@@ -178,8 +178,10 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
             catch (std::exception& e)
             {
                 TXPOOL_LOG(WARNING) << "Unexpected exception: " << boost::diagnostic_information(e);
+                // Unknown, not Malformed: nothing judged the transaction, and the RPC answers
+                // Unknown as the node's fault where Malformed would be an invalid-parameter reply.
                 completeOnce(
-                    BCOS_ERROR_PTR((int32_t)TransactionStatus::Malformed, "Unknown exception"),
+                    BCOS_ERROR_PTR((int32_t)TransactionStatus::Unknown, "Unknown exception"),
                     nullptr);
             }
         }

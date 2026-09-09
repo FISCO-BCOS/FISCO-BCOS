@@ -29,6 +29,7 @@
 #include <bcos-rpc/jwtAuth/JwtConfig.h>
 #include <bcos-rpc/jwtAuth/JwtVerifier.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3FilterRequest.h>
+#include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-task/Task.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
@@ -503,7 +504,7 @@ BOOST_AUTO_TEST_CASE(handleMempoolChainIdGateUnconfiguredTest)
             "72f3e8f299379ce2802e64b1cbb55275ad9aaa81190b44");
         BOOST_TEST(response.isMember("error"));
         BOOST_TEST(response["error"]["code"].asInt() == InvalidParams);
-        BOOST_TEST(response["error"]["message"].asString() == "InvalidChainId");
+        BOOST_TEST(response["error"]["message"].asString() == "invalid chain id for signer");
     }
     // Typed EIP-1559 (chainId=1; etherscan 0x5b2f24...): rejected on the same rule.
     {
@@ -513,7 +514,7 @@ BOOST_AUTO_TEST_CASE(handleMempoolChainIdGateUnconfiguredTest)
             "0f6ed7d035397547aeac0e5130847570f4b607350f71c1391b7cb7f9dd604c");
         BOOST_TEST(response.isMember("error"));
         BOOST_TEST(response["error"]["code"].asInt() == InvalidParams);
-        BOOST_TEST(response["error"]["message"].asString() == "InvalidChainId");
+        BOOST_TEST(response["error"]["message"].asString() == "invalid chain id for signer");
     }
     // Pre-EIP-155 legacy (v=28; etherscan 0xf6ecaf...): exempt — accepted into the mempool.
     // Funded first: this path now runs the balance check, which it did not before.
@@ -550,7 +551,7 @@ BOOST_AUTO_TEST_CASE(handleSendRawTypedChainIdMismatchTest)
     auto response = onRPCRequestWrapper(request);
     BOOST_TEST(response.isMember("error"));
     BOOST_TEST(response["error"]["code"].asInt() == InvalidParams);
-    BOOST_TEST(response["error"]["message"].asString() == "InvalidChainId");
+    BOOST_TEST(response["error"]["message"].asString() == "invalid chain id for signer");
 }
 
 // The pre-EIP-155 transaction used by the two cases below: it claims no chain, so the chainId
@@ -587,8 +588,8 @@ BOOST_AUTO_TEST_CASE(handleMempoolRejectionIsReportedRatherThanHashed)
     // The same bytes again: one transaction, one hash, already held.
     auto second = onRPCRequestWrapper(request);
     BOOST_TEST(second.isMember("error"));
-    BOOST_TEST(second["error"]["code"].asInt() == InvalidParams);
-    BOOST_TEST(second["error"]["message"].asString() == "AlreadyInTxPool");
+    BOOST_TEST(second["error"]["code"].asInt() == Web3DefaultError);
+    BOOST_TEST(second["error"]["message"].asString() == "already known");
     BOOST_TEST(!second.isMember("result"));
 }
 
@@ -606,13 +607,102 @@ BOOST_AUTO_TEST_CASE(handleMempoolEestReplayContextDropsTheBalanceCheck)
     // Unfunded, under the ordinary column.
     auto rejected = onRPCRequestWrapper(request);
     BOOST_TEST(rejected.isMember("error"));
-    BOOST_TEST(rejected["error"]["message"].asString() == "InsufficientFunds");
+    BOOST_TEST(rejected["error"]["code"].asInt() == Web3DefaultError);
+    BOOST_TEST(
+        rejected["error"]["message"].asString() == "insufficient funds for gas * price + value");
 
     nodeService->setAdmissionValidator(
         m_admissionValidator, bcos::txvalidator::AdmissionContext::EESTReplay);
     auto accepted = onRPCRequestWrapper(request);
     validRespCheck(accepted);
     BOOST_TEST(accepted["result"].asString() == std::string(c_unprotectedTxHash));
+}
+
+// The typed EIP-1559 envelope for chain 1 the chain-id cases above use (etherscan 0x5b2f24...).
+static constexpr std::string_view c_typedChain1RawTx =
+    "0x02f871018308b3e6808501cd2ec1d7826ac194ba1951df0c0a52af23857c5ab48b4c43a57e7ed1872700f2d0"
+    "ba3db080c001a069be171dfa805790a28f1bfcd131eb2aa8f345f601c4a3659de4ae8d624a7b89a06e0f6ed7d0"
+    "35397547aeac0e5130847570f4b607350f71c1391b7cb7f9dd604c";
+
+// Both pools refuse through one table (AdmissionError.h). The txpool branch used to let the
+// pool's refusal escape as a bcos::Error into the catch-all, which answered -32603 with the status
+// name; the mempool branch answered -32602 with the same name. Same transaction, same rule, same
+// answer now: a structural refusal is -32602 in geth's words, a well-formed transaction a rule
+// turned away is -32000 in geth's words.
+BOOST_AUTO_TEST_CASE(handleTxpoolRefusalAnswersWithTheMempoolShape)
+{
+    // No mempool set: this is the txpool branch.
+    BOOST_REQUIRE(nodeService->memPool() == nullptr);
+    auto ledgerConfig = std::make_shared<bcos::ledger::LedgerConfig>();
+    ledgerConfig->setChainId(evmc::bytes32{999});
+    ledgerConfig->setGasPrice({"0", 0});
+    m_ledgerConfigState->set(std::move(ledgerConfig));
+    auto submit = [&](std::string_view rawTx) {
+        const std::string request =
+            R"({"jsonrpc":"2.0","id":1132123, "method":"eth_sendRawTransaction","params":[")" +
+            std::string(rawTx) + R"("]})";
+        return onRPCRequestWrapper(request);
+    };
+    // Signed for chain 1, sent to a node on chain 999: not a transaction for this chain.
+    {
+        auto response = submit(c_typedChain1RawTx);
+        BOOST_TEST(response.isMember("error"));
+        BOOST_TEST(response["error"]["code"].asInt() == InvalidParams);
+        BOOST_TEST(response["error"]["message"].asString() == "invalid chain id for signer");
+        BOOST_TEST(!response.isMember("result"));
+    }
+    // Pre-EIP-155 and unfunded: well-formed, turned away by the balance rule.
+    {
+        auto response = submit(c_unprotectedRawTx);
+        BOOST_TEST(response.isMember("error"));
+        BOOST_TEST(response["error"]["code"].asInt() == Web3DefaultError);
+        BOOST_TEST(response["error"]["message"].asString() ==
+                   "insufficient funds for gas * price + value");
+        BOOST_TEST(!response.isMember("result"));
+    }
+}
+
+// verify() throws when the data it needs cannot be read (TxValidator.h). That is the node's
+// fault, not a verdict on the transaction, and the storage diagnostic belongs in the log, not in
+// the response: the client gets the same -32603 sentence the txpool branch gives for it (there
+// verifyAndSubmitTransaction catches the throw and refuses with Unknown).
+BOOST_AUTO_TEST_CASE(handleMempoolAdmissionFaultIsAnsweredAsTheNodesFault)
+{
+    struct FaultingLedger : FakeLedger
+    {
+        using FakeLedger::FakeLedger;
+        task::Task<std::optional<ledger::StorageState>> getStorageState(
+            std::string_view, protocol::BlockNumber) override
+        {
+            throw std::runtime_error("storage unavailable");
+            co_return std::nullopt;
+        }
+    };
+    auto faulting = std::make_shared<FaultingLedger>(m_blockFactory, 20, 10, 10);
+    auto validator = std::make_shared<bcos::txvalidator::TxValidator>(
+        cryptoSuite, faulting, m_ledgerConfigState, /*txPoolNonceChecker=*/nullptr,
+        std::make_shared<bcos::txvalidator::Web3NonceChecker>(faulting),
+        [](bcos::protocol::Transaction const&) { return false; }, groupId, chainId);
+    validator->setScheduler(scheduler);
+    bcos::txpool::MemPoolImpl memPool;
+    nodeService->setMemPool(memPool);
+    nodeService->setAdmissionValidator(
+        validator, bcos::txvalidator::AdmissionContext::PoolAdmission);
+    // Funded in the fixture's ledger, so the only thing standing between this transaction and
+    // the pool is the read that faults.
+    std::optional<storage::Entry> balance = storage::Entry();
+    balance->set(asBytes("8921810000000000000"));
+    m_ledger->setStorageAt(std::string(c_unprotectedSender),
+        std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE), balance);
+
+    const std::string request =
+        R"({"jsonrpc":"2.0","id":1132123, "method":"eth_sendRawTransaction","params":[")" +
+        std::string(c_unprotectedRawTx) + R"("]})";
+    auto response = onRPCRequestWrapper(request);
+    BOOST_TEST(response.isMember("error"));
+    BOOST_TEST(response["error"]["code"].asInt() == InternalError);
+    BOOST_TEST(response["error"]["message"].asString() == "admission could not be decided");
+    BOOST_TEST(!response.isMember("result"));
 }
 
 BOOST_AUTO_TEST_CASE(handleEIP4844TxTest)
@@ -629,7 +719,9 @@ BOOST_AUTO_TEST_CASE(handleEIP4844TxTest)
             rawTx + R"("]})";
         auto response = onRPCRequestWrapper(request);
         BOOST_REQUIRE(response.isMember("error"));
-        BOOST_CHECK_NE(response["error"]["message"].asString().find("blob"), std::string::npos);
+        BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), Web3DefaultError);
+        BOOST_CHECK_EQUAL(
+            response["error"]["message"].asString(), "transaction type not supported (blob)");
         std::vector<crypto::HashType> hashes = {HashType(txHash)};
         task::wait([](Web3TestFixture* self, decltype(hashes) m_hashes) -> task::Task<void> {
             auto txs = co_await self->txPool->getTransactions(m_hashes);
