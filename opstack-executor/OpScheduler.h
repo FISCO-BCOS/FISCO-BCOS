@@ -659,9 +659,13 @@ private:
                 m_multiLayerStorage->pushView(std::move(view));
                 {
                     std::lock_guard<std::mutex> lock(m_pendingMutex);
-                    m_pending = PendingBlock{std::move(block), std::move(outcome.result),
-                        outcome.announcedBlockHash, executedHeader, true,
-                        std::move(outcome.mptDelta), std::move(outcome.stateHistoryKeys)};
+                    m_pending = PendingBlock{.block = std::move(block),
+                        .result = std::move(outcome.result),
+                        .announcedBlockHash = outcome.announcedBlockHash,
+                        .executedHeader = executedHeader,
+                        .verified = true,
+                        .mptDelta = std::move(outcome.mptDelta),
+                        .stateHistoryKeys = std::move(outcome.stateHistoryKeys)};
                 }
                 m_lastExecutedBlockNumber.store(number);
                 m_lastProbe.reset();
@@ -669,8 +673,11 @@ private:
             else
             {
                 // Keep the probe so adoptProbeAsPending can push this view.
-                m_lastProbe = ProbeSlot{std::move(view), std::move(outcome.result), executedHeader,
-                    std::move(outcome.mptDelta), std::move(outcome.stateHistoryKeys)};
+                m_lastProbe = ProbeSlot{.view = std::move(view),
+                    .result = std::move(outcome.result),
+                    .executedHeader = executedHeader,
+                    .mptDelta = std::move(outcome.mptDelta),
+                    .stateHistoryKeys = std::move(outcome.stateHistoryKeys)};
             }
 
             co_return {nullptr, std::move(executedHeader), sysBlock};
@@ -808,9 +815,13 @@ private:
             auto executedHeader = m_lastProbe->executedHeader;
             {
                 std::lock_guard<std::mutex> lock(m_pendingMutex);
-                m_pending = PendingBlock{std::move(block), std::move(m_lastProbe->result),
-                    announcedBlockHash, executedHeader, true, std::move(m_lastProbe->mptDelta),
-                    std::move(m_lastProbe->stateHistoryKeys)};
+                m_pending = PendingBlock{.block = std::move(block),
+                    .result = std::move(m_lastProbe->result),
+                    .announcedBlockHash = announcedBlockHash,
+                    .executedHeader = executedHeader,
+                    .verified = true,
+                    .mptDelta = std::move(m_lastProbe->mptDelta),
+                    .stateHistoryKeys = std::move(m_lastProbe->stateHistoryKeys)};
             }
             m_lastExecutedBlockNumber.store(number);
             m_lastProbe.reset();
@@ -933,14 +944,6 @@ private:
             // Single merge: all-or-nothing.
             co_await m_multiLayerStorage->mergeBackStorage(*storage);
 
-            // G9, second half: the batch has landed, so the indexes may now name its rows — and
-            // before m_lastCommittedBlockNumber below, which is the `tip` every historical read is
-            // admitted against.
-            if (historyStage)
-            {
-                ledger::mpt::history::publishBlockHistory(*m_mptHistory, std::move(*historyStage));
-            }
-
             // Drop the slot only after merge succeeds, and only if it is still this block.
             {
                 std::lock_guard<std::mutex> lock(m_pendingMutex);
@@ -953,6 +956,21 @@ private:
             }
 
             auto ledgerConfig = co_await loadCommitLedgerConfig(header);
+
+            // G9, second half: the batch has landed, so the indexes may now name its rows.
+            //
+            // LAST fallible step before the tip advances — the same ordering, and the same
+            // reasoning, as BaselineScheduler's (see the long comment there). A commit that
+            // publishes and then throws before m_lastCommittedBlockNumber leaves the height
+            // uncommitted and re-drivable, and a second publish of block N is refused by
+            // HistoryIndex as out-of-order, which latches the index Unavailable and wedges the
+            // height. Nothing fallible sits between this line and the store below, so a retry is
+            // stopped by the already-committed gate at the top of this function instead.
+            if (historyStage)
+            {
+                ledger::mpt::history::publishBlockHistory(*m_mptHistory, std::move(*historyStage));
+            }
+
             m_lastCommittedBlockNumber.store(number);
             commitLock.unlock();
 
@@ -1214,8 +1232,10 @@ private:
         // metadata + execution commitments onto executedHeader, which stays out of this identity.
         bcos::crypto::HashType announcedBlockHash =
             bcos::protocol::EthBlockHeader::computeHash(header);
-        co_return ExecuteOutcome{std::move(result), announcedBlockHash, std::move(mptDelta),
-            std::move(stateHistoryKeys)};
+        co_return ExecuteOutcome{.result = std::move(result),
+            .announcedBlockHash = announcedBlockHash,
+            .mptDelta = std::move(mptDelta),
+            .stateHistoryKeys = std::move(stateHistoryKeys)};
     }
 
     /// Copy execution commitments onto a clone of the announced header.

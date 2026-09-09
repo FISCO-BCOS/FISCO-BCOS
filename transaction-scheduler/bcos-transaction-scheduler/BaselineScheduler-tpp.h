@@ -661,10 +661,12 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
         // MPT blocks have a history: both the historical call and the historical proof are
         // MPT-gated, so a chain without one pays nothing.
         //
-        // Only the WRITE happens here. The in-memory query indexes learn about these rows below,
-        // after the merge (G9) — see publishBlockHistory. `historyStage` therefore has to outlive
-        // the merge scope, and a merge that throws destroys it unpublished, which IS the rollback:
-        // no index ever names a row this batch failed to write.
+        // Only the WRITE happens here. The in-memory query indexes learn about these rows much
+        // further down, as the last fallible step before the tip advances (G9) — see the comment
+        // on publishBlockHistory below for why that exact position. `historyStage` therefore has
+        // to outlive the merge scope, and anything that throws before the publish destroys it
+        // unpublished, which IS the rollback: no index ever names a block this commit did not
+        // finish.
         std::optional<ledger::mpt::history::HistoryCommitStage> historyStage;
         if (result->m_mptDelta && m_mptHistory && m_mptHistory->depths().anyEnabled())
         {
@@ -683,15 +685,6 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
             ittapi::Report mergeReport(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                 ittapi::ITT_DOMAINS::instance().MERGE_STATE);
             co_await m_multiLayerStorage.get().mergeBackStorage(prewriteStorage);
-        }
-
-        // G9, second half: the batch has landed, so the indexes may now name its rows. Before
-        // m_lastCommittedBlockNumber advances, because that number is the `tip` every historical
-        // read is admitted against — a reader let in at the new tip must already be able to see
-        // this block's versions, or it would read the miss as "the key never changed".
-        if (historyStage)
-        {
-            ledger::mpt::history::publishBlockHistory(*m_mptHistory, std::move(*historyStage));
         }
 
         // CommitObserver timing contract (CommitObserver.h): AFTER the block's WriteBatch
@@ -717,6 +710,34 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
 
         auto ledgerConfig = co_await ledger::getLedgerConfig(m_ledger.get());
         ledgerConfig->setHash(header->hash());
+
+        // G9, second half: the batch has landed, so the indexes may now name its rows.
+        //
+        // LAST fallible step before the tip advances, and the position is load-bearing in both
+        // directions. It cannot be earlier: a commit that fails after publishing but before
+        // m_lastCommittedBlockNumber does NOT advance the tip, and PBFT re-drives the same height
+        // (LedgerStorage.cpp -> onStableCheckPointCommitFailed -> clearExceptionProposalState).
+        // The retry passes the already-committed gate above, re-stages, re-merges (idempotent),
+        // and publishes block N a second time — which HistoryIndex refuses as out-of-order,
+        // latching itself Unavailable and rethrowing. That would cost the node every historical
+        // read until restart AND wedge the height forever, since each retry throws at the same
+        // place. Publishing here leaves nothing fallible between it and the advance, so a retry
+        // is stopped by the already-committed gate instead.
+        //
+        // It cannot be later either: the tip is what every historical read is admitted against,
+        // so a reader let in at N must be able to see N's versions.
+        //
+        // The accepted cost of this ordering, stated so nobody has to rediscover it: between the
+        // merge above and this line the RPC's tip is already N while the index does not yet hold
+        // N. Both readings are fail-closed — a query for N-1 needs N's records and gets "no state
+        // history recorded for that block", and a query for N answers from the current state via
+        // the `block >= tip` arm, which is correct. And a throw AFTER this line (there is none
+        // today) would leave at most one block published but not committed, which
+        // historyCoversBlock refuses and a restart rebuild repairs from the shard rows.
+        if (historyStage)
+        {
+            ledger::mpt::history::publishBlockHistory(*m_mptHistory, std::move(*historyStage));
+        }
 
         // FIB-101: Advance the committed counter only after the merge succeeds.
         m_lastCommittedBlockNumber = header->number();

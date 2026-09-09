@@ -134,7 +134,38 @@ private:
 };
 
 using HWCheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, HWCountingBackend>;
-using HWMultiLayerStorage = MultiLayerStorage<HWMutableStorage, void, HWCheckpointBackend>;
+using HWBaseMultiLayerStorage = MultiLayerStorage<HWMutableStorage, void, HWCheckpointBackend>;
+
+/// The storage the scheduler commits through, with one switch: `m_failNextMerge` makes the next
+/// mergeBackStorage throw instead of landing anything — the storage-layer shape of "this block's
+/// WriteBatch did not land", which is the failure G9 is about.
+///
+/// std::logic_error, not std::runtime_error, and the reason is a macOS link artefact rather than
+/// anything about coroutines: this repo propagates wedprcrypto PUBLIC from bcos-crypto to the
+/// whole tree, and Apple arm64 libc++ decides typeinfo uniqueness by the name-pointer high bit,
+/// so a thrown runtime_error binds only to an exact-type handler and falls straight through
+/// coCommitBlock's `catch (std::exception&)`. The logic_error family binds normally, and
+/// exact-type handlers (HistoryPruned, HistoryIndexUnavailable) are fine either way because they
+/// hit the pointer-equality short circuit. On Linux — CI and production — neither family has the
+/// problem. With logic_error the injected failure comes back as the commit Error a real backend
+/// failure would produce, which is what this test needs to assert on.
+struct HWFailingMultiLayerStorage : HWBaseMultiLayerStorage
+{
+    using HWBaseMultiLayerStorage::HWBaseMultiLayerStorage;
+
+    bool m_failNextMerge = false;
+
+    task::Task<std::shared_ptr<MutableStorage>> mergeBackStorage(auto&... extraStorages)
+    {
+        if (m_failNextMerge)
+        {
+            m_failNextMerge = false;
+            BOOST_THROW_EXCEPTION(std::logic_error("injected merge failure"));
+        }
+        co_return co_await HWBaseMultiLayerStorage::mergeBackStorage(extraStorages...);
+    }
+};
+using HWMultiLayerStorage = HWFailingMultiLayerStorage;
 
 size_t countInTable(std::vector<HWMergedKey> const& keys, std::string_view table, bool deleted)
 {
@@ -249,10 +280,27 @@ struct HWExecutor
 struct HWDeltaRecorder : ledger::mpt::CommitObserver
 {
     std::map<protocol::BlockNumber, size_t> m_preimageCounts;
+    /// Throw once, for this block. The commit path calls observers AFTER the merge and BEFORE
+    /// the committed block number advances, deliberately without a try/catch, so this is the
+    /// simplest faithful way to make a commit fail at that exact point — which is the window the
+    /// publish must not sit inside (G9, and the retry hazard the ordering comment describes).
+    ///
+    /// std::logic_error, not std::runtime_error: on Apple arm64 libc++ this repo's link graph
+    /// (wedprcrypto propagated PUBLIC from bcos-crypto) makes the runtime_error family's typeinfo
+    /// non-unique, so a thrown runtime_error binds only to an exact-type handler and falls
+    /// through `catch (std::exception&)`. The logic_error family is unaffected. The distinction
+    /// is a macOS link artefact, absent on Linux, and it decides only whether the failure reaches
+    /// the test as an Error or as a throw.
+    protocol::BlockNumber m_throwOnBlock{-1};
 
     void onCommit(protocol::BlockNumber blockNumber, ledger::mpt::PathDiff const& diff) override
     {
         m_preimageCounts[blockNumber] = diff.preimages.size();
+        if (blockNumber == m_throwOnBlock)
+        {
+            m_throwOnBlock = -1;
+            throw std::logic_error("injected commit-observer failure");
+        }
     }
 };
 
@@ -531,6 +579,110 @@ BOOST_AUTO_TEST_CASE(historyRowsRideTheBlocksSingleMerge)
     BOOST_CHECK(mptHistory->trie().recordedBlock(kActivation + 1));
 }
 
+/// G9 at the commit path: a merge that fails publishes nothing, and re-driving the same height
+/// publishes it exactly once.
+///
+/// The injection is a throwing `mergeBackStorage`, which is what a backend failure looks like
+/// from coCommitBlock: the commit comes back as an Error, the block's rows never reach the
+/// backend, and the stage is destroyed on the way out. The index must be byte-identical to what
+/// it was, and the retry — the same header, driven again, as PBFT's failure handler does — must
+/// leave it holding block N once.
+BOOST_AUTO_TEST_CASE(aFailedMergePublishesNothingAndTheRetryPublishesOnce)
+{
+    auto const first = kActivation + 1;  // first MPT block
+    runChain(first);                     // the activation block plus the first MPT block
+
+    BOOST_REQUIRE(mptHistory->state().recordedBlock(first));
+    BOOST_REQUIRE(!mptHistory->state().recordedBlock(first + 1));
+    auto const versionsBefore = mptHistory->state().index().versionCount();
+    auto const blocksBefore = mptHistory->state().index().blockCount();
+    auto const mergesBefore = backendStorage.m_mergeCalls;
+
+    planBlock(first + 1);
+    auto const header = executeOneBlock(first + 1);
+
+    multiLayerStorage.m_failNextMerge = true;
+    Error::Ptr commitError;
+    baselineScheduler.commitBlock(header,
+        [&](Error::Ptr error, ledger::LedgerConfig::Ptr) { commitError = std::move(error); });
+    BOOST_REQUIRE_MESSAGE(commitError, "the injected merge failure must fail the commit");
+
+    // Nothing landed and nothing was published.
+    BOOST_CHECK_EQUAL(backendStorage.m_mergeCalls, mergesBefore);
+    BOOST_CHECK(!mptHistory->state().recordedBlock(first + 1));
+    BOOST_CHECK(!mptHistory->trie().recordedBlock(first + 1));
+    BOOST_CHECK_EQUAL(mptHistory->state().index().versionCount(), versionsBefore);
+    BOOST_CHECK_EQUAL(mptHistory->state().index().blockCount(), blocksBefore);
+    BOOST_CHECK(mptHistory->state().index().state() == ledger::mpt::history::IndexState::Ready);
+    BOOST_CHECK(!history::historyCoversBlock(mptHistory->state(), first, first + 1));
+
+    // The retry commits the same block for real, and only now does the index hold it — once.
+    commitOneBlock(header);
+    BOOST_CHECK_EQUAL(backendStorage.m_mergeCalls, mergesBefore + 1);
+    BOOST_CHECK(mptHistory->state().recordedBlock(first + 1));
+    BOOST_CHECK(mptHistory->trie().recordedBlock(first + 1));
+    BOOST_CHECK(mptHistory->state().index().state() == ledger::mpt::history::IndexState::Ready);
+    BOOST_CHECK_EQUAL(mptHistory->state().index().blockCount(), blocksBefore + 1);
+    BOOST_CHECK_EQUAL(mptHistory->state().index().versionCount(), versionsBefore + 2);
+    BOOST_CHECK(history::historyCoversBlock(mptHistory->state(), first, first + 1));
+}
+
+/// The publish must be the LAST fallible step before the committed block number advances, and
+/// this is the case that pins it.
+///
+/// The commit observer runs after the merge and before that advance, and its contract says it
+/// must not throw — but if it does (or if anything else in that stretch does), the commit returns
+/// an error WITHOUT advancing the tip, and PBFT re-drives the same height
+/// (LedgerStorage.cpp -> onStableCheckPointCommitFailed -> clearExceptionProposalState). A
+/// publish sitting above that point would already have run for block N, and the re-drive would
+/// run it again; HistoryIndex refuses the second as out-of-order, latches itself Unavailable and
+/// rethrows, and from there every historical read on the node is refused until restart AND the
+/// height can never commit, because each retry throws at the same place.
+///
+/// So the property to pin is the one that makes the second publish impossible: a commit that
+/// fails ANYWHERE after the merge must leave the index exactly as it was. With the publish above
+/// the observer this case goes red on every assertion below.
+///
+/// The retry half — "and the next attempt publishes it exactly once" — is asserted by the
+/// merge-failure case above rather than here, because this fixture cannot re-commit after a
+/// SUCCESSFUL merge: mergeBackStorage consumes the queued view, so a bare second commitBlock
+/// fails with NotExistsImmutableStorageError. Production does not re-commit bare either; it
+/// re-executes first, which pushes the view back.
+BOOST_AUTO_TEST_CASE(aCommitFailingAfterTheMergePublishesNothing)
+{
+    auto const first = kActivation + 1;
+    runChain(first);
+
+    auto const versionsBefore = mptHistory->state().index().versionCount();
+    auto const blocksBefore = mptHistory->state().index().blockCount();
+    auto const mergesBefore = backendStorage.m_mergeCalls;
+
+    planBlock(first + 1);
+    auto const header = executeOneBlock(first + 1);
+
+    // Throws once, for this block, from inside the commit path's observer call — which sits
+    // after the merge and before the committed block number advances.
+    deltaRecorder->m_throwOnBlock = first + 1;
+    Error::Ptr commitError;
+    baselineScheduler.commitBlock(header,
+        [&](Error::Ptr error, ledger::LedgerConfig::Ptr) { commitError = std::move(error); });
+    BOOST_REQUIRE_MESSAGE(commitError, "a throwing commit observer must fail the commit");
+    BOOST_REQUIRE_EQUAL(deltaRecorder->m_throwOnBlock, protocol::BlockNumber{-1});
+
+    // The merge DID land — this is a failure after it, not instead of it.
+    BOOST_REQUIRE_EQUAL(backendStorage.m_mergeCalls, mergesBefore + 1);
+    BOOST_REQUIRE_EQUAL(
+        countHistoryRowsOfBlock(backendStorage, history::kStateHistory.shard, first + 1), 2U);
+
+    // ...and the index still knows nothing about the block, so the height stays re-drivable.
+    BOOST_CHECK(mptHistory->state().index().state() == ledger::mpt::history::IndexState::Ready);
+    BOOST_CHECK(!mptHistory->state().recordedBlock(first + 1));
+    BOOST_CHECK(!mptHistory->trie().recordedBlock(first + 1));
+    BOOST_CHECK_EQUAL(mptHistory->state().index().blockCount(), blocksBefore);
+    BOOST_CHECK_EQUAL(mptHistory->state().index().versionCount(), versionsBefore);
+    BOOST_CHECK(!history::historyCoversBlock(mptHistory->state(), first, first + 1));
+}
+
 /// G9: the index learns about a block exactly when publishBlockHistory runs — not when the rows
 /// are written, and never when the write did not land.
 ///
@@ -545,11 +697,9 @@ BOOST_AUTO_TEST_CASE(historyRowsRideTheBlocksSingleMerge)
 ///     exactly as before;
 ///  3. re-stage the same block (the retry), merge the batch, and only then publish. Both flip.
 ///
-/// The failure is modelled by dropping the stage rather than by making the backend's merge throw.
-/// That injection was tried and abandoned: an exception raised under a `co_await` does not reach
-/// coCommitBlock's `catch (std::exception&)` on this toolchain, the coroutine frame is never
-/// destroyed, its commit lock is never released, and the process dies at fixture teardown. The
-/// finding is reported separately; what it cannot do is carry this assertion.
+/// This case proves the API CONTRACT, not the commit path: moving publishBlockHistory to before
+/// the merge in either scheduler would leave it green. The commit path's own ordering is pinned
+/// by the two cases above, which drive it through a real failure.
 BOOST_AUTO_TEST_CASE(publishingIsWhatMakesAStagedBlockVisible)
 {
     auto const first = kActivation + 1;  // first MPT block
