@@ -43,7 +43,8 @@
 #include <span>
 #include <string>
 #include <string_view>
-#include <tuple>
+#include <utility>
+#include <vector>
 
 using namespace std::string_view_literals;
 
@@ -84,6 +85,24 @@ std::string currentNumberKey()
            std::string(ledger::SYS_KEY_CURRENT_NUMBER);
 }
 
+/// Whether block @p block still has a meta row in @p Tables — "is this block's history still
+/// there", which is what the rollback deletes as it finishes with each block.
+template <history::HistoryTables const& Tables, class Storage>
+bool hasHistory(Storage& storage, protocol::BlockNumber block)
+{
+    return bcos::task::syncWait(bcos::storage2::readOne(storage, executor_v1::StateKey{Tables.shard,
+                                                                     history::metaRowKey(block)}))
+        .has_value();
+}
+
+/// Records block @p block's state history holds, read straight off its rows.
+template <class Storage>
+std::size_t stateRecordsOf(Storage& storage, protocol::BlockNumber block)
+{
+    history::StateHistoryStore store;
+    return bcos::task::syncWait(store.readBlock(storage, block)).records.size();
+}
+
 /// Three committed blocks, both histories recorded, with the state plane standing at block 3.
 ///
 ///   key                              b1        b2        b3
@@ -93,6 +112,8 @@ std::string currentNumberKey()
 ///   /mptp/a:<root position>          "n1"      "n2"      "n3"
 struct RollbackFixture
 {
+    history::StateHistoryStore stateStore;
+    history::TrieHistoryStore trieStore;
     history::test::HistoryMemStorage storage;
     static constexpr protocol::BlockNumber kTip = 3;
     static constexpr protocol::BlockNumber kDepth = 8;
@@ -126,13 +147,11 @@ struct RollbackFixture
         stateDiff.change(currentNumberKey(), block == 1 ?
                                                  std::optional<std::string_view>{} :
                                                  std::optional<std::string_view>{previousNumber});
-        bcos::task::syncWait(history::StateHistoryStore::put(
-            storage, block, stateDiff.entries(), history::test::kWideShardCap));
+        history::test::putBlock(stateStore, storage, block, stateDiff);
 
         history::test::Diff trieDiff;
         trieDiff.change(nodeKey, nodeOld);
-        bcos::task::syncWait(history::TrieHistoryStore::put(
-            storage, block, trieDiff.entries(), history::test::kWideShardCap));
+        history::test::putBlock(trieStore, storage, block, trieDiff);
 
         writeLiveRow(storage, "/apps/a:x", xValue);
         if (yValue)
@@ -161,7 +180,7 @@ BOOST_AUTO_TEST_CASE(dryRunCountsWithoutTouchingAnything)
 
     BOOST_CHECK(!report.applied);
     BOOST_CHECK_EQUAL(report.blocks, 2);
-    // Three state keys and one trie key per block, two blocks.
+    // Three state keys and one trie key per block, two blocks — counted off the meta rows.
     BOOST_CHECK_EQUAL(report.stateRows, 6);
     BOOST_CHECK_EQUAL(report.trieRows, 2);
     BOOST_CHECK_EQUAL(report.rowsWritten, 0);
@@ -169,9 +188,7 @@ BOOST_AUTO_TEST_CASE(dryRunCountsWithoutTouchingAnything)
 
     // Nothing moved.
     BOOST_CHECK_EQUAL(*readLiveRow(fixture.storage, "/apps/a:x"), "v3");
-    BOOST_CHECK_EQUAL(
-        bcos::task::syncWait(history::StateHistoryStore::keysOfBlock(fixture.storage, 3)).size(),
-        3);
+    BOOST_CHECK_EQUAL(stateRecordsOf(fixture.storage, 3), 3);
 }
 
 BOOST_AUTO_TEST_CASE(rollbackRestoresBothPlanesToTheTargetBlock)
@@ -194,13 +211,26 @@ BOOST_AUTO_TEST_CASE(rollbackRestoresBothPlanesToTheTargetBlock)
     BOOST_CHECK_EQUAL(*report.currentNumberRow, "1");
 
     // The rolled-back blocks' history is gone; the target block's is not.
-    BOOST_CHECK(
-        bcos::task::syncWait(history::StateHistoryStore::keysOfBlock(fixture.storage, 3)).empty());
-    BOOST_CHECK(
-        bcos::task::syncWait(history::TrieHistoryStore::keysOfBlock(fixture.storage, 2)).empty());
-    BOOST_CHECK_EQUAL(
-        bcos::task::syncWait(history::StateHistoryStore::keysOfBlock(fixture.storage, 1)).size(),
-        3);
+    BOOST_CHECK(!hasHistory<history::kStateHistory>(fixture.storage, 3));
+    BOOST_CHECK(!hasHistory<history::kTrieHistory>(fixture.storage, 2));
+    BOOST_CHECK_EQUAL(stateRecordsOf(fixture.storage, 1), 3);
+}
+
+/// G4's delete asymmetry, on the row the rollback is allowed to remove and the ones it is not:
+/// `/apps/a:y` did not exist before block 2, so block 2's record for it is ABSENT and the rollback
+/// deletes it. Every other key had a value, and each of those is WRITTEN BACK — never removed,
+/// whatever the live plane holds.
+BOOST_AUTO_TEST_CASE(onlyAbsentRecordsBecomeDeletes)
+{
+    RollbackFixture fixture;
+    auto const report = fixture.rollback(1, /*apply=*/true);
+
+    // Block 3: x, y and the tip row all had values (3 writes) plus one node row (1 write).
+    // Block 2: x and the tip row had values (2 writes), y did not exist (1 delete), plus the node
+    // row (1 write).
+    BOOST_CHECK_EQUAL(report.rowsDeleted, 1);
+    BOOST_CHECK_EQUAL(report.rowsWritten, 7);
+    BOOST_CHECK(!readLiveRow(fixture.storage, "/apps/a:y").has_value());
 }
 
 BOOST_AUTO_TEST_CASE(rollingBackOneBlockStopsAtTheBlockBelow)
@@ -211,6 +241,28 @@ BOOST_AUTO_TEST_CASE(rollingBackOneBlockStopsAtTheBlockBelow)
     BOOST_CHECK_EQUAL(*readLiveRow(fixture.storage, "/apps/a:x"), "v2");
     BOOST_CHECK_EQUAL(*readLiveRow(fixture.storage, "/apps/a:y"), "w2");
     BOOST_CHECK_EQUAL(*readLiveRow(fixture.storage, fixture.nodeKey), "n2");
+}
+
+/// The rollback discards from the TOP, so the oldest block the store can answer for does not move
+/// — RetentionBoundary::Keep. Advancing it would refuse the walk's own next step.
+BOOST_AUTO_TEST_CASE(rollbackLeavesTheRetentionBoundaryWhereItWas)
+{
+    RollbackFixture fixture;
+    bcos::task::syncWait(history::seedRetentionBoundary<history::StateHistoryStore>(
+        fixture.storage, std::nullopt, 1));
+    bcos::task::syncWait(history::seedRetentionBoundary<history::TrieHistoryStore>(
+        fixture.storage, std::nullopt, 1));
+
+    fixture.rollback(1, /*apply=*/true);
+
+    auto const stateBoundary =
+        bcos::task::syncWait(history::StateHistoryStore::retentionBoundary(fixture.storage));
+    auto const trieBoundary =
+        bcos::task::syncWait(history::TrieHistoryStore::retentionBoundary(fixture.storage));
+    BOOST_REQUIRE(stateBoundary.has_value());
+    BOOST_REQUIRE(trieBoundary.has_value());
+    BOOST_CHECK_EQUAL(*stateBoundary, 0);
+    BOOST_CHECK_EQUAL(*trieBoundary, 0);
 }
 
 BOOST_AUTO_TEST_CASE(targetOutsideTheRetentionWindowIsRefusedBeforeAnyWrite)
@@ -256,7 +308,6 @@ BOOST_AUTO_TEST_CASE(targetAtOrAboveTheTipIsRejected)
     BOOST_CHECK_THROW(fixture.rollback(-1, /*apply=*/true), history::InvalidHistoryBlock);
 }
 
-
 /// The pairing the CLI performs after `rollback --yes`: put the trie plane back, then prove the
 /// tree it landed on is the one the TARGET block's header commits to.
 ///
@@ -267,6 +318,8 @@ BOOST_AUTO_TEST_CASE(rollbackLandsOnATreeThatVerifiesAgainstTheTargetRoot)
 {
     mpt::test::NodeMemoryStorage nodes;
     history::test::HistoryMemStorage flat;
+    history::StateHistoryStore stateStore;
+    history::TrieHistoryStore trieStore;
 
     // Block 1: two accounts.
     std::map<bcos::h256, bcos::bytes> first;
@@ -277,9 +330,9 @@ BOOST_AUTO_TEST_CASE(rollbackLandsOnATreeThatVerifiesAgainstTheTargetRoot)
     writeLiveRow(flat, currentNumberKey(), "1");
     history::test::Diff blockOne;
     blockOne.change(currentNumberKey(), std::nullopt);
-    bcos::task::syncWait(
-        history::StateHistoryStore::put(flat, 1, blockOne.entries(), history::test::kWideShardCap));
-    bcos::task::syncWait(history::TrieHistoryStore::put(flat, 1, {}, history::test::kWideShardCap));
+    history::test::putBlock(stateStore, flat, 1, blockOne);
+    history::test::Diff const emptyTrie;
+    history::test::putBlock(trieStore, flat, 1, emptyTrie);
 
     // Block 2: a third account, committed over block 1's root.
     auto const rebuilt = mpt::test::commitTrieFlushed(nodes, rootAtOne,
@@ -314,13 +367,13 @@ BOOST_AUTO_TEST_CASE(rollbackLandsOnATreeThatVerifiesAgainstTheTargetRoot)
         }
         entries.push_back(history::HistoryEntry{.key = keyBytes, .oldValue = oldValue});
     }
-    bcos::task::syncWait(
-        history::TrieHistoryStore::put(flat, 2, entries, history::test::kWideShardCap));
+    trieStore.publish(bcos::task::syncWait(trieStore.put(flat, 2, history::test::blockHashOf(2),
+                          entries, history::test::kWideShardCap)),
+        std::nullopt, std::nullopt);
 
     history::test::Diff blockTwo;
     blockTwo.change(currentNumberKey(), "1"sv);
-    bcos::task::syncWait(
-        history::StateHistoryStore::put(flat, 2, blockTwo.entries(), history::test::kWideShardCap));
+    history::test::putBlock(stateStore, flat, 2, blockTwo);
     writeLiveRow(flat, currentNumberKey(), "2");
 
     // The store stands at block 2 and verifies against block 2's root, not block 1's.
@@ -339,23 +392,24 @@ BOOST_AUTO_TEST_CASE(rollbackLandsOnATreeThatVerifiesAgainstTheTargetRoot)
     BOOST_CHECK_THROW(runPathTreeAudit(flat, rootAtTwo), MPTInvariantViolation);
 }
 
-/// NEGATIVE CONTROL — a block inside the range whose manifest is gone must abort the WHOLE
+/// NEGATIVE CONTROL — a block inside the range whose history is gone must abort the WHOLE
 /// rollback before a single row moves.
 ///
-/// keysOfBlock() answers an expired block and a block that changed nothing with the same empty
-/// vector, so without the manifest pre-check block 2 would look like "nothing to undo": block 3
-/// alone would be reverse-applied and the live plane would be left straddling two block heights,
-/// reported as a success.
-BOOST_AUTO_TEST_CASE(missingManifestInsideTheRangeRefusesTheWholeRollback)
+/// The coverage contract (HistoryTables.h) makes "no meta row" mean "these pre-images were never
+/// captured, or have been expired", which is indistinguishable from a block that changed nothing
+/// unless the meta row is checked: a block that changed nothing still HAS one. Without the
+/// pre-check block 2 would look like "nothing to undo", block 3 alone would be reverse-applied,
+/// and the live plane would be left straddling two block heights and reported as a success.
+BOOST_AUTO_TEST_CASE(missingHistoryInsideTheRangeRefusesTheWholeRollback)
 {
     RollbackFixture fixture;
-    bcos::task::syncWait(history::StateHistoryStore::expire(fixture.storage, fixture.storage, 2));
+    bcos::task::syncWait(fixture.stateStore.expire(fixture.storage, fixture.storage, 2));
 
     BOOST_CHECK_EXCEPTION(fixture.rollback(1, /*apply=*/true), MPTInvariantViolation,
         [](MPTInvariantViolation const& error) {
             std::string const message = boost::diagnostic_information(error);
             BOOST_TEST_MESSAGE("rollback refused: " << message);
-            return message.find("block 2 has no StateHistory manifest") != std::string::npos &&
+            return message.find("block 2 has no StateHistory meta row") != std::string::npos &&
                    message.find("Nothing was written") != std::string::npos;
         });
 
@@ -364,44 +418,41 @@ BOOST_AUTO_TEST_CASE(missingManifestInsideTheRangeRefusesTheWholeRollback)
     BOOST_CHECK(!readLiveRow(fixture.storage, "/apps/a:y").has_value());
     BOOST_CHECK_EQUAL(*readLiveRow(fixture.storage, fixture.nodeKey), "n3");
     BOOST_CHECK_EQUAL(*readLiveRow(fixture.storage, currentNumberKey()), "3");
-    BOOST_CHECK_EQUAL(
-        bcos::task::syncWait(history::StateHistoryStore::keysOfBlock(fixture.storage, 3)).size(),
-        3);
+    BOOST_CHECK_EQUAL(stateRecordsOf(fixture.storage, 3), 3);
 }
 
 /// The dry run refuses too — that is where an operator looks first, so it is where the refusal has
 /// to land.
-BOOST_AUTO_TEST_CASE(missingManifestInsideTheRangeAlsoRefusesTheDryRun)
+BOOST_AUTO_TEST_CASE(missingHistoryInsideTheRangeAlsoRefusesTheDryRun)
 {
     RollbackFixture fixture;
-    bcos::task::syncWait(history::TrieHistoryStore::expire(fixture.storage, fixture.storage, 3));
+    bcos::task::syncWait(fixture.trieStore.expire(fixture.storage, fixture.storage, 3));
 
     BOOST_CHECK_EXCEPTION(fixture.rollback(1, /*apply=*/false), MPTInvariantViolation,
         [](MPTInvariantViolation const& error) {
             return std::string(boost::diagnostic_information(error))
-                       .find("block 3 has no TrieHistory manifest") != std::string::npos;
+                       .find("block 3 has no TrieHistory meta row") != std::string::npos;
         });
 }
 
-/// A block that genuinely changed nothing is NOT a missing manifest: put() always writes shard 0,
-/// so the block is present with an empty key list and the rollback proceeds.
+/// A block that genuinely changed nothing is NOT a missing block: put() always writes a meta row
+/// and an empty shard 0, so the block is present with a record count of zero and the rollback
+/// walks straight past it.
 BOOST_AUTO_TEST_CASE(blockThatChangedNothingDoesNotLookLikeAHole)
 {
+    history::StateHistoryStore stateStore;
+    history::TrieHistoryStore trieStore;
     history::test::HistoryMemStorage storage;
     history::test::Diff first;
     first.change("/apps/a:x"sv, std::nullopt);
-    bcos::task::syncWait(
-        history::StateHistoryStore::put(storage, 1, first.entries(), history::test::kWideShardCap));
-    bcos::task::syncWait(
-        history::TrieHistoryStore::put(storage, 1, first.entries(), history::test::kWideShardCap));
+    history::test::putBlock(stateStore, storage, 1, first);
+    history::test::putBlock(trieStore, storage, 1, first);
 
     history::test::Diff const empty;
     for (protocol::BlockNumber block = 2; block <= 3; ++block)
     {
-        bcos::task::syncWait(history::StateHistoryStore::put(
-            storage, block, empty.entries(), history::test::kWideShardCap));
-        bcos::task::syncWait(history::TrieHistoryStore::put(
-            storage, block, empty.entries(), history::test::kWideShardCap));
+        history::test::putBlock(stateStore, storage, block, empty);
+        history::test::putBlock(trieStore, storage, block, empty);
     }
     writeLiveRow(storage, "/apps/a:x", "v1");
 
@@ -411,26 +462,28 @@ BOOST_AUTO_TEST_CASE(blockThatChangedNothingDoesNotLookLikeAHole)
     BOOST_CHECK_EQUAL(*readLiveRow(storage, "/apps/a:x"), "v1");
 }
 
-/// NEGATIVE CONTROL — a block whose manifest lists a key it has no index row for cannot be
-/// reverse-applied, and the rollback must stop rather than leave that row at its post-block value
-/// (G6).
-BOOST_AUTO_TEST_CASE(holeInThePreimageChainStopsTheRollback)
+/// NEGATIVE CONTROL — a block whose meta row survives while a shard it declares does not. The
+/// diff on offer is SHORT, and applying a short diff would leave the rows it lost standing at
+/// their post-block values with nothing reporting it, so the rollback stops (G6).
+BOOST_AUTO_TEST_CASE(shortBlockDiffStopsTheRollback)
 {
     RollbackFixture fixture;
-    bcos::task::syncWait(bcos::storage2::removeOne(
-        fixture.storage, executor_v1::StateKey{history::kStateHistory.index,
-                             history::indexRowKey(history::test::makeBytes("/apps/a:x"sv), 3)}));
+    history::test::deleteRow(
+        fixture.storage, history::kStateHistory.shard, history::shardRowKey(3, 0));
 
     BOOST_CHECK_THROW(fixture.rollback(1, /*apply=*/true), MPTInvariantViolation);
+    // Block 3's own live rows are untouched: readBlock throws before a single write goes out.
+    BOOST_CHECK_EQUAL(*readLiveRow(fixture.storage, "/apps/a:x"), "v3");
 }
 
 /// The CLI's `--yes` leg, end to end, against the storage production runs on.
 ///
 /// Two real trie versions, block 2's PathMergeResult::preimages fed to TrieHistory, an /apps/ row
-/// in the state history shaped the way isHistoricalStateRow captures them, headers for both blocks
-/// and a seeded retention boundary — a store that looks like a node's, not like a test's. One copy
-/// is rolled back here with assertions; a second identical copy is left on disk under
-/// MPT_AUDIT_TEST_DB_DIR so `mpt-audit rollback --to 1 --yes` has a pristine store to run against.
+/// in the state history shaped the way isHistoricalStateRow captures them, headers and
+/// number->hash rows for both blocks and a seeded retention boundary — a store that looks like a
+/// node's, not like a test's. One copy is rolled back here with assertions; further identical
+/// copies are left on disk under MPT_AUDIT_TEST_DB_DIR so the `mpt-audit` smoke has pristine
+/// stores to run against.
 struct RocksDbRollbackStore
 {
     bcos::h256 rootAtOne;
@@ -443,6 +496,8 @@ RocksDbRollbackStore buildRocksDbRollbackStore(RocksDbStateStorage& storage)
 {
     mpt::test::NodeMemoryStorage nodes;
     RocksDbRollbackStore built;
+    history::StateHistoryStore stateStore;
+    history::TrieHistoryStore trieStore;
 
     std::map<bcos::h256, bcos::bytes> first;
     first[accountKeyHash(mpt::test::makeAddress(0x01))] = Account{}.encode();
@@ -456,10 +511,10 @@ RocksDbRollbackStore buildRocksDbRollbackStore(RocksDbStateStorage& storage)
     history::test::Diff blockOneState;
     blockOneState.change("/apps/0100000000000000000000000000000000000000:nonce"sv, std::nullopt);
     blockOneState.change("/apps/0200000000000000000000000000000000000000:nonce"sv, std::nullopt);
-    bcos::task::syncWait(history::StateHistoryStore::put(
-        storage, 1, blockOneState.entries(), history::kManifestShardByteCap));
-    bcos::task::syncWait(
-        history::TrieHistoryStore::put(storage, 1, {}, history::kManifestShardByteCap));
+    bcos::task::syncWait(stateStore.put(storage, 1, history::test::blockHashOf(1),
+        blockOneState.entries(), history::kHistoryShardByteCap));
+    bcos::task::syncWait(trieStore.put(
+        storage, 1, history::test::blockHashOf(1), {}, history::kHistoryShardByteCap));
     bcos::task::syncWait(
         history::seedRetentionBoundary<history::StateHistoryStore>(storage, std::nullopt, 1));
     bcos::task::syncWait(
@@ -498,17 +553,18 @@ RocksDbRollbackStore buildRocksDbRollbackStore(RocksDbStateStorage& storage)
         }
         trieEntries.push_back(history::HistoryEntry{.key = keyBytes, .oldValue = oldValue});
     }
-    bcos::task::syncWait(
-        history::TrieHistoryStore::put(storage, 2, trieEntries, history::kManifestShardByteCap));
+    bcos::task::syncWait(trieStore.put(
+        storage, 2, history::test::blockHashOf(2), trieEntries, history::kHistoryShardByteCap));
 
     built.newAccountRow = "/apps/0300000000000000000000000000000000000000:nonce";
     history::test::Diff blockTwoState;
     blockTwoState.change(built.newAccountRow, std::nullopt);
-    bcos::task::syncWait(history::StateHistoryStore::put(
-        storage, 2, blockTwoState.entries(), history::kManifestShardByteCap));
+    bcos::task::syncWait(stateStore.put(storage, 2, history::test::blockHashOf(2),
+        blockTwoState.entries(), history::kHistoryShardByteCap));
     writeLiveRow(storage, built.newAccountRow, "1");
 
-    // The chain metadata the CLI reads: a header per block, and the tip.
+    // The chain metadata the CLI reads: a header per block, the number->hash row B.10 ⑤ compares
+    // the meta rows against, and the tip.
     for (auto const& [block, root] : {std::pair{protocol::BlockNumber{1}, built.rootAtOne},
              std::pair{protocol::BlockNumber{2}, built.rootAtTwo}})
     {
@@ -520,9 +576,32 @@ RocksDbRollbackStore buildRocksDbRollbackStore(RocksDbStateStorage& storage)
         writeLiveRow(storage,
             std::string(ledger::SYS_NUMBER_2_BLOCK_HEADER) + ':' + std::to_string(block),
             std::string(encoded.begin(), encoded.end()));
+
+        auto const blockHash = history::test::blockHashOf(block);
+        writeLiveRow(storage, std::string(ledger::SYS_NUMBER_2_HASH) + ':' + std::to_string(block),
+            std::string(blockHash.begin(), blockHash.end()));
     }
     writeLiveRow(storage, currentNumberKey(), "2");
     return built;
+}
+
+/// The hash source the unit assertions use — the same rows the CLI reads.
+std::optional<bcos::h256> ledgerHashOf(RocksDbStateStorage& storage, protocol::BlockNumber block)
+{
+    auto entry = bcos::task::syncWait(bcos::storage2::readOne(
+        storage, executor_v1::StateKey{ledger::SYS_NUMBER_2_HASH, std::to_string(block)}));
+    if (!entry)
+    {
+        return std::nullopt;
+    }
+    auto const raw = entry->get();
+    if (raw.size() != bcos::h256::SIZE)
+    {
+        return std::nullopt;
+    }
+    return bcos::h256(bcos::bytesConstRef(
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+        reinterpret_cast<bcos::byte const*>(raw.data()), raw.size()));
 }
 
 BOOST_AUTO_TEST_CASE(rocksDbRollbackAppliesAndLandsOnTheTargetRoot)
@@ -540,7 +619,7 @@ BOOST_AUTO_TEST_CASE(rocksDbRollbackAppliesAndLandsOnTheTargetRoot)
         }
         {
             // The same store with block 1's state history expired under the Keep policy — an
-            // expiry that dropped rows without advancing the boundary. Oldest manifest 2, boundary
+            // expiry that dropped rows without advancing the boundary. Oldest meta row 2, boundary
             // still 0, so the store claims to answer for block 1 with nothing left to answer from:
             // the direction of B.10 ④ that produces silently wrong historical reads, and the one
             // the CLI has to print the `detail` text for.
@@ -549,9 +628,11 @@ BOOST_AUTO_TEST_CASE(rocksDbRollbackAppliesAndLandsOnTheTargetRoot)
                 bcos::storage2::rocksdb::StateKeyResolver{},
                 bcos::storage2::rocksdb::StateValueResolver{});
             buildRocksDbRollbackStore(storage);
-            bcos::task::syncWait(history::StateHistoryStore::expire(storage, storage, 1));
+            history::StateHistoryStore expiring;
+            bcos::task::syncWait(expiring.expire(storage, storage, 1));
 
-            auto const report = bcos::task::syncWait(auditStateHistory(storage, 2, 8, 1));
+            auto const report = bcos::task::syncWait(auditStateHistory(storage, 2, 8, 1,
+                [&storage](protocol::BlockNumber block) { return ledgerHashOf(storage, block); }));
             BOOST_CHECK_EQUAL(report.oldestRetained, 2);
             BOOST_REQUIRE(report.retentionBoundary.has_value());
             BOOST_CHECK_EQUAL(*report.retentionBoundary, 0);
@@ -576,11 +657,14 @@ BOOST_AUTO_TEST_CASE(rocksDbRollbackAppliesAndLandsOnTheTargetRoot)
     RocksDbStateStorage storage(*database.db, bcos::storage2::rocksdb::StateKeyResolver{},
         bcos::storage2::rocksdb::StateValueResolver{});
     auto const built = buildRocksDbRollbackStore(storage);
+    auto const hashes = [&storage](
+                            protocol::BlockNumber block) { return ledgerHashOf(storage, block); };
 
-    // Standing at block 2, and both histories audit clean against their own metadata.
+    // Standing at block 2, and both histories audit clean against their own metadata and the
+    // chain's hashes.
     BOOST_CHECK_NO_THROW(runPathTreeAudit(storage, built.rootAtTwo));
-    BOOST_CHECK(bcos::task::syncWait(auditStateHistory(storage, 2, 8, 1)).consistent());
-    BOOST_CHECK(bcos::task::syncWait(auditTrieHistory(storage, 2, 8, 1)).consistent());
+    BOOST_CHECK(bcos::task::syncWait(auditStateHistory(storage, 2, 8, 1, hashes)).consistent());
+    BOOST_CHECK(bcos::task::syncWait(auditTrieHistory(storage, 2, 8, 1, hashes)).consistent());
 
     auto const report = bcos::task::syncWait(rollbackTo(storage, 2, 1, 8, 8, /*apply=*/true));
     BOOST_CHECK(report.applied);
