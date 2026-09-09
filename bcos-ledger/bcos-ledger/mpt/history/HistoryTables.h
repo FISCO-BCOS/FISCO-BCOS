@@ -101,8 +101,8 @@ inline constexpr std::string_view kBlockHistoryCoverageContract =
 /// A table name must not contain ':': StateKeyResolver splits a physical key at its FIRST colon to
 /// rebuild the (table, rowKey) pair, so a colon in the table name would corrupt the split. History
 /// row keys DO contain arbitrary bytes (0x3A among them) — that is safe precisely because every
-/// colon in them sits after the first one. Same rule and reasoning as
-/// bcos-storage/KeyPrefixes.h:43.
+/// colon in them sits after the first one. Same rule and reasoning as the trie-node table names
+/// in bcos-ledger/bcos-ledger/mpt/PathKey.h:56.
 static_assert(kStateHistory.shard.find(':') == std::string_view::npos &&
                   kStateHistory.boundary.find(':') == std::string_view::npos &&
                   kTrieHistory.shard.find(':') == std::string_view::npos &&

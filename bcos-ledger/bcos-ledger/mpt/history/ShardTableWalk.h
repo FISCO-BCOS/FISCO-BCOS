@@ -37,6 +37,7 @@
 #include <bcos-task/Task.h>
 #include <cstddef>
 #include <memory>
+#include <string>
 #include <string_view>
 #include <variant>
 
@@ -89,9 +90,13 @@ inline const executor_v1::StateValue* asStateValue(RowValue const& value) noexce
 ///
 /// The byte count includes only rows that carry bytes; a sentinel contributes nothing, which is
 /// what makes `bytesScanned` "what was actually read" rather than "what was iterated over".
+/// @param fromRowKey taken BY VALUE: this is a coroutine, so a reference parameter would outlive
+///        nothing — every call site builds the key with metaRowKey(block), whose result is a
+///        temporary that dies at the end of the call expression, i.e. before the coroutine body
+///        first runs.
 template <SeekableStateStorage Storage, class Visitor>
 task::Task<std::size_t> walkShardTable(
-    Storage& backend, std::string_view table, std::string_view fromRowKey, Visitor&& visitor)
+    Storage& backend, std::string_view table, std::string fromRowKey, Visitor&& visitor)
 {
     std::size_t bytesScanned = 0;
     auto iterator = co_await storage2::range(
