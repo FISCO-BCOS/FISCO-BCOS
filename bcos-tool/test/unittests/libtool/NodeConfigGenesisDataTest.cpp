@@ -868,7 +868,7 @@ BOOST_AUTO_TEST_CASE(ethereumMergeBlockParsing)
     // 0x-prefixed hex is accepted, like the timestamps.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(base + "merge_block=0x1a7bcb\n"));
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(base + "merge_block=0x1a7acb\n"));
         BOOST_CHECK_EQUAL(cfg.ethereumMergeBlock(), 1735371u);
     }
     // Malformed values fail fast like every neighbouring parse.
