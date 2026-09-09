@@ -201,7 +201,10 @@ public:
                 }
                 catch (const std::exception& e)
                 {
-                    // Map storage faults to OpStorageFault, same as historical eth_call.
+                    // Round-4 F1: no dedicated OpStorageError clause — a storage fault must
+                    // classify as OpStorageFault ("storage fault") exactly like callAtBlock's
+                    // catch(std::exception&) arm, so latest and historical calls report the same
+                    // node-local fault identically.
                     auto const code = self->classifyException(std::current_exception());
                     OP_SCHEDULER_LOG(WARNING) << LOG_DESC("eth_call failed")
                                               << LOG_KV("detail", boost::diagnostic_information(e));
@@ -372,8 +375,13 @@ public:
         if (features.get(bcos::ledger::Features::Flag::feature_l2_ethereum_compat) &&
             keyOwned == bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE)
         {
-            auto const blockNumber =
-                co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
+            // Scenario-B MPT nonce reads use the requested block tag when provided; 0 means tip.
+            auto blockNumber = number;
+            if (blockNumber <= 0)
+            {
+                blockNumber =
+                    co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
+            }
             auto block = co_await bcos::ledger::getBlockData(
                 view, blockNumber, bcos::ledger::HEADER, *m_blockFactory);
             auto const stateRoot = block->blockHeader()->stateRoot();
@@ -1329,10 +1337,6 @@ private:
             {
                 error << bcos::engine::OpRejectIsCapacity{true};
             }
-            if (opErr.validateErrorCode)
-            {
-                error << bcos::engine::OpValidateErrorCode{opErr.validateErrorCode};
-            }
         }
         catch (...)
         {}
@@ -1507,22 +1511,6 @@ private:
         view.newMutable();
         auto blockNumber =
             co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
-
-        bcos::ledger::Features features;
-        co_await bcos::ledger::readFromStorage(features, view, blockNumber);
-        // Scenario B (OP / feature_l2_ethereum_compat): balances live in committed MPT only.
-        // The flat committed plane has no ACCOUNT_BALANCE rows, so route latest eth_call /
-        // estimateGas through the same MPT view as historical calls.
-        if (features.get(bcos::ledger::Features::Flag::feature_l2_ethereum_compat))
-        {
-            auto [err, receipt] = co_await coCallAtBlock(std::move(transaction), blockNumber);
-            if (err)
-            {
-                BOOST_THROW_EXCEPTION(*err);
-            }
-            co_return receipt;
-        }
-
         auto block = co_await bcos::ledger::getBlockData(
             view, blockNumber, bcos::ledger::HEADER, *m_blockFactory);
         // blockHeader() returns a shared_ptr by value; keep it alive.
@@ -1534,6 +1522,8 @@ private:
         auto ledgerConfig = std::make_shared<bcos::ledger::LedgerConfig>();
         ledgerConfig->setBlockNumber(blockNumber);
         ledgerConfig->setTimestamp(header.timestamp());
+        bcos::ledger::Features features;
+        co_await bcos::ledger::readFromStorage(features, view, blockNumber);
         ledgerConfig->setFeatures(features);
         ledgerConfig->setEVMCRevision(cfg.rev);
 
@@ -1558,19 +1548,16 @@ private:
                         latestNumber)),
                 protocol::TransactionReceipt::Ptr{nullptr}};
         }
-
-        bcos::ledger::Features features;
-        co_await bcos::ledger::readFromStorage(features, latestView, blockNumber);
-
-        if (blockNumber == latestNumber &&
-            !features.get(bcos::ledger::Features::Flag::feature_l2_ethereum_compat))
+        if (blockNumber == latestNumber)
         {
-            // Scenario A / flat-storage chains: latest == coCallLatest.
+            // Latest height: reuse coCallLatest.
             co_return std::tuple{
                 Error::Ptr{nullptr}, co_await coCallLatest(std::move(transaction))};
         }
 
-        // Historical (and scenario-B latest) calls need feature_l2_ethereum_compat.
+        // Historical call needs feature_l2_ethereum_compat (full-fidelity MPT).
+        bcos::ledger::Features features;
+        co_await bcos::ledger::readFromStorage(features, latestView, blockNumber);
         if (!features.get(bcos::ledger::Features::Flag::feature_l2_ethereum_compat))
         {
             co_return std::tuple{

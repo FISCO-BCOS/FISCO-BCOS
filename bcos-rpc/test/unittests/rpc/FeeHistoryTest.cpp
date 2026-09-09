@@ -17,9 +17,12 @@
  * @brief eth_feeHistory helpers: EIP-1559 / OP base-fee prediction and DA-cap wiring.
  */
 
+#include <bcos-framework/testutils/faker/FakeBlock.h>
+#include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/FeeHistory.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
+#include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -90,6 +93,68 @@ BOOST_AUTO_TEST_CASE(opNextBaseFeeFallsBackWithoutHoloceneExtraData)
     auto parent = makeLondonParent(30'000'000, 0, 1'000'000'000);
     auto const next = calcOpNextBaseFee(parent);
     BOOST_CHECK_EQUAL(next, bcos::u256(1'000'000'000));
+}
+
+BOOST_AUTO_TEST_CASE(buildFeeHistoryRejectsOutOfRangePercentile)
+{
+    auto cryptoSuite = bcos::test::createNormalCryptoSuite();
+    auto blockFactory = bcos::test::createBlockFactory(cryptoSuite);
+    auto ledger = std::make_shared<bcos::test::FakeLedger>(blockFactory, 5, 10, 10);
+
+    BOOST_CHECK_THROW(
+        task::syncWait(buildFeeHistory(*ledger, 4, 1, std::vector<double>{101.0}, false)),
+        JsonRpcException);
+}
+
+BOOST_AUTO_TEST_CASE(buildFeeHistoryReturnsOldestBlockAndBaseFees)
+{
+    auto cryptoSuite = bcos::test::createNormalCryptoSuite();
+    auto blockFactory = bcos::test::createBlockFactory(cryptoSuite);
+    auto ledger = std::make_shared<bcos::test::FakeLedger>(blockFactory, 5, 10, 10);
+
+    auto result = task::syncWait(buildFeeHistory(*ledger, 4, 2, std::vector<double>{}, false));
+    BOOST_CHECK(result.isMember("oldestBlock"));
+    BOOST_CHECK(result.isMember("baseFeePerGas"));
+    BOOST_CHECK(result["baseFeePerGas"].isArray());
+    // One entry per block in range plus a trailing predicted next base fee.
+    BOOST_CHECK_EQUAL(result["baseFeePerGas"].size(), 3u);
+    BOOST_CHECK_EQUAL(result["oldestBlock"].asString(), "0x3");
+}
+
+BOOST_AUTO_TEST_CASE(buildFeeHistoryIncludesRewardRowsWhenRequested)
+{
+    auto cryptoSuite = bcos::test::createNormalCryptoSuite();
+    auto blockFactory = bcos::test::createBlockFactory(cryptoSuite);
+    auto ledger = std::make_shared<bcos::test::FakeLedger>(blockFactory, 5, 10, 10);
+
+    auto result = task::syncWait(buildFeeHistory(*ledger, 4, 2, std::vector<double>{50.0}, false));
+    BOOST_CHECK(result.isMember("reward"));
+    BOOST_CHECK(result["reward"].isArray());
+    BOOST_CHECK_EQUAL(result["reward"].size(), 2u);
+    BOOST_REQUIRE_EQUAL(result["reward"][0].size(), 1u);
+}
+
+BOOST_AUTO_TEST_CASE(buildFeeHistoryOpModeUsesOpTrailingBaseFee)
+{
+    auto cryptoSuite = bcos::test::createNormalCryptoSuite();
+    auto blockFactory = bcos::test::createBlockFactory(cryptoSuite);
+    auto ledger = std::make_shared<bcos::test::FakeLedger>(blockFactory, 5, 10, 10);
+
+    auto header =
+        std::dynamic_pointer_cast<BlockHeaderImpl>(ledger->ledgerData()[4]->blockHeader());
+    BOOST_REQUIRE(header);
+    header->setEthBlockVersion(bcos::protocol::EthBlockVersion::LONDON);
+    header->setGasLimit(30'000'000);
+    header->setGasUsed(20'000'000);
+    header->setBaseFee(1'000'000'000);
+
+    auto l1Result = task::syncWait(buildFeeHistory(*ledger, 4, 1, std::vector<double>{}, false));
+    auto opResult = task::syncWait(buildFeeHistory(*ledger, 4, 1, std::vector<double>{}, true));
+    BOOST_REQUIRE_EQUAL(l1Result["baseFeePerGas"].size(), 2u);
+    BOOST_REQUIRE_EQUAL(opResult["baseFeePerGas"].size(), 2u);
+    // L1 uses EIP-1559 elasticity; OP (pre-Holocene parent) holds the parent base fee.
+    BOOST_CHECK_EQUAL(l1Result["baseFeePerGas"][1].asString(), "0x3e16926a");
+    BOOST_CHECK_EQUAL(opResult["baseFeePerGas"][1].asString(), "0x3b9aca00");
 }
 
 BOOST_AUTO_TEST_CASE(pickRewardPercentilesGasWeighted)

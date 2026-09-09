@@ -97,6 +97,10 @@ BOOST_FIXTURE_TEST_CASE(l2GenesisUsesMptRootNotXor, L2MptStorageFixture)
         mptView, *mptHeader, ledgerConfig, *cryptoSuite->hashImpl(), *blockFactory));
 
     BOOST_CHECK_NE(mptRoot, xorRoot);
+
+    auto directDelta = task::syncWait(bcos::engine::engine_common::buildMPTStateRootForView(
+        mptView, *mptHeader, ledgerConfig, *blockFactory));
+    BOOST_CHECK_EQUAL(mptRoot, directDelta.stateRoot);
 }
 
 BOOST_FIXTURE_TEST_CASE(nonL2ChainKeepsXorRoot, L2MptStorageFixture)

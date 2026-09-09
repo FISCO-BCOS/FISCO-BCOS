@@ -223,6 +223,14 @@ bcos::task::Task<Json::Value> bcos::rpc::buildFeeHistory(bcos::ledger::LedgerInt
     bcos::protocol::BlockNumber newestBlock, std::size_t blockCount,
     std::vector<double> const& rewardPercentiles, bool opStackMode)
 {
+    for (double percentile : rewardPercentiles)
+    {
+        if (percentile < 0.0 || percentile > 100.0)
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "reward percentiles must be in [0, 100]"));
+        }
+    }
     blockCount = std::min(blockCount, c_maxFeeHistoryBlocks);
     if (blockCount == 0)
     {

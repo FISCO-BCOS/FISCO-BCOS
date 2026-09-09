@@ -2618,4 +2618,19 @@ BOOST_AUTO_TEST_CASE(CommitAfterResetReportsUnknownErrorNotConsensusRejected)
     BOOST_CHECK(commitErr->errorMessage().find("Unexpected empty results") != std::string::npos);
 }
 
+/// Scenario B: nonce lives in the MPT trie, not the flat account row. eth_call /
+/// eth_estimateGas resolve the sender nonce via getPendingStorageAt(number=0).
+BOOST_AUTO_TEST_CASE(getPendingStorageAtReadsMptOnlyGenesisNonce)
+{
+    Fixture f;
+    seedL2CompatFeature(f.multiLayerStorage);
+    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
+
+    auto entry = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
+        kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, 0));
+    BOOST_REQUIRE(entry.has_value());
+    BOOST_CHECK_EQUAL(entry->get(), "0");
+}
+
 BOOST_AUTO_TEST_SUITE_END()
