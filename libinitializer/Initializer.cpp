@@ -90,7 +90,6 @@
 #include <memory>
 #include <string>
 #include <toml++/toml.hpp>
-#include <unistd.h>
 #include <vector>
 
 using namespace bcos;
@@ -424,10 +423,11 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             ledger::mpt::MPTPruner<std::remove_reference_t<decltype(pruneBackend)>>>(
             pruneBackend, m_nodeConfig->mptPruneWindow());
         // Startup rebuild: nothing pruning-related is persisted, so init re-derives the counts
-        // and the delete queue from the window's state roots, then sweeps unreachable "/mpt/"
-        // garbage synchronously — above the confirm threshold an interactive [y/N] is asked on
-        // a TTY; a non-interactive boot (daemon/systemd) skips the sweep and retries next boot.
-        // Throws MPTInvariantViolation on a missing reachable node row; fails loudly at boot.
+        // and the delete queue from the window's state roots, then handles pre-existing
+        // unreachable "/mpt/" garbage as storage.mpt_prune_sweep_garbage directs: off (the
+        // default) only counts and reports it; on deletes it in SWEEP_DELETE_CHUNK batches
+        // while scanning (MPTPruner.h Phase 3). Throws MPTInvariantViolation on a missing
+        // reachable node row; fails loudly at boot.
         auto const currentBlock = task::syncWait(ledger::getCurrentBlockNumber(*ledger));
         task::syncWait(pruner->init(currentBlock,
             [ledger](BlockNumber number) -> task::Task<std::optional<h256>> {
@@ -435,37 +435,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 co_return block ? std::optional<h256>{block->blockHeader()->stateRoot()}
                                 : std::nullopt;
             },
-            [](uint64_t count) {
-                if (isatty(STDIN_FILENO) == 0)
-                {
-                    INITIALIZER_LOG(WARNING)
-                        << LOG_DESC("MPT pruning: unreachable node rows exceed the confirm "
-                                    "threshold but stdin is not a TTY — cannot ask for "
-                                    "confirmation, garbage sweep skipped this boot")
-                        << LOG_KV("garbage", count);
-                    return false;
-                }
-                std::cout << "MPT pruning: found " << count
-                          << " unreachable node rows (historical garbage). Delete now? [y/N] "
-                          << std::flush;
-                std::string answer;
-                std::getline(std::cin, answer);
-                bool const yes = !answer.empty() && (answer[0] == 'y' || answer[0] == 'Y');
-                INITIALIZER_LOG(INFO) << LOG_DESC("MPT pruning: garbage sweep confirmed by "
-                                                  "operator")
-                                      << LOG_KV("garbage", count) << LOG_KV("confirmed", yes);
-                return yes;
-            },
+            m_nodeConfig->mptPruneSweepGarbage(),
             [](uint64_t done, uint64_t total) {
-                if (isatty(STDIN_FILENO) != 0)
-                {
-                    std::cout << "\rMPT pruning: deleting garbage node rows " << done << "/"
-                              << total << std::flush;
-                    if (done == total)
-                    {
-                        std::cout << std::endl;
-                    }
-                }
                 INITIALIZER_LOG(INFO) << LOG_DESC("MPT pruning: garbage sweep progress")
                                       << LOG_KV("deleted", done) << LOG_KV("total", total);
             }));

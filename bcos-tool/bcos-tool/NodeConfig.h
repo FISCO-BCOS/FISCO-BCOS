@@ -129,6 +129,9 @@ public:
     // MPT pruning (pathdb spec §4.8): retention window in blocks, -1 = disabled (default,
     // archive behavior).
     std::int64_t mptPruneWindow() const;
+    // Whether the startup rebuild also DELETES the pre-existing unreachable "/mpt/" garbage it
+    // finds (init Phase 3). Default false: the garbage is only counted and reported.
+    bool mptPruneSweepGarbage() const;
     std::vector<std::string> const& pdAddrs() const;
     std::string const& pdCaPath() const;
     std::string const& pdCertPath() const;
@@ -495,6 +498,9 @@ private:
     // MPT pruning (pathdb spec §4.8): a node whose refcount hits 0 at block b is deleted once
     // block b + mptPruneWindow commits; state roots in [head - N, head] stay fully reachable.
     std::int64_t m_mptPruneWindow = -1;  // -1 = disabled (default, archive behavior)
+    // Startup garbage sweep (init Phase 3): delete pre-existing unreachable "/mpt/" rows while
+    // booting. Default off — the boot then only counts and reports the garbage.
+    bool m_mptPruneSweepGarbage = false;
 
     bool m_enableArchive = false;
     bool m_syncArchivedBlocks = false;

@@ -644,11 +644,11 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
         // (RocksDBStorage2::merge).
         //
         // MPT pruning (CommitObserver::coPreparePruneRows): the observer turns the block's
-        // delta into its pruning metadata rows (refcount / delete-queue / watermark / window
-        // fingerprint) PLUS the
-        // deletions of expired node rows, all applied to prewriteStorage so they land in the
-        // SAME WriteBatch as the block data — metadata, data and deletions can never diverge
-        // across a crash, and the deletion decision runs here, under m_commitMutex, so it can
+        // delta into the deletion keys of expired node rows (pruning keeps no metadata on
+        // disk — its counts and queue are in memory — so the batch carries deletions only),
+        // applied to prewriteStorage so they land in the SAME WriteBatch as the block data —
+        // data and deletions can never diverge across a crash, and the deletion decision runs
+        // here, under m_commitMutex, so it can
         // never race a concurrent commit reviving the node (F2 review fix: an earlier revision
         // deleted from the observer's private worker thread, which could remove a node a
         // concurrent block had just revived). The NoopCommitObserver default returns an empty
@@ -663,10 +663,6 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
         {
             auto pruneRows = co_await commitObserver->coPreparePruneRows(
                 header->number(), *result->m_mptDelta);
-            if (!pruneRows.rows.empty())
-            {
-                co_await storage2::writeSome(prewriteStorage, std::move(pruneRows.rows));
-            }
             if (!pruneRows.deletions.empty())
             {
                 // The mutable layer is LOGICAL_DELETION: removeSome writes tombstones that the

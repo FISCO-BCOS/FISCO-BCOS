@@ -16,8 +16,12 @@
  */
 
 #include "../common/RPCFixture.h"
+#include <bcos-framework/storage2/MemoryStorage.h>
+#include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-ledger/mpt/Constants.h>
 #include <bcos-rpc/util.h>
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
+#include <bcos-storage/MPTNodeReadStorage.h>
 #include <boost/test/unit_test.hpp>
 #include <future>
 #include <string>
@@ -58,8 +62,16 @@ public:
 class Web3EthCallBlockTagFixture : public RPCFixture
 {
 public:
+    /// The MPT node row plane the historical eth_call root probe reads through the NodeService
+    /// reader (round-5 F4): a non-latest tag resolves the block's committed state root and
+    /// answers -32004 when that root is no longer in MPT node storage, before callAtBlock.
+    using StateRowStorage =
+        bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
+            bcos::executor_v1::StateValue, bcos::storage2::memory_storage::ORDERED>;
+
     Web3JsonRpcImpl::Ptr buildWeb3Rpc(std::shared_ptr<bcos::scheduler::SchedulerInterface> sched,
-        protocol::BlockNumber safeDepth = 0, protocol::BlockNumber finalizedDepth = 0)
+        protocol::BlockNumber safeDepth = 0, protocol::BlockNumber finalizedDepth = 0,
+        std::int64_t mptPruneWindow = -1)
     {
         auto service = std::make_shared<rpc::NodeService>(
             m_ledger, std::move(sched), txPool, nullptr, nullptr, m_blockFactory, nullptr);
@@ -67,6 +79,18 @@ public:
         // through callAtBlock (covered in configuredDepthsRouteThroughCallAtBlock).
         service->setSafeBlockDepth(safeDepth);
         service->setFinalizedBlockDepth(finalizedDepth);
+        service->setMPTNodeReader(storage2::makeMPTNodeReader(m_stateRows));
+        service->setMPTPruneWindow(mptPruneWindow);
+        // Give every fake block a resolvable committed root: the empty root is a legal
+        // "no accounts" root and skips the row probe — the tests below exercise the probe
+        // itself with explicit roots.
+        for (auto const& block : m_ledger->ledgerData())
+        {
+            if (block && block->blockHeader())
+            {
+                block->blockHeader()->setStateRoot(bcos::ledger::mpt::emptyRootHash());
+            }
+        }
         rpc = factory->buildLocalRpc(groupInfo, service);
         auto web3 = rpc->web3JsonRpc();
         BOOST_REQUIRE(web3 != nullptr);
@@ -90,6 +114,7 @@ public:
         return value;
     }
 
+    StateRowStorage m_stateRows;
     Rpc::Ptr rpc;
 };
 
@@ -173,6 +198,26 @@ BOOST_AUTO_TEST_CASE(defaultImplementationKeepsLegacySchedulersWorking)
 
     auto resp = request(web3, R"("0x1")");
     BOOST_CHECK(resp.isMember("result"));
+}
+
+// Round-5 F4: a historical eth_call whose committed state root is no longer in MPT node
+// storage (beyond the pruning window) answers -32004 with the pruned-window message BEFORE
+// dispatching to callAtBlock — the scheduler never sees the request.
+BOOST_AUTO_TEST_CASE(historicalCallBeyondPruneWindowAnswers32004)
+{
+    auto recording = std::make_shared<RecordingScheduler>(m_ledger, m_blockFactory);
+    auto web3 = buildWeb3Rpc(recording, 0, 0, /*mptPruneWindow=*/10);
+
+    // Block 1's root is absent from the (empty) node-row plane — as if pruned. The head is
+    // 19, so block 1 < 19 - 10: inside the pruned region.
+    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(h256{0x1234U});
+
+    auto resp = request(web3, R"("0x1")");
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32004);
+    BOOST_CHECK(resp["error"]["message"].asString().find("State pruned") != std::string::npos);
+    BOOST_CHECK_EQUAL(recording->m_latestCalls, 0);
+    BOOST_CHECK(recording->m_historicalCalls.empty());
 }
 
 // Direct unit coverage of bcos::rpc::getBlockNumberByTag (round-2 Finding G/Q): default

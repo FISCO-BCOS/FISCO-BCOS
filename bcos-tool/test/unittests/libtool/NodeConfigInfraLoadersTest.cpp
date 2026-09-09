@@ -86,6 +86,16 @@ BOOST_AUTO_TEST_CASE(storageConfigMptPruneValidation)
         BOOST_CHECK_THROW(probe.loadStorageConfig(fromIni(std::string("[storage]\n") + bad)),
             bcos::tool::InvalidConfig);
     }
+
+    // mpt_prune_sweep_garbage: bool, default false (the boot only counts and reports the
+    // unreachable garbage rows).
+    LoaderProbe sweepDefault;
+    BOOST_CHECK_NO_THROW(sweepDefault.loadStorageConfig({}));
+    BOOST_CHECK(!sweepDefault.mptPruneSweepGarbage());
+    LoaderProbe sweepOn;
+    BOOST_CHECK_NO_THROW(
+        sweepOn.loadStorageConfig(fromIni("[storage]\nmpt_prune_sweep_garbage=true\n")));
+    BOOST_CHECK(sweepOn.mptPruneSweepGarbage());
 }
 
 

@@ -20,27 +20,23 @@
 
 #include "MPTDeltaLayer.h"
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
-#include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-task/Task.h>
-#include <utility>
 #include <vector>
 
 namespace bcos::ledger::mpt
 {
 
-/// One block's pruning rows, exchanged between the observer and the commit flow. `rows` are
-/// upserts (refcount / delete-queue / watermark), `deletions` the keys to remove (expired
-/// "/mpt/" node rows plus the consumed metadata rows). Both are keyed by executor_v1::StateKey
-/// (not an h256/bytes node-storage pair) because the pruning metadata lives in ordinary
-/// "/sys/mpt_prune_*" state tables and the node rows in "/mpt/" — all must merge into the
-/// block's prewriteStorage alongside the flat state, so the commit flow applies them with one
-/// storage2::writeSome + one storage2::removeSome and no MPT-specific code of its own, and the
-/// deletions land in the SAME WriteBatch as the block data (no "metadata says deleted, node
-/// row still there" — or the reverse — crash window).
+/// One block's pruning rows, exchanged between the observer and the commit flow: `deletions`
+/// are the keys to remove (expired "/mpt/" node rows). Keyed by executor_v1::StateKey (not an
+/// h256/bytes node-storage pair) because the node rows live in the ordinary "/mpt/" state
+/// table and must merge into the block's prewriteStorage alongside the flat state, so the
+/// commit flow applies them with one storage2::removeSome and no MPT-specific code of its own,
+/// and the deletions land in the SAME WriteBatch as the block data (no "node row deleted,
+/// block data lost" — or the reverse — crash window). Pruning keeps no metadata on disk — all
+/// of its state is in memory (MPTPruner) — so there are no upsert rows to carry.
 struct PruneRowBatch
 {
-    std::vector<std::pair<bcos::executor_v1::StateKey, bcos::storage::Entry>> rows;
     std::vector<bcos::executor_v1::StateKey> deletions;
 };
 
@@ -59,14 +55,13 @@ public:
     virtual void onCommit(bcos::protocol::BlockNumber blockNumber, MPTDeltaLayer const& delta) = 0;
 
     /// Pre-commit counterpart of onCommit: called inside the commit coroutine BEFORE the block's
-    /// storage layers merge, and returns the pruning metadata rows AND the deletions of expired
-    /// nodes, both landing in the SAME WriteBatch as the block data — metadata, data and
-    /// deletions can never diverge across a crash, and the deletion decision (made under the
-    /// commit mutex, against the committed backend plus this block's own overlay) can never
-    /// race a concurrent commit reviving the node. Pure computation plus batched reads against
-    /// the committed backend — the caller owns applying the returned rows. The default returns
-    /// an empty batch: observers without pruning metadata (e.g. NoopCommitObserver) ignore the
-    /// hook.
+    /// storage layers merge, and returns the deletions of expired node rows, landing in the
+    /// SAME WriteBatch as the block data — data and deletions can never diverge across a crash,
+    /// and the deletion decision (made under the commit mutex, against the committed backend
+    /// plus this block's own overlay) can never race a concurrent commit reviving the node.
+    /// Pure computation plus batched reads against the committed backend — the caller owns
+    /// applying the returned keys. The default returns an empty batch: observers without
+    /// pruning (e.g. NoopCommitObserver) ignore the hook.
     virtual bcos::task::Task<PruneRowBatch> coPreparePruneRows(
         bcos::protocol::BlockNumber /*blockNumber*/, MPTDeltaLayer const& /*delta*/)
     {

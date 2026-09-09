@@ -978,6 +978,18 @@ task::Task<void> EthEndpoint::call(
         WEB3_LOG(TRACE) << LOG_DESC("eth_call") << LOG_KV("call", call)
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
+    if (!isLatest)
+    {
+        // Same root-presence probe as the other five historical MPT endpoints: a block whose
+        // state root is no longer in MPT node storage (beyond the pruning window) answers
+        // -32004 right here, instead of dispatching to callAtBlock, whose historical-state
+        // walk would surface the missing root as a generic scheduler error. The context itself
+        // is re-resolved by callAtBlock; a root pruned between this probe and the execution
+        // keeps the pre-existing behavior.
+        auto const ledger = m_nodeService->ledger();
+        co_await resolveHistoricalMptContext(*ledger, blockNumber, head,
+            m_nodeService->mptNodeReader(), m_nodeService->mptPruneWindow());
+    }
     auto tx = call.takeToTransaction(
         m_nodeService->blockFactory()->transactionFactory(), isEstimate ? scheduler : nullptr);
     struct Awaitable

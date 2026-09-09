@@ -1746,6 +1746,9 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
                                   "[1, 10000000], got " +
                                   std::to_string(m_mptPruneWindow)));
     }
+    // Startup garbage sweep (init Phase 3): default off — the boot only counts and reports the
+    // pre-existing unreachable "/mpt/" rows; enable to delete them (in batches) while booting.
+    m_mptPruneSweepGarbage = _pt.get<bool>("storage.mpt_prune_sweep_garbage", false);
     m_pdCaPath = _pt.get<std::string>("storage.pd_ssl_ca_path", "");
     m_pdCertPath = _pt.get<std::string>("storage.pd_ssl_cert_path", "");
     m_pdKeyPath = _pt.get<std::string>("storage.pd_ssl_key_path", "");
@@ -1788,6 +1791,7 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("archiveListenPort", m_archiveListenPort)
                          << LOG_KV("enable_rocksdb_blob", m_enableRocksDBBlob)
                          << LOG_KV("mptPruneWindow", m_mptPruneWindow)
+                         << LOG_KV("mptPruneSweepGarbage", m_mptPruneSweepGarbage)
                          << LOG_KV("enableLRUCacheStorage", m_enableLRUCacheStorage);
 }
 
@@ -2498,6 +2502,11 @@ bool NodeConfig::enableRocksDBBlob() const
 std::int64_t NodeConfig::mptPruneWindow() const
 {
     return m_mptPruneWindow;
+}
+
+bool NodeConfig::mptPruneSweepGarbage() const
+{
+    return m_mptPruneSweepGarbage;
 }
 
 std::vector<std::string> const& NodeConfig::pdAddrs() const

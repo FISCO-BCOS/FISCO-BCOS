@@ -100,13 +100,18 @@ namespace bcos::ledger::mpt
 ///    one the head state no longer references, last referenced by the NEWEST root that still
 ///    holds it, s — it was obsoleted at s+1, so deadline = s+1+N (still in the future:
 ///    s >= head−N). Newest-first makes the first attribution the correct one; the deadline
-///    keeps the node alive until every root referencing it has left the window.
+///    keeps the node alive until every root referencing it has left the window. Each candidate
+///    root's ROW is probed first: a missing root row means the chain previously ran a SMALLER
+///    window and that block was already pruned (root(b) leaves at b+1+N_old) — a widened N
+///    recovers only roots still on disk, so the walk stops there and the effective window
+///    starts at the first surviving root.
 ///  - Phase 3 (first-sweep of pre-existing garbage): scan the "/mpt/" table; a row in neither
 ///    the counts nor the queue is unreachable garbage (historical leak, or nodes written before
-///    pruning was enabled) and is deleted synchronously right here, in SWEEP_DELETE_CHUNK
-///    batches. A garbage count above SWEEP_CONFIRM_THRESHOLD requires an interactive
-///    confirmation (init's confirm callable); unconfirmed or non-interactive boots skip the
-///    sweep with a WARNING — the garbage stays on disk and is re-detected at the next boot.
+///    pruning was enabled). Driven by storage.mpt_prune_sweep_garbage: disabled (the default)
+///    only counts and reports the garbage with a hint to enable the sweep; enabled deletes the
+///    rows WHILE scanning, in SWEEP_DELETE_CHUNK batches — the full garbage set is never
+///    materialized (the range iterator survives deleting already-passed keys: MemoryStorage's
+///    ordered index invalidates only erased elements, RocksDBStorage2 pins a snapshot).
 ///
 /// A chain whose MPT is not yet active at boot (head < activation) skips the rebuild entirely:
 /// the activation block's full first build (FlatToMPT) emits every node as that block's
@@ -128,9 +133,6 @@ public:
     /// Garbage sweep batching: each chunk is one WriteBatch (idempotent — a crash mid-sweep
     /// leaves the rest on disk, re-detected at the next boot).
     static constexpr size_t SWEEP_DELETE_CHUNK = 10'000;
-    /// Above this many unreachable rows the startup sweep asks for confirmation before
-    /// deleting (see init's GarbageConfirm).
-    static constexpr uint64_t SWEEP_CONFIRM_THRESHOLD = 10'000;
 
     /// The stateRoot of block @p n (nullopt when that block's header is unavailable). A pre-MPT
     /// block may return its legacy XOR root — init truncates the walk at firstMptBlock via the
@@ -138,11 +140,9 @@ public:
     using StateRootLookup =
         std::function<bcos::task::Task<std::optional<bcos::h256>>(bcos::protocol::BlockNumber)>;
 
-    /// Startup-sweep interaction: called once with the unreachable garbage count when it
-    /// exceeds SWEEP_CONFIRM_THRESHOLD; returns true to delete now, false to skip. An empty
-    /// callable is a refusal (safe default).
-    using GarbageConfirm = std::function<bool(uint64_t count)>;
-    /// Called after each deleted chunk of the startup sweep: rows deleted so far, total.
+    /// Called after each deleted chunk of the startup sweep: rows deleted so far, garbage rows
+    /// found so far (the total is unknown until the scan finishes; the last call reports the
+    /// final total in both).
     using GarbageProgress = std::function<void(uint64_t done, uint64_t total)>;
 
     /// @param backend         the committed-state backend; every read below hits it directly
@@ -156,11 +156,13 @@ public:
     /// Rebuild the in-memory counts and delete queue from the committed state (see the class
     /// comment for the three phases). Runs synchronously at boot, before the scheduler starts
     /// committing — no concurrency. No persistence, no startup guard: any chain state with the
-    /// window's roots intact rebuilds correctly. @throws MPTInvariantViolation when a reachable
-    /// node row is missing (the trie is the source of truth — fail loud, same convention as
-    /// Trie.h) or the head header carries no root.
+    /// window's roots intact rebuilds correctly. @p sweepGarbage mirrors
+    /// storage.mpt_prune_sweep_garbage: false only counts and reports the unreachable rows,
+    /// true deletes them while scanning (Phase 3). @throws MPTInvariantViolation when a
+    /// reachable node row is missing (the trie is the source of truth — fail loud, same
+    /// convention as Trie.h) or the head header carries no root.
     bcos::task::Task<void> init(bcos::protocol::BlockNumber currentBlock,
-        StateRootLookup stateRootAt, GarbageConfirm confirm = {}, GarbageProgress progress = {})
+        StateRootLookup stateRootAt, bool sweepGarbage, GarbageProgress progress = {})
     {
         m_watermark.store(currentBlock, std::memory_order_relaxed);
 
@@ -218,16 +220,37 @@ public:
             {
                 break;  // older headers unavailable (pruned block data) — nothing more to walk
             }
+            // Probe the root ROW first: a chain that previously ran a SMALLER window has
+            // already deleted this block's root (root(b) leaves at b+1+N_old), and deadlineWalk
+            // would fail loud on the missing row. Widening N recovers only roots still on disk,
+            // so stop the downward walk here — the effective window starts at block+1, the
+            // first surviving root (the same shape as a shrunken window).
+            if (*root != emptyRootHash() &&
+                !co_await bcos::storage2::readOne(
+                    *m_backend, bcos::ledger::mptNodeStateKey(*root)))
+            {
+                MPT_PRUNER_LOG(INFO)
+                    << "MPT pruning: in-window state root already pruned by a previous smaller "
+                       "window — stopping the rebuild walk at the first surviving root"
+                    << LOG_KV("block", block) << LOG_KV("effectiveWindowStart", block + 1)
+                    << LOG_KV("pruneWindow", m_pruneWindow);
+                break;
+            }
             co_await deadlineWalk(
                 *root, true, static_cast<uint64_t>(block + 1 + m_pruneWindow), seen);
         }
 
-        // Phase 3: collect every unreachable "/mpt/" row (never counted, never queued) —
-        // historical garbage from before pruning existed — then delete it synchronously in
-        // SWEEP_DELETE_CHUNK batches. Above SWEEP_CONFIRM_THRESHOLD an interactive
-        // confirmation is required; without it the sweep is skipped (retried at next boot).
-        // Garbage rows are by definition not in m_counts, so no in-memory table needs a fix-up.
-        std::vector<bcos::h256> garbage;
+        // Phase 3: scan the "/mpt/" table for unreachable rows (never counted, never queued) —
+        // historical garbage from before pruning existed. sweepGarbage=false only counts and
+        // reports (the rows stay and are re-detected at every boot); sweepGarbage=true deletes
+        // WHILE scanning in SWEEP_DELETE_CHUNK batches, never materializing the full garbage
+        // set: the range iterator survives deleting already-passed keys (MemoryStorage's
+        // ordered index invalidates only erased elements; RocksDBStorage2's RANGE_SEEK pins a
+        // snapshot). Garbage rows are by definition not in m_counts, so no in-memory table
+        // needs a fix-up.
+        uint64_t garbage = 0;
+        uint64_t garbageDeleted = 0;
+        std::vector<bcos::executor_v1::StateKey> chunk;
         auto iterator = co_await bcos::storage2::range(*m_backend, bcos::storage2::RANGE_SEEK,
             bcos::executor_v1::StateKey{bcos::storage2::kMPTTable, std::string_view{}});
         while (auto item = co_await iterator.next())
@@ -255,43 +278,41 @@ public:
             {
                 continue;
             }
-            garbage.push_back(hash);
-        }
-
-        uint64_t garbageDeleted = 0;
-        uint64_t garbageSkipped = 0;
-        if (!garbage.empty())
-        {
-            bool const confirmed = garbage.size() <= SWEEP_CONFIRM_THRESHOLD ||
-                                   (confirm && confirm(static_cast<uint64_t>(garbage.size())));
-            if (confirmed)
+            ++garbage;
+            if (!sweepGarbage)
             {
-                for (size_t offset = 0; offset < garbage.size(); offset += SWEEP_DELETE_CHUNK)
+                continue;
+            }
+            chunk.push_back(bcos::ledger::mptNodeStateKey(hash));
+            if (chunk.size() >= SWEEP_DELETE_CHUNK)
+            {
+                garbageDeleted += chunk.size();
+                co_await bcos::storage2::removeSome(*m_backend, std::move(chunk));
+                chunk.clear();
+                if (progress)
                 {
-                    auto const end = std::min(offset + SWEEP_DELETE_CHUNK, garbage.size());
-                    std::vector<bcos::executor_v1::StateKey> keys;
-                    keys.reserve(end - offset);
-                    for (size_t i = offset; i < end; ++i)
-                    {
-                        keys.push_back(bcos::ledger::mptNodeStateKey(garbage[i]));
-                    }
-                    co_await bcos::storage2::removeSome(*m_backend, std::move(keys));
-                    garbageDeleted = end;
-                    if (progress)
-                    {
-                        progress(garbageDeleted, static_cast<uint64_t>(garbage.size()));
-                    }
+                    progress(garbageDeleted, garbage);
                 }
             }
-            else
+        }
+        if (!chunk.empty())
+        {
+            garbageDeleted += chunk.size();
+            co_await bcos::storage2::removeSome(*m_backend, std::move(chunk));
+            if (progress)
             {
-                garbageSkipped = garbage.size();
-                MPT_PRUNER_LOG(WARNING)
-                    << "MPT pruning: unreachable \"/mpt/\" garbage exceeds the confirm threshold "
-                       "and was not confirmed — sweep skipped, retried at next boot"
-                    << LOG_KV("garbage", garbage.size())
-                    << LOG_KV("threshold", SWEEP_CONFIRM_THRESHOLD);
+                progress(garbageDeleted, garbage);
             }
+        }
+
+        uint64_t const garbageSkipped = sweepGarbage ? 0 : garbage;
+        if (garbageSkipped > 0)
+        {
+            MPT_PRUNER_LOG(INFO)
+                << "MPT pruning: unreachable \"/mpt/\" garbage rows found but the sweep is "
+                   "disabled — set storage.mpt_prune_sweep_garbage=true and restart to reclaim "
+                   "the disk space (counted only, nothing deleted this boot)"
+                << LOG_KV("garbage", garbageSkipped);
         }
 
         MPT_PRUNER_LOG(INFO) << "MPT pruning: reference counts rebuilt from the state roots"
@@ -300,16 +321,16 @@ public:
                              << LOG_KV("windowStart", windowStart)
                              << LOG_KV("tracked", m_counts.size())
                              << LOG_KV("scheduled", pendingCount())
-                             << LOG_KV("garbage", garbage.size())
+                             << LOG_KV("garbage", garbage)
                              << LOG_KV("garbageDeleted", garbageDeleted)
-                             << LOG_KV("garbageSkipped", garbageSkipped);
+                             << LOG_KV("garbageSkipped", garbageSkipped)
+                             << LOG_KV("sweepGarbage", sweepGarbage);
         m_lastSweepDeleted = garbageDeleted;
         m_lastSweepSkipped = garbageSkipped;
     }
 
     /// The pruning rows for @p blockNumber: only the deletions of expired nodes — pruning keeps
-    /// no metadata on disk, so `rows` is always empty. Pure in-memory computation plus no reads;
-    /// issues no writes itself.
+    /// no metadata on disk. Pure in-memory computation plus no reads; issues no writes itself.
     bcos::task::Task<PruneRowBatch> coPreparePruneRows(
         bcos::protocol::BlockNumber blockNumber, MPTDeltaLayer const& delta) override
     {
