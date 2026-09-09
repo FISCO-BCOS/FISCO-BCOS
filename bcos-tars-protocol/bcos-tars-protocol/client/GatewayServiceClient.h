@@ -57,8 +57,8 @@ public:
     bcos::task::Task<std::tuple<bcos::Error::Ptr, bcos::gateway::GroupNodeInfo::Ptr>>
     getGroupNodeInfo(const std::string& _groupID) override;
 
-    void asyncNotifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo,
-        std::function<void(bcos::Error::Ptr&&)> _callback) override;
+    bcos::task::Task<bcos::Error::Ptr> notifyGroupInfo(
+        bcos::group::GroupInfo::Ptr _groupInfo) override;
 
     bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>> sendMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data) override;

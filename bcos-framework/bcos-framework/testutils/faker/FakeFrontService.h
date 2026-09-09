@@ -279,9 +279,10 @@ public:
     {
         co_return;
     };
-    void asyncNotifyGroupInfo(
-        bcos::group::GroupInfo::Ptr _groupInfo, std::function<void(Error::Ptr&&)> function) override
-    {}
+    task::Task<Error::Ptr> notifyGroupInfo(bcos::group::GroupInfo::Ptr) override
+    {
+        co_return nullptr;
+    }
     task::Task<std::tuple<Error::Ptr, int16_t, bcos::bytes>> sendMessageByTopic(
         const std::string& /*_topic*/, bcos::bytesConstRef /*_data*/) override
     {

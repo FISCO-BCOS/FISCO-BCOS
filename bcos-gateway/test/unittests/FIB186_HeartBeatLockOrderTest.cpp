@@ -147,7 +147,7 @@ BOOST_AUTO_TEST_CASE(HeartBeatDoesNotHoldNodesLockWhileTakingSessionsLock)
         "FIB-186 vector D: heartBeat held x_nodes while calling isConnected() (which takes "
         "x_sessions). That is the reverse of onConnect's order (x_sessions -> x_nodes via "
         "updateStaticNodes) and deadlocks under connection churn. heartBeat must snapshot "
-        "m_staticNodes under x_nodes, release it, then do the isConnected()/asyncConnect() work.");
+        "m_staticNodes under x_nodes, release it, then do the isConnected()/connect() work.");
 
     service->disarm();
 }

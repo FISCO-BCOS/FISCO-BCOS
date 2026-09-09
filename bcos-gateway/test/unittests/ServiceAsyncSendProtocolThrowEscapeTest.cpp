@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief Regression test for round-3 review finding 1: Service::asyncSendProtocol must not let a
+ * @brief Regression test for round-3 review finding 1: Service::sendProtocol must not let a
  *        synchronous pre-send rejection (outgoing rate limit / max size) escape task::wait and
  *        abort Service::onConnect's session-registration tail (the session would stay
  *        live-but-unregistered, silently hidden from the routing layer).
@@ -23,7 +23,7 @@
  * The pre-send checks in Session::fastSendMessage (allowMaxMsgSize / beforeMessageHandler) run
  * synchronously on the caller thread and BOOST_THROW_EXCEPTION. That exception propagates out of
  * task::wait synchronously (the nested co_await chain unwinds inside AsyncTask::start()). If
- * asyncSendProtocol did not catch it, onConnect's lines after the handshake call —
+ * sendProtocol did not catch it, onConnect's lines after the handshake call —
  * updateStaticNodes, m_sessions[p2pID] = p2pSession, callNewSessionHandlers — would all be
  * skipped, leaving a started/live socket that the routing layer cannot see. This test is RED on
  * the pre-fix code (the rejection escapes) and GREEN after (caught inside the coroutine).
@@ -45,23 +45,23 @@ using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::test;
 
-BOOST_FIXTURE_TEST_SUITE(ServiceAsyncSendProtocolThrowEscapeTest, TestPromptFixture)
+BOOST_FIXTURE_TEST_SUITE(ServiceSendProtocolThrowEscapeTest, TestPromptFixture)
 
 namespace
 {
-// Service::asyncSendProtocol is protected; expose it for the test through a subclass (same pattern
+// Service::sendProtocol is protected; expose it for the test through a subclass (same pattern
 // as the FIB-186 lock-order tests).
 class ProbeService : public Service
 {
 public:
     explicit ProbeService(P2PInfo const& _info) : Service(_info) {}
-    void sendProtocol(P2PSession::Ptr _session) { asyncSendProtocol(std::move(_session)); }
+    using Service::sendProtocol;
 };
 
 // A SessionFace whose fastSendMessage rejects synchronously — the same way Session::
 // fastSendMessage throws NetworkException for a rate-limit / oversize rejection before any
 // suspension. P2PSession::fastSendP2PMessage therefore throws synchronously out of the co_await,
-// which (pre-fix) escaped task::wait inside Service::asyncSendProtocol.
+// which (pre-fix) escaped task::wait inside Service::sendProtocol.
 class RejectingSession : public SessionFace
 {
 public:
@@ -86,9 +86,9 @@ public:
 };
 }  // namespace
 
-BOOST_AUTO_TEST_CASE(AsyncSendProtocolDoesNotEscapeSendRejection)
+BOOST_AUTO_TEST_CASE(SendProtocolDoesNotEscapeSendRejection)
 {
-    // asyncSendProtocol encodes the local protocol via g_BCOSConfig's codec — the same global the
+    // sendProtocol encodes the local protocol via g_BCOSConfig's codec — the same global the
     // Service constructor reads. Production initializers set it before building the gateway; the
     // unit-test harness does not, so set it here (idempotent).
     bcos::protocol::g_BCOSConfig.setCodec(
@@ -106,7 +106,7 @@ BOOST_AUTO_TEST_CASE(AsyncSendProtocolDoesNotEscapeSendRejection)
     p2pSession->setProtocolInfo(
         g_BCOSConfig.protocolInfo(bcos::protocol::ProtocolModuleID::GatewayService));
 
-    // Pre-fix: the handshake rejection escapes task::wait and propagates out of asyncSendProtocol
+    // Pre-fix: the handshake rejection escapes task::wait and propagates out of sendProtocol
     // (synchronously aborting onConnect's registration tail). Post-fix: caught inside the
     // coroutine and logged — a failed handshake is a recoverable per-session failure and the
     // session registration in onConnect must proceed.
