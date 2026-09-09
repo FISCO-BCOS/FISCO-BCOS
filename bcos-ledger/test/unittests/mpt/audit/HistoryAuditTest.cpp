@@ -181,9 +181,11 @@ BOOST_AUTO_TEST_CASE(metaShardCountAboveWhatIsOnDiskIsReportedAsBOne)
     BOOST_CHECK_EQUAL(findingOf(report, HistoryFindingKind::MetaShardCountMismatch).block, 7);
     BOOST_CHECK(findingOf(report, HistoryFindingKind::MetaShardCountMismatch)
                     .detail.find("declares 2 shards, 1 are on disk") != std::string::npos);
-    // The rebuild refuses over the same damage, and says so as its own finding.
+    // The rebuild refuses over the same damage, and says so as its own finding — at the block it
+    // tripped at, taken off the exception rather than guessed from the oldest retained block.
     BOOST_CHECK(!report.rebuilt);
-    BOOST_CHECK_EQUAL(countFindings(report, HistoryFindingKind::RebuildRejected), 1);
+    BOOST_REQUIRE_EQUAL(countFindings(report, HistoryFindingKind::RebuildRejected), 1);
+    BOOST_CHECK_EQUAL(findingOf(report, HistoryFindingKind::RebuildRejected).block, 7);
     BOOST_CHECK_THROW(report.throwIfInconsistent(), MPTInvariantViolation);
 }
 
@@ -271,6 +273,10 @@ BOOST_AUTO_TEST_CASE(missingMetaInsideTheWindowIsReportedAsBTwoAndStopsTheRebuil
     BOOST_REQUIRE_EQUAL(countFindings(report, HistoryFindingKind::RebuildRejected), 1);
     BOOST_CHECK(findingOf(report, HistoryFindingKind::RebuildRejected)
                     .detail.find("not preceded by its block's meta row") != std::string::npos);
+    // Block 7, not block 5: the finding names the height the rebuild tripped at.
+    BOOST_CHECK_EQUAL(findingOf(report, HistoryFindingKind::RebuildRejected).block, 7);
+    BOOST_CHECK_NE(
+        findingOf(report, HistoryFindingKind::RebuildRejected).block, report.oldestRetained);
 }
 
 /// A block that lost BOTH its rows is a plain ② hole: nothing is left to refuse a rebuild over,
@@ -326,7 +332,12 @@ BOOST_AUTO_TEST_CASE(firstHistoryBlockMovesTheWindowStart)
     HistoryAuditFixture fixture;
     auto const noisy =
         bcos::task::syncWait(auditStateHistory(fixture.storage, 10, 20, 0, ledgerHashes()));
-    BOOST_CHECK_EQUAL(countFindings(noisy, HistoryFindingKind::MissingMeta), 5);
+    // Blocks 0..4 are one gap, so one finding — not five. An era that predates the feature is the
+    // common shape here, and a finding per block would bury the other four checks.
+    BOOST_REQUIRE_EQUAL(countFindings(noisy, HistoryFindingKind::MissingMeta), 1);
+    auto const& gap = findingOf(noisy, HistoryFindingKind::MissingMeta);
+    BOOST_CHECK_EQUAL(gap.block, 0);
+    BOOST_CHECK(gap.detail.find("blocks 0..4 have no meta row (5 blocks)") != std::string::npos);
 
     auto const quiet =
         bcos::task::syncWait(auditStateHistory(fixture.storage, 10, 20, 5, ledgerHashes()));
@@ -337,6 +348,51 @@ BOOST_AUTO_TEST_CASE(firstHistoryBlockMovesTheWindowStart)
 /// that row — so an audit that never reads it can call a store healthy while every historical read
 /// below the oldest block answers with today's value. The invariant in every regime is
 /// boundary == max(0, oldest meta row - 1).
+
+/// NEGATIVE CONTROL — a shard row that is a DELETION SENTINEL rather than bytes, the shape an
+/// expiry leaves on a mutable layer before it is merged down (HistoryLogicalDeleteStorage).
+///
+/// The two walks read the same row in opposite ways on purpose, and this pins both: the audit's
+/// scan skips it — the row is already gone, so the block is short a shard and ① says so — while
+/// the rebuild refuses over it, because a sentinel means records it cannot index. An audit that
+/// followed the rebuild here would report nothing at all about the block; one that ignored the
+/// rebuild would not say the store is unservable.
+BOOST_AUTO_TEST_CASE(deletionSentinelShardIsSkippedByTheScanAndRefusedByTheRebuild)
+{
+    history::StateHistoryStore store;
+    history::test::HistoryLogicalDeleteStorage storage;
+    for (protocol::BlockNumber block = 5; block <= 7; ++block)
+    {
+        history::test::Diff diff;
+        diff.change("alpha"sv, "alpha-before-" + std::to_string(block));
+        diff.change("beta"sv, std::nullopt);
+        history::test::putBlock(store, storage, block, diff);
+    }
+    bcos::task::syncWait(
+        history::seedRetentionBoundary<history::StateHistoryStore>(storage, std::nullopt, 5));
+
+    auto const clean = bcos::task::syncWait(auditStateHistory(storage, 7, 3, 0, ledgerHashes()));
+    BOOST_REQUIRE(clean.consistent());
+
+    // removeOne on this backend marks the row instead of erasing it, so the iterator still yields
+    // it — as a sentinel.
+    history::test::deleteRow(storage, history::kStateHistory.shard, history::shardRowKey(6, 0));
+
+    auto const report = bcos::task::syncWait(auditStateHistory(storage, 7, 3, 0, ledgerHashes()));
+    BOOST_CHECK_EQUAL(report.shardRows, 2);  // the sentinel was skipped, not counted
+    BOOST_REQUIRE_EQUAL(countFindings(report, HistoryFindingKind::MetaShardCountMismatch), 1);
+    BOOST_CHECK_EQUAL(findingOf(report, HistoryFindingKind::MetaShardCountMismatch).block, 6);
+    BOOST_CHECK(findingOf(report, HistoryFindingKind::MetaShardCountMismatch)
+                    .detail.find("declares 1 shards, 0 are on disk") != std::string::npos);
+    BOOST_CHECK_EQUAL(countFindings(report, HistoryFindingKind::MetaRecordCountMismatch), 1);
+
+    BOOST_CHECK(!report.rebuilt);
+    BOOST_REQUIRE_EQUAL(countFindings(report, HistoryFindingKind::RebuildRejected), 1);
+    auto const& refusal = findingOf(report, HistoryFindingKind::RebuildRejected);
+    BOOST_CHECK(refusal.detail.find("deletion sentinel") != std::string::npos);
+    // The block comes off the exception, so it names the damaged height rather than the oldest.
+    BOOST_CHECK_EQUAL(refusal.block, 6);
+}
 
 /// NEGATIVE CONTROL — B.10 ④, (a): meta rows with no boundary row behind them.
 BOOST_AUTO_TEST_CASE(boundaryRowMissingWhileMetaRowsExistIsReportedAsBFour)

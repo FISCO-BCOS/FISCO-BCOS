@@ -37,9 +37,11 @@
 #pragma once
 
 #include "../Errors.h"
+#include "../history/HistoryErrors.h"
 #include "../history/HistoryRowCodec.h"
 #include "../history/HistoryTables.h"
 #include "../history/ReverseHistoryStore.h"
+#include "../history/ShardTableWalk.h"
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
@@ -47,6 +49,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/exception/diagnostic_information.hpp>
+#include <boost/exception/get_error_info.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <chrono>
@@ -265,9 +268,18 @@ using ShardTableScan = std::map<protocol::BlockNumber, BlockRows>;
 
 /// One seek-scan of @p Tables' shard table, grouping rows by block.
 ///
-/// Starts at row key "" rather than at the retention boundary, on purpose: rows an interrupted
-/// expiry left BELOW the boundary are invisible to rebuild (which starts at boundary + 1) and are
-/// exactly what B.10 ④'s "dead weight" direction is about, so the audit has to see them.
+/// The walk itself is `history::walkShardTable` — the SAME function ReverseHistoryStore's rebuild
+/// and whole-block read go through. That is not code tidiness: this is the component whose job is
+/// to detect layout damage, and reading the layout through a second implementation of the walk
+/// would let it agree with itself while disagreeing with the store it is auditing.
+///
+/// What is this scan's own is the visitor. It starts at row key "" rather than at the retention
+/// boundary, because rows an interrupted expiry left BELOW the boundary are invisible to rebuild
+/// (which starts at boundary + 1) and are exactly what B.10 ④'s "dead weight" direction is about.
+/// And it SKIPS a deletion sentinel rather than refusing it, the opposite of what rebuild does with
+/// the same row: an expired row on a logical-deletion layer is already gone, so the audit reports
+/// the block as short a shard — while rebuild's refusal over the same row is reported separately,
+/// as B.10 ③.
 ///
 /// @throws MPTInvariantViolation on a row the codec cannot decode at all — a row key that is
 ///         neither 8 nor 10 bytes, a Meta row that is not the fixed 41 bytes or carries an unknown
@@ -277,37 +289,25 @@ template <history::HistoryTables const& Tables, history::SeekableStateStorage St
 bcos::task::Task<ShardTableScan> scanShardTable(Storage& storage)
 {
     ShardTableScan blocks;
-    auto iterator = co_await bcos::storage2::range(
-        storage, bcos::storage2::RANGE_SEEK, executor_v1::StateKey{Tables.shard, ""});
-    while (true)
-    {
-        auto row = co_await iterator.next();
-        if (!row)
-        {
-            break;
-        }
-        auto const& [rowKey, rowValue] = *row;
-        executor_v1::StateKeyView const rowKeyView{rowKey};
-        if (rowKeyView.m_table != Tables.shard)
-        {
-            break;
-        }
-        auto const* entry = history::detail::asStateValue(rowValue);
-        if (entry == nullptr)
-        {
-            continue;  // an expired row on a logical-deletion layer: it is already gone
-        }
-        auto const block = history::rowKeyBlock(rowKeyView.m_key);
-        auto& blockRows = blocks[block];
-        if (history::isMetaRowKey(rowKeyView.m_key, block))
-        {
-            blockRows.meta = history::decodeMeta(entry->get());
-            blockRows.metaFound = true;
-            continue;
-        }
-        blockRows.shardOrdinals.push_back(history::rowKeyShard(rowKeyView.m_key));
-        blockRows.records += history::decodeShard(entry->get()).size();
-    }
+    co_await history::walkShardTable(storage, Tables.shard, "",
+        [&](executor_v1::StateKeyView const& rowKeyView,
+            executor_v1::StateValue const* entry) -> bool {
+            if (entry == nullptr)
+            {
+                return true;  // an expired row on a logical-deletion layer: it is already gone
+            }
+            auto const block = history::rowKeyBlock(rowKeyView.m_key);
+            auto& blockRows = blocks[block];
+            if (history::isMetaRowKey(rowKeyView.m_key, block))
+            {
+                blockRows.meta = history::decodeMeta(entry->get());
+                blockRows.metaFound = true;
+                return true;
+            }
+            blockRows.shardOrdinals.push_back(history::rowKeyShard(rowKeyView.m_key));
+            blockRows.records += history::decodeShard(entry->get()).size();
+            return true;
+        });
     co_return blocks;
 }
 
@@ -418,15 +418,33 @@ bcos::task::Task<HistoryAuditReport> auditHistory(Storage& storage, protocol::Bl
     }
 
     // ---- B.10 ②: the window must be gapless ----
+    //
+    // Contiguous gaps are folded into ONE finding. The common shapes here are whole eras, not
+    // isolated blocks — a node that turned history on mid-life and was audited without --from, a
+    // depth raised across a restart, a chain older than the feature — and one finding per block
+    // would bury the other four checks under thousands of lines saying the same thing. The range
+    // is what an operator acts on anyway.
+    //
+    // A block that IS in the scan without a Meta row is not folded in: it produced its own finding
+    // above, with the shard count that makes it a different fault (rows exist, nothing declares
+    // them) from a block that is simply absent.
     for (auto block = report.windowStart; block <= tip; ++block)
     {
-        auto const found = blocks.find(block);
-        if (found == blocks.end())
+        if (blocks.contains(block))
         {
-            report.findings.push_back(
-                HistoryFinding{.kind = HistoryFindingKind::MissingMeta, .block = block});
+            continue;
         }
-        // A block that IS in the scan without a Meta row already produced its finding above.
+        auto const gapStart = block;
+        while (block + 1 <= tip && !blocks.contains(block + 1))
+        {
+            ++block;
+        }
+        report.findings.push_back(HistoryFinding{.kind = HistoryFindingKind::MissingMeta,
+            .block = gapStart,
+            .detail = gapStart == block ? std::string{} :
+                                          "blocks " + std::to_string(gapStart) + ".." +
+                                              std::to_string(block) + " have no meta row (" +
+                                              std::to_string(block - gapStart + 1) + " blocks)"});
     }
 
     // ---- B.10 ⑤: the retained pre-images must belong to THIS chain ----
@@ -567,8 +585,15 @@ bcos::task::Task<HistoryAuditReport> auditHistory(Storage& storage, protocol::Bl
         }
         catch (MPTInvariantViolation const& error)
         {
+            // The block comes off the exception, not from a guess: rebuild tags every refusal it
+            // raises itself with the height it tripped at (errinfo_historyBlock), and a finding
+            // pointing at the wrong height sends an operator to the wrong rows. Absent only for a
+            // refusal raised inside the row codec, which never saw a row key — and the pass-1 scan
+            // above decodes every row first, so a codec failure has already thrown out of this
+            // whole function before the rebuild runs.
+            auto const* refusedAt = boost::get_error_info<history::errinfo_historyBlock>(error);
             report.findings.push_back(HistoryFinding{.kind = HistoryFindingKind::RebuildRejected,
-                .block = report.oldestRetained,
+                .block = refusedAt != nullptr ? *refusedAt : report.oldestRetained,
                 .detail = std::string(boost::diagnostic_information(error))});
         }
         report.rebuildMilliseconds =
