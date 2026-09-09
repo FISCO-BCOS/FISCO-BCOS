@@ -23,6 +23,7 @@
 #include "../Classify.h"
 #include "../PathKey.h"
 #include "HistoryDepths.h"
+#include "MPTHistory.h"
 #include "ReverseHistoryStore.h"
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/storage2/Storage.h>
@@ -41,18 +42,19 @@
 namespace bcos::ledger::mpt::history
 {
 
-/// The manifest payload size at which a new shard starts (spec B.9).
+/// The shard payload size at which a new shard row starts (spec B.9, layout spec §1.2).
 ///
-/// B.9 sizes the manifest but does not fix a number, so this is a judgement, recorded here rather
+/// B.9 sizes the shard but does not fix a number, so this is a judgement, recorded here rather
 /// than at a call site: 64 KiB is well under RocksDB's blob threshold and its default 64 MiB
 /// memtable, so a shard is an ordinary row that never forces a large-value path; and at the ~40
-/// bytes an account row key takes (4-byte length + "/apps/" + 40 hex + ':' + field name) one shard
-/// still lists on the order of a thousand keys, so a normal block's manifest is ONE row and the
-/// per-row overhead of sharding is not paid at all. A block big enough to need several shards is
-/// exactly the block for which a single multi-megabyte row would hurt.
-inline constexpr std::size_t kManifestShardByteCap = 64UL * 1024UL;
+/// bytes an account row key takes (4-byte length + "/apps/" + 40 hex + ':' + field name) plus its
+/// old value, one shard still holds hundreds of records, so a normal block's history is ONE shard
+/// row and the per-row overhead of sharding is not paid at all. A block big enough to need several
+/// shards is exactly the block for which a single multi-megabyte row would hurt.
+inline constexpr std::size_t kHistoryShardByteCap = 64UL * 1024UL;
 
-/// The index key a state row is recorded under: the row's PHYSICAL key bytes, `"<table>:<rowKey>"`
+/// The history key a state row is recorded under: the row's PHYSICAL key bytes,
+/// `"<table>:<rowKey>"`
 /// — the exact string a StateKey already holds, so no second key format exists to drift.
 ///
 /// Using the physical form rather than (table, rowKey) is what keeps the two trie-node tables from
@@ -179,7 +181,7 @@ inline protocol::BlockNumber boundaryAfterSeed(
     return current ? *current : std::max<protocol::BlockNumber>(0, block - 1);
 }
 
-/// What one commitBlockHistory() pass did — reported so the caller can log it and so a test can
+/// What one stageBlockHistory() pass did — reported so the caller can log it and so a test can
 /// assert the block's own numbers instead of re-deriving them from the rows.
 struct HistoryCommitReport
 {
@@ -188,64 +190,152 @@ struct HistoryCommitReport
     std::size_t stateEntries{};
     /// Trie positions recorded in this block's node history: PathDiff::preimages.size().
     std::size_t trieEntries{};
+    /// Counts only: the `retired` block inside each of these has been moved into the stage, which
+    /// is where publishing takes it from.
     ExpireReport stateExpired{};
     ExpireReport trieExpired{};
 };
 
-/// Record block @p block's two reverse histories into @p batch and expire the two blocks that just
-/// left the windows. The SINGLE entry point both commit paths call — BaselineScheduler's and
-/// OpScheduler's coCommitBlock differ in how they reach this point, not in the bookkeeping.
+/// What one store's share of stageBlockHistory() wrote to the batch, and therefore what its
+/// in-memory index must learn once that batch has landed (G9).
+///
+/// Every field is the OUTPUT of a disk write that has not been published yet. Dropping this
+/// object — which is what a scope exit after a throwing merge does — is exactly the rollback: the
+/// index never hears about rows that are not there.
+struct StagedStoreCommit
+{
+    /// The block's own records, from put(). Engaged iff this store's depth is > 0.
+    std::optional<StagedBlock> staged;
+    /// The block that left the window, from expire(). Engaged iff a live row was deleted.
+    std::optional<RetiredBlock> retired;
+    /// The retention boundary this batch wrote, if it wrote one — the seed for a store's first
+    /// block, or the advanced boundary of an expiry. Applied to the index as a MAX.
+    std::optional<protocol::BlockNumber> boundaryWritten;
+    /// What the expiry pass did, for the caller's log line. Its own `retired` field has been
+    /// moved out into `retired` above — the index's copy is the authoritative one, and leaving a
+    /// second would invite a caller to publish it twice.
+    ExpireReport expired;
+};
+
+/// Everything one block's history staged, across both stores, held between the write and the
+/// publish. Move-only in spirit: publishBlockHistory consumes it.
+struct HistoryCommitStage
+{
+    HistoryCommitReport report;
+    StagedStoreCommit state;
+    StagedStoreCommit trie;
+};
+
+/// One store's put + boundary seed + window expiry, all into @p batch, with nothing published.
+///
+/// Split out because the state and the trie halves differ only in where their HistoryEntry list
+/// comes from; the bookkeeping around it — one boundary read, the seed rule, the expiry policy —
+/// is one algorithm and is written once.
+///
+/// @param entries the block's pre-images. The spans inside must stay alive until this returns.
+/// @param depth this store's retention window; the caller only calls with depth > 0.
+template <class Store, QueryableStateStorage Backend, WritableStateStorage Batch>
+task::Task<StagedStoreCommit> stageOneStore(Store const& store, Backend& backend, Batch& batch,
+    protocol::BlockNumber block, bcos::h256 const& blockHash, std::span<HistoryEntry const> entries,
+    protocol::BlockNumber depth)
+{
+    StagedStoreCommit result;
+
+    // The boundary is read ONCE, and the same value answers both questions this commit has about
+    // it: does this block have to seed it, and may this block's expiry advance it. One point read
+    // per enabled store per block, of a row that is hot by construction.
+    auto const boundary = co_await Store::retentionBoundary(backend);
+
+    result.staged = co_await store.put(batch, block, blockHash, entries, kHistoryShardByteCap);
+    if (!boundary)
+    {
+        result.boundaryWritten = std::max<protocol::BlockNumber>(0, block - 1);
+    }
+    co_await seedRetentionBoundary<Store>(batch, boundary, block);
+
+    // spec §12: the block leaving the window is expired in the SAME batch that commits the new
+    // block, so "an index version pointing at a freed shard" is not a state the disk can hold. A
+    // window wider than the chain so far expires nothing — the subtraction is signed on purpose.
+    //
+    // This is the ONE caller discarding from the BOTTOM, where the expired block is the oldest one
+    // still recorded — so it is the one that may move the boundary, and it says so explicitly
+    // (expire's default is Keep, for a rollback discarding from the top). The policy is still
+    // computed rather than assumed: mid-chain activation, a raised depth and a rollback all make
+    // `block - H` land BELOW the boundary, and it must not follow them down (expiryBoundaryPolicy).
+    //
+    // Exactly one Advance expire per batch, with the oldest block leaving the window — which is
+    // expire()'s stated precondition (ReverseHistoryStore.h): its max is computed against @p
+    // backend, which cannot yet see this batch.
+    if (auto const expiring = block - depth; expiring >= 0)
+    {
+        auto const policy = expiryBoundaryPolicy(boundaryAfterSeed(boundary, block), expiring);
+        auto expired = co_await store.expire(backend, batch, expiring, policy);
+        result.retired = std::move(expired.retired);
+        result.expired = std::move(expired);
+        // The same predicate expire() applies to @p backend before writing the row, evaluated on
+        // the boundary value already read above rather than by reading it a second time. A seed
+        // and an Advance cannot both fire for one block — the seed is `block - 1`, the expiry is
+        // `block - depth <= block - 1`, and expiryBoundaryPolicy answers Keep whenever the
+        // post-seed boundary is not below it — so this never overwrites a seed with a lower value.
+        if (policy == RetentionBoundary::Advance && (!boundary || *boundary < expiring))
+        {
+            result.boundaryWritten = expiring;
+        }
+    }
+    co_return result;
+}
+
+/// Write block @p block's two reverse histories into @p batch and expire the two blocks that just
+/// left the windows — WITHOUT touching either in-memory index. The SINGLE entry point both commit
+/// paths call; BaselineScheduler's and OpScheduler's coCommitBlock differ in how they reach this
+/// point, not in the bookkeeping.
+///
+/// This is the first half of the two-phase commit G9 requires. The rows go into the block's own
+/// WriteBatch here; the indexes learn about them in publishBlockHistory, which the caller invokes
+/// only after that batch has landed. A merge that throws simply destroys the returned stage, and
+/// the indexes are then exactly as they were before this block — no compensating action, no
+/// window in which a query can see a version whose shard row does not exist.
 ///
 /// @param backend the COMMITTED plane, holding state through block @p block - 1: the pre-images
 ///        are read from it (spec §0.4 / code map Q3 — the commit path itself has no old values:
 ///        the delta rows carry only new state and mergeBackStorage never reads its destination),
-///        and expire()'s manifest sweep seeks in it. Must be seekable, which the production
+///        and expire()'s block walk seeks in it. Must be seekable, which the production
 ///        `latestBackend()` (RocksDBStorage2) is and a production `View` is not — its LRU cache
 ///        layer is CONCURRENT|LRU with no ORDERED, so `View::range(RANGE_SEEK, …)` cannot even be
 ///        instantiated.
 /// @param batch a mutable layer that the caller will hand to this block's single
-///        `mergeBackStorage` — in production the commit's prewrite buffer. History rows, index
-///        rows and expiry deletes therefore ride the block's one WriteBatch (G3, spec §13): a
-///        crash cannot leave "current state advanced, one block's history missing".
+///        `mergeBackStorage` — in production the commit's prewrite buffer. History rows and expiry
+///        deletes therefore ride the block's one WriteBatch (G3, spec §13): a crash cannot leave
+///        "current state advanced, one block's history missing".
+/// @param blockHash the committing header's hash, recorded in each store's Meta row so PR-D's
+///        audit can tell which chain a retained block belongs to.
 /// @param stateKeys the block's flat rows, from collectStateHistoryKeys at execute time.
 /// @param triePreimages PathDiff::preimages — position → the bytes that position held before this
 ///        block (nullopt = nothing was there). Free of I/O: the builder already read every one of
 ///        them while resolving the changed paths (spec §9).
-/// @param depths the node's retention window; a zero depth writes nothing for that history and
+/// @param history the node's stores and depths; a zero depth writes nothing for that history and
 ///        expires nothing.
 ///
-/// Called ONCE per block per store — ReverseHistoryStore::put allows exactly one call per
-/// (instance, block).
+/// Called ONCE per block per store — HistoryIndex refuses a republished or out-of-order block.
 ///
-/// **Manifest coverage contract** (HistoryTables.h::kManifestCoverageContract, and what PR-D's
-/// rollback and audit may assume): both commit paths call this only for a block that BUILT AN
-/// MPT DELTA, and it writes to a store only while that store's depth is > 0. So a manifest
+/// **Block-history coverage contract** (HistoryTables.h::kBlockHistoryCoverageContract, and what
+/// PR-D's rollback and audit may assume): both commit paths call this only for a block that BUILT
+/// AN MPT DELTA, and it writes to a store only while that store's depth is > 0. So a Meta row
 /// exists for block N in store S iff both hold. A block that qualifies but changed nothing still
-/// gets an empty shard 0 (spec B.10 ②), so "no manifest" never means "changed nothing" — it
-/// means the pre-images were never captured, which is true of every pre-MPT block of a
-/// scenario-A chain and of every block committed while the depth was 0. Empty manifests are
-/// deliberately NOT written for those: the row would assert a recording that did not happen. A
-/// consumer spanning such a block must refuse rather than read the gap as an empty diff.
+/// gets `Meta{shardCount = 1, recordCount = 0}` and an empty shard 0 (spec B.10 ②), so "no Meta
+/// row" never means "changed nothing" — it means the pre-images were never captured, which is true
+/// of every pre-MPT block of a scenario-A chain and of every block committed while the depth was
+/// 0. Empty records are deliberately NOT written for those: the row would assert a recording that
+/// did not happen. A consumer spanning such a block must refuse rather than read the gap as an
+/// empty diff.
 template <QueryableStateStorage Backend, WritableStateStorage Batch>
-task::Task<HistoryCommitReport> commitBlockHistory(Backend& backend, Batch& batch,
-    protocol::BlockNumber block, std::span<executor_v1::StateKey const> stateKeys,
-    std::map<PathKey, std::optional<bcos::bytes>> const& triePreimages, HistoryDepths const& depths)
+task::Task<HistoryCommitStage> stageBlockHistory(Backend& backend, Batch& batch,
+    protocol::BlockNumber block, bcos::h256 const& blockHash,
+    std::span<executor_v1::StateKey const> stateKeys,
+    std::map<PathKey, std::optional<bcos::bytes>> const& triePreimages, MPTHistory& history)
 {
-    HistoryCommitReport report;
-
-    // Each enabled store's boundary is read ONCE, and the same value answers both questions this
-    // commit has about it: does this block have to seed it, and may this block's expiry advance
-    // it. One point read per enabled store per block, of a row that is hot by construction.
-    std::optional<protocol::BlockNumber> stateBoundary;
-    std::optional<protocol::BlockNumber> trieBoundary;
-    if (depths.state > 0)
-    {
-        stateBoundary = co_await StateHistoryStore::retentionBoundary(backend);
-    }
-    if (depths.proof > 0)
-    {
-        trieBoundary = co_await TrieHistoryStore::retentionBoundary(backend);
-    }
+    HistoryCommitStage stage;
+    auto const depths = history.depths();
 
     if (depths.state > 0)
     {
@@ -265,9 +355,10 @@ task::Task<HistoryCommitReport> commitBlockHistory(Backend& backend, Batch& batc
             entries.emplace_back(
                 HistoryEntry{.key = historyKeyOf(stateKeys[index]), .oldValue = oldValue});
         }
-        report.stateEntries = entries.size();
-        co_await StateHistoryStore::put(batch, block, entries, kManifestShardByteCap);
-        co_await seedRetentionBoundary<StateHistoryStore>(batch, stateBoundary, block);
+        stage.report.stateEntries = entries.size();
+        stage.state = co_await stageOneStore(
+            history.state(), backend, batch, block, blockHash, entries, depths.state);
+        stage.report.stateExpired = stage.state.expired;
     }
 
     if (depths.proof > 0)
@@ -290,40 +381,38 @@ task::Task<HistoryCommitReport> commitBlockHistory(Backend& backend, Batch& batc
             entries.emplace_back(
                 HistoryEntry{.key = historyKeyOf(nodeKeys.back()), .oldValue = oldValue});
         }
-        report.trieEntries = entries.size();
-        co_await TrieHistoryStore::put(batch, block, entries, kManifestShardByteCap);
-        co_await seedRetentionBoundary<TrieHistoryStore>(batch, trieBoundary, block);
+        stage.report.trieEntries = entries.size();
+        stage.trie = co_await stageOneStore(
+            history.trie(), backend, batch, block, blockHash, entries, depths.proof);
+        stage.report.trieExpired = stage.trie.expired;
     }
 
-    // spec §12: the block leaving each window is expired in the SAME batch that commits the new
-    // block, so "an index entry pointing at a freed shard" is not a state the disk can hold. A
-    // window wider than the chain so far expires nothing — the subtraction is signed on purpose.
-    //
-    // This is the ONE caller discarding from the BOTTOM, where the expired block is the oldest
-    // one still recorded — so it is the one that may move the boundary, and it says so
-    // explicitly (expire's default is Keep, for a rollback discarding from the top). The policy
-    // is still computed rather than assumed: mid-chain activation, a raised depth and a rollback
-    // all make `block - H` land BELOW the boundary, and it must not follow them down
-    // (expiryBoundaryPolicy). expire() takes a max of its own as well, for callers outside this
-    // one.
-    if (depths.state > 0)
-    {
-        if (auto const expiring = block - depths.state; expiring >= 0)
-        {
-            report.stateExpired = co_await StateHistoryStore::expire(backend, batch, expiring,
-                expiryBoundaryPolicy(boundaryAfterSeed(stateBoundary, block), expiring));
-        }
-    }
-    if (depths.proof > 0)
-    {
-        if (auto const expiring = block - depths.proof; expiring >= 0)
-        {
-            report.trieExpired = co_await TrieHistoryStore::expire(backend, batch, expiring,
-                expiryBoundaryPolicy(boundaryAfterSeed(trieBoundary, block), expiring));
-        }
-    }
+    co_return stage;
+}
 
-    co_return report;
+/// Apply to the two in-memory indexes what @p stage already wrote to disk (G9, second half).
+///
+/// Call site discipline, and it is the whole point of the split: this runs AFTER the block's
+/// WriteBatch has been merged and BEFORE the committed block number advances. Earlier, and a
+/// failed merge leaves the index describing rows that do not exist; later, and a reader admitted
+/// by the new tip would miss this block's versions and read that miss as "the key never changed".
+///
+/// Not a coroutine and not fallible in the ordinary sense: publishing is pure memory under each
+/// index's own unique lock. If it does throw (allocation, or the ascending-order invariant),
+/// HistoryIndex latches itself Unavailable and rethrows — every later query then refuses instead
+/// of answering from a half-applied index.
+inline void publishBlockHistory(MPTHistory& history, HistoryCommitStage&& stage)
+{
+    if (stage.state.staged)
+    {
+        history.state().publish(std::move(*stage.state.staged), std::move(stage.state.retired),
+            stage.state.boundaryWritten);
+    }
+    if (stage.trie.staged)
+    {
+        history.trie().publish(std::move(*stage.trie.staged), std::move(stage.trie.retired),
+            stage.trie.boundaryWritten);
+    }
 }
 
 }  // namespace bcos::ledger::mpt::history
