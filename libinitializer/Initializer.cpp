@@ -725,8 +725,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // which is the txpool's commit-time hook, so that cache is only ever raised by its own
         // storage misses. The effect is a lower bound that can lag behind the chain: a
         // transaction reusing an already-executed nonce is admitted here and refused at
-        // execution. That is where it is refused today too, since this path currently checks no
-        // nonce at all.
+        // execution. That is where it was refused before this validator was wired, when the
+        // path checked no nonce at all.
         auto web3NonceChecker = std::make_shared<bcos::txvalidator::Web3NonceChecker>(m_ledger);
         m_memPoolValidator = std::make_shared<bcos::txvalidator::TxValidator>(
             m_protocolInitializer->cryptoSuite(), m_ledger, m_ledgerConfigState,
