@@ -31,6 +31,7 @@
 #include "bcos-framework/engine/Types.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-framework/ledger/LedgerConfigState.h"
 #include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
@@ -150,18 +151,25 @@ class EngineServiceImpl
 public:
     using ViewType = typename GlobalStateStorageType::ViewType;
 
+    /// @param ledgerConfigState the process-wide configuration snapshot transaction admission
+    /// reads, republished here after every block this service commits. In this mode nothing
+    /// else republishes it: MultiVersionScheduler is the hook for the txpool/consensus path,
+    /// and block production here does not go through it. Null in the tests and in any wiring
+    /// that has no admission to serve.
     EngineServiceImpl(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage,
         ExecutorType& executor, SchedulerType& scheduler,
         bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
-        int64_t blockTxCountLimit = bcos::engine::c_defaultBlockTxCountLimit)
+        int64_t blockTxCountLimit = bcos::engine::c_defaultBlockTxCountLimit,
+        bcos::ledger::LedgerConfigState::Ptr ledgerConfigState = nullptr)
       : m_memPool(std::ref(memPool)),
         m_globalStateStorage(std::ref(globalStateStorage)),
         m_blockTxCountLimit(blockTxCountLimit),
         m_executor(std::ref(executor)),
         m_scheduler(std::ref(scheduler)),
         m_blockFactory(std::move(blockFactory)),
-        m_ledger(std::move(ledger))
+        m_ledger(std::move(ledger)),
+        m_ledgerConfigState(std::move(ledgerConfigState))
     {
         if (!m_blockFactory)
         {
@@ -853,6 +861,24 @@ private:
         // Uses the parent block number since system configs are effective up to the parent
         ledger::LedgerConfig ledgerConfig;
         co_await ledger::getLedgerConfig(view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
+
+        // Hand the same read to transaction admission. In this mode nothing else does:
+        // MultiVersionScheduler republishes the snapshot on the txpool/consensus path, and
+        // block production here does not go through it, so without this the snapshot keeps
+        // the values the node read at boot -- including the block number the EVM revision is
+        // derived from, which past a fork activation would have the pool refusing transaction
+        // types execution accepts.
+        //
+        // Published here rather than after the commit because this is where the read already
+        // happens: it costs nothing, and the configuration a transaction should be judged
+        // against is the one the block being built will execute under. The block number it
+        // carries is nextBlockNumber - 1, so admission's "revision for blockNumber + 1" is the
+        // revision of this very block.
+        if (m_ledgerConfigState)
+        {
+            m_ledgerConfigState->set(std::make_shared<const ledger::LedgerConfig>(ledgerConfig));
+        }
+
         auto blockVersion = ledgerConfig.compatibilityVersion();
 
         // Header fork era comes from the chain's EVM revision (the per-block fork schedule
@@ -1223,6 +1249,8 @@ private:
     /// is committed via newPayload(). Null in unit tests / for payloads without block
     /// persistence.
     bcos::ledger::LedgerInterface::Ptr m_ledger;
+    /// Republished after every commit; see the constructor.
+    bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState;
     ForkchoiceState m_forkchoiceState;
     std::optional<TrackedHeadBlock> m_trackedHeadBlock;
     std::optional<bcos::protocol::BlockNumber> m_safeBlockNumber;

@@ -536,11 +536,9 @@ bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev)
 void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const ExecutionPayload& payload,
     std::optional<bcos::h256> parentBeaconBlockRoot, bcos::protocol::EthBlockVersion forkVersion)
 {
-    static const auto c_emptyOmmersHash = bcos::crypto::HashType(
-        "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347");
-    header.setUncleHash(c_emptyOmmersHash);
+    header.setUncleHash(engine_common::c_emptyOmmersHash);
     header.setDifficulty(bcos::u256(0));
-    header.setNonce(bcos::h64(0));
+    header.setNonce(engine_common::c_posNonce);
 
     header.setLogsBloom(bcos::bytesConstRef(payload.logsBloom.data(), payload.logsBloom.size()));
     header.setBaseFee(payload.baseFeePerGas);
@@ -559,8 +557,7 @@ void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const Execution
 
     if (forkVersion >= bcos::protocol::EthBlockVersion::PRAGUE)
     {
-        header.setRequestsHash(bcos::crypto::HashType(
-            "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
+        header.setRequestsHash(engine_common::c_emptyRequestsHash);
     }
 
     header.setEthBlockVersion(forkVersion);

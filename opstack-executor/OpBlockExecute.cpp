@@ -1,4 +1,5 @@
 #include <bcos-codec/rlp/RLPEncode.h>
+#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-evm/adapter/StateDiffSanitize.h>
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
@@ -171,10 +172,21 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             const evmc::bytes_view env{btx.signedEnvelope.data(), btx.signedEnvelope.size()};
             auto const envRef =
                 bcos::bytesConstRef(btx.signedEnvelope.data(), btx.signedEnvelope.size());
+            // Pool eviction keys on OpConsensusError::txHash (keccak of the signed envelope),
+            // never a substring of what(). That hash equals Transaction::hash() for Web3 txs.
+            // `validateErrorCode` carries the opValidate table's typed classification for
+            // validate-class rejects — empty for every other reject shape.
+            auto rejectNonDeposit = [&](std::string message,
+                                    std::error_code validateErrorCode = {}) {
+                OpConsensusError err(std::move(message));
+                err.txHash = bcos::crypto::keccak256Hash(envRef);
+                err.validateErrorCode = std::move(validateErrorCode);
+                throw err;
+            };
             if (auto mismatch =
                     bcos::executor_v1::opstack::envelopeChainIdMismatch(envRef, chainId))
             {
-                throw OpConsensusError("op block: " + *mismatch);
+                rejectNonDeposit("op block: " + *mismatch);
             }
             // Fail-closed mirror↔envelope cross-check — the SAME gate the per-tx path runs in
             // m_prepare (OpstackExecutor.h): execution fields (nonce/gasLimit/to/value/data)
@@ -184,21 +196,45 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             if (auto mismatch =
                     bcos::executor_v1::opstack::envelopeExecutionFieldsMismatch(envRef, tx))
             {
-                throw OpConsensusError(
+                rejectNonDeposit(
                     "op block: tx execution fields diverge from the signed envelope: " + *mismatch);
             }
             if (auto missing = bcos::executor_v1::opstack::blockPathZeroSender(tx.sender))
             {
-                throw OpConsensusError("op block: " + *missing);
+                rejectNonDeposit("op block: " + *missing);
             }
             if (auto unbound = bcos::executor_v1::opstack::blockPathUnboundAuthorizationList(tx))
             {
-                throw OpConsensusError("op block: " + *unbound);
+                rejectNonDeposit("op block: " + *unbound);
             }
             auto v = opValidate(view, block, tx, env, cfg, fee, blockGasLeft);
             if (const auto* err = std::get_if<std::error_code>(&v))
+            {
+                // A full remaining-gas pool is a capacity fault, not a poisoned tx —
+                // the same classification m_prepare gives GAS_LIMIT_REACHED on the
+                // per-tx path (OpBlockGasPoolFull): the tx is VALID but does not fit
+                // this candidate and must stay pooled for a later block. The txHash
+                // tag names the culprit whose bytes (plus its sender's nonce tail)
+                // the wired build loop trims from THIS candidate; `capacity` alone
+                // decides evict-vs-skip (keep the tx pooled). Without the tag the
+                // consumer's only skip path is unreachable: it would fall through to
+                // the internal-error throw and forkchoiceUpdated would answer
+                // -32603 for a full gas pool on every retry.
+                // The block itself is still voided — op-geth has no failed-receipt
+                // mechanism for normal txs.
+                if (*err == evmone::state::make_error_code(evmone::state::GAS_LIMIT_REACHED))
+                {
+                    OpConsensusError capacityFault(
+                        "op block: tx does not fit the remaining block gas");
+                    capacityFault.txHash = bcos::crypto::keccak256Hash(envRef);
+                    capacityFault.capacity = true;
+                    throw capacityFault;
+                }
                 // No failed-receipt mechanism for normal txs: void the whole block (op-geth).
-                throw OpConsensusError("op block: invalid non-deposit tx: " + err->message());
+                // The classification survives as the typed `validateErrorCode` field on the
+                // thrown OpConsensusError, not only as message text.
+                rejectNonDeposit("op block: invalid non-deposit tx: " + err->message(), *err);
+            }
             // opTransition charges from props.fee (the validate-time snapshot — no second read).
             evmone::state::StateDiff diff;
             auto receipt = [&]() {
@@ -213,8 +249,12 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
                 }
                 catch (const std::runtime_error& e)
                 {
-                    throw OpConsensusError(
+                    // Throw the tagged error directly (evictable by tx hash). A bare
+                    // `throw;` here would be unreachable - rejectNonDeposit never returns.
+                    OpConsensusError err(
                         std::string("op block: transaction execution failed: ") + e.what());
+                    err.txHash = bcos::crypto::keccak256Hash(envRef);
+                    throw err;
                 }
             }();
             applyDiffChecked(diff);

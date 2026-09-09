@@ -339,14 +339,11 @@ BOOST_AUTO_TEST_CASE(testAMOPMock)
             co_return std::make_tuple(bcos::Error::Ptr(nullptr), int16_t(0), bcos::bytes{});
         });
 
-    fakeit::When(Method(mockAMOP, asyncSubscribeTopic))
-        .AlwaysDo([](std::string const& /*clientID*/, std::string const& /*topicInfo*/,
-                      const std::function<void(bcos::Error::Ptr&&)>& callback) {
+    fakeit::When(Method(mockAMOP, subscribeTopic))
+        .AlwaysDo([](std::string const& /*clientID*/,
+                      std::string const& /*topicInfo*/) -> bcos::task::Task<bcos::Error::Ptr> {
             // Simulate successful subscription
-            if (callback)
-            {
-                callback(nullptr);
-            }
+            co_return bcos::Error::Ptr(nullptr);
         });
 
     // Test the mocked AMOP
@@ -364,16 +361,12 @@ BOOST_AUTO_TEST_CASE(testAMOPMock)
     BOOST_CHECK(sendResponse.empty());
 
     // Test topic subscription
-    bool subscriptionCallbackInvoked = false;
-    amopRef.asyncSubscribeTopic(
-        testClientID, testTopic, [&subscriptionCallbackInvoked](const bcos::Error::Ptr& /*error*/) {
-            subscriptionCallbackInvoked = true;
-        });
-    BOOST_CHECK(subscriptionCallbackInvoked);
+    auto subscribeError = bcos::task::syncWait(amopRef.subscribeTopic(testClientID, testTopic));
+    BOOST_CHECK(!subscribeError);
 
     // Verify methods were called
     fakeit::Verify(Method(mockAMOP, sendMessageByTopic)).Exactly(1);
-    fakeit::Verify(Method(mockAMOP, asyncSubscribeTopic)).Exactly(1);
+    fakeit::Verify(Method(mockAMOP, subscribeTopic)).Exactly(1);
 }
 
 BOOST_AUTO_TEST_CASE(testComplexGatewayScenario)

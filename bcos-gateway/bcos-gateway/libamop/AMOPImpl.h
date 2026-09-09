@@ -47,10 +47,10 @@ public:
 
     virtual void start();
     virtual void stop();
-    virtual void asyncSubscribeTopic(std::string const& _clientID, std::string const& _topicInfo,
-        std::function<void(Error::Ptr&&)> _callback);
-    virtual void asyncRemoveTopic(std::string const& _clientID,
-        std::vector<std::string> const& _topicList, std::function<void(Error::Ptr&&)> _callback);
+    virtual task::Task<Error::Ptr> subscribeTopic(
+        std::string const& _clientID, std::string const& _topicInfo);
+    virtual task::Task<Error::Ptr> removeTopic(
+        std::string const& _clientID, std::vector<std::string> const& _topicList);
 
     /**
      * @brief: send message to a random node subscribed to _topic

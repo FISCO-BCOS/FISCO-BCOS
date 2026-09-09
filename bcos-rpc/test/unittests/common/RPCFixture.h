@@ -31,6 +31,7 @@
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2KeyPair.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
+#include <bcos-framework/ledger/LedgerConfigState.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/testutils/faker/FakeFrontService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
@@ -41,11 +42,11 @@
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/tarsRPC/RPCServer.h>
 #include <bcos-rpc/validator/CallValidator.h>
+#include <bcos-tx-validator/TxValidator.h>
 #include <bcos-txpool/TxPoolConfig.h>
 #include <bcos-txpool/TxPoolFactory.h>
 #include <bcos-txpool/sync/TransactionSync.h>
 #include <bcos-txpool/txpool/storage/MemoryStorage.h>
-#include <bcos-txpool/txpool/validator/TxValidator.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
@@ -119,14 +120,38 @@ public:
 
         scheduler = std::make_shared<FakeScheduler2>(m_ledger, m_blockFactory);
         txPoolFactory->setScheduler(scheduler);
+        // Admission reads the chain configuration from this snapshot, never from the ledger: a
+        // node publishes it at boot and republishes it after every commit. This fixture has
+        // neither, so it publishes once here -- with the chain id the Web3 cases configure, and
+        // free gas, which is what the balances seeded into the fake ledger assume. Without it the
+        // holder is empty and every EIP-155 transaction is refused as InvalidChainId, which is
+        // the state a node is in before its first publish.
+        auto ledgerConfig = std::make_shared<bcos::ledger::LedgerConfig>(*m_ledger->ledgerConfig());
+        ledgerConfig->setChainId(evmc::bytes32{1});
+        ledgerConfig->setGasPrice({"0", 0});
+        m_ledgerConfigState =
+            std::make_shared<bcos::ledger::LedgerConfigState>(std::move(ledgerConfig));
+        txPoolFactory->setLedgerConfigState(m_ledgerConfigState);
         txPool = txPoolFactory->createTxPool(*ioServicePool->getIOService(), ioServicePool);
         txPool->init();
         txPool->start();
 
-        nodeService = std::make_shared<rpc::NodeService>(
-            m_ledger, scheduler, txPool, nullptr, nullptr, m_blockFactory,
+        nodeService = std::make_shared<rpc::NodeService>(m_ledger, scheduler, txPool, nullptr,
+            nullptr, m_blockFactory,
             // EngineService not needed for existing RPC tests; pass nullptr as stub.
             nullptr);
+
+        // Admission for the mempool path, the way AirNodeInitializer wires it: same snapshot the
+        // txpool reads, no BCOS pool nonce checker (this path carries Web3 transactions only),
+        // and nothing is a system transaction here. A case that wants the EESTReplay column
+        // calls setAdmissionValidator again with it.
+        m_admissionValidator = std::make_shared<bcos::txvalidator::TxValidator>(
+            cryptoSuite, m_ledger, m_ledgerConfigState, /*txPoolNonceChecker=*/nullptr,
+            std::make_shared<bcos::txvalidator::Web3NonceChecker>(m_ledger),
+            [](bcos::protocol::Transaction const&) { return false; }, groupId, chainId);
+        m_admissionValidator->setScheduler(scheduler);
+        nodeService->setAdmissionValidator(
+            m_admissionValidator, bcos::txvalidator::AdmissionContext::PoolAdmission);
 
 
         groupInfo = std::make_shared<group::GroupInfo>();
@@ -141,8 +166,7 @@ public:
     }
     // ioServicePool MUST be declared before any member that creates Timer objects
     // referencing its io_context, to ensure it outlives them during destruction.
-    bcos::IOServicePool::Ptr ioServicePool =
-        std::make_shared<bcos::IOServicePool>(1, "rpcTest");
+    bcos::IOServicePool::Ptr ioServicePool = std::make_shared<bcos::IOServicePool>(1, "rpcTest");
 
     bcos::tool::NodeConfig::Ptr nodeConfig;
     RPCInterface::Ptr rpc;
@@ -158,6 +182,10 @@ public:
     FakeLedger::Ptr m_ledger;
     TxPool::Ptr txPool;
     FakeScheduler2::Ptr scheduler;
+    /// The published chain configuration admission judges against; a case that needs a different
+    /// chain id or base fee republishes through it.
+    bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState;
+    std::shared_ptr<bcos::txvalidator::TxValidator> m_admissionValidator;
     BlockFactory::Ptr m_blockFactory;
 
     rpc::NodeService::Ptr nodeService;

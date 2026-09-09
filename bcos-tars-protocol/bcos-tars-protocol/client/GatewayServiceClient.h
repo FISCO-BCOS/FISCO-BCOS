@@ -66,11 +66,11 @@ public:
     bcos::task::Task<void> sendBroadcastMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data) override;
 
-    void asyncSubscribeTopic(std::string const& _clientID, std::string const& _topicInfo,
-        std::function<void(bcos::Error::Ptr&&)> _callback) override;
+    bcos::task::Task<bcos::Error::Ptr> subscribeTopic(
+        std::string const& _clientID, std::string const& _topicInfo) override;
 
-    void asyncRemoveTopic(std::string const& _clientID, std::vector<std::string> const& _topicList,
-        std::function<void(bcos::Error::Ptr&&)> _callback) override;
+    bcos::task::Task<bcos::Error::Ptr> removeTopic(std::string const& _clientID,
+        std::vector<std::string> const& _topicList) override;
 
     bcostars::GatewayServicePrx prx();
 

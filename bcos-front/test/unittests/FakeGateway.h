@@ -103,12 +103,15 @@ public:
         co_return;
     }
 
-    void asyncSubscribeTopic(
-        std::string const&, std::string const&, std::function<void(Error::Ptr&&)>) override
-    {}
-    void asyncRemoveTopic(std::string const&, std::vector<std::string> const&,
-        std::function<void(Error::Ptr&&)>) override
-    {}
+    task::Task<Error::Ptr> subscribeTopic(std::string const&, std::string const&) override
+    {
+        co_return nullptr;
+    }
+    task::Task<Error::Ptr> removeTopic(
+        std::string const&, std::vector<std::string> const&) override
+    {
+        co_return nullptr;
+    }
 };
 
 }  // namespace bcos::front::test

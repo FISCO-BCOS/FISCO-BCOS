@@ -20,19 +20,22 @@
  *        calculateEthereumTransactionRoot and block production halts.
  * @file RejectNativeTxOnV2Test.cpp
  */
-#include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
+#include "bcos-framework/testutils/faker/FakeLedger.h"
+#include "bcos-framework/testutils/faker/FakeTransaction.h"
+#include "bcos-framework/ledger/LedgerConfigState.h"
 #include "bcos-protocol/TransactionStatus.h"
-#include "bcos-txpool/txpool/validator/TxValidator.h"
+#include "bcos-tx-validator/TxValidator.h"
+#include "bcos-tx-validator/Web3NonceChecker.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-framework/dispatcher/SchedulerInterface.h>
+#include <bcos-task/Wait.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
-using namespace bcos::txpool;
 using namespace bcos::protocol;
+using namespace bcos::txvalidator;
 
 namespace bcos::test
 {
@@ -40,29 +43,32 @@ BOOST_FIXTURE_TEST_SUITE(RejectNativeTxOnV2Test, TestPromptFixture)
 
 BOOST_AUTO_TEST_CASE(nativeTxRefusedOnV2Chain)
 {
-    auto hashImpl = std::make_shared<Keccak256>();
-    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
-    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    auto cryptoSuite = std::make_shared<CryptoSuite>(
+        std::make_shared<Keccak256>(), std::make_shared<Secp256k1Crypto>(), nullptr);
+    auto ledger = std::make_shared<FakeLedger>();
+    auto ledgerConfigState = std::make_shared<ledger::LedgerConfigState>();
+    auto web3NonceChecker = std::make_shared<Web3NonceChecker>(ledger);
+    SystemTxPredicate noSystemTx = [](Transaction const&) { return false; };
     // A genuinely signed, valid native (BCOS) transaction.
-    auto nativeTx = fakeTransaction(cryptoSuite, "1", 1000, "chainId", "groupId");
-
-    std::weak_ptr<bcos::scheduler::SchedulerInterface> noScheduler;
+    auto nativeTx = test::fakeTransaction(cryptoSuite, "1", 1000, "chainId", "groupId");
 
     // Control on a v0/v1 validator (flag OFF, wrong group): the tx is NOT refused
     // by the v2 gate — it proceeds and fails the ordinary group check.
-    auto v1Validator = std::make_shared<TxValidator>(
-        nullptr, nullptr, nullptr, "other_group", "chainId", noScheduler,
+    TxValidator v1Validator(cryptoSuite, ledger, ledgerConfigState, nullptr, web3NonceChecker,
+        noSystemTx, "other_group", "chainId",
         /*rejectNativeTxOnV2Chain=*/false);
-    auto v1Result = v1Validator->verify(*nativeTx);
+    auto v1Result = task::syncWait(v1Validator.verify(
+        *nativeTx, AdmissionContext::PoolAdmission, SignaturePolicy::Required));
     BOOST_CHECK(v1Result != TransactionStatus::TxTypeNotSupported);
     BOOST_CHECK(v1Result == TransactionStatus::InvalidGroupId);
 
     // v2-chain validator: the native tx is refused at the gate, before any of the
     // (null here) checker dependencies are touched.
-    auto v2Validator = std::make_shared<TxValidator>(
-        nullptr, nullptr, nullptr, "groupId", "chainId", noScheduler,
+    TxValidator v2Validator(cryptoSuite, ledger, ledgerConfigState, nullptr, web3NonceChecker,
+        noSystemTx, "groupId", "chainId",
         /*rejectNativeTxOnV2Chain=*/true);
-    BOOST_CHECK(v2Validator->verify(*nativeTx) == TransactionStatus::TxTypeNotSupported);
+    BOOST_CHECK(task::syncWait(v2Validator.verify(*nativeTx, AdmissionContext::PoolAdmission,
+                    SignaturePolicy::Required)) == TransactionStatus::TxTypeNotSupported);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

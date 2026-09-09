@@ -27,12 +27,12 @@
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/Common.h>
 #include <bcos-framework/protocol/Protocol.h>
+#include <bcos-utilities/BoostLog.h>
 #include <util/tc_clientsocket.h>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <cstddef>
 #include <unordered_map>
-#include <bcos-utilities/BoostLog.h>
 
 #define NodeConfig_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("NodeConfig")
 namespace bcos::tool
@@ -353,6 +353,9 @@ public:
     TarsRPCConfig const& tarsRPCConfig() const;
 
     bool checkTransactionSignature() const;
+    /// [executor] eest_replay_mode. Node-local and NOT part of the genesis config: it changes
+    /// which checks admission runs on this node, never what the chain agrees on.
+    bool eestReplayMode() const { return m_eestReplayMode; }
     bool checkParallelConflict() const;
     bool singlePointConsensus() const;
     const bytes& forceSender() const;
@@ -427,7 +430,6 @@ public:
     void validateELModeInvariants() const;
 
 private:
-
     bcos::consensus::ConsensusNodeList parseConsensusNodeList(
         boost::property_tree::ptree const& _pt, std::string const& _sectionName,
         std::string const& _subSectionName);
@@ -656,6 +658,7 @@ private:
 
     // experimental
     bool m_checkTransactionSignature = true;
+    bool m_eestReplayMode = false;
     bool m_checkParallelConflict = true;
     bool m_singlePointConsensus = false;
     bytes m_forceSender;

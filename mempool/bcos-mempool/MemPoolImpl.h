@@ -4,6 +4,7 @@
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
+#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Exceptions.h"
 #include <boost/multi_index/composite_key.hpp>
@@ -15,6 +16,7 @@
 #include <boost/multi_index_container.hpp>
 #include <algorithm>
 #include <concepts>
+#include <cstdint>
 #include <string_view>
 #include <unordered_set>
 
@@ -24,6 +26,10 @@ namespace bcos::txpool
 DERIVE_BCOS_EXCEPTION(InvalidNonce);
 DERIVE_BCOS_EXCEPTION(InvalidTaintedTransaction);
 DERIVE_BCOS_EXCEPTION(InvalidBlobTransaction);
+/// tryAdd() was handed no transaction. Its siblings above describe a transaction the pool
+/// refuses; this one describes a caller that has nothing to offer, which is a wiring defect and
+/// not something to report back as a transaction status.
+DERIVE_BCOS_EXCEPTION(NullTransaction);
 
 struct TransactionData
 {
@@ -120,6 +126,17 @@ private:
         return addr;
     }
 
+    /// What the pool does when (sender, nonce) is already taken: the one policy difference
+    /// between its two entries, kept as a value so admission has one implementation, not two.
+    enum class OnTakenNonce : std::uint8_t
+    {
+        Replace,  ///< add(): the newer transaction takes the slot
+        Refuse,   ///< tryAdd(): first come first served
+    };
+    /// Shared body of add() and tryAdd(); the caller holds m_mutex.
+    protocol::TransactionStatus insertLocked(
+        protocol::Transaction::Ptr transaction, OnTakenNonce onTakenNonce);
+
     void add(protocol::Transaction::Ptr transaction);
     void removeBySenderNonces(SenderNonces auto senderNonces)
     {
@@ -145,6 +162,32 @@ public:
             add(std::forward<decltype(transaction)>(transaction));
         }
     }
+
+    /// Admit one transaction and SAY what happened. add() above answers nothing, and its four
+    /// silent endings are not equally harmless:
+    ///
+    ///   no computable hash / unreadable nonce -- nothing is stored, so a caller that reports
+    ///   success on the strength of add() having returned hands its user a transaction hash for
+    ///   a transaction the pool does not hold, and the user polls for a receipt until they give
+    ///   up;
+    ///   taken (sender, nonce) -- the newer transaction REPLACES the stored one, so it is an
+    ///   EARLIER submitter whose hash quietly stops being pollable;
+    ///   duplicate hash -- the transaction is in the pool (someone already submitted it), and
+    ///   the only thing lost is the caller's ability to tell that from a fresh admission.
+    ///
+    /// The two entries also differ on that taken pair: this one refuses. First come first
+    /// served is what the other pool does (MemoryStorage's insertMemoryNonce), and a
+    /// replacement policy is a fee-market decision this pool has no fee market to make.
+    ///
+    /// Refusing and reserving are ONE step here, under the same lock as the lookup. Asking the
+    /// pool whether a pair is free and then adding it would be two, and two admissions racing
+    /// through that gap both pass -- the TOCTOU FIB-51 removed from the other pool.
+    ///
+    /// @return None when the transaction is now in the pool; AlreadyInTxPool, NonceCheckFail or
+    /// Malformed when it is not. THROWS on a null, tainted or blob transaction: none of those is
+    /// a verdict about an otherwise well-formed transaction -- they mean the caller skipped
+    /// admission, so they must not be reportable as one of its statuses.
+    protocol::TransactionStatus tryAdd(protocol::Transaction::Ptr transaction);
 
     void seal(int64_t limit,
         storage2::ReadWriteStorage<executor_v1::StateKeyView, executor_v1::StateValue> auto& state,

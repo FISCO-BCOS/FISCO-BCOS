@@ -20,6 +20,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 namespace bcos::evm
@@ -34,6 +35,12 @@ struct OpConsensusError : std::runtime_error
     std::optional<bcos::h256> txHash;
     /// True when the block gas pool cannot fit this tx (skip this build, do not evict).
     bool capacity = false;
+    /// The opValidate table's std::error_code when the reject came from the
+    /// validate step. Typed classification surface next to txHash:
+    /// consumers classify on this field + capacity, never on what() substrings.
+    /// Empty for every other reject class (chain-id/mirror/field faults, capacity,
+    /// wiring).
+    std::error_code validateErrorCode;
 
     explicit OpConsensusError(std::string const& what_arg) : std::runtime_error(what_arg) {}
 

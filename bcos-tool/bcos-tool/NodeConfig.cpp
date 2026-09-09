@@ -42,8 +42,8 @@
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <array>
-#include <charconv>
 #include <cctype>
+#include <charconv>
 #include <cstdint>
 #include <limits>
 #include <set>
@@ -1054,8 +1054,7 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     if (mode != "none" && mode != "el")
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "ethereum.mode invalid: \"" + mode +
-                                  "\" (supported: none, el)"));
+                                  "ethereum.mode invalid: \"" + mode + "\" (supported: none, el)"));
     }
     const bool enableEL = (mode == "el");
     // EL mode is a self-contained L1 sync client: it is mutually exclusive with the
@@ -1095,8 +1094,7 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
                                   "ethereum.listen_port invalid: " + std::to_string(listenPort)));
     }
     m_ethereumListenPort = static_cast<uint16_t>(listenPort);
-    m_ethereumBootnodesFile =
-        _pt.get<std::string>("ethereum.bootnodes_file", "./bootnodes.json");
+    m_ethereumBootnodesFile = _pt.get<std::string>("ethereum.bootnodes_file", "./bootnodes.json");
     m_ethereumNodeKeyFile = _pt.get<std::string>("ethereum.node_key_file", "");
     uint32_t maxBatch = _pt.get<uint32_t>("ethereum.max_batch_size", 192);
     // This value will size RLPx GetBlockHeaders/GetBlockBodies requests once
@@ -1106,9 +1104,9 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     // config-compatibility change.
     if (maxBatch == 0 || maxBatch > 1024)
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "ethereum.max_batch_size must be in [1, 1024], got " +
-                                  std::to_string(maxBatch)));
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "ethereum.max_batch_size must be in [1, 1024], got " + std::to_string(maxBatch)));
     }
     m_ethereumMaxBatchSize = maxBatch;
 
@@ -1149,8 +1147,8 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
             EthereumFinalizedCheckpoint{number, crypto::HashType(hashStr)};
     }
 
-    NodeConfig_LOG(INFO) << LOG_DESC("loadEthereumConfig")
-                         << LOG_KV("mode", mode) << LOG_KV("listenIP", m_ethereumListenIP)
+    NodeConfig_LOG(INFO) << LOG_DESC("loadEthereumConfig") << LOG_KV("mode", mode)
+                         << LOG_KV("listenIP", m_ethereumListenIP)
                          << LOG_KV("listenPort", m_ethereumListenPort)
                          << LOG_KV("bootnodesFile", m_ethereumBootnodesFile)
                          << LOG_KV("nodeKeyFile", m_ethereumNodeKeyFile)
@@ -1185,9 +1183,9 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
         auto mode = ethSection->get<std::string>("mode", "none");
         if (mode != "none" && mode != "el")
         {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "config.genesis [ethereum].mode invalid: \"" + mode +
-                                      "\" (supported: none, el)"));
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment("config.genesis [ethereum].mode invalid: \"" +
+                                                   mode + "\" (supported: none, el)"));
         }
         m_genesisConfig.m_ethereumELMode = (mode == "el");
     }
@@ -1297,12 +1295,12 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     {
         if (ladder[i].second < ladder[i - 1].second)
         {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "[fork_timestamps]." + std::string(ladder[i].first) + " (" +
-                                      std::to_string(ladder[i].second) + ") is earlier than " +
-                                      std::string(ladder[i - 1].first) + " (" +
-                                      std::to_string(ladder[i - 1].second) +
-                                      "): fork activation times must be non-decreasing"));
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment(
+                    "[fork_timestamps]." + std::string(ladder[i].first) + " (" +
+                    std::to_string(ladder[i].second) + ") is earlier than " +
+                    std::string(ladder[i - 1].first) + " (" + std::to_string(ladder[i - 1].second) +
+                    "): fork activation times must be non-decreasing"));
         }
     }
     // Stored on the GenesisConfig so generateGenesisData emits the REQUIRED ladder
@@ -1904,6 +1902,30 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
     m_tarsRPCConfig.host = _pt.get<std::string>("rpc.tars_rpc_host", "127.0.0.1");
     m_tarsRPCConfig.port = _pt.get<int>("rpc.tars_rpc_port", 0);
 
+    // EEST fixture replay. Fixtures use arbitrary nonces and unfunded senders, so this switches
+    // admission to the context that drops the balance and nonce-window checks -- and NOTHING
+    // else: the check set for that context is defined in the routing table, not here.
+    //
+    // Refused outside engine-driven block production rather than ignored. A chain that produces
+    // blocks through consensus admits transactions from peers, and a node that stopped checking
+    // balances would fill its pool with transactions the leader cannot execute. Making it a
+    // startup failure means the mistake is found once, at the node that made it, instead of
+    // being discovered later as unexplained pool behaviour.
+    m_eestReplayMode = _pt.get<bool>("executor.eest_replay_mode", false);
+    if (m_eestReplayMode && !engineDrivenBlockProduction())
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "executor.eest_replay_mode requires engine-driven block "
+                                  "production ([consensus] enable_single_node_consensus or "
+                                  "[op_engine_rpc] enable); it cannot be used on a chain that "
+                                  "produces blocks through consensus"));
+    }
+    if (m_eestReplayMode)
+    {
+        NodeConfig_LOG(WARNING) << LOG_DESC(
+            "EEST replay mode: balance and nonce-window checks are DISABLED at admission");
+    }
+
     m_checkTransactionSignature = _pt.get<bool>("experimental.check_transaction_signature", true);
     m_checkParallelConflict = _pt.get<bool>("experimental.check_parallel_conflict", true);
     m_singlePointConsensus = _pt.get<bool>("experimental.single_point_consensus", false);
@@ -1918,6 +1940,7 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("ioThreadCount", m_ioThreadCount)
                          << LOG_KV("tbbThreadCount", m_tbbThreadCount)
                          << LOG_KV("checkTransactionSignature", m_checkTransactionSignature)
+                         << LOG_KV("eestReplayMode", m_eestReplayMode)
                          << LOG_KV("checkParallelConflict", m_checkParallelConflict)
                          << LOG_KV("singlePointConsensus", m_singlePointConsensus)
                          << LOG_KV("enableAuth", toHex(m_forceSender));
@@ -2268,13 +2291,12 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
         !m_genesisConfig.m_evmcRevision && m_genesisConfig.m_evmcRevisionForks.empty() &&
         !m_genesisConfig.m_ethereumELMode)
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "executor.version=2 (ethereum-executor) requires an explicit "
-                "executor.evm_revision (or executor.evm_revision_forks), or "
-                "[ethereum] mode=el with a [fork_timestamps] section (Ethereum "
-                "L1 EL mode) so the EVM revision is recorded on-chain; refusing "
-                "to run with an implicit binary-side default"));
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "executor.version=2 (ethereum-executor) requires an explicit "
+                                  "executor.evm_revision (or executor.evm_revision_forks), or "
+                                  "[ethereum] mode=el with a [fork_timestamps] section (Ethereum "
+                                  "L1 EL mode) so the EVM revision is recorded on-chain; refusing "
+                                  "to run with an implicit binary-side default"));
     }
     // A v2 chain must ALSO be able to persist that revision: Ledger::buildGenesisBlock only
     // writes evmc_revision for compatibility_version >= V3_18_0 (and executor_version for

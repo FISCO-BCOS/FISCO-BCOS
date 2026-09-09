@@ -14,7 +14,11 @@ target_include_directories(engine PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-engine>)
 # PRIVATE + static library: consumers still link rlp-protocol transitively
-# ($<LINK_ONLY:...>); include dirs still propagate via ledger's PUBLIC rlp-protocol link.
+# ($<LINK_ONLY:...>); only the include dirs stay unpropagated. The split keeps the
+# installed pair consistent with that: OpEngineService.h is declarations-only (no
+# rlp-protocol include, no .inl include), and OpEngineService.inl is the opt-in definition
+# half — instantiating the template requires rlp-protocol and bcos-evm-opstack include
+# dirs (in-tree instantiators link both).
 target_link_libraries(engine PUBLIC bcos-framework bcos-task bcos-utilities ledger codec
     PRIVATE rlp-protocol)
 set_target_properties(engine PROPERTIES UNITY_BUILD "ON")
@@ -27,4 +31,7 @@ endif()
 
 include(GNUInstallDirs)
 install(TARGETS engine EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
-install(DIRECTORY "bcos-engine" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING PATTERN "*.h")
+install(DIRECTORY "bcos-engine" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING
+    PATTERN "*.h"
+    PATTERN "OpEngineService.inl"
+    PATTERN "EthEngineService.inl")

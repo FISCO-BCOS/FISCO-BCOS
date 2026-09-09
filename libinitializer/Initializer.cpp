@@ -58,7 +58,6 @@
 #include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
-#include <boost/algorithm/string.hpp>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/rpc/RPCInterface.h>
@@ -78,11 +77,12 @@
 #include <bcos-transaction-executor/precompiled/PrecompiledManager.h>
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
+#include <bcos-txpool/txpool/utilities/SystemTransaction.h>
 #include <legacy/bcos-storage/StorageWrapperImpl.h>
 #include <rocksdb/slice.h>
 #include <rocksdb/sst_file_reader.h>
-#include <txpool/validator/TxValidator.h>
 #include <util/tc_clientsocket.h>
+#include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <cstddef>
 #include <memory>
@@ -304,10 +304,22 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     auto transactionSubmitResultFactory =
         std::make_shared<protocol::TransactionSubmitResultFactoryImpl>();
 
+    // One holder per process, written by whoever commits a block and read by transaction
+    // admission. Created here because it outlives both and neither should own the other.
+    //
+    // Published once now, from the ledger as it stands at boot, rather than left empty until the
+    // first commit: an empty holder has no chain id and admission fails closed on that, so a
+    // restarted node would refuse every EIP-155 transaction until a block committed -- which on
+    // a quiet chain is never, since nothing gets admitted to fill one. A malformed persisted
+    // value (web3_chain_id, evmc_revision) throws here and refuses to start, the same fail-stop
+    // the per-block refetch applies.
+    m_ledgerConfigState = std::make_shared<bcos::ledger::LedgerConfigState>(
+        task::syncWait(ledger::getLedgerConfig(*m_ledger)));
+
     // init the txpool
     m_txpoolInitializer = std::make_shared<TxPoolInitializer>(m_nodeConfig, m_protocolInitializer,
         m_frontServiceInitializer->front(), ledger, *m_ioServicePool->getIOService(),
-        m_ioServicePool);
+        m_ioServicePool, m_ledgerConfigState);
     m_memPoolInitializer = MemPoolInitializer::build();
 
     std::shared_ptr<bcos::scheduler::TarsExecutorManager> executorManager;
@@ -426,7 +438,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                parallelScheduler, transactionExecutor, m_memPoolInitializer->memPool(), ledger);
+                parallelScheduler, transactionExecutor, m_memPoolInitializer->memPool(), ledger,
+                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState);
         }
 
         // executor_version=2: a dedicated pipeline instance for the EthereumExecutor baseline
@@ -461,8 +474,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                m_ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(),
-                ledger);
+                m_ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger,
+                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState);
         }
     }
     else
@@ -477,7 +490,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                serialScheduler, transactionExecutor, m_memPoolInitializer->memPool(), ledger);
+                serialScheduler, transactionExecutor, m_memPoolInitializer->memPool(), ledger,
+                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState);
         }
 
         // executor_version=2 baseline scheduler, driven by a dedicated serial pipeline.
@@ -496,8 +510,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                m_ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(),
-                ledger);
+                m_ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger,
+                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState);
         }
     }
 
@@ -511,11 +525,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module
                                // switch to a leader during startup
+    // The dispatcher republishes the configuration after every commit, for every executor
+    // version; the holder was published once at boot when it was created.
     m_scheduler = std::make_shared<scheduler_v1::MultiVersionScheduler>(
         std::to_array<scheduler::SchedulerInterface::Ptr>(
             {std::make_shared<bcos::scheduler::SchedulerManager>(
                  schedulerSeq, factory, executorManager, m_ioServicePool),
-                m_baselineSchedulerHolder(), m_ethereumSchedulerHolder()}));
+                m_baselineSchedulerHolder(), m_ethereumSchedulerHolder()}),
+        m_ledgerConfigState);
 
     // m_executorVersion was resolved earlier (before the Engine API gate); apply it now.
     INITIALIZER_LOG(INFO) << "Set executor version to: " << m_executorVersion;
@@ -703,6 +720,25 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         INITIALIZER_LOG(INFO) << LOG_DESC(
             "EngineDrivenBlockProduction: skip txpool/pbft/sealer init (block production via "
             "EngineService + mempool; driver = single-node consensus or external op-node)");
+
+        // Admission for the mempool path. Built here and not in the txpool initializer because
+        // in this mode there is no txpool: the RPC entry judges a transaction against this
+        // validator and then reserves its (sender, nonce) with MemPoolImpl::tryAdd.
+        //
+        // No pool nonce checker: those two checks are the BCOS transaction's replay protection,
+        // and this mode carries Web3 transactions only. The Web3 nonce checker IS needed -- the
+        // account nonce comes through its cache -- but nothing here calls updateNonceCache,
+        // which is the txpool's commit-time hook, so that cache is only ever raised by its own
+        // storage misses. The effect is a lower bound that can lag behind the chain: a
+        // transaction reusing an already-executed nonce is admitted here and refused at
+        // execution. That is where it is refused today too, since this path currently checks no
+        // nonce at all.
+        auto web3NonceChecker = std::make_shared<bcos::txvalidator::Web3NonceChecker>(m_ledger);
+        m_memPoolValidator = std::make_shared<bcos::txvalidator::TxValidator>(
+            m_protocolInitializer->cryptoSuite(), m_ledger, m_ledgerConfigState,
+            /*txPoolNonceChecker=*/nullptr, std::move(web3NonceChecker),
+            &bcos::txpool::isSystemTransaction, m_nodeConfig->groupId(), m_nodeConfig->chainId());
+        m_memPoolValidator->setScheduler(m_scheduler);
     }
 
     // init the frontService
@@ -1658,8 +1694,8 @@ std::shared_ptr<bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>> Initializer
         m_globalStateStorageInitializer->storage().latestBackend());
 }
 
-std::function<std::shared_ptr<
-    bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>>()>
+std::function<
+    std::shared_ptr<bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>>()>
 Initializer::stateStorageProvider()
 {
     if (!m_globalStateStorageInitializer)

@@ -46,6 +46,11 @@ DERIVE_BCOS_EXCEPTION(InvalidEngineEncoding);
 /// other fork-shape mismatches share this channel (see #5517).
 DERIVE_BCOS_EXCEPTION(UnsupportedFork);
 
+/// An Engine service was constructed with a malformed or missing dependency
+/// (e.g. a null block factory) — a startup/wiring fault of the composition root,
+/// not a request fault and not a storage fault.
+DERIVE_BCOS_EXCEPTION(InvalidEngineConfig);
+
 /// Structured carrier for the OP build-loop's poisoned-tx eviction: the OpScheduler
 /// catch attaches the offending tx hash to the boundary bcos::Error as a typed
 /// boost::error_info slot, and buildOpPayload reads it back to evict the culprit from

@@ -60,7 +60,7 @@ public:
     // the height and serves the latest state — byte-for-byte the pre-existing behaviour of
     // every implementation with no historical state to offer (tars SchedulerService, fakes),
     // which is why this is a defaulted method and not a pure one (same pattern as
-    // FrontInterface::asyncBroadcastMessageByOwnedPayload). BaselineScheduler overrides it
+    // FrontInterface::broadcastMessageByOwnedPayload). BaselineScheduler overrides it
     // with a real execution against the MPT state committed at that block. A distinct name
     // rather than a call() overload: -Woverloaded-virtual (in -Wall, promoted by -Werror)
     // would otherwise fire in every subclass that overrides only the latest-state call().

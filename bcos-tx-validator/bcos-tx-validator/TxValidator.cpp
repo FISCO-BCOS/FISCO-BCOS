@@ -117,7 +117,7 @@ TxValidator::TxValidator(crypto::CryptoSuite::Ptr cryptoSuite,
     std::shared_ptr<ledger::LedgerInterface> ledger,
     ledger::LedgerConfigState::Ptr ledgerConfigState, NonceCheckerInterface::Ptr txPoolNonceChecker,
     Web3NonceChecker::Ptr web3NonceChecker, SystemTxPredicate isSystemTx, std::string groupId,
-    std::string chainId)
+    std::string chainId, bool rejectNativeTxOnV2Chain)
   : m_cryptoSuite(std::move(cryptoSuite)),
     m_ledger(std::move(ledger)),
     m_ledgerConfigState(std::move(ledgerConfigState)),
@@ -125,7 +125,8 @@ TxValidator::TxValidator(crypto::CryptoSuite::Ptr cryptoSuite,
     m_web3NonceChecker(std::move(web3NonceChecker)),
     m_isSystemTx(std::move(isSystemTx)),
     m_groupId(std::move(groupId)),
-    m_chainId(std::move(chainId))
+    m_chainId(std::move(chainId)),
+    m_rejectNativeTxOnV2Chain(rejectNativeTxOnV2Chain)
 {
     if (!m_ledgerConfigState)
     {
@@ -155,6 +156,12 @@ void TxValidator::setLedgerNonceChecker(std::shared_ptr<LedgerNonceChecker> ledg
     m_ledgerNonceChecker = std::move(ledgerNonceChecker);
 }
 
+std::shared_ptr<LedgerNonceChecker> TxValidator::ledgerNonceChecker() const
+{
+    ReadGuard guard(x_lateBound);
+    return m_ledgerNonceChecker;
+}
+
 void TxValidator::setScheduler(std::weak_ptr<scheduler::SchedulerInterface> scheduler)
 {
     WriteGuard guard(x_lateBound);
@@ -174,6 +181,9 @@ struct Envelope
     crypto::CryptoSuite& cryptoSuite;
     std::string_view groupId;
     std::string_view chainId;
+    /// Whether this chain admits native BCOS transactions at all (false on an
+    /// executor_version >= 2 chain). Validator configuration, not chain state.
+    bool bcosTxAllowed;
 };
 
 /// The chain as of one snapshot, taken once per verify() before the state stage: every check in
@@ -236,6 +246,14 @@ struct PoolInputs
 // members beyond what its stage's inputs carry. The parameter type IS the stage: a gate check
 // cannot read the chain, a state check cannot reach the pool, and the compiler enforces it.
 // Returns None to pass, any other status to reject.
+
+TransactionStatus checkBcosTxAllowed(Envelope const& in)
+{
+    // Only in TxKind::Bcos's set, so no kind test is needed here: a Web3 transaction never
+    // meets this check. On a chain that seals only Web3 transactions (executor_version >= 2),
+    // a native BCOS transaction is refused before the signature recovery below.
+    return in.bcosTxAllowed ? TransactionStatus::None : TransactionStatus::TxTypeNotSupported;
+}
 
 TransactionStatus checkTypeGate(Envelope const& in)
 {
@@ -464,43 +482,46 @@ TransactionStatus checkNonceNotMax(StateInputs const& in)
     return TransactionStatus::None;
 }
 
-/// The window below adds DEFAULT_WEB3_NONCE_CHECK_LIMIT to the account nonce in u256, which is
-/// boost::multiprecision::unchecked and would wrap silently near 2^256. That is safe only because
-/// NonceNotMax has already refused any account nonce at or above 2^64 - 1 -- an ordering
-/// dependency between two checks, pinned here so a reorder cannot quietly reopen it.
+/// The window rule (Web3NonceChecker::withinCommittedWindow) adds DEFAULT_WEB3_NONCE_CHECK_LIMIT
+/// to the account nonce in u256, which is boost::multiprecision::unchecked and would wrap
+/// silently near 2^256. That is safe only because NonceNotMax has already refused any account
+/// nonce at or above 2^64 - 1 -- an ordering dependency between two checks, pinned here so a
+/// reorder cannot quietly reopen it.
 static_assert(detail::indexOf(c_stateOrder, Check::NonceNotMax) <
               detail::indexOf(c_stateOrder, Check::Web3NonceWindow));
 
 TransactionStatus checkWeb3NonceWindow(StateInputs const& in)
 {
-    // Lower bound and queue depth are one check: they share a single account-nonce read, and the
-    // existing implementation expresses both in one comparison.
+    // Lower bound and queue depth are one check: they share a single account-nonce read. The
+    // rule itself is Web3NonceChecker's, and the pool's re-checks of pooled transactions run the
+    // same function over the same cached read (committedNonceStatus -> checkWeb3Nonce), so
+    // admission and re-check cannot disagree about a nonce.
+    //
+    // No length gate on the nonce string here, unlike checkWeb3Nonce's FIB-57 cap: every check
+    // runs after normalize(), which wrote this string from the envelope's uint64 nonce
+    // (Web3TarsBridge.cpp:161), so it is at most 18 characters. The cap guards the public string
+    // overload, which takes whatever it is handed.
     auto const& senderNonce = in.sender.value().nonce;
     if (!senderNonce.has_value())
     {
-        // Account not on chain yet. The existing Web3NonceChecker also declines to judge in this
-        // case (its storage-miss branch falls through without comparing), and matching it keeps
-        // this a pure refactor. Whether an unknown account should instead be treated as nonce 0
-        // is a separate question -- it would tighten queue-flooding behaviour.
+        // Account not on chain yet. Web3NonceChecker declines to judge in this case too
+        // (committedNonce() reports the account absent), and matching it keeps this a pure
+        // refactor. Whether an unknown account should instead be treated as nonce 0 is a
+        // separate question -- it would tighten queue-flooding behaviour.
         return TransactionStatus::None;
     }
-    auto const txNonce = u256(in.tx.nonce());
-    if (txNonce < *senderNonce)
+    if (!Web3NonceChecker::withinCommittedWindow(u256(in.tx.nonce()), *senderNonce))
     {
-        return TransactionStatus::NonceCheckFail;  // already used
-    }
-    if (txNonce > *senderNonce + DEFAULT_WEB3_NONCE_CHECK_LIMIT)
-    {
-        return TransactionStatus::NonceCheckFail;  // too far ahead to queue
+        return TransactionStatus::NonceCheckFail;  // already used, or too far ahead to queue
     }
     return TransactionStatus::None;
 }
 
 TransactionStatus checkInitCodeSize(StateInputs const& in)
 {
-    // EIP-3860 applies to contract CREATION only. The current implementation keys on transaction
-    // type alone, so a 60000-byte call to a deployed contract is wrongly rejected with
-    // MaxInitCodeSizeExceeded.
+    // EIP-3860 applies to contract CREATION only, so this keys on an empty `to`. The pool-side
+    // validator this replaced keyed on transaction type alone, and rejected a 60000-byte call to
+    // a deployed contract with MaxInitCodeSizeExceeded.
     if (in.chain.revision.has_value() && *in.chain.revision >= EVMC_SHANGHAI &&
         in.tx.to().empty() && in.tx.input().size() > MAX_INITCODE_SIZE)
     {
@@ -621,6 +642,7 @@ struct CheckEntry
 /// or in sequence.
 constexpr std::array<CheckEntry<Envelope>, c_gateOrder.size()> c_gateRegistry{{
     {Check::TypeGate, &checkTypeGate},
+    {Check::BcosTxAllowed, &checkBcosTxAllowed},
     {Check::ToFieldFormat, &checkToFieldFormat},
     {Check::Signature, &checkSignature},
     {Check::BcosGroupChainId, &checkBcosGroupChainId},
@@ -839,7 +861,8 @@ task::Task<TransactionStatus> TxValidator::verify(
         .kind = kind,
         .cryptoSuite = *m_cryptoSuite,
         .groupId = m_groupId,
-        .chainId = m_chainId};
+        .chainId = m_chainId,
+        .bcosTxAllowed = !m_rejectNativeTxOnV2Chain};
     if (auto status = runStage(c_gateRegistry, checks, envelope); status != TransactionStatus::None)
     {
         co_return status;
