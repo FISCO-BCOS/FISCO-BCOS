@@ -486,80 +486,155 @@ bcos::task::Task<void> bcostars::GatewayServiceClient::sendBroadcastMessageByTop
     m_prx->async_asyncSendBroadcastMessageByTopic(nullptr, _topic, tarsRequestData);
     co_return;
 }
-void bcostars::GatewayServiceClient::asyncSubscribeTopic(std::string const& _clientID,
-    std::string const& _topicInfo, std::function<void(bcos::Error::Ptr&&)> _callback)
+bcos::task::Task<bcos::Error::Ptr> bcostars::GatewayServiceClient::subscribeTopic(
+    std::string const& _clientID, std::string const& _topicInfo)
 {
-    class Callback : public bcostars::GatewayServicePrxCallback
+    struct SubscribeTopicAwaitable
     {
-    public:
-        Callback(std::function<void(bcos::Error::Ptr&&)> callback) : m_callback(std::move(callback))
-        {}
-        void callback_asyncSubscribeTopic(const bcostars::Error& ret) override
+        struct CompletionState
         {
-            s_tarsTimeoutCount.store(0);
-            m_callback(toBcosError(ret));
-        }
-        void callback_asyncSubscribeTopic_exception(tars::Int32 ret) override
+            std::atomic<bool> completed{false};
+            std::coroutine_handle<> handle;
+            bcos::Error::Ptr error;
+        };
+
+        class Callback : public bcostars::GatewayServicePrxCallback
         {
-            s_tarsTimeoutCount++;
-            return m_callback(toBcosError(ret));
+        public:
+            explicit Callback(std::shared_ptr<CompletionState> state) : m_state(std::move(state))
+            {}
+
+            void callback_asyncSubscribeTopic(const bcostars::Error& ret) override
+            {
+                s_tarsTimeoutCount.store(0);
+                complete(toBcosError(ret));
+            }
+            void callback_asyncSubscribeTopic_exception(tars::Int32 ret) override
+            {
+                s_tarsTimeoutCount++;
+                complete(toBcosError(ret));
+            }
+
+        private:
+            void complete(bcos::Error::Ptr error)
+            {
+                if (!m_state->completed.exchange(true))
+                {
+                    m_state->error = std::move(error);
+                    m_state->handle.resume();
+                }
+            }
+            std::shared_ptr<CompletionState> m_state;
+        };
+
+        GatewayServiceClient* m_self;
+        std::string m_clientID;
+        std::string m_topicInfo;
+        std::shared_ptr<CompletionState> m_state;
+
+        constexpr static bool await_ready() noexcept { return false; }
+
+        // see SendAwaitable::await_suspend for why this returns false on a synchronous
+        // connection-check failure
+        bool await_suspend(std::coroutine_handle<> _handle)
+        {
+            m_state->handle = _handle;
+            auto state = m_state;
+            auto shouldBlockCall = m_self->shouldStopCall();
+            auto ret = checkConnection(m_self->c_moduleName, "asyncSubscribeTopic", m_self->m_prx,
+                [state](bcos::Error::Ptr _error) { state->error = std::move(_error); },
+                shouldBlockCall);
+            if (!ret && shouldBlockCall)
+            {
+                return false;
+            }
+            m_self->m_prx->async_asyncSubscribeTopic(new Callback(state), m_clientID, m_topicInfo);
+            return true;
         }
 
-    private:
-        std::function<void(bcos::Error::Ptr&&)> m_callback;
+        bcos::Error::Ptr await_resume() { return std::move(m_state->error); }
     };
-    auto shouldBlockCall = shouldStopCall();
-    auto ret = checkConnection(
-        c_moduleName, "asyncSubscribeTopic", m_prx,
-        [_callback](bcos::Error::Ptr _error) {
-            if (_callback)
-            {
-                _callback(std::move(_error));
-            }
-        },
-        shouldBlockCall);
-    if (!ret && shouldBlockCall)
-    {
-        return;
-    }
-    m_prx->async_asyncSubscribeTopic(new Callback(_callback), _clientID, _topicInfo);
+
+    // copy the arguments into the awaitable — the caller's references are not guaranteed to
+    // outlive the request
+    SubscribeTopicAwaitable awaitable{this, _clientID, _topicInfo,
+        std::make_shared<SubscribeTopicAwaitable::CompletionState>()};
+    co_return co_await awaitable;
 }
-void bcostars::GatewayServiceClient::asyncRemoveTopic(std::string const& _clientID,
-    std::vector<std::string> const& _topicList, std::function<void(bcos::Error::Ptr&&)> _callback)
+bcos::task::Task<bcos::Error::Ptr> bcostars::GatewayServiceClient::removeTopic(
+    std::string const& _clientID, std::vector<std::string> const& _topicList)
 {
-    class Callback : public bcostars::GatewayServicePrxCallback
+    struct RemoveTopicAwaitable
     {
-    public:
-        Callback(std::function<void(bcos::Error::Ptr&&)> callback) : m_callback(callback) {}
-        void callback_asyncRemoveTopic(const bcostars::Error& ret) override
+        struct CompletionState
         {
-            s_tarsTimeoutCount.store(0);
-            m_callback(toBcosError(ret));
-        }
-        void callback_asyncRemoveTopic_exception(tars::Int32 ret) override
+            std::atomic<bool> completed{false};
+            std::coroutine_handle<> handle;
+            bcos::Error::Ptr error;
+        };
+
+        class Callback : public bcostars::GatewayServicePrxCallback
         {
-            s_tarsTimeoutCount++;
-            return m_callback(toBcosError(ret));
+        public:
+            explicit Callback(std::shared_ptr<CompletionState> state) : m_state(std::move(state))
+            {}
+
+            void callback_asyncRemoveTopic(const bcostars::Error& ret) override
+            {
+                s_tarsTimeoutCount.store(0);
+                complete(toBcosError(ret));
+            }
+            void callback_asyncRemoveTopic_exception(tars::Int32 ret) override
+            {
+                s_tarsTimeoutCount++;
+                complete(toBcosError(ret));
+            }
+
+        private:
+            void complete(bcos::Error::Ptr error)
+            {
+                if (!m_state->completed.exchange(true))
+                {
+                    m_state->error = std::move(error);
+                    m_state->handle.resume();
+                }
+            }
+            std::shared_ptr<CompletionState> m_state;
+        };
+
+        GatewayServiceClient* m_self;
+        std::string m_clientID;
+        std::vector<std::string> m_topicList;
+        std::shared_ptr<CompletionState> m_state;
+
+        constexpr static bool await_ready() noexcept { return false; }
+
+        // see SendAwaitable::await_suspend for why this returns false on a synchronous
+        // connection-check failure
+        bool await_suspend(std::coroutine_handle<> _handle)
+        {
+            m_state->handle = _handle;
+            auto state = m_state;
+            auto shouldBlockCall = m_self->shouldStopCall();
+            auto ret = checkConnection(m_self->c_moduleName, "asyncRemoveTopic", m_self->m_prx,
+                [state](bcos::Error::Ptr _error) { state->error = std::move(_error); },
+                shouldBlockCall);
+            if (!ret && shouldBlockCall)
+            {
+                return false;
+            }
+            m_self->m_prx->async_asyncRemoveTopic(new Callback(state), m_clientID, m_topicList);
+            return true;
         }
 
-    private:
-        std::function<void(bcos::Error::Ptr&&)> m_callback;
+        bcos::Error::Ptr await_resume() { return std::move(m_state->error); }
     };
-    auto shouldBlockCall = shouldStopCall();
-    auto ret = checkConnection(
-        c_moduleName, "asyncRemoveTopic", m_prx,
-        [_callback](bcos::Error::Ptr _error) {
-            if (_callback)
-            {
-                _callback(std::move(_error));
-            }
-        },
-        shouldBlockCall);
-    if (!ret && shouldBlockCall)
-    {
-        return;
-    }
-    m_prx->async_asyncRemoveTopic(new Callback(_callback), _clientID, _topicList);
+
+    // copy the arguments into the awaitable — the caller's references are not guaranteed to
+    // outlive the request
+    RemoveTopicAwaitable awaitable{this, _clientID, _topicList,
+        std::make_shared<RemoveTopicAwaitable::CompletionState>()};
+    co_return co_await awaitable;
 }
 bcostars::GatewayServicePrx bcostars::GatewayServiceClient::prx()
 {

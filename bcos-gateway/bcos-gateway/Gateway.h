@@ -114,11 +114,11 @@ public:
     task::Task<void> sendBroadcastMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data) override;
 
-    void asyncSubscribeTopic(std::string const& _clientID, std::string const& _topicInfo,
-        std::function<void(Error::Ptr&&)> _callback) override;
+    task::Task<Error::Ptr> subscribeTopic(
+        std::string const& _clientID, std::string const& _topicInfo) override;
 
-    void asyncRemoveTopic(std::string const& _clientID, std::vector<std::string> const& _topicList,
-        std::function<void(Error::Ptr&&)> _callback) override;
+    task::Task<Error::Ptr> removeTopic(std::string const& _clientID,
+        std::vector<std::string> const& _topicList) override;
 
     bcos::amop::AMOPImpl::Ptr amop();
 
