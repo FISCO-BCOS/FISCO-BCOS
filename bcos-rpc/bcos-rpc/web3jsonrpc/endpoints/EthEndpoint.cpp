@@ -33,6 +33,7 @@
 #include <bcos-framework/storage/LegacyStorageMethods.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-ledger/mpt/Classify.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/Proof.h>
 #include <bcos-ledger/mpt/history/HistoryErrors.h>
@@ -239,6 +240,11 @@ bcos::task::Task<HistoricalStateContext> resolveHistoricalStateContext(
 /// exist then. HistoryUseCurrent means nothing changed the row since, so the committed CURRENT
 /// row is that block's value — read from the same plane the window guard's tip describes, so a
 /// not-yet-committed block cannot leak into a historical answer.
+/// @param rowKey the MPT row name (Classify.h's ROW_BALANCE / ROW_NONCE / ROW_CODE_HASH), not
+///        the executor's ACCOUNT_* spelling. The two are equal today, but the history captures
+///        and classifies by the MPT names (HistoryCommit.h::isHistoricalStateRow ->
+///        classifyRowKey), so a read that spelled them the other way would silently stop matching
+///        what was recorded if either set ever moved.
 bcos::task::Task<std::optional<std::string>> historicalStateRow(
     HistoricalStateContext const& context, std::string_view table, std::string_view rowKey)
 {
@@ -358,7 +364,7 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
         auto const ctx =
             co_await resolveHistoricalStateContext(*m_nodeService, *ledger, blockNumber);
         if (auto const row = co_await historicalStateRow(
-                ctx, historicalAccountTable(addressStr), bcos::executor::ACCOUNT_BALANCE))
+                ctx, historicalAccountTable(addressStr), ledger::mpt::ROW_BALANCE))
         {
             balance = u256(*row);
         }
@@ -554,7 +560,7 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
         auto const ctx =
             co_await resolveHistoricalStateContext(*m_nodeService, *ledger, blockNumber);
         if (auto const row = co_await historicalStateRow(
-                ctx, historicalAccountTable(addressStr), bcos::executor::ACCOUNT_NONCE))
+                ctx, historicalAccountTable(addressStr), ledger::mpt::ROW_NONCE))
         {
             nonce = u256(*row);
         }
@@ -698,7 +704,7 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
         auto const ctx =
             co_await resolveHistoricalStateContext(*m_nodeService, *ledger, blockNumber);
         auto const codeHashRow = co_await historicalStateRow(
-            ctx, historicalAccountTable(addressStr), bcos::executor::ACCOUNT_CODE_HASH);
+            ctx, historicalAccountTable(addressStr), ledger::mpt::ROW_CODE_HASH);
         if (codeHashRow && !codeHashRow->empty())
         {
             auto const codeHash = bcos::h256(
