@@ -918,8 +918,21 @@ task::Task<void> EthEndpoint::call(
         WEB3_LOG(TRACE) << LOG_DESC("eth_call") << LOG_KV("call", call)
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
-    auto tx = call.takeToTransaction(
-        m_nodeService->blockFactory()->transactionFactory(), isEstimate ? scheduler : nullptr);
+    std::optional<uint64_t> chainBlockGasLimit;
+    if (isEstimate)
+    {
+        auto ledger = m_nodeService->ledger();
+        if (ledger)
+        {
+            if (auto block =
+                    co_await ledger::getBlockData(*ledger, blockNumber, bcos::ledger::HEADER))
+            {
+                chainBlockGasLimit = static_cast<uint64_t>(block->blockHeader()->gasLimit());
+            }
+        }
+    }
+    auto tx = call.takeToTransaction(m_nodeService->blockFactory()->transactionFactory(),
+        isEstimate ? scheduler : nullptr, chainBlockGasLimit);
     struct Awaitable
     {
         bcos::scheduler::SchedulerInterface& m_scheduler;

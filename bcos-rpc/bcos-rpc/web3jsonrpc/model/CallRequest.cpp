@@ -28,7 +28,8 @@ using namespace bcos::rpc;
 
 bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
     bcos::protocol::TransactionFactory::Ptr const& factory,
-    bcos::scheduler::SchedulerInterface::Ptr const& scheduler) noexcept
+    bcos::scheduler::SchedulerInterface::Ptr const& scheduler,
+    std::optional<uint64_t> chainBlockGasLimit) noexcept
 {
     std::string nonce;
     if (scheduler && from.has_value())
@@ -62,10 +63,10 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
     }
     uint64_t gasLimit = gas.value_or(0);
     // eth_estimateGas omits gas; validation rejects gasLimit==0 ("intrinsic gas too low").
-    // Match geth: cap at the chain block gas limit so estimation can measure actual usage.
+    // Match geth: cap at the parent block's gas limit (wired from EthEndpoint).
     if (gasLimit == 0 && scheduler)
     {
-        gasLimit = 30'000'000;
+        gasLimit = chainBlockGasLimit.value_or(30'000'000);
     }
     auto tx = factory->createTransaction(1, std::move(this->to), this->data, nonce, 0, {}, {}, 0,
         "", value.value_or(""), gasPrice.value_or(""), gasLimit, maxFeePerGas.value_or(""),

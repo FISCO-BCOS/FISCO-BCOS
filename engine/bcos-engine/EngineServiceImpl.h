@@ -14,11 +14,11 @@
  * limitations under the License.
  *
  * @file EngineServiceImpl.h
- * @brief Shared Engine API template: Tracker, PayloadCache, and engine_common helpers.
+ * @brief Engine API template still constructed by EngineServiceInitializer.
  *
- * Production nodes wire EthEngineService / OpEngineService through EngineServiceInitializer
- * (see Initializer::init). This header keeps the original EngineServiceImpl template for
- * reuse and unit tests.
+ * Tracker, PayloadCache, and engine_common helpers live beside the legacy template.
+ * Production Initializer still instantiates EngineServiceImpl; switching to
+ * EthEngineService / OpEngineService is a follow-up cutover PR.
  */
 
 #pragma once

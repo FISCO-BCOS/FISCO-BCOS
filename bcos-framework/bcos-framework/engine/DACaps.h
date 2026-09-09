@@ -25,8 +25,9 @@
 namespace bcos::engine
 {
 
-/// Shared DA size limits for OP payload building. RPC writes values from
-/// miner_setMaxDASize; the engine reads them during block assembly.
+/// Shared DA size limits for OP payload building. Initializer creates one instance
+/// when [op_engine_rpc] is enabled; AirNodeInitializer wires it to NodeService so
+/// miner_setMaxDASize can update caps that OpEngineService reads during assembly.
 ///   maxTxSize    — drop sealed pool txs above this estimated DA size.
 ///   maxBlockSize — stop appending sealed txs once the cumulative estimate exceeds this.
 /// Zero means uncapped. Sizes use the Fjord FastLZ estimate over the EIP-2718 envelope.
