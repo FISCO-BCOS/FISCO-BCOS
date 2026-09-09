@@ -42,7 +42,7 @@ BOOST_AUTO_TEST_SUITE(HashBuilderSuite)
 
 namespace
 {
-using NodeStorage = bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes>;
+using NodeStorage = bcos::ledger::mpt::test::NodeMemoryStorage;
 
 // keccak256 of `raw` using a fresh hasher (independent recompute for cache/drain checks).
 bcos::h256 hbKeccak(bcos::bytes const& raw)
@@ -103,8 +103,8 @@ BOOST_AUTO_TEST_CASE(EmptyTrieReturnsEmptyRootHash)
     auto result = commitTrieFlushed(
         storage, emptyRootHash(), std::map<bcos::h256, std::optional<bcos::bytes>>{});
     BOOST_CHECK_EQUAL(result.root, emptyRootHash());
-    BOOST_CHECK(result.newNodes.empty());
-    BOOST_CHECK(result.obsoletedNodes.empty());
+    BOOST_CHECK(result.upserts.empty());
+    BOOST_CHECK(result.deletes.empty());
 }
 
 // A single key+value must match an independently computed leaf root (anchors to M2 encoder).
@@ -140,8 +140,9 @@ BOOST_AUTO_TEST_CASE(TwoKeysSharedPrefix)
 
     BOOST_CHECK_EQUAL(result.root, referenceRoot({{keyA, valA}, {keyB, valB}}));
 
-    // The top node is large here, so the flushed root node must be retrievable from storage.
-    auto cached = bcos::task::syncWait(bcos::storage2::readOne(storage, result.root));
+    // The top node is large here, so the flushed root node must be retrievable — from the fixed
+    // entry point, position "", with the state root as its checksum.
+    auto cached = bcos::task::syncWait(bcos::storage2::readOne(storage, accountRootPathKey()));
     BOOST_REQUIRE(cached.has_value());
     BOOST_CHECK_EQUAL(hbKeccak(*cached), result.root);
 }
@@ -174,8 +175,8 @@ BOOST_AUTO_TEST_CASE(RandomBatchMatchesReference)
     }
 }
 
-// A multi-node trie must produce new nodes; every (hash, bytes) must satisfy keccak(bytes)==hash,
-// and a from-empty build obsoletes nothing.
+// A multi-node trie must produce rows; each one's bytes must hash to what its parent records,
+// and a from-empty build deletes nothing.
 BOOST_AUTO_TEST_CASE(NewNodesMatchTheirHashes)
 {
     auto kvs = randomKvs(50, /*seed=*/0xABCD);
@@ -188,14 +189,17 @@ BOOST_AUTO_TEST_CASE(NewNodesMatchTheirHashes)
     NodeStorage storage;
     auto result = commitTrieFlushed(storage, emptyRootHash(), changes);
 
-    BOOST_REQUIRE(!result.newNodes.empty());
-    for (auto const& [hash, raw] : result.newNodes)
+    BOOST_REQUIRE(!result.upserts.empty());
+    // Every row belongs to the account trie, and the root sits at the empty position — the fixed
+    // entry point every reader starts from — hashing to the returned state root.
+    for (auto const& [key, raw] : result.upserts)
     {
-        BOOST_CHECK_EQUAL(hbKeccak(raw), hash);
+        BOOST_CHECK(key.scope == TrieScope::account());
     }
-    // The root must be among the produced nodes (top node is large for 50 keys).
-    BOOST_CHECK(result.newNodes.find(result.root) != result.newNodes.end());
-    BOOST_CHECK(result.obsoletedNodes.empty());
+    auto const rootRow = result.upserts.find(accountRootPathKey());
+    BOOST_REQUIRE(rootRow != result.upserts.end());
+    BOOST_CHECK_EQUAL(hbKeccak(rootRow->second), result.root);
+    BOOST_CHECK(result.deletes.empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

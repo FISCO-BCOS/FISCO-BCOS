@@ -22,6 +22,7 @@
  *        would send block 1's incremental build down the node-reading merge
  *        path and abort on the nonexistent zero-hash node.
  */
+#include "../mpt/TestHelpers.h"
 #include "L2GenesisTestStorage.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
@@ -109,13 +110,14 @@ BOOST_AUTO_TEST_CASE(GenesisRootIsUsableAsCommitTrieParent)
         auto priorRoot = co_await buildAndReadGenesisStateRoot();
 
         // Empty node storage: exactly what a fresh empty-alloc chain has.
-        bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> nodeStorage;
+        bcos::ledger::mpt::test::NodeMemoryStorage nodeStorage;
         std::map<bcos::h256, std::optional<bcos::bytes>> changes;
         bcos::h256 key{};
         key.data()[0] = 0xab;
         changes[key] = bcos::bytes{0x42};
 
-        auto result = co_await mpt::commitTrie(nodeStorage, priorRoot, changes);
+        auto result =
+            co_await mpt::commitTrie(nodeStorage, mpt::TrieScope::account(), priorRoot, changes);
 
         // Same root the stateless from-empty core derives for this single entry.
         std::map<bcos::h256, bcos::bytes> entries{{key, bcos::bytes{0x42}}};

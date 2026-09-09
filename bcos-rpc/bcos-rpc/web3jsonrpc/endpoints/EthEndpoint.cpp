@@ -33,10 +33,12 @@
 #include <bcos-framework/storage/LegacyStorageMethods.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-ledger/mpt/Classify.h>
 #include <bcos-ledger/mpt/Constants.h>
-#include <bcos-ledger/mpt/MPTReadView.h>
 #include <bcos-ledger/mpt/Proof.h>
-#include <bcos-ledger/mpt/StorageValueCodec.h>
+#include <bcos-ledger/mpt/history/HistoryErrors.h>
+#include <bcos-ledger/mpt/history/HistoryRead.h>
+#include <bcos-ledger/mpt/history/MPTHistory.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/util.h>
@@ -159,61 +161,159 @@ task::Task<void> EthEndpoint::blockNumber(const Json::Value&, Json::Value& respo
 }
 
 /// Historical state-read error code (eth_getStorageAt / getBalance / getTransactionCount /
-/// getCode): a historical block whose MPT state root is not available on this node (MPT never
-/// enabled, or the block predates MPT activation), or — scenario A — a dormant account absent
-/// from the incomplete trie.
+/// getCode): a height this node cannot serve from its state reverse history — older than the
+/// retained window, no history retained at all, an era that was never recorded, or an address
+/// whose rows the history does not cover (system contracts).
 constexpr int32_t EthHistoricalStateUnavailable = -32004;
 
-/// Historical MPT read context: the block's committed state root plus whether the chain's
-/// storage tries are complete. getProof reads the same flag (feature_l2_ethereum_compat) to
-/// distinguish "exclusion provably means zero" (scenario B, complete tries) from "cold slot
-/// absent from an incomplete trie" (scenario A, mid-chain MPT activation).
-struct HistoricalMptContext
+/// The plane a historical STATE query reads, plus the window it is allowed to read it in.
+///
+/// Historical state comes from the state reverse history, one row at a time (pathdb spec §11):
+/// a path-addressed node store keeps ONE version per position, so the trie at an older header's
+/// root is not a thing this node can walk, and the old `holdsTrieRoot` admission check rejected
+/// every superseded root by construction. The index answers per key instead, with no dependence
+/// on the trie's shape.
+struct HistoricalStateContext
 {
-    bcos::h256 stateRoot;
-    bool fullTrie = false;
+    /// The node's history object — borrowed, and kept alive for the request by the shared_ptr the
+    /// NodeService holds. `history->state()` owns the in-memory index every row is located
+    /// through; `history->backend()` is the plane its shard rows are read from.
+    std::shared_ptr<ledger::mpt::history::MPTHistory> history;
+    bcos::protocol::BlockNumber block{};
+    bcos::protocol::BlockNumber tip{};
+    bcos::protocol::BlockNumber depth{};
 };
 
-/// Resolve a historical block's committed MPT state root and scenario flag, applying the same
-/// checks as getProof (generateProof's BlockNotCommitted): the block must exist, the node must
-/// have a local MPT node reader, and the state root must be present in MPT node storage.
-/// Throws a JsonRpcException on any failure — a historical query is never silently served from
-/// the latest state. The empty root is a legal "no accounts" root (genesis / pre-MPT / empty
-/// blocks): the empty trie has no node rows, so it is NOT a "root not committed" error — the
-/// scenario flag below still governs how absence at it reads.
-bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
-    bcos::ledger::LedgerInterface& ledger, bcos::protocol::BlockNumber blockNumber,
-    std::shared_ptr<rpc::NodeService::MPTNodeReader> const& mptReader)
+/// Admit a historical state query, or refuse it with the reason. Never falls back to the latest
+/// state: every refusal below is a case where today's rows would look like a valid answer.
+bcos::task::Task<HistoricalStateContext> resolveHistoricalStateContext(
+    rpc::NodeService& nodeService, bcos::ledger::LedgerInterface& ledger,
+    bcos::protocol::BlockNumber blockNumber)
 {
     auto const block = co_await ledger::getBlockData(ledger, blockNumber, bcos::ledger::HEADER);
     if (!block || !block->blockHeader()) [[unlikely]]
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
     }
-    auto const stateRoot = block->blockHeader()->stateRoot();
-    if (!mptReader) [[unlikely]]
+    auto history = nodeService.mptHistory();
+    if (!history || !history->backend()) [[unlikely]]
     {
+        // A deployment matter (a tars-built NodeService has no local storage), not a request
+        // one — hence -32603 rather than -32004.
         BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "MPT not enabled on this node"));
     }
-    // An empty state root (block 0 / empty blocks / pre-MPT blocks) is a
-    // legal "no accounts" root, not a missing node row — skip the root-presence check and let
-    // MPTReadView (which handles emptyRootHash as "no accounts") plus the scenario flag decide
-    // how absence reads: scenario B -> zero; scenario A -> honest dormant-account error.
-    if (stateRoot != bcos::ledger::mpt::emptyRootHash()) [[likely]]
+    auto const depths = history->depths();
+    if (depths.state <= 0) [[unlikely]]
     {
-        if (!co_await bcos::storage2::readOne(*mptReader, stateRoot)) [[unlikely]]
-        {
-            BOOST_THROW_EXCEPTION(JsonRpcException(
-                EthHistoricalStateUnavailable, "Block stateRoot not in MPT node storage"));
-        }
+        BOOST_THROW_EXCEPTION(JsonRpcException(EthHistoricalStateUnavailable,
+            "Historical state is not retained on this node "
+            "(storage.mpt_history_state_blocks = 0)"));
     }
-    // The scenario flag decides how absence at this root is read (getProof's fullTrie).
-    // Single-flag read (feature_l2_ethereum_compat): one SYS_CONFIG row instead of
-    // fetchAllFeatures' ~60-key scan; degrades to false (scenario A) on read failure, the
-    // same honest default as getFeatures' empty-set fallback.
-    auto const fullTrie = co_await ledger::getFeature(
-        ledger, ledger::Features::Flag::feature_l2_ethereum_compat, blockNumber);
-    co_return HistoricalMptContext{stateRoot, fullTrie};
+    auto const tip = co_await ledger::getCurrentBlockNumber(ledger);
+    bool covered = false;
+    try
+    {
+        covered = ledger::mpt::history::historyCoversBlock(history->state(), blockNumber, tip);
+    }
+    catch (ledger::mpt::history::HistoryPruned const&)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(EthHistoricalStateUnavailable,
+            fmt::format("Block {} is older than the retained state history window "
+                        "(storage.mpt_history_state_blocks = {})",
+                blockNumber, depths.state)));
+    }
+    catch (ledger::mpt::history::HistoryIndexUnavailable const&)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(EthHistoricalStateUnavailable,
+            "history index unavailable on this node (rebuild failed); see node log"));
+    }
+    if (!covered) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(EthHistoricalStateUnavailable,
+            fmt::format("No state history recorded for block {} on this node", blockNumber)));
+    }
+    co_return HistoricalStateContext{
+        .history = std::move(history), .block = blockNumber, .tip = tip, .depth = depths.state};
+}
+
+/// The value one flat account row held at the context's block; nullopt when the row did not
+/// exist then. HistoryUseCurrent means nothing changed the row since, so the committed CURRENT
+/// row is that block's value — read from the same plane the window guard's tip describes, so a
+/// not-yet-committed block cannot leak into a historical answer.
+/// @param rowKey the MPT row name (Classify.h's ROW_BALANCE / ROW_NONCE / ROW_CODE_HASH), not
+///        the executor's ACCOUNT_* spelling. The two are equal today, but the history captures
+///        and classifies by the MPT names (HistoryCommit.h::isHistoricalStateRow ->
+///        classifyRowKey), so a read that spelled them the other way would silently stop matching
+///        what was recorded if either set ever moved.
+bcos::task::Task<std::optional<std::string>> historicalStateRow(
+    HistoricalStateContext const& context, std::string_view table, std::string_view rowKey)
+{
+    executor_v1::StateKeyView const keyView{table, rowKey};
+    std::optional<executor_v1::StateValue> value;
+    try
+    {
+        // readStateAtOrCurrent, not readStateAt: the "unchanged since B" arm ends in a read of
+        // the CURRENT committed row, and between a block's merge and its publish that plane is
+        // ahead of the index — a bare read there answers with the newer block's bytes under the
+        // requested block's number. The helper proves no commit crossed the read, and refuses
+        // rather than answering when one did (HistoryRead.h::readAtOrCurrent).
+        value = co_await ledger::mpt::history::readStateAtOrCurrent(context.history->state(),
+            *context.history->backend(), keyView, context.block, context.tip, context.depth);
+    }
+    catch (ledger::mpt::history::HistoryPruned const&)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(EthHistoricalStateUnavailable,
+            fmt::format(
+                "Block {} is older than the retained state history window", context.block)));
+    }
+    catch (ledger::mpt::history::HistoryIndexUnavailable const&)
+    {
+        // Three ways here, one answer: the admission check passed and the index then went
+        // unusable (a publish that threw), or a commit stayed mid-publish for the whole retry
+        // budget, or commits kept crossing this read. A Ready answer and an Unavailable one
+        // differ exactly in whether a missing version means "unchanged" (G10), so refusing is
+        // the only reading left.
+        BOOST_THROW_EXCEPTION(JsonRpcException(EthHistoricalStateUnavailable,
+            "history index unavailable on this node (rebuild failed, or a commit is publishing); "
+            "see node log"));
+    }
+    if (!value)
+    {
+        co_return std::nullopt;
+    }
+    co_return std::string(value->get());
+}
+
+/// The account table a historical state read must look in — or a refusal, when there is none.
+///
+/// EVMAccount puts system-contract addresses under "/sys/" and user accounts under "/apps/", and
+/// the latest branch of each endpoint selects between them. The state history has no such
+/// choice: it captures exactly the rows `Classify.h::parseAccountTable` recognises, which is
+/// "/apps/<40-hex>" and nothing else, because that is the set MPTBuilder folds into the Ethereum
+/// commitment. A system contract's rows were therefore never recorded at any height.
+///
+/// So the two sides are made consistent by REFUSING rather than by widening the table: looking a
+/// system-contract address up under "/apps/" would find nothing and answer 0 / 0 / "0x" / a zero
+/// word for state that demonstrably exists, which is the fabricated answer G6 forbids. Widening
+/// the read to "/sys/" would be worse — those rows have no pre-images, so it would silently
+/// serve TODAY's system-contract state under an old block's number.
+std::string historicalAccountTable(std::string const& addressStr)
+{
+    // Normalize to the 40-char form FIRST, then test membership. The eth_ endpoints reach here
+    // with whatever the caller sent, minus "0x" and lowercased — a short form like "1000" is
+    // legal JSON-RPC input — while c_systemTxsAddress holds 40-char forms. Testing the raw
+    // string would let "0x1000" slip past the refusal below and be answered from
+    // "/apps/00…001000", a table with no rows: the fabricated zero this function exists to
+    // prevent, reached by the one input that looks least like a system address.
+    bcos::Address const address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight};
+    auto const normalized = address.hex();  // 40 lowercase hex, no prefix
+    if (precompiled::contains(bcos::precompiled::c_systemTxsAddress, std::string_view{normalized}))
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(EthHistoricalStateUnavailable,
+            "Historical state is not retained for system-contract addresses: the state history "
+            "records only /apps/ account rows"));
+    }
+    return ledger::mpt::accountTableName(address);
 }
 
 task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value& response)
@@ -254,23 +354,17 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
     }
     else
     {
-        // Historical state: the account's balance from the block's committed MPT root.
-        // Absence semantics are scenario-driven, same rule as getProof: scenario B (complete
-        // tries) reads a missing account as zero; scenario A cannot distinguish a dormant
-        // account from a non-existent one, so it errors explicitly.
-        auto const mptReader = m_nodeService->mptNodeReader();
-        auto const ctx = co_await resolveHistoricalMptContext(*ledger, blockNumber, mptReader);
-        bcos::ledger::mpt::MPTReadView view{*mptReader, ctx.stateRoot};
-        auto const account = co_await view.readAccount(
-            bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
-        if (account)
+        // Historical state: the account's balance row as of that block, from the state reverse
+        // history (pathdb spec §11). A row that did not exist then reads as 0 — the same
+        // absent-account semantics the latest path above uses, and no longer scenario-dependent:
+        // the index records what the flat row held, so there is no "dormant, invisible to an
+        // incomplete trie" case left to distinguish.
+        auto const ctx =
+            co_await resolveHistoricalStateContext(*m_nodeService, *ledger, blockNumber);
+        if (auto const row = co_await historicalStateRow(
+                ctx, historicalAccountTable(addressStr), ledger::mpt::ROW_BALANCE))
         {
-            balance = account->balance;
-        }
-        else if (!ctx.fullTrie) [[unlikely]]
-        {
-            BOOST_THROW_EXCEPTION(JsonRpcException(
-                EthHistoricalStateUnavailable, "Account not in trie (dormant in scenario A)"));
+            balance = u256(*row);
         }
     }
     Json::Value result = toQuantity(std::move(balance));
@@ -396,77 +490,20 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
         co_return;
     }
 
-    // Historical state: served from the MPT at the block's committed state root (same checks
-    // as getProof / getBalance / getTransactionCount / getCode).
-    auto const mptReader = m_nodeService->mptNodeReader();
-    auto const ctx = co_await resolveHistoricalMptContext(*ledger, blockNumber, mptReader);
-
-    // Query the slot through the MPT at that root: account leaf -> storageRoot -> slot leaf
-    // (slotKeyHash(slot)). Absence semantics are scenario-driven, exactly like getProof:
-    //  - scenario B (ctx.fullTrie): the trie is complete, so absent account / empty storage
-    //    trie / absent slot all read zero — Ethereum semantics at a committed root;
-    //  - scenario A (mid-chain activation): a dormant account absent from the trie is
-    //    indistinguishable from a non-existent one → explicit error; a slot absent from the
-    //    (incomplete) storage trie — whether the account has no storage in the trie yet
-    //    (storageRoot == emptyRootHash(), first touch wrote only nonce/balance/code) or the
-    //    storage trie has no leaf for this slot — → fall back to the flat KV. The flat value
-    //    is authoritative when the slot was never written after activation; if it was written
-    //    *after* the requested block the fallback returns that later value, since
-    //    ledger::getStorageAt ignores blockNumber today (the same limitation as getProof's
-    //    SlotNotInMPT fallback). Still strictly better than reporting zero.
-    std::optional<std::string> flatFallback;  // scenario-A dormant-slot fallback rendering
-    bcos::u256 value = 0;
-    {
-        bcos::ledger::mpt::MPTReadView view{*mptReader, ctx.stateRoot};
-        auto const account = co_await view.readAccount(
-            bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
-        if (!account)
-        {
-            if (!ctx.fullTrie) [[unlikely]]
-            {
-                BOOST_THROW_EXCEPTION(JsonRpcException(
-                    EthHistoricalStateUnavailable, "Account not in trie (dormant in scenario A)"));
-            }
-        }
-        else
-        {
-            // The slot may be absent two ways: the account has no storage in the trie yet
-            // (storageRoot == emptyRootHash — first touch wrote only nonce/balance/code,
-            // MPTBuilder.h:307-310), or the storage trie has no leaf for this slot. Both mean
-            // "unknown at this root", not "zero", on a scenario-A chain — so the flat fallback
-            // below covers both.
-            bool slotInTrie = false;
-            if (account->storageRoot != bcos::ledger::mpt::emptyRootHash())
-            {
-                bcos::ledger::mpt::Trie trie{*mptReader, account->storageRoot};
-                if (auto const slot =
-                        co_await trie.get(bcos::ledger::mpt::slotKeyHash(positionBytes)))
-                {
-                    value = bcos::ledger::mpt::decodeStorageValue(bcos::ref(*slot));
-                    slotInTrie = true;
-                }
-            }
-            if (!slotInTrie && !ctx.fullTrie) [[unlikely]]
-            {
-                if (auto const flat = co_await ledger::getStorageAt(
-                        *ledger, addressStr, positionBytes.toRawString(), blockNumber);
-                    flat.has_value())
-                {
-                    flatFallback = storageValueToData(flat.value().get());
-                }
-            }
-        }
-    }
-    // Render like the flat path: a fixed-width 32-byte hex value.
-    Json::Value result;
-    if (flatFallback)
-    {
-        result = *flatFallback;
-    }
-    else
-    {
-        result = toHex(bcos::h256{value}.ref(), "0x");
-    }
+    // Historical state: the slot's own flat row as of that block, from the state reverse history
+    // (pathdb spec §11 puts historical state on StateIndex, not on a rooted trie walk).
+    //
+    // What changed with it, and it is a real semantic change: absence no longer has two readings.
+    // The MPT path had to tell "absent because the account/slot genuinely held nothing" from
+    // "absent because a scenario-A trie never committed this slot", and answered the second with
+    // an error or with a flat fallback that ignored the requested height. The index records what
+    // the ROW held, whatever the trie did with it, so an absent row at block N means the slot was
+    // unset at block N — on either scenario — and reads as zero, like the latest path.
+    auto const ctx = co_await resolveHistoricalStateContext(*m_nodeService, *ledger, blockNumber);
+    auto const slotRow = co_await historicalStateRow(
+        ctx, historicalAccountTable(addressStr), positionBytes.toRawString());
+    // Render like the flat path: a fixed-width 32-byte hex value; an unset slot is 32 zero bytes.
+    Json::Value result = slotRow ? storageValueToData(*slotRow) : storageValueToData({});
     buildJsonContent(result, response);
 }
 task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Json::Value& response)
@@ -516,22 +553,14 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
     }
     else
     {
-        // Historical state: the account's nonce from the block's committed MPT root.
-        // Scenario-driven absence semantics, same rule as getBalance / getProof: scenario B
-        // reads a missing account as zero; scenario A errors for a dormant account.
-        auto const mptReader = m_nodeService->mptNodeReader();
-        auto const ctx = co_await resolveHistoricalMptContext(*ledger, blockNumber, mptReader);
-        bcos::ledger::mpt::MPTReadView view{*mptReader, ctx.stateRoot};
-        auto const account = co_await view.readAccount(
-            bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
-        if (account)
+        // Historical state: the account's nonce row as of that block, from the state reverse
+        // history. Absent reads as 0, the same absent-account answer the latest path gives.
+        auto const ctx =
+            co_await resolveHistoricalStateContext(*m_nodeService, *ledger, blockNumber);
+        if (auto const row = co_await historicalStateRow(
+                ctx, historicalAccountTable(addressStr), ledger::mpt::ROW_NONCE))
         {
-            nonce = account->nonce;
-        }
-        else if (!ctx.fullTrie) [[unlikely]]
-        {
-            BOOST_THROW_EXCEPTION(JsonRpcException(
-                EthHistoricalStateUnavailable, "Account not in trie (dormant in scenario A)"));
+            nonce = u256(*row);
         }
     }
     Json::Value result = toQuantity(nonce);
@@ -667,29 +696,29 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
         // scenario B reads a missing account as "no code"; scenario A errors for a dormant
         // account.
         auto const ledger = m_nodeService->ledger();
-        auto const mptReader = m_nodeService->mptNodeReader();
-        auto const ctx = co_await resolveHistoricalMptContext(*ledger, blockNumber, mptReader);
-        bcos::ledger::mpt::MPTReadView view{*mptReader, ctx.stateRoot};
-        auto const account = co_await view.readAccount(
-            bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
-        if (account)
+        // The codeHash row as of that block comes from the state reverse history; the code
+        // BYTES do not need a historical plane at all — s_code_binary is content-addressed and
+        // append-only, so the bytes under a given hash are the same at any height.
+        auto const ctx =
+            co_await resolveHistoricalStateContext(*m_nodeService, *ledger, blockNumber);
+        auto const codeHashRow = co_await historicalStateRow(
+            ctx, historicalAccountTable(addressStr), ledger::mpt::ROW_CODE_HASH);
+        if (codeHashRow && !codeHashRow->empty())
         {
-            if (account->codeHash != bcos::ledger::mpt::emptyCodeHash())
+            auto const codeHash = bcos::h256(
+                bcos::bytesConstRef(
+                    reinterpret_cast<bcos::byte const*>(codeHashRow->data()), codeHashRow->size()),
+                bcos::h256::AlignLeft);
+            if (codeHash != bcos::ledger::mpt::emptyCodeHash())
             {
                 auto const stateStorage = ledger->getStateStorage();
-                std::string const codeHashStr = account->codeHash.toRawString();
                 if (auto const codeEntry = co_await bcos::storage2::readOne(*stateStorage,
-                        executor_v1::StateKeyView{bcos::ledger::SYS_CODE_BINARY, codeHashStr});
+                        executor_v1::StateKeyView{bcos::ledger::SYS_CODE_BINARY, *codeHashRow});
                     codeEntry.has_value())
                 {
                     code.assign(codeEntry.value().get().begin(), codeEntry.value().get().end());
                 }
             }
-        }
-        else if (!ctx.fullTrie) [[unlikely]]
-        {
-            BOOST_THROW_EXCEPTION(JsonRpcException(
-                EthHistoricalStateUnavailable, "Account not in trie (dormant in scenario A)"));
         }
     }
     Json::Value result = toHexStringWithPrefix(code);
@@ -1290,7 +1319,7 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
         }
     }
     auto const blockTag = toView(request[2U]);
-    auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
+    auto [blockNumber, isLatest] = co_await getBlockNumberByTag(blockTag);
     if (c_fileLogLevel == TRACE)
     {
         WEB3_LOG(TRACE) << "eth_getProof" << LOG_KV("address", address.hexPrefixed())
@@ -1320,14 +1349,88 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
     // feature_l2_ethereum_compat (scenario B) are the storage tries complete, making an
     // exclusion walk a provable zero. Otherwise (scenario A) the trie omits slots never
     // written after MPT activation, and generateProof marks such slots inMPT=false instead
-    // of emitting a lying value-0 exclusion proof. Single-flag read (one SYS_CONFIG row,
-    // same helper as resolveHistoricalMptContext); degrades to false (honest scenario-A
-    // behavior) on fetch failure.
+    // of emitting a lying value-0 exclusion proof. Single-flag read: one SYS_CONFIG row rather
+    // than fetchAllFeatures' ~60-key scan; degrades to false (honest scenario-A behavior) on
+    // fetch failure.
     auto const fullTrie = co_await ledger::getFeature(
         *ledger, ledger::Features::Flag::feature_l2_ethereum_compat, blockNumber);
 
-    auto result = co_await ledger::mpt::generateProof(
-        *mptReader, stateRoot, address, std::span<h256 const>(slots), fullTrie);
+    std::variant<ledger::mpt::EIP1186Proof, ledger::mpt::ProofErrorCode> result;
+    if (isLatest)
+    {
+        result = co_await ledger::mpt::generateProof(
+            *mptReader, stateRoot, address, std::span<h256 const>(slots), fullTrie);
+    }
+    else
+    {
+        // A past block: the node rows hold ONE version per position, so the walk is served from
+        // the trie-node reverse history instead — each position resolved to its version at this
+        // block (pathdb spec §10.2). The proof BYTES are the same object either way: the walk
+        // still verifies every node against the hash its parent records, which is exactly what
+        // makes a historical version trustworthy rather than merely plausible.
+        auto const history = m_nodeService->mptHistory();
+        if (!history || !history->backend() || history->depths().proof <= 0) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(EthGetProofUnavailable,
+                "Historical proofs are not retained on this node "
+                "(storage.mpt_history_proof_blocks = 0)"));
+        }
+        auto const depth = history->depths().proof;
+        auto const tip = co_await ledger::getCurrentBlockNumber(*ledger);
+        // Being inside the window is a claim about the retention PARAMETER; whether this node
+        // ever recorded that era is a separate question, and without it every position would
+        // resolve to HistoryUseCurrent — today's trie, proved against an old header's root,
+        // which would simply fail the parent-child check and look like corruption.
+        bool covered = false;
+        try
+        {
+            covered = ledger::mpt::history::historyCoversBlock(history->trie(), blockNumber, tip);
+        }
+        catch (ledger::mpt::history::HistoryPruned const&)
+        {
+            // The store's own retention boundary says this height is already gone, which the
+            // parameter window need not have known.
+            BOOST_THROW_EXCEPTION(JsonRpcException(EthGetProofUnavailable,
+                fmt::format("Block {} is older than the retained trie-node history window "
+                            "(storage.mpt_history_proof_blocks = {})",
+                    blockNumber, depth)));
+        }
+        catch (ledger::mpt::history::HistoryIndexUnavailable const&)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(EthGetProofUnavailable,
+                "history index unavailable on this node (rebuild failed); see node log"));
+        }
+        if (!covered) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(EthGetProofUnavailable,
+                fmt::format(
+                    "No trie-node history recorded for block {} on this node", blockNumber)));
+        }
+        ledger::mpt::history::HistoricalNodeStorage<NodeService::MPTNodeReader,
+            ledger::mpt::history::MPTHistory::Backend>
+            historicalNodes(
+                *mptReader, history->trie(), *history->backend(), blockNumber, tip, depth);
+        try
+        {
+            result = co_await ledger::mpt::generateProof(
+                historicalNodes, stateRoot, address, std::span<h256 const>(slots), fullTrie);
+        }
+        catch (ledger::mpt::history::HistoryPruned const&)
+        {
+            // The ONLY out-of-window outcome: the guard fires before the lookup, so this is never
+            // confused with "the position never changed" (spec B.3).
+            BOOST_THROW_EXCEPTION(JsonRpcException(EthGetProofUnavailable,
+                fmt::format("Block {} is older than the retained trie-node history window "
+                            "(storage.mpt_history_proof_blocks = {})",
+                    blockNumber, depth)));
+        }
+        catch (ledger::mpt::history::HistoryIndexUnavailable const&)
+        {
+            // The index went unusable between admission and the walk (a publish that threw).
+            BOOST_THROW_EXCEPTION(JsonRpcException(EthGetProofUnavailable,
+                "history index unavailable on this node (rebuild failed); see node log"));
+        }
+    }
     if (auto const* errorCode = std::get_if<ledger::mpt::ProofErrorCode>(&result))
     {
         auto const* message = (*errorCode == ledger::mpt::ProofErrorCode::AccountNotInMPT) ?
@@ -1351,6 +1454,11 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
     output["accountProof"] = std::move(accountProof);
     Json::Value storageProof = Json::arrayValue;
     auto const addressHex = address.hex();  // ledger::getStorageAt's shape: lowercase, unprefixed
+    // Resolved at most once for the whole request, so every cold slot below is read against ONE
+    // tip snapshot rather than a per-slot one — two slots of the same proof must not straddle a
+    // commit. Lazy, not hoisted outright: a proof whose slots are all in the trie needs no flat
+    // half at all, and must not start failing on a node that retains no state history.
+    std::optional<HistoricalStateContext> stateContext;
     for (auto& entry : proof.storageProof)
     {
         Json::Value entryJson = Json::objectValue;
@@ -1359,18 +1467,44 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
         {
             // SlotNotInMPT (spec §5.9): the slot is absent from the scenario-A storage trie, so
             // no Merkle proof exists — "value" is the authoritative flat-KV truth, "proof" the
-            // empty array. Forward the resolved blockNumber (not a hardcoded 0 like the other
-            // Web3 flat reads): unlike them, this endpoint's Merkle half DOES honor blockTag —
-            // it proves against the requested block's stateRoot — so the flat half must target
-            // the same block. Ledger::getStorageAt ignores the argument today and serves
-            // latest-committed state; passing it keeps this call site correct once historical
-            // flat reads land, instead of silently staying latest-only. Unset slot reads as zero.
+            // empty array.
+            //
+            // The two halves of this response MUST describe the same height. The Merkle half
+            // honours blockTag (it proves against the requested block's stateRoot), so the flat
+            // half has to as well — and `ledger::getStorageAt` cannot do it: it takes a block
+            // number and discards it (`Ledger.cpp`: `std::ignore = _blockNumber`), always
+            // serving latest-committed state. Reading a cold slot through it at a past height
+            // therefore returned TODAY's value inside a proof anchored at B, with nothing in
+            // the response to say so.
+            //
+            // The historical flat read the rest of this file now uses is the answer: the state
+            // reverse history holds this row's value at B. When the node cannot serve that
+            // height, resolveHistoricalStateContext refuses with -32004 rather than letting the
+            // latest value stand in — a refusal is the only honest answer for half a proof.
             std::string quantity = "0x0";
-            if (auto const flat = co_await ledger::getStorageAt(
-                    *ledger, addressHex, entry.key.toRawString(), blockNumber);
-                flat.has_value())
+            std::optional<std::string> slotRow;
+            if (isLatest)
             {
-                quantity = toQuantity(flat.value().get());
+                if (auto const flat = co_await ledger::getStorageAt(
+                        *ledger, addressHex, entry.key.toRawString(), blockNumber);
+                    flat.has_value())
+                {
+                    slotRow = std::string(flat.value().get());
+                }
+            }
+            else
+            {
+                if (!stateContext)
+                {
+                    stateContext = co_await resolveHistoricalStateContext(
+                        *m_nodeService, *ledger, blockNumber);
+                }
+                slotRow = co_await historicalStateRow(
+                    *stateContext, historicalAccountTable(addressHex), entry.key.toRawString());
+            }
+            if (slotRow)
+            {
+                quantity = toQuantity(*slotRow);
             }
             entryJson["value"] = std::move(quantity);
             entryJson["proof"] = Json::arrayValue;

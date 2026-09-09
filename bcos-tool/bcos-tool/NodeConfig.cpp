@@ -1765,6 +1765,27 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     boost::split(m_pd_addrs, pd_addrs, boost::is_any_of(","));
     m_enableLRUCacheStorage = _pt.get<bool>("storage.enable_cache", true);
     m_cacheSize = _pt.get<ssize_t>("storage.cache_size", DEFAULT_CACHE_SIZE);
+
+    // How far back this node keeps the two MPT reverse histories (pathdb spec §10.3, §12).
+    // Node-local operations parameters, NOT consensus values: they decide what this node can
+    // answer, never what it computes, so two nodes of one chain may run different depths.
+    // 0 disables that history — nothing is written and the matching query is refused.
+    //
+    // They are not one-endpoint-each: H_state bounds every historical state read AND the flat
+    // half of an eth_getProof that touches a scenario-A cold slot, so a proof-serving node
+    // wants both depths set, not H_proof alone.
+    m_mptHistoryStateBlocks =
+        _pt.get<int64_t>("storage.mpt_history_state_blocks", DEFAULT_MPT_HISTORY_BLOCKS);
+    m_mptHistoryProofBlocks =
+        _pt.get<int64_t>("storage.mpt_history_proof_blocks", DEFAULT_MPT_HISTORY_BLOCKS);
+    if (m_mptHistoryStateBlocks < 0 || m_mptHistoryProofBlocks < 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "storage.mpt_history_state_blocks and storage.mpt_history_proof_blocks must not "
+                "be negative (0 disables that history)"));
+    }
+
     g_BCOSConfig.setStorageType(m_storageType);  // Set storageType to global
     NodeConfig_LOG(INFO) << LOG_DESC("loadStorageConfig") << LOG_KV("storagePath", m_storagePath)
                          << LOG_KV("KeyPage", m_keyPageSize) << LOG_KV("storageType", m_storageType)
@@ -1774,7 +1795,9 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("archiveListenIP", m_archiveListenIP)
                          << LOG_KV("archiveListenPort", m_archiveListenPort)
                          << LOG_KV("enable_rocksdb_blob", m_enableRocksDBBlob)
-                         << LOG_KV("enableLRUCacheStorage", m_enableLRUCacheStorage);
+                         << LOG_KV("enableLRUCacheStorage", m_enableLRUCacheStorage)
+                         << LOG_KV("mptHistoryStateBlocks", m_mptHistoryStateBlocks)
+                         << LOG_KV("mptHistoryProofBlocks", m_mptHistoryProofBlocks);
 }
 
 // Note: In components that do not require failover, do not need to set member_id
@@ -2943,6 +2966,16 @@ bool NodeConfig::enableLRUCacheStorage() const
 ssize_t NodeConfig::cacheSize() const
 {
     return m_cacheSize;
+}
+
+int64_t NodeConfig::mptHistoryStateBlocks() const
+{
+    return m_mptHistoryStateBlocks;
+}
+
+int64_t NodeConfig::mptHistoryProofBlocks() const
+{
+    return m_mptHistoryProofBlocks;
 }
 
 uint32_t NodeConfig::compatibilityVersion() const

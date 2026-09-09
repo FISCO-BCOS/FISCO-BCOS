@@ -41,12 +41,16 @@ public:
         std::shared_ptr<SchedulerType> scheduler, std::shared_ptr<txpool::TxPoolInterface> txpool,
         std::shared_ptr<protocol::TransactionSubmitResultFactory> transactionSubmitResultFactory,
         std::shared_ptr<ledger::LedgerInterface> ledger,
-        std::shared_ptr<Executor> transactionExecutor, bool notifyTransactions = true)
+        std::shared_ptr<Executor> transactionExecutor, bool notifyTransactions = true,
+        std::shared_ptr<ledger::mpt::history::MPTHistory> mptHistory = nullptr)
     {
         auto baselineScheduler = std::make_shared<BaselineScheduler<initializer::GlobalStateStorage,
-            Executor, SchedulerType, ledger::LedgerInterface>>(
-            storageInitializer->storage(), *scheduler, *transactionExecutor, *blockFactory, *ledger,
-            *txpool, *transactionSubmitResultFactory, *blockFactory->cryptoSuite()->hashImpl());
+            Executor, SchedulerType, ledger::LedgerInterface>>(storageInitializer->storage(),
+            *scheduler, *transactionExecutor, *blockFactory, *ledger, *txpool,
+            *transactionSubmitResultFactory, *blockFactory->cryptoSuite()->hashImpl());
+        // The node's MPT reverse histories (nodeConfig [storage] depths + the rebuilt indexes),
+        // set before any block flows. Null leaves the scheduler at depths {0, 0}.
+        baselineScheduler->setMPTHistory(std::move(mptHistory));
         if (notifyTransactions)
         {
             baselineScheduler->registerTransactionNotifier(

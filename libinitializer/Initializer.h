@@ -32,6 +32,8 @@
 #include "tools/archive-tool/ArchiveService.h"
 #endif
 #include <bcos-executor/src/executor/SwitchExecutorManager.h>
+#include <bcos-ledger/mpt/PathKey.h>
+#include <bcos-ledger/mpt/history/MPTHistory.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-tx-validator/TxValidator.h>
 #include <bcos-utilities/BoostLogInitializer.h>
@@ -145,7 +147,25 @@ public:
     /// key-translating adapter, but the backend stays owned by this Initializer's
     /// GlobalStateStorageInitializer, so the handle must not outlive this Initializer.
     /// nullptr before initNode() built the global state storage (e.g. config-only usage).
-    std::shared_ptr<bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>> mptNodeReader();
+    std::shared_ptr<bcos::storage2::AnyStorage<bcos::ledger::mpt::PathKey, bcos::bytes>>
+    mptNodeReader();
+
+    /// The node's two MPT reverse histories: the stores that own the in-memory query indexes,
+    /// the retention depths (nodeConfig [storage]) and the read-only handle on the committed
+    /// backend the shard rows live in. ONE instance per node, shared by the scheduler that
+    /// publishes into it and the RPC endpoints that read it — the index is derived data, and a
+    /// second copy would be stale from the first commit onwards.
+    ///
+    /// The backend handle is the committed backend itself, NOT a forked view: a rebuild and an
+    /// expiry seek, and a production View stacks an LRU cache layer that is CONCURRENT|LRU with
+    /// no ORDERED, so `View::range(RANGE_SEEK, …)` cannot be instantiated at all. It is also the
+    /// right plane on its own terms — the window guard's tip is the committed tip, so the pending
+    /// layers of in-flight blocks must stay invisible. Same lifetime contract as mptNodeReader().
+    /// nullptr before initNode() built the global state storage.
+    [[nodiscard]] std::shared_ptr<bcos::ledger::mpt::history::MPTHistory> const& mptHistory() const
+    {
+        return m_mptHistory;
+    }
 
     /// Provider for eth_getStorageAt's latest-state path: each call forks a fresh latest view
     /// of GlobalStateStorage and returns an AnyStorage handle owning it (see
@@ -190,6 +210,9 @@ private:
     std::shared_ptr<bcos::archive::ArchiveService> m_archiveService = nullptr;
 #endif
     std::shared_ptr<GlobalStateStorageInitializer> m_globalStateStorageInitializer;
+    /// Built and rebuilt in init(), immediately after m_globalStateStorageInitializer and before
+    /// any scheduler or RPC object; borrows that storage, so it must be destroyed before it.
+    std::shared_ptr<bcos::ledger::mpt::history::MPTHistory> m_mptHistory;
     std::shared_ptr<EngineServiceInitializer> m_engineServiceInitializer;
     std::shared_ptr<bcos::single_consensus::SingleNodeConsensus> m_singleNodeConsensus;
     std::shared_ptr<executor_v1::PrecompiledManager> m_precompiledManager;

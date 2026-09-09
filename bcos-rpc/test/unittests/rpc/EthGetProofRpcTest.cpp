@@ -43,7 +43,8 @@ namespace mpt = bcos::ledger::mpt;
 class EthGetProofFixture : public RPCFixture
 {
 public:
-    using MPTNodeStorage = bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes>;
+    using MPTNodeStorage = bcos::storage2::memory_storage::MemoryStorage<mpt::PathKey, bcos::bytes,
+        bcos::storage2::memory_storage::ORDERED>;
 
     EthGetProofFixture()
     {
@@ -58,18 +59,21 @@ public:
         m_ledger->setFeatures(features);
     }
 
-    /// Commit @p entries into a fresh trie in @p storage and flush the produced nodes, returning
-    /// the root. commitTrie only computes; persistence is the caller's job (HashBuilder.h).
-    static bcos::h256 commitInto(
-        MPTNodeStorage& storage, std::map<bcos::h256, bcos::bytes> const& entries)
+    /// Commit @p entries into a fresh trie of @p scope in @p storage and flush the produced
+    /// rows, returning the root. commitTrie only computes; persistence is the caller's job
+    /// (HashBuilder.h). The scope is part of every row's address, so a storage trie must be
+    /// built under its OWNER — that is how the proof walk finds it again.
+    static bcos::h256 commitInto(MPTNodeStorage& storage, mpt::TrieScope const& scope,
+        std::map<bcos::h256, bcos::bytes> const& entries)
     {
         std::map<bcos::h256, std::optional<bcos::bytes>> changes;
         for (auto const& [key, value] : entries)
         {
             changes[key] = value;
         }
-        auto result = task::syncWait(mpt::commitTrie(storage, mpt::emptyRootHash(), changes));
-        task::syncWait(mpt::flushTrieNodes(storage, result.newNodes));
+        auto result =
+            task::syncWait(mpt::commitTrie(storage, scope, mpt::emptyRootHash(), changes));
+        task::syncWait(mpt::flushTrieNodes(storage, result.upserts));
         return result.root;
     }
 
@@ -78,14 +82,16 @@ public:
     /// separate step so the unset-reader case can reuse the same trie setup.
     void buildTrie()
     {
-        auto const storageRoot = commitInto(
-            m_mptNodes, {{mpt::slotKeyHash(slotA), valueA}, {mpt::slotKeyHash(slotB), valueB}});
+        auto const storageRoot =
+            commitInto(m_mptNodes, mpt::TrieScope::storage(mpt::accountKeyHash(address)),
+                {{mpt::slotKeyHash(slotA), valueA}, {mpt::slotKeyHash(slotB), valueB}});
 
         mpt::Account account;
         account.nonce = 7;
         account.balance = 1000;
         account.storageRoot = storageRoot;
-        stateRoot = commitInto(m_mptNodes, {{mpt::accountKeyHash(address), account.encode()}});
+        stateRoot = commitInto(m_mptNodes, mpt::TrieScope::account(),
+            {{mpt::accountKeyHash(address), account.encode()}});
 
         m_ledger->ledgerData().back()->blockHeader()->setStateRoot(stateRoot);
     }
@@ -95,7 +101,7 @@ public:
     void wireReader()
     {
         nodeService->setMPTNodeReader(
-            std::make_shared<bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>>(m_mptNodes));
+            std::make_shared<bcos::storage2::AnyStorage<mpt::PathKey, bcos::bytes>>(m_mptNodes));
     }
 
     Json::Value request(std::string const& req)
@@ -103,8 +109,9 @@ public:
         Json::Value value;
         Json::Reader reader;
         std::promise<bcos::bytes> promise;
-        web3JsonRpc->onRPCRequest(
-            req, [&promise](bcos::bytes resp, boost::beast::http::status) { promise.set_value(std::move(resp)); });
+        web3JsonRpc->onRPCRequest(req, [&promise](bcos::bytes resp, boost::beast::http::status) {
+            promise.set_value(std::move(resp));
+        });
         auto jsonBytes = promise.get_future().get();
         std::string_view json((char*)jsonBytes.data(), (char*)jsonBytes.data() + jsonBytes.size());
         reader.parse(json.begin(), json.end(), value);

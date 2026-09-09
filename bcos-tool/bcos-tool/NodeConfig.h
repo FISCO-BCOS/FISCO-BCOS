@@ -41,6 +41,13 @@ class NodeConfig
 {
 public:
     constexpr static ssize_t DEFAULT_CACHE_SIZE = 32 * 1024 * 1024;
+    /// Blocks of MPT reverse history both windows keep by default (pathdb spec §10.3: a first
+    /// deployment sets H_state == H_proof so historical calls and historical proofs cover the
+    /// same span — and eth_getProof needs both, since a scenario-A cold slot's value comes from
+    /// the state history while its account walk comes from the trie history). The SINGLE source of
+    /// this number — `ledger::mpt::history::HistoryDepths` defaults to 0/disabled precisely so
+    /// nothing else spells it.
+    constexpr static int64_t DEFAULT_MPT_HISTORY_BLOCKS = 128;
     constexpr static ssize_t DEFAULT_MIN_CONSENSUS_TIME_MS = 3000;
     constexpr static ssize_t DEFAULT_MIN_LEASE_TTL_SECONDS = 3;
     constexpr static ssize_t DEFAULT_MAX_SEAL_TIME_MS = 600000;
@@ -289,6 +296,19 @@ public:
 
     bool enableLRUCacheStorage() const;
     ssize_t cacheSize() const;
+
+    /// [storage] mpt_history_state_blocks — H_state, the depth of the flat-state reverse history
+    /// this node keeps. It bounds every historical STATE read: eth_call at a past block, and
+    /// eth_getBalance / eth_getTransactionCount / eth_getStorageAt / eth_getCode. It also bounds
+    /// part of eth_getProof — a scenario-A cold slot has no trie leaf, so its value comes from
+    /// this history, and a proof containing one is refused when H_state cannot cover the height
+    /// even though H_proof can. 0 = not retained.
+    int64_t mptHistoryStateBlocks() const;
+    /// [storage] mpt_history_proof_blocks — H_proof, the depth of the trie-node reverse history
+    /// this node keeps. It bounds the Merkle half of a historical eth_getProof (every position
+    /// on the walk resolved to its version at that block). A node serving proofs wants BOTH
+    /// depths: this one alone leaves cold slots unanswerable. 0 = not retained.
+    int64_t mptHistoryProofBlocks() const;
 
     uint32_t compatibilityVersion() const;
     std::string compatibilityVersionStr() const;
@@ -623,6 +643,8 @@ private:
 
     bool m_enableLRUCacheStorage = true;
     ssize_t m_cacheSize = DEFAULT_CACHE_SIZE;  // 32MB for default
+    int64_t m_mptHistoryStateBlocks = DEFAULT_MPT_HISTORY_BLOCKS;
+    int64_t m_mptHistoryProofBlocks = DEFAULT_MPT_HISTORY_BLOCKS;
 
     // failover config
     std::string m_memberID;

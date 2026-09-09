@@ -10,10 +10,13 @@
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/mpt/CommitObserver.h"
-#include "bcos-ledger/mpt/MPTDeltaLayer.h"
+#include "bcos-ledger/mpt/PathDiff.h"
+#include "bcos-ledger/mpt/history/MPTHistory.h"
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <oneapi/tbb/task_group.h>
@@ -30,7 +33,6 @@
 #include <tuple>
 #include <type_traits>
 #include <vector>
-#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::protocol
 {
@@ -132,10 +134,30 @@ private:
         /// (MPTNodeStorage.h), and the NEXT block reads its parent root from the published
         /// header row, not from here (buildMPTStateRoot), so this field is not a channel any
         /// consensus-path data flows through.
-        std::optional<ledger::mpt::MPTDeltaLayer> m_mptDelta;
+        std::optional<ledger::mpt::PathDiff> m_mptDelta;
+        /// The flat rows this block changed, collected at EXECUTE time while the block's own
+        /// mutable layer is still reachable (HistoryCommit.h::collectStateHistoryKeys). Their
+        /// PRE-images are read at commit time, from the committed plane, which is the last
+        /// moment they exist (code map Q3). Empty when H_state is 0 or the block built no MPT.
+        std::vector<executor_v1::StateKey> m_stateHistoryKeys;
     };
     std::deque<std::shared_ptr<ExecuteResult>> m_results;
     std::mutex m_resultsMutex;
+
+    /// The node's two reverse-history stores, their retention depths and the plane they read —
+    /// the SAME object the RPC layer holds (MPTHistory.h), because a derived in-memory index is
+    /// only correct if there is exactly one of it. Injected at wiring time (nodeConfig [storage]
+    /// -> Initializer). Null on an un-wired scheduler (tests, tars), which then behaves as depths
+    /// {0, 0}: no history written, every historical query refused. Written before block flow
+    /// starts, read on the commit and query paths.
+    std::shared_ptr<ledger::mpt::history::MPTHistory> m_mptHistory;
+
+    /// This scheduler's retention depths, or {0, 0} when no MPTHistory was injected — the one
+    /// place that reading is spelled, so no call site has to remember what a null handle means.
+    [[nodiscard]] ledger::mpt::history::HistoryDepths historyDepths() const
+    {
+        return m_mptHistory ? m_mptHistory->depths() : ledger::mpt::history::HistoryDepths{};
+    }
 
     /// Post-commit hook over each MPT block's node delta — the pathdb pruning seam
     /// (CommitObserver.h). Defaults to the no-op observer; replaced via setMPTCommitObserver.
@@ -172,9 +194,8 @@ private:
      * (account trie + storage sub-tries, computeGenesisStateTrie) as "/mpt/" state rows on
      * first init of an L2 chain, so block 1's incremental build reads its parents here.
      */
-    task::Task<ledger::mpt::MPTDeltaLayer> buildMPTStateRoot(
-        typename MultiLayerStorage::ViewType& view, protocol::BlockHeader const& blockHeader,
-        ledger::LedgerConfig const& ledgerConfig);
+    task::Task<ledger::mpt::PathDiff> buildMPTStateRoot(typename MultiLayerStorage::ViewType& view,
+        protocol::BlockHeader const& blockHeader, ledger::LedgerConfig const& ledgerConfig);
 
 
     /**
@@ -239,9 +260,11 @@ public:
 
 
     /// eth_call pinned at @p blockNumber (M13.2, spec §5.13): execute against the state
-    /// block N committed — the MPT at block N's header stateRoot — with the call's own
-    /// writes landing in a fresh mutable layer stacked on a HistoricalStateBackend
-    /// (read-your-writes inside the call, nothing persisted; HistoricalCallStorage.h).
+    /// block N committed — resolved per key from the STATE reverse history (pathdb spec §10.1,
+    /// §11), with the call's own writes landing in a fresh mutable layer stacked on a
+    /// HistoricalStateBackend (read-your-writes inside the call, nothing persisted;
+    /// HistoricalCallStorage.h). Refused when H_state is 0 (nothing was recorded) and, per key,
+    /// when the height predates the retained window (HistoryPruned).
     ///
     /// Gated to scenario B (feature_l2_ethereum_compat): only there is the trie the
     /// COMPLETE state at the root. A scenario-A trie excludes every account dormant since
@@ -291,6 +314,15 @@ public:
     /// flow starts. A null pointer keeps the current observer — the commit path relies on the
     /// member never being empty.
     void setMPTCommitObserver(std::shared_ptr<ledger::mpt::CommitObserver> observer);
+
+
+    /// Inject the node's MPT reverse histories — the stores, their retention depths (nodeConfig
+    /// [storage] mpt_history_state_blocks / mpt_history_proof_blocks) and the plane they read.
+    /// Call at wiring time, before block flow starts and after the Initializer has rebuilt the
+    /// indexes: publishing into an index that is still being rebuilt would race the walk, and a
+    /// depth change mid-chain would leave a window the node cannot honour.
+    void setMPTHistory(std::shared_ptr<ledger::mpt::history::MPTHistory> history);
+    [[nodiscard]] std::shared_ptr<ledger::mpt::history::MPTHistory> const& mptHistory() const;
 
 
     void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig) override;

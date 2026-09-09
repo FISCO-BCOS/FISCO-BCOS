@@ -59,7 +59,6 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-ledger/mpt/Classify.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
-#include "bcos-storage/KeyPrefixes.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
@@ -144,7 +143,8 @@ bool keySetContains(std::vector<StateKey> const& keys, std::string_view table, s
 size_t mptKeyCount(std::vector<StateKey> const& keys)
 {
     return static_cast<size_t>(std::ranges::count_if(keys, [](StateKey const& stateKey) {
-        return StateKeyView{stateKey}.m_table == storage2::kMPTTable;
+        auto const table = StateKeyView{stateKey}.m_table;
+        return table == ledger::mpt::kMPTAccountTable || table == ledger::mpt::kMPTStorageTable;
     }));
 }
 
@@ -525,7 +525,8 @@ BOOST_AUTO_TEST_CASE(mptCommitSingleMergeIncludesTrieNodeRows)
     // The node rows really landed (spot-check one recorded "/mpt/" key).
     auto const& keys = backendStorage.m_mergedKeySets[1];
     auto nodeKey = std::ranges::find_if(keys, [](StateKey const& stateKey) {
-        return StateKeyView{stateKey}.m_table == storage2::kMPTTable;
+        auto const table = StateKeyView{stateKey}.m_table;
+        return table == ledger::mpt::kMPTAccountTable || table == ledger::mpt::kMPTStorageTable;
     });
     BOOST_REQUIRE(nodeKey != keys.end());
     auto nodeView = StateKeyView{*nodeKey};
