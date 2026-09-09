@@ -129,7 +129,7 @@ protected:
     std::shared_ptr<P2PSession> getP2PSessionByNodeIdWithoutLock(P2pID const& _nodeID) const;
 
     // handshake protocol
-    void asyncSendProtocol(P2PSession::Ptr _session);
+    void sendProtocol(P2PSession::Ptr _session);
     void onReceiveProtocol(
         NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
     void onReceiveHeartbeat(

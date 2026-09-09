@@ -595,7 +595,30 @@ void Host::handshakeServer(const boost::system::error_code& error,
                        << LOG_KV("remote endpoint", socket->remoteEndpoint())
                        << LOG_KV("shortP2pid", printShortP2pID(info.p2pID))
                        << LOG_KV("rawP2pID", printShortP2pID(info.rawP2pID));
-        startPeerSession(info, socket, m_connectionHandler);
+        auto session = startPeerSession(info, socket);
+        if (!session)
+        {
+            return;
+        }
+        // inbound (accepted) connections have no awaiting connect() coroutine to receive the
+        // session, so deliver it to the registered connection handler — posted to the socket's
+        // io_context so the handler runs off the accept path
+        auto weakHost = weak_from_this();
+        boost::asio::post(socket->ioService(), [weakHost, session = std::move(session), info]() {
+            auto host = weakHost.lock();
+            if (!host)
+            {
+                return;
+            }
+            if (host->m_connectionHandler)
+            {
+                host->m_connectionHandler(NetworkException(0, ""), info, session);
+            }
+            else
+            {
+                HOST_LOG(WARNING) << LOG_DESC("No connectionHandler, new connection may lost");
+            }
+        });
     }
 }
 
@@ -612,7 +635,6 @@ void Host::handshakeServer(const boost::system::error_code& error,
  * listenPort
  * @param _s : connected socket(used to init session object)
  */
-// TODO: asyncConnect pass handle to startPeerSession, make use of it
 // FIB-184: reserve a session slot under the global and per-IP caps. Returns false when either
 // cap is reached; the caller must then close the socket without creating a session.
 bool Host::tryAcquireSessionSlot(std::string const& _address)
@@ -727,8 +749,8 @@ struct SessionSlotGuard
 };
 }  // namespace
 
-void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> const& socket,
-    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>)
+std::shared_ptr<SessionFace> Host::startPeerSession(
+    P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> const& socket)
 {
     auto weakHost = weak_from_this();
 
@@ -745,7 +767,7 @@ void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> 
                           << LOG_KV("maxConcurrentSessions", m_maxConcurrentSessions)
                           << LOG_KV("maxSessionsPerIP", m_maxSessionsPerIP);
         socket->close();
-        return;
+        return nullptr;
     }
 
     std::shared_ptr<SessionFace> session =
@@ -753,25 +775,11 @@ void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> 
     // Bind a slot-release guard to the session; the slot is freed when the session is destroyed.
     session->setLifetimeGuard(std::make_shared<SessionSlotGuard>(weakHost, remoteAddress));
 
-    boost::asio::post(socket->ioService(), [weakHost, session = std::move(session), p2pInfo]() {
-        auto host = weakHost.lock();
-        if (!host)
-        {
-            return;
-        }
-        if (host->m_connectionHandler)
-        {
-            host->m_connectionHandler(NetworkException(0, ""), p2pInfo, session);
-        }
-        else
-        {
-            HOST_LOG(WARNING) << LOG_DESC("No connectionHandler, new connection may lost");
-        }
-    });
     HOST_LOG(INFO) << LOG_DESC("startPeerSession, Remote=") << socket->remoteEndpoint()
                    << LOG_KV("local endpoint", socket->localEndpoint())
                    << LOG_KV("shortP2pid", printShortP2pID(p2pInfo.p2pID))
                    << LOG_KV("rawP2pID", printShortP2pID(p2pInfo.rawP2pID));
+    return session;
 }
 
 /**
@@ -796,12 +804,12 @@ void Host::start()
  * @brief : connect to the server
  * @param _nodeIPEndpoint : the endpoint of the connected server
  */
-void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
-    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)> callback)
+task::Task<std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionFace>>> Host::connect(
+    NodeIPEndpoint _nodeIPEndpoint)
 {
     if (!m_run)
     {
-        return;
+        co_return std::make_tuple(NetworkException(0, ""), P2PInfo{}, std::shared_ptr<SessionFace>());
     }
     HOST_LOG(INFO) << LOG_DESC("Connecting to node") << LOG_KV("endpoint", _nodeIPEndpoint);
     {
@@ -809,21 +817,18 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
         auto it = m_pendingConns.find(_nodeIPEndpoint);
         if (it != m_pendingConns.end())
         {
-            BCOS_LOG(TRACE) << LOG_DESC("asyncConnected node is in the pending list")
+            BCOS_LOG(TRACE) << LOG_DESC("connected node is in the pending list")
                             << LOG_KV("endpoint", _nodeIPEndpoint);
-            return;
+            co_return std::make_tuple(NetworkException(0, ""), P2PInfo{}, std::shared_ptr<SessionFace>());
         }
     }
 
     std::shared_ptr<SocketFace> socket = m_asioInterface->newSocket(false, _nodeIPEndpoint);
-    // fire-and-forget: the coroutine frame owns the connect/handshake chain (and the strong Host
-    // reference) until it completes — the old nested-lambda chain did the same via captures.
-    task::wait(clientConnect(std::move(socket), _nodeIPEndpoint, std::move(callback)));
+    co_return co_await clientConnect(std::move(socket), std::move(_nodeIPEndpoint));
 }
 
-task::Task<void> Host::clientConnect(std::shared_ptr<SocketFace> socket,
-    NodeIPEndpoint _nodeIPEndpoint,
-    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)> callback)
+task::Task<std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionFace>>> Host::clientConnect(
+    std::shared_ptr<SocketFace> socket, NodeIPEndpoint _nodeIPEndpoint)
 {
     auto self = shared_from_this();
     try
@@ -866,13 +871,12 @@ task::Task<void> Host::clientConnect(std::shared_ptr<SocketFace> socket,
             // the resolver's context (resolveConnect invokes the handler inline from the
             // resolver completion), while connectTimer's async_wait handler runs on the
             // socket's — close()/cancel() from here would race it ("Shared objects: Unsafe").
-            boost::asio::post(socket->ioService(),
-                [socket, connectTimer, callback = std::move(callback)]() mutable {
-                    socket->close();
-                    connectTimer->cancel();
-                    callback(NetworkException(ConnectError, "Connect failed"), {}, {});
-                });
-            co_return;
+            boost::asio::post(socket->ioService(), [socket, connectTimer]() {
+                socket->close();
+                connectTimer->cancel();
+            });
+            co_return std::make_tuple(NetworkException(ConnectError, "Connect failed"), P2PInfo{},
+                std::shared_ptr<SessionFace>());
         }
         insertPendingConns(_nodeIPEndpoint);
         /// get the public key of the server during handshake
@@ -882,10 +886,12 @@ task::Task<void> Host::clientConnect(std::shared_ptr<SocketFace> socket,
         auto [handshakeError] =
             co_await m_asioInterface->awaitableHandshake(socket, ba::ssl::stream_base::client);
         connectTimer->cancel();
-        // Pass COPIES of socket/callback, not moves: if handshakeClient itself throws, the
-        // catch(...) below settles the operation through socket->close() and the callback —
-        // both would be moved-from (null) here had they been moved into the call.
-        handshakeClient(handshakeError, socket, endpointPublicKey, callback, _nodeIPEndpoint);
+        // Pass COPIES of socket/_nodeIPEndpoint, not moves: if handshakeClient itself throws, the
+        // catch(...) below settles the operation through socket->close() and
+        // erasePendingConns(_nodeIPEndpoint) — both would be moved-from here had they been moved
+        // into the call.
+        co_return handshakeClient(
+            handshakeError, socket, std::move(endpointPublicKey), _nodeIPEndpoint);
     }
     catch (...)
     {
@@ -893,25 +899,19 @@ task::Task<void> Host::clientConnect(std::shared_ptr<SocketFace> socket,
         HOST_LOG(ERROR) << LOG_DESC("client connect exception")
                         << LOG_KV("endpoint", _nodeIPEndpoint)
                         << LOG_KV("what", boost::current_exception_diagnostic_information());
-        // Total completion for the caller-facing callback: an exception between
-        // insertPendingConns() and handshakeClient() (bad_alloc on endpointPublicKey,
-        // setVerifyCallback, or an initiation failure rethrown by await_resume) would otherwise
-        // leak the pending-connection entry — permanently blocking every future reconnect to
-        // this peer — and orphan the caller's callback. Settle the operation exactly like the
-        // error paths do: erase the entry, close the socket and answer the callback. The
-        // socket teardown is POSTED to the socket's io_context — this catch is reachable on
-        // the resolver's thread (see the resolve-failure branch above) as well as on a
-        // producer's stack inside an await_suspend, and close() from here would race the
-        // connect timer's handler ("Shared objects: Unsafe").
+        // Total completion for the awaiting caller: an exception between insertPendingConns() and
+        // handshakeClient() (bad_alloc on endpointPublicKey, setVerifyCallback, or an initiation
+        // failure rethrown by await_resume) would otherwise leak the pending-connection entry —
+        // permanently blocking every future reconnect to this peer — and orphan the caller's
+        // co_await. Settle the operation exactly like the error paths do: erase the entry, close
+        // the socket and return the error. The socket teardown is POSTED to the socket's
+        // io_context — this catch is reachable on the resolver's thread (see the resolve-failure
+        // branch above) as well as on a producer's stack inside an await_suspend, and close()
+        // from here would race the connect timer's handler ("Shared objects: Unsafe").
         erasePendingConns(_nodeIPEndpoint);
-        boost::asio::post(socket->ioService(),
-            [socket, callback = std::move(callback)]() mutable {
-                socket->close();
-                if (callback)
-                {
-                    callback(NetworkException(ConnectError, "Connect failed"), {}, {});
-                }
-            });
+        boost::asio::post(socket->ioService(), [socket]() { socket->close(); });
+        co_return std::make_tuple(NetworkException(ConnectError, "Connect failed"), P2PInfo{},
+            std::shared_ptr<SessionFace>());
     }
 }
 
@@ -923,10 +923,9 @@ task::Task<void> Host::clientConnect(std::shared_ptr<SocketFace> socket,
  * certificate
  * @param _nodeIPEndpoint : endpoint of the server to connect
  */
-void Host::handshakeClient(const boost::system::error_code& error,
-    std::shared_ptr<SocketFace> socket, std::shared_ptr<std::string> endpointPublicKey,
-    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)> callback,
-    NodeIPEndpoint _nodeIPEndpoint)
+std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionFace>> Host::handshakeClient(
+    const boost::system::error_code& error, std::shared_ptr<SocketFace> socket,
+    std::shared_ptr<std::string> endpointPublicKey, NodeIPEndpoint _nodeIPEndpoint)
 {
     erasePendingConns(_nodeIPEndpoint);
     if (error)
@@ -939,7 +938,8 @@ void Host::handshakeClient(const boost::system::error_code& error,
         {
             socket->close();
         }
-        return;
+        return std::make_tuple(NetworkException(ConnectError, "Handshake failed"), P2PInfo{},
+            std::shared_ptr<SessionFace>());
     }
     const std::string& nodeInfo = *endpointPublicKey;
     if (nodeInfo.empty())
@@ -947,7 +947,8 @@ void Host::handshakeClient(const boost::system::error_code& error,
         HOST_LOG(WARNING) << LOG_DESC("handshakeClient get p2pID failed")
                           << LOG_KV("local endpoint", socket->localEndpoint());
         socket->close();
-        return;
+        return std::make_tuple(NetworkException(ConnectError, "Handshake failed"), P2PInfo{},
+            std::shared_ptr<SessionFace>());
     }
 
     if (m_run)
@@ -956,8 +957,15 @@ void Host::handshakeClient(const boost::system::error_code& error,
         obtainNodeInfo(info, nodeInfo);
         HOST_LOG(INFO) << LOG_DESC("handshakeClient succ")
                        << LOG_KV("local endpoint", socket->localEndpoint());
-        startPeerSession(info, socket, std::move(callback));
+        auto session = startPeerSession(info, socket);
+        if (!session)
+        {
+            return std::make_tuple(NetworkException(ConnectError, "Session cap reached"), P2PInfo{},
+                std::shared_ptr<SessionFace>());
+        }
+        return std::make_tuple(NetworkException(0, ""), std::move(info), std::move(session));
     }
+    return std::make_tuple(NetworkException(0, ""), P2PInfo{}, std::shared_ptr<SessionFace>());
 }
 
 /// stop the network and worker thread

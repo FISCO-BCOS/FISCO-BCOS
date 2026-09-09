@@ -331,52 +331,88 @@ bcostars::GatewayServiceClient::getGroupNodeInfo(const std::string& _groupID)
         this, _groupID, std::make_shared<GetGroupNodeInfoAwaitable::CompletionState>()};
     co_return co_await awaitable;
 }
-void bcostars::GatewayServiceClient::asyncNotifyGroupInfo(
-    bcos::group::GroupInfo::Ptr _groupInfo, std::function<void(bcos::Error::Ptr&&)> _callback)
+bcos::task::Task<bcos::Error::Ptr> bcostars::GatewayServiceClient::notifyGroupInfo(
+    bcos::group::GroupInfo::Ptr _groupInfo)
 {
-    class Callback : public bcostars::GatewayServicePrxCallback
+    struct NotifyGroupInfoAwaitable
     {
-    public:
-        Callback(std::function<void(bcos::Error::Ptr&&)> callback) : m_callback(callback) {}
-
-        void callback_asyncNotifyGroupInfo(const bcostars::Error& ret) override
+        struct CompletionState
         {
-            s_tarsTimeoutCount.store(0);
-            m_callback(toBcosError(ret));
-        }
-        void callback_asyncNotifyGroupInfo_exception(tars::Int32 ret) override
-        {
-            s_tarsTimeoutCount++;
-            m_callback(toBcosError(ret));
-        }
+            std::atomic<bool> completed{false};
+            std::coroutine_handle<> handle;
+            bcos::Error::Ptr error;
+        };
 
-    private:
-        std::function<void(bcos::Error::Ptr&&)> m_callback;
-    };
-    auto shouldBlockCall = shouldStopCall();
-    auto ret = checkConnection(
-        c_moduleName, "asyncNotifyGroupInfo", m_prx,
-        [_callback](bcos::Error::Ptr _error) {
-            if (_callback)
+        class Callback : public bcostars::GatewayServicePrxCallback
+        {
+        public:
+            explicit Callback(std::shared_ptr<CompletionState> state) : m_state(std::move(state))
+            {}
+
+            void callback_asyncNotifyGroupInfo(const bcostars::Error& ret) override
             {
-                _callback(std::move(_error));
+                s_tarsTimeoutCount.store(0);
+                complete(toBcosError(ret));
             }
-        },
-        shouldBlockCall);
-    if (!ret && shouldBlockCall)
-    {
-        return;
-    }
+            void callback_asyncNotifyGroupInfo_exception(tars::Int32 ret) override
+            {
+                s_tarsTimeoutCount++;
+                complete(toBcosError(ret));
+            }
 
-    auto activeEndPoints = tarsProxyAvailableEndPoints(m_prx);
-    auto tarsGroupInfo = toTarsGroupInfo(_groupInfo);
+        private:
+            void complete(bcos::Error::Ptr error)
+            {
+                // the groupInfo is fanned out to every gateway endpoint (see await_suspend); the
+                // first answer settles the coroutine, later answers are discarded
+                if (!m_state->completed.exchange(true))
+                {
+                    m_state->error = std::move(error);
+                    m_state->handle.resume();
+                }
+            }
+            std::shared_ptr<CompletionState> m_state;
+        };
 
-    // notify groupInfo to all gateway nodes
-    for (auto const& endPoint : activeEndPoints)
-    {
-        auto prx = bcostars::createServantProxy<GatewayServicePrx>(m_gatewayServiceName, endPoint);
-        prx->async_asyncNotifyGroupInfo(new Callback(_callback), tarsGroupInfo);
-    }
+        GatewayServiceClient* m_self;
+        bcostars::GroupInfo m_groupInfo;
+        std::shared_ptr<CompletionState> m_state;
+
+        constexpr static bool await_ready() noexcept { return false; }
+
+        // see SendAwaitable::await_suspend for why this returns false on a synchronous
+        // connection-check failure
+        bool await_suspend(std::coroutine_handle<> _handle)
+        {
+            m_state->handle = _handle;
+            auto state = m_state;
+            auto shouldBlockCall = m_self->shouldStopCall();
+            auto ret = checkConnection(m_self->c_moduleName, "asyncNotifyGroupInfo", m_self->m_prx,
+                [state](bcos::Error::Ptr _error) { state->error = std::move(_error); },
+                shouldBlockCall);
+            if (!ret && shouldBlockCall)
+            {
+                return false;
+            }
+            // notify groupInfo to all gateway nodes
+            auto activeEndPoints = tarsProxyAvailableEndPoints(m_self->m_prx);
+            for (auto const& endPoint : activeEndPoints)
+            {
+                auto prx = bcostars::createServantProxy<GatewayServicePrx>(
+                    m_self->m_gatewayServiceName, endPoint);
+                prx->async_asyncNotifyGroupInfo(new Callback(state), m_groupInfo);
+            }
+            // no gateway endpoint to notify: nothing is in flight, so resume inline with the
+            // (unset, i.e. success) result instead of suspending forever
+            return !activeEndPoints.empty();
+        }
+
+        bcos::Error::Ptr await_resume() { return std::move(m_state->error); }
+    };
+
+    NotifyGroupInfoAwaitable awaitable{
+        this, toTarsGroupInfo(_groupInfo), std::make_shared<NotifyGroupInfoAwaitable::CompletionState>()};
+    co_return co_await awaitable;
 }
 bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>>
 bcostars::GatewayServiceClient::sendMessageByTopic(

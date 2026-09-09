@@ -32,6 +32,7 @@
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/FileUtility.h"
 #include "bcos-utilities/IOServicePool.h"
+#include <bcos-task/Wait.h>
 #include <openssl/evp.h>
 #include <openssl/x509.h>
 #include <exception>
@@ -965,16 +966,18 @@ void GatewayFactory::initFailOver(
                 << LOG_DESC("The leader entryPoint changed") << LOG_KV("key", _leaderKey)
                 << LOG_KV("memberID", _leader->memberID()) << LOG_KV("modifyIndex", _leader->seq())
                 << LOG_KV("groupID", groupInfo->groupID());
-            _gateWay->asyncNotifyGroupInfo(groupInfo, [](Error::Ptr&& _error) {
-                if (_error)
+            task::wait([](std::shared_ptr<Gateway> _gateWay,
+                           bcos::group::GroupInfo::Ptr _groupInfo) -> task::Task<void> {
+                auto error = co_await _gateWay->notifyGroupInfo(std::move(_groupInfo));
+                if (error)
                 {
                     GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("memberChangedNotification failed")
-                                              << LOG_KV("code", _error->errorCode())
-                                              << LOG_KV("msg", _error->errorMessage());
-                    return;
+                                              << LOG_KV("code", error->errorCode())
+                                              << LOG_KV("msg", error->errorMessage());
+                    co_return;
                 }
                 GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("memberChangedNotification success");
-            });
+            }(_gateWay, std::move(groupInfo)));
         });
 
     _entryPoint->addMemberDeleteNotificationHandler(

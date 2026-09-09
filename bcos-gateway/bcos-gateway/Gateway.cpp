@@ -329,22 +329,14 @@ bool Gateway::checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
     return true;
 }
 
-void Gateway::asyncNotifyGroupInfo(
-    bcos::group::GroupInfo::Ptr _groupInfo, std::function<void(Error::Ptr&&)> _callback)
+bcos::task::Task<Error::Ptr> Gateway::notifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
 {
     if (!checkGroupInfo(_groupInfo))
     {
-        if (_callback)
-        {
-            _callback(nullptr);
-        }
-        return;
+        co_return nullptr;
     }
     m_gatewayNodeManager->updateFrontServiceInfo(_groupInfo);
-    if (_callback)
-    {
-        _callback(nullptr);
-    }
+    co_return nullptr;
 }
 
 void Gateway::onReceiveP2PMessage(

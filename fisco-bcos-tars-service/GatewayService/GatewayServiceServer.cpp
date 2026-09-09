@@ -9,10 +9,22 @@ bcostars::Error GatewayServiceServer::asyncNotifyGroupInfo(
     current->setResponse(false);
     auto bcosGroupInfo = toBcosGroupInfo(m_gatewayInitializer->chainNodeInfoFactory(),
         m_gatewayInitializer->groupInfoFactory(), groupInfo);
-    m_gatewayInitializer->gateway()->asyncNotifyGroupInfo(
-        bcosGroupInfo, [current](bcos::Error::Ptr&& _error) {
-            async_response_asyncNotifyGroupInfo(current, toTarsError(_error));
-        });
+    auto gateway = m_gatewayInitializer->gateway();
+    // try/catch guarantees the RPC is always answered even if the notify throws
+    // (current->setResponse(false) already disabled the automatic reply)
+    bcos::task::wait([](auto _gateway, auto _groupInfo,
+                         auto _current) -> bcos::task::Task<void> {
+        try
+        {
+            auto error = co_await _gateway->notifyGroupInfo(std::move(_groupInfo));
+            async_response_asyncNotifyGroupInfo(_current, toTarsError(error));
+        }
+        catch (std::exception const& e)
+        {
+            async_response_asyncNotifyGroupInfo(
+                _current, toTarsError(BCOS_ERROR_PTR(-1, boost::diagnostic_information(e))));
+        }
+    }(gateway, std::move(bcosGroupInfo), current));
     return {};
 }
 

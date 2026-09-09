@@ -23,6 +23,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <tuple>
 
 
 namespace boost::asio::ssl
@@ -72,9 +73,19 @@ public:
     virtual void start();
     virtual void stop();
 
-    virtual void asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
-        std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
-            callback);
+    /**
+     * @brief: (coroutine) connect to the server
+     * @param _nodeIPEndpoint : the endpoint of the connected server
+     * @return {error, p2pInfo, session}: on success the error code is 0 and the session is the
+     *         established peer session; on failure the session is nullptr and the error describes
+     *         the failure. A skipped connect (host not running, or the endpoint is already in the
+     *         pending list) returns a success error with a nullptr session.
+     * @note the caller must keep this Host alive until the returned task completes (e.g. own a
+     *       shared_ptr in the awaiting coroutine frame); the task resumes on the connected
+     *       socket's io_context thread.
+     */
+    virtual task::Task<std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionFace>>> connect(
+        NodeIPEndpoint _nodeIPEndpoint);
 
     virtual bool haveNetwork() const;
 
@@ -255,27 +266,24 @@ protected:
     void handshakeServer(const boost::system::error_code& error,
         std::shared_ptr<std::string> endpointPublicKey, std::shared_ptr<SocketFace> socket);
 
-    void startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> const& socket,
-        std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
-            handler);
+    std::shared_ptr<SessionFace> startPeerSession(
+        P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> const& socket);
 
-    void handshakeClient(const boost::system::error_code& error, std::shared_ptr<SocketFace> socket,
-        std::shared_ptr<std::string> endpointPublicKey,
-        std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
-            callback,
-        NodeIPEndpoint _nodeIPEndpoint);
+    std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionFace>> handshakeClient(
+        const boost::system::error_code& error, std::shared_ptr<SocketFace> socket,
+        std::shared_ptr<std::string> endpointPublicKey, NodeIPEndpoint _nodeIPEndpoint);
 
     void erasePendingConns(NodeIPEndpoint const& nodeIPEndpoint);
 
     void insertPendingConns(NodeIPEndpoint const& nodeIPEndpoint);
 
 private:
-    // Coroutine bodies for the accept/connect paths, launched fire-and-forget (task::wait) from
-    // startAccept()/asyncConnect(). Each frame holds a strong Host reference for its whole
-    // lifetime — structurally replacing the per-operation shared_from_this() captures of the old
-    // completion handlers. acceptLoop additionally keeps the Host alive until Host::stop()
-    // cancels the acceptor, which completes the pending async_accept with operation_aborted and
-    // lets the loop exit.
+    // Coroutine bodies for the accept/connect paths. The accept path is launched fire-and-forget
+    // (task::wait) from startAccept(); the connect path is co_awaited by connect()'s caller. Each
+    // frame holds a strong Host reference for its whole lifetime — structurally replacing the
+    // per-operation shared_from_this() captures of the old completion handlers. acceptLoop
+    // additionally keeps the Host alive until Host::stop() cancels the acceptor, which completes
+    // the pending async_accept with operation_aborted and lets the loop exit.
     task::Task<void> acceptLoop();
     // handshakeGuard owns the reserved FIB-186 in-flight-handshake admission slot (acquired in
     // acceptLoop so the slot/token admission ordering is preserved); it is released exactly when
@@ -283,10 +291,8 @@ private:
     // implementation detail of Host.cpp.
     task::Task<void> serverHandshake(
         std::shared_ptr<SocketFace> socket, std::shared_ptr<void> handshakeGuard);
-    task::Task<void> clientConnect(std::shared_ptr<SocketFace> socket,
-        NodeIPEndpoint _nodeIPEndpoint,
-        std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
-            callback);
+    task::Task<std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionFace>>> clientConnect(
+        std::shared_ptr<SocketFace> socket, NodeIPEndpoint _nodeIPEndpoint);
 
 protected:
     // FIB-186 (vector D): dedicated single-thread executor for session-teardown notifications, kept
