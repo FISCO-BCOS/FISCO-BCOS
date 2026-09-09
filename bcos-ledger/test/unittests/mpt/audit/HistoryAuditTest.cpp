@@ -271,12 +271,18 @@ BOOST_AUTO_TEST_CASE(missingMetaInsideTheWindowIsReportedAsBTwoAndStopsTheRebuil
 
     BOOST_CHECK(!report.rebuilt);
     BOOST_REQUIRE_EQUAL(countFindings(report, HistoryFindingKind::RebuildRejected), 1);
-    BOOST_CHECK(findingOf(report, HistoryFindingKind::RebuildRejected)
-                    .detail.find("not preceded by its block's meta row") != std::string::npos);
+    auto const& refused = findingOf(report, HistoryFindingKind::RebuildRejected);
+    BOOST_CHECK(refused.detail.find("not preceded by its block's meta row") != std::string::npos);
     // Block 7, not block 5: the finding names the height the rebuild tripped at.
-    BOOST_CHECK_EQUAL(findingOf(report, HistoryFindingKind::RebuildRejected).block, 7);
-    BOOST_CHECK_NE(
-        findingOf(report, HistoryFindingKind::RebuildRejected).block, report.oldestRetained);
+    BOOST_CHECK_EQUAL(refused.block, 7);
+    BOOST_CHECK_NE(refused.block, report.oldestRetained);
+    // The block belongs to the finding, not to its text. Every reporter prints `.block` in front
+    // of the detail, so a detail carrying the exception's full diagnostic dump — which renders
+    // errinfo_historyBlock and the throw site — would state the height twice and bury the one
+    // sentence that says what went wrong.
+    BOOST_CHECK(refused.detail.find("tag_historyBlock") == std::string::npos);
+    BOOST_CHECK(refused.detail.find("Throw in function") == std::string::npos);
+    BOOST_CHECK_EQUAL(std::count(refused.detail.begin(), refused.detail.end(), '\n'), 0);
 }
 
 /// A block that lost BOTH its rows is a plain ② hole: nothing is left to refuse a rebuild over,

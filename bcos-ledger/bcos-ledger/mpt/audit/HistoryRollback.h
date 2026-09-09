@@ -29,6 +29,18 @@
  * to `publish` so the index forgets what the disk forgot (G9). A caller that skips the publish and
  * is NOT offline would leave the index naming shard rows that are gone, and every query landing on
  * one of them would throw HistoryPruned for a height the store should still answer for.
+ *
+ * **Known limitation: the two stores' expiries are two writes, not one batch.** A block's state
+ * history and its trie history are dropped by separate `expire` calls, so an interruption between
+ * them leaves that block's TRIE rows on disk with its state rows gone. Nothing half-applies
+ * silently — the re-run's pre-check sees the block as incomplete and refuses, naming a lower
+ * `--tip` — but the re-run does not reach the leftover rows either, and the next node start will
+ * index them. That matters because the index takes blocks in strictly ascending order: once the
+ * chain re-executes and commits a block at or below the leftover height, publishing it throws and
+ * the trie history latches Unavailable. The refusal message therefore tells the operator to run
+ * `mpt-audit history` afterwards and check that both stores report the same retained span. Making
+ * the pair atomic would mean giving this tool one batch spanning both stores, which is a change to
+ * the store API rather than to the rollback.
  */
 #pragma once
 
@@ -312,8 +324,12 @@ bcos::task::Task<RollbackReport> rollbackTo(Storage& storage, protocol::BlockNum
                         "moves the tip row, so those blocks are already at their pre-block state. "
                         "Nothing was written. Re-run with --tip " +
                         std::to_string(lowest - 1) +
-                        " to finish the range that is left. If the history is missing for some "
-                        "other reason, `mpt-audit history` will say which."));
+                        " to finish the range that is left. Then run `mpt-audit history` and "
+                        "check that BOTH stores report the same retained span: the two stores' "
+                        "expiries are separate writes, so an interruption between them can leave "
+                        "one block's trie rows behind and the re-run will not reach them. If the "
+                        "history is missing for some other reason, `mpt-audit history` will say "
+                        "which."));
             }
             BOOST_THROW_EXCEPTION(
                 MPTInvariantViolation{} << bcos::errinfo_comment(
@@ -324,7 +340,9 @@ bcos::task::Task<RollbackReport> rollbackTo(Storage& storage, protocol::BlockNum
                     std::to_string(target) +
                     " and only the tip row is left to set — or this node never recorded history "
                     "for these blocks. Nothing was written. `mpt-audit history` tells the two "
-                    "apart."));
+                    "apart, and the same run shows whether both stores report the same retained "
+                    "span: their expiries are separate writes, so an interrupted run can leave "
+                    "one block's trie rows behind."));
         }
 
         // Anything else — a gap in the middle, or the bottom of the range — is not an interrupted
@@ -377,6 +395,10 @@ bcos::task::Task<RollbackReport> rollbackTo(Storage& storage, protocol::BlockNum
         // to the pre-rollback tip one block at a time (it is a max), and the node would then
         // refuse every historical read below that height while the pre-images that answer them
         // are still on disk.
+        //
+        // TWO writes, not one batch — see the file header's known limitation. An interruption
+        // between these two lines leaves this block's trie rows behind, and only the operator's
+        // post-run `mpt-audit history` will show it.
         co_await stateStore.expire(storage, storage, block, history::RetentionBoundary::Keep);
         co_await trieStore.expire(storage, storage, block, history::RetentionBoundary::Keep);
     }

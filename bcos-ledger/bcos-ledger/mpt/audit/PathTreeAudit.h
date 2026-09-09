@@ -35,10 +35,12 @@
 #include "../TrieNode.h"
 // history::SeekableStateStorage ("can seek to a key and walk forward") and
 // history::detail::asStateValue ("the row's bytes, or nullptr for a deletion sentinel") say
-// exactly what this scan needs of a storage. They are declared next to the reverse-history store
-// because that is where they were first needed, not because they are history-specific — so this
-// header reuses them rather than declaring a second copy.
-#include "../history/ReverseHistoryStore.h"
+// exactly what this scan needs of a storage, and neither is history-specific: they sit beside the
+// shard-table walk because that is the walk that first required them. This header reuses them
+// rather than declaring a second copy — but it does NOT use the walk itself, because the node
+// tables are not shaped like the shard table: a row here is (owner, position), the two node tables
+// are scanned separately, and one owner's run ends where the next owner's begins.
+#include "../history/ShardTableWalk.h"
 #include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/storage2/Storage.h>

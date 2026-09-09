@@ -592,9 +592,22 @@ bcos::task::Task<HistoryAuditReport> auditHistory(Storage& storage, protocol::Bl
             // above decodes every row first, so a codec failure has already thrown out of this
             // whole function before the rebuild runs.
             auto const* refusedAt = boost::get_error_info<history::errinfo_historyBlock>(error);
+            // `what()` and not `boost::diagnostic_information`: the latter renders EVERY error_info
+            // on the exception, errinfo_historyBlock among them, plus the throw site and the
+            // function signature. The block is already this finding's `.block` and every reporter
+            // prints it, so the dump would state it twice and bury the one sentence that says what
+            // went wrong. bcos::Exception::what() is exactly the errinfo_comment the throw site
+            // wrote (Exceptions.cpp) — empty only if a throw site set none, which would be a defect
+            // in the store rather than in the data, so that case falls back to the full dump rather
+            // than to silence.
+            std::string message = error.what();
+            if (message.empty())
+            {
+                message = boost::diagnostic_information(error);
+            }
             report.findings.push_back(HistoryFinding{.kind = HistoryFindingKind::RebuildRejected,
                 .block = refusedAt != nullptr ? *refusedAt : report.oldestRetained,
-                .detail = std::string(boost::diagnostic_information(error))});
+                .detail = std::move(message)});
         }
         report.rebuildMilliseconds =
             static_cast<std::size_t>(std::chrono::duration_cast<std::chrono::milliseconds>(

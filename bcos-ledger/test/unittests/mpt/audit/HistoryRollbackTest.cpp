@@ -37,6 +37,7 @@
 #include <bcos-task/Wait.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <deque>
 #include <map>
 #include <optional>
@@ -462,7 +463,10 @@ BOOST_AUTO_TEST_CASE(interruptedRollbackIsDiagnosedAndNamesTheTipToResumeFrom)
                    message.find("previous rollback was probably interrupted") !=
                        std::string::npos &&
                    message.find("Re-run with --tip 1") != std::string::npos &&
-                   message.find("Nothing was written") != std::string::npos;
+                   message.find("Nothing was written") != std::string::npos &&
+                   // The residue the re-run does not reach: the two stores' expiries are separate
+                   // writes, so an interruption between them leaves one block's trie rows behind.
+                   message.find("BOTH stores report the same retained span") != std::string::npos;
         });
     // Not the generic diagnosis, which would send the operator to the retention depths.
     BOOST_CHECK_EXCEPTION(fixture.rollback(0, /*apply=*/true), MPTInvariantViolation,
@@ -493,6 +497,7 @@ BOOST_AUTO_TEST_CASE(anEmptyRangeSaysTheRollbackMayAlreadyBeDone)
             BOOST_TEST_MESSAGE("empty-range refusal: " << message);
             return message.find("nothing left to undo") != std::string::npos &&
                    message.find("only the tip row is left to set") != std::string::npos &&
+                   message.find("same retained span") != std::string::npos &&
                    message.find("--tip") == std::string::npos;
         });
 }
@@ -701,6 +706,31 @@ BOOST_AUTO_TEST_CASE(rocksDbRollbackAppliesAndLandsOnTheTargetRoot)
             BOOST_REQUIRE(!report.findings.empty());
             BOOST_CHECK(report.findings.back().detail.find(
                             "claims heights this store no longer holds") != std::string::npos);
+        }
+        {
+            // The same store with block 2's state META row gone while its shard survives — the
+            // shape that makes a rebuild REFUSE. Nothing else in the kept set produces a B.10 (3)
+            // finding, so without this the CLI's rendering of one is never exercised.
+            AuditRocksDb noRebuild(base + "-norebuild", true);
+            RocksDbStateStorage storage(*noRebuild.db, bcos::storage2::rocksdb::StateKeyResolver{},
+                bcos::storage2::rocksdb::StateValueResolver{});
+            buildRocksDbRollbackStore(storage);
+            bcos::task::syncWait(bcos::storage2::removeOne(storage,
+                bcos::executor_v1::StateKey{history::kStateHistory.shard, history::metaRowKey(2)}));
+
+            auto const report = bcos::task::syncWait(auditStateHistory(storage, 2, 8, 1,
+                [&storage](protocol::BlockNumber block) { return ledgerHashOf(storage, block); }));
+            BOOST_CHECK(!report.rebuilt);
+            auto const rejected = std::find_if(
+                report.findings.begin(), report.findings.end(), [](HistoryFinding const& finding) {
+                    return finding.kind == HistoryFindingKind::RebuildRejected;
+                });
+            BOOST_REQUIRE(rejected != report.findings.end());
+            BOOST_CHECK_EQUAL(rejected->block, 2);
+            // One line, no error-info dump: the block is the finding's, not the text's.
+            BOOST_CHECK(rejected->detail.find("tag_historyBlock") == std::string::npos);
+            BOOST_CHECK_EQUAL(
+                std::count(rejected->detail.begin(), rejected->detail.end(), '\n'), 0);
         }
         {
             // The same store without block 1's header. A rollback to 1 succeeds in writing the
