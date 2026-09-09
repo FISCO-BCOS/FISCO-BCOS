@@ -362,26 +362,34 @@ public:
 
         // A delta that changed nodes but carries an EMPTY refCountDeltas means the tally was
         // never kept (a build run with trackRefCounts=false — production avoids this via
-        // needsRefCountDeltas — or a future producer). The set reading this would fall back to
-        // (+1 per newNodes hash, −1 per obsoleted/intraBlock hash) cannot see duplicate
-        // emissions: content-addressed nodes shared across this block's tries are created once
-        // per referencing trie but appear once in the deduplicated newNodes map, so creations
-        // would be under-counted and a later obsoletion would delete a node another trie still
-        // references (MPTDeltaLayer::refCountDeltas' comment). Fail-safe: skip ALL pruning work
-        // for this block — no counting, no deletions; a leak, never a live-node deletion. A
-        // fully empty delta is the normal empty block and passes through silently.
+        // needsRefCountDeltas — so reaching here is a producer WIRING bug). The set reading
+        // this would fall back to (+1 per newNodes hash, −1 per obsoleted/intraBlock hash)
+        // cannot see duplicate emissions: content-addressed nodes shared across this block's
+        // tries are created once per referencing trie but appear once in the deduplicated
+        // newNodes map, so creations would be under-counted and a later obsoletion would
+        // delete a node another trie still references (MPTDeltaLayer::refCountDeltas'
+        // comment). Fail LOUD, not skip: skipping is not a pure leak either — nodes born in
+        // the skipped block stay uncounted forever, so their later obsoletion could still
+        // delete a live node. Throwing fails this block's commit (coPreparePruneRows is
+        // co_awaited on the BaselineScheduler commit path), surfacing the bug on the first
+        // block it affects. A fully empty delta is the normal empty block and passes through
+        // silently.
         if (delta.refCountDeltas.empty() &&
             (!delta.newNodes.empty() || !delta.obsoletedNodes.empty() ||
                 !delta.intraBlockObsoleted.empty()))
         {
-            MPT_PRUNER_LOG(ERROR)
-                << "MPT pruning: block carries node changes but no refCountDeltas tally — "
-                   "pruning skipped for this block (suspect the producer ran without "
-                   "trackRefCounts; check the observer's needsRefCountDeltas wiring)"
-                << LOG_KV("block", blockNumber) << LOG_KV("newNodes", delta.newNodes.size())
-                << LOG_KV("obsoleted", delta.obsoletedNodes.size())
-                << LOG_KV("intraBlock", delta.intraBlockObsoleted.size());
-            co_return out;
+            BOOST_THROW_EXCEPTION(MPTInvariantViolation{}
+                                  << bcos::errinfo_comment(
+                                         "MPT pruning: block " + std::to_string(blockNumber) +
+                                         " carries node changes but no refCountDeltas tally "
+                                         "(newNodes=" +
+                                         std::to_string(delta.newNodes.size()) +
+                                         ", obsoletedNodes=" +
+                                         std::to_string(delta.obsoletedNodes.size()) +
+                                         ", intraBlockObsoleted=" +
+                                         std::to_string(delta.intraBlockObsoleted.size()) +
+                                         ") — the producer ran without trackRefCounts; check "
+                                         "the observer's needsRefCountDeltas wiring"));
         }
 
         auto const horizon = static_cast<uint64_t>(blockNumber);

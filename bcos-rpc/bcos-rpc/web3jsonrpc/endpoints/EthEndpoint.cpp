@@ -1394,14 +1394,13 @@ task::Task<void> EthEndpoint::getLogs(const Json::Value& request, Json::Value& r
     Json::Value result = co_await m_filterSystem->getLogs(params);
     buildJsonContent(result, response);
 }
+/// The block number for @p blockTag plus whether it IS the current head. Delegates to
+/// getBlockNumberAndHeadByTag and compares against the head it resolved against.
 task::Task<std::tuple<protocol::BlockNumber, bool>> EthEndpoint::getBlockNumberByTag(
     std::string_view blockTag)
 {
-    auto ledger = m_nodeService->ledger();
-    auto latest = co_await ledger::getCurrentBlockNumber(*ledger);
-    auto [number, _] = bcos::rpc::getBlockNumberByTag(
-        latest, blockTag, m_nodeService->safeBlockDepth(), m_nodeService->finalizedBlockDepth());
-    co_return std::make_tuple(number, std::cmp_equal(latest, number));
+    auto [number, head] = co_await getBlockNumberAndHeadByTag(blockTag);
+    co_return std::make_tuple(number, std::cmp_equal(head, number));
 }
 
 /// The block number for @p blockTag plus the head it was resolved against. Historical-state

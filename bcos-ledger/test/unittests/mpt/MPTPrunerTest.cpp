@@ -302,12 +302,14 @@ BOOST_AUTO_TEST_CASE(DefaultObserverHookReturnsNoRows)
     BOOST_CHECK(batch.deletions.empty());
 }
 
-BOOST_AUTO_TEST_CASE(UncountedDeltaSkipsPruningFailSafe)
+BOOST_AUTO_TEST_CASE(UncountedDeltaThrowsFailLoud)
 {
     // A delta that changed nodes but carries no refCountDeltas tally (a build run with
-    // trackRefCounts=false, or a hand-built delta): the set reading would under-count
-    // content-addressed nodes shared across the block's tries (newNodes deduplicates duplicate
-    // emissions), so the pruner fail-safes — no counting, no queueing, no deletions.
+    // trackRefCounts=false — production prevents this via needsRefCountDeltas, so it is a
+    // wiring bug): the set reading would under-count content-addressed nodes shared across
+    // the block's tries (newNodes deduplicates duplicate emissions), and skipping the block
+    // is not a pure leak either (nodes born in it stay uncounted forever) — so the pruner
+    // fails loud, failing the block's commit on the commit path.
     PruneBackend backend;
     BackendNodeStorage nodes(backend);
     Pruner pruner(backend, /*pruneWindow=*/5);
@@ -318,8 +320,8 @@ BOOST_AUTO_TEST_CASE(UncountedDeltaSkipsPruningFailSafe)
     delta.newNodes[h1] = bcos::bytes{0x11};
     delta.obsoletedNodes.insert(h2);
 
-    auto batch = bcos::task::syncWait(pruner.coPreparePruneRows(7, delta));
-    BOOST_CHECK(batch.deletions.empty());
+    BOOST_CHECK_THROW(
+        bcos::task::syncWait(pruner.coPreparePruneRows(7, delta)), MPTInvariantViolation);
     BOOST_CHECK(!pruner.countOf(h1).has_value());
     BOOST_CHECK(!pruner.countOf(h2).has_value());
     BOOST_CHECK_EQUAL(pruner.pendingCount(), 0U);
