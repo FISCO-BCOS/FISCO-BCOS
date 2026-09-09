@@ -177,6 +177,9 @@ BOOST_AUTO_TEST_CASE(ZeroValueWriteLeavesTheTrieLikeADelete)
     std::map<bcos::h256, bcos::bytes> const priorSlots{
         {slotKey(0x00), bcos::bytes{0x10}}, {slotKey(0x01), bcos::bytes{0x11}}};
     Account prior;
+    // A real contract: with the default {0, 0, keccak256("")} triple the account would be
+    // EIP-161 empty and cleared by the #5373 rule, which is not what this case is about.
+    prior.codeHash = makeHash(0xCD);
     prior.storageRoot = buildStorageTrie(storage, priorSlots);
     auto const parentRoot = buildStateTrie(storage, {{addr, prior}});
 

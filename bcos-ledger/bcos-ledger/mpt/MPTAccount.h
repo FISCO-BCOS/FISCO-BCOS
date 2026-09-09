@@ -87,10 +87,13 @@ concept HistoricalStorageContext = requires(Storage& storage) {
 /// One consequence to know about: exists() means different things on the two paths, and the rooted
 /// one is the Ethereum meaning. With a root it is leaf presence, exactly as an Ethereum client
 /// answers "does this account exist". The inherited flat exists() (EVMAccount.h:27-31) tests for a
-/// SYS_TABLES row, a BCOS notion with no Ethereum counterpart, and the two can disagree: an
-/// account touched only by rows carrying no Ethereum state never produces a leaf (MPTBuilder.h:
-/// 92-97, 215-227 keep that one member of the EIP-161 empty-account class out of the trie), so it
-/// reads as absent historically and present flatly. Ethereum agrees with the historical answer.
+/// SYS_TABLES row, a BCOS notion with no Ethereum counterpart, and the two can disagree.
+/// MPTBuilder.h finalizeAccount keeps the whole EIP-161 empty-account class out of the trie: an
+/// account touched only by rows carrying no Ethereum state never produces a leaf (the
+/// sawEthereumRow early-out), and an account whose merged post-block triple is
+/// {0, 0, keccak256("")} has its leaf removed (the empty-triple check, storage ignored). Either
+/// kind still owns a SYS_TABLES row, so it reads as present flatly and absent historically.
+/// Ethereum agrees with the historical answer.
 ///
 /// abi() and increaseNonce() are inherited unchanged. abi is BCOS metadata outside the committed
 /// 4-tuple and is deliberately not historicised — a historical query returns the CURRENT abi,

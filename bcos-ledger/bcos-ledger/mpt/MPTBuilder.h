@@ -91,10 +91,9 @@ struct AccountRows
     /// extension rows leave it false: an account touched only by those has no Ethereum state
     /// change, and finalizeAccount must not invent a leaf for it (see there).
     ///
-    /// This closes ONE member of the EIP-161 empty-account class, not the class. A block that
-    /// writes a zero balance to an otherwise-untouched account still produces {0, 0,
-    /// emptyCodeHash, emptyRoot}, because EIP-158/161 empty-account clearing is not implemented
-    /// (see finalizeAccount's tombstone comment).
+    /// This closes the "no Ethereum row at all" member of the EIP-161 empty-account class up
+    /// front; the rest of the class (a touched account whose merged triple is empty) is
+    /// cleared in finalizeAccount after the merge.
     bool sawEthereumRow = false;
 };
 
@@ -238,10 +237,8 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
     // revert), so the run reaches us as "all three core rows deleted"; without this case
     // requireNotDeleted() would reject a perfectly legal transaction.
     //
-    // Removing a pre-existing leaf is the same one line, kept as compatibility headroom: there is
-    // no path to it today (6780 spares already-existing contracts; EIP-158/161 empty-account
-    // clearing is not implemented) — but if one appears, silently leaving a stale leaf behind
-    // would be a fork.
+    // Removing a pre-existing leaf is the same one line; EIP-6780 spares already-existing
+    // contracts, so today the only other remover is the EIP-161 empty-account clearing below.
     if (rows.nonce.deleted && rows.balance.deleted && rows.codeHash.deleted)
     {
         // Record the prior storage root for future pathdb pruning — the full subtree walk
@@ -293,6 +290,40 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
         updated.codeHash = meta.codeHash;
     }
 
+    if (rows.nonce.value)
+    {
+        updated.nonce = *rows.nonce.value;
+    }
+    if (rows.balance.value)
+    {
+        updated.balance = *rows.balance.value;
+    }
+    if (rows.codeHash.value)
+    {
+        updated.codeHash = *rows.codeHash.value;
+    }
+
+    // EIP-158/161 empty-account clearing (issue #5373): a touched account whose post-block core
+    // triple is {nonce 0, balance 0, keccak256("")} is removed from the trie, never written.
+    // Decided on the MERGED triple because fields the block did not write keep their baseline /
+    // flat value, and only the merged triple is the account's real state. Storage is not
+    // consulted for emptiness, and the block's slot writes for such an account are DROPPED
+    // together with its prior storage trie — the same semantics as reth (revm
+    // touch_empty_eip161 sets storage_was_destroyed; HashedPostState maps the account to None).
+    // Checked before the storage commit so those dropped slot writes never produce nodes.
+    if (updated.nonce == 0 && updated.balance == 0 && updated.codeHash == emptyCodeHash())
+    {
+        if (priorStorageRoot != emptyRootHash())
+        {
+            output.obsoletedNodes.insert(priorStorageRoot);
+        }
+        if (baseline)
+        {
+            accountChanges[accountKeyHash(address)] = std::nullopt;
+        }
+        co_return;
+    }
+
     if (!rows.storageChanges.empty())
     {
         // First trie level: commit THIS account's storage trie; the new root is embedded in
@@ -307,19 +338,6 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
     else
     {
         updated.storageRoot = priorStorageRoot;
-    }
-
-    if (rows.nonce.value)
-    {
-        updated.nonce = *rows.nonce.value;
-    }
-    if (rows.balance.value)
-    {
-        updated.balance = *rows.balance.value;
-    }
-    if (rows.codeHash.value)
-    {
-        updated.codeHash = *rows.codeHash.value;
     }
     accountChanges[accountKeyHash(address)] = updated.encode();
 }

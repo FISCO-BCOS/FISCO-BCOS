@@ -37,25 +37,28 @@ public:
             m_storage.get(), executor_v1::StateKeyView(SYS_TABLES, m_tableName));
     }
 
-    /// Ethereum-style existence (EIP-161 Spurious Dragon+):
-    /// empty accounts (nonce=0, balance=0, code_hash=EMPTY) are treated as non-existent.
-    task::Task<bool> existsEthereum()
+    /// Ethereum-style existence (EIP-161 Spurious Dragon+): an account with nonce 0, balance 0
+    /// and no code is empty and counts as non-existent. "No code" is either a missing CODE_HASH
+    /// row (zero hash) or a row holding @p emptyCodeHash, the chain hasher's hash of "" (an
+    /// EIP-7702 delegation cleared back to an EOA is stored that way).
+    /// @param knownCodeHash the CODE_HASH row if the caller already read it, to avoid a second
+    ///        read on the EXTCODEHASH path.
+    task::Task<bool> existsEthereum(
+        const h256& emptyCodeHash, std::optional<h256> knownCodeHash = std::nullopt)
     {
+        auto ch = knownCodeHash ? *knownCodeHash : co_await codeHash();
+        if (ch != h256{} && ch != emptyCodeHash)
+            co_return true;  // has code: live regardless of nonce / balance
+
         if (!co_await exists())
             co_return false;
 
-        // Check if account is non-empty (EIP-161: empty accounts don't exist)
         auto nonceVal = co_await nonce();
         if (nonceVal.has_value() && u256(nonceVal.value()) != 0)
             co_return true;
 
         auto bal = co_await balance();
         if (bal != 0)
-            co_return true;
-
-        auto ch = co_await codeHash();
-        static const h256 EMPTY_CODE_HASH{};
-        if (ch != EMPTY_CODE_HASH)
             co_return true;
 
         co_return false;  // empty account → not exist in Ethereum sense

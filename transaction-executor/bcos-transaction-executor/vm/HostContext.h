@@ -398,13 +398,42 @@ public:
     {
         Account<Storage> account(m_rollbackableStorage.get(), address,
             m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
-        co_return co_await account.codeHash();
+        if (!m_ledgerConfig.get().features().get(
+                ledger::Features::Flag::bugfix_eip161_1052_account_semantics))
+        {
+            co_return co_await account.codeHash();  // pre-fix: zero for any code-less account
+        }
+        // EIP-1052: 0 for an absent or EIP-161-empty account, hash("") for a live code-less
+        // one, the code hash otherwise (issue #5372). Read CODE_HASH first so a contract costs
+        // the same single read as before; nonce/balance are consulted only for code-less rows.
+        // hash("") rather than Hash::emptyHash(): the latter is non-const and memoises without
+        // synchronisation, and m_hashImpl is a const reference shared across executor threads.
+        auto const emptyCodeHash = m_hashImpl.get().hash(bytesConstRef{});
+        auto codeHash = co_await account.codeHash();
+        if (codeHash != h256{} && codeHash != emptyCodeHash)
+        {
+            co_return codeHash;
+        }
+        if (!co_await account.existsEthereum(emptyCodeHash, codeHash))
+        {
+            co_return {};
+        }
+        co_return emptyCodeHash;
     }
 
-    task::Task<bool> exists([[maybe_unused]] const evmc_address& address, auto&&... /*unused*/)
+    task::Task<bool> exists(const evmc_address& address, auto&&... /*unused*/)
     {
-        // TODO: impl the full support for solidity
-        co_return true;
+        if (!m_ledgerConfig.get().features().get(
+                ledger::Features::Flag::bugfix_eip161_1052_account_semantics))
+        {
+            co_return true;  // pre-fix: every address "exists"
+        }
+        // EIP-161: empty == absent; feeds evmone's new-account gas and SELFDESTRUCT beneficiary
+        // handling through account_exists (issue #5371).
+        Account<Storage> account(m_rollbackableStorage.get(), address,
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
+        auto const emptyCodeHash = m_hashImpl.get().hash(bytesConstRef{});
+        co_return co_await account.existsEthereum(emptyCodeHash);
     }
 
     /// Hash of a block if within the last 256 blocks, or h256() otherwise.
