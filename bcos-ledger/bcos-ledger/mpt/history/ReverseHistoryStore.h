@@ -14,13 +14,24 @@
  *  limitations under the License.
  *
  * @file ReverseHistoryStore.h
- * @brief One block's diff, stored twice under two sort orders, so that both a point query and a
- *        whole-block sweep are one seek (spec B.1-B.8)
+ * @brief One block's pre-images packed into per-block shards on disk, located by an in-memory
+ *        index that is rebuilt from those shards at startup (layout spec §1.1-§1.5)
+ *
+ * The earlier layout stored each pre-image twice — once in a `(key, block)` index row that
+ * answered point queries, once in a `(block, shard)` manifest that listed the block's keys. This
+ * one stores it once, in the shard, and keeps the `(key, block)` order in RAM. Three consequences
+ * drive the whole file:
+ *
+ *  - a commit writes `shardCount + 1` rows instead of `keyCount + shardCount`;
+ *  - an expiry deletes `shardCount + 1` rows instead of one per key plus the shards;
+ *  - the index is derived, so it must be REBUILT at startup and must refuse to answer until it
+ *    has been (G10) — "not in the index" is never allowed to mean "the key never changed".
  */
 #pragma once
 
 #include "../Errors.h"
 #include "HistoryErrors.h"
+#include "HistoryIndex.h"
 #include "HistoryRowCodec.h"
 #include "HistoryTables.h"
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
@@ -29,14 +40,18 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <tuple>
 #include <unordered_set>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -54,11 +69,22 @@ concept WritableStateStorage = requires(Storage& storage,
 };
 
 /// A storage that can position an iterator at the first row at or after a key and walk forward.
-/// Both readAt and the manifest sweep need it; a plain point-read storage cannot serve either.
+/// Every whole-block walk and the startup rebuild need it; a plain point-read storage serves
+/// neither.
 template <class Storage>
 concept SeekableStateStorage = requires(Storage& storage, executor_v1::StateKey key) {
     { storage2::range(storage, storage2::RANGE_SEEK, key) } -> task::IsAwaitable;
 };
+
+/// A storage a history QUERY or an expiry runs against. Two capabilities, needed by different
+/// members: `readOne` is all readAt uses — it locates the record in memory and reads exactly one
+/// shard row — while the seek comes from expire, which walks a block's rows before deleting them,
+/// and from the retention-boundary point read.
+template <class Storage>
+concept QueryableStateStorage =
+    SeekableStateStorage<Storage> && requires(Storage& storage, executor_v1::StateKey key) {
+        { storage2::readOne(storage, key) } -> task::IsAwaitable;
+    };
 
 /// One key changed by one block, paired with the value it held when the block began.
 /// Both fields are non-owning views into the caller's diff — put() copies out of them.
@@ -69,16 +95,16 @@ struct HistoryEntry
     std::optional<std::span<const bcos::byte>> oldValue;
 };
 
-/// readAt outcome: the key did not exist at the queried block (the index row's tag is 0x00).
+/// readAt outcome: the key did not exist at the queried block (the record's tag is 0x00).
 struct HistoryAbsent
 {
     friend bool operator==(HistoryAbsent, HistoryAbsent) noexcept { return true; }
 };
 
-/// readAt outcome: no index row exists after the queried block, so the key has not changed since
-/// — the current value IS the historical one and the caller should read it from the live plane
-/// (spec B.3). Only trustworthy because the window guard already ruled out "the row existed and
-/// was expired".
+/// readAt outcome: no change was recorded after the queried block, so the key has not changed
+/// since — the current value IS the historical one and the caller should read it from the live
+/// plane (spec B.3). Only trustworthy because the index was Ready and its boundary covers the
+/// block; without both, "not in the index" is silence, not evidence (G6, G10).
 struct HistoryUseCurrent
 {
     friend bool operator==(HistoryUseCurrent, HistoryUseCurrent) noexcept { return true; }
@@ -87,23 +113,60 @@ struct HistoryUseCurrent
 /// readAt outcome, third case: the key's value at the queried block, as `bcos::bytes`.
 using ReadAtResult = std::variant<bcos::bytes, HistoryAbsent, HistoryUseCurrent>;
 
+/// What expire() does to the retention boundary — the row recording the OLDEST block this store
+/// can still answer for (HistoryTables.h).
+///
+/// The parameter exists because "discard block E's history" has two callers that move in opposite
+/// directions along the chain, and only one of them changes which block is the oldest.
+enum class RetentionBoundary : uint8_t
+{
+    /// Leave the boundary alone. The caller is discarding history from the TOP — an operational
+    /// rollback walks tip downwards, reverse-applying block N and then dropping N's record. The
+    /// oldest block the store can answer for does not move when the newest one goes, and moving it
+    /// would refuse the very next step of the walk: rollback reads at N-2 right after discarding
+    /// N, which a boundary at N rejects.
+    Keep,
+    /// Advance the boundary to the expired block. The caller is the commit path, where E = N - H
+    /// is the block LEAVING the window from the bottom, so everything below E is now gone. The
+    /// write rides the same batch as the deletes.
+    Advance,
+};
+
+/// One block's whole recorded diff, as readBlock hands it back: the meta row plus every record in
+/// shard order. Rollback and the B.10 audits both need this to be COMPLETE, which is why readBlock
+/// verifies the counts the meta row declares.
+struct BlockHistory
+{
+    BlockMeta meta;
+    std::vector<std::pair<bcos::bytes, std::optional<bcos::bytes>>> records;
+};
+
 /// What one expire() pass did.
 struct ExpireReport
 {
-    /// Keys the block's manifest listed. Zero also means "already expired" — expire is idempotent.
+    /// Records the block's shards listed. Zero also means "already expired" — expire is idempotent.
     std::size_t keyCount{};
-    /// Index-row deletes issued, one per listed key. On a replay of an interrupted expiry some of
-    /// them target rows that are already gone, which is a no-op — hence "issued", not "removed".
-    std::size_t indexDeletesIssued{};
-    /// Manifest shards found and deleted. These did exist: the sweep read them.
-    std::size_t manifestShardsDeleted{};
+    /// Shard rows found live and deleted. The meta row goes with them, so the deletes issued are
+    /// `shardsDeleted + 1` when the meta row was live too.
+    std::size_t shardsDeleted{};
+    /// The block as the in-memory index must now forget it — nullopt when the pass found nothing
+    /// live, i.e. the block was never recorded or was already expired. Handed to publish().
+    std::optional<RetiredBlock> retired;
+};
+
+/// What one rebuild() pass walked.
+struct RebuildReport
+{
+    std::size_t blocks{};
+    std::size_t records{};
+    std::size_t bytesScanned{};
 };
 
 namespace detail
 {
 /// Storage iterators hand back either a `StorageValueType<Value>` variant (MemoryStorage,
-/// RocksDBStorage2) or a bare value. Reduce both to "the entry, or nullptr when this row carries
-/// a deletion sentinel instead of bytes".
+/// RocksDBStorage2) or a bare value. Reduce both to "the entry, or nullptr when this row carries a
+/// deletion sentinel instead of bytes".
 template <class RowValue>
 inline const executor_v1::StateValue* asStateValue(RowValue const& value) noexcept
 {
@@ -118,60 +181,76 @@ inline const executor_v1::StateValue* asStateValue(RowValue const& value) noexce
 }
 }  // namespace detail
 
-/// The reverse history of one key space: every key a block changed, keyed both by (key, block)
-/// for point queries and by (block, shard) for whole-block sweeps (spec B.1).
+/// The reverse history of one key space: every block's pre-images packed into that block's shard
+/// rows, plus the in-memory index that says which shard and which byte offset answers a query.
 ///
 /// Instantiated twice over the same code — `StateHistoryStore` for state rows, `TrieHistoryStore`
 /// for path-addressed trie nodes (spec B.8). @p Tables selects which pair of state tables the
 /// instance owns; everything else is identical, which is the point.
 ///
-/// All members are static: the store owns no state of its own. The rows live in whatever storage
-/// the caller passes, and each call takes the storage it should act on — in production the
-/// block's mutable layer for writes and the backend view for reads.
+/// Unlike the earlier all-static store this one is an OBJECT: it owns the index, so a node holds
+/// exactly one instance per key space (PR-C's `MPTHistory`) and every reader shares it. Disk still
+/// arrives as a parameter — in production the block's mutable layer for writes and the committed
+/// backend for reads.
 template <HistoryTables const& Tables>
 class ReverseHistoryStore
 {
 public:
-    /// Record @p entries as the pre-images of block @p block, plus the manifest that lists them.
+    ReverseHistoryStore() = default;
+    // The index carries a shared_mutex, so neither it nor this wrapper can be copied or moved.
+    ReverseHistoryStore(const ReverseHistoryStore&) = delete;
+    ReverseHistoryStore(ReverseHistoryStore&&) = delete;
+    ReverseHistoryStore& operator=(const ReverseHistoryStore&) = delete;
+    ReverseHistoryStore& operator=(ReverseHistoryStore&&) = delete;
+    ~ReverseHistoryStore() = default;
+
+    /// Record @p entries as the pre-images of block @p block: the shard rows that hold them, plus
+    /// the one meta row that says how many of each to expect.
     ///
     /// Pure append: every row is a fresh Put and nothing is read first, so write amplification is
     /// the size of this block's diff and does not grow with the retention depth (spec B.4). All
-    /// rows go out in ONE writeSome, which in production is one contribution to the block's
-    /// single WriteBatch (G3).
+    /// rows go out in ONE writeSome, which in production is one contribution to the block's single
+    /// WriteBatch (G3).
+    ///
+    /// It does NOT touch the index. The returned StagedBlock is the index update this write
+    /// implies, and the caller applies it with publish() only after the batch has landed (G9); if
+    /// the merge fails, dropping the StagedBlock leaves the index exactly as it was.
     ///
     /// @param entries one record per key the block changed, each carrying the value the key held
-    ///        when the block BEGAN. A key must appear at most once: a second row for the same
-    ///        (key, block) would overwrite the block-start value with a mid-block one and hand
-    ///        every later query a wrong answer, so a duplicate throws instead of being ignored.
-    ///        The caller does the intra-block deduplication (spec B.4).
-    /// @param shardByteCap the manifest payload size at which a new shard starts. A key whose own
-    ///        record exceeds the cap still gets a shard — the cap bounds row size, it cannot
-    ///        split a record.
+    ///        when the block BEGAN. A key must appear at most once: a second record for the same
+    ///        (key, block) would give the key two index versions for one block, and every later
+    ///        query would resolve to whichever came second — so a duplicate throws rather than
+    ///        being ignored. The caller does the intra-block deduplication (spec B.4).
+    /// @param shardByteCap the payload size at which a new shard starts. A key whose own record
+    ///        exceeds the cap still gets a shard — the cap bounds row size, it cannot split a
+    ///        record.
     ///
-    /// A block that changed nothing still gets an empty shard 0. Spec B.10 ② audits the window
-    /// for a manifest per block and treats a gap as fatal, so "no changes" must be recorded as
-    /// such rather than being indistinguishable from a lost manifest.
+    /// A block that changed nothing still gets `Meta{shardCount = 1, recordCount = 0}` and an
+    /// empty shard 0 (spec B.10 ②): the audit reads the window as one meta row per block and
+    /// treats a gap as fatal, so "no changes" must be recorded as such rather than being
+    /// indistinguishable from a lost block.
     template <WritableStateStorage Storage>
-    static task::Task<void> put(Storage& mutableLayer, protocol::BlockNumber block,
-        std::span<HistoryEntry const> entries, std::size_t shardByteCap)
+    task::Task<StagedBlock> put(Storage& batch, protocol::BlockNumber block,
+        bcos::h256 const& blockHash, std::span<HistoryEntry const> entries,
+        std::size_t shardByteCap) const
     {
         if (shardByteCap == 0)
         {
             BOOST_THROW_EXCEPTION(MPTInvariantViolation() << bcos::errinfo_comment(
-                                      "history manifest shard byte cap must be positive"));
+                                      "history shard byte cap must be positive"));
         }
 
-        std::vector<std::tuple<executor_v1::StateKey, executor_v1::StateValue>> rows;
-        rows.reserve(entries.size() + 1);
+        StagedBlock staged{.block = block, .meta = {}, .versions = {}};
+        staged.versions.reserve(entries.size());
 
+        std::vector<std::tuple<executor_v1::StateKey, executor_v1::StateValue>> rows;
         std::unordered_set<std::string_view> seenKeys;
         seenKeys.reserve(entries.size());
 
         std::string shardPayload;
         std::size_t shardIndex = 0;
         auto flushShard = [&]() {
-            rows.emplace_back(
-                executor_v1::StateKey{Tables.manifest, manifestRowKey(block, shardIndex)},
+            rows.emplace_back(executor_v1::StateKey{Tables.shard, shardRowKey(block, shardIndex)},
                 executor_v1::StateValue{std::move(shardPayload)});
             shardPayload.clear();
             ++shardIndex;
@@ -179,8 +258,7 @@ public:
 
         for (auto const& entry : entries)
         {
-            auto keyView = asStringView(entry.key);
-            if (!seenKeys.insert(keyView).second)
+            if (!seenKeys.insert(asStringView(entry.key)).second)
             {
                 BOOST_THROW_EXCEPTION(
                     MPTInvariantViolation() << bcos::errinfo_comment(
@@ -188,168 +266,445 @@ public:
                         "block-start value may be recorded"));
             }
 
-            rows.emplace_back(executor_v1::StateKey{Tables.index, indexRowKey(entry.key, block)},
-                executor_v1::StateValue{indexRowValue(entry.oldValue)});
-
-            if (!shardPayload.empty() &&
-                shardPayload.size() + manifestRecordSize(entry.key) > shardByteCap)
+            auto const size = recordSize(entry.key, entry.oldValue);
+            if (!shardPayload.empty() && shardPayload.size() + size > shardByteCap)
             {
                 flushShard();
             }
-            appendManifestRecord(shardPayload, entry.key);
+            // shardRowKey enforces the 2-byte shard field, but the ordinal is narrowed into the
+            // index version BEFORE the row key is built, so it is checked here too.
+            if (shardIndex > kMaxShardIndex)
+            {
+                BOOST_THROW_EXCEPTION(MPTInvariantViolation() << bcos::errinfo_comment(
+                                          "history shard ordinal overflows the 2-byte field"));
+            }
+            auto const offset = appendRecord(shardPayload, entry.key, entry.oldValue);
+            if (offset > std::numeric_limits<uint32_t>::max())
+            {
+                BOOST_THROW_EXCEPTION(MPTInvariantViolation() << bcos::errinfo_comment(
+                                          "history record offset overflows its 4-byte field"));
+            }
+            staged.versions.emplace_back(bcos::bytes(entry.key.begin(), entry.key.end()),
+                HistoryVersion{.block = block,
+                    .shard = static_cast<uint16_t>(shardIndex),
+                    .offset = static_cast<uint32_t>(offset)});
         }
         flushShard();
 
-        co_await storage2::writeSome(mutableLayer, std::move(rows));
+        staged.meta = BlockMeta{.shardCount = static_cast<uint32_t>(shardIndex),
+            .recordCount = static_cast<uint32_t>(entries.size()),
+            .blockHash = blockHash};
+        // Appended last because shardCount is only known once the loop is done; the batch applies
+        // the rows as a set, so position carries no meaning on disk.
+        rows.emplace_back(executor_v1::StateKey{Tables.shard, metaRowKey(block)},
+            executor_v1::StateValue{metaRowValue(
+                staged.meta.shardCount, staged.meta.recordCount, staged.meta.blockHash)});
+
+        co_await storage2::writeSome(batch, std::move(rows));
+        co_return staged;
     }
+
+    /// Apply to the index what @p recorded, @p retired and @p boundaryWritten already did to disk.
+    ///
+    /// G9: the commit path calls this ONLY after the block's WriteBatch has landed. A merge that
+    /// throws leaves the StagedBlock unpublished, and the index therefore never learns about rows
+    /// that are not there — the next query answers exactly as it did before the failed block.
+    void publish(StagedBlock&& recorded, std::optional<RetiredBlock> retired,
+        std::optional<protocol::BlockNumber> boundaryWritten)
+    {
+        m_index.publish(std::move(recorded), std::move(retired), boundaryWritten);
+    }
+
+    /// The index this store answers from. Read-only: it is mutated through publish, rebuild and
+    /// markUnavailable.
+    [[nodiscard]] HistoryIndex const& index() const { return m_index; }
+
+    /// Refuse every history query from here on. The startup path calls this when rebuild() throws
+    /// (layout spec §1.5): the node keeps running and keeps committing blocks, and only the
+    /// history reads are refused, which is the difference between a degraded node and a dead one.
+    void markUnavailable() { m_index.markUnavailable(); }
 
     /// The value @p key held at block @p block.
     ///
     /// The answer is the OLD value recorded by the first change after @p block: between @p block
     /// and that change the key was untouched, so that old value is exactly the block-@p block
-    /// value (spec §0.4). One seek, one row read, independent of how far back @p block is.
+    /// value (spec §0.4). One in-memory lookup, one row read, one record decoded, independent of
+    /// how far back @p block is.
+    ///
+    /// Three hard rules, in order (layout spec §1.4):
+    ///
+    ///  1. the window guard runs BEFORE anything else (G5);
+    ///  2. the state check, the boundary check and the lookup happen under ONE shared lock;
+    ///  3. a located version whose shard row is gone throws HistoryPruned — it never falls back to
+    ///     the current value.
     ///
     /// @param tip the chain's current block number.
     /// @param depth the retention window, i.e. H_state or H_proof for this instance.
-    /// @throws HistoryPruned when @p block predates the retained window.
-    /// @throws InvalidHistoryBlock when @p block is negative or ahead of @p tip.
-    template <SeekableStateStorage Storage>
-    static task::Task<ReadAtResult> readAt(Storage& backend, std::span<const bcos::byte> key,
-        protocol::BlockNumber block, protocol::BlockNumber tip, protocol::BlockNumber depth)
+    /// @throws HistoryPruned when @p block predates the retained window or the located shard is
+    ///         gone.
+    /// @throws HistoryIndexUnavailable when the index has not been rebuilt or is unusable.
+    /// @throws InvalidHistoryBlock when @p block is negative, when @p block is ahead of @p tip,
+    ///         or when @p depth is negative.
+    template <QueryableStateStorage Storage>
+    task::Task<ReadAtResult> readAt(Storage& backend, std::span<const bcos::byte> key,
+        protocol::BlockNumber block, protocol::BlockNumber tip, protocol::BlockNumber depth) const
     {
-        // The window guard runs BEFORE the seek, and that order is the whole point (spec B.3,
-        // G5): a seek that finds nothing cannot tell "never changed after B, so the current
-        // value is the answer" from "the record was expired away, so the current value is a
-        // wrong answer" — the index holds no evidence either way. Only the window bound
-        // separates them. HISTORY_GUARD_DISABLED exists solely so the test suite can compile a
-        // build without the guard and demonstrate that the out-of-window case then returns a
-        // plausible-looking wrong value; nothing defines it.
+        // The window guard runs BEFORE the lookup, and that order is the whole point (spec B.3,
+        // G5): a lookup that finds nothing cannot tell "never changed after B, so the current
+        // value is the answer" from "the record was expired away, so the current value is a wrong
+        // answer". Only the window bound separates them. HISTORY_GUARD_DISABLED exists solely so
+        // the test suite can compile a build without the guard and demonstrate that the
+        // out-of-window case then returns a plausible-looking wrong value; nothing defines it.
 #ifndef HISTORY_GUARD_DISABLED
         checkWindow(block, tip, depth);
 #endif
 
-        auto keyView = asStringView(key);
-        executor_v1::StateKey seekKey{Tables.index, indexRowKey(key, block + 1)};
+        // Throws when the index is not entitled to answer, so everything below this line is
+        // reasoning about a Ready index whose boundary covers @p block (G10).
+        auto const located = m_index.locate(key, block);
+        if (block >= tip || !located)
+        {
+            // At or above the tip no later block can have recorded a pre-image, and below it an
+            // empty lookup means the key has not changed since — both are the current value.
+            co_return HistoryUseCurrent{};
+        }
 
-        auto iterator = co_await storage2::range(backend, storage2::RANGE_SEEK, seekKey);
-        auto row = co_await iterator.next();
+        auto row = co_await storage2::readOne(backend,
+            executor_v1::StateKey{Tables.shard, shardRowKey(located->block, located->shard)});
         if (!row)
         {
-            co_return HistoryUseCurrent{};
+            // The index located a version and the shard is not there — an expiry landed between
+            // the lookup and this read, or on a logical-deletion layer the row is a sentinel
+            // (readOne reports both as absent). Falling through to the current value here is the
+            // silent wrong answer the whole layout exists to prevent (G6, G10).
+            BOOST_THROW_EXCEPTION(
+                HistoryPruned() << bcos::errinfo_comment(
+                    "the shard holding the requested pre-image was deleted after the index "
+                    "located it"));
         }
-
-        auto const& [rowKey, rowValue] = *row;
-        executor_v1::StateKeyView rowKeyView{rowKey};
-        if (rowKeyView.m_table != Tables.index || !indexRowBelongsTo(rowKeyView.m_key, keyView))
+        auto const record = decodeRecordAt(row->get(), located->offset);
+        if (record.key != asStringView(key))
         {
-            co_return HistoryUseCurrent{};
-        }
-
-        auto const* entry = detail::asStateValue(rowValue);
-        if (entry == nullptr)
-        {
-            // The row is present but carries a deletion sentinel rather than bytes: the
-            // pre-image this query needs was removed while the window still claims to cover it.
-            // Fail loud (G6) — falling through to the current value is the silent wrong answer
-            // B.3 exists to prevent.
+            // The offset the index held no longer names this key's record: the index and the
+            // shard disagree about the layout of the same bytes. Returning the record found there
+            // would answer with another key's value.
             BOOST_THROW_EXCEPTION(
                 MPTInvariantViolation() << bcos::errinfo_comment(
-                    "history index row is deleted inside the retention window; the pre-image "
-                    "chain has a hole"));
+                    "the history record at the indexed offset belongs to a different key"));
         }
-        co_return decodeIndexValue(entry->get());
+        if (!record.oldValue)
+        {
+            co_return HistoryAbsent{};
+        }
+        co_return bcos::bytes(record.oldValue->begin(), record.oldValue->end());
     }
 
-    /// Every key block @p block changed, read off that block's manifest. Used by rollback and by
-    /// the B.10 audits, both of which need the list to be COMPLETE.
+    /// Was block @p block's history ever RECORDED here? Pure memory — the index holds one entry
+    /// per retained block, put there by publish or by the rebuild walk.
     ///
-    /// Empty when the block changed nothing, and empty on a plane where the block's manifest rows
-    /// are physically gone — the backend after a merge, for instance.
-    ///
-    /// @throws MPTInvariantViolation when a shard row is present but carries a deletion sentinel
-    ///         rather than bytes. That is what an expiry looks like on the mutable layer, whose
-    ///         removeSome marks rather than erases (MemoryStorage LOGICAL_DELETION, the mode
-    ///         GlobalStateMutableStorage runs in). The keys such a shard listed are unreadable, so
-    ///         a caller that needs the complete list must not be handed a short one (G6). Callers
-    ///         wanting the expiry-tolerant reading use expire(), which skips those shards.
-    template <SeekableStateStorage Storage>
-    static task::Task<std::vector<bcos::bytes>> keysOfBlock(
-        Storage& backend, protocol::BlockNumber block)
+    /// This answers a question the window guard cannot: readAt's window bound says "block B is
+    /// young enough not to have been expired", which is a statement about the RETENTION PARAMETER,
+    /// not about what was ever written. A node whose history began after block B — the depth was
+    /// raised, the MPT was enabled mid-life, the era predates this feature — has blocks inside its
+    /// nominal window that were never recorded, and for those every key misses the index and
+    /// reports HistoryUseCurrent: today's value, presented as block B's. Probing the record itself
+    /// is what turns that into a refusal (G6).
+    [[nodiscard]] bool recordedBlock(protocol::BlockNumber block) const
     {
-        auto scan = co_await scanManifest(backend, block, DeletedShardPolicy::Reject);
-        co_return std::move(scan.keys);
+        return m_index.hasBlock(block);
     }
 
-    /// Drop block @p block from the retained window: delete its index rows, then its manifest.
+    /// Block @p block's whole recorded diff: the meta row plus every record, in shard order. Used
+    /// by rollback and by the B.10 audits, both of which need the list to be COMPLETE — so the
+    /// counts the meta row declares are verified against what the walk actually read.
     ///
-    /// Deletions are written to @p mutableLayer, so in the default mode they land in the
-    /// committing block's WriteBatch and the whole expiry is atomic with the commit (spec B.5).
+    /// @throws MPTInvariantViolation when the meta row is missing, when the shard count or the
+    ///         record count disagrees with it, or when a row is present but carries a deletion
+    ///         sentinel rather than bytes. That last shape is what an expiry looks like on the
+    ///         mutable layer, whose removeSome marks rather than erases (MemoryStorage
+    ///         LOGICAL_DELETION, the mode GlobalStateMutableStorage runs in): the records such a
+    ///         shard held are unreadable, and a caller that needs the complete diff must not be
+    ///         handed a short one (G6). expire() takes the opposite reading of the same row.
+    template <SeekableStateStorage Storage>
+    task::Task<BlockHistory> readBlock(Storage& backend, protocol::BlockNumber block) const
+    {
+        BlockHistory history;
+        auto const scan = co_await scanBlock(backend, block, DeletedShardPolicy::Reject,
+            [&](ShardRecord const& record, HistoryVersion const&) {
+                std::optional<bcos::bytes> oldValue;
+                if (record.oldValue)
+                {
+                    oldValue.emplace(record.oldValue->begin(), record.oldValue->end());
+                }
+                history.records.emplace_back(
+                    bcos::bytes(record.key.begin(), record.key.end()), std::move(oldValue));
+            });
+
+        if (!scan.metaFound)
+        {
+            BOOST_THROW_EXCEPTION(MPTInvariantViolation() << bcos::errinfo_comment(
+                                      "history block has no meta row; its diff cannot be read"));
+        }
+        if (scan.shardsRead != scan.meta.shardCount)
+        {
+            BOOST_THROW_EXCEPTION(
+                MPTInvariantViolation() << bcos::errinfo_comment(
+                    "history block holds a different number of shards than its meta row declares"));
+        }
+        if (scan.recordsRead != scan.meta.recordCount)
+        {
+            BOOST_THROW_EXCEPTION(
+                MPTInvariantViolation() << bcos::errinfo_comment(
+                    "history block holds a different number of records than its meta row "
+                    "declares"));
+        }
+        history.meta = scan.meta;
+        co_return history;
+    }
+
+    /// Drop block @p block from the retained window: delete its shard rows and its meta row.
     ///
-    /// The manifest is deleted LAST, and that ordering is what makes the deferred mode (expiry
-    /// split out of the commit batch) safe to interrupt: a crash after some index rows are gone
-    /// leaves the manifest, so re-running finds the same key list and re-issues deletes that are
-    /// no-ops for the rows already gone. Deleting the manifest first would strand the surviving
-    /// index rows permanently — nothing else records which keys the block touched.
+    /// This is the saving the layout was reshaped for. The old layout had to delete one index row
+    /// per key, so an expiry cost as much as the commit that created it; here the pre-images live
+    /// inside the shards, so `shardCount + 1` removes take the whole block — and the in-memory
+    /// versions go with them, without a single point-delete.
+    ///
+    /// Deletions are written to @p batch, so in the default mode they land in the committing
+    /// block's WriteBatch and the whole expiry is atomic with the commit (spec B.5).
     ///
     /// Idempotent on every storage, including the one G3 puts it on. The production mutable layer
     /// is MemoryStorage with LOGICAL_DELETION (GlobalStateStorageInitializer.h:15-19), where a
-    /// removed row stays in the container as a deletion sentinel and the iterator still yields
-    /// it; so a second expire() of the same block sees its own shards coming back as sentinels.
-    /// It skips them instead of failing, and that is sound rather than merely convenient: the
-    /// index-then-manifest order above means a shard can only be deleted after the index rows of
-    /// every key it listed were deleted, so a skipped shard has nothing left to clean up.
-    /// keysOfBlock() takes the opposite reading of the same row, because a short key list would
-    /// silently break rollback.
-    template <SeekableStateStorage ReadStorage, WritableStateStorage WriteStorage>
-    static task::Task<ExpireReport> expire(
-        ReadStorage& backend, WriteStorage& mutableLayer, protocol::BlockNumber block)
+    /// removed row stays in the container as a deletion sentinel and the iterator still yields it;
+    /// so a second expire() of the same block sees its own rows coming back as sentinels. It skips
+    /// them, reports nothing retired, and issues no deletes.
+    ///
+    /// @param boundaryPolicy which end of the chain this call is discarding from, and therefore
+    ///        whether the retention boundary moves. DEFAULTS to Keep, the answer for every caller
+    ///        that is not the commit path.
+    ///
+    ///        **Precondition for Advance: at most ONE Advance call per @p batch, and @p block must
+    ///        be the oldest block leaving the window.** The max that keeps the boundary from moving
+    ///        down is computed against @p backend, which does not yet see this batch's write, so
+    ///        two Advance calls in one batch both read the pre-batch value and the second one wins
+    ///        outright — a lower second block would then lower the boundary. The commit path issues
+    ///        exactly one expiry per block, which is what makes the max claim true; a caller that
+    ///        needs several must expire them lowest-first in separate batches, or pass Keep for all
+    ///        but the highest.
+    template <QueryableStateStorage ReadStorage, WritableStateStorage WriteStorage>
+    task::Task<ExpireReport> expire(ReadStorage& backend, WriteStorage& batch,
+        protocol::BlockNumber block,
+        RetentionBoundary boundaryPolicy = RetentionBoundary::Keep) const
     {
-        auto scan = co_await scanManifest(backend, block, DeletedShardPolicy::Skip);
+        std::vector<bcos::bytes> keys;
+        auto scan = co_await scanBlock(backend, block, DeletedShardPolicy::Skip,
+            [&](ShardRecord const& record, HistoryVersion const&) {
+                keys.emplace_back(record.key.begin(), record.key.end());
+            });
 
-        ExpireReport report{.keyCount = scan.keys.size(),
-            .indexDeletesIssued = scan.keys.size(),
-            .manifestShardsDeleted = scan.manifestKeys.size()};
-
-        if (!scan.keys.empty())
+        ExpireReport report{
+            .keyCount = keys.size(), .shardsDeleted = scan.shardsRead, .retired = std::nullopt};
+        if (!scan.rowKeys.empty())
         {
-            std::vector<executor_v1::StateKey> indexKeys;
-            indexKeys.reserve(scan.keys.size());
-            for (auto const& key : scan.keys)
-            {
-                indexKeys.emplace_back(Tables.index, indexRowKey(key, block));
-            }
-            co_await storage2::removeSome(mutableLayer, std::move(indexKeys));
+            report.retired = RetiredBlock{
+                .block = block, .keys = std::move(keys), .shardsDeleted = scan.shardsRead};
+            co_await storage2::removeSome(batch, std::move(scan.rowKeys));
         }
-        if (!scan.manifestKeys.empty())
+
+        // Under Advance the boundary moves with the deletes, in the same batch and therefore the
+        // same Write. Doing it inside expire rather than at the call site is what makes it
+        // impossible for the commit path to expire without advancing it.
+        //
+        // The new boundary is @p block ITSELF, not block + 1. "The value at B" is answered by the
+        // first change AFTER B, so block B's own records are not what answers B — they answer the
+        // blocks below it. Dropping block B therefore leaves B answerable (from B+1's records,
+        // which are still here) and takes B-1 away.
+        //
+        // Written whenever the policy allows it, including when the block had nothing to expire:
+        // the claim is "nothing below @p block is left", which is true either way.
+        //
+        // MAX, not assignment. The boundary only ever grows — expired data does not come back —
+        // and @p block is not monotonic across every caller: a chain re-committing after a
+        // rollback replays lower heights, and an operator RAISING mpt_history_*_blocks makes N - H
+        // jump backwards on the next commit. Assigning would then claim heights are intact whose
+        // shards an earlier expiry already deleted.
+        if (boundaryPolicy == RetentionBoundary::Advance)
         {
-            co_await storage2::removeSome(mutableLayer, std::move(scan.manifestKeys));
+            auto const current = co_await retentionBoundary(backend);
+            if (!current || *current < block)
+            {
+                co_await writeRetentionBoundary(batch, block);
+            }
         }
         co_return report;
     }
 
-private:
-    /// One manifest sweep: the keys the block changed and the manifest rows that list them.
-    struct ManifestScan
+    /// The oldest block this store can still ANSWER FOR, read off disk — everything below it has
+    /// been expired away. Nullopt when the row was never written, which means no expiry has ever
+    /// run against this store.
+    template <class Storage>
+    static task::Task<std::optional<protocol::BlockNumber>> retentionBoundary(Storage& backend)
     {
-        std::vector<bcos::bytes> keys;
-        std::vector<executor_v1::StateKey> manifestKeys;
-    };
+        auto row = co_await storage2::readOne(
+            backend, executor_v1::StateKey{Tables.boundary, kRetentionBoundaryRowKey});
+        if (!row)
+        {
+            co_return std::nullopt;
+        }
+        co_return decodeRetentionBoundary(row->get());
+    }
 
-    /// What a manifest sweep does with a shard row that is present but carries a deletion
-    /// sentinel instead of bytes — the shape an expired shard has on a logical-deletion layer.
-    /// The row is the same; the two callers need opposite readings of it, so the choice is a
-    /// parameter rather than a rule baked into the sweep.
+    /// Record that @p oldestIntactBlock is the oldest block this store can still answer for.
+    ///
+    /// It must ride the same batch as whatever made that true. expire() calls it itself, so an
+    /// expiry cannot land without the boundary moving with it.
+    template <WritableStateStorage Storage>
+    static task::Task<void> writeRetentionBoundary(
+        Storage& batch, protocol::BlockNumber oldestIntactBlock)
+    {
+        std::vector<std::tuple<executor_v1::StateKey, executor_v1::StateValue>> rows;
+        rows.emplace_back(executor_v1::StateKey{Tables.boundary, kRetentionBoundaryRowKey},
+            executor_v1::StateValue{retentionBoundaryValue(oldestIntactBlock)});
+        co_await storage2::writeSome(batch, std::move(rows));
+    }
+
+    /// Recompute the whole in-memory index from the shard rows on disk (layout spec §1.5).
+    ///
+    /// Runs once, at startup, BEFORE any reader exists — which is what removes the window the
+    /// derived index would otherwise have: there is no moment at which a query can miss a version
+    /// because the rebuild has not reached it yet and read that miss as "unmodified".
+    ///
+    /// It starts at `boundary + 1` rather than at block 0 so that rows left below the boundary by
+    /// an interrupted expiry are skipped instead of resurrecting heights the store has already
+    /// promised not to answer for.
+    ///
+    /// Every inconsistency is fatal, and deliberately so: a shard row before its meta row, a
+    /// missing or extra shard, a record count that disagrees with the meta row, an unknown format
+    /// version, a truncated record. Each of them means some pre-image would be absent from the
+    /// index, and an absent pre-image reads as "the key never changed" (G6). The caller catches
+    /// MPTInvariantViolation and calls markUnavailable() — a store that refuses is recoverable, a
+    /// store that answers from a short index is not.
+    ///
+    /// @p Storage is constrained on seeking only, per the spec; the boundary read below also needs
+    /// `readOne`, which every backend this runs on has (readAt requires it on the same storage).
+    template <SeekableStateStorage Storage>
+    task::Task<RebuildReport> rebuild(Storage& backend)
+    {
+        auto const boundary = co_await retentionBoundary(backend);
+        auto const start =
+            boundary ? std::max<protocol::BlockNumber>(0, *boundary + 1) : protocol::BlockNumber{0};
+
+        HistoryIndex rebuilt;
+        rebuilt.setBoundary(boundary);
+
+        RebuildReport report;
+        StagedBlock staged;
+        bool inBlock = false;
+        std::size_t shardsSeen = 0;
+        std::size_t recordsSeen = 0;
+
+        // Close off the block the walk has been accumulating, checking it against its meta row.
+        auto finishBlock = [&]() {
+            if (!inBlock)
+            {
+                return;
+            }
+            if (shardsSeen != staged.meta.shardCount || recordsSeen != staged.meta.recordCount)
+            {
+                BOOST_THROW_EXCEPTION(
+                    MPTInvariantViolation() << bcos::errinfo_comment(
+                        "history block holds a different number of shards or records than its "
+                        "meta row declares"));
+            }
+            rebuilt.publish(std::move(staged), std::nullopt, std::nullopt);
+            ++report.blocks;
+            report.records += recordsSeen;
+            inBlock = false;
+        };
+
+        report.bytesScanned = co_await walkShardTable(backend, start,
+            [&](executor_v1::StateKeyView const& rowKeyView,
+                executor_v1::StateValue const* entry) -> bool {
+                if (entry == nullptr)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        MPTInvariantViolation() << bcos::errinfo_comment(
+                            "history shard table holds a deletion sentinel; the records it "
+                            "carried cannot be indexed"));
+                }
+                auto const rowBlock = rowKeyBlock(rowKeyView.m_key);
+                if (isMetaRowKey(rowKeyView.m_key, rowBlock))
+                {
+                    finishBlock();
+                    staged = StagedBlock{
+                        .block = rowBlock, .meta = decodeMeta(entry->get()), .versions = {}};
+                    staged.versions.reserve(staged.meta.recordCount);
+                    shardsSeen = 0;
+                    recordsSeen = 0;
+                    inBlock = true;
+                    return true;
+                }
+                if (!inBlock || rowBlock != staged.block)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        MPTInvariantViolation() << bcos::errinfo_comment(
+                            "history shard row is not preceded by its block's meta row"));
+                }
+                auto const shard = rowKeyShard(rowKeyView.m_key);
+                if (shard != shardsSeen)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        MPTInvariantViolation() << bcos::errinfo_comment(
+                            "history shard ordinals are not the contiguous 0..n-1 run the meta "
+                            "row describes"));
+                }
+                ++shardsSeen;
+                if (shardsSeen > staged.meta.shardCount)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        MPTInvariantViolation() << bcos::errinfo_comment(
+                            "history block holds more shards than its meta row declares"));
+                }
+                for (auto const& record : decodeShard(entry->get()))
+                {
+                    staged.versions.emplace_back(bcos::bytes(record.key.begin(), record.key.end()),
+                        HistoryVersion{.block = rowBlock,
+                            .shard = static_cast<uint16_t>(shard),
+                            .offset = static_cast<uint32_t>(record.offset)});
+                    ++recordsSeen;
+                }
+                return true;
+            });
+        finishBlock();
+
+        m_index.replace(std::move(rebuilt));
+        co_return report;
+    }
+
+private:
+    /// What a block walk does with a row that is present but carries a deletion sentinel instead
+    /// of bytes — the shape an expired row has on a logical-deletion layer. The row is the same;
+    /// the two callers need opposite readings of it, so the choice is a parameter rather than a
+    /// rule baked into the walk.
     enum class DeletedShardPolicy : uint8_t
     {
-        /// The caller needs the block's complete key list (rollback, the B.10 audits). A deleted
-        /// shard makes part of that list unreadable, so fail loud instead of returning a short
-        /// one (G6).
+        /// The caller needs the block's complete diff (readBlock, and through it rollback and the
+        /// B.10 audits). A deleted row makes part of that diff unreadable, so fail loud (G6).
         Reject,
-        /// The caller only re-issues deletes (expire). A shard is deleted only after the index
-        /// rows of every key it listed were deleted — B.5's index-then-manifest order — so a
-        /// deleted shard has nothing left to clean up and skipping it is what makes a replay a
-        /// no-op rather than an error.
+        /// The caller only re-issues deletes (expire). A row that is already a sentinel has
+        /// nothing left to clean up, and skipping it is what makes a replay a no-op.
         Skip,
+    };
+
+    /// What one single-block walk saw.
+    struct BlockScan
+    {
+        bool metaFound{};
+        BlockMeta meta;
+        std::size_t shardsRead{};
+        std::size_t recordsRead{};
+        /// Every LIVE row of the block — the meta row and the shard rows — as the keys an expiry
+        /// deletes.
+        std::vector<executor_v1::StateKey> rowKeys;
     };
 
     /// spec B.3, first two lines. Kept as its own function so the one call site above can be
@@ -382,50 +737,21 @@ private:
         }
     }
 
-    /// Decode an index row value: tag byte, then the old value when the tag says there is one.
-    static ReadAtResult decodeIndexValue(std::string_view value)
+    /// Seek to `BE64(@p fromBlock)` in the shard table and hand every row forward to @p visitor as
+    /// (row key view, entry or nullptr), stopping at the end of the table or when the visitor
+    /// returns false. Returns the payload bytes read.
+    ///
+    /// The seek positions at the block's META row, because an 8-byte key sorts before every
+    /// 10-byte key sharing its first eight bytes — so one seek yields meta, shard 0, shard 1, ...
+    /// and then the next block. The iterator runs on past the table, so the VISITOR, not the seek,
+    /// defines where a walk ends.
+    template <SeekableStateStorage Storage, class Visitor>
+    static task::Task<std::size_t> walkShardTable(
+        Storage& backend, protocol::BlockNumber fromBlock, Visitor&& visitor)
     {
-        if (value.empty())
-        {
-            BOOST_THROW_EXCEPTION(MPTInvariantViolation() << bcos::errinfo_comment(
-                                      "history index row value is empty; the tag byte is "
-                                      "mandatory"));
-        }
-        switch (value.front())
-        {
-        case kTagAbsent:
-            if (value.size() != kTagBytes)
-            {
-                BOOST_THROW_EXCEPTION(
-                    MPTInvariantViolation() << bcos::errinfo_comment(
-                        "history index row is tagged ABSENT but carries value bytes"));
-            }
-            return HistoryAbsent{};
-        case kTagValue:
-        {
-            auto payload = value.substr(kTagBytes);
-            return bcos::bytes(payload.begin(), payload.end());
-        }
-        default:
-            BOOST_THROW_EXCEPTION(MPTInvariantViolation() << bcos::errinfo_comment(
-                                      "history index row carries an unknown tag byte"));
-        }
-    }
-
-    /// Walk the manifest shards of one block, in shard order, collecting both the keys they list
-    /// and the row keys of the shards themselves. Stops at the first row that is not a manifest
-    /// row of this block — the iterator runs on into the rest of the table and then into other
-    /// tables, so the loop, not the seek, defines the range. A shard carrying a deletion sentinel
-    /// is not such a boundary: it is skipped or rejected per @p deletedShards, and the walk goes
-    /// on either way, because live shards can follow a deleted one.
-    template <SeekableStateStorage Storage>
-    static task::Task<ManifestScan> scanManifest(
-        Storage& backend, protocol::BlockNumber block, DeletedShardPolicy deletedShards)
-    {
-        ManifestScan scan;
-        executor_v1::StateKey seekKey{Tables.manifest, manifestRowKey(block, 0)};
-
-        auto iterator = co_await storage2::range(backend, storage2::RANGE_SEEK, seekKey);
+        std::size_t bytesScanned = 0;
+        auto iterator = co_await storage2::range(backend, storage2::RANGE_SEEK,
+            executor_v1::StateKey{Tables.shard, metaRowKey(fromBlock)});
         while (true)
         {
             auto row = co_await iterator.next();
@@ -435,31 +761,72 @@ private:
             }
             auto const& [rowKey, rowValue] = *row;
             executor_v1::StateKeyView rowKeyView{rowKey};
-            if (rowKeyView.m_table != Tables.manifest ||
-                !manifestRowBelongsTo(rowKeyView.m_key, block))
+            if (rowKeyView.m_table != Tables.shard)
             {
                 break;
             }
             auto const* entry = detail::asStateValue(rowValue);
-            if (entry == nullptr)
+            if (entry != nullptr)
             {
-                if (deletedShards == DeletedShardPolicy::Skip)
-                {
-                    continue;
-                }
-                BOOST_THROW_EXCEPTION(
-                    MPTInvariantViolation() << bcos::errinfo_comment(
-                        "history manifest shard is deleted; the keys it listed cannot be "
-                        "recovered from this storage layer"));
+                bytesScanned += entry->get().size();
             }
-            scan.manifestKeys.emplace_back(rowKeyView);
-            for (auto& key : decodeManifestShard(entry->get()))
+            if (!visitor(rowKeyView, entry))
             {
-                scan.keys.emplace_back(std::move(key));
+                break;
             }
         }
+        co_return bytesScanned;
+    }
+
+    /// Walk exactly one block's rows, handing each record to @p sink as (record, version).
+    /// @p sink lets each caller materialize only what it needs: readBlock copies the values,
+    /// expire copies only the keys, and neither pays for the other's copies.
+    template <SeekableStateStorage Storage, class RecordSink>
+    static task::Task<BlockScan> scanBlock(Storage& backend, protocol::BlockNumber block,
+        DeletedShardPolicy deletedShards, RecordSink&& sink)
+    {
+        BlockScan scan;
+        co_await walkShardTable(backend, block,
+            [&](executor_v1::StateKeyView const& rowKeyView,
+                executor_v1::StateValue const* entry) -> bool {
+                if (rowKeyBlock(rowKeyView.m_key) != block)
+                {
+                    return false;
+                }
+                if (entry == nullptr)
+                {
+                    if (deletedShards == DeletedShardPolicy::Skip)
+                    {
+                        // Live rows can follow a deleted one, so the walk goes on.
+                        return true;
+                    }
+                    BOOST_THROW_EXCEPTION(
+                        MPTInvariantViolation() << bcos::errinfo_comment(
+                            "history block row is deleted; the records it carried cannot be "
+                            "recovered from this storage layer"));
+                }
+                scan.rowKeys.emplace_back(rowKeyView);
+                if (isMetaRowKey(rowKeyView.m_key, block))
+                {
+                    scan.meta = decodeMeta(entry->get());
+                    scan.metaFound = true;
+                    return true;
+                }
+                auto const shard = rowKeyShard(rowKeyView.m_key);
+                ++scan.shardsRead;
+                for (auto const& record : decodeShard(entry->get()))
+                {
+                    sink(record, HistoryVersion{.block = block,
+                                     .shard = static_cast<uint16_t>(shard),
+                                     .offset = static_cast<uint32_t>(record.offset)});
+                    ++scan.recordsRead;
+                }
+                return true;
+            });
         co_return scan;
     }
+
+    HistoryIndex m_index;
 };
 
 /// The two instantiations spec B.8 calls for.
