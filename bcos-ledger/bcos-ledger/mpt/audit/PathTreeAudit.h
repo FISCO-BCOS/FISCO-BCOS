@@ -28,7 +28,9 @@
 #include "../PathKey.h"
 #include "../Trie.h"
 // detail::refFromRawBytes — the child-ref parser the merge engine uses, Yellow Paper 32-byte
-// rule included. detail::childPosition comes with PathKey.h.
+// rule included — and detail::childPosition, the spec A.1 position arithmetic. Both are taken
+// from the merge engine rather than re-derived here: the engine walks down them while rebuilding
+// and this audit walks down them while checking, and those two must agree by construction.
 #include "../TrieMerge.h"
 #include "../TrieNode.h"
 // history::SeekableStateStorage ("can seek to a key and walk forward") and
