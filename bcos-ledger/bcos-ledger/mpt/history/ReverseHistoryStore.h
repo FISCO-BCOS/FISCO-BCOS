@@ -50,6 +50,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <tuple>
 #include <unordered_set>
 #include <utility>
@@ -69,15 +70,23 @@ concept WritableStateStorage = requires(Storage& storage,
     { storage2::removeSome(storage, keys) } -> task::IsAwaitable;
 };
 
-/// A storage a history QUERY or an expiry runs against. Two capabilities, needed by different
-/// members: `readOne` is all readAt uses — it locates the record in memory and reads exactly one
-/// shard row — while the seek comes from expire, which walks a block's rows before deleting them,
-/// and from the retention-boundary point read.
+/// A storage a point read runs against — one key in, one value out. This is all `readAt` needs:
+/// the version is located in memory, so the disk work is a single `readOne` of a single shard
+/// row. The retention-boundary read is a `readOne` too.
 template <class Storage>
-concept QueryableStateStorage =
-    SeekableStateStorage<Storage> && requires(Storage& storage, executor_v1::StateKey key) {
-        { storage2::readOne(storage, key) } -> task::IsAwaitable;
-    };
+concept ReadableStateStorage = requires(Storage& storage, executor_v1::StateKey key) {
+    { storage2::readOne(storage, key) } -> task::IsAwaitable;
+};
+
+/// A storage a whole-block WALK runs against: `expire` reads a block's rows before deleting them
+/// and the rebuild walks the shard table end to end, and both position an iterator and go
+/// forward. Point reads come with it because `expire` also reads the boundary row.
+///
+/// Kept separate from ReadableStateStorage because the two are genuinely different requirements
+/// on a caller: a query plane only has to answer point reads, and demanding a seek of it would
+/// exclude storages that can serve every query this component makes.
+template <class Storage>
+concept QueryableStateStorage = SeekableStateStorage<Storage> && ReadableStateStorage<Storage>;
 
 /// One key changed by one block, paired with the value it held when the block began.
 /// Both fields are non-owning views into the caller's diff — put() copies out of them.
@@ -100,7 +109,24 @@ struct HistoryAbsent
 /// block; without both, "not in the index" is silence, not evidence (G6, G10).
 struct HistoryUseCurrent
 {
-    friend bool operator==(HistoryUseCurrent, HistoryUseCurrent) noexcept { return true; }
+    /// The index's publish generation as it stood BEFORE the lookup that produced this answer,
+    /// and always even — readAt refuses to conclude "unchanged" while a commit is mid-publish.
+    ///
+    /// The caller must read the current value and then check this against `index().generation()`
+    /// again: equal means no commit moved underneath the query and the current value really is
+    /// block B's; different means the disk it just read may already be ahead of the index, and
+    /// the answer has to be recomputed or refused. HistoryRead.h::readAtOrCurrent is the one
+    /// place that does this, and every caller goes through it.
+    uint64_t generation{};
+
+    /// Equality IGNORES the generation, on purpose: it is provenance for the caller's own
+    /// re-check, not part of the answer. Two "this key has not changed since B" outcomes are the
+    /// same outcome whichever index generation produced them — and a test comparing answers
+    /// across two indexes (the rebuild cases) would otherwise be comparing counters.
+    friend bool operator==(HistoryUseCurrent const&, HistoryUseCurrent const&) noexcept
+    {
+        return true;
+    }
 };
 
 /// readAt outcome, third case: the key's value at the queried block, as `bcos::bytes`.
@@ -214,6 +240,17 @@ public:
             BOOST_THROW_EXCEPTION(MPTInvariantViolation() << bcos::errinfo_comment(
                                       "history shard byte cap must be positive"));
         }
+        // Checked HERE rather than left to the codec: metaRowKey/shardRowKey do refuse a negative
+        // block, but only after every record has been encoded and every version staged, so the
+        // failure would arrive with a batch already half-built and a message about a row key
+        // rather than about the argument that was wrong.
+        if (block < 0)
+        {
+            BOOST_THROW_EXCEPTION(MPTInvariantViolation()
+                                  << bcos::errinfo_comment("history block number must not be "
+                                                           "negative")
+                                  << errinfo_historyBlock(block));
+        }
 
         StagedBlock staged{.block = block, .meta = {}, .versions = {}};
         staged.versions.reserve(entries.size());
@@ -299,6 +336,13 @@ public:
     /// history reads are refused, which is the difference between a degraded node and a dead one.
     void markUnavailable() { m_index.markUnavailable(); }
 
+    /// The publish window a commit holds between its merge and its publish (HistoryIndex.h).
+    /// Opened by HistoryCommit.h's RAII guard immediately before the merge and closed by the
+    /// publish or by that guard; readers observe it through `index().generation()`.
+    void openPublishWindow() noexcept { m_index.openPublishWindow(); }
+    void closePublishWindow() noexcept { m_index.closePublishWindow(); }
+    [[nodiscard]] uint64_t generation() const noexcept { return m_index.generation(); }
+
     /// The value @p key held at block @p block.
     ///
     /// The answer is the OLD value recorded by the first change after @p block: between @p block
@@ -306,21 +350,25 @@ public:
     /// value (spec §0.4). One in-memory lookup, one row read, one record decoded, independent of
     /// how far back @p block is.
     ///
-    /// Three hard rules, in order (layout spec §1.4):
+    /// Four hard rules, in order (layout spec §1.4):
     ///
     ///  1. the window guard runs BEFORE anything else (G5);
     ///  2. the state check, the boundary check and the lookup happen under ONE shared lock;
     ///  3. a located version whose shard row is gone throws HistoryPruned — it never falls back to
-    ///     the current value.
+    ///     the current value;
+    ///  4. an "unchanged since B" answer is only reached while the index's publish generation is
+    ///     EVEN, and it reports the generation it saw so the caller can prove no commit moved
+    ///     underneath the current-value read that follows.
     ///
     /// @param tip the chain's current block number.
     /// @param depth the retention window, i.e. H_state or H_proof for this instance.
     /// @throws HistoryPruned when @p block predates the retained window or the located shard is
     ///         gone.
-    /// @throws HistoryIndexUnavailable when the index has not been rebuilt or is unusable.
+    /// @throws HistoryIndexUnavailable when the index has not been rebuilt or is unusable, or
+    ///         when a commit stayed mid-publish for the whole retry budget below.
     /// @throws InvalidHistoryBlock when @p block is negative, when @p block is ahead of @p tip,
     ///         or when @p depth is negative.
-    template <QueryableStateStorage Storage>
+    template <ReadableStateStorage Storage>
     task::Task<ReadAtResult> readAt(Storage& backend, std::span<const bcos::byte> key,
         protocol::BlockNumber block, protocol::BlockNumber tip, protocol::BlockNumber depth) const
     {
@@ -334,14 +382,61 @@ public:
         checkWindow(block, tip, depth);
 #endif
 
-        // Throws when the index is not entitled to answer, so everything below this line is
-        // reasoning about a Ready index whose boundary covers @p block (G10).
-        auto const located = m_index.locate(key, block);
+        // A "nothing recorded after B" answer sends the caller to the CURRENT value, and that is
+        // only sound while the index is not behind the disk. Between a block's merge and its
+        // publish it IS behind — the disk already holds block N, the index does not know N — and
+        // a miss there would hand back N's bytes labelled B. So sample the generation first and
+        // only conclude "unchanged" from an even one; an odd one means wait, never answer.
+        //
+        // Bounded, and fail-closed at the bound: the window is a few microseconds of in-memory
+        // work on the single committer, so a budget this size is only ever exhausted by a commit
+        // that died mid-window without closing it. Refusing then is right — the node genuinely
+        // cannot say what block B held.
+        constexpr std::size_t kPublishWindowYieldBudget = 4096;
+        std::optional<HistoryVersion> located;
+        uint64_t generation = 0;
+        for (std::size_t attempt = 0;; ++attempt)
+        {
+            generation = m_index.generation();
+            if ((generation % 2) == 0)
+            {
+                // Throws when the index is not entitled to answer, so everything below this line
+                // is reasoning about a Ready index whose boundary covers @p block (G10).
+                located = m_index.locate(key, block);
+                if (located)
+                {
+                    break;
+                }
+                // A miss is only trustworthy if no publish started while we were looking it up.
+                if (m_index.generation() == generation)
+                {
+                    break;
+                }
+            }
+            if (attempt >= kPublishWindowYieldBudget)
+            {
+                BOOST_THROW_EXCEPTION(
+                    HistoryIndexUnavailable() << bcos::errinfo_comment(
+                        "a commit is publishing; retry — if this persists, a commit died between "
+                        "its merge and its publish and the node must be restarted"));
+            }
+            std::this_thread::yield();
+        }
+
         if (block >= tip || !located)
         {
             // At or above the tip no later block can have recorded a pre-image, and below it an
             // empty lookup means the key has not changed since — both are the current value.
-            co_return HistoryUseCurrent{};
+            //
+            // The tip arm is checked AFTER locate, not before, so even a query that needs no
+            // history at all still requires an available index. Same reading as
+            // HistoryRead.h::historyCoversBlock: a node whose index is unusable does not know
+            // what it holds, and a tip answer from it would look like a healthy node's.
+            //
+            // The generation rides along: the caller has still to READ the current value, and a
+            // commit landing between here and that read would make it wrong. Only
+            // HistoryRead.h::readAtOrCurrent may act on this outcome.
+            co_return HistoryUseCurrent{.generation = generation};
         }
 
         auto row = co_await storage2::readOne(backend,

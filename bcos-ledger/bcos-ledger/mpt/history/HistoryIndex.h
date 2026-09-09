@@ -25,6 +25,7 @@
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-utilities/Common.h>
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -43,7 +44,7 @@ namespace bcos::ledger::mpt::history
 {
 
 /// Where one key's pre-image for one block physically is: the block's shard row, and the byte
-/// offset of the record inside that row's payload. Twelve bytes of RAM buy a query that reads
+/// offset of the record inside that row's payload. Sixteen bytes of RAM buy a query that reads
 /// exactly one row and decodes exactly one record.
 struct HistoryVersion
 {
@@ -53,6 +54,11 @@ struct HistoryVersion
 
     friend bool operator==(HistoryVersion const&, HistoryVersion const&) noexcept = default;
 };
+
+/// 8 + 2 + (2 padding) + 4. Pinned because the number is quoted as the per-version RAM cost of
+/// retention (MPTHistory.h) and read off the field list gets it wrong — the padding after
+/// `shard` is invisible there.
+static_assert(sizeof(HistoryVersion) == 16, "HistoryVersion is the index's per-version cost");
 
 /// What one `put` computed but has NOT published: the rows are in the block's WriteBatch, and the
 /// index must not learn about them until that batch lands (G9). The commit path holds this
@@ -150,8 +156,65 @@ public:
         catch (...)
         {
             m_state = IndexState::Unavailable;
+            closePublishWindow();
             throw;
         }
+        bumpGenerationAfterPublish();
+    }
+
+    /// Announce that a commit has reached the point where DISK is ahead of this index.
+    ///
+    /// The window this opens is the one hole the two-phase commit leaves. A query resolves
+    /// "unchanged since B" in two steps that cannot be one: `locate` says no version was recorded
+    /// after B, and then the caller reads the CURRENT value from the committed plane. Between
+    /// those two steps — and, worse, for the whole stretch between a block's merge and its
+    /// publish — the disk already holds block N's new value while this index does not yet know N
+    /// exists. A query for any B < N - 1 would pass admission, miss in the index, read the
+    /// current value, and hand back block N's bytes labelled B. That is the fabricated answer G6
+    /// forbids, and no amount of locking inside the index can see it, because the wrong value
+    /// comes from a plane the index does not own.
+    ///
+    /// So the index publishes a COUNTER instead of trying to serialize the disk read. Even means
+    /// quiescent; odd means a commit is somewhere between its merge and its publish. A reader
+    /// samples it before `locate` and again after its current-value read: an odd sample, or two
+    /// samples that differ, means a commit moved underneath the query and the "unchanged" reading
+    /// is not established — so the query retries, and eventually refuses. It never silently
+    /// answers.
+    ///
+    /// Relaxed ordering is enough on the reader side because the counter is not guarding data:
+    /// every value the reader actually returns comes from the index under its own mutex or from
+    /// the storage layer's own synchronisation. The counter only has to change, and a reader that
+    /// sees a stale even value has by construction not yet been overtaken.
+    ///
+    /// Idempotent in the sense that matters: opening an already-open window is a programming
+    /// error the commit path cannot make (one committer, RAII guard), and this checks rather than
+    /// assumes.
+    void openPublishWindow() noexcept
+    {
+        auto const current = m_generation.load(std::memory_order_relaxed);
+        if ((current % 2) == 0)
+        {
+            m_generation.store(current + 1, std::memory_order_release);
+        }
+    }
+
+    /// Close the window opened above. `publish` calls it at the end, so the ordinary path needs
+    /// no separate call; the RAII guard on the commit path calls it on every failure path, so a
+    /// commit that dies between merge and publish does not leave every later query retrying
+    /// forever.
+    void closePublishWindow() noexcept
+    {
+        auto const current = m_generation.load(std::memory_order_relaxed);
+        if ((current % 2) != 0)
+        {
+            m_generation.store(current + 1, std::memory_order_release);
+        }
+    }
+
+    /// The publish counter. Even: no commit is between its merge and its publish. Odd: one is.
+    [[nodiscard]] uint64_t generation() const noexcept
+    {
+        return m_generation.load(std::memory_order_acquire);
     }
 
     /// Install a freshly rebuilt index in place of this one.
@@ -366,6 +429,19 @@ private:
         m_blocks.erase(retired.block);
     }
 
+    /// Leave the counter EVEN and STRICTLY GREATER than it was, whether or not a window was open.
+    ///
+    /// Closing an open window (+1) is the ordinary path. The other case matters just as much: a
+    /// reader that sampled the counter before a publish and re-samples after its own read of the
+    /// current value is relying on the two samples DIFFERING, and a publish that only closed a
+    /// window it never had would leave them equal — the reader would then accept a current value
+    /// it read across a commit. So a publish with no window open advances by two.
+    void bumpGenerationAfterPublish() noexcept
+    {
+        auto const current = m_generation.load(std::memory_order_relaxed);
+        m_generation.store(current + ((current % 2) != 0 ? 1 : 2), std::memory_order_release);
+    }
+
     /// The boundary only ever grows: expired data does not come back, and the block an expiry
     /// names is not monotonic across callers (raising the retention depth makes N - H jump
     /// backwards). Assigning would claim heights are intact whose shards an earlier, higher
@@ -386,6 +462,10 @@ private:
     std::optional<protocol::BlockNumber> m_boundary;
     std::size_t m_versionCount{};
     IndexState m_state{IndexState::Empty};
+    /// Even = quiescent, odd = a commit is between its merge and its publish. Outside m_mutex on
+    /// purpose: readers sample it without taking the shared lock, and the commit path opens the
+    /// window before it holds anything.
+    std::atomic<uint64_t> m_generation{0};
 };
 
 }  // namespace bcos::ledger::mpt::history

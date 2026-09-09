@@ -262,6 +262,57 @@ BOOST_AUTO_TEST_CASE(publishingBlocksOutOfOrderIsRefused)
     BOOST_CHECK_EQUAL(lookup(fresh, "a"sv, 10)->offset, 200U);
 }
 
+/// The publish generation: the counter a reader uses to tell "the index is quiescent" from "a
+/// commit has already put its rows on disk and has not told me yet".
+///
+/// Everything about it is a parity claim, so the case is about parity: even at rest, odd while a
+/// window is open, and even again once the publish that closes the window has run. The value must
+/// also MOVE across a publish — a reader compares two samples across its own read of the current
+/// value, and a counter that only toggled parity without advancing would let an open-then-closed
+/// pair look like no publish at all.
+BOOST_AUTO_TEST_CASE(thePublishGenerationTracksTheWindow)
+{
+    HistoryIndex index;
+    BOOST_CHECK_EQUAL(index.generation() % 2, 0U);
+    auto const atRest = index.generation();
+
+    // Opening is idempotent: the commit path opens once per block, but a second open must not
+    // toggle the parity back to "quiescent" while the window is still held.
+    index.openPublishWindow();
+    BOOST_CHECK_EQUAL(index.generation() % 2, 1U);
+    auto const opened = index.generation();
+    index.openPublishWindow();
+    BOOST_CHECK_EQUAL(index.generation(), opened);
+    BOOST_CHECK_GT(opened, atRest);
+
+    // publish closes the window it finds open...
+    index.publish(stagedFor(10, {{"a"sv, 100}}), std::nullopt, std::nullopt);
+    BOOST_CHECK_EQUAL(index.generation() % 2, 0U);
+    auto const afterPublish = index.generation();
+    BOOST_CHECK_GT(afterPublish, opened);
+
+    // ...and closing is idempotent too, so the RAII guard's destructor after a successful publish
+    // does not open a phantom window by flipping the parity again.
+    index.closePublishWindow();
+    BOOST_CHECK_EQUAL(index.generation(), afterPublish);
+
+    // A publish with no window open still advances the counter, because a reader's two samples
+    // straddling it must differ.
+    index.publish(stagedFor(20, {{"a"sv, 200}}), std::nullopt, std::nullopt);
+    BOOST_CHECK_EQUAL(index.generation() % 2, 0U);
+    BOOST_CHECK_GT(index.generation(), afterPublish);
+
+    // A publish that THROWS must not leave the window open — the commit died, and a permanently
+    // open window would make every later "unchanged since B" query spin and then refuse forever
+    // rather than only until the node notices.
+    index.openPublishWindow();
+    BOOST_CHECK_EQUAL(index.generation() % 2, 1U);
+    BOOST_CHECK_THROW(index.publish(stagedFor(15, {{"a"sv, 150}}), std::nullopt, std::nullopt),
+        MPTInvariantViolation);
+    BOOST_CHECK(index.state() == IndexState::Unavailable);
+    BOOST_CHECK_EQUAL(index.generation() % 2, 0U);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace bcos::ledger::mpt::history::test
