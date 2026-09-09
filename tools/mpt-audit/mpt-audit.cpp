@@ -100,9 +100,12 @@ void printUsage(po::options_description const& options)
            "        receipts — and s_current_state:current_number are outside the history's\n"
            "        capture set and are left as they are; the run ends by telling you which\n"
            "        value to set the tip row to.\n\n"
-           "Exit codes: 0 = consistent, 1 = findings, 2 = usage or I/O error. A rollback that\n"
-           "wrote rows but could not verify the result against the target block's header exits\n"
-           "1 as well — the store was changed and the check could not be made.\n\n"
+           "Exit codes: 0 = consistent, 1 = findings, 2 = a bad command line or a database\n"
+           "that cannot be opened. Everything raised while READING a store — an undecodable\n"
+           "row, a hole in the tree, a refused rollback — exits 1, because at that point the\n"
+           "tool has an answer about the store and the answer is bad. A rollback that wrote\n"
+           "rows but could not verify the result against the target block's header exits 1\n"
+           "as well: the store was changed and the check could not be made.\n\n"
         << options << std::endl;
 }
 
@@ -171,9 +174,14 @@ std::optional<bcos::h256> readHeaderStateRoot(StateStorage& storage, protocol::B
 /// meta row at commit time, so a disagreement means the retained pre-images belong to a different
 /// block at that height, not that two hash functions were used.
 ///
-/// A row of the wrong length is nullopt rather than a truncated hash: h256's byte-range
-/// constructor would zero-fill, and a zero-filled hash compared against a meta row is a mismatch
-/// the operator would then chase in the wrong place.
+/// `ledger::getBlockHash(storage, block, FromStorage{})` (LedgerMethods.h:555-575) reads exactly
+/// this row and is the shared way to do it — but it builds `HashType(hashStr, FromBinary)`, which
+/// zero-PADS a short string rather than rejecting it. That is right for a caller that already
+/// trusts the row; it is wrong here, because this is an auditor and a row of the wrong length is
+/// itself a finding. Zero-padding it would turn a malformed row into a plausible hash, report it
+/// as a B.10 ⑤ mismatch, and send the operator to compare block hashes when the fault is the row's
+/// length. So the length is checked and a wrong one reads as "no hash" — B.10 ⑤ then reports the
+/// height as UNVERIFIABLE, which is what it is.
 std::optional<bcos::h256> readLedgerBlockHash(StateStorage& storage, protocol::BlockNumber block)
 {
     auto entry = bcos::task::syncWait(bcos::storage2::readOne(
@@ -239,17 +247,15 @@ protocol::BlockNumber requireTip(StateStorage& storage, po::variables_map const&
     return *tip;
 }
 
-int runTree(StateStorage& storage, po::variables_map const& params)
+/// The counts and the warnings of one path-tree audit.
+///
+/// Shared by `tree` and by the re-audit `rollback --yes` performs, because the rollback's re-audit
+/// is the SAME audit and its warnings mean the same thing. Reporting only the root there would
+/// hide the orphan rows a rollback can create — reverse-applying a block puts node rows back at
+/// positions the newer tree had dropped, and any that nothing references afterwards are exactly
+/// the "one delete too few" waste (G4) an operator wants to know about before restarting the node.
+void printTreeReport(audit::PathTreeAuditReport const& report)
 {
-    // The tip is only needed to find the header to compare against, so a store without one is
-    // still auditable — it just cannot have its root checked.
-    auto const tip =
-        params.count("tip") != 0U ?
-            std::optional<protocol::BlockNumber>{params["tip"].as<protocol::BlockNumber>()} :
-            readTip(storage);
-    auto const [expected, source] = committedRoot(storage, params, tip);
-
-    auto const report = bcos::task::syncWait(audit::auditPathTree(storage, expected));
     std::cout << "account trie root : " << report.accountRoot.hex() << "\n"
               << "account node rows : " << report.accountNodes << "\n"
               << "accounts          : " << report.accounts << "\n"
@@ -267,6 +273,20 @@ int runTree(StateStorage& storage, po::variables_map const& params)
         std::cout << "WARNING: warning list truncated at " << audit::kMaxAuditWarnings
                   << " lines; the counts above are complete" << std::endl;
     }
+}
+
+int runTree(StateStorage& storage, po::variables_map const& params)
+{
+    // The tip is only needed to find the header to compare against, so a store without one is
+    // still auditable — it just cannot have its root checked.
+    auto const tip =
+        params.count("tip") != 0U ?
+            std::optional<protocol::BlockNumber>{params["tip"].as<protocol::BlockNumber>()} :
+            readTip(storage);
+    auto const [expected, source] = committedRoot(storage, params, tip);
+
+    auto const report = bcos::task::syncWait(audit::auditPathTree(storage, expected));
+    printTreeReport(report);
     if (report.rootChecked)
     {
         std::cout << "state root matches " << source << std::endl;
@@ -419,8 +439,8 @@ int runRollback(StateStorage& storage, po::variables_map const& params)
     if (targetRoot)
     {
         auto const tree = bcos::task::syncWait(audit::auditPathTree(storage, targetRoot));
-        std::cout << "tree re-audited: state root " << tree.accountRoot.hex()
-                  << " matches the header of block " << target << std::endl;
+        std::cout << "tree re-audited against the header of block " << target << ':' << std::endl;
+        printTreeReport(tree);
     }
     else
     {
