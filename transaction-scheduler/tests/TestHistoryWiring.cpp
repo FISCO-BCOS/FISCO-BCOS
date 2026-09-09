@@ -66,6 +66,7 @@
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <fakeit.hpp>
+#include <functional>
 #include <map>
 #include <optional>
 #include <string>
@@ -154,6 +155,11 @@ struct HWFailingMultiLayerStorage : HWBaseMultiLayerStorage
     using HWBaseMultiLayerStorage::HWBaseMultiLayerStorage;
 
     bool m_failNextMerge = false;
+    /// Run INSIDE the publish window: after the real merge has landed the block's rows and before
+    /// mergeBackStorage returns, so the commit path has not published yet. That is the exact
+    /// instant at which the disk is ahead of the index, and it is the only place a test can stand
+    /// to observe what a query sees there.
+    std::function<void()> m_afterMerge;
 
     task::Task<std::shared_ptr<MutableStorage>> mergeBackStorage(auto&... extraStorages)
     {
@@ -162,7 +168,13 @@ struct HWFailingMultiLayerStorage : HWBaseMultiLayerStorage
             m_failNextMerge = false;
             BOOST_THROW_EXCEPTION(std::logic_error("injected merge failure"));
         }
-        co_return co_await HWBaseMultiLayerStorage::mergeBackStorage(extraStorages...);
+        auto merged = co_await HWBaseMultiLayerStorage::mergeBackStorage(extraStorages...);
+        if (m_afterMerge)
+        {
+            auto const hook = std::exchange(m_afterMerge, {});
+            hook();
+        }
+        co_return merged;
     }
 };
 using HWMultiLayerStorage = HWFailingMultiLayerStorage;
@@ -438,12 +450,18 @@ public:
     /// non-empty diff and consecutive blocks touch different keys.
     void planBlock(protocol::BlockNumber number)
     {
-        auto address = Address{};
-        address.data()[0] = 0xAB;
-        auto const table = ledger::mpt::accountTableName(address);
+        auto const table = ledger::mpt::accountTableName(hwAccount());
         plan[number] = {{table, "balance", std::to_string(1000 + number)},
             {table, slotRowKey(static_cast<byte>(number & 0xFFU)),
                 std::string(32, static_cast<char>(number & 0xFFU))}};
+    }
+
+    /// The one account every planned block writes to.
+    static Address hwAccount()
+    {
+        auto address = Address{};
+        address.data()[0] = 0xAB;
+        return address;
     }
 
     static std::string slotRowKey(byte tail)
@@ -681,6 +699,95 @@ BOOST_AUTO_TEST_CASE(aCommitFailingAfterTheMergePublishesNothing)
     BOOST_CHECK_EQUAL(mptHistory->state().index().blockCount(), blocksBefore);
     BOOST_CHECK_EQUAL(mptHistory->state().index().versionCount(), versionsBefore);
     BOOST_CHECK(!history::historyCoversBlock(mptHistory->state(), first, first + 1));
+}
+
+/// MF1: inside the publish window — after a block's rows have landed on disk and before the index
+/// learns about them — a historical read must NOT hand back that block's value.
+///
+/// This is the hole two-phase commit leaves and locking cannot close: the wrong value would come
+/// from the committed plane, which the index does not own. The case stands exactly there, in a
+/// hook that runs inside mergeBackStorage after the real merge, and asks for a key that the
+/// committing block N is the FIRST to touch, at a height B well below N. `locate` must miss (no
+/// version was ever recorded for that key), so without the generation guard the query would fall
+/// through to the current value — which by then is N's.
+///
+/// The negative control is in the same hook: a raw readOne of the same row DOES return N's value.
+/// The wrong answer is available; the guard is what stops the query taking it.
+BOOST_AUTO_TEST_CASE(aReadInsideThePublishWindowRefusesRatherThanSeeingTheNewBlock)
+{
+    useDepths(128, 128);  // nothing expires here; the subject is the window, not the boundary
+    auto const first = kActivation + 1;
+    runChain(first + 1);  // blocks first and first+1 recorded; tip is first+1
+
+    auto const committing = first + 2;  // block N, whose rows land inside the hook
+    auto const queried = first;         // block B, two below N
+    auto const table = ledger::mpt::accountTableName(hwAccount());
+    auto const freshSlot = slotRowKey(static_cast<byte>(committing & 0xFFU));
+
+    planBlock(committing);
+    auto const header = executeOneBlock(committing);
+
+    bool hookRan = false;
+    bool generationWasOdd = false;
+    bool rawReadSawTheNewBlock = false;
+    bool guardedReadRefused = false;
+    std::optional<std::string> guardedAnswer;
+
+    multiLayerStorage.m_afterMerge = [&]() {
+        hookRan = true;
+        generationWasOdd = (mptHistory->state().index().generation() % 2) != 0;
+
+        // The wrong answer is right there on the committed plane.
+        auto const raw =
+            task::syncWait(storage2::readOne(backendStorage, StateKey{table, freshSlot}));
+        rawReadSawTheNewBlock = raw.has_value();
+
+        // ...and the guarded read must not take it. tip is still first+1: the commit has not
+        // advanced it yet, which is precisely why B is admissible and the window matters.
+        try
+        {
+            auto const value = task::syncWait(history::readStateAtOrCurrent(mptHistory->state(),
+                backendStorage, StateKeyView{table, freshSlot}, queried, first + 1, 128));
+            if (value)
+            {
+                guardedAnswer = std::string(value->get());
+            }
+        }
+        catch (history::HistoryIndexUnavailable const&)
+        {
+            guardedReadRefused = true;
+        }
+    };
+
+    commitOneBlock(header);
+
+    BOOST_REQUIRE_MESSAGE(hookRan, "the in-window hook must have run");
+    BOOST_CHECK_MESSAGE(
+        generationWasOdd, "the publish window must be open between the merge and the publish");
+    BOOST_REQUIRE_MESSAGE(rawReadSawTheNewBlock,
+        "the committed plane must already hold block N's row inside the window, or this case is "
+        "not testing anything");
+    BOOST_CHECK_MESSAGE(
+        guardedReadRefused, "a read inside the publish window must refuse, got: "
+                                << (guardedAnswer ? "a value" : "no value but no refusal either"));
+    BOOST_CHECK_MESSAGE(!guardedAnswer.has_value(),
+        "a read inside the publish window must never return the committing block's value");
+
+    // And once the window has closed, the same question is answered — correctly. Block N is the
+    // first to touch this slot, so at B it did not exist: absent, not N's value.
+    BOOST_CHECK(mptHistory->state().recordedBlock(committing));
+    BOOST_CHECK_EQUAL(mptHistory->state().index().generation() % 2, 0U);
+    auto const afterPublish = task::syncWait(history::readStateAtOrCurrent(mptHistory->state(),
+        backendStorage, StateKeyView{table, freshSlot}, queried, committing, 128));
+    BOOST_CHECK_MESSAGE(!afterPublish.has_value(),
+        "after the publish, the slot block N created must read as absent at an earlier height");
+
+    // The row block N CHANGED (rather than created) reads back as its pre-image, so the index is
+    // genuinely answering rather than refusing everything.
+    auto const balanceAtB = task::syncWait(history::readStateAtOrCurrent(mptHistory->state(),
+        backendStorage, StateKeyView{table, "balance"}, queried, committing, 128));
+    BOOST_REQUIRE(balanceAtB.has_value());
+    BOOST_CHECK_EQUAL(std::string(balanceAtB->get()), std::to_string(1000 + queried));
 }
 
 /// G9: the index learns about a block exactly when publishBlockHistory runs — not when the rows

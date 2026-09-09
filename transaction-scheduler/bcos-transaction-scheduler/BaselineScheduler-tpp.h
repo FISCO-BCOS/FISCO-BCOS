@@ -681,6 +681,17 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
                 << historyStage->report.stateExpired.keyCount << " | expired trie keys "
                 << historyStage->report.trieExpired.keyCount;
         }
+        // From here until the publish below, DISK is ahead of the INDEX: the merge lands block
+        // N's rows on the committed plane while the index still does not know N exists. A
+        // historical query that missed the index in that window and then read the current value
+        // would get N's bytes labelled with the block it asked for. The window is announced on
+        // both stores so readers can detect it — held by RAII, so no early return or throw can
+        // leave it open (HistoryCommit.h::PublishWindow, HistoryIndex.h::openPublishWindow).
+        std::optional<ledger::mpt::history::PublishWindow> publishWindow;
+        if (historyStage)
+        {
+            publishWindow.emplace(*m_mptHistory);
+        }
         {
             ittapi::Report mergeReport(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                 ittapi::ITT_DOMAINS::instance().MERGE_STATE);
@@ -717,8 +728,8 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
         // directions. It cannot be earlier: a commit that fails after publishing but before
         // m_lastCommittedBlockNumber does NOT advance the tip, and PBFT re-drives the same height
         // (LedgerStorage.cpp -> onStableCheckPointCommitFailed -> clearExceptionProposalState).
-        // The retry passes the already-committed gate above, re-stages, re-merges (idempotent),
-        // and publishes block N a second time — which HistoryIndex refuses as out-of-order,
+        // The retry passes the already-committed gate above, re-stages and re-merges, and
+        // publishes block N a second time — which HistoryIndex refuses as out-of-order,
         // latching itself Unavailable and rethrowing. That would cost the node every historical
         // read until restart AND wedge the height forever, since each retry throws at the same
         // place. Publishing here leaves nothing fallible between it and the advance, so a retry
@@ -727,13 +738,21 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
         // It cannot be later either: the tip is what every historical read is admitted against,
         // so a reader let in at N must be able to see N's versions.
         //
-        // The accepted cost of this ordering, stated so nobody has to rediscover it: between the
-        // merge above and this line the RPC's tip is already N while the index does not yet hold
-        // N. Both readings are fail-closed — a query for N-1 needs N's records and gets "no state
-        // history recorded for that block", and a query for N answers from the current state via
-        // the `block >= tip` arm, which is correct. And a throw AFTER this line (there is none
-        // today) would leave at most one block published but not committed, which
-        // historyCoversBlock refuses and a restart rebuild repairs from the shard rows.
+        // (A re-stage is not a no-op repeat: it re-reads the pre-images from a committed plane
+        // that now holds N's POST-state, so the second attempt records N's own values as N's
+        // pre-images. The rows it writes are wrong. That is one more reason the retry must be
+        // refused by the already-committed gate rather than reached — the ordering below is what
+        // guarantees it is.)
+        //
+        // The cost of this ordering is the publish window opened before the merge: from the merge
+        // to this line the RPC's tip is already N while the index does not hold N, and readers
+        // resolving "unchanged since B" would otherwise read N's value off the committed plane.
+        // They cannot: readAt refuses to conclude "unchanged" while the window is open, and
+        // readAtOrCurrent re-checks the generation across its current-value read, so such a query
+        // retries and — if the window never closes — refuses. A query for N itself still answers
+        // from the current state via the `block >= tip` arm, which is correct. And a throw AFTER
+        // this line (there is none today) would leave at most one block published but not
+        // committed, which historyCoversBlock refuses and a restart rebuild repairs.
         if (historyStage)
         {
             ledger::mpt::history::publishBlockHistory(*m_mptHistory, std::move(*historyStage));

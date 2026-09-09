@@ -458,6 +458,11 @@ public:
     /// Wiring time only, after the Initializer has rebuilt the indexes. The SAME object the RPC
     /// layer holds: the in-memory index is derived data, and two copies of it would mean one that
     /// commits keep current and one that silently goes stale.
+    ///
+    /// No production caller yet — OpScheduler is constructed only by its tests today. Whoever
+    /// wires it into a node must call this, or the scheduler runs at depths {0, 0}: it writes no
+    /// history and refuses every historical query. That is fail-closed rather than wrong, but it
+    /// is silent, so it is stated here.
     void setMPTHistory(std::shared_ptr<bcos::ledger::mpt::history::MPTHistory> history)
     {
         m_mptHistory = std::move(history);
@@ -939,6 +944,17 @@ private:
                     << historyStage->report.trieEntries << " | expired state keys "
                     << historyStage->report.stateExpired.keyCount << " | expired trie keys "
                     << historyStage->report.trieExpired.keyCount;
+            }
+
+            // From here until the publish below, DISK is ahead of the INDEX: the merge lands this
+            // block's rows while the index does not yet know the block exists, and a historical
+            // query resolving "unchanged since B" off the committed plane in that window would
+            // get the new value under an old block's number. Announced on both stores and held by
+            // RAII, so no early return or throw leaves it open (HistoryCommit.h::PublishWindow).
+            std::optional<ledger::mpt::history::PublishWindow> publishWindow;
+            if (historyStage)
+            {
+                publishWindow.emplace(*m_mptHistory);
             }
 
             // Single merge: all-or-nothing.
