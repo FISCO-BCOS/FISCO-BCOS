@@ -395,17 +395,62 @@ task::Task<HistoryCommitStage> stageBlockHistory(Backend& backend, Batch& batch,
     co_return stage;
 }
 
+/// Hold both enabled stores' publish windows open for the stretch where DISK is ahead of the
+/// INDEX (HistoryIndex.h::openPublishWindow).
+///
+/// Opened immediately before the merge and closed by publishBlockHistory, or by this destructor
+/// on any path that does not get there. Leaving a window open would make every later
+/// "unchanged since B" query retry and then refuse, so the guard exists precisely so that no
+/// early return, no throw and no forgotten branch can do that.
+///
+/// Both stores are opened even when only one is enabled: an un-staged store's window is closed by
+/// this destructor either way, and gating the open on the depth would put a second copy of "is
+/// this store enabled" here.
+class PublishWindow
+{
+public:
+    explicit PublishWindow(MPTHistory& history) noexcept : m_history(std::addressof(history))
+    {
+        m_history->state().openPublishWindow();
+        m_history->trie().openPublishWindow();
+    }
+    PublishWindow(PublishWindow const&) = delete;
+    PublishWindow& operator=(PublishWindow const&) = delete;
+    PublishWindow(PublishWindow&&) = delete;
+    PublishWindow& operator=(PublishWindow&&) = delete;
+    ~PublishWindow() noexcept { close(); }
+
+    /// Idempotent: publishBlockHistory closes each store's window as it publishes it, and the
+    /// destructor then finds nothing left to do.
+    void close() noexcept
+    {
+        m_history->state().closePublishWindow();
+        m_history->trie().closePublishWindow();
+    }
+
+private:
+    MPTHistory* m_history;
+};
+
 /// Apply to the two in-memory indexes what @p stage already wrote to disk (G9, second half).
 ///
 /// Call site discipline, and it is the whole point of the split: this runs AFTER the block's
-/// WriteBatch has been merged and BEFORE the committed block number advances. Earlier, and a
-/// failed merge leaves the index describing rows that do not exist; later, and a reader admitted
-/// by the new tip would miss this block's versions and read that miss as "the key never changed".
+/// WriteBatch has been merged, and it must be the LAST FALLIBLE STEP before the committed block
+/// number advances — not merely somewhere before it.
+///
+/// Earlier than the merge, a failed merge leaves the index describing rows that do not exist.
+/// Later than the advance, a reader admitted by the new tip would miss this block's versions and
+/// read that miss as "the key never changed". And anything fallible BETWEEN this call and the
+/// advance re-opens the worst case: a commit that publishes and then throws leaves the height
+/// uncommitted, PBFT re-drives it, and the retry publishes block N a second time — which
+/// HistoryIndex refuses as out-of-order, latching itself Unavailable and wedging both the
+/// historical reads and the height. Both schedulers therefore call this immediately above the
+/// line that advances their committed block number, with nothing in between.
 ///
 /// Not a coroutine and not fallible in the ordinary sense: publishing is pure memory under each
 /// index's own unique lock. If it does throw (allocation, or the ascending-order invariant),
-/// HistoryIndex latches itself Unavailable and rethrows — every later query then refuses instead
-/// of answering from a half-applied index.
+/// HistoryIndex latches itself Unavailable, closes its publish window and rethrows — every later
+/// query then refuses instead of answering from a half-applied index.
 inline void publishBlockHistory(MPTHistory& history, HistoryCommitStage&& stage)
 {
     if (stage.state.staged)
@@ -418,6 +463,11 @@ inline void publishBlockHistory(MPTHistory& history, HistoryCommitStage&& stage)
         history.trie().publish(std::move(*stage.trie.staged), std::move(stage.trie.retired),
             stage.trie.boundaryWritten);
     }
+    // A store with nothing staged (depth 0) still had its window opened by the guard, and
+    // publish() is what would otherwise close it. Closing is idempotent, so this is also the
+    // whole of the guard's work on the success path.
+    history.state().closePublishWindow();
+    history.trie().closePublishWindow();
 }
 
 }  // namespace bcos::ledger::mpt::history

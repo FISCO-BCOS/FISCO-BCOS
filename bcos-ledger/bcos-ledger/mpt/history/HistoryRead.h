@@ -30,10 +30,14 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
+#include <concepts>
 #include <memory>
 #include <optional>
 #include <range/v3/range/concepts.hpp>
 #include <stdexcept>
+#include <string_view>
+#include <thread>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -46,6 +50,10 @@ namespace bcos::ledger::mpt::history
 /// physical form a row is recorded under is written down once (historyKeyOf) and both the capture
 /// and the query go through it.
 ///
+/// Returns the raw three-way answer, HistoryUseCurrent included — so a caller that acts on that
+/// arm must go through readStateAtOrCurrent below instead, which is the only place allowed to
+/// turn "unchanged since B" into an actual value.
+///
 /// @param store the node's ONE state-history store — the object that owns the in-memory index the
 ///        lookup runs against (MPTHistory::state()). Passing the store rather than constructing
 ///        one is not a style choice: a second instance would have its own empty index and would
@@ -57,13 +65,122 @@ namespace bcos::ledger::mpt::history
 /// @throws HistoryPruned when @p block predates the retained window — the caller must surface
 ///         that, never fall back to the current value (G6).
 /// @throws HistoryIndexUnavailable when the index was never rebuilt or a rebuild failed.
-template <QueryableStateStorage Backend>
+template <ReadableStateStorage Backend>
 [[nodiscard]] task::Task<ReadAtResult> readStateAt(StateHistoryStore const& store, Backend& backend,
     executor_v1::StateKeyView const& key, protocol::BlockNumber block, protocol::BlockNumber tip,
     protocol::BlockNumber depth)
 {
     executor_v1::StateKey const rowKey{key};
     co_return co_await store.readAt(backend, historyKeyOf(rowKey), block, tip, depth);
+}
+
+namespace detail
+{
+/// A recorded pre-image is `bcos::bytes`; the plane it is being returned alongside speaks either
+/// `bcos::bytes` (trie nodes) or `storage::Entry` (flat state rows). One conversion, chosen at
+/// compile time, so readAtOrCurrent can hand back the same type on both of its arms.
+template <class Value>
+Value valueFromRecorded(bcos::bytes&& recorded)
+{
+    if constexpr (std::constructible_from<Value, bcos::bytes&&>)
+    {
+        return Value(std::move(recorded));
+    }
+    else
+    {
+        return Value(
+            std::string_view{reinterpret_cast<char const*>(recorded.data()), recorded.size()});
+    }
+}
+}  // namespace detail
+
+/// One historical read, end to end: the recorded pre-image if there is one, the current value if
+/// the key has not changed since — and never the current value when a commit could have moved it
+/// underneath the query.
+///
+/// This is the ONE place allowed to act on `HistoryUseCurrent`, and every caller goes through it
+/// (EthEndpoint's historicalStateRow, HistoricalStateBackend::resolveHistoricalRow,
+/// HistoricalNodeStorage::readOne). The reason is a race that no lock inside the index can close:
+///
+///   the commit path merges block N's rows to disk, and only afterwards publishes N to the index.
+///   In between — and again for the instant between a reader's `locate` and its own read of the
+///   current value — the disk holds N's new value while the index does not know N exists. A query
+///   for any B < N-1 passes admission, misses the index, reads the current value and gets N's
+///   bytes labelled B.
+///
+/// The generation counter is what makes that observable: readAt returns the (even) generation it
+/// resolved "unchanged" at, and this function re-reads it after the current-value read. Equal
+/// means nothing published in between and the value really is block B's. Different, or odd, means
+/// the read may be from a plane that is ahead of the index, so the whole thing is recomputed —
+/// and after a bounded number of attempts refused, because answering is the one thing that must
+/// not happen.
+///
+/// @param currentReader an awaitable-returning callable with no arguments that reads the key's
+///        value from the CURRENT committed plane and yields `std::optional<Value>`. It is invoked
+///        only on the UseCurrent arm, so a query whose key does have a recorded pre-image never
+///        touches the current plane at all. Its `Value` is what this function returns, and it is
+///        built from the recorded bytes on the other arm.
+/// @throws whatever readAt throws, plus HistoryIndexUnavailable when the retry budget is spent.
+template <class Store, class Backend, class CurrentReader>
+[[nodiscard]] auto readAtOrCurrent(Store const& store, Backend& backend,
+    std::span<const bcos::byte> key, protocol::BlockNumber block, protocol::BlockNumber tip,
+    protocol::BlockNumber depth, CurrentReader&& currentReader)
+    -> task::Task<task::AwaitableReturnType<std::invoke_result_t<CurrentReader&>>>
+{
+    using CurrentResult = task::AwaitableReturnType<std::invoke_result_t<CurrentReader&>>;
+    using Value = typename CurrentResult::value_type;
+    // The same budget readAt uses for the window itself: enough that only a commit which died
+    // mid-publish can exhaust it.
+    constexpr std::size_t kGenerationRetryBudget = 4096;
+
+    for (std::size_t attempt = 0;; ++attempt)
+    {
+        auto version = co_await store.readAt(backend, key, block, tip, depth);
+        if (auto* recorded = std::get_if<bcos::bytes>(std::addressof(version)))
+        {
+            co_return CurrentResult{detail::valueFromRecorded<Value>(std::move(*recorded))};
+        }
+        if (std::holds_alternative<HistoryAbsent>(version))
+        {
+            co_return std::nullopt;
+        }
+
+        auto const& useCurrent = std::get<HistoryUseCurrent>(version);
+        auto current = co_await currentReader();
+        // The whole point: the value above was read from a plane the index does not control, so
+        // it is only block @p block's value if no commit published while it was being read.
+        auto const after = store.index().generation();
+        if (after == useCurrent.generation && (after % 2) == 0)
+        {
+            co_return current;
+        }
+        if (attempt >= kGenerationRetryBudget)
+        {
+            BOOST_THROW_EXCEPTION(
+                HistoryIndexUnavailable() << bcos::errinfo_comment(
+                    "commits kept publishing while this historical read was resolving an "
+                    "unchanged-since value; refusing rather than answering from a plane that may "
+                    "be ahead of the index"));
+        }
+        std::this_thread::yield();
+    }
+}
+
+/// What the flat state row @p key held at block @p block, current-value arm included and proved
+/// (readAtOrCurrent). This is what the state-side callers use; `readStateAt` above is the raw
+/// three-way answer, for callers that need to distinguish the arms themselves.
+///
+/// The current value is read from @p backend, which is the same committed plane the window
+/// guard's @p tip describes — a pending, not-yet-committed block must not leak into a historical
+/// answer, and a committed one must not either unless the index already knows about it.
+template <ReadableStateStorage Backend>
+[[nodiscard]] task::Task<std::optional<executor_v1::StateValue>> readStateAtOrCurrent(
+    StateHistoryStore const& store, Backend& backend, executor_v1::StateKeyView const& key,
+    protocol::BlockNumber block, protocol::BlockNumber tip, protocol::BlockNumber depth)
+{
+    executor_v1::StateKey const rowKey{key};
+    co_return co_await readAtOrCurrent(store, backend, historyKeyOf(rowKey), block, tip, depth,
+        [&backend, &rowKey]() { return storage2::readOne(backend, rowKey); });
 }
 
 /// Read-only façade over the plane the history rows live in, so it can be type-erased.
@@ -162,13 +279,19 @@ makeHistoryReader(Storage& storage)
 ///     change after B, so that block's records are the necessary condition. On a scenario-A chain
 ///     this is what rules out every pre-activation height. -> false.
 ///
-/// Call it ONCE per query, before the per-key reads; readAt's own guard is the other half and
-/// neither replaces the other. Nothing is re-checked afterwards, and nothing needs to be: an
-/// expiry landing mid-query moves the index boundary under the same lock readAt's `locate` takes,
-/// so a version located after it is either still there or reported as HistoryPruned by readAt
-/// itself — the fall-through-to-current-value hole the old double boundary read was guarding is
-/// closed inside the store. A hole in the MIDDLE of the window is invisible to both — spec §13
-/// assigns range continuity to the audit, and that is where a complete answer belongs.
+/// Call it ONCE per query, before the per-key reads. It is an ADMISSION check and nothing more:
+/// it says this node recorded the era and still retains it, at the instant it is asked. Two other
+/// mechanisms cover what happens afterwards, and neither is replaceable by re-running this one:
+///
+///  - an expiry landing mid-query moves the index boundary under the same lock readAt's `locate`
+///    takes, so a version located after it is either still there or reported as HistoryPruned by
+///    readAt itself;
+///  - a COMMIT landing mid-query would leave the disk ahead of the index, which is what the
+///    publish generation and readAtOrCurrent above exist for — this check cannot see it, because
+///    the wrong value would come from the current plane rather than from the index.
+///
+/// A hole in the MIDDLE of the window is invisible to all of them — spec §13 assigns range
+/// continuity to the audit, and that is where a complete answer belongs.
 ///
 /// @throws HistoryPruned when @p block is below the store's retention boundary.
 /// @throws HistoryIndexUnavailable when the store's index is unusable.
@@ -256,17 +379,11 @@ public:
     task::Task<std::optional<bcos::bytes>> readOne(PathKey const& key)
     {
         executor_v1::StateKey const rowKey = pathNodeStateKey(key);
-        auto version =
-            co_await m_store->readAt(*m_backend, historyKeyOf(rowKey), m_block, m_tip, m_depth);
-        if (auto* recorded = std::get_if<bcos::bytes>(std::addressof(version)))
-        {
-            co_return std::move(*recorded);
-        }
-        if (std::holds_alternative<HistoryAbsent>(version))
-        {
-            co_return std::nullopt;
-        }
-        co_return co_await bcos::storage2::readOne(*m_current, key);
+        // Through readAtOrCurrent, not readAt: the "this position has not changed since B" arm
+        // ends in a read of the CURRENT node row, and that read has to be proved not to have
+        // crossed a commit (see readAtOrCurrent).
+        co_return co_await readAtOrCurrent(*m_store, *m_backend, historyKeyOf(rowKey), m_block,
+            m_tip, m_depth, [this, &key]() { return bcos::storage2::readOne(*m_current, key); });
     }
 
     task::Task<std::vector<std::optional<bcos::bytes>>> readSome(::ranges::input_range auto keys)

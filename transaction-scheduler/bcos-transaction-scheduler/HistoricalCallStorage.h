@@ -236,21 +236,15 @@ private:
     task::Task<storage2::StorageValueType<Value>> resolveHistoricalRow(
         executor_v1::StateKeyView const& keyView)
     {
-        auto version = co_await ledger::mpt::history::readStateAt(
+        // readStateAtOrCurrent, not readStateAt: on the "nothing changed the row after the queried
+        // block" arm the answer is the committed CURRENT value, and that read has to be proved
+        // not to have crossed a commit. Between a block's merge and its publish the committed
+        // plane already holds that block's value while the index does not know it exists, so a
+        // bare current read there would hand back the new value under the old block's number
+        // (HistoryRead.h::readAtOrCurrent). The plane is the same one the window guard's tip
+        // describes, so a pending block's write cannot leak in either.
+        auto current = co_await ledger::mpt::history::readStateAtOrCurrent(
             *m_store, *m_history, keyView, m_blockNumber, m_tip, m_depth);
-        if (auto* recorded = std::get_if<bcos::bytes>(std::addressof(version)))
-        {
-            co_return storage::Entry{std::string_view{
-                reinterpret_cast<char const*>(recorded->data()), recorded->size()}};
-        }
-        if (std::holds_alternative<ledger::mpt::history::HistoryAbsent>(version))
-        {
-            co_return storage2::NOT_EXISTS_TYPE{};
-        }
-        // HistoryUseCurrent: nothing changed the row after the queried block, so the committed
-        // current value IS the value at that block. Read it from the SAME plane the window
-        // guard's tip describes — a pending block's write must not leak into a historical read.
-        auto current = co_await storage2::readOne(*m_history, executor_v1::StateKey{keyView});
         if (!current)
         {
             co_return storage2::NOT_EXISTS_TYPE{};

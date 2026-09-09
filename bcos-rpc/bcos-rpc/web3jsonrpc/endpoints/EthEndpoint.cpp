@@ -249,10 +249,15 @@ bcos::task::Task<std::optional<std::string>> historicalStateRow(
     HistoricalStateContext const& context, std::string_view table, std::string_view rowKey)
 {
     executor_v1::StateKeyView const keyView{table, rowKey};
-    ledger::mpt::history::ReadAtResult version;
+    std::optional<executor_v1::StateValue> value;
     try
     {
-        version = co_await ledger::mpt::history::readStateAt(context.history->state(),
+        // readStateAtOrCurrent, not readStateAt: the "unchanged since B" arm ends in a read of
+        // the CURRENT committed row, and between a block's merge and its publish that plane is
+        // ahead of the index — a bare read there answers with the newer block's bytes under the
+        // requested block's number. The helper proves no commit crossed the read, and refuses
+        // rather than answering when one did (HistoryRead.h::readAtOrCurrent).
+        value = co_await ledger::mpt::history::readStateAtOrCurrent(context.history->state(),
             *context.history->backend(), keyView, context.block, context.tip, context.depth);
     }
     catch (ledger::mpt::history::HistoryPruned const&)
@@ -263,27 +268,20 @@ bcos::task::Task<std::optional<std::string>> historicalStateRow(
     }
     catch (ledger::mpt::history::HistoryIndexUnavailable const&)
     {
-        // The admission check above passed, so the index went unusable mid-request — a publish
-        // that threw. Refusing is the only reading left: a Ready answer and an Unavailable one
-        // differ exactly in whether a missing version means "unchanged" (G10).
+        // Three ways here, one answer: the admission check passed and the index then went
+        // unusable (a publish that threw), or a commit stayed mid-publish for the whole retry
+        // budget, or commits kept crossing this read. A Ready answer and an Unavailable one
+        // differ exactly in whether a missing version means "unchanged" (G10), so refusing is
+        // the only reading left.
         BOOST_THROW_EXCEPTION(JsonRpcException(EthHistoricalStateUnavailable,
-            "history index unavailable on this node (rebuild failed); see node log"));
+            "history index unavailable on this node (rebuild failed, or a commit is publishing); "
+            "see node log"));
     }
-    if (auto* recorded = std::get_if<bcos::bytes>(std::addressof(version)))
-    {
-        co_return std::string(recorded->begin(), recorded->end());
-    }
-    if (std::holds_alternative<ledger::mpt::history::HistoryAbsent>(version))
+    if (!value)
     {
         co_return std::nullopt;
     }
-    auto const current = co_await bcos::storage2::readOne(
-        *context.history->backend(), executor_v1::StateKey{keyView});
-    if (!current)
-    {
-        co_return std::nullopt;
-    }
-    co_return std::string(current->get());
+    co_return std::string(value->get());
 }
 
 /// The account table a historical state read must look in — or a refusal, when there is none.

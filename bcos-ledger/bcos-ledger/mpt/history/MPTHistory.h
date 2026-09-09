@@ -51,25 +51,33 @@ namespace bcos::ledger::mpt::history
 /// **What retaining history costs**, so an operator can derive the number for their own chain
 /// rather than guess it. Per MPT block, per store whose depth is > 0:
 ///
-///  - one `readSome` over exactly the rows that block changed — the state store's only extra
-///    READ, and the trie store's is zero (the builder already read every node it overwrote);
-///  - written into the block's own WriteBatch, so they cost no extra Write: one Meta row (41
-///    bytes), `ceil(diff bytes / 64 KiB)` shard rows carrying the pre-images, the boundary row
-///    when this block seeds or advances it, and the `shardCount + 1` deletes of the block leaving
-///    the window.
+/// READS (HistoryCommit.h::stageOneStore):
+///
+///  - one point read of the store's retention-boundary row, every block, both stores;
+///  - one `readSome` over exactly the rows that block changed — the STATE store's second extra
+///    read. The trie store has none here, because the builder already read every node it
+///    overwrote and hands the pre-images over in the PathDiff;
+///  - once the chain is deeper than the window, `expire`'s walk of the block leaving it: one seek
+///    plus `shardCount + 1` rows, per store. This is not zero for the trie store either.
+///
+/// WRITES, all into the block's own WriteBatch, so they cost no extra Write: one Meta row (41
+/// bytes), `ceil(diff bytes / 64 KiB)` shard rows carrying the pre-images, the boundary row when
+/// this block seeds or advances it, and the `shardCount + 1` deletes of the block leaving the
+/// window.
 ///
 /// So the on-disk footprint is roughly `depth × (one block's changed rows, key + old value)` per
-/// store, and the per-block write amplification does NOT grow with the depth — raising it costs
-/// disk, not commit latency.
+/// store, and neither the per-block read count nor the write amplification grows with the depth —
+/// raising it costs disk, not commit latency.
 ///
 /// At startup, one synchronous walk of each enabled store's shard table (`rebuild` below), which
 /// reads that same footprint once.
 ///
-/// In RAM, the index is `Σ over retained blocks of (changed keys × (key bytes + 12 B + container
-/// overhead))` — 12 bytes is `HistoryVersion`, the key bytes are the row's physical
-/// `"<table>:<rowKey>"` form, and the overhead is one `unordered_map` node per DISTINCT key plus
-/// one `vector` slot per version. A hot key costs its bytes once and 12 bytes per block that
-/// touched it; a cold key costs its bytes plus 12.
+/// In RAM, the index is `Σ over retained blocks of (changed keys × (key bytes + 16 B + container
+/// overhead))` — 16 bytes is `sizeof(HistoryVersion)` (8 + 2 + 2 padding + 4, static_asserted at
+/// its definition), the key bytes are the row's physical `"<table>:<rowKey>"` form, and the
+/// overhead is one `unordered_map` node per DISTINCT key plus one `vector` slot per version. A
+/// hot key costs its bytes once and 16 bytes per block that touched it; a cold key costs its
+/// bytes plus 16.
 class MPTHistory
 {
 public:
