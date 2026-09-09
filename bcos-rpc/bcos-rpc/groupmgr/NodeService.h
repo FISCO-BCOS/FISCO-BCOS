@@ -34,16 +34,25 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tars-protocol/client/LedgerServiceClient.h>
+#include <bcos-tx-validator/CheckSet.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <functional>
 #include <servant/Application.h>
+#include <functional>
 #include <utility>
 
 namespace bcos::txpool
 {
 class MemPoolImpl;
 }  // namespace bcos::txpool
+
+/// Forward-declared: this header only holds a shared_ptr to it (whose deleter is type-erased at
+/// construction) and the context enum above. Including the whole validator would pull the
+/// scheduler, ledger and nonce-checker headers into every translation unit that links rpc.
+namespace bcos::txvalidator
+{
+class TxValidator;
+}  // namespace bcos::txvalidator
 
 namespace bcos::rpc
 {
@@ -89,6 +98,24 @@ public:
     void setMemPool(bcos::txpool::MemPoolImpl& _memPool) noexcept { m_memPool = &_memPool; }
     bool memPoolAvailable() const noexcept { return m_memPool != nullptr; }
     bcos::txpool::MemPoolImpl* memPool() const noexcept { return m_memPool; }
+
+    /// Admission for the mempool path, set by the same wiring that sets the mempool above. The
+    /// txpool path does not read it: a transaction going to the txpool is judged by the
+    /// validator that pool owns, through submitTransaction.
+    ///
+    /// @param context PoolAdmission, or EESTReplay when [executor] eest_replay_mode is on --
+    /// the context selects a column of the routing table and nothing else.
+    void setAdmissionValidator(std::shared_ptr<txvalidator::TxValidator> _validator,
+        txvalidator::AdmissionContext _context) noexcept
+    {
+        m_admissionValidator = std::move(_validator);
+        m_admissionContext = _context;
+    }
+    std::shared_ptr<txvalidator::TxValidator> const& admissionValidator() const noexcept
+    {
+        return m_admissionValidator;
+    }
+    txvalidator::AdmissionContext admissionContext() const noexcept { return m_admissionContext; }
 
     /// Type-erased read handle over the MPT node storage for eth_getProof (M8.3): key = node
     /// hash, value = the node's raw RLP encoding, physically stored as ordinary state rows —
@@ -177,6 +204,11 @@ private:
 
     /// Raw pointer to the single-node-consensus mempool (see setMemPool for lifetime).
     bcos::txpool::MemPoolImpl* m_memPool = nullptr;
+
+    /// Shared, unlike the mempool above: the validator is built for this path alone and nothing
+    /// else keeps it alive. Null until set, which is every mode that has no mempool.
+    std::shared_ptr<txvalidator::TxValidator> m_admissionValidator;
+    txvalidator::AdmissionContext m_admissionContext = txvalidator::AdmissionContext::PoolAdmission;
 
     bcostars::LedgerServicePrx m_ledgerPrx;
 };

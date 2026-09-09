@@ -43,22 +43,24 @@ bcos::txpool::TransactionData::TransactionData(protocol::Transaction::Ptr transa
         return nonce;
     }())
 {}
-void bcos::txpool::MemPoolImpl::add(protocol::Transaction::Ptr transaction)
+/// The shared body of add() and tryAdd(). The caller holds m_mutex; the lookup and the insert
+/// are one step under it, which is what makes tryAdd's reservation atomic.
+///
+/// @param transaction non-null, checked by both entries -- they answer a null differently.
+bcos::protocol::TransactionStatus bcos::txpool::MemPoolImpl::insertLocked(
+    protocol::Transaction::Ptr transaction, OnTakenNonce onTakenNonce)
 {
-    if (!transaction) [[unlikely]]
-    {
-        return;
-    }
+    using bcos::protocol::TransactionStatus;
 
     if (transaction->tainted()) [[unlikely]]
     {
         bcos::throwTrace(InvalidTaintedTransaction{});
     }
 
-    // L2 never admits blob (type-3) transactions (OP Stack, Ecotone onwards). The RPC
-    // entry rejects them before decoding; this is the second gate for in-process callers.
-    // For Web3 transactions the signing payload (extraTransactionBytes) starts with the
-    // same EIP-2718 type byte as the raw envelope, so the shared dispatch table applies.
+    // L2 never admits blob (type-3) transactions (OP Stack, Ecotone onwards). The RPC entry
+    // rejects them before decoding; this is the second gate for in-process callers. For Web3
+    // transactions the signing payload (extraTransactionBytes) starts with the same EIP-2718
+    // type byte as the raw envelope, so the shared dispatch table applies.
     if (transaction->type() ==
             static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction) &&
         bcos::engine::dispatchRawTransaction(transaction->extraTransactionBytes()) ==
@@ -77,34 +79,64 @@ void bcos::txpool::MemPoolImpl::add(protocol::Transaction::Ptr transaction)
     }
     catch (std::exception const& e)
     {
-        MEMPOOL_LOG(WARNING) << LOG_DESC("MemPoolImpl::add: get hash failed, skip")
+        // A transaction whose hash cannot be computed cannot be stored under one, and a caller
+        // has nothing to poll for.
+        MEMPOOL_LOG(WARNING) << LOG_DESC("MemPoolImpl: get hash failed, skip")
                              << LOG_KV("reason", boost::diagnostic_information(e));
-        return;
+        return TransactionStatus::Malformed;
     }
 
-    if (auto it = hashIndex.find(hash); it != hashIndex.end())
+    if (hashIndex.find(hash) != hashIndex.end())
     {
-        return;
+        return TransactionStatus::AlreadyInTxPool;
     }
 
     try
     {
         TransactionData transactionData{std::move(transaction)};
-        if (auto it = nonceIndex.lower_bound(
-                std::make_tuple(transactionData.sender(), transactionData.nonce()));
-            it != nonceIndex.end() && it->sender() == transactionData.sender() &&
-            it->nonce() == transactionData.nonce())
+        auto const position = nonceIndex.lower_bound(
+            std::make_tuple(transactionData.sender(), transactionData.nonce()));
+        if (position != nonceIndex.end() && position->sender() == transactionData.sender() &&
+            position->nonce() == transactionData.nonce())
         {
-            nonceIndex.replace(it, std::move(transactionData));
+            if (onTakenNonce == OnTakenNonce::Refuse)
+            {
+                return TransactionStatus::NonceCheckFail;
+            }
+            nonceIndex.replace(position, std::move(transactionData));
+            return TransactionStatus::None;
         }
-        else
-        {
-            nonceIndex.emplace_hint(it, std::move(transactionData));
-        }
+        nonceIndex.emplace_hint(position, std::move(transactionData));
     }
     catch (InvalidNonce const& e)
     {
-        MEMPOOL_LOG(WARNING) << LOG_DESC("MemPoolImpl::add: invalid nonce, skip")
+        // TransactionData's constructor parses the nonce; one it cannot read is not a nonce this
+        // pool can order by.
+        MEMPOOL_LOG(WARNING) << LOG_DESC("MemPoolImpl: invalid nonce, skip")
                              << LOG_KV("reason", boost::diagnostic_information(e));
+        return TransactionStatus::NonceCheckFail;
     }
+    return TransactionStatus::None;
+}
+
+bcos::protocol::TransactionStatus bcos::txpool::MemPoolImpl::tryAdd(
+    protocol::Transaction::Ptr transaction)
+{
+    if (!transaction) [[unlikely]]
+    {
+        bcos::throwTrace(NullTransaction{});
+    }
+    std::unique_lock lock(m_mutex);
+    return insertLocked(std::move(transaction), OnTakenNonce::Refuse);
+}
+
+void bcos::txpool::MemPoolImpl::add(protocol::Transaction::Ptr transaction)
+{
+    if (!transaction) [[unlikely]]
+    {
+        return;
+    }
+    // The status is what tryAdd() exists to report; this entry drops it, which is the whole of
+    // the difference between them once the taken-nonce policy is a parameter.
+    (void)insertLocked(std::move(transaction), OnTakenNonce::Replace);
 }

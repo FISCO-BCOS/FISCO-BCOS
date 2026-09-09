@@ -77,6 +77,7 @@
 #include <bcos-transaction-executor/precompiled/PrecompiledManager.h>
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
+#include <bcos-txpool/txpool/utilities/SystemTransaction.h>
 #include <legacy/bcos-storage/StorageWrapperImpl.h>
 #include <rocksdb/slice.h>
 #include <rocksdb/sst_file_reader.h>
@@ -437,7 +438,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                parallelScheduler, transactionExecutor, m_memPoolInitializer->memPool(), ledger);
+                parallelScheduler, transactionExecutor, m_memPoolInitializer->memPool(), ledger,
+                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState);
         }
 
         // executor_version=2: a dedicated pipeline instance for the EthereumExecutor baseline
@@ -471,7 +473,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger);
+                ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger,
+                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState);
         }
     }
     else
@@ -486,7 +489,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                serialScheduler, transactionExecutor, m_memPoolInitializer->memPool(), ledger);
+                serialScheduler, transactionExecutor, m_memPoolInitializer->memPool(), ledger,
+                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState);
         }
 
         // executor_version=2 baseline scheduler, driven by a dedicated serial pipeline.
@@ -504,7 +508,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger);
+                ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger,
+                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState);
         }
     }
 
@@ -709,6 +714,25 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         INITIALIZER_LOG(INFO) << LOG_DESC(
             "EngineDrivenBlockProduction: skip txpool/pbft/sealer init (block production via "
             "EngineService + mempool; driver = single-node consensus or external op-node)");
+
+        // Admission for the mempool path. Built here and not in the txpool initializer because
+        // in this mode there is no txpool: the RPC entry judges a transaction against this
+        // validator and then reserves its (sender, nonce) with MemPoolImpl::tryAdd.
+        //
+        // No pool nonce checker: those two checks are the BCOS transaction's replay protection,
+        // and this mode carries Web3 transactions only. The Web3 nonce checker IS needed -- the
+        // account nonce comes through its cache -- but nothing here calls updateNonceCache,
+        // which is the txpool's commit-time hook, so that cache is only ever raised by its own
+        // storage misses. The effect is a lower bound that can lag behind the chain: a
+        // transaction reusing an already-executed nonce is admitted here and refused at
+        // execution. That is where it is refused today too, since this path currently checks no
+        // nonce at all.
+        auto web3NonceChecker = std::make_shared<bcos::txvalidator::Web3NonceChecker>(m_ledger);
+        m_memPoolValidator = std::make_shared<bcos::txvalidator::TxValidator>(
+            m_protocolInitializer->cryptoSuite(), m_ledger, m_ledgerConfigState,
+            /*txPoolNonceChecker=*/nullptr, std::move(web3NonceChecker),
+            &bcos::txpool::isSystemTransaction, m_nodeConfig->groupId(), m_nodeConfig->chainId());
+        m_memPoolValidator->setScheduler(m_scheduler);
     }
 
     // init the frontService

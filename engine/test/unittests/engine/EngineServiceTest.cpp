@@ -436,10 +436,12 @@ public:
 };
 
 TestEngineServiceImpl makeCommittingEngineServiceImpl(MemPoolImpl& memPool,
-    RealGlobalStateStorage& storage, bcos::ledger::LedgerInterface::Ptr ledger)
+    RealGlobalStateStorage& storage, bcos::ledger::LedgerInterface::Ptr ledger,
+    bcos::ledger::LedgerConfigState::Ptr ledgerConfigState = nullptr)
 {
     return TestEngineServiceImpl(memPool, storage, sharedStubExecutor(), sharedStubScheduler(),
-        testBlockFactory(), std::move(ledger));
+        testBlockFactory(), std::move(ledger), bcos::engine::c_defaultBlockTxCountLimit,
+        std::move(ledgerConfigState));
 }
 
 /// Reads the block header the commit persisted, the way eth_getBlockByNumber reaches it
@@ -1698,6 +1700,45 @@ BOOST_AUTO_TEST_CASE(committed_header_carries_the_same_jovian_extra_data_as_the_
         toHexStringWithPrefix(payload->executionPayload.extraData));
     BOOST_CHECK_EQUAL(
         toHexStringWithPrefix(persisted->extraData()), "0x01000000fa000000060000000000000000");
+}
+
+// Transaction admission judges against a published configuration snapshot, and in this mode
+// nothing else republishes it: MultiVersionScheduler is the hook for the txpool/consensus path,
+// and block production here does not go through it. Left unpublished, the snapshot keeps the
+// block number the node booted with, and the EVM revision admission derives from it freezes
+// there too -- past a fork activation the pool would start refusing transaction types execution
+// accepts.
+//
+// The publish happens where the configuration is already read, which is the payload build, so
+// this case only has to get as far as getPayload.
+BOOST_AUTO_TEST_CASE(buildingAPayloadRepublishesTheLedgerConfiguration)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto payloadAttributes = makeKarstPayloadAttributes();
+    payloadAttributes.eip1559Params = bytes(8, 0);
+    payloadAttributes.minBaseFee = 0;
+
+    // Empty, as a holder is between construction and the first publish.
+    auto ledgerConfigState = std::make_shared<bcos::ledger::LedgerConfigState>();
+    auto const before = ledgerConfigState->get();
+    auto engineService = makeCommittingEngineServiceImpl(
+        memPool, globalStateStorageFixture.storage, nullptr, ledgerConfigState);
+
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    BOOST_REQUIRE(task::syncWait(engineService.getPayload(*result.payloadId, 3)));
+
+    auto const after = ledgerConfigState->get();
+    BOOST_REQUIRE(after);
+    BOOST_CHECK(after != before);
+    // The parent's number: admission asks for the revision of blockNumber + 1, which is the
+    // block just built.
+    BOOST_CHECK_EQUAL(after->blockNumber(), c_initialBlockNumber);
 }
 
 // A CL that alters the extraData of a payload this node built, while keeping the

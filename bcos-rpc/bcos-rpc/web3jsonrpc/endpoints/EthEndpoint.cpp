@@ -38,7 +38,6 @@
 #include <bcos-ledger/mpt/Proof.h>
 #include <bcos-ledger/mpt/StorageValueCodec.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
-#include <bcos-rlp-protocol/Web3TxEnvelope.h>  // isTypedWeb3Envelope (envelope-sourced chainId gate)
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/util.h>
 #include <bcos-rpc/web3jsonrpc/model/BlockResponse.h>
@@ -47,6 +46,7 @@
 #include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <bcos-tx-validator/TxValidator.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
@@ -784,77 +784,34 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     // txpool and P2P broadcast. EngineService seals these txs into blocks on a timer.
     if (auto* memPool = m_nodeService->memPool()) [[unlikely]]
     {
-        // The mempool path bypasses TxValidator, so admission here is deliberately lighter
-        // than the txpool path: signature + EIP-155 chainId are checked below; web3 nonce,
-        // ledger nonce/blockLimit, EIP-3860 initcode size and balance are NOT — the mode is
-        // aimed at single-node EEST reproduction where fixtures use arbitrary nonces and
-        // unfunded senders (MemPoolImpl::add only rejects null / tainted / duplicate-hash /
-        // unparseable-nonce transactions). ChainId IS checked because dropping it would
-        // disable EIP-155 replay protection: a transaction signed for another chain would
-        // execute here and consume the sender's nonce.
-        auto chainIdConfig = co_await ledger::getSystemConfig(
-            *m_nodeService->ledger(), ledger::SYSTEM_KEY_WEB3_CHAIN_ID);
-        if (!chainIdConfig)
+        auto validator = m_nodeService->admissionValidator();
+        if (!validator) [[unlikely]]
         {
-            // No web3_chain_id: reject anything that binds a chainId. Only Unprotected is exempt.
-            auto const classified =
-                bcos::rlp::protocol::classifyWeb3EnvelopeChainId(tx->extraTransactionBytes());
-            if (classified.kind != bcos::rlp::protocol::Web3EnvelopeChainIdKind::Unprotected)
-            {
-                WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction: web3_chain_id not configured")
-                                  << LOG_KV("txChainId", tx->chainId())
-                                  << LOG_KV("envelopeKind",
-                                         bcos::rlp::protocol::toString(classified.kind));
-                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
-            }
+            // The wiring that set the mempool sets this too. Refuse rather than admit
+            // unchecked: this branch used to carry its own chainId and signature checks, and
+            // silently dropping them is how a node ends up accepting transactions signed for
+            // another chain.
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(JsonRpcError::InternalError, "admission validator not available"));
         }
-        else
+        // Required, always: this transaction was built directly above, so m_tainted is still
+        // true and no signature has been verified. tryAdd refuses a tainted transaction, and
+        // the Signature check is what clears it.
+        if (auto status = co_await validator->verify(
+                *tx, m_nodeService->admissionContext(), txvalidator::SignaturePolicy::Required);
+            status != protocol::TransactionStatus::None)
         {
-            auto [chainIdStr, _] = chainIdConfig.value();
-            // Envelope chainId vs parseWeb3ChainId. Unprotected only is exempt.
-            auto expected = ledger::parseWeb3ChainId(chainIdStr);
-            if (!expected.has_value())
-            {
-                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
-            }
-            auto const classified =
-                bcos::rlp::protocol::classifyWeb3EnvelopeChainId(tx->extraTransactionBytes());
-            if (classified.kind == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Malformed ||
-                classified.kind == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Deposit)
-            {
-                WEB3_LOG(WARNING) << LOG_DESC(
-                                         "sendRawTransaction envelope has no comparable chainId")
-                                  << LOG_KV("txChainId", tx->chainId())
-                                  << LOG_KV("envelopeKind",
-                                         bcos::rlp::protocol::toString(classified.kind));
-                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
-            }
-            if (classified.kind == bcos::rlp::protocol::Web3EnvelopeChainIdKind::Protected &&
-                bcos::u256(classified.chainId) != *expected)
-            {
-                WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction chainId mismatch")
-                                  << LOG_KV("txChainId", tx->chainId())
-                                  << LOG_KV("nodeChainId", chainIdStr);
-                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid chainId"));
-            }
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, protocol::toString(status)));
         }
-        // The mempool rejects tainted transactions (MemPoolImpl::add throws
-        // InvalidTaintedTransaction), so recover the sender / verify the signature the same
-        // way TxValidator does for the txpool path before adding.
-        try
+        // tryAdd, not add: add() returns void and ends four different ways without saying so,
+        // and this method answers with a transaction hash as soon as it returns. It is also
+        // what reserves the (sender, nonce) pair -- checking first and adding second would let
+        // two concurrent submissions through the gap between the two calls.
+        if (auto status = memPool->tryAdd(std::move(tx));
+            status != protocol::TransactionStatus::None)
         {
-            auto cryptoSuite = m_nodeService->blockFactory()->cryptoSuite();
-            tx->verify(*cryptoSuite->hashImpl(), *cryptoSuite->signatureImpl());
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, protocol::toString(status)));
         }
-        catch (std::exception const& e)
-        {
-            WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction mempool verify failed")
-                              << LOG_KV("reason", boost::diagnostic_information(e));
-            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid transaction signature"));
-        }
-        std::vector<protocol::Transaction::Ptr> txs;
-        txs.push_back(std::move(tx));
-        memPool->add(txs);
         Json::Value result = encodeTxHash.hexPrefixed();
         buildJsonContent(result, response);
         co_return;
