@@ -16,6 +16,7 @@
  */
 
 #include "../common/RPCFixture.h"
+#include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/mpt/Constants.h>
@@ -71,7 +72,7 @@ public:
 
     Web3JsonRpcImpl::Ptr buildWeb3Rpc(std::shared_ptr<bcos::scheduler::SchedulerInterface> sched,
         protocol::BlockNumber safeDepth = 0, protocol::BlockNumber finalizedDepth = 0,
-        std::int64_t mptPruneWindow = -1)
+        std::int64_t mptPruneWindow = -1, bool withMptReader = true)
     {
         auto service = std::make_shared<rpc::NodeService>(
             m_ledger, std::move(sched), txPool, nullptr, nullptr, m_blockFactory, nullptr);
@@ -79,7 +80,12 @@ public:
         // through callAtBlock (covered in configuredDepthsRouteThroughCallAtBlock).
         service->setSafeBlockDepth(safeDepth);
         service->setFinalizedBlockDepth(finalizedDepth);
-        service->setMPTNodeReader(storage2::makeMPTNodeReader(m_stateRows));
+        // withMptReader=false simulates a node with no local MPT node reader: the historical
+        // root probe is reader-gated and the request falls through to callAtBlock untouched.
+        if (withMptReader)
+        {
+            service->setMPTNodeReader(storage2::makeMPTNodeReader(m_stateRows));
+        }
         service->setMPTPruneWindow(mptPruneWindow);
         // Give every fake block a resolvable committed root: the empty root is a legal
         // "no accounts" root and skips the row probe — the tests below exercise the probe
@@ -205,6 +211,12 @@ BOOST_AUTO_TEST_CASE(defaultImplementationKeepsLegacySchedulersWorking)
 // dispatching to callAtBlock — the scheduler never sees the request.
 BOOST_AUTO_TEST_CASE(historicalCallBeyondPruneWindowAnswers32004)
 {
+    // MPT was active at the queried block (feature_mpt_state_root), so a missing root inside
+    // the pruned region is genuinely "State pruned" — not a predates-activation misreport.
+    bcos::ledger::Features features;
+    features.set(bcos::ledger::Features::Flag::feature_mpt_state_root);
+    m_ledger->setFeatures(std::move(features));
+
     auto recording = std::make_shared<RecordingScheduler>(m_ledger, m_blockFactory);
     auto web3 = buildWeb3Rpc(recording, 0, 0, /*mptPruneWindow=*/10);
 
@@ -218,6 +230,53 @@ BOOST_AUTO_TEST_CASE(historicalCallBeyondPruneWindowAnswers32004)
     BOOST_CHECK(resp["error"]["message"].asString().find("State pruned") != std::string::npos);
     BOOST_CHECK_EQUAL(recording->m_latestCalls, 0);
     BOOST_CHECK(recording->m_historicalCalls.empty());
+}
+
+// The same pruned-window shape on a block that PREDATES MPT activation (no feature flag, its
+// header commits a legacy XOR root) must not claim "State pruned": the root was never an MPT
+// root, so the -32004 message says predates-activation instead.
+BOOST_AUTO_TEST_CASE(historicalCallPreMptBlockSaysPredatesActivation)
+{
+    auto recording = std::make_shared<RecordingScheduler>(m_ledger, m_blockFactory);
+    auto web3 = buildWeb3Rpc(recording, 0, 0, /*mptPruneWindow=*/10);
+
+    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(h256{0x1234U});
+
+    auto resp = request(web3, R"("0x1")");
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32004);
+    auto const message = resp["error"]["message"].asString();
+    BOOST_CHECK(message.find("predates MPT activation") != std::string::npos);
+    BOOST_CHECK(message.find("State pruned") == std::string::npos);
+    BOOST_CHECK(recording->m_historicalCalls.empty());
+}
+
+// Reader gate (review fix): with NO MPT node reader the historical root probe is skipped, so
+// a node without MPT keeps the pre-probe behavior — the request reaches callAtBlock instead
+// of failing with -32603 "MPT not enabled".
+BOOST_AUTO_TEST_CASE(historicalCallWithoutMptReaderStillReachesScheduler)
+{
+    auto recording = std::make_shared<RecordingScheduler>(m_ledger, m_blockFactory);
+    auto web3 = buildWeb3Rpc(recording, 0, 0, -1, /*withMptReader=*/false);
+
+    auto resp = request(web3, R"("0x1")");
+    auto const failureDetail = resp.isMember("error") ? resp["error"]["message"].asString() :
+                                                        std::string{"no result, no error"};
+    BOOST_REQUIRE_MESSAGE(resp.isMember("result"), failureDetail);
+    BOOST_REQUIRE_EQUAL(recording->m_historicalCalls.size(), 1U);
+    BOOST_CHECK_EQUAL(recording->m_historicalCalls[0], 1);
+    BOOST_CHECK_EQUAL(recording->m_latestCalls, 0);
+}
+
+// Same gate for a legacy scheduler that only implements call(): the interface's default
+// callAtBlock forwarding keeps it working, exactly as before the probe existed.
+BOOST_AUTO_TEST_CASE(historicalCallWithoutMptReaderKeepsLegacySchedulerWorking)
+{
+    auto web3 = buildWeb3Rpc(std::make_shared<FakeScheduler2>(m_ledger, m_blockFactory), 0, 0,
+        -1, /*withMptReader=*/false);
+
+    auto resp = request(web3, R"("0x1")");
+    BOOST_CHECK(resp.isMember("result"));
 }
 
 // Direct unit coverage of bcos::rpc::getBlockNumberByTag (round-2 Finding G/Q): default

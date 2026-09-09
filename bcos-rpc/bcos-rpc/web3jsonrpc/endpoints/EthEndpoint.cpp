@@ -181,19 +181,50 @@ struct HistoricalMptContext
 /// the latest state. The empty root is a legal "no accounts" root (genesis / pre-MPT / empty
 /// blocks): the empty trie has no node rows, so it is NOT a "root not committed" error — the
 /// scenario flag below still governs how absence at it reads.
-/// The -32004 message for a missing stateRoot. With MPT pruning configured
-/// (mptPruneWindow > 0) a root older than the retention window is EXPECTED to be gone, so
-/// say so explicitly; anything else stays the generic miss message. @p head is the chain head
-/// the CALLER already resolved for the request (getBlockNumberAndHeadByTag) — re-reading the
-/// ledger here would add a round-trip to a cold error path for a message-only decision.
+/// The -32004 message for a missing stateRoot. @p mptActive tells whether the block's header
+/// stateRoot was ever expected to be an MPT root (mptStateRootExpectedAt): a pre-activation
+/// block commits a legacy XOR root, which ALWAYS misses the /mpt/ probe — claiming "State
+/// pruned" for a root the chain never had would be a misreport, so say predates-activation
+/// instead. With MPT pruning configured (mptPruneWindow > 0) a post-activation root older
+/// than the retention window is EXPECTED to be gone, so say so explicitly; anything else
+/// stays the generic miss message. @p head is the chain head the CALLER already resolved for
+/// the request (getBlockNumberAndHeadByTag) — re-reading the ledger here would add a
+/// round-trip to a cold error path for a message-only decision.
 std::string stateRootMissingMessage(bcos::protocol::BlockNumber blockNumber,
-    bcos::protocol::BlockNumber head, std::int64_t mptPruneWindow)
+    bcos::protocol::BlockNumber head, std::int64_t mptPruneWindow, bool mptActive)
 {
+    if (!mptActive)
+    {
+        return "Block predates MPT activation: stateRoot is not an MPT root";
+    }
     if (mptPruneWindow > 0 && blockNumber < head - mptPruneWindow)
     {
         return fmt::format("State pruned: beyond MPT retention window (N={})", mptPruneWindow);
     }
     return "Block stateRoot not in MPT node storage";
+}
+
+/// Was this block's header stateRoot ever expected to be an MPT root? Scenario B
+/// (feature_l2_ethereum_compat) builds the MPT from genesis; scenario A
+/// (feature_mpt_state_root) starts at the flag's activation block + 1 — the activation block
+/// itself still commits a legacy XOR root (shouldBuildMPT's strictly-greater, mirrored by
+/// MPTPruner's activation+1), reproduced here by querying the flag at blockNumber - 1 through
+/// the same single-row SYS_CONFIG read as the fullTrie flag below. Called ONLY on the
+/// historical-read error paths to pick the -32004 wording; a fetch failure degrades to false
+/// (predates-MPT wording), the honest non-pruned default.
+bcos::task::Task<bool> mptStateRootExpectedAt(
+    bcos::ledger::LedgerInterface& ledger, bcos::protocol::BlockNumber blockNumber)
+{
+    using Flag = bcos::ledger::Features::Flag;
+    if (co_await ledger::getFeature(ledger, Flag::feature_l2_ethereum_compat, blockNumber))
+    {
+        co_return true;
+    }
+    if (blockNumber <= 0)
+    {
+        co_return false;
+    }
+    co_return co_await ledger::getFeature(ledger, Flag::feature_mpt_state_root, blockNumber - 1);
 }
 
 bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
@@ -220,8 +251,12 @@ bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
     {
         if (!co_await bcos::storage2::readOne(*mptReader, stateRoot)) [[unlikely]]
         {
+            // Error path only: read whether MPT was this block's root scheme before choosing
+            // the wording — a pre-activation block's legacy XOR root ALWAYS misses this
+            // probe, and "State pruned" would claim pruned a root the chain never had.
+            auto const mptActive = co_await mptStateRootExpectedAt(ledger, blockNumber);
             BOOST_THROW_EXCEPTION(JsonRpcException(EthHistoricalStateUnavailable,
-                stateRootMissingMessage(blockNumber, head, mptPruneWindow)));
+                stateRootMissingMessage(blockNumber, head, mptPruneWindow, mptActive)));
         }
     }
     // The scenario flag decides how absence at this root is read (getProof's fullTrie).
@@ -250,8 +285,11 @@ task::Task<T> mapPrunedMptWalk(task::Task<T> walk, bcos::protocol::BlockNumber b
     }
     catch (bcos::ledger::mpt::MPTInvariantViolation const&)
     {
+        // mptActive is certainly true here: a mid-walk invariant violation means the walk's
+        // NON-EMPTY root row WAS read from MPT node storage (an empty root walks nothing),
+        // so the block's root provably was a committed MPT root.
         BOOST_THROW_EXCEPTION(JsonRpcException(EthHistoricalStateUnavailable,
-            stateRootMissingMessage(blockNumber, head, mptPruneWindow)));
+            stateRootMissingMessage(blockNumber, head, mptPruneWindow, /*mptActive=*/true)));
     }
 }
 
@@ -986,9 +1024,17 @@ task::Task<void> EthEndpoint::call(
         // walk would surface the missing root as a generic scheduler error. The context itself
         // is re-resolved by callAtBlock; a root pruned between this probe and the execution
         // keeps the pre-existing behavior.
-        auto const ledger = m_nodeService->ledger();
-        co_await resolveHistoricalMptContext(*ledger, blockNumber, head,
-            m_nodeService->mptNodeReader(), m_nodeService->mptPruneWindow());
+        // Reader-gated: without a local MPT node reader the probe could only throw "MPT not
+        // enabled", masking the base behavior — callAtBlock's default forwarding keeps
+        // schedulers that only implement call() working, and a non-L2 scheduler answers with
+        // its own explicit feature_l2_ethereum_compat error. Skipping the probe preserves
+        // both. (resolveHistoricalMptContext keeps its own null check, defensively.)
+        if (auto const& mptReader = m_nodeService->mptNodeReader())
+        {
+            auto const ledger = m_nodeService->ledger();
+            co_await resolveHistoricalMptContext(
+                *ledger, blockNumber, head, mptReader, m_nodeService->mptPruneWindow());
+        }
     }
     auto tx = call.takeToTransaction(
         m_nodeService->blockFactory()->transactionFactory(), isEstimate ? scheduler : nullptr);
@@ -1457,10 +1503,20 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
         blockNumber, head, m_nodeService->mptPruneWindow());
     if (auto const* errorCode = std::get_if<ledger::mpt::ProofErrorCode>(&result))
     {
-        auto const message = (*errorCode == ledger::mpt::ProofErrorCode::AccountNotInMPT) ?
-                                 std::string{"Account not in trie (dormant in scenario A)"} :
-                                 stateRootMissingMessage(
-                                     blockNumber, head, m_nodeService->mptPruneWindow());
+        std::string message;
+        if (*errorCode == ledger::mpt::ProofErrorCode::AccountNotInMPT)
+        {
+            message = "Account not in trie (dormant in scenario A)";
+        }
+        else
+        {
+            // BlockNotCommitted: same wording rules as the other five endpoints' root probe —
+            // a pre-activation block never had an MPT root, so don't claim pruning. The extra
+            // feature read is paid only on this error path.
+            auto const mptActive = co_await mptStateRootExpectedAt(*ledger, blockNumber);
+            message = stateRootMissingMessage(
+                blockNumber, head, m_nodeService->mptPruneWindow(), mptActive);
+        }
         BOOST_THROW_EXCEPTION(JsonRpcException(EthGetProofUnavailable, message));
     }
     auto& proof = std::get<ledger::mpt::EIP1186Proof>(result);

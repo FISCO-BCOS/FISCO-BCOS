@@ -425,9 +425,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // Startup rebuild: nothing pruning-related is persisted, so init re-derives the counts
         // and the delete queue from the window's state roots, then handles pre-existing
         // unreachable "/mpt/" garbage as storage.mpt_prune_sweep_garbage directs: off (the
-        // default) only counts and reports it; on deletes it in SWEEP_DELETE_CHUNK batches
-        // while scanning (MPTPruner.h Phase 3). Throws MPTInvariantViolation on a missing
-        // reachable node row; fails loudly at boot.
+        // default) skips the scan entirely (init only logs a hint); on deletes the garbage in
+        // SWEEP_DELETE_CHUNK batches while scanning (MPTPruner.h Phase 3). Throws
+        // MPTInvariantViolation on a missing reachable node row; fails loudly at boot.
         auto const currentBlock = task::syncWait(ledger::getCurrentBlockNumber(*ledger));
         task::syncWait(pruner->init(currentBlock,
             [ledger](BlockNumber number) -> task::Task<std::optional<h256>> {
@@ -445,8 +445,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                               << LOG_KV("window", m_nodeConfig->mptPruneWindow())
                               << LOG_KV("trackedNodes", pruner->trackedCount())
                               << LOG_KV("scheduledDeletions", pruner->pendingCount())
-                              << LOG_KV("garbageDeleted", pruner->lastSweepDeleted())
-                              << LOG_KV("garbageSkipped", pruner->lastSweepSkipped());
+                              << LOG_KV("garbageDeleted", pruner->lastSweepDeleted());
         m_mptCommitObserver = std::move(pruner);
     }
 

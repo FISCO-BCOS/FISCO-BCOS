@@ -72,16 +72,23 @@ namespace bcos::ledger::mpt
 /// an existing chain needs no seeding or guard — the rebuild covers whatever history is on disk.
 ///
 /// Per block, coPreparePruneRows runs inside the commit coroutine under the commit mutex, BEFORE
-/// the block's storage layers merge:
-///  1. the block's refCountDeltas are applied to m_counts (schedules armed/revoked as above);
+/// the block's storage layers merge. It never touches m_counts/m_pending directly: the block's
+/// effects are computed on a scratch OVERLAY (m_staged*, seeded from the entries the block
+/// touches), which onCommit applies to the base tables. The commit flow calls onCommit only
+/// after the block's WriteBatch landed, so a failed merge leaves the counts untouched and the
+/// retried block's prepare recomputes from the pre-block state, producing the identical batch —
+/// prepare is idempotent under commit retry (a direct apply would double-count the deltas and
+/// could schedule the deletion of a node a parallel trie still references):
+///  1. the block's refCountDeltas are applied to the overlay (schedules armed/revoked as above,
+///     staged against the base queue);
 ///  2. the queue is consumed up to the current block in full (steady state the matured amount
 ///     is ≈ one block's delta): each candidate is re-checked against its entry AS UPDATED
-///     BY THIS BLOCK (a node this very block revived reads count > 0 and is not deleted), and
-///     confirmed deletions (count == 0 AND deadline == the queue entry's deadline — anything
-///     else is a stale entry left by a revival or a re-arm) go into the batch's `deletions` as
-///     the single "/mpt/" node-row key. The commit flow applies the deletions to
-///     prewriteStorage, so node deletions land in ONE WriteBatch with the block data: no crash
-///     window, no worker thread racing a concurrent commit (the F2 review fix).
+///     BY THIS BLOCK (a node this very block revived reads count > 0 in the overlay and is not
+///     deleted), and confirmed deletions (count == 0 AND deadline == the queue entry's
+///     deadline — anything else is a stale entry left by a revival or a re-arm) go into the
+///     batch's `deletions` as the single "/mpt/" node-row key. The commit flow applies the
+///     deletions to prewriteStorage, so node deletions land in ONE WriteBatch with the block
+///     data: no crash window, no worker thread racing a concurrent commit (the F2 review fix).
 ///
 /// Window guarantee: a node referenced by the state of block r can only be obsoleted at some
 /// block o > r, so its deletion is consumed at o + N >= r + N + 1 — every state root in
@@ -108,10 +115,12 @@ namespace bcos::ledger::mpt
 ///  - Phase 3 (first-sweep of pre-existing garbage): scan the "/mpt/" table; a row in neither
 ///    the counts nor the queue is unreachable garbage (historical leak, or nodes written before
 ///    pruning was enabled). Driven by storage.mpt_prune_sweep_garbage: disabled (the default)
-///    only counts and reports the garbage with a hint to enable the sweep; enabled deletes the
-///    rows WHILE scanning, in SWEEP_DELETE_CHUNK batches — the full garbage set is never
-///    materialized (the range iterator survives deleting already-passed keys: MemoryStorage's
-///    ordered index invalidates only erased elements, RocksDBStorage2 pins a snapshot).
+///    SKIPS the scan entirely — counting the garbage would itself cost the full-table scan the
+///    option exists to avoid, so a disabled boot only logs the hint to enable the sweep;
+///    enabled deletes the rows WHILE scanning, in SWEEP_DELETE_CHUNK batches — the full garbage
+///    set is never materialized (the range iterator survives deleting already-passed keys:
+///    MemoryStorage's ordered index invalidates only erased elements, RocksDBStorage2 pins a
+///    snapshot).
 ///
 /// A chain whose MPT is not yet active at boot (head < activation) skips the rebuild entirely:
 /// the activation block's full first build (FlatToMPT) emits every node as that block's
@@ -157,8 +166,9 @@ public:
     /// comment for the three phases). Runs synchronously at boot, before the scheduler starts
     /// committing — no concurrency. No persistence, no startup guard: any chain state with the
     /// window's roots intact rebuilds correctly. @p sweepGarbage mirrors
-    /// storage.mpt_prune_sweep_garbage: false only counts and reports the unreachable rows,
-    /// true deletes them while scanning (Phase 3). @throws MPTInvariantViolation when a
+    /// storage.mpt_prune_sweep_garbage: false skips the Phase-3 garbage scan entirely (only an
+    /// informational hint is logged), true deletes the unreachable rows while scanning.
+    /// @throws MPTInvariantViolation when a
     /// reachable node row is missing (the trie is the source of truth — fail loud, same
     /// convention as Trie.h) or the head header carries no root.
     bcos::task::Task<void> init(bcos::protocol::BlockNumber currentBlock,
@@ -240,14 +250,33 @@ public:
                 *root, true, static_cast<uint64_t>(block + 1 + m_pruneWindow), seen);
         }
 
-        // Phase 3: scan the "/mpt/" table for unreachable rows (never counted, never queued) —
-        // historical garbage from before pruning existed. sweepGarbage=false only counts and
-        // reports (the rows stay and are re-detected at every boot); sweepGarbage=true deletes
-        // WHILE scanning in SWEEP_DELETE_CHUNK batches, never materializing the full garbage
-        // set: the range iterator survives deleting already-passed keys (MemoryStorage's
-        // ordered index invalidates only erased elements; RocksDBStorage2's RANGE_SEEK pins a
-        // snapshot). Garbage rows are by definition not in m_counts, so no in-memory table
-        // needs a fix-up.
+        // Phase 3: unreachable-garbage sweep. With the sweep disabled (the config default) the
+        // scan is SKIPPED outright — even counting the garbage would cost the full-table
+        // "/mpt/" scan the option exists to avoid on large chains. The hint is logged
+        // unconditionally: historical garbage (a leak, or nodes written before pruning was
+        // enabled) may sit on disk undetected until the operator opts in and restarts.
+        if (!sweepGarbage)
+        {
+            MPT_PRUNER_LOG(INFO)
+                << "MPT pruning: \"/mpt/\" garbage sweep disabled — skipping the startup scan "
+                   "(historical unreachable rows, if any, stay on disk; set "
+                   "storage.mpt_prune_sweep_garbage=true and restart to reclaim the space)"
+                << LOG_KV("head", currentBlock);
+            MPT_PRUNER_LOG(INFO) << "MPT pruning: reference counts rebuilt from the state roots"
+                                 << LOG_KV("head", currentBlock)
+                                 << LOG_KV("firstMptBlock", *firstMptBlock)
+                                 << LOG_KV("windowStart", windowStart)
+                                 << LOG_KV("tracked", m_counts.size())
+                                 << LOG_KV("scheduled", pendingCount())
+                                 << LOG_KV("sweepGarbage", false);
+            co_return;
+        }
+        // sweepGarbage=true: scan the "/mpt/" table for unreachable rows (never counted, never
+        // queued) and delete WHILE scanning in SWEEP_DELETE_CHUNK batches, never materializing
+        // the full garbage set: the range iterator survives deleting already-passed keys
+        // (MemoryStorage's ordered index invalidates only erased elements; RocksDBStorage2's
+        // RANGE_SEEK pins a snapshot). Garbage rows are by definition not in m_counts, so no
+        // in-memory table needs a fix-up.
         uint64_t garbage = 0;
         uint64_t garbageDeleted = 0;
         std::vector<bcos::executor_v1::StateKey> chunk;
@@ -279,10 +308,6 @@ public:
                 continue;
             }
             ++garbage;
-            if (!sweepGarbage)
-            {
-                continue;
-            }
             chunk.push_back(bcos::ledger::mptNodeStateKey(hash));
             if (chunk.size() >= SWEEP_DELETE_CHUNK)
             {
@@ -305,16 +330,6 @@ public:
             }
         }
 
-        uint64_t const garbageSkipped = sweepGarbage ? 0 : garbage;
-        if (garbageSkipped > 0)
-        {
-            MPT_PRUNER_LOG(INFO)
-                << "MPT pruning: unreachable \"/mpt/\" garbage rows found but the sweep is "
-                   "disabled — set storage.mpt_prune_sweep_garbage=true and restart to reclaim "
-                   "the disk space (counted only, nothing deleted this boot)"
-                << LOG_KV("garbage", garbageSkipped);
-        }
-
         MPT_PRUNER_LOG(INFO) << "MPT pruning: reference counts rebuilt from the state roots"
                              << LOG_KV("head", currentBlock)
                              << LOG_KV("firstMptBlock", *firstMptBlock)
@@ -323,18 +338,28 @@ public:
                              << LOG_KV("scheduled", pendingCount())
                              << LOG_KV("garbage", garbage)
                              << LOG_KV("garbageDeleted", garbageDeleted)
-                             << LOG_KV("garbageSkipped", garbageSkipped)
                              << LOG_KV("sweepGarbage", sweepGarbage);
         m_lastSweepDeleted = garbageDeleted;
-        m_lastSweepSkipped = garbageSkipped;
     }
 
     /// The pruning rows for @p blockNumber: only the deletions of expired nodes — pruning keeps
     /// no metadata on disk. Pure in-memory computation plus no reads; issues no writes itself.
+    /// IDEMPOTENT under commit retry: the block's effects are staged on the m_staged* overlay
+    /// and land on m_counts/m_pending only in onCommit (which the commit flow calls after the
+    /// block's WriteBatch landed), so a retried block recomputes from the pre-block state and
+    /// produces the identical batch — applying the refCountDeltas twice would schedule (and
+    /// eventually delete) nodes a parallel trie still references.
     bcos::task::Task<PruneRowBatch> coPreparePruneRows(
         bcos::protocol::BlockNumber blockNumber, MPTDeltaLayer const& delta) override
     {
         PruneRowBatch out;
+        // Fresh overlay per prepare; entries it does not touch read through to the base tables.
+        // A previous uncommitted overlay (a failed commit whose retry this is) is DISCARDED —
+        // the retry re-derives everything from the pre-block state.
+        m_stagedCounts.clear();
+        m_stagedDeadlineErases.clear();
+        m_stagedDeadlineInserts.clear();
+
         // A delta that changed nodes but carries an EMPTY refCountDeltas means the tally was
         // never kept (a build run with trackRefCounts=false — production avoids this via
         // needsRefCountDeltas — or a future producer). The set reading this would fall back to
@@ -359,11 +384,44 @@ public:
             co_return out;
         }
 
-        // Apply the block's reference movements. A node this block revived (0→>0) reads as
-        // alive for the deletion re-check below, because the counts are updated first.
+        auto const horizon = static_cast<uint64_t>(blockNumber);
+
+        // Seed the overlay with a copy of every base entry the block can touch: the movements'
+        // hashes, plus every hash sitting in an expired queue bucket (the consumption re-check
+        // below reads those entries as updated by this block).
         for (auto const& [hash, movement] : delta.refCountDeltas)
         {
-            auto& entry = m_counts[hash];
+            if (auto const it = m_counts.find(hash); it != m_counts.end())
+            {
+                m_stagedCounts.emplace(hash, it->second);
+            }
+        }
+        for (auto const& [deadline, bucket] : m_pending)
+        {
+            if (deadline > horizon)
+            {
+                break;
+            }
+            for (auto const& hash : bucket)
+            {
+                if (m_stagedCounts.contains(hash))
+                {
+                    continue;
+                }
+                if (auto const it = m_counts.find(hash); it != m_counts.end())
+                {
+                    m_stagedCounts.emplace(hash, it->second);
+                }
+            }
+        }
+
+        // Apply the block's reference movements ON THE OVERLAY. A node this block revived
+        // (0→>0) reads as alive for the deletion re-check below, because the overlay counts are
+        // updated first. stageSchedule()/revoke() mutate the overlay entry and stage the
+        // matching queue-bucket change against the base queue; onCommit applies both.
+        for (auto const& [hash, movement] : delta.refCountDeltas)
+        {
+            auto& entry = m_stagedCounts[hash];  // seeded above, or a fresh {0, none}
             uint64_t const newCount = static_cast<uint64_t>(
                 std::max<int64_t>(0, static_cast<int64_t>(entry.count) + movement));
             bool const wasObsoleted = delta.obsoletedNodes.contains(hash) ||
@@ -372,7 +430,7 @@ public:
             {
                 // >0→0, or the saturating 0→0 of a node with no counted history: schedule the
                 // deletion.
-                schedule(hash, static_cast<uint64_t>(blockNumber + m_pruneWindow));
+                stageSchedule(hash, static_cast<uint64_t>(blockNumber + m_pruneWindow));
             }
             else if (newCount > 0 && entry.deadline)
             {
@@ -383,24 +441,37 @@ public:
         }
 
         // Consume the expired delete queue, oldest deadline first, in full — in steady state
-        // the matured amount is ≈ one block's delta.
-        auto const horizon = static_cast<uint64_t>(blockNumber);
-        while (!m_pending.empty() && m_pending.begin()->first <= horizon)
+        // the matured amount is ≈ one block's delta. The CONSUMED view is the base queue minus
+        // the staged erases (a bucket entry this block's movements already revoked is skipped);
+        // the removals themselves are only staged — onCommit mutates the base buckets.
+        for (auto bucketIt = m_pending.begin();
+             bucketIt != m_pending.end() && bucketIt->first <= horizon; ++bucketIt)
         {
-            auto const bucketIt = m_pending.begin();
             uint64_t const deadline = bucketIt->first;
-            auto& bucket = bucketIt->second;
-            for (auto it = bucket.begin(); it != bucket.end();)
+            for (auto const& hash : bucketIt->second)
             {
-                auto const hash = *it;
-                it = bucket.erase(it);
-                // Re-check before deleting: a queue entry is only a hint — the count entry is
-                // the verdict. count == 0 AND deadline == this entry's deadline confirms the
-                // schedule was never revoked or re-armed (a re-armed node carries a NEWER
-                // deadline, mismatching this stale entry).
-                auto const entryIt = m_counts.find(hash);
-                bool const confirmed = entryIt != m_counts.end() && entryIt->second.count == 0 &&
-                                       entryIt->second.deadline == deadline &&
+                if (auto const erasedIt = m_stagedDeadlineErases.find(deadline);
+                    erasedIt != m_stagedDeadlineErases.end() && erasedIt->second.contains(hash))
+                {
+                    continue;  // revoked by this block's movements — never a candidate
+                }
+                // Re-check before deleting: a queue entry is only a hint — the count entry (AS
+                // UPDATED BY THIS BLOCK, read overlay-then-base) is the verdict. count == 0 AND
+                // deadline == this entry's deadline confirms the schedule was never revoked or
+                // re-armed (a re-armed node carries a NEWER deadline, mismatching this stale
+                // entry).
+                Entry const* entry = nullptr;
+                if (auto const stagedIt = m_stagedCounts.find(hash);
+                    stagedIt != m_stagedCounts.end())
+                {
+                    entry = std::addressof(stagedIt->second);
+                }
+                else if (auto const baseIt = m_counts.find(hash); baseIt != m_counts.end())
+                {
+                    entry = std::addressof(baseIt->second);
+                }
+                bool const confirmed = entry != nullptr && entry->count == 0 &&
+                                       entry->deadline == deadline &&
                                        // Unreachable under correct accounting (an emission this
                                        // block implies a positive post-block count), kept as a
                                        // belt-and-braces: never delete a node this block's own
@@ -410,13 +481,35 @@ public:
                 if (confirmed)
                 {
                     out.deletions.push_back(bcos::ledger::mptNodeStateKey(hash));
-                    m_counts.erase(entryIt);  // a later revival re-creates the entry via its +1
+                    // onCommit erases the base entry (a later revival re-creates it via its +1).
+                    auto& staged = m_stagedCounts[hash];
+                    staged.count = 0;
+                    staged.deadline.reset();
                 }
+                m_stagedDeadlineErases[deadline].insert(hash);  // consumed either way
             }
-            if (bucket.empty())
-            {
-                m_pending.erase(bucketIt);
-            }
+        }
+
+        // Steady-state observability. `out.deletions` IS the batch handed back to the caller —
+        // this block's CONFIRMED deletions. The staged counting (m_staged*) is not yet
+        // committed, so tracked/pending/nextDeadline deliberately read the BASE tables: the
+        // pre-block committed state, not the overlay (onCommit applies the staged changes only
+        // after the block's WriteBatch landed).
+        if (!out.deletions.empty())
+        {
+            MPT_PRUNER_LOG(DEBUG)
+                << "MPT pruning: block deletions confirmed" << LOG_KV("block", blockNumber)
+                << LOG_KV("deletions", out.deletions.size());
+        }
+        if (blockNumber % summaryLogInterval(m_pruneWindow) == 0)
+        {
+            auto const nextDeadline = nextPendingDeadline();
+            MPT_PRUNER_LOG(INFO)
+                << "MPT pruning: steady-state summary" << LOG_KV("block", blockNumber)
+                << LOG_KV("deletions", out.deletions.size())
+                << LOG_KV("tracked", trackedCount()) << LOG_KV("pending", pendingCount())
+                << LOG_KV("nextDeadline",
+                       nextDeadline ? std::to_string(*nextDeadline) : std::string{"-"});
         }
         co_return out;
     }
@@ -424,12 +517,49 @@ public:
     /// The pruner counts references from the delta — the build must maintain the tally.
     bool needsRefCountDeltas() const noexcept override { return true; }
 
-    /// After the block's WriteBatch: advance the in-memory watermark. Deletions already landed
-    /// with the batch — there is nothing to hand off. The CommitObserver contract forbids
-    /// throwing and blocking here.
+    /// After the block's WriteBatch: apply the staged overlay to the base tables and advance
+    /// the in-memory watermark. coPreparePruneRows staged the block's counting work precisely so
+    /// that a failed merge (which never reaches this hook) leaves the counts untouched and the
+    /// commit retry reproduces the identical batch. Deletions already landed with the batch —
+    /// there is nothing to hand off. The CommitObserver contract forbids throwing and blocking
+    /// here.
     void onCommit(
         bcos::protocol::BlockNumber blockNumber, MPTDeltaLayer const& /*delta*/) override
     {
+        for (auto const& [deadline, hashes] : m_stagedDeadlineErases)
+        {
+            if (auto const bucketIt = m_pending.find(deadline); bucketIt != m_pending.end())
+            {
+                for (auto const& hash : hashes)
+                {
+                    bucketIt->second.erase(hash);
+                }
+                if (bucketIt->second.empty())
+                {
+                    m_pending.erase(bucketIt);
+                }
+            }
+        }
+        for (auto const& [deadline, hashes] : m_stagedDeadlineInserts)
+        {
+            auto& bucket = m_pending[deadline];
+            bucket.insert(hashes.begin(), hashes.end());
+        }
+        for (auto const& [hash, staged] : m_stagedCounts)
+        {
+            if (staged.count == 0 && !staged.deadline)
+            {
+                m_counts.erase(hash);  // confirmed-deleted, or never tracked
+            }
+            else
+            {
+                m_counts[hash] = staged;
+            }
+        }
+        m_stagedCounts.clear();
+        m_stagedDeadlineErases.clear();
+        m_stagedDeadlineInserts.clear();
+
         auto current = m_watermark.load(std::memory_order_relaxed);
         while (current < blockNumber &&
                !m_watermark.compare_exchange_weak(
@@ -447,7 +577,6 @@ public:
 
     /// Outcome of the latest startup garbage sweep (init Phase 3), for logging/tooling.
     uint64_t lastSweepDeleted() const noexcept { return m_lastSweepDeleted; }
-    uint64_t lastSweepSkipped() const noexcept { return m_lastSweepSkipped; }
 
     /// The tracked reference count of @p hash, or nullopt when untracked (never seen, or
     /// already deleted and erased). Introspection for tests and tooling.
@@ -495,6 +624,19 @@ public:
 
     /// Number of hashes with a count entry (counted live nodes plus scheduled ones).
     size_t trackedCount() const noexcept { return m_counts.size(); }
+
+    /// Steady-state observability: coPreparePruneRows emits one INFO summary every
+    /// summaryLogInterval(m_pruneWindow) blocks. The interval tracks the prune window — the
+    /// natural cadence of the pruning cycle — with a 100-block floor: a small N (a test chain,
+    /// or an aggressive production config) would otherwise print one line per block. The
+    /// trade-off is that with N < 100 the summary is sparser than one-per-window; the logged
+    /// block number still makes the cadence unambiguous, and the per-batch DEBUG line keeps
+    /// every actual deletion visible between summaries.
+    static constexpr int64_t SUMMARY_LOG_MIN_INTERVAL = 100;
+    static constexpr int64_t summaryLogInterval(int64_t pruneWindow)
+    {
+        return std::max<int64_t>(pruneWindow, SUMMARY_LOG_MIN_INTERVAL);
+    }
 
 private:
     struct Entry
@@ -608,7 +750,9 @@ private:
         }
     }
 
-    /// Arm @p hash's deletion at @p deadline (its entry is created when absent — count 0).
+    /// Arm @p hash's deletion at @p deadline on the BASE tables (its entry is created when
+    /// absent — count 0). The init rebuild path only: the per-block path stages instead, so a
+    /// failed commit leaves no trace (stageSchedule).
     void schedule(bcos::h256 const& hash, uint64_t deadline)
     {
         auto& entry = m_counts[hash];
@@ -616,16 +760,30 @@ private:
         m_pending[deadline].insert(hash);
     }
 
-    /// Revoke @p hash's pending deletion (O(log) via the entry's own deadline).
+    /// Arm @p hash's deletion at @p deadline on the overlay: the deadline lands on the staged
+    /// entry and the queue insert is staged for onCommit. The per-block prepare path only.
+    void stageSchedule(bcos::h256 const& hash, uint64_t deadline)
+    {
+        m_stagedCounts[hash].deadline = deadline;
+        m_stagedDeadlineInserts[deadline].insert(hash);
+    }
+
+    /// Revoke @p hash's pending deletion on the overlay: stage the removal from its base-queue
+    /// bucket (a no-op there when the deadline was armed by this same prepare — but then the
+    /// staged INSERT is dropped instead) and clear the staged entry's deadline.
     void revoke(bcos::h256 const& hash, Entry& entry)
     {
-        auto const bucketIt = m_pending.find(*entry.deadline);
-        if (bucketIt != m_pending.end())
+        if (entry.deadline)
         {
-            bucketIt->second.erase(hash);
-            if (bucketIt->second.empty())
+            m_stagedDeadlineErases[*entry.deadline].insert(hash);
+            if (auto const insIt = m_stagedDeadlineInserts.find(*entry.deadline);
+                insIt != m_stagedDeadlineInserts.end())
             {
-                m_pending.erase(bucketIt);
+                insIt->second.erase(hash);
+                if (insIt->second.empty())
+                {
+                    m_stagedDeadlineInserts.erase(insIt);
+                }
             }
         }
         entry.deadline.reset();
@@ -635,9 +793,20 @@ private:
     int64_t m_pruneWindow;
     std::atomic<int64_t> m_watermark{-1};
     uint64_t m_lastSweepDeleted = 0;
-    uint64_t m_lastSweepSkipped = 0;
     std::unordered_map<bcos::h256, Entry> m_counts;
     std::map<uint64_t, std::unordered_set<bcos::h256>> m_pending;
+
+    /// The per-block scratch overlay (see the class comment): populated by coPreparePruneRows,
+    /// applied to m_counts/m_pending by onCommit, and empty outside a commit — the commit flow
+    /// serializes prepare → merge → onCommit under the commit mutex, and a retried prepare
+    /// discards and recomputes the overlay from the pre-block state. m_stagedCounts overlays
+    /// the count entries the block touches (read overlay-then-base); a staged {count 0, no
+    /// deadline} entry tells onCommit to ERASE the base entry (a confirmed deletion — or a
+    /// never-tracked hash, whose erase is a no-op). m_stagedDeadlineErases/Inserts are the
+    /// queue-bucket changes to replay against m_pending.
+    std::unordered_map<bcos::h256, Entry> m_stagedCounts;
+    std::map<uint64_t, std::unordered_set<bcos::h256>> m_stagedDeadlineErases;
+    std::map<uint64_t, std::unordered_set<bcos::h256>> m_stagedDeadlineInserts;
 };
 
 }  // namespace bcos::ledger::mpt

@@ -448,10 +448,17 @@ BOOST_AUTO_TEST_CASE(HistoricalWithoutMptReaderReturns32603)
     BOOST_CHECK(resp["error"]["message"].asString().find("MPT not enabled") != std::string::npos);
 }
 
-// Historical state, root absent from MPT node rows (block predates MPT activation):
-// -32004 with the missing-root message.
+// Historical state, MPT active at the block but the root absent from MPT node rows (no
+// pruning configured, so not an expected prune): -32004 with the generic missing-root
+// message.
 BOOST_AUTO_TEST_CASE(HistoricalMissingRootReturns32004)
 {
+    // feature_mpt_state_root marks the block post-activation, so a missing root is a genuine
+    // storage miss rather than a predates-activation legacy XOR root.
+    bcos::ledger::Features features;
+    features.set(bcos::ledger::Features::Flag::feature_mpt_state_root);
+    m_ledger->setFeatures(std::move(features));
+
     buildTrie();
     wireReader();
     m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(h256{0x1234U});
@@ -461,6 +468,25 @@ BOOST_AUTO_TEST_CASE(HistoricalMissingRootReturns32004)
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32004);
     BOOST_CHECK(resp["error"]["message"].asString().find("not in MPT node storage") !=
                 std::string::npos);
+}
+
+// Historical state, root absent AND inside the pruning window, but the block PREDATES MPT
+// activation (no feature flag — its header commits a legacy XOR root, which always misses
+// the /mpt/ probe): the -32004 message must not claim "State pruned" for a root the chain
+// never had.
+BOOST_AUTO_TEST_CASE(HistoricalPreMptRootWithPruningSaysPredatesActivation)
+{
+    buildTrie();
+    wireReader();
+    nodeService->setMPTPruneWindow(10);  // head is 19, block 1 < 19 - 10: inside the window
+    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(h256{0x1234U});
+
+    auto resp = getStorageAt(address.hexPrefixed(), "0x1", "0x1");
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32004);
+    auto const message = resp["error"]["message"].asString();
+    BOOST_CHECK(message.find("predates MPT activation") != std::string::npos);
+    BOOST_CHECK(message.find("State pruned") == std::string::npos);
 }
 
 // Historical state, empty root, scenario B (round-2 Finding K): the empty root is a legal

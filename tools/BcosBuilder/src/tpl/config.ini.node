@@ -59,11 +59,15 @@
     ; surviving on disk: roots already pruned under a previous smaller window are
     ; skipped (an INFO log names the first surviving root), and the effective
     ; window starts there. Accepted values: -1 or [1, 10000000].
+    ; Binary upgrades/downgrades need no migration: counts are in-memory only, and
+    ; a pre-pruning binary keeps executing on a pruned database (head-reachable
+    ; nodes are never deleted); only historical reads beyond the window degrade
+    ; to a generic miss error.
     ;mpt_prune_window=-1
-    ; Startup garbage sweep: pre-existing unreachable MPT node rows (historical
-    ; garbage from before pruning was enabled) are counted and reported at every
-    ; boot; set true to also delete them (in batches) during that boot.
-    ; Default false (report only, nothing deleted).
+    ; Startup garbage sweep: set true to scan the whole MPT node table at boot and
+    ; delete (in batches) pre-existing unreachable rows (historical garbage from
+    ; before pruning was enabled). Default false skips the scan entirely; an INFO
+    ; log at every boot notes how to enable it.
     ;mpt_prune_sweep_garbage=false
 
 [txpool]

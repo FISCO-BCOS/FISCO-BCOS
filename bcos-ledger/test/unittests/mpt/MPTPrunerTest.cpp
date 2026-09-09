@@ -233,10 +233,11 @@ Pruner::StateRootLookup rootLookupOf(
     };
 }
 
-/// Prepare block @p blockNumber's pruning batch over @p delta and apply it to @p backend in
-/// the commit flow's order (the stand-in for the block's single WriteBatch, BaselineScheduler
-/// -tpp.h's writeSome + removeSome onto prewriteStorage). The in-memory pruner never produces
-/// upsert rows — only node deletions.
+/// One full commit of block @p blockNumber over @p delta, in the production commit flow's order
+/// (BaselineScheduler-tpp.h): prepare the pruning batch → apply its deletions (the stand-in for
+/// the block's single WriteBatch onto prewriteStorage) → onCommit. onCommit is what lands the
+/// block's staged counting on the pruner's base tables, so tests read post-commit state only
+/// after this returns. The in-memory pruner never produces upsert rows — only node deletions.
 void commitPruneBlock(PruneBackend& backend, Pruner& pruner,
     bcos::protocol::BlockNumber blockNumber, MPTDeltaLayer const& delta)
 {
@@ -245,6 +246,7 @@ void commitPruneBlock(PruneBackend& backend, Pruner& pruner,
     {
         bcos::task::syncWait(bcos::storage2::removeSome(backend, std::move(batch.deletions)));
     }
+    pruner.onCommit(blockNumber, delta);
 }
 
 /// Blocks with no trie delta: the delete queue is still consumed up to each block — how a
@@ -259,9 +261,8 @@ void runEmptyBlocks(PruneBackend& backend, Pruner& pruner, bcos::protocol::Block
 }
 
 /// One block of the account-trie chain the pruning tests drive, in the production commit order:
-/// build the trie delta → flush its nodes → prepare + apply the pruning batch (the deletions of
-/// expired nodes, the prewriteStorage stand-in). Returns the delta so the caller can feed
-/// onCommit itself.
+/// build the trie delta → flush its nodes → prepare + apply the pruning batch + onCommit (the
+/// deletions of expired nodes, the prewriteStorage stand-in). Returns the delta for inspection.
 MPTDeltaLayer commitAccountBlock(PruneBackend& backend, BackendNodeStorage& nodes,
     Pruner& pruner, std::map<bcos::Address, Account>& accounts, bcos::h256 priorRoot,
     std::map<bcos::Address, std::optional<Account>> const& accountChanges,
@@ -354,6 +355,18 @@ BOOST_AUTO_TEST_CASE(EmptyDeltaPassesSilently)
     BOOST_CHECK(!pruner.countOf(h1).has_value());  // entry erased with the deletion
 }
 
+BOOST_AUTO_TEST_CASE(SummaryLogIntervalFloorsAtHundred)
+{
+    // The steady-state INFO summary fires every max(N, 100) blocks: the floor keeps a small
+    // prune window from printing one line per block.
+    BOOST_CHECK_EQUAL(Pruner::summaryLogInterval(0), Pruner::SUMMARY_LOG_MIN_INTERVAL);
+    BOOST_CHECK_EQUAL(Pruner::summaryLogInterval(1), Pruner::SUMMARY_LOG_MIN_INTERVAL);
+    BOOST_CHECK_EQUAL(
+        Pruner::summaryLogInterval(100), Pruner::SUMMARY_LOG_MIN_INTERVAL);
+    BOOST_CHECK_EQUAL(Pruner::summaryLogInterval(101), 101);
+    BOOST_CHECK_EQUAL(Pruner::summaryLogInterval(10'000), 10'000);
+}
+
 BOOST_AUTO_TEST_CASE(ObsoletionToZeroQueuesDeletion)
 {
     PruneBackend backend;
@@ -403,6 +416,75 @@ BOOST_AUTO_TEST_CASE(SharedRefCountSurvivesSingleObsoletion)
     // 2→1: still referenced — no deadline armed.
     BOOST_CHECK(pruner.countOf(h1) == std::optional<uint64_t>{1});
     BOOST_CHECK(!pruner.deadlineOf(h1).has_value());
+    BOOST_CHECK_EQUAL(pruner.pendingCount(), 0U);
+}
+
+BOOST_AUTO_TEST_CASE(CommitRetryPrepareIsIdempotent)
+{
+    // The commit flow retries a block whose merge failed by re-running coPreparePruneRows with
+    // the SAME delta (BaselineScheduler keeps the pending result; onCommit never ran). The
+    // block's effects are staged on an overlay until onCommit, so the retry recomputes from the
+    // pre-block state: identical batch, no double-applied refCountDeltas. Regression pinned:
+    // applying the deltas directly at prepare time drove a count-2 shared node 2→1→0 across the
+    // retry and scheduled the deletion of a node a second trie still referenced.
+    PruneBackend backend;
+    BackendNodeStorage nodes(backend);
+    Pruner pruner(backend, /*pruneWindow=*/5);
+    auto const shared = makeHash(0x01);
+    auto const expiring = makeHash(0x02);
+    bcos::task::syncWait(nodes.writeOne(expiring, bcos::bytes{0x22}));
+
+    // Block 1: the shared node's first reference; the expiring node is created. Block 2: the
+    // shared node's second reference (count 2); the expiring node is obsoleted → deadline 7.
+    MPTDeltaLayer delta1;
+    delta1.refCountDeltas[shared] = 1;
+    delta1.newNodes[shared] = bcos::bytes{0x11};
+    delta1.refCountDeltas[expiring] = 1;
+    delta1.newNodes[expiring] = bcos::bytes{0x22};
+    commitPruneBlock(backend, pruner, 1, delta1);
+    MPTDeltaLayer delta2;
+    delta2.refCountDeltas[shared] = 1;
+    delta2.newNodes[shared] = bcos::bytes{0x11};
+    delta2.refCountDeltas[expiring] = -1;
+    delta2.obsoletedNodes.insert(expiring);
+    commitPruneBlock(backend, pruner, 2, delta2);
+    BOOST_REQUIRE(pruner.countOf(shared) == std::optional<uint64_t>{2});
+
+    // Block 3 obsoletes ONE of the shared node's two references (2→1 — no schedule may arm).
+    // Its commit "fails" after prepare: the identical prepare runs again, with no onCommit in
+    // between.
+    MPTDeltaLayer delta3;
+    delta3.refCountDeltas[shared] = -1;
+    delta3.obsoletedNodes.insert(shared);
+    auto first = bcos::task::syncWait(pruner.coPreparePruneRows(3, delta3));
+    BOOST_CHECK(first.deletions.empty());
+    // The base tables are untouched until onCommit: the pre-block count still reads 2.
+    BOOST_CHECK(pruner.countOf(shared) == std::optional<uint64_t>{2});
+
+    auto retry = bcos::task::syncWait(pruner.coPreparePruneRows(3, delta3));
+    BOOST_CHECK(retry.deletions == first.deletions);
+    // The retry armed no schedule: the only pending entry is still the expiring node's.
+    BOOST_CHECK(!pruner.deadlineOf(shared).has_value());
+    BOOST_CHECK_EQUAL(pruner.pendingCount(), 1U);
+    BOOST_CHECK(pruner.countOf(shared) == std::optional<uint64_t>{2});
+
+    // One onCommit for the one successful merge: exactly one application — count 1, not 0.
+    pruner.onCommit(3, delta3);
+    BOOST_CHECK(pruner.countOf(shared) == std::optional<uint64_t>{1});
+    BOOST_CHECK(!pruner.deadlineOf(shared).has_value());
+    BOOST_CHECK_EQUAL(pruner.pendingCount(), 1U);  // still only the expiring node
+
+    // The same idempotency at a DELETION block: the expiring node matures at block 7. Two
+    // prepares produce the same one-key batch; one onCommit + one apply removes the row once.
+    runEmptyBlocks(backend, pruner, 4, 6);
+    auto firstAt7 = bcos::task::syncWait(pruner.coPreparePruneRows(7, MPTDeltaLayer{}));
+    BOOST_REQUIRE_EQUAL(firstAt7.deletions.size(), 1U);
+    auto retryAt7 = bcos::task::syncWait(pruner.coPreparePruneRows(7, MPTDeltaLayer{}));
+    BOOST_CHECK(retryAt7.deletions == firstAt7.deletions);
+    pruner.onCommit(7, MPTDeltaLayer{});
+    bcos::task::syncWait(bcos::storage2::removeSome(backend, std::move(firstAt7.deletions)));
+    BOOST_CHECK(!nodeRowExists(backend, expiring));
+    BOOST_CHECK(!pruner.countOf(expiring).has_value());
     BOOST_CHECK_EQUAL(pruner.pendingCount(), 0U);
 }
 
@@ -755,10 +837,10 @@ BOOST_AUTO_TEST_CASE(WindowedRandomWorkloadInvariants)
 
 BOOST_AUTO_TEST_CASE(OnCommitAdvancesWatermarkAfterBatchDeletion)
 {
-    // The production commit order: coPreparePruneRows' deletions land with the block's
-    // WriteBatch (commitPruneBlock applies them inline here); onCommit afterwards only advances
-    // the in-memory watermark. The end state matches what a deletion pass run to the same
-    // horizon produces.
+    // The production commit order (commitAccountBlock runs it inline): coPreparePruneRows'
+    // deletions land with the block's WriteBatch; onCommit afterwards applies the block's
+    // staged counting to the base tables and advances the in-memory watermark. The end state
+    // matches what a deletion pass run to the same horizon produces.
     constexpr int64_t N = 2;
     PruneBackend backend;
     BackendNodeStorage nodes(backend);
@@ -782,7 +864,6 @@ BOOST_AUTO_TEST_CASE(OnCommitAdvancesWatermarkAfterBatchDeletion)
         auto const delta = commitAccountBlock(backend, nodes, pruner, accounts, root, changes, block);
         root = delta.stateRoot;
         history.emplace_back(block, root);
-        pruner.onCommit(block, delta);
     }
     BOOST_CHECK_EQUAL(pruner.watermark(), 5);
 
@@ -968,7 +1049,6 @@ BOOST_AUTO_TEST_CASE(RebuildAfterRestartMatchesIncrementalState)
         root = delta.stateRoot;
         roots[block] = root;
         accountsAt[block] = accounts;
-        prunerA.onCommit(block, delta);
     }
 
     // Restart: a fresh pruner rebuilds from the same backend and the recorded roots.
@@ -1076,7 +1156,6 @@ BOOST_AUTO_TEST_CASE(RebuildDeletesSmallGarbageAtStartup)
         BOOST_CHECK(!prunerB.deadlineOf(hash).has_value());
     }
     BOOST_CHECK_EQUAL(prunerB.lastSweepDeleted(), 3U);
-    BOOST_CHECK_EQUAL(prunerB.lastSweepSkipped(), 0U);
 
     // The ordinary per-block consumption still works afterwards: at head 4 the window is
     // [2, 4], so root 1's unique nodes (deadline 4) leave with it. On disk remains exactly the
@@ -1098,9 +1177,10 @@ BOOST_AUTO_TEST_CASE(RebuildDeletesSmallGarbageAtStartup)
 
 BOOST_AUTO_TEST_CASE(StartupSweepDisabled)
 {
-    // sweepGarbage=false (the config default): the boot COUNTS the unreachable garbage and
-    // reports it with a hint to enable the sweep — not one row is deleted, so the garbage is
-    // re-detected at every boot until the operator opts in.
+    // sweepGarbage=false (the config default): Phase 3 is SKIPPED outright — no full-table
+    // "/mpt/" scan at boot, so the garbage count is not even known (the boot log carries the
+    // unconditional hint that historical garbage may exist and how to enable the sweep). Not
+    // one row is deleted; the garbage is only ever reclaimed by a sweep-enabled restart.
     PruneBackend backend;
     BackendNodeStorage nodes(backend);
     writeMptActivation(backend, /*activation=*/0);
@@ -1116,14 +1196,23 @@ BOOST_AUTO_TEST_CASE(StartupSweepDisabled)
         root = commitAccountBlock(backend, nodes, seeder, accounts, root, changes, 1).stateRoot;
         roots[1] = root;
     }
-    constexpr size_t garbageCount = Pruner::SWEEP_DELETE_CHUNK + 1;
+    // Garbage no trie references, including a MALFORMED row the Phase-3 scan would reject with
+    // a WARNING — with the scan skipped, init passes over all of it untouched (and silently:
+    // nothing decodes or even reads those rows).
+    constexpr size_t garbageCount = 3;
     writeGarbageRows(backend, garbageCount);
+    {
+        bcos::storage::Entry entry;
+        entry.set(bcos::bytes(4, 0x66));
+        bcos::task::syncWait(bcos::storage2::writeOne(backend,
+            bcos::executor_v1::StateKey{bcos::storage2::kMPTTable, std::string_view{"short"}},
+            std::move(entry)));
+    }
     auto const rowsBefore = countRowsInTable(backend, bcos::storage2::kMPTTable);
 
     Pruner pruner(backend, N);
     bcos::task::syncWait(pruner.init(1, rootLookupOf(roots), /*sweepGarbage=*/false));
     BOOST_CHECK_EQUAL(pruner.lastSweepDeleted(), 0U);
-    BOOST_CHECK_EQUAL(pruner.lastSweepSkipped(), garbageCount);
     BOOST_CHECK_EQUAL(countRowsInTable(backend, bcos::storage2::kMPTTable), rowsBefore);
     BOOST_CHECK(nodeRowExists(backend, garbageHash(0)));
     BOOST_CHECK(nodeRowExists(backend, garbageHash(garbageCount - 1)));
@@ -1175,7 +1264,6 @@ BOOST_AUTO_TEST_CASE(StartupSweepEnabled)
     BOOST_CHECK_EQUAL(progress[1].first, garbageCount);
     BOOST_CHECK_EQUAL(progress[1].second, garbageCount);
     BOOST_CHECK_EQUAL(pruner.lastSweepDeleted(), garbageCount);
-    BOOST_CHECK_EQUAL(pruner.lastSweepSkipped(), 0U);
 
     for (uint32_t i = 0; i < garbageCount; ++i)
     {
@@ -1291,6 +1379,109 @@ BOOST_AUTO_TEST_CASE(RebuildAfterWindowWideningSkipsPrunedRoots)
     auto proof = bcos::task::syncWait(
         generateProof(nodes, roots[4], makeAddress(0x01), std::span<bcos::h256 const>{}));
     BOOST_CHECK(std::holds_alternative<EIP1186Proof>(proof));
+}
+
+BOOST_AUTO_TEST_CASE(ShrinkChurnWidenRebuildsCleanly)
+{
+    // Review-pinned regression (the analysis concluded the feared failure is unreachable; this
+    // test nails that down): run with N=5, restart SHRUNK to N=2 right after state-unchanged
+    // blocks (the last roots equal the head root), commit three churn blocks whose deletions
+    // include nodes a WIDER window would still walk, then restart widened to N=5 again. The
+    // churn that deleted a shared node X also deleted the churn-eve root row with the SAME
+    // deadline, so Phase 2's newest-first root-row probe hits that pruned root first and stops
+    // the walk before ever resolving X — the fail-loud deadlineWalk stays unreachable here.
+    PruneBackend backend;
+    BackendNodeStorage nodes(backend);
+    writeMptActivation(backend, /*activation=*/0);
+
+    std::map<bcos::Address, Account> accounts;
+    std::map<bcos::protocol::BlockNumber, bcos::h256> roots;
+    std::map<bcos::protocol::BlockNumber, std::map<bcos::Address, Account>> accountsAt;
+    bcos::h256 root = emptyRootHash();
+
+    // Phase A: N=5, six churn blocks — every block adds a fresh account and rewrites the
+    // previous one (a new balance changes its leaf), so each root is a new trie version.
+    constexpr int64_t WIDE_N = 5;
+    {
+        Pruner prunerA(backend, WIDE_N);
+        for (bcos::protocol::BlockNumber block = 1; block <= 6; ++block)
+        {
+            std::map<bcos::Address, std::optional<Account>> changes;
+            changes[makeAddress(static_cast<uint8_t>(block))] = makePruneAccount(0, 10 * block);
+            if (block > 1)
+            {
+                changes[makeAddress(static_cast<uint8_t>(block - 1))] =
+                    makePruneAccount(1, 10 * block);
+            }
+            root = commitAccountBlock(backend, nodes, prunerA, accounts, root, changes, block)
+                       .stateRoot;
+            roots[block] = root;
+            accountsAt[block] = accounts;
+        }
+        // Two state-unchanged blocks: roots 7 and 8 equal the head root — the shrink restart
+        // below sees a head whose newest roots carry no new trie version.
+        runEmptyBlocks(backend, prunerA, 7, 8);
+        roots[7] = root;
+        roots[8] = root;
+        accountsAt[7] = accounts;
+        accountsAt[8] = accounts;
+    }
+
+    // Restart SHRUNK to N=2 at head 8: the rebuild walks only roots 6..8 (all the same hash) —
+    // clean. Then three churn blocks under the shrunk window: block 9's rebuild obsoletes the
+    // root-6 version (referenced by roots 6..8) — its root row and every node unique to it are
+    // scheduled with the SAME deadline 9+2 = 11 and deleted together at block 11.
+    constexpr int64_t SHRUNK_N = 2;
+    {
+        Pruner prunerB(backend, SHRUNK_N);
+        BOOST_CHECK_NO_THROW(
+            bcos::task::syncWait(prunerB.init(8, rootLookupOf(roots), /*sweepGarbage=*/false)));
+        for (bcos::protocol::BlockNumber block = 9; block <= 11; ++block)
+        {
+            std::map<bcos::Address, std::optional<Account>> changes;
+            changes[makeAddress(static_cast<uint8_t>(block))] = makePruneAccount(0, 10 * block);
+            changes[makeAddress(static_cast<uint8_t>(block - 3))] =
+                makePruneAccount(2, 10 * block);
+            root = commitAccountBlock(backend, nodes, prunerB, accounts, root, changes, block)
+                       .stateRoot;
+            roots[block] = root;
+            accountsAt[block] = accounts;
+        }
+    }
+    // The churn-eve root row left on schedule — the widened walk below probes into it first.
+    BOOST_REQUIRE(!nodeRowExists(backend, roots[6]));
+
+    // Restart WIDENED back to N=5 at head 11: Phase 2 probes downward from block 10 — roots
+    // 10..9 resolve, block 8's root (== root 6) is already pruned, so the walk stops there
+    // instead of resolving (and failing loud on) the nodes block 11 deleted.
+    Pruner prunerC(backend, WIDE_N);
+    BOOST_CHECK_NO_THROW(
+        bcos::task::syncWait(prunerC.init(11, rootLookupOf(roots), /*sweepGarbage=*/false)));
+
+    // The effective window is the surviving roots 9..11: exactly their nodes are tracked (the
+    // oldest one's unique nodes carry the WIDE deadline 9+1+5, the first in the queue) and
+    // every in-window root still proves its accounts.
+    std::unordered_set<bcos::h256> windowLive;
+    for (bcos::protocol::BlockNumber block = 9; block <= 11; ++block)
+    {
+        auto live = liveNodeHashes(nodes, roots[block]);
+        windowLive.insert(live.begin(), live.end());
+        size_t proven = 0;
+        for (auto const& [address, account] : accountsAt[block])
+        {
+            auto proof = bcos::task::syncWait(
+                generateProof(nodes, roots[block], address, std::span<bcos::h256 const>{}));
+            BOOST_REQUIRE_MESSAGE(std::holds_alternative<EIP1186Proof>(proof),
+                "in-window root failed generateProof at block " << block);
+            if (++proven >= 3)
+            {
+                break;
+            }
+        }
+    }
+    BOOST_CHECK_EQUAL(prunerC.trackedCount(), windowLive.size());
+    BOOST_REQUIRE(prunerC.nextPendingDeadline().has_value());
+    BOOST_CHECK_EQUAL(*prunerC.nextPendingDeadline(), 9 + 1 + WIDE_N);
 }
 
 BOOST_AUTO_TEST_CASE(RebuildSkippedBeforeActivationThenDeltaSeeds)
