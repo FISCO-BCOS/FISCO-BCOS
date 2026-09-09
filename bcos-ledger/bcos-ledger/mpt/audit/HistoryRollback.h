@@ -16,16 +16,27 @@
  * @file HistoryRollback.h
  * @brief Operator rollback: reverse-apply StateHistory and TrieHistory block by block
  *        (pathdb spec §11, last row of the read-path table)
+ *
+ * **Offline, and the whole file depends on it.** The node is STOPPED and this runs over its
+ * RocksDB directly, through store objects it constructs for the occasion. Those stores' in-memory
+ * indexes are empty and stay empty: nothing here calls `readAt`, so nothing needs an index, and
+ * nothing calls `publish`, so the `expire(..., Keep)` below leaves no index out of step with the
+ * rows it deleted. The node rebuilds its index from the shards that survive on its next start
+ * (ReverseHistoryStore::rebuild), which is where the memory side gets its truth back.
+ *
+ * That obligation is stated here rather than left implicit because `expire` normally comes in a
+ * pair: the commit path issues it against a live store and then hands the returned `retired` block
+ * to `publish` so the index forgets what the disk forgot (G9). A caller that skips the publish and
+ * is NOT offline would leave the index naming shard rows that are gone, and every query landing on
+ * one of them would throw HistoryPruned for a height the store should still answer for.
  */
 #pragma once
 
 #include "../Errors.h"
-// detail::scanManifests — "which blocks have a manifest at all", the question keysOfBlock
-// cannot answer (it returns empty for a missing manifest and for an empty one alike).
 #include "../history/HistoryErrors.h"
+#include "../history/HistoryRowCodec.h"
 #include "../history/HistoryTables.h"
 #include "../history/ReverseHistoryStore.h"
-#include "HistoryAudit.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/storage/Entry.h>
@@ -36,11 +47,11 @@
 #include <boost/throw_exception.hpp>
 #include <cstddef>
 #include <functional>
+#include <map>
 #include <optional>
 #include <string>
 #include <tuple>
 #include <utility>
-#include <variant>
 #include <vector>
 
 namespace bcos::ledger::mpt::audit
@@ -58,7 +69,7 @@ struct RollbackReport
     /// Pre-images the trie history holds for those blocks.
     std::size_t trieRows{};
     /// Rows written back and rows deleted. Zero on a dry run — the counts above are what a dry
-    /// run reports, and they are read off the manifests without touching the live plane.
+    /// run reports, and they are read off the meta rows without touching the live plane.
     std::size_t rowsWritten{};
     std::size_t rowsDeleted{};
     bool applied{false};
@@ -71,62 +82,74 @@ struct RollbackReport
     /// the tip row at all. So this reads whatever it read before the rollback, every time. It is
     /// carried so the caller can quote the CURRENT value in the instruction it gives the operator,
     /// not so it can be compared against the target.
-    std::optional<std::string> currentNumberRow;
+    std::optional<std::string> currentNumberRow{};
 };
 
 namespace detail
 {
 
-/// Reverse-apply one block from ONE history instance, then drop that block's history rows.
+/// Block @p block's meta row in @p Tables, or nullopt when there is none.
 ///
-/// The pre-image of key k for block B is fetched as "the value k held at block B-1", which is
-/// exactly what readAt answers, and reusing it rather than reading the (k, B) index row directly
-/// is deliberate: readAt owns the window guard, the tag decoding and the fail-loud behaviour, and
-/// a second copy of that decoding here would be a second thing to keep in step with the layout.
+/// A point read, and the ONLY question the pre-check needs answered: the coverage contract
+/// (HistoryTables.h::kBlockHistoryCoverageContract) makes "has a meta row" mean "this block's
+/// pre-images were captured", including for a block that changed nothing — which still gets
+/// `Meta{shardCount = 1, recordCount = 0}`. So the absence of the row is unambiguous, and the
+/// declared `recordCount` that comes back with it is exactly what a dry run counts.
+template <history::HistoryTables const& Tables, class Storage>
+bcos::task::Task<std::optional<history::BlockMeta>> readBlockMeta(
+    Storage& storage, protocol::BlockNumber block)
+{
+    auto row = co_await bcos::storage2::readOne(
+        storage, executor_v1::StateKey{Tables.shard, history::metaRowKey(block)});
+    if (!row)
+    {
+        co_return std::nullopt;
+    }
+    co_return history::decodeMeta(row->get());
+}
+
+/// Reverse-apply one block from ONE history instance: put every recorded pre-image back.
 ///
-/// The seek readAt performs lands on (k, B) precisely because rollback runs from the tip
-/// DOWNWARDS and deletes each block's history as it finishes with it — every row newer than B is
-/// already gone by the time B is processed, so the first row at or after (k, B) is (k, B) itself.
-/// If it is not there, readAt reports HistoryUseCurrent, which for a key the manifest just listed
-/// can only mean the index row is missing; that is a hole, and it stops the rollback (G6) rather
-/// than silently leaving the row at its post-block value.
+/// `readBlock` hands over the block's whole diff as `(key, oldValue | ABSENT)` in one pass, so
+/// there is nothing to derive: a record with a value is written back verbatim, a record tagged
+/// ABSENT means the key did not exist when the block began and its row is deleted. G4's asymmetry
+/// falls out of that structurally rather than being a rule this function has to remember — the
+/// only rows it deletes are the ones the history recorded as absent.
 ///
+/// It is also why the earlier "the pre-image is whatever readAt answers for block - 1" indirection
+/// is gone: that reached the same records through the query path, which meant the rollback
+/// depended on the window guard, the retention boundary and the in-memory index — none of which
+/// exist in an offline tool. Reading the block's own rows depends on nothing but the rows.
+///
+/// @throws MPTInvariantViolation (from readBlock) when the block's meta row is missing, when the
+///         shard or record counts disagree with it, or when a row is a deletion sentinel. Each of
+///         those means the diff on offer is SHORT, and applying a short diff would leave the rows
+///         it lost standing at their post-block values with nothing reporting it (G6).
 /// @returns (rows written, rows deleted).
 template <history::HistoryTables const& Tables, class Storage>
-bcos::task::Task<std::pair<std::size_t, std::size_t>> reverseApplyBlock(Storage& storage,
-    protocol::BlockNumber block, protocol::BlockNumber tip, protocol::BlockNumber depth)
+bcos::task::Task<std::pair<std::size_t, std::size_t>> reverseApplyBlock(
+    history::ReverseHistoryStore<Tables> const& store, Storage& storage,
+    protocol::BlockNumber block)
 {
-    using Store = history::ReverseHistoryStore<Tables>;
-
-    auto const keys = co_await Store::keysOfBlock(storage, block);
+    auto const recorded = co_await store.readBlock(storage, block);
 
     std::vector<std::tuple<executor_v1::StateKey, executor_v1::StateValue>> writes;
     std::vector<executor_v1::StateKey> deletes;
-    writes.reserve(keys.size());
-    for (auto const& key : keys)
+    writes.reserve(recorded.records.size());
+    for (auto const& [key, oldValue] : recorded.records)
     {
-        auto value = co_await Store::readAt(storage, key, block - 1, tip, depth);
         // A history key IS the physical state key of the row it shadows — "<table>:<rowKey>" —
         // for both instances: ordinary state rows and path-addressed node rows alike. StateKey's
         // string constructor splits it back at the first colon, the same rule StateKeyResolver
         // applies on the way out of RocksDB.
         executor_v1::StateKey stateKey{std::string(key.begin(), key.end())};
-        if (std::holds_alternative<history::HistoryUseCurrent>(value))
-        {
-            BOOST_THROW_EXCEPTION(
-                MPTInvariantViolation{} << bcos::errinfo_comment(
-                    "rollback: block " + std::to_string(block) +
-                    " lists a key in its manifest but holds no index row for it; the pre-image "
-                    "chain has a hole and the rollback cannot be completed"));
-        }
-        if (std::holds_alternative<history::HistoryAbsent>(value))
+        if (!oldValue)
         {
             deletes.push_back(std::move(stateKey));
             continue;
         }
-        auto& bytes = std::get<bcos::bytes>(value);
         executor_v1::StateValue entry;
-        entry.set(std::string(bytes.begin(), bytes.end()));
+        entry.set(std::string(oldValue->begin(), oldValue->end()));
         writes.emplace_back(std::move(stateKey), std::move(entry));
     }
 
@@ -143,26 +166,19 @@ bcos::task::Task<std::pair<std::size_t, std::size_t>> reverseApplyBlock(Storage&
     co_return std::pair<std::size_t, std::size_t>{written, removed};
 }
 
-/// Keys one block's manifest lists, without reading a single pre-image — what a dry run counts.
-template <history::HistoryTables const& Tables, class Storage>
-bcos::task::Task<std::size_t> countBlockKeys(Storage& storage, protocol::BlockNumber block)
-{
-    auto const keys = co_await history::ReverseHistoryStore<Tables>::keysOfBlock(storage, block);
-    co_return keys.size();
-}
-
 }  // namespace detail
 
 /// Roll the state and trie planes of @p storage back to the end of block @p target.
 ///
 /// Blocks are undone newest first: for each block B from @p tip down to `target + 1`, the state
-/// pre-images and the trie-node pre-images of B are written back TOGETHER, and only then is B's
-/// own history deleted. Applying both planes before dropping either block's records is what keeps
-/// an interrupted run recoverable: a crash mid-block leaves that block's manifests and index rows
+/// pre-images and the trie-node pre-images of B are written back TOGETHER, and only then are B's
+/// own history rows deleted. Applying both planes before dropping either block's records is what
+/// keeps an interrupted run recoverable: a crash mid-block leaves that block's meta and shard rows
 /// intact, so re-running redoes it — the writes are absolute values, so redoing one is a no-op.
 ///
 /// **The node must be stopped.** This writes directly into the state plane with no coordination
-/// with a running scheduler, consensus or RPC.
+/// with a running scheduler, consensus or RPC, and the store objects it uses are its own (see the
+/// file header on why no `publish` is needed for the expiries below).
 ///
 /// **Scope of what is rolled back: the state plane and the trie node rows, and nothing else.**
 /// Not a hedge — the capture set is decided. HistoryCommit.h::isHistoricalStateRow keeps only the
@@ -171,10 +187,11 @@ bcos::task::Task<std::size_t> countBlockKeys(Storage& storage, protocol::BlockNu
 /// and are still on disk when this returns. A caller that needs a full block rollback has to deal
 /// with those itself.
 ///
-/// Every block in (@p target, @p tip] must have a manifest in BOTH histories, or the whole
-/// rollback is refused before the first write: a missing manifest is indistinguishable from an
-/// empty one at the keysOfBlock level, so proceeding would silently skip that block and leave the
-/// live plane straddling two block heights.
+/// Every block in (@p target, @p tip] must have a meta row in BOTH histories, or the whole
+/// rollback is refused before the first write: without that check a block whose history was never
+/// recorded — a pre-MPT block, a block committed while the depth was 0, a block an expiry already
+/// dropped — would be walked past, and the live plane would be left straddling two block heights
+/// while the run reported success.
 ///
 /// **The tip row is left for the operator, by decision.** `s_current_state:current_number` is
 /// outside the capture set above, so it always still reads the pre-rollback tip when this returns;
@@ -184,16 +201,15 @@ bcos::task::Task<std::size_t> countBlockKeys(Storage& storage, protocol::BlockNu
 /// a real tip move touches.
 ///
 /// @param stateDepth H_state, @param proofDepth H_proof — the retention depths the node runs
-///        with. They bound how far back a rollback can reach: the pre-image of the oldest block
-///        being undone is read AT block @p target, so @p target must still be inside both
-///        windows.
-/// @param apply false = dry run: count what would change from the manifests, write nothing.
-/// @throws InvalidHistoryBlock when @p target is negative or not below @p tip; HistoryPruned when
-///         @p target predates either retention window; MPTInvariantViolation on a hole in either
-///         history chain.
+///        with. They are checked, not used: a rollback reads each block's OWN records rather than
+///        querying at a height, so the retention window bounds how far back a target can be but
+///        plays no part in reading. A depth of 0 means that history was never written at all.
+/// @param apply false = dry run: count what would change from the meta rows, write nothing.
+/// @throws InvalidHistoryBlock when @p target is negative, not below @p tip, or names a history
+///         this node never recorded; HistoryPruned when @p target predates either retention
+///         window; MPTInvariantViolation on a missing or damaged block inside the range.
 template <class Storage>
-    requires history::SeekableStateStorage<Storage> && history::WritableStateStorage<Storage> &&
-             bcos::storage2::ReadableStorage<Storage, executor_v1::StateKey>
+    requires history::QueryableStateStorage<Storage> && history::WritableStateStorage<Storage>
 bcos::task::Task<RollbackReport> rollbackTo(Storage& storage, protocol::BlockNumber tip,
     protocol::BlockNumber target, protocol::BlockNumber stateDepth,
     protocol::BlockNumber proofDepth, bool apply)
@@ -223,9 +239,9 @@ bcos::task::Task<RollbackReport> rollbackTo(Storage& storage, protocol::BlockNum
                     std::string(planeName) + " cannot be rolled back; the operation is refused"));
         }
     }
-    // The oldest read this rollback performs is "the value at block target", so target itself has
-    // to be inside both windows. Checking up front turns "we rewrote 900 blocks and then hit a
-    // pruned one" into a refusal before the first write.
+    // The oldest block this rollback touches is `target + 1`, whose records are what restore the
+    // state as of @p target. Checking the depths up front turns "we rewrote 900 blocks and then
+    // hit a pruned one" into a refusal before the first write.
     for (auto const depth : {stateDepth, proofDepth})
     {
         if (target < tip - depth + 1)
@@ -238,65 +254,74 @@ bcos::task::Task<RollbackReport> rollbackTo(Storage& storage, protocol::BlockNum
         }
     }
 
-    // Every block being undone must actually HAVE a manifest, in both histories, before anything
-    // is written.
+    // Every block being undone must actually HAVE a meta row, in both histories, before anything
+    // is written — and the counts those rows declare are what the dry run reports, so the pre-check
+    // and the dry run are one pass rather than two.
     //
-    // keysOfBlock() answers "no manifest" and "manifest listing nothing" identically — an empty
-    // vector — so without this check a block whose history is missing looks like a block that
-    // changed nothing, and the rollback quietly skips it and reports success for the range. That
-    // happens for free with the CLI's default retention depth of 128 against a node configured
-    // shorter, and it happens for real on a B.10 ② hole. The damage is silent: the live plane ends
-    // up a mixture of two block heights, and nothing downstream notices — the caller's own
-    // post-rollback re-audit compares the tree against the TARGET block's root, which a partial
-    // rollback of the state plane can still satisfy when the skipped block touched no trie node.
-    auto const stateManifests = co_await detail::scanManifests<history::kStateHistory>(storage);
-    auto const trieManifests = co_await detail::scanManifests<history::kTrieHistory>(storage);
+    // The damage the check prevents is silent: skipping one block leaves the live plane a mixture
+    // of two block heights, and nothing downstream notices — the caller's own post-rollback
+    // re-audit compares the tree against the TARGET block's root, which a partial rollback of the
+    // state plane can still satisfy when the skipped block touched no trie node. It happens for
+    // free with the CLI's default retention depth of 128 against a node configured shorter, and it
+    // happens for real on a B.10 ② hole.
+    std::map<protocol::BlockNumber, std::pair<std::size_t, std::size_t>> declared;
     for (auto block = target + 1; block <= tip; ++block)
     {
-        for (auto const& [manifests, name] : {std::pair{std::cref(stateManifests), "StateHistory"},
-                 std::pair{std::cref(trieManifests), "TrieHistory"}})
+        auto const stateMeta =
+            co_await detail::readBlockMeta<history::kStateHistory>(storage, block);
+        auto const trieMeta = co_await detail::readBlockMeta<history::kTrieHistory>(storage, block);
+        for (auto const& [meta, name] : {std::pair{std::cref(stateMeta), "StateHistory"},
+                 std::pair{std::cref(trieMeta), "TrieHistory"}})
         {
-            if (!manifests.get().contains(block))
+            if (!meta.get())
             {
                 BOOST_THROW_EXCEPTION(
                     MPTInvariantViolation{} << bcos::errinfo_comment(
                         "rollback " + std::to_string(tip) + " -> " + std::to_string(target) +
                         " refused: block " + std::to_string(block) + " has no " + name +
-                        " manifest, so its pre-images cannot be replayed. Nothing was written. "
+                        " meta row, so its pre-images cannot be replayed. Nothing was written. "
                         "Check the retention depths, and run `mpt-audit history` for the full "
                         "picture."));
             }
         }
+        declared.emplace(block,
+            std::pair<std::size_t, std::size_t>{stateMeta->recordCount, trieMeta->recordCount});
     }
 
     RollbackReport report{.tip = tip, .target = target, .applied = apply};
+    // One store per plane for the whole walk. They exist for their disk-facing members only:
+    // readBlock and expire never touch the index, so these two objects carry no state between
+    // blocks and nothing is ever published into them (file header).
+    history::StateHistoryStore stateStore;
+    history::TrieHistoryStore trieStore;
+
     for (auto block = tip; block > target; --block)
     {
         ++report.blocks;
         if (!apply)
         {
-            auto const stateKeys =
-                co_await detail::countBlockKeys<history::kStateHistory>(storage, block);
-            auto const trieKeys =
-                co_await detail::countBlockKeys<history::kTrieHistory>(storage, block);
-            report.stateRows += stateKeys;
-            report.trieRows += trieKeys;
+            auto const& [stateRecords, trieRecords] = declared.at(block);
+            report.stateRows += stateRecords;
+            report.trieRows += trieRecords;
             continue;
         }
 
-        auto const stateApplied = co_await detail::reverseApplyBlock<history::kStateHistory>(
-            storage, block, tip, stateDepth);
-        auto const trieApplied = co_await detail::reverseApplyBlock<history::kTrieHistory>(
-            storage, block, tip, proofDepth);
+        auto const stateApplied = co_await detail::reverseApplyBlock(stateStore, storage, block);
+        auto const trieApplied = co_await detail::reverseApplyBlock(trieStore, storage, block);
         report.stateRows += stateApplied.first + stateApplied.second;
         report.trieRows += trieApplied.first + trieApplied.second;
         report.rowsWritten += stateApplied.first + trieApplied.first;
         report.rowsDeleted += stateApplied.second + trieApplied.second;
 
         // The block is undone; its own history is what goes last (spec B.5's ordering, applied to
-        // rollback: while the manifest survives, re-running the block is possible).
-        co_await history::StateHistoryStore::expire(storage, storage, block);
-        co_await history::TrieHistoryStore::expire(storage, storage, block);
+        // rollback: while the meta row survives, re-running the block is possible).
+        //
+        // RetentionBoundary::Keep — the default, spelled out because it is the load-bearing half
+        // of the difference from the commit path. This discards from the TOP, so the oldest block
+        // the store can answer for has not moved; advancing here would also refuse the very next
+        // step of this walk.
+        co_await stateStore.expire(storage, storage, block, history::RetentionBoundary::Keep);
+        co_await trieStore.expire(storage, storage, block, history::RetentionBoundary::Keep);
     }
 
     if (apply)
