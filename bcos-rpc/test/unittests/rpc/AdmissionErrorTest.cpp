@@ -106,6 +106,12 @@ BOOST_AUTO_TEST_CASE(statusWithoutGethWordsKeepsItsName)
     auto const timeout = admissionError(TS::TransactionPoolTimeout);
     BOOST_CHECK_EQUAL(timeout.code(), Web3DefaultError);
     BOOST_CHECK_EQUAL(timeout.msg(), "TransactionPoolTimeout");
+    // Below the table's first row (Unknown = 1), where the binary search stops at begin() without
+    // matching. EthEndpoint casts an Error's code straight to TransactionStatus, so an arbitrary
+    // int -- None among them -- reaches here.
+    auto const none = admissionError(TS::None);
+    BOOST_CHECK_EQUAL(none.code(), Web3DefaultError);
+    BOOST_CHECK_EQUAL(none.msg(), "None");
 }
 
 BOOST_AUTO_TEST_CASE(detailIsAppendedInParentheses)
