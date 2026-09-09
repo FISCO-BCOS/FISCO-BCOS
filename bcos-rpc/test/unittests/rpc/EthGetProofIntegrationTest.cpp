@@ -38,8 +38,8 @@
 #include <bcos-rpc/web3jsonrpc/endpoints/EthEndpoint.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <boost/test/unit_test.hpp>
 #include <boost/algorithm/hex.hpp>
+#include <boost/test/unit_test.hpp>
 #include <optional>
 #include <string>
 #include <vector>
@@ -80,10 +80,11 @@ using namespace bcos;
 using namespace bcos::test::fullchain;
 namespace mpt = bcos::ledger::mpt;
 
-using EpiNodeStorage = storage2::memory_storage::MemoryStorage<h256, bytes>;
+using EpiNodeStorage =
+    storage2::memory_storage::MemoryStorage<mpt::PathKey, bytes, storage2::memory_storage::ORDERED>;
 
-/// Snapshot every committed "/mpt/" row from the fixture's RocksDB backend into @p nodes —
-/// the read surface a production node reader serves, minus the wiring.
+/// Snapshot every committed node row from the fixture's RocksDB backend into @p nodes — the
+/// read surface a production node reader serves, minus the wiring.
 void epiLoadNodes(FullChainFixture& fixture, EpiNodeStorage& nodes)
 {
     task::syncWait([&]() -> task::Task<void> {
@@ -91,16 +92,13 @@ void epiLoadNodes(FullChainFixture& fixture, EpiNodeStorage& nodes)
         while (auto keyValue = co_await iterator.next())
         {
             auto&& [key, value] = *keyValue;
-            auto view = executor_v1::StateKeyView{key};
-            if (view.m_table == storage2::kMPTTable)
+            if (auto position = mpt::parsePathNodeStateKey(key))
             {
-                BOOST_REQUIRE_EQUAL(view.m_key.size(), h256::SIZE);
-                h256 hash{bcos::bytesConstRef(
-                    reinterpret_cast<bcos::byte const*>(view.m_key.data()), h256::SIZE)};
                 auto const* entry = std::get_if<storage::Entry>(std::addressof(value));
                 BOOST_REQUIRE(entry != nullptr);
                 auto raw = entry->get();
-                co_await storage2::writeOne(nodes, hash, bytes(raw.begin(), raw.end()));
+                co_await storage2::writeOne(
+                    nodes, std::move(*position), bytes(raw.begin(), raw.end()));
             }
         }
     }());

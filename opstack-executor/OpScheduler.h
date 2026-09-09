@@ -43,10 +43,12 @@
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/Errors.h>
 #include <bcos-ledger/mpt/MPTBuilder.h>
+#include <bcos-ledger/mpt/Trie.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
 #include <bcos-transaction-scheduler/HistoricalCallStorage.h>
+#include <bcos-transaction-scheduler/MPTNodeStorage.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
@@ -1321,7 +1323,10 @@ public:
                                                                         "internal error";
     }
 
-    /// Map OP / MPT exceptions to SchedulerError. Raw MPT faults are storage faults.
+    /// Map OP / MPT exceptions to SchedulerError. Raw MPT faults are storage faults; a root the
+    /// path-addressed node store no longer holds is NOT one — nothing is corrupt, the version
+    /// simply isn't there — so it answers with the same InvalidStatus the up-front root probe
+    /// uses, and the message says which root.
     scheduler::SchedulerError classifyException(std::exception_ptr eptr) const
     {
         try
@@ -1335,6 +1340,10 @@ public:
         catch (const bcos::evm::engine::OpStorageError&)
         {
             return scheduler::SchedulerError::OpStorageFault;
+        }
+        catch (const bcos::ledger::mpt::MPTHistoryUnavailable&)
+        {
+            return scheduler::SchedulerError::InvalidStatus;
         }
         catch (const bcos::ledger::mpt::MPTInvariantViolation&)
         {
@@ -1362,6 +1371,10 @@ public:
             return e.what();
         }
         catch (const bcos::evm::engine::OpStorageError& e)
+        {
+            return e.what();
+        }
+        catch (const bcos::ledger::mpt::MPTHistoryUnavailable& e)
         {
             return e.what();
         }
@@ -1553,16 +1566,26 @@ private:
                                          blockNumber)),
                 protocol::TransactionReceipt::Ptr{nullptr}};
         }
-        // Empty root needs no nodes; any other missing root is an error.
-        if (stateRoot != bcos::ledger::mpt::emptyRootHash() &&
-            !co_await storage2::existsOne(latestView, storage2::mptNodeStateKey(stateRoot)))
+        // Empty root needs no nodes; any other root must be the one the node store currently
+        // holds — read the account trie's fixed entry point (position "") and compare digests.
+        // A path store keeps one version per position, so this also rejects roots that HAVE been
+        // persisted but have since been overwritten: the historical call cannot be served until
+        // the trie-node history index lands.
+        if (stateRoot != bcos::ledger::mpt::emptyRootHash())
         {
-            co_return std::tuple{
-                BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
-                    fmt::format("eth_call: block {}'s state root has no persisted MPT nodes "
-                                "(trie-node persistence was not yet active at that height)",
-                        blockNumber)),
-                protocol::TransactionReceipt::Ptr{nullptr}};
+            bcos::scheduler_v1::ViewNodeStorage<ViewType> probeStorage(latestView);
+            bool const available = co_await bcos::ledger::mpt::holdsTrieRoot(
+                probeStorage, bcos::ledger::mpt::TrieScope::account(), stateRoot);
+            if (!available)
+            {
+                co_return std::tuple{
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
+                        fmt::format("eth_call: block {}'s state root is not the version the MPT "
+                                    "node store holds (trie-node persistence was not yet active "
+                                    "at that height, or the root is no longer the latest)",
+                            blockNumber)),
+                    protocol::TransactionReceipt::Ptr{nullptr}};
+            }
         }
 
         const auto& cfg = op::configAt(m_forkFlags);

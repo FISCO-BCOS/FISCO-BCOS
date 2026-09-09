@@ -239,11 +239,17 @@ BOOST_AUTO_TEST_CASE(MatchesReferenceAndStatefulCommit)
         TrieBuildResult const result = computeTrieRoot(sorted);
         BOOST_CHECK_EQUAL(result.root, expected);
 
-        bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
+        bcos::ledger::mpt::test::NodeMemoryStorage storage;
         auto commitResult = seedTrieFlushed(storage, emptyRootHash(), sorted);
         BOOST_CHECK_EQUAL(result.root, commitResult.root);
-        // unordered_map operator== is content-based: this is a byte-identical node-set check.
-        BOOST_CHECK(result.newNodes == commitResult.newNodes);
+        // Byte-identical node-set check: the stateless core keys nodes by bare position, the
+        // commit path by (scope, position), so scope the former before comparing.
+        std::map<PathKey, bcos::bytes> expectedRows;
+        for (auto const& [position, raw] : result.newNodes)
+        {
+            expectedRows.emplace(PathKey{.scope = TrieScope::account(), .position = position}, raw);
+        }
+        BOOST_CHECK(expectedRows == commitResult.upserts);
     }
 }
 

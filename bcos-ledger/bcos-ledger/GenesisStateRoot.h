@@ -18,7 +18,7 @@
  */
 #pragma once
 #include <bcos-framework/ledger/GenesisConfig.h>
-#include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-ledger/mpt/PathKey.h>
 #include <bcos-task/Task.h>
 #include <bcos-tool/Exceptions.h>
 #include <bcos-utilities/Common.h>
@@ -26,19 +26,12 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/throw_exception.hpp>
+#include <map>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 
 namespace bcos::ledger
 {
-/// The state-row key of an MPT trie node (table "/mpt/", row key = the 32 raw
-/// digest bytes). Ledger-owned spelling delegating to bcos-storage
-/// KeyPrefixes.h's storage2::mptNodeStateKey (the single source of the key
-/// layout), so installed consumers of the genesis loader headers need no
-/// bcos-storage include path (that directory is a build-tree-only, PRIVATE
-/// include of the ledger target).
-executor_v1::StateKey mptNodeStateKey(bcos::h256 const& hash);
 /// Strip a leading 0x/0X prefix, if present. Genesis alloc hex arrives
 /// 0x-prefixed from NodeConfig (which lowercases first) and possibly 0X-prefixed
 /// or unprefixed from direct GenesisConfig callers.
@@ -60,11 +53,10 @@ inline void unhexAllocExact(
     hex = stripHexPrefix(hex);
     if (hex.size() != expectedBytes * 2)
     {
-        BOOST_THROW_EXCEPTION(
-            bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                "genesis alloc " + std::string(field) + " must be exactly " +
-                std::to_string(expectedBytes * 2) + " hex digits, got " +
-                std::to_string(hex.size())));
+        BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                  "genesis alloc " + std::string(field) + " must be exactly " +
+                                  std::to_string(expectedBytes * 2) + " hex digits, got " +
+                                  std::to_string(hex.size())));
     }
     try
     {
@@ -86,10 +78,10 @@ inline bcos::bytes unhexAllocBytes(std::string_view hex, std::string_view field)
     hex = stripHexPrefix(hex);
     if (hex.size() % 2 != 0)
     {
-        BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                  "genesis alloc " + std::string(field) +
-                                  " must be even-length hex, got " + std::to_string(hex.size()) +
-                                  " digits"));
+        BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig()
+                              << bcos::errinfo_comment("genesis alloc " + std::string(field) +
+                                                       " must be even-length hex, got " +
+                                                       std::to_string(hex.size()) + " digits"));
     }
     bcos::bytes out;
     out.reserve(hex.size() / 2);
@@ -129,16 +121,18 @@ inline bcos::bytes unhexAllocBytes(std::string_view hex, std::string_view field)
 bcos::task::Task<bcos::h256> computeGenesisStateRoot(GenesisConfig const& genesis);
 
 /// The genesis state trie in full: the op-geth-compatible root plus EVERY node the build
-/// produced — account trie and each account's storage sub-trie — as hash-keyed raw RLP.
-/// Identical encodings across sub-tries hash identically and dedupe in the map.
+/// produced — account trie and each account's storage sub-trie — keyed by where it sits
+/// (mpt::PathKey). Two accounts with byte-identical storage tries therefore get their own rows;
+/// the de-duplication a hash-keyed map did is exactly what path addressing gives up, and the
+/// reason a destroyed account's nodes can be removed without a reachability argument.
 struct GenesisStateTrie
 {
     bcos::h256 root;
-    std::unordered_map<bcos::h256, bcos::bytes> nodes;
+    std::map<mpt::PathKey, bcos::bytes> nodes;
 };
 
 // computeGenesisStateRoot plus the produced nodes. Scenario B (L2, Ethereum-compatible)
-// chains need the nodes persisted as "/mpt/" state rows at genesis: block 1's incremental
+// chains need the nodes persisted as path-addressed state rows at genesis: block 1's incremental
 // MPT build (buildAndCollect with the genesis root as parent) reads parent-version nodes
 // through storage, and a missing node aborts execution loudly (MPTInvariantViolation).
 bcos::task::Task<GenesisStateTrie> computeGenesisStateTrie(GenesisConfig const& genesis);

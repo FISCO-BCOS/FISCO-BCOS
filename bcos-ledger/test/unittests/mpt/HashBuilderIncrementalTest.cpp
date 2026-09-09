@@ -25,6 +25,7 @@
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-ledger/mpt/NodeDecoder.h>
+#include <bcos-ledger/mpt/PathKey.h>
 #include <bcos-ledger/mpt/Trie.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
@@ -33,6 +34,7 @@
 #include <map>
 #include <optional>
 #include <random>
+#include <set>
 #include <unordered_set>
 #include <vector>
 
@@ -43,7 +45,7 @@ BOOST_AUTO_TEST_SUITE(HashBuilderIncrementalSuite)
 
 namespace
 {
-using NodeStorage = bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes>;
+using NodeStorage = bcos::ledger::mpt::test::NodeMemoryStorage;
 using ChangeMap = std::map<bcos::h256, std::optional<bcos::bytes>>;
 using KeyValueMap = std::map<bcos::h256, bcos::bytes>;
 
@@ -70,14 +72,26 @@ KeyValueMap applyChanges(KeyValueMap base, ChangeMap const& changes)
     return base;
 }
 
-// Run the incremental commit (flushed) and hand out the produced node delta via out-params.
+using PositionSet = std::set<bcos::bytes>;
+using PositionMap = std::map<bcos::bytes, bcos::bytes>;
+
+// Run the incremental commit (flushed) and hand out the produced row diff via out-params, with
+// the TrieScope stripped back off: every trie here is the account trie, so the position alone
+// carries all the information the oracles below compare.
 bcos::h256 incrementalCommit(NodeStorage& storage, bcos::h256 priorRoot, ChangeMap const& changes,
-    std::unordered_map<bcos::h256, bcos::bytes>& outNewNodes,
-    std::unordered_set<bcos::h256>& outObsoleted)
+    PositionMap& outUpserts, PositionSet& outDeletes)
 {
     auto result = commitTrieFlushed(storage, priorRoot, changes);
-    outNewNodes = std::move(result.newNodes);
-    outObsoleted = std::move(result.obsoletedNodes);
+    outUpserts.clear();
+    outDeletes.clear();
+    for (auto& [key, raw] : result.upserts)
+    {
+        outUpserts.emplace(key.position, std::move(raw));
+    }
+    for (auto const& key : result.deletes)
+    {
+        outDeletes.insert(key.position);
+    }
     return result.root;
 }
 
@@ -86,7 +100,7 @@ bcos::h256 incrementalCommit(NodeStorage& storage, bcos::h256 priorRoot, ChangeM
 void checkReadback(NodeStorage& storage, bcos::h256 root, KeyValueMap const& expected,
     std::vector<bcos::h256> const& absent)
 {
-    Trie<NodeStorage> trie(storage, root);
+    Trie<NodeStorage> trie(storage, TrieScope::account(), root);
     for (auto const& [key, value] : expected)
     {
         auto got = bcos::task::syncWait(trie.get(key));
@@ -100,44 +114,46 @@ void checkReadback(NodeStorage& storage, bcos::h256 root, KeyValueMap const& exp
     }
 }
 
-// Collect the hashes of every hash-addressed node reachable from @p root (the live node set of
-// this trie version). Extension children and branch children are followed; inline children live
-// inside their parent's encoding and have no hash of their own.
-std::unordered_set<bcos::h256> reachableHashes(NodeStorage& storage, bcos::h256 root)
+// Collect the POSITION of every row-bearing node reachable from the root of @p root's trie: start
+// at position "", follow branch and extension children by the position rules (spec A.1). Inline
+// children live inside their parent's encoding and own no row, so they contribute no position.
+PositionMap reachablePositions(NodeStorage& storage, bcos::h256 root)
 {
-    std::unordered_set<bcos::h256> out;
+    PositionMap out;
     if (root == emptyRootHash())
     {
         return out;
     }
-    std::vector<bcos::h256> queue{root};
+    std::vector<bcos::bytes> queue{bcos::bytes{}};
     while (!queue.empty())
     {
-        bcos::h256 const hash = queue.back();
+        bcos::bytes const position = queue.back();
         queue.pop_back();
-        if (!out.insert(hash).second)
-        {
-            continue;
-        }
-        auto raw = bcos::task::syncWait(bcos::storage2::readOne(storage, hash));
+        auto raw = bcos::task::syncWait(bcos::storage2::readOne(
+            storage, PathKey{.scope = TrieScope::account(), .position = position}));
         BOOST_REQUIRE_MESSAGE(raw.has_value(), "reachable node missing from storage");
         TrieNode const node = decodeNode(bcos::ref(*raw));
+        out.emplace(position, *raw);
         if (auto const* ext = std::get_if<ExtensionNode>(&node))
         {
             if (ext->child.size() == HASH_REF_ENCODED_SIZE && ext->child[0] == RLP_HASH_REF_PREFIX)
             {
-                queue.emplace_back(
-                    bcos::bytesConstRef(ext->child.data(), ext->child.size()).getCroppedData(1));
+                bcos::bytes child = position;
+                child.insert(child.end(), ext->sharedNibbles.begin(), ext->sharedNibbles.end());
+                queue.push_back(std::move(child));
             }
         }
         else if (auto const* branch = std::get_if<BranchNode>(&node))
         {
-            for (auto const& child : branch->children)
+            for (size_t nibble = 0; nibble < NIBBLE_RANGE; ++nibble)
             {
-                if (child.kind() == NodeRef::Kind::Hash)
+                if (branch->children[nibble].kind() != NodeRef::Kind::Hash)
                 {
-                    queue.push_back(child.hash());
+                    continue;
                 }
+                bcos::bytes child = position;
+                child.push_back(static_cast<bcos::byte>(nibble));
+                queue.push_back(std::move(child));
             }
         }
     }
@@ -172,14 +188,14 @@ bcos::h256 hexKey(std::string_view hex)
 }
 
 // Full oracle bundle for one incremental step: equivalence against BOTH independent from-scratch
-// builders, readback through Trie, and pruning safety (no obsoleted node is still referenced by
-// the new version; live nodes survive dropping the obsoleted set).
+// builders, readback through Trie, and delete safety (no deleted position is still occupied by
+// the new version; the live rows alone still serve every read).
 void checkIncrementalStep(
     NodeStorage& storage, bcos::h256 priorRoot, KeyValueMap const& base, ChangeMap const& changes)
 {
-    std::unordered_map<bcos::h256, bcos::bytes> newNodes;
-    std::unordered_set<bcos::h256> obsoleted;
-    auto const newRoot = incrementalCommit(storage, priorRoot, changes, newNodes, obsoleted);
+    PositionMap upserts;
+    PositionSet deletes;
+    auto const newRoot = incrementalCommit(storage, priorRoot, changes, upserts, deletes);
 
     // Equivalence: the incremental root must match a from-scratch build of the merged key set —
     // once via the stateless production core, once via the independent reference trie.
@@ -198,22 +214,25 @@ void checkIncrementalStep(
     }
     checkReadback(storage, newRoot, expected, absent);
 
-    // Pruning safety: obsoleted nodes are exactly dead weight — nothing the new version
-    // references may be in the obsoleted set...
-    auto const live = reachableHashes(storage, newRoot);
-    for (auto const& hash : obsoleted)
+    // Delete safety (G4): a position the new version still occupies must never be deleted —
+    // that is a hole in the trie, not wasted space.
+    auto const live = reachablePositions(storage, newRoot);
+    for (auto const& position : deletes)
     {
-        BOOST_CHECK_MESSAGE(!live.contains(hash), "obsoleted node still referenced by new root");
+        BOOST_CHECK_MESSAGE(
+            !live.contains(position), "deleted position still occupied by the new root");
     }
-    // ...and dropping (prior nodes ∩ obsoleted) while keeping newNodes must leave every live
-    // node resolvable: rebuild a pruned storage and re-run the readback.
+    // The rows the flush left behind must be exactly the live set — no leftovers, since a scan
+    // of this trie is what a verifier would enumerate.
+    BOOST_CHECK(scanTrieNodes(storage, TrieScope::account()) == live);
+
+    // A storage holding ONLY the live rows still answers every read: nothing reachable was
+    // deleted, and nothing unreachable is needed.
     NodeStorage pruned;
-    for (auto const& hash : live)
+    for (auto const& [position, raw] : live)
     {
-        auto raw = bcos::task::syncWait(bcos::storage2::readOne(storage, hash));
-        BOOST_REQUIRE(raw.has_value());
-        BOOST_REQUIRE_MESSAGE(!obsoleted.contains(hash), "live node would be pruned");
-        bcos::task::syncWait(bcos::storage2::writeOne(pruned, hash, *raw));
+        bcos::task::syncWait(bcos::storage2::writeOne(
+            pruned, PathKey{.scope = TrieScope::account(), .position = position}, raw));
     }
     checkReadback(pruned, newRoot, expected, absent);
 }
@@ -227,20 +246,20 @@ BOOST_AUTO_TEST_CASE(UpdateSingleLeafValue)
     checkIncrementalStep(storage, priorRoot, base, ChangeMap{{makeHash(0x11), bcos::bytes{0x02}}});
 }
 
-BOOST_AUTO_TEST_CASE(NoOpPutKeepsRootAndObsoletesNothing)
+BOOST_AUTO_TEST_CASE(NoOpPutKeepsRootAndTouchesNothing)
 {
     NodeStorage storage;
     KeyValueMap const base{
         {makeHash(0x11), bcos::bytes{0x01}}, {makeHash(0x22), bcos::bytes{0x02}}};
     auto const priorRoot = buildBase(storage, base);
 
-    std::unordered_map<bcos::h256, bcos::bytes> newNodes;
-    std::unordered_set<bcos::h256> obsoleted;
+    PositionMap upserts;
+    PositionSet deletes;
     auto const newRoot = incrementalCommit(
-        storage, priorRoot, ChangeMap{{makeHash(0x11), bcos::bytes{0x01}}}, newNodes, obsoleted);
+        storage, priorRoot, ChangeMap{{makeHash(0x11), bcos::bytes{0x01}}}, upserts, deletes);
 
     BOOST_CHECK(newRoot == priorRoot);
-    BOOST_CHECK(obsoleted.empty());
+    BOOST_CHECK(deletes.empty());
 }
 
 BOOST_AUTO_TEST_CASE(DeleteNonexistentKeyIsNoop)
@@ -250,14 +269,14 @@ BOOST_AUTO_TEST_CASE(DeleteNonexistentKeyIsNoop)
         {makeHash(0x11), bcos::bytes{0x01}}, {makeHash(0x22), bcos::bytes{0x02}}};
     auto const priorRoot = buildBase(storage, base);
 
-    std::unordered_map<bcos::h256, bcos::bytes> newNodes;
-    std::unordered_set<bcos::h256> obsoleted;
+    PositionMap upserts;
+    PositionSet deletes;
     auto const newRoot = incrementalCommit(
-        storage, priorRoot, ChangeMap{{makeHash(0x33), std::nullopt}}, newNodes, obsoleted);
+        storage, priorRoot, ChangeMap{{makeHash(0x33), std::nullopt}}, upserts, deletes);
 
     BOOST_CHECK(newRoot == priorRoot);
-    BOOST_CHECK(newNodes.empty());
-    BOOST_CHECK(obsoleted.empty());
+    BOOST_CHECK(upserts.empty());
+    BOOST_CHECK(deletes.empty());
 }
 
 BOOST_AUTO_TEST_CASE(DeleteLastKeyYieldsEmptyRoot)
@@ -266,14 +285,16 @@ BOOST_AUTO_TEST_CASE(DeleteLastKeyYieldsEmptyRoot)
     KeyValueMap const base{{makeHash(0x11), bcos::bytes{0x01}}};
     auto const priorRoot = buildBase(storage, base);
 
-    std::unordered_map<bcos::h256, bcos::bytes> newNodes;
-    std::unordered_set<bcos::h256> obsoleted;
+    PositionMap upserts;
+    PositionSet deletes;
     auto const newRoot = incrementalCommit(
-        storage, priorRoot, ChangeMap{{makeHash(0x11), std::nullopt}}, newNodes, obsoleted);
+        storage, priorRoot, ChangeMap{{makeHash(0x11), std::nullopt}}, upserts, deletes);
 
     BOOST_CHECK(newRoot == emptyRootHash());
-    BOOST_CHECK(newNodes.empty());
-    BOOST_CHECK(obsoleted == std::unordered_set<bcos::h256>{priorRoot});
+    BOOST_CHECK(upserts.empty());
+    // The emptied trie's only row was its root, at position "".
+    BOOST_CHECK(deletes == PositionSet{bcos::bytes{}});
+    BOOST_CHECK(scanTrieNodes(storage, TrieScope::account()).empty());
 }
 
 BOOST_AUTO_TEST_CASE(LeafSplitDeepSharedPrefix)
@@ -318,7 +339,7 @@ BOOST_AUTO_TEST_CASE(BranchCollapseKeepsUntouchedBranchUnrebuilt)
 {
     // Root branch: nibble 0 → one lone leaf, nibble 1 → a 16-way branch (via 17 keys). Deleting
     // the lone leaf collapses the root into ext{1}+branch; the surviving branch is re-referenced
-    // by hash — it must be neither obsoleted nor re-emitted.
+    // by hash — its row must be neither deleted nor re-written.
     NodeStorage storage;
     KeyValueMap base{{hexKey("0000000000000000000000000000000000000000000000000000000000000000"),
         bcos::bytes{0xAA}}};
@@ -330,28 +351,40 @@ BOOST_AUTO_TEST_CASE(BranchCollapseKeepsUntouchedBranchUnrebuilt)
     }
     auto const priorRoot = buildBase(storage, base);
 
-    // Identify the untouched subtree's node hash: the root branch's child at nibble 1.
-    auto rootRaw = bcos::task::syncWait(bcos::storage2::readOne(storage, priorRoot));
+    // The untouched subtree is the root branch's child at nibble 1, i.e. position "1".
+    bcos::bytes const untouchedPosition{0x01};
+    auto rootRaw = bcos::task::syncWait(
+        bcos::storage2::readOne(storage, PathKey{.scope = TrieScope::account(), .position = {}}));
     BOOST_REQUIRE(rootRaw.has_value());
     auto const rootNode = decodeNode(bcos::ref(*rootRaw));
     auto const& rootBranch = std::get<BranchNode>(rootNode);
     BOOST_REQUIRE(rootBranch.children[1].kind() == NodeRef::Kind::Hash);
-    auto const untouchedChild = rootBranch.children[1].hash();
+    auto const survivorBefore = bcos::task::syncWait(bcos::storage2::readOne(
+        storage, PathKey{.scope = TrieScope::account(), .position = untouchedPosition}));
+    BOOST_REQUIRE(survivorBefore.has_value());
 
-    std::unordered_map<bcos::h256, bcos::bytes> newNodes;
-    std::unordered_set<bcos::h256> obsoleted;
+    PositionMap upserts;
+    PositionSet deletes;
     auto const newRoot = incrementalCommit(storage, priorRoot,
         ChangeMap{{hexKey("0000000000000000000000000000000000000000000000000000000000000000"),
             std::nullopt}},
-        newNodes, obsoleted);
+        upserts, deletes);
 
     KeyValueMap expected = base;
     expected.erase(hexKey("0000000000000000000000000000000000000000000000000000000000000000"));
     BOOST_CHECK(newRoot == computeTrieRoot(expected).root);
-    BOOST_CHECK(!obsoleted.contains(untouchedChild));
-    BOOST_CHECK(!newNodes.contains(untouchedChild));
+    // The survivor branch stays where it is, byte for byte: the collapse folds the eliminated
+    // nibble into the new extension's shared prefix (spec A.5), so nothing below it moves.
+    BOOST_CHECK(!deletes.contains(untouchedPosition));
+    BOOST_CHECK(!upserts.contains(untouchedPosition));
+    auto const survivorAfter = bcos::task::syncWait(bcos::storage2::readOne(
+        storage, PathKey{.scope = TrieScope::account(), .position = untouchedPosition}));
+    BOOST_REQUIRE(survivorAfter.has_value());
+    BOOST_CHECK(*survivorAfter == *survivorBefore);
     // Only the new root extension should have been emitted for this shape.
-    BOOST_CHECK_EQUAL(newNodes.size(), 1U);
+    BOOST_CHECK_EQUAL(upserts.size(), 1U);
+    // ...and the lone leaf's own position is the only row that goes.
+    BOOST_CHECK(deletes == PositionSet{bcos::bytes{0x00}});
 }
 
 BOOST_AUTO_TEST_CASE(SequentialCommitChain)

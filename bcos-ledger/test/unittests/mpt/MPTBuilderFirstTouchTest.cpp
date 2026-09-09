@@ -49,7 +49,7 @@ BOOST_AUTO_TEST_SUITE(MPTBuilderFirstTouchSuite)
 
 namespace
 {
-using NodeStorage = bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes>;
+using NodeStorage = bcos::ledger::mpt::test::NodeMemoryStorage;
 
 // A distinct 32-byte slot key for index i (two marker bytes cover up to 65536 slots).
 bcos::h256 slotKeyAt(size_t i)
@@ -150,7 +150,8 @@ BOOST_AUTO_TEST_CASE(FirstTouchDoesNotBackfillColdSlots)
     BOOST_CHECK_EQUAL(account->balance, bcos::u256(70));
     BOOST_CHECK(account->codeHash == makeHash(0xC2));
     // A cold slot is genuinely absent from the trie (SlotNotInMPT territory, spec §5.9).
-    Trie<NodeStorage> storageTrie(storage, account->storageRoot);
+    Trie<NodeStorage> storageTrie(
+        storage, TrieScope::storage(accountKeyHash(addr)), account->storageRoot);
     auto cold = bcos::task::syncWait(storageTrie.get(slotKeyHash(slotKeyAt(0))));
     BOOST_CHECK(!cold.has_value());
 }

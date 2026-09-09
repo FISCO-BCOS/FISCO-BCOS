@@ -24,7 +24,9 @@
 #include "MPTReadView.h"
 #include "Nibble.h"
 #include "NodeDecoder.h"
+#include "PathKey.h"
 #include "StorageValueCodec.h"
+#include "Trie.h"
 #include "TrieNode.h"
 // AnyHasher.h defines the free bcos::crypto::hasher::hash(); OpenSSLHasher.h only defines the
 // hasher type. A unity build can mask a missing include of the former, so keep both explicit.
@@ -99,22 +101,39 @@ struct ProofWalk
     bool rootMissing{false};           ///< the root hash itself is absent from storage
 };
 
-/// Walk from @p root along @p path (nibble sequence), collecting each hash-referenced node's raw
-/// RLP. Stops at the leaf holding the key, or at the node where the path dead-ends (exclusion
-/// proof — the collected prefix is still returned). This descent intentionally does not reuse
-/// Trie::get(): the proof needs every visited node's raw encoding, which Trie discards.
-/// @throws MPTInvariantViolation when a non-root referenced node is missing from storage.
-template <bcos::storage2::ReadableStorage<bcos::h256> Storage>
-bcos::task::Task<ProofWalk> proofWalk(Storage& storage, bcos::h256 root, bcos::bytes path)
+/// Walk the trie @p scope rooted at @p root along @p path (nibble sequence), collecting each
+/// hash-referenced node's raw RLP. Stops at the leaf holding the key, or at the node where the
+/// path dead-ends (exclusion proof — the collected prefix is still returned). This descent
+/// intentionally does not reuse Trie::get(): the proof needs every visited node's raw encoding,
+/// which Trie discards.
+///
+/// Nodes are located BY POSITION and checked against the hash their parent records, so the proof
+/// bytes are byte-identical to what the hash-addressed walk produced — a proof commits to node
+/// CONTENT, and content is what path addressing left alone.
+///
+/// A root that the store does not currently hold reports rootMissing rather than throwing: to a
+/// caller it is the same request-level outcome as an unknown root always was, and generateProof
+/// maps it to ProofErrorCode::BlockNotCommitted.
+/// @p hasher is the caller's — the SAME context generateProof uses for its slot-key transform.
+/// Constructing one here instead would pin node verification to keccak while the key transform
+/// followed HasherT, so an SM3 instantiation would look up nodes along SM3 paths and reject them
+/// against keccak digests.
+/// @throws MPTInvariantViolation when a non-root referenced node is missing or its bytes disagree
+/// with the hash its parent records.
+template <bcos::storage2::ReadableStorage<PathKey> Storage, bcos::crypto::hasher::Hasher HasherT>
+bcos::task::Task<ProofWalk> proofWalk(
+    Storage& storage, TrieScope const& scope, bcos::h256 root, bcos::bytes path, HasherT& hasher)
 {
     ProofWalk out;
-    auto rootRaw = co_await bcos::storage2::readOne(storage, root);
-    if (!rootRaw)
+    try
+    {
+        out.nodes.push_back(co_await loadRootBytesAt(storage, scope, root, hasher));
+    }
+    catch (MPTHistoryUnavailable const&)
     {
         out.rootMissing = true;
         co_return out;
     }
-    out.nodes.push_back(std::move(*rootRaw));
     // decodeNode deep-copies into the TrieNode, so later push_back reallocations are harmless.
     TrieNode node = decodeNode(bcos::ref(out.nodes.back()));
     size_t pos = 0;  // nibbles consumed so far
@@ -142,19 +161,17 @@ bcos::task::Task<ProofWalk> proofWalk(Storage& storage, bcos::h256 root, bcos::b
             {
                 co_return out;  // path diverges inside the extension: dead end
             }
+            // An extension consumes its whole shared prefix: child position = P || shared.
             pos += ext->sharedNibbles.size();
             // The child is a raw RLP ref: EITHER the 33-byte hash string (0xa0 + digest) OR the
             // inline child's complete RLP encoding (already part of this node's proof item).
             if (ext->child.size() == HASH_REF_ENCODED_SIZE && ext->child[0] == RLP_HASH_REF_PREFIX)
             {
                 bcos::h256 const childHash(ext->child.data() + 1, bcos::h256::SIZE);
-                auto childRaw = co_await bcos::storage2::readOne(storage, childHash);
-                if (!childRaw)
-                {
-                    BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
-                                              "proofWalk: storage lacks a referenced trie node"));
-                }
-                out.nodes.push_back(std::move(*childRaw));
+                out.nodes.push_back(co_await loadNodeBytesAt(storage,
+                    PathKey{
+                        .scope = scope, .position = bcos::bytes(path.begin(), path.begin() + pos)},
+                    childHash, hasher));
                 TrieNode next = decodeNode(bcos::ref(out.nodes.back()));
                 node = std::move(next);
             }
@@ -180,17 +197,14 @@ bcos::task::Task<ProofWalk> proofWalk(Storage& storage, bcos::h256 root, bcos::b
             co_return out;
         }
         NodeRef const& child = branch.children.at(path.at(pos));
+        // A branch consumes one nibble: child position = P || nibble.
         ++pos;
         if (child.kind() == NodeRef::Kind::Hash)
         {
             bcos::h256 const childHash = child.hash();
-            auto childRaw = co_await bcos::storage2::readOne(storage, childHash);
-            if (!childRaw)
-            {
-                BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
-                                          "proofWalk: storage lacks a referenced trie node"));
-            }
-            out.nodes.push_back(std::move(*childRaw));
+            out.nodes.push_back(co_await loadNodeBytesAt(storage,
+                PathKey{.scope = scope, .position = bcos::bytes(path.begin(), path.begin() + pos)},
+                childHash, hasher));
             TrieNode next = decodeNode(bcos::ref(out.nodes.back()));
             node = std::move(next);
         }
@@ -243,20 +257,25 @@ bcos::task::Task<ProofWalk> proofWalk(Storage& storage, bcos::h256 root, bcos::b
 /// the builders: accountKeyHash and the trie the proof reads were produced with the chain's
 /// hasher — parameterizing this function alone does not make an SM3 chain, it keeps the door
 /// open for one).
-template <bcos::storage2::ReadableStorage<bcos::h256> Storage,
+template <bcos::storage2::ReadableStorage<PathKey> Storage,
     bcos::crypto::hasher::Hasher HasherT = bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>
 bcos::task::Task<std::variant<EIP1186Proof, ProofErrorCode>> generateProof(Storage& storage,
     bcos::h256 stateRoot, bcos::Address address, std::span<bcos::h256 const> slots,
     bool fullTrie = true)
 {
-    if (stateRoot == emptyRootHash())
+    if (stateRoot == emptyRootHash<HasherT>())
     {
         co_return ProofErrorCode::AccountNotInMPT;  // empty trie holds no accounts
     }
 
+    // ONE hash context for this whole proof: the SLOT key transform, and the verification of
+    // every node either walk reads. The ACCOUNT key transform is not on it — accountKeyHash()
+    // is pinned to keccak256 and builds its own context (MPTReadView.cpp); see @tparam HasherT
+    // above for what that costs an SM3 deployment.
+    HasherT hasher;
     auto const addressKeyHash = accountKeyHash(address);
-    auto accountWalk =
-        co_await detail::proofWalk(storage, stateRoot, bytesToNibbles(addressKeyHash.ref()));
+    auto accountWalk = co_await detail::proofWalk(
+        storage, TrieScope::account(), stateRoot, bytesToNibbles(addressKeyHash.ref()), hasher);
     if (accountWalk.rootMissing)
     {
         co_return ProofErrorCode::BlockNotCommitted;
@@ -276,16 +295,18 @@ bcos::task::Task<std::variant<EIP1186Proof, ProofErrorCode>> generateProof(Stora
     out.accountProof = std::move(accountWalk.nodes);
 
     out.storageProof.reserve(slots.size());
-    HasherT hasher;  // one hash context, reused for every requested slot's key transform
     for (auto const& slot : slots)
     {
         StorageProof entry;
         entry.key = slot;
-        if (account.storageRoot != emptyRootHash())
+        if (account.storageRoot != emptyRootHash<HasherT>())
         {
             auto const slotHash = slotKeyHash(slot, hasher);
-            auto slotWalk = co_await detail::proofWalk(
-                storage, account.storageRoot, bytesToNibbles(slotHash.ref()));
+            // The storage trie is found by its OWNER — the account key the walk above just
+            // consumed — with storageRoot demoted to the checksum that proves the root row is the
+            // one the leaf commits to (spec §8.3).
+            auto slotWalk = co_await detail::proofWalk(storage, TrieScope::storage(addressKeyHash),
+                account.storageRoot, bytesToNibbles(slotHash.ref()), hasher);
             if (slotWalk.rootMissing)
             {
                 // A committed account leaf references this root; its absence is corruption, not a

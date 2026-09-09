@@ -73,8 +73,9 @@ BOOST_AUTO_TEST_CASE(L2GenesisNodesReachBackend)
     BOOST_CHECK_NE(genesisHeader->stateRoot(), h256{});
     BOOST_CHECK_GT(fixture.backendNodeCount(), 0);
 
-    // The genesis root's own node row is present and hashes back to the root.
-    auto rootNode = fixture.backendNode(genesisHeader->stateRoot());
+    // The account trie's root row — position "" — is present and hashes back to the header's
+    // stateRoot, which is what a reader checks it against.
+    auto rootNode = fixture.backendNode(bcos::ledger::mpt::accountRootPathKey());
     BOOST_REQUIRE(rootNode.has_value());
     BOOST_CHECK_EQUAL(
         crypto::keccak256Hash(bcos::ref(*rootNode)).hex(), genesisHeader->stateRoot().hex());

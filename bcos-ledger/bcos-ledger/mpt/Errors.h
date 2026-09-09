@@ -43,4 +43,19 @@ DERIVE_BCOS_EXCEPTION(UnexpectedBCOSFieldInL2);
 /// line in KNOWN_BCOS_EXTENSION_FIELDS once that judgement is made.
 DERIVE_BCOS_EXCEPTION(UnknownAccountRowField);
 
+/// Thrown when a read asks for a state root the path-addressed node store cannot serve.
+///
+/// Node rows are keyed by POSITION, and a position holds exactly ONE version — the current one.
+/// So a root the caller supplies is only readable while it IS the store's current root: the walk
+/// reads the trie root at position "" and compares keccak(bytes) against the requested root, and
+/// a disagreement means the caller asked about an older version whose bytes that position no
+/// longer holds. Restoring those reads needs the trie-node history index (spec appendix B), which
+/// this PR does not build — hence a loud, specific failure rather than silently answering with
+/// today's state, which would be a wrong answer indistinguishable from a right one.
+///
+/// Distinct from MPTInvariantViolation on purpose: a mismatch at a CHILD position (a hash the
+/// parent just told us to expect) is corruption, while a mismatch at the ROOT is the ordinary
+/// "that version is gone" outcome of keeping one version per position.
+DERIVE_BCOS_EXCEPTION(MPTHistoryUnavailable);
+
 }  // namespace bcos::ledger::mpt

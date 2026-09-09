@@ -39,9 +39,9 @@
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include "bcos-ledger/mpt/MPTNodeReadStorage.h"
 #include "bcos-scheduler/src/TarsExecutorManager.h"
 #include "bcos-single-consensus/SingleNodeConsensus.h"
-#include "bcos-storage/MPTNodeReadStorage.h"
 #include "bcos-storage/RocksDBStorage.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
@@ -1671,7 +1671,8 @@ std::string Initializer::getBlockDBPath(bool _airVersion) const
            c_fileSeparator + blockDBPath;
 }
 
-std::shared_ptr<bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>> Initializer::mptNodeReader()
+std::shared_ptr<bcos::storage2::AnyStorage<bcos::ledger::mpt::PathKey, bcos::bytes>>
+Initializer::mptNodeReader()
 {
     if (!m_globalStateStorageInitializer)
     {
@@ -1681,7 +1682,7 @@ std::shared_ptr<bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>> Initializer
     // state, one WriteBatch) into latestBackend(), and eth_getProof targets committed
     // headers — the pending layers of the MultiLayerStorage belong to in-flight blocks and
     // must stay invisible to proofs.
-    return bcos::storage2::makeMPTNodeReader(
+    return bcos::ledger::mpt::makeMPTNodeReader(
         m_globalStateStorageInitializer->storage().latestBackend());
 }
 

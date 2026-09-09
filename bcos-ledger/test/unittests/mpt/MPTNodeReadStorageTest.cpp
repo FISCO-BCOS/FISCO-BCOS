@@ -14,11 +14,11 @@
  *  limitations under the License.
  *
  * @brief MPTNodeReadStorage — the eth_getProof node reader adapter (M8.3 wiring): node rows
- *        written through the ORDINARY state write path (Entry keyed mptNodeStateKey(hash)
+ *        written through the ORDINARY state write path (Entry keyed pathNodeStateKey(position)
  *        into a real RocksDBStorage2<StateKey, ..., StateKeyResolver, ...>) read back by raw
  *        h256 through the adapter, both directly and through the type-erased
  *        AnyStorage<h256, bytes> handle makeMPTNodeReader() hands to NodeService.
- * @file TestMPTNodeReadStorage.cpp
+ * @file MPTNodeReadStorageTest.cpp
  */
 
 #include "bcos-framework/storage2/AnyStorage.h"
@@ -26,8 +26,8 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Wait.h"
 #include <bcos-framework/storage/Entry.h>
-#include <bcos-storage/KeyPrefixes.h>
-#include <bcos-storage/MPTNodeReadStorage.h>
+#include <bcos-ledger/mpt/MPTNodeReadStorage.h>
+#include <bcos-ledger/mpt/PathKey.h>
 #include <bcos-storage/RocksDBStorage2.h>
 #include <bcos-storage/StateKVResolver.h>
 #include <boost/filesystem.hpp>
@@ -55,13 +55,14 @@ bytes nodeRlpB()
     return bytes{0xC3, 0x82, 0x13, 0x37};
 }
 
-/// Write a node row exactly the way production does: an Entry under mptNodeStateKey(hash)
-/// through the ordinary storage2 write path — no adapter involved on the write side.
-task::Task<void> writeNodeRow(auto& storage, h256 const& hash, bytes rlp)
+/// Write a node row exactly the way production does: an Entry under
+/// pathNodeStateKey(position) through the ordinary storage2 write path — no adapter involved
+/// on the write side.
+task::Task<void> writeNodeRow(auto& storage, ledger::mpt::PathKey const& position, bytes rlp)
 {
     storage::Entry entry;
     entry.set(std::move(rlp));
-    co_await storage2::writeOne(storage, storage2::mptNodeStateKey(hash), std::move(entry));
+    co_await storage2::writeOne(storage, ledger::mpt::pathNodeStateKey(position), std::move(entry));
 }
 }  // namespace
 
@@ -82,35 +83,39 @@ struct TestMPTNodeReadStorageFixture
     ~TestMPTNodeReadStorageFixture() { boost::filesystem::remove_all(path); }
 
     std::unique_ptr<::rocksdb::DB> rocksDB;
-    h256 hashA{1U};
-    h256 hashB{2U};
-    h256 hashMissing{3U};
+    // Three positions in one account's storage trie: two written, one never.
+    ledger::mpt::PathKey positionA{.scope = ledger::mpt::TrieScope::storage(h256{1U}),
+        .position = bytes{0x0a}};
+    ledger::mpt::PathKey positionB{.scope = ledger::mpt::TrieScope::storage(h256{1U}),
+        .position = bytes{0x0b}};
+    ledger::mpt::PathKey positionMissing{.scope = ledger::mpt::TrieScope::account(),
+        .position = bytes{0x0c}};
 };
 
-BOOST_FIXTURE_TEST_SUITE(TestMPTNodeReadStorage, TestMPTNodeReadStorageFixture)
+BOOST_FIXTURE_TEST_SUITE(MPTNodeReadStorageSuite, TestMPTNodeReadStorageFixture)
 
-// Ordinary state write path in, adapter read by raw h256 out; a hash never written reads
+// Ordinary state write path in, adapter read by position out; a position never written reads
 // back as nullopt — the exact miss shape generateProof's proofWalk keys its rootMissing /
 // broken-chain handling on.
 BOOST_AUTO_TEST_CASE(readOneRoundTripAndMiss)
 {
     task::syncWait([this]() -> task::Task<void> {
         StateRocksDB storage(*rocksDB, StateKeyResolver{}, StateValueResolver{});
-        co_await writeNodeRow(storage, hashA, nodeRlpA());
-        co_await writeNodeRow(storage, hashB, nodeRlpB());
+        co_await writeNodeRow(storage, positionA, nodeRlpA());
+        co_await writeNodeRow(storage, positionB, nodeRlpB());
 
-        storage2::MPTNodeReadStorage reader(storage);
-        auto valueA = co_await reader.readOne(hashA);
+        ledger::mpt::MPTNodeReadStorage reader(storage);
+        auto valueA = co_await reader.readOne(positionA);
         BOOST_REQUIRE(valueA.has_value());
         BOOST_CHECK(*valueA == nodeRlpA());
 
-        // Negative control: a different hash yields DIFFERENT bytes (the adapter keys reads
-        // by hash, it does not replay a constant), and an absent hash yields nullopt.
-        auto valueB = co_await reader.readOne(hashB);
+        // Negative control: a different position yields DIFFERENT bytes (the adapter keys
+        // reads by position, it does not replay a constant), and an absent one yields nullopt.
+        auto valueB = co_await reader.readOne(positionB);
         BOOST_REQUIRE(valueB.has_value());
         BOOST_CHECK(*valueB != *valueA);
         BOOST_CHECK(*valueB == nodeRlpB());
-        auto miss = co_await reader.readOne(hashMissing);
+        auto miss = co_await reader.readOne(positionMissing);
         BOOST_CHECK(!miss.has_value());
     }());
 }
@@ -121,11 +126,11 @@ BOOST_AUTO_TEST_CASE(readSomeKeepsOrderAndGaps)
 {
     task::syncWait([this]() -> task::Task<void> {
         StateRocksDB storage(*rocksDB, StateKeyResolver{}, StateValueResolver{});
-        co_await writeNodeRow(storage, hashA, nodeRlpA());
-        co_await writeNodeRow(storage, hashB, nodeRlpB());
+        co_await writeNodeRow(storage, positionA, nodeRlpA());
+        co_await writeNodeRow(storage, positionB, nodeRlpB());
 
-        storage2::MPTNodeReadStorage reader(storage);
-        std::vector<h256> keys{hashA, hashMissing, hashB};
+        ledger::mpt::MPTNodeReadStorage reader(storage);
+        std::vector<ledger::mpt::PathKey> keys{positionA, positionMissing, positionB};
         auto values = co_await storage2::readSome(reader, keys);
         BOOST_REQUIRE_EQUAL(values.size(), 3U);
         BOOST_REQUIRE(values[0].has_value());
@@ -136,21 +141,21 @@ BOOST_AUTO_TEST_CASE(readSomeKeepsOrderAndGaps)
     }());
 }
 
-// The production shape: makeMPTNodeReader() returns an AnyStorage<h256, bytes> handle that
+// The production shape: makeMPTNodeReader() returns an AnyStorage<PathKey, bytes> handle that
 // OWNS its adapter (aliasing shared_ptr), so the handle stays valid with no other reference
 // to the adapter — only the backend row storage must outlive it.
 BOOST_AUTO_TEST_CASE(anyStorageHandleOwnsItsAdapter)
 {
     task::syncWait([this]() -> task::Task<void> {
         StateRocksDB storage(*rocksDB, StateKeyResolver{}, StateValueResolver{});
-        co_await writeNodeRow(storage, hashA, nodeRlpA());
+        co_await writeNodeRow(storage, positionA, nodeRlpA());
 
-        auto reader = storage2::makeMPTNodeReader(storage);
+        auto reader = ledger::mpt::makeMPTNodeReader(storage);
         BOOST_REQUIRE(reader != nullptr);
-        auto value = co_await reader->readOne(hashA);
+        auto value = co_await reader->readOne(positionA);
         BOOST_REQUIRE(value.has_value());
         BOOST_CHECK(*value == nodeRlpA());
-        auto miss = co_await reader->readOne(hashMissing);
+        auto miss = co_await reader->readOne(positionMissing);
         BOOST_CHECK(!miss.has_value());  // negative control through the erased handle too
     }());
 }
@@ -161,18 +166,18 @@ BOOST_AUTO_TEST_CASE(anyStorageHandleOwnsItsAdapter)
 BOOST_AUTO_TEST_CASE(mutationsThrowReadsSurvive)
 {
     StateRocksDB storage(*rocksDB, StateKeyResolver{}, StateValueResolver{});
-    task::syncWait(writeNodeRow(storage, hashA, nodeRlpA()));
+    task::syncWait(writeNodeRow(storage, positionA, nodeRlpA()));
 
-    auto reader = storage2::makeMPTNodeReader(storage);
-    BOOST_CHECK_THROW(task::syncWait(reader->writeOne(hashB, nodeRlpB())), std::logic_error);
-    BOOST_CHECK_THROW(task::syncWait(reader->removeOne(hashA)), std::logic_error);
+    auto reader = ledger::mpt::makeMPTNodeReader(storage);
+    BOOST_CHECK_THROW(task::syncWait(reader->writeOne(positionB, nodeRlpB())), std::logic_error);
+    BOOST_CHECK_THROW(task::syncWait(reader->removeOne(positionA)), std::logic_error);
     BOOST_CHECK_THROW(task::syncWait(reader->range()), std::logic_error);
 
     // The rejected write really did not land, and reads still work.
-    auto valueA = task::syncWait(reader->readOne(hashA));
+    auto valueA = task::syncWait(reader->readOne(positionA));
     BOOST_REQUIRE(valueA.has_value());
     BOOST_CHECK(*valueA == nodeRlpA());
-    BOOST_CHECK(!task::syncWait(reader->readOne(hashB)).has_value());
+    BOOST_CHECK(!task::syncWait(reader->readOne(positionB)).has_value());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

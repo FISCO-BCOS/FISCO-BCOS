@@ -196,15 +196,22 @@ bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
         BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "MPT not enabled on this node"));
     }
     // An empty state root (block 0 / empty blocks / pre-MPT blocks) is a
-    // legal "no accounts" root, not a missing node row — skip the root-presence check and let
+    // legal "no accounts" root, not a missing node row — skip the root check and let
     // MPTReadView (which handles emptyRootHash as "no accounts") plus the scenario flag decide
     // how absence reads: scenario B -> zero; scenario A -> honest dormant-account error.
+    //
+    // For any other root, "is it available?" now means "does the account trie's fixed entry
+    // point hold bytes that hash to it?" — the node store keeps one version per position, so a
+    // root that has been superseded reads as unavailable and the query fails loudly instead of
+    // being answered from the current state.
     if (stateRoot != bcos::ledger::mpt::emptyRootHash()) [[likely]]
     {
-        if (!co_await bcos::storage2::readOne(*mptReader, stateRoot)) [[unlikely]]
+        bool const available = co_await bcos::ledger::mpt::holdsTrieRoot(
+            *mptReader, bcos::ledger::mpt::TrieScope::account(), stateRoot);
+        if (!available) [[unlikely]]
         {
-            BOOST_THROW_EXCEPTION(JsonRpcException(
-                EthHistoricalStateUnavailable, "Block stateRoot not in MPT node storage"));
+            BOOST_THROW_EXCEPTION(JsonRpcException(EthHistoricalStateUnavailable,
+                "Block stateRoot is not the version held by MPT node storage"));
         }
     }
     // The scenario flag decides how absence at this root is read (getProof's fullTrie).
@@ -438,7 +445,11 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
             bool slotInTrie = false;
             if (account->storageRoot != bcos::ledger::mpt::emptyRootHash())
             {
-                bcos::ledger::mpt::Trie trie{*mptReader, account->storageRoot};
+                bcos::ledger::mpt::Trie trie{*mptReader,
+                    bcos::ledger::mpt::TrieScope::storage(
+                        bcos::ledger::mpt::accountKeyHash(bcos::Address{
+                            addressStr, bcos::Address::FromHex, bcos::Address::AlignRight})),
+                    account->storageRoot};
                 if (auto const slot =
                         co_await trie.get(bcos::ledger::mpt::slotKeyHash(positionBytes)))
                 {

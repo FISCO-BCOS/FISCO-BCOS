@@ -32,6 +32,7 @@
 #include "tools/archive-tool/ArchiveService.h"
 #endif
 #include <bcos-executor/src/executor/SwitchExecutorManager.h>
+#include <bcos-ledger/mpt/PathKey.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-tx-validator/TxValidator.h>
 #include <bcos-utilities/BoostLogInitializer.h>
@@ -145,7 +146,8 @@ public:
     /// key-translating adapter, but the backend stays owned by this Initializer's
     /// GlobalStateStorageInitializer, so the handle must not outlive this Initializer.
     /// nullptr before initNode() built the global state storage (e.g. config-only usage).
-    std::shared_ptr<bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>> mptNodeReader();
+    std::shared_ptr<bcos::storage2::AnyStorage<bcos::ledger::mpt::PathKey, bcos::bytes>>
+    mptNodeReader();
 
     /// Provider for eth_getStorageAt's latest-state path: each call forks a fresh latest view
     /// of GlobalStateStorage and returns an AnyStorage handle owning it (see
