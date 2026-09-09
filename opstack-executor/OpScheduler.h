@@ -361,21 +361,36 @@ public:
             }(this, std::string(contract), std::move(callback)));
     }
 
-    task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
-        std::string_view address, std::string_view key, bcos::protocol::BlockNumber number) override
+    task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(std::string_view address,
+        std::string_view key, bcos::protocol::BlockNumber /*number*/) override
     {
         auto const addressOwned = std::string(address);
         auto const keyOwned = std::string(key);
         auto view = this->m_multiLayerStorage->fork();
+        // The storage mode is a property of the chain's current state, not of the caller's block
+        // context (EthEndpoint passes 0), so read the flags at the committed tip: a feature
+        // enabled after genesis is invisible at number 0, which silently disabled the
+        // scenario-B arm below.
+        auto const tipNumber =
+            co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
         bcos::ledger::Features features;
-        co_await bcos::ledger::readFromStorage(features, view, number);
+        co_await bcos::ledger::readFromStorage(features, view, tipNumber);
         if (features.get(bcos::ledger::Features::Flag::feature_l2_ethereum_compat) &&
             keyOwned == bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE)
         {
-            auto const blockNumber =
-                co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
+            // Pending first: the caller uses this value as the transaction nonce, and a sealed
+            // but uncommitted block may already have advanced it (the sibling note above: fork()
+            // "can read the pending slot"). Scenario B keeps account fields in the committed
+            // MPT, so when the pending/flat plane has no row, fall back to the committed tip's
+            // MPT state.
+            bcos::ledger::account::EVMAccount pendingAccount(view, addressOwned,
+                features.get(bcos::ledger::Features::Flag::feature_raw_address));
+            if (auto pending = co_await pendingAccount.storageEntry(keyOwned))
+            {
+                co_return pending;
+            }
             auto block = co_await bcos::ledger::getBlockData(
-                view, blockNumber, bcos::ledger::HEADER, *m_blockFactory);
+                view, tipNumber, bcos::ledger::HEADER, *m_blockFactory);
             // getBlockData can answer nullptr for a number with no committed header; a null
             // header here would be a deref crash, so fall through to the flat path instead.
             auto const stateRoot = (block != nullptr && block->blockHeader() != nullptr) ?

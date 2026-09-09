@@ -1556,6 +1556,34 @@ BOOST_AUTO_TEST_CASE(CallAtBlockLatestEqualsLatestCall)
         "effectiveGasPrice " << egp << " must equal the latest header baseFee");
 }
 
+/// Scenario B (feature_l2_ethereum_compat) keeps account fields in the committed MPT, but a
+/// sealed-but-uncommitted block may already have advanced the nonce in the pending layer.
+/// getPendingStorageAt feeds EthEndpoint::call's tx nonce, so the pending row must win over the
+/// committed trie value — otherwise a caller whose tx is already sealed gets NONCE_TOO_LOW.
+BOOST_AUTO_TEST_CASE(PendingStorageAtPrefersThePendingLayerOverTheCommittedTrie)
+{
+    Fixture f;
+    // Committed state: kSender's trie-backed nonce is 0 (seedSender), and the genesis header
+    // carries the root so the historical arm can resolve it.
+    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
+    seedL2CompatFeature(f.multiLayerStorage);
+
+    // Pending layer (pushed, never merged): the in-flight block advanced kSender's nonce to 7.
+    {
+        auto view = f.multiLayerStorage.fork();
+        view.newMutable();
+        bcos::ledger::account::EVMAccount account(view, kSender, /*binaryAddress=*/false);
+        bcos::task::syncWait(account.setNonce("7"));
+        f.multiLayerStorage.pushView(std::move(view));
+    }
+
+    auto entry = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
+        kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*number=*/0));
+    BOOST_REQUIRE_MESSAGE(entry.has_value(), "the pending nonce row must be visible");
+    BOOST_CHECK_EQUAL(std::string(entry->get()), "7");
+}
+
 /// The OQ6 gate: a chain WITHOUT feature_l2_ethereum_compat never committed its complete
 /// state to the trie — the historical path refuses loudly (InvalidStatus), never silently
 /// downgrading to the latest state.

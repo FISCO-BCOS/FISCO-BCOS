@@ -281,6 +281,12 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     BuiltPayloadPtr cached;
     PayloadID payloadId;
     std::optional<EthPayloadArtifacts<ViewType>> localArtifact;
+    // Set when THIS block still owns a queued (or about-to-be-queued) state layer: either this
+    // call pushes one, or a previous attempt pushed it and failed, leaving it queued for the
+    // retry (commit_retry_without_ledger_drains_after_failed_merge). A payload whose artifact
+    // was consumed by a successful commit owns nothing, so a no-op duplicate must not drain —
+    // otherwise it would merge another block's in-flight layer (and could fail on it).
+    bool stateLayerQueued = false;
     enum class NewPayloadMiss
     {
         None,
@@ -362,6 +368,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         if (artifactIt != m_artifacts.end() &&
             (artifactIt->second.view || artifactIt->second.header))
         {
+            stateLayerQueued = true;
             if (artifactIt->second.view)
             {
                 m_globalStateStorage.pushView(std::move(*artifactIt->second.view));
@@ -427,10 +434,11 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         // payload's state queued in-memory — lost on restart — though it answered VALID.
         co_await engine_common::drainQueuedLayers(m_globalStateStorage);
     }
-    else
+    else if (stateLayerQueued)
     {
-        // No-ledger (or no-header) path: always drain. Empty queue is
-        // NotExistsImmutableStorageError and drainQueuedLayers returns.
+        // A queued layer without durable work still has to reach the backends — the merge must
+        // not depend on ledger persistence (CI-found: the pushed view stayed queued in memory
+        // and every committed balance was lost).
         co_await engine_common::drainQueuedLayers(m_globalStateStorage);
     }
 
@@ -650,92 +658,20 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     // Executed transactions, with each one's EIP-2718 type byte kept index-parallel to
     // `receipts` for the receipts-root leaf prefix below. Raw-only (forced) entries have no
     // executable form and are skipped.
-    std::vector<protocol::Transaction::Ptr> executableTransactions;
-    std::vector<std::uint8_t> executedTypes;
-    executableTransactions.reserve(executionPayload.transactions.size());
-    executedTypes.reserve(executionPayload.transactions.size());
-    for (auto const& tx : executionPayload.transactions)
-    {
-        if (tx.decoded == nullptr)
-        {
-            continue;
-        }
-        executableTransactions.push_back(tx.decoded);
-        executedTypes.push_back(bcos::engine::rawTransactionTypeByte(bcos::ref(tx.raw)));
-    }
+    auto executable = engine_common::collectExecutableTransactions(executionPayload.transactions);
     auto receipts = co_await m_scheduler.executeBlock(view, m_executor, *blockHeader,
-        executableTransactions | ::ranges::views::indirect, ledgerConfig);
+        executable.transactions | ::ranges::views::indirect, ledgerConfig);
 
-    // The v2 executor's receipts carry neither a logsBloom nor a cumulativeGasUsed (a
-    // documented limitation). The receipts-root leaf commits to both, so normalize them here
-    // before encoding: derive the bloom from the logs when absent, and fill the running gas
-    // prefix when the scheduler did not provide one (BaselineScheduler::finishExecute does
-    // both for the PBFT path). header.logsBloom == OR(receipt blooms) then also holds.
-    u256 cumulativeGasUsed = 0;
-    for (auto& receipt : receipts)
-    {
-        if (!receipt)
-        {
-            BOOST_THROW_EXCEPTION(OpExecutionInternalError{}
-                                  << bcos::errinfo_comment{"Null receipt returned by scheduler"});
-        }
-        if (receipt->logsBloom().empty())
-        {
-            auto const bloom = bcos::getLogsBloom(receipt->logEntries());
-            receipt->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
-        }
-        cumulativeGasUsed += receipt->gasUsed();
-        // A scheduler-provided cumulative value (BaselineScheduler, the OP executor) is
-        // authoritative and left alone; only the v2 executor path needs it filled in.
-        if (receipt->cumulativeGasUsed().empty())
-        {
-            receipt->setCumulativeGasUsed(cumulativeGasUsed.str());
-        }
-    }
-
-    // transactionsRoot — the index-keyed MPT over the raw EIP-2718 envelopes, the Ethereum
-    // header commitment. It MUST match the cache-miss reconstruction
-    // (EngineServiceCommon.cpp transactionsRootFromPayload) and the OP path's computeTxRoot,
-    // otherwise newPayload rejects this node's own payloads with INVALID_BLOCK_HASH.
-    std::vector<bcos::bytesConstRef> rawEnvelopes;
-    rawEnvelopes.reserve(executionPayload.transactions.size());
-    for (auto const& tx : executionPayload.transactions)
-    {
-        rawEnvelopes.emplace_back(bcos::ref(tx.raw));
-    }
-    h256 const txRoot = rawEnvelopes.empty() ?
-                            bcos::ledger::mpt::emptyRootHash() :
-                            bcos::ledger::mpt::calculateTransactionsRoot(rawEnvelopes);
-
-    // receiptsRoot — the index-keyed MPT over the RLP-encoded receipts, the Ethereum header
-    // commitment. Same construction as the OP block seal (sealOpBlock), shared through
-    // ledger/mpt so the two producers cannot drift.
-    h256 receiptRoot = bcos::ledger::mpt::emptyRootHash();
-    {
-        // One receipt per executed transaction: the leaf prefix is the transaction's type byte,
-        // so a scheduler returning a different count would index `executedTypes` out of range.
-        if (receipts.size() != executedTypes.size())
-        {
-            BOOST_THROW_EXCEPTION(
-                OpExecutionInternalError{} << bcos::errinfo_comment{
-                    "scheduler returned a receipt count that does not match the executed "
-                    "transactions"});
-        }
-        std::vector<bcos::bytes> receiptLeaves;
-        receiptLeaves.reserve(receipts.size());
-        for (std::size_t i = 0; i < receipts.size(); ++i)
-        {
-            receiptLeaves.push_back(
-                bcos::ledger::mpt::encodeReceiptLeaf(*receipts[i], executedTypes[i]));
-        }
-        std::vector<bcos::bytesConstRef> receiptLeafRefs;
-        receiptLeafRefs.reserve(receiptLeaves.size());
-        for (auto const& leaf : receiptLeaves)
-        {
-            receiptLeafRefs.emplace_back(leaf.data(), leaf.size());
-        }
-        receiptRoot = bcos::ledger::mpt::calculateReceiptsRoot(receiptLeafRefs);
-    }
+    // The Ethereum header commitments, shared with EngineServiceImpl so the two producers cannot
+    // drift. transactionsRoot is the index-keyed MPT over the raw EIP-2718 envelopes and MUST
+    // match the cache-miss reconstruction (EngineServiceCommon.cpp transactionsRootFromPayload)
+    // and the OP path's computeTxRoot, otherwise newPayload rejects this node's own payloads
+    // with INVALID_BLOCK_HASH. receiptsRoot is the same construction over the RLP receipt leaves
+    // and MUST match the OP block seal (sealOpBlock).
+    auto const commitments = engine_common::buildHeaderCommitments(
+        executionPayload.transactions, receipts, executable.types);
+    h256 const txRoot = commitments.transactionsRoot;
+    h256 const receiptRoot = commitments.receiptsRoot;
 
     u256 totalGasUsed;
     Bloom logsBloom{};

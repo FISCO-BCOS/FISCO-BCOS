@@ -684,6 +684,80 @@ BOOST_AUTO_TEST_CASE(commit_retry_without_ledger_drains_after_failed_merge)
     }
 }
 
+BOOST_AUTO_TEST_CASE(duplicate_new_payload_does_not_drain_a_foreign_layer)
+{
+    // A duplicate newPayload whose artifact was consumed by its own successful commit owns no
+    // queued state, so it must not drain the deque. MultiLayerStorage merges the OLDEST layer,
+    // so draining there would land another block's in-flight state before that block's ledger
+    // rows are written — and would surface that merge's error inside an unrelated duplicate.
+    // commit_retry_without_ledger_drains_after_failed_merge pins the other side of the
+    // predicate: a block that still owns a queued layer DOES drain.
+    auto run = [](auto& service, GateMergeStorage& storage) {
+        auto forkchoice = makeForkchoiceState();
+        seedForkchoiceStorage(storage, forkchoice);
+        storage.mergeGate->store(true);
+
+        // M: built and committed successfully; its artifact is consumed.
+        PayloadAttributes attrsM = makeAttrs(1'700'000'000'000ULL);
+        auto buildM = task::syncWait(service.updateForkchoice(forkchoice, &attrsM, 3));
+        BOOST_REQUIRE(buildM.payloadId.has_value());
+        auto payloadM = task::syncWait(service.getPayload(*buildM.payloadId, 3));
+        NewPayloadRequest requestM;
+        requestM.executionPayload = payloadM->executionPayload;
+        requestM.parentBeaconBlockRoot = attrsM.parentBeaconBlockRoot;
+        auto statusM = task::syncWait(service.newPayload(requestM, 3));
+        BOOST_CHECK_EQUAL(
+            static_cast<int>(statusM.status), static_cast<int>(PayloadValidationStatus::Valid));
+        BOOST_CHECK_EQUAL(storage.queuedDepth.load(), 0);
+
+        // N: its commit fails mid-merge, leaving N's layer queued.
+        PayloadAttributes attrsN = makeAttrs(1'700'000'001'000ULL);
+        auto buildN = task::syncWait(service.updateForkchoice(forkchoice, &attrsN, 3));
+        BOOST_REQUIRE(buildN.payloadId.has_value());
+        auto payloadN = task::syncWait(service.getPayload(*buildN.payloadId, 3));
+        NewPayloadRequest requestN;
+        requestN.executionPayload = payloadN->executionPayload;
+        requestN.parentBeaconBlockRoot = attrsN.parentBeaconBlockRoot;
+        storage.throwOnMerge->store(true);
+        BOOST_CHECK_THROW(task::syncWait(service.newPayload(requestN, 3)), std::runtime_error);
+        storage.throwOnMerge->store(false);
+        BOOST_CHECK_EQUAL(storage.queuedDepth.load(), 1);
+
+        // The duplicate of M owns nothing: N's queued layer must survive untouched.
+        auto dupStatus = task::syncWait(service.newPayload(requestM, 3));
+        BOOST_CHECK_EQUAL(
+            static_cast<int>(dupStatus.status), static_cast<int>(PayloadValidationStatus::Valid));
+        BOOST_CHECK_MESSAGE(storage.queuedDepth.load() == 1,
+            "a no-op duplicate drained another block's queued layer (depth " +
+                std::to_string(storage.queuedDepth.load()) + ")");
+    };
+
+    {
+        GateMergeStorage storage;
+        MemPoolImpl memPool;
+        StubExecutor executor;
+        StubScheduler scheduler;
+        auto blockFactory = bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+        auto ledger = std::make_shared<PersistingFakeLedger>(blockFactory, 20, 10, 10);
+        using Service =
+            EthEngineService<MemPoolImpl, GateMergeStorage, StubExecutor, StubScheduler>;
+        Service service(memPool, storage, executor, scheduler, blockFactory, ledger);
+        run(service, storage);
+    }
+    {
+        GateMergeStorage storage;
+        MemPoolImpl memPool;
+        StubExecutor executor;
+        StubScheduler scheduler;
+        auto blockFactory = bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+        auto ledger = std::make_shared<PersistingFakeLedger>(blockFactory, 20, 10, 10);
+        using Service =
+            EngineServiceImpl<MemPoolImpl, GateMergeStorage, StubExecutor, StubScheduler>;
+        Service service(memPool, storage, executor, scheduler, blockFactory, ledger);
+        run(service, storage);
+    }
+}
+
 BOOST_AUTO_TEST_CASE(commit_retry_valid_when_ledger_row_exists)
 {
     GateMergeStorage storage;

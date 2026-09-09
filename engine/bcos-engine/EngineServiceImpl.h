@@ -536,6 +536,12 @@ private:
         // The locked region below only validates, resolves and prepares; the co_awaits
         // follow after the lock is released; the cache publish re-acquires it.
         bool persistLedger = false;
+        // Set when THIS block still owns a queued (or about-to-be-queued) state layer: either
+        // this call pushes one, or a previous attempt pushed it and failed, leaving it queued
+        // for the retry. A payload whose artifact was consumed by a successful commit owns
+        // nothing, so a no-op duplicate must not drain — otherwise it would merge another
+        // block's in-flight layer (and could fail on it).
+        bool stateLayerQueued = false;
         typename GlobalStateStorageType::MutableStorage prewriteStorage;
         protocol::Block::Ptr persistBlock;
         std::shared_ptr<protocol::ConstTransactions> blockTxs;
@@ -612,6 +618,7 @@ private:
             // Retry only when a view or header is still pending durable commit.
             if (it->second.view || it->second.header)
             {
+                stateLayerQueued = true;
                 if (it->second.view)
                 {
                     m_globalStateStorage.get().pushView(std::move(*it->second.view));
@@ -700,10 +707,11 @@ private:
             }
             co_await engine_common::drainQueuedLayers(m_globalStateStorage.get());
         }
-        else
+        else if (stateLayerQueued)
         {
-            // No-ledger (or no-header) path: always drain. Empty queue is
-            // NotExistsImmutableStorageError and drainQueuedLayers returns.
+            // A queued layer without durable work still has to reach the backends. A payload
+            // that owns nothing does not drain, so a no-op duplicate cannot merge another
+            // block's in-flight layer (and cannot fail on that layer's merge either).
             co_await engine_common::drainQueuedLayers(m_globalStateStorage.get());
         }
 
@@ -1038,97 +1046,26 @@ private:
         // forms. Raw-only entries (forced transactions from the OP attributes list) have
         // no executable form yet and are skipped — see the forced-transaction comment
         // above. Materialized into a vector because scheduler implementations require a
-        // sized range (a lazy filter view is not sized). `executedTypes` stays index-parallel
-        // with `receipts`: it carries each executed transaction's EIP-2718 type byte for the
-        // receipts-root leaf prefix below.
-        std::vector<protocol::Transaction::Ptr> executableTransactions;
-        std::vector<std::uint8_t> executedTypes;
-        executableTransactions.reserve(executionPayload.transactions.size());
-        executedTypes.reserve(executionPayload.transactions.size());
-        for (auto const& tx : executionPayload.transactions)
-        {
-            if (tx.decoded == nullptr)
-            {
-                continue;
-            }
-            executableTransactions.push_back(tx.decoded);
-            executedTypes.push_back(bcos::engine::rawTransactionTypeByte(bcos::ref(tx.raw)));
-        }
+        // sized range (a lazy filter view is not sized); the collected type bytes stay
+        // index-parallel with the receipts for the receipts-root leaf prefix below.
+        auto executable =
+            engine_common::collectExecutableTransactions(executionPayload.transactions);
         auto receipts = co_await m_scheduler.get().executeBlock(view, m_executor.get(),
-            *blockHeader, executableTransactions | ::ranges::views::indirect, ledgerConfig);
+            *blockHeader, executable.transactions | ::ranges::views::indirect, ledgerConfig);
 
-        // The v2 executor's receipts carry neither a logsBloom nor a cumulativeGasUsed (a
-        // documented limitation). The receipts-root leaf commits to both, so normalize them
-        // here before encoding: derive the bloom from the logs when absent, and fill the
-        // running gas prefix when the scheduler did not provide one (BaselineScheduler::
-        // finishExecute does both for the PBFT path). header.logsBloom == OR(receipt
-        // blooms) then also holds.
-        u256 cumulativeGasUsed = 0;
-        for (auto& receipt : receipts)
-        {
-            if (!receipt)
-            {
-                BOOST_THROW_EXCEPTION(std::runtime_error{"Null receipt returned by scheduler"});
-            }
-            if (receipt->logsBloom().empty())
-            {
-                auto const bloom = bcos::getLogsBloom(receipt->logEntries());
-                receipt->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
-            }
-            cumulativeGasUsed += receipt->gasUsed();
-            // A scheduler-provided cumulative value (BaselineScheduler, the OP executor) is
-            // authoritative and left alone; only the v2 executor path needs it filled in.
-            if (receipt->cumulativeGasUsed().empty())
-            {
-                receipt->setCumulativeGasUsed(cumulativeGasUsed.str());
-            }
-        }
-
-        // Step 2d: transactionsRoot — the index-keyed MPT over the raw EIP-2718 envelopes,
-        // which is the Ethereum header commitment. It MUST match both the cache-miss
-        // reconstruction (EngineServiceCommon.cpp transactionsRootFromPayload) and the OP
-        // path's computeTxRoot, otherwise newPayload rejects this node's own payloads with
-        // INVALID_BLOCK_HASH. An empty list maps to the canonical empty-trie root.
-        std::vector<bcos::bytesConstRef> rawEnvelopes;
-        rawEnvelopes.reserve(executionPayload.transactions.size());
-        for (auto const& tx : executionPayload.transactions)
-        {
-            rawEnvelopes.emplace_back(bcos::ref(tx.raw));
-        }
-        h256 const txRoot = rawEnvelopes.empty() ?
-                                bcos::ledger::mpt::emptyRootHash() :
-                                bcos::ledger::mpt::calculateTransactionsRoot(rawEnvelopes);
-
-        // Step 2e: receiptsRoot — the index-keyed MPT over the RLP-encoded receipts, the
-        // Ethereum header commitment (op-geth types.DeriveSha over receipts). It MUST match the
-        // OP block seal's receiptsRoot (sealOpBlock) and any Ethereum-semantics verifier: a
-        // FISCO Merkle fold here changes the block hash. Empty -> canonical empty-trie root.
-        h256 receiptRoot = bcos::ledger::mpt::emptyRootHash();
-        {
-            // One receipt per executed transaction: the leaf prefix is the transaction's type
-            // byte, so a scheduler returning a different count would index `executedTypes`
-            // out of range. Fail closed instead.
-            if (receipts.size() != executedTypes.size())
-            {
-                BOOST_THROW_EXCEPTION(std::runtime_error{
-                    "scheduler returned a receipt count that does not match the executed "
-                    "transactions"});
-            }
-            std::vector<bcos::bytes> receiptLeaves;
-            receiptLeaves.reserve(receipts.size());
-            for (std::size_t i = 0; i < receipts.size(); ++i)
-            {
-                receiptLeaves.push_back(
-                    bcos::ledger::mpt::encodeReceiptLeaf(*receipts[i], executedTypes[i]));
-            }
-            std::vector<bcos::bytesConstRef> receiptLeafRefs;
-            receiptLeafRefs.reserve(receiptLeaves.size());
-            for (auto const& leaf : receiptLeaves)
-            {
-                receiptLeafRefs.emplace_back(leaf.data(), leaf.size());
-            }
-            receiptRoot = bcos::ledger::mpt::calculateReceiptsRoot(receiptLeafRefs);
-        }
+        // Steps 2d/2e: the Ethereum header commitments, shared with the Eth service so the two
+        // producers cannot drift. transactionsRoot is the index-keyed MPT over the raw EIP-2718
+        // envelopes and MUST match both the cache-miss reconstruction
+        // (EngineServiceCommon.cpp transactionsRootFromPayload) and the OP path's computeTxRoot,
+        // otherwise newPayload rejects this node's own payloads with INVALID_BLOCK_HASH.
+        // receiptsRoot is the same construction over the RLP receipt leaves (op-geth
+        // types.DeriveSha) and MUST match the OP block seal's receiptsRoot (sealOpBlock): a
+        // FISCO Merkle fold here changes the block hash. Empty lists map to the canonical
+        // empty-trie root.
+        auto const commitments = engine_common::buildHeaderCommitments(
+            executionPayload.transactions, receipts, executable.types);
+        h256 const txRoot = commitments.transactionsRoot;
+        h256 const receiptRoot = commitments.receiptsRoot;
 
         // Step 2f: Compute gas used and block-level logsBloom from receipts.
         u256 totalGasUsed;
