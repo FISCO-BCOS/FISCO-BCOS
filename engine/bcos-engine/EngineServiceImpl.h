@@ -530,6 +530,12 @@ private:
 
         PayloadID payloadId;
 
+        auto hashCheckView = m_globalStateStorage.get().fork();
+        auto const forkVersionForHash =
+            co_await engine_common::forkVersionForPayloadHashCheck(hashCheckView,
+                static_cast<bcos::protocol::BlockNumber>(request.executionPayload.blockNumber),
+                *m_blockFactory);
+
         // Commit I/O (ledger persist + state merge) is performed WITHOUT x_state held: a
         // POSIX mutex must not be locked across a coroutine suspension point, because the
         // resume can land on a different thread (the FCU path avoids the same hazard).
@@ -551,16 +557,38 @@ private:
             bool const cacheHit = parentKnown && builtIt != m_payloadCache.end();
             if (!cacheHit)
             {
-                if (auto hashError = detail::matchReconstructedEthBlockHash(
-                        m_blockFactory->blockHeaderFactory(), request.executionPayload,
-                        request.parentBeaconBlockRoot, detail::ethBlockVersionForApi(version));
-                    hashError.has_value())
+                if (forkVersionForHash.has_value())
                 {
-                    co_return engine_common::makeStatus(
-                        PayloadValidationStatus::InvalidBlockHash, std::nullopt, hashError);
+                    if (auto hashError = detail::matchReconstructedEthBlockHash(
+                            m_blockFactory->blockHeaderFactory(), request.executionPayload,
+                            request.parentBeaconBlockRoot, *forkVersionForHash);
+                        hashError.has_value())
+                    {
+                        co_return engine_common::makeStatus(
+                            PayloadValidationStatus::InvalidBlockHash, std::nullopt, hashError);
+                    }
                 }
                 if (!parentKnown)
                 {
+                    co_return engine_common::makeStatus(
+                        PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+                }
+                if (payloadIdIt == m_blockHashToPayloadId.end())
+                {
+                    // #5468: no EL sync — external payloads are not executed here.
+                    static std::atomic<std::chrono::steady_clock::time_point> lastNotBuiltWarn{
+                        std::chrono::steady_clock::time_point{}};
+                    auto const now = std::chrono::steady_clock::now();
+                    auto prev = lastNotBuiltWarn.load(std::memory_order_relaxed);
+                    if (now - prev >= std::chrono::seconds(10) &&
+                        lastNotBuiltWarn.compare_exchange_strong(
+                            prev, now, std::memory_order_relaxed, std::memory_order_relaxed))
+                    {
+                        BCOS_LOG(WARNING)
+                            << LOG_BADGE("EngineService")
+                            << LOG_DESC("newPayload block not built here; answering SYNCING")
+                            << LOG_KV("blockHash", request.executionPayload.blockHash.hex());
+                    }
                     co_return engine_common::makeStatus(
                         PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
                 }

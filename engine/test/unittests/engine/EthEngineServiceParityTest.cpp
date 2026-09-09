@@ -692,7 +692,7 @@ BOOST_AUTO_TEST_CASE(generic_cache_only_parent_known_matches)
     BOOST_CHECK_NE(newStatus.validationError->find("blockHash"), std::string::npos);
 }
 
-BOOST_AUTO_TEST_CASE(generic_unknown_parent_syncing_matches)
+BOOST_AUTO_TEST_CASE(generic_unknown_parent_inconsistent_hash_is_invalid)
 {
     ServicePair pair;
     auto forkchoiceState = makeForkchoiceState();
@@ -702,6 +702,8 @@ BOOST_AUTO_TEST_CASE(generic_unknown_parent_syncing_matches)
         c_initialBlockNumber, c_initialBlockNumber);
 
     NewPayloadRequest legacyRequest;
+    legacyRequest.executionPayload.blockNumber = c_initialBlockNumber + 1;
+    legacyRequest.executionPayload.timestamp = c_timestamp;
     legacyRequest.executionPayload.parentHash =
         h256("7777777777777777777777777777777777777777777777777777777777777777");
     legacyRequest.executionPayload.blockHash =

@@ -35,7 +35,8 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
     if (scheduler && from.has_value())
     {
         // eth_estimateGas / eth_call: match the sender's committed nonce so validation
-        // does not reject with NONCE_TOO_LOW (deploy was the only case wired before).
+        // does not reject with NONCE_TOO_LOW. Release only wired this for deploy (to.empty());
+        // PR-1 applies to every call/estimate that carries a sender.
         if (const auto entry = task::syncWait(scheduler->getPendingStorageAt(
                 bcos::precompiled::trimHexPrefix(from.value()), "nonce", 0)))
         {
@@ -63,10 +64,10 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
     }
     uint64_t gasLimit = gas.value_or(0);
     // eth_estimateGas omits gas; validation rejects gasLimit==0 ("intrinsic gas too low").
-    // Match geth: cap at the parent block's gas limit (wired from EthEndpoint).
-    if (gasLimit == 0 && scheduler)
+    // EthEndpoint must supply the parent block gas limit; eth_call passes scheduler=nullptr.
+    if (gasLimit == 0 && scheduler && chainBlockGasLimit.has_value())
     {
-        gasLimit = chainBlockGasLimit.value_or(30'000'000);
+        gasLimit = *chainBlockGasLimit;
     }
     auto tx = factory->createTransaction(1, std::move(this->to), this->data, nonce, 0, {}, {}, 0,
         "", value.value_or(""), gasPrice.value_or(""), gasLimit, maxFeePerGas.value_or(""),

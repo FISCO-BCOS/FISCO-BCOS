@@ -545,23 +545,24 @@ bcos::h256 transactionsRootFromPayload(const ExecutionPayload& payload)
 }
 }  // namespace
 
-std::optional<std::string> matchReconstructedEthBlockHash(
+std::optional<bcos::h256> ethBlockHashFromPayload(
     const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
     const std::optional<bcos::h256>& parentBeaconBlockRoot,
-    bcos::protocol::EthBlockVersion forkVersion)
+    bcos::protocol::EthBlockVersion forkVersion, std::optional<bcos::h256> parentHashOverride)
 {
     if (!factory)
     {
-        return std::string("blockHash does not match the reconstructed block header");
+        return std::nullopt;
     }
     try
     {
         auto header = factory->createBlockHeader();
         const auto number = payload.blockNumber;
+        auto const parentHash = parentHashOverride.value_or(payload.parentHash);
         header->setNumber(number);
         header->setTimestamp(static_cast<int64_t>(payload.timestamp));
         header->setParentInfo(
-            bcos::protocol::ParentInfo{.blockNumber = number - 1, .blockHash = payload.parentHash});
+            bcos::protocol::ParentInfo{.blockNumber = number - 1, .blockHash = parentHash});
         header->setCoinbase(payload.feeRecipient);
         header->setStateRoot(payload.stateRoot);
         header->setTxsRoot(transactionsRootFromPayload(payload));
@@ -587,7 +588,7 @@ std::optional<std::string> matchReconstructedEthBlockHash(
             if (!payload.blobGasUsed.has_value() || !payload.excessBlobGas.has_value() ||
                 !parentBeaconBlockRoot.has_value())
             {
-                return std::string("blockHash does not match the reconstructed block header");
+                return std::nullopt;
             }
             header->setBlobGasUsed(*payload.blobGasUsed);
             header->setExcessBlobGas(*payload.excessBlobGas);
@@ -601,18 +602,32 @@ std::optional<std::string> matchReconstructedEthBlockHash(
         header->setEthBlockVersion(forkVersion);
         if (auto error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header))
         {
-            return std::string("blockHash does not match the reconstructed block header");
+            return std::nullopt;
         }
-        if (header->hash() != payload.blockHash)
-        {
-            return std::string("blockHash does not match the reconstructed block header");
-        }
-        return std::nullopt;
+        return header->hash();
     }
     catch (...)
     {
+        return std::nullopt;
+    }
+}
+
+std::optional<std::string> matchReconstructedEthBlockHash(
+    const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
+    const std::optional<bcos::h256>& parentBeaconBlockRoot,
+    bcos::protocol::EthBlockVersion forkVersion)
+{
+    auto const reconstructed =
+        ethBlockHashFromPayload(factory, payload, parentBeaconBlockRoot, forkVersion);
+    if (!reconstructed.has_value())
+    {
         return std::string("blockHash does not match the reconstructed block header");
     }
+    if (*reconstructed != payload.blockHash)
+    {
+        return std::string("blockHash does not match the reconstructed block header");
+    }
+    return std::nullopt;
 }
 
 bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev)

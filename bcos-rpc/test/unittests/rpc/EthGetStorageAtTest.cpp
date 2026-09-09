@@ -155,6 +155,22 @@ public:
             std::move(entry)));
     }
 
+    void setFlatBalance(bcos::u256 balance)
+    {
+        storage::Entry entry;
+        entry.set(asBytes(balance.str()));
+        m_ledger->setStorageAt(address.hex(),
+            std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE), std::move(entry));
+    }
+
+    void setFlatNonce(bcos::u256 nonce)
+    {
+        storage::Entry entry;
+        entry.set(asBytes(nonce.str()));
+        m_ledger->setStorageAt(address.hex(),
+            std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE), std::move(entry));
+    }
+
     Json::Value request(std::string const& req)
     {
         Json::Value value;
@@ -581,6 +597,70 @@ BOOST_AUTO_TEST_CASE(ConfigurableSafeDepth)
     BOOST_TEST(!resp.isMember("error"));
     BOOST_REQUIRE(resp.isMember("result"));
     BOOST_TEST(resp["result"].asString() == paddedHex(42));
+}
+
+// Latest getBalance on scenario B: OP chains store balances in MPT only, so "latest" must
+// read the tip block's committed root (not the empty flat ACCOUNT_BALANCE row).
+BOOST_AUTO_TEST_CASE(LatestBalanceFromMPTOnScenarioB)
+{
+    bcos::ledger::Features features;
+    features.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
+    m_ledger->setFeatures(std::move(features));
+
+    buildTrie();
+    wireReader();
+    m_ledger->ledgerData().back()->blockHeader()->setStateRoot(stateRoot);
+
+    auto resp = getBalance(address.hexPrefixed(), "latest");
+    BOOST_TEST(!resp.isMember("error"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    BOOST_TEST(resp["result"].asString() == toQuantity(1000));
+}
+
+// Latest getTransactionCount on scenario B: same MPT-first path as eth_getBalance.
+BOOST_AUTO_TEST_CASE(LatestNonceFromMPTOnScenarioB)
+{
+    bcos::ledger::Features features;
+    features.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
+    m_ledger->setFeatures(std::move(features));
+
+    buildTrie();
+    wireReader();
+    m_ledger->ledgerData().back()->blockHeader()->setStateRoot(stateRoot);
+
+    auto resp = getTransactionCount(address.hexPrefixed(), "latest");
+    BOOST_TEST(!resp.isMember("error"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    BOOST_TEST(resp["result"].asString() == toQuantity(7));
+}
+
+// Latest getBalance on scenario A (default): the incomplete trie is not authoritative for
+// "latest", so the flat ACCOUNT_BALANCE row remains the live read path.
+BOOST_AUTO_TEST_CASE(LatestBalanceFallsBackToFlatOnScenarioA)
+{
+    buildTrie();
+    wireReader();
+    m_ledger->ledgerData().back()->blockHeader()->setStateRoot(stateRoot);
+    setFlatBalance(2000);
+
+    auto resp = getBalance(address.hexPrefixed(), "latest");
+    BOOST_TEST(!resp.isMember("error"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    BOOST_TEST(resp["result"].asString() == toQuantity(2000));
+}
+
+// Latest getTransactionCount on scenario A: flat nonce row wins over the MPT leaf.
+BOOST_AUTO_TEST_CASE(LatestNonceFallsBackToFlatOnScenarioA)
+{
+    buildTrie();
+    wireReader();
+    m_ledger->ledgerData().back()->blockHeader()->setStateRoot(stateRoot);
+    setFlatNonce(9);
+
+    auto resp = getTransactionCount(address.hexPrefixed(), "latest");
+    BOOST_TEST(!resp.isMember("error"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    BOOST_TEST(resp["result"].asString() == toQuantity(9));
 }
 
 // Historical getBalance: the balance comes from the block's committed MPT root (1000).

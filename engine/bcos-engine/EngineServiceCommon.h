@@ -22,9 +22,12 @@
 #include <bcos-framework/engine/Constants.h>
 #include <bcos-framework/engine/RawTransactionDispatch.h>
 #include <bcos-framework/engine/Types.h>
+#include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/BlockHeaderFactory.h>
+#include <bcos-ledger/LedgerMethods.h>
 #include <bcos-ledger/mpt/Constants.h>
+#include <bcos-task/Task.h>
 #include <evmc/evmc.h>
 
 #include <cstddef>
@@ -72,7 +75,8 @@ std::optional<std::string> validateExecutionPayload(
 std::optional<std::string> compareWithBuiltPayload(
     const ExecutionPayload& submitted, const ExecutionPayload& built);
 bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev);
-/// Header fork implied by the Engine API method version (used on cache miss).
+/// Header fork implied by the Engine API method version (shape gates only — not for
+/// newPayload hash reconstruction, which must follow the chain fork).
 inline bcos::protocol::EthBlockVersion ethBlockVersionForApi(std::uint32_t version)
 {
     if (version >= static_cast<std::uint32_t>(ApiVersion::V4))
@@ -89,6 +93,12 @@ inline bcos::protocol::EthBlockVersion ethBlockVersionForApi(std::uint32_t versi
     }
     return bcos::protocol::EthBlockVersion::LONDON;
 }
+/// Rebuild the Eth header from submitted fields (optional parent override) and return its hash.
+std::optional<bcos::h256> ethBlockHashFromPayload(
+    const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
+    const std::optional<bcos::h256>& parentBeaconBlockRoot,
+    bcos::protocol::EthBlockVersion forkVersion,
+    std::optional<bcos::h256> parentHashOverride = std::nullopt);
 /// Rebuild the Eth header from submitted fields and require hash == payload.blockHash.
 std::optional<std::string> matchReconstructedEthBlockHash(
     const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
@@ -107,10 +117,10 @@ inline bcos::h256 withdrawalsRootFor(const ExecutionPayload& /*payload*/)
 /// helpers: these validators/status/shape helpers are consumed across the engine-split
 /// stack (the live EngineServiceImpl here, EngineTracker, and the Eth/Op services in
 /// #5548/#5549), so they get a named home instead of the private detail namespace
-///.
+/// (finding F28).
 namespace engine_common
 {
-/// Engine API behavior follows op-geth.
+/// Upstream pin for Engine API comments in this extract:
 /// op-geth d401af16f2dd94b010a72eaef10e07ac10b31931
 /// (eth/catalyst/api.go, miner/payload_building.go).
 std::vector<std::string> supportedCapabilities();
@@ -119,7 +129,7 @@ bool isGetPayloadVersionCompatible(ApiVersion requestVersion, std::uint32_t payl
 std::uint32_t payloadShapeVersion(std::uint32_t methodVersion);
 std::optional<std::string> validateRawTransactionKind(
     bcos::engine::RawTransactionKind kind, std::size_t index);
-/// EIP-1559 attribute pairing rule: the pair must be both-zero or both
+/// EIP-1559 attribute pairing rule (finding AO): the pair must be both-zero or both
 /// non-zero. (0,0) is legal attribute input — encodeOptimismExtraData translates it to
 /// the Canyon constants 250/6 — but a mixed pair such as (d>0,e==0) would be encoded
 /// verbatim as a zero-elasticity header that calcOpBaseFee can never extend, bricking
@@ -144,7 +154,7 @@ inline bool forkchoiceHashIsCanonical(
 {
     return canonicalAtNumber.has_value() && *canonicalAtNumber == submitted;
 }
-/// High semantic ceiling for FCU forced txs. Not a ~256 miner
+/// High semantic ceiling for FCU forced txs (finding BY). Not a ~256 miner
 /// limit — deposit blocks can exceed that. HTTP's default 10MiB body already
 /// bounds the RPC path; this rejects before keccak when a caller bypasses it.
 /// Forced DA overflow is still not INVALID (OP deposits are undroppable).
@@ -162,7 +172,7 @@ inline const bcos::h64 c_posNonce{std::string{"0x0000000000000000"}};
 inline const bcos::h256 c_emptyRequestsHash{std::string{c_emptyRequestsHashHex}};
 
 /// Decoded byte count of a hex string, matching `fromHex` (optional 0x, odd nibble pads).
-/// Used to reject over-ceiling forced txs before allocating the decoded buffer.
+/// Used to reject over-ceiling forced txs before allocating the decoded buffer (finding BY).
 inline std::size_t decodedHexByteCount(std::string_view hex)
 {
     if (hex.size() >= 2 && (hex[0] == '0') && (hex[1] == 'x' || hex[1] == 'X'))
@@ -174,7 +184,7 @@ inline std::size_t decodedHexByteCount(std::string_view hex)
 
 std::optional<std::string> validatePayloadAttributes(const PayloadAttributes& payloadAttributes,
     std::uint32_t version, std::vector<bcos::bytes>* decodedForcedTxs = nullptr);
-/// `decodedForcedTxs` reuses bytes from validate. Hex fallback is
+/// `decodedForcedTxs` reuses bytes from validate (finding AE). Hex fallback is
 /// gone: if attributes carry transactions, pass the validated decoded bodies.
 /// An empty span with a non-empty transactions list returns nullopt.
 std::optional<PayloadID> derivePayloadId(const PayloadAttributes& payloadAttributes,
@@ -183,17 +193,41 @@ std::optional<PayloadID> derivePayloadId(const PayloadAttributes& payloadAttribu
 PayloadStatus makeStatus(PayloadValidationStatus status,
     std::optional<h256> latestValidHash = std::nullopt,
     std::optional<std::string> validationError = std::nullopt);
-/// Shared getPayload shape gate. Throws IncompatiblePayloadVersion when the request
-/// version cannot render the stored body.
+/// Chain-derived header fork for newPayload cache-miss hash reconstruction. Returns nullopt
+/// when the revision cannot be resolved (caller should skip hash check and answer SYNCING).
+template <class StorageView>
+bcos::task::Task<std::optional<bcos::protocol::EthBlockVersion>> forkVersionForPayloadHashCheck(
+    StorageView& view, bcos::protocol::BlockNumber blockNumber,
+    bcos::protocol::BlockFactory& blockFactory)
+{
+    if (blockNumber == 0)
+    {
+        co_return std::nullopt;
+    }
+    bcos::ledger::LedgerConfig ledgerConfig;
+    co_await bcos::ledger::getLedgerConfig(view, ledgerConfig, blockNumber - 1, blockFactory);
+    auto const chainRevision = ledgerConfig.evmcRevisionForBlock(blockNumber);
+    if (!chainRevision.has_value())
+    {
+        co_return std::nullopt;
+    }
+    co_return detail::ethBlockVersionFor(*chainRevision);
+}
+/// Shared getPayload shape gate (leftover Impl + EngineTracker). Throws
+/// IncompatiblePayloadVersion when the request version cannot render the stored body.
 void requireGetPayloadShape(std::uint32_t builtVersion, const ExecutionPayload& payload,
     std::optional<h256> const& parentBeaconBlockRoot, std::uint32_t requestVersion);
-/// Supported getPayload API version window.
+/// Shared getPayload version window (finding F30: one definition for the leftover
+/// Impl and EngineTracker, both of which serve getPayload).
 inline bool isGetPayloadVersionSupported(std::uint32_t version)
 {
     return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
            version <= static_cast<std::uint32_t>(ApiVersion::V5);
 }
-/// Shared getPayload response assembly so V4+ executionRequests semantics stay aligned.
+/// Shared getPayload response assembly (finding N5): the leftover Impl and
+/// EngineTracker build the same GetPayloadData from structurally identical entries;
+/// one definition so the V4+ executionRequests semantics cannot drift between the
+/// two serving paths.
 template <class EntryT>
 GetPayloadResult assembleGetPayloadData(const EntryT& entry, std::uint32_t version)
 {

@@ -276,6 +276,11 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     BuiltPayloadPtr cached;
     PayloadID payloadId;
     std::optional<EthPayloadArtifacts<ViewType>> localArtifact;
+    auto hashCheckView = m_globalStateStorage.fork();
+    auto const forkVersionForHash = co_await engine_common::forkVersionForPayloadHashCheck(
+        hashCheckView,
+        static_cast<bcos::protocol::BlockNumber>(request.executionPayload.blockNumber),
+        *m_blockFactory);
     {
         auto guard = m_tracker.lockExclusive();
         auto const& forkchoiceState = guard.forkchoiceState();
@@ -286,13 +291,16 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         bool const cacheHit = parentKnown && existingId && cached;
         if (!cacheHit)
         {
-            if (auto hashError = detail::matchReconstructedEthBlockHash(
-                    m_blockFactory->blockHeaderFactory(), request.executionPayload,
-                    request.parentBeaconBlockRoot, detail::ethBlockVersionForApi(version));
-                hashError.has_value())
+            if (forkVersionForHash.has_value())
             {
-                co_return engine_common::makeStatus(
-                    PayloadValidationStatus::InvalidBlockHash, std::nullopt, hashError);
+                if (auto hashError = detail::matchReconstructedEthBlockHash(
+                        m_blockFactory->blockHeaderFactory(), request.executionPayload,
+                        request.parentBeaconBlockRoot, *forkVersionForHash);
+                    hashError.has_value())
+                {
+                    co_return engine_common::makeStatus(
+                        PayloadValidationStatus::InvalidBlockHash, std::nullopt, hashError);
+                }
             }
             if (!parentKnown)
             {

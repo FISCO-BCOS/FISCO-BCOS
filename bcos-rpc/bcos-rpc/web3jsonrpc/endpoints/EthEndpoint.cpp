@@ -240,9 +240,9 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
     u256 balance = 0;
     if (isLatest)
     {
-        // OP / scenario-B chains commit account state in MPT only; the flat ACCOUNT_BALANCE
-        // row is absent, so "latest" must read the tip block's committed state root (same as
-        // an explicit block tag) instead of ledger::getStorageAt on the empty flat plane.
+        // PR-1 live read-path change: when an MPT node reader is available and the chain is on
+        // scenario B (full trie), "latest" reads balance from the tip state root instead of the
+        // flat ACCOUNT_BALANCE row (which is absent on OP / MPT-only commits).
         auto const mptReader = m_nodeService->mptNodeReader();
         if (mptReader)
         {
@@ -425,17 +425,17 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
 
     // Query the slot through the MPT at that root: account leaf -> storageRoot -> slot leaf
     // (slotKeyHash(slot)). Absence semantics are scenario-driven, exactly like getProof:
-    // - scenario B (ctx.fullTrie): the trie is complete, so absent account / empty storage
-    // trie / absent slot all read zero — Ethereum semantics at a committed root;
-    // - scenario A (mid-chain activation): a dormant account absent from the trie is
-    // indistinguishable from a non-existent one → explicit error; a slot absent from the
-    // (incomplete) storage trie — whether the account has no storage in the trie yet
-    // (storageRoot == emptyRootHash(), first touch wrote only nonce/balance/code) or the
-    // storage trie has no leaf for this slot — → fall back to the flat KV. The flat value
-    // is authoritative when the slot was never written after activation; if it was written
-    // *after* the requested block the fallback returns that later value, since
-    // ledger::getStorageAt ignores blockNumber today (the same limitation as getProof's
-    // SlotNotInMPT fallback). Still strictly better than reporting zero.
+    //  - scenario B (ctx.fullTrie): the trie is complete, so absent account / empty storage
+    //    trie / absent slot all read zero — Ethereum semantics at a committed root;
+    //  - scenario A (mid-chain activation): a dormant account absent from the trie is
+    //    indistinguishable from a non-existent one → explicit error; a slot absent from the
+    //    (incomplete) storage trie — whether the account has no storage in the trie yet
+    //    (storageRoot == emptyRootHash(), first touch wrote only nonce/balance/code) or the
+    //    storage trie has no leaf for this slot — → fall back to the flat KV. The flat value
+    //    is authoritative when the slot was never written after activation; if it was written
+    //    *after* the requested block the fallback returns that later value, since
+    //    ledger::getStorageAt ignores blockNumber today (the same limitation as getProof's
+    //    SlotNotInMPT fallback). Still strictly better than reporting zero.
     std::optional<std::string> flatFallback;  // scenario-A dormant-slot fallback rendering
     bcos::u256 value = 0;
     {
@@ -529,6 +529,7 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
     u256 nonce = 0;
     if (isLatest)
     {
+        // Same MPT-first "latest" path as eth_getBalance (see comment there).
         auto const mptReader = m_nodeService->mptNodeReader();
         if (mptReader)
         {
@@ -922,13 +923,20 @@ task::Task<void> EthEndpoint::call(
     if (isEstimate)
     {
         auto ledger = m_nodeService->ledger();
-        if (ledger)
+        if (!ledger)
         {
-            if (auto block =
-                    co_await ledger::getBlockData(*ledger, blockNumber, bcos::ledger::HEADER))
-            {
-                chainBlockGasLimit = static_cast<uint64_t>(block->blockHeader()->gasLimit());
-            }
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                JsonRpcError::InternalError, "Ledger not available for eth_estimateGas"));
+        }
+        if (auto block = co_await ledger::getBlockData(*ledger, blockNumber, bcos::ledger::HEADER))
+        {
+            chainBlockGasLimit = static_cast<uint64_t>(block->blockHeader()->gasLimit());
+        }
+        bool const needsGasDefault = !call.gas.has_value() || call.gas.value() == 0;
+        if (needsGasDefault && !chainBlockGasLimit.has_value())
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(JsonRpcError::InternalError,
+                "Unable to read parent block gas limit for eth_estimateGas"));
         }
     }
     auto tx = call.takeToTransaction(m_nodeService->blockFactory()->transactionFactory(),
@@ -1359,7 +1367,7 @@ constexpr int32_t EthGetProofUnavailable = -32004;
 
 task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& response)
 {
-    // params: address(DATA 20B), storageKeys(DATA[] of 32B), blockNumber(QTY|TAG) (EIP-1186)
+    // params: address(DATA 20B), storageKeys(DATA[] of 32B), blockNumber(QTY|TAG)  (EIP-1186)
     // result: {address, balance, nonce, codeHash, storageHash, accountProof[], storageProof[]}
     Address address;
     try

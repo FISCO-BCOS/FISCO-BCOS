@@ -1214,6 +1214,37 @@ BOOST_AUTO_TEST_CASE(new_payload_cache_miss_wrong_hash_is_invalid)
     BOOST_CHECK_EQUAL(stillBuilt->executionPayload.blockHash, payload->executionPayload.blockHash);
 }
 
+BOOST_AUTO_TEST_CASE(new_payload_unknown_parent_is_syncing)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    h256 const unknownParent("7777777777777777777777777777777777777777777777777777777777777777");
+    auto const forkVersion = bcos::engine::detail::ethBlockVersionFor(EVMC_CANCUN);
+    auto recomputed =
+        bcos::engine::detail::ethBlockHashFromPayload(testBlockFactory()->blockHeaderFactory(),
+            request.executionPayload, request.parentBeaconBlockRoot, forkVersion, unknownParent);
+    BOOST_REQUIRE(recomputed.has_value());
+    request.executionPayload.parentHash = unknownParent;
+    request.executionPayload.blockHash = *recomputed;
+
+    auto status = task::syncWait(engineService.newPayload(request, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Syncing));
+    BOOST_CHECK(!status.validationError.has_value());
+}
+
 BOOST_AUTO_TEST_CASE(new_payload_hit_rejects_altered_state_root_and_keeps_built_body)
 {
     MemPoolImpl memPool;
