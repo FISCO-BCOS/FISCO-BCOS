@@ -101,11 +101,17 @@ public:
     /// it must bypass the global address-keyed executable cache (HostContext.h::getExecutable).
     constexpr static bool isHistoricalStateStorage = true;
 
+    /// @param store the node's ONE state-history store (MPTHistory::state()), which owns the
+    ///        in-memory index every row below is located through. A second instance would carry
+    ///        an empty index and answer "unchanged since N" for every key — today's state under
+    ///        block N's number (G10).
     /// @param blockNumber the height being read, @p tip the chain's committed tip and @p depth
     ///        this node's H_state — together the window guard (spec B.3, G5).
-    HistoricalStateBackend(LatestView& latestView, HistoryBackend& historyBackend,
+    HistoricalStateBackend(LatestView& latestView,
+        ledger::mpt::history::StateHistoryStore const& store, HistoryBackend& historyBackend,
         protocol::BlockNumber blockNumber, protocol::BlockNumber tip, protocol::BlockNumber depth)
       : m_latestView(std::addressof(latestView)),
+        m_store(std::addressof(store)),
         m_history(std::addressof(historyBackend)),
         m_blockNumber(blockNumber),
         m_tip(tip),
@@ -231,7 +237,7 @@ private:
         executor_v1::StateKeyView const& keyView)
     {
         auto version = co_await ledger::mpt::history::readStateAt(
-            *m_history, keyView, m_blockNumber, m_tip, m_depth);
+            *m_store, *m_history, keyView, m_blockNumber, m_tip, m_depth);
         if (auto* recorded = std::get_if<bcos::bytes>(std::addressof(version)))
         {
             co_return storage::Entry{std::string_view{
@@ -268,6 +274,7 @@ private:
     }
 
     LatestView* m_latestView;
+    ledger::mpt::history::StateHistoryStore const* m_store;
     HistoryBackend* m_history;
     protocol::BlockNumber m_blockNumber;
     protocol::BlockNumber m_tip;

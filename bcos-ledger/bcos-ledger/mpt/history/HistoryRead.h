@@ -22,6 +22,8 @@
 #include "../PathKey.h"
 #include "HistoryCommit.h"
 #include "HistoryErrors.h"
+#include "HistoryIndex.h"
+#include "MPTHistory.h"
 #include "ReverseHistoryStore.h"
 #include <bcos-framework/storage2/AnyStorage.h>
 #include <bcos-framework/storage2/Storage.h>
@@ -41,21 +43,27 @@ namespace bcos::ledger::mpt::history
 /// What the flat state row @p key held at block @p block (spec §10.1).
 ///
 /// A thin adapter over StateHistoryStore::readAt whose only job is the key mapping, so that the
-/// physical form a row is indexed under is written down once (historyKeyOf) and both the capture
+/// physical form a row is recorded under is written down once (historyKeyOf) and both the capture
 /// and the query go through it.
 ///
-/// @param backend the committed, seekable plane the history rows live in.
+/// @param store the node's ONE state-history store — the object that owns the in-memory index the
+///        lookup runs against (MPTHistory::state()). Passing the store rather than constructing
+///        one is not a style choice: a second instance would have its own empty index and would
+///        report "this key never changed" for every block, which reads as today's value under an
+///        old block's number (G10).
+/// @param backend the committed plane the shard rows live in.
 /// @param tip the chain's committed tip at the time of the query, and @p depth this node's
-///        H_state: together they are the window guard that runs BEFORE the seek (G5, spec B.3).
+///        H_state: together they are the window guard that runs BEFORE the lookup (G5, spec B.3).
 /// @throws HistoryPruned when @p block predates the retained window — the caller must surface
 ///         that, never fall back to the current value (G6).
+/// @throws HistoryIndexUnavailable when the index was never rebuilt or a rebuild failed.
 template <QueryableStateStorage Backend>
-[[nodiscard]] task::Task<ReadAtResult> readStateAt(Backend& backend,
+[[nodiscard]] task::Task<ReadAtResult> readStateAt(StateHistoryStore const& store, Backend& backend,
     executor_v1::StateKeyView const& key, protocol::BlockNumber block, protocol::BlockNumber tip,
     protocol::BlockNumber depth)
 {
     executor_v1::StateKey const rowKey{key};
-    co_return co_await StateHistoryStore::readAt(backend, historyKeyOf(rowKey), block, tip, depth);
+    co_return co_await store.readAt(backend, historyKeyOf(rowKey), block, tip, depth);
 }
 
 /// Read-only façade over the plane the history rows live in, so it can be type-erased.
@@ -110,7 +118,7 @@ private:
     Storage* m_storage;
 };
 
-/// Build the handle NodeService::setMPTHistoryReader takes: an AnyStorage that OWNS its
+/// Build the backend handle MPTHistory takes: an AnyStorage that OWNS its
 /// read-only adapter through an aliasing shared_ptr, so callers manage exactly one lifetime.
 /// Only @p storage itself is borrowed (production: the committed state backend, owned by the
 /// Initializer), and it must outlive the returned handle.
@@ -132,61 +140,71 @@ makeHistoryReader(Storage& storage)
     return {owner, std::addressof(*owner->erased)};
 }
 
-/// Can a query at block @p block be answered at all from @p Store's rows?
+/// Can a query at block @p block be answered at all from @p store's rows?
 ///
-/// Three things have to hold, and they fail differently:
+/// Pure memory under the optimized layout: everything it asks is in the in-memory index, so the
+/// admission check that used to cost two point reads and a seek per query now costs three map
+/// probes. No I/O also means no coroutine — callers get a plain bool.
 ///
-///  1. the store has recorded SOMETHING — its retention-boundary row exists. A node that never
+/// Four things have to hold, and they fail differently:
+///
+///  1. the index is entitled to answer at all. `Unavailable` (a rebuild or a publish failed) is a
+///     statement that the store does not know what it holds, and answering "not covered" would
+///     let a caller present that as a normal "this node retains nothing" — so it THROWS
+///     HistoryIndexUnavailable and the RPC maps it to its own code. `Empty` (never rebuilt, or a
+///     store whose depth is 0) is the ordinary "nothing here" and returns false (G10);
+///  2. the store has recorded SOMETHING — its retention boundary is known. A node that never
 ///     wrote history (the depth was 0, the MPT was enabled later, the era predates this feature)
-///     has none, and every key would otherwise seek past the end of the index and report
+///     has no boundary, and every key would otherwise miss the index and report
 ///     HistoryUseCurrent, i.e. hand back today's state wearing block B's label. -> false;
-///  2. @p block is not already below the boundary. -> HistoryPruned;
-///  3. block B+1 recorded its diff — the reverse history answers "the value at B" from the FIRST
-///     change after B, so that block's manifest is the necessary condition. On a scenario-A
-///     chain this is what rules out every pre-activation height. -> false.
-///
-/// Then the boundary is re-read, for the same reason readAt re-reads it: an expiry that lands
-/// between the checks above and the per-key seeks that follow would leave the query answering
-/// from a window it no longer has. The boundary advances in the same Write as the deletes, so
-/// this ordering catches it (spec B.3, §13).
+///  3. @p block is not already below the boundary. -> HistoryPruned;
+///  4. block B+1 recorded its diff — the reverse history answers "the value at B" from the FIRST
+///     change after B, so that block's records are the necessary condition. On a scenario-A chain
+///     this is what rules out every pre-activation height. -> false.
 ///
 /// Call it ONCE per query, before the per-key reads; readAt's own guard is the other half and
-/// neither replaces the other. A hole in the MIDDLE of the window is invisible to both — spec
-/// §13 assigns range continuity to the audit, and that is where a complete answer belongs.
+/// neither replaces the other. Nothing is re-checked afterwards, and nothing needs to be: an
+/// expiry landing mid-query moves the index boundary under the same lock readAt's `locate` takes,
+/// so a version located after it is either still there or reported as HistoryPruned by readAt
+/// itself — the fall-through-to-current-value hole the old double boundary read was guarding is
+/// closed inside the store. A hole in the MIDDLE of the window is invisible to both — spec §13
+/// assigns range continuity to the audit, and that is where a complete answer belongs.
 ///
 /// @throws HistoryPruned when @p block is below the store's retention boundary.
-template <class Store, QueryableStateStorage Backend>
-[[nodiscard]] task::Task<bool> historyCoversBlock(
-    Backend& backend, protocol::BlockNumber block, protocol::BlockNumber tip)
+/// @throws HistoryIndexUnavailable when the store's index is unusable.
+template <class Store>
+[[nodiscard]] bool historyCoversBlock(
+    Store const& store, protocol::BlockNumber block, protocol::BlockNumber tip)
 {
+    auto const& index = store.index();
+    switch (index.state())
+    {
+    case IndexState::Unavailable:
+        BOOST_THROW_EXCEPTION(
+            HistoryIndexUnavailable() << bcos::errinfo_comment(
+                "the reverse-history query index is unusable; historical reads are refused until "
+                "this node is restarted with a successful rebuild"));
+    case IndexState::Empty:
+        return false;
+    case IndexState::Ready:
+        break;
+    }
     if (block >= tip)
     {
         // The tip needs no history: its rows ARE the current state.
-        co_return true;
+        return true;
     }
-    auto const boundary = co_await Store::retentionBoundary(backend);
+    auto const boundary = index.boundary();
     if (!boundary)
     {
-        co_return false;
+        return false;
     }
     if (*boundary > block)
     {
         BOOST_THROW_EXCEPTION(HistoryPruned() << bcos::errinfo_comment(
                                   "requested block is below this store's retention boundary"));
     }
-    if (!co_await Store::recordedBlock(backend, block + 1))
-    {
-        co_return false;
-    }
-    auto const boundaryAfter = co_await Store::retentionBoundary(backend);
-    if (!boundaryAfter || *boundaryAfter > block)
-    {
-        BOOST_THROW_EXCEPTION(
-            HistoryPruned() << bcos::errinfo_comment(
-                "the retained history window moved past the requested block while the query was "
-                "being admitted"));
-    }
-    co_return true;
+    return store.recordedBlock(block + 1);
 }
 
 /// A read-only PathKey -> RLP storage that answers with each position's version at block B
@@ -215,12 +233,16 @@ public:
     using Value = bcos::bytes;
 
     /// @param current the node rows as they stand now (a committed-plane reader).
-    /// @param backend the committed, seekable plane the TrieHistory rows live in.
+    /// @param store the node's ONE trie-history store (MPTHistory::trie()) — it owns the index
+    ///        every position is located through.
+    /// @param backend the committed plane the TrieHistory shard rows live in.
     /// @param block the height being proved, @p tip the committed tip, @p depth this node's
     ///        H_proof.
-    HistoricalNodeStorage(NodeStorage& current, HistoryBackend& backend,
-        protocol::BlockNumber block, protocol::BlockNumber tip, protocol::BlockNumber depth)
+    HistoricalNodeStorage(NodeStorage& current, TrieHistoryStore const& store,
+        HistoryBackend& backend, protocol::BlockNumber block, protocol::BlockNumber tip,
+        protocol::BlockNumber depth)
       : m_current(std::addressof(current)),
+        m_store(std::addressof(store)),
         m_backend(std::addressof(backend)),
         m_block(block),
         m_tip(tip),
@@ -230,8 +252,8 @@ public:
     task::Task<std::optional<bcos::bytes>> readOne(PathKey const& key)
     {
         executor_v1::StateKey const rowKey = pathNodeStateKey(key);
-        auto version = co_await TrieHistoryStore::readAt(
-            *m_backend, historyKeyOf(rowKey), m_block, m_tip, m_depth);
+        auto version =
+            co_await m_store->readAt(*m_backend, historyKeyOf(rowKey), m_block, m_tip, m_depth);
         if (auto* recorded = std::get_if<bcos::bytes>(std::addressof(version)))
         {
             co_return std::move(*recorded);
@@ -304,6 +326,7 @@ private:
     }
 
     NodeStorage* m_current;
+    TrieHistoryStore const* m_store;
     HistoryBackend* m_backend;
     protocol::BlockNumber m_block;
     protocol::BlockNumber m_tip;
