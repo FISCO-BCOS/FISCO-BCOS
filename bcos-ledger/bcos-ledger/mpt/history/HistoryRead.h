@@ -191,7 +191,11 @@ template <class Store>
     }
     if (block >= tip)
     {
-        // The tip needs no history: its rows ARE the current state.
+        // The tip's rows ARE the current state, so no history is consulted for it — but the state
+        // check above still runs first, and deliberately: an Unavailable index means this node
+        // does not know what it holds, and answering "covered" would let a caller present a
+        // degraded node as a healthy one. It costs a tip query on a broken node a refusal it does
+        // not strictly need, and that refusal disappears at the first successful rebuild.
         return true;
     }
     auto const boundary = index.boundary();
