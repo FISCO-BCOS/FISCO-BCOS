@@ -25,6 +25,7 @@
 #include <range/v3/view/transform.hpp>
 
 #include <bcos-ledger/mpt/Constants.h>
+#include <bcos-ledger/mpt/EthereumBlockRoots.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <optional>
 
@@ -665,28 +666,34 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     auto receipts = co_await m_scheduler.executeBlock(view, m_executor, *blockHeader,
         executableTransactions | ::ranges::views::indirect, ledgerConfig);
 
-    h256 txRoot = bcos::ledger::mpt::emptyRootHash();
+    // Transaction root, receipt root, gas used and block-level logsBloom.
+    //  - Ethereum executor (v2): the shared ledger::mpt::computeEthereumRoots (the same
+    //    implementation release EngineServiceImpl and EthereumBlockVerifier use) fills
+    //    per-receipt cumulativeGasUsed + logsBloom, then commits to the transaction trie
+    //    over each transaction's EIP-2718 wire bytes and to the receipts trie over
+    //    EthReceipt RLP. Raw-only entries (forced transactions from the OP attributes
+    //    list) participate in txsRoot via their raw bytes but have no receipt.
+    //  - legacy: Merkle over tx / receipt hashes (unchanged).
+    const bool ethereumRoots =
+        ledgerConfig.executorVersion() >= ledger::ETHEREUM_EXECUTOR_VERSION;
+    h256 txRoot;
+    h256 receiptRoot;
+    u256 totalGasUsed;
+    Bloom logsBloom{};
+    if (ethereumRoots)
     {
-        auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
-        auto hasher = hashImpl.hasher();
-        crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(hasher.clone());
-        if (!executionPayload.transactions.empty())
-        {
-            auto txHashes =
-                executionPayload.transactions | ::ranges::views::transform([](auto& tx) {
-                    return tx.decoded ? tx.decoded->hash() :
-                                        bcos::crypto::keccak256Hash(bcos::ref(tx.raw));
-                });
-            std::vector<h256> merkleTrie;
-            merkle.generateMerkle(txHashes, merkleTrie);
-            if (!merkleTrie.empty())
-            {
-                txRoot = merkleTrie.back();
-            }
-        }
+        auto computation = co_await ledger::mpt::computeEthereumRoots(receipts,
+            executableTransactions | ::ranges::views::indirect,
+            executionPayload.transactions |
+                ::ranges::views::transform([](auto const& transaction) -> bcos::bytes const& {
+                    return transaction.raw;
+                }));
+        txRoot = computation.txsRoot;
+        receiptRoot = computation.receiptsRoot;
+        totalGasUsed = computation.gasUsed;
+        logsBloom = computation.logsBloom;
     }
-
-    h256 receiptRoot = bcos::ledger::mpt::emptyRootHash();
+    else
     {
         if (::ranges::any_of(receipts, [](auto& r) { return !r; }))
         {
@@ -694,30 +701,54 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
                                       "Null receipt returned by scheduler"});
         }
         auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
-        auto hasher = hashImpl.hasher();
-        crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(hasher.clone());
-        if (!receipts.empty())
+
+        txRoot = bcos::ledger::mpt::emptyRootHash();
         {
-            auto receiptHashes =
-                receipts | ::ranges::views::transform([](auto& r) { return r->hash(); });
-            std::vector<h256> merkleTrie;
-            merkle.generateMerkle(receiptHashes, merkleTrie);
-            if (!merkleTrie.empty())
+            auto hasher = hashImpl.hasher();
+            crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(
+                hasher.clone());
+            if (!executionPayload.transactions.empty())
             {
-                receiptRoot = merkleTrie.back();
+                auto txHashes =
+                    executionPayload.transactions | ::ranges::views::transform([](auto& tx) {
+                        return tx.decoded ? tx.decoded->hash() :
+                                            bcos::crypto::keccak256Hash(bcos::ref(tx.raw));
+                    });
+                std::vector<h256> merkleTrie;
+                merkle.generateMerkle(txHashes, merkleTrie);
+                if (!merkleTrie.empty())
+                {
+                    txRoot = merkleTrie.back();
+                }
             }
         }
-    }
 
-    u256 totalGasUsed;
-    Bloom logsBloom{};
-    for (auto& receipt : receipts)
-    {
-        // Null receipts were rejected by the any_of guard above the merkle.
-        totalGasUsed += receipt->gasUsed();
-        if (!receipt->logsBloom().empty())
+        receiptRoot = bcos::ledger::mpt::emptyRootHash();
         {
-            orBloom(logsBloom, receipt->logsBloom());
+            auto hasher = hashImpl.hasher();
+            crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(
+                hasher.clone());
+            if (!receipts.empty())
+            {
+                auto receiptHashes =
+                    receipts | ::ranges::views::transform([](auto& r) { return r->hash(); });
+                std::vector<h256> merkleTrie;
+                merkle.generateMerkle(receiptHashes, merkleTrie);
+                if (!merkleTrie.empty())
+                {
+                    receiptRoot = merkleTrie.back();
+                }
+            }
+        }
+
+        for (auto& receipt : receipts)
+        {
+            // Null receipts were rejected by the any_of guard above the merkle.
+            totalGasUsed += receipt->gasUsed();
+            if (!receipt->logsBloom().empty())
+            {
+                orBloom(logsBloom, receipt->logsBloom());
+            }
         }
     }
 
