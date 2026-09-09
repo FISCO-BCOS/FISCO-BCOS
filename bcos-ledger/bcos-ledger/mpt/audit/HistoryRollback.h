@@ -46,7 +46,6 @@
 #include <bcos-utilities/Common.h>
 #include <boost/throw_exception.hpp>
 #include <cstddef>
-#include <functional>
 #include <map>
 #include <optional>
 #include <string>
@@ -172,9 +171,17 @@ bcos::task::Task<std::pair<std::size_t, std::size_t>> reverseApplyBlock(
 ///
 /// Blocks are undone newest first: for each block B from @p tip down to `target + 1`, the state
 /// pre-images and the trie-node pre-images of B are written back TOGETHER, and only then are B's
-/// own history rows deleted. Applying both planes before dropping either block's records is what
-/// keeps an interrupted run recoverable: a crash mid-block leaves that block's meta and shard rows
-/// intact, so re-running redoes it — the writes are absolute values, so redoing one is a no-op.
+/// own history rows deleted.
+///
+/// Applying both planes before dropping either one's records buys exactly one thing, and it is
+/// worth being precise about how narrow it is: **within a single block, up to the moment its first
+/// expire runs**, an interruption leaves B's meta and shard rows intact in both stores, so
+/// re-running the same command redoes B — the writes are absolute values, so redoing one is a
+/// no-op. Past that moment the guarantee is gone: B's history is deleted while the tip row still
+/// says @p tip, so a re-run of the SAME command is asked to undo a block whose pre-images no longer
+/// exist. It refuses rather than skipping (the pre-check below), and the refusal names the tip the
+/// re-run should use instead — that, not restartability, is what makes an interrupted run
+/// recoverable across blocks.
 ///
 /// **The node must be stopped.** This writes directly into the state plane with no coordination
 /// with a running scheduler, consensus or RPC, and the store objects it uses are its own (see the
@@ -256,36 +263,83 @@ bcos::task::Task<RollbackReport> rollbackTo(Storage& storage, protocol::BlockNum
 
     // Every block being undone must actually HAVE a meta row, in both histories, before anything
     // is written — and the counts those rows declare are what the dry run reports, so the pre-check
-    // and the dry run are one pass rather than two.
-    //
-    // The damage the check prevents is silent: skipping one block leaves the live plane a mixture
-    // of two block heights, and nothing downstream notices — the caller's own post-rollback
-    // re-audit compares the tree against the TARGET block's root, which a partial rollback of the
-    // state plane can still satisfy when the skipped block touched no trie node. It happens for
-    // free with the CLI's default retention depth of 128 against a node configured shorter, and it
-    // happens for real on a B.10 ② hole.
+    // and the dry run are one pass rather than two. Which blocks lack one decides WHICH refusal
+    // the operator gets, so the whole range is probed before any of them is raised.
     std::map<protocol::BlockNumber, std::pair<std::size_t, std::size_t>> declared;
+    std::vector<std::pair<protocol::BlockNumber, std::string>> missing;
     for (auto block = target + 1; block <= tip; ++block)
     {
         auto const stateMeta =
             co_await detail::readBlockMeta<history::kStateHistory>(storage, block);
         auto const trieMeta = co_await detail::readBlockMeta<history::kTrieHistory>(storage, block);
-        for (auto const& [meta, name] : {std::pair{std::cref(stateMeta), "StateHistory"},
-                 std::pair{std::cref(trieMeta), "TrieHistory"}})
+        if (!stateMeta || !trieMeta)
         {
-            if (!meta.get())
-            {
-                BOOST_THROW_EXCEPTION(
-                    MPTInvariantViolation{} << bcos::errinfo_comment(
-                        "rollback " + std::to_string(tip) + " -> " + std::to_string(target) +
-                        " refused: block " + std::to_string(block) + " has no " + name +
-                        " meta row, so its pre-images cannot be replayed. Nothing was written. "
-                        "Check the retention depths, and run `mpt-audit history` for the full "
-                        "picture."));
-            }
+            missing.emplace_back(block, !stateMeta ? "StateHistory" : "TrieHistory");
+            continue;
         }
         declared.emplace(block,
             std::pair<std::size_t, std::size_t>{stateMeta->recordCount, trieMeta->recordCount});
+    }
+
+    if (!missing.empty())
+    {
+        auto const lowest = missing.front().first;
+        auto const prefix =
+            "rollback " + std::to_string(tip) + " -> " + std::to_string(target) + " refused: ";
+
+        // The blocks with no history form a contiguous run reaching the TIP. That is the shape an
+        // INTERRUPTED rollback leaves, and it is the one shape a plain "block N has no history"
+        // message diagnoses wrongly: this walk drops each block's history as it finishes with that
+        // block and never moves the tip row (it is outside the capture set), so a run that stops
+        // part-way leaves exactly the blocks it already undid without history, while everything
+        // below them still has it. Re-running the SAME command then asks for pre-images that were
+        // consumed on purpose, and "check the retention depths" sends the operator nowhere.
+        //
+        // The shape is not proof — a B.10 (2) hole at the top of the range looks the same, and a
+        // node that recorded no history for its newest blocks does too — so the message says
+        // "probably" and names the check that settles it.
+        if (static_cast<std::size_t>(tip - lowest + 1) == missing.size())
+        {
+            if (lowest > target + 1)
+            {
+                BOOST_THROW_EXCEPTION(
+                    MPTInvariantViolation{} << bcos::errinfo_comment(
+                        prefix + "blocks " + std::to_string(lowest) + ".." + std::to_string(tip) +
+                        " have no history while every block from " + std::to_string(target + 1) +
+                        " to " + std::to_string(lowest - 1) +
+                        " still does. A previous rollback was probably interrupted after undoing "
+                        "them — this tool drops each block's history as it undoes it and never "
+                        "moves the tip row, so those blocks are already at their pre-block state. "
+                        "Nothing was written. Re-run with --tip " +
+                        std::to_string(lowest - 1) +
+                        " to finish the range that is left. If the history is missing for some "
+                        "other reason, `mpt-audit history` will say which."));
+            }
+            BOOST_THROW_EXCEPTION(
+                MPTInvariantViolation{} << bcos::errinfo_comment(
+                    prefix + "no block in (" + std::to_string(target) + ", " + std::to_string(tip) +
+                    "] has history in both stores, so there is nothing left to undo. Either a "
+                    "previous rollback to this target already completed — in which case the state "
+                    "and trie planes are at block " +
+                    std::to_string(target) +
+                    " and only the tip row is left to set — or this node never recorded history "
+                    "for these blocks. Nothing was written. `mpt-audit history` tells the two "
+                    "apart."));
+        }
+
+        // Anything else — a gap in the middle, or the bottom of the range — is not an interrupted
+        // run: this walk cannot produce it. The damage it prevents is silent either way. Skipping
+        // one block leaves the live plane a mixture of two block heights, and nothing downstream
+        // notices: the caller's own post-rollback re-audit compares the tree against the TARGET
+        // block's root, which a partial rollback of the state plane can still satisfy when the
+        // skipped block touched no trie node. It happens for free with the CLI's default retention
+        // depth of 128 against a node configured shorter, and it happens for real on a B.10 (2)
+        // hole.
+        BOOST_THROW_EXCEPTION(
+            MPTInvariantViolation{} << bcos::errinfo_comment(
+                prefix + "block " + std::to_string(lowest) + " has no " + missing.front().second +
+                " meta row, so its pre-images cannot be replayed. Nothing was written. Check the "
+                "retention depths, and run `mpt-audit history` for the full picture."));
     }
 
     RollbackReport report{.tip = tip, .target = target, .applied = apply};

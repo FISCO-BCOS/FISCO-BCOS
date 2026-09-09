@@ -422,16 +422,78 @@ BOOST_AUTO_TEST_CASE(missingHistoryInsideTheRangeRefusesTheWholeRollback)
 }
 
 /// The dry run refuses too — that is where an operator looks first, so it is where the refusal has
-/// to land.
+/// to land. Also the TrieHistory side of the same check: either store missing is enough.
 BOOST_AUTO_TEST_CASE(missingHistoryInsideTheRangeAlsoRefusesTheDryRun)
 {
     RollbackFixture fixture;
-    bcos::task::syncWait(fixture.trieStore.expire(fixture.storage, fixture.storage, 3));
+    bcos::task::syncWait(fixture.trieStore.expire(fixture.storage, fixture.storage, 2));
 
     BOOST_CHECK_EXCEPTION(fixture.rollback(1, /*apply=*/false), MPTInvariantViolation,
         [](MPTInvariantViolation const& error) {
             return std::string(boost::diagnostic_information(error))
-                       .find("block 3 has no TrieHistory meta row") != std::string::npos;
+                       .find("block 2 has no TrieHistory meta row") != std::string::npos;
+        });
+}
+
+/// NEGATIVE CONTROL — an interrupted `--yes` run, which is NOT the same fault as a hole and must
+/// not get the same message.
+///
+/// The walk drops each block's history as it undoes that block, and never moves the tip row, so a
+/// run that stops part-way leaves a contiguous run of history-less blocks at the TOP of the range.
+/// Re-running the same command then asks for pre-images that were consumed on purpose. "Check the
+/// retention depths" is a dead end there; the refusal has to say what happened and give the tip to
+/// re-run with.
+BOOST_AUTO_TEST_CASE(interruptedRollbackIsDiagnosedAndNamesTheTipToResumeFrom)
+{
+    RollbackFixture fixture;
+    // What the walk itself does to blocks 3 and 2 before being killed: both planes undone, both
+    // stores' history for those blocks dropped, tip row untouched.
+    for (protocol::BlockNumber block : {3, 2})
+    {
+        bcos::task::syncWait(fixture.stateStore.expire(fixture.storage, fixture.storage, block));
+        bcos::task::syncWait(fixture.trieStore.expire(fixture.storage, fixture.storage, block));
+    }
+
+    BOOST_CHECK_EXCEPTION(fixture.rollback(0, /*apply=*/true), MPTInvariantViolation,
+        [](MPTInvariantViolation const& error) {
+            std::string const message = boost::diagnostic_information(error);
+            BOOST_TEST_MESSAGE("interrupted-rollback refusal: " << message);
+            return message.find("blocks 2..3 have no history") != std::string::npos &&
+                   message.find("previous rollback was probably interrupted") !=
+                       std::string::npos &&
+                   message.find("Re-run with --tip 1") != std::string::npos &&
+                   message.find("Nothing was written") != std::string::npos;
+        });
+    // Not the generic diagnosis, which would send the operator to the retention depths.
+    BOOST_CHECK_EXCEPTION(fixture.rollback(0, /*apply=*/true), MPTInvariantViolation,
+        [](MPTInvariantViolation const& error) {
+            return std::string(boost::diagnostic_information(error))
+                       .find("Check the retention depths") == std::string::npos;
+        });
+    // Block 1's own history is intact, so the resumed run has something to do.
+    BOOST_CHECK(hasHistory<history::kStateHistory>(fixture.storage, 1));
+    BOOST_CHECK_EQUAL(*readLiveRow(fixture.storage, currentNumberKey()), "3");
+}
+
+/// The degenerate end of the same shape: NOTHING in the range has history. Naming a `--tip` here
+/// would name the target itself, which is not a rollback — so the refusal says what the two
+/// possible causes are instead.
+BOOST_AUTO_TEST_CASE(anEmptyRangeSaysTheRollbackMayAlreadyBeDone)
+{
+    RollbackFixture fixture;
+    for (protocol::BlockNumber block : {3, 2})
+    {
+        bcos::task::syncWait(fixture.stateStore.expire(fixture.storage, fixture.storage, block));
+        bcos::task::syncWait(fixture.trieStore.expire(fixture.storage, fixture.storage, block));
+    }
+
+    BOOST_CHECK_EXCEPTION(fixture.rollback(1, /*apply=*/true), MPTInvariantViolation,
+        [](MPTInvariantViolation const& error) {
+            std::string const message = boost::diagnostic_information(error);
+            BOOST_TEST_MESSAGE("empty-range refusal: " << message);
+            return message.find("nothing left to undo") != std::string::npos &&
+                   message.find("only the tip row is left to set") != std::string::npos &&
+                   message.find("--tip") == std::string::npos;
         });
 }
 
