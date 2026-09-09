@@ -9,13 +9,13 @@
 #include <oneapi/tbb/parallel_invoke.h>
 #include <boost/throw_exception.hpp>
 #include <concepts>
+#include <deque>
 #include <functional>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/map.hpp>
 #include <range/v3/view/zip.hpp>
 #include <type_traits>
 #include <variant>
-#include <deque>
 
 namespace bcos::storage2
 {
@@ -598,10 +598,27 @@ public:
         }
     }
 
+    /// Drop the oldest pending layer without writing it to the backend.
+    void popBackStorage()
+    {
+        std::unique_lock lock(m_listMutex);
+        if (!m_storages.empty())
+        {
+            m_storages.pop_back();
+        }
+    }
+
+    /// Number of queued pending layers.
+    std::size_t pendingLayerCount()
+    {
+        std::unique_lock lock(m_listMutex);
+        return m_storages.size();
+    }
+
 private:
     /// Shared merge body of mergeBackStorage / mergeToBackends — the only difference
     /// between the two is whether a queued layer participates in the merge.
-    /// Private on purpose (finding R1): every other public mutator on this class
+    /// Private on purpose: every other public mutator on this class
     /// self-locks; this body performs an unlocked storage2::merge into the backends,
     /// so exposing it would let a caller race mergeBackStorage on m_latestBackend.
     /// mergeBackStorage/mergeToBackends hold m_mergeMutex around the call.

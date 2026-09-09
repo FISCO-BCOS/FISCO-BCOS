@@ -177,7 +177,7 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             // `validateErrorCode` carries the opValidate table's typed classification for
             // validate-class rejects — empty for every other reject shape.
             auto rejectNonDeposit = [&](std::string message,
-                                    std::error_code validateErrorCode = {}) {
+                                        std::error_code validateErrorCode = {}) {
                 OpConsensusError err(std::move(message));
                 err.txHash = bcos::crypto::keccak256Hash(envRef);
                 err.validateErrorCode = std::move(validateErrorCode);
@@ -249,12 +249,11 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
                 }
                 catch (const std::runtime_error& e)
                 {
-                    // Throw the tagged error directly (evictable by tx hash). A bare
-                    // `throw;` here would be unreachable - rejectNonDeposit never returns.
-                    OpConsensusError err(
+                    // Executor-internal faults (e.g. opTransition invariant) are not a
+                    // poisoned tx: do not tag txHash, matching rethrowExecError on the
+                    // per-tx path. Capacity / validate rejects above stay tagged.
+                    throw OpConsensusError(
                         std::string("op block: transaction execution failed: ") + e.what());
-                    err.txHash = bcos::crypto::keccak256Hash(envRef);
-                    throw err;
                 }
             }();
             applyDiffChecked(diff);

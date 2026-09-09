@@ -1,15 +1,16 @@
 /*
- *  Copyright (C) 2026 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Copyright (C) 2026 FISCO BCOS.
+ * SPDX-License-Identifier: Apache-2.0
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  */
 
 #include "../common/RPCFixture.h"
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
+#include <bcos-rpc/web3jsonrpc/endpoints/EndpointsMapping.h>
 #include <boost/test/unit_test.hpp>
 #include <future>
 #include <string_view>
@@ -227,6 +228,31 @@ BOOST_AUTO_TEST_CASE(sendRawTransactionGarbageReportsError)
     auto resp = call(req("eth_sendRawTransaction", R"(["0xdeadbeef"])"));
     BOOST_CHECK(resp.isMember("error") || resp.isMember("result"));
     BOOST_CHECK(resp.isMember("id"));
+}
+
+BOOST_AUTO_TEST_CASE(feeHistoryAndSetMaxDASizeRegistered)
+{
+    // Check handler registration directly; a generic RPC error is not enough.
+    EndpointsMapping publicMapping(/*enableOPEngine=*/false);
+    BOOST_CHECK_MESSAGE(
+        publicMapping.findHandler("eth_feeHistory").has_value(), "eth_feeHistory not dispatched");
+    BOOST_CHECK_MESSAGE(!publicMapping.findHandler("miner_setMaxDASize").has_value(),
+        "miner_setMaxDASize must not be exposed on public web3_rpc");
+
+    EndpointsMapping engineMapping(/*enableOPEngine=*/true);
+    BOOST_CHECK_MESSAGE(engineMapping.findHandler("miner_setMaxDASize").has_value(),
+        "miner_setMaxDASize not dispatched on op_engine_rpc");
+
+    // And the endpoint stays reachable through the real dispatch path.
+    auto resp = call(req("eth_feeHistory", R"(["0x1","latest"])"));
+    if (resp.isMember("error"))
+    {
+        BOOST_CHECK_NE(resp["error"]["code"].asInt(), -32601);
+    }
+    else
+    {
+        BOOST_CHECK(resp.isMember("result"));
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -1,23 +1,24 @@
 /**
- *  Copyright (C) 2026 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Copyright (C) 2026 FISCO BCOS.
+ * SPDX-License-Identifier: Apache-2.0
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  * @file EngineServiceTest.cpp
  * @brief Tests for the engine-split Engine API module (EngineServiceTest)
  */
 
 #include "engine/bcos-engine/EngineServiceImpl.h"
+#include "engine/test/unittests/engine/EthServiceStubs.h"
 
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPEncode.h>
@@ -48,13 +49,12 @@
 
 using namespace bcos;
 using namespace bcos::engine;
+using namespace bcos::engine::eth_test;
 
 namespace
 {
-// Whole-second milliseconds (1700000000s): every Eth header produced by finalizeEthBlockHeader
-// must satisfy validateHeader's "timestamp is a whole number of seconds" check, so a fixture
-// timestamp with sub-second milliseconds would make every build path throw.
-constexpr std::uint64_t c_timestamp = 1700000000ULL * 1000ULL;
+// Whole-second milliseconds: finalizeEthBlockHeader requires whole-second timestamps.
+constexpr std::uint64_t c_timestamp = c_defaultPayloadTimestamp;
 constexpr bcos::protocol::BlockNumber c_initialBlockNumber = 5;
 constexpr bcos::protocol::BlockNumber c_trackedInitialBlockNumber = 10;
 constexpr bcos::protocol::BlockNumber c_trackedNextBlockNumber = 11;
@@ -144,155 +144,6 @@ static protocol::Transaction::Ptr makeWeb3Tx(std::string_view senderBytes, uint6
     tx->setImportTime(static_cast<int64_t>(nonce));
     return tx;
 }
-
-using RealGlobalStateMutableStorage = bcos::storage2::memory_storage::MemoryStorage<
-    bcos::executor_v1::StateKey, bcos::executor_v1::StateValue,
-    bcos::storage2::memory_storage::Attribute(bcos::storage2::memory_storage::ORDERED |
-                                              bcos::storage2::memory_storage::LOGICAL_DELETION)>;
-using RealGlobalStateBackendStorage =
-    bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
-        bcos::executor_v1::StateValue,
-        bcos::storage2::memory_storage::Attribute(
-            bcos::storage2::memory_storage::ORDERED | bcos::storage2::memory_storage::CONCURRENT),
-        std::hash<bcos::executor_v1::StateKey>>;
-
-// Minimal CheckpointStorage stub — only the interface needed by MultiLayerStorage
-template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
-struct TrivialCheckpointStorage
-{
-    using CheckpointName = bcos::h256;
-
-    Storage& m_storage;
-    explicit TrivialCheckpointStorage(Storage& s) : m_storage(s) {}
-    Storage& open() { return m_storage; }
-    [[noreturn]] Storage& open(CheckpointName const&) { std::abort(); }
-    void createCheckpoint(Storage&, CheckpointName const&) {}
-    void deleteCheckpoint(CheckpointName const&) {}
-    std::optional<CheckpointName> latestCheckpointName() const { return std::nullopt; }
-    std::optional<CheckpointName> oldestCheckpointName() const { return std::nullopt; }
-};
-
-using RealGlobalCheckpointBackend = TrivialCheckpointStorage<bcos::executor_v1::StateKey,
-    bcos::executor_v1::StateValue, RealGlobalStateBackendStorage>;
-using RealGlobalStateStorage = bcos::storage2::MultiLayerStorage<RealGlobalStateMutableStorage,
-    void, RealGlobalCheckpointBackend>;
-
-task::Task<void> writeBlockNumberToStorage(RealGlobalStateBackendStorage& backendStorage,
-    const h256& blockHash, bcos::protocol::BlockNumber blockNumber)
-{
-    storage::Entry entry;
-    entry.set(boost::lexical_cast<std::string>(blockNumber));
-    co_await bcos::storage2::writeOne(backendStorage,
-        bcos::executor_v1::StateKey{
-            ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash)},
-        std::move(entry));
-    storage::Entry hashEntry;
-    hashEntry.set(blockHash.asBytes());
-    co_await bcos::storage2::writeOne(backendStorage,
-        bcos::executor_v1::StateKey{
-            ledger::SYS_NUMBER_2_HASH, boost::lexical_cast<std::string>(blockNumber)},
-        std::move(hashEntry));
-}
-
-struct RealGlobalStateStorageFixture
-{
-    RealGlobalStateBackendStorage backendStorage;
-    RealGlobalCheckpointBackend checkpointBackend{backendStorage};
-    RealGlobalStateStorage storage{checkpointBackend};
-
-    explicit RealGlobalStateStorageFixture(
-        evmc_revision rev = EVMC_CANCUN, bool writeEvmcRevision = true)
-    {
-        // The Engine service runs only on executor_version=2 with an explicit EVMC
-        // revision. The default models the "Karst" chain (CANCUN) these tests mostly
-        // drive; tests that exercise older FCU method versions (V1/V2) pass SHANGHAI so
-        // the attribute shape the request can express matches the chain fork.
-        // buildPayload FAILS CLOSED when the revision is absent (it never falls back to
-        // the compile-time default), so the missing-revision test passes writeEvmcRevision
-        // = false to reach that branch.
-        writeSysConfig(magic_enum::enum_name(ledger::SystemConfig::executor_version),
-            std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
-        if (writeEvmcRevision)
-        {
-            writeSysConfig(
-                ledger::SYSTEM_KEY_EVMC_REVISION, ledger::encodeEVMCRevisionConfig(rev, {}));
-        }
-    }
-
-    void setBlockNumber(const h256& blockHash, bcos::protocol::BlockNumber blockNumber)
-    {
-        task::syncWait(writeBlockNumberToStorage(backendStorage, blockHash, blockNumber));
-    }
-
-    void setNonce(std::string_view sender, std::string nonce)
-    {
-        // The mempool stores senders as raw bytes and MemPoolImpl::seal/remove resolve the
-        // account via the evmc_address overload (lower-case hex path), matching the executor.
-        // Use the same path here so the sealed nonce the test relies on is visible to seal().
-        evmc_address addr{};
-        std::copy_n(sender.begin(), std::min(sender.size(), sizeof(addr.bytes)), addr.bytes);
-        ledger::account::EVMAccount account{backendStorage, addr, false};
-        task::syncWait(account.setNonce(std::move(nonce)));
-    }
-
-private:
-    void writeSysConfig(std::string_view key, std::string value)
-    {
-        storage::Entry entry;
-        entry.set(bcos::storage::serialize::encode(ledger::SystemConfigEntry{std::move(value), 0}));
-        task::syncWait(storage2::writeOne(backendStorage,
-            bcos::executor_v1::StateKey{ledger::SYS_CONFIG, key}, std::move(entry)));
-    }
-};
-
-void setForkchoiceBlockNumbers(RealGlobalStateStorageFixture& storageFixture,
-    const ForkchoiceState& forkchoiceState, bcos::protocol::BlockNumber headBlockNumber,
-    bcos::protocol::BlockNumber safeBlockNumber, bcos::protocol::BlockNumber finalizedBlockNumber)
-{
-    storageFixture.setBlockNumber(forkchoiceState.headBlockHash, headBlockNumber);
-    storageFixture.setBlockNumber(forkchoiceState.safeBlockHash, safeBlockNumber);
-    storageFixture.setBlockNumber(forkchoiceState.finalizedBlockHash, finalizedBlockNumber);
-}
-
-// Stub types satisfying executor_v1::TransactionExecutor and
-// scheduler_v1::TransactionScheduler concepts for unit testing.
-// Stub executor and scheduler return empty results; blockFactory is a real
-// instance used for block header creation and hash computation.
-struct StubExecutor
-{
-    template <class Storage>
-    struct ExecuteContext
-    {
-        task::Task<void> prepare() { co_return; }
-        task::Task<void> execute() { co_return; }
-        task::Task<protocol::TransactionReceipt::Ptr> finish() { co_return nullptr; }
-    };
-
-    template <class Storage>
-    task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(Storage&,
-        const protocol::BlockHeader&, const protocol::Transaction&, int,
-        const ledger::LedgerConfig&, bool)
-    {
-        co_return nullptr;
-    }
-
-    template <class Storage>
-    task::Task<ExecuteContext<Storage>> createExecuteContext(Storage&, const protocol::BlockHeader&,
-        const protocol::Transaction&, int, const ledger::LedgerConfig&, bool)
-    {
-        co_return ExecuteContext<Storage>{};
-    }
-};
-
-struct StubScheduler
-{
-    template <class Storage, class Executor>
-    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
-        const protocol::BlockHeader&, ::ranges::input_range auto&&, const ledger::LedgerConfig&)
-    {
-        co_return {};
-    }
-};
 
 struct BloomScheduler
 {
@@ -393,13 +244,12 @@ public:
     {
         if (m_failNext.exchange(false))
         {
-            callback("injected", BCOS_ERROR_PTR(
-                                     bcos::ledger::LedgerError::ErrorArgument,
+            callback("injected", BCOS_ERROR_PTR(bcos::ledger::LedgerError::ErrorArgument,
                                      "injected prewrite failure"));
             return;
         }
-        CommitLedger::asyncPrewriteBlock(std::move(storage), std::move(_blockTxs),
-            std::move(block), std::move(callback), writeTxsAndReceipts, std::move(features),
+        CommitLedger::asyncPrewriteBlock(std::move(storage), std::move(_blockTxs), std::move(block),
+            std::move(callback), writeTxsAndReceipts, std::move(features),
             std::move(blockHashOverride), writeNonces);
     }
     std::atomic_bool m_failNext{true};
@@ -427,8 +277,8 @@ public:
                 std::this_thread::yield();
             }
         }
-        CommitLedger::asyncPrewriteBlock(std::move(storage), std::move(_blockTxs),
-            std::move(block), std::move(callback), writeTxsAndReceipts, std::move(features),
+        CommitLedger::asyncPrewriteBlock(std::move(storage), std::move(_blockTxs), std::move(block),
+            std::move(callback), writeTxsAndReceipts, std::move(features),
             std::move(blockHashOverride), writeNonces);
     }
     std::atomic_bool m_firstEntered{false};
@@ -462,58 +312,6 @@ bcos::protocol::BlockHeader::Ptr readPersistedHeader(
         bcos::bytesConstRef(reinterpret_cast<const bcos::byte*>(field.data()), field.size()));
 }
 
-ForkchoiceState makeForkchoiceState()
-{
-    return {h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
-        h256("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
-        h256("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")};
-}
-
-PayloadAttributes makePayloadAttributesV2()
-{
-    PayloadAttributes payloadAttributes;
-    payloadAttributes.timestamp = c_timestamp;
-    payloadAttributes.prevRandao =
-        h256("1111111111111111111111111111111111111111111111111111111111111111");
-    payloadAttributes.suggestedFeeRecipient = Address("1234567890abcdef1234567890abcdef12345678");
-    // The withdrawals list is empty: finalizeEthBlockHeader commits the empty-trie root as
-    // a placeholder, and validatePayloadAttributes rejects a NON-empty list paired with it
-    // (the real withdrawals trie root is not computed yet).
-    payloadAttributes.withdrawals = std::vector<WithdrawalV1>{};
-    return payloadAttributes;
-}
-
-PayloadAttributes makePayloadAttributesV3()
-{
-    auto payloadAttributes = makePayloadAttributesV2();
-    payloadAttributes.parentBeaconBlockRoot =
-        h256("2222222222222222222222222222222222222222222222222222222222222222");
-    return payloadAttributes;
-}
-
-/// Attributes op-node actually sends on a Karst chain: same as V3 except the withdrawals
-/// operation list is empty, which Isthmus requires of the resulting ExecutionPayloadV4
-/// (op-geth beacon/engine/types.go:324-326).
-PayloadAttributes makeKarstPayloadAttributes()
-{
-    auto payloadAttributes = makePayloadAttributesV3();
-    payloadAttributes.withdrawals = std::vector<WithdrawalV1>{};
-    return payloadAttributes;
-}
-
-NewPayloadRequest makeNewPayloadRequestV3(const ExecutionPayload& executionPayload)
-{
-    NewPayloadRequest request;
-    request.executionPayload = executionPayload;
-    // expectedBlobVersionedHashes stays empty: L2 forbids blob transactions, so a real CL
-    // never sends any and a non-empty list is INVALID from V3 up
-    // (new_payload_v3_rejects_blob_versioned_hashes below).
-    // Deliberately different from makePayloadAttributesV3()'s beacon root (0x2222...):
-    // newPayload must keep the FCU-built beacon, not rewrite from the request.
-    request.parentBeaconBlockRoot =
-        h256("5555555555555555555555555555555555555555555555555555555555555555");
-    return request;
-}
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(EngineServiceTest)
@@ -580,9 +378,12 @@ BOOST_AUTO_TEST_CASE(forkchoice_with_payload_attributes_builds_retrievable_paylo
     auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 2));
     BOOST_CHECK_EQUAL(payload->executionPayload.parentHash, forkchoiceState.headBlockHash);
     BOOST_CHECK_EQUAL(payload->executionPayload.blockNumber, c_initialBlockNumber + 1);
-    BOOST_CHECK_EQUAL(payload->executionPayload.timestamp, c_timestamp);
+    BOOST_CHECK_EQUAL(payload->executionPayload.timestamp, c_defaultPayloadTimestamp);
     BOOST_CHECK(payload->executionPayload.withdrawals.has_value());
     BOOST_CHECK(!payload->executionPayload.blobGasUsed.has_value());
+    // makeTx is a native Tars tx (no EIP-2718 wire form). Sealing it into the
+    // payload would livelock FCU→getPayload→newPayload; the empty list is the
+    // exclusion, not "the sealer dropped everything".
     BOOST_CHECK(payload->executionPayload.transactions.empty());
     auto fetched = memPool.get(std::vector{tx->hash()});
     BOOST_CHECK_EQUAL(fetched.size(), 1);
@@ -603,7 +404,7 @@ BOOST_AUTO_TEST_CASE(forkchoice_v2_rejected_on_cancun_chain)
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     auto payloadAttributes = makePayloadAttributesV2();
-    // Pin the exact gate, not just the exception type: the same UnsupportedFork type is
+    // Check the exact validation gate, not only the exception type. UnsupportedFork is
     // thrown by the V2-attr and the missing-revision gates with different what() text.
     BOOST_CHECK_EXCEPTION(
         task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 2)),
@@ -1184,9 +985,7 @@ BOOST_AUTO_TEST_CASE(new_payload_round_trips_deposit_raw_bytes)
         payload->executionPayload.transactions.size());
 }
 
-/// Parent known (via the locally built hash) but this blockHash was never built:
-/// op-geth would execute first; we must not VALID-store the CL body.
-BOOST_AUTO_TEST_CASE(new_payload_cache_miss_is_syncing)
+BOOST_AUTO_TEST_CASE(new_payload_cache_miss_wrong_hash_is_invalid)
 {
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
@@ -1206,8 +1005,10 @@ BOOST_AUTO_TEST_CASE(new_payload_cache_miss_is_syncing)
     request.executionPayload.blockHash =
         h256("6666666666666666666666666666666666666666666666666666666666666666");
     auto status = task::syncWait(engineService.newPayload(request, 3));
-    BOOST_CHECK_EQUAL(
-        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Syncing));
+    BOOST_CHECK_EQUAL(static_cast<int>(status.status),
+        static_cast<int>(PayloadValidationStatus::InvalidBlockHash));
+    BOOST_REQUIRE(status.validationError.has_value());
+    BOOST_CHECK_NE(status.validationError->find("blockHash"), std::string::npos);
     BOOST_CHECK(!status.latestValidHash.has_value());
 
     auto stillBuilt = task::syncWait(engineService.getPayload(*result.payloadId, 3));
@@ -1253,7 +1054,7 @@ BOOST_AUTO_TEST_CASE(new_payload_hit_rejects_altered_state_root_and_keeps_built_
 
 BOOST_AUTO_TEST_CASE(new_payload_honest_retry_does_not_recommit)
 {
-    // Pins finding F22's no-op leg: after a successful commit the entry survives with
+    // Pins 's no-op leg: after a successful commit the entry survives with
     // view==null and header==null (artifacts consumed post-I/O), so a repeat newPayload
     // must skip the commit branch entirely and answer VALID WITHOUT touching storage —
     // never a mergeBackStorage() on the drained/foreign queue.
@@ -1313,8 +1114,8 @@ BOOST_AUTO_TEST_CASE(new_payload_retry_after_failed_prewrite_recommits)
     // First attempt: the injected prewrite error must propagate, never become VALID,
     // and no header row may exist yet.
     BOOST_CHECK_THROW(task::syncWait(engineService.newPayload(honest, 3)), bcos::Error);
-    BOOST_REQUIRE(readPersistedHeader(
-        globalStateStorageFixture.backendStorage, c_initialBlockNumber + 1) == nullptr);
+    BOOST_REQUIRE(readPersistedHeader(globalStateStorageFixture.backendStorage,
+                      c_initialBlockNumber + 1) == nullptr);
 
     // Retry: the entry survived the failed attempt, so the commit completes for real —
     // the header row lands with the same extraData the payload carries.
@@ -1328,7 +1129,7 @@ BOOST_AUTO_TEST_CASE(new_payload_retry_after_failed_prewrite_recommits)
         toHexStringWithPrefix(payload->executionPayload.extraData));
 }
 
-// finding N1: a duplicate newPayload racing the first attempt's commit I/O must
+// a duplicate newPayload racing the first attempt's commit I/O must
 // answer the idempotent VALID — not a NotExistsImmutableStorageError from a
 // mergeBackStorage on the queue the first attempt already drained. Both attempts
 // prewrite identical rows; the drained-queue side falls through to
@@ -1617,7 +1418,7 @@ BOOST_AUTO_TEST_CASE(karst_v3_build_v5_get_v4_commit_round_trip)
         static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
 }
 
-// Round-5 op-node breakpoint: a Jovian CL sends eip1559Params + minBaseFee and expects
+// node breakpoint: a Jovian CL sends eip1559Params + minBaseFee and expects
 // the built block to carry the 17-byte Jovian extraData, re-validated when it reads the
 // header back (op-core/eip1559/eip1559.go ValidateJovianExtraData). The payload and the
 // header the block hash was computed over must agree: buildPayload stamps the same bytes

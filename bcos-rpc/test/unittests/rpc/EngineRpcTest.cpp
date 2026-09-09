@@ -1,17 +1,17 @@
 /**
- *  Copyright (C) 2026 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Copyright (C) 2026 FISCO BCOS.
+ * SPDX-License-Identifier: Apache-2.0
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  * @file EngineRpcTest.cpp
  * @brief Unit tests for Engine API through Endpoints/EngineEndpoint
@@ -29,6 +29,7 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <stdexcept>
 #include <thread>
 
 using namespace bcos;
@@ -62,7 +63,10 @@ public:
         bool throwUnknownPayload = false;
         bool throwInvalidPayloadAttributes = false;
         bool throwUnsupportedFork = false;
+        bool throwUnsupportedEngineApiVersion = false;
         bool throwInvalidForkchoiceState = false;
+        bool throwOpExecutionInternalError = false;
+        bool throwStdRuntimeError = false;
         std::atomic<bool> hangNewPayload{false};
         std::atomic<bool> enteredNewPayload{false};
     };
@@ -90,9 +94,22 @@ public:
         {
             BOOST_THROW_EXCEPTION(engine::UnsupportedFork{});
         }
+        if (m_state->throwUnsupportedEngineApiVersion)
+        {
+            BOOST_THROW_EXCEPTION(engine::UnsupportedEngineApiVersion{});
+        }
         if (m_state->throwInvalidForkchoiceState)
         {
             BOOST_THROW_EXCEPTION(engine::InvalidForkchoiceState{});
+        }
+        if (m_state->throwOpExecutionInternalError)
+        {
+            BOOST_THROW_EXCEPTION(engine::OpExecutionInternalError{}
+                                  << bcos::errinfo_comment{"Null receipt returned by scheduler"});
+        }
+        if (m_state->throwStdRuntimeError)
+        {
+            throw std::runtime_error{"untreated scheduler fault"};
         }
         co_return m_state->forkchoiceUpdatedResult;
     }
@@ -105,6 +122,19 @@ public:
         if (m_state->throwUnknownPayload)
         {
             BOOST_THROW_EXCEPTION(engine::UnknownPayload{});
+        }
+        if (m_state->throwUnsupportedEngineApiVersion)
+        {
+            BOOST_THROW_EXCEPTION(engine::UnsupportedEngineApiVersion{});
+        }
+        if (m_state->throwOpExecutionInternalError)
+        {
+            BOOST_THROW_EXCEPTION(engine::OpExecutionInternalError{}
+                                  << bcos::errinfo_comment{"Null receipt returned by scheduler"});
+        }
+        if (m_state->throwStdRuntimeError)
+        {
+            throw std::runtime_error{"untreated scheduler fault"};
         }
         co_return std::make_unique<engine::GetPayloadData>(*m_state->getPayloadResult);
     }
@@ -126,6 +156,19 @@ public:
         if (m_state->throwUnsupportedFork)
         {
             BOOST_THROW_EXCEPTION(engine::UnsupportedFork{});
+        }
+        if (m_state->throwUnsupportedEngineApiVersion)
+        {
+            BOOST_THROW_EXCEPTION(engine::UnsupportedEngineApiVersion{});
+        }
+        if (m_state->throwOpExecutionInternalError)
+        {
+            BOOST_THROW_EXCEPTION(engine::OpExecutionInternalError{}
+                                  << bcos::errinfo_comment{"Null receipt returned by scheduler"});
+        }
+        if (m_state->throwStdRuntimeError)
+        {
+            throw std::runtime_error{"untreated scheduler fault"};
         }
         co_return m_state->forkchoiceUpdatedResult.payloadStatus;
     }
@@ -275,6 +318,60 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedTypedFailuresMapToSpecErrorCodes)
     Json::Value stateOnly(Json::arrayValue);
     stateOnly.append(fc);
     expectCode(stateOnly, EngineError::InvalidForkchoiceState);
+
+    mockService.m_state->throwInvalidForkchoiceState = false;
+    mockService.m_state->throwUnsupportedEngineApiVersion = true;
+    expectCode(params, EngineError::UnsupportedFork);
+}
+
+namespace
+{
+bool isShortInternalError(JsonRpcException const& e, char const* needle)
+{
+    auto const& msg = e.msg();
+    return e.code() == InternalError && msg.find("Internal error") != std::string::npos &&
+           msg.find(needle) != std::string::npos && msg.find("boost") == std::string::npos &&
+           msg.find("Diagnostic") == std::string::npos;
+}
+
+Json::Value makeForkchoiceParams()
+{
+    Json::Value params(Json::arrayValue);
+    Json::Value fc;
+    fc["headBlockHash"] = "0x1111111111111111111111111111111111111111111111111111111111111111";
+    fc["safeBlockHash"] = "0x2222222222222222222222222222222222222222222222222222222222222222";
+    fc["finalizedBlockHash"] = "0x3333333333333333333333333333333333333333333333333333333333333333";
+    params.append(fc);
+    return params;
+}
+}  // namespace
+
+BOOST_AUTO_TEST_CASE(engineRpcInternalFaultsMapToShort32603)
+{
+    auto const params = makeForkchoiceParams();
+
+    mockService.m_state->throwOpExecutionInternalError = true;
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(forkchoiceUpdatedV3, params, response), JsonRpcException,
+        [](JsonRpcException const& e) {
+            return isShortInternalError(e, "Null receipt returned by scheduler");
+        });
+
+    mockService.m_state->throwOpExecutionInternalError = false;
+    mockService.m_state->throwStdRuntimeError = true;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(forkchoiceUpdatedV3, params, response), JsonRpcException,
+        [](JsonRpcException const& e) {
+            return isShortInternalError(e, "untreated scheduler fault");
+        });
+
+    mockService.m_state->throwStdRuntimeError = false;
+    mockService.m_state->throwOpExecutionInternalError = true;
+    Json::Value getParams(Json::arrayValue);
+    getParams.append("0x00000000deadbeef");
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(getPayloadV3, getParams, response), JsonRpcException,
+        [](JsonRpcException const& e) {
+            return isShortInternalError(e, "Null receipt returned by scheduler");
+        });
 }
 
 
@@ -467,6 +564,17 @@ BOOST_AUTO_TEST_CASE(getPayloadV5UnknownPayload)
         [](JsonRpcException const& e) { return e.code() == EngineError::UnknownPayload; });
 }
 
+BOOST_AUTO_TEST_CASE(getPayloadUnsupportedEngineApiVersionMapsTo38005)
+{
+    mockService.m_state->throwUnsupportedEngineApiVersion = true;
+
+    Json::Value params(Json::arrayValue);
+    params.append("0x00000000deadbeef");
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(getPayloadV3, params, response), JsonRpcException,
+        [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
+}
+
 BOOST_AUTO_TEST_CASE(getPayloadV5MissingParams)
 {
     Json::Value params(Json::arrayValue);
@@ -518,9 +626,41 @@ Json::Value makeV1ExecutionPayloadJson()
 }
 }  // namespace
 
+BOOST_AUTO_TEST_CASE(newPayloadInternalFaultsMapToShort32603)
+{
+    mockService.m_state->throwOpExecutionInternalError = true;
+
+    Json::Value params(Json::arrayValue);
+    params.append(makeV1ExecutionPayloadJson());
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV1, params, response), JsonRpcException,
+        [](JsonRpcException const& e) {
+            return isShortInternalError(e, "Null receipt returned by scheduler");
+        });
+
+    mockService.m_state->throwOpExecutionInternalError = false;
+    mockService.m_state->throwStdRuntimeError = true;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV1, params, response), JsonRpcException,
+        [](JsonRpcException const& e) {
+            return isShortInternalError(e, "untreated scheduler fault");
+        });
+}
+
 BOOST_AUTO_TEST_CASE(newPayloadUnsupportedForkMapsTo38005)
 {
     mockService.m_state->throwUnsupportedFork = true;
+
+    Json::Value params(Json::arrayValue);
+    params.append(makeV1ExecutionPayloadJson());
+
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV1, params, response), JsonRpcException,
+        [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
+}
+
+BOOST_AUTO_TEST_CASE(newPayloadUnsupportedEngineApiVersionMapsTo38005)
+{
+    mockService.m_state->throwUnsupportedEngineApiVersion = true;
 
     Json::Value params(Json::arrayValue);
     params.append(makeV1ExecutionPayloadJson());

@@ -1,17 +1,17 @@
 /**
- *  Copyright (C) 2024 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Copyright (C) 2024 FISCO BCOS.
+ * SPDX-License-Identifier: Apache-2.0
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  * @file EthEndpoint.cpp
  * @author: kyonGuo
@@ -44,6 +44,7 @@
 #include <bcos-rpc/web3jsonrpc/model/CallRequest.h>
 #include <bcos-rpc/web3jsonrpc/model/ReceiptResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
+#include <bcos-rpc/web3jsonrpc/utils/FeeHistory.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tx-validator/TxValidator.h>
@@ -239,6 +240,27 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
     u256 balance = 0;
     if (isLatest)
     {
+        // OP / scenario-B chains commit account state in MPT only; the flat ACCOUNT_BALANCE
+        // row is absent, so "latest" must read the tip block's committed state root (same as
+        // an explicit block tag) instead of ledger::getStorageAt on the empty flat plane.
+        auto const mptReader = m_nodeService->mptNodeReader();
+        if (mptReader)
+        {
+            auto const ctx = co_await resolveHistoricalMptContext(*ledger, blockNumber, mptReader);
+            if (ctx.fullTrie)
+            {
+                bcos::ledger::mpt::MPTReadView view{*mptReader, ctx.stateRoot};
+                auto const account = co_await view.readAccount(
+                    bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
+                if (account)
+                {
+                    balance = account->balance;
+                }
+                Json::Value result = toQuantity(std::move(balance));
+                buildJsonContent(result, response);
+                co_return;
+            }
+        }
         if (auto const entry = co_await ledger::getStorageAt(
                 *ledger, addressStr, bcos::executor::ACCOUNT_BALANCE, /*blockNumber*/ 0);
             entry.has_value())
@@ -403,17 +425,17 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
 
     // Query the slot through the MPT at that root: account leaf -> storageRoot -> slot leaf
     // (slotKeyHash(slot)). Absence semantics are scenario-driven, exactly like getProof:
-    //  - scenario B (ctx.fullTrie): the trie is complete, so absent account / empty storage
-    //    trie / absent slot all read zero — Ethereum semantics at a committed root;
-    //  - scenario A (mid-chain activation): a dormant account absent from the trie is
-    //    indistinguishable from a non-existent one → explicit error; a slot absent from the
-    //    (incomplete) storage trie — whether the account has no storage in the trie yet
-    //    (storageRoot == emptyRootHash(), first touch wrote only nonce/balance/code) or the
-    //    storage trie has no leaf for this slot — → fall back to the flat KV. The flat value
-    //    is authoritative when the slot was never written after activation; if it was written
-    //    *after* the requested block the fallback returns that later value, since
-    //    ledger::getStorageAt ignores blockNumber today (the same limitation as getProof's
-    //    SlotNotInMPT fallback). Still strictly better than reporting zero.
+    // - scenario B (ctx.fullTrie): the trie is complete, so absent account / empty storage
+    // trie / absent slot all read zero — Ethereum semantics at a committed root;
+    // - scenario A (mid-chain activation): a dormant account absent from the trie is
+    // indistinguishable from a non-existent one → explicit error; a slot absent from the
+    // (incomplete) storage trie — whether the account has no storage in the trie yet
+    // (storageRoot == emptyRootHash(), first touch wrote only nonce/balance/code) or the
+    // storage trie has no leaf for this slot — → fall back to the flat KV. The flat value
+    // is authoritative when the slot was never written after activation; if it was written
+    // *after* the requested block the fallback returns that later value, since
+    // ledger::getStorageAt ignores blockNumber today (the same limitation as getProof's
+    // SlotNotInMPT fallback). Still strictly better than reporting zero.
     std::optional<std::string> flatFallback;  // scenario-A dormant-slot fallback rendering
     bcos::u256 value = 0;
     {
@@ -507,6 +529,24 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
     u256 nonce = 0;
     if (isLatest)
     {
+        auto const mptReader = m_nodeService->mptNodeReader();
+        if (mptReader)
+        {
+            auto const ctx = co_await resolveHistoricalMptContext(*ledger, blockNumber, mptReader);
+            if (ctx.fullTrie)
+            {
+                bcos::ledger::mpt::MPTReadView view{*mptReader, ctx.stateRoot};
+                auto const account = co_await view.readAccount(
+                    bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
+                if (account)
+                {
+                    nonce = account->nonce;
+                }
+                Json::Value result = toQuantity(nonce);
+                buildJsonContent(result, response);
+                co_return;
+            }
+        }
         if (auto const entry = co_await ledger::getStorageAt(
                 *ledger, addressStr, bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*blockNumber*/ 0);
             entry.has_value())
@@ -1254,13 +1294,59 @@ task::Task<void> EthEndpoint::maxPriorityFeePerGas(
     co_return;
 }
 
+task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value& response)
+{
+    // params: blockCount(QTY), newestBlock(QTY|TAG), rewardPercentiles(FLOAT[] optional)
+    if (request.empty() || !request[0U].isString())
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "eth_feeHistory expects [blockCount, newestBlock, ...]"));
+    }
+    auto const blockCountParsed = bcos::safeFromQuantity(request[0U].asString());
+    if (!blockCountParsed.has_value())
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid blockCount"));
+    }
+    if (request.size() < 2 || !request[1U].isString())
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "eth_feeHistory expects [blockCount, newestBlock, ...]"));
+    }
+
+    auto const newestTag = toView(request[1U]);
+    auto [newestBlock, _] = co_await getBlockNumberByTag(newestTag);
+
+    std::vector<double> rewardPercentiles;
+    if (request.size() >= 3 && request[2U].isArray())
+    {
+        for (auto const& entry : request[2U])
+        {
+            if (!entry.isNumeric())
+            {
+                BOOST_THROW_EXCEPTION(
+                    JsonRpcException(InvalidParams, "rewardPercentiles must be numbers"));
+            }
+            rewardPercentiles.push_back(entry.asDouble());
+        }
+    }
+
+    // The OP base-fee rule is keyed on the chain's L2 flag (feature_l2_ethereum_compat) —
+    // the same canonical source the MPT paths above use — not on the DA-cap object, which
+    // is a DA-throttling handshake that only coincides with OP mode today.
+    auto const opStackMode = co_await ledger::getFeature(
+        *m_nodeService->ledger(), ledger::Features::Flag::feature_l2_ethereum_compat, newestBlock);
+    auto result = co_await buildFeeHistory(*m_nodeService->ledger(), newestBlock,
+        static_cast<std::size_t>(*blockCountParsed), rewardPercentiles, opStackMode);
+    buildJsonContent(result, response);
+}
+
 /// eth_getProof custom error code (spec §5.9): both request-level proof failures — dormant
 /// account and unknown/uncommitted state root — map to -32004; the message distinguishes them.
 constexpr int32_t EthGetProofUnavailable = -32004;
 
 task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& response)
 {
-    // params: address(DATA 20B), storageKeys(DATA[] of 32B), blockNumber(QTY|TAG)  (EIP-1186)
+    // params: address(DATA 20B), storageKeys(DATA[] of 32B), blockNumber(QTY|TAG) (EIP-1186)
     // result: {address, balance, nonce, codeHash, storageHash, accountProof[], storageProof[]}
     Address address;
     try
