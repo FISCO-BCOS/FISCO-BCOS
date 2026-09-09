@@ -14,6 +14,8 @@
 #include "EVMSupport.h"
 #include "EthereumHost.h"
 #include "EthereumState.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-framework/protocol/BlobSchedule.h"
 #include "bcos-framework/protocol/LogEntry.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
@@ -35,34 +37,45 @@ namespace bcos::executor_v1::eth
 using evm::ErrorCode;
 using evm::make_error_code;
 
-// EIP-7840 blob schedule constants (target, max, base_fee_update_fraction).
-// Shared by EthereumExecutor (blob_gas_left for validation) and the block-info
-// builder (blob_base_fee computation) so the two cannot drift.
-//
-// Osaka keeps the Prague schedule (EIP-7918 changes only the excess-blob-gas
-// UPDATE rule, which evmone's calc_excess_blob_gas already implements for
-// rev >= EVMC_OSAKA). The post-Osaka BPO1 (9/14) / BPO2 (14/21) schedules of
-// EIP-7840 are NOT reachable here yet: execution maxes out at EVMC_OSAKA (the
-// verifier's timestamp->revision ladder and evmc itself have no BPO revision),
-// so a block past BPO1/BPO2 with blobs would be executed with Osaka fees. This
-// is a known limitation (tracked with the BPO1/BPO2 header-validation support
-// in bcos-devp2p/sync/HeaderValidator.h: kBpo1BlobSchedule 9/14 @8832827,
-// kBpo2BlobSchedule 14/21 @13739630).
-inline constexpr evm::BlobParams PRAGUE_BLOB_PARAMS{.target = 6,
-    .max = 9,
-    .base_fee_update_fraction = 5007716};
-inline constexpr evm::BlobParams CANCUN_BLOB_PARAMS{.target = 3,
-    .max = 6,
-    .base_fee_update_fraction = 3338477};
+// EIP-7840 blob schedule constants: the canonical table lives in
+// bcos-framework/protocol/BlobSchedule.h (shared with the devp2p header
+// validator, so the two cannot drift). The revision-keyed fallback below covers
+// only chains that never stamp a per-block schedule into the ledger config:
+// an evmc revision cannot express the post-Osaka BPO1/BPO2 schedule bumps, so a
+// chain that schedules BPO1/BPO2 MUST go through the external-block verifier,
+// which stamps the timestamp-resolved schedule into
+// ledger::LedgerConfig::blobSchedule (see fillExecutionLedgerConfig).
+inline evm::BlobParams toEvmBlobParams(protocol::BlobScheduleConfig const& schedule) noexcept
+{
+    return {.target = static_cast<uint16_t>(schedule.targetBlobs),
+        .max = static_cast<uint16_t>(schedule.maxBlobs),
+        .base_fee_update_fraction = static_cast<uint32_t>(schedule.baseFeeUpdateFraction)};
+}
 
-/// The EIP-7840 blob schedule in effect for @p rev (empty for pre-Cancun).
+/// The EIP-7840 blob schedule for an EVM revision — the pre-BPO fallback
+/// (empty pre-Cancun). Prefer blobParamsForBlock whenever a ledger config is
+/// available.
 inline evm::BlobParams blobParamsForRevision(evmc_revision rev) noexcept
 {
     if (rev >= EVMC_PRAGUE)
-        return PRAGUE_BLOB_PARAMS;  // Prague/Osaka.
+        return toEvmBlobParams(protocol::PRAGUE_BLOB_SCHEDULE);  // Prague/Osaka.
     if (rev == EVMC_CANCUN)
-        return CANCUN_BLOB_PARAMS;  // Cancun.
+        return toEvmBlobParams(protocol::CANCUN_BLOB_SCHEDULE);
     return {};
+}
+
+/// The blob params for the block being executed: the per-block schedule the
+/// verifier stamped into the ledger config (BPO1/BPO2-aware) when present,
+/// else the revision-keyed fallback.
+inline evm::BlobParams blobParamsForBlock(
+    ledger::LedgerConfig const& config, evmc_revision rev) noexcept
+{
+    if (auto const& schedule = config.blobSchedule();
+        schedule.has_value() && schedule->maxBlobs != 0)
+    {
+        return toEvmBlobParams(*schedule);
+    }
+    return blobParamsForRevision(rev);
 }
 
 /// Transaction properties computed during the validation needed for the execution

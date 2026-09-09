@@ -466,7 +466,13 @@ BOOST_FIXTURE_TEST_CASE(downloadVerifyCommitChain, EBSFixture)
             bcos::devp2p::rlpx::RlpxClient client(std::move(clientKey), clientConfig);
             auto established = client.connect();
 
+            // The synthetic headers are London-style (no withdrawals/blob/requests
+            // fields); disable the post-London forks so the fail-closed field-presence
+            // checks match what this chain actually carries.
             bcos::devp2p::sync::ChainConfig devp2pConfig{.chainId = 1};
+            devp2pConfig.shanghaiTime = std::numeric_limits<uint64_t>::max();
+            devp2pConfig.cancunTime = std::numeric_limits<uint64_t>::max();
+            devp2pConfig.pragueTime = std::numeric_limits<uint64_t>::max();
             bcos::devp2p::sync::BlockExchange exchange(1, genesisHeader, devp2pConfig);
 
             auto prevHeader = genesisHeader;
@@ -669,7 +675,12 @@ BOOST_FIXTURE_TEST_CASE(downloadRejectsTamperedCommitment, EBSFixture)
         {
             bcos::devp2p::rlpx::RlpxClient client(std::move(clientKey), clientConfig);
             auto established = client.connect();
+            // Same London-style synthetic headers as above: keep the post-London forks
+            // disabled in the devp2p header validator.
             bcos::devp2p::sync::ChainConfig devp2pConfig{.chainId = 1};
+            devp2pConfig.shanghaiTime = std::numeric_limits<uint64_t>::max();
+            devp2pConfig.cancunTime = std::numeric_limits<uint64_t>::max();
+            devp2pConfig.pragueTime = std::numeric_limits<uint64_t>::max();
             bcos::devp2p::sync::BlockExchange exchange(1, genesisHeader, devp2pConfig);
             exchange.downloadRange(established.session, chain.size() - 1,
                 [&](bcos::devp2p::sync::Block const& block) {

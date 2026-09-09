@@ -75,6 +75,12 @@ struct EvmcForkTimestamps
     uint64_t cancunTime{kForkDisabled};    // EIP-4844 blobs
     uint64_t pragueTime{kForkDisabled};    // EIP-7702 etc.
     uint64_t osakaTime{kForkDisabled};
+    // EIP-7892 blob-parameter-only forks: no EVM revision change (execution
+    // stays Osaka), but they bump the EIP-7840 blob schedule — the executor
+    // picks it up through ledgerConfig.blobSchedule, stamped per block by
+    // fillExecutionLedgerConfig below.
+    uint64_t bpo1Time{kForkDisabled};
+    uint64_t bpo2Time{kForkDisabled};
 };
 
 inline constexpr uint64_t kSecondsToMilliseconds = 1000;
@@ -235,6 +241,19 @@ inline void fillExecutionLedgerConfig(protocol::EthBlockHeaderData const& ethHea
     {
         config.setBlobGasUsed(static_cast<uint64_t>(*ethHeader.blobGasUsed));
     }
+
+    // EIP-7840 blob schedule for THIS block, resolved from the fork-timestamp
+    // schedule: the executor's blob base fee and per-block blob gas limit read
+    // it (an evmc revision tops out at Osaka and cannot express the BPO1/BPO2
+    // schedule bumps). Stamped unconditionally — the executor only consults it
+    // from Cancun on, and the zero entry pre-Cancun falls through to the
+    // revision-keyed default.
+    config.setBlobSchedule(protocol::blobScheduleForTimestamp(
+        protocol::BlobForkTimes{.cancunTime = schedule.cancunTime,
+            .pragueTime = schedule.pragueTime,
+            .bpo1Time = schedule.bpo1Time,
+            .bpo2Time = schedule.bpo2Time},
+        static_cast<uint64_t>(ethHeader.timestamp)));
 
     // chain id -> big-endian evmc_uint256be.
     evmc_uint256be cid{};

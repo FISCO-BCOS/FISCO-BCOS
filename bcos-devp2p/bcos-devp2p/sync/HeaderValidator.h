@@ -22,6 +22,7 @@
 #pragma once
 
 #include "Block.h"
+#include <bcos-framework/protocol/BlobSchedule.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-utilities/Common.h>
 #include <limits>
@@ -39,25 +40,29 @@ constexpr uint64_t kMaxExtraDataSize = 32;
 constexpr uint64_t kGasPerBlob = 1U << 17;  // 131072 (BlobTxBlobGasPerBlob)
 constexpr uint64_t kBlobBaseCost = 1U << 13;  // 8192 (EIP-7918 reserve-price factor)
 
-// EIP-7840 blob schedule (target/max blob gas per block + the blob base-fee
-// update fraction of the block at that timestamp) per fork. Values match geth's
-// BlobScheduleConfig (Cancun 3/6 @3338477, Prague 6/9 @5007716, BPO1 9/14
-// @8832827, BPO2 14/21 @13739630); Osaka keeps the Prague schedule — EIP-7918
-// changes only the excess-blob-gas UPDATE rule, not target/max. Keep in sync
-// with CANCUN_BLOB_PARAMS / PRAGUE_BLOB_PARAMS in
-// ethereum-executor/EthereumTransition.h.
+// EIP-7840 blob schedule per fork: the canonical table (blob counts + update
+// fraction) lives in bcos-framework/protocol/BlobSchedule.h, shared with the v2
+// executor so the two cannot drift. The gas-denominated view below is what the
+// validation math uses.
 struct BlobSchedule
 {
-    uint64_t targetBlobGas;            // target blob gas per block
-    uint64_t maxBlobGas;               // maximum blob gas per block
-    uint64_t baseFeeUpdateFraction;    // EIP-4844/7840 blob fee update fraction
+    uint64_t targetBlobGas;          // target blob gas per block
+    uint64_t maxBlobGas;             // maximum blob gas per block
+    uint64_t baseFeeUpdateFraction;  // EIP-4844/7840 blob fee update fraction
 };
-constexpr BlobSchedule kCancunBlobSchedule{3 * kGasPerBlob, 6 * kGasPerBlob, 3338477};
-constexpr BlobSchedule kPragueBlobSchedule{6 * kGasPerBlob, 9 * kGasPerBlob, 5007716};
+
+constexpr BlobSchedule toGasSchedule(protocol::BlobScheduleConfig const& _params)
+{
+    return {_params.targetBlobs * kGasPerBlob, _params.maxBlobs * kGasPerBlob,
+        _params.baseFeeUpdateFraction};
+}
+
+constexpr BlobSchedule kCancunBlobSchedule = toGasSchedule(protocol::CANCUN_BLOB_SCHEDULE);
+constexpr BlobSchedule kPragueBlobSchedule = toGasSchedule(protocol::PRAGUE_BLOB_SCHEDULE);
 // Osaka keeps the Prague schedule (EIP-7918 only changes the excess update rule).
 constexpr BlobSchedule kOsakaBlobSchedule = kPragueBlobSchedule;
-constexpr BlobSchedule kBpo1BlobSchedule{9 * kGasPerBlob, 14 * kGasPerBlob, 8832827};
-constexpr BlobSchedule kBpo2BlobSchedule{14 * kGasPerBlob, 21 * kGasPerBlob, 13739630};
+constexpr BlobSchedule kBpo1BlobSchedule = toGasSchedule(protocol::BPO1_BLOB_SCHEDULE);
+constexpr BlobSchedule kBpo2BlobSchedule = toGasSchedule(protocol::BPO2_BLOB_SCHEDULE);
 
 // Minimal chain configuration for header validation (timestamp-based forks).
 struct ChainConfig
@@ -105,24 +110,18 @@ inline bool isForkActive(uint64_t _forkTime, int64_t _timestamp)
     return _forkTime == 0 || static_cast<uint64_t>(_timestamp) >= _forkTime;
 }
 
-// EIP-7840: the blob schedule in effect for the block at `_timestamp`. Cancun /
-// Prague / BPO1 / BPO2 are keyed on their activation timestamps; Osaka keeps the
-// Prague schedule — EIP-7918 changes only the excess-blob-gas UPDATE rule.
+// EIP-7840: the blob schedule in effect for the block at `_timestamp`, from the
+// shared table (protocol::blobScheduleForTimestamp). Cancun / Prague / BPO1 /
+// BPO2 are keyed on their activation timestamps; Osaka keeps the Prague
+// schedule — EIP-7918 changes only the excess-blob-gas UPDATE rule.
 inline BlobSchedule blobScheduleFor(ChainConfig const& _config, int64_t _timestamp)
 {
-    if (isForkActive(_config.bpo2Time, _timestamp))
-    {
-        return kBpo2BlobSchedule;
-    }
-    if (isForkActive(_config.bpo1Time, _timestamp))
-    {
-        return kBpo1BlobSchedule;
-    }
-    if (isForkActive(_config.pragueTime, _timestamp))
-    {
-        return kPragueBlobSchedule;
-    }
-    return kCancunBlobSchedule;
+    return toGasSchedule(protocol::blobScheduleForTimestamp(
+        protocol::BlobForkTimes{.cancunTime = _config.cancunTime,
+            .pragueTime = _config.pragueTime,
+            .bpo1Time = _config.bpo1Time,
+            .bpo2Time = _config.bpo2Time},
+        static_cast<uint64_t>(_timestamp)));
 }
 
 // EIP-1559: the base fee of the next block (the block after `_parent`).
@@ -146,22 +145,37 @@ inline u256 computeNextBaseFee(bcos::protocol::EthBlockHeaderData const& _parent
 }
 
 // EIP-4844 fake_exponential: floor(factor * e^(numerator/denominator)) via the
-// truncated Taylor series. Port of geth's fakeExponential; the values that reach
-// header validation (excess blob gas, update fraction) are far below u256
-// overflow, so no wider accumulator is needed.
+// truncated Taylor series. Port of the spec / geth's fakeExponential: the
+// accumulator starts at factor * denominator so every term keeps the
+// denominator's precision through the per-step floors, and the sum is divided
+// by the denominator once at the end. (Starting the accumulator at `factor`
+// truncates each term to an integer and badly under-approximates — e.g. the
+// spec gives floor(e^2) = 7 for (1, 2d, d), the naive form gives 6.)
+// The multiply is widened to u512 as in the executor's compute_blob_gas_price;
+// excess values here come from peer headers, so absurd inputs saturate (treated
+// as "very expensive", the same side of the reserve-price branch geth lands on)
+// instead of wrapping.
 inline u256 fakeExponential(
     u256 const& _factor, u256 const& _numerator, u256 const& _denominator)
 {
-    u256 output = 0;
-    u256 acc = _factor;
+    u512 output = 0;
+    u256 acc = _factor * _denominator;
     u256 i = 1;
     while (acc > 0)
     {
         output += acc;
-        acc = acc * _numerator / (_denominator * i);
+        auto const product = u512(acc) * u512(_numerator);
+        if (product > u512(std::numeric_limits<u256>::max()))
+        {
+            return std::numeric_limits<u256>::max();
+        }
+        acc = u256(product) / (_denominator * i);
         ++i;
     }
-    return output;
+    auto const result = output / u512(_denominator);
+    return result > u512(std::numeric_limits<u256>::max()) ?
+               std::numeric_limits<u256>::max() :
+               u256(result);
 }
 
 // EIP-4844 / EIP-7918: the excess blob gas of the next block (the block after

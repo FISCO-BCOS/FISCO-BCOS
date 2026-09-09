@@ -114,8 +114,8 @@ BOOST_AUTO_TEST_CASE(excessBlobGasGoldenVectors)
 // EIP-7918 (Osaka): when the blob fee sits below the reserve price
 // (8192 * baseFee > 131072 * blobBaseFee), the excess grows by
 // used * (max - target) / max instead of the plain target delta.
-// Vectors verified against an independent Python port of geth's
-// consensus/misc/eip4844 calcExcessBlobGas.
+// Vectors verified against an independent Python port of the EIP-4844
+// fake_exponential + geth's consensus/misc/eip4844 calcExcessBlobGas.
 BOOST_AUTO_TEST_CASE(eip7918ExcessBlobGasGoldenVectors)
 {
     auto parent = makeValidPair().parent;
@@ -129,22 +129,34 @@ BOOST_AUTO_TEST_CASE(eip7918ExcessBlobGasGoldenVectors)
     BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kCancunBlobSchedule, false), u256(131072));
 
     // Blob fee ABOVE the reserve price: even under Osaka the original EIP-4844
-    // rule applies. parent excess 30e6 -> blobBaseFee 6816 -> blob price
-    // 6816 * 131072 = 893386752 > reserve 8192 * 100000 = 819200000.
+    // rule applies. parent excess 30e6 -> blobBaseFee 7991 -> blob price
+    // 7991 * 131072 = 1047396352 > reserve 8192 * 100000 = 819200000.
     auto p2 = makeValidPair().parent;
     p2.excessBlobGas = u256(30000000);
     p2.blobGasUsed = u256(2 * kGasPerBlob);
     p2.baseFee = u256(100000);
     BOOST_CHECK_EQUAL(computeNextExcessBlobGas(p2, kCancunBlobSchedule, true), u256(29868928));
     BOOST_CHECK_EQUAL(computeNextExcessBlobGas(p2, kCancunBlobSchedule, false), u256(29868928));
+
+    // Branch-discriminating vector: at baseFee 120000 the reserve is
+    // 8192 * 120000 = 983040000 and the spec blob price 7991 * 131072 =
+    // 1047396352 stays ABOVE it (plain rule). A fake_exponential that starts
+    // the accumulator at factor instead of factor * denominator computes
+    // blobBaseFee 6816 -> 893386752 < reserve, wrongly taking the EIP-7918
+    // branch (30131072). The correct answer is the plain delta 29868928.
+    auto p3 = makeValidPair().parent;
+    p3.excessBlobGas = u256(30000000);
+    p3.blobGasUsed = u256(2 * kGasPerBlob);
+    p3.baseFee = u256(120000);
+    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(p3, kCancunBlobSchedule, true), u256(29868928));
 }
 
-// EIP-7840 schedule progression past Prague: BPO1 (9/14), BPO2 (14/21).
+// EIP-7840 schedule progression past Prague: BPO1 (10/15), BPO2 (14/21).
 // The same parent yields different expected excess per active schedule.
 // Vectors verified against an independent Python port of geth's calcExcessBlobGas.
 BOOST_AUTO_TEST_CASE(postOsakaBlobScheduleGoldenVectors)
 {
-    // 12 blobs used: above the Prague target (6) and BPO1 target (9), below the
+    // 12 blobs used: above the Prague target (6) and BPO1 target (10), below the
     // BPO2 target (14). baseFee 1e9 keeps the EIP-7918 reserve-price condition true.
     auto parent = makeValidPair().parent;
     parent.excessBlobGas = u256(0);
@@ -154,18 +166,18 @@ BOOST_AUTO_TEST_CASE(postOsakaBlobScheduleGoldenVectors)
     // Prague schedule (also Osaka): 12-6 = 6 blobs under the old rule, but
     // EIP-7918 scales by (9-6)/9 = 1/3 of the used gas.
     BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kPragueBlobSchedule, true), u256(524288));
-    // BPO1: 12 used vs target 9 -> EIP-7918 scaled by (14-9)/14.
-    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kBpo1BlobSchedule, true), u256(561737));
-    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kBpo1BlobSchedule, false), u256(393216));
+    // BPO1: 12 used vs target 10 -> EIP-7918 scaled by (15-10)/15.
+    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kBpo1BlobSchedule, true), u256(524288));
+    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kBpo1BlobSchedule, false), u256(262144));
     // BPO2: 12 used is below the target 14 -> excess resets to 0.
     BOOST_CHECK_EQUAL(computeNextExcessBlobGas(parent, kBpo2BlobSchedule, true), u256(0));
 
-    // 10 blobs: over BPO1's target (9), under BPO2's (14).
+    // 10 blobs: exactly at BPO1's target (10), under BPO2's (14).
     auto p2 = makeValidPair().parent;
     p2.excessBlobGas = u256(0);
     p2.blobGasUsed = u256(10 * kGasPerBlob);
     p2.baseFee = u256(1000000000);
-    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(p2, kBpo1BlobSchedule, true), u256(468114));
+    BOOST_CHECK_EQUAL(computeNextExcessBlobGas(p2, kBpo1BlobSchedule, true), u256(436906));
     BOOST_CHECK_EQUAL(computeNextExcessBlobGas(p2, kBpo2BlobSchedule, true), u256(0));
 }
 
@@ -201,7 +213,7 @@ BOOST_AUTO_TEST_CASE(postBpo2HeaderValidates)
     BOOST_CHECK(!rejected.valid);
     BOOST_CHECK(rejected.error.find("excessBlobGas") != std::string::npos);
 
-    // 15 blobs fit under the BPO2 max (21) but exceed the BPO1 max (14).
+    // 16 blobs fit under the BPO2 max (21) but exceed the BPO1 max (15).
     auto pMax = makeValidPair();
     pMax.config.pragueTime = 1600000000;
     pMax.config.osakaTime = 1600000000;
@@ -209,7 +221,7 @@ BOOST_AUTO_TEST_CASE(postBpo2HeaderValidates)
     pMax.config.bpo2Time = 1600000002;  // still BPO1 at the child block
     pMax.parent.excessBlobGas = u256(0);
     pMax.parent.blobGasUsed = u256(0);
-    pMax.child.blobGasUsed = u256(15 * kGasPerBlob);  // over BPO1 max (14)
+    pMax.child.blobGasUsed = u256(16 * kGasPerBlob);  // over BPO1 max (15)
     pMax.child.excessBlobGas = u256(0);
     auto overBpo1 = validateHeaderPoS(pMax.child, pMax.parent, pMax.config);
     BOOST_CHECK(!overBpo1.valid);

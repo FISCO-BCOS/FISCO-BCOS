@@ -325,6 +325,11 @@ private:
         forks.cancunTime = m_nodeConfig->ethereumForkCancunTime();
         forks.pragueTime = m_nodeConfig->ethereumForkPragueTime();
         forks.osakaTime = m_nodeConfig->ethereumForkOsakaTime();
+        // BPO1/BPO2 don't change the EVM revision but do bump the EIP-7840 blob
+        // schedule; the verifier stamps the resolved schedule into the ledger
+        // config so the executor picks it up.
+        forks.bpo1Time = m_nodeConfig->ethereumForkBpo1Time();
+        forks.bpo2Time = m_nodeConfig->ethereumForkBpo2Time();
         return forks;
     }
 
