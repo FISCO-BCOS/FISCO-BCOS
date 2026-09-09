@@ -706,7 +706,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // keeps the EngineService the sole block producer; otherwise PBFT and the engine driver
     // would write blocks to the same global storage concurrently. The front service is
     // still wired for gateway bookkeeping, but its dispatchers are inert with no peers.
-    if (!m_nodeConfig->engineDrivenBlockProduction())
+    //
+    // Ethereum L1 EL mode (ethereum.mode=el) skips them for the same reason, one level
+    // further out: blocks arrive over devp2p download (EthereumSyncInitializer) and there
+    // is no local block production at all, so the txpool's ledger reads at init and the
+    // consensus/sync handlers pbft->init() registers would serve nothing. start() below
+    // already skips both modes.
+    if (!m_nodeConfig->engineDrivenBlockProduction() && !m_nodeConfig->ethereumELModeEnabled())
     {
         // init the txpool
         m_txpoolInitializer->init();
@@ -714,6 +720,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // Note: must init PBFT after txpool, in case of pbft calls txpool to verifyBlock before
         // txpool init finished
         m_pbftInitializer->init();
+    }
+    else if (m_nodeConfig->ethereumELModeEnabled())
+    {
+        INITIALIZER_LOG(INFO) << LOG_DESC(
+            "EthereumELMode: skip txpool/pbft/sealer init (blocks arrive via devp2p download; "
+            "no local block production)");
     }
     else
     {
