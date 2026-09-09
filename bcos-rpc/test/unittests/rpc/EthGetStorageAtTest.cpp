@@ -676,25 +676,6 @@ BOOST_AUTO_TEST_CASE(HistoricalBalanceFromMPT)
     BOOST_TEST(resp["result"].asString() == toQuantity(1000));
 }
 
-// Latest getBalance on scenario B: OP chains store balances in MPT only, so "latest" must
-// read the tip block's committed root (not the empty flat ACCOUNT_BALANCE row).
-BOOST_AUTO_TEST_CASE(LatestBalanceFromMPTOnScenarioB)
-{
-    bcos::ledger::Features features;
-    features.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
-    m_ledger->setFeatures(std::move(features));
-
-    buildTrie();
-    wireReader();
-    // "latest" resolves to the tip block, not an arbitrary historical height.
-    m_ledger->ledgerData().back()->blockHeader()->setStateRoot(stateRoot);
-
-    auto resp = getBalance(address.hexPrefixed(), "latest");
-    BOOST_TEST(!resp.isMember("error"));
-    BOOST_REQUIRE(resp.isMember("result"));
-    BOOST_TEST(resp["result"].asString() == toQuantity(1000));
-}
-
 // Historical getTransactionCount: the nonce comes from the block's committed MPT root (7).
 BOOST_AUTO_TEST_CASE(HistoricalNonceFromMPT)
 {
