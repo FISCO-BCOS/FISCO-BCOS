@@ -61,8 +61,7 @@ class SchedulerInterface;
 namespace engine
 {
 class AnyEngineService;
-struct DACaps;
-}  // namespace engine
+}
 namespace single_consensus
 {
 class SingleNodeConsensus;
@@ -104,7 +103,6 @@ public:
         return m_engineServiceInitializer;
     }
     std::shared_ptr<bcos::engine::AnyEngineService> engineService();
-    std::shared_ptr<bcos::engine::DACaps> daCaps() const { return m_daCaps; }
 
     std::shared_ptr<bcos::single_consensus::SingleNodeConsensus> singleNodeConsensus()
     {
@@ -193,7 +191,6 @@ private:
 #endif
     std::shared_ptr<GlobalStateStorageInitializer> m_globalStateStorageInitializer;
     std::shared_ptr<EngineServiceInitializer> m_engineServiceInitializer;
-    std::shared_ptr<bcos::engine::DACaps> m_daCaps;
     std::shared_ptr<bcos::single_consensus::SingleNodeConsensus> m_singleNodeConsensus;
     std::shared_ptr<executor_v1::PrecompiledManager> m_precompiledManager;
     bcos::storage::TransactionalStorageInterface::Ptr m_storage = nullptr;

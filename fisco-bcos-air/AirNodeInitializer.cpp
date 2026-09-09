@@ -122,10 +122,6 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
             nodeConfig->eestReplayMode() ? bcos::txvalidator::AdmissionContext::EESTReplay :
                                            bcos::txvalidator::AdmissionContext::PoolAdmission);
     }
-    if (auto daCaps = m_nodeInitializer->daCaps())
-    {
-        nodeService->setDaCaps(daCaps);
-    }
 
     // create rpc
     RpcFactory rpcFactory(nodeConfig->chainId(), m_gateway, keyFactory,

@@ -54,7 +54,6 @@
 #include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework/engine/DACaps.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
 #include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
@@ -402,11 +401,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // any case requires an on-chain EVM revision (buildPayload fails closed without one),
     // so the escape hatch can no longer build payloads; production configs must never set
     // it.
-    if (m_nodeConfig->enableOpEngineRpc())
-    {
-        m_daCaps = std::make_shared<bcos::engine::DACaps>();
-    }
-
     if (m_nodeConfig->enableOpEngineRpc() && engineApiForV1Only)
     {
         if (!m_nodeConfig->opEngineAllowV1Executor())

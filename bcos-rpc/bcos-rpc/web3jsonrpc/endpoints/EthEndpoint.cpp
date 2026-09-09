@@ -29,7 +29,6 @@
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-executor/src/Common.h>
-#include <bcos-executor/src/precompiled/common/Utilities.h>  // trimHexPrefix
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/storage/LegacyStorageMethods.h>
 #include <bcos-framework/storage2/Storage.h>
@@ -45,11 +44,9 @@
 #include <bcos-rpc/web3jsonrpc/model/CallRequest.h>
 #include <bcos-rpc/web3jsonrpc/model/ReceiptResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
-#include <bcos-rpc/web3jsonrpc/utils/FeeHistory.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tx-validator/TxValidator.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
@@ -242,27 +239,6 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
     u256 balance = 0;
     if (isLatest)
     {
-        // OP / scenario-B chains commit account state in MPT only; the flat ACCOUNT_BALANCE
-        // row is absent, so "latest" must read the tip block's committed state root (same as
-        // an explicit block tag) instead of ledger::getStorageAt on the empty flat plane.
-        auto const mptReader = m_nodeService->mptNodeReader();
-        if (mptReader)
-        {
-            auto const ctx = co_await resolveHistoricalMptContext(*ledger, blockNumber, mptReader);
-            if (ctx.fullTrie)
-            {
-                bcos::ledger::mpt::MPTReadView view{*mptReader, ctx.stateRoot};
-                auto const account = co_await view.readAccount(
-                    bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
-                if (account)
-                {
-                    balance = account->balance;
-                }
-                Json::Value result = toQuantity(std::move(balance));
-                buildJsonContent(result, response);
-                co_return;
-            }
-        }
         if (auto const entry = co_await ledger::getStorageAt(
                 *ledger, addressStr, bcos::executor::ACCOUNT_BALANCE, /*blockNumber*/ 0);
             entry.has_value())
@@ -427,17 +403,17 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
 
     // Query the slot through the MPT at that root: account leaf -> storageRoot -> slot leaf
     // (slotKeyHash(slot)). Absence semantics are scenario-driven, exactly like getProof:
-    // - scenario B (ctx.fullTrie): the trie is complete, so absent account / empty storage
-    // trie / absent slot all read zero — Ethereum semantics at a committed root;
-    // - scenario A (mid-chain activation): a dormant account absent from the trie is
-    // indistinguishable from a non-existent one → explicit error; a slot absent from the
-    // (incomplete) storage trie — whether the account has no storage in the trie yet
-    // (storageRoot == emptyRootHash(), first touch wrote only nonce/balance/code) or the
-    // storage trie has no leaf for this slot — → fall back to the flat KV. The flat value
-    // is authoritative when the slot was never written after activation; if it was written
-    // *after* the requested block the fallback returns that later value, since
-    // ledger::getStorageAt ignores blockNumber today (the same limitation as getProof's
-    // SlotNotInMPT fallback). Still strictly better than reporting zero.
+    //  - scenario B (ctx.fullTrie): the trie is complete, so absent account / empty storage
+    //    trie / absent slot all read zero — Ethereum semantics at a committed root;
+    //  - scenario A (mid-chain activation): a dormant account absent from the trie is
+    //    indistinguishable from a non-existent one → explicit error; a slot absent from the
+    //    (incomplete) storage trie — whether the account has no storage in the trie yet
+    //    (storageRoot == emptyRootHash(), first touch wrote only nonce/balance/code) or the
+    //    storage trie has no leaf for this slot — → fall back to the flat KV. The flat value
+    //    is authoritative when the slot was never written after activation; if it was written
+    //    *after* the requested block the fallback returns that later value, since
+    //    ledger::getStorageAt ignores blockNumber today (the same limitation as getProof's
+    //    SlotNotInMPT fallback). Still strictly better than reporting zero.
     std::optional<std::string> flatFallback;  // scenario-A dormant-slot fallback rendering
     bcos::u256 value = 0;
     {
@@ -531,24 +507,6 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
     u256 nonce = 0;
     if (isLatest)
     {
-        auto const mptReader = m_nodeService->mptNodeReader();
-        if (mptReader)
-        {
-            auto const ctx = co_await resolveHistoricalMptContext(*ledger, blockNumber, mptReader);
-            if (ctx.fullTrie)
-            {
-                bcos::ledger::mpt::MPTReadView view{*mptReader, ctx.stateRoot};
-                auto const account = co_await view.readAccount(
-                    bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
-                if (account)
-                {
-                    nonce = account->nonce;
-                }
-                Json::Value result = toQuantity(nonce);
-                buildJsonContent(result, response);
-                co_return;
-            }
-        }
         if (auto const entry = co_await ledger::getStorageAt(
                 *ledger, addressStr, bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*blockNumber*/ 0);
             entry.has_value())
@@ -908,15 +866,6 @@ task::Task<void> EthEndpoint::call(
         BOOST_THROW_EXCEPTION(
             JsonRpcException(JsonRpcError::InternalError, "Scheduler not available!"));
     }
-    // eth_estimateGas sizes its gas cap from the target block's header, so it cannot run
-    // without the ledger. Fail closed here rather than later substituting a constant cap that
-    // has nothing to do with this chain's configuration.
-    auto ledger = m_nodeService->ledger();
-    if (isEstimate && !ledger)
-    {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            JsonRpcError::InternalError, "Ledger not available for eth_estimateGas"));
-    }
     auto [valid, call] = decodeCallRequest(request[0U]);
     if (!valid)
     {
@@ -929,51 +878,8 @@ task::Task<void> EthEndpoint::call(
         WEB3_LOG(TRACE) << LOG_DESC("eth_call") << LOG_KV("call", call)
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
-    std::optional<uint64_t> chainBlockGasLimit;
-    if (isEstimate)
-    {
-        if (auto block = co_await ledger::getBlockData(*ledger, blockNumber, bcos::ledger::HEADER))
-        {
-            // Bounds-checked narrowing: an over-wide gasLimit leaves the optional unset and
-            // the guard below refuses the request instead of using a truncated cap.
-            auto const limit = block->blockHeader()->gasLimit();
-            if (bcos::u256FitsUint64(limit))
-            {
-                chainBlockGasLimit = static_cast<uint64_t>(limit);
-            }
-        }
-        // No default cap: an unreadable header or an over-wide gasLimit must fail the request
-        // with a diagnosable message, not silently size the estimate against a constant.
-        bool const needsGasDefault = !call.gas.has_value() || call.gas.value() == 0;
-        if (needsGasDefault && !chainBlockGasLimit.has_value())
-        {
-            BOOST_THROW_EXCEPTION(JsonRpcException(JsonRpcError::InternalError,
-                "Unable to read parent block gas limit for eth_estimateGas"));
-        }
-    }
-    // Await the sender's committed nonce HERE (a coroutine suspension) instead of blocking
-    // the handler thread with task::syncWait inside takeToTransaction. Needed so validation
-    // does not reject with NONCE_TOO_LOW; on OP chains this read itself costs several storage
-    // round-trips, so it stays off the synchronous path.
-    std::optional<std::string> pendingNonce;
-    if (scheduler && call.from.has_value())
-    {
-        // Validate the sender here, at the RPC boundary: a malformed `from` must be
-        // InvalidParams, not a silently empty pending nonce. Downstream the value becomes a
-        // storage table name (EVMAccount) and the scheduler swallows its decode error, so the
-        // request would otherwise proceed with the sender's stale state nonce and a WARNING
-        // log line per call.
-        auto const fromBytes = bcos::safeFromHexWithPrefix(call.from.value());
-        if (!fromBytes.has_value() || fromBytes->size() != bcos::Address::SIZE)
-        {
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(InvalidParams, "invalid `from` address in call request"));
-        }
-        pendingNonce = CallRequest::nonceFromPendingEntry(co_await scheduler->getPendingStorageAt(
-            bcos::precompiled::trimHexPrefix(call.from.value()), "nonce", 0));
-    }
-    auto tx = call.takeToTransaction(m_nodeService->blockFactory()->transactionFactory(),
-        std::move(pendingNonce), chainBlockGasLimit);
+    auto tx = call.takeToTransaction(
+        m_nodeService->blockFactory()->transactionFactory(), isEstimate ? scheduler : nullptr);
     struct Awaitable
     {
         bcos::scheduler::SchedulerInterface& m_scheduler;
@@ -1048,13 +954,6 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
 {
     // params: transaction(TX), blockNumber(QTY|TAG)
     // result: gas(QTY)
-    // Resolving the block tag and sizing the gas cap both need the ledger: refuse up front
-    // instead of dereferencing a null ledger, or silently substituting a constant gas cap.
-    if (!m_nodeService->ledger())
-    {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            JsonRpcError::InternalError, "Ledger not available for eth_estimateGas"));
-    }
     auto const& tx = request[0U];
     auto const blockTag = toView(request[1U]);
     auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
@@ -1355,84 +1254,13 @@ task::Task<void> EthEndpoint::maxPriorityFeePerGas(
     co_return;
 }
 
-task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value& response)
-{
-    // params: blockCount(QTY), newestBlock(QTY|TAG), rewardPercentiles(FLOAT[] optional)
-    if (request.empty() || !request[0U].isString())
-    {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            InvalidParams, "eth_feeHistory expects [blockCount, newestBlock, ...]"));
-    }
-    auto const blockCountParsed = bcos::safeFromQuantity(request[0U].asString());
-    if (!blockCountParsed.has_value())
-    {
-        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid blockCount"));
-    }
-    if (request.size() < 2 || !request[1U].isString())
-    {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            InvalidParams, "eth_feeHistory expects [blockCount, newestBlock, ...]"));
-    }
-
-    auto const newestTag = toView(request[1U]);
-    auto [newestBlock, _] = co_await getBlockNumberByTag(newestTag);
-
-    std::vector<double> rewardPercentiles;
-    if (request.size() >= 3)
-    {
-        // geth rejects a non-array third parameter rather than ignoring it.
-        if (!request[2U].isArray())
-        {
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(InvalidParams, "rewardPercentiles must be an array"));
-        }
-        // Same query limit as geth (eth/gasprice/feehistory.go maxQueryLimit).
-        constexpr std::size_t c_maxRewardPercentiles = 100;
-        if (request[2U].size() > c_maxRewardPercentiles)
-        {
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(InvalidParams, "rewardPercentiles over the query limit 100"));
-        }
-        for (auto const& entry : request[2U])
-        {
-            if (!entry.isNumeric())
-            {
-                BOOST_THROW_EXCEPTION(
-                    JsonRpcException(InvalidParams, "rewardPercentiles must be numbers"));
-            }
-            auto const percentile = entry.asDouble();
-            if (percentile < 0.0 || percentile > 100.0)
-            {
-                BOOST_THROW_EXCEPTION(
-                    JsonRpcException(InvalidParams, "rewardPercentiles must be in [0, 100]"));
-            }
-            // geth rejects a non-increasing array (errInvalidPercentile).
-            if (!rewardPercentiles.empty() && percentile <= rewardPercentiles.back())
-            {
-                BOOST_THROW_EXCEPTION(JsonRpcException(
-                    InvalidParams, "rewardPercentiles must be monotonically increasing"));
-            }
-            rewardPercentiles.push_back(percentile);
-        }
-    }
-
-    // The OP base-fee rule is keyed on the chain's L2 flag (feature_l2_ethereum_compat) —
-    // the same canonical source the MPT paths above use — not on the DA-cap object, which
-    // is a DA-throttling handshake that only coincides with OP mode today.
-    auto const opStackMode = co_await ledger::getFeature(
-        *m_nodeService->ledger(), ledger::Features::Flag::feature_l2_ethereum_compat, newestBlock);
-    auto result = co_await buildFeeHistory(*m_nodeService->ledger(), newestBlock,
-        static_cast<std::size_t>(*blockCountParsed), rewardPercentiles, opStackMode);
-    buildJsonContent(result, response);
-}
-
 /// eth_getProof custom error code (spec §5.9): both request-level proof failures — dormant
 /// account and unknown/uncommitted state root — map to -32004; the message distinguishes them.
 constexpr int32_t EthGetProofUnavailable = -32004;
 
 task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& response)
 {
-    // params: address(DATA 20B), storageKeys(DATA[] of 32B), blockNumber(QTY|TAG) (EIP-1186)
+    // params: address(DATA 20B), storageKeys(DATA[] of 32B), blockNumber(QTY|TAG)  (EIP-1186)
     // result: {address, balance, nonce, codeHash, storageHash, accountProof[], storageProof[]}
     Address address;
     try

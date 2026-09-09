@@ -3,36 +3,18 @@
 
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-ledger/mpt/Constants.h>
-#include <bcos-rlp-protocol/EthBlockHeader.h>
-#include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-utilities/Bloom.h>
 
 #include <range/v3/view/enumerate.hpp>
-
-namespace
-{
-/// isOpEthereumBlock lives in web3jsonrpc/utils/util.h — the fee-history base-fee read
-/// needs the same predicate, and two copies drifted once already.
-bcos::crypto::HashType blockIdentityHash(const bcos::protocol::BlockHeader& header)
-{
-    if (bcos::rpc::isOpEthereumBlock(header))
-    {
-        return bcos::protocol::EthBlockHeader::computeHash(header);
-    }
-    return header.hash();
-}
-}  // namespace
 
 void bcos::rpc::combineBlockResponse(
     Json::Value& result, const bcos::protocol::Block& block, bool fullTxs)
 {
     auto blockHeader = block.blockHeader();
+    auto blockHash = blockHeader->hash();
     auto blockNumber = blockHeader->number();
     auto const ethVersion = blockHeader->ethBlockVersion();
     auto const isEth = ethVersion != bcos::protocol::EthBlockVersion::NON_ETH;
-    auto const isOp = isOpEthereumBlock(*blockHeader);
-    auto const isEthLike = isEth || isOp;
-    auto blockHash = blockIdentityHash(*blockHeader);
 
     result["number"] = toQuantity(blockNumber);
     result["hash"] = blockHash.hexPrefixed();
@@ -43,10 +25,10 @@ void bcos::rpc::combineBlockResponse(
     // non-zero parent would surface here as a changed RPC value.
     result["parentHash"] = blockHeader->parentInfo().blockHash.hexPrefixed();
 
-    if (isEthLike)
+    if (isEth)
     {
-        // Ethereum / OP-Stack header: header-carried fields are taken from the header. The
-        // block-body fields (withdrawals list, totalDifficulty) remain placeholders below.
+        // Ethereum header: header-carried fields are taken from the header. The block-body
+        // fields (withdrawals list, totalDifficulty) remain placeholders below.
         result["nonce"] = blockHeader->nonce().hexPrefixed();
         result["sha3Uncles"] = blockHeader->uncleHash().hexPrefixed();
         // EIP-55 checksummed address, matching geth's eth_getBlock* output.
@@ -63,7 +45,8 @@ void bcos::rpc::combineBlockResponse(
         // the sealer list (FISCO headers carry no coinbase).
         result["nonce"] = "0x0000000000000000";
         // empty uncle hash: keccak256(RLP([]))
-        result["sha3Uncles"] = "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347";
+        result["sha3Uncles"] =
+            "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347";
         result["difficulty"] = "0x0";
         result["mixHash"] = crypto::HashType().hexPrefixed();
         if (blockNumber == 0)
@@ -86,7 +69,7 @@ void bcos::rpc::combineBlockResponse(
     // NON_ETH branch the block's own bloom. A per-log copy was previously built here and
     // never read; removed.
     result["logsBloom"] = toPaddingHexStringWithPrefix(
-        BloomBytesSize, isEthLike ? blockHeader->logsBloom() : block.logsBloom());
+        BloomBytesSize, isEth ? blockHeader->logsBloom() : block.logsBloom());
     result["transactionsRoot"] = blockHeader->txsRoot().hexPrefixed();
     result["stateRoot"] = blockHeader->stateRoot().hexPrefixed();
     result["receiptsRoot"] = blockHeader->receiptsRoot().hexPrefixed();
@@ -96,7 +79,8 @@ void bcos::rpc::combineBlockResponse(
     // Native FISCO-BCOS blocks never call setGasLimit, so the header field reads back as 0;
     // keep the historical fixed value for NON_ETH blocks (the Ethereum-compatible gas limit),
     // and the real header value for Eth blocks (where buildPayload always sets it).
-    result["gasLimit"] = toQuantity(isEthLike ? blockHeader->gasLimit() : bcos::u256(30000000));
+    result["gasLimit"] = toQuantity(
+        isEth ? blockHeader->gasLimit() : bcos::u256(30000000));
     result["gasUsed"] = toQuantity(static_cast<uint64_t>(blockHeader->gasUsed()));
     // BlockHeader stores the timestamp in milliseconds; the eth_* RPC emits seconds.
     result["timestamp"] = toQuantity(blockHeader->timestamp() / 1000);
@@ -121,9 +105,9 @@ void bcos::rpc::combineBlockResponse(
         // build path always sets it (finalizeEthBlockHeader uses the empty-trie root), so
         // the absent case only arises for non-engine producers — emit the canonical
         // empty-trie root to keep the response shape unconditional for the fork.
-        result["withdrawalsRoot"] = blockHeader->withdrawalsRoot()
-                                        .value_or(bcos::ledger::mpt::emptyRootHash())
-                                        .hexPrefixed();
+        result["withdrawalsRoot"] =
+            blockHeader->withdrawalsRoot().value_or(bcos::ledger::mpt::emptyRootHash())
+                .hexPrefixed();
     }
     if (isEth && versionAtLeast(bcos::protocol::EthBlockVersion::CANCUN))
     {
@@ -147,33 +131,7 @@ void bcos::rpc::combineBlockResponse(
             result["requestsHash"] = requestsHash->hexPrefixed();
         }
     }
-    if (isOp)
-    {
-        // OP blocks are always post-Shanghai/Prague-shaped; emit fork fields from the header
-        // (op-node PayloadByHash / derivation read these via eth_getBlockByHash).
-        result["baseFeePerGas"] = toQuantity(blockHeader->baseFee().value_or(bcos::u256(0)));
-        result["withdrawals"] = Json::Value(Json::arrayValue);
-        result["withdrawalsRoot"] = blockHeader->withdrawalsRoot()
-                                        .value_or(bcos::ledger::mpt::emptyRootHash())
-                                        .hexPrefixed();
-        if (auto blobGasUsed = blockHeader->blobGasUsed())
-        {
-            result["blobGasUsed"] = toQuantity(*blobGasUsed);
-        }
-        if (auto excessBlobGas = blockHeader->excessBlobGas())
-        {
-            result["excessBlobGas"] = toQuantity(*excessBlobGas);
-        }
-        if (auto beaconRoot = blockHeader->parentBeaconBlockRoot())
-        {
-            result["parentBeaconBlockRoot"] = beaconRoot->hexPrefixed();
-        }
-        if (auto requestsHash = blockHeader->requestsHash())
-        {
-            result["requestsHash"] = requestsHash->hexPrefixed();
-        }
-    }
-    else if (!isEth)
+    if (!isEth)
     {
         // Native FISCO-BCOS blocks keep their pre-existing Ethereum-compatible mock shape.
         result["baseFeePerGas"] = "0x0";

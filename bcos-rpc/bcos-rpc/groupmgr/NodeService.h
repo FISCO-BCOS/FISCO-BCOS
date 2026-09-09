@@ -24,7 +24,6 @@
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/engine/AnyEngineService.h>
-#include <bcos-framework/engine/DACaps.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/multigroup/ChainNodeInfo.h>
 #include <bcos-framework/multigroup/GroupInfo.h>
@@ -172,15 +171,6 @@ public:
     }
     protocol::BlockNumber finalizedBlockDepth() const noexcept { return m_finalizedBlockDepth; }
 
-    /// OP DA size caps, read by OpEngineService during payload assembly. Null on Ethereum-only
-    /// nodes. Inert at this revision: the miner_setMaxDASize producer is not registered until
-    /// the OpEngineService cutover wires a reader for it (see DACaps.h).
-    void setDaCaps(std::shared_ptr<bcos::engine::DACaps> caps) noexcept
-    {
-        m_daCaps = std::move(caps);
-    }
-    std::shared_ptr<bcos::engine::DACaps> daCaps() const noexcept { return m_daCaps; }
-
     void setLedgerPrx(bcostars::LedgerServicePrx const& _ledgerPrx) { m_ledgerPrx = _ledgerPrx; }
 
     bool unreachable()
@@ -219,9 +209,6 @@ private:
     /// else keeps it alive. Null until set, which is every mode that has no mempool.
     std::shared_ptr<txvalidator::TxValidator> m_admissionValidator;
     txvalidator::AdmissionContext m_admissionContext = txvalidator::AdmissionContext::PoolAdmission;
-
-    /// Shared OP DA caps (see setDaCaps); nullptr on Ethereum-only nodes.
-    std::shared_ptr<bcos::engine::DACaps> m_daCaps;
 
     bcostars::LedgerServicePrx m_ledgerPrx;
 };

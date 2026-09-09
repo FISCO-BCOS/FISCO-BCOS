@@ -19,29 +19,12 @@
  */
 
 #pragma once
-#include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
 
 namespace bcos::rpc
 {
-/// OP-Stack blocks are stored as NON_ETH BlockHeaders (EthBlockVersion::NON_ETH) but their
-/// identity hash and RPC shape follow the Ethereum RLP header (op-geth / op-node). Ledger
-/// indexes them by EthBlockHeader::computeHash via blockHashOverride; native FISCO NON_ETH
-/// headers lack the Shanghai+ fork fields OP always stamps.
-///
-/// One definition: the block response and the fee-history base-fee read both need it, and
-/// a second copy is how one of them ends up treating an OP block as a plain NON_ETH header.
-[[nodiscard]] inline bool isOpEthereumBlock(bcos::protocol::BlockHeader const& header)
-{
-    if (header.ethBlockVersion() != bcos::protocol::EthBlockVersion::NON_ETH)
-    {
-        return false;
-    }
-    return header.withdrawalsRoot().has_value() && header.baseFee().has_value();
-}
-
 void buildJsonContent(Json::Value& result, Json::Value& response);
 void buildJsonError(
     Json::Value const& request, int32_t code, std::string message, Json::Value& response);
