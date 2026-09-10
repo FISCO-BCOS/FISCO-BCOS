@@ -1,0 +1,53 @@
+name: opstack-t8n-regen
+description: >-
+  Regenerate opstack t8n reference vectors (opstack-executor/tests/t8n/{vectors,golden})
+  from pinned op-geth before running tests. The generated JSON is git-ignored and never
+  committed; this action materializes it into the checkout source tree, where the C++
+  tests read it via the OP_T8N_* compile-time absolute-path macros.
+  The op-geth provisioning + regen logic lives in
+  opstack-executor/tests/t8n/generator/ensure-vectors.sh, so local verification runs the
+  exact same steps as CI.
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve op-geth pin
+      # Single source of truth is regen.sh's PIN= line; this just surfaces it for the
+      # cache key below (and passes it through so ensure-vectors.sh can't drift).
+      id: pin
+      shell: bash
+      run: |
+        set -euo pipefail
+        REGEN="$GITHUB_WORKSPACE/opstack-executor/tests/t8n/generator/regen.sh"
+        PIN="$(sed -nE 's/^PIN="([0-9a-f]{40})"/\1/p' "$REGEN")"
+        if [ -z "$PIN" ]; then
+          echo "::error::failed to extract PIN from regen.sh"
+          exit 1
+        fi
+        echo "pin=${PIN}" >> "$GITHUB_OUTPUT"
+
+    - name: Set up Go
+      # regen.sh builds the generator inside the op-geth module (go.mod: go 1.24.0 at the
+      # pinned commit). Fixed version instead of go-version-file: op-geth is provisioned
+      # by ensure-vectors.sh (a plain shell step), which runs after this action.
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24.x'
+
+    - name: Cache pinned op-geth tree
+      # Content-addressed by the pinned commit, so a re-run at the same pin re-uses the
+      # shallow checkout (saves clone time/bandwidth). os in the key: the tree is checked
+      # out per-runner, avoid cross-OS cache restore.
+      id: opcache
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}/op-geth
+        key: op-geth-${{ runner.os }}-${{ steps.pin.outputs.pin }}
+
+    - name: Regenerate t8n vectors
+      shell: bash
+      env:
+        OPGETH: ${{ runner.temp }}/op-geth
+      run: |
+        set -euo pipefail
+        bash "$GITHUB_WORKSPACE/opstack-executor/tests/t8n/generator/ensure-vectors.sh"
