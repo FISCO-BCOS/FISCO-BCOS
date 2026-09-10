@@ -113,9 +113,10 @@ namespace bcos::ledger::mpt
 ///    window and that block was already pruned (root(b) leaves at b+1+N_old) — a widened N
 ///    recovers only roots still on disk, so the walk stops there and the effective window
 ///    starts at the first surviving root.
-///    Phases 1 and 2 share ONE traversal implementation (walkTrie): the stack, the node-row
-///    read and the descend rules live there once; each phase supplies only its per-node
-///    callback (count-and-descend vs. dedup-against-m_counts-then-arm).
+///    Phases 1 and 2 share ONE traversal implementation (walkTrie): the stack, the batched
+///    node-row read (storage2::readSome — MultiGet underneath) and the descend rules live
+///    there once; each phase supplies only its per-node callback (count-and-descend vs.
+///    dedup-against-m_counts-then-arm).
 ///  - Phase 3 (first-sweep of pre-existing garbage): scan the "/mpt/" table; a row in neither
 ///    the counts nor the queue is unreachable garbage (historical leak, or nodes written before
 ///    pruning was enabled). Driven by storage.mpt_prune_sweep_garbage: disabled (the default)
@@ -686,24 +687,6 @@ private:
         std::optional<uint64_t> deadline{};
     };
 
-    /// The raw RLP of the hash-addressed node @p hash. A missing row violates the window
-    /// guarantee the rebuild relies on — fail loud, same convention as Trie.h.
-    bcos::task::Task<bcos::bytes> readNodeOrThrow(bcos::h256 const& hash) const
-    {
-        auto entry =
-            co_await bcos::storage2::readOne(*m_backend, bcos::ledger::mptNodeStateKey(hash));
-        if (!entry)
-        {
-            BOOST_THROW_EXCEPTION(MPTInvariantViolation{}
-                                  << bcos::errinfo_comment(
-                                         "MPT pruning rebuild: reachable node row missing from "
-                                         "the committed backend (hash " +
-                                         hash.abridged() + ")"));
-        }
-        auto raw = entry->get();
-        co_return bcos::bytes(raw.begin(), raw.end());
-    }
-
     /// The hash-addressed children of @p node, plus — for an account-trie leaf — the account's
     /// storage root. Inline node refs are embedded in their parent and never stored as rows, so
     /// they carry no count and are not descended into (an inline subtree is < 32 bytes and can
@@ -744,12 +727,27 @@ private:
         }
     }
 
+    /// Node-read batch size for walkTrie: 64 covers a branch node's 16-way sibling fan-out
+    /// several times over (the stack's steady-state occupancy right after a descend), so the
+    /// walk costs a handful of MultiGets per trie level without ballooning the transient
+    /// key/result vectors.
+    static constexpr size_t WALK_READ_BATCH = 64;
+
     /// The single trie-traversal implementation behind BOTH rebuild phases (countWalk and
     /// deadlineWalk below are thin wrappers supplying the per-node callback): iterative over an
-    /// explicit (hash, accountTrie) stack, each popped hash's row read once from the committed
-    /// backend and descended per descend(). @p onNode runs per POPPED hash and returns whether
-    /// to read and descend into the node (false = already accounted for — skip the read and the
-    /// whole subtree). The empty root short-circuits: an empty trie stores no nodes.
+    /// explicit (hash, accountTrie) stack, descended per descend(). @p onNode runs per POPPED
+    /// hash and returns whether to read and descend into the node (false = already accounted
+    /// for — skip the read and the whole subtree). The empty root short-circuits: an empty
+    /// trie stores no nodes.
+    ///
+    /// Node rows are fetched in BATCHES: up to WALK_READ_BATCH entries are popped per round,
+    /// each run through @p onNode IN POP ORDER (the phases' semantics stay point-for-point
+    /// identical to the serial per-node walk — Phase 1 counts every encounter, Phase 2's
+    /// try_emplace dedup sees the same sequence), and the accepted rows are fetched with ONE
+    /// storage2::readSome (rocksdb::MultiGet underneath on the production backend) instead of
+    /// a point read per node — the dominant startup-rebuild cost on a cold RocksDB. The
+    /// fail-loud contract is unchanged: a reachable row missing from the batch's results
+    /// throws the same MPTInvariantViolation.
     template <typename OnNode>
     bcos::task::Task<void> walkTrie(bcos::h256 root, bool accountTrie, OnNode&& onNode)
     {
@@ -760,14 +758,43 @@ private:
         std::vector<std::pair<bcos::h256, bool>> stack{{root, accountTrie}};
         while (!stack.empty())
         {
-            auto const [hash, isAccount] = stack.back();
-            stack.pop_back();
-            if (!onNode(hash))
+            std::vector<std::pair<bcos::h256, bool>> accepted;
+            std::vector<bcos::executor_v1::StateKey> keys;
+            for (size_t popped = 0; popped < WALK_READ_BATCH && !stack.empty(); ++popped)
+            {
+                auto const [hash, isAccount] = stack.back();
+                stack.pop_back();
+                if (!onNode(hash))
+                {
+                    continue;
+                }
+                accepted.emplace_back(hash, isAccount);
+                keys.push_back(bcos::ledger::mptNodeStateKey(hash));
+            }
+            if (keys.empty())
             {
                 continue;
             }
-            auto const raw = co_await readNodeOrThrow(hash);
-            descend(decodeNode(bcos::ref(raw)), isAccount, stack);
+            auto const entries = co_await bcos::storage2::readSome(*m_backend, std::move(keys));
+            for (size_t i = 0; i < accepted.size(); ++i)
+            {
+                auto const& [hash, isAccount] = accepted[i];
+                if (!entries[i])
+                {
+                    // A reachable node row missing from the committed backend violates the
+                    // window guarantee the rebuild relies on — fail loud, same convention as
+                    // Trie.h.
+                    BOOST_THROW_EXCEPTION(MPTInvariantViolation{}
+                                          << bcos::errinfo_comment(
+                                                 "MPT pruning rebuild: reachable node row "
+                                                 "missing from the committed backend (hash " +
+                                                 hash.abridged() + ")"));
+                }
+                auto const raw = entries[i]->get();
+                descend(decodeNode(bcos::bytesConstRef(
+                            reinterpret_cast<bcos::byte const*>(raw.data()), raw.size())),
+                    isAccount, stack);
+            }
         }
     }
 
