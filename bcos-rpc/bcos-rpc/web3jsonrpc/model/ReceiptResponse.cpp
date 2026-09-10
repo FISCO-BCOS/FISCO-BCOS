@@ -7,6 +7,23 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <cstdint>
 
+namespace
+{
+std::string checksummedHexAddress(std::string hexNoPrefix)
+{
+    bcos::toAddress(hexNoPrefix);
+    bcos::toChecksumAddress(
+        hexNoPrefix, bcos::crypto::keccak256Hash(bcos::bytesConstRef(hexNoPrefix)).hex());
+    return hexNoPrefix;
+}
+
+std::string checksummedHexAddressFromHex(std::string_view hexAddress)
+{
+    auto const hexNoPrefix = hexAddress.starts_with("0x") ? hexAddress.substr(2) : hexAddress;
+    return checksummedHexAddress(std::string(hexNoPrefix));
+}
+}  // namespace
+
 void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::TransactionReceipt& receipt,
     const bcos::protocol::Transaction& tx, const crypto::HashType& blockHash)
 {
@@ -26,22 +43,14 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     result["blockHash"] = blockHashHex;
     auto blockNumber = receipt.blockNumber();
     result["blockNumber"] = toQuantity(blockNumber);
-    auto from = toHex(tx.sender());
-    // EIP-55 checksum needs keccak256(address) per recipient; RPC read path (not consensus),
-    // so the 3-4 hashes per receipt are acceptable — caching here would need shared-state
-    // synchronization for a marginal win (see review Finding J).
-    toChecksumAddress(from, bcos::crypto::keccak256Hash(bcos::bytesConstRef(from)).hex());
-    result["from"] = "0x" + std::move(from);
+    result["from"] = "0x" + checksummedHexAddress(bcos::toHex(tx.sender()));
     if (tx.to().empty())
     {
         result["to"] = Json::nullValue;
     }
     else
     {
-        auto toView = tx.to();
-        auto to = std::string(toView.starts_with("0x") ? toView.substr(2) : toView);
-        toChecksumAddress(to, bcos::crypto::keccak256Hash(bcos::bytesConstRef(to)).hex());
-        result["to"] = "0x" + std::move(to);
+        result["to"] = "0x" + checksummedHexAddressFromHex(tx.to());
     }
     result["cumulativeGasUsed"] = toQuantity(cumulativeGasUsed);
     result["effectiveGasPrice"] =
@@ -53,10 +62,7 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     }
     else
     {
-        auto contractAddress = std::string(receipt.contractAddress());
-        toChecksumAddress(contractAddress,
-            bcos::crypto::keccak256Hash(bcos::bytesConstRef(contractAddress)).hex());
-        result["contractAddress"] = "0x" + std::move(contractAddress);
+        result["contractAddress"] = "0x" + checksummedHexAddressFromHex(receipt.contractAddress());
     }
     result["logs"] = Json::arrayValue;
     auto* mutableReceipt = std::addressof(receipt);
@@ -64,9 +70,7 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     for (size_t i = 0; i < receiptLog.size(); i++)
     {
         Json::Value log;
-        auto address = std::string(receiptLog[i].address());
-        toChecksumAddress(address, bcos::crypto::keccak256Hash(bcos::bytesConstRef(address)).hex());
-        log["address"] = "0x" + std::move(address);
+        log["address"] = "0x" + checksummedHexAddress(bcos::toHex(receiptLog[i].address()));
         log["topics"] = Json::arrayValue;
         for (const auto& topic : receiptLog[i].topics())
         {
@@ -76,7 +80,7 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
         log["logIndex"] = toQuantity(logIndex + i);
         log["blockNumber"] = toQuantity(blockNumber);
         log["blockHash"] = blockHashHex;
-        log["transactionIndex"] = toQuantity(transactionIndex);
+        log["transactionIndex"] = transactionIndex;
         log["transactionHash"] = txHashHex;
         log["removed"] = false;
         result["logs"].append(std::move(log));

@@ -84,7 +84,8 @@ enum class EthMethod
     eth_getFilterLogs,
     eth_getLogs,
     eth_maxPriorityFeePerGas,
-    eth_getProof
+    eth_getProof,
+    eth_feeHistory
 };
 
 [[maybe_unused]] static std::string methodString(EthMethod _method)
