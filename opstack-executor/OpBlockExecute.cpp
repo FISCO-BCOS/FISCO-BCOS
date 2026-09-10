@@ -112,7 +112,6 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
     bool feeLoaded = false;
     OpFeeParams fee{};
 
-    size_t transactionIndex = 0;
     for (const auto& btx : txs)
     {
         if (const auto* dep = std::get_if<DepositTx>(&btx.tx))
@@ -143,7 +142,6 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             cumulative += gasUsed;
             // Store cumulative gas as decimal; RPC parses that field as decimal.
             receipt->setCumulativeGasUsed(decimalCumulative(static_cast<uint64_t>(cumulative)));
-            receipt->setTransactionIndex(transactionIndex++);
             result.receipts.emplace_back(std::move(receipt));
             result.txTypes.emplace_back(classifyTxType(static_cast<uint8_t>(kDepositTxType)));
         }
@@ -266,7 +264,6 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
             blockGasLeft -= gasUsed;
             cumulative += gasUsed;
             receipt->setCumulativeGasUsed(decimalCumulative(static_cast<uint64_t>(cumulative)));
-            receipt->setTransactionIndex(transactionIndex++);
             result.receipts.emplace_back(std::move(receipt));
             result.txTypes.emplace_back(classifyTxType(static_cast<uint8_t>(tx.type)));
         }
@@ -277,6 +274,10 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
     applyDiffChecked(result.finalizeDiff);
 
     result.gasUsed = cumulative;
+    // Same receipt-field policy as the live seal path (finalizeOpBlockResult → sealOpBlock) and the
+    // engine path: transactionIndex / logIndex, unconditional logsBloom from logEntries,
+    // cumulativeGasUsed fill-when-empty (#5582).
+    bcos::protocol::normalizeReceipts(result.receipts);
     return result;
 }
 

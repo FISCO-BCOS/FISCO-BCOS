@@ -1055,7 +1055,6 @@ struct OpBlockExecutionContext
     mutable bool feeLoaded = false;
     mutable int64_t blockGasLeft = 0;
     mutable int64_t cumulativeGasUsed = 0;
-    mutable size_t transactionIndex = 0;
     mutable bool seenNonDeposit = false;
     evmone::state::BlockHashes* blockHashes = nullptr;
     uint64_t chainId = 0;
@@ -1288,14 +1287,14 @@ public:
                     storage, blockHeader, ledgerConfig, m_receipt, m_diff, call);
             }
             // This stage solely owns cumulative-gas backfill + blockGasLeft decrement
-            // (narrowGasUsed / decimalCumulative live in OpCommon.h). Decimal + the block index —
-            // the RPC read path lexical_casts decimal only and serves transactionIndex from the
-            // receipt.
+            // (narrowGasUsed / decimalCumulative live in OpCommon.h); the RPC read path
+            // lexical_casts decimal only. transactionIndex / logIndex / logsBloom are written at
+            // block seal by protocol::normalizeReceipts (OpBlockExecute.h finalizeOpBlockResult),
+            // the same policy the engine path uses.
             auto gasUsed = op::narrowGasUsed(receipt->gasUsed());
             m_ctx->cumulativeGasUsed += gasUsed;
             receipt->setCumulativeGasUsed(
                 op::decimalCumulative(static_cast<uint64_t>(m_ctx->cumulativeGasUsed)));
-            receipt->setTransactionIndex(m_ctx->transactionIndex++);
             m_ctx->blockGasLeft -= gasUsed;
             co_return receipt;
         }

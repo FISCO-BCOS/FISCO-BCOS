@@ -14,6 +14,7 @@
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
+#include <bcos-framework/protocol/TransactionReceiptNormalize.h>
 #include <bcos-ledger/mpt/EthTrieRoots.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
@@ -250,6 +251,13 @@ OpExecuteBlockResult finalizeOpBlockResult(bcos::executor_v1::opstack::OpstackEx
     result.gasUsed = cumulative;
     if (hashErr.has_value())
         throw OpStorageError("block-hash lookup failed: " + *hashErr);
+
+    // One receipt-field policy for both receipts-root producers (the engine
+    // buildHeaderCommitments and this OP seal): transactionIndex / logIndex are written, logsBloom
+    // is recomputed unconditionally from logEntries, and cumulativeGasUsed is filled when empty
+    // (the OP running prefix is set upstream in ExecuteContext::finish and kept). Closes the OP
+    // eth_getLogs logIndex gap and the leaf-bloom provenance divergence (#5582).
+    bcos::protocol::normalizeReceipts(result.receipts);
 
     // Commitments: MessagePasser snapshot → seal → stateRoot → txRoot. accountStorage
     // returns the complete, tombstone-filtered live slot map for one address (same

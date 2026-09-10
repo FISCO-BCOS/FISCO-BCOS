@@ -2043,6 +2043,66 @@ BOOST_AUTO_TEST_CASE(ExecuteFailsLoudlyWhenParentTrieNodesMissing)
     }
 }
 
+/// The OP seal path applies the shared receipt-field policy: finalizeOpBlockResult calls
+/// protocol::normalizeReceipts before sealOpBlock, so an OP receipt carries a real
+/// transactionIndex and logIndex (the cumulative log count), matching the engine/PBFT paths.
+/// Pins the kyonRay round-3 F1 gap — the OP path previously set neither logIndex nor a shared
+/// bloom policy, and eth_getLogs reported logIndex 0x0 for every OP log.
+BOOST_AUTO_TEST_CASE(finalizeOpBlockResultNormalizesReceiptIndices)
+{
+    Fixture f;
+    fundCallAccount(f.multiLayerStorage, kCallSender, f.hashImpl, bcos::u256(1) << 200);
+    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader());
+
+    // Contract whose single LOG1 emits one log each call:
+    //   PUSH1 0 (memStart) PUSH1 0 (memSize) PUSH1 0 (topic) LOG1 STOP
+    const bcos::Address kLogContract{"0x3000000000000000000000000000000000000001"};
+    {
+        auto view = f.multiLayerStorage.fork();
+        view.newMutable();
+        bcos::ledger::account::EVMAccount account(view, kLogContract, /*rawAddress=*/false);
+        bcos::task::syncWait(account.create());
+        bcos::bytes const code{0x60, 0x00, 0x60, 0x00, 0x60, 0x00, 0xa1, 0x00};
+        bcos::task::syncWait(account.setCode(code, {}, f.hashImpl->hash(code)));
+        bcos::task::syncWait(account.setNonce("0"));
+        bcos::task::syncWait(account.setBalance(bcos::u256(0)));
+        bcos::task::syncWait(f.multiLayerStorage.mergeView(std::move(view)));
+    }
+
+    auto makeLogDeposit = [&](evmc::bytes32 source) {
+        auto dep = makeDeposit();
+        dep.source_hash = source;
+        evmc::address to{};
+        std::memcpy(to.bytes, kLogContract.data(), sizeof(to.bytes));
+        dep.to = to;
+        dep.data = {};
+        return encodeDepositEnvelope(dep);
+    };
+    auto const l1 = encodeDepositEnvelope(makeDeposit());  // L1 attributes, emits no log
+    auto const log1 =
+        makeLogDeposit(0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1_bytes32);
+    auto const log2 =
+        makeLogDeposit(0xb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2_bytes32);
+
+    auto header = makeHeaderAt(1, bcos::u256(1'000'000'000));
+    auto view = f.multiLayerStorage.fork();
+    view.newMutable();
+    auto const result = runExecutionProbe(f, view, *header, {l1, log1, log2});
+
+    BOOST_REQUIRE_EQUAL(result.receipts.size(), 3);
+    BOOST_REQUIRE_EQUAL(result.receipts[1]->logEntries().size(), 1);
+    BOOST_REQUIRE_EQUAL(result.receipts[2]->logEntries().size(), 1);
+    // L1 attributes emits no log; each log-contract deposit emits one.
+    BOOST_CHECK_EQUAL(result.receipts[0]->logIndex(), 0);
+    BOOST_CHECK_EQUAL(result.receipts[1]->logIndex(), 0);
+    BOOST_CHECK_EQUAL(result.receipts[2]->logIndex(), 1);
+    BOOST_CHECK_EQUAL(result.receipts[0]->transactionIndex(), 0);
+    BOOST_CHECK_EQUAL(result.receipts[1]->transactionIndex(), 1);
+    BOOST_CHECK_EQUAL(result.receipts[2]->transactionIndex(), 2);
+    // normalizeReceipts recomputes every bloom from logEntries: 256 bytes, non-empty for a log.
+    BOOST_CHECK_EQUAL(result.receipts[2]->logsBloom().size(), 256);
+}
+
 /// The ①a gate (design §7): on a chain where EVERY state change flows through a committed
 /// block, the incremental build (MPTBuilder::buildAndCollect over the block's delta layer,
 /// parent root = previous header's stateRoot) must reproduce the full rebuild's root
