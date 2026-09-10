@@ -867,7 +867,7 @@ private:
                 if (!m_pending || !m_pending->verified ||
                     m_pending->executedHeader->number() != number)
                 {
-                    co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError,
+                    co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::OpPendingDropped,
                                    "Unexpected empty results!"),
                         nullptr};
                 }

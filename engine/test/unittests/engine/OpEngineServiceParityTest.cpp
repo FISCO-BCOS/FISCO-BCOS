@@ -150,9 +150,10 @@ struct RecordingScheduler : bcos::scheduler::SchedulerInterface
     int failCommitRemaining = 0;
     bool stampWithdrawalsRoot = true;
     // Error code for the stub commit failure. -1 is the generic stub; the mapDelegateError
-    // routing test sets real SchedulerError codes (UnknownError = the dropped-pending shape
-    // a concurrent reset produces in OpScheduler; OpConsensusRejected = the one code the
-    // service is allowed to answer INVALID for).
+    // routing test sets real SchedulerError codes (OpPendingDropped = the dropped-pending
+    // shape a concurrent reset produces in OpScheduler; OpConsensusRejected = the one code
+    // the service is allowed to answer INVALID for; UnknownError = the catch-all bucket
+    // classifyException fills for unclassified commit faults, which must NOT fall through).
     int commitErrorCode = -1;
     bool failReset = false;
     int executeCalls = 0;
@@ -1470,14 +1471,14 @@ BOOST_AUTO_TEST_CASE(op_newpayload_honest_retry_does_not_recommit)
 
 /// A transient commit failure must not strand the payload: the first newPayload THROWS,
 /// the retained artifacts survive, and the retry re-attempts the commit and completes it.
-/// The fault is the dropped-pending code (SchedulerError::UnknownError), the only one that
-/// may fall through to execute+commit; any other commit error is reported immediately.
+/// The fault is the dropped-pending code (SchedulerError::OpPendingDropped), the only one
+/// that may fall through to execute+commit; any other commit error is reported immediately.
 BOOST_AUTO_TEST_CASE(op_newpayload_retry_after_failed_commit_recommits)
 {
     auto delegate = std::make_shared<RecordingScheduler>();
     delegate->failFirst = false;
     delegate->failCommit = true;
-    delegate->commitErrorCode = static_cast<int>(bcos::scheduler::SchedulerError::UnknownError);
+    delegate->commitErrorCode = static_cast<int>(bcos::scheduler::SchedulerError::OpPendingDropped);
     OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate);
     delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
 
@@ -1520,9 +1521,9 @@ BOOST_AUTO_TEST_CASE(op_newpayload_built_header_commit_failure_falls_through_to_
     auto delegate = std::make_shared<RecordingScheduler>();
     delegate->failFirst = false;
     delegate->failCommitRemaining = 1;
-    // "Replaced pending" is reported as SchedulerError::UnknownError; that is the code the
-    // fall-through is scoped to.
-    delegate->commitErrorCode = static_cast<int>(bcos::scheduler::SchedulerError::UnknownError);
+    // "Replaced pending" is reported as SchedulerError::OpPendingDropped; that is the code
+    // the fall-through is scoped to.
+    delegate->commitErrorCode = static_cast<int>(bcos::scheduler::SchedulerError::OpPendingDropped);
     OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate);
     delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
 
@@ -1585,7 +1586,7 @@ BOOST_AUTO_TEST_CASE(op_newpayload_missing_executed_withdrawals_root_is_internal
     delegate->failCommitRemaining = 1;
     // Dropped-pending code: only that fault falls through to the execute path where the
     // missing withdrawalsRoot is detected.
-    delegate->commitErrorCode = static_cast<int>(bcos::scheduler::SchedulerError::UnknownError);
+    delegate->commitErrorCode = static_cast<int>(bcos::scheduler::SchedulerError::OpPendingDropped);
     BOOST_CHECK_THROW(bcos::task::syncWait(pair.service.newPayload(request, 4)),
         bcos::engine::OpExecutionInternalError);
 }
@@ -1595,10 +1596,13 @@ BOOST_AUTO_TEST_CASE(op_newpayload_missing_executed_withdrawals_root_is_internal
 /// embeds the full V3 field set unchanged.
 /// mapDelegateError's routing is the load-bearing half of the delegate-concurrency
 /// rationale: a commitBlock whose pending was dropped by a concurrent reset
-/// reports SchedulerError::UnknownError ("Unexpected empty results!", OpScheduler.h) — that
-/// must surface as -32603 (OpExecutionInternalError), NEVER as a consensus INVALID for a
-/// valid payload. OpConsensusRejected is the ONLY code the service may answer INVALID for;
-/// pin both routes so a future change to either side cannot silently flip them.
+/// reports SchedulerError::OpPendingDropped ("Unexpected empty results!", OpScheduler.h) —
+/// that must surface as -32603 (OpExecutionInternalError), NEVER as a consensus INVALID for
+/// a valid payload. OpConsensusRejected is the ONLY code the service may answer INVALID for;
+/// pin both routes so a future change to either side cannot silently flip them. The
+/// dropped-pending case is also the only one allowed to fall through to execute+commit, and
+/// UnknownError — the catch-all bucket classifyException fills for unclassified commit
+/// faults — must NOT, or a real fault takes that path.
 BOOST_AUTO_TEST_CASE(op_commit_error_routing_unknown_error_is_never_invalid)
 {
     auto makeRequest = [](OpServicePair& pair, RecordingScheduler& delegate) {
@@ -1624,7 +1628,9 @@ BOOST_AUTO_TEST_CASE(op_commit_error_routing_unknown_error_is_never_invalid)
         return request;
     };
 
-    // Dropped-pending shape: UnknownError → internal error (-32603), never INVALID.
+    // The catch-all bucket: UnknownError → internal error (-32603), never INVALID — and
+    // routed immediately, with no re-execution, because a real commit fault must not be
+    // silently retried by the fall-through the comment in OpEngineService.inl describes.
     {
         auto delegate = std::make_shared<RecordingScheduler>();
         delegate->failFirst = false;
@@ -1633,8 +1639,29 @@ BOOST_AUTO_TEST_CASE(op_commit_error_routing_unknown_error_is_never_invalid)
         OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate);
         delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
         auto request = makeRequest(pair, *delegate);
+        // Building the payload executed once (FCU); the counters below are deltas over that.
+        int const executesAfterBuild = delegate->executeCalls;
         BOOST_CHECK_THROW(bcos::task::syncWait(pair.service.newPayload(request, 4)),
             bcos::engine::OpExecutionInternalError);
+        BOOST_CHECK_EQUAL(delegate->commitCalls, 1);  // routed, not re-executed
+        BOOST_CHECK_EQUAL(delegate->executeCalls, executesAfterBuild);
+    }
+
+    // The dropped-pending shape: same answer, but reached through execute+commit.
+    {
+        auto delegate = std::make_shared<RecordingScheduler>();
+        delegate->failFirst = false;
+        delegate->failCommit = true;
+        delegate->commitErrorCode =
+            static_cast<int>(bcos::scheduler::SchedulerError::OpPendingDropped);
+        OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate);
+        delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+        auto request = makeRequest(pair, *delegate);
+        int const executesAfterBuild = delegate->executeCalls;
+        BOOST_CHECK_THROW(bcos::task::syncWait(pair.service.newPayload(request, 4)),
+            bcos::engine::OpExecutionInternalError);
+        BOOST_CHECK_EQUAL(delegate->commitCalls, 2);  // fast path, then the re-execute
+        BOOST_CHECK_GT(delegate->executeCalls, executesAfterBuild);  // it did re-execute
     }
 
     // The one code that may answer INVALID: OpConsensusRejected → Invalid status.
@@ -1692,14 +1719,14 @@ BOOST_AUTO_TEST_CASE(op_commit_error_routing_non_dropped_pending_does_not_fall_t
 }
 
 /// The intended fall-through: a commit whose built pending was dropped by a concurrent
-/// reset (SchedulerError::UnknownError) is retried once and answers VALID when the retry
-/// commits, instead of -32603 on every retry of a still-valid payload.
+/// reset (SchedulerError::OpPendingDropped) is retried once and answers VALID when the
+/// retry commits, instead of -32603 on every retry of a still-valid payload.
 BOOST_AUTO_TEST_CASE(op_commit_error_routing_dropped_pending_reexecutes)
 {
     auto delegate = std::make_shared<RecordingScheduler>();
     delegate->failFirst = false;
     delegate->failCommitRemaining = 1;
-    delegate->commitErrorCode = static_cast<int>(bcos::scheduler::SchedulerError::UnknownError);
+    delegate->commitErrorCode = static_cast<int>(bcos::scheduler::SchedulerError::OpPendingDropped);
     OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate);
     delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
 

@@ -2588,11 +2588,15 @@ BOOST_AUTO_TEST_CASE(adoptRejectsHashMismatchWhenCommitmentsMatch)
 
 /// Pins the OpScheduler half of the delegate-concurrency rationale (OpEngineService.h):
 /// a commitBlock whose pending was dropped by a reset reports
-/// SchedulerError::UnknownError ("Unexpected empty results!") — never OpConsensusRejected.
-/// mapDelegateError answers -32603 for the former and consensus-INVALID only for the
-/// latter, so a change to this code would silently flip a concurrent-reset commit from
-/// "internal error, sequencer retries" into "consensus INVALID for a valid payload".
-BOOST_AUTO_TEST_CASE(CommitAfterResetReportsUnknownErrorNotConsensusRejected)
+/// SchedulerError::OpPendingDropped ("Unexpected empty results!") — never
+/// OpConsensusRejected and, critically, never UnknownError.
+/// mapDelegateError answers -32603 for the dropped-pending code and consensus-INVALID only
+/// for OpConsensusRejected, so a change to this code would silently flip a concurrent-reset
+/// commit from "internal error, sequencer retries" into "consensus INVALID for a valid
+/// payload". The UnknownError negative matters on its own: classifyException's catch-all
+/// returns UnknownError for every unclassified commit fault, so the engine's re-execution
+/// fall-through keys on OpPendingDropped to exclude exactly those.
+BOOST_AUTO_TEST_CASE(CommitAfterResetReportsOpPendingDroppedNotUnknownError)
 {
     Fixture f;
     auto depTx = makeDeposit();
@@ -2639,10 +2643,14 @@ BOOST_AUTO_TEST_CASE(CommitAfterResetReportsUnknownErrorNotConsensusRejected)
         });
     BOOST_REQUIRE(called);
     BOOST_REQUIRE(commitErr != nullptr);
-    BOOST_CHECK_EQUAL(
-        commitErr->errorCode(), static_cast<int>(bcos::scheduler::SchedulerError::UnknownError));
+    BOOST_CHECK_EQUAL(commitErr->errorCode(),
+        static_cast<int>(bcos::scheduler::SchedulerError::OpPendingDropped));
     BOOST_CHECK_NE(commitErr->errorCode(),
         static_cast<int>(bcos::scheduler::SchedulerError::OpConsensusRejected));
+    // The discriminator the engine's re-execution fall-through keys on must not be the
+    // catch-all bucket: that is what made a real commit fault take the same path.
+    BOOST_CHECK_NE(
+        commitErr->errorCode(), static_cast<int>(bcos::scheduler::SchedulerError::UnknownError));
     BOOST_CHECK(commitErr->errorMessage().find("Unexpected empty results") != std::string::npos);
 }
 

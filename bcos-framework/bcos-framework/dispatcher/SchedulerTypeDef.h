@@ -75,6 +75,13 @@ enum SchedulerError
     // OpStorageFault (engine -> JSON-RPC -32603, never INVALID).
     OpConsensusRejected,
     OpStorageFault,
+    // The pending block a newPayload was asked to commit is gone (superseded or already
+    // committed by a concurrent call): "Unexpected empty results!". This is a benign,
+    // self-healing race, so the engine re-executes the payload instead of answering an
+    // error — and it needs a code of its own to say so, because UnknownError is also
+    // what classifyException's catch-all returns for every unclassified commit fault.
+    // Gating on UnknownError would route those faults into the same re-execution.
+    OpPendingDropped,
 };
 }
 }  // namespace bcos
