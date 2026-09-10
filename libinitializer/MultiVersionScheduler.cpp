@@ -1,14 +1,40 @@
 #include "MultiVersionScheduler.h"
 #include "Common.h"
-#include <algorithm>
+
+bcos::scheduler::SchedulerInterface& bcos::scheduler_v1::MultiVersionScheduler::checkedSchedulerAt(
+    int version) const
+{
+    if (version < 0)
+    {
+        BOOST_THROW_EXCEPTION(ExecutorVersionNotSupported()
+                              << errinfo_comment("executor version " + std::to_string(version) +
+                                                 " is not supported (must be >= 0)"));
+    }
+    if (static_cast<size_t>(version) >= m_schedulers.size())
+    {
+        BOOST_THROW_EXCEPTION(ExecutorVersionNotSupported()
+                              << errinfo_comment("executor version " + std::to_string(version) +
+                                                 " is not supported (max wired slot is " +
+                                                 std::to_string(m_schedulers.size() - 1) + ")"));
+    }
+    auto const& scheduler = m_schedulers.at(static_cast<size_t>(version));
+    if (!scheduler)
+    {
+        BOOST_THROW_EXCEPTION(ExecutorVersionNotSupported() << errinfo_comment(
+                                  "executor_version " + std::to_string(version) +
+                                  " requires a wired scheduler at slot " + std::to_string(version) +
+                                  " but none was assembled at node startup"));
+    }
+    return *scheduler;
+}
 
 bcos::scheduler::SchedulerInterface& bcos::scheduler_v1::MultiVersionScheduler::getScheduler()
 {
-    return *m_schedulers.at(m_currentIndex);
+    return checkedSchedulerAt(m_currentIndex);
 }
 
 bcos::scheduler_v1::MultiVersionScheduler::MultiVersionScheduler(
-    std::array<scheduler::SchedulerInterface::Ptr, 3> schedulers,
+    std::array<scheduler::SchedulerInterface::Ptr, SUPPORTED_EXECUTOR_VERSION_COUNT> schedulers,
     ledger::LedgerConfigState::Ptr ledgerConfigState)
   : m_schedulers(std::move(schedulers)),
     m_currentIndex(0),
@@ -52,6 +78,13 @@ void bcos::scheduler_v1::MultiVersionScheduler::call(protocol::Transaction::Ptr 
     auto& scheduler = getScheduler();
     scheduler.call(std::move(transaction), std::move(callback));
 }
+void bcos::scheduler_v1::MultiVersionScheduler::callAtBlock(protocol::Transaction::Ptr transaction,
+    protocol::BlockNumber blockNumber,
+    std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback)
+{
+    auto& scheduler = getScheduler();
+    scheduler.callAtBlock(std::move(transaction), blockNumber, std::move(callback));
+}
 void bcos::scheduler_v1::MultiVersionScheduler::reset(
     [[maybe_unused]] std::function<void(Error::Ptr)> callback)
 {
@@ -84,43 +117,84 @@ void bcos::scheduler_v1::MultiVersionScheduler::preExecuteBlock(
     auto& scheduler = getScheduler();
     scheduler.preExecuteBlock(std::move(block), verify, std::move(callback));
 }
+void bcos::scheduler_v1::MultiVersionScheduler::adoptProbeAsPending(
+    bcos::protocol::Block::Ptr block,
+    std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool)> callback)
+{
+    auto& scheduler = getScheduler();
+    scheduler.adoptProbeAsPending(std::move(block), std::move(callback));
+}
 void bcos::scheduler_v1::MultiVersionScheduler::stop()
 {
     auto& scheduler = getScheduler();
     scheduler.stop();
 }
 void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
-    int version, ledger::LedgerConfig::Ptr ledgerConfig)
+    int version, [[maybe_unused]] ledger::LedgerConfig::Ptr ledgerConfig)
 {
+    // Runtime callers are the two commit callbacks (LedgerStorage::onStableCheckPointCommitted
+    // and DownloadingQueue), which catch-and-log a throw and then stop advancing. A governance
+    // tx that writes an unwired executor_version must therefore NOT make this throw: an unwired
+    // slot (e.g. OP executor on a non-OP node) would otherwise halt the chain permanently.
+    // Keep running on a wired scheduler and make the misconfiguration loud. The hard failure
+    // for executor_version>=3 without the OP wiring belongs at boot (Initializer::init).
+    auto const onChainVersion = ledgerConfig && ledgerConfig->executorVersion() > 0 ?
+                                    ledgerConfig->executorVersion() :
+                                    version;
     if (version < 0)
     {
-        // BCOS exception (not std::out_of_range) so it stays within the codebase's
-        // exception taxonomy and carries the same error-channel conventions.
         BOOST_THROW_EXCEPTION(ExecutorVersionNotSupported()
                               << errinfo_comment("executor version " + std::to_string(version) +
-                                                 " is not supported "
-                                                 "(must be >= 0)"));
+                                                 " is not supported (must be >= 0)"));
     }
-    // Saturate the upper bound: any version >= the last scheduler index selects the
-    // newest executor (the v2 EthereumExecutor). This keeps the version space
-    // open-ended above 2 so a future executor version needs no array/schema change.
-    // The saturation itself is silent by design, but an unknown version above today's
-    // set deserves a log line: on a binary that has no such version, "see an unknown
-    // version, run the newest" means executing blocks under rules the chain did not
-    // explicitly ask for — make the guess visible instead of quiet.
-    if (static_cast<size_t>(version) >= m_schedulers.size())
+    auto selected = static_cast<size_t>(version);
+    if (selected >= m_schedulers.size())
     {
-        INITIALIZER_LOG(WARNING) << LOG_DESC(
-                                        "executor version above the newest known executor; "
-                                        "saturating to the newest")
-                                 << LOG_KV("requested", version)
-                                 << LOG_KV("selected", m_schedulers.size() - 1);
+        // Unknown version above the wired set: saturate to the newest wired slot, as before.
+        selected = m_schedulers.size() - 1;
+        while (selected > 0 && !m_schedulers.at(selected))
+        {
+            --selected;
+        }
     }
-    m_currentIndex =
-        static_cast<int>(std::min<size_t>(static_cast<size_t>(version), m_schedulers.size() - 1));
+    if (!m_schedulers.at(selected))
+    {
+        INITIALIZER_LOG(ERROR)
+            << LOG_DESC("executor_version has no wired scheduler; keeping the current executor")
+            << LOG_KV("requested", version) << LOG_KV("onChain", onChainVersion)
+            << LOG_KV("keeping", m_currentIndex)
+            << LOG_DESC(
+                   "align genesis/boot config with on-chain executor_version or enable the "
+                   "matching engine wiring (OP mode / single-node consensus)");
+        if (onChainVersion != m_currentIndex)
+        {
+            INITIALIZER_LOG(ERROR)
+                << LOG_DESC("executor_version drift: on-chain config != runtime executor")
+                << LOG_KV("onChain", onChainVersion) << LOG_KV("runtime", m_currentIndex);
+        }
+        return;
+    }
+    if (selected != static_cast<size_t>(version))
+    {
+        INITIALIZER_LOG(ERROR) << LOG_DESC(
+                                      "executor_version above the wired set; running the newest "
+                                      "wired executor")
+                               << LOG_KV("requested", version) << LOG_KV("selected", selected)
+                               << LOG_KV("onChain", onChainVersion);
+    }
+    m_currentIndex = static_cast<int>(selected);
+    if (onChainVersion != m_currentIndex)
+    {
+        INITIALIZER_LOG(ERROR)
+            << LOG_DESC("executor_version drift: on-chain config != runtime executor")
+            << LOG_KV("onChain", onChainVersion) << LOG_KV("runtime", m_currentIndex)
+            << LOG_DESC(
+                   "governance wrote a version this node cannot wire; blocks still execute on "
+                   "the runtime executor above");
+    }
 }
 bcos::scheduler::SchedulerInterface& bcos::scheduler_v1::MultiVersionScheduler::scheduler(
     int version)
 {
-    return *m_schedulers.at(version);
+    return checkedSchedulerAt(version);
 }

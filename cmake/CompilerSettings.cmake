@@ -165,11 +165,23 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     endif()
 
     if(SANITIZE_ADDRESS)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined -fno-sanitize=alignment -fsanitize-address-use-after-scope -fsanitize-recover=all")
+        # ASan + UBSan. Alignment checks stay off: packed protocol structs are
+        # intentional. recover=all keeps a test run going so we see every report.
+        set(_fisco_asan_flags "-ggdb -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined -fno-sanitize=alignment -fsanitize-address-use-after-scope -fsanitize-recover=all")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${_fisco_asan_flags}")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${_fisco_asan_flags}")
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address -fsanitize=undefined")
+        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=address -fsanitize=undefined")
+        unset(_fisco_asan_flags)
     endif()
 
     if(SANITIZE_THREAD)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb -fno-omit-frame-pointer -fsanitize=thread")
+        set(_fisco_tsan_flags "-ggdb -fno-omit-frame-pointer -fsanitize=thread")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${_fisco_tsan_flags}")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${_fisco_tsan_flags}")
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=thread")
+        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=thread")
+        unset(_fisco_tsan_flags)
     endif()
 
     if(COVERAGE)
