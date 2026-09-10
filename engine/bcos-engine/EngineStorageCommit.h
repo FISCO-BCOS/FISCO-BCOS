@@ -24,6 +24,7 @@
 #include <bcos-framework/engine/RawTransactionDispatch.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
+#include <bcos-framework/protocol/TransactionReceiptNormalize.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-ledger/mpt/EthTrieRoots.h>
 #include <bcos-task/Task.h>
@@ -102,37 +103,27 @@ struct HeaderCommitments
     bcos::h256 receiptsRoot;
 };
 
-/// Normalizes @p receipts in place, then builds both index-keyed MPT roots. The v2 executor's
-/// receipts carry neither a logsBloom nor a cumulativeGasUsed (a documented limitation) and the
-/// receipts-root leaf commits to both, so the bloom is derived from the logs when absent and the
-/// running gas prefix is filled when the scheduler did not provide one (BaselineScheduler::
-/// finishExecute does both for the PBFT path); a scheduler-provided value stays authoritative.
-/// One receipt per executed transaction — the leaf prefix is the transaction's type byte — so a
-/// count mismatch fails closed instead of indexing @p types out of range.
+/// Normalizes @p receipts in place via protocol::normalizeReceipts (same policy as
+/// BaselineScheduler::finishExecute), then builds both index-keyed MPT roots.
+/// One receipt per executed transaction — the leaf prefix is the transaction's type
+/// byte — so a count mismatch fails closed instead of indexing @p types out of range.
+/// Forced (decoded == nullptr) envelopes still enter transactionsRoot and do not
+/// produce receipts; receiptsRoot is therefore not externally verifiable until
+/// deposit execution lands (N envelopes vs M receipts).
 template <class PayloadTransactions>
 HeaderCommitments buildHeaderCommitments(PayloadTransactions const& payloadTransactions,
     std::vector<protocol::TransactionReceipt::Ptr> const& receipts,
     std::vector<std::uint8_t> const& types)
 {
-    u256 cumulativeGasUsed = 0;
-    for (auto& receipt : receipts)
+    for (auto const& receipt : receipts)
     {
         if (!receipt)
         {
             BOOST_THROW_EXCEPTION(OpExecutionInternalError{}
                                   << bcos::errinfo_comment{"scheduler returned a null receipt"});
         }
-        if (receipt->logsBloom().empty())
-        {
-            auto const bloom = bcos::getLogsBloom(receipt->logEntries());
-            receipt->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
-        }
-        cumulativeGasUsed += receipt->gasUsed();
-        if (receipt->cumulativeGasUsed().empty())
-        {
-            receipt->setCumulativeGasUsed(cumulativeGasUsed.str());
-        }
     }
+    protocol::normalizeReceipts(receipts);
 
     std::vector<bcos::bytesConstRef> rawEnvelopes;
     rawEnvelopes.reserve(payloadTransactions.size());

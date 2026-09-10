@@ -410,6 +410,9 @@ void bcostars::protocol::TransactionReceiptImpl::setLogsBloom(bcos::bytesConstRe
 }
 size_t bcostars::protocol::TransactionReceiptImpl::logIndex() const
 {
-    return 0;
+    return m_inner()->logIndex;
 }
-void bcostars::protocol::TransactionReceiptImpl::setLogIndex(size_t index) {}
+void bcostars::protocol::TransactionReceiptImpl::setLogIndex(size_t index)
+{
+    m_inner()->logIndex = static_cast<unsigned int>(index);
+}

@@ -27,6 +27,8 @@
 #include <bcos-framework/engine/RawTransactionDispatch.h>
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-framework/protocol/LogEntry.h>
+#include <bcos-framework/protocol/TransactionReceiptNormalize.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
@@ -2126,5 +2128,18 @@ BOOST_AUTO_TEST_CASE(cache_miss_new_payload_v4_before_prague_fork_answers_syncin
     BOOST_CHECK_EQUAL(
         static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Syncing));
     BOOST_CHECK(!status.validationError.has_value());
+}
+
+BOOST_AUTO_TEST_CASE(normalize_receipts_assigns_transaction_and_log_index)
+{
+    auto first = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+    auto second = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+    first->setLogEntries({protocol::LogEntry(bytes(20, 0x11), h256s{h256{}}, bytes{})});
+    std::vector<protocol::TransactionReceipt::Ptr> receipts{first, second};
+    (void)protocol::normalizeReceipts(receipts);
+    BOOST_CHECK_EQUAL(first->transactionIndex(), 0);
+    BOOST_CHECK_EQUAL(second->transactionIndex(), 1);
+    BOOST_CHECK_EQUAL(first->logIndex(), 0);
+    BOOST_CHECK_EQUAL(second->logIndex(), 1);
 }
 BOOST_AUTO_TEST_SUITE_END()

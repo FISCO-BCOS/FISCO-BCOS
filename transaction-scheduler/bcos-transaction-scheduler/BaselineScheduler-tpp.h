@@ -39,6 +39,7 @@
 #include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/protocol/TransactionReceiptNormalize.h"
 #include "bcos-framework/protocol/TransactionSubmitResultFactory.h"
 #include "bcos-framework/storage2/MultiLayerStorage.h"
 #include "bcos-framework/storage2/Storage.h"
@@ -120,18 +121,10 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
         },
         [&]() { receiptRoot = calculateReceiptRoot(receipts, block, hashImpl); },
         [&]() {
-            size_t logIndex = 0;
             block.clearReceipts();
-            for (auto&& [index, receipt] : ::ranges::views::enumerate(receipts))
+            totalGasUsed = protocol::normalizeReceipts(receipts);
+            for (auto const& receipt : receipts)
             {
-                receipt->setTransactionIndex(index);
-                receipt->setLogIndex(logIndex);
-                auto logBloom = getLogsBloom(receipt->logEntries());
-                receipt->setLogsBloom({logBloom.data(), logBloom.size()});
-                logIndex += receipt->logEntries().size();
-                totalGasUsed += receipt->gasUsed();
-                receipt->setCumulativeGasUsed(totalGasUsed.str());
-
                 block.appendReceipt(receipt);
             }
         },
