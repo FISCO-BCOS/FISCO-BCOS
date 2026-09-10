@@ -148,15 +148,15 @@ public:
             boost::asio::error::operation_aborted);
     }
 
-    auto awaitableWrite(const std::shared_ptr<SocketFace>& socket, const auto& buffers)
+    auto awaitableWrite(const std::shared_ptr<SocketFace>& socket, auto buffers)
     {
         return task::makeFireAwaitable<boost::system::error_code, std::size_t>(
-            [this, socket, &buffers](auto handler) mutable {
+            [this, socket, buffers = std::move(buffers)](auto handler) mutable {
                 auto type = m_type;
                 auto& ioService = socket->ioService();
                 if (socket->isConnected())
                 {
-                    boost::asio::post(ioService, [type, socket, &buffers,
+                    boost::asio::post(ioService, [type, socket, buffers = std::move(buffers),
                                                      handler = std::move(handler)]() mutable {
                         switch (type)
                         {

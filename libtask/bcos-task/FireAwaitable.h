@@ -138,7 +138,7 @@ struct FireAwaitable
             // runs initiate. Returning its handle is a symmetric transfer — the compiler suspends
             // the awaiting coroutine first, then resumes the bridge, so the awaiting frame is
             // always suspended when initiate runs.
-            auto task = [initiate = std::move(m_initiate)](auto completion) mutable -> TaskPure {
+            auto task = [](auto completion, Initiate initiate) mutable -> TaskPure {
                 try
                 {
                     completion.active();
@@ -150,7 +150,7 @@ struct FireAwaitable
                     // the awaiting coroutine (with the initial error). Swallow here.
                 }
                 co_return;
-            }(detail::FireCompletion<Error, Results...>(&m_result, handle));
+            }(detail::FireCompletion<Error, Results...>(&m_result, handle), std::move(m_initiate));
             return task.getHandle();
         }
         catch (...)
