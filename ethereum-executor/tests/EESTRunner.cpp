@@ -918,7 +918,12 @@ public:
             evmc_address addr;
             std::copy(addrBytes.begin(), addrBytes.end(), addr.bytes);
 
-            ledger::account::EVMAccount<MutableStorage> evmAccount(storage, addr, false);
+            // treatSystemAsUser=true: the v2 executor (EthereumState) views every
+            // address — including BCOS system-range ones like 0x...1000 — as an
+            // ordinary Ethereum account under /apps/. The harness must read and
+            // write the same table or pre-state and execution split-brain.
+            ledger::account::EVMAccount<MutableStorage> evmAccount(
+                storage, addr, false, /*treatSystemAsUser=*/true);
 
             task::tbb::syncWait([&]() -> task::Task<void> {
                 if (!co_await evmAccount.exists())
@@ -1208,7 +1213,10 @@ public:
             evmc_address addr;
             std::copy(addrBytes.begin(), addrBytes.end(), addr.bytes);
 
-            ledger::account::EVMAccount<MutableStorage> evmAccount(storage, addr, false);
+            // treatSystemAsUser=true to match setupPreState and the executor — see
+            // the comment in setupPreState.
+            ledger::account::EVMAccount<MutableStorage> evmAccount(
+                storage, addr, false, /*treatSystemAsUser=*/true);
 
             task::tbb::syncWait([&]() -> task::Task<void> {
                 // nonce
@@ -1335,7 +1343,8 @@ public:
             {
                 evmc_address senderAddr{};
                 std::copy(senderBytes.begin(), senderBytes.end(), senderAddr.bytes);
-                ledger::account::EVMAccount<MutableStorage> senderAcct(storage, senderAddr, false);
+                ledger::account::EVMAccount<MutableStorage> senderAcct(
+                    storage, senderAddr, false, /*treatSystemAsUser=*/true);
                 auto txNonce = test::hexToU256(fixture.transaction.nonce);
                 auto nonceStr = txNonce.str(0, std::ios_base::dec);
                 task::tbb::syncWait([&]() -> task::Task<void> {
@@ -1650,7 +1659,8 @@ public:
                 }
                 evmc_address senderAddr{};
                 std::copy(senderBytes.begin(), senderBytes.end(), senderAddr.bytes);
-                ledger::account::EVMAccount<MutableStorage> senderAcct(storage, senderAddr, false);
+                ledger::account::EVMAccount<MutableStorage> senderAcct(
+                    storage, senderAddr, false, /*treatSystemAsUser=*/true);
                 auto txNonce = test::hexToU256(tx.nonce);
                 auto nonceStr = txNonce.str(0, std::ios_base::dec);
                 task::tbb::syncWait([&]() -> task::Task<void> {
