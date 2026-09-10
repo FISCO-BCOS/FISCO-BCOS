@@ -832,6 +832,50 @@ BOOST_AUTO_TEST_CASE(combineTxResponseBlob4844)
     BOOST_CHECK_EQUAL(result["maxFeePerBlobGas"].asString(), "0x3");
 }
 
+// A legacy (type-0) tx must expose the EIP-155 `v` = chainId*2 + 35 + yParity (geth's
+// RawSignatureValues semantics), NOT the raw yParity 0/1. FISCO stores the internal signature
+// as r||s||yParity, so the response used to emit `v` = 0/1 for a legacy tx; go-ethereum then
+// fails sender recovery with "invalid transaction v, r, s values", which stalls op-node (or any
+// geth-based CL) the moment a block contains a legacy transaction.
+BOOST_AUTO_TEST_CASE(combineTxResponseLegacyUsesEip155V)
+{
+    constexpr uint64_t c_chainId = 914901;  // 0xdf5d5
+    constexpr uint8_t c_parity = 1;
+    constexpr uint64_t c_eip155V = c_chainId * 2 + 35 + c_parity;  // 0x1bebce
+
+    bcos::rpc::Web3Transaction legacy;
+    legacy.type = bcos::rpc::TransactionType::Legacy;
+    legacy.chainId = c_chainId;
+    legacy.nonce = 0;
+    legacy.maxPriorityFeePerGas = bcos::u256(2000000000);  // gasPrice for a legacy tx
+    legacy.gasLimit = 21000;
+    legacy.to.emplace(bcos::Address("0xdeaddeaddeaddeaddeaddeaddeaddeaddead0000"));
+    legacy.value = bcos::u256(81);
+    legacy.signatureR = bcos::bytes(32, 0x11);
+    legacy.signatureS = bcos::bytes(32, 0x22);
+    // yParity; encode() derives the wire v = chainId*2 + 35 + yParity for the full envelope.
+    legacy.signatureV = c_parity;
+
+    // Full EIP-2718 envelope (the ledger's read path stores the full envelope, not the preimage).
+    auto const fullEnvelope = legacy.encode();
+    // takeToTarsTransaction stores the internal signature as r||s||yParity — the value the
+    // buggy code read as `v`.
+    auto tarsTx = legacy.takeToTarsTransaction();
+    tarsTx.extraTransactionBytes.assign(fullEnvelope.begin(), fullEnvelope.end());
+    bcos::h256 arbitraryHash("0303030303030303030303030303030303030303030303030303030303030303");
+    tarsTx.extraTransactionHash.assign(arbitraryHash.begin(), arbitraryHash.end());
+    bcostars::protocol::TransactionImpl txImpl(
+        [tarsTx = std::move(tarsTx)]() mutable { return &tarsTx; });
+
+    Json::Value result = Json::objectValue;
+    combineTxResponse(
+        result, txImpl, /*transactionIndex=*/0u, /*blockNumber=*/12, bcos::crypto::HashType{});
+
+    BOOST_CHECK_EQUAL(result["type"].asString(), "0x0");
+    BOOST_CHECK_EQUAL(result["chainId"].asString(), toQuantity(c_chainId));
+    BOOST_CHECK_EQUAL(result["v"].asString(), toQuantity(c_eip155V));
+}
+
 // Positive serialization test for the EIP-2930 accessList and EIP-7702 authorizationList
 // branches of combineTxResponse (TransactionResponse.cpp:82-148). A wrong key name or a
 // hex-prefix/quantity drift on either list would pass a coverage-by-absence test — these
