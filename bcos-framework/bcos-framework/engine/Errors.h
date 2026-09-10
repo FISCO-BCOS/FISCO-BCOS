@@ -67,6 +67,14 @@ using OpRejectIsCapacity = boost::error_info<struct OpRejectIsCapacityTag, bool>
 /// Empty/default error_code is not attached. Never route this through the message text.
 using OpValidateErrorCode = boost::error_info<struct OpValidateErrorCodeTag, std::error_code>;
 
+/// True when a commit failed because the pending block it named is gone — superseded or
+/// already committed by a concurrent call ("Unexpected empty results!"). The engine may
+/// re-execute such a payload; every other commit fault must keep its routing.
+/// A tag rather than an error code because OpScheduler::classifyException's catch (...)
+/// returns SchedulerError::UnknownError for every unclassified commit fault, so the code
+/// cannot tell a dropped pending from a storage fault.
+using OpPendingDropped = boost::error_info<struct OpPendingDroppedTag, bool>;
+
 /// Consumed by OpEngineService (#5549) to classify execute-reject culprits; unused
 /// within #5547 itself.
 [[nodiscard]] inline std::optional<bcos::h256> culpritTxHashFromError(boost::exception const& error)

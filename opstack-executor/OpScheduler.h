@@ -867,9 +867,14 @@ private:
                 if (!m_pending || !m_pending->verified ||
                     m_pending->executedHeader->number() != number)
                 {
-                    co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::OpPendingDropped,
-                                   "Unexpected empty results!"),
-                        nullptr};
+                    // Carries the OpPendingDropped tag on top of the code: the engine may
+                    // re-execute a payload whose pending was dropped, and the code alone
+                    // cannot say so (classifyException's catch-all also reports
+                    // UnknownError — bcos-framework/engine/Errors.h).
+                    auto pendingDropped = BCOS_ERROR_UNIQUE_PTR(
+                        scheduler::SchedulerError::UnknownError, "Unexpected empty results!");
+                    *pendingDropped << bcos::engine::OpPendingDropped{true};
+                    co_return {std::move(pendingDropped), nullptr};
                 }
                 pending = *m_pending;
             }

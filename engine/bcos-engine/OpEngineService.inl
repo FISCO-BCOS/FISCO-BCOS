@@ -697,17 +697,16 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
                     PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
             }
             // Only the "built pending was dropped or replaced" fault may fall through to a
-            // full execute+commit: OpScheduler raises it as SchedulerError::OpPendingDropped
+            // full execute+commit: OpScheduler tags it as bcos::engine::OpPendingDropped
             // ("Unexpected empty results!"), and answering -32603 on every retry of a
             // still-valid payload would wedge the CL. Every other commit failure is a real
             // error and keeps its documented routing (INVALID for OpConsensusRejected,
-            // internal error otherwise) — swallowing it here would hide storage faults.
-            // The code is deliberately not UnknownError: classifyException's catch-all maps
-            // every unclassified commit fault to UnknownError, so gating on that would route
-            // real faults into this re-execution.
+            // internal error otherwise) — falling through on one would hide storage faults.
+            // Keyed on the tag, not on SchedulerError::UnknownError: classifyException's
+            // catch-all maps every unclassified commit fault to that code, so a code test
+            // cannot separate a dropped pending from a RocksDB or merge fault.
             bool const pendingDropped =
-                commitError->errorCode() ==
-                static_cast<int32_t>(bcos::scheduler::SchedulerError::OpPendingDropped);
+                boost::get_error_info<bcos::engine::OpPendingDropped>(*commitError) != nullptr;
             if (!pendingDropped)
             {
                 co_return mapDelegateError(*commitError, std::nullopt);

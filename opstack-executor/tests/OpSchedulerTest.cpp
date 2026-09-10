@@ -2587,15 +2587,16 @@ BOOST_AUTO_TEST_CASE(adoptRejectsHashMismatchWhenCommitmentsMatch)
 }
 
 /// Pins the OpScheduler half of the delegate-concurrency rationale (OpEngineService.h):
-/// a commitBlock whose pending was dropped by a reset reports
-/// SchedulerError::OpPendingDropped ("Unexpected empty results!") — never
-/// OpConsensusRejected and, critically, never UnknownError.
-/// mapDelegateError answers -32603 for the dropped-pending code and consensus-INVALID only
-/// for OpConsensusRejected, so a change to this code would silently flip a concurrent-reset
+/// a commitBlock whose pending was dropped by a reset carries the
+/// bcos::engine::OpPendingDropped tag ("Unexpected empty results!") — and reports
+/// UnknownError, never OpConsensusRejected.
+/// The tag is what the engine's re-execution fall-through keys on, because the code
+/// cannot carry it: classifyException's catch-all returns UnknownError for every
+/// unclassified commit fault, so a code test cannot separate a dropped pending from a
+/// storage fault. mapDelegateError answers -32603 for this shape and consensus-INVALID
+/// only for OpConsensusRejected, so a change here would silently flip a concurrent-reset
 /// commit from "internal error, sequencer retries" into "consensus INVALID for a valid
-/// payload". The UnknownError negative matters on its own: classifyException's catch-all
-/// returns UnknownError for every unclassified commit fault, so the engine's re-execution
-/// fall-through keys on OpPendingDropped to exclude exactly those.
+/// payload" — or, losing the tag, into a hard error where a retry belongs.
 BOOST_AUTO_TEST_CASE(CommitAfterResetReportsOpPendingDroppedNotUnknownError)
 {
     Fixture f;
@@ -2643,13 +2644,12 @@ BOOST_AUTO_TEST_CASE(CommitAfterResetReportsOpPendingDroppedNotUnknownError)
         });
     BOOST_REQUIRE(called);
     BOOST_REQUIRE(commitErr != nullptr);
-    BOOST_CHECK_EQUAL(commitErr->errorCode(),
-        static_cast<int>(bcos::scheduler::SchedulerError::OpPendingDropped));
+    // The tag, not the code, is the discriminator the engine keys on.
+    BOOST_CHECK(boost::get_error_info<bcos::engine::OpPendingDropped>(*commitErr) != nullptr);
     BOOST_CHECK_NE(commitErr->errorCode(),
         static_cast<int>(bcos::scheduler::SchedulerError::OpConsensusRejected));
-    // The discriminator the engine's re-execution fall-through keys on must not be the
-    // catch-all bucket: that is what made a real commit fault take the same path.
-    BOOST_CHECK_NE(
+    // The code stays in the catch-all bucket — that is exactly why the tag has to exist.
+    BOOST_CHECK_EQUAL(
         commitErr->errorCode(), static_cast<int>(bcos::scheduler::SchedulerError::UnknownError));
     BOOST_CHECK(commitErr->errorMessage().find("Unexpected empty results") != std::string::npos);
 }
