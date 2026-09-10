@@ -205,11 +205,8 @@ template <class RawTxRange>
 /// finalizeBlock (MessagePasser snapshot) → seal → stateRoot → txRoot. txTypes are rebuilt from
 /// rawTxBytes[i][0] (the FISCO receipt has no tx-type slot; sealOpBlock's EncodeIndex receipts-root
 /// leaf needs the EIP-2718 type byte — mirror of the per-tx loop's classification). hashErr is
-/// checked here (poisoned block-hash lookup → OpStorageError). The OP running cumulativeGasUsed
-/// prefix is set upstream in the per-tx loop (ExecuteContext::finish) and kept: the
-/// normalizeReceipts call below fills the field only when a receipt arrives with it empty, and the
-/// per-tx loop always writes it, so on this path it never fires (see the call-site comment at the
-/// normalizeReceipts call).
+/// checked here (poisoned block-hash lookup → OpStorageError). cumulativeGasUsed is set upstream in
+/// ExecuteContext::finish and kept; normalizeReceipts below fills it only when absent.
 ///
 /// @p skipStateRootBuild (①a incremental MPT): when true, the full two-layer rebuild is
 /// skipped and the result's stateRoot is left EMPTY — the caller replaces it with the
