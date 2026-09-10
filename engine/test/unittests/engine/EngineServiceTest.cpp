@@ -1893,6 +1893,18 @@ BOOST_AUTO_TEST_CASE(ethBlockVersionForBlockIsTotalForUnmappableRevision)
     BOOST_CHECK_THROW(bcos::engine::detail::ethBlockVersionFor(EVMC_EXPERIMENTAL), UnsupportedFork);
 }
 
+/// A node-local fault during header reconstruction must throw (→ the caller's internal-error
+/// mapping), never return the mismatch string both call sites fold into InvalidBlockHash:
+/// InvalidBlockHash is a hard consensus rejection op-node does not retry. A null header factory
+/// is the simplest node-local fault to pin. kyonRay round-3 F2.
+BOOST_AUTO_TEST_CASE(matchReconstructedEthBlockHashThrowsOnNodeLocalFault)
+{
+    bcos::engine::ExecutionPayload payload;
+    BOOST_CHECK_THROW(bcos::engine::detail::matchReconstructedEthBlockHash(/*factory=*/nullptr,
+                          payload, std::nullopt, bcos::protocol::EthBlockVersion::LONDON),
+        bcos::engine::OpExecutionInternalError);
+}
+
 BOOST_AUTO_TEST_CASE(finalizeEthBlockHeaderFillsEthFieldsAndHash)
 {
     static auto blockFactory =

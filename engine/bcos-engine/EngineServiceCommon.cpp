@@ -547,46 +547,61 @@ std::optional<std::string> matchReconstructedEthBlockHash(
     const std::optional<bcos::h256>& parentBeaconBlockRoot,
     bcos::protocol::EthBlockVersion forkVersion)
 {
+    // A null factory is a node-local wiring fault, not a defect in the submitted payload: it must
+    // reach the caller's internal-error mapping, never the InvalidBlockHash string (a hard
+    // consensus rejection op-node does not retry).
     if (!factory)
     {
+        BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                  "EngineService: block header factory is null"});
+    }
+    // Only a genuine hash mismatch, or a header the submitted fields cannot reconstruct into a
+    // valid Ethereum header, returns a message (both callers fold it into InvalidBlockHash).
+    // Everything that reconstructs the header from the submitted fields is outside the try: a
+    // header-factory or transactionsRoot-MPT fault is node-local and must propagate to the
+    // caller's internal-error mapping (-32603), never be folded into InvalidBlockHash.
+    auto header = factory->createBlockHeader();
+    const auto number = payload.blockNumber;
+    header->setNumber(number);
+    header->setTimestamp(static_cast<int64_t>(payload.timestamp));
+    header->setParentInfo(
+        bcos::protocol::ParentInfo{.blockNumber = number - 1, .blockHash = payload.parentHash});
+    header->setCoinbase(payload.feeRecipient);
+    header->setStateRoot(payload.stateRoot);
+    header->setTxsRoot(transactionsRootFromPayload(payload));
+    header->setReceiptsRoot(payload.receiptsRoot);
+    header->setGasLimit(payload.gasLimit);
+    header->setGasUsed(payload.gasUsed);
+    header->setExtraData(payload.extraData);
+    header->setPrevRandao(payload.prevRandao);
+
+    if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN &&
+        (!payload.blobGasUsed.has_value() || !payload.excessBlobGas.has_value() ||
+            !parentBeaconBlockRoot.has_value()))
+    {
         return std::string("blockHash does not match the reconstructed block header");
     }
+
     try
     {
-        auto header = factory->createBlockHeader();
-        const auto number = payload.blockNumber;
-        header->setNumber(number);
-        header->setTimestamp(static_cast<int64_t>(payload.timestamp));
-        header->setParentInfo(
-            bcos::protocol::ParentInfo{.blockNumber = number - 1, .blockHash = payload.parentHash});
-        header->setCoinbase(payload.feeRecipient);
-        header->setStateRoot(payload.stateRoot);
-        header->setTxsRoot(transactionsRootFromPayload(payload));
-        header->setReceiptsRoot(payload.receiptsRoot);
-        header->setGasLimit(payload.gasLimit);
-        header->setGasUsed(payload.gasUsed);
-        header->setExtraData(payload.extraData);
-        header->setPrevRandao(payload.prevRandao);
-
-        if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN &&
-            (!payload.blobGasUsed.has_value() || !payload.excessBlobGas.has_value() ||
-                !parentBeaconBlockRoot.has_value()))
-        {
-            return std::string("blockHash does not match the reconstructed block header");
-        }
-
         finalizeEthBlockHeader(
             *header, payload, parentBeaconBlockRoot, forkVersion, payload.withdrawalsRoot);
-        if (header->hash() != payload.blockHash)
-        {
-            return std::string("blockHash does not match the reconstructed block header");
-        }
-        return std::nullopt;
     }
-    catch (...)
+    catch (OpExecutionInternalError const&)
+    {
+        // finalizeEthBlockHeader raises this only when calculateRLPHash -> validateHeader rejects
+        // the header rebuilt from the SUBMITTED fields (a zero stateRoot / receiptsRoot, a
+        // sub-second timestamp, a missing fork field): a payload-content fault, so the
+        // invalid-payload answer is right. Any other exception inside finalize is node-local and
+        // propagates (the whole body used to be wrapped in a bare catch (...) that reported all
+        // of them as a hash mismatch).
+        return std::string("blockHash does not match the reconstructed block header");
+    }
+    if (header->hash() != payload.blockHash)
     {
         return std::string("blockHash does not match the reconstructed block header");
     }
+    return std::nullopt;
 }
 
 std::optional<bcos::protocol::EthBlockVersion> tryEthBlockVersionFor(evmc_revision rev)

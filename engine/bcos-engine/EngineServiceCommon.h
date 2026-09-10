@@ -88,6 +88,10 @@ std::optional<bcos::protocol::EthBlockVersion> ethBlockVersionForBlock(
     ledger::LedgerConfig const& ledgerConfig, bcos::protocol::BlockNumber blockNumber);
 /// Rebuild the Eth header from submitted fields and require hash == payload.blockHash.
 /// Fork-gated fields come from @p forkVersion via finalizeEthBlockHeader.
+/// Returns a message (callers answer InvalidBlockHash) for a genuine hash mismatch or for a
+/// header the submitted fields cannot reconstruct into a valid Ethereum header. A node-local
+/// fault — a null @p factory, the transactionsRoot MPT build — throws instead, so the caller
+/// answers an internal error.
 std::optional<std::string> matchReconstructedEthBlockHash(
     const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
     const std::optional<bcos::h256>& parentBeaconBlockRoot,
