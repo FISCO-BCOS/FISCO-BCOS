@@ -116,11 +116,12 @@ struct HeaderCommitments
 /// BaselineScheduler::finishExecute) — @p receipts is a non-const reference so the
 /// signature states that mutation — then builds both index-keyed MPT roots and the
 /// block-level gasUsed / logsBloom.
-/// One receipt per executed transaction — the leaf prefix is the transaction's type
-/// byte — so a count mismatch fails closed instead of indexing @p types out of range.
-/// Forced (decoded == nullptr) envelopes still enter transactionsRoot and do not
-/// produce receipts; receiptsRoot is therefore not externally verifiable until
-/// deposit execution lands (N envelopes vs M receipts).
+/// Ethereum's receipts trie has exactly one leaf per block transaction, so the receipt
+/// count must equal the envelope count: a mismatch fails closed instead of emitting a
+/// header whose two roots cover different sets. A forced (decoded == nullptr) envelope
+/// that does not execute (EngineServiceImpl.h:795-803) produces no receipt and is refused
+/// here until deposit execution lands (follow-up PR); the @p types count is checked against
+/// @p receipts for the same index-parallel reason.
 template <class PayloadTransactions>
 HeaderCommitments buildHeaderCommitments(PayloadTransactions const& payloadTransactions,
     std::vector<protocol::TransactionReceipt::Ptr>& receipts,
@@ -133,6 +134,20 @@ HeaderCommitments buildHeaderCommitments(PayloadTransactions const& payloadTrans
             BOOST_THROW_EXCEPTION(OpExecutionInternalError{}
                                   << bcos::errinfo_comment{"scheduler returned a null receipt"});
         }
+    }
+    // One receipt per payload envelope. transactionsRoot covers every envelope and the
+    // receipt leaves are keyed by the same rlp(index), so a block with N envelopes and M < N
+    // receipts omits executed work from receiptsRoot and is invalid to any Ethereum verifier
+    // (op-node included). Forced (decoded == nullptr) envelopes have no receipt, so a payload
+    // carrying one is refused here rather than committed as an inconsistent header; deposit
+    // execution (follow-up) restores N == M.
+    if (payloadTransactions.size() != receipts.size())
+    {
+        BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                  "payload envelope count does not match the receipt count: " +
+                                  std::to_string(payloadTransactions.size()) + " vs " +
+                                  std::to_string(receipts.size()) +
+                                  " (a forced/deposit envelope without a receipt)"});
     }
     protocol::normalizeReceipts(receipts);
 
