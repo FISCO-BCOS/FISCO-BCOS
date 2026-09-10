@@ -35,6 +35,8 @@
 
 [executor]
     ; Ethereum L1 EL mode REQUIRES executor version 2 (the pure-Ethereum executor).
+    ; PRE-RELEASE: version 2 is not part of an upstream release and its consensus
+    ; gates may still change before release; see FISCO-BCOS issue #5563.
     version=2
     is_auth_check=false
     auth_admin_account=0x0000000000000000000000000000000000000000

@@ -7,6 +7,14 @@
 ;
 ; Usage:
 ;   fisco-bcos -c config.ini -g config.genesis [--el] [--bootnodes bootnodes.json]
+;
+; CURRENT LIMITATIONS (follow-up work):
+;   - Sync is serial and no full Sepolia from-genesis time/disk benchmark is
+;     published yet; the log reports each committed block, without a rate or ETA.
+;   - No rollback/truncate tool ships: after a fatal checkpoint/reorg stop, the
+;     supported recovery is a full resync from scratch.
+;   - executor version 2 is pre-release; its consensus gates are tracked in
+;     https://github.com/FISCO-BCOS/FISCO-BCOS/issues/5563.
 ; ============================================================================
 
 [service]

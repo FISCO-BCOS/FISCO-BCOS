@@ -186,7 +186,10 @@ protocol::EthBlockHeaderData headerFromJson(Json::Value const& j)
     return h;
 }
 
-/// The Sepolia chain configuration (public chain spec).
+/// The Sepolia chain configuration (public chain spec). Current tool limitation:
+/// the schedule stops at Prague and does not model Osaka/BPO1/BPO2 blob
+/// parameters yet, so post-Prague blob-bearing headers can fail this standalone
+/// check until the fork-tail follow-up lands.
 ChainConfig sepoliaConfig()
 {
     ChainConfig config;

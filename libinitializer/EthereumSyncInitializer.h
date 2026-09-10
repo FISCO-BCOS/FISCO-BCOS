@@ -65,6 +65,11 @@ namespace bcos::initializer
 /// repeatedly: (1) loads the bootnode list, (2) connects to each in turn, (3)
 /// downloads blocks from the local head onward and verifies + commits each through
 /// EthereumBlockVerifier, and (4) loops forever (catching transient network errors).
+///
+/// Current limits: sync is serial and no full-Sepolia time/disk benchmark is
+/// published yet; the trusted-bootnode model does not verify PoW/TD or consensus-layer
+/// finality; and no rollback tool ships, so a fatal fork/checkpoint stop requires
+/// a full resync until the follow-up recovery work lands.
 class EthereumSyncInitializer
 {
 public:
