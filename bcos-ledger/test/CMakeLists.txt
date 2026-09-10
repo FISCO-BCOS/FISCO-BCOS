@@ -29,7 +29,10 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/bcos-
 
 find_package(Boost REQUIRED unit_test_framework)
 
-target_link_libraries(${TEST_BINARY_NAME} PRIVATE ledger bcos-crypto protocol-tars Boost::unit_test_framework)
+# `storage` is a test-only link: HistoryRocksDBTest.cpp exercises the reverse-history layout
+# against RocksDBStorage2, the storage production seeks on. The `ledger` library itself still
+# avoids it (see bcos-ledger/CMakeLists.txt) so RocksDB stays out of the exported target.
+target_link_libraries(${TEST_BINARY_NAME} PRIVATE ledger storage bcos-crypto protocol-tars Boost::unit_test_framework)
 target_compile_definitions(${TEST_BINARY_NAME} PUBLIC _TESTS_)
 # ethereum/tests vectors (EthereumTrieVectorsTest.cpp), installed by the ethereum-tests
 # data port (ports-data/) under the tests manifest feature
