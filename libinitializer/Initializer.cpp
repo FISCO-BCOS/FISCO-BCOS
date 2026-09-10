@@ -77,6 +77,7 @@
 #include <bcos-transaction-executor/precompiled/PrecompiledManager.h>
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
+#include <bcos-txpool/txpool/utilities/SystemTransaction.h>
 #include <legacy/bcos-storage/StorageWrapperImpl.h>
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerSeam.h>
