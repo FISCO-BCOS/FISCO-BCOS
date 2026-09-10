@@ -28,6 +28,7 @@
 #include <atomic>
 #include <memory>
 #include <stdexcept>
+#include <thread>
 #include <tuple>
 
 using namespace bcos::task;
@@ -56,8 +57,7 @@ BOOST_AUTO_TEST_SUITE(FireAwaitableTest)
 // result is delivered and the (now disarmed) completion must NOT re-resume on destruction.
 BOOST_AUTO_TEST_CASE(NormalCompletionDeliversResult)
 {
-    auto result =
-        runOnce([](auto completion) { completion(boost::system::error_code{}, 42); });
+    auto result = runOnce([](auto completion) { completion(boost::system::error_code{}, 42); });
     BOOST_CHECK_EQUAL(result, 42);
 }
 
@@ -87,8 +87,7 @@ BOOST_AUTO_TEST_CASE(RepeatedCompletionsStayStable)
 {
     for (int i = 0; i < 10000; ++i)
     {
-        auto result =
-            runOnce([](auto completion) { completion(boost::system::error_code{}, 7); });
+        auto result = runOnce([](auto completion) { completion(boost::system::error_code{}, 7); });
         BOOST_CHECK_EQUAL(result, 7);
     }
 }
@@ -134,6 +133,49 @@ BOOST_AUTO_TEST_CASE(SynchronousCompletionUnderTaskWait)
     // as a second call), and under ASan would fault outright.
     BOOST_CHECK_EQUAL(calls->load(), 1);
     BOOST_CHECK_EQUAL(delivered->load(), 42);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_AUTO_TEST_SUITE(GetResultAwaitableTest)
+
+// complete() must be exactly-once: the first call wins and delivers its value; a second call on
+// the same Result is a no-op and must not overwrite the delivered data.
+BOOST_AUTO_TEST_CASE(SecondCompleteIsANoOp)
+{
+    auto value = syncWait([]() -> Task<int> {
+        GetResultAwaitable<int>::Result result;
+        GetResultAwaitable<int> awaitable(result);
+        GetResultAwaitable<int>::complete(result, 42);
+        GetResultAwaitable<int>::complete(result, 99);
+        auto [v] = co_await awaitable;
+        co_return v;
+    }());
+    BOOST_CHECK_EQUAL(value, 42);
+}
+
+// Two racing completers must settle the awaiting coroutine exactly once with one winner's value,
+// never double-resume (which would crash) and never race on the delivered data.
+BOOST_AUTO_TEST_CASE(ConcurrentCompleteSettlesExactlyOnce)
+{
+    auto result = std::make_shared<GetResultAwaitable<int>::Result>();
+    auto delivered = std::make_shared<std::atomic<int>>(-1);
+
+    std::thread first([result] { GetResultAwaitable<int>::complete(*result, 42); });
+    std::thread second([result] { GetResultAwaitable<int>::complete(*result, 99); });
+
+    syncWait([result, delivered]() -> Task<void> {
+        GetResultAwaitable<int> awaitable(*result);
+        auto [v] = co_await awaitable;
+        delivered->store(v);
+        co_return;
+    }());
+
+    first.join();
+    second.join();
+
+    auto v = delivered->load();
+    BOOST_CHECK(v == 42 || v == 99);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

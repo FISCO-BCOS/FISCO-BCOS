@@ -279,7 +279,8 @@ public:
     ///    waiter forever.
     ///  - The caller may itself be sitting on another waiter's await_suspend stack, so it must not
     ///    nest that waiter's whole continuation either.
-    /// This is the single place that policy lives.
+    /// This is the single place that policy lives for write-queue settlement; the
+    /// response-callback paths in onMessage / onTimeout settle inline under their own containment.
     template <class Callback, class... Args>
     inline void postCallback(Callback&& callback, const char* description, Args... args)
     {

@@ -20,6 +20,8 @@
 #include "bcos-task/Task.h"
 #include <atomic>
 #include <coroutine>
+#include <cstdio>
+#include <string>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -43,6 +45,22 @@ namespace bcos::task
 
 namespace detail
 {
+// Emit the rescued resume exception to stderr so an initiate failure is distinguishable from an
+// ordinary teardown in the log. libtask cannot use BCOS_LOG without a bcos-task -> bcos-utilities
+// link dependency, so a bare stderr write keeps these silent catches diagnosable without one.
+inline void logResumeException(const char* context) noexcept
+{
+    try
+    {
+        std::fprintf(stderr, "[FireAwaitable] %s: %s\n", context,
+            boost::current_exception_diagnostic_information().c_str());
+    }
+    catch (...)
+    {
+        // the diagnostic itself failed; nothing more to do
+    }
+}
+
 // Move-only completion handed to the initiate callable. Created disarmed; the bridge body arms
 // it via active() right before initiating, so a completion destroyed before initiation (e.g.
 // bridge-frame allocation failure) is a no-op and can never resume a frame await_suspend has not
@@ -68,7 +86,9 @@ public:
 
     ~FireCompletion() noexcept
     {
-        if (!m_armed)
+        // Atomically claim the completion: an exchange wins exactly once, so a concurrent
+        // operator() and destructor can never both resume the awaiting coroutine.
+        if (!m_armed.exchange(false))
         {
             // moved-from, already ran, or never activated (bridge-frame construction failed)
             return;
@@ -80,7 +100,9 @@ public:
             m_handle.resume();
         }
         catch (...)
-        {}
+        {
+            logResumeException("resume rescued the awaiting coroutine and it threw");
+        }
     }
 
     // Arm the completion: called by the bridge body right before initiating.
@@ -92,11 +114,12 @@ public:
     // implicit empty Error here.
     void operator()(Error error, Results... results)
     {
-        if (!m_armed)
+        // Atomically disarm: wins exactly once, so the completion is settled once even under a
+        // concurrent destructor.
+        if (!m_armed.exchange(false))
         {
             return;
         }
-        m_armed = false;
         *m_result = std::make_tuple(std::move(error), std::move(results)...);
         try
         {
@@ -105,6 +128,7 @@ public:
         catch (...)
         {
             // an exception escaping the resumed coroutine must not unwind the caller's handler
+            logResumeException("resume completed the awaiting coroutine and it threw");
         }
     }
 
@@ -147,7 +171,10 @@ struct FireAwaitable
                 catch (...)
                 {
                     // initiate threw after arming: the completion's destructor already resumed
-                    // the awaiting coroutine (with the initial error). Swallow here.
+                    // the awaiting coroutine (with the initial error). Swallow the exception but
+                    // keep its diagnostic so an initiate failure is distinguishable from teardown.
+                    detail::logResumeException(
+                        "initiate threw; awaiting coroutine settled with the failure error");
                 }
                 co_return;
             }(detail::FireCompletion<Error, Results...>(&m_result, handle), std::move(m_initiate));

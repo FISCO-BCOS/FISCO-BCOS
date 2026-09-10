@@ -78,8 +78,7 @@ public:
     // awaiting coroutine is always settled. Deferring the initiation is the norm, but a
     // synchronous invocation or drop is safe here — symmetric transfer means it can no longer
     // resume a frame that has not finished suspending.
-    using ReadSomeHandler =
-        task::detail::FireCompletion<boost::system::error_code, std::size_t>;
+    using ReadSomeHandler = task::detail::FireCompletion<boost::system::error_code, std::size_t>;
 
     // Production read-initiation policy: directly dispatches async_read_some on the socket
     // (TCP vs SSL, with the unexpected-type default completing via operation_not_supported).

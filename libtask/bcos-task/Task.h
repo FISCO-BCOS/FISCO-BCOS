@@ -107,8 +107,8 @@ public:
         }
         TaskPure get_return_object()
         {
-            auto handle =
-                std::coroutine_handle<promise_type>::from_promise(*static_cast<promise_type*>(this));
+            auto handle = std::coroutine_handle<promise_type>::from_promise(
+                *static_cast<promise_type*>(this));
             return TaskPure{handle};
         }
     };
@@ -120,7 +120,7 @@ public:
     TaskPure& operator=(TaskPure&&) noexcept = default;
     ~TaskPure() noexcept = default;
     const std::coroutine_handle<promise_type>& getHandle() const { return m_handle; }
-    
+
 private:
     std::coroutine_handle<promise_type> m_handle;
 };

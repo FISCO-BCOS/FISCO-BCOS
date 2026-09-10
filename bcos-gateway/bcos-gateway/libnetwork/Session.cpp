@@ -321,7 +321,7 @@ task::Task<void> Session::writeLoop()
             // iteration, and a short/failed write is handled through `error` alone
             [[maybe_unused]] auto [error, size] =
                 co_await m_server.get().asioInterface()->awaitableWrite(
-                    m_socket, buffers);
+                    m_socket, std::move(buffers));
 
             buffers.clear();
             for (auto& payload : payloads)
@@ -435,7 +435,7 @@ void Session::drop(DisconnectReason _reason)
     // available. writeLoop never runs on a sender's stack anymore (Session::write() posts its
     // launch), but drop() remains reachable from arbitrary caller stacks — including write()'s
     // launch-failure catch, which can still sit inside a sender's await_suspend — so calling the
-    // callback inline here could resume a coroutine from inside its own await_suspend. settleCallback
+    // callback inline here could resume a coroutine from inside its own await_suspend. postCallback
     // posts to the shared pool and falls back to inline only when the host is already gone — the
     // same shape as the notifyDisconnect / closeSocket branches below.
     Payload payload;
