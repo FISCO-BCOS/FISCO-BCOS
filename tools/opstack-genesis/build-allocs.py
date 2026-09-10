@@ -52,12 +52,6 @@ import json
 import sys
 from pathlib import Path
 
-try:
-    import yaml
-except ImportError:  # pragma: no cover - dependency hint only
-    sys.stderr.write("error: pyyaml required (pip install pyyaml)\n")
-    raise
-
 
 # ---------------------------------------------------------------------------
 # keccak256 (pure python, no dependency).
@@ -700,6 +694,14 @@ def main(argv=None):
                         help="also write the merged set as a geth-style alloc "
                              "JSON (feeds the op-reth oracle genesis)")
     args = parser.parse_args(argv)
+
+    # Deferred to the CLI path only: importing this module (for keccak256, e.g. from
+    # mpt_state_root.py / gen_eth_header_fixture.py / the e2e suites) must not require pyyaml.
+    try:
+        import yaml
+    except ImportError:  # pragma: no cover - dependency hint only
+        sys.stderr.write("error: pyyaml required (pip install pyyaml)\n")
+        raise
 
     with open(args.config) as handle:
         config = yaml.safe_load(handle)

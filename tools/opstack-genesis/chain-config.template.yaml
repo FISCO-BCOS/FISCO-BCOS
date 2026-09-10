@@ -115,3 +115,11 @@ expected_predeploys:
     address: "0x4200000000000000000000000000000000000012"
   - name: OperatorFeeVault
     address: "0x420000000000000000000000000000000000001B"
+  # EIP-4788 beacon-roots system contract (Cancun/Ecotone+): system_call_block_start
+  # writes the parent beacon block root here every block; silently no-op at the EVM
+  # level if missing, but a genesis without it diverges from every OP reference client.
+  - name: BeaconBlockRoot
+    address: "0x000F3DF6D732807Ef1319FB7B8bB8522d0Beac02"
+  # EIP-2935 historical block hashes (Prague/Isthmus-era op-deployer output includes it).
+  - name: HistoryStorage
+    address: "0x0000F90827F1C53A10CB7A02335B175320002935"
