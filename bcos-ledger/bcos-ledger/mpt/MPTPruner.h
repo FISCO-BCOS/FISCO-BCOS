@@ -762,12 +762,23 @@ private:
             co_return;
         }
         std::vector<std::pair<bcos::h256, bool>> stack{{root, accountTrie}};
+        // Per-round scratch, hoisted out of the loop so a batch costs no container
+        // constructions: clear() keeps the capacity across rounds.
+        std::vector<std::pair<bcos::h256, bool>> accepted;
+        std::vector<size_t> resultIndex;  // accepted[i] -> its row's slot in keys/entries
+        std::vector<bcos::executor_v1::StateKey> keys;
+        std::unordered_map<bcos::h256, size_t> dedup;  // hash -> slot, this round only
+        std::vector<std::optional<TrieNode>> decoded;  // slot -> parsed node, this round only
+        accepted.reserve(WALK_READ_BATCH);
+        resultIndex.reserve(WALK_READ_BATCH);
+        keys.reserve(WALK_READ_BATCH);
+        dedup.reserve(WALK_READ_BATCH);
         while (!stack.empty())
         {
-            std::vector<std::pair<bcos::h256, bool>> accepted;
-            std::vector<size_t> resultIndex;  // accepted[i] -> its row's slot in keys/entries
-            std::vector<bcos::executor_v1::StateKey> keys;
-            std::unordered_map<bcos::h256, size_t> dedup;  // hash -> slot, this round only
+            accepted.clear();
+            resultIndex.clear();
+            keys.clear();
+            dedup.clear();
             for (size_t popped = 0; popped < WALK_READ_BATCH && !stack.empty(); ++popped)
             {
                 auto const [hash, isAccount] = stack.back();
@@ -789,25 +800,31 @@ private:
                 continue;
             }
             auto const entries = co_await bcos::storage2::readSome(*m_backend, std::move(keys));
+            decoded.clear();
+            decoded.resize(entries.size());
             for (size_t i = 0; i < accepted.size(); ++i)
             {
                 auto const& [hash, isAccount] = accepted[i];
-                auto const& entry = entries[resultIndex[i]];
-                if (!entry)
+                auto const slot = resultIndex[i];
+                if (!decoded[slot])
                 {
-                    // A reachable node row missing from the committed backend violates the
-                    // window guarantee the rebuild relies on — fail loud, same convention as
-                    // Trie.h.
-                    BOOST_THROW_EXCEPTION(MPTInvariantViolation{}
-                                          << bcos::errinfo_comment(
-                                                 "MPT pruning rebuild: reachable node row "
-                                                 "missing from the committed backend (hash " +
-                                                 hash.abridged() + ")"));
+                    auto const& entry = entries[slot];
+                    if (!entry)
+                    {
+                        // A reachable node row missing from the committed backend violates
+                        // the window guarantee the rebuild relies on — fail loud, same
+                        // convention as Trie.h.
+                        BOOST_THROW_EXCEPTION(MPTInvariantViolation{}
+                                              << bcos::errinfo_comment(
+                                                     "MPT pruning rebuild: reachable node row "
+                                                     "missing from the committed backend (hash " +
+                                                     hash.abridged() + ")"));
+                    }
+                    auto const raw = entry->get();
+                    decoded[slot] = decodeNode(bcos::bytesConstRef(
+                        reinterpret_cast<bcos::byte const*>(raw.data()), raw.size()));
                 }
-                auto const raw = entry->get();
-                descend(decodeNode(bcos::bytesConstRef(
-                            reinterpret_cast<bcos::byte const*>(raw.data()), raw.size())),
-                    isAccount, stack);
+                descend(*decoded[slot], isAccount, stack);
             }
         }
     }
