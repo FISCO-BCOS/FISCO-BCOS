@@ -1324,6 +1324,32 @@ BOOST_AUTO_TEST_CASE(forced_transactions_enter_payload_first)
     BOOST_CHECK_NE(payload->executionPayload.transactions.size(), executable.transactions.size());
 }
 
+/// collectExecutableTransactions must reject a blob (0x03) envelope, not only Unsupported: the
+/// type byte it returns is committed into the receipts-trie leaf prefix, and the repo's admission
+/// rule (isRawTransactionPayloadAdmissible) invalidates the whole payload for blob and unsupported
+/// alike. Blobs are rejected upstream, so this is defence-in-depth. kyonRay round-3 F3.
+BOOST_AUTO_TEST_CASE(collectExecutableTransactionsRejectsBlobEnvelope)
+{
+    std::vector<bcos::engine::EngineTransaction> blob{bcos::engine::EngineTransaction{
+        .raw = bytes{0x03, 0xaa, 0xbb}, .decoded = makeWeb3Tx("aaaaaaaaaaaaaaaaaaaa", 0)}};
+    BOOST_CHECK_THROW(bcos::engine::engine_common::collectExecutableTransactions(blob),
+        bcos::engine::OpExecutionInternalError);
+
+    // An unsupported envelope (0x00) still fails closed.
+    std::vector<bcos::engine::EngineTransaction> unsupported{bcos::engine::EngineTransaction{
+        .raw = bytes{0x00, 0x01}, .decoded = makeWeb3Tx("bbbbbbbbbbbbbbbbbbbb", 1)}};
+    BOOST_CHECK_THROW(bcos::engine::engine_common::collectExecutableTransactions(unsupported),
+        bcos::engine::OpExecutionInternalError);
+
+    // A supported (non-blob) envelope still passes.
+    std::vector<bcos::engine::EngineTransaction> ok{bcos::engine::EngineTransaction{
+        .raw = bytes{0x02, 0xf8, 0xaa}, .decoded = makeWeb3Tx("cccccccccccccccccccc", 2)}};
+    auto const executable = bcos::engine::engine_common::collectExecutableTransactions(ok);
+    BOOST_CHECK_EQUAL(executable.transactions.size(), 1);
+    BOOST_CHECK_EQUAL(executable.types.size(), 1);
+    BOOST_CHECK_EQUAL(executable.types[0], 0x02);
+}
+
 BOOST_AUTO_TEST_CASE(no_tx_pool_true_excludes_mempool_transactions)
 {
     MemPoolImpl memPool;

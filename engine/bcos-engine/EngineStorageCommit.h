@@ -60,9 +60,10 @@ task::Task<void> drainQueuedLayers(Storage& storage)
 }
 
 /// The executable transactions of an execution payload, index-parallel with their EIP-2718 type
-/// bytes. Raw-only (forced) entries have no executable form and are skipped. An unsupported
-/// envelope has no type byte at all, so it fails closed here rather than letting the
-/// receipts-root leaf silently lose its prefix.
+/// bytes. Raw-only (forced) entries have no executable form and are skipped. Blob (0x03) and
+/// unsupported envelopes fail closed here — through the same isRawTransactionPayloadAdmissible
+/// rule the admission paths use — so the receipts-root leaf can never commit a type prefix for
+/// an envelope the repo's policy invalidates the whole payload for.
 struct ExecutableTransactions
 {
     std::vector<protocol::Transaction::Ptr> transactions;
@@ -81,15 +82,17 @@ ExecutableTransactions collectExecutableTransactions(PayloadTransactions const& 
         {
             continue;
         }
-        auto const typeByte = rawTransactionTypeByte(bcos::ref(tx.raw));
-        if (!typeByte.has_value())
+        // Gate on the single authoritative dispatch table, not rawTransactionTypeByte alone:
+        // that returns 0x03 for a blob, so a blob would be committed as a 0x03-prefixed
+        // receipts-trie leaf instead of invalidating the payload.
+        if (!isRawTransactionPayloadAdmissible(dispatchRawTransaction(bcos::ref(tx.raw))))
         {
             BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
-                                      "execution payload carries an unsupported transaction "
-                                      "envelope"});
+                                      "execution payload carries an inadmissible transaction "
+                                      "envelope (blob or unsupported)"});
         }
         out.transactions.push_back(tx.decoded);
-        out.types.push_back(*typeByte);
+        out.types.push_back(*rawTransactionTypeByte(bcos::ref(tx.raw)));
     }
     return out;
 }
