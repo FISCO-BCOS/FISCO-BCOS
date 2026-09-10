@@ -588,7 +588,7 @@ std::optional<std::string> matchReconstructedEthBlockHash(
     }
 }
 
-bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev)
+std::optional<bcos::protocol::EthBlockVersion> tryEthBlockVersionFor(evmc_revision rev)
 {
     switch (rev)
     {
@@ -607,11 +607,26 @@ bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev)
         {
             return bcos::protocol::EthBlockVersion::LONDON;
         }
-        BOOST_THROW_EXCEPTION(
-            UnsupportedFork{} << bcos::errinfo_comment{"EngineService: unsupported EVM revision " +
-                                                       std::to_string(static_cast<int>(rev)) +
-                                                       " for Eth header fork derivation"});
+        // EVMC_EXPERIMENTAL ("experimental" is a nameable, round-trippable
+        // SYS_CONFIG value) and anything newer than this binary maps. Whether that
+        // is fatal is not this function's call: the build path must fail loudly (a
+        // guessed era hashes a header the chain never configured), the newPayload
+        // cache-miss path must not (it would blame the submitted block). Each
+        // caller picks, via this mapping or the throwing adapter below.
+        return std::nullopt;
     }
+}
+
+bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev)
+{
+    if (auto version = tryEthBlockVersionFor(rev))
+    {
+        return *version;
+    }
+    BOOST_THROW_EXCEPTION(
+        UnsupportedFork{} << bcos::errinfo_comment{"EngineService: unsupported EVM revision " +
+                                                   std::to_string(static_cast<int>(rev)) +
+                                                   " for Eth header fork derivation"});
 }
 
 std::optional<bcos::protocol::EthBlockVersion> ethBlockVersionForBlock(
@@ -622,7 +637,7 @@ std::optional<bcos::protocol::EthBlockVersion> ethBlockVersionForBlock(
     {
         return std::nullopt;
     }
-    return ethBlockVersionFor(*revision);
+    return tryEthBlockVersionFor(*revision);
 }
 
 void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const ExecutionPayload& payload,

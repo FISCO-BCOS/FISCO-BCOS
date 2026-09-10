@@ -1845,6 +1845,31 @@ BOOST_AUTO_TEST_CASE(ethBlockVersionForMapsEvmRevisions)
         });
 }
 
+/// The cache-miss lookup must be total. A revision this binary cannot map is the same
+/// kind of fact as a block with no revision configured — the node cannot say which era
+/// to hash under — so it reports absence rather than throwing. Throwing here escaped the
+/// caller's try/catch and, on the OP path, was rewritten into a generic
+/// OpExecutionInternalError, so the CL saw an internal error instead of the recoverable
+/// SYNCING this path exists to answer.
+BOOST_AUTO_TEST_CASE(ethBlockVersionForBlockIsTotalForUnmappableRevision)
+{
+    using bcos::protocol::EthBlockVersion;
+    BOOST_CHECK(!bcos::engine::detail::tryEthBlockVersionFor(EVMC_EXPERIMENTAL).has_value());
+    // Mappable revisions keep their mapping through the non-throwing entry point.
+    BOOST_CHECK_EQUAL(static_cast<int>(*bcos::engine::detail::tryEthBlockVersionFor(EVMC_CANCUN)),
+        static_cast<int>(EthBlockVersion::CANCUN));
+
+    // End to end through the per-block lookup: "experimental" is a nameable,
+    // round-trippable SYS_CONFIG value (evmcRevisionFromName -> EVMC_EXPERIMENTAL), so a
+    // chain can legitimately be configured with a revision above this binary's knowledge.
+    bcos::ledger::LedgerConfig ledgerConfig;
+    ledgerConfig.setEVMCRevision(EVMC_EXPERIMENTAL);
+    BOOST_CHECK(!bcos::engine::detail::ethBlockVersionForBlock(ledgerConfig, 7).has_value());
+    // The build path keeps failing loudly on the same revision: a guessed era hashes a
+    // header the chain never configured.
+    BOOST_CHECK_THROW(bcos::engine::detail::ethBlockVersionFor(EVMC_EXPERIMENTAL), UnsupportedFork);
+}
+
 BOOST_AUTO_TEST_CASE(finalizeEthBlockHeaderFillsEthFieldsAndHash)
 {
     static auto blockFactory =

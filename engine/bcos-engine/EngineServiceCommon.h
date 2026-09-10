@@ -72,10 +72,18 @@ std::optional<std::string> validateExecutionPayload(
 /// slotNumber are compared only when both sides carry them.
 std::optional<std::string> compareWithBuiltPayload(
     const ExecutionPayload& submitted, const ExecutionPayload& built);
+/// Evm revision -> Eth header fork. Total: nullopt covers both "above this binary's
+/// knowledge" (EVMC_EXPERIMENTAL and newer) and nothing else; revisions below LONDON
+/// fold to LONDON. Callers that must not guess pick an answer for nullopt.
+std::optional<bcos::protocol::EthBlockVersion> tryEthBlockVersionFor(evmc_revision rev);
+/// Throwing adapter over tryEthBlockVersionFor, for the build path: hashing a header
+/// under an era the chain never configured is the silent-divergence failure the
+/// chain-derived selection exists to prevent, so it fails loudly (-38005).
 bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev);
 /// Header fork for payload @p blockNumber from the chain's per-block schedule.
-/// Missing revision is a node-local fact — callers answer SYNCING, never
-/// InvalidBlockHash (that would blame the submitted block).
+/// Either way of not resolving the era — no revision at this block, or a revision
+/// this binary cannot map — is a node-local fact: callers answer SYNCING, never
+/// InvalidBlockHash (that would blame the submitted block). Never throws.
 std::optional<bcos::protocol::EthBlockVersion> ethBlockVersionForBlock(
     ledger::LedgerConfig const& ledgerConfig, bcos::protocol::BlockNumber blockNumber);
 /// Rebuild the Eth header from submitted fields and require hash == payload.blockHash.
