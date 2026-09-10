@@ -1090,20 +1090,10 @@ private:
         h256 const txRoot = commitments.transactionsRoot;
         h256 const receiptRoot = commitments.receiptsRoot;
 
-        // Step 2f: Compute gas used and block-level logsBloom from receipts.
-        u256 totalGasUsed;
-        Bloom logsBloom{};
-        for (auto& receipt : receipts)
-        {
-            totalGasUsed += receipt->gasUsed();
-            // The v2 (pure-Ethereum) executor's receipts carry an empty logsBloom (a
-            // documented limitation — evmoneReceiptToBcos does not compute it), so tolerate
-            // empty blooms instead of indexing past their (zero) length.
-            if (!receipt->logsBloom().empty())
-            {
-                orBloom(logsBloom, receipt->logsBloom());
-            }
-        }
+        // Step 2f: gas used and the block-level logsBloom come out of the same call, so
+        // neither can be derived from pre-normalization receipts.
+        u256 const totalGasUsed = commitments.gasUsed;
+        Bloom const& logsBloom = commitments.logsBloom;
 
         // Step 2g: Compute state root (MPT when enabled, otherwise legacy XOR fold).
         h256 stateRoot = co_await engine_common::resolveEngineBlockStateRoot(view, *blockHeader,

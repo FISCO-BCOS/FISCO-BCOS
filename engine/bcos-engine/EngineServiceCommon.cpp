@@ -525,12 +525,13 @@ std::optional<std::string> compareWithBuiltPayload(
 
 namespace
 {
+/// Cache-miss reconstruction of transactionsRoot. Same entry point as the two other
+/// producers (engine_common::buildHeaderCommitments, opstack-executor computeOpTxRoot):
+/// all three MUST agree or newPayload rejects this node's own payloads.
+/// calculateTransactionsRoot owns the empty-list -> emptyRootHash() contract
+/// (computeIndexedTrieRoot), so it is not restated here.
 bcos::h256 transactionsRootFromPayload(const ExecutionPayload& payload)
 {
-    if (payload.transactions.empty())
-    {
-        return bcos::ledger::mpt::emptyRootHash();
-    }
     std::vector<bcos::bytesConstRef> rawEnvelopes;
     rawEnvelopes.reserve(payload.transactions.size());
     for (auto const& tx : payload.transactions)

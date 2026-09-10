@@ -101,10 +101,18 @@ struct HeaderCommitments
 {
     bcos::h256 transactionsRoot;
     bcos::h256 receiptsRoot;
+    /// Derived from the normalized receipts, so they come out of the same call rather
+    /// than being recomputed by each caller: a caller looping over `receipts` itself
+    /// would silently depend on normalizeReceipts having already run, on fields that
+    /// enter the block hash.
+    bcos::u256 gasUsed;
+    bcos::Bloom logsBloom;
 };
 
 /// Normalizes @p receipts in place via protocol::normalizeReceipts (same policy as
-/// BaselineScheduler::finishExecute), then builds both index-keyed MPT roots.
+/// BaselineScheduler::finishExecute) — @p receipts is a non-const reference so the
+/// signature states that mutation — then builds both index-keyed MPT roots and the
+/// block-level gasUsed / logsBloom.
 /// One receipt per executed transaction — the leaf prefix is the transaction's type
 /// byte — so a count mismatch fails closed instead of indexing @p types out of range.
 /// Forced (decoded == nullptr) envelopes still enter transactionsRoot and do not
@@ -112,7 +120,7 @@ struct HeaderCommitments
 /// deposit execution lands (N envelopes vs M receipts).
 template <class PayloadTransactions>
 HeaderCommitments buildHeaderCommitments(PayloadTransactions const& payloadTransactions,
-    std::vector<protocol::TransactionReceipt::Ptr> const& receipts,
+    std::vector<protocol::TransactionReceipt::Ptr>& receipts,
     std::vector<std::uint8_t> const& types)
 {
     for (auto const& receipt : receipts)
@@ -133,9 +141,19 @@ HeaderCommitments buildHeaderCommitments(PayloadTransactions const& payloadTrans
     }
 
     HeaderCommitments out;
-    out.transactionsRoot = rawEnvelopes.empty() ?
-                               bcos::ledger::mpt::emptyRootHash() :
-                               bcos::ledger::mpt::calculateTransactionsRoot(rawEnvelopes);
+    // calculateTransactionsRoot owns the empty-list -> emptyRootHash() contract
+    // (computeIndexedTrieRoot), so no caller re-implements it.
+    out.transactionsRoot = bcos::ledger::mpt::calculateTransactionsRoot(rawEnvelopes);
+    for (auto const& receipt : receipts)
+    {
+        out.gasUsed += receipt->gasUsed();
+        // Guard retained: normalizeReceipts fills a bloom only when empty, so a v2-executor
+        // receipt can still arrive with none, and orBloom reads 256 bytes unconditionally.
+        if (!receipt->logsBloom().empty())
+        {
+            bcos::orBloom(out.logsBloom, receipt->logsBloom());
+        }
+    }
 
     if (receipts.size() != types.size())
     {

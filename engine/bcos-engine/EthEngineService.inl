@@ -689,18 +689,10 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         executionPayload.transactions, receipts, executable.types);
     h256 const txRoot = commitments.transactionsRoot;
     h256 const receiptRoot = commitments.receiptsRoot;
-
-    u256 totalGasUsed;
-    Bloom logsBloom{};
-    for (auto& receipt : receipts)
-    {
-        // Null receipts were rejected by buildHeaderCommitments above.
-        totalGasUsed += receipt->gasUsed();
-        if (!receipt->logsBloom().empty())
-        {
-            orBloom(logsBloom, receipt->logsBloom());
-        }
-    }
+    // gas used and the block-level logsBloom come out of the same call, so neither can be
+    // derived from pre-normalization receipts.
+    u256 const totalGasUsed = commitments.gasUsed;
+    Bloom const& logsBloom = commitments.logsBloom;
 
     h256 stateRoot = co_await engine_common::resolveEngineBlockStateRoot(view, *blockHeader,
         ledgerConfig, *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory);

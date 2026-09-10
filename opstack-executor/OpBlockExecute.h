@@ -14,6 +14,7 @@
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
+#include <bcos-ledger/mpt/EthTrieRoots.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Task.h>
@@ -387,20 +388,23 @@ inline OpBlockCommitments announcedCommitmentsOf(const bcos::engine::ExecutionPa
 /// Matches op-geth's DeriveSha because the raw-tx decoders reject non-canonical encodings
 /// (assertCanonicalRoundTrip fails closed if that lapses). Two call sites: the engine's
 /// pre-execution blockHash check and finalizeOpBlockResult's txRoot.
-/// Values are copied into owned bytes because computeTrieRootVarKey needs owned keys.
+/// Shares one construction with the engine's other two transactionsRoot producers
+/// (EngineServiceCommon.cpp transactionsRootFromPayload, EngineStorageCommit.h
+/// buildHeaderCommitments) — the three MUST agree or newPayload rejects this node's own
+/// payloads. Values stay views: computeIndexedTrieRoot reads the caller's bytes, so the
+/// owned-bytes marshalling this needed while it went through computeTrieRootVarKey is gone.
 template <class RawTxRange>
 [[nodiscard]] bcos::h256 computeOpTxRoot(RawTxRange const& rawTxBytes)
 {
-    std::vector<std::pair<bcos::bytes, bcos::bytes>> entries;
-    entries.reserve(rawTxBytes.size());
-    uint64_t index = 0;
+    std::vector<bcos::bytesConstRef> rawEnvelopes;
+    rawEnvelopes.reserve(rawTxBytes.size());
     for (auto const& rawItem : rawTxBytes)
     {
-        bcos::bytes key;
-        bcos::codec::rlp::encode(key, index);
-        entries.emplace_back(std::move(key), bcos::bytes(std::begin(rawItem), std::end(rawItem)));
-        ++index;
+        // .data()/.size() rather than bcos::ref: the range's element is `bytes` at one
+        // call site and already a RefDataContainer at another, and bcos::ref would double-wrap
+        // the latter.
+        rawEnvelopes.emplace_back(rawItem.data(), rawItem.size());
     }
-    return bcos::ledger::mpt::computeTrieRootVarKey(entries).root;
+    return bcos::ledger::mpt::calculateTransactionsRoot(rawEnvelopes);
 }
 }  // namespace bcos::evm::engine
