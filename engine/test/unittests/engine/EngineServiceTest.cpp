@@ -1934,38 +1934,37 @@ BOOST_AUTO_TEST_CASE(matchReconstructedEthBlockHashThrowsOnNodeLocalFault)
 
 /// Negative control for the round-3 F2 fix (kyonRay round-4 F4). The null-factory case above
 /// exercises the `if (!factory)` guard, which sits ABOVE the try — reverting the catch narrowing
-/// to catch(...) leaves it green. This one throws a non-OpExecutionInternalError from inside the
-/// reconstruction (`header->setTxsRoot(...)`), so it pins the narrowing and the reconstruction
-/// being outside the try: if either regresses, the fault is folded into the InvalidBlockHash
-/// mismatch string and the BOOST_CHECK_THROW fails.
+/// to catch(...) leaves it green. This one throws from INSIDE the try: the first call
+/// finalizeEthBlockHeader makes is `header.setUncleHash(...)`, so a header whose setUncleHash
+/// throws a non-OpExecutionInternalError is swallowed into the InvalidBlockHash mismatch string
+/// by catch(...) and propagates only under the narrowed catch(OpExecutionInternalError const&).
+/// Reverting the narrowing turns this red.
 namespace
 {
-struct ThrowingTxsRootHeader : bcostars::protocol::BlockHeaderImpl
+struct ThrowingUncleHashHeader : bcostars::protocol::BlockHeaderImpl
 {
-    void setTxsRoot(bcos::crypto::HashType) override
+    void setUncleHash(bcos::crypto::HashType) override
     {
-        throw std::runtime_error("header setTxsRoot fault");
+        throw std::runtime_error("header setUncleHash fault");
     }
 };
-struct ThrowingTxsRootHeaderFactory : bcostars::protocol::BlockHeaderFactoryImpl
+struct ThrowingUncleHashHeaderFactory : bcostars::protocol::BlockHeaderFactoryImpl
 {
     // Inherit the (CryptoSuite::Ptr) constructor.
     using bcostars::protocol::BlockHeaderFactoryImpl::BlockHeaderFactoryImpl;
     bcos::protocol::BlockHeader::Ptr createBlockHeader() override
     {
-        return std::make_shared<ThrowingTxsRootHeader>();
+        return std::make_shared<ThrowingUncleHashHeader>();
     }
 };
 }  // namespace
 
-BOOST_AUTO_TEST_CASE(matchReconstructedEthBlockHashPropagatesReconstructionFault)
+BOOST_AUTO_TEST_CASE(matchReconstructedEthBlockHashNarrowedCatchPropagatesNodeLocalFault)
 {
     auto factory =
-        std::make_shared<ThrowingTxsRootHeaderFactory>(bcos::test::createNormalCryptoSuite());
+        std::make_shared<ThrowingUncleHashHeaderFactory>(bcos::test::createNormalCryptoSuite());
     bcos::engine::ExecutionPayload payload;
     payload.blockNumber = 1;
-    // No transactions needed: transactionsRootFromPayload maps an empty list to the empty-trie
-    // root, then the throwing setTxsRoot drives the fault.
     BOOST_CHECK_THROW(bcos::engine::detail::matchReconstructedEthBlockHash(
                           factory, payload, std::nullopt, bcos::protocol::EthBlockVersion::LONDON),
         std::runtime_error);
