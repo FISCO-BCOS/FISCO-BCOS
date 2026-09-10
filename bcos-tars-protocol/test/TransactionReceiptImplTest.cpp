@@ -180,8 +180,10 @@ BOOST_AUTO_TEST_CASE(sizeGasUsedAndLogIndex)
     TransactionReceiptImpl empty;
     BOOST_CHECK_EQUAL(empty.gasUsed(), bcos::u256(0));
     BOOST_CHECK_EQUAL(empty.size(), 0U);
-    // logIndex is a stub: always zero, setter is a no-op.
+    // logIndex is a real stored field: the setter persists and the getter reads it back.
     empty.setLogIndex(9);
+    BOOST_CHECK_EQUAL(empty.logIndex(), 9U);
+    empty.setLogIndex(0);
     BOOST_CHECK_EQUAL(empty.logIndex(), 0U);
 
     // size() accumulates output + log payload + message; check it tracks the
