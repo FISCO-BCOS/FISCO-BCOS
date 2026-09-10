@@ -21,6 +21,7 @@
 #include <boost/asio/error.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/system/error_code.hpp>
+#include <atomic>
 #include <bcos-task/Task.h>
 #include <coroutine>
 #include <cstdint>

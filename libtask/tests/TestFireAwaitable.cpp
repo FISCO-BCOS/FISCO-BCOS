@@ -50,11 +50,12 @@ static int runOnce(auto&& initiate)
 
 BOOST_AUTO_TEST_SUITE(FireAwaitableTest)
 
-// Normal path: initiate invokes the completion synchronously; the result is delivered and the
-// (now disarmed) completion must NOT re-resume on destruction.
+// Normal path: initiate invokes the completion synchronously with an empty error (success); the
+// result is delivered and the (now disarmed) completion must NOT re-resume on destruction.
 BOOST_AUTO_TEST_CASE(NormalCompletionDeliversResult)
 {
-    auto result = runOnce([](auto completion) { completion(42); });
+    auto result =
+        runOnce([](auto completion) { completion(boost::system::error_code{}, 42); });
     BOOST_CHECK_EQUAL(result, 42);
 }
 
@@ -84,7 +85,8 @@ BOOST_AUTO_TEST_CASE(RepeatedCompletionsStayStable)
 {
     for (int i = 0; i < 10000; ++i)
     {
-        auto result = runOnce([](auto completion) { completion(7); });
+        auto result =
+            runOnce([](auto completion) { completion(boost::system::error_code{}, 7); });
         BOOST_CHECK_EQUAL(result, 7);
     }
 }
@@ -94,7 +96,7 @@ BOOST_AUTO_TEST_CASE(RepeatedCompletionsStayStable)
 BOOST_AUTO_TEST_CASE(WorksWithBcosErrorPtr)
 {
     auto errorResult = BCOS_ERROR_PTR(-1, "aborted");
-    auto initiate = [](auto completion) { completion(42); };
+    auto initiate = [](auto completion) { completion(bcos::Error::Ptr{}, 42); };
     auto result = syncWait([errorResult, initiate]() -> Task<int> {
         FireAwaitable<bcos::Error::Ptr, std::decay_t<decltype(initiate)>, int> awaitable(
             initiate, errorResult);

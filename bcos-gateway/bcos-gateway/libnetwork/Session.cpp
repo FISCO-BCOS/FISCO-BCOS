@@ -9,7 +9,6 @@
 
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
-#include "bcos-gateway/libnetwork/AsioAwaitable.h"
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Message.h"
@@ -273,62 +272,14 @@ task::Task<void> Session::writeLoop()
     std::vector<Payload> payloads;
     std::vector<boost::asio::const_buffer> buffers;
 
-    // Frame-local RAII guard for the single-flight write flag. The completion-or-cancel rescue
-    // (detail::AsioCompletion in AsioAwaitable.h) can DESTROY this frame without running the
-    // loop body or its catch blocks (an armed write completion destroyed without invocation).
-    // Frame destruction runs frame-local destructors only, so without this guard m_writingInFlight
-    // — a Session member — would stay claimed forever (every later write() returns at the CAS and
-    // the queue never drains again), and the batch already moved into `payloads` would be
-    // destroyed with its m_callbacks never fired (the awaiting senders leak). Declared AFTER
-    // payloads so the guard's destructor — which runs FIRST on frame destruction — still sees the
-    // batch to fail. release() is called on every normal exit path (the loop tail), so the guard
-    // fires only on the destroy path.
-    struct WriteLoopGuard
-    {
-        Session* session;
-        std::vector<Payload>& payloads;
-        bool released = false;
-        ~WriteLoopGuard()
-        {
-            if (released)
-            {
-                return;
-            }
-            session->m_writingInFlight.store(false);
-            // fail the batch callbacks inline (not posted): on the destroy path there is no
-            // guaranteed-live executor to post to, and the senders awaiting them are suspended
-            // (their frames are alive), so a synchronous resume is safe here — the destroy path
-            // never runs on a sender's own stack.
-            for (auto& payload : payloads)
-            {
-                if (payload.m_callback)
-                {
-                    auto callback = std::move(payload.m_callback);
-                    try
-                    {
-                        callback(boost::asio::error::operation_aborted);
-                    }
-                    catch (std::exception const& e)
-                    {
-                        SESSION_LOG(WARNING)
-                            << LOG_DESC("write batch callback failed on frame destroy")
-                            << LOG_KV("what", boost::diagnostic_information(e));
-                    }
-                    catch (...)
-                    {
-                        // the guard's destructor is implicitly noexcept: a foreign exception
-                        // (not derived from std::exception) escaping here would call
-                        // std::terminate, so catch everything and log
-                        SESSION_LOG(WARNING)
-                            << LOG_DESC("write batch callback failed on frame destroy")
-                            << LOG_KV("what", boost::current_exception_diagnostic_information());
-                    }
-                }
-            }
-            payloads.clear();
-        }
-        void release() { released = true; }
-    } writeLoopGuard{this, payloads};
+    // No frame-local RAII guard is needed for the single-flight write flag. The completion
+    // rescue (FireCompletion in FireAwaitable.h) RESUMES an uninvoked completion's coroutine
+    // with the initial error rather than destroying its frame, so this loop always runs through
+    // to its single exit below and releases m_writingInFlight there. The only frame destroyed
+    // before that is one destroyed while parked at initial_suspend (a failed launch), and the
+    // launch-failure catch in write() already releases the flag for that case. NOTE: a
+    // destroy-based rescue would make the flag and the popped batch leak here — re-add a guard
+    // like the one this comment replaced if such a rescue is ever reintroduced.
 
     // Fails the in-flight batch: the payloads have already been moved out of m_writeQueue and no
     // completion handler exists for them, so their callbacks would never fire (drop() only drains
@@ -467,7 +418,7 @@ task::Task<void> Session::writeLoop()
     }
     catch (...)
     {
-        // never let an exception escape into the resuming asio handler (see AsioAwaitable.h);
+        // never let an exception escape into the resuming asio handler (see FireAwaitable.h);
         // fail the in-flight batch here too — the catch(std::exception&) arm above does it, and a
         // batch destroyed with its callbacks unfired would pin every awaiting sender forever
         SESSION_LOG(ERROR) << LOG_DESC("write error") << LOG_KV("endpoint", nodeIPEndpoint())
@@ -485,15 +436,11 @@ task::Task<void> Session::writeLoop()
     // queue is drained by drop() (and late producers fail via send()'s re-check), so re-arming
     // there would just spin a fresh loop into the same teardown.
     //
-    // The guard is released BEFORE the flag is cleared so its destructor never fires on this path
-    // (it must not clear the flag that a re-armed write() has just claimed). The destroy path
-    // (completion-or-cancel rescue) never reaches this tail, so the guard fires there instead.
     // The flag is cleared with exchange, not store: the tail never otherwise READS the flag, and
     // a plain store is release-only, so the queue re-check below would have no happens-before
     // edge from a producer's push (push, then exchange(true) observing the flag set). The seq_cst
     // exchange reads from the release sequence headed by that producer's exchange(true), giving
     // every such producer's push a happens-before edge to the re-check.
-    writeLoopGuard.release();
     m_writingInFlight.exchange(false);
     if (active() && !m_writeQueue.empty())
     {

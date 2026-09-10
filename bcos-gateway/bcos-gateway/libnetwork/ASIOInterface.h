@@ -60,24 +60,24 @@ public:
         const std::shared_ptr<SocketFace>& socket, VerifyCallback callback, bool /*unused*/ = true);
 
     // ----- coroutine-facing interface -----------------------------------------
-    // Awaitable network operations, for use inside task::Task coroutines (see AsioAwaitable.h
-    // for the threading / exception / lifetime contract). Each operation guarantees total
-    // completion: the awaiting coroutine is resumed exactly once, on success and on failure
-    // alike — a silently dropped completion would pin the suspended coroutine (and everything
-    // its frame holds) forever. The awaitables live in the calling coroutine's own frame — no
-    // bridge frame, and no per-operation allocation — and are obtained from the non-virtual
-    // awaitable* helpers below.
+    // Awaitable network operations for use inside task::Task coroutines. They are built on
+    // task::FireAwaitable (see bcos-task/FireAwaitable.h for the threading / exception /
+    // lifetime contract): await_suspend starts a fire-and-forget bridge coroutine that owns the
+    // asio initiation, and symmetric transfer guarantees the awaiting coroutine has already
+    // suspended before the completion can fire. Each operation guarantees total completion: the
+    // awaiting coroutine is resumed exactly once, on success and on failure alike. A completion
+    // destroyed without being invoked (executor torn down / handler dropped) resumes it with the
+    // injected failure error rather than pinning the frame forever.
     //
     // The read path is a COMPILE-TIME policy (the template parameter of awaitableReadSome):
     // production uses DefaultReadPolicy, whose invoke() directly dispatches async_read_some on
     // the socket (TCP vs SSL, see DefaultReadPolicy below) — no std::function, no virtual call,
     // fully inlined. Read-loop test fakes substitute their own policy type to park / control
     // read completions deterministically. CONTRACT (for custom policies and for every initiate
-    // call in this header): the completion must be handed to a deferred executor (asio, or a
-    // post to some io_context) — it must be neither invoked nor dropped synchronously. A
-    // synchronous invocation / drop is neutralized by the arm/cancel handshake in AsioAwaitable
-    // (see AsioAwaitable.h) rather than corrupting the running coroutine, but the awaitable's
-    // total-completion guarantee is clearest when every initiation defers.
+    // call in this header): the completion must be invoked or destroyed exactly once, so the
+    // awaiting coroutine is always settled. Deferring the initiation is the norm, but a
+    // synchronous invocation or drop is safe here — symmetric transfer means it can no longer
+    // resume a frame that has not finished suspending.
     using ReadSomeHandler =
         task::detail::FireCompletion<boost::system::error_code, std::size_t>;
 
@@ -100,10 +100,8 @@ public:
                 break;
             default:
                 // total completion: an unexpected type must still answer the read, or the
-                // awaiting read-loop coroutine pins forever. POST the completion rather than
-                // invoking it inline — this runs on the initiator's stack inside await_suspend,
-                // and an inline invocation would resume the coroutine from within its own
-                // await_suspend.
+                // awaiting read-loop coroutine pins forever. Post the completion so it runs on
+                // the socket's io thread like every other asio completion.
                 boost::asio::post(socket->ioService(),
                     [completion = std::move(completion)]() mutable {
                         completion(boost::asio::error::operation_not_supported, std::size_t{0});
@@ -175,7 +173,7 @@ public:
                         default:
                             // total completion: an unexpected type must still answer the
                             // awaiting coroutine — dropping the handler would pin its frame
-                            // forever. (The completion-or-cancel guard in AsioAwaitable would
+                            // forever. (FireAwaitable's completion-or-cancel rescue would
                             // eventually release the frame, but failing loudly here keeps the
                             // error explicit.)
                             handler(boost::asio::error::operation_not_supported, 0);
@@ -213,7 +211,7 @@ public:
 private:
     // resolve + connect helper backing awaitableResolveConnect (total completion: the handler
     // fires with an error when resolution fails — see the coroutine-interface comment above).
-    // Templated because the handler is the move-only AsioCompletion.
+    // Templated because the handler is the move-only FireCompletion.
     template <typename Handler>
     void resolveConnect(const std::shared_ptr<SocketFace>& socket, Handler handler)
     {

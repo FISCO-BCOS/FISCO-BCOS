@@ -207,7 +207,7 @@ task::Task<void> Session::readLoop()
     }
     catch (...)
     {
-        // never let an exception escape into the resuming asio handler (see AsioAwaitable.h);
+        // never let an exception escape into the resuming asio handler (see FireAwaitable.h);
         // a session whose read loop died without a drop would zombie until the idle timer
         SESSION_LOG(ERROR) << LOG_DESC("read loop exception")
                            << LOG_KV("endpoint", nodeIPEndpoint())

@@ -126,25 +126,6 @@ private:
     std::coroutine_handle<promise_type> m_handle;
 };
 
-//only used in coroutine function body to get the handle of the coroutine
-#define GET_HANDLE co_await GetHandleAwaitable
-
-struct GetHandleAwaitable
-{
-    std::coroutine_handle<> m_handle;
-
-    constexpr bool await_ready() noexcept { return false; }
-    constexpr bool await_suspend(std::coroutine_handle<> handle) noexcept
-    {
-        m_handle = handle;
-        return false;
-    }
-    constexpr std::coroutine_handle<> await_resume() noexcept
-    {
-        return m_handle;
-    }
-};
-
 template <typename... Resp>
 struct GetResultAwaitable
 {
@@ -191,6 +172,10 @@ struct GetResultAwaitable
 
     static void complete(Result& result, Resp... resp)
     {
+        if (result.state.load(std::memory_order_acquire) == Result::State::DONE)
+        {
+            return;
+        }
         result.data = std::make_tuple(std::move(resp)...);
         typename Result::State expected = Result::State::INIT;
         if (result.state.compare_exchange_strong(expected, Result::State::DONE,
