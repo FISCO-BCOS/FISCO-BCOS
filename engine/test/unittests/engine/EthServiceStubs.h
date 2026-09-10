@@ -42,6 +42,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <magic_enum/magic_enum.hpp>
+#include <map>
 #include <range/v3/range/concepts.hpp>
 
 #include <algorithm>
@@ -178,8 +179,8 @@ inline NewPayloadRequest makeNewPayloadRequestV3(ExecutionPayload const& executi
 }
 
 template <class Backend>
-void writeEthExecutorConfig(
-    Backend& backend, evmc_revision rev = EVMC_CANCUN, bool writeEvmcRevision = true)
+void writeEthExecutorConfig(Backend& backend, evmc_revision rev = EVMC_CANCUN,
+    bool writeEvmcRevision = true, std::map<protocol::BlockNumber, evmc_revision> const& forks = {})
 {
     auto writeSysConfig = [&](std::string_view key, std::string value) {
         storage::Entry entry;
@@ -191,7 +192,8 @@ void writeEthExecutorConfig(
         std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
     if (writeEvmcRevision)
     {
-        writeSysConfig(ledger::SYSTEM_KEY_EVMC_REVISION, ledger::encodeEVMCRevisionConfig(rev, {}));
+        writeSysConfig(
+            ledger::SYSTEM_KEY_EVMC_REVISION, ledger::encodeEVMCRevisionConfig(rev, forks));
     }
 }
 

@@ -1308,6 +1308,14 @@ BOOST_AUTO_TEST_CASE(forced_transactions_enter_payload_first)
     BOOST_CHECK(payload->executionPayload.transactions[1].raw == (bytes{0x02, 0xf8, 0xaa, 0xbb}));
     // The mempool transaction follows the forced list.
     BOOST_CHECK(payload->executionPayload.transactions[2].decoded == poolTx);
+    // F4 leftover: forced envelopes enter transactionsRoot and have no decoded
+    // form, so collectExecutableTransactions (the receipts-root leaf source)
+    // returns M < N. Pin the length split until deposit execution lands.
+    auto const executable =
+        engine_common::collectExecutableTransactions(payload->executionPayload.transactions);
+    BOOST_REQUIRE_EQUAL(payload->executionPayload.transactions.size(), 3);
+    BOOST_CHECK_EQUAL(executable.transactions.size(), 1);
+    BOOST_CHECK_NE(payload->executionPayload.transactions.size(), executable.transactions.size());
 }
 
 BOOST_AUTO_TEST_CASE(no_tx_pool_true_excludes_mempool_transactions)
@@ -1406,6 +1414,9 @@ BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
     }
     BOOST_CHECK_EQUAL(payload->executionPayload.receiptsRoot,
         bcos::ledger::mpt::computeTrieRootVarKey(expectedEntries).root);
+    BOOST_REQUIRE_EQUAL(bloomScheduler.lastReceipts.size(), 2);
+    BOOST_CHECK_EQUAL(bloomScheduler.lastReceipts[0]->transactionIndex(), 0);
+    BOOST_CHECK_EQUAL(bloomScheduler.lastReceipts[1]->transactionIndex(), 1);
 }
 
 // ---- B4: Karst method surface (forkchoiceUpdatedV3 -> getPayloadV5 -> newPayloadV4) ----
@@ -2051,5 +2062,69 @@ BOOST_AUTO_TEST_CASE(cache_miss_with_transactions_reconstructs_and_answers_synci
         static_cast<int>(PayloadValidationStatus::InvalidBlockHash));
     BOOST_REQUIRE(tamperedStatus.validationError.has_value());
     BOOST_CHECK_NE(tamperedStatus.validationError->find("blockHash"), std::string::npos);
+}
+
+/// The cache-miss reconstruction must hash under the chain fork, not the API
+/// method version. A CANCUN-built payload submitted as newPayloadV4 used to
+/// stamp requestsHash and answer INVALID_BLOCK_HASH.
+BOOST_AUTO_TEST_CASE(cache_miss_new_payload_v4_on_cancun_chain_answers_syncing)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    std::string sender("abababababababababab", 20);
+    auto poolTx = makeWeb3Tx(sender, 0);
+    memPool.add(std::vector{poolTx});
+    globalStateStorageFixture.setNonce(sender, "0");
+    auto builder = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto attributes = makePayloadAttributesV3();
+    auto result = task::syncWait(builder.updateForkchoice(forkchoiceState, &attributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(builder.getPayload(*result.payloadId, 3));
+
+    auto verifier = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
+    request.executionRequests = std::vector<bytes>{};
+    auto status = task::syncWait(verifier.newPayload(request, 4));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Syncing));
+    BOOST_CHECK(!status.validationError.has_value());
+}
+
+/// Fork transition at 100: a pre-activation block built as CANCUN, submitted
+/// under newPayloadV4 to an empty cache, must stay SYNCING.
+BOOST_AUTO_TEST_CASE(cache_miss_new_payload_v4_before_prague_fork_answers_syncing)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    writeEthExecutorConfig(globalStateStorageFixture.backendStorage, EVMC_CANCUN, true,
+        {{0, EVMC_CANCUN}, {100, EVMC_PRAGUE}});
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    std::string sender("abababababababababab", 20);
+    auto poolTx = makeWeb3Tx(sender, 0);
+    memPool.add(std::vector{poolTx});
+    globalStateStorageFixture.setNonce(sender, "0");
+    auto builder = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto attributes = makePayloadAttributesV3();
+    auto result = task::syncWait(builder.updateForkchoice(forkchoiceState, &attributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(builder.getPayload(*result.payloadId, 3));
+    BOOST_CHECK_LT(payload->executionPayload.blockNumber, 100);
+
+    auto verifier = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
+    request.executionRequests = std::vector<bytes>{};
+    auto status = task::syncWait(verifier.newPayload(request, 4));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Syncing));
+    BOOST_CHECK(!status.validationError.has_value());
 }
 BOOST_AUTO_TEST_SUITE_END()

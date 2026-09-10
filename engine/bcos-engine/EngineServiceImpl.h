@@ -132,7 +132,10 @@ bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev);
 // on them and would throw std::bad_optional_access otherwise). buildPayload guarantees the
 // precondition under the same forkVersion-derived gate; a direct caller must too.
 void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const ExecutionPayload& payload,
-    std::optional<bcos::h256> parentBeaconBlockRoot, bcos::protocol::EthBlockVersion forkVersion);
+    std::optional<bcos::h256> parentBeaconBlockRoot, bcos::protocol::EthBlockVersion forkVersion,
+    std::optional<bcos::h256> withdrawalsRoot);
+std::optional<bcos::protocol::EthBlockVersion> ethBlockVersionForBlock(
+    ledger::LedgerConfig const& ledgerConfig, bcos::protocol::BlockNumber blockNumber);
 }  // namespace detail
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
@@ -565,9 +568,32 @@ private:
 
         if (!cacheHit)
         {
-            if (auto hashError = detail::matchReconstructedEthBlockHash(
-                    m_blockFactory->blockHeaderFactory(), request.executionPayload,
-                    request.parentBeaconBlockRoot, detail::ethBlockVersionForApi(version));
+            // Hash the reconstructed header under the chain's per-block fork, not the
+            // Engine API method version: V4 on a CANCUN block must not stamp
+            // requestsHash (that answers INVALID_BLOCK_HASH for an honest payload).
+            auto view = m_globalStateStorage.get().fork();
+            ledger::LedgerConfig missLedgerConfig;
+            auto const blockNumber = request.executionPayload.blockNumber;
+            auto const parentNumber = blockNumber > 0 ? blockNumber - 1 : 0;
+            try
+            {
+                co_await ledger::getLedgerConfig(
+                    view, missLedgerConfig, parentNumber, *m_blockFactory);
+            }
+            catch (...)
+            {
+                co_return engine_common::makeStatus(
+                    PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+            }
+            auto const forkVersion = detail::ethBlockVersionForBlock(missLedgerConfig, blockNumber);
+            if (!forkVersion.has_value())
+            {
+                co_return engine_common::makeStatus(
+                    PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+            }
+            if (auto hashError =
+                    detail::matchReconstructedEthBlockHash(m_blockFactory->blockHeaderFactory(),
+                        request.executionPayload, request.parentBeaconBlockRoot, *forkVersion);
                 hashError.has_value())
             {
                 co_return engine_common::makeStatus(
@@ -1072,10 +1098,6 @@ private:
         Bloom logsBloom{};
         for (auto& receipt : receipts)
         {
-            if (!receipt)
-            {
-                BOOST_THROW_EXCEPTION(std::runtime_error{"Null receipt returned by scheduler"});
-            }
             totalGasUsed += receipt->gasUsed();
             // The v2 (pure-Ethereum) executor's receipts carry an empty logsBloom (a
             // documented limitation — evmoneReceiptToBcos does not compute it), so tolerate

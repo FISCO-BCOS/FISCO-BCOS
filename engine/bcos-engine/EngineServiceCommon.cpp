@@ -19,7 +19,7 @@
 
 #include "EngineServiceCommon.h"
 
-// Matches op-geth Engine API behavior.
+// Upstream pin: op-geth d401af16f2dd94b010a72eaef10e07ac10b31931
 // (eth/catalyst/api.go GetPayloadVn / forkchoiceUpdated, miner/payload_building.go).
 
 #include "bcos-crypto/hash/Keccak256.h"
@@ -562,43 +562,20 @@ std::optional<std::string> matchReconstructedEthBlockHash(
         header->setStateRoot(payload.stateRoot);
         header->setTxsRoot(transactionsRootFromPayload(payload));
         header->setReceiptsRoot(payload.receiptsRoot);
-        header->setLogsBloom(
-            bcos::bytesConstRef(payload.logsBloom.data(), payload.logsBloom.size()));
         header->setGasLimit(payload.gasLimit);
         header->setGasUsed(payload.gasUsed);
         header->setExtraData(payload.extraData);
         header->setPrevRandao(payload.prevRandao);
-        header->setBaseFee(payload.baseFeePerGas);
-        header->setUncleHash(engine_common::c_emptyOmmersHash);
-        header->setDifficulty(bcos::u256(0));
-        header->setNonce(engine_common::c_posNonce);
 
-        if (forkVersion >= bcos::protocol::EthBlockVersion::SHANGHAI)
-        {
-            header->setWithdrawalsRoot(
-                payload.withdrawalsRoot.value_or(withdrawalsRootFor(payload)));
-        }
-        if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN)
-        {
-            if (!payload.blobGasUsed.has_value() || !payload.excessBlobGas.has_value() ||
-                !parentBeaconBlockRoot.has_value())
-            {
-                return std::string("blockHash does not match the reconstructed block header");
-            }
-            header->setBlobGasUsed(*payload.blobGasUsed);
-            header->setExcessBlobGas(*payload.excessBlobGas);
-            header->setParentBeaconBlockRoot(*parentBeaconBlockRoot);
-        }
-        if (forkVersion >= bcos::protocol::EthBlockVersion::PRAGUE)
-        {
-            header->setRequestsHash(engine_common::c_emptyRequestsHash);
-        }
-
-        header->setEthBlockVersion(forkVersion);
-        if (auto error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header))
+        if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN &&
+            (!payload.blobGasUsed.has_value() || !payload.excessBlobGas.has_value() ||
+                !parentBeaconBlockRoot.has_value()))
         {
             return std::string("blockHash does not match the reconstructed block header");
         }
+
+        finalizeEthBlockHeader(
+            *header, payload, parentBeaconBlockRoot, forkVersion, payload.withdrawalsRoot);
         if (header->hash() != payload.blockHash)
         {
             return std::string("blockHash does not match the reconstructed block header");
@@ -637,8 +614,20 @@ bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev)
     }
 }
 
+std::optional<bcos::protocol::EthBlockVersion> ethBlockVersionForBlock(
+    ledger::LedgerConfig const& ledgerConfig, bcos::protocol::BlockNumber blockNumber)
+{
+    auto const revision = ledgerConfig.evmcRevisionForBlock(blockNumber);
+    if (!revision.has_value())
+    {
+        return std::nullopt;
+    }
+    return ethBlockVersionFor(*revision);
+}
+
 void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const ExecutionPayload& payload,
-    std::optional<bcos::h256> parentBeaconBlockRoot, bcos::protocol::EthBlockVersion forkVersion)
+    std::optional<bcos::h256> parentBeaconBlockRoot, bcos::protocol::EthBlockVersion forkVersion,
+    std::optional<bcos::h256> withdrawalsRoot)
 {
     header.setUncleHash(engine_common::c_emptyOmmersHash);
     header.setDifficulty(bcos::u256(0));
@@ -649,7 +638,7 @@ void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const Execution
 
     if (forkVersion >= bcos::protocol::EthBlockVersion::SHANGHAI)
     {
-        header.setWithdrawalsRoot(bcos::engine::detail::withdrawalsRootFor(payload));
+        header.setWithdrawalsRoot(withdrawalsRoot.value_or(withdrawalsRootFor(payload)));
     }
 
     if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN)

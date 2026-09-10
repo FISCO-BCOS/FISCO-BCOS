@@ -22,6 +22,7 @@
 #include <bcos-framework/engine/Constants.h>
 #include <bcos-framework/engine/RawTransactionDispatch.h>
 #include <bcos-framework/engine/Types.h>
+#include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/BlockHeaderFactory.h>
 #include <bcos-ledger/mpt/Constants.h>
@@ -72,30 +73,23 @@ std::optional<std::string> validateExecutionPayload(
 std::optional<std::string> compareWithBuiltPayload(
     const ExecutionPayload& submitted, const ExecutionPayload& built);
 bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev);
-/// Header fork implied by the Engine API method version (used on cache miss).
-inline bcos::protocol::EthBlockVersion ethBlockVersionForApi(std::uint32_t version)
-{
-    if (version >= static_cast<std::uint32_t>(ApiVersion::V4))
-    {
-        return bcos::protocol::EthBlockVersion::PRAGUE;
-    }
-    if (version >= static_cast<std::uint32_t>(ApiVersion::V3))
-    {
-        return bcos::protocol::EthBlockVersion::CANCUN;
-    }
-    if (version >= static_cast<std::uint32_t>(ApiVersion::V2))
-    {
-        return bcos::protocol::EthBlockVersion::SHANGHAI;
-    }
-    return bcos::protocol::EthBlockVersion::LONDON;
-}
+/// Header fork for payload @p blockNumber from the chain's per-block schedule.
+/// Missing revision is a node-local fact — callers answer SYNCING, never
+/// InvalidBlockHash (that would blame the submitted block).
+std::optional<bcos::protocol::EthBlockVersion> ethBlockVersionForBlock(
+    ledger::LedgerConfig const& ledgerConfig, bcos::protocol::BlockNumber blockNumber);
 /// Rebuild the Eth header from submitted fields and require hash == payload.blockHash.
+/// Fork-gated fields come from @p forkVersion via finalizeEthBlockHeader.
 std::optional<std::string> matchReconstructedEthBlockHash(
     const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
     const std::optional<bcos::h256>& parentBeaconBlockRoot,
     bcos::protocol::EthBlockVersion forkVersion);
+/// Stamp Eth constants and fork-gated fields, then compute the RLP hash.
+/// @p withdrawalsRoot, when set, overrides withdrawalsRootFor (cache-miss
+/// reconstruction prefers the submitted header field).
 void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const ExecutionPayload& payload,
-    std::optional<bcos::h256> parentBeaconBlockRoot, bcos::protocol::EthBlockVersion forkVersion);
+    std::optional<bcos::h256> parentBeaconBlockRoot, bcos::protocol::EthBlockVersion forkVersion,
+    std::optional<bcos::h256> withdrawalsRoot = {});
 
 inline bcos::h256 withdrawalsRootFor(const ExecutionPayload& /*payload*/)
 {

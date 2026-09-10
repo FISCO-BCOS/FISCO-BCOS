@@ -321,9 +321,29 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     }
     if (miss != NewPayloadMiss::None)
     {
+        auto view = m_globalStateStorage.fork();
+        ledger::LedgerConfig missLedgerConfig;
+        auto const blockNumber = request.executionPayload.blockNumber;
+        auto const parentNumber = blockNumber > 0 ? blockNumber - 1 : 0;
+        try
+        {
+            co_await ledger::getLedgerConfig(
+                view, missLedgerConfig, parentNumber, *m_blockFactory);
+        }
+        catch (...)
+        {
+            co_return engine_common::makeStatus(
+                PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+        }
+        auto const forkVersion = detail::ethBlockVersionForBlock(missLedgerConfig, blockNumber);
+        if (!forkVersion.has_value())
+        {
+            co_return engine_common::makeStatus(
+                PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+        }
         if (auto hashError = detail::matchReconstructedEthBlockHash(
                 m_blockFactory->blockHeaderFactory(), request.executionPayload,
-                request.parentBeaconBlockRoot, detail::ethBlockVersionForApi(version));
+                request.parentBeaconBlockRoot, *forkVersion);
             hashError.has_value())
         {
             co_return engine_common::makeStatus(
@@ -677,7 +697,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     Bloom logsBloom{};
     for (auto& receipt : receipts)
     {
-        // Null receipts were rejected by the any_of guard above the leaf encoding.
+        // Null receipts were rejected by buildHeaderCommitments above.
         totalGasUsed += receipt->gasUsed();
         if (!receipt->logsBloom().empty())
         {
