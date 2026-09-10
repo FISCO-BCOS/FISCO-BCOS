@@ -241,9 +241,10 @@ BOOST_AUTO_TEST_CASE(genesisOnlyFeatureIsRefusedByGovernance)
         });
 
     // The refusal is the feature rule, not the unknown-key rule: the key IS recognised, so a
-    // neighbouring genesis-era feature on the same channel is still settable by governance.
-    setInput = codec.encodeWithSig(
-        "setValueByKey(string,string)", std::string("feature_op_jovian"), std::string("1"));
+    // neighbouring feature on the same channel is still settable by governance. (feature_op_jovian
+    // was the control until OP forks moved to [op_fork_timestamps]; its bit 60 is now reserved.)
+    setInput = codec.encodeWithSig("setValueByKey(string,string)",
+        std::string("bugfix_eip161_1052_account_semantics"), std::string("1"));
     setParameters->m_input = bcos::ref(setInput);
     BOOST_CHECK_NO_THROW(systemConfigPrecompiled.call(executive, setParameters));
 }

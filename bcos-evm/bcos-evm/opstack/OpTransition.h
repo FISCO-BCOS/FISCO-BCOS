@@ -281,6 +281,9 @@ struct OpDepositGasLimitReached : std::runtime_error
 /// block-level error). Returns a bcos::protocol::TransactionReceipt::Ptr
 /// with the deposit_nonce/receipt_version carried via setOpStackMeta; the state diff is
 /// returned through `outStateDiff`.
+/// Deposits are exempt from the EIP-7825 per-tx gas cap that Karst's Osaka base enforces for
+/// normal transactions (docs.optimism.io/notices/upgrade-19: deposits are already capped at 20M
+/// gas total per L1 block, and rejecting on L2 a deposit L1 accepted would burn the minted ETH).
 bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateView& view,
     const evmone::state::BlockInfo& block, const evmone::state::BlockHashes& hashes,
     const DepositTx& dep, const OpForkConfig& cfg, evmc::VM& vm, uint64_t chainId,
