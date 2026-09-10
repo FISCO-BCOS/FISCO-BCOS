@@ -1092,7 +1092,7 @@ BOOST_AUTO_TEST_CASE(mirror_rejects_non_empty_withdrawals)
         std::string::npos);
 }
 
-BOOST_AUTO_TEST_CASE(mirror_forced_transactions_fail_closed)
+BOOST_AUTO_TEST_CASE(mirror_forced_transactions_enter_payload_first)
 {
     ServicePair pair;
     auto forkchoiceState = makeForkchoiceState();
@@ -1108,15 +1108,25 @@ BOOST_AUTO_TEST_CASE(mirror_forced_transactions_fail_closed)
     pair.legacyStorage.setNonce(sender, "0");
     pair.newStorage.setNonce(sender, "0");
 
-    // A forced envelope has no receipt, so the header build fails closed in both services rather
-    // than let transactionsRoot and receiptsRoot cover different sets. The forced-first ordering
-    // is observable again once deposit execution lands (follow-up), restoring N == M.
     auto attributes = makePayloadAttributesV3();
     attributes.transactions = std::vector<std::string>{"0x7e0102030405", "0x02f8aabb"};
-    BOOST_CHECK_THROW(task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &attributes, 3)),
-        bcos::engine::OpExecutionInternalError);
-    BOOST_CHECK_THROW(task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &attributes, 3)),
-        bcos::engine::OpExecutionInternalError);
+    auto legacyResult =
+        task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &attributes, 3));
+    auto newResult = task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &attributes, 3));
+    checkForkchoiceParity(legacyResult, newResult);
+    BOOST_REQUIRE(legacyResult.payloadId.has_value());
+    BOOST_REQUIRE(newResult.payloadId.has_value());
+
+    auto legacyPayload = task::syncWait(pair.legacy.getPayload(*legacyResult.payloadId, 3));
+    auto newPayload = task::syncWait(pair.fresh.getPayload(*newResult.payloadId, 3));
+    checkGetPayloadParity(*legacyPayload, *newPayload);
+    BOOST_REQUIRE_EQUAL(legacyPayload->executionPayload.transactions.size(), 3);
+    BOOST_CHECK(legacyPayload->executionPayload.transactions[0].raw ==
+                (bytes{0x7e, 0x01, 0x02, 0x03, 0x04, 0x05}));
+    BOOST_CHECK(
+        legacyPayload->executionPayload.transactions[1].raw == (bytes{0x02, 0xf8, 0xaa, 0xbb}));
+    BOOST_CHECK(legacyPayload->executionPayload.transactions[2].decoded == legacyTx);
+    BOOST_CHECK(newPayload->executionPayload.transactions[2].decoded == newTx);
 }
 
 BOOST_AUTO_TEST_CASE(mirror_no_tx_pool_excludes_mempool)
@@ -1135,15 +1145,19 @@ BOOST_AUTO_TEST_CASE(mirror_no_tx_pool_excludes_mempool)
     pair.legacyStorage.setNonce(sender, "0");
     pair.newStorage.setNonce(sender, "0");
 
-    // noTxPool=true with a forced deposit: both services fail the header build closed (the
-    // forced envelope has no receipt).
     auto attributes = makePayloadAttributesV3();
     attributes.noTxPool = true;
     attributes.transactions = std::vector<std::string>{"0x7e010203"};
-    BOOST_CHECK_THROW(task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &attributes, 3)),
-        bcos::engine::OpExecutionInternalError);
-    BOOST_CHECK_THROW(task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &attributes, 3)),
-        bcos::engine::OpExecutionInternalError);
+    auto legacyResult =
+        task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &attributes, 3));
+    auto newResult = task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &attributes, 3));
+    checkForkchoiceParity(legacyResult, newResult);
+    auto legacyPayload = task::syncWait(pair.legacy.getPayload(*legacyResult.payloadId, 3));
+    auto newPayload = task::syncWait(pair.fresh.getPayload(*newResult.payloadId, 3));
+    checkGetPayloadParity(*legacyPayload, *newPayload);
+    BOOST_REQUIRE_EQUAL(legacyPayload->executionPayload.transactions.size(), 1);
+    BOOST_CHECK(legacyPayload->executionPayload.transactions.front().raw ==
+                (bytes{0x7e, 0x01, 0x02, 0x03}));
 
     auto emptyAttributes = makePayloadAttributesV3();
     emptyAttributes.noTxPool = true;

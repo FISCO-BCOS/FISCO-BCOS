@@ -1270,19 +1270,22 @@ BOOST_AUTO_TEST_CASE(forkchoice_attributes_reject_blob_forced_transactions)
     BOOST_CHECK_EQUAL(static_cast<int>(badHexResult.payloadStatus.status),
         static_cast<int>(PayloadValidationStatus::Invalid));
 
-    // A deposit in the forced transaction list passes validation (dep-1 arrives this way), but
-    // a forced envelope has no decoded executable form and therefore no receipt, so building the
-    // header would leave transactionsRoot (every envelope) and receiptsRoot (executed subset)
-    // over different sets. The build fails closed instead of emitting that header; deposit
-    // execution restores N == M (follow-up).
+    // A deposit in the forced transaction list is admissible (dep-1 arrives this way)
+    // AND actually lands in the built payload, byte-for-byte.
     auto depositAttributes = makePayloadAttributesV3();
     depositAttributes.transactions = std::vector<std::string>{"0x7e010203"};
-    BOOST_CHECK_THROW(
-        task::syncWait(engineService.updateForkchoice(forkchoiceState, &depositAttributes, 3)),
-        bcos::engine::OpExecutionInternalError);
+    auto depositResult =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &depositAttributes, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(depositResult.payloadStatus.status),
+        static_cast<int>(PayloadValidationStatus::Valid));
+    BOOST_REQUIRE(depositResult.payloadId.has_value());
+    auto depositPayload = task::syncWait(engineService.getPayload(*depositResult.payloadId, 3));
+    BOOST_REQUIRE_EQUAL(depositPayload->executionPayload.transactions.size(), 1);
+    BOOST_CHECK(depositPayload->executionPayload.transactions.front().raw ==
+                (bytes{0x7e, 0x01, 0x02, 0x03}));
 }
 
-BOOST_AUTO_TEST_CASE(forced_transactions_fail_closed_until_deposit_execution)
+BOOST_AUTO_TEST_CASE(forced_transactions_enter_payload_first)
 {
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
@@ -1295,16 +1298,30 @@ BOOST_AUTO_TEST_CASE(forced_transactions_fail_closed_until_deposit_execution)
     globalStateStorageFixture.setNonce(sender, "0");
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
-    // Two forced envelopes (dep-1 first) plus one mempool transaction. The forced envelopes
-    // have no decoded executable form, so collectExecutableTransactions returns M < N; the header
-    // builder refuses that (transactionsRoot and receiptsRoot must cover one set) rather than emit
-    // an inconsistent header. The forced-first ordering this case used to pin is observable again
-    // once deposit execution lands (follow-up), restoring N == M.
+    // Two forced transactions (dep-1 first) plus one mempool transaction:
+    // payload order = forced list order, then pool transactions.
     auto attributes = makePayloadAttributesV3();
     attributes.transactions = std::vector<std::string>{"0x7e0102030405", "0x02f8aabb"};
-    BOOST_CHECK_THROW(
-        task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3)),
-        bcos::engine::OpExecutionInternalError);
+    auto result = task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_REQUIRE_EQUAL(payload->executionPayload.transactions.size(), 3);
+    // Forced first, in the order the attributes gave them, byte-for-byte.
+    BOOST_CHECK(payload->executionPayload.transactions[0].raw ==
+                (bytes{0x7e, 0x01, 0x02, 0x03, 0x04, 0x05}));
+    BOOST_CHECK(payload->executionPayload.transactions[0].decoded == nullptr);
+    BOOST_CHECK(payload->executionPayload.transactions[1].raw == (bytes{0x02, 0xf8, 0xaa, 0xbb}));
+    // The mempool transaction follows the forced list.
+    BOOST_CHECK(payload->executionPayload.transactions[2].decoded == poolTx);
+    // F4 leftover: forced envelopes enter transactionsRoot and have no decoded
+    // form, so collectExecutableTransactions (the receipts-root leaf source)
+    // returns M < N. Pin the length split until deposit execution lands.
+    auto const executable =
+        engine_common::collectExecutableTransactions(payload->executionPayload.transactions);
+    BOOST_REQUIRE_EQUAL(payload->executionPayload.transactions.size(), 3);
+    BOOST_CHECK_EQUAL(executable.transactions.size(), 1);
+    BOOST_CHECK_NE(payload->executionPayload.transactions.size(), executable.transactions.size());
 }
 
 BOOST_AUTO_TEST_CASE(no_tx_pool_true_excludes_mempool_transactions)
@@ -1320,17 +1337,22 @@ BOOST_AUTO_TEST_CASE(no_tx_pool_true_excludes_mempool_transactions)
     globalStateStorageFixture.setNonce(sender, "0");
     auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
-    // noTxPool=true with a forced deposit: the forced envelope has no receipt, so the header
-    // build fails closed (see forced_transactions_fail_closed_until_deposit_execution).
+    // noTxPool=true with a forced deposit: the payload contains exactly the forced
+    // list; the sealable mempool transaction must not appear and stays in the pool.
     auto attributes = makePayloadAttributesV3();
     attributes.noTxPool = true;
     attributes.transactions = std::vector<std::string>{"0x7e010203"};
-    BOOST_CHECK_THROW(
-        task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3)),
-        bcos::engine::OpExecutionInternalError);
+    auto result = task::syncWait(engineService.updateForkchoice(forkchoiceState, &attributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+    BOOST_REQUIRE_EQUAL(payload->executionPayload.transactions.size(), 1);
+    BOOST_CHECK(
+        payload->executionPayload.transactions.front().raw == (bytes{0x7e, 0x01, 0x02, 0x03}));
+    auto retained = memPool.get(std::vector{poolTx->hash()});
+    BOOST_REQUIRE_EQUAL(retained.size(), 1);
+    BOOST_CHECK(retained[0]);
 
-    // noTxPool=true with no forced transactions: an empty payload, and the sealable mempool
-    // transaction stays in the pool.
+    // noTxPool=true with no forced transactions: an empty payload.
     auto emptyAttributes = makePayloadAttributesV3();
     emptyAttributes.noTxPool = true;
     auto emptyResult =
@@ -1338,9 +1360,6 @@ BOOST_AUTO_TEST_CASE(no_tx_pool_true_excludes_mempool_transactions)
     BOOST_REQUIRE(emptyResult.payloadId.has_value());
     auto emptyPayload = task::syncWait(engineService.getPayload(*emptyResult.payloadId, 3));
     BOOST_CHECK(emptyPayload->executionPayload.transactions.empty());
-    auto retained = memPool.get(std::vector{poolTx->hash()});
-    BOOST_REQUIRE_EQUAL(retained.size(), 1);
-    BOOST_CHECK(retained[0]);
 }
 
 BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
@@ -2068,14 +2087,12 @@ BOOST_AUTO_TEST_CASE(cache_miss_with_transactions_reconstructs_and_answers_synci
     globalStateStorageFixture.setNonce(sender, "0");
     auto builder = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
-    // One sealed mempool transaction and no forced envelopes, so every envelope has a receipt
-    // (a forced envelope would fail the build closed); the reconstruction still has a non-empty
-    // body to hash.
     auto attributes = makePayloadAttributesV3();
+    attributes.transactions = std::vector<std::string>{"0x7e0102030405", "0x02f8aabb"};
     auto result = task::syncWait(builder.updateForkchoice(forkchoiceState, &attributes, 3));
     BOOST_REQUIRE(result.payloadId.has_value());
     auto payload = task::syncWait(builder.getPayload(*result.payloadId, 3));
-    BOOST_REQUIRE_EQUAL(payload->executionPayload.transactions.size(), 1);
+    BOOST_REQUIRE_EQUAL(payload->executionPayload.transactions.size(), 3);
 
     // A fresh service has an empty cache, so newPayload takes the reconstruction path.
     auto verifier = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
