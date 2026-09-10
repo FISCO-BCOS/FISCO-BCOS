@@ -45,11 +45,6 @@ public:
     constexpr static ssize_t DEFAULT_MIN_LEASE_TTL_SECONDS = 3;
     constexpr static ssize_t DEFAULT_MAX_SEAL_TIME_MS = 600000;
     constexpr static ssize_t DEFAULT_PIPELINE_SIZE = 50;
-    // Ethereum EL mode: the merge (terminal total difficulty) block — the chain's
-    // only block-based fork. Sepolia's value is the default; 0 means the chain is
-    // PoS from genesis (pure-PoS chains like Holesky).
-    constexpr static uint64_t DEFAULT_ETHEREUM_MERGE_BLOCK = 1735371;
-
     using Ptr = std::shared_ptr<NodeConfig>;
     NodeConfig();
 
@@ -258,8 +253,8 @@ public:
     uint64_t ethereumForkBpo2Time() const;
     // The merge (TTD) block number ([fork_timestamps].merge_block in config.genesis):
     // blocks below it follow PoW header rules (non-zero difficulty, ommers allowed),
-    // from it onward PoS rules. 0 = PoS from genesis. Defaults to Sepolia's 1735371
-    // when the key is absent.
+    // from it onward PoS rules. 0 = PoS from genesis. REQUIRED whenever a
+    // [fork_timestamps] section is present — there is no chain-agnostic default.
     uint64_t ethereumMergeBlock() const;
     // Optional operator-pinned finalized checkpoint ([ethereum].finalized_checkpoint in
     // config.ini, "<number>:<0xHASH>"): the committed block at `number` must carry
@@ -614,7 +609,7 @@ private:
     std::string m_ethereumBootnodesFile = "./bootnodes.json";
     std::string m_ethereumNodeKeyFile;
     uint32_t m_ethereumMaxBatchSize = 192;
-    uint64_t m_ethereumMergeBlock = DEFAULT_ETHEREUM_MERGE_BLOCK;
+    uint64_t m_ethereumMergeBlock = 0;
     std::optional<EthereumFinalizedCheckpoint> m_ethereumFinalizedCheckpoint;
     // The EL-mode chain id, validated and pinned from config.genesis's [web3] chain_id
     // (validateL2Invariants) when the genesis declares EL mode. 0 = unset: a read

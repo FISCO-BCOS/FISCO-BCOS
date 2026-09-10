@@ -1176,7 +1176,7 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     m_genesisConfig.m_ethereumELMode = false;
     m_genesisConfig.m_ethereumForkSchedule.reset();
     m_ethereumChainId = 0;  // reassigned by validateL2Invariants when EL is declared
-    m_ethereumMergeBlock = DEFAULT_ETHEREUM_MERGE_BLOCK;
+    m_ethereumMergeBlock = 0;  // reassigned by the REQUIRED merge_block key below
 
     if (auto ethSection = _genesisConfig.get_child_optional("ethereum"))
     {
@@ -1262,18 +1262,18 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     readOptionalTs("osaka_time", schedule.m_osakaTime);
     readOptionalTs("bpo1_time", schedule.m_bpo1Time);
     readOptionalTs("bpo2_time", schedule.m_bpo2Time);
-    // merge_block is OPTIONAL, defaulting to Sepolia's 1735371: the chain's only
+    // merge_block is REQUIRED like the rest of the non-tail ladder: the chain's only
     // block-based fork (terminal total difficulty) — blocks below it follow PoW
     // header rules, from it onward PoS rules. 0 = PoS from genesis (pure-PoS
-    // chains like Holesky). Not a timestamp, but it belongs to the same
-    // chain-level fork declaration and is parsed with the same strict
-    // decimal/0x-hex rules. Like the post-Prague tail it is deliberately NOT part
-    // of the genesis pin: divergence is caught by the EIP-2124 fork-id handshake,
-    // which chains the merge block into the checksum.
-    if (auto mergeBlock = section->get_optional<std::string>("merge_block"))
-    {
-        m_ethereumMergeBlock = parseTs("merge_block", *mergeBlock);
-    }
+    // chains like Holesky). It must NOT silently default: an omitted key on a
+    // non-Sepolia chain would route millions of blocks through the (deliberately
+    // permissive) PoW validation branch and announce an EIP-2124 fork-id the
+    // remote rejects, with no config error to explain either. Not a timestamp, but
+    // it belongs to the same chain-level fork declaration and is parsed with the
+    // same strict decimal/0x-hex rules. Like the post-Prague tail it is
+    // deliberately NOT part of the genesis pin: divergence is caught by the
+    // fork-id handshake, which chains the merge block into the checksum.
+    m_ethereumMergeBlock = readTs("merge_block");
     // Activation times must be non-decreasing down the fork ladder — geth rejects an
     // out-of-order schedule at startup (ChainConfig.CheckConfigForkOrder), and the
     // EIP-2124 fork-id checksum chains activations IN ORDER, so a decreasing step

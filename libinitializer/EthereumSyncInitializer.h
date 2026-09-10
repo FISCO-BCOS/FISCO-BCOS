@@ -413,8 +413,22 @@ private:
             return makeNodeKeyPair(std::move(key), path.string());
         }
         bcos::devp2p::rlpx::EccKeyPair generated;  // random keypair
+        // Create the (empty) file first and narrow its permissions BEFORE writing
+        // the key material: std::ofstream creates with 0666 & ~umask (typically
+        // 0644), so writing first would leave the private key world-readable in
+        // between.
         {
-            std::ofstream out(path);
+            std::ofstream create(path);
+            if (!create)
+            {
+                throw std::runtime_error(
+                    "EL sync: cannot persist generated node key to " + path.string());
+            }
+        }
+        std::filesystem::permissions(path, std::filesystem::perms::owner_read |
+                                               std::filesystem::perms::owner_write);
+        {
+            std::ofstream out(path, std::ios::trunc);
             if (!out)
             {
                 throw std::runtime_error(
@@ -422,8 +436,6 @@ private:
             }
             out << bcos::toHexStringWithPrefix(generated.privateKey()) << '\n';
         }
-        std::filesystem::permissions(path, std::filesystem::perms::owner_read |
-                                               std::filesystem::perms::owner_write);
         INITIALIZER_LOG(INFO) << LOG_DESC("EL sync: generated and persisted node key")
                               << LOG_KV("file", path);
         return generated;
@@ -448,10 +460,12 @@ private:
 
     /// Startup half of the finalized-checkpoint check: when the local chain already
     /// reaches past the pinned checkpoint height, the committed block there must
-    /// carry the pinned hash. Returns false (after a FATAL log) on a mismatch or an
-    /// unreadable local block; true when the checkpoint holds or the local chain has
-    /// not reached it yet — the crossing block is then checked as it downloads (see
-    /// the syncLoop callback).
+    /// carry the pinned hash. Returns false (after a FATAL log) on a mismatch; true
+    /// when the checkpoint holds or the local chain has not reached it yet — the
+    /// crossing block is then checked as it downloads (see the syncLoop callback).
+    /// A storage-level read failure (missing/archived header, backend error)
+    /// THROWS — getBlockData fails closed (NotFoundBlockHeader) rather than
+    /// returning null — and is converted to a FATAL stop by syncLoop's outer catch.
     bool verifyLocalCheckpoint(
         bcos::tool::NodeConfig::EthereumFinalizedCheckpoint const& _checkpoint) const
     {
@@ -462,15 +476,12 @@ private:
         }
         auto block = task::syncWait(ledger::getBlockData(
             *m_ledger, static_cast<int64_t>(_checkpoint.number), bcos::ledger::HEADER));
-        // The stored Tars header re-encodes to the byte-exact committed RLP (the same
-        // invariant the resume anchor relies on), so this hash IS the committed
-        // Ethereum block hash.
-        bcos::h256 localHash;
-        if (block && block->blockHeader())
-        {
-            bcos::protocol::EthBlockHeader localHeader(*block->blockHeader());
-            localHash = bcos::devp2p::sync::headerHash(localHeader.data());
-        }
+        // getBlockData throws NotFoundBlockHeader when the header row is absent, so
+        // a returned block always carries the header. The stored Tars header
+        // re-encodes to the byte-exact committed RLP (the same invariant the resume
+        // anchor relies on), so this hash IS the committed Ethereum block hash.
+        bcos::protocol::EthBlockHeader localHeader(*block->blockHeader());
+        auto const localHash = bcos::devp2p::sync::headerHash(localHeader.data());
         if (localHash != _checkpoint.hash)
         {
             INITIALIZER_LOG(FATAL)
@@ -480,9 +491,9 @@ private:
                 << LOG_KV("expectedHash", _checkpoint.hash.hex())
                 << LOG_KV("localHash", localHash.hex())
                 << LOG_KV("action",
-                    "roll the local data back below the checkpoint height (or resync from "
-                    "scratch) and verify the bootnode list / finalized_checkpoint setting, "
-                    "then restart");
+                    "no chain-rollback tool ships yet, so the only supported recovery is "
+                    "a full resync from scratch; verify the bootnode list / "
+                    "finalized_checkpoint setting, then restart");
             return false;
         }
         INITIALIZER_LOG(INFO) << LOG_DESC("EL sync: finalized checkpoint verified")
@@ -491,7 +502,28 @@ private:
         return true;
     }
 
+    /// Thread entry point. syncLoopImpl's startup section (checkpoint verification
+    /// reads the ledger) sits OUTSIDE its round-level try/catch, so an escaping
+    /// exception would reach the std::thread entry and call std::terminate,
+    /// aborting the whole node. Convert ANY escape into a FATAL log + stopped
+    /// loop instead; the round-level handlers inside syncLoopImpl are unchanged.
     void syncLoop()
+    {
+        try
+        {
+            syncLoopImpl();
+        }
+        catch (std::exception const& e)
+        {
+            INITIALIZER_LOG(FATAL)
+                << LOG_DESC("EL sync: unhandled error escaped the sync loop; stopping")
+                << LOG_KV("error", e.what())
+                << LOG_KV("diag", boost::current_exception_diagnostic_information());
+            m_running.store(false);
+        }
+    }
+
+    void syncLoopImpl()
     {
         // The verifier runs on the shared v2 scheduler + EthereumExecutor.
         using Verifier = bcos::scheduler_v1::EthereumBlockVerifier<scheduler_v1::SchedulerSerialImpl,
@@ -738,10 +770,11 @@ private:
                                 << LOG_KV("anchorNumber", mismatchAnchor)
                                 << LOG_KV("streak", mismatchStreak)
                                 << LOG_KV("action",
-                                    "automatic reorg rollback is not implemented yet: roll the "
-                                    "local data back below the anchor height (or resync from "
-                                    "scratch), verify the bootnode list / finalized_checkpoint "
-                                    "setting, then restart");
+                                    "automatic reorg rollback is not implemented yet and no "
+                                    "chain-rollback tool ships, so the only supported "
+                                    "recovery is a full resync from scratch; verify the "
+                                    "bootnode list / finalized_checkpoint setting, then "
+                                    "restart");
                             m_running.store(false);
                             return;
                         }

@@ -50,10 +50,10 @@
     ; The merge (terminal total difficulty) BLOCK NUMBER — the chain's only
     ; block-based fork. Blocks below it follow PoW header rules (non-zero
     ; difficulty, ommers allowed); from it onward PoS rules apply. It also feeds
-    ; the EIP-2124 fork-id handshake. Sepolia: 1735371 (the default when this key
-    ; is absent). merge_block=0 means the chain is PoS from genesis (pure-PoS
-    ; chains like Holesky). Non-Sepolia chains MUST set their own value here —
-    ; otherwise they silently inherit Sepolia's.
+    ; the EIP-2124 fork-id handshake. REQUIRED (no chain-agnostic default):
+    ; Sepolia: 1735371. merge_block=0 means the chain is PoS from genesis
+    ; (pure-PoS chains like Holesky). Non-Sepolia chains MUST set their own
+    ; value here.
     merge_block=1735371
     shanghai_time=1677557088
     cancun_time=1706655072
