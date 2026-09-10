@@ -2167,4 +2167,41 @@ BOOST_AUTO_TEST_CASE(normalize_receipts_assigns_transaction_and_log_index)
     BOOST_CHECK_EQUAL(first->logIndex(), 0);
     BOOST_CHECK_EQUAL(second->logIndex(), 1);
 }
+
+/// A config-read failure on the cache-miss path must surface, not be absorbed into
+/// SYNCING. The bare catch that absorbed it turned a corrupted persisted consensus
+/// parameter — whose contract is to halt loudly (InvalidEVMCRevisionConfig) — into a node
+/// that silently never syncs, with no diagnostic. SYNCING belongs to the other case, an
+/// era the node merely cannot resolve (see ethBlockVersionForBlockIsTotalForUnmappableRevision);
+/// a config it cannot parse is a different fact and must not be folded into it.
+BOOST_AUTO_TEST_CASE(cache_miss_corrupt_evmc_revision_config_surfaces_not_syncing)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    std::string sender("abababababababababab", 20);
+    auto poolTx = makeWeb3Tx(sender, 0);
+    memPool.add(std::vector{poolTx});
+    globalStateStorageFixture.setNonce(sender, "0");
+    auto builder = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto attributes = makePayloadAttributesV3();
+    auto result = task::syncWait(builder.updateForkchoice(forkchoiceState, &attributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(builder.getPayload(*result.payloadId, 3));
+
+    // Corrupt the persisted revision after boot, the way a bad governance write would:
+    // the value no longer parses, so applyEVMCRevisionConfig must refuse it.
+    writeRawSysConfig(globalStateStorageFixture.backendStorage, ledger::SYSTEM_KEY_EVMC_REVISION,
+        "not-a-revision");
+
+    auto verifier = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
+    request.executionRequests = std::vector<bytes>{};
+    BOOST_CHECK_THROW(
+        task::syncWait(verifier.newPayload(request, 4)), ledger::InvalidEVMCRevisionConfig);
+}
 BOOST_AUTO_TEST_SUITE_END()

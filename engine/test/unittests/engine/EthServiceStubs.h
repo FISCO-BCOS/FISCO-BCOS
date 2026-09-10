@@ -178,22 +178,28 @@ inline NewPayloadRequest makeNewPayloadRequestV3(ExecutionPayload const& executi
     return request;
 }
 
+/// Write a SYS_CONFIG row verbatim, so a test can persist a value the normal encoders
+/// would never produce (e.g. a corrupt evmc_revision, which the config layer is required
+/// to reject loudly rather than fall back on).
+template <class Backend>
+void writeRawSysConfig(Backend& backend, std::string_view key, std::string value)
+{
+    storage::Entry entry;
+    entry.set(bcos::storage::serialize::encode(ledger::SystemConfigEntry{std::move(value), 0}));
+    task::syncWait(storage2::writeOne(
+        backend, bcos::executor_v1::StateKey{ledger::SYS_CONFIG, key}, std::move(entry)));
+}
+
 template <class Backend>
 void writeEthExecutorConfig(Backend& backend, evmc_revision rev = EVMC_CANCUN,
     bool writeEvmcRevision = true, std::map<protocol::BlockNumber, evmc_revision> const& forks = {})
 {
-    auto writeSysConfig = [&](std::string_view key, std::string value) {
-        storage::Entry entry;
-        entry.set(bcos::storage::serialize::encode(ledger::SystemConfigEntry{std::move(value), 0}));
-        task::syncWait(storage2::writeOne(
-            backend, bcos::executor_v1::StateKey{ledger::SYS_CONFIG, key}, std::move(entry)));
-    };
-    writeSysConfig(magic_enum::enum_name(ledger::SystemConfig::executor_version),
+    writeRawSysConfig(backend, magic_enum::enum_name(ledger::SystemConfig::executor_version),
         std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
     if (writeEvmcRevision)
     {
-        writeSysConfig(
-            ledger::SYSTEM_KEY_EVMC_REVISION, ledger::encodeEVMCRevisionConfig(rev, forks));
+        writeRawSysConfig(backend, ledger::SYSTEM_KEY_EVMC_REVISION,
+            ledger::encodeEVMCRevisionConfig(rev, forks));
     }
 }
 
