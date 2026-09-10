@@ -19,7 +19,7 @@
 
 #include "EngineTracker.h"
 
-// Matches op-geth Engine API behavior.
+// Upstream pin: op-geth d401af16f2dd94b010a72eaef10e07ac10b31931
 // (eth/catalyst/api.go forkchoiceUpdated / SetSafe / SetFinalized).
 
 #include <bcos-utilities/Exceptions.h>

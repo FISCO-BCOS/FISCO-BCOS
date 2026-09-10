@@ -396,8 +396,9 @@ namespace engine = bcos::evm::engine;
 }
 
 /// Full authorizationList bind for 0x04: decode each signed tuple from the envelope and require
-/// element-wise equality with the mirror on chain_id/address/nonce/yParity/r/s. Signer recovery
-/// stays in processAuthorizationList at execution time — the mirror's signer field is not trusted.
+/// element-wise equality with the mirror on chain_id/address/nonce/yParity/r/s. The mirror's
+/// signer field is not compared: processAuthorizationList (bcos-evm/eth/Eip7702Recover.h)
+/// ignores Authorization::signer and always ecrecovers from these six bound fields.
 [[nodiscard]] inline std::optional<std::string> bindEnvelopeAuthorizationList(
     bcos::bytesConstRef listPayload, bool isList,
     std::vector<evmone::state::Authorization> const& mirror)
@@ -1626,7 +1627,10 @@ private:
         // envelopeExecutionFieldsMismatch — type byte, nonce, gasLimit, fees, to, value, data,
         // and full element-wise binds of accessList / blobVersionedHashes are fail-closed
         // (OpConsensusError) on both the scheduler and block paths. NOT bound at this head:
-        // sender (needs ecrecover) and authorizationList signers. ecrecover is part-5.
+        // sender (needs ecrecover). authorizationList signers are not carried across this
+        // boundary — processAuthorizationList ignores Authorization::signer and always
+        // ecrecovers from the six fields bindEnvelopeAuthorizationList binds. ecrecover
+        // is part-5.
         // eth_call (call=true) simulates without fee constraints — op-geth's eth_call does
         // not enforce max_gas_price >= base_fee. A pricing-less call (e.g. the RPC default
         // 2 gwei cap) would fail MAX_FEE_PER_GAS_TOO_LOW once the OP base fee exceeds it, so

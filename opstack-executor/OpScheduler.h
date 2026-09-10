@@ -361,6 +361,8 @@ public:
             }(this, std::string(contract), std::move(callback)));
     }
 
+    // `number` discarded: pending has no historical block context. See
+    // SchedulerInterface::getPendingStorageAt.
     task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(std::string_view address,
         std::string_view key, bcos::protocol::BlockNumber /*number*/) override
     {
