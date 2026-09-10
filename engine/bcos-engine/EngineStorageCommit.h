@@ -105,8 +105,11 @@ struct HeaderCommitments
     /// than being recomputed by each caller: a caller looping over `receipts` itself
     /// would silently depend on normalizeReceipts having already run, on fields that
     /// enter the block hash.
-    bcos::u256 gasUsed;
-    bcos::Bloom logsBloom;
+    /// Value-initialized: `HeaderCommitments out;` default-initializes, and an
+    /// uninitialized Bloom would start the block bloom's OR from stack garbage — which
+    /// reads as zero on one platform and not on another.
+    bcos::u256 gasUsed{};
+    bcos::Bloom logsBloom{};
 };
 
 /// Normalizes @p receipts in place via protocol::normalizeReceipts (same policy as
