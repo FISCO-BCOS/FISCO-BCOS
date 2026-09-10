@@ -31,9 +31,14 @@ namespace bcos::protocol
 ///
 /// - transactionIndex / logIndex are always written (the first log of receipt i
 ///   is numbered after all logs of receipts 0..i-1).
-/// - logsBloom is derived from logEntries when empty; a scheduler-provided bloom
-///   stays (the v2 executor leaves it empty).
-/// - cumulativeGasUsed is filled when empty; a scheduler-provided value stays.
+/// - logsBloom is derived from logEntries when empty; a producer-supplied bloom stays.
+///   Deliberately NOT recomputed unconditionally: a receipt reaching this path can carry
+///   a bloom that differs from getLogsBloom(logEntries()) — the engine's own parity tests
+///   build such a receipt, and recomputing changed both the receipts-root leaf and the
+///   block hash there. A producer that supplies a bloom is asserting something this
+///   function cannot verify, so it is trusted rather than overwritten.
+/// - cumulativeGasUsed is filled when empty; a scheduler-provided value stays (the
+///   running prefix is a scheduling decision, not a derived field).
 template <class Receipts>
 inline u256 normalizeReceipts(Receipts& receipts)
 {
