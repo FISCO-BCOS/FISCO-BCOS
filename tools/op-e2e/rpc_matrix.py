@@ -110,15 +110,23 @@ def _known_error_check(name, e):
 
 def a1_engine_surface(erpc):
     print("A.1 engine surface")
-    # Version-adaptive (08-18): the old line advertises the V4 trio; the scheduler line only
-    # V3 (FCU V4 -> -38005, docs/2026-08-18-opstack-scheduler-e2e-verification.md). Pin that a
-    # coherent trio exists at the line's version — the exact gates are covered by
-    # OpNewPayloadRpcE2eTest and a1_active's other-version loop.
+    # Accept every valid engine surface shape, not only a same-version trio:
+    #   A) same-V trio (V4 or V3) — the eth / scheduler lines
+    #      (docs/2026-08-18-opstack-scheduler-e2e-verification.md).
+    #   B) OP lane (Isthmus+): FCU stays at V3 (FCU V4 is unimplemented -> -38005) while
+    #      newPayload advances to V4 and getPayload to V4/V5 — exactly what op-geth's
+    #      OP-stack advertises and what OpEngineReviewFixTest pins. The three families are
+    #      NOT expected to agree on one version here.
     caps = erpc.call("engine_exchangeCapabilities")
-    trio = next((v for v in (4, 3)
-                 if all(f"engine_{m}V{v}" in caps
-                        for m in ["newPayload", "forkchoiceUpdated", "getPayload"])), None)
-    check(f"exchangeCapabilities has a coherent trio (V{trio or '?'})", trio is not None, str(caps))
+    same_v = next((v for v in (4, 3)
+                   if all(f"engine_{m}V{v}" in caps
+                          for m in ["newPayload", "forkchoiceUpdated", "getPayload"])), None)
+    op_lane = ("engine_forkchoiceUpdatedV3" in caps and "engine_newPayloadV4" in caps and
+               any(f"engine_getPayloadV{v}" in caps for v in (4, 5)))
+    shape = (f"V{same_v}" if same_v else
+             ("OP(FCU V3 + newPayload V4 + getPayload V4/V5)" if op_lane else None))
+    check(f"exchangeCapabilities advertises a drivable engine surface ({shape or '?'})",
+        shape is not None, str(caps))
     check("newPayload method reachable", True)
 
 
