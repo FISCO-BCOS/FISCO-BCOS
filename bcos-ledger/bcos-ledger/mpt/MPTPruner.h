@@ -741,12 +741,18 @@ private:
     /// trie stores no nodes.
     ///
     /// Node rows are fetched in BATCHES: up to WALK_READ_BATCH entries are popped per round,
-    /// each run through @p onNode IN POP ORDER (the phases' semantics stay point-for-point
-    /// identical to the serial per-node walk — Phase 1 counts every encounter, Phase 2's
-    /// try_emplace dedup sees the same sequence), and the accepted rows are fetched with ONE
+    /// each run through @p onNode in pop order, and the accepted rows are fetched with ONE
     /// storage2::readSome (rocksdb::MultiGet underneath on the production backend) instead of
-    /// a point read per node — the dominant startup-rebuild cost on a cold RocksDB. The
-    /// fail-loud contract is unchanged: a reachable row missing from the batch's results
+    /// a point read per node — the dominant startup-rebuild cost on a cold RocksDB. Batching
+    /// changes the VISIT ORDER versus the serial per-node walk (up to 64 siblings are popped
+    /// before the earlier entries' children are pushed), and both phases are correct under any
+    /// visit order: Phase 1 counts every encounter, so any order yields the same per-hash
+    /// tally, and Phase 2's try_emplace makes the visited set a reachability closure, likewise
+    /// order-independent. The same hash may be accepted several times within one round (two
+    /// accounts sharing a storage trie push the same storageRoot); duplicate keys are fetched
+    /// and decoded ONCE per round, then descended once per accepted entry, so the
+    /// per-encounter tally is preserved without relying on MultiGet's duplicate-key contract.
+    /// The fail-loud contract is unchanged: a reachable row missing from the batch's results
     /// throws the same MPTInvariantViolation.
     template <typename OnNode>
     bcos::task::Task<void> walkTrie(bcos::h256 root, bool accountTrie, OnNode&& onNode)
@@ -759,7 +765,9 @@ private:
         while (!stack.empty())
         {
             std::vector<std::pair<bcos::h256, bool>> accepted;
+            std::vector<size_t> resultIndex;  // accepted[i] -> its row's slot in keys/entries
             std::vector<bcos::executor_v1::StateKey> keys;
+            std::unordered_map<bcos::h256, size_t> dedup;  // hash -> slot, this round only
             for (size_t popped = 0; popped < WALK_READ_BATCH && !stack.empty(); ++popped)
             {
                 auto const [hash, isAccount] = stack.back();
@@ -768,10 +776,15 @@ private:
                 {
                     continue;
                 }
+                auto const [it, inserted] = dedup.try_emplace(hash, keys.size());
+                if (inserted)
+                {
+                    keys.push_back(bcos::ledger::mptNodeStateKey(hash));
+                }
                 accepted.emplace_back(hash, isAccount);
-                keys.push_back(bcos::ledger::mptNodeStateKey(hash));
+                resultIndex.push_back(it->second);
             }
-            if (keys.empty())
+            if (accepted.empty())
             {
                 continue;
             }
@@ -779,7 +792,8 @@ private:
             for (size_t i = 0; i < accepted.size(); ++i)
             {
                 auto const& [hash, isAccount] = accepted[i];
-                if (!entries[i])
+                auto const& entry = entries[resultIndex[i]];
+                if (!entry)
                 {
                     // A reachable node row missing from the committed backend violates the
                     // window guarantee the rebuild relies on — fail loud, same convention as
@@ -790,7 +804,7 @@ private:
                                                  "missing from the committed backend (hash " +
                                                  hash.abridged() + ")"));
                 }
-                auto const raw = entries[i]->get();
+                auto const raw = entry->get();
                 descend(decodeNode(bcos::bytesConstRef(
                             reinterpret_cast<bcos::byte const*>(raw.data()), raw.size())),
                     isAccount, stack);

@@ -87,8 +87,8 @@ BOOST_AUTO_TEST_CASE(storageConfigMptPruneValidation)
             bcos::tool::InvalidConfig);
     }
 
-    // mpt_prune_sweep_garbage: bool, default false (the boot only counts and reports the
-    // unreachable garbage rows).
+    // mpt_prune_sweep_garbage: bool, default false (the boot skips the garbage scan entirely
+    // and only logs a hint).
     LoaderProbe sweepDefault;
     BOOST_CHECK_NO_THROW(sweepDefault.loadStorageConfig({}));
     BOOST_CHECK(!sweepDefault.mptPruneSweepGarbage());

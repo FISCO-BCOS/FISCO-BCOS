@@ -25,7 +25,10 @@
  *          (d) a fresh pruner over the same backend (the restart path) REBUILDS the in-memory
  *              counts from the window's state roots at init and keeps deleting on new commits;
  *          (e) enabling pruning on a chain whose MPT built blocks WITHOUT a pruner needs no
- *              guard or seeding — init rebuilds over whatever history is on disk.
+ *              guard or seeding — init rebuilds over whatever history is on disk;
+ *          (f) the rebuild's batched node read (walkTrie over readSome/MultiGet) runs on the
+ *              real backend with duplicate hashes — accounts sharing one storage trie — in
+ *              the same batch, and still tallies every encounter.
  *        Deletions land synchronously inside commitBlock (coPreparePruneRows' batch), so every
  *        assertion below runs against the committed state with no worker to drain.
  */
@@ -228,6 +231,60 @@ BOOST_AUTO_TEST_CASE(midChainEnableRebuildsFromStateRoots)
             "out-of-window root of block " + std::to_string(number) + " still on disk");
     }
     BOOST_CHECK_EQUAL(pruneMetadataRowCount(backend), 0U);
+}
+
+BOOST_AUTO_TEST_CASE(batchedRebuildWithSharedStorageTrie)
+{
+    // The rebuild's batched node read (walkTrie, WALK_READ_BATCH = 64) against the PRODUCTION
+    // RocksDB backend: many accounts holding byte-identical storage tries share ONE storage
+    // root, so Phase 1 pops — and must count — that hash once per referencing account while
+    // the batch fetch reads the shared row once (in-batch key dedup; the duplicate hashes are
+    // pushed back to back and land in the same 64-entry batch by construction). The account
+    // trie alone is large enough to fill several batches.
+    FullChainFixture fixture{"mpt_pruner_batched_shared"};
+    fixture.buildGenesis(FullChainFixture::baseGenesis());
+    fixture.enableFeatureFromBlock(c_mptFlagName, 1);
+
+    constexpr int c_slots = 4;
+    std::map<h256, h256> slots;  // slot -> value, identical across all accounts
+    for (int slot = 0; slot < c_slots; ++slot)
+    {
+        slots.emplace(h256(0x100U + slot), h256(0xBEEFU + slot));
+    }
+    constexpr int c_accounts = 100;
+    std::vector<FCRowOp> rows;
+    for (int i = 1; i <= c_accounts; ++i)
+    {
+        auto const address = FullChainFixture::makeAddress(static_cast<uint8_t>(i));
+        rows.push_back(FullChainFixture::balanceRow(address, "1000"));
+        for (auto const& [slot, value] : slots)
+        {
+            rows.push_back(FullChainFixture::slotRow(address, slot, value));
+        }
+    }
+    fixture.planBlock(1, {FullChainFixture::balanceRow(FullChainFixture::makeAddress(0xA7), "1")});
+    fixture.runBlock(1);  // XOR block; blocks >= 2 are MPT blocks
+    fixture.planBlock(2, std::move(rows));
+    fixture.runBlock(2);
+
+    auto& backend = fixture.m_multiLayerStorage.latestBackend();
+    auto pruner = std::make_shared<FCPruner>(backend, c_pruneWindow);
+    // Phase 1's countWalk resolves the popped hashes through ONE readSome per 64-entry batch
+    // — rocksdb::MultiGet underneath here — with duplicate hashes inside a batch.
+    BOOST_REQUIRE_NO_THROW(
+        task::syncWait(pruner->init(2, stateRootLookup(fixture.m_ledger), /*sweepGarbage=*/false)));
+    // Every node on disk is reachable from block 2's root and counted once per referencing
+    // path: the distinct-key count equals the on-disk row count...
+    BOOST_CHECK_EQUAL(pruner->trackedCount(), fixture.backendNodeCount());
+    // ...while the shared storage root carries the full K-fold tally — the in-batch dedup
+    // must not collapse the per-encounter counting.
+    std::map<h256, bytes> oracleSlots;
+    for (auto const& [slot, value] : slots)
+    {
+        oracleSlots.emplace(slot, value.ref().toBytes());
+    }
+    auto const sharedRoot = FullChainFixture::storageTrieOracle(oracleSlots);
+    BOOST_CHECK(pruner->countOf(sharedRoot) == std::optional<uint64_t>{c_accounts});
 }
 
 BOOST_AUTO_TEST_SUITE_END()

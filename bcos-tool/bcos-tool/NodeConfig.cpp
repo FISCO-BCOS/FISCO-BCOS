@@ -1747,8 +1747,9 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
                                   "[1, 10000000], got " +
                                   std::to_string(m_mptPruneWindow)));
     }
-    // Startup garbage sweep (init Phase 3): default off — the boot only counts and reports the
-    // pre-existing unreachable "/mpt/" rows; enable to delete them (in batches) while booting.
+    // Startup garbage sweep (init Phase 3): default off — the boot skips the scan of the
+    // pre-existing unreachable "/mpt/" rows entirely (only a hint is logged); enable to delete
+    // them (in batches) while booting.
     m_mptPruneSweepGarbage = _pt.get<bool>("storage.mpt_prune_sweep_garbage", false);
     m_pdCaPath = _pt.get<std::string>("storage.pd_ssl_ca_path", "");
     m_pdCertPath = _pt.get<std::string>("storage.pd_ssl_cert_path", "");

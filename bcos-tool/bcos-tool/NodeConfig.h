@@ -130,7 +130,8 @@ public:
     // archive behavior).
     std::int64_t mptPruneWindow() const;
     // Whether the startup rebuild also DELETES the pre-existing unreachable "/mpt/" garbage it
-    // finds (init Phase 3). Default false: the garbage is only counted and reported.
+    // finds (init Phase 3). Default false: the scan is skipped entirely (only a hint is
+    // logged — counting the garbage would itself cost the full-table scan).
     bool mptPruneSweepGarbage() const;
     std::vector<std::string> const& pdAddrs() const;
     std::string const& pdCaPath() const;
@@ -501,7 +502,8 @@ private:
     // block b + mptPruneWindow commits; state roots in [head - N, head] stay fully reachable.
     std::int64_t m_mptPruneWindow = -1;  // -1 = disabled (default, archive behavior)
     // Startup garbage sweep (init Phase 3): delete pre-existing unreachable "/mpt/" rows while
-    // booting. Default off — the boot then only counts and reports the garbage.
+    // booting. Default off — the boot skips the scan entirely and only logs a hint (counting
+    // the garbage would itself cost the full-table scan).
     bool m_mptPruneSweepGarbage = false;
 
     bool m_enableArchive = false;
