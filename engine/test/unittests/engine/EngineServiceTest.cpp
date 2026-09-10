@@ -47,6 +47,7 @@
 #include <algorithm>
 #include <atomic>
 #include <future>
+#include <stdexcept>
 #include <thread>
 
 using namespace bcos;
@@ -1929,6 +1930,45 @@ BOOST_AUTO_TEST_CASE(matchReconstructedEthBlockHashThrowsOnNodeLocalFault)
     BOOST_CHECK_THROW(bcos::engine::detail::matchReconstructedEthBlockHash(/*factory=*/nullptr,
                           payload, std::nullopt, bcos::protocol::EthBlockVersion::LONDON),
         bcos::engine::OpExecutionInternalError);
+}
+
+/// Negative control for the round-3 F2 fix (kyonRay round-4 F4). The null-factory case above
+/// exercises the `if (!factory)` guard, which sits ABOVE the try — reverting the catch narrowing
+/// to catch(...) leaves it green. This one throws a non-OpExecutionInternalError from inside the
+/// reconstruction (`header->setTxsRoot(...)`), so it pins the narrowing and the reconstruction
+/// being outside the try: if either regresses, the fault is folded into the InvalidBlockHash
+/// mismatch string and the BOOST_CHECK_THROW fails.
+namespace
+{
+struct ThrowingTxsRootHeader : bcostars::protocol::BlockHeaderImpl
+{
+    void setTxsRoot(bcos::crypto::HashType) override
+    {
+        throw std::runtime_error("header setTxsRoot fault");
+    }
+};
+struct ThrowingTxsRootHeaderFactory : bcostars::protocol::BlockHeaderFactoryImpl
+{
+    // Inherit the (CryptoSuite::Ptr) constructor.
+    using bcostars::protocol::BlockHeaderFactoryImpl::BlockHeaderFactoryImpl;
+    bcos::protocol::BlockHeader::Ptr createBlockHeader() override
+    {
+        return std::make_shared<ThrowingTxsRootHeader>();
+    }
+};
+}  // namespace
+
+BOOST_AUTO_TEST_CASE(matchReconstructedEthBlockHashPropagatesReconstructionFault)
+{
+    auto factory =
+        std::make_shared<ThrowingTxsRootHeaderFactory>(bcos::test::createNormalCryptoSuite());
+    bcos::engine::ExecutionPayload payload;
+    payload.blockNumber = 1;
+    // No transactions needed: transactionsRootFromPayload maps an empty list to the empty-trie
+    // root, then the throwing setTxsRoot drives the fault.
+    BOOST_CHECK_THROW(bcos::engine::detail::matchReconstructedEthBlockHash(
+                          factory, payload, std::nullopt, bcos::protocol::EthBlockVersion::LONDON),
+        std::runtime_error);
 }
 
 BOOST_AUTO_TEST_CASE(finalizeEthBlockHeaderFillsEthFieldsAndHash)
