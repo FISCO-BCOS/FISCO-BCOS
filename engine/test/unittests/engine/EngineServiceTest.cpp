@@ -157,21 +157,25 @@ struct BloomScheduler
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
         const protocol::BlockHeader&, ::ranges::input_range auto&&, const ledger::LedgerConfig&)
     {
-        Bloom bloom1{};
-        bloom1[255] = static_cast<bcos::byte>(0x01);
-        Bloom bloom2{};
-        bloom2[255] = static_cast<bcos::byte>(0x02);
-
+        // Production shape: a receipt's logs and its bloom come from one execution, so the bloom
+        // is derived from the logs here rather than fabricated. normalizeReceipts recomputes it
+        // unconditionally (logsBloom is a pure function of logEntries), so a fabricated bloom with
+        // no logs — a shape no producer in this tree emits — would simply be overwritten.
+        auto makeReceipt = [](bcos::byte addressByte, std::string cumulativeGasUsed) {
+            auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+            receipt->setLogEntries(
+                {protocol::LogEntry(bytes(20, addressByte), h256s{h256{}}, bytes{})});
+            auto const bloom = bcos::getLogsBloom(receipt->logEntries());
+            receipt->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
+            // Real executor receipts carry a cumulative gas value (BaselineScheduler stores it as a
+            // decimal string); the receipts-root leaf commits to it, so the stub must too.
+            receipt->setCumulativeGasUsed(std::move(cumulativeGasUsed));
+            return receipt;
+        };
+        auto receipt1 = makeReceipt(0x11, "21000");
+        auto receipt2 = makeReceipt(0x22, "42000");
         Keccak256 hasher;
-        auto receipt1 = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
-        receipt1->setLogsBloom({bloom1.data(), bloom1.size()});
-        // Real executor receipts carry a cumulative gas value (BaselineScheduler stores it as a
-        // decimal string); the receipts-root leaf commits to it, so the stub must too.
-        receipt1->setCumulativeGasUsed("21000");
         receipt1->calculateHash(hasher);
-        auto receipt2 = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
-        receipt2->setLogsBloom({bloom2.data(), bloom2.size()});
-        receipt2->setCumulativeGasUsed("42000");
         receipt2->calculateHash(hasher);
 
         lastReceipts = {receipt1, receipt2};
@@ -1387,22 +1391,41 @@ BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
 
     auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 2));
 
-    // Verify bloom aggregation: bloom1[255]=0x01 | bloom2[255]=0x02 = 0x03
-    BOOST_CHECK_EQUAL(static_cast<int>(payload->executionPayload.logsBloom[255]), 0x03);
-    // Other bytes remain zero (only the last byte was set in both blooms)
-    for (size_t i = 0; i < 255; ++i)
+    // Bloom aggregation: the block bloom is the OR of the receipts' blooms. Both receipts carry a
+    // real log, so each bloom is non-empty and they differ — which is what makes the OR a test
+    // rather than a tautology. Derived from the receipts instead of a literal because the bloom is
+    // now recomputed from logEntries, so a hand-picked constant no longer describes any input.
+    BOOST_REQUIRE_EQUAL(bloomScheduler.lastReceipts.size(), 2);
+    bcos::Bloom expectedBloom{};
+    for (auto const& receipt : bloomScheduler.lastReceipts)
     {
-        BOOST_CHECK_EQUAL(static_cast<int>(payload->executionPayload.logsBloom[i]), 0);
+        BOOST_REQUIRE_EQUAL(receipt->logsBloom().size(), expectedBloom.size());
+        bcos::orBloom(expectedBloom, receipt->logsBloom());
+    }
+    // Boost.Test cannot stream Bloom / bytesConstRef, so both properties are reduced to bools.
+    auto const& bloom0 = bloomScheduler.lastReceipts[0]->logsBloom();
+    auto const& bloom1 = bloomScheduler.lastReceipts[1]->logsBloom();
+    bool const bloomsDiffer =
+        std::memcmp(bloom0.data(), bloom1.data(), std::min(bloom0.size(), bloom1.size())) != 0;
+    BOOST_CHECK(bloomsDiffer);
+    bool const bloomNonZero = std::any_of(
+        expectedBloom.begin(), expectedBloom.end(), [](bcos::byte byte) { return byte != 0; });
+    BOOST_CHECK(bloomNonZero);
+    for (size_t i = 0; i < expectedBloom.size(); ++i)
+    {
+        BOOST_CHECK_EQUAL(static_cast<int>(payload->executionPayload.logsBloom[i]),
+            static_cast<int>(expectedBloom[i]));
     }
 
     // receiptsRoot is the Ethereum index-keyed MPT over the RLP receipt leaves (op-geth
     // Receipts.EncodeIndex), not a FISCO Merkle fold over receipt hashes: the two stub receipts
-    // carry cumulative gas 21000/42000, these blooms, status success and no logs, under two
-    // type-2 transactions. The literal is anchored to the shared implementation that
-    // OpReceiptEncodeTest pins against evmone's encoder and EthTrieRootsTest pins against the
-    // Python MPT reference, so this case only pins that the engine path uses it.
+    // carry cumulative gas 21000/42000, one log each (address 0x11…/0x22…, no topics, no data),
+    // the bloom derived from those logs, and status success, under two type-2 transactions. The
+    // literal is anchored to the shared implementation that OpReceiptEncodeTest pins against
+    // evmone's encoder and EthTrieRootsTest pins against the Python MPT reference, so this case
+    // only pins that the engine path uses it.
     BOOST_CHECK_EQUAL(payload->executionPayload.receiptsRoot.hex(),
-        "456c66268a43485758d636e9be4fdda036bf446ff274df67e4f83f6ca7096ac7");
+        "857df1e535d83ef7621941de9a85049cf9c8b1030525c78f23d808bc487b457f");
 
     // Differential against the OP path's var-key trie builder: same leaves, different root
     // function, so an engine/OP drift on key ordering or leaf handling fails here.

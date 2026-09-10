@@ -150,12 +150,9 @@ HeaderCommitments buildHeaderCommitments(PayloadTransactions const& payloadTrans
     for (auto const& receipt : receipts)
     {
         out.gasUsed += receipt->gasUsed();
-        // Guard retained: normalizeReceipts fills a bloom only when empty, so a v2-executor
-        // receipt can still arrive with none, and orBloom reads 256 bytes unconditionally.
-        if (!receipt->logsBloom().empty())
-        {
-            bcos::orBloom(out.logsBloom, receipt->logsBloom());
-        }
+        // No empty-bloom guard: normalizeReceipts recomputed every bloom from logEntries, so
+        // each is the full 256 bytes orBloom reads.
+        bcos::orBloom(out.logsBloom, receipt->logsBloom());
     }
 
     if (receipts.size() != types.size())
