@@ -42,6 +42,7 @@
 #include <bcos-framework/engine/EngineService.h>
 #include <bcos-framework/engine/Errors.h>
 #include <bcos-framework/engine/OpBaseFee.h>
+#include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
@@ -417,9 +418,11 @@ using EngineOpSchedulerBase = bcos::evm::engine::OpSchedulerSeam<ViewType>;
 struct EngineOpScheduler : EngineOpSchedulerBase
 {
     using EngineOpSchedulerBase::EngineOpSchedulerBase;
-    [[nodiscard]] bcos::bytes synthesizeL1AttributesEnvelope() const
+    [[nodiscard]] bcos::bytes synthesizeL1AttributesEnvelope(
+        int64_t l2InternalTimestampMs, int64_t parentInternalTimestampMs) const
     {
-        return bcos::evm::engine::testutil::synthesizeL1AttributesEnvelope(isJovianActive());
+        return bcos::evm::engine::testutil::synthesizeL1AttributesEnvelope(
+            isJovianActive(l2InternalTimestampMs) && isJovianActive(parentInternalTimestampMs));
     }
 };
 using EthLegacyEngine =
@@ -626,14 +629,18 @@ struct OpServicePair
     StubMemPool memPool;
     StubExecutor executor;
     bcos::protocol::BlockFactory::Ptr blockFactory{makeBlockFactory()};
-    EngineOpScheduler scheduler{bcos::evm::opstack::OpForkFlags{}, {}};
+    /// Declared before `service` so the reference handed to OpEngine is already alive.
+    /// Default schedule = nothing scheduled, i.e. every block is on the Isthmus baseline.
+    EngineOpScheduler scheduler;
     bcos::scheduler::SchedulerInterface::Ptr delegate;
     OpEngine service;
 
     explicit OpServicePair(bool allowSynthesizedL1Attributes = false,
         bcos::scheduler::SchedulerInterface::Ptr delegateIn = nullptr,
-        std::shared_ptr<bcos::engine::DACaps> daCapsIn = nullptr)
-      : delegate(std::move(delegateIn)),
+        std::shared_ptr<bcos::engine::DACaps> daCapsIn = nullptr,
+        bcos::ledger::OpForkSchedule forkSchedule = {})
+      : scheduler(forkSchedule, {}),
+        delegate(std::move(delegateIn)),
         service(memPool, storage, scheduler, blockFactory, bcos::engine::c_defaultBlockTxCountLimit,
             delegate, std::move(daCapsIn), allowSynthesizedL1Attributes)
     {}
@@ -652,8 +659,8 @@ struct SharedForkchoicePair
     StubExecutor legacyExecutor;
     StubExecutor opExecutor;
     bcos::protocol::BlockFactory::Ptr blockFactory{makeBlockFactory()};
-    EngineOpScheduler legacyScheduler{bcos::evm::opstack::OpForkFlags{}, {}};
-    EngineOpScheduler opScheduler{bcos::evm::opstack::OpForkFlags{}, {}};
+    EngineOpScheduler legacyScheduler{bcos::ledger::OpForkSchedule{}, {}};
+    EngineOpScheduler opScheduler{bcos::ledger::OpForkSchedule{}, {}};
     EthLegacyEngine legacy;
     OpEngine op;
 
@@ -1602,9 +1609,6 @@ BOOST_AUTO_TEST_CASE(op_newpayload_missing_executed_withdrawals_root_is_internal
         bcos::engine::OpExecutionInternalError);
 }
 
-/// getPayloadV4/V5 (the advertised capability set) serve the built payload through the
-/// service, not just V3: the V4+ shape gate requires withdrawalsRoot and the response
-/// embeds the full V3 field set unchanged.
 /// mapDelegateError's routing is the load-bearing half of the delegate-concurrency
 /// rationale: a commitBlock whose pending was dropped by a concurrent reset
 /// carries the bcos::engine::OpPendingDropped tag ("Unexpected empty results!", OpScheduler.h) —
@@ -1832,7 +1836,16 @@ BOOST_AUTO_TEST_CASE(op_reset_failure_is_internal_error)
         bcos::engine::OpExecutionInternalError);
 }
 
-BOOST_AUTO_TEST_CASE(op_getpayload_v4_v5_serve_the_built_payload)
+/// getPayload's method version and the built payload's fork must agree (execution-apis
+/// prague.md / osaka.md): V4 serves a pre-Karst payload and answers -38005 for a Karst one,
+/// V5 the other way round. V3 keeps serving both — its window predates the OP lane.
+///
+/// The Karst arm crosses the fork inside one block on purpose: the schedule activates Jovian
+/// and Karst at the CHILD's second, so the parent (one second earlier, with a 9-byte Holocene
+/// extraData) is still pre-Jovian for base-fee purposes while the payload being built is
+/// Karst. That is exactly the keying op-geth and op-node use — CalcBaseFee on parent.Time,
+/// the attributes and the payload on the child's.
+BOOST_AUTO_TEST_CASE(op_getpayload_v4_serves_a_pre_karst_payload)
 {
     auto delegate = std::make_shared<RecordingScheduler>();
     delegate->failFirst = false;
@@ -1853,15 +1866,58 @@ BOOST_AUTO_TEST_CASE(op_getpayload_v4_v5_serve_the_built_payload)
     auto v3 = bcos::task::syncWait(pair.service.getPayload(*built.payloadId, 3));
     BOOST_REQUIRE(v3);
 
-    for (std::uint32_t version : {4U, 5U})
-    {
-        auto response = bcos::task::syncWait(pair.service.getPayload(*built.payloadId, version));
-        BOOST_REQUIRE(response);
-        BOOST_REQUIRE(response->executionPayload.withdrawalsRoot.has_value());
-        BOOST_CHECK_EQUAL(response->executionPayload.withdrawalsRoot->hex(),
-            delegate->executedWithdrawalsRoot.hex());
-        checkSameExecutionPayload(v3->executionPayload, response->executionPayload);
-    }
+    auto response = bcos::task::syncWait(pair.service.getPayload(*built.payloadId, 4));
+    BOOST_REQUIRE(response);
+    BOOST_REQUIRE(response->executionPayload.withdrawalsRoot.has_value());
+    BOOST_CHECK_EQUAL(
+        response->executionPayload.withdrawalsRoot->hex(), delegate->executedWithdrawalsRoot.hex());
+    checkSameExecutionPayload(v3->executionPayload, response->executionPayload);
+
+    // V5 is the Osaka/Karst method; this payload is not Karst.
+    BOOST_CHECK_EXCEPTION(bcos::task::syncWait(pair.service.getPayload(*built.payloadId, 5)),
+        bcos::engine::UnsupportedFork, [](bcos::engine::UnsupportedFork const& e) {
+            auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
+            return comment != nullptr &&
+                   comment->find("engine_getPayloadV5 requires a Karst payload") !=
+                       std::string::npos;
+        });
+}
+
+BOOST_AUTO_TEST_CASE(op_getpayload_v5_serves_a_karst_payload)
+{
+    auto delegate = std::make_shared<RecordingScheduler>();
+    delegate->failFirst = false;
+    // Jovian and Karst both activate at the child block's second (1'700'000'000).
+    OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate, nullptr,
+        bcos::ledger::OpForkSchedule{.m_jovianTime = 1'700'000'000, .m_karstTime = 1'700'000'000});
+    delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+
+    auto decoded = makeDecodableWeb3Tx(1);
+    // minBaseFee stays set: the attributes are validated against the CHILD's time, which is
+    // Jovian here (makeOpPayloadAttributes' timestamp is 1'700'000'000'000 ms).
+    auto attrs = makeOpPayloadAttributes();
+    attrs.transactions = std::vector<std::string>{decoded.rawHex};
+    auto const hash =
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+    registerVerifiedBlock(pair.storage, hash, 0);
+    registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+    auto built = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+    BOOST_REQUIRE(built.payloadId.has_value());
+
+    auto response = bcos::task::syncWait(pair.service.getPayload(*built.payloadId, 5));
+    BOOST_REQUIRE(response);
+    BOOST_REQUIRE(response->executionRequests.has_value());
+    BOOST_CHECK(response->executionRequests->empty());
+
+    // V4 is the pre-Osaka method; this payload is Karst.
+    BOOST_CHECK_EXCEPTION(bcos::task::syncWait(pair.service.getPayload(*built.payloadId, 4)),
+        bcos::engine::UnsupportedFork, [](bcos::engine::UnsupportedFork const& e) {
+            auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
+            return comment != nullptr &&
+                   comment->find("a Karst payload requires engine_getPayloadV5") !=
+                       std::string::npos;
+        });
 }
 
 /// The OP lane's FCU window is exactly V1-V3 (the caps list advertises no

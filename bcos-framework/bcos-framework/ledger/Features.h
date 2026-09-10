@@ -124,13 +124,18 @@ public:
         // bugfix_statestorage_hash_v3_17 it occupies on release-3.17.0: inserting it there would
         // renumber every feature_ flag after it and silently move their on-chain bits.
         bugfix_nonce_ordering = 59,  // web3 EOA nonce must be independent of intra-block tx order
-        feature_op_jovian = 60,      // OP-Stack: Jovian fork semantics (DA footprint in
-                                     // header.BlobGasUsed, operator fee ×100 formula, 17B Jovian
-                                     // extraData). OFF → Isthmus semantics. Replaces the former
-                                     // chain.jovian_time timestamp threshold (FISCO has no
-                                     // timestamp-based fork activation); read at startup from
-                                     // genesis [features], same channel as
-                                     // feature_l2_ethereum_compat.
+        // RESERVED, never reuse. Bit 60 was feature_op_jovian on release-3.18.0 (introduced by
+        // 63e131920), which selected OP-Stack Jovian semantics chain-wide. The OP lane now
+        // activates forks by L2 block timestamp from the genesis [op_fork_timestamps] schedule
+        // (ledger::OpForkSchedule, bcos::evm::opstack::configAt), so nothing reads this bit any
+        // more. It stays declared because the value is persisted on-chain and the rule above is
+        // "never delete a flag's number": #5571 has since numbered
+        // bugfix_eip161_1052_account_semantics at 61 on top of it, so deleting 60 would renumber
+        // that flag and every later one on chains where the bits are already written —
+        // reclaiming 60 is no longer on the table. It is deliberately NOT named feature_op_jovian
+        // — Features::string2Flag must keep REJECTING that name so a genesis still carrying
+        // `feature_op_jovian=true` fails loudly at load instead of silently enabling nothing.
+        reserved_removed_op_jovian = 60,
         bugfix_eip161_1052_account_semantics = 61,  // #5371/#5372: v1 executor answers
                                                     // account_exists per EIP-161 (empty == absent)
                                                     // and EXTCODEHASH per EIP-1052: the chain
@@ -143,16 +148,19 @@ public:
     // magic_enum's default reflection range [-128,127] is caught at compile time.
     // Values must stay CONTIGUOUS from zero: m_flags indexes by value order,
     // toFlagsNumber packs bit = enum value — a gap desyncs the two encodings.
-    // (A contiguity static_assert is deliberately omitted: magic_enum only reflects
-    // contiguous values by default, so `enum_max == enum_count - 1` is a tautology
-    // and cannot catch gaps. The contiguous-from-zero rule is enforced by code review
-    // and the comment on Flag above — the two range asserts catch the other failure
-    // mode: a new flag pushed past magic_enum's reflection boundary.)
     static_assert(magic_enum::enum_contains(Flag::bugfix_eip161_1052_account_semantics),
         "newest Flag fell outside magic_enum's reflection range — check enum values");
     static_assert(magic_enum::enum_integer(
                       magic_enum::enum_value<Flag>(magic_enum::enum_count<Flag>() - 1)) <= 127,
         "max Flag value exceeds 127; bitset encoding (bit = enum value) requires values 0..127.");
+    // enum_count is the number of DECLARED enumerators, not the span of the value range —
+    // magic_enum reflects sparse enums too — so this equality is not a tautology: it holds
+    // exactly when the values run 0,1,...,count-1 and fails on the first gap.
+    static_assert(magic_enum::enum_integer(
+                      magic_enum::enum_value<Flag>(magic_enum::enum_count<Flag>() - 1)) ==
+                      static_cast<int>(magic_enum::enum_count<Flag>()) - 1,
+        "Flag values must be contiguous from zero: m_flags indexes by declaration position while "
+        "toFlagsNumber packs bit = enum value; a gap desyncs the two encodings.");
 
 private:
     std::bitset<magic_enum::enum_count<Flag>()> m_flags;
