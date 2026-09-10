@@ -19,6 +19,7 @@
 
 #include "bcos-tx-validator/TxValidator.h"
 #include "bcos-framework/engine/RawTransactionDispatch.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-framework/protocol/Protocol.h"
@@ -192,6 +193,10 @@ struct ChainView
 {
     /// const: LedgerConfigState hands out a snapshot nobody may mutate.
     std::shared_ptr<const ledger::LedgerConfig> config;
+    /// The three fields below are derived only when the check set contains a reader of them
+    /// (c_revisionDependent, c_baseFeeDependent, Check::ChainId); otherwise each keeps the value
+    /// that already means "nothing to say".
+    ///
     /// nullopt = the chain declares no EVM revision; revision-dependent checks stand down rather
     /// than guess, because admission must never be STRICTER than execution.
     std::optional<evmc_revision> revision;
@@ -338,6 +343,30 @@ TransactionStatus checkBcosGroupChainId(Envelope const& in)
     if (in.tx.chainId() != in.chainId) [[unlikely]]
     {
         return TransactionStatus::InvalidChainId;
+    }
+    return TransactionStatus::None;
+}
+
+TransactionStatus checkBcosTxAllowedOnChain(StateInputs const& in)
+{
+    // An OP-Stack L2 carries EIP-2718 envelopes only. A BCOSTransaction has none, so op-reth
+    // cannot re-derive it and rejects the whole block that carries it -- one native transaction
+    // in one block stalls the whole L2. Refuse it here instead of sealing a block the verifier
+    // throws away.
+    //
+    // The flag comes from the same snapshot every other state check reads, so this follows
+    // whatever the chain last published. It cannot change under a running pool: the flag is
+    // genesis-only, and Features::validate rejects it on the governance setSystemConfig path
+    // (bcos-framework/ledger/Features.cpp). That closes what would otherwise be a hole here --
+    // transactions already admitted are not re-judged at seal time (MemoryStorage re-checks the
+    // ledger nonce alone), so a mid-chain flip would leave native transactions in the pool
+    // eligible for a proposal. The rest of the tree makes the same genesis-time assumption
+    // (OpScheduler.h; NodeConfig::validateL2Invariants, which validates the flag against the
+    // genesis alloc; scheduler_v1::validateMPTFlagMatrix, which refuses to boot when its
+    // activation block is not 0).
+    if (in.chain.config->features().get(ledger::Features::Flag::feature_l2_ethereum_compat))
+    {
+        return TransactionStatus::BcosTxNotAllowed;
     }
     return TransactionStatus::None;
 }
@@ -636,6 +665,7 @@ constexpr std::array<CheckEntry<Envelope>, c_gateOrder.size()> c_gateRegistry{{
 }};
 
 constexpr std::array<CheckEntry<StateInputs>, c_stateOrder.size()> c_stateRegistry{{
+    {Check::BcosTxAllowedOnChain, &checkBcosTxAllowedOnChain},
     {Check::TypeByRevision, &checkTypeByRevision},
     {Check::SetCodeHasTo, &checkSetCodeHasTo},
     {Check::AuthListNonEmpty, &checkAuthListNonEmpty},
@@ -716,11 +746,16 @@ u256 parseBalance(std::string_view raw)
     }
 }
 
-/// The state stage's inputs, taken once: a pointer copy and two field conversions. Whoever
-/// commits a block republishes the configuration, and nothing here goes to storage. Throws
-/// (never returns a status) on a snapshot that cannot be used -- infrastructure, not a defect in
-/// the transaction, and reported so that it cannot masquerade as a rejected transaction.
-ChainView readChainView(ledger::LedgerConfigState const& configState)
+/// The state stage's inputs, taken once: a pointer copy and the fields @p checks actually reads.
+/// Whoever commits a block republishes the configuration, and nothing here goes to storage.
+/// Throws (never returns a status) on a snapshot that cannot be used -- infrastructure, not a
+/// defect in the transaction, and reported so that it cannot masquerade as a rejected
+/// transaction.
+///
+/// Per-field, keyed on @p checks, for the same reason verify() reads the account only for
+/// c_accountStateDependent: deriving a value nothing in the set will read is work at best and a
+/// failure at worst. tx_gas_price is the "at worst" -- see c_baseFeeDependent.
+ChainView readChainView(ledger::LedgerConfigState const& configState, Check checks)
 {
     ChainView view;
     view.config = configState.get();
@@ -730,14 +765,23 @@ ChainView readChainView(ledger::LedgerConfigState const& configState)
         // corrupted.
         BOOST_THROW_EXCEPTION(std::runtime_error("admission: ledger config state returned null"));
     }
-    // Judged against the block it would execute in, which is the next one.
-    view.revision = view.config->evmcRevisionForBlock(view.config->blockNumber() + 1);
-    // The raw SYS_CONFIG string: "0x0" by default, hex as SystemConfigPrecompiled enforces. A
-    // value u256 cannot parse throws here, as it did when the checks parsed it themselves.
-    view.baseFee = u256(std::get<0>(view.config->gasPrice()));
-    if (auto const& chainId = view.config->chainId())
+    if ((checks & c_revisionDependent) != Check::None)
     {
-        view.web3ChainId = fromBigEndian<u256>(chainId->bytes);
+        // Judged against the block it would execute in, which is the next one.
+        view.revision = view.config->evmcRevisionForBlock(view.config->blockNumber() + 1);
+    }
+    if ((checks & c_baseFeeDependent) != Check::None)
+    {
+        // The raw SYS_CONFIG string: "0x0" by default, hex as SystemConfigPrecompiled enforces. A
+        // value u256 cannot parse throws here, as it did when the checks parsed it themselves.
+        view.baseFee = u256(std::get<0>(view.config->gasPrice()));
+    }
+    if (contains(checks, Check::ChainId))
+    {
+        if (auto const& chainId = view.config->chainId())
+        {
+            view.web3ChainId = fromBigEndian<u256>(chainId->bytes);
+        }
     }
     return view;
 }
@@ -861,7 +905,7 @@ task::Task<TransactionStatus> TxValidator::verify(
     // extra member keys on the sender address without reading anything.
     if ((checks & c_stateStage) != Check::None)
     {
-        auto const chain = readChainView(*m_ledgerConfigState);
+        auto const chain = readChainView(*m_ledgerConfigState, checks);
         std::optional<AccountState> sender;
         if ((checks & c_accountStateDependent) != Check::None)
         {

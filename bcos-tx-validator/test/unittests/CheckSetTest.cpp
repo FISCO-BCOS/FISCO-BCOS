@@ -42,9 +42,10 @@ BOOST_AUTO_TEST_SUITE(CheckSetTest)
 // says so.
 BOOST_AUTO_TEST_CASE(poolAdmissionColumnIsExact)
 {
-    BOOST_CHECK(checkSet(TxKind::Bcos, AdmissionContext::PoolAdmission) ==
-                (Check::TypeGate | Check::ToFieldFormat | Check::Signature |
-                    Check::BcosGroupChainId | Check::BcosPoolNonce | Check::BcosLedgerNonce));
+    BOOST_CHECK(
+        checkSet(TxKind::Bcos, AdmissionContext::PoolAdmission) ==
+        (Check::TypeGate | Check::ToFieldFormat | Check::Signature | Check::BcosGroupChainId |
+            Check::BcosTxAllowedOnChain | Check::BcosPoolNonce | Check::BcosLedgerNonce));
 
     constexpr auto legacy = Check::TypeGate | Check::ToFieldFormat | Check::Signature |
                             Check::MaxGasLimit | Check::FeeCapVsBaseFee | Check::ChainId |
@@ -210,12 +211,14 @@ BOOST_AUTO_TEST_CASE(stagesPartitionTheEvaluationOrder)
     BOOST_CHECK(contains(c_senderDependent, Check::Web3PoolNonce));
     BOOST_CHECK(!contains(c_accountStateDependent, Check::Web3PoolNonce));
     BOOST_CHECK((c_senderDependent & ~(c_stateStage | c_poolStage)) == Check::None);
-    // A BCOS transaction has no state-stage check in any context, so it never reads the chain;
-    // a Web3 proposal has state-stage checks but no sender-dependent one, so it reads the chain
-    // view and not the account.
+    // A BCOS transaction's only state-stage check is BcosTxAllowedOnChain, so it reads the chain
+    // view and never the account; a Web3 proposal has state-stage checks but no sender-dependent
+    // one, so it too reads the chain view and not the account.
     for (auto context : kContexts)
     {
-        BOOST_CHECK((checkSet(TxKind::Bcos, context) & c_stateStage) == Check::None);
+        BOOST_CHECK(
+            (checkSet(TxKind::Bcos, context) & c_stateStage) == Check::BcosTxAllowedOnChain);
+        BOOST_CHECK((checkSet(TxKind::Bcos, context) & c_senderDependent) == Check::None);
     }
     const auto proposal = checkSet(TxKind::Web3DynamicFee, AdmissionContext::ProposalVerification);
     BOOST_CHECK((proposal & c_stateStage) != Check::None);
@@ -276,8 +279,9 @@ BOOST_AUTO_TEST_CASE(proposalVerificationKeepsProtocolInvariants)
         return checkSet(kind, AdmissionContext::ProposalVerification);
     };
     BOOST_CHECK(
-        proposal(TxKind::Bcos) == (Check::TypeGate | Check::ToFieldFormat | Check::Signature |
-                                      Check::BcosGroupChainId | Check::BcosLedgerNonce));
+        proposal(TxKind::Bcos) ==
+        (Check::TypeGate | Check::ToFieldFormat | Check::Signature | Check::BcosGroupChainId |
+            Check::BcosTxAllowedOnChain | Check::BcosLedgerNonce));
 
     constexpr auto legacy = Check::TypeGate | Check::ToFieldFormat | Check::Signature |
                             Check::MaxGasLimit | Check::FeeCapVsBaseFee | Check::ChainId |

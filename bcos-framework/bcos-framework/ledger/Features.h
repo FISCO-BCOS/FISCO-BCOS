@@ -115,7 +115,8 @@ public:
         feature_rpbft_vrf_type_secp256k1 = 55,
         feature_balance_policy2 = 56,     // 转账白名单 Transfer whitelist
         feature_l2_ethereum_compat = 57,  // OP-Stack L2 mode: Ethereum-compatible
-                                          // genesis/predeploys
+                                          // genesis/predeploys. Genesis-only: validate()
+                                          // rejects it on the governance setSystemConfig path.
         feature_mpt_state_root = 58,      // MPT lazy-build: block stateRoot switches to the
                                           // Ethereum MPT root from this flag's activation
                                           // block on (spec 2026-04-24 design3 4.3)
@@ -168,6 +169,9 @@ public:
 
     void validate(std::string_view flag) const;
 
+    /// Rejects a feature the governance setSystemConfig path must not turn on: one whose
+    /// dependencies are unmet, and one that is genesis-only. Not called by genesis loading,
+    /// which uses set() directly.
     void validate(Flag flag) const;
 
     bool get(Flag flag) const;
