@@ -854,9 +854,21 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         // (MemoryStorage::submitTransaction's await_resume); left alone it reaches the catch-all
         // above this method, which answers -32603 with the status name. Same table as the
         // mempool branch instead, so both pools refuse the same transaction the same way.
-        // bcos::Error only, where the mempool branch catches everything: the pool has already
-        // turned verify()'s throw into Unknown (verifyAndSubmitTransaction), so an Error is a
-        // verdict and anything else is not one -- it keeps going to the catch-all as before.
+        //
+        // Only for a code that is a verdict. This interface also carries faults that are the
+        // node's own -- a MAX/TARS deployment's TxPoolServiceClient throws "No value!" and TARS
+        // transport codes through it -- and those keep going to the catch-all, which answers
+        // -32603 with the message they came with, as they did before this table existed.
+        // bcos::Error only, where the mempool branch catches everything: an in-process pool has
+        // already turned verify()'s throw into Unknown (verifyAndSubmitTransaction), so anything
+        // that is not an Error is not a verdict either.
+        if (!isAdmissionVerdict(e.errorCode())) [[unlikely]]
+        {
+            WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction: pool fault, not a verdict")
+                              << LOG_KV("code", e.errorCode())
+                              << LOG_KV("message", e.errorMessage());
+            throw;
+        }
         BOOST_THROW_EXCEPTION(
             admissionError(static_cast<protocol::TransactionStatus>(e.errorCode())));
     }

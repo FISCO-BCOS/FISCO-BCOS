@@ -22,8 +22,11 @@
 #include "Common.h"
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <functional>
+#include <limits>
 #include <string>
+#include <utility>
 
 namespace bcos::rpc
 {
@@ -89,5 +92,28 @@ JsonRpcException admissionError(protocol::TransactionStatus status, std::string_
 {
     auto base = admissionError(status);
     return {base.code(), base.msg() + " (" + std::string(detail) + ")"};
+}
+
+bool isAdmissionVerdict(int64_t errorCode)
+{
+    // Error carries its code in an int64_t, TransactionStatus is an int32_t: a value that does
+    // not fit is not one of them, and must not become one by truncation.
+    if (std::cmp_less(errorCode, std::numeric_limits<int32_t>::min()) ||
+        std::cmp_greater(errorCode, std::numeric_limits<int32_t>::max()))
+    {
+        return false;
+    }
+    auto const status = static_cast<protocol::TransactionStatus>(errorCode);
+    if (status == TS::None)
+    {
+        return false;
+    }
+    // toString's switch ends in `case Unknown: default:`, so every value the enum does not
+    // declare comes back as "Unknown". That makes "this node has a name for it" the test for a
+    // declared status, with Unknown itself the one value that has to be named here -- and it
+    // reuses the enum's own switch instead of keeping a second copy of the enumerators in sync.
+    // What reusing it costs: a new enumerator whose case someone forgets to add to that switch
+    // is read here as a fault, and answered -32603 rather than -32000 with its name.
+    return status == TS::Unknown || protocol::toString(status) != "Unknown";
 }
 }  // namespace bcos::rpc

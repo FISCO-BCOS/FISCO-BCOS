@@ -19,9 +19,9 @@
  */
 
 #include "../common/RPCFixture.h"
+#include "../common/ThrowingTxPool.h"
 #include "../common/Web3TxSamples.h"
 #include <bcos-framework/testutils/faker/FakeTransaction.h>
-#include <bcos-framework/testutils/faker/FakeTxPool.h>
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EthEndpoint.h>
@@ -43,37 +43,22 @@ namespace bcos::test
 // commit does so with a receipt (TxPool::asyncNotifyBlockResult); the expiry sweep
 // (MemoryStorage::removeInvalidTxs) does so the way a refusal ends it: an Error carrying
 // TransactionPoolTimeout, thrown from submitTransaction's await_resume. That shape is pinned in
-// TxpoolMemoryStorageTest; this pool produces it for every submission, so the cases here take
-// microseconds instead of txs_expiration_time and pin the two JSON faces' side of it: the catch
-// that answers a refusal answers a swept wait too. The tars face (RPCServer::sendTransaction) has
-// no harness in this tree; its catch is read, not run.
-class SweptTxPool : public FakeTxPool
-{
-public:
-    task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
-        protocol::Transaction::Ptr, bool waitForReceipt) override
-    {
-        m_waitedForReceipt = waitForReceipt;
-        constexpr auto swept = protocol::TransactionStatus::TransactionPoolTimeout;
-        BOOST_THROW_EXCEPTION(BCOS_ERROR(static_cast<int32_t>(swept), protocol::toString(swept)));
-        co_return nullptr;
-    }
-    task::Task<void> broadcastTransaction(protocol::Transaction const&) override { co_return; }
-    task::Task<void> broadcastTransactionBuffer(bytesConstRef) override { co_return; }
-
-    bool m_waitedForReceipt = false;
-};
-
+// TxpoolMemoryStorageTest; the pool here (ThrowingTxPool) produces it for every submission, so
+// the cases take microseconds instead of txs_expiration_time and pin the two JSON faces' side of
+// it: the catch that answers a refusal answers a swept wait too. The tars face
+// (RPCServer::sendTransaction) has no harness in this tree; its catch is read, not run.
 class PoolTimeoutFixture : public RPCFixture
 {
 public:
     PoolTimeoutFixture()
     {
-        pool = std::make_shared<SweptTxPool>();
+        constexpr auto swept = protocol::TransactionStatus::TransactionPoolTimeout;
+        pool = std::make_shared<ThrowingTxPool>(
+            static_cast<int32_t>(swept), protocol::toString(swept));
         service = std::make_shared<rpc::NodeService>(
             m_ledger, scheduler, pool, nullptr, nullptr, m_blockFactory, nullptr);
     }
-    std::shared_ptr<SweptTxPool> pool;
+    std::shared_ptr<ThrowingTxPool> pool;
     rpc::NodeService::Ptr service;
 };
 

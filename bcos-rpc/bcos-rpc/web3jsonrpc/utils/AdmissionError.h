@@ -21,6 +21,7 @@
 #pragma once
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-rpc/jsonrpc/Common.h>
+#include <cstdint>
 #include <string_view>
 
 namespace bcos::rpc
@@ -51,4 +52,16 @@ JsonRpcException admissionError(protocol::TransactionStatus status);
 /// The same, with a detail appended: "transaction type not supported (blob)". The detail follows
 /// geth's words so a client matching on them still does.
 JsonRpcException admissionError(protocol::TransactionStatus status, std::string_view detail);
+
+/// Whether an Error thrown out of a pool's submitTransaction is a verdict on the transaction, and
+/// so belongs to the table above, rather than a fault in the node or the transport. The two are
+/// the same C++ type carrying the same int field: MemoryStorage throws BCOS_ERROR(status,
+/// toString(status)), while a MAX/TARS deployment's TxPoolServiceClient throws BCOS_ERROR(-1,
+/// "No value!") and TARS transport codes through the same interface (TxPoolServiceClient.cpp's
+/// await_resume, ErrorConverter.h's toBcosError). Only a code this node can name is a verdict;
+/// anything else belongs to Web3JsonRpcImpl's catch-all, which answers -32603 with the message,
+/// as it did before the two pools shared this table. A MAX refusal is not among them: the txpool
+/// process answers it with the status as its code, and toBcosError carries that code back
+/// unchanged, so it is a verdict there for the same reason it is one in-process.
+bool isAdmissionVerdict(int64_t errorCode);
 }  // namespace bcos::rpc

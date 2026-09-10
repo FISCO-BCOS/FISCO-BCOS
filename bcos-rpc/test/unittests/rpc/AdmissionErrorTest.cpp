@@ -23,6 +23,8 @@
 #include <bcos-rpc/web3jsonrpc/utils/AdmissionError.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <boost/test/unit_test.hpp>
+#include <cstdint>
+#include <limits>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -119,6 +121,32 @@ BOOST_AUTO_TEST_CASE(detailIsAppendedInParentheses)
     auto const e = admissionError(TS::BlobTxNotAllowed, "blob");
     BOOST_CHECK_EQUAL(e.code(), Web3DefaultError);
     BOOST_CHECK_EQUAL(e.msg(), "transaction type not supported (blob)");
+}
+
+// Which codes the table is allowed to answer at all. An in-process pool only ever throws a
+// TransactionStatus, but the same interface carries a MAX/TARS client's own faults through the
+// same int field, and the table's fallback would name one of those "Unknown" -- a refusal's code
+// for a node fault. A code this node has no name for is not a verdict.
+BOOST_AUTO_TEST_CASE(onlyANamedStatusIsAVerdict)
+{
+    BOOST_TEST(isAdmissionVerdict(static_cast<int32_t>(TS::TxPoolIsFull)));
+    // Named, and refused by the fallback rather than by a row -- still a verdict.
+    BOOST_TEST(isAdmissionVerdict(static_cast<int32_t>(TS::NonceCheckFail)));
+    // The one status whose own name is the name every undeclared value gets.
+    BOOST_TEST(isAdmissionVerdict(static_cast<int32_t>(TS::Unknown)));
+    // Not a refusal: nothing refused it.
+    BOOST_TEST(!isAdmissionVerdict(static_cast<int32_t>(TS::None)));
+    // TxPoolServiceClient's await_resume when the tars callback left no value.
+    BOOST_TEST(!isAdmissionVerdict(-1));
+    // toBcosError(tars::Int32): a TARS transport code.
+    BOOST_TEST(!isAdmissionVerdict(-7));
+    BOOST_TEST(!isAdmissionVerdict(99999));
+    BOOST_TEST(!isAdmissionVerdict(std::numeric_limits<int32_t>::min()));
+    BOOST_TEST(!isAdmissionVerdict(std::numeric_limits<int32_t>::max()));
+    // Error's code is an int64_t: a value outside TransactionStatus's own type must not become a
+    // status by truncation. 0x1'0000'2712 truncates to TxPoolIsFull.
+    BOOST_TEST(!isAdmissionVerdict(int64_t{0x100002712}));
+    BOOST_TEST(!isAdmissionVerdict(std::numeric_limits<int64_t>::min()));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
