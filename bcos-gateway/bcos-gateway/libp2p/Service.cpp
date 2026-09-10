@@ -114,7 +114,7 @@ void Service::heartBeat()
     }
 
     // FIB-186 (vector D): snapshot the static-node list under x_nodes and release it BEFORE calling
-    // isConnected()/asyncConnect(), both of which take x_sessions. Holding x_nodes across an
+    // isConnected()/connect(), both of which take x_sessions. Holding x_nodes across an
     // x_sessions acquisition here is the reverse of the order onConnect uses (x_sessions ->
     // x_nodes, via updateStaticNodes), which deadlocks under connection churn: onConnect holds
     // x_sessions(W) waiting for x_nodes(W) while heartBeat holds x_nodes(R) waiting for
@@ -143,10 +143,26 @@ void Service::heartBeat()
         }
         SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat try to reconnect")
                            << LOG_KV("endpoint", it.first);
-        m_host->asyncConnect(it.first,
-            [service = shared_from_this()](auto error, const P2PInfo& p2pInfo, auto session) {
-                service->onConnect(std::move(error), p2pInfo, std::move(session));
-            });
+        // detached: each reconnect runs in its own coroutine so a stalled connect cannot block the
+        // heartBeat pass; the connection result is fed to onConnect exactly like the old callback
+        // (error-only on failure; success carries the established session)
+        task::wait([](std::shared_ptr<Service> _service,
+                       NodeIPEndpoint _endpoint) -> task::Task<void> {
+            try
+            {
+                auto [error, p2pInfo, session] = co_await _service->m_host->connect(_endpoint);
+                if (session || error.errorCode() != 0)
+                {
+                    _service->onConnect(std::move(error), p2pInfo, std::move(session));
+                }
+            }
+            catch (std::exception const& e)
+            {
+                SERVICE_LOG(WARNING) << LOG_DESC("heartBeat reconnect exception")
+                                     << LOG_KV("endpoint", _endpoint)
+                                     << LOG_KV("what", boost::diagnostic_information(e));
+            }
+        }(shared_from_this(), it.first));
     }
 
     std::shared_lock sessionLock(x_sessions);
@@ -272,7 +288,7 @@ void Service::onConnect(
         return;
     }
     p2pSession->start();
-    asyncSendProtocol(p2pSession);
+    sendProtocol(p2pSession);
     updateStaticNodes(session->socket(), p2pID);
 
     if (existedSession)
@@ -608,7 +624,7 @@ bcos::task::Task<void> Service::sendMessageByNodeIDs(uint16_t _type,
 }
 
 // send the protocolInfo
-void Service::asyncSendProtocol(P2PSession::Ptr _session)
+void Service::sendProtocol(P2PSession::Ptr _session)
 {
     auto self = shared_from_this();
     // value message in frame; payload owned by the frame. All state is passed as coroutine
@@ -626,7 +642,7 @@ void Service::asyncSendProtocol(P2PSession::Ptr _session)
             message.setPacketType(GatewayMessageType::Handshake);
             message.setSeq(_self->messageFactory()->newSeq());
             message.setPayload(std::move(payload));
-            SERVICE_LOG(INFO) << LOG_DESC("asyncSendProtocol")
+            SERVICE_LOG(INFO) << LOG_DESC("sendProtocol")
                               << LOG_KV("payload", message.payload().size())
                               << LOG_KV("seq", message.seq());
             co_await _session->fastSendP2PMessage(
@@ -634,7 +650,7 @@ void Service::asyncSendProtocol(P2PSession::Ptr _session)
         }
         catch (std::exception const& e)
         {
-            SERVICE_LOG(WARNING) << LOG_DESC("asyncSendProtocol send exception")
+            SERVICE_LOG(WARNING) << LOG_DESC("sendProtocol send exception")
                                  << LOG_KV("p2pid", printShortP2pID(_session->p2pID()))
                                  << LOG_KV("what", boost::diagnostic_information(e));
         }

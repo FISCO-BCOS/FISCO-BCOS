@@ -11,6 +11,7 @@
 // startup gate that keeps it off a chain producing blocks through consensus.
 
 #include "NodeConfigLoaderProbe.h"
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -34,7 +35,10 @@ BOOST_AUTO_TEST_CASE(refusedWithoutEngineDrivenBlockProduction)
 {
     LoaderProbe probe;
     auto pt = fromIni("[executor]\neest_replay_mode=true\n");
-    BOOST_CHECK_THROW(probe.loadOthersConfig(pt), InvalidConfig);
+    BOOST_CHECK_EXCEPTION(probe.loadOthersConfig(pt), InvalidConfig, [](InvalidConfig const& e) {
+        return boost::diagnostic_information(e).find("requires engine-driven block production") !=
+               std::string::npos;
+    });
 }
 
 BOOST_AUTO_TEST_CASE(acceptedUnderSingleNodeConsensus)

@@ -130,6 +130,12 @@ public:
                                      // timestamp-based fork activation); read at startup from
                                      // genesis [features], same channel as
                                      // feature_l2_ethereum_compat.
+        bugfix_eip161_1052_account_semantics = 61,  // #5371/#5372: v1 executor answers
+                                                    // account_exists per EIP-161 (empty == absent)
+                                                    // and EXTCODEHASH per EIP-1052: the chain
+                                                    // hasher's hash("") (keccak on a non-SM
+                                                    // chain) for a code-less live account, 0 for
+                                                    // an absent/empty one; was true / 0.
     };
 
     // feature_flags bit = enum value. Pin the newest flag so a value beyond
@@ -141,7 +147,7 @@ public:
     // and cannot catch gaps. The contiguous-from-zero rule is enforced by code review
     // and the comment on Flag above — the two range asserts catch the other failure
     // mode: a new flag pushed past magic_enum's reflection boundary.)
-    static_assert(magic_enum::enum_contains(Flag::feature_op_jovian),
+    static_assert(magic_enum::enum_contains(Flag::bugfix_eip161_1052_account_semantics),
         "newest Flag fell outside magic_enum's reflection range — check enum values");
     static_assert(magic_enum::enum_integer(
                       magic_enum::enum_value<Flag>(magic_enum::enum_count<Flag>() - 1)) <= 127,

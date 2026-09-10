@@ -36,45 +36,15 @@ namespace bcos::rlp::protocol
     return !payload.empty() && payload[0] > 0 && payload[0] < bcos::codec::rlp::BYTES_HEAD_BASE;
 }
 
-/// Decode an RLP unsigned integer; reject non-minimal encodings (leading zeros, bare 0x00,
-/// oversized prefixes). Re-encode must match the source bytes.
+/// Decode an RLP unsigned integer, rejecting non-minimal encodings (leading zeros, bare 0x00,
+/// oversized prefixes) with NonCanonicalSize. Since #5353 the shared decoder enforces all of
+/// that itself (RLPDecode.h: width gate, header canonicality, leading-zero payload), so this is
+/// a plain forward kept for its name at the ~60 Web3TxHandler call sites.
 template <typename T>
 [[nodiscard]] inline bcos::Error::UniquePtr decodeCanonicalRlpUint(
     bcos::bytesRef& from, T& to) noexcept
 {
-    auto const* const start = from.data();
-    if (auto error = bcos::codec::rlp::decode(from, to); error != nullptr)
-    {
-        return error;
-    }
-    // Canonicality checked in place (finding BA: the decode-then-re-encode roundtrip cost
-    // 1-2 heap allocations per scalar on the shared decode funnel). The consumed item
-    // [start, from.data()) must be the minimal RLP spelling of an unsigned integer:
-    //   0        -> exactly {0x80} (empty payload)
-    //   1..0x7f  -> single inline byte ({0x00} would be the non-canonical spelling of 0)
-    //   >=0x80   -> prefix 0x80+len + minimal big-endian payload: no leading zero, and a
-    //              one-byte payload must be >= 0x80 or it should have been inline.
-    // Payload width beyond T is already rejected by decode above.
-    auto const consumed = static_cast<std::size_t>(from.data() - start);
-    if (consumed == 1)
-    {
-        if (*start == 0x00) [[unlikely]]
-        {
-            return BCOS_ERROR_UNIQUE_PTR(
-                bcos::codec::rlp::DecodingError::NonCanonicalSize, "non-canonical RLP integer");
-        }
-        return nullptr;
-    }
-    auto const headerByte = *start;
-    auto const payloadLength = consumed - 1;
-    if (headerByte < 0x80 || headerByte != static_cast<bcos::byte>(0x80 + payloadLength) ||
-        start[1] == 0x00 || (payloadLength == 1 && start[1] < 0x80)) [[unlikely]]
-    {
-        // In-range but non-minimal spelling.
-        return BCOS_ERROR_UNIQUE_PTR(
-            bcos::codec::rlp::DecodingError::NonCanonicalSize, "non-canonical RLP integer");
-    }
-    return nullptr;
+    return bcos::codec::rlp::decode(from, to);
 }
 
 /// Typed yParity: whole item must be 0x80 (0) or 0x01 (1). Bare 0x00 is rejected.

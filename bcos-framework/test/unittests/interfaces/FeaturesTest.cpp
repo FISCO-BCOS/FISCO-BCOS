@@ -215,6 +215,8 @@ BOOST_AUTO_TEST_CASE(feature)
         // feature_op_jovian = 60 (OP-Stack Jovian fork semantics), appended after the last
         // feature_/bugfix_ per the mirror-declaration-order rule above.
         "feature_op_jovian",
+        // bugfix_eip161_1052_account_semantics = 61 (#5371/#5372), next unused value.
+        "bugfix_eip161_1052_account_semantics",
     };
     // clang-format on
     BOOST_CHECK_EQUAL(keys.size(), compareKeys.size());

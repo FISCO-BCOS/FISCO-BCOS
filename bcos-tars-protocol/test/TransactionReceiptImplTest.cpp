@@ -180,7 +180,9 @@ BOOST_AUTO_TEST_CASE(sizeGasUsedAndLogIndex)
     TransactionReceiptImpl empty;
     BOOST_CHECK_EQUAL(empty.gasUsed(), bcos::u256(0));
     BOOST_CHECK_EQUAL(empty.size(), 0U);
-    // logIndex is a real stored field: the setter persists and the getter reads it back.
+    // logIndex round-trips through the tars field (issue #5553). Both sides added this
+    // assertion; the reset is kept because it also pins that the setter writes rather than
+    // ignoring its argument.
     empty.setLogIndex(9);
     BOOST_CHECK_EQUAL(empty.logIndex(), 9U);
     empty.setLogIndex(0);

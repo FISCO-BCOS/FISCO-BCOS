@@ -150,10 +150,13 @@ public:
     using ViewType = typename GlobalStateStorageType::ViewType;
 
     /// @param ledgerConfigState the process-wide configuration snapshot transaction admission
-    /// reads, republished here after every block this service commits. In this mode nothing
-    /// else republishes it: MultiVersionScheduler is the hook for the txpool/consensus path,
-    /// and block production here does not go through it. Null in the tests and in any wiring
-    /// that has no admission to serve.
+    /// reads, republished from buildPayload, where the configuration for the block about to be
+    /// built is read anyway. In this mode nothing else republishes it: MultiVersionScheduler is
+    /// the hook for the txpool/consensus path, and block production here does not go through
+    /// it. A node that only executes externally built payloads never calls buildPayload, so
+    /// its snapshot stays at the boot read; its mempool RPC still admits against that
+    /// snapshot, into a pool nothing seals on such a node. Null in the tests and in any
+    /// wiring that has no admission to serve.
     EngineServiceImpl(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage,
         ExecutorType& executor, SchedulerType& scheduler,
         bcos::protocol::BlockFactory::Ptr blockFactory,
@@ -1142,7 +1145,7 @@ private:
     /// is committed via newPayload(). Null in unit tests / for payloads without block
     /// persistence.
     bcos::ledger::LedgerInterface::Ptr m_ledger;
-    /// Republished after every commit; see the constructor.
+    /// Republished from buildPayload; see the constructor.
     bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState;
     ForkchoiceState m_forkchoiceState;
     std::optional<TrackedHeadBlock> m_trackedHeadBlock;

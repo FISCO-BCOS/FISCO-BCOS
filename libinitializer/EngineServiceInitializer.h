@@ -2,6 +2,7 @@
 
 #include "GlobalStateStorageInitializer.h"
 #include "bcos-framework/engine/AnyEngineService.h"
+#include "bcos-framework/ledger/LedgerConfigState.h"
 #include "bcos-mempool/MemPoolImpl.h"
 #include "bcos-transaction-executor/TransactionExecutorImpl.h"
 #include "engine/bcos-engine/EngineServiceImpl.h"
