@@ -8,11 +8,13 @@ on:
     paths:
       - "bcos-l2-contracts/**"
       - "tools/opstack-genesis/**"
+      - "tools/op-e2e/**"
       - ".github/workflows/l2-contracts.yml"
   pull_request:
     paths:
       - "bcos-l2-contracts/**"
       - "tools/opstack-genesis/**"
+      - "tools/op-e2e/**"
       - ".github/workflows/l2-contracts.yml"
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

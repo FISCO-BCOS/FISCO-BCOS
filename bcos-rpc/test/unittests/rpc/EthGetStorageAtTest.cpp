@@ -149,10 +149,26 @@ public:
         storage::Entry entry;
         entry.set(bcos::bytes(value32));
         task::syncWait(storage2::writeOne(m_latestState,
-            executor_v1::StateKey{std::string(bcos::ledger::SYS_DIRECTORY::USER_APPS) +
-                                      address.hex(),
+            executor_v1::StateKey{
+                std::string(bcos::ledger::SYS_DIRECTORY::USER_APPS) + address.hex(),
                 std::string{reinterpret_cast<char const*>(slot.ref().data()), h256::SIZE}},
             std::move(entry)));
+    }
+
+    void setFlatBalance(bcos::u256 balance)
+    {
+        storage::Entry entry;
+        entry.set(asBytes(balance.str()));
+        m_ledger->setStorageAt(address.hex(),
+            std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE), std::move(entry));
+    }
+
+    void setFlatNonce(bcos::u256 nonce)
+    {
+        storage::Entry entry;
+        entry.set(asBytes(nonce.str()));
+        m_ledger->setStorageAt(address.hex(),
+            std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE), std::move(entry));
     }
 
     Json::Value request(std::string const& req)
@@ -346,15 +362,16 @@ BOOST_AUTO_TEST_CASE(HistoricalDormantAccountScenarioAErrors)
     m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(stateRoot);
 
     std::string const dormant = "0x00000000000000000000000000000000000000cc";
-    for (auto const& [method, resp] : {std::make_pair("eth_getStorageAt", getStorageAt(dormant, "0x1", "0x1")),
-             std::make_pair("eth_getBalance", getBalance(dormant, "0x1")),
-             std::make_pair("eth_getTransactionCount", getTransactionCount(dormant, "0x1")),
-             std::make_pair("eth_getCode", getCode(dormant, "0x1"))})
+    for (auto const& [method, resp] :
+        {std::make_pair("eth_getStorageAt", getStorageAt(dormant, "0x1", "0x1")),
+            std::make_pair("eth_getBalance", getBalance(dormant, "0x1")),
+            std::make_pair("eth_getTransactionCount", getTransactionCount(dormant, "0x1")),
+            std::make_pair("eth_getCode", getCode(dormant, "0x1"))})
     {
         BOOST_REQUIRE_MESSAGE(resp.isMember("error"), method);
         BOOST_CHECK_MESSAGE(resp["error"]["code"].asInt() == -32004, method);
-        BOOST_CHECK_MESSAGE(resp["error"]["message"].asString().find("Account not in trie") !=
-                                std::string::npos,
+        BOOST_CHECK_MESSAGE(
+            resp["error"]["message"].asString().find("Account not in trie") != std::string::npos,
             method);
     }
 }
@@ -444,11 +461,11 @@ BOOST_AUTO_TEST_CASE(HistoricalMissingRootReturns32004)
     auto resp = getStorageAt(address.hexPrefixed(), "0x1", "0x1");
     BOOST_REQUIRE(resp.isMember("error"));
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32004);
-    BOOST_CHECK(resp["error"]["message"].asString().find("not in MPT node storage") !=
-                std::string::npos);
+    BOOST_CHECK(
+        resp["error"]["message"].asString().find("not in MPT node storage") != std::string::npos);
 }
 
-// Historical state, empty root, scenario B (round-2 Finding K): the empty root is a legal
+// Historical state, empty root, scenario B (): the empty root is a legal
 // "no accounts" root — the empty trie has no node rows, so it is NOT a "root not in MPT
 // storage" error. With complete tries the absent account provably reads zero, matching
 // Ethereum semantics.
@@ -485,8 +502,8 @@ BOOST_AUTO_TEST_CASE(HistoricalEmptyRootScenarioADormantAccountErrors)
     {
         BOOST_REQUIRE_MESSAGE(resp.isMember("error"), method);
         BOOST_CHECK_MESSAGE(resp["error"]["code"].asInt() == -32004, method);
-        BOOST_CHECK_MESSAGE(resp["error"]["message"].asString().find("Account not in trie") !=
-                                std::string::npos,
+        BOOST_CHECK_MESSAGE(
+            resp["error"]["message"].asString().find("Account not in trie") != std::string::npos,
             method);
     }
 }
@@ -514,8 +531,7 @@ BOOST_AUTO_TEST_CASE(OverwidePositionReturnsInvalidParams)
     auto resp = getStorageAt(address.hexPrefixed(), overwide, "latest");
     BOOST_REQUIRE(resp.isMember("error"));
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32602);
-    BOOST_CHECK(resp["error"]["message"].asString().find("storage position") !=
-                std::string::npos);
+    BOOST_CHECK(resp["error"]["message"].asString().find("storage position") != std::string::npos);
 }
 
 // blockTag semantics: the default depths are 0 — PBFT commits are final, so safe/finalized
@@ -581,6 +597,70 @@ BOOST_AUTO_TEST_CASE(ConfigurableSafeDepth)
     BOOST_TEST(!resp.isMember("error"));
     BOOST_REQUIRE(resp.isMember("result"));
     BOOST_TEST(resp["result"].asString() == paddedHex(42));
+}
+
+// Latest getBalance on scenario B: OP chains store balances in MPT only, so "latest" must
+// read the tip block's committed root (not the empty flat ACCOUNT_BALANCE row).
+BOOST_AUTO_TEST_CASE(LatestBalanceFromMPTOnScenarioB)
+{
+    bcos::ledger::Features features;
+    features.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
+    m_ledger->setFeatures(std::move(features));
+
+    buildTrie();
+    wireReader();
+    m_ledger->ledgerData().back()->blockHeader()->setStateRoot(stateRoot);
+
+    auto resp = getBalance(address.hexPrefixed(), "latest");
+    BOOST_TEST(!resp.isMember("error"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    BOOST_TEST(resp["result"].asString() == toQuantity(1000));
+}
+
+// Latest getTransactionCount on scenario B: same MPT-first path as eth_getBalance.
+BOOST_AUTO_TEST_CASE(LatestNonceFromMPTOnScenarioB)
+{
+    bcos::ledger::Features features;
+    features.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
+    m_ledger->setFeatures(std::move(features));
+
+    buildTrie();
+    wireReader();
+    m_ledger->ledgerData().back()->blockHeader()->setStateRoot(stateRoot);
+
+    auto resp = getTransactionCount(address.hexPrefixed(), "latest");
+    BOOST_TEST(!resp.isMember("error"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    BOOST_TEST(resp["result"].asString() == toQuantity(7));
+}
+
+// Latest getBalance on scenario A (default): the incomplete trie is not authoritative for
+// "latest", so the flat ACCOUNT_BALANCE row remains the live read path.
+BOOST_AUTO_TEST_CASE(LatestBalanceFallsBackToFlatOnScenarioA)
+{
+    buildTrie();
+    wireReader();
+    m_ledger->ledgerData().back()->blockHeader()->setStateRoot(stateRoot);
+    setFlatBalance(2000);
+
+    auto resp = getBalance(address.hexPrefixed(), "latest");
+    BOOST_TEST(!resp.isMember("error"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    BOOST_TEST(resp["result"].asString() == toQuantity(2000));
+}
+
+// Latest getTransactionCount on scenario A: flat nonce row wins over the MPT leaf.
+BOOST_AUTO_TEST_CASE(LatestNonceFallsBackToFlatOnScenarioA)
+{
+    buildTrie();
+    wireReader();
+    m_ledger->ledgerData().back()->blockHeader()->setStateRoot(stateRoot);
+    setFlatNonce(9);
+
+    auto resp = getTransactionCount(address.hexPrefixed(), "latest");
+    BOOST_TEST(!resp.isMember("error"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    BOOST_TEST(resp["result"].asString() == toQuantity(9));
 }
 
 // Historical getBalance: the balance comes from the block's committed MPT root (1000).

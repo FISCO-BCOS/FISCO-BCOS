@@ -54,7 +54,8 @@ namespace
 // Whole-second milliseconds (1700000000s): every Eth header produced by finalizeEthBlockHeader
 // must satisfy validateHeader's "timestamp is a whole number of seconds" check, so a fixture
 // timestamp with sub-second milliseconds would make every build path throw.
-constexpr std::uint64_t c_timestamp = 1700000000ULL * 1000ULL;
+constexpr std::uint64_t c_defaultPayloadTimestamp = 1700000000ULL * 1000ULL;
+constexpr std::uint64_t c_timestamp = c_defaultPayloadTimestamp;
 constexpr bcos::protocol::BlockNumber c_initialBlockNumber = 5;
 constexpr bcos::protocol::BlockNumber c_trackedInitialBlockNumber = 10;
 constexpr bcos::protocol::BlockNumber c_trackedNextBlockNumber = 11;
@@ -393,13 +394,12 @@ public:
     {
         if (m_failNext.exchange(false))
         {
-            callback("injected", BCOS_ERROR_PTR(
-                                     bcos::ledger::LedgerError::ErrorArgument,
+            callback("injected", BCOS_ERROR_PTR(bcos::ledger::LedgerError::ErrorArgument,
                                      "injected prewrite failure"));
             return;
         }
-        CommitLedger::asyncPrewriteBlock(std::move(storage), std::move(_blockTxs),
-            std::move(block), std::move(callback), writeTxsAndReceipts, std::move(features),
+        CommitLedger::asyncPrewriteBlock(std::move(storage), std::move(_blockTxs), std::move(block),
+            std::move(callback), writeTxsAndReceipts, std::move(features),
             std::move(blockHashOverride), writeNonces);
     }
     std::atomic_bool m_failNext{true};
@@ -427,8 +427,8 @@ public:
                 std::this_thread::yield();
             }
         }
-        CommitLedger::asyncPrewriteBlock(std::move(storage), std::move(_blockTxs),
-            std::move(block), std::move(callback), writeTxsAndReceipts, std::move(features),
+        CommitLedger::asyncPrewriteBlock(std::move(storage), std::move(_blockTxs), std::move(block),
+            std::move(callback), writeTxsAndReceipts, std::move(features),
             std::move(blockHashOverride), writeNonces);
     }
     std::atomic_bool m_firstEntered{false};
@@ -580,7 +580,7 @@ BOOST_AUTO_TEST_CASE(forkchoice_with_payload_attributes_builds_retrievable_paylo
     auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 2));
     BOOST_CHECK_EQUAL(payload->executionPayload.parentHash, forkchoiceState.headBlockHash);
     BOOST_CHECK_EQUAL(payload->executionPayload.blockNumber, c_initialBlockNumber + 1);
-    BOOST_CHECK_EQUAL(payload->executionPayload.timestamp, c_timestamp);
+    BOOST_CHECK_EQUAL(payload->executionPayload.timestamp, c_defaultPayloadTimestamp);
     BOOST_CHECK(payload->executionPayload.withdrawals.has_value());
     BOOST_CHECK(!payload->executionPayload.blobGasUsed.has_value());
     BOOST_CHECK(payload->executionPayload.transactions.empty());
@@ -1184,9 +1184,7 @@ BOOST_AUTO_TEST_CASE(new_payload_round_trips_deposit_raw_bytes)
         payload->executionPayload.transactions.size());
 }
 
-/// Parent known (via the locally built hash) but this blockHash was never built:
-/// op-geth would execute first; we must not VALID-store the CL body.
-BOOST_AUTO_TEST_CASE(new_payload_cache_miss_is_syncing)
+BOOST_AUTO_TEST_CASE(new_payload_cache_miss_wrong_hash_is_invalid)
 {
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
@@ -1206,12 +1204,45 @@ BOOST_AUTO_TEST_CASE(new_payload_cache_miss_is_syncing)
     request.executionPayload.blockHash =
         h256("6666666666666666666666666666666666666666666666666666666666666666");
     auto status = task::syncWait(engineService.newPayload(request, 3));
-    BOOST_CHECK_EQUAL(
-        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Syncing));
+    BOOST_CHECK_EQUAL(static_cast<int>(status.status),
+        static_cast<int>(PayloadValidationStatus::InvalidBlockHash));
+    BOOST_REQUIRE(status.validationError.has_value());
+    BOOST_CHECK_NE(status.validationError->find("blockHash"), std::string::npos);
     BOOST_CHECK(!status.latestValidHash.has_value());
 
     auto stillBuilt = task::syncWait(engineService.getPayload(*result.payloadId, 3));
     BOOST_CHECK_EQUAL(stillBuilt->executionPayload.blockHash, payload->executionPayload.blockHash);
+}
+
+BOOST_AUTO_TEST_CASE(new_payload_unknown_parent_is_syncing)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
+
+    auto payloadAttributes = makePayloadAttributesV3();
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
+    BOOST_REQUIRE(result.payloadId.has_value());
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
+
+    auto request = makeNewPayloadRequestV3(payload->executionPayload);
+    h256 const unknownParent("7777777777777777777777777777777777777777777777777777777777777777");
+    auto const forkVersion = bcos::engine::detail::ethBlockVersionFor(EVMC_CANCUN);
+    auto recomputed =
+        bcos::engine::detail::ethBlockHashFromPayload(testBlockFactory()->blockHeaderFactory(),
+            request.executionPayload, request.parentBeaconBlockRoot, forkVersion, unknownParent);
+    BOOST_REQUIRE(recomputed.has_value());
+    request.executionPayload.parentHash = unknownParent;
+    request.executionPayload.blockHash = *recomputed;
+
+    auto status = task::syncWait(engineService.newPayload(request, 3));
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Syncing));
+    BOOST_CHECK(!status.validationError.has_value());
 }
 
 BOOST_AUTO_TEST_CASE(new_payload_hit_rejects_altered_state_root_and_keeps_built_body)
@@ -1313,8 +1344,8 @@ BOOST_AUTO_TEST_CASE(new_payload_retry_after_failed_prewrite_recommits)
     // First attempt: the injected prewrite error must propagate, never become VALID,
     // and no header row may exist yet.
     BOOST_CHECK_THROW(task::syncWait(engineService.newPayload(honest, 3)), bcos::Error);
-    BOOST_REQUIRE(readPersistedHeader(
-        globalStateStorageFixture.backendStorage, c_initialBlockNumber + 1) == nullptr);
+    BOOST_REQUIRE(readPersistedHeader(globalStateStorageFixture.backendStorage,
+                      c_initialBlockNumber + 1) == nullptr);
 
     // Retry: the entry survived the failed attempt, so the commit completes for real —
     // the header row lands with the same extraData the payload carries.

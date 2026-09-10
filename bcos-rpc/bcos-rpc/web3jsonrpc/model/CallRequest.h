@@ -26,6 +26,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
+#include <optional>
 
 namespace bcos::rpc
 {
@@ -60,7 +61,8 @@ struct CallRequest
     }
     bcos::protocol::Transaction::Ptr takeToTransaction(
         bcos::protocol::TransactionFactory::Ptr const&,
-        bcos::scheduler::SchedulerInterface::Ptr const&) noexcept;
+        bcos::scheduler::SchedulerInterface::Ptr const& scheduler,
+        std::optional<uint64_t> chainBlockGasLimit = std::nullopt) noexcept;
 };
 [[maybe_unused]] std::tuple<bool, CallRequest> decodeCallRequest(Json::Value const& _root);
 }  // namespace bcos::rpc

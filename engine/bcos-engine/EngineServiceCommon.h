@@ -22,8 +22,12 @@
 #include <bcos-framework/engine/Constants.h>
 #include <bcos-framework/engine/RawTransactionDispatch.h>
 #include <bcos-framework/engine/Types.h>
+#include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/BlockHeader.h>
+#include <bcos-framework/protocol/BlockHeaderFactory.h>
+#include <bcos-ledger/LedgerMethods.h>
 #include <bcos-ledger/mpt/Constants.h>
+#include <bcos-task/Task.h>
 #include <evmc/evmc.h>
 
 #include <cstddef>
@@ -64,13 +68,42 @@ bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes);
 
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
-/// Hash-relevant fields vs the locally built payload (op-geth ExecutableDataToBlock).
-/// Keep-local-body (BL): optional V3 fields (withdrawalsRoot / blobGasUsed /
-/// excessBlobGas) are compared only when both sides have them. Presence XOR
-/// (omit vs value) is not a mismatch.
+/// Compare a submitted payload against the locally built copy. Required fields
+/// must match. Omitting withdrawalsRoot is equivalent to the empty trie;
+/// omitting blobGasUsed / excessBlobGas is a mismatch. blockAccessList and
+/// slotNumber are compared only when both sides carry them.
 std::optional<std::string> compareWithBuiltPayload(
     const ExecutionPayload& submitted, const ExecutionPayload& built);
 bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev);
+/// Header fork implied by the Engine API method version (shape gates only — not for
+/// newPayload hash reconstruction, which must follow the chain fork).
+inline bcos::protocol::EthBlockVersion ethBlockVersionForApi(std::uint32_t version)
+{
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V4))
+    {
+        return bcos::protocol::EthBlockVersion::PRAGUE;
+    }
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V3))
+    {
+        return bcos::protocol::EthBlockVersion::CANCUN;
+    }
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V2))
+    {
+        return bcos::protocol::EthBlockVersion::SHANGHAI;
+    }
+    return bcos::protocol::EthBlockVersion::LONDON;
+}
+/// Rebuild the Eth header from submitted fields (optional parent override) and return its hash.
+std::optional<bcos::h256> ethBlockHashFromPayload(
+    const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
+    const std::optional<bcos::h256>& parentBeaconBlockRoot,
+    bcos::protocol::EthBlockVersion forkVersion,
+    std::optional<bcos::h256> parentHashOverride = std::nullopt);
+/// Rebuild the Eth header from submitted fields and require hash == payload.blockHash.
+std::optional<std::string> matchReconstructedEthBlockHash(
+    const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
+    const std::optional<bcos::h256>& parentBeaconBlockRoot,
+    bcos::protocol::EthBlockVersion forkVersion);
 void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const ExecutionPayload& payload,
     std::optional<bcos::h256> parentBeaconBlockRoot, bcos::protocol::EthBlockVersion forkVersion);
 
@@ -160,6 +193,26 @@ std::optional<PayloadID> derivePayloadId(const PayloadAttributes& payloadAttribu
 PayloadStatus makeStatus(PayloadValidationStatus status,
     std::optional<h256> latestValidHash = std::nullopt,
     std::optional<std::string> validationError = std::nullopt);
+/// Chain-derived header fork for newPayload cache-miss hash reconstruction. Returns nullopt
+/// when the revision cannot be resolved (caller should skip hash check and answer SYNCING).
+template <class StorageView>
+bcos::task::Task<std::optional<bcos::protocol::EthBlockVersion>> forkVersionForPayloadHashCheck(
+    StorageView& view, bcos::protocol::BlockNumber blockNumber,
+    bcos::protocol::BlockFactory& blockFactory)
+{
+    if (blockNumber == 0)
+    {
+        co_return std::nullopt;
+    }
+    bcos::ledger::LedgerConfig ledgerConfig;
+    co_await bcos::ledger::getLedgerConfig(view, ledgerConfig, blockNumber - 1, blockFactory);
+    auto const chainRevision = ledgerConfig.evmcRevisionForBlock(blockNumber);
+    if (!chainRevision.has_value())
+    {
+        co_return std::nullopt;
+    }
+    co_return detail::ethBlockVersionFor(*chainRevision);
+}
 /// Shared getPayload shape gate (leftover Impl + EngineTracker). Throws
 /// IncompatiblePayloadVersion when the request version cannot render the stored body.
 void requireGetPayloadShape(std::uint32_t builtVersion, const ExecutionPayload& payload,

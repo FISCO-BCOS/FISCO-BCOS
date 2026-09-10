@@ -54,6 +54,7 @@
 #include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-framework/engine/DACaps.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
 #include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
@@ -401,6 +402,11 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // any case requires an on-chain EVM revision (buildPayload fails closed without one),
     // so the escape hatch can no longer build payloads; production configs must never set
     // it.
+    if (m_nodeConfig->enableOpEngineRpc())
+    {
+        m_daCaps = std::make_shared<bcos::engine::DACaps>();
+    }
+
     if (m_nodeConfig->enableOpEngineRpc() && engineApiForV1Only)
     {
         if (!m_nodeConfig->opEngineAllowV1Executor())
@@ -501,8 +507,11 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 ethereumExecutor, !m_nodeConfig->engineDrivenBlockProduction());
-        // Engine-driven modes on the v2 EthereumExecutor (serial pipeline); see the parallel
-        // branch above for why op_engine_rpc.enable also builds the EngineService here.
+        // Engine-driven modes on the v2 EthereumExecutor (serial pipeline).
+        // executor_version=2 alone does NOT enable the Engine API: one of
+        // [consensus] enable_single_node_consensus or [op_engine_rpc] enable must be set
+        // (NodeConfig rejects both at once). Without either flag the node keeps the legacy
+        // PBFT/sealer + scheduler path even on the v2 executor.
         if (!engineApiForV1Only &&
             (m_nodeConfig->enableSingleNodeConsensus() || m_nodeConfig->enableOpEngineRpc()))
         {
@@ -533,6 +542,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_ledgerConfigState);
 
     // m_executorVersion was resolved earlier (before the Engine API gate); apply it now.
+    // Governance may later write executor_version on-chain; MultiVersionScheduler::setVersion
+    // keeps the node running when the value names an unwired slot (fail-open by design).
+    // Operators must align genesis/boot config with on-chain executor_version — runtime
+    // drift is logged at ERROR when the ledger names a version this node cannot wire.
     INITIALIZER_LOG(INFO) << "Set executor version to: " << m_executorVersion;
     m_scheduler->setVersion(m_executorVersion, {});
 

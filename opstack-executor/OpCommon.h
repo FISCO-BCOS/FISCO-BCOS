@@ -27,7 +27,7 @@ namespace bcos::evm
 {
 /// Thrown for anything OP block execution classifies as a consensus-level rejection (error
 /// table): malformed/undecodable raw tx bytes, processOpBlock's own semantic throws
-/// (empty block, first tx not the L1 attributes deposit, gas-pool overrun, ...). Maps to INVALID
+/// (empty block, first tx not the L1 attributes deposit, gas-pool overrun,...). Maps to INVALID
 /// on the caller side, never -32603. Lives in bcos::evm so both the opstack and engine
 /// namespaces (and the code that references it from either) resolve it by outer-scope lookup.
 struct OpConsensusError : std::runtime_error
@@ -171,8 +171,7 @@ inline evmc::bytes32 toEvmcBytes32(const bcos::h256& h) noexcept
 /// (silent-truncation guard).
 inline uint64_t narrowU256ToU64(const bcos::u256& v, const char* fieldName)
 {
-    static const bcos::u256 kMaxU64(std::numeric_limits<uint64_t>::max());
-    if (v > kMaxU64)
+    if (!bcos::u256FitsUint64(v))
         throw OpConsensusError(std::string("field exceeds uint64_t range: ") + fieldName);
     return static_cast<uint64_t>(v);
 }

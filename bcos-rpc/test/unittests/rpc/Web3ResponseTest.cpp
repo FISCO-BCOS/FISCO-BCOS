@@ -10,6 +10,7 @@
 
 #include "../common/RPCFixture.h"
 #include <bcos-crypto/ChecksumAddress.h>
+#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rpc/web3jsonrpc/model/BlockResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/ReceiptResponse.h>
@@ -223,12 +224,11 @@ BOOST_AUTO_TEST_CASE(combineBlockResponseEthHeaderReadsFieldsFromHeader)
     header->setNumber(7);
     header->setTimestamp(1700000000 * 1000LL);  // BlockHeader milliseconds == 1700000000 s
     header->setEthBlockVersion(bcos::protocol::EthBlockVersion::CANCUN);
-    header->setParentInfo(
-        bcos::protocol::ParentInfo{.blockNumber = 6,
-            .blockHash = bcos::crypto::HashType(
-                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")});
-    header->setUncleHash(
-        bcos::crypto::HashType("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"));
+    header->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = 6,
+        .blockHash = bcos::crypto::HashType(
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")});
+    header->setUncleHash(bcos::crypto::HashType(
+        "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"));
     header->setCoinbase(bcos::Address("1234567890abcdef1234567890abcdef12345678"));
     header->setDifficulty(bcos::u256(0));
     header->setNonce(bcos::h64(0));
@@ -311,10 +311,9 @@ static std::shared_ptr<bcos::protocol::Block> makeEthHeaderBlock(
     header->setNumber(7);
     header->setTimestamp(1700000000 * 1000LL);  // BlockHeader milliseconds == 1700000000 s
     header->setEthBlockVersion(version);
-    header->setParentInfo(
-        bcos::protocol::ParentInfo{.blockNumber = 6,
-            .blockHash = bcos::crypto::HashType(
-                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")});
+    header->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = 6,
+        .blockHash = bcos::crypto::HashType(
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")});
     header->setUncleHash(bcos::crypto::HashType(
         "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"));
     header->setCoinbase(bcos::Address("1234567890abcdef1234567890abcdef12345678"));
@@ -362,6 +361,62 @@ static std::shared_ptr<bcos::protocol::Block> makeEthHeaderBlock(
     return block;
 }
 
+BOOST_AUTO_TEST_CASE(combineBlockResponseOpNonEthUsesRlpIdentityHashAndPrevRandao)
+{
+    auto block = m_blockFactory->createBlock();
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    header->setNumber(1);
+    header->setTimestamp(1700000000 * 1000LL);
+    header->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = 0,
+        .blockHash = bcos::crypto::HashType(
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")});
+    header->setCoinbase(bcos::Address("4200000000000000000000000000000000000011"));
+    header->setUncleHash(
+        bcos::h256("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"));
+    header->setDifficulty(bcos::u256(0));
+    header->setNonce(bcos::h64(0));
+    header->setPrevRandao(
+        bcos::h256("62293916ac98bc02b90472638bd2beb1b531a914395c34239abe6fc011b9011a"));
+    header->setGasLimit(bcos::u256(30000000));
+    header->setGasUsed(bcos::u256(21000));
+    header->setStateRoot(
+        bcos::h256("4444444444444444444444444444444444444444444444444444444444444444"));
+    header->setTxsRoot(
+        bcos::h256("5555555555555555555555555555555555555555555555555555555555555555"));
+    header->setReceiptsRoot(
+        bcos::h256("6666666666666666666666666666666666666666666666666666666666666666"));
+    bcos::Bloom bloom;
+    bloom[0] = 0xcd;
+    header->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
+    header->setExtraData(bcos::bytes{0x01, 0x00, 0x00, 0x00, 0xfa, 0x00, 0x00, 0x00, 0x06, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00});
+    header->setBaseFee(bcos::u256(1000000000));
+    header->setWithdrawalsRoot(
+        bcos::h256("2222222222222222222222222222222222222222222222222222222222222222"));
+    header->setBlobGasUsed(bcos::u256(0));
+    header->setExcessBlobGas(bcos::u256(0));
+    header->setParentBeaconBlockRoot(
+        bcos::h256("3333333333333333333333333333333333333333333333333333333333333333"));
+    header->setRequestsHash(
+        bcos::h256("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
+    header->calculateHash(*hashImpl);
+    auto const tarsHash = header->hash();
+    auto const rlpHash = bcos::protocol::EthBlockHeader::computeHash(*header);
+    BOOST_CHECK(tarsHash != rlpHash);
+    block->setBlockHeader(header);
+
+    Json::Value result(Json::objectValue);
+    combineBlockResponse(result, *block, /*fullTxs=*/false);
+
+    BOOST_CHECK_EQUAL(result["hash"].asString(), rlpHash.hexPrefixed());
+    BOOST_CHECK_NE(result["hash"].asString(), tarsHash.hexPrefixed());
+    BOOST_CHECK_EQUAL(result["mixHash"].asString(),
+        "0x62293916ac98bc02b90472638bd2beb1b531a914395c34239abe6fc011b9011a");
+    BOOST_CHECK_EQUAL(result["baseFeePerGas"].asString(), "0x3b9aca00");
+    BOOST_CHECK(result.isMember("withdrawalsRoot"));
+    BOOST_CHECK(result.isMember("requestsHash"));
+}
+
 // The fork-gated key matrix must match geth's eth_getBlock* shape exactly: LONDON has only
 // baseFeePerGas; SHANGHAI adds withdrawals/withdrawalsRoot; CANCUN adds the blob trio;
 // PRAGUE adds requestsHash. A wrong presence/absence on any fork must fail here.
@@ -396,20 +451,20 @@ BOOST_AUTO_TEST_CASE(combineBlockResponseEthForkShapesGateKeys)
         std::optional<bcos::h256> requestsHash;
         if (c.expectWithdrawals)
         {
-            withdrawalsRoot = bcos::h256(
-                "2222222222222222222222222222222222222222222222222222222222222222");
+            withdrawalsRoot =
+                bcos::h256("2222222222222222222222222222222222222222222222222222222222222222");
         }
         if (c.expectBlobTrio)
         {
             blobGasUsed = bcos::u256(0);
             excessBlobGas = bcos::u256(0);
-            parentBeaconBlockRoot = bcos::h256(
-                "3333333333333333333333333333333333333333333333333333333333333333");
+            parentBeaconBlockRoot =
+                bcos::h256("3333333333333333333333333333333333333333333333333333333333333333");
         }
         if (c.expectRequestsHash)
         {
-            requestsHash = bcos::h256(
-                "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+            requestsHash =
+                bcos::h256("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
         }
         auto block = makeEthHeaderBlock(m_blockFactory, hashImpl, c.version, baseFee,
             withdrawalsRoot, blobGasUsed, excessBlobGas, parentBeaconBlockRoot, requestsHash);

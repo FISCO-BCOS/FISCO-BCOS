@@ -56,8 +56,12 @@ concept InputHashes =
 
 template <class SenderNonceTuple>
 concept SenderNonce = requires(SenderNonceTuple senderNonce) {
-    { std::get<0>(senderNonce) } -> std::convertible_to<std::string_view>;
-    { std::get<1>(senderNonce) } -> std::convertible_to<int64_t>;
+    {
+        std::get<0>(senderNonce)
+    } -> std::convertible_to<std::string_view>;
+    {
+        std::get<1>(senderNonce)
+    } -> std::convertible_to<int64_t>;
 };
 
 
@@ -76,19 +80,19 @@ private:
     // 按账户与 nonce 顺序扫描，以及按发送者聚合遍历，同时保留插入顺序。
     //
     // Index layout 索引布局（get<N>() 对应关系）：
-    //   0 -> SenderNonceIndex（ordered_unique by (sender, nonce)）
-    //        - 保证同一 sender 下 nonce 的唯一性与有序性；
-    //        - 便于按照 (sender, currentNonce..) 连续扫描，用于 seal / remove等流程；
-    //   1 -> HashIndex（hashed_unique by tx hash）
-    //        - 按交易哈希 O(1) 近似查找/去重，用于交易按 hash 去重；
-    //   2 -> SenderIndex（hashed_non_unique by sender）
-    //        - 快速按发送者分组遍历（一个 sender 对应多笔交易），用于按 sender 遍历；
-    //   3 -> SequenceIndex（sequenced）
-    //        - 维护插入顺序（FIFO），便于基于时间/先来先服务的策略，用于超时淘汰；
+    // 0 -> SenderNonceIndex（ordered_unique by (sender, nonce)）
+    // - 保证同一 sender 下 nonce 的唯一性与有序性；
+    // - 便于按照 (sender, currentNonce..) 连续扫描，用于 seal / remove等流程；
+    // 1 -> HashIndex（hashed_unique by tx hash）
+    // - 按交易哈希 O(1) 近似查找/去重，用于交易按 hash 去重；
+    // 2 -> SenderIndex（hashed_non_unique by sender）
+    // - 快速按发送者分组遍历（一个 sender 对应多笔交易），用于按 sender 遍历；
+    // 3 -> SequenceIndex（sequenced）
+    // - 维护插入顺序（FIFO），便于基于时间/先来先服务的策略，用于超时淘汰；
     //
     // Notes:
     // - ordered_unique composite key uses (sender, nonce) to avoid duplicates and keep
-    //   per-sender nonce strictly increasing when scanning.
+    // per-sender nonce strictly increasing when scanning.
     // - hashed_unique by hash prevents duplicate transactions with the same hash.
     // - hashed_non_unique by sender supports grouping operations across all txs of a sender.
     // - sequenced keeps push order; useful for strategies relying on arrival order.
@@ -237,9 +241,9 @@ public:
             // (in-memory noncer) and reth's best_transactions() select block transactions
             // without touching state.
             for (auto nonceIt = senderNonceIndex.lower_bound(std::make_tuple(sender, currentNonce));
-                nonceIt != senderNonceIndex.end() && nonceIt->sender() == sender &&
-                nonceIt->nonce() == currentNonce;
-                ++nonceIt)
+                 nonceIt != senderNonceIndex.end() && nonceIt->sender() == sender &&
+                 nonceIt->nonce() == currentNonce;
+                 ++nonceIt)
             {
                 ++currentNonce;
                 ++count;
@@ -289,6 +293,17 @@ public:
             }
 
             it = nextIt;
+        }
+    }
+
+    /// Drop txs by hash during OP payload building.
+    void removeByHash(std::span<bcos::crypto::HashType const> hashes)
+    {
+        std::unique_lock lock(m_mutex);
+        auto& hashIndex = m_transactions.get<1>();
+        for (auto const& hash : hashes)
+        {
+            hashIndex.erase(hash);
         }
     }
 

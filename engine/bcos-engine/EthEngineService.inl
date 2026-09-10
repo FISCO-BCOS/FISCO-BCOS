@@ -276,28 +276,52 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     BuiltPayloadPtr cached;
     PayloadID payloadId;
     std::optional<EthPayloadArtifacts<ViewType>> localArtifact;
+    auto hashCheckView = m_globalStateStorage.fork();
+    auto const forkVersionForHash = co_await engine_common::forkVersionForPayloadHashCheck(
+        hashCheckView,
+        static_cast<bcos::protocol::BlockNumber>(request.executionPayload.blockNumber),
+        *m_blockFactory);
     {
         auto guard = m_tracker.lockExclusive();
         auto const& forkchoiceState = guard.forkchoiceState();
         auto parentKnown = request.executionPayload.parentHash == forkchoiceState.headBlockHash ||
                            guard.payloadIdForHash(request.executionPayload.parentHash).has_value();
-        if (!parentKnown)
-        {
-            detail::warnSyncingRateLimited<detail::c_newPayloadParentUnknown>(
-                "newPayload parent unknown; answering SYNCING",
-                request.executionPayload.parentHash);
-            co_return engine_common::makeStatus(
-                PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
-        }
-
         auto existingId = guard.payloadIdForHash(request.executionPayload.blockHash);
-        if (!existingId)
+        cached = existingId ? guard.findPayload(*existingId) : nullptr;
+        bool const cacheHit = parentKnown && existingId && cached;
+        if (!cacheHit)
         {
-            // #5468 / finding E: op-geth executes (InsertBlockWithoutSetHead) before VALID.
-            // An external payload this node did not build is not executed here yet.
-            detail::warnSyncingRateLimited<detail::c_newPayloadNotBuiltHere>(
-                "newPayload block not built here; answering SYNCING",
-                request.executionPayload.blockHash);
+            if (forkVersionForHash.has_value())
+            {
+                if (auto hashError = detail::matchReconstructedEthBlockHash(
+                        m_blockFactory->blockHeaderFactory(), request.executionPayload,
+                        request.parentBeaconBlockRoot, *forkVersionForHash);
+                    hashError.has_value())
+                {
+                    co_return engine_common::makeStatus(
+                        PayloadValidationStatus::InvalidBlockHash, std::nullopt, hashError);
+                }
+            }
+            if (!parentKnown)
+            {
+                detail::warnSyncingRateLimited<detail::c_newPayloadParentUnknown>(
+                    "newPayload parent unknown; answering SYNCING",
+                    request.executionPayload.parentHash);
+                co_return engine_common::makeStatus(
+                    PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+            }
+            if (!existingId)
+            {
+                // #5468 / finding E: op-geth executes (InsertBlockWithoutSetHead) before VALID.
+                // An external payload this node did not build is not executed here yet.
+                detail::warnSyncingRateLimited<detail::c_newPayloadNotBuiltHere>(
+                    "newPayload block not built here; answering SYNCING",
+                    request.executionPayload.blockHash);
+                co_return engine_common::makeStatus(
+                    PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+            }
+            detail::warnSyncingRateLimited<detail::c_newPayloadCacheMiss>(
+                "newPayload cache miss; answering SYNCING", request.executionPayload.blockHash);
             co_return engine_common::makeStatus(
                 PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
         }
@@ -629,7 +653,8 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         emptyHeader->setPrevRandao(payloadAttributes.prevRandao);
         emptyHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
         emptyHeader->setExtraData(std::move(extraData));
-        emptyHeader->setStateRoot(co_await calculateStateRoot(view, emptyHeader->version()));
+        co_await engine_common::resolveEngineBlockStateRoot(view, *emptyHeader, ledgerConfig,
+            *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory);
         emptyHeader->setReceiptsRoot(bcos::ledger::mpt::emptyRootHash());
         emptyHeader->setTxsRoot(bcos::ledger::mpt::emptyRootHash());
         emptyHeader->setGasUsed(0);
@@ -721,8 +746,8 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         }
     }
 
-    h256 stateRoot = co_await calculateStateRoot(view, blockHeader->version());
-    blockHeader->setStateRoot(stateRoot);
+    h256 stateRoot = co_await engine_common::resolveEngineBlockStateRoot(view, *blockHeader,
+        ledgerConfig, *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory);
     blockHeader->setReceiptsRoot(receiptRoot);
     blockHeader->setTxsRoot(txRoot);
     blockHeader->setGasUsed(totalGasUsed);
@@ -740,38 +765,6 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
         .header = std::move(blockHeader),
         .receipts = std::move(receipts)};
-}
-
-template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
-    requires executor_v1::TransactionExecutor<ExecutorType,
-                 typename GlobalStateStorageType::ViewType> &&
-             scheduler_v1::TransactionScheduler<SchedulerType,
-                 typename GlobalStateStorageType::ViewType, ExecutorType,
-                 std::vector<protocol::Transaction::Ptr>>
-task::Task<h256> EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType,
-    SchedulerType>::calculateStateRoot(ViewType& view, uint32_t blockVersion) const
-{
-    auto range = co_await storage2::range(view);
-    h256 totalHash;
-    while (auto keyValue = co_await range.next())
-    {
-        auto& [key, value] = *keyValue;
-        executor_v1::StateKeyView viewKey(key);
-        auto [tableName, keyName] = viewKey.get();
-
-        storage::Entry entry;
-        if (auto* e = std::get_if<storage::Entry>(std::addressof(value)))
-        {
-            entry = *e;
-        }
-        else
-        {
-            entry.setStatus(storage::Entry::DELETED);
-        }
-        totalHash ^= entry.hash(
-            tableName, keyName, *m_blockFactory->cryptoSuite()->hashImpl(), blockVersion);
-    }
-    co_return totalHash;
 }
 
 }  // namespace bcos::engine

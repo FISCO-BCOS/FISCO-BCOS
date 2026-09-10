@@ -12,6 +12,12 @@
 
 namespace bcos::initializer
 {
+/// Wires the Engine API (forkchoiceUpdated / getPayload / newPayload) to a scheduler +
+/// executor pipeline. Called from Initializer when engine-driven block production is enabled:
+///   * executor_version=2 + [consensus] enable_single_node_consensus (built-in CL), or
+///   * executor_version=2 + [op_engine_rpc] enable (external op-node over authenticated RPC), or
+///   * executor_version>=3 OP mode (external op-node + [op_engine_rpc] enable at boot).
+/// executor_version alone does not enable the Engine API on v2 chains.
 class EngineServiceInitializer
 {
 public:

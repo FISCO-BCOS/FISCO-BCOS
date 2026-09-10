@@ -70,6 +70,7 @@ void EndpointsMapping::addEngineHandlers()
     m_handlers[methodString(EthMethod::engine_newPayloadV2)] = &Endpoints::newPayloadV2;
     m_handlers[methodString(EthMethod::engine_newPayloadV3)] = &Endpoints::newPayloadV3;
     m_handlers[methodString(EthMethod::engine_newPayloadV4)] = &Endpoints::newPayloadV4;
+    m_handlers[methodString(EthMethod::miner_setMaxDASize)] = &Endpoints::setMaxDASize;
     // clang-format on
 }
 
@@ -115,7 +116,9 @@ void EndpointsMapping::addEthHandlers()
     m_handlers[methodString(EthMethod::eth_getFilterLogs)] = &Endpoints::getFilterLogs;
     m_handlers[methodString(EthMethod::eth_getLogs)] = &Endpoints::getLogs;
     m_handlers[methodString(EthMethod::eth_maxPriorityFeePerGas)] = &Endpoints::maxPriorityFeePerGas;
+    m_handlers[methodString(EthMethod::eth_feeHistory)] = &Endpoints::feeHistory;
     m_handlers[methodString(EthMethod::eth_getProof)] = &Endpoints::getProof;
+    m_handlers[methodString(EthMethod::eth_feeHistory)] = &Endpoints::feeHistory;
     // clang-format on
 }
 

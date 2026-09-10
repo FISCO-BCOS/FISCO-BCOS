@@ -19,16 +19,16 @@
 
 #pragma once
 
-// This is the DEFINITION half of the split: OpEngineService.h is declarations-only so an
-// installed consumer of the declarations needs no rlp-protocol include dirs (engine links
-// rlp-protocol PRIVATE and does not propagate them). Including this .inl is the opt-in
-// instantiation point — the template's members use bcos::protocol::EthBlockHeader::computeHash
-// (a non-dependent name) and bcos::evm::opstack::estimatedDaSize, so instantiating TUs need
-// rlp-protocol and bcos-evm-opstack include dirs and link both (in-tree instantiators do).
+// This is the DEFINITION half of the split: OpEngineService.h is declarations-only.
+// Including this.inl is the opt-in instantiation point — members use
+// EthBlockHeader::computeHash and bcos::evm::opstack::estimatedDaSize. engine links
+// rlp-protocol PUBLIC so installed consumers inherit the include dirs;
+// instantiators still need to link bcos-evm-opstack.
 #include "OpEngineService.h"
 #include <bcos-evm/opstack/RollupCost.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 
+#include <iterator>
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/view/transform.hpp>
 
@@ -132,13 +132,25 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
         }
     }
 
+    if (forkchoiceState.headBlockHash == bcos::h256{})
+    {
+        // op-geth: "Forkchoice requested update to zero hash" → STATUS_INVALID.
+        // SYNCING would tell the CL to wait on sync for a malformed request.
+        co_return ForkchoiceUpdatedResult{
+            .payloadStatus = makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+                std::string("Forkchoice requested update to zero hash")),
+            .payloadId = std::nullopt,
+        };
+    }
+
     auto view = m_globalStateStorage.fork();
     auto headBlockNumber = co_await bcos::ledger::getBlockNumber(
         view, forkchoiceState.headBlockHash, bcos::ledger::fromStorage);
     // All-zero safe/finalized hashes are the Engine-API "not set" value: skip number
     // resolution and canonical checks for that field (op-geth SetSafe/SetFinalized are
-    // only called for non-zero hashes). A missing HEAD is SYNCING; a non-zero
-    // unresolvable safe/finalized is InvalidForkchoiceState (op-geth, finding BJ).
+    // only called for non-zero hashes). A missing non-zero HEAD is SYNCING; a
+    // zero HEAD is INVALID. A non-zero unresolvable safe/finalized is
+    // InvalidForkchoiceState (op-geth, ).
     bool const safeSet = forkchoiceState.safeBlockHash != bcos::h256{};
     bool const finalizedSet = forkchoiceState.finalizedBlockHash != bcos::h256{};
     auto safeBlockNumber = safeSet ? co_await bcos::ledger::getBlockNumber(view,
@@ -212,8 +224,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
         co_return result;
     }
 
-    co_return co_await buildOpPayload(
-        forkchoiceState, *payloadAttributes, version, *headBlockNumber + 1, decodedForcedTxs);
+    co_return co_await buildOpPayload(forkchoiceState, *payloadAttributes, version,
+        *headBlockNumber + 1, std::move(decodedForcedTxs));
 }
 
 template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
@@ -221,17 +233,17 @@ task::Task<ForkchoiceUpdatedResult>
 OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayload(
     const ForkchoiceState& forkchoiceState, const PayloadAttributes& payloadAttributes,
     std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
-    std::vector<bcos::bytes> const& decodedForcedTxs)
+    std::vector<bcos::bytes> decodedForcedTxs)
 {
     // Same policy as EthEngineService (option B): deterministic derivePayloadId, not a
-    // process-local sequence counter. Reuse validate's decoded forced txs (finding AE).
+    // process-local sequence counter. Reuse validate's decoded forced txs.
     // The id's version byte is the PAYLOAD SHAPE version (V3/V4-method → PayloadV3),
     // matching both the cache entry's version below and upstream: op-geth's
     // ForkchoiceUpdatedV3/V4 build the same PayloadV3 shape, so the same content under
     // either method must derive the same id (GetPayloadV4 accepts only PayloadV3 ids).
-    auto payloadIdOpt = engine_common::derivePayloadId(payloadAttributes,
-        forkchoiceState.headBlockHash, engine_common::payloadShapeVersion(version),
-        decodedForcedTxs);
+    auto payloadIdOpt =
+        engine_common::derivePayloadId(payloadAttributes, forkchoiceState.headBlockHash,
+            engine_common::payloadShapeVersion(version), decodedForcedTxs);
     if (!payloadIdOpt.has_value())
     {
         co_return ForkchoiceUpdatedResult{
@@ -253,9 +265,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
             // Parent hash already resolved (canonical). Missing header is local-state
             // corruption — fail closed rather than pricing the block at 1 gwei.
             co_return ForkchoiceUpdatedResult{
-                .payloadStatus = makeStatus(PayloadValidationStatus::Invalid,
-                    forkchoiceState.headBlockHash,
-                    std::string("parent block header is missing from storage")),
+                .payloadStatus =
+                    makeStatus(PayloadValidationStatus::Invalid, forkchoiceState.headBlockHash,
+                        std::string("parent block header is missing from storage")),
                 .payloadId = std::nullopt,
             };
         }
@@ -286,8 +298,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     }
     if (payloadAttributes.transactions.has_value())
     {
-        forcedEnvelopes.insert(
-            forcedEnvelopes.end(), decodedForcedTxs.begin(), decodedForcedTxs.end());
+        forcedEnvelopes.insert(forcedEnvelopes.end(),
+            std::make_move_iterator(decodedForcedTxs.begin()),
+            std::make_move_iterator(decodedForcedTxs.end()));
     }
 
     std::vector<std::pair<crypto::HashType, bytes>> sealedEnvelopes;
@@ -317,7 +330,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     std::set<crypto::HashType> evicted;
     // op-geth miner: excluding nonce n of sender S also drops S's later nonces from
     // this candidate and never evicts those successors from the pool (R3-F1).
-    // Walk by nonce, not sealed-vector position (finding BU): seal order is not a
+    // Walk by nonce, not sealed-vector position: seal order is not a
     // nonce-order contract the build path may assume.
     auto skipSenderTail = [&](crypto::HashType const& hash) {
         evicted.insert(hash);
@@ -406,7 +419,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     // Retry loop: each evicted culprit re-executes the whole candidate block from scratch
     // (no incremental prefix reuse), so k failing pool txs cost up to k+1 full build+execute
     // passes plus the always-on canonical verify pass. Bounded by the sealed-envelope count;
-    // only reworked when per-envelope execution becomes reusable (finding AX).
+    // only reworked when per-envelope execution becomes reusable.
     while (true)
     {
         std::vector<bytes> candidateEnvelopes = forcedEnvelopes;
@@ -437,8 +450,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
         }
         payload = assemblePayload(std::move(candidateEnvelopes));
 
-        const auto transactionsRoot =
-            SchedulerType::computeTxRoot(detail::rawEnvelopes(payload));
+        const auto transactionsRoot = SchedulerType::computeTxRoot(detail::rawEnvelopes(payload));
         auto provisionalHeader = engine_common::op::rebuildOpEthHeader(
             m_blockFactory->blockHeaderFactory(), payload, transactionsRoot, parentBeaconBlockRoot);
         bcos::protocol::Block::Ptr block;
@@ -462,8 +474,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
             // The build loop's whole model rests on reset having done its documented effect
             // (dropping any uncommitted pending, restoring the watermark) before executeBlock
             // runs; a failed reset must not be silently ignored.
-            BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
-                std::string("OP payload build reset failed: ") + resetError->errorMessage()});
+            BOOST_THROW_EXCEPTION(
+                OpExecutionInternalError{} << bcos::errinfo_comment{
+                    std::string("OP payload build reset failed: ") + resetError->errorMessage()});
         }
         bcos::Error::Ptr executeError;
         m_delegate->executeBlock(block, /*verify=*/false,
@@ -482,7 +495,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
         // A block-gas capacity fault means the tx is VALID but does not fit this
         // candidate (mempool seals by count only). OpRejectIsCapacity's contract is
         // "skip this build, do not evict": the tx must stay in the mempool for a later
-        // block, so the eviction loop only excludes it from this candidate (finding AY).
+        // block, so the eviction loop only excludes it from this candidate.
         bool const isCapacityReject =
             executeError != nullptr &&
             boost::get_error_info<bcos::engine::OpRejectIsCapacity>(*executeError) != nullptr;
@@ -536,8 +549,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     m_delegate->reset([&](bcos::Error::Ptr error) { resetError = std::move(error); });
     if (resetError)
     {
-        BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
-            std::string("OP payload build reset failed: ") + resetError->errorMessage()});
+        BOOST_THROW_EXCEPTION(
+            OpExecutionInternalError{} << bcos::errinfo_comment{
+                std::string("OP payload build reset failed: ") + resetError->errorMessage()});
     }
     bcos::Error::Ptr canonicalError;
     bcos::protocol::BlockHeader::Ptr canonicalHeader;
@@ -573,8 +587,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
         // moved-from, and putStaged then hashes that reference into hashToId.
         const auto blockHash = commonEntry->executionPayload.blockHash;
         auto guard = m_tracker.lockExclusive();
-        publishBuiltPayload(guard, m_artifacts, payloadId, blockHash,
-            std::move(commonEntry), std::move(stagedArtifact));
+        publishBuiltPayload(guard, m_artifacts, payloadId, blockHash, std::move(commonEntry),
+            std::move(stagedArtifact));
     }
 
     co_return ForkchoiceUpdatedResult{
@@ -593,8 +607,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::newPayload(
 }
 
 template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
-task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType,
-    SchedulerType>::handleOpNewPayload(const NewPayloadRequest& request, std::uint32_t version)
+task::Task<PayloadStatus>
+OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::handleOpNewPayload(
+    const NewPayloadRequest& request, std::uint32_t version)
 {
     if (!isNewPayloadVersionSupported(version))
     {
@@ -621,8 +636,9 @@ task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType,
 }
 
 template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
-    task::Task<PayloadStatus> OpEngineService<MemPoolType, GlobalStateStorageType,
-        SchedulerType>::runOpNewPayloadSteps(const NewPayloadRequest& request)
+task::Task<PayloadStatus>
+OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPayloadSteps(
+    const NewPayloadRequest& request)
 {
     // No reset of m_lastExecutedHeader here: a duplicate newPayload
     // arriving while another one is mid-flight must not clear a header the
@@ -670,15 +686,15 @@ template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
                 builtHeader, [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr) {
                     commitError = std::move(error);
                 });
-            if (commitError)
-            {
-                co_return mapDelegateError(*commitError, std::nullopt);
-            }
+            if (!commitError)
             {
                 std::lock_guard lock(m_lastExecutedHeaderMutex);
                 m_lastExecutedHeader = builtHeader;
+                co_return makeStatus(
+                    PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
             }
-            co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
+            // Built pending was dropped or replaced: fall through to execute+commit
+            // instead of answering -32603 on every retry of a still-valid payload.
         }
     }
 
@@ -723,9 +739,9 @@ template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
     }
     catch (const std::exception& e)
     {
-        BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
-                                  std::string("stored parent block header is undecodable: ") +
-                                  e.what()});
+        BOOST_THROW_EXCEPTION(
+            OpExecutionInternalError{} << bcos::errinfo_comment{
+                std::string("stored parent block header is undecodable: ") + e.what()});
     }
     if (parentHeader->number() != static_cast<int64_t>(*parentBlockNumber))
     {
@@ -784,7 +800,7 @@ template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
 
     // Payload-content fault: an envelope the CL submitted cannot be decoded into a
     // transaction. op-geth answers INVALID at block construction for this class; it is
-    // not a node-internal fault, so it must not surface as -32603 (finding AM). Internal
+    // not a node-internal fault, so it must not surface as -32603. Internal
     // faults (storage, delegate) still throw and map to -32603 by the caller.
     bcos::protocol::Block::Ptr block;
     try
@@ -800,7 +816,7 @@ template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
         {
             throw;
         }
-        // Stable Engine API string only (finding CG). FCU already returns this
+        // Stable Engine API string only. FCU already returns this
         // exact phrase via fcuInvalidIfUndecodable; dump Boost diagnostics in logs,
         // not in validationError.
         co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
@@ -820,8 +836,11 @@ template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
     }
     if (!executedHeader || !executedHeader->withdrawalsRoot().has_value())
     {
-        co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
-            std::string("executed header is missing withdrawalsRoot"));
+        // Presence of withdrawalsRoot is stamped by this node's scheduler, not the
+        // CL payload. A missing field is a node-internal fault (-32603), never a
+        // consensus INVALID the CL would discard.
+        BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                  "executed header is missing withdrawalsRoot"});
     }
     if (executedHeader->withdrawalsRoot() != payload.withdrawalsRoot)
     {
@@ -860,10 +879,10 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpBloc
         auto tarsTx = engine_common::op::opEnvelopeToTars(env, txHash);
         if (!tarsTx)
         {
-            BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << OpPayloadUndecodable{true}
-                                                             << bcos::errinfo_comment{
-                                                                    "undecodable payload "
-                                                                    "transaction envelope"});
+            BOOST_THROW_EXCEPTION(OpExecutionInternalError{}
+                                  << OpPayloadUndecodable{true}
+                                  << bcos::errinfo_comment{"undecodable payload "
+                                                           "transaction envelope"});
         }
         tarsTx->extraTransactionBytes.assign(env.begin(), env.end());
         auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(

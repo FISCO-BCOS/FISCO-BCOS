@@ -187,6 +187,17 @@ BOOST_AUTO_TEST_CASE(decode_invalid_fee_fields_pass_through)
     BOOST_CHECK_EQUAL(req.maxFeePerGas.value(), "\t");
 }
 
+namespace
+{
+auto makeTxFactory()
+{
+    auto cryptoSuite =
+        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
+            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
+    return std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+}
+}  // namespace
+
 BOOST_AUTO_TEST_CASE(deployEstimateGasParsesDecimalNonce)
 {
     // FISCO stores account nonces as DECIMAL strings, and the transaction nonce is
@@ -194,10 +205,7 @@ BOOST_AUTO_TEST_CASE(deployEstimateGasParsesDecimalNonce)
     // TransactionExecutorImpl via hex2u). A deployment eth_estimateGas must therefore
     // convert the stored decimal "12" to the hex quantity "0xc" — reading it as hex
     // would yield 0x12 = 18 and fail NONCE_TOO_HIGH in the executor.
-    auto cryptoSuite =
-        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
-            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
-    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+    auto txFactory = makeTxFactory();
 
     auto nonceScheduler = std::make_shared<NonceStubScheduler>(nullptr, nullptr);
     nonceScheduler->nonceValue = "12";
@@ -211,15 +219,63 @@ BOOST_AUTO_TEST_CASE(deployEstimateGasParsesDecimalNonce)
     BOOST_CHECK_EQUAL(tx->nonce(), "0xc");
 }
 
+BOOST_AUTO_TEST_CASE(callEstimateGasParsesDecimalNonce)
+{
+    // PR-1: pending-nonce lookup applies to every eth_estimateGas with a sender, not
+    // only contract deployments. A call-shaped estimate must still convert the stored
+    // decimal nonce before the executor parses it as hex.
+    auto txFactory = makeTxFactory();
+
+    auto nonceScheduler = std::make_shared<NonceStubScheduler>(nullptr, nullptr);
+    nonceScheduler->nonceValue = "12";
+
+    CallRequest req;
+    req.from = "0x1234567890abcdef1234567890abcdef12345678";
+    req.to = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd";
+    req.data = bytes{0x01, 0x02, 0x03};
+
+    auto tx = req.takeToTransaction(txFactory, nonceScheduler);
+    BOOST_CHECK_EQUAL(tx->nonce(), "0xc");
+}
+
+BOOST_AUTO_TEST_CASE(ethCallSkipsPendingNonceWithoutScheduler)
+{
+    // EthEndpoint passes scheduler=nullptr for eth_call, so pending-nonce lookup must
+    // not run even when `from` is present (release and PR-1 agree on this path).
+    auto txFactory = makeTxFactory();
+
+    auto nonceScheduler = std::make_shared<NonceStubScheduler>(nullptr, nullptr);
+    nonceScheduler->nonceValue = "12";
+
+    CallRequest req;
+    req.from = "0x1234567890abcdef1234567890abcdef12345678";
+    req.to = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd";
+
+    auto tx = req.takeToTransaction(txFactory, nullptr);
+    BOOST_CHECK(tx->nonce().empty());
+}
+
+BOOST_AUTO_TEST_CASE(estimateGasUsesParentBlockGasLimitWhenOmitted)
+{
+    auto txFactory = makeTxFactory();
+
+    auto nonceScheduler = std::make_shared<NonceStubScheduler>(nullptr, nullptr);
+    nonceScheduler->nonceValue = "0";
+
+    CallRequest req;
+    req.from = "0x1234567890abcdef1234567890abcdef12345678";
+    req.to = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd";
+
+    auto tx = req.takeToTransaction(txFactory, nonceScheduler, std::optional<uint64_t>{42'000'000});
+    BOOST_CHECK_EQUAL(tx->gasLimit(), 42'000'000);
+}
+
 BOOST_AUTO_TEST_CASE(deployEstimateGasLeavesCorruptNonceUnset)
 {
     // A stored nonce that is empty or non-numeric must not abort the RPC (this
     // function is noexcept) — the nonce is left unset and the executor's dry-run
     // falls back to the sender's state nonce.
-    auto cryptoSuite =
-        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
-            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
-    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+    auto txFactory = makeTxFactory();
 
     for (auto const& corrupt : {std::string{}, std::string{"12a"}, std::string{"abc"}})
     {

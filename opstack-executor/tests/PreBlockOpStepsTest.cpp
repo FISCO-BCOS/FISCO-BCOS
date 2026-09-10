@@ -332,7 +332,7 @@ BOOST_AUTO_TEST_CASE(PrePoisonedSharedSlotFailsAtSystemCallStep)
         engine::OpStorageError);
 }
 
-// Round-14 F1: processOpBlock's four applyDiff call sites must normalize a storage write-back
+// processOpBlock's four applyDiff call sites must normalize a storage write-back
 // failure to OpStorageError, exactly like the per-tx path (m_finish / executeDeposit /
 // finalizeBlock). Storage2State::applyDiff poisons AND rethrows raw, so without the block-path
 // wrapper a bare std::runtime_error would escape processOpBlock and break the documented
@@ -389,6 +389,8 @@ BOOST_AUTO_TEST_CASE(ProcessOpBlockCapacityFaultIsNotAnEvictableCulprit)
     tx.to = evmc::address{};
     std::memset(tx.to->bytes, 0x11, sizeof(tx.to->bytes));
     tx.value = intx::uint256{0};
+    tx.max_gas_price = 30'000'000'000;
+    tx.max_priority_gas_price = 30'000'000'000;
     tx.sender = evmc::address{};
     std::memset(tx.sender.bytes, 0xaa, sizeof(tx.sender.bytes));
 
@@ -399,9 +401,8 @@ BOOST_AUTO_TEST_CASE(ProcessOpBlockCapacityFaultIsNotAnEvictableCulprit)
         return out;
     };
     bcos::bytes payload;
-    auto append = [&payload](bcos::bytes const& b) {
-        payload.insert(payload.end(), b.begin(), b.end());
-    };
+    auto append = [&payload](
+                      bcos::bytes const& b) { payload.insert(payload.end(), b.begin(), b.end()); };
     append(intItem(10));  // chainId
     append(intItem(0));   // nonce
     append(intItem(30000000000));
@@ -411,7 +412,7 @@ BOOST_AUTO_TEST_CASE(ProcessOpBlockCapacityFaultIsNotAnEvictableCulprit)
     bcos::bytes toItem;
     rlp::encode(toItem, bcos::bytesConstRef{toBytes.data(), toBytes.size()});
     append(toItem);
-    append(intItem(0));  // value
+    append(intItem(0));       // value
     payload.push_back(0x80);  // empty data (bare byte)
     payload.push_back(0xc0);  // empty accessList
     bcos::bytes listHeader;
@@ -431,8 +432,7 @@ BOOST_AUTO_TEST_CASE(ProcessOpBlockCapacityFaultIsNotAnEvictableCulprit)
         normalTx.tx = tx;
         normalTx.signedEnvelope = envelope;
         std::vector<op::OpBlockTx> const txs{depTx, normalTx};
-        (void)op::processOpBlock(view, block, hashes, txs,
-            op::isthmusConfig(), vm, /*chainId=*/10,
+        (void)op::processOpBlock(view, block, hashes, txs, op::isthmusConfig(), vm, /*chainId=*/10,
             bcos::evm::opstack::testutil::kOpTestReceiptFactory,
             [](const evmone::state::StateDiff&) {});
         BOOST_FAIL("a tx over the remaining block gas must void the block");
@@ -442,12 +442,10 @@ BOOST_AUTO_TEST_CASE(ProcessOpBlockCapacityFaultIsNotAnEvictableCulprit)
         BOOST_CHECK(e.capacity);
         BOOST_REQUIRE(e.txHash.has_value());
         BOOST_CHECK_EQUAL(e.txHash->hex(),
-            bcos::crypto::keccak256Hash(
-                bcos::bytesConstRef{envelope.data(), envelope.size()})
+            bcos::crypto::keccak256Hash(bcos::bytesConstRef{envelope.data(), envelope.size()})
                 .hex());
         BOOST_CHECK_MESSAGE(
-            std::string(e.what()).find("does not fit the remaining block gas") !=
-                std::string::npos,
+            std::string(e.what()).find("does not fit the remaining block gas") != std::string::npos,
             "unexpected reject: " << e.what());
     }
 }

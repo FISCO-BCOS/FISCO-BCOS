@@ -156,8 +156,15 @@ inline const evmc::bytes32 OP_EMPTY_REQUESTS_HASH = [] {
     // the same value the engine header builders stamp (EngineServiceCommon.h
     // c_emptyRequestsHash), cast here into the seal's native type. Both are
     // keccak256(rlp(header))-critical, so the hex must have exactly one home.
-    auto raw = bcos::fromHex(std::string{bcos::engine::c_emptyRequestsHashHex});
+    // 0x + 64 hex digits; a wrong-length edit must fail at compile time.
+    static_assert(bcos::engine::c_emptyRequestsHashHex.size() == 66,
+        "c_emptyRequestsHashHex must be 0x plus 32 bytes of hex");
+    auto const raw = bcos::fromHex(std::string{bcos::engine::c_emptyRequestsHashHex});
     evmc::bytes32 hash{};
+    if (raw.size() != sizeof(hash.bytes))
+    {
+        throw std::logic_error("c_emptyRequestsHashHex must decode to exactly 32 bytes");
+    }
     std::copy(raw.begin(), raw.end(), hash.bytes);
     return hash;
 }();
@@ -172,7 +179,7 @@ inline const evmc::bytes32 OP_EMPTY_REQUESTS_HASH = [] {
 
 /// Receipts-root leaf, byte-for-byte op-geth `Receipts.EncodeIndex` semantics:
 /// deposit 0x7E || rlp([status, cumGas, bloom, logs, nonce, version]);
-/// normal  typed prefix + rlp([status, cumGas, bloom, logs]).
+/// normal typed prefix + rlp([status, cumGas, bloom, logs]).
 [[nodiscard]] bcos::bytes encodeReceiptForRoot(
     const bcos::protocol::TransactionReceipt& r, uint8_t txType);
 }  // namespace bcos::evm::opstack
@@ -376,9 +383,7 @@ inline OpBlockCommitments announcedCommitmentsOf(const bcos::engine::ExecutionPa
 /// Matches op-geth's DeriveSha because the raw-tx decoders reject non-canonical encodings
 /// (assertCanonicalRoundTrip fails closed if that lapses). Two call sites: the engine's
 /// pre-execution blockHash check and finalizeOpBlockResult's txRoot.
-/// Values are copied into owned bytes: computeTrieRootVarKey takes
-/// span<pair<bytes, bytes>>, not a non-owning bytesConstRef. A non-owning overload
-/// would drop this copy; not rewritten in this slice.
+/// Values are copied into owned bytes because computeTrieRootVarKey needs owned keys.
 template <class RawTxRange>
 [[nodiscard]] bcos::h256 computeOpTxRoot(RawTxRange const& rawTxBytes)
 {
