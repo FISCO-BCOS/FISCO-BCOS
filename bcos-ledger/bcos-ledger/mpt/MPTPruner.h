@@ -103,7 +103,8 @@ namespace bcos::ledger::mpt
 ///    refCountDeltas' per-emission semantics); at each account leaf Account::decode yields the
 ///    storageRoot, non-empty storage tries are walked the same way.
 ///  - Phase 2 (deadlines): walk the roots head−1 .. S NEWEST-FIRST with subtree dedup against
-///    everything already seen (Phase 1 plus the newer roots of this phase): a newly seen node is
+///    everything already counted (m_counts IS the seen set: Phase 1 plus the newer roots of
+///    this phase): a newly seen node is
 ///    one the head state no longer references, last referenced by the NEWEST root that still
 ///    holds it, s — it was obsoleted at s+1, so deadline = s+1+N (still in the future:
 ///    s >= head−N). Newest-first makes the first attribution the correct one; the deadline
@@ -112,6 +113,9 @@ namespace bcos::ledger::mpt
 ///    window and that block was already pruned (root(b) leaves at b+1+N_old) — a widened N
 ///    recovers only roots still on disk, so the walk stops there and the effective window
 ///    starts at the first surviving root.
+///    Phases 1 and 2 share ONE traversal implementation (walkTrie): the stack, the node-row
+///    read and the descend rules live there once; each phase supplies only its per-node
+///    callback (count-and-descend vs. dedup-against-m_counts-then-arm).
 ///  - Phase 3 (first-sweep of pre-existing garbage): scan the "/mpt/" table; a row in neither
 ///    the counts nor the queue is unreachable garbage (historical leak, or nodes written before
 ///    pruning was enabled). Driven by storage.mpt_prune_sweep_garbage: disabled (the default)
@@ -214,8 +218,7 @@ public:
         }
 
         // Phase 1: count the head state's references.
-        std::unordered_set<bcos::h256> seen;
-        co_await countWalk(*headRoot, true, seen);
+        co_await countWalk(*headRoot, true);
 
         // Phase 2: newest-first over [head−N, head): attribute each no-longer-live node to the
         // newest root still referencing it, deadline = s+1+N. The oldest in-window root head−N
@@ -228,7 +231,15 @@ public:
             auto const root = co_await stateRootAt(block);
             if (!root)
             {
-                break;  // older headers unavailable (pruned block data) — nothing more to walk
+                // Older HEADERS unavailable (snapshot restore / pruned block data — NOT
+                // pruning, which only ever touches "/mpt/" node rows): nothing more to walk.
+                // Log loud like the pruned-root branch below — the effective window silently
+                // collapses to the head otherwise.
+                MPT_PRUNER_LOG(WARNING)
+                    << "MPT pruning: block data unavailable (not pruned state) — stopping "
+                       "the rebuild walk at the first block with a readable header"
+                    << LOG_KV("block", block) << LOG_KV("effectiveWindowStart", block + 1);
+                break;
             }
             // Probe the root ROW first: a chain that previously ran a SMALLER window has
             // already deleted this block's root (root(b) leaves at b+1+N_old), and deadlineWalk
@@ -246,8 +257,7 @@ public:
                     << LOG_KV("pruneWindow", m_pruneWindow);
                 break;
             }
-            co_await deadlineWalk(
-                *root, true, static_cast<uint64_t>(block + 1 + m_pruneWindow), seen);
+            co_await deadlineWalk(*root, true, static_cast<uint64_t>(block + 1 + m_pruneWindow));
         }
 
         // Phase 3: unreachable-garbage sweep. With the sweep disabled (the config default) the
@@ -484,7 +494,7 @@ public:
                                        // block implies a positive post-block count), kept as a
                                        // belt-and-braces: never delete a node this block's own
                                        // flush is writing in the same WriteBatch — a leak
-                                       // (retryable next block) beats a deleted live node.
+                                       // beats a deleted live node.
                                        !delta.newNodes.contains(hash);
                 if (confirmed)
                 {
@@ -493,8 +503,31 @@ public:
                     auto& staged = m_stagedCounts[hash];
                     staged.count = 0;
                     staged.deadline.reset();
+                    m_stagedDeadlineErases[deadline].insert(hash);
                 }
-                m_stagedDeadlineErases[deadline].insert(hash);  // consumed either way
+                else if (entry == nullptr || entry->count != 0 || entry->deadline != deadline)
+                {
+                    // Disqualified for a self-healing reason — revoked, re-armed (a newer
+                    // deadline mismatches this stale queue entry) or untracked: the hint is
+                    // dead weight, consumed with the bucket.
+                    m_stagedDeadlineErases[deadline].insert(hash);
+                }
+                else
+                {
+                    // count == 0 and the deadline matches, blocked ONLY by the newNodes
+                    // belt-and-braces — unreachable under correct accounting, so worth a loud
+                    // log. KEEP the queue entry: the next block's prepare re-checks it (the
+                    // entry is consistent, just deferred), while erasing it here would orphan
+                    // the count entry ({count 0, expired deadline}, referenced by no bucket)
+                    // until a restart.
+                    MPT_PRUNER_LOG(WARNING)
+                        << "MPT pruning: the newNodes guard blocked a matured deletion whose "
+                           "count entry still matches its schedule (unreachable under correct "
+                           "accounting) — the queue entry is kept for re-check at the next "
+                           "block"
+                        << LOG_KV("block", blockNumber) << LOG_KV("deadline", deadline)
+                        << LOG_KV("hash", hash.abridged());
+                }
             }
         }
 
@@ -711,11 +744,14 @@ private:
         }
     }
 
-    /// Phase 1: count EVERY encounter of each hash-addressed node reachable from @p root (no
-    /// dedup — K referencing tries are K live references), recording the encountered set into
-    /// @p seen for Phase 2's attribution.
-    bcos::task::Task<void> countWalk(
-        bcos::h256 root, bool accountTrie, std::unordered_set<bcos::h256>& seen)
+    /// The single trie-traversal implementation behind BOTH rebuild phases (countWalk and
+    /// deadlineWalk below are thin wrappers supplying the per-node callback): iterative over an
+    /// explicit (hash, accountTrie) stack, each popped hash's row read once from the committed
+    /// backend and descended per descend(). @p onNode runs per POPPED hash and returns whether
+    /// to read and descend into the node (false = already accounted for — skip the read and the
+    /// whole subtree). The empty root short-circuits: an empty trie stores no nodes.
+    template <typename OnNode>
+    bcos::task::Task<void> walkTrie(bcos::h256 root, bool accountTrie, OnNode&& onNode)
     {
         if (root == emptyRootHash())
         {
@@ -726,46 +762,44 @@ private:
         {
             auto const [hash, isAccount] = stack.back();
             stack.pop_back();
-            seen.insert(hash);
-            ++m_counts[hash].count;
-            auto const raw = co_await readNodeOrThrow(hash);
-            descend(decodeNode(bcos::ref(raw)), isAccount, stack);
-        }
-    }
-
-    /// Phase 2: walk @p root's trie, skipping any subtree root already in @p seen (owned by the
-    /// head state or a newer root); newly seen nodes are no longer live and get
-    /// @p deadline = s+1+N with s the walked root's block.
-    bcos::task::Task<void> deadlineWalk(bcos::h256 root, bool accountTrie, uint64_t deadline,
-        std::unordered_set<bcos::h256>& seen)
-    {
-        if (root == emptyRootHash())
-        {
-            co_return;
-        }
-        std::vector<std::pair<bcos::h256, bool>> stack{{root, accountTrie}};
-        while (!stack.empty())
-        {
-            auto const [hash, isAccount] = stack.back();
-            stack.pop_back();
-            if (!seen.insert(hash).second)
+            if (!onNode(hash))
             {
                 continue;
             }
-            schedule(hash, deadline);
             auto const raw = co_await readNodeOrThrow(hash);
             descend(decodeNode(bcos::ref(raw)), isAccount, stack);
         }
     }
 
-    /// Arm @p hash's deletion at @p deadline on the BASE tables (its entry is created when
-    /// absent — count 0). The init rebuild path only: the per-block path stages instead, so a
-    /// failed commit leaves no trace (stageSchedule).
-    void schedule(bcos::h256 const& hash, uint64_t deadline)
+    /// Phase 1: count EVERY encounter of each hash-addressed node reachable from @p root (no
+    /// dedup — K referencing tries are K live references) and always descend. The counted keys
+    /// double as Phase 2's seen set: deadlineWalk dedups against m_counts itself, so no separate
+    /// set is kept.
+    bcos::task::Task<void> countWalk(bcos::h256 root, bool accountTrie)
     {
-        auto& entry = m_counts[hash];
-        entry.deadline = deadline;
-        m_pending[deadline].insert(hash);
+        co_await walkTrie(root, accountTrie, [this](bcos::h256 const& hash) {
+            ++m_counts[hash].count;
+            return true;
+        });
+    }
+
+    /// Phase 2: walk @p root's trie, deduping against m_counts itself (whose key set covers the
+    /// head state plus the newer roots already walked in this phase) — an already-counted hash
+    /// is neither re-armed nor descended into. A node with no entry yet is one the head state
+    /// no longer references, so its fresh entry (count 0) is armed with @p deadline = s+1+N,
+    /// s the walked root's block.
+    bcos::task::Task<void> deadlineWalk(bcos::h256 root, bool accountTrie, uint64_t deadline)
+    {
+        co_await walkTrie(root, accountTrie, [this, deadline](bcos::h256 const& hash) {
+            auto const [it, inserted] = m_counts.try_emplace(hash);
+            if (!inserted)
+            {
+                return false;
+            }
+            it->second.deadline = deadline;
+            m_pending[deadline].insert(hash);
+            return true;
+        });
     }
 
     /// Arm @p hash's deletion at @p deadline on the overlay: the deadline lands on the staged

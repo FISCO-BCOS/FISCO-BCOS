@@ -1552,6 +1552,62 @@ BOOST_AUTO_TEST_CASE(RebuildFailsLoudOnMissingNode)
         bcos::task::syncWait(pruner.init(1, rootLookupOf(roots), /*sweepGarbage=*/false)), MPTInvariantViolation);
 }
 
+BOOST_AUTO_TEST_CASE(NewNodesGuardKeepsQueueEntryForRecheck)
+{
+    // The belt-and-braces newNodes guard, unreachable under correct accounting: a matured
+    // queue entry whose count is 0 with the matching deadline, but whose hash ALSO appears in
+    // the expiry block's newNodes. The deletion is skipped WITHOUT consuming the queue entry —
+    // the next block's prepare re-checks it and (with a clean delta) confirms it. Consuming
+    // the entry anyway would orphan the count entry ({count 0, expired deadline}, referenced
+    // by no bucket) until a restart.
+    PruneBackend backend;
+    BackendNodeStorage nodes(backend);
+    Pruner pruner(backend, /*pruneWindow=*/2);
+    auto const h1 = makeHash(0x01);
+    bcos::task::syncWait(nodes.writeOne(h1, bcos::bytes{0x11}));
+
+    // Counted history: created at block 1, obsoleted at block 2 → deadline 4.
+    MPTDeltaLayer delta1;
+    delta1.refCountDeltas[h1] = 1;
+    delta1.newNodes[h1] = bcos::bytes{0x11};
+    commitPruneBlock(backend, pruner, 1, delta1);
+    MPTDeltaLayer delta2;
+    delta2.refCountDeltas[h1] = -1;
+    delta2.obsoletedNodes.insert(h1);
+    commitPruneBlock(backend, pruner, 2, delta2);
+    BOOST_REQUIRE(pruner.countOf(h1) == std::optional<uint64_t>{0});
+    BOOST_REQUIRE(pruner.deadlineOf(h1) == std::optional<uint64_t>{4});
+    BOOST_REQUIRE_EQUAL(pruner.pendingCount(), 1U);
+
+    // Block 4, the expiry block: a hand-built delta whose tally nets h1 to no movement (the
+    // count stays 0 — a fully EMPTY tally together with node changes would trip the fail-loud
+    // wiring check) but whose newNodes lists h1 — the shape correct accounting never produces,
+    // since an emission implies a positive post-block count. prepare must NOT delete, and must
+    // NOT consume the queue entry.
+    MPTDeltaLayer delta4;
+    delta4.refCountDeltas[h1] = 0;
+    delta4.newNodes[h1] = bcos::bytes{0x11};
+    auto batch4 = bcos::task::syncWait(pruner.coPreparePruneRows(4, delta4));
+    BOOST_CHECK(batch4.deletions.empty());
+    pruner.onCommit(4, delta4);
+    BOOST_CHECK(nodeRowExists(backend, h1));
+    // The base entry is not orphaned: still {count 0, deadline 4}, still referenced by the
+    // queue.
+    BOOST_CHECK(pruner.countOf(h1) == std::optional<uint64_t>{0});
+    BOOST_CHECK(pruner.deadlineOf(h1) == std::optional<uint64_t>{4});
+    BOOST_CHECK_EQUAL(pruner.pendingCount(), 1U);
+
+    // The next block's prepare re-checks the kept entry: with a clean delta the matured
+    // deletion confirms normally.
+    auto batch5 = bcos::task::syncWait(pruner.coPreparePruneRows(5, MPTDeltaLayer{}));
+    BOOST_REQUIRE_EQUAL(batch5.deletions.size(), 1U);
+    bcos::task::syncWait(bcos::storage2::removeSome(backend, std::move(batch5.deletions)));
+    pruner.onCommit(5, MPTDeltaLayer{});
+    BOOST_CHECK(!nodeRowExists(backend, h1));
+    BOOST_CHECK(!pruner.countOf(h1).has_value());
+    BOOST_CHECK_EQUAL(pruner.pendingCount(), 0U);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace bcos::ledger::mpt::test
