@@ -8,11 +8,13 @@ on:
     paths:
       - "bcos-l2-contracts/**"
       - "tools/opstack-genesis/**"
+      - "tools/op-e2e/**"
       - ".github/workflows/l2-contracts.yml"
   pull_request:
     paths:
       - "bcos-l2-contracts/**"
       - "tools/opstack-genesis/**"
+      - "tools/op-e2e/**"
       - ".github/workflows/l2-contracts.yml"
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -35,35 +37,8 @@ jobs:
         with:
           version: 1.5.1
       - name: Fetch pinned Solidity deps
-        # SystemConfig / L2ValidatorSet import @openzeppelin (v4.7.3). The
-        # storage-layout gate below requires the EXACT OZ pinned in
-        # op-fork-pin.toml — a different OZ point release can shift an inherited
-        # slot — so clone at those SHAs rather than `forge install` (which pulls
-        # a moving tag and, here, cannot register a submodule inside the
-        # git-ignored lib/). forge-std is test-only and layout-irrelevant, so a
-        # shallow default-branch clone is fine.
-        #
-        # The OZ SHAs are parsed from op-fork-pin.toml and validated as 40-char
-        # lowercase hex before use, so a tampered pin file cannot splice shell
-        # metacharacters into the clone commands.
-        run: |
-          set -euo pipefail
-          mkdir -p lib
-          git clone --depth 1 https://github.com/foundry-rs/forge-std lib/forge-std
-          # Normalize to lowercase first: git accepts uppercase hex SHAs (a
-          # GitHub-UI copy-paste can produce them), so enforce the lowercase
-          # convention by folding rather than rejecting with a confusing error.
-          oz=$(grep -E '^"openzeppelin-contracts"' op-fork-pin.toml | awk -F'"' '{print $4}' | tr 'A-F' 'a-f')
-          ozu=$(grep -E '^"openzeppelin-contracts-upgradeable"' op-fork-pin.toml | awk -F'"' '{print $4}' | tr 'A-F' 'a-f')
-          for sha in "$oz" "$ozu"; do
-            if ! [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
-              echo "::error::op-fork-pin.toml OZ dep SHA is not a 40-char hex SHA: '${sha}'"; exit 1
-            fi
-          done
-          git clone https://github.com/OpenZeppelin/openzeppelin-contracts lib/openzeppelin-contracts
-          git -C lib/openzeppelin-contracts checkout "$oz"
-          git clone https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable lib/openzeppelin-contracts-upgradeable
-          git -C lib/openzeppelin-contracts-upgradeable checkout "$ozu"
+        working-directory: ${{ github.workspace }}
+        run: bash tools/.ci/fetch-l2-contract-deps.sh
       - name: Build self-written predeploys (src/)
         run: forge build
       - name: Read pinned OP fork commit
@@ -175,6 +150,13 @@ jobs:
       - name: Install Python deps
         # build-allocs.py imports pyyaml at module load, so the pytest suite
         # (which loads it by path) needs pyyaml too. pytest runs the suite.
-        run: python3 -m pip install --upgrade pip pyyaml pytest
+        # eth-hash / trie / rlp are the independent oracle the op-e2e pure tests
+        # cross-check withdraw_claim's ABI/Merkle decoding against.
+        run: python3 -m pip install --upgrade pip pyyaml pytest 'eth-hash[pycryptodome]' trie rlp
       - name: Run pytest
-        run: python3 -m pytest test_build_allocs.py test_gen_rollup_config.py -v
+        run: python3 -m pytest test_build_allocs.py test_gen_rollup_config.py test_gen_eth_header_fixture.py -v
+      - name: Run op-e2e pure tests
+        # tier-1 mock layer of tools/op-e2e (no node required). Committed but previously
+        # unwired, so its frozen-constant and ABI-layout anchors never ran in CI.
+        working-directory: .
+        run: python3 -m unittest discover -s tools/op-e2e/tests -v
