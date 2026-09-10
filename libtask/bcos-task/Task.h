@@ -103,8 +103,7 @@ public:
         constexpr void return_void() noexcept {}
         void unhandled_exception()
         {
-            auto exception = std::current_exception();
-            throw exception;
+            std::rethrow_exception(std::current_exception());
         }
         TaskPure get_return_object()
         {
@@ -129,6 +128,8 @@ private:
 template <typename... Resp>
 struct GetResultAwaitable
 {
+    // Shared state, single-shot: one Result backs exactly one co_await and exactly one
+    // complete(). There is no reset — reuse would silently redeliver the first completion.
     struct Result
     {
         enum class State : uint8_t
@@ -139,8 +140,13 @@ struct GetResultAwaitable
         };
 
         std::tuple<Resp...> data;
+        // Suspend handshake only. DONE means the result arrived BEFORE the coroutine parked (so
+        // await_ready() takes the fast path); a result delivered after it parked resumes the
+        // coroutine and leaves this at SUSPENDED. Exactly-once is owned by `completed`, not here.
         std::atomic<State> state = State::INIT;
         std::coroutine_handle<> handle;
+        // Exactly-once claim: the completer that flips this false->true owns the completion.
+        std::atomic<bool> completed{false};
     };
 
     explicit GetResultAwaitable(Result& result) : m_result(result) {}
@@ -172,12 +178,15 @@ struct GetResultAwaitable
 
     static void complete(Result& result, Resp... resp)
     {
-        if (result.state.load(std::memory_order_acquire) == Result::State::DONE)
+        // Claim first: a second (or concurrent) complete() must not touch data or handle.
+        auto claimed = false;
+        if (!result.completed.compare_exchange_strong(claimed, true))
         {
             return;
         }
-        result.data = std::make_tuple(std::move(resp)...);
+        // Write before publishing DONE, so a reader that observes DONE also observes data.
         typename Result::State expected = Result::State::INIT;
+        result.data = std::make_tuple(std::move(resp)...);
         if (result.state.compare_exchange_strong(expected, Result::State::DONE,
                 std::memory_order_acq_rel, std::memory_order_acquire))
         {

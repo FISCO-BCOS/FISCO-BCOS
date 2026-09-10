@@ -134,8 +134,8 @@ static task::Task<boost::system::error_code> send(
     // payload's callback would never fire and this coroutine would hang. Either drop()'s drain
     // already popped our payload (its callback then fires with operation_aborted), or this
     // re-check sees an inactive session and drains the leftover payloads here. Both paths settle
-    // every queued callback exactly once. Drain via post when a live executor exists -- a
-    // synchronous complete/resume inside this coroutine's own suspension path is unsafe.
+    // every queued callback exactly once: the loop drains the whole queue, so it may resume
+    // senders other than this coroutine — postCallback settles them off this stack.
     if (!session.active())
     {
         Payload pending;
@@ -143,17 +143,8 @@ static task::Task<boost::system::error_code> send(
         {
             if (pending.m_callback)
             {
-                if (session.m_server.get().haveNetwork())
-                {
-                    session.m_server.get().asioInterface()->post(
-                        [callback = std::move(pending.m_callback)]() {
-                            callback(boost::asio::error::not_connected);
-                        });
-                }
-                else
-                {
-                    pending.m_callback(boost::asio::error::not_connected);
-                }
+                session.postCallback(std::move(pending.m_callback),
+                    "drained write callback exception", boost::asio::error::not_connected);
             }
         }
     }
@@ -285,44 +276,13 @@ task::Task<void> Session::writeLoop()
     // completion handler exists for them, so their callbacks would never fire (drop() only drains
     // m_writeQueue). Invoked from every exception exit so the batch is settled exactly once — a
     // batch destroyed with its callbacks unfired would pin every awaiting sender forever.
-    // Posted rather than inline when the network is still up, for the same reason as drop()'s
-    // drain: this code runs on the caller's stack, which may still be inside an await_suspend.
     auto failBatch = [this](std::vector<Payload>& batch) {
         for (auto& payload : batch)
         {
             if (payload.m_callback)
             {
-                auto callback = std::move(payload.m_callback);
-                if (m_server.get().haveNetwork())
-                {
-                    m_server.get().asioInterface()->post([callback = std::move(callback)]() {
-                        // Same containment as the success-path write completion below: the
-                        // callback resumes a waiter whose await_resume may throw, and this
-                        // lambda runs inside io_context::run(), so nothing may escape it.
-                        try
-                        {
-                            callback(boost::asio::error::operation_aborted);
-                        }
-                        catch (std::exception const& e2)
-                        {
-                            SESSION_LOG(WARNING)
-                                << LOG_DESC("write callback exception")
-                                << LOG_KV("what", boost::diagnostic_information(e2));
-                        }
-                    });
-                }
-                else
-                {
-                    try
-                    {
-                        callback(boost::asio::error::operation_aborted);
-                    }
-                    catch (std::exception const& e2)
-                    {
-                        SESSION_LOG(WARNING) << LOG_DESC("write callback exception")
-                                             << LOG_KV("what", boost::diagnostic_information(e2));
-                    }
-                }
+                postCallback(std::move(payload.m_callback), "write callback exception",
+                    boost::asio::error::operation_aborted);
             }
         }
         batch.clear();
@@ -368,22 +328,7 @@ task::Task<void> Session::writeLoop()
             {
                 if (payload.m_callback)
                 {
-                    m_server.get().asioInterface()->post(
-                        [callback = std::move(payload.m_callback), error]() {
-                            // The callback resumes a coroutine whose await_resume may throw
-                            // (fastSendMessageWithoutResponse throws NetworkException on
-                            // write failure). Catch so it cannot escape io_context::run().
-                            try
-                            {
-                                callback(error);
-                            }
-                            catch (std::exception const& e)
-                            {
-                                SESSION_LOG(WARNING)
-                                    << LOG_DESC("write callback exception")
-                                    << LOG_KV("what", boost::diagnostic_information(e));
-                            }
-                        });
+                    postCallback(std::move(payload.m_callback), "write callback exception", error);
                 }
             }
             payloads.clear();
@@ -490,45 +435,16 @@ void Session::drop(DisconnectReason _reason)
     // available. writeLoop never runs on a sender's stack anymore (Session::write() posts its
     // launch), but drop() remains reachable from arbitrary caller stacks — including write()'s
     // launch-failure catch, which can still sit inside a sender's await_suspend — so calling the
-    // callback inline here could resume a coroutine from inside its own await_suspend (the exact
-    // hazard send()'s early-return branch avoids by posting). Post to the shared pool; when the
-    // host is already gone there is no live executor to hand it to, so fall back to inline —
-    // the same shape as the notifyDisconnect / closeSocket branches below.
+    // callback inline here could resume a coroutine from inside its own await_suspend. settleCallback
+    // posts to the shared pool and falls back to inline only when the host is already gone — the
+    // same shape as the notifyDisconnect / closeSocket branches below.
     Payload payload;
     while (m_writeQueue.try_pop(payload))
     {
         if (payload.m_callback)
         {
-            if (m_server.get().haveNetwork())
-            {
-                m_server.get().asioInterface()->post([callback = std::move(payload.m_callback)]() {
-                    // The callback resumes a coroutine whose await_resume may throw
-                    // (fastSendMessageWithoutResponse throws NetworkException on write failure),
-                    // and this lambda runs inside io_context::run() — contain it exactly as
-                    // failBatch and the response-waiter flush below do.
-                    try
-                    {
-                        callback(boost::asio::error::operation_aborted);
-                    }
-                    catch (std::exception const& e)
-                    {
-                        SESSION_LOG(WARNING) << LOG_DESC("write callback exception during drop")
-                                             << LOG_KV("what", boost::diagnostic_information(e));
-                    }
-                });
-            }
-            else
-            {
-                try
-                {
-                    payload.m_callback(boost::asio::error::operation_aborted);
-                }
-                catch (std::exception const& e)
-                {
-                    SESSION_LOG(WARNING) << LOG_DESC("write callback exception during drop")
-                                         << LOG_KV("what", boost::diagnostic_information(e));
-                }
-            }
+            postCallback(std::move(payload.m_callback), "write callback exception during drop",
+                boost::asio::error::operation_aborted);
         }
     }
 
@@ -567,39 +483,10 @@ void Session::drop(DisconnectReason _reason)
             {
                 callback->timeoutHandler->cancel();
             }
-            if (m_server.get().haveNetwork())
-            {
-                m_server.get().asioInterface()->post([callback = std::move(callback)]() mutable {
-                    // the callback resumes a coroutine whose await_resume may rethrow; keep
-                    // the exception out of io_context::run() (same containment as onMessage /
-                    // onTimeout / the write-completion post)
-                    try
-                    {
-                        callback->callback(
-                            NetworkException(P2PExceptionType::NetworkTimeout, "NetworkTimeout"),
-                            Message::Ptr());
-                    }
-                    catch (std::exception const& e)
-                    {
-                        SESSION_LOG(WARNING) << LOG_DESC("response callback exception during drop")
-                                             << LOG_KV("what", boost::diagnostic_information(e));
-                    }
-                });
-            }
-            else
-            {
-                try
-                {
-                    callback->callback(
-                        NetworkException(P2PExceptionType::NetworkTimeout, "NetworkTimeout"),
-                        Message::Ptr());
-                }
-                catch (std::exception const& e)
-                {
-                    SESSION_LOG(WARNING) << LOG_DESC("response callback exception during drop")
-                                         << LOG_KV("what", boost::diagnostic_information(e));
-                }
-            }
+            postCallback(std::move(callback->callback),
+                "response callback exception during drop",
+                NetworkException(P2PExceptionType::NetworkTimeout, "NetworkTimeout"),
+                Message::Ptr());
         }
     }
 

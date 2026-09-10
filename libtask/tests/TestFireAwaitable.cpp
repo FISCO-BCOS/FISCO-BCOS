@@ -25,6 +25,8 @@
 #include <boost/asio/error.hpp>
 #include <boost/system/error_code.hpp>
 #include <boost/test/unit_test.hpp>
+#include <atomic>
+#include <memory>
 #include <stdexcept>
 #include <tuple>
 
@@ -104,6 +106,34 @@ BOOST_AUTO_TEST_CASE(WorksWithBcosErrorPtr)
         co_return error ? -1 : value;
     }());
     BOOST_CHECK_EQUAL(result, 42);
+}
+
+// Regression for the [this]-capture UAF: the bridge must own the initiate callable (moved into
+// its frame), never reach back into the awaitable once it is gone. syncWait keeps the inner Task
+// alive through the test parameter and so cannot reach that destruction ordering — drive it
+// through task::wait instead, whose detached AsyncTask chain is the shape that produced the bug.
+BOOST_AUTO_TEST_CASE(SynchronousCompletionUnderTaskWait)
+{
+    auto calls = std::make_shared<std::atomic<int>>(0);
+    auto delivered = std::make_shared<std::atomic<int>>(-1);
+
+    bcos::task::wait([](std::shared_ptr<std::atomic<int>> calls,
+                         std::shared_ptr<std::atomic<int>> delivered) -> Task<void> {
+        auto [ec, value] = co_await makeFireAwaitable<boost::system::error_code, int>(
+            [calls](auto completion) {
+                ++*calls;
+                completion(boost::system::error_code{}, 42);
+            },
+            failureError);
+        delivered->store(ec ? -1 : value);
+        co_return;
+    }(calls, delivered));
+
+    // Synchronous completion settles the whole chain inside the symmetric transfer above, so both
+    // are observable here. A stale [this] capture would re-enter the destroyed awaitable (counted
+    // as a second call), and under ASan would fault outright.
+    BOOST_CHECK_EQUAL(calls->load(), 1);
+    BOOST_CHECK_EQUAL(delivered->load(), 42);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
