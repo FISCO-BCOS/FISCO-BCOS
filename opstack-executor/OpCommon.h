@@ -27,7 +27,7 @@ namespace bcos::evm
 {
 /// Thrown for anything OP block execution classifies as a consensus-level rejection (error
 /// table): malformed/undecodable raw tx bytes, processOpBlock's own semantic throws
-/// (empty block, first tx not the L1 attributes deposit, gas-pool overrun,...). Maps to INVALID
+/// (empty block, first tx not the L1 attributes deposit, gas-pool overrun, ...). Maps to INVALID
 /// on the caller side, never -32603. Lives in bcos::evm so both the opstack and engine
 /// namespaces (and the code that references it from either) resolve it by outer-scope lookup.
 struct OpConsensusError : std::runtime_error

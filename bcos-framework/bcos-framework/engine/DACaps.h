@@ -25,13 +25,13 @@
 namespace bcos::engine
 {
 
-/// Shared DA size limits for OP payload building. Neither side of the handshake is wired at
-/// this revision: Initializer creates one instance and AirNodeInitializer attaches it to
-/// NodeService, but miner_setMaxDASize is NOT registered (a registered writer with no reader
-/// would acknowledge caps the sequencer never applies), and the only reader, OpEngineService
-/// (OpEngineService.inl), has no production construction site — the live block producer is
-/// EngineServiceImpl, which does not read these caps. Producer, reader and the Pro/Max (tars)
-/// setDaCaps bootstrap land together in the engine-service cutover.
+/// Shared DA size limits for OP payload building. No side of the handshake is wired in this
+/// PR: the NodeService/Initializer/AIR wiring and the `miner_setMaxDASize` producer live in
+/// the RPC follow-up (#5572). The only reader, OpEngineService (OpEngineService.inl), has no
+/// production construction site — the live block producer is EngineServiceImpl, which does
+/// not read these caps (a registered writer with no reader would acknowledge caps the
+/// sequencer never applies). Producer, reader and the Pro/Max (tars) setDaCaps bootstrap
+/// land together in the engine-service cutover.
 ///   maxTxSize    — drop sealed pool txs above this estimated DA size.
 ///   maxBlockSize — stop appending sealed txs once the cumulative estimate exceeds this.
 /// Zero means uncapped. Sizes use the Fjord FastLZ estimate over the EIP-2718 envelope.
