@@ -23,6 +23,7 @@
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/FeaturesStorage.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
@@ -113,13 +114,45 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
         [defaultCmp](int64_t _value, uint32_t version) {
             defaultCmp(magic_enum::enum_name(ledger::SystemConfig::executor_version), _value, 0,
                 version, BlockVersion::V3_15_0_VERSION);
-            // NOTE: deliberately no upper bound here. A value >= 2 (or any value above
-            // today's set) runs the v2 ethereum-executor via MultiVersionScheduler's
-            // saturating setVersion; banning values here would be an unversioned consensus
-            // change (validate() runs inside block execution) that breaks replay/resync of
-            // historical blocks that set executor_version on the old binary. The v2-only
-            // guardrails live in node-local startup (Initializer refuses to boot a v2 chain
-            // without an on-chain evmc_revision), not in this per-block validator.
+            // OP mode is a GENESIS property, not a governable one. Entering it changes the
+            // block producer (an external op-node over the Engine API), the scheduler slot and
+            // the fork schedule -- all three are chosen once, at boot, from the on-chain
+            // executor_version row (Initializer::init; executor.version in config.genesis seeds
+            // that row and is the fallback when it is absent). A governance write flipping the
+            // row to >= 3 would leave every already-running node executing its boot-time lane
+            // while a restarted node picks the OP lane: same chain, two state transitions.
+            // Refuse it here, the only RUNTIME writer of the row -- this precompile, registered
+            // on the v0 executor (executor/TransactionExecutor.cpp) and the v1 one
+            // (transaction-executor/.../PrecompiledManager.cpp), is the only implementation of
+            // setValueByKey; neither ethereum-executor nor the OP lane serves address 0x1000, so
+            // an OP chain cannot write executor_version back down either. Genesis is the other
+            // writer and the legitimate way an OP chain gets the value: Ledger.cpp's genesis
+            // build sets the row directly, without going through validate().
+            // Versioned on V3_18_0_VERSION because validate() runs inside block execution:
+            // a chain replaying blocks that predate 3.18.0 must keep whatever the old binary
+            // accepted, or resync diverges. The gate is the on-chain compatibility version, not
+            // the binary's, so a chain still at < 3.18.0 running a 3.18.0 binary is NOT covered
+            // here; there the boot refusals in Initializer::init (no [op_fork_timestamps], no
+            // [op_engine_rpc]) are what stop such a node, fail-stop rather than a second lane.
+            if (versionCompareTo(version, BlockVersion::V3_18_0_VERSION) >= 0 &&
+                _value >= ledger::OPSTACK_EXECUTOR_VERSION) [[unlikely]]
+            {
+                BOOST_THROW_EXCEPTION(
+                    PrecompiledError{} << errinfo_comment(
+                        "Invalid value " + std::to_string(_value) + " for " +
+                        std::string{magic_enum::enum_name(ledger::SystemConfig::executor_version)} +
+                        ": OP mode (executor_version >= " +
+                        std::to_string(ledger::OPSTACK_EXECUTOR_VERSION) +
+                        ") is a genesis property set by executor.version in config.genesis and "
+                        "cannot be entered by governance on a running chain"));
+            }
+            // Below the OP boundary there is deliberately no upper bound: banning values here
+            // would be an unversioned consensus change that breaks replay/resync of historical
+            // blocks which set executor_version on the old binary. What such a value does is
+            // node-local -- MultiVersionScheduler::setVersion saturates anything at or above the
+            // wired slot count down to the newest NON-NULL slot, and an in-range but unwired slot
+            // keeps the current executor and logs ERROR rather than throwing, because a
+            // governance write must not halt the chain.
         });
     // for compatibility
     // Note: the compatibility_version is not compatibility

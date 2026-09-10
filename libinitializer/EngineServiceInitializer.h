@@ -2,10 +2,12 @@
 
 #include "GlobalStateStorageInitializer.h"
 #include "bcos-framework/engine/AnyEngineService.h"
+#include "bcos-framework/engine/DACaps.h"
 #include "bcos-framework/ledger/LedgerConfigState.h"
 #include "bcos-mempool/MemPoolImpl.h"
 #include "bcos-transaction-executor/TransactionExecutorImpl.h"
 #include "engine/bcos-engine/EngineServiceImpl.h"
+#include "engine/bcos-engine/OpEngineService.h"
 #include <functional>
 #include <memory>
 #include <utility>
@@ -33,6 +35,30 @@ public:
                 std::move(storageInitializer), std::move(blockFactory), std::move(scheduler),
                 std::move(transactionExecutor), memPool, std::move(ledger), blockTxCountLimit,
                 std::move(ledgerConfigState));
+        initializer->m_holder = holder;
+        initializer->m_engineService =
+            std::shared_ptr<bcos::engine::AnyEngineService>(holder, &holder->m_any);
+        return initializer;
+    }
+
+    /// OP path (executor_version >= 3): OpSchedulerSeam drives the engine, an OpScheduler
+    /// delegate executes and commits. The engine takes no ledger (the delegate owns it).
+    template <class SchedulerType>
+    static Ptr buildOp(std::shared_ptr<GlobalStateStorageInitializer> storageInitializer,
+        bcos::protocol::BlockFactory::Ptr blockFactory, std::shared_ptr<SchedulerType> scheduler,
+        bcos::txpool::MemPoolImpl& memPool,
+        int64_t blockTxCountLimit = bcos::engine::c_defaultBlockTxCountLimit,
+        bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
+        std::shared_ptr<bcos::engine::DACaps> daCaps = nullptr,
+        bool allowSynthesizedL1Attributes = false)
+    {
+        auto initializer = Ptr(new EngineServiceInitializer());
+        using ConcreteEngineService = bcos::engine::OpEngineService<bcos::txpool::MemPoolImpl,
+            GlobalStateStorage, SchedulerType>;
+        auto holder = std::make_shared<ConcreteOpModel<SchedulerType, ConcreteEngineService>>(
+            std::move(storageInitializer), std::move(blockFactory), std::move(scheduler), memPool,
+            blockTxCountLimit, std::move(delegate), std::move(daCaps),
+            allowSynthesizedL1Attributes);
         initializer->m_holder = holder;
         initializer->m_engineService =
             std::shared_ptr<bcos::engine::AnyEngineService>(holder, &holder->m_any);
@@ -72,6 +98,29 @@ private:
         std::shared_ptr<GlobalStateStorageInitializer> m_storageInitializer;
         std::reference_wrapper<bcos::txpool::MemPoolImpl> m_memPool;
         std::shared_ptr<ExecutorType> m_transactionExecutor;
+        std::shared_ptr<SchedulerType> m_scheduler;
+        bcos::engine::AnyEngineService m_any;
+    };
+
+    template <class SchedulerType, class ConcreteEngineService>
+    struct ConcreteOpModel final : Holder
+    {
+        ConcreteOpModel(std::shared_ptr<GlobalStateStorageInitializer> storageInitializer,
+            bcos::protocol::BlockFactory::Ptr blockFactory,
+            std::shared_ptr<SchedulerType> scheduler, bcos::txpool::MemPoolImpl& memPool,
+            int64_t blockTxCountLimit, bcos::scheduler::SchedulerInterface::Ptr delegate,
+            std::shared_ptr<bcos::engine::DACaps> daCaps, bool allowSynthesizedL1Attributes)
+          : m_storageInitializer(std::move(storageInitializer)),
+            m_memPool(memPool),
+            m_scheduler(std::move(scheduler)),
+            m_any(std::in_place_type<ConcreteEngineService>, m_memPool,
+                m_storageInitializer->storage(), *m_scheduler, std::move(blockFactory),
+                blockTxCountLimit, std::move(delegate), std::move(daCaps),
+                allowSynthesizedL1Attributes)
+        {}
+
+        std::shared_ptr<GlobalStateStorageInitializer> m_storageInitializer;
+        std::reference_wrapper<bcos::txpool::MemPoolImpl> m_memPool;
         std::shared_ptr<SchedulerType> m_scheduler;
         bcos::engine::AnyEngineService m_any;
     };
