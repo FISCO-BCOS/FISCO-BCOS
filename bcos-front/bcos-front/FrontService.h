@@ -222,6 +222,10 @@ private:
     /// gateway interface
     std::shared_ptr<bcos::gateway::GatewayInterface> m_gatewayInterface;
 
+    // Written at init (registerModuleMessageDispatcher) and cleared in stop(); read on every
+    // received message from the io pool threads, which in AIR are still delivering when stop()
+    // runs (issue #5433 review), so reads take ReadGuard and writes WriteGuard.
+    mutable bcos::SharedMutex x_moduleID2MessageDispatcher;
     std::unordered_map<int,
         std::function<void(bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef)>>
         m_moduleID2MessageDispatcher;

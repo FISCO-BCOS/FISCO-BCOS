@@ -30,7 +30,10 @@ enum HashImplType : int
 {
     Keccak256Hash,
     Sm3Hash,
-    Sha3
+    Sha3,
+    // "Hash" suffix on purpose: this enum is unscoped, so a bare `Sha256` would shadow class
+    // Sha256 in bcos::crypto (the existing `Sha3` value already does that to class Sha3).
+    Sha256Hash
 };
 class Hash
 {

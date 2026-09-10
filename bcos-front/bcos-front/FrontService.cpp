@@ -140,6 +140,7 @@ void FrontService::setIOServicePool(bcos::IOServicePool::Ptr _ioServicePool)
 void FrontService::registerModuleMessageDispatcher(int _moduleID,
     std::function<void(bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef)> _dispatcher)
 {
+    WriteGuard l(x_moduleID2MessageDispatcher);
     m_moduleID2MessageDispatcher[_moduleID] = std::move(_dispatcher);
 }
 
@@ -147,6 +148,7 @@ std::unordered_map<int,
     std::function<void(bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef)>>
 FrontService::moduleID2MessageDispatcher() const
 {
+    ReadGuard l(x_moduleID2MessageDispatcher);
     return m_moduleID2MessageDispatcher;
 }
 
@@ -274,11 +276,14 @@ void FrontService::start()
     FRONT_LOG(INFO) << LOG_DESC("start") << LOG_KV("nodeID", m_nodeID->hex())
                     << LOG_KV("groupID", m_groupID);
 
-    FRONT_LOG(INFO) << LOG_DESC("register module")
-                    << LOG_KV("count", m_moduleID2MessageDispatcher.size());
-    for (const auto& module : m_moduleID2MessageDispatcher)
     {
-        FRONT_LOG(INFO) << LOG_DESC("register module") << LOG_KV("moduleID", module.first);
+        ReadGuard l(x_moduleID2MessageDispatcher);
+        FRONT_LOG(INFO) << LOG_DESC("register module")
+                        << LOG_KV("count", m_moduleID2MessageDispatcher.size());
+        for (const auto& module : m_moduleID2MessageDispatcher)
+        {
+            FRONT_LOG(INFO) << LOG_DESC("register module") << LOG_KV("moduleID", module.first);
+        }
     }
 }
 void FrontService::stop()
@@ -339,6 +344,22 @@ void FrontService::stop()
                                         "timed out flushing the send strand; "
                                         "pending sends may be dropped");
             }
+        }
+
+        // Drop both dispatcher tables (issue #5433). The lambdas registered by
+        // libinitializer/FrontServiceInitializer.cpp capture TxPool / BlockSync / PBFT by value,
+        // and those modules hold this FrontService back through their configs, so keeping the
+        // lambdas after stop() keeps the whole graph alive and its destructors (thread joins,
+        // io_context teardown) never run. In MAX the tars server joins its handle threads before
+        // destroyApp reaches us; in AIR the shared io pool may still be delivering a message that
+        // entered onReceiveMessage before Gateway::stop() returned, hence the locks.
+        {
+            WriteGuard l(x_moduleID2MessageDispatcher);
+            m_moduleID2MessageDispatcher.clear();
+        }
+        {
+            Guard l(x_notifierLock);
+            m_module2GroupNodeInfoNotifier.clear();
         }
     }
     catch (const std::exception& e)
@@ -811,10 +832,18 @@ task::Task<Error::Ptr> FrontService::onReceiveMessage(
         }
         else
         {
-            if (auto it = m_moduleID2MessageDispatcher.find(moduleID);
-                it != m_moduleID2MessageDispatcher.end())
+            std::function<void(bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef)>
+                callback;
             {
-                auto callback = it->second;
+                ReadGuard l(x_moduleID2MessageDispatcher);
+                if (auto it = m_moduleID2MessageDispatcher.find(moduleID);
+                    it != m_moduleID2MessageDispatcher.end())
+                {
+                    callback = it->second;
+                }
+            }
+            if (callback)
+            {
                 // Copy the payload before dispatching asynchronously.
                 bytes buffer(message.payload().begin(), message.payload().end());
 

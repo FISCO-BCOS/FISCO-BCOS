@@ -54,36 +54,32 @@ BOOST_AUTO_TEST_CASE(hasherMatchesHashForConsistentImpls)
     }
 }
 
-// BUG (recorded, not fixed per task scope): Sha256::hash() computes SHA2-256
-// (OpenSSL_SHA2_256_Hasher) but Sha256::hasher() returns a SHA3-256 streaming
-// hasher (OpenSSL_SHA3_256_Hasher) -- a copy-paste from Sha3 in HashImpl.cpp.
-// The two therefore disagree, and Sha256::hasher() actually matches Sha3.
-// This is a pinning test of the current behavior; when HashImpl.cpp is fixed
-// so hasher() returns OpenSSL_SHA2_256_Hasher, this will fail and should be
-// changed to assert equality.
-BOOST_AUTO_TEST_CASE(sha256HasherInconsistentWithHash)
+// Sha256::hash() and Sha256::hasher() must both be SHA2-256 (issue #5356: hasher() used to
+// return a SHA3-256 streaming hasher, copy-pasted from Sha3).
+BOOST_AUTO_TEST_CASE(sha256HasherMatchesHash)
 {
     Sha256 sha256;
-    auto oneShot = sha256.hash(ref(c_input)).asBytes();       // SHA2-256
-    auto streaming = streamDigest(sha256.hasher(), c_input);  // SHA3-256 (bug)
-    BOOST_CHECK(oneShot != streaming);
+    auto oneShot = sha256.hash(ref(c_input)).asBytes();
+    auto streaming = streamDigest(sha256.hasher(), c_input);
+    BOOST_CHECK(oneShot == streaming);
 
-    // Sha256::hasher() is really a SHA3-256 hasher, so it matches Sha3.
+    // and it is SHA2-256, not SHA3-256: differs from Sha3 for the same input
     class Sha3 sha3;
-    BOOST_CHECK(streaming == streamDigest(sha3.hasher(), c_input));
-    BOOST_CHECK(streaming == sha3.hash(ref(c_input)).asBytes());
+    BOOST_CHECK(streaming != sha3.hash(ref(c_input)).asBytes());
+
+    // SHA2-256("abcdef") reference vector
+    BOOST_CHECK_EQUAL(sha256.hash(ref(c_input)).hex(),
+        "bef57ec7f53a6d40beb640a780a639c83bc29ac8a9816f1fc6c5c6dcd93c4721");
 }
 
-// BUG (recorded): there is no Sha256 value in HashImplType; Sha256's ctor sets
-// the impl type to Sha3 (copy-paste from Sha3), so getHashImplType() cannot
-// distinguish a Sha256 from a Sha3 and mislabels the SHA2-256 one-shot path.
-BOOST_AUTO_TEST_CASE(sha256ReportsSha3ImplType)
+// getHashImplType() distinguishes Sha256 from Sha3 (issue #5356: Sha256's ctor used to set Sha3).
+BOOST_AUTO_TEST_CASE(sha256ReportsOwnImplType)
 {
     Sha256 sha256;
-    BOOST_CHECK(sha256.getHashImplType() == HashImplType::Sha3);
+    BOOST_CHECK(sha256.getHashImplType() == HashImplType::Sha256Hash);
 
     class Sha3 sha3;
-    BOOST_CHECK(sha3.getHashImplType() == HashImplType::Sha3);  // indistinguishable
+    BOOST_CHECK(sha3.getHashImplType() == HashImplType::Sha3);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

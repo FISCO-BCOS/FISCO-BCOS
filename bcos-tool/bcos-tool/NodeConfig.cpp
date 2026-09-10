@@ -1375,12 +1375,15 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
             "use thread_pool.io_thread_count instead");
     }
 
-    m_txpoolLimit = checkAndGetValue(_pt, "txpool.limit", "15000");
-    if (m_txpoolLimit <= 0)
+    // validate on the signed value: m_txpoolLimit is size_t, so a negative would wrap to
+    // UINT64_MAX and pass a `<= 0` check on the member (issue #5354)
+    auto txpoolLimit = checkAndGetValue(_pt, "txpool.limit", "15000");
+    if (txpoolLimit <= 0)
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("Please set txpool.limit to positive !"));
     }
+    m_txpoolLimit = static_cast<size_t>(txpoolLimit);
     // the txs expiration time, in second
     auto txsExpirationTime = checkAndGetValue(_pt, "txpool.txs_expiration_time", "600");
     if (txsExpirationTime * 1000 <= DEFAULT_MIN_CONSENSUS_TIME_MS) [[unlikely]]
@@ -1793,14 +1796,15 @@ void NodeConfig::loadFailOverConfig(boost::property_tree::ptree const& _pt, bool
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("Please set failover.member_id must be non-empty "));
     }
-    m_leaseTTL =
+    auto leaseTTL =
         checkAndGetValue(_pt, "failover.lease_ttl", std::to_string(DEFAULT_MIN_LEASE_TTL_SECONDS));
-    if (m_leaseTTL < DEFAULT_MIN_LEASE_TTL_SECONDS)
+    if (leaseTTL < static_cast<int64_t>(DEFAULT_MIN_LEASE_TTL_SECONDS))
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "Please set failover.lease_ttl to no less than " +
                                   std::to_string(DEFAULT_MIN_LEASE_TTL_SECONDS) + " seconds!"));
     }
+    m_leaseTTL = static_cast<unsigned>(leaseTTL);
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadFailOverConfig")
                          << LOG_KV("failOverClusterUrl", m_failOverClusterUrl)
@@ -1832,9 +1836,22 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
             "use thread_pool.io_thread_count instead");
     }
 
-    m_ioThreadCount = checkAndGetValue(_pt, "thread_pool.io_thread_count",
+    auto ioThreadCount = checkAndGetValue(_pt, "thread_pool.io_thread_count",
         std::to_string(std::thread::hardware_concurrency() + 1));
-    m_tbbThreadCount = checkAndGetValue(_pt, "thread_pool.tbb_thread_count", "0");
+    if (ioThreadCount <= 0)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "Please set thread_pool.io_thread_count to positive !"));
+    }
+    m_ioThreadCount = static_cast<size_t>(ioThreadCount);
+    // 0 means "let TBB decide"; only negatives are invalid
+    auto tbbThreadCount = checkAndGetValue(_pt, "thread_pool.tbb_thread_count", "0");
+    if (tbbThreadCount < 0)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "Please set thread_pool.tbb_thread_count to non-negative !"));
+    }
+    m_tbbThreadCount = static_cast<size_t>(tbbThreadCount);
 
     m_tarsRPCConfig.host = _pt.get<std::string>("rpc.tars_rpc_host", "127.0.0.1");
     m_tarsRPCConfig.port = _pt.get<int>("rpc.tars_rpc_port", 0);
@@ -1885,32 +1902,40 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
 
 void NodeConfig::loadConsensusConfig(boost::property_tree::ptree const& _pt)
 {
-    m_checkPointTimeoutInterval = checkAndGetValue(
+    // All of these are size_t members: compare the signed value first so a negative cannot wrap
+    // past the lower bound (issue #5354).
+    auto checkPointTimeoutInterval = checkAndGetValue(
         _pt, "consensus.checkpoint_timeout", std::to_string(DEFAULT_MIN_CONSENSUS_TIME_MS));
-    m_pipelineSize =
+    auto pipelineSize =
         checkAndGetValue(_pt, "consensus.pipeline_size", std::to_string(DEFAULT_PIPELINE_SIZE));
-    if (m_checkPointTimeoutInterval < DEFAULT_MIN_CONSENSUS_TIME_MS)
+    if (checkPointTimeoutInterval < static_cast<int64_t>(DEFAULT_MIN_CONSENSUS_TIME_MS))
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "Please set consensus.checkpoint_timeout to no less than " +
                                   std::to_string(DEFAULT_MIN_CONSENSUS_TIME_MS) + "ms!"));
     }
-    if (m_pipelineSize < DEFAULT_PIPELINE_SIZE)
+    if (pipelineSize < static_cast<int64_t>(DEFAULT_PIPELINE_SIZE))
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "Please set consensus.pipeline_size to no less than " +
                                   std::to_string(DEFAULT_PIPELINE_SIZE)));
     }
+    m_checkPointTimeoutInterval = static_cast<size_t>(checkPointTimeoutInterval);
+    m_pipelineSize = static_cast<size_t>(pipelineSize);
     m_pipelineAdmissionEnabled = _pt.get<bool>("consensus.pipeline_admission_enabled", true);
-    m_pipelinePerPeerCapacity = checkAndGetValue(_pt, "consensus.pipeline_per_peer_capacity", "64");
-    m_pipelineLruCapacity = checkAndGetValue(_pt, "consensus.pipeline_lru_capacity", "256");
-    m_pipelineMaxPeers = checkAndGetValue(_pt, "consensus.pipeline_max_peers", "1024");
-    if (m_pipelinePerPeerCapacity == 0 || m_pipelineLruCapacity == 0 || m_pipelineMaxPeers == 0)
+    auto pipelinePerPeerCapacity =
+        checkAndGetValue(_pt, "consensus.pipeline_per_peer_capacity", "64");
+    auto pipelineLruCapacity = checkAndGetValue(_pt, "consensus.pipeline_lru_capacity", "256");
+    auto pipelineMaxPeers = checkAndGetValue(_pt, "consensus.pipeline_max_peers", "1024");
+    if (pipelinePerPeerCapacity <= 0 || pipelineLruCapacity <= 0 || pipelineMaxPeers <= 0)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "pipeline_per_peer_capacity / pipeline_lru_capacity / "
                                   "pipeline_max_peers must all be > 0"));
     }
+    m_pipelinePerPeerCapacity = static_cast<size_t>(pipelinePerPeerCapacity);
+    m_pipelineLruCapacity = static_cast<size_t>(pipelineLruCapacity);
+    m_pipelineMaxPeers = static_cast<size_t>(pipelineMaxPeers);
     NodeConfig_LOG(INFO) << LOG_DESC("loadConsensusConfig")
                          << LOG_KV("checkPointTimeoutInterval", m_checkPointTimeoutInterval)
                          << LOG_KV("pipeline_size", m_pipelineSize)
