@@ -41,7 +41,8 @@ uint32_t LogMatcher::matches(FilterRequest::ConstPtr _params, bcos::crypto::Hash
             count++;
             Json::Value log;
             log["data"] = toHexStringWithPrefix(logEntry.data());
-            log["logIndex"] = toQuantity(i);
+            // block-wide index, same base as ReceiptResponse.cpp (issue #5553)
+            log["logIndex"] = toQuantity(_receipt.logIndex() + i);
             log["blockNumber"] = toQuantity(blockNumber);
             log["blockHash"] = _blockHash.hexPrefixed();
             log["transactionIndex"] = toQuantity(_txIndex);

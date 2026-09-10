@@ -67,14 +67,18 @@ struct AccountState
 /// catching binary-wide -- into every module that admits a transaction.
 using SystemTxPredicate = std::function<bool(protocol::Transaction const&)>;
 
-/// The one place a transaction is judged admissible, for every ingress: Web3 JSON-RPC, P2P, and
-/// block-proposal verification. As of this commit no ingress calls it yet -- the pool still runs
-/// txpool::TxValidator, and the callers move over in the wiring commits that follow. Read the
-/// sentence above as what this class is for, not as a claim about who calls it today.
+/// The one place a transaction is judged admissible, for every ingress of both transaction
+/// pools: JSON-RPC (BCOS and Web3), P2P, and block-proposal verification. The txpool's two
+/// entry points call it -- verifyAndSubmitTransaction for submission and the peer fetch,
+/// enforceSubmitTransaction for proposal verification. The engine-driven mempool (single-node
+/// consensus or the OP engine RPC) has one, EthEndpoint::sendRawTransaction, which calls it and
+/// then reserves the (sender, nonce) with MemPoolImpl::tryAdd.
 ///
-/// It OWNS the nonce checkers rather than reaching them through callbacks. Nonce admission is
-/// the same question at every ingress, and routing it through a per-caller hook is how the pool
-/// and the RPC layer came to disagree about it in the first place.
+/// It holds pointers to the shared nonce checkers rather than owning them: the txpool reserves
+/// and clears nonces through the same instances without going near admission, and the admission
+/// question is asked here. Nonce admission is the same question at every ingress, and routing it
+/// through a per-caller hook is how the pool and the RPC layer came to disagree about it in the
+/// first place.
 class TxValidator
 {
 public:
@@ -96,6 +100,9 @@ public:
     /// the chain's block limit. Until it is bound there is nothing to check a BCOS nonce against,
     /// and that check passes.
     void setLedgerNonceChecker(std::shared_ptr<LedgerNonceChecker> ledgerNonceChecker);
+    /// The checker bound above, null until then. The pool clears committed nonces from, and
+    /// re-checks at seal time against, the instance it reads here -- one holder, not a copy.
+    std::shared_ptr<LedgerNonceChecker> ledgerNonceChecker() const;
 
     /// Also bound after construction -- the scheduler does not exist yet when the pools are
     /// built. Until it is bound, and in engine-driven mode where there is none, the balance check

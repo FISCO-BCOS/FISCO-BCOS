@@ -60,8 +60,9 @@ inline void encodeWithdrawalsRlp(
         {
             if (w.index > maxU64 || w.validatorIndex > maxU64 || w.amount > maxU64)
             {
-                throw std::invalid_argument(
-                    "OP withdrawal index/validatorIndex/amount must fit in uint64");
+                BOOST_THROW_EXCEPTION(
+                    InvalidEngineEncoding{} << bcos::errinfo_comment{
+                        "OP withdrawal index/validatorIndex/amount must fit in uint64"});
             }
             codec::rlp::encode(items, w.index, w.validatorIndex, w.address, w.amount);
         }
@@ -87,7 +88,9 @@ inline void encodeWithdrawalsRlp(
 /// Upstream geth Amsterdam hashes an optional SlotNum (u64 BE) between
 /// parentBeaconBlockRoot and the tx block. op-geth d401af16 Id() has no such
 /// field. PayloadAttributes has no slotNumber either, so the stream matches
-/// current op-geth. If slotNumber is added later it must be hashed here.
+/// current op-geth. If slotNumber — or any other V4 field (e.g. the
+/// blockAccessList) — enters the payload shape, it must be hashed here too,
+/// or payload ids collide across distinct payloads (finding N3).
 ///
 /// @param attrs    the payload attributes. attrs.timestamp is FISCO-internal
 ///                 milliseconds (EngineHelper converts Engine-API seconds to
@@ -165,7 +168,8 @@ inline std::string derivePayloadId(PayloadAttributes const& attrs, h256 const& p
         // diverge from op-geth's fixed Bytes8. Require the Holocene 8-byte pair.
         if (attrs.eip1559Params->size() != 8)
         {
-            throw std::invalid_argument("eip1559Params must be 8 bytes");
+            BOOST_THROW_EXCEPTION(InvalidEngineEncoding{} <<
+                                  bcos::errinfo_comment{"eip1559Params must be 8 bytes"});
         }
         updateBytes(attrs.eip1559Params->data(), attrs.eip1559Params->size());
     }

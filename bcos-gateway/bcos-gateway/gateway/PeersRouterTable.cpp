@@ -291,7 +291,7 @@ bcos::task::Task<void> bcos::gateway::PeersRouterTable::broadcastMessage(uint16_
     {
         if (c_fileLogLevel <= TRACE) [[unlikely]]
         {
-            ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable") << LOG_DESC("asyncBroadcastMsg")
+            ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable") << LOG_DESC("broadcastMsg")
                               << LOG_KV("nodeType", type) << LOG_KV("moduleID", moduleID)
                               << LOG_KV("dst", printShortP2pID(peer));
         }

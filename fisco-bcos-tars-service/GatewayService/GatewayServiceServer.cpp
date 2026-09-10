@@ -9,10 +9,22 @@ bcostars::Error GatewayServiceServer::asyncNotifyGroupInfo(
     current->setResponse(false);
     auto bcosGroupInfo = toBcosGroupInfo(m_gatewayInitializer->chainNodeInfoFactory(),
         m_gatewayInitializer->groupInfoFactory(), groupInfo);
-    m_gatewayInitializer->gateway()->asyncNotifyGroupInfo(
-        bcosGroupInfo, [current](bcos::Error::Ptr&& _error) {
-            async_response_asyncNotifyGroupInfo(current, toTarsError(_error));
-        });
+    auto gateway = m_gatewayInitializer->gateway();
+    // try/catch guarantees the RPC is always answered even if the notify throws
+    // (current->setResponse(false) already disabled the automatic reply)
+    bcos::task::wait([](auto _gateway, auto _groupInfo,
+                         auto _current) -> bcos::task::Task<void> {
+        try
+        {
+            auto error = co_await _gateway->notifyGroupInfo(std::move(_groupInfo));
+            async_response_asyncNotifyGroupInfo(_current, toTarsError(error));
+        }
+        catch (std::exception const& e)
+        {
+            async_response_asyncNotifyGroupInfo(
+                _current, toTarsError(BCOS_ERROR_PTR(-1, boost::diagnostic_information(e))));
+        }
+    }(gateway, std::move(bcosGroupInfo), current));
     return {};
 }
 
@@ -53,10 +65,22 @@ bcostars::Error GatewayServiceServer::asyncSubscribeTopic(
     const std::string& _clientID, const std::string& _topicInfo, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-    m_gatewayInitializer->gateway()->asyncSubscribeTopic(
-        _clientID, _topicInfo, [current](bcos::Error::Ptr&& _error) {
-            async_response_asyncSubscribeTopic(current, toTarsError(_error));
-        });
+    auto gateway = m_gatewayInitializer->gateway();
+    // try/catch guarantees the RPC is always answered even if the subscribe throws
+    // (current->setResponse(false) already disabled the automatic reply)
+    bcos::task::wait([](auto _gateway, auto _clientID, auto _topicInfo,
+                         auto _current) -> bcos::task::Task<void> {
+        try
+        {
+            auto error = co_await _gateway->subscribeTopic(_clientID, _topicInfo);
+            async_response_asyncSubscribeTopic(_current, toTarsError(error));
+        }
+        catch (std::exception const& e)
+        {
+            async_response_asyncSubscribeTopic(
+                _current, toTarsError(BCOS_ERROR_PTR(-1, boost::diagnostic_information(e))));
+        }
+    }(gateway, _clientID, _topicInfo, current));
     return {};
 }
 bcostars::Error GatewayServiceServer::asyncSendBroadcastMessageByTopic(
@@ -80,10 +104,22 @@ bcostars::Error GatewayServiceServer::asyncRemoveTopic(const std::string& _clien
     const std::vector<std::string>& _topicList, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-    m_gatewayInitializer->gateway()->asyncRemoveTopic(
-        _clientID, _topicList, [current](bcos::Error::Ptr&& _error) {
-            async_response_asyncRemoveTopic(current, toTarsError(_error));
-        });
+    auto gateway = m_gatewayInitializer->gateway();
+    // try/catch guarantees the RPC is always answered even if the remove throws
+    // (current->setResponse(false) already disabled the automatic reply)
+    bcos::task::wait([](auto _gateway, auto _clientID, auto _topicList,
+                         auto _current) -> bcos::task::Task<void> {
+        try
+        {
+            auto error = co_await _gateway->removeTopic(_clientID, _topicList);
+            async_response_asyncRemoveTopic(_current, toTarsError(error));
+        }
+        catch (std::exception const& e)
+        {
+            async_response_asyncRemoveTopic(
+                _current, toTarsError(BCOS_ERROR_PTR(-1, boost::diagnostic_information(e))));
+        }
+    }(gateway, _clientID, _topicList, current));
     return {};
 }
 bcostars::GatewayServiceServer::GatewayServiceServer(GatewayServiceParam const& _param)

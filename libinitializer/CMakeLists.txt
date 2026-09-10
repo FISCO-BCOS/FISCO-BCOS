@@ -39,6 +39,7 @@ target_link_libraries(init PUBLIC
     tool front
     txpool
     mempool
+    bcos-tx-validator
     single-consensus
     engine
     ledger

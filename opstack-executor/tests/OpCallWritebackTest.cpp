@@ -349,4 +349,40 @@ BOOST_AUTO_TEST_CASE(DepositCallPathLeavesStorageUnmodified)
     BOOST_CHECK_EQUAL(countRows(storage), 0u);
 }
 
+/// The block path's missing-RecentBlockHashes fault is node wiring, not a
+/// property of the transaction — the thrown OpConsensusError must NOT tag an innocent
+/// tx's hash as an eviction culprit (a set txHash drains the pool one tx per retry while
+/// the real fault persists). The member check used to carry transaction.hash(); the
+/// sibling free-function checks always threw the 1-arg form.
+BOOST_AUTO_TEST_CASE(BlockPathWiringFaultCarriesNoTxHash)
+{
+    MutableStorage storage;
+    auto header = makeCallHeader();
+
+    bcos::ledger::LedgerConfig ledgerConfig;
+    auto cfg = bcos::evm::opstack::jovianConfig();
+    ledgerConfig.setEVMCRevision(cfg.rev);
+
+    FakeTransaction tx;
+    bcos::executor_v1::opstack::OpstackExecutor executor{
+        bcos::evm::opstack::testutil::kOpTestReceiptFactory,
+        std::make_shared<bcos::crypto::Keccak256>(), cfg};
+
+    bcos::evm::opstack::OpFeeParams fee{};
+    try
+    {
+        (void)bcos::task::syncWait(executor.executeTransaction(storage, *header, tx,
+            /*contextID=*/0, ledgerConfig, /*call=*/false, fee, /*blockGasLeft=*/30'000'000,
+            /*chainId=*/10, /*blockHashes=*/nullptr));
+        BOOST_FAIL("block path with unwired RecentBlockHashes must throw");
+    }
+    catch (bcos::evm::OpConsensusError const& e)
+    {
+        BOOST_CHECK(!e.txHash.has_value());
+        BOOST_CHECK(std::string(e.what()).find("RecentBlockHashes") != std::string::npos);
+        BOOST_CHECK(!e.validateErrorCode);
+    }
+    BOOST_CHECK_EQUAL(countRows(storage), 0u);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

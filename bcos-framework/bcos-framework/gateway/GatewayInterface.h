@@ -109,9 +109,9 @@ public:
      * @brief receive the latest group information notification from the GroupManagerInterface
      *
      * @param _groupInfo the latest group information
+     * @return error: nullptr on success
      */
-    virtual void asyncNotifyGroupInfo(
-        bcos::group::GroupInfo::Ptr _groupInfo, std::function<void(Error::Ptr&&)>) = 0;
+    virtual task::Task<Error::Ptr> notifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo) = 0;
 
     /// for AMOP
 
@@ -133,11 +133,24 @@ public:
     virtual task::Task<void> sendBroadcastMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data) = 0;
 
-    virtual void asyncSubscribeTopic(std::string const& _clientID, std::string const& _topicInfo,
-        std::function<void(Error::Ptr&&)> _callback) = 0;
-    virtual void asyncRemoveTopic(std::string const& _clientID,
-        std::vector<std::string> const& _topicList,
-        std::function<void(Error::Ptr&&)> _callback) = 0;
+    /**
+     * @brief: subscribe topics of _topicInfo for the client _clientID
+     * @return error: nullptr on success
+     * @note coroutine: the parameters are passed by reference and the coroutine frame holds the
+     *       references (not copies) across suspensions — the caller must keep them alive until the
+     *       returned task completes (e.g. own them in a task::wait frame); do not pass temporaries.
+     */
+    virtual task::Task<Error::Ptr> subscribeTopic(
+        std::string const& _clientID, std::string const& _topicInfo) = 0;
+    /**
+     * @brief: remove the topics _topicList of the client _clientID
+     * @return error: nullptr on success
+     * @note coroutine: the parameters are passed by reference and the coroutine frame holds the
+     *       references (not copies) across suspensions — the caller must keep them alive until the
+     *       returned task completes (e.g. own them in a task::wait frame); do not pass temporaries.
+     */
+    virtual task::Task<Error::Ptr> removeTopic(
+        std::string const& _clientID, std::vector<std::string> const& _topicList) = 0;
 
     // for the air-mode node
     virtual bool registerNode(const std::string&, bcos::crypto::NodeIDPtr, bcos::protocol::NodeType,

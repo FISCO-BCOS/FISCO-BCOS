@@ -180,9 +180,9 @@ BOOST_AUTO_TEST_CASE(sizeGasUsedAndLogIndex)
     TransactionReceiptImpl empty;
     BOOST_CHECK_EQUAL(empty.gasUsed(), bcos::u256(0));
     BOOST_CHECK_EQUAL(empty.size(), 0U);
-    // logIndex is a stub: always zero, setter is a no-op.
+    // logIndex round-trips through the tars field (issue #5553).
     empty.setLogIndex(9);
-    BOOST_CHECK_EQUAL(empty.logIndex(), 0U);
+    BOOST_CHECK_EQUAL(empty.logIndex(), 9U);
 
     // size() accumulates output + log payload + message; check it tracks the
     // message delta rather than an exact byte total (robust to encoding).

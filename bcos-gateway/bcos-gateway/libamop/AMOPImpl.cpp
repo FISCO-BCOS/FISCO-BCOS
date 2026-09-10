@@ -648,24 +648,16 @@ void AMOPImpl::dispatcherAMOPMessage(
     }
 }
 
-void AMOPImpl::asyncSubscribeTopic(std::string const& _clientID, std::string const& _topicInfo,
-    std::function<void(Error::Ptr&&)> _callback)
+bcos::task::Task<bcos::Error::Ptr> AMOPImpl::subscribeTopic(
+    std::string const& _clientID, std::string const& _topicInfo)
 {
     m_topicManager->subTopic(_clientID, _topicInfo);
-    if (!_callback)
-    {
-        return;
-    }
-    _callback(nullptr);
+    co_return nullptr;
 }
 
-void AMOPImpl::asyncRemoveTopic(std::string const& _clientID,
-    std::vector<std::string> const& _topicList, std::function<void(Error::Ptr&&)> _callback)
+bcos::task::Task<bcos::Error::Ptr> AMOPImpl::removeTopic(
+    std::string const& _clientID, std::vector<std::string> const& _topicList)
 {
     m_topicManager->removeTopics(_clientID, _topicList);
-    if (!_callback)
-    {
-        return;
-    }
-    _callback(nullptr);
+    co_return nullptr;
 }

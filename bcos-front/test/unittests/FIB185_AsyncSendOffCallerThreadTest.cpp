@@ -7,8 +7,8 @@
  *        and, under TLS-churn, that lock is contended by session connect/disconnect; running the
  *        send on the caller thread (e.g. the PBFT consensus worker holding m_mutex) couples
  *        consensus to gateway lock contention and halts consensus. Both the broadcast
- *        (asyncBroadcastMessageByOwnedPayload, used by PBFT's prepare/commit/view-change
- *        broadcasts) and the point-to-point send (asyncSendMessageByNodeIDByOwnedPayload, used by
+ *        (broadcastMessageByOwnedPayload, used by PBFT's prepare/commit/view-change
+ *        broadcasts) and the point-to-point send (sendMessageByNodeIDByOwnedPayload, used by
  *        sendViewChange/sendRecoverResponse) hand the owned payload to a serial send queue and
  *        return immediately. These tests pin that: with a gateway whose send blocks, the caller
  *        returns promptly and the send runs on another thread.
@@ -104,7 +104,7 @@ BOOST_AUTO_TEST_CASE(asyncBroadcastByOwnedPayload_returnsWithoutBlockingOnGatewa
 
     auto callerThread = std::this_thread::get_id();
     auto startTime = utcSteadyTime();
-    front->asyncBroadcastMessageByOwnedPayload(static_cast<uint16_t>(1), /*moduleID*/ 111, payload);
+    front->broadcastMessageByOwnedPayload(static_cast<uint16_t>(1), /*moduleID*/ 111, payload);
     auto elapsed = utcSteadyTime() - startTime;
 
     // Deferred to the serial send queue: the caller returns promptly even though the gateway
@@ -119,7 +119,7 @@ BOOST_AUTO_TEST_CASE(asyncBroadcastByOwnedPayload_returnsWithoutBlockingOnGatewa
     front->stop();
 }
 
-BOOST_AUTO_TEST_CASE(asyncSendByNodeIDByOwnedPayload_returnsWithoutBlockingOnGatewaySend)
+BOOST_AUTO_TEST_CASE(sendByNodeIDByOwnedPayload_returnsWithoutBlockingOnGatewaySend)
 {
     auto gateway = std::make_shared<BlockingGateway>();
     auto front = buildFrontServiceWith(gateway);
@@ -128,7 +128,7 @@ BOOST_AUTO_TEST_CASE(asyncSendByNodeIDByOwnedPayload_returnsWithoutBlockingOnGat
 
     auto callerThread = std::this_thread::get_id();
     auto startTime = utcSteadyTime();
-    front->asyncSendMessageByNodeIDByOwnedPayload(/*moduleID*/ 111, dstNodeID, payload);
+    front->sendMessageByNodeIDByOwnedPayload(/*moduleID*/ 111, dstNodeID, payload);
     auto elapsed = utcSteadyTime() - startTime;
 
     // Deferred to the serial send queue: the caller (PBFT under m_mutex, via sendViewChange /

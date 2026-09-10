@@ -89,13 +89,14 @@ public:
      * @param _groupID: groupID
      * @param _srcNodeID: the sender nodeID
      * @param _dstNodeID: the receiver nodeID
-     * @param _payload: message content
+     * @param _msg: the received p2p message, passed by ownership so its payload buffer stays
+     *        alive for the whole (possibly deferred) dispatch, keeping the dispatch zero-copy
      * @param _errorRespFunc: error func
      * @return void
      */
     virtual void onReceiveP2PMessage(const std::string& _groupID,
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        bytesConstRef _payload, ErrorRespFunc _errorRespFunc = ErrorRespFunc());
+        std::shared_ptr<P2PMessage> _msg, ErrorRespFunc _errorRespFunc = ErrorRespFunc());
 
     P2PInterface::Ptr p2pInterface() const;
     GatewayNodeManager::Ptr gatewayNodeManager();
@@ -103,9 +104,9 @@ public:
      * @brief receive the latest group information notification from the GroupManagerInterface
      *
      * @param _groupInfo the latest group information
+     * @return error: nullptr on success
      */
-    void asyncNotifyGroupInfo(
-        bcos::group::GroupInfo::Ptr, std::function<void(Error::Ptr&&)>) override;
+    task::Task<Error::Ptr> notifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo) override;
 
     /// for AMOP
     task::Task<std::tuple<Error::Ptr, int16_t, bcos::bytes>> sendMessageByTopic(
@@ -113,11 +114,11 @@ public:
     task::Task<void> sendBroadcastMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data) override;
 
-    void asyncSubscribeTopic(std::string const& _clientID, std::string const& _topicInfo,
-        std::function<void(Error::Ptr&&)> _callback) override;
+    task::Task<Error::Ptr> subscribeTopic(
+        std::string const& _clientID, std::string const& _topicInfo) override;
 
-    void asyncRemoveTopic(std::string const& _clientID, std::vector<std::string> const& _topicList,
-        std::function<void(Error::Ptr&&)> _callback) override;
+    task::Task<Error::Ptr> removeTopic(std::string const& _clientID,
+        std::vector<std::string> const& _topicList) override;
 
     bcos::amop::AMOPImpl::Ptr amop();
 

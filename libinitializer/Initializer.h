@@ -23,6 +23,7 @@
 #include "PBFTInitializer.h"
 #include "ProtocolInitializer.h"
 #include "TxPoolInitializer.h"
+#include "bcos-framework/ledger/LedgerConfigState.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
@@ -32,6 +33,7 @@
 #endif
 #include <bcos-executor/src/executor/SwitchExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
+#include <bcos-tx-validator/TxValidator.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <oneapi/tbb/global_control.h>
@@ -95,6 +97,11 @@ public:
     PBFTInitializer::Ptr pbftInitializer() { return m_pbftInitializer; }
     TxPoolInitializer::Ptr txPoolInitializer() { return m_txpoolInitializer; }
     std::shared_ptr<MemPoolInitializer> memPoolInitializer() { return m_memPoolInitializer; }
+    /// Admission for the mempool path; null in every mode that has no mempool.
+    std::shared_ptr<bcos::txvalidator::TxValidator> memPoolValidator()
+    {
+        return m_memPoolValidator;
+    }
     std::shared_ptr<EngineServiceInitializer> engineServiceInitializer()
     {
         return m_engineServiceInitializer;
@@ -168,6 +175,9 @@ private:
     ProtocolInitializer::Ptr m_protocolInitializer;
     FrontServiceInitializer::Ptr m_frontServiceInitializer;
     bcos::IOServicePool::Ptr m_ioServicePool;
+    bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState;
+    /// Built only in engine-driven mode, where the mempool is the pool a transaction enters.
+    std::shared_ptr<bcos::txvalidator::TxValidator> m_memPoolValidator;
     TxPoolInitializer::Ptr m_txpoolInitializer;
     PBFTInitializer::Ptr m_pbftInitializer;
 #ifdef WITH_LIGHTNODE

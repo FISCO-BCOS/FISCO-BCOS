@@ -918,24 +918,26 @@ BOOST_AUTO_TEST_CASE(testRejectOverwideInteger)
         auto e = rlp::decode(ref, v);
         BOOST_CHECK(e != nullptr);
     }
-    // A canonical 8-byte uint64 still decodes fine (no regression).
+    // A canonical 8-byte uint64 still decodes fine (no regression). The leading byte must be
+    // non-zero: leading zeros are a non-canonical integer and are rejected since #5353.
     {
-        bcos::bytes raw{0x88, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2a};  // 42
+        bcos::bytes raw{0x88, 0x2a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01};
         auto ref = bcos::ref(raw);
         uint64_t v = 0;
         BOOST_REQUIRE(rlp::decode(ref, v) == nullptr);
-        BOOST_CHECK_EQUAL(v, 42);
+        BOOST_CHECK_EQUAL(v, 0x2a00000000000001ULL);
     }
     // A canonical 32-byte u256 still decodes fine (guards the maxBytes formula against a
     // sizeof(T)-based regression: sizeof(u256) == 48, which would reject legal 32-byte values).
     {
         bcos::bytes raw(33, 0x00);
         raw[0] = 0xa0;   // long-string header, 32-byte payload
-        raw[32] = 0x01;  // least-significant payload byte -> value 1
+        raw[1] = 0x01;   // most-significant payload byte non-zero (canonical)
+        raw[32] = 0x01;  // least-significant payload byte
         auto ref = bcos::ref(raw);
         bcos::u256 v = 0;
         BOOST_REQUIRE(rlp::decode(ref, v) == nullptr);
-        BOOST_CHECK(v == 1);
+        BOOST_CHECK(v == (bcos::u256(1) << 248) + 1);
     }
     // Narrow integers: 5-byte uint32 rejected, canonical 4-byte accepted.
     {
@@ -945,11 +947,11 @@ BOOST_AUTO_TEST_CASE(testRejectOverwideInteger)
         BOOST_CHECK(rlp::decode(ref, v) != nullptr);
     }
     {
-        bcos::bytes raw{0x84, 0x00, 0x00, 0x00, 0x2a};  // 42
+        bcos::bytes raw{0x84, 0x2a, 0x00, 0x00, 0x01};
         auto ref = bcos::ref(raw);
         uint32_t v = 0;
         BOOST_REQUIRE(rlp::decode(ref, v) == nullptr);
-        BOOST_CHECK_EQUAL(v, 42);
+        BOOST_CHECK_EQUAL(v, 0x2a000001U);
     }
     // 3-byte uint16 rejected, canonical 2-byte accepted.
     {
@@ -959,11 +961,11 @@ BOOST_AUTO_TEST_CASE(testRejectOverwideInteger)
         BOOST_CHECK(rlp::decode(ref, v) != nullptr);
     }
     {
-        bcos::bytes raw{0x82, 0x00, 0x2a};  // 42
+        bcos::bytes raw{0x82, 0x2a, 0x01};
         auto ref = bcos::ref(raw);
         uint16_t v = 0;
         BOOST_REQUIRE(rlp::decode(ref, v) == nullptr);
-        BOOST_CHECK_EQUAL(v, 42);
+        BOOST_CHECK_EQUAL(v, 0x2a01U);
     }
 }
 

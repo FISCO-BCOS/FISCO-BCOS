@@ -18,6 +18,7 @@
 
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <optional>
 
 namespace bcos::engine
 {
@@ -34,10 +35,21 @@ DERIVE_BCOS_EXCEPTION(InvalidForkchoiceState);
 DERIVE_BCOS_EXCEPTION(InvalidPayloadAttributes);
 DERIVE_BCOS_EXCEPTION(UnknownPayload);
 DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
+/// A tracker guard (Exclusive/SharedAccess) was used after move or without owning
+/// its lock — a programming error inside the tracker's callers (finding F23).
+DERIVE_BCOS_EXCEPTION(InvalidGuardState);
+/// An Engine-API byte payload (attribute/payload-id encoding) is malformed —
+/// length, range or shape violation in a wire-shaped byte sequence (finding N7).
+DERIVE_BCOS_EXCEPTION(InvalidEngineEncoding);
 
 /// JSON-RPC -38005 Unsupported fork. Isthmus+ requiring payload V4 is one use;
 /// other fork-shape mismatches share this channel (see #5517).
 DERIVE_BCOS_EXCEPTION(UnsupportedFork);
+
+/// An Engine service was constructed with a malformed or missing dependency
+/// (e.g. a null block factory) — a startup/wiring fault of the composition root,
+/// not a request fault and not a storage fault.
+DERIVE_BCOS_EXCEPTION(InvalidEngineConfig);
 
 /// Structured carrier for the OP build-loop's poisoned-tx eviction: the OpScheduler
 /// catch attaches the offending tx hash to the boundary bcos::Error as a typed
@@ -49,5 +61,16 @@ using OpCulpritTxHash = boost::error_info<struct OpCulpritTxHashTag, bcos::h256>
 /// True when the reject is a block-gas-pool capacity fault (skip this build, do not evict).
 /// Named separately from executor_v1::opstack::OpBlockGasPoolFull (the prepare-time exception).
 using OpRejectIsCapacity = boost::error_info<struct OpRejectIsCapacityTag, bool>;
+
+/// Consumed by OpEngineService (#5549) to classify execute-reject culprits; unused
+/// within #5547 itself.
+[[nodiscard]] inline std::optional<bcos::h256> culpritTxHashFromError(boost::exception const& error)
+{
+    if (auto const* hash = boost::get_error_info<OpCulpritTxHash>(error))
+    {
+        return *hash;
+    }
+    return std::nullopt;
+}
 
 }  // namespace bcos::engine

@@ -442,17 +442,20 @@ void GatewayNodeManager::syncLatestNodeIDList()
                                << LOG_KV("nodeCount", groupNodeInfos->nodeIDList().size());
         for (const auto& entry : localNodeEntryPoints)
         {
-            entry.second->frontService()->onReceiveGroupNodeInfo(
-                groupID, groupNodeInfos, [](Error::Ptr _error) {
-                    if (!_error)
-                    {
-                        return;
-                    }
-                    NODE_MANAGER_LOG(WARNING)
-                        << LOG_DESC("syncLatestNodeIDList onReceiveGroupNodeInfo callback")
-                        << LOG_KV("codeCode", _error->errorCode())
-                        << LOG_KV("codeMessage", _error->errorMessage());
-                });
+            task::wait([](bcos::front::FrontServiceInterface::Ptr _frontService,
+                           std::string _groupID,
+                           GroupNodeInfo::Ptr _groupNodeInfo) -> task::Task<void> {
+                auto error = co_await _frontService->onReceiveGroupNodeInfo(
+                    std::move(_groupID), std::move(_groupNodeInfo));
+                if (!error)
+                {
+                    co_return;
+                }
+                NODE_MANAGER_LOG(WARNING)
+                    << LOG_DESC("syncLatestNodeIDList onReceiveGroupNodeInfo callback")
+                    << LOG_KV("codeCode", error->errorCode())
+                    << LOG_KV("codeMessage", error->errorMessage());
+            }(entry.second->frontService(), groupID, groupNodeInfos));
         }
     }
 }

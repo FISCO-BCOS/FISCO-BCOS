@@ -1,0 +1,295 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file OpEngineService.h
+ * @brief Side-by-side OP Engine API service (template on mempool / global state / scheduler)
+ */
+
+#pragma once
+
+#include "EngineServiceCommon.h"
+#include "EngineTracker.h"
+
+#include <bcos-concepts/ByteBuffer.h>
+#include <bcos-framework/dispatcher/SchedulerInterface.h>
+#include <bcos-framework/engine/DACaps.h>
+#include <bcos-framework/engine/EngineService.h>
+#include <bcos-framework/engine/Errors.h>
+#include <bcos-framework/engine/OpBaseFee.h>
+#include <bcos-framework/engine/Types.h>
+
+#include <bcos-framework/ledger/Ledger.h>
+#include <bcos-framework/ledger/LedgerConfig.h>
+#include <bcos-framework/protocol/BlockFactory.h>
+#include <bcos-framework/protocol/Transaction.h>
+#include <bcos-framework/storage/Entry.h>
+#include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-framework/transaction-executor/TransactionExecutor.h>
+#include <bcos-framework/transaction-scheduler/TransactionScheduler.h>
+#include <bcos-ledger/LedgerMethods.h>
+#include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
+#include <bcos-task/Task.h>
+#include <bcos-utilities/Bloom.h>
+#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Exceptions.h>
+#include <boost/lexical_cast.hpp>
+
+#include <algorithm>
+#include <cstdint>
+#include <mutex>
+#include <optional>
+#include <set>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+namespace bcos::engine
+{
+
+/// Tag on OpExecutionInternalError marking an undecodable payload transaction
+/// envelope: fcuInvalidIfUndecodable maps it to an Invalid FCU status. Same
+/// carrier convention as the framework's OpCulpritTxHash/OpRejectIsCapacity
+/// error_info tags (bcos::engine scope, not the global namespace).
+using OpPayloadUndecodable = boost::error_info<struct tag_op_payload_undecodable, bool>;
+
+struct OpPayloadArtifacts
+{
+    bcos::protocol::BlockHeader::Ptr canonicalHeader;
+};
+
+namespace engine_common::op
+{
+std::vector<std::string> supportedOpCapabilities();
+std::optional<std::uint64_t> narrowU256ToU64(const u256& value);
+bcos::h2048 toEthLogsBloom(const Bloom& logsBloom);
+std::optional<std::string> validateOpPayloadAttributes(
+    const PayloadAttributes& payloadAttributes, bool jovianActive);
+/// op-geth miner.BuildPayload uses attrs.Transactions as-is and never synthesizes
+/// an L1-attributes deposit. Synthesis is test-only (`allowSynthesizedL1Attributes`);
+/// production op_engine_rpc must receive the real deposit from op-node.
+inline std::optional<std::string> requireL1AttributesDeposit(
+    const PayloadAttributes& payloadAttributes, bool allowSynthesized)
+{
+    bool const missing =
+        !payloadAttributes.transactions.has_value() || payloadAttributes.transactions->empty();
+    if (missing && !allowSynthesized)
+    {
+        return std::string(
+            "payloadAttributes.transactions must include the L1 attributes deposit "
+            "(op-geth does not synthesize one)");
+    }
+    return std::nullopt;
+}
+std::optional<std::string> validateOpNewPayloadRequest(
+    const NewPayloadRequest& request, bool jovianActive);
+void applyOpHeaderConstants(bcos::protocol::BlockHeader& header);
+bcos::protocol::BlockHeader::Ptr rebuildOpEthHeader(
+    const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
+    const h256& transactionsRoot, const h256& parentBeaconBlockRoot);
+std::optional<bcostars::Transaction> opEnvelopeToTars(
+    bcos::bytes const& env, bcos::crypto::HashType const& txHash);
+}  // namespace engine_common::op
+
+namespace detail
+{
+template <class ArtifactsMap>
+bcos::protocol::BlockHeader::Ptr findBuiltHeader(
+    EngineTracker::SharedAccess& shared, ArtifactsMap const& artifacts, h256 const& blockHash)
+{
+    if (auto payloadId = shared.payloadIdForHash(blockHash))
+    {
+        if (auto artifactIt = artifacts.find(*payloadId); artifactIt != artifacts.end())
+        {
+            return artifactIt->second.canonicalHeader;
+        }
+    }
+    return nullptr;
+}
+}  // namespace detail
+
+template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
+class OpEngineService
+{
+public:
+    using ViewType = typename GlobalStateStorageType::ViewType;
+
+    OpEngineService(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage,
+        SchedulerType& scheduler, bcos::protocol::BlockFactory::Ptr blockFactory,
+        int64_t blockTxCountLimit = c_defaultBlockTxCountLimit,
+        bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
+        std::shared_ptr<DACaps> daCaps = nullptr, bool allowSynthesizedL1Attributes = false)
+      : m_memPool(memPool),
+        m_globalStateStorage(globalStateStorage),
+        m_scheduler(scheduler),
+        m_blockFactory(std::move(blockFactory)),
+        m_blockTxCountLimit(blockTxCountLimit),
+        m_delegate(std::move(delegate)),
+        m_daCaps(std::move(daCaps)),
+        m_allowSynthesizedL1Attributes(allowSynthesizedL1Attributes)
+    {
+        if (!m_blockFactory)
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidEngineConfig{} << bcos::errinfo_comment{"blockFactory must not be null"});
+        }
+    }
+    ~OpEngineService() = default;
+    OpEngineService(const OpEngineService&) = delete;
+    OpEngineService(OpEngineService&&) = delete;
+    OpEngineService& operator=(const OpEngineService&) = delete;
+    OpEngineService& operator=(OpEngineService&&) = delete;
+
+    task::Task<std::vector<std::string>> exchangeCapabilities(
+        std::vector<std::string> remoteCapabilities)
+    {
+        (void)remoteCapabilities;
+        co_return engine_common::op::supportedOpCapabilities();
+    }
+
+    task::Task<ForkchoiceUpdatedResult> updateForkchoice(const ForkchoiceState& forkchoiceState,
+        const PayloadAttributes* payloadAttributes, std::uint32_t version);
+
+    task::Task<GetPayloadResult> getPayload(const PayloadID& payloadId, std::uint32_t version)
+    {
+        co_return m_tracker.getPayload(payloadId, version);
+    }
+
+    task::Task<PayloadStatus> newPayload(const NewPayloadRequest& request, std::uint32_t version);
+
+    std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber() const
+    {
+        return m_tracker.safeBlockNumber();
+    }
+
+    std::optional<bcos::protocol::BlockNumber> getFinalizedBlockNumber() const
+    {
+        return m_tracker.finalizedBlockNumber();
+    }
+
+    /// Header returned by the last successful newPayload execute/commit (not the
+    /// request-rebuilt announcement). Null if this call did not run or persist execution.
+    bcos::protocol::BlockHeader::Ptr lastExecutedHeader() const
+    {
+        std::lock_guard lock(m_lastExecutedHeaderMutex);
+        return m_lastExecutedHeader;
+    }
+
+private:
+    static PayloadStatus makeStatus(PayloadValidationStatus status,
+        std::optional<h256> latestValidHash = std::nullopt,
+        std::optional<std::string> validationError = std::nullopt)
+    {
+        return engine_common::makeStatus(status, latestValidHash, validationError);
+    }
+
+    static PayloadStatus mapDelegateError(
+        bcos::Error const& error, std::optional<h256> latestValidHash)
+    {
+        if (static_cast<bcos::scheduler::SchedulerError>(error.errorCode()) ==
+            bcos::scheduler::SchedulerError::OpConsensusRejected)
+        {
+            return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
+                std::string("OP block execution rejected the payload: ") + error.errorMessage());
+        }
+        BOOST_THROW_EXCEPTION(
+            OpExecutionInternalError{} << bcos::errinfo_comment{
+                std::string("OP block execution failed (SchedulerError ") +
+                std::to_string(error.errorCode()) + "): " + error.errorMessage()});
+    }
+
+    /// FCU method-version window for the OP lane: V1-V3 exactly (Isthmus/Jovian —
+    /// upstream has no FCU V4 on this fork; the caps list advertises exactly this
+    /// window and V4 answers -38005). newPayload is Isthmus-only (V4). Method windows
+    /// need not intersect; stored shape is payloadShapeVersion (V3/V4 → PayloadV3).
+    static bool isForkchoiceVersionSupported(std::uint32_t version)
+    {
+        return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
+               version <= static_cast<std::uint32_t>(ApiVersion::V3);
+    }
+
+    /// OP newPayload is Isthmus-only (V4). Not the Eth V1..V4 window.
+    static bool isNewPayloadVersionSupported(std::uint32_t version)
+    {
+        return version == static_cast<std::uint32_t>(ApiVersion::V4);
+    }
+
+    task::Task<ForkchoiceUpdatedResult> buildOpPayload(const ForkchoiceState& forkchoiceState,
+        const PayloadAttributes& payloadAttributes, std::uint32_t version,
+        bcos::protocol::BlockNumber nextBlockNumber,
+        std::vector<bcos::bytes> const& decodedForcedTxs);
+
+    task::Task<PayloadStatus> handleOpNewPayload(
+        const NewPayloadRequest& request, std::uint32_t version);
+
+    task::Task<PayloadStatus> runOpNewPayloadSteps(const NewPayloadRequest& request);
+
+    bcos::protocol::Block::Ptr buildOpBlock(
+        const ExecutionPayload& payload, bcos::protocol::BlockHeader::Ptr header);
+
+    void requireDelegate() const
+    {
+        if (!m_delegate)
+        {
+            BOOST_THROW_EXCEPTION(
+                OpExecutionInternalError{} << bcos::errinfo_comment{
+                    "OP engine requires an m_delegate (OpScheduler); the composition "
+                    "root did not wire one"});
+        }
+    }
+
+    EngineTracker m_tracker;
+    std::unordered_map<PayloadID, OpPayloadArtifacts> m_artifacts;
+    MemPoolType& m_memPool;
+    GlobalStateStorageType& m_globalStateStorage;
+    SchedulerType& m_scheduler;
+    bcos::protocol::BlockFactory::Ptr m_blockFactory;
+    int64_t m_blockTxCountLimit;
+    /// Block-commit delegate. CONTRACT: executeBlock/commitBlock must invoke the
+    /// completion callback synchronously, before the call returns — this service
+    /// reads the captured error immediately after the call and answers VALID on a
+    /// null error (answering before the durable write would mask a failed commit).
+    /// BaselineScheduler satisfies this (task::wait runs the coroutine to
+    /// completion, callback inside it); the legacy chain's SchedulerImpl does NOT
+    /// (its commitBlock returns while blockExecutive->asyncCommit is still in
+    /// flight) — do not wire it here.
+    bcos::scheduler::SchedulerInterface::Ptr m_delegate;
+    std::shared_ptr<DACaps> m_daCaps;
+    bool m_allowSynthesizedL1Attributes;
+    /// Guards m_lastExecutedHeader: newPayload requests can run concurrently on RPC
+    /// threads (no serial executor), so the shared_ptr write/read must be synchronized.
+    ///
+    /// The m_delegate (an OpScheduler) sequences (reset → executeBlock, executeBlock →
+    /// commitBlock) need no extra serialization of their own — the reasoning, precisely:
+    /// OpScheduler::executeBlock try-locks m_executeMutex AND m_commitMutex ("Another
+    /// block is executing/committing!" — a concurrent second caller fails closed), and
+    /// executeBlock/commitBlock drive their task via task::syncWait, so a sequence's calls
+    /// are ordered within the calling thread. OpScheduler::reset is NOT a no-op: it takes
+    /// all three mutexes (scoped_lock, so it cannot interleave with an in-flight execute
+    /// or commit), then drops any uncommitted pending block (popping its verified storage
+    /// layer) and restores the continuity watermark to the committed tip. A reset landing
+    /// between another caller's executeBlock and commitBlock therefore makes that caller's
+    /// commitBlock fail CLOSED ("Unexpected empty results!" — the pending it needs was
+    /// dropped/replaced), which the OP service reports as an error and the sequencer
+    /// retries — convergent, never corrupt. Out-of-order parents cannot interleave: the
+    /// sequencer advances height n+1 only after height n's canonical status, and the
+    /// delegate's continuity check rejects anything else.
+    mutable std::mutex m_lastExecutedHeaderMutex;
+    bcos::protocol::BlockHeader::Ptr m_lastExecutedHeader;
+};
+
+}  // namespace bcos::engine

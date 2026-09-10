@@ -38,9 +38,8 @@ class MemoryStorage : public TxPoolStorageInterface,
 {
 public:
     // the default txsExpirationTime is 10 minutes
-    explicit MemoryStorage(TxPoolConfig::Ptr _config,
-        boost::asio::io_context& _ioContext, size_t _notifyWorkerNum = 2,
-        uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
+    explicit MemoryStorage(TxPoolConfig::Ptr _config, boost::asio::io_context& _ioContext,
+        size_t _notifyWorkerNum = 2, uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
     ~MemoryStorage() override;
     MemoryStorage(const MemoryStorage&) = delete;
     MemoryStorage(MemoryStorage&&) = delete;
@@ -95,6 +94,14 @@ public:
     void remove(crypto::HashType const& _txHash);
 
 protected:
+    /// Whether a transaction ALREADY IN THE POOL has been invalidated by a committed block --
+    /// its nonce landed on chain, or its block limit passed. Not admission: it re-asks the one
+    /// question whose answer changes while a transaction sits in the pool, and it runs over every
+    /// pooled transaction during sealing and cleanup, where re-verifying signatures and balances
+    /// would be both wrong and expensive.
+    bcos::protocol::TransactionStatus committedNonceStatus(
+        bcos::protocol::Transaction const& _tx) const;
+
     virtual void notifyTxsSize(size_t _retryTime = 0);
 
     bcos::protocol::TransactionStatus enforceSubmitTransaction(

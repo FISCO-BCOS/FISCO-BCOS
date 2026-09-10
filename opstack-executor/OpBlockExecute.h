@@ -7,6 +7,7 @@
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>
+#include <bcos-framework/engine/Constants.h>
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/BlockFactory.h>
@@ -150,8 +151,16 @@ evmone::state::StateDiff finalizeOpBlock(
 using evmc::literals::operator""_bytes32;
 
 /// Isthmus+ requestsHash = sha256("").
-inline constexpr auto OP_EMPTY_REQUESTS_HASH =
-    0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855_bytes32;
+inline const evmc::bytes32 OP_EMPTY_REQUESTS_HASH = [] {
+    // sha256("") — single-sourced from bcos::engine::c_emptyRequestsHashHex (framework):
+    // the same value the engine header builders stamp (EngineServiceCommon.h
+    // c_emptyRequestsHash), cast here into the seal's native type. Both are
+    // keccak256(rlp(header))-critical, so the hex must have exactly one home.
+    auto raw = bcos::fromHex(std::string{bcos::engine::c_emptyRequestsHashHex});
+    evmc::bytes32 hash{};
+    std::copy(raw.begin(), raw.end(), hash.bytes);
+    return hash;
+}();
 
 /// Single-account storage root (secure trie: key = keccak256(slot), value = rlp(trimmed)).
 [[nodiscard]] evmone::hash256 opStorageRoot(const std::map<evmc::bytes32, evmc::bytes32>& storage);
