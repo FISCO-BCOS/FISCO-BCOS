@@ -67,18 +67,15 @@ struct AccountState
 /// catching binary-wide -- into every module that admits a transaction.
 using SystemTxPredicate = std::function<bool(protocol::Transaction const&)>;
 
-/// The one place a transaction is judged admissible, for every ingress of the transaction pool:
-/// JSON-RPC (BCOS and Web3), P2P, and block-proposal verification. The pool's two ingresses call
-/// it -- verifyAndSubmitTransaction for submission and the peer fetch, enforceSubmitTransaction
-/// for proposal verification.
+/// The one place a transaction is judged admissible, for every ingress of both transaction
+/// pools: JSON-RPC (BCOS and Web3), P2P, and block-proposal verification. The txpool's two
+/// entry points call it -- verifyAndSubmitTransaction for submission and the peer fetch,
+/// enforceSubmitTransaction for proposal verification. The engine-driven mempool (single-node
+/// consensus or the OP engine RPC) has one, EthEndpoint::sendRawTransaction, which calls it and
+/// then reserves the (sender, nonce) with MemPoolImpl::tryAdd.
 ///
-/// NOT yet the engine-driven mempool. On a node with single-node consensus or the OP engine RPC,
-/// EthEndpoint::sendRawTransaction refuses blob and deposit envelopes, recovers the signature and
-/// checks the EIP-155 chain id inline, then hands the transaction to MemPoolImpl::add; neither
-/// runs verify(). #5555 wires that ingress.
-///
-/// It holds pointers to the shared nonce checkers rather than owning them: the pool reserves and
-/// clears nonces through the same instances without going near admission, and the admission
+/// It holds pointers to the shared nonce checkers rather than owning them: the txpool reserves
+/// and clears nonces through the same instances without going near admission, and the admission
 /// question is asked here. Nonce admission is the same question at every ingress, and routing it
 /// through a per-caller hook is how the pool and the RPC layer came to disagree about it in the
 /// first place.
