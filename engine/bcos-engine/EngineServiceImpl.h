@@ -578,12 +578,14 @@ private:
             ledger::LedgerConfig missLedgerConfig;
             auto const blockNumber = request.executionPayload.blockNumber;
             auto const parentNumber = blockNumber > 0 ? blockNumber - 1 : 0;
-            // Not caught: getLedgerConfig throws only for a corrupted persisted consensus
-            // parameter (InvalidEVMCRevisionConfig / InvalidWeb3ChainIdConfig), whose
-            // contract is to halt loudly. Absorbing that into SYNCING would leave a node
-            // that cannot sync and no reason why; the RPC layer turns it into -32603 with
-            // the diagnostic instead. An era this node merely cannot resolve is the
-            // nullopt branch below, and that is the case that answers SYNCING.
+            // Not caught: getLedgerConfig surfaces node-local faults — a corrupted persisted
+            // consensus parameter (InvalidEVMCRevisionConfig / InvalidWeb3ChainIdConfig, or a
+            // boost::bad_lexical_cast from another malformed SYS_CONFIG field applyLedgerConfig
+            // parses) or a storage read fault — whose contract is to halt loudly, not to be
+            // absorbed into SYNCING. Absorbing one would leave a node that cannot sync and no
+            // reason why; the RPC layer turns the exception into -32603 with the diagnostic
+            // instead. An era this node merely cannot resolve is the nullopt branch below, and
+            // that is the case that answers SYNCING.
             co_await ledger::getLedgerConfig(view, missLedgerConfig, parentNumber, *m_blockFactory);
             auto const forkVersion = detail::ethBlockVersionForBlock(missLedgerConfig, blockNumber);
             if (!forkVersion.has_value())
