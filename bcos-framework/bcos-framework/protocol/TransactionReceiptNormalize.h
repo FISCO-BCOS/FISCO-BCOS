@@ -26,8 +26,14 @@
 namespace bcos::protocol
 {
 
-/// Single receipt-normalization policy used by BaselineScheduler::finishExecute and
-/// engine buildHeaderCommitments. Callers must reject null receipts before entry.
+/// Receipt-normalization policy shared by BaselineScheduler::finishExecute and engine
+/// buildHeaderCommitments — the two callers migrated so far. Callers must reject null
+/// receipts before entry.
+/// NOT yet the repo-wide policy: the OP block path (opstack-executor/OpBlockExecute.cpp
+/// deposit and normal-tx loops, and OpstackExecutor::ExecuteContext::finish) sets
+/// cumulativeGasUsed / transactionIndex inline, never sets logIndex, and does not recompute
+/// logsBloom, so its receipts-trie leaf and eth_getLogs logIndex differ. Migrating the OP
+/// path (call normalizeReceipts before sealOpBlock) is a follow-up: #5582.
 ///
 /// - transactionIndex / logIndex are always written (the first log of receipt i
 ///   is numbered after all logs of receipts 0..i-1).
