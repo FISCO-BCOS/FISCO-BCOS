@@ -38,6 +38,7 @@
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <cstdint>
 #include <string>
@@ -488,19 +489,8 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
 
 task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& response)
 {
-    co_await call(request, response, nullptr, false);
-}
-task::Task<void> EthEndpoint::call(
-    const Json::Value& request, Json::Value& response, u256* gasUsed, bool isEstimate)
-{
     // params: transaction(TX), blockNumber(QTY|TAG)
     // result: data(DATA)
-    auto scheduler = m_nodeService->scheduler();
-    if (!scheduler)
-    {
-        BOOST_THROW_EXCEPTION(
-            JsonRpcException(JsonRpcError::InternalError, "Scheduler not available!"));
-    }
     auto [valid, call] = decodeCallRequest(request[0U]);
     if (!valid)
     {
@@ -513,6 +503,37 @@ task::Task<void> EthEndpoint::call(
         WEB3_LOG(TRACE) << LOG_DESC("eth_call") << LOG_KV("call", call)
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
+    auto result = co_await executeCall(std::move(call), false);
+    buildCallResponse(result, response);
+}
+
+void EthEndpoint::buildCallResponse(CallOutcome const& outcome, Json::Value& response)
+{
+    auto output = toHexStringWithPrefix(outcome.output);
+    response["jsonrpc"] = "2.0";
+    if (outcome.status == static_cast<int32_t>(protocol::TransactionStatus::None))
+    {
+        response["result"] = output;
+        return;
+    }
+    // https://docs.infura.io/api/networks/ethereum/json-rpc-methods/eth_call#returns
+    Json::Value jsonResult = Json::objectValue;
+    jsonResult["code"] = outcome.status;
+    jsonResult["message"] = outcome.message;
+    jsonResult["data"] = output;
+    response["error"] = std::move(jsonResult);
+}
+
+task::Task<EthEndpoint::CallOutcome> EthEndpoint::executeCall(CallRequest call, bool isEstimate)
+{
+    auto scheduler = m_nodeService->scheduler();
+    if (!scheduler)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(JsonRpcError::InternalError, "Scheduler not available!"));
+    }
+    // takeToTransaction moves `to` out of the request, hence the by-value parameter:
+    // estimateGas replays the same request at several gas caps.
     auto tx = call.takeToTransaction(
         m_nodeService->blockFactory()->transactionFactory(), isEstimate ? scheduler : nullptr);
     struct Awaitable
@@ -520,8 +541,7 @@ task::Task<void> EthEndpoint::call(
         bcos::scheduler::SchedulerInterface& m_scheduler;
         bcos::protocol::Transaction::Ptr& m_tx;
         Error::Ptr m_error;
-        Json::Value& m_response;
-        u256* m_gasUsed;
+        CallOutcome m_outcome;
 
         constexpr static bool await_ready() noexcept { return false; }
         void await_suspend(std::coroutine_handle<> handle)
@@ -533,72 +553,100 @@ task::Task<void> EthEndpoint::call(
                 }
                 else
                 {
-                    auto output = toHexStringWithPrefix(result->output());
-                    if (result->status() == static_cast<int32_t>(protocol::TransactionStatus::None))
-                    {
-                        m_response["jsonrpc"] = "2.0";
-                        m_response["result"] = output;
-                    }
-                    else
-                    {
-                        // https://docs.infura.io/api/networks/ethereum/json-rpc-methods/eth_call#returns
-                        Json::Value jsonResult = Json::objectValue;
-                        jsonResult["code"] = result->status();
-                        jsonResult["message"] = result->message();
-                        jsonResult["data"] = output;
-                        m_response["jsonrpc"] = "2.0";
-                        m_response["error"] = std::move(jsonResult);
-                    }
-
-                    if (m_gasUsed)
-                    {
-                        *m_gasUsed = result->gasUsed();
-                    }
+                    m_outcome.status = result->status();
+                    m_outcome.message = result->message();
+                    m_outcome.output = result->output().toBytes();
+                    m_outcome.gasUsed = result->gasUsed();
                 }
-
                 handle.resume();
             });
         }
-        void await_resume()
+        CallOutcome await_resume()
         {
             if (m_error)
             {
                 BOOST_THROW_EXCEPTION(*m_error);
             }
+            return std::move(m_outcome);
         }
-    } awaitable{.m_scheduler = *scheduler,
-        .m_tx = tx,
-        .m_error = {},
-        .m_response = response,
-        .m_gasUsed = gasUsed};
-    co_await awaitable;
+    } awaitable{.m_scheduler = *scheduler, .m_tx = tx, .m_error = {}, .m_outcome = {}};
+    co_return co_await awaitable;
 }
+
 task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Value& response)
 {
     // params: transaction(TX), blockNumber(QTY|TAG)
     // result: gas(QTY)
-    auto const& tx = request[0U];
+    auto [valid, call] = decodeCallRequest(request[0U]);
+    if (!valid)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid call request!"));
+    }
     auto const blockTag = toView(request[1U]);
     auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
     if (c_fileLogLevel == TRACE)
     {
-        WEB3_LOG(TRACE) << LOG_DESC("eth_estimateGas") << LOG_KV("tx", printJson(tx))
+        WEB3_LOG(TRACE) << LOG_DESC("eth_estimateGas") << LOG_KV("call", call)
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
 
-    u256 gasUsed;
-    Json::Value callResponse;
-    co_await call(request, callResponse, std::addressof(gasUsed), true);
+    // The receipt's gasUsed is not the gas a transaction needs: a precompiled target hands
+    // its budget to internal sub-calls and never books what they burn (issue #5587), and the
+    // executor only meters what it charges. So do what geth does: find the smallest gas cap
+    // the call still succeeds at. Cap = the request's gas if given, else the chain's
+    // tx_gas_limit; the executor clamps the budget to tx.gasLimit() (executor v1,
+    // bugfix_gas_payment_balance_precheck) — where it doesn't, every probe succeeds and the
+    // answer degrades to the first run's gasUsed (the pre-existing behavior, one extra
+    // execution).
+    uint64_t cap = call.gas.value_or(0);
+    if (cap == 0)
+    {
+        auto const ledger = m_nodeService->ledger();
+        if (auto config =
+                co_await ledger::getSystemConfig(*ledger, ledger::SYSTEM_KEY_TX_GAS_LIMIT))
+        {
+            cap = boost::lexical_cast<uint64_t>(std::get<0>(*config));
+        }
+    }
+    auto succeeded = [](CallOutcome const& outcome) {
+        return outcome.status == static_cast<int32_t>(protocol::TransactionStatus::None);
+    };
 
-    if (!callResponse.isMember("error"))
+    call.gas = cap;
+    auto first = co_await executeCall(call, true);
+    if (!succeeded(first))
     {
-        Json::Value result = toQuantity(gasUsed);
-        buildJsonContent(result, response);
+        buildCallResponse(first, response);
+        co_return;
     }
-    else
+    auto estimate = first.gasUsed.convert_to<uint64_t>();
+    if (estimate < cap)
     {
-        response = std::move(callResponse);
+        call.gas = estimate;
+        if (!succeeded(co_await executeCall(call, true)))
+        {
+            // gasUsed is not enough on its own: binary search (gasUsed, cap] for the lowest
+            // cap that still succeeds. ~log2(cap) probes, each a full eth_call.
+            uint64_t lo = estimate;
+            uint64_t hi = cap;
+            while (hi - lo > 1)
+            {
+                auto mid = lo + (hi - lo) / 2;
+                call.gas = mid;
+                if (succeeded(co_await executeCall(call, true)))
+                {
+                    hi = mid;
+                }
+                else
+                {
+                    lo = mid;
+                }
+            }
+            estimate = hi;
+        }
     }
+    Json::Value result = toQuantity(u256(estimate));
+    buildJsonContent(result, response);
 }
 task::Task<void> EthEndpoint::getBlockByHash(const Json::Value& request, Json::Value& response)
 {
