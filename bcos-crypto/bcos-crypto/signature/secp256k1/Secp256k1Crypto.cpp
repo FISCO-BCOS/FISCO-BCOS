@@ -36,7 +36,11 @@ static const std::unique_ptr<secp256k1_context, decltype(&secp256k1_context_dest
     g_SECP256K1_CTX{secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY),
         &secp256k1_context_destroy};
 
-inline void checkSigLen(bytesConstRef _signatureData)
+// Shared precondition for every entry that hands the signature to libsecp256k1. The recid
+// byte must be checked here: secp256k1_ecdsa_recoverable_signature_parse_compact treats
+// recid > 3 as a caller bug and aborts the process through its illegal-argument callback
+// instead of returning an error.
+inline void checkSignatureFormat(bytesConstRef _signatureData)
 {
     if (SECP256K1_SIGNATURE_LEN != _signatureData.size())
     {
@@ -45,6 +49,12 @@ inline void checkSigLen(bytesConstRef _signatureData)
         std::string errMsg = oss.str();
         CRYPTO_LOG(WARNING) << LOG_DESC("recoverAddress failed") << LOG_KV("message", errMsg);
         BOOST_THROW_EXCEPTION(InvalidSignature() << errinfo_comment(errMsg));
+    }
+    if ((uint8_t)_signatureData[SECP256K1_SIGNATURE_V] > 3)
+    {
+        BOOST_THROW_EXCEPTION(InvalidSignature() << errinfo_comment(
+                                  "secp256k1 illegal argument: recid >= 0 && recid <= 3, recid: " +
+                                  std::to_string((int)_signatureData[SECP256K1_SIGNATURE_V])));
     }
 }
 
@@ -70,14 +80,7 @@ std::shared_ptr<bytes> bcos::crypto::secp256k1Sign(
 bool bcos::crypto::secp256k1Verify(
     const PublicPtr& _pubKey, const HashType& _hash, bytesConstRef _signatureData)
 {
-    checkSigLen(_signatureData);
-    if ((uint8_t)_signatureData[SECP256K1_SIGNATURE_V] > 3)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidSignature() << errinfo_comment(
-                "secp256k1 verify illegal argument: recid >= 0 && recid <= 3, recid: " +
-                std::to_string((int)_signatureData[SECP256K1_SIGNATURE_V])));
-    }
+    checkSignatureFormat(_signatureData);
 
     secp256k1_ecdsa_recoverable_signature sig;
     secp256k1_ecdsa_recoverable_signature_parse_compact(g_SECP256K1_CTX.get(), &sig,
@@ -115,7 +118,7 @@ KeyPairInterface::UniquePtr bcos::crypto::secp256k1GenerateKeyPair()
 
 void secp256k1RecoverPrimitive(const HashType& _hash, char* _pubKey, bytesConstRef _signatureData)
 {
-    checkSigLen(_signatureData);
+    checkSignatureFormat(_signatureData);
     secp256k1_ecdsa_recoverable_signature sig;
     secp256k1_ecdsa_recoverable_signature_parse_compact(g_SECP256K1_CTX.get(), &sig,
         _signatureData.data(), (int)_signatureData[SECP256K1_SIGNATURE_V]);
@@ -137,14 +140,7 @@ void secp256k1RecoverPrimitive(const HashType& _hash, char* _pubKey, bytesConstR
 
 PublicPtr bcos::crypto::secp256k1Recover(const HashType& _hash, bytesConstRef _signatureData)
 {
-    checkSigLen(_signatureData);
-    if ((uint8_t)_signatureData[SECP256K1_SIGNATURE_V] > 3)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidSignature() << errinfo_comment(
-                "secp256k1 recover illegal argument: recid >= 0 && recid <= 3, recid: " +
-                std::to_string((int)_signatureData[SECP256K1_SIGNATURE_V])));
-    }
+    checkSignatureFormat(_signatureData);
     auto pubKey = std::make_shared<KeyImpl>(SECP256K1_PUBLIC_LEN);
     secp256k1RecoverPrimitive(_hash, pubKey->mutableData(), _signatureData);
     return pubKey;
@@ -184,7 +180,7 @@ std::pair<bool, bytes> bcos::crypto::secp256k1Recover(Hash::Ptr _hashImpl, bytes
 std::pair<bool, bytes> Secp256k1Crypto::recoverAddress(
     crypto::Hash& _hashImpl, const HashType& _hash, bytesConstRef _signatureData) const
 {
-    checkSigLen(_signatureData);
+    checkSignatureFormat(_signatureData);
     std::array<unsigned char, SECP256K1_UNCOMPRESS_PUBLICKEY_LEN> data{};
     secp256k1_ecdsa_recoverable_signature sig;
     secp256k1_pubkey pubkey;
