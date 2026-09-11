@@ -68,8 +68,8 @@ config_console()
     mkdir -p "./src/integration-test/resources/conf"
     cp -r ${node_path}/sdk/* ./src/integration-test/resources/conf
     cp ./src/integration-test/resources/config-example.toml ./src/integration-test/resources/config.toml
-    # 单节点模式：peer指向node0(20200)
-    ${sed_cmd} "s/peers=\[\"127.0.0.1:20200\", \"127.0.0.1:20201\"\]/peers=\[\"127.0.0.1:20200\"\]/g" ./src/integration-test/resources/config.toml
+    # 单节点模式：peer指向node0（RPC_PORT 由主脚本按阶段设置，默认20200）
+    ${sed_cmd} "s/peers=\[[^]]*\]/peers=\[\"127.0.0.1:${RPC_PORT:-20200}\"\]/g" ./src/integration-test/resources/config.toml
     cp -r ./src/main/resources/contract ./contracts
     
     local not_use_sm="true"

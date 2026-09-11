@@ -186,10 +186,11 @@ jobs:
         with:
           collection: https://raw.githubusercontent.com/FISCO-BCOS/FISCOBCOS-RPC-API/main/fiscobcos.rpcapi.collection.json
       - name: Integration test - Air
+        # ubuntu 两条腿资源充足（4 vCPU/16GB），三个阶段（non-sm/sm/baseline）并行运行
         if: matrix.os != 'windows-2025' && matrix.os != 'macos-15'
         run: |
           cd tools
-          bash .ci/ci_check_air.sh ${{ github.base_ref }} "true"
+          bash .ci/ci_check_air.sh ${{ github.base_ref }} "true" parallel
       - name: Ethereum executor integration test (executor_version=2)
         # Runs a single-node L2 chain with executor_version=2 (ethereum-executor),
         # pre-funds an EOA via genesis alloc, and drives a simple value transfer
