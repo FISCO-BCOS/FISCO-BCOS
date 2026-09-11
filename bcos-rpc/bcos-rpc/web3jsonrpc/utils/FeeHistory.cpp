@@ -210,7 +210,8 @@ bcos::u256 bcos::rpc::effectivePriorityFeePerGas(
 }
 
 std::vector<bcos::u256> bcos::rpc::pickRewardPercentiles(
-    std::vector<GasWeightedPriorityFee> const& samples, std::span<double const> percentiles)
+    std::vector<GasWeightedPriorityFee> const& samples, std::span<double const> percentiles,
+    std::uint64_t blockGasUsed)
 {
     std::vector<bcos::u256> rewards;
     rewards.reserve(percentiles.size());
@@ -235,7 +236,7 @@ std::vector<bcos::u256> bcos::rpc::pickRewardPercentiles(
     {
         // The RPC boundary rejects values outside [0, 100], so no clamp is needed here; a
         // clamp would only mask a caller that skipped that validation.
-        if (totalGas == 0)
+        if (blockGasUsed == 0)
         {
             rewards.push_back(0);
             continue;
@@ -243,9 +244,11 @@ std::vector<bcos::u256> bcos::rpc::pickRewardPercentiles(
         // op-geth truncates the threshold to uint64 before comparing
         // (eth/gasprice/feehistory.go: thresholdGasUsed := uint64(float64(block.GasUsed()) * p /
         // 100)); comparing the raw double would advance one sample further whenever a prefix sum
-        // lands exactly on the truncated value.
+        // lands exactly on the truncated value. The threshold basis is the block header's
+        // gasUsed — the same field the citation names — while the weights are the per-receipt
+        // gasUsed sums; the two coincide on every well-formed block.
         auto const threshold =
-            static_cast<std::uint64_t>(static_cast<double>(totalGas) * percentile / 100.0);
+            static_cast<std::uint64_t>(static_cast<double>(blockGasUsed) * percentile / 100.0);
         auto const boundary =
             std::lower_bound(cumulativeGas.begin(), cumulativeGas.end(), threshold);
         auto const index = boundary == cumulativeGas.end() ?
@@ -315,7 +318,12 @@ bcos::task::Task<Json::Value> bcos::rpc::buildFeeHistory(bcos::ledger::LedgerInt
         if (wantRewards)
         {
             auto const samples = collectPriorityFeeSamples(*block, blockBaseFee(header));
-            auto const row = pickRewardPercentiles(samples, rewardPercentiles);
+            // Saturate rather than truncate: a header gasUsed beyond uint64 is not producible
+            // by the engine, and saturating keeps the threshold inside the sampled range.
+            auto const blockGasUsed = bcos::u256FitsUint64(header.gasUsed()) ?
+                                          static_cast<std::uint64_t>(header.gasUsed()) :
+                                          std::numeric_limits<std::uint64_t>::max();
+            auto const row = pickRewardPercentiles(samples, rewardPercentiles, blockGasUsed);
             Json::Value rewardRow(Json::arrayValue);
             for (auto const& tip : row)
             {

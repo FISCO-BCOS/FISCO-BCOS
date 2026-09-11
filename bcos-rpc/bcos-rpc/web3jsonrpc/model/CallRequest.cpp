@@ -67,7 +67,9 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
     // (the guard demanded the header read for gas:"0x0", then the conversion left it at zero).
     // A failed header read leaves the limit at 0 so validation fails instead of being silently
     // sized against a constant that has nothing to do with this chain's configuration. The
-    // endpoint passes the limit only on the estimate arm, so eth_call keeps its zero.
+    // endpoint supplies the bound on both arms: the estimate arm passes the target block's
+    // gasLimit, and the eth_call arm passes the RPC gas cap (bounded by the block limit when
+    // its header is readable) — geth sizes an omitted-or-zero eth_call budget the same way.
     if ((!gas.has_value() || *gas == 0) && chainBlockGasLimit.has_value())
     {
         gasLimit = *chainBlockGasLimit;

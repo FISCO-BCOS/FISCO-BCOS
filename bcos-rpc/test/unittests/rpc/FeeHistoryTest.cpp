@@ -154,7 +154,7 @@ BOOST_AUTO_TEST_CASE(pickRewardPercentilesKeepsZeroTipSamples)
     // geth keeps zero-tip transactions in the weighted sample set (it sorts every tx in the
     // block); the percentile boundary can land on one, so the helper must not filter them.
     std::vector<GasWeightedPriorityFee> samples{{0, 21'000}, {5, 21'000}};
-    auto rewards = pickRewardPercentiles(samples, std::vector<double>{10.0});
+    auto rewards = pickRewardPercentiles(samples, std::vector<double>{10.0}, 42'000);
     BOOST_REQUIRE_EQUAL(rewards.size(), 1);
     BOOST_CHECK_EQUAL(rewards[0], 0);
 }
@@ -164,7 +164,7 @@ BOOST_AUTO_TEST_CASE(pickRewardPercentilesGasWeighted)
     // Equal gas: geth walks cumulative gas, not tx-count index (75th -> highest tip).
     std::vector<GasWeightedPriorityFee> equalGas{{1, 21'000}, {3, 21'000}, {9, 21'000}};
     std::vector<double> percentiles{25.0, 50.0, 75.0};
-    auto rewards = pickRewardPercentiles(equalGas, percentiles);
+    auto rewards = pickRewardPercentiles(equalGas, percentiles, 63'000);
     BOOST_REQUIRE_EQUAL(rewards.size(), 3);
     BOOST_CHECK_EQUAL(rewards[0], 1);
     BOOST_CHECK_EQUAL(rewards[1], 3);
@@ -173,7 +173,7 @@ BOOST_AUTO_TEST_CASE(pickRewardPercentilesGasWeighted)
     // Unequal gas: the 50th percentile lands on the high-gas low-tip tx.
     std::vector<GasWeightedPriorityFee> skewed{{1, 10'000}, {3, 90'000}};
     std::vector<double> halfPercentile{50.0};
-    auto skewedRewards = pickRewardPercentiles(skewed, halfPercentile);
+    auto skewedRewards = pickRewardPercentiles(skewed, halfPercentile, 100'000);
     BOOST_REQUIRE_EQUAL(skewedRewards.size(), 1);
     BOOST_CHECK_EQUAL(skewedRewards[0], 3);
 }
@@ -185,7 +185,7 @@ BOOST_AUTO_TEST_CASE(pickRewardPercentilesSingleSweepMatchesBoundaries)
     // gas 10k / 20k / 70k (total 100k) -> cumulative 10k / 30k / 100k.
     std::vector<GasWeightedPriorityFee> samples{{7, 10'000}, {5, 20'000}, {3, 70'000}};
     std::vector<double> percentiles{0.0, 10.0, 30.0, 30.1, 99.0, 100.0};
-    auto rewards = pickRewardPercentiles(samples, percentiles);
+    auto rewards = pickRewardPercentiles(samples, percentiles, 100'000);
     BOOST_REQUIRE_EQUAL(rewards.size(), 6);
     BOOST_CHECK_EQUAL(rewards[0], 7);  // 0% -> first sample
     BOOST_CHECK_EQUAL(rewards[1], 7);  // threshold 10k == first cumulative sum
@@ -194,9 +194,10 @@ BOOST_AUTO_TEST_CASE(pickRewardPercentilesSingleSweepMatchesBoundaries)
     BOOST_CHECK_EQUAL(rewards[4], 3);
     BOOST_CHECK_EQUAL(rewards[5], 3);  // 100% -> last sample
 
-    // All-zero gas weights collapse to zero rewards instead of dividing by zero.
+    // All-zero gas weights: blockGasUsed == 0 collapses to zero rewards instead of
+    // dividing by zero (and no well-formed block carries gas without header gasUsed).
     std::vector<GasWeightedPriorityFee> zeroGas{{1, 0}, {2, 0}};
-    auto zeroRewards = pickRewardPercentiles(zeroGas, std::vector<double>{25.0, 75.0});
+    auto zeroRewards = pickRewardPercentiles(zeroGas, std::vector<double>{25.0, 75.0}, 0);
     BOOST_REQUIRE_EQUAL(zeroRewards.size(), 2);
     BOOST_CHECK_EQUAL(zeroRewards[0], 0);
     BOOST_CHECK_EQUAL(zeroRewards[1], 0);
@@ -298,7 +299,7 @@ BOOST_AUTO_TEST_CASE(pickRewardPercentilesTruncatesThresholdLikeOpGeth)
     // (uint64(float64(blockGasUsed) * p / 100)); with total = 101 and p = 50 that is 50, not
     // 50.5, so the sample whose cumulative gas is exactly 50 is the boundary.
     std::vector<GasWeightedPriorityFee> samples{{1, 50}, {2, 51}};
-    auto rewards = pickRewardPercentiles(samples, std::vector<double>{50.0});
+    auto rewards = pickRewardPercentiles(samples, std::vector<double>{50.0}, 101);
     BOOST_REQUIRE_EQUAL(rewards.size(), 1);
     BOOST_CHECK_EQUAL(rewards[0], 1);
 }
