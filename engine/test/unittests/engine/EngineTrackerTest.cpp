@@ -35,6 +35,7 @@
 #include <barrier>
 #include <chrono>
 #include <condition_variable>
+#include <exception>
 #include <mutex>
 #include <stdexcept>
 #include <thread>
@@ -209,7 +210,7 @@ BOOST_AUTO_TEST_CASE(payload_cache_replacing_same_id_drops_stale_hash)
     BOOST_CHECK_EQUAL(cache.find(id)->version, 2);
 }
 
-// Finding F26: a re-published payload (same deterministic id, identical FCU retry)
+// a re-published payload (same deterministic id, identical FCU retry)
 // refreshes its FIFO position — the oldest unrefreshed entry is evicted first, not the
 // freshly re-published one.
 BOOST_AUTO_TEST_CASE(payload_cache_reput_refreshes_fifo_position)
@@ -263,7 +264,7 @@ BOOST_AUTO_TEST_CASE(engine_tracker_put_and_retain_payload)
 }
 
 // The Engine-API "not set" head hash must never seed or advance the tracker: the
-// zero sentinel is rejected outright (finding N6), mirroring the safe/finalized
+// zero sentinel is rejected outright, mirroring the safe/finalized
 // treatment — the canonical gates must not depend on resolvers pre-guarding it.
 BOOST_AUTO_TEST_CASE(engine_tracker_zero_head_hash_is_rejected)
 {
@@ -468,7 +469,7 @@ BOOST_AUTO_TEST_CASE(engine_tracker_updates_safe_and_finalized_on_apply)
 
 BOOST_AUTO_TEST_CASE(engine_tracker_zero_hash_keeps_safe_and_finalized)
 {
-    // Finding AJ: Engine-API unset (zero) safe/finalized must not clear stored heights.
+    // Engine-API unset (zero) safe/finalized must not clear stored heights.
     EngineTracker tracker;
     ResolvedForkchoice first{
         .state = ForkchoiceState{h256(10), h256(11), h256(12)},
@@ -607,10 +608,33 @@ BOOST_AUTO_TEST_CASE(engine_tracker_moved_from_exclusive_access_is_dead)
     EngineTracker tracker;
     auto guard = tracker.lockExclusive();
     auto moved = std::move(guard);
-    checkExceptionMessage<InvalidGuardState>(
-        [&]() { guard.findPayload("0x01"); },
+    checkExceptionMessage<InvalidGuardState>([&]() { guard.findPayload("0x01"); },
         "EngineTracker::ExclusiveAccess used after move or without owning its lock");
     BOOST_CHECK(moved.findPayload("0x01") == nullptr);
+}
+
+BOOST_AUTO_TEST_CASE(engine_tracker_exclusive_access_used_on_other_thread_throws)
+{
+    // method use on a foreign thread throws. Destroy / move of a live
+    // guard on a foreign thread std::terminate()s (cannot throw from noexcept
+    // move or a destructor); that path is not exercised here.
+    EngineTracker tracker;
+    auto guard = tracker.lockExclusive();
+    std::exception_ptr ep;
+    std::thread worker([&] {
+        try
+        {
+            (void)guard.findPayload("0x01");
+        }
+        catch (...)
+        {
+            ep = std::current_exception();
+        }
+    });
+    worker.join();
+    BOOST_REQUIRE(ep);
+    checkExceptionMessage<InvalidGuardState>([&]() { std::rethrow_exception(ep); },
+        "EngineTracker::ExclusiveAccess unlocked or used on a different thread");
 }
 
 BOOST_AUTO_TEST_CASE(engine_tracker_get_payload_unknown)
@@ -697,7 +721,7 @@ BOOST_AUTO_TEST_CASE(engine_tracker_get_payload_v3_omits_execution_requests)
 
 BOOST_AUTO_TEST_CASE(engine_tracker_get_payload_survives_cache_eviction)
 {
-    // Finding AF: getPayload copies from the shared_ptr; evicting the cache
+    // getPayload copies from the shared_ptr; evicting the cache
     // entry after the call must not empty the returned tx raw.
     EngineTracker tracker;
     const PayloadID id = "0x0102030405060708";
@@ -794,8 +818,8 @@ BOOST_AUTO_TEST_CASE(engine_tracker_exclusive_guard_blocks_shared_readers)
     // Observability boundary: std::shared_mutex exposes no API to observe a thread
     // blocked inside lock_shared(). This test establishes happens-before with explicit
     // permission to attempt lockShared():
-    //   permissionGranted -> permissionConsumed (worker consumed the permit and proceeds
-    //   to lockShared()) -> lockAcquired only after exclusive release.
+    // permissionGranted -> permissionConsumed (worker consumed the permit and proceeds
+    // to lockShared()) -> lockAcquired only after exclusive release.
     // permissionConsumed + acquired==false while exclusive is held excludes "thread never
     // ran"; acquired==true after release excludes "no blocking occurred".
 
@@ -917,7 +941,7 @@ BOOST_AUTO_TEST_CASE(payload_cache_put_and_retain_reports_dropped_ids)
 
 BOOST_AUTO_TEST_CASE(publish_built_payload_restores_replaced_entry_on_artifacts_throw)
 {
-    // Finding A: put overwrites the same id; artifacts assign then throws.
+    // put overwrites the same id; artifacts assign then throws.
     // erasePayload(id) would drop both the new and the previous entry.
     ThrowingArtifact::throwOnAssign = false;
 
@@ -1043,7 +1067,7 @@ BOOST_AUTO_TEST_CASE(engine_common_validate_payload_attributes_gold)
         "0x" + std::string(2 * (engine_common::c_maxForcedTxBytes + 1), 'a')};
     expectError(engine_common::validatePayloadAttributes(tooManyForcedBytes, 3), "byte ceiling");
 
-    // Finding BY: hex-length estimate rejects before fromHex. Second tx alone
+    // hex-length estimate rejects before fromHex. Second tx alone
     // is over the ceiling; first stays tiny so a running-total-after-decode
     // implementation would still allocate the second body.
     PayloadAttributes secondTxOverCeiling = minimalPayloadAttributes();
@@ -1137,7 +1161,7 @@ BOOST_AUTO_TEST_CASE(compare_with_built_payload_pins_each_hash_field)
     expectField([](ExecutionPayload& p) { p.withdrawalsRoot = h256(99); }, "withdrawalsRoot");
     expectField([](ExecutionPayload& p) { p.blobGasUsed = u256(99); }, "blobGasUsed");
     expectField([](ExecutionPayload& p) { p.excessBlobGas = u256(99); }, "excessBlobGas");
-    // finding N3: the V4 fields are part of the built payload — a rewritten or
+    // the V4 fields are part of the built payload — a rewritten or
     // dropped echo must not pass under the same blockHash.
     expectField([](ExecutionPayload& p) { p.blockAccessList = bytes{0xff}; }, "blockAccessList");
     expectField([](ExecutionPayload& p) { p.slotNumber = 99; }, "slotNumber");

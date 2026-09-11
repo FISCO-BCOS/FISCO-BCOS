@@ -6,21 +6,30 @@
 project(bcos-engine VERSION ${VERSION})
 
 file(GLOB_RECURSE SRC_LIST "bcos-engine/*.cpp")
-# Helpers live in EngineServiceCommon.cpp. EngineServiceImpl is header-only;
-# production still constructs it from the header.
+# EngineServiceImpl.h is the class libinitializer/EngineServiceInitializer.h instantiates in
+# production (engine-driven modes); it is header-only today and its helpers live in
+# EngineServiceCommon.cpp. It ships in the installed header set (see below).
 
 add_library(engine ${SRC_LIST})
 target_include_directories(engine PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    # Installed EthEngineService.h / EngineMPTStateRoot.h include
+    # <bcos-transaction-scheduler/...> and <bcos-storage/...>. Those headers land at
+    # ${prefix}/include/<module>/..., so an installed consumer of the exported `engine`
+    # target needs the package include root. This is an include path only —
+    # transaction-scheduler is still not exported, so RocksDB stays out of
+    # fiscobcosTargets. Keep include/bcos-engine so quoted intra-module includes
+    # (`"EngineServiceCommon.h"`) still resolve after install.
+    $<INSTALL_INTERFACE:include>
     $<INSTALL_INTERFACE:include/bcos-engine>)
-# PRIVATE + static library: consumers still link rlp-protocol transitively
-# ($<LINK_ONLY:...>); only the include dirs stay unpropagated. The split keeps the
-# installed pair consistent with that: OpEngineService.h is declarations-only (no
-# rlp-protocol include, no .inl include), and OpEngineService.inl is the opt-in definition
-# half — instantiating the template requires rlp-protocol and bcos-evm-opstack include
-# dirs (in-tree instantiators link both).
+target_include_directories(engine PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/transaction-scheduler>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/bcos-storage>)
+# PUBLIC rlp-protocol: EthEngineService.h includes EthEngineService.inl, and the
+# installed OpEngineService.inl uses <bcos-rlp-protocol/EthBlockHeader.h>. PRIVATE
+# would drop include dirs for consumers that instantiate the templates.
 target_link_libraries(engine PUBLIC bcos-framework bcos-task bcos-utilities ledger codec
-    PRIVATE rlp-protocol)
+    rlp-protocol)
 set_target_properties(engine PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)
@@ -31,7 +40,21 @@ endif()
 
 include(GNUInstallDirs)
 install(TARGETS engine EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
-install(DIRECTORY "bcos-engine" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING
-    PATTERN "*.h"
+# Installed production headers, including EngineServiceImpl.h — the class
+# libinitializer/EngineServiceInitializer.h builds today. Its EngineMPTStateRoot.h dependency
+# is installed alongside it (and that header's transaction-scheduler / bcos-storage includes
+# are installed by their own packages), so an external consumer can construct the engine
+# service the product actually runs.
+install(DIRECTORY "bcos-engine" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+    FILES_MATCHING
+    PATTERN "EthEngineService.h"
+    PATTERN "EthEngineService.inl"
+    PATTERN "OpEngineService.h"
     PATTERN "OpEngineService.inl"
-    PATTERN "EthEngineService.inl")
+    PATTERN "EngineServiceImpl.h"
+    PATTERN "EngineMPTStateRoot.h"
+    PATTERN "EngineStorageCommit.h"
+    PATTERN "EngineServiceCommon.h"
+    PATTERN "EngineTracker.h"
+    PATTERN "PayloadCache.h"
+    PATTERN "PayloadId.h")

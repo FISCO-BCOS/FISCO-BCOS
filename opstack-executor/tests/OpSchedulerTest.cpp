@@ -5,11 +5,11 @@
 // Ported from the combined-branch suite. ReorgUndo codec cases stay with the reorg follow-up.
 //
 // 1. CommitPersistsSevenLedgerTables: deposit + 1 eip1559, executeBlock + commitBlock; announced
-//    commitments come from a direct probe (preBlockOpSteps → SchedulerSerialImpl →
-//    finalizeOpBlockResult).
+// commitments come from a direct probe (preBlockOpSteps → SchedulerSerialImpl →
+// finalizeOpBlockResult).
 // 2. ConsensusRejectionClassifiedAsOpConsensusRejected: 0x03 type byte → OpConsensusRejected.
 // 3. classifyException: OpConsensusError→OpConsensusRejected / OpStorageError→OpStorageFault /
-//    other→UnknownError.
+// other→UnknownError.
 #include <opstack-executor/OpCommitments.h>    // detail::toBcosH256
 #include <opstack-executor/OpDepositEncode.h>  // encodeDepositEnvelope
 #include <opstack-executor/OpScheduler.h>
@@ -54,6 +54,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <system_error>
 #include <unordered_map>
 #include <vector>
 
@@ -214,7 +215,7 @@ void fillAnnouncedHeader(bcos::protocol::BlockHeader::Ptr const& header,
 
 /// extraTransactionBytes = full envelope (the only bytes executeTransaction /
 /// depositFromTransaction read). Hash is the keccak of those bytes. Engine's opEnvelopeToTars is
-/// not in this slice.
+///
 bcos::protocol::Transaction::Ptr buildFiscoTx(
     bcos::bytes const& env, bcos::crypto::Hash::Ptr const& hashImpl)
 {
@@ -695,8 +696,8 @@ bcos::h256 computeAndPersistGenesisTrie(MLS& mls)
 /// Seed a contract account holding real bytecode and one storage slot (same create()+
 /// setCode existence pattern as seedSender; setStorage writes the raw 32-byte slot row the
 /// full-rebuild trie enumerates). The bytecode is a read-or-set getter:
-///   empty calldata  → return slot 0;
-///   32-byte calldata → SSTORE it to slot 0, then return slot 0.
+/// empty calldata → return slot 0;
+/// 32-byte calldata → SSTORE it to slot 0, then return slot 0.
 /// An eth_call (empty calldata) returns the stored value at whatever state the call ran
 /// against, and a deposit carrying a 32-byte data word flips the slot INSIDE a block —
 /// ①a requires every state change to flow through a block delta (no out-of-band writes).
@@ -707,7 +708,7 @@ void seedContractWithSlot(MLS& mls, bcos::Address const& addr, bcos::h256 const&
     view.newMutable();
     bcos::ledger::account::EVMAccount account(view, addr, /*rawAddress=*/false);
     bcos::task::syncWait(account.create());
-    // CALLDATASIZE; PUSH1 0x0f; JUMPI;            (calldata? → setter at 0x0f)
+    // CALLDATASIZE; PUSH1 0x0f; JUMPI; (calldata? → setter at 0x0f)
     // PUSH1 0; SLOAD; PUSH1 0; MSTORE; PUSH1 32; PUSH1 0; RETURN;
     // JUMPDEST; PUSH1 0; CALLDATALOAD; PUSH1 0; SSTORE;
     // PUSH1 0; SLOAD; PUSH1 0; MSTORE; PUSH1 32; PUSH1 0; RETURN
@@ -1001,7 +1002,7 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
 }
 
 // ── RPC-face case migration (verbatim from the deleted OpBlockSchedulerTest; driven object
-//    changed to OpScheduler — call/getCode/status/reset inherited) ──
+// changed to OpScheduler — call/getCode/status/reset inherited) ──
 
 /// Skeleton defaults to no-op status/reset (same semantics as OpBlockScheduler).
 BOOST_AUTO_TEST_CASE(StatusAndResetNoOp)
@@ -1200,8 +1201,8 @@ BOOST_AUTO_TEST_CASE(CallInvalidReturnsError)
             called = true;
             BOOST_REQUIRE(err != nullptr);  // Error (JSON-RPC), never a status-0 receipt
             // maxFeePerGas=1 below the block base fee → FEE_CAP_LESS_THAN_BLOCKS. The
-            // OpConsensusError is classified by the call path's exception ladder (round-3 F3
-            // made the catch(...) arm classify like the catch(std::exception) arm already did).
+            // OpConsensusError is classified by the call path's exception ladder: the
+            // catch(...) arm now classifies like the catch(std::exception) arm already did.
             BOOST_CHECK_EQUAL(
                 err->errorCode(), (int)bcos::scheduler::SchedulerError::OpConsensusRejected);
             const auto msg = err->errorMessage();
@@ -1263,6 +1264,7 @@ BOOST_AUTO_TEST_CASE(ExecuteBlockGasPoolFullTagsCapacity)
     BOOST_REQUIRE_MESSAGE(capacity != nullptr && *capacity,
         "executeBlock pool-full must tag OpRejectIsCapacity=true (no-evict)");
     BOOST_CHECK(boost::get_error_info<bcos::engine::OpCulpritTxHash>(*out.err) != nullptr);
+    BOOST_CHECK(!bcos::engine::validateErrorCodeFromError(*out.err).has_value());
     BOOST_CHECK(out.header == nullptr);
 }
 
@@ -1384,6 +1386,18 @@ BOOST_AUTO_TEST_CASE(ClassifyExceptionMapping)
     BOOST_CHECK_EQUAL(unknown, bcos::scheduler::SchedulerError::UnknownError);
 }
 
+BOOST_AUTO_TEST_CASE(ValidateErrorCodeRoundTripsOnError)
+{
+    std::error_code const code{7, std::generic_category()};
+    bcos::Error error;
+    BOOST_CHECK(!bcos::engine::validateErrorCodeFromError(error).has_value());
+    error << bcos::engine::OpValidateErrorCode{code};
+    auto const got = bcos::engine::validateErrorCodeFromError(error);
+    BOOST_REQUIRE(got.has_value());
+    BOOST_CHECK_EQUAL(got->value(), 7);
+    BOOST_CHECK(*got == code);
+}
+
 /// A storage-read fault during block execution rejects the whole block as OpStorageFault: the
 /// per-tx Storage2State instances share the block error slot with the finalize bridge (Part 2 of
 /// the StorageStateView→Storage2State merge), so a corrupt row discovered at finalize
@@ -1433,7 +1447,7 @@ BOOST_AUTO_TEST_CASE(StorageReadFaultRejectsBlockAsStorageFault)
     BOOST_CHECK(err->errorMessage().find("poisoned") != std::string::npos);
 }
 
-// Round-3 F1: a storage fault under the TX SENDER surfaces at the VALIDATION stage (m_prepare's
+// a storage fault under the TX SENDER surfaces at the VALIDATION stage (m_prepare's
 // opValidate reads the sender account; Storage2State swallows the fault into the shared slot and
 // returns a default, so validation fails as an insufficient-funds-style OpConsensusError). The
 // execute() catch ladder must reclassify that as OpStorageError — the same treatment coCallOnView
@@ -1540,6 +1554,34 @@ BOOST_AUTO_TEST_CASE(CallAtBlockLatestEqualsLatestCall)
     const auto egp = bcos::u256(std::string(receipt->effectiveGasPrice()));
     BOOST_CHECK_MESSAGE(egp == bcos::u256(1'000'000'000),
         "effectiveGasPrice " << egp << " must equal the latest header baseFee");
+}
+
+/// Scenario B (feature_l2_ethereum_compat) keeps account fields in the committed MPT, but a
+/// sealed-but-uncommitted block may already have advanced the nonce in the pending layer.
+/// getPendingStorageAt feeds EthEndpoint::call's tx nonce, so the pending row must win over the
+/// committed trie value — otherwise a caller whose tx is already sealed gets NONCE_TOO_LOW.
+BOOST_AUTO_TEST_CASE(PendingStorageAtPrefersThePendingLayerOverTheCommittedTrie)
+{
+    Fixture f;
+    // Committed state: kSender's trie-backed nonce is 0 (seedSender), and the genesis header
+    // carries the root so the historical arm can resolve it.
+    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
+    seedL2CompatFeature(f.multiLayerStorage);
+
+    // Pending layer (pushed, never merged): the in-flight block advanced kSender's nonce to 7.
+    {
+        auto view = f.multiLayerStorage.fork();
+        view.newMutable();
+        bcos::ledger::account::EVMAccount account(view, kSender, /*binaryAddress=*/false);
+        bcos::task::syncWait(account.setNonce("7"));
+        f.multiLayerStorage.pushView(std::move(view));
+    }
+
+    auto entry = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
+        kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*number=*/0));
+    BOOST_REQUIRE_MESSAGE(entry.has_value(), "the pending nonce row must be visible");
+    BOOST_CHECK_EQUAL(std::string(entry->get()), "7");
 }
 
 /// The OQ6 gate: a chain WITHOUT feature_l2_ethereum_compat never committed its complete
@@ -1686,7 +1728,7 @@ BOOST_AUTO_TEST_CASE(CallAtBlockInnerNodeMissingIsStorageFault)
     BOOST_TEST_CONTEXT("err message: " << err->errorMessage())
     {
         BOOST_CHECK_EQUAL(err->errorCode(), (int)bcos::scheduler::SchedulerError::OpStorageFault);
-        // Round-2 F4: the RPC-bound message is generic ("storage fault"); the full diagnostic
+        // the RPC-bound message is generic ("storage fault"); the full diagnostic
         // (which node is missing) goes to the node log, not the RPC response.
         BOOST_CHECK(err->errorMessage().find("storage fault") != std::string::npos);
     }
@@ -1743,7 +1785,7 @@ BOOST_AUTO_TEST_CASE(CallAtBlockExecutionStageNodeMissingIsStorageFault)
     BOOST_TEST_CONTEXT("err message: " << err->errorMessage())
     {
         BOOST_CHECK_EQUAL(err->errorCode(), (int)bcos::scheduler::SchedulerError::OpStorageFault);
-        // Round-2 F4: generic RPC-bound message; the missing-node detail is in the node log.
+        // generic RPC-bound message; the missing-node detail is in the node log.
         BOOST_CHECK(err->errorMessage().find("storage fault") != std::string::npos);
     }
     BOOST_CHECK(receipt == nullptr);
@@ -1787,10 +1829,10 @@ BOOST_AUTO_TEST_CASE(CallAtBlockCorruptTrieNodeIsStorageFault)
     BOOST_CHECK(receipt == nullptr);
 }
 
-/// The latest-path poison tripwire (coCallLatest shares coCallOnView with the historical path —
-/// round-2 F1): a wrong-length slot row at the call target poisons the executor's internal
+/// The latest-path poison tripwire (coCallLatest shares coCallOnView with the historical
+/// path): a wrong-length slot row at the call target poisons the executor's internal
 /// Storage2State during the getter's SLOAD, the sharedError check throws, and call()'s catch
-/// returns OpStorageFault ("storage fault", round-4 F1) instead of a status-ok receipt on zero
+/// returns OpStorageFault ("storage fault") instead of a status-ok receipt on zero
 /// values.
 BOOST_AUTO_TEST_CASE(CallLatestStorageReadFaultFailsLoudly)
 {
@@ -1830,7 +1872,7 @@ BOOST_AUTO_TEST_CASE(CallLatestStorageReadFaultFailsLoudly)
         err != nullptr, "latest call on a corrupt slot must fail loudly, not return slot 0 = 0");
     BOOST_TEST_CONTEXT("err message: " << err->errorMessage())
     {
-        // Round-4 F1: call() no longer has a dedicated OpStorageError clause — the fault
+        // call() no longer has a dedicated OpStorageError clause — the fault
         // classifies as OpStorageFault ("storage fault") exactly like callAtBlock, so latest
         // and historical calls report the same node-local fault identically.
         BOOST_CHECK_EQUAL(err->errorCode(), (int)bcos::scheduler::SchedulerError::OpStorageFault);
@@ -1843,11 +1885,11 @@ BOOST_AUTO_TEST_CASE(CallLatestStorageReadFaultFailsLoudly)
 /// (①a incremental buildAndCollect computes each block's stateRoot from its delta and flushes
 /// the new trie nodes), then historical calls at each height against a contract whose slot 0
 /// changes in block 2 (a setter deposit):
-///  - the contract's getter (SLOAD slot 0 → RETURN) answers V1 at blocks 0/1 and V2 at
-///    blocks 2/3 — the receipt output IS the stored value at the pinned root, so a wrong
-///    (latest-state) read flips the bytes, not just a status code;
-///  - each height's call answers with ITS header's fee context (egp == baseFee@N);
-///  - block 0 (genesis) is queryable through its persisted genesis trie.
+/// - the contract's getter (SLOAD slot 0 → RETURN) answers V1 at blocks 0/1 and V2 at
+/// blocks 2/3 — the receipt output IS the stored value at the pinned root, so a wrong
+/// (latest-state) read flips the bytes, not just a status code;
+/// - each height's call answers with ITS header's fee context (egp == baseFee@N);
+/// - block 0 (genesis) is queryable through its persisted genesis trie.
 /// (A balance-based discriminator is impossible here: the call path runs opValidate with
 /// skipBalanceCheck=true, so an absent-at-N account does not fail validation.)
 BOOST_AUTO_TEST_CASE(CallAtBlockServesEachHeightWithOpSemantics)
@@ -2001,18 +2043,78 @@ BOOST_AUTO_TEST_CASE(ExecuteFailsLoudlyWhenParentTrieNodesMissing)
     }
 }
 
+/// The OP seal path applies the shared receipt-field policy: finalizeOpBlockResult calls
+/// protocol::normalizeReceipts before sealOpBlock, so an OP receipt carries a real
+/// transactionIndex and logIndex (the cumulative log count), matching the engine/PBFT paths.
+/// Pins the kyonRay round-3 F1 gap — the OP path previously set neither logIndex nor a shared
+/// bloom policy, and eth_getLogs reported logIndex 0x0 for every OP log.
+BOOST_AUTO_TEST_CASE(finalizeOpBlockResultNormalizesReceiptIndices)
+{
+    Fixture f;
+    fundCallAccount(f.multiLayerStorage, kCallSender, f.hashImpl, bcos::u256(1) << 200);
+    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader());
+
+    // Contract whose single LOG1 emits one log each call:
+    //   PUSH1 0 (memStart) PUSH1 0 (memSize) PUSH1 0 (topic) LOG1 STOP
+    const bcos::Address kLogContract{"0x3000000000000000000000000000000000000001"};
+    {
+        auto view = f.multiLayerStorage.fork();
+        view.newMutable();
+        bcos::ledger::account::EVMAccount account(view, kLogContract, /*rawAddress=*/false);
+        bcos::task::syncWait(account.create());
+        bcos::bytes const code{0x60, 0x00, 0x60, 0x00, 0x60, 0x00, 0xa1, 0x00};
+        bcos::task::syncWait(account.setCode(code, {}, f.hashImpl->hash(code)));
+        bcos::task::syncWait(account.setNonce("0"));
+        bcos::task::syncWait(account.setBalance(bcos::u256(0)));
+        bcos::task::syncWait(f.multiLayerStorage.mergeView(std::move(view)));
+    }
+
+    auto makeLogDeposit = [&](evmc::bytes32 source) {
+        auto dep = makeDeposit();
+        dep.source_hash = source;
+        evmc::address to{};
+        std::memcpy(to.bytes, kLogContract.data(), sizeof(to.bytes));
+        dep.to = to;
+        dep.data = {};
+        return encodeDepositEnvelope(dep);
+    };
+    auto const l1 = encodeDepositEnvelope(makeDeposit());  // L1 attributes, emits no log
+    auto const log1 =
+        makeLogDeposit(0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1_bytes32);
+    auto const log2 =
+        makeLogDeposit(0xb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2_bytes32);
+
+    auto header = makeHeaderAt(1, bcos::u256(1'000'000'000));
+    auto view = f.multiLayerStorage.fork();
+    view.newMutable();
+    auto const result = runExecutionProbe(f, view, *header, {l1, log1, log2});
+
+    BOOST_REQUIRE_EQUAL(result.receipts.size(), 3);
+    BOOST_REQUIRE_EQUAL(result.receipts[1]->logEntries().size(), 1);
+    BOOST_REQUIRE_EQUAL(result.receipts[2]->logEntries().size(), 1);
+    // L1 attributes emits no log; each log-contract deposit emits one.
+    BOOST_CHECK_EQUAL(result.receipts[0]->logIndex(), 0);
+    BOOST_CHECK_EQUAL(result.receipts[1]->logIndex(), 0);
+    BOOST_CHECK_EQUAL(result.receipts[2]->logIndex(), 1);
+    BOOST_CHECK_EQUAL(result.receipts[0]->transactionIndex(), 0);
+    BOOST_CHECK_EQUAL(result.receipts[1]->transactionIndex(), 1);
+    BOOST_CHECK_EQUAL(result.receipts[2]->transactionIndex(), 2);
+    // normalizeReceipts recomputes every bloom from logEntries: 256 bytes, non-empty for a log.
+    BOOST_CHECK_EQUAL(result.receipts[2]->logsBloom().size(), 256);
+}
+
 /// The ①a gate (design §7): on a chain where EVERY state change flows through a committed
 /// block, the incremental build (MPTBuilder::buildAndCollect over the block's delta layer,
 /// parent root = previous header's stateRoot) must reproduce the full rebuild's root
 /// (stateRootOf via runExecutionProbe) byte-for-byte — otherwise switching OpScheduler to the
 /// incremental root would break the verify-time six-field comparison against op-geth. This
 /// exercises the riskiest OP write shapes against the scanner's classification rules:
-///  - block 1: plain deposit + eip1559 transfer (balance/nonce updates);
-///  - block 2: a deposit with mint>0 (mint write shape) and a CREATE deposit (to=nullopt —
-///    the new account's s_code_binary row is the content-addressed bypass the scanner must
-///    classify, not choke on);
-///  - block 3: a setter deposit writing ZERO over the genesis-seeded slot 0 — the
-///    slot-tombstone (delete) shape, where incremental/full divergence would hide.
+/// - block 1: plain deposit + eip1559 transfer (balance/nonce updates);
+/// - block 2: a deposit with mint>0 (mint write shape) and a CREATE deposit (to=nullopt —
+/// the new account's s_code_binary row is the content-addressed bypass the scanner must
+/// classify, not choke on);
+/// - block 3: a setter deposit writing ZERO over the genesis-seeded slot 0 — the
+/// slot-tombstone (delete) shape, where incremental/full divergence would hide.
 /// Any UnknownAccountRowField / UnexpectedBCOSFieldInL2 surfaces here as a thrown exception.
 /// Note the chain deliberately avoids out-of-band flat writes (no overwriteSlot): the
 /// incremental contract requires the block delta to be the ONLY change since the parent.
@@ -2020,7 +2122,7 @@ BOOST_AUTO_TEST_CASE(IncrementalMPTRootMatchesFullRebuild)
 {
     Fixture f;
     seedL2CompatFeature(f.multiLayerStorage);
-    // Round-3 F2: drive execute()'s ①a path with the full-rebuild cross-check ENABLED (the
+    // drive execute()'s ①a path with the full-rebuild cross-check ENABLED (the
     // scheduler-side branch at OpScheduler.h:840-860 — shared-error Storage2State, poisoned()
     // check, divergence throw). Default off means nothing else exercises it; the blocks below
     // then assert both that the branch runs and that the incremental root matches.
@@ -2075,7 +2177,7 @@ BOOST_AUTO_TEST_CASE(IncrementalMPTRootMatchesFullRebuild)
         auto const result = runExecutionProbe(f, view, *header, rawTxBytes);
         auto const fullRoot = result.stateRoot;
         BOOST_REQUIRE(fullRoot != bcos::h256{});
-        // Positive anchor (round-2 F3): every probe tx must be a SUCCESS — the root comparison
+        // Positive anchor: every probe tx must be a SUCCESS — the root comparison
         // below is only meaningful on a healthy block; a silently-reverted probe tx would still
         // produce a matching root and mask a real divergence. (FISCO receipt status: 0 =
         // success.)
@@ -2112,7 +2214,7 @@ BOOST_AUTO_TEST_CASE(IncrementalMPTRootMatchesFullRebuild)
         driveOpBlock(f, header, rawTxBytes);
     }
 
-    // Tombstone read-back (round-2 F3): a historical call at block 3 (the tombstone block)
+    // Tombstone read-back: a historical call at block 3 (the tombstone block)
     // must answer ZERO for slot 0 through the block-3 MPT — the delete shape must have removed
     // the slot from the trie, not just from the flat state. Block 4 makes block 3 a historical
     // (non-latest) height so the read resolves along block 3's persisted nodes.
@@ -2132,7 +2234,7 @@ BOOST_AUTO_TEST_CASE(IncrementalMPTRootMatchesFullRebuild)
             "block-3 call must read the tombstoned slot as zero (trie-level delete shape)");
     }
 
-    // Block-2 control (round-3 S6): the block-3 zero above could equally be produced by a
+    // Block-2 control: the block-3 zero above could equally be produced by a
     // wrong latest-state pass-through (the latest state has slot 0 deleted too). A block-2
     // call must still answer the pre-tombstone value — only the pinned block-2 trie has it.
     const bcos::h256 kPreTombstone{
@@ -2545,12 +2647,17 @@ BOOST_AUTO_TEST_CASE(adoptRejectsHashMismatchWhenCommitmentsMatch)
 }
 
 /// Pins the OpScheduler half of the delegate-concurrency rationale (OpEngineService.h):
-/// a commitBlock whose pending was dropped by a reset reports
-/// SchedulerError::UnknownError ("Unexpected empty results!") — never OpConsensusRejected.
-/// mapDelegateError answers -32603 for the former and consensus-INVALID only for the
-/// latter, so a change to this code would silently flip a concurrent-reset commit from
-/// "internal error, sequencer retries" into "consensus INVALID for a valid payload".
-BOOST_AUTO_TEST_CASE(CommitAfterResetReportsUnknownErrorNotConsensusRejected)
+/// a commitBlock whose pending was dropped by a reset carries the
+/// bcos::engine::OpPendingDropped tag ("Unexpected empty results!") — and reports
+/// UnknownError, never OpConsensusRejected.
+/// The tag is what the engine's re-execution fall-through keys on, because the code
+/// cannot carry it: classifyException's catch-all returns UnknownError for every
+/// unclassified commit fault, so a code test cannot separate a dropped pending from a
+/// storage fault. mapDelegateError answers -32603 for this shape and consensus-INVALID
+/// only for OpConsensusRejected, so a change here would silently flip a concurrent-reset
+/// commit from "internal error, sequencer retries" into "consensus INVALID for a valid
+/// payload" — or, losing the tag, into a hard error where a retry belongs.
+BOOST_AUTO_TEST_CASE(CommitAfterResetReportsOpPendingDroppedNotUnknownError)
 {
     Fixture f;
     auto depTx = makeDeposit();
@@ -2597,10 +2704,13 @@ BOOST_AUTO_TEST_CASE(CommitAfterResetReportsUnknownErrorNotConsensusRejected)
         });
     BOOST_REQUIRE(called);
     BOOST_REQUIRE(commitErr != nullptr);
-    BOOST_CHECK_EQUAL(commitErr->errorCode(),
-        static_cast<int>(bcos::scheduler::SchedulerError::UnknownError));
+    // The tag, not the code, is the discriminator the engine keys on.
+    BOOST_CHECK(boost::get_error_info<bcos::engine::OpPendingDropped>(*commitErr) != nullptr);
     BOOST_CHECK_NE(commitErr->errorCode(),
         static_cast<int>(bcos::scheduler::SchedulerError::OpConsensusRejected));
+    // The code stays in the catch-all bucket — that is exactly why the tag has to exist.
+    BOOST_CHECK_EQUAL(
+        commitErr->errorCode(), static_cast<int>(bcos::scheduler::SchedulerError::UnknownError));
     BOOST_CHECK(commitErr->errorMessage().find("Unexpected empty results") != std::string::npos);
 }
 

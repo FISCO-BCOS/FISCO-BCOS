@@ -171,8 +171,7 @@ inline evmc::bytes32 toEvmcBytes32(const bcos::h256& h) noexcept
 /// (silent-truncation guard).
 inline uint64_t narrowU256ToU64(const bcos::u256& v, const char* fieldName)
 {
-    static const bcos::u256 kMaxU64(std::numeric_limits<uint64_t>::max());
-    if (v > kMaxU64)
+    if (!bcos::u256FitsUint64(v))
         throw OpConsensusError(std::string("field exceeds uint64_t range: ") + fieldName);
     return static_cast<uint64_t>(v);
 }

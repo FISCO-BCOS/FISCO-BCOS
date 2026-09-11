@@ -26,12 +26,33 @@
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 
+#include <exception>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
+#include <thread>
 
 namespace bcos::engine
 {
+
+namespace tracker_detail
+{
+/// shared_mutex unlock on the wrong thread is POSIX UB. Method misuse throws
+/// InvalidGuardState; move/dtor cannot throw, so they terminate instead.
+///
+/// Deliberate hardening (not an oversight): a guard that crosses threads is already a
+/// bug the compiler cannot see, and aborting names it at the point of misuse instead of
+/// unlocking a mutex the current thread does not own. Every in-tree call site keeps its
+/// guard inside one scope with no co_await, so this is unreachable on the live path.
+inline void abortIfForeignThread(bool ownsLock, std::thread::id lockedOn) noexcept
+{
+    if (ownsLock && lockedOn != std::this_thread::get_id())
+    {
+        std::terminate();
+    }
+}
+}  // namespace tracker_detail
+
 
 // TrackedHeadBlock now lives in EngineServiceCommon.h (one shared definition).
 
@@ -68,9 +89,10 @@ public:
     std::optional<bcos::protocol::BlockNumber> safeBlockNumber() const;
     std::optional<bcos::protocol::BlockNumber> finalizedBlockNumber() const;
     /// RAII guards over m_mutex. Unlock must run on the locking thread
-    /// (shared_mutex); do not move a live guard across threads or hold it
-    /// across co_await. applyForkchoice/getPayload take the same mutex —
-    /// do not call them while a guard is held (non-recursive, deadlock).
+    /// (shared_mutex). A live guard moved or destroyed on another thread
+    /// std::terminate()s rather than unlocking (POSIX UB). Do not hold a
+    /// guard across co_await. applyForkchoice/getPayload take the same
+    /// mutex — do not call them while a guard is held (non-recursive).
     ExclusiveAccess lockExclusive();
     SharedAccess lockShared() const;
 
@@ -89,21 +111,29 @@ class EngineTracker::ExclusiveAccess
 public:
     ExclusiveAccess() = default;
     ExclusiveAccess(ExclusiveAccess&& other) noexcept
-      : m_owner(other.m_owner), m_lock(std::move(other.m_lock))
     {
+        tracker_detail::abortIfForeignThread(other.m_lock.owns_lock(), other.m_threadId);
+        m_owner = other.m_owner;
+        m_lock = std::move(other.m_lock);
+        m_threadId = other.m_threadId;
         other.m_owner = nullptr;
+        other.m_threadId = {};
     }
     ExclusiveAccess& operator=(ExclusiveAccess&& other) noexcept
     {
         if (this != &other)
         {
+            tracker_detail::abortIfForeignThread(m_lock.owns_lock(), m_threadId);
+            tracker_detail::abortIfForeignThread(other.m_lock.owns_lock(), other.m_threadId);
             m_lock = std::move(other.m_lock);
             m_owner = other.m_owner;
+            m_threadId = other.m_threadId;
             other.m_owner = nullptr;
+            other.m_threadId = {};
         }
         return *this;
     }
-    ~ExclusiveAccess() = default;
+    ~ExclusiveAccess() { tracker_detail::abortIfForeignThread(m_lock.owns_lock(), m_threadId); }
     ExclusiveAccess(const ExclusiveAccess&) = delete;
     ExclusiveAccess& operator=(const ExclusiveAccess&) = delete;
 
@@ -120,10 +150,13 @@ public:
 
 private:
     friend class EngineTracker;
-    explicit ExclusiveAccess(EngineTracker& owner) : m_owner(&owner), m_lock(owner.m_mutex) {}
+    explicit ExclusiveAccess(EngineTracker& owner)
+      : m_owner(&owner), m_lock(owner.m_mutex), m_threadId(std::this_thread::get_id())
+    {}
     void requireOwner() const;
     EngineTracker* m_owner = nullptr;
     std::unique_lock<std::shared_mutex> m_lock;
+    std::thread::id m_threadId{};
 };
 
 /// shared_lock wrapper. Same-thread unlock only; never hold across co_await.
@@ -132,21 +165,29 @@ class EngineTracker::SharedAccess
 public:
     SharedAccess() = default;
     SharedAccess(SharedAccess&& other) noexcept
-      : m_owner(other.m_owner), m_lock(std::move(other.m_lock))
     {
+        tracker_detail::abortIfForeignThread(other.m_lock.owns_lock(), other.m_threadId);
+        m_owner = other.m_owner;
+        m_lock = std::move(other.m_lock);
+        m_threadId = other.m_threadId;
         other.m_owner = nullptr;
+        other.m_threadId = {};
     }
     SharedAccess& operator=(SharedAccess&& other) noexcept
     {
         if (this != &other)
         {
+            tracker_detail::abortIfForeignThread(m_lock.owns_lock(), m_threadId);
+            tracker_detail::abortIfForeignThread(other.m_lock.owns_lock(), other.m_threadId);
             m_lock = std::move(other.m_lock);
             m_owner = other.m_owner;
+            m_threadId = other.m_threadId;
             other.m_owner = nullptr;
+            other.m_threadId = {};
         }
         return *this;
     }
-    ~SharedAccess() = default;
+    ~SharedAccess() { tracker_detail::abortIfForeignThread(m_lock.owns_lock(), m_threadId); }
     SharedAccess(const SharedAccess&) = delete;
     SharedAccess& operator=(const SharedAccess&) = delete;
 
@@ -156,17 +197,20 @@ public:
 
 private:
     friend class EngineTracker;
-    explicit SharedAccess(const EngineTracker& owner) : m_owner(&owner), m_lock(owner.m_mutex) {}
+    explicit SharedAccess(const EngineTracker& owner)
+      : m_owner(&owner), m_lock(owner.m_mutex), m_threadId(std::this_thread::get_id())
+    {}
     void requireOwner() const;
     const EngineTracker* m_owner = nullptr;
     std::shared_lock<std::shared_mutex> m_lock;
+    std::thread::id m_threadId{};
 };
 
 /// Publish a built payload. put() is CoW, so a throw there leaves the live
 /// cache unchanged. After a successful put, an artifacts insert throw must
 /// restore the pre-put cache and artifacts — erasePayload(id) would drop a
 /// replaced entry (same id, different payload) and its prior artifact.
-/// Consolidated from the eth_detail / op_detail copies (review PR #5544).
+/// Shared helper for publishing built payloads into the tracker cache.
 template <class ArtifactsMap, class ArtifactNode>
 PayloadCache::PutResult publishBuiltPayload(EngineTracker::ExclusiveAccess& guard,
     ArtifactsMap& artifacts, PayloadID const& payloadId, h256 const& blockHash,

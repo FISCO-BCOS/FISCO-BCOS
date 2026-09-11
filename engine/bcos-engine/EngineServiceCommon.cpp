@@ -28,12 +28,14 @@
 #include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include "engine/bcos-engine/PayloadId.h"
+#include <bcos-ledger/mpt/EthTrieRoots.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <boost/assert.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <span>
 #include <stdexcept>
+#include <vector>
 
 namespace bcos::engine::engine_common
 {
@@ -49,7 +51,7 @@ bool isGetPayloadVersionCompatible(ApiVersion requestVersion, std::uint32_t payl
     case ApiVersion::V3:
         // GetPayloadV3 answers only PayloadV3 builds (op-geth passes
         // []engine.PayloadVersion{engine.PayloadV3}); V1/V2-tagged entries cannot
-        // render the V3 wire shape (blob-gas pair, beacon root) - finding AN.
+        // render the V3 wire shape (blob-gas pair, beacon root).
         return payloadVersion == 3;
     case ApiVersion::V4:
         // Match release EngineServiceImpl: GetPayloadV4 accepts only PayloadV3 builds
@@ -129,7 +131,7 @@ std::optional<std::string> validatePayloadAttributes(const PayloadAttributes& pa
         for (std::size_t i = 0; i < payloadAttributes.transactions->size(); ++i)
         {
             auto const& hexTx = (*payloadAttributes.transactions)[i];
-            // Finding BY: reject on hex length before fromHex allocates the body.
+            // reject on hex length before fromHex allocates the body.
             auto const estimated = decodedHexByteCount(hexTx);
             if (estimated > c_maxForcedTxBytes || totalBytes > c_maxForcedTxBytes - estimated)
             {
@@ -160,31 +162,36 @@ std::optional<std::string> validatePayloadAttributes(const PayloadAttributes& pa
     {
         return std::string("withdrawals are not part of PayloadAttributesV1");
     }
-    if (version <= 2 && payloadAttributes.parentBeaconBlockRoot.has_value())
+    if (version <= static_cast<std::uint32_t>(ApiVersion::V2) &&
+        payloadAttributes.parentBeaconBlockRoot.has_value())
     {
         return std::string("parentBeaconBlockRoot is only valid for PayloadAttributesV3");
     }
-    if (version >= 2 && !payloadAttributes.withdrawals.has_value())
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V2) &&
+        !payloadAttributes.withdrawals.has_value())
     {
         return std::string("withdrawals are required for PayloadAttributesV2 and V3");
     }
-    if (version >= 2 && payloadAttributes.withdrawals.has_value() &&
-        !payloadAttributes.withdrawals->empty())
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V2) &&
+        payloadAttributes.withdrawals.has_value() && !payloadAttributes.withdrawals->empty())
     {
         return std::string(
             "non-empty withdrawals are not supported until the withdrawals trie root is "
             "computed");
     }
-    if (version >= 3 && !payloadAttributes.parentBeaconBlockRoot.has_value())
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V3) &&
+        !payloadAttributes.parentBeaconBlockRoot.has_value())
     {
         // op-geth ForkchoiceUpdatedV3/V4 both reject missing BeaconRoot when attrs present.
         return std::string("parentBeaconBlockRoot must be a 32-byte hash for V3 and later");
     }
-    if (version <= 2 && payloadAttributes.eip1559Params.has_value())
+    if (version <= static_cast<std::uint32_t>(ApiVersion::V2) &&
+        payloadAttributes.eip1559Params.has_value())
     {
         return std::string("eip1559Params is only valid for PayloadAttributesV3");
     }
-    if (version <= 2 && payloadAttributes.minBaseFee.has_value())
+    if (version <= static_cast<std::uint32_t>(ApiVersion::V2) &&
+        payloadAttributes.minBaseFee.has_value())
     {
         return std::string("minBaseFee is only valid for PayloadAttributesV3");
     }
@@ -278,8 +285,7 @@ bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes)
     }
     if (payloadAttributes.eip1559Params->size() != c_eip1559ParamsBytes)
     {
-        BOOST_THROW_EXCEPTION(InvalidEngineEncoding{} <<
-                              bcos::errinfo_comment{
+        BOOST_THROW_EXCEPTION(InvalidEngineEncoding{} << bcos::errinfo_comment{
                                   "encodeOptimismExtraData requires exactly 8 bytes of "
                                   "eip1559Params"});
     }
@@ -326,12 +332,13 @@ std::optional<std::string> validateExecutionPayload(
     {
         return std::string("withdrawals are not part of ExecutionPayloadV1");
     }
-    if (version >= 2 && !executionPayload.withdrawals.has_value())
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V2) &&
+        !executionPayload.withdrawals.has_value())
     {
         return std::string("withdrawals are required for ExecutionPayloadV2 and later");
     }
-    if (version >= 2 && executionPayload.withdrawals.has_value() &&
-        !executionPayload.withdrawals->empty())
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V2) &&
+        executionPayload.withdrawals.has_value() && !executionPayload.withdrawals->empty())
     {
         // Mirror validatePayloadAttributes: this node cannot compute a real withdrawals
         // trie root (empty-trie placeholder), so a non-empty list is uncommittable at
@@ -340,17 +347,17 @@ std::optional<std::string> validateExecutionPayload(
             "non-empty withdrawals are not supported until the withdrawals trie root is "
             "computed");
     }
-    if (version <= 2 &&
+    if (version <= static_cast<std::uint32_t>(ApiVersion::V2) &&
         (executionPayload.blobGasUsed.has_value() || executionPayload.excessBlobGas.has_value()))
     {
         return std::string("blob gas fields are only valid for ExecutionPayloadV3 and later");
     }
-    if (version >= 3 &&
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V3) &&
         (!executionPayload.blobGasUsed.has_value() || !executionPayload.excessBlobGas.has_value()))
     {
         return std::string("blob gas fields are required for ExecutionPayloadV3 and later");
     }
-    if (version >= 4)
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V4))
     {
         if (!executionPayload.withdrawalsRoot.has_value())
         {
@@ -368,11 +375,9 @@ std::optional<std::string> validateExecutionPayload(
         // and no in-tree builder fills them — requiring their presence would reject
         // every honest newPayloadV4, including echoes of this node's own builds.
     }
-    // finding N4: pre-Holocene payloads (V1/V2) carry an empty extraData; the OP
-    // Holocene/Jovian shape below would otherwise accept a 9/17-byte extraData here
-    // while the attributes side rejects eip1559Params at V3- — same fork window,
-    // same rule (predicate symmetry).
-    if (version <= 2 && !executionPayload.extraData.empty())
+    // Pre-Holocene payloads must carry empty extraData.
+    if (version <= static_cast<std::uint32_t>(ApiVersion::V2) &&
+        !executionPayload.extraData.empty())
     {
         return std::string("extraData must be empty for ExecutionPayloadV1/V2 (pre-Holocene)");
     }
@@ -386,21 +391,29 @@ std::optional<std::string> validateExecutionPayload(
 std::optional<std::string> compareWithBuiltPayload(
     const ExecutionPayload& submitted, const ExecutionPayload& built)
 {
-    // op-geth ExecutableDataToBlock re-derives keccak256(rlp(header)) from every
-    // hash-relevant field. Compare the fields this node actually built (cache hit).
-    // Keep-local-body (finding BL): optional V3 fields are compared only when
-    // BOTH sides have them. Presence XOR is not INVALID — GetPayloadV3 may omit
-    // a field the local payload still carries, and the CL is echoing the hash.
     auto mismatch = [](char const* field) {
         return std::string("executionPayload.") + field +
                " does not match the payload this node built under the submitted blockHash";
     };
-    // Presence XOR is not a mismatch. GetPayloadV3 may omit a V4-only field the
-    // in-memory payload still carries; a V2 body may omit blob-gas that a later
-    // cache entry filled. Only a present-vs-present value disagreement is INVALID.
-    auto optionalMismatch = [&](char const* field, auto const& submittedField,
-                                auto const& builtField) -> std::optional<std::string> {
+    auto optionalPresentMismatch = [&](char const* field, auto const& submittedField,
+                                       auto const& builtField) -> std::optional<std::string> {
         if (submittedField.has_value() && builtField.has_value() && *submittedField != *builtField)
+        {
+            return mismatch(field);
+        }
+        return std::nullopt;
+    };
+    // Presence-XOR, not present-vs-present: validateExecutionPayload forces blobGasUsed /
+    // excessBlobGas per method version, so a payload that omits a field the built copy carries
+    // (a V3 echo of a V4 build) is a real mismatch. Comparing only when both sides are engaged
+    // would accept exactly that echo.
+    auto optionalHashPresence = [&](char const* field, auto const& submittedField,
+                                    auto const& builtField) -> std::optional<std::string> {
+        if (submittedField.has_value() != builtField.has_value())
+        {
+            return mismatch(field);
+        }
+        if (submittedField.has_value() && *submittedField != *builtField)
         {
             return mismatch(field);
         }
@@ -469,45 +482,129 @@ std::optional<std::string> compareWithBuiltPayload(
             return mismatch("transactions");
         }
     }
-    if (auto error =
-            optionalMismatch("withdrawalsRoot", submitted.withdrawalsRoot, built.withdrawalsRoot))
+    if (submitted.withdrawalsRoot.has_value() && built.withdrawalsRoot.has_value())
     {
-        return error;
+        if (*submitted.withdrawalsRoot != *built.withdrawalsRoot)
+        {
+            return mismatch("withdrawalsRoot");
+        }
     }
-    // The withdrawals LIST is the field withdrawalsRoot commits to: the root arm
-    // above alone lets a tampered list through whenever both sides omit the root
-    // (V2/V3 wire) or the submitted root is copied from the build. Compare the
-    // lists directly — an honest echo always carries the built list.
+    else if (submitted.withdrawalsRoot.has_value() != built.withdrawalsRoot.has_value())
+    {
+        auto const& present = submitted.withdrawalsRoot.has_value() ? *submitted.withdrawalsRoot :
+                                                                      *built.withdrawalsRoot;
+        if (present != withdrawalsRootFor(submitted))
+        {
+            return mismatch("withdrawalsRoot");
+        }
+    }
     if (submitted.withdrawals != built.withdrawals)
     {
         return mismatch("withdrawals");
     }
-    if (auto error = optionalMismatch("blobGasUsed", submitted.blobGasUsed, built.blobGasUsed))
+    if (auto error = optionalHashPresence("blobGasUsed", submitted.blobGasUsed, built.blobGasUsed))
     {
         return error;
     }
     if (auto error =
-            optionalMismatch("excessBlobGas", submitted.excessBlobGas, built.excessBlobGas))
+            optionalHashPresence("excessBlobGas", submitted.excessBlobGas, built.excessBlobGas))
     {
         return error;
     }
-    // V4 optional fields follow the presence-XOR rule like blobGasUsed/excessBlobGas:
-    // optionalMismatch only fires when BOTH sides carry the field and they differ. A
-    // drop (built present, echo absent) is tolerated — the wire dialect cannot express
-    // these fields, so an honest echo never carries them.
-    if (auto error = optionalMismatch(
+    if (auto error = optionalPresentMismatch(
             "blockAccessList", submitted.blockAccessList, built.blockAccessList))
     {
         return error;
     }
-    if (auto error = optionalMismatch("slotNumber", submitted.slotNumber, built.slotNumber))
+    if (auto error = optionalPresentMismatch("slotNumber", submitted.slotNumber, built.slotNumber))
     {
         return error;
     }
     return std::nullopt;
 }
 
-bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev)
+namespace
+{
+/// Cache-miss reconstruction of transactionsRoot. Same entry point as the two other
+/// producers (engine_common::buildHeaderCommitments, opstack-executor computeOpTxRoot):
+/// all three MUST agree or newPayload rejects this node's own payloads.
+/// calculateTransactionsRoot owns the empty-list -> emptyRootHash() contract
+/// (computeIndexedTrieRoot), so it is not restated here.
+bcos::h256 transactionsRootFromPayload(const ExecutionPayload& payload)
+{
+    std::vector<bcos::bytesConstRef> rawEnvelopes;
+    rawEnvelopes.reserve(payload.transactions.size());
+    for (auto const& tx : payload.transactions)
+    {
+        rawEnvelopes.push_back(bcos::ref(tx.raw));
+    }
+    return bcos::ledger::mpt::calculateTransactionsRoot(rawEnvelopes);
+}
+}  // namespace
+
+std::optional<std::string> matchReconstructedEthBlockHash(
+    const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
+    const std::optional<bcos::h256>& parentBeaconBlockRoot,
+    bcos::protocol::EthBlockVersion forkVersion)
+{
+    // A null factory is a node-local wiring fault, not a defect in the submitted payload: it must
+    // reach the caller's internal-error mapping, never the InvalidBlockHash string (a hard
+    // consensus rejection op-node does not retry).
+    if (!factory)
+    {
+        BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                  "EngineService: block header factory is null"});
+    }
+    // Only a genuine hash mismatch, or a header the submitted fields cannot reconstruct into a
+    // valid Ethereum header, returns a message (both callers fold it into InvalidBlockHash).
+    // Everything that reconstructs the header from the submitted fields is outside the try: a
+    // header-factory or transactionsRoot-MPT fault is node-local and must propagate to the
+    // caller's internal-error mapping (-32603), never be folded into InvalidBlockHash.
+    auto header = factory->createBlockHeader();
+    const auto number = payload.blockNumber;
+    header->setNumber(number);
+    header->setTimestamp(static_cast<int64_t>(payload.timestamp));
+    header->setParentInfo(
+        bcos::protocol::ParentInfo{.blockNumber = number - 1, .blockHash = payload.parentHash});
+    header->setCoinbase(payload.feeRecipient);
+    header->setStateRoot(payload.stateRoot);
+    header->setTxsRoot(transactionsRootFromPayload(payload));
+    header->setReceiptsRoot(payload.receiptsRoot);
+    header->setGasLimit(payload.gasLimit);
+    header->setGasUsed(payload.gasUsed);
+    header->setExtraData(payload.extraData);
+    header->setPrevRandao(payload.prevRandao);
+
+    if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN &&
+        (!payload.blobGasUsed.has_value() || !payload.excessBlobGas.has_value() ||
+            !parentBeaconBlockRoot.has_value()))
+    {
+        return std::string("blockHash does not match the reconstructed block header");
+    }
+
+    try
+    {
+        finalizeEthBlockHeader(
+            *header, payload, parentBeaconBlockRoot, forkVersion, payload.withdrawalsRoot);
+    }
+    catch (OpExecutionInternalError const&)
+    {
+        // finalizeEthBlockHeader raises this only when calculateRLPHash -> validateHeader rejects
+        // the header rebuilt from the SUBMITTED fields (a zero stateRoot / receiptsRoot, a
+        // sub-second timestamp, a missing fork field): a payload-content fault, so the
+        // invalid-payload answer is right. Any other exception inside finalize is node-local and
+        // propagates (the whole body used to be wrapped in a bare catch (...) that reported all
+        // of them as a hash mismatch).
+        return std::string("blockHash does not match the reconstructed block header");
+    }
+    if (header->hash() != payload.blockHash)
+    {
+        return std::string("blockHash does not match the reconstructed block header");
+    }
+    return std::nullopt;
+}
+
+std::optional<bcos::protocol::EthBlockVersion> tryEthBlockVersionFor(evmc_revision rev)
 {
     switch (rev)
     {
@@ -526,15 +623,42 @@ bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev)
         {
             return bcos::protocol::EthBlockVersion::LONDON;
         }
-        BOOST_THROW_EXCEPTION(
-            UnsupportedFork{} << bcos::errinfo_comment{"EngineService: unsupported EVM revision " +
-                                                       std::to_string(static_cast<int>(rev)) +
-                                                       " for Eth header fork derivation"});
+        // EVMC_EXPERIMENTAL ("experimental" is a nameable, round-trippable
+        // SYS_CONFIG value) and anything newer than this binary maps. Whether that
+        // is fatal is not this function's call: the build path must fail loudly (a
+        // guessed era hashes a header the chain never configured), the newPayload
+        // cache-miss path must not (it would blame the submitted block). Each
+        // caller picks, via this mapping or the throwing adapter below.
+        return std::nullopt;
     }
 }
 
+bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev)
+{
+    if (auto version = tryEthBlockVersionFor(rev))
+    {
+        return *version;
+    }
+    BOOST_THROW_EXCEPTION(
+        UnsupportedFork{} << bcos::errinfo_comment{"EngineService: unsupported EVM revision " +
+                                                   std::to_string(static_cast<int>(rev)) +
+                                                   " for Eth header fork derivation"});
+}
+
+std::optional<bcos::protocol::EthBlockVersion> ethBlockVersionForBlock(
+    ledger::LedgerConfig const& ledgerConfig, bcos::protocol::BlockNumber blockNumber)
+{
+    auto const revision = ledgerConfig.evmcRevisionForBlock(blockNumber);
+    if (!revision.has_value())
+    {
+        return std::nullopt;
+    }
+    return tryEthBlockVersionFor(*revision);
+}
+
 void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const ExecutionPayload& payload,
-    std::optional<bcos::h256> parentBeaconBlockRoot, bcos::protocol::EthBlockVersion forkVersion)
+    std::optional<bcos::h256> parentBeaconBlockRoot, bcos::protocol::EthBlockVersion forkVersion,
+    std::optional<bcos::h256> withdrawalsRoot)
 {
     header.setUncleHash(engine_common::c_emptyOmmersHash);
     header.setDifficulty(bcos::u256(0));
@@ -545,7 +669,7 @@ void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const Execution
 
     if (forkVersion >= bcos::protocol::EthBlockVersion::SHANGHAI)
     {
-        header.setWithdrawalsRoot(bcos::engine::detail::withdrawalsRootFor(payload));
+        header.setWithdrawalsRoot(withdrawalsRoot.value_or(withdrawalsRootFor(payload)));
     }
 
     if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN)

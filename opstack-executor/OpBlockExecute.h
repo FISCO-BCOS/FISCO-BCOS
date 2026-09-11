@@ -14,6 +14,8 @@
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
+#include <bcos-framework/protocol/TransactionReceiptNormalize.h>
+#include <bcos-ledger/mpt/EthTrieRoots.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Task.h>
@@ -156,8 +158,19 @@ inline const evmc::bytes32 OP_EMPTY_REQUESTS_HASH = [] {
     // the same value the engine header builders stamp (EngineServiceCommon.h
     // c_emptyRequestsHash), cast here into the seal's native type. Both are
     // keccak256(rlp(header))-critical, so the hex must have exactly one home.
-    auto raw = bcos::fromHex(std::string{bcos::engine::c_emptyRequestsHashHex});
+    // 0x + 64 hex digits; a wrong-length edit must fail at compile time.
+    static_assert(bcos::engine::c_emptyRequestsHashHex.size() == 66,
+        "c_emptyRequestsHashHex must be 0x plus 32 bytes of hex");
+    auto const raw = bcos::fromHex(std::string{bcos::engine::c_emptyRequestsHashHex});
     evmc::bytes32 hash{};
+    if (raw.size() != sizeof(hash.bytes))
+    {
+        // Unreachable: the static_assert above pins the hex length, so fromHex always
+        // yields 32 bytes. Kept as std::logic_error to match the seal's other
+        // internal-invariant guards (see the length/empty-envelope checks below): a
+        // builder bug, not a block-content rejection (which would be OpConsensusError).
+        throw std::logic_error("c_emptyRequestsHashHex must decode to exactly 32 bytes");
+    }
     std::copy(raw.begin(), raw.end(), hash.bytes);
     return hash;
 }();
@@ -172,7 +185,7 @@ inline const evmc::bytes32 OP_EMPTY_REQUESTS_HASH = [] {
 
 /// Receipts-root leaf, byte-for-byte op-geth `Receipts.EncodeIndex` semantics:
 /// deposit 0x7E || rlp([status, cumGas, bloom, logs, nonce, version]);
-/// normal  typed prefix + rlp([status, cumGas, bloom, logs]).
+/// normal typed prefix + rlp([status, cumGas, bloom, logs]).
 [[nodiscard]] bcos::bytes encodeReceiptForRoot(
     const bcos::protocol::TransactionReceipt& r, uint8_t txType);
 }  // namespace bcos::evm::opstack
@@ -192,8 +205,8 @@ template <class RawTxRange>
 /// finalizeBlock (MessagePasser snapshot) → seal → stateRoot → txRoot. txTypes are rebuilt from
 /// rawTxBytes[i][0] (the FISCO receipt has no tx-type slot; sealOpBlock's EncodeIndex receipts-root
 /// leaf needs the EIP-2718 type byte — mirror of the per-tx loop's classification). hashErr is
-/// checked here (poisoned block-hash lookup → OpStorageError). **cumulativeGasUsed backfill is NOT
-/// in scope** (it stays in the per-tx loop / ExecuteContext::finish).
+/// checked here (poisoned block-hash lookup → OpStorageError). cumulativeGasUsed is set upstream in
+/// ExecuteContext::finish and kept; normalizeReceipts below fills it only when absent.
 ///
 /// @p skipStateRootBuild (①a incremental MPT): when true, the full two-layer rebuild is
 /// skipped and the result's stateRoot is left EMPTY — the caller replaces it with the
@@ -238,6 +251,13 @@ OpExecuteBlockResult finalizeOpBlockResult(bcos::executor_v1::opstack::OpstackEx
     result.gasUsed = cumulative;
     if (hashErr.has_value())
         throw OpStorageError("block-hash lookup failed: " + *hashErr);
+
+    // One receipt-field policy for both receipts-root producers (the engine
+    // buildHeaderCommitments and this OP seal): transactionIndex / logIndex are written, logsBloom
+    // is recomputed unconditionally from logEntries, and cumulativeGasUsed is filled when empty
+    // (the OP running prefix is set upstream in ExecuteContext::finish and kept). Closes the OP
+    // eth_getLogs logIndex gap and the leaf-bloom provenance divergence (#5582).
+    bcos::protocol::normalizeReceipts(result.receipts);
 
     // Commitments: MessagePasser snapshot → seal → stateRoot → txRoot. accountStorage
     // returns the complete, tombstone-filtered live slot map for one address (same
@@ -376,22 +396,23 @@ inline OpBlockCommitments announcedCommitmentsOf(const bcos::engine::ExecutionPa
 /// Matches op-geth's DeriveSha because the raw-tx decoders reject non-canonical encodings
 /// (assertCanonicalRoundTrip fails closed if that lapses). Two call sites: the engine's
 /// pre-execution blockHash check and finalizeOpBlockResult's txRoot.
-/// Values are copied into owned bytes: computeTrieRootVarKey takes
-/// span<pair<bytes, bytes>>, not a non-owning bytesConstRef. A non-owning overload
-/// would drop this copy; not rewritten in this slice.
+/// Shares one construction with the engine's other two transactionsRoot producers
+/// (EngineServiceCommon.cpp transactionsRootFromPayload, EngineStorageCommit.h
+/// buildHeaderCommitments) — the three MUST agree or newPayload rejects this node's own
+/// payloads. Values stay views: computeIndexedTrieRoot reads the caller's bytes, so the
+/// owned-bytes marshalling this needed while it went through computeTrieRootVarKey is gone.
 template <class RawTxRange>
 [[nodiscard]] bcos::h256 computeOpTxRoot(RawTxRange const& rawTxBytes)
 {
-    std::vector<std::pair<bcos::bytes, bcos::bytes>> entries;
-    entries.reserve(rawTxBytes.size());
-    uint64_t index = 0;
+    std::vector<bcos::bytesConstRef> rawEnvelopes;
+    rawEnvelopes.reserve(rawTxBytes.size());
     for (auto const& rawItem : rawTxBytes)
     {
-        bcos::bytes key;
-        bcos::codec::rlp::encode(key, index);
-        entries.emplace_back(std::move(key), bcos::bytes(std::begin(rawItem), std::end(rawItem)));
-        ++index;
+        // .data()/.size() rather than bcos::ref: the range's element is `bytes` at one
+        // call site and already a RefDataContainer at another, and bcos::ref would double-wrap
+        // the latter.
+        rawEnvelopes.emplace_back(rawItem.data(), rawItem.size());
     }
-    return bcos::ledger::mpt::computeTrieRootVarKey(entries).root;
+    return bcos::ledger::mpt::calculateTransactionsRoot(rawEnvelopes);
 }
 }  // namespace bcos::evm::engine

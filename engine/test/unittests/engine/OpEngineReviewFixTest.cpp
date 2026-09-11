@@ -18,12 +18,12 @@
  */
 
 // Review fixes for PR #5544. Oracles:
-//   - extraData 0,0 -> Canyon 250/6: op-core/eip1559 EncodeHoloceneExtraData
-//     (specs holocene exec-engine); byte literal 0x00000000fa00000006
-//   - GetPayloadV4 accepts only PayloadV3: op-geth payloadID.Is(PayloadV3)
-//   - FCU V3/V4 attrs require BeaconRoot: op-geth ForkchoiceUpdatedV3/V4
-//   - leftover RLP after decodeTyped is invalid
-//   - blob (0x03) rejection is FISCO OP policy, not an op-geth decodeTyped check
+// - extraData 0,0 -> Canyon 250/6: op-core/eip1559 EncodeHoloceneExtraData
+// (specs holocene exec-engine); byte literal 0x00000000fa00000006
+// - GetPayloadV4 accepts only PayloadV3: op-geth payloadID.Is(PayloadV3)
+// - FCU V3/V4 attrs require BeaconRoot: op-geth ForkchoiceUpdatedV3/V4
+// - leftover RLP after decodeTyped is invalid
+// - blob (0x03) rejection is FISCO OP policy, not an op-geth decodeTyped check
 
 #include "engine/bcos-engine/EngineServiceCommon.h"
 #include "engine/bcos-engine/OpEngineService.h"
@@ -65,7 +65,8 @@ PayloadAttributes holoceneAttributes(bytes eip1559Params)
 NewPayloadRequest makeIsthmusNewPayload(bytes extraData)
 {
     NewPayloadRequest request;
-    request.executionRequests = std::vector<bytes>{};  // present-but-empty: the Isthmus wire contract
+    request.executionRequests =
+        std::vector<bytes>{};  // present-but-empty: the Isthmus wire contract
     request.executionPayload.withdrawals = std::vector<WithdrawalV1>{};
     request.executionPayload.withdrawalsRoot = ledger::mpt::emptyRootHash();
     request.executionPayload.excessBlobGas = u256(0);
@@ -89,7 +90,7 @@ Json::Value hex20(char fill)
 }
 
 // Minimal `_op_payload` that reaches parseNewPayloadRequest field readers. `nullField`
-// is left as JSON null so makeInvalidParamsJson must not strip it (finding E6).
+// is left as JSON null so makeInvalidParamsJson must not strip it.
 w6test::InvalidSample invalidSampleWithNullField(char const* nullField)
 {
     w6test::InvalidSample sample;
@@ -135,22 +136,22 @@ BOOST_AUTO_TEST_CASE(holocene_zero_params_encode_canyon_and_pass_newpayload_gate
     auto extraData = engine::detail::encodeOptimismExtraData(holoceneAttributes(bytes(8, 0)));
     BOOST_REQUIRE_EQUAL(toHexStringWithPrefix(extraData), "0x00000000fa00000006");
     BOOST_CHECK(!engine_common::op::validateOpNewPayloadRequest(
-        makeIsthmusNewPayload(extraData), /*jovianActive=*/false));
+        makeIsthmusNewPayload(extraData), /*jovianActive=*/false, /*isthmusActive=*/true));
 }
 
 BOOST_AUTO_TEST_CASE(holocene_header_extra_data_matches_validate_holocene_1559_params)
 {
     // Committed headers must carry a usable (non-zero) EIP-1559 pair - the same rule
-    // calcOpBaseFee enforces on the parent (finding AO). The lenient attribute-side
+    // calcOpBaseFee enforces on the parent. The lenient attribute-side
     // 0,0 acceptance does NOT extend to headers: a zero-elasticity or zero-denominator
     // head can never be extended by the next FCU build / child newPayload.
     auto accept = [](bytes extra, bool jovian) {
         return !engine_common::op::validateOpNewPayloadRequest(
-            makeIsthmusNewPayload(std::move(extra)), jovian);
+            makeIsthmusNewPayload(std::move(extra)), jovian, /*isthmusActive=*/true);
     };
     auto rejectContains = [](bytes extra, bool jovian, std::string_view needle) {
         auto error = engine_common::op::validateOpNewPayloadRequest(
-            makeIsthmusNewPayload(std::move(extra)), jovian);
+            makeIsthmusNewPayload(std::move(extra)), jovian, /*isthmusActive=*/true);
         BOOST_REQUIRE(error.has_value());
         BOOST_CHECK(error->find(std::string(needle)) != std::string::npos);
     };
@@ -165,7 +166,7 @@ BOOST_AUTO_TEST_CASE(op_newpayload_rejects_extradata_length_and_version)
 {
     auto rejectContains = [](bytes extra, bool jovian, std::string_view needle) {
         auto error = engine_common::op::validateOpNewPayloadRequest(
-            makeIsthmusNewPayload(std::move(extra)), jovian);
+            makeIsthmusNewPayload(std::move(extra)), jovian, /*isthmusActive=*/true);
         BOOST_REQUIRE(error.has_value());
         BOOST_CHECK(error->find(std::string(needle)) != std::string::npos);
     };
@@ -186,7 +187,7 @@ BOOST_AUTO_TEST_CASE(attrs_holocene_pairing_matches_op_geth)
     BOOST_REQUIRE(commonZeroDenom.has_value());
     BOOST_CHECK(commonZeroDenom->find("both zero or both non-zero") != std::string::npos);
     // (d>0,e==0) is rejected too: encode writes it verbatim and calcOpBaseFee cannot
-    // extend a zero-elasticity head (finding AO).
+    // extend a zero-elasticity head.
     BOOST_REQUIRE(engine_common::validatePayloadAttributes(zeroElasticity, 3).has_value());
     BOOST_CHECK(!engine_common::validatePayloadAttributes(bothZero, 3));
 
@@ -206,9 +207,8 @@ BOOST_AUTO_TEST_CASE(op_does_not_advertise_unimplemented_fcu_v4)
     // The OP lane must not advertise methods its own gates deterministically reject:
     // newPayload is Isthmus-only V4 (-38005 for V1-V3) and getPayloadV1/V2 cannot
     // render a PayloadV3 build — a pre-Isthmus CL reading them has no sync path back.
-    for (auto const* dead :
-        {"engine_newPayloadV1", "engine_newPayloadV2", "engine_newPayloadV3",
-            "engine_getPayloadV1", "engine_getPayloadV2"})
+    for (auto const* dead : {"engine_newPayloadV1", "engine_newPayloadV2", "engine_newPayloadV3",
+             "engine_getPayloadV1", "engine_getPayloadV2"})
     {
         BOOST_CHECK_MESSAGE(std::find(caps.begin(), caps.end(), dead) == caps.end(),
             "OP caps must not advertise " << dead);
@@ -220,7 +220,8 @@ BOOST_AUTO_TEST_CASE(newpayload_rejects_blob_type_as_fisco_op_policy)
     auto request = makeIsthmusNewPayload(fromHex("00000000fa00000006"));
     request.executionPayload.transactions.push_back(
         EngineTransaction{.raw = bytes{0x03, 0xaa}, .decoded = nullptr});
-    auto error = engine_common::op::validateOpNewPayloadRequest(request, /*jovianActive=*/false);
+    auto error = engine_common::op::validateOpNewPayloadRequest(
+        request, /*jovianActive=*/false, /*isthmusActive=*/true);
     BOOST_REQUIRE(error.has_value());
     BOOST_CHECK(error->find("blob transactions are not allowed") != std::string::npos);
 }
@@ -232,7 +233,8 @@ BOOST_AUTO_TEST_CASE(validate_op_newpayload_request_static_rules)
     auto withViolation = [](auto&& mutate) {
         auto request = makeIsthmusNewPayload(fromHex("00000000fa00000006"));
         mutate(request);
-        return engine_common::op::validateOpNewPayloadRequest(request, /*jovianActive=*/false);
+        return engine_common::op::validateOpNewPayloadRequest(
+            request, /*jovianActive=*/false, /*isthmusActive=*/true);
     };
     auto expectReject = [](std::optional<std::string> const& error, std::string const& needle) {
         BOOST_REQUIRE_MESSAGE(error.has_value(), "expected a reject mentioning " << needle);
@@ -242,31 +244,31 @@ BOOST_AUTO_TEST_CASE(validate_op_newpayload_request_static_rules)
 
     expectReject(withViolation([](NewPayloadRequest& r) {
         r.executionRequests = std::vector<bytes>{bytes{0x01}};
-    }), "executionRequests must be a present-but-empty list");
-    expectReject(withViolation([](NewPayloadRequest& r) {
-        r.executionRequests.reset();
-    }), "executionRequests must be a present-but-empty list");
-    expectReject(withViolation([](NewPayloadRequest& r) {
-        r.executionPayload.withdrawals.reset();
-    }), "withdrawals must be present and empty");
+    }),
+        "executionRequests must be a present-but-empty list");
+    expectReject(withViolation([](NewPayloadRequest& r) { r.executionRequests.reset(); }),
+        "executionRequests must be a present-but-empty list");
+    expectReject(
+        withViolation([](NewPayloadRequest& r) { r.executionPayload.withdrawals.reset(); }),
+        "withdrawals must be present and empty");
     expectReject(withViolation([](NewPayloadRequest& r) {
         r.executionPayload.withdrawals = std::vector<WithdrawalV1>{WithdrawalV1{}};
-    }), "withdrawals must be present and empty");
-    expectReject(withViolation([](NewPayloadRequest& r) {
-        r.expectedBlobVersionedHashes = {h256(1)};
-    }), "expectedBlobVersionedHashes must be an empty array");
-    expectReject(withViolation([](NewPayloadRequest& r) {
-        r.executionPayload.withdrawalsRoot.reset();
-    }), "withdrawalsRoot is required");
-    expectReject(withViolation([](NewPayloadRequest& r) {
-        r.executionPayload.excessBlobGas = u256(1);
-    }), "excessBlobGas must be present and zero");
-    expectReject(withViolation([](NewPayloadRequest& r) {
-        r.executionPayload.blobGasUsed = u256(1);
-    }), "blobGasUsed must be zero before Jovian");
-    expectReject(withViolation([](NewPayloadRequest& r) {
-        r.executionPayload.blockNumber = -1;
-    }), "blockNumber must not be negative");
+    }),
+        "withdrawals must be present and empty");
+    expectReject(
+        withViolation([](NewPayloadRequest& r) { r.expectedBlobVersionedHashes = {h256(1)}; }),
+        "expectedBlobVersionedHashes must be an empty array");
+    expectReject(
+        withViolation([](NewPayloadRequest& r) { r.executionPayload.withdrawalsRoot.reset(); }),
+        "withdrawalsRoot is required");
+    expectReject(
+        withViolation([](NewPayloadRequest& r) { r.executionPayload.excessBlobGas = u256(1); }),
+        "excessBlobGas must be present and zero");
+    expectReject(
+        withViolation([](NewPayloadRequest& r) { r.executionPayload.blobGasUsed = u256(1); }),
+        "blobGasUsed must be zero before Jovian");
+    expectReject(withViolation([](NewPayloadRequest& r) { r.executionPayload.blockNumber = -1; }),
+        "blockNumber must not be negative");
 }
 
 /// Same treatment for the FCU attributes-side rules (validateOpPayloadAttributes).
@@ -283,15 +285,20 @@ BOOST_AUTO_TEST_CASE(validate_op_payload_attributes_static_rules)
             "reject \"" << *error << "\" does not mention " << needle);
     };
 
-    expectReject(withViolation([](PayloadAttributes& a) {
-        a.withdrawals = std::vector<WithdrawalV1>{WithdrawalV1{}};
-    }, false), "withdrawals must be empty on the OP path");
-    expectReject(withViolation([](PayloadAttributes& a) {
-        a.minBaseFee = std::nullopt;
-    }, /*jovianActive=*/true), "minBaseFee is required after the Jovian fork");
-    expectReject(withViolation([](PayloadAttributes& a) {
-        a.minBaseFee = 0;  // a pre-Jovian CL sending a floor is a reject
-    }, /*jovianActive=*/false), "minBaseFee must be null before the Jovian fork");
+    expectReject(
+        withViolation(
+            [](PayloadAttributes& a) { a.withdrawals = std::vector<WithdrawalV1>{WithdrawalV1{}}; },
+            false),
+        "withdrawals must be empty on the OP path");
+    expectReject(withViolation([](PayloadAttributes& a) { a.minBaseFee = std::nullopt; },
+                     /*jovianActive=*/true),
+        "minBaseFee is required after the Jovian fork");
+    expectReject(withViolation(
+                     [](PayloadAttributes& a) {
+                         a.minBaseFee = 0;  // a pre-Jovian CL sending a floor is a reject
+                     },
+                     /*jovianActive=*/false),
+        "minBaseFee must be null before the Jovian fork");
 }
 
 BOOST_AUTO_TEST_CASE(fcu_v4_missing_beacon_root_is_invalid)
@@ -392,29 +399,29 @@ BOOST_AUTO_TEST_CASE(op_newpayload_rejects_missing_blob_fields_and_wide_gas_limi
 
     auto missingBlob = base;
     missingBlob.executionPayload.blobGasUsed = std::nullopt;
-    auto missingBlobError =
-        engine_common::op::validateOpNewPayloadRequest(missingBlob, /*jovianActive=*/false);
+    auto missingBlobError = engine_common::op::validateOpNewPayloadRequest(
+        missingBlob, /*jovianActive=*/false, /*isthmusActive=*/true);
     BOOST_REQUIRE(missingBlobError.has_value());
     BOOST_CHECK_EQUAL(*missingBlobError, "blobGasUsed must be present on the OP path");
 
     auto missingExcess = base;
     missingExcess.executionPayload.excessBlobGas = std::nullopt;
-    auto missingExcessError =
-        engine_common::op::validateOpNewPayloadRequest(missingExcess, /*jovianActive=*/false);
+    auto missingExcessError = engine_common::op::validateOpNewPayloadRequest(
+        missingExcess, /*jovianActive=*/false, /*isthmusActive=*/true);
     BOOST_REQUIRE(missingExcessError.has_value());
     BOOST_CHECK_EQUAL(*missingExcessError, "excessBlobGas must be present and zero on the OP path");
 
     auto overSigned = base;
     overSigned.executionPayload.gasLimit = u256(1) << 63;
-    auto overSignedError =
-        engine_common::op::validateOpNewPayloadRequest(overSigned, /*jovianActive=*/false);
+    auto overSignedError = engine_common::op::validateOpNewPayloadRequest(
+        overSigned, /*jovianActive=*/false, /*isthmusActive=*/true);
     BOOST_REQUIRE(overSignedError.has_value());
     BOOST_CHECK_EQUAL(*overSignedError, "gasLimit exceeds the maximum block gas limit (2^63-1)");
 
     auto overUint64 = base;
     overUint64.executionPayload.gasLimit = u256(1) << 64;
-    auto overUint64Error =
-        engine_common::op::validateOpNewPayloadRequest(overUint64, /*jovianActive=*/false);
+    auto overUint64Error = engine_common::op::validateOpNewPayloadRequest(
+        overUint64, /*jovianActive=*/false, /*isthmusActive=*/true);
     BOOST_REQUIRE(overUint64Error.has_value());
     BOOST_CHECK_EQUAL(
         *overUint64Error, "gasLimit exceeds the uint64 range of the ETH header field");
@@ -425,17 +432,33 @@ BOOST_AUTO_TEST_CASE(op_newpayload_accepts_announced_withdrawals_root)
     // Presence is required; the announced root is not pinned to emptyRootHash.
     // Equality vs the executed MessagePasser storage root is checked after execute.
     auto request = makeIsthmusNewPayload(fromHex("00000000fa00000006"));
-    BOOST_CHECK(!engine_common::op::validateOpNewPayloadRequest(request, /*jovianActive=*/false));
+    BOOST_CHECK(!engine_common::op::validateOpNewPayloadRequest(
+        request, /*jovianActive=*/false, /*isthmusActive=*/true));
 
     auto missing = request;
     missing.executionPayload.withdrawalsRoot = std::nullopt;
-    auto missingError =
-        engine_common::op::validateOpNewPayloadRequest(missing, /*jovianActive=*/false);
+    auto missingError = engine_common::op::validateOpNewPayloadRequest(
+        missing, /*jovianActive=*/false, /*isthmusActive=*/true);
     BOOST_REQUIRE(missingError.has_value());
     BOOST_CHECK(missingError->find("withdrawalsRoot") != std::string::npos);
 
     request.executionPayload.withdrawalsRoot = h256(1);
-    BOOST_CHECK(!engine_common::op::validateOpNewPayloadRequest(request, /*jovianActive=*/false));
+    BOOST_CHECK(!engine_common::op::validateOpNewPayloadRequest(
+        request, /*jovianActive=*/false, /*isthmusActive=*/true));
+}
+
+BOOST_AUTO_TEST_CASE(op_newpayload_rejects_withdrawals_root_pre_isthmus)
+{
+    auto request = makeIsthmusNewPayload(fromHex("00000000fa00000006"));
+    auto preIsthmusError = engine_common::op::validateOpNewPayloadRequest(
+        request, /*jovianActive=*/false, /*isthmusActive=*/false);
+    BOOST_REQUIRE(preIsthmusError.has_value());
+    BOOST_CHECK_EQUAL(*preIsthmusError, "non-nil withdrawalsRoot pre-Isthmus");
+
+    auto omitted = request;
+    omitted.executionPayload.withdrawalsRoot = std::nullopt;
+    BOOST_CHECK(!engine_common::op::validateOpNewPayloadRequest(
+        omitted, /*jovianActive=*/false, /*isthmusActive=*/false));
 }
 
 BOOST_AUTO_TEST_CASE(op_fcu_attrs_reject_gas_limit_above_signed_max)

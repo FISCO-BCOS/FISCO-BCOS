@@ -95,8 +95,12 @@ inline std::optional<std::string> requireL1AttributesDeposit(
     }
     return std::nullopt;
 }
+/// Validate a submitted OP payload against the local fork state. Both fork predicates are
+/// required arguments on purpose: a fork-state selector must not be defaulted to the most
+/// permissive value. Isthmus is the OP-mode baseline (OpForkSchedule.h — there is no
+/// pre-Isthmus config), but the caller states that explicitly.
 std::optional<std::string> validateOpNewPayloadRequest(
-    const NewPayloadRequest& request, bool jovianActive);
+    const NewPayloadRequest& request, bool jovianActive, bool isthmusActive);
 void applyOpHeaderConstants(bcos::protocol::BlockHeader& header);
 bcos::protocol::BlockHeader::Ptr rebuildOpEthHeader(
     const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
@@ -230,8 +234,7 @@ private:
 
     task::Task<ForkchoiceUpdatedResult> buildOpPayload(const ForkchoiceState& forkchoiceState,
         const PayloadAttributes& payloadAttributes, std::uint32_t version,
-        bcos::protocol::BlockNumber nextBlockNumber,
-        std::vector<bcos::bytes> const& decodedForcedTxs);
+        bcos::protocol::BlockNumber nextBlockNumber, std::vector<bcos::bytes> decodedForcedTxs);
 
     task::Task<PayloadStatus> handleOpNewPayload(
         const NewPayloadRequest& request, std::uint32_t version);

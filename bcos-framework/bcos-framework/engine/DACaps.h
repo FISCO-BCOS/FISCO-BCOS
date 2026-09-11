@@ -15,7 +15,6 @@
  *
  * @file DACaps.h
  * @brief Shared DA throttling caps for the OP payload build path.
- *        Zero remains uncapped until an RPC writer (miner_setMaxDASize) is added.
  */
 
 #pragma once
@@ -26,50 +25,29 @@
 namespace bcos::engine
 {
 
-/// The OP Stack batcher's DA throttling handshake: it pushes
-/// miner_setMaxDASize(maxCanonTxSize, maxBlockSize) on every L2 endpoint and treats a
-/// missing method as fatal. The RPC layer receives the values; the engine's payload
-/// build consumes them. The two layers share nothing else, so the caps live here —
-/// one instance created by the initializer, handed to both sides (NodeService carries
-/// it for the RPC, the engine service ctor receives it directly).
-///
-/// Status in this slice: CONSUMER-SIDE ONLY. No miner_setMaxDASize RPC writer exists yet
-/// (the caps stay zero/uncapped until that producer lands), and NodeService does not yet
-/// carry the instance — the handoff described above is the intended wiring, not current
-/// code.
-///
-/// Semantics (both in ESTIMATED DA bytes — the Fjord FastLZ size estimate of the
-/// serialized EIP-2718 envelope, matching op-geth's DA throttling: its txpool DA filter
-/// and the LazyTransaction DABytes carrier both use RollupCostData().EstimatedDASize(),
-/// never the raw envelope length. This tree's equivalent is estimatedDaSize() in
-/// bcos-evm/opstack/RollupCost.h — feed that, not raw size):
-///   maxTxSize   — a sealed pool tx whose estimated DA size exceeds this is dropped
-///                 from the build (op-geth's txpool excludes such txs the same way);
-///   maxBlockSize — block assembly stops appending sealed envelopes once the
-///                  cumulative estimated DA size (forced envelopes included in the
-///                  accounting, never dropped — the leading deposit is consensus-
-///                  required) crosses the cap.
-/// Zero means UNSET = uncapped (the atomics' zero init), so a node without throttling
-/// behaves exactly as before.
+/// Shared DA size limits for OP payload building. No side of the handshake is wired in this
+/// PR: the NodeService/Initializer/AIR wiring and the `miner_setMaxDASize` producer live in
+/// the RPC follow-up (#5572). The only reader, OpEngineService (OpEngineService.inl), has no
+/// production construction site — the live block producer is EngineServiceImpl, which does
+/// not read these caps (a registered writer with no reader would acknowledge caps the
+/// sequencer never applies). Producer, reader and the Pro/Max (tars) setDaCaps bootstrap
+/// land together in the engine-service cutover.
+///   maxTxSize    — drop sealed pool txs above this estimated DA size.
+///   maxBlockSize — stop appending sealed txs once the cumulative estimate exceeds this.
+/// Zero means uncapped. Sizes use the Fjord FastLZ estimate over the EIP-2718 envelope.
 struct DACaps
 {
     std::atomic<std::uint64_t> maxTxSize{0};
     std::atomic<std::uint64_t> maxBlockSize{0};
 
-    /// Estimated-DA-size gate for sealed pool txs (0 = everything passes).
+    /// Per-tx gate for sealed pool txs (0 passes everything).
     bool txFits(std::uint64_t estimatedDaSize) const noexcept
     {
         auto const cap = maxTxSize.load(std::memory_order_relaxed);
         return cap == 0 || estimatedDaSize <= cap;
     }
 
-    /// Running estimated-DA byte budget for block assembly: construct with the forced
-    /// (undroppable) envelopes' estimate, then admits(estimatedDaSize) per sealed tx in
-    /// order. The block-size cap is snapshotted at construction (one consistent view
-    /// for the whole build; a Budget must be confined to the single build loop that
-    /// created it, and caps pushed by the RPC mid-build take effect from the next
-    /// budget on). This is a plain helper, not enforced state — the build loop owns
-    /// the decisions.
+    /// Block assembly byte budget. Seed with forced (undroppable) envelope estimates.
     class Budget
     {
     public:
@@ -83,8 +61,6 @@ struct DACaps
             {
                 return true;
             }
-            // Wrap-safe form: `m_used + estimatedDaSize` could wrap only at ~2^64 bytes,
-            // but the comparison is cheap to write without the addition.
             if (cap < m_used || estimatedDaSize > cap - m_used)
             {
                 return false;
