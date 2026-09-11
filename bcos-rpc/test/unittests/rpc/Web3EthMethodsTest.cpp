@@ -9,6 +9,7 @@
  */
 
 #include "../common/RPCFixture.h"
+#include <bcos-framework/engine/DACaps.h>
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EndpointsMapping.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EthEndpoint.h>
@@ -257,6 +258,36 @@ BOOST_AUTO_TEST_CASE(feeHistoryAndSetMaxDASizeRegistered)
     {
         BOOST_CHECK(resp.isMember("result"));
     }
+}
+
+BOOST_AUTO_TEST_CASE(minerSetMaxDASizeWritesSharedCapsAndGatesEthOnly)
+{
+    // Regression for the miner_setMaxDASize producer (previously the handler was never
+    // invoked, so the write path and the eth-only gate were untested).
+    //
+    // Ethereum-only node: daCaps() is null, so even though the handler is registered
+    // the namespace must answer MethodNotFound (-32601) rather than ack a cap nothing
+    // applies.
+    nodeService->setDaCaps(nullptr);
+    auto ethOnly = call(req("miner_setMaxDASize", R"(["0x100","0x200"])"));
+    BOOST_REQUIRE(ethOnly.isMember("error"));
+    BOOST_CHECK_EQUAL(ethOnly["error"]["code"].asInt(), -32601);
+
+    // OP node: the handler writes both quantities into the shared DACaps the engine reads.
+    auto caps = std::make_shared<bcos::engine::DACaps>();
+    nodeService->setDaCaps(caps);
+    auto ok = call(req("miner_setMaxDASize", R"(["0x100","0x200"])"));
+    BOOST_REQUIRE(ok.isMember("result"));
+    BOOST_CHECK(ok["result"].asBool());
+    BOOST_CHECK_EQUAL(caps->maxTxSize.load(), 0x100);
+    BOOST_CHECK_EQUAL(caps->maxBlockSize.load(), 0x200);
+
+    // Rejecting a malformed request must not touch the stored caps.
+    auto bad = call(req("miner_setMaxDASize", R"(["0x100"])"));
+    BOOST_REQUIRE(bad.isMember("error"));
+    BOOST_CHECK_EQUAL(bad["error"]["code"].asInt(), -32602);
+    BOOST_CHECK_EQUAL(caps->maxTxSize.load(), 0x100);
+    BOOST_CHECK_EQUAL(caps->maxBlockSize.load(), 0x200);
 }
 
 BOOST_AUTO_TEST_CASE(estimateGasWithoutLedgerFailsClosed)
