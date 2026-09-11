@@ -15,7 +15,9 @@
  *
  * @file EthereumBlockVerifier.h
  * @brief External Ethereum block verification core: executes an incoming block
- *        (from devp2p sync or the Engine API) against the local state, checks
+ *        (from devp2p sync or the Engine API) against the local state — including
+ *        the Cancun/Prague block-level system calls (EIP-4788/2935 at block start,
+ *        EIP-7002/7251 at block end, see EthereumSystemCalls.h) — checks
  *        the deterministic roots (txsRoot/receiptsRoot/gasUsed/logsBloom), the
  *        uncle (ommers) hash, the withdrawals root and the state root, then
  *        commits the block + ledger rows atomically (FIB-104 prewriteBlockToBuffer
@@ -42,6 +44,7 @@
 #include "bcos-rlp-protocol/EthBlockHeader.h"
 #include "bcos-rlp-protocol/EthWithdrawal.h"
 #include "bcos-task/Task.h"
+#include "bcos-transaction-scheduler/EthereumSystemCalls.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
@@ -348,12 +351,16 @@ task::Task<void> accumulatePoWBlockRewards(ViewType& view,
 /// keccak256(rlp(uncles)) — the header's uncleHash (ommers) commitment. Each rawUncles
 /// element is a COMPLETE RLP item (the uncle header's own RLP), so the list encoding is
 /// their plain concatenation under a single list header. The empty list encodes to 0xc0,
-/// whose keccak256 is the canonical empty-ommers hash
-/// 0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347 — the value every
-/// PoS header carries, so comparing this against the header's uncleHash also enforces
-/// "PoS blocks must have no uncles" with no extra rule.
+/// whose keccak256 is the canonical empty-ommers hash (bcos::protocol::c_emptyOmmersHash,
+/// single-sourced in bcos-rlp-protocol/EthBlockHeader.h) — the value every PoS header
+/// carries, so comparing this against the header's uncleHash also enforces "PoS blocks
+/// must have no uncles" with no extra rule.
 inline crypto::HashType calculateUnclesHash(std::vector<bcos::bytes> const& rawUncles)
 {
+    if (rawUncles.empty())
+    {
+        return protocol::c_emptyOmmersHash;
+    }
     bcos::bytes payload;
     for (auto const& uncle : rawUncles)
     {
@@ -450,6 +457,37 @@ public:
         auto blockHeader = makeExecutionBlockHeader(
             ethHeader, m_blockFactory.get(), ledgerConfig.compatibilityVersion());
         result.header = blockHeader;
+
+        // 2a. The block's EVM revision, resolved once for every fork-gated step below
+        //     (system calls, withdrawals).
+        auto revOpt = ledgerConfig.evmcRevisionForBlock(ethHeader.number);
+        if (!revOpt)
+        {
+            co_return co_await fail(
+                "EthereumBlockVerifier: no EVMC revision configured for the block");
+        }
+        const evmc_revision blockRevision = *revOpt;
+
+        // 2b. Cancun+ block-start system calls (EIP-4788 beacon roots; EIP-2935
+        //     historical block hashes from Prague). geth runs these BEFORE the block's
+        //     transactions, so the write must land in the view before executeBlock;
+        //     from Cancun on the beacon-roots contract storage is part of every
+        //     block's state root, so skipping this makes every Cancun+ stateRoot
+        //     verification fail. The contract code is already in state (deployed by
+        //     ordinary pre-fork transactions — see EthereumSystemCalls.h); evmone
+        //     silently skips a code-less contract, per the EIPs. evmone gates each
+        //     contract by revision internally, so a Shanghai block (rev < CANCUN)
+        //     must not even call in — the gate below keeps pre-Cancun behavior
+        //     byte-identical to before this change.
+        if (blockRevision >= EVMC_CANCUN)
+        {
+            if (auto error = applyBlockStartSystemCalls(
+                    view, m_executor.get().vm(), ethHeader, blockRevision);
+                error.has_value())
+            {
+                co_return co_await fail("EthereumBlockVerifier: " + *error);
+            }
+        }
 
         // 3. Decode every raw transaction. A failure is a hard invalid: a real block has
         //    exactly one receipt per transaction, so we cannot skip any.
@@ -552,14 +590,8 @@ public:
                 ew.amount_in_gwei = d.amount;
                 withdrawals.push_back(std::move(ew));
             }
-            auto revOpt = ledgerConfig.evmcRevisionForBlock(ethHeader.number);
-            if (!revOpt)
-            {
-                co_return co_await fail(
-                    "EthereumBlockVerifier: no EVMC revision for withdrawals block");
-            }
             co_await m_executor.get().finalizeBlock(
-                view, *blockHeader, ledgerConfig, *revOpt, std::nullopt, withdrawals);
+                view, *blockHeader, ledgerConfig, blockRevision, std::nullopt, withdrawals);
         }
 
         // 4b. PoW (pre-merge) blocks pay the coinbase block reward (2 ETH) plus
@@ -595,6 +627,28 @@ public:
             {
                 co_return co_await fail(
                     "EthereumBlockVerifier: uncle header RLP decode failed");
+            }
+        }
+
+        // 4c. Prague+ block-end system calls (EIP-7002 withdrawal requests, EIP-7251
+        //     consolidation requests). geth runs these AFTER the block's transactions
+        //     and withdrawals, so the call must land after 4a/4b and before the state
+        //     root is computed: the contracts' storage updates are part of the block's
+        //     world state. evmone gates by revision internally; the explicit PRAGUE
+        //     gate keeps Cancun/Shanghai behavior identical to before this change.
+        //
+        //     LEFTOVER (EIP-7685 requestsHash): the returned requests are not yet
+        //     cross-checked against ethHeader.requestsHash. A complete check also
+        //     needs the EIP-6110 deposit requests collected from the receipts, whose
+        //     deposit-contract address is per-chain (bcos-evm's requests.cpp pins the
+        //     mainnet address) — that plumbing is out of scope for this fix.
+        if (blockRevision >= EVMC_PRAGUE)
+        {
+            auto blockEnd = applyBlockEndSystemCalls(
+                view, m_executor.get().vm(), ethHeader, blockRevision);
+            if (blockEnd.error.has_value())
+            {
+                co_return co_await fail("EthereumBlockVerifier: " + *blockEnd.error);
             }
         }
 
@@ -645,12 +699,7 @@ public:
             //
             // NOTE: BlockImpl::setBlockHeader COPIES the header's inner data, so the
             // RLP hash must be set on blockHeader BEFORE it is copied into the block.
-            {
-                bcos::bytes headerRlp;
-                bcos::codec::rlp::encode(headerRlp, ethHeader);
-                blockHeader->setRLPHash(bcos::crypto::keccak256Hash(
-                    bcos::bytesConstRef(headerRlp.data(), headerRlp.size())));
-            }
+            blockHeader->setRLPHash(bcos::protocol::ethHeaderHash(ethHeader));
             block->setBlockHeader(blockHeader);
             auto const& bloom = computation.logsBloom;
             block->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
@@ -728,9 +777,10 @@ public:
                    " header=" + ethHeader.stateRoot.hex() + ")";
         }
         // Uncle (ommers) hash: keccak256(rlp(uncles)) must match the header's uncleHash.
-        // An empty uncle list hashes to the canonical empty-ommers hash 0x1dcc4de8...,
-        // which is exactly what every PoS header carries — so this one comparison also
-        // rejects a PoS block that attaches uncles, without a separate rule.
+        // An empty uncle list hashes to the canonical empty-ommers hash
+        // (protocol::c_emptyOmmersHash), which is exactly what every PoS header carries
+        // — so this one comparison also rejects a PoS block that attaches uncles,
+        // without a separate rule.
         if (calculateUnclesHash(rawUncles) != ethHeader.uncleHash)
         {
             return "uncleHash mismatch (computed over " + std::to_string(rawUncles.size()) +

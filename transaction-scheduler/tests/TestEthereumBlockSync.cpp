@@ -210,7 +210,7 @@ bcos::protocol::EthBlockHeaderData EBSBaseHeader(int64_t number, int64_t timesta
     header.parentInfo.blockNumber = number - 1;
     header.parentInfo.blockHash = parentHash;
     header.difficulty = 0;
-    header.uncleHash = bcos::devp2p::sync::emptyOmmersHash();
+    header.uncleHash = bcos::protocol::c_emptyOmmersHash;
     header.gasLimit = gasLimit;
     header.gasUsed = 0;
     header.baseFee = baseFee;
@@ -273,7 +273,7 @@ BOOST_FIXTURE_TEST_CASE(downloadVerifyCommitChain, EBSFixture)
         auto genesisHeader = EBSBaseHeader(
             0, 1600000000, bcos::h256{}, 30000000, EBSBaseFee);
         genesisHeader.gasUsed = 0;
-        auto genesisHash = bcos::devp2p::sync::headerHash(genesisHeader);
+        auto genesisHash = bcos::protocol::ethHeaderHash(genesisHeader);
         co_await EBSWriteBlockHash(backendStorage, 0, genesisHash);
         {
             storage::Entry entry;
@@ -553,7 +553,7 @@ BOOST_FIXTURE_TEST_CASE(downloadRejectsTamperedCommitment, EBSFixture)
 
         auto genesisHeader = EBSBaseHeader(0, 1600000000, bcos::h256{}, 30000000, EBSBaseFee);
         genesisHeader.gasUsed = 0;
-        auto genesisHash = bcos::devp2p::sync::headerHash(genesisHeader);
+        auto genesisHash = bcos::protocol::ethHeaderHash(genesisHeader);
         co_await EBSWriteBlockHash(backendStorage, 0, genesisHash);
         co_await EBSWriteCurrentNumber(backendStorage, 0);
         co_await EBSWriteSystemConfig(backendStorage,

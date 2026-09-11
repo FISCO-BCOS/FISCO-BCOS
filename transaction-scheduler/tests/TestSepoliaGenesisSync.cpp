@@ -244,7 +244,7 @@ BOOST_FIXTURE_TEST_CASE(loadSepoliaGenesisVerifyEmptyBlock, ESSFixture)
         ethHeader.parentInfo.blockNumber = 0;
         ethHeader.parentInfo.blockHash = genesisHash;
         ethHeader.difficulty = 0;
-        ethHeader.uncleHash = bcos::devp2p::sync::emptyOmmersHash();
+        ethHeader.uncleHash = bcos::protocol::c_emptyOmmersHash;
         ethHeader.gasLimit = 30000000;
         ethHeader.gasUsed = 0;
         ethHeader.baseFee = bcos::devp2p::sync::computeNextBaseFee(parentHeader);

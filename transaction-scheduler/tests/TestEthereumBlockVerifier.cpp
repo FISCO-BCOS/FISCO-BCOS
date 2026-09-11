@@ -109,6 +109,86 @@ task::Task<u256> EEBVReadBalance(Storage& storage, evmc_address const& addr)
     co_return co_await acc.balance();
 }
 
+evmc_address EEBVAddressFromHex(std::string_view hexAddr)
+{
+    evmc_address addr{};
+    bcos::bytes raw = bcos::fromHex(std::string(hexAddr));
+    std::copy(raw.begin(), raw.end(), addr.bytes);
+    return addr;
+}
+
+evmc::bytes32 EEBVBytes32FromU64(uint64_t value)
+{
+    evmc::bytes32 out{};
+    for (int i = 0; i < 8; ++i)
+    {
+        out.bytes[31 - i] = static_cast<uint8_t>((value >> (8 * i)) & 0xff);
+    }
+    return out;
+}
+
+evmc::bytes32 EEBVBytes32FromH256(bcos::h256 const& hash)
+{
+    evmc::bytes32 out{};
+    std::memcpy(out.bytes, hash.data(), sizeof(out.bytes));
+    return out;
+}
+
+/// Deploy contract code directly into the state (the way the system contracts got
+/// their code: ordinary pre-fork deployment transactions — the test shortcuts the
+/// deployment tx and writes the code row itself).
+task::Task<void> EEBVDeployCode(
+    EEBVBackendStorage& storage, evmc_address const& addr, bcos::bytes code)
+{
+    using namespace bcos::ledger::account;
+    EVMAccount<EEBVBackendStorage> acc(storage, addr, false);
+    if (!co_await acc.exists())
+    {
+        co_await acc.create();
+    }
+    auto codeHash = bcos::crypto::keccak256Hash(bcos::bytesConstRef(code.data(), code.size()));
+    co_await acc.setCode(std::move(code), std::string{}, codeHash);
+}
+
+template <class Storage>
+task::Task<void> EEBVWriteSlot(
+    Storage& storage, evmc_address const& addr, uint64_t slot, evmc::bytes32 const& value)
+{
+    using namespace bcos::ledger::account;
+    EVMAccount<std::remove_reference_t<Storage>> acc(storage, addr, false);
+    co_await acc.setStorage(EEBVBytes32FromU64(slot), value);
+}
+
+template <class Storage>
+task::Task<evmc::bytes32> EEBVReadSlot(Storage& storage, evmc_address const& addr, uint64_t slot)
+{
+    using namespace bcos::ledger::account;
+    EVMAccount<std::remove_reference_t<Storage>> acc(storage, addr, false);
+    co_return co_await acc.storage(EEBVBytes32FromU64(slot));
+}
+
+// EIP-4788 beacon-roots system contract (Cancun): the real deployed runtime code and
+// its spec slot layout — timestamp_idx = timestamp % HISTORY_BUFFER_LENGTH holds the
+// timestamp, timestamp_idx + HISTORY_BUFFER_LENGTH holds the parent beacon block root.
+constexpr std::string_view kEEBVBeaconRootsAddress = "000F3df6D732807Ef1319fB7B8bB8522d0Beac02";
+constexpr std::string_view kEEBVBeaconRootsCode =
+    "3373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f358015604957"
+    "62001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f35"
+    "9062001fff015500";
+// EIP-2935 history-storage system contract (Prague): runtime code from the EIP's
+// deployment transaction (initcode minus its 9-byte constructor prefix); slot
+// (number-1) % HISTORY_SERVE_WINDOW holds the parent block hash.
+constexpr std::string_view kEEBVHistoryStorageAddress = "0000F90827F1C53A10CB7A02335B175320002935";
+constexpr std::string_view kEEBVHistoryStorageCode =
+    "3373fffffffffffffffffffffffffffffffffffffffe14604657602036036042575f35600143038111604257"
+    "611fff81430311604257611fff9006545f5260205ff35b5f5ffd5b5f35611fff60014303065500";
+// EIP-7002 / EIP-7251 request contracts (Prague): a bare STOP stands in — the call
+// succeeds with empty output, so the contracts produce no requests and no state.
+constexpr std::string_view kEEBVWithdrawalRequestAddress = "00000961EF480EB55E80D19AD83579A64C007002";
+constexpr std::string_view kEEBVConsolidationRequestAddress =
+    "0000BBDDC7CE488642FB579F8B00F3A590007251";
+constexpr uint64_t kEEBVHistoryBufferLength = 8191;
+
 task::Task<void> EEBVWriteBlockHash(
     EEBVBackendStorage& storage, int64_t number, crypto::HashType const& hash)
 {
@@ -221,14 +301,9 @@ task::Task<crypto::HashType> EEBVXorStateRoot(View& view, uint32_t blockVersion,
     co_return totalHash;
 }
 
-/// Canonical empty-ommers-hash (keccak(rlp([]))), independent of the devp2p module.
-inline bcos::h256 EEBVEmptyOmmersHash()
-{
-    static const bcos::h256 hash = bcos::crypto::keccak256Hash(
-        bcos::bytesConstRef(reinterpret_cast<const bcos::byte*>("\xc0"), 1));
-    return hash;
-}
-
+/// A PoS header skeleton with placeholder roots (the caller fills in the real ones).
+/// The uncle hash is the shared canonical empty-ommers hash
+/// (bcos::protocol::c_emptyOmmersHash, bcos-rlp-protocol/EthBlockHeader.h).
 bcos::protocol::EthBlockHeaderData EEBVPoSHeader(int64_t number, int64_t timestamp,
     bcos::h256 parentHash, uint64_t gasLimit, bcos::u256 baseFee)
 {
@@ -238,7 +313,7 @@ bcos::protocol::EthBlockHeaderData EEBVPoSHeader(int64_t number, int64_t timesta
     header.parentInfo.blockNumber = number - 1;
     header.parentInfo.blockHash = parentHash;
     header.difficulty = 0;
-    header.uncleHash = EEBVEmptyOmmersHash();
+    header.uncleHash = bcos::protocol::c_emptyOmmersHash;
     header.gasLimit = gasLimit;
     header.gasUsed = 0;
     header.baseFee = baseFee;
@@ -588,6 +663,397 @@ BOOST_AUTO_TEST_CASE(tarsExecutionHeaderRoundTripPreservesRlp)
         "Tars round-trip hash mismatch: orig=" << origHash.hex()
                                                << " rebuilt=" << rebuiltHash.hex());
     BOOST_CHECK(orig == rebuiltRlp);
+}
+
+// Cancun+ block through verifyAndCommit: the EIP-4788 block-start system call must
+// write the parent beacon block root into the beacon-roots contract storage, and the
+// resulting state root must match a block produced with an INDEPENDENT application
+// of the EIP-4788 slot formula (manual slot writes on the production side — not the
+// same system-call code under test).
+BOOST_FIXTURE_TEST_CASE(cancunBeaconRootsSystemCallVerifies, EEBVFixture)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testEBVCancun");
+        SchedulerSerialImpl scheduler(ioServicePool);
+
+        auto sender = EEBVAddress(7);
+        auto recipient = EEBVAddress(0x21);
+        auto beaconRoots = EEBVAddressFromHex(kEEBVBeaconRootsAddress);
+
+        co_await EEBVFundAccount(backendStorage, sender, EEBVFunding);
+        co_await EEBVFundAccount(backendStorage, recipient, 0);
+        co_await EEBVDeployCode(
+            backendStorage, beaconRoots, bcos::fromHex(std::string(kEEBVBeaconRootsCode)));
+
+        auto genesisHash = cryptoSuite->hashImpl()->hash(std::string("genesis"));
+        co_await EEBVWriteBlockHash(backendStorage, 0, genesisHash);
+        co_await EEBVWriteCurrentNumber(backendStorage, 0);
+        co_await EEBVWriteSystemConfig(backendStorage,
+            std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version)),
+            std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
+        co_await EEBVWriteSystemConfig(backendStorage,
+            std::string(magic_enum::enum_name(ledger::SystemConfig::tx_gas_limit)), "30000000");
+
+        auto tx = EEBVMakeWeb3TransferTx(sender, recipient, 100, "0");
+        auto raw = bcostars::protocol::reassembleWeb3RawTransaction(
+            tx->extraTransactionBytes(), tx->signatureData());
+
+        const int64_t kTimestamp = 12345;  // seconds (the 4788 slot math uses seconds)
+        const uint64_t kGasLimit = 30000000;
+        const u256 kBaseFee(1000000000);
+        const bcos::h256 kParentBeaconRoot = cryptoSuite->hashImpl()->hash(std::string("beacon"));
+
+        // ---- Production side: execute, then apply the EIP-4788 write MANUALLY. ----
+        ledger::LedgerConfig prodConfig;
+        prodConfig.setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
+        prodConfig.setEVMCRevision(EVMC_CANCUN);
+        prodConfig.setGasLimit({kGasLimit, 1});
+        prodConfig.setGasPrice({"0x3b9aca00", 1});
+        prodConfig.setDifficulty(0);
+
+        bcostars::protocol::BlockHeaderImpl prodHeader;
+        prodHeader.setNumber(1);
+        prodHeader.setTimestamp(kTimestamp * 1000L);
+        prodHeader.setVersion(prodConfig.compatibilityVersion());
+        prodHeader.setParentInfo({0, genesisHash});
+        prodHeader.setGasLimit(u256(kGasLimit));
+        prodHeader.calculateHash(*cryptoSuite->hashImpl());
+
+        auto view = multiLayerStorage.fork();
+        view.newMutable();
+        std::vector<protocol::Transaction::Ptr> txs{tx};
+        auto receipts = co_await scheduler.executeBlock(
+            view, *executor, prodHeader, txs | ::ranges::views::indirect, prodConfig);
+        BOOST_REQUIRE_EQUAL(receipts.size(), 1u);
+        BOOST_CHECK_EQUAL(receipts[0]->status(), 0);
+
+        // The independent EIP-4788 application: slot ts%8191 <- timestamp,
+        // slot ts%8191+8191 <- parent beacon root.
+        const uint64_t timestampIdx =
+            static_cast<uint64_t>(kTimestamp) % kEEBVHistoryBufferLength;
+        co_await EEBVWriteSlot(view, beaconRoots, timestampIdx,
+            EEBVBytes32FromU64(static_cast<uint64_t>(kTimestamp)));
+        co_await EEBVWriteSlot(view, beaconRoots, timestampIdx + kEEBVHistoryBufferLength,
+            EEBVBytes32FromH256(kParentBeaconRoot));
+
+        auto computation =
+            co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
+                computeEthereumRoots(
+                    receipts, txs | ::ranges::views::indirect, std::vector<bcos::bytes>{raw});
+
+        auto parentHeader = EEBVPoSHeader(0, kTimestamp - 1, bcos::h256{}, kGasLimit, kBaseFee);
+        parentHeader.gasUsed = 0;
+        parentHeader.stateRoot = ledger::mpt::emptyRootHash();
+        parentHeader.txsRoot = ledger::mpt::emptyRootHash();
+        parentHeader.receiptsRoot = ledger::mpt::emptyRootHash();
+
+        auto stateRoot =
+            co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
+                computeMptStateRoot(view, parentHeader.stateRoot, prodConfig);
+
+        // The external Cancun header: blob-gas fields + parentBeaconRoot present.
+        auto ethHeader = EEBVPoSHeader(1, kTimestamp, genesisHash, kGasLimit, kBaseFee);
+        ethHeader.stateRoot = stateRoot;
+        ethHeader.txsRoot = computation.txsRoot;
+        ethHeader.receiptsRoot = computation.receiptsRoot;
+        ethHeader.gasUsed = computation.gasUsed;
+        ethHeader.logsBloom = computation.logsBloom;
+        ethHeader.prevRandao = bcos::h256{};
+        ethHeader.coinbase = bcos::Address{};
+        ethHeader.nonce = bcos::h64{};
+        ethHeader.blobGasUsed = u256(0);
+        ethHeader.excessBlobGas = u256(0);
+        ethHeader.parentBeaconRoot = kParentBeaconRoot;
+
+        auto fakeLedger = std::make_shared<bcos::test::FakeLedger>();
+        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor> verifier(
+            scheduler, *executor, *blockFactory);
+
+        scheduler_v1::EvmcForkTimestamps forks;
+        forks.londonTime = 0;
+        forks.parisTime = 0;
+        forks.shanghaiTime = 0;
+        forks.cancunTime = 0;  // Cancun active from genesis
+        forks.pragueTime = std::numeric_limits<uint64_t>::max();
+        forks.osakaTime = std::numeric_limits<uint64_t>::max();
+        auto decoder = [tx](bcos::bytes const&) -> protocol::Transaction::Ptr { return tx; };
+        using ViewType = EEBVMultiLayerStorage::ViewType;
+        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
+            StateRootCalculator<ViewType>
+                stateRootCalc = [](ViewType&, uint32_t) -> task::Task<crypto::HashType> {
+            BOOST_THROW_EXCEPTION(
+                std::runtime_error{"legacy state-root fold must not run for executor v2"});
+        };
+
+        auto result = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, ethHeader,
+            parentHeader, std::vector<bcos::bytes>{raw}, std::nullopt, forks, 1, {}, 0, decoder,
+            stateRootCalc);
+
+        BOOST_CHECK(result.valid);
+        BOOST_CHECK_MESSAGE(result.error.empty(), result.error);
+
+        // The committed state must carry the beacon-root write the system call made.
+        auto committedTs =
+            co_await EEBVReadSlot(multiLayerStorage.latestBackend(), beaconRoots, timestampIdx);
+        BOOST_CHECK(committedTs == EEBVBytes32FromU64(static_cast<uint64_t>(kTimestamp)));
+        auto committedRoot = co_await EEBVReadSlot(
+            multiLayerStorage.latestBackend(), beaconRoots, timestampIdx + kEEBVHistoryBufferLength);
+        BOOST_CHECK(committedRoot == EEBVBytes32FromH256(kParentBeaconRoot));
+    }());
+}
+
+// Robustness: a Cancun block on a chain where the beacon-roots contract code was never
+// deployed (the EIP-4788 "no code -> fail silently" case) must still verify — evmone
+// skips the call and the state root carries no beacon-root write.
+BOOST_FIXTURE_TEST_CASE(cancunBeaconRootsMissingCodeSkipsSilently, EEBVFixture)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testEBVCancunNoCode");
+        SchedulerSerialImpl scheduler(ioServicePool);
+
+        auto sender = EEBVAddress(7);
+        auto recipient = EEBVAddress(0x21);
+        auto beaconRoots = EEBVAddressFromHex(kEEBVBeaconRootsAddress);
+
+        co_await EEBVFundAccount(backendStorage, sender, EEBVFunding);
+        co_await EEBVFundAccount(backendStorage, recipient, 0);
+        // NOTE: no beacon-roots code deployed.
+
+        auto genesisHash = cryptoSuite->hashImpl()->hash(std::string("genesis"));
+        co_await EEBVWriteBlockHash(backendStorage, 0, genesisHash);
+        co_await EEBVWriteCurrentNumber(backendStorage, 0);
+        co_await EEBVWriteSystemConfig(backendStorage,
+            std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version)),
+            std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
+        co_await EEBVWriteSystemConfig(backendStorage,
+            std::string(magic_enum::enum_name(ledger::SystemConfig::tx_gas_limit)), "30000000");
+
+        auto tx = EEBVMakeWeb3TransferTx(sender, recipient, 100, "0");
+        auto raw = bcostars::protocol::reassembleWeb3RawTransaction(
+            tx->extraTransactionBytes(), tx->signatureData());
+
+        const int64_t kTimestamp = 12345;
+        const uint64_t kGasLimit = 30000000;
+        const u256 kBaseFee(1000000000);
+        const bcos::h256 kParentBeaconRoot = cryptoSuite->hashImpl()->hash(std::string("beacon"));
+
+        ledger::LedgerConfig prodConfig;
+        prodConfig.setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
+        prodConfig.setEVMCRevision(EVMC_CANCUN);
+        prodConfig.setGasLimit({kGasLimit, 1});
+        prodConfig.setGasPrice({"0x3b9aca00", 1});
+        prodConfig.setDifficulty(0);
+
+        bcostars::protocol::BlockHeaderImpl prodHeader;
+        prodHeader.setNumber(1);
+        prodHeader.setTimestamp(kTimestamp * 1000L);
+        prodHeader.setVersion(prodConfig.compatibilityVersion());
+        prodHeader.setParentInfo({0, genesisHash});
+        prodHeader.setGasLimit(u256(kGasLimit));
+        prodHeader.calculateHash(*cryptoSuite->hashImpl());
+
+        auto view = multiLayerStorage.fork();
+        view.newMutable();
+        std::vector<protocol::Transaction::Ptr> txs{tx};
+        auto receipts = co_await scheduler.executeBlock(
+            view, *executor, prodHeader, txs | ::ranges::views::indirect, prodConfig);
+        BOOST_REQUIRE_EQUAL(receipts.size(), 1u);
+        // No manual 4788 write: the contract has no code, so the real block carries none.
+        auto computation =
+            co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
+                computeEthereumRoots(
+                    receipts, txs | ::ranges::views::indirect, std::vector<bcos::bytes>{raw});
+
+        auto parentHeader = EEBVPoSHeader(0, kTimestamp - 1, bcos::h256{}, kGasLimit, kBaseFee);
+        parentHeader.gasUsed = 0;
+        parentHeader.stateRoot = ledger::mpt::emptyRootHash();
+        parentHeader.txsRoot = ledger::mpt::emptyRootHash();
+        parentHeader.receiptsRoot = ledger::mpt::emptyRootHash();
+
+        auto stateRoot =
+            co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
+                computeMptStateRoot(view, parentHeader.stateRoot, prodConfig);
+
+        auto ethHeader = EEBVPoSHeader(1, kTimestamp, genesisHash, kGasLimit, kBaseFee);
+        ethHeader.stateRoot = stateRoot;
+        ethHeader.txsRoot = computation.txsRoot;
+        ethHeader.receiptsRoot = computation.receiptsRoot;
+        ethHeader.gasUsed = computation.gasUsed;
+        ethHeader.logsBloom = computation.logsBloom;
+        ethHeader.blobGasUsed = u256(0);
+        ethHeader.excessBlobGas = u256(0);
+        ethHeader.parentBeaconRoot = kParentBeaconRoot;
+
+        auto fakeLedger = std::make_shared<bcos::test::FakeLedger>();
+        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor> verifier(
+            scheduler, *executor, *blockFactory);
+        scheduler_v1::EvmcForkTimestamps forks;
+        forks.londonTime = 0;
+        forks.parisTime = 0;
+        forks.shanghaiTime = 0;
+        forks.cancunTime = 0;
+        forks.pragueTime = std::numeric_limits<uint64_t>::max();
+        forks.osakaTime = std::numeric_limits<uint64_t>::max();
+        auto decoder = [tx](bcos::bytes const&) -> protocol::Transaction::Ptr { return tx; };
+        using ViewType = EEBVMultiLayerStorage::ViewType;
+        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
+            StateRootCalculator<ViewType>
+                stateRootCalc = [](ViewType&, uint32_t) -> task::Task<crypto::HashType> {
+            BOOST_THROW_EXCEPTION(
+                std::runtime_error{"legacy state-root fold must not run for executor v2"});
+        };
+
+        auto result = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, ethHeader,
+            parentHeader, std::vector<bcos::bytes>{raw}, std::nullopt, forks, 1, {}, 0, decoder,
+            stateRootCalc);
+
+        BOOST_CHECK(result.valid);
+        BOOST_CHECK_MESSAGE(result.error.empty(), result.error);
+        // The beacon-roots account must NOT have appeared in the committed state.
+        auto committedTs = co_await EEBVReadSlot(multiLayerStorage.latestBackend(), beaconRoots,
+            static_cast<uint64_t>(kTimestamp) % kEEBVHistoryBufferLength);
+        BOOST_CHECK(committedTs == evmc::bytes32{});
+    }());
+}
+
+// Prague block through verifyAndCommit: block-start runs BOTH EIP-4788 and EIP-2935
+// (the parent block hash lands in the history-storage contract), and block-end runs
+// EIP-7002/7251 (bare-STOP stand-ins: succeed with empty output, no state). The state
+// root is cross-checked against independent manual slot applications.
+BOOST_FIXTURE_TEST_CASE(pragueSystemCallsVerify, EEBVFixture)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testEBVPrague");
+        SchedulerSerialImpl scheduler(ioServicePool);
+
+        auto sender = EEBVAddress(7);
+        auto recipient = EEBVAddress(0x21);
+        auto beaconRoots = EEBVAddressFromHex(kEEBVBeaconRootsAddress);
+        auto historyStorage = EEBVAddressFromHex(kEEBVHistoryStorageAddress);
+
+        co_await EEBVFundAccount(backendStorage, sender, EEBVFunding);
+        co_await EEBVFundAccount(backendStorage, recipient, 0);
+        co_await EEBVDeployCode(
+            backendStorage, beaconRoots, bcos::fromHex(std::string(kEEBVBeaconRootsCode)));
+        co_await EEBVDeployCode(
+            backendStorage, historyStorage, bcos::fromHex(std::string(kEEBVHistoryStorageCode)));
+        co_await EEBVDeployCode(backendStorage,
+            EEBVAddressFromHex(kEEBVWithdrawalRequestAddress), bcos::bytes{0x00});
+        co_await EEBVDeployCode(backendStorage,
+            EEBVAddressFromHex(kEEBVConsolidationRequestAddress), bcos::bytes{0x00});
+
+        auto genesisHash = cryptoSuite->hashImpl()->hash(std::string("genesis"));
+        co_await EEBVWriteBlockHash(backendStorage, 0, genesisHash);
+        co_await EEBVWriteCurrentNumber(backendStorage, 0);
+        co_await EEBVWriteSystemConfig(backendStorage,
+            std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version)),
+            std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
+        co_await EEBVWriteSystemConfig(backendStorage,
+            std::string(magic_enum::enum_name(ledger::SystemConfig::tx_gas_limit)), "30000000");
+
+        auto tx = EEBVMakeWeb3TransferTx(sender, recipient, 100, "0");
+        auto raw = bcostars::protocol::reassembleWeb3RawTransaction(
+            tx->extraTransactionBytes(), tx->signatureData());
+
+        const int64_t kTimestamp = 12345;
+        const uint64_t kGasLimit = 30000000;
+        const u256 kBaseFee(1000000000);
+        const bcos::h256 kParentBeaconRoot = cryptoSuite->hashImpl()->hash(std::string("beacon"));
+
+        ledger::LedgerConfig prodConfig;
+        prodConfig.setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
+        prodConfig.setEVMCRevision(EVMC_PRAGUE);
+        prodConfig.setGasLimit({kGasLimit, 1});
+        prodConfig.setGasPrice({"0x3b9aca00", 1});
+        prodConfig.setDifficulty(0);
+
+        bcostars::protocol::BlockHeaderImpl prodHeader;
+        prodHeader.setNumber(1);
+        prodHeader.setTimestamp(kTimestamp * 1000L);
+        prodHeader.setVersion(prodConfig.compatibilityVersion());
+        prodHeader.setParentInfo({0, genesisHash});
+        prodHeader.setGasLimit(u256(kGasLimit));
+        prodHeader.calculateHash(*cryptoSuite->hashImpl());
+
+        auto view = multiLayerStorage.fork();
+        view.newMutable();
+        std::vector<protocol::Transaction::Ptr> txs{tx};
+        auto receipts = co_await scheduler.executeBlock(
+            view, *executor, prodHeader, txs | ::ranges::views::indirect, prodConfig);
+        BOOST_REQUIRE_EQUAL(receipts.size(), 1u);
+        BOOST_CHECK_EQUAL(receipts[0]->status(), 0);
+
+        // Independent EIP-4788 + EIP-2935 applications on the production side.
+        const uint64_t timestampIdx =
+            static_cast<uint64_t>(kTimestamp) % kEEBVHistoryBufferLength;
+        co_await EEBVWriteSlot(view, beaconRoots, timestampIdx,
+            EEBVBytes32FromU64(static_cast<uint64_t>(kTimestamp)));
+        co_await EEBVWriteSlot(view, beaconRoots, timestampIdx + kEEBVHistoryBufferLength,
+            EEBVBytes32FromH256(kParentBeaconRoot));
+        // EIP-2935: slot (number-1) % 8191 <- parent block hash (block 1 -> slot 0).
+        co_await EEBVWriteSlot(view, historyStorage, 0, EEBVBytes32FromH256(genesisHash));
+
+        auto computation =
+            co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
+                computeEthereumRoots(
+                    receipts, txs | ::ranges::views::indirect, std::vector<bcos::bytes>{raw});
+
+        auto parentHeader = EEBVPoSHeader(0, kTimestamp - 1, bcos::h256{}, kGasLimit, kBaseFee);
+        parentHeader.gasUsed = 0;
+        parentHeader.stateRoot = ledger::mpt::emptyRootHash();
+        parentHeader.txsRoot = ledger::mpt::emptyRootHash();
+        parentHeader.receiptsRoot = ledger::mpt::emptyRootHash();
+
+        auto stateRoot =
+            co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
+                computeMptStateRoot(view, parentHeader.stateRoot, prodConfig);
+
+        auto ethHeader = EEBVPoSHeader(1, kTimestamp, genesisHash, kGasLimit, kBaseFee);
+        ethHeader.stateRoot = stateRoot;
+        ethHeader.txsRoot = computation.txsRoot;
+        ethHeader.receiptsRoot = computation.receiptsRoot;
+        ethHeader.gasUsed = computation.gasUsed;
+        ethHeader.logsBloom = computation.logsBloom;
+        ethHeader.prevRandao = bcos::h256{};
+        ethHeader.coinbase = bcos::Address{};
+        ethHeader.nonce = bcos::h64{};
+        ethHeader.blobGasUsed = u256(0);
+        ethHeader.excessBlobGas = u256(0);
+        ethHeader.parentBeaconRoot = kParentBeaconRoot;
+
+        auto fakeLedger = std::make_shared<bcos::test::FakeLedger>();
+        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor> verifier(
+            scheduler, *executor, *blockFactory);
+        scheduler_v1::EvmcForkTimestamps forks;
+        forks.londonTime = 0;
+        forks.parisTime = 0;
+        forks.shanghaiTime = 0;
+        forks.cancunTime = 0;
+        forks.pragueTime = 0;  // Prague active from genesis
+        forks.osakaTime = std::numeric_limits<uint64_t>::max();
+        auto decoder = [tx](bcos::bytes const&) -> protocol::Transaction::Ptr { return tx; };
+        using ViewType = EEBVMultiLayerStorage::ViewType;
+        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
+            StateRootCalculator<ViewType>
+                stateRootCalc = [](ViewType&, uint32_t) -> task::Task<crypto::HashType> {
+            BOOST_THROW_EXCEPTION(
+                std::runtime_error{"legacy state-root fold must not run for executor v2"});
+        };
+
+        auto result = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, ethHeader,
+            parentHeader, std::vector<bcos::bytes>{raw}, std::nullopt, forks, 1, {}, 0, decoder,
+            stateRootCalc);
+
+        BOOST_CHECK(result.valid);
+        BOOST_CHECK_MESSAGE(result.error.empty(), result.error);
+
+        auto committedRoot = co_await EEBVReadSlot(
+            multiLayerStorage.latestBackend(), beaconRoots, timestampIdx + kEEBVHistoryBufferLength);
+        BOOST_CHECK(committedRoot == EEBVBytes32FromH256(kParentBeaconRoot));
+        auto committedParentHash =
+            co_await EEBVReadSlot(multiLayerStorage.latestBackend(), historyStorage, 0);
+        BOOST_CHECK(committedParentHash == EEBVBytes32FromH256(genesisHash));
+    }());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

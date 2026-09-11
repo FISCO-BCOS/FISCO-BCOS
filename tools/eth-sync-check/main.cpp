@@ -504,7 +504,7 @@ void runGenesisIniCheck(std::string const& path, std::optional<std::string> cons
         h.excessBlobGas = eth->m_excessBlobGas;
         h.parentBeaconRoot = eth->m_parentBeaconBlockRoot;
         h.requestsHash = eth->m_requestsHash;
-        auto computed = headerHash(h);
+        auto computed = bcos::protocol::ethHeaderHash(h);
         report("genesis header hash match", computed == eth->m_hash,
             computed.hex() + " vs " + eth->m_hash.hex());
     }
@@ -631,7 +631,7 @@ int main(int argc, char** argv)
         // 1. Header RLP re-encoding: keccak(rlp(header)) must equal the canonical hash.
         auto canonical = crypto::HashType(std::string_view(stripHexPrefix((*block)["hash"].asString())),
             crypto::HashType::FromHex);
-        report("header hash", headerHash(h) == canonical);
+        report("header hash", bcos::protocol::ethHeaderHash(h) == canonical);
 
         // 2. PoS header field rules against the parent (base fee, gas limit, timestamp...),
         //    plus the EIP-1559 base-fee recomputation from the PARENT.

@@ -133,8 +133,8 @@ inline constexpr std::size_t c_maxForcedTxBytes = 8 * 1024 * 1024;
 /// keccak256(rlp(header))-critical values, so the literals must live in exactly one place.
 /// The empty-requests hash is single-sourced cross-layer too: its hex lives in the
 /// framework (c_emptyRequestsHashHex) because the OP block seal stamps the same value.
-inline const bcos::h256 c_emptyOmmersHash{
-    std::string{"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"}};
+/// The empty-ommers hash is single-sourced one layer down, in bcos-rlp-protocol
+/// (bcos::protocol::c_emptyOmmersHash, EthBlockHeader.h) — call sites use it directly.
 inline const bcos::h64 c_posNonce{std::string{"0x0000000000000000"}};
 inline const bcos::h256 c_emptyRequestsHash{std::string{c_emptyRequestsHashHex}};
 

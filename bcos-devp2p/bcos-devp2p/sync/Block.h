@@ -19,7 +19,6 @@
  */
 #pragma once
 
-#include "../rlpx/Crypto.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rlp-protocol/EthWithdrawal.h>
@@ -47,20 +46,7 @@ struct Block
     bool hasWithdrawals() const { return withdrawals.has_value(); }
 };
 
-// Canonical empty-ommers-hash (keccak256(rlp([]))), used on every PoS block.
-inline bcos::h256 emptyOmmersHash()
-{
-    static const bcos::h256 hash = bcos::crypto::keccak256Hash(
-        bcos::bytesConstRef(reinterpret_cast<const bcos::byte*>("\xc0"), 1));
-    return hash;
-}
-
-// keccak256 of the canonical RLP encoding of an Ethereum header.
-inline bcos::h256 headerHash(bcos::protocol::EthBlockHeaderData const& _header)
-{
-    bcos::bytes rlp;
-    bcos::codec::rlp::encode(rlp, _header);
-    return bcos::crypto::keccak256Hash(
-        bcos::bytesConstRef(rlp.data(), rlp.size()));
-}
+// The canonical empty-ommers hash and the header-hash function are single-sourced in
+// bcos-rlp-protocol (bcos::protocol::c_emptyOmmersHash / bcos::protocol::ethHeaderHash,
+// EthBlockHeader.h) — they used to be local copies here.
 }  // namespace bcos::devp2p::sync

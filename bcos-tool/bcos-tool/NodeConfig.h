@@ -230,8 +230,6 @@ public:
     // from RLPx bootnodes, verifies them with EthereumBlockVerifier and commits them
     // locally — no FISCO gateway / PBFT / txpool pipeline.
     bool ethereumELModeEnabled() const;
-    const std::string& ethereumListenIP() const;
-    uint16_t ethereumListenPort() const;
     // path to the bootnodes file (enode:// list, geth-style); default ./bootnodes.json
     const std::string& ethereumBootnodesFile() const;
     // path to a file holding the 32-byte secp256k1 node private key (hex, optional
@@ -604,8 +602,6 @@ private:
 
     // config for Ethereum L1 EL-mode self-sync ([ethereum] in config.ini)
     bool m_enableEthereumEL = false;
-    std::string m_ethereumListenIP = "0.0.0.0";
-    uint16_t m_ethereumListenPort = 30303;
     std::string m_ethereumBootnodesFile = "./bootnodes.json";
     std::string m_ethereumNodeKeyFile;
     uint32_t m_ethereumMaxBatchSize = 192;

@@ -220,6 +220,21 @@ BOOST_AUTO_TEST_CASE(rlpHashFormula)
     BOOST_CHECK(header->hash() == expected);
 }
 
+// The single-sourced header hash helpers (used by devp2p sync, the block verifier and
+// the engine header builders): c_emptyOmmersHash is keccak256(0xc0) — the canonical
+// value every PoS header carries — and ethHeaderHash is keccak256(rlp(data)).
+BOOST_AUTO_TEST_CASE(sharedHeaderHashHelpers)
+{
+    BOOST_CHECK_EQUAL(c_emptyOmmersHash.hex(),
+        std::string("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"));
+
+    auto header = makeEthHeader();
+    EthBlockHeader ethHeader(*header);
+    bytes rlp;
+    ethHeader.rlpEncode(rlp);
+    BOOST_CHECK(ethHeaderHash(ethHeader.data()) == crypto::keccak256Hash(bcos::ref(rlp)));
+}
+
 // Prague-shaped golden vector: all five optional fork fields present, so the RLP list
 // carries 21 items (through requestsHash). The encoding must round-trip all optional fields
 // losslessly.

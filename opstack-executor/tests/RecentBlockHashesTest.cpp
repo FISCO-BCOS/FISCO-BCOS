@@ -5,7 +5,7 @@
 // semantics): the range guards, the {N-1: parentHash} seed, the SYS_NUMBER_2_HASH lookup, the
 // value-length poison channel, and the cache short-circuit on repeat queries.
 
-#include <opstack-executor/RecentBlockHashes.h>
+#include <bcos-evm/adapter/RecentBlockHashes.h>
 
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/MemoryStorage.h>

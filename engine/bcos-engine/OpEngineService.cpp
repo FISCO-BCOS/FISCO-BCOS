@@ -21,6 +21,7 @@
 
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-framework/engine/RawTransactionDispatch.h>
+#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <limits>
@@ -73,7 +74,7 @@ std::optional<bcostars::Transaction> opEnvelopeToTars(
 
 void applyOpHeaderConstants(bcos::protocol::BlockHeader& header)
 {
-    header.setUncleHash(engine_common::c_emptyOmmersHash);
+    header.setUncleHash(bcos::protocol::c_emptyOmmersHash);
     header.setDifficulty(bcos::u256(0));
     header.setNonce(engine_common::c_posNonce);
 }

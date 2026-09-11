@@ -3,6 +3,10 @@
 #pragma once
 
 // Storage2State — evmone::state::StateView over the storage2 (StateKey/EVMAccount) key space.
+// Lives in the bcos-evm adapter layer (moved out of opstack-executor) so every
+// production execution path that needs the evmone StateView/StateDiff surface can share
+// the one bridge: the OP block path (OpBlockExecute / OpScheduler) and the Ethereum
+// external-block verifier's Cancun/Prague system calls (EthereumSystemCalls.h).
 // One instance per block, single-threaded (mutable caches, no locks). The shared block-wide
 // error slot (dbErr analogue) is the one cross-instance state and is deliberately mutex-guarded
 // (SharedErrorSlot): part-3 parallel execution shares one slot across per-tx instances, and
@@ -29,7 +33,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <opstack-executor/Storage2StateHelpers.h>
+#include <bcos-evm/adapter/Storage2StateHelpers.h>
 #include <bcos-evm/eth/state/hash_utils.hpp>
 #include <bcos-evm/eth/state/state_diff.hpp>
 #include <bcos-evm/eth/state/state_view.hpp>

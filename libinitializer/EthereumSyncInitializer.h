@@ -37,6 +37,7 @@
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-transaction-scheduler/EthereumBlockVerifier.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
+#include "bcos-rlp-protocol/EthBlockHeader.h"
 #include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"  // complete type for shared_ptr upcast in decodeRaw()
 #include "bcos-task/Wait.h"
@@ -144,7 +145,6 @@ public:
         m_localKey = std::move(localKey);
         INITIALIZER_LOG(INFO) << LOG_DESC("EL sync: starting self-sync loop")
                               << LOG_KV("bootnodes", m_nodeConfig->ethereumBootnodesFile())
-                              << LOG_KV("listenPort", m_nodeConfig->ethereumListenPort())
                               << LOG_KV("maxBatch", m_nodeConfig->ethereumMaxBatchSize());
         m_thread = std::thread([this]() { syncLoop(); });
     }
@@ -248,7 +248,7 @@ private:
         INITIALIZER_LOG(INFO) << LOG_DESC("EL sync: resuming from local head")
                               << LOG_KV("headNumber", current)
                               << LOG_KV("headHash",
-                                  bcos::devp2p::sync::headerHash(head).hex().substr(0, 18))
+                                  bcos::protocol::ethHeaderHash(head).hex().substr(0, 18))
                               << LOG_KV("resumeFrom", current + 1);
         return {
             static_cast<uint64_t>(current + 1), head, head, genesisHeader};
@@ -486,7 +486,7 @@ private:
         // re-encodes to the byte-exact committed RLP (the same invariant the resume
         // anchor relies on), so this hash IS the committed Ethereum block hash.
         bcos::protocol::EthBlockHeader localHeader(*block->blockHeader());
-        auto const localHash = bcos::devp2p::sync::headerHash(localHeader.data());
+        auto const localHash = bcos::protocol::ethHeaderHash(localHeader.data());
         if (localHash != _checkpoint.hash)
         {
             INITIALIZER_LOG(FATAL)
@@ -607,8 +607,8 @@ private:
                         auto clientConfig = peer;
                         clientConfig.clientId = "FISCO-BCOS-EL/v0.1.0";
                         clientConfig.networkId = chainId;
-                        clientConfig.genesisHash = bcos::devp2p::sync::headerHash(genesisHeader);
-                        clientConfig.headHash = bcos::devp2p::sync::headerHash(anchor);
+                        clientConfig.genesisHash = bcos::protocol::ethHeaderHash(genesisHeader);
+                        clientConfig.headHash = bcos::protocol::ethHeaderHash(anchor);
                         // totalDifficulty: minimal big-endian u256(0). An EMPTY byte
                         // string RLP-encodes as 0x80 (the canonical RLP integer 0); a
                         // single {0} would encode as 0x00 (non-canonical, rejected by

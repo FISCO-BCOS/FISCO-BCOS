@@ -345,7 +345,7 @@ inline HeaderValidationResult validateHeaderPoS(
         {
             return {false, "PoS nonce must be zero"};
         }
-        if (_header.uncleHash != emptyOmmersHash())
+        if (_header.uncleHash != bcos::protocol::c_emptyOmmersHash)
         {
             return {false, "PoS blocks must have no ommers"};
         }

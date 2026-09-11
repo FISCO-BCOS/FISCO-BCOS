@@ -44,7 +44,7 @@ PoSPair makeValidPair()
     parent.number = 1;
     parent.timestamp = 1600000000;
     parent.difficulty = 0;
-    parent.uncleHash = emptyOmmersHash();
+    parent.uncleHash = bcos::protocol::c_emptyOmmersHash;
     parent.gasLimit = 30000000;
     parent.gasUsed = 21000;
     parent.baseFee = u256(1000000000);
@@ -55,7 +55,7 @@ PoSPair makeValidPair()
     child.number = 2;
     child.timestamp = 1600000001;
     child.difficulty = 0;
-    child.uncleHash = emptyOmmersHash();
+    child.uncleHash = bcos::protocol::c_emptyOmmersHash;
     child.gasLimit = 30000000;
     child.gasUsed = 21000;
     child.baseFee = computeNextBaseFee(parent);  // 875175000 (golden)

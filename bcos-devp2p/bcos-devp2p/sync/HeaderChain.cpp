@@ -37,7 +37,7 @@ HeaderChain::HeaderChain(uint64_t _nextNumber,
     bcos::protocol::EthBlockHeaderData _anchorHeader, ChainConfig const& _config,
     uint64_t _maxHeadersPerRequest)
   : m_nextNumber(_nextNumber),
-    m_anchorHash(headerHash(_anchorHeader)),
+    m_anchorHash(bcos::protocol::ethHeaderHash(_anchorHeader)),
     m_anchorHeader(std::move(_anchorHeader)),
     m_config(_config),
     m_maxHeadersPerRequest(_maxHeadersPerRequest)

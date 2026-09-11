@@ -21,7 +21,7 @@
 #include "ethereum-executor/EVMSupport.h"
 #include "opstack-executor/OpCommon.h"  // detail::narrowU256ToU64 / toEvmcAddress / toEvmcBytes32
 #include "opstack-executor/OpDepositEncode.h"  // detail::encodeRlpItem (call-path sizing envelope)
-#include "opstack-executor/Storage2State.h"    // Storage2State / SharedErrorSlot
+#include <bcos-evm/adapter/Storage2State.h>    // Storage2State / SharedErrorSlot
 #include <bcos-codec/rlp/Common.h>     // BYTES_HEAD_BASE (consensus deposit-envelope decode)
 #include <bcos-codec/rlp/RLPDecode.h>  // decodeHeader / decode / decodeItems
 #include <bcos-rlp-protocol/Web3TxEnvelope.h>   // isTypedWeb3Envelope (header-only)

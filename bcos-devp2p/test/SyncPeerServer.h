@@ -48,7 +48,7 @@ inline std::vector<sync::Block> makeTestChain(size_t _count)
         // header round-trips compare equal.
         header.parentInfo.blockNumber = 0;
         header.parentInfo.blockHash = parentHash;
-        header.uncleHash = sync::emptyOmmersHash();
+        header.uncleHash = bcos::protocol::c_emptyOmmersHash;
         header.coinbase = bcos::Address{};
         header.stateRoot = bcos::crypto::HashType(
             std::string_view("0x1111111111111111111111111111111111111111111111111111111111111111"),

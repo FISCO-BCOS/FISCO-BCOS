@@ -536,7 +536,7 @@ bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev)
 void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const ExecutionPayload& payload,
     std::optional<bcos::h256> parentBeaconBlockRoot, bcos::protocol::EthBlockVersion forkVersion)
 {
-    header.setUncleHash(engine_common::c_emptyOmmersHash);
+    header.setUncleHash(bcos::protocol::c_emptyOmmersHash);
     header.setDifficulty(bcos::u256(0));
     header.setNonce(engine_common::c_posNonce);
 

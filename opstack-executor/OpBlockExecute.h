@@ -24,8 +24,8 @@
 #include <opstack-executor/OpCommon.h>
 // toBlockInfo / narrowU256ToU64 / toEvmcBytes32 / OpBlockSeal
 #include <opstack-executor/OpstackExecutor.h>
-#include <opstack-executor/RecentBlockHashes.h>
-#include <opstack-executor/Storage2State.h>
+#include <bcos-evm/adapter/RecentBlockHashes.h>
+#include <bcos-evm/adapter/Storage2State.h>
 #include <algorithm>
 #include <array>
 #include <bcos-evm/eth/state/bloom_filter.hpp>

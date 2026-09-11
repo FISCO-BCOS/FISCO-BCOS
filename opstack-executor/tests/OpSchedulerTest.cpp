@@ -14,7 +14,7 @@
 #include <opstack-executor/OpDepositEncode.h>  // encodeDepositEnvelope
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerSeam.h>
-#include <opstack-executor/Storage2StateHelpers.h>  // accountTableName (corrupt-slot seeding)
+#include <bcos-evm/adapter/Storage2StateHelpers.h>  // accountTableName (corrupt-slot seeding)
 
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>

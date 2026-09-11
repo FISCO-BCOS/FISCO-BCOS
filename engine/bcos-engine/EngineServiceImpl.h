@@ -1091,7 +1091,9 @@ private:
         //    trie over each transaction's EIP-2718 wire bytes and to the receipts trie over
         //    EthReceipt RLP. Raw-only entries (forced transactions from the OP attributes
         //    list) participate in txsRoot via their raw bytes but have no receipt.
-        //  - legacy: Merkle over tx / receipt hashes (unchanged).
+        //  - legacy: Merkle over tx / receipt hashes; both roots default to the
+        //    empty-trie root (see the branch below) so a payload with no executable
+        //    transactions still passes validateHeader.
         h256 txRoot;
         h256 receiptRoot;
         u256 totalGasUsed;
@@ -1121,6 +1123,12 @@ private:
             }
 
             auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
+            // Default both roots to the canonical empty-trie root, not the all-zero hash:
+            // a payload of only raw-only forced transactions (OP deposits) has no
+            // executable transactions and no receipts, and finalizeEthBlockHeader goes
+            // through EthBlockHeader::calculateRLPHash -> validateHeader, which rejects
+            // a zero receiptsRoot/txsRoot (same reason as the empty-block branch above).
+            txRoot = bcos::ledger::mpt::emptyRootHash();
             auto hasher = hashImpl.hasher();
             crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(
                 hasher.clone());
@@ -1142,6 +1150,7 @@ private:
                 }
             }
 
+            receiptRoot = bcos::ledger::mpt::emptyRootHash();
             auto receiptHasher = hashImpl.hasher();
             crypto::merkle::Merkle<std::remove_reference_t<decltype(receiptHasher)>>
                 receiptMerkle(receiptHasher.clone());

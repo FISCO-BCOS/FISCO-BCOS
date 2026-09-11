@@ -1033,8 +1033,6 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
         ; FISCO gateway / PBFT / txpool pipeline. Any other value (or absent
         ; section) leaves the node in the normal FISCO mode.
         mode=none
-        listen_ip=0.0.0.0
-        listen_port=30303
         ; geth-style enode:// list; path relative to the working directory
         bootnodes_file=./bootnodes.json
         ; secp256k1 node identity: a file holding the 32-byte private key as hex
@@ -1086,14 +1084,6 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     // chain_id) in validateL2Invariants, and the config.ini->config.genesis
     // direction in validateELModeInvariants, which the node initializers call
     // after BOTH files are loaded.
-    m_ethereumListenIP = _pt.get<std::string>("ethereum.listen_ip", "0.0.0.0");
-    int listenPort = _pt.get<int>("ethereum.listen_port", 30303);
-    if (!isValidPort(listenPort))
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "ethereum.listen_port invalid: " + std::to_string(listenPort)));
-    }
-    m_ethereumListenPort = static_cast<uint16_t>(listenPort);
     m_ethereumBootnodesFile = _pt.get<std::string>("ethereum.bootnodes_file", "./bootnodes.json");
     m_ethereumNodeKeyFile = _pt.get<std::string>("ethereum.node_key_file", "");
     uint32_t maxBatch = _pt.get<uint32_t>("ethereum.max_batch_size", 192);
@@ -1148,8 +1138,6 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     }
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadEthereumConfig") << LOG_KV("mode", mode)
-                         << LOG_KV("listenIP", m_ethereumListenIP)
-                         << LOG_KV("listenPort", m_ethereumListenPort)
                          << LOG_KV("bootnodesFile", m_ethereumBootnodesFile)
                          << LOG_KV("nodeKeyFile", m_ethereumNodeKeyFile)
                          << LOG_KV("maxBatchSize", m_ethereumMaxBatchSize)
@@ -3369,14 +3357,6 @@ std::map<protocol::BlockNumber, evmc_revision> const& bcos::tool::NodeConfig::ev
 bool bcos::tool::NodeConfig::ethereumELModeEnabled() const
 {
     return m_enableEthereumEL;
-}
-const std::string& bcos::tool::NodeConfig::ethereumListenIP() const
-{
-    return m_ethereumListenIP;
-}
-uint16_t bcos::tool::NodeConfig::ethereumListenPort() const
-{
-    return m_ethereumListenPort;
 }
 const std::string& bcos::tool::NodeConfig::ethereumBootnodesFile() const
 {

@@ -28,9 +28,6 @@
 [ethereum]
     ; EL mode: none (default) = normal FISCO node; el = Ethereum L1 execution layer
     mode=el
-    ; RLPx listen address/port (the Ethereum devp2p protocol, NOT the FISCO gateway)
-    listen_ip=0.0.0.0
-    listen_port=30303
     ; geth-style bootnodes file (a JSON array of enode:// strings); see bootnodes.json
     ;
     ; TRUST MODEL: the bootnodes list is the trust root for chain data. The node
