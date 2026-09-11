@@ -117,6 +117,7 @@ void EndpointsMapping::addEthHandlers()
     m_handlers[methodString(EthMethod::eth_maxPriorityFeePerGas)] = &Endpoints::maxPriorityFeePerGas;
     m_handlers[methodString(EthMethod::eth_getProof)] = &Endpoints::getProof;
     m_handlers[methodString(EthMethod::eth_feeHistory)] = &Endpoints::feeHistory;
+    m_handlers[methodString(EthMethod::eth_config)] = &Endpoints::ethConfig;
     m_handlers[methodString(EthMethod::miner_setMaxDASize)] = &Endpoints::setMaxDASize;
     // clang-format on
 }

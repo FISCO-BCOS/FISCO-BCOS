@@ -42,6 +42,10 @@ set_source_files_properties("unittests/rpc/RpcReadHandlersTest.cpp" PROPERTIES S
 set_source_files_properties(
     "unittests/rpc/EthGetProofIntegrationTest.cpp" "unittests/rpc/FullChainFixtureInst.cpp"
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+# EthConfigTest.cpp's `using namespace bcos::rpc` + EndpointsMapping pulls the fake
+# testutils headers whose ConsensusNodeList collides under unity; compile it standalone.
+set_source_files_properties("unittests/rpc/EthConfigTest.cpp"
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 #add_test(NAME ${TEST_BINARY_NAME} WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "" "")

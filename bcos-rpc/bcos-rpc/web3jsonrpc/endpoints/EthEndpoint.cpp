@@ -26,6 +26,7 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-mempool/MemPoolImpl.h"
 #include "bcos-protocol/TransactionStatus.h"
+#include "bcos-rpc/web3jsonrpc/utils/EthConfig.h"
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-executor/src/Common.h>
@@ -116,6 +117,36 @@ task::Task<void> EthEndpoint::chainId(const Json::Value&, Json::Value& response)
     {
         result = "0x0";  // 0 for default
     }
+    buildJsonContent(result, response);
+}
+task::Task<void> EthEndpoint::ethConfig(const Json::Value&, Json::Value& response)
+{
+    // EIP-7910 `eth_config`: the node's fork configuration. No params.
+    auto const ledger = m_nodeService->ledger();
+    if (!ledger)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(JsonRpcError::InternalError, "Ledger not available!"));
+    }
+    auto const ledgerConfig = co_await ledger::getLedgerConfig(*ledger);
+    uint64_t chainId = 0;
+    if (ledgerConfig->chainId().has_value())
+    {
+        chainId = static_cast<uint64_t>(fromEvmC(ledgerConfig->chainId().value()));
+    }
+    auto const revision = ledgerConfig->evmcRevision().value_or(EVMC_CANCUN);
+    // L2 mode is the chain's canonical flag (the same source eth_feeHistory / getProof use),
+    // not the DA-cap object which merely coincides with OP mode today.
+    auto const opL2 = co_await ledger::getFeature(
+        *ledger, ledger::Features::Flag::feature_l2_ethereum_compat, ledgerConfig->blockNumber());
+    // EIP-2124 fork id from the genesis (block 0) hash. FISCO has no block- or
+    // timestamp-activated fork list at the RPC layer, so the fork set is the genesis (0).
+    std::string forkIdHex = "0x00000000";
+    if (auto genesis = co_await ledger::getBlockData(*ledger, 0, bcos::ledger::HEADER))
+    {
+        forkIdHex = ethForkIdHex(genesis->blockHeader()->hash().hexPrefixed(), {0});
+    }
+    auto result = buildEthConfig(revision, chainId, forkIdHex, opL2);
     buildJsonContent(result, response);
 }
 task::Task<void> EthEndpoint::mining(const Json::Value&, Json::Value& response)

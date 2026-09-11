@@ -80,6 +80,8 @@ public:
     task::Task<void> maxPriorityFeePerGas(const Json::Value&, Json::Value&);
     task::Task<void> getProof(const Json::Value&, Json::Value&);
     task::Task<void> feeHistory(const Json::Value&, Json::Value&);
+    /// EIP-7910 `eth_config`: the node's current/next/last fork configuration.
+    task::Task<void> ethConfig(const Json::Value&, Json::Value&);
 
 private:
     NodeService::Ptr m_nodeService;
