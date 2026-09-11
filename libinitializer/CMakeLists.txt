@@ -47,6 +47,7 @@ target_link_libraries(init PUBLIC
     ethereum-executor
     scheduler storage executor rpc
     bcos-boostssl
+    bcos-devp2p
     tomlplusplus::tomlplusplus
 )
 if(WITH_LEDGER_ELECTION)

@@ -27,12 +27,14 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
+#include "ethereum-executor/EthereumExecutor.h"
 #include "libinitializer/MultiVersionScheduler.h"
 #ifdef TOOLS
 #include "tools/archive-tool/ArchiveService.h"
 #endif
 #include <bcos-executor/src/executor/SwitchExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
+#include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <bcos-tx-validator/TxValidator.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/IOServicePool.h>
@@ -111,6 +113,23 @@ public:
 
     bcos::ledger::LedgerInterface::Ptr ledger() { return m_ledger; }
     std::shared_ptr<bcos::scheduler::SchedulerInterface> scheduler() { return m_scheduler; }
+
+    // Ethereum L1 EL-mode wiring: the v2 EthereumExecutor and its serial scheduler, plus the
+    // global state storage and IO pool. Only valid after initNode() on an executor_version>=2
+    // node (EL mode); callers must guard on nodeConfig->ethereumELModeEnabled() first.
+    std::shared_ptr<executor_v1::eth::EthereumExecutor> ethereumExecutor()
+    {
+        return m_ethereumExecutor;
+    }
+    std::shared_ptr<scheduler_v1::SchedulerSerialImpl> ethereumSerialScheduler()
+    {
+        return m_ethereumSerialScheduler;
+    }
+    std::shared_ptr<GlobalStateStorageInitializer> globalStateStorageInitializer()
+    {
+        return m_globalStateStorageInitializer;
+    }
+    bcos::IOServicePool::Ptr ioServicePool() { return m_ioServicePool; }
 
     FrontServiceInitializer::Ptr frontService() { return m_frontServiceInitializer; }
 
@@ -208,6 +227,12 @@ private:
     std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_ethereumSchedulerHolder;
     std::function<void(std::function<void(protocol::BlockNumber)>)>
         m_setEthereumSchedulerBlockNumberNotifier;
+    /// EthereumExecutor (executor_version=2) instance + its serial scheduler. Saved as members
+    /// (the executor is otherwise only captured by the holder lambda) so the Ethereum L1
+    /// EL-mode sync path (EthereumSyncInitializer) can drive the SAME executor/scheduler that
+    /// the rest of the v2 pipeline uses. Only meaningful when executor_version >= 2.
+    std::shared_ptr<executor_v1::eth::EthereumExecutor> m_ethereumExecutor;
+    std::shared_ptr<scheduler_v1::SchedulerSerialImpl> m_ethereumSerialScheduler;
     /// Resolved executor version (0 = legacy SchedulerManager, 1 = TransactionExecutorImpl,
     /// 2 = EthereumExecutor). Cached during initNode so initSysContract can decide whether the
     /// FISCO system-contract deployment block applies (it does not for the ethereum executor).

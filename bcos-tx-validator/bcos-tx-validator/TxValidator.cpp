@@ -117,7 +117,7 @@ TxValidator::TxValidator(crypto::CryptoSuite::Ptr cryptoSuite,
     std::shared_ptr<ledger::LedgerInterface> ledger,
     ledger::LedgerConfigState::Ptr ledgerConfigState, NonceCheckerInterface::Ptr txPoolNonceChecker,
     Web3NonceChecker::Ptr web3NonceChecker, SystemTxPredicate isSystemTx, std::string groupId,
-    std::string chainId)
+    std::string chainId, bool rejectNativeTxOnV2Chain)
   : m_cryptoSuite(std::move(cryptoSuite)),
     m_ledger(std::move(ledger)),
     m_ledgerConfigState(std::move(ledgerConfigState)),
@@ -125,7 +125,8 @@ TxValidator::TxValidator(crypto::CryptoSuite::Ptr cryptoSuite,
     m_web3NonceChecker(std::move(web3NonceChecker)),
     m_isSystemTx(std::move(isSystemTx)),
     m_groupId(std::move(groupId)),
-    m_chainId(std::move(chainId))
+    m_chainId(std::move(chainId)),
+    m_rejectNativeTxOnV2Chain(rejectNativeTxOnV2Chain)
 {
     if (!m_ledgerConfigState)
     {
@@ -180,6 +181,9 @@ struct Envelope
     crypto::CryptoSuite& cryptoSuite;
     std::string_view groupId;
     std::string_view chainId;
+    /// Whether this chain admits native BCOS transactions at all (false on an
+    /// executor_version >= 2 chain). Validator configuration, not chain state.
+    bool bcosTxAllowed;
 };
 
 /// The chain as of one snapshot, taken once per verify() before the state stage: every check in
@@ -242,6 +246,14 @@ struct PoolInputs
 // members beyond what its stage's inputs carry. The parameter type IS the stage: a gate check
 // cannot read the chain, a state check cannot reach the pool, and the compiler enforces it.
 // Returns None to pass, any other status to reject.
+
+TransactionStatus checkBcosTxAllowed(Envelope const& in)
+{
+    // Only in TxKind::Bcos's set, so no kind test is needed here: a Web3 transaction never
+    // meets this check. On a chain that seals only Web3 transactions (executor_version >= 2),
+    // a native BCOS transaction is refused before the signature recovery below.
+    return in.bcosTxAllowed ? TransactionStatus::None : TransactionStatus::TxTypeNotSupported;
+}
 
 TransactionStatus checkTypeGate(Envelope const& in)
 {
@@ -630,6 +642,7 @@ struct CheckEntry
 /// or in sequence.
 constexpr std::array<CheckEntry<Envelope>, c_gateOrder.size()> c_gateRegistry{{
     {Check::TypeGate, &checkTypeGate},
+    {Check::BcosTxAllowed, &checkBcosTxAllowed},
     {Check::ToFieldFormat, &checkToFieldFormat},
     {Check::Signature, &checkSignature},
     {Check::BcosGroupChainId, &checkBcosGroupChainId},
@@ -848,7 +861,8 @@ task::Task<TransactionStatus> TxValidator::verify(
         .kind = kind,
         .cryptoSuite = *m_cryptoSuite,
         .groupId = m_groupId,
-        .chainId = m_chainId};
+        .chainId = m_chainId,
+        .bcosTxAllowed = !m_rejectNativeTxOnV2Chain};
     if (auto status = runStage(c_gateRegistry, checks, envelope); status != TransactionStatus::None)
     {
         co_return status;

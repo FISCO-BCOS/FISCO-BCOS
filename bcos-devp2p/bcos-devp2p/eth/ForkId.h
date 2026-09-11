@@ -21,6 +21,8 @@
 
 #include <bcos-utilities/Common.h>
 #include <cstdint>
+#include <initializer_list>
+#include <limits>
 
 namespace bcos::devp2p::eth
 {
@@ -38,4 +40,39 @@ uint32_t crc32(bytesConstRef _data, uint32_t _seed = 0);
 
 // Chain a fork point (block number or timestamp) into the fork-id hash.
 uint32_t forkIdAddForkPoint(uint32_t _hash, uint64_t _forkPoint);
+
+// Compute the EIP-2124 fork-id over a timestamp fork ladder, mirroring the
+// timestamp half of geth's forkid.NewID: every fork point <= _localHeadTime is
+// chained into the checksum and the first not-yet-passed one is announced as
+// `next`. `_forks` must be in activation order. Semantics:
+//   * fork == 0          -> active from genesis, never a fork-id point (skipped);
+//   * fork == UINT64_MAX -> unscheduled ("not yet active", the NodeConfig default
+//     for an absent key); it is the END of the ladder: nothing after it is chained
+//     and `next` falls back to 0 — geth announces next = 0 when no future fork is
+//     known, never UINT64_MAX.
+inline ForkId forkIdFromTimeLadder(uint32_t _checksum, uint64_t _localHeadTime,
+    std::initializer_list<uint64_t> const& _forks)
+{
+    uint32_t hash = _checksum;
+    for (uint64_t fork : _forks)
+    {
+        if (fork == std::numeric_limits<uint64_t>::max())
+        {
+            break;  // unscheduled tail fork: no future fork known -> next = 0
+        }
+        if (fork == 0)
+        {
+            continue;  // active from genesis, never a fork-id point
+        }
+        if (fork <= _localHeadTime)
+        {
+            hash = forkIdAddForkPoint(hash, fork);
+        }
+        else
+        {
+            return {hash, fork};  // first fork the local head has not passed yet
+        }
+    }
+    return {hash, 0};
+}
 }  // namespace bcos::devp2p::eth

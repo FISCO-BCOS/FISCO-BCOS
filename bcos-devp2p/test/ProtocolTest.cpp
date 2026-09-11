@@ -22,6 +22,7 @@
 #include <bcos-devp2p/rlpx/Messages.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
+#include <limits>
 
 using namespace bcos;
 using namespace bcos::devp2p;
@@ -270,6 +271,79 @@ BOOST_AUTO_TEST_CASE(forkIdMainnetChain)
         hash = eth::forkIdAddForkPoint(hash, fork);
     }
     BOOST_CHECK_EQUAL(hash, 0x9f3d2254u);  // Cancun (geth forkid testdata)
+}
+
+// forkIdFromTimeLadder: a head past the whole scheduled ladder announces next = 0.
+BOOST_AUTO_TEST_CASE(forkIdLadderAllPassed)
+{
+    // Sepolia-style ladder (shanghai..bpo2) all in the past for the local head.
+    auto forkId = eth::forkIdFromTimeLadder(0x12345678u, 1765000000ull,
+        {1677557088ull, 1706655072ull, 1741159776ull, 1760427360ull, 1761017184ull,
+            1761607008ull});
+    // Every fork point was chained into the checksum.
+    uint32_t expected = 0x12345678u;
+    for (auto fork : {1677557088ull, 1706655072ull, 1741159776ull, 1760427360ull,
+             1761017184ull, 1761607008ull})
+    {
+        expected = eth::forkIdAddForkPoint(expected, fork);
+    }
+    BOOST_CHECK_EQUAL(forkId.hash, expected);
+    BOOST_CHECK_EQUAL(forkId.next, 0u);  // no future fork -> next = 0 (geth semantics)
+}
+
+// forkIdFromTimeLadder: a fork in the future is announced as `next`, nothing later
+// is chained.
+BOOST_AUTO_TEST_CASE(forkIdLadderFutureForkAnnounced)
+{
+    auto forkId = eth::forkIdFromTimeLadder(0u, 1700000000ull,
+        {1677557088ull /*passed*/, 1706655072ull /*future*/, 1741159776ull /*further*/});
+    uint32_t expected = eth::forkIdAddForkPoint(0u, 1677557088ull);
+    BOOST_CHECK_EQUAL(forkId.hash, expected);
+    BOOST_CHECK_EQUAL(forkId.next, 1706655072ull);
+}
+
+// F6 regression: an UNSCHEDULED tail fork (UINT64_MAX, the NodeConfig default for
+// an absent key) must NOT be announced as next = UINT64_MAX. geth announces next = 0
+// when no future fork is known — the unscheduled tail ends the ladder.
+BOOST_AUTO_TEST_CASE(forkIdLadderOmittedTailFork)
+{
+    // Only scheduled up to Prague; osaka/bpo1/bpo2 are absent (UINT64_MAX).
+    auto forkId = eth::forkIdFromTimeLadder(0x12345678u, 1760000000ull,
+        {1677557088ull, 1706655072ull, 1741159776ull,
+            std::numeric_limits<uint64_t>::max(), std::numeric_limits<uint64_t>::max(),
+            std::numeric_limits<uint64_t>::max()});
+    // The ladder chains up to Prague and STOPS: next must be 0, never UINT64_MAX.
+    uint32_t expected = 0x12345678u;
+    for (auto fork : {1677557088ull, 1706655072ull, 1741159776ull})
+    {
+        expected = eth::forkIdAddForkPoint(expected, fork);
+    }
+    BOOST_CHECK_EQUAL(forkId.hash, expected);
+    BOOST_CHECK_EQUAL(forkId.next, 0u);
+
+    // A node whose head has not passed Prague yet still announces Prague as next,
+    // even when the post-Prague tail is unscheduled.
+    auto beforePrague = eth::forkIdFromTimeLadder(0x12345678u, 1740000000ull,
+        {1677557088ull, 1706655072ull, 1741159776ull,
+            std::numeric_limits<uint64_t>::max(), std::numeric_limits<uint64_t>::max(),
+            std::numeric_limits<uint64_t>::max()});
+    uint32_t hashThroughCancun = 0x12345678u;
+    for (auto fork : {1677557088ull, 1706655072ull})
+    {
+        hashThroughCancun = eth::forkIdAddForkPoint(hashThroughCancun, fork);
+    }
+    BOOST_CHECK_EQUAL(beforePrague.hash, hashThroughCancun);
+    BOOST_CHECK_EQUAL(beforePrague.next, 1741159776ull);
+}
+
+// forkIdFromTimeLadder: 0 (active from genesis) is never a fork-id point.
+BOOST_AUTO_TEST_CASE(forkIdLadderZeroSkipped)
+{
+    auto forkId = eth::forkIdFromTimeLadder(0x12345678u, 1760000000ull,
+        {0 /*london at genesis*/, 1677557088ull, 0 /*another at-genesis fork*/});
+    uint32_t expected = eth::forkIdAddForkPoint(0x12345678u, 1677557088ull);
+    BOOST_CHECK_EQUAL(forkId.hash, expected);
+    BOOST_CHECK_EQUAL(forkId.next, 0u);
 }
 
 // Hello message golden (RLP built with an independent encoder).

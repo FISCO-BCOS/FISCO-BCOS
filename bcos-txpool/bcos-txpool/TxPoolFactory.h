@@ -38,7 +38,7 @@ public:
         bcos::front::FrontServiceInterface::Ptr _frontService,
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger, std::string _groupId,
         std::string _chainId, int64_t _blockLimit, size_t _txpoolLimit,
-        bool checkTransactionSignature);
+        bool checkTransactionSignature, bool _rejectNativeTxOnV2Chain = false);
 
     virtual ~TxPoolFactory() = default;
     TxPool::Ptr createTxPool(boost::asio::io_context& _ioContext,
@@ -64,6 +64,9 @@ private:
     int64_t m_blockLimit = DEFAULT_BLOCK_LIMIT;
     size_t m_txpoolLimit = DEFAULT_POOL_LIMIT;
     bool m_checkTransactionSignature;
+    // executor_version >= 2 chains accept only Web3 transactions at the pool
+    // (see txvalidator::TxValidator::m_rejectNativeTxOnV2Chain).
+    bool m_rejectNativeTxOnV2Chain = false;
     std::weak_ptr<bcos::scheduler::SchedulerInterface> m_scheduler;
     /// Shared with the scheduler, which publishes into it on every commit. Defaulted rather than
     /// required so a pool built without one (tests) reads an empty configuration instead of

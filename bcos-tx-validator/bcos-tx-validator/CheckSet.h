@@ -112,6 +112,13 @@ enum class Check : uint32_t
     /// pool (Web3NonceChecker::existsMemoryNonce). The Web3 counterpart of BcosPoolNonce, and
     /// node-local in the same way -- but keyed on the SENDER, which BcosPoolNonce is not.
     Web3PoolNonce = 1U << 19,
+    /// Native BCOS transactions are admitted at all. An executor_version >= 2 chain (the
+    /// pure-Ethereum executor) seals ONLY Web3 transactions: a native BCOS transaction has no
+    /// EIP-2718 wire form, so committing one would make finishExecute's
+    /// calculateEthereumTransactionRoot throw and abandon the block -- halting production.
+    /// Such a chain constructs its validator with the refusal on, and this gate refuses the
+    /// transaction at admission instead. Reads the validator's configuration, not the chain.
+    BcosTxAllowed = 1U << 20,
 };
 
 constexpr Check operator|(Check lhs, Check rhs) noexcept
@@ -156,6 +163,7 @@ constexpr bool contains(Check set, Check item) noexcept
 /// and the account.
 inline constexpr std::array c_gateOrder{
     Check::TypeGate,
+    Check::BcosTxAllowed,
     Check::ToFieldFormat,
     Check::Signature,
     Check::BcosGroupChainId,
@@ -276,9 +284,11 @@ constexpr Check poolAdmissionCheckSet(TxKind kind) noexcept
     {
     case TxKind::Bcos:
         // A BCOS transaction's dataHash covers its whole TransactionData, so none of the
-        // envelope-derived Web3 rules apply to it.
-        return Check::TypeGate | Check::ToFieldFormat | Check::Signature | Check::BcosGroupChainId |
-               Check::BcosPoolNonce | Check::BcosLedgerNonce;
+        // envelope-derived Web3 rules apply to it. BcosTxAllowed stands first: on a chain
+        // that seals only Web3 transactions the refusal is cheapest here, before the
+        // signature recovery below it.
+        return Check::BcosTxAllowed | Check::TypeGate | Check::ToFieldFormat | Check::Signature |
+               Check::BcosGroupChainId | Check::BcosPoolNonce | Check::BcosLedgerNonce;
     case TxKind::Web3Legacy:
         return c_web3Common;
     case TxKind::Web3AccessList:

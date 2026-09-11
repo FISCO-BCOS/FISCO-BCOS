@@ -38,6 +38,10 @@
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include "bcos-ledger/mpt/EthTrieRoots.h"
+#include "bcos-ledger/mpt/EthereumBlockRoots.h"
+#include "bcos-ledger/mpt/MPTFeatureGates.h"
+#include "bcos-ledger/mpt/StateRoots.h"
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Bloom.h"
@@ -1005,6 +1009,13 @@ private:
         // header by finalizeEthBlockHeader.
         executionPayload.gasLimit = std::get<0>(ledgerConfig.gasLimit());
 
+        // Ethereum-compatible roots (executor_version >= 2): txsRoot/receiptsRoot commit to
+        // the transaction / receipt tries; legacy executors keep the Merkle roots. Empty
+        // blocks get emptyRootHash() on BOTH paths (validateHeader rejects a zero
+        // receiptsRoot/txsRoot — see the empty-block branch below).
+        const bool ethereumRoots =
+            ledgerConfig.executorVersion() >= ledger::ETHEREUM_EXECUTOR_VERSION;
+
         // Execute transactions (if any) and finalize the Eth header with its RLP hash.
         if (executionPayload.transactions.empty())
         {
@@ -1024,9 +1035,12 @@ private:
             // Must precede calculateHash: extraData is part of the Tars header hash
             // (bcos-tars-protocol/impl/TarsHashable.h).
             emptyHeader->setExtraData(std::move(extraData));
-            emptyHeader->setStateRoot(co_await calculateStateRoot(view, emptyHeader->version()));
+            emptyHeader->setStateRoot(co_await calculateStateRoot(
+                view, nextBlockNumber, emptyHeader->version(), ledgerConfig));
             // An empty block's transaction/receipt tries are the canonical empty-trie root, not
-            // the all-zero hash (validateHeader rejects a zero receiptsRoot/txsRoot).
+            // the all-zero hash: finalizeEthBlockHeader always goes through
+            // EthBlockHeader::calculateRLPHash -> validateHeader, which rejects a zero
+            // receiptsRoot/txsRoot — this holds for legacy executors too.
             emptyHeader->setReceiptsRoot(bcos::ledger::mpt::emptyRootHash());
             emptyHeader->setTxsRoot(bcos::ledger::mpt::emptyRootHash());
             emptyHeader->setGasUsed(0);
@@ -1073,13 +1087,42 @@ private:
         auto receipts = co_await m_scheduler.get().executeBlock(view, m_executor.get(),
             *blockHeader, executableTransactions | ::ranges::views::indirect, ledgerConfig);
 
-        // Step 2d: Compute transaction root (Merkle over tx hashes)
-        // TODO: Use scheduler_v1::calculateTransactionRoot from BaselineScheduler.h
-        // once MPTStorage is available. The current tx->hash() call lacks exception
-        // handling for malformed transactions. An empty transaction list maps to the
-        // canonical empty-trie root (validateHeader rejects an all-zero txsRoot).
-        h256 txRoot = bcos::ledger::mpt::emptyRootHash();
+        // Step 2d-2f: Transaction root, receipt root, gas used and block-level logsBloom.
+        //  - Ethereum executor (v2): the shared ledger::mpt::computeEthereumRoots (the same
+        //    implementation EthereumBlockVerifier uses for Sepolia sync / external payloads)
+        //    fills per-receipt cumulativeGasUsed + logsBloom, then commits to the transaction
+        //    trie over each transaction's EIP-2718 wire bytes and to the receipts trie over
+        //    EthReceipt RLP. Raw-only entries (forced transactions from the OP attributes
+        //    list) participate in txsRoot via their raw bytes but have no receipt.
+        //  - legacy: Merkle over tx / receipt hashes (unchanged).
+        h256 txRoot;
+        h256 receiptRoot;
+        u256 totalGasUsed;
+        Bloom logsBloom{};
+        if (ethereumRoots)
         {
+            auto computation = co_await ledger::mpt::computeEthereumRoots(receipts,
+                executableTransactions | ::ranges::views::indirect,
+                executionPayload.transactions |
+                    ::ranges::views::transform([](auto const& transaction) -> bcos::bytes const& {
+                        return transaction.raw;
+                    }));
+            txRoot = computation.txsRoot;
+            receiptRoot = computation.receiptsRoot;
+            totalGasUsed = computation.gasUsed;
+            logsBloom = computation.logsBloom;
+        }
+        else
+        {
+            for (auto& receipt : receipts)
+            {
+                if (!receipt)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        std::runtime_error{"Null receipt returned by scheduler"});
+                }
+            }
+
             auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
             auto hasher = hashImpl.hasher();
             crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(
@@ -1101,56 +1144,38 @@ private:
                     txRoot = merkleTrie.back();
                 }
             }
-        }
 
-        // Step 2e: Compute receipt root (Merkle over receipt hashes). An empty receipt list
-        // maps to the canonical empty-trie root (validateHeader rejects an all-zero
-        // receiptsRoot).
-        h256 receiptRoot = bcos::ledger::mpt::emptyRootHash();
-        {
-            // Validate receipts are non-null before computing hashes
-            if (::ranges::any_of(receipts, [](auto& r) { return !r; }))
-            {
-                BOOST_THROW_EXCEPTION(std::runtime_error{"Null receipt returned by scheduler"});
-            }
-            auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
-            auto hasher = hashImpl.hasher();
-            crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(
-                hasher.clone());
+            auto receiptHasher = hashImpl.hasher();
+            crypto::merkle::Merkle<std::remove_reference_t<decltype(receiptHasher)>>
+                receiptMerkle(receiptHasher.clone());
             if (!receipts.empty())
             {
                 auto receiptHashes =
                     receipts | ::ranges::views::transform([](auto& r) { return r->hash(); });
                 std::vector<h256> merkleTrie;
-                merkle.generateMerkle(receiptHashes, merkleTrie);
+                receiptMerkle.generateMerkle(receiptHashes, merkleTrie);
                 if (!merkleTrie.empty())
                 {
                     receiptRoot = merkleTrie.back();
                 }
             }
-        }
 
-        // Step 2f: Compute gas used and block-level logsBloom from receipts.
-        u256 totalGasUsed;
-        Bloom logsBloom{};
-        for (auto& receipt : receipts)
-        {
-            if (!receipt)
+            for (auto& receipt : receipts)
             {
-                BOOST_THROW_EXCEPTION(std::runtime_error{"Null receipt returned by scheduler"});
-            }
-            totalGasUsed += receipt->gasUsed();
-            // The v2 (pure-Ethereum) executor's receipts carry an empty logsBloom (a
-            // documented limitation — evmoneReceiptToBcos does not compute it), so tolerate
-            // empty blooms instead of indexing past their (zero) length.
-            if (!receipt->logsBloom().empty())
-            {
-                orBloom(logsBloom, receipt->logsBloom());
+                totalGasUsed += receipt->gasUsed();
+                // Legacy receipts may carry an empty bloom (documented limitation of the raw
+                // SchedulerSerialImpl path), which is tolerated here.
+                if (!receipt->logsBloom().empty())
+                {
+                    orBloom(logsBloom, receipt->logsBloom());
+                }
             }
         }
 
-        // Step 2g: Compute state root (MPT over state storage)
-        h256 stateRoot = co_await calculateStateRoot(view, blockHeader->version());
+        // Step 2g: Compute state root (real world-state MPT on MPT chains, the legacy
+        // XOR fold otherwise — see calculateStateRoot below).
+        h256 stateRoot =
+            co_await calculateStateRoot(view, nextBlockNumber, blockHeader->version(), ledgerConfig);
 
         // Step 2h: Set computed values in the block header and calculate the block hash.
         // The header timestamp stays in milliseconds throughout (the executor consumed it in
@@ -1178,35 +1203,34 @@ private:
             .receipts = std::move(receipts)};
     }
 
-    /// Compute state root by iterating over storage and XOR-ing entry hashes.
-    /// This is a simplified MPT approximation; for full correctness use
-    /// scheduler_v1::calculateStateRoot from BaselineScheduler.h.
-    /// TODO: Replace with scheduler_v1::calculateStateRoot from BaselineScheduler.h
-    /// once MPTStorage is available. The XOR approach is not collision-resistant
-    /// and is a consensus risk for production use.
-    task::Task<h256> calculateStateRoot(ViewType& view, uint32_t blockVersion) const
+    /// Compute the block's state root over the executed view.
+    ///  - MPT chains (the shared flag-matrix predicate ledger::mpt::shouldBuildMPT, spec
+    ///    5.6/5.10): the real Ethereum world-state MPT root via ledger::mpt::
+    ///    computeMptStateRoot — the same incremental build BaselineScheduler::
+    ///    buildMPTStateRoot and EthereumBlockVerifier use, so a locally built block commits
+    ///    the same root scheme a re-executing/verifying node computes. The new trie nodes
+    ///    land in the view's top mutable layer and are committed by newPayload's
+    ///    pushView + mergeBackStorage together with the flat state. The parent root comes
+    ///    from the shared ledger::mpt::parentStateRootFor (StateRoots.h) — the same rule
+    ///    BaselineScheduler::buildMPTStateRoot uses: a parent that still committed a legacy
+    ///    root (mid-chain activation boundary) starts the build from the empty trie.
+    ///  - legacy (non-MPT) chains: the canonical XOR fold (ledger::mpt::
+    ///    computeLegacyStateRoot, shared with BaselineScheduler). Engine API chains are
+    ///    v2/L2 in production, so this branch only serves legacy test configurations.
+    task::Task<h256> calculateStateRoot(ViewType& view, protocol::BlockNumber blockNumber,
+        uint32_t blockVersion, ledger::LedgerConfig const& ledgerConfig) const
     {
-        auto range = co_await storage2::range(view);
-        h256 totalHash;
-        while (auto keyValue = co_await range.next())
+        if (!ledger::mpt::shouldBuildMPT(ledgerConfig.features(), blockNumber))
         {
-            auto& [key, value] = *keyValue;
-            executor_v1::StateKeyView viewKey(key);
-            auto [tableName, keyName] = viewKey.get();
-
-            storage::Entry entry;
-            if (auto* e = std::get_if<storage::Entry>(std::addressof(value)))
-            {
-                entry = *e;
-            }
-            else
-            {
-                entry.setStatus(storage::Entry::DELETED);
-            }
-            totalHash ^= entry.hash(
-                tableName, keyName, *m_blockFactory->cryptoSuite()->hashImpl(), blockVersion);
+            co_return co_await ledger::mpt::computeLegacyStateRoot(view, blockVersion,
+                *m_blockFactory->cryptoSuite()->hashImpl(), ledgerConfig.features());
         }
-        co_return totalHash;
+        // Fail loud on the unsupported raw_address + MPT flag combination (same guard
+        // BaselineScheduler runs inside its MPT branch).
+        ledger::mpt::rejectRawAddressWithMPT(ledgerConfig.features(), blockNumber);
+        h256 parentStateRoot = co_await ledger::mpt::parentStateRootFor(
+            view, ledgerConfig.features(), blockNumber, *m_blockFactory);
+        co_return co_await ledger::mpt::computeMptStateRoot(view, parentStateRoot, ledgerConfig);
     }
 
 

@@ -20,6 +20,7 @@
  */
 #include "TxPoolInitializer.h"
 #include "Common.h"
+#include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-txpool/TxPoolFactory.h>
 #include <utility>
 
@@ -45,7 +46,10 @@ TxPoolInitializer::TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
         m_protocolInitializer->txResultFactory(), m_protocolInitializer->blockFactory(),
         m_frontService, m_ledger, m_nodeConfig->groupId(), m_nodeConfig->chainId(),
         m_nodeConfig->blockLimit(), m_nodeConfig->txpoolLimit(),
-        m_nodeConfig->checkTransactionSignature());
+        m_nodeConfig->checkTransactionSignature(),
+        // executor_version >= 2 (the pure-Ethereum executor) seals only Web3
+        // transactions — refuse native BCOS transactions at the pool (F2).
+        m_nodeConfig->executorVersion() >= ledger::ETHEREUM_EXECUTOR_VERSION);
 
     // Before createTxPool: the admission validator takes the holder at construction.
     m_txpoolFactory->setLedgerConfigState(std::move(_ledgerConfigState));

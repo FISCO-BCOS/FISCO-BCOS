@@ -28,6 +28,8 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
@@ -100,9 +102,22 @@ struct StubScheduler
 {
     template <class Storage, class Executor>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
-        const protocol::BlockHeader&, ::ranges::input_range auto&&, const ledger::LedgerConfig&)
+        const protocol::BlockHeader&, ::ranges::input_range auto&& transactions,
+        const ledger::LedgerConfig&)
     {
-        co_return {};
+        // One receipt per executed transaction — the real scheduler contract, and the v2
+        // receipts-root assembly (computeEthereumRoots) types each receipt by the
+        // transaction at the same index, so the counts must agree.
+        crypto::Keccak256 hasher;
+        std::vector<protocol::TransactionReceipt::Ptr> receipts;
+        for (auto const& transaction : transactions)
+        {
+            (void)transaction;
+            auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+            receipt->calculateHash(hasher);
+            receipts.push_back(std::move(receipt));
+        }
+        co_return receipts;
     }
 };
 

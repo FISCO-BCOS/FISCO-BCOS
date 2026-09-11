@@ -87,7 +87,12 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
         "generate snapshot with or without txs and receipts, if true generate snapshot with txs "
         "and receipts")(
         "output,o", boost::program_options::value<std::string>(), "snapshot output directory")(
-        "import,i", boost::program_options::value<std::string>(), "import snapshot from directory");
+        "import,i", boost::program_options::value<std::string>(), "import snapshot from directory")(
+        "el,e", "run in Ethereum L1 EL mode (mirror of [ethereum].mode=el; conflicts with the "
+                "config file are rejected)")(
+        "bootnodes,b", boost::program_options::value<std::string>(),
+        "path to the EL-mode bootnodes file (mirror of [ethereum].bootnodes_file; a value that "
+        "differs from the config file is rejected)");
 
     if (_autoSendTx)
     {
@@ -191,5 +196,21 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
         snapshotPath = vm["import"].as<std::string>();
     }
 
-    return bcos::initializer::Params{configPath, genesisFilePath, snapshotPath, txSpeed, op};
+    // Ethereum L1 EL-mode command-line mirrors ([ethereum] in config.ini is the source of
+    // truth; these flags only echo it). The conflict check is done by the caller
+    // (AirNodeInitializer) against the loaded NodeConfig: --el must agree with
+    // ethereum.mode, and --bootnodes must agree with ethereum.bootnodes_file.
+    std::optional<bool> ethereumEL;
+    if (vm.count("el") || vm.count("e"))
+    {
+        ethereumEL = true;
+    }
+    std::optional<std::string> ethereumBootnodesFile;
+    if (vm.count("bootnodes") || vm.count("b"))
+    {
+        ethereumBootnodesFile = vm["bootnodes"].as<std::string>();
+    }
+
+    return bcos::initializer::Params{
+        configPath, genesisFilePath, snapshotPath, txSpeed, ethereumEL, ethereumBootnodesFile, op};
 }

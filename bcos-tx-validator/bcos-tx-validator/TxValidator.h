@@ -90,11 +90,16 @@ public:
     /// @p ledgerConfigState and @p web3NonceChecker must be non-null and throw if they are not;
     /// @p txPoolNonceChecker and the two late-bound setters below are nullable by design, each
     /// with a check that says what its absence means.
+    ///
+    /// @p rejectNativeTxOnV2Chain is set by an executor_version >= 2 chain (see
+    /// Check::BcosTxAllowed): its blocks cannot commit a native BCOS transaction, so one is
+    /// refused at admission rather than stalling the leader at seal time.
     TxValidator(crypto::CryptoSuite::Ptr cryptoSuite,
         std::shared_ptr<ledger::LedgerInterface> ledger,
         ledger::LedgerConfigState::Ptr ledgerConfigState,
         NonceCheckerInterface::Ptr txPoolNonceChecker, Web3NonceChecker::Ptr web3NonceChecker,
-        SystemTxPredicate isSystemTx, std::string groupId, std::string chainId);
+        SystemTxPredicate isSystemTx, std::string groupId, std::string chainId,
+        bool rejectNativeTxOnV2Chain = false);
 
     /// Bound after construction: the ledger nonce checker cannot be built until the pool has read
     /// the chain's block limit. Until it is bound there is nothing to check a BCOS nonce against,
@@ -158,6 +163,11 @@ private:
     /// and resolves to shared_ptr<NonceCheckerInterface>, which loses the derived type.
     std::shared_ptr<LedgerNonceChecker> m_ledgerNonceChecker;
     std::weak_ptr<scheduler::SchedulerInterface> m_scheduler;
+    // executor_version >= 2 chains (the pure-Ethereum executor) seal ONLY Web3 transactions —
+    // a native BCOS transaction cannot be committed to the Ethereum tx trie, so the leader's
+    // finishExecute would throw and block production would halt. When true, the BcosTxAllowed
+    // gate refuses native transactions at admission instead.
+    bool m_rejectNativeTxOnV2Chain = false;
 };
 
 }  // namespace bcos::txvalidator

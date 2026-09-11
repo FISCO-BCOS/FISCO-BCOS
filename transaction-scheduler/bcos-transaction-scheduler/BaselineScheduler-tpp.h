@@ -24,7 +24,6 @@
 
 #include "BaselineSchedulerMPTHelpers.h"
 #include "HistoricalCallStorage.h"
-#include "MPTNodeStorage.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-executor/src/Common.h"
@@ -44,7 +43,10 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
+#include "bcos-ledger/mpt/EthereumBlockRoots.h"
 #include "bcos-ledger/mpt/MPTBuilder.h"
+#include "bcos-ledger/mpt/StateRoots.h"
+#include "bcos-ledger/mpt/ViewNodeStorage.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Bloom.h"
@@ -66,6 +68,8 @@ namespace bcos::scheduler_v1
 
 /**
  * Calculates the state root of the given storage using the specified hash implementation.
+ * The implementation (the legacy XOR fold) lives in bcos-ledger/mpt/StateRoots.h as
+ * ledger::mpt::computeLegacyStateRoot, shared with the Engine API block builder.
  *
  * @param storage The storage to calculate the state root for.
  * @param hashImpl The hash implementation to use for the calculation.
@@ -74,42 +78,7 @@ namespace bcos::scheduler_v1
 task::Task<h256> calculateStateRoot(auto& storage, uint32_t blockVersion,
     crypto::Hash const& hashImpl, ledger::Features const& features)
 {
-    auto range = co_await storage2::range(storage);
-    storage::Entry deletedEntry;
-    deletedEntry.setStatus(storage::Entry::DELETED);
-
-    // Wrap once outside the parallel pipeline so the optional copy is paid only once,
-    // not per entry.
-    const std::optional<ledger::Features> featuresOpt(features);
-
-    h256 totalHash;
-    using KeyValueType = task::AwaitableReturnType<decltype(range.next())>;
-    tbb::parallel_pipeline(tbb::this_task_arena::max_concurrency(),
-        tbb::make_filter<void, KeyValueType>(tbb::filter_mode::serial_in_order,
-            [&](tbb::flow_control& control) -> KeyValueType {
-                if (auto keyValue = task::tbb::syncWait(range.next()))
-                {
-                    return keyValue;
-                }
-                control.stop();
-                return {};
-            }) &
-            tbb::make_filter<KeyValueType, h256>(tbb::filter_mode::parallel,
-                [&](KeyValueType keyValue) -> h256 {
-                    auto& [key, value] = *keyValue;
-                    executor_v1::StateKeyView view(key);
-                    auto [tableName, keyName] = view.get();
-
-                    const storage::Entry* entry = nullptr;
-                    if (entry = std::get_if<storage::Entry>(std::addressof(value)); !entry)
-                    {
-                        entry = std::addressof(deletedEntry);
-                    }
-                    return entry->hash(tableName, keyName, hashImpl, blockVersion, featuresOpt);
-                }) &
-            tbb::make_filter<h256, void>(
-                tbb::filter_mode::serial_out_of_order, [&](h256 hash) { totalHash ^= hash; }));
-    co_return totalHash;
+    return ledger::mpt::computeLegacyStateRoot(storage, blockVersion, hashImpl, features);
 }
 
 h256 calculateReceiptRoot(
@@ -131,6 +100,12 @@ h256 calculateReceiptRoot(
     return receiptRoot;
 }
 
+/// The Ethereum receipts trie root (receiptsRoot) for executor_version >= 2 chains is
+/// ledger::mpt::calculateEthereumReceiptsRoot (bcos-ledger/mpt/EthereumBlockRoots.h), shared
+/// with EthereumBlockVerifier and EngineServiceImpl::buildPayload. It must be computed AFTER
+/// finishExecute's receipt-processing phase (it reads cumulativeGasUsed + logsBloom, which
+/// that phase fills). Empty -> emptyRootHash().
+
 /**
  * @brief Finishes the execution of a transaction and updates the block header and block.
  *
@@ -140,11 +115,15 @@ h256 calculateReceiptRoot(
  * @param newBlockHeader The updated block header.
  * @param newBlock The updated block.
  * @param hashImpl The hash implementation used to calculate the block hash.
+ * @param executorVersion The chain's executor version: >= ETHEREUM_EXECUTOR_VERSION selects the
+ *        Ethereum-compatible roots (txsRoot/receiptsRoot trie roots, emptyRootHash() for empty
+ *        blocks); lower versions keep the legacy Merkle roots byte-identical (no behaviour
+ *        change on legacy chains).
  */
 task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
     protocol::BlockHeader& newBlockHeader, protocol::Block& block,
     ::ranges::input_range auto transactions, bool& sysBlock, crypto::Hash const& hashImpl,
-    ledger::Features const& features, std::optional<h256> mptStateRoot = {})
+    ledger::Features const& features, int executorVersion, std::optional<h256> mptStateRoot = {})
 {
     ittapi::Report finishReport(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
         ittapi::ITT_DOMAINS::instance().FINISH_EXECUTE);
@@ -153,7 +132,18 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
     h256 stateRoot;
     h256 receiptRoot;
 
-    tbb::parallel_invoke([&]() { transactionRoot = calculateTransactionRoot(block, hashImpl); },
+    // Ethereum-compatible roots for the pure-Ethereum executor (v2): the tx trie is committed
+    // over each transaction's EIP-2718 wire bytes and the receipt trie over EthReceipt RLP
+    // (empty blocks get emptyRootHash()). Legacy executors keep the Merkle roots unchanged.
+    // ETHEREUM_EXECUTOR_VERSION is a PRE-RELEASE gate — see its doc comment in
+    // bcos-framework/ledger/LedgerConfig.h (must be feature-flagged before release).
+    const bool ethereumRoots = executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION;
+
+    tbb::parallel_invoke(
+        [&]() {
+            transactionRoot = ethereumRoots ? calculateEthereumTransactionRoot(block) :
+                                              calculateTransactionRoot(block, hashImpl);
+        },
         [&]() {
             // When the block was built with an Ethereum MPT root (shouldBuildMPT), the header
             // commits to it verbatim and the legacy XOR fold is skipped; with no MPT root the
@@ -166,7 +156,6 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
             stateRoot = task::tbb::syncWait(
                 calculateStateRoot(storage, block.blockHeader()->version(), hashImpl, features));
         },
-        [&]() { receiptRoot = calculateReceiptRoot(receipts, block, hashImpl); },
         [&]() {
             size_t logIndex = 0;
             block.clearReceipts();
@@ -189,6 +178,13 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
                     bcos::precompiled::c_systemTxsAddress, transaction->to());
             });
         });
+
+    // The Ethereum receipts trie root reads cumulativeGasUsed + logsBloom, which the receipt
+    // processing branch above fills — so it is computed strictly AFTER that branch. The legacy
+    // Merkle arm is unaffected by the move (receipt->hash() is cached by the executor and the
+    // finishExecute mutations never clear dataHash), keeping legacy output identical.
+    receiptRoot = ethereumRoots ? ledger::mpt::calculateEthereumReceiptsRoot(receipts, transactions) :
+                                  calculateReceiptRoot(receipts, block, hashImpl);
 
     newBlockHeader.setGasUsed(totalGasUsed);
     newBlockHeader.setTxsRoot(transactionRoot);
@@ -249,18 +245,19 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::buildMPTS
     ledger::LedgerConfig const& ledgerConfig)
 {
     auto const blockNumber = blockHeader.number();
-    h256 parentStateRoot = ledger::mpt::emptyRootHash();
-    if (blockNumber > 0 && shouldBuildMPT(ledgerConfig.features(), blockNumber - 1))
-    {
-        auto parentBlock = co_await ledger::getBlockData(
-            view, blockNumber - 1, ledger::HEADER, m_blockFactory.get());
-        parentStateRoot = parentBlock->blockHeader()->stateRoot();
-    }
-    // else: scenario-A activation boundary (parent committed an XOR root) — empty trie.
+    // The parent-root selection rule is shared with EngineServiceImpl::calculateStateRoot
+    // (ledger::mpt::parentStateRootFor, StateRoots.h): an MPT parent contributes its
+    // header's state root; anything else (genesis, scenario-A activation boundary) starts
+    // the build from the empty trie.
+    h256 parentStateRoot = co_await ledger::mpt::parentStateRootFor(
+        view, ledgerConfig.features(), blockNumber, m_blockFactory.get());
 
     // Node reads resolve through the full view (parent nodes live in the pending layers /
-    // backend); node writes land in this block's own mutable layer (MPTNodeStorage.h).
-    ViewNodeStorage<typename MultiLayerStorage::ViewType> nodeStorage(view);
+    // backend); node writes land in this block's own mutable layer
+    // (bcos-ledger/mpt/ViewNodeStorage.h). The delta itself (not just the root) rides in
+    // ExecuteResult for the CommitObserver, so this calls buildAndCollect directly rather
+    // than the root-only ledger::mpt::computeMptStateRoot.
+    ledger::mpt::ViewNodeStorage<typename MultiLayerStorage::ViewType> nodeStorage(view);
     bool const l2Mode =
         ledgerConfig.features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
     co_return co_await ledger::mpt::buildAndCollect(nodeStorage, parentStateRoot, view, l2Mode);
@@ -415,7 +412,8 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coExecute
         bool sysBlock = false;
         co_await finishExecute(mutableStorage(view), ::ranges::views::all(receipts),
             *executedBlockHeader, *block, ::ranges::views::all(transactions), sysBlock,
-            m_hashImpl.get(), ledgerConfig->features(), mptStateRoot);
+            m_hashImpl.get(), ledgerConfig->features(), ledgerConfig->executorVersion(),
+            mptStateRoot);
 
         if (verify && (executedBlockHeader->hash() != blockHeader->hash()))
         {

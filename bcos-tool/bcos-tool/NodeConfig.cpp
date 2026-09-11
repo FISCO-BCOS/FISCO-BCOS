@@ -1037,11 +1037,18 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
         listen_port=30303
         ; geth-style enode:// list; path relative to the working directory
         bootnodes_file=./bootnodes.json
-        ; secp256k1 node identity (hex or PEM). Empty = derive deterministically.
+        ; secp256k1 node identity: a file holding the 32-byte private key as hex
+        ; (optional 0x prefix). Empty = auto-generate a persistent key on first
+        ; start (node.rlpx.key next to the FISCO node key) — a stable key is
+        ; strongly recommended so bootnodes can authenticate us.
         node_key_file=
         ; max blocks requested per batch (geth caps one request at
         ; MaxHeaderFetch=192 / MaxBodyFetch=128; accepted range here: 1..1024)
         max_batch_size=192
+        ; optional operator-pinned finalized checkpoint, "<number>:<0xHASH>": the
+        ; committed block at <number> must carry <0xHASH>; a mismatch is fatal
+        ; (the bootnodes serve a wrong fork). Empty = no checkpoint.
+        finalized_checkpoint=
     */
     const std::string mode = _pt.get<std::string>("ethereum.mode", "none");
     if (mode != "none" && mode != "el")
@@ -1103,12 +1110,54 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     }
     m_ethereumMaxBatchSize = maxBatch;
 
+    // Operator-pinned finalized checkpoint, "<number>:<0xHASH>". Validated eagerly
+    // like every neighbouring parse: a malformed value is a config error at load
+    // time, not a sync-time surprise. Empty = no checkpoint (default).
+    m_ethereumFinalizedCheckpoint.reset();
+    auto checkpoint = _pt.get<std::string>("ethereum.finalized_checkpoint", "");
+    boost::algorithm::trim(checkpoint);
+    if (!checkpoint.empty())
+    {
+        auto const colon = checkpoint.find(':');
+        if (colon == std::string::npos)
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment("ethereum.finalized_checkpoint must be "
+                                                   "\"<number>:<0xHASH>\", got: " +
+                                                   checkpoint));
+        }
+        auto numberStr = checkpoint.substr(0, colon);
+        auto hashStr = checkpoint.substr(colon + 1);
+        boost::algorithm::trim(numberStr);
+        boost::algorithm::trim(hashStr);
+        requireDecimalField("ethereum", "finalized_checkpoint(number)", numberStr);
+        requireHexField("ethereum", "finalized_checkpoint(hash)", hashStr, 64, false);
+        uint64_t number = 0;
+        try
+        {
+            number = boost::lexical_cast<uint64_t>(numberStr);
+        }
+        catch (boost::bad_lexical_cast const&)
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment(
+                    "ethereum.finalized_checkpoint number does not fit uint64: " + numberStr));
+        }
+        m_ethereumFinalizedCheckpoint =
+            EthereumFinalizedCheckpoint{number, crypto::HashType(hashStr)};
+    }
+
     NodeConfig_LOG(INFO) << LOG_DESC("loadEthereumConfig") << LOG_KV("mode", mode)
                          << LOG_KV("listenIP", m_ethereumListenIP)
                          << LOG_KV("listenPort", m_ethereumListenPort)
                          << LOG_KV("bootnodesFile", m_ethereumBootnodesFile)
                          << LOG_KV("nodeKeyFile", m_ethereumNodeKeyFile)
-                         << LOG_KV("maxBatchSize", m_ethereumMaxBatchSize);
+                         << LOG_KV("maxBatchSize", m_ethereumMaxBatchSize)
+                         << LOG_KV("finalizedCheckpoint",
+                                m_ethereumFinalizedCheckpoint ?
+                                    std::to_string(m_ethereumFinalizedCheckpoint->number) + ":" +
+                                        m_ethereumFinalizedCheckpoint->hash.hex() :
+                                    "none");
 }
 
 // EL-mode timestamp fork schedule ([fork_timestamps] in config.genesis). L1 PoS chains
@@ -1127,6 +1176,7 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     m_genesisConfig.m_ethereumELMode = false;
     m_genesisConfig.m_ethereumForkSchedule.reset();
     m_ethereumChainId = 0;  // reassigned by validateL2Invariants when EL is declared
+    m_ethereumMergeBlock = 0;  // reassigned by the REQUIRED merge_block key below
 
     if (auto ethSection = _genesisConfig.get_child_optional("ethereum"))
     {
@@ -1212,6 +1262,18 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     readOptionalTs("osaka_time", schedule.m_osakaTime);
     readOptionalTs("bpo1_time", schedule.m_bpo1Time);
     readOptionalTs("bpo2_time", schedule.m_bpo2Time);
+    // merge_block is REQUIRED like the rest of the non-tail ladder: the chain's only
+    // block-based fork (terminal total difficulty) — blocks below it follow PoW
+    // header rules, from it onward PoS rules. 0 = PoS from genesis (pure-PoS
+    // chains like Holesky). It must NOT silently default: an omitted key on a
+    // non-Sepolia chain would route millions of blocks through the (deliberately
+    // permissive) PoW validation branch and announce an EIP-2124 fork-id the
+    // remote rejects, with no config error to explain either. Not a timestamp, but
+    // it belongs to the same chain-level fork declaration and is parsed with the
+    // same strict decimal/0x-hex rules. Like the post-Prague tail it is
+    // deliberately NOT part of the genesis pin: divergence is caught by the
+    // fork-id handshake, which chains the merge block into the checksum.
+    m_ethereumMergeBlock = readTs("merge_block");
     // Activation times must be non-decreasing down the fork ladder — geth rejects an
     // out-of-order schedule at startup (ChainConfig.CheckConfigForkOrder), and the
     // EIP-2124 fork-id checksum chains activations IN ORDER, so a decreasing step
@@ -1257,7 +1319,8 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
                          << LOG_KV("prague", schedule.m_pragueTime)
                          << LOG_KV("osaka", schedule.m_osakaTime)
                          << LOG_KV("bpo1", schedule.m_bpo1Time)
-                         << LOG_KV("bpo2", schedule.m_bpo2Time);
+                         << LOG_KV("bpo2", schedule.m_bpo2Time)
+                         << LOG_KV("mergeBlock", m_ethereumMergeBlock);
 }
 
 void NodeConfig::loadGatewayConfig(boost::property_tree::ptree const& _pt)
@@ -3411,6 +3474,15 @@ uint64_t bcos::tool::NodeConfig::ethereumForkBpo2Time() const
     return m_genesisConfig.m_ethereumForkSchedule ?
                m_genesisConfig.m_ethereumForkSchedule->m_bpo2Time :
                std::numeric_limits<uint64_t>::max();
+}
+uint64_t bcos::tool::NodeConfig::ethereumMergeBlock() const
+{
+    return m_ethereumMergeBlock;
+}
+std::optional<NodeConfig::EthereumFinalizedCheckpoint> const&
+bcos::tool::NodeConfig::ethereumFinalizedCheckpoint() const
+{
+    return m_ethereumFinalizedCheckpoint;
 }
 bool bcos::tool::NodeConfig::singlePointConsensus() const
 {

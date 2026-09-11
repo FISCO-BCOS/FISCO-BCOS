@@ -72,6 +72,12 @@ task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
  */
 bcos::h256 calculateTransactionRoot(protocol::Block const& block, crypto::Hash const& hashImpl);
 
+/// Ethereum transactions trie root (txsRoot) for executor_version >= 2 chains: reassembles
+/// each transaction's full EIP-2718 wire bytes (Web3RawTransaction::reassembleWeb3RawTransaction)
+/// and commits to the tx trie (ledger::mpt::calculateTransactionsRoot). Defined in
+/// BaselineScheduler.cpp (block is a concrete protocol::Block). Empty block -> emptyRootHash().
+h256 calculateEthereumTransactionRoot(protocol::Block const& block);
+
 /**
  * Returns the current time in milliseconds since the epoch.
  *
@@ -148,7 +154,9 @@ private:
      * mutable layer is exactly this block's delta and whose immutable layers are the pending
      * blocks' not-yet-committed deltas, node rows included — and return the trie-node delta.
      *
-     * The parent state root comes from the parent block's HEADER, read through the view.
+     * The parent state root comes from the parent block's HEADER, read through the view —
+     * the shared selection rule ledger::mpt::parentStateRootFor (StateRoots.h), also used by
+     * EngineServiceImpl::calculateStateRoot.
      * finishExecute publishes every non-genesis MPT block's executed header into its own
      * mutable layer, so ONE getBlockData arm covers every case: a pending parent resolves
      * from the view's immutable chain (pipeline), a committed parent — the genesis block

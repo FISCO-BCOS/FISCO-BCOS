@@ -37,7 +37,8 @@ TxPoolFactory::TxPoolFactory(NodeIDPtr _nodeId, CryptoSuite::Ptr _cryptoSuite,
     TransactionSubmitResultFactory::Ptr _txResultFactory, BlockFactory::Ptr _blockFactory,
     bcos::front::FrontServiceInterface::Ptr _frontService,
     bcos::ledger::LedgerInterface::Ptr _ledger, std::string _groupId, std::string _chainId,
-    int64_t _blockLimit, size_t _txpoolLimit, bool checkTransactionSignature)
+    int64_t _blockLimit, size_t _txpoolLimit, bool checkTransactionSignature,
+    bool _rejectNativeTxOnV2Chain)
   : m_nodeId(std::move(_nodeId)),
     m_cryptoSuite(std::move(_cryptoSuite)),
     m_txResultFactory(std::move(_txResultFactory)),
@@ -48,7 +49,8 @@ TxPoolFactory::TxPoolFactory(NodeIDPtr _nodeId, CryptoSuite::Ptr _cryptoSuite,
     m_chainId(std::move(_chainId)),
     m_blockLimit(_blockLimit),
     m_txpoolLimit(_txpoolLimit),
-    m_checkTransactionSignature(checkTransactionSignature)
+    m_checkTransactionSignature(checkTransactionSignature),
+    m_rejectNativeTxOnV2Chain(_rejectNativeTxOnV2Chain)
 {}
 
 
@@ -61,7 +63,8 @@ TxPool::Ptr TxPoolFactory::createTxPool(boost::asio::io_context& _ioContext,
     auto web3NonceChecker = std::make_shared<txvalidator::Web3NonceChecker>(m_ledger);
     auto validator =
         std::make_shared<txvalidator::TxValidator>(m_cryptoSuite, m_ledger, m_ledgerConfigState,
-            txpoolNonceChecker, web3NonceChecker, &isSystemTransaction, m_groupId, m_chainId);
+            txpoolNonceChecker, web3NonceChecker, &isSystemTransaction, m_groupId, m_chainId,
+            m_rejectNativeTxOnV2Chain);
     validator->setScheduler(m_scheduler);
 
     TXPOOL_LOG(INFO) << LOG_DESC("create transaction config");

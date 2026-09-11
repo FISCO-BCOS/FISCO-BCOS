@@ -137,8 +137,10 @@ BOOST_AUTO_TEST_CASE(BuildsRlpHashMatchingPythonReference)
         // The stored header keeps its Ethereum identity across encode/decode.
         BOOST_CHECK(header->ethBlockVersion() == EthBlockVersion::PRAGUE);
         BOOST_CHECK_EQUAL(header->stateRoot().hex(), std::string(c_emptyTrieRoot));
-        // B0 timestamp is the artifact's, converted to BlockHeader milliseconds.
-        BOOST_CHECK_EQUAL(header->timestamp(), 0x689d5c00 * 1000LL);
+        // B0 timestamp is the artifact's seconds converted to the internal
+        // BlockHeader millisecond domain (applyEthGenesisHeader x1000); the RLP
+        // bridge divides by 1000 on encode, so the hash above is unaffected.
+        BOOST_CHECK_EQUAL(header->timestamp(), 0x689d5c00LL * 1000);
 
         // The FISCO genesis pin moved to SYS_CONFIG.
         auto pinEntry = co_await storage2::readOne(

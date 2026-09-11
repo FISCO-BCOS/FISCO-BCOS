@@ -43,7 +43,7 @@ BOOST_AUTO_TEST_SUITE(CheckSetTest)
 BOOST_AUTO_TEST_CASE(poolAdmissionColumnIsExact)
 {
     BOOST_CHECK(checkSet(TxKind::Bcos, AdmissionContext::PoolAdmission) ==
-                (Check::TypeGate | Check::ToFieldFormat | Check::Signature |
+                (Check::BcosTxAllowed | Check::TypeGate | Check::ToFieldFormat | Check::Signature |
                     Check::BcosGroupChainId | Check::BcosPoolNonce | Check::BcosLedgerNonce));
 
     constexpr auto legacy = Check::TypeGate | Check::ToFieldFormat | Check::Signature |
@@ -276,8 +276,9 @@ BOOST_AUTO_TEST_CASE(proposalVerificationKeepsProtocolInvariants)
         return checkSet(kind, AdmissionContext::ProposalVerification);
     };
     BOOST_CHECK(
-        proposal(TxKind::Bcos) == (Check::TypeGate | Check::ToFieldFormat | Check::Signature |
-                                      Check::BcosGroupChainId | Check::BcosLedgerNonce));
+        proposal(TxKind::Bcos) == (Check::BcosTxAllowed | Check::TypeGate | Check::ToFieldFormat |
+                                      Check::Signature | Check::BcosGroupChainId |
+                                      Check::BcosLedgerNonce));
 
     constexpr auto legacy = Check::TypeGate | Check::ToFieldFormat | Check::Signature |
                             Check::MaxGasLimit | Check::FeeCapVsBaseFee | Check::ChainId |
