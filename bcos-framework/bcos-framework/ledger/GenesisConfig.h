@@ -28,6 +28,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <cstdint>
+#include <limits>
 #include <map>
 #include <optional>
 #include <sstream>
@@ -120,6 +121,20 @@ struct EthereumForkSchedule
     uint64_t m_bpo2Time = 0;
 };
 
+// OP-lane fork schedule, parsed from the [op_fork_timestamps] section of
+// config.genesis (executor_version >= OPSTACK_EXECUTOR_VERSION). OP forks
+// activate by L2 block TIMESTAMP IN SECONDS, exactly like op-node's
+// rollup.json jovian_time / karst_time (op-node/rollup/types.go:
+// IsJovian(ts) == Time != nil && ts >= *Time). 0 means "active from genesis";
+// std::numeric_limits<uint64_t>::max() encodes op-node's nil, i.e. "not
+// scheduled". Isthmus is the OP lane's baseline and therefore has no entry:
+// the engine's -38005 gate admits only Isthmus+ payloads.
+struct OpForkSchedule
+{
+    uint64_t m_jovianTime = std::numeric_limits<uint64_t>::max();
+    uint64_t m_karstTime = std::numeric_limits<uint64_t>::max();
+};
+
 class GenesisConfig
 {
 public:
@@ -182,6 +197,13 @@ public:
     // Part of the genesis pin via generateGenesisData; absent on every legacy
     // chain, keeping their genesis strings byte-identical.
     std::optional<EthereumForkSchedule> m_ethereumForkSchedule;
+
+    // Present iff config.genesis carries an [op_fork_timestamps] section (OP
+    // lane, executor_version >= OPSTACK_EXECUTOR_VERSION). Only the entries
+    // that are 0 reach the genesis pin (generateGenesisData): a fork scheduled
+    // for a future timestamp must stay editable on a running chain, and
+    // op-node's rollup.json is the source of truth for those.
+    std::optional<OpForkSchedule> m_opForkSchedule;
 
     // True iff config.genesis declares "[ethereum] mode=el" — the chain is an
     // Ethereum L1 EL-sync chain. Chain-level (part of the genesis pin), NOT the

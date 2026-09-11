@@ -170,7 +170,29 @@ public:
 
     task::Task<GetPayloadResult> getPayload(const PayloadID& payloadId, std::uint32_t version)
     {
-        co_return m_tracker.getPayload(payloadId, version);
+        auto result = m_tracker.getPayload(payloadId, version);
+        // execution-apis prague.md / osaka.md: engine_getPayloadV4 serves payloads inside the
+        // pre-Osaka (pre-Karst) time frame and engine_getPayloadV5 serves Karst ones; asking
+        // for the wrong one is -38005 Unsupported fork, NOT a payload-shape error (that is
+        // IncompatiblePayloadVersion, already raised by the tracker above). The fork comes
+        // from the built payload's OWN timestamp — op-node's GetPayloadVersion(ts) picks V5
+        // from exactly that value (op-node/rollup/types.go, v1.19.3). V1-V3 keep the
+        // tracker's behaviour untouched: they predate the OP lane's Isthmus baseline.
+        if (version == static_cast<std::uint32_t>(ApiVersion::V4) ||
+            version == static_cast<std::uint32_t>(ApiVersion::V5))
+        {
+            const bool karstPayload =
+                m_scheduler.isKarstActive(static_cast<int64_t>(result->executionPayload.timestamp));
+            const bool karstMethod = version == static_cast<std::uint32_t>(ApiVersion::V5);
+            if (karstPayload != karstMethod)
+            {
+                BOOST_THROW_EXCEPTION(
+                    UnsupportedFork{} << bcos::errinfo_comment{
+                        karstMethod ? "engine_getPayloadV5 requires a Karst payload" :
+                                      "a Karst payload requires engine_getPayloadV5"});
+            }
+        }
+        co_return result;
     }
 
     task::Task<PayloadStatus> newPayload(const NewPayloadRequest& request, std::uint32_t version);
@@ -226,7 +248,13 @@ private:
                version <= static_cast<std::uint32_t>(ApiVersion::V3);
     }
 
-    /// OP newPayload is Isthmus-only (V4). Not the Eth V1..V4 window.
+    /// OP newPayload is V4-only, and STAYS V4-only through Karst. This is upstream's own
+    /// asymmetry, not an oversight: op-node's NewPayloadVersion(ts) (op-node/rollup/types.go)
+    /// has a single Isthmus branch returning NewPayloadV4 and no Karst branch, while
+    /// GetPayloadVersion(ts) does rise to GetPayloadV5 on Karst — which is why getPayload
+    /// above gates V4/V5 on the payload's fork and this window does not move.
+    /// exchangeCapabilities therefore advertises engine_getPayloadV5 but no
+    /// engine_newPayloadV5. Not the Eth V1..V4 window.
     static bool isNewPayloadVersionSupported(std::uint32_t version)
     {
         return version == static_cast<std::uint32_t>(ApiVersion::V4);

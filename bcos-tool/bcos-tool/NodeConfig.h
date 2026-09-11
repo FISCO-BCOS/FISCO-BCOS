@@ -93,11 +93,12 @@ public:
     std::string const& groupId() const;
     size_t blockLimit() const;
 
-    /// OP-Stack Jovian fork selection: enabled iff `feature_op_jovian` is set in the genesis
-    /// [features] section (the FISCO-native feature-flag mechanism — replaces the former
-    /// chain.isthmus_time / chain.jovian_time timestamp thresholds). Isthmus is the OP-mode
-    /// baseline; this flag selects Jovian semantics (DA footprint, operator fee ×100).
-    bool opJovianActive() const;
+    /// OP-lane fork schedule from the genesis [op_fork_timestamps] section: activation times
+    /// in SECONDS, keyed per block by the L2 block timestamp exactly as op-node keys
+    /// rollup.json's jovian_time / karst_time. Present iff the section is present, which
+    /// validateL2Invariants binds both ways to executor.version >= OPSTACK_EXECUTOR_VERSION.
+    /// Isthmus is the lane baseline and has no entry.
+    std::optional<ledger::OpForkSchedule> const& opForkSchedule() const;
 
     std::string const& privateKeyPath() const;
     std::string const& hsmLibPath() const;
@@ -382,6 +383,8 @@ protected:
     void loadExecutorConfig(boost::property_tree::ptree const& _pt);
     // EL-mode timestamp fork schedule ([fork_timestamps] in config.genesis)
     void loadForkTimestamps(boost::property_tree::ptree const& _genesisConfig);
+    // OP-lane fork schedule ([op_fork_timestamps] in config.genesis)
+    void loadOpForkTimestamps(boost::property_tree::ptree const& _genesisConfig);
 
     // load config.ini
     void loadExecutorNormalConfig(boost::property_tree::ptree const& _pt);
@@ -392,7 +395,7 @@ protected:
     void checkService(std::string const& _serviceType, std::string const& _serviceName);
 
     // [features] section loader — exposed to the LoaderProbe test harness like the other
-    // per-section loaders (feature_op_jovian drives OP-Stack fork selection).
+    // per-section loaders.
     void loadGenesisFeatures(boost::property_tree::ptree const& ptree);
 
 private:

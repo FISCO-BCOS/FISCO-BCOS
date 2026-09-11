@@ -22,6 +22,7 @@
 #include <bcos-evm/adapter/StateRootCompute.h>
 #include <bcos-framework/engine/Errors.h>
 #include <bcos-framework/ledger/FeaturesStorage.h>  // writeToStorage (seedL2CompatFeature)
+#include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
@@ -318,7 +319,9 @@ struct Fixture
     bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory{makeReceiptFactory()};
     bcos::crypto::Hash::Ptr hashImpl{makeCryptoSuite()->hashImpl()};
     bcos::protocol::BlockFactory::Ptr blockFactory{makeBlockFactory()};
-    bcos::evm::opstack::OpForkFlags forkFlags{.jovianActive = false};
+    // Default schedule: both forks unscheduled (UINT64_MAX), so every block in this fixture
+    // resolves to the Isthmus baseline regardless of its timestamp.
+    bcos::ledger::OpForkSchedule forkSchedule{};
     // A real Ledger wired into the scheduler's m_ledger (the commit hook now calls
     // prewriteBlockToBuffer). prewriteBlockToBuffer writes through the commit hook's MutableStorage
     // (wrapped into a fresh LegacyStorageWrapper by prewriteBlock), so the Ledger's own
@@ -330,13 +333,17 @@ struct Fixture
     bcos::IOServicePool::Ptr ioServicePool{std::make_shared<bcos::IOServicePool>(1)};
     std::shared_ptr<bcos::executor_v1::opstack::OpScheduler<MLS>> scheduler;
 
-    Fixture()
-      : legacyLedgerStorage(
+    /// @p schedule lets a case cross an OP fork inside this fixture; the default leaves both
+    /// forks unscheduled, which is what every pre-existing case relies on.
+    explicit Fixture(bcos::ledger::OpForkSchedule schedule = {})
+      : forkSchedule(schedule),
+        legacyLedgerStorage(
             std::make_shared<bcos::storage::LegacyStorageWrapper<BackendMemStorage>>(
                 backendStorage)),
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
-        scheduler(std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory,
-            hashImpl, kChainId, forkFlags, blockFactory, multiLayerStorage, ledger, ioServicePool))
+        scheduler(
+            std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory, hashImpl,
+                kChainId, forkSchedule, blockFactory, multiLayerStorage, ledger, ioServicePool))
     {
         seedSender(multiLayerStorage, kSender, hashImpl);
         seedSysTables(multiLayerStorage);
@@ -599,7 +606,7 @@ bcos::evm::engine::OpExecuteBlockResult runExecutionProbe(Fixture& f, ViewType& 
 {
     namespace op = bcos::evm::opstack;
     namespace detail = bcos::evm::engine::detail;
-    const auto& cfg = op::configAt(f.forkFlags);
+    const auto& cfg = op::configAt(f.forkSchedule, detail::forkTimestampSec(header.timestamp()));
     // Build block-order transactions first (mirroring buildOpBlock: opEnvelopeToTars + full
     // envelope overwrite).
     std::vector<bcos::protocol::Transaction::ConstPtr> transactions;
@@ -1140,9 +1147,9 @@ BOOST_AUTO_TEST_CASE(PendingSlotStateMachine)
 BOOST_AUTO_TEST_CASE(CommitWithoutLedgerReturnsInvalidStatus)
 {
     Fixture f;
-    auto execOnly =
-        std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(f.receiptFactory, f.hashImpl,
-            kChainId, f.forkFlags, f.blockFactory, f.multiLayerStorage, nullptr, f.ioServicePool);
+    auto execOnly = std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(f.receiptFactory,
+        f.hashImpl, kChainId, f.forkSchedule, f.blockFactory, f.multiLayerStorage, nullptr,
+        f.ioServicePool);
     auto saved = f.scheduler;
     f.scheduler = execOnly;
 
@@ -1240,6 +1247,57 @@ BOOST_AUTO_TEST_CASE(CallGasAboveBlockPoolClassifiesAsConsensusRejected)
 
 /// executeBlock: a normal tx that does not fit the remaining pool is a capacity fault
 /// (OpRejectIsCapacity + no-evict), not the eth_call classification above.
+/// executeBlock must resolve the fork from the timestamp of THE BLOCK IT IS EXECUTING, not
+/// from a chain-wide constant. The observable is the P256VERIFY precompile at 0x100: Jovian
+/// prices it at 3450 (an OP override carried since Fjord), Karst drops the override so EIP-7951's
+/// 6900 applies (pinned by OpKarstTest::P256VerifyCosts6900UnderKarstAnd3450UnderJovian). One
+/// deposit calling 0x100, one schedule, two blocks straddling karst_time — the executed header's
+/// gasUsed differs by exactly 3450.
+///
+/// makeHeader()'s timestamp is 0x3f2 * 1000 ms, i.e. second 0x3f2, so a karst_time OF 0x3f2 puts
+/// that block at the activation second (op-node's `ts >= karst_time`) while 0x3f2 + 1 leaves it
+/// one second short. Nothing else about the two runs differs.
+BOOST_AUTO_TEST_CASE(ExecuteBlockSelectsForkFromTheBlockTimestamp)
+{
+    constexpr uint64_t kHeaderSecond = 0x3f2;
+    constexpr auto kP256Verify = 0x0000000000000000000000000000000000000100_address;
+
+    // Both arms are Jovian-or-later, so the block keeps ONE shape: a Jovian-sized L1-attributes
+    // deposit first (has_da_footprint carries from Jovian into Karst unchanged), then the probe.
+    auto l1AttributesEnv = [] {
+        bcos::evm::opstack::DepositTx dep;
+        dep.source_hash = evmc::bytes32{};
+        dep.from = bcos::evm::opstack::OP_DEPOSITOR;
+        dep.to = bcos::evm::opstack::OP_L1_BLOCK;
+        dep.mint = std::nullopt;
+        dep.value = intx::uint256{0};
+        dep.gas_limit = 1'000'000;
+        dep.is_system_tx = false;
+        dep.data = evmc::bytes(bcos::evm::opstack::JovianL1AttributesLen, 0);
+        std::copy(bcos::evm::opstack::JovianL1AttributesSelector.begin(),
+            bcos::evm::opstack::JovianL1AttributesSelector.end(), dep.data.begin());
+        return encodeDepositEnvelope(dep);
+    }();
+
+    auto gasUsedWithKarstAt = [&](uint64_t karstTime) {
+        Fixture f(bcos::ledger::OpForkSchedule{.m_jovianTime = 0, .m_karstTime = karstTime});
+        auto dep = makeDeposit();
+        dep.to = kP256Verify;  // empty input: the precompile succeeds and only the price moves
+        auto const depEnv = encodeDepositEnvelope(dep);
+        auto out = invokeExecute(
+            f, assembleBlock(f, makeHeader(), {l1AttributesEnv, depEnv}), /*verify=*/false);
+        BOOST_REQUIRE_MESSAGE(
+            out.err == nullptr, "fork-selection probe block must execute cleanly, got: "
+                                    << (out.err ? out.err->errorMessage() : std::string{}));
+        BOOST_REQUIRE(out.header != nullptr);
+        return out.header->gasUsed();
+    };
+
+    auto const jovianGasUsed = gasUsedWithKarstAt(kHeaderSecond + 1);  // one second short
+    auto const karstGasUsed = gasUsedWithKarstAt(kHeaderSecond);       // exactly at activation
+    BOOST_CHECK_EQUAL(karstGasUsed - jovianGasUsed, 6900U - 3450U);
+}
+
 BOOST_AUTO_TEST_CASE(ExecuteBlockGasPoolFullTagsCapacity)
 {
     Fixture f;
