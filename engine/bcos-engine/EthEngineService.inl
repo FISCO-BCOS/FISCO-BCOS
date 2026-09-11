@@ -513,11 +513,35 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         sealedTxs.size());
     if (payloadAttributes.transactions.has_value())
     {
+        // Forced envelopes are raw-only on the wire, so give each one the same executable
+        // `decoded` form a sealed pool transaction already carries. Carrying them raw
+        // (decoded == nullptr) made collectExecutableTransactions skip them: they entered
+        // transactionsRoot but were neither executed, persisted, nor given a receipt, so
+        // transactionsRoot covered N envelopes while receiptsRoot covered only the M sealed
+        // txs. Decoding here lets executeBlock run them and makes N == M.
+        auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
         for (auto& raw : decodedForcedTxs)
         {
+            const auto txHash = hashImpl.hash(raw);
+            auto tarsTx = engine_common::op::opEnvelopeToTars(raw, txHash);
+            if (!tarsTx)
+            {
+                // validatePayloadAttributes already admitted this envelope, so a decode
+                // failure here is a node-local anomaly — fail loudly (-32603), never a
+                // false payload INVALID.
+                BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                          "forced payloadAttributes.transactions envelope "
+                                          "is undecodable"});
+            }
+            // Same carrier the OP build path uses (OpEngineService::buildOpBlock): keep the
+            // raw EIP-2718 envelope on extraTransactionBytes so the executor sees the exact
+            // wire form.
+            tarsTx->extraTransactionBytes.assign(raw.begin(), raw.end());
+            auto decoded = std::make_shared<bcostars::protocol::TransactionImpl>(
+                [tars = std::move(*tarsTx)]() mutable { return &tars; });
             engineTransactions.push_back(EngineTransaction{
                 .raw = std::move(raw),
-                .decoded = nullptr,
+                .decoded = std::move(decoded),
             });
         }
     }

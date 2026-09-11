@@ -105,8 +105,6 @@ void applyOpHeaderConstants(bcos::protocol::BlockHeader& header);
 bcos::protocol::BlockHeader::Ptr rebuildOpEthHeader(
     const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
     const h256& transactionsRoot, const h256& parentBeaconBlockRoot);
-std::optional<bcostars::Transaction> opEnvelopeToTars(
-    bcos::bytes const& env, bcos::crypto::HashType const& txHash);
 }  // namespace engine_common::op
 
 namespace detail

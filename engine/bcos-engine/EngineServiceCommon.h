@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/engine/Constants.h>
 #include <bcos-framework/engine/RawTransactionDispatch.h>
 #include <bcos-framework/engine/Types.h>
@@ -26,6 +27,7 @@
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/BlockHeaderFactory.h>
 #include <bcos-ledger/mpt/Constants.h>
+#include <bcos-tars-protocol/tars/Transaction.h>
 #include <evmc/evmc.h>
 
 #include <cstddef>
@@ -216,6 +218,18 @@ GetPayloadResult assembleGetPayloadData(const EntryT& entry, std::uint32_t versi
         .parentBeaconBlockRoot = entry.parentBeaconBlockRoot,
     });
 }
+
+namespace op
+{
+/// Decode one EIP-2718 (typed/legacy) Web3 raw envelope into its Tars transaction form,
+/// tagged with @p txHash (keccak256 of the same raw bytes). Returns nullopt when the
+/// envelope is not a decodable Web3 signing payload. Single home for both the Eth and OP
+/// build paths: a raw/forced envelope needs the same executable `decoded` form a sealed
+/// pool transaction already carries, or the scheduler skips it and receiptsRoot ends up
+/// covering fewer transactions than transactionsRoot.
+std::optional<bcostars::Transaction> opEnvelopeToTars(
+    bcos::bytes const& env, bcos::crypto::HashType const& txHash);
+}  // namespace op
 }  // namespace engine_common
 
 }  // namespace bcos::engine
