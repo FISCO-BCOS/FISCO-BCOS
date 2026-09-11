@@ -157,6 +157,27 @@ def a2_chain(rpc):
     check("maxPriorityFeePerGas returns 0x0 (FISCO constant)", mpf == "0x0", str(mpf))
     syncing = rpc.call("eth_syncing")
     check("syncing false", syncing is False, str(syncing))
+    # EIP-7910 eth_config: the node's fork configuration. A missing method answers -32601,
+    # which rpc.call turns into a loud failure here — the method must be registered.
+    cfg = rpc.call("eth_config")
+    cur = cfg.get("current") if isinstance(cfg, dict) else None
+    check("eth_config has current", isinstance(cur, dict), str(cfg)[:120])
+    if isinstance(cur, dict):
+        check("eth_config.current.chainId == chainId",
+              int(cur.get("chainId", "0x0"), 16) == int(cid, 16),
+              f"cfg={cur.get('chainId')} chainId={cid}")
+        fid = cur.get("forkId")
+        check("eth_config.current.forkId is a 4-byte 0x-hex",
+              isinstance(fid, str) and fid.startswith("0x") and len(fid) == 10, str(fid))
+        pcs = cur.get("precompiles") or {}
+        check("eth_config.current.precompiles includes ECREC",
+              isinstance(pcs, dict) and "ECREC" in pcs, str(list(pcs)[:6]))
+        scs = cur.get("systemContracts") or {}
+        # The C2 devnet is an OP L2 (feature_l2_ethereum_compat): beacon roots + history.
+        check("eth_config.current.systemContracts includes BEACON_ROOTS_ADDRESS",
+              isinstance(scs, dict) and "BEACON_ROOTS_ADDRESS" in scs, str(scs))
+    check("eth_config.next is null", isinstance(cfg, dict) and cfg.get("next") is None, "")
+    check("eth_config.last is null", isinstance(cfg, dict) and cfg.get("last") is None, "")
 
 
 def a2_blocks(rpc):
