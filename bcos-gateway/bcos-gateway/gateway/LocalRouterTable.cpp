@@ -21,7 +21,7 @@
 #include "bcos-framework/protocol/CommonError.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
 #include "bcos-gateway/Common.h"
-#include "bcos-gateway/libp2p/P2PMessage.h"
+#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-tars-protocol/client/FrontServiceClient.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-task/Wait.h>
@@ -263,7 +263,7 @@ bool LocalRouterTable::eraseUnreachableNodes()
 }
 
 bool LocalRouterTable::broadcastMsg(uint16_t _nodeType, const std::string& _groupID,
-    uint16_t _moduleID, NodeIDPtr _srcNodeID, std::shared_ptr<P2PMessage> _msg) const
+    uint16_t _moduleID, NodeIDPtr _srcNodeID, std::shared_ptr<Message> _msg) const
 {
     auto frontServiceList = getGroupFrontServiceList(_groupID);
     if (frontServiceList.empty())
@@ -271,7 +271,7 @@ bool LocalRouterTable::broadcastMsg(uint16_t _nodeType, const std::string& _grou
         return false;
     }
     auto srcNodeIDHex = _srcNodeID->hex();
-    // zero-copy: each dispatch task below owns the P2PMessage, so the payload view into it
+    // zero-copy: each dispatch task below owns the Message, so the payload view into it
     // stays valid for the whole (possibly deferred) per-front dispatch
     auto payloadSize = _msg->payload().size();
     for (auto const& it : frontServiceList)
@@ -293,7 +293,7 @@ bool LocalRouterTable::broadcastMsg(uint16_t _nodeType, const std::string& _grou
                           << LOG_KV("moduleID", _moduleID) << LOG_KV("payloadSize", payloadSize)
                           << LOG_KV("dst", dstNodeID);
         task::wait([](bcos::front::FrontServiceInterface::Ptr _frontService, std::string _groupID,
-                       uint16_t _moduleID, NodeIDPtr _srcNodeID, std::shared_ptr<P2PMessage> _msg,
+                       uint16_t _moduleID, NodeIDPtr _srcNodeID, std::shared_ptr<Message> _msg,
                        std::string _dstNodeID) -> task::Task<void> {
             auto error =
                 co_await _frontService->onReceiveMessage(_groupID, _srcNodeID, _msg->payload());

@@ -22,8 +22,8 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
+#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/Session.h"
-#include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/test/unit_test.hpp>
@@ -122,7 +122,7 @@ inline SessionBundle_FIB97new makeSessionFib97new()
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_FIB97new>();
     auto fakeAsio = std::make_shared<FakeASIO_FIB97new>();
-    auto msgFactory = std::make_shared<P2PMessageFactory>();
+    auto msgFactory = std::make_shared<MessageFactory>();
     auto fakeHost = std::make_shared<FakeHost_FIB97new>(hashImpl, fakeAsio, nullptr, msgFactory);
 
     auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);

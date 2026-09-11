@@ -15,7 +15,6 @@
 #include "bcos-gateway/libnetwork/SessionFace.h"
 #include "bcos-gateway/libnetwork/SessionReadLoop.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"
-#include "bcos-gateway/libp2p/Common.h"  // for c_compressThreshold / c_zstdCompressLevel
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Overloaded.h"
 #include "bcos-utilities/ZstdCompress.h"
@@ -40,9 +39,9 @@ using namespace bcos;
 using namespace bcos::gateway;
 
 // ext field offset in the fixed base P2P header: length(4) | version(2) | packetType(2) |
-// seq(4) | ext(2). ext is the last field of the base header (P2PMessage::MESSAGE_HEADER_LENGTH
+// seq(4) | ext(2). ext is the last field of the base header (Message::MESSAGE_HEADER_LENGTH
 // = 14); the V2 ttl/src/dst extension follows it.
-constexpr size_t c_p2pHeaderExtOffset = 12;  // P2PMessage::MESSAGE_HEADER_LENGTH(14) - 2
+constexpr size_t c_p2pHeaderExtOffset = 12;  // Message::MESSAGE_HEADER_LENGTH(14) - 2
 
 Session::Session(
     std::shared_ptr<SocketFace> socket, Host& server, size_t _recvBufferSize, bool _forceSize)
@@ -1286,7 +1285,7 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
     }
 
     // Zero-copy send by default. When compression is enabled and the payload is large enough (and
-    // the wire format is V2+ — the same rule as the removed asyncSendMessage path, P2PMessage::
+    // the wire format is V2+ — the same rule as the removed asyncSendMessage path, Message::
     // tryToCompressPayload also requires V2), the payload views are joined into a frame-owned
     // buffer and compressed; the wire then carries header + the compressed payload. Both buffers
     // live in this coroutine frame for the whole (deferred) send.

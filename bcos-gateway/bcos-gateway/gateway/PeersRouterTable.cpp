@@ -264,7 +264,7 @@ void PeersRouterTable::removeNodeFromGatewayInfo(P2pID const& _p2pID)
 }
 
 bcos::task::Task<void> bcos::gateway::PeersRouterTable::broadcastMessage(uint16_t type,
-    std::string_view group, uint16_t moduleID, const P2PMessageV2& message,
+    std::string_view group, uint16_t moduleID, const Message& message,
     ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads)
 {
     std::vector<std::string> selectedPeers;

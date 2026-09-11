@@ -22,10 +22,9 @@
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
+#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SessionReadLoop.h"
-#include "bcos-gateway/libp2p/P2PMessage.h"
-#include "bcos-gateway/libp2p/P2PMessageV2.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include <bcos-framework/protocol/Protocol.h>
@@ -202,49 +201,6 @@ protected:
     bcos::IOServicePool::Ptr m_threadPool;
 };
 
-class FakeP2PMessage : public P2PMessage
-{
-public:
-    using Ptr = std::shared_ptr<FakeP2PMessage>;
-    int32_t decode(const bytesConstRef& _buffer) override
-    {
-        if (_buffer.size() == 0)
-        {
-            return MessageDecodeStatus::MESSAGE_INCOMPLETE;
-        }
-
-        uint8_t length = _buffer[0];
-        m_length = length;
-        if (_buffer.size() < length)
-        {
-            return MessageDecodeStatus::MESSAGE_INCOMPLETE;
-        }
-
-        // check packet is right
-        for (uint8_t i = 1; i < length; ++i)
-        {
-            if (_buffer[i] != uint8_t(0xff))
-            {
-                BOOST_CHECK(false);
-                return MessageDecodeStatus::MESSAGE_ERROR;
-            }
-        }
-
-        m_payload.assign(_buffer.begin(), _buffer.begin() + length);
-        return length;
-    }
-};
-
-class FakeMessageFactory : public P2PMessageFactory
-{
-public:
-    Message::Ptr buildMessage() override
-    {
-        auto message = std::make_shared<FakeP2PMessage>();
-        return message;
-    }
-};
-
 class FakeMessagesBuilder
 {
 public:
@@ -253,8 +209,8 @@ public:
     {
         for (std::size_t i = 0; i < packetNum; ++i)
         {
-            uint8_t randPacketSize = rand() % 0xfe + 1;  // 1 ~ 254
-            Packet packet = buildPacket(randPacketSize);
+            uint8_t randPayloadSize = rand() % 0xf1;  // 0 ~ 240, frame is 14 ~ 254 bytes
+            Packet packet = buildPacket(randPayloadSize);
             m_sendBuffer.insert(m_sendBuffer.end(), packet->begin(), packet->end());
         }
 
@@ -305,16 +261,17 @@ public:
     size_t sendBufferSize() { return m_sendBuffer.size(); }
 
 private:
-    Packet buildPacket(uint8_t size)
+    Packet buildPacket(uint8_t payloadSize)
     {
-        // [size][0xff][0xff]...[0xff]
-        // 1B    size-1B
-        auto packet = std::make_shared<std::vector<uint8_t>>(size);
-        (*packet)[0] = size;
-        for (uint8_t i = 1; i < size; ++i)
-        {
-            (*packet)[i] = uint8_t(0xff);
-        }
+        // a real version-0 Message frame: [length:4][version:2][packetType:2][seq:4][ext:2]
+        // followed by payloadSize bytes of 0xff payload
+        auto packet = std::make_shared<std::vector<uint8_t>>(
+            Message::MESSAGE_HEADER_LENGTH + payloadSize, uint8_t(0xff));
+        // version/packetType/seq/ext stay zero: V0 base header, packetType 0 carries no options
+        std::memset(packet->data(), 0, Message::MESSAGE_HEADER_LENGTH);
+        uint32_t frameLen = boost::asio::detail::socket_ops::host_to_network_long(
+            static_cast<uint32_t>(packet->size()));
+        std::memcpy(packet->data(), &frameLen, sizeof(frameLen));
         return packet;
     }
 
@@ -420,7 +377,7 @@ BOOST_AUTO_TEST_CASE(doReadTest)
 {
     auto totalPacketNum = 500;
     FakeMessagesBuilder messageBuilder(totalPacketNum);
-    auto fakeMessageFactory = std::make_shared<FakeMessageFactory>();
+    auto fakeMessageFactory = std::make_shared<MessageFactory>();
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket>();
 
@@ -431,7 +388,10 @@ BOOST_AUTO_TEST_CASE(doReadTest)
     {
         auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr, fakeMessageFactory);
 
-        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
+        // 16-byte initial buffer: a real frame needs its 14-byte fixed header decoded before the
+        // read loop can learn the frame length and grow the buffer, so the growth path is now
+        // exercised from header-size upward (frames run up to 254 bytes)
+        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 16, true);
         session->setMessageFactory(fakeHost->messageFactory());
 
         session->setMessageHandler(
@@ -505,7 +465,7 @@ BOOST_AUTO_TEST_CASE(startUsesDefaultReadPolicy)
     // with a posted operation_not_supported — and assert the read loop drops the session.
     // (m_type defaults to TCP_ONLY, so "unset" would arm a real async_read_some on the fake's
     // connected socket pair instead; the invalid type is what makes the branch deterministic.)
-    auto fakeMessageFactory = std::make_shared<FakeMessageFactory>();
+    auto fakeMessageFactory = std::make_shared<MessageFactory>();
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket>();
     auto fakeAsio = std::make_shared<FakeASIO>();
@@ -541,7 +501,7 @@ BOOST_AUTO_TEST_CASE(fastSendMessageOutboundRateLimit)
     // The fast path must honour the same pre-send (outgoing rate-limit) check the removed callback
     // path (asyncSendMessage) enforced: a beforeMessageHandler rejection surfaces as a thrown
     // NetworkException (e.g. OutBWOverflow) so coroutine retry loops can stop.
-    auto fakeMessageFactory = std::make_shared<FakeMessageFactory>();
+    auto fakeMessageFactory = std::make_shared<MessageFactory>();
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket>();
     auto fakeAsio = std::make_shared<FakeASIO>();
@@ -556,7 +516,7 @@ BOOST_AUTO_TEST_CASE(fastSendMessageOutboundRateLimit)
             });
         session->startWithPolicy<FakeASIO::ReadPolicy>();
 
-        P2PMessage message;
+        Message message;
         message.setSeq(1);
         bytes payload{1, 2, 3, 4};
         BOOST_CHECK_THROW(
@@ -635,7 +595,7 @@ BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
     // fan-out / retry loop) that compresses for one peer cannot leak the flag to a later peer that
     // receives an uncompressed frame (which would fail to decompress and drop the connection).
     // Also exercises the compression branch itself, which the FakeSocket-based tests cannot reach.
-    auto fakeMessageFactory = std::make_shared<FakeMessageFactory>();
+    auto fakeMessageFactory = std::make_shared<MessageFactory>();
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeAsio = std::make_shared<FakeASIO>();
 
@@ -681,7 +641,7 @@ BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
         session->startWithPolicy<FakeASIO::ReadPolicy>();
 
         // V2 wire format + payload well above the 1KB compress threshold -> compression must run
-        P2PMessage message;
+        Message message;
         message.setVersion((uint16_t)bcos::protocol::ProtocolVersion::V2);
         message.setSeq(1);
         bytes payload(2000, 'x');
@@ -725,8 +685,8 @@ BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
     ioThread.join();
 
     // The wire frame must actually be compressed: parse the header
-    // [length:4][version:2][packetType:2][seq:4][ext:2] (P2PMessage::MESSAGE_HEADER_LENGTH = 14).
-    BOOST_REQUIRE(received.size() >= P2PMessage::MESSAGE_HEADER_LENGTH);
+    // [length:4][version:2][packetType:2][seq:4][ext:2] (Message::MESSAGE_HEADER_LENGTH = 14).
+    BOOST_REQUIRE(received.size() >= Message::MESSAGE_HEADER_LENGTH);
     uint16_t frameExt = (static_cast<uint16_t>(received[12]) << 8) |
                         static_cast<uint16_t>(received[13]);
     BOOST_CHECK(frameExt & bcos::protocol::MessageExtFieldFlag::COMPRESS);
@@ -742,7 +702,7 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
     // carrying its OWN negotiated version: the shared message is stamped per-peer before each
     // header encode and the parallel fan-out tasks never cross-contaminate each other's wire
     // header.
-    auto fakeMessageFactory = std::make_shared<FakeMessageFactory>();
+    auto fakeMessageFactory = std::make_shared<MessageFactory>();
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeAsio = std::make_shared<FakeASIO>();
 
@@ -864,7 +824,7 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
     // that the V2-peer decode below asserts — a regression that encodes a V2 frame through the
     // base-class header (e.g. an object-sliced message, which writes no ttl/src/dst extension)
     // would fail that decode immediately.
-    auto message = std::make_shared<P2PMessageV2>();
+    auto message = std::make_shared<Message>();
     message->setPacketType(GatewayMessageType::SyncNodeSeq);
     message->setSeq(0x1234);
     message->setSrcP2PNodeID("srcNodeID");
@@ -927,16 +887,16 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
 
     // The V0 frame must carry the negotiated V0 version (base header only): the version field is
     // bytes [4..6) of the fixed base header [length:4][version:2][packetType:2][seq:4][ext:2].
-    BOOST_REQUIRE(receivedV0.size() >= P2PMessage::MESSAGE_HEADER_LENGTH);
+    BOOST_REQUIRE(receivedV0.size() >= Message::MESSAGE_HEADER_LENGTH);
     uint16_t versionV0 = (static_cast<uint16_t>(receivedV0[4]) << 8) | receivedV0[5];
     BOOST_CHECK_EQUAL(versionV0, 0);
 
     // The V2 frame must decode as a real V2 message carrying the full routing extension. Round-6
-    // review: decode the whole frame with P2PMessageV2::decode (instead of hand-reading the
+    // review: decode the whole frame with Message::decode (instead of hand-reading the
     // version bytes) and assert src/dst/ttl, so "V2 version written but ttl/src/dst missing" (the
     // exact shape of the round-2..5 object-slicing defect) fails here.
-    BOOST_REQUIRE(receivedV2.size() >= P2PMessage::MESSAGE_HEADER_LENGTH);
-    P2PMessageV2 decodedV2;
+    BOOST_REQUIRE(receivedV2.size() >= Message::MESSAGE_HEADER_LENGTH);
+    Message decodedV2;
     int32_t decodedOffset = decodedV2.decode(bcos::ref(receivedV2));
     BOOST_REQUIRE(decodedOffset > 0);
     BOOST_CHECK_EQUAL(decodedV2.version(), 2);
@@ -958,7 +918,7 @@ BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
     constexpr size_t msgPerThread = 50;
     constexpr size_t totalMsgs = threadCount * msgPerThread;
 
-    auto fakeMessageFactory = std::make_shared<FakeMessageFactory>();
+    auto fakeMessageFactory = std::make_shared<MessageFactory>();
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeAsio = std::make_shared<FakeASIO>();
 
@@ -1001,9 +961,11 @@ BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
     client.connect(listenEndpoint, connectError);
     BOOST_REQUIRE(!connectError);
 
-    // Each frame is the fixed 14-byte base header plus the 64-byte payload (payload is far below
-    // the compress threshold, so no compression runs even at V2).
-    const size_t frameSize = P2PMessage::MESSAGE_HEADER_LENGTH + 64;
+    // Each frame is the fixed 14-byte base header plus the 6-byte V2 extended header (ttl +
+    // empty src/dst nodeIDs — a version>V0 message always carries them) plus the 64-byte payload
+    // (payload is far below the compress threshold, so no compression runs even at V2).
+    const size_t extendedHeaderLen = 6;
+    const size_t frameSize = Message::MESSAGE_HEADER_LENGTH + extendedHeaderLen + 64;
     const size_t expectedBytes = frameSize * totalMsgs;
 
     {
@@ -1020,7 +982,7 @@ BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
             senders.emplace_back([t, session] {
                 for (size_t i = 0; i < msgPerThread; ++i)
                 {
-                    P2PMessage message;
+                    Message message;
                     message.setVersion((uint16_t)bcos::protocol::ProtocolVersion::V2);
                     message.setSeq(static_cast<uint32_t>(t * msgPerThread + i));
                     bytes payload(64, static_cast<uint8_t>('a' + t));
@@ -1092,8 +1054,9 @@ BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
     ioThread.join();
 
     // Parse the accumulated stream into frames by the 4-byte length prefix. Header layout:
-    // [length:4][version:2][packetType:2][seq:4][ext:2] (P2PMessage::MESSAGE_HEADER_LENGTH = 14);
-    // seq sits at bytes [8..12) in network byte order.
+    // [length:4][version:2][packetType:2][seq:4][ext:2] (Message::MESSAGE_HEADER_LENGTH = 14),
+    // followed by the 6-byte V2 extended header [ttl:2][srcLen:2][dstLen:2] (nodeIDs empty);
+    // seq sits at bytes [8..12) in network byte order, payload at byte 20.
     std::vector<uint32_t> seqs;
     std::unordered_set<uint32_t> seenSeqs;
     {
@@ -1114,7 +1077,8 @@ BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
                            (uint32_t(received[pos + 10]) << 8) | received[pos + 11];
             // payload integrity: each thread sent 64 bytes of ('a' + threadIdx)
             uint8_t expect = static_cast<uint8_t>('a' + seq / msgPerThread);
-            for (size_t k = P2PMessage::MESSAGE_HEADER_LENGTH; k < frameLen; ++k)
+            for (size_t k = Message::MESSAGE_HEADER_LENGTH + extendedHeaderLen; k < frameLen;
+                 ++k)
             {
                 BOOST_CHECK_EQUAL(received[pos + k], expect);
             }
