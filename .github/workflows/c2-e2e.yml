@@ -57,10 +57,10 @@ jobs:
             https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
 
-      - name: Install Foundry
+      - name: Install Foundry (optimism contracts-bedrock pin)
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: 1.5.1
+          version: 1.2.3
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -68,6 +68,12 @@ jobs:
           go-version: "1.26.4"
           cache-dependency-path: |
             go.sum
+
+      - name: Install just (op-deployer build)
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh \
+            | sudo bash -s -- --to /usr/local/bin
+          just --version
 
       - name: Read OP monorepo pin
         id: op-pin
@@ -98,7 +104,10 @@ jobs:
           git -C .ci-op-monorepo checkout -q "${{ steps.op-pin.outputs.commit }}"
           git -C .ci-op-monorepo submodule update --init superchain-registry
           bash .ci-op-monorepo/op-core/superchain/sync-superchain.sh
-          (cd .ci-op-monorepo && go build -o "$GITHUB_WORKSPACE/.ci-c2-bins/op-deployer" ./op-deployer/cmd/op-deployer)
+          # Plain go build omits artifacts.tzst; op-deployer apply fails without just build.
+          # Mirrors tools/.ci/c2-e2e.sh's op-deployer build exactly.
+          (cd .ci-op-monorepo/op-deployer && just build)
+          cp .ci-op-monorepo/op-deployer/bin/op-deployer "$GITHUB_WORKSPACE/.ci-c2-bins/op-deployer"
           (cd .ci-op-monorepo && go build -o "$GITHUB_WORKSPACE/.ci-c2-bins/op-batcher" ./op-batcher/cmd)
           (cd .ci-op-monorepo && go build -o "$GITHUB_WORKSPACE/.ci-c2-bins/op-node" ./op-node/cmd)
 

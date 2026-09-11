@@ -127,7 +127,13 @@ def a1_engine_surface(erpc):
              ("OP(FCU V3 + newPayload V4 + getPayload V4/V5)" if op_lane else None))
     check(f"exchangeCapabilities advertises a drivable engine surface ({shape or '?'})",
         shape is not None, str(caps))
-    check("newPayload method reachable", True)
+    # Real reachability gate: the web3 surface must expose the engine methods this
+    # matrix drives. A surface without them answers -32601 to every engine call below,
+    # so fail here instead of recording dozens of vacuous passes.
+    check("engine methods exposed on the web3 surface",
+        any(f"engine_{m}V{v}" in caps
+            for m in ["newPayload", "forkchoiceUpdated"] for v in (3, 4)),
+        f"{sorted(c for c in caps if c.startswith('engine_'))[:4]}...")
 
 
 # ---- A.2 eth_* ----

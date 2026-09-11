@@ -1,3 +1,6 @@
+# Copyright (c) FISCO-BCOS, Apache-2.0
+# SPDX-License-Identifier: Apache-2.0
+
 # C2 chain config: real op-deployer base allocs (l2genesis.json from anvil L1 deploy).
 # OP predeploys come from the base; only FISCO self-written predeploys are overlaid.
 # FISCO governance contracts use 0x1000+ (outside the OP reserved 0x0000-0x7FF namespace,

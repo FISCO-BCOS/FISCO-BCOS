@@ -206,6 +206,16 @@ def compute_storage_root(storage):
         if rlp_value is None:
             continue  # zero value: skipped
         slot_bytes = bytes.fromhex(strip0x(slot_hex))
+        # The genesis contract keccaks the slot bytes AS CONFIGURED (see
+        # bcos-ledger GenesisStateRoot.cpp: "not mpt::slotKeyHash, which right-aligns
+        # into a fixed 32 bytes"). geth instead keccaks the zero-padded slot32 — so a
+        # short slot here silently roots a DIFFERENT trie than geth would. build-allocs
+        # always emits 64-char pairs; reject anything else loudly instead of rooting
+        # over bytes the input never meant.
+        if len(slot_bytes) != 32:
+            raise ValueError(
+                f"storage slot must be exactly 32 bytes (64 hex chars), got "
+                f"{len(slot_bytes)} bytes: {slot_hex!r} — pad the slot or fix the input")
         slot_key_hash = keccak256(slot_bytes)
         entries.append((slot_key_hash, rlp_value))
     return build_trie(entries)
@@ -244,10 +254,22 @@ def parse_allocs_ini(path):
             if line.startswith("[") and line.endswith("]"):
                 section = line[1:-1]
                 if section.startswith("alloc.") and section.endswith(".storage"):
+                    if current is None:
+                        raise ValueError(
+                            f"{path}: [alloc.N.storage] section before any [alloc.N] — "
+                            "fix the INI section order")
                     current_storage = []
                     current["storage"] = current_storage
                 elif section.startswith("alloc."):
-                    current = {"storage": []}
+                    address = section[len("alloc."):]
+                    if any(a.get("address", "").lower() == address.lower() for a in allocs):
+                        # Two sections for one address used to survive parsing and only
+                        # fail deep inside build_branch (IndexError at depth 64); the
+                        # genesis hash for a duplicated alloc is meaningless either way.
+                        raise ValueError(
+                            f"{path}: duplicate [alloc.{address}] section — merge the "
+                            "storage entries into one section")
+                    current = {"address": address, "storage": []}
                     allocs.append(current)
                     current_storage = None
                 else:

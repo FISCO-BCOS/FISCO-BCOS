@@ -38,35 +38,52 @@ static int hex_decode(const char* in, unsigned char* out, size_t out_len)
     }
     return 0;
 }
+// Volatile-wash zeroization: the compiler must not elide it, and it covers every
+// exit path that has already consumed the key.
+static void secure_zero(void* p, size_t n)
+{
+    volatile unsigned char* v = (volatile unsigned char*)p;
+    while (n-- > 0)
+        *v++ = 0;
+}
 
 int main(int argc, char** argv)
 {
+    unsigned char seckey[32], msg[32];
+    memset(seckey, 0, sizeof(seckey));
+    memset(msg, 0, sizeof(msg));
     if (argc != 3)
     {
         fprintf(stderr, "usage: sign_secp <privkey_hex> <msg_hash_hex>\n");
         return 2;
     }
-    unsigned char seckey[32], msg[32];
     if (hex_decode(argv[1], seckey, 32) != 0 || hex_decode(argv[2], msg, 32) != 0)
     {
         fprintf(stderr, "bad hex input\n");
+        secure_zero(seckey, sizeof(seckey));
         return 2;
     }
     secp256k1_context* ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
     if (!ctx)
     {
         fprintf(stderr, "ctx create failed\n");
+        secure_zero(seckey, sizeof(seckey));
         return 1;
     }
     if (secp256k1_ec_seckey_verify(ctx, seckey) != 1)
     {
         fprintf(stderr, "invalid private key\n");
+        secure_zero(seckey, sizeof(seckey));
+        secp256k1_context_destroy(ctx);
         return 1;
     }
     secp256k1_ecdsa_recoverable_signature sig;
     if (secp256k1_ecdsa_sign_recoverable(ctx, &sig, msg, seckey, NULL, NULL) != 1)
     {
         fprintf(stderr, "sign failed\n");
+        secure_zero(seckey, sizeof(seckey));
+        memset(&sig, 0, sizeof(sig));
+        secp256k1_context_destroy(ctx);
         return 1;
     }
     // Compact serialization order is [r (32)] [s (32)].
@@ -110,6 +127,10 @@ int main(int argc, char** argv)
         printf("%02x", compact[32 + i]);
     printf("\n");                           // line2: s=<hex>
     printf("recid=%u\n", (unsigned)recid);  // line3
+    secure_zero(seckey, sizeof(seckey));
+    memset(&sig, 0, sizeof(sig));
+    memset(compact, 0, sizeof(compact));
+    memset(msg, 0, sizeof(msg));
     secp256k1_context_destroy(ctx);
     return 0;
 }

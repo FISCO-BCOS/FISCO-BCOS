@@ -7,9 +7,9 @@
     "build_targets": {
       "op-node": "./op-node/cmd",
       "op-batcher": "./op-batcher/cmd",
-      "op-deployer": "./op-deployer/cmd/op-deployer"
+      "op-deployer": "./op-deployer"
     },
-    "note": "op-deployer embeds contracts-bedrock forge artifacts (mktar from packages/contracts-bedrock, justfile copy-contract-artifacts semantics) — the monorepo commit therefore pins the deployed contract bytecode too."
+    "note": "op-deployer embeds contracts-bedrock forge artifacts (mktar from packages/contracts-bedrock, justfile copy-contract-artifacts semantics) \u2014 the monorepo commit therefore pins the deployed contract bytecode too. Build it with `just build` in ./op-deployer: a plain `go build` omits artifacts.tzst and op-deployer apply fails at runtime (see tools/.ci/c2-e2e.sh)."
   },
   "l1_contracts": {
     "source": "embedded contracts-bedrock at the monorepo commit above (pre-U20 form: classic fault games, SystemConfig v3)",
