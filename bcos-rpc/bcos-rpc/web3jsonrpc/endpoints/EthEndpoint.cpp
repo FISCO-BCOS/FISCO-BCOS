@@ -1288,6 +1288,27 @@ task::Task<std::tuple<protocol::BlockNumber, bool>> EthEndpoint::getBlockNumberB
 {
     auto ledger = m_nodeService->ledger();
     auto latest = co_await ledger::getCurrentBlockNumber(*ledger);
+    // Prefer the Engine-API forkchoice safe/finalized heads when present (op-node drives them
+    // via engine_forkchoiceUpdated): the static node-config depth is only a fallback for
+    // chains with no engine service (PBFT).
+    auto const& engine = m_nodeService->engineService();
+    if (engine && *engine)
+    {
+        if (blockTag == SafeBlock)
+        {
+            if (auto safe = engine->getSafeBlockNumber(); safe.has_value())
+            {
+                co_return std::make_tuple(*safe, std::cmp_equal(latest, *safe));
+            }
+        }
+        else if (blockTag == FinalizedBlock)
+        {
+            if (auto finalized = engine->getFinalizedBlockNumber(); finalized.has_value())
+            {
+                co_return std::make_tuple(*finalized, std::cmp_equal(latest, *finalized));
+            }
+        }
+    }
     auto [number, _] = bcos::rpc::getBlockNumberByTag(
         latest, blockTag, m_nodeService->safeBlockDepth(), m_nodeService->finalizedBlockDepth());
     co_return std::make_tuple(number, std::cmp_equal(latest, number));
@@ -1337,7 +1358,26 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
         }
     }
     auto const blockTag = toView(request[2U]);
-    auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
+    // op-node passes the 32-byte block hash (DATA) for eth_getProof, unlike the number/tag the
+    // other eth_* endpoints take. Resolve the hash to a height first; a not-found hash surfaces
+    // the same "Block not found" as the number/tag path below.
+    protocol::BlockNumber blockNumber = 0;
+    if (blockTag.size() == 66 && blockTag[0] == '0' && (blockTag[1] == 'x' || blockTag[1] == 'X'))
+    {
+        try
+        {
+            auto const hash = crypto::HashType(blockTag, crypto::HashType::FromHex);
+            blockNumber = co_await ledger::getBlockNumber(*m_nodeService->ledger(), hash);
+        }
+        catch (std::exception const&)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
+        }
+    }
+    else
+    {
+        std::tie(blockNumber, std::ignore) = co_await getBlockNumberByTag(blockTag);
+    }
     if (c_fileLogLevel == TRACE)
     {
         WEB3_LOG(TRACE) << "eth_getProof" << LOG_KV("address", address.hexPrefixed())
