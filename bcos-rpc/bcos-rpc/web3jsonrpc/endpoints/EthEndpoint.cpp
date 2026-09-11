@@ -1044,7 +1044,18 @@ task::Task<void> EthEndpoint::call(
     std::optional<uint64_t> chainBlockGasLimit;
     if (isEstimate)
     {
-        if (auto block = co_await ledger::getBlockData(*ledger, blockNumber, bcos::ledger::HEADER))
+        bcos::protocol::Block::Ptr block;
+        try
+        {
+            block = co_await ledger::getBlockData(*ledger, blockNumber, bcos::ledger::HEADER);
+        }
+        catch (bcos::Error const& e)
+        {
+            // Some ledger implementations report a missing block as an error rather than a
+            // null block: swallow it here so the refusal below is the diagnosable answer,
+            // instead of leaking the raw ledger exception as a bare -32603.
+        }
+        if (block)
         {
             // Bounds-checked narrowing: an over-wide gasLimit leaves the optional unset and
             // the guard below refuses the request instead of using a truncated cap.
