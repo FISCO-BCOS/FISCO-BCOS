@@ -215,7 +215,7 @@ task::Task<void> Host::acceptLoop()
         }
         catch (...)
         {
-            // never let an exception escape into the resuming asio handler (see AsioAwaitable.h);
+            // never let an exception escape into the resuming asio handler (see FireAwaitable.h);
             // a failed iteration must not kill the accept loop, so log and continue
             iterationFailed = true;
             HOST_LOG(ERROR) << LOG_DESC("accept iteration exception")
@@ -249,10 +249,11 @@ task::Task<void> Host::acceptLoop()
             try
             {
                 auto retryTimer = m_asioInterface->newAcceptorTimer(ACCEPT_RETRY_INTERVAL_MS);
-                co_await makeAsioAwaitable<boost::system::error_code>(
+                co_await task::makeFireAwaitable<boost::system::error_code>(
                     [&retryTimer](auto handler) {
                         retryTimer.async_wait(std::move(handler));
-                    });
+                    },
+                    boost::asio::error::operation_aborted);
             }
             catch (...)
             {
@@ -317,7 +318,7 @@ task::Task<void> Host::serverHandshake(
     }
     catch (...)
     {
-        // never let an exception escape into the resuming asio handler (see AsioAwaitable.h);
+        // never let an exception escape into the resuming asio handler (see FireAwaitable.h);
         // the HandshakeSlotGuard still releases the admission slot on unwind
         HOST_LOG(ERROR) << LOG_DESC("server handshake exception")
                         << LOG_KV("endpoint", socket->nodeIPEndpoint())
@@ -897,7 +898,7 @@ task::Task<std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionFace>>> 
     }
     catch (...)
     {
-        // never let an exception escape into the resuming asio handler (see AsioAwaitable.h)
+        // never let an exception escape into the resuming asio handler (see FireAwaitable.h)
         HOST_LOG(ERROR) << LOG_DESC("client connect exception")
                         << LOG_KV("endpoint", _nodeIPEndpoint)
                         << LOG_KV("what", boost::current_exception_diagnostic_information());

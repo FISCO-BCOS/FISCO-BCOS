@@ -62,7 +62,7 @@ class FakeASIO : public bcos::gateway::ASIOInterface
 public:
     using Packet = std::shared_ptr<std::vector<uint8_t>>;
     using ReadCompletion =
-        bcos::gateway::detail::AsioCompletion<boost::system::error_code, std::size_t>;
+        task::detail::FireCompletion<boost::system::error_code, std::size_t>;
 
     FakeASIO()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"), "0.0.0.0", 0),
@@ -1130,15 +1130,14 @@ BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
 
 BOOST_AUTO_TEST_CASE(asioCompletionHandshakeSynchronousInvocation)
 {
-    // Arm/cancel handshake regression: an initiate that INVOKES the completion synchronously
-    // (before returning) must not resume the coroutine from inside its own await_suspend
-    // (resuming a not-yet-suspended frame is UB). The completion's operator() claims
-    // Init -> Completed and deliberately does not resume; await_suspend observes Completed on
-    // its failed CAS and resumes inline by returning false — the result is delivered exactly
-    // once.
+    // Regression: an initiate that INVOKES the completion synchronously (before returning) must
+    // not resume the coroutine from inside its own await_suspend. Symmetric transfer guarantees
+    // the awaiting coroutine is suspended before the bridge runs, so resuming it is safe — the
+    // result is delivered exactly once.
     auto task = []() -> task::Task<boost::system::error_code> {
-        auto [ec] = co_await makeAsioAwaitable<boost::system::error_code>(
-            [](auto handler) { handler(boost::system::error_code()); });
+        auto [ec] = co_await task::makeFireAwaitable<boost::system::error_code>(
+            [](auto handler) { handler(boost::system::error_code()); },
+            boost::asio::error::operation_aborted);
         co_return ec;
     }();
     auto ec = task::syncWait(std::move(task));
@@ -1147,18 +1146,17 @@ BOOST_AUTO_TEST_CASE(asioCompletionHandshakeSynchronousInvocation)
 
 BOOST_AUTO_TEST_CASE(asioCompletionHandshakeSynchronousDrop)
 {
-    // Arm/cancel handshake regression: an initiate that DROPS the completion synchronously
-    // (destroys it without invocation, no exception) must not destroy the still-running frame
-    // from inside its own await_suspend. The destructor records the cancellation instead, and
-    // await_suspend resumes inline with operation_aborted so the awaiting coroutine completes
-    // with an error rather than suspending forever.
+    // Regression: an initiate that DROPS the completion synchronously (destroys it without
+    // invocation, no exception) delivers the initial error result (operation_aborted) instead of
+    // suspending forever.
     auto task = []() -> task::Task<boost::system::error_code> {
-        auto [ec] = co_await makeAsioAwaitable<boost::system::error_code>(
+        auto [ec] = co_await task::makeFireAwaitable<boost::system::error_code>(
             [](auto handler) {
                 // destroy the armed completion without invoking it: the by-value parameter is
                 // destroyed at scope exit
                 (void)handler;
-            });
+            },
+            boost::asio::error::operation_aborted);
         co_return ec;
     }();
     auto ec = task::syncWait(std::move(task));

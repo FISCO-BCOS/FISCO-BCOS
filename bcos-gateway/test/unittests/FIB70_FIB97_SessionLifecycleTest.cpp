@@ -49,7 +49,7 @@ class FakeASIO_FIB : public bcos::gateway::ASIOInterface
 public:
     using Packet = std::shared_ptr<std::vector<uint8_t>>;
     using ReadCompletion =
-        bcos::gateway::detail::AsioCompletion<boost::system::error_code, std::size_t>;
+        task::detail::FireCompletion<boost::system::error_code, std::size_t>;
 
     FakeASIO_FIB()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"), "0.0.0.0", 0),
