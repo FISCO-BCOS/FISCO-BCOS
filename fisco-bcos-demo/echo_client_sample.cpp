@@ -38,7 +38,7 @@ void usage()
     exit(0);
 }
 
-void sendMessage(NodeIPEndpoint const& _endPoint, std::shared_ptr<P2PMessage> _msg,
+void sendMessage(NodeIPEndpoint const& _endPoint, std::shared_ptr<Message> _msg,
     std::shared_ptr<Service> _service, std::shared_ptr<RateLimiter> _rateLimiter)
 {
     while (true)
@@ -50,7 +50,7 @@ void sendMessage(NodeIPEndpoint const& _endPoint, std::shared_ptr<P2PMessage> _m
         auto msgSize = _msg->payload().size();
         _service->asyncSendMessageByEndPoint(_endPoint, _msg,
             [msgSize, startT](NetworkException _e, std::shared_ptr<P2PSession> _session,
-                std::shared_ptr<P2PMessage>) {
+                std::shared_ptr<Message>) {
                 if (_e.errorCode())
                 {
                     BCOS_LOG(WARNING) << LOG_DESC("asyncSendMessage network error")
@@ -101,7 +101,7 @@ int main(int argc, char** argv)
 
     gateway->start();
     // construct message
-    auto msg = std::dynamic_pointer_cast<P2PMessage>(service->messageFactory()->buildMessage());
+    auto msg = std::static_pointer_cast<Message>(service->messageFactory()->buildMessage());
     msg->setPacketType(999);
     std::string randStr(payLoadSize, 'a');
     msg->setPayload(bcos::bytes(randStr.begin(), randStr.end()));

@@ -20,7 +20,7 @@
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-gateway/GatewayFactory.h"
 #include "bcos-gateway/libnetwork/Common.h"
-#include "bcos-gateway/libp2p/P2PMessage.h"
+#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/BoostLogInitializer.h"
@@ -97,7 +97,7 @@ int main(int argc, const char** argv)
             // register message handler for p2p echo message type
             service->registerHandlerByMsgType(
                 packageType, [reporter](NetworkException _exception,
-                                 std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message) {
+                                 std::shared_ptr<P2PSession> _session, Message::Ptr _message) {
                     if (_exception.errorCode() != 0)
                     {
                         return;
@@ -114,7 +114,7 @@ int main(int argc, const char** argv)
                     // passed as a coroutine parameter so it stays alive for the (possibly
                     // deferred) send; its payload rides as a view (zero-copy).
                     task::wait([](std::shared_ptr<P2PSession> _session,
-                                   P2PMessage::Ptr _message) -> task::Task<void> {
+                                   Message::Ptr _message) -> task::Task<void> {
                         try
                         {
                             co_await _session->fastSendP2PMessage(
@@ -173,7 +173,7 @@ int main(int argc, const char** argv)
             std::string content = std::string(msgSize, 'a');
 
             auto messageFactory = service->messageFactory();
-            auto message = dynamic_pointer_cast<P2PMessage>(messageFactory->buildMessage());
+            auto message = static_pointer_cast<Message>(messageFactory->buildMessage());
             auto payload = std::make_shared<bcos::bytes>();
             payload->insert(payload->end(), content.begin(), content.end());
             message->setPayload(*payload);
@@ -190,7 +190,7 @@ int main(int argc, const char** argv)
                 // the removed asyncSendMessageByNodeID callback path): the message is passed as a
                 // coroutine parameter so it is copied into the frame and stays alive for the whole
                 // (possibly deferred) send.
-                task::wait([](P2PInterface::Ptr _service, P2pID _p2pID, P2PMessage::Ptr _message)
+                task::wait([](P2PInterface::Ptr _service, P2pID _p2pID, Message::Ptr _message)
                                -> task::Task<void> {
                     try
                     {

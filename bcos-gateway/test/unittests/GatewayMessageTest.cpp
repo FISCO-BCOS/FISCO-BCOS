@@ -21,8 +21,7 @@
 
 #include "bcos-gateway/gateway/GatewayMessageExtAttributes.h"
 #define BOOST_TEST_MAIN
-#include "bcos-gateway/libp2p/P2PMessage.h"
-#include "bcos-gateway/libp2p/P2PMessageV2.h"
+#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
@@ -35,8 +34,8 @@ BOOST_FIXTURE_TEST_SUITE(GatewayMessageTest, TestPromptFixture)
 
 void testP2PMessageHasOptions(std::shared_ptr<MessageFactory> factory, uint32_t _version = 0)
 {
-    // default P2PMessage object
-    auto msg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
+    // default Message object
+    auto msg = std::static_pointer_cast<Message>(factory->buildMessage());
     msg->setVersion(_version);
     msg->setPacketType(GatewayMessageType::Heartbeat);
     BOOST_CHECK_EQUAL(msg->hasOptions(), false);
@@ -58,20 +57,20 @@ void testP2PMessageHasOptions(std::shared_ptr<MessageFactory> factory, uint32_t 
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage_hasOptions)
 {
-    auto factory = std::make_shared<P2PMessageFactory>();
+    auto factory = std::make_shared<MessageFactory>();
     testP2PMessageHasOptions(factory);
 }
 
-BOOST_AUTO_TEST_CASE(test_P2PMessageV2_hasOptions)
+BOOST_AUTO_TEST_CASE(test_P2PMessage_extVersion_hasOptions)
 {
-    auto factory = std::make_shared<P2PMessageFactoryV2>();
+    auto factory = std::make_shared<MessageFactory>();
     testP2PMessageHasOptions(factory, 1);
 }
 
 void testP2PMessage(std::shared_ptr<MessageFactory> factory, uint32_t _version = 0)
 {
-    // default P2PMessage object
-    auto encodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
+    // default Message object
+    auto encodeMsg = std::static_pointer_cast<Message>(factory->buildMessage());
     encodeMsg->setVersion(_version);
     auto buffer = std::make_shared<bytes>();
     auto r = encodeMsg->encode(*buffer);
@@ -79,7 +78,7 @@ void testP2PMessage(std::shared_ptr<MessageFactory> factory, uint32_t _version =
     BOOST_CHECK_EQUAL(r, true);
 
     // decode default
-    auto decodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
+    auto decodeMsg = std::static_pointer_cast<Message>(factory->buildMessage());
     auto ret = decodeMsg->decode(bytesConstRef(buffer->data(), buffer->size()));
     auto version = decodeMsg->version();
     if (version == 0)
@@ -97,7 +96,7 @@ void testP2PMessage(std::shared_ptr<MessageFactory> factory, uint32_t _version =
     BOOST_CHECK_EQUAL(decodeMsg->ext(), 0);
     BOOST_CHECK_EQUAL(decodeMsg->payload().size(), 0);
 
-    auto decodeMsg1 = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
+    auto decodeMsg1 = std::static_pointer_cast<Message>(factory->buildMessage());
     // decode with less length
 
 
@@ -105,9 +104,9 @@ void testP2PMessage(std::shared_ptr<MessageFactory> factory, uint32_t _version =
     BOOST_CHECK_EQUAL(ret1, MessageDecodeStatus::MESSAGE_INCOMPLETE);
 
     {
-        auto factory1 = std::make_shared<P2PMessageFactory>();
-        // default P2PMessage object
-        auto encodeMsg1 = std::static_pointer_cast<P2PMessage>(factory1->buildMessage());
+        auto factory1 = std::make_shared<MessageFactory>();
+        // default Message object
+        auto encodeMsg1 = std::static_pointer_cast<Message>(factory1->buildMessage());
         encodeMsg1->setVersion(_version);
         encodeMsg1->setPacketType(GatewayMessageType::PeerToPeerMessage);
 
@@ -121,7 +120,7 @@ void testP2PMessage(std::shared_ptr<MessageFactory> factory, uint32_t _version =
         "upgrade\r\nSec-WebSocket-Key: lkBb9dFFu4tuMNJyXAWIfQ==\r\nSec-WebSocket-Version: "
         "13\r\n\r\n";
     auto invalidMsgBytes = asBytes(invalidMessage);
-    auto p2pMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
+    auto p2pMsg = std::static_pointer_cast<Message>(factory->buildMessage());
     p2pMsg->setVersion(_version);
 
     {
@@ -133,20 +132,20 @@ void testP2PMessage(std::shared_ptr<MessageFactory> factory, uint32_t _version =
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage)
 {
-    auto factory = std::make_shared<P2PMessageFactory>();
+    auto factory = std::make_shared<MessageFactory>();
     testP2PMessage(factory);
 }
 
-BOOST_AUTO_TEST_CASE(test_P2PMessageV2)
+BOOST_AUTO_TEST_CASE(test_P2PMessage_extVersion)
 {
-    auto factory = std::make_shared<P2PMessageFactoryV2>();
+    auto factory = std::make_shared<MessageFactory>();
     testP2PMessage(factory, 1);
 }
 
 void test_P2PMessageWithoutOptions(std::shared_ptr<MessageFactory> factory, uint32_t _version = 0)
 {
-    // default P2PMessage object
-    auto encodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
+    // default Message object
+    auto encodeMsg = std::static_pointer_cast<Message>(factory->buildMessage());
     encodeMsg->setVersion(_version);
     uint32_t seq = 0x12345678;
     uint16_t packetType = 0x4321;
@@ -170,7 +169,7 @@ void test_P2PMessageWithoutOptions(std::shared_ptr<MessageFactory> factory, uint
     BOOST_CHECK_EQUAL(r, true);
 
     // decode default
-    auto decodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
+    auto decodeMsg = std::static_pointer_cast<Message>(factory->buildMessage());
     auto ret = decodeMsg->decode(bytesConstRef(buffer->data(), buffer->size()));
     BOOST_CHECK_EQUAL(ret, headerLen + payload->size());
     BOOST_CHECK_EQUAL(decodeMsg->length(), headerLen + payload->size());
@@ -185,7 +184,7 @@ void test_P2PMessageWithoutOptions(std::shared_ptr<MessageFactory> factory, uint
         "upgrade\r\nSec-WebSocket-Key: lkBb9dFFu4tuMNJyXAWIfQ==\r\nSec-WebSocket-Version: "
         "13\r\n\r\n";
     auto invalidMsgBytes = asBytes(invalidMessage);
-    auto p2pMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
+    auto p2pMsg = std::static_pointer_cast<Message>(factory->buildMessage());
     p2pMsg->setVersion(_version);
 
     {
@@ -197,13 +196,13 @@ void test_P2PMessageWithoutOptions(std::shared_ptr<MessageFactory> factory, uint
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage_withoutOptions)
 {
-    auto factory = std::make_shared<P2PMessageFactory>();
+    auto factory = std::make_shared<MessageFactory>();
     test_P2PMessageWithoutOptions(factory);
 }
 
-BOOST_AUTO_TEST_CASE(test_P2PMessageV2_withoutOptions)
+BOOST_AUTO_TEST_CASE(test_P2PMessage_extVersion_withoutOptions)
 {
-    auto factory = std::make_shared<P2PMessageFactoryV2>();
+    auto factory = std::make_shared<MessageFactory>();
     test_P2PMessageWithoutOptions(factory, 1);
 }
 
@@ -333,7 +332,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_optionsCodec)
 
 void testP2PMessageCodec(std::shared_ptr<MessageFactory> factory, uint32_t _version = 0)
 {
-    auto encodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
+    auto encodeMsg = std::static_pointer_cast<Message>(factory->buildMessage());
     encodeMsg->setVersion(_version);
 
     uint16_t version = static_cast<uint16_t>(bcos::protocol::ProtocolVersion::V3);
@@ -368,7 +367,7 @@ void testP2PMessageCodec(std::shared_ptr<MessageFactory> factory, uint32_t _vers
     auto r = encodeMsg->encode(*buffer.get());
     BOOST_CHECK(r);
 
-    auto decodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
+    auto decodeMsg = std::static_pointer_cast<Message>(factory->buildMessage());
     auto ret = decodeMsg->decode(bytesConstRef(buffer->data(), buffer->size()));
     BOOST_CHECK(ret > 0);
 
@@ -392,21 +391,21 @@ void testP2PMessageCodec(std::shared_ptr<MessageFactory> factory, uint32_t _vers
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage_codec)
 {
-    auto factory = std::make_shared<P2PMessageFactory>();
+    auto factory = std::make_shared<MessageFactory>();
     testP2PMessageCodec(factory);
 }
 
-BOOST_AUTO_TEST_CASE(test_P2PMessageV2_codec)
+BOOST_AUTO_TEST_CASE(test_P2PMessage_extVersion_codec)
 {
-    auto factory = std::make_shared<P2PMessageFactoryV2>();
+    auto factory = std::make_shared<MessageFactory>();
     testP2PMessageCodec(factory, 1);
 }
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage_compress)
 {
-    auto factory = std::make_shared<P2PMessageFactoryV2>();
-    auto encodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
-    auto encodeMsgWithoutCompress = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
+    auto factory = std::make_shared<MessageFactory>();
+    auto encodeMsg = std::static_pointer_cast<Message>(factory->buildMessage());
+    auto encodeMsgWithoutCompress = std::static_pointer_cast<Message>(factory->buildMessage());
 
     // only version >= V2 support p2p network compress
     uint16_t version = 2;
@@ -454,7 +453,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_compress)
     auto buffer = std::make_shared<bytes>();
     auto retWithoutCompress = encodeMsg->encode(*buffer.get());
     BOOST_CHECK(retWithoutCompress);
-    auto decodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
+    auto decodeMsg = std::static_pointer_cast<Message>(factory->buildMessage());
     auto ret = decodeMsg->decode(bytesConstRef(buffer->data(), buffer->size()));
     BOOST_CHECK_EQUAL(ret, MessageDecodeStatus::MESSAGE_ERROR);
     */
@@ -476,7 +475,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_attr)
 BOOST_AUTO_TEST_CASE(test_P2PMessage_decodeHeader_invalidLength)
 {
     // Craft a 14-byte buffer where m_length field is set to a value less than header size (14)
-    bytes buffer(P2PMessage::MESSAGE_HEADER_LENGTH, 0);
+    bytes buffer(Message::MESSAGE_HEADER_LENGTH, 0);
     // Set length field to 5 (less than MESSAGE_HEADER_LENGTH=14)
     uint32_t invalidLength = boost::asio::detail::socket_ops::host_to_network_long(5);
     std::memcpy(buffer.data(), &invalidLength, 4);
@@ -484,35 +483,35 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_decodeHeader_invalidLength)
     uint16_t version = 0;
     std::memcpy(buffer.data() + 4, &version, 2);
 
-    auto factory = std::make_shared<P2PMessageFactory>();
-    auto msg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
+    auto factory = std::make_shared<MessageFactory>();
+    auto msg = std::static_pointer_cast<Message>(factory->buildMessage());
     auto ret = msg->decode(bytesConstRef(buffer.data(), buffer.size()));
     BOOST_CHECK_EQUAL(ret, MessageDecodeStatus::MESSAGE_ERROR);
 }
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage_decodeHeader_zeroLength)
 {
-    bytes buffer(P2PMessage::MESSAGE_HEADER_LENGTH, 0);
+    bytes buffer(Message::MESSAGE_HEADER_LENGTH, 0);
     // length = 0, less than header
-    auto factory = std::make_shared<P2PMessageFactory>();
-    auto msg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
+    auto factory = std::make_shared<MessageFactory>();
+    auto msg = std::static_pointer_cast<Message>(factory->buildMessage());
     auto ret = msg->decode(bytesConstRef(buffer.data(), buffer.size()));
     BOOST_CHECK_EQUAL(ret, MessageDecodeStatus::MESSAGE_ERROR);
 }
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage_decodeHeader_invalidVersion)
 {
-    bytes buffer(P2PMessage::MESSAGE_HEADER_LENGTH, 0);
+    bytes buffer(Message::MESSAGE_HEADER_LENGTH, 0);
     // Set length = 14 (valid minimum)
     uint32_t validLength =
-        boost::asio::detail::socket_ops::host_to_network_long(P2PMessage::MESSAGE_HEADER_LENGTH);
+        boost::asio::detail::socket_ops::host_to_network_long(Message::MESSAGE_HEADER_LENGTH);
     std::memcpy(buffer.data(), &validLength, 4);
     // Set version = 99 (beyond V3=3)
     uint16_t invalidVersion = boost::asio::detail::socket_ops::host_to_network_short(99);
     std::memcpy(buffer.data() + 4, &invalidVersion, 2);
 
-    auto factory = std::make_shared<P2PMessageFactory>();
-    auto msg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
+    auto factory = std::make_shared<MessageFactory>();
+    auto msg = std::static_pointer_cast<Message>(factory->buildMessage());
     auto ret = msg->decode(bytesConstRef(buffer.data(), buffer.size()));
     BOOST_CHECK_EQUAL(ret, MessageDecodeStatus::MESSAGE_ERROR);
 }
@@ -522,10 +521,10 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_decode_offsetExceedsLength)
     // Create a message with PeerToPeerMessage type (has options) but m_length
     // set to just the header size. After header parsing, options parsing will make
     // offset > m_length, triggering the underflow check.
-    bytes buffer(P2PMessage::MESSAGE_HEADER_LENGTH + P2PMessageOptions::OPTIONS_MIN_LENGTH, 0);
+    bytes buffer(Message::MESSAGE_HEADER_LENGTH + P2PMessageOptions::OPTIONS_MIN_LENGTH, 0);
     // Set length = MESSAGE_HEADER_LENGTH (too small for header + options)
     uint32_t tightLength =
-        boost::asio::detail::socket_ops::host_to_network_long(P2PMessage::MESSAGE_HEADER_LENGTH);
+        boost::asio::detail::socket_ops::host_to_network_long(Message::MESSAGE_HEADER_LENGTH);
     std::memcpy(buffer.data(), &tightLength, 4);
     // version = 0 (valid)
     // packetType = PeerToPeerMessage (0x5, has options)
@@ -533,14 +532,14 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_decode_offsetExceedsLength)
         GatewayMessageType::PeerToPeerMessage);
     std::memcpy(buffer.data() + 6, &peerType, 2);
 
-    auto factory = std::make_shared<P2PMessageFactory>();
-    auto msg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
+    auto factory = std::make_shared<MessageFactory>();
+    auto msg = std::static_pointer_cast<Message>(factory->buildMessage());
     auto ret = msg->decode(bytesConstRef(buffer.data(), buffer.size()));
     // Should return MESSAGE_ERROR (either from options decode or offset>length check)
     BOOST_CHECK(ret < 0);
 }
 
-BOOST_AUTO_TEST_CASE(test_P2PMessageV2_decodeHeader_errorPropagation)
+BOOST_AUTO_TEST_CASE(test_P2PMessage_extVersion_decodeHeader_errorPropagation)
 {
     // V2 message with invalid version should propagate error from base decodeHeader
     bytes buffer(20, 0);  // V2 header is 20 bytes
@@ -551,8 +550,8 @@ BOOST_AUTO_TEST_CASE(test_P2PMessageV2_decodeHeader_errorPropagation)
     uint16_t invalidVersion = boost::asio::detail::socket_ops::host_to_network_short(200);
     std::memcpy(buffer.data() + 4, &invalidVersion, 2);
 
-    auto factory = std::make_shared<P2PMessageFactoryV2>();
-    auto msg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
+    auto factory = std::make_shared<MessageFactory>();
+    auto msg = std::static_pointer_cast<Message>(factory->buildMessage());
     auto ret = msg->decode(bytesConstRef(buffer.data(), buffer.size()));
     BOOST_CHECK_EQUAL(ret, MessageDecodeStatus::MESSAGE_ERROR);
 }
@@ -616,29 +615,31 @@ BOOST_AUTO_TEST_CASE(test_P2PMessageOptions_decode_truncatedNodeID)
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage_decode_validVersionBoundary)
 {
-    // Test that V3 (max valid) is accepted
-    bytes buffer(P2PMessage::MESSAGE_HEADER_LENGTH, 0);
-    uint32_t validLength =
-        boost::asio::detail::socket_ops::host_to_network_long(P2PMessage::MESSAGE_HEADER_LENGTH);
+    // Test that V3 (max valid) is accepted. A version>V0 frame carries the extended header
+    // [ttl:2][srcLen:2][dstLen:2] after the 14-byte base header, so a header-only V3 frame is
+    // 20 bytes.
+    constexpr size_t v3HeaderOnlyLen = Message::MESSAGE_HEADER_LENGTH + 6;
+    bytes buffer(v3HeaderOnlyLen, 0);
+    uint32_t validLength = boost::asio::detail::socket_ops::host_to_network_long(v3HeaderOnlyLen);
     std::memcpy(buffer.data(), &validLength, 4);
     uint16_t v3 = boost::asio::detail::socket_ops::host_to_network_short(
         static_cast<uint16_t>(bcos::protocol::ProtocolVersion::V3));
     std::memcpy(buffer.data() + 4, &v3, 2);
 
-    auto factory = std::make_shared<P2PMessageFactory>();
-    auto msg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
+    auto factory = std::make_shared<MessageFactory>();
+    auto msg = std::static_pointer_cast<Message>(factory->buildMessage());
     auto ret = msg->decode(bytesConstRef(buffer.data(), buffer.size()));
     // V3 is valid, should succeed (return the length)
-    BOOST_CHECK_EQUAL(ret, static_cast<int32_t>(P2PMessage::MESSAGE_HEADER_LENGTH));
+    BOOST_CHECK_EQUAL(ret, static_cast<int32_t>(v3HeaderOnlyLen));
 
     // Test that V3+1 is rejected
-    bytes buffer2(P2PMessage::MESSAGE_HEADER_LENGTH, 0);
+    bytes buffer2(Message::MESSAGE_HEADER_LENGTH, 0);
     std::memcpy(buffer2.data(), &validLength, 4);
     uint16_t v4 = boost::asio::detail::socket_ops::host_to_network_short(
         static_cast<uint16_t>(bcos::protocol::ProtocolVersion::V3) + 1);
     std::memcpy(buffer2.data() + 4, &v4, 2);
 
-    auto msg2 = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
+    auto msg2 = std::static_pointer_cast<Message>(factory->buildMessage());
     auto ret2 = msg2->decode(bytesConstRef(buffer2.data(), buffer2.size()));
     BOOST_CHECK_EQUAL(ret2, MessageDecodeStatus::MESSAGE_ERROR);
 }

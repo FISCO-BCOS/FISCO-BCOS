@@ -19,7 +19,7 @@
  * @date 2021-05-13
  */
 #include "GatewayNodeManager.h"
-#include "bcos-gateway/libp2p/P2PMessageV2.h"
+#include "bcos-gateway/libnetwork/Message.h"
 #include <bcos-task/Wait.h>
 #include <cstring>
 
@@ -87,19 +87,19 @@ GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _n
     // SyncNodeSeq
     m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::SyncNodeSeq,
         [this](NetworkException const& _e, P2PSession::Ptr _session,
-            std::shared_ptr<P2PMessage> _msg) {
+            std::shared_ptr<Message> _msg) {
             onReceiveStatusSeq(_e, _session, std::move(_msg));
         });
     // RequestNodeStatus
     m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::RequestNodeStatus,
         [this](NetworkException const& _e, P2PSession::Ptr _session,
-            std::shared_ptr<P2PMessage> _msg) {
+            std::shared_ptr<Message> _msg) {
             onRequestNodeStatus(_e, _session, std::move(_msg));
         });
     // ResponseNodeStatus
     m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::ResponseNodeStatus,
         [this](NetworkException const& _e, P2PSession::Ptr _session,
-            std::shared_ptr<P2PMessage> _msg) {
+            std::shared_ptr<Message> _msg) {
             onReceiveNodeStatus(_e, _session, std::move(_msg));
         });
     m_timer = std::make_shared<Timer>(_ioContext, SEQ_SYNC_PERIOD, "seqSync");
@@ -166,7 +166,7 @@ bool GatewayNodeManager::unregisterNode(const std::string& _groupID, std::string
 }
 
 void GatewayNodeManager::onReceiveStatusSeq(
-    NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg)
+    NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<Message> _msg)
 {
     if (_e.errorCode())
     {
@@ -200,7 +200,7 @@ void GatewayNodeManager::onReceiveStatusSeq(
     // (empty) payload rides as a view; an unreachable peer is an expected, recoverable state.
     task::wait([](P2PInterface::Ptr _p2pInterface, uint16_t _type, P2pID _nodeID)
                    -> task::Task<void> {
-        P2PMessageV2 message;
+        Message message;
         message.setPacketType(_type);
         message.setSeq(_p2pInterface->messageFactory()->newSeq());
         try
@@ -228,7 +228,7 @@ bool GatewayNodeManager::statusChanged(std::string const& _p2pNodeID, uint32_t _
 }
 
 void GatewayNodeManager::onReceiveNodeStatus(
-    NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg)
+    NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<Message> _msg)
 {
     if (_e.errorCode())
     {
@@ -276,7 +276,7 @@ bool GatewayNodeManager::updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _gro
 }
 
 void GatewayNodeManager::onRequestNodeStatus(
-    NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg)
+    NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<Message> _msg)
 {
     if (_e.errorCode())
     {
@@ -300,7 +300,7 @@ void GatewayNodeManager::onRequestNodeStatus(
     // send); an unreachable peer is an expected, recoverable state.
     task::wait([](P2PInterface::Ptr _p2pInterface, uint16_t _type, P2pID _nodeID,
                    bcos::bytes _payload) -> task::Task<void> {
-        P2PMessageV2 message;
+        Message message;
         message.setPacketType(_type);
         message.setSeq(_p2pInterface->messageFactory()->newSeq());
         message.setPayload(std::move(_payload));
@@ -422,7 +422,7 @@ void GatewayNodeManager::broadcastStatusSeq()
     // and stays alive for the whole (possibly deferred) send.
     task::wait([](P2PInterface::Ptr _p2p, bcos::bytes _payload) mutable
                    -> task::Task<void> {
-        auto message = std::make_shared<P2PMessageV2>();
+        auto message = std::make_shared<Message>();
         message->setPacketType(GatewayMessageType::SyncNodeSeq);
         message->setPayload(std::move(_payload));
         co_await _p2p->broadcastMessageToAll(

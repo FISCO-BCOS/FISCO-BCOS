@@ -45,24 +45,24 @@ public:
     void onMessage(NetworkException _error, SessionFace::Ptr session, Message::Ptr message,
         std::weak_ptr<P2PSession> p2pSessionWeakPtr) override;
     void sendRespMessageBySession(
-        bytesConstRef _payload, P2PMessage::Ptr _p2pMessage, P2PSession::Ptr _p2pSession) override;
+        bytesConstRef _payload, Message::Ptr _p2pMessage, P2PSession::Ptr _p2pSession) override;
     bool isReachable(P2pID const& _nodeID) const override;
 
     // (coroutine) broadcast to all reachable nodes through the router table
-    task::Task<void> broadcastMessageToAll(P2PMessage::Ptr message,
+    task::Task<void> broadcastMessageToAll(Message::Ptr message,
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads,
         Options options = Options()) override;
 
     // handlers called when the node is unreachable
     void registerUnreachableHandler(std::function<void(std::string)> _handler) override;
 
-    task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, P2PMessage& message,
+    task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, Message& message,
         ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
 
     // (coroutine) forward a received message to its destination through the router table. Unlike
     // sendMessageByNodeID it does NOT rewrite srcP2PNodeID: the original sender must be preserved
     // so the final destination can reply to it directly.
-    task::Task<Message::Ptr> forwardMessageByNodeID(P2pID nodeID, P2PMessage& message,
+    task::Task<Message::Ptr> forwardMessageByNodeID(P2pID nodeID, Message& message,
         ::ranges::any_view<bytesConstRef> payloads, Options options = Options());
 
     std::string getShortP2pID(std::string const& rawP2pID) const override;
@@ -70,24 +70,24 @@ public:
 
     // Note: since the message of the old node maybe forwarded through new node, we should try to
     // reset the p2pNodeID in both cases >=v3 and <v3
-    void resetP2pID(P2PMessage& message, bcos::protocol::ProtocolVersion const& version) override;
+    void resetP2pID(Message& message, bcos::protocol::ProtocolVersion const& version) override;
 
 protected:
     // called when the nodes become unreachable
     void onP2PNodesUnreachable(std::set<std::string> const& _p2pNodeIDs);
     // router related
     virtual void onReceivePeersRouterTable(
-        NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
+        NetworkException _error, std::shared_ptr<P2PSession> _session, Message::Ptr _message);
     virtual void joinRouterTable(
         std::shared_ptr<P2PSession> _session, RouterTableInterface::Ptr _routerTable);
     virtual void onReceiveRouterTableRequest(
-        NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
+        NetworkException _error, std::shared_ptr<P2PSession> _session, Message::Ptr _message);
     virtual void broadcastRouterSeq();
     // FIB-186 (vector B): advance is done by the caller; this broadcasts the seq on the leading
     // edge of a membership/route-change burst and coalesces the rest (see m_routerSeqDirty).
     void markRouterSeqChanged();
     virtual void onReceiveRouterSeq(
-        NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
+        NetworkException _error, std::shared_ptr<P2PSession> _session, Message::Ptr _message);
 
     virtual void onNewSession(P2PSession::Ptr _session);
     virtual void onEraseSession(P2PSession::Ptr _session);

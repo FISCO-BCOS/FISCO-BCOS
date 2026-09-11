@@ -21,9 +21,9 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
+#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SessionReadLoop.h"
-#include "bcos-gateway/libp2p/P2PMessage.h"
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/IOServicePool.h>
 #include "bcos-utilities/testutils/TestPromptFixture.h"
@@ -179,48 +179,29 @@ protected:
     bcos::IOServicePool::Ptr m_threadPool;
 };
 
-// A message that always returns MESSAGE_ERROR to simulate decode failure
-class DecodeErrorMessage : public P2PMessage
+// A frame that decodes to MESSAGE_ERROR: the base-header length is valid (14) but the version
+// is out of the supported range, so the FIB-66 version check in decodeHeader rejects it.
+inline std::shared_ptr<std::vector<uint8_t>> buildDecodeErrorFrame()
 {
-public:
-    using Ptr = std::shared_ptr<DecodeErrorMessage>;
-    int32_t decode(const bytesConstRef& _buffer) override
-    {
-        if (_buffer.size() == 0)
-        {
-            return MessageDecodeStatus::MESSAGE_INCOMPLETE;
-        }
-        // Always return error for any non-empty buffer
-        return MessageDecodeStatus::MESSAGE_ERROR;
-    }
-};
+    auto frame = std::make_shared<std::vector<uint8_t>>(Message::MESSAGE_HEADER_LENGTH, 0);
+    uint32_t frameLen = boost::asio::detail::socket_ops::host_to_network_long(
+        static_cast<uint32_t>(Message::MESSAGE_HEADER_LENGTH));
+    std::memcpy(frame->data(), &frameLen, sizeof(frameLen));
+    uint16_t badVersion = boost::asio::detail::socket_ops::host_to_network_short(0xFFFF);
+    std::memcpy(frame->data() + 4, &badVersion, sizeof(badVersion));
+    return frame;
+}
 
-class DecodeErrorMessageFactory : public P2PMessageFactory
+// A frame that throws during decode: version V2 means the extended header (ttl/src/dst) must
+// follow the 14-byte base header, but the frame ends there — checkOffset throws out_of_range.
+inline std::shared_ptr<std::vector<uint8_t>> buildDecodeExceptionFrame()
 {
-public:
-    Message::Ptr buildMessage() override { return std::make_shared<DecodeErrorMessage>(); }
-};
-
-// A message that throws an exception during decode
-class DecodeExceptionMessage : public P2PMessage
-{
-public:
-    using Ptr = std::shared_ptr<DecodeExceptionMessage>;
-    int32_t decode(const bytesConstRef& _buffer) override
-    {
-        if (_buffer.size() == 0)
-        {
-            return MessageDecodeStatus::MESSAGE_INCOMPLETE;
-        }
-        throw std::runtime_error("Simulated decode exception");
-    }
-};
-
-class DecodeExceptionMessageFactory : public P2PMessageFactory
-{
-public:
-    Message::Ptr buildMessage() override { return std::make_shared<DecodeExceptionMessage>(); }
-};
+    auto frame = buildDecodeErrorFrame();
+    uint16_t v2 = boost::asio::detail::socket_ops::host_to_network_short(
+        static_cast<uint16_t>(bcos::protocol::ProtocolVersion::V2));
+    std::memcpy(frame->data() + 4, &v2, sizeof(v2));
+    return frame;
+}
 
 class FakeHost_FIB : public bcos::gateway::Host
 {
@@ -294,23 +275,23 @@ BOOST_AUTO_TEST_CASE(DecodeErrorTriggersSessionDrop)
 {
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_FIB>();
-    auto decodeErrorFactory = std::make_shared<DecodeErrorMessageFactory>();
 
     {
         auto fakeAsio = std::make_shared<FakeASIO_FIB>();
-        auto fakeHost =
-            std::make_shared<FakeHost_FIB>(hashImpl, fakeAsio, nullptr, decodeErrorFactory);
+        auto fakeHost = std::make_shared<FakeHost_FIB>(
+            hashImpl, fakeAsio, nullptr, std::make_shared<MessageFactory>());
 
-        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
+        // 16-byte initial buffer: the read loop must see the 14-byte fixed header before it can
+        // make progress on a real frame
+        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 16, true);
         session->setMessageFactory(fakeHost->messageFactory());
         session->setMessageHandler(
             [](NetworkException e, SessionFace::Ptr sessionFace, Message::Ptr message) {});
 
         session->startWithPolicy<FakeASIO_FIB::ReadPolicy>();
 
-        // Send a packet that will trigger a decode error (MESSAGE_ERROR)
-        auto badPacket = std::make_shared<std::vector<uint8_t>>(10, 0xAB);
-        fakeAsio->asyncAppendRecvPacket(badPacket);
+        // Send a frame that will trigger a decode error (MESSAGE_ERROR)
+        fakeAsio->asyncAppendRecvPacket(buildDecodeErrorFrame());
 
         // Wait for the session to be dropped
         size_t retryCount = 0;
@@ -337,23 +318,21 @@ BOOST_AUTO_TEST_CASE(DecodeExceptionTriggersSessionDrop)
 {
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_FIB>();
-    auto decodeExceptionFactory = std::make_shared<DecodeExceptionMessageFactory>();
 
     {
         auto fakeAsio = std::make_shared<FakeASIO_FIB>();
-        auto fakeHost =
-            std::make_shared<FakeHost_FIB>(hashImpl, fakeAsio, nullptr, decodeExceptionFactory);
+        auto fakeHost = std::make_shared<FakeHost_FIB>(
+            hashImpl, fakeAsio, nullptr, std::make_shared<MessageFactory>());
 
-        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
+        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 16, true);
         session->setMessageFactory(fakeHost->messageFactory());
         session->setMessageHandler(
             [](NetworkException e, SessionFace::Ptr sessionFace, Message::Ptr message) {});
 
         session->startWithPolicy<FakeASIO_FIB::ReadPolicy>();
 
-        // Send a packet that will trigger a decode exception
-        auto badPacket = std::make_shared<std::vector<uint8_t>>(10, 0xCD);
-        fakeAsio->asyncAppendRecvPacket(badPacket);
+        // Send a frame that will trigger a decode exception
+        fakeAsio->asyncAppendRecvPacket(buildDecodeExceptionFrame());
 
         // Wait for the session to be dropped
         size_t retryCount = 0;
@@ -379,7 +358,6 @@ BOOST_AUTO_TEST_CASE(SocketSharedPtrCaptureInAsyncHandler)
 {
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_FIB>();
-    auto decodeErrorFactory = std::make_shared<DecodeErrorMessageFactory>();
 
     // Verify socket has expected reference count before session creation
     auto initialRefCount = fakeSocket.use_count();
@@ -387,8 +365,8 @@ BOOST_AUTO_TEST_CASE(SocketSharedPtrCaptureInAsyncHandler)
 
     {
         auto fakeAsio = std::make_shared<FakeASIO_FIB>();
-        auto fakeHost =
-            std::make_shared<FakeHost_FIB>(hashImpl, fakeAsio, nullptr, decodeErrorFactory);
+        auto fakeHost = std::make_shared<FakeHost_FIB>(
+            hashImpl, fakeAsio, nullptr, std::make_shared<MessageFactory>());
 
         auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
         session->setMessageFactory(fakeHost->messageFactory());
@@ -420,7 +398,7 @@ BOOST_AUTO_TEST_CASE(DropFlushesOnlyOwnPendingResponseCallbacks)
     {
         auto fakeAsio = std::make_shared<FakeASIO_FIB>();
         auto fakeHost = std::make_shared<FakeHost_FIB>(
-            hashImpl, fakeAsio, nullptr, std::make_shared<P2PMessageFactory>());
+            hashImpl, fakeAsio, nullptr, std::make_shared<MessageFactory>());
         // one manager shared by both sessions, as in production
         auto callbackManager = std::make_shared<SessionCallbackManagerBucket>();
 
@@ -498,7 +476,7 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
     {
         auto fakeAsio = std::make_shared<FakeASIO_FIB>();
         auto fakeHost = std::make_shared<FakeHost_FIB>(
-            hashImpl, fakeAsio, nullptr, std::make_shared<P2PMessageFactory>());
+            hashImpl, fakeAsio, nullptr, std::make_shared<MessageFactory>());
         auto callbackManager = std::make_shared<SessionCallbackManagerBucket>();
 
         auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
@@ -512,11 +490,11 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
         // async_write actually executes (and fails against the closed peer)
         std::thread ioThread([&]() { fakeSocket->ioService().run(); });
 
-        auto message = std::static_pointer_cast<P2PMessage>(fakeHost->messageFactory()->buildMessage());
+        auto message = std::static_pointer_cast<Message>(fakeHost->messageFactory()->buildMessage());
         message->setPacketType(1);
         message->setSeq(seq);
         bcos::bytes payload = {'x'};
-        task::wait([](std::shared_ptr<Session> _session, std::shared_ptr<P2PMessage> _message,
+        task::wait([](std::shared_ptr<Session> _session, std::shared_ptr<Message> _message,
                        bcos::bytes _payload, std::atomic<int>& _completions,
                        std::atomic<int64_t>& _errorCode) -> task::Task<void> {
             try

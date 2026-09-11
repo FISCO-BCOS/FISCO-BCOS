@@ -21,8 +21,8 @@
 #include "bcos-framework/protocol/AMOPRequest.h"
 #include "bcos-gateway/libamop/AMOPMessage.h"
 #include "bcos-gateway/libamop/TopicManager.h"
+#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libp2p/P2PInterface.h"
-#include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/Timer.h"
@@ -72,14 +72,14 @@ public:
 
     virtual void onAMOPMessage(bcos::gateway::NetworkException const& _e,
         bcos::gateway::P2PSession::Ptr _session,
-        std::shared_ptr<bcos::gateway::P2PMessage> _message);
+        std::shared_ptr<bcos::gateway::Message> _message);
 
     virtual TopicManager::Ptr topicManager();
 
 protected:
     virtual void dispatcherAMOPMessage(bcos::gateway::NetworkException const& _e,
         bcos::gateway::P2PSession::Ptr _session,
-        std::shared_ptr<bcos::gateway::P2PMessage> _message);
+        std::shared_ptr<bcos::gateway::Message> _message);
     /**
      * @brief: periodically send topicSeq to all other nodes
      * @return void

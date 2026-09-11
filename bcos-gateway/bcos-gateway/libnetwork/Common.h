@@ -30,6 +30,11 @@ enum MessageDecodeStatus
     MESSAGE_ERROR = -1,
     MESSAGE_INCOMPLETE = 0,
 };
+
+/// default compress threshold: 1KB
+const uint64_t c_compressThreshold = 1024;
+/// default zstd compress level:
+const uint64_t c_zstdCompressLevel = 1;
 enum DisconnectReason
 {
     DisconnectRequested = 0,

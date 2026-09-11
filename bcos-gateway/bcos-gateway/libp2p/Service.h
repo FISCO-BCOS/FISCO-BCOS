@@ -21,7 +21,6 @@
 namespace bcos::gateway
 {
 class Host;
-class P2PMessage;
 class Gateway;
 
 class Service : public P2PInterface, public std::enable_shared_from_this<Service>
@@ -51,9 +50,9 @@ public:
     virtual void registerUnreachableHandler(std::function<void(std::string)> /*unused*/);
 
     void sendRespMessageBySession(
-        bytesConstRef _payload, P2PMessage::Ptr _p2pMessage, P2PSession::Ptr _p2pSession) override;
+        bytesConstRef _payload, Message::Ptr _p2pMessage, P2PSession::Ptr _p2pSession) override;
 
-    task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, P2PMessage& header,
+    task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, Message& header,
         ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
 
     task::Task<void> sendMessageByNodeIDs(uint16_t _type, const std::vector<P2pID>& _nodeIDs,
@@ -64,7 +63,7 @@ public:
      *         over as a shared_ptr: broadcastMessageToAll fans out one coroutine per peer and each
      *         task keeps the message alive (the payload rides as a view, zero-copy).
      */
-    task::Task<void> broadcastMessageToAll(P2PMessage::Ptr message,
+    task::Task<void> broadcastMessageToAll(Message::Ptr message,
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads,
         Options options = Options()) override;
 
@@ -74,7 +73,7 @@ public:
      *         only be exchanged between neighbors and propagated hop-by-hop. The message is handed
      *         over as a shared_ptr and kept alive by the per-peer fan-out tasks.
      */
-    virtual task::Task<void> broadcastMessageToNeighbors(P2PMessage::Ptr message,
+    virtual task::Task<void> broadcastMessageToNeighbors(Message::Ptr message,
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads,
         Options options = Options());
 
@@ -123,7 +122,7 @@ public:
     virtual std::string getShortP2pID(std::string const& rawP2pID) const;
     virtual std::string getRawP2pID(std::string const& shortP2pID) const;
 
-    virtual void resetP2pID(P2PMessage&, bcos::protocol::ProtocolVersion const&);
+    virtual void resetP2pID(Message&, bcos::protocol::ProtocolVersion const&);
 
 protected:
     std::shared_ptr<P2PSession> getP2PSessionByNodeIdWithoutLock(P2pID const& _nodeID) const;
@@ -131,9 +130,9 @@ protected:
     // handshake protocol
     void sendProtocol(P2PSession::Ptr _session);
     void onReceiveProtocol(
-        NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
+        NetworkException _error, std::shared_ptr<P2PSession> _session, Message::Ptr _message);
     void onReceiveHeartbeat(
-        NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
+        NetworkException _error, std::shared_ptr<P2PSession> _session, Message::Ptr _message);
 
     // handlers called when new-session
     void registerOnNewSession(std::function<void(P2PSession::Ptr)> _handler);

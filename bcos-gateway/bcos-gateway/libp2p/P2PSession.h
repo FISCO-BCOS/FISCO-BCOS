@@ -7,8 +7,8 @@
 
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-gateway/libnetwork/Common.h"
+#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/SessionFace.h"
-#include "bcos-gateway/libp2p/P2PMessage.h"
 #include <boost/asio/steady_timer.hpp>
 #include <memory>
 #include <utility>
@@ -16,7 +16,6 @@
 
 namespace bcos::gateway
 {
-class P2PMessage;
 class Service;
 
 class P2PSession : public std::enable_shared_from_this<P2PSession>
@@ -51,7 +50,7 @@ public:
     virtual bcos::protocol::ProtocolInfo::ConstPtr protocolInfo() const;
 
     task::Task<Message::Ptr> fastSendP2PMessage(
-        P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options);
+        Message& message, ::ranges::any_view<bytesConstRef> payloads, Options options);
 
 private:
     SessionFace::Ptr m_session;
