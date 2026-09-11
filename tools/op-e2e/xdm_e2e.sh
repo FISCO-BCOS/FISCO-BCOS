@@ -16,7 +16,8 @@
 #
 # Env: C2_L2_WEB3/C2_L1_RPC/C2_DEV_KEY (defaults = C2).
 set -euo pipefail
-cd "$(dirname "$0")"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
 
 export NO_PROXY="${NO_PROXY:-127.0.0.1,localhost}"
 export no_proxy="${no_proxy:-127.0.0.1,localhost}"
@@ -30,12 +31,29 @@ CHAIN_ID="${C2_L2_CHAIN_ID:-914901}"
 RECIPIENT=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266  # DEV0
 L2_XDM=0x4200000000000000000000000000000000000007
 AMT=0.5ether
+STATE="${C2_STATE:-/tmp/c2/state.json}"
+# DEV0 (== RECIPIENT) is the L1 dev account used to fund the portal.
+DEV0_KEY="${C2_DEPLOYER_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}"
 
 log() { echo "[xdm] $*"; }
 die() { echo "[xdm] !! $*" >&2; exit 1; }
 
 # shellcheck source=l2_gas.sh
-source "$(dirname "$0")/l2_gas.sh"
+source "$SCRIPT_DIR/l2_gas.sh"
+
+# Fund the portal BEFORE withdrawing. On a fresh devnet the portal holds 0 ETH;
+# finalize's relay is an OP SafeCall.callWithMinGas(target, gasLimit, value,
+# data) whose inner call{value} then FAILS SILENTLY — finalize still succeeds
+# and emits WithdrawalFinalized(wh, false), so the messenger relay never runs
+# and the recipient's L1 balance does not move (delta 0). Mirrors
+# withdraw_e2e.sh; funded from DEV0 BEFORE the balance baseline so the relayed
+# value remains the sole delta.
+PORTAL=$(python3 -c "import json;print(json.load(open('$STATE'))['opChainDeployments'][0]['OptimismPortalProxy'])")
+PORTAL_BAL=$(cast balance "$PORTAL" --rpc-url "$L1")
+if [ "$PORTAL_BAL" -lt 2000000000000000000 ] 2>/dev/null; then
+  cast send "$PORTAL" --value 2ether --private-key "$DEV0_KEY" --rpc-url "$L1" > /dev/null
+  log "portal funded with 2 ETH (was $PORTAL_BAL wei)"
+fi
 
 log "L2 sendMessage($RECIPIENT, 0x, 100000) value=$AMT via the L2 messenger"
 NONCE_BEFORE=$(cast call "$L2_XDM" "messageNonce()(uint256)" --rpc-url "$L2")
@@ -53,7 +71,7 @@ assert_l2_receipt_ok "$TX" "$L2"
 
 # The messenger's withdrawal flows through the standard claim machinery;
 # finalize's target call IS the relay.
-python3 "$(dirname "$0")/withdraw_claim.py" "$TX" --wait-finalized 600
+python3 "$SCRIPT_DIR/withdraw_claim.py" "$TX" --wait-finalized 600
 
 NONCE_AFTER=$(cast call "$L2_XDM" "messageNonce()(uint256)" --rpc-url "$L2")
 BAL_AFTER=$(cast balance "$RECIPIENT" --rpc-url "$L1")
