@@ -412,6 +412,38 @@ BOOST_AUTO_TEST_CASE(generic_stale_head_swallow_matches)
     checkForkchoiceParity(legacyStale, newStale);
 }
 
+// 5593 review F1: a forced envelope that passes the first-byte admission gate but fails
+// RLP decode must answer a terminal INVALID carrying fcuInvalidIfUndecodable's message —
+// not a retryable -32603 (untagged OpExecutionInternalError), and not the derivePayloadId
+// "contains undecodable hex" arm either.
+BOOST_AUTO_TEST_CASE(eth_fcu_undecodable_forced_envelope_is_invalid_not_internal_error)
+{
+    ServicePair pair;
+    auto parentForkchoice = makeForkchoiceState();
+    parentForkchoice.safeBlockHash = parentForkchoice.headBlockHash;
+    parentForkchoice.finalizedBlockHash = parentForkchoice.headBlockHash;
+    setForkchoiceBlockNumbers(pair.newStorage, parentForkchoice, c_rebuildBaseBlockNumber,
+        c_rebuildBaseBlockNumber, c_rebuildBaseBlockNumber);
+    pair.newStorage.setCanonicalBlock(parentForkchoice.headBlockHash, c_rebuildBaseBlockNumber);
+
+    auto payloadAttributes = makePayloadAttributesV3();
+    // 0xdeadbeef: the type byte dispatches as Legacy (>= 0xc0), so admission admits the
+    // envelope, but the body is not a decodable RLP list — opEnvelopeToTars fails inside
+    // buildPayload.
+    payloadAttributes.transactions = std::vector<std::string>{"0xdeadbeef"};
+
+    auto result =
+        task::syncWait(pair.fresh.updateForkchoice(parentForkchoice, &payloadAttributes, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(result.payloadStatus.status),
+        static_cast<int>(PayloadValidationStatus::Invalid));
+    BOOST_CHECK(!result.payloadId.has_value());
+    BOOST_REQUIRE(result.payloadStatus.validationError.has_value());
+    // The exact fcuInvalidIfUndecodable message — pins the tagged-throw path, not the
+    // derivePayloadId "payloadAttributes.transactions contains undecodable hex" arm.
+    BOOST_CHECK_EQUAL(*result.payloadStatus.validationError,
+        std::string("undecodable payload transaction envelope"));
+}
+
 BOOST_AUTO_TEST_CASE(generic_rebuild_on_parent_matches)
 {
     ServicePair pair;

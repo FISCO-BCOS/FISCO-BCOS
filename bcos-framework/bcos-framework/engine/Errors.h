@@ -75,6 +75,13 @@ using OpValidateErrorCode = boost::error_info<struct OpValidateErrorCodeTag, std
 /// cannot tell a dropped pending from a storage fault.
 using OpPendingDropped = boost::error_info<struct OpPendingDroppedTag, bool>;
 
+/// True when an Engine API payload carries a transaction envelope this service cannot
+/// decode: a payload-content fault the FCU/newPayload paths map to a consensus INVALID
+/// (fcuInvalidIfUndecodable), never to -32603 — an untagged OpExecutionInternalError must
+/// keep propagating as an internal error. Same carrier convention as
+/// OpCulpritTxHash/OpRejectIsCapacity; shared by the Eth and OP build paths.
+using OpPayloadUndecodable = boost::error_info<struct tag_op_payload_undecodable, bool>;
+
 /// Consumed by OpEngineService (#5549) to classify execute-reject culprits; unused
 /// within #5547 itself.
 [[nodiscard]] inline std::optional<bcos::h256> culpritTxHashFromError(boost::exception const& error)

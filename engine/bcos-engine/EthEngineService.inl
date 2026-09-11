@@ -189,12 +189,28 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
     }
     auto payloadId = *payloadIdOpt;
     auto nextBlockNumber = *headBlockNumber + 1;
-    auto built = co_await buildPayload(forkchoiceState, *payloadAttributes, payloadId, version,
-        nextBlockNumber, std::move(sealedTxs), view, std::move(decodedForcedTxs));
+    std::optional<BuildPayloadResult> built;
+    try
+    {
+        built = co_await buildPayload(forkchoiceState, *payloadAttributes, payloadId, version,
+            nextBlockNumber, std::move(sealedTxs), view, std::move(decodedForcedTxs));
+    }
+    catch (OpExecutionInternalError const& e)
+    {
+        // An envelope the CL submitted but this service cannot decode is a payload-content
+        // fault: answer a terminal INVALID (same contract as the OP lane's
+        // fcuInvalidIfUndecodable), never a retryable -32603. Every other internal fault
+        // keeps propagating so the endpoint maps it to -32603.
+        if (auto invalid = detail::fcuInvalidIfUndecodable(e))
+        {
+            co_return *invalid;
+        }
+        throw;
+    }
 
     auto commonEntry = std::make_shared<BuiltPayload>();
     commonEntry->version = engine_common::payloadShapeVersion(version);
-    commonEntry->executionPayload = std::move(built.executionPayload);
+    commonEntry->executionPayload = std::move(built->executionPayload);
     commonEntry->blockValue = 0;
     commonEntry->blobsBundle = std::nullopt;
     commonEntry->shouldOverrideBuilder = false;
@@ -206,8 +222,8 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
 
     auto stagedArtifact = EthPayloadArtifacts<ViewType>{
         .view = std::make_shared<ViewType>(std::move(view)),
-        .header = std::move(built.header),
-        .receipts = std::move(built.receipts),
+        .header = std::move(built->header),
+        .receipts = std::move(built->receipts),
     };
 
     {
@@ -526,10 +542,14 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
             auto tarsTx = engine_common::op::opEnvelopeToTars(raw, txHash);
             if (!tarsTx)
             {
-                // validatePayloadAttributes already admitted this envelope, so a decode
-                // failure here is a node-local anomaly — fail loudly (-32603), never a
-                // false payload INVALID.
-                BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                // validatePayloadAttributes only dispatches on the envelope's type byte, so a
+                // body that fails RLP decode reaches here from a remote CL. Tag it as a
+                // payload-content fault: updateForkchoice maps the tag to a terminal INVALID
+                // (same contract as the OP lane's fcuInvalidIfUndecodable) — an untagged
+                // OpExecutionInternalError would surface as -32603 and the CL would resubmit
+                // the identical attributes forever.
+                BOOST_THROW_EXCEPTION(OpExecutionInternalError{}
+                                      << OpPayloadUndecodable{true} << bcos::errinfo_comment{
                                           "forced payloadAttributes.transactions envelope "
                                           "is undecodable"});
             }
