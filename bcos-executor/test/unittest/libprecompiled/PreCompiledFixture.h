@@ -71,6 +71,11 @@ class PrecompiledFixture : public TestPromptFixture
 public:
     PrecompiledFixture()
     {
+        // The global name->selector cache (s_name2SelectCache) is keyed by function name
+        // alone, ignoring the hash impl. An earlier test using an SM crypto suite can leave
+        // SM3-based selectors behind; clear it so this test case computes selectors with
+        // its own hash impl.
+        clearName2SelectCache();
         hashImpl = std::make_shared<Keccak256>();
         assert(hashImpl);
         smHashImpl = std::make_shared<SM3>();

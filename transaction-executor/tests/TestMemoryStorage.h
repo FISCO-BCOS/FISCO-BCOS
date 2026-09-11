@@ -1,4 +1,5 @@
 #pragma once
+#include "../bcos-transaction-executor/vm/HostContext.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
@@ -7,6 +8,16 @@ namespace bcos::executor_v1
 {
 using MutableStorage = storage2::memory_storage::MemoryStorage<StateKey, StateValue,
     storage2::memory_storage::ORDERED>;
+
+/// The global executable cache (hostcontext::getCacheExecutables()) is keyed by address
+/// alone and lives for the whole process. Tests deploy different code at the same
+/// deterministic addresses into fresh storages, so a stale entry left by an earlier test
+/// case would make the executor run the wrong code. Fixtures call this to start every
+/// test case with a clean cache.
+inline void clearGlobalExecutableCache()
+{
+    hostcontext::getCacheExecutables().clear();
+}
 
 auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, MutableStorage& storage,
     ::ranges::input_range auto&& keys, storage2::BYPASS_READ_SET_TYPE /*unused*/)

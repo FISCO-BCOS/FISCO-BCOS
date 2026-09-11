@@ -23,7 +23,6 @@
 
 #include "../Common.h"
 #include "../executor/TransactionExecutor.h"
-#include "../vm/Eip2929AccessState.h"
 #include "BlockContext.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
@@ -148,18 +147,7 @@ public:
 
     std::shared_ptr<storage::StateStorageInterface> getTransientStateStorage(int64_t contextID);
 
-    /// EIP-2929 warm sets scoped per transaction (contextID), shared across nested CALL depth.
-    std::shared_ptr<Eip2929AccessState> getEip2929AccessState(int64_t contextID);
-
     std::shared_ptr<storage::Recoder> getRecoder() { return m_recoder; }
-
-    /// Berlin+ EIP-2929: warm origin, callee (unless contract creation tx), precompiles 0x01..0x09.
-    void warmUpEip2929InitialSet(CallParameters const& params);
-
-    /// Berlin+ EIP-2930 (W2): after W1, warm accounts and storage slots from the tx access list.
-    /// EIP-2929 W2 for compat tests / DAG experiments only; production W2 is TE
-    /// HostContext::prepare.
-    void warmUpEip2930AccessList(CallParameters const& params);
 
 protected:
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> call(

@@ -51,7 +51,6 @@
 #include "../precompiled/extension/RingSigPrecompiled.h"
 #include "../precompiled/extension/SmallBankPrecompiled.h"
 #include "../precompiled/extension/ZkpPrecompiled.h"
-#include "../vm/EvmPrecompiledAddress.h"
 #include "../vm/Precompiled.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/FeaturesStorage.h"
@@ -246,23 +245,6 @@ void TransactionExecutor::initEvmEnvironment()
     m_evmPrecompiled->insert({fillZero(10),
         make_shared<PrecompiledContract>(PrecompiledRegistrar::pricer("point_evaluation"),
             PrecompiledRegistrar::executor("point_evaluation"))});
-
-    // EIP-2537 BLS12-381 precompiles (Prague) — gated by feature_evm_prague in
-    // callBuiltInPrecompiled
-    static const char* bls_names[] = {"bls12_g1add", "bls12_g1msm", "bls12_g2add", "bls12_g2msm",
-        "bls12_pairing_check", "bls12_map_fp_to_g1", "bls12_map_fp2_to_g2"};
-    for (int addr = 0x0b; addr <= 0x11; ++addr)
-    {
-        const char* name = bls_names[addr - 0x0b];
-        m_evmPrecompiled->insert(
-            {fillZero(addr), make_shared<PrecompiledContract>(PrecompiledRegistrar::pricer(name),
-                                 PrecompiledRegistrar::executor(name))});
-    }
-
-    // EIP-7212 / RIP-7212 p256verify at 0x0100 (Osaka-gated, guard in HostContext)
-    m_evmPrecompiled->insert({std::string(P256VERIFY_PRECOMPILED_ADDRESS),
-        make_shared<PrecompiledContract>(PrecompiledRegistrar::pricer("p256verify"),
-            PrecompiledRegistrar::executor("p256verify"))});
 
 
     auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl);
@@ -2768,16 +2750,6 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
     callParameters->transactionType = input.txType();
     callParameters->nonce = hex2u(input.nonce());
-
-    // TODO(C2): EIP-2930 accessList pre-warm is NOT wired in the bcos-executor path.
-    // The transaction-executor path (TransactionExecutorImpl + HostContext) already handles W2
-    // correctly via resolveWeb3AccessList() + warmUpAccessList().
-    // This path must be fixed before bcos-executor can support EIP-2930/1559 access lists:
-    //   1. Call resolveWeb3AccessList(tx) here to obtain Eip2930AccessList.
-    //   2. Assign resolved.web3TypedTxKind → callParameters->web3TypedTxKind.
-    //   3. Assign resolved.accessList      → callParameters->eip2930AccessList.
-    //   4. In TransactionExecutive::execute(), call warmUpEip2930AccessList(*callParameters)
-    //      right after warmUpEip2929InitialSet(*callParameters) (see ~line 478).
 
     if (!callParameters->create)
     {

@@ -102,12 +102,7 @@ public:
         feature_balance_precompiled = 44,
         feature_balance_policy1 = 45,
         feature_paillier_add_raw = 46,
-        feature_evm_eip2929 = 47,  // EIP-2929 冷热访问 gas 折扣（Berlin+）；影响全局
-                                   // gas，需治理层显式启用
         feature_evm_cancun = 48,
-        feature_evm_prague = 49,  // EIP-7702、BLS12-381；依赖 feature_evm_cancun
-        feature_evm_osaka = 50,   // EIP-7212 p256verify、EIP-7823/EIP-7883 modexp；依赖
-                                  // feature_evm_prague
         feature_evm_timestamp = 51,
         feature_evm_address = 52,
         feature_rpbft_term_weight = 53,
