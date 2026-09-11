@@ -208,9 +208,15 @@ private:
     std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_ethereumSchedulerHolder;
     std::function<void(std::function<void(protocol::BlockNumber)>)>
         m_setEthereumSchedulerBlockNumberNotifier;
+    /// OP scheduler (executor_version >= 3), wired to MultiVersionScheduler slot 3.
+    std::shared_ptr<scheduler::SchedulerInterface> m_opScheduler;
+    /// Installs the OP block-number notifier on the OpScheduler.
+    std::function<void(std::function<void(protocol::BlockNumber)>)>
+        m_setOpSchedulerBlockNumberNotifier;
     /// Resolved executor version (0 = legacy SchedulerManager, 1 = TransactionExecutorImpl,
-    /// 2 = EthereumExecutor). Cached during initNode so initSysContract can decide whether the
-    /// FISCO system-contract deployment block applies (it does not for the ethereum executor).
+    /// 2 = EthereumExecutor, >= 3 = OP mode). Cached during initNode so initSysContract can
+    /// decide whether the FISCO system-contract deployment block applies (it does not for the
+    /// ethereum executor).
     int m_executorVersion = 0;
 
     protocol::BlockNumber getCurrentBlockNumber(

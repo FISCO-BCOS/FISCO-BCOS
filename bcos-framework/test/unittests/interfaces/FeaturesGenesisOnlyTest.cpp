@@ -75,11 +75,12 @@ BOOST_AUTO_TEST_CASE(genesisSetIsUnaffected)
 }
 
 /// Negative control: the rule is about this one flag, not about validate() rejecting whatever
-/// it is handed. A neighbouring L2-adjacent flag with no dependency still validates.
+/// it is handed. A neighbouring flag with no dependency still validates. (feature_op_jovian was
+/// the control here until OP forks moved to [op_fork_timestamps]; bit 60 is now reserved.)
 BOOST_AUTO_TEST_CASE(otherFeaturesStillValidate)
 {
     Features features;
-    BOOST_CHECK_NO_THROW(features.validate(Features::Flag::feature_op_jovian));
+    BOOST_CHECK_NO_THROW(features.validate(Features::Flag::bugfix_eip161_1052_account_semantics));
     BOOST_CHECK_NO_THROW(features.validate(Features::Flag::feature_balance));
 }
 

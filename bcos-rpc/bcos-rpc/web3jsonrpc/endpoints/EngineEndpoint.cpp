@@ -165,10 +165,21 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
         BOOST_THROW_EXCEPTION(JsonRpcException(
             EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
     }
+    catch (engine::UnsupportedEngineApiVersion const& e)
+    {
+        // Method-version mismatch is a -38005, same class as an unsupported fork.
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
+    }
     catch (engine::InvalidForkchoiceState const& e)
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::InvalidForkchoiceState,
             std::string("Invalid forkchoice state: ") + e.what()));
+    }
+    catch (engine::OpExecutionInternalError const& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InternalError, std::string("Internal error: ") + e.what()));
     }
     auto jsonResult = combineForkchoiceUpdatedResult(engineResult, version);
     buildJsonContent(jsonResult, response);
@@ -231,6 +242,24 @@ task::Task<void> EngineEndpoint::handleGetPayload(
         // Payload was built under a different method version.
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnsupportedFork,
             "Unsupported fork: payload was built by a different method version"));
+    }
+    catch (engine::UnsupportedFork const& e)
+    {
+        // The payload's fork is outside this method's window (getPayloadV4 for a Karst
+        // payload, V5 for a pre-Karst one).
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
+    }
+    catch (engine::UnsupportedEngineApiVersion const& e)
+    {
+        // Method-version mismatch is a -38005, same class as an unsupported fork.
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
+    }
+    catch (engine::OpExecutionInternalError const& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InternalError, std::string("Internal error: ") + e.what()));
     }
     if (!engineResult)
     {
@@ -304,10 +333,21 @@ task::Task<void> EngineEndpoint::handleNewPayload(
         BOOST_THROW_EXCEPTION(JsonRpcException(
             EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
     }
+    catch (engine::UnsupportedEngineApiVersion const& e)
+    {
+        // Method-version mismatch is a -38005, same class as an unsupported fork.
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
+    }
     catch (engine::InvalidPayloadAttributes const& e)
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::InvalidPayloadAttributes,
             std::string("Invalid payload attributes: ") + e.what()));
+    }
+    catch (engine::OpExecutionInternalError const& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InternalError, std::string("Internal error: ") + e.what()));
     }
     auto result = serializePayloadStatus(engineResult, version);
     buildJsonContent(result, response);

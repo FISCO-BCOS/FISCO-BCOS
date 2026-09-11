@@ -8,21 +8,37 @@
 namespace bcos::scheduler_v1
 {
 
-/// Thrown when setVersion() is asked to select a negative executor version.
+/// Thrown for a negative executor version, and by scheduler(version) / getScheduler() when
+/// the selected slot is out of range or unwired. setVersion() deliberately does NOT throw on
+/// an unwired slot at runtime — see its definition.
 DERIVE_BCOS_EXCEPTION(ExecutorVersionNotSupported);
 
+/// Version-selection contract for the slot array below: version 0, 1 and 2 name slots 0
+/// (legacy SchedulerManager), 1 (baseline) and 2 (pure-Ethereum EthereumExecutor); version 3
+/// names slot 3 (OP). A version ABOVE the newest declared slot -- and only such a version --
+/// saturates down to the newest slot this node actually wired, so "every version >= 2 runs
+/// the v2 executor" is no longer the contract. A version that names a DECLARED slot this node
+/// did not wire (version 3 on a build without the OP engine) neither saturates nor switches:
+/// setVersion keeps the current executor and logs ERROR, see its definition.
+///
 /// The executor version that selects the pure-Ethereum EthereumExecutor
-/// (ethereum-executor). It is index 2 of MultiVersionScheduler's scheduler array.
-/// Versions >= this all select the v2 executor (setVersion saturates), leaving
-/// room above 2 for a future executor without a schema change.
+/// (ethereum-executor); index 2 of MultiVersionScheduler's scheduler array.
 /// The canonical value lives in bcos-framework/ledger (so lower layers can gate on
 /// it without depending on libinitializer); this keeps the scheduler_v1 spelling.
 constexpr static int ETHEREUM_EXECUTOR_VERSION = ledger::ETHEREUM_EXECUTOR_VERSION;
 
+/// executor_version >= this selects OP mode (OpScheduler, slot 3). It is a genesis property:
+/// SystemConfigPrecompiled refuses a governance write of this value from 3.18.0 on, so on a
+/// running chain the value can only reach here from config.genesis via Initializer::init.
+constexpr static int OPSTACK_EXECUTOR_VERSION = ledger::OPSTACK_EXECUTOR_VERSION;
+static_assert(OPSTACK_EXECUTOR_VERSION > ETHEREUM_EXECUTOR_VERSION,
+    "OPSTACK_EXECUTOR_VERSION must be strictly greater than ETHEREUM_EXECUTOR_VERSION");
+
 class MultiVersionScheduler : public bcos::scheduler::SchedulerInterface
 {
 private:
-    static constexpr size_t SUPPORTED_EXECUTOR_VERSION_COUNT = 3;
+    // Slots: 0 legacy, 1 baseline, 2 Ethereum, 3 OP (may be null).
+    static constexpr size_t SUPPORTED_EXECUTOR_VERSION_COUNT = 4;
 
     std::array<scheduler::SchedulerInterface::Ptr, SUPPORTED_EXECUTOR_VERSION_COUNT> m_schedulers;
     int m_currentIndex;
@@ -34,6 +50,7 @@ private:
     ledger::LedgerConfigState::Ptr m_ledgerConfigState;
 
     bcos::scheduler::SchedulerInterface& getScheduler();
+    bcos::scheduler::SchedulerInterface& checkedSchedulerAt(int version) const;
 
 public:
     bcos::scheduler::SchedulerInterface& scheduler(int version);
@@ -54,6 +71,17 @@ public:
 
     void call(protocol::Transaction::Ptr transaction,
         std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override;
+
+    /// eth_call pinned at a block height: forward to the selected scheduler.
+    void callAtBlock(protocol::Transaction::Ptr transaction, protocol::BlockNumber blockNumber,
+        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override;
+
+    /// Adopt a verify=false probe as the pending block. Forwarded so a caller reaching
+    /// OpScheduler through this wrapper gets its real adopt, not SchedulerInterface's
+    /// re-execute default.
+    void adoptProbeAsPending(bcos::protocol::Block::Ptr block,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool sysBlock)>
+            callback) override;
 
     void reset([[maybe_unused]] std::function<void(Error::Ptr)> callback) override;
 
