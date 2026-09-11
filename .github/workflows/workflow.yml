@@ -456,7 +456,6 @@ jobs:
         with:
           filters: |
             c2_e2e:
-              - 'tools/op-e2e/**'
               - 'tools/opstack-genesis/**'
               - 'tools/.ci/c2-e2e.sh'
               - 'bcos-l2-contracts/**'

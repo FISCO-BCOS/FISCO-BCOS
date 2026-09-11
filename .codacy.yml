@@ -2,5 +2,4 @@
 # C2 OP full-stack e2e harness (shell + Python); not production node code.
 # See tools/op-e2e/README conventions in setup_c2.sh / versions.json.
 exclude_paths:
-  - "tools/op-e2e/**"
   - "tools/opstack-genesis/test_*.py"

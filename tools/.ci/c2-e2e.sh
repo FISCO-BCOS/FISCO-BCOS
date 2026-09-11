@@ -19,7 +19,11 @@
 set -euo pipefail
 
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
-VERSIONS="${REPO_ROOT}/tools/op-e2e/versions.json"
+# The e2e harness lives in FISCO-BCOS/op-stack-e2e-tests (migrated out of
+# tools/op-e2e in PR #5593's follow-up); the workflow checks it out at a pinned
+# ref into OP_E2E_DIR. Point OP_E2E_DIR at any harness checkout for local runs.
+OP_E2E_DIR="${OP_E2E_DIR:-${REPO_ROOT}/.ci-op-e2e-tests}"
+VERSIONS="${OP_E2E_DIR}/tools/op-e2e/versions.json"
 OP_MONOREPO="${OP_MONOREPO:-${REPO_ROOT}/.ci-op-monorepo}"
 BIN_DIR="${BIN_DIR:-${REPO_ROOT}/.ci-c2-bins}"
 FISCO_BIN="${FISCO_BIN:-${REPO_ROOT}/build/fisco-bcos-air/fisco-bcos}"
@@ -29,7 +33,7 @@ XDM="${XDM:-0}"
 log() { echo "[c2-e2e] $*"; }
 die() { echo "[c2-e2e] ERROR: $*" >&2; exit 1; }
 
-[ -f "$VERSIONS" ] || die "missing $VERSIONS (commit tools/op-e2e first)"
+[ -f "$VERSIONS" ] || die "missing $VERSIONS (check out FISCO-BCOS/op-stack-e2e-tests at the pinned ref into $OP_E2E_DIR first)"
 
 read_op_pin() {
   python3 - "$VERSIONS" <<'PY'
@@ -138,4 +142,4 @@ FISCO_REPO="$REPO_ROOT" \
 OP_NODE_EXTRA_FLAGS="--p2p.disable" \
 CONTEST="$CONTEST" \
 XDM="$XDM" \
-bash "${REPO_ROOT}/tools/op-e2e/withdraw_e2e_ephemeral.sh"
+bash "${OP_E2E_DIR}/tools/op-e2e/withdraw_e2e_ephemeral.sh"

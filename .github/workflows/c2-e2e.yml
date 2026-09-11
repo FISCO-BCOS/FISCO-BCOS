@@ -29,6 +29,15 @@ jobs:
         with:
           clean: false
 
+      # The e2e harness lives in its own repo; pinned ref — bump it in lockstep
+      # with node changes (its CI gates the harness itself).
+      - name: Check out the op-e2e harness (op-stack-e2e-tests)
+        uses: actions/checkout@v4
+        with:
+          repository: FISCO-BCOS/op-stack-e2e-tests
+          ref: 88c690f7fa75500f44197155e513fcef5a9f3e95
+          path: .ci-op-e2e-tests
+
       - name: Initialize vcpkg submodule
         run: git submodule update --init --recursive -- vcpkg
 
@@ -79,7 +88,7 @@ jobs:
         id: op-pin
         run: |
           set -euo pipefail
-          COMMIT=$(python3 -c "import json; print(json.load(open('tools/op-e2e/versions.json'))['op_monorepo']['commit'])")
+          COMMIT=$(python3 -c "import json; print(json.load(open('.ci-op-e2e-tests/tools/op-e2e/versions.json'))['op_monorepo']['commit'])")
           echo "commit=${COMMIT}" >> "$GITHUB_OUTPUT"
 
       - name: Cache OP monorepo + binaries
