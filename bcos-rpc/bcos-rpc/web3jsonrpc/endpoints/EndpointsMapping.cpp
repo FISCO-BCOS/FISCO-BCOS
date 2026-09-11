@@ -44,6 +44,7 @@ void EndpointsMapping::addHandlers(bool enableOPEngine)
         addEngineHandlers();
     }
     addEthHandlers();
+    addMinerHandlers();
     addNetHandlers();
     addWeb3Handlers();
     for (auto& [method, _] : m_handlers)
@@ -118,6 +119,14 @@ void EndpointsMapping::addEthHandlers()
     m_handlers[methodString(EthMethod::eth_getProof)] = &Endpoints::getProof;
     m_handlers[methodString(EthMethod::eth_feeHistory)] = &Endpoints::feeHistory;
     m_handlers[methodString(EthMethod::eth_config)] = &Endpoints::ethConfig;
+    // clang-format on
+}
+
+void EndpointsMapping::addMinerHandlers()
+{
+    // clang-format off
+    // OP Stack `miner` namespace. Registered unconditionally; the handler itself
+    // throws MethodNotFound when daCaps() is null (Ethereum-only nodes).
     m_handlers[methodString(EthMethod::miner_setMaxDASize)] = &Endpoints::setMaxDASize;
     // clang-format on
 }
