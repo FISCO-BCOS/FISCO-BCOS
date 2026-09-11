@@ -112,6 +112,12 @@ enum class Check : uint32_t
     /// pool (Web3NonceChecker::existsMemoryNonce). The Web3 counterpart of BcosPoolNonce, and
     /// node-local in the same way -- but keyed on the SENDER, which BcosPoolNonce is not.
     Web3PoolNonce = 1U << 19,
+    /// Whether this chain carries FISCO-native (tars) transactions at all. An OP-Stack L2
+    /// (feature_l2_ethereum_compat) carries EIP-2718 envelopes only: a BCOSTransaction has no
+    /// envelope for an op-reth verifier to re-derive, so one inside a block makes that verifier
+    /// reject the WHOLE block. Reads the configuration snapshot alone -- no account, no
+    /// envelope -- which is why it sits in the state stage.
+    BcosTxAllowedOnChain = 1U << 20,
 };
 
 constexpr Check operator|(Check lhs, Check rhs) noexcept
@@ -151,9 +157,10 @@ constexpr bool contains(Check set, Check item) noexcept
 ///   pool  -- the BCOS nonce checkers, pool set before ledger, as the pool-side validator ran
 ///            them. Reads the pool, not the chain.
 ///
-/// Per (kind, context) this yields exactly the reads the table implies: a BCOS transaction
-/// reads nothing, a Web3 proposal reads the chain view, a Web3 admission reads the chain view
-/// and the account.
+/// Per (kind, context) this yields exactly the reads the table implies: a BCOS transaction takes
+/// the configuration snapshot and reads one flag out of it, a Web3 proposal derives the whole
+/// chain view, a Web3 admission derives it and reads the account. Which FIELDS of the view are
+/// derived is itself keyed on the set -- see c_revisionDependent.
 inline constexpr std::array c_gateOrder{
     Check::TypeGate,
     Check::ToFieldFormat,
@@ -161,6 +168,12 @@ inline constexpr std::array c_gateOrder{
     Check::BcosGroupChainId,
 };
 inline constexpr std::array c_stateOrder{
+    /// First, though the position is not observable today: BcosTxAllowedOnChain appears only in
+    /// TxKind::Bcos's set, whose sole state-stage member it is, so no transaction can violate it
+    /// and one of evmone's rules at once. The place is chosen for the case where that stops being
+    /// true -- a whole kind the chain refuses says more than any rule about the transaction's
+    /// contents -- not because anything reports a different code because of it.
+    Check::BcosTxAllowedOnChain,
     Check::TypeByRevision,
     Check::SetCodeHasTo,
     Check::AuthListNonEmpty,
@@ -252,6 +265,23 @@ inline constexpr Check c_poolStage = detail::unionOf(c_poolOrder);
 inline constexpr Check c_accountStateDependent =
     Check::SenderIsEOA | Check::NonceNotMax | Check::Web3NonceWindow | Check::Balance;
 
+/// What the chain view has to DERIVE, per field. The state stage always holds the configuration
+/// snapshot itself -- a pointer copy -- but the three values read out of it are not free, and one
+/// of them can fail: tx_gas_price reaches the snapshot as whatever string genesis put there
+/// (NodeConfig.cpp reads tx.gas_price with no validation, and SystemConfigPrecompiled's hex rule
+/// only governs later governance writes), so parsing it throws on a malformed value. Deriving a
+/// field no check in the set will read would turn that into a rejection of every transaction on a
+/// chain whose checks never look at the gas price -- which is exactly a BCOS transaction's set.
+///
+/// Same rule as c_accountStateDependent one level down: verify() reads what the table says is
+/// needed, nothing else. A check missing from its field's set here reads a disengaged optional
+/// (or a zero base fee), which every reader treats as "stand down" -- so adding a check without
+/// listing it weakens the check rather than crashing, and the state-stage cases in the admission
+/// tests are what catch it.
+inline constexpr Check c_revisionDependent =
+    Check::TypeByRevision | Check::MaxGasLimit | Check::InitCodeSize | Check::IntrinsicGas;
+inline constexpr Check c_baseFeeDependent = Check::FeeCapVsBaseFee | Check::Balance;
+
 /// Web3PoolNonce IS sender-dependent, and that is the difference between the two pool rules: its
 /// key is the PAIR (sender, nonce), where BcosPoolNonce's is a nonce value alone. Run with an
 /// unrecovered sender it would file every pending Web3 transaction under the empty string, and
@@ -277,8 +307,15 @@ constexpr Check poolAdmissionCheckSet(TxKind kind) noexcept
     case TxKind::Bcos:
         // A BCOS transaction's dataHash covers its whole TransactionData, so none of the
         // envelope-derived Web3 rules apply to it.
+        //
+        // BcosTxAllowedOnChain survives into all three contexts (neither derived column strips
+        // it): its answer is a function of the transaction kind and the chain configuration, so
+        // every honest node computes the same one and enforcing it under ProposalVerification
+        // cannot split a block -- while a native transaction sealed by a leader is exactly as
+        // unverifiable to an OP verifier as one submitted over RPC. EESTReplay keeps it too;
+        // fixtures are Web3 only, so it never fires there.
         return Check::TypeGate | Check::ToFieldFormat | Check::Signature | Check::BcosGroupChainId |
-               Check::BcosPoolNonce | Check::BcosLedgerNonce;
+               Check::BcosTxAllowedOnChain | Check::BcosPoolNonce | Check::BcosLedgerNonce;
     case TxKind::Web3Legacy:
         return c_web3Common;
     case TxKind::Web3AccessList:

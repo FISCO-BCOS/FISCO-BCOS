@@ -89,6 +89,50 @@ template <typename T>
     return nullptr;
 }
 
+/// Consume one EIP-7702 authorization yParity item the way op-geth's RLP decoder reads a
+/// uint8: an empty byte string is 0, a single non-zero payload byte is its value, and a
+/// leading-zero or multi-byte payload is rejected as non-canonical/overflowing. The admitted
+/// wire forms are the inline single byte 0x01..0x7f and the 0x81 XX form with XX >= 0x80; the
+/// shared canonical-RLP decoder (decodeHeader) rejects 0x81 with a payload below 0x80 as
+/// NonCanonicalSize before this function sees it — stricter than op-geth, which accepts it.
+///
+/// Values above 1 are LEGAL here, unlike the transaction-signature domain above: op-geth
+/// decodes the authorization's V as a plain uint8 and skips the entry at execution when it is
+/// not 0/1, so the transaction stays valid. Rejecting it at decode would reject a whole block
+/// op-geth accepts (minus the bad entry).
+[[nodiscard]] inline bcos::Error::UniquePtr decodeAuthorizationYParity(
+    bcos::bytesRef& from, uint64_t& to) noexcept
+{
+    auto&& [error, header] = bcos::codec::rlp::decodeHeader(from);
+    if (error != nullptr)
+    {
+        return std::move(error);
+    }
+    if (header.isList)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(
+            bcos::codec::rlp::DecodingError::UnexpectedList, "y_parity: expected a scalar");
+    }
+    uint64_t value = 0;
+    if (header.payloadLength > 1)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(bcos::codec::rlp::DecodingError::InvalidVInSignature,
+            "authorization y_parity must be a canonical uint8");
+    }
+    if (header.payloadLength == 1)
+    {
+        if (from.data()[0] == 0)
+        {
+            return BCOS_ERROR_UNIQUE_PTR(bcos::codec::rlp::DecodingError::InvalidVInSignature,
+                "authorization y_parity has a leading zero byte");
+        }
+        value = from.data()[0];
+    }
+    to = value;
+    from = from.getCroppedData(header.payloadLength);
+    return nullptr;
+}
+
 
 /// Empty r/s => EIP-155 preimage (chainId, 0, 0); otherwise sealed (v, r, s).
 /// chainId 27/28 is indistinguishable from an erased Homestead signature.

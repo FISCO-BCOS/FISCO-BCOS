@@ -40,6 +40,7 @@
 #include <bcos-txpool/sync/TransactionSync.h>
 #include <bcos-txpool/txpool/storage/MemoryStorage.h>
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/Error.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
@@ -407,10 +408,20 @@ inline void checkTxSubmit(TxPoolInterface::Ptr _txpool, TxPoolStorageInterface::
                       << std::endl;
             if (_maybeExpired)
             {
-                BOOST_CHECK(
-                    (submitResult->status() == _expectedStatus) ||
-                    (submitResult->status() == (int32_t)TransactionStatus::TransactionPoolTimeout));
+                // A wait the sweep ended never arrives as a result (see the catch below).
+                BOOST_CHECK_EQUAL(submitResult->status(), _expectedStatus);
             }
+        }
+        catch (bcos::Error& e)
+        {
+            // The expiry sweep ends a receipt-wait as an Error carrying TransactionPoolTimeout
+            // (MemoryStorage::removeInvalidTxs), the way a refusal ends it.
+            if (_maybeExpired)
+            {
+                BOOST_CHECK_EQUAL(
+                    e.errorCode(), (int64_t)TransactionStatus::TransactionPoolTimeout);
+            }
+            std::cout << "Submit transaction exception! " << boost::diagnostic_information(e);
         }
         catch (std::exception& e)
         {

@@ -289,8 +289,8 @@ public:
             bcos::storage::Entry hash2NumberEntry;
             hash2NumberEntry.set(std::to_string(header->number()));
             storage->asyncSetRow(ledger::SYS_HASH_2_NUMBER,
-                bcos::concepts::bytebuffer::toView(header->hash()),
-                std::move(hash2NumberEntry), [](auto&&) {});
+                bcos::concepts::bytebuffer::toView(header->hash()), std::move(hash2NumberEntry),
+                [](auto&&) {});
         }
         ++prewriteCount;
         callback("", nullptr);
@@ -341,43 +341,6 @@ struct ThrowingClearArtifactStore
         inner.clear();
     }
 };
-
-ForkchoiceState makeForkchoiceState()
-{
-    return {h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
-        h256("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
-        h256("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")};
-}
-
-void seedForkchoiceStorage(GateMergeStorage& storageFixture, ForkchoiceState const& forkchoice)
-{
-    auto writeSysConfig = [&](std::string_view key, std::string value) {
-        storage::Entry entry;
-        entry.set(bcos::storage::serialize::encode(ledger::SystemConfigEntry{std::move(value), 0}));
-        task::syncWait(bcos::storage2::writeOne(storageFixture.backendStorage,
-            bcos::executor_v1::StateKey{ledger::SYS_CONFIG, key}, std::move(entry)));
-    };
-    writeSysConfig(magic_enum::enum_name(ledger::SystemConfig::executor_version),
-        std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
-    writeSysConfig(
-        ledger::SYSTEM_KEY_EVMC_REVISION, ledger::encodeEVMCRevisionConfig(EVMC_CANCUN, {}));
-
-    auto writeBlock = [&](h256 const& hash, char const* number) {
-        storage::Entry entry;
-        entry.set(number);
-        task::syncWait(bcos::storage2::writeOne(storageFixture.backendStorage,
-            bcos::executor_v1::StateKey{
-                ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(hash)},
-            std::move(entry)));
-        storage::Entry hashEntry;
-        hashEntry.set(hash.asBytes());
-        task::syncWait(bcos::storage2::writeOne(storageFixture.backendStorage,
-            bcos::executor_v1::StateKey{ledger::SYS_NUMBER_2_HASH, number}, std::move(hashEntry)));
-    };
-    writeBlock(forkchoice.finalizedBlockHash, "3");
-    writeBlock(forkchoice.safeBlockHash, "4");
-    writeBlock(forkchoice.headBlockHash, "5");
-}
 
 PayloadAttributes makeAttrs(std::uint64_t timestamp)
 {
@@ -664,6 +627,137 @@ BOOST_AUTO_TEST_CASE(commit_drains_every_queued_layer)
             std::to_string(storage.queuedDepth.load()) + ")");
 }
 
+BOOST_AUTO_TEST_CASE(commit_retry_without_ledger_drains_after_failed_merge)
+{
+    // no-ledger path used to skip drain when the retry had nothing to
+    // push (view already reset). The queued layer then survived a VALID answer.
+    auto run = [](auto& service, GateMergeStorage& storage) {
+        auto forkchoice = makeForkchoiceState();
+        seedForkchoiceStorage(storage, forkchoice);
+
+        PayloadAttributes attrs = makeAttrs(1'700'000'000'000ULL);
+        auto build = task::syncWait(service.updateForkchoice(forkchoice, &attrs, 3));
+        BOOST_REQUIRE(build.payloadId.has_value());
+        auto payload = task::syncWait(service.getPayload(*build.payloadId, 3));
+
+        storage.throwOnMerge->store(true);
+        storage.mergeGate->store(true);
+
+        NewPayloadRequest request;
+        request.executionPayload = payload->executionPayload;
+        request.parentBeaconBlockRoot = attrs.parentBeaconBlockRoot;
+        BOOST_CHECK_THROW(task::syncWait(service.newPayload(request, 3)), std::runtime_error);
+        BOOST_CHECK_EQUAL(storage.queuedDepth.load(), 1);
+        BOOST_CHECK_EQUAL(storage.mergeCount.load(), 0u);
+
+        storage.throwOnMerge->store(false);
+        auto retryStatus = task::syncWait(service.newPayload(request, 3));
+        BOOST_CHECK_EQUAL(
+            static_cast<int>(retryStatus.status), static_cast<int>(PayloadValidationStatus::Valid));
+        BOOST_CHECK_MESSAGE(storage.queuedDepth.load() == 0,
+            "retry after a failed no-ledger drain must still merge; depth " +
+                std::to_string(storage.queuedDepth.load()));
+        BOOST_CHECK_GE(storage.mergeCount.load(), 1u);
+    };
+
+    {
+        GateMergeStorage storage;
+        MemPoolImpl memPool;
+        StubExecutor executor;
+        StubScheduler scheduler;
+        auto blockFactory = bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+        using Service =
+            EthEngineService<MemPoolImpl, GateMergeStorage, StubExecutor, StubScheduler>;
+        Service service(memPool, storage, executor, scheduler, blockFactory);
+        run(service, storage);
+    }
+    {
+        GateMergeStorage storage;
+        MemPoolImpl memPool;
+        StubExecutor executor;
+        StubScheduler scheduler;
+        auto blockFactory = bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+        using Service =
+            EngineServiceImpl<MemPoolImpl, GateMergeStorage, StubExecutor, StubScheduler>;
+        Service service(memPool, storage, executor, scheduler, blockFactory);
+        run(service, storage);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(duplicate_new_payload_does_not_drain_a_foreign_layer)
+{
+    // A duplicate newPayload whose artifact was consumed by its own successful commit owns no
+    // queued state, so it must not drain the deque. MultiLayerStorage merges the OLDEST layer,
+    // so draining there would land another block's in-flight state before that block's ledger
+    // rows are written — and would surface that merge's error inside an unrelated duplicate.
+    // commit_retry_without_ledger_drains_after_failed_merge pins the other side of the
+    // predicate: a block that still owns a queued layer DOES drain.
+    auto run = [](auto& service, GateMergeStorage& storage) {
+        auto forkchoice = makeForkchoiceState();
+        seedForkchoiceStorage(storage, forkchoice);
+        storage.mergeGate->store(true);
+
+        // M: built and committed successfully; its artifact is consumed.
+        PayloadAttributes attrsM = makeAttrs(1'700'000'000'000ULL);
+        auto buildM = task::syncWait(service.updateForkchoice(forkchoice, &attrsM, 3));
+        BOOST_REQUIRE(buildM.payloadId.has_value());
+        auto payloadM = task::syncWait(service.getPayload(*buildM.payloadId, 3));
+        NewPayloadRequest requestM;
+        requestM.executionPayload = payloadM->executionPayload;
+        requestM.parentBeaconBlockRoot = attrsM.parentBeaconBlockRoot;
+        auto statusM = task::syncWait(service.newPayload(requestM, 3));
+        BOOST_CHECK_EQUAL(
+            static_cast<int>(statusM.status), static_cast<int>(PayloadValidationStatus::Valid));
+        BOOST_CHECK_EQUAL(storage.queuedDepth.load(), 0);
+
+        // N: its commit fails mid-merge, leaving N's layer queued.
+        PayloadAttributes attrsN = makeAttrs(1'700'000'001'000ULL);
+        auto buildN = task::syncWait(service.updateForkchoice(forkchoice, &attrsN, 3));
+        BOOST_REQUIRE(buildN.payloadId.has_value());
+        auto payloadN = task::syncWait(service.getPayload(*buildN.payloadId, 3));
+        NewPayloadRequest requestN;
+        requestN.executionPayload = payloadN->executionPayload;
+        requestN.parentBeaconBlockRoot = attrsN.parentBeaconBlockRoot;
+        storage.throwOnMerge->store(true);
+        BOOST_CHECK_THROW(task::syncWait(service.newPayload(requestN, 3)), std::runtime_error);
+        storage.throwOnMerge->store(false);
+        BOOST_CHECK_EQUAL(storage.queuedDepth.load(), 1);
+
+        // The duplicate of M owns nothing: N's queued layer must survive untouched.
+        auto dupStatus = task::syncWait(service.newPayload(requestM, 3));
+        BOOST_CHECK_EQUAL(
+            static_cast<int>(dupStatus.status), static_cast<int>(PayloadValidationStatus::Valid));
+        BOOST_CHECK_MESSAGE(storage.queuedDepth.load() == 1,
+            "a no-op duplicate drained another block's queued layer (depth " +
+                std::to_string(storage.queuedDepth.load()) + ")");
+    };
+
+    {
+        GateMergeStorage storage;
+        MemPoolImpl memPool;
+        StubExecutor executor;
+        StubScheduler scheduler;
+        auto blockFactory = bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+        auto ledger = std::make_shared<PersistingFakeLedger>(blockFactory, 20, 10, 10);
+        using Service =
+            EthEngineService<MemPoolImpl, GateMergeStorage, StubExecutor, StubScheduler>;
+        Service service(memPool, storage, executor, scheduler, blockFactory, ledger);
+        run(service, storage);
+    }
+    {
+        GateMergeStorage storage;
+        MemPoolImpl memPool;
+        StubExecutor executor;
+        StubScheduler scheduler;
+        auto blockFactory = bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+        auto ledger = std::make_shared<PersistingFakeLedger>(blockFactory, 20, 10, 10);
+        using Service =
+            EngineServiceImpl<MemPoolImpl, GateMergeStorage, StubExecutor, StubScheduler>;
+        Service service(memPool, storage, executor, scheduler, blockFactory, ledger);
+        run(service, storage);
+    }
+}
+
 BOOST_AUTO_TEST_CASE(commit_retry_valid_when_ledger_row_exists)
 {
     GateMergeStorage storage;
@@ -890,6 +984,26 @@ BOOST_AUTO_TEST_CASE(commit_releases_exclusive_guard_during_prewrite)
 
     BOOST_CHECK(prewriteStarted);
     BOOST_CHECK(probeFinishedDuringPrewrite);
+}
+
+BOOST_AUTO_TEST_CASE(gate_merge_storage_push_view_gate_blocks_until_opened)
+{
+    // pushViewGate / pushViewStarted must be driven, not dead fixture fields.
+    GateMergeStorage storage;
+    storage.pushViewGate->store(false);
+    std::atomic<bool> finished{false};
+    std::thread pusher([&] {
+        storage.pushView(storage.fork());
+        finished.store(true, std::memory_order_release);
+    });
+    while (!storage.pushViewStarted->load(std::memory_order_acquire))
+    {
+        std::this_thread::yield();
+    }
+    BOOST_CHECK(!finished.load(std::memory_order_acquire));
+    storage.pushViewGate->store(true, std::memory_order_release);
+    pusher.join();
+    BOOST_CHECK(finished.load(std::memory_order_acquire));
 }
 
 BOOST_AUTO_TEST_CASE(engine_tracker_bounded_put_fifo_evicts_oldest)

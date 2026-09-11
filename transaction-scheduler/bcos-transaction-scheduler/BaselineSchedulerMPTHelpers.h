@@ -1,9 +1,26 @@
 #pragma once
 
+#include "MPTNodeStorage.h"  // ViewNodeStorage
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-framework/protocol/BlockFactory.h"
+#include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/storage/Entry.h"
+#include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
+#include <bcos-ledger/LedgerMethods.h>
+#include <bcos-ledger/mpt/Constants.h>
+#include <bcos-ledger/mpt/MPTBuilder.h>
+#include <bcos-ledger/mpt/MPTDeltaLayer.h>
+#include <bcos-task/TBBWait.h>
+#include <bcos-task/Task.h>
 #include <bcos-utilities/Exceptions.h>
+#include <tbb/parallel_pipeline.h>
+#include <tbb/task_arena.h>
+#include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
+#include <optional>
 
 namespace bcos::scheduler_v1
 {
@@ -135,6 +152,116 @@ inline void validateMPTFlagMatrix(bcos::ledger::Features const& features)
                 "; enabling it mid-chain would switch the state-root scheme with no "
                 "transition rule (spec 5.10 scenario B)"));
     }
+}
+
+/// XOR fold over flat storage — the legacy (non-MPT) state-root path, shared by the PBFT
+/// scheduler and the engine service. BOTH callers must pass @p features to Entry::hash: the
+/// v3.17 bugfix flag (bugfix_statestorage_hash_v3_17) changes the digest, so an
+/// implementation that omits it commits a different root than the other for the same state.
+template <class StorageType>
+task::Task<h256> xorStateRoot(StorageType& storage, uint32_t blockVersion,
+    crypto::Hash const& hashImpl, ledger::Features const& features)
+{
+    auto range = co_await storage2::range(storage);
+    storage::Entry deletedEntry;
+    deletedEntry.setStatus(storage::Entry::DELETED);
+
+    // Wrap once outside the parallel pipeline so the optional copy is paid only once,
+    // not per entry.
+    std::optional<ledger::Features> const featuresOpt(features);
+
+    h256 totalHash;
+    using KeyValueType = task::AwaitableReturnType<decltype(range.next())>;
+    tbb::parallel_pipeline(tbb::this_task_arena::max_concurrency(),
+        tbb::make_filter<void, KeyValueType>(tbb::filter_mode::serial_in_order,
+            [&](tbb::flow_control& control) -> KeyValueType {
+                if (auto keyValue = task::tbb::syncWait(range.next()))
+                {
+                    return keyValue;
+                }
+                control.stop();
+                return {};
+            }) &
+            tbb::make_filter<KeyValueType, h256>(tbb::filter_mode::parallel,
+                [&](KeyValueType keyValue) -> h256 {
+                    auto& [key, value] = *keyValue;
+                    executor_v1::StateKeyView view(key);
+                    auto [tableName, keyName] = view.get();
+
+                    const storage::Entry* entry = nullptr;
+                    if (entry = std::get_if<storage::Entry>(std::addressof(value)); !entry)
+                    {
+                        entry = std::addressof(deletedEntry);
+                    }
+                    return entry->hash(tableName, keyName, hashImpl, blockVersion, featuresOpt);
+                }) &
+            tbb::make_filter<h256, void>(
+                tbb::filter_mode::serial_out_of_order, [&](h256 hash) { totalHash ^= hash; }));
+    co_return totalHash;
+}
+
+/// Backwards-compatible name for xorStateRoot, kept for the FIB-99/FIB-105 state-root tests.
+template <class StorageType>
+task::Task<h256> calculateStateRoot(StorageType& storage, uint32_t blockVersion,
+    crypto::Hash const& hashImpl, ledger::Features const& features)
+{
+    co_return co_await xorStateRoot(storage, blockVersion, hashImpl, features);
+}
+
+/// Build an Ethereum MPT state root over @p view. Single source for the parent-root rule:
+/// the parent's committed state root is read only when the parent itself built an MPT, so an
+/// activation-boundary parent (XOR root) starts from the empty trie.
+///
+/// @param trackRefCounts  forwarded to buildAndCollect: false skips the per-hash
+///                        refCountDeltas tally for callers whose commit path never reads it
+///                        (the engine service; the PBFT scheduler passes its observer flag).
+template <class ViewType>
+task::Task<ledger::mpt::MPTDeltaLayer> buildMPTStateRootForView(ViewType& view,
+    protocol::BlockHeader const& blockHeader, ledger::LedgerConfig const& ledgerConfig,
+    protocol::BlockFactory& blockFactory, bool trackRefCounts = true)
+{
+    auto const blockNumber = blockHeader.number();
+    h256 parentStateRoot = ledger::mpt::emptyRootHash();
+    if (blockNumber > 0 && shouldBuildMPT(ledgerConfig.features(), blockNumber - 1))
+    {
+        auto parentBlock =
+            co_await ledger::getBlockData(view, blockNumber - 1, ledger::HEADER, blockFactory);
+        parentStateRoot = parentBlock->blockHeader()->stateRoot();
+    }
+    // Node reads resolve through the full view (parent nodes live in the pending layers /
+    // backend); node writes land in this block's own mutable layer (MPTNodeStorage.h).
+    ViewNodeStorage<ViewType> nodeStorage(view);
+    bool const l2Mode =
+        ledgerConfig.features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
+    co_return co_await ledger::mpt::buildAndCollect(
+        nodeStorage, parentStateRoot, view, l2Mode, trackRefCounts);
+}
+
+/// Publish the header under SYS_NUMBER_2_BLOCK_HEADER so the next block's MPT build can read
+/// the parent's committed state root through the view.
+///
+/// NOT byte-equivalent to a fully signed header when called at execute time: the engine calls
+/// it before receiptsRoot / txsRoot / gasUsed are set and before the hash is computed, so the
+/// row carries defaults for those fields. Two facts make that safe, and any new reader must
+/// re-check them: (1) the only reader before the commit overwrites the row is the next
+/// block's parent-stateRoot lookup, which needs only stateRoot; (2) the commit's prewrite
+/// layer merges after the block layer, so the signed header wins in the backend.
+template <class ViewType>
+task::Task<void> publishPendingBlockHeaderForMPT(
+    ViewType& view, protocol::BlockHeader const& header)
+{
+    if (header.number() == 0)
+    {
+        co_return;
+    }
+    auto blockNumberStr = boost::lexical_cast<std::string>(header.number());
+    bytes headerBuffer;
+    header.encode(headerBuffer);
+    storage::Entry headerEntry;
+    headerEntry.set(std::move(headerBuffer));
+    co_await storage2::writeOne(view,
+        executor_v1::StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr},
+        std::move(headerEntry));
 }
 
 }  // namespace bcos::scheduler_v1

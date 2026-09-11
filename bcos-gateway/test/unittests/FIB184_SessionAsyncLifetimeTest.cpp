@@ -61,7 +61,7 @@ class FakeASIO_Lifetime : public bcos::gateway::ASIOInterface
 {
 public:
     using ReadCompletion =
-        bcos::gateway::detail::AsioCompletion<boost::system::error_code, std::size_t>;
+        task::detail::FireCompletion<boost::system::error_code, std::size_t>;
 
     FakeASIO_Lifetime()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_Lifetime"), "0.0.0.0", 0)
@@ -104,7 +104,7 @@ public:
     }
 
 private:
-    std::optional<bcos::gateway::detail::AsioCompletion<boost::system::error_code, std::size_t>>
+    std::optional<task::detail::FireCompletion<boost::system::error_code, std::size_t>>
         m_readHandler;
 };
 

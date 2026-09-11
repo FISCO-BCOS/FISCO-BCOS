@@ -16,12 +16,16 @@
 #include "bcos-utilities/Timer.h"
 #include <oneapi/tbb/concurrent_queue.h>
 #include <boost/asio/buffer.hpp>
+#include <boost/asio/error.hpp>
 #include <boost/container/small_vector.hpp>
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/heap/priority_queue.hpp>
 #include <atomic>
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <tuple>
+#include <type_traits>
 #include <unordered_set>
 #include <utility>
 #include <variant>
@@ -260,6 +264,50 @@ public:
 
     /// called by the read loop to deal with a decoded message
     void onMessage(NetworkException const& e, Message::Ptr message);
+
+    /// Settle one queued callback that resumes a suspended waiter, delivering `args...` to it.
+    /// The settle error is chosen at the call site, per callback signature: a payload callback
+    /// takes a boost::system::error_code, whereas a response callback
+    /// (ResponseCallback::callback) takes (NetworkException, Message::Ptr).
+    ///
+    /// Run it on the shared io pool while the host is alive, inline once it is gone, containing any
+    /// exception either way. Three reasons for that shape, all of them load-bearing:
+    ///  - A resumed waiter may throw (fastSendMessageWithoutResponse throws NetworkException on a
+    ///    failed write) and a posted callback runs inside io_context::run(), so an escaping
+    ///    exception would unwind the reactor.
+    ///  - Once the host is gone a posted task would never run at all, which would hang every
+    ///    waiter forever.
+    ///  - The caller may itself be sitting on another waiter's await_suspend stack, so it must not
+    ///    nest that waiter's whole continuation either.
+    /// This is the single place that policy lives for write-queue settlement; the
+    /// response-callback paths in onMessage / onTimeout settle inline under their own containment.
+    template <class Callback, class... Args>
+    inline void postCallback(Callback&& callback, const char* description, Args... args)
+    {
+        static_assert(std::is_invocable_v<Callback&, Args...>,
+            "postCallback: the callback cannot be invoked with the given settle arguments");
+
+        auto deliver = [callback = std::forward<Callback>(callback), description,
+                           ... args = std::move(args)]() mutable {
+            try
+            {
+                callback(std::move(args)...);
+            }
+            catch (std::exception const& e)
+            {
+                SESSION_LOG(WARNING) << LOG_DESC(description)
+                                     << LOG_KV("what", boost::diagnostic_information(e));
+            }
+        };
+        if (m_server.get().haveNetwork())
+        {
+            m_server.get().asioInterface()->post(std::move(deliver));
+        }
+        else
+        {
+            deliver();  // no live executor: a posted task would never run
+        }
+    }
 
     std::reference_wrapper<Host> m_server;  ///< The host that owns us. Never null.
     std::shared_ptr<SocketFace> m_socket;   ///< Socket of peer's connection.

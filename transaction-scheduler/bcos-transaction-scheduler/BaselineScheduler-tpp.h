@@ -39,6 +39,7 @@
 #include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/protocol/TransactionReceiptNormalize.h"
 #include "bcos-framework/protocol/TransactionSubmitResultFactory.h"
 #include "bcos-framework/storage2/MultiLayerStorage.h"
 #include "bcos-framework/storage2/Storage.h"
@@ -63,54 +64,6 @@
 
 namespace bcos::scheduler_v1
 {
-
-/**
- * Calculates the state root of the given storage using the specified hash implementation.
- *
- * @param storage The storage to calculate the state root for.
- * @param hashImpl The hash implementation to use for the calculation.
- * @return A task that will eventually resolve to the calculated state root.
- */
-task::Task<h256> calculateStateRoot(auto& storage, uint32_t blockVersion,
-    crypto::Hash const& hashImpl, ledger::Features const& features)
-{
-    auto range = co_await storage2::range(storage);
-    storage::Entry deletedEntry;
-    deletedEntry.setStatus(storage::Entry::DELETED);
-
-    // Wrap once outside the parallel pipeline so the optional copy is paid only once,
-    // not per entry.
-    const std::optional<ledger::Features> featuresOpt(features);
-
-    h256 totalHash;
-    using KeyValueType = task::AwaitableReturnType<decltype(range.next())>;
-    tbb::parallel_pipeline(tbb::this_task_arena::max_concurrency(),
-        tbb::make_filter<void, KeyValueType>(tbb::filter_mode::serial_in_order,
-            [&](tbb::flow_control& control) -> KeyValueType {
-                if (auto keyValue = task::tbb::syncWait(range.next()))
-                {
-                    return keyValue;
-                }
-                control.stop();
-                return {};
-            }) &
-            tbb::make_filter<KeyValueType, h256>(tbb::filter_mode::parallel,
-                [&](KeyValueType keyValue) -> h256 {
-                    auto& [key, value] = *keyValue;
-                    executor_v1::StateKeyView view(key);
-                    auto [tableName, keyName] = view.get();
-
-                    const storage::Entry* entry = nullptr;
-                    if (entry = std::get_if<storage::Entry>(std::addressof(value)); !entry)
-                    {
-                        entry = std::addressof(deletedEntry);
-                    }
-                    return entry->hash(tableName, keyName, hashImpl, blockVersion, featuresOpt);
-                }) &
-            tbb::make_filter<h256, void>(
-                tbb::filter_mode::serial_out_of_order, [&](h256 hash) { totalHash ^= hash; }));
-    co_return totalHash;
-}
 
 h256 calculateReceiptRoot(
     ::ranges::range auto const& receipts, protocol::Block& block, crypto::Hash const& hashImpl)
@@ -168,18 +121,10 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
         },
         [&]() { receiptRoot = calculateReceiptRoot(receipts, block, hashImpl); },
         [&]() {
-            size_t logIndex = 0;
             block.clearReceipts();
-            for (auto&& [index, receipt] : ::ranges::views::enumerate(receipts))
+            totalGasUsed = protocol::normalizeReceipts(receipts);
+            for (auto const& receipt : receipts)
             {
-                receipt->setTransactionIndex(index);
-                receipt->setLogIndex(logIndex);
-                auto logBloom = getLogsBloom(receipt->logEntries());
-                receipt->setLogsBloom({logBloom.data(), logBloom.size()});
-                logIndex += receipt->logEntries().size();
-                totalGasUsed += receipt->gasUsed();
-                receipt->setCumulativeGasUsed(totalGasUsed.str());
-
                 block.appendReceipt(receipt);
             }
         },
@@ -229,15 +174,11 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
     //    prewriteBlockToBuffer for block 0 (isSysContractDeploy), so nothing would overwrite
     //    an execute-time row — the sys-contract-deploy header (its own gasUsed, hash, empty
     //    sealer/parentInfo) would replace the chain's genesis header on disk.
-    if (mptStateRoot && newBlockHeader.number() != 0)
+    if (mptStateRoot)
     {
-        bytes headerBuffer;
-        newBlockHeader.encode(headerBuffer);
-        storage::Entry headerEntry;
-        headerEntry.set(std::move(headerBuffer));
-        co_await storage2::writeOne(storage,
-            executor_v1::StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr},
-            std::move(headerEntry));
+        // Shared with the engine service (BaselineSchedulerMPTHelpers.h); it no-ops at
+        // block 0, which the comment above explains is load-bearing for genesis.
+        co_await scheduler_v1::publishPendingBlockHeaderForMPT(storage, newBlockHeader);
     }
 }
 
@@ -248,28 +189,16 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::buildMPTS
     typename MultiLayerStorage::ViewType& view, protocol::BlockHeader const& blockHeader,
     ledger::LedgerConfig const& ledgerConfig)
 {
-    auto const blockNumber = blockHeader.number();
-    h256 parentStateRoot = ledger::mpt::emptyRootHash();
-    if (blockNumber > 0 && shouldBuildMPT(ledgerConfig.features(), blockNumber - 1))
-    {
-        auto parentBlock = co_await ledger::getBlockData(
-            view, blockNumber - 1, ledger::HEADER, m_blockFactory.get());
-        parentStateRoot = parentBlock->blockHeader()->stateRoot();
-    }
-    // else: scenario-A activation boundary (parent committed an XOR root) — empty trie.
-
-    // Node reads resolve through the full view (parent nodes live in the pending layers /
-    // backend); node writes land in this block's own mutable layer (MPTNodeStorage.h).
-    ViewNodeStorage<typename MultiLayerStorage::ViewType> nodeStorage(view);
-    bool const l2Mode =
-        ledgerConfig.features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
-    // Skip the per-hash refCountDeltas tally when the commit observer does not count references
-    // (NoopCommitObserver — pruning not configured): the delta's consumers then never read the
-    // map, and the execute path pays nothing for it. The execute path reads the cached
-    // m_trackRefCounts flag rather than the observer pointer, so it needs no synchronization
-    // against resetMPTCommitObserver's stop()-time write beyond the atomic flag itself.
-    co_return co_await ledger::mpt::buildAndCollect(nodeStorage, parentStateRoot, view, l2Mode,
-        m_trackRefCounts.load(std::memory_order_relaxed));
+    // Single source (BaselineSchedulerMPTHelpers.h): the parent-root rule, the ViewNodeStorage
+    // wiring and the l2Mode derivation are shared with the engine service.
+    // trackRefCounts: skip the per-hash refCountDeltas tally when the commit observer does not
+    // count references (NoopCommitObserver — pruning not configured): the delta's consumers then
+    // never read the map, and the execute path pays nothing for it. The execute path reads the
+    // cached m_trackRefCounts flag rather than the observer pointer, so it needs no
+    // synchronization against resetMPTCommitObserver's stop()-time write beyond the atomic flag
+    // itself.
+    co_return co_await scheduler_v1::buildMPTStateRootForView(view, blockHeader, ledgerConfig,
+        m_blockFactory.get(), m_trackRefCounts.load(std::memory_order_relaxed));
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>

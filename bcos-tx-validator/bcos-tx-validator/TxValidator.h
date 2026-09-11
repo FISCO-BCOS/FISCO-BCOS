@@ -74,6 +74,22 @@ using SystemTxPredicate = std::function<bool(protocol::Transaction const&)>;
 /// consensus or the OP engine RPC) has one, EthEndpoint::sendRawTransaction, which calls it and
 /// then reserves the (sender, nonce) with MemPoolImpl::tryAdd.
 ///
+/// NOT every way a transaction reaches a block. Two paths do not pass through here, and both
+/// matter to whoever reads the L2 rule below (Check::BcosTxAllowedOnChain):
+///
+///   - transactions an external CL hands the engine in newPayload. Nothing under engine/ calls
+///     verify(); that block arrives already built, and rejecting it is a payload-validation
+///     answer, not an admission one.
+///   - block production's own filter. Every engine service's payload builder -- buildPayload in
+///     EngineServiceImpl.h and EthEngineService.inl, buildOpPayload in OpEngineService.inl --
+///     drops a sealed transaction whose type is not TransactionType::Web3Transaction, logging
+///     and continuing. That is NOT this rule seen from the other end, and the two are not
+///     copies to merge: the builder enforces a payload-encoding invariant that holds on any
+///     chain -- a transaction with no EIP-2718 wire form cannot be written into an engine
+///     payload at all, whatever feature_l2_ethereum_compat says -- while the check below is a
+///     ruling about what THIS chain's configuration admits, and reports a status a caller can
+///     read. Different predicate, different domain, different consequence.
+///
 /// It holds pointers to the shared nonce checkers rather than owning them: the txpool reserves
 /// and clears nonces through the same instances without going near admission, and the admission
 /// question is asked here. Nonce admission is the same question at every ingress, and routing it

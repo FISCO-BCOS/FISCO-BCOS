@@ -220,4 +220,32 @@ BOOST_AUTO_TEST_CASE(web3ChainIdSharesParseWeb3ChainId)
     BOOST_CHECK_THROW(trySet("4294967296"), PrecompiledError);
 }
 
+// feature_l2_ethereum_compat is genesis-only. Features::validate refuses it, and this pins the
+// refusal where an operator meets it: the governance setValueByKey transaction, which must fail
+// rather than turn L2 mode on for a chain that was not born one. The message matters too --
+// SystemConfigPrecompiled re-throws the errinfo_comment verbatim (SystemConfigPrecompiled.cpp:334)
+// so what is asserted here is the revert reason the caller sees.
+BOOST_AUTO_TEST_CASE(genesisOnlyFeatureIsRefusedByGovernance)
+{
+    SystemConfigPrecompiled systemConfigPrecompiled(hashImpl);
+    auto setParameters = std::make_shared<PrecompiledExecResult>();
+    CodecWrapper codec(hashImpl);
+
+    auto setInput = codec.encodeWithSig("setValueByKey(string,string)",
+        std::string("feature_l2_ethereum_compat"), std::string("1"));
+    setParameters->m_input = bcos::ref(setInput);
+    BOOST_CHECK_EXCEPTION(systemConfigPrecompiled.call(executive, setParameters), PrecompiledError,
+        [](PrecompiledError const& e) {
+            auto const* msg = boost::get_error_info<bcos::errinfo_comment>(e);
+            return msg != nullptr && msg->find("genesis-only") != std::string::npos;
+        });
+
+    // The refusal is the feature rule, not the unknown-key rule: the key IS recognised, so a
+    // neighbouring genesis-era feature on the same channel is still settable by governance.
+    setInput = codec.encodeWithSig(
+        "setValueByKey(string,string)", std::string("feature_op_jovian"), std::string("1"));
+    setParameters->m_input = bcos::ref(setInput);
+    BOOST_CHECK_NO_THROW(systemConfigPrecompiled.call(executive, setParameters));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

@@ -51,7 +51,8 @@ static void bytesToBloom(bcos::concepts::ByteBuffer auto const& _bytes, Bloom& _
 
 template <class Logs>
     requires ::ranges::input_range<Logs> &&
-             std::same_as<typename ::ranges::range_value_t<Logs>, protocol::LogEntry>
+             std::same_as<std::remove_cvref_t<typename ::ranges::range_value_t<Logs>>,
+                 protocol::LogEntry>
 Bloom getLogsBloom(Logs logs)
 {
     Bloom bloom{};
