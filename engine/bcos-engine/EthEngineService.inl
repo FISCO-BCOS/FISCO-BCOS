@@ -719,8 +719,10 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     blockHeader->setExtraData(std::move(extraData));
 
     // Executed transactions, with each one's EIP-2718 type byte kept index-parallel to
-    // `receipts` for the receipts-root leaf prefix below. Raw-only (forced) entries have no
-    // executable form and are skipped.
+    // `receipts` for the receipts-root leaf prefix below. Forced entries arrive already
+    // decoded (buildPayload's opEnvelopeToTars step), so every envelope in
+    // executionPayload.transactions has an executable form: collectExecutableTransactions
+    // skips nothing here, and transactionsRoot and receiptsRoot cover the same set (N == M).
     auto executable = engine_common::collectExecutableTransactions(executionPayload.transactions);
     auto receipts = co_await m_scheduler.executeBlock(view, m_executor, *blockHeader,
         executable.transactions | ::ranges::views::indirect, ledgerConfig);
