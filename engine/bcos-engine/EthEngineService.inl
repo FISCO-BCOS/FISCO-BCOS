@@ -189,12 +189,28 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
     }
     auto payloadId = *payloadIdOpt;
     auto nextBlockNumber = *headBlockNumber + 1;
-    auto built = co_await buildPayload(forkchoiceState, *payloadAttributes, payloadId, version,
-        nextBlockNumber, std::move(sealedTxs), view, std::move(decodedForcedTxs));
+    std::optional<BuildPayloadResult> built;
+    try
+    {
+        built = co_await buildPayload(forkchoiceState, *payloadAttributes, payloadId, version,
+            nextBlockNumber, std::move(sealedTxs), view, std::move(decodedForcedTxs));
+    }
+    catch (OpExecutionInternalError const& e)
+    {
+        // An envelope the CL submitted but this service cannot decode is a payload-content
+        // fault: answer a terminal INVALID (same contract as the OP lane's
+        // fcuInvalidIfUndecodable), never a retryable -32603. Every other internal fault
+        // keeps propagating so the endpoint maps it to -32603.
+        if (auto invalid = detail::fcuInvalidIfUndecodable(e))
+        {
+            co_return *invalid;
+        }
+        throw;
+    }
 
     auto commonEntry = std::make_shared<BuiltPayload>();
     commonEntry->version = engine_common::payloadShapeVersion(version);
-    commonEntry->executionPayload = std::move(built.executionPayload);
+    commonEntry->executionPayload = std::move(built->executionPayload);
     commonEntry->blockValue = 0;
     commonEntry->blobsBundle = std::nullopt;
     commonEntry->shouldOverrideBuilder = false;
@@ -206,8 +222,8 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
 
     auto stagedArtifact = EthPayloadArtifacts<ViewType>{
         .view = std::make_shared<ViewType>(std::move(view)),
-        .header = std::move(built.header),
-        .receipts = std::move(built.receipts),
+        .header = std::move(built->header),
+        .receipts = std::move(built->receipts),
     };
 
     {
@@ -526,10 +542,14 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
             auto tarsTx = engine_common::op::opEnvelopeToTars(raw, txHash);
             if (!tarsTx)
             {
-                // validatePayloadAttributes already admitted this envelope, so a decode
-                // failure here is a node-local anomaly — fail loudly (-32603), never a
-                // false payload INVALID.
-                BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                // validatePayloadAttributes only dispatches on the envelope's type byte, so a
+                // body that fails RLP decode reaches here from a remote CL. Tag it as a
+                // payload-content fault: updateForkchoice maps the tag to a terminal INVALID
+                // (same contract as the OP lane's fcuInvalidIfUndecodable) — an untagged
+                // OpExecutionInternalError would surface as -32603 and the CL would resubmit
+                // the identical attributes forever.
+                BOOST_THROW_EXCEPTION(OpExecutionInternalError{}
+                                      << OpPayloadUndecodable{true} << bcos::errinfo_comment{
                                           "forced payloadAttributes.transactions envelope "
                                           "is undecodable"});
             }
@@ -699,8 +719,10 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     blockHeader->setExtraData(std::move(extraData));
 
     // Executed transactions, with each one's EIP-2718 type byte kept index-parallel to
-    // `receipts` for the receipts-root leaf prefix below. Raw-only (forced) entries have no
-    // executable form and are skipped.
+    // `receipts` for the receipts-root leaf prefix below. Forced entries arrive already
+    // decoded (buildPayload's opEnvelopeToTars step), so every envelope in
+    // executionPayload.transactions has an executable form: collectExecutableTransactions
+    // skips nothing here, and transactionsRoot and receiptsRoot cover the same set (N == M).
     auto executable = engine_common::collectExecutableTransactions(executionPayload.transactions);
     auto receipts = co_await m_scheduler.executeBlock(view, m_executor, *blockHeader,
         executable.transactions | ::ranges::views::indirect, ledgerConfig);

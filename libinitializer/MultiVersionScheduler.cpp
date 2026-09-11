@@ -1,3 +1,22 @@
+/**
+ *  Copyright (C) 2021 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file MultiVersionScheduler.cpp
+ * @brief Multi-version scheduler dispatch (implementation)
+ */
+
 #include "MultiVersionScheduler.h"
 #include "Common.h"
 
@@ -196,7 +215,20 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
                                << LOG_KV("requested", version) << LOG_KV("selected", selected)
                                << LOG_KV("onChain", onChainVersion);
     }
+    auto const previousIndex = m_currentIndex;
     m_currentIndex = static_cast<int>(selected);
+    if (previousIndex != m_currentIndex && onChainVersion == m_currentIndex)
+    {
+        // The drift log below keys on onChainVersion != m_currentIndex, so a governance tx
+        // that downgrades executor_version to a WIRED lower slot (e.g. 3 -> 2 on an OP-wired
+        // node) is otherwise silent: consensus commits move to the generic lane while the
+        // engine service keeps answering on its wired engine. Make the switch loud.
+        INITIALIZER_LOG(WARNING)
+            << LOG_DESC("executor_version switched at runtime: consensus commits moved lanes")
+            << LOG_KV("from", previousIndex) << LOG_KV("to", m_currentIndex)
+            << LOG_KV("onChain", onChainVersion)
+            << LOG_DESC("the wired engine service still answers Engine API on its own scheduler");
+    }
     if (onChainVersion != m_currentIndex)
     {
         INITIALIZER_LOG(ERROR)

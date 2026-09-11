@@ -248,11 +248,16 @@ BOOST_AUTO_TEST_CASE(feeHistoryAndSetMaxDASizeRegistered)
     BOOST_CHECK_MESSAGE(
         mapping.findHandler("miner_setMaxDASize").has_value(), "miner_setMaxDASize not dispatched");
 
-    // And the endpoint stays reachable through the real dispatch path.
+    // And the endpoint stays reachable through the real dispatch path. A well-formed request
+    // over a fixture chain can only answer a result or an InvalidParams (-32602, e.g. a block
+    // the fixture does not carry); -32601 means unregistered and -32603 an internal fault —
+    // both are regressions.
     auto resp = call(req("eth_feeHistory", R"(["0x1","latest"])"));
     if (resp.isMember("error"))
     {
-        BOOST_CHECK_NE(resp["error"]["code"].asInt(), -32601);
+        auto const code = resp["error"]["code"].asInt();
+        BOOST_CHECK_NE(code, -32601);
+        BOOST_CHECK_NE(code, -32603);
     }
     else
     {
@@ -316,6 +321,33 @@ BOOST_AUTO_TEST_CASE(estimateGasWithoutLedgerFailsClosed)
     {
         BOOST_CHECK_EQUAL(error.code(), static_cast<int32_t>(JsonRpcError::InternalError));
         BOOST_CHECK_EQUAL(error.msg(), "Ledger not available for eth_estimateGas");
+    }
+}
+
+BOOST_AUTO_TEST_CASE(estimateGasMissingParentBlockFailsClosed)
+{
+    // The ledger-backed half of the estimate-arm guard: a readable ledger whose target block
+    // is missing must refuse with the diagnosable message, not silently size the estimate
+    // against a constant cap. The fake ledger carries 20 blocks; 0x40 (64) is missing.
+    auto endpoint = std::make_shared<EthEndpoint>(nodeService, nullptr, false);
+
+    Json::Value params(Json::arrayValue);
+    Json::Value tx(Json::objectValue);
+    tx["to"] = "0x1234567890abcdef1234567890abcdef12345678";
+    tx["data"] = "0x";
+    params.append(tx);
+    params.append("0x40");
+
+    Json::Value response;
+    try
+    {
+        task::syncWait(endpoint->estimateGas(params, response));
+        BOOST_FAIL("eth_estimateGas must not succeed on a missing parent block");
+    }
+    catch (JsonRpcException const& error)
+    {
+        BOOST_CHECK_EQUAL(error.code(), static_cast<int32_t>(JsonRpcError::InternalError));
+        BOOST_CHECK_EQUAL(error.msg(), "Unable to read parent block gas limit for eth_estimateGas");
     }
 }
 

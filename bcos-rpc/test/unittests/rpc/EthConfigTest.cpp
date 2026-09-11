@@ -99,16 +99,20 @@ BOOST_AUTO_TEST_CASE(ethConfigShape)
     BOOST_CHECK_EQUAL(result["current"]["chainId"].asString(), "0xdf5d5");
 }
 
-// EIP-2124 fork id: CRC32(genesis || be64(fork)) folded to 31 bits, 0x-prefixed 8 hex.
+// EIP-2124 fork id: the FULL IEEE CRC32 of (genesis || be64(fork)) — no folding; geth fork
+// ids carry the high bit (mainnet genesis 0xfc64ec04). Expected values independently
+// recomputed with Python's zlib.crc32 over the same byte input.
 BOOST_AUTO_TEST_CASE(forkIdEip2124)
 {
     std::string const zeros = "0x" + std::string(64, '0');
-    BOOST_CHECK_EQUAL(ethForkIdHex(zeros, {0}), "0x69ec3db1");
+    // crc32(00*32 || be64(0)) = 0xe9ec3db1 — high bit set, must NOT be masked to 0x69ec3db1.
+    BOOST_CHECK_EQUAL(ethForkIdHex(zeros, {0}), "0xe9ec3db1");
 
     auto id = ethForkIdHex("0x" + std::string(64, '1'), {0});
     BOOST_CHECK_EQUAL(id.size(), 10u);
     BOOST_CHECK_EQUAL(id.substr(0, 2), "0x");
-    BOOST_CHECK_EQUAL(id, "0x020735ed");  // deterministic golden
+    // crc32(11*32 || be64(0)) = 0x820735ed — deterministic golden from the independent oracle.
+    BOOST_CHECK_EQUAL(id, "0x820735ed");
 
     // No genesis hash -> the zero fork id, never throws.
     BOOST_CHECK_EQUAL(ethForkIdHex("", {0}), "0x00000000");

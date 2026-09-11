@@ -655,7 +655,7 @@ def main():
                       'finalizeWithdrawalTransaction((uint256,address,address,'
                       'uint256,uint256,bytes))', tx,
                       "--from", PROPOSER_ADDR, "--rpc-url", L1):
-        raise SystemExit("finalize not callable within 300s")
+        raise SystemExit("finalize not callable within 600s (proof maturity + finality delay)")
     fin = cast("send", portal,
         'finalizeWithdrawalTransaction((uint256,address,address,uint256,'
         'uint256,bytes))', tx, "--private-key", PROPOSER_KEY,

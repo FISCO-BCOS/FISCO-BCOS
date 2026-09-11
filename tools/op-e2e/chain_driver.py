@@ -20,7 +20,12 @@ import urllib.request
 
 SIGN_SECP = os.environ.get("SIGN_SECP", "/tmp/op-spike/sign_secp")
 SENDER = "0x6afa9580383E6627dA926B6f6ed9Ab2B9c8cC693"
-PRIVKEY = "cdf753782bdb981198eab72e09b6c0ad780a9858ea4f3a8fe8b257016e2e0e29"
+# DELIBERATELY COMMITTED devnet-only key: the C2 genesis allocs fund exactly this
+# address, so the e2e suite cannot run without it and it must not be rotated casually.
+# It is burned as a secret by being committed here — never use it, or the C2_*_KEY
+# override below, for anything holding real value.
+PRIVKEY = os.environ.get("C2_TEST_PRIVKEY",
+    "cdf753782bdb981198eab72e09b6c0ad780a9858ea4f3a8fe8b257016e2e0e29")
 RECIPIENT = bytes.fromhex("000000000000000000000000000000000000dEaD")
 CHAIN_ID = 11155111
 
@@ -145,6 +150,7 @@ def main():
 
     prev_head = int(rpc.call("eth_blockNumber"), 16)
     cumulative_gas = 0
+    receipts = []
     for i in range(args.txs):
         raw = make_signed_tx(args.privkey, nonce0 + i, args.value)
         tx_hash = rpc.call("eth_sendRawTransaction", [raw])
@@ -165,6 +171,7 @@ def main():
         check(f"tx[{i}] from", receipt["from"].lower() == SENDER.lower(), receipt["from"])
         check(f"tx[{i}] gasUsed=21000", int(receipt["gasUsed"], 16) == 21000, receipt["gasUsed"])
         cumulative_gas += int(receipt["gasUsed"], 16)
+        receipts.append(receipt)
 
         # A.2 tx query family (phase-1 additions): getTransactionByHash field parity,
         # getTransactionByBlockNumberAndIndex (index 0 = L1-attributes deposit, index i+1 = user),
@@ -193,11 +200,14 @@ def main():
             int(receipt.get("cumulativeGasUsed", "0x0"), 16) >= int(receipt["gasUsed"], 16),
             str(receipt.get("cumulativeGasUsed")))
 
-    # Final balance accounting: pre − Σ(value + gasUsed×effectiveGasPrice)
+    # Final balance accounting: pre − Σ(value + gasUsed×effectiveGasPrice), with the price
+    # read from each receipt instead of a hardcoded 1 gwei, so the assert survives a fee
+    # curve change instead of false-failing.
     bal1 = int(rpc.call("eth_getBalance", [SENDER, "latest"]), 16)
     nonce1 = int(rpc.call("eth_getTransactionCount", [SENDER, "latest"]), 16)
     check("nonce advanced", nonce1 == nonce0 + args.txs, f"{nonce0}+{args.txs}={nonce1}")
-    gas_cost = cumulative_gas * 1_000_000_000  # effectiveGasPrice = 1 gwei
+    gas_cost = sum(
+        int(r["gasUsed"], 16) * int(r["effectiveGasPrice"], 16) for r in receipts)
     expected = bal0 - (args.txs * args.value) - gas_cost
     check("balance exact", bal1 == expected, f"got={bal1} want={expected}")
 

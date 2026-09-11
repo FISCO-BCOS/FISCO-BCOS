@@ -176,6 +176,11 @@ task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response
 {
     // result: gasPrice(QTY)
     auto const ledger = m_nodeService->ledger();
+    if (!ledger)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(JsonRpcError::InternalError, "Ledger not available for eth_gasPrice"));
+    }
     auto const ledgerConfig = co_await ledger::getLedgerConfig(*ledger);
     Json::Value result;
     if (usesEthereumFeeSemantics(ledgerConfig->executorVersion()))
@@ -1482,6 +1487,11 @@ task::Task<void> EthEndpoint::maxPriorityFeePerGas(
     const Json::Value& request, Json::Value& response)
 {
     auto const ledger = m_nodeService->ledger();
+    if (!ledger)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            JsonRpcError::InternalError, "Ledger not available for eth_maxPriorityFeePerGas"));
+    }
     auto const ledgerConfig = co_await ledger::getLedgerConfig(*ledger);
     // Ethereum / OP lane: a non-zero tip suggestion (OP floors at 1e6 wei, matching op-geth);
     // the legacy FISCO lane keeps its historic constant 0.
@@ -1512,6 +1522,11 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
 
     auto const newestTag = toView(request[1U]);
     auto [newestBlock, _] = co_await getBlockNumberByTag(newestTag);
+    if (!m_nodeService->ledger())
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            JsonRpcError::InternalError, "Ledger not available for eth_feeHistory"));
+    }
 
     std::vector<double> rewardPercentiles;
     if (request.size() >= 3)

@@ -22,7 +22,12 @@ import urllib.request
 
 SIGN_SECP = os.environ.get("SIGN_SECP", "/tmp/op-spike/sign_secp")
 SENDER = "0x6afa9580383E6627dA926B6f6ed9Ab2B9c8cC693"
-PRIVKEY = "cdf753782bdb981198eab72e09b6c0ad780a9858ea4f3a8fe8b257016e2e0e29"
+# DELIBERATELY COMMITTED devnet-only key: the C2 genesis allocs fund exactly this
+# address, so the e2e suite cannot run without it and it must not be rotated casually.
+# It is burned as a secret by being committed here — never use it, or the C2_*_KEY
+# override below, for anything holding real value.
+PRIVKEY = os.environ.get("C2_TEST_PRIVKEY",
+    "cdf753782bdb981198eab72e09b6c0ad780a9858ea4f3a8fe8b257016e2e0e29")
 CHAIN_ID = 11155111
 # 预部署地址(与 genesis [alloc.*] 一致)
 L1_BLOCK = "0x4200000000000000000000000000000000000015"
@@ -73,6 +78,7 @@ ERC20_INIT_HEX = (
     "2d99e65f966c5d7964736f6c634300080f0033"
 )
 PASSED, FAILED = [], []
+UNVERIFIED = []
 
 
 def check(name, cond, detail=""):
@@ -82,6 +88,14 @@ def check(name, cond, detail=""):
     else:
         FAILED.append(name)
         print(f"  FAIL {name} {detail}")
+
+
+def check_unverified(name, detail=""):
+    """Record a residual gap: the invariant could NOT be verified on this run (e.g. the
+    bridge was uninitialized). A divergence arm must land here — never in PASSED — so the
+    summary and the exit code surface it instead of reporting an unverified gate green."""
+    UNVERIFIED.append(name)
+    print(f"  UNVERIFIED {name} {detail}")
 
 
 class Rpc:
@@ -485,7 +499,7 @@ def main():
     else:
         check("bridge_deposit_status1", r.get("status") in ("0x1", "0x0"),
               f"receipt ok; status={r.get('status')} (DIVERGENCE: bridge uninitialized)")
-        check("bridge_mint_divergence_unverified", True,
+        check_unverified("bridge_mint_divergence_unverified",
               f"mint not observed ({bal0}->{bal1}); register bridge_deposit_l2_only_mint_unverified")
     EBI_TOPIC = "0x7ff126db8024424bbfd9826e8ab82ff59136289ea440b04b39a0df1b03b9cabf"
     ebi_logs = [lg for lg in r.get("logs", []) if lg.get("topics", [""])[0] == EBI_TOPIC]
@@ -493,7 +507,7 @@ def main():
         check("bridge_erc20initiated_event", len(ebi_logs) >= 1,
               str([lg.get("topics", [""])[0] for lg in r.get("logs", [])]))
     else:
-        check("bridge_erc20initiated_event", True,
+        check_unverified("bridge_erc20initiated_event_unverified",
               f"DIVERGENCE: event unverified (bridge reverts); logs={len(r.get('logs', []))}")
     # withdraw(l2Token, amount, minGas, extra) selector 0x32b7006d;SENDER 无币(未 mint)→ 必 revert。
     bal2 = int(rpc.eth("eth_call", [{"to": l2token, "data": "0x70a08231" + addr_pad(SENDER)}, "latest"]), 16)
@@ -509,7 +523,7 @@ def main():
     else:
         check("bridge_withdraw_status1", r2.get("status") in ("0x1", "0x0"),
               f"receipt ok; status={r2.get('status')} (DIVERGENCE)")
-        check("bridge_burn_divergence_unverified", True,
+        check_unverified("bridge_burn_divergence_unverified",
               f"burn not observed ({bal2}->{bal3}); register bridge_withdraw_l2_only_burn_unverified")
     WI_TOPIC = "0x73d170910aba9e6d50b102db522b1dbcd796216f5128b445aa2135272886497e"
     wi_logs = [lg for lg in r2.get("logs", []) if lg.get("topics", [""])[0] == WI_TOPIC]
@@ -517,7 +531,7 @@ def main():
         check("bridge_withdrawalinitiated_event", len(wi_logs) >= 1,
               str([lg.get("topics", [""])[0] for lg in r2.get("logs", [])]))
     else:
-        check("bridge_withdrawalinitiated_event", True,
+        check_unverified("bridge_withdrawalinitiated_event_unverified",
               f"DIVERGENCE: event unverified (bridge reverts); logs={len(r2.get('logs', []))}")
 
     # ═══ SystemConfig group (Task 5) ═══
@@ -543,8 +557,13 @@ def main():
     r = wait_receipt(rpc, rpc.eth("eth_sendRawTransaction", [raw]))
     check("syscfg_set_reverts_unwritable", r.get("status") == "0x0", f"status={r.get('status')}")
 
-    print(f"\n{'ALL' if not FAILED else 'SOME'} PASSED {len(PASSED)} FAILED {len(FAILED)}")
-    sys.exit(0 if not FAILED else 1)
+    print(f"\n{'ALL' if not FAILED else 'SOME'} PASSED {len(PASSED)} FAILED {len(FAILED)}"
+          f" UNVERIFIED {len(UNVERIFIED)}")
+    if UNVERIFIED:
+        print("RESIDUAL GAPS (invariants this run could not verify — do not treat as green):")
+        for name in UNVERIFIED:
+            print(f"  - {name}")
+    sys.exit(0 if not FAILED and not UNVERIFIED else 1)
 
 
 if __name__ == "__main__":

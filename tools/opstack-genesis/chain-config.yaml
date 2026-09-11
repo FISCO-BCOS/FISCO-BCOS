@@ -17,6 +17,13 @@
 # Predeploys: SystemConfig + L2ValidatorSet (self-written, src/) and the 11
 # vendored OP fork entry-point contracts (vendor/op-fork/). Canonical OP-Stack
 # predeploy addresses are fixed by the protocol.
+#
+# ADDRESS-LAYOUT NOTE (template vs C2): this template pins the self-written
+# predeploys at 0x…C0/C1 — a slot inside the OP reserved 0x4200…0000-07FF
+# predeploy namespace. That is the LEGACY devnet layout this template predates;
+# the C2 deployment follows the stricter rule documented in chain-config-c2.yaml
+# (FISCO contracts at 0x1000+, outside the reserved namespace). Do not copy these
+# addresses into a C2-era config; changing them here changes the genesis hash.
 predeploys:
   # --- FISCO-BCOS self-written predeploys ---
   - name: SystemConfig

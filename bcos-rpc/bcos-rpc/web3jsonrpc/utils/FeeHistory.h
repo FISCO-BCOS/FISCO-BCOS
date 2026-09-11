@@ -57,8 +57,10 @@ struct GasWeightedPriorityFee
 };
 
 /// Pick reward percentiles using geth's gas-weighted indexing over ascending tips.
-std::vector<bcos::u256> pickRewardPercentiles(
-    std::vector<GasWeightedPriorityFee> const& samples, std::span<double const> percentiles);
+/// @param blockGasUsed the block header's gasUsed (the threshold basis geth cites:
+/// eth/gasprice/feehistory.go thresholds on block.GasUsed, not the receipt sum).
+std::vector<bcos::u256> pickRewardPercentiles(std::vector<GasWeightedPriorityFee> const& samples,
+    std::span<double const> percentiles, std::uint64_t blockGasUsed);
 
 /// Build the eth_feeHistory result object. `opStackMode` selects OP vs Ethereum base-fee
 /// prediction for the trailing entry (and OP parent metering on Jovian parents).

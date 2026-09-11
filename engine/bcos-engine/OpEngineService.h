@@ -61,11 +61,8 @@
 namespace bcos::engine
 {
 
-/// Tag on OpExecutionInternalError marking an undecodable payload transaction
-/// envelope: fcuInvalidIfUndecodable maps it to an Invalid FCU status. Same
-/// carrier convention as the framework's OpCulpritTxHash/OpRejectIsCapacity
-/// error_info tags (bcos::engine scope, not the global namespace).
-using OpPayloadUndecodable = boost::error_info<struct tag_op_payload_undecodable, bool>;
+// OpPayloadUndecodable lives in bcos-framework/engine/Errors.h beside its sibling
+// error_info tags; both engine lanes resolve it from there.
 
 struct OpPayloadArtifacts
 {

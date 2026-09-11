@@ -17,7 +17,12 @@ import urllib.request
 
 SIGN_SECP = os.environ.get("SIGN_SECP", "/tmp/op-spike/sign_secp")
 SENDER = "0x6afa9580383E6627dA926B6f6ed9Ab2B9c8cC693"
-PRIVKEY = "cdf753782bdb981198eab72e09b6c0ad780a9858ea4f3a8fe8b257016e2e0e29"
+# DELIBERATELY COMMITTED devnet-only key: the C2 genesis allocs fund exactly this
+# address, so the e2e suite cannot run without it and it must not be rotated casually.
+# It is burned as a secret by being committed here — never use it, or the C2_*_KEY
+# override below, for anything holding real value.
+PRIVKEY = os.environ.get("C2_TEST_PRIVKEY",
+    "cdf753782bdb981198eab72e09b6c0ad780a9858ea4f3a8fe8b257016e2e0e29")
 CHAIN_ID = 11155111
 L1_BLOCK = "0x4200000000000000000000000000000000000015"
 

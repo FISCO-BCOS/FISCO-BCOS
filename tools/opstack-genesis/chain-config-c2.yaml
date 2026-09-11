@@ -1,3 +1,6 @@
+# Copyright (c) FISCO-BCOS, Apache-2.0
+# SPDX-License-Identifier: Apache-2.0
+
 # C2 chain config: real op-deployer base allocs (l2genesis.json from anvil L1 deploy).
 # OP predeploys come from the base; only FISCO self-written predeploys are overlaid.
 # FISCO governance contracts use 0x1000+ (outside the OP reserved 0x0000-0x7FF namespace,
@@ -45,4 +48,8 @@ expected_predeploys:
   - name: L1FeeVault
     address: "0x420000000000000000000000000000000000001A"
 
-base_allocs_sha256: "1e9f51265c5f1631ba2b8d96ea6232861906e2388d94b4585a8530bd6c60e359"
+# Pin of the COMMITTED frozen artifact op-fork-base-allocs.json (setup_op_node.sh's
+# default --base-allocs). setup_c2.sh rewrites this line to the fresh l2genesis.json's
+# sha256 before build-allocs, so a C2 run always self-pins; this committed value keeps
+# the setup_op_node.sh default path (no fresh devnet) verifiable.
+base_allocs_sha256: "9b33b2433446f67d0efa7e9f2da8e59366ccf9b6ceb4e98f9351f9c8c6da57f8"

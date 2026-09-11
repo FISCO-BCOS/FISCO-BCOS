@@ -190,8 +190,10 @@ std::string ethForkIdHex(std::string_view genesisHashHex, std::vector<uint64_t> 
         appendU64Be(input, fork);
     }
     auto const crc = crc32Update(0, input.data(), input.size());
-    // EIP-2124: mask the high bit so the 32-bit checksum stays positive in JSON.
-    auto const forkId = static_cast<uint32_t>(crc & 0x7fffffffu);
+    // EIP-2124: FORK_HASH is the full IEEE CRC32 of (genesis hash || be64 fork blocks), with
+    // no folding — geth fork ids carry the high bit (e.g. mainnet genesis 0xfc64ec04), and a
+    // CL diffing this id against geth's would mismatch on half the inputs if it were masked.
+    auto const forkId = static_cast<uint32_t>(crc);
     std::array<char, 11> buffer{};
     std::snprintf(buffer.data(), buffer.size(), "0x%08x", forkId);
     return std::string(buffer.data());

@@ -53,30 +53,8 @@ inline auto rawEnvelopes(ExecutionPayload const& payload)
                [](EngineTransaction const& tx) -> bytes const& { return tx.raw; });
 }
 
-/// True when the OpExecutionInternalError carries the OpPayloadUndecodable tag:
-/// a payload-content fault (an envelope the CL submitted cannot be decoded),
-/// not a node-internal fault. Single predicate for both answer shapes — the FCU
-/// path maps it to an Invalid FCU status, the newPayload path to an Invalid
-/// PayloadStatus; any OTHER OpExecutionInternalError must keep propagating as
-/// -32603, never be flattened into a consensus INVALID.
-inline bool isUndecodablePayloadFault(OpExecutionInternalError const& error)
-{
-    return boost::get_error_info<OpPayloadUndecodable>(error) != nullptr;
-}
-
-inline std::optional<ForkchoiceUpdatedResult> fcuInvalidIfUndecodable(
-    OpExecutionInternalError const& error)
-{
-    if (!isUndecodablePayloadFault(error))
-    {
-        return std::nullopt;
-    }
-    return ForkchoiceUpdatedResult{
-        .payloadStatus = engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
-            std::string("undecodable payload transaction envelope")),
-        .payloadId = std::nullopt,
-    };
-}
+// isUndecodablePayloadFault / fcuInvalidIfUndecodable live in EngineServiceCommon.h
+// (namespace bcos::engine::detail) so the Eth build path maps the same fault the same way.
 }  // namespace detail
 
 template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
