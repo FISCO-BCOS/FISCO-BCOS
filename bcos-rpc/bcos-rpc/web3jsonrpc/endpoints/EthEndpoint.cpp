@@ -27,6 +27,7 @@
 #include "bcos-mempool/MemPoolImpl.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-rpc/web3jsonrpc/utils/EthConfig.h"
+#include "bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h"
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-executor/src/Common.h>
@@ -56,6 +57,7 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
 #include <cstdint>
 #include <span>
 #include <string>
@@ -64,6 +66,15 @@
 
 using namespace bcos;
 using namespace bcos::rpc;
+
+namespace
+{
+/// op-geth's default `--rpc.gascap`: the gas budget an `eth_call` uses when the request omits
+/// `gas`. geth / op-geth fall back to this cap (or MaxUint64/2 when the cap is disabled) and
+/// never execute a call with a zero budget — a raw `gas=0` is rejected as "intrinsic gas too
+/// low". The target block's own gasLimit bounds it further when it is readable and non-zero.
+constexpr uint64_t c_ethCallGasCap = 50'000'000;
+}  // namespace
 
 task::Task<void> EthEndpoint::protocolVersion(const Json::Value&, Json::Value&)
 {
@@ -165,18 +176,35 @@ task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response
 {
     // result: gasPrice(QTY)
     auto const ledger = m_nodeService->ledger();
-    // TODO)): gas price can wrap in a class
-    auto config = co_await ledger::getSystemConfig(*ledger, ledger::SYSTEM_KEY_TX_GAS_PRICE);
+    auto const ledgerConfig = co_await ledger::getLedgerConfig(*ledger);
     Json::Value result;
-    if (config.has_value())
+    if (usesEthereumFeeSemantics(ledgerConfig->executorVersion()))
     {
-        auto [gasPrice, _] = config.value();
-        auto const value = std::stoull(gasPrice, nullptr, 16);
-        result = toQuantity(value);
+        // Ethereum / OP lane: geth's eth_gasPrice = head.baseFee + suggested tip — never below
+        // the base fee, never 0 (a legacy tx signed at a suggested price below the base fee is
+        // silently evicted). OP floors the tip at 1e6 wei (op-geth --gpo.minsuggestedpriorityfee).
+        u256 baseFee = 0;
+        if (auto block =
+                co_await ledger::getBlockData(*ledger, ledgerConfig->blockNumber(), ledger::HEADER))
+        {
+            baseFee = blockBaseFee(*block->blockHeader());
+        }
+        auto const tip = suggestedPriorityFeeWei(ledgerConfig->executorVersion());
+        result = toQuantity(baseFee + u256(tip));
     }
     else
     {
-        result = "0x0";
+        // Legacy FISCO lane: echo the ledger tx_gas_price as before.
+        auto config = co_await ledger::getSystemConfig(*ledger, ledger::SYSTEM_KEY_TX_GAS_PRICE);
+        if (config.has_value())
+        {
+            auto [gasPrice, _] = config.value();
+            result = toQuantity(std::stoull(gasPrice, nullptr, 16));
+        }
+        else
+        {
+            result = "0x0";
+        }
     }
     buildJsonContent(result, response);
 }
@@ -1007,6 +1035,7 @@ task::Task<void> EthEndpoint::call(
         WEB3_LOG(TRACE) << LOG_DESC("eth_call") << LOG_KV("call", call)
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
+    bool const needsGasDefault = !call.gas.has_value() || call.gas.value() == 0;
     std::optional<uint64_t> chainBlockGasLimit;
     if (isEstimate)
     {
@@ -1022,12 +1051,36 @@ task::Task<void> EthEndpoint::call(
         }
         // No default cap: an unreadable header or an over-wide gasLimit must fail the request
         // with a diagnosable message, not silently size the estimate against a constant.
-        bool const needsGasDefault = !call.gas.has_value() || call.gas.value() == 0;
         if (needsGasDefault && !chainBlockGasLimit.has_value())
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(JsonRpcError::InternalError,
                 "Unable to read parent block gas limit for eth_estimateGas"));
         }
+    }
+    else if (needsGasDefault)
+    {
+        // Plain eth_call: geth / op-geth size an omitted gas against the RPC gas cap, never 0
+        // (a zero budget is rejected downstream as "intrinsic gas too low"). Bound the default
+        // by the target block's gasLimit when its header is readable and non-zero; otherwise
+        // (unreadable / genesis / zero gasLimit) keep the cap so a call is never run with gas 0.
+        uint64_t gasDefault = c_ethCallGasCap;
+        if (ledger)
+        {
+            if (auto block =
+                    co_await ledger::getBlockData(*ledger, blockNumber, bcos::ledger::HEADER))
+            {
+                auto const limit = block->blockHeader()->gasLimit();
+                if (bcos::u256FitsUint64(limit))
+                {
+                    auto const blockLimit = static_cast<uint64_t>(limit);
+                    if (blockLimit > 0)
+                    {
+                        gasDefault = std::min(gasDefault, blockLimit);
+                    }
+                }
+            }
+        }
+        chainBlockGasLimit = gasDefault;
     }
     // Await the sender's committed nonce HERE (a coroutine suspension) instead of blocking
     // the handler thread with task::syncWait inside takeToTransaction. Needed so validation
@@ -1428,7 +1481,12 @@ task::Task<std::tuple<protocol::BlockNumber, bool>> EthEndpoint::getBlockNumberB
 task::Task<void> EthEndpoint::maxPriorityFeePerGas(
     const Json::Value& request, Json::Value& response)
 {
-    Json::Value result = "0x0";
+    auto const ledger = m_nodeService->ledger();
+    auto const ledgerConfig = co_await ledger::getLedgerConfig(*ledger);
+    // Ethereum / OP lane: a non-zero tip suggestion (OP floors at 1e6 wei, matching op-geth);
+    // the legacy FISCO lane keeps its historic constant 0.
+    auto const tip = suggestedPriorityFeeWei(ledgerConfig->executorVersion());
+    Json::Value result = toQuantity(u256(tip));
     buildJsonContent(result, response);
     co_return;
 }

@@ -149,12 +149,12 @@ def a2_chain(rpc):
           gp is not None and lb is not None and
           int(gp, 16) >= int(lb["baseFeePerGas"], 16),
           f"gasPrice={gp} baseFee={lb and lb.get('baseFeePerGas')}")
-    # B1 (08-18): pin the current eth_maxPriorityFeePerGas. op-geth's is dynamic
-    # (SuggestOptimismPriorityFee >= 1e6 wei, gasprice/optimism-gasprice.go:38);
-    # FISCO's is the constant 0x0 (EthEndpoint.cpp:943) — divergence D-GP-2, see
-    # docs/2026-08-18-rpc-parity-gasprice-withdrawals.md.
+    # eth_maxPriorityFeePerGas on the Ethereum/OP lane must suggest a non-zero tip (OP floors
+    # at 1e6 wei, op-geth's --gpo.minsuggestedpriorityfee); the legacy FISCO lane keeps 0x0.
+    # The C2 devnet is an OP L2, so the floor applies.
     mpf = rpc.call("eth_maxPriorityFeePerGas")
-    check("maxPriorityFeePerGas returns 0x0 (FISCO constant)", mpf == "0x0", str(mpf))
+    check("maxPriorityFeePerGas suggests a non-zero OP tip (>= 1e6 wei)",
+          mpf is not None and int(mpf, 16) >= 1_000_000, str(mpf))
     syncing = rpc.call("eth_syncing")
     check("syncing false", syncing is False, str(syncing))
     # EIP-7910 eth_config: the node's fork configuration. A missing method answers -32601,
