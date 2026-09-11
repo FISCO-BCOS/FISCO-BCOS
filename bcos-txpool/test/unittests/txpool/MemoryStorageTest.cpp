@@ -35,8 +35,10 @@
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <fakeit.hpp>
 #include <future>
+#include <optional>
 #include <thread>
 
 using namespace bcos;
@@ -1356,6 +1358,73 @@ BOOST_AUTO_TEST_CASE(poolAdmissionRefusesInsteadOfThrowingOnAStorageFault)
     BOOST_CHECK(status == TransactionStatus::Unknown);
     BOOST_CHECK(!storageSig.exists(tx->hash()));
     BOOST_CHECK(!task::syncWait(faultingWeb3Nonces->existsMemoryNonce(tx->sender(), tx->nonce())));
+}
+
+// The expiry sweep ends a receipt-wait the way a refusal does: as an Error carrying
+// TransactionPoolTimeout, thrown from await_resume. It used to deliver a result with that status
+// and no receipt instead, and the tars result type fabricates a default receipt on read, so every
+// RPC face then reported a transaction the pool had dropped as executed: a VM exception on the
+// Web3 face, a status-0 receipt on the BCOS face.
+BOOST_AUTO_TEST_CASE(sweptReceiptWaitEndsAsTimeoutError)
+{
+    // submitTransaction() uses shared_from_this(); ten milliseconds to live.
+    auto ioServicePool = std::make_shared<IOServicePool>(1, "sweptWait");
+    auto sharedStorage = std::make_shared<MemoryStorage>(
+        config, *ioServicePool->getIOService(), /*notifyWorkerNum*/ 2, /*txsExpirationTime*/ 10);
+
+    // In the pool without a callback, then a receipt-wait hangs its callback on it
+    // (AlreadyInTxPoolAndAccept), the shape FIB48_SubmitTransactionResumesOnce uses.
+    auto tx = makeTx("swept_receipt_wait", false);
+    BOOST_REQUIRE_EQUAL(sharedStorage->insert(tx), TransactionStatus::None);
+    std::promise<void> done;
+    auto doneFuture = done.get_future();
+    std::optional<int64_t> errorCode;
+    std::string errorMessage;
+    bool gotResult = false;
+    bool unexpected = false;
+    std::thread waitThread([&]() {
+        try
+        {
+            auto result = task::syncWait(sharedStorage->submitTransaction(tx, true));
+            gotResult = (result != nullptr);
+        }
+        catch (bcos::Error const& e)
+        {
+            errorCode = e.errorCode();
+            errorMessage = e.errorMessage();
+        }
+        catch (...)
+        {
+            unexpected = true;
+        }
+        done.set_value();
+    });
+    for (size_t i = 0; i < 500 && !tx->submitCallback(); ++i)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    BOOST_REQUIRE(tx->submitCallback());
+
+    // Sealing finds it past its expiration and sweeps it.
+    tx->setImportTime(static_cast<int64_t>(utcTime()) - 1000);
+    std::vector<protocol::TransactionMetaData::Ptr> txsList;
+    std::vector<protocol::TransactionMetaData::Ptr> sysTxsList;
+    sharedStorage->batchSealTransactions(txsList, sysTxsList, 100);
+
+    // A wait nothing ends cannot be joined: let it go and fail, rather than hang the binary.
+    if (doneFuture.wait_for(std::chrono::seconds(5)) != std::future_status::ready)
+    {
+        waitThread.detach();
+        BOOST_FAIL("the receipt-wait was not ended by the sweep");
+    }
+    waitThread.join();
+    BOOST_CHECK(!unexpected);
+    BOOST_CHECK(txsList.empty());
+    BOOST_CHECK(!sharedStorage->exists(tx->hash()));
+    BOOST_CHECK(!gotResult);
+    BOOST_REQUIRE(errorCode.has_value());
+    BOOST_CHECK_EQUAL(*errorCode, static_cast<int64_t>(TransactionStatus::TransactionPoolTimeout));
+    BOOST_CHECK_EQUAL(errorMessage, "TransactionPoolTimeout");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

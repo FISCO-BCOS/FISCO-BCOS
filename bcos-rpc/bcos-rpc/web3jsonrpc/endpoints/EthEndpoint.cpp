@@ -44,10 +44,12 @@
 #include <bcos-rpc/web3jsonrpc/model/CallRequest.h>
 #include <bcos-rpc/web3jsonrpc/model/ReceiptResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
+#include <bcos-rpc/web3jsonrpc/utils/AdmissionError.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tx-validator/TxValidator.h>
 #include <boost/algorithm/string.hpp>
+#include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <cstdint>
@@ -728,15 +730,16 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     auto rawTx = toView(request[0U]);
     auto rawTxBytes = fromHexWithPrefix(rawTx);
     auto bytesRef = bcos::ref(rawTxBytes);
-    // Reject blob txs at the RPC gate. Deposits (0x7e) enter only via Engine API.
+    // Reject blob txs at the RPC gate. Deposits (0x7e) enter only via Engine API. Both answer
+    // as the type refusal verify() would give (AdmissionError.h), with the type named.
     switch (engine::dispatchRawTransaction(bytesRef))
     {
     case engine::RawTransactionKind::Blob:
         BOOST_THROW_EXCEPTION(
-            JsonRpcException(InvalidParams, "blob transactions are not supported"));
+            admissionError(protocol::TransactionStatus::BlobTxNotAllowed, "blob"));
     case engine::RawTransactionKind::Deposit:
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            InvalidParams, "deposit transactions cannot be submitted via eth_sendRawTransaction"));
+        BOOST_THROW_EXCEPTION(admissionError(
+            protocol::TransactionStatus::TxTypeNotSupported, "deposit, Engine API only"));
     default:
         break;
     }
@@ -751,8 +754,8 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     // derivation/engine path, never from a client RPC submission.
     if (web3Tx.type == TransactionType::Deposit) [[unlikely]]
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,
-            "Deposit (0x7e) transactions are not supported via eth_sendRawTransaction"));
+        BOOST_THROW_EXCEPTION(admissionError(
+            protocol::TransactionStatus::TxTypeNotSupported, "deposit, Engine API only"));
     }
     auto encodeTxHash = web3Tx.txHash();
 
@@ -797,20 +800,36 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         // Required, always: this transaction was built directly above, so m_tainted is still
         // true and no signature has been verified. tryAdd refuses a tainted transaction, and
         // the Signature check is what clears it.
-        if (auto status = co_await validator->verify(
-                *tx, m_nodeService->admissionContext(), txvalidator::SignaturePolicy::Required);
-            status != protocol::TransactionStatus::None)
+        auto status = protocol::TransactionStatus::None;
+        try
         {
-            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, protocol::toString(status)));
+            status = co_await validator->verify(
+                *tx, m_nodeService->admissionContext(), txvalidator::SignaturePolicy::Required);
+        }
+        catch (...)
+        {
+            // verify() throws, by contract, when the data it needs cannot be read
+            // (TxValidator.h). A storage fault is the node's fault, not a verdict on the
+            // transaction, and its diagnostic is for the log: the client gets the same answer
+            // the txpool branch gives, where verifyAndSubmitTransaction catches this and refuses
+            // with Unknown.
+            WEB3_LOG(ERROR) << LOG_DESC("sendRawTransaction: admission could not be decided")
+                            << LOG_KV("txHash", encodeTxHash.hexPrefixed())
+                            << LOG_KV("reason", boost::current_exception_diagnostic_information());
+            BOOST_THROW_EXCEPTION(admissionError(protocol::TransactionStatus::Unknown));
+        }
+        if (status != protocol::TransactionStatus::None)
+        {
+            BOOST_THROW_EXCEPTION(admissionError(status));
         }
         // tryAdd, not add: add() returns void and ends four different ways without saying so,
         // and this method answers with a transaction hash as soon as it returns. It is also
         // what reserves the (sender, nonce) pair -- checking first and adding second would let
         // two concurrent submissions through the gap between the two calls.
-        if (auto status = memPool->tryAdd(std::move(tx));
-            status != protocol::TransactionStatus::None)
+        if (auto const taken = memPool->tryAdd(std::move(tx));
+            taken != protocol::TransactionStatus::None)
         {
-            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, protocol::toString(status)));
+            BOOST_THROW_EXCEPTION(admissionError(taken));
         }
         Json::Value result = encodeTxHash.hexPrefixed();
         buildJsonContent(result, response);
@@ -824,7 +843,35 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
             JsonRpcException(JsonRpcError::InternalError, "TXPool not available!"));
     }
     co_await txpool->broadcastTransaction(*tx);
-    auto const txResult = co_await txpool->submitTransaction(std::move(tx), m_syncTransaction);
+    protocol::TransactionSubmitResult::Ptr txResult;
+    try
+    {
+        txResult = co_await txpool->submitTransaction(std::move(tx), m_syncTransaction);
+    }
+    catch (bcos::Error const& e)
+    {
+        // The pool's refusal arrives as an Error whose code is the TransactionStatus
+        // (MemoryStorage::submitTransaction's await_resume); left alone it reaches the catch-all
+        // above this method, which answers -32603 with the status name. Same table as the
+        // mempool branch instead, so both pools refuse the same transaction the same way.
+        //
+        // Only for a code that is a verdict. This interface also carries faults that are the
+        // node's own -- a MAX/TARS deployment's TxPoolServiceClient throws "No value!" and TARS
+        // transport codes through it -- and those keep going to the catch-all, which answers
+        // -32603 with the message they came with, as they did before this table existed.
+        // bcos::Error only, where the mempool branch catches everything: an in-process pool has
+        // already turned verify()'s throw into Unknown (verifyAndSubmitTransaction), so anything
+        // that is not an Error is not a verdict either.
+        if (!isAdmissionVerdict(e.errorCode())) [[unlikely]]
+        {
+            WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction: pool fault, not a verdict")
+                              << LOG_KV("code", e.errorCode())
+                              << LOG_KV("message", e.errorMessage());
+            throw;
+        }
+        BOOST_THROW_EXCEPTION(
+            admissionError(static_cast<protocol::TransactionStatus>(e.errorCode())));
+    }
     if (txResult->status() == 0)
     {
         Json::Value result = encodeTxHash.hexPrefixed();
