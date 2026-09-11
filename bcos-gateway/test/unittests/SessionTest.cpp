@@ -34,6 +34,7 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -409,6 +410,10 @@ BOOST_AUTO_TEST_CASE(doReadTest)
                     BOOST_CHECK_EQUAL(e.errorCode(), P2PExceptionType::Success);
                     BOOST_CHECK(message);
                     BOOST_CHECK(message->lengthDirect() > 0);
+                    // every payload byte of the reassembled frame must be 0xff
+                    auto payload = message->payload();
+                    BOOST_CHECK(std::all_of(payload.begin(), payload.end(),
+                        [](auto b) { return b == 0xff; }));
                 }
 
                 recvBufferSize += message->lengthDirect();
