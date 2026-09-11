@@ -376,9 +376,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
     m_executorVersion = executorVersion;
 
-    // v1 engine on executor_version < 2; Eth on 2; Op on >= 3.
+    // v1 engine on executor_version < 2; Eth on 2; Op on exactly 3.
     const bool engineApiForV1Only = (m_executorVersion < scheduler_v1::ETHEREUM_EXECUTOR_VERSION);
-    const bool opStackMode = (m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION);
+    const bool opStackMode = (m_executorVersion == scheduler_v1::OPSTACK_EXECUTOR_VERSION);
 
     // [op_engine_rpc] requires the v2 pure-Ethereum executor: on executor_version < 2 the
     // endpoint would silently serve EthEngineService over the v1 TransactionExecutorImpl
@@ -821,11 +821,11 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     //
     // OP mode requires an external op-node; built-in single-node CL is unsupported.
     if (m_nodeConfig->enableSingleNodeConsensus() &&
-        m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION)
+        m_executorVersion == scheduler_v1::OPSTACK_EXECUTOR_VERSION)
     {
         BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
                                   "enable_single_node_consensus is not supported with "
-                                  "executor_version >= 3 (OP mode): an OP chain is driven by "
+                                  "executor_version == 3 (OP mode): an OP chain is driven by "
                                   "an external op-node over [op_engine_rpc]"));
     }
     if (m_nodeConfig->enableSingleNodeConsensus())

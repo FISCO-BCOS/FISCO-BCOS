@@ -44,8 +44,10 @@ BOOST_AUTO_TEST_CASE(laneBoundaries)
     BOOST_CHECK(usesEthereumFeeSemantics(ledger::OPSTACK_EXECUTOR_VERSION));
     BOOST_CHECK(isOpStackLane(ledger::OPSTACK_EXECUTOR_VERSION));
     BOOST_CHECK_EQUAL(suggestedPriorityFeeWei(ledger::OPSTACK_EXECUTOR_VERSION), 1'000'000u);
-    // Above the known set still maps to the OP lane.
-    BOOST_CHECK(isOpStackLane(ledger::OPSTACK_EXECUTOR_VERSION + 5));
+    // OP mode is exactly OPSTACK_EXECUTOR_VERSION (a fixed genesis value, not a floor): a
+    // higher version is not the OP lane. It still gets the Ethereum tip via
+    // usesEthereumFeeSemantics (>= ETHEREUM).
+    BOOST_CHECK(!isOpStackLane(ledger::OPSTACK_EXECUTOR_VERSION + 5));
     BOOST_CHECK_EQUAL(suggestedPriorityFeeWei(ledger::OPSTACK_EXECUTOR_VERSION + 5), 1'000'000u);
 }
 

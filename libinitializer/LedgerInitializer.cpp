@@ -45,8 +45,25 @@ std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::buil
     {
         BOOST_THROW_EXCEPTION(*error);
     }
-    bcos::scheduler_v1::validateMPTFlagMatrix(
-        bcos::task::syncWait(ledger->fetchAllFeatures(blockNumber + 1)));
+    auto features = bcos::task::syncWait(ledger->fetchAllFeatures(blockNumber + 1));
+    bcos::scheduler_v1::validateMPTFlagMatrix(features);
+
+    // OP mode is a genesis-only property: executor_version == OPSTACK must carry the
+    // genesis-only feature_l2_ethereum_compat, and it must itself be genesis-bound. The value
+    // is read from the ledger (written at genesis), with the genesis config as the fallback
+    // when the on-chain entry is absent.
+    {
+        int executorVersion = nodeConfig->executorVersion();
+        bcos::protocol::BlockNumber executorVersionActivation = 0;
+        if (auto versionCfg = bcos::task::syncWait(bcos::ledger::getSystemConfig(
+                *ledger, magic_enum::enum_name(bcos::ledger::SystemConfig::executor_version))))
+        {
+            executorVersion = boost::lexical_cast<int>(std::get<0>(*versionCfg));
+            executorVersionActivation = std::get<1>(*versionCfg);
+        }
+        bcos::scheduler_v1::validateOpModeGenesisOnly(
+            features, executorVersion, executorVersionActivation);
+    }
 
     return ledger;
 }

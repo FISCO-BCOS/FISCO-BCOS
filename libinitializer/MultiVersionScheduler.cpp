@@ -132,6 +132,20 @@ void bcos::scheduler_v1::MultiVersionScheduler::stop()
 void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
     int version, [[maybe_unused]] ledger::LedgerConfig::Ptr ledgerConfig)
 {
+    // OP mode is genesis-only (see scheduler_v1::validateOpModeGenesisOnly): once the chain is
+    // OP (feature_l2_ethereum_compat at genesis), a governance write that moves
+    // executor_version off OPSTACK_EXECUTOR_VERSION must not change the running executor.
+    // Keep the current executor and log loudly instead of switching — a throw here would halt
+    // the commit callbacks.
+    if (ledgerConfig &&
+        ledgerConfig->features().get(ledger::Features::Flag::feature_l2_ethereum_compat) &&
+        version != bcos::ledger::OPSTACK_EXECUTOR_VERSION)
+    {
+        INITIALIZER_LOG(ERROR) << LOG_DESC(
+                                      "executor_version change rejected: OP mode is genesis-frozen")
+                               << LOG_KV("requested", version) << LOG_KV("keeping", m_currentIndex);
+        return;
+    }
     // Runtime callers are the two commit callbacks (LedgerStorage::onStableCheckPointCommitted
     // and DownloadingQueue), which catch-and-log a throw and then stop advancing. A governance
     // tx that writes an unwired executor_version must therefore NOT make this throw: an unwired
