@@ -44,13 +44,16 @@ std::optional<std::string> CallRequest::nonceFromPendingEntry(
     // The all-digits guard keeps the caller's noexcept contract: bcos::u256 throws on an
     // unparseable string, and an empty or non-numeric stored nonce is left unset (empty nonce
     // string) — a corrupt row falls back to the executor reading the sender's state nonce
-    // rather than aborting the RPC. The length bound closes the last throw window: a
-    // >=79-digit all-digit row passes the digits guard but overflows u256 (2^256-1 has 78
-    // decimal digits), so it must fall back like any other corrupt row instead of throwing
-    // inside the RPC handler.
+    // rather than aborting the RPC. The bound closes every throw window: anything over 78
+    // decimal digits overflows, and a 78-digit value still has to be <= 2^256-1 (the max
+    // 78-digit number 10^78-1 exceeds it, so the range check must run at exactly 78 digits,
+    // not only above it).
     auto const raw = entry->get();
     constexpr std::size_t c_maxNonceDigits = 78;
+    constexpr std::string_view c_maxU256Decimal =
+        "115792089237316195423570985008687907853269984665640564039457584007913129639935";
     if (raw.empty() || raw.size() > c_maxNonceDigits ||
+        (raw.size() == c_maxNonceDigits && raw > c_maxU256Decimal) ||
         !std::all_of(raw.begin(), raw.end(), [](char c) { return c >= '0' && c <= '9'; }))
     {
         return std::nullopt;

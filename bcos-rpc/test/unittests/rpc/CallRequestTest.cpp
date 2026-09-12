@@ -214,6 +214,32 @@ BOOST_AUTO_TEST_CASE(deployEstimateGasLeavesCorruptNonceUnset)
     }
 }
 
+BOOST_AUTO_TEST_CASE(nonceFromPendingEntryBoundsTheU256Range)
+{
+    // 5593 round-4 F22: the length bound must not let an all-digit row that overflows
+    // u256 reach the constructor. 2^256-1 has 78 decimal digits, but 10^78-1 exceeds it,
+    // so a 78-digit value above the max (and anything longer) must fall back to nullopt
+    // like any other corrupt row — not throw.
+    std::string const maxU256 =
+        "115792089237316195423570985008687907853269984665640564039457584007913129639935";
+    std::string const justOverMax =
+        "115792089237316195423570985008687907853269984665640564039457584007913129639936";
+    std::string const seventyEightNines = std::string(78, '9');
+    std::string const seventyNineDigits = std::string(79, '0');
+
+    // The exact max is valid and converted.
+    BOOST_CHECK_EQUAL(
+        CallRequest::nonceFromPendingEntry(bcos::storage::Entry(maxU256)).has_value(), true);
+
+    // Any 78-digit value above the max, and any longer row, must be rejected, not throw.
+    for (auto const& overflow : {justOverMax, seventyEightNines, seventyNineDigits})
+    {
+        BOOST_CHECK_MESSAGE(
+            !CallRequest::nonceFromPendingEntry(bcos::storage::Entry(overflow)).has_value(),
+            "overflowing nonce " << overflow.substr(0, 10) << "… was not rejected");
+    }
+}
+
 BOOST_AUTO_TEST_CASE(estimateGasGasCapComesOnlyFromTheParentHeader)
 {
     // eth_estimateGas with no explicit `gas` takes its cap from the target block's header and
