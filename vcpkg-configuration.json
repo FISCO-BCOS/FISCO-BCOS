@@ -15,8 +15,8 @@
   "overlay-ports": [
     "./ports/boost-context",
     "./ports/tarscpp",
-    "./ports/rapidhash",
     "./ports/openssl",
+    "./ports/secp256k1",
     "./ports/evmc",
     "./ports/evmone",
     "./ports/intx",
@@ -25,7 +25,6 @@
     "./ports/group-sig",
     "./ports/paillier",
     "./ports/tikv-client-cpp",
-    "./ports/benchmark",
     "./ports-data/ethereum-tests"
   ]
 }

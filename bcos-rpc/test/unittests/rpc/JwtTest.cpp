@@ -71,7 +71,7 @@ std::string buildJwt(std::string_view _alg, std::optional<std::string> _typ,
 // This helper is used to test that the verifier rejects alg:none tokens.
 std::string buildJwtNone()
 {
-    auto header = ::jwt::builder<::jwt::traits::kazuho_picojson>()
+    auto header = ::jwt::create<::jwt::traits::kazuho_picojson>()
                       .set_algorithm("none")
                       .set_type("JWT");
     auto token = header.sign(::jwt::algorithm::none{});

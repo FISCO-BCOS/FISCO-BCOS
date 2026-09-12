@@ -34,7 +34,12 @@
     "fakeit",
     "tbb",
     "jsoncpp",
-    "jwt-cpp",
+    {
+      "name": "jwt-cpp",
+      "features": [
+        "picojson"
+      ]
+    },
     "evmc",
     "curl",
     "tomlplusplus",
@@ -138,11 +143,15 @@
       ]
     }
   },
-  "builtin-baseline": "f6729a3ac3bfdefc999aa8e3664f8014370886b8",
+  "builtin-baseline": "62159a45e18f3a9ac0548628dcaf74fcb60c6ff9",
   "overrides": [
     {
       "name": "boost-context",
-      "version": "1.88.0-u1"
+      "version": "1.90.0-u1"
+    },
+    {
+      "name": "curl",
+      "version": "8.17.0"
     }
   ]
 }
