@@ -1020,26 +1020,12 @@ task::Task<void> EthEndpoint::call(
         WEB3_LOG(TRACE) << LOG_DESC("eth_call") << LOG_KV("call", call)
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
-    if (!isLatest)
-    {
-        // Same root-presence probe as the other five historical MPT endpoints: a block whose
-        // state root is no longer in MPT node storage (beyond the pruning window) answers
-        // -32004 right here, instead of dispatching to callAtBlock, whose historical-state
-        // walk would surface the missing root as a generic scheduler error. The context itself
-        // is re-resolved by callAtBlock; a root pruned between this probe and the execution
-        // keeps the pre-existing behavior.
-        // Reader-gated: without a local MPT node reader the probe could only throw "MPT not
-        // enabled", masking the base behavior — callAtBlock's default forwarding keeps
-        // schedulers that only implement call() working, and a non-L2 scheduler answers with
-        // its own explicit feature_l2_ethereum_compat error. Skipping the probe preserves
-        // both. (resolveHistoricalMptContext keeps its own null check, defensively.)
-        if (auto const& mptReader = m_nodeService->mptNodeReader())
-        {
-            auto const ledger = m_nodeService->ledger();
-            co_await resolveHistoricalMptContext(
-                *ledger, blockNumber, head, mptReader, m_nodeService->mptPruneWindow());
-        }
-    }
+    // No root-presence probe here (unlike the five direct historical endpoints): callAtBlock
+    // owns the historical walk, so it also owns the pruned-walk mapping — a root or internal
+    // node lost to the pruning window surfaces as SchedulerError::MPTStateUnavailable and is
+    // answered -32004 below. Probing here would re-resolve the context callAtBlock resolves
+    // anyway (one header read + one node-row read per request) and still miss the
+    // pruned-mid-request race the scheduler-side mapping covers exactly.
     auto tx = call.takeToTransaction(
         m_nodeService->blockFactory()->transactionFactory(), isEstimate ? scheduler : nullptr);
     struct Awaitable
@@ -1110,7 +1096,25 @@ task::Task<void> EthEndpoint::call(
         .m_error = {},
         .m_response = response,
         .m_gasUsed = gasUsed};
-    co_await awaitable;
+    try
+    {
+        co_await awaitable;
+    }
+    catch (bcos::Error const& e)
+    {
+        // callAtBlock maps a pruned historical walk (missing root or internal node) to
+        // MPTStateUnavailable; answer the same -32004 the five direct historical endpoints
+        // produce. mptActive is certainly true — the same argument as mapPrunedMptWalk: the
+        // walk only runs against a committed MPT root, so the block's root provably was one.
+        if (e.errorCode() == scheduler::SchedulerError::MPTStateUnavailable && !isLatest)
+            [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(EthHistoricalStateUnavailable,
+                stateRootMissingMessage(
+                    blockNumber, head, m_nodeService->mptPruneWindow(), /*mptActive=*/true)));
+        }
+        throw;
+    }
 }
 task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Value& response)
 {

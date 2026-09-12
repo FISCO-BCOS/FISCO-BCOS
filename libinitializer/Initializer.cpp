@@ -482,7 +482,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
                 parallelScheduler, transactionExecutor, m_memPoolInitializer->memPool(), ledger,
-                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState);
+                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState, m_mptCommitObserver);
         }
 
         // executor_version=2: a dedicated pipeline instance for the EthereumExecutor baseline
@@ -518,7 +518,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
                 ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger,
-                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState);
+                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState, m_mptCommitObserver);
         }
     }
     else
@@ -535,7 +535,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
                 serialScheduler, transactionExecutor, m_memPoolInitializer->memPool(), ledger,
-                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState);
+                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState, m_mptCommitObserver);
         }
 
         // executor_version=2 baseline scheduler, driven by a dedicated serial pipeline.
@@ -555,7 +555,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
                 ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger,
-                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState);
+                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState, m_mptCommitObserver);
         }
     }
 

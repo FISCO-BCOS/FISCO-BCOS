@@ -44,6 +44,10 @@ public:
 
     int m_latestCalls{0};
     std::vector<protocol::BlockNumber> m_historicalCalls;
+    /// When set, callAtBlock answers with this error instead of a receipt — pins the
+    /// endpoint's handling of SchedulerError::MPTStateUnavailable (the pruned-walk mapping)
+    /// versus every other scheduler error (passed through untouched).
+    std::optional<int64_t> m_callAtBlockErrorCode;
 
     void call(protocol::Transaction::Ptr,
         std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) noexcept
@@ -56,6 +60,14 @@ public:
         std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override
     {
         m_historicalCalls.push_back(blockNumber);
+        if (m_callAtBlockErrorCode)
+        {
+            callback(BCOS_ERROR_UNIQUE_PTR(
+                         static_cast<bcos::scheduler::SchedulerError>(*m_callAtBlockErrorCode),
+                         "callAtBlock stub error"),
+                nullptr);
+            return;
+        }
         callback({}, std::make_shared<bcostars::protocol::TransactionReceiptImpl>());
     }
 };
@@ -63,9 +75,10 @@ public:
 class Web3EthCallBlockTagFixture : public RPCFixture
 {
 public:
-    /// The MPT node row plane the historical eth_call root probe reads through the NodeService
-    /// reader (round-5 F4): a non-latest tag resolves the block's committed state root and
-    /// answers -32004 when that root is no longer in MPT node storage, before callAtBlock.
+    /// MPT node row plane kept for the NodeService reader (still used by the direct
+    /// historical endpoints such as eth_getBalance). eth_call itself no longer probes it —
+    /// pruned-state detection moved into callAtBlock's MPTStateUnavailable error (round-14
+    /// F5).
     using StateRowStorage =
         bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
             bcos::executor_v1::StateValue, bcos::storage2::memory_storage::ORDERED>;
@@ -80,16 +93,16 @@ public:
         // through callAtBlock (covered in configuredDepthsRouteThroughCallAtBlock).
         service->setSafeBlockDepth(safeDepth);
         service->setFinalizedBlockDepth(finalizedDepth);
-        // withMptReader=false simulates a node with no local MPT node reader: the historical
-        // root probe is reader-gated and the request falls through to callAtBlock untouched.
+        // withMptReader=false simulates a node with no local MPT node reader; irrelevant to
+        // eth_call itself since the endpoint-side root probe was removed (round-14 F5).
         if (withMptReader)
         {
             service->setMPTNodeReader(storage2::makeMPTNodeReader(m_stateRows));
         }
         service->setMPTPruneWindow(mptPruneWindow);
-        // Give every fake block a resolvable committed root: the empty root is a legal
-        // "no accounts" root and skips the row probe — the tests below exercise the probe
-        // itself with explicit roots.
+        // Give every fake block a resolvable committed root (the empty root is a legal
+        // "no accounts" root) so header-root lookups never interfere with the scheduler
+        // routing under test.
         for (auto const& block : m_ledger->ledgerData())
         {
             if (block && block->blockHeader())
@@ -206,54 +219,57 @@ BOOST_AUTO_TEST_CASE(defaultImplementationKeepsLegacySchedulersWorking)
     BOOST_CHECK(resp.isMember("result"));
 }
 
-// Round-5 F4: a historical eth_call whose committed state root is no longer in MPT node
-// storage (beyond the pruning window) answers -32004 with the pruned-window message BEFORE
-// dispatching to callAtBlock — the scheduler never sees the request.
+// Round-14 F5: callAtBlock maps a pruned historical walk (missing root or internal MPT node)
+// to SchedulerError::MPTStateUnavailable, and the endpoint maps that to -32004 — one
+// resolution path, no endpoint-side root probe. The message picks the pruned-window wording
+// from the queried height versus the caller-resolved head.
 BOOST_AUTO_TEST_CASE(historicalCallBeyondPruneWindowAnswers32004)
 {
-    // MPT was active at the queried block (feature_mpt_state_root), so a missing root inside
-    // the pruned region is genuinely "State pruned" — not a predates-activation misreport.
-    bcos::ledger::Features features;
-    features.set(bcos::ledger::Features::Flag::feature_mpt_state_root);
-    m_ledger->setFeatures(std::move(features));
-
     auto recording = std::make_shared<RecordingScheduler>(m_ledger, m_blockFactory);
+    recording->m_callAtBlockErrorCode = bcos::scheduler::SchedulerError::MPTStateUnavailable;
     auto web3 = buildWeb3Rpc(recording, 0, 0, /*mptPruneWindow=*/10);
 
-    // Block 1's root is absent from the (empty) node-row plane — as if pruned. The head is
-    // 19, so block 1 < 19 - 10: inside the pruned region.
-    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(h256{0x1234U});
-
+    // The head is 19 and the window 10, so block 1 < 19 - 10: inside the pruned region.
     auto resp = request(web3, R"("0x1")");
     BOOST_REQUIRE(resp.isMember("error"));
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32004);
     BOOST_CHECK(resp["error"]["message"].asString().find("State pruned") != std::string::npos);
+    // Unlike the removed endpoint-side probe, the scheduler DOES see the request — the
+    // -32004 answer comes back out of callAtBlock's own error.
     BOOST_CHECK_EQUAL(recording->m_latestCalls, 0);
-    BOOST_CHECK(recording->m_historicalCalls.empty());
+    BOOST_REQUIRE_EQUAL(recording->m_historicalCalls.size(), 1U);
+    BOOST_CHECK_EQUAL(recording->m_historicalCalls[0], 1);
+
+    // The same error inside the retention window (block 15 > 19 - 10) is a genuinely
+    // missing root, so the message stays the generic miss wording.
+    auto respInWindow = request(web3, R"("0xf")");
+    BOOST_REQUIRE(respInWindow.isMember("error"));
+    BOOST_CHECK_EQUAL(respInWindow["error"]["code"].asInt(), -32004);
+    BOOST_CHECK(respInWindow["error"]["message"].asString().find(
+                    "Block stateRoot not in MPT node storage") != std::string::npos);
+    BOOST_CHECK(respInWindow["error"]["message"].asString().find("State pruned") ==
+                std::string::npos);
 }
 
-// The same pruned-window shape on a block that PREDATES MPT activation (no feature flag, its
-// header commits a legacy XOR root) must not claim "State pruned": the root was never an MPT
-// root, so the -32004 message says predates-activation instead.
-BOOST_AUTO_TEST_CASE(historicalCallPreMptBlockSaysPredatesActivation)
+// Only MPTStateUnavailable is remapped: any other scheduler error (here InvalidStatus, the
+// pre-MPT-activation rejection a scenario-A chain produces) must pass through untouched —
+// the endpoint must NOT dress it up as -32004 "State pruned".
+BOOST_AUTO_TEST_CASE(historicalCallOtherSchedulerErrorsPassThrough)
 {
     auto recording = std::make_shared<RecordingScheduler>(m_ledger, m_blockFactory);
+    recording->m_callAtBlockErrorCode = bcos::scheduler::SchedulerError::InvalidStatus;
     auto web3 = buildWeb3Rpc(recording, 0, 0, /*mptPruneWindow=*/10);
-
-    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(h256{0x1234U});
 
     auto resp = request(web3, R"("0x1")");
     BOOST_REQUIRE(resp.isMember("error"));
-    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32004);
-    auto const message = resp["error"]["message"].asString();
-    BOOST_CHECK(message.find("predates MPT activation") != std::string::npos);
-    BOOST_CHECK(message.find("State pruned") == std::string::npos);
-    BOOST_CHECK(recording->m_historicalCalls.empty());
+    BOOST_CHECK(resp["error"]["code"].asInt() != -32004);
+    BOOST_CHECK(resp["error"]["message"].asString().find("State pruned") == std::string::npos);
+    BOOST_REQUIRE_EQUAL(recording->m_historicalCalls.size(), 1U);
+    BOOST_CHECK_EQUAL(recording->m_historicalCalls[0], 1);
 }
 
-// Reader gate (review fix): with NO MPT node reader the historical root probe is skipped, so
-// a node without MPT keeps the pre-probe behavior — the request reaches callAtBlock instead
-// of failing with -32603 "MPT not enabled".
+// A node without MPT (no local node reader) serves historical eth_call exactly like any
+// other: the request reaches callAtBlock and the scheduler answers for itself.
 BOOST_AUTO_TEST_CASE(historicalCallWithoutMptReaderStillReachesScheduler)
 {
     auto recording = std::make_shared<RecordingScheduler>(m_ledger, m_blockFactory);
@@ -268,8 +284,8 @@ BOOST_AUTO_TEST_CASE(historicalCallWithoutMptReaderStillReachesScheduler)
     BOOST_CHECK_EQUAL(recording->m_latestCalls, 0);
 }
 
-// Same gate for a legacy scheduler that only implements call(): the interface's default
-// callAtBlock forwarding keeps it working, exactly as before the probe existed.
+// Same for a legacy scheduler that only implements call(): the interface's default
+// callAtBlock forwarding keeps it working.
 BOOST_AUTO_TEST_CASE(historicalCallWithoutMptReaderKeepsLegacySchedulerWorking)
 {
     auto web3 = buildWeb3Rpc(std::make_shared<FakeScheduler2>(m_ledger, m_blockFactory), 0, 0,

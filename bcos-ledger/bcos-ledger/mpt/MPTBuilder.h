@@ -426,7 +426,11 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
 /// @param trackRefCounts  false leaves the returned delta's refCountDeltas EMPTY (the per-hash
 ///                        tally is skipped) — for callers whose CommitObserver does not count
 ///                        references (CommitObserver::needsRefCountDeltas). stateRoot, newNodes,
-///                        obsoletedNodes and intraBlockObsoleted are unaffected.
+///                        obsoletedNodes and intraBlockObsoleted are unaffected. Defaults to
+///                        false so a producer that forgets to wire its observer's
+///                        needsRefCountDeltas through cannot silently tally with no consumer —
+///                        and one that DOES count but tallies nothing trips the pruner's
+///                        fail-loud empty-refCountDeltas check on its first pruned block.
 /// @throws MPTInvariantViolation on a deleted core-field row outside a tombstone
 ///         (spec §5.4 treats that as an error).
 /// @throws UnknownAccountRowField on an account row whose field name is not classified, in
@@ -434,7 +438,7 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
 template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage>
 bcos::task::Task<MPTDeltaLayer> buildAndCollect(
     Storage& nodeStorage, bcos::h256 parentStateRoot, auto& flatView, bool l2Mode,
-    bool trackRefCounts = true)
+    bool trackRefCounts = false)
 {
     MPTDeltaLayer output;
     MPTReadView<Storage> const parentView(nodeStorage, parentStateRoot);

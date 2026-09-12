@@ -23,40 +23,75 @@
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/BlockHeader.h>
+#include <bcos-ledger/mpt/CommitObserver.h>
 #include <bcos-task/Task.h>
 // Shared state-root derivations (xorStateRoot / buildMPTStateRootForView /
 // publishPendingBlockHeaderForMPT) live in the transaction-scheduler package so the engine
 // and the PBFT scheduler cannot drift on the parent-root rule or the XOR features argument.
 #include <bcos-transaction-scheduler/BaselineSchedulerMPTHelpers.h>
 
+#include <memory>
+#include <optional>
+
 namespace bcos::engine::engine_common
 {
+
+/// The result of resolveEngineBlockStateRoot: the header's state root plus, on the MPT branch,
+/// the block's full node delta. The engine commit path stashes the delta in the payload
+/// artifact so newPayload can hand it to the CommitObserver (MPT pruning) when the block
+/// commits — the observer hooks live at the "MPT delta -> backend merge" layer, not in this
+/// derivation.
+struct EngineStateRootResolution
+{
+    h256 stateRoot;
+    std::optional<ledger::mpt::MPTDeltaLayer> mptDelta;
+};
+
+/// Wrap a resolved MPT delta for payload-artifact storage: the entry keeps it until the
+/// durable write succeeds, and the commit path's retry re-reads it — shared ownership avoids
+/// copying the node map per attempt.
+inline std::shared_ptr<const ledger::mpt::MPTDeltaLayer> shareMptDelta(
+    std::optional<ledger::mpt::MPTDeltaLayer> mptDelta)
+{
+    if (!mptDelta)
+    {
+        return nullptr;
+    }
+    return std::make_shared<const ledger::mpt::MPTDeltaLayer>(std::move(*mptDelta));
+}
 
 /// Resolve the block header's state root: MPT when shouldBuildMPT, otherwise the legacy XOR
 /// fold. Both derivations are shared with the PBFT scheduler (BaselineSchedulerMPTHelpers.h);
 /// the XOR branch passes ledgerConfig.features() so the v3.17 hash fix applies identically on
 /// both paths.
+///
+/// @param commitObserver the engine service's pruning observer: its needsRefCountDeltas() is
+/// the single decision point for the refCountDeltas tally, so the build cannot drift from the
+/// commit hook — with a counting observer an untallied delta would trip the pruner's fail-loud
+/// empty-refCountDeltas check on the first pruned block. NoopCommitObserver (pruning off)
+/// skips the tally, and the returned mptDelta is then still carried to commit, where the
+/// Noop observer ignores it.
 template <class ViewType>
-task::Task<h256> resolveEngineBlockStateRoot(ViewType& view, protocol::BlockHeader& blockHeader,
-    ledger::LedgerConfig const& ledgerConfig, crypto::Hash const& hashImpl,
-    protocol::BlockFactory& blockFactory)
+task::Task<EngineStateRootResolution> resolveEngineBlockStateRoot(ViewType& view,
+    protocol::BlockHeader& blockHeader, ledger::LedgerConfig const& ledgerConfig,
+    crypto::Hash const& hashImpl, protocol::BlockFactory& blockFactory,
+    ledger::mpt::CommitObserver const& commitObserver)
 {
     auto const blockNumber = blockHeader.number();
     if (scheduler_v1::shouldBuildMPT(ledgerConfig.features(), blockNumber))
     {
         scheduler_v1::rejectRawAddressWithMPT(ledgerConfig.features(), blockNumber);
-        // trackRefCounts=false: the engine's commit path consumes only stateRoot, never
-        // refCountDeltas — skip the per-hash tally.
-        auto mptDelta = co_await scheduler_v1::buildMPTStateRootForView(
-            view, blockHeader, ledgerConfig, blockFactory, /*trackRefCounts=*/false);
-        blockHeader.setStateRoot(mptDelta.stateRoot);
+        auto mptDelta = co_await scheduler_v1::buildMPTStateRootForView(view, blockHeader,
+            ledgerConfig, blockFactory, commitObserver.needsRefCountDeltas());
+        auto const stateRoot = mptDelta.stateRoot;
+        blockHeader.setStateRoot(stateRoot);
         co_await scheduler_v1::publishPendingBlockHeaderForMPT(view, blockHeader);
-        co_return mptDelta.stateRoot;
+        co_return EngineStateRootResolution{stateRoot, std::move(mptDelta)};
     }
     auto stateRoot = co_await scheduler_v1::xorStateRoot(
         view, blockHeader.version(), hashImpl, ledgerConfig.features());
     blockHeader.setStateRoot(stateRoot);
-    co_return stateRoot;
+    co_return EngineStateRootResolution{stateRoot, std::nullopt};
 }
 
 }  // namespace bcos::engine::engine_common

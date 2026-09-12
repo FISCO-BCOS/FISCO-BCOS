@@ -47,6 +47,7 @@
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-framework/storage2/MultiLayerStorage.h>
+#include <bcos-ledger/mpt/CommitObserver.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/EthTrieRoots.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
@@ -162,7 +163,8 @@ public:
         bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
         int64_t blockTxCountLimit = bcos::engine::c_defaultBlockTxCountLimit,
-        bcos::ledger::LedgerConfigState::Ptr ledgerConfigState = nullptr)
+        bcos::ledger::LedgerConfigState::Ptr ledgerConfigState = nullptr,
+        std::shared_ptr<ledger::mpt::CommitObserver> commitObserver = nullptr)
       : m_memPool(std::ref(memPool)),
         m_globalStateStorage(std::ref(globalStateStorage)),
         m_blockTxCountLimit(blockTxCountLimit),
@@ -170,7 +172,9 @@ public:
         m_scheduler(std::ref(scheduler)),
         m_blockFactory(std::move(blockFactory)),
         m_ledger(std::move(ledger)),
-        m_ledgerConfigState(std::move(ledgerConfigState))
+        m_ledgerConfigState(std::move(ledgerConfigState)),
+        m_commitObserver(commitObserver ? std::move(commitObserver) :
+                                          std::make_shared<ledger::mpt::NoopCommitObserver>())
     {
         if (!m_blockFactory)
         {
@@ -343,6 +347,7 @@ public:
             .view = std::make_shared<ViewType>(std::move(view)),
             .header = std::move(built.header),
             .receipts = std::move(built.receipts),
+            .mptDelta = std::move(built.mptDelta),
         };
         if (version == static_cast<std::uint32_t>(ApiVersion::V3))
         {
@@ -421,6 +426,10 @@ private:
         /// received payloads leave these null/empty.
         bcos::protocol::BlockHeader::Ptr header;
         std::vector<protocol::TransactionReceipt::Ptr> receipts;
+        /// The block's MPT delta (null on the XOR-root path). newPayload hands it to the
+        /// CommitObserver (MPT pruning) when the block commits; kept until the durable write
+        /// succeeds, same rule as header/receipts, so a failed attempt's retry re-reads it.
+        std::shared_ptr<const ledger::mpt::MPTDeltaLayer> mptDelta = nullptr;
     };
 
     /// Per-method Engine API version windows. forkchoiceUpdated tops out at V3 (the
@@ -551,6 +560,10 @@ private:
         typename GlobalStateStorageType::MutableStorage prewriteStorage;
         protocol::Block::Ptr persistBlock;
         std::shared_ptr<protocol::ConstTransactions> blockTxs;
+        // The committing block's MPT delta (null on the XOR-root path), borrowed from the
+        // payload entry for the pruning hooks below; the entry keeps owning it until the
+        // durable-write consume step, so a failed attempt's retry re-reads it there.
+        std::shared_ptr<const ledger::mpt::MPTDeltaLayer> commitMptDelta;
         bool parentKnown = false;
         bool cacheHit = false;
         {
@@ -661,6 +674,7 @@ private:
                     // eth_getTransactionReceipt and to ledger::getBlockHash /
                     // getCurrentBlockNumber.
                     persistLedger = true;
+                    commitMptDelta = it->second.mptDelta;
                     persistBlock = m_blockFactory->createBlock();
                     persistBlock->setBlockHeader(it->second.header);
                     // Persist the block-level logsBloom (computed in buildPayload from the
@@ -699,10 +713,54 @@ private:
             }
         }  // x_state released — safe to co_await below.
 
+        // MPT pruning (CommitObserver) serialization: m_commitMutex guards the whole commit
+        // section — the pruning hooks stage the block's counting work on one shared overlay
+        // between coPreparePruneRows and onCommit (BaselineSchedulerMPTHelpers.h's
+        // prepareMPTPruneRows contract), so [prepare -> merge -> onCommit] must be serialized
+        // against every other commit, exactly like BaselineScheduler::m_commitMutex (which is
+        // likewise held across co_await). The mutex also settles the concurrent-duplicate
+        // race the comments below describe: the first call to enter commits; a duplicate that
+        // pops the still-unconsumed artifact blocks here and is detected by the re-validation
+        // immediately after locking.
+        std::unique_lock commitLock(m_commitMutex);
+        if (persistLedger)
+        {
+            bool committedByDuplicate = false;
+            {
+                std::unique_lock lock(x_state);
+                auto it = m_payloadCache.find(payloadId);
+                // The entry is consumed by resetting its header after a successful commit
+                // (below), so a present-but-headerless entry means a concurrent duplicate
+                // already landed this block's rows AND counted its delta — re-firing either
+                // would merge idempotent rows but DOUBLE-COUNT the reference movements. A
+                // missing entry is the pre-existing eviction race, answered SYNCING above.
+                committedByDuplicate = it != m_payloadCache.end() && !it->second.header;
+            }
+            if (committedByDuplicate)
+            {
+                // The block IS committed; skip the commit work and fall through to the
+                // idempotent VALID. stateLayerQueued is cleared too: this call owns no layer,
+                // so it must not drain (the no-op duplicate rule at stateLayerQueued).
+                persistLedger = false;
+                stateLayerQueued = false;
+            }
+        }
+
         if (persistLedger)
         {
             co_await ledger::prewriteBlockToBuffer(
                 *m_ledger, blockTxs, persistBlock, prewriteStorage);
+            // MPT pruning: the observer turns the block's delta into the deletion keys of
+            // expired node rows, applied to prewriteStorage so deletions land in the SAME
+            // WriteBatch as the block data — the same hook (and ordering) as
+            // BaselineScheduler::coCommitBlock. A throw here fails the commit before any row
+            // lands; the CL's retry re-runs it (the pruner's staged overlay is discarded and
+            // re-derived, so the retry reproduces the identical batch).
+            if (commitMptDelta)
+            {
+                co_await scheduler_v1::prepareMPTPruneRows(*m_commitObserver,
+                    request.executionPayload.blockNumber, *commitMptDelta, prewriteStorage);
+            }
             // Land the prewritten rows together with the oldest queued layer (the
             // commit contract's prewrite+merge pairing), then drain the whole queue.
             // mergeBackStorage throws NotExistsImmutableStorageError on an empty
@@ -734,6 +792,16 @@ private:
                 co_await m_globalStateStorage.get().mergeToBackends(prewriteStorage);
             }
             co_await engine_common::drainQueuedLayers(m_globalStateStorage.get());
+            // CommitObserver timing contract (CommitObserver.h): AFTER the block's WriteBatch
+            // landed. Deliberately before the artifact consume below and with no co_await in
+            // between: if a retry ever re-ran the hooks for an already-counted block the
+            // double-count would degrade to leaks, while skipping onCommit for a merged block
+            // would under-count and could later delete a live node — the ordering chosen
+            // fails toward the leak side. onCommit must not throw (Noop and MPTPruner don't).
+            if (commitMptDelta)
+            {
+                m_commitObserver->onCommit(request.executionPayload.blockNumber, *commitMptDelta);
+            }
         }
         else if (stateLayerQueued)
         {
@@ -751,6 +819,7 @@ private:
             {
                 it->second.header.reset();
                 it->second.receipts.clear();
+                it->second.mptDelta.reset();
             }
             std::erase_if(m_blockHashToPayloadId,
                 [&](auto const& kv) { return kv.first != request.executionPayload.blockHash; });
@@ -771,6 +840,9 @@ private:
         ExecutionPayload executionPayload;
         bcos::protocol::BlockHeader::Ptr header;
         std::vector<protocol::TransactionReceipt::Ptr> receipts;
+        /// The block's MPT delta (null on the XOR-root path); updateForkchoice stashes it in
+        /// the payload entry for the newPayload commit's pruning hooks.
+        std::shared_ptr<const ledger::mpt::MPTDeltaLayer> mptDelta = nullptr;
     };
 
     bcos::task::Task<BuildPayloadResult> buildPayload(const ForkchoiceState& forkchoiceState,
@@ -1035,8 +1107,9 @@ private:
             // Must precede calculateHash: extraData is part of the Tars header hash
             // (bcos-tars-protocol/impl/TarsHashable.h).
             emptyHeader->setExtraData(std::move(extraData));
-            co_await engine_common::resolveEngineBlockStateRoot(view, *emptyHeader, ledgerConfig,
-                *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory);
+            auto emptyResolution = co_await engine_common::resolveEngineBlockStateRoot(view,
+                *emptyHeader, ledgerConfig, *m_blockFactory->cryptoSuite()->hashImpl(),
+                *m_blockFactory, *m_commitObserver);
             // An empty block's transaction/receipt tries are the canonical empty-trie root, not
             // the all-zero hash (validateHeader rejects a zero receiptsRoot/txsRoot).
             emptyHeader->setReceiptsRoot(bcos::ledger::mpt::emptyRootHash());
@@ -1050,7 +1123,8 @@ private:
             executionPayload.blockHash = emptyHeader->hash();
             co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
                 .header = std::move(emptyHeader),
-                .receipts = {}};
+                .receipts = {},
+                .mptDelta = engine_common::shareMptDelta(std::move(emptyResolution.mptDelta))};
         }
 
         // Step 2b: Create BlockHeader for the new block
@@ -1101,8 +1175,10 @@ private:
         Bloom const& logsBloom = commitments.logsBloom;
 
         // Step 2g: Compute state root (MPT when enabled, otherwise legacy XOR fold).
-        h256 stateRoot = co_await engine_common::resolveEngineBlockStateRoot(view, *blockHeader,
-            ledgerConfig, *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory);
+        auto resolution = co_await engine_common::resolveEngineBlockStateRoot(view, *blockHeader,
+            ledgerConfig, *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory,
+            *m_commitObserver);
+        h256 const stateRoot = resolution.stateRoot;
 
         // Step 2h: Set computed values in the block header and calculate the block hash.
         // The header timestamp stays in milliseconds throughout (the executor consumed it in
@@ -1126,7 +1202,8 @@ private:
 
         co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
             .header = std::move(blockHeader),
-            .receipts = std::move(receipts)};
+            .receipts = std::move(receipts),
+            .mptDelta = engine_common::shareMptDelta(std::move(resolution.mptDelta))};
     }
 
     void updateTrackedBlockNumbers(std::optional<bcos::protocol::BlockNumber> safeBlockNumber,
@@ -1137,6 +1214,12 @@ private:
     }
 
     mutable std::shared_mutex x_state;
+    /// Serializes the newPayload commit section [prepareMPTPruneRows -> merge -> onCommit]
+    /// against every other commit: MPTPruner stages the block's counting work on one shared
+    /// overlay between the two hooks, so concurrent commits (the duplicate-newPayload race the
+    /// commit path comments describe) would corrupt it. Held across co_await, the same pattern
+    /// as BaselineScheduler::m_commitMutex.
+    std::mutex m_commitMutex;
     std::reference_wrapper<MemPoolType> m_memPool;
     std::reference_wrapper<GlobalStateStorageType> m_globalStateStorage;
     int64_t m_blockTxCountLimit;
@@ -1149,6 +1232,11 @@ private:
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     /// Republished from buildPayload; see the constructor.
     bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState;
+    /// The pruning observer the newPayload commit path fires (NoopCommitObserver unless the
+    /// initializer injected an MPTPruner for storage.mpt_prune_window > 0). Dereferenced only
+    /// under m_commitMutex; also consulted at build time via needsRefCountDeltas() (passed to
+    /// resolveEngineBlockStateRoot so the tally decision cannot drift from the commit hook).
+    std::shared_ptr<ledger::mpt::CommitObserver> m_commitObserver;
     ForkchoiceState m_forkchoiceState;
     std::optional<TrackedHeadBlock> m_trackedHeadBlock;
     std::optional<bcos::protocol::BlockNumber> m_safeBlockNumber;

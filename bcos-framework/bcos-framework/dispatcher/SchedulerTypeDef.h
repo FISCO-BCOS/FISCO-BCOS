@@ -75,6 +75,10 @@ enum SchedulerError
     // OpStorageFault (engine -> JSON-RPC -32603, never INVALID).
     OpConsensusRejected,
     OpStorageFault,
+    // A historical callAtBlock walk lost its state-trie root (or an internal node) — with
+    // MPT pruning enabled that is the retention window, so the RPC layer maps it to the
+    // -32004 historical-state-unavailable answer rather than a generic internal error.
+    MPTStateUnavailable,
 };
 }
 }  // namespace bcos

@@ -45,6 +45,7 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
+#include "bcos-ledger/mpt/Errors.h"
 #include "bcos-ledger/mpt/MPTBuilder.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Wait.h"
@@ -590,15 +591,11 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
         auto const commitObserver = m_mptCommitObserver;
         if (result->m_mptDelta)
         {
-            auto pruneRows = co_await commitObserver->coPreparePruneRows(
-                header->number(), *result->m_mptDelta);
-            if (!pruneRows.deletions.empty())
-            {
-                // The mutable layer is LOGICAL_DELETION: removeSome writes tombstones that the
-                // merge turns into physical deletes in the backend's WriteBatch (and removals
-                // in the cache fan-out).
-                co_await storage2::removeSome(prewriteStorage, std::move(pruneRows.deletions));
-            }
+            // The shared pre-commit hook (BaselineSchedulerMPTHelpers.h), also fired by the
+            // engine services' commit paths: deletion keys of expired node rows land in
+            // prewriteStorage, i.e. in the SAME WriteBatch as the block data.
+            co_await prepareMPTPruneRows(
+                *commitObserver, header->number(), *result->m_mptDelta, prewriteStorage);
         }
         {
             ittapi::Report mergeReport(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
@@ -829,6 +826,21 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
             auto receipt = co_await self->m_executor.get().executeTransaction(
                 historicalView, *block->blockHeader(), *transaction, 0, *ledgerConfig, true);
             callback(nullptr, std::move(receipt));
+        }
+        catch (bcos::ledger::mpt::MPTInvariantViolation const& e)
+        {
+            // The historical walk lost its state-trie root (or an internal node): with
+            // pruning enabled that is the retention window, not corruption — and the
+            // window-boundary race (root resolves at request time, a concurrent commit
+            // deletes the rows before the walk) makes it reachable on a healthy node.
+            // Distinct error code so the RPC layer answers -32004, the same shape the five
+            // direct historical endpoints use, instead of a generic internal error leaking
+            // diagnostic_information to an unauthenticated caller.
+            callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::MPTStateUnavailable,
+                         fmt::format("eth_call at block {} failed: state trie node unavailable "
+                                     "(beyond the pruning retention window or missing): {}",
+                             blockNumber, boost::diagnostic_information(e))),
+                nullptr);
         }
         catch (std::exception const& e)
         {
