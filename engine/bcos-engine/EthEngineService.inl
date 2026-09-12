@@ -539,7 +539,9 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         for (auto& raw : decodedForcedTxs)
         {
             const auto txHash = hashImpl.hash(raw);
-            auto tarsTx = engine_common::op::opEnvelopeToTars(raw, txHash);
+            // allowDeposit=false: a 0x7e deposit envelope is an OP-Stack extension and
+            // invalid on the Eth lane — the shared decode rejects it here (5593 round-3 L).
+            auto tarsTx = engine_common::op::opEnvelopeToTars(raw, txHash, /*allowDeposit=*/false);
             if (!tarsTx)
             {
                 // validatePayloadAttributes only dispatches on the envelope's type byte, so a

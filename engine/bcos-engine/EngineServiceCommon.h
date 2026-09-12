@@ -228,8 +228,13 @@ namespace op
 /// build paths: a raw/forced envelope needs the same executable `decoded` form a sealed
 /// pool transaction already carries, or the scheduler skips it and receiptsRoot ends up
 /// covering fewer transactions than transactionsRoot.
+/// @param allowDeposit  deposit (0x7e) envelopes are an OP-Stack payloadAttributes
+///        extension: the OP build path passes true (deposits are the only OP-sanctioned
+///        forced-tx lane); the Eth build path passes false — a 0x7e type is invalid on
+///        an Eth/L1 chain and no Eth client would re-execute it, so admitting it there
+///        would fork the chain from every honest peer.
 std::optional<bcostars::Transaction> opEnvelopeToTars(
-    bcos::bytes const& env, bcos::crypto::HashType const& txHash);
+    bcos::bytes const& env, bcos::crypto::HashType const& txHash, bool allowDeposit = true);
 }  // namespace op
 }  // namespace engine_common
 

@@ -874,7 +874,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpBloc
     for (auto const& env : detail::rawEnvelopes(payload))
     {
         const auto txHash = hashImpl.hash(env);
-        auto tarsTx = engine_common::op::opEnvelopeToTars(env, txHash);
+        // allowDeposit=true: the OP lane accepts 0x7e deposit envelopes — the CL
+        // submits deposits via payloadAttributes.transactions (5593 round-3 L).
+        auto tarsTx = engine_common::op::opEnvelopeToTars(env, txHash, /*allowDeposit=*/true);
         if (!tarsTx)
         {
             BOOST_THROW_EXCEPTION(OpExecutionInternalError{}

@@ -444,6 +444,55 @@ BOOST_AUTO_TEST_CASE(eth_fcu_undecodable_forced_envelope_is_invalid_not_internal
         std::string("undecodable payload transaction envelope"));
 }
 
+// A WELL-FORMED deposit (0x7e) envelope is decodable, but deposits are an OP-Stack
+// payloadAttributes extension: admission (isRawTransactionPayloadAdmissible) is
+// lane-agnostic by design, so the Eth build path itself must refuse the type —
+// no Eth/L1 client would re-execute a 0x7e block, so executing one here would fork
+// the chain from every honest peer (5593 round-3 L).
+BOOST_AUTO_TEST_CASE(eth_fcu_deposit_envelope_is_rejected_on_the_eth_lane)
+{
+    ServicePair pair;
+    auto parentForkchoice = makeForkchoiceState();
+    parentForkchoice.safeBlockHash = parentForkchoice.headBlockHash;
+    parentForkchoice.finalizedBlockHash = parentForkchoice.headBlockHash;
+    setForkchoiceBlockNumbers(pair.newStorage, parentForkchoice, c_rebuildBaseBlockNumber,
+        c_rebuildBaseBlockNumber, c_rebuildBaseBlockNumber);
+    pair.newStorage.setCanonicalBlock(parentForkchoice.headBlockHash, c_rebuildBaseBlockNumber);
+
+    // A decodable deposit envelope, built with the production encoder, so the decode
+    // side of the gate (not admission) is what this test exercises:
+    // 0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTx, data]).
+    bcos::rpc::Web3Transaction depositTx;
+    depositTx.type = bcos::rpc::TransactionType::Deposit;
+    depositTx.sourceHash =
+        bcos::h256("0x1111111111111111111111111111111111111111111111111111111111111111");
+    depositTx.from = bcos::Address("1234567890abcdef1234567890abcdef12345678");
+    depositTx.to = bcos::Address("1234567890abcdef1234567890abcdef12345679");
+    depositTx.mint = 0;
+    depositTx.value = 0;
+    depositTx.gasLimit = 21000;
+    depositTx.isSystemTx = false;
+    auto const raw = depositTx.encode();
+    BOOST_REQUIRE(raw.size() > 1);
+    BOOST_REQUIRE_EQUAL(raw.front(), 0x7e);
+
+    auto payloadAttributes = makePayloadAttributesV3();
+    payloadAttributes.transactions = std::vector<std::string>{bcos::toHexStringWithPrefix(raw)};
+
+    auto result =
+        task::syncWait(pair.fresh.updateForkchoice(parentForkchoice, &payloadAttributes, 3));
+    // Same terminal answer as any other inadmissible payload content: INVALID, never
+    // an internal error the CL would retry forever, and never a valid build.
+    BOOST_CHECK_EQUAL(static_cast<int>(result.payloadStatus.status),
+        static_cast<int>(PayloadValidationStatus::Invalid));
+    BOOST_CHECK(!result.payloadId.has_value());
+    if (result.payloadStatus.validationError.has_value())
+    {
+        auto const& message = *result.payloadStatus.validationError;
+        BOOST_CHECK_NE(message.find("undecodable"), std::string::npos);
+    }
+}
+
 BOOST_AUTO_TEST_CASE(generic_rebuild_on_parent_matches)
 {
     ServicePair pair;
