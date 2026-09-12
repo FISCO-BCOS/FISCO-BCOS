@@ -248,21 +248,23 @@ BOOST_AUTO_TEST_CASE(feeHistoryAndSetMaxDASizeRegistered)
     BOOST_CHECK_MESSAGE(
         mapping.findHandler("miner_setMaxDASize").has_value(), "miner_setMaxDASize not dispatched");
 
-    // And the endpoint stays reachable through the real dispatch path. A well-formed request
-    // over a fixture chain can only answer a result or an InvalidParams (-32602, e.g. a block
-    // the fixture does not carry); -32601 means unregistered and -32603 an internal fault —
-    // both are regressions.
+    // And the endpoint stays reachable through the real dispatch path — pinned POSITIVE
+    // here, not conditionally: the fixture carries 20 blocks, so a well-formed request
+    // must answer a result with the feeHistory shape (a -32602/-32603 here is a
+    // regression; the old conditional arm let any non-(-32601/-32603) code pass).
     auto resp = call(req("eth_feeHistory", R"(["0x1","latest"])"));
-    if (resp.isMember("error"))
-    {
-        auto const code = resp["error"]["code"].asInt();
-        BOOST_CHECK_NE(code, -32601);
-        BOOST_CHECK_NE(code, -32603);
-    }
-    else
-    {
-        BOOST_CHECK(resp.isMember("result"));
-    }
+    BOOST_REQUIRE(resp.isMember("result"));
+    BOOST_REQUIRE(resp["result"].isObject());
+    BOOST_CHECK(resp["result"].isMember("oldestBlock"));
+    BOOST_CHECK(resp["result"].isMember("baseFeePerGas"));
+    BOOST_CHECK(!resp.isMember("error"));
+
+    // The param validation is pinned on both arms: a missing newestBlock is the exact
+    // InvalidParams (-32602) the endpoint throws (EthEndpoint::feeHistory), not just
+    // "anything but -32601/-32603".
+    auto malformed = call(req("eth_feeHistory", R"(["0x1"])"));
+    BOOST_REQUIRE(malformed.isMember("error"));
+    BOOST_CHECK_EQUAL(malformed["error"]["code"].asInt(), -32602);
 }
 
 BOOST_AUTO_TEST_CASE(minerSetMaxDASizeWritesSharedCapsAndGatesEthOnly)
@@ -324,6 +326,55 @@ BOOST_AUTO_TEST_CASE(estimateGasWithoutLedgerFailsClosed)
     }
 }
 
+// The sibling null-ledger guards (round-3 I): gasPrice, maxPriorityFeePerGas and
+// feeHistory must all fail closed with InternalError on a node with no ledger —
+// the guards existed but no test reached them, so a reordering that put the deref
+// first (as round-2 B did for feeHistory) would have passed the suite.
+BOOST_AUTO_TEST_CASE(feeMethodsWithoutLedgerFailClosed)
+{
+    auto noLedgerService = std::make_shared<rpc::NodeService>(
+        nullptr, scheduler, nullptr, nullptr, nullptr, m_blockFactory, nullptr);
+    auto endpoint = std::make_shared<EthEndpoint>(noLedgerService, nullptr, false);
+
+    Json::Value emptyParams;
+    Json::Value response;
+    try
+    {
+        task::syncWait(endpoint->gasPrice(emptyParams, response));
+        BOOST_FAIL("eth_gasPrice must not succeed without a ledger");
+    }
+    catch (JsonRpcException const& error)
+    {
+        BOOST_CHECK_EQUAL(error.code(), static_cast<int32_t>(JsonRpcError::InternalError));
+        BOOST_CHECK_EQUAL(error.msg(), "Ledger not available for eth_gasPrice");
+    }
+
+    try
+    {
+        task::syncWait(endpoint->maxPriorityFeePerGas(emptyParams, response));
+        BOOST_FAIL("eth_maxPriorityFeePerGas must not succeed without a ledger");
+    }
+    catch (JsonRpcException const& error)
+    {
+        BOOST_CHECK_EQUAL(error.code(), static_cast<int32_t>(JsonRpcError::InternalError));
+        BOOST_CHECK_EQUAL(error.msg(), "Ledger not available for eth_maxPriorityFeePerGas");
+    }
+
+    Json::Value feeHistoryParams(Json::arrayValue);
+    feeHistoryParams.append("0x1");
+    feeHistoryParams.append("latest");
+    try
+    {
+        task::syncWait(endpoint->feeHistory(feeHistoryParams, response));
+        BOOST_FAIL("eth_feeHistory must not succeed without a ledger");
+    }
+    catch (JsonRpcException const& error)
+    {
+        BOOST_CHECK_EQUAL(error.code(), static_cast<int32_t>(JsonRpcError::InternalError));
+        BOOST_CHECK_EQUAL(error.msg(), "Ledger not available for eth_feeHistory");
+    }
+}
+
 BOOST_AUTO_TEST_CASE(estimateGasMissingParentBlockFailsClosed)
 {
     // The ledger-backed half of the estimate-arm guard: a readable ledger whose target block
@@ -351,6 +402,56 @@ BOOST_AUTO_TEST_CASE(estimateGasMissingParentBlockFailsClosed)
     }
 }
 
+namespace
+{
+// Captures the transaction EthEndpoint::call hands to the scheduler, so a test can pin
+// the gasLimit the endpoint actually derived (the response alone does not expose it).
+class RecordingScheduler : public FakeScheduler2
+{
+public:
+    using FakeScheduler2::FakeScheduler2;
+    protocol::Transaction::Ptr lastTx;
+    void call(protocol::Transaction::Ptr _tx,
+        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> _callback) noexcept
+        override
+    {
+        lastTx = std::move(_tx);
+        // Same shape as FakeScheduler2::call (which is private): an empty receipt.
+        _callback({}, std::make_shared<bcostars::protocol::TransactionReceiptImpl>());
+    }
+};
+}  // namespace
+
+// Round-3 F2: CallRequestTest pins only takeToTransaction with a hand-passed cap; the
+// ENDPOINT's own header read is pinned here — with a tip gasLimit != 30'000'000 so a
+// regression to the removed hardcoded constant (or to the RPC cap) fails visibly.
+BOOST_AUTO_TEST_CASE(estimateGasCapComesFromTheTipBlockHeaderAtTheEndpoint)
+{
+    // Give block 1's header a distinctive gas limit the endpoint must read.
+    auto const distinctiveLimit = u256(21'000'000);
+    m_ledger->ledgerData().at(1)->blockHeader()->setGasLimit(distinctiveLimit);
+
+    auto recordingScheduler = std::make_shared<RecordingScheduler>(m_ledger, m_blockFactory);
+    auto ledgerService = std::make_shared<rpc::NodeService>(
+        m_ledger, recordingScheduler, nullptr, nullptr, nullptr, m_blockFactory, nullptr);
+    auto endpoint = std::make_shared<EthEndpoint>(ledgerService, nullptr, false);
+
+    Json::Value params(Json::arrayValue);
+    Json::Value tx(Json::objectValue);
+    tx["to"] = "0x1234567890abcdef1234567890abcdef12345678";
+    tx["data"] = "0x";
+    params.append(tx);
+    params.append("0x1");
+
+    Json::Value response;
+    task::syncWait(endpoint->estimateGas(params, response));
+
+    // The estimate proceeded through the header read (no refusal) and the budget handed
+    // to the scheduler is the target block's gasLimit — not 30M, not the 50M RPC cap.
+    BOOST_REQUIRE(recordingScheduler->lastTx != nullptr);
+    BOOST_CHECK_EQUAL(recordingScheduler->lastTx->gasLimit(), 21'000'000u);
+}
+
 BOOST_AUTO_TEST_CASE(callRejectsMalformedFromAddress)
 {
     // A malformed `from` used to be passed straight to the scheduler as a storage table name:
@@ -361,13 +462,13 @@ BOOST_AUTO_TEST_CASE(callRejectsMalformedFromAddress)
     BOOST_REQUIRE(resp.isMember("error"));
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32602);
 
-    // A well-formed `from` still reaches execution (no InvalidParams).
+    // A well-formed `from` still reaches execution: assert the positive arm (a result
+    // member) instead of the old conditional, which passed vacuously when the response
+    // carried no error and accepted any code except -32602 when it did.
     auto ok = call(req("eth_call",
         R"([{"from":"0x1234567890abcdef1234567890abcdef12345678","to":"0x1234567890abcdef1234567890abcdef12345678","data":"0x"},"latest"])"));
-    if (ok.isMember("error"))
-    {
-        BOOST_CHECK_NE(ok["error"]["code"].asInt(), -32602);
-    }
+    BOOST_REQUIRE(ok.isMember("result"));
+    BOOST_CHECK(!ok.isMember("error"));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

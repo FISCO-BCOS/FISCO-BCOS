@@ -91,6 +91,29 @@ BOOST_AUTO_TEST_CASE(ethNextBaseFeeHoldsAtTarget)
     BOOST_CHECK_EQUAL(next, bcos::u256(1'000'000'000));
 }
 
+// geth clamps the EIP-1559 decrease branch to MinimumBaseFee (1 wei): a base fee never
+// reaches 0 through the rule, so the trailing feeHistory prediction must not report 0x0
+// where geth/op-geth report 0x1 (5593 round-3 F8).
+BOOST_AUTO_TEST_CASE(ethNextBaseFeeDecreaseClampsToOneWeiNotZero)
+{
+    // An engaged-but-zero parent base fee (a malformed London header): deltaFee floors to
+    // 0 in u256 arithmetic and the clamp must answer 1 — geth's math.BigMax(x,
+    // params.MinimumBaseFee) — not propagate a free block as 0x0.
+    auto zeroBase = makeLondonParent(30'000'000, 0, 0);
+    BOOST_CHECK_EQUAL(calcEthNextBaseFee(zeroBase), bcos::u256(1));
+
+    // Boundary at parentBase 1: deltaFee floors to 0, the subtraction keeps 1 — the
+    // rule never produces 0 on its own either.
+    auto tiny = makeLondonParent(30'000'000, 0, 1);
+    BOOST_CHECK_EQUAL(calcEthNextBaseFee(tiny), bcos::u256(1));
+
+    // Sanity on a partial decrease: gasUsed 0 vs target 3.75M with parentBase 1M gives
+    // deltaFee 125'000 and the expected 875'000 — the clamp does not touch it.
+    auto partial = makeLondonParent(30'000'000, 0, 1'000'000);
+    BOOST_CHECK_EQUAL(calcEthNextBaseFee(partial), bcos::u256(875'000));
+    BOOST_CHECK_GT(calcEthNextBaseFee(partial), bcos::u256(1));
+}
+
 BOOST_AUTO_TEST_CASE(opNextBaseFeeFallsBackWithoutHoloceneExtraData)
 {
     auto parent = makeLondonParent(30'000'000, 0, 1'000'000'000);
@@ -264,10 +287,16 @@ BOOST_AUTO_TEST_CASE(buildFeeHistoryRejectsOutOfRangeBlockCount)
         std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(suite));
     auto ledger = std::make_shared<bcos::test::FakeLedger>(blockFactory, /*blocks=*/201, 0, 0);
 
-    // Rewards: 1000 blocks is over the 128-block body-loading bound -> rejected, not shortened.
-    BOOST_CHECK_THROW(bcos::task::syncWait(buildFeeHistory(*ledger, /*newestBlock=*/200,
-                          /*blockCount=*/1000, std::vector<double>{50.0}, /*opStackMode=*/false)),
-        JsonRpcException);
+    // Rewards: 1000 blocks is over the 128-block body-loading bound -> rejected, not
+    // shortened. The code is pinned: an InternalError from a fixture fault must not pass
+    // what claims to be the InvalidParams bounds check (5593 round-3 F13).
+    auto const isInvalidParams = [](JsonRpcException const& e) {
+        return e.code() == InvalidParams;
+    };
+    BOOST_CHECK_EXCEPTION(
+        bcos::task::syncWait(buildFeeHistory(*ledger, /*newestBlock=*/200,
+            /*blockCount=*/1000, std::vector<double>{50.0}, /*opStackMode=*/false)),
+        JsonRpcException, isInvalidParams);
 
     // The 128-block bound itself is served: newest 200, 128 blocks -> oldest 200 - 127 = 73.
     auto atBound = bcos::task::syncWait(buildFeeHistory(*ledger, /*newestBlock=*/200,
@@ -283,14 +312,14 @@ BOOST_AUTO_TEST_CASE(buildFeeHistoryRejectsOutOfRangeBlockCount)
     BOOST_CHECK(!headersOnly.isMember("reward"));
 
     // Over the geth query limit, and a zero count, are both InvalidParams.
-    BOOST_CHECK_THROW(
+    BOOST_CHECK_EXCEPTION(
         bcos::task::syncWait(buildFeeHistory(*ledger, /*newestBlock=*/200, /*blockCount=*/1025,
             /*rewardPercentiles=*/{}, /*opStackMode=*/false)),
-        JsonRpcException);
-    BOOST_CHECK_THROW(
+        JsonRpcException, isInvalidParams);
+    BOOST_CHECK_EXCEPTION(
         bcos::task::syncWait(buildFeeHistory(*ledger, /*newestBlock=*/200, /*blockCount=*/0,
             /*rewardPercentiles=*/{}, /*opStackMode=*/false)),
-        JsonRpcException);
+        JsonRpcException, isInvalidParams);
 }
 
 BOOST_AUTO_TEST_CASE(pickRewardPercentilesTruncatesThresholdLikeOpGeth)

@@ -40,9 +40,12 @@ BOOST_AUTO_TEST_CASE(precompilesByRevision)
         cancun["KZG_POINT_EVALUATION"].asString(), "0x000000000000000000000000000000000000000a");
 
     auto prague = ethConfigPrecompiles(EVMC_PRAGUE);
-    BOOST_CHECK_EQUAL(prague.size(), 17u);
+    BOOST_CHECK_EQUAL(prague.size(), 18u);
     BOOST_CHECK(prague.isMember("BLS12_G1ADD"));
     BOOST_CHECK(prague.isMember("BLS12_MAP_FP2_TO_G2"));
+    BOOST_CHECK(prague.isMember("P256_VERIFY"));
+    BOOST_CHECK_EQUAL(
+        prague["P256_VERIFY"].asString(), "0x0000000000000000000000000000000000000100");
 }
 
 // EIP-7910 systemContracts: Cancun -> beacon roots; Prague adds history storage + the L1-only
@@ -116,6 +119,29 @@ BOOST_AUTO_TEST_CASE(forkIdEip2124)
 
     // No genesis hash -> the zero fork id, never throws.
     BOOST_CHECK_EQUAL(ethForkIdHex("", {0}), "0x00000000");
+}
+
+// The PRODUCTION shape is the genesis-only seed: EthEndpoint::ethConfig passes an EMPTY
+// fork list (geth's gatherForks strips block-0 forks — "that's the genesis ruleset" —
+// and seeds the CRC from the genesis hash alone). The vectors above pin only {0} lists,
+// so a regression back to {0} passed the whole suite; these pin the empty-list arm with
+// values independently recomputed via Python's zlib.crc32 (and, for mainnet, matching
+// geth's reported fork id and bcos-devp2p's forkIdMainnetChain golden — pinning this
+// CRC32 to its devp2p twin at the same time).
+BOOST_AUTO_TEST_CASE(forkIdGenesisSeededCrc)
+{
+    // crc32(mainnet genesis) = 0xfc64ec04 — the value geth reports for mainnet.
+    std::string const mainnetGenesis =
+        "0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3";
+    BOOST_CHECK_EQUAL(ethForkIdHex(mainnetGenesis, {}), "0xfc64ec04");
+
+    // crc32(00*32) = 0x190a55ad — genesis-only, no fork-block suffix.
+    std::string const zeros = "0x" + std::string(64, '0');
+    BOOST_CHECK_EQUAL(ethForkIdHex(zeros, {}), "0x190a55ad");
+
+    // The empty-list result must differ from the {0} result over the same genesis:
+    // be64(0) is 8 real bytes the CRC sees.
+    BOOST_CHECK_NE(ethForkIdHex(zeros, {}), ethForkIdHex(zeros, {0}));
 }
 
 // The method must be dispatched (an unregistered method answers -32601 to the CL).

@@ -33,21 +33,17 @@ BOOST_AUTO_TEST_CASE(laneBoundaries)
     for (auto const v : {0, 1})
     {
         BOOST_CHECK(!usesEthereumFeeSemantics(v));
-        BOOST_CHECK(!isOpStackLane(v));
         BOOST_CHECK_EQUAL(suggestedPriorityFeeWei(v), 0u);
     }
     // Ethereum executor (== ETHEREUM): geth fee semantics, non-zero tip.
     BOOST_CHECK(usesEthereumFeeSemantics(ledger::ETHEREUM_EXECUTOR_VERSION));
-    BOOST_CHECK(!isOpStackLane(ledger::ETHEREUM_EXECUTOR_VERSION));
     BOOST_CHECK_EQUAL(suggestedPriorityFeeWei(ledger::ETHEREUM_EXECUTOR_VERSION), 1'000'000u);
-    // OP (>= OPSTACK): geth fee semantics, OP tip floor 1e6.
-    BOOST_CHECK(usesEthereumFeeSemantics(ledger::OPSTACK_EXECUTOR_VERSION));
-    BOOST_CHECK(isOpStackLane(ledger::OPSTACK_EXECUTOR_VERSION));
-    BOOST_CHECK_EQUAL(suggestedPriorityFeeWei(ledger::OPSTACK_EXECUTOR_VERSION), 1'000'000u);
-    // OP mode is exactly OPSTACK_EXECUTOR_VERSION (a fixed genesis value, not a floor): a
-    // higher version is not the OP lane. It still gets the Ethereum tip via
+    // OP mode is exactly OPSTACK_EXECUTOR_VERSION (a fixed genesis value, not a floor):
+    // the == gate lives where the mode is selected (Initializer / EngineServiceInitializer),
+    // not in the fee policy. A higher version still gets the Ethereum tip via
     // usesEthereumFeeSemantics (>= ETHEREUM).
-    BOOST_CHECK(!isOpStackLane(ledger::OPSTACK_EXECUTOR_VERSION + 5));
+    BOOST_CHECK(usesEthereumFeeSemantics(ledger::OPSTACK_EXECUTOR_VERSION));
+    BOOST_CHECK_EQUAL(suggestedPriorityFeeWei(ledger::OPSTACK_EXECUTOR_VERSION), 1'000'000u);
     BOOST_CHECK_EQUAL(suggestedPriorityFeeWei(ledger::OPSTACK_EXECUTOR_VERSION + 5), 1'000'000u);
 }
 
