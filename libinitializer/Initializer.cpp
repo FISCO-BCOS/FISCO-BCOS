@@ -505,10 +505,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     {
         if (!m_nodeConfig->engineDrivenBlockProduction())
         {
-            BOOST_THROW_EXCEPTION(
-                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                    "OP mode (executor_version>=3) requires engine-driven block production "
-                    "([op_engine_rpc] enable)"));
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                      "OP mode (executor_version==3, the OPSTACK slot) requires "
+                                      "engine-driven block production ([op_engine_rpc] enable)"));
         }
         auto forkFlags = bcos::evm::opstack::OpForkFlags{
             .jovianActive = m_nodeConfig->opJovianActive(),
@@ -518,22 +517,21 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         auto parsedChainId = ledger::parseWeb3ChainId(web3ChainId);
         if (!parsedChainId.has_value())
         {
-            BOOST_THROW_EXCEPTION(
-                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                    "OP mode (executor_version>=3) requires a numeric [web3] chain_id "
-                    "(decimal or 0x-prefixed hex)"));
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                      "OP mode (executor_version==3, the OPSTACK slot) requires "
+                                      "a numeric [web3] chain_id (decimal or 0x-prefixed hex)"));
         }
         if (*parsedChainId == 0)
         {
-            BOOST_THROW_EXCEPTION(
-                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                    "OP mode (executor_version>=3) requires a non-zero [web3] chain_id"));
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                      "OP mode (executor_version==3, the OPSTACK slot) requires "
+                                      "a non-zero [web3] chain_id"));
         }
         if (*parsedChainId > std::numeric_limits<uint64_t>::max())
         {
-            BOOST_THROW_EXCEPTION(
-                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                    "OP mode (executor_version>=3) [web3] chain_id exceeds uint64"));
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                      "OP mode (executor_version==3, the OPSTACK slot) [web3] "
+                                      "chain_id exceeds uint64"));
         }
         uint64_t const opChainId = static_cast<uint64_t>(*parsedChainId);
         auto opScheduler =
@@ -619,7 +617,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 {
                     BOOST_THROW_EXCEPTION(
                         InvalidConfig() << errinfo_comment(
-                            "OP mode (executor_version>=3) requires the on-chain "
+                            "OP mode (executor_version==3, the OPSTACK slot) requires the on-chain "
                             "evmc_revision to match the configured OP fork schedule; a "
                             "mismatch makes every newPayload fail. Refusing to start"));
                 }

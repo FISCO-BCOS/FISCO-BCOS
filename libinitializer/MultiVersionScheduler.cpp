@@ -170,7 +170,8 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
     // tx that writes an unwired executor_version must therefore NOT make this throw: an unwired
     // slot (e.g. OP executor on a non-OP node) would otherwise halt the chain permanently.
     // Keep running on a wired scheduler and make the misconfiguration loud. The hard failure
-    // for executor_version>=3 without the OP wiring belongs at boot (Initializer::init).
+    // for executor_version == OPSTACK_EXECUTOR_VERSION without the OP wiring belongs at
+    // boot (Initializer::init).
     auto const onChainVersion = ledgerConfig && ledgerConfig->executorVersion() > 0 ?
                                     ledgerConfig->executorVersion() :
                                     version;
@@ -217,12 +218,15 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
     }
     auto const previousIndex = m_currentIndex;
     m_currentIndex = static_cast<int>(selected);
-    if (previousIndex != m_currentIndex && onChainVersion == m_currentIndex)
+    if (previousIndex != m_currentIndex && onChainVersion == m_currentIndex && ledgerConfig)
     {
         // The drift log below keys on onChainVersion != m_currentIndex, so a governance tx
         // that downgrades executor_version to a WIRED lower slot (e.g. 3 -> 2 on an OP-wired
         // node) is otherwise silent: consensus commits move to the generic lane while the
         // engine service keeps answering on its wired engine. Make the switch loud.
+        // ledgerConfig gates out the boot call (Initializer.cpp passes a null config):
+        // at boot previousIndex(0) -> wired is the initial selection, not a runtime switch,
+        // and firing here would label every OP node's startup as a lane switch.
         INITIALIZER_LOG(WARNING)
             << LOG_DESC("executor_version switched at runtime: consensus commits moved lanes")
             << LOG_KV("from", previousIndex) << LOG_KV("to", m_currentIndex)

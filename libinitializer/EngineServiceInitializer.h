@@ -37,7 +37,7 @@ namespace bcos::initializer
 /// executor pipeline. Called from Initializer when engine-driven block production is enabled:
 ///   * build(...)   → EthEngineService (executor_version=2 + single-node consensus or
 ///   op_engine_rpc)
-///   * buildOp(...) → OpEngineService (executor_version>=3 OP mode)
+///   * buildOp(...) → OpEngineService (executor_version==3, the genesis-frozen OPSTACK slot)
 /// executor_version alone does not enable the Engine API on v2 chains.
 class EngineServiceInitializer
 {

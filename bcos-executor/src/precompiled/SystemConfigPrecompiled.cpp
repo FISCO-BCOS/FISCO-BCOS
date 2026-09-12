@@ -114,14 +114,17 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
             defaultCmp(magic_enum::enum_name(ledger::SystemConfig::executor_version), _value, 0,
                 version, BlockVersion::V3_15_0_VERSION);
             // NOTE: deliberately no upper bound here. MultiVersionScheduler::setVersion
-            // keeps the node running when the value names an unwired or unknown executor:
-            // it saturates to the newest wired slot and logs ERROR rather than throwing, so
-            // this per-block validator cannot halt a chain. Banning values here would be an
-            // unversioned consensus change (validate() runs inside block execution) that
-            // breaks replay/resync of historical blocks that set executor_version on the old
-            // binary. The hard guardrails live in node-local startup (Initializer refuses to
-            // boot a v2 chain without an on-chain evmc_revision, and an OP chain without the
-            // OP wiring), not in this per-block validator.
+            // keeps the node running when the value names an unwired or unknown executor,
+            // in two fail-open branches with different keep-behaviours: a value ABOVE the
+            // wired set saturates to the newest wired slot, while an in-range but unwired
+            // slot keeps the CURRENT scheduler — both log ERROR rather than throwing, so
+            // this per-block validator cannot halt a chain. Banning values here would be
+            // an unversioned consensus change (validate() runs inside block execution)
+            // that breaks replay/resync of historical blocks that set executor_version
+            // on the old binary. The hard guardrails live in node-local startup
+            // (Initializer refuses to boot a v2 chain without an on-chain
+            // evmc_revision, and an OP chain without the OP wiring), not in this
+            // per-block validator.
         });
     // for compatibility
     // Note: the compatibility_version is not compatibility
