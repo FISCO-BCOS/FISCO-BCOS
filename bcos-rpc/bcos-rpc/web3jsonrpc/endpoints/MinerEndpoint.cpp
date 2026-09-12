@@ -61,15 +61,12 @@ task::Task<void> MinerEndpoint::setMaxDASize(const Json::Value& request, Json::V
 
     auto const maxTxSize = parseDaCapQuantity(request[0U], "maxTxSize");
     auto const maxBlockSize = parseDaCapQuantity(request[1U], "maxBlockSize");
-    // A zero cap stalls the OP batcher's data availability (it sizes every batch against
-    // these values), and op-geth's handshake only ever writes non-zero caps — reject the
-    // degenerate values the producer could never make progress with instead of storing
-    // them atomically for the whole node.
-    if (maxTxSize == 0 || maxBlockSize == 0)
-    {
-        BOOST_THROW_EXCEPTION(
-            JsonRpcException(InvalidParams, "miner_setMaxDASize caps must be non-zero quantities"));
-    }
+    // Zero is a legal cap and MUST be accepted: op-batcher's throttle controller initialises
+    // MaxTxSize to 0 (op-batcher/batcher/throttler/controller.go NewThrottleController), so
+    // the batcher's first miner_setMaxDASize call carries 0 as maxTxSize. It treats any
+    // generic RPC error here as fatal (isCriticalThrottlingRPCError -> shutdown), hence
+    // rejecting 0 kills the DA handshake and safe/finalized never advance. op-geth stores
+    // what the producer sends; mirror that instead of second-guessing the caller.
     daCaps->maxTxSize.store(maxTxSize, std::memory_order_relaxed);
     daCaps->maxBlockSize.store(maxBlockSize, std::memory_order_relaxed);
 

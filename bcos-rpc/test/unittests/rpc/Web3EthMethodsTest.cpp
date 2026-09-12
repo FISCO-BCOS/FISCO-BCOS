@@ -297,6 +297,22 @@ BOOST_AUTO_TEST_CASE(minerSetMaxDASizeWritesSharedCapsAndGatesEthOnly)
     BOOST_CHECK_EQUAL(caps->maxBlockSize.load(), 0x200);
 }
 
+BOOST_AUTO_TEST_CASE(minerSetMaxDASizeAcceptsZeroMaxTxSizeFromTheBatcher)
+{
+    // op-batcher's throttle controller initialises MaxTxSize to 0 and its FIRST
+    // miner_setMaxDASize call therefore sends ["0x0","0x1fbd0"] (0, 130000 =
+    // DefaultThrottleBlockSizeUpperLimit). The batcher shuts itself down on any generic
+    // RPC error from this call, so a zero-reject here silently kills safe/finalized
+    // derivation (PR #5593 C2 e2e regression). Zero must be stored, not refused.
+    auto caps = std::make_shared<bcos::engine::DACaps>();
+    nodeService->setDaCaps(caps);
+    auto batcherFirstCall = call(req("miner_setMaxDASize", R"(["0x0","0x1fbd0"])"));
+    BOOST_REQUIRE(batcherFirstCall.isMember("result"));
+    BOOST_CHECK(batcherFirstCall["result"].asBool());
+    BOOST_CHECK_EQUAL(caps->maxTxSize.load(), 0);
+    BOOST_CHECK_EQUAL(caps->maxBlockSize.load(), 130000);
+}
+
 BOOST_AUTO_TEST_CASE(estimateGasWithoutLedgerFailsClosed)
 {
     // eth_estimateGas sizes its gas cap from the target block's header, so a node with no
