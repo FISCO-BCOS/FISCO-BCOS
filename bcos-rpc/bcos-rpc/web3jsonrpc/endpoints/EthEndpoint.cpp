@@ -151,11 +151,14 @@ task::Task<void> EthEndpoint::ethConfig(const Json::Value&, Json::Value& respons
     auto const opL2 = co_await ledger::getFeature(
         *ledger, ledger::Features::Flag::feature_l2_ethereum_compat, ledgerConfig->blockNumber());
     // EIP-2124 fork id from the genesis (block 0) hash. FISCO has no block- or
-    // timestamp-activated fork list at the RPC layer, so the fork set is the genesis (0).
+    // timestamp-activated fork list at the RPC layer, and geth's gatherForks strips
+    // block-0 forks ("that's the genesis ruleset") before any checksumUpdate — the CRC
+    // is seeded from the genesis hash ALONE, so the fork list here must stay empty
+    // (crc32(mainnet genesis) = 0xfc64ec04, the value geth reports).
     std::string forkIdHex = "0x00000000";
     if (auto genesis = co_await ledger::getBlockData(*ledger, 0, bcos::ledger::HEADER))
     {
-        forkIdHex = ethForkIdHex(genesis->blockHeader()->hash().hexPrefixed(), {0});
+        forkIdHex = ethForkIdHex(genesis->blockHeader()->hash().hexPrefixed(), {});
     }
     auto result = buildEthConfig(revision, chainId, forkIdHex, opL2);
     buildJsonContent(result, response);
@@ -1033,6 +1036,13 @@ task::Task<void> EthEndpoint::call(
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid call request!"));
     }
+    // geth clamps caller-supplied gas to the RPC gas cap (rpc.gascap) on both the call
+    // and estimate paths (TransactionArgs::CallDefaults); without this an explicit
+    // gas up to 2^64-1 bypasses the cap and sizes execution for an unauthenticated caller.
+    if (call.gas.has_value() && call.gas.value() > c_ethCallGasCap)
+    {
+        call.gas = c_ethCallGasCap;
+    }
     auto const blockTag = toView(request[1U]);
     auto [blockNumber, isLatest] = co_await getBlockNumberByTag(blockTag);
     if (c_fileLogLevel == TRACE)
@@ -1531,13 +1541,18 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
             InvalidParams, "eth_feeHistory expects [blockCount, newestBlock, ...]"));
     }
 
-    auto const newestTag = toView(request[1U]);
-    auto [newestBlock, _] = co_await getBlockNumberByTag(newestTag);
-    if (!m_nodeService->ledger())
+    // Capture the ledger once and fail closed BEFORE any deref: getBlockNumberByTag
+    // calls getCurrentBlockNumber(*ledger), so a null-ledger node must refuse here
+    // instead of crashing inside the helper (sibling fee methods guard the same way).
+    auto ledger = m_nodeService->ledger();
+    if (!ledger)
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(
             JsonRpcError::InternalError, "Ledger not available for eth_feeHistory"));
     }
+
+    auto const newestTag = toView(request[1U]);
+    auto [newestBlock, _] = co_await getBlockNumberByTag(newestTag);
 
     std::vector<double> rewardPercentiles;
     if (request.size() >= 3)
@@ -1582,8 +1597,8 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
     // the same canonical source the MPT paths above use — not on the DA-cap object, which
     // is a DA-throttling handshake that only coincides with OP mode today.
     auto const opStackMode = co_await ledger::getFeature(
-        *m_nodeService->ledger(), ledger::Features::Flag::feature_l2_ethereum_compat, newestBlock);
-    auto result = co_await buildFeeHistory(*m_nodeService->ledger(), newestBlock,
+        *ledger, ledger::Features::Flag::feature_l2_ethereum_compat, newestBlock);
+    auto result = co_await buildFeeHistory(*ledger, newestBlock,
         static_cast<std::size_t>(*blockCountParsed), rewardPercentiles, opStackMode);
     buildJsonContent(result, response);
 }
