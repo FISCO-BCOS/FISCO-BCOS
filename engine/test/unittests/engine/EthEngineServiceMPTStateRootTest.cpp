@@ -62,6 +62,8 @@ struct L2MptStorageFixture
     RealGlobalStateStorage globalStorage{checkpointBackend};
     std::shared_ptr<bcos::crypto::CryptoSuite> cryptoSuite = bcos::test::createNormalCryptoSuite();
     bcos::protocol::BlockFactory::Ptr blockFactory = bcos::test::createBlockFactory(cryptoSuite);
+    /// No refCount tally: these tests assert root derivations, not pruning bookkeeping.
+    bcos::ledger::mpt::NoopCommitObserver commitObserver;
     ledger::LedgerConfig ledgerConfig;
 
     L2MptStorageFixture()
@@ -98,7 +100,9 @@ BOOST_FIXTURE_TEST_CASE(l2GenesisUsesMptRootNotXor, L2MptStorageFixture)
     mptHeader->setNumber(0);
     mptHeader->setVersion(kBlockVersion);
     auto mptRoot = task::syncWait(bcos::engine::engine_common::resolveEngineBlockStateRoot(
-        mptView, *mptHeader, ledgerConfig, *cryptoSuite->hashImpl(), *blockFactory));
+        mptView, *mptHeader, ledgerConfig, *cryptoSuite->hashImpl(), *blockFactory,
+        commitObserver))
+                       .stateRoot;
 
     BOOST_CHECK_NE(mptRoot, xorRoot);
 }
@@ -114,7 +118,8 @@ BOOST_FIXTURE_TEST_CASE(nonL2ChainKeepsXorRoot, L2MptStorageFixture)
     auto xorRoot = task::syncWait(bcos::scheduler_v1::xorStateRoot(
         view, header->version(), *cryptoSuite->hashImpl(), legacyConfig.features()));
     auto resolved = task::syncWait(bcos::engine::engine_common::resolveEngineBlockStateRoot(
-        view, *header, legacyConfig, *cryptoSuite->hashImpl(), *blockFactory));
+        view, *header, legacyConfig, *cryptoSuite->hashImpl(), *blockFactory, commitObserver))
+                        .stateRoot;
     BOOST_CHECK_EQUAL(resolved, xorRoot);
 }
 
@@ -151,7 +156,8 @@ BOOST_FIXTURE_TEST_CASE(l2BlocksChainParentRootAndPublishHeader, L2MptStorageFix
                              bcos::protocol::BlockHeader& header,
                              ledger::LedgerConfig const& config) {
         return task::syncWait(bcos::engine::engine_common::resolveEngineBlockStateRoot(
-            view, header, config, *cryptoSuite->hashImpl(), *blockFactory));
+            view, header, config, *cryptoSuite->hashImpl(), *blockFactory, commitObserver))
+            .stateRoot;
     };
 
     bcos::h256 root1;
@@ -207,7 +213,8 @@ BOOST_FIXTURE_TEST_CASE(l2BlocksChainParentRootAndPublishHeader, L2MptStorageFix
         header->setVersion(kBlockVersion);
         BOOST_CHECK_THROW(
             task::syncWait(bcos::engine::engine_common::resolveEngineBlockStateRoot(view, *header,
-                control.ledgerConfig, *control.cryptoSuite->hashImpl(), *control.blockFactory)),
+                control.ledgerConfig, *control.cryptoSuite->hashImpl(), *control.blockFactory,
+                control.commitObserver)),
             bcos::ledger::NotFoundBlockHeader);
     }
 }

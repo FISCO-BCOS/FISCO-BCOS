@@ -96,6 +96,10 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     // declared before m_rpc / m_tarsApplication (the NodeService holders), so it is
     // destroyed after them.
     nodeService->setMPTNodeReader(m_nodeInitializer->mptNodeReader());
+    // MPT pruning retention window ([storage] mpt_prune_window): lets the historical-state
+    // endpoints report a scheduled pruning (-32004 "State pruned: beyond MPT retention
+    // window") instead of a generic node-storage miss. Purely informational; <= 0 = off.
+    nodeService->setMPTPruneWindow(nodeConfig->mptPruneWindow());
 
     // eth_getStorageAt latest-state path: a provider that forks a fresh latest view of
     // GlobalStateStorage per request (see Initializer::stateStorageProvider for the lifetime

@@ -10,6 +10,7 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include <bcos-ledger/LedgerMethods.h>
+#include <bcos-ledger/mpt/CommitObserver.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/MPTBuilder.h>
 #include <bcos-ledger/mpt/MPTDeltaLayer.h>
@@ -211,10 +212,19 @@ task::Task<h256> calculateStateRoot(StorageType& storage, uint32_t blockVersion,
 /// Build an Ethereum MPT state root over @p view. Single source for the parent-root rule:
 /// the parent's committed state root is read only when the parent itself built an MPT, so an
 /// activation-boundary parent (XOR root) starts from the empty trie.
+///
+/// @param trackRefCounts  forwarded to buildAndCollect: false skips the per-hash
+///                        refCountDeltas tally for callers whose commit path never reads it.
+///                        Pass the commit observer's needsRefCountDeltas() (the PBFT scheduler
+///                        and the engine services both do). Defaults to false so a producer
+///                        that forgets to wire its observer through fails LOUD — the pruner's
+///                        empty-refCountDeltas check (MPTPruner::coPreparePruneRows) throws on
+///                        the first pruned block — instead of silently tallying with no
+///                        consumer.
 template <class ViewType>
 task::Task<ledger::mpt::MPTDeltaLayer> buildMPTStateRootForView(ViewType& view,
     protocol::BlockHeader const& blockHeader, ledger::LedgerConfig const& ledgerConfig,
-    protocol::BlockFactory& blockFactory)
+    protocol::BlockFactory& blockFactory, bool trackRefCounts = false)
 {
     auto const blockNumber = blockHeader.number();
     h256 parentStateRoot = ledger::mpt::emptyRootHash();
@@ -229,7 +239,8 @@ task::Task<ledger::mpt::MPTDeltaLayer> buildMPTStateRootForView(ViewType& view,
     ViewNodeStorage<ViewType> nodeStorage(view);
     bool const l2Mode =
         ledgerConfig.features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
-    co_return co_await ledger::mpt::buildAndCollect(nodeStorage, parentStateRoot, view, l2Mode);
+    co_return co_await ledger::mpt::buildAndCollect(
+        nodeStorage, parentStateRoot, view, l2Mode, trackRefCounts);
 }
 
 /// Publish the header under SYS_NUMBER_2_BLOCK_HEADER so the next block's MPT build can read
@@ -257,6 +268,34 @@ task::Task<void> publishPendingBlockHeaderForMPT(
     co_await storage2::writeOne(view,
         executor_v1::StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr},
         std::move(headerEntry));
+}
+
+/// The pre-commit pruning hook, shared by every producer that lands an MPT delta (the PBFT
+/// BaselineScheduler::coCommitBlock and the engine services' newPayload commit): the observer
+/// turns the block's delta into the deletion keys of expired "/mpt/" node rows, applied to
+/// @p prewriteStorage so the deletions land in the SAME WriteBatch as the block data (CommitObserver.h
+/// explains the crash-atomicity contract). The NoopCommitObserver default returns an empty
+/// batch, so a node without pruning configured pays nothing.
+///
+/// SERIALIZATION CONTRACT: MPTPruner stages the block's counting work on a single shared
+/// overlay between this call and the matching CommitObserver::onCommit, so the caller must
+/// hold its commit mutex across [prepareMPTPruneRows -> merge -> onCommit] and thereby
+/// serialize the triple against every other commit (BaselineScheduler::m_commitMutex, the
+/// engine services' m_commitMutex). A commit that fails before onCommit simply re-runs this
+/// helper on retry — the staged overlay is discarded and re-derived (idempotent).
+template <class MutableStorageType>
+task::Task<void> prepareMPTPruneRows(ledger::mpt::CommitObserver& commitObserver,
+    protocol::BlockNumber blockNumber, ledger::mpt::MPTDeltaLayer const& mptDelta,
+    MutableStorageType& prewriteStorage)
+{
+    auto pruneRows = co_await commitObserver.coPreparePruneRows(blockNumber, mptDelta);
+    if (!pruneRows.deletions.empty())
+    {
+        // The mutable layer is LOGICAL_DELETION: removeSome writes tombstones that the
+        // merge turns into physical deletes in the backend's WriteBatch (and removals
+        // in the cache fan-out).
+        co_await storage2::removeSome(prewriteStorage, std::move(pruneRows.deletions));
+    }
 }
 
 }  // namespace bcos::scheduler_v1

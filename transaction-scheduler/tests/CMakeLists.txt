@@ -29,6 +29,7 @@ set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties(
     "FullChainFixtureSmokeTest.cpp" "BaselineSchedulerMPTL1UpgradeTest.cpp"
     "BaselineSchedulerMPTGenesisTest.cpp" "SharedBaselineSchedulerInst.cpp"
+    "TestMPTPrunerWiring.cpp" "TestMPTPrunerEngineWiring.cpp"
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # TestEthereumExecutorScheduler pulls EthereumExecutor + bcos-ledger LedgerMethods.h
 # (executor / tars headers) whose namespace-scope entities would collide with the

@@ -86,8 +86,17 @@ void bcos::scheduler_v1::MultiVersionScheduler::preExecuteBlock(
 }
 void bcos::scheduler_v1::MultiVersionScheduler::stop()
 {
-    auto& scheduler = getScheduler();
-    scheduler.stop();
+    // Every slot must be stopped, not just the active one: Initializer wires the same shared
+    // MPT commit observer into each BaselineScheduler slot, and a slot's stop() is what
+    // detaches it — an inactive slot left running would keep dereferencing the pruner while
+    // Initializer::stop() drops it and tears down the storage backend beneath. Each slot's
+    // stop() is idempotent and safe on a never-started slot (BaselineScheduler::stop() only
+    // resets its observer under m_commitMutex; SchedulerManager::stop() short-circuits on
+    // STOPPED and tolerates a null scheduler).
+    for (auto const& scheduler : m_schedulers)
+    {
+        scheduler->stop();
+    }
 }
 void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
     int version, ledger::LedgerConfig::Ptr ledgerConfig)

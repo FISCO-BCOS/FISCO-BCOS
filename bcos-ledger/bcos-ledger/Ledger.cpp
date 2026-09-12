@@ -2290,7 +2290,8 @@ bool Ledger::buildGenesisBlock(
         // flat rows above just went to. A missing node aborts block-1 execution loudly
         // (MPTInvariantViolation). Non-MPT chains never read these rows and get none; scenario
         // A (feature_mpt_state_root activated mid-chain) starts its first MPT block from
-        // emptyRootHash() and needs no genesis nodes either.
+        // emptyRootHash() and needs no genesis nodes either. MPT pruning needs no genesis
+        // seeding: its counts are rebuilt from the state roots at every startup (MPTPruner.h).
         if (l2EthereumCompat)
         {
             for (auto& [nodeHash, nodeRlp] : ethStateTrie.nodes)

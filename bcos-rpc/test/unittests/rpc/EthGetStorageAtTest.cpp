@@ -42,6 +42,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace bcos::test
 {
@@ -218,6 +219,20 @@ public:
         req["method"] = "eth_getCode";
         Json::Value params(Json::arrayValue);
         params.append(addressHex);
+        params.append(tag);
+        req["params"] = params;
+        return request(printJson(req));
+    }
+
+    Json::Value getProof(std::string const& addressHex, std::string const& tag)
+    {
+        Json::Value req;
+        req["jsonrpc"] = "2.0";
+        req["id"] = 1;
+        req["method"] = "eth_getProof";
+        Json::Value params(Json::arrayValue);
+        params.append(addressHex);
+        params.append(Json::Value(Json::arrayValue));
         params.append(tag);
         req["params"] = params;
         return request(printJson(req));
@@ -433,10 +448,17 @@ BOOST_AUTO_TEST_CASE(HistoricalWithoutMptReaderReturns32603)
     BOOST_CHECK(resp["error"]["message"].asString().find("MPT not enabled") != std::string::npos);
 }
 
-// Historical state, root absent from MPT node rows (block predates MPT activation):
-// -32004 with the missing-root message.
+// Historical state, MPT active at the block but the root absent from MPT node rows (no
+// pruning configured, so not an expected prune): -32004 with the generic missing-root
+// message.
 BOOST_AUTO_TEST_CASE(HistoricalMissingRootReturns32004)
 {
+    // feature_mpt_state_root marks the block post-activation, so a missing root is a genuine
+    // storage miss rather than a predates-activation legacy XOR root.
+    bcos::ledger::Features features;
+    features.set(bcos::ledger::Features::Flag::feature_mpt_state_root);
+    m_ledger->setFeatures(std::move(features));
+
     buildTrie();
     wireReader();
     m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(h256{0x1234U});
@@ -446,6 +468,25 @@ BOOST_AUTO_TEST_CASE(HistoricalMissingRootReturns32004)
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32004);
     BOOST_CHECK(resp["error"]["message"].asString().find("not in MPT node storage") !=
                 std::string::npos);
+}
+
+// Historical state, root absent AND inside the pruning window, but the block PREDATES MPT
+// activation (no feature flag — its header commits a legacy XOR root, which always misses
+// the /mpt/ probe): the -32004 message must not claim "State pruned" for a root the chain
+// never had.
+BOOST_AUTO_TEST_CASE(HistoricalPreMptRootWithPruningSaysPredatesActivation)
+{
+    buildTrie();
+    wireReader();
+    nodeService->setMPTPruneWindow(10);  // head is 19, block 1 < 19 - 10: inside the window
+    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(h256{0x1234U});
+
+    auto resp = getStorageAt(address.hexPrefixed(), "0x1", "0x1");
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32004);
+    auto const message = resp["error"]["message"].asString();
+    BOOST_CHECK(message.find("predates MPT activation") != std::string::npos);
+    BOOST_CHECK(message.find("State pruned") == std::string::npos);
 }
 
 // Historical state, empty root, scenario B (round-2 Finding K): the empty root is a legal
@@ -637,6 +678,60 @@ BOOST_AUTO_TEST_CASE(HistoricalCodeFromMPT)
     BOOST_TEST(!resp.isMember("error"));
     BOOST_REQUIRE(resp.isMember("result"));
     BOOST_TEST(resp["result"].asString() == toHexStringWithPrefix(code));
+}
+
+// Window-boundary partial prune (round-3 F5): resolveHistoricalMptContext probes only the
+// ROOT node row, so an internal node pruned while the root still resolves must answer the
+// SAME -32004 (state unavailable), not a generic internal error from the trie walk's
+// MPTInvariantViolation.
+BOOST_AUTO_TEST_CASE(HistoricalPrunedInternalNodeReturns32004)
+{
+    // Two accounts, so the account trie has node rows below the root row.
+    auto const address2 = bcos::Address{std::string("0x00000000000000000000000000000000000000cd")};
+    mpt::Account accountA;
+    accountA.nonce = 7;
+    accountA.balance = 1000;
+    mpt::Account accountB;
+    accountB.nonce = 1;
+    accountB.balance = 2000;
+    stateRoot = commitIntoStateRows({{mpt::accountKeyHash(address), accountA.encode()},
+        {mpt::accountKeyHash(address2), accountB.encode()}});
+
+    // Prune every node row EXCEPT the root: the root-presence probe passes and every trie
+    // walk fails mid-way — the window-boundary shape.
+    std::vector<executor_v1::StateKey> internalRows;
+    auto iterator = task::syncWait(storage2::range(m_stateRows));
+    while (auto item = task::syncWait(iterator.next()))
+    {
+        auto key = std::get<0>(*item);
+        executor_v1::StateKeyView const keyView{key};
+        if (keyView.m_table == bcos::storage2::kMPTTable &&
+            keyView.m_key !=
+                std::string_view(reinterpret_cast<char const*>(stateRoot.data()), h256::SIZE))
+        {
+            internalRows.push_back(std::move(key));
+        }
+    }
+    BOOST_REQUIRE(!internalRows.empty());  // else the two-account trie shared no internal node
+    task::syncWait(storage2::removeSome(m_stateRows, internalRows));
+
+    wireReader();
+    m_ledger->ledgerData()[1]->blockHeader()->setStateRoot(stateRoot);
+
+    for (auto const& [method, resp] :
+        {std::make_pair("eth_getBalance", getBalance(address.hexPrefixed(), "0x1")),
+            std::make_pair(
+                "eth_getTransactionCount", getTransactionCount(address.hexPrefixed(), "0x1")),
+            std::make_pair("eth_getCode", getCode(address.hexPrefixed(), "0x1")),
+            std::make_pair("eth_getStorageAt", getStorageAt(address.hexPrefixed(), "0x1", "0x1")),
+            std::make_pair("eth_getProof", getProof(address.hexPrefixed(), "0x1"))})
+    {
+        BOOST_REQUIRE_MESSAGE(resp.isMember("error"), method);
+        BOOST_CHECK_MESSAGE(resp["error"]["code"].asInt() == -32004, method);
+        BOOST_CHECK_MESSAGE(resp["error"]["message"].asString().find("not in MPT node storage") !=
+                                std::string::npos,
+            method);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

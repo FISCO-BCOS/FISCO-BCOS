@@ -73,6 +73,32 @@ BOOST_AUTO_TEST_CASE(storageConfigDefaultsAndTikv)
 }
 
 
+BOOST_AUTO_TEST_CASE(storageConfigMptPruneValidation)
+{
+    // mpt_prune_window: -1 (disabled) or [1, 10000000]; anything else throws.
+    LoaderProbe windowOk;
+    BOOST_CHECK_NO_THROW(windowOk.loadStorageConfig(fromIni("[storage]\nmpt_prune_window=128\n")));
+    BOOST_CHECK_EQUAL(windowOk.mptPruneWindow(), 128);
+    for (auto const* bad : {"mpt_prune_window=0\n", "mpt_prune_window=-2\n",
+             "mpt_prune_window=10000001\n"})
+    {
+        LoaderProbe probe;
+        BOOST_CHECK_THROW(probe.loadStorageConfig(fromIni(std::string("[storage]\n") + bad)),
+            bcos::tool::InvalidConfig);
+    }
+
+    // mpt_prune_sweep_garbage: bool, default false (the boot skips the garbage scan entirely
+    // and only logs a hint).
+    LoaderProbe sweepDefault;
+    BOOST_CHECK_NO_THROW(sweepDefault.loadStorageConfig({}));
+    BOOST_CHECK(!sweepDefault.mptPruneSweepGarbage());
+    LoaderProbe sweepOn;
+    BOOST_CHECK_NO_THROW(
+        sweepOn.loadStorageConfig(fromIni("[storage]\nmpt_prune_sweep_garbage=true\n")));
+    BOOST_CHECK(sweepOn.mptPruneSweepGarbage());
+}
+
+
 BOOST_AUTO_TEST_CASE(failOverConfigDisabledAndError)
 {
     LoaderProbe a;  // disabled → early return

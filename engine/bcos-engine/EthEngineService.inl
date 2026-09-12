@@ -208,6 +208,7 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
         .view = std::make_shared<ViewType>(std::move(view)),
         .header = std::move(built.header),
         .receipts = std::move(built.receipts),
+        .mptDelta = std::move(built.mptDelta),
     };
 
     {
@@ -400,6 +401,37 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         }
     }
 
+    // MPT pruning (CommitObserver) serialization: m_commitMutex guards the whole commit
+    // section — the pruning hooks stage the block's counting work on one shared overlay
+    // between coPreparePruneRows and onCommit (BaselineSchedulerMPTHelpers.h's
+    // prepareMPTPruneRows contract), so [prepare -> merge -> onCommit] must be serialized
+    // against every other commit, exactly like BaselineScheduler::m_commitMutex (likewise
+    // held across co_await). The mutex also settles the concurrent-duplicate race the
+    // comments below describe: the first call to enter commits; a duplicate that popped the
+    // still-unconsumed artifact blocks here and is caught by the re-validation next.
+    std::unique_lock commitLock(m_commitMutex);
+    if (localArtifact)
+    {
+        bool committedByDuplicate = false;
+        {
+            auto guard = m_tracker.lockExclusive();
+            // commitRetainedPayload (below) clears m_artifacts after a successful commit, so
+            // an artifact that vanished while this call waited on m_commitMutex means a
+            // concurrent duplicate already landed this block's rows AND counted its delta —
+            // re-firing either would merge idempotent rows but DOUBLE-COUNT the reference
+            // movements.
+            committedByDuplicate = !m_artifacts.contains(payloadId);
+        }
+        if (committedByDuplicate)
+        {
+            // The block IS committed: skip the commit work, own no queued layer (the no-op
+            // duplicate rule at stateLayerQueued), and let the fail-closed guard below answer
+            // from the ledger row (present -> the idempotent VALID).
+            localArtifact = std::nullopt;
+            stateLayerQueued = false;
+        }
+    }
+
     if (localArtifact)
     {
         typename GlobalStateStorageType::MutableStorage prewriteStorage;
@@ -425,6 +457,17 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
                 [](auto const& tx) { return protocol::Transaction::ConstPtr(tx.decoded); }) |
             ::ranges::to<std::vector>());
         co_await ledger::prewriteBlockToBuffer(*m_ledger, blockTxs, block, prewriteStorage);
+        // MPT pruning: the observer turns the block's delta into the deletion keys of expired
+        // node rows, applied to prewriteStorage so deletions land in the SAME WriteBatch as
+        // the block data — the same hook (and ordering) as BaselineScheduler::coCommitBlock.
+        // A throw here fails the commit before any row lands; the CL's retry re-runs it (the
+        // pruner's staged overlay is discarded and re-derived, so the retry reproduces the
+        // identical batch).
+        if (localArtifact->mptDelta)
+        {
+            co_await scheduler_v1::prepareMPTPruneRows(*m_commitObserver,
+                cached->executionPayload.blockNumber, *localArtifact->mptDelta, prewriteStorage);
+        }
         // Land the prewritten rows together with the queued view layer, then let a
         // later commit drain any layer a previously failed attempt left queued.
         // mergeBackStorage throws NotExistsImmutableStorageError on an empty deque;
@@ -452,6 +495,17 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         // otherwise make every later commit merge one-behind, leaving the newest
         // payload's state queued in-memory — lost on restart — though it answered VALID.
         co_await engine_common::drainQueuedLayers(m_globalStateStorage);
+        // CommitObserver timing contract (CommitObserver.h): AFTER the block's WriteBatch
+        // landed. Deliberately before commitRetainedPayload below and with no co_await in
+        // between: if a retry ever re-ran the hooks for an already-counted block the
+        // double-count would degrade to leaks, while skipping onCommit for a merged block
+        // would under-count and could later delete a live node — the ordering chosen fails
+        // toward the leak side. onCommit must not throw (Noop and MPTPruner don't).
+        if (localArtifact->mptDelta)
+        {
+            m_commitObserver->onCommit(
+                cached->executionPayload.blockNumber, *localArtifact->mptDelta);
+        }
     }
     else if (stateLayerQueued)
     {
@@ -646,8 +700,9 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         emptyHeader->setPrevRandao(payloadAttributes.prevRandao);
         emptyHeader->setGasLimit(u256(std::get<0>(ledgerConfig.gasLimit())));
         emptyHeader->setExtraData(std::move(extraData));
-        co_await engine_common::resolveEngineBlockStateRoot(view, *emptyHeader, ledgerConfig,
-            *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory);
+        auto emptyResolution = co_await engine_common::resolveEngineBlockStateRoot(view,
+            *emptyHeader, ledgerConfig, *m_blockFactory->cryptoSuite()->hashImpl(),
+            *m_blockFactory, *m_commitObserver);
         emptyHeader->setReceiptsRoot(bcos::ledger::mpt::emptyRootHash());
         emptyHeader->setTxsRoot(bcos::ledger::mpt::emptyRootHash());
         emptyHeader->setGasUsed(0);
@@ -659,7 +714,8 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         executionPayload.blockHash = emptyHeader->hash();
         co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
             .header = std::move(emptyHeader),
-            .receipts = {}};
+            .receipts = {},
+            .mptDelta = engine_common::shareMptDelta(std::move(emptyResolution.mptDelta))};
     }
 
     auto blockHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
@@ -696,8 +752,10 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     u256 const totalGasUsed = commitments.gasUsed;
     Bloom const& logsBloom = commitments.logsBloom;
 
-    h256 stateRoot = co_await engine_common::resolveEngineBlockStateRoot(view, *blockHeader,
-        ledgerConfig, *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory);
+    auto resolution = co_await engine_common::resolveEngineBlockStateRoot(view, *blockHeader,
+        ledgerConfig, *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory,
+        *m_commitObserver);
+    h256 const stateRoot = resolution.stateRoot;
     blockHeader->setReceiptsRoot(receiptRoot);
     blockHeader->setTxsRoot(txRoot);
     blockHeader->setGasUsed(totalGasUsed);
@@ -714,7 +772,8 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
 
     co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
         .header = std::move(blockHeader),
-        .receipts = std::move(receipts)};
+        .receipts = std::move(receipts),
+        .mptDelta = engine_common::shareMptDelta(std::move(resolution.mptDelta))};
 }
 
 }  // namespace bcos::engine

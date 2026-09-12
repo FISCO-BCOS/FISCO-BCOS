@@ -45,6 +45,7 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
+#include "bcos-ledger/mpt/Errors.h"
 #include "bcos-ledger/mpt/MPTBuilder.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Wait.h"
@@ -191,8 +192,14 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::buildMPTS
 {
     // Single source (BaselineSchedulerMPTHelpers.h): the parent-root rule, the ViewNodeStorage
     // wiring and the l2Mode derivation are shared with the engine service.
-    co_return co_await scheduler_v1::buildMPTStateRootForView(
-        view, blockHeader, ledgerConfig, m_blockFactory.get());
+    // trackRefCounts: skip the per-hash refCountDeltas tally when the commit observer does not
+    // count references (NoopCommitObserver — pruning not configured): the delta's consumers then
+    // never read the map, and the execute path pays nothing for it. The execute path reads the
+    // cached m_trackRefCounts flag rather than the observer pointer, so it needs no
+    // synchronization against resetMPTCommitObserver's stop()-time write beyond the atomic flag
+    // itself.
+    co_return co_await scheduler_v1::buildMPTStateRootForView(view, blockHeader, ledgerConfig,
+        m_blockFactory.get(), m_trackRefCounts.load(std::memory_order_relaxed));
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
@@ -323,17 +330,16 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coExecute
                     << blockHeader->number() << " | " << boost::diagnostic_information(e);
                 if (blockHeader->number() == 1)
                 {
-                    // The known scenario-B gap has exactly this shape, and a bare
-                    // missing-node error from the trie core cannot say so: an L2 genesis
-                    // built from a NON-EMPTY alloc writes the genesis stateRoot but not
-                    // the trie nodes behind it, so block 1's incremental build cannot
-                    // resolve the parent trie. Name it instead of leaving operators to
-                    // guess.
+                    // Block 1 is where a missing parent trie first bites on an L2 chain: the
+                    // genesis trie nodes ARE persisted with the genesis state (Ledger.cpp's
+                    // l2EthereumCompat prewrite, #5374), so a failure here means that prewrite
+                    // did not run (e.g. a genesis written by a binary predating #5374). Name
+                    // it instead of leaving operators to guess at a bare missing-node error
+                    // from the trie core.
                     BASELINE_SCHEDULER_LOG(ERROR)
-                        << "Block 1 build failure on an L2 chain: if genesis was created "
-                           "with a non-empty alloc, its trie nodes were never persisted "
-                           "(known limitation) — only empty-alloc genesis chains block 1 "
-                           "today";
+                        << "Block 1 build failure on an L2 chain: the genesis trie nodes are "
+                           "missing from \"/mpt/\" storage — the genesis was likely written by "
+                           "a binary that predates genesis node persistence (#5374)";
                 }
                 throw;
             }
@@ -565,9 +571,32 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
         // into its mutable layer at execute time as ordinary "/mpt/" state rows
         // (MPTNodeStorage.h), so the single mergeBackStorage below lands flat state and
         // trie nodes in one backend merge — one WriteBatch, one Write
-        // (RocksDBStorage2::merge). delta.obsoletedNodes / intraBlockObsoleted are NOT
-        // consumed here: they are candidates for the future pathdb pruning spec only, no
-        // deletes are issued (MPTDeltaLayer.h contract).
+        // (RocksDBStorage2::merge).
+        //
+        // MPT pruning (CommitObserver::coPreparePruneRows): the observer turns the block's
+        // delta into the deletion keys of expired node rows (pruning keeps no metadata on
+        // disk — its counts and queue are in memory — so the batch carries deletions only),
+        // applied to prewriteStorage so they land in the SAME WriteBatch as the block data —
+        // data and deletions can never diverge across a crash, and the deletion decision runs
+        // here, under m_commitMutex, so it can
+        // never race a concurrent commit reviving the node (F2 review fix: an earlier revision
+        // deleted from the observer's private worker thread, which could remove a node a
+        // concurrent block had just revived). The NoopCommitObserver default returns an empty
+        // batch, so a node without pruning configured pays nothing here — and pays nothing on the
+        // execute path either: buildMPTStateRoot skips the refCountDeltas tally unless the
+        // observer's needsRefCountDeltas() says it counts references.
+        // The observer is read ONCE per commit so coPreparePruneRows and onCommit below see
+        // the same observer even if stop()'s reset lands mid-commit (impossible today — the
+        // reset holds m_commitMutex, which this coroutine holds — but cheap insurance).
+        auto const commitObserver = m_mptCommitObserver;
+        if (result->m_mptDelta)
+        {
+            // The shared pre-commit hook (BaselineSchedulerMPTHelpers.h), also fired by the
+            // engine services' commit paths: deletion keys of expired node rows land in
+            // prewriteStorage, i.e. in the SAME WriteBatch as the block data.
+            co_await prepareMPTPruneRows(
+                *commitObserver, header->number(), *result->m_mptDelta, prewriteStorage);
+        }
         {
             ittapi::Report mergeReport(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                 ittapi::ITT_DOMAINS::instance().MERGE_STATE);
@@ -581,7 +610,7 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coCommitB
         // no try/catch here — swallowing an observer bug would hide it forever.
         if (result->m_mptDelta)
         {
-            m_mptCommitObserver->onCommit(header->number(), *result->m_mptDelta);
+            commitObserver->onCommit(header->number(), *result->m_mptDelta);
         }
 
         {
@@ -798,6 +827,21 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
                 historicalView, *block->blockHeader(), *transaction, 0, *ledgerConfig, true);
             callback(nullptr, std::move(receipt));
         }
+        catch (bcos::ledger::mpt::MPTInvariantViolation const& e)
+        {
+            // The historical walk lost its state-trie root (or an internal node): with
+            // pruning enabled that is the retention window, not corruption — and the
+            // window-boundary race (root resolves at request time, a concurrent commit
+            // deletes the rows before the walk) makes it reachable on a healthy node.
+            // Distinct error code so the RPC layer answers -32004, the same shape the five
+            // direct historical endpoints use, instead of a generic internal error leaking
+            // diagnostic_information to an unauthenticated caller.
+            callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::MPTStateUnavailable,
+                         fmt::format("eth_call at block {} failed: state trie node unavailable "
+                                     "(beyond the pruning retention window or missing): {}",
+                             blockNumber, boost::diagnostic_information(e))),
+                nullptr);
+        }
         catch (std::exception const& e)
         {
             callback(BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError,
@@ -888,7 +932,24 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::preE
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
-void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::stop(){};
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::stop()
+{
+    resetMPTCommitObserver();
+};
+template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
+    requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::
+    resetMPTCommitObserver()
+{
+    // Blocking lock, unlike coCommitBlock's try_to_lock: wait out any in-flight commit so
+    // that once this returns, no thread will ever dereference the previous observer from the
+    // commit path again (the commit path reads m_mptCommitObserver only while holding
+    // m_commitMutex). The execute path never dereferences the pointer — it reads the atomic
+    // m_trackRefCounts flag, whose stale value is harmless either way.
+    std::unique_lock commitLock(m_commitMutex);
+    m_mptCommitObserver = std::make_shared<ledger::mpt::NoopCommitObserver>();
+    m_trackRefCounts.store(false, std::memory_order_relaxed);
+}
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
 void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl,
@@ -913,6 +974,8 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::setM
 {
     if (observer)
     {
+        // Wiring-time only, before block flow starts — no mutex needed here.
+        m_trackRefCounts.store(observer->needsRefCountDeltas(), std::memory_order_relaxed);
         m_mptCommitObserver = std::move(observer);
     }
 }
