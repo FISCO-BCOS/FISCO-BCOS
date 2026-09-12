@@ -16,6 +16,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # STEP-SET TWIN of workflow.yml's c2_e2e job (that one downloads the
+  # l2_unit_suites fisco-bcos artifact; this one builds from source with
+  # WITH_L2_CONTRACTS=ON): every shared step must be edited in lockstep in
+  # both files. Dedup into a composite action is tracked as a C2 CI follow-up
+  # once the harness-repo migration settles.
   c2_e2e:
     name: C2 deposit/withdraw e2e
     runs-on: ubuntu-24.04

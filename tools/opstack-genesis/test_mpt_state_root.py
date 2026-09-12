@@ -45,3 +45,35 @@ def test_state_root_matches_independent_golden_oracle():
         for address, nonce, balance, code, storage in golden.GOLDEN_ALLOC
     ]
     assert "0x" + mpt.compute_state_root(allocs).hex() == golden.EXPECTED["golden_state"]
+
+
+def test_off_width_address_is_rejected_loudly():
+    # 5593 review F5: the slot lane raised on len != 32 while the address lane
+    # silently keccak'd a 19/21-byte address into a different trie. The guard must
+    # reject before any hashing happens.
+    for bad in ("0x" + "11" * 19, "0x" + "11" * 21, "11" * 19):
+        allocs = [{"address": bad, "balance": "1", "nonce": "0", "storage": []}]
+        try:
+            mpt.compute_state_root(allocs)
+        except ValueError as exc:
+            assert "exactly 20 bytes" in str(exc), exc
+        else:
+            raise AssertionError(f"off-width address {bad!r} was not rejected")
+
+
+def test_duplicate_slot_key_inside_one_section_is_rejected(tmp_path):
+    # 5593 review F15: duplicate slot lines used to survive parsing and crash with
+    # an IndexError at depth 64 inside build_branch — the failure mode the
+    # duplicate-address guard's comment says was fixed, left open for slots.
+    import pytest
+
+    ini = tmp_path / "allocs.ini"
+    ini.write_text(
+        "[alloc.1111111111111111111111111111111111111111]\n"
+        "balance = 5\n"
+        "[alloc.1111111111111111111111111111111111111111.storage]\n"
+        "0x" + "01" * 32 + " = 0x" + "22" * 32 + "\n"
+        "0x" + "01" * 32 + " = 0x" + "33" * 32 + "\n"
+    )
+    with pytest.raises(ValueError, match="duplicate storage slot"):
+        mpt.parse_allocs_ini(str(ini))

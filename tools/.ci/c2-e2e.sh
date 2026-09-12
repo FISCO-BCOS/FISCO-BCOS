@@ -59,7 +59,18 @@ prepare_op_monorepo_for_go_build() {
 ensure_op_forge() {
   local pin forge_dir
   pin="$(yq -r '.tools.forge' "$OP_MONOREPO/mise.toml" 2>/dev/null || true)"
-  [[ "$pin" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || pin="1.2.3"
+  # An unreadable pin must be loud, not silently fall back to a hardcoded version:
+  # the pin exists precisely because a wrong-version forge fails the op-deployer
+  # build (forge-lint), and a stale fallback produces that failure far from its
+  # cause. Only a missing mise.toml KEY falls back (older monorepo pins).
+  if ! [[ "$pin" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    if [[ -f "$OP_MONOREPO/mise.toml" ]] && ! grep -q 'forge' "$OP_MONOREPO/mise.toml"; then
+      pin="1.2.3"
+      log "mise.toml has no forge pin; using fallback ${pin}"
+    else
+      die "cannot read the forge pin from $OP_MONOREPO/mise.toml (got '${pin}') — fix yq or the pin file"
+    fi
+  fi
   forge_dir="${HOME}/.foundry/versions/v${pin}"
   if [[ ! -x "${forge_dir}/forge" ]]; then
     if command -v foundryup >/dev/null; then

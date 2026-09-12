@@ -26,9 +26,11 @@ MPT node encoding follows the C++ mpt module (bcos-ledger/bcos-ledger/mpt):
     hash (RLP >= 32 bytes) -> 0xa0 || keccak256(raw).
   - Root is ALWAYS a 32-byte hash, even when the top node encodes to < 32 bytes.
 
-Verified byte-identical against the C++ implementation:
-  - /tmp/op-spike/b3/config.genesis (14 allocs) -> 409e6736... (known-good anchor)
-  - setup-generated allocs + SENDER (14 allocs) -> 0f4dbf6c... (C++ derived root)
+Verified against an independent implementation: test_mpt_state_root.py
+(test_state_root_matches_independent_golden_oracle) pins compute_state_root against
+gen_trieroot_golden.py — a separate RLP/MPT implementation whose vectors predate this
+tool — so a drift in either changes the genesis hash and fails the committed test
+instead of shipping a silently different genesis.
 """
 import importlib.util
 from pathlib import Path
@@ -235,6 +237,14 @@ def compute_state_root(allocs):
             rlp_bytes(code_hash),
         ]))
         addr_bytes = bytes.fromhex(strip0x(alloc["address"]))
+        # Same loud-reject contract as the slot lane above: the state key is
+        # keccak256(address) over EXACTLY 20 bytes, so a 19/21-byte address would
+        # silently root a different trie (keccak over different-width bytes) — reject
+        # anything the input never meant instead of rooting over it.
+        if len(addr_bytes) != 20:
+            raise ValueError(
+                f"alloc address must be exactly 20 bytes (40 hex chars), got "
+                f"{len(addr_bytes)} bytes: {alloc['address']!r} — fix the allocs INI")
         addr_key_hash = keccak256(addr_bytes)
         state_entries.append((addr_key_hash, account_rlp))
     return build_trie(state_entries)
@@ -282,6 +292,15 @@ def parse_allocs_ini(path):
             key = key.strip()
             value = value.strip()
             if current_storage is not None:
+                # Duplicate slot keys inside one section survive parsing only to crash
+                # deep inside build_branch (IndexError at depth 64) — the same
+                # late-failure mode the duplicate-address guard above closes. Two
+                # entries for one slot overwrite each other in any real MPT, so the
+                # root would be meaningless either way; reject at parse time.
+                if any(existing == key for existing, _ in current_storage):
+                    raise ValueError(
+                        f"{path}: duplicate storage slot {key!r} inside one "
+                        "[alloc.N.storage] section — merge the entries into one line")
                 current_storage.append((key, value))
             else:
                 current[key] = value
