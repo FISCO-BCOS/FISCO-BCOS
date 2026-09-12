@@ -44,9 +44,13 @@ std::optional<std::string> CallRequest::nonceFromPendingEntry(
     // The all-digits guard keeps the caller's noexcept contract: bcos::u256 throws on an
     // unparseable string, and an empty or non-numeric stored nonce is left unset (empty nonce
     // string) — a corrupt row falls back to the executor reading the sender's state nonce
-    // rather than aborting the RPC.
+    // rather than aborting the RPC. The length bound closes the last throw window: a
+    // >=79-digit all-digit row passes the digits guard but overflows u256 (2^256-1 has 78
+    // decimal digits), so it must fall back like any other corrupt row instead of throwing
+    // inside the RPC handler.
     auto const raw = entry->get();
-    if (raw.empty() ||
+    constexpr std::size_t c_maxNonceDigits = 78;
+    if (raw.empty() || raw.size() > c_maxNonceDigits ||
         !std::all_of(raw.begin(), raw.end(), [](char c) { return c >= '0' && c <= '9'; }))
     {
         return std::nullopt;
@@ -74,10 +78,15 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
     {
         gasLimit = *chainBlockGasLimit;
     }
-    auto tx = factory->createTransaction(1, std::move(this->to), this->data,
-        pendingNonce.value_or(std::string{}), 0, {}, {}, 0, "", value.value_or(""),
-        gasPrice.value_or(""), gasLimit, maxFeePerGas.value_or(""),
-        maxPriorityFeePerGas.value_or(""));
+    // The request is consumed by this call (noexcept, single use), so move the optional
+    // strings out instead of value_or's copy (5593 round-3 S).
+    auto tx = factory->createTransaction(1, std::move(this->to), std::move(this->data),
+        pendingNonce.value_or(std::string{}), 0, {}, {}, 0, "",
+        this->value.has_value() ? std::move(*this->value) : std::string{},
+        this->gasPrice.has_value() ? std::move(*this->gasPrice) : std::string{}, gasLimit,
+        this->maxFeePerGas.has_value() ? std::move(*this->maxFeePerGas) : std::string{},
+        this->maxPriorityFeePerGas.has_value() ? std::move(*this->maxPriorityFeePerGas) :
+                                                 std::string{});
     if (from.has_value())
     {
         if (auto const sender = safeFromHexWithPrefix(from.value()))

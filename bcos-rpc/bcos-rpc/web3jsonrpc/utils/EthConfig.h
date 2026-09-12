@@ -41,16 +41,17 @@ Json::Value ethConfigSystemContracts(evmc_revision revision, bool opL2);
 /// EIP-7910 one `EthForkConfig` object for the given revision / chain id / fork id.
 /// `forkIdHex` is the 4-byte 0x-prefixed EIP-2124 fork id (e.g. "0x0929e24e").
 Json::Value buildEthForkConfig(
-    evmc_revision revision, uint64_t chainId, std::string_view forkIdHex, bool opL2);
+    evmc_revision revision, bcos::u256 chainId, std::string_view forkIdHex, bool opL2);
 
 /// EIP-7910 `eth_config` result: {"current": <EthForkConfig>, "next": null, "last": null}.
 /// FISCO has no scheduled future fork and no timestamp-activated history at the RPC layer,
 /// so `next`/`last` are null and `current.activationTime` is the genesis time (0).
 Json::Value buildEthConfig(
-    evmc_revision revision, uint64_t chainId, std::string_view forkIdHex, bool opL2);
+    evmc_revision revision, bcos::u256 chainId, std::string_view forkIdHex, bool opL2);
 
-/// EIP-2124 fork id: CRC32(genesisHash || fork_0_be64 || ...) folded to the first 32 bits,
-/// the high bit never set (four bytes, 0x-prefixed). Empty genesis hash -> "0x00000000".
+/// EIP-2124 fork id: full IEEE CRC32 over the genesis hash (and, when the fork list is
+/// non-empty, each fork block as big-endian u64) — the FULL 32 bits, high bit included;
+/// geth fork ids carry it (mainnet genesis 0xfc64ec04). Empty genesis hash -> "0x00000000".
 std::string ethForkIdHex(std::string_view genesisHashHex, std::vector<uint64_t> const& forks);
 
 }  // namespace bcos::rpc

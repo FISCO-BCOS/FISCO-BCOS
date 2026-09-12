@@ -168,7 +168,17 @@ bcos::u256 bcos::rpc::calcEthNextBaseFee(bcos::protocol::BlockHeader const& pare
     bcos::u256 deltaFee = parentBase * bcos::u256(delta);
     deltaFee /= gasTarget;
     deltaFee /= c_eth1559Denominator;
-    return deltaFee < parentBase ? parentBase - deltaFee : bcos::u256(0);
+    // geth clamps the decrease branch to MinimumBaseFee (1 wei): math.BigMax(x,
+    // params.MinimumBaseFee) — a base fee never reaches 0 through the EIP-1559 rule, so
+    // feeHistory must not report a 0x0 prediction where geth/op-geth report 0x1. With
+    // u256 floor division deltaFee <= parentBase/8, so the clamp observably fires only
+    // for an engaged-but-zero parent base fee (a malformed London header) — geth floors
+    // that to 1 too, rather than propagating a free block.
+    if (deltaFee >= parentBase)
+    {
+        return bcos::u256(1);
+    }
+    return parentBase - deltaFee;
 }
 
 bcos::u256 bcos::rpc::calcOpNextBaseFee(bcos::protocol::BlockHeader const& parent)

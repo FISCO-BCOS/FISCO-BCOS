@@ -36,7 +36,7 @@ struct Precompile
     evmc_revision since;  // first revision that activates it
 };
 
-constexpr std::array<Precompile, 17> c_precompiles{{
+constexpr std::array<Precompile, 18> c_precompiles{{
     {"ECREC", "0x0000000000000000000000000000000000000001", EVMC_FRONTIER},
     {"SHA256", "0x0000000000000000000000000000000000000002", EVMC_FRONTIER},
     {"RIPEMD160", "0x0000000000000000000000000000000000000003", EVMC_FRONTIER},
@@ -47,6 +47,7 @@ constexpr std::array<Precompile, 17> c_precompiles{{
     {"BN254_PAIRING", "0x0000000000000000000000000000000000000008", EVMC_BYZANTIUM},
     {"BLAKE2F", "0x0000000000000000000000000000000000000009", EVMC_ISTANBUL},
     {"KZG_POINT_EVALUATION", "0x000000000000000000000000000000000000000a", EVMC_CANCUN},
+    {"P256_VERIFY", "0x0000000000000000000000000000000000000100", EVMC_PRAGUE},
     {"BLS12_G1ADD", "0x000000000000000000000000000000000000000b", EVMC_PRAGUE},
     {"BLS12_G1MSM", "0x000000000000000000000000000000000000000c", EVMC_PRAGUE},
     {"BLS12_G2ADD", "0x000000000000000000000000000000000000000d", EVMC_PRAGUE},
@@ -63,7 +64,12 @@ constexpr char const* c_consolidationRequest = "0x0000bbddc7ce488642fb579f8b00f3
 constexpr char const* c_withdrawalRequest = "0x00000961ef480eb55e80d19ad83579a64c007002";
 constexpr char const* c_depositContract = "0x00000000219ab540356cbb839cbe05303d7705fa";
 
-/// IEEE CRC32 (the polynomial EIP-2124 uses).
+/// IEEE CRC32 (the polynomial EIP-2124 uses). BIT-FOR-BIT TWIN of bcos-devp2p's
+/// table-driven crc32 (bcos-devp2p/bcos-devp2p/eth/ForkId.cpp) — bcos-rpc cannot link
+/// the P2P module, so the two homes are pinned to each other by the shared golden
+/// vectors in EthConfigTest (forkIdEip2124 / forkIdGenesisSeededCrc) and the devp2p
+/// suite. Any semantic change here must be mirrored there or the discv4 handshake and
+/// eth_config will advertise different fork ids for one chain.
 uint32_t crc32Update(uint32_t crc, uint8_t const* data, std::size_t size)
 {
     crc = ~crc;
@@ -125,7 +131,7 @@ Json::Value ethConfigSystemContracts(evmc_revision revision, bool opL2)
 }
 
 Json::Value buildEthForkConfig(
-    evmc_revision revision, uint64_t chainId, std::string_view forkIdHex, bool opL2)
+    evmc_revision revision, bcos::u256 chainId, std::string_view forkIdHex, bool opL2)
 {
     Json::Value config(Json::objectValue);
     // All FISCO / OP forks are active from genesis (chain-config isthmusTime=jovianTime=0).
@@ -157,7 +163,7 @@ Json::Value buildEthForkConfig(
 }
 
 Json::Value buildEthConfig(
-    evmc_revision revision, uint64_t chainId, std::string_view forkIdHex, bool opL2)
+    evmc_revision revision, bcos::u256 chainId, std::string_view forkIdHex, bool opL2)
 {
     Json::Value result(Json::objectValue);
     result["current"] = buildEthForkConfig(revision, chainId, forkIdHex, opL2);

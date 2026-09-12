@@ -30,16 +30,11 @@ inline constexpr uint64_t c_minSuggestedPriorityFeeWei = 1'000'000;
 
 /// True when the chain runs the Ethereum executor (>= ETHEREUM_EXECUTOR_VERSION): fee/gas
 /// semantics follow geth (eth_gasPrice = head.baseFee + tip, never below the base fee).
+/// This is the lane predicate the endpoints consume; OP mode itself is a fixed genesis
+/// value (== OPSTACK_EXECUTOR_VERSION), decided at chain creation and never re-derived.
 inline bool usesEthereumFeeSemantics(int executorVersion)
 {
     return executorVersion >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
-}
-
-/// True when the chain runs the OP lane (exactly OPSTACK_EXECUTOR_VERSION). OP mode is a
-/// fixed value, not a floor: the executor_version is decided at chain creation.
-inline bool isOpStackLane(int executorVersion)
-{
-    return executorVersion == bcos::ledger::OPSTACK_EXECUTOR_VERSION;
 }
 
 /// Suggested priority fee (wei): the Ethereum/OP lanes suggest a non-zero tip (OP floors at

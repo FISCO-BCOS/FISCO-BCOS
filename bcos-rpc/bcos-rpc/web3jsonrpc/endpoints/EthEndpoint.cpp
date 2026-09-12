@@ -140,10 +140,13 @@ task::Task<void> EthEndpoint::ethConfig(const Json::Value&, Json::Value& respons
             JsonRpcException(JsonRpcError::InternalError, "Ledger not available!"));
     }
     auto const ledgerConfig = co_await ledger::getLedgerConfig(*ledger);
-    uint64_t chainId = 0;
+    // The full u256 chain id, not a uint64 truncation: eth_chainId emits the whole value
+    // below, and two notions of one semantic in one build would let eth_config wrap for
+    // ids above 2^64 while eth_chainId reports the true value (5593 round-3 P).
+    bcos::u256 chainId = 0;
     if (ledgerConfig->chainId().has_value())
     {
-        chainId = static_cast<uint64_t>(fromEvmC(ledgerConfig->chainId().value()));
+        chainId = fromEvmC(ledgerConfig->chainId().value());
     }
     auto const revision = ledgerConfig->evmcRevision().value_or(EVMC_CANCUN);
     // L2 mode is the chain's canonical flag (the same source eth_feeHistory / getProof use),
