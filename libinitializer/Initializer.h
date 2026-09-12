@@ -28,6 +28,7 @@
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include "libinitializer/MultiVersionScheduler.h"
+#include <bcos-framework/engine/DACaps.h>
 #ifdef TOOLS
 #include "tools/archive-tool/ArchiveService.h"
 #endif
@@ -104,6 +105,9 @@ public:
     }
     std::shared_ptr<bcos::engine::AnyEngineService> engineService();
 
+    /// DA caps for the OP engine path; null outside OP mode.
+    std::shared_ptr<bcos::engine::DACaps> daCaps() const { return m_daCaps; }
+
     std::shared_ptr<bcos::single_consensus::SingleNodeConsensus> singleNodeConsensus()
     {
         return m_singleNodeConsensus;
@@ -172,8 +176,6 @@ private:
     FrontServiceInitializer::Ptr m_frontServiceInitializer;
     bcos::IOServicePool::Ptr m_ioServicePool;
     bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState;
-    /// Built only in engine-driven mode, where the mempool is the pool a transaction enters.
-    std::shared_ptr<bcos::txvalidator::TxValidator> m_memPoolValidator;
     TxPoolInitializer::Ptr m_txpoolInitializer;
     PBFTInitializer::Ptr m_pbftInitializer;
 #ifdef WITH_LIGHTNODE
@@ -191,12 +193,16 @@ private:
 #endif
     std::shared_ptr<GlobalStateStorageInitializer> m_globalStateStorageInitializer;
     std::shared_ptr<EngineServiceInitializer> m_engineServiceInitializer;
+
+    std::shared_ptr<bcos::engine::DACaps> m_daCaps;
     std::shared_ptr<bcos::single_consensus::SingleNodeConsensus> m_singleNodeConsensus;
     std::shared_ptr<executor_v1::PrecompiledManager> m_precompiledManager;
     bcos::storage::TransactionalStorageInterface::Ptr m_storage = nullptr;
     // if enable SeparateBlockAndState,txs and receipts will be stored in m_blockStorage
     bcos::storage::TransactionalStorageInterface::Ptr m_blockStorage = nullptr;
     std::shared_ptr<MemPoolInitializer> m_memPoolInitializer;
+    /// Built only in engine-driven mode, where the mempool is the pool a transaction enters.
+    std::shared_ptr<bcos::txvalidator::TxValidator> m_memPoolValidator;
     std::optional<oneapi::tbb::global_control> m_tbbGlobalControl;
 
     std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_baselineSchedulerHolder;
@@ -208,9 +214,12 @@ private:
     std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_ethereumSchedulerHolder;
     std::function<void(std::function<void(protocol::BlockNumber)>)>
         m_setEthereumSchedulerBlockNumberNotifier;
-    /// Resolved executor version (0 = legacy SchedulerManager, 1 = TransactionExecutorImpl,
-    /// 2 = EthereumExecutor). Cached during initNode so initSysContract can decide whether the
-    /// FISCO system-contract deployment block applies (it does not for the ethereum executor).
+    /// OP scheduler wired to MultiVersionScheduler slot 3.
+    std::shared_ptr<scheduler::SchedulerInterface> m_opScheduler;
+    /// Installs the OP block-number notifier on OpScheduler.
+    std::function<void(std::function<void(protocol::BlockNumber)>)>
+        m_setOpSchedulerBlockNumberNotifier;
+    /// Cached executor version for initSysContract.
     int m_executorVersion = 0;
 
     protocol::BlockNumber getCurrentBlockNumber(

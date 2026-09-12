@@ -189,12 +189,28 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
     }
     auto payloadId = *payloadIdOpt;
     auto nextBlockNumber = *headBlockNumber + 1;
-    auto built = co_await buildPayload(forkchoiceState, *payloadAttributes, payloadId, version,
-        nextBlockNumber, std::move(sealedTxs), view, std::move(decodedForcedTxs));
+    std::optional<BuildPayloadResult> built;
+    try
+    {
+        built = co_await buildPayload(forkchoiceState, *payloadAttributes, payloadId, version,
+            nextBlockNumber, std::move(sealedTxs), view, std::move(decodedForcedTxs));
+    }
+    catch (OpExecutionInternalError const& e)
+    {
+        // An envelope the CL submitted but this service cannot decode is a payload-content
+        // fault: answer a terminal INVALID (same contract as the OP lane's
+        // fcuInvalidIfUndecodable), never a retryable -32603. Every other internal fault
+        // keeps propagating so the endpoint maps it to -32603.
+        if (auto invalid = detail::fcuInvalidIfUndecodable(e))
+        {
+            co_return *invalid;
+        }
+        throw;
+    }
 
     auto commonEntry = std::make_shared<BuiltPayload>();
     commonEntry->version = engine_common::payloadShapeVersion(version);
-    commonEntry->executionPayload = std::move(built.executionPayload);
+    commonEntry->executionPayload = std::move(built->executionPayload);
     commonEntry->blockValue = 0;
     commonEntry->blobsBundle = std::nullopt;
     commonEntry->shouldOverrideBuilder = false;
@@ -206,8 +222,8 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
 
     auto stagedArtifact = EthPayloadArtifacts<ViewType>{
         .view = std::make_shared<ViewType>(std::move(view)),
-        .header = std::move(built.header),
-        .receipts = std::move(built.receipts),
+        .header = std::move(built->header),
+        .receipts = std::move(built->receipts),
     };
 
     {
@@ -513,11 +529,41 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         sealedTxs.size());
     if (payloadAttributes.transactions.has_value())
     {
+        // Forced envelopes are raw-only on the wire, so give each one the same executable
+        // `decoded` form a sealed pool transaction already carries. Carrying them raw
+        // (decoded == nullptr) made collectExecutableTransactions skip them: they entered
+        // transactionsRoot but were neither executed, persisted, nor given a receipt, so
+        // transactionsRoot covered N envelopes while receiptsRoot covered only the M sealed
+        // txs. Decoding here lets executeBlock run them and makes N == M.
+        auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
         for (auto& raw : decodedForcedTxs)
         {
+            const auto txHash = hashImpl.hash(raw);
+            // allowDeposit=false: a 0x7e deposit envelope is an OP-Stack extension and
+            // invalid on the Eth lane — the shared decode rejects it here (5593 round-3 L).
+            auto tarsTx = engine_common::op::opEnvelopeToTars(raw, txHash, /*allowDeposit=*/false);
+            if (!tarsTx)
+            {
+                // validatePayloadAttributes only dispatches on the envelope's type byte, so a
+                // body that fails RLP decode reaches here from a remote CL. Tag it as a
+                // payload-content fault: updateForkchoice maps the tag to a terminal INVALID
+                // (same contract as the OP lane's fcuInvalidIfUndecodable) — an untagged
+                // OpExecutionInternalError would surface as -32603 and the CL would resubmit
+                // the identical attributes forever.
+                BOOST_THROW_EXCEPTION(OpExecutionInternalError{}
+                                      << OpPayloadUndecodable{true} << bcos::errinfo_comment{
+                                          "forced payloadAttributes.transactions envelope "
+                                          "is undecodable"});
+            }
+            // Same carrier the OP build path uses (OpEngineService::buildOpBlock): keep the
+            // raw EIP-2718 envelope on extraTransactionBytes so the executor sees the exact
+            // wire form.
+            tarsTx->extraTransactionBytes.assign(raw.begin(), raw.end());
+            auto decoded = std::make_shared<bcostars::protocol::TransactionImpl>(
+                [tars = std::move(*tarsTx)]() mutable { return &tars; });
             engineTransactions.push_back(EngineTransaction{
                 .raw = std::move(raw),
-                .decoded = nullptr,
+                .decoded = std::move(decoded),
             });
         }
     }
@@ -675,8 +721,10 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     blockHeader->setExtraData(std::move(extraData));
 
     // Executed transactions, with each one's EIP-2718 type byte kept index-parallel to
-    // `receipts` for the receipts-root leaf prefix below. Raw-only (forced) entries have no
-    // executable form and are skipped.
+    // `receipts` for the receipts-root leaf prefix below. Forced entries arrive already
+    // decoded (buildPayload's opEnvelopeToTars step), so every envelope in
+    // executionPayload.transactions has an executable form: collectExecutableTransactions
+    // skips nothing here, and transactionsRoot and receiptsRoot cover the same set (N == M).
     auto executable = engine_common::collectExecutableTransactions(executionPayload.transactions);
     auto receipts = co_await m_scheduler.executeBlock(view, m_executor, *blockHeader,
         executable.transactions | ::ranges::views::indirect, ledgerConfig);

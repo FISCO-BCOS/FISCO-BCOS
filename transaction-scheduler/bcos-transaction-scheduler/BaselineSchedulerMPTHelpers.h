@@ -154,6 +154,43 @@ inline void validateMPTFlagMatrix(bcos::ledger::Features const& features)
     }
 }
 
+/// OP mode (executor_version == OPSTACK_EXECUTOR_VERSION) is a genesis-only property: it is
+/// decided when the chain is created and cannot change afterwards. It must carry the
+/// genesis-only feature_l2_ethereum_compat, and both the executor_version and that feature
+/// must be genesis-bound (activation block 0). No higher executor_version is a defined lane.
+/// A mismatch means the node is booting a data dir/config that disagrees on the chain's mode,
+/// which forks the executor/state-root scheme; refuse to start.
+inline void validateOpModeGenesisOnly(bcos::ledger::Features const& features, int executorVersion,
+    bcos::protocol::BlockNumber executorVersionActivation)
+{
+    using Flag = bcos::ledger::Features::Flag;
+    bool const flagOn = features.get(Flag::feature_l2_ethereum_compat);
+    bool const opMode = (executorVersion == bcos::ledger::OPSTACK_EXECUTOR_VERSION);
+    if (executorVersion > bcos::ledger::OPSTACK_EXECUTOR_VERSION)
+    {
+        BOOST_THROW_EXCEPTION(InvalidMPTFlagMatrix{} << bcos::errinfo_comment(
+                                  "executor_version " + std::to_string(executorVersion) +
+                                  " is above OPSTACK_EXECUTOR_VERSION; OP mode is exactly " +
+                                  std::to_string(bcos::ledger::OPSTACK_EXECUTOR_VERSION)));
+    }
+    if (opMode != flagOn)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidMPTFlagMatrix{} << bcos::errinfo_comment(
+                "OP mode must be decided at chain creation: executor_version=" +
+                std::to_string(executorVersion) + " but feature_l2_ethereum_compat=" +
+                std::string(flagOn ? "on" : "off") + " (both are genesis-only and must agree)"));
+    }
+    if (opMode && executorVersionActivation != 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidMPTFlagMatrix{} << bcos::errinfo_comment(
+                "executor_version is genesis-only in OP mode (activation block " +
+                std::to_string(executorVersionActivation) +
+                " != 0); it cannot be changed on a running chain -- start a new chain"));
+    }
+}
+
 /// XOR fold over flat storage — the legacy (non-MPT) state-root path, shared by the PBFT
 /// scheduler and the engine service. BOTH callers must pass @p features to Entry::hash: the
 /// v3.17 bugfix flag (bugfix_statestorage_hash_v3_17) changes the digest, so an

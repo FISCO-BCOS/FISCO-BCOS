@@ -42,6 +42,7 @@ private:
     void addHandlers(bool enableOPEngine = false);
     void addEngineHandlers();
     void addEthHandlers();
+    void addMinerHandlers();
     void addNetHandlers();
     void addWeb3Handlers();
 

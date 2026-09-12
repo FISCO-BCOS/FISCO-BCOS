@@ -25,6 +25,7 @@
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/engine/EngineService.h>
 #include <bcos-framework/engine/Errors.h>
 #include <bcos-framework/engine/RawTransactionDispatch.h>
@@ -38,6 +39,7 @@
 #include <bcos-framework/testutils/faker/FakeBlock.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-mempool/MemPoolImpl.h>
+#include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Wait.h>
@@ -134,6 +136,32 @@ static protocol::Transaction::Ptr makeWeb3Tx(std::string_view senderBytes, uint6
     tx->markClean();
     tx->setImportTime(static_cast<int64_t>(nonce));
     return tx;
+}
+
+/// A genuinely RLP-decodable EIP-2718 (0x02) envelope, hex-encoded, to stand in for a
+/// payloadAttributes.transactions forced entry. The build path decodes every forced
+/// envelope into its executable form (opEnvelopeToTars), so a placeholder such as
+/// "0x02f8aabb" is no longer accepted — contrast the old raw-passthrough behaviour.
+static std::string makeForcedEnvelopeHex(uint64_t nonce)
+{
+    bcos::rpc::Web3Transaction w3;
+    w3.type = bcos::rpc::TransactionType::EIP1559;
+    w3.chainId = 1;
+    w3.nonce = nonce;
+    w3.maxPriorityFeePerGas = 1;
+    w3.maxFeePerGas = 1;
+    w3.gasLimit = 21000;
+    w3.to = Address("5656565656565656565656565656565656565656");
+    w3.value = 0;
+    Secp256k1Crypto secp;
+    auto keyPair = secp.generateKeyPair();
+    auto const sig = secp.sign(*keyPair, w3.hashForSign(), false);
+    BOOST_REQUIRE(sig);
+    BOOST_REQUIRE_EQUAL(sig->size(), 65);
+    w3.signatureR.assign(sig->begin(), sig->begin() + 32);
+    w3.signatureS.assign(sig->begin() + 32, sig->begin() + 64);
+    w3.signatureV = (*sig)[64];
+    return bcos::toHexStringWithPrefix(w3.encode());
 }
 
 struct ServicePair
@@ -382,6 +410,87 @@ BOOST_AUTO_TEST_CASE(generic_stale_head_swallow_matches)
     auto legacyStale = task::syncWait(pair.legacy.updateForkchoice(firstForkchoice, nullptr, 3));
     auto newStale = task::syncWait(pair.fresh.updateForkchoice(firstForkchoice, nullptr, 3));
     checkForkchoiceParity(legacyStale, newStale);
+}
+
+// 5593 review F1: a forced envelope that passes the first-byte admission gate but fails
+// RLP decode must answer a terminal INVALID carrying fcuInvalidIfUndecodable's message —
+// not a retryable -32603 (untagged OpExecutionInternalError), and not the derivePayloadId
+// "contains undecodable hex" arm either.
+BOOST_AUTO_TEST_CASE(eth_fcu_undecodable_forced_envelope_is_invalid_not_internal_error)
+{
+    ServicePair pair;
+    auto parentForkchoice = makeForkchoiceState();
+    parentForkchoice.safeBlockHash = parentForkchoice.headBlockHash;
+    parentForkchoice.finalizedBlockHash = parentForkchoice.headBlockHash;
+    setForkchoiceBlockNumbers(pair.newStorage, parentForkchoice, c_rebuildBaseBlockNumber,
+        c_rebuildBaseBlockNumber, c_rebuildBaseBlockNumber);
+    pair.newStorage.setCanonicalBlock(parentForkchoice.headBlockHash, c_rebuildBaseBlockNumber);
+
+    auto payloadAttributes = makePayloadAttributesV3();
+    // 0xdeadbeef: the type byte dispatches as Legacy (>= 0xc0), so admission admits the
+    // envelope, but the body is not a decodable RLP list — opEnvelopeToTars fails inside
+    // buildPayload.
+    payloadAttributes.transactions = std::vector<std::string>{"0xdeadbeef"};
+
+    auto result =
+        task::syncWait(pair.fresh.updateForkchoice(parentForkchoice, &payloadAttributes, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(result.payloadStatus.status),
+        static_cast<int>(PayloadValidationStatus::Invalid));
+    BOOST_CHECK(!result.payloadId.has_value());
+    BOOST_REQUIRE(result.payloadStatus.validationError.has_value());
+    // The exact fcuInvalidIfUndecodable message — pins the tagged-throw path, not the
+    // derivePayloadId "payloadAttributes.transactions contains undecodable hex" arm.
+    BOOST_CHECK_EQUAL(*result.payloadStatus.validationError,
+        std::string("undecodable payload transaction envelope"));
+}
+
+// A WELL-FORMED deposit (0x7e) envelope is decodable, but deposits are an OP-Stack
+// payloadAttributes extension: admission (isRawTransactionPayloadAdmissible) is
+// lane-agnostic by design, so the Eth build path itself must refuse the type —
+// no Eth/L1 client would re-execute a 0x7e block, so executing one here would fork
+// the chain from every honest peer (5593 round-3 L).
+BOOST_AUTO_TEST_CASE(eth_fcu_deposit_envelope_is_rejected_on_the_eth_lane)
+{
+    ServicePair pair;
+    auto parentForkchoice = makeForkchoiceState();
+    parentForkchoice.safeBlockHash = parentForkchoice.headBlockHash;
+    parentForkchoice.finalizedBlockHash = parentForkchoice.headBlockHash;
+    setForkchoiceBlockNumbers(pair.newStorage, parentForkchoice, c_rebuildBaseBlockNumber,
+        c_rebuildBaseBlockNumber, c_rebuildBaseBlockNumber);
+    pair.newStorage.setCanonicalBlock(parentForkchoice.headBlockHash, c_rebuildBaseBlockNumber);
+
+    // A decodable deposit envelope, built with the production encoder, so the decode
+    // side of the gate (not admission) is what this test exercises:
+    // 0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTx, data]).
+    bcos::rpc::Web3Transaction depositTx;
+    depositTx.type = bcos::rpc::TransactionType::Deposit;
+    depositTx.sourceHash =
+        bcos::h256("0x1111111111111111111111111111111111111111111111111111111111111111");
+    depositTx.from = bcos::Address("1234567890abcdef1234567890abcdef12345678");
+    depositTx.to = bcos::Address("1234567890abcdef1234567890abcdef12345679");
+    depositTx.mint = 0;
+    depositTx.value = 0;
+    depositTx.gasLimit = 21000;
+    depositTx.isSystemTx = false;
+    auto const raw = depositTx.encode();
+    BOOST_REQUIRE(raw.size() > 1);
+    BOOST_REQUIRE_EQUAL(raw.front(), 0x7e);
+
+    auto payloadAttributes = makePayloadAttributesV3();
+    payloadAttributes.transactions = std::vector<std::string>{bcos::toHexStringWithPrefix(raw)};
+
+    auto result =
+        task::syncWait(pair.fresh.updateForkchoice(parentForkchoice, &payloadAttributes, 3));
+    // Same terminal answer as any other inadmissible payload content: INVALID, never
+    // an internal error the CL would retry forever, and never a valid build.
+    BOOST_CHECK_EQUAL(static_cast<int>(result.payloadStatus.status),
+        static_cast<int>(PayloadValidationStatus::Invalid));
+    BOOST_CHECK(!result.payloadId.has_value());
+    if (result.payloadStatus.validationError.has_value())
+    {
+        auto const& message = *result.payloadStatus.validationError;
+        BOOST_CHECK_NE(message.find("undecodable"), std::string::npos);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(generic_rebuild_on_parent_matches)
@@ -1094,82 +1203,68 @@ BOOST_AUTO_TEST_CASE(mirror_rejects_non_empty_withdrawals)
 
 BOOST_AUTO_TEST_CASE(mirror_forced_transactions_enter_payload_first)
 {
+    // The Eth service decodes forced (payloadAttributes.transactions) envelopes into their
+    // executable form, so they are executed and persisted. This is a deliberate divergence
+    // from the legacy EngineServiceImpl (the parity oracle), which still carries them
+    // raw-only (decoded == nullptr) and does not execute them; the case therefore asserts
+    // the Eth behavior directly instead of mirroring the legacy service.
     ServicePair pair;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
     setForkchoiceBlockNumbers(pair.newStorage, forkchoiceState, c_initialBlockNumber,
         c_initialBlockNumber, c_initialBlockNumber);
     std::string sender("abababababababababab", 20);
-    auto legacyTx = makeWeb3Tx(sender, 0);
     auto newTx = makeWeb3Tx(sender, 0);
-    pair.legacyMemPool.add(std::vector{legacyTx});
     pair.newMemPool.add(std::vector{newTx});
-    pair.legacyStorage.setNonce(sender, "0");
     pair.newStorage.setNonce(sender, "0");
 
+    const auto forcedA = makeForcedEnvelopeHex(7);
+    const auto forcedB = makeForcedEnvelopeHex(8);
     auto attributes = makePayloadAttributesV3();
-    attributes.transactions = std::vector<std::string>{"0x7e0102030405", "0x02f8aabb"};
-    auto legacyResult =
-        task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &attributes, 3));
+    attributes.transactions = std::vector<std::string>{forcedA, forcedB};
     auto newResult = task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &attributes, 3));
-    checkForkchoiceParity(legacyResult, newResult);
-    BOOST_REQUIRE(legacyResult.payloadId.has_value());
     BOOST_REQUIRE(newResult.payloadId.has_value());
 
-    auto legacyPayload = task::syncWait(pair.legacy.getPayload(*legacyResult.payloadId, 3));
     auto newPayload = task::syncWait(pair.fresh.getPayload(*newResult.payloadId, 3));
-    checkGetPayloadParity(*legacyPayload, *newPayload);
-    BOOST_REQUIRE_EQUAL(legacyPayload->executionPayload.transactions.size(), 3);
-    BOOST_CHECK(legacyPayload->executionPayload.transactions[0].raw ==
-                (bytes{0x7e, 0x01, 0x02, 0x03, 0x04, 0x05}));
-    BOOST_CHECK(
-        legacyPayload->executionPayload.transactions[1].raw == (bytes{0x02, 0xf8, 0xaa, 0xbb}));
-    BOOST_CHECK(legacyPayload->executionPayload.transactions[2].decoded == legacyTx);
+    BOOST_REQUIRE_EQUAL(newPayload->executionPayload.transactions.size(), 3);
+    // Forced entries come first and keep their raw wire form, but are now decoded (executed)
+    // rather than carried raw-only with decoded == nullptr.
+    BOOST_CHECK(newPayload->executionPayload.transactions[0].raw == bcos::fromHex(forcedA));
+    BOOST_CHECK(newPayload->executionPayload.transactions[1].raw == bcos::fromHex(forcedB));
+    BOOST_CHECK(newPayload->executionPayload.transactions[0].decoded != nullptr);
+    BOOST_CHECK(newPayload->executionPayload.transactions[1].decoded != nullptr);
     BOOST_CHECK(newPayload->executionPayload.transactions[2].decoded == newTx);
 }
 
 BOOST_AUTO_TEST_CASE(mirror_no_tx_pool_excludes_mempool)
 {
+    // noTxPool=true keeps the forced list and drops the mempool; the Eth service executes the
+    // decoded forced entry (see the divergence note in
+    // mirror_forced_transactions_enter_payload_first).
     ServicePair pair;
     auto forkchoiceState = makeForkchoiceState();
-    setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
-        c_initialBlockNumber, c_initialBlockNumber);
     setForkchoiceBlockNumbers(pair.newStorage, forkchoiceState, c_initialBlockNumber,
         c_initialBlockNumber, c_initialBlockNumber);
     std::string sender("cdcdcdcdcdcdcdcdcdcd", 20);
-    auto legacyTx = makeWeb3Tx(sender, 0);
     auto newTx = makeWeb3Tx(sender, 0);
-    pair.legacyMemPool.add(std::vector{legacyTx});
     pair.newMemPool.add(std::vector{newTx});
-    pair.legacyStorage.setNonce(sender, "0");
     pair.newStorage.setNonce(sender, "0");
 
+    const auto forced = makeForcedEnvelopeHex(0);
     auto attributes = makePayloadAttributesV3();
     attributes.noTxPool = true;
-    attributes.transactions = std::vector<std::string>{"0x7e010203"};
-    auto legacyResult =
-        task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &attributes, 3));
+    attributes.transactions = std::vector<std::string>{forced};
     auto newResult = task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &attributes, 3));
-    checkForkchoiceParity(legacyResult, newResult);
-    auto legacyPayload = task::syncWait(pair.legacy.getPayload(*legacyResult.payloadId, 3));
     auto newPayload = task::syncWait(pair.fresh.getPayload(*newResult.payloadId, 3));
-    checkGetPayloadParity(*legacyPayload, *newPayload);
-    BOOST_REQUIRE_EQUAL(legacyPayload->executionPayload.transactions.size(), 1);
-    BOOST_CHECK(legacyPayload->executionPayload.transactions.front().raw ==
-                (bytes{0x7e, 0x01, 0x02, 0x03}));
+    BOOST_REQUIRE_EQUAL(newPayload->executionPayload.transactions.size(), 1);
+    BOOST_CHECK(newPayload->executionPayload.transactions.front().raw == bcos::fromHex(forced));
+    BOOST_CHECK(newPayload->executionPayload.transactions.front().decoded != nullptr);
 
     auto emptyAttributes = makePayloadAttributesV3();
     emptyAttributes.noTxPool = true;
-    auto legacyEmpty =
-        task::syncWait(pair.legacy.updateForkchoice(forkchoiceState, &emptyAttributes, 3));
     auto newEmpty =
         task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &emptyAttributes, 3));
-    checkForkchoiceParity(legacyEmpty, newEmpty);
-    auto legacyEmptyPayload = task::syncWait(pair.legacy.getPayload(*legacyEmpty.payloadId, 3));
     auto newEmptyPayload = task::syncWait(pair.fresh.getPayload(*newEmpty.payloadId, 3));
-    checkGetPayloadParity(*legacyEmptyPayload, *newEmptyPayload);
-    BOOST_CHECK(legacyEmptyPayload->executionPayload.transactions.empty());
+    BOOST_CHECK(newEmptyPayload->executionPayload.transactions.empty());
 }
 
 BOOST_AUTO_TEST_CASE(mirror_jovian_extra_data_on_payload)

@@ -8,29 +8,11 @@
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-utilities/DataConvertUtility.h"
-#include <bcos-framework/testutils/faker/FakeScheduler.h>
 
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::rpc;
 
-namespace
-{
-/// Scheduler stub that answers getPendingStorageAt("nonce", ...) with a fixed raw
-/// value, simulating the FISCO account-table row (a DECIMAL nonce string).
-class NonceStubScheduler : public bcos::test::FakeScheduler
-{
-public:
-    using bcos::test::FakeScheduler::FakeScheduler;
-    std::string nonceValue;
-
-    task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
-        std::string_view, std::string_view, bcos::protocol::BlockNumber) override
-    {
-        co_return bcos::storage::Entry(nonceValue);
-    }
-};
-}  // namespace
 
 BOOST_AUTO_TEST_SUITE(testCallRequest)
 
@@ -199,14 +181,13 @@ BOOST_AUTO_TEST_CASE(deployEstimateGasParsesDecimalNonce)
             std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
     auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
 
-    auto nonceScheduler = std::make_shared<NonceStubScheduler>(nullptr, nullptr);
-    nonceScheduler->nonceValue = "12";
-
     CallRequest req;
     req.from = "0x1234567890abcdef1234567890abcdef12345678";
     req.to = "";  // deployment (no `to`)
 
-    auto tx = req.takeToTransaction(txFactory, nonceScheduler);
+    // The endpoint awaits the row and hands the converted nonce in.
+    auto tx = req.takeToTransaction(
+        txFactory, CallRequest::nonceFromPendingEntry(bcos::storage::Entry("12")));
     // Decimal 12, not hex 0x12 = 18.
     BOOST_CHECK_EQUAL(tx->nonce(), "0xc");
 }
@@ -223,16 +204,73 @@ BOOST_AUTO_TEST_CASE(deployEstimateGasLeavesCorruptNonceUnset)
 
     for (auto const& corrupt : {std::string{}, std::string{"12a"}, std::string{"abc"}})
     {
-        auto nonceScheduler = std::make_shared<NonceStubScheduler>(nullptr, nullptr);
-        nonceScheduler->nonceValue = corrupt;
-
         CallRequest req;
         req.from = "0x1234567890abcdef1234567890abcdef12345678";
         req.to = "";
 
-        auto tx = req.takeToTransaction(txFactory, nonceScheduler);
+        auto tx = req.takeToTransaction(
+            txFactory, CallRequest::nonceFromPendingEntry(bcos::storage::Entry(corrupt)));
         BOOST_CHECK(tx->nonce().empty());
     }
+}
+
+BOOST_AUTO_TEST_CASE(nonceFromPendingEntryBoundsTheU256Range)
+{
+    // 5593 round-4 F22: the length bound must not let an all-digit row that overflows
+    // u256 reach the constructor. 2^256-1 has 78 decimal digits, but 10^78-1 exceeds it,
+    // so a 78-digit value above the max (and anything longer) must fall back to nullopt
+    // like any other corrupt row — not throw.
+    std::string const maxU256 =
+        "115792089237316195423570985008687907853269984665640564039457584007913129639935";
+    std::string const justOverMax =
+        "115792089237316195423570985008687907853269984665640564039457584007913129639936";
+    std::string const seventyEightNines = std::string(78, '9');
+    std::string const seventyNineDigits = std::string(79, '0');
+
+    // The exact max is valid and converted.
+    BOOST_CHECK_EQUAL(
+        CallRequest::nonceFromPendingEntry(bcos::storage::Entry(maxU256)).has_value(), true);
+
+    // Any 78-digit value above the max, and any longer row, must be rejected, not throw.
+    for (auto const& overflow : {justOverMax, seventyEightNines, seventyNineDigits})
+    {
+        BOOST_CHECK_MESSAGE(
+            !CallRequest::nonceFromPendingEntry(bcos::storage::Entry(overflow)).has_value(),
+            "overflowing nonce " << overflow.substr(0, 10) << "… was not rejected");
+    }
+}
+
+BOOST_AUTO_TEST_CASE(estimateGasGasCapComesOnlyFromTheParentHeader)
+{
+    // eth_estimateGas with no explicit `gas` takes its cap from the target block's header and
+    // nowhere else: an unreadable header leaves the limit unset, and the endpoint refuses the
+    // request (EthEndpoint::call) instead of substituting a hardcoded constant — which is what
+    // the removed 30'000'000 fallback did. An explicit non-zero gas always wins; an explicit
+    // zero means "size it for me" and takes the same cap, matching op-geth's estimator.
+    auto cryptoSuite =
+        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
+            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
+    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+
+    CallRequest req;
+    req.to = "0x1234567890abcdef1234567890abcdef12345678";
+
+    auto const noLimit = req.takeToTransaction(txFactory, std::nullopt, std::nullopt);
+    BOOST_CHECK_EQUAL(noLimit->gasLimit(), 0);
+
+    auto const capped = req.takeToTransaction(txFactory, std::nullopt, uint64_t{30'000'000});
+    BOOST_CHECK_EQUAL(capped->gasLimit(), 30'000'000);
+
+    req.gas = 21000;
+    auto const explicitGas = req.takeToTransaction(txFactory, std::nullopt, uint64_t{30'000'000});
+    BOOST_CHECK_EQUAL(explicitGas->gasLimit(), 21000);
+
+    // gas:"0x0" is present-but-zero: op-geth's estimator keeps the header cap for anything
+    // below params.TxGas, and the endpoint's guard reads the header for it, so the conversion
+    // must apply the same cap (the old code left it at zero and always failed validation).
+    req.gas = 0;
+    auto const explicitZero = req.takeToTransaction(txFactory, std::nullopt, uint64_t{30'000'000});
+    BOOST_CHECK_EQUAL(explicitZero->gasLimit(), 30'000'000);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

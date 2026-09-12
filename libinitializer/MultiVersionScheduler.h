@@ -1,3 +1,22 @@
+/**
+ *  Copyright (C) 2021 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file MultiVersionScheduler.h
+ * @brief Multi-version scheduler dispatch
+ */
+
 #pragma once
 
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
@@ -8,21 +27,28 @@
 namespace bcos::scheduler_v1
 {
 
-/// Thrown when setVersion() is asked to select a negative executor version.
+/// Thrown for a negative version, and by scheduler(version)/getScheduler() when the
+/// selected slot is out of range or unwired. setVersion() deliberately does NOT throw on
+/// an unwired slot at runtime — see its definition.
 DERIVE_BCOS_EXCEPTION(ExecutorVersionNotSupported);
 
 /// The executor version that selects the pure-Ethereum EthereumExecutor
 /// (ethereum-executor). It is index 2 of MultiVersionScheduler's scheduler array.
-/// Versions >= this all select the v2 executor (setVersion saturates), leaving
-/// room above 2 for a future executor without a schema change.
 /// The canonical value lives in bcos-framework/ledger (so lower layers can gate on
 /// it without depending on libinitializer); this keeps the scheduler_v1 spelling.
 constexpr static int ETHEREUM_EXECUTOR_VERSION = ledger::ETHEREUM_EXECUTOR_VERSION;
 
+/// executor_version >= this selects OP mode.
+constexpr static int OPSTACK_EXECUTOR_VERSION = ledger::OPSTACK_EXECUTOR_VERSION;
+/// Version ordering invariant: OP sits strictly above the Ethereum executor.
+static_assert(OPSTACK_EXECUTOR_VERSION > ETHEREUM_EXECUTOR_VERSION,
+    "OPSTACK_EXECUTOR_VERSION must be strictly greater than ETHEREUM_EXECUTOR_VERSION");
+
 class MultiVersionScheduler : public bcos::scheduler::SchedulerInterface
 {
 private:
-    static constexpr size_t SUPPORTED_EXECUTOR_VERSION_COUNT = 3;
+    // Slots: 0 legacy, 1 baseline, 2 Ethereum, 3 OP (may be null).
+    static constexpr size_t SUPPORTED_EXECUTOR_VERSION_COUNT = 4;
 
     std::array<scheduler::SchedulerInterface::Ptr, SUPPORTED_EXECUTOR_VERSION_COUNT> m_schedulers;
     int m_currentIndex;
@@ -34,6 +60,7 @@ private:
     ledger::LedgerConfigState::Ptr m_ledgerConfigState;
 
     bcos::scheduler::SchedulerInterface& getScheduler();
+    bcos::scheduler::SchedulerInterface& checkedSchedulerAt(int version) const;
 
 public:
     bcos::scheduler::SchedulerInterface& scheduler(int version);
@@ -54,6 +81,17 @@ public:
 
     void call(protocol::Transaction::Ptr transaction,
         std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override;
+
+    /// eth_call pinned at a block height: forward to the selected scheduler.
+    void callAtBlock(protocol::Transaction::Ptr transaction, protocol::BlockNumber blockNumber,
+        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override;
+
+    /// Adopt a verify=false probe as the pending block. Forwarded so a caller reaching
+    /// OpScheduler through this wrapper gets its real adopt, not SchedulerInterface's
+    /// re-execute default.
+    void adoptProbeAsPending(bcos::protocol::Block::Ptr block,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool sysBlock)>
+            callback) override;
 
     void reset([[maybe_unused]] std::function<void(Error::Ptr)> callback) override;
 

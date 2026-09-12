@@ -54,6 +54,8 @@ macro(configure_project)
     endif()
     default_option(SANITIZE_ADDRESS OFF)
     default_option(SANITIZE_THREAD OFF)
+    # clang-tidy / clangd need a compilation database. Harmless for Ninja/Make.
+    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
     default_option(IPO OFF)
     if(IPO)
         set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)

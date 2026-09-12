@@ -1,0 +1,7 @@
+---
+# C2 OP full-stack e2e harness (shell + Python); not production node code.
+# The harness lives in the FISCO-BCOS/op-stack-e2e-tests repo (pinned ref in
+# .github/workflows/c2-e2e.yml); the in-repo entrypoints are tools/.ci/c2-e2e.sh
+# and tools/opstack-genesis (setup_c2.sh / versions.json come from the harness checkout).
+exclude_paths:
+  - "tools/opstack-genesis/test_*.py"

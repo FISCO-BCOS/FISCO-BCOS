@@ -1,0 +1,154 @@
+name: C2 OP e2e (manual)
+# PR/push C2 e2e runs from workflow.yml → c2_e2e (reuses l2_unit_suites artifact).
+# This workflow is for manual smoke runs only — it builds fisco-bcos from scratch.
+on:
+  workflow_dispatch:
+    inputs:
+      contest:
+        description: "Run adversarial dispute scenarios (1=yes, 0=smoke only)"
+        required: false
+        default: "1"
+        type: choice
+        options: ["1", "0"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # STEP-SET TWIN of workflow.yml's c2_e2e job (that one downloads the
+  # l2_unit_suites fisco-bcos artifact; this one builds from source with
+  # WITH_L2_CONTRACTS=ON): every shared step must be edited in lockstep in
+  # both files. Dedup into a composite action is tracked as a C2 CI follow-up
+  # once the harness-repo migration settles.
+  c2_e2e:
+    name: C2 deposit/withdraw e2e
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      CONTEST: ${{ github.event.inputs.contest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+
+      # The e2e harness lives in its own repo; pinned ref — bump it in lockstep
+      # with node changes (its CI gates the harness itself).
+      - name: Check out the op-e2e harness (op-stack-e2e-tests)
+        uses: actions/checkout@v4
+        with:
+          repository: FISCO-BCOS/op-stack-e2e-tests
+          ref: 88c690f7fa75500f44197155e513fcef5a9f3e95
+          path: .ci-op-e2e-tests
+
+      - name: Initialize vcpkg submodule
+        run: git submodule update --init --recursive -- vcpkg
+
+      - name: Compute vcpkg revision
+        id: vcpkg-revision
+        run: echo "revision=$(git -C vcpkg rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: 3.28.3
+          ninjaVersion: 1.12.1
+
+      - name: Restore vcpkg cache
+        uses: actions/cache@v4
+        with:
+          path: build/vcpkg_installed
+          key: vcpkg-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'ports/**') }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-cache-key-v4
+
+      - name: Install system packages
+        run: |
+          sudo apt update
+          sudo apt install -y --no-install-recommends \
+            wget python3-dev python3-pip git curl ca-certificates mold \
+            build-essential libssl-dev zlib1g-dev gcc-14 g++-14 jq zip
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Install Foundry (optimism contracts-bedrock pin)
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: 1.2.3
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.4"
+          cache-dependency-path: |
+            go.sum
+
+      - name: Install just (op-deployer build)
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh \
+            | sudo bash -s -- --to /usr/local/bin
+          just --version
+
+      - name: Read OP monorepo pin
+        id: op-pin
+        run: |
+          set -euo pipefail
+          COMMIT=$(python3 -c "import json; print(json.load(open('.ci-op-e2e-tests/tools/op-e2e/versions.json'))['op_monorepo']['commit'])")
+          echo "commit=${COMMIT}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache OP monorepo + binaries
+        id: op-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ci-op-monorepo
+            .ci-c2-bins
+          key: c2-op-${{ steps.op-pin.outputs.commit }}-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Build OP stack binaries
+        if: steps.op-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-c2-bins
+          if [ ! -d .ci-op-monorepo/.git ]; then
+            git clone --filter=blob:none https://github.com/ethereum-optimism/optimism .ci-op-monorepo
+          fi
+          git -C .ci-op-monorepo fetch --depth=1 origin "${{ steps.op-pin.outputs.commit }}" \
+            || git -C .ci-op-monorepo fetch origin
+          git -C .ci-op-monorepo checkout -q "${{ steps.op-pin.outputs.commit }}"
+          git -C .ci-op-monorepo submodule update --init superchain-registry
+          bash .ci-op-monorepo/op-core/superchain/sync-superchain.sh
+          # Plain go build omits artifacts.tzst; op-deployer apply fails without just build.
+          # Mirrors tools/.ci/c2-e2e.sh's op-deployer build exactly.
+          (cd .ci-op-monorepo/op-deployer && just build)
+          cp .ci-op-monorepo/op-deployer/bin/op-deployer "$GITHUB_WORKSPACE/.ci-c2-bins/op-deployer"
+          (cd .ci-op-monorepo && go build -o "$GITHUB_WORKSPACE/.ci-c2-bins/op-batcher" ./op-batcher/cmd)
+          (cd .ci-op-monorepo && go build -o "$GITHUB_WORKSPACE/.ci-c2-bins/op-node" ./op-node/cmd)
+
+      - name: Configure FISCO (WITH_L2_CONTRACTS=ON)
+        run: |
+          mkdir -p build
+          cd build
+          CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold \
+            -DTESTS=ON -DCOVERAGE=OFF -DWITH_L2_CONTRACTS=ON \
+            -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF \
+            -DWITH_TARS_SERVICES=OFF -DTOOL=OFF \
+            -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+
+      - name: Build fisco-bcos
+        run: cmake --build build --target fisco-bcos
+
+      - name: Fetch pinned Solidity deps
+        run: bash tools/.ci/fetch-l2-contract-deps.sh
+
+      - name: Forge build L2 contracts
+        run: forge build
+        working-directory: bcos-l2-contracts
+
+      - name: Run C2 ephemeral e2e
+        run: SKIP_OP_BUILD=1 bash tools/.ci/c2-e2e.sh
+        env:
+          REPO_ROOT: ${{ github.workspace }}
+          BIN_DIR: ${{ github.workspace }}/.ci-c2-bins
+          FISCO_BIN: ${{ github.workspace }}/build/fisco-bcos-air/fisco-bcos
+          SKIP_FISCO_BUILD: "1"

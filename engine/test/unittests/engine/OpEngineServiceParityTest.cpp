@@ -1184,6 +1184,90 @@ BOOST_AUTO_TEST_CASE(op_da_skip_drops_higher_nonce_regardless_of_seal_order)
     }
 }
 
+BOOST_AUTO_TEST_CASE(op_da_block_budget_admits_at_cap_then_drops_and_keeps_forced)
+{
+    // BU — maxBlockSize is a cumulative estimated-DA budget: the forced (undroppable)
+    // envelope preloads it and a sealed tx is admitted only while it fits the remaining
+    // budget. At exactly the remaining budget it lands; one estimated byte over it is
+    // dropped while the forced envelope still lands. (op_da_skip covers maxTxSize; this
+    // is the maxBlockSize/Budget engine path, previously tested only in isolation.)
+    bcos::crypto::Secp256k1Crypto secp;
+    auto key = secp.generateKeyPair();
+    bcos::bytes incompressible(200);
+    for (std::size_t i = 0; i < incompressible.size(); ++i)
+    {
+        incompressible[i] = static_cast<bcos::byte>(i * 7 + 1);
+    }
+    auto sealed = makeDecodableWeb3Tx(1, key.get(), incompressible);
+    auto const sealedRaw = bcostars::protocol::reassembleWeb3RawTransaction(
+        sealed.tx->extraTransactionBytes(), sealed.tx->signatureData());
+    auto const sealedEst =
+        bcos::evm::opstack::estimatedDaSize(evmc::bytes_view(sealedRaw.data(), sealedRaw.size()));
+
+    // Forced envelope carried through payloadAttributes.transactions (the same shape the
+    // txFits test uses); its estimate is what preloads the budget.
+    auto forced = makeDecodableWeb3Tx(0);
+    auto const forcedRaw = bcos::fromHex(forced.rawHex);
+    auto const forcedEst =
+        bcos::evm::opstack::estimatedDaSize(evmc::bytes_view(forcedRaw.data(), forcedRaw.size()));
+
+    auto buildWithBudget = [&](std::uint64_t maxBlockSize) {
+        auto daCaps = std::make_shared<bcos::engine::DACaps>();
+        daCaps->maxBlockSize.store(maxBlockSize, std::memory_order_relaxed);
+        auto delegate = std::make_shared<RecordingScheduler>();
+        delegate->failFirst = false;
+        OpServicePair pair(/*allowSynthesizedL1Attributes=*/true, delegate, daCaps);
+        delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+        pair.memPool.pool.push_back(sealed.tx);
+
+        auto attrs = makeOpPayloadAttributes();
+        attrs.minBaseFee = std::nullopt;
+        attrs.noTxPool = false;
+        attrs.transactions = std::vector<std::string>{forced.rawHex};
+        auto const hash =
+            bcos::h256("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+        registerVerifiedBlock(pair.storage, hash, 0);
+        registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+
+        auto result = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+        BOOST_REQUIRE_EQUAL(static_cast<int>(result.payloadStatus.status),
+            static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+        BOOST_REQUIRE(result.payloadId.has_value());
+        auto payload = bcos::task::syncWait(pair.service.getPayload(*result.payloadId, 3));
+        BOOST_REQUIRE(payload);
+        std::vector<bcos::bytes> raws;
+        raws.reserve(payload->executionPayload.transactions.size());
+        for (auto const& tx : payload->executionPayload.transactions)
+        {
+            raws.push_back(tx.raw);
+        }
+        return raws;
+    };
+    auto contains = [](std::vector<bcos::bytes> const& raws, bcos::bytes const& needle) {
+        for (auto const& raw : raws)
+        {
+            if (raw == needle)
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    // Exactly at the remaining budget: the sealed tx is admitted alongside forced.
+    auto const atCap = buildWithBudget(forcedEst + sealedEst);
+    BOOST_CHECK_MESSAGE(contains(atCap, forcedRaw), "forced envelope must always be present");
+    BOOST_CHECK_MESSAGE(contains(atCap, sealedRaw), "sealed tx must fit exactly at the budget");
+
+    // One estimated byte over: the sealed tx is dropped, the forced envelope still lands.
+    auto const overCap = buildWithBudget(forcedEst + sealedEst - 1);
+    BOOST_CHECK_MESSAGE(
+        contains(overCap, forcedRaw), "forced envelope must survive an over-budget sealed tx");
+    BOOST_CHECK_MESSAGE(
+        !contains(overCap, sealedRaw), "sealed tx exceeding the block budget must be dropped");
+}
+
 BOOST_AUTO_TEST_CASE(op_fcu_zero_head_is_invalid)
 {
     // op-geth answers STATUS_INVALID for a zero head, not SYNCING.
