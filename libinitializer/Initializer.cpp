@@ -780,7 +780,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     {
         INITIALIZER_LOG(INFO) << LOG_BADGE("create archive service");
         m_archiveService = std::make_shared<bcos::archive::ArchiveService>(m_storage, ledger,
-            m_blockStorage, m_nodeConfig->archiveListenIP(), m_nodeConfig->archiveListenPort());
+            m_protocolInitializer->blockFactory(), m_blockStorage, m_nodeConfig->archiveListenIP(),
+            m_nodeConfig->archiveListenPort());
     }
 #endif
 

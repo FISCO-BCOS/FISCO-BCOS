@@ -69,12 +69,6 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
     co_return;
 }
 
-void bcos::ledger::tag_invoke(ledger::tag_t<removeExpiredNonce> /*unused*/, LedgerInterface& ledger,
-    protocol::BlockNumber expiredNumber)
-{
-    ledger.removeExpiredNonce(expiredNumber, false);
-}
-
 bcos::task::Task<bcos::protocol::Block::Ptr> bcos::ledger::tag_invoke(
     ledger::tag_t<getBlockData> /*unused*/, LedgerInterface& ledger,
     protocol::BlockNumber blockNumber, int32_t blockFlag)

@@ -132,8 +132,6 @@ public:
 
     bool buildGenesisBlock(GenesisConfig const& genesis, ledger::LedgerConfig const& ledgerConfig);
 
-    void asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNumber,
-        std::function<void(Error::Ptr&&, std::vector<std::string>&&)> callback);
     void setKeyPageSize(size_t keyPageSize) { m_keyPageSize = keyPageSize; }
 
     task::Task<bcos::ledger::SystemConfigs> fetchAllSystemConfigs(
@@ -174,9 +172,6 @@ private:
     void getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
         std::function<void(Error::Ptr&&, MerkleProofPtr&&)> _onGetProof);
 
-    void asyncGetSystemTableEntry(const std::string_view& table, const std::string_view& key,
-        std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> callback);
-
     void createFileSystemTables(uint32_t blockVersion);
 
     bcos::storage::StorageInterface::Ptr getBlockStorage()
@@ -194,10 +189,6 @@ private:
 
     task::Task<std::optional<ledger::StorageState>> getStorageState(
         std::string_view _address, protocol::BlockNumber _blockNumber) override;
-
-    std::tuple<bool, bcos::crypto::HashListPtr, std::shared_ptr<std::vector<bytesConstPtr>>>
-    needStoreUnsavedTxs(
-        bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr _block);
 
     bcos::consensus::ConsensusNodeList selectWorkingSealer(
         const bcos::ledger::LedgerConfig& _ledgerConfig, std::int64_t _epochSealerNum);
