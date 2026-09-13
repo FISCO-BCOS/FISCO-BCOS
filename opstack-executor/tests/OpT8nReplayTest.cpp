@@ -703,6 +703,10 @@ bool loadBlockContext(const std::string& id, const JsonValue& blk, BlockContext&
                             // carry 0xef0100||tuple.addr delegation code in the vector
                             // postState (required only when this tx has marked tuples).
                             const auto authAddr = hexAddr(*auth.signer);
+                            // 仅 setcode/7702 载体路径。当前所有 setcode 向量都是平面单块
+                            // （postState 恒在）；若将来出现含 7702 交易的【采样链】向量，
+                            // 此处需与 replaySingleBlockInto 同样加 wantPostState 门控——
+                            // A″（isthmus/jovian 链段可达）的前置条件。
                             const auto& post = jAt(blk, "postState");
                             if (post.isMember(authAddr))
                             {
@@ -1685,8 +1689,20 @@ void replayChainVector(const std::string& id, const JsonValue& v, DivergenceLedg
     if (!sampledAll)
     {
         const auto& sb = v["sampledBlocks"];
+        // 非数组（null/字符串/数字）会让 jsoncpp 的 size() 返回 0，静默关闭整条链的
+        // 账户级状态比对而不报错——与「绿但空转」同类，必须显式拒绝。
+        BOOST_REQUIRE_MESSAGE(sb.isArray(), "sampledBlocks must be an array");
         for (Json::ArrayIndex k = 0; k < sb.size(); ++k)
-            sampled.insert(static_cast<std::size_t>(sb[k].asInt64()));
+        {
+            const auto& e = sb[k];
+            BOOST_REQUIRE_MESSAGE(e.isInt64() || e.isUInt64(),
+                "sampledBlocks[" + std::to_string(k) + "] must be an integer");
+            const auto idx = e.asInt64();
+            BOOST_REQUIRE_MESSAGE(idx >= 0 && static_cast<std::size_t>(idx) < blocks.size(),
+                "sampledBlocks[" + std::to_string(k) + "] = " + std::to_string(idx) +
+                    " out of range [0, " + std::to_string(blocks.size()) + ")");
+            sampled.insert(static_cast<std::size_t>(idx));
+        }
     }
     opstack_test::MutableStorage storage;
     evmone::test::TestState chainState;
