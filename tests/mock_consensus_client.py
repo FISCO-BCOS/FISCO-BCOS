@@ -15,7 +15,12 @@ mock_consensus_client.py — FISCO-BCOS Engine API Smoke Test (Karst dialect)
 
 用法:
     pip install requests
-    python3 mock_consensus_client.py [RPC_URL] [JWT_SECRET_FILE]
+    python3 mock_consensus_client.py [RPC_URL] [JWT_SECRET_FILE] [--deposit-rejected]
+
+  --deposit-rejected  目标链跑 Eth 车道（executor_version=2）。0x7e deposit 是 OP 车道
+                      扩展，Eth 构建路径把它当 undecodable，FCU 终态 INVALID
+                      （updateForkchoice 的 fcInvalidIfUndecodable 语义）。此模式下
+                      出块流程不再注入 deposit，并新增"注入 deposit 必须被拒"的负测。
 
 退出码: 0 = 全部通过, 1 = 有测试失败
 """
@@ -68,6 +73,13 @@ UNIMPLEMENTED_METHODS = ("engine_forkchoiceUpdatedV4",)
 # The gas limit sent in payloadAttributes. See test_negative_cases / the note below: this
 # node currently IGNORES it and takes the gas limit from its own SystemConfig.
 ATTRS_GAS_LIMIT = "0x1c9c380"
+
+# Set by --deposit-rejected: the target chain runs the Eth lane (executor_version=2),
+# where a 0x7e deposit envelope in payloadAttributes.transactions is answered with a
+# terminal INVALID (deposits are an OP-lane extension; PR #5593 round-3 L). Under this
+# flag the block flow injects no forced deposit and a dedicated negative case pins the
+# rejection instead.
+DEPOSIT_REJECTED = False
 
 # ---- Minimal RLP encoder (enough for the deposit fixture) ----
 
@@ -242,9 +254,17 @@ def next_timestamp() -> str:
     return hex(int(time.time()) + _timestamp_bump)
 
 
-def run_karst_block_flow(no_tx_pool: bool) -> bool:
-    """One op-node-shaped block: FCU V3 (deposit injected) -> getPayloadV5 -> newPayloadV4."""
+def run_karst_block_flow(no_tx_pool: bool, forced_deposit: bool = True) -> bool:
+    """One op-node-shaped block: FCU V3 (deposit injected) -> getPayloadV5 -> newPayloadV4.
+
+    With forced_deposit=False (Eth lane, --deposit-rejected) the attributes carry no
+    transactions and the deposit-specific assertions are skipped: the payload is built
+    from the txpool instead, and the injected-deposit rejection is pinned separately by
+    test_deposit_envelope_is_rejected_on_eth_lane.
+    """
     label = f"noTxPool={str(no_tx_pool).lower()}"
+    if not forced_deposit:
+        label += ", no forced deposit (Eth lane)"
     _log_test(f"FCU V3 + getPayloadV5 + newPayloadV4 ({label})")
 
     head_hash = get_head_hash()
@@ -261,13 +281,6 @@ def run_karst_block_flow(no_tx_pool: bool) -> bool:
         "suggestedFeeRecipient": FEE_RECIPIENT,
         "withdrawals": [],
         "parentBeaconBlockRoot": ZERO_HASH,
-        "transactions": [DEPOSIT_RAW],
-        "noTxPool": no_tx_pool,
-        "gasLimit": ATTRS_GAS_LIMIT,
-        # Bare JSON number, NOT a hex string: op-node serializes MinBaseFee as a plain
-        # *uint64 without hexutil (op-service/eth/types.go:523, v1.19.3), so the mock
-        # must put the same wire shape on the wire ("minBaseFee": 0).
-        "minBaseFee": 0,
         # Holocene Bytes8 wire shape: an 8-byte hex string, u32 BE denominator in
         # [0:4] and u32 BE elasticity in [4:8] (op-service/eth/types.go:521,
         # EIP1559Params *Bytes8, v1.19.3). All-zero means "SystemConfig has not set
@@ -275,6 +288,14 @@ def run_karst_block_flow(no_tx_pool: bool) -> bool:
         # built extraData.
         "eip1559Params": "0x0000000000000000",
     }
+    if forced_deposit:
+        payload_attrs["transactions"] = [DEPOSIT_RAW]
+        payload_attrs["noTxPool"] = no_tx_pool
+        payload_attrs["gasLimit"] = ATTRS_GAS_LIMIT
+        # Bare JSON number, NOT a hex string: op-node serializes MinBaseFee as a plain
+        # *uint64 without hexutil (op-service/eth/types.go:523, v1.19.3), so the mock
+        # must put the same wire shape on the wire ("minBaseFee": 0).
+        payload_attrs["minBaseFee"] = 0
 
     fcu = rpc_result("engine_forkchoiceUpdatedV3", [fc_state, payload_attrs])
     status = fcu["payloadStatus"]["status"]
@@ -324,14 +345,26 @@ def run_karst_block_flow(no_tx_pool: bool) -> bool:
         return False
 
     # dep-1 byte fidelity: the injected deposit's raw bytes lead the transaction list.
+    # On the Eth lane (no forced deposit) the txpool is the only tx source on this
+    # harness, so a 0x7e envelope in the payload would mean a deposit was executed
+    # after all — reject that too.
     txs = payload["transactions"]
-    if not txs or txs[0].lower() != DEPOSIT_RAW.lower():
-        _log_fail(f"deposit raw bytes not first in payload transactions: {txs[:2]}")
+    if forced_deposit:
+        if not txs or txs[0].lower() != DEPOSIT_RAW.lower():
+            _log_fail(f"deposit raw bytes not first in payload transactions: {txs[:2]}")
+            return False
+        if no_tx_pool and len(txs) != 1:
+            _log_fail(
+                f"noTxPool=true payload must contain exactly the forced deposit, got {len(txs)}"
+            )
+            return False
+    elif any(tx.lower().startswith("0x7e") for tx in txs):
+        _log_fail(f"Eth lane built a deposit envelope into the payload: {txs[:2]}")
         return False
-    if no_tx_pool and len(txs) != 1:
-        _log_fail(f"noTxPool=true payload must contain exactly the forced deposit, got {len(txs)}")
-        return False
-    _log_info(f"deposit in payload at index 0 ({len(txs)} tx total)")
+    if forced_deposit:
+        _log_info(f"deposit in payload at index 0 ({len(txs)} tx total)")
+    else:
+        _log_info(f"no forced deposit; payload carries {len(txs)} txpool tx(s)")
 
     beacon_root = result.get("parentBeaconBlockRoot", ZERO_HASH)
     new_status = rpc_result("engine_newPayloadV4", [payload, [], beacon_root, []])
@@ -369,6 +402,45 @@ def run_karst_block_flow(no_tx_pool: bool) -> bool:
 
     _log_pass()
     return True
+
+
+def test_deposit_envelope_is_rejected_on_eth_lane() -> None:
+    """Eth lane: a 0x7e deposit in payloadAttributes.transactions must be terminal INVALID.
+
+    Deposits are an OP-Stack payloadAttributes extension; the Eth build path decodes the
+    envelope with allowDeposit=false and answers it as undecodable, which
+    forkchoiceUpdated maps to a terminal INVALID (fcInvalidIfUndecodable). A VALID here
+    would mean the Eth lane executes deposits again — the exact regression 071c45fec
+    closed.
+    """
+    _log_test("FCU V3 with a deposit envelope -> INVALID on the Eth lane")
+
+    head_hash = get_head_hash()
+    fc_state = {
+        "headBlockHash": head_hash,
+        "safeBlockHash": head_hash,
+        "finalizedBlockHash": head_hash,
+    }
+    payload_attrs = {
+        "timestamp": next_timestamp(),
+        "prevRandao": PREV_RANDAO,
+        "suggestedFeeRecipient": FEE_RECIPIENT,
+        "withdrawals": [],
+        "parentBeaconBlockRoot": ZERO_HASH,
+        "transactions": [DEPOSIT_RAW],
+        "noTxPool": True,
+        "gasLimit": ATTRS_GAS_LIMIT,
+        "minBaseFee": 0,
+        "eip1559Params": "0x0000000000000000",
+    }
+
+    fcu = rpc_result("engine_forkchoiceUpdatedV3", [fc_state, payload_attrs])
+    status = fcu["payloadStatus"]["status"]
+    if status != "INVALID" or fcu.get("payloadId"):
+        _log_fail(f"Eth lane accepted a deposit envelope: status={status}, payloadId={fcu.get('payloadId')}")
+        return
+    _log_info(f"status=INVALID ({fcu['payloadStatus'].get('validationError')})")
+    _log_pass()
 
 
 def run_v2_block_flow() -> None:
@@ -665,12 +737,14 @@ def generate_jwt(secret_file: str) -> str:
 
 
 def main() -> int:
-    global RPC_URL, HEADERS
+    global RPC_URL, HEADERS, DEPOSIT_REJECTED
 
-    if len(sys.argv) > 1:
-        RPC_URL = sys.argv[1]
-    if len(sys.argv) > 2:
-        jwt_token = generate_jwt(sys.argv[2])
+    positional = [a for a in sys.argv[1:] if not a.startswith("--")]
+    DEPOSIT_REJECTED = "--deposit-rejected" in sys.argv[1:]
+    if positional:
+        RPC_URL = positional[0]
+    if len(positional) > 1:
+        jwt_token = generate_jwt(positional[1])
         HEADERS["Authorization"] = f"Bearer {jwt_token}"
         _log_info("JWT token generated")
 
@@ -687,9 +761,14 @@ def main() -> int:
         # 2. Pure forkchoice update (no payload build).
         test_forkchoice_v3_without_payload()
 
-        # 3./4./5. Two full block flows with noTxPool rotation: the forced deposit must
-        # be the whole payload under noTxPool=true, and still lead it under false.
-        if run_karst_block_flow(no_tx_pool=True):
+        # 3./4./5. Full block flow(s). On the OP lane the noTxPool rotation asserts the
+        # forced deposit is the whole payload under true and still leads it under false.
+        # On the Eth lane (--deposit-rejected) deposits are refused, so a single
+        # deposit-free flow runs and the rejection is pinned by its own negative case.
+        if DEPOSIT_REJECTED:
+            if run_karst_block_flow(no_tx_pool=True, forced_deposit=False):
+                test_deposit_envelope_is_rejected_on_eth_lane()
+        elif run_karst_block_flow(no_tx_pool=True):
             run_karst_block_flow(no_tx_pool=False)
 
         # 6. The pre-Karst surface is still live.

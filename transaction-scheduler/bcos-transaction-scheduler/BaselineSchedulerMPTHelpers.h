@@ -155,11 +155,15 @@ inline void validateMPTFlagMatrix(bcos::ledger::Features const& features)
 }
 
 /// OP mode (executor_version == OPSTACK_EXECUTOR_VERSION) is a genesis-only property: it is
-/// decided when the chain is created and cannot change afterwards. It must carry the
-/// genesis-only feature_l2_ethereum_compat, and both the executor_version and that feature
-/// must be genesis-bound (activation block 0). No higher executor_version is a defined lane.
-/// A mismatch means the node is booting a data dir/config that disagrees on the chain's mode,
-/// which forks the executor/state-root scheme; refuse to start.
+/// decided when the chain is created and cannot change afterwards. It requires the
+/// genesis-only feature_l2_ethereum_compat (the OP lane commits account state in MPT only),
+/// and executor_version must be genesis-bound (activation block 0). No higher
+/// executor_version is a defined lane.
+/// The converse does NOT hold: feature_l2_ethereum_compat is the LEDGER's L2 state shape,
+/// and the Ethereum lane (executor_version == ETHEREUM_EXECUTOR_VERSION) serves L2 chains
+/// with it — the pure-Ethereum executor on an MPT root, sealing through the consensus
+/// layer (the executor integration harness has covered that pairing since #5397). Such a
+/// chain is Eth mode, not OP mode; only the OP lane needs engine-driven production.
 inline void validateOpModeGenesisOnly(bcos::ledger::Features const& features, int executorVersion,
     bcos::protocol::BlockNumber executorVersionActivation)
 {
@@ -173,13 +177,15 @@ inline void validateOpModeGenesisOnly(bcos::ledger::Features const& features, in
                                   " is above OPSTACK_EXECUTOR_VERSION; OP mode is exactly " +
                                   std::to_string(bcos::ledger::OPSTACK_EXECUTOR_VERSION)));
     }
-    if (opMode != flagOn)
+    if (opMode && !flagOn)
     {
         BOOST_THROW_EXCEPTION(
             InvalidMPTFlagMatrix{} << bcos::errinfo_comment(
                 "OP mode must be decided at chain creation: executor_version=" +
-                std::to_string(executorVersion) + " but feature_l2_ethereum_compat=" +
-                std::string(flagOn ? "on" : "off") + " (both are genesis-only and must agree)"));
+                std::to_string(executorVersion) +
+                " (the OPSTACK slot) requires feature_l2_ethereum_compat=on, but it is off; "
+                "the OP lane commits account state in MPT only, so the flag is genesis-bound "
+                "with the mode"));
     }
     if (opMode && executorVersionActivation != 0)
     {

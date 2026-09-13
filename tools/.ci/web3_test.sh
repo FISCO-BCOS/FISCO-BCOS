@@ -33,6 +33,9 @@ GOERLI_URL=https://goerli.infura.io/v3/your_infura_api_key_here
 EOF
 
 npx hardhat test --network bcosnet
+# Propagate the hardhat result: everything below (the dormant websocket-env rewrite)
+# would otherwise reset $? to 0 and turn 22 failing tests into "web3 test success".
+hardhat_rc=$?
 
 
 # websocket test
@@ -49,3 +52,5 @@ GOERLI_URL=https://goerli.infura.io/v3/your_infura_api_key_here
 EOF
 
 # npx hardhat test test/tx/eth_sendRawTransaction* --network bcosnet
+
+exit "${hardhat_rc}"

@@ -249,16 +249,21 @@ struct HistoricalMptContext
     bool fullTrie = false;
 };
 
-/// Resolve a historical block's committed MPT state root and scenario flag, applying the same
-/// checks as getProof (generateProof's BlockNotCommitted): the block must exist, the node must
-/// have a local MPT node reader, and the state root must be present in MPT node storage.
-/// Throws a JsonRpcException on any failure — a historical query is never silently served from
-/// the latest state. The empty root is a legal "no accounts" root (genesis / pre-MPT / empty
-/// blocks): the empty trie has no node rows, so it is NOT a "root not committed" error — the
-/// scenario flag below still governs how absence at it reads.
-bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
+/// Resolve a block's committed MPT state root and scenario flag, applying the same checks as
+/// getProof (generateProof's BlockNotCommitted): the block must exist, the node must have a
+/// local MPT node reader, and — for historical tags — the state root must be present in MPT
+/// node storage. `requireRootInStorage` is false only for the latest/pending tags: a
+/// flat-storage chain's tip header still carries a non-empty root that is NOT an MPT root,
+/// and such a request must fall back to the flat state read instead of failing, so the core
+/// answers std::nullopt for a missing reader/root there and the caller decides. Historical
+/// tags keep the strict contract: a committed historical root that cannot be read is a
+/// -32004, never a silent serve from the latest state. The empty root is a legal "no
+/// accounts" root (genesis / pre-MPT / empty blocks): the empty trie has no node rows, so it
+/// is NOT a "root not committed" error — the scenario flag below still governs how absence
+/// at it reads.
+task::Task<std::optional<HistoricalMptContext>> tryResolveMptContext(
     bcos::ledger::LedgerInterface& ledger, bcos::protocol::BlockNumber blockNumber,
-    std::shared_ptr<rpc::NodeService::MPTNodeReader> const& mptReader)
+    std::shared_ptr<rpc::NodeService::MPTNodeReader> const& mptReader, bool requireRootInStorage)
 {
     auto const block = co_await ledger::getBlockData(ledger, blockNumber, bcos::ledger::HEADER);
     if (!block || !block->blockHeader()) [[unlikely]]
@@ -268,7 +273,11 @@ bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
     auto const stateRoot = block->blockHeader()->stateRoot();
     if (!mptReader) [[unlikely]]
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "MPT not enabled on this node"));
+        if (requireRootInStorage) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "MPT not enabled on this node"));
+        }
+        co_return std::nullopt;
     }
     // An empty state root (block 0 / empty blocks / pre-MPT blocks) is a
     // legal "no accounts" root, not a missing node row — skip the root-presence check and let
@@ -278,6 +287,12 @@ bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
     {
         if (!co_await bcos::storage2::readOne(*mptReader, stateRoot)) [[unlikely]]
         {
+            if (!requireRootInStorage)
+            {
+                // The tip header's root is not an MPT root (flat-storage chain): the
+                // caller falls back to the flat state read.
+                co_return std::nullopt;
+            }
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 EthHistoricalStateUnavailable, "Block stateRoot not in MPT node storage"));
         }
@@ -289,6 +304,26 @@ bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
     auto const fullTrie = co_await ledger::getFeature(
         ledger, ledger::Features::Flag::feature_l2_ethereum_compat, blockNumber);
     co_return HistoricalMptContext{stateRoot, fullTrie};
+}
+
+/// Historical-tag entry: strict — a missing reader or a root absent from MPT node storage
+/// throws (see tryResolveMptContext).
+bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
+    bcos::ledger::LedgerInterface& ledger, bcos::protocol::BlockNumber blockNumber,
+    std::shared_ptr<rpc::NodeService::MPTNodeReader> const& mptReader)
+{
+    auto const ctx = co_await tryResolveMptContext(ledger, blockNumber, mptReader, true);
+    co_return *ctx;
+}
+
+/// latest/pending entry: lenient — a missing reader or a tip root absent from MPT node
+/// storage yields std::nullopt so the caller serves the request from the flat state instead
+/// of failing the tag every client sends by default.
+task::Task<std::optional<HistoricalMptContext>> tryResolveLatestMptContext(
+    bcos::ledger::LedgerInterface& ledger, bcos::protocol::BlockNumber blockNumber,
+    std::shared_ptr<rpc::NodeService::MPTNodeReader> const& mptReader)
+{
+    co_return co_await tryResolveMptContext(ledger, blockNumber, mptReader, false);
 }
 
 task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value& response)
@@ -315,15 +350,17 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
     if (isLatest)
     {
         // OP / scenario-B chains commit account state in MPT only; the flat ACCOUNT_BALANCE
-        // row is absent, so "latest" must read the tip block's committed state root (same as
-        // an explicit block tag) instead of ledger::getStorageAt on the empty flat plane.
+        // row is absent, so "latest" reads the tip block's committed state root when it IS an
+        // MPT root. A flat-storage chain's tip root is not (its state lives in the flat
+        // rows), so tryResolveLatestMptContext answers nullopt there and the flat read below
+        // serves the request — the pre-5593 behaviour the Air Hardhat suite depends on.
         auto const mptReader = m_nodeService->mptNodeReader();
         if (mptReader)
         {
-            auto const ctx = co_await resolveHistoricalMptContext(*ledger, blockNumber, mptReader);
-            if (ctx.fullTrie)
+            auto const ctx = co_await tryResolveLatestMptContext(*ledger, blockNumber, mptReader);
+            if (ctx && ctx->fullTrie)
             {
-                bcos::ledger::mpt::MPTReadView view{*mptReader, ctx.stateRoot};
+                bcos::ledger::mpt::MPTReadView view{*mptReader, ctx->stateRoot};
                 auto const account = co_await view.readAccount(
                     bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
                 if (account)
@@ -603,13 +640,16 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
     u256 nonce = 0;
     if (isLatest)
     {
+        // Same latest semantics as getBalance: an MPT-committed tip is read through its
+        // root; a flat-storage tip root answers nullopt and the flat NONCE row below
+        // serves the request.
         auto const mptReader = m_nodeService->mptNodeReader();
         if (mptReader)
         {
-            auto const ctx = co_await resolveHistoricalMptContext(*ledger, blockNumber, mptReader);
-            if (ctx.fullTrie)
+            auto const ctx = co_await tryResolveLatestMptContext(*ledger, blockNumber, mptReader);
+            if (ctx && ctx->fullTrie)
             {
-                bcos::ledger::mpt::MPTReadView view{*mptReader, ctx.stateRoot};
+                bcos::ledger::mpt::MPTReadView view{*mptReader, ctx->stateRoot};
                 auto const account = co_await view.readAccount(
                     bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight});
                 if (account)

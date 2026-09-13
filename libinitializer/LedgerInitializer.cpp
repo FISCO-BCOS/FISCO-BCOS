@@ -48,10 +48,11 @@ std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::buil
     auto features = bcos::task::syncWait(ledger->fetchAllFeatures(blockNumber + 1));
     bcos::scheduler_v1::validateMPTFlagMatrix(features);
 
-    // OP mode is a genesis-only property: executor_version == OPSTACK must carry the
-    // genesis-only feature_l2_ethereum_compat, and it must itself be genesis-bound. The value
+    // OP mode is a genesis-only property: executor_version == OPSTACK requires the
+    // genesis-only feature_l2_ethereum_compat and must itself be genesis-bound. The value
     // is read from the ledger (written at genesis), with the genesis config as the fallback
-    // when the on-chain entry is absent.
+    // when the on-chain entry is absent. The Eth lane (executor_version == ETHEREUM) may
+    // carry the same feature for an L2 state shape — that is Eth mode, not OP mode.
     {
         int executorVersion = nodeConfig->executorVersion();
         bcos::protocol::BlockNumber executorVersionActivation = 0;
