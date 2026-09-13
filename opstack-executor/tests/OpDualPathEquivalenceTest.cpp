@@ -14,14 +14,18 @@
 //     `_op_expected.header.stateRoot`) is hard for non-contract_create, soft REPORT for
 //     contract_create (the create-output divergence is a known base-layer issue); green guard
 //     (deposit_basefee ×2) is always hard; receipt-count sanity is asserted.
-//   - pre-isthmus (ecotone/fjord/granite): FISCO executes under isthmus semantics by design (the
-//     golden fork mismatch is expected output); the announced golden commitments are a different
-//     fork's, so route A is expected to be rejected at the six-way verify → soft REPORT (never
-//     hard). Any OTHER failure (shape/validation) is a real bug → BOOST_ERROR.
+//   - pre-isthmus (ecotone/fjord/granite) SINGLE-BLOCK vectors: FISCO executes under isthmus
+//     semantics by design (the golden fork mismatch is expected output); the announced golden
+//     commitments are a different fork's, so route A is expected to be rejected at the six-way
+//     verify → soft REPORT (never hard). Any OTHER failure (shape/validation) is a real bug →
+//     BOOST_ERROR. Chain blocks are EXEMPT from this pin: each block executes under its own
+//     `_info.hardfork`, so its golden is that fork's and the commitments are comparable.
 //
-// Fork model: `forkFlagsFor(bool jovian)` + `configAt` (feature-op_jovian: isthmus/jovian). Fork
-// parity is
-// asserted by resolving cfg from the same source as the scheduler's internal configAt.
+// Fork model: a chain block's execution fork is selected PER BLOCK from `_info.hardfork`
+// (mirroring OpT8nReplayTest.loadBlockContext's name→config switch) by building a timestamp-0
+// single-activation schedule `"0:<hardfork>"`; a single-block vector keeps the legacy
+// vector-level pin (isthmus, or jovian when the vector is jovian). Fork parity is asserted by
+// checking the schedule's resolved config self-identifies as the intended exec fork (cfg.fork).
 // Exception handling: per-vector catches use catch(std::exception)/catch(...) (libevmone -fno-rtti
 // makes typed catch unreliable) — catch → BOOST_ERROR + continue.
 // has_storage scan (same-block create pre-triage) + /sys tripwire derived-table prefix assertion
@@ -37,7 +41,7 @@
 #include <bcos-evm/adapter/StateRootCompute.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
-#include <bcos-evm/test/opstack/support/OpForkFlagsCompat.h>
+#include <bcos-framework/engine/OpTime.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage/Entry.h>
@@ -76,6 +80,7 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -170,9 +175,57 @@ bcos::protocol::BlockFactory::Ptr makeBlockFactory()
 
 constexpr uint64_t kChainId = 0x2105;
 
-bcos::evm::opstack::OpForkFlags forkFlagsFor(bool jovian)
+bcos::evm::opstack::OpFork forkEnumForName(const std::string& id, const std::string& name)
 {
-    return bcos::evm::opstack::OpForkFlags{.jovianActive = jovian};
+    using bcos::evm::opstack::OpFork;
+    if (name == "regolith")
+        return OpFork::Regolith;
+    if (name == "canyon")
+        return OpFork::Canyon;
+    if (name == "ecotone")
+        return OpFork::Ecotone;
+    if (name == "fjord")
+        return OpFork::Fjord;
+    if (name == "granite")
+        return OpFork::Granite;
+    if (name == "holocene")
+        return OpFork::Holocene;
+    if (name == "isthmus")
+        return OpFork::Isthmus;
+    if (name == "jovian")
+        return OpFork::Jovian;
+    // Mirrors OpT8nReplayTest.cpp loadBlockContext: no default fork, unknown name is a hard error.
+    throw std::invalid_argument(
+        id + ": _info.hardfork must be exactly "
+             "regolith|canyon|ecotone|fjord|granite|holocene|isthmus|jovian, got '" +
+        name + "'");
+}
+
+std::string_view forkNameForEnum(bcos::evm::opstack::OpFork fork)
+{
+    using bcos::evm::opstack::OpFork;
+    switch (fork)
+    {
+    case OpFork::Regolith:
+        return "regolith";
+    case OpFork::Canyon:
+        return "canyon";
+    case OpFork::Ecotone:
+        return "ecotone";
+    case OpFork::Fjord:
+        return "fjord";
+    case OpFork::Granite:
+        return "granite";
+    case OpFork::Holocene:
+        return "holocene";
+    case OpFork::Isthmus:
+        return "isthmus";
+    case OpFork::Jovian:
+        return "jovian";
+    case OpFork::Karst:
+        return "karst";
+    }
+    throw std::invalid_argument("unknown OpFork enum");
 }
 
 struct Fixture
@@ -483,29 +536,35 @@ void reportGolden(const std::string& id, const JsonValue& vec, const bcos::h256&
 /// the golden commitments (filled by the caller via fillAnnouncedHeaderFromGolden), route A runs
 /// through OpScheduler.executeBlock, and the golden three-way + receipt sanity are checked.
 /// isthmus/jovian must pass the six-way verify (FISCO == op-geth commitments); pre-isthmus is
-/// expected to be rejected at the verify (fork mismatch) → soft REPORT. mergeBackStorage persists
-/// route A's authoritative post-state (chain inheritance).
+/// expected to be rejected at the verify (single-block isthmus pin / chain announce-shape gap) →
+/// soft REPORT. mergeBackStorage persists route A's authoritative post-state (chain inheritance).
 /// persistStateOnSoftReject: only chain callers set this — see the soft-reject branch; the
 /// scheduler throws the verify rejection BEFORE its pushView, so a soft-rejected block leaves no
 /// state behind for the next chain block unless we re-derive and adopt it.
 void runBlockEquivalence(const std::string& id, Fixture& fixture,
     bcos::protocol::BlockHeader::Ptr const& header, const std::vector<bcos::bytes>& rawTxBytes,
-    const JsonValue& vec, bool jovian, const bcos::evm::opstack::OpForkConfig& vectorCfg,
-    bool greenGuard, bool persistStateOnSoftReject, GoldenStats& stats)
+    const JsonValue& vec, bcos::evm::opstack::OpFork execFork, bool greenGuard,
+    bool persistStateOnSoftReject, GoldenStats& stats)
 {
-    // Fork parity: cfg = configAt(forkFlagsFor(jovian)), resolved from the same source as the
-    // scheduler's internal configAt (same forkFlagsFor, same static singleton object).
-    // Bind forkFlagsFor(jovian) to a named lvalue first: configAt takes const OpForkFlags&, and
-    // GCC-14's -Wdangling-reference flags passing a prvalue temporary here even though the
-    // returned reference aliases the static config, never the flags (false positive). The named
-    // lvalue preserves the reference + its address identity (the &cfg == &vectorCfg check below).
-    const auto forkFlags = forkFlagsFor(jovian);
-    const auto& cfg = op::configAt(forkFlags);
-    BOOST_CHECK_MESSAGE(&cfg == &vectorCfg, id << ": fork parity broken: block cfg != vector cfg");
-
+    // Declared fork (`_info.hardfork`) drives the hard/soft golden gate. The EXECUTED fork is
+    // execFork: equal to the declared fork for chain blocks (per-block fork config), but pinned to
+    // isthmus/jovian for single-block vectors (legacy vector-level pin; pre-isthmus singles stay
+    // soft-REPORT).
     const auto hardfork = jAt(jAt(vec, "_info"), "hardfork").asString();
     const bool isIsthmusJovian = (hardfork == "isthmus" || hardfork == "jovian");
     const bool hardGolden = isIsthmusJovian && (id.find("contract_create") == std::string::npos);
+
+    // Execution schedule: a timestamp-0 single activation of execFork built through the production
+    // parser ("0:<fork>"), so the scheduler's internal configAt(blockTs) resolves to exactly that
+    // fork's config. Fork parity: the resolved config must self-identify as execFork.
+    const auto schedule = std::make_shared<op::OpForkSchedule>(
+        op::OpForkSchedule::parse("0:" + std::string(forkNameForEnum(execFork))));
+    const auto tsSec = bcos::engine::unixSecondsFromInternalMillis(
+        static_cast<uint64_t>(header->timestamp()));
+    const auto& cfg = schedule->configAt(tsSec);
+    BOOST_CHECK_MESSAGE(cfg.fork == execFork,
+        id << ": fork parity broken: schedule resolved fork " << static_cast<int>(cfg.fork)
+           << " != execFork " << static_cast<int>(execFork));
 
     // Deposits (has_storage triage scan), built from the block-order Transaction objects
     // (mirroring the execute hook, no RLP parse).
@@ -553,11 +612,8 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
         seedParentHeaderForActivationCheck(fixture.multiLayerStorage, header);
 
         auto opScheduler = std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(
-            fixture.receiptFactory, fixture.hashImpl, kChainId,
-            std::make_shared<bcos::evm::opstack::OpForkSchedule>(
-                bcos::evm::opstack::OpForkSchedule::legacy(jovian)),
-            fixture.blockFactory, fixture.multiLayerStorage, /*ledger=*/nullptr,
-            fixture.ioServicePool);
+            fixture.receiptFactory, fixture.hashImpl, kChainId, schedule, fixture.blockFactory,
+            fixture.multiLayerStorage, /*ledger=*/nullptr, fixture.ioServicePool);
 
         opScheduler->executeBlock(block, /*verify=*/true,
             [&](bcos::Error::Ptr e, bcos::protocol::BlockHeader::Ptr, bool) {
@@ -566,8 +622,13 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
         if (routeAErr)
         {
             // isthmus/jovian: any executeBlock error is a real failure (FISCO must reproduce
-            // op-geth). pre-isthmus: a six-way commitment mismatch is the expected fork-mismatch
-            // divergence → soft REPORT; any other error is a real bug.
+            // op-geth). pre-isthmus: a six-way commitment mismatch is a soft REPORT, never hard.
+            // Two shapes feed this: (a) single-block vectors execute under the isthmus pin, so the
+            // announced golden is a different fork's; (b) chain blocks, now executed under their
+            // own fork, still carry the harness's announced-header default for a field the
+            // pre-Prague golden omits (no requestsHash in the golden → announced zero-valued h256
+            // vs the executed header's absent value → a presence mismatch, not a state
+            // divergence). Any OTHER error is a real bug → BOOST_ERROR below.
             const std::string msg = routeAErr->errorMessage();
             const bool commitmentMismatch =
                 msg.find("six-way commitment mismatch") != std::string::npos ||
@@ -585,10 +646,9 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
                     // with the coroutine and MLS still holds the PARENT — the next chain block
                     // would validate its txs against the stale nonce ("nonce too high"). Re-derive
                     // the same executed state as a verify=false probe and adopt it, matched against
-                    // its OWN computed header: the announced golden is a different fork's, so
-                    // re-announcing it would only re-trip the same fork-shape mismatch. The state
-                    // is authoritative route-A output; only the commitments are incomparable
-                    // across the fork.
+                    // its OWN computed header: re-announcing the golden would only re-trip the same
+                    // header-shape mismatch. The state is authoritative route-A output under the
+                    // block's own fork; only the commitments are incomparable here.
                     bcos::protocol::BlockHeader::Ptr probedHeader;
                     bcos::Error::Ptr probeError;
                     opScheduler->executeBlock(block, /*verify=*/false,
@@ -705,9 +765,10 @@ void runSingleVector(const std::string& id, const JsonValue& vec, Fixture& fixtu
     // Single-block vector header: isthmus/jovian use decodeGoldenHeader (golden authoritative
     // op-geth header); pre-isthmus (ecotone/fjord/granite) encodedHeaderHex would throw under
     // decodeOpHeader's strict 21-field decode (RTTI-bypass runtime_error, verified empirically),
-    // so fall back to buildHeaderFromEnv (same source as chain). Both execute under the same cfg
-    // (configAt → isthmusConfig); the golden three-way REPORTs a fork mismatch for pre-isthmus
-    // (soft) and the six-way verify is expected to reject them (see runBlockEquivalence).
+    // so fall back to buildHeaderFromEnv (same source as chain). Both execute under the legacy
+    // vector-level pin (execFork below → isthmusConfig, or jovianConfig for a jovian vector); the
+    // golden three-way REPORTs a fork mismatch for pre-isthmus (soft) and the six-way verify is
+    // expected to reject them (see runBlockEquivalence).
     const auto hardfork = jAt(jAt(vec, "_info"), "hardfork").asString();
     try
     {
@@ -736,22 +797,35 @@ void runSingleVector(const std::string& id, const JsonValue& vec, Fixture& fixtu
     // The announced header carries the golden commitments (route A's six-way verify = the
     // FISCO-vs-op-geth gate).
     fillAnnouncedHeaderFromGolden(header, vec, rawTxBytes);
-    // Named-lvalue first (see runBlockEquivalence's fork-parity comment): GCC-14
-    // -Wdangling-reference false positive on a prvalue OpForkFlags argument.
-    const auto forkFlags = forkFlagsFor(jovian);
-    const auto& vectorCfg = op::configAt(forkFlags);
-    runBlockEquivalence(id, fixture, header, rawTxBytes, vec, jovian, vectorCfg, greenGuard,
+    // Single-block execution fork: the legacy vector-level pin — isthmus unless the vector is
+    // jovian. Pre-isthmus single vectors deliberately execute under isthmus semantics (their
+    // golden is a different fork's, so route A softly REPORTs the fork mismatch). This is NOT a
+    // per-block fork choice; only chain vectors route by `_info.hardfork`.
+    const auto execFork = jovian ? op::OpFork::Jovian : op::OpFork::Isthmus;
+    runBlockEquivalence(id, fixture, header, rawTxBytes, vec, execFork, greenGuard,
         /*persistStateOnSoftReject=*/false, stats);
 }
 
 /// Chain vector: per-block runBlockEquivalence with route A mergeView inheritance (authoritative
 /// path). Block 0 pre is explicit; later blocks inherit the previous block's route A post-state.
-/// Each block's announced header carries its golden commitments (isthmus/jovian → the six-way
-/// verify is a hard FISCO-vs-op-geth gate).
+/// Each block executes under its own `_info.hardfork` (per-block fork config) and its announced
+/// header carries that fork's golden commitments — isthmus/jovian → the six-way verify is a hard
+/// FISCO-vs-op-geth gate, pre-isthmus → soft REPORT on a fork mismatch.
 void runChainVector(const std::string& id, const JsonValue& vec, Fixture& fixture,
     GoldenStats& stats)
 {
     const auto& blocks = jAt(vec, "blocks");
+    // Per-fork tallies: chain-only evidence that EVERY fork segment is driven through route A and
+    // compared against its OWN-fork golden (routeA = blocks that completed route A, i.e. reached
+    // reportGolden via a hard pass or a soft REPORT; a hard route-A failure contributes 0).
+    struct ForkTally
+    {
+        int blocks = 0;
+        int routeA = 0;
+        int match = 0;
+        int mismatch = 0;
+    };
+    std::map<std::string, ForkTally> perFork;
     for (std::size_t i = 0; i < blocks.size(); ++i)
     {
         const auto& blk = blocks[static_cast<Json::ArrayIndex>(i)];
@@ -761,13 +835,29 @@ void runChainVector(const std::string& id, const JsonValue& vec, Fixture& fixtur
         const auto header = buildHeaderFromEnv(jAt(blk, "env"));
         const auto rawTxBytes = buildRawTxBytes(blk, bid);
         fillAnnouncedHeaderFromGolden(header, blk, rawTxBytes);
-        const bool jovian = (jAt(jAt(blk, "_info"), "hardfork").asString() == "jovian");
-        const auto forkFlags = forkFlagsFor(jovian);  // named-lvalue first (GCC-14 dangling false positive)
-        const auto& vectorCfg = op::configAt(forkFlags);
-        runBlockEquivalence(bid, fixture, header, rawTxBytes, blk, jovian, vectorCfg,
+        // Per-block fork config: execute under the block's own declared fork, not a vector-level
+        // pin. The chain spans regolith..jovian, so a fixed pin mis-executes every pre-isthmus
+        // block and poisons the inherited state of the later (hard-checked) isthmus/jovian blocks.
+        const auto hardfork = jAt(jAt(blk, "_info"), "hardfork").asString();
+        const auto execFork = forkEnumForName(bid, hardfork);
+        const int matchBefore = stats.match;
+        const int mismatchBefore = stats.mismatch;
+        runBlockEquivalence(bid, fixture, header, rawTxBytes, blk, execFork,
             /*greenGuard=*/false, /*persistStateOnSoftReject=*/true, stats);
+        auto& tally = perFork[hardfork];
+        ++tally.blocks;
+        const int matchDelta = stats.match - matchBefore;
+        const int mismatchDelta = stats.mismatch - mismatchBefore;
+        tally.match += matchDelta;
+        tally.mismatch += mismatchDelta;
+        tally.routeA += matchDelta + mismatchDelta;
         ++stats.chainBlocks;
     }
+    std::cout << "  CHAIN-FORK " << id << ":";
+    for (const auto& [fork, tally] : perFork)
+        std::cout << " " << fork << "={blocks=" << tally.blocks << ",routeA=" << tally.routeA
+                  << ",goldenMatch=" << tally.match << ",goldenMismatch=" << tally.mismatch << "}";
+    std::cout << "\n";
 }
 }  // namespace
 
