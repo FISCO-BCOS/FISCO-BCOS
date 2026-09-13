@@ -485,10 +485,13 @@ void reportGolden(const std::string& id, const JsonValue& vec, const bcos::h256&
 /// isthmus/jovian must pass the six-way verify (FISCO == op-geth commitments); pre-isthmus is
 /// expected to be rejected at the verify (fork mismatch) → soft REPORT. mergeBackStorage persists
 /// route A's authoritative post-state (chain inheritance).
+/// persistStateOnSoftReject: only chain callers set this — see the soft-reject branch; the
+/// scheduler throws the verify rejection BEFORE its pushView, so a soft-rejected block leaves no
+/// state behind for the next chain block unless we re-derive and adopt it.
 void runBlockEquivalence(const std::string& id, Fixture& fixture,
     bcos::protocol::BlockHeader::Ptr const& header, const std::vector<bcos::bytes>& rawTxBytes,
     const JsonValue& vec, bool jovian, const bcos::evm::opstack::OpForkConfig& vectorCfg,
-    bool greenGuard, GoldenStats& stats)
+    bool greenGuard, bool persistStateOnSoftReject, GoldenStats& stats)
 {
     // Fork parity: cfg = configAt(forkFlagsFor(jovian)), resolved from the same source as the
     // scheduler's internal configAt (same forkFlagsFor, same static singleton object).
@@ -575,6 +578,45 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
                 std::cout << "  GOLDEN-REPORT " << id
                           << " route A rejected at six-way verify (pre-isthmus fork mismatch): "
                           << msg << "\n";
+                if (persistStateOnSoftReject)
+                {
+                    // Chain inheritance: the rejection above is thrown before coExecuteBlock's
+                    // pushView (OpScheduler.h:712-723 precedes :729), so the executed view died
+                    // with the coroutine and MLS still holds the PARENT — the next chain block
+                    // would validate its txs against the stale nonce ("nonce too high"). Re-derive
+                    // the same executed state as a verify=false probe and adopt it, matched against
+                    // its OWN computed header: the announced golden is a different fork's, so
+                    // re-announcing it would only re-trip the same fork-shape mismatch. The state
+                    // is authoritative route-A output; only the commitments are incomparable
+                    // across the fork.
+                    bcos::protocol::BlockHeader::Ptr probedHeader;
+                    bcos::Error::Ptr probeError;
+                    opScheduler->executeBlock(block, /*verify=*/false,
+                        [&](bcos::Error::Ptr e, bcos::protocol::BlockHeader::Ptr h, bool) {
+                            probeError = std::move(e);
+                            probedHeader = std::move(h);
+                        });
+                    if (probeError || !probedHeader)
+                    {
+                        BOOST_ERROR(id << ": pre-isthmus soft-reject probe re-execution failed: "
+                                       << (probeError ? probeError->errorMessage() : "no header"));
+                        return;
+                    }
+                    auto probedBlock = fixture.blockFactory->createBlock();
+                    probedBlock->setBlockHeader(probedHeader);
+                    bcos::Error::Ptr adoptError;
+                    opScheduler->adoptProbeAsPending(probedBlock,
+                        [&](bcos::Error::Ptr e, bcos::protocol::BlockHeader::Ptr, bool) {
+                            adoptError = std::move(e);
+                        });
+                    if (adoptError)
+                    {
+                        BOOST_ERROR(id << ": pre-isthmus soft-reject probe adopt failed: "
+                                       << adoptError->errorMessage());
+                        return;
+                    }
+                    bcos::task::syncWait(fixture.multiLayerStorage.mergeBackStorage());
+                }
                 return;
             }
             BOOST_ERROR(id << ": route A executeBlock failed: " << msg);
@@ -698,7 +740,8 @@ void runSingleVector(const std::string& id, const JsonValue& vec, Fixture& fixtu
     // -Wdangling-reference false positive on a prvalue OpForkFlags argument.
     const auto forkFlags = forkFlagsFor(jovian);
     const auto& vectorCfg = op::configAt(forkFlags);
-    runBlockEquivalence(id, fixture, header, rawTxBytes, vec, jovian, vectorCfg, greenGuard, stats);
+    runBlockEquivalence(id, fixture, header, rawTxBytes, vec, jovian, vectorCfg, greenGuard,
+        /*persistStateOnSoftReject=*/false, stats);
 }
 
 /// Chain vector: per-block runBlockEquivalence with route A mergeView inheritance (authoritative
@@ -722,7 +765,7 @@ void runChainVector(const std::string& id, const JsonValue& vec, Fixture& fixtur
         const auto forkFlags = forkFlagsFor(jovian);  // named-lvalue first (GCC-14 dangling false positive)
         const auto& vectorCfg = op::configAt(forkFlags);
         runBlockEquivalence(bid, fixture, header, rawTxBytes, blk, jovian, vectorCfg,
-            /*greenGuard=*/false, stats);
+            /*greenGuard=*/false, /*persistStateOnSoftReject=*/true, stats);
         ++stats.chainBlocks;
     }
 }
