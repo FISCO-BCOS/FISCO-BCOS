@@ -9,7 +9,7 @@
 // Hard assertion discipline: A) dir *.json set == manifest.txt set; parse
 // failure / missing required field = named ADD_FAILURE; per-vector comparison
 // count recorded, 0 = FAILURE. B) required fields via jAt(); hardfork must be
-// exactly ecotone|fjord|granite|holocene|isthmus|jovian (no default fork);
+// exactly regolith|canyon|ecotone|fjord|granite|holocene|isthmus|jovian (no default fork);
 // unknown _op_type / receipt count mismatch = FAILURE (no zip-min).
 // D) comparisons routed through checkField/checkOptional into DivergenceLedger;
 // checkOptional never gated on has_value() (one-sided absence = DIVERGE
@@ -1370,6 +1370,49 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
             hexU256(parseU256(std::string{receipt->cumulativeGasUsed()})));
         ctx.checkField(p + ".logsCount", std::to_string(jAt(er, "logsCount").asInt64()),
             std::to_string(receipt->logEntries().size()));
+        // D2（设计 v2 §4.2）：per-entry logs 对拍（address/topics/data）。仅当向量
+        // 携带 "logs" 数组时激活——旧向量只有 logsCount，自动跳过。
+        // 计数也走 DivergenceLedger（checkField）：BOOST_REQUIRE_EQUAL 会在首错中止
+        // 整个测试，与「收集全部分歧再报告」的对拍语义冲突。数量不等时仍遍历
+        // min(len) 收集逐项分歧。
+        if (er.isMember("logs"))
+        {
+            const auto& receiptLogs = receipt->logEntries();
+            const auto& goldenLogs = jAt(er, "logs");
+            ctx.checkField(p + ".logsLen", std::to_string(receiptLogs.size()),
+                std::to_string(static_cast<size_t>(goldenLogs.size())));
+            const size_t logCount = std::min(
+                static_cast<size_t>(receiptLogs.size()), static_cast<size_t>(goldenLogs.size()));
+            for (size_t j = 0; j < logCount; ++j)
+            {
+                const auto& log = receiptLogs[j];
+                const auto& el = goldenLogs[static_cast<Json::ArrayIndex>(j)];
+                const std::string lp = p + ".logs[" + std::to_string(j) + "]";
+                // bcos::byte == uint8_t == unsigned char，evmc::bytes_view 是
+                // basic_string_view<unsigned char>，故原始指针可直接构造（与 .output
+                // 比较同一 idiom）。
+                const auto hexRaw = [](const unsigned char* data, size_t size) {
+                    return hexBytes(evmc::bytes_view{data, size});
+                };
+                const auto addrView = log.address();  // std::string_view, 20 原始字节
+                ctx.checkField(lp + ".address", jAt(el, "address").asString(),
+                    hexRaw(
+                        reinterpret_cast<const unsigned char*>(addrView.data()), addrView.size()));
+                ctx.checkField(lp + ".topicsLen", std::to_string(log.topics().size()),
+                    std::to_string(static_cast<size_t>(jAt(el, "topics").size())));
+                const size_t topicCount = std::min(static_cast<size_t>(log.topics().size()),
+                    static_cast<size_t>(jAt(el, "topics").size()));
+                for (size_t t = 0; t < topicCount; ++t)
+                {
+                    const auto& topic = log.topics()[t];  // bcos::h256 (FixedBytes<32>)
+                    ctx.checkField(lp + ".topics[" + std::to_string(t) + "]",
+                        jAt(el, "topics")[static_cast<Json::ArrayIndex>(t)].asString(),
+                        hexRaw(topic.data(), topic.size()));
+                }
+                ctx.checkField(lp + ".data", jAt(el, "data").asString(),
+                    hexRaw(log.data().data(), log.data().size()));
+            }
+        }
         // Receipt output (tx return data): the generator always emits it (empty = "0x");
         // FISCO output() returns raw bytes, normalized to "0x"+lowercase hex by hexBytes.
         // Both-absent/both-present byte-exact compare — wrapper returndata truncation and
