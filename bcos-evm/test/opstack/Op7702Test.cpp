@@ -78,6 +78,8 @@ RunWithAuthResult runWithAuth(
     tx.authorization_list = {auth};
 
     OpFeeParams fee{.l1_base_fee = 0_u256,
+        .overhead = 0_u256,
+        .bedrock_scalar = 0_u256,
         .base_fee_scalar = 0,
         .blob_base_fee_scalar = 0,
         .blob_base_fee = 0_u256,
@@ -333,6 +335,8 @@ BOOST_AUTO_TEST_CASE(DelegatedCallAfterAuthorization, * boost::unit_test::label(
     tx.nonce = 0;
 
     OpFeeParams fee{.l1_base_fee = 0_u256,
+        .overhead = 0_u256,
+        .bedrock_scalar = 0_u256,
         .base_fee_scalar = 0,
         .blob_base_fee_scalar = 0,
         .blob_base_fee = 0_u256,

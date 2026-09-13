@@ -31,7 +31,17 @@ BOOST_AUTO_TEST_CASE(PutThenHasBlockAndBody)
 {
     ImportedStore store;
     auto hash = h256(1);
-    ImportedBlock b{.hash = hash, .parent = h256(0), .number = 1};
+    ImportedBlock b{.hash = hash,
+        .parent = h256(0),
+        .number = 1,
+        .headerBytes = {},
+        .txs = {},
+        .txHashes = {},
+        .encodedTxs = {},
+        .receipts = {},
+        .txRecipients = {},
+        .storageDelta = {},
+        .postStateFlat = {}};
     BOOST_REQUIRE(store.put(b));
     BOOST_CHECK(store.hasBlock(hash));
     BOOST_CHECK(store.hasState(hash));
@@ -42,16 +52,56 @@ BOOST_AUTO_TEST_CASE(PutThenHasBlockAndBody)
 BOOST_AUTO_TEST_CASE(OverwriteWithDescendantsIsRejected)
 {
     ImportedStore store;
-    store.put({.hash = h256(1), .parent = h256(0), .number = 1});
-    store.put({.hash = h256(2), .parent = h256(1), .number = 2});
-    BOOST_CHECK(!store.put({.hash = h256(3), .parent = h256(0), .number = 1}));  // 同高，1 已有子孙
+    store.put({.hash = h256(1),
+        .parent = h256(0),
+        .number = 1,
+        .headerBytes = {},
+        .txs = {},
+        .txHashes = {},
+        .encodedTxs = {},
+        .receipts = {},
+        .txRecipients = {},
+        .storageDelta = {},
+        .postStateFlat = {}});
+    store.put({.hash = h256(2),
+        .parent = h256(1),
+        .number = 2,
+        .headerBytes = {},
+        .txs = {},
+        .txHashes = {},
+        .encodedTxs = {},
+        .receipts = {},
+        .txRecipients = {},
+        .storageDelta = {},
+        .postStateFlat = {}});
+    BOOST_CHECK(!store.put({.hash = h256(3),
+        .parent = h256(0),
+        .number = 1,
+        .headerBytes = {},
+        .txs = {},
+        .txHashes = {},
+        .encodedTxs = {},
+        .receipts = {},
+        .txRecipients = {},
+        .storageDelta = {},
+        .postStateFlat = {}}));  // 同高，1 已有子孙
 }
 
 // 未 FCU 的同一哈希重复 newPayload 必须幂等 VALID，不双写。
 BOOST_AUTO_TEST_CASE(SameHashReputIsIdempotent)
 {
     ImportedStore store;
-    ImportedBlock b{.hash = h256(1), .parent = h256(0), .number = 1};
+    ImportedBlock b{.hash = h256(1),
+        .parent = h256(0),
+        .number = 1,
+        .headerBytes = {},
+        .txs = {},
+        .txHashes = {},
+        .encodedTxs = {},
+        .receipts = {},
+        .txRecipients = {},
+        .storageDelta = {},
+        .postStateFlat = {}};
     BOOST_REQUIRE(store.put(b));
     BOOST_CHECK(store.put(b));
     BOOST_CHECK_EQUAL(store.size(), 1U);
@@ -61,8 +111,28 @@ BOOST_AUTO_TEST_CASE(SameHashReputIsIdempotent)
 BOOST_AUTO_TEST_CASE(SameHeightWithoutDescendantsIsAccepted)
 {
     ImportedStore store;
-    BOOST_REQUIRE(store.put({.hash = h256(1), .parent = h256(0), .number = 1}));
-    BOOST_CHECK(store.put({.hash = h256(9), .parent = h256(0), .number = 1}));
+    BOOST_REQUIRE(store.put({.hash = h256(1),
+        .parent = h256(0),
+        .number = 1,
+        .headerBytes = {},
+        .txs = {},
+        .txHashes = {},
+        .encodedTxs = {},
+        .receipts = {},
+        .txRecipients = {},
+        .storageDelta = {},
+        .postStateFlat = {}}));
+    BOOST_CHECK(store.put({.hash = h256(9),
+        .parent = h256(0),
+        .number = 1,
+        .headerBytes = {},
+        .txs = {},
+        .txHashes = {},
+        .encodedTxs = {},
+        .receipts = {},
+        .txRecipients = {},
+        .storageDelta = {},
+        .postStateFlat = {}}));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

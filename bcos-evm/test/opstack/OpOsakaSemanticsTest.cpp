@@ -254,7 +254,7 @@ OsakaHostCallResult osakaHostCall(evmc_revision rev, const PrecompileOverrides* 
     msg.input_data = input.data();
     msg.input_size = input.size();
     const auto r = host.call(msg);
-    OsakaHostCallResult out{.status_code = r.status_code, .gas_left = r.gas_left};
+    OsakaHostCallResult out{.status_code = r.status_code, .gas_left = r.gas_left, .output = {}};
     if (r.output_data != nullptr && r.output_size > 0)
         out.output.assign(r.output_data, r.output_data + r.output_size);
     return out;

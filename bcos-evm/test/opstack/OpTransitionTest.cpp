@@ -73,6 +73,8 @@ BOOST_AUTO_TEST_CASE(RoutesFeesToFourVaults, * boost::unit_test::label("fork-reg
     tx.nonce = 0;
 
     OpFeeParams fee{.l1_base_fee = 1000000000_u256,
+        .overhead = 0_u256,
+        .bedrock_scalar = 0_u256,
         .base_fee_scalar = 2,
         .blob_base_fee_scalar = 3,
         .blob_base_fee = 10000000_u256,
@@ -135,6 +137,8 @@ BOOST_AUTO_TEST_CASE(ReceiptCarriesL1AndOperatorMeta, * boost::unit_test::label(
     tx.nonce = 0;
 
     OpFeeParams fee{.l1_base_fee = 1000000000_u256,
+        .overhead = 0_u256,
+        .bedrock_scalar = 0_u256,
         .base_fee_scalar = 2,
         .blob_base_fee_scalar = 3,
         .blob_base_fee = 10000000_u256,
@@ -219,6 +223,8 @@ BOOST_AUTO_TEST_CASE(ReceiptBloomMatchesRecomputedBloom, * boost::unit_test::lab
     tx.nonce = 0;
 
     OpFeeParams fee{.l1_base_fee = 1000000000_u256,
+        .overhead = 0_u256,
+        .bedrock_scalar = 0_u256,
         .base_fee_scalar = 2,
         .blob_base_fee_scalar = 3,
         .blob_base_fee = 10000000_u256,
@@ -276,6 +282,8 @@ BOOST_AUTO_TEST_CASE(JovianReceiptMetaAndOperatorFormula, * boost::unit_test::la
 
     // Jovian: gas * scalar * 100 + constant — use small scalar so buyGas stays affordable.
     OpFeeParams fee{.l1_base_fee = 1000000000_u256,
+        .overhead = 0_u256,
+        .bedrock_scalar = 0_u256,
         .base_fee_scalar = 2,
         .blob_base_fee_scalar = 3,
         .blob_base_fee = 10000000_u256,
@@ -464,6 +472,8 @@ BOOST_AUTO_TEST_CASE(OperatorFeeConservesWhenCfgDisagreesWithProps, * boost::uni
     tx.nonce = 0;
 
     OpFeeParams fee{.l1_base_fee = 0_u256,
+        .overhead = 0_u256,
+        .bedrock_scalar = 0_u256,
         .base_fee_scalar = 0,
         .blob_base_fee_scalar = 0,
         .blob_base_fee = 0_u256,
@@ -533,6 +543,8 @@ BOOST_AUTO_TEST_CASE(ReceiptMetaFollowsSnapshotNotTransitionCfg, * boost::unit_t
     tx.nonce = 0;
 
     OpFeeParams fee{.l1_base_fee = 0_u256,
+        .overhead = 0_u256,
+        .bedrock_scalar = 0_u256,
         .base_fee_scalar = 0,
         .blob_base_fee_scalar = 0,
         .blob_base_fee = 0_u256,
@@ -611,6 +623,8 @@ BOOST_AUTO_TEST_CASE(L1CostIsDebitedFromSenderAndConserves, * boost::unit_test::
 
     // l1_base_fee 非零，operator fee 关闭：把 l1 这一项单独隔离出来。
     OpFeeParams fee{.l1_base_fee = 1000000000_u256,
+        .overhead = 0_u256,
+        .bedrock_scalar = 0_u256,
         .base_fee_scalar = 1100,
         .blob_base_fee_scalar = 0,
         .blob_base_fee = 0_u256,

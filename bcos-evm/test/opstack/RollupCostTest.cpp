@@ -35,6 +35,8 @@ OpFeeParams feeParams(uint64_t l1Base, uint64_t blobBase, uint32_t baseScalar, u
     uint32_t opScalar = 0, uint64_t opConst = 0)
 {
     return OpFeeParams{.l1_base_fee = intx::uint256{l1Base},
+        .overhead = 0_u256,
+        .bedrock_scalar = 0_u256,
         .base_fee_scalar = baseScalar,
         .blob_base_fee_scalar = blobScalar,
         .blob_base_fee = intx::uint256{blobBase},
@@ -104,6 +106,8 @@ BOOST_AUTO_TEST_CASE(EcotoneL1DiffersFromFjordSameEnvelope, * boost::unit_test::
 // clang-format on
 {
     OpFeeParams fee{.l1_base_fee = 1000000000_u256,
+        .overhead = 0_u256,
+        .bedrock_scalar = 0_u256,
         .base_fee_scalar = 2,
         .blob_base_fee_scalar = 3,
         .blob_base_fee = 10000000_u256,
@@ -138,6 +142,8 @@ BOOST_AUTO_TEST_CASE(L1CostDoesNotWrapOnWholeSlotFeeValues, * boost::unit_test::
     const evmc::bytes_view env = kEmptyTx;  // flz 31 -> daScaled floors to 1e8; calldataGas 480
 
     OpFeeParams fee{.l1_base_fee = intx::uint256{1} << 252,
+        .overhead = 0_u256,
+        .bedrock_scalar = 0_u256,
         .base_fee_scalar = 1368,
         .blob_base_fee_scalar = 0,
         .blob_base_fee = intx::uint256{0},
@@ -154,6 +160,8 @@ BOOST_AUTO_TEST_CASE(L1CostDoesNotWrapOnWholeSlotFeeValues, * boost::unit_test::
 
     // The blob term wraps independently of the calldata term.
     const OpFeeParams blobFee{.l1_base_fee = intx::uint256{0},
+        .overhead = 0_u256,
+        .bedrock_scalar = 0_u256,
         .base_fee_scalar = 0,
         .blob_base_fee_scalar = 0xffffffff,
         .blob_base_fee = intx::uint256{1} << 250,
