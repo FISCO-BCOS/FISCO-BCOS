@@ -1379,8 +1379,8 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
         {
             const auto& receiptLogs = receipt->logEntries();
             const auto& goldenLogs = jAt(er, "logs");
-            ctx.checkField(p + ".logsLen", std::to_string(receiptLogs.size()),
-                std::to_string(static_cast<size_t>(goldenLogs.size())));
+            ctx.checkField(p + ".logsLen", std::to_string(static_cast<size_t>(goldenLogs.size())),
+                std::to_string(receiptLogs.size()));
             const size_t logCount = std::min(
                 static_cast<size_t>(receiptLogs.size()), static_cast<size_t>(goldenLogs.size()));
             for (size_t j = 0; j < logCount; ++j)
@@ -1398,8 +1398,9 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
                 ctx.checkField(lp + ".address", jAt(el, "address").asString(),
                     hexRaw(
                         reinterpret_cast<const unsigned char*>(addrView.data()), addrView.size()));
-                ctx.checkField(lp + ".topicsLen", std::to_string(log.topics().size()),
-                    std::to_string(static_cast<size_t>(jAt(el, "topics").size())));
+                ctx.checkField(lp + ".topicsLen",
+                    std::to_string(static_cast<size_t>(jAt(el, "topics").size())),
+                    std::to_string(log.topics().size()));
                 const size_t topicCount = std::min(static_cast<size_t>(log.topics().size()),
                     static_cast<size_t>(jAt(el, "topics").size()));
                 for (size_t t = 0; t < topicCount; ++t)
