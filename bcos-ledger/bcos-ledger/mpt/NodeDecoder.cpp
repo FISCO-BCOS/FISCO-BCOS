@@ -51,8 +51,12 @@ struct DecoderItem
 DecoderItem readItem(bcos::bytesRef& cursor)
 {
     bcos::byte const* const itemStart = cursor.data();
-    auto&& [error, header] = bcos::codec::rlp::decodeHeader(cursor);
-    if (error)
+    bcos::codec::rlp::Header header;
+    try
+    {
+        header = bcos::codec::rlp::decodeHeader(cursor);
+    }
+    catch (bcos::codec::rlp::RlpDecodeException const&)
     {
         BOOST_THROW_EXCEPTION(MPTDecodeError{} << bcos::errinfo_comment(
                                   "malformed RLP header while decoding MPT node"));

@@ -33,7 +33,6 @@
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-utilities/Bloom.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/Error.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <optional>
 #include <vector>
@@ -83,12 +82,13 @@ public:
     EthReceipt() = default;
     explicit EthReceipt(EthReceiptData data) : m_data(std::move(data)) {}
 
-    // Encode the receipt. Returns nullptr on success; fails closed (with an Error) on a
-    // type byte >= 0x80 that the decoder would misread as a legacy RLP item head, so
-    // encode and decode accept the same set.
-    bcos::Error::UniquePtr rlpEncode(bcos::bytes& out) const;
+    // Encode the receipt. Throws codec::rlp::RlpEncodeException on a type byte >= 0x80
+    // that the decoder would misread as a legacy RLP item head, so encode and decode
+    // accept the same set.
+    void rlpEncode(bcos::bytes& out) const;
     // Decodes a single receipt item (possibly with an EIP-2718 type prefix) from `data`.
-    bcos::Error::UniquePtr rlpDecode(bcos::bytesConstRef data);
+    // Throws codec::rlp::RlpDecodeException on malformed input.
+    void rlpDecode(bcos::bytesConstRef data);
 
     const EthReceiptData& data() const { return m_data; }
     EthReceiptData& data() { return m_data; }
@@ -102,39 +102,29 @@ private:
 /// receiptsRoot trie on Ethereum-compatible (executor_version >= 2) chains. The bcos status
 /// maps None (0, success) -> 1 (EIP-658 success) and every other status -> 0.
 ///
-/// Returns nullptr on success. On failure (e.g. a malformed cumulativeGasUsed or a
-/// logsBloom whose size cannot be represented in the wire format) it returns an Error;
-/// @p out is reset at entry and may hold partially-written fields afterwards, so callers
-/// must fail closed rather than substitute defaults, since this value feeds the receipts
-/// root.
-bcos::Error::UniquePtr toEthReceiptData(
-    TransactionReceipt const& receipt, uint8_t txType, EthReceiptData& out);
+/// Throws codec::rlp::RlpEncodeException on failure (e.g. a malformed cumulativeGasUsed or a
+/// logsBloom whose size cannot be represented in the wire format); @p out is reset at entry
+/// and may hold partially-written fields afterwards, so callers must fail closed rather than
+/// substitute defaults, since this value feeds the receipts root.
+void toEthReceiptData(TransactionReceipt const& receipt, uint8_t txType, EthReceiptData& out);
 }  // namespace bcos::protocol
 
 namespace bcos::codec::rlp
 {
 // Overloads so EthReceiptData works as an item inside the generic list/vector codecs.
 // Implementation lives in EthReceipt.cpp (it needs the type-prefix and status/postState
-// disambiguation logic, which is not header-inline).
+// disambiguation logic, which is not header-inline). decode throws RlpDecodeException on
+// malformed input.
 size_t length(const protocol::EthReceiptData& _receipt) noexcept;
 void encode(bcos::bytes& _out, const protocol::EthReceiptData& _receipt) noexcept;
-bcos::Error::UniquePtr decode(bcos::bytesRef& _in, protocol::EthReceiptData& _receipt) noexcept;
+void decode(bcos::bytesRef& _in, protocol::EthReceiptData& _receipt);
 }  // namespace bcos::codec::rlp
 
 namespace bcos::protocol
 {
 // ADL-visible delegators (see EthLog.h): let EthReceiptData participate in
 // std::vector<EthReceiptData> / variadic-list encode/decode.
-inline size_t length(const EthReceiptData& _receipt) noexcept
-{
-    return codec::rlp::length(_receipt);
-}
-inline void encode(bcos::bytes& _out, const EthReceiptData& _receipt) noexcept
-{
-    codec::rlp::encode(_out, _receipt);
-}
-inline bcos::Error::UniquePtr decode(bcos::bytesRef& _in, EthReceiptData& _receipt) noexcept
-{
-    return codec::rlp::decode(_in, _receipt);
-}
+size_t length(const EthReceiptData& _receipt) noexcept;
+void encode(bcos::bytes& _out, const EthReceiptData& _receipt) noexcept;
+void decode(bcos::bytesRef& _in, EthReceiptData& _receipt);
 }  // namespace bcos::protocol

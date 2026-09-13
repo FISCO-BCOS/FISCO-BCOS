@@ -356,7 +356,9 @@ BOOST_AUTO_TEST_CASE(handleLegacyTxTest)
             auto const chainId = txs[0]->chainId();
             BOOST_TEST(chainId == std::to_string(rawWeb3Tx.chainId.value_or(0)));
             Web3Transaction tx;
-            bcos::codec::rlp::decode(ref, tx);
+            // extraTransactionBytes stores the encodeForSign() preimage (no signature), so
+            // decode it without the signature arm.
+            bcos::codec::rlp::decodeFromPayload(ref, tx);
             BOOST_TEST(tx.type == rawWeb3Tx.type);
             BOOST_TEST(tx.data == rawWeb3Tx.data);
             BOOST_TEST(tx.nonce == rawWeb3Tx.nonce);
@@ -428,7 +430,9 @@ BOOST_AUTO_TEST_CASE(handleEIP1559TxTest)
             auto ref = bytesRef(const_cast<unsigned char*>(txs[0]->extraTransactionBytes().data()),
                 txs[0]->extraTransactionBytes().size());
             Web3Transaction tx;
-            bcos::codec::rlp::decode(ref, tx);
+            // extraTransactionBytes stores the encodeForSign() preimage (no signature), so
+            // decode it without the signature arm.
+            bcos::codec::rlp::decodeFromPayload(ref, tx);
             BOOST_TEST(tx.type == rawWeb3Tx.type);
             BOOST_TEST(tx.data == rawWeb3Tx.data);
             BOOST_TEST(tx.nonce == rawWeb3Tx.nonce);

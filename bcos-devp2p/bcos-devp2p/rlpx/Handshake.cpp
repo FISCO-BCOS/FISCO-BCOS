@@ -20,6 +20,7 @@
 #include "Handshake.h"
 
 #include <bcos-codec/rlp/Common.h>
+#include <bcos-codec/rlp/Exceptions.h>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/random/CryptoRandom.h>
@@ -119,14 +120,26 @@ bcos::bytes AuthMessage::bodyAsRlp() const
 void AuthMessage::initFromRlp(bytesConstRef _data)
 {
     bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
-    auto [listError, listHeader] = bcos::codec::rlp::decodeHeader(view);
-    if (listError || !listHeader.isList)
+    bcos::codec::rlp::Header listHeader;
+    try
+    {
+        listHeader = bcos::codec::rlp::decodeHeader(view);
+    }
+    catch (bcos::codec::rlp::RlpDecodeException const&)
+    {
+        throw std::runtime_error("AuthMessage: auth body is not an RLP list");
+    }
+    if (!listHeader.isList)
     {
         throw std::runtime_error("AuthMessage: auth body is not an RLP list");
     }
     bcos::bytesRef items(view.data(), listHeader.payloadLength);
     auto decodeBytes = [&items](bcos::bytes& out) {
-        if (auto err = bcos::codec::rlp::decode(items, out))
+        try
+        {
+            bcos::codec::rlp::decode(items, out);
+        }
+        catch (bcos::codec::rlp::RlpDecodeException const&)
         {
             throw std::runtime_error("AuthMessage: item decode failed");
         }
@@ -135,7 +148,11 @@ void AuthMessage::initFromRlp(bytesConstRef _data)
     decodeBytes(m_initiatorPublicKey);
     decodeBytes(m_nonce);
     uint64_t version = 0;
-    if (auto err = bcos::codec::rlp::decode(items, version))
+    try
+    {
+        bcos::codec::rlp::decode(items, version);
+    }
+    catch (bcos::codec::rlp::RlpDecodeException const&)
     {
         throw std::runtime_error("AuthMessage: version decode failed");
     }
@@ -181,14 +198,26 @@ bcos::bytes AuthAckMessage::bodyAsRlp() const
 void AuthAckMessage::initFromRlp(bytesConstRef _data)
 {
     bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
-    auto [listError, listHeader] = bcos::codec::rlp::decodeHeader(view);
-    if (listError || !listHeader.isList)
+    bcos::codec::rlp::Header listHeader;
+    try
+    {
+        listHeader = bcos::codec::rlp::decodeHeader(view);
+    }
+    catch (bcos::codec::rlp::RlpDecodeException const&)
+    {
+        throw std::runtime_error("AuthAckMessage: ack body is not an RLP list");
+    }
+    if (!listHeader.isList)
     {
         throw std::runtime_error("AuthAckMessage: ack body is not an RLP list");
     }
     bcos::bytesRef items(view.data(), listHeader.payloadLength);
     auto decodeBytes = [&items](bcos::bytes& out) {
-        if (auto err = bcos::codec::rlp::decode(items, out))
+        try
+        {
+            bcos::codec::rlp::decode(items, out);
+        }
+        catch (bcos::codec::rlp::RlpDecodeException const&)
         {
             throw std::runtime_error("AuthAckMessage: item decode failed");
         }
@@ -196,7 +225,11 @@ void AuthAckMessage::initFromRlp(bytesConstRef _data)
     decodeBytes(m_ephemeralPublicKey);
     decodeBytes(m_nonce);
     uint64_t version = 0;
-    if (auto err = bcos::codec::rlp::decode(items, version))
+    try
+    {
+        bcos::codec::rlp::decode(items, version);
+    }
+    catch (bcos::codec::rlp::RlpDecodeException const&)
     {
         throw std::runtime_error("AuthAckMessage: version decode failed");
     }

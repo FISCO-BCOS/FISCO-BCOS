@@ -685,11 +685,16 @@ void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const Execution
     }
 
     header.setEthBlockVersion(forkVersion);
-    if (auto error = bcos::protocol::EthBlockHeader::calculateRLPHash(header))
+    try
     {
-        BOOST_THROW_EXCEPTION(
-            OpExecutionInternalError{} << bcos::errinfo_comment{
-                "EngineService: failed to compute Eth RLP hash: " + error->errorMessage()});
+        bcos::protocol::EthBlockHeader::calculateRLPHash(header);
+    }
+    catch (bcos::codec::rlp::RlpEncodeException const& e)
+    {
+        auto const* message = boost::get_error_info<bcos::errinfo_comment>(e);
+        BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                  "EngineService: failed to compute Eth RLP hash: " +
+                                  (message ? *message : std::string{"unknown RLP encode error"})});
     }
 }
 

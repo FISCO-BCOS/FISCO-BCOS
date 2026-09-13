@@ -19,6 +19,7 @@
  */
 
 #include "bcos-rlp-protocol/EthBlockHeader.h"
+#include <bcos-codec/rlp/Exceptions.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>
@@ -87,6 +88,38 @@ static bcos::protocol::BlockHeader::Ptr makeEthHeader(
     return header;
 }
 
+// The RLP stack now throws instead of returning bcos::Error::UniquePtr. This helper keeps the
+// old errorCode/errorMessage assertions: it runs `fn`, requires a thrown RLP exception
+// carrying `expectedCode`, and optionally pins a substring of the errinfo_comment message.
+template <typename F>
+static void expectRlpError(F&& fn, int32_t expectedCode, std::string_view messageNeedle = {})
+{
+    auto const checkError = [&](std::exception const& e) {
+        auto const* code = boost::get_error_info<bcos::codec::rlp::errinfo_rlpErrorCode>(e);
+        BOOST_REQUIRE(code != nullptr);
+        BOOST_CHECK_EQUAL(*code, expectedCode);
+        if (!messageNeedle.empty())
+        {
+            auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
+            BOOST_REQUIRE(comment != nullptr);
+            BOOST_CHECK_NE(comment->find(messageNeedle), std::string::npos);
+        }
+    };
+    try
+    {
+        fn();
+        BOOST_FAIL("expected an RLP exception, but nothing was thrown");
+    }
+    catch (bcos::codec::rlp::RlpEncodeException const& e)
+    {
+        checkError(e);
+    }
+    catch (bcos::codec::rlp::RlpDecodeException const& e)
+    {
+        checkError(e);
+    }
+}
+
 // header -> EthBlockHeader -> RLP -> toTarsHeader (base-class Ptr)
 BOOST_AUTO_TEST_CASE(rlpEncodeDecodeRoundTrip)
 {
@@ -113,10 +146,8 @@ BOOST_AUTO_TEST_CASE(rlpEncodeDecodeRoundTrip)
     BOOST_CHECK(!rlp.empty());
 
     // Static: decode RLP -> EthBlockHeader
-    bcos::Error::UniquePtr ethError;
     EthBlockHeader decodedEth;
-    ethError = EthBlockHeader::toEthBlockHeader(decodedEth, bcos::ref(rlp));
-    BOOST_CHECK(!ethError);
+    EthBlockHeader::toEthBlockHeader(decodedEth, bcos::ref(rlp));
     BOOST_CHECK_EQUAL(decodedEth.data().number, 77);
     // rlpDecode keeps the wire's seconds directly in EthBlockHeaderData (no ms conversion).
     BOOST_CHECK_EQUAL(decodedEth.data().timestamp, 1700000000LL);
@@ -144,8 +175,7 @@ BOOST_AUTO_TEST_CASE(rlpEncodeDecodeRoundTrip)
     // Static: decode RLP into a caller-provided base-class header. The RLP carries seconds,
     // the bridge converts to BlockHeader milliseconds.
     auto decodedHeader = makeEthHeader();
-    ethError = EthBlockHeader::toTarsHeader(decodedHeader, bcos::ref(rlp));
-    BOOST_CHECK(!ethError);
+    EthBlockHeader::toTarsHeader(decodedHeader, bcos::ref(rlp));
     BOOST_CHECK_EQUAL(decodedHeader->number(), 77);
     BOOST_CHECK_EQUAL(decodedHeader->timestamp(), 1700000000 * 1000LL);
     BOOST_CHECK_EQUAL(decodedHeader->gasLimit(), u256(30000000));
@@ -169,10 +199,8 @@ BOOST_AUTO_TEST_CASE(toTarsHeaderIgnoresTrailingData)
     withTrailing.push_back(static_cast<byte>(0xde));
     withTrailing.push_back(static_cast<byte>(0xad));
 
-    bcos::Error::UniquePtr error;
     auto decodedHeader = makeEthHeader();
-    error = EthBlockHeader::toTarsHeader(decodedHeader, bcos::ref(withTrailing));
-    BOOST_CHECK(!error);
+    EthBlockHeader::toTarsHeader(decodedHeader, bcos::ref(withTrailing));
 
     // The injected hash equals keccak256(rlp(header)) — not keccak256(withTrailing).
     bytes canonicalRlp;
@@ -187,9 +215,7 @@ BOOST_AUTO_TEST_CASE(calculateRLPHashInjectsHash)
 {
     auto header = makeEthHeader();
 
-    bcos::Error::UniquePtr error;
-    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
-    BOOST_CHECK(!error);
+    bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
 
     // Expected: keccak256 of the RLP encoding
     bcos::protocol::EthBlockHeader ethHeader(*header);
@@ -214,9 +240,7 @@ BOOST_AUTO_TEST_CASE(rlpHashFormula)
     auto expected = crypto::keccak256Hash(bcos::ref(rlp));
 
     // calculateRLPHash injects exactly keccak256(rlp(header))
-    bcos::Error::UniquePtr error;
-    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
-    BOOST_CHECK(!error);
+    bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
     BOOST_CHECK(header->hash() == expected);
 }
 
@@ -232,10 +256,8 @@ BOOST_AUTO_TEST_CASE(goldenPragueEncoding)
     ethHeader.rlpEncode(rlp);
 
     // Decode back and check every optional field survives the round-trip.
-    bcos::Error::UniquePtr error;
     EthBlockHeader decoded;
-    error = EthBlockHeader::toEthBlockHeader(decoded, bcos::ref(rlp));
-    BOOST_CHECK(!error);
+    EthBlockHeader::toEthBlockHeader(decoded, bcos::ref(rlp));
     BOOST_CHECK(decoded.data().baseFee.has_value());
     BOOST_CHECK_EQUAL(*decoded.data().baseFee, u256(1000000000));
     BOOST_CHECK(decoded.data().withdrawalsHash.has_value());
@@ -257,7 +279,7 @@ BOOST_AUTO_TEST_CASE(goldenPragueEncoding)
 }
 
 // An incomplete header: the constructor converts defensively (no throw), but
-// calculateRLPHash must report an InvalidHeader error.
+// calculateRLPHash must throw an InvalidHeader error.
 BOOST_AUTO_TEST_CASE(incompleteHeaderReportsError)
 {
     auto header = makeEthHeader();
@@ -265,15 +287,10 @@ BOOST_AUTO_TEST_CASE(incompleteHeaderReportsError)
     BOOST_REQUIRE(impl != nullptr);
     impl->inner().data.stateRoot.clear();  // all-zero -> "missing"
 
-    // calculateRLPHash on an incomplete header must report an error
-    bcos::Error::UniquePtr error;
-    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
-    BOOST_CHECK(error != nullptr);
-    BOOST_CHECK_EQUAL(error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
-    // Pin the distinguishing message, not just the error type: a swapped gate that keeps
-    // InvalidHeader must still fail (T3).
-    BOOST_CHECK_NE(std::string(error->errorMessage()).find("missing or bad stateRoot"),
-        std::string::npos);
+    // calculateRLPHash on an incomplete header must throw. Pin the distinguishing message,
+    // not just the error code: a swapped gate that keeps InvalidHeader must still fail (T3).
+    expectRlpError([&] { bcos::protocol::EthBlockHeader::calculateRLPHash(*header); },
+        static_cast<int32_t>(EthBlockHeaderError::InvalidHeader), "missing or bad stateRoot");
 }
 
 // calculateRLPHash rejects a NON_ETH header outright — that is exactly what computeHash
@@ -284,12 +301,8 @@ BOOST_AUTO_TEST_CASE(calculateRLPHashRejectsNonEthHeader)
     auto header = makeEthHeader();
     header->setEthBlockVersion(EthBlockVersion::NON_ETH);
 
-    bcos::Error::UniquePtr error;
-    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
-    BOOST_REQUIRE(error != nullptr);
-    BOOST_CHECK_EQUAL(error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
-    BOOST_CHECK_NE(std::string(error->errorMessage()).find("not an Ethereum header"),
-        std::string::npos);
+    expectRlpError([&] { bcos::protocol::EthBlockHeader::calculateRLPHash(*header); },
+        static_cast<int32_t>(EthBlockHeaderError::InvalidHeader), "not an Ethereum header");
     // computeHash, by contrast, hashes without validation.
     BOOST_CHECK_NO_THROW(
         bcos::protocol::EthBlockHeader::computeHash(*header));
@@ -306,10 +319,8 @@ BOOST_AUTO_TEST_CASE(decodeTruncatedCascadeNoCrash)
     bytes rlp;
     ethHeader.rlpEncode(rlp);
 
-    bcos::Error::UniquePtr error;
     EthBlockHeader decodedEth;
-    error = EthBlockHeader::toEthBlockHeader(decodedEth, bcos::ref(rlp));
-    BOOST_CHECK(!error);
+    EthBlockHeader::toEthBlockHeader(decodedEth, bcos::ref(rlp));
     BOOST_CHECK(decodedEth.data().baseFee.has_value());
     BOOST_CHECK(decodedEth.data().withdrawalsHash.has_value());
     BOOST_CHECK(decodedEth.data().blobGasUsed.has_value());
@@ -320,8 +331,7 @@ BOOST_AUTO_TEST_CASE(decodeTruncatedCascadeNoCrash)
 
     // toTarsHeader must not crash and must preserve the present optional fields
     auto decodedHeader = makeEthHeader(EthBlockVersion::CANCUN);
-    error = EthBlockHeader::toTarsHeader(decodedHeader, bcos::ref(rlp));
-    BOOST_CHECK(!error);
+    EthBlockHeader::toTarsHeader(decodedHeader, bcos::ref(rlp));
     BOOST_CHECK(decodedHeader->parentBeaconBlockRoot().has_value());
 }
 
@@ -334,10 +344,8 @@ BOOST_AUTO_TEST_CASE(validateHeaderRejectsMissingForkField)
     BOOST_REQUIRE(impl != nullptr);
     impl->inner().data.excessBlobGas.clear();  // Cancun requires excessBlobGas
 
-    bcos::Error::UniquePtr error;
-    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
-    BOOST_CHECK(error != nullptr);
-    BOOST_CHECK_EQUAL(error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
+    expectRlpError([&] { bcos::protocol::EthBlockHeader::calculateRLPHash(*header); },
+        static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
 }
 
 // A pre-London (version 1) header must not require fork-gated fields, but must carry the
@@ -346,9 +354,7 @@ BOOST_AUTO_TEST_CASE(validateHeaderPreLondon)
 {
     auto header = makeEthHeader(EthBlockVersion::PRE_LONDON);
 
-    bcos::Error::UniquePtr error;
-    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
-    BOOST_CHECK(!error);
+    bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
 }
 
 // A Prague header without requestsHash must be rejected (version 5 requires it).
@@ -359,10 +365,8 @@ BOOST_AUTO_TEST_CASE(validateHeaderPragueRequiresRequestsHash)
     BOOST_REQUIRE(impl != nullptr);
     impl->inner().data.requestsHash.clear();
 
-    bcos::Error::UniquePtr error;
-    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
-    BOOST_CHECK(error != nullptr);
-    BOOST_CHECK_EQUAL(error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
+    expectRlpError([&] { bcos::protocol::EthBlockHeader::calculateRLPHash(*header); },
+        static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
 }
 
 // A fork-gated field must not be present when the header's version is older than the fork
@@ -375,10 +379,8 @@ BOOST_AUTO_TEST_CASE(validateHeaderRejectsUnexpectedForkField)
     BOOST_REQUIRE(impl != nullptr);
     impl->inner().data.requestsHash.assign(32, static_cast<char>(0x63));
 
-    bcos::Error::UniquePtr error;
-    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
-    BOOST_CHECK(error != nullptr);
-    BOOST_CHECK_EQUAL(error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
+    expectRlpError([&] { bcos::protocol::EthBlockHeader::calculateRLPHash(*header); },
+        static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
 }
 
 // A wire-supplied EthBlockVersion above the known fork range must be rejected.
@@ -389,10 +391,8 @@ BOOST_AUTO_TEST_CASE(validateHeaderRejectsUnknownVersion)
     BOOST_REQUIRE(impl != nullptr);
     impl->inner().ethBlockVersion = static_cast<tars::Char>(200);  // not a named EthBlockVersion
 
-    bcos::Error::UniquePtr error;
-    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
-    BOOST_CHECK(error != nullptr);
-    BOOST_CHECK_EQUAL(error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
+    expectRlpError([&] { bcos::protocol::EthBlockHeader::calculateRLPHash(*header); },
+        static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
 }
 
 // Each fork version must round-trip to its own derived version (encode -> decode -> version).
@@ -406,10 +406,8 @@ BOOST_AUTO_TEST_CASE(versionDerivationRoundTrip)
         bytes rlp;
         ethHeader.rlpEncode(rlp);
 
-        bcos::Error::UniquePtr error;
         EthBlockHeader decoded;
-        error = EthBlockHeader::toEthBlockHeader(decoded, bcos::ref(rlp));
-        BOOST_CHECK(!error);
+        EthBlockHeader::toEthBlockHeader(decoded, bcos::ref(rlp));
         BOOST_CHECK_EQUAL(static_cast<uint8_t>(decoded.version()), static_cast<uint8_t>(v));
     }
 }
@@ -423,22 +421,21 @@ BOOST_AUTO_TEST_CASE(validateHeaderRejectsNegativeScalars)
     BOOST_REQUIRE(impl != nullptr);
     impl->inner().data.blockNumber = -5;
 
-    bcos::Error::UniquePtr error;
-    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
-    BOOST_CHECK(error != nullptr);
+    BOOST_CHECK_THROW(bcos::protocol::EthBlockHeader::calculateRLPHash(*header),
+        bcos::codec::rlp::RlpEncodeException);
 
     // timestamp negative
     auto header2 = makeEthHeader();
     auto impl2 = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(header2);
     BOOST_REQUIRE(impl2 != nullptr);
     impl2->inner().data.timestamp = -1;
-    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header2);
-    BOOST_CHECK(error != nullptr);
+    BOOST_CHECK_THROW(bcos::protocol::EthBlockHeader::calculateRLPHash(*header2),
+        bcos::codec::rlp::RlpEncodeException);
 }
 
 // A wire-supplied sub-second millisecond timestamp on an otherwise-valid ETH-version header
-// must be rejected by validateHeader on the calculateRLPHash path (Error return, not the
-// rlpEncode throw), keeping BlockHeaderImpl::calculateHash's clear-on-failure promise intact.
+// must be rejected by validateHeader on the calculateRLPHash path (a thrown RlpEncodeException
+// that BlockHeaderImpl::calculateHash catches, keeping its clear-on-failure promise intact).
 BOOST_AUTO_TEST_CASE(validateHeaderRejectsSubSecondTimestamp)
 {
     auto header = makeEthHeader();
@@ -446,10 +443,8 @@ BOOST_AUTO_TEST_CASE(validateHeaderRejectsSubSecondTimestamp)
     BOOST_REQUIRE(impl != nullptr);
     impl->inner().data.timestamp = 1700000000001LL;  // ms not divisible by 1000
 
-    bcos::Error::UniquePtr error;
-    BOOST_CHECK_NO_THROW(error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header));
-    BOOST_REQUIRE(error != nullptr);
-    BOOST_CHECK_EQUAL(error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
+    expectRlpError([&] { bcos::protocol::EthBlockHeader::calculateRLPHash(*header); },
+        static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
 }
 
 // Real mainnet golden vector: Ethereum block #19800000 (Cancun era, 20-item header).
@@ -569,10 +564,8 @@ BOOST_AUTO_TEST_CASE(validateHeaderRejectsMissingMandatoryField)
     BOOST_REQUIRE(impl != nullptr);
     impl->inner().data.stateRoot.clear();  // all-zero -> "missing"
 
-    bcos::Error::UniquePtr error;
-    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
-    BOOST_CHECK(error != nullptr);
-    BOOST_CHECK_EQUAL(error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
+    expectRlpError([&] { bcos::protocol::EthBlockHeader::calculateRLPHash(*header); },
+        static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
 }
 
 // A "middle optional missing, later present" input: the decode layer is faithful (no error),
@@ -591,16 +584,12 @@ BOOST_AUTO_TEST_CASE(validateHeaderRejectsMiddleGap)
     EthBlockHeader ethHeader(*header);
     bytes rlp;
     ethHeader.rlpEncode(rlp);
-    bcos::Error::UniquePtr decodeError;
     EthBlockHeader decoded;
-    decodeError = EthBlockHeader::toEthBlockHeader(decoded, bcos::ref(rlp));
-    BOOST_CHECK(!decodeError);
+    EthBlockHeader::toEthBlockHeader(decoded, bcos::ref(rlp));
 
     // The gap makes the header invalid for CANCUN: validation must fail.
-    bcos::Error::UniquePtr error;
-    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
-    BOOST_CHECK(error != nullptr);
-    BOOST_CHECK_EQUAL(error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
+    expectRlpError([&] { bcos::protocol::EthBlockHeader::calculateRLPHash(*header); },
+        static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
 }
 
 // calculateHash on an Eth header must recompute the RLP hash (it internally calls
@@ -632,9 +621,7 @@ BOOST_AUTO_TEST_CASE(genesisExemption)
     impl->inner().data.blockNumber = 0;
     impl->inner().data.parentInfo.clear();  // empty parent hash
 
-    bcos::Error::UniquePtr error;
-    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
-    BOOST_CHECK(!error);
+    bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
 }
 
 // uncleHash is never legitimately zero on Ethereum (the empty-ommers constant is 0x1dcc…);
@@ -646,10 +633,8 @@ BOOST_AUTO_TEST_CASE(uncleHashZeroRejected)
     BOOST_REQUIRE(impl != nullptr);
     impl->inner().data.uncleHash.clear();  // all-zero
 
-    bcos::Error::UniquePtr error;
-    error = bcos::protocol::EthBlockHeader::calculateRLPHash(*header);
-    BOOST_CHECK(error != nullptr);
-    BOOST_CHECK_EQUAL(error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
+    expectRlpError([&] { bcos::protocol::EthBlockHeader::calculateRLPHash(*header); },
+        static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
 }
 
 // toTarsHeader must clear residual optional fields when the destination header is reused:
@@ -670,9 +655,7 @@ BOOST_AUTO_TEST_CASE(toTarsHeaderClearsResidual)
 
     // Decode PRE_LONDON into a header that currently holds PRAGUE fields.
     auto reused = makeEthHeader(EthBlockVersion::PRAGUE);
-    bcos::Error::UniquePtr error;
-    error = EthBlockHeader::toTarsHeader(reused, bcos::ref(preLondonRlp));
-    BOOST_CHECK(!error);
+    EthBlockHeader::toTarsHeader(reused, bcos::ref(preLondonRlp));
     // Residual PRAGUE-only fields must have been cleared.
     BOOST_CHECK(!reused->requestsHash().has_value());
     BOOST_CHECK(!reused->parentBeaconBlockRoot().has_value());
@@ -713,9 +696,8 @@ BOOST_AUTO_TEST_CASE(toTarsHeaderRejectsOverflowingTimestamp)
         d.parentBeaconRoot, d.requestsHash);
 
     auto decodedHeader = makeEthHeader();
-    auto error = EthBlockHeader::toTarsHeader(decodedHeader, bcos::ref(rlp));
-    BOOST_REQUIRE(error != nullptr);
-    BOOST_CHECK_EQUAL(error->errorCode(), static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
+    expectRlpError([&] { EthBlockHeader::toTarsHeader(decodedHeader, bcos::ref(rlp)); },
+        static_cast<int32_t>(EthBlockHeaderError::InvalidHeader));
     // The destination must be empty on failure, matching the validateHeader error path.
     BOOST_CHECK_EQUAL(decodedHeader->number(), 0);
 }
@@ -730,12 +712,9 @@ BOOST_AUTO_TEST_CASE(constructorRejectsSubSecondTimestamp)
     header->setTimestamp(1001);  // 1s + 1ms
 
     BOOST_CHECK_THROW(EthBlockHeader ethHeader(*header), std::invalid_argument);
-    // validateHeader reports the same condition through its Error-return contract.
-    bcos::Error::UniquePtr error;
-    BOOST_CHECK(!EthBlockHeader::validateHeader(*header, error));
-    BOOST_REQUIRE(error != nullptr);
-    BOOST_CHECK_NE(std::string(error->errorMessage()).find("whole number of seconds"),
-        std::string::npos);
+    // validateHeader reports the same condition by throwing an InvalidHeader RLP error.
+    expectRlpError([&] { EthBlockHeader::validateHeader(*header); },
+        static_cast<int32_t>(EthBlockHeaderError::InvalidHeader), "whole number of seconds");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -20,7 +20,8 @@
 
 #pragma once
 #include "Common.h"
-#include "bcos-utilities/Error.h"
+#include "Exceptions.h"
+#include "Result.h"
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <algorithm>
@@ -31,15 +32,22 @@
 
 // THANKS TO: RLP implement based on silkworm: https://github.com/erigontech/silkworm.git
 // Note:https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp/
+//
+// Error handling: every decode entry point THROWS RlpDecodeException (see Exceptions.h) on
+// malformed input instead of returning a bcos::Error::UniquePtr; the former DecodingError code
+// travels in the errinfo_rlpErrorCode error_info and the message in bcos::errinfo_comment.
+// tryDecodeHeader is the non-throwing core of decodeHeader for hot ingress paths (devp2p);
+// it reports the same failures as an RlpResult value (see Result.h) and never throws on
+// malformed input.
 namespace bcos::codec::rlp
 {
 
-inline std::tuple<bcos::Error::UniquePtr, Header> decodeHeader(bytesRef& from) noexcept
+inline RlpResult<Header> tryDecodeHeader(bytesRef& from)
 {
     if (from.size() == 0)
     {
-        return {BCOS_ERROR_UNIQUE_PTR(DecodingError::InputTooShort, "Input data is too short"),
-            Header()};
+        return std::unexpected(
+            RlpError{.code = DecodingError::InputTooShort, .message = "Input data is too short"});
     }
     Header header{.isList = false};
     const auto byte{from[0]};
@@ -58,11 +66,13 @@ inline std::tuple<bcos::Error::UniquePtr, Header> decodeHeader(bytesRef& from) n
         {
             if (from.empty())
             {
-                return {BCOS_ERROR_UNIQUE_PTR(InputTooShort, "Input data is too short"), Header()};
+                return std::unexpected(RlpError{
+                    .code = InputTooShort, .message = "Input data is too short"});
             }
             if (from[0] < 0x80)
             {
-                return {BCOS_ERROR_UNIQUE_PTR(NonCanonicalSize, "NonCanonicalSize"), Header()};
+                return std::unexpected(
+                    RlpError{.code = NonCanonicalSize, .message = "NonCanonicalSize"});
             }
         }
     }
@@ -73,7 +83,8 @@ inline std::tuple<bcos::Error::UniquePtr, Header> decodeHeader(bytesRef& from) n
         const auto lenOfLen{byte - LONG_BYTES_HEAD_BASE};
         if (std::cmp_greater(lenOfLen, from.size()))
         {
-            return {BCOS_ERROR_UNIQUE_PTR(InputTooShort, "Input data is too short"), Header()};
+            return std::unexpected(
+                RlpError{.code = InputTooShort, .message = "Input data is too short"});
         }
         // C1 (final review batch B): a multi-byte length prefix whose leading byte is zero is
         // non-canonical — op-geth rlp/decode.go readUint() rejects it with ErrCanonSize (the
@@ -89,9 +100,8 @@ inline std::tuple<bcos::Error::UniquePtr, Header> decodeHeader(bytesRef& from) n
         // covers both paths with identical observable behavior.
         if (lenOfLen >= 2 && from[0] == 0)
         {
-            return {BCOS_ERROR_UNIQUE_PTR(
-                        NonCanonicalSize, "Non-canonical length prefix: leading zero byte"),
-                Header()};
+            return std::unexpected(RlpError{.code = NonCanonicalSize,
+                .message = "Non-canonical length prefix: leading zero byte"});
         }
         // Migration note (W8): canonicality now enforced for ALL consumers of this shared decoder,
         // not just the OP path. FISCO's own encoder (RLPEncode.h) always writes a minimal length
@@ -103,9 +113,8 @@ inline std::tuple<bcos::Error::UniquePtr, Header> decodeHeader(bytesRef& from) n
         from = from.getCroppedData(lenOfLen);
         if (header.payloadLength < 56)
         {
-            return {BCOS_ERROR_UNIQUE_PTR(
-                        NonCanonicalSize, "The length of the payload is less than 56"),
-                Header()};
+            return std::unexpected(RlpError{.code = NonCanonicalSize,
+                .message = "The length of the payload is less than 56"});
         }
     }
     else if (byte <= LONG_LIST_HEAD_BASE)
@@ -123,17 +132,16 @@ inline std::tuple<bcos::Error::UniquePtr, Header> decodeHeader(bytesRef& from) n
         const auto lenOfLen{byte - LONG_LIST_HEAD_BASE};
         if (std::cmp_greater(lenOfLen, from.size()))
         {
-            return {BCOS_ERROR_UNIQUE_PTR(DecodingError::InputTooShort, "Input data is too short"),
-                Header()};
+            return std::unexpected(RlpError{
+                .code = DecodingError::InputTooShort, .message = "Input data is too short"});
         }
         // C1 (final review batch B): long-list length prefix, same canonical rule as the
         // long-string branch above — op-geth rlp/decode.go readUint() `default` case. lenOfLen==1
         // (0xf8 ..) is left to the `< 56` check below to match op-geth's readUint `case 1`.
         if (lenOfLen >= 2 && from[0] == 0)
         {
-            return {BCOS_ERROR_UNIQUE_PTR(DecodingError::NonCanonicalSize,
-                        "Non-canonical length prefix: leading zero byte"),
-                Header()};
+            return std::unexpected(RlpError{.code = DecodingError::NonCanonicalSize,
+                .message = "Non-canonical length prefix: leading zero byte"});
         }
         auto payloadSize =
             fromBigEndian<uint64_t, bcos::bytesConstRef>(from.getCroppedData(0, lenOfLen));
@@ -141,29 +149,34 @@ inline std::tuple<bcos::Error::UniquePtr, Header> decodeHeader(bytesRef& from) n
         from = from.getCroppedData(lenOfLen);
         if (header.payloadLength < 56)
         {
-            return {BCOS_ERROR_UNIQUE_PTR(DecodingError::NonCanonicalSize,
-                        "The length of the payload is less than 56"),
-                Header()};
+            return std::unexpected(RlpError{.code = DecodingError::NonCanonicalSize,
+                .message = "The length of the payload is less than 56"});
         }
     }
     if (header.payloadLength > from.size())
     {
-        return {BCOS_ERROR_UNIQUE_PTR(DecodingError::InputTooShort, "Input data is too short"),
-            Header()};
+        return std::unexpected(RlpError{
+            .code = DecodingError::InputTooShort, .message = "Input data is too short"});
     }
-    return {nullptr, header};
+    return header;
 }
 
-inline bcos::Error::UniquePtr decode(bytesRef& from, bcos::concepts::ByteBuffer auto& to) noexcept
+inline Header decodeHeader(bytesRef& from)
 {
-    auto&& [error, header] = decodeHeader(from);
-    if (error)
+    auto result = tryDecodeHeader(from);
+    if (!result)
     {
-        return std::move(error);
+        throwRlpDecodeError(result.error().code, result.error().message);
     }
+    return *result;
+}
+
+inline void decode(bytesRef& from, bcos::concepts::ByteBuffer auto& to)
+{
+    auto header = decodeHeader(from);
     if (header.isList)
     {
-        return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedList, "Unexpected list");
+        throwRlpDecodeError(DecodingError::UnexpectedList, "Unexpected list");
     }
     if constexpr (std::same_as<std::decay_t<decltype(to)>, bcos::bytes>)
     {
@@ -192,8 +205,7 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, bcos::concepts::ByteBuffer 
         using FixedT = std::decay_t<decltype(to)>;
         if (header.payloadLength != FixedT::SIZE)
         {
-            return BCOS_ERROR_UNIQUE_PTR(
-                DecodingError::UnexpectedLength, "Unexpected fixed-bytes length");
+            throwRlpDecodeError(DecodingError::UnexpectedLength, "Unexpected fixed-bytes length");
         }
         to = FixedT{from.getCroppedData(0, header.payloadLength)};
     }
@@ -205,8 +217,7 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, bcos::concepts::ByteBuffer 
         // big-endian scalar FixedBytes branches above which right-align.
         if (header.payloadLength != to.size())
         {
-            return BCOS_ERROR_UNIQUE_PTR(
-                DecodingError::UnexpectedLength, "Unexpected bloom length");
+            throwRlpDecodeError(DecodingError::UnexpectedLength, "Unexpected bloom length");
         }
         auto payload = from.getCroppedData(0, header.payloadLength);
         std::memcpy(to.data(), payload.data(), payload.size());
@@ -216,86 +227,66 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, bcos::concepts::ByteBuffer 
         static_assert(!sizeof(to), "Unsupported type");
     }
     from = from.getCroppedData(header.payloadLength);
-    return nullptr;
 }
 
-inline bcos::Error::UniquePtr decode(bytesRef& from, UnsignedIntegral auto& to) noexcept
+inline void decode(bytesRef& from, UnsignedIntegral auto& to)
 {
-    auto&& [error, header] = decodeHeader(from);
-    if (error)
-    {
-        return std::move(error);
-    }
+    auto header = decodeHeader(from);
     if (header.isList)
     {
-        return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedList, "Unexpected list");
+        throwRlpDecodeError(DecodingError::UnexpectedList, "Unexpected list");
     }
     // Reject integers wider than the target type instead of silently truncating via fromBigEndian
     // (op-geth parity). Use digits/8, NOT sizeof(T): boost u256 has sizeof 48 but 32 payload bytes.
     constexpr auto maxBytes = std::numeric_limits<std::decay_t<decltype(to)>>::digits / 8;
     if (header.payloadLength > maxBytes)
     {
-        return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedLength,
-            "integer wider than target type");
+        throwRlpDecodeError(DecodingError::UnexpectedLength, "integer wider than target type");
     }
     // Canonical integers carry no leading zero byte, and zero is the empty string 0x80, never a
     // single 0x00 (op-geth ErrCanonInt). decodeHeader only checks length prefixes (issue #5353).
     if (header.payloadLength >= 1 && from[0] == 0)
     {
-        return BCOS_ERROR_UNIQUE_PTR(
+        throwRlpDecodeError(
             DecodingError::NonCanonicalSize, "Non-canonical integer: leading zero byte");
     }
     to = fromBigEndian<std::decay_t<decltype(to)>, bcos::bytesRef>(
         from.getCroppedData(0, header.payloadLength));
     from = from.getCroppedData(header.payloadLength);
-    return nullptr;
 }
 
-inline bcos::Error::UniquePtr decode(bytesRef& from, bool& to) noexcept
+inline void decode(bytesRef& from, bool& to)
 {
-    auto&& [error, header] = decodeHeader(from);
-    if (error)
-    {
-        return std::move(error);
-    }
+    auto header = decodeHeader(from);
     if (header.isList)
     {
-        return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedList, "Unexpected list");
+        throwRlpDecodeError(DecodingError::UnexpectedList, "Unexpected list");
     }
     if (header.payloadLength != 1)
     {
-        return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedLength, "Unexpected length");
+        throwRlpDecodeError(DecodingError::UnexpectedLength, "Unexpected length");
     }
     to = from[0] != 0;
     from = from.getCroppedData(1);
-    return nullptr;
 }
 
 template <typename T>
     requires(!std::same_as<std::remove_cvref_t<T>, bcos::byte>)
-inline bcos::Error::UniquePtr decode(bytesRef& from, std::vector<T>& to) noexcept
+inline void decode(bytesRef& from, std::vector<T>& to)
 {
-    auto&& [error, header] = decodeHeader(from);
-    if (error)
-    {
-        return std::move(error);
-    }
+    auto header = decodeHeader(from);
     if (!header.isList)
     {
-        return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedString, "Unexpected string");
+        throwRlpDecodeError(DecodingError::UnexpectedString, "Unexpected string");
     }
     to.clear();
     auto payloadView = from.getCroppedData(0, header.payloadLength);
     while (!payloadView.empty())
     {
         to.emplace_back();
-        if (auto decodeError = decode(payloadView, to.back()); decodeError != nullptr)
-        {
-            return decodeError;
-        }
+        decode(payloadView, to.back());
     }
     from = from.getCroppedData(header.payloadLength);
-    return nullptr;
 }
 
 // Decodes an optional element. Presence is decided by "the view is exhausted" — i.e.
@@ -304,64 +295,45 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, std::vector<T>& to) noexcep
 // that still holds trailing data will silently treat the remaining fields as absent rather
 // than reporting malformed input; keep the list-context invariant in mind.
 template <typename T>
-inline bcos::Error::UniquePtr decode(bytesRef& from, std::optional<T>& to) noexcept
+inline void decode(bytesRef& from, std::optional<T>& to)
 {
     if (from.empty())
     {
         to.reset();
-        return nullptr;
+        return;
     }
     T value;
-    if (auto decodeError = decode(from, value); decodeError != nullptr)
-    {
-        return decodeError;
-    }
+    decode(from, value);
     to = std::move(value);
-    return nullptr;
 }
 
 template <typename... Args>
     requires(sizeof...(Args) > 1)
-inline bcos::Error::UniquePtr decodeItems(bytesRef& from, Args&... args) noexcept
+inline void decodeItems(bytesRef& from, Args&... args)
 {
-    bcos::Error::UniquePtr decodeError;
-    ((decodeError = decode(from, args)) || ...);
-    if (decodeError != nullptr)
-    {
-        return decodeError;
-    }
-    return nullptr;
+    (decode(from, args), ...);
 }
 
 template <typename... Args>
     requires(sizeof...(Args) > 1)
-inline bcos::Error::UniquePtr decode(bytesRef& from, Args&... args) noexcept
+inline void decode(bytesRef& from, Args&... args)
 {
-    auto&& [error, header] = decodeHeader(from);
-    if (error)
-    {
-        return std::move(error);
-    }
+    auto header = decodeHeader(from);
     if (!header.isList)
     {
-        return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedString, "Unexpected string");
+        throwRlpDecodeError(DecodingError::UnexpectedString, "Unexpected string");
     }
     // Crop to this list's payload before decoding the items: decode(std::optional) decides
     // presence by "the view is exhausted", which must mean "this list is exhausted" — not
     // "the whole buffer is consumed". Without the crop, a header nested inside a block RLP
     // would try to decode the trailing transactions as optional fields.
     auto payloadView = from.getCroppedData(0, header.payloadLength);
-    if (auto decodeError = decodeItems(payloadView, args...); decodeError != nullptr)
-    {
-        return decodeError;
-    }
+    decodeItems(payloadView, args...);
     if (!payloadView.empty())
     {
-        return BCOS_ERROR_UNIQUE_PTR(
-            DecodingError::UnexpectedListElements, "Unexpected list elements");
+        throwRlpDecodeError(DecodingError::UnexpectedListElements, "Unexpected list elements");
     }
     from = from.getCroppedData(header.payloadLength);
-    return {};
 }
 
 }  // namespace bcos::codec::rlp

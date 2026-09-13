@@ -351,8 +351,7 @@ static DecodableWeb3Tx makeDecodableWeb3Tx(
         bcos::rpc::Web3Transaction decoded;
         bcos::bytes copy = raw;
         bcos::bytesRef ref{copy.data(), copy.size()};
-        auto err = bcos::codec::rlp::decode(ref, decoded);
-        BOOST_REQUIRE(!err);
+        BOOST_REQUIRE_NO_THROW(bcos::codec::rlp::decode(ref, decoded));
         BOOST_REQUIRE(ref.empty());
         BOOST_REQUIRE(bcos::engine::engine_common::op::opEnvelopeToTars(raw, bcos::h256{}));
     }

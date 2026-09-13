@@ -24,6 +24,7 @@
 #include "../rlpx/Crypto.h"
 #include "../rlpx/Messages.h"
 #include "ForkId.h"
+#include <bcos-codec/rlp/Result.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <optional>
 #include <string>
@@ -85,7 +86,9 @@ bcos::bytes encodeStatus(StatusMessage const& _msg);
 // when non-zero, the decoded protocolVersion must match it — otherwise the peer
 // controls the layout selector. 0 = auto-detect from the embedded version
 // (test/convenience use only).
-StatusMessage decodeStatus(bytesConstRef _data, uint8_t _negotiatedVersion = 0);
+// Malformed input is reported as an RlpError value, never thrown.
+bcos::codec::rlp::RlpResult<StatusMessage> decodeStatus(
+    bytesConstRef _data, uint8_t _negotiatedVersion = 0);
 
 // GetBlockHeaders (eth/66+): [requestId, [origin, amount, skip, reverse]]
 struct GetBlockHeadersMessage
@@ -99,7 +102,7 @@ struct GetBlockHeadersMessage
 };
 
 bcos::bytes encodeGetBlockHeaders(GetBlockHeadersMessage const& _msg);
-GetBlockHeadersMessage decodeGetBlockHeaders(bytesConstRef _data);
+bcos::codec::rlp::RlpResult<GetBlockHeadersMessage> decodeGetBlockHeaders(bytesConstRef _data);
 
 // BlockHeaders (eth/66+): [requestId, [headerRlp, ...]]
 struct BlockHeadersMessage
@@ -109,7 +112,7 @@ struct BlockHeadersMessage
 };
 
 bcos::bytes encodeBlockHeaders(BlockHeadersMessage const& _msg);
-BlockHeadersMessage decodeBlockHeaders(bytesConstRef _data);
+bcos::codec::rlp::RlpResult<BlockHeadersMessage> decodeBlockHeaders(bytesConstRef _data);
 
 // GetBlockBodies (eth/66+): [requestId, [blockHash, ...]]
 struct GetBlockBodiesMessage
@@ -119,7 +122,7 @@ struct GetBlockBodiesMessage
 };
 
 bcos::bytes encodeGetBlockBodies(GetBlockBodiesMessage const& _msg);
-GetBlockBodiesMessage decodeGetBlockBodies(bytesConstRef _data);
+bcos::codec::rlp::RlpResult<GetBlockBodiesMessage> decodeGetBlockBodies(bytesConstRef _data);
 
 // BlockBodies (eth/66+): [requestId, [[txs, uncles, withdrawals?], ...]]
 // Each body: [transactions, uncles, withdrawals? (Shanghai+)]. In `transactions`,
@@ -142,7 +145,7 @@ struct BlockBodiesMessage
 };
 
 bcos::bytes encodeBlockBodies(BlockBodiesMessage const& _msg);
-BlockBodiesMessage decodeBlockBodies(bytesConstRef _data);
+bcos::codec::rlp::RlpResult<BlockBodiesMessage> decodeBlockBodies(bytesConstRef _data);
 
 // NewBlockHashes: [[blockHash, number], ...]
 struct NewBlockHashesMessage
@@ -156,7 +159,7 @@ struct NewBlockHashesMessage
 };
 
 bcos::bytes encodeNewBlockHashes(NewBlockHashesMessage const& _msg);
-NewBlockHashesMessage decodeNewBlockHashes(bytesConstRef _data);
+bcos::codec::rlp::RlpResult<NewBlockHashesMessage> decodeNewBlockHashes(bytesConstRef _data);
 
 // Capability entries advertised in the Hello message: eth/69 and eth/68. The
 // handshake negotiates the highest common version; eth/69 peers use the EIP-7642

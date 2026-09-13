@@ -50,7 +50,9 @@ BOOST_AUTO_TEST_CASE(helloRoundTrip)
     msg.capabilities = {{"eth", 68}, {"snap", 1}, {"edge", 255}};
 
     auto wire = encodeHello(msg);
-    HelloMessage decoded = decodeHello(bytesConstRef(wire.data(), wire.size()));
+    auto decodedResult = decodeHello(bytesConstRef(wire.data(), wire.size()));
+    BOOST_REQUIRE(decodedResult.has_value());
+    HelloMessage decoded = std::move(*decodedResult);
 
     BOOST_CHECK_EQUAL(decoded.version, msg.version);
     BOOST_CHECK(decoded.clientId == msg.clientId);
@@ -83,7 +85,9 @@ BOOST_AUTO_TEST_CASE(helloGoldenWireFormat)
         "1111111111111111111111111111111111111111");
 
     // And the golden decodes back to the same message.
-    HelloMessage decoded = decodeHello(bytesConstRef(wire.data(), wire.size()));
+    auto decodedResult = decodeHello(bytesConstRef(wire.data(), wire.size()));
+    BOOST_REQUIRE(decodedResult.has_value());
+    HelloMessage decoded = std::move(*decodedResult);
     BOOST_CHECK_EQUAL(decoded.version, 5);
     BOOST_CHECK(decoded.clientId == "FISCO-BCOS");
     BOOST_CHECK(decoded.capabilities.empty());
@@ -99,7 +103,9 @@ BOOST_AUTO_TEST_CASE(helloRejectsOversizedCapVersion)
         "f85a058a464953434f2d42434f53c8c78365746882010082765fb84011111111"
         "1111111111111111111111111111111111111111111111111111111111111111"
         "11111111111111111111111111111111111111111111111111111111");
-    BOOST_CHECK_THROW(decodeHello(bytesConstRef(wire.data(), wire.size())), std::runtime_error);
+    auto decoded = decodeHello(bytesConstRef(wire.data(), wire.size()));
+    BOOST_CHECK(!decoded.has_value());
+    BOOST_CHECK_EQUAL(decoded.error().message, "decodeHello: capability version out of range");
 }
 
 // Disconnect is always emitted in the geth list form [reason] and both the list
@@ -120,17 +126,20 @@ BOOST_AUTO_TEST_CASE(disconnectCodecs)
     // Decode the list form.
     auto listForm = fromHex("c180");
     auto decoded = decodeDisconnect(bytesConstRef(listForm.data(), listForm.size()));
-    BOOST_CHECK(decoded.reason == DisconnectReason::DisconnectRequested);
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_CHECK(decoded->reason == DisconnectReason::DisconnectRequested);
 
     // Decode the legacy bare-integer form (as sent by some clients).
     auto bareForm = fromHex("02");
     decoded = decodeDisconnect(bytesConstRef(bareForm.data(), bareForm.size()));
-    BOOST_CHECK(decoded.reason == DisconnectReason::ProtocolBreach);
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_CHECK(decoded->reason == DisconnectReason::ProtocolBreach);
 
     // 0x10 is the spec's subprotocol-specific reason.
     auto subreason = fromHex("10");
     decoded = decodeDisconnect(bytesConstRef(subreason.data(), subreason.size()));
-    BOOST_CHECK(decoded.reason == DisconnectReason::SubprotocolReason);
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_CHECK(decoded->reason == DisconnectReason::SubprotocolReason);
 }
 
 // Ping/Pong payloads are the empty list.

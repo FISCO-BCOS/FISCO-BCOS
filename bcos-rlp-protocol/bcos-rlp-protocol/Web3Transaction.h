@@ -22,6 +22,7 @@
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
+#include <bcos-codec/rlp/Result.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -43,9 +44,9 @@ struct Transaction;
 namespace bcos
 {
 /// EIP-2 low-s check for decode and TxValidator. r,s in [1, n-1], s <= n/2, each <= 32 bytes.
-/// Callers pad short scalars. Returns an error, or nullptr if ok. Deposits skip this.
-[[nodiscard]] bcos::Error::UniquePtr checkEip2Signature(
-    bcos::bytesConstRef signatureR, bcos::bytesConstRef signatureS);
+/// Callers pad short scalars. Returns false on violation; the decode funnel turns that into
+/// the RlpDecodeException the wire format requires. Deposits skip this.
+bool checkEip2Signature(bcos::bytesConstRef signatureR, bcos::bytesConstRef signatureS) noexcept;
 
 namespace rpc
 {
@@ -116,8 +117,12 @@ public:
     bcos::bytes encodeForSign() const;
     // full RLP (with type byte) — delegates to handlerFor(type).encode
     bcos::bytes encode() const;
-    // Decode — delegates to handlerFor(type).decode, propagating decode errors
-    bcos::Error::UniquePtr decode(bcos::bytesRef& in, bool withSig = true);
+    // Decode — delegates to handlerFor(type).decode; decode failures propagate as thrown
+    // codec::rlp::RlpDecodeException
+    void decode(bcos::bytesRef& in, bool withSig = true);
+    // Value-returning boundary wrapper around decode() for hot ingress paths (see
+    // codec::rlp::captureRlp).
+    codec::rlp::RlpResult<void> tryDecode(bcos::bytesRef& in, bool withSig = true);
     // tx hash = keccak256(rlp(tx_payload,v,r,s))
     bcos::crypto::HashType txHash() const;
     // hash for sign = keccak256(rlp(tx_payload))
@@ -167,11 +172,16 @@ size_t length(const rpc::AuthorizationListEntry&) noexcept;
 
 size_t length(const rpc::Web3Transaction&) noexcept;
 void encode(bcos::bytes& out, const rpc::Web3Transaction&) noexcept;
-bcos::Error::UniquePtr decode(bcos::bytesRef& in, rpc::AccessListEntry&) noexcept;
-bcos::Error::UniquePtr decode(bcos::bytesRef& in, rpc::AuthorizationListEntry&) noexcept;
-bcos::Error::UniquePtr decode(bcos::bytesRef& in, rpc::Web3Transaction&) noexcept;
-bcos::Error::UniquePtr decodeFromPayload(bcos::bytesRef& in, rpc::Web3Transaction&) noexcept;
-bcos::Error::UniquePtr decodeTransaction(
-    bcos::bytesRef& in, rpc::Web3Transaction&, bool withSignature) noexcept;
+// All decode entry points throw RlpDecodeException on malformed input.
+void decode(bcos::bytesRef& in, rpc::AccessListEntry&);
+void decode(bcos::bytesRef& in, rpc::AuthorizationListEntry&);
+void decode(bcos::bytesRef& in, rpc::Web3Transaction&);
+void decodeFromPayload(bcos::bytesRef& in, rpc::Web3Transaction&);
+void decodeTransaction(bcos::bytesRef& in, rpc::Web3Transaction&, bool withSignature);
+// Value-returning boundary wrappers around the throwing entry points above (see captureRlp):
+// use these on hot ingress paths where malformed input is routine.
+RlpResult<void> tryDecodeFromPayload(bcos::bytesRef& in, rpc::Web3Transaction& out);
+RlpResult<void> tryDecodeTransaction(
+    bcos::bytesRef& in, rpc::Web3Transaction& out, bool withSignature);
 }  // namespace codec::rlp
 }  // namespace bcos

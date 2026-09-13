@@ -63,10 +63,16 @@ bcos::u256 decodeStorageValue(bcos::bytesConstRef leaf)
     // decode as if canonical. Ethereum's storage values are minimal big-endian byte strings of at
     // most 32 bytes; anything else is a corrupt leaf.
     bcos::bytes payload;
-    if (auto error = bcos::codec::rlp::decode(cursor, payload); error)
+    try
     {
+        bcos::codec::rlp::decode(cursor, payload);
+    }
+    catch (bcos::codec::rlp::RlpDecodeException const& e)
+    {
+        auto const* msg = boost::get_error_info<bcos::errinfo_comment>(e);
         BOOST_THROW_EXCEPTION(MPTDecodeError{} << bcos::errinfo_comment(
-                                  "storage leaf: bad RLP value: " + error->errorMessage()));
+                                  "storage leaf: bad RLP value: " +
+                                  (msg ? *msg : std::string("unknown RLP decode error"))));
     }
     if (!cursor.empty())
     {

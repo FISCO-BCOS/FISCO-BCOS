@@ -1,5 +1,6 @@
 #include "Web3AccessListResolver.h"
 #include "bcos-codec/rlp/Common.h"
+#include "bcos-codec/rlp/Exceptions.h"
 #include "bcos-codec/rlp/RLPDecode.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/Web3AccessList.h"
@@ -116,12 +117,12 @@ Web3AccessListResolved resolveWeb3AccessListFromExtraBytes(protocol::Transaction
     bcos::bytes extraCopy(extra.begin(), extra.end());
     bcos::bytesRef ref(extraCopy.data(), extraCopy.size());
     bcos::rpc::Web3Transaction w3{};
-    if (auto const decodeError = bcos::codec::rlp::decodeFromPayload(ref, w3);
-        decodeError != nullptr)
+    if (auto const result = bcos::codec::rlp::tryDecodeFromPayload(ref, w3); !result.has_value())
     {
         WEB3_ACCESS_LIST_RESOLVER_LOG(WARNING)
             << LOG_DESC("Failed to decode Web3 extraTransactionBytes for access list")
-            << LOG_KV("extraLen", extra.size()) << LOG_KV("msg", decodeError->errorMessage());
+            << LOG_KV("extraLen", extra.size())
+            << LOG_KV("msg", result.error().message);
         return out;
     }
     buildAccessListFromWeb3(w3, out);

@@ -26,6 +26,7 @@
 #include <cctype>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 
 namespace bcos::devp2p::rlpx
 {
@@ -46,6 +47,19 @@ Session makeSession(Socket&& _socket, AuthKeys const& _keys, bool _isInitiator)
     return Session(std::move(_socket), FramingCipher(keyMaterial));
 }
 
+// Unwraps an RlpResult at the handshake boundary (once per connection, so the
+// exception style is kept here): the value on success, a std::runtime_error
+// with _context + the error message on failure.
+template <typename T>
+T unwrapOrThrow(bcos::codec::rlp::RlpResult<T>&& _result, std::string_view _context)
+{
+    if (!_result)
+    {
+        throw std::runtime_error(std::string(_context) + _result.error().message);
+    }
+    return std::move(*_result);
+}
+
 // Shared Hello/Status exchange once the encrypted session exists.
 EstablishedSession exchangeHandshake(
     Session&& _session, EccKeyPair const& _keyPair, PeerConfig const& _config)
@@ -64,20 +78,29 @@ EstablishedSession exchangeHandshake(
     hello.id = _keyPair.publicKey();
 
     session.sendMessage(Message{baseMsg::Hello, encodeHello(hello)});
-    auto helloMsg = session.recvMessage();
+    auto helloMsg = unwrapOrThrow(
+        session.recvMessage(), "exchangeHandshake: failed to decode the Hello frame: ");
     if (helloMsg.id != baseMsg::Hello)
     {
         if (helloMsg.id == baseMsg::Disconnect)
         {
             auto disc = decodeDisconnect(bytesConstRef(helloMsg.data.data(), helloMsg.data.size()));
+            if (disc)
+            {
+                throw std::runtime_error(
+                    "exchangeHandshake: peer disconnected during Hello: reason=" +
+                    std::to_string(static_cast<int>(disc->reason)));
+            }
             throw std::runtime_error(
-                "exchangeHandshake: peer disconnected during Hello: reason=" +
-                std::to_string(static_cast<int>(disc.reason)));
+                "exchangeHandshake: peer disconnected during Hello (reason undecodable: " +
+                disc.error().message + ")");
         }
         throw std::runtime_error("exchangeHandshake: expected Hello, got message id=" +
                                  std::to_string(helloMsg.id));
     }
-    auto peerHello = decodeHello(bytesConstRef(helloMsg.data.data(), helloMsg.data.size()));
+    auto peerHello = unwrapOrThrow(
+        decodeHello(bytesConstRef(helloMsg.data.data(), helloMsg.data.size())),
+        "exchangeHandshake: failed to decode the Hello message: ");
     // Negotiate the highest eth version the peer supports from {68, 69}.
     uint8_t negotiatedEth = 0;
     for (auto const& cap : peerHello.capabilities)
@@ -137,25 +160,26 @@ EstablishedSession exchangeHandshake(
     session.sendMessage(
         Message{static_cast<uint8_t>(eth::frameId(eth::msg::Status)), encodeStatus(status)});
 
-    auto statusMsg = session.recvMessage();
+    auto statusMsg = unwrapOrThrow(
+        session.recvMessage(), "exchangeHandshake: failed to decode the eth Status frame: ");
     if (statusMsg.id != eth::frameId(eth::msg::Status))
     {
         if (statusMsg.id == baseMsg::Disconnect)
         {
-            try
+            auto disc = decodeDisconnect(
+                bytesConstRef(statusMsg.data.data(), statusMsg.data.size()));
+            if (disc)
             {
-                auto disc = decodeDisconnect(
-                    bytesConstRef(statusMsg.data.data(), statusMsg.data.size()));
                 BCOS_LOG(INFO) << LOG_BADGE("handshake") << "peer disconnected during Status"
                                << LOG_KV("peerClient", peerHello.clientId)
-                               << LOG_KV("reason", static_cast<int>(disc.reason));
+                               << LOG_KV("reason", static_cast<int>(disc->reason));
             }
-            catch (std::exception const& e)
+            else
             {
                 BCOS_LOG(INFO) << LOG_BADGE("handshake")
                                << "peer disconnected during Status (reason undecodable)"
                                << LOG_KV("peerClient", peerHello.clientId)
-                               << LOG_KV("error", e.what());
+                               << LOG_KV("error", disc.error().message);
             }
         }
         throw std::runtime_error("exchangeHandshake: expected eth Status, got message id=" +
@@ -163,8 +187,10 @@ EstablishedSession exchangeHandshake(
     }
     // The Status layout is selected from the version negotiated in Hello (never
     // from the peer-supplied field), and the embedded version must match it.
-    auto peerStatus = eth::decodeStatus(
-        bytesConstRef(statusMsg.data.data(), statusMsg.data.size()), negotiatedEth);
+    auto peerStatus = unwrapOrThrow(
+        eth::decodeStatus(bytesConstRef(statusMsg.data.data(), statusMsg.data.size()),
+            negotiatedEth),
+        "exchangeHandshake: failed to decode the eth Status message: ");
 
     // The peer must be on our network (spec: disconnect on network-ID mismatch).
     if (peerStatus.networkId != _config.networkId)

@@ -250,7 +250,20 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
         auto extraBytesRef =
             bcos::bytesRef(const_cast<byte*>(transaction.extraTransactionBytes().data()),
                 transaction.extraTransactionBytes().size());
-        codec::rlp::decodeFromPayload(extraBytesRef, web3Tx);
+        // The decode result is intentionally ignored: on undecodable extraTransactionBytes
+        // the zero/default fields already filled above are the observable answer.
+        try
+        {
+            codec::rlp::decodeFromPayload(extraBytesRef, web3Tx);
+        }
+        catch (codec::rlp::RlpDecodeException const& e)
+        {
+            auto const* reason = boost::get_error_info<bcos::errinfo_comment>(e);
+            RPC_IMPL_LOG(DEBUG)
+                << LOG_DESC("toJsonResp: undecodable web3 payload, keeping default fields")
+                << LOG_KV("reason",
+                       reason != nullptr ? *reason : std::string("RLP decode failed"));
+        }
         jResp["value"] = web3Tx.value.str();
         jResp["gasLimit"] = web3Tx.gasLimit;
         if (web3Tx.type >= TransactionType::EIP1559)

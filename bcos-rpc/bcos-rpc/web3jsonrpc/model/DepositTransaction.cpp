@@ -29,88 +29,85 @@ using namespace bcos::codec::rlp;
 bcos::Error::UniquePtr bcos::rpc::decodeDepositTransaction(
     bcos::bytesRef& in, DepositTransaction& out) noexcept
 {
-    if (in.empty() || in[0] != c_depositTxType)
+    // The RLP layer reports errors by throwing RlpDecodeException; this function keeps its
+    // Error::UniquePtr interface, so the whole body is wrapped and the exception's code
+    // (errinfo_rlpErrorCode) and message (errinfo_comment) are folded back into an Error.
+    try
     {
-        return BCOS_ERROR_UNIQUE_PTR(
-            UnexpectedEip2718Serialization, "Not a 0x7e deposit transaction envelope");
-    }
-    in = in.getCroppedData(1);
-    auto&& [error, header] = decodeHeader(in);
-    if (error != nullptr)
-    {
-        return std::move(error);
-    }
-    if (!header.isList)
-    {
-        return BCOS_ERROR_UNIQUE_PTR(UnexpectedString, "Deposit transaction body must be a list");
-    }
-    if (header.payloadLength > in.size())
-    {
-        return BCOS_ERROR_UNIQUE_PTR(InputTooShort, "Deposit transaction body too short");
-    }
-    bytesRef body(in.data(), header.payloadLength);
+        if (in.empty() || in[0] != c_depositTxType)
+        {
+            return BCOS_ERROR_UNIQUE_PTR(
+                UnexpectedEip2718Serialization, "Not a 0x7e deposit transaction envelope");
+        }
+        in = in.getCroppedData(1);
+        auto header = decodeHeader(in);
+        if (!header.isList)
+        {
+            return BCOS_ERROR_UNIQUE_PTR(
+                UnexpectedString, "Deposit transaction body must be a list");
+        }
+        if (header.payloadLength > in.size())
+        {
+            return BCOS_ERROR_UNIQUE_PTR(InputTooShort, "Deposit transaction body too short");
+        }
+        bytesRef body(in.data(), header.payloadLength);
 
-    if (auto fieldError = decodeItems(body, out.sourceHash, out.from); fieldError != nullptr)
-    {
-        return fieldError;
-    }
-    // `to`: empty RLP item = contract creation (same convention as every Ethereum tx type).
-    if (body.empty())
-    {
-        return BCOS_ERROR_UNIQUE_PTR(InputTooShort, "Deposit transaction missing to field");
-    }
-    if (body[0] == BYTES_HEAD_BASE)
-    {
-        out.to = std::nullopt;
-        body = body.getCroppedData(1);
-    }
-    else
-    {
-        Address to{};
-        if (auto fieldError = decode(body, to); fieldError != nullptr)
+        decodeItems(body, out.sourceHash, out.from);
+        // `to`: empty RLP item = contract creation (same convention as every Ethereum tx type).
+        if (body.empty())
         {
-            return fieldError;
+            return BCOS_ERROR_UNIQUE_PTR(InputTooShort, "Deposit transaction missing to field");
         }
-        out.to.emplace(to);
-    }
-    // `mint`: empty RLP item = no mint. op-geth encodes a nil *big.Int as the empty item
-    // and decodes the empty item back to nil — on the wire nil and zero are the same
-    // (both encode to 0x80), so nullopt here matches op-geth's decode-side behavior.
-    if (body.empty())
-    {
-        return BCOS_ERROR_UNIQUE_PTR(InputTooShort, "Deposit transaction missing mint field");
-    }
-    if (body[0] == BYTES_HEAD_BASE)
-    {
-        out.mint = std::nullopt;
-        body = body.getCroppedData(1);
-    }
-    else
-    {
-        u256 mint{0};
-        if (auto fieldError = decode(body, mint); fieldError != nullptr)
+        if (body[0] == BYTES_HEAD_BASE)
         {
-            return fieldError;
+            out.to = std::nullopt;
+            body = body.getCroppedData(1);
         }
-        out.mint.emplace(mint);
+        else
+        {
+            Address to{};
+            decode(body, to);
+            out.to.emplace(to);
+        }
+        // `mint`: empty RLP item = no mint. op-geth encodes a nil *big.Int as the empty item
+        // and decodes the empty item back to nil — on the wire nil and zero are the same
+        // (both encode to 0x80), so nullopt here matches op-geth's decode-side behavior.
+        if (body.empty())
+        {
+            return BCOS_ERROR_UNIQUE_PTR(InputTooShort, "Deposit transaction missing mint field");
+        }
+        if (body[0] == BYTES_HEAD_BASE)
+        {
+            out.mint = std::nullopt;
+            body = body.getCroppedData(1);
+        }
+        else
+        {
+            u256 mint{0};
+            decode(body, mint);
+            out.mint.emplace(mint);
+        }
+        // isSystemTx decodes as an integer: RLP-canonical false is the EMPTY item (0x80,
+        // zero-length payload — op-geth encodes Go bools that way), which the shared
+        // decode(bool&) rejects because it requires exactly one payload byte.
+        uint64_t isSystemTxValue = 0;
+        decodeItems(body, out.value, out.gas, isSystemTxValue, out.input);
+        out.isSystemTx = isSystemTxValue != 0;
+        if (!body.empty())
+        {
+            return BCOS_ERROR_UNIQUE_PTR(
+                UnexpectedListElements, "Trailing bytes in deposit transaction body");
+        }
+        in = in.getCroppedData(header.payloadLength);
+        return nullptr;
     }
-    // isSystemTx decodes as an integer: RLP-canonical false is the EMPTY item (0x80,
-    // zero-length payload — op-geth encodes Go bools that way), which the shared
-    // decode(bool&) rejects because it requires exactly one payload byte.
-    uint64_t isSystemTxValue = 0;
-    if (auto fieldError = decodeItems(body, out.value, out.gas, isSystemTxValue, out.input);
-        fieldError != nullptr)
+    catch (RlpDecodeException const& e)
     {
-        return fieldError;
+        auto const* code = boost::get_error_info<errinfo_rlpErrorCode>(e);
+        auto const* msg = boost::get_error_info<errinfo_comment>(e);
+        return BCOS_ERROR_UNIQUE_PTR(code != nullptr ? *code : UnexpectedEip2718Serialization,
+            msg != nullptr ? *msg : "RLP decode failed");
     }
-    out.isSystemTx = isSystemTxValue != 0;
-    if (!body.empty())
-    {
-        return BCOS_ERROR_UNIQUE_PTR(
-            UnexpectedListElements, "Trailing bytes in deposit transaction body");
-    }
-    in = in.getCroppedData(header.payloadLength);
-    return nullptr;
 }
 
 void bcos::rpc::combineDepositTxResponse(Json::Value& result, const DepositTransaction& deposit)

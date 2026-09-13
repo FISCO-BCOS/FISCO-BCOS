@@ -34,7 +34,7 @@ void Session::sendMessage(Message const& _message)
     m_socket.sendAll(bytesConstRef(encrypted.data(), encrypted.size()));
 }
 
-Message Session::recvMessage()
+bcos::codec::rlp::RlpResult<Message> Session::recvMessage()
 {
     auto header = m_socket.recvFixed(FramingCipher::headerSize());
     size_t frameSize = m_cipher.decryptHeader(bytesConstRef(header.data(), header.size()));

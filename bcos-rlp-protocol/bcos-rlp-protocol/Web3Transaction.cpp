@@ -35,18 +35,16 @@ namespace bcos
 {
 // EIP-2: s > n/2 is malleable. Shared with TxValidator (P2P tars never hits decode()).
 
-/// Returns a decode error if r/s fall outside EIP-2's valid range (r,s in [1, n-1], s <= n/2),
-/// else nullptr. r/s are the raw 32-byte big-endian scalars (already zero-padded by the handler).
-bcos::Error::UniquePtr checkEip2Signature(
-    bcos::bytesConstRef signatureR, bcos::bytesConstRef signatureS)
+/// Returns false if r/s fall outside EIP-2's valid range (r,s in [1, n-1], s <= n/2).
+/// r/s are the raw 32-byte big-endian scalars (already zero-padded by the handler).
+bool checkEip2Signature(bcos::bytesConstRef signatureR, bcos::bytesConstRef signatureS) noexcept
 {
     // Width gate first: padSignature only zero-pads shorter input, and fromBigEndian truncates
     // wider input — without this a 33-byte 0x00||r would pass the range check below on truncation,
     // where op-geth rejects >256-bit scalars at RLP decode.
     if (signatureR.size() > 32 || signatureS.size() > 32)
     {
-        return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::InvalidVInSignature,
-            "EIP-2: invalid signature (r/s wider than 32 bytes)");
+        return false;
     }
     // r/s are raw 32-byte big-endian scalars — decode in place instead of round-tripping through a
     // "0x"+hex string + u256 parse (4 heap allocations per tx on the shared decode funnel).
@@ -55,11 +53,9 @@ bcos::Error::UniquePtr checkEip2Signature(
     if (r == 0 || r >= bcos::crypto::c_secp256k1n || s == 0 || s >= bcos::crypto::c_secp256k1n ||
         s > bcos::crypto::c_secp256k1nOver2)
     {
-        return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::InvalidVInSignature,
-            "EIP-2: invalid signature (r/s out of [1,n-1], or s exceeds secp256k1n/2 — "
-            "malleable signature)");
+        return false;
     }
-    return nullptr;
+    return true;
 }
 
 namespace rpc
@@ -86,11 +82,11 @@ bcos::bytes Web3Transaction::encode() const
     return handlerFor(type).encode(*this);
 }
 
-bcos::Error::UniquePtr Web3Transaction::decode(bcos::bytesRef& in, bool withSig)
+void Web3Transaction::decode(bcos::bytesRef& in, bool withSig)
 {
     if (in.empty())
     {
-        return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::InputTooShort, "Input too short");
+        codec::rlp::throwRlpDecodeError(codec::rlp::DecodingError::InputTooShort, "Input too short");
     }
     const auto firstByte = in[0];
     // A valid transaction body is always an RLP list (≥0xC0). Use >= LIST_HEAD_BASE rather than
@@ -107,7 +103,7 @@ bcos::Error::UniquePtr Web3Transaction::decode(bcos::bytesRef& in, bool withSig)
         auto txType = magic_enum::enum_cast<TransactionType>(firstByte);
         if (!txType.has_value())
         {
-            return BCOS_ERROR_UNIQUE_PTR(codec::rlp::DecodingError::UnsupportedTransactionType,
+            codec::rlp::throwRlpDecodeError(codec::rlp::DecodingError::UnsupportedTransactionType,
                 "Unsupported transaction type");
         }
         type = txType.value();
@@ -115,10 +111,10 @@ bcos::Error::UniquePtr Web3Transaction::decode(bcos::bytesRef& in, bool withSig)
     // ⚠️ Do not pre-strip the type byte: the typed handler consumes the envelope itself (see the
     // Web3TxHandler.h decode contract); stripping it again here would skip the list header a second
     // time and fail every typed tx decode.
-    auto err = handlerFor(type).decode(in, *this, withSig);
-    if (err == nullptr && !in.empty())
+    handlerFor(type).decode(in, *this, withSig);
+    if (!in.empty())
     {
-        return BCOS_ERROR_UNIQUE_PTR(
+        codec::rlp::throwRlpDecodeError(
             codec::rlp::DecodingError::InputTooLong, "Trailing bytes after RLP list");
     }
     // EIP-2: reject malleable (high-s) signatures at decode time. This member is the shared funnel
@@ -129,12 +125,18 @@ bcos::Error::UniquePtr Web3Transaction::decode(bcos::bytesRef& in, bool withSig)
     // EIP-2 on any decoded (y,r,s). Preimage leftovers have empty r/s and stay exempt.
     bool const decodedSigTrailer =
         withSig || !signatureR.empty() || !signatureS.empty() || signatureV != 0;
-    if (err == nullptr && decodedSigTrailer && type != TransactionType::Deposit)
+    if (decodedSigTrailer && type != TransactionType::Deposit &&
+        !checkEip2Signature(bcos::bytesConstRef(signatureR.data(), signatureR.size()),
+            bcos::bytesConstRef(signatureS.data(), signatureS.size())))
     {
-        err = checkEip2Signature(bcos::bytesConstRef(signatureR.data(), signatureR.size()),
-            bcos::bytesConstRef(signatureS.data(), signatureS.size()));
+        codec::rlp::throwRlpDecodeError(codec::rlp::DecodingError::InvalidVInSignature,
+            "EIP-2: invalid signature (r/s out of range, or s exceeds secp256k1n/2)");
     }
-    return err;
+}
+
+codec::rlp::RlpResult<void> Web3Transaction::tryDecode(bcos::bytesRef& in, bool withSig)
+{
+    return codec::rlp::captureRlp([&] { decode(in, withSig); });
 }
 
 bcos::crypto::HashType Web3Transaction::txHash() const
@@ -240,79 +242,65 @@ void encode(bcos::bytes& out, const Web3Transaction& tx) noexcept
     }
 }
 
-bcos::Error::UniquePtr decode(bcos::bytesRef& in, AuthorizationListEntry& out) noexcept
+void decode(bcos::bytesRef& in, AuthorizationListEntry& out)
 {
     // Each authorization entry is itself an RLP list:
     // [chain_id, address, nonce, y_parity, r, s]
     // Canonical integers / yParity: authority hash is re-encoded from these values.
-    auto&& [error, header] = decodeHeader(in);
-    if (error != nullptr)
-    {
-        return std::move(error);
-    }
+    auto header = decodeHeader(in);
     if (!header.isList)
     {
-        return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedString, "Unexpected string");
+        throwRlpDecodeError(DecodingError::UnexpectedString, "Unexpected string");
     }
     const uint64_t leftover{in.size() - header.payloadLength};
     u256 chainId = 0;
-    if (auto e = bcos::rlp::protocol::decodeCanonicalRlpUint(in, chainId); e != nullptr)
-    {
-        return e;
-    }
-    if (auto e = decode(in, out.address); e != nullptr)
-    {
-        return e;
-    }
+    bcos::rlp::protocol::decodeCanonicalRlpUint(in, chainId);
+    decode(in, out.address);
     uint64_t nonce = 0;
-    if (auto e = bcos::rlp::protocol::decodeCanonicalRlpUint(in, nonce); e != nullptr)
-    {
-        return e;
-    }
+    bcos::rlp::protocol::decodeCanonicalRlpUint(in, nonce);
     uint64_t yParity = 0;
-    if (auto e = bcos::rlp::protocol::decodeAuthorizationYParity(in, yParity); e != nullptr)
-    {
-        // op-geth parity: the authorization's V is a plain uint8 at decode; a value outside
-        // {0, 1} does not invalidate the transaction — processAuthorizationList skips that
-        // entry at execution ("errors are ignored, we simply skip invalid authorizations").
-        // Only non-canonical encodings (leading zero, multi-byte payload) are rejected here.
-        return e;
-    }
-    if (auto e = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.r); e != nullptr)
-    {
-        return e;
-    }
-    if (auto e = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.s); e != nullptr)
-    {
-        return e;
-    }
+    // op-geth parity: the authorization's V is a plain uint8 at decode; a value outside
+    // {0, 1} does not invalidate the transaction — processAuthorizationList skips that
+    // entry at execution ("errors are ignored, we simply skip invalid authorizations").
+    // Only non-canonical encodings (leading zero, multi-byte payload) are rejected here.
+    bcos::rlp::protocol::decodeAuthorizationYParity(in, yParity);
+    bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.r);
+    bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.s);
     if (in.size() != leftover)
     {
-        return BCOS_ERROR_UNIQUE_PTR(
-            DecodingError::UnexpectedListElements, "Unexpected list elements");
+        throwRlpDecodeError(DecodingError::UnexpectedListElements, "Unexpected list elements");
     }
     out.chainId = chainId;
     out.nonce = nonce;
     out.yParity = static_cast<uint8_t>(yParity);
-    return nullptr;
 }
-bcos::Error::UniquePtr decode(bcos::bytesRef& in, Web3Transaction& out) noexcept
+void decode(bcos::bytesRef& in, Web3Transaction& out)
 {
-    return out.decode(in, true);
+    out.decode(in, true);
 }
 
-bcos::Error::UniquePtr decodeFromPayload(bcos::bytesRef& in, rpc::Web3Transaction& out) noexcept
+void decodeFromPayload(bcos::bytesRef& in, rpc::Web3Transaction& out)
 {
-    return out.decode(in, false);
+    out.decode(in, false);
 }
 
-bcos::Error::UniquePtr decodeTransaction(
-    bcos::bytesRef& in, rpc::Web3Transaction& out, bool withSignature) noexcept
+void decodeTransaction(bcos::bytesRef& in, rpc::Web3Transaction& out, bool withSignature)
 {
     // Kept as the entry point (the call target of decodeOpEnvelope/decodeOpEnvelopeWithSig,
     // EthEndpoint.cpp:73); it now delegates to the member function so the new handler dispatch
     // path is used.
-    return out.decode(in, withSignature);
+    out.decode(in, withSignature);
+}
+
+RlpResult<void> tryDecodeFromPayload(bcos::bytesRef& in, rpc::Web3Transaction& out)
+{
+    return captureRlp([&] { decodeFromPayload(in, out); });
+}
+
+RlpResult<void> tryDecodeTransaction(
+    bcos::bytesRef& in, rpc::Web3Transaction& out, bool withSignature)
+{
+    return captureRlp([&] { decodeTransaction(in, out, withSignature); });
 }
 }  // namespace codec::rlp
 }  // namespace bcos

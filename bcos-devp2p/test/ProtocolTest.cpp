@@ -47,12 +47,13 @@ BOOST_AUTO_TEST_CASE(getBlockHeadersGolden)
     BOOST_CHECK_EQUAL(toHex(encoded), "d1886b1a456ba6e2f81dc783b9ffff018080");
 
     auto decoded = eth::decodeGetBlockHeaders(ref(encoded));
-    BOOST_CHECK_EQUAL(decoded.requestId, msg.requestId);
-    BOOST_CHECK(!decoded.originHash.has_value());
-    BOOST_CHECK_EQUAL(decoded.originNumber, msg.originNumber);
-    BOOST_CHECK_EQUAL(decoded.amount, msg.amount);
-    BOOST_CHECK_EQUAL(decoded.skip, msg.skip);
-    BOOST_CHECK_EQUAL(decoded.reverse, false);
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_CHECK_EQUAL(decoded->requestId, msg.requestId);
+    BOOST_CHECK(!decoded->originHash.has_value());
+    BOOST_CHECK_EQUAL(decoded->originNumber, msg.originNumber);
+    BOOST_CHECK_EQUAL(decoded->amount, msg.amount);
+    BOOST_CHECK_EQUAL(decoded->skip, msg.skip);
+    BOOST_CHECK_EQUAL(decoded->reverse, false);
 }
 
 BOOST_AUTO_TEST_CASE(getBlockHeadersByHashRoundTrip)
@@ -68,12 +69,13 @@ BOOST_AUTO_TEST_CASE(getBlockHeadersByHashRoundTrip)
 
     auto encoded = eth::encodeGetBlockHeaders(msg);
     auto decoded = eth::decodeGetBlockHeaders(ref(encoded));
-    BOOST_CHECK_EQUAL(decoded.requestId, 7);
-    BOOST_REQUIRE(decoded.originHash.has_value());
-    BOOST_CHECK(*decoded.originHash == *msg.originHash);
-    BOOST_CHECK_EQUAL(decoded.amount, 128);
-    BOOST_CHECK_EQUAL(decoded.skip, 1);
-    BOOST_CHECK_EQUAL(decoded.reverse, true);
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_CHECK_EQUAL(decoded->requestId, 7);
+    BOOST_REQUIRE(decoded->originHash.has_value());
+    BOOST_CHECK(*decoded->originHash == *msg.originHash);
+    BOOST_CHECK_EQUAL(decoded->amount, 128);
+    BOOST_CHECK_EQUAL(decoded->skip, 1);
+    BOOST_CHECK_EQUAL(decoded->reverse, true);
 }
 
 BOOST_AUTO_TEST_CASE(blockHeadersRoundTrip)
@@ -86,10 +88,11 @@ BOOST_AUTO_TEST_CASE(blockHeadersRoundTrip)
 
     auto encoded = eth::encodeBlockHeaders(msg);
     auto decoded = eth::decodeBlockHeaders(ref(encoded));
-    BOOST_CHECK_EQUAL(decoded.requestId, 9);
-    BOOST_REQUIRE_EQUAL(decoded.headers.size(), 2u);
-    BOOST_CHECK(decoded.headers[0] == msg.headers[0]);
-    BOOST_CHECK(decoded.headers[1] == msg.headers[1]);
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_CHECK_EQUAL(decoded->requestId, 9);
+    BOOST_REQUIRE_EQUAL(decoded->headers.size(), 2u);
+    BOOST_CHECK(decoded->headers[0] == msg.headers[0]);
+    BOOST_CHECK(decoded->headers[1] == msg.headers[1]);
 }
 
 BOOST_AUTO_TEST_CASE(blockBodiesRoundTrip)
@@ -108,14 +111,15 @@ BOOST_AUTO_TEST_CASE(blockBodiesRoundTrip)
 
     auto encoded = eth::encodeBlockBodies(msg);
     auto decoded = eth::decodeBlockBodies(ref(encoded));
-    BOOST_CHECK_EQUAL(decoded.requestId, 3);
-    BOOST_REQUIRE_EQUAL(decoded.bodies.size(), 1u);
-    BOOST_REQUIRE_EQUAL(decoded.bodies[0].transactions.size(), 3u);
-    BOOST_CHECK(decoded.bodies[0].transactions[0] == body.transactions[0]);
-    BOOST_CHECK(decoded.bodies[0].transactions[1] == body.transactions[1]);
-    BOOST_CHECK(decoded.bodies[0].transactions[2] == body.transactions[2]);
-    BOOST_REQUIRE_EQUAL(decoded.bodies[0].uncles.size(), 1u);
-    BOOST_CHECK(decoded.bodies[0].uncles[0] == body.uncles[0]);
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_CHECK_EQUAL(decoded->requestId, 3);
+    BOOST_REQUIRE_EQUAL(decoded->bodies.size(), 1u);
+    BOOST_REQUIRE_EQUAL(decoded->bodies[0].transactions.size(), 3u);
+    BOOST_CHECK(decoded->bodies[0].transactions[0] == body.transactions[0]);
+    BOOST_CHECK(decoded->bodies[0].transactions[1] == body.transactions[1]);
+    BOOST_CHECK(decoded->bodies[0].transactions[2] == body.transactions[2]);
+    BOOST_REQUIRE_EQUAL(decoded->bodies[0].uncles.size(), 1u);
+    BOOST_CHECK(decoded->bodies[0].uncles[0] == body.uncles[0]);
 }
 
 // On the wire a typed transaction is RLP-encoded as a STRING whose content is
@@ -177,12 +181,13 @@ BOOST_AUTO_TEST_CASE(blockBodiesTypedTxStringWrapped)
     }();
 
     auto decoded = eth::decodeBlockBodies(ref(wire));
-    BOOST_CHECK_EQUAL(decoded.requestId, 7);
-    BOOST_REQUIRE_EQUAL(decoded.bodies.size(), 1u);
-    BOOST_REQUIRE_EQUAL(decoded.bodies[0].transactions.size(), 2u);
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_CHECK_EQUAL(decoded->requestId, 7);
+    BOOST_REQUIRE_EQUAL(decoded->bodies.size(), 1u);
+    BOOST_REQUIRE_EQUAL(decoded->bodies[0].transactions.size(), 2u);
     // typed tx must come back WITHOUT the string prefix (0xNN||payload only)
-    BOOST_CHECK(decoded.bodies[0].transactions[0] == typedTx);
-    BOOST_CHECK(decoded.bodies[0].transactions[1] ==
+    BOOST_CHECK(decoded->bodies[0].transactions[0] == typedTx);
+    BOOST_CHECK(decoded->bodies[0].transactions[1] ==
                 (bcos::bytes{0xc3, 0x01, 0x02, 0x03}));
 
     // The ENCODE path must produce exactly this hand-built wire form: typed txs
@@ -212,13 +217,14 @@ BOOST_AUTO_TEST_CASE(statusRoundTrip)
 
     auto encoded = eth::encodeStatus(msg);
     auto decoded = eth::decodeStatus(ref(encoded));
-    BOOST_CHECK_EQUAL(decoded.protocolVersion, 68);
-    BOOST_CHECK_EQUAL(decoded.networkId, 11155111);
-    BOOST_CHECK(decoded.totalDifficulty == msg.totalDifficulty);
-    BOOST_CHECK(decoded.headHash == msg.headHash);
-    BOOST_CHECK(decoded.genesisHash == msg.genesisHash);
-    BOOST_CHECK_EQUAL(decoded.forkId.hash, 0x12345678u);
-    BOOST_CHECK_EQUAL(decoded.forkId.next, 0u);
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_CHECK_EQUAL(decoded->protocolVersion, 68);
+    BOOST_CHECK_EQUAL(decoded->networkId, 11155111);
+    BOOST_CHECK(decoded->totalDifficulty == msg.totalDifficulty);
+    BOOST_CHECK(decoded->headHash == msg.headHash);
+    BOOST_CHECK(decoded->genesisHash == msg.genesisHash);
+    BOOST_CHECK_EQUAL(decoded->forkId.hash, 0x12345678u);
+    BOOST_CHECK_EQUAL(decoded->forkId.next, 0u);
 }
 
 BOOST_AUTO_TEST_CASE(newBlockHashesRoundTrip)
@@ -234,11 +240,12 @@ BOOST_AUTO_TEST_CASE(newBlockHashesRoundTrip)
     };
     auto encoded = eth::encodeNewBlockHashes(msg);
     auto decoded = eth::decodeNewBlockHashes(ref(encoded));
-    BOOST_REQUIRE_EQUAL(decoded.entries.size(), 2u);
-    BOOST_CHECK(decoded.entries[0].hash == msg.entries[0].hash);
-    BOOST_CHECK_EQUAL(decoded.entries[0].number, 1u);
-    BOOST_CHECK(decoded.entries[1].hash == msg.entries[1].hash);
-    BOOST_CHECK_EQUAL(decoded.entries[1].number, 2u);
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_REQUIRE_EQUAL(decoded->entries.size(), 2u);
+    BOOST_CHECK(decoded->entries[0].hash == msg.entries[0].hash);
+    BOOST_CHECK_EQUAL(decoded->entries[0].number, 1u);
+    BOOST_CHECK(decoded->entries[1].hash == msg.entries[1].hash);
+    BOOST_CHECK_EQUAL(decoded->entries[1].number, 2u);
 }
 
 // EIP-2124: mainnet genesis + forks → CRC32 chain. Vectors are the real
@@ -292,13 +299,14 @@ BOOST_AUTO_TEST_CASE(helloGolden)
     BOOST_CHECK_EQUAL(toHex(encoded), expected);
 
     auto decoded = rlpx::decodeHello(ref(encoded));
-    BOOST_CHECK_EQUAL(decoded.version, 5u);
-    BOOST_CHECK_EQUAL(decoded.clientId, "test");
-    BOOST_REQUIRE_EQUAL(decoded.capabilities.size(), 1u);
-    BOOST_CHECK_EQUAL(decoded.capabilities[0].name, "eth");
-    BOOST_CHECK_EQUAL(decoded.capabilities[0].version, 68);
-    BOOST_CHECK_EQUAL(decoded.listenPort, 30303u);
-    BOOST_CHECK(decoded.id == hello.id);
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_CHECK_EQUAL(decoded->version, 5u);
+    BOOST_CHECK_EQUAL(decoded->clientId, "test");
+    BOOST_REQUIRE_EQUAL(decoded->capabilities.size(), 1u);
+    BOOST_CHECK_EQUAL(decoded->capabilities[0].name, "eth");
+    BOOST_CHECK_EQUAL(decoded->capabilities[0].version, 68);
+    BOOST_CHECK_EQUAL(decoded->listenPort, 30303u);
+    BOOST_CHECK(decoded->id == hello.id);
 }
 
 BOOST_AUTO_TEST_CASE(disconnectRoundTrip)
@@ -307,7 +315,8 @@ BOOST_AUTO_TEST_CASE(disconnectRoundTrip)
     msg.reason = rlpx::DisconnectReason::UselessPeer;
     auto encoded = rlpx::encodeDisconnect(msg);
     auto decoded = rlpx::decodeDisconnect(ref(encoded));
-    BOOST_CHECK(decoded.reason == rlpx::DisconnectReason::UselessPeer);
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_CHECK(decoded->reason == rlpx::DisconnectReason::UselessPeer);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -21,6 +21,7 @@
 #include "bcos-rlp-protocol/EthBlockBody.h"
 #include "bcos-rlp-protocol/EthBlockHeader.h"
 #include "bcos-rlp-protocol/EthWithdrawal.h"
+#include <bcos-codec/rlp/Exceptions.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 #include <limits>
@@ -187,7 +188,7 @@ BOOST_AUTO_TEST_CASE(headerCodecRoundTrip)
     EthBlockHeaderData decoded;
     auto mutableData = out;
     bytesRef in(mutableData.data(), mutableData.size());
-    BOOST_CHECK(!codec::rlp::decode(in, decoded));
+    BOOST_CHECK_NO_THROW(codec::rlp::decode(in, decoded));
     BOOST_CHECK(decoded == shanghai);
 }
 
@@ -215,13 +216,13 @@ BOOST_AUTO_TEST_CASE(headerCodecRejectsOverwideNumberAndTimestamp)
         auto rlp = makeHeaderRlpWith(std::numeric_limits<uint64_t>::max(), 0);
         EthBlockHeaderData data;
         bytesRef in(const_cast<bcos::byte*>(rlp.data()), rlp.size());
-        BOOST_REQUIRE(codec::rlp::decode(in, data) != nullptr);
+        BOOST_REQUIRE_THROW(codec::rlp::decode(in, data), bcos::codec::rlp::RlpDecodeException);
     }
     {
         auto rlp = makeHeaderRlpWith(0, std::numeric_limits<uint64_t>::max());
         EthBlockHeaderData data;
         bytesRef in(const_cast<bcos::byte*>(rlp.data()), rlp.size());
-        BOOST_REQUIRE(codec::rlp::decode(in, data) != nullptr);
+        BOOST_REQUIRE_THROW(codec::rlp::decode(in, data), bcos::codec::rlp::RlpDecodeException);
     }
 }
 
@@ -232,7 +233,7 @@ BOOST_AUTO_TEST_CASE(goldenEncode)
     preShanghai.withdrawals.reset();
     EthBlock b(preShanghai);
     bytes out;
-    BOOST_REQUIRE(!b.rlpEncode(out));
+    BOOST_REQUIRE_NO_THROW(b.rlpEncode(out));
     BOOST_CHECK_EQUAL(toHex(out), kPreShanghaiHex);
 
     EthBlockData shanghai;
@@ -242,7 +243,7 @@ BOOST_AUTO_TEST_CASE(goldenEncode)
     shanghai.withdrawals = std::vector<EthWithdrawalData>{makeWithdrawal()};
     EthBlock b2(shanghai);
     bytes out2;
-    BOOST_REQUIRE(!b2.rlpEncode(out2));
+    BOOST_REQUIRE_NO_THROW(b2.rlpEncode(out2));
     BOOST_CHECK_EQUAL(toHex(out2), kShanghaiHex);
 
     EthBlockData emptyW;
@@ -250,7 +251,7 @@ BOOST_AUTO_TEST_CASE(goldenEncode)
     emptyW.withdrawals = std::vector<EthWithdrawalData>{};
     EthBlock b3(emptyW);
     bytes out3;
-    BOOST_REQUIRE(!b3.rlpEncode(out3));
+    BOOST_REQUIRE_NO_THROW(b3.rlpEncode(out3));
     BOOST_CHECK_EQUAL(toHex(out3), kShanghaiEmptyWHex);
 }
 
@@ -258,8 +259,7 @@ BOOST_AUTO_TEST_CASE(goldenDecode)
 {
     EthBlock b;
     auto rawkPreShanghai = fromHex(kPreShanghaiHex);
-    auto err = b.rlpDecode(ref(rawkPreShanghai));
-    BOOST_CHECK(!err);
+    b.rlpDecode(ref(rawkPreShanghai));
     BOOST_CHECK(b.data().header == makeLondonHeader());
     BOOST_CHECK(b.data().transactions.empty());
     BOOST_CHECK(b.data().ommers.empty());
@@ -267,8 +267,7 @@ BOOST_AUTO_TEST_CASE(goldenDecode)
 
     EthBlock b2;
     auto rawkShanghai = fromHex(kShanghaiHex);
-    auto err2 = b2.rlpDecode(ref(rawkShanghai));
-    BOOST_CHECK(!err2);
+    b2.rlpDecode(ref(rawkShanghai));
     BOOST_CHECK(b2.data().header == makeShanghaiHeader());
     BOOST_REQUIRE_EQUAL(b2.data().transactions.size(), 2u);
     BOOST_CHECK(b2.data().transactions[0] == fromHex("01c9010203040506070809"));
@@ -280,8 +279,7 @@ BOOST_AUTO_TEST_CASE(goldenDecode)
 
     EthBlock b3;
     auto rawkShanghaiEmptyW = fromHex(kShanghaiEmptyWHex);
-    auto err3 = b3.rlpDecode(ref(rawkShanghaiEmptyW));
-    BOOST_CHECK(!err3);
+    b3.rlpDecode(ref(rawkShanghaiEmptyW));
     BOOST_REQUIRE(b3.data().withdrawals.has_value());
     BOOST_CHECK(b3.data().withdrawals->empty());  // Shanghai+: present but empty
 }
@@ -295,9 +293,9 @@ BOOST_AUTO_TEST_CASE(roundTrip)
     body.withdrawals = std::vector<EthWithdrawalData>{makeWithdrawal()};
     EthBlock b(body);
     bytes out;
-    BOOST_REQUIRE(!b.rlpEncode(out));
+    BOOST_REQUIRE_NO_THROW(b.rlpEncode(out));
     EthBlock decoded;
-    BOOST_CHECK(!decoded.rlpDecode(ref(out)));
+    BOOST_CHECK_NO_THROW(decoded.rlpDecode(ref(out)));
     BOOST_CHECK(decoded.data() == body);
 }
 
@@ -317,10 +315,10 @@ BOOST_AUTO_TEST_CASE(legacyTxGolden)
     body.transactions = {legacyTx};
     EthBlock b(body);
     bytes out;
-    BOOST_REQUIRE(!b.rlpEncode(out));
+    BOOST_REQUIRE_NO_THROW(b.rlpEncode(out));
 
     EthBlock decoded;
-    BOOST_CHECK(!decoded.rlpDecode(ref(out)));
+    BOOST_CHECK_NO_THROW(decoded.rlpDecode(ref(out)));
     BOOST_REQUIRE_EQUAL(decoded.data().transactions.size(), 1u);
     // Byte-identical: the legacy list header must survive encode+decode untouched.
     BOOST_CHECK(decoded.data().transactions[0] == legacyTx);
@@ -347,9 +345,9 @@ BOOST_AUTO_TEST_CASE(legacyAndTypedMixedRoundTrip)
     body.withdrawals = std::vector<EthWithdrawalData>{};
     EthBlock b(body);
     bytes out;
-    BOOST_REQUIRE(!b.rlpEncode(out));
+    BOOST_REQUIRE_NO_THROW(b.rlpEncode(out));
     EthBlock decoded;
-    BOOST_CHECK(!decoded.rlpDecode(ref(out)));
+    BOOST_CHECK_NO_THROW(decoded.rlpDecode(ref(out)));
     BOOST_REQUIRE_EQUAL(decoded.data().transactions.size(), 2u);
     BOOST_CHECK(decoded.data().transactions[0] == legacyTx);
     BOOST_CHECK(decoded.data().transactions[1] == typedTx);
@@ -366,7 +364,7 @@ BOOST_AUTO_TEST_CASE(rejectsReservedTypeByte)
     EthBlock b(body);
     bytes out;
     // The encoder now rejects the reserved 0x00 type byte (round-8 F2 typed arm).
-    BOOST_REQUIRE(b.rlpEncode(out) != nullptr);
+    BOOST_REQUIRE_THROW(b.rlpEncode(out), bcos::codec::rlp::RlpEncodeException);
 }
 
 // A bare single-byte transaction element must be rejected by the encoder.
@@ -377,7 +375,7 @@ BOOST_AUTO_TEST_CASE(rejectsBareSingleByteTransaction)
     body.transactions = {fromHex("02")};  // 1-byte element, no payload
     EthBlock b(body);
     bytes out;
-    BOOST_REQUIRE(b.rlpEncode(out) != nullptr);
+    BOOST_REQUIRE_THROW(b.rlpEncode(out), bcos::codec::rlp::RlpEncodeException);
 }
 
 // A string-wrapped element whose content starts at 0xc0..0xfe must be rejected by
@@ -388,7 +386,8 @@ BOOST_AUTO_TEST_CASE(rejectsWrappedElementWithListByteContent)
     auto elem = fromHex("8ac9808080808080808080");  // RLP string len 10, content starts 0xc9
     bytesRef in(const_cast<bcos::byte*>(elem.data()), elem.size());
     bcos::bytes out;
-    BOOST_REQUIRE(codec::rlp::detail::decodeTx(in, out) != nullptr);
+    BOOST_REQUIRE_THROW(
+        codec::rlp::detail::decodeTx(in, out), bcos::codec::rlp::RlpDecodeException);
 }
 
 // A typed element below the 10-byte floor (type byte + 9-field list) must be rejected.
@@ -397,7 +396,8 @@ BOOST_AUTO_TEST_CASE(rejectsShortTypedTransaction)
     auto elem = fromHex("83010203");  // 3-byte typed element (type 0x01 + 2 bytes)
     bytesRef in(const_cast<bcos::byte*>(elem.data()), elem.size());
     bcos::bytes out;
-    BOOST_REQUIRE(codec::rlp::detail::decodeTx(in, out) != nullptr);
+    BOOST_REQUIRE_THROW(
+        codec::rlp::detail::decodeTx(in, out), bcos::codec::rlp::RlpDecodeException);
 }
 
 // Two concatenated minimal legacy lists must be rejected by the encoder: the declared
@@ -410,7 +410,7 @@ BOOST_AUTO_TEST_CASE(rejectsConcatenatedLegacyLists)
     body.transactions = {fromHex("c9808080808080808080c9808080808080808080")};
     EthBlock b(body);
     bytes out;
-    BOOST_REQUIRE(b.rlpEncode(out) != nullptr);
+    BOOST_REQUIRE_THROW(b.rlpEncode(out), bcos::codec::rlp::RlpEncodeException);
 }
 
 // Decode-side rejection arms: 0x00 content, a legacy-short element, and a bare
@@ -422,21 +422,24 @@ BOOST_AUTO_TEST_CASE(decodeTxRejectionArms)
         auto elem = fromHex("8a00c98080808080808080");
         bytesRef in(const_cast<bcos::byte*>(elem.data()), elem.size());
         bcos::bytes out;
-        BOOST_REQUIRE(codec::rlp::detail::decodeTx(in, out) != nullptr);
+        BOOST_REQUIRE_THROW(
+        codec::rlp::detail::decodeTx(in, out), bcos::codec::rlp::RlpDecodeException);
     }
     // Bare 0xc0: empty legacy list, below the 9-field minimum.
     {
         auto elem = fromHex("c0");
         bytesRef in(const_cast<bcos::byte*>(elem.data()), elem.size());
         bcos::bytes out;
-        BOOST_REQUIRE(codec::rlp::detail::decodeTx(in, out) != nullptr);
+        BOOST_REQUIRE_THROW(
+        codec::rlp::detail::decodeTx(in, out), bcos::codec::rlp::RlpDecodeException);
     }
     // Bare single byte 0x05 (below BYTES_HEAD_BASE, not a valid transaction).
     {
         auto elem = fromHex("05");
         bytesRef in(const_cast<bcos::byte*>(elem.data()), elem.size());
         bcos::bytes out;
-        BOOST_REQUIRE(codec::rlp::detail::decodeTx(in, out) != nullptr);
+        BOOST_REQUIRE_THROW(
+        codec::rlp::detail::decodeTx(in, out), bcos::codec::rlp::RlpDecodeException);
     }
 }
 
@@ -449,7 +452,7 @@ BOOST_AUTO_TEST_CASE(rejectsEmptyTransactionElement)
     body.transactions = {{}};  // one empty element
     EthBlock b(body);
     bytes out;
-    BOOST_REQUIRE(b.rlpEncode(out) != nullptr);
+    BOOST_REQUIRE_THROW(b.rlpEncode(out), bcos::codec::rlp::RlpEncodeException);
 }
 
 // Trailing bytes after the top-level RLP item must be rejected (round-6 F3 guard).
@@ -458,7 +461,7 @@ BOOST_AUTO_TEST_CASE(rlpDecodeRejectsTrailingBytes)
     bytes wire = fromHex(kPreShanghaiHex);
     wire.push_back(0xff);
     EthBlock decoded;
-    BOOST_REQUIRE(decoded.rlpDecode(ref(wire)) != nullptr);
+    BOOST_REQUIRE_THROW(decoded.rlpDecode(ref(wire)), bcos::codec::rlp::RlpDecodeException);
 }
 
 // A 5-element body [header, txs, ommers, withdrawals, extra] must be rejected
@@ -483,7 +486,7 @@ BOOST_AUTO_TEST_CASE(rejectsTrailingElements)
     wire.insert(wire.end(), extra.begin(), extra.end());
 
     EthBlock decoded;
-    BOOST_CHECK(decoded.rlpDecode(ref(wire)) != nullptr);
+    BOOST_CHECK_THROW(decoded.rlpDecode(ref(wire)), bcos::codec::rlp::RlpDecodeException);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

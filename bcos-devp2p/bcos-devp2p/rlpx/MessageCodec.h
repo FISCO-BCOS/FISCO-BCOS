@@ -20,6 +20,7 @@
  */
 #pragma once
 
+#include <bcos-codec/rlp/Result.h>
 #include <bcos-utilities/Common.h>
 
 namespace bcos::devp2p::rlpx
@@ -39,7 +40,8 @@ public:
     static constexpr size_t kMaxFrameSize = 16 << 20;  // 16 MiB
 
     bcos::bytes encode(Message const& _message) const;
-    Message decode(bytesConstRef _frameData) const;
+    // Malformed frames are reported as an RlpError value, never thrown.
+    bcos::codec::rlp::RlpResult<Message> decode(bytesConstRef _frameData) const;
 
     void enableCompression() { m_compressionEnabled = true; }
 

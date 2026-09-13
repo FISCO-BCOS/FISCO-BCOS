@@ -55,8 +55,9 @@ BOOST_AUTO_TEST_CASE(snappyRawBlockFormatCompatibility)
     rlpx::MessageCodec codec;
     codec.enableCompression();
     auto msg = codec.decode(bcos::bytesConstRef(frame.data(), frame.size()));
-    BOOST_CHECK_EQUAL(msg.id, 0x10u);
-    BOOST_CHECK(msg.data == expected);
+    BOOST_REQUIRE(msg.has_value());
+    BOOST_CHECK_EQUAL(msg->id, 0x10u);
+    BOOST_CHECK(msg->data == expected);
 
     // Encode the same payload: our literal-only output must be a valid raw
     // snappy block — uvarint(8)=0x08 then literal tag (7<<2)=0x1c + 8 literal
@@ -93,12 +94,24 @@ BOOST_AUTO_TEST_CASE(loopbackHandshakeAndMessageExchange)
         try
         {
             auto established = server.accept();
-            auto msg = established.session.recvMessage();
+            auto msgResult = established.session.recvMessage();
+            if (!msgResult)
+            {
+                throw std::runtime_error("server: failed to decode request frame: " +
+                                         msgResult.error().message);
+            }
+            auto& msg = *msgResult;
             if (msg.id != eth::frameId(eth::msg::GetBlockHeaders))
             {
                 throw std::runtime_error("server: expected GetBlockHeaders");
             }
-            auto request = eth::decodeGetBlockHeaders(ref(msg.data));
+            auto requestResult = eth::decodeGetBlockHeaders(ref(msg.data));
+            if (!requestResult)
+            {
+                throw std::runtime_error("server: failed to decode GetBlockHeaders: " +
+                                         requestResult.error().message);
+            }
+            auto& request = *requestResult;
 
             eth::BlockHeadersMessage response;
             response.requestId = request.requestId;
@@ -157,11 +170,14 @@ BOOST_AUTO_TEST_CASE(loopbackHandshakeAndMessageExchange)
         Message{static_cast<uint8_t>(eth::frameId(eth::msg::GetBlockHeaders)),
             eth::encodeGetBlockHeaders(request)});
 
-    auto responseMsg = established.session.recvMessage();
+    auto responseMsgResult = established.session.recvMessage();
+    BOOST_REQUIRE(responseMsgResult.has_value());
+    auto& responseMsg = *responseMsgResult;
     BOOST_CHECK_EQUAL(responseMsg.id, eth::frameId(eth::msg::BlockHeaders));
     auto response = eth::decodeBlockHeaders(ref(responseMsg.data));
-    BOOST_CHECK_EQUAL(response.requestId, 42u);
-    BOOST_REQUIRE_EQUAL(response.headers.size(), 1u);
+    BOOST_REQUIRE(response.has_value());
+    BOOST_CHECK_EQUAL(response->requestId, 42u);
+    BOOST_REQUIRE_EQUAL(response->headers.size(), 1u);
 
     serverThread.join();
     BOOST_CHECK(serverOk);

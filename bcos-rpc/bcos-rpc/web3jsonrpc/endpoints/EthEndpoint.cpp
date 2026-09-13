@@ -744,9 +744,10 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         break;
     }
     Web3Transaction web3Tx;
-    if (auto const error = codec::rlp::decode(bytesRef, web3Tx); error != nullptr) [[unlikely]]
+    if (auto const result = web3Tx.tryDecode(bytesRef); !result.has_value())
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, error->errorMessage()));
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,
+            result.error().message.empty() ? "RLP decode failed" : result.error().message));
     }
     // Defense-in-depth: the first-byte dispatch above already rejects 0x7e, and decode cannot
     // produce type==Deposit from any other first byte. op-geth likewise rejects Deposit from
@@ -1432,7 +1433,11 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
         if (!entry.value.empty())
         {
             auto valueRef = bcos::ref(entry.value);
-            if (auto error = codec::rlp::decode(valueRef, payload); error != nullptr) [[unlikely]]
+            try
+            {
+                codec::rlp::decode(valueRef, payload);
+            }
+            catch (codec::rlp::RlpDecodeException const&)
             {
                 BOOST_THROW_EXCEPTION(
                     JsonRpcException(InternalError, "Malformed storage leaf RLP"));
