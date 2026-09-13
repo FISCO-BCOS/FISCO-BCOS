@@ -1107,7 +1107,8 @@ std::size_t g_metaForkCellsChecked = 0;
 /// storage / ts (chain block i>0). touchedAddrs/touchedSlots are per-block.
 void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
     opstack_test::MutableStorage& storage, evmone::test::TestState& ts, const JsonValue* pre,
-    DivergenceLedger& ledger, const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
+    bool wantPostState, DivergenceLedger& ledger,
+    const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
     bcos::crypto::Hash::Ptr const& hashImpl, bcos::IOServicePool::Ptr const& ioServicePool)
 {
     VectorContext ctx{ledger, id};
@@ -1469,80 +1470,87 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
     // zero + all slots zero", and a missing got-side account is treated as a zero
     // account, so identity => pass. A present-but-empty got account also passes
     // (EIP-161 empty account == absent from trie).
-    const auto& post = jAt(blk, "postState");
-    std::set<evmc::address> postAddrs;
-    static const test::TestAccount kZeroAccount{};
-    for (const auto& addrStr : post.getMemberNames())
+    // Gate (design v2 §4.3): sampled ladder vectors omit postState on unsampled
+    // blocks -- skip the whole account-level section there. header + receipts are
+    // still compared every block (stateRoot every block at the header compare),
+    // so detection power is preserved; only account-level localization is lost.
+    if (wantPostState)
     {
-        const auto& acc = post[addrStr];
-        const auto addr = test::from_json<evmc::address>(Json::Value(addrStr));
-        postAddrs.insert(addr);
-        const auto ap = "postState." + hexAddr(addr);
-
-        const auto it = ts.find(addr);
-        const test::TestAccount& got = it != ts.end() ? it->second : kZeroAccount;
-
-        ctx.checkField(
-            ap + ".balance", hexU256(parseU256(jAt(acc, "balance"))), hexU256(got.balance));
-        ctx.checkField(ap + ".nonce",
-            hexU64(acc.isMember("nonce") ? test::from_json<uint64_t>(jAt(acc, "nonce")) : 0),
-            hexU64(got.nonce));
-        ctx.checkField(ap + ".code",
-            acc.isMember("code") ? hexBytes(test::from_json<bytes>(jAt(acc, "code"))) : "0x",
-            hexBytes(got.code));
-
-        // Slot union = vector-declared slots ∪ got non-zero slots ∪ replay write-set
-        // touched slots (slot dimension of coverage assertion (ii): a touched slot is
-        // always in the union and explicitly compared — final non-zero while unlisted
-        // by the vector => want=0x0 turns red; final zero while unlisted => 0==absent
-        // both-zero pass, i.e. "covered").
-        std::map<evmc::bytes32, intx::uint256> wantStorage;
-        if (acc.isMember("storage"))
+        const auto& post = jAt(blk, "postState");
+        std::set<evmc::address> postAddrs;
+        static const test::TestAccount kZeroAccount{};
+        for (const auto& addrStr : post.getMemberNames())
         {
-            const auto& storage = acc["storage"];
-            for (const auto& slotStr : storage.getMemberNames())
-                wantStorage[test::from_json<hash256>(Json::Value(slotStr))] =
-                    parseU256(storage[slotStr]);
+            const auto& acc = post[addrStr];
+            const auto addr = test::from_json<evmc::address>(Json::Value(addrStr));
+            postAddrs.insert(addr);
+            const auto ap = "postState." + hexAddr(addr);
+
+            const auto it = ts.find(addr);
+            const test::TestAccount& got = it != ts.end() ? it->second : kZeroAccount;
+
+            ctx.checkField(
+                ap + ".balance", hexU256(parseU256(jAt(acc, "balance"))), hexU256(got.balance));
+            ctx.checkField(ap + ".nonce",
+                hexU64(acc.isMember("nonce") ? test::from_json<uint64_t>(jAt(acc, "nonce")) : 0),
+                hexU64(got.nonce));
+            ctx.checkField(ap + ".code",
+                acc.isMember("code") ? hexBytes(test::from_json<bytes>(jAt(acc, "code"))) : "0x",
+                hexBytes(got.code));
+
+            // Slot union = vector-declared slots ∪ got non-zero slots ∪ replay write-set
+            // touched slots (slot dimension of coverage assertion (ii): a touched slot is
+            // always in the union and explicitly compared — final non-zero while unlisted
+            // by the vector => want=0x0 turns red; final zero while unlisted => 0==absent
+            // both-zero pass, i.e. "covered").
+            std::map<evmc::bytes32, intx::uint256> wantStorage;
+            if (acc.isMember("storage"))
+            {
+                const auto& storage = acc["storage"];
+                for (const auto& slotStr : storage.getMemberNames())
+                    wantStorage[test::from_json<hash256>(Json::Value(slotStr))] =
+                        parseU256(storage[slotStr]);
+            }
+            std::set<evmc::bytes32> slots;
+            for (const auto& [k, val] : wantStorage)
+                slots.insert(k);
+            for (const auto& [k, val] : got.storage)
+                slots.insert(k);
+            if (const auto tIt = touchedSlots.find(addr); tIt != touchedSlots.end())
+                slots.insert(tIt->second.begin(), tIt->second.end());
+            for (const auto& slot : slots)
+            {
+                const auto wIt = wantStorage.find(slot);
+                const auto want = wIt != wantStorage.end() ? wIt->second : intx::uint256{0};
+                const auto gIt = got.storage.find(slot);
+                const auto gotVal = gIt != got.storage.end() ?
+                                        intx::be::load<intx::uint256>(gIt->second) :
+                                        intx::uint256{0};
+                ctx.checkField(ap + ".storage." + hexSlot(slot), hexU256(want), hexU256(gotVal));
+            }
         }
-        std::set<evmc::bytes32> slots;
-        for (const auto& [k, val] : wantStorage)
-            slots.insert(k);
-        for (const auto& [k, val] : got.storage)
-            slots.insert(k);
-        if (const auto tIt = touchedSlots.find(addr); tIt != touchedSlots.end())
-            slots.insert(tIt->second.begin(), tIt->second.end());
-        for (const auto& slot : slots)
+        // Reverse existence: a non-empty account in the replay final state not listed by
+        // the vector = DIVERGE (the vector candidate set claims coverage of all written
+        // accounts; empty accounts == absent from trie, reduced to pass).
+        for (const auto& [addr, acc] : ts)
         {
-            const auto wIt = wantStorage.find(slot);
-            const auto want = wIt != wantStorage.end() ? wIt->second : intx::uint256{0};
-            const auto gIt = got.storage.find(slot);
-            const auto gotVal = gIt != got.storage.end() ?
-                                    intx::be::load<intx::uint256>(gIt->second) :
-                                    intx::uint256{0};
-            ctx.checkField(ap + ".storage." + hexSlot(slot), hexU256(want), hexU256(gotVal));
+            if (postAddrs.contains(addr))
+                continue;
+            const bool storageAllZero = std::ranges::all_of(
+                acc.storage, [](const auto& kv) { return evmc::is_zero(kv.second); });
+            if (acc.nonce != 0 || acc.balance != 0 || !acc.code.empty() || !storageAllZero)
+                ledger.diverge(id, "postState." + hexAddr(addr) + ".exists", kAbsent, "<present>");
         }
-    }
-    // Reverse existence: a non-empty account in the replay final state not listed by
-    // the vector = DIVERGE (the vector candidate set claims coverage of all written
-    // accounts; empty accounts == absent from trie, reduced to pass).
-    for (const auto& [addr, acc] : ts)
-    {
-        if (postAddrs.contains(addr))
-            continue;
-        const bool storageAllZero = std::ranges::all_of(
-            acc.storage, [](const auto& kv) { return evmc::is_zero(kv.second); });
-        if (acc.nonce != 0 || acc.balance != 0 || !acc.code.empty() || !storageAllZero)
-            ledger.diverge(id, "postState." + hexAddr(addr) + ".exists", kAbsent, "<present>");
-    }
-    // Coverage assertion (ii) address dimension: an address touched by replay applyDiff
-    // but not listed in the vector postState = DIVERGE .uncovered (an account touched
-    // then deleted is emitted by the generator as {"balance":"0x0"} and stays in
-    // postAddrs — absent means the corpus candidate set missed an account).
-    for (const auto& addr : touchedAddrs)
-    {
-        if (!postAddrs.contains(addr))
-            ledger.diverge(
-                id, "postState." + hexAddr(addr) + ".uncovered", "<covered>", "<uncovered>");
+        // Coverage assertion (ii) address dimension: an address touched by replay applyDiff
+        // but not listed in the vector postState = DIVERGE .uncovered (an account touched
+        // then deleted is emitted by the generator as {"balance":"0x0"} and stays in
+        // postAddrs — absent means the corpus candidate set missed an account).
+        for (const auto& addr : touchedAddrs)
+        {
+            if (!postAddrs.contains(addr))
+                ledger.diverge(
+                    id, "postState." + hexAddr(addr) + ".uncovered", "<covered>", "<uncovered>");
+        }
     }
 
     // Per-vector comparison count: 0 = FAILURE (prevents a vacuous green).
@@ -1559,8 +1567,8 @@ void replayVector(const std::string& id, const JsonValue& v, DivergenceLedger& l
 {
     opstack_test::MutableStorage storage;
     evmone::test::TestState ts;
-    replaySingleBlockInto(
-        id, v, storage, ts, &jAt(v, "pre"), ledger, receiptFactory, hashImpl, ioServicePool);
+    replaySingleBlockInto(id, v, storage, ts, &jAt(v, "pre"), /*wantPostState=*/true, ledger,
+        receiptFactory, hashImpl, ioServicePool);
 }
 
 // ── reject branch ────────────────────────────────────────────────────────────
@@ -1658,12 +1666,28 @@ void assertRejectThrow(const std::string& id, const JsonValue& v,
 // is_object assert, hence the nullptr pre pointer). ParentOnlyBlockHashes only
 // answers blockNumber-1 (see above), so chain vectors must not contain txs that
 // read historical blockhashes (transfer-safe; review R13).
+// postState sampling (design v2 §4.3): a vector-level "sampledBlocks" that is
+// absent means every block is sampled (legacy shape); when present only the
+// listed 0-based block indices get the account-level postState compare. Unsampled
+// blocks still compare header + receipts per block and stateRoot is compared on
+// every header, so detection power is not reduced — only localization is.
 
 void replayChainVector(const std::string& id, const JsonValue& v, DivergenceLedger& ledger,
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
     bcos::crypto::Hash::Ptr const& hashImpl, bcos::IOServicePool::Ptr const& ioServicePool)
 {
     const auto& blocks = jAt(v, "blocks");
+    // postState 采样（设计 v2 §4.3）：向量级 "sampledBlocks" 缺省 = 每块都比
+    // （旧链向量形状不变）；存在则只比列出的 0-based 块号——未采样块仍逐块比
+    // header + receipts，stateRoot 每块都比，故检测能力不降，只少了账户级定位。
+    std::set<std::size_t> sampled;
+    const bool sampledAll = !v.isMember("sampledBlocks");
+    if (!sampledAll)
+    {
+        const auto& sb = v["sampledBlocks"];
+        for (Json::ArrayIndex k = 0; k < sb.size(); ++k)
+            sampled.insert(static_cast<std::size_t>(sb[k].asInt64()));
+    }
     opstack_test::MutableStorage storage;
     evmone::test::TestState chainState;
     for (std::size_t i = 0; i < blocks.size(); ++i)
@@ -1672,8 +1696,9 @@ void replayChainVector(const std::string& id, const JsonValue& v, DivergenceLedg
         const JsonValue* pre = nullptr;
         if (blk.isMember("pre") && !blk["pre"].isNull())
             pre = &blk["pre"];
+        const bool wantPostState = sampledAll || sampled.contains(i);
         replaySingleBlockInto(id + "[" + std::to_string(i) + "]", blk, storage, chainState, pre,
-            ledger, receiptFactory, hashImpl, ioServicePool);
+            wantPostState, ledger, receiptFactory, hashImpl, ioServicePool);
     }
 }
 }  // namespace
