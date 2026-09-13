@@ -177,6 +177,9 @@ BOOST_AUTO_TEST_CASE(L1CostDoesNotWrapOnWholeSlotFeeValues, * boost::unit_test::
     const OpFeeParams bedrockFee{.l1_base_fee = intx::uint256{1} << 200,
         .overhead = intx::uint256{0},
         .bedrock_scalar = intx::uint256{1'000'000},
+        .base_fee_scalar = 0,
+        .blob_base_fee_scalar = 0,
+        .blob_base_fee = 0_u256,
         .operator_fee_scalar = 0,
         .operator_fee_constant = 0};
     // Exact, independently computed: 480 * 2^200 * 1e6 / 1e6.
