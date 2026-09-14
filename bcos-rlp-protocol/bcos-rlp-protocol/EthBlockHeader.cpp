@@ -57,8 +57,8 @@ void EthBlockHeader::toTarsHeader(
 {
     if (header == nullptr)
     {
-        codec::rlp::throwRlpDecodeError(EthBlockHeaderError::InvalidHeaderType,
-            "EthBlockHeader: header is null");
+        codec::rlp::throwRlpDecodeError(
+            EthBlockHeaderError::InvalidHeaderType, "EthBlockHeader: header is null");
     }
 
     // Reset the destination first so reusing a header (previously holding higher-version
@@ -84,8 +84,7 @@ void EthBlockHeader::toTarsHeader(
     // EthBlockHeaderData stores SECONDS; the internal BlockHeader stores MILLISECONDS.
     // Bound by int64 before the ×1000 so a hostile wire value cannot trigger signed
     // overflow on the conversion.
-    if (ethHeader.data().timestamp >
-        std::numeric_limits<int64_t>::max() / 1000)
+    if (ethHeader.data().timestamp > std::numeric_limits<int64_t>::max() / 1000)
     {
         // Leave the destination in the same defined empty state as the validateHeader
         // failure path below: the fields above are already written, so without a clear a
@@ -164,10 +163,8 @@ void EthBlockHeader::toEthBlockHeader(EthBlockHeader& ethHeader, bcos::bytesCons
     }
     catch (codec::rlp::RlpDecodeException const& e)
     {
-        auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
         codec::rlp::throwRlpDecodeError(EthBlockHeaderError::RlpDecodeFailed,
-            "EthBlockHeader: rlpDecode failed: " +
-                (comment != nullptr ? *comment : std::string{}));
+            "EthBlockHeader: rlpDecode failed: " + codec::rlp::rlpErrorMessage(e, ""));
     }
 }
 
@@ -263,12 +260,10 @@ void EthBlockHeader::validateHeader(const bcos::protocol::BlockHeader& _header)
     requireForkField(
         EthBlockVersion::SHANGHAI, "withdrawalsRoot", _header.withdrawalsRoot().has_value());
     requireForkField(EthBlockVersion::CANCUN, "blobGasUsed", _header.blobGasUsed().has_value());
-    requireForkField(
-        EthBlockVersion::CANCUN, "excessBlobGas", _header.excessBlobGas().has_value());
+    requireForkField(EthBlockVersion::CANCUN, "excessBlobGas", _header.excessBlobGas().has_value());
     requireForkField(EthBlockVersion::CANCUN, "parentBeaconBlockRoot",
         _header.parentBeaconBlockRoot().has_value());
-    requireForkField(
-        EthBlockVersion::PRAGUE, "requestsHash", _header.requestsHash().has_value());
+    requireForkField(EthBlockVersion::PRAGUE, "requestsHash", _header.requestsHash().has_value());
 
     // Symmetric check: a fork-gated field must not be present when the header's version is
     // older than the fork that introduced it. RLP lists are positional — a field above the
@@ -287,12 +282,10 @@ void EthBlockHeader::validateHeader(const bcos::protocol::BlockHeader& _header)
     forbidForkField(
         EthBlockVersion::SHANGHAI, "withdrawalsRoot", _header.withdrawalsRoot().has_value());
     forbidForkField(EthBlockVersion::CANCUN, "blobGasUsed", _header.blobGasUsed().has_value());
-    forbidForkField(
-        EthBlockVersion::CANCUN, "excessBlobGas", _header.excessBlobGas().has_value());
+    forbidForkField(EthBlockVersion::CANCUN, "excessBlobGas", _header.excessBlobGas().has_value());
     forbidForkField(EthBlockVersion::CANCUN, "parentBeaconBlockRoot",
         _header.parentBeaconBlockRoot().has_value());
-    forbidForkField(
-        EthBlockVersion::PRAGUE, "requestsHash", _header.requestsHash().has_value());
+    forbidForkField(EthBlockVersion::PRAGUE, "requestsHash", _header.requestsHash().has_value());
 }
 
 EthBlockHeader::EthBlockHeader(const bcos::protocol::BlockHeader& _header)
@@ -310,9 +303,9 @@ EthBlockHeader::EthBlockHeader(const bcos::protocol::BlockHeader& _header)
     // the calculateRLPHash path, and this covers every direct ctor+rlpEncode caller.
     if (_header.timestamp() % 1000 != 0)
     {
-        BOOST_THROW_EXCEPTION(std::invalid_argument(
-            "timestamp must be a whole number of seconds, got " +
-            std::to_string(_header.timestamp()) + " ms"));
+        BOOST_THROW_EXCEPTION(
+            std::invalid_argument("timestamp must be a whole number of seconds, got " +
+                                  std::to_string(_header.timestamp()) + " ms"));
     }
     m_version = _header.ethBlockVersion();
     auto parent = _header.parentInfo();
@@ -502,8 +495,7 @@ void decode(bcos::bytesRef& _in, protocol::EthBlockHeaderData& _header)
     // this codec with no bridge to catch it).
     if (timestamp > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
     {
-        throwRlpDecodeError(
-            DecodingError::UnexpectedLength, "block timestamp exceeds int64 range");
+        throwRlpDecodeError(DecodingError::UnexpectedLength, "block timestamp exceeds int64 range");
     }
     _header.number = static_cast<int64_t>(number);
     _header.timestamp = static_cast<int64_t>(timestamp);

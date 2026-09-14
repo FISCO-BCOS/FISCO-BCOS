@@ -69,10 +69,10 @@ bcos::u256 decodeStorageValue(bcos::bytesConstRef leaf)
     }
     catch (bcos::codec::rlp::RlpDecodeException const& e)
     {
-        auto const* msg = boost::get_error_info<bcos::errinfo_comment>(e);
-        BOOST_THROW_EXCEPTION(MPTDecodeError{} << bcos::errinfo_comment(
-                                  "storage leaf: bad RLP value: " +
-                                  (msg ? *msg : std::string("unknown RLP decode error"))));
+        BOOST_THROW_EXCEPTION(
+            MPTDecodeError{} << bcos::errinfo_comment(
+                "storage leaf: bad RLP value: " +
+                bcos::codec::rlp::rlpErrorMessage(e, "unknown RLP decode error")));
     }
     if (!cursor.empty())
     {

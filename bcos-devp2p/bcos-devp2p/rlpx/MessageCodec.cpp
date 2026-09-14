@@ -126,7 +126,8 @@ bcos::bytes rawSnappyBlockCompress(bytesConstRef _data)
 }
 
 // Decodes one raw block starting at _pos; advances _pos to the end of the block.
-RlpResult<bcos::bytes> rawSnappyDecompressBlock(bytesConstRef _data, size_t& _pos, size_t _maxOutput)
+RlpResult<bcos::bytes> rawSnappyDecompressBlock(
+    bytesConstRef _data, size_t& _pos, size_t _maxOutput)
 {
     bcos::bytes out;
     size_t const n = _data.size();
@@ -158,8 +159,7 @@ RlpResult<bcos::bytes> rawSnappyDecompressBlock(bytesConstRef _data, size_t& _po
             }
             if (out.size() + len > _maxOutput || _pos + len > n)
             {
-                return std::unexpected(
-                    genericError("MessageCodec: snappy literal exceeds limits"));
+                return std::unexpected(genericError("MessageCodec: snappy literal exceeds limits"));
             }
             out.insert(out.end(), _data.begin() + _pos, _data.begin() + _pos + len);
             _pos += len;
@@ -229,8 +229,7 @@ RlpResult<bcos::bytes> rawSnappyDecompress(bytesConstRef _data, size_t _maxOutpu
     RLP_TRY(auto declared, readUvarint(_data, pos));
     if (declared > _maxOutput)
     {
-        return std::unexpected(
-            genericError("MessageCodec: snappy declared length exceeds limits"));
+        return std::unexpected(genericError("MessageCodec: snappy declared length exceeds limits"));
     }
     RLP_TRY(auto out, rawSnappyDecompressBlock(_data, pos, _maxOutput));
     if (out.size() != declared)
@@ -268,18 +267,13 @@ RlpResult<Message> MessageCodec::decode(bytesConstRef _frameData) const
         return std::unexpected(genericError("MessageCodec: frame data too short"));
     }
     Message message;
-    // The message id is RLP-encoded (RLP(0) == 0x80), so decode it properly.
+    // The message id is RLP-encoded (RLP(0) == 0x80), so decode it properly, with the
+    // codec's canonical-integer rules via the non-throwing core.
     bcos::bytesRef view(const_cast<bcos::byte*>(_frameData.data()), _frameData.size());
-    RLP_TRY(auto header, bcos::codec::rlp::tryDecodeHeader(view));
-    // The id is a single byte: no lists, nothing wider than uint8_t, no
-    // non-canonical leading zero (same rules as the throwing codec).
-    if (header.isList || header.payloadLength > 1 ||
-        (header.payloadLength == 1 && view[0] == 0))
+    if (auto result = bcos::codec::rlp::tryDecode(view, message.id); !result) [[unlikely]]
     {
-        return std::unexpected(genericError("MessageCodec: failed to decode message id"));
+        return std::unexpected(result.error());
     }
-    message.id = header.payloadLength == 0 ? 0 : static_cast<uint8_t>(view[0]);
-    view = bcos::bytesRef(view.data() + header.payloadLength, view.size() - header.payloadLength);
     auto payload = _frameData.getCroppedData(_frameData.size() - view.size());
     if (!m_compressionEnabled)
     {

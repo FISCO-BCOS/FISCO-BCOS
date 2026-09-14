@@ -97,8 +97,8 @@ RlpResult<HelloMessage> decodeHello(bytesConstRef _data)
     bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
     RLP_TRY(auto items, takeListPayload(view, "rlpx: expected an RLP list"));
 
-    RLP_TRY(msg.version, takeUint(items, "decodeHello: version decode failed"));
-    RLP_TRY(msg.clientId, takeString(items, "decodeHello: clientId decode failed"));
+    RLP_TRY(msg.version, takeUint(items));
+    RLP_TRY(msg.clientId, takeString(items));
 
     // caps list
     RLP_TRY(auto capsPayload, takeListPayload(items, "rlpx: expected an RLP list"));
@@ -106,19 +106,18 @@ RlpResult<HelloMessage> decodeHello(bytesConstRef _data)
     {
         RLP_TRY(auto capItems, takeListPayload(capsPayload, "rlpx: expected an RLP list"));
         Capability cap;
-        RLP_TRY(cap.name, takeString(capItems, "decodeHello: cap name decode failed"));
-        RLP_TRY(auto capVersion, takeUint(capItems, "decodeHello: cap version decode failed"));
+        RLP_TRY(cap.name, takeString(capItems));
+        RLP_TRY(auto capVersion, takeUint(capItems));
         if (capVersion > 0xff)
         {
-            return std::unexpected(
-                genericError("decodeHello: capability version out of range"));
+            return std::unexpected(genericError("decodeHello: capability version out of range"));
         }
         cap.version = static_cast<uint8_t>(capVersion);
         msg.capabilities.push_back(std::move(cap));
     }
 
-    RLP_TRY(msg.listenPort, takeUint(items, "decodeHello: listenPort decode failed"));
-    RLP_TRY(msg.id, takeBytes(items, "decodeHello: id decode failed"));
+    RLP_TRY(msg.listenPort, takeUint(items));
+    RLP_TRY(msg.id, takeBytes(items));
     return msg;
 }
 
@@ -147,7 +146,7 @@ RlpResult<DisconnectMessage> decodeDisconnect(bytesConstRef _data)
                 msg.reason = DisconnectReason::DisconnectRequested;
                 return msg;
             }
-            auto first = takeUint(*items, "decodeDisconnect: reason decode failed");
+            auto first = takeUint(*items);
             if (first)
             {
                 // The reason is the first element; every remaining element must
@@ -155,7 +154,7 @@ RlpResult<DisconnectMessage> decodeDisconnect(bytesConstRef _data)
                 bool restOk = true;
                 while (restOk && !items->empty())
                 {
-                    restOk = takeUint(*items, "decodeDisconnect: reason decode failed").has_value();
+                    restOk = takeUint(*items).has_value();
                 }
                 if (restOk)
                 {
@@ -168,16 +167,16 @@ RlpResult<DisconnectMessage> decodeDisconnect(bytesConstRef _data)
     // Not the list form; fall back to the bare-integer form.
     {
         bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
-        auto reason = takeUint(view, "decodeDisconnect: reason decode failed");
+        auto reason = takeUint(view);
         if (reason)
         {
             msg.reason = static_cast<DisconnectReason>(*reason);
             return msg;
         }
     }
-    return std::unexpected(genericError("decodeDisconnect: reason decode failed payload=" +
-                                        bcos::toHexStringWithPrefix(
-                                            bcos::bytes(_data.begin(), _data.end()))));
+    return std::unexpected(
+        genericError("decodeDisconnect: reason decode failed payload=" +
+                     bcos::toHexStringWithPrefix(bcos::bytes(_data.begin(), _data.end()))));
 }
 
 bcos::bytes encodePing()

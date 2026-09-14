@@ -254,17 +254,10 @@ void EthBlock::rlpEncode(bcos::bytes& out) const
             // view.size() after the prefix) so two concatenated minimal lists cannot
             // pass as one element — encode-then-decode would then yield a different set.
             bytesRef view(const_cast<bcos::byte*>(tx.data()), tx.size());
-            bool valid = false;
-            try
-            {
-                auto header = codec::rlp::decodeHeader(view);
-                valid = header.isList && header.payloadLength >= 9 &&
-                        header.payloadLength == view.size();
-            }
-            catch (codec::rlp::RlpDecodeException const&)
-            {
-                valid = false;
-            }
+            auto headerResult = codec::rlp::tryDecodeHeader(view);
+            bool const valid = headerResult.has_value() && headerResult->isList &&
+                               headerResult->payloadLength >= 9 &&
+                               headerResult->payloadLength == view.size();
             if (!valid)
             {
                 codec::rlp::throwRlpEncodeError(codec::rlp::DecodingError::UnexpectedListElements,

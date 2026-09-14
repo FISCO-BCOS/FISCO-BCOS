@@ -103,10 +103,8 @@ bcos::Error::UniquePtr bcos::rpc::decodeDepositTransaction(
     }
     catch (RlpDecodeException const& e)
     {
-        auto const* code = boost::get_error_info<errinfo_rlpErrorCode>(e);
-        auto const* msg = boost::get_error_info<errinfo_comment>(e);
-        return BCOS_ERROR_UNIQUE_PTR(code != nullptr ? *code : UnexpectedEip2718Serialization,
-            msg != nullptr ? *msg : "RLP decode failed");
+        return BCOS_ERROR_UNIQUE_PTR(rlpErrorCode(e, UnexpectedEip2718Serialization),
+            rlpErrorMessage(e, "RLP decode failed"));
     }
 }
 

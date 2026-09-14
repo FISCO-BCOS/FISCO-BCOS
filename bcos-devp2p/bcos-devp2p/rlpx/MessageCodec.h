@@ -28,8 +28,8 @@ namespace bcos::devp2p::rlpx
 // A decoded RLPx message.
 struct Message
 {
-    uint8_t id{0};       // message code
-    bcos::bytes data;    // RLP-encoded payload
+    uint8_t id{0};     // message code
+    bcos::bytes data;  // RLP-encoded payload
 };
 
 // Encodes/decodes a Message into/from a frame payload:

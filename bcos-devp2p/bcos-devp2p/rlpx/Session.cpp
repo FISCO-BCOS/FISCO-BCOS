@@ -44,8 +44,8 @@ bcos::codec::rlp::RlpResult<Message> Session::recvMessage()
     }
 
     auto encrypted = m_socket.recvFixed(FramingCipher::frameSize(frameSize));
-    auto frameData = m_cipher.decryptFrame(
-        bytesConstRef(encrypted.data(), encrypted.size()), frameSize);
+    auto frameData =
+        m_cipher.decryptFrame(bytesConstRef(encrypted.data(), encrypted.size()), frameSize);
     return m_codec.decode(bytesConstRef(frameData.data(), frameData.size()));
 }
 

@@ -29,10 +29,10 @@
 // Evaluates expr (an RlpResult<T>); on error returns std::unexpected(error) from the
 // enclosing function, otherwise moves the value into `target`. Only for functions that
 // themselves return RlpResult. One RLP_TRY per line (__LINE__ generates the temp name).
-#define RLP_TRY(target, expr)                                                     \
-    auto&& RLP_TRY_DETAIL_CONCAT(_rlp_try_, __LINE__) = (expr);                   \
-    if (!RLP_TRY_DETAIL_CONCAT(_rlp_try_, __LINE__)) [[unlikely]]                 \
-    {                                                                             \
+#define RLP_TRY(target, expr)                                                       \
+    auto&& RLP_TRY_DETAIL_CONCAT(_rlp_try_, __LINE__) = (expr);                     \
+    if (!RLP_TRY_DETAIL_CONCAT(_rlp_try_, __LINE__)) [[unlikely]]                   \
+    {                                                                               \
         return std::unexpected(RLP_TRY_DETAIL_CONCAT(_rlp_try_, __LINE__).error()); \
-    }                                                                             \
+    }                                                                               \
     target = std::move(*RLP_TRY_DETAIL_CONCAT(_rlp_try_, __LINE__))

@@ -36,8 +36,10 @@ inline bcos::codec::rlp::RlpError genericError(std::string_view _message)
     return {.code = bcos::codec::rlp::kRlpGenericError, .message = std::string(_message)};
 }
 
-// RLP-layer failures propagate the tryDecodeHeader error as-is; item-level
-// validation failures report genericError with the given message.
+// RLP-layer and item-level failures both propagate the codec's tryDecodeHeader/tryDecode
+// error as-is: the canonical rules (no list, width, no leading zero byte, exact fixed
+// size) live in RLPDecode.h as the single source of truth. genericError is only for
+// wire-level validations the codec does not cover (e.g. "expected a list").
 
 // Expects a list at `_view` and returns a view over its payload.
 inline bcos::codec::rlp::RlpResult<bcos::bytesRef> takeListPayload(
@@ -49,50 +51,34 @@ inline bcos::codec::rlp::RlpResult<bcos::bytesRef> takeListPayload(
         return std::unexpected(genericError(_notListMessage));
     }
     bcos::bytesRef payload(_view.data(), header.payloadLength);
-    _view = bcos::bytesRef(
-        _view.data() + header.payloadLength, _view.size() - header.payloadLength);
+    _view =
+        bcos::bytesRef(_view.data() + header.payloadLength, _view.size() - header.payloadLength);
     return payload;
 }
 
-inline bcos::codec::rlp::RlpResult<uint64_t> takeUint(
-    bcos::bytesRef& _view, std::string_view _message)
+inline bcos::codec::rlp::RlpResult<uint64_t> takeUint(bcos::bytesRef& _view)
 {
-    RLP_TRY(auto header, bcos::codec::rlp::tryDecodeHeader(_view));
-    // Same integer rules as the throwing codec: no lists, nothing wider than
-    // uint64, no non-canonical leading zero byte.
-    if (header.isList || header.payloadLength > sizeof(uint64_t) ||
-        (header.payloadLength >= 1 && _view[0] == 0))
-    {
-        return std::unexpected(genericError(_message));
-    }
     uint64_t value = 0;
-    for (size_t i = 0; i < header.payloadLength; ++i)
+    if (auto result = bcos::codec::rlp::tryDecode(_view, value); !result) [[unlikely]]
     {
-        value = (value << 8) | _view[i];
+        return std::unexpected(result.error());
     }
-    _view = bcos::bytesRef(
-        _view.data() + header.payloadLength, _view.size() - header.payloadLength);
     return value;
 }
 
-inline bcos::codec::rlp::RlpResult<bcos::bytes> takeBytes(
-    bcos::bytesRef& _view, std::string_view _message)
+inline bcos::codec::rlp::RlpResult<bcos::bytes> takeBytes(bcos::bytesRef& _view)
 {
-    RLP_TRY(auto header, bcos::codec::rlp::tryDecodeHeader(_view));
-    if (header.isList)
+    bcos::bytes out;
+    if (auto result = bcos::codec::rlp::tryDecode(_view, out); !result) [[unlikely]]
     {
-        return std::unexpected(genericError(_message));
+        return std::unexpected(result.error());
     }
-    bcos::bytes out(_view.data(), _view.data() + header.payloadLength);
-    _view = bcos::bytesRef(
-        _view.data() + header.payloadLength, _view.size() - header.payloadLength);
     return out;
 }
 
-inline bcos::codec::rlp::RlpResult<std::string> takeString(
-    bcos::bytesRef& _view, std::string_view _message)
+inline bcos::codec::rlp::RlpResult<std::string> takeString(bcos::bytesRef& _view)
 {
-    RLP_TRY(auto bytes, takeBytes(_view, _message));
+    RLP_TRY(auto bytes, takeBytes(_view));
     return std::string(bytes.begin(), bytes.end());
 }
 }  // namespace bcos::devp2p::detail

@@ -86,7 +86,8 @@ void Web3Transaction::decode(bcos::bytesRef& in, bool withSig)
 {
     if (in.empty())
     {
-        codec::rlp::throwRlpDecodeError(codec::rlp::DecodingError::InputTooShort, "Input too short");
+        codec::rlp::throwRlpDecodeError(
+            codec::rlp::DecodingError::InputTooShort, "Input too short");
     }
     const auto firstByte = in[0];
     // A valid transaction body is always an RLP list (≥0xC0). Use >= LIST_HEAD_BASE rather than

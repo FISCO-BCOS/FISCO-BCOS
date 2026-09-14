@@ -60,9 +60,9 @@ BOOST_AUTO_TEST_CASE(getBlockHeadersByHashRoundTrip)
 {
     eth::GetBlockHeadersMessage msg;
     msg.requestId = 7;
-    msg.originHash = h256(
-        std::string_view("0x00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"),
-        h256::FromHex);
+    msg.originHash =
+        h256(std::string_view("0x00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"),
+            h256::FromHex);
     msg.amount = 128;
     msg.skip = 1;
     msg.reverse = true;
@@ -103,8 +103,7 @@ BOOST_AUTO_TEST_CASE(blockBodiesRoundTrip)
     // Transactions / uncles / withdrawals are already-encoded RLP elements;
     // legacy txs are lists, typed txs are 0xNN||payload (unwrapped form; the
     // encoder applies the wire string wrapping). Use complete RLP here.
-    body.transactions = {fromHex("c3010203"), fromHex("c101"),
-        fromHex("02c3010203")};
+    body.transactions = {fromHex("c3010203"), fromHex("c101"), fromHex("02c3010203")};
     body.uncles = {fromHex("c0")};
     body.withdrawals = std::vector<bcos::bytes>{fromHex("c101"), fromHex("c20203")};
     msg.bodies.push_back(body);
@@ -136,15 +135,14 @@ BOOST_AUTO_TEST_CASE(blockBodiesTypedTxStringWrapped)
     // The same bytes as geth would encode them in a BlockBodies list: an RLP
     // STRING wrapping the typed tx (string prefix + 0x02f877...).
     bcos::bytes wireTypedTx;
-    bcos::codec::rlp::encode(wireTypedTx,
-        bcos::bytesConstRef(typedTx.data(), typedTx.size()));
+    bcos::codec::rlp::encode(wireTypedTx, bcos::bytesConstRef(typedTx.data(), typedTx.size()));
 
     // Build the wire message by hand (decode path only): requestId, one body
     // with transactions [string-wrapped typed tx, legacy list tx], uncles [].
     auto txsList = [&]() {
         bcos::bytes out;
-        bcos::codec::rlp::encodeHeader(out, {.isList = true,
-            .payloadLength = wireTypedTx.size() + 4 /* 0xc3 01 02 03 */});
+        bcos::codec::rlp::encodeHeader(
+            out, {.isList = true, .payloadLength = wireTypedTx.size() + 4 /* 0xc3 01 02 03 */});
         out.insert(out.end(), wireTypedTx.begin(), wireTypedTx.end());
         out.insert(out.end(), {0xc3, 0x01, 0x02, 0x03});
         return out;
@@ -157,8 +155,8 @@ BOOST_AUTO_TEST_CASE(blockBodiesTypedTxStringWrapped)
     }();
     auto bodyList = [&]() {
         bcos::bytes out;
-        bcos::codec::rlp::encodeHeader(out,
-            {.isList = true, .payloadLength = txsList.size() + unclesList.size()});
+        bcos::codec::rlp::encodeHeader(
+            out, {.isList = true, .payloadLength = txsList.size() + unclesList.size()});
         out.insert(out.end(), txsList.begin(), txsList.end());
         out.insert(out.end(), unclesList.begin(), unclesList.end());
         return out;
@@ -173,8 +171,8 @@ BOOST_AUTO_TEST_CASE(blockBodiesTypedTxStringWrapped)
     }();
     auto wire = [&]() {
         bcos::bytes out;
-        bcos::codec::rlp::encodeHeader(out,
-            {.isList = true, .payloadLength = 1 + bodiesList.size()});
+        bcos::codec::rlp::encodeHeader(
+            out, {.isList = true, .payloadLength = 1 + bodiesList.size()});
         out.push_back(0x07);  // requestId
         out.insert(out.end(), bodiesList.begin(), bodiesList.end());
         return out;
@@ -187,8 +185,7 @@ BOOST_AUTO_TEST_CASE(blockBodiesTypedTxStringWrapped)
     BOOST_REQUIRE_EQUAL(decoded->bodies[0].transactions.size(), 2u);
     // typed tx must come back WITHOUT the string prefix (0xNN||payload only)
     BOOST_CHECK(decoded->bodies[0].transactions[0] == typedTx);
-    BOOST_CHECK(decoded->bodies[0].transactions[1] ==
-                (bcos::bytes{0xc3, 0x01, 0x02, 0x03}));
+    BOOST_CHECK(decoded->bodies[0].transactions[1] == (bcos::bytes{0xc3, 0x01, 0x02, 0x03}));
 
     // The ENCODE path must produce exactly this hand-built wire form: typed txs
     // string-wrapped, legacy list txs spliced bare.
@@ -207,12 +204,12 @@ BOOST_AUTO_TEST_CASE(statusRoundTrip)
     msg.protocolVersion = 68;
     msg.networkId = 11155111;  // Sepolia
     msg.totalDifficulty = fromHex("0102030405060708");
-    msg.headHash = h256(
-        std::string_view("0x1111111111111111111111111111111111111111111111111111111111111111"),
-        h256::FromHex);
-    msg.genesisHash = h256(
-        std::string_view("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9"),
-        h256::FromHex);  // Sepolia genesis
+    msg.headHash =
+        h256(std::string_view("0x1111111111111111111111111111111111111111111111111111111111111111"),
+            h256::FromHex);
+    msg.genesisHash =
+        h256(std::string_view("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9"),
+            h256::FromHex);  // Sepolia genesis
     msg.forkId = {0x12345678, 0};
 
     auto encoded = eth::encodeStatus(msg);
@@ -231,10 +228,12 @@ BOOST_AUTO_TEST_CASE(newBlockHashesRoundTrip)
 {
     eth::NewBlockHashesMessage msg;
     msg.entries = {
-        {h256(std::string_view("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+        {h256(
+             std::string_view("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
              h256::FromHex),
             1},
-        {h256(std::string_view("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+        {h256(
+             std::string_view("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
              h256::FromHex),
             2},
     };
@@ -252,9 +251,9 @@ BOOST_AUTO_TEST_CASE(newBlockHashesRoundTrip)
 // network values (EIP-2124 worked example / geth forkid testdata).
 BOOST_AUTO_TEST_CASE(forkIdMainnetChain)
 {
-    auto genesis = h256(
-        std::string_view("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3"),
-        h256::FromHex);
+    auto genesis =
+        h256(std::string_view("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3"),
+            h256::FromHex);
     // crc32 over the FULL 32-byte genesis hash.
     auto hash = eth::crc32(bytesConstRef(genesis.data(), genesis.size()));
     BOOST_CHECK_EQUAL(hash, 0xfc64ec04u);
@@ -271,8 +270,8 @@ BOOST_AUTO_TEST_CASE(forkIdMainnetChain)
     // Continue with the remaining block-based forks, then the timestamp-based
     // Shanghai (1681338455) and Cancun (1710338135) points. The merge block
     // 15537394 is TTD-triggered and is NOT a forkid point.
-    for (auto fork : {9069000ull, 9200000ull, 12244000ull, 12965000ull, 13773000ull,
-             15050000ull, 1681338455ull, 1710338135ull})
+    for (auto fork : {9069000ull, 9200000ull, 12244000ull, 12965000ull, 13773000ull, 15050000ull,
+             1681338455ull, 1710338135ull})
     {
         hash = eth::forkIdAddForkPoint(hash, fork);
     }

@@ -36,16 +36,14 @@ using errinfo_rlpErrorCode = boost::error_info<struct tag_rlpErrorCode, int32_t>
 
 [[noreturn]] inline void throwRlpDecodeError(int32_t code, std::string_view message)
 {
-    BOOST_THROW_EXCEPTION(RlpDecodeException{}
-                          << errinfo_rlpErrorCode(code)
-                          << bcos::errinfo_comment(std::string(message)));
+    BOOST_THROW_EXCEPTION(RlpDecodeException{} << errinfo_rlpErrorCode(code)
+                                               << bcos::errinfo_comment(std::string(message)));
 }
 
 [[noreturn]] inline void throwRlpEncodeError(int32_t code, std::string_view message)
 {
-    BOOST_THROW_EXCEPTION(RlpEncodeException{}
-                          << errinfo_rlpErrorCode(code)
-                          << bcos::errinfo_comment(std::string(message)));
+    BOOST_THROW_EXCEPTION(RlpEncodeException{} << errinfo_rlpErrorCode(code)
+                                               << bcos::errinfo_comment(std::string(message)));
 }
 
 // Enum convenience overloads: accept DecodingError, protocol::EthBlockHeaderError, etc.
@@ -61,5 +59,26 @@ template <typename E>
 [[noreturn]] inline void throwRlpEncodeError(E code, std::string_view message)
 {
     throwRlpEncodeError(static_cast<int32_t>(code), message);
+}
+
+// Shared accessors for the two error_info fields, so catch sites stop re-deriving
+// boost::get_error_info with per-site fallback strings. The fallback is returned when the
+// exception carries no such info (e.g. a foreign boost::exception).
+inline std::string rlpErrorMessage(boost::exception const& e, std::string_view fallback)
+{
+    if (auto const* msg = boost::get_error_info<bcos::errinfo_comment>(e))
+    {
+        return *msg;
+    }
+    return std::string(fallback);
+}
+
+inline int32_t rlpErrorCode(boost::exception const& e, int32_t fallback)
+{
+    if (auto const* code = boost::get_error_info<errinfo_rlpErrorCode>(e))
+    {
+        return *code;
+    }
+    return fallback;
 }
 }  // namespace bcos::codec::rlp

@@ -19,9 +19,10 @@
  */
 #include "Client.h"
 
+#include "../eth/Protocol.h"
 #include "Framing.h"
 #include "Messages.h"
-#include "../eth/Protocol.h"
+#include <bcos-codec/rlp/Result.h>
 #include <bcos-utilities/BoostLog.h>
 #include <cctype>
 #include <stdexcept>
@@ -48,17 +49,8 @@ Session makeSession(Socket&& _socket, AuthKeys const& _keys, bool _isInitiator)
 }
 
 // Unwraps an RlpResult at the handshake boundary (once per connection, so the
-// exception style is kept here): the value on success, a std::runtime_error
-// with _context + the error message on failure.
-template <typename T>
-T unwrapOrThrow(bcos::codec::rlp::RlpResult<T>&& _result, std::string_view _context)
-{
-    if (!_result)
-    {
-        throw std::runtime_error(std::string(_context) + _result.error().message);
-    }
-    return std::move(*_result);
-}
+// exception style is kept here).
+using bcos::codec::rlp::unwrapOrThrow;
 
 // Shared Hello/Status exchange once the encrypted session exists.
 EstablishedSession exchangeHandshake(
@@ -95,12 +87,12 @@ EstablishedSession exchangeHandshake(
                 "exchangeHandshake: peer disconnected during Hello (reason undecodable: " +
                 disc.error().message + ")");
         }
-        throw std::runtime_error("exchangeHandshake: expected Hello, got message id=" +
-                                 std::to_string(helloMsg.id));
+        throw std::runtime_error(
+            "exchangeHandshake: expected Hello, got message id=" + std::to_string(helloMsg.id));
     }
-    auto peerHello = unwrapOrThrow(
-        decodeHello(bytesConstRef(helloMsg.data.data(), helloMsg.data.size())),
-        "exchangeHandshake: failed to decode the Hello message: ");
+    auto peerHello =
+        unwrapOrThrow(decodeHello(bytesConstRef(helloMsg.data.data(), helloMsg.data.size())),
+            "exchangeHandshake: failed to decode the Hello message: ");
     // Negotiate the highest eth version the peer supports from {68, 69}.
     uint8_t negotiatedEth = 0;
     for (auto const& cap : peerHello.capabilities)
@@ -126,8 +118,7 @@ EstablishedSession exchangeHandshake(
         {
             ourCaps += " " + cap.name + "/" + std::to_string(cap.version);
         }
-        BCOS_LOG(INFO) << LOG_BADGE("handshake")
-                       << LOG_KV("peerClient", peerHello.clientId)
+        BCOS_LOG(INFO) << LOG_BADGE("handshake") << LOG_KV("peerClient", peerHello.clientId)
                        << LOG_KV("peerCaps", peerCaps) << LOG_KV("ourCaps", ourCaps)
                        << LOG_KV("eth", static_cast<int>(negotiatedEth));
     }
@@ -166,8 +157,8 @@ EstablishedSession exchangeHandshake(
     {
         if (statusMsg.id == baseMsg::Disconnect)
         {
-            auto disc = decodeDisconnect(
-                bytesConstRef(statusMsg.data.data(), statusMsg.data.size()));
+            auto disc =
+                decodeDisconnect(bytesConstRef(statusMsg.data.data(), statusMsg.data.size()));
             if (disc)
             {
                 BCOS_LOG(INFO) << LOG_BADGE("handshake") << "peer disconnected during Status"
@@ -187,26 +178,24 @@ EstablishedSession exchangeHandshake(
     }
     // The Status layout is selected from the version negotiated in Hello (never
     // from the peer-supplied field), and the embedded version must match it.
-    auto peerStatus = unwrapOrThrow(
-        eth::decodeStatus(bytesConstRef(statusMsg.data.data(), statusMsg.data.size()),
-            negotiatedEth),
-        "exchangeHandshake: failed to decode the eth Status message: ");
+    auto peerStatus =
+        unwrapOrThrow(eth::decodeStatus(bytesConstRef(statusMsg.data.data(), statusMsg.data.size()),
+                          negotiatedEth),
+            "exchangeHandshake: failed to decode the eth Status message: ");
 
     // The peer must be on our network (spec: disconnect on network-ID mismatch).
     if (peerStatus.networkId != _config.networkId)
     {
-        throw std::runtime_error("exchangeHandshake: peer network id mismatch: " +
-                                 std::to_string(peerStatus.networkId) +
-                                 " != " + std::to_string(_config.networkId));
+        throw std::runtime_error(
+            "exchangeHandshake: peer network id mismatch: " + std::to_string(peerStatus.networkId) +
+            " != " + std::to_string(_config.networkId));
     }
 
     // Verify the peer is on our chain — only when the local config actually
     // pins a genesis hash (the server side accepts whatever the client sends).
-    if (_config.genesisHash != bcos::h256{} &&
-        peerStatus.genesisHash != _config.genesisHash)
+    if (_config.genesisHash != bcos::h256{} && peerStatus.genesisHash != _config.genesisHash)
     {
-        throw std::runtime_error(
-            "exchangeHandshake: peer genesis hash mismatch (different chain)");
+        throw std::runtime_error("exchangeHandshake: peer genesis hash mismatch (different chain)");
     }
     return EstablishedSession(std::move(session), std::move(peerHello), std::move(peerStatus));
 }

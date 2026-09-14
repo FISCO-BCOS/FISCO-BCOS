@@ -258,11 +258,9 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
         }
         catch (codec::rlp::RlpDecodeException const& e)
         {
-            auto const* reason = boost::get_error_info<bcos::errinfo_comment>(e);
             RPC_IMPL_LOG(DEBUG)
                 << LOG_DESC("toJsonResp: undecodable web3 payload, keeping default fields")
-                << LOG_KV("reason",
-                       reason != nullptr ? *reason : std::string("RLP decode failed"));
+                << LOG_KV("reason", codec::rlp::rlpErrorMessage(e, "RLP decode failed"));
         }
         jResp["value"] = web3Tx.value.str();
         jResp["gasLimit"] = web3Tx.gasLimit;
@@ -1450,9 +1448,9 @@ void JsonRpcImpl_2_0::getGroupPeers(std::string_view _groupID, RespFunc _respFun
         Json::Value jResp(Json::arrayValue);
         if (error)
         {
-            RPC_IMPL_LOG(INFO)
-                << LOG_BADGE("getGroupPeers failed") << LOG_KV("code", error->errorCode())
-                << LOG_KV("message", error->errorMessage());
+            RPC_IMPL_LOG(INFO) << LOG_BADGE("getGroupPeers failed")
+                               << LOG_KV("code", error->errorCode())
+                               << LOG_KV("message", error->errorMessage());
             respFunc(error, jResp);
             co_return;
         }

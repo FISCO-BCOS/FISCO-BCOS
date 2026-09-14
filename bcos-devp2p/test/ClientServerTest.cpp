@@ -79,9 +79,9 @@ BOOST_AUTO_TEST_CASE(loopbackHandshakeAndMessageExchange)
     rlpx::PeerConfig serverConfig;
     serverConfig.clientId = "FISCO-BCOS-devp2p-server/v0.1.0";
     serverConfig.networkId = 11155111;
-    serverConfig.genesisHash = h256(
-        std::string_view("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9"),
-        h256::FromHex);
+    serverConfig.genesisHash =
+        h256(std::string_view("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9"),
+            h256::FromHex);
     serverConfig.forkId = {0x12345678, 0};
 
     rlpx::RlpxServer server(serverKey, 0, serverConfig);
@@ -97,8 +97,8 @@ BOOST_AUTO_TEST_CASE(loopbackHandshakeAndMessageExchange)
             auto msgResult = established.session.recvMessage();
             if (!msgResult)
             {
-                throw std::runtime_error("server: failed to decode request frame: " +
-                                         msgResult.error().message);
+                throw std::runtime_error(
+                    "server: failed to decode request frame: " + msgResult.error().message);
             }
             auto& msg = *msgResult;
             if (msg.id != eth::frameId(eth::msg::GetBlockHeaders))
@@ -108,8 +108,8 @@ BOOST_AUTO_TEST_CASE(loopbackHandshakeAndMessageExchange)
             auto requestResult = eth::decodeGetBlockHeaders(ref(msg.data));
             if (!requestResult)
             {
-                throw std::runtime_error("server: failed to decode GetBlockHeaders: " +
-                                         requestResult.error().message);
+                throw std::runtime_error(
+                    "server: failed to decode GetBlockHeaders: " + requestResult.error().message);
             }
             auto& request = *requestResult;
 
@@ -146,9 +146,9 @@ BOOST_AUTO_TEST_CASE(loopbackHandshakeAndMessageExchange)
     config.port = port;
     config.peerPublicKey = serverKey.publicKey();
     config.networkId = 11155111;
-    config.genesisHash = h256(
-        std::string_view("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9"),
-        h256::FromHex);
+    config.genesisHash =
+        h256(std::string_view("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9"),
+            h256::FromHex);
     config.forkId = {0x12345678, 0};
 
     rlpx::RlpxClient client(std::move(clientKey), config);

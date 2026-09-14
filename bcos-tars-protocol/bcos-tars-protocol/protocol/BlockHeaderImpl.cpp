@@ -29,6 +29,7 @@
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-utilities/BoostLog.h>
 #include <boost/endian/conversion.hpp>
 #include <boost/lexical_cast.hpp>
 #include <cstring>
@@ -36,7 +37,6 @@
 #include <range/v3/view/any_view.hpp>
 #include <range/v3/view/transform.hpp>
 #include <stdexcept>
-#include <bcos-utilities/BoostLog.h>
 
 DERIVE_BCOS_EXCEPTION(EmptyBlockHeaderHash);
 
@@ -94,8 +94,7 @@ void bcostars::protocol::BlockHeaderImpl::calculateHash(const bcos::crypto::Hash
         }
         catch (bcos::codec::rlp::RlpEncodeException const& e)
         {
-            auto const* const errorMessage = boost::get_error_info<bcos::errinfo_comment>(e);
-            failSoft(errorMessage != nullptr ? *errorMessage : std::string{});
+            failSoft(bcos::codec::rlp::rlpErrorMessage(e, ""));
         }
         catch (const std::exception& e)
         {

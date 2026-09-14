@@ -25,7 +25,9 @@
 #include "Exceptions.h"
 #include <bcos-utilities/Exceptions.h>
 #include <expected>
+#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 
@@ -47,9 +49,12 @@ inline constexpr int32_t kRlpGenericError{-1};
 template <typename T>
 using RlpResult = std::expected<T, RlpError>;
 
-// Boundary adapter: runs f and converts any thrown failure into an RlpError value. The
-// success path is zero-cost; use it where an exception-based implementation feeds a hot
-// ingress boundary whose callers should branch on values instead of catching.
+// Boundary adapter: runs f and converts any thrown failure into an RlpError value, so
+// callers at a hot ingress boundary branch on values instead of catching. The success path
+// is zero-cost, but note this is an adapter, not a non-throwing core: when f rejects
+// malformed input it still throws and unwinds once inside this wrapper before the failure
+// becomes a value. Paths that must never unwind need a genuinely non-throwing
+// implementation (tryDecodeHeader/tryDecode) rather than captureRlp.
 template <typename F>
 auto captureRlp(F&& f) -> RlpResult<std::invoke_result_t<F>>
 {
@@ -68,25 +73,34 @@ auto captureRlp(F&& f) -> RlpResult<std::invoke_result_t<F>>
     }
     catch (boost::exception const& e)
     {
-        // RlpDecodeException/RlpEncodeException derive from bcos::Error (a boost::exception).
+        // RlpDecodeException/RlpEncodeException derive from bcos::Exception (a
+        // boost::exception) — NOT from bcos::Error, so catch (bcos::Error const&) handlers
+        // elsewhere do not see them; the code travels in errinfo_rlpErrorCode precisely
+        // because errorCode() is unavailable.
         // Default-construct then set the one field rather than writing {.code = ...}: a partial
         // designated initialiser trips GCC's -Wmissing-field-initializers (-Werror) at every
         // instantiation of this template (same rule as Eip7702Recover.h's Account init).
         RlpError error;
-        error.code = kRlpGenericError;
-        if (auto const* code = boost::get_error_info<errinfo_rlpErrorCode>(e))
-        {
-            error.code = *code;
-        }
-        if (auto const* msg = boost::get_error_info<bcos::errinfo_comment>(e))
-        {
-            error.message = *msg;
-        }
+        error.code = rlpErrorCode(e, kRlpGenericError);
+        error.message = rlpErrorMessage(e, "");
         return std::unexpected(std::move(error));
     }
     catch (std::exception const& e)
     {
         return std::unexpected(RlpError{.code = kRlpGenericError, .message = e.what()});
     }
+}
+
+// The inverse of captureRlp, for boundaries that keep the exception style (for example the
+// once-per-connection handshake): the value on success, a std::runtime_error with
+// _context + the error message on failure.
+template <typename T>
+T unwrapOrThrow(RlpResult<T>&& _result, std::string_view _context)
+{
+    if (!_result)
+    {
+        throw std::runtime_error(std::string(_context) + _result.error().message);
+    }
+    return std::move(*_result);
 }
 }  // namespace bcos::codec::rlp

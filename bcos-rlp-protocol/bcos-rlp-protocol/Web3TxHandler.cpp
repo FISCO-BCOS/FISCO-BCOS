@@ -486,7 +486,8 @@ struct EIP2930TxHandler : Web3TxHandler
             // transactions.
             if (out.signatureV > 1)
             {
-                bcos::codec::rlp::throwRlpDecodeError(codec::rlp::DecodingError::InvalidVInSignature,
+                bcos::codec::rlp::throwRlpDecodeError(
+                    codec::rlp::DecodingError::InvalidVInSignature,
                     "typed tx y_parity must be 0 or 1");
             }
         }
@@ -667,7 +668,8 @@ struct EIP1559TxHandler : Web3TxHandler
             // transactions.
             if (out.signatureV > 1)
             {
-                bcos::codec::rlp::throwRlpDecodeError(codec::rlp::DecodingError::InvalidVInSignature,
+                bcos::codec::rlp::throwRlpDecodeError(
+                    codec::rlp::DecodingError::InvalidVInSignature,
                     "typed tx y_parity must be 0 or 1");
             }
         }
@@ -811,7 +813,7 @@ struct DepositTxHandler : Web3TxHandler
             out.isSystemTx = systemFlag;
         }
         codec::rlp::decode(in, out.data);  // bytes
-        out.nonce = 0;   // deposit nonce is always 0
+        out.nonce = 0;                     // deposit nonce is always 0
         // op-geth ListEnd parity: reject if fields crossed the declared payload boundary.
         if (in.data() != nullptr &&
             in.data() - payloadStart != static_cast<std::ptrdiff_t>(payloadLength))
@@ -989,7 +991,8 @@ struct EIP4844TxHandler : Web3TxHandler
             // transactions.
             if (out.signatureV > 1)
             {
-                bcos::codec::rlp::throwRlpDecodeError(codec::rlp::DecodingError::InvalidVInSignature,
+                bcos::codec::rlp::throwRlpDecodeError(
+                    codec::rlp::DecodingError::InvalidVInSignature,
                     "typed tx y_parity must be 0 or 1");
             }
         }
@@ -1175,7 +1178,8 @@ struct EIP7702TxHandler : Web3TxHandler
             // transactions.
             if (out.signatureV > 1)
             {
-                bcos::codec::rlp::throwRlpDecodeError(codec::rlp::DecodingError::InvalidVInSignature,
+                bcos::codec::rlp::throwRlpDecodeError(
+                    codec::rlp::DecodingError::InvalidVInSignature,
                     "typed tx y_parity must be 0 or 1");
             }
         }

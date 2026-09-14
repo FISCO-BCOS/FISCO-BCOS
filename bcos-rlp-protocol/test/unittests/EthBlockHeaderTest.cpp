@@ -304,8 +304,7 @@ BOOST_AUTO_TEST_CASE(calculateRLPHashRejectsNonEthHeader)
     expectRlpError([&] { bcos::protocol::EthBlockHeader::calculateRLPHash(*header); },
         static_cast<int32_t>(EthBlockHeaderError::InvalidHeader), "not an Ethereum header");
     // computeHash, by contrast, hashes without validation.
-    BOOST_CHECK_NO_THROW(
-        bcos::protocol::EthBlockHeader::computeHash(*header));
+    BOOST_CHECK_NO_THROW(bcos::protocol::EthBlockHeader::computeHash(*header));
 }
 
 // A truncated RLP header (fields stop mid-cascade) must decode cleanly instead of throwing

@@ -1162,8 +1162,8 @@ BOOST_AUTO_TEST_CASE(testTrailingBytesAfterEnvelopeRejected)
     envelope.push_back(0x00);
     auto bRef = bcos::ref(envelope);
     Web3Transaction tx{};
-    requireRlpThrow([&] { rlp::decode(bRef, tx); },
-        static_cast<int32_t>(rlp::DecodingError::InputTooLong));
+    requireRlpThrow(
+        [&] { rlp::decode(bRef, tx); }, static_cast<int32_t>(rlp::DecodingError::InputTooLong));
 }
 
 // F5: EIP-7702 negative decode tests — yParity > 1, truncated input, empty input.

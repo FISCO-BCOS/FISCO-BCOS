@@ -62,8 +62,8 @@ inline uint16_t frameId(uint8_t _messageId)
 }
 
 // eth Status message. Two wire formats exist:
-//   eth/68: [protocolVersion, networkId, totalDifficulty, headHash, genesisHash, [forkHash, forkNext]]
-//   eth/69+ (EIP-7642 block range): [protocolVersion, networkId, genesisHash,
+//   eth/68: [protocolVersion, networkId, totalDifficulty, headHash, genesisHash, [forkHash,
+//   forkNext]] eth/69+ (EIP-7642 block range): [protocolVersion, networkId, genesisHash,
 //           [forkHash, forkNext], earliestBlock, latestBlock, latestBlockHash]
 struct StatusMessage
 {
@@ -166,7 +166,6 @@ bcos::codec::rlp::RlpResult<NewBlockHashesMessage> decodeNewBlockHashes(bytesCon
 // Status format while eth/68 peers keep the legacy TD/head Status.
 inline std::vector<bcos::devp2p::rlpx::Capability> ethCapabilities()
 {
-    return {{std::string("eth"), kProtocolVersion},
-        {std::string("eth"), kMinProtocolVersion}};
+    return {{std::string("eth"), kProtocolVersion}, {std::string("eth"), kMinProtocolVersion}};
 }
 }  // namespace bcos::devp2p::eth

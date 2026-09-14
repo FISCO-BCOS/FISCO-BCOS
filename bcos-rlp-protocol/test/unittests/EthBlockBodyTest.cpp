@@ -423,7 +423,7 @@ BOOST_AUTO_TEST_CASE(decodeTxRejectionArms)
         bytesRef in(const_cast<bcos::byte*>(elem.data()), elem.size());
         bcos::bytes out;
         BOOST_REQUIRE_THROW(
-        codec::rlp::detail::decodeTx(in, out), bcos::codec::rlp::RlpDecodeException);
+            codec::rlp::detail::decodeTx(in, out), bcos::codec::rlp::RlpDecodeException);
     }
     // Bare 0xc0: empty legacy list, below the 9-field minimum.
     {
@@ -431,7 +431,7 @@ BOOST_AUTO_TEST_CASE(decodeTxRejectionArms)
         bytesRef in(const_cast<bcos::byte*>(elem.data()), elem.size());
         bcos::bytes out;
         BOOST_REQUIRE_THROW(
-        codec::rlp::detail::decodeTx(in, out), bcos::codec::rlp::RlpDecodeException);
+            codec::rlp::detail::decodeTx(in, out), bcos::codec::rlp::RlpDecodeException);
     }
     // Bare single byte 0x05 (below BYTES_HEAD_BASE, not a valid transaction).
     {
@@ -439,7 +439,7 @@ BOOST_AUTO_TEST_CASE(decodeTxRejectionArms)
         bytesRef in(const_cast<bcos::byte*>(elem.data()), elem.size());
         bcos::bytes out;
         BOOST_REQUIRE_THROW(
-        codec::rlp::detail::decodeTx(in, out), bcos::codec::rlp::RlpDecodeException);
+            codec::rlp::detail::decodeTx(in, out), bcos::codec::rlp::RlpDecodeException);
     }
 }
 

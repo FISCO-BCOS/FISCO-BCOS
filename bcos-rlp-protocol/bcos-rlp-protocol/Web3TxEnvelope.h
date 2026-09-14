@@ -46,8 +46,7 @@ inline void decodeCanonicalRlpUint(bcos::bytesRef& from, T& to)
 }
 
 /// Typed yParity: whole item must be 0x80 (0) or 0x01 (1). Bare 0x00 is rejected.
-[[nodiscard]] std::optional<uint64_t> canonicalTypedYParityItem(
-    bcos::bytesConstRef item) noexcept;
+[[nodiscard]] std::optional<uint64_t> canonicalTypedYParityItem(bcos::bytesConstRef item) noexcept;
 
 /// Consume one canonical yParity item (0x80 / 0x01) from the cursor.
 /// Throws codec::rlp::RlpDecodeException on malformed input.

@@ -965,9 +965,8 @@ public:
     }
     catch (const rlp::RlpDecodeException& e)
     {
-        auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
         fail("deposit envelope: sourceHash/from decode failed: " +
-             (comment != nullptr ? *comment : std::string("unknown RLP decode error")));
+             rlp::rlpErrorMessage(e, "unknown RLP decode error"));
     }
 
     op::DepositTx dep;

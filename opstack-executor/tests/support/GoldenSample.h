@@ -113,9 +113,9 @@ inline bcostars::protocol::BlockHeaderImpl::Ptr decodeGoldenHeader(GoldenSample 
     catch (const bcos::Exception& e)
     {
         auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
-        throw std::runtime_error("decodeGoldenHeader: " +
-                                 (comment != nullptr ? *comment :
-                                                       boost::diagnostic_information(e)));
+        throw std::runtime_error(
+            "decodeGoldenHeader: " +
+            (comment != nullptr ? *comment : boost::diagnostic_information(e)));
     }
     return header;
 }

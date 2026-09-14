@@ -132,7 +132,8 @@ public:
     /// carries seconds, converted at the bridge — the EthBlockHeader(BlockHeader) ctor
     /// divides by 1000 and throws std::invalid_argument on a sub-second value, so a
     /// non-whole-second timestamp fails loudly here. Callers that cannot tolerate
-    /// exceptions should use calculateRLPHash instead.
+    /// exceptions should use the fail-soft BlockHeaderImpl::calculateHash wrapper instead
+    /// (calculateRLPHash itself throws RlpEncodeException).
     static bcos::crypto::HashType computeHash(const bcos::protocol::BlockHeader& header) noexcept(
         false);
 

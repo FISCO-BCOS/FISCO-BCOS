@@ -157,15 +157,12 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
         // bytes verbatim and re-emit just the header + signature.
         auto const txType = firstByte;
         cursor = cursor.getCroppedData(1);  // drop the EIP-2718 type byte
-        bcos::codec::rlp::Header header;
-        try
-        {
-            header = bcos::codec::rlp::decodeHeader(cursor);
-        }
-        catch (bcos::codec::rlp::RlpDecodeException const&)
+        auto headerResult = bcos::codec::rlp::tryDecodeHeader(cursor);
+        if (!headerResult) [[unlikely]]
         {
             throwDecode("typed body");
         }
+        auto const header = *headerResult;
         if (!header.isList || header.payloadLength > cursor.size()) [[unlikely]]
         {
             throwDecode("typed body");
@@ -199,15 +196,12 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
             bcos::bytesRef counter(cursor.data(), header.payloadLength);
             while (!counter.empty())
             {
-                bcos::codec::rlp::Header itemHeader;
-                try
-                {
-                    itemHeader = bcos::codec::rlp::decodeHeader(counter);
-                }
-                catch (bcos::codec::rlp::RlpDecodeException const&)
+                auto itemHeaderResult = bcos::codec::rlp::tryDecodeHeader(counter);
+                if (!itemHeaderResult) [[unlikely]]
                 {
                     throwDecode("typed item count");
                 }
+                auto const itemHeader = *itemHeaderResult;
                 if (itemHeader.payloadLength > counter.size()) [[unlikely]]
                 {
                     throwDecode("typed item count");
@@ -228,15 +222,12 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
                 while (!tail.empty())
                 {
                     auto const* const itemStart = tail.data();
-                    bcos::codec::rlp::Header itemHeader;
-                    try
-                    {
-                        itemHeader = bcos::codec::rlp::decodeHeader(tail);
-                    }
-                    catch (bcos::codec::rlp::RlpDecodeException const&)
+                    auto itemHeaderResult = bcos::codec::rlp::tryDecodeHeader(tail);
+                    if (!itemHeaderResult) [[unlikely]]
                     {
                         throwDecode("typed trailer");
                     }
+                    auto const itemHeader = *itemHeaderResult;
                     if (itemHeader.payloadLength > tail.size()) [[unlikely]]
                     {
                         throwDecode("typed trailer");
@@ -297,15 +288,12 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
         // trailing chainId,0,0 with v,r,s (v = chainId*2+35+yParity); pre-155 simply appends v,r,s
         // (v = yParity+27). We locate the end of the 6 field items, reuse those bytes, and emit a
         // fresh list header + v,r,s.
-        bcos::codec::rlp::Header header;
-        try
-        {
-            header = bcos::codec::rlp::decodeHeader(cursor);
-        }
-        catch (bcos::codec::rlp::RlpDecodeException const&)
+        auto headerResult = bcos::codec::rlp::tryDecodeHeader(cursor);
+        if (!headerResult) [[unlikely]]
         {
             throwDecode("legacy header");
         }
+        auto const header = *headerResult;
         if (!header.isList || header.payloadLength > cursor.size()) [[unlikely]]
         {
             throwDecode("legacy header");
@@ -318,15 +306,12 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
         bcos::bytesRef walker(cursor.data(), header.payloadLength);
         for (int i = 0; i < 6; ++i)
         {
-            bcos::codec::rlp::Header fieldHeader;
-            try
-            {
-                fieldHeader = bcos::codec::rlp::decodeHeader(walker);
-            }
-            catch (bcos::codec::rlp::RlpDecodeException const&)
+            auto fieldHeaderResult = bcos::codec::rlp::tryDecodeHeader(walker);
+            if (!fieldHeaderResult) [[unlikely]]
             {
                 throwDecode("legacy field");
             }
+            auto const fieldHeader = *fieldHeaderResult;
             if (fieldHeader.payloadLength > walker.size()) [[unlikely]]
             {
                 throwDecode("legacy field");

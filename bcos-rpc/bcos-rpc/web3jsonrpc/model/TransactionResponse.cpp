@@ -97,11 +97,10 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
             // Undecodable web3 payload (corrupt extraTransactionBytes, or a tars mirror that
             // diverged from the envelope): never serialize half-decoded state. Emit zeroed
             // web3 fields instead (same posture as the deposit fallback above) and log once.
-            auto const* reason = boost::get_error_info<bcos::errinfo_comment>(e);
+            auto const reason = bcos::codec::rlp::rlpErrorMessage(e, "RLP decode failed");
             WEB3_LOG(WARNING) << LOG_DESC("TransactionResponse: undecodable web3 payload")
                               << LOG_KV("hash", tx.hash().hexPrefixed())
-                              << LOG_KV("reason",
-                                     reason != nullptr ? *reason : std::string("RLP decode failed"));
+                              << LOG_KV("reason", reason);
             result["nonce"] = "0x0";
             result["type"] = toQuantity(0);
             result["value"] = "0x0";

@@ -18,7 +18,6 @@
  */
 
 #include "bcos-tx-validator/Normalize.h"
-#include <bcos-codec/rlp/Exceptions.h>
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-framework/protocol/Protocol.h"
@@ -26,6 +25,7 @@
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/Web3RawTransaction.h"
 #include "bcos-utilities/BoostLog.h"
+#include <bcos-codec/rlp/Exceptions.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <cstring>
 

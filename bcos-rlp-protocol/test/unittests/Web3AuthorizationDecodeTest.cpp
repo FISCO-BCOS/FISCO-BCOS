@@ -17,8 +17,8 @@
  * @brief EIP-7702 authorization-entry decode: op-geth's uint8 yParity domain.
  */
 
-#include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-codec/rlp/Exceptions.h>
+#include <bcos-rlp-protocol/Web3Transaction.h>
 #include <boost/test/unit_test.hpp>
 #include <array>
 

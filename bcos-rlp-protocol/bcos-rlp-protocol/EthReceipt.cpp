@@ -98,8 +98,7 @@ void decode(bcos::bytesRef& _in, protocol::EthReceiptData& _receipt)
         _in = _in.getCroppedData(1);
         _receipt.postState.reset();
         // The multi-arg decode expects a list header here: [status, cumGas, bloom, logs].
-        decode(
-            _in, _receipt.status, _receipt.cumulativeGasUsed, _receipt.logsBloom, _receipt.logs);
+        decode(_in, _receipt.status, _receipt.cumulativeGasUsed, _receipt.logsBloom, _receipt.logs);
         return;
     }
 
@@ -242,6 +241,34 @@ void toEthReceiptData(TransactionReceipt const& receipt, uint8_t txType, EthRece
         codec::rlp::throwRlpEncodeError(codec::rlp::DecodingError::InvalidFieldset,
             "toEthReceiptData: non-numeric cumulativeGasUsed: " + cumStr);
     }
+    // Normalise the decimal form so boost's implicit-base rule (a leading 0
+    // selects octal) can never fire: strip leading zeros, keep at least one digit.
+    std::string decimalDigits;
+    if (!hexForm)
+    {
+        decimalDigits = digits;
+        auto const firstNonZero = decimalDigits.find_first_not_of('0');
+        if (firstNonZero == std::string::npos)
+        {
+            decimalDigits = "0";
+        }
+        else if (firstNonZero > 0)
+        {
+            decimalDigits.erase(0, firstNonZero);
+        }
+        // 2^256-1 has 78 decimal digits; 78-digit strings above it still truncate
+        // silently under boost's unchecked u256, so reject them lexicographically
+        // (equal-length digit strings compare correctly as strings). This check stays
+        // OUT of the try below: the catch relabels parse failures as non-numeric, and
+        // must not swallow this precise UnexpectedLength error.
+        if (decimalDigits.size() == 78 && decimalDigits >
+                                              "115792089237316195423570985008687907853269984665"
+                                              "640564039457584007913129639935")
+        {
+            codec::rlp::throwRlpEncodeError(codec::rlp::DecodingError::UnexpectedLength,
+                "toEthReceiptData: cumulativeGasUsed exceeds 256 bits: " + cumStr);
+        }
+    }
     try
     {
         if (hexForm)
@@ -250,28 +277,6 @@ void toEthReceiptData(TransactionReceipt const& receipt, uint8_t txType, EthRece
         }
         else
         {
-            // Normalise the decimal form so boost's implicit-base rule (a leading 0
-            // selects octal) can never fire: strip leading zeros, keep at least one digit.
-            auto decimalDigits = digits;
-            auto const firstNonZero = decimalDigits.find_first_not_of('0');
-            if (firstNonZero == std::string::npos)
-            {
-                decimalDigits = "0";
-            }
-            else if (firstNonZero > 0)
-            {
-                decimalDigits.erase(0, firstNonZero);
-            }
-            // 2^256-1 has 78 decimal digits; 78-digit strings above it still truncate
-            // silently under boost's unchecked u256, so reject them lexicographically
-            // (equal-length digit strings compare correctly as strings).
-            if (decimalDigits.size() == 78 && decimalDigits >
-                                                  "115792089237316195423570985008687907853269984665"
-                                                  "640564039457584007913129639935")
-            {
-                codec::rlp::throwRlpEncodeError(codec::rlp::DecodingError::UnexpectedLength,
-                    "toEthReceiptData: cumulativeGasUsed exceeds 256 bits: " + cumStr);
-            }
             eth.cumulativeGasUsed = bcos::u256(decimalDigits);
         }
     }

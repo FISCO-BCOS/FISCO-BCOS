@@ -20,6 +20,7 @@
 
 #include "bcos-rlp-protocol/EthReceipt.h"
 #include "bcos-rlp-protocol/EthLog.h"
+#include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/Exceptions.h>
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
@@ -209,8 +210,7 @@ BOOST_AUTO_TEST_CASE(rlpDecodeRejectsTrailingBytes)
     BOOST_REQUIRE_NO_THROW(r.rlpEncode(out));
     out.push_back(0xff);
     EthReceipt decoded;
-    BOOST_REQUIRE_THROW(
-        decoded.rlpDecode(ref(out)), bcos::codec::rlp::RlpDecodeException);
+    BOOST_REQUIRE_THROW(decoded.rlpDecode(ref(out)), bcos::codec::rlp::RlpDecodeException);
 }
 
 // A receipt with a type byte >= 0x80 must be rejected by the encoder (the decoder
@@ -324,8 +324,8 @@ BOOST_AUTO_TEST_CASE(toEthReceiptDataFailClosedBloom)
     inner.logsBloom.assign(32, static_cast<char>(0xab));  // wrong size (not 256)
 
     protocol::EthReceiptData eth;
-    BOOST_REQUIRE_THROW(protocol::toEthReceiptData(*receipt, 1, eth),
-        bcos::codec::rlp::RlpEncodeException);
+    BOOST_REQUIRE_THROW(
+        protocol::toEthReceiptData(*receipt, 1, eth), bcos::codec::rlp::RlpEncodeException);
 }
 
 // An out-of-range EIP-2718 type byte (>= 0x80) must be rejected, not written as a
@@ -339,8 +339,8 @@ BOOST_AUTO_TEST_CASE(toEthReceiptDataRejectsBadType)
     inner.cumulativeGasUsed = "42000";
     inner.logsBloom.assign(256, static_cast<char>(0xab));
     protocol::EthReceiptData eth;
-    BOOST_REQUIRE_THROW(protocol::toEthReceiptData(*receipt, 0x80, eth),
-        bcos::codec::rlp::RlpEncodeException);
+    BOOST_REQUIRE_THROW(
+        protocol::toEthReceiptData(*receipt, 0x80, eth), bcos::codec::rlp::RlpEncodeException);
 }
 
 // The log-address conversion must accept 20 raw bytes and reject invalid lengths
@@ -378,8 +378,8 @@ BOOST_AUTO_TEST_CASE(logAddressRawAndInvalidLength)
         tarsLog.address = std::string(30, 'x');
         inner.data.logEntries.push_back(std::move(tarsLog));
         protocol::EthReceiptData eth;
-        BOOST_REQUIRE_THROW(protocol::toEthReceiptData(*receipt, 1, eth),
-            bcos::codec::rlp::RlpEncodeException);
+        BOOST_REQUIRE_THROW(
+            protocol::toEthReceiptData(*receipt, 1, eth), bcos::codec::rlp::RlpEncodeException);
     }
 }
 
@@ -397,8 +397,8 @@ BOOST_AUTO_TEST_CASE(toEthReceiptDataFailClosedGas)
         inner.cumulativeGasUsed = "";
         inner.logsBloom.assign(256, static_cast<char>(0xab));
         protocol::EthReceiptData eth;
-        BOOST_REQUIRE_THROW(protocol::toEthReceiptData(*receipt, 1, eth),
-            bcos::codec::rlp::RlpEncodeException);
+        BOOST_REQUIRE_THROW(
+            protocol::toEthReceiptData(*receipt, 1, eth), bcos::codec::rlp::RlpEncodeException);
     }
     // Non-numeric cumulativeGasUsed.
     {
@@ -409,8 +409,8 @@ BOOST_AUTO_TEST_CASE(toEthReceiptDataFailClosedGas)
         inner.cumulativeGasUsed = "abc";
         inner.logsBloom.assign(256, static_cast<char>(0xab));
         protocol::EthReceiptData eth;
-        BOOST_REQUIRE_THROW(protocol::toEthReceiptData(*receipt, 1, eth),
-            bcos::codec::rlp::RlpEncodeException);
+        BOOST_REQUIRE_THROW(
+            protocol::toEthReceiptData(*receipt, 1, eth), bcos::codec::rlp::RlpEncodeException);
     }
     // 0x-prefixed hex form (opstack producer) parses to the same value.
     {
@@ -433,8 +433,8 @@ BOOST_AUTO_TEST_CASE(toEthReceiptDataFailClosedGas)
         inner.cumulativeGasUsed = "0x";
         inner.logsBloom.assign(256, static_cast<char>(0xab));
         protocol::EthReceiptData eth;
-        BOOST_REQUIRE_THROW(protocol::toEthReceiptData(*receipt, 1, eth),
-            bcos::codec::rlp::RlpEncodeException);
+        BOOST_REQUIRE_THROW(
+            protocol::toEthReceiptData(*receipt, 1, eth), bcos::codec::rlp::RlpEncodeException);
     }
     // Leading-zero decimal must not be interpreted as octal: "021000" == 21000.
     {
@@ -458,8 +458,8 @@ BOOST_AUTO_TEST_CASE(toEthReceiptDataFailClosedGas)
         inner.cumulativeGasUsed = std::string(65, 'f');  // 65 hex digits > 256 bits
         inner.logsBloom.assign(256, static_cast<char>(0xab));
         protocol::EthReceiptData eth;
-        BOOST_REQUIRE_THROW(protocol::toEthReceiptData(*receipt, 1, eth),
-            bcos::codec::rlp::RlpEncodeException);
+        BOOST_REQUIRE_THROW(
+            protocol::toEthReceiptData(*receipt, 1, eth), bcos::codec::rlp::RlpEncodeException);
     }
     {
         auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
@@ -469,11 +469,13 @@ BOOST_AUTO_TEST_CASE(toEthReceiptDataFailClosedGas)
         inner.cumulativeGasUsed = std::string(79, '9');  // 79 decimal digits > 256 bits
         inner.logsBloom.assign(256, static_cast<char>(0xab));
         protocol::EthReceiptData eth;
-        BOOST_REQUIRE_THROW(protocol::toEthReceiptData(*receipt, 1, eth),
-            bcos::codec::rlp::RlpEncodeException);
+        BOOST_REQUIRE_THROW(
+            protocol::toEthReceiptData(*receipt, 1, eth), bcos::codec::rlp::RlpEncodeException);
     }
     // A 78-digit decimal above 2^256-1 must fail closed (unchecked u256 would
-    // truncate silently — the 78-digit length bound alone is not tight).
+    // truncate silently — the 78-digit length bound alone is not tight). Pin the
+    // precise code too: the broad parse-failure catch in toEthReceiptData must not
+    // relabel this UnexpectedLength as InvalidFieldset ("non-numeric").
     {
         auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
         auto& inner = receipt->inner();
@@ -482,8 +484,18 @@ BOOST_AUTO_TEST_CASE(toEthReceiptDataFailClosedGas)
         inner.cumulativeGasUsed = "2" + std::string(77, '0');  // 78 digits > 2^256-1
         inner.logsBloom.assign(256, static_cast<char>(0xab));
         protocol::EthReceiptData eth;
-        BOOST_REQUIRE_THROW(protocol::toEthReceiptData(*receipt, 1, eth),
-            bcos::codec::rlp::RlpEncodeException);
+        try
+        {
+            protocol::toEthReceiptData(*receipt, 1, eth);
+            BOOST_FAIL("expected RlpEncodeException for an over-range cumulativeGasUsed");
+        }
+        catch (bcos::codec::rlp::RlpEncodeException const& e)
+        {
+            auto const* code = boost::get_error_info<bcos::codec::rlp::errinfo_rlpErrorCode>(e);
+            BOOST_REQUIRE(code != nullptr);
+            BOOST_CHECK_EQUAL(
+                *code, static_cast<int32_t>(bcos::codec::rlp::DecodingError::UnexpectedLength));
+        }
     }
 }
 
