@@ -1348,8 +1348,9 @@ task::Task<void> EthEndpoint::newFilter(const Json::Value& request, Json::Value&
     auto const ledger = m_nodeService->ledger();
     auto const latest = co_await ledger::getCurrentBlockNumber(*ledger);
     auto params = m_filterSystem->requestFactory()->create();
-    params->fromJson(
-        jParams, latest, m_nodeService->safeBlockDepth(), m_nodeService->finalizedBlockDepth());
+    auto const context = forkchoiceContext();
+    params->fromJson(jParams, latest, m_nodeService->safeBlockDepth(),
+        m_nodeService->finalizedBlockDepth(), context.safe, context.finalized, context.engineLane);
     Json::Value result = co_await m_filterSystem->newFilter(params);
     buildJsonContent(result, response);
 }
@@ -1397,8 +1398,9 @@ task::Task<void> EthEndpoint::getLogs(const Json::Value& request, Json::Value& r
     auto const ledger = m_nodeService->ledger();
     auto const latest = co_await ledger::getCurrentBlockNumber(*ledger);
     auto params = m_filterSystem->requestFactory()->create();
-    params->fromJson(
-        jParams, latest, m_nodeService->safeBlockDepth(), m_nodeService->finalizedBlockDepth());
+    auto const context = forkchoiceContext();
+    params->fromJson(jParams, latest, m_nodeService->safeBlockDepth(),
+        m_nodeService->finalizedBlockDepth(), context.safe, context.finalized, context.engineLane);
     Json::Value result = co_await m_filterSystem->getLogs(params);
     buildJsonContent(result, response);
 }
@@ -1419,30 +1421,30 @@ task::Task<std::tuple<protocol::BlockNumber, protocol::BlockNumber>>
 {
     auto ledger = m_nodeService->ledger();
     auto latest = co_await ledger::getCurrentBlockNumber(*ledger);
-    // Prefer the Engine-API forkchoice safe/finalized heads when present (op-node drives them
-    // via engine_forkchoiceUpdated): the static node-config depth is only a fallback for
-    // chains with no engine service (PBFT).
-    auto const& engine = m_nodeService->engineService();
-    if (engine && *engine)
+    // On the engine lane (op-node drives forkchoice) the tracker values are preferred for
+    // "safe"/"finalized"; an unset value must fail closed (not-found) rather than fall back to
+    // the static depth, which with the default 0 would report the unsafe tip as immutable. The
+    // tag matching itself lives in the shared bcos::rpc::getBlockNumberByTag resolver so
+    // eth_getBlockByNumber and eth_getLogs/eth_newFilter cannot diverge.
+    auto const context = forkchoiceContext();
+    auto [number, _] = bcos::rpc::getBlockNumberByTag(latest, blockTag,
+        m_nodeService->safeBlockDepth(), m_nodeService->finalizedBlockDepth(), context.safe,
+        context.finalized, context.engineLane);
+    // isLatest is "resolved height == latest", independent of the tag kind — a numeric tag that
+    // equals the tip is the latest state, the same way the pre-forkchoice code computed it.
+    co_return std::make_tuple(number, std::cmp_equal(latest, number));
+}
+
+EthEndpoint::ForkchoiceContext EthEndpoint::forkchoiceContext() const
+{
+    ForkchoiceContext context;
+    if (auto const& engine = m_nodeService->engineService(); engine && *engine)
     {
-        if (blockTag == SafeBlock)
-        {
-            if (auto safe = engine->getSafeBlockNumber(); safe.has_value())
-            {
-                co_return std::make_tuple(*safe, std::cmp_equal(latest, *safe));
-            }
-        }
-        else if (blockTag == FinalizedBlock)
-        {
-            if (auto finalized = engine->getFinalizedBlockNumber(); finalized.has_value())
-            {
-                co_return std::make_tuple(*finalized, std::cmp_equal(latest, *finalized));
-            }
-        }
+        context.safe = engine->getSafeBlockNumber();
+        context.finalized = engine->getFinalizedBlockNumber();
+        context.engineLane = true;
     }
-    auto [number, _] = bcos::rpc::getBlockNumberByTag(
-        latest, blockTag, m_nodeService->safeBlockDepth(), m_nodeService->finalizedBlockDepth());
-    co_return std::make_tuple(number, latest);
+    return context;
 }
 
 task::Task<void> EthEndpoint::maxPriorityFeePerGas(
@@ -1490,19 +1492,36 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
     }
     auto const blockTag = toView(request[2U]);
     // op-node passes the 32-byte block hash (DATA) for eth_getProof, unlike the number/tag the
-    // other eth_* endpoints take. Resolve the hash to a height first; a not-found hash surfaces
-    // the same "Block not found" as the number/tag path below.
+    // other eth_* endpoints take. Decode the hash FIRST (a malformed hex string is a client
+    // error) and let getBlockNumber distinguish "not found" from a storage fault.
     protocol::BlockNumber blockNumber = 0;
     if (blockTag.size() == 66 && blockTag[0] == '0' && (blockTag[1] == 'x' || blockTag[1] == 'X'))
     {
+        bcos::crypto::HashType hash;
         try
         {
-            auto const hash = crypto::HashType(blockTag, crypto::HashType::FromHex);
-            blockNumber = co_await ledger::getBlockNumber(*m_nodeService->ledger(), hash);
+            hash = bcos::crypto::HashType(blockTag, bcos::crypto::HashType::FromHex);
         }
         catch (std::exception const&)
         {
-            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid block hash"));
+        }
+        try
+        {
+            blockNumber = co_await ledger::getBlockNumber(*m_nodeService->ledger(), hash);
+        }
+        catch (bcos::Error const& e)
+        {
+            // asyncGetBlockNumberByHash answers GetStorageError for an unknown hash (no chained
+            // cause) and for a storage read fault (with a chained std::exception). Only the
+            // former is a client's "Block not found"; the latter must propagate as the internal
+            // error the number/tag path produces for a storage failure.
+            if (e.errorCode() == bcos::ledger::LedgerError::GetStorageError &&
+                boost::get_error_info<bcos::Error::STDError>(e) == nullptr)
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
+            }
+            throw;
         }
     }
     else
