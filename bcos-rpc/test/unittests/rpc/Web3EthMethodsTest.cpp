@@ -506,8 +506,8 @@ BOOST_AUTO_TEST_CASE(callPendingNonceLookupNormalizesTheFromAddress)
     task::syncWait(endpoint->call(params, response));
 
     BOOST_CHECK_EQUAL(recordingScheduler->lastPendingKey, "nonce");
-    BOOST_CHECK_EQUAL(recordingScheduler->lastPendingAddress,
-        "5aaeb6053f3e94c9b9a09f33669435e7ef1beaed");
+    BOOST_CHECK_EQUAL(
+        recordingScheduler->lastPendingAddress, "5aaeb6053f3e94c9b9a09f33669435e7ef1beaed");
 }
 
 BOOST_AUTO_TEST_CASE(callRejectsMalformedFromAddress)

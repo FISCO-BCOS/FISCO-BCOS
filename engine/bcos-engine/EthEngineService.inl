@@ -178,9 +178,9 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
     // the PAYLOAD SHAPE version, exactly as the OP lane derives it and as the cache entry
     // below stores it: two methods that build the same shape must mint one id for the same
     // content (a raw-version byte would mint two once maxEngineVersion exceeds V3).
-    auto payloadIdOpt = engine_common::derivePayloadId(*payloadAttributes,
-        forkchoiceState.headBlockHash, engine_common::payloadShapeVersion(version),
-        decodedForcedTxs);
+    auto payloadIdOpt =
+        engine_common::derivePayloadId(*payloadAttributes, forkchoiceState.headBlockHash,
+            engine_common::payloadShapeVersion(version), decodedForcedTxs);
     if (!payloadIdOpt.has_value())
     {
         co_return ForkchoiceUpdatedResult{
@@ -553,10 +553,11 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
                 // (same contract as the OP lane's fcuInvalidIfUndecodable) — an untagged
                 // OpExecutionInternalError would surface as -32603 and the CL would resubmit
                 // the identical attributes forever.
-                BOOST_THROW_EXCEPTION(OpExecutionInternalError{}
-                                      << OpPayloadUndecodable{true} << bcos::errinfo_comment{
-                                          "forced payloadAttributes.transactions envelope "
-                                          "is undecodable"});
+                BOOST_THROW_EXCEPTION(
+                    OpExecutionInternalError{}
+                    << OpPayloadUndecodable{true}
+                    << bcos::errinfo_comment{"forced payloadAttributes.transactions envelope "
+                                             "is undecodable"});
             }
             // Same carrier the OP build path uses (OpEngineService::buildOpBlock): keep the
             // raw EIP-2718 envelope on extraTransactionBytes so the executor sees the exact
