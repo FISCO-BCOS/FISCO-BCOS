@@ -46,7 +46,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: FISCO-BCOS/op-stack-e2e-tests
-          ref: b10600ef2aa34a6d354704fc53b51b361bea1148
+          ref: e3bf84c8d9695819e104519e73d98fe4252f977f
           path: .ci-op-e2e-tests
 
       - name: Initialize vcpkg submodule

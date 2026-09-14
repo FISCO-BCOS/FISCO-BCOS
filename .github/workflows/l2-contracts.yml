@@ -1,19 +1,18 @@
 name: L2 contracts
 # Forge build/test + storage-layout drift gate for the OP-Stack L2 Solidity
-# suite, plus the build-allocs.py pytest suite. Path-filtered so it only runs
-# when the L2 artifacts (or this workflow) change — the heavy C++ matrix in
-# workflow.yml stays untouched.
+# suite. Path-filtered so it only runs when the L2 artifacts (or this workflow)
+# change — the heavy C++ matrix in workflow.yml stays untouched. The genesis
+# toolchain (build-allocs.py and the pytest suite over it) moved to
+# FISCO-BCOS/op-stack-e2e-tests and is gated by that repo's own CI.
 on:
   push:
     paths:
       - "bcos-l2-contracts/**"
-      - "tools/opstack-genesis/**"
       - "tools/.ci/fetch-l2-contract-deps.sh"
       - ".github/workflows/l2-contracts.yml"
   pull_request:
     paths:
       - "bcos-l2-contracts/**"
-      - "tools/opstack-genesis/**"
       - "tools/.ci/fetch-l2-contract-deps.sh"
       - ".github/workflows/l2-contracts.yml"
 concurrency:
@@ -134,26 +133,3 @@ jobs:
             fi
           done
           exit "$fail"
-
-  genesis-tooling:
-    name: opstack-genesis pytest
-    runs-on: ubuntu-24.04
-    defaults:
-      run:
-        working-directory: tools/opstack-genesis
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Install Python deps
-        # build-allocs.py imports pyyaml at module load, so the pytest suite
-        # (which loads it by path) needs pyyaml too. pytest runs the suite.
-        # eth-hash / trie / rlp are the independent oracle the op-e2e pure tests
-        # cross-check withdraw_claim's ABI/Merkle decoding against.
-        run: python3 -m pip install --upgrade pip pyyaml pytest 'eth-hash[pycryptodome]' trie rlp
-      - name: Run pytest
-        run: python3 -m pytest test_build_allocs.py test_gen_rollup_config.py test_gen_eth_header_fixture.py test_mpt_state_root.py -v
-      # op-e2e pure tests (tier-1 mock layer) moved with the harness to
-      # FISCO-BCOS/op-stack-e2e-tests and run in that repo's own CI.

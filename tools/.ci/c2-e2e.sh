@@ -144,9 +144,12 @@ log "running withdraw_e2e_ephemeral (CONTEST=${CONTEST} XDM=${XDM})…"
 # MONOREPO/L2CONTRACTS/FISCO_REPO are what setup_c2.sh (reached through
 # withdraw_e2e_ephemeral.sh) reads; its own defaults are repo-relative, but the
 # monorepo clone and the contracts dir are CI-layout specific, so pin them here.
+# OPGEN points at the harness checkout: the genesis toolchain lives in
+# op-stack-e2e-tests (the harness defaults to its own copy, this only makes the
+# CI-pinned one explicit).
 BIN_DIR="$BIN_DIR" \
 FISCO_BIN="$FISCO_BIN" \
-OPGEN="${REPO_ROOT}/tools/opstack-genesis" \
+OPGEN="${OP_E2E_DIR}/tools/opstack-genesis" \
 MONOREPO="$OP_MONOREPO" \
 L2CONTRACTS="${REPO_ROOT}/bcos-l2-contracts" \
 FISCO_REPO="$REPO_ROOT" \

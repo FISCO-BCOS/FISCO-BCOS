@@ -18,7 +18,14 @@ set -euo pipefail
 REPO_ROOT="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 BINARY="${REPO_ROOT}/build/fisco-bcos-air/fisco-bcos"
 BUILDER="${REPO_ROOT}/tools/BcosAirBuilder/build_chain.sh"
-GEN_ROLLUP="${REPO_ROOT}/tools/opstack-genesis/gen_rollup_config.py"
+# gen_rollup_config.py lives in FISCO-BCOS/op-stack-e2e-tests (tools/opstack-genesis);
+# point OP_E2E_DIR at a checkout of it. Missing checkout is a SKIP, like the binaries.
+OP_E2E_DIR="${OP_E2E_DIR:-${REPO_ROOT}/.ci-op-e2e-tests}"
+GEN_ROLLUP="${OP_E2E_DIR}/tools/opstack-genesis/gen_rollup_config.py"
+if [ ! -f "${GEN_ROLLUP}" ]; then
+    echo "SKIP: ${GEN_ROLLUP} not found — check out FISCO-BCOS/op-stack-e2e-tests into ${OP_E2E_DIR}"
+    exit 0
+fi
 WORK_ROOT="${REPO_ROOT}/tools/opnode-check"
 NODE_DIR="${WORK_ROOT}/nodes/127.0.0.1/node0"
 
