@@ -436,8 +436,9 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
 /// @throws UnknownAccountRowField on an account row whose field name is not classified, in
 ///         either mode (spec §5.2).
 template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage>
-bcos::task::Task<MPTDeltaLayer> buildAndCollect(Storage& nodeStorage, bcos::h256 parentStateRoot,
-    auto& flatView, bool l2Mode, bool trackRefCounts = false)
+bcos::task::Task<MPTDeltaLayer> buildAndCollect(
+    Storage& nodeStorage, bcos::h256 parentStateRoot, auto& flatView, bool l2Mode,
+    bool trackRefCounts = false)
 {
     MPTDeltaLayer output;
     MPTReadView<Storage> const parentView(nodeStorage, parentStateRoot);

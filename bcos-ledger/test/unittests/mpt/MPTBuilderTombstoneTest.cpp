@@ -124,8 +124,8 @@ BOOST_AUTO_TEST_CASE(SelfdestructRemovesAccountFromTrie)
 
     // A tombstone account still reaches the scan: logical deletion keeps its keys in the delta
     // layer, so the run is seen and settled as a tombstone.
-    auto output = bcos::task::syncWait(
-        buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false, /*trackRefCounts=*/true));
+    auto output = bcos::task::syncWait(buildAndCollect(
+        storage, parentRoot, view, /*l2Mode=*/false, /*trackRefCounts=*/true));
 
     // The destroyed account is gone; the untouched one still reads back.
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
@@ -169,8 +169,8 @@ BOOST_AUTO_TEST_CASE(UntrackedTombstoneSkipsManualRefCountEntry)
     auto view = makeFlatView(flatBackend);
     writeTombstoneEntries(view, addrA);
 
-    auto output = bcos::task::syncWait(
-        buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false, /*trackRefCounts=*/false));
+    auto output = bcos::task::syncWait(buildAndCollect(
+        storage, parentRoot, view, /*l2Mode=*/false, /*trackRefCounts=*/false));
 
     BOOST_CHECK(output.refCountDeltas.empty());
     BOOST_CHECK(output.obsoletedNodes.contains(accountA.storageRoot));

@@ -49,14 +49,13 @@ struct AnyEngineServiceFacade
             std::vector<std::string>)>::add_convention<MemUpdateForkchoice,
         task::Task<ForkchoiceUpdatedResult>(const ForkchoiceState&, const PayloadAttributes*,
             std::uint32_t)>::add_convention<MemGetPayload,
-        task::Task<GetPayloadResult>(const PayloadID&, std::uint32_t)>::
-        add_convention<MemNewPayload, task::Task<PayloadStatus>(const NewPayloadRequest&,
-                                          std::uint32_t)>::add_convention<MemGetSafeBlockNumber,
-            std::optional<bcos::protocol::BlockNumber>()
-                const>::add_convention<MemGetFinalizedBlockNumber,
-            std::optional<bcos::protocol::BlockNumber>()
-                const>::support_relocation<pro::constraint_level::nothrow>::
-            support_destruction<pro::constraint_level::nothrow>::build
+        task::Task<GetPayloadResult>(
+            const PayloadID&, std::uint32_t)>::add_convention<MemNewPayload,
+        task::Task<PayloadStatus>(
+            const NewPayloadRequest&, std::uint32_t)>::add_convention<MemGetSafeBlockNumber,
+        std::optional<bcos::protocol::BlockNumber>() const>::add_convention<MemGetFinalizedBlockNumber,
+        std::optional<bcos::protocol::BlockNumber>() const>::support_relocation<pro::constraint_level::nothrow>::
+        support_destruction<pro::constraint_level::nothrow>::build
 {
 };
 
@@ -98,7 +97,8 @@ public:
 
     /// Construct in-place from constructor arguments (for non-movable types).
     template <class T, class... Args>
-        requires EngineServiceConcept<T> && std::is_constructible_v<T, Args...>
+        requires EngineServiceConcept<T> &&
+                 std::is_constructible_v<T, Args...>
     explicit AnyEngineService(std::in_place_type_t<T>, Args&&... args)
       : m_impl(pro::make_proxy<AnyEngineServiceFacade, T>(std::forward<Args>(args)...))
     {}
