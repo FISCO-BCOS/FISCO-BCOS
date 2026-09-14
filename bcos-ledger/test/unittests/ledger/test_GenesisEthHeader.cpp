@@ -41,9 +41,10 @@ namespace bcos::test
 {
 namespace
 {
-// Fixture values match tools/opstack-genesis/gen_eth_header_fixture.py
-// (DEFAULT_FIELDS): an empty-alloc post-Karst L2 genesis. The expected hash
-// was computed OFFLINE by that script (independent python rlp + keccak256);
+// Fixture values match gen_eth_header_fixture.py (DEFAULT_FIELDS) from the
+// genesis toolchain in the harness (FISCO-BCOS/op-stack-e2e-tests,
+// tools/opstack-genesis): an empty-alloc post-Karst L2 genesis. The expected
+// hash was computed OFFLINE by that script (independent python rlp + keccak256);
 // the test asserts the C++ RLP encoder reproduces it bit-for-bit.
 constexpr std::string_view c_expectedGenesisHash =
     "8634eabcf9e6df6b91b63cecab2d7af50a0a4fb8e0cc0aaca07cd8d0da32c069";
