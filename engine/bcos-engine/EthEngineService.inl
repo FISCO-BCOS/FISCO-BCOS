@@ -732,8 +732,10 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     auto receipts = co_await m_scheduler.executeBlock(view, m_executor, *blockHeader,
         executable.transactions | ::ranges::views::indirect, ledgerConfig);
 
-    // The Ethereum header commitments, shared with EngineServiceImpl so the two producers cannot
-    // drift. transactionsRoot is the index-keyed MPT over the raw EIP-2718 envelopes and MUST
+    // The Ethereum header commitments, built by the shared engine_common helper that
+    // EngineServiceImpl also uses (that class has no production caller left; the parity tests
+    // keep it as an oracle) so the implementations cannot drift.
+    // transactionsRoot is the index-keyed MPT over the raw EIP-2718 envelopes and MUST
     // match the cache-miss reconstruction (EngineServiceCommon.cpp transactionsRootFromPayload)
     // and the OP path's computeTxRoot, otherwise newPayload rejects this node's own payloads
     // with INVALID_BLOCK_HASH. receiptsRoot is the same construction over the RLP receipt leaves

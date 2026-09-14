@@ -36,7 +36,7 @@ public:
     using Sender = std::function<void(bcos::bytes, boost::beast::http::status)>;
     Web3JsonRpcImpl(std::string const& _groupId, uint32_t _batchRequestSizeLimit,
         bcos::rpc::GroupManager::Ptr const& _groupManager, FilterSystem::Ptr filterSystem,
-        bool syncTransaction, bool _enableOPEngine = false);
+        bool syncTransaction, bool _enableOPEngine, bool _enableMinerApi = false);
     ~Web3JsonRpcImpl() = default;
 
     void setJwtVerifier(bcos::rpc::JwtVerifier::Ptr _jwtVerifier) { m_jwtVerifier = std::move(_jwtVerifier);}

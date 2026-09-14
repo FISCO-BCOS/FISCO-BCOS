@@ -484,7 +484,8 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
 }
 
 bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(int sendTxTimeout,
-    boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager, bool _enableOPEngine)
+    boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager, bool _enableOPEngine,
+    bool _enableMinerApi)
 {
     // Each RPC surface (web3 / op-engine) gets its own FilterSystem so that
     // filter stores are isolated across ports (filters created on one port
@@ -498,7 +499,7 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(int sendTxTimeout,
         _enableOPEngine ? m_nodeConfig->opEngineBatchRequestSizeLimit() :
                           m_nodeConfig->web3BatchRequestSizeLimit(),
         std::move(_groupManager), std::move(filterSystem), m_nodeConfig->web3SyncTransaction(),
-        _enableOPEngine);
+        _enableOPEngine, _enableMinerApi);
 
     // if enable op engine, set jwt verifier and register op engine json http request handler
     if (_enableOPEngine)
@@ -599,7 +600,8 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
         // buildWeb3JsonRpc creates a dedicated FilterSystem for this port, so
         // filter stores are isolated between the OP Engine (8551) and web3 (8545).
         auto opEngineJsonRpc =
-            buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), opEngineWsService, groupManager, true);
+            buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), opEngineWsService, groupManager, true,
+                m_nodeConfig->enableMinerApi());
 
         rpc->setOpEngineJsonRpcImpl(std::move(opEngineJsonRpc));
         rpc->setOpEngineService(std::move(opEngineWsService));
@@ -610,7 +612,8 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
         auto web3WsService = buildWsService(std::move(web3Config));
 
         auto web3JsonRpc =
-            buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), web3WsService, groupManager);
+            buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), web3WsService, groupManager, false,
+                m_nodeConfig->enableMinerApi());
 
         auto weakPtrWeb3JsonRpc = std::weak_ptr<Web3JsonRpcImpl>(web3JsonRpc);
 

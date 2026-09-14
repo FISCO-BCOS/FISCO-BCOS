@@ -239,10 +239,17 @@ BOOST_AUTO_TEST_CASE(sendRawTransactionGarbageReportsError)
 
 BOOST_AUTO_TEST_CASE(feeHistoryAndSetMaxDASizeRegistered)
 {
-    // The cutover wires the DA-cap consumer (OpEngineService), so the producer is now
-    // registered. Its runtime reachability is still gated: MinerEndpoint::setMaxDASize
-    // throws MethodNotFound when daCaps() is null (Ethereum-only nodes).
-    EndpointsMapping mapping;
+    // The miner namespace is opt-in ([web3_rpc] enable_miner_api): it writes the node-wide DA
+    // caps, so a listener that does not explicitly enable it must not dispatch it at all —
+    // otherwise any caller of the public web3 port can starve the sequencer's DA budget.
+    EndpointsMapping defaultMapping;
+    BOOST_CHECK_MESSAGE(!defaultMapping.findHandler("miner_setMaxDASize").has_value(),
+        "miner_setMaxDASize must not be dispatched unless enable_miner_api is set");
+
+    // With the opt-in on, the DA-cap producer is registered. Its runtime reachability is still
+    // gated: MinerEndpoint::setMaxDASize throws MethodNotFound when daCaps() is null
+    // (Ethereum-only nodes).
+    EndpointsMapping mapping(/*enableOPEngine=*/false, /*enableMinerApi=*/true);
     BOOST_CHECK_MESSAGE(
         mapping.findHandler("eth_feeHistory").has_value(), "eth_feeHistory not dispatched");
     BOOST_CHECK_MESSAGE(
@@ -426,6 +433,9 @@ class RecordingScheduler : public FakeScheduler2
 public:
     using FakeScheduler2::FakeScheduler2;
     protocol::Transaction::Ptr lastTx;
+    // Records what the RPC layer asked the pool for, so a test can pin the lookup key.
+    std::string lastPendingAddress;
+    std::string lastPendingKey;
     void call(protocol::Transaction::Ptr _tx,
         std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> _callback) noexcept
         override
@@ -433,6 +443,13 @@ public:
         lastTx = std::move(_tx);
         // Same shape as FakeScheduler2::call (which is private): an empty receipt.
         _callback({}, std::make_shared<bcostars::protocol::TransactionReceiptImpl>());
+    }
+    task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(std::string_view _address,
+        std::string_view _key, bcos::protocol::BlockNumber _number) override
+    {
+        lastPendingAddress = std::string(_address);
+        lastPendingKey = std::string(_key);
+        co_return co_await FakeScheduler2::getPendingStorageAt(_address, _key, _number);
     }
 };
 }  // namespace
@@ -465,6 +482,32 @@ BOOST_AUTO_TEST_CASE(estimateGasCapComesFromTheTipBlockHeaderAtTheEndpoint)
     // to the scheduler is the target block's gasLimit — not 30M, not the 50M RPC cap.
     BOOST_REQUIRE(recordingScheduler->lastTx != nullptr);
     BOOST_CHECK_EQUAL(recordingScheduler->lastTx->gasLimit(), 21'000'000u);
+}
+
+// A client sends an EIP-55 mixed-case `from` (ethers/viem default). The account row key is
+// the lowercase hex text, so the pending-nonce lookup must normalize before the read or it
+// misses and the call silently falls back to the state nonce.
+BOOST_AUTO_TEST_CASE(callPendingNonceLookupNormalizesTheFromAddress)
+{
+    auto recordingScheduler = std::make_shared<RecordingScheduler>(m_ledger, m_blockFactory);
+    auto ledgerService = std::make_shared<rpc::NodeService>(
+        m_ledger, recordingScheduler, nullptr, nullptr, nullptr, m_blockFactory, nullptr);
+    auto endpoint = std::make_shared<EthEndpoint>(ledgerService, nullptr, false);
+
+    Json::Value params(Json::arrayValue);
+    Json::Value tx(Json::objectValue);
+    tx["from"] = "0x5AAeb6053f3e94c9b9a09f33669435E7Ef1BeAed";  // EIP-55 mixed case
+    tx["to"] = "0x1234567890abcdef1234567890abcdef12345678";
+    tx["data"] = "0x";
+    params.append(tx);
+    params.append("latest");
+
+    Json::Value response;
+    task::syncWait(endpoint->call(params, response));
+
+    BOOST_CHECK_EQUAL(recordingScheduler->lastPendingKey, "nonce");
+    BOOST_CHECK_EQUAL(recordingScheduler->lastPendingAddress,
+        "5aaeb6053f3e94c9b9a09f33669435e7ef1beaed");
 }
 
 BOOST_AUTO_TEST_CASE(callRejectsMalformedFromAddress)

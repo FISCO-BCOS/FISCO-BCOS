@@ -114,5 +114,23 @@ BOOST_AUTO_TEST_CASE(engineDrivenBlockProduction)
     BOOST_CHECK(probe2.engineDrivenBlockProduction());
 }
 
+// The OP miner namespace (miner_setMaxDASize) is opt-in: it writes the node-wide DA caps, so
+// a listener that has not enabled it must not register it at all. Default off is load-bearing —
+// an OP node creates the caps, so the runtime MethodNotFound guard would not stop a public caller.
+BOOST_AUTO_TEST_CASE(minerApiDefaultsOff)
+{
+    LoaderProbe probe;
+    probe.loadWeb3RpcConfig(fromIni("[web3_rpc]\nenable=true\nlisten_port=8545\n"));
+    BOOST_CHECK(!probe.enableMinerApi());
+}
+
+BOOST_AUTO_TEST_CASE(minerApiPopulated)
+{
+    LoaderProbe probe;
+    probe.loadWeb3RpcConfig(
+        fromIni("[web3_rpc]\nenable=true\nlisten_port=8545\nenable_miner_api=true\n"));
+    BOOST_CHECK(probe.enableMinerApi());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

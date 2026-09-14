@@ -1132,8 +1132,14 @@ task::Task<void> EthEndpoint::call(
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(InvalidParams, "invalid `from` address in call request"));
         }
-        pendingNonce = CallRequest::nonceFromPendingEntry(co_await scheduler->getPendingStorageAt(
-            bcos::precompiled::trimHexPrefix(call.from.value()), "nonce", 0));
+        // The account row key is the lowercase hex text on chains without feature_raw_address,
+        // and clients (ethers/viem) send an EIP-55 mixed-case `from` — normalize the lookup key
+        // the same way every other address lookup in this file does, or the read misses and the
+        // call falls back to the state nonce (NONCE_TOO_LOW for an in-flight sender).
+        auto lookupAddress = std::string(bcos::precompiled::trimHexPrefix(call.from.value()));
+        boost::algorithm::to_lower(lookupAddress);
+        pendingNonce = CallRequest::nonceFromPendingEntry(
+            co_await scheduler->getPendingStorageAt(lookupAddress, "nonce", 0));
     }
     auto tx = call.takeToTransaction(m_nodeService->blockFactory()->transactionFactory(),
         std::move(pendingNonce), chainBlockGasLimit);

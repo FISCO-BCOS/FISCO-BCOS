@@ -193,7 +193,10 @@ inline void validateOpModeGenesisOnly(bcos::ledger::Features const& features, in
             InvalidMPTFlagMatrix{} << bcos::errinfo_comment(
                 "executor_version is genesis-only in OP mode (activation block " +
                 std::to_string(executorVersionActivation) +
-                " != 0); it cannot be changed on a running chain -- start a new chain"));
+                " != 0); it cannot be changed on a running chain. Recovery on a chain that "
+                "wrote this row before upgrading: run the previous binary and set "
+                "executor_version back to the value that chain ran with (2 = Eth lane), then "
+                "upgrade again. A new chain is only needed if that write is impossible"));
     }
 }
 

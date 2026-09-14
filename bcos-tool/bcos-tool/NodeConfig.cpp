@@ -902,6 +902,11 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
         ; PBFT has no finalization window: a committed block is already final
         ; safe_block_depth=0
         ; finalized_block_depth=0
+        ; The OP miner namespace (miner_setMaxDASize, the batcher DA-throttle handshake) is off
+        ; unless enabled here: it writes the node-wide DA caps, and any client of the listener
+        ; carrying it can starve the sequencer. Enable it only on a listener that is private to
+        ; op-batcher / op-conductor — never on a publicly reachable one.
+        ; enable_miner_api=false
     */
     const std::string listenIP = _pt.get<std::string>("web3_rpc.listen_ip", "127.0.0.1");
     const int listenPort = _pt.get<int>("web3_rpc.listen_port", 8545);
@@ -944,6 +949,9 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
     m_web3SyncTransaction = _pt.get<bool>("web3_rpc.sync_transaction", false);
     m_web3SafeBlockDepth = _pt.get<uint32_t>("web3_rpc.safe_block_depth", 0);
     m_web3FinalizedBlockDepth = _pt.get<uint32_t>("web3_rpc.finalized_block_depth", 0);
+    // Default off: on an OP node the DA caps exist, so without this gate the method would be
+    // reachable from every caller of this listener (see the [web3_rpc] doc block).
+    m_enableMinerApi = _pt.get<bool>("web3_rpc.enable_miner_api", false);
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadWeb3RpcConfig") << LOG_KV("enableWeb3Rpc", enableWeb3Rpc)
                          << LOG_KV("listenIP", listenIP) << LOG_KV("listenPort", listenPort)
@@ -2773,6 +2781,11 @@ bool NodeConfig::web3SyncTransaction() const
 bool NodeConfig::enableOpEngineRpc() const
 {
     return m_enableOpEngineRpc;
+}
+
+bool NodeConfig::enableMinerApi() const
+{
+    return m_enableMinerApi;
 }
 
 bool NodeConfig::opEngineAllowV1Executor() const

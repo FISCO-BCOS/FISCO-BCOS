@@ -37,14 +37,17 @@ std::optional<EndpointsMapping::Handler> EndpointsMapping::findHandler(
     return it->second;
 }
 
-void EndpointsMapping::addHandlers(bool enableOPEngine)
+void EndpointsMapping::addHandlers(bool enableOPEngine, bool enableMinerApi)
 {
     if (enableOPEngine)
     {
         addEngineHandlers();
     }
     addEthHandlers();
-    addMinerHandlers();
+    if (enableMinerApi)
+    {
+        addMinerHandlers();
+    }
     addNetHandlers();
     addWeb3Handlers();
     for (auto& [method, _] : m_handlers)

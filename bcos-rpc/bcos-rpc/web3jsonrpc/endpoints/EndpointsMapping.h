@@ -31,7 +31,13 @@ class EndpointsMapping
 {
 public:
     using Handler = task::Task<void> (Endpoints::*)(const Json::Value&, Json::Value&);
-    EndpointsMapping(bool enableOPEngine = false) { addHandlers(enableOPEngine); };
+    /// enableOPEngine: register the engine_* methods (JWT-guarded engine listener only).
+    /// enableMinerApi: register the OP miner namespace (miner_setMaxDASize). Off by default —
+    /// it writes the node-wide DA caps, so only a listener private to the batcher should carry it.
+    EndpointsMapping(bool enableOPEngine = false, bool enableMinerApi = false)
+    {
+        addHandlers(enableOPEngine, enableMinerApi);
+    };
     ~EndpointsMapping() = default;
     EndpointsMapping(const EndpointsMapping&) = delete;
     EndpointsMapping& operator=(const EndpointsMapping&) = delete;
@@ -39,7 +45,7 @@ public:
     [[nodiscard]] std::optional<Handler> findHandler(const std::string& _method) const;
 
 private:
-    void addHandlers(bool enableOPEngine = false);
+    void addHandlers(bool enableOPEngine = false, bool enableMinerApi = false);
     void addEngineHandlers();
     void addEthHandlers();
     void addMinerHandlers();

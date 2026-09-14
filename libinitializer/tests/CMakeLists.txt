@@ -1,5 +1,10 @@
 file(GLOB_RECURSE SOURCES "*.cpp")
 
+# The module is added before the top-level enable_testing(), so the ctest registration has to
+# be enabled here — otherwise add_test below is dropped and the suite never runs in CI (the
+# same explicit call bcos-rpc/test/CMakeLists.txt makes).
+enable_testing()
+
 # Single-TU suites only: MultiVersionSchedulerTest defines BOOST_TEST_MODULE (auto main);
 # a second TU defining a module would collide. MultiVersionScheduler.cpp is compiled in
 # directly so the test does not link the init mega-target.
@@ -8,3 +13,10 @@ find_package(Boost REQUIRED unit_test_framework)
 target_include_directories(test-libinitializer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(test-libinitializer
     PRIVATE bcos-framework bcos-task bcos-utilities Boost::unit_test_framework)
+
+# Register explicitly: without add_test the suite is compiled and never executed by the CI
+# ctest run, so the behaviour it pins (setVersion keeping the current slot when OP mode is
+# frozen) would have no signal.
+add_test(NAME test-libinitializer
+    WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    COMMAND test-libinitializer)

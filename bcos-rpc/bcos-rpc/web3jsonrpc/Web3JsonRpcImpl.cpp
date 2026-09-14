@@ -28,10 +28,10 @@ using namespace bcos::rpc;
 
 bcos::rpc::Web3JsonRpcImpl::Web3JsonRpcImpl(std::string const& _groupId, uint32_t _batchRequestSizeLimit,
     bcos::rpc::GroupManager::Ptr const& _groupManager, FilterSystem::Ptr filterSystem, 
-    bool syncTransaction, bool _enableOPEngine)
+    bool syncTransaction, bool _enableOPEngine, bool _enableMinerApi)
   : m_endpoints(
         _groupManager->getNodeService(_groupId, ""), std::move(filterSystem), syncTransaction),
-    m_endpointsMapping(_enableOPEngine),
+    m_endpointsMapping(_enableOPEngine, _enableMinerApi),
     m_batchRequestSizeLimit(_batchRequestSizeLimit)
 {
     RPC_LOG(INFO) << LOG_KV("[NEWOBJ][Web3JsonRpcImpl]", this);
