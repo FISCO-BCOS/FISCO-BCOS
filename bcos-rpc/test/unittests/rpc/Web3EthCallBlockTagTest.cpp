@@ -16,6 +16,7 @@
  */
 
 #include "../common/RPCFixture.h"
+#include <bcos-ledger/Ledger.h>
 #include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
@@ -345,6 +346,50 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByTagDirect)
     {
         auto [number, isLatest] = getBlockNumberByTag(latest, "earliest", 0, 0);
         BOOST_CHECK_EQUAL(number, 0);
+        BOOST_CHECK(!isLatest);
+    }
+}
+
+// Forkchoice overrides (op-node drives safe/finalized via engine_forkchoiceUpdated): the
+// tracker values are preferred over the depth fallback, and on the engine lane an unset value
+// fails closed (NotFoundBlockHeader) rather than silently reporting the unsafe tip.
+BOOST_AUTO_TEST_CASE(getBlockNumberByTagForkchoiceOverride)
+{
+    using bcos::rpc::getBlockNumberByTag;
+    auto const latest = protocol::BlockNumber{19};
+
+    // Forkchoice value present: preferred over the depth.
+    {
+        auto [number, isLatest] = getBlockNumberByTag(latest, "safe", 0, 0,
+            /*forkchoiceSafe=*/protocol::BlockNumber{12}, std::nullopt, false);
+        BOOST_CHECK_EQUAL(number, 12);
+        BOOST_CHECK(!isLatest);
+        auto [num2, isLatest2] = getBlockNumberByTag(latest, "finalized", 0, 0, std::nullopt,
+            /*forkchoiceFinalized=*/protocol::BlockNumber{7}, false);
+        BOOST_CHECK_EQUAL(num2, 7);
+        BOOST_CHECK(!isLatest2);
+    }
+    // Forkchoice == latest is the isLatest case.
+    {
+        auto [number, isLatest] = getBlockNumberByTag(latest, "safe", 0, 0,
+            /*forkchoiceSafe=*/latest, std::nullopt, false);
+        BOOST_CHECK_EQUAL(number, latest);
+        BOOST_CHECK(isLatest);
+    }
+    // Engine lane, no forkchoice value yet: fail closed, not the depth fallback.
+    {
+        BOOST_CHECK_THROW(getBlockNumberByTag(latest, "safe", 0, 0, std::nullopt, std::nullopt,
+                              /*failClosedOnMissingForkchoice=*/true),
+            bcos::ledger::NotFoundBlockHeader);
+        BOOST_CHECK_THROW(getBlockNumberByTag(latest, "finalized", 0, 0, std::nullopt,
+                              std::nullopt, /*failClosedOnMissingForkchoice=*/true),
+            bcos::ledger::NotFoundBlockHeader);
+    }
+    // PBFT lane (failClosed=false), no forkchoice value: depth fallback still applies.
+    {
+        auto [number, isLatest] =
+            getBlockNumberByTag(latest, "safe", 2, 0, std::nullopt, std::nullopt, false);
+        BOOST_CHECK_EQUAL(number, 17);
         BOOST_CHECK(!isLatest);
     }
 }

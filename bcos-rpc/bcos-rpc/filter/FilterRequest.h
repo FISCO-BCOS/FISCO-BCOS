@@ -82,9 +82,14 @@ public:
     // against the real head + configured depths (the Web3 entry and the legacy entry both
     // thread them explicitly). A bare fromJson(jParams) would silently resolve "latest" to
     // block 0 and ignore configured safe/finalized depths — the divergence this signature
-    // exists to prevent.
+    // exists to prevent. The forkchoice overrides are threaded through to the shared
+    // getBlockNumberByTag resolver so eth_getLogs/eth_newFilter resolve the same heights as
+    // eth_getBlockByNumber.
     void fromJson(const Json::Value& jParams, protocol::BlockNumber latest,
-        protocol::BlockNumber safeDepth, protocol::BlockNumber finalizedDepth);
+        protocol::BlockNumber safeDepth, protocol::BlockNumber finalizedDepth,
+        std::optional<protocol::BlockNumber> forkchoiceSafe = std::nullopt,
+        std::optional<protocol::BlockNumber> forkchoiceFinalized = std::nullopt,
+        bool failClosedOnMissingForkchoice = false);
     bool checkBlockRange();
 
     virtual int32_t InvalidParamsCode() = 0;
