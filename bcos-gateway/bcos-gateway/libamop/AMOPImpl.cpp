@@ -77,7 +77,7 @@ AMOPImpl::AMOPImpl(TopicManager::Ptr _topicManager,
 
     m_network->registerHandlerByMsgType(GatewayMessageType::AMOPMessageType,
         [this](bcos::gateway::NetworkException const& _e, bcos::gateway::P2PSession::Ptr _session,
-            std::shared_ptr<bcos::gateway::P2PMessage> _message) {
+            std::shared_ptr<bcos::gateway::Message> _message) {
             onAMOPMessage(_e, std::move(_session), std::move(_message));
         });
 }
@@ -104,7 +104,7 @@ void AMOPImpl::broadcastTopicSeq()
     // each task keeps the message alive (zero-copy: the payload rides as a view). All state is
     // passed as coroutine parameters so it is copied into the frame and stays alive.
     task::wait([](P2PInterface::Ptr _network, bcos::bytes _payload) -> task::Task<void> {
-        auto message = std::static_pointer_cast<P2PMessage>(
+        auto message = std::static_pointer_cast<Message>(
             _network->messageFactory()->buildMessage());
         message->setPacketType(GatewayMessageType::AMOPMessageType);
         message->setSeq(_network->messageFactory()->newSeq());
@@ -139,7 +139,7 @@ void AMOPImpl::onReceiveTopicSeqMessage(P2pID const& _nodeID, AMOPMessage::Ptr _
         // an unreachable peer is an expected, recoverable state.
         task::wait([](P2PInterface::Ptr _network, uint16_t _type, P2pID _nodeID,
                        bcos::bytes _payload) -> task::Task<void> {
-            auto message = std::static_pointer_cast<P2PMessage>(
+            auto message = std::static_pointer_cast<Message>(
                 _network->messageFactory()->buildMessage());
             message->setPacketType(_type);
             message->setSeq(_network->messageFactory()->newSeq());
@@ -224,7 +224,7 @@ void AMOPImpl::onReceiveRequestTopicMessage(P2pID const& _nodeID, AMOPMessage::P
         // a send failure is logged here (the old async callback only logged errors too).
         task::wait([](P2PInterface::Ptr _network, uint16_t _type, P2pID _nodeID,
                        bcos::bytes _payload) -> task::Task<void> {
-            auto message = std::static_pointer_cast<P2PMessage>(
+            auto message = std::static_pointer_cast<Message>(
                 _network->messageFactory()->buildMessage());
             message->setPacketType(_type);
             message->setSeq(_network->messageFactory()->newSeq());
@@ -441,7 +441,7 @@ bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>> AMOPImpl::s
     // request on another session); the payload is moved in once instead of being lvalue-copied
     // into a rebuilt message every iteration.
     auto message =
-        std::static_pointer_cast<P2PMessage>(network->messageFactory()->buildMessage());
+        std::static_pointer_cast<Message>(network->messageFactory()->buildMessage());
     message->setPacketType(GatewayMessageType::AMOPMessageType);
     message->setPayload(std::move(buffer));
     while (!nodeIDs.empty())
@@ -456,7 +456,7 @@ bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>> AMOPImpl::s
             auto resp = co_await network->sendMessageByNodeID(choosedNodeID, *message,
                 ::ranges::views::single(message->payload()),
                 Options{c_amopResponseTimeoutMs, true});
-            auto respMessage = std::dynamic_pointer_cast<P2PMessage>(resp);
+            auto respMessage = std::static_pointer_cast<Message>(resp);
             if (!respMessage)
             {
                 // self-id sends and sessions expiring before the write co_return a null
@@ -549,7 +549,7 @@ bcos::task::Task<void> AMOPImpl::sendBroadcastMessageByTopic(
 }
 
 void AMOPImpl::onAMOPMessage(
-    NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _message)
+    NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<Message> _message)
 {
     auto self = std::weak_ptr<AMOPImpl>(shared_from_this());
     m_strand.post([self, _e, _session, _message]() {
@@ -571,7 +571,7 @@ void AMOPImpl::onAMOPMessage(
 }
 
 void AMOPImpl::dispatcherAMOPMessage(
-    NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _message)
+    NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<Message> _message)
 {
     if (_e.errorCode() != 0 || !_message)
     {
@@ -604,11 +604,11 @@ void AMOPImpl::dispatcherAMOPMessage(
         // all state is passed as coroutine parameters so it is copied into the frame and stays
         // alive for the whole (possibly deferred) round trip
         task::wait([](std::shared_ptr<AMOPImpl> _self, P2pID _fromNodeID,
-                       AMOPMessage::Ptr _amopMessage, std::shared_ptr<P2PMessage> _message)
+                       AMOPMessage::Ptr _amopMessage, std::shared_ptr<Message> _message)
                        -> task::Task<void> {
             auto [responseData, type] =
                 co_await _self->onReceiveAMOPMessage(_fromNodeID, _amopMessage);
-            auto responseP2PMsg = std::dynamic_pointer_cast<P2PMessage>(
+            auto responseP2PMsg = std::static_pointer_cast<Message>(
                 _self->m_network->messageFactory()->buildMessage());
             AMOP_LOG(DEBUG) << LOG_BADGE("onReceiveAMOPMessage") << LOG_DESC("send response")
                             << LOG_KV("type", type) << LOG_KV("data", responseData->size());
