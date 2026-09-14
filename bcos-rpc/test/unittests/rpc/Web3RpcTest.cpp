@@ -894,8 +894,12 @@ BOOST_AUTO_TEST_CASE(logMatcherTest)
         params2->addAddress(toHexStringWithPrefix(address1));
         BOOST_TEST(matcher.matches(params1, log1));
         BOOST_TEST(matcher.matches(params1, log2));
-        BOOST_TEST(!matcher.matches(params2, log1));
-        BOOST_TEST(!matcher.matches(params2, log2));
+        // The address predicate normalizes through logEntryAddressHex (round-8 N-H1): the
+        // raw-byte log address and the hex-text filter entry refer to the SAME address, so
+        // the filter matches. (This assertion previously pinned the pre-fix no-match
+        // behaviour — the lane-form mismatch bug.)
+        BOOST_TEST(matcher.matches(params2, log1));
+        BOOST_TEST(matcher.matches(params2, log2));
     }
     // 2.[A] "A in first position (and anything after)"
     {
