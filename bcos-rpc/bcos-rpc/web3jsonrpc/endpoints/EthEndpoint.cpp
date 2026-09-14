@@ -212,6 +212,51 @@ struct HistoricalMptContext
     bool fullTrie = false;
 };
 
+/// The -32004 message for a missing stateRoot. @p mptActive tells whether the block's header
+/// stateRoot was ever expected to be an MPT root (mptStateRootExpectedAt): a pre-activation
+/// block commits a legacy XOR root, which ALWAYS misses the /mpt/ probe — claiming "State
+/// pruned" for a root the chain never had would be a misreport, so say predates-activation
+/// instead. With MPT pruning configured (mptPruneWindow > 0) a post-activation root older
+/// than the retention window is EXPECTED to be gone, so say so explicitly; anything else
+/// stays the generic miss message. @p head is the chain head the CALLER already resolved for
+/// the request (getBlockNumberAndHeadByTag) — re-reading the ledger here would add a
+/// round-trip to a cold error path for a message-only decision.
+std::string stateRootMissingMessage(bcos::protocol::BlockNumber blockNumber,
+    bcos::protocol::BlockNumber head, std::int64_t mptPruneWindow, bool mptActive)
+{
+    if (!mptActive)
+    {
+        return "Block predates MPT activation: stateRoot is not an MPT root";
+    }
+    if (mptPruneWindow > 0 && blockNumber < head - mptPruneWindow)
+    {
+        return fmt::format("State pruned: beyond MPT retention window (N={})", mptPruneWindow);
+    }
+    return "Block stateRoot not in MPT node storage";
+}
+
+/// Was this block's header stateRoot ever expected to be an MPT root? Scenario B
+/// (feature_l2_ethereum_compat) builds the MPT from genesis; scenario A
+/// (feature_mpt_state_root) starts at the flag's activation block + 1 — the activation block
+/// itself still commits a legacy XOR root (shouldBuildMPT's strictly-greater, mirrored by
+/// MPTPruner's activation+1), reproduced here by querying the flag at blockNumber - 1 through
+/// the same single-row SYS_CONFIG read as the fullTrie flag below. Called ONLY on the
+/// historical-read error paths to pick the -32004 wording; a fetch failure degrades to false
+/// (predates-MPT wording), the honest non-pruned default.
+bcos::task::Task<bool> mptStateRootExpectedAt(
+    bcos::ledger::LedgerInterface& ledger, bcos::protocol::BlockNumber blockNumber)
+{
+    using Flag = bcos::ledger::Features::Flag;
+    if (co_await ledger::getFeature(ledger, Flag::feature_l2_ethereum_compat, blockNumber))
+    {
+        co_return true;
+    }
+    if (blockNumber <= 0)
+    {
+        co_return false;
+    }
+    co_return co_await ledger::getFeature(ledger, Flag::feature_mpt_state_root, blockNumber - 1);
+}
 /// Resolve a block's committed MPT state root and scenario flag, applying the same checks as
 /// getProof (generateProof's BlockNotCommitted): the block must exist, the node must have a
 /// local MPT node reader, and — for historical tags — the state root must be present in MPT
