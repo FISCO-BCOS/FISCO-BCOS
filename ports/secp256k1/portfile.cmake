@@ -8,11 +8,17 @@ vcpkg_from_github(
 )
 
 vcpkg_cmake_configure(
-	SOURCE_PATH "${SOURCE_PATH}"
+    SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
         -DSECP256K1_BUILD_BENCHMARK=OFF
         -DSECP256K1_BUILD_TESTS=OFF
         -DSECP256K1_BUILD_EXHAUSTIVE_TESTS=OFF
+        -DSECP256K1_BUILD_CTIME_TESTS=OFF
+        # VALGRIND defaults to AUTO upstream and adds -DVALGRIND when the host
+        # has valgrind headers; pin it off so the artifact is host-independent
+        -DSECP256K1_VALGRIND=OFF
+        # This overlay exists solely to enable the recovery module (ECDSA pubkey
+        # recovery, required by ecrecover); the baseline port leaves it OFF
         -DSECP256K1_ENABLE_MODULE_RECOVERY=ON
 )
 

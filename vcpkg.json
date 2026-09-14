@@ -151,6 +151,7 @@
     },
     {
       "name": "curl",
+      "$comment": "curl 8.18+ requires OpenSSL >= 3.0, which conflicts with the Tassl 1.1.1 ports/openssl overlay; 8.17.0 is the last version supporting OpenSSL 1.1.1. Unpin when OpenSSL 3 lands, see https://github.com/FISCO-BCOS/FISCO-BCOS/issues/5601",
       "version": "8.17.0"
     }
   ]
