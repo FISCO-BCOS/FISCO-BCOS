@@ -1815,19 +1815,13 @@ BOOST_AUTO_TEST_CASE(Vectors)
         if (!present.contains(name))
             BOOST_ERROR("manifest lists " << name << " but file is missing");
     }
-    // Exclusions (forced): expectedBlobVersionedHashes / executionRequests cannot
-    // be expressed through the GoldenSample loader, so the generator still emits files
-    // but keeps them out of the manifest. Set equality exempts these two known
-    // unregistered static-face files (suffix match, base-independent).
-    const auto isUnregisteredStatic = [](std::string const& n) {
-        // "_static_3.json" = 14 chars, "_static_12.json" = 15 chars (suffix match,
-        // base-independent)
-        return (n.size() >= 14 && n.rfind("_static_3.json") == n.size() - 14) ||
-               (n.size() >= 15 && n.rfind("_static_12.json") == n.size() - 15);
-    };
+    // WI-E13: the former forced exclusion is gone. expectedBlobVersionedHashes /
+    // executionRequests (§4c static items 3/12) are now expressible — makeInvalidParamsJson
+    // passes both _op_payload members through to engine_newPayloadV4 params[1]/params[3] —
+    // so the generator registers them and the dir set must equal the manifest exactly.
     for (const auto& name : present)
     {
-        if (!manifest.contains(name) && !isUnregisteredStatic(name))
+        if (!manifest.contains(name))
             BOOST_ERROR("unmanifested vector file present: " << name);
     }
 

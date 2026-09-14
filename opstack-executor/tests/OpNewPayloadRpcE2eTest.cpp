@@ -1118,8 +1118,9 @@ BOOST_AUTO_TEST_CASE(InvalidManifestStemStripsJsonSuffix)
 // Iterates manifest invalid_* vectors + inline vectors, asserting every required
 // set member is covered (missing -> FAILURE): each classification (incl. -38005 — satisfied
 // by the Task 2 version vector; -32603 satisfied by the two-pour runner), each
-// latest_valid_hash value ("parent"|null), each static item (except 3/12 — inexpressible
-// through the loader, forced out of manifest), each validation_error_contains target string.
+// latest_valid_hash value ("parent"|null), each static item 1..12 (WI-E13: 3/12 — the
+// engine_newPayloadV4 blob/requests faces — registered once the loader passed
+// params[1]/params[3] through), each validation_error_contains target string.
 BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
 {
     const auto names = loadInvalidManifest();
@@ -1165,14 +1166,12 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
     for (auto const* h : {"parent", "null"})
         BOOST_CHECK_MESSAGE(
             lvh.count(h), "coverage: latest_valid_hash '" << h << "' has no vector");
-    // Required: static items 1..11 (except 3/12 — forced out of manifest)
-    for (int n : {1, 2, 4, 5, 6, 7, 8, 9, 10, 11})
+    // Required: static items 1..12 (WI-E13: items 3/12 — the engine_newPayloadV4
+    // expectedBlobVersionedHashes / executionRequests faces — are manifest-registered now
+    // that makeInvalidParamsJson passes params[1]/params[3] through).
+    for (int n : {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
         BOOST_CHECK_MESSAGE(
             staticItems.count(n), "coverage: static item " << n << " has no vector");
-    BOOST_CHECK_MESSAGE(!staticItems.count(3),
-        "coverage: static item 3 must NOT be manifest-registered (loader inexpressible)");
-    BOOST_CHECK_MESSAGE(!staticItems.count(12),
-        "coverage: static item 12 must NOT be manifest-registered (loader inexpressible)");
     // Required: full set of validation_error_contains target strings (corrupt fields / static faces
     // / invalid-tx messages)
     static const char* kRequiredErrors[] = {
@@ -1190,6 +1189,8 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
         "blockNumber must not be negative",
         "gasLimit exceeds the maximum block gas limit (2^63-1)",
         "invalid DA footprint in blobGasUsed field",
+        "expectedBlobVersionedHashes must be an empty array on the OP path",
+        "executionRequests must be a present-but-empty list on the OP path",
         "intrinsic gas too low",
         "nonce too low",
         "nonce too high",

@@ -69,6 +69,47 @@ BOOST_AUTO_TEST_CASE(MakeParamsJsonShape)
     BOOST_CHECK_EQUAL(ep["transactions"].size(), 1);  // jovian_deposit_only has 1 deposit
 }
 
+// WI-E13: makeInvalidParamsJson must pass the engine_newPayloadV4 blob/requests parameters
+// through from _op_payload (static face §4c items 3/12) instead of hardcoding empty arrays —
+// this is the loader capability that un-forced those vectors out of the manifest. The members
+// must also stay OUT of the ExecutionPayload object (they are params, not payload fields).
+BOOST_AUTO_TEST_CASE(MakeInvalidParamsJsonPassesBlobParamsThrough)
+{
+    w6test::InvalidSample sample;
+    sample.vector["_info"]["hardfork"] = "jovian";
+    auto& op = sample.vector["_op_payload"];
+    op["parentHash"] = "0x0000000000000000000000000000000000000000000000000000000000000001";
+    op["blockHash"] = "0x0000000000000000000000000000000000000000000000000000000000000002";
+    op["transactions"][0] = "0x7e80";
+    op["expectedBlobVersionedHashes"][0] =
+        "0x0101010101010101010101010101010101010101010101010101010101010101";
+    op["executionRequests"][0] = "0xdeadbeef";
+
+    auto params = w6test::makeInvalidParamsJson(sample);
+    BOOST_REQUIRE(params.isArray());
+    BOOST_REQUIRE_EQUAL(params.size(), 4u);
+    auto const& ep = params[0u];
+    // params, not payload fields: must not leak into the ExecutionPayload object.
+    BOOST_CHECK(!ep.isMember("expectedBlobVersionedHashes"));
+    BOOST_CHECK(!ep.isMember("executionRequests"));
+    BOOST_CHECK(ep.isMember("transactions"));
+    // params[1]/params[3] carry the vector's non-empty wire-form lists verbatim.
+    BOOST_REQUIRE(params[1u].isArray());
+    BOOST_CHECK_EQUAL(params[1u].size(), 1u);
+    BOOST_CHECK_EQUAL(params[1u][0u].asString(),
+        "0x0101010101010101010101010101010101010101010101010101010101010101");
+    BOOST_REQUIRE(params[3u].isArray());
+    BOOST_CHECK_EQUAL(params[3u].size(), 1u);
+    BOOST_CHECK_EQUAL(params[3u][0u].asString(), "0xdeadbeef");
+
+    // Absent members keep the legal OP shape: empty arrays.
+    op.removeMember("expectedBlobVersionedHashes");
+    op.removeMember("executionRequests");
+    auto plain = w6test::makeInvalidParamsJson(sample);
+    BOOST_CHECK(plain[1u].isArray() && plain[1u].empty());
+    BOOST_CHECK(plain[3u].isArray() && plain[3u].empty());
+}
+
 BOOST_AUTO_TEST_CASE(ManifestCorpusConsistency)
 {
     // D4: automatic golden-manifest validation — manifest.txt (non-comment lines) ↔
@@ -109,21 +150,9 @@ BOOST_AUTO_TEST_CASE(ManifestCorpusConsistency)
     }
 
     auto vectors = basenameSet(OP_T8N_VECTORS_DIR, ".json");
-    // Static items 3/12 (expectedBlobVersionedHashes/executionRequests) are generated but
-    // forced out of the manifest (inexpressible through the GoldenSample loader) — set
-    // equality exempts them (Task 6, same as OpT8nReplayTest.cpp's isUnregisteredStatic;
-    // entries have .json stripped). "_static_3"=9 chars / "_static_12"=10 chars.
-    const auto isUnregisteredStatic = [](std::string const& n) {
-        return (n.size() >= 9 && n.rfind("_static_3") == n.size() - 9) ||
-               (n.size() >= 10 && n.rfind("_static_12") == n.size() - 10);
-    };
-    for (auto it = vectors.begin(); it != vectors.end();)
-    {
-        if (isUnregisteredStatic(*it))
-            it = vectors.erase(it);
-        else
-            ++it;
-    }
+    // WI-E13: the former static items 3/12 exemption is gone — makeInvalidParamsJson passes
+    // engine_newPayloadV4 params[1]/params[3] through, so the generator registers those
+    // vectors and the manifest set must equal the vectors set exactly.
     auto golden = basenameSet(OP_T8N_GOLDEN_ENGINE_DIR, ".golden.json");
 
     BOOST_CHECK_MESSAGE(manifest == vectors,

@@ -215,15 +215,22 @@ struct InvalidSample
 ///   wire-null into "field absent", so parseNewPayloadRequest never sees the -32602
 ///   quantity/type rejection those nulls must produce (finding E6);
 /// - `parentBeaconBlockRoot` is params[2] (not an ExecutionPayload field), so it does not
-///   enter ep.
+///   enter ep;
+/// - `expectedBlobVersionedHashes` and `executionRequests` are params[1]/params[3] (also not
+///   ExecutionPayload fields). When `_op_payload` carries them (WI-E13 static face §4c
+///   items 3/12: non-empty lists, WIRE form — a hex-string hash per element / a hex byte
+///   string per request) they pass through verbatim, so the engine's
+///   validateOpBlobVersionedHashes / executionRequests window gate see the malformation the
+///   vector anchors. Otherwise both stay the empty array (the legal OP shape).
 inline Json::Value makeInvalidParamsJson(InvalidSample const& sample)
 {
     auto const& op = sample.vector["_op_payload"];
     Json::Value ep(Json::objectValue);
     for (auto const& member : op.getMemberNames())
     {
-        if (member == "parentBeaconBlockRoot")
-            continue;  // not an ExecutionPayload field; passed via params[2]
+        if (member == "parentBeaconBlockRoot" || member == "expectedBlobVersionedHashes" ||
+            member == "executionRequests")
+            continue;  // engine_newPayloadV4 params, not ExecutionPayload fields
         ep[member] = op[member];
     }
     if (!ep.isMember("withdrawals"))
@@ -233,12 +240,18 @@ inline Json::Value makeInvalidParamsJson(InvalidSample const& sample)
 
     Json::Value params(Json::arrayValue);
     params.append(ep);
-    params.append(Json::Value(Json::arrayValue));  // expectedBlobVersionedHashes = []
+    if (op.isMember("expectedBlobVersionedHashes"))
+        params.append(op["expectedBlobVersionedHashes"]);
+    else
+        params.append(Json::Value(Json::arrayValue));  // expectedBlobVersionedHashes = []
     if (op.isMember("parentBeaconBlockRoot") && !op["parentBeaconBlockRoot"].isNull())
         params.append(op["parentBeaconBlockRoot"]);
     else
         params.append(Json::Value(Json::nullValue));
-    params.append(Json::Value(Json::arrayValue));  // executionRequests = []
+    if (op.isMember("executionRequests"))
+        params.append(op["executionRequests"]);
+    else
+        params.append(Json::Value(Json::arrayValue));  // executionRequests = []
     return params;
 }
 
