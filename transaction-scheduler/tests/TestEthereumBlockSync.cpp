@@ -504,6 +504,12 @@ BOOST_FIXTURE_TEST_CASE(downloadVerifyCommitChain, EBSFixture)
                         }
                         BOOST_REQUIRE(result.valid);
                         BOOST_CHECK(result.error.empty());
+                        // FakeLedger::asyncPrewriteBlock is a no-op, so the commit does
+                        // not advance SYS_KEY_CURRENT_NUMBER the way the real
+                        // Ledger::prewriteBlock (Ledger.cpp:296-300) does — write the
+                        // row the real commit would have written, so the verifier's
+                        // head+1 guard sees the advanced head for the next block.
+                        task::syncWait(EBSWriteCurrentNumber(backendStorage, block.number()));
                         prevHeader = block.header;
                         downloaded.push_back(block);
                     });
@@ -699,6 +705,296 @@ BOOST_FIXTURE_TEST_CASE(downloadRejectsTamperedCommitment, EBSFixture)
         auto balanceR1 =
             co_await EBSReadBalance(multiLayerStorage.latestBackend(), recipient1);
         BOOST_CHECK_EQUAL(balanceR1, u256(0));
+    }());
+}
+
+// Two-peer regression coverage for the stale-resume-point finding. The reviewer's
+// two-peer ask — "the second peer is never asked for a block the first one
+// committed" — targets the sync LOOP's resume-point logic in EthereumSyncInitializer,
+// which this harness does not drive: here the test itself issues the BlockExchange
+// requests, so "never asked" cannot be observed at this level (the loop-side fix is
+// a separate change). What this harness CAN assert is the defense-in-depth half of
+// the finding: when the second peer IS asked for the exact blocks the first peer
+// already committed (the stale resume point reused across bootnodes), the verifier's
+// head+1 guard rejects every replayed block by throwing before any state fork, and
+// the ledger head / committed state are left untouched (no SYS_KEY_CURRENT_NUMBER
+// rewind — the permanent-stall outcome from the finding).
+BOOST_FIXTURE_TEST_CASE(secondPeerReplayRejectedByHeadGuard, EBSFixture)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testEBSTwoPeer");
+        SchedulerSerialImpl scheduler(ioServicePool);
+
+        auto sender = EBSAddress(7);
+        auto recipient1 = EBSAddress(0x21);
+        auto recipient2 = EBSAddress(0x22);
+
+        co_await EBSFundAccount(backendStorage, sender, EBSFunding);
+        co_await EBSFundAccount(backendStorage, recipient1, 0);
+        co_await EBSFundAccount(backendStorage, recipient2, 0);
+
+        // The genesis (block-0) Ethereum header: its keccak(rlp) is the chain anchor.
+        auto genesisHeader = EBSBaseHeader(0, 1600000000, bcos::h256{}, 30000000, EBSBaseFee);
+        genesisHeader.gasUsed = 0;
+        auto genesisHash = bcos::protocol::ethHeaderHash(genesisHeader);
+        co_await EBSWriteBlockHash(backendStorage, 0, genesisHash);
+        {
+            storage::Entry entry;
+            entry.set("0");
+            co_await storage2::writeOne(backendStorage,
+                executor_v1::StateKey{
+                    ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(genesisHash)},
+                std::move(entry));
+        }
+        co_await EBSWriteCurrentNumber(backendStorage, 0);
+        co_await EBSWriteSystemConfig(backendStorage,
+            std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version)),
+            std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
+        co_await EBSWriteSystemConfig(backendStorage,
+            std::string(magic_enum::enum_name(ledger::SystemConfig::tx_gas_limit)), "30000000");
+
+        // ---- Production side: build the 2-block chain with real executed values (a
+        //      SEPARATE MultiLayerStorage over the same backend, so its layer stack
+        //      cannot leak into the verification side). ----
+        EBSCheckpointBackend prodCheckpoint{backendStorage};
+        EBSMultiLayerStorage prodStorage{prodCheckpoint};
+
+        auto tx1 = EBSMakeWeb3TransferTx(sender, recipient1, 100, "0", 1000000000);
+        auto tx2 = EBSMakeWeb3TransferTx(sender, recipient2, 50, "1", 1000000000);
+        auto raw1 = bcostars::protocol::reassembleWeb3RawTransaction(
+            tx1->extraTransactionBytes(), tx1->signatureData());
+        auto raw2 = bcostars::protocol::reassembleWeb3RawTransaction(
+            tx2->extraTransactionBytes(), tx2->signatureData());
+
+        const int64_t kTs1 = 1600000001;
+        const int64_t kTs2 = 1600000002;
+        const uint64_t kGasLimit = 30000000;
+
+        // Block 1 — base fee recomputed from the (empty) genesis (PoS validation
+        // checks it exactly).
+        auto baseFee1 = bcos::devp2p::sync::computeNextBaseFee(genesisHeader);
+        ledger::LedgerConfig prodConfig1;
+        prodConfig1.setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
+        prodConfig1.setEVMCRevision(EVMC_SHANGHAI);
+        prodConfig1.setGasLimit({kGasLimit, 1});
+        prodConfig1.setGasPrice({scheduler_v1::u256ToHexString(baseFee1), 1});
+        prodConfig1.setDifficulty(0);
+
+        bcostars::protocol::BlockHeaderImpl prodHeader1;
+        prodHeader1.setNumber(1);
+        prodHeader1.setTimestamp(kTs1 * 1000L);
+        prodHeader1.setParentInfo({0, genesisHash});
+        prodHeader1.setGasLimit(u256(kGasLimit));
+        prodHeader1.calculateHash(*cryptoSuite->hashImpl());
+
+        auto view1 = prodStorage.fork();
+        view1.newMutable();
+        std::vector<protocol::Transaction::Ptr> txs1{tx1};
+        auto receipts1 = co_await scheduler.executeBlock(
+            view1, *executor, prodHeader1, txs1 | ::ranges::views::indirect, prodConfig1);
+        BOOST_REQUIRE_EQUAL(receipts1.size(), 1u);
+        BOOST_CHECK_EQUAL(receipts1[0]->status(), 0);
+        auto comp1 = co_await EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
+            computeEthereumRoots(receipts1, txs1 | ::ranges::views::indirect,
+                std::vector<bcos::bytes>{raw1});
+        auto stateRoot1 = co_await EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
+            computeMptStateRoot(view1, genesisHeader.stateRoot, prodConfig1);
+        prodStorage.pushView(std::move(view1));
+
+        auto ethHeader1 = EBSBaseHeader(1, kTs1, genesisHash, kGasLimit, baseFee1);
+        ethHeader1.stateRoot = stateRoot1;
+        ethHeader1.txsRoot = comp1.txsRoot;
+        ethHeader1.receiptsRoot = comp1.receiptsRoot;
+        ethHeader1.gasUsed = comp1.gasUsed;
+        ethHeader1.logsBloom = comp1.logsBloom;
+        bcos::devp2p::sync::Block block1;
+        block1.header = ethHeader1;
+        bcos::codec::rlp::encode(block1.headerRlp, ethHeader1);
+        block1.hash = bcos::crypto::keccak256Hash(
+            bcos::bytesConstRef(block1.headerRlp.data(), block1.headerRlp.size()));
+        block1.transactions = {raw1};
+        block1.uncles = {};
+
+        // Block 2 — base fee recomputed per EIP-1559 from block 1.
+        auto baseFee2 = bcos::devp2p::sync::computeNextBaseFee(ethHeader1);
+        ledger::LedgerConfig prodConfig2;
+        prodConfig2.setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
+        prodConfig2.setEVMCRevision(EVMC_SHANGHAI);
+        prodConfig2.setGasLimit({kGasLimit, 2});
+        prodConfig2.setGasPrice({scheduler_v1::u256ToHexString(baseFee2), 2});
+        prodConfig2.setDifficulty(0);
+
+        bcostars::protocol::BlockHeaderImpl prodHeader2;
+        prodHeader2.setNumber(2);
+        prodHeader2.setTimestamp(kTs2 * 1000L);
+        prodHeader2.setParentInfo({1, block1.hash});
+        prodHeader2.setGasLimit(u256(kGasLimit));
+        prodHeader2.calculateHash(*cryptoSuite->hashImpl());
+
+        auto view2 = prodStorage.fork();
+        view2.newMutable();
+        std::vector<protocol::Transaction::Ptr> txs2{tx2};
+        auto receipts2 = co_await scheduler.executeBlock(
+            view2, *executor, prodHeader2, txs2 | ::ranges::views::indirect, prodConfig2);
+        BOOST_REQUIRE_EQUAL(receipts2.size(), 1u);
+        BOOST_CHECK_EQUAL(receipts2[0]->status(), 0);
+        auto comp2 = co_await EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
+            computeEthereumRoots(receipts2, txs2 | ::ranges::views::indirect,
+                std::vector<bcos::bytes>{raw2});
+        // MPT state root from block 1's root; the trie nodes written by block 1's
+        // build are reachable through view2 (block 1's layer was pushed above).
+        auto stateRoot2 = co_await EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
+            computeMptStateRoot(view2, ethHeader1.stateRoot, prodConfig2);
+
+        auto ethHeader2 = EBSBaseHeader(2, kTs2, block1.hash, kGasLimit, baseFee2);
+        ethHeader2.stateRoot = stateRoot2;
+        ethHeader2.txsRoot = comp2.txsRoot;
+        ethHeader2.receiptsRoot = comp2.receiptsRoot;
+        ethHeader2.gasUsed = comp2.gasUsed;
+        ethHeader2.logsBloom = comp2.logsBloom;
+        bcos::devp2p::sync::Block block2;
+        block2.header = ethHeader2;
+        bcos::codec::rlp::encode(block2.headerRlp, ethHeader2);
+        block2.hash = bcos::crypto::keccak256Hash(
+            bcos::bytesConstRef(block2.headerRlp.data(), block2.headerRlp.size()));
+        block2.transactions = {raw2};
+        block2.uncles = {};
+
+        // Both fake peers serve the SAME full chain: genesis at [0], then the two
+        // real blocks.
+        bcos::devp2p::sync::Block genesisBlock;
+        genesisBlock.header = genesisHeader;
+        bcos::codec::rlp::encode(genesisBlock.headerRlp, genesisHeader);
+        genesisBlock.hash = genesisHash;
+        genesisBlock.transactions = {};
+        genesisBlock.uncles = {};
+        std::vector<bcos::devp2p::sync::Block> chain{genesisBlock, block1, block2};
+
+        auto fakeLedger = std::make_shared<bcos::test::FakeLedger>();
+        EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor> verifier(
+            scheduler, *executor, *blockFactory);
+
+        std::map<bcos::bytes, protocol::Transaction::Ptr> rawToTx;
+        rawToTx[raw1] = tx1;
+        rawToTx[raw2] = tx2;
+        auto decoder = [&rawToTx](bcos::bytes const& raw) -> protocol::Transaction::Ptr {
+            return rawToTx.at(raw);
+        };
+
+        scheduler_v1::EvmcForkTimestamps forks;
+        forks.londonTime = 0;    // London/Paris/Shanghai active from genesis (explicit 0;
+        forks.parisTime = 0;     // unset fields default to UINT64_MAX = never active)
+        forks.shanghaiTime = 0;
+        forks.cancunTime = std::numeric_limits<uint64_t>::max();
+        forks.pragueTime = std::numeric_limits<uint64_t>::max();
+        forks.osakaTime = std::numeric_limits<uint64_t>::max();
+        using ViewType = EBSMultiLayerStorage::ViewType;
+        EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::StateRootCalculator<ViewType>
+            stateRootCalc = [](ViewType&, uint32_t) -> task::Task<crypto::HashType> {
+            BOOST_THROW_EXCEPTION(
+                std::runtime_error{"legacy state-root fold must not run for executor v2"});
+        };
+
+        // One peer round: serve the chain from a fresh fake peer, download the two
+        // blocks with a fresh BlockExchange (the synthetic headers are London-style,
+        // so the post-London forks stay disabled in the devp2p header validator),
+        // and hand every downloaded block to onBlock.
+        auto runPeerRound = [&](std::string const& clientId, auto&& onBlock) {
+            bcos::devp2p::rlpx::EccKeyPair serverKey;
+            bcos::devp2p::rlpx::EccKeyPair clientKey;
+            bcos::devp2p::rlpx::PeerConfig serverConfig;
+            serverConfig.clientId = "fake-peer";
+            bcos::devp2p::rlpx::RlpxServer server(serverKey, 0, serverConfig);
+            uint16_t port = server.port();
+
+            std::thread serverThread([&] {
+                try
+                {
+                    auto established = server.accept();
+                    bcos::devp2p::test::serveRequests(established.session, chain);
+                }
+                catch (...)
+                {
+                }
+            });
+
+            bcos::devp2p::rlpx::PeerConfig clientConfig;
+            clientConfig.host = "127.0.0.1";
+            clientConfig.port = port;
+            clientConfig.peerPublicKey = serverKey.publicKey();
+            clientConfig.clientId = clientId;
+            {
+                bcos::devp2p::rlpx::RlpxClient client(std::move(clientKey), clientConfig);
+                auto established = client.connect();
+                bcos::devp2p::sync::ChainConfig devp2pConfig{.chainId = 1};
+                devp2pConfig.shanghaiTime = std::numeric_limits<uint64_t>::max();
+                devp2pConfig.cancunTime = std::numeric_limits<uint64_t>::max();
+                devp2pConfig.pragueTime = std::numeric_limits<uint64_t>::max();
+                bcos::devp2p::sync::BlockExchange exchange(1, genesisHeader, devp2pConfig);
+                exchange.downloadRange(established.session, chain.size() - 1, onBlock);
+            }  // close the client connection
+            serverThread.join();
+        };
+
+        // ---- Peer 1: the normal first sync — both blocks verify + commit. ----
+        auto prevHeader = genesisHeader;
+        int committed = 0;
+        runPeerRound("peer-1", [&](bcos::devp2p::sync::Block const& block) {
+            auto result = task::syncWait(verifier.verifyAndCommit(multiLayerStorage, *fakeLedger,
+                block.header, prevHeader, block.transactions, block.withdrawals, forks, 1,
+                block.uncles, 0, decoder, stateRootCalc));
+            BOOST_REQUIRE_MESSAGE(result.valid,
+                "peer-1 block " << block.number() << " invalid: " << result.error);
+            // FakeLedger::asyncPrewriteBlock is a no-op, so the commit does not
+            // advance SYS_KEY_CURRENT_NUMBER the way the real Ledger::prewriteBlock
+            // (Ledger.cpp:296-300) does — write the row the real commit would have
+            // written, so the verifier's head+1 guard sees the advanced head for the
+            // next block.
+            task::syncWait(EBSWriteCurrentNumber(backendStorage, block.number()));
+            prevHeader = block.header;
+            ++committed;
+        });
+        BOOST_CHECK_EQUAL(committed, 2);
+
+        // ---- Peer 2: the stale resume point — the second peer is asked for the SAME
+        //      blocks the first peer already committed. Every replayed block must be
+        //      rejected by the head+1 guard (throw) before any state fork. ----
+        int rejected = 0;
+        runPeerRound("peer-2", [&](bcos::devp2p::sync::Block const& block) {
+            try
+            {
+                task::syncWait(verifier.verifyAndCommit(multiLayerStorage, *fakeLedger,
+                    block.header, prevHeader, block.transactions, block.withdrawals, forks, 1,
+                    block.uncles, 0, decoder, stateRootCalc));
+            }
+            catch (std::exception const& e)
+            {
+                BOOST_CHECK(std::string(e.what()).find("not the ledger head + 1") !=
+                            std::string::npos);
+                ++rejected;
+                return;
+            }
+            BOOST_FAIL("peer-2 replay of block " << block.number()
+                                                 << " was not rejected by the head guard");
+        });
+        BOOST_CHECK_EQUAL(rejected, 2);
+
+        // The replays changed nothing: the head is still 2 (no SYS_KEY_CURRENT_NUMBER
+        // rewind) and the committed balances are exactly what peer 1's round produced.
+        // Read the head through a freshly forked view (the tag-based
+        // ledger::getCurrentBlockNumber overload takes a view, not the
+        // MultiLayerStorage itself — same idiom as BaselineScheduler).
+        auto headView = multiLayerStorage.fork();
+        auto head = co_await ledger::getCurrentBlockNumber(headView, ledger::fromStorage);
+        BOOST_CHECK_EQUAL(head, 2);
+        auto balanceR1 = co_await EBSReadBalance(multiLayerStorage.latestBackend(), recipient1);
+        BOOST_CHECK_EQUAL(balanceR1, u256(100));
+        auto balanceR2 = co_await EBSReadBalance(multiLayerStorage.latestBackend(), recipient2);
+        BOOST_CHECK_EQUAL(balanceR2, u256(50));
+        auto balanceSender = co_await EBSReadBalance(multiLayerStorage.latestBackend(), sender);
+        auto baseFee2u = bcos::devp2p::sync::computeNextBaseFee(ethHeader1);
+        BOOST_CHECK_EQUAL(balanceSender, EBSFunding - 100 - u256(21000) * baseFee1 - 50 -
+                                             u256(21000) * baseFee2u);
     }());
 }
 

@@ -422,6 +422,11 @@ public:
     /// transactions, verify the deterministic roots + state root against the header,
     /// and on success commit block/state/ledger rows atomically.
     ///
+    /// Height guard (step 1a below): the block number MUST equal the current ledger
+    /// head + 1, read through the freshly forked view from the SYS_KEY_CURRENT_NUMBER
+    /// row before any execution. A stale replay (number <= head) or a gap
+    /// (number > head + 1) throws std::runtime_error instead of executing.
+    ///
     /// @tparam GlobalStateStorage MultiLayerStorage-like: fork()/pushView()/mergeBackStorage()
     /// @param rawUncles raw uncle-header RLP elements (PoW blocks only; empty on PoS)
     /// @param mergeBlock first PoS (merge) block number; blocks below it are PoW and
@@ -445,10 +450,47 @@ public:
             co_return std::move(result);
         };
 
-        // 1. Ledger config (system config) + per-block EVM overlay.
+        // 1. Fork the execution view, then the height guard.
         ledger::LedgerConfig ledgerConfig;
         auto view = globalStateStorage.fork();
         view.newMutable();
+
+        // 1a. Height guard (defense in depth against a stale sync resume point reused
+        //     across bootnodes): the block must be the DIRECT child of the ledger head
+        //     this call commits on top of. Without it, a replayed block (number <= head)
+        //     executes against a NEWER state fork: a block with transactions fails late
+        //     and misleadingly (receiptsRoot mismatch after nonce re-consumption), and a
+        //     state-neutral empty block can verify and be RE-COMMITTED — the commit's
+        //     prewriteBlockToBuffer unconditionally writes SYS_KEY_CURRENT_NUMBER = N,
+        //     rewinding the ledger head into a permanent stall. A gap (number > head + 1)
+        //     is rejected too: the incremental MPT build needs the parent block's trie
+        //     nodes from the immediately-preceding commit. The head
+        //     (SYS_CURRENT_STATE / SYS_KEY_CURRENT_NUMBER, the row the commit's
+        //     prewriteBlockToBuffer maintains) is read through the freshly forked view
+        //     with the tag-based ledger::getCurrentBlockNumber(view, fromStorage)
+        //     overload — the one designed for views (BaselineScheduler reads the head
+        //     the same way): a MultiLayerStorage itself exposes no read interface (only
+        //     fork/pushView/mergeBackStorage), and a forked view reads through the same
+        //     layer stack the commit will push onto, so the guard cannot disagree with
+        //     the commit target. A missing row reads as -1 (empty chain), keeping the
+        //     first-sync-from-genesis path (head 0 -> block 1) intact. The view is a
+        //     purely local object until step 8's pushView, so throwing here discards it
+        //     with zero state pollution — the rejection still happens before any
+        //     execution or commit, which is the "refuse before the state fork takes
+        //     effect" semantics the reviewer asked for. Throwing (rather than an
+        //     invalid result) matches the finding that a wrong-height block reaching
+        //     this point is a sync-loop bug, not a peer-supplied invalid block.
+        auto const currentNumber =
+            co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
+        if (ethHeader.number != currentNumber + 1)
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error{
+                "EthereumBlockVerifier: block number " + std::to_string(ethHeader.number) +
+                " is not the ledger head + 1 (head " + std::to_string(currentNumber) +
+                "): refusing to execute a stale (already committed) or out-of-order block"});
+        }
+
+        //     Ledger config (system config) + per-block EVM overlay.
         co_await ledger::getLedgerConfig(
             view, ledgerConfig, ethHeader.number - 1, m_blockFactory.get());
         fillExecutionLedgerConfig(ethHeader, ledgerConfig, forkSchedule, chainId);

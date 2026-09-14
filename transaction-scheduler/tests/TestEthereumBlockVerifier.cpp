@@ -664,6 +664,174 @@ BOOST_FIXTURE_TEST_CASE(verifyRejectsTamperedTxsRoot, EEBVFixture)
     }());
 }
 
+// Height guard (defense in depth against a stale sync resume point): after block 1
+// commits, re-offering it (stale replay, number <= head) or skipping ahead (gap,
+// number > head + 1) must THROW before any view is forked — the ledger head and the
+// committed state must stay exactly as the first commit left them.
+BOOST_FIXTURE_TEST_CASE(verifyRejectsStaleOrGapBlock, EEBVFixture)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testEBVStale");
+        SchedulerSerialImpl scheduler(ioServicePool);
+
+        auto sender = EEBVAddress(7);
+        auto recipient = EEBVAddress(0x21);  // 0x21 > 0x0a: not a precompile address
+
+        co_await EEBVFundAccount(backendStorage, sender, EEBVFunding);
+        co_await EEBVFundAccount(backendStorage, recipient, 0);
+
+        auto genesisHash = cryptoSuite->hashImpl()->hash(std::string("genesis"));
+        co_await EEBVWriteBlockHash(backendStorage, 0, genesisHash);
+        {
+            storage::Entry entry;
+            entry.set("0");
+            co_await storage2::writeOne(backendStorage,
+                executor_v1::StateKey{
+                    ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(genesisHash)},
+                std::move(entry));
+        }
+        co_await EEBVWriteCurrentNumber(backendStorage, 0);
+        co_await EEBVWriteSystemConfig(backendStorage,
+            std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version)),
+            std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
+        co_await EEBVWriteSystemConfig(backendStorage,
+            std::string(magic_enum::enum_name(ledger::SystemConfig::tx_gas_limit)), "30000000");
+
+        auto tx = EEBVMakeWeb3TransferTx(sender, recipient, 100, "0");
+        auto raw = bcostars::protocol::reassembleWeb3RawTransaction(
+            tx->extraTransactionBytes(), tx->signatureData());
+
+        // ---- Production side: build block 1 locally (real executed roots). ----
+        const int64_t kTimestamp = 12345;  // seconds
+        const uint64_t kGasLimit = 30000000;
+        const u256 kBaseFee(1000000000);
+
+        ledger::LedgerConfig prodConfig;
+        prodConfig.setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
+        prodConfig.setEVMCRevision(EVMC_SHANGHAI);
+        prodConfig.setGasLimit({kGasLimit, 1});
+        prodConfig.setGasPrice({"0x3b9aca00", 1});  // 1e9
+        prodConfig.setDifficulty(0);
+
+        bcostars::protocol::BlockHeaderImpl prodHeader;
+        prodHeader.setNumber(1);
+        prodHeader.setTimestamp(kTimestamp * 1000L);  // ms
+        prodHeader.setVersion(prodConfig.compatibilityVersion());
+        prodHeader.setParentInfo({0, genesisHash});
+        prodHeader.setGasLimit(u256(kGasLimit));
+        prodHeader.calculateHash(*cryptoSuite->hashImpl());
+
+        auto view = multiLayerStorage.fork();
+        view.newMutable();
+        std::vector<protocol::Transaction::Ptr> txs{tx};
+        auto receipts = co_await scheduler.executeBlock(
+            view, *executor, prodHeader, txs | ::ranges::views::indirect, prodConfig);
+        auto computation =
+            co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
+                computeEthereumRoots(
+                    receipts, txs | ::ranges::views::indirect, std::vector<bcos::bytes>{raw});
+
+        auto parentHeader = EEBVPoSHeader(0, kTimestamp - 1, bcos::h256{}, kGasLimit, kBaseFee);
+        parentHeader.gasUsed = 0;
+        parentHeader.stateRoot = ledger::mpt::emptyRootHash();
+        parentHeader.txsRoot = ledger::mpt::emptyRootHash();
+        parentHeader.receiptsRoot = ledger::mpt::emptyRootHash();
+
+        auto stateRoot =
+            co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
+                computeMptStateRoot(view, parentHeader.stateRoot, prodConfig);
+
+        auto ethHeader = EEBVPoSHeader(1, kTimestamp, genesisHash, kGasLimit, kBaseFee);
+        ethHeader.stateRoot = stateRoot;
+        ethHeader.txsRoot = computation.txsRoot;
+        ethHeader.receiptsRoot = computation.receiptsRoot;
+        ethHeader.gasUsed = computation.gasUsed;
+        ethHeader.logsBloom = computation.logsBloom;
+        ethHeader.prevRandao = bcos::h256{};
+        ethHeader.coinbase = bcos::Address{};
+        ethHeader.nonce = bcos::h64{};
+
+        auto fakeLedger = std::make_shared<bcos::test::FakeLedger>();
+        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor> verifier(
+            scheduler, *executor, *blockFactory);
+
+        scheduler_v1::EvmcForkTimestamps forks;
+        forks.londonTime = 0;    // London/Paris/Shanghai active from genesis (explicit 0;
+        forks.parisTime = 0;     // unset fields default to UINT64_MAX = never active)
+        forks.shanghaiTime = 0;
+        forks.cancunTime = std::numeric_limits<uint64_t>::max();
+        forks.pragueTime = std::numeric_limits<uint64_t>::max();
+        forks.osakaTime = std::numeric_limits<uint64_t>::max();
+        auto decoder = [tx](bcos::bytes const&) -> protocol::Transaction::Ptr { return tx; };
+        using ViewType = EEBVMultiLayerStorage::ViewType;
+        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
+            StateRootCalculator<ViewType>
+                stateRootCalc = [](ViewType&, uint32_t) -> task::Task<crypto::HashType> {
+            BOOST_THROW_EXCEPTION(
+                std::runtime_error{"legacy state-root fold must not run for executor v2"});
+        };
+
+        // ---- The legitimate first commit (head 0 -> block 1) must succeed: the guard
+        //      must not break the normal in-order path. ----
+        auto result = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, ethHeader,
+            parentHeader, std::vector<bcos::bytes>{raw}, std::nullopt, forks, 1, {}, 0, decoder,
+            stateRootCalc);
+        BOOST_REQUIRE(result.valid);
+
+        // FakeLedger::asyncPrewriteBlock is a no-op, so the commit does not advance
+        // SYS_KEY_CURRENT_NUMBER the way the real Ledger::prewriteBlock
+        // (Ledger.cpp:296-300) does — write the row the real commit would have written,
+        // so the ledger head IS 1 ("the ledger already holds block 1").
+        co_await EEBVWriteCurrentNumber(backendStorage, 1);
+
+        // Offering a wrong-height block must throw with the guard's error before any
+        // state fork; the caller is the sync loop, which turns this into a round abort.
+        auto attemptCommit = [&](protocol::EthBlockHeaderData const& header,
+                                 protocol::EthBlockHeaderData const& parent) -> task::Task<bool> {
+            try
+            {
+                co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, header, parent,
+                    std::vector<bcos::bytes>{raw}, std::nullopt, forks, 1, {}, 0, decoder,
+                    stateRootCalc);
+            }
+            catch (std::exception const& e)
+            {
+                BOOST_CHECK(std::string(e.what()).find("not the ledger head + 1") !=
+                            std::string::npos);
+                co_return true;
+            }
+            co_return false;
+        };
+
+        // Stale replay: block 1 again while the head is already 1.
+        BOOST_CHECK(co_await attemptCommit(ethHeader, parentHeader));
+        // Gap: block 3 while the head is 1 (only block 2 could commit next). The guard
+        // fires before the parent header is ever consulted, so the exact parent is
+        // irrelevant here.
+        auto gapHeader = ethHeader;
+        gapHeader.number = 3;
+        gapHeader.parentInfo.blockNumber = 2;
+        gapHeader.parentInfo.blockHash = cryptoSuite->hashImpl()->hash(std::string("block2"));
+        BOOST_CHECK(co_await attemptCommit(gapHeader, ethHeader));
+
+        // Both rejections happened BEFORE any state fork/commit: the head is still 1
+        // (no SYS_KEY_CURRENT_NUMBER rewind or advance) and the committed balances are
+        // exactly what the single legitimate commit produced.
+        // Read the head through a freshly forked view (the tag-based
+        // ledger::getCurrentBlockNumber overload takes a view, not the
+        // MultiLayerStorage itself — same idiom as BaselineScheduler).
+        auto headView = multiLayerStorage.fork();
+        auto head = co_await ledger::getCurrentBlockNumber(headView, ledger::fromStorage);
+        BOOST_CHECK_EQUAL(head, 1);
+        auto recipientBalance =
+            co_await EEBVReadBalance(multiLayerStorage.latestBackend(), recipient);
+        BOOST_CHECK_EQUAL(recipientBalance, u256(100));
+        auto senderBalance = co_await EEBVReadBalance(multiLayerStorage.latestBackend(), sender);
+        BOOST_CHECK_EQUAL(senderBalance, EEBVFunding - 100 - u256(21000) * u256(1000000000));
+    }());
+}
+
+
 // makeExecutionBlockHeader must carry every Ethereum field so the stored Tars
 // header round-trips to the SAME RLP/hash on resume (the resume anchor re-encodes
 // the stored header). Any field dropped by the Tars bridge makes the resume

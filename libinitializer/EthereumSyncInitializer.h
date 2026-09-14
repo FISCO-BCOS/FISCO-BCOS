@@ -98,7 +98,8 @@ public:
     EthereumSyncInitializer& operator=(EthereumSyncInitializer const&) = delete;
 
     /// Validate that the EL-mode prerequisites hold (executor v2, fork schedule, bootnode
-    /// file readable, genesis anchor present). Throws InvalidConfig on failure.
+    /// file readable, genesis anchor present and hashing to the configured
+    /// [eth_genesis_header].hash). Throws InvalidConfig on failure.
     void validateConfig() const
     {
         if (!m_nodeConfig->ethereumELModeEnabled())
@@ -118,6 +119,21 @@ public:
             BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
                                       "Ethereum L1 EL mode requires an [eth_genesis_header] "
                                       "section in config.genesis (sync anchor)"));
+        }
+        // The initializer's own genesis projection must hash to the configured
+        // [eth_genesis_header].hash. Ledger refuses to start when ITS projection's hash
+        // differs from m_hash, but the RLPx Status handshake (genesisHash) and the
+        // EIP-2124 fork-id both derive from THIS projection — a drift between the two
+        // would disconnect every bootnode with no config error.
+        auto const& ethGenesisHeader = m_nodeConfig->genesisConfig().m_ethGenesisHeader;
+        auto const projectedHash = bcos::protocol::ethHeaderHash(genesisAnchorHeader());
+        if (projectedHash != ethGenesisHeader->m_hash)
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                      "Ethereum L1 EL mode: [eth_genesis_header].hash " +
+                                      ethGenesisHeader->m_hash.hex() +
+                                      " does not match the re-computed genesis hash " +
+                                      projectedHash.hex()));
         }
         // Bootnode file must exist and parse (validates the enode list eagerly).
         auto nodes = bcos::devp2p::sync::loadBootnodes(m_nodeConfig->ethereumBootnodesFile());
@@ -547,10 +563,13 @@ private:
         size_t mismatchStreak = 0;
 
         // Caught-up backoff: when a whole round over the bootnode list yields no
-        // download window (and no peer failure), the local head sits inside every
-        // peer's finality window — retry after ~one block interval instead of the
-        // 3s behind-cadence, or a synced node re-dials ~14 bootnodes every 3s and
-        // trips geth's per-IP inbound dial throttle into WARNING spam.
+        // download window (and no peer failure) AND at least one bootnode actually
+        // served its head lookup, the local head sits inside that peer's finality
+        // window — retry after ~one block interval instead of the 3s behind-cadence,
+        // or a synced node re-dials ~14 bootnodes every 3s and trips geth's per-IP
+        // inbound dial throttle into WARNING spam. A round where NO bootnode served
+        // the by-hash head lookup is not "caught up" — it is a connectivity signal
+        // and logs a WARNING instead (same backoff).
         constexpr std::chrono::seconds c_caughtUpBackoff{12};
 
         while (m_running.load())
@@ -560,8 +579,11 @@ private:
                 // Compute the resume point fresh on EVERY round (not once per process):
                 // the previous round may have committed blocks, so the next round must
                 // resume from the new local head instead of re-downloading what we
-                // already have. The chain genesis is pinned separately for the RLPx
-                // handshake — it must never change.
+                // already have. The resume point is deliberately NOT refreshed per
+                // bootnode within a round — instead the round ends after the first
+                // successful download (see the break below), so no second bootnode ever
+                // reuses a stale startNumber/anchor. The chain genesis is pinned
+                // separately for the RLPx handshake — it must never change.
                 auto resume = resumePoint();
                 if (resume.anchor.number != mismatchAnchor)
                 {
@@ -578,9 +600,14 @@ private:
                 // Round progress tracking: a caught-up round (no peer offered a safe
                 // download window) backs off to c_caughtUpBackoff and stays quiet; a
                 // round with a download — or with peer failures, which already log a
-                // WARNING each — keeps the 3s retry cadence.
+                // WARNING each — keeps the 3s retry cadence. headLookupMisses counts
+                // the peers that declined the by-hash lookup for their own announced
+                // head: a round where EVERY bootnode missed is not "caught up" and
+                // logs a WARNING at round end (a peer that is merely behind us still
+                // counts as served).
                 bool madeProgress = false;
                 bool anyPeerFailed = false;
+                size_t headLookupMisses = 0;
                 for (auto const& peer : bootnodes)
                 {
                     if (!m_running.load())
@@ -657,6 +684,13 @@ private:
                             downloadEnd = peerHead->number() > c_finalityLag ?
                                               peerHead->number() - c_finalityLag :
                                               0;
+                        }
+                        else
+                        {
+                            // The peer declined the by-hash lookup for its own
+                            // announced head: not a peer failure, but NOT a "caught
+                            // up" signal either — counted for the round-end log.
+                            ++headLookupMisses;
                         }
                         if (!peerHead || downloadEnd < resume.startNumber)
                         {
@@ -743,6 +777,17 @@ private:
                                     << LOG_KV("stateRoot",
                                         result.stateRoot.hex().substr(0, 18));
                             });
+                        // Successful download: the committed local head advanced, so
+                        // this round's resume point (startNumber/anchor/prevHeader) is
+                        // now STALE for the remaining bootnodes — reusing it would
+                        // re-download already-committed blocks (failing verification
+                        // with misleading errors, or worse, re-committing a
+                        // state-neutral empty block and rewinding the current number).
+                        // End the round here; the next round re-anchors on the new
+                        // local head. madeProgress is already true, so the round-end
+                        // backoff keeps the 3s retry cadence, and the next round's
+                        // anchor advance resets the parent-hash-mismatch streak.
+                        break;
                     }
                     catch (SyncCancelled const&)
                     {
@@ -791,23 +836,42 @@ private:
                                 boost::current_exception_diagnostic_information());
                     }
                 }
-                // One full pass over the bootnode list: pause briefly before checking for
-                // new blocks again (a successful download already advanced the local head;
-                // the next round resumes from there).
+                // End of the round — either one pass over the bootnode list, or an
+                // early exit after the first successful download (the break above, so
+                // the stale resume point is never reused by a second bootnode). Pause
+                // briefly before checking for new blocks again (a successful download
+                // already advanced the local head; the next round resumes from there).
                 if (madeProgress || anyPeerFailed)
                 {
                     std::this_thread::sleep_for(std::chrono::seconds(3));
                 }
                 else
                 {
-                    // Caught up: no peer offered a safe download window and none failed,
-                    // so the local head sits inside every bootnode's finality window.
-                    // Back off to ~one block interval and log the state once per round
-                    // instead of per-peer-per-round.
-                    INITIALIZER_LOG(INFO)
-                        << LOG_DESC("EL sync: caught up with the bootnode tips")
-                        << LOG_KV("headNumber", resume.anchor.number)
-                        << LOG_KV("retrySeconds", c_caughtUpBackoff.count());
+                    if (headLookupMisses >= bootnodes.size())
+                    {
+                        // NOT caught up: every bootnode this round declined the
+                        // by-hash lookup for its own announced head, so nothing here
+                        // proves the local head is current — log a WARNING instead of
+                        // a false healthy "caught up". Same backoff.
+                        INITIALIZER_LOG(WARNING)
+                            << LOG_DESC("EL sync: no bootnode served the head lookup this round")
+                            << LOG_KV("bootnodes", bootnodes.size())
+                            << LOG_KV("headNumber", resume.anchor.number)
+                            << LOG_KV("retrySeconds", c_caughtUpBackoff.count());
+                    }
+                    else
+                    {
+                        // Caught up: at least one peer served its head/window answer
+                        // (a peer merely behind us counts as served), no peer offered
+                        // a safe download window and none failed, so the local head
+                        // sits inside the serving bootnodes' finality window. Back off
+                        // to ~one block interval and log the state once per round
+                        // instead of per-peer-per-round.
+                        INITIALIZER_LOG(INFO)
+                            << LOG_DESC("EL sync: caught up with the bootnode tips")
+                            << LOG_KV("headNumber", resume.anchor.number)
+                            << LOG_KV("retrySeconds", c_caughtUpBackoff.count());
+                    }
                     std::this_thread::sleep_for(c_caughtUpBackoff);
                 }
             }
