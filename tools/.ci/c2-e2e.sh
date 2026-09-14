@@ -112,9 +112,10 @@ for b in op-deployer op-node op-batcher; do
   [ -x "$BIN_DIR/$b" ] || die "missing $BIN_DIR/$b"
 done
 
-if [[ "${SKIP_FISCO_BUILD:-0}" != "1" ]]; then
-  [ -x "$FISCO_BIN" ] || die "FISCO_BIN not found: $FISCO_BIN (build WITH_L2_CONTRACTS=ON first)"
-fi
+# The existence check runs in BOTH modes: SKIP_FISCO_BUILD=1 only documents that the
+# binary came from the prebuilt artifact instead of a local build — it must not skip the
+# check, or a failed artifact download surfaces deep inside the harness instead of here.
+[ -x "$FISCO_BIN" ] || die "FISCO_BIN not found: $FISCO_BIN (build WITH_L2_CONTRACTS=ON first)"
 
 # setup_c2 / build-allocs need forge artifacts from bcos-l2-contracts.
 if ! command -v forge >/dev/null; then

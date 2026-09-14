@@ -25,6 +25,8 @@
 #include <json/json.h>
 #include <algorithm>
 #include <cctype>
+#include <string>
+#include <string_view>
 
 namespace bcos::rpc
 {
@@ -49,6 +51,28 @@ namespace bcos::rpc
         return std::string(raw);
     }
     return bcos::toHex(raw);
+}
+
+/// EIP-55 checksum an address given as hex text without the 0x prefix. Deliberately does
+/// NOT validate the input: callers feed lane-dependent forms (a FISCO-native tx.to may be
+/// a BFS link path, a feature_raw_address chain carries raw bytes), and a response
+/// producer must never fail on transaction input — an unchecksummable address degrades to
+/// the unchecked form instead of throwing the whole eth_* call away. One home for the
+/// idiom: the private copies this replaces had already drifted (one threw, the rest did
+/// not).
+[[nodiscard]] inline std::string checksummedHexAddress(std::string hexNoPrefix)
+{
+    bcos::toChecksumAddress(
+        hexNoPrefix, bcos::crypto::keccak256Hash(bcos::bytesConstRef(hexNoPrefix)).hex());
+    return hexNoPrefix;
+}
+
+/// 0x-tolerant form: strips an optional 0x prefix before checksumming (returns without
+/// the prefix; the caller adds it back).
+[[nodiscard]] inline std::string checksummedHexAddressFromHex(std::string_view hexAddress)
+{
+    auto const hexNoPrefix = hexAddress.starts_with("0x") ? hexAddress.substr(2) : hexAddress;
+    return checksummedHexAddress(hexNoPrefix);
 }
 
 void buildJsonContent(Json::Value& result, Json::Value& response);

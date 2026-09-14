@@ -8,22 +8,11 @@
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <cstdint>
 
-namespace
-{
-std::string checksummedHexAddress(std::string hexNoPrefix)
-{
-    bcos::toAddress(hexNoPrefix);
-    bcos::toChecksumAddress(
-        hexNoPrefix, bcos::crypto::keccak256Hash(bcos::bytesConstRef(hexNoPrefix)).hex());
-    return hexNoPrefix;
-}
-
-std::string checksummedHexAddressFromHex(std::string_view hexAddress)
-{
-    auto const hexNoPrefix = hexAddress.starts_with("0x") ? hexAddress.substr(2) : hexAddress;
-    return checksummedHexAddress(std::string(hexNoPrefix));
-}
-}  // namespace
+// The EIP-55 helpers live in utils/util.h (checksummedHexAddress /
+// checksummedHexAddressFromHex) — one home for the idiom across the response producers.
+// The shared helper deliberately does NOT run bcos::toAddress as a validator: tx.to() is
+// transaction input and may be a FISCO-native form (BFS path, raw bytes), which must
+// degrade to an unchecked string, not fail the whole eth_getTransactionReceipt call.
 
 void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::TransactionReceipt& receipt,
     const bcos::protocol::Transaction& tx, const crypto::HashType& blockHash)

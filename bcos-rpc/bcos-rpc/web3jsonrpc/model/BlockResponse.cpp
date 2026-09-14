@@ -6,6 +6,7 @@
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-utilities/Bloom.h>
+#include <bcos-rpc/web3jsonrpc/utils/util.h>
 
 #include <range/v3/view/enumerate.hpp>
 
@@ -36,10 +37,7 @@ void bcos::rpc::combineBlockResponse(
         result["nonce"] = blockHeader->nonce().hexPrefixed();
         result["sha3Uncles"] = blockHeader->uncleHash().hexPrefixed();
         // EIP-55 checksummed address, matching geth's eth_getBlock* output.
-        auto minerAddr = blockHeader->coinbase().hex();
-        auto minerAddrHash = crypto::keccak256Hash(bytesConstRef(minerAddr)).hex();
-        toChecksumAddress(minerAddr, minerAddrHash);
-        result["miner"] = "0x" + minerAddr;
+        result["miner"] = "0x" + checksummedHexAddress(blockHeader->coinbase().hex());
         result["difficulty"] = toQuantity(blockHeader->difficulty());
         result["mixHash"] = blockHeader->prevRandao().hexPrefixed();
     }
@@ -61,10 +59,7 @@ void bcos::rpc::combineBlockResponse(
             auto pk = blockHeader->sealerList()[blockHeader->sealer()];
             auto hash = crypto::keccak256Hash(bcos::ref(pk));
             Address address = right160(hash);
-            auto addrString = address.hex();
-            auto addrHash = crypto::keccak256Hash(bytesConstRef(addrString)).hex();
-            toChecksumAddress(addrString, addrHash);
-            result["miner"] = "0x" + addrString;
+            result["miner"] = "0x" + checksummedHexAddress(address.hex());
         }
     }
 

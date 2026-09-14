@@ -1,8 +1,8 @@
 #include "TransactionResponse.h"
 #include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-rpc/web3jsonrpc/model/DepositTransaction.h"
-#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-rpc/jsonrpc/Common.h>  // WEB3_LOG
+#include <bcos-rpc/web3jsonrpc/utils/util.h>
 
 void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Transaction& tx,
     const protocol::TransactionReceipt& receipt, const crypto::HashType& blockHash)
@@ -26,19 +26,14 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     result["blockHash"] = blockHash.hexPrefixed();
     result["blockNumber"] = toQuantity(blockNumber);
     result["transactionIndex"] = toQuantity(transactionIndex);
-    auto from = toHex(tx.sender());
-    toChecksumAddress(from, bcos::crypto::keccak256Hash(bcos::bytesConstRef(from)).hex());
-    result["from"] = "0x" + std::move(from);
+    result["from"] = "0x" + checksummedHexAddress(toHex(tx.sender()));
     if (tx.to().empty())
     {
         result["to"] = Json::nullValue;
     }
     else
     {
-        auto toView = tx.to();
-        auto to = std::string(toView.starts_with("0x") ? toView.substr(2) : toView);
-        toChecksumAddress(to, bcos::crypto::keccak256Hash(bcos::bytesConstRef(to)).hex());
-        result["to"] = "0x" + std::move(to);
+        result["to"] = "0x" + checksummedHexAddressFromHex(tx.to());
     }
     result["gas"] = toQuantity(tx.gasLimit());
     auto gasPrice = tx.gasPrice();
