@@ -542,7 +542,8 @@ struct BlockContext
     std::optional<std::string> decodeRejectMessage;
 };
 
-bool loadBlockContext(const std::string& id, const JsonValue& blk, BlockContext& out)
+bool loadBlockContext(
+    const std::string& id, const JsonValue& blk, BlockContext& out, bool wantPostState)
 {
     // _info.hardfork must be exactly regolith|canyon|ecotone|fjord|granite|holocene|
     // isthmus|jovian, anything else = FAILURE. No default fork (the default-Isthmus
@@ -592,7 +593,8 @@ bool loadBlockContext(const std::string& id, const JsonValue& blk, BlockContext&
     hs.blockNumber = bi.number;
     hs.parentHash = test::from_json<hash256>(jAt(env, "parentHash"));
 
-    // Three transaction arms (deposit / eip1559 / setcode). Unknown _op_type = FAILURE.
+    // Five transaction arms (deposit / eip1559 / accesslist / legacy / setcode). Unknown
+    // _op_type = FAILURE.
     auto& deposits = out.deposits;
     auto& rawTxBytes = out.rawTxBytes;
     std::optional<uint64_t> vectorChainId;
@@ -703,19 +705,24 @@ bool loadBlockContext(const std::string& id, const JsonValue& blk, BlockContext&
                             // carry 0xef0100||tuple.addr delegation code in the vector
                             // postState (required only when this tx has marked tuples).
                             const auto authAddr = hexAddr(*auth.signer);
-                            // 仅 setcode/7702 载体路径。当前所有 setcode 向量都是平面单块
-                            // （postState 恒在）；若将来出现含 7702 交易的【采样链】向量，
-                            // 此处需与 replaySingleBlockInto 同样加 wantPostState 门控——
-                            // A″（isthmus/jovian 链段可达）的前置条件。
-                            const auto& post = jAt(blk, "postState");
-                            if (post.isMember(authAddr))
+                            // wantPostState 门控（与 replaySingleBlockInto 同语义）：
+                            // 采样链向量（--poststate boundary，sampledBlocks 存在）的
+                            // 未采样块不携带 postState，jAt 会 throw——这里只在采样块上
+                            // 做委托锚存在性检查。P2-B ladder 7702（isthmus/jovian 链段
+                            // 可达）的前置条件；全量模式（缺省/registered ladder）每块
+                            // 都有 postState，行为不变。
+                            if (wantPostState)
                             {
-                                const std::string wantCode =
-                                    "0xef0100" + hexAddr(auth.addr).substr(2);
-                                if (jAt(post, authAddr.c_str())
-                                        .get("code", Json::Value(""))
-                                        .asString() == wantCode)
-                                    anchorOk = true;
+                                const auto& post = jAt(blk, "postState");
+                                if (post.isMember(authAddr))
+                                {
+                                    const std::string wantCode =
+                                        "0xef0100" + hexAddr(auth.addr).substr(2);
+                                    if (jAt(post, authAddr.c_str())
+                                            .get("code", Json::Value(""))
+                                            .asString() == wantCode)
+                                        anchorOk = true;
+                                }
                             }
                         }
                     }
@@ -724,10 +731,54 @@ bool loadBlockContext(const std::string& id, const JsonValue& blk, BlockContext&
                 if (hasMarked && !hasUnmarked)
                     BOOST_ERROR(id << ": setcode tx with marked tuples must contain >=1 unmarked "
                                       "tuple");
-                if (hasMarked && hasUnmarked && !anchorOk)
+                // anchorOk 只在采样块（postState 携带）上可判定；未采样块跳过
+                // （上面的 wantPostState 门控同样语义）。
+                if (wantPostState && hasMarked && hasUnmarked && !anchorOk)
                     BOOST_ERROR(id << ": marked-tuple tx has no applied delegation anchor in "
                                       "postState");
             }
+            auto envelope = test::from_json<bytes>(jAt(t, "_op_raw"));
+            rawTxBytes.emplace_back(envelope.begin(), envelope.end());
+        }
+        else if (opType == "accesslist")
+        {
+            // P2-B（ladder tx-type diversity）accesslist 臂：type-0x01 EIP-2930
+            // 信封。与其他签名臂相同的 parse-only 处理——执行从 _op_raw 重建
+            // 交易（buildFiscoTxFromEnvelope -> web3TypedTxKind()==1 ->
+            // Type::access_list），这里只做块内 chainId 一致性闸门并解析
+            // accessList 形状（解析结果与 eip1559 臂同样不进入执行路径）。
+            state::Transaction tx;
+            tx.type = state::Transaction::Type::access_list;
+            tx.sender = test::from_json<evmc::address>(jAt(t, "sender"));
+            tx.to = jAt(t, "to").isNull() ?
+                        std::nullopt :
+                        std::optional{test::from_json<evmc::address>(jAt(t, "to"))};
+            tx.nonce = test::from_json<uint64_t>(jAt(t, "nonce"));
+            tx.gas_limit = test::from_json<int64_t>(jAt(t, "gas"));
+            const auto gasPrice = parseU256(jAt(t, "gasPrice"));
+            tx.max_gas_price = gasPrice;
+            tx.max_priority_gas_price = gasPrice;
+            tx.value = parseU256(jAt(t, "value"));
+            tx.data = test::from_json<bytes>(jAt(t, "data"));
+            if (t.isMember("accessList"))
+            {
+                for (const auto& e : jAt(t, "accessList"))
+                {
+                    std::vector<evmc::bytes32> keys;
+                    for (const auto& k : jAt(e, "storageKeys"))
+                        keys.push_back(test::from_json<hash256>(k));
+                    tx.access_list.emplace_back(
+                        test::from_json<evmc::address>(jAt(e, "address")), std::move(keys));
+                }
+            }
+            tx.chain_id = test::from_json<uint64_t>(jAt(t, "chainId"));
+            if (vectorChainId.has_value() && *vectorChainId != tx.chain_id)
+            {
+                BOOST_ERROR(id << ": inconsistent chainId across txs: " << hexU64(*vectorChainId)
+                               << " vs " << hexU64(tx.chain_id));
+                return false;
+            }
+            vectorChainId = tx.chain_id;
             auto envelope = test::from_json<bytes>(jAt(t, "_op_raw"));
             rawTxBytes.emplace_back(envelope.begin(), envelope.end());
         }
@@ -1117,7 +1168,7 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
 {
     VectorContext ctx{ledger, id};
     BlockContext bc;
-    if (!loadBlockContext(id, blk, bc))
+    if (!loadBlockContext(id, blk, bc, /*wantPostState=*/wantPostState))
         return;
     const auto& cfg = *bc.cfg;
     const bool isJovian = bc.isJovian;
@@ -1607,7 +1658,7 @@ void assertRejectThrow(const std::string& id, const JsonValue& v,
         return;
     }
     BlockContext bc;
-    if (!loadBlockContext(id, v, bc))
+    if (!loadBlockContext(id, v, bc, /*wantPostState=*/true))
         return;
     if (bc.decodeRejectMessage.has_value())
     {
@@ -2035,13 +2086,61 @@ BOOST_AUTO_TEST_CASE(LegacyArmBuildsLegacyTx)
         }
     })");
     BlockContext bc;
-    BOOST_REQUIRE_MESSAGE(loadBlockContext("legacy_arm_load", v, bc), "legacy vector must load");
+    BOOST_REQUIRE_MESSAGE(loadBlockContext("legacy_arm_load", v, bc, /*wantPostState=*/true),
+        "legacy vector must load");
     BOOST_REQUIRE_EQUAL(bc.rawTxBytes.size(), 2u);
     BOOST_REQUIRE(!bc.rawTxBytes[0].empty());
     BOOST_REQUIRE(!bc.rawTxBytes[1].empty());
     BOOST_CHECK_EQUAL(bc.rawTxBytes[0][0], static_cast<uint8_t>(0x7e));
     BOOST_CHECK_EQUAL(bc.rawTxBytes[1][0], static_cast<uint8_t>(0x01));
     BOOST_CHECK_EQUAL(bc.deposits.size(), 1u);
+    BOOST_CHECK_EQUAL(bc.chainId, uint64_t{0x2105});
+}
+
+// ── accesslist arm loading (P2-B ladder tx-type diversity) ───────
+// Verifies _op_type "accesslist" (type-0x01 EIP-2930) is accepted by the
+// loader, parses the accessList shape, and records the raw envelope. Full
+// execution path is exercised by the regenerated ladder vector's probe blocks.
+BOOST_AUTO_TEST_CASE(AccessListArmBuildsAccessListTx)
+{
+    JsonValue v = jParse(R"({
+        "_info": {"hardfork": "isthmus"},
+        "env": {
+            "currentNumber": 1, "currentTimestamp": "0x64",
+            "currentGasLimit": "0x989680", "currentBaseFee": "0x3b9aca00",
+            "currentCoinbase": "0x0000000000000000000000000000000000000000",
+            "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "parentBeaconBlockRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "pre": {
+            "0x0000000000000000000000000000000000000001": {
+                "balance": "0xde0b6b3a7640000", "nonce": "0x0", "code": "0x"
+            }
+        },
+        "block": {
+            "transactions": [
+                {
+                    "_op_type": "accesslist",
+                    "_op_raw": "0x01deadbeef",
+                    "chainId": "0x2105", "nonce": "0x0",
+                    "to": "0xb0b0000000000000000000000000000000000001",
+                    "gas": "0x14930", "gasPrice": "0x4a817c800",
+                    "value": "0x0", "data": "0x",
+                    "accessList": [
+                        {"address": "0xb0b0000000000000000000000000000000000001", "storageKeys": []},
+                        {"address": "0xc0de00000000000000000000000000000000000b", "storageKeys": ["0x0000000000000000000000000000000000000000000000000000000000000000"]}
+                    ],
+                    "sender": "0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"
+                }
+            ]
+        }
+    })");
+    BlockContext bc;
+    BOOST_REQUIRE_MESSAGE(loadBlockContext("accesslist_arm_load", v, bc, /*wantPostState=*/true),
+        "accesslist vector must load");
+    BOOST_REQUIRE_EQUAL(bc.rawTxBytes.size(), 1u);
+    BOOST_CHECK_EQUAL(bc.rawTxBytes[0][0], static_cast<uint8_t>(0x01));
     BOOST_CHECK_EQUAL(bc.chainId, uint64_t{0x2105});
 }
 
