@@ -1247,7 +1247,7 @@ BOOST_AUTO_TEST_CASE(StartupSweepEnabled)
     std::vector<std::pair<uint64_t, uint64_t>> progress;
     Pruner pruner(backend, N);
     bcos::task::syncWait(pruner.init(1, rootLookupOf(roots), /*sweepGarbage=*/true,
-        [&progress, &backend, garbageCount](uint64_t done, uint64_t total) {
+        [&progress, &backend](uint64_t done, uint64_t total) {
             progress.emplace_back(done, total);
             if (done == Pruner::SWEEP_DELETE_CHUNK)
             {
