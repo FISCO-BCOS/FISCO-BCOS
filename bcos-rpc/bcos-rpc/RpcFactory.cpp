@@ -596,8 +596,11 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
         auto opEngineWsService = buildWsService(std::move(opEngineConfig));
         // buildWeb3JsonRpc creates a dedicated FilterSystem for this port, so
         // filter stores are isolated between the OP Engine (8551) and web3 (8545).
+        // The miner namespace is scoped per listener: the op-engine port carries it under
+        // [op_engine_rpc] enable_miner_api, the web3 port under [web3_rpc] enable_miner_api —
+        // the batcher handshake can no longer leak onto the public listener.
         auto opEngineJsonRpc = buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), opEngineWsService,
-            groupManager, true, m_nodeConfig->enableMinerApi());
+            groupManager, true, m_nodeConfig->enableOpEngineMinerApi());
 
         rpc->setOpEngineJsonRpcImpl(std::move(opEngineJsonRpc));
         rpc->setOpEngineService(std::move(opEngineWsService));

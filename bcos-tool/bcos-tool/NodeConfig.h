@@ -204,6 +204,10 @@ public:
 
     // op engine rpc configurations
     bool enableOpEngineRpc() const;
+    // scopes the OP miner namespace to the op-engine listener (8551) only; enableMinerApi()
+    // scopes it to the web3 listener (8545) only — the two ports are configured separately
+    // so the batcher's handshake never leaks onto the public port.
+    bool enableOpEngineMinerApi() const;
     bool enableMinerApi() const;
     const std::string& opEngineRpcListenIP() const;
     uint16_t opEngineRpcListenPort() const;
@@ -563,6 +567,7 @@ private:
     // config for op engine rpc
     bool m_enableOpEngineRpc = false;
     bool m_enableMinerApi = false;
+    bool m_enableOpEngineMinerApi = false;
     std::string m_opEngineRpcListenIP = "127.0.0.1";
     uint16_t m_opEngineRpcListenPort{};
     uint32_t m_opEngineHttpBodySizeLimit{};

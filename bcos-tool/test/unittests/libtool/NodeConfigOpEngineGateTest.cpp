@@ -124,6 +124,24 @@ BOOST_AUTO_TEST_CASE(minerApiDefaultsOff)
     BOOST_CHECK(!probe.enableMinerApi());
 }
 
+// The two listeners configure the miner namespace independently: the op-engine (8551) key
+// must not touch the web3 (8545) switch and vice versa — enabling the batcher handshake on
+// the private port can never expose it on the public one.
+BOOST_AUTO_TEST_CASE(minerApiScopedPerListener)
+{
+    LoaderProbe probe;
+    probe.loadOpEngineRpcConfig(
+        fromIni("[op_engine_rpc]\nenable=true\nenable_miner_api=true\n"));
+    BOOST_CHECK(probe.enableOpEngineMinerApi());
+    BOOST_CHECK(!probe.enableMinerApi());
+
+    LoaderProbe probe2;
+    probe2.loadWeb3RpcConfig(
+        fromIni("[web3_rpc]\nenable=true\nlisten_port=8545\nenable_miner_api=true\n"));
+    BOOST_CHECK(probe2.enableMinerApi());
+    BOOST_CHECK(!probe2.enableOpEngineMinerApi());
+}
+
 BOOST_AUTO_TEST_CASE(minerApiPopulated)
 {
     LoaderProbe probe;
