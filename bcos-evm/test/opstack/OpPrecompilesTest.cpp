@@ -76,7 +76,29 @@ BOOST_AUTO_TEST_CASE(JovianLimitsStricterThanIsthmus)
     BOOST_CHECK_EQUAL(
         jovianPrecompileOverrides().find(evmc::address{0x0f})->max_input_size, 156672u);
     BOOST_CHECK_EQUAL(jovianConfig().precompiles, &jovianPrecompileOverrides());
-    BOOST_CHECK_EQUAL(karstConfig().precompiles, &jovianPrecompileOverrides());
+}
+
+// Karst tightens bn256Pairing to 57600 and drops the 0x100 override so the vendored
+// Osaka-gated p256verify (EIP-7951, gas 6900) applies instead of RIP-7212's 3450.
+// The BLS MSM/pairing limits carry over from Jovian unchanged.
+BOOST_AUTO_TEST_CASE(KarstTightensBn256AndDropsP256Override)
+{
+    const auto& k = karstPrecompileOverrides();
+    const auto* k08 = k.find(evmc::address{0x08});
+    BOOST_REQUIRE((k08) != nullptr);
+    BOOST_CHECK_EQUAL(k08->max_input_size, 57600u);
+    BOOST_CHECK_EQUAL(k08->gas_cost_override, -1);
+    BOOST_CHECK_LT(
+        k08->max_input_size, jovianPrecompileOverrides().find(evmc::address{0x08})->max_input_size);
+
+    BOOST_CHECK(!k.contains(kP256VerifyAddress));
+    BOOST_CHECK(jovianPrecompileOverrides().contains(kP256VerifyAddress));
+
+    BOOST_CHECK_EQUAL(k.find(evmc::address{0x0c})->max_input_size, 288960u);
+    BOOST_CHECK_EQUAL(k.find(evmc::address{0x0e})->max_input_size, 278784u);
+    BOOST_CHECK_EQUAL(k.find(evmc::address{0x0f})->max_input_size, 156672u);
+
+    BOOST_CHECK_EQUAL(karstConfig().precompiles, &karstPrecompileOverrides());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

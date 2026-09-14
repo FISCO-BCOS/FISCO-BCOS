@@ -110,8 +110,10 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
                 .payloadId = std::nullopt,
             };
         }
+        // Jovian attribute fields (minBaseFee) are keyed on the CHILD block's time — the
+        // block these attributes build (op-node derive/attributes.go, nextL2Time).
         if (auto validationError = engine_common::op::validateOpPayloadAttributes(
-                *payloadAttributes, m_scheduler.isJovianActive());
+                *payloadAttributes, m_scheduler.isJovianActive(payloadAttributes->timestamp));
             validationError.has_value())
         {
             co_return ForkchoiceUpdatedResult{
@@ -255,6 +257,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     auto payloadId = *payloadIdOpt;
 
     u256 baseFee;
+    // Hoisted out of the block below: the L1-attributes layout needs the parent's time too
+    // (op-node's isJovianButNotFirstBlock — see OpSchedulerSeam::synthesizeL1AttributesEnvelope).
+    int64_t parentTimestampMs = 0;
     {
         auto view = m_globalStateStorage.fork();
         auto parentNumberStr = boost::lexical_cast<std::string>(nextBlockNumber - 1);
@@ -275,7 +280,11 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
         bcos::bytes parentHeaderBytes(stored.begin(), stored.end());
         auto parentHeader =
             m_blockFactory->blockHeaderFactory()->createBlockHeader(parentHeaderBytes);
-        baseFee = calcOpBaseFee(*parentHeader, m_scheduler.isJovianActive());
+        // PARENT time, not the child's: op-geth's CalcBaseFee(config, parent, time) keys both
+        // the Holocene extraData decode and the Jovian DA-footprint branch on parent.Time
+        // (consensus/misc/eip1559/eip1559.go:64-110).
+        parentTimestampMs = parentHeader->timestamp();
+        baseFee = calcOpBaseFee(*parentHeader, m_scheduler.isJovianActive(parentTimestampMs));
     }
 
     requireDelegate();
@@ -294,7 +303,11 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     // op_engine_rpc never invents this envelope (op-geth does not either).
     if (!payloadAttributes.transactions.has_value() || payloadAttributes.transactions->empty())
     {
-        forcedEnvelopes.push_back(m_scheduler.synthesizeL1AttributesEnvelope());
+        // CHILD time picks the calldata layout (op-node's L1InfoDeposit(..., l2Timestamp)),
+        // with the parent passed alongside so the Jovian ACTIVATION block still emits the
+        // Isthmus layout — op-node's isJovianButNotFirstBlock (derive/l1_block_info.go:462).
+        forcedEnvelopes.push_back(m_scheduler.synthesizeL1AttributesEnvelope(
+            payloadAttributes.timestamp, parentTimestampMs));
     }
     if (payloadAttributes.transactions.has_value())
     {
@@ -647,11 +660,12 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
     // "last executed" semantics the accessor documents.
     auto const& payload = request.executionPayload;
 
-    // Isthmus is stated, not defaulted: OpForkSchedule.h documents Isthmus as the OP-mode
-    // baseline with no pre-Isthmus config (OpForkFlags carries only jovianActive, and OP mode
-    // itself is the Isthmus+ admission check), so the pre-Isthmus arm is unreachable here.
+    // The payload's OWN time decides which shape it must have. Isthmus is stated, not
+    // defaulted: OpForkSchedule.h documents Isthmus as the OP-mode baseline with no entry in
+    // the schedule (OP mode itself is the Isthmus+ admission check), so the pre-Isthmus arm
+    // is unreachable here.
     if (auto validationError = engine_common::op::validateOpNewPayloadRequest(
-            request, m_scheduler.isJovianActive(), /*isthmusActive=*/true);
+            request, m_scheduler.isJovianActive(payload.timestamp), /*isthmusActive=*/true);
         validationError.has_value())
     {
         co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt, validationError);
@@ -775,7 +789,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
             std::string("timestamp must be strictly greater than the parent's"));
     }
     {
-        auto expectedBaseFee = calcOpBaseFee(*parentHeader, m_scheduler.isJovianActive());
+        // PARENT time (op-geth eip1559.go:64-110 keys CalcBaseFee on parent.Time).
+        auto expectedBaseFee =
+            calcOpBaseFee(*parentHeader, m_scheduler.isJovianActive(parentHeader->timestamp()));
         if (payload.baseFeePerGas != expectedBaseFee)
         {
             co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,

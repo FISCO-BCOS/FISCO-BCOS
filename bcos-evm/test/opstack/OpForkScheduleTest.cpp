@@ -1,9 +1,21 @@
 #include "TestPrinters.h"
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPrecompiles.h>
+#include <bcos-framework/ledger/GenesisConfig.h>
 #include <boost/test/unit_test.hpp>
+#include <limits>
 
 using namespace bcos::evm::opstack;
+
+namespace
+{
+constexpr uint64_t kNever = std::numeric_limits<uint64_t>::max();
+/// Genesis fork schedule in SECONDS, the shape [op_fork_timestamps] produces.
+bcos::ledger::OpForkSchedule sched(uint64_t jovianTime, uint64_t karstTime)
+{
+    return bcos::ledger::OpForkSchedule{.m_jovianTime = jovianTime, .m_karstTime = karstTime};
+}
+}  // namespace
 
 BOOST_AUTO_TEST_SUITE(OpForkScheduleSuite)
 
@@ -27,13 +39,69 @@ BOOST_AUTO_TEST_CASE(JovianAndKarstConfigs)
     BOOST_CHECK(j.disable_prague_requests);
     BOOST_CHECK((j.precompiles) != nullptr);
 
+    // Karst keeps every Jovian fee/receipt rule and changes exactly two fields: the EVM base
+    // moves to Osaka and the precompile table becomes Karst's own.
     const auto& k = karstConfig();
     BOOST_CHECK_EQUAL(k.fork, OpFork::Karst);
-    BOOST_CHECK_EQUAL(k.rev, j.rev);
+    BOOST_CHECK_EQUAL(k.rev, EVMC_OSAKA);
+    BOOST_CHECK_NE(k.rev, j.rev);
     BOOST_CHECK_EQUAL(k.has_operator_fee, j.has_operator_fee);
     BOOST_CHECK_EQUAL(k.has_jovian_operator_formula, j.has_jovian_operator_formula);
     BOOST_CHECK_EQUAL(k.has_da_footprint, j.has_da_footprint);
-    BOOST_CHECK_EQUAL(k.precompiles, j.precompiles);
+    BOOST_CHECK_EQUAL(k.disable_prague_requests, j.disable_prague_requests);
+    BOOST_CHECK_EQUAL(k.precompiles, &karstPrecompileOverrides());
+    BOOST_CHECK_NE(k.precompiles, j.precompiles);
+}
+
+// At and above karst_time configAt hands back the same static config karstConfig() does.
+BOOST_AUTO_TEST_CASE(ConfigAtSelectsKarst)
+{
+    // Value copies, not references: configAt returns a reference to a static config, but the
+    // schedule argument is a prvalue temporary — GCC-14 -Wdangling-reference flags the
+    // reference binding as potentially dangling (false positive; the returned ref never
+    // aliases the argument). Copy the ~32B config instead.
+    const auto karst = configAt(sched(1000, 2000), 2000);
+    BOOST_CHECK_EQUAL(karst.fork, OpFork::Karst);
+    BOOST_CHECK_EQUAL(karst.rev, EVMC_OSAKA);
+    BOOST_CHECK_EQUAL(karst.precompiles, &karstPrecompileOverrides());
+    BOOST_CHECK(karst.has_da_footprint);
+    BOOST_CHECK(karst.has_jovian_operator_formula);
+    BOOST_CHECK_EQUAL(&configAt(sched(1000, 2000), 2000), &karstConfig());
+
+    // Karst is a superset of Jovian: a schedule that activates both at the same second is
+    // Karst, and one that (illegally, NodeConfig rejects it) leaves jovian unscheduled must
+    // still not downgrade a Karst block to Isthmus.
+    BOOST_CHECK_EQUAL(configAt(sched(0, 0), 0).fork, OpFork::Karst);
+    BOOST_CHECK_EQUAL(configAt(sched(kNever, 2000), 2000).fork, OpFork::Karst);
+}
+
+// The whole ladder on one schedule, at the exact boundary seconds. op-node's IsX(ts) is
+// `ts >= *Time`, so the activation second itself is already inside the fork.
+BOOST_AUTO_TEST_CASE(ConfigAtIsKeyedOnTheBlockTimestamp)
+{
+    const auto schedule = sched(1000, 2000);
+    BOOST_CHECK_EQUAL(configAt(schedule, 0).fork, OpFork::Isthmus);
+    BOOST_CHECK_EQUAL(configAt(schedule, 999).fork, OpFork::Isthmus);
+    BOOST_CHECK_EQUAL(configAt(schedule, 1000).fork, OpFork::Jovian);
+    BOOST_CHECK_EQUAL(configAt(schedule, 1999).fork, OpFork::Jovian);
+    BOOST_CHECK_EQUAL(configAt(schedule, 2000).fork, OpFork::Karst);
+    BOOST_CHECK_EQUAL(configAt(schedule, 2001).fork, OpFork::Karst);
+}
+
+// UINT64_MAX is op-node's nil: the fork is not scheduled and never activates, not even at
+// the largest representable timestamp.
+BOOST_AUTO_TEST_CASE(UnscheduledForksNeverActivate)
+{
+    BOOST_CHECK_EQUAL(configAt(sched(kNever, kNever), 0).fork, OpFork::Isthmus);
+    BOOST_CHECK_EQUAL(configAt(sched(kNever, kNever), kNever - 1).fork, OpFork::Isthmus);
+    BOOST_CHECK_EQUAL(configAt(sched(0, kNever), kNever - 1).fork, OpFork::Jovian);
+}
+
+// A genesis-activated fork is active for block 0 itself (timestamp 0 >= 0).
+BOOST_AUTO_TEST_CASE(ZeroMeansActiveFromGenesis)
+{
+    BOOST_CHECK_EQUAL(configAt(sched(0, kNever), 0).fork, OpFork::Jovian);
+    BOOST_CHECK_EQUAL(configAt(sched(0, 0), 0).fork, OpFork::Karst);
 }
 
 BOOST_AUTO_TEST_CASE(IsthmusDisablesJovianFlags)
@@ -43,28 +111,9 @@ BOOST_AUTO_TEST_CASE(IsthmusDisablesJovianFlags)
     BOOST_CHECK(!(i.has_da_footprint));
 }
 
-// Feature-flag fork selection (feature_op_jovian replaces the former timestamp thresholds):
-// OFF → Isthmus baseline, ON → Jovian semantics.
-BOOST_AUTO_TEST_CASE(ConfigAtSelectsForkByFeatureFlag)
-{
-    // Value copies, not references: configAt returns a reference to a static config, but the
-    // OpForkFlags{...} argument is a prvalue temporary — GCC-14 -Wdangling-reference flags the
-    // reference binding as potentially dangling (false positive; the returned ref never aliases
-    // the flags argument). Copy the ~32B config instead.
-    const auto ist = configAt(OpForkFlags{.jovianActive = false});
-    BOOST_CHECK_EQUAL(ist.fork, OpFork::Isthmus);
-    BOOST_CHECK(!ist.has_jovian_operator_formula);
-    BOOST_CHECK(!ist.has_da_footprint);
-
-    const auto jov = configAt(OpForkFlags{.jovianActive = true});
-    BOOST_CHECK_EQUAL(jov.fork, OpFork::Jovian);
-    BOOST_CHECK(jov.has_jovian_operator_formula);
-    BOOST_CHECK(jov.has_da_footprint);
-}
-
-// 覆盖剩余字段 has_ecotone_l1_formula（Ecotone 用 calldataGas、Fjord+ 用 FastLZ）
-// 与 configAt 永不返回 karstConfig()（Karst 是 op-reth-only 占位，无真实语义）。
-BOOST_AUTO_TEST_CASE(EcotoneFormulaFlagAndKarstUnreachable)
+// Covers the remaining field has_ecotone_l1_formula (Ecotone bills L1 by calldataGas, Fjord+ by
+// FastLZ) and the reference stability of configAt's three branches.
+BOOST_AUTO_TEST_CASE(EcotoneFormulaFlagAndConfigAtBranches)
 {
     BOOST_CHECK(ecotoneConfig().has_ecotone_l1_formula);
     BOOST_CHECK(!(fjordConfig().has_ecotone_l1_formula));
@@ -73,9 +122,12 @@ BOOST_AUTO_TEST_CASE(EcotoneFormulaFlagAndKarstUnreachable)
     BOOST_CHECK(!(isthmusConfig().has_ecotone_l1_formula));
     BOOST_CHECK(!(jovianConfig().has_ecotone_l1_formula));
 
-    // configAt 只有 Isthmus/Jovian 两分支（引用稳定性：返回指向同一 static config）。
-    BOOST_CHECK_EQUAL(&configAt(OpForkFlags{.jovianActive = false}), &isthmusConfig());
-    BOOST_CHECK_EQUAL(&configAt(OpForkFlags{.jovianActive = true}), &jovianConfig());
+    BOOST_CHECK(!(karstConfig().has_ecotone_l1_formula));
+
+    // configAt's three branches; each returns a reference to the same static config.
+    BOOST_CHECK_EQUAL(&configAt(sched(1000, 2000), 999), &isthmusConfig());
+    BOOST_CHECK_EQUAL(&configAt(sched(1000, 2000), 1000), &jovianConfig());
+    BOOST_CHECK_EQUAL(&configAt(sched(1000, 2000), 2000), &karstConfig());
 }
 
 BOOST_AUTO_TEST_CASE(PreIsthmusConfigsPinned)
