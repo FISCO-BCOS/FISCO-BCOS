@@ -86,7 +86,6 @@ enum class EthMethod
     eth_maxPriorityFeePerGas,
     eth_getProof,
     eth_feeHistory,
-    eth_config,
     miner_setMaxDASize
 };
 
