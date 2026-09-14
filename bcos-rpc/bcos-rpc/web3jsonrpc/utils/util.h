@@ -19,6 +19,8 @@
  */
 
 #pragma once
+#include <bcos-crypto/ChecksumAddress.h>
+#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -72,7 +74,7 @@ namespace bcos::rpc
 [[nodiscard]] inline std::string checksummedHexAddressFromHex(std::string_view hexAddress)
 {
     auto const hexNoPrefix = hexAddress.starts_with("0x") ? hexAddress.substr(2) : hexAddress;
-    return checksummedHexAddress(hexNoPrefix);
+    return checksummedHexAddress(std::string(hexNoPrefix));
 }
 
 void buildJsonContent(Json::Value& result, Json::Value& response);
