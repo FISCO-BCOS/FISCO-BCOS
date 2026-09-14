@@ -45,12 +45,17 @@ target_link_libraries(init PUBLIC
     engine
     ledger
     transaction-scheduler transaction-executor
-    bcosevm::opstack
-    opstack-executor
     ethereum-executor
     scheduler storage executor rpc
     bcos-boostssl
     tomlplusplus::tomlplusplus
+)
+# PRIVATE: only the implementation TUs (Initializer.cpp, OpEngineServiceInstantiate.cpp)
+# include opstack headers — no installed init header does, so consumers of the init target
+# need no opstack include dirs (the repo's usage-based PUBLIC/PRIVATE rule, cf. engine).
+target_link_libraries(init PRIVATE
+    bcosevm::opstack
+    opstack-executor
 )
 if(WITH_LEDGER_ELECTION)
     target_link_libraries(init PUBLIC leader_election)

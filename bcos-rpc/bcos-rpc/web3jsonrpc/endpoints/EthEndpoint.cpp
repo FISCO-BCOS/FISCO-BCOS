@@ -449,14 +449,17 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     {
         // Latest state: fork a fresh view of GlobalStateStorage's COMMITTED plane and read
         // the flat KV — a consistent point-in-time snapshot of the last committed block
-        // (cache -> committed backend, no in-flight pending layers). This is the same plane
-        // getBalance / getTransactionCount / getCode read (committed ledger / scheduler):
-        // "latest" means the last committed block, per Ethereum semantics. Operators who
-        // want the pending window (in-flight executed, not yet committed layers) visible
-        // can wire a provider that forks GlobalStateStorage::fork() instead — the default
-        // wiring (AirNodeInitializer) is committed-only. The provider is unset on nodes
-        // with no local state storage (tars-built NodeService); those fall back to the
-        // ledger, which serves the same committed plane.
+        // (cache -> committed backend, no in-flight pending layers). NOTE this is the FLAT
+        // read; getBalance / getTransactionCount branch first: on an MPT-committed chain
+        // (OP / scenario-B) they read the tip block's committed state root through the MPT
+        // reader and never touch this plane — the flat rows are the fallback there, and
+        // getCode has its own path. "latest" means the last committed block, per Ethereum
+        // semantics, on all of them. Operators who want the pending window (in-flight
+        // executed, not yet committed layers) visible can wire a provider that forks
+        // GlobalStateStorage::fork() instead — the default wiring (AirNodeInitializer) is
+        // committed-only. The provider is unset on nodes with no local state storage
+        // (tars-built NodeService); those fall back to the ledger, which serves the same
+        // committed plane.
         Json::Value result;
         auto const& stateStorageProvider = m_nodeService->stateStorageProvider();
         if (stateStorageProvider)

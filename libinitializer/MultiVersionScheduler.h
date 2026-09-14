@@ -50,6 +50,13 @@ class MultiVersionScheduler : public bcos::scheduler::SchedulerInterface
 private:
     // Slots: 0 legacy, 1 baseline, 2 Ethereum, 3 OP (may be null).
     static constexpr size_t SUPPORTED_EXECUTOR_VERSION_COUNT = 4;
+    // The slot array is the LADDER + the zero index: one slot per executor version from 0 up
+    // to the newest defined lane. Link the two cardinalities so wiring a new lane without
+    // growing the slot array fails the build instead of failing a node's setVersion at runtime.
+    static_assert(SUPPORTED_EXECUTOR_VERSION_COUNT ==
+                      static_cast<size_t>(ledger::MAX_GOVERNANCE_EXECUTOR_VERSION) + 1,
+        "SUPPORTED_EXECUTOR_VERSION_COUNT must stay in lockstep with the executor lane ladder: "
+        "one slot per version from 0 (legacy) to MAX_GOVERNANCE_EXECUTOR_VERSION");
 
     std::array<scheduler::SchedulerInterface::Ptr, SUPPORTED_EXECUTOR_VERSION_COUNT> m_schedulers;
     int m_currentIndex;

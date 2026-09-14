@@ -23,6 +23,8 @@
 
 #include "MultiVersionScheduler.h"
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
+#include <array>
 #include <functional>
 #include <memory>
 #include <optional>

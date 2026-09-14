@@ -308,11 +308,14 @@ inline constexpr int ETHEREUM_EXECUTOR_VERSION = static_cast<int>(ExecutorLane::
 /// lane — refused at boot and, from this release on, refused as a governance write.
 inline constexpr int OPSTACK_EXECUTOR_VERSION = static_cast<int>(ExecutorLane::Opstack);
 
-/// The highest executor_version a TRANSACTION may set: the newest defined lane, derived
-/// from the ladder above and never hand-copied — wiring a new lane moves the bound with
-/// it. An accepted write above this value would land activation N+1 while every node's
-/// next start fails closed (the runtime setVersion fail-opens, so the chain would keep
-/// producing but could never restart).
+/// The highest executor_version a GOVERNANCE WRITE may ever accept: the newest defined
+/// lane, derived from the ladder above and never hand-copied — wiring a new lane moves the
+/// bound with it. Note the TRANSACTION ceiling is one lane BELOW this constant: the newest
+/// lane (OPSTACK) is genesis-only, so SystemConfigPrecompiled refuses a transaction-set
+/// value of MAX_GOVERNANCE_EXECUTOR_VERSION itself, and the highest version a transaction
+/// may actually set is ETHEREUM_EXECUTOR_VERSION. Above this constant an accepted write
+/// would land activation N+1 while every node's next start fails closed (the runtime
+/// setVersion fail-opens, so the chain would keep producing but could never restart).
 inline constexpr int MAX_GOVERNANCE_EXECUTOR_VERSION =
     static_cast<int>(magic_enum::enum_values<ExecutorLane>().back());
 

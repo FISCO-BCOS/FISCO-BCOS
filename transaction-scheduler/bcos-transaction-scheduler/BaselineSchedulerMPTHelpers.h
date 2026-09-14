@@ -175,7 +175,10 @@ inline void validateOpModeGenesisOnly(bcos::ledger::Features const& features, in
         BOOST_THROW_EXCEPTION(InvalidMPTFlagMatrix{} << bcos::errinfo_comment(
                                   "executor_version " + std::to_string(executorVersion) +
                                   " is above OPSTACK_EXECUTOR_VERSION; OP mode is exactly " +
-                                  std::to_string(bcos::ledger::OPSTACK_EXECUTOR_VERSION)));
+                                  std::to_string(bcos::ledger::OPSTACK_EXECUTOR_VERSION) +
+                                  ". Recovery on a chain that wrote this row before upgrading: "
+                                  "run the previous binary and set executor_version back to the "
+                                  "value that chain ran with, then upgrade again"));
     }
     if (opMode && !flagOn)
     {
