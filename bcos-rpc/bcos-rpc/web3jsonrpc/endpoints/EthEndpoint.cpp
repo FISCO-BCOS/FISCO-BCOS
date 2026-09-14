@@ -306,8 +306,6 @@ task::Task<std::optional<HistoricalMptContext>> tryResolveMptContext(
                 // caller falls back to the flat state read.
                 co_return std::nullopt;
             }
-            BOOST_THROW_EXCEPTION(JsonRpcException(
-                EthHistoricalStateUnavailable, "Block stateRoot not in MPT node storage"));
             // Error path only: read whether MPT was this block's root scheme before choosing
             // the wording — a pre-activation block's legacy XOR root ALWAYS misses this
             // probe, and "State pruned" would claim pruned a root the chain never had.
