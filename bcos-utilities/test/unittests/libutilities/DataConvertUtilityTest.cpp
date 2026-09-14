@@ -214,6 +214,13 @@ BOOST_AUTO_TEST_CASE(testOperators)
     BOOST_CHECK(s == "abc");
 }
 
+BOOST_AUTO_TEST_CASE(testU256FitsUint64)
+{
+    BOOST_CHECK(u256FitsUint64(u256(0)));
+    BOOST_CHECK(u256FitsUint64(u256(std::numeric_limits<uint64_t>::max())));
+    BOOST_CHECK(!u256FitsUint64(u256(std::numeric_limits<uint64_t>::max()) + 1));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos

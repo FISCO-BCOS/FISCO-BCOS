@@ -59,7 +59,7 @@ HashType sha256Hash(bytesConstRef _data)
 
 Sha256::Sha256()
 {
-    setHashImplType(HashImplType::Sha3);
+    setHashImplType(HashImplType::Sha256Hash);
 }
 
 HashType Sha256::hash(bytesConstRef _data) const
@@ -69,7 +69,7 @@ HashType Sha256::hash(bytesConstRef _data) const
 
 bcos::crypto::hasher::AnyHasher Sha256::hasher() const
 {
-    return bcos::crypto::hasher::AnyHasher{hasher::openssl::OpenSSL_SHA3_256_Hasher{}};
+    return bcos::crypto::hasher::AnyHasher{hasher::openssl::OpenSSL_SHA2_256_Hasher{}};
 }
 
 HashType sha3Hash(bytesConstRef _data)

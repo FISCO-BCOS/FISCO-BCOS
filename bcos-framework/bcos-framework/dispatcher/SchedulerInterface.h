@@ -88,6 +88,11 @@ public:
     virtual void getABI(
         std::string_view contract, std::function<void(Error::Ptr, std::string)> callback) = 0;
 
+    // One key from the uncommitted pending plane (sealed, not yet commitBlock'd).
+    // `number` is the ledger-config / feature-flag height for implementations that
+    // need one (BaselineScheduler). The pending rows themselves have no historical
+    // block context: OpScheduler discards `number` and reads the committed tip's
+    // flags. EthEndpoint currently passes 0.
     virtual task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
         std::string_view address, std::string_view key, bcos::protocol::BlockNumber number) = 0;
 

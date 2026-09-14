@@ -270,14 +270,12 @@ bcos::Error::UniquePtr decode(bcos::bytesRef& in, AuthorizationListEntry& out) n
         return e;
     }
     uint64_t yParity = 0;
-    if (auto e = bcos::rlp::protocol::decodeCanonicalYParity(in, yParity); e != nullptr)
+    if (auto e = bcos::rlp::protocol::decodeAuthorizationYParity(in, yParity); e != nullptr)
     {
-        // Strict whole-item forms only (0x80/0x01) — an auth entry never carries the legacy
-        // wide-v spelling. Deliberate REJECT-side divergence vs op-geth (finding S5): geth
-        // decodes a canonical uint8 and skips V-not-in-{0,1} authorizations per-entry at
-        // execution; this decode rejects 0x02+ for the whole transaction, so adversarial
-        // blocks op-geth would accept (minus the bad entry) are rejected here. Aligning
-        // requires per-entry skip semantics in Eip7702Recover — revisit if that lands.
+        // op-geth parity: the authorization's V is a plain uint8 at decode; a value outside
+        // {0, 1} does not invalidate the transaction — processAuthorizationList skips that
+        // entry at execution ("errors are ignored, we simply skip invalid authorizations").
+        // Only non-canonical encodings (leading zero, multi-byte payload) are rejected here.
         return e;
     }
     if (auto e = bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.r); e != nullptr)

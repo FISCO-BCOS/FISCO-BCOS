@@ -10,6 +10,7 @@
 
 #include "../common/RPCFixture.h"
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
+#include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <boost/test/unit_test.hpp>
 #include <future>
 #include <string_view>
@@ -210,7 +211,8 @@ BOOST_AUTO_TEST_CASE(sendRawTransactionRejectsBlobTransaction)
     // L2 never admits blob (type-3) transactions; rejected before RLP decoding.
     auto resp = call(req("eth_sendRawTransaction", R"(["0x03deadbeef"])"));
     BOOST_REQUIRE(resp.isMember("error"));
-    BOOST_CHECK_NE(resp["error"]["message"].asString().find("blob"), std::string::npos);
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), bcos::rpc::Web3DefaultError);
+    BOOST_CHECK_EQUAL(resp["error"]["message"].asString(), "transaction type not supported (blob)");
 }
 
 BOOST_AUTO_TEST_CASE(sendRawTransactionRejectsDepositTransaction)
@@ -218,7 +220,9 @@ BOOST_AUTO_TEST_CASE(sendRawTransactionRejectsDepositTransaction)
     // Deposits (0x7e) are CL-injected via the Engine API only, never via the tx pool.
     auto resp = call(req("eth_sendRawTransaction", R"(["0x7edeadbeef"])"));
     BOOST_REQUIRE(resp.isMember("error"));
-    BOOST_CHECK_NE(resp["error"]["message"].asString().find("deposit"), std::string::npos);
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), bcos::rpc::Web3DefaultError);
+    BOOST_CHECK_EQUAL(resp["error"]["message"].asString(),
+        "transaction type not supported (deposit, Engine API only)");
 }
 
 BOOST_AUTO_TEST_CASE(sendRawTransactionGarbageReportsError)

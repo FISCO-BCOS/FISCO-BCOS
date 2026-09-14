@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <cstring>
 #include <iterator>
+#include <limits>
 #include <optional>
 #include <range/v3/range/concepts.hpp>
 #include <range/v3/view/concat.hpp>
@@ -101,6 +102,13 @@ u256 safeCastToU256(const concepts::StringLike auto& value)
     {
         return {};
     }
+}
+
+/// True when @a value fits in uint64_t without truncation.
+[[nodiscard]] inline bool u256FitsUint64(u256 const& value)
+{
+    static u256 const c_maxU64(std::numeric_limits<std::uint64_t>::max());
+    return value <= c_maxU64;
 }
 
 template <class T>

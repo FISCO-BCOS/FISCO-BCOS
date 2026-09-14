@@ -96,7 +96,7 @@ public:
      */
     virtual void onReceiveP2PMessage(const std::string& _groupID,
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        std::shared_ptr<P2PMessage> _msg, ErrorRespFunc _errorRespFunc = ErrorRespFunc());
+        std::shared_ptr<Message> _msg, ErrorRespFunc _errorRespFunc = ErrorRespFunc());
 
     P2PInterface::Ptr p2pInterface() const;
     GatewayNodeManager::Ptr gatewayNodeManager();
@@ -104,9 +104,9 @@ public:
      * @brief receive the latest group information notification from the GroupManagerInterface
      *
      * @param _groupInfo the latest group information
+     * @return error: nullptr on success
      */
-    void asyncNotifyGroupInfo(
-        bcos::group::GroupInfo::Ptr, std::function<void(Error::Ptr&&)>) override;
+    task::Task<Error::Ptr> notifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo) override;
 
     /// for AMOP
     task::Task<std::tuple<Error::Ptr, int16_t, bcos::bytes>> sendMessageByTopic(
@@ -134,7 +134,7 @@ protected:
     // for UT
     Gateway() = default;
     virtual void onReceiveP2PMessage(
-        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
+        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<Message> _msg);
 
     /**
      * @brief: receive group broadcast message
@@ -144,7 +144,7 @@ protected:
      * @return void
      */
     virtual void onReceiveBroadcastMessage(
-        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
+        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<Message> _msg);
 
     bool checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
 

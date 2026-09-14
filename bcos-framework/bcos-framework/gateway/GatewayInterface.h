@@ -109,9 +109,9 @@ public:
      * @brief receive the latest group information notification from the GroupManagerInterface
      *
      * @param _groupInfo the latest group information
+     * @return error: nullptr on success
      */
-    virtual void asyncNotifyGroupInfo(
-        bcos::group::GroupInfo::Ptr _groupInfo, std::function<void(Error::Ptr&&)>) = 0;
+    virtual task::Task<Error::Ptr> notifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo) = 0;
 
     /// for AMOP
 

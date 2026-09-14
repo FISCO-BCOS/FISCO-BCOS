@@ -85,7 +85,7 @@ ExecutionPayload makePayloadWithTransactions(bytes extraData, std::vector<bytes>
 
 BOOST_AUTO_TEST_SUITE(JovianExtraDataTest)
 
-// The round-5 breakpoint vector: op-node sends eip1559Params = 0x0000000000000000 and
+// The vector: op-node sends eip1559Params = 0x0000000000000000 and
 // minBaseFee = 0 while the SystemConfig has not set the params, and expects the EL to
 // translate 0,0 to the Canyon constants (250, 6). Expected bytes: version 0x01
 // (op-core requires 0x01 for Jovian, NOT the 0x00 our genesis fixture carries —
@@ -153,7 +153,7 @@ BOOST_AUTO_TEST_CASE(wrong_length_eip1559_params_are_rejected)
         engine_common::validatePayloadAttributes(makeAttributes(bytes(9, 0), 0), 3).has_value());
 }
 
-// Attribute pairing (finding AO): both-zero or both non-zero. (0,0) is legal (encode
+// Attribute pairing: both-zero or both non-zero. (0,0) is legal (encode
 // translates to Canyon 250/6); a mixed pair (d==0,e!=0) or (d>0,e==0) is rejected
 // because encode writes (d>0,e==0) verbatim and calcOpBaseFee cannot extend the
 // zero-elasticity head.
@@ -284,7 +284,7 @@ BOOST_AUTO_TEST_CASE(execution_payload_extra_data_shape_is_validated)
     rejectNeedle(fromHexWithPrefix("0x01000000fa00000006"), "version byte does not match length");
     // Header extraData is a committed artifact: a zero denominator OR zero elasticity
     // makes the head unextendable (calcOpBaseFee fail-closes), so headers carry the
-    // strict non-zero rule (validateOpExtraDataShape) — finding AO.
+    // strict non-zero rule (validateOpExtraDataShape).
     rejectNeedle(fromHexWithPrefix("0x000000000000000006"),
         "must encode a non-zero EIP-1559 denominator and elasticity");
     rejectNeedle(fromHexWithPrefix("0x000000000000000000"),
@@ -293,7 +293,7 @@ BOOST_AUTO_TEST_CASE(execution_payload_extra_data_shape_is_validated)
         "must encode a non-zero EIP-1559 denominator and elasticity");
 }
 
-// finding N4: pre-Holocene payloads (V1/V2) must carry an empty extraData — the
+// pre-Holocene payloads (V1/V2) must carry an empty extraData — the
 // Holocene/Jovian shape validator would otherwise accept a 9/17-byte extraData at
 // versions whose fork window forbids it (the attributes side already rejects
 // eip1559Params there — predicate symmetry). The fixture is a proper V2 shape:
@@ -313,7 +313,7 @@ BOOST_AUTO_TEST_CASE(pre_holocene_payload_rejects_holocene_extra_data)
     BOOST_CHECK(!engine::detail::validateExecutionPayload(emptyExtra, 2).has_value());
 }
 
-// finding N3: the V4 payload shape — blockAccessList and slotNumber are part of
+// the V4 payload shape — blockAccessList and slotNumber are part of
 // the version's fields, so an echo that rewrites or drops them must not pass the
 // comparator under the same blockHash (validate requires their presence only when
 // the wire dialect carries them — see the V4 arm's comment).
@@ -329,7 +329,7 @@ BOOST_AUTO_TEST_CASE(execution_payload_v4_shape_fields_are_compared)
     BOOST_CHECK(!engine::detail::compareWithBuiltPayload(payload, payload).has_value());
 
     // ...a rewritten blockAccessList under the same blockHash is rejected. (The
-    // comparator is presence-XOR lenient — finding BL's keep-local-body semantics —
+    // comparator's keep-local-body semantics are presence-XOR lenient —
     // so only a present-vs-present value disagreement is INVALID.)
     auto rewritten = payload;
     rewritten.blockAccessList = bytes{0x09};
@@ -357,11 +357,17 @@ BOOST_AUTO_TEST_CASE(compare_with_built_payload_catches_altered_extra_data)
     strippedExtraData.extraData.clear();
     BOOST_CHECK(engine::detail::compareWithBuiltPayload(strippedExtraData, built).has_value());
 
-    // V3 wire may omit withdrawalsRoot; that is not a mismatch.
     auto withoutWithdrawalsRoot = built;
     withoutWithdrawalsRoot.withdrawalsRoot = std::nullopt;
     BOOST_CHECK(
         !engine::detail::compareWithBuiltPayload(withoutWithdrawalsRoot, built).has_value());
+    auto withForeignRoot = built;
+    withForeignRoot.withdrawalsRoot = h256(1);
+    auto omittedForeign = withForeignRoot;
+    omittedForeign.withdrawalsRoot = std::nullopt;
+    auto omitError = engine::detail::compareWithBuiltPayload(omittedForeign, withForeignRoot);
+    BOOST_REQUIRE(omitError.has_value());
+    BOOST_CHECK_NE(omitError->find("withdrawalsRoot"), std::string::npos);
 
     auto alteredTransaction = built;
     alteredTransaction.transactions[1].raw = bytes{0x02, 0x04};
@@ -379,7 +385,7 @@ BOOST_AUTO_TEST_CASE(compare_with_built_payload_catches_altered_extra_data)
 // compareWithBuiltPayload must reject a mismatch on EVERY hash-relevant field, not just
 // extraData/stateRoot/transactions. Parameterized over the 16 field arms; each mutation
 // must produce a mismatch message naming the field (unique per arm), and the honest echo
-// must stay VALID. Guards against a dropped compare arm (finding AQ): deleting any arm
+// must stay VALID. Guards against a dropped compare arm: deleting any arm
 // keeps the whole suite green today, so each field gets its own assertion.
 BOOST_AUTO_TEST_CASE(compare_with_built_payload_catches_every_hash_relevant_field)
 {
@@ -420,11 +426,10 @@ BOOST_AUTO_TEST_CASE(compare_with_built_payload_catches_every_hash_relevant_fiel
         {"withdrawalsRoot", [](ExecutionPayload& p) { p.withdrawalsRoot = h256(2); }},
         {"blobGasUsed", [](ExecutionPayload& p) { p.blobGasUsed = u256(2); }},
         {"excessBlobGas", [](ExecutionPayload& p) { p.excessBlobGas = u256(2); }},
-        // The newer comparator arms (round-5 finding R2): present-vs-present value
+        // The newer comparator arms (R2): present-vs-present value
         // disagreements on the withdrawals LIST and the V4 shape fields must reject
         // exactly like the hash fields — a dropped arm would keep every suite green.
-        {"withdrawals",
-            [](ExecutionPayload& p) { p.withdrawals->push_back(WithdrawalV1{}); }},
+        {"withdrawals", [](ExecutionPayload& p) { p.withdrawals->push_back(WithdrawalV1{}); }},
         {"blockAccessList", [](ExecutionPayload& p) { p.blockAccessList = bytes{0x09}; }},
         {"slotNumber", [](ExecutionPayload& p) { p.slotNumber = 8; }},
     };
@@ -453,22 +458,31 @@ BOOST_AUTO_TEST_CASE(compare_with_built_payload_catches_every_hash_relevant_fiel
         BOOST_CHECK_NE(err->find("transactions"), std::string::npos);
     }
 
-    // V3-omitted optionals are not mismatches (missing vs present-zero semantics).
     {
         auto stripped = built;
         stripped.withdrawalsRoot = std::nullopt;
-        BOOST_CHECK(!engine::detail::compareWithBuiltPayload(stripped, built).has_value());
+        auto rootError = engine::detail::compareWithBuiltPayload(stripped, built);
+        BOOST_REQUIRE(rootError.has_value());
+        BOOST_CHECK_NE(rootError->find("withdrawalsRoot"), std::string::npos);
+        stripped = built;
+        stripped.withdrawalsRoot = engine::detail::withdrawalsRootFor(built);
+        auto emptyRoot = built;
+        emptyRoot.withdrawalsRoot = std::nullopt;
+        BOOST_CHECK(!engine::detail::compareWithBuiltPayload(emptyRoot, stripped).has_value());
+        stripped = built;
         stripped.blobGasUsed = std::nullopt;
-        BOOST_CHECK(!engine::detail::compareWithBuiltPayload(stripped, built).has_value());
+        auto blobError = engine::detail::compareWithBuiltPayload(stripped, built);
+        BOOST_REQUIRE(blobError.has_value());
+        BOOST_CHECK_NE(blobError->find("blobGasUsed"), std::string::npos);
+        stripped = built;
         stripped.excessBlobGas = std::nullopt;
-        BOOST_CHECK(!engine::detail::compareWithBuiltPayload(stripped, built).has_value());
+        auto excessError = engine::detail::compareWithBuiltPayload(stripped, built);
+        BOOST_REQUIRE(excessError.has_value());
+        BOOST_CHECK_NE(excessError->find("excessBlobGas"), std::string::npos);
     }
 }
 
-// Finding BL: keep-local-body contract. Optional V3 fields are compared only
-// when both sides have them. Presence XOR (omit vs value, either direction) is
-// not a mismatch; only present-vs-present disagreement is INVALID.
-BOOST_AUTO_TEST_CASE(compare_absent_optional_keeps_local_body)
+BOOST_AUTO_TEST_CASE(compare_absent_optional_follows_reconstructed_hash)
 {
     auto built = makePayloadWithTransactions(
         fromHexWithPrefix("0x01000000fa000000060000000000000000"), {{0x7e, 0x01}});
@@ -483,23 +497,31 @@ BOOST_AUTO_TEST_CASE(compare_absent_optional_keeps_local_body)
 
     // Both absent.
     BOOST_CHECK(!engine::detail::compareWithBuiltPayload(omitted, omitted).has_value());
-    // Submitted omit vs built present (GetPayloadV3 echo of a V4-capable local body).
-    BOOST_CHECK(!engine::detail::compareWithBuiltPayload(omitted, built).has_value());
-    // Submitted present vs built omit (reverse XOR; omit vs value, not both-have).
-    BOOST_CHECK(!engine::detail::compareWithBuiltPayload(built, omitted).has_value());
+    // Submitted omit vs built present non-empty-trie root / present blob-gas.
+    BOOST_CHECK(engine::detail::compareWithBuiltPayload(omitted, built).has_value());
+    BOOST_CHECK(engine::detail::compareWithBuiltPayload(built, omitted).has_value());
     // Both present and equal.
     BOOST_CHECK(!engine::detail::compareWithBuiltPayload(built, built).has_value());
 
-    // Per-field omit vs present still ACCEPT; only a value disagreement INVALID.
     {
         auto stripped = built;
         stripped.withdrawalsRoot = std::nullopt;
-        BOOST_CHECK(!engine::detail::compareWithBuiltPayload(stripped, built).has_value());
+        auto rootError = engine::detail::compareWithBuiltPayload(stripped, built);
+        BOOST_REQUIRE(rootError.has_value());
+        BOOST_CHECK_NE(rootError->find("withdrawalsRoot"), std::string::npos);
+        stripped = built;
         stripped.blobGasUsed = std::nullopt;
-        BOOST_CHECK(!engine::detail::compareWithBuiltPayload(stripped, built).has_value());
+        BOOST_CHECK(engine::detail::compareWithBuiltPayload(stripped, built).has_value());
+        stripped = built;
         stripped.excessBlobGas = std::nullopt;
-        BOOST_CHECK(!engine::detail::compareWithBuiltPayload(stripped, built).has_value());
+        BOOST_CHECK(engine::detail::compareWithBuiltPayload(stripped, built).has_value());
     }
+
+    auto emptyTrie = built;
+    emptyTrie.withdrawalsRoot = engine::detail::withdrawalsRootFor(built);
+    auto omitEmpty = emptyTrie;
+    omitEmpty.withdrawalsRoot = std::nullopt;
+    BOOST_CHECK(!engine::detail::compareWithBuiltPayload(omitEmpty, emptyTrie).has_value());
 
     auto disagreedRoot = built;
     disagreedRoot.withdrawalsRoot = h256(2);

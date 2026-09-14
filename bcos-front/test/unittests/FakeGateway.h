@@ -89,9 +89,10 @@ public:
         const bcos::crypto::NodeID& srcNodeID,
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads) override;
 
-    void asyncNotifyGroupInfo(
-        bcos::group::GroupInfo::Ptr, std::function<void(Error::Ptr&&)>) override
-    {}
+    task::Task<Error::Ptr> notifyGroupInfo(bcos::group::GroupInfo::Ptr) override
+    {
+        co_return nullptr;
+    }
 
     task::Task<std::tuple<Error::Ptr, int16_t, bcos::bytes>> sendMessageByTopic(
         const std::string&, bcos::bytesConstRef) override

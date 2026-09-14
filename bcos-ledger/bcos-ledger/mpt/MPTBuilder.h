@@ -58,6 +58,9 @@ struct BuildContext
     MPTReadView<Storage> const& parentView;  ///< the parent block's MPT, for baseline lookups
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher& hasher;  ///< reused slot-key context
     bool l2Mode;  ///< scenario B: a BCOS extension row is an error rather than a skip
+    /// Forwarded to every mergeNodeDelta / hand tally: false when the configured CommitObserver
+    /// does not count references (CommitObserver::needsRefCountDeltas).
+    bool trackRefCounts;
 };
 
 /// One core-field row's fate in the block's delta layer.
@@ -91,10 +94,9 @@ struct AccountRows
     /// extension rows leave it false: an account touched only by those has no Ethereum state
     /// change, and finalizeAccount must not invent a leaf for it (see there).
     ///
-    /// This closes ONE member of the EIP-161 empty-account class, not the class. A block that
-    /// writes a zero balance to an otherwise-untouched account still produces {0, 0,
-    /// emptyCodeHash, emptyRoot}, because EIP-158/161 empty-account clearing is not implemented
-    /// (see finalizeAccount's tombstone comment).
+    /// This closes the "no Ethereum row at all" member of the EIP-161 empty-account class up
+    /// front; the rest of the class (a touched account whose merged triple is empty) is
+    /// cleared in finalizeAccount after the merge.
     bool sawEthereumRow = false;
 };
 
@@ -238,19 +240,24 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
     // revert), so the run reaches us as "all three core rows deleted"; without this case
     // requireNotDeleted() would reject a perfectly legal transaction.
     //
-    // Removing a pre-existing leaf is the same one line, kept as compatibility headroom: there is
-    // no path to it today (6780 spares already-existing contracts; EIP-158/161 empty-account
-    // clearing is not implemented) — but if one appears, silently leaving a stale leaf behind
-    // would be a fork.
+    // Removing a pre-existing leaf is the same one line; EIP-6780 spares already-existing
+    // contracts, so today the only other remover is the EIP-161 empty-account clearing below.
     if (rows.nonce.deleted && rows.balance.deleted && rows.codeHash.deleted)
     {
-        // Record the prior storage root for future pathdb pruning — the full subtree walk
-        // is deferred to the pruning spec, the root hash is the ledger entry. Removing an
-        // absent leaf is a legal no-op (commitTrie treats it as such).
+        // Record the prior storage root for pathdb pruning — the full subtree walk is
+        // deferred (MPTPruner documents the gap), the root hash is the ledger entry. Removing
+        // an absent leaf is a legal no-op (commitTrie treats it as such). The refcount tally
+        // is hand-maintained here: this obsoletion bypasses commitTrie, so mergeNodeDelta
+        // never sees it — the ONLY place refCountDeltas is written outside mergeNodeDelta,
+        // gated by the same trackRefCounts switch.
         auto prior = co_await context.parentView.readAccount(address);
         if (prior && prior->storageRoot != emptyRootHash())
         {
             output.obsoletedNodes.insert(prior->storageRoot);
+            if (context.trackRefCounts)
+            {
+                output.refCountDeltas[prior->storageRoot] -= 1;
+            }
         }
         accountChanges[accountKeyHash(address)] = std::nullopt;
         co_return;
@@ -293,22 +300,6 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
         updated.codeHash = meta.codeHash;
     }
 
-    if (!rows.storageChanges.empty())
-    {
-        // First trie level: commit THIS account's storage trie; the new root is embedded in
-        // the leaf encoded below, which is how it reaches the account trie.
-        // First-touch: priorStorageRoot == emptyRootHash() — the trie holds exactly this
-        // block's written slots (spec §4.2); deletes of never-written slots are no-ops.
-        auto merged =
-            co_await commitTrie(context.nodeStorage, priorStorageRoot, rows.storageChanges);
-        updated.storageRoot = merged.root;
-        mergeNodeDelta(std::move(merged), output);
-    }
-    else
-    {
-        updated.storageRoot = priorStorageRoot;
-    }
-
     if (rows.nonce.value)
     {
         updated.nonce = *rows.nonce.value;
@@ -320,6 +311,43 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
     if (rows.codeHash.value)
     {
         updated.codeHash = *rows.codeHash.value;
+    }
+
+    // EIP-158/161 empty-account clearing (issue #5373): a touched account whose post-block core
+    // triple is {nonce 0, balance 0, keccak256("")} is removed from the trie, never written.
+    // Decided on the MERGED triple because fields the block did not write keep their baseline /
+    // flat value, and only the merged triple is the account's real state. Storage is not
+    // consulted for emptiness, and the block's slot writes for such an account are DROPPED
+    // together with its prior storage trie — the same semantics as reth (revm
+    // touch_empty_eip161 sets storage_was_destroyed; HashedPostState maps the account to None).
+    // Checked before the storage commit so those dropped slot writes never produce nodes.
+    if (updated.nonce == 0 && updated.balance == 0 && updated.codeHash == emptyCodeHash())
+    {
+        if (priorStorageRoot != emptyRootHash())
+        {
+            output.obsoletedNodes.insert(priorStorageRoot);
+        }
+        if (baseline)
+        {
+            accountChanges[accountKeyHash(address)] = std::nullopt;
+        }
+        co_return;
+    }
+
+    if (!rows.storageChanges.empty())
+    {
+        // First trie level: commit THIS account's storage trie; the new root is embedded in
+        // the leaf encoded below, which is how it reaches the account trie.
+        // First-touch: priorStorageRoot == emptyRootHash() — the trie holds exactly this
+        // block's written slots (spec §4.2); deletes of never-written slots are no-ops.
+        auto merged =
+            co_await commitTrie(context.nodeStorage, priorStorageRoot, rows.storageChanges);
+        updated.storageRoot = merged.root;
+        mergeNodeDelta(std::move(merged), output, context.trackRefCounts);
+    }
+    else
+    {
+        updated.storageRoot = priorStorageRoot;
     }
     accountChanges[accountKeyHash(address)] = updated.encode();
 }
@@ -395,19 +423,31 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
 ///                        stops advancing.
 /// @param l2Mode          scenario B (Ethereum-compatible chain): a KNOWN BCOS extension row in
 ///                        the delta throws UnexpectedBCOSFieldInL2; scenario A skips it.
+/// @param trackRefCounts  false leaves the returned delta's refCountDeltas EMPTY (the per-hash
+///                        tally is skipped) — for callers whose CommitObserver does not count
+///                        references (CommitObserver::needsRefCountDeltas). stateRoot, newNodes,
+///                        obsoletedNodes and intraBlockObsoleted are unaffected. Defaults to
+///                        false so a producer that forgets to wire its observer's
+///                        needsRefCountDeltas through cannot silently tally with no consumer —
+///                        and one that DOES count but tallies nothing trips the pruner's
+///                        fail-loud empty-refCountDeltas check on its first pruned block.
 /// @throws MPTInvariantViolation on a deleted core-field row outside a tombstone
 ///         (spec §5.4 treats that as an error).
 /// @throws UnknownAccountRowField on an account row whose field name is not classified, in
 ///         either mode (spec §5.2).
 template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage>
 bcos::task::Task<MPTDeltaLayer> buildAndCollect(
-    Storage& nodeStorage, bcos::h256 parentStateRoot, auto& flatView, bool l2Mode)
+    Storage& nodeStorage, bcos::h256 parentStateRoot, auto& flatView, bool l2Mode,
+    bool trackRefCounts = false)
 {
     MPTDeltaLayer output;
     MPTReadView<Storage> const parentView(nodeStorage, parentStateRoot);
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
-    detail::BuildContext<Storage> context{
-        .nodeStorage = nodeStorage, .parentView = parentView, .hasher = hasher, .l2Mode = l2Mode};
+    detail::BuildContext<Storage> context{.nodeStorage = nodeStorage,
+        .parentView = parentView,
+        .hasher = hasher,
+        .l2Mode = l2Mode,
+        .trackRefCounts = trackRefCounts};
 
     // The ACCOUNT trie's change-set: accountKeyHash(addr) → the account's new leaf encoding
     // (nullopt = tombstone removal). Slot changes never appear here — each account digests
@@ -474,7 +514,7 @@ bcos::task::Task<MPTDeltaLayer> buildAndCollect(
     // tries must be committed first. This root is the block's new MPT state root.
     auto merged = co_await commitTrie(nodeStorage, parentStateRoot, accountChanges);
     output.stateRoot = merged.root;
-    mergeNodeDelta(std::move(merged), output);
+    mergeNodeDelta(std::move(merged), output, trackRefCounts);
 
     // MPTDeltaLayer aggregates one commitTrie result per touched storage trie plus the
     // account trie. Unlike a single mergeTrie() result the union is not disjoint by
@@ -491,6 +531,13 @@ bcos::task::Task<MPTDeltaLayer> buildAndCollect(
             output.intraBlockObsoleted.insert(hash);
         }
     }
+    // refCountDeltas is deliberately NOT adjusted here: mergeNodeDelta already nets each hash's
+    // emissions against its obsoletions (and cancels byte-identical re-emits via
+    // TrieMergeResult::reemittedNodes), which is exactly the movement the pruning spec counts —
+    // or the map is empty outright because trackRefCounts is false.
+    // The one entry mergeNodeDelta never saw — the tombstone path's manual storage-root
+    // obsoletion (finalizeAccount, the only hand-maintained refcount entry) — needs no
+    // adjustment either: it has no countervailing emission in this block by construction.
 
     // One batched flush for the whole block (spec §5.4): nothing inside this build reads a
     // node it produced — storage-trie merges read parent-version nodes only, and the account

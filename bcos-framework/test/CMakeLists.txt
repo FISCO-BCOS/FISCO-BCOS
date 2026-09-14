@@ -24,6 +24,7 @@ set(SOURCES unittests/storage2/TestMemoryStorage.cpp
     unittests/main/main.cpp
     unittests/interfaces/ExecutorTest.cpp
     unittests/interfaces/FeaturesActivationBlockTest.cpp
+    unittests/interfaces/FeaturesGenesisOnlyTest.cpp
     unittests/interfaces/FeaturesTest.cpp
     unittests/interfaces/TestTransactionExecutor.cpp
     unittests/mempool/TestAnyMemPool.cpp

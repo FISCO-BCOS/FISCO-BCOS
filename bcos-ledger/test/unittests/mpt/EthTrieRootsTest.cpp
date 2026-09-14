@@ -24,6 +24,7 @@
  *        The empty-trie root is also pinned to the Ethereum constant.
  */
 #include "bcos-ledger/mpt/EthTrieRoots.h"
+#include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-utilities/Bloom.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -114,6 +115,33 @@ BOOST_AUTO_TEST_CASE(ReceiptsRoot)
     auto root = calculateReceiptsRoot(refs);
     BOOST_CHECK_EQUAL(
         root.hexPrefixed(), "0x2d82724250d2cb15d23a84a75c0ccce1c4fbd6032110e3be57eccbf68866353d");
+}
+
+/// The engine header paths and the OP block seal both root the receipts trie through
+/// calculateReceiptsRoot, while the OP path historically built the same trie through
+/// computeTrieRootVarKey. Pin their equivalence across the 2-byte-key boundary
+/// (rlp(128) = 0x8180 shares its leading nibble with rlp(0) = 0x80) so the two entry points
+/// cannot drift on key ordering or leaf handling.
+BOOST_AUTO_TEST_CASE(IndexedRootMatchesVarKeyBuilderAcrossKeyWidthBoundary)
+{
+    for (std::size_t count : {1U, 2U, 3U, 127U, 128U, 129U, 300U})
+    {
+        std::vector<bytes> items;
+        items.reserve(count);
+        std::vector<std::pair<bytes, bytes>> entries;
+        entries.reserve(count);
+        for (std::size_t i = 0; i < count; ++i)
+        {
+            bytes leaf{static_cast<byte>(i & 0xff), static_cast<byte>((i >> 8) & 0xff)};
+            bytes key;
+            codec::rlp::encode(key, static_cast<uint64_t>(i));
+            entries.emplace_back(std::move(key), leaf);
+            items.push_back(std::move(leaf));
+        }
+        auto const indexed = calculateReceiptsRoot(refsOf(items));
+        auto const varKey = computeTrieRootVarKey(entries).root;
+        BOOST_CHECK_MESSAGE(indexed == varKey, "receipts root differs at count " << count);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(WithdrawalsRoot)

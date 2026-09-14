@@ -410,6 +410,11 @@ void bcostars::protocol::TransactionReceiptImpl::setLogsBloom(bcos::bytesConstRe
 }
 size_t bcostars::protocol::TransactionReceiptImpl::logIndex() const
 {
-    return 0;
+    return m_inner()->logIndex;
 }
-void bcostars::protocol::TransactionReceiptImpl::setLogIndex(size_t index) {}
+void bcostars::protocol::TransactionReceiptImpl::setLogIndex(size_t index)
+{
+    // Both sides made the same field real (upstream tracked it as issue #5553); the tars type
+    // is spelled out rather than assumed.
+    m_inner()->logIndex = static_cast<tars::UInt32>(index);
+}

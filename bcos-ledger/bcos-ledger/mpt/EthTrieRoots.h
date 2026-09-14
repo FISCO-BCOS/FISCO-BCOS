@@ -23,10 +23,16 @@
 #include "HashBuilder.h"
 #include <bcos-utilities/Bloom.h>
 #include <bcos-utilities/Common.h>
+#include <cstdint>
 #include <range/v3/range.hpp>
 #include <span>
 #include <type_traits>
 #include <vector>
+
+namespace bcos::protocol
+{
+class TransactionReceipt;
+}
 
 namespace bcos::ledger::mpt
 {
@@ -47,7 +53,7 @@ inline bcos::h256 calculateTransactionsRoot(std::span<bcos::bytesConstRef const>
     return computeIndexedTrieRoot(txs);
 }
 /// Receipts trie root (receiptsRoot): values are the receipt RLP encodings
-/// (EthReceipt::rlpEncode output — type-prefix + [status, cumGas, logsBloom, logs]).
+/// (encodeReceiptLeaf output — type-prefix + [status, cumGas, logsBloom, logs]).
 inline bcos::h256 calculateReceiptsRoot(std::span<bcos::bytesConstRef const> receipts)
 {
     return computeIndexedTrieRoot(receipts);
@@ -57,6 +63,19 @@ inline bcos::h256 calculateWithdrawalsRoot(std::span<bcos::bytesConstRef const> 
 {
     return computeIndexedTrieRoot(withdrawals);
 }
+
+/// RLP leaf for one receipt in the receipts trie, byte-for-byte op-geth's
+/// `Receipts.EncodeIndex` (core/types/receipt.go):
+///   legacy  (txType 0x00) -> rlp([status, cumulativeGasUsed, logsBloom, logs])
+///   typed                 -> <txType> || rlp([...])
+///   deposit (txType 0x7e) -> 0x7e || rlp([..., depositNonce, depositReceiptVersion])
+/// This is the value half of calculateReceiptsRoot; the caller keys the leaves by rlp(index).
+///
+/// @param txType EIP-2718 type byte of the transaction that produced @p receipt (0 = legacy).
+/// @throws EthReceiptEncodeError when the receipt is malformed: bloom not 256 bytes, an
+///         unparseable cumulativeGasUsed, or a deposit receipt without its nonce/version.
+[[nodiscard]] bcos::bytes encodeReceiptLeaf(
+    bcos::protocol::TransactionReceipt const& receipt, std::uint8_t txType);
 
 /// Block-level logs bloom: bitwise OR of the per-receipt 256-byte blooms (each computed from its
 /// logs via bcos::getLogsBloom). Returns a zero bloom for an empty input. Forwarding reference:

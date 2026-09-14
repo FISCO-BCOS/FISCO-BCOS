@@ -25,6 +25,7 @@
 #include <bcos-sync/BlockSync.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
+#include <bcos-task/Wait.h>
 
 using namespace bcos;
 using namespace bcos::tool;
@@ -88,14 +89,17 @@ void ProPBFTInitializer::reportNodeInfo()
     });
 
     // notify groupInfo to gateway
-    m_gateway->asyncNotifyGroupInfo(m_groupInfo, [this](bcos::Error::Ptr&& _error) {
-        if (_error && m_running)
+    bcos::task::wait([](bcos::gateway::GatewayInterface::Ptr _gateway,
+                         bcos::group::GroupInfo::Ptr _groupInfo,
+                         ProPBFTInitializer* _self) -> bcos::task::Task<void> {
+        auto error = co_await _gateway->notifyGroupInfo(std::move(_groupInfo));
+        if (error && _self->m_running)
         {
             INITIALIZER_LOG(WARNING)
-                << LOG_DESC("asyncNotifyGroupInfo to gateway failed")
-                << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
+                << LOG_DESC("notifyGroupInfo to gateway failed")
+                << LOG_KV("code", error->errorCode()) << LOG_KV("msg", error->errorMessage());
         }
-    });
+    }(m_gateway, m_groupInfo, this));
 }
 
 void ProPBFTInitializer::start()

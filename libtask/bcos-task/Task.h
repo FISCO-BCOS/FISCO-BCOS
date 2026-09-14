@@ -16,6 +16,7 @@
 
 #pragma once
 #include "bcos-utilities/Exceptions.h"
+#include <atomic>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <coroutine>
@@ -90,6 +91,112 @@ struct PromiseValue : public PromiseBase<TaskType, PromiseValue<TaskType>>
                 .template emplace<typename TaskType::Value>(std::move(value));
         }
     }
+};
+
+struct TaskPure
+{
+public:
+    struct promise_type
+    {
+        constexpr std::suspend_always initial_suspend() noexcept { return {}; }
+        constexpr std::suspend_never final_suspend() noexcept { return {}; }
+        constexpr void return_void() noexcept {}
+        void unhandled_exception()
+        {
+            std::rethrow_exception(std::current_exception());
+        }
+        TaskPure get_return_object()
+        {
+            auto handle = std::coroutine_handle<promise_type>::from_promise(
+                *static_cast<promise_type*>(this));
+            return TaskPure{handle};
+        }
+    };
+
+    explicit TaskPure(std::coroutine_handle<promise_type> handle) : m_handle(handle) {}
+    TaskPure(const TaskPure&) = delete;
+    TaskPure(TaskPure&&) noexcept = default;
+    TaskPure& operator=(const TaskPure&) = delete;
+    TaskPure& operator=(TaskPure&&) noexcept = default;
+    ~TaskPure() noexcept = default;
+    const std::coroutine_handle<promise_type>& getHandle() const { return m_handle; }
+
+private:
+    std::coroutine_handle<promise_type> m_handle;
+};
+
+template <typename... Resp>
+struct GetResultAwaitable
+{
+    // Shared state, single-shot: one Result backs exactly one co_await and exactly one
+    // complete(). There is no reset — reuse would silently redeliver the first completion.
+    struct Result
+    {
+        enum class State : uint8_t
+        {
+            INIT,
+            SUSPENDED,
+            DONE,
+        };
+
+        std::tuple<Resp...> data;
+        // Suspend handshake only. DONE means the result arrived BEFORE the coroutine parked (so
+        // await_ready() takes the fast path); a result delivered after it parked resumes the
+        // coroutine and leaves this at SUSPENDED. Exactly-once is owned by `completed`, not here.
+        std::atomic<State> state = State::INIT;
+        std::coroutine_handle<> handle;
+        // Exactly-once claim: the completer that flips this false->true owns the completion.
+        std::atomic<bool> completed{false};
+    };
+
+    explicit GetResultAwaitable(Result& result) : m_result(result) {}
+
+    bool await_ready() noexcept
+    {
+        // Fast path: the result was completed before the coroutine reached this co_await
+        // (e.g. an ack arrived while the coroutine was still waiting on the write). Skip the
+        // suspension entirely and let await_resume read the already-completed data.
+        return m_result.state.load(std::memory_order_acquire) == Result::State::DONE;
+    }
+    bool await_suspend(std::coroutine_handle<> handle) noexcept
+    {
+        m_result.handle = handle;
+        typename Result::State expected = Result::State::INIT;
+        if (m_result.state.compare_exchange_strong(expected, Result::State::SUSPENDED,
+                std::memory_order_acq_rel, std::memory_order_acquire))
+        {
+            return true;
+        }
+        // The completion won the race (state already DONE): do not suspend, await_resume reads
+        // the data inline.
+        return false;
+    }
+    std::tuple<Resp...> await_resume() noexcept
+    {
+        return std::move(m_result.data);
+    }
+
+    static void complete(Result& result, Resp... resp)
+    {
+        // Claim first: a second (or concurrent) complete() must not touch data or handle.
+        auto claimed = false;
+        if (!result.completed.compare_exchange_strong(claimed, true))
+        {
+            return;
+        }
+        // Write before publishing DONE, so a reader that observes DONE also observes data.
+        typename Result::State expected = Result::State::INIT;
+        result.data = std::make_tuple(std::move(resp)...);
+        if (result.state.compare_exchange_strong(expected, Result::State::DONE,
+                std::memory_order_acq_rel, std::memory_order_acquire))
+        {
+            return;
+        }
+        result.handle.resume();
+    }
+
+private:
+    Result& m_result;
 };
 
 template <class TaskType>

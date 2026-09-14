@@ -70,6 +70,7 @@ constexpr Expectation kExpectations[] = {
     {TransactionStatus::NonceHasMaxValue, "NonceHasMaxValue"},
     {TransactionStatus::FeeCapLessThanBaseFee, "FeeCapLessThanBaseFee"},
     {TransactionStatus::MaxGasLimitExceeded, "MaxGasLimitExceeded"},
+    {TransactionStatus::BcosTxNotAllowed, "BcosTxNotAllowed"},
 };
 }  // namespace
 

@@ -9,13 +9,13 @@
 #include <oneapi/tbb/parallel_invoke.h>
 #include <boost/throw_exception.hpp>
 #include <concepts>
+#include <deque>
 #include <functional>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/map.hpp>
 #include <range/v3/view/zip.hpp>
 #include <type_traits>
 #include <variant>
-#include <deque>
 
 namespace bcos::storage2
 {
@@ -601,7 +601,7 @@ public:
 private:
     /// Shared merge body of mergeBackStorage / mergeToBackends — the only difference
     /// between the two is whether a queued layer participates in the merge.
-    /// Private on purpose (finding R1): every other public mutator on this class
+    /// Private on purpose: every other public mutator on this class
     /// self-locks; this body performs an unlocked storage2::merge into the backends,
     /// so exposing it would let a caller race mergeBackStorage on m_latestBackend.
     /// mergeBackStorage/mergeToBackends hold m_mergeMutex around the call.

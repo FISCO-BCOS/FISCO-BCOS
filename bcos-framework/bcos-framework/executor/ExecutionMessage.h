@@ -23,6 +23,9 @@
 #include "../protocol/LogEntry.h"
 #include "../protocol/ProtocolTypeDef.h"
 #include <boost/iterator/iterator_categories.hpp>
+// boost.range 1.89/1.90 regression: any_iterator_interface.hpp uses add_const
+// without including it; fixed upstream in 1.91. Drop this after boost >= 1.91.
+#include <boost/type_traits/add_const.hpp>
 #include <boost/range/any_range.hpp>
 #include <memory>
 #include <sstream>

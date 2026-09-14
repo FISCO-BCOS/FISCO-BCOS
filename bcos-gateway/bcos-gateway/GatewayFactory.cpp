@@ -17,10 +17,10 @@
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/PeerBlackWhitelistInterface.h"
 #include "bcos-gateway/libnetwork/PeerBlacklist.h"
+#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/PeerWhitelist.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
-#include "bcos-gateway/libp2p/P2PMessageV2.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-gateway/libp2p/ServiceV2.h"
 #include "bcos-gateway/libp2p/router/RouterTableImpl.h"
@@ -32,6 +32,7 @@
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/FileUtility.h"
 #include "bcos-utilities/IOServicePool.h"
+#include <bcos-task/Wait.h>
 #include <openssl/evp.h>
 #include <openssl/x509.h>
 #include <exception>
@@ -691,7 +692,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     asioInterface->setType(ASIOInterface::ASIO_TYPE::SSL);
 
     // Message Factory
-    auto messageFactory = std::make_shared<P2PMessageFactoryV2>();
+    auto messageFactory = std::make_shared<MessageFactory>();
     auto nodeIDHash = _config->calculateShortNodeID(pubHex);
     P2PInfo selfInfo(nodeIDHash, pubHex);
     // Session Factory
@@ -814,7 +815,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                 service->registerHandlerByMsgType(GatewayMessageType::AMOPMessageType,
                     [](const bcos::gateway::NetworkException& _e,
                         const bcos::gateway::P2PSession::Ptr& session,
-                        const std::shared_ptr<bcos::gateway::P2PMessage>& message) {
+                        const std::shared_ptr<bcos::gateway::Message>& message) {
                         // 只读模式下, 不处理其它节点的amop消息
                         // In read-only mode, AMOP messages from other nodes are not processed
                         return;
@@ -965,16 +966,18 @@ void GatewayFactory::initFailOver(
                 << LOG_DESC("The leader entryPoint changed") << LOG_KV("key", _leaderKey)
                 << LOG_KV("memberID", _leader->memberID()) << LOG_KV("modifyIndex", _leader->seq())
                 << LOG_KV("groupID", groupInfo->groupID());
-            _gateWay->asyncNotifyGroupInfo(groupInfo, [](Error::Ptr&& _error) {
-                if (_error)
+            task::wait([](std::shared_ptr<Gateway> _gateWay,
+                           bcos::group::GroupInfo::Ptr _groupInfo) -> task::Task<void> {
+                auto error = co_await _gateWay->notifyGroupInfo(std::move(_groupInfo));
+                if (error)
                 {
                     GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("memberChangedNotification failed")
-                                              << LOG_KV("code", _error->errorCode())
-                                              << LOG_KV("msg", _error->errorMessage());
-                    return;
+                                              << LOG_KV("code", error->errorCode())
+                                              << LOG_KV("msg", error->errorMessage());
+                    co_return;
                 }
                 GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("memberChangedNotification success");
-            });
+            }(_gateWay, std::move(groupInfo)));
         });
 
     _entryPoint->addMemberDeleteNotificationHandler(

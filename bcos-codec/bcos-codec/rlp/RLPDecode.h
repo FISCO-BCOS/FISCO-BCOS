@@ -238,6 +238,13 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, UnsignedIntegral auto& to) 
         return BCOS_ERROR_UNIQUE_PTR(DecodingError::UnexpectedLength,
             "integer wider than target type");
     }
+    // Canonical integers carry no leading zero byte, and zero is the empty string 0x80, never a
+    // single 0x00 (op-geth ErrCanonInt). decodeHeader only checks length prefixes (issue #5353).
+    if (header.payloadLength >= 1 && from[0] == 0)
+    {
+        return BCOS_ERROR_UNIQUE_PTR(
+            DecodingError::NonCanonicalSize, "Non-canonical integer: leading zero byte");
+    }
     to = fromBigEndian<std::decay_t<decltype(to)>, bcos::bytesRef>(
         from.getCroppedData(0, header.payloadLength));
     from = from.getCroppedData(header.payloadLength);

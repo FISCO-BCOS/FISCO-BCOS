@@ -44,6 +44,25 @@ void Features::validate(Flag flag) const
         BOOST_THROW_EXCEPTION(bcos::tool::InvalidSetFeature{}
                               << errinfo_comment("must set feature_balance_precompiled first"));
     }
+    // Genesis-only. validate() has exactly one production caller --
+    // SystemConfigPrecompiled::validate (SystemConfigPrecompiled.cpp:309), the governance
+    // setSystemConfig path, which reaches this overload through the string overload above --
+    // while genesis loading calls set() directly, so rejecting here bars post-genesis activation
+    // without touching how a chain is born. Every reader of this flag treats it as a property the
+    // chain was created with, not one it can acquire: NodeConfig::validateL2Invariants ties it to
+    // the genesis [alloc.*] and [eth_genesis_header] sections that only exist at genesis;
+    // scheduler_v1::validateMPTFlagMatrix refuses to boot a node whose activation block is not 0,
+    // because switching the state-root scheme mid-chain forks every replaying node; and the L2
+    // admission gate (Check::BcosTxAllowedOnChain) judges a transaction once, at admission, so a
+    // mid-chain flip would leave already-admitted native transactions eligible for a proposal.
+    if (flag == Flag::feature_l2_ethereum_compat)
+    {
+        BOOST_THROW_EXCEPTION(
+            bcos::tool::InvalidSetFeature{} << errinfo_comment(
+                "feature_l2_ethereum_compat is a genesis-only feature: set it in config.genesis "
+                "[features] when the chain is created. It cannot be enabled by governance on a "
+                "running chain -- start a new chain instead."));
+    }
 }
 
 bool Features::get(Flag flag) const
@@ -195,15 +214,18 @@ void Features::setUpgradeFeatures(
                     Flag::bugfix_v1_timestamp}},
             {.to = protocol::BlockVersion::V3_16_4_VERSION, .flags = {Flag::bugfix_revert_logs}},
             {.to = protocol::BlockVersion::V3_17_0_VERSION,
-                .flags = {
-                    Flag::bugfix_auth_check,
-                    Flag::bugfix_v1_error_handling,
-                    Flag::bugfix_gas_payment_balance_precheck,
-                    Flag::bugfix_precompiled_feature_gate,
-                    Flag::bugfix_evm_storage_status,
-                    Flag::bugfix_statestorage_hash_v3_17,
-                    Flag::bugfix_nonce_ordering,
-                }}});
+                .flags =
+                    {
+                        Flag::bugfix_auth_check,
+                        Flag::bugfix_v1_error_handling,
+                        Flag::bugfix_gas_payment_balance_precheck,
+                        Flag::bugfix_precompiled_feature_gate,
+                        Flag::bugfix_evm_storage_status,
+                        Flag::bugfix_statestorage_hash_v3_17,
+                        Flag::bugfix_nonce_ordering,
+                    }},
+            {.to = protocol::BlockVersion::V3_18_0_VERSION,
+                .flags = {Flag::bugfix_eip161_1052_account_semantics}}});
     for (const auto& upgradeFeatures : upgradeRoadmap)
     {
         if (((toVersion < protocol::BlockVersion::V3_2_7_VERSION) &&

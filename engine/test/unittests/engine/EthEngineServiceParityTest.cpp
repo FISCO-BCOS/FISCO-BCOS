@@ -21,7 +21,6 @@
 #include "engine/bcos-engine/EthEngineService.h"
 #include "engine/test/unittests/engine/EthServiceStubs.h"
 
-#include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-concepts/ByteBuffer.h>
@@ -39,6 +38,7 @@
 #include <bcos-framework/testutils/faker/FakeBlock.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-mempool/MemPoolImpl.h>
+#include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -68,8 +68,8 @@ namespace eth_parity_test
 
 using namespace bcos::engine::eth_test;
 // Whole-second milliseconds: finalizeEthBlockHeader / validateHeader require a whole
-// number of seconds at the Eth RLP boundary.
-constexpr std::uint64_t c_timestamp = 1700000000ULL * 1000ULL;
+// number of seconds at the Eth RLP boundary. Single definition in EthServiceStubs.h.
+constexpr std::uint64_t c_timestamp = bcos::engine::eth_test::c_defaultPayloadTimestamp;
 constexpr bcos::protocol::BlockNumber c_initialBlockNumber = 5;
 constexpr bcos::protocol::BlockNumber c_trackedInitialBlockNumber = 10;
 constexpr bcos::protocol::BlockNumber c_trackedNextBlockNumber = 11;
@@ -136,99 +136,6 @@ static protocol::Transaction::Ptr makeWeb3Tx(std::string_view senderBytes, uint6
     return tx;
 }
 
-task::Task<void> writeBlockNumberToStorage(RealGlobalStateBackendStorage& backendStorage,
-    const h256& blockHash, bcos::protocol::BlockNumber blockNumber)
-{
-    storage::Entry entry;
-    entry.set(boost::lexical_cast<std::string>(blockNumber));
-    co_await bcos::storage2::writeOne(backendStorage,
-        bcos::executor_v1::StateKey{
-            ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash)},
-        std::move(entry));
-}
-
-task::Task<void> writeCanonicalHashToStorage(RealGlobalStateBackendStorage& backendStorage,
-    bcos::protocol::BlockNumber blockNumber, const h256& blockHash)
-{
-    storage::Entry entry;
-    entry.set(blockHash.asBytes());
-    co_await bcos::storage2::writeOne(backendStorage,
-        bcos::executor_v1::StateKey{
-            ledger::SYS_NUMBER_2_HASH, boost::lexical_cast<std::string>(blockNumber)},
-        std::move(entry));
-}
-
-struct RealGlobalStateStorageFixture
-{
-    RealGlobalStateBackendStorage backendStorage;
-    RealGlobalCheckpointBackend checkpointBackend{backendStorage};
-    RealGlobalStateStorage storage{checkpointBackend};
-
-    explicit RealGlobalStateStorageFixture(
-        evmc_revision rev = EVMC_CANCUN, bool writeEvmcRevision = true)
-    {
-        writeSysConfig(magic_enum::enum_name(ledger::SystemConfig::executor_version),
-            std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
-        if (writeEvmcRevision)
-        {
-            writeSysConfig(
-                ledger::SYSTEM_KEY_EVMC_REVISION, ledger::encodeEVMCRevisionConfig(rev, {}));
-        }
-    }
-
-    void setBlockNumber(const h256& blockHash, bcos::protocol::BlockNumber blockNumber)
-    {
-        task::syncWait(writeBlockNumberToStorage(backendStorage, blockHash, blockNumber));
-    }
-
-    void setCanonicalBlock(const h256& blockHash, bcos::protocol::BlockNumber blockNumber)
-    {
-        setBlockNumber(blockHash, blockNumber);
-        task::syncWait(writeCanonicalHashToStorage(backendStorage, blockNumber, blockHash));
-    }
-
-    void setNonce(std::string_view sender, std::string nonce)
-    {
-        evmc_address addr{};
-        std::copy_n(sender.begin(), std::min(sender.size(), sizeof(addr.bytes)), addr.bytes);
-        ledger::account::EVMAccount account{backendStorage, addr, false};
-        task::syncWait(account.setNonce(std::move(nonce)));
-    }
-
-private:
-    void writeSysConfig(std::string_view key, std::string value)
-    {
-        storage::Entry entry;
-        entry.set(bcos::storage::serialize::encode(ledger::SystemConfigEntry{std::move(value), 0}));
-        task::syncWait(storage2::writeOne(backendStorage,
-            bcos::executor_v1::StateKey{ledger::SYS_CONFIG, key}, std::move(entry)));
-    }
-};
-
-void setForkchoiceBlockNumbers(RealGlobalStateStorageFixture& storageFixture,
-    const ForkchoiceState& forkchoiceState, bcos::protocol::BlockNumber headBlockNumber,
-    bcos::protocol::BlockNumber safeBlockNumber, bcos::protocol::BlockNumber finalizedBlockNumber)
-{
-    // One number → one canonical hash. Distinct hashes at the same height overwrite
-    // NUMBER_2_HASH and fail R3-F4's fail-closed check. Legacy fixtures that reused a
-    // height for makeForkchoiceState()'s three hashes get finalized < safe < head.
-    if (forkchoiceState.headBlockHash != forkchoiceState.safeBlockHash &&
-        headBlockNumber == safeBlockNumber)
-    {
-        BOOST_REQUIRE_GE(headBlockNumber, 1);
-        safeBlockNumber = headBlockNumber - 1;
-    }
-    if (forkchoiceState.headBlockHash != forkchoiceState.finalizedBlockHash &&
-        (headBlockNumber == finalizedBlockNumber || safeBlockNumber == finalizedBlockNumber))
-    {
-        BOOST_REQUIRE_GE(std::min(safeBlockNumber, headBlockNumber), 1);
-        finalizedBlockNumber = std::min(safeBlockNumber, headBlockNumber) - 1;
-    }
-    storageFixture.setCanonicalBlock(forkchoiceState.headBlockHash, headBlockNumber);
-    storageFixture.setCanonicalBlock(forkchoiceState.safeBlockHash, safeBlockNumber);
-    storageFixture.setCanonicalBlock(forkchoiceState.finalizedBlockHash, finalizedBlockNumber);
-}
-
 struct ServicePair
 {
     MemPoolImpl legacyMemPool;
@@ -252,50 +159,6 @@ struct ServicePair
     {}
 };
 
-ForkchoiceState makeForkchoiceState()
-{
-    return {h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
-        h256("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
-        h256("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")};
-}
-
-PayloadAttributes makePayloadAttributesV2()
-{
-    PayloadAttributes payloadAttributes;
-    payloadAttributes.timestamp = c_timestamp;
-    payloadAttributes.prevRandao =
-        h256("1111111111111111111111111111111111111111111111111111111111111111");
-    payloadAttributes.suggestedFeeRecipient = Address("1234567890abcdef1234567890abcdef12345678");
-    // release validatePayloadAttributes rejects non-empty withdrawals until the trie root
-    // is computed; match EngineServiceTest / Karst fixtures with an empty list.
-    payloadAttributes.withdrawals = std::vector<WithdrawalV1>{};
-    return payloadAttributes;
-}
-
-PayloadAttributes makePayloadAttributesV3()
-{
-    auto payloadAttributes = makePayloadAttributesV2();
-    payloadAttributes.parentBeaconBlockRoot =
-        h256("2222222222222222222222222222222222222222222222222222222222222222");
-    return payloadAttributes;
-}
-
-PayloadAttributes makeKarstPayloadAttributes()
-{
-    auto payloadAttributes = makePayloadAttributesV3();
-    payloadAttributes.withdrawals = std::vector<WithdrawalV1>{};
-    return payloadAttributes;
-}
-
-NewPayloadRequest makeNewPayloadRequestV3(const ExecutionPayload& executionPayload)
-{
-    NewPayloadRequest request;
-    request.executionPayload = executionPayload;
-    request.parentBeaconBlockRoot =
-        h256("5555555555555555555555555555555555555555555555555555555555555555");
-    return request;
-}
-
 void checkForkchoiceParity(
     ForkchoiceUpdatedResult const& legacyResult, ForkchoiceUpdatedResult const& newResult)
 {
@@ -305,9 +168,7 @@ void checkForkchoiceParity(
         legacyResult.payloadStatus.latestValidHash == newResult.payloadStatus.latestValidHash);
     BOOST_CHECK(
         legacyResult.payloadStatus.validationError == newResult.payloadStatus.validationError);
-    // Payload ID policy (option B): EthEngineService uses deterministic derivePayloadId
-    // (op-geth-aligned). release EngineServiceImpl still uses nextPayloadID(). Parity
-    // requires matching presence only — ID strings are not part of the cutover contract.
+    // Legacy and Eth services must agree on whether a payload ID is returned.
     BOOST_CHECK_EQUAL(legacyResult.payloadId.has_value(), newResult.payloadId.has_value());
 }
 
@@ -668,11 +529,7 @@ BOOST_AUTO_TEST_CASE(generic_bounded_cache_evicts_front_after_sixty_five_builds)
 
 BOOST_AUTO_TEST_CASE(eth_derive_payload_id_stable_under_identical_attrs)
 {
-    // Matrix: E4 — presence-only FCU ID comparison is option B (checkForkchoiceParity).
-    // This case is the same-attrs overwrite contract, not an ID-string equality vs Impl.
-    // Option B: Eth contract is derivePayloadId — identical attrs → identical id and cache
-    // overwrite (no FIFO growth). Legacy nextPayloadID characterization kept alongside for
-    // cutover awareness; it is not a defect on the Eth path.
+    // Eth path uses stable derivePayloadId; legacy uses sequential IDs.
     ServicePair pair;
     auto forkchoiceState = makeForkchoiceState();
     setForkchoiceBlockNumbers(pair.legacyStorage, forkchoiceState, c_initialBlockNumber,
@@ -699,13 +556,13 @@ BOOST_AUTO_TEST_CASE(eth_derive_payload_id_stable_under_identical_attrs)
         }
     }
 
-    // Legacy characterization (sequential ids + FIFO eviction) — pre-cutover only.
+    // Legacy nextPayloadID behavior for comparison only.
     BOOST_CHECK_NE(legacyIds.front(), legacyIds.back());
     BOOST_CHECK_THROW(
         task::syncWait(pair.legacy.getPayload(legacyIds.front(), 3)), bcos::engine::UnknownPayload);
     BOOST_CHECK_NO_THROW(task::syncWait(pair.legacy.getPayload(legacyIds.back(), 3)));
 
-    // Eth contract under option B.
+    // Eth path reuses the same payload ID for identical attrs.
     BOOST_CHECK_EQUAL(newIds.front(), newIds.back());
     auto ethPayload = task::syncWait(pair.fresh.getPayload(newIds.front(), 3));
     BOOST_REQUIRE(ethPayload);
@@ -829,8 +686,10 @@ BOOST_AUTO_TEST_CASE(generic_cache_only_parent_known_matches)
     auto legacyStatus = task::syncWait(pair.legacy.newPayload(legacyRequest, 3));
     auto newStatus = task::syncWait(pair.fresh.newPayload(newRequest, 3));
     checkStatusParity(legacyStatus, newStatus);
-    BOOST_CHECK_EQUAL(
-        static_cast<int>(newStatus.status), static_cast<int>(PayloadValidationStatus::Syncing));
+    BOOST_CHECK_EQUAL(static_cast<int>(newStatus.status),
+        static_cast<int>(PayloadValidationStatus::InvalidBlockHash));
+    BOOST_REQUIRE(newStatus.validationError.has_value());
+    BOOST_CHECK_NE(newStatus.validationError->find("blockHash"), std::string::npos);
 }
 
 BOOST_AUTO_TEST_CASE(generic_unknown_parent_syncing_matches)
@@ -858,8 +717,10 @@ BOOST_AUTO_TEST_CASE(generic_unknown_parent_syncing_matches)
     auto legacyStatus = task::syncWait(pair.legacy.newPayload(legacyRequest, 3));
     auto newStatus = task::syncWait(pair.fresh.newPayload(newRequest, 3));
     checkStatusParity(legacyStatus, newStatus);
-    BOOST_CHECK_EQUAL(
-        static_cast<int>(legacyStatus.status), static_cast<int>(PayloadValidationStatus::Syncing));
+    BOOST_CHECK_EQUAL(static_cast<int>(legacyStatus.status),
+        static_cast<int>(PayloadValidationStatus::InvalidBlockHash));
+    BOOST_REQUIRE(legacyStatus.validationError.has_value());
+    BOOST_CHECK_NE(legacyStatus.validationError->find("blockHash"), std::string::npos);
 }
 
 template <typename Exception>
@@ -1580,44 +1441,42 @@ BOOST_AUTO_TEST_CASE(eth_nonempty_withdrawals_rejected_with_pinned_message)
     BOOST_REQUIRE(legacyPayload);
     BOOST_REQUIRE(newPayload);
 
-    auto checkNonEmptyWithdrawalsInvalid =
-        [](PayloadStatus const& status, const char* what)
-    {
-        BOOST_CHECK_EQUAL(static_cast<int>(status.status),
-            static_cast<int>(PayloadValidationStatus::Invalid));
+    auto checkNonEmptyWithdrawalsInvalid = [](PayloadStatus const& status, const char* what) {
+        BOOST_CHECK_EQUAL(
+            static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Invalid));
         BOOST_REQUIRE(status.validationError.has_value());
-        BOOST_CHECK_MESSAGE(status.validationError->find("non-empty withdrawals") !=
-                                std::string::npos,
+        BOOST_CHECK_MESSAGE(
+            status.validationError->find("non-empty withdrawals") != std::string::npos,
             what << ": unexpected validationError: " << *status.validationError);
     };
 
     // V2: the first version that carries withdrawals.
     NewPayloadRequest legacyV2;
     legacyV2.executionPayload = legacyPayload->executionPayload;
-    legacyV2.executionPayload.withdrawals =
-        std::vector<WithdrawalV1>{WithdrawalV1{.index = 1, .validatorIndex = 0, .amount = 1, .address = {}}};
+    legacyV2.executionPayload.withdrawals = std::vector<WithdrawalV1>{
+        WithdrawalV1{.index = 1, .validatorIndex = 0, .amount = 1, .address = {}}};
     auto legacyV2Status = task::syncWait(pair.legacy.newPayload(legacyV2, 2));
     checkNonEmptyWithdrawalsInvalid(legacyV2Status, "legacy V2");
 
     NewPayloadRequest newV2;
     newV2.executionPayload = newPayload->executionPayload;
-    newV2.executionPayload.withdrawals =
-        std::vector<WithdrawalV1>{WithdrawalV1{.index = 1, .validatorIndex = 0, .amount = 1, .address = {}}};
+    newV2.executionPayload.withdrawals = std::vector<WithdrawalV1>{
+        WithdrawalV1{.index = 1, .validatorIndex = 0, .amount = 1, .address = {}}};
     auto newV2Status = task::syncWait(pair.fresh.newPayload(newV2, 2));
     checkNonEmptyWithdrawalsInvalid(newV2Status, "fresh V2");
 
     // V4 (Isthmus): the advertised newPayload ceiling.
     NewPayloadRequest legacyV4 = makeNewPayloadRequestV3(legacyPayload->executionPayload);
     legacyV4.executionRequests = std::vector<bytes>{};
-    legacyV4.executionPayload.withdrawals =
-        std::vector<WithdrawalV1>{WithdrawalV1{.index = 1, .validatorIndex = 0, .amount = 1, .address = {}}};
+    legacyV4.executionPayload.withdrawals = std::vector<WithdrawalV1>{
+        WithdrawalV1{.index = 1, .validatorIndex = 0, .amount = 1, .address = {}}};
     auto legacyV4Status = task::syncWait(pair.legacy.newPayload(legacyV4, 4));
     checkNonEmptyWithdrawalsInvalid(legacyV4Status, "legacy V4");
 
     NewPayloadRequest newV4 = makeNewPayloadRequestV3(newPayload->executionPayload);
     newV4.executionRequests = std::vector<bytes>{};
-    newV4.executionPayload.withdrawals =
-        std::vector<WithdrawalV1>{WithdrawalV1{.index = 1, .validatorIndex = 0, .amount = 1, .address = {}}};
+    newV4.executionPayload.withdrawals = std::vector<WithdrawalV1>{
+        WithdrawalV1{.index = 1, .validatorIndex = 0, .amount = 1, .address = {}}};
     auto newV4Status = task::syncWait(pair.fresh.newPayload(newV4, 4));
     checkNonEmptyWithdrawalsInvalid(newV4Status, "fresh V4");
 }
@@ -1668,8 +1527,8 @@ BOOST_AUTO_TEST_CASE(eth_publish_blocks_behind_shared_guard)
             {
                 writerReady.count_down();
                 permission.wait();
-                committed.count_down();
                 auto guard = tracker.lockExclusive();
+                committed.count_down();
                 h256 writerHash(0x99);
                 PayloadID writerPayloadId = "0xcafebabe";
                 auto entry = std::make_shared<BuiltPayload>();
@@ -1690,9 +1549,10 @@ BOOST_AUTO_TEST_CASE(eth_publish_blocks_behind_shared_guard)
 
         writerReady.wait();
         permission.count_down();
-        committed.wait();
+        // Still holding shared: the writer is blocked in lockExclusive.
         BOOST_CHECK(!writerFinished.load(std::memory_order_acquire));
     }
+    committed.wait();
 
     writer->join();
     if (writerError)
@@ -1733,8 +1593,8 @@ BOOST_AUTO_TEST_CASE(wire_round_trip_through_engine_helper)
     BOOST_REQUIRE(built);
     BOOST_REQUIRE(built->parentBeaconBlockRoot.has_value());
 
-    for (auto const& [version, label] :
-        {std::pair{ApiVersion::V3, "V3"}, std::pair{ApiVersion::V5, "V5"}})
+    for (auto const& [version, label] : {std::pair{ApiVersion::V3, "V3"},
+             std::pair{ApiVersion::V4, "V4"}, std::pair{ApiVersion::V5, "V5"}})
     {
         auto ep = bcos::rpc::serializeExecutionPayload(built->executionPayload, version);
         Json::Value params(Json::arrayValue);
@@ -1749,9 +1609,8 @@ BOOST_AUTO_TEST_CASE(wire_round_trip_through_engine_helper)
         BOOST_REQUIRE(parsed.parentBeaconBlockRoot.has_value());
         BOOST_CHECK_EQUAL(parsed.parentBeaconBlockRoot->hexPrefixed(),
             built->parentBeaconBlockRoot->hexPrefixed());
-        auto mismatch =
-            bcos::engine::detail::compareWithBuiltPayload(
-                parsed.executionPayload, built->executionPayload);
+        auto mismatch = bcos::engine::detail::compareWithBuiltPayload(
+            parsed.executionPayload, built->executionPayload);
         BOOST_CHECK_MESSAGE(!mismatch, label << " wire round-trip diverged: " << *mismatch);
     }
 

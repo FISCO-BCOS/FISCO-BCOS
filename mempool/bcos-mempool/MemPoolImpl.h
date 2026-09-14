@@ -56,8 +56,12 @@ concept InputHashes =
 
 template <class SenderNonceTuple>
 concept SenderNonce = requires(SenderNonceTuple senderNonce) {
-    { std::get<0>(senderNonce) } -> std::convertible_to<std::string_view>;
-    { std::get<1>(senderNonce) } -> std::convertible_to<int64_t>;
+    {
+        std::get<0>(senderNonce)
+    } -> std::convertible_to<std::string_view>;
+    {
+        std::get<1>(senderNonce)
+    } -> std::convertible_to<int64_t>;
 };
 
 
@@ -237,9 +241,9 @@ public:
             // (in-memory noncer) and reth's best_transactions() select block transactions
             // without touching state.
             for (auto nonceIt = senderNonceIndex.lower_bound(std::make_tuple(sender, currentNonce));
-                nonceIt != senderNonceIndex.end() && nonceIt->sender() == sender &&
-                nonceIt->nonce() == currentNonce;
-                ++nonceIt)
+                 nonceIt != senderNonceIndex.end() && nonceIt->sender() == sender &&
+                 nonceIt->nonce() == currentNonce;
+                 ++nonceIt)
             {
                 ++currentNonce;
                 ++count;
@@ -289,6 +293,17 @@ public:
             }
 
             it = nextIt;
+        }
+    }
+
+    /// Drop txs by hash during OP payload building.
+    void removeByHash(std::span<bcos::crypto::HashType const> hashes)
+    {
+        std::unique_lock lock(m_mutex);
+        auto& hashIndex = m_transactions.get<1>();
+        for (auto const& hash : hashes)
+        {
+            hashIndex.erase(hash);
         }
     }
 

@@ -67,18 +67,31 @@ struct AccountState
 /// catching binary-wide -- into every module that admits a transaction.
 using SystemTxPredicate = std::function<bool(protocol::Transaction const&)>;
 
-/// The one place a transaction is judged admissible, for every ingress of the transaction pool:
-/// JSON-RPC (BCOS and Web3), P2P, and block-proposal verification. The pool's two ingresses call
-/// it -- verifyAndSubmitTransaction for submission and the peer fetch, enforceSubmitTransaction
-/// for proposal verification.
+/// The one place a transaction is judged admissible, for every ingress of both transaction
+/// pools: JSON-RPC (BCOS and Web3), P2P, and block-proposal verification. The txpool's two
+/// entry points call it -- verifyAndSubmitTransaction for submission and the peer fetch,
+/// enforceSubmitTransaction for proposal verification. The engine-driven mempool (single-node
+/// consensus or the OP engine RPC) has one, EthEndpoint::sendRawTransaction, which calls it and
+/// then reserves the (sender, nonce) with MemPoolImpl::tryAdd.
 ///
-/// NOT yet the engine-driven mempool. On a node with single-node consensus or the OP engine RPC,
-/// EthEndpoint::sendRawTransaction refuses blob and deposit envelopes, recovers the signature and
-/// checks the EIP-155 chain id inline, then hands the transaction to MemPoolImpl::add; neither
-/// runs verify(). #5555 wires that ingress.
+/// NOT every way a transaction reaches a block. Two paths do not pass through here, and both
+/// matter to whoever reads the L2 rule below (Check::BcosTxAllowedOnChain):
 ///
-/// It holds pointers to the shared nonce checkers rather than owning them: the pool reserves and
-/// clears nonces through the same instances without going near admission, and the admission
+///   - transactions an external CL hands the engine in newPayload. Nothing under engine/ calls
+///     verify(); that block arrives already built, and rejecting it is a payload-validation
+///     answer, not an admission one.
+///   - block production's own filter. Every engine service's payload builder -- buildPayload in
+///     EngineServiceImpl.h and EthEngineService.inl, buildOpPayload in OpEngineService.inl --
+///     drops a sealed transaction whose type is not TransactionType::Web3Transaction, logging
+///     and continuing. That is NOT this rule seen from the other end, and the two are not
+///     copies to merge: the builder enforces a payload-encoding invariant that holds on any
+///     chain -- a transaction with no EIP-2718 wire form cannot be written into an engine
+///     payload at all, whatever feature_l2_ethereum_compat says -- while the check below is a
+///     ruling about what THIS chain's configuration admits, and reports a status a caller can
+///     read. Different predicate, different domain, different consequence.
+///
+/// It holds pointers to the shared nonce checkers rather than owning them: the txpool reserves
+/// and clears nonces through the same instances without going near admission, and the admission
 /// question is asked here. Nonce admission is the same question at every ingress, and routing it
 /// through a per-caller hook is how the pool and the RPC layer came to disagree about it in the
 /// first place.
@@ -93,16 +106,11 @@ public:
     /// @p ledgerConfigState and @p web3NonceChecker must be non-null and throw if they are not;
     /// @p txPoolNonceChecker and the two late-bound setters below are nullable by design, each
     /// with a check that says what its absence means.
-    ///
-    /// @p rejectNativeTxOnV2Chain is set by an executor_version >= 2 chain (see
-    /// Check::BcosTxAllowed): its blocks cannot commit a native BCOS transaction, so one is
-    /// refused at admission rather than stalling the leader at seal time.
     TxValidator(crypto::CryptoSuite::Ptr cryptoSuite,
         std::shared_ptr<ledger::LedgerInterface> ledger,
         ledger::LedgerConfigState::Ptr ledgerConfigState,
         NonceCheckerInterface::Ptr txPoolNonceChecker, Web3NonceChecker::Ptr web3NonceChecker,
-        SystemTxPredicate isSystemTx, std::string groupId, std::string chainId,
-        bool rejectNativeTxOnV2Chain = false);
+        SystemTxPredicate isSystemTx, std::string groupId, std::string chainId);
 
     /// Bound after construction: the ledger nonce checker cannot be built until the pool has read
     /// the chain's block limit. Until it is bound there is nothing to check a BCOS nonce against,
@@ -166,11 +174,6 @@ private:
     /// and resolves to shared_ptr<NonceCheckerInterface>, which loses the derived type.
     std::shared_ptr<LedgerNonceChecker> m_ledgerNonceChecker;
     std::weak_ptr<scheduler::SchedulerInterface> m_scheduler;
-    // executor_version >= 2 chains (the pure-Ethereum executor) seal ONLY Web3 transactions —
-    // a native BCOS transaction cannot be committed to the Ethereum tx trie, so the leader's
-    // finishExecute would throw and block production would halt. When true, the BcosTxAllowed
-    // gate refuses native transactions at admission instead.
-    bool m_rejectNativeTxOnV2Chain = false;
 };
 
 }  // namespace bcos::txvalidator

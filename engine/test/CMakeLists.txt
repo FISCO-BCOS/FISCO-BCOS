@@ -7,6 +7,8 @@ include(SearchTestCases)
 
 set(TEST_BINARY_NAME test-bcos-engine)
 
+# Tests that still include EngineServiceImpl.h instantiate the header-only template, so
+# the file is kept here until those fixtures migrate off it.
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE
     . ${CMAKE_SOURCE_DIR}
@@ -17,9 +19,14 @@ find_package(Boost REQUIRED unit_test_framework)
 find_package(jsoncpp CONFIG REQUIRED)
 
 target_link_libraries(${TEST_BINARY_NAME} PUBLIC
-    engine mempool protocol-tars rlp-protocol opstack-executor ledger rpc
+    engine mempool protocol-tars rlp-protocol opstack-executor ledger rpc transaction-scheduler
     jsoncpp_static Boost::unit_test_framework)
 
+# S6: GoldenSample / t8n corpus. The vectors and golden/engine/ files are tracked in-tree
+# under opstack-executor/tests/t8n/ (the external FISCO-BCOS/op-stack-e2e-tests pin is an
+# optional refresh source, not a build requirement); OP_T8N_* below only override the
+# location. Local builds skip when the corpus is absent, CI (GITHUB_ACTIONS/CI or
+# -DREQUIRE_T8N_CORPUS=ON) must fail instead.
 if(NOT DEFINED OP_T8N_VECTORS_DIR)
     set(OP_T8N_VECTORS_DIR "${CMAKE_SOURCE_DIR}/opstack-executor/tests/t8n/vectors")
 endif()
@@ -44,6 +51,8 @@ set_source_files_properties(
     "unittests/engine/OpEngineReviewFixTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties(
     "unittests/engine/EthEngineServiceParityTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_source_files_properties(
+    "unittests/engine/EthEngineServiceMPTStateRootTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties(
     "unittests/engine/EthEngineServiceTransactionalTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")

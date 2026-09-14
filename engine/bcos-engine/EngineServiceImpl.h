@@ -23,9 +23,10 @@
 
 #pragma once
 
+#include "EngineMPTStateRoot.h"
 #include "EngineServiceCommon.h"
+#include "EngineStorageCommit.h"
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/engine/EngineService.h"
 #include "bcos-framework/engine/Errors.h"
 #include "bcos-framework/engine/Types.h"
@@ -38,11 +39,6 @@
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/LedgerMethods.h"
-#include "bcos-ledger/mpt/EthTrieRoots.h"
-#include "bcos-ledger/mpt/EthereumBlockRoots.h"
-#include "bcos-ledger/mpt/MPTFeatureGates.h"
-#include "bcos-ledger/mpt/StateRoots.h"
-#include <bcos-framework/storage2/MultiLayerStorage.h>
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/BoostLog.h"
@@ -50,7 +46,10 @@
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
+#include <bcos-framework/storage2/MultiLayerStorage.h>
+#include <bcos-ledger/mpt/CommitObserver.h>
 #include <bcos-ledger/mpt/Constants.h>
+#include <bcos-ledger/mpt/EthTrieRoots.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <atomic>
 #include <chrono>
@@ -114,9 +113,6 @@ bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes);
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
 
-/// Hash-relevant fields vs the locally built payload (op-geth ExecutableDataToBlock).
-/// Optional V3 fields are compared only when both sides have them (finding BL).
-/// Cache-miss (unexecuted external body) is SYNCING, not VALID — #5468.
 std::optional<std::string> compareWithBuiltPayload(
     const ExecutionPayload& submitted, const ExecutionPayload& built);
 
@@ -137,7 +133,10 @@ bcos::protocol::EthBlockVersion ethBlockVersionFor(evmc_revision rev);
 // on them and would throw std::bad_optional_access otherwise). buildPayload guarantees the
 // precondition under the same forkVersion-derived gate; a direct caller must too.
 void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const ExecutionPayload& payload,
-    std::optional<bcos::h256> parentBeaconBlockRoot, bcos::protocol::EthBlockVersion forkVersion);
+    std::optional<bcos::h256> parentBeaconBlockRoot, bcos::protocol::EthBlockVersion forkVersion,
+    std::optional<bcos::h256> withdrawalsRoot);
+std::optional<bcos::protocol::EthBlockVersion> ethBlockVersionForBlock(
+    ledger::LedgerConfig const& ledgerConfig, bcos::protocol::BlockNumber blockNumber);
 }  // namespace detail
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
@@ -152,16 +151,20 @@ public:
     using ViewType = typename GlobalStateStorageType::ViewType;
 
     /// @param ledgerConfigState the process-wide configuration snapshot transaction admission
-    /// reads, republished here after every block this service commits. In this mode nothing
-    /// else republishes it: MultiVersionScheduler is the hook for the txpool/consensus path,
-    /// and block production here does not go through it. Null in the tests and in any wiring
-    /// that has no admission to serve.
+    /// reads, republished from buildPayload, where the configuration for the block about to be
+    /// built is read anyway. In this mode nothing else republishes it: MultiVersionScheduler is
+    /// the hook for the txpool/consensus path, and block production here does not go through
+    /// it. A node that only executes externally built payloads never calls buildPayload, so
+    /// its snapshot stays at the boot read; its mempool RPC still admits against that
+    /// snapshot, into a pool nothing seals on such a node. Null in the tests and in any
+    /// wiring that has no admission to serve.
     EngineServiceImpl(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage,
         ExecutorType& executor, SchedulerType& scheduler,
         bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
         int64_t blockTxCountLimit = bcos::engine::c_defaultBlockTxCountLimit,
-        bcos::ledger::LedgerConfigState::Ptr ledgerConfigState = nullptr)
+        bcos::ledger::LedgerConfigState::Ptr ledgerConfigState = nullptr,
+        std::shared_ptr<ledger::mpt::CommitObserver> commitObserver = nullptr)
       : m_memPool(std::ref(memPool)),
         m_globalStateStorage(std::ref(globalStateStorage)),
         m_blockTxCountLimit(blockTxCountLimit),
@@ -169,7 +172,9 @@ public:
         m_scheduler(std::ref(scheduler)),
         m_blockFactory(std::move(blockFactory)),
         m_ledger(std::move(ledger)),
-        m_ledgerConfigState(std::move(ledgerConfigState))
+        m_ledgerConfigState(std::move(ledgerConfigState)),
+        m_commitObserver(commitObserver ? std::move(commitObserver) :
+                                          std::make_shared<ledger::mpt::NoopCommitObserver>())
     {
         if (!m_blockFactory)
         {
@@ -198,10 +203,11 @@ public:
             BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
                                   << bcos::errinfo_comment{"Unsupported Engine API version"});
         }
+        std::vector<bcos::bytes> decodedForcedTxs;
         if (payloadAttributes != nullptr)
         {
-            if (auto validationError =
-                    engine_common::validatePayloadAttributes(*payloadAttributes, version);
+            if (auto validationError = engine_common::validatePayloadAttributes(
+                    *payloadAttributes, version, &decodedForcedTxs);
                 validationError.has_value())
             {
                 ForkchoiceUpdatedResult result{
@@ -330,7 +336,7 @@ public:
         auto payloadId = nextPayloadID();
         auto nextBlockNumber = *headBlockNumber + 1;
         auto built = co_await buildPayload(forkchoiceState, *payloadAttributes, payloadId, version,
-            nextBlockNumber, std::move(sealedTxs), view);
+            nextBlockNumber, std::move(sealedTxs), view, std::move(decodedForcedTxs));
         PayloadEntry entry{
             .version = version,
             .executionPayload = std::move(built.executionPayload),
@@ -341,6 +347,7 @@ public:
             .view = std::make_shared<ViewType>(std::move(view)),
             .header = std::move(built.header),
             .receipts = std::move(built.receipts),
+            .mptDelta = std::move(built.mptDelta),
         };
         if (version == static_cast<std::uint32_t>(ApiVersion::V3))
         {
@@ -402,7 +409,7 @@ private:
     struct PayloadEntry
     {
         /// Engine API version of the forkchoiceUpdated that built this entry. newPayload
-        /// keeps the locally built body (finding E) and does not rewrite the version tag.
+        /// keeps the locally built body and does not rewrite the version tag.
         std::uint32_t version = 0;
         ExecutionPayload executionPayload;
         u256 blockValue = 0;
@@ -419,6 +426,10 @@ private:
         /// received payloads leave these null/empty.
         bcos::protocol::BlockHeader::Ptr header;
         std::vector<protocol::TransactionReceipt::Ptr> receipts;
+        /// The block's MPT delta (null on the XOR-root path). newPayload hands it to the
+        /// CommitObserver (MPT pruning) when the block commits; kept until the durable write
+        /// succeeds, same rule as header/receipts, so a failed attempt's retry re-reads it.
+        std::shared_ptr<const ledger::mpt::MPTDeltaLayer> mptDelta = nullptr;
     };
 
     /// Per-method Engine API version windows. forkchoiceUpdated tops out at V3 (the
@@ -457,9 +468,7 @@ private:
         }
         engine_common::requireGetPayloadShape(it->second.version, it->second.executionPayload,
             it->second.parentBeaconBlockRoot, version);
-        // Assembled in-lock: PayloadEntry is held by value, so the copy-out fix
-        // doubled the block-body copy without shortening the hold (round-3 F2).
-        // The shared-ptr-held shape lives in EngineTracker::getPayload.
+        // PayloadEntry is held by value here; EngineTracker::getPayload uses shared storage.
         return engine_common::assembleGetPayloadData(it->second, version);
     }
 
@@ -482,18 +491,21 @@ private:
             co_return engine_common::makeStatus(
                 PayloadValidationStatus::Invalid, std::nullopt, validationError);
         }
-        if (version <= 2 && request.parentBeaconBlockRoot.has_value())
+        if (version <= static_cast<std::uint32_t>(ApiVersion::V2) &&
+            request.parentBeaconBlockRoot.has_value())
         {
             co_return engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
                 std::string("parentBeaconBlockRoot is only valid for newPayloadV3 and later"));
         }
-        if (version >= 3 && !request.parentBeaconBlockRoot.has_value())
+        if (version >= static_cast<std::uint32_t>(ApiVersion::V3) &&
+            !request.parentBeaconBlockRoot.has_value())
         {
             co_return engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
                 std::string(
                     "parentBeaconBlockRoot must be a 32-byte hash for newPayloadV3 and later"));
         }
-        if (version >= 3 && !request.expectedBlobVersionedHashes.empty())
+        if (version >= static_cast<std::uint32_t>(ApiVersion::V3) &&
+            !request.expectedBlobVersionedHashes.empty())
         {
             // op-geth checks expectedBlobVersionedHashes against the blob hashes carried by
             // the payload's OWN transactions and answers INVALID on any length or element
@@ -516,7 +528,7 @@ private:
                 std::string("expectedBlobVersionedHashes must be empty (L2 forbids blob "
                             "transactions)"));
         }
-        if (version >= 4)
+        if (version >= static_cast<std::uint32_t>(ApiVersion::V4))
         {
             // Present-but-empty, not "absent or empty": op-geth's NewPayloadV4 rejects a
             // nil executionRequests outright ("nil executionRequests post-prague",
@@ -539,53 +551,102 @@ private:
         // The locked region below only validates, resolves and prepares; the co_awaits
         // follow after the lock is released; the cache publish re-acquires it.
         bool persistLedger = false;
+        // Set when THIS block still owns a queued (or about-to-be-queued) state layer: either
+        // this call pushes one, or a previous attempt pushed it and failed, leaving it queued
+        // for the retry. A payload whose artifact was consumed by a successful commit owns
+        // nothing, so a no-op duplicate must not drain — otherwise it would merge another
+        // block's in-flight layer (and could fail on it).
+        bool stateLayerQueued = false;
         typename GlobalStateStorageType::MutableStorage prewriteStorage;
         protocol::Block::Ptr persistBlock;
         std::shared_ptr<protocol::ConstTransactions> blockTxs;
-        bool viewPushed = false;
+        // The committing block's MPT delta (null on the XOR-root path), borrowed from the
+        // payload entry for the pruning hooks below; the entry keeps owning it until the
+        // durable-write consume step, so a failed attempt's retry re-reads it there.
+        std::shared_ptr<const ledger::mpt::MPTDeltaLayer> commitMptDelta;
+        bool parentKnown = false;
+        bool cacheHit = false;
         {
             std::unique_lock lock(x_state);
-            auto parentKnown =
-                request.executionPayload.parentHash == m_forkchoiceState.headBlockHash ||
-                m_blockHashToPayloadId.contains(request.executionPayload.parentHash);
+            parentKnown = request.executionPayload.parentHash == m_forkchoiceState.headBlockHash ||
+                          m_blockHashToPayloadId.contains(request.executionPayload.parentHash);
+            auto payloadIdIt = m_blockHashToPayloadId.find(request.executionPayload.blockHash);
+            auto builtIt = (payloadIdIt == m_blockHashToPayloadId.end()) ?
+                               m_payloadCache.end() :
+                               m_payloadCache.find(payloadIdIt->second);
+            cacheHit = parentKnown && builtIt != m_payloadCache.end();
+            if (cacheHit)
+            {
+                payloadId = payloadIdIt->second;
+            }
+        }  // x_state released: the block-hash reconstruction below is O(total envelope bytes)
+           // and must not hold the lock (the FCU/getPayload paths need it).
+
+        if (!cacheHit)
+        {
+            // Hash the reconstructed header under the chain's per-block fork, not the
+            // Engine API method version: V4 on a CANCUN block must not stamp
+            // requestsHash (that answers INVALID_BLOCK_HASH for an honest payload).
+            auto view = m_globalStateStorage.get().fork();
+            ledger::LedgerConfig missLedgerConfig;
+            auto const blockNumber = request.executionPayload.blockNumber;
+            auto const parentNumber = blockNumber > 0 ? blockNumber - 1 : 0;
+            // Not caught: getLedgerConfig surfaces node-local faults — a corrupted persisted
+            // consensus parameter (InvalidEVMCRevisionConfig / InvalidWeb3ChainIdConfig, or a
+            // boost::bad_lexical_cast from another malformed SYS_CONFIG field applyLedgerConfig
+            // parses) or a storage read fault — whose contract is to halt loudly, not to be
+            // absorbed into SYNCING. Absorbing one would leave a node that cannot sync and no
+            // reason why; the RPC layer turns the exception into -32603 with the diagnostic
+            // instead. An era this node merely cannot resolve is the nullopt branch below, and
+            // that is the case that answers SYNCING.
+            co_await ledger::getLedgerConfig(view, missLedgerConfig, parentNumber, *m_blockFactory);
+            auto const forkVersion = detail::ethBlockVersionForBlock(missLedgerConfig, blockNumber);
+            if (!forkVersion.has_value())
+            {
+                co_return engine_common::makeStatus(
+                    PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+            }
+            if (auto hashError =
+                    detail::matchReconstructedEthBlockHash(m_blockFactory->blockHeaderFactory(),
+                        request.executionPayload, request.parentBeaconBlockRoot, *forkVersion);
+                hashError.has_value())
+            {
+                co_return engine_common::makeStatus(
+                    PayloadValidationStatus::InvalidBlockHash, std::nullopt, hashError);
+            }
             if (!parentKnown)
             {
                 co_return engine_common::makeStatus(
                     PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
             }
-
-            auto payloadIdIt = m_blockHashToPayloadId.find(request.executionPayload.blockHash);
-            if (payloadIdIt == m_blockHashToPayloadId.end())
+            // Rate-limit the warning so a retrying CL cannot flood the log.
+            static std::atomic<std::chrono::steady_clock::time_point> lastWarn{
+                std::chrono::steady_clock::time_point{}};
+            auto const now = std::chrono::steady_clock::now();
+            auto prev = lastWarn.load(std::memory_order_relaxed);
+            if (now - prev >= std::chrono::seconds(10) &&
+                lastWarn.compare_exchange_strong(
+                    prev, now, std::memory_order_relaxed, std::memory_order_relaxed))
             {
-                // #5468 / finding E: unexecuted external payload. op-geth executes
-                // before VALID; we must not store the CL body and answer VALID.
-                // This leftover service has no EL sync, so SYNCING is terminal.
-                // Rate-limit the warning so a retrying CL cannot flood the log.
-                static std::atomic<std::chrono::steady_clock::time_point> lastWarn{
-                    std::chrono::steady_clock::time_point{}};
-                auto const now = std::chrono::steady_clock::now();
-                auto prev = lastWarn.load(std::memory_order_relaxed);
-                if (now - prev >= std::chrono::seconds(10) &&
-                    lastWarn.compare_exchange_strong(
-                        prev, now, std::memory_order_relaxed, std::memory_order_relaxed))
-                {
-                    BCOS_LOG(WARNING)
-                        << LOG_BADGE("EngineService")
-                        << LOG_DESC("newPayload cache miss; answering SYNCING (#5468, no EL sync)")
-                        << LOG_KV("blockHash", request.executionPayload.blockHash.hex());
-                }
-                co_return engine_common::makeStatus(
-                    PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+                BCOS_LOG(WARNING) << LOG_BADGE("EngineService")
+                                  << LOG_DESC("newPayload cache miss; answering SYNCING")
+                                  << LOG_KV("blockHash", request.executionPayload.blockHash.hex());
             }
-            payloadId = payloadIdIt->second;
-            auto builtIt = m_payloadCache.find(payloadId);
-            if (builtIt == m_payloadCache.end())
+            co_return engine_common::makeStatus(
+                PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+        }
+
+        {
+            std::unique_lock lock(x_state);
+            auto it = m_payloadCache.find(payloadId);
+            if (it == m_payloadCache.end())
             {
+                // Evicted between the two lock scopes: same answer as a cache miss.
                 co_return engine_common::makeStatus(
                     PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
             }
             if (auto mismatch = detail::compareWithBuiltPayload(
-                    request.executionPayload, builtIt->second.executionPayload))
+                    request.executionPayload, it->second.executionPayload))
             {
                 co_return engine_common::makeStatus(
                     PayloadValidationStatus::InvalidBlockHash, std::nullopt, mismatch);
@@ -595,21 +656,13 @@ private:
             // state changes to storage. Externally received payloads have no view to commit.
             // Commit contract: pushView + view.reset() happen here under x_state (a
             // concurrent duplicate newPayload must never push the same view twice); the
-            // pushed layer stays queued until a mergeBackStorage drains it (MultiLayerStorage
-            // FIFO). The commit branch runs only when PENDING DURABLE WORK exists — a view
-            // to push, or artifacts to persist. header/receipts are consumed only after the
-            // durable write succeeds, so their presence is the retry discriminator (finding
-            // F22): both null means the block is already durably committed and the retry is
-            // a pure no-op VALID that never touches storage; artifacts intact means the
-            // retry re-runs the prewrite/merge — a failed attempt left the pushed layer
-            // queued, and mergeBackStorage below drains it.
-            auto it = m_payloadCache.find(payloadId);
-            if (it != m_payloadCache.end() && (it->second.view || it->second.header))
+            // Retry only when a view or header is still pending durable commit.
+            if (it->second.view || it->second.header)
             {
+                stateLayerQueued = true;
                 if (it->second.view)
                 {
                     m_globalStateStorage.get().pushView(std::move(*it->second.view));
-                    viewPushed = true;
                 }
                 it->second.view.reset();
                 if (m_ledger && it->second.header)
@@ -621,6 +674,7 @@ private:
                     // eth_getTransactionReceipt and to ledger::getBlockHash /
                     // getCurrentBlockNumber.
                     persistLedger = true;
+                    commitMptDelta = it->second.mptDelta;
                     persistBlock = m_blockFactory->createBlock();
                     persistBlock->setBlockHeader(it->second.header);
                     // Persist the block-level logsBloom (computed in buildPayload from the
@@ -659,21 +713,65 @@ private:
             }
         }  // x_state released — safe to co_await below.
 
+        // MPT pruning (CommitObserver) serialization: m_commitMutex guards the whole commit
+        // section — the pruning hooks stage the block's counting work on one shared overlay
+        // between coPreparePruneRows and onCommit (BaselineSchedulerMPTHelpers.h's
+        // prepareMPTPruneRows contract), so [prepare -> merge -> onCommit] must be serialized
+        // against every other commit, exactly like BaselineScheduler::m_commitMutex (which is
+        // likewise held across co_await). The mutex also settles the concurrent-duplicate
+        // race the comments below describe: the first call to enter commits; a duplicate that
+        // pops the still-unconsumed artifact blocks here and is detected by the re-validation
+        // immediately after locking.
+        std::unique_lock commitLock(m_commitMutex);
+        if (persistLedger)
+        {
+            bool committedByDuplicate = false;
+            {
+                std::unique_lock lock(x_state);
+                auto it = m_payloadCache.find(payloadId);
+                // The entry is consumed by resetting its header after a successful commit
+                // (below), so a present-but-headerless entry means a concurrent duplicate
+                // already landed this block's rows AND counted its delta — re-firing either
+                // would merge idempotent rows but DOUBLE-COUNT the reference movements. A
+                // missing entry is the pre-existing eviction race, answered SYNCING above.
+                committedByDuplicate = it != m_payloadCache.end() && !it->second.header;
+            }
+            if (committedByDuplicate)
+            {
+                // The block IS committed; skip the commit work and fall through to the
+                // idempotent VALID. stateLayerQueued is cleared too: this call owns no layer,
+                // so it must not drain (the no-op duplicate rule at stateLayerQueued).
+                persistLedger = false;
+                stateLayerQueued = false;
+            }
+        }
+
         if (persistLedger)
         {
             co_await ledger::prewriteBlockToBuffer(
                 *m_ledger, blockTxs, persistBlock, prewriteStorage);
+            // MPT pruning: the observer turns the block's delta into the deletion keys of
+            // expired node rows, applied to prewriteStorage so deletions land in the SAME
+            // WriteBatch as the block data — the same hook (and ordering) as
+            // BaselineScheduler::coCommitBlock. A throw here fails the commit before any row
+            // lands; the CL's retry re-runs it (the pruner's staged overlay is discarded and
+            // re-derived, so the retry reproduces the identical batch).
+            if (commitMptDelta)
+            {
+                co_await scheduler_v1::prepareMPTPruneRows(*m_commitObserver,
+                    request.executionPayload.blockNumber, *commitMptDelta, prewriteStorage);
+            }
             // Land the prewritten rows together with the oldest queued layer (the
             // commit contract's prewrite+merge pairing), then drain the whole queue.
             // mergeBackStorage throws NotExistsImmutableStorageError on an empty
             // deque and exposes no emptiness query; the empty case is NOT an error
-            // here: a concurrent duplicate of this newPayload (finding N1) may have
+            // here: a concurrent duplicate of this newPayload may have
             // drained the layer between the two attempts, and its prewritten rows
             // are identical to ours — mergeToBackends then lands the rows directly
             // (idempotent) instead of surfacing a spurious internal error where the
             // Engine API requires the idempotent VALID. The drain loop then removes
             // every remaining queued layer: one left behind by an abandoned failed
-            // merge (finding N2) would otherwise make every later commit merge
+            // merge would otherwise make every later commit merge
             // one-behind, leaving the newest payload's state queued in-memory —
             // lost on restart — though it answered VALID. (The MultiLayerStorage
             // doc itself prescribes draining "in a loop until empty".) Note: awaits
@@ -693,47 +791,24 @@ private:
             {
                 co_await m_globalStateStorage.get().mergeToBackends(prewriteStorage);
             }
-            for (;;)
+            co_await engine_common::drainQueuedLayers(m_globalStateStorage.get());
+            // CommitObserver timing contract (CommitObserver.h): AFTER the block's WriteBatch
+            // landed. Deliberately before the artifact consume below and with no co_await in
+            // between: if a retry ever re-ran the hooks for an already-counted block the
+            // double-count would degrade to leaks, while skipping onCommit for a merged block
+            // would under-count and could later delete a live node — the ordering chosen
+            // fails toward the leak side. onCommit must not throw (Noop and MPTPruner don't).
+            if (commitMptDelta)
             {
-                bool drained = false;
-                try
-                {
-                    co_await m_globalStateStorage.get().mergeBackStorage();
-                    drained = true;
-                }
-                catch (bcos::storage2::NotExistsImmutableStorageError const&)
-                {
-                    // Queue empty — the drain is complete.
-                }
-                if (!drained)
-                {
-                    break;
-                }
+                m_commitObserver->onCommit(request.executionPayload.blockNumber, *commitMptDelta);
             }
         }
-        else if (viewPushed)
+        else if (stateLayerQueued)
         {
-            // A pushed view without durable work (no ledger instance / no header):
-            // the queued state layer must still drain into the backends — the
-            // merge must not depend on ledger persistence (CI-found: the pushed
-            // view stayed queued in memory and every committed balance was lost).
-            for (;;)
-            {
-                bool drained = false;
-                try
-                {
-                    co_await m_globalStateStorage.get().mergeBackStorage();
-                    drained = true;
-                }
-                catch (bcos::storage2::NotExistsImmutableStorageError const&)
-                {
-                    // Queue empty — the drain is complete.
-                }
-                if (!drained)
-                {
-                    break;
-                }
-            }
+            // A queued layer without durable work still has to reach the backends. A payload
+            // that owns nothing does not drain, so a no-op duplicate cannot merge another
+            // block's in-flight layer (and cannot fail on that layer's merge either).
+            co_await engine_common::drainQueuedLayers(m_globalStateStorage.get());
         }
 
         {
@@ -744,6 +819,7 @@ private:
             {
                 it->second.header.reset();
                 it->second.receipts.clear();
+                it->second.mptDelta.reset();
             }
             std::erase_if(m_blockHashToPayloadId,
                 [&](auto const& kv) { return kv.first != request.executionPayload.blockHash; });
@@ -764,12 +840,16 @@ private:
         ExecutionPayload executionPayload;
         bcos::protocol::BlockHeader::Ptr header;
         std::vector<protocol::TransactionReceipt::Ptr> receipts;
+        /// The block's MPT delta (null on the XOR-root path); updateForkchoice stashes it in
+        /// the payload entry for the newPayload commit's pruning hooks.
+        std::shared_ptr<const ledger::mpt::MPTDeltaLayer> mptDelta = nullptr;
     };
 
     bcos::task::Task<BuildPayloadResult> buildPayload(const ForkchoiceState& forkchoiceState,
         const PayloadAttributes& payloadAttributes, const PayloadID& payloadId,
         std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
-        std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view) const
+        std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view,
+        std::vector<bcos::bytes> decodedForcedTxs) const
     {
         // Dual carrier: every sealed transaction is stored with both its raw EIP-2718
         // bytes (the wire form getPayload returns) and the decoded executable form (used
@@ -787,7 +867,7 @@ private:
         // exclusion only ever triggers for in-process callers.
         std::vector<EngineTransaction> engineTransactions;
         engineTransactions.reserve(
-            payloadAttributes.transactions.value_or(std::vector<std::string>{}).size() +
+            (payloadAttributes.transactions ? payloadAttributes.transactions->size() : 0) +
             sealedTxs.size());
         // Forced transactions (OP attributes.transactions) come FIRST, in the order the
         // CL gave them — this is the only OP-sanctioned path for deposits. Their raw
@@ -800,10 +880,12 @@ private:
         // canonical keccak256(raw) hash, but are not executed and do not advance state.
         if (payloadAttributes.transactions.has_value())
         {
-            for (auto const& forcedHex : *payloadAttributes.transactions)
+            // Reuse validatePayloadAttributes' decoded bodies. A second
+            // fromHex here would allocate the same EIP-2718 bytes again.
+            for (auto& raw : decodedForcedTxs)
             {
                 engineTransactions.push_back(EngineTransaction{
-                    .raw = fromHex(forcedHex),
+                    .raw = std::move(raw),
                     .decoded = nullptr,
                 });
             }
@@ -1006,13 +1088,6 @@ private:
         // header by finalizeEthBlockHeader.
         executionPayload.gasLimit = std::get<0>(ledgerConfig.gasLimit());
 
-        // Ethereum-compatible roots (executor_version >= 2): txsRoot/receiptsRoot commit to
-        // the transaction / receipt tries; legacy executors keep the Merkle roots. Empty
-        // blocks get emptyRootHash() on BOTH paths (validateHeader rejects a zero
-        // receiptsRoot/txsRoot — see the empty-block branch below).
-        const bool ethereumRoots =
-            ledgerConfig.executorVersion() >= ledger::ETHEREUM_EXECUTOR_VERSION;
-
         // Execute transactions (if any) and finalize the Eth header with its RLP hash.
         if (executionPayload.transactions.empty())
         {
@@ -1032,8 +1107,9 @@ private:
             // Must precede calculateHash: extraData is part of the Tars header hash
             // (bcos-tars-protocol/impl/TarsHashable.h).
             emptyHeader->setExtraData(std::move(extraData));
-            emptyHeader->setStateRoot(co_await calculateStateRoot(
-                view, nextBlockNumber, emptyHeader->version(), ledgerConfig));
+            auto emptyResolution = co_await engine_common::resolveEngineBlockStateRoot(view,
+                *emptyHeader, ledgerConfig, *m_blockFactory->cryptoSuite()->hashImpl(),
+                *m_blockFactory, *m_commitObserver);
             // An empty block's transaction/receipt tries are the canonical empty-trie root, not
             // the all-zero hash: finalizeEthBlockHeader always goes through
             // EthBlockHeader::calculateRLPHash -> validateHeader, which rejects a zero
@@ -1049,7 +1125,8 @@ private:
             executionPayload.blockHash = emptyHeader->hash();
             co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
                 .header = std::move(emptyHeader),
-                .receipts = {}};
+                .receipts = {},
+                .mptDelta = engine_common::shareMptDelta(std::move(emptyResolution.mptDelta))};
         }
 
         // Step 2b: Create BlockHeader for the new block
@@ -1073,120 +1150,41 @@ private:
         // forms. Raw-only entries (forced transactions from the OP attributes list) have
         // no executable form yet and are skipped — see the forced-transaction comment
         // above. Materialized into a vector because scheduler implementations require a
-        // sized range (a lazy filter view is not sized).
-        auto executableTransactions =
-            executionPayload.transactions | ::ranges::views::filter([](auto const& transaction) {
-                return transaction.decoded != nullptr;
-            }) |
-            ::ranges::views::transform(
-                [](auto const& transaction) { return transaction.decoded; }) |
-            ::ranges::to<std::vector>();
+        // sized range (a lazy filter view is not sized); the collected type bytes stay
+        // index-parallel with the receipts for the receipts-root leaf prefix below.
+        auto executable =
+            engine_common::collectExecutableTransactions(executionPayload.transactions);
         auto receipts = co_await m_scheduler.get().executeBlock(view, m_executor.get(),
-            *blockHeader, executableTransactions | ::ranges::views::indirect, ledgerConfig);
+            *blockHeader, executable.transactions | ::ranges::views::indirect, ledgerConfig);
 
-        // Step 2d-2f: Transaction root, receipt root, gas used and block-level logsBloom.
-        //  - Ethereum executor (v2): the shared ledger::mpt::computeEthereumRoots (the same
-        //    implementation EthereumBlockVerifier uses for Sepolia sync / external payloads)
-        //    fills per-receipt cumulativeGasUsed + logsBloom, then commits to the transaction
-        //    trie over each transaction's EIP-2718 wire bytes and to the receipts trie over
-        //    EthReceipt RLP. Raw-only entries (forced transactions from the OP attributes
-        //    list) participate in txsRoot via their raw bytes but have no receipt.
-        //  - legacy: Merkle over tx / receipt hashes; both roots default to the
-        //    empty-trie root (see the branch below) so a payload with no executable
-        //    transactions still passes validateHeader.
-        h256 txRoot;
-        h256 receiptRoot;
-        u256 totalGasUsed;
-        Bloom logsBloom{};
-        if (ethereumRoots)
-        {
-            auto computation = co_await ledger::mpt::computeEthereumRoots(receipts,
-                executableTransactions | ::ranges::views::indirect,
-                executionPayload.transactions |
-                    ::ranges::views::transform([](auto const& transaction) -> bcos::bytes const& {
-                        return transaction.raw;
-                    }));
-            txRoot = computation.txsRoot;
-            receiptRoot = computation.receiptsRoot;
-            totalGasUsed = computation.gasUsed;
-            logsBloom = computation.logsBloom;
-        }
-        else
-        {
-            for (auto& receipt : receipts)
-            {
-                if (!receipt)
-                {
-                    BOOST_THROW_EXCEPTION(
-                        std::runtime_error{"Null receipt returned by scheduler"});
-                }
-            }
+        // Steps 2d/2e: the Ethereum header commitments, shared with the Eth service so the two
+        // producers cannot drift. transactionsRoot is the index-keyed MPT over the raw EIP-2718
+        // envelopes and MUST match both the cache-miss reconstruction
+        // (EngineServiceCommon.cpp transactionsRootFromPayload) and the OP path's computeTxRoot,
+        // otherwise newPayload rejects this node's own payloads with INVALID_BLOCK_HASH.
+        // receiptsRoot is the same construction over the RLP receipt leaves (op-geth
+        // types.DeriveSha) and MUST match the OP block seal's receiptsRoot (sealOpBlock): a
+        // FISCO Merkle fold here changes the block hash. Empty lists map to the canonical
+        // empty-trie root.
+        auto const commitments = engine_common::buildHeaderCommitments(
+            executionPayload.transactions, receipts, executable.types);
+        h256 const txRoot = commitments.transactionsRoot;
+        h256 const receiptRoot = commitments.receiptsRoot;
 
-            auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
-            // Default both roots to the canonical empty-trie root, not the all-zero hash:
-            // a payload of only raw-only forced transactions (OP deposits) has no
-            // executable transactions and no receipts, and finalizeEthBlockHeader goes
-            // through EthBlockHeader::calculateRLPHash -> validateHeader, which rejects
-            // a zero receiptsRoot/txsRoot (same reason as the empty-block branch above).
-            txRoot = bcos::ledger::mpt::emptyRootHash();
-            auto hasher = hashImpl.hasher();
-            crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(
-                hasher.clone());
-            if (!executionPayload.transactions.empty())
-            {
-                auto txHashes =
-                    executionPayload.transactions | ::ranges::views::transform([](auto& tx) {
-                        // Canonical txHash: decoded transactions expose it directly;
-                        // raw-only (forced) entries hash their EIP-2718 bytes, which is
-                        // the canonical hash for every raw transaction kind.
-                        return tx.decoded ? tx.decoded->hash() :
-                                            bcos::crypto::keccak256Hash(bcos::ref(tx.raw));
-                    });
-                std::vector<h256> merkleTrie;
-                merkle.generateMerkle(txHashes, merkleTrie);
-                if (!merkleTrie.empty())
-                {
-                    txRoot = merkleTrie.back();
-                }
-            }
+        // Step 2f: gas used and the block-level logsBloom come out of the same call, so
+        // neither can be derived from pre-normalization receipts.
+        u256 const totalGasUsed = commitments.gasUsed;
+        Bloom const& logsBloom = commitments.logsBloom;
 
-            receiptRoot = bcos::ledger::mpt::emptyRootHash();
-            auto receiptHasher = hashImpl.hasher();
-            crypto::merkle::Merkle<std::remove_reference_t<decltype(receiptHasher)>>
-                receiptMerkle(receiptHasher.clone());
-            if (!receipts.empty())
-            {
-                auto receiptHashes =
-                    receipts | ::ranges::views::transform([](auto& r) { return r->hash(); });
-                std::vector<h256> merkleTrie;
-                receiptMerkle.generateMerkle(receiptHashes, merkleTrie);
-                if (!merkleTrie.empty())
-                {
-                    receiptRoot = merkleTrie.back();
-                }
-            }
-
-            for (auto& receipt : receipts)
-            {
-                totalGasUsed += receipt->gasUsed();
-                // Legacy receipts may carry an empty bloom (documented limitation of the raw
-                // SchedulerSerialImpl path), which is tolerated here.
-                if (!receipt->logsBloom().empty())
-                {
-                    orBloom(logsBloom, receipt->logsBloom());
-                }
-            }
-        }
-
-        // Step 2g: Compute state root (real world-state MPT on MPT chains, the legacy
-        // XOR fold otherwise — see calculateStateRoot below).
-        h256 stateRoot =
-            co_await calculateStateRoot(view, nextBlockNumber, blockHeader->version(), ledgerConfig);
+        // Step 2g: Compute state root (MPT when enabled, otherwise legacy XOR fold).
+        auto resolution = co_await engine_common::resolveEngineBlockStateRoot(view, *blockHeader,
+            ledgerConfig, *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory,
+            *m_commitObserver);
+        h256 const stateRoot = resolution.stateRoot;
 
         // Step 2h: Set computed values in the block header and calculate the block hash.
         // The header timestamp stays in milliseconds throughout (the executor consumed it in
         // milliseconds above); EthBlockHeader converts to seconds at the RLP boundary.
-        blockHeader->setStateRoot(stateRoot);
         blockHeader->setReceiptsRoot(receiptRoot);
         blockHeader->setTxsRoot(txRoot);
         blockHeader->setGasUsed(totalGasUsed);
@@ -1206,39 +1204,9 @@ private:
 
         co_return BuildPayloadResult{.executionPayload = std::move(executionPayload),
             .header = std::move(blockHeader),
-            .receipts = std::move(receipts)};
+            .receipts = std::move(receipts),
+            .mptDelta = engine_common::shareMptDelta(std::move(resolution.mptDelta))};
     }
-
-    /// Compute the block's state root over the executed view.
-    ///  - MPT chains (the shared flag-matrix predicate ledger::mpt::shouldBuildMPT, spec
-    ///    5.6/5.10): the real Ethereum world-state MPT root via ledger::mpt::
-    ///    computeMptStateRoot — the same incremental build BaselineScheduler::
-    ///    buildMPTStateRoot and EthereumBlockVerifier use, so a locally built block commits
-    ///    the same root scheme a re-executing/verifying node computes. The new trie nodes
-    ///    land in the view's top mutable layer and are committed by newPayload's
-    ///    pushView + mergeBackStorage together with the flat state. The parent root comes
-    ///    from the shared ledger::mpt::parentStateRootFor (StateRoots.h) — the same rule
-    ///    BaselineScheduler::buildMPTStateRoot uses: a parent that still committed a legacy
-    ///    root (mid-chain activation boundary) starts the build from the empty trie.
-    ///  - legacy (non-MPT) chains: the canonical XOR fold (ledger::mpt::
-    ///    computeLegacyStateRoot, shared with BaselineScheduler). Engine API chains are
-    ///    v2/L2 in production, so this branch only serves legacy test configurations.
-    task::Task<h256> calculateStateRoot(ViewType& view, protocol::BlockNumber blockNumber,
-        uint32_t blockVersion, ledger::LedgerConfig const& ledgerConfig) const
-    {
-        if (!ledger::mpt::shouldBuildMPT(ledgerConfig.features(), blockNumber))
-        {
-            co_return co_await ledger::mpt::computeLegacyStateRoot(view, blockVersion,
-                *m_blockFactory->cryptoSuite()->hashImpl(), ledgerConfig.features());
-        }
-        // Fail loud on the unsupported raw_address + MPT flag combination (same guard
-        // BaselineScheduler runs inside its MPT branch).
-        ledger::mpt::rejectRawAddressWithMPT(ledgerConfig.features(), blockNumber);
-        h256 parentStateRoot = co_await ledger::mpt::parentStateRootFor(
-            view, ledgerConfig.features(), blockNumber, *m_blockFactory);
-        co_return co_await ledger::mpt::computeMptStateRoot(view, parentStateRoot, ledgerConfig);
-    }
-
 
     void updateTrackedBlockNumbers(std::optional<bcos::protocol::BlockNumber> safeBlockNumber,
         std::optional<bcos::protocol::BlockNumber> finalizedBlockNumber)
@@ -1248,6 +1216,12 @@ private:
     }
 
     mutable std::shared_mutex x_state;
+    /// Serializes the newPayload commit section [prepareMPTPruneRows -> merge -> onCommit]
+    /// against every other commit: MPTPruner stages the block's counting work on one shared
+    /// overlay between the two hooks, so concurrent commits (the duplicate-newPayload race the
+    /// commit path comments describe) would corrupt it. Held across co_await, the same pattern
+    /// as BaselineScheduler::m_commitMutex.
+    std::mutex m_commitMutex;
     std::reference_wrapper<MemPoolType> m_memPool;
     std::reference_wrapper<GlobalStateStorageType> m_globalStateStorage;
     int64_t m_blockTxCountLimit;
@@ -1258,8 +1232,13 @@ private:
     /// is committed via newPayload(). Null in unit tests / for payloads without block
     /// persistence.
     bcos::ledger::LedgerInterface::Ptr m_ledger;
-    /// Republished after every commit; see the constructor.
+    /// Republished from buildPayload; see the constructor.
     bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState;
+    /// The pruning observer the newPayload commit path fires (NoopCommitObserver unless the
+    /// initializer injected an MPTPruner for storage.mpt_prune_window > 0). Dereferenced only
+    /// under m_commitMutex; also consulted at build time via needsRefCountDeltas() (passed to
+    /// resolveEngineBlockStateRoot so the tally decision cannot drift from the commit hook).
+    std::shared_ptr<ledger::mpt::CommitObserver> m_commitObserver;
     ForkchoiceState m_forkchoiceState;
     std::optional<TrackedHeadBlock> m_trackedHeadBlock;
     std::optional<bcos::protocol::BlockNumber> m_safeBlockNumber;

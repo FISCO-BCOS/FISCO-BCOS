@@ -32,7 +32,7 @@ set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 #add_test(NAME test-pbft WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 config_test_cases("" "${SOURCES}" "${TEST_BINARY_NAME}" "" "")
 
-# Protobuf v5.29.x ABSL_ANNOTATE_CONTIGUOUS_CONTAINER false positives:
+# Protobuf (v5.29+ / v6.x) ABSL_ANNOTATE_CONTIGUOUS_CONTAINER false positives:
 # disable detect_container_overflow only for tests that go through
 # RepeatedField SOO / ParseFromArray code paths.
 disable_container_overflow_for_tests(

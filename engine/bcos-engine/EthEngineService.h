@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include "EngineMPTStateRoot.h"
 #include "EngineServiceCommon.h"
 #include "EngineTracker.h"
 
@@ -37,6 +38,7 @@
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-framework/transaction-scheduler/TransactionScheduler.h>
 #include <bcos-ledger/LedgerMethods.h>
+#include <bcos-ledger/mpt/CommitObserver.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <bcos-task/Task.h>
@@ -50,6 +52,8 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -125,6 +129,10 @@ struct EthPayloadArtifacts
     std::shared_ptr<ViewType> view;
     bcos::protocol::BlockHeader::Ptr header;
     std::vector<protocol::TransactionReceipt::Ptr> receipts;
+    /// The block's MPT delta (null on the XOR-root path), handed to the CommitObserver (MPT
+    /// pruning) when newPayload commits the block. Kept until the durable write succeeds,
+    /// same rule as header/receipts, so a failed attempt's retry re-reads it.
+    std::shared_ptr<const ledger::mpt::MPTDeltaLayer> mptDelta = nullptr;
 };
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
@@ -143,7 +151,8 @@ public:
         bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
         int64_t blockTxCountLimit = c_defaultBlockTxCountLimit,
-        std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(ApiVersion::V3))
+        std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(ApiVersion::V3),
+        std::shared_ptr<ledger::mpt::CommitObserver> commitObserver = nullptr)
       : m_memPool(memPool),
         m_globalStateStorage(globalStateStorage),
         m_executor(executor),
@@ -151,7 +160,9 @@ public:
         m_blockFactory(std::move(blockFactory)),
         m_ledger(std::move(ledger)),
         m_blockTxCountLimit(blockTxCountLimit),
-        m_maxEngineVersion(maxEngineVersion)
+        m_maxEngineVersion(maxEngineVersion),
+        m_commitObserver(commitObserver ? std::move(commitObserver) :
+                                          std::make_shared<ledger::mpt::NoopCommitObserver>())
     {
         if (!m_blockFactory)
         {
@@ -167,13 +178,13 @@ public:
     /// Version-window contract (the four surfaces deliberately differ, matching
     /// op-geth's by-design ceiling split; do not "fix" them to agree):
     /// - exchangeCapabilities: the FULL supported list regardless of
-    ///   m_maxEngineVersion — capability advertisement is static, method windows
-    ///   are what gate actual dispatch.
+    /// m_maxEngineVersion — capability advertisement is static, method windows
+    /// are what gate actual dispatch.
     /// - updateForkchoice (FCU): instance-gated by m_maxEngineVersion (V1–V3 for
-    ///   the default-constructed service).
+    /// the default-constructed service).
     /// - newPayload: V1–V4 (Isthmus V4 empty-lists shape).
     /// - getPayload: V1–V5 via the tracker's window (the V2 build answers V1–V2,
-    ///   the V3 build answers V1–V5).
+    /// the V3 build answers V1–V5).
     task::Task<std::vector<std::string>> exchangeCapabilities(
         std::vector<std::string> remoteCapabilities)
     {
@@ -207,6 +218,9 @@ private:
         ExecutionPayload executionPayload;
         bcos::protocol::BlockHeader::Ptr header;
         std::vector<protocol::TransactionReceipt::Ptr> receipts;
+        /// The block's MPT delta (null on the XOR-root path); updateForkchoice stashes it in
+        /// the payload artifacts for the newPayload commit's pruning hooks.
+        std::shared_ptr<const ledger::mpt::MPTDeltaLayer> mptDelta = nullptr;
     };
 
     bool isForkchoiceVersionSupported(std::uint32_t version) const
@@ -225,11 +239,15 @@ private:
         const PayloadAttributes& payloadAttributes, const PayloadID& payloadId,
         std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
         std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view,
-        std::vector<bcos::bytes> const& decodedForcedTxs) const;
-
-    task::Task<h256> calculateStateRoot(ViewType& view, uint32_t blockVersion) const;
+        std::vector<bcos::bytes> decodedForcedTxs) const;
 
     EngineTracker m_tracker;
+    /// Serializes the newPayload commit section [prepareMPTPruneRows -> merge -> onCommit ->
+    /// artifact consume] against every other commit: MPTPruner stages the block's counting
+    /// work on one shared overlay between the two hooks, so concurrent commits (the
+    /// duplicate-newPayload race the commit path comments describe) would corrupt it. Held
+    /// across co_await, the same pattern as BaselineScheduler::m_commitMutex.
+    std::mutex m_commitMutex;
     std::unordered_map<PayloadID, EthPayloadArtifacts<ViewType>> m_artifacts;
     MemPoolType& m_memPool;
     GlobalStateStorageType& m_globalStateStorage;
@@ -239,6 +257,11 @@ private:
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     int64_t m_blockTxCountLimit;
     std::uint32_t m_maxEngineVersion;
+    /// The pruning observer the newPayload commit path fires (NoopCommitObserver unless the
+    /// wiring injected an MPTPruner). Dereferenced only under m_commitMutex; also consulted at
+    /// build time via needsRefCountDeltas() (passed to resolveEngineBlockStateRoot so the
+    /// tally decision cannot drift from the commit hook).
+    std::shared_ptr<ledger::mpt::CommitObserver> m_commitObserver;
 };
 
 }  // namespace bcos::engine
