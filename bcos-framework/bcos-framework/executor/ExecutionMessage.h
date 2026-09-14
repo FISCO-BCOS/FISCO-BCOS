@@ -25,13 +25,16 @@
 #include <boost/iterator/iterator_categories.hpp>
 // boost.range 1.89/1.90 regression: any_iterator_interface.hpp uses add_const /
 // remove_reference / is_reference / is_convertible without including them (fixed
-// upstream in 1.91) — and the includes MUST precede any_range.hpp, whose expansion
-// is where the parse errors fire. Drop these after boost >= 1.91.
-#include <boost/range/any_range.hpp>
+// upstream in 1.91) — and the includes MUST be reachable BEFORE any_range.hpp's
+// expansion, which is where the parse errors fire. The blank line keeps this a
+// separate clang-format sort block, so -i cannot move them below any_range again.
+// Drop these after boost >= 1.91.
 #include <boost/type_traits/add_const.hpp>
 #include <boost/type_traits/is_convertible.hpp>
 #include <boost/type_traits/is_reference.hpp>
 #include <boost/type_traits/remove_reference.hpp>
+
+#include <boost/range/any_range.hpp>
 #include <memory>
 #include <sstream>
 #include <string_view>
