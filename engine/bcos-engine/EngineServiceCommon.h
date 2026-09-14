@@ -125,7 +125,7 @@ namespace engine_common
 /// self-pointer. One home, because the carrier shape decides what the executor hashes and
 /// executes — a drift between the lanes would fork the payload composition.
 inline std::shared_ptr<bcostars::protocol::TransactionImpl> decodedTransactionFromEnvelope(
-    bcostars::Transaction tars, bcos::bytesConstRef raw)
+    bcostars::Transaction tars, bcos::bytes const& raw)
 {
     tars.extraTransactionBytes.assign(raw.begin(), raw.end());
     return std::make_shared<bcostars::protocol::TransactionImpl>(
