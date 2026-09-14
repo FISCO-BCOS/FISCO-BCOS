@@ -28,22 +28,6 @@
 
 namespace bcos::rpc
 {
-/// OP-Stack blocks are stored as NON_ETH BlockHeaders (EthBlockVersion::NON_ETH) but their
-/// identity hash and RPC shape follow the Ethereum RLP header (op-geth / op-node). Ledger
-/// indexes them by EthBlockHeader::computeHash via blockHashOverride; native FISCO NON_ETH
-/// headers lack the Shanghai+ fork fields OP always stamps.
-///
-/// One definition: the block response and the fee-history base-fee read both need it, and
-/// a second copy is how one of them ends up treating an OP block as a plain NON_ETH header.
-[[nodiscard]] inline bool isOpEthereumBlock(bcos::protocol::BlockHeader const& header)
-{
-    if (header.ethBlockVersion() != bcos::protocol::EthBlockVersion::NON_ETH)
-    {
-        return false;
-    }
-    return header.withdrawalsRoot().has_value() && header.baseFee().has_value();
-}
-
 /// The log entry's address as 40 hex digits, no 0x prefix. LogEntry::address() carries
 /// whichever form the executing lane produced, and the two lanes disagree:
 ///   * the OP lane stores the raw 20 bytes (bcos-evm/opstack/OpTransition.cpp

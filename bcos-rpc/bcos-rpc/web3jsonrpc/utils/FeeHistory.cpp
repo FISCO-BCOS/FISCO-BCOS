@@ -23,6 +23,7 @@
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-ledger/LedgerMethods.h>
+#include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -114,7 +115,7 @@ bcos::u256 bcos::rpc::blockBaseFee(bcos::protocol::BlockHeader const& header)
     // OP-Stack headers are NON_ETH yet carry a real base fee (rebuildOpEthHeader
     // deliberately leaves ethBlockVersion NON_ETH). Check that case before the NON_ETH
     // short-circuit, which is for native FISCO headers that have no base fee at all.
-    if (isOpEthereumBlock(header))
+    if (bcos::protocol::isOpEthereumBlock(header))
     {
         return header.baseFee().value_or(0);
     }

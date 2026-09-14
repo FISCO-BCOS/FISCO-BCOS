@@ -1,6 +1,6 @@
 #include <bcos-protocol/TransactionStatus.h>
+#include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rpc/filter/LogMatcher.h>
-#include <bcos-rpc/web3jsonrpc/model/BlockResponse.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -14,7 +14,7 @@ uint32_t LogMatcher::matches(
 {
     uint32_t count = 0;
     auto receipts = _block->receipts();
-    auto const blockHash = bcos::rpc::blockIdentityHash(*_block->blockHeader());
+    auto const blockHash = bcos::protocol::canonicalBlockHash(*_block->blockHeader());
     for (std::size_t index = 0; index < _block->transactionsMetaDataSize(); index++)
     {
         auto receipt = receipts[index];

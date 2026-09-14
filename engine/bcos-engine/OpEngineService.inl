@@ -21,12 +21,13 @@
 
 // This is the DEFINITION half of the split: OpEngineService.h is declarations-only.
 // Including this.inl is the opt-in instantiation point — members use
-// EthBlockHeader::computeHash and bcos::evm::opstack::estimatedDaSize. engine links
+// the canonical block hash (bcos-rlp-protocol) and bcos::evm::opstack::estimatedDaSize. engine links
 // rlp-protocol PUBLIC so installed consumers inherit the include dirs;
 // instantiators still need to link bcos-evm-opstack.
 #include "OpEngineService.h"
 #include <bcos-evm/opstack/RollupCost.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
+#include <bcos-rlp-protocol/BlockHeaderHash.h>
 
 #include <iterator>
 #include <range/v3/algorithm/any_of.hpp>
@@ -508,7 +509,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     auto finalHeader =
         engine_common::op::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(), payload,
             SchedulerType::computeTxRoot(detail::rawEnvelopes(payload)), parentBeaconBlockRoot);
-    payload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*finalHeader);
+    payload.blockHash = bcos::protocol::canonicalBlockHash(*finalHeader);
 
     bcos::protocol::Block::Ptr finalBlock;
     try
@@ -639,7 +640,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
     const auto ethHeader =
         engine_common::op::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(), payload,
             transactionsRoot, *request.parentBeaconBlockRoot);
-    if (bcos::protocol::EthBlockHeader::computeHash(*ethHeader) != payload.blockHash)
+    if (bcos::protocol::canonicalBlockHash(*ethHeader) != payload.blockHash)
     {
         co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
             std::string("blockHash does not match the reconstructed block header"));

@@ -3,25 +3,11 @@
 
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-ledger/mpt/Constants.h>
+#include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
-#include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-utilities/Bloom.h>
 
 #include <range/v3/view/enumerate.hpp>
-
-// Declared in BlockResponse.h: the block response, the transaction-by-block-number response
-// and eth_getLogs must all publish the same identity hash, or a client that reads a tx or a
-// log back cannot match it to the block it came from. isOpEthereumBlock lives in
-// web3jsonrpc/utils/util.h — the fee-history base-fee read needs the same predicate, and two
-// copies drifted once already.
-bcos::crypto::HashType bcos::rpc::blockIdentityHash(const bcos::protocol::BlockHeader& header)
-{
-    if (bcos::rpc::isOpEthereumBlock(header))
-    {
-        return bcos::protocol::EthBlockHeader::computeHash(header);
-    }
-    return header.hash();
-}
 
 void bcos::rpc::combineBlockResponse(
     Json::Value& result, const bcos::protocol::Block& block, bool fullTxs)
@@ -30,9 +16,9 @@ void bcos::rpc::combineBlockResponse(
     auto blockNumber = blockHeader->number();
     auto const ethVersion = blockHeader->ethBlockVersion();
     auto const isEth = ethVersion != bcos::protocol::EthBlockVersion::NON_ETH;
-    auto const isOp = isOpEthereumBlock(*blockHeader);
+    auto const isOp = bcos::protocol::isOpEthereumBlock(*blockHeader);
     auto const isEthLike = isEth || isOp;
-    auto blockHash = blockIdentityHash(*blockHeader);
+    auto blockHash = bcos::protocol::canonicalBlockHash(*blockHeader);
 
     result["number"] = toQuantity(blockNumber);
     result["hash"] = blockHash.hexPrefixed();

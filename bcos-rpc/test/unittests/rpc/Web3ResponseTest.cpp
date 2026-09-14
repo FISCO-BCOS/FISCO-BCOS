@@ -10,6 +10,7 @@
 
 #include "../common/RPCFixture.h"
 #include <bcos-crypto/ChecksumAddress.h>
+#include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rpc/web3jsonrpc/model/BlockResponse.h>
@@ -582,20 +583,19 @@ BOOST_AUTO_TEST_CASE(combineReceiptResponseEmitsLogAddressAndIndex)
     BOOST_CHECK_EQUAL(log["removed"].asBool(), false);
 }
 
-BOOST_AUTO_TEST_CASE(blockIdentityHashUsesTheRlpHashForOpHeaders)
+BOOST_AUTO_TEST_CASE(canonicalBlockHashUsesTheRlpHashForOpHeaders)
 {
-    // The block response reports this hash; every other producer of a blockHash field (the
-    // transaction-by-block-number response, eth_getLogs log entries) must report the same
-    // one, or a client cannot match a tx/log back to the block it read.
+    // The RPC reports this hash through every producer of a blockHash field (the block
+    // response, the transaction-by-block-number response, eth_getLogs log entries), so a
+    // client can always match a tx/log back to the block it read.
     auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
     BOOST_REQUIRE(header);
     header->setEthBlockVersion(bcos::protocol::EthBlockVersion::NON_ETH);
     header->setWithdrawalsRoot(bcos::h256(1U));
     header->setBaseFee(bcos::u256(1));
-    BOOST_REQUIRE(bcos::rpc::isOpEthereumBlock(*header));
+    BOOST_REQUIRE(bcos::protocol::isOpEthereumBlock(*header));
 
-    // OP identity is the RLP hash, not the stored (TARS) header hash.
-    BOOST_CHECK_EQUAL(bcos::rpc::blockIdentityHash(*header).hex(),
+    BOOST_CHECK_EQUAL(bcos::protocol::canonicalBlockHash(*header).hex(),
         bcos::protocol::EthBlockHeader::computeHash(*header).hex());
 }
 

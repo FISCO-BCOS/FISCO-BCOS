@@ -39,6 +39,7 @@
 #include <bcos-ledger/mpt/MPTReadView.h>
 #include <bcos-ledger/mpt/Proof.h>
 #include <bcos-ledger/mpt/StorageValueCodec.h>
+#include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/util.h>
@@ -1381,10 +1382,7 @@ task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid transaction index!"));
         }
         auto receipt = co_await ledger::getReceipt(*ledger, txHash);
-        // Must be the client-visible identity hash (RLP on an OP header), not header->hash():
-        // the block response reports the former, so header->hash() here would hand the client
-        // a blockHash that no block query ever returns.
-        auto blockHash = bcos::rpc::blockIdentityHash(*block->blockHeader());
+        auto blockHash = bcos::protocol::canonicalBlockHash(*block->blockHeader());
         combineTxResponse(result, *(*tx)[0], *receipt, blockHash);
     }
     catch (std::exception const& e)

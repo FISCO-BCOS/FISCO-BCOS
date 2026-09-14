@@ -287,7 +287,7 @@ bcos::protocol::BlockHeader::Ptr rebuildOpEthHeader(
 {
     // Intentionally NO setEthBlockVersion (unlike detail::finalizeEthBlockHeader): the OP
     // header is a FISCO BlockHeader whose ethBlockVersion stays NON_ETH, which is exactly
-    // the header class EthBlockHeader::computeHash documents itself for ("block-identity
+    // the canonical block hash documents itself for ("block-identity
     // hash for FISCO-native/OP headers... that validateHeader rejects"). The RLP encoding
     // cannot depend on that field: the ctor builds EthBlockHeaderData from field presence
     // (each optional fork field copied when set) and the shared codec encodes exactly the
