@@ -130,6 +130,23 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
                                           "would make every node restart fail. Create the chain "
                                           "with executor.version=3 instead"));
             }
+            // Values above the defined lane ladder are refused for the same reason: the
+            // runtime setVersion fail-opens (the chain keeps producing), but every node's
+            // next start throws in validateOpModeGenesisOnly, which rejects anything above
+            // the ladder — an accepted write bricks restarts. The bound derives from the
+            // ladder (MAX_GOVERNANCE_EXECUTOR_VERSION), so wiring a new lane moves it with
+            // the wiring; version-gated so pre-3.18 blocks that set such a value replay.
+            if (_value > bcos::ledger::MAX_GOVERNANCE_EXECUTOR_VERSION &&
+                versionCompareTo(version, BlockVersion::V3_18_0_VERSION) >= 0)
+            {
+                BOOST_THROW_EXCEPTION(
+                    PrecompiledError{} << errinfo_comment(
+                        "executor_version " + std::to_string(_value) +
+                        " is above the highest defined executor lane (" +
+                        std::to_string(bcos::ledger::MAX_GOVERNANCE_EXECUTOR_VERSION) +
+                        "); an accepted write would leave a chain that keeps "
+                        "producing but cannot restart"));
+            }
             // NOTE: no other bound here. MultiVersionScheduler::setVersion keeps the node
             // running when the value names an unwired or unknown executor, in two fail-open
             // branches with different keep-behaviours: a value ABOVE the wired set saturates
