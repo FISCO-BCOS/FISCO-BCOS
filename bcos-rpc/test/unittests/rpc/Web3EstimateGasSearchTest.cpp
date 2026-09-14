@@ -145,7 +145,7 @@ BOOST_AUTO_TEST_CASE(gasUsedSufficientReturnsGasUsedInTwoRuns)
     BOOST_CHECK_EQUAL(threshold->m_probes.size(), 2U);
 }
 
-// A gas field in the request bounds the search instead of the chain's tx_gas_limit, and a
+// A gas field in the request below the chain's tx_gas_limit bounds the search, and a
 // call that fails even at that bound reports the failure rather than a number.
 BOOST_AUTO_TEST_CASE(requestGasCapsSearchAndFailureAtCapIsReported)
 {
@@ -165,6 +165,44 @@ BOOST_AUTO_TEST_CASE(requestGasCapsSearchAndFailureAtCapIsReported)
     BOOST_CHECK_EQUAL(response["error"]["code"].asInt(),
         static_cast<int32_t>(protocol::TransactionStatus::OutOfGas));
     BOOST_CHECK_EQUAL(threshold->m_probes.size(), 1U);
+}
+
+// A gas field above the chain's tx_gas_limit does not widen the search: no transaction is
+// budgeted more than tx_gas_limit, so the cap is min(request gas, tx_gas_limit) and a client
+// cannot turn one request into ~64 executions by sending gas = 2^64 - 1.
+BOOST_AUTO_TEST_CASE(requestGasAboveChainLimitIsClampedToChainLimit)
+{
+    constexpr uint64_t txGasLimit = 3000000;
+    m_ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_GAS_LIMIT, std::to_string(txGasLimit));
+    auto threshold =
+        std::make_shared<GasThresholdScheduler>(m_ledger, m_blockFactory, 150000, u256(21000));
+    auto web3 = buildWeb3(threshold);
+
+    auto response = request(web3, estimateRequest(R"(,"gas":"0xffffffffffffffff")"));
+    BOOST_REQUIRE(!response.isMember("error"));
+    BOOST_CHECK_EQUAL(response["result"].asString(), toQuantity(u256(150000)));
+    BOOST_REQUIRE_GE(threshold->m_probes.size(), 3U);
+    BOOST_CHECK_EQUAL(threshold->m_probes[0], static_cast<int64_t>(txGasLimit));
+    BOOST_CHECK_LE(threshold->m_probes.size(), 2U + 22U);
+}
+
+// A successful call whose receipt books 0 gas: rechecking at gas 0 would mean "no cap" to
+// the executor and pass vacuously, making 0 the answer. The search must run instead and
+// never probe at 0.
+BOOST_AUTO_TEST_CASE(zeroGasUsedReceiptStillSearches)
+{
+    m_ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_GAS_LIMIT, "3000000");
+    auto threshold =
+        std::make_shared<GasThresholdScheduler>(m_ledger, m_blockFactory, 150000, u256(0));
+    auto web3 = buildWeb3(threshold);
+
+    auto response = request(web3, estimateRequest());
+    BOOST_REQUIRE(!response.isMember("error"));
+    BOOST_CHECK_EQUAL(response["result"].asString(), toQuantity(u256(150000)));
+    for (auto probe : threshold->m_probes)
+    {
+        BOOST_CHECK_GT(probe, 0);
+    }
 }
 
 // No tx_gas_limit in the ledger and no gas in the request: cap is 0, the executor budgets its

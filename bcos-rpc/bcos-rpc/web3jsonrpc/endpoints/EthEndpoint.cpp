@@ -593,13 +593,13 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
     // The receipt's gasUsed is not the gas a transaction needs: a precompiled target hands
     // its budget to internal sub-calls and never books what they burn (issue #5587), and the
     // executor only meters what it charges. So do what geth does: find the smallest gas cap
-    // the call still succeeds at. Cap = the request's gas if given, else the chain's
-    // tx_gas_limit; the executor clamps the budget to tx.gasLimit() (executor v1,
-    // bugfix_gas_payment_balance_precheck) — where it doesn't, every probe succeeds and the
-    // answer degrades to the first run's gasUsed (the pre-existing behavior, one extra
-    // execution).
-    uint64_t cap = call.gas.value_or(0);
-    if (cap == 0)
+    // the call still succeeds at. Cap = min(request gas, chain tx_gas_limit): no transaction
+    // is budgeted more than tx_gas_limit anyway, and taking the smaller one keeps the search
+    // bounded by the chain, not by whatever a client puts in the gas field. The executor
+    // clamps the budget to tx.gasLimit() (executor v1, bugfix_gas_payment_balance_precheck)
+    // — where it doesn't, every probe succeeds and the answer degrades to the first run's
+    // gasUsed (the pre-existing behavior, one extra execution).
+    uint64_t cap = 0;
     {
         auto const ledger = m_nodeService->ledger();
         if (auto config =
@@ -607,6 +607,11 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
         {
             cap = boost::lexical_cast<uint64_t>(std::get<0>(*config));
         }
+    }
+    if (auto const requested = call.gas.value_or(0);
+        requested != 0 && (cap == 0 || requested < cap))
+    {
+        cap = requested;
     }
     auto succeeded = [](CallOutcome const& outcome) {
         return outcome.status == static_cast<int32_t>(protocol::TransactionStatus::None);
@@ -622,8 +627,15 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
     auto estimate = first.gasUsed.convert_to<uint64_t>();
     if (estimate < cap)
     {
-        call.gas = estimate;
-        if (!succeeded(co_await executeCall(call, true)))
+        // gas 0 means "no cap" to the executor, so a receipt that books 0 cannot be rechecked
+        // as-is — it would pass vacuously and 0 would be the answer. Search instead.
+        bool enough = false;
+        if (estimate != 0)
+        {
+            call.gas = estimate;
+            enough = succeeded(co_await executeCall(call, true));
+        }
+        if (!enough)
         {
             // gasUsed is not enough on its own: binary search (gasUsed, cap] for the lowest
             // cap that still succeeds. ~log2(cap) probes, each a full eth_call.

@@ -47,7 +47,7 @@ inline void checkSignatureFormat(bytesConstRef _signatureData)
         std::ostringstream oss;
         oss << "invalid signature length : current length is " << _signatureData.size();
         std::string errMsg = oss.str();
-        CRYPTO_LOG(WARNING) << LOG_DESC("recoverAddress failed") << LOG_KV("message", errMsg);
+        CRYPTO_LOG(WARNING) << LOG_DESC("invalid signature format") << LOG_KV("message", errMsg);
         BOOST_THROW_EXCEPTION(InvalidSignature() << errinfo_comment(errMsg));
     }
     if ((uint8_t)_signatureData[SECP256K1_SIGNATURE_V] > 3)
