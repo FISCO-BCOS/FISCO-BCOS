@@ -337,7 +337,13 @@ bcostars::protocol::BlockHeaderImpl::Ptr buildHeaderFromEnv(const Json::Value& e
     h->setTxsRoot(bcos::h256{});
     h->setReceiptsRoot(bcos::h256{});
     h->setWithdrawalsRoot(bcos::h256{});
-    h->setRequestsHash(bcos::h256{});
+    // requestsHash: deliberately NOT defaulted here. The announced zero was a harness-fixture
+    // artifact: pre-Prague goldens omit requestsHash, so fillAnnouncedHeaderFromGolden left the
+    // zero in place, while the executed pre-Prague header has the field absent — the six-way
+    // verify compares presence AND value (OpCommitments.h mismatchedFieldOf), so every
+    // pre-isthmus CHAIN block soft-reported on requestsHash despite golden-identical state.
+    // Announce it only when the golden carries the key (isthmus/jovian do;
+    // fillAnnouncedHeaderFromGolden sets it then) — mirrors the withdrawalsRoot handling there.
     return h;
 }
 
@@ -623,12 +629,11 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
         {
             // isthmus/jovian: any executeBlock error is a real failure (FISCO must reproduce
             // op-geth). pre-isthmus: a six-way commitment mismatch is a soft REPORT, never hard.
-            // Two shapes feed this: (a) single-block vectors execute under the isthmus pin, so the
-            // announced golden is a different fork's; (b) chain blocks, now executed under their
-            // own fork, still carry the harness's announced-header default for a field the
-            // pre-Prague golden omits (no requestsHash in the golden → announced zero-valued h256
-            // vs the executed header's absent value → a presence mismatch, not a state
-            // divergence). Any OTHER error is a real bug → BOOST_ERROR below.
+            // Shape feeding this: single-block pre-isthmus vectors execute under the isthmus pin,
+            // so the announced (pre-isthmus) golden cannot match the isthmus-computed header.
+            // (The harness's old announced-zero requestsHash default that soft-reported
+            // pre-isthmus CHAIN blocks is gone — the announced header now carries requestsHash
+            // only when the golden does.) Any OTHER error is a real bug → BOOST_ERROR below.
             const std::string msg = routeAErr->errorMessage();
             const bool commitmentMismatch =
                 msg.find("six-way commitment mismatch") != std::string::npos ||
