@@ -825,13 +825,8 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
 void Ledger::asyncGetTotalTransactionCount(
     std::function<void(Error::Ptr, int64_t, int64_t, bcos::protocol::BlockNumber)> _callback)
 {
-    // The storage2 read path cannot distinguish a missing SYS_CURRENT_STATE table from
-    // missing rows; the legacy contract reports a missing table as an error (-1,-1,-1)
-    // while missing rows mean 0, so the open-table check stays here.
-    m_stateStorage->asyncOpenTable(SYS_CURRENT_STATE,
-        [this, callback = std::move(_callback)](auto&& error, std::optional<Table>&& table) mutable {
-            auto tableError =
-                checkTableValid(std::forward<decltype(error)>(error), table, SYS_CURRENT_STATE);
+    asyncCheckStateTableValid(SYS_CURRENT_STATE,
+        [this, callback = std::move(_callback)](Error::Ptr tableError) mutable {
             if (tableError)
             {
                 LEDGER_LOG(DEBUG) << "GetTotalTransactionCount"
@@ -954,58 +949,76 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
         return;
     }
 
-    task::wait([](decltype(*this)& self, bcos::protocol::BlockNumber startNumber, int64_t offset,
-                   std::function<void(Error::Ptr,
-                       std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>)>
-                       callback) -> task::Task<void> {
-        auto numberRange = ::ranges::views::iota(startNumber, startNumber + offset + 1);
-        std::vector<std::optional<Entry>> entries;
-        try
-        {
-            entries = co_await storage2::readSome(*self.m_stateStorage,
-                numberRange | ::ranges::views::transform([](BlockNumber blockNumber) {
-                    return executor_v1::StateKey(
-                        SYS_BLOCK_NUMBER_2_NONCES, boost::lexical_cast<std::string>(blockNumber));
-                }));
-        }
-        catch (std::exception& e)
-        {
-            LEDGER_LOG(INFO) << "GetNonceList failed" << boost::diagnostic_information(e);
-            callback(BCOS_ERROR_WITH_PREV_PTR(LedgerError::GetStorageError, "GetNonceList", e),
-                nullptr);
-            co_return;
-        }
-
-        auto retMap = std::make_shared<std::map<protocol::BlockNumber, protocol::NonceListPtr>>();
-
-        for (auto const& [number, entry] : ::ranges::views::zip(numberRange, entries))
-        {
-            try
+    asyncCheckStateTableValid(SYS_BLOCK_NUMBER_2_NONCES,
+        [this, callback = std::move(_onGetList), _startNumber, _offset](
+            Error::Ptr tableError) mutable {
+            if (tableError)
             {
-                if (!entry)
+                LEDGER_LOG(INFO) << "GetNonceList open table failed"
+                                 << boost::diagnostic_information(*tableError);
+                callback(std::move(tableError), nullptr);
+                return;
+            }
+
+            task::wait([](decltype(*this)& self, bcos::protocol::BlockNumber startNumber,
+                           int64_t offset,
+                           std::function<void(Error::Ptr,
+                               std::shared_ptr<std::map<protocol::BlockNumber,
+                                   protocol::NonceListPtr>>)>
+                               callback) -> task::Task<void> {
+                auto numberRange = ::ranges::views::iota(startNumber, startNumber + offset + 1);
+                std::vector<std::optional<Entry>> entries;
+                try
                 {
-                    continue;
+                    entries = co_await storage2::readSome(*self.m_stateStorage,
+                        numberRange | ::ranges::views::transform([](BlockNumber blockNumber) {
+                            return executor_v1::StateKey(SYS_BLOCK_NUMBER_2_NONCES,
+                                boost::lexical_cast<std::string>(blockNumber));
+                        }));
+                }
+                catch (std::exception& e)
+                {
+                    LEDGER_LOG(INFO) << "GetNonceList failed" << boost::diagnostic_information(e);
+                    callback(
+                        BCOS_ERROR_WITH_PREV_PTR(LedgerError::GetStorageError, "GetNonceList", e),
+                        nullptr);
+                    co_return;
                 }
 
-                auto value = entry->get();
-                auto block = self.m_blockFactory->createBlock(
-                    bcos::bytesConstRef((bcos::byte*)value.data(), value.size()), false, false);
+                auto retMap =
+                    std::make_shared<std::map<protocol::BlockNumber, protocol::NonceListPtr>>();
 
-                retMap->emplace(std::make_pair(
-                    number, std::make_shared<NonceList>(
-                                block->nonceList() | ::ranges::to<NonceList>())));
-            }
-            catch (std::exception const& e)
-            {
-                LEDGER_LOG(WARNING) << "Parse nonce list failed"
-                                    << boost::diagnostic_information(e);
-                continue;
-            }
-        }
+                for (auto const& [number, entry] : ::ranges::views::zip(numberRange, entries))
+                {
+                    try
+                    {
+                        if (!entry)
+                        {
+                            continue;
+                        }
 
-        LEDGER_LOG(TRACE) << "GetNonceList success" << LOG_KV("retMap size", retMap->size());
-        callback(nullptr, std::move(retMap));
-    }(*this, _startNumber, _offset, std::move(_onGetList)));
+                        auto value = entry->get();
+                        auto block = self.m_blockFactory->createBlock(
+                            bcos::bytesConstRef((bcos::byte*)value.data(), value.size()), false,
+                            false);
+
+                        retMap->emplace(std::make_pair(
+                            number, std::make_shared<NonceList>(
+                                        block->nonceList() | ::ranges::to<NonceList>())));
+                    }
+                    catch (std::exception const& e)
+                    {
+                        LEDGER_LOG(WARNING) << "Parse nonce list failed"
+                                            << boost::diagnostic_information(e);
+                        continue;
+                    }
+                }
+
+                LEDGER_LOG(TRACE) << "GetNonceList success"
+                                  << LOG_KV("retMap size", retMap->size());
+                callback(nullptr, std::move(retMap));
+            }(*this, _startNumber, _offset, std::move(callback)));
+        });
 }
 
 void Ledger::removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync)
@@ -1074,6 +1087,17 @@ void Ledger::asyncGetNodeListByType(std::string_view const& _type,
                 {});
         }
     }(*this, eType, std::move(_onGetConfig)));
+}
+
+void Ledger::asyncCheckStateTableValid(
+    std::string_view tableName, std::function<void(Error::Ptr)> callback)
+{
+    m_stateStorage->asyncOpenTable(tableName,
+        [this, tableName = std::string(tableName), callback = std::move(callback)](
+            auto&& error, std::optional<Table>&& table) mutable {
+            callback(
+                checkTableValid(std::forward<decltype(error)>(error), table, tableName));
+        });
 }
 
 Error::Ptr Ledger::checkTableValid(Error::UniquePtr&& error,
@@ -2445,27 +2469,42 @@ std::optional<storage::Table> Ledger::buildDir(
 void Ledger::asyncGetCurrentStateByKey(std::string_view const& _key,
     std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback)
 {
-    task::wait([](decltype(*this)& self, std::string key,
-                   std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)>
-                       callback) -> task::Task<void> {
-        std::optional<bcos::storage::Entry> entry;
-        try
-        {
-            entry = co_await storage2::readOne(
-                *self.m_stateStorage, executor_v1::StateKeyView{SYS_CURRENT_STATE, key});
-        }
-        catch (std::exception& e)
-        {
-            LEDGER_LOG(DEBUG) << LOG_DESC("asyncGetCurrentStateByKey exception")
-                              << LOG_KV("key", key) << boost::diagnostic_information(e);
-            callback(BCOS_ERROR_WITH_PREV_PTR(LedgerError::GetStorageError, "Get row failed", e),
-                {});
-            co_return;
-        }
-        // A missing entry is success with an empty optional: this API historically does
-        // not checkEntryValid here.
-        callback(nullptr, std::move(entry));
-    }(*this, std::string(_key), std::move(_callback)));
+    asyncCheckStateTableValid(SYS_CURRENT_STATE,
+        [this, key = std::string(_key), callback = std::move(_callback)](
+            Error::Ptr tableError) mutable {
+            if (tableError)
+            {
+                LEDGER_LOG(DEBUG) << LOG_DESC("asyncGetCurrentStateByKey failed")
+                                  << LOG_KV("key", key)
+                                  << boost::diagnostic_information(*tableError);
+                callback(std::move(tableError), {});
+                return;
+            }
+
+            task::wait([](decltype(*this)& self, std::string key,
+                           std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)>
+                               callback) -> task::Task<void> {
+                std::optional<bcos::storage::Entry> entry;
+                try
+                {
+                    entry = co_await storage2::readOne(
+                        *self.m_stateStorage, executor_v1::StateKeyView{SYS_CURRENT_STATE, key});
+                }
+                catch (std::exception& e)
+                {
+                    LEDGER_LOG(DEBUG)
+                        << LOG_DESC("asyncGetCurrentStateByKey exception") << LOG_KV("key", key)
+                        << boost::diagnostic_information(e);
+                    callback(
+                        BCOS_ERROR_WITH_PREV_PTR(LedgerError::GetStorageError, "Get row failed", e),
+                        {});
+                    co_return;
+                }
+                // A missing entry is success with an empty optional: this API historically does
+                // not checkEntryValid here.
+                callback(nullptr, std::move(entry));
+            }(*this, std::move(key), std::move(callback)));
+        });
 }
 
 Error::Ptr Ledger::setCurrentStateByKey(std::string_view const& _key, bcos::storage::Entry entry)
@@ -2478,6 +2517,12 @@ Error::Ptr Ledger::setCurrentStateByKey(std::string_view const& _key, bcos::stor
     catch (bcos::Error& e)
     {
         return std::make_shared<Error>(std::move(e));
+    }
+    catch (std::exception& e)
+    {
+        LEDGER_LOG(DEBUG) << "setCurrentStateByKey" << boost::diagnostic_information(e);
+        return BCOS_ERROR_WITH_PREV_PTR(
+            LedgerError::CollectAsyncCallbackError, "Set current state failed with errors!", e);
     }
     return nullptr;
 }

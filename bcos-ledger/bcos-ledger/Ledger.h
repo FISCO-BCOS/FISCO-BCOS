@@ -156,6 +156,13 @@ private:
     Error::Ptr checkTableValid(Error::UniquePtr&& error,
         const std::optional<bcos::storage::Table>& table, const std::string_view& tableName);
 
+    // The storage2 read path cannot distinguish a missing table from missing rows; the
+    // legacy async contract reports a missing table as OpenTableFailed, so the legacy
+    // SYS_* readers share this open-table gate. @p callback receives nullptr when the
+    // table exists and is valid, the OpenTableFailed error otherwise.
+    void asyncCheckStateTableValid(
+        std::string_view tableName, std::function<void(Error::Ptr)> callback);
+
     Error::Ptr checkEntryValid(Error::UniquePtr&& error,
         const std::optional<bcos::storage::Entry>& entry, const std::string_view& key);
 

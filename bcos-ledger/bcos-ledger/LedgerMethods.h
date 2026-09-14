@@ -102,7 +102,12 @@ struct EncodedBlockTransaction
 inline std::vector<EncodedBlockTransaction> encodeUnsavedBlockTransactions(
     bcos::protocol::Block::ConstPtr block, bcos::protocol::ConstTransactionsPtr blockTxs)
 {
-    auto const txCount = std::max(block->transactionsSize(), block->transactionsMetaDataSize());
+    // An external tx list is iterated by its own size (the historical needStoreUnsavedTxs
+    // semantics): indexing it by the block's tx count would overrun a shorter list and
+    // silently drop the tail of a longer one.
+    auto const txCount = blockTxs ? blockTxs->size() :
+                                    std::max(block->transactionsSize(),
+                                        block->transactionsMetaDataSize());
     auto inlineTxs = block->transactions();
     std::vector<EncodedBlockTransaction> out;
     out.reserve(txCount);
@@ -112,7 +117,7 @@ inline std::vector<EncodedBlockTransaction> encodeUnsavedBlockTransactions(
         std::optional<bcos::protocol::AnyTransaction> anyTx;
         if (blockTxs)
         {
-            tx = blockTxs->at(i).get();
+            tx = (*blockTxs)[i].get();
         }
         else
         {
@@ -153,107 +158,9 @@ struct PrewriteBlockRows
 /// same list. @p blockHash is the mapping key for both hash rows; the header row encodes
 /// the header itself, whose hash() differs from @p blockHash when it came from a
 /// blockHashOverride (OP path) — OP-aware readers must use the override hash.
-inline PrewriteBlockRows buildPrewriteBlockRows(protocol::Block::ConstPtr block,
+PrewriteBlockRows buildPrewriteBlockRows(protocol::Block::ConstPtr block,
     protocol::ConstTransactionsPtr blockTxs, protocol::BlockFactory& blockFactory,
-    bcos::crypto::HashType const& blockHash, bool writeNonces)
-{
-    auto header = block->blockHeader();
-    auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
-
-    PrewriteBlockRows out;
-    out.rows.reserve(6);
-
-    // number 2 hash
-    storage::Entry hashEntry;
-    hashEntry.set(blockHash.asBytes());
-    out.rows.emplace_back(
-        executor_v1::StateKey{SYS_NUMBER_2_HASH, blockNumberStr}, std::move(hashEntry));
-
-    // hash 2 number
-    storage::Entry hash2NumberEntry;
-    hash2NumberEntry.set(blockNumberStr);
-    out.rows.emplace_back(
-        executor_v1::StateKey{SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash)},
-        std::move(hash2NumberEntry));
-
-    // number 2 header
-    bytes headerBuffer;
-    header->encode(headerBuffer);
-    storage::Entry number2HeaderEntry;
-    number2HeaderEntry.set(std::move(headerBuffer));
-    out.rows.emplace_back(executor_v1::StateKey{SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr},
-        std::move(number2HeaderEntry));
-
-    // number 2 nonce — nonces prefer the external tx list over the block's inline txs
-    if (writeNonces)
-    {
-        auto nonceBlock = blockFactory.createBlock();
-        protocol::NonceList nonceList;
-        if (blockTxs)
-        {
-            for (auto const& tx : *blockTxs)
-            {
-                nonceList.emplace_back(tx->nonce());
-            }
-        }
-        else
-        {
-            for (auto tx : block->transactions())
-            {
-                nonceList.emplace_back(tx->nonce());
-            }
-        }
-
-        nonceBlock->setNonceList(nonceList);
-        bytes nonceBuffer;
-        nonceBlock->encode(nonceBuffer);
-        storage::Entry number2NonceEntry;
-        number2NonceEntry.set(std::move(nonceBuffer));
-        out.rows.emplace_back(executor_v1::StateKey{SYS_BLOCK_NUMBER_2_NONCES, blockNumberStr},
-            std::move(number2NonceEntry));
-    }
-
-    // current number
-    storage::Entry numberEntry;
-    numberEntry.set(blockNumberStr);
-    out.rows.emplace_back(
-        executor_v1::StateKey{SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER}, std::move(numberEntry));
-
-    // number 2 transactions (metadata only; rebuilt from full transactions when the block
-    // carries no metadata)
-    out.transactionsBlock = blockFactory.createBlock();
-    if (block->transactionsMetaDataSize() > 0)
-    {
-        for (auto originTransactionMetaData : block->transactionMetaDatas())
-        {
-            auto transactionMetaData = blockFactory.createTransactionMetaData(
-                originTransactionMetaData->hash(), std::string(originTransactionMetaData->to()));
-            out.transactionsBlock->appendTransactionMetaData(std::move(transactionMetaData));
-        }
-    }
-    else if (block->transactionsSize() > 0)
-    {
-        for (auto transaction : block->transactions())
-        {
-            auto transactionMetaData = blockFactory.createTransactionMetaData(
-                transaction->hash(), std::string(transaction->to()));
-            out.transactionsBlock->appendTransactionMetaData(std::move(transactionMetaData));
-        }
-    }
-    else if (header->number() > 0)
-    {
-        LEDGER_LOG(WARNING) << "Empty transactions and metadata, empty block?"
-                            << LOG_KV("blockNumber", blockNumberStr);
-    }
-    bytes transactionsBuffer;
-    out.transactionsBlock->encode(transactionsBuffer);
-    storage::Entry number2TransactionHashesEntry;
-    number2TransactionHashesEntry.set(std::move(transactionsBuffer));
-    out.rows.emplace_back(executor_v1::StateKey{SYS_NUMBER_2_TXS, blockNumberStr},
-        std::move(number2TransactionHashesEntry));
-
-    return out;
-}
+    bcos::crypto::HashType const& blockHash, bool writeNonces);
 
 // FIB-104: Unified prewrite — routes block, transaction, and receipt data into
 // the caller-provided storage buffer. Phase 1 reuses the existing prewriteBlock
