@@ -32,6 +32,7 @@
 
 #include <bcos-framework/ledger/Ledger.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
+#include <bcos-framework/ledger/LedgerConfigState.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/storage/Entry.h>
@@ -131,7 +132,8 @@ public:
         SchedulerType& scheduler, bcos::protocol::BlockFactory::Ptr blockFactory,
         int64_t blockTxCountLimit = c_defaultBlockTxCountLimit,
         bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
-        std::shared_ptr<DACaps> daCaps = nullptr, bool allowSynthesizedL1Attributes = false)
+        std::shared_ptr<DACaps> daCaps = nullptr, bool allowSynthesizedL1Attributes = false,
+        bcos::ledger::LedgerConfigState::Ptr ledgerConfigState = nullptr)
       : m_memPool(memPool),
         m_globalStateStorage(globalStateStorage),
         m_scheduler(scheduler),
@@ -139,7 +141,8 @@ public:
         m_blockTxCountLimit(blockTxCountLimit),
         m_delegate(std::move(delegate)),
         m_daCaps(std::move(daCaps)),
-        m_allowSynthesizedL1Attributes(allowSynthesizedL1Attributes)
+        m_allowSynthesizedL1Attributes(allowSynthesizedL1Attributes),
+        m_ledgerConfigState(std::move(ledgerConfigState))
     {
         if (!m_blockFactory)
         {
@@ -296,6 +299,11 @@ private:
     bcos::scheduler::SchedulerInterface::Ptr m_delegate;
     std::shared_ptr<DACaps> m_daCaps;
     bool m_allowSynthesizedL1Attributes;
+    /// Published after every durable commit from the ledger config the OpScheduler hands
+    /// back (whoever commits a block publishes — TxValidator's contract). This lane bypasses
+    /// MultiVersionScheduler's publishing wrapper, so without it the engine-driven modes
+    /// would admit later transactions against the boot snapshot.
+    bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState;
     /// Guards m_lastExecutedHeader: newPayload requests can run concurrently on RPC
     /// threads (no serial executor), so the shared_ptr write/read must be synchronized.
     ///

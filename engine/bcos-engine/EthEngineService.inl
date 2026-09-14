@@ -508,6 +508,20 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
             guard, m_artifacts, payloadId, cached->executionPayload.blockHash, cached);
     }
 
+    // Publish the post-commit configuration into the admission holder (TxValidator's
+    // "whoever commits a block publishes" contract). This lane bypasses
+    // MultiVersionScheduler's publishing wrapper, so without this the engine-driven modes
+    // would admit every later transaction against the boot snapshot. Fires on every VALID
+    // answer — including the idempotent-duplicate path — so a failed refetch is retried by
+    // the CL's resubmission instead of silently leaving admission one block behind. A
+    // failing refetch propagates: the block is durable and the CL retries, the same
+    // fail-stop the per-block refetch elsewhere applies.
+    if (m_ledgerConfigState && m_ledger)
+    {
+        auto ledgerConfig = co_await ledger::getLedgerConfig(*m_ledger);
+        m_ledgerConfigState->set(std::make_shared<const bcos::ledger::LedgerConfig>(*ledgerConfig));
+    }
+
     co_return engine_common::makeStatus(
         PayloadValidationStatus::Valid, cached->executionPayload.blockHash, std::nullopt);
 }
@@ -562,9 +576,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
             // Same carrier the OP build path uses (OpEngineService::buildOpBlock): keep the
             // raw EIP-2718 envelope on extraTransactionBytes so the executor sees the exact
             // wire form.
-            tarsTx->extraTransactionBytes.assign(raw.begin(), raw.end());
-            auto decoded = std::make_shared<bcostars::protocol::TransactionImpl>(
-                [tars = std::move(*tarsTx)]() mutable { return &tars; });
+            auto decoded = engine_common::decodedTransactionFromEnvelope(std::move(*tarsTx), raw);
             engineTransactions.push_back(EngineTransaction{
                 .raw = std::move(raw),
                 .decoded = std::move(decoded),

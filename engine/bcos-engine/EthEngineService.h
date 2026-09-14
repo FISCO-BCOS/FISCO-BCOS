@@ -31,6 +31,7 @@
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/ledger/Ledger.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
+#include <bcos-framework/ledger/LedgerConfigState.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/storage/Entry.h>
@@ -144,7 +145,8 @@ public:
         bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
         int64_t blockTxCountLimit = c_defaultBlockTxCountLimit,
-        std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(ApiVersion::V3))
+        std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(ApiVersion::V3),
+        bcos::ledger::LedgerConfigState::Ptr ledgerConfigState = nullptr)
       : m_memPool(memPool),
         m_globalStateStorage(globalStateStorage),
         m_executor(executor),
@@ -152,7 +154,8 @@ public:
         m_blockFactory(std::move(blockFactory)),
         m_ledger(std::move(ledger)),
         m_blockTxCountLimit(blockTxCountLimit),
-        m_maxEngineVersion(maxEngineVersion)
+        m_maxEngineVersion(maxEngineVersion),
+        m_ledgerConfigState(std::move(ledgerConfigState))
     {
         if (!m_blockFactory)
         {
@@ -238,6 +241,11 @@ private:
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     int64_t m_blockTxCountLimit;
     std::uint32_t m_maxEngineVersion;
+    /// Published after every durable commit (whoever commits a block publishes the new
+    /// configuration — TxValidator's contract): this lane commits via direct storage merges,
+    /// not through MultiVersionScheduler's publishing wrapper, so without this holder the
+    /// engine-driven modes would admit every later transaction against the boot snapshot.
+    bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState;
 };
 
 }  // namespace bcos::engine

@@ -26,7 +26,6 @@
 // instantiators still need to link bcos-evm-opstack.
 #include "OpEngineService.h"
 #include <bcos-evm/opstack/RollupCost.h>
-#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
 
 #include <iterator>
@@ -678,9 +677,17 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
             }
             requireDelegate();
             bcos::Error::Ptr commitError;
-            m_delegate->commitBlock(
-                builtHeader, [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr) {
+            m_delegate->commitBlock(builtHeader,
+                [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr ledgerConfig) {
                     commitError = std::move(error);
+                    // Publish the post-commit configuration (TxValidator's "whoever commits
+                    // a block publishes" contract): this lane bypasses
+                    // MultiVersionScheduler's publishing wrapper.
+                    if (!commitError && m_ledgerConfigState && ledgerConfig)
+                    {
+                        m_ledgerConfigState->set(
+                            std::make_shared<const bcos::ledger::LedgerConfig>(*ledgerConfig));
+                    }
                 });
             if (!commitError)
             {
@@ -864,9 +871,17 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
     }
 
     bcos::Error::Ptr commitError;
-    m_delegate->commitBlock(
-        executedHeader, [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr) {
+    m_delegate->commitBlock(executedHeader,
+        [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr ledgerConfig) {
             commitError = std::move(error);
+            // Publish the post-commit configuration (TxValidator's "whoever commits a block
+            // publishes" contract): this lane bypasses MultiVersionScheduler's publishing
+            // wrapper.
+            if (!commitError && m_ledgerConfigState && ledgerConfig)
+            {
+                m_ledgerConfigState->set(
+                    std::make_shared<const bcos::ledger::LedgerConfig>(*ledgerConfig));
+            }
         });
     if (commitError)
     {
@@ -901,9 +916,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpBloc
                                   << bcos::errinfo_comment{"undecodable payload "
                                                            "transaction envelope"});
         }
-        tarsTx->extraTransactionBytes.assign(env.begin(), env.end());
-        auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
-            [tars = std::move(*tarsTx)]() mutable { return &tars; });
+        auto tx = engine_common::decodedTransactionFromEnvelope(std::move(*tarsTx), env);
         block->appendTransaction(std::move(tx));
     }
     return block;
