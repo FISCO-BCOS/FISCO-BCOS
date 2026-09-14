@@ -231,6 +231,78 @@ void testEthereumStateInstantiation()
     CHECK(state.find(addr) != nullptr);
 }
 
+void testHasStorageIgnoresTombstones()
+{
+    // Regression for the Sepolia block-4913057 divergence: after a selfdestruct
+    // cleanup the account's storage rows stay in the storage layer as
+    // logically-deleted tombstones, and a later same-block transfer revives the
+    // address as an empty prefunded account. has_initial_storage must then be
+    // false — a tombstone row is not initial storage, or the re-CREATE is
+    // misjudged as an EIP-7610 collision.
+    //
+    // The tombstone scenario needs logical deletion: the plain
+    // executor_v1::MutableStorage is ORDERED-only and removes rows physically,
+    // while the production multi-layer view uses LOGICAL_DELETION storages.
+    using TombstoneStorage =
+        bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
+            bcos::executor_v1::StateValue,
+            bcos::storage2::memory_storage::Attribute(bcos::storage2::memory_storage::ORDERED |
+                bcos::storage2::memory_storage::LOGICAL_DELETION)>;
+    TombstoneStorage storage;
+    const auto addr = addressFromHex("0x2000000000000000000000000000000000000000");
+    const auto slotKey = bytes32FromHex(
+        "0x0000000000000000000000000000000000000000000000000000000000000001");
+    const auto slotValue = bytes32FromHex(
+        "0x00000000000000000000000000000000000000000000000000000000000000ff");
+
+    // Lifecycle 1: a live contract with one storage slot.
+    {
+        eth::EthereumState<decltype(storage)> state(storage);
+        auto& acc = state.insert(addr);
+        acc.nonce = 1;
+        acc.balance = 1;
+        state.get_storage(addr, slotKey).current = slotValue;
+        bcos::task::tbb::syncWait(state.applyToStorage(EVMC_SHANGHAI));
+    }
+    {
+        eth::EthereumState<decltype(storage)> state(storage);
+        auto* acc = state.find(addr);
+        CHECK(acc != nullptr);
+        CHECK(acc->has_initial_storage);
+    }
+
+    // Lifecycle 2: selfdestruct — applyToStorage clears every account row,
+    // leaving logically-deleted tombstones in the storage layer.
+    {
+        eth::EthereumState<decltype(storage)> state(storage);
+        auto& acc = *state.find(addr);
+        state.journal_destruct(addr);
+        acc.destructed = true;
+        bcos::task::tbb::syncWait(state.applyToStorage(EVMC_SHANGHAI));
+    }
+    {
+        eth::EthereumState<decltype(storage)> state(storage);
+        CHECK(state.find(addr) == nullptr);
+    }
+
+    // Lifecycle 3: the address is revived as an empty prefunded account (a
+    // plain transfer writes back the core rows; the slot row stays a
+    // tombstone), as happened to the metamorphic contract before its
+    // same-block re-creation.
+    {
+        eth::EthereumState<decltype(storage)> state(storage);
+        auto& acc = state.get_or_insert(addr);
+        acc.balance = 1000;
+        bcos::task::tbb::syncWait(state.applyToStorage(EVMC_SHANGHAI));
+    }
+    {
+        eth::EthereumState<decltype(storage)> state(storage);
+        auto* acc = state.find(addr);
+        CHECK(acc != nullptr);
+        CHECK(!acc->has_initial_storage);
+    }
+}
+
 }  // namespace
 
 int main()
@@ -243,6 +315,7 @@ int main()
     testRecoverAuthority();
     testRecoverAuthorityRejectsBadSignature();
     testEthereumStateInstantiation();
+    testHasStorageIgnoresTombstones();
 
     if (g_failures > 0)
     {

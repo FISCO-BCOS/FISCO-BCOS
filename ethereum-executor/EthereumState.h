@@ -322,6 +322,17 @@ class EthereumState
             if (view.m_table != tableName)
                 break;  // Left this account's table.
 
+            // The multi-layer range iterator also yields logically-deleted
+            // (tombstone) rows. A slot cleared earlier in the same block (e.g.
+            // by a selfdestruct cleanup) must NOT count as initial storage —
+            // otherwise a later CREATE at this address is misjudged as an
+            // EIP-7610 collision and the re-creation fails (observed on
+            // Sepolia block 4913057, where a metamorphic contract is
+            // selfdestructed and re-created within one block).
+            if (std::holds_alternative<storage2::DELETED_TYPE>(v) ||
+                std::holds_alternative<storage2::NOT_EXISTS_TYPE>(v))
+                continue;
+
             auto key = view.m_key;
             if (key != ACCOUNT_TABLE_FIELDS::NONCE && key != ACCOUNT_TABLE_FIELDS::BALANCE &&
                 key != ACCOUNT_TABLE_FIELDS::CODE_HASH && key != ACCOUNT_TABLE_FIELDS::CODE &&
