@@ -49,7 +49,7 @@ public:
     // empty when negotiate failed or negotiate unfinished
     virtual bcos::protocol::ProtocolInfo::ConstPtr protocolInfo() const;
 
-    task::Task<Message::Ptr> fastSendP2PMessage(
+    task::Task<std::optional<Message>> fastSendP2PMessage(
         Message& message, ::ranges::any_view<bytesConstRef> payloads, Options options);
 
 private:

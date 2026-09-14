@@ -84,7 +84,7 @@ class FakeHost_FIB184 : public bcos::gateway::Host
 {
 public:
     FakeHost_FIB184(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface)
-      : Host(_hash, _asioInterface, nullptr, nullptr)
+      : Host(_hash, _asioInterface, nullptr)
     {
         m_run = true;
     }

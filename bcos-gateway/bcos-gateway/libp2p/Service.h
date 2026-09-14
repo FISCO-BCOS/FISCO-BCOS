@@ -41,7 +41,7 @@ public:
     virtual void onConnect(
         NetworkException e, P2PInfo const& p2pInfo, std::shared_ptr<SessionFace> session);
     virtual void onDisconnect(NetworkException e, P2PSession::Ptr p2pSession);
-    virtual void onMessage(NetworkException e, SessionFace::Ptr session, Message::Ptr message,
+    virtual void onMessage(NetworkException e, SessionFace::Ptr session, Message message,
         std::weak_ptr<P2PSession> p2pSessionWeakPtr);
 
     virtual std::optional<bcos::Error> onBeforeMessage(
@@ -50,9 +50,9 @@ public:
     virtual void registerUnreachableHandler(std::function<void(std::string)> /*unused*/);
 
     void sendRespMessageBySession(
-        bytesConstRef _payload, Message::Ptr _p2pMessage, P2PSession::Ptr _p2pSession) override;
+        bytesConstRef _payload, const Message& _p2pMessage, P2PSession::Ptr _p2pSession) override;
 
-    task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, Message& header,
+    task::Task<std::optional<Message>> sendMessageByNodeID(P2pID nodeID, Message& header,
         ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
 
     task::Task<void> sendMessageByNodeIDs(uint16_t _type, const std::vector<P2pID>& _nodeIDs,
@@ -88,8 +88,7 @@ public:
     std::shared_ptr<Host> host() override;
     virtual void setHost(std::shared_ptr<Host> host);
 
-    std::shared_ptr<MessageFactory> messageFactory() override;
-    virtual void setMessageFactory(std::shared_ptr<MessageFactory> _messageFactory);
+    uint32_t newSeq() override;
 
     std::shared_ptr<bcos::crypto::KeyFactory> keyFactory();
 
@@ -114,7 +113,7 @@ public:
     void eraseHandlerByMsgType(uint16_t _type) override;
 
     void setOnMessageHandler(
-        std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> _handler);
+        std::function<std::optional<bcos::Error>(SessionFace::Ptr, const Message&)> _handler);
 
     void updatePeerBlacklist(const std::set<std::string>& _strList, const bool _enable) override;
     void updatePeerWhitelist(const std::set<std::string>& _strList, const bool _enable) override;
@@ -130,9 +129,9 @@ protected:
     // handshake protocol
     void sendProtocol(P2PSession::Ptr _session);
     void onReceiveProtocol(
-        NetworkException _error, std::shared_ptr<P2PSession> _session, Message::Ptr _message);
+        NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message);
     void onReceiveHeartbeat(
-        NetworkException _error, std::shared_ptr<P2PSession> _session, Message::Ptr _message);
+        NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message);
 
     // handlers called when new-session
     void registerOnNewSession(std::function<void(P2PSession::Ptr)> _handler);
@@ -157,7 +156,6 @@ protected:
     SessionsType m_sessions;
     mutable std::shared_mutex x_sessions;
 
-    std::shared_ptr<MessageFactory> m_messageFactory;
     P2PInfo m_selfInfo;
     P2pID m_nodeID;
     std::optional<boost::asio::steady_timer> m_timer;
@@ -176,7 +174,8 @@ protected:
 
     std::function<std::optional<bcos::Error>(
         SessionFace&, const Message&, uint32_t)> m_beforeMessageHandler;
-    std::function<std::optional<bcos::Error>(SessionFace::Ptr, Message::Ptr)> m_onMessageHandler;
+    std::function<std::optional<bcos::Error>(SessionFace::Ptr, const Message&)>
+        m_onMessageHandler;
 };
 
 }  // namespace bcos::gateway

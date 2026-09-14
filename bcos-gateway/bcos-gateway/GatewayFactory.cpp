@@ -691,8 +691,6 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     asioInterface->setClientContext(std::move(clientCtx));
     asioInterface->setType(ASIOInterface::ASIO_TYPE::SSL);
 
-    // Message Factory
-    auto messageFactory = std::make_shared<MessageFactory>();
     auto nodeIDHash = _config->calculateShortNodeID(pubHex);
     P2PInfo selfInfo(nodeIDHash, pubHex);
     // Session Factory
@@ -712,8 +710,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
         std::make_shared<PeerWhitelist>(_config->peerWhitelist(), _config->enableWhitelist());
 
     // init Host
-    auto host =
-        std::make_shared<Host>(_config->hashImpl(), asioInterface, sessionFactory, messageFactory);
+    auto host = std::make_shared<Host>(_config->hashImpl(), asioInterface, sessionFactory);
     host->setHostPort(_config->listenIP(), _config->listenPort());
     host->setSSLContextPubHandler(m_sslContextPubHandler);
     host->setSSLContextPubHandlerWithoutExtInfo(m_sslContextPubHandlerWithoutExtInfo);
@@ -757,7 +754,6 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
                               << LOG_KV("enable compress", _config->enableCompress())
                               << LOG_KV("myself pub id", printShortP2pID(pubHex))
                               << LOG_KV("myself_pub_id_hash", printShortP2pID(nodeIDHash));
-    service->setMessageFactory(messageFactory);
     service->setKeyFactory(keyFactory);
     return service;
 }
@@ -815,7 +811,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                 service->registerHandlerByMsgType(GatewayMessageType::AMOPMessageType,
                     [](const bcos::gateway::NetworkException& _e,
                         const bcos::gateway::P2PSession::Ptr& session,
-                        const std::shared_ptr<bcos::gateway::Message>& message) {
+                        const bcos::gateway::Message& message) {
                         // 只读模式下, 不处理其它节点的amop消息
                         // In read-only mode, AMOP messages from other nodes are not processed
                         return;
@@ -916,7 +912,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             });
 
             service->setOnMessageHandler([gatewayRateLimiterWeakPtr](SessionFace::Ptr _session,
-                                             Message::Ptr _message) -> std::optional<bcos::Error> {
+                                             const Message& _message) -> std::optional<bcos::Error> {
                 auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
                 if (!gatewayRateLimiter)
                 {
@@ -924,8 +920,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                 }
 
                 auto endpoint = _session->nodeIPEndpoint().address();
-                auto packetType = _message->packetType();
-                auto msgLength = _message->length();
+                auto packetType = _message.packetType();
+                auto msgLength = _message.length();
 
                 auto result =
                     gatewayRateLimiter->checkInComing(endpoint, packetType, msgLength, true);

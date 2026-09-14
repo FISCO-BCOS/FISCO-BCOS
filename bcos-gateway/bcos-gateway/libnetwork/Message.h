@@ -26,7 +26,6 @@
 #include <boost/asio/buffer.hpp>
 #include <boost/throw_exception.hpp>
 #include <any>
-#include <atomic>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -219,29 +218,5 @@ protected:
 
     std::any m_extAttr = nullptr;  ///< message additional attributes
 };
-
-class MessageFactory
-{
-public:
-    using Ptr = std::shared_ptr<MessageFactory>;
-
-    MessageFactory() = default;
-    MessageFactory(const MessageFactory&) = delete;
-    MessageFactory(MessageFactory&&) = delete;
-    MessageFactory& operator=(const MessageFactory&) = delete;
-    MessageFactory&& operator=(MessageFactory&&) = delete;
-
-    ~MessageFactory() = default;
-    Message::Ptr buildMessage();
-
-    uint32_t newSeq();
-
-private:
-    std::atomic<uint32_t> m_seq = {1};
-};
-
-std::ostream& operator<<(std::ostream& _out, const Message& _message);
-
-std::ostream& operator<<(std::ostream& _out, Message::Ptr& _message);
 
 }  // namespace bcos::gateway

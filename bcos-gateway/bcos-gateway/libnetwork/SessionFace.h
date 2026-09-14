@@ -42,13 +42,16 @@ public:
     virtual void start() = 0;
     virtual void disconnect(DisconnectReason) = 0;
 
-    virtual task::Task<Message::Ptr> fastSendMessage(
+    virtual task::Task<std::optional<Message>> fastSendMessage(
         const Message& header, ::ranges::any_view<bytesConstRef> payloads, Options options) = 0;
 
     virtual std::shared_ptr<SocketFace> socket() = 0;
 
+    // The handler is invoked with the decoded message by value (move it out if it must outlive
+    // the call); on error delivery the message is default-constructed and the error carries the
+    // cause.
     virtual void setMessageHandler(
-        std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler) = 0;
+        std::function<void(NetworkException, SessionFace::Ptr, Message)> messageHandler) = 0;
 
     // Outgoing pre-send check (rate limiting). _wireLength is the actual frame size including the
     // payload views — a zero-copy message does not carry its payload, so message.length() alone

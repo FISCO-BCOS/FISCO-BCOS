@@ -11,6 +11,7 @@
 #include <boost/asio/steady_timer.hpp>
 #include <array>
 #include <mutex>
+#include <optional>
 #include <unordered_map>
 
 namespace bcos::gateway
@@ -18,7 +19,9 @@ namespace bcos::gateway
 
 class Session;
 
-using SessionCallbackFunc = std::function<void(NetworkException, Message::Ptr)>;
+// The response message, or nullopt when the request failed / timed out / the session dropped
+// before any response arrived.
+using SessionCallbackFunc = std::function<void(NetworkException, std::optional<Message>)>;
 
 struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
 {

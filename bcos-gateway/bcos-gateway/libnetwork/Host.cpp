@@ -772,7 +772,7 @@ std::shared_ptr<SessionFace> Host::startPeerSession(
     }
 
     std::shared_ptr<SessionFace> session =
-        m_sessionFactory->createSession(*this, socket, m_messageFactory, m_sessionCallbackManager);
+        m_sessionFactory->createSession(*this, socket, m_sessionCallbackManager);
     // Bind a slot-release guard to the session; the slot is freed when the session is destroyed.
     session->setLifetimeGuard(std::make_shared<SessionSlotGuard>(weakHost, remoteAddress));
 
@@ -1046,12 +1046,10 @@ void Host::stop()
     // silently lose its disconnect notification.
 }
 bcos::gateway::Host::Host(bcos::crypto::Hash::Ptr _hash,
-    std::shared_ptr<ASIOInterface> _asioInterface, std::shared_ptr<SessionFactory> _sessionFactory,
-    MessageFactory::Ptr _messageFactory)
+    std::shared_ptr<ASIOInterface> _asioInterface, std::shared_ptr<SessionFactory> _sessionFactory)
   : m_hashImpl(std::move(_hash)),
     m_asioInterface(std::move(_asioInterface)),
-    m_sessionFactory(std::move(_sessionFactory)),
-    m_messageFactory(std::move(_messageFactory))
+    m_sessionFactory(std::move(_sessionFactory))
 {
     // FIB-186 (vector D): a single dedicated thread for session-teardown notifications, off the
     // shared IOServicePool that carries inbound-message delivery. See postTeardown / Host.h.
@@ -1138,9 +1136,9 @@ std::shared_ptr<SessionFactory> bcos::gateway::Host::sessionFactory() const
 {
     return m_sessionFactory;
 }
-bcos::gateway::MessageFactory::Ptr bcos::gateway::Host::messageFactory() const
+uint32_t bcos::gateway::Host::newSeq()
 {
-    return m_messageFactory;
+    return ++m_seq;
 }
 void bcos::gateway::Host::setPeerBlacklist(PeerBlackWhitelistInterface::Ptr _peerBlacklist)
 {

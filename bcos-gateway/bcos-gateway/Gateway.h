@@ -89,14 +89,14 @@ public:
      * @param _groupID: groupID
      * @param _srcNodeID: the sender nodeID
      * @param _dstNodeID: the receiver nodeID
-     * @param _msg: the received p2p message, passed by ownership so its payload buffer stays
+     * @param _msg: the received p2p message, passed by value so its payload buffer stays
      *        alive for the whole (possibly deferred) dispatch, keeping the dispatch zero-copy
      * @param _errorRespFunc: error func
      * @return void
      */
     virtual void onReceiveP2PMessage(const std::string& _groupID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        std::shared_ptr<Message> _msg, ErrorRespFunc _errorRespFunc = ErrorRespFunc());
+        bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID, Message _msg,
+        ErrorRespFunc _errorRespFunc = ErrorRespFunc());
 
     P2PInterface::Ptr p2pInterface() const;
     GatewayNodeManager::Ptr gatewayNodeManager();
@@ -134,7 +134,7 @@ protected:
     // for UT
     Gateway() = default;
     virtual void onReceiveP2PMessage(
-        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<Message> _msg);
+        NetworkException const& _e, P2PSession::Ptr _session, Message _msg);
 
     /**
      * @brief: receive group broadcast message
@@ -144,7 +144,7 @@ protected:
      * @return void
      */
     virtual void onReceiveBroadcastMessage(
-        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<Message> _msg);
+        NetworkException const& _e, P2PSession::Ptr _session, Message _msg);
 
     bool checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
 
