@@ -1,6 +1,7 @@
-name: C2 OP e2e (manual)
-# PR/push C2 e2e runs from workflow.yml → c2_e2e (reuses l2_unit_suites artifact).
-# This workflow is for manual smoke runs only — it builds fisco-bcos from scratch.
+name: C2 OP e2e (manual + nightly full run)
+# Per-PR coverage comes from workflow.yml → c2_e2e (smoke: CONTEST=0, reuses the
+# l2_unit_suites artifact). This workflow is the full run — it builds fisco-bcos from
+# scratch — and is triggered manually or nightly.
 on:
   workflow_dispatch:
     inputs:
@@ -10,6 +11,10 @@ on:
         default: "1"
         type: choice
         options: ["1", "0"]
+  # Nightly full run: CONTEST=1 (adversarial dispute scenarios). The per-PR leg in
+  # workflow.yml runs the smoke variant instead.
+  schedule:
+    - cron: "0 18 * * *"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -27,7 +32,9 @@ jobs:
     permissions:
       contents: read
     env:
-      CONTEST: ${{ github.event.inputs.contest }}
+      # Manual runs pass the input; a scheduled run has none, so default to the full
+      # adversarial variant there.
+      CONTEST: ${{ github.event.inputs.contest || '1' }}
     steps:
       - uses: actions/checkout@v4
         with:

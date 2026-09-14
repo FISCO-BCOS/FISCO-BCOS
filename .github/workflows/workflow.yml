@@ -441,39 +441,6 @@ jobs:
             build/pr-number.txt
           retention-days: 7
 
-  # Path filter for jobs that should not run on every PR (e.g. the heavy C2 e2e leg).
-  changes:
-    name: Detect path filters
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    outputs:
-      c2_e2e: ${{ steps.filter.outputs.c2_e2e }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            c2_e2e:
-              - 'tools/opstack-genesis/**'
-              - 'tools/.ci/c2-e2e.sh'
-              - 'tools/.ci/fetch-l2-contract-deps.sh'
-              - 'bcos-l2-contracts/**'
-              - 'opstack-executor/**'
-              - 'bcos-rpc/**'
-              - 'bcos-evm/**'
-              - 'engine/**'
-              - 'fisco-bcos-air/**'
-              - 'libinitializer/**'
-              # The boot-time mode/MPT gates live here (validateOpModeGenesisOnly) and in
-              # bcos-executor's SystemConfig precompile: either can make every OP-mode node
-              # fail to start, which is exactly what this leg must catch.
-              - 'transaction-scheduler/**'
-              - 'bcos-executor/**'
-              - '.github/workflows/workflow.yml'
-              - '.github/workflows/c2-e2e.yml'
-
   # Dedicated, lightweight leg for the OP-Stack L2 mode. Kept OUT of the 5-OS
   # `build` matrix on purpose: multiplying that matrix by an l2 dimension would
   # double an already heavy C++ build for no extra coverage. L2 mode is a
@@ -484,7 +451,6 @@ jobs:
   # itself when the A8 devnet is absent).
   l2_unit_suites:
     name: L2 unit suites
-    needs: changes
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -546,7 +512,6 @@ jobs:
       - name: L2 integration runner (SKIPs without the A8 devnet)
         run: bash tools/.ci/l2-integration/run-all.sh
       - name: Upload fisco-bcos for C2 e2e
-        if: needs.changes.outputs.c2_e2e == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: fisco-bcos-l2-ubuntu
@@ -557,16 +522,19 @@ jobs:
   # l2_unit_suites (artifact) so this job skips vcpkg configure + C++ build.
   # STEP-SET TWIN of c2-e2e.yml's c2_e2e job (that one builds fisco-bcos from
   # source): every shared step must be edited in lockstep in both files.
+  # Runs on every PR (the workflow itself is skipped only for docs-only changes). The
+  # smoke variant keeps it inside a few minutes; the full adversarial run
+  # (CONTEST=1) is scheduled nightly in c2-e2e.yml.
   c2_e2e:
     name: C2 deposit/withdraw e2e
-    needs: [changes, l2_unit_suites]
-    if: needs.changes.outputs.c2_e2e == 'true' && needs.l2_unit_suites.result == 'success'
+    needs: [l2_unit_suites]
+    if: needs.l2_unit_suites.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: read
     env:
-      CONTEST: "1"
+      CONTEST: "0"
     steps:
       - uses: actions/checkout@v4
         with:
