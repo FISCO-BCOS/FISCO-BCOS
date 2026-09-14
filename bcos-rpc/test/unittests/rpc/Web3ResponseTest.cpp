@@ -19,6 +19,7 @@
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
+#include <string_view>
 
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
@@ -595,8 +596,16 @@ BOOST_AUTO_TEST_CASE(canonicalBlockHashUsesTheRlpHashForOpHeaders)
     header->setBaseFee(bcos::u256(1));
     BOOST_REQUIRE(bcos::protocol::isOpEthereumBlock(*header));
 
-    BOOST_CHECK_EQUAL(bcos::protocol::canonicalBlockHash(*header).hex(),
-        bcos::protocol::EthBlockHeader::computeHash(*header).hex());
+    // Golden pinned externally (keccak256 over the RLP encoding of exactly this header's
+    // field set), not derived from canonicalBlockHash — the OP branch of the predicate
+    // delegates to EthBlockHeader::computeHash, so comparing the two calls against each
+    // other can never fail, and a broken hash would pass unnoticed.
+    constexpr std::string_view c_opHeaderGoldenHash =
+        "fb8ad653db984845f2d6e8271069d37e99da6454e798740654bacdebae7655ec";
+    BOOST_CHECK_EQUAL(bcos::protocol::EthBlockHeader::computeHash(*header).hex(),
+        c_opHeaderGoldenHash);
+    BOOST_CHECK_EQUAL(
+        bcos::protocol::canonicalBlockHash(*header).hex(), c_opHeaderGoldenHash);
 }
 
 BOOST_AUTO_TEST_CASE(combineReceiptResponseAcceptsTheFiscoLaneAddressForm)
