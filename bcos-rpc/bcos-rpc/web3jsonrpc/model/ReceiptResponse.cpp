@@ -5,6 +5,7 @@
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <cstdint>
 
 namespace
@@ -70,7 +71,10 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     for (size_t i = 0; i < receiptLog.size(); i++)
     {
         Json::Value log;
-        log["address"] = "0x" + checksummedHexAddress(bcos::toHex(receiptLog[i].address()));
+        // LogEntry::address() is lane-dependent (raw bytes on the OP lane, ASCII hex text
+        // on the FISCO/eth-mode lane) — normalize before checksumming, or one of the two
+        // lanes emits hex-of-ASCII and ethers rejects the whole receipt.
+        log["address"] = "0x" + checksummedHexAddress(logEntryAddressHex(receiptLog[i]));
         log["topics"] = Json::arrayValue;
         for (const auto& topic : receiptLog[i].topics())
         {

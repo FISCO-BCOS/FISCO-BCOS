@@ -23,6 +23,8 @@
 #include <bcos-rpc/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
+#include <algorithm>
+#include <cctype>
 
 namespace bcos::rpc
 {
@@ -40,6 +42,29 @@ namespace bcos::rpc
         return false;
     }
     return header.withdrawalsRoot().has_value() && header.baseFee().has_value();
+}
+
+/// The log entry's address as 40 hex digits, no 0x prefix. LogEntry::address() carries
+/// whichever form the executing lane produced, and the two lanes disagree:
+///   * the OP lane stores the raw 20 bytes (bcos-evm/opstack/OpTransition.cpp
+///     mapOpLogAddress — a byte copy, deliberately not a hex encode);
+///   * the FISCO / eth-mode lane stores the ASCII hex text (bcos-executor HostContext::log
+///     passes myAddress(), which is the text form on that lane).
+/// Every JSON producer of a log address must normalize through here: hex-encoding the text
+/// form yields hex-of-ASCII (ethers rejects the whole receipt), while copying the byte form
+/// verbatim yields non-printable garbage. One definition, because two copies is how one
+/// consumer ends up right on one lane and wrong on the other.
+[[nodiscard]] inline std::string logEntryAddressHex(bcos::protocol::LogEntry const& entry)
+{
+    auto const raw = entry.address();
+    constexpr std::size_t c_hexAddressChars = 40;
+    if (raw.size() == c_hexAddressChars && std::all_of(raw.begin(), raw.end(), [](char c) {
+            return std::isxdigit(static_cast<unsigned char>(c)) != 0;
+        }))
+    {
+        return std::string(raw);
+    }
+    return bcos::toHex(raw);
 }
 
 void buildJsonContent(Json::Value& result, Json::Value& response);

@@ -30,4 +30,11 @@ namespace bcos::rpc
 {
 void combineBlockResponse(
     Json::Value& result, const bcos::protocol::Block& block, bool fullTxs = false);
+
+/// The block's identity hash as an Ethereum client sees it: the RLP hash on an OP header
+/// (whose stored hash() differs — see Ledger's blockHashOverride contract), the stored hash
+/// otherwise. Every producer of a blockHash field must use this: the block response, the
+/// transaction-by-block-number response and the eth_getLogs log entries all publish values
+/// a client correlates with eth_getBlockByNumber(...).hash.
+bcos::crypto::HashType blockIdentityHash(const bcos::protocol::BlockHeader& header);
 }  // namespace bcos::rpc

@@ -175,9 +175,13 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
 
     // Payload ID: deterministic derive from attributes + parent (op-geth-aligned). Do not
     // switch back to a process-local sequence counter — that was release EngineServiceImpl
-    // only and is not the EthEngineService cutover contract (option B).
-    auto payloadIdOpt = engine_common::derivePayloadId(
-        *payloadAttributes, forkchoiceState.headBlockHash, version, decodedForcedTxs);
+    // only and is not the EthEngineService cutover contract (option B). The version byte is
+    // the PAYLOAD SHAPE version, exactly as the OP lane derives it and as the cache entry
+    // below stores it: two methods that build the same shape must mint one id for the same
+    // content (a raw-version byte would mint two once maxEngineVersion exceeds V3).
+    auto payloadIdOpt = engine_common::derivePayloadId(*payloadAttributes,
+        forkchoiceState.headBlockHash, engine_common::payloadShapeVersion(version),
+        decodedForcedTxs);
     if (!payloadIdOpt.has_value())
     {
         co_return ForkchoiceUpdatedResult{

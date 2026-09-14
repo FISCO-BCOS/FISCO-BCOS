@@ -1419,7 +1419,10 @@ task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid transaction index!"));
         }
         auto receipt = co_await ledger::getReceipt(*ledger, txHash);
-        auto blockHash = block->blockHeader()->hash();
+        // Must be the client-visible identity hash (RLP on an OP header), not header->hash():
+        // the block response reports the former, so header->hash() here would hand the client
+        // a blockHash that no block query ever returns.
+        auto blockHash = bcos::rpc::blockIdentityHash(*block->blockHeader());
         combineTxResponse(result, *(*tx)[0], *receipt, blockHash);
     }
     catch (std::exception const& e)
@@ -1636,11 +1639,13 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
         }
     }
 
-    // The OP base-fee rule is keyed on the chain's L2 flag (feature_l2_ethereum_compat) —
-    // the same canonical source the MPT paths above use — not on the DA-cap object, which
-    // is a DA-throttling handshake that only coincides with OP mode today.
-    auto const opStackMode = co_await ledger::getFeature(
-        *ledger, ledger::Features::Flag::feature_l2_ethereum_compat, newestBlock);
+    // The OP base-fee rule follows the LANE, not the ledger's feature_l2_ethereum_compat
+    // state shape: an Eth-lane chain may carry that flag (the pure-Ethereum executor on an
+    // MPT root) and must keep EIP-1559 fee semantics, which is what eth_gasPrice /
+    // eth_maxPriorityFeePerGas (RpcChainPolicy) already report. Lane is genesis-frozen, so
+    // the tip config answers for newestBlock too.
+    auto const ledgerConfig = co_await ledger::getLedgerConfig(*ledger);
+    auto const opStackMode = isOpStackLane(ledgerConfig->executorVersion());
     auto result = co_await buildFeeHistory(*ledger, newestBlock,
         static_cast<std::size_t>(*blockCountParsed), rewardPercentiles, opStackMode);
     buildJsonContent(result, response);

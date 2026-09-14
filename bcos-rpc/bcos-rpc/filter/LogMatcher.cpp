@@ -1,5 +1,7 @@
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-rpc/filter/LogMatcher.h>
+#include <bcos-rpc/web3jsonrpc/model/BlockResponse.h>
+#include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
 
@@ -12,10 +14,11 @@ uint32_t LogMatcher::matches(
 {
     uint32_t count = 0;
     auto receipts = _block->receipts();
+    auto const blockHash = bcos::rpc::blockIdentityHash(*_block->blockHeader());
     for (std::size_t index = 0; index < _block->transactionsMetaDataSize(); index++)
     {
         auto receipt = receipts[index];
-        count += matches(_params, _block->blockHeader()->hash(), *receipt,
+        count += matches(_params, crypto::HashType(blockHash), *receipt,
             _block->transactionHash(index), index, _result);
     }
 
@@ -48,7 +51,9 @@ uint32_t LogMatcher::matches(FilterRequest::ConstPtr _params, bcos::crypto::Hash
             log["transactionIndex"] = toQuantity(_txIndex);
             log["transactionHash"] = _txHash.hexPrefixed();
             log["removed"] = false;
-            log["address"] = "0x" + std::string(logEntry.address());
+            // Same lane-dependent address form as the receipt encoder: normalize through
+            // the shared helper so eth_getLogs and eth_getTransactionReceipt agree.
+            log["address"] = "0x" + logEntryAddressHex(logEntry);
             Json::Value jTopics(Json::arrayValue);
             for (const auto& topic : logEntry.topics())
             {

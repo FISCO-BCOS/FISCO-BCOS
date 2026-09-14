@@ -15,6 +15,7 @@
 #include <bcos-rpc/web3jsonrpc/model/BlockResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/ReceiptResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
+#include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 
@@ -579,6 +580,59 @@ BOOST_AUTO_TEST_CASE(combineReceiptResponseEmitsLogAddressAndIndex)
     BOOST_CHECK_EQUAL(log["topics"][0U].asString(), topics[0].hexPrefixed());
     BOOST_CHECK_EQUAL(log["data"].asString(), "0x0102");
     BOOST_CHECK_EQUAL(log["removed"].asBool(), false);
+}
+
+BOOST_AUTO_TEST_CASE(blockIdentityHashUsesTheRlpHashForOpHeaders)
+{
+    // The block response reports this hash; every other producer of a blockHash field (the
+    // transaction-by-block-number response, eth_getLogs log entries) must report the same
+    // one, or a client cannot match a tx/log back to the block it read.
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    BOOST_REQUIRE(header);
+    header->setEthBlockVersion(bcos::protocol::EthBlockVersion::NON_ETH);
+    header->setWithdrawalsRoot(bcos::h256(1U));
+    header->setBaseFee(bcos::u256(1));
+    BOOST_REQUIRE(bcos::rpc::isOpEthereumBlock(*header));
+
+    // OP identity is the RLP hash, not the stored (TARS) header hash.
+    BOOST_CHECK_EQUAL(bcos::rpc::blockIdentityHash(*header).hex(),
+        bcos::protocol::EthBlockHeader::computeHash(*header).hex());
+}
+
+BOOST_AUTO_TEST_CASE(combineReceiptResponseAcceptsTheFiscoLaneAddressForm)
+{
+    // The FISCO / eth-mode VM stores a log's address as its ASCII hex TEXT
+    // (bcos-executor HostContext::log passes myAddress()), while the OP lane stores the raw
+    // 20 bytes (OpTransition's mapOpLogAddress). The encoder must publish the same field for
+    // both: hex-encoding the text form yields hex-of-ASCII and ethers rejects the whole
+    // receipt, which is what the Air integration harness caught. The case above pins the
+    // byte form; this one pins the text form.
+    auto txFactory = m_blockFactory->transactionFactory();
+    auto tx = txFactory->createTransaction(0, "0x1234567890123456789012345678901234567890",
+        bcos::bytes{0x0a}, "0x2", 100, chainId, groupId, 0);
+    BOOST_REQUIRE(tx);
+
+    std::string const textAddress = "800df9e6e4f7146932d97e89b66ca6ae55b0c9de";
+    bcos::bytes const logAddress(textAddress.begin(), textAddress.end());
+    bcos::h256s const topics{bcos::h256(1U)};
+    std::vector<bcos::protocol::LogEntry> logs;
+    logs.emplace_back(logAddress, topics, bcos::bytes{});
+
+    auto receiptFactory = m_blockFactory->receiptFactory();
+    auto receipt = receiptFactory->createReceipt(bcos::u256(21000),
+        "0x1234567890123456789012345678901234567890", logs, /*status=*/0, bcos::bytesConstRef{},
+        /*blockNumber=*/12);
+    BOOST_REQUIRE(receipt);
+
+    Json::Value result(Json::objectValue);
+    combineReceiptResponse(result, *receipt, *tx, bcos::crypto::HashType{});
+    BOOST_REQUIRE_EQUAL(result["logs"].size(), 1U);
+    auto const& out = result["logs"][0U]["address"].asString();
+    BOOST_REQUIRE_EQUAL(out.size(), 42U);
+    BOOST_CHECK_EQUAL(boost::algorithm::to_lower_copy(out.substr(2)), textAddress);
+    // The regression shape, stated independently of the checksum implementation: never the
+    // hex-of-ASCII form.
+    BOOST_CHECK_NE(out, "0x" + bcos::toHex(textAddress));
 }
 
 BOOST_AUTO_TEST_CASE(combineReceiptResponseEmitsOpExtensionFieldsFromMeta)

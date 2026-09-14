@@ -9,11 +9,12 @@
 
 #include <range/v3/view/enumerate.hpp>
 
-namespace
-{
-/// isOpEthereumBlock lives in web3jsonrpc/utils/util.h — the fee-history base-fee read
-/// needs the same predicate, and two copies drifted once already.
-bcos::crypto::HashType blockIdentityHash(const bcos::protocol::BlockHeader& header)
+// Declared in BlockResponse.h: the block response, the transaction-by-block-number response
+// and eth_getLogs must all publish the same identity hash, or a client that reads a tx or a
+// log back cannot match it to the block it came from. isOpEthereumBlock lives in
+// web3jsonrpc/utils/util.h — the fee-history base-fee read needs the same predicate, and two
+// copies drifted once already.
+bcos::crypto::HashType bcos::rpc::blockIdentityHash(const bcos::protocol::BlockHeader& header)
 {
     if (bcos::rpc::isOpEthereumBlock(header))
     {
@@ -21,7 +22,6 @@ bcos::crypto::HashType blockIdentityHash(const bcos::protocol::BlockHeader& head
     }
     return header.hash();
 }
-}  // namespace
 
 void bcos::rpc::combineBlockResponse(
     Json::Value& result, const bcos::protocol::Block& block, bool fullTxs)
