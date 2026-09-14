@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "../consensus/ConsensusNode.h"
+#include "../protocol/BlobSchedule.h"
 #include "../protocol/ProtocolTypeDef.h"
 #include "Features.h"
 #include "LedgerTypeDef.h"
@@ -160,6 +161,17 @@ public:
     std::optional<uint64_t> blobGasUsed() const { return m_blobGasUsed; }
     void setBlobGasUsed(std::optional<uint64_t> v) { m_blobGasUsed = v; }
 
+    // EIP-7840 blob schedule resolved for the block being executed, stamped per
+    // block by the external-block verifier from the chain's fork-timestamp
+    // schedule (revisions cannot express the post-Osaka BPO1/BPO2 schedule
+    // bumps). nullopt = not stamped: the executor falls back to the
+    // revision-keyed defaults (Cancun/Prague), the pre-BPO behaviour.
+    std::optional<protocol::BlobScheduleConfig> const& blobSchedule() const
+    {
+        return m_blobSchedule;
+    }
+    void setBlobSchedule(protocol::BlobScheduleConfig v) { m_blobSchedule = v; }
+
     // Not enforce to set this field, in memory data
     void setSealerId(int64_t _sealerId) { m_sealerId = _sealerId; }
     int64_t sealerId() const { return m_sealerId; }
@@ -251,6 +263,7 @@ private:
     evmc::bytes32 m_prevRandao{};
     std::optional<uint64_t> m_excessBlobGas;
     std::optional<uint64_t> m_blobGasUsed;
+    std::optional<protocol::BlobScheduleConfig> m_blobSchedule;
     std::tuple<uint64_t, protocol::BlockNumber> m_epochSealerNum = {DEFAULT_EPOCH_SEALER_NUM, 0};
     std::tuple<uint64_t, protocol::BlockNumber> m_epochBlockNum = {DEFAULT_EPOCH_BLOCK_NUM, 0};
     uint64_t m_notifyRotateFlagInfo{0};
@@ -282,6 +295,16 @@ inline constexpr evmc_revision EVMC_REVISION_DEFAULT = EVMC_OSAKA;
 /// without depending on libinitializer; libinitializer/MultiVersionScheduler.h keeps a
 /// scheduler_v1-scoped alias for the same value. Versions >= this all select the v2
 /// executor (setVersion saturates), leaving room above 2 for a future executor.
+///
+/// PRE-RELEASE SEMANTICS: executor_version = 2 was introduced mid-branch (2026-08) and is
+/// NOT part of any upstream release — upstream releases have no v2. The version gates
+/// consensus-critical behaviour (Ethereum trie roots for txsRoot/receiptsRoot/stateRoot,
+/// the system-address migration to /apps/), and its exact rules may still change between
+/// commits; no cross-commit compatibility is guaranteed for a chain that ran v2 on a
+/// pre-release binary. Before any formal release ships with v2 selectable, this gate must
+/// be re-hung on a proper feature flag / activation block height (Features::Flag) instead
+/// of a bare version compare — tracked in
+/// https://github.com/FISCO-BCOS/FISCO-BCOS/issues/5563.
 inline constexpr int ETHEREUM_EXECUTOR_VERSION = 2;
 
 /// The executor version that selects the OP-Stack OpSchedulerSeam (op composition root).

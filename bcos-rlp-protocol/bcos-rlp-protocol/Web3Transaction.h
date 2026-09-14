@@ -39,6 +39,10 @@ namespace bcostars
 {
 struct Transaction;
 }
+namespace bcostars::protocol
+{
+class TransactionImpl;
+}
 
 namespace bcos
 {
@@ -154,6 +158,13 @@ public:
     bcos::bytes signatureS;
     uint64_t signatureV{0};
 };
+
+// eth_sync: decode a raw signed EIP-2718 envelope into the tars TransactionImpl
+// used by the ledger / executor. As with takeToTarsTransaction(), the definition
+// lives in bcos-tars-protocol (protocol/Web3TarsBridge.cpp), the module that owns
+// the tars types, so bcos-rlp-protocol stays free of any tars dependency.
+std::shared_ptr<bcostars::protocol::TransactionImpl> decodeWeb3RawTransaction(
+    bcos::bytesConstRef raw, const bcos::crypto::Hash& hashImpl);
 }  // namespace rpc
 namespace codec::rlp
 {

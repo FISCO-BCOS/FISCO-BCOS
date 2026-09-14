@@ -25,6 +25,7 @@
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
+#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/Bloom.h>
@@ -171,5 +172,24 @@ inline void encode(bcos::bytes& _out, const EthBlockHeaderData& _headerData) noe
 inline bcos::Error::UniquePtr decode(bcos::bytesRef& _in, EthBlockHeaderData& _headerData) noexcept
 {
     return codec::rlp::decode(_in, _headerData);
+}
+
+/// Canonical empty-ommers-hash: keccak256(rlp([])) = keccak256(0xc0) —
+/// 0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347, the uncleHash
+/// every PoS header carries. Single source of truth (it used to be triplicated:
+/// devp2p's sync/Block.h computed it, transaction-scheduler's calculateUnclesHash
+/// derived it through encodeHeader, and the engine hard-coded the hex). Naming
+/// follows the framework's c_emptyRequestsHashHex precedent (engine/Constants.h).
+inline const bcos::crypto::HashType c_emptyOmmersHash = bcos::crypto::keccak256Hash(
+    bcos::bytesConstRef(reinterpret_cast<const bcos::byte*>("\xc0"), 1));
+
+/// keccak256 of the canonical RLP encoding of an Ethereum header — the block hash.
+/// Single source of truth for EthBlockHeaderData hashing (was duplicated verbatim
+/// between devp2p's sync/Block.h::headerHash and EthereumBlockVerifier's commit step).
+inline bcos::crypto::HashType ethHeaderHash(const EthBlockHeaderData& _header)
+{
+    bcos::bytes rlp;
+    codec::rlp::encode(rlp, _header);
+    return bcos::crypto::keccak256Hash(bcos::bytesConstRef(rlp.data(), rlp.size()));
 }
 }  // namespace bcos::protocol

@@ -4,7 +4,7 @@
 // Unit tests for the extracted Storage2State helpers (Storage2StateHelpers.h): account
 // table-name derivation, slot/field classification, zero-slot and tombstone semantics.
 
-#include <opstack-executor/Storage2StateHelpers.h>
+#include <bcos-evm/adapter/Storage2StateHelpers.h>
 
 #include <boost/test/unit_test.hpp>
 #include <cstring>

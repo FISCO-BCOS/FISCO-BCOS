@@ -71,7 +71,11 @@ public:
         // options.compaction_pri = rocksdb::kMinOverlappingRatio;
         options.compression = rocksdb::kZSTD;
         options.bottommost_compression = rocksdb::kZSTD;  // last level compression
-        options.max_open_files = 256;
+        // -1 (unlimited): an archive-scale DB holds tens of thousands of SSTs, and a small
+        // table cache thrashes — every random read evicts a reader and re-reads its
+        // index/filter/properties blocks (observed ~900MB/s of throwaway reads during an MPT
+        // prune rebuild with the previous 256). The storage/archive tools already use -1.
+        options.max_open_files = -1;
         options.write_buffer_size =
             rocksDBOption.writeBufferSize;  // default is 64MB, set 256MB here
         options.min_write_buffer_number_to_merge =

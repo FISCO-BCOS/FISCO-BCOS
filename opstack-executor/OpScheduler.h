@@ -16,7 +16,7 @@
 #include <opstack-executor/OpSchedulerPolicy.h>
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <opstack-executor/OpstackExecutor.h>
-#include <opstack-executor/RecentBlockHashes.h>
+#include <bcos-evm/adapter/RecentBlockHashes.h>
 
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>

@@ -75,7 +75,10 @@ template <class KeyType, class ValueType, Resolver<KeyType> KeyResolver,
     options.bytes_per_sync = 1 << 20;
     options.compression = ::rocksdb::kZSTD;
     options.bottommost_compression = ::rocksdb::kZSTD;
-    options.max_open_files = 256;
+    // -1 (unlimited): an archive-scale "latest" DB holds tens of thousands of SSTs; a small
+    // table cache thrashes, re-reading index/filter/properties blocks on every random read
+    // (observed ~900MB/s of throwaway reads during an MPT prune rebuild with the previous 256).
+    options.max_open_files = -1;
     options.write_buffer_size = m_option.writeBufferSize;
     options.min_write_buffer_number_to_merge = m_option.minWriteBufferNumberToMerge;
     options.enable_pipelined_write = true;
@@ -105,7 +108,9 @@ template <class KeyType, class ValueType, Resolver<KeyType> KeyResolver,
     ::rocksdb::Options options;
     options.create_if_missing = false;
 
-    options.max_open_files = 256;
+    // -1 (unlimited): same table-cache thrash reasoning as latestCheckpointOptions — a
+    // historical checkpoint can hold thousands of SSTs.
+    options.max_open_files = -1;
     options.compression = ::rocksdb::kZSTD;
     options.bottommost_compression = ::rocksdb::kZSTD;
 
