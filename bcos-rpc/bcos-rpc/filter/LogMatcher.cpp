@@ -75,8 +75,11 @@ bool LogMatcher::matches(FilterRequest::ConstPtr _params, const bcos::protocol::
     FILTER_LOG(TRACE) << LOG_BADGE("matches") << LOG_KV("address", _logEntry.address())
                       << LOG_KV("logEntry topics", _logEntry.topics().size());
 
-    // An empty address array matches all values otherwise log.address must be in addresses
-    if (!addresses.empty() && !addresses.count("0x" + std::string(_logEntry.address())))
+    // An empty address array matches all values otherwise log.address must be in addresses.
+    // Normalize through logEntryAddressHex like every other consumer: the OP lane stores the
+    // raw 20 bytes in LogEntry::address, so concatenating "0x" with the raw form can never
+    // equal a requested hex address and every address-filtered query would match nothing.
+    if (!addresses.empty() && !addresses.count("0x" + logEntryAddressHex(_logEntry)))
     {
         return false;
     }
