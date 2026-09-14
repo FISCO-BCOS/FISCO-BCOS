@@ -6,6 +6,7 @@
 
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-framework/engine/Types.h>
+#include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
@@ -33,8 +34,8 @@ class OpSchedulerSeam
 {
 public:
     explicit OpSchedulerSeam(
-        bcos::evm::opstack::OpForkFlags forkFlags, bcos::evm::opstack::L1BlockInfo l1BlockInfo)
-      : m_forkFlags(forkFlags), m_l1BlockInfo(std::move(l1BlockInfo))
+        bcos::ledger::OpForkSchedule forkSchedule, bcos::evm::opstack::L1BlockInfo l1BlockInfo)
+      : m_forkSchedule(forkSchedule), m_l1BlockInfo(std::move(l1BlockInfo))
     {}
 
     using BlockEnv = bcos::protocol::BlockHeader;
@@ -69,14 +70,45 @@ public:
         return computeOpTxRoot(rawTxBytes);
     }
 
-    /// Jovian is active (blobGasUsed is DA footprint; Isthmus keeps it 0).
-    [[nodiscard]] bool isJovianActive() const noexcept { return m_forkFlags.jovianActive; }
+    /// Jovian semantics or later for a block whose internal (millisecond) timestamp is
+    /// @p internalTimestampMs — blobGasUsed is the DA footprint, the operator fee uses the
+    /// ×100 formula and extraData is the 17-byte Jovian shape; Isthmus keeps blobGasUsed 0.
+    /// Derived from the fork the schedule resolves rather than a single flag: Karst is a
+    /// superset of Jovian and leaves the L1-attributes / DA-footprint shape unchanged, and
+    /// OpFork is declared in fork order (OpForkSchedule.h), so `>= Jovian` is the predicate.
+    /// The CALLER picks which block's timestamp to pass: op-geth keys base fee on the parent
+    /// (eip1559.go CalcBaseFee), op-node keys the L1-attributes layout and the payload
+    /// attributes on the child (derive/l1_block_info.go, derive/attributes.go).
+    [[nodiscard]] bool isJovianActive(int64_t internalTimestampMs) const noexcept
+    {
+        return forkAt(internalTimestampMs) >= bcos::evm::opstack::OpFork::Jovian;
+    }
+
+    /// Karst semantics for a block whose internal (millisecond) timestamp is
+    /// @p internalTimestampMs: Jovian's fee and receipt rules on an Osaka EVM base. Used by
+    /// the engine's getPayload method-version gate (V5 is Karst-only, V4 is pre-Karst).
+    [[nodiscard]] bool isKarstActive(int64_t internalTimestampMs) const noexcept
+    {
+        return forkAt(internalTimestampMs) >= bcos::evm::opstack::OpFork::Karst;
+    }
 
     /// Synthesize the L1-attributes deposit envelope from the configured L1 info.
     /// Refuses the unset snapshot sentinel (number/time/hash all zero) and an unset
     /// SystemConfig (zero baseFeeScalar or batcherHash) so a missing CL snapshot cannot
     /// mint a plausible L1-attributes deposit.
-    [[nodiscard]] bcos::bytes synthesizeL1AttributesEnvelope() const
+    ///
+    /// The calldata layout is keyed on the CHILD L2 block's timestamp (op-node
+    /// derive/l1_block_info.go L1InfoDeposit(..., l2Timestamp)) with ONE exception: op-node
+    /// gates it on `isJovianButNotFirstBlock`, i.e.
+    /// `IsJovian(ts) && !IsJovianActivationBlock(ts)` (l1_block_info.go:462-470), so the
+    /// ACTIVATION block itself still emits the previous fork's 176-byte Isthmus layout — that
+    /// is the block in which the L1Block predeploy is upgraded, and it cannot already speak
+    /// the new ABI. `IsJovianActivationBlock(t)` is `IsJovian(t) && !IsJovian(t - blockTime)`,
+    /// and `t - blockTime` is exactly the parent's timestamp on an OP chain's fixed cadence,
+    /// so passing the parent lets this reproduce op-node's rule without the schedule having to
+    /// carry a block_time.
+    [[nodiscard]] bcos::bytes synthesizeL1AttributesEnvelope(
+        int64_t l2InternalTimestampMs, int64_t parentInternalTimestampMs) const
     {
         if (bcos::evm::opstack::isUnsetL1BlockInfo(m_l1BlockInfo))
         {
@@ -90,8 +122,11 @@ public:
                 "OpSchedulerSeam: refuse to synthesize L1-attributes with an unset "
                 "SystemConfig (baseFeeScalar and batcherHash must be non-zero)");
         }
-        return bcos::evm::opstack::synthesizeL1AttributesDeposit(
-            m_l1BlockInfo, m_forkFlags.jovianActive);
+        // Jovian layout only once the PARENT is Jovian too — on the activation block itself
+        // the child is Jovian but the parent is not, and op-node still emits Isthmus there.
+        const bool jovianLayout =
+            isJovianActive(l2InternalTimestampMs) && isJovianActive(parentInternalTimestampMs);
+        return bcos::evm::opstack::synthesizeL1AttributesDeposit(m_l1BlockInfo, jovianLayout);
     }
 
     OpSchedulerSeam(const OpSchedulerSeam&) = delete;
@@ -112,7 +147,15 @@ public:
     }
 
 private:
-    bcos::evm::opstack::OpForkFlags m_forkFlags;
+    /// Single conversion point from internal milliseconds to the schedule's seconds.
+    [[nodiscard]] bcos::evm::opstack::OpFork forkAt(int64_t internalTimestampMs) const noexcept
+    {
+        return bcos::evm::opstack::configAt(
+            m_forkSchedule, bcos::evm::engine::detail::forkTimestampSec(internalTimestampMs))
+            .fork;
+    }
+
+    bcos::ledger::OpForkSchedule m_forkSchedule;
     bcos::evm::opstack::L1BlockInfo m_l1BlockInfo;
 };
 

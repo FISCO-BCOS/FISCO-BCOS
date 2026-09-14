@@ -91,8 +91,8 @@ endfunction()
 # ---------------------------------------------------------------------------
 # disable_container_overflow_for_tests
 #
-# Protobuf v5.29.x ABSL_ANNOTATE_CONTIGUOUS_CONTAINER leaves stale ASAN
-# container-overflow markers on RepeatedFields when ParseFromArray is
+# Protobuf (v5.29+ / v6.x) ABSL_ANNOTATE_CONTIGUOUS_CONTAINER leaves stale
+# ASAN container-overflow markers on RepeatedFields when ParseFromArray is
 # called on an object that already has a sub-message (e.g. from a prior
 # decode or from mutable_proposal()).  The annotation false-positive is
 # harmless in production but trips `detect_container_overflow`.

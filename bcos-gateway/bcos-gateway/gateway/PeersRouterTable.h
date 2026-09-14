@@ -22,8 +22,8 @@
 #include "bcos-crypto/interfaces/crypto/KeyFactory.h"
 #include "bcos-framework/gateway/GroupNodeInfo.h"
 #include "bcos-framework/protocol/ProtocolInfo.h"
+#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libp2p/P2PInterface.h"
-#include "bcos-gateway/libp2p/P2PMessageV2.h"
 #include "bcos-gateway/protocol/GatewayNodeStatus.h"
 #include "bcos-task/Task.h"
 #include <oneapi/tbb/concurrent_unordered_map.h>
@@ -56,7 +56,7 @@ public:
     Group2NodeIDListType peersNodeIDList(P2pID const& _p2pNodeID) const;
 
     task::Task<void> broadcastMessage(uint16_t type, std::string_view group, uint16_t moduleID,
-        const P2PMessageV2& message,
+        const Message& message,
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads);
 
     std::set<P2pID> getAllPeers() const;

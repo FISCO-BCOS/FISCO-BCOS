@@ -212,9 +212,10 @@ BOOST_AUTO_TEST_CASE(feature)
         // inserting it mid-list would move every feature_ flag's bit. This list mirrors
         // declaration order, so it follows the enum, not the other way round.
         "bugfix_nonce_ordering",
-        // feature_op_jovian = 60 (OP-Stack Jovian fork semantics), appended after the last
-        // feature_/bugfix_ per the mirror-declaration-order rule above.
-        "feature_op_jovian",
+        // Bit 60 is reserved, not reusable: it was feature_op_jovian on release-3.18.0 and the
+        // OP lane now activates forks from [op_fork_timestamps] instead. It is still declared
+        // so the next flag added cannot take its on-chain bit.
+        "reserved_removed_op_jovian",
         // bugfix_eip161_1052_account_semantics = 61 (#5371/#5372), next unused value.
         "bugfix_eip161_1052_account_semantics",
     };
@@ -224,6 +225,25 @@ BOOST_AUTO_TEST_CASE(feature)
     {
         BOOST_CHECK_EQUAL(keys[i], compareKeys[i]);
     }
+}
+
+// The enum value IS the on-chain feature_flags bit position, so bit 60 staying occupied by the
+// reserved placeholder is a consensus constant, not a cosmetic detail: the name-order list above
+// passes just as happily if the next flag added silently takes 60. Pin the number, and pin that
+// the retired NAME no longer resolves — a genesis still carrying feature_op_jovian=true must
+// fail at load rather than quietly enable nothing.
+BOOST_AUTO_TEST_CASE(retiredOpJovianBitIsReservedNotReusable)
+{
+    BOOST_CHECK_EQUAL(static_cast<int>(Features::Flag::reserved_removed_op_jovian), 60);
+    BOOST_CHECK(!Features::contains("feature_op_jovian"));
+    BOOST_CHECK_THROW(Features::string2Flag("feature_op_jovian"), std::exception);
+
+    // The reserved slot carries no behaviour of its own: it is off in a default Features and
+    // packs to exactly bit 60 when set, which is what keeps it un-reusable.
+    Features features;
+    BOOST_CHECK(!features.get(Features::Flag::reserved_removed_op_jovian));
+    features.set(Features::Flag::reserved_removed_op_jovian);
+    BOOST_CHECK_EQUAL(features.toFlagsNumber(), bcos::u256(1) << 60);
 }
 
 BOOST_AUTO_TEST_CASE(toFlagsNumber)
