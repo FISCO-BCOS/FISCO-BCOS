@@ -23,19 +23,19 @@
 #include <bcos-crypto/signature/codec/SignatureDataWithV.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h>
+#include <bcos-utilities/BoostLog.h>
 #include <secp256k1.h>
 #include <secp256k1_recovery.h>
 #include <wedpr-crypto/WedprCrypto.h>
 #include <array>
 #include <memory>
-#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos;
 using namespace bcos::crypto;
 
-static const std::unique_ptr<secp256k1_context, void (*)(secp256k1_context*)>
-    g_SECP256K1_CTX{secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY),
-        &secp256k1_context_destroy};
+static const std::unique_ptr<secp256k1_context, void (*)(secp256k1_context*)> g_SECP256K1_CTX{
+    secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY),
+    &secp256k1_context_destroy};
 
 // Shared precondition for every entry that hands the signature to libsecp256k1. The recid
 // byte must be checked here: secp256k1_ecdsa_recoverable_signature_parse_compact treats
@@ -48,7 +48,7 @@ inline void checkSignatureFormat(bytesConstRef _signatureData)
         std::ostringstream oss;
         oss << "invalid signature length : current length is " << _signatureData.size();
         std::string errMsg = oss.str();
-        CRYPTO_LOG(WARNING) << LOG_DESC("recoverAddress failed") << LOG_KV("message", errMsg);
+        CRYPTO_LOG(WARNING) << LOG_DESC("invalid signature format") << LOG_KV("message", errMsg);
         BOOST_THROW_EXCEPTION(InvalidSignature() << errinfo_comment(errMsg));
     }
     if ((uint8_t)_signatureData[SECP256K1_SIGNATURE_V] > 3)
