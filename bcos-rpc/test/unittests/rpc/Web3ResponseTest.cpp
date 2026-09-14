@@ -1032,5 +1032,76 @@ BOOST_AUTO_TEST_CASE(combineTxResponseAccessAndAuthLists)
     }
 }
 
+// F1 regression: extraTransactionBytes is the signing PREIMAGE on the txpool lane
+// (takeToTarsTransaction stores encodeForSign(), no signature trailer), so the parity lives
+// ONLY in the tars signature field (r(32)||s(32)||parity(1)). combineTxResponse must read the
+// parity from tx.signatureData()[64] — a decoded-payload parity would stay 0 (typed) or drop
+// the legacy parity, and op-node's re-encode of the JSON would then produce the wrong txHash.
+BOOST_AUTO_TEST_CASE(combineTxResponseVFieldFromTarsSignature)
+{
+    auto combineFor = [](bcos::rpc::Web3Transaction web3Tx) {
+        auto tarsTx = web3Tx.takeToTarsTransaction();
+        bcos::h256 arbitraryHash(
+            "0505050505050505050505050505050505050505050505050505050505050505");
+        tarsTx.extraTransactionHash.assign(arbitraryHash.begin(), arbitraryHash.end());
+        bcostars::protocol::TransactionImpl txImpl(
+            [tarsTx = std::move(tarsTx)]() mutable { return &tarsTx; });
+        Json::Value result = Json::objectValue;
+        combineTxResponse(result, txImpl, /*transactionIndex=*/0u, /*blockNumber=*/1,
+            bcos::crypto::HashType{});
+        return result;
+    };
+
+    // Typed EIP-1559 with parity 1: v is the raw yParity 0x1.
+    {
+        bcos::rpc::Web3Transaction typed;
+        typed.type = bcos::rpc::TransactionType::EIP1559;
+        typed.chainId = 1;
+        typed.nonce = 0;
+        typed.maxPriorityFeePerGas = bcos::u256(1);
+        typed.maxFeePerGas = bcos::u256(2);
+        typed.gasLimit = 21000;
+        typed.to.emplace(bcos::Address("0x1234567890123456789012345678901234567890"));
+        typed.value = bcos::u256(0);
+        typed.signatureR = bcos::bytes(32, 0x11);
+        typed.signatureS = bcos::bytes(32, 0x22);
+        typed.signatureV = 1;
+        auto result = combineFor(std::move(typed));
+        BOOST_CHECK_EQUAL(result["v"].asString(), "0x1");
+    }
+    // Legacy EIP-155 (chainId 1, parity 1): v = chainId*2 + 35 + parity = 38.
+    {
+        bcos::rpc::Web3Transaction legacy;
+        legacy.type = bcos::rpc::TransactionType::Legacy;
+        legacy.chainId = 1;
+        legacy.nonce = 0;
+        legacy.maxPriorityFeePerGas = bcos::u256(1);  // gasPrice for legacy
+        legacy.gasLimit = 21000;
+        legacy.to.emplace(bcos::Address("0x1234567890123456789012345678901234567890"));
+        legacy.value = bcos::u256(0);
+        legacy.signatureR = bcos::bytes(32, 0x11);
+        legacy.signatureS = bcos::bytes(32, 0x22);
+        legacy.signatureV = 1;
+        auto result = combineFor(std::move(legacy));
+        BOOST_CHECK_EQUAL(result["v"].asString(), "0x26");  // 38
+    }
+    // Pre-EIP-155 legacy (no chainId, parity 1): v = 27 + parity = 28.
+    {
+        bcos::rpc::Web3Transaction legacy;
+        legacy.type = bcos::rpc::TransactionType::Legacy;
+        legacy.chainId = std::nullopt;
+        legacy.nonce = 0;
+        legacy.maxPriorityFeePerGas = bcos::u256(1);
+        legacy.gasLimit = 21000;
+        legacy.to.emplace(bcos::Address("0x1234567890123456789012345678901234567890"));
+        legacy.value = bcos::u256(0);
+        legacy.signatureR = bcos::bytes(32, 0x11);
+        legacy.signatureS = bcos::bytes(32, 0x22);
+        legacy.signatureV = 1;
+        auto result = combineFor(std::move(legacy));
+        BOOST_CHECK_EQUAL(result["v"].asString(), "0x1c");  // 28
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
