@@ -12,12 +12,12 @@ include(Options)
 configure_project()
 
 if (WIN32)
-# to fix boost log link error in Windows8 API
+# boost.atomic 1.90+ unconditionally calls boost::winapi::WaitOnAddress on Windows,
+# which boost.winapi only declares when BOOST_USE_WINAPI_VERSION >= WIN8, so the
+# former WIN7 pin no longer compiles. WIN8 also matches the boost.log nt62 ABI of
+# vcpkg-built boost (built with the default WIN10), see
 # https://github.com/microsoft/vcpkg/discussions/22762
-#    add_definitions(-D_WIN32_WINNT=0x0601)
-#    set(VCPKG_C_FLAGS -D_WIN32_WINNT=0x0601 -DWINVER=0x0601)
-#    set(VCPKG_CXX_FLAGS -D_WIN32_WINNT=0x0601 -DWINVER=0x0601)
-    add_definitions(-DBOOST_USE_WINAPI_VERSION=BOOST_WINAPI_VERSION_WIN7)
+    add_definitions(-DBOOST_USE_WINAPI_VERSION=BOOST_WINAPI_VERSION_WIN8)
     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS "ON")
 endif ()
 

@@ -27,6 +27,7 @@
 #include "bcos-transaction-executor/TransactionExecutorImpl.h"
 #include "engine/bcos-engine/EthEngineService.h"
 #include "engine/bcos-engine/OpEngineService.h"
+#include <bcos-ledger/mpt/CommitObserver.h>
 #include <functional>
 #include <memory>
 #include <utility>
@@ -54,7 +55,8 @@ public:
         std::shared_ptr<ExecutorType> transactionExecutor, bcos::txpool::MemPoolImpl& memPool,
         bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
         int64_t blockTxCountLimit = bcos::engine::c_defaultBlockTxCountLimit,
-        bcos::ledger::LedgerConfigState::Ptr ledgerConfigState = nullptr)
+        bcos::ledger::LedgerConfigState::Ptr ledgerConfigState = nullptr,
+        std::shared_ptr<ledger::mpt::CommitObserver> commitObserver = nullptr)
     {
         auto initializer = Ptr(new EngineServiceInitializer());
         using ConcreteEngineService = bcos::engine::EthEngineService<bcos::txpool::MemPoolImpl,
@@ -63,7 +65,7 @@ public:
             std::make_shared<ConcreteModel<SchedulerType, ExecutorType, ConcreteEngineService>>(
                 std::move(storageInitializer), std::move(blockFactory), std::move(scheduler),
                 std::move(transactionExecutor), memPool, std::move(ledger), blockTxCountLimit,
-                std::move(ledgerConfigState));
+                std::move(ledgerConfigState), std::move(commitObserver));
         initializer->m_holder = holder;
         initializer->m_engineService =
             std::shared_ptr<bcos::engine::AnyEngineService>(holder, &holder->m_any);
@@ -88,8 +90,8 @@ public:
             GlobalStateStorage, SchedulerType>;
         auto holder = std::make_shared<ConcreteOpModel<SchedulerType, ConcreteEngineService>>(
             std::move(storageInitializer), std::move(blockFactory), std::move(scheduler), memPool,
-            blockTxCountLimit, std::move(delegate), std::move(daCaps),
-            allowSynthesizedL1Attributes, std::move(ledgerConfigState));
+            blockTxCountLimit, std::move(delegate), std::move(daCaps), allowSynthesizedL1Attributes,
+            std::move(ledgerConfigState));
         initializer->m_holder = holder;
         initializer->m_engineService =
             std::shared_ptr<bcos::engine::AnyEngineService>(holder, &holder->m_any);
@@ -115,7 +117,8 @@ private:
             std::shared_ptr<SchedulerType> scheduler,
             std::shared_ptr<ExecutorType> transactionExecutor, bcos::txpool::MemPoolImpl& memPool,
             bcos::ledger::LedgerInterface::Ptr ledger, int64_t blockTxCountLimit,
-            bcos::ledger::LedgerConfigState::Ptr ledgerConfigState)
+            bcos::ledger::LedgerConfigState::Ptr ledgerConfigState,
+            std::shared_ptr<ledger::mpt::CommitObserver> commitObserver)
           : m_storageInitializer(std::move(storageInitializer)),
             m_memPool(memPool),
             m_transactionExecutor(std::move(transactionExecutor)),
@@ -124,7 +127,7 @@ private:
                 m_storageInitializer->storage(), *m_transactionExecutor, *m_scheduler,
                 std::move(blockFactory), std::move(ledger), blockTxCountLimit,
                 /*maxEngineVersion=*/static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3),
-                std::move(ledgerConfigState))
+                std::move(commitObserver), std::move(ledgerConfigState))
         {}
 
         std::shared_ptr<GlobalStateStorageInitializer> m_storageInitializer;

@@ -21,7 +21,7 @@
 #pragma once
 
 #include "bcos-framework/mempool/MemPool.h"
-#include <proxy/v3/proxy.h>
+#include <proxy/v4/proxy.h>
 #include <vector>
 
 namespace bcos::mempool
@@ -44,13 +44,12 @@ struct AnyMemPoolFacade
   : pro::facade_builder ::add_convention<MemAdd,
         void(std::vector<protocol::Transaction::Ptr>)>::add_convention<MemSeal,
         void(int64_t, StateStorage&,
-            std::back_insert_iterator<
-                std::vector<protocol::Transaction::Ptr>>)>::template add_convention<MemRemove,
-        void(StateStorage&),
-        void(std::vector<bcos::crypto::HashType>)>::template add_convention<MemGet,
-        std::vector<protocol::Transaction::Ptr>(std::vector<bcos::crypto::HashType>)>::
-        template support_relocation<pro::constraint_level::nothrow>::template support_destruction<
-            pro::constraint_level::nothrow>::build
+            std::back_insert_iterator<std::vector<protocol::Transaction::Ptr>>)>::
+        template add_convention<MemRemove, void(StateStorage&),
+            void(std::vector<bcos::crypto::HashType>)>::template add_convention<MemGet,
+            std::vector<protocol::Transaction::Ptr>(std::vector<bcos::crypto::HashType>)>::
+            template support_relocation<pro::constraint_level::nothrow>::
+                template support_destruction<pro::constraint_level::nothrow>::build
 {
 };
 

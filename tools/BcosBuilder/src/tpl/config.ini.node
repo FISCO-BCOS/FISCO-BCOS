@@ -48,6 +48,27 @@
     type=RocksDB
     pd_addrs=
     key_page_size=10240
+    ; MPT state-node pruning (pathdb): delete MPT nodes obsoleted more than
+    ; mpt_prune_window blocks ago, bounding state-trie disk usage.
+    ; State roots within [latest - mpt_prune_window, latest] stay fully reachable
+    ; (eth_getProof / historical eth_call); older roots answer -32004.
+    ; -1 disables pruning (default, archive-node behavior); a suggested value is 128.
+    ; Reference counts live in memory only and are rebuilt from the recent state
+    ; roots at every startup, so pruning can be enabled and the window resized at
+    ; any restart. Enlarging the window recovers only the coverage of roots still
+    ; surviving on disk: roots already pruned under a previous smaller window are
+    ; skipped (an INFO log names the first surviving root), and the effective
+    ; window starts there. Accepted values: -1 or [1, 10000000].
+    ; Binary upgrades/downgrades need no migration: counts are in-memory only, and
+    ; a pre-pruning binary keeps executing on a pruned database (head-reachable
+    ; nodes are never deleted); only historical reads beyond the window degrade
+    ; to a generic miss error.
+    ;mpt_prune_window=-1
+    ; Startup garbage sweep: set true to scan the whole MPT node table at boot and
+    ; delete (in batches) pre-existing unreachable rows (historical garbage from
+    ; before pruning was enabled). Default false skips the scan entirely; an INFO
+    ; log at every boot notes how to enable it.
+    ;mpt_prune_sweep_garbage=false
 
 [txpool]
     ; size of the txpool, default is 15000

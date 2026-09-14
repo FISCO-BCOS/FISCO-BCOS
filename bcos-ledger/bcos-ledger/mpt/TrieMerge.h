@@ -52,6 +52,13 @@ struct TrieMergeResult
     bcos::h256 root;
     std::unordered_map<bcos::h256, bcos::bytes> newNodes;
     std::unordered_set<bcos::h256> obsoletedNodes;
+    /// Prior-version nodes this rebuild resolved AND re-emitted byte-identically (phase 4:
+    /// resolvedHashes ∩ newNodes). The same trie referenced them before and after, so their
+    /// reference count must not move — but they DO sit in newNodes (the emit phase re-encodes
+    /// every dirty node, and a no-net-change subtree's encoding coincides with its origin).
+    /// A reference-counting consumer subtracts these from the newNodes tally; a consumer that
+    /// only tracks writes/deletes ignores this set.
+    std::unordered_set<bcos::h256> reemittedNodes;
 };
 
 namespace detail
@@ -640,8 +647,10 @@ NodeRef emitNode(EmitContext<HasherT>& ctx, MutableNode& node)  // NOLINT(misc-n
 /// PrefixSet-style path-level increment of spec §5.3 path 1 step 2).
 ///
 /// newNodes holds every node emitted for the new version (a no-net-change subtree re-emits its
-/// identical encoding — harmless). obsoletedNodes = nodes of the prior version that the new root
-/// no longer references: exactly the resolved-and-replaced set minus re-emitted identical hashes.
+/// identical encoding — harmless for writers; those hashes are additionally reported in
+/// reemittedNodes so reference counting can net them out). obsoletedNodes = nodes of the prior
+/// version that the new root no longer references: exactly the resolved-and-replaced set minus
+/// re-emitted identical hashes.
 /// Storage is only read; commitTrie's caller owns flushing newNodes (flushTrieNodes) — and owns
 /// @p hasher, reused across every node emission of this merge (and across merges, if the caller
 /// keeps it around). @p hasher is any type satisfying the Hasher concept (keccak256, SM3, ...);
@@ -722,6 +731,12 @@ bcos::task::Task<TrieMergeResult> mergeTrie(Storage& storage, bcos::h256 priorRo
         if (!result.newNodes.contains(hash))
         {
             result.obsoletedNodes.insert(hash);
+        }
+        else
+        {
+            // Resolved from the prior version and re-emitted byte-identically: still live, same
+            // reference as before — reported separately so reference counting nets it to zero.
+            result.reemittedNodes.insert(hash);
         }
     }
     co_return result;

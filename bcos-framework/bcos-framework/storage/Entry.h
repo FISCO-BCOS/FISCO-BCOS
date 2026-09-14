@@ -6,7 +6,7 @@
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
-#include <proxy/v3/proxy.h>
+#include <proxy/v4/proxy.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
@@ -30,8 +30,12 @@ namespace bcos::storage
 
 template <class T>
 concept ByteBuffer = requires(const T& t) {
-    { t.data() } -> std::convertible_to<const void*>;
-    { t.size() } -> std::convertible_to<std::size_t>;
+    {
+        t.data()
+    } -> std::convertible_to<const void*>;
+    {
+        t.size()
+    } -> std::convertible_to<std::size_t>;
     requires sizeof(typename std::remove_cvref_t<T>::value_type) == 1;
 };
 
@@ -244,7 +248,9 @@ concept Encodable = requires(const T& v, bytesConstRef bytes) {
     {
         encode(v, [](bytesConstRef) {})
     } -> std::same_as<void>;
-    { decode(std::type_identity<T>{}, bytes) } -> std::same_as<T>;
+    {
+        decode(std::type_identity<T>{}, bytes)
+    } -> std::same_as<T>;
 };
 
 // ─── Typed holder model ────────────────────────────────────────────

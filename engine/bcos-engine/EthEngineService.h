@@ -39,6 +39,7 @@
 #include <bcos-framework/transaction-executor/TransactionExecutor.h>
 #include <bcos-framework/transaction-scheduler/TransactionScheduler.h>
 #include <bcos-ledger/LedgerMethods.h>
+#include <bcos-ledger/mpt/CommitObserver.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <bcos-task/Task.h>
@@ -52,6 +53,8 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -127,6 +130,10 @@ struct EthPayloadArtifacts
     std::shared_ptr<ViewType> view;
     bcos::protocol::BlockHeader::Ptr header;
     std::vector<protocol::TransactionReceipt::Ptr> receipts;
+    /// The block's MPT delta (null on the XOR-root path), handed to the CommitObserver (MPT
+    /// pruning) when newPayload commits the block. Kept until the durable write succeeds,
+    /// same rule as header/receipts, so a failed attempt's retry re-reads it.
+    std::shared_ptr<const ledger::mpt::MPTDeltaLayer> mptDelta = nullptr;
 };
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
@@ -146,6 +153,7 @@ public:
         bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
         int64_t blockTxCountLimit = c_defaultBlockTxCountLimit,
         std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(ApiVersion::V3),
+        std::shared_ptr<ledger::mpt::CommitObserver> commitObserver = nullptr,
         bcos::ledger::LedgerConfigState::Ptr ledgerConfigState = nullptr)
       : m_memPool(memPool),
         m_globalStateStorage(globalStateStorage),
@@ -155,6 +163,8 @@ public:
         m_ledger(std::move(ledger)),
         m_blockTxCountLimit(blockTxCountLimit),
         m_maxEngineVersion(maxEngineVersion),
+        m_commitObserver(commitObserver ? std::move(commitObserver) :
+                                          std::make_shared<ledger::mpt::NoopCommitObserver>()),
         m_ledgerConfigState(std::move(ledgerConfigState))
     {
         if (!m_blockFactory)
@@ -211,6 +221,9 @@ private:
         ExecutionPayload executionPayload;
         bcos::protocol::BlockHeader::Ptr header;
         std::vector<protocol::TransactionReceipt::Ptr> receipts;
+        /// The block's MPT delta (null on the XOR-root path); updateForkchoice stashes it in
+        /// the payload artifacts for the newPayload commit's pruning hooks.
+        std::shared_ptr<const ledger::mpt::MPTDeltaLayer> mptDelta = nullptr;
     };
 
     bool isForkchoiceVersionSupported(std::uint32_t version) const
@@ -232,6 +245,12 @@ private:
         std::vector<bcos::bytes> decodedForcedTxs) const;
 
     EngineTracker m_tracker;
+    /// Serializes the newPayload commit section [prepareMPTPruneRows -> merge -> onCommit ->
+    /// artifact consume] against every other commit: MPTPruner stages the block's counting
+    /// work on one shared overlay between the two hooks, so concurrent commits (the
+    /// duplicate-newPayload race the commit path comments describe) would corrupt it. Held
+    /// across co_await, the same pattern as BaselineScheduler::m_commitMutex.
+    std::mutex m_commitMutex;
     std::unordered_map<PayloadID, EthPayloadArtifacts<ViewType>> m_artifacts;
     MemPoolType& m_memPool;
     GlobalStateStorageType& m_globalStateStorage;
@@ -241,6 +260,12 @@ private:
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     int64_t m_blockTxCountLimit;
     std::uint32_t m_maxEngineVersion;
+    /// The pruning observer the newPayload commit path fires (NoopCommitObserver unless the
+    /// wiring injected an MPTPruner). Dereferenced only under m_commitMutex; also consulted at
+    /// build time via needsRefCountDeltas() (passed to resolveEngineBlockStateRoot so the
+    /// tally decision cannot drift from the commit hook).
+    std::shared_ptr<ledger::mpt::CommitObserver> m_commitObserver;
+
     /// Published after every durable commit (whoever commits a block publishes the new
     /// configuration — TxValidator's contract): this lane commits via direct storage merges,
     /// not through MultiVersionScheduler's publishing wrapper, so without this holder the

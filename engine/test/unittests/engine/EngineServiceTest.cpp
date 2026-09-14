@@ -271,9 +271,9 @@ public:
 };
 
 /// CommitLedger that parks the FIRST asyncPrewriteBlock until the test releases it,
-/// then passes everything through. Models the N1 window: the first newPayload's
-/// commit I/O is "in flight" (view pushed, artifacts not yet consumed) while a
-/// concurrent duplicate newPayload runs to completion.
+/// then passes everything through. Models the window where the first newPayload's
+/// commit I/O is "in flight" — parked inside the commit section, holding
+/// EngineServiceImpl::m_commitMutex — while a concurrent duplicate arrives.
 class GatedLedger : public CommitLedger
 {
 public:
@@ -1144,11 +1144,11 @@ BOOST_AUTO_TEST_CASE(new_payload_retry_after_failed_prewrite_recommits)
         toHexStringWithPrefix(payload->executionPayload.extraData));
 }
 
-// a duplicate newPayload racing the first attempt's commit I/O must
-// answer the idempotent VALID — not a NotExistsImmutableStorageError from a
-// mergeBackStorage on the queue the first attempt already drained. Both attempts
-// prewrite identical rows; the drained-queue side falls through to
-// mergeToBackends, which lands them idempotently.
+// A duplicate newPayload racing the first attempt's commit I/O no longer enters the
+// commit section: m_commitMutex serializes it behind the parked first attempt. Once the
+// first attempt commits and consumes the artifacts, the blocked duplicate acquires the
+// mutex, detects the headerless entry (committedByDuplicate) and answers the idempotent
+// VALID — without re-writing rows or double-counting the MPT prune references.
 BOOST_AUTO_TEST_CASE(new_payload_concurrent_duplicate_is_idempotent)
 {
     MemPoolImpl memPool;
@@ -1175,17 +1175,28 @@ BOOST_AUTO_TEST_CASE(new_payload_concurrent_duplicate_is_idempotent)
     std::thread firstAttempt(
         [&]() { firstDone.set_value(task::syncWait(engineService.newPayload(honest, 3))); });
     // Wait until the first attempt is parked inside the commit I/O (view pushed,
-    // artifacts intact — exactly the state the concurrent duplicate must survive).
+    // artifacts intact, commit mutex held) — exactly the state the duplicate must queue
+    // behind rather than race.
     while (!gatedLedger->m_firstEntered.load())
     {
         std::this_thread::yield();
     }
-    auto duplicateStatus = task::syncWait(engineService.newPayload(honest, 3));
-    BOOST_CHECK_EQUAL(
-        static_cast<int>(duplicateStatus.status), static_cast<int>(PayloadValidationStatus::Valid));
+
+    // The duplicate runs on its own thread and must BLOCK on the commit mutex while the
+    // first attempt is parked — completing early would mean the serialization broke.
+    std::promise<PayloadStatus> duplicateDone;
+    auto duplicateFuture = duplicateDone.get_future();
+    std::thread duplicateAttempt(
+        [&]() { duplicateDone.set_value(task::syncWait(engineService.newPayload(honest, 3))); });
+    BOOST_CHECK(
+        duplicateFuture.wait_for(std::chrono::milliseconds(200)) == std::future_status::timeout);
 
     gatedLedger->m_release = true;
     firstAttempt.join();
+    duplicateAttempt.join();
+    auto duplicateStatus = duplicateFuture.get();
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(duplicateStatus.status), static_cast<int>(PayloadValidationStatus::Valid));
     auto firstStatus = firstDone.get_future().get();
     BOOST_CHECK_EQUAL(
         static_cast<int>(firstStatus.status), static_cast<int>(PayloadValidationStatus::Valid));
