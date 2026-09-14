@@ -25,6 +25,7 @@
 #include "../rlpx/Messages.h"
 #include "../rlpx/Session.h"
 #include "../eth/Protocol.h"
+#include <stdexcept>
 
 namespace bcos::devp2p::sync
 {
@@ -37,6 +38,21 @@ struct HeaderWithHash
 
     uint64_t number() const { return static_cast<uint64_t>(header.number); }
     bcos::h256 parentHash() const { return header.parentInfo.blockHash; }
+};
+
+// The first header of a peer's batch does not build on the local anchor — a
+// fork/reorg signal, typed so the sync loop classifies it by failure origin
+// instead of string-matching the message.
+struct ParentHashMismatch : public std::runtime_error
+{
+    using std::runtime_error::runtime_error;
+};
+
+// A downloaded header violates the Ethereum PoS field rules against its parent.
+// Deterministic: every honest peer's copy of the same block fails identically.
+struct HeaderRuleViolation : public std::runtime_error
+{
+    using std::runtime_error::runtime_error;
 };
 
 // Downloads a contiguous run of headers from a peer, validating the ascending

@@ -172,7 +172,7 @@ std::vector<HeaderWithHash> HeaderChain::requestHeaders(
         {
             if (header.parentHash() != m_anchorHash)
             {
-                throw std::runtime_error(
+                throw ParentHashMismatch(
                     "HeaderChain: parent hash mismatch (fork or reorg)");
             }
         }
@@ -190,8 +190,9 @@ std::vector<HeaderWithHash> HeaderChain::requestHeaders(
             auto result = validateHeaderPoS(header.header, parentHeader, m_config);
             if (!result.valid)
             {
-                throw std::runtime_error("HeaderChain: PoS validation failed at block " +
-                                         std::to_string(header.number()) + ": " + result.error);
+                throw HeaderRuleViolation(
+                    "HeaderChain: PoS validation failed at block " +
+                    std::to_string(header.number()) + ": " + result.error);
             }
         }
         out.push_back(std::move(header));
