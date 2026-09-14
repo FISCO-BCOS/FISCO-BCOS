@@ -1,5 +1,6 @@
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
+#include <bcos-rpc/filter/Common.h>
 #include <bcos-rpc/filter/LogMatcher.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-utilities/BoostLog.h>
