@@ -48,7 +48,6 @@
 #include <bcos-rpc/web3jsonrpc/model/ReceiptResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
 #include <bcos-rpc/web3jsonrpc/utils/AdmissionError.h>
-#include <bcos-rpc/web3jsonrpc/utils/FeeHistory.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tx-validator/TxValidator.h>
@@ -1671,88 +1670,6 @@ task::Task<void> EthEndpoint::maxPriorityFeePerGas(
     co_return;
 }
 
-task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value& response)
-{
-    // params: blockCount(QTY), newestBlock(QTY|TAG), rewardPercentiles(FLOAT[] optional)
-    if (request.empty() || !request[0U].isString())
-    {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            InvalidParams, "eth_feeHistory expects [blockCount, newestBlock, ...]"));
-    }
-    auto const blockCountParsed = bcos::safeFromQuantity(request[0U].asString());
-    if (!blockCountParsed.has_value())
-    {
-        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid blockCount"));
-    }
-    if (request.size() < 2 || !request[1U].isString())
-    {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            InvalidParams, "eth_feeHistory expects [blockCount, newestBlock, ...]"));
-    }
-
-    // Capture the ledger once and fail closed BEFORE any deref: getBlockNumberByTag
-    // calls getCurrentBlockNumber(*ledger), so a null-ledger node must refuse here
-    // instead of crashing inside the helper (sibling fee methods guard the same way).
-    auto ledger = m_nodeService->ledger();
-    if (!ledger)
-    {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            JsonRpcError::InternalError, "Ledger not available for eth_feeHistory"));
-    }
-
-    auto const newestTag = toView(request[1U]);
-    auto [newestBlock, _] = co_await getBlockNumberByTag(newestTag);
-
-    std::vector<double> rewardPercentiles;
-    if (request.size() >= 3)
-    {
-        // geth rejects a non-array third parameter rather than ignoring it.
-        if (!request[2U].isArray())
-        {
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(InvalidParams, "rewardPercentiles must be an array"));
-        }
-        // Same query limit as geth (eth/gasprice/feehistory.go maxQueryLimit).
-        constexpr std::size_t c_maxRewardPercentiles = 100;
-        if (request[2U].size() > c_maxRewardPercentiles)
-        {
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(InvalidParams, "rewardPercentiles over the query limit 100"));
-        }
-        for (auto const& entry : request[2U])
-        {
-            if (!entry.isNumeric())
-            {
-                BOOST_THROW_EXCEPTION(
-                    JsonRpcException(InvalidParams, "rewardPercentiles must be numbers"));
-            }
-            auto const percentile = entry.asDouble();
-            if (percentile < 0.0 || percentile > 100.0)
-            {
-                BOOST_THROW_EXCEPTION(
-                    JsonRpcException(InvalidParams, "rewardPercentiles must be in [0, 100]"));
-            }
-            // geth rejects a non-increasing array (errInvalidPercentile).
-            if (!rewardPercentiles.empty() && percentile <= rewardPercentiles.back())
-            {
-                BOOST_THROW_EXCEPTION(JsonRpcException(
-                    InvalidParams, "rewardPercentiles must be monotonically increasing"));
-            }
-            rewardPercentiles.push_back(percentile);
-        }
-    }
-
-    // The OP base-fee rule follows the LANE, not the ledger's feature_l2_ethereum_compat
-    // state shape: an Eth-lane chain may carry that flag (the pure-Ethereum executor on an
-    // MPT root) and must keep EIP-1559 fee semantics, which is what eth_gasPrice /
-    // eth_maxPriorityFeePerGas (RpcChainPolicy) already report. Lane is genesis-frozen, so
-    // the tip config answers for newestBlock too.
-    auto const ledgerConfig = co_await ledger::getLedgerConfig(*ledger);
-    auto const opStackMode = isOpStackLane(ledgerConfig->executorVersion());
-    auto result = co_await buildFeeHistory(*ledger, newestBlock,
-        static_cast<std::size_t>(*blockCountParsed), rewardPercentiles, opStackMode);
-    buildJsonContent(result, response);
-}
 
 /// eth_getProof custom error code (spec §5.9): both request-level proof failures — dormant
 /// account and unknown/uncommitted state root — map to -32004; the message distinguishes them.

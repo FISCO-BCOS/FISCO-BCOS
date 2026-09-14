@@ -40,8 +40,8 @@ inline bool usesEthereumFeeSemantics(int executorVersion)
 /// True when the chain runs the OP lane (exactly OPSTACK_EXECUTOR_VERSION). This is a LANE
 /// predicate, distinct from the ledger's feature_l2_ethereum_compat state shape: the Eth
 /// lane may carry that flag too (an MPT-state chain still sealed by the consensus layer),
-/// and on such a chain the OP base-fee rule must not apply. eth_feeHistory consumes this,
-/// so feeHistory and eth_gasPrice agree on every configuration.
+/// and on such a chain the OP base-fee rule must not apply. The historical fee methods
+/// consume this, so they and eth_gasPrice agree on every configuration.
 inline bool isOpStackLane(int executorVersion)
 {
     return executorVersion == bcos::ledger::OPSTACK_EXECUTOR_VERSION;
