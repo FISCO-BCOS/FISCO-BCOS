@@ -20,11 +20,13 @@
 #include "../common/RPCFixture.h"
 #include <bcos-framework/engine/AnyEngineService.h>
 #include <bcos-framework/engine/Errors.h>
+#include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/Endpoints.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Error.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <chrono>
@@ -67,6 +69,7 @@ public:
         bool throwInvalidForkchoiceState = false;
         bool throwOpExecutionInternalError = false;
         bool throwStdRuntimeError = false;
+        bool throwBcosError = false;
         std::atomic<bool> hangNewPayload{false};
         std::atomic<bool> enteredNewPayload{false};
     };
@@ -111,6 +114,11 @@ public:
         {
             throw std::runtime_error{"untreated scheduler fault"};
         }
+        if (m_state->throwBcosError)
+        {
+            BOOST_THROW_EXCEPTION(
+                BCOS_ERROR(bcos::ledger::LedgerError::GetStorageError, "missing SYS_HASH_2_TX row"));
+        }
         co_return m_state->forkchoiceUpdatedResult;
     }
 
@@ -135,6 +143,11 @@ public:
         if (m_state->throwStdRuntimeError)
         {
             throw std::runtime_error{"untreated scheduler fault"};
+        }
+        if (m_state->throwBcosError)
+        {
+            BOOST_THROW_EXCEPTION(
+                BCOS_ERROR(bcos::ledger::LedgerError::GetStorageError, "missing SYS_HASH_2_TX row"));
         }
         co_return std::make_unique<engine::GetPayloadData>(*m_state->getPayloadResult);
     }
@@ -169,6 +182,11 @@ public:
         if (m_state->throwStdRuntimeError)
         {
             throw std::runtime_error{"untreated scheduler fault"};
+        }
+        if (m_state->throwBcosError)
+        {
+            BOOST_THROW_EXCEPTION(
+                BCOS_ERROR(bcos::ledger::LedgerError::GetStorageError, "missing SYS_HASH_2_TX row"));
         }
         co_return m_state->forkchoiceUpdatedResult.payloadStatus;
     }
@@ -372,6 +390,31 @@ BOOST_AUTO_TEST_CASE(engineRpcInternalFaultsMapToShort32603)
         [](JsonRpcException const& e) {
             return isShortInternalError(e, "Null receipt returned by scheduler");
         });
+}
+
+// A bcos::Error from the scheduler/ledger carries its reason in ErrorMessage, not in what()
+// (Exception::what() returns only errinfo_comment, which BCOS_ERROR never sets). The catch-all
+// must not collapse it to a bare "Internal error" — the reason is the operator's only
+// diagnostic on the -32603.
+BOOST_AUTO_TEST_CASE(bcosErrorReasonSurvivesInternalError)
+{
+    auto const params = makeForkchoiceParams();
+
+    mockService.m_state->throwBcosError = true;
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(forkchoiceUpdatedV3, params, response), JsonRpcException,
+        [](JsonRpcException const& e) {
+            return isShortInternalError(e, "missing SYS_HASH_2_TX row");
+        });
+
+    Json::Value getParams(Json::arrayValue);
+    getParams.append("0x00000000deadbeef");
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(getPayloadV3, getParams, response), JsonRpcException,
+        [](JsonRpcException const& e) {
+            return isShortInternalError(e, "missing SYS_HASH_2_TX row");
+        });
+
+    mockService.m_state->throwBcosError = false;
 }
 
 
