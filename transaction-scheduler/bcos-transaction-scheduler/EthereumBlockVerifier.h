@@ -455,30 +455,25 @@ public:
         auto view = globalStateStorage.fork();
         view.newMutable();
 
-        // 1a. Height guard (defense in depth against a stale sync resume point reused
-        //     across bootnodes): the block must be the DIRECT child of the ledger head
-        //     this call commits on top of. Without it, a replayed block (number <= head)
-        //     executes against a NEWER state fork: a block with transactions fails late
-        //     and misleadingly (receiptsRoot mismatch after nonce re-consumption), and a
-        //     state-neutral empty block can verify and be RE-COMMITTED — the commit's
-        //     prewriteBlockToBuffer unconditionally writes SYS_KEY_CURRENT_NUMBER = N,
-        //     rewinding the ledger head into a permanent stall. A gap (number > head + 1)
-        //     is rejected too: the incremental MPT build needs the parent block's trie
-        //     nodes from the immediately-preceding commit. The head
-        //     (SYS_CURRENT_STATE / SYS_KEY_CURRENT_NUMBER, the row the commit's
-        //     prewriteBlockToBuffer maintains) is read through the freshly forked view
+        // 1a. Height guard: the block must be the DIRECT child of the ledger head
+        //     this call commits on top of; a replay or gap throws before any
+        //     execution or commit. Without it, a replayed block (number <= head)
+        //     executes against a NEWER state fork — and a state-neutral empty
+        //     block could verify and be RE-COMMITTED, since the commit's
+        //     prewriteBlockToBuffer unconditionally writes SYS_KEY_CURRENT_NUMBER
+        //     = N, rewinding the ledger head into a permanent stall — while a gap
+        //     (number > head + 1) breaks the incremental MPT build, which needs
+        //     the parent block's trie nodes from the immediately-preceding
+        //     commit. The head (the SYS_CURRENT_STATE / SYS_KEY_CURRENT_NUMBER
+        //     row the commit maintains) is read through the freshly forked view
         //     with the tag-based ledger::getCurrentBlockNumber(view, fromStorage)
-        //     overload — the one designed for views (BaselineScheduler reads the head
-        //     the same way): a MultiLayerStorage itself exposes no read interface (only
-        //     fork/pushView/mergeBackStorage), and a forked view reads through the same
-        //     layer stack the commit will push onto, so the guard cannot disagree with
-        //     the commit target. A missing row reads as -1 (empty chain), keeping the
-        //     first-sync-from-genesis path (head 0 -> block 1) intact. The view is a
-        //     purely local object until step 8's pushView, so throwing here discards it
-        //     with zero state pollution — the rejection still happens before any
-        //     execution or commit, which is the "refuse before the state fork takes
-        //     effect" semantics the reviewer asked for. Throwing (rather than an
-        //     invalid result) matches the finding that a wrong-height block reaching
+        //     overload — the one designed for views (BaselineScheduler reads the
+        //     head the same way) — so the guard cannot disagree with the commit
+        //     target. A missing row reads as -1 (empty chain), keeping the
+        //     first-sync-from-genesis path (head 0 -> block 1) intact. The view
+        //     is purely local until step 8's pushView, so throwing discards it
+        //     with zero state pollution. Throwing (rather than an invalid
+        //     result) matches the caller contract: a wrong-height block reaching
         //     this point is a sync-loop bug, not a peer-supplied invalid block.
         auto const currentNumber =
             co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);

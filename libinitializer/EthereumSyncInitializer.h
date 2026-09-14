@@ -553,14 +553,18 @@ private:
             return;
         }
 
-        // Reorg detection: a parent-hash mismatch means the bootnode's chain does not
-        // build on our committed local head. Committed blocks are NOT rolled back (no
-        // reorg handling yet), so every following round re-anchors on the same
-        // wrong-fork head and fails identically — detect the streak at one anchor and
-        // stop with operator guidance instead of spinning forever.
+        // Same-anchor failure streak: a parent-hash mismatch means the bootnode's
+        // chain does not build on our committed local head (a reorg); any other
+        // post-handshake failure repeating at the SAME anchor is deterministic —
+        // the block re-fails identically for every peer, so no bootnode can move
+        // us past it. Committed blocks are NOT rolled back (no reorg handling
+        // yet) and retries fix neither case: a mismatch streak stops the loop
+        // with operator guidance, a deterministic streak drops to the slow
+        // probing cadence instead of dialing every bootnode every 3s forever.
         constexpr size_t c_maxAnchorMismatchStreak = 3;
-        int64_t mismatchAnchor = -1;
-        size_t mismatchStreak = 0;
+        int64_t streakAnchor = -1;
+        size_t anchorStreak = 0;
+        bool deterministicStall = false;
 
         // Caught-up backoff: when a whole round over the bootnode list yields no
         // download window (and no peer failure) AND at least one bootnode actually
@@ -576,24 +580,6 @@ private:
         {
             try
             {
-                // Compute the resume point fresh on EVERY round (not once per process):
-                // the previous round may have committed blocks, so the next round must
-                // resume from the new local head instead of re-downloading what we
-                // already have. The resume point is deliberately NOT refreshed per
-                // bootnode within a round — instead the round ends after the first
-                // successful download (see the break below), so no second bootnode ever
-                // reuses a stale startNumber/anchor. The chain genesis is pinned
-                // separately for the RLPx handshake — it must never change.
-                auto resume = resumePoint();
-                if (resume.anchor.number != mismatchAnchor)
-                {
-                    // Anchor advanced (or first round): the mismatch streak resets —
-                    // only REPEATED failures at the SAME anchor indicate a reorg.
-                    mismatchAnchor = resume.anchor.number;
-                    mismatchStreak = 0;
-                }
-                auto const& anchor = resume.anchor;
-                auto const& genesisHeader = resume.genesisHeader;
                 auto devp2pConfig = devp2pChainConfig();
                 auto bootnodes =
                     bcos::devp2p::sync::loadBootnodes(m_nodeConfig->ethereumBootnodesFile());
@@ -608,12 +594,38 @@ private:
                 bool madeProgress = false;
                 bool anyPeerFailed = false;
                 size_t headLookupMisses = 0;
+                int64_t lastHeadNumber = -1;
                 for (auto const& peer : bootnodes)
                 {
                     if (!m_running.load())
                     {
                         return;
                     }
+                    // Refresh the resume point for EVERY bootnode, not once per
+                    // round: a peer whose download commits blocks — fully, or
+                    // partially before a mid-range throw — advances the local
+                    // head, and the next peer must anchor on the NEW head instead
+                    // of re-downloading committed blocks only to be rejected by
+                    // the verifier's head+1 guard. The chain genesis is pinned
+                    // separately for the RLPx handshake — it must never change.
+                    auto resume = resumePoint();
+                    lastHeadNumber = resume.anchor.number;
+                    if (resume.anchor.number != streakAnchor)
+                    {
+                        // Anchor advanced (or first attempt): the streak resets —
+                        // only REPEATED failures at the SAME anchor cannot be
+                        // resolved by retrying.
+                        streakAnchor = resume.anchor.number;
+                        anchorStreak = 0;
+                        deterministicStall = false;
+                    }
+                    auto const& anchor = resume.anchor;
+                    auto const& genesisHeader = resume.genesisHeader;
+                    // Set once the RLPx handshake succeeds: failures past that
+                    // point count toward the same-anchor streak (they are
+                    // peer-/chain-shaped), while connect() failures are
+                    // network-shaped and must not trip the stop/stall logic.
+                    bool postHandshake = false;
                     // A single unreachable bootnode must not stall the round: each peer's
                     // connect + download is fault-isolated so the loop moves on to the next
                     // bootnode (online fallback) and retries the whole list next round.
@@ -649,6 +661,7 @@ private:
                             << LOG_KV("host", peer.host) << LOG_KV("port", peer.port)
                             << LOG_KV("startNumber", resume.startNumber);
                         auto established = client.connect();
+                        postHandshake = true;
                         INITIALIZER_LOG(DEBUG)
                             << LOG_DESC("EL sync: handshake OK")
                             << LOG_KV("host", peer.host) << LOG_KV("port", peer.port)
@@ -777,16 +790,12 @@ private:
                                     << LOG_KV("stateRoot",
                                         result.stateRoot.hex().substr(0, 18));
                             });
-                        // Successful download: the committed local head advanced, so
-                        // this round's resume point (startNumber/anchor/prevHeader) is
-                        // now STALE for the remaining bootnodes — reusing it would
-                        // re-download already-committed blocks (failing verification
-                        // with misleading errors, or worse, re-committing a
-                        // state-neutral empty block and rewinding the current number).
-                        // End the round here; the next round re-anchors on the new
-                        // local head. madeProgress is already true, so the round-end
-                        // backoff keeps the 3s retry cadence, and the next round's
-                        // anchor advance resets the parent-hash-mismatch streak.
+                        // Successful download: end the round here rather than
+                        // chaining another bounded download from the next
+                        // bootnode. madeProgress is already true, so the round
+                        // end keeps the 3s retry cadence, and the next round
+                        // re-anchors on the new local head (the anchor advance
+                        // resets the failure streak).
                         break;
                     }
                     catch (SyncCancelled const&)
@@ -806,27 +815,53 @@ private:
                     catch (std::exception const& e)
                     {
                         anyPeerFailed = true;
-                        if (std::string(e.what()).find("parent hash mismatch") !=
-                            std::string::npos)
+                        bool const parentHashMismatch =
+                            std::string(e.what()).find("parent hash mismatch") !=
+                            std::string::npos;
+                        // A parent-hash mismatch is a reorg signal wherever it
+                        // surfaces; any OTHER failure counts toward the streak
+                        // only once the handshake succeeded — connect failures
+                        // are network-shaped and resolve by retrying.
+                        if (parentHashMismatch || postHandshake)
                         {
-                            ++mismatchStreak;
+                            ++anchorStreak;
                         }
-                        if (mismatchStreak >= c_maxAnchorMismatchStreak)
+                        if (anchorStreak >= c_maxAnchorMismatchStreak)
                         {
-                            INITIALIZER_LOG(FATAL)
-                                << LOG_DESC("EL sync: repeated parent hash mismatch at the same "
-                                            "anchor — the committed local chain is on a fork the "
-                                            "bootnodes rejected (reorg); stopping the sync loop")
-                                << LOG_KV("anchorNumber", mismatchAnchor)
-                                << LOG_KV("streak", mismatchStreak)
-                                << LOG_KV("action",
-                                    "automatic reorg rollback is not implemented yet and no "
-                                    "chain-rollback tool ships, so the only supported "
-                                    "recovery is a full resync from scratch; verify the "
-                                    "bootnode list / finalized_checkpoint setting, then "
-                                    "restart");
-                            m_running.store(false);
-                            return;
+                            if (parentHashMismatch)
+                            {
+                                INITIALIZER_LOG(FATAL)
+                                    << LOG_DESC("EL sync: repeated parent hash mismatch at the same "
+                                                "anchor — the committed local chain is on a fork the "
+                                                "bootnodes rejected (reorg); stopping the sync loop")
+                                    << LOG_KV("anchorNumber", streakAnchor)
+                                    << LOG_KV("streak", anchorStreak)
+                                    << LOG_KV("action",
+                                        "automatic reorg rollback is not implemented yet and no "
+                                        "chain-rollback tool ships, so the only supported "
+                                        "recovery is a full resync from scratch; verify the "
+                                        "bootnode list / finalized_checkpoint setting, then "
+                                        "restart");
+                                m_running.store(false);
+                                return;
+                            }
+                            // Deterministic failure: the same block fails
+                            // identically for every bootnode at this anchor
+                            // (e.g. a hard fork this binary does not implement),
+                            // so dialing the remaining bootnodes only hammers
+                            // them. Log once and keep probing at the slow
+                            // cadence until the anchor advances.
+                            if (!deterministicStall)
+                            {
+                                INITIALIZER_LOG(ERROR)
+                                    << LOG_DESC("EL sync: cannot advance past the local head with "
+                                                "any bootnode; backing off and retrying")
+                                    << LOG_KV("headNumber", streakAnchor)
+                                    << LOG_KV("streak", anchorStreak)
+                                    << LOG_KV("error", e.what());
+                                deterministicStall = true;
+                            }
+                            break;
                         }
                         INITIALIZER_LOG(WARNING)
                             << LOG_DESC("EL sync: bootnode failed, trying next")
@@ -837,11 +872,17 @@ private:
                     }
                 }
                 // End of the round — either one pass over the bootnode list, or an
-                // early exit after the first successful download (the break above, so
-                // the stale resume point is never reused by a second bootnode). Pause
-                // briefly before checking for new blocks again (a successful download
-                // already advanced the local head; the next round resumes from there).
-                if (madeProgress || anyPeerFailed)
+                // early exit after the first successful download / a tripped
+                // failure streak. Pause briefly before checking for new blocks
+                // again (a successful download already advanced the local head;
+                // the next round resumes from there).
+                if (deterministicStall)
+                {
+                    // Slow probing cadence while the deterministic failure
+                    // persists; the ERROR was logged once when the stall tripped.
+                    std::this_thread::sleep_for(c_caughtUpBackoff);
+                }
+                else if (madeProgress || anyPeerFailed)
                 {
                     std::this_thread::sleep_for(std::chrono::seconds(3));
                 }
@@ -856,7 +897,7 @@ private:
                         INITIALIZER_LOG(WARNING)
                             << LOG_DESC("EL sync: no bootnode served the head lookup this round")
                             << LOG_KV("bootnodes", bootnodes.size())
-                            << LOG_KV("headNumber", resume.anchor.number)
+                            << LOG_KV("headNumber", lastHeadNumber)
                             << LOG_KV("retrySeconds", c_caughtUpBackoff.count());
                     }
                     else
@@ -869,7 +910,7 @@ private:
                         // instead of per-peer-per-round.
                         INITIALIZER_LOG(INFO)
                             << LOG_DESC("EL sync: caught up with the bootnode tips")
-                            << LOG_KV("headNumber", resume.anchor.number)
+                            << LOG_KV("headNumber", lastHeadNumber)
                             << LOG_KV("retrySeconds", c_caughtUpBackoff.count());
                     }
                     std::this_thread::sleep_for(c_caughtUpBackoff);

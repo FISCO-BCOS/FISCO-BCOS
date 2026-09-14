@@ -708,17 +708,14 @@ BOOST_FIXTURE_TEST_CASE(downloadRejectsTamperedCommitment, EBSFixture)
     }());
 }
 
-// Two-peer regression coverage for the stale-resume-point finding. The reviewer's
-// two-peer ask — "the second peer is never asked for a block the first one
-// committed" — targets the sync LOOP's resume-point logic in EthereumSyncInitializer,
-// which this harness does not drive: here the test itself issues the BlockExchange
-// requests, so "never asked" cannot be observed at this level (the loop-side fix is
-// a separate change). What this harness CAN assert is the defense-in-depth half of
-// the finding: when the second peer IS asked for the exact blocks the first peer
-// already committed (the stale resume point reused across bootnodes), the verifier's
-// head+1 guard rejects every replayed block by throwing before any state fork, and
-// the ledger head / committed state are left untouched (no SYS_KEY_CURRENT_NUMBER
-// rewind — the permanent-stall outcome from the finding).
+// Regression coverage for a stale sync resume point reused across bootnodes: when
+// the second peer IS asked for the exact blocks the first peer already committed,
+// the verifier's head+1 guard must reject every replayed block by throwing before
+// any state fork, and the ledger head / committed state must be left untouched
+// (no SYS_KEY_CURRENT_NUMBER rewind, which would stall the chain permanently).
+// The sync LOOP's own per-peer resume-point logic in EthereumSyncInitializer is
+// not driven by this harness — here the test itself issues the BlockExchange
+// requests — so the loop side is covered only indirectly.
 BOOST_FIXTURE_TEST_CASE(secondPeerReplayRejectedByHeadGuard, EBSFixture)
 {
     task::syncWait([&, this]() -> task::Task<void> {

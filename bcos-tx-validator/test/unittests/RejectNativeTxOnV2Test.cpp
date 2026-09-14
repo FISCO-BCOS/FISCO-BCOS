@@ -13,8 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief regression test for the round-2 review finding F2 on #5554: an
- *        executor_version >= 2 (pure-Ethereum) chain seals ONLY Web3
+ * @brief an executor_version >= 2 (pure-Ethereum) chain seals ONLY Web3
  *        transactions, so a native BCOS transaction must be refused at pool
  *        admission — otherwise the leader's finishExecute throws in
  *        calculateEthereumTransactionRoot and block production halts.
