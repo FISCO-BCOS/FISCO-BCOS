@@ -388,8 +388,9 @@ void Gateway::onReceiveP2PMessage(
         if (result.has_value())
         {
             auto errorCode = std::to_string((int)protocol::CommonError::GatewayQPSOverFlow);
-            m_p2pInterface->sendRespMessageBySession(
-                bytesConstRef((byte*)errorCode.data(), errorCode.size()), _msg, _session);
+            m_p2pInterface->sendRespMessageBySession(bytesConstRef(
+                                                         (byte*)errorCode.data(), errorCode.size()),
+                _msg.seq(), _msg.srcP2PNodeID(), _session);
             return;
         }
     }
@@ -409,7 +410,7 @@ void Gateway::onReceiveP2PMessage(
     auto srcNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(srcNodeID);
     auto dstNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(dstNodeIDs[0]);
     auto gateway = std::weak_ptr<Gateway>(shared_from_this());
-    // the response only reads the request's seq and srcP2PNodeID, so capture those by value and
+    // the response only needs the request's seq and srcP2PNodeID, so capture those by value and
     // move the message itself into the dispatch below
     auto seq = _msg.seq();
     auto srcP2PNodeID = _msg.srcP2PNodeID();
@@ -433,13 +434,9 @@ void Gateway::onReceiveP2PMessage(
                     << LOG_KV("moduleID", moduleID) << LOG_KV("src", srcNodeIDPtr->shortHex())
                     << LOG_KV("dst", dstNodeIDPtr->shortHex());
             }
-            // header-only reference to the request being answered (sendRespMessageBySession reads
-            // only seq and srcP2PNodeID)
-            Message requestRef;
-            requestRef.setSeq(seq);
-            requestRef.setSrcP2PNodeID(srcP2PNodeID);
             gatewayPtr->m_p2pInterface->sendRespMessageBySession(
-                bytesConstRef((byte*)errorCode.data(), errorCode.size()), requestRef, _session);
+                bytesConstRef((byte*)errorCode.data(), errorCode.size()), seq, srcP2PNodeID,
+                _session);
         });
 }
 

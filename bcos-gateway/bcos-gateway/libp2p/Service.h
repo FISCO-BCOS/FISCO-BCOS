@@ -49,8 +49,8 @@ public:
 
     virtual void registerUnreachableHandler(std::function<void(std::string)> /*unused*/);
 
-    void sendRespMessageBySession(
-        bytesConstRef _payload, const Message& _p2pMessage, P2PSession::Ptr _p2pSession) override;
+    void sendRespMessageBySession(bytesConstRef _payload, uint32_t _requestSeq,
+        std::string _requestSrcP2PNodeID, P2PSession::Ptr _p2pSession) override;
 
     task::Task<std::optional<Message>> sendMessageByNodeID(P2pID nodeID, Message& header,
         ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;

@@ -73,8 +73,8 @@ public:
 
     virtual void eraseHandlerByMsgType(uint16_t _type) = 0;
 
-    virtual void sendRespMessageBySession(bytesConstRef _payload, const Message& _p2pMessage,
-        std::shared_ptr<P2PSession> _p2pSession) = 0;
+    virtual void sendRespMessageBySession(bytesConstRef _payload, uint32_t _requestSeq,
+        std::string _requestSrcP2PNodeID, std::shared_ptr<P2PSession> _p2pSession) = 0;
 
     virtual void updatePeerBlacklist(const std::set<std::string>& _strList, const bool _enable) = 0;
     virtual void updatePeerWhitelist(const std::set<std::string>& _strList, const bool _enable) = 0;

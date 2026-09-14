@@ -343,11 +343,10 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
     // heartBeat();
 }
 
-void Service::sendRespMessageBySession(
-    bytesConstRef _payload, const Message& _p2pMessage, P2PSession::Ptr _p2pSession)
+void Service::sendRespMessageBySession(bytesConstRef _payload, uint32_t _requestSeq,
+    std::string /*_requestSrcP2PNodeID*/, P2PSession::Ptr _p2pSession)
 {
     auto self = shared_from_this();
-    auto seq = _p2pMessage.seq();
     auto p2pid = _p2pSession->p2pID();
     // value message in frame; the (borrowed) response payload is copied into the frame because the
     // receive callback that passed it does not outlive the deferred send. The session/service are
@@ -379,7 +378,7 @@ void Service::sendRespMessageBySession(
                                  << LOG_KV("p2pid", printShortP2pID(_p2pid))
                                  << LOG_KV("what", boost::diagnostic_information(e));
         }
-    }(self, _p2pSession, bcos::bytes(_payload.begin(), _payload.end()), seq, p2pid));
+    }(self, _p2pSession, bcos::bytes(_payload.begin(), _payload.end()), _requestSeq, p2pid));
 }
 
 std::optional<bcos::Error> Service::onBeforeMessage(

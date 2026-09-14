@@ -196,15 +196,16 @@ BOOST_AUTO_TEST_CASE(test_retrySucceedsAfterNetworkException)
 
     auto attempts = fixture.attempts;
     When(Method(fixture.networkMock, sendMessageByNodeID))
-        .AlwaysDo([attempts, expectedPayload](P2pID nodeID, Message&,
-                      ::ranges::any_view<bytesConstRef>, Options) -> task::Task<std::optional<Message>> {
-            attempts->push_back(nodeID);
-            if (attempts->size() == 1)
-            {
-                throw NetworkException(-1, "mock network failure");
-            }
-            co_return buildP2PResponse(expectedPayload);
-        });
+        .AlwaysDo(
+            [attempts, expectedPayload](P2pID nodeID, Message&, ::ranges::any_view<bytesConstRef>,
+                Options) -> task::Task<std::optional<Message>> {
+                attempts->push_back(nodeID);
+                if (attempts->size() == 1)
+                {
+                    throw NetworkException(-1, "mock network failure");
+                }
+                co_return buildP2PResponse(expectedPayload);
+            });
 
     SendResult result;
     fixture.send("topic_retry_success", result);
@@ -235,15 +236,16 @@ BOOST_AUTO_TEST_CASE(test_nullResponseRetriesNextNode)
     auto expectedPayload = encodeAMOPResponse(0, "ok");
     auto attempts = fixture.attempts;
     When(Method(fixture.networkMock, sendMessageByNodeID))
-        .AlwaysDo([attempts, expectedPayload](P2pID nodeID, Message&,
-                      ::ranges::any_view<bytesConstRef>, Options) -> task::Task<std::optional<Message>> {
-            attempts->push_back(nodeID);
-            if (attempts->size() == 1)
-            {
-                co_return std::nullopt;
-            }
-            co_return buildP2PResponse(expectedPayload);
-        });
+        .AlwaysDo(
+            [attempts, expectedPayload](P2pID nodeID, Message&, ::ranges::any_view<bytesConstRef>,
+                Options) -> task::Task<std::optional<Message>> {
+                attempts->push_back(nodeID);
+                if (attempts->size() == 1)
+                {
+                    co_return std::nullopt;
+                }
+                co_return buildP2PResponse(expectedPayload);
+            });
 
     SendResult result;
     fixture.send("topic_null_response", result);

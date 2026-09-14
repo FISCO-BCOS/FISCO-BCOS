@@ -44,8 +44,8 @@ public:
 
     void onMessage(NetworkException _error, SessionFace::Ptr session, Message message,
         std::weak_ptr<P2PSession> p2pSessionWeakPtr) override;
-    void sendRespMessageBySession(
-        bytesConstRef _payload, const Message& _p2pMessage, P2PSession::Ptr _p2pSession) override;
+    void sendRespMessageBySession(bytesConstRef _payload, uint32_t _requestSeq,
+        std::string _requestSrcP2PNodeID, P2PSession::Ptr _p2pSession) override;
     bool isReachable(P2pID const& _nodeID) const override;
 
     // (coroutine) broadcast to all reachable nodes through the router table
