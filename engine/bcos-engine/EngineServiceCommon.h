@@ -231,10 +231,10 @@ namespace op
 /// @param allowDeposit  deposit (0x7e) envelopes are an OP-Stack payloadAttributes
 ///        extension: the OP build path passes true (deposits are the only OP-sanctioned
 ///        forced-tx lane); the Eth build path passes false — a 0x7e type is invalid on
-///        an Eth/L1 chain and no Eth client would re-execute it, so admitting it there
-///        would fork the chain from every honest peer.
+///        an Eth/L1 chain, so no Eth client would re-execute such a block. No default:
+///        this is a consensus-shape decision, so every caller states its lane's policy.
 std::optional<bcostars::Transaction> opEnvelopeToTars(
-    bcos::bytes const& env, bcos::crypto::HashType const& txHash, bool allowDeposit = true);
+    bcos::bytes const& env, bcos::crypto::HashType const& txHash, bool allowDeposit);
 }  // namespace op
 }  // namespace engine_common
 

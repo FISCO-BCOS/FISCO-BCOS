@@ -354,7 +354,8 @@ static DecodableWeb3Tx makeDecodableWeb3Tx(
         auto err = bcos::codec::rlp::decode(ref, decoded);
         BOOST_REQUIRE(!err);
         BOOST_REQUIRE(ref.empty());
-        BOOST_REQUIRE(bcos::engine::engine_common::op::opEnvelopeToTars(raw, bcos::h256{}));
+        BOOST_REQUIRE(bcos::engine::engine_common::op::opEnvelopeToTars(
+            raw, bcos::h256{}, /*allowDeposit=*/true));
     }
     bcos::bytes signature(65, 0);
     std::copy(w3.signatureR.begin(), w3.signatureR.end(), signature.begin());
@@ -365,7 +366,8 @@ static DecodableWeb3Tx makeDecodableWeb3Tx(
         reassembled = bcostars::protocol::reassembleWeb3RawTransaction(
             bcos::bytesConstRef(signPayload.data(), signPayload.size()),
             bcos::bytesConstRef(signature.data(), signature.size()));
-        BOOST_REQUIRE(bcos::engine::engine_common::op::opEnvelopeToTars(reassembled, bcos::h256{}));
+        BOOST_REQUIRE(bcos::engine::engine_common::op::opEnvelopeToTars(
+            reassembled, bcos::h256{}, /*allowDeposit=*/true));
     }
 
     auto tx = std::make_shared<TestTransactionImpl>();

@@ -466,6 +466,11 @@ jobs:
               - 'engine/**'
               - 'fisco-bcos-air/**'
               - 'libinitializer/**'
+              # The boot-time mode/MPT gates live here (validateOpModeGenesisOnly) and in
+              # bcos-executor's SystemConfig precompile: either can make every OP-mode node
+              # fail to start, which is exactly what this leg must catch.
+              - 'transaction-scheduler/**'
+              - 'bcos-executor/**'
               - '.github/workflows/workflow.yml'
               - '.github/workflows/c2-e2e.yml'
 

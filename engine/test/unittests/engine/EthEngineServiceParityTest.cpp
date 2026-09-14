@@ -486,11 +486,11 @@ BOOST_AUTO_TEST_CASE(eth_fcu_deposit_envelope_is_rejected_on_the_eth_lane)
     BOOST_CHECK_EQUAL(static_cast<int>(result.payloadStatus.status),
         static_cast<int>(PayloadValidationStatus::Invalid));
     BOOST_CHECK(!result.payloadId.has_value());
-    if (result.payloadStatus.validationError.has_value())
-    {
-        auto const& message = *result.payloadStatus.validationError;
-        BOOST_CHECK_NE(message.find("undecodable"), std::string::npos);
-    }
+    // Require the message rather than pinning it only if present: a bare INVALID with no
+    // validationError is exactly the regression this case exists to catch.
+    BOOST_REQUIRE(result.payloadStatus.validationError.has_value());
+    BOOST_CHECK_EQUAL(
+        *result.payloadStatus.validationError, "undecodable payload transaction envelope");
 }
 
 BOOST_AUTO_TEST_CASE(generic_rebuild_on_parent_matches)
