@@ -31,10 +31,9 @@
 
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
+#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/SessionFace.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"
-#include "bcos-gateway/libp2p/P2PMessage.h"
-#include "bcos-gateway/libp2p/P2PMessageV2.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h"
@@ -98,7 +97,7 @@ BOOST_AUTO_TEST_CASE(SendProtocolDoesNotEscapeSendRejection)
     selfInfo.rawP2pID = "selfRawP2pID";
     selfInfo.p2pID = "selfP2pID";
     auto service = std::make_shared<ProbeService>(selfInfo);
-    service->setMessageFactory(std::make_shared<P2PMessageFactoryV2>());
+    service->setMessageFactory(std::make_shared<MessageFactory>());
 
     auto p2pSession = std::make_shared<P2PSession>();
     p2pSession->setSession(std::make_shared<RejectingSession>());

@@ -24,6 +24,7 @@ if(NOT BCOS_EVM_STANDALONE)
         opstack/OpValidateTest.cpp
         opstack/OpTransitionTest.cpp
         opstack/OpDepositTest.cpp
+        opstack/OpKarstTest.cpp
         opstack/OpZeroDiffTest.cpp
         opstack/OpReceiptMetaTest.cpp
         opstack/Op7702Test.cpp
@@ -34,7 +35,7 @@ if(NOT BCOS_EVM_STANDALONE)
         opstack/Storage2StateBridgeTest.cpp
         testutils/MemoryState.cpp
     )
-    # Unity build over the 20 header-heavy test TUs; opstack/TestMain.cpp defines
+    # Unity build over the header-heavy test TUs; opstack/TestMain.cpp defines
     # BOOST_TEST_MODULE and stays out of the batch (project convention).
     set_target_properties(bcos-evm-opstack-tests PROPERTIES UNITY_BUILD "ON")
     set_source_files_properties(opstack/TestMain.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)

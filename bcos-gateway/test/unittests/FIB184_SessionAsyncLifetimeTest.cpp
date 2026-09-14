@@ -33,9 +33,9 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
+#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SessionReadLoop.h"
-#include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/asio/error.hpp>
@@ -163,7 +163,7 @@ BOOST_AUTO_TEST_CASE(InFlightReadKeepsSessionAlive)
 {
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_Lifetime>();
-    auto messageFactory = std::make_shared<P2PMessageFactory>();
+    auto messageFactory = std::make_shared<MessageFactory>();
     auto fakeAsio = std::make_shared<FakeASIO_Lifetime>();
     auto fakeHost =
         std::make_shared<FakeHost_Lifetime>(hashImpl, fakeAsio, nullptr, messageFactory);
@@ -236,7 +236,7 @@ BOOST_AUTO_TEST_CASE(DropClosesSocketInlineWhenNetworkDown)
 {
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_Lifetime>();
-    auto messageFactory = std::make_shared<P2PMessageFactory>();
+    auto messageFactory = std::make_shared<MessageFactory>();
     auto fakeAsio = std::make_shared<FakeASIO_Lifetime>();
     auto fakeHost =
         std::make_shared<FakeHost_Lifetime>(hashImpl, fakeAsio, nullptr, messageFactory);
