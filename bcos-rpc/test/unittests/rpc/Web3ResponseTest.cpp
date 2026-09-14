@@ -603,9 +603,9 @@ BOOST_AUTO_TEST_CASE(canonicalBlockHashUsesTheRlpHashForOpHeaders)
     constexpr std::string_view c_opHeaderGoldenHash =
         "fb8ad653db984845f2d6e8271069d37e99da6454e798740654bacdebae7655ec";
     BOOST_CHECK_EQUAL(bcos::protocol::EthBlockHeader::computeHash(*header).hex(),
-        c_opHeaderGoldenHash);
+        std::string(c_opHeaderGoldenHash));
     BOOST_CHECK_EQUAL(
-        bcos::protocol::canonicalBlockHash(*header).hex(), c_opHeaderGoldenHash);
+        bcos::protocol::canonicalBlockHash(*header).hex(), std::string(c_opHeaderGoldenHash));
 }
 
 BOOST_AUTO_TEST_CASE(combineReceiptResponseAcceptsTheFiscoLaneAddressForm)

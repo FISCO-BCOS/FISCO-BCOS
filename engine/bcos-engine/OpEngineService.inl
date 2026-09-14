@@ -21,8 +21,8 @@
 
 // This is the DEFINITION half of the split: OpEngineService.h is declarations-only.
 // Including this.inl is the opt-in instantiation point — members use
-// the canonical block hash (bcos-rlp-protocol) and bcos::evm::opstack::estimatedDaSize. engine links
-// rlp-protocol PUBLIC so installed consumers inherit the include dirs;
+// the canonical block hash (bcos-rlp-protocol) and bcos::evm::opstack::estimatedDaSize.
+// engine links rlp-protocol PUBLIC so installed consumers inherit the include dirs;
 // instantiators still need to link bcos-evm-opstack.
 #include "OpEngineService.h"
 #include <bcos-evm/opstack/RollupCost.h>

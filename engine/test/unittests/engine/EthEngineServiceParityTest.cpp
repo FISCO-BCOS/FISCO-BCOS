@@ -1256,10 +1256,10 @@ BOOST_AUTO_TEST_CASE(mirror_forced_transactions_enter_payload_first)
 
     BOOST_CHECK_EQUAL(emptyPayload->executionPayload.receiptsRoot.hex(),
         bcos::ledger::mpt::emptyRootHash().hex());
-    BOOST_CHECK_NE(
-        singlePayload->executionPayload.receiptsRoot.hex(), emptyPayload->executionPayload.receiptsRoot.hex());
-    BOOST_CHECK_NE(
-        newPayload->executionPayload.receiptsRoot.hex(), singlePayload->executionPayload.receiptsRoot.hex());
+    auto const emptyRoot = emptyPayload->executionPayload.receiptsRoot.hex();
+    auto const singleRoot = singlePayload->executionPayload.receiptsRoot.hex();
+    BOOST_CHECK_NE(singleRoot, emptyRoot);
+    BOOST_CHECK_NE(newPayload->executionPayload.receiptsRoot.hex(), singleRoot);
 }
 
 BOOST_AUTO_TEST_CASE(mirror_no_tx_pool_excludes_mempool)

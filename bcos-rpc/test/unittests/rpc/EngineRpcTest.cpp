@@ -116,8 +116,8 @@ public:
         }
         if (m_state->throwBcosError)
         {
-            BOOST_THROW_EXCEPTION(
-                BCOS_ERROR(bcos::ledger::LedgerError::GetStorageError, "missing SYS_HASH_2_TX row"));
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(bcos::ledger::LedgerError::GetStorageError,
+                "missing SYS_HASH_2_TX row"));
         }
         co_return m_state->forkchoiceUpdatedResult;
     }
@@ -146,8 +146,8 @@ public:
         }
         if (m_state->throwBcosError)
         {
-            BOOST_THROW_EXCEPTION(
-                BCOS_ERROR(bcos::ledger::LedgerError::GetStorageError, "missing SYS_HASH_2_TX row"));
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(bcos::ledger::LedgerError::GetStorageError,
+                "missing SYS_HASH_2_TX row"));
         }
         co_return std::make_unique<engine::GetPayloadData>(*m_state->getPayloadResult);
     }
@@ -185,8 +185,8 @@ public:
         }
         if (m_state->throwBcosError)
         {
-            BOOST_THROW_EXCEPTION(
-                BCOS_ERROR(bcos::ledger::LedgerError::GetStorageError, "missing SYS_HASH_2_TX row"));
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(bcos::ledger::LedgerError::GetStorageError,
+                "missing SYS_HASH_2_TX row"));
         }
         co_return m_state->forkchoiceUpdatedResult.payloadStatus;
     }
