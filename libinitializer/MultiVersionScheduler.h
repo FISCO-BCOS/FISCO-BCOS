@@ -38,7 +38,8 @@ DERIVE_BCOS_EXCEPTION(ExecutorVersionNotSupported);
 /// it without depending on libinitializer); this keeps the scheduler_v1 spelling.
 constexpr static int ETHEREUM_EXECUTOR_VERSION = ledger::ETHEREUM_EXECUTOR_VERSION;
 
-/// executor_version >= this selects OP mode.
+/// executor_version == this selects OP mode; higher values are not a defined lane
+/// (LedgerInitializer refuses to boot above it).
 constexpr static int OPSTACK_EXECUTOR_VERSION = ledger::OPSTACK_EXECUTOR_VERSION;
 /// Version ordering invariant: OP sits strictly above the Ethereum executor.
 static_assert(OPSTACK_EXECUTOR_VERSION > ETHEREUM_EXECUTOR_VERSION,

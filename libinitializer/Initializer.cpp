@@ -367,14 +367,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         std::move(ethereumBlockHashLookup));
 
     // Read executor_version from the ledger before wiring schedulers or Engine API.
-    auto executorVersion = m_nodeConfig->executorVersion();
-    if (auto versionConfig = task::syncWait(ledger::getSystemConfig(
-            *m_ledger, magic_enum::enum_name(ledger::SystemConfig::executor_version))))
+    auto const onChainVersion =
+        readOnChainExecutorVersion(*m_ledger, m_nodeConfig->executorVersion());
+    if (onChainVersion.present)
     {
-        executorVersion = boost::lexical_cast<int>(std::get<0>(*versionConfig));
-        INITIALIZER_LOG(INFO) << "Use ledger executor version: " << executorVersion;
+        INITIALIZER_LOG(INFO) << "Use ledger executor version: " << onChainVersion.version;
     }
-    m_executorVersion = executorVersion;
+    m_executorVersion = onChainVersion.version;
 
     // v1 engine on executor_version < 2; Eth on 2; Op on exactly 3.
     const bool engineApiForV1Only = (m_executorVersion < scheduler_v1::ETHEREUM_EXECUTOR_VERSION);

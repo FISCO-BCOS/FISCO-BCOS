@@ -54,17 +54,35 @@ std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::buil
     // when the on-chain entry is absent. The Eth lane (executor_version == ETHEREUM) may
     // carry the same feature for an L2 state shape — that is Eth mode, not OP mode.
     {
-        int executorVersion = nodeConfig->executorVersion();
-        bcos::protocol::BlockNumber executorVersionActivation = 0;
-        if (auto versionCfg = bcos::task::syncWait(bcos::ledger::getSystemConfig(
-                *ledger, magic_enum::enum_name(bcos::ledger::SystemConfig::executor_version))))
-        {
-            executorVersion = boost::lexical_cast<int>(std::get<0>(*versionCfg));
-            executorVersionActivation = std::get<1>(*versionCfg);
-        }
+        auto const onChain = readOnChainExecutorVersion(*ledger, nodeConfig->executorVersion());
         bcos::scheduler_v1::validateOpModeGenesisOnly(
-            features, executorVersion, executorVersionActivation);
+            features, onChain.version, onChain.activation);
     }
 
     return ledger;
+}
+
+bcos::initializer::OnChainExecutorVersion bcos::initializer::readOnChainExecutorVersion(
+    bcos::ledger::LedgerInterface& ledger, int fallbackVersion)
+{
+    OnChainExecutorVersion result{.version = fallbackVersion};
+    auto const raw = bcos::task::syncWait(bcos::ledger::getSystemConfig(
+        ledger, magic_enum::enum_name(bcos::ledger::SystemConfig::executor_version)));
+    if (!raw.has_value())
+    {
+        return result;
+    }
+    try
+    {
+        result.version = boost::lexical_cast<int>(std::get<0>(*raw));
+    }
+    catch (boost::bad_lexical_cast const&)
+    {
+        BOOST_THROW_EXCEPTION(
+            bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                "on-chain executor_version is not an integer: '" + std::get<0>(*raw) + "'"));
+    }
+    result.activation = std::get<1>(*raw);
+    result.present = true;
+    return result;
 }

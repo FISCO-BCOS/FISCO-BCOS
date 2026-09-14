@@ -151,13 +151,13 @@ void bcos::scheduler_v1::MultiVersionScheduler::stop()
 void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
     int version, [[maybe_unused]] ledger::LedgerConfig::Ptr ledgerConfig)
 {
-    // OP mode is genesis-only (see scheduler_v1::validateOpModeGenesisOnly): once the chain is
-    // OP (feature_l2_ethereum_compat at genesis), a governance write that moves
-    // executor_version off OPSTACK_EXECUTOR_VERSION must not change the running executor.
-    // Keep the current executor and log loudly instead of switching — a throw here would halt
-    // the commit callbacks.
-    if (ledgerConfig &&
-        ledgerConfig->features().get(ledger::Features::Flag::feature_l2_ethereum_compat) &&
+    // OP mode is genesis-only (see scheduler_v1::validateOpModeGenesisOnly): a chain already
+    // RUNNING the OP executor must not be moved off it by a governance write. Keyed on the
+    // running slot, not on feature_l2_ethereum_compat — that flag is the ledger's L2 state
+    // shape and the Eth lane may carry it as well, so keying on it would freeze (and
+    // mislabel) an Eth-lane L2 chain. Keep the current executor and log loudly instead of
+    // switching: a throw here would halt the commit callbacks.
+    if (m_currentIndex == bcos::ledger::OPSTACK_EXECUTOR_VERSION &&
         version != bcos::ledger::OPSTACK_EXECUTOR_VERSION)
     {
         INITIALIZER_LOG(ERROR) << LOG_DESC(

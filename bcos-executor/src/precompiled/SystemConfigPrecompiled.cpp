@@ -113,18 +113,30 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
         [defaultCmp](int64_t _value, uint32_t version) {
             defaultCmp(magic_enum::enum_name(ledger::SystemConfig::executor_version), _value, 0,
                 version, BlockVersion::V3_15_0_VERSION);
-            // NOTE: deliberately no upper bound here. MultiVersionScheduler::setVersion
-            // keeps the node running when the value names an unwired or unknown executor,
-            // in two fail-open branches with different keep-behaviours: a value ABOVE the
-            // wired set saturates to the newest wired slot, while an in-range but unwired
-            // slot keeps the CURRENT scheduler — both log ERROR rather than throwing, so
-            // this per-block validator cannot halt a chain. Banning values here would be
-            // an unversioned consensus change (validate() runs inside block execution)
-            // that breaks replay/resync of historical blocks that set executor_version
-            // on the old binary. The hard guardrails live in node-local startup
-            // (Initializer refuses to boot a v2 chain without an on-chain
-            // evmc_revision, and an OP chain without the OP wiring), not in this
-            // per-block validator.
+            // OP mode is genesis-only: validateOpModeGenesisOnly refuses to boot an OP chain
+            // whose on-chain executor_version activation block is non-zero, and the genesis
+            // row is written by Ledger::buildGenesisBlock (activation 0) — never through this
+            // per-block validator. A mid-chain write to the OPSTACK slot would therefore land
+            // activation N+1 and make every node's NEXT START fail closed: the chain keeps
+            // producing and cannot be restarted. Refuse the value; version-gated on this
+            // release so replay/resync of pre-3.18 blocks that set it stays valid.
+            if (_value == bcos::ledger::OPSTACK_EXECUTOR_VERSION &&
+                versionCompareTo(version, BlockVersion::V3_18_0_VERSION) >= 0)
+            {
+                BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
+                                          "executor_version " + std::to_string(_value) +
+                                          " (the OPSTACK slot) is genesis-only and cannot be set "
+                                          "by a transaction: the resulting activation block "
+                                          "would make every node restart fail. Create the chain "
+                                          "with executor.version=3 instead"));
+            }
+            // NOTE: no other bound here. MultiVersionScheduler::setVersion keeps the node
+            // running when the value names an unwired or unknown executor, in two fail-open
+            // branches with different keep-behaviours: a value ABOVE the wired set saturates
+            // to the newest wired slot, while an in-range but unwired slot keeps the CURRENT
+            // scheduler — both log ERROR rather than throwing. The remaining hard guardrails
+            // live in node-local startup (Initializer refuses to boot a v2 chain without an
+            // on-chain evmc_revision, and an OP chain without the OP wiring).
         });
     // for compatibility
     // Note: the compatibility_version is not compatibility
