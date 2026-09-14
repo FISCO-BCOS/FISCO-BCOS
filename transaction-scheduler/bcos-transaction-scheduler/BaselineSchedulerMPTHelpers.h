@@ -154,6 +154,49 @@ inline void validateMPTFlagMatrix(bcos::ledger::Features const& features)
     }
 }
 
+/// OP mode (executor_version == OPSTACK_EXECUTOR_VERSION) is a genesis-only property: it is
+/// decided when the chain is created and cannot change afterwards. It requires the
+/// genesis-only feature_l2_ethereum_compat (the OP lane commits account state in MPT only),
+/// and executor_version must be genesis-bound (activation block 0). No higher
+/// executor_version is a defined lane.
+/// The converse does NOT hold: feature_l2_ethereum_compat is the LEDGER's L2 state shape,
+/// and the Ethereum lane (executor_version == ETHEREUM_EXECUTOR_VERSION) serves L2 chains
+/// with it — the pure-Ethereum executor on an MPT root, sealing through the consensus
+/// layer (the executor integration harness has covered that pairing since #5397). Such a
+/// chain is Eth mode, not OP mode; only the OP lane needs engine-driven production.
+inline void validateOpModeGenesisOnly(bcos::ledger::Features const& features, int executorVersion,
+    bcos::protocol::BlockNumber executorVersionActivation)
+{
+    using Flag = bcos::ledger::Features::Flag;
+    bool const flagOn = features.get(Flag::feature_l2_ethereum_compat);
+    bool const opMode = (executorVersion == bcos::ledger::OPSTACK_EXECUTOR_VERSION);
+    if (executorVersion > bcos::ledger::OPSTACK_EXECUTOR_VERSION)
+    {
+        BOOST_THROW_EXCEPTION(InvalidMPTFlagMatrix{} << bcos::errinfo_comment(
+                                  "executor_version " + std::to_string(executorVersion) +
+                                  " is above OPSTACK_EXECUTOR_VERSION; OP mode is exactly " +
+                                  std::to_string(bcos::ledger::OPSTACK_EXECUTOR_VERSION)));
+    }
+    if (opMode && !flagOn)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidMPTFlagMatrix{} << bcos::errinfo_comment(
+                "OP mode must be decided at chain creation: executor_version=" +
+                std::to_string(executorVersion) +
+                " (the OPSTACK slot) requires feature_l2_ethereum_compat=on, but it is off; "
+                "the OP lane commits account state in MPT only, so the flag is genesis-bound "
+                "with the mode"));
+    }
+    if (opMode && executorVersionActivation != 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidMPTFlagMatrix{} << bcos::errinfo_comment(
+                "executor_version is genesis-only in OP mode (activation block " +
+                std::to_string(executorVersionActivation) +
+                " != 0); it cannot be changed on a running chain -- start a new chain"));
+    }
+}
+
 /// XOR fold over flat storage — the legacy (non-MPT) state-root path, shared by the PBFT
 /// scheduler and the engine service. BOTH callers must pass @p features to Entry::hash: the
 /// v3.17 bugfix flag (bugfix_statestorage_hash_v3_17) changes the digest, so an

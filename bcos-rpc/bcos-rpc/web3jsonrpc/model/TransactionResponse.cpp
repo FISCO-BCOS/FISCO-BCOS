@@ -73,6 +73,15 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
         return;
     }
 
+    // Legacy (type-0) EVM transactions carry an EIP-155 `v` in geth's JSON encoding
+    // (chainId*2 + 35 + yParity, or 27 + yParity pre-EIP-155); typed transactions carry the
+    // raw yParity. Track the legacy case so the `v` emitted below matches geth. Emitting the
+    // raw yParity for a legacy tx makes go-ethereum's signature recovery fail with
+    // "invalid transaction v, r, s values", which stalls op-node (or any geth-based CL) as
+    // soon as a block contains a legacy transaction.
+    bool isLegacyEvmTx = false;
+    std::optional<uint64_t> legacyChainId;
+
     if (tx.type() == bcos::protocol::TransactionType::BCOSTransaction) [[unlikely]]
     {
         result["type"] = toQuantity(0);
@@ -134,6 +143,8 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
             result["maxFeePerGas"] = toQuantity(web3Tx.maxFeePerGas);
         }
         result["chainId"] = toQuantity(web3Tx.chainId.value_or(0));
+        isLegacyEvmTx = (web3Tx.type == TransactionType::Legacy);
+        legacyChainId = web3Tx.chainId;
         if (web3Tx.type == TransactionType::EIP4844)
         {
             result["maxFeePerBlobGas"] = toQuantity(web3Tx.maxFeePerBlobGas);
@@ -164,5 +175,16 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     }
     result["r"] = toQuantity(tx.signatureData().getCroppedData(0, 32));
     result["s"] = toQuantity(tx.signatureData().getCroppedData(32, 32));
-    result["v"] = toQuantity(tx.signatureData().getCroppedData(64, 1));
+    auto const parityRef = tx.signatureData().getCroppedData(64, 1);
+    uint64_t const yParity = parityRef.empty() ? 0 : static_cast<uint64_t>(parityRef[0]);
+    if (isLegacyEvmTx)
+    {
+        // EIP-155 (or pre-155 27/28) `v`, matching geth's RawSignatureValues for a legacy tx.
+        uint64_t const chainId = legacyChainId.value_or(0);
+        result["v"] = toQuantity(chainId != 0 ? chainId * 2 + 35 + yParity : 27 + yParity);
+    }
+    else
+    {
+        result["v"] = toQuantity(yParity);
+    }
 }

@@ -180,8 +180,6 @@ private:
     FrontServiceInitializer::Ptr m_frontServiceInitializer;
     bcos::IOServicePool::Ptr m_ioServicePool;
     bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState;
-    /// Built only in engine-driven mode, where the mempool is the pool a transaction enters.
-    std::shared_ptr<bcos::txvalidator::TxValidator> m_memPoolValidator;
     TxPoolInitializer::Ptr m_txpoolInitializer;
     PBFTInitializer::Ptr m_pbftInitializer;
 #ifdef WITH_LIGHTNODE
@@ -207,6 +205,8 @@ private:
     // if enable SeparateBlockAndState,txs and receipts will be stored in m_blockStorage
     bcos::storage::TransactionalStorageInterface::Ptr m_blockStorage = nullptr;
     std::shared_ptr<MemPoolInitializer> m_memPoolInitializer;
+    /// Built only in engine-driven mode, where the mempool is the pool a transaction enters.
+    std::shared_ptr<bcos::txvalidator::TxValidator> m_memPoolValidator;
     std::optional<oneapi::tbb::global_control> m_tbbGlobalControl;
 
     std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_baselineSchedulerHolder;

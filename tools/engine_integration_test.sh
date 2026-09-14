@@ -627,7 +627,11 @@ if [ -f "${PYTHON_SCRIPT}" ]; then
     python3 -c "import requests" 2>/dev/null || \
         pip3 install --quiet requests 2>/dev/null || \
         pip3 install --break-system-packages --quiet requests 2>/dev/null || true
-    if python3 "${PYTHON_SCRIPT}" "${RPC_URL}" "${WORK_DIR}/jwt.hex" 2>&1; then
+    # --deposit-rejected: this harness chain runs executor_version=2 (the Eth lane),
+    # where a 0x7e deposit envelope in payloadAttributes is a terminal INVALID
+    # (deposits are an OP-lane extension). The mock then runs its block flow without
+    # the forced deposit and pins the rejection with a dedicated negative case.
+    if python3 "${PYTHON_SCRIPT}" "${RPC_URL}" "${WORK_DIR}/jwt.hex" --deposit-rejected 2>&1; then
         log_info "Python tests passed"
         log_pass
     else

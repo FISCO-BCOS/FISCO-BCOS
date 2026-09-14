@@ -241,7 +241,7 @@ std::optional<std::string> validateOpBlobGasUsed(
 }  // namespace
 
 std::optional<bcostars::Transaction> opEnvelopeToTars(
-    bcos::bytes const& env, bcos::crypto::HashType const& txHash)
+    bcos::bytes const& env, bcos::crypto::HashType const& txHash, bool allowDeposit)
 {
     bcos::rpc::Web3Transaction web3Tx;
     bcos::bytesRef envRef{const_cast<bcos::byte*>(env.data()), env.size()};
@@ -250,6 +250,17 @@ std::optional<bcostars::Transaction> opEnvelopeToTars(
         return std::nullopt;
     }
     if (!envRef.empty())
+    {
+        return std::nullopt;
+    }
+    // Deposit envelopes are an OP-Stack extension: the OP lane must accept them (the
+    // CL submits deposits via payloadAttributes.transactions), but the shared decode
+    // must not admit 0x7e on the Eth lane — the type is invalid outside OP and no
+    // Eth client would re-execute the block, so executing one would fork the chain
+    // from every honest peer. The Eth build path answers this as undecodable, which
+    // updateForkchoice maps to a terminal INVALID — the same contract as any other
+    // inadmissible payload content.
+    if (web3Tx.type == bcos::rpc::TransactionType::Deposit && !allowDeposit)
     {
         return std::nullopt;
     }
@@ -409,7 +420,7 @@ bcos::protocol::BlockHeader::Ptr rebuildOpEthHeader(
 {
     // Intentionally NO setEthBlockVersion (unlike detail::finalizeEthBlockHeader): the OP
     // header is a FISCO BlockHeader whose ethBlockVersion stays NON_ETH, which is exactly
-    // the header class EthBlockHeader::computeHash documents itself for ("block-identity
+    // the canonical block hash documents itself for ("block-identity
     // hash for FISCO-native/OP headers... that validateHeader rejects"). The RLP encoding
     // cannot depend on that field: the ctor builds EthBlockHeaderData from field presence
     // (each optional fork field copied when set) and the shared codec encodes exactly the

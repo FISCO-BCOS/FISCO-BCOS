@@ -426,7 +426,8 @@ inline DecodableWeb3Tx makeDecodableWeb3Tx(
         auto err = bcos::codec::rlp::decode(ref, decoded);
         BOOST_REQUIRE(!err);
         BOOST_REQUIRE(ref.empty());
-        BOOST_REQUIRE(bcos::engine::engine_common::op::opEnvelopeToTars(raw, bcos::h256{}));
+        BOOST_REQUIRE(bcos::engine::engine_common::op::opEnvelopeToTars(
+            raw, bcos::h256{}, /*allowDeposit=*/true));
     }
     bcos::bytes signature(65, 0);
     std::copy(w3.signatureR.begin(), w3.signatureR.end(), signature.begin());
@@ -437,7 +438,8 @@ inline DecodableWeb3Tx makeDecodableWeb3Tx(
         reassembled = bcostars::protocol::reassembleWeb3RawTransaction(
             bcos::bytesConstRef(signPayload.data(), signPayload.size()),
             bcos::bytesConstRef(signature.data(), signature.size()));
-        BOOST_REQUIRE(bcos::engine::engine_common::op::opEnvelopeToTars(reassembled, bcos::h256{}));
+        BOOST_REQUIRE(bcos::engine::engine_common::op::opEnvelopeToTars(
+            reassembled, bcos::h256{}, /*allowDeposit=*/true));
     }
 
     auto tx = std::make_shared<TestTransactionImpl>();
@@ -1426,7 +1428,8 @@ struct ImportServiceFixtureT
             for (auto const& env : bcos::engine::detail::rawEnvelopes(request.executionPayload))
             {
                 auto const txHash = hashImpl.hash(env);
-                auto tarsTx = bcos::engine::engine_common::op::opEnvelopeToTars(env, txHash);
+                auto tarsTx = bcos::engine::engine_common::op::opEnvelopeToTars(
+                    env, txHash, /*allowDeposit=*/true);
                 BOOST_REQUIRE(tarsTx.has_value());
                 tarsTx->extraTransactionBytes.assign(env.begin(), env.end());
                 auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(

@@ -50,7 +50,9 @@ struct OpPayloadBusyReset
     }
 };
 
-/// Map unexpected service errors to -32603 without Boost diagnostics.
+/// Map unexpected service errors to a SHORT -32603: the reason is echoed so the operator can
+/// diagnose it, but boost's file/line diagnostics are not. EngineRpcTest pins both halves
+/// (isShortInternalError), so this is a deliberate contract, not an accident.
 [[noreturn]] void rethrowAsEngineInternalError(std::exception const& e)
 {
     auto const* what = e.what();

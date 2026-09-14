@@ -21,12 +21,13 @@
 
 // This is the DEFINITION half of the split: OpEngineService.h is declarations-only.
 // Including this.inl is the opt-in instantiation point — members use
-// EthBlockHeader::computeHash and bcos::evm::opstack::estimatedDaSize. engine links
+// the canonical block hash (bcos-rlp-protocol) and bcos::evm::opstack::estimatedDaSize. engine links
 // rlp-protocol PUBLIC so installed consumers inherit the include dirs;
 // instantiators still need to link bcos-evm-opstack.
 #include "OpEngineService.h"
 #include <bcos-evm/opstack/RollupCost.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
+#include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <opstack-executor/OpCommitments.h>
 
 #include <iterator>
@@ -54,30 +55,8 @@ inline auto rawEnvelopes(ExecutionPayload const& payload)
                [](EngineTransaction const& tx) -> bytes const& { return tx.raw; });
 }
 
-/// True when the OpExecutionInternalError carries the OpPayloadUndecodable tag:
-/// a payload-content fault (an envelope the CL submitted cannot be decoded),
-/// not a node-internal fault. Single predicate for both answer shapes — the FCU
-/// path maps it to an Invalid FCU status, the newPayload path to an Invalid
-/// PayloadStatus; any OTHER OpExecutionInternalError must keep propagating as
-/// -32603, never be flattened into a consensus INVALID.
-inline bool isUndecodablePayloadFault(OpExecutionInternalError const& error)
-{
-    return boost::get_error_info<OpPayloadUndecodable>(error) != nullptr;
-}
-
-inline std::optional<ForkchoiceUpdatedResult> fcuInvalidIfUndecodable(
-    OpExecutionInternalError const& error)
-{
-    if (!isUndecodablePayloadFault(error))
-    {
-        return std::nullopt;
-    }
-    return ForkchoiceUpdatedResult{
-        .payloadStatus = engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
-            std::string("undecodable payload transaction envelope")),
-        .payloadId = std::nullopt,
-    };
-}
+// isUndecodablePayloadFault / fcuInvalidIfUndecodable live in EngineServiceCommon.h
+// (namespace bcos::engine::detail) so the Eth build path maps the same fault the same way.
 }  // namespace detail
 
 template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
@@ -395,8 +374,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
     std::vector<bcos::bytes> decodedForcedTxs)
 {
-    // Same policy as EthEngineService (option B): deterministic derivePayloadId, not a
-    // process-local sequence counter. Reuse validate's decoded forced txs.
+    // Same policy as EthEngineService: deterministic derivePayloadId, not a process-local
+    // sequence counter. Reuse validate's decoded forced txs.
     // The id's version byte is the PAYLOAD SHAPE version (V3/V4-method → PayloadV3),
     // matching both the cache entry's version below and upstream: op-geth's
     // ForkchoiceUpdatedV3/V4 build the same PayloadV3 shape, so the same content under
@@ -720,6 +699,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     {
         payload.blobGasUsed = *executedBlobGas;
     }
+    // OP lane: EthBlockHeader::computeHash directly — pre-Canyon builds carry no
+    // withdrawalsRoot, so canonicalBlockHash would fall back to header.hash() and stop
+    // being the Ethereum RLP hash (pre-Bedrock/karst payloads must still verify).
     auto finalHeader = engine_common::op::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(),
         payload, SchedulerType::computeTxRoot(detail::rawEnvelopes(payload)), parentBeaconBlockRoot,
         ctx.forkId);
@@ -921,6 +903,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
     const auto ethHeader =
         engine_common::op::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(), payload,
             transactionsRoot, request.parentBeaconBlockRoot, ctx.forkId);
+    // Direct EthBlockHeader::computeHash, NOT canonicalBlockHash — pre-Canyon payloads
+    // (no withdrawalsRoot) must still verify against the eth RLP hash (see build path).
     if (bcos::protocol::EthBlockHeader::computeHash(*ethHeader) != payload.blockHash)
     {
         co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
@@ -2051,7 +2035,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpBloc
     for (auto const& env : detail::rawEnvelopes(payload))
     {
         const auto txHash = hashImpl.hash(env);
-        auto tarsTx = engine_common::op::opEnvelopeToTars(env, txHash);
+        // allowDeposit=true: the OP lane accepts 0x7e deposit envelopes — the CL submits
+        // them via payloadAttributes.transactions.
+        auto tarsTx = engine_common::op::opEnvelopeToTars(env, txHash, /*allowDeposit=*/true);
         if (!tarsTx)
         {
             BOOST_THROW_EXCEPTION(OpExecutionInternalError{}

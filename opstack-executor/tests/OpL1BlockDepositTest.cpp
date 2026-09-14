@@ -288,7 +288,7 @@ bcos::protocol::Transaction::Ptr buildFiscoTxFromEnvelope(
     bcos::bytes const& env, bcos::crypto::Hash::Ptr const& hashImpl)
 {
     auto txHash = hashImpl->hash(env);
-    auto tarsTx = bcos::engine::engine_common::op::opEnvelopeToTars(env, txHash);
+    auto tarsTx = bcos::engine::engine_common::op::opEnvelopeToTars(env, txHash, /*allowDeposit=*/true);
     if (!tarsTx)
         return nullptr;
     tarsTx->extraTransactionBytes.assign(env.begin(), env.end());

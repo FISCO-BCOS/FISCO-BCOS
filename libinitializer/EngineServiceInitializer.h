@@ -48,7 +48,12 @@ public:
         return initializer;
     }
 
-    /// OP path: OpSchedulerSeam + OpScheduler delegate.
+    /// OP path: OpSchedulerSeam + OpScheduler delegate. The OP engine keeps
+    /// ledger=nullptr (the OP scheduler owns the ledger) and no maxEngineVersion field —
+    /// the karst profile keys payload versions on the payload timestamp — so both
+    /// parameters are accepted here only to keep the boot call site explicit, and are
+    /// discarded by the holder below (merge note: engine-cutover wanted them removed
+    /// from the signature; karst keeps them as documented no-ops).
     template <class SchedulerType>
     static Ptr buildOp(std::shared_ptr<GlobalStateStorageInitializer> storageInitializer,
         bcos::protocol::BlockFactory::Ptr blockFactory, std::shared_ptr<SchedulerType> scheduler,

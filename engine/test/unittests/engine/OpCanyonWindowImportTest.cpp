@@ -141,7 +141,8 @@ struct CanyonWindowFixture
             for (auto const& env : bcos::engine::detail::rawEnvelopes(payload))
             {
                 auto const txHash = hashImpl.hash(env);
-                auto tarsTx = bcos::engine::engine_common::op::opEnvelopeToTars(env, txHash);
+                auto tarsTx = bcos::engine::engine_common::op::opEnvelopeToTars(
+                    env, txHash, /*allowDeposit=*/true);
                 BOOST_REQUIRE(tarsTx.has_value());
                 tarsTx->extraTransactionBytes.assign(env.begin(), env.end());
                 auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(

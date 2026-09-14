@@ -372,29 +372,32 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         std::move(ethereumBlockHashLookup));
 
     // Read executor_version from the ledger before wiring schedulers or Engine API.
-    auto executorVersion = m_nodeConfig->executorVersion();
-    if (auto versionConfig = task::syncWait(ledger::getSystemConfig(
-            *m_ledger, magic_enum::enum_name(ledger::SystemConfig::executor_version))))
+    // Shared helper (LedgerInitializer): an unparsable on-chain row is a diagnosable boot
+    // failure, not a bare bad_lexical_cast.
+    auto const onChainVersion =
+        readOnChainExecutorVersion(*m_ledger, m_nodeConfig->executorVersion());
+    if (onChainVersion.present)
     {
-        executorVersion = boost::lexical_cast<int>(std::get<0>(*versionConfig));
-        INITIALIZER_LOG(INFO) << "Use ledger executor version: " << executorVersion;
+        INITIALIZER_LOG(INFO) << "Use ledger executor version: " << onChainVersion.version;
     }
-    m_executorVersion = executorVersion;
+    m_executorVersion = onChainVersion.version;
 
-    // v1 engine on executor_version < 2; Eth on 2; Op on >= 3.
+    // v1 engine on executor_version < 2; Eth on 2; Op on >= 3 (karst: >= keeps any future
+    // OP-lane version in OP mode; engine-cutover's == pairing with a boot refusal above 3
+    // was not carried over since that refusal is not part of the merged tree).
     const bool engineApiForV1Only = (m_executorVersion < scheduler_v1::ETHEREUM_EXECUTOR_VERSION);
     const bool opStackMode = (m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION);
 
     // [op_engine_rpc] requires the v2 pure-Ethereum executor: on executor_version < 2 the
-    // endpoint would silently serve the v1 EngineService built below, and an external
-    // op-node — which trusts the EL and never cross-checks state roots — would drive a
-    // chain with v1 (non-Ethereum) semantics. Fail fast instead. The only exception is the
-    // explicit test-only escape hatch unsafe_allow_v1_executor, which the former v1 Engine
-    // API integration harness (tools/engine_integration_test.sh) set. The harness now runs
-    // executor_version=2 + evm_revision=cancun like production, and payload building in
-    // any case requires an on-chain EVM revision (buildPayload fails closed without one),
-    // so the escape hatch can no longer build payloads; production configs must never set
-    // it.
+    // endpoint would silently serve EthEngineService over the v1 TransactionExecutorImpl
+    // built below, and an external op-node — which trusts the EL and never cross-checks
+    // state roots — would drive a chain with v1 (non-Ethereum) semantics. Fail fast
+    // instead. The only exception is the explicit test-only escape hatch
+    // unsafe_allow_v1_executor, which the former v1 Engine API integration harness
+    // (tools/engine_integration_test.sh) set. The harness now runs executor_version=2 +
+    // evm_revision=cancun like production, and payload building in any case requires an
+    // on-chain EVM revision (buildPayload fails closed without one), so the escape hatch
+    // can no longer build payloads; production configs must never set it.
     if (m_nodeConfig->enableOpEngineRpc() && engineApiForV1Only)
     {
         if (!m_nodeConfig->opEngineAllowV1Executor())
@@ -409,8 +412,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                     "unsafe_allow_v1_executor=true"));
         }
         INITIALIZER_LOG(WARNING) << LOG_DESC(
-            "op_engine_rpc serving the v1 EngineService (unsafe_allow_v1_executor=true): "
-            "test-harness mode, never drive this endpoint with a production op-node");
+            "op_engine_rpc on executor_version < 2 serves EthEngineService over the v1 "
+            "TransactionExecutorImpl (unsafe_allow_v1_executor=true): test-harness mode, "
+            "never drive this endpoint with a production op-node");
     }
 
     if (baselineSchedulerConfig.parallel)
@@ -497,6 +501,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 ethereumExecutor, !m_nodeConfig->engineDrivenBlockProduction());
         // Engine-driven modes on the v2 EthereumExecutor (serial pipeline); see the parallel
         // branch above for why op_engine_rpc.enable also builds the EngineService here.
+        // executor_version=2 alone does NOT enable the Engine API: one of
+        // [consensus] enable_single_node_consensus or [op_engine_rpc] enable must be set.
         if (!engineApiForV1Only && !opStackMode &&
             (m_nodeConfig->enableSingleNodeConsensus() || m_nodeConfig->enableOpEngineRpc()))
         {
@@ -613,6 +619,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module
                                // switch to a leader during startup
+    // The dispatcher republishes the configuration after every commit, for every executor
+    // version; the holder was published once at boot when it was created.
     auto multiVersionScheduler = std::make_shared<scheduler_v1::MultiVersionScheduler>(
         std::to_array<scheduler::SchedulerInterface::Ptr>(
             {std::make_shared<bcos::scheduler::SchedulerManager>(
@@ -622,6 +630,11 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_opScheduler}),
         m_ledgerConfigState);
 
+    // m_executorVersion was resolved earlier (before the Engine API gate); apply it now.
+    // Governance may later write executor_version on-chain; MultiVersionScheduler::setVersion
+    // keeps the node running when the value names an unwired slot (fail-open by design).
+    // Operators must align genesis/boot config with on-chain executor_version — runtime
+    // drift is logged at ERROR when the ledger names a version this node cannot wire.
     INITIALIZER_LOG(INFO) << "Set executor version to: " << m_executorVersion;
     multiVersionScheduler->setVersion(m_executorVersion, {});
     m_scheduler = std::move(multiVersionScheduler);
@@ -642,6 +655,19 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             ledger::applyEVMCRevisionConfig(probe, std::get<0>(*evmcRev));
             INITIALIZER_LOG(INFO) << LOG_DESC("Effective EVMC revision (v2)")
                                   << LOG_KV("evmcRevision", std::get<0>(*evmcRev));
+            if (opStackMode)
+            {
+                // MERGE NOTE (engine-cutover-on-prereqs): that branch refused to boot when
+                // the on-chain evmc_revision mismatched the fork config's rev
+                // (configAt(forkFlags).rev). The karst line replaced the single global
+                // fork-config model with a timestamp-keyed OpForkSchedule, so there is no
+                // single "expected rev" to compare against at boot (different rungs carry
+                // different revs). The invariant is still enforced per block by
+                // OpstackExecutor::checkForkRevision (OpForkRevisionMismatch), and the
+                // schedule itself is validated above (InvalidOpForkSchedule refuses boot).
+                // A rev/fork mismatch therefore fails loudly on the first Engine API
+                // submission instead of at boot.
+            }
         }
         else
         {
