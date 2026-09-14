@@ -38,6 +38,7 @@
 #include "bcos-transaction-scheduler/EthereumBlockVerifier.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
 #include "bcos-rlp-protocol/EthBlockHeader.h"
+#include "bcos-rlp-protocol/EthGenesisHeader.h"
 #include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"  // complete type for shared_ptr upcast in decodeRaw()
 #include "bcos-task/Wait.h"
@@ -167,37 +168,13 @@ public:
 private:
     /// The chain-genesis anchor header, from [eth_genesis_header]. Used as the download
     /// anchor on a fresh node and pinned as the RLPx handshake genesisHash on every
-    /// resume. Fork-gated fields copy through only when the genesis header carries them,
-    /// so the anchor re-encodes to the byte-exact genesis RLP.
+    /// resume. The field mapping (fork-gated fields copy through only when the genesis
+    /// header carries them, so the anchor re-encodes to the byte-exact genesis RLP)
+    /// lives in rlp-protocol's toEthBlockHeaderData.
     bcos::protocol::EthBlockHeaderData genesisAnchorHeader() const
     {
-        auto const& genesis = m_nodeConfig->genesisConfig().m_ethGenesisHeader.value();
-        bcos::protocol::EthBlockHeaderData h;
-        h.parentInfo.blockHash = genesis.m_parentHash;
-        h.uncleHash = genesis.m_sha3Uncles;
-        h.stateRoot = genesis.m_stateRoot;
-        h.txsRoot = genesis.m_transactionsRoot;
-        h.receiptsRoot = genesis.m_receiptsRoot;
-        std::copy(genesis.m_logsBloom.begin(), genesis.m_logsBloom.end(), h.logsBloom.begin());
-        h.difficulty = genesis.m_difficulty;
-        h.gasLimit = genesis.m_gasLimit;
-        h.gasUsed = genesis.m_gasUsed;
-        h.number = 0;
-        h.timestamp = genesis.m_timestamp;
-        h.extraData = genesis.m_extraData;
-        std::copy(genesis.m_mixHash.begin(), genesis.m_mixHash.end(), h.prevRandao.begin());
-        std::copy(genesis.m_nonce.begin(), genesis.m_nonce.end(), h.nonce.begin());
-        h.coinbase = genesis.m_miner;
-        // Fork-gated fields: copy through only the ones the genesis header
-        // actually carries (nullopt stays nullopt), so the anchor re-encodes
-        // to the same byte-exact RLP as the committed genesis block.
-        h.baseFee = genesis.m_baseFeePerGas;
-        h.withdrawalsHash = genesis.m_withdrawalsRoot;
-        h.blobGasUsed = genesis.m_blobGasUsed;
-        h.excessBlobGas = genesis.m_excessBlobGas;
-        h.parentBeaconRoot = genesis.m_parentBeaconBlockRoot;
-        h.requestsHash = genesis.m_requestsHash;
-        return h;
+        return bcos::protocol::toEthBlockHeaderData(
+            m_nodeConfig->genesisConfig().m_ethGenesisHeader.value());
     }
 
     /// Resume point computed once per sync round: where to start downloading and
@@ -311,7 +288,8 @@ private:
         }
         // Timestamp-based forks, chained in activation order; an unscheduled tail
         // fork (UINT64_MAX) ends the ladder with next = 0 (see forkIdFromTimeLadder).
-        return bcos::devp2p::eth::forkIdFromTimeLadder(hash, _localHeadTime,
+        return bcos::devp2p::eth::forkIdFromTimeLadder(hash,
+            static_cast<uint64_t>(genesis.m_timestamp), _localHeadTime,
             {m_nodeConfig->ethereumForkShanghaiTime(), m_nodeConfig->ethereumForkCancunTime(),
                 m_nodeConfig->ethereumForkPragueTime(), m_nodeConfig->ethereumForkOsakaTime(),
                 m_nodeConfig->ethereumForkBpo1Time(), m_nodeConfig->ethereumForkBpo2Time()});
@@ -568,6 +546,13 @@ private:
         int64_t mismatchAnchor = -1;
         size_t mismatchStreak = 0;
 
+        // Caught-up backoff: when a whole round over the bootnode list yields no
+        // download window (and no peer failure), the local head sits inside every
+        // peer's finality window — retry after ~one block interval instead of the
+        // 3s behind-cadence, or a synced node re-dials ~14 bootnodes every 3s and
+        // trips geth's per-IP inbound dial throttle into WARNING spam.
+        constexpr std::chrono::seconds c_caughtUpBackoff{12};
+
         while (m_running.load())
         {
             try
@@ -590,6 +575,12 @@ private:
                 auto devp2pConfig = devp2pChainConfig();
                 auto bootnodes =
                     bcos::devp2p::sync::loadBootnodes(m_nodeConfig->ethereumBootnodesFile());
+                // Round progress tracking: a caught-up round (no peer offered a safe
+                // download window) backs off to c_caughtUpBackoff and stays quiet; a
+                // round with a download — or with peer failures, which already log a
+                // WARNING each — keeps the 3s retry cadence.
+                bool madeProgress = false;
+                bool anyPeerFailed = false;
                 for (auto const& peer : bootnodes)
                 {
                     if (!m_running.load())
@@ -622,12 +613,16 @@ private:
                             static_cast<uint64_t>(resume.anchor.timestamp));
 
                         bcos::devp2p::rlpx::RlpxClient client(localKey, clientConfig);
-                        INITIALIZER_LOG(INFO)
+                        // DEBUG: in steady state (caught up) the loop re-dials every
+                        // bootnode each round — per-peer connect/handshake noise at
+                        // INFO would drown the log; the download path below logs its
+                        // own INFO with the peer's host/port.
+                        INITIALIZER_LOG(DEBUG)
                             << LOG_DESC("EL sync: connecting to bootnode")
                             << LOG_KV("host", peer.host) << LOG_KV("port", peer.port)
                             << LOG_KV("startNumber", resume.startNumber);
                         auto established = client.connect();
-                        INITIALIZER_LOG(INFO)
+                        INITIALIZER_LOG(DEBUG)
                             << LOG_DESC("EL sync: handshake OK")
                             << LOG_KV("host", peer.host) << LOG_KV("port", peer.port)
                             << LOG_KV("peerHead",
@@ -669,7 +664,9 @@ private:
                             // serve the by-hash lookup, or we are already inside the
                             // finality window (caught up). Leave the committed chain
                             // untouched and try the next bootnode / retry next round.
-                            INITIALIZER_LOG(INFO)
+                            // DEBUG: this is the steady-state path — the caught-up
+                            // state itself is logged once per round below.
+                            INITIALIZER_LOG(DEBUG)
                                 << LOG_DESC("EL sync: no safe download window")
                                 << LOG_KV("startNumber", resume.startNumber)
                                 << LOG_KV("peerHeadNumber", peerHead ? peerHead->number() : 0)
@@ -677,9 +674,11 @@ private:
                                     established.peerStatus.headHash.hex().substr(0, 18));
                             continue;
                         }
+                        madeProgress = true;
                         uint64_t const downloadCount = downloadEnd - resume.startNumber + 1;
                         INITIALIZER_LOG(INFO)
                             << LOG_DESC("EL sync: starting bounded download")
+                            << LOG_KV("host", peer.host) << LOG_KV("port", peer.port)
                             << LOG_KV("startNumber", resume.startNumber)
                             << LOG_KV("downloadEnd", downloadEnd)
                             << LOG_KV("downloadCount", downloadCount)
@@ -761,6 +760,7 @@ private:
                     }
                     catch (std::exception const& e)
                     {
+                        anyPeerFailed = true;
                         if (std::string(e.what()).find("parent hash mismatch") !=
                             std::string::npos)
                         {
@@ -794,7 +794,22 @@ private:
                 // One full pass over the bootnode list: pause briefly before checking for
                 // new blocks again (a successful download already advanced the local head;
                 // the next round resumes from there).
-                std::this_thread::sleep_for(std::chrono::seconds(3));
+                if (madeProgress || anyPeerFailed)
+                {
+                    std::this_thread::sleep_for(std::chrono::seconds(3));
+                }
+                else
+                {
+                    // Caught up: no peer offered a safe download window and none failed,
+                    // so the local head sits inside every bootnode's finality window.
+                    // Back off to ~one block interval and log the state once per round
+                    // instead of per-peer-per-round.
+                    INITIALIZER_LOG(INFO)
+                        << LOG_DESC("EL sync: caught up with the bootnode tips")
+                        << LOG_KV("headNumber", resume.anchor.number)
+                        << LOG_KV("retrySeconds", c_caughtUpBackoff.count());
+                    std::this_thread::sleep_for(c_caughtUpBackoff);
+                }
             }
             catch (std::exception const& e)
             {

@@ -42,6 +42,7 @@
 #include "bcos-tars-protocol/protocol/Web3RawTransaction.h"
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-scheduler/EthereumBlockVerifier.h"
+#include "bcos-transaction-scheduler/EthereumSystemCalls.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "ethereum-executor/EthereumExecutor.h"
@@ -134,6 +135,15 @@ evmc::bytes32 EEBVBytes32FromH256(bcos::h256 const& hash)
     return out;
 }
 
+/// An address as a 32-byte storage word (left-padded), the way the EIP-7002/7251
+/// contracts store msg.sender in their queue slots.
+evmc::bytes32 EEBVBytes32FromAddress(evmc_address const& addr)
+{
+    evmc::bytes32 out{};
+    std::memcpy(out.bytes + 12, addr.bytes, sizeof(addr.bytes));
+    return out;
+}
+
 /// Deploy contract code directly into the state (the way the system contracts got
 /// their code: ordinary pre-fork deployment transactions — the test shortcuts the
 /// deployment tx and writes the code row itself).
@@ -182,11 +192,51 @@ constexpr std::string_view kEEBVHistoryStorageAddress = "0000F90827F1C53A10CB7A0
 constexpr std::string_view kEEBVHistoryStorageCode =
     "3373fffffffffffffffffffffffffffffffffffffffe14604657602036036042575f35600143038111604257"
     "611fff81430311604257611fff9006545f5260205ff35b5f5ffd5b5f35611fff60014303065500";
-// EIP-7002 / EIP-7251 request contracts (Prague): a bare STOP stands in — the call
-// succeeds with empty output, so the contracts produce no requests and no state.
+// EIP-7002 / EIP-7251 request contracts (Prague): the real runtime code — each EIP's
+// deployment-transaction input minus its 45-byte init prefix (the "Deployment" sections
+// of https://eips.ethereum.org/EIPS/eip-7002 and .../eip-7251; the prefix also SSTOREs
+// the 2**256-1 EXCESS_INHIBITOR into slot 0, which the test seeds explicitly instead) —
+// plus the spec slot layout both contracts share: excess(0), count(1), queue head(2),
+// queue tail(3), queue entries from slot 4 (3 slots per withdrawal request, 4 per
+// consolidation request). The block-end system call resets count every block, zeroes
+// head/tail when the queue drains, and decays excess towards zero — all zero-value
+// write-backs over slots present in the parent state.
 constexpr std::string_view kEEBVWithdrawalRequestAddress = "00000961EF480EB55E80D19AD83579A64C007002";
 constexpr std::string_view kEEBVConsolidationRequestAddress =
     "0000BBDDC7CE488642FB579F8B00F3A590007251";
+constexpr std::string_view kEEBVWithdrawalRequestCode =
+    "3373fffffffffffffffffffffffffffffffffffffffe1460cb5760115f54807fffffffffffffffff"
+    "ffffffffffffffffffffffffffffffffffffffffffffffff146101f457600182026001905f5b5f82"
+    "111560685781019083028483029004916001019190604d565b909390049250505036603814608857"
+    "366101f457346101f4575f5260205ff35b34106101f4576001546001016001556003548060030260"
+    "04013381556001015f35815560010160203590553360601b5f5260385f601437604c5fa060010160"
+    "0355005b6003546002548082038060101160df575060105b5f5b8181146101835782810160030260"
+    "040181604c02815460601b8152601401816001015481526020019060020154807fffffffffffffff"
+    "ffffffffffffffffff00000000000000000000000000000000168252906010019060401c90816038"
+    "1c81600701538160301c81600601538160281c81600501538160201c81600401538160181c816003"
+    "01538160101c81600201538160081c81600101535360010160e1565b910180921461019557906002"
+    "556101a0565b90505f6002555f6003555b5f54807fffffffffffffffffffffffffffffffffffffff"
+    "ffffffffffffffffffffffffff14156101cd57505f5b6001546002828201116101e25750505f6101"
+    "e8565b01600290035b5f555f600155604c025ff35b5f5ffd";
+constexpr std::string_view kEEBVConsolidationRequestCode =
+    "3373fffffffffffffffffffffffffffffffffffffffe1460d35760115f54807fffffffffffffffff"
+    "ffffffffffffffffffffffffffffffffffffffffffffffff1461019a57600182026001905f5b5f82"
+    "111560685781019083028483029004916001019190604d565b909390049250505036606014608857"
+    "3661019a573461019a575f5260205ff35b341061019a576001546001016001556003548060040260"
+    "04013381556001015f358155600101602035815560010160403590553360601b5f5260605f601437"
+    "60745fa0600101600355005b6003546002548082038060021160e7575060025b5f5b818114610129"
+    "5782810160040260040181607402815460601b815260140181600101548152602001816002015481"
+    "526020019060030154905260010160e9565b910180921461013b5790600255610146565b90505f60"
+    "02555f6003555b5f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    "ffffff141561017357505f5b6001546001828201116101885750505f61018e565b01600190035b5f"
+    "555f6001556074025ff35b5f5ffd";
+constexpr uint64_t kEEBVRequestExcessSlot = 0;
+constexpr uint64_t kEEBVRequestCountSlot = 1;
+constexpr uint64_t kEEBVRequestQueueHeadSlot = 2;
+constexpr uint64_t kEEBVRequestQueueTailSlot = 3;
+constexpr uint64_t kEEBVRequestQueueStorageOffset = 4;
+constexpr uint64_t kEEBVWithdrawalEntrySlots = 3;
+constexpr uint64_t kEEBVConsolidationEntrySlots = 4;
 constexpr uint64_t kEEBVHistoryBufferLength = 8191;
 
 task::Task<void> EEBVWriteBlockHash(
@@ -917,9 +967,15 @@ BOOST_FIXTURE_TEST_CASE(cancunBeaconRootsMissingCodeSkipsSilently, EEBVFixture)
 }
 
 // Prague block through verifyAndCommit: block-start runs BOTH EIP-4788 and EIP-2935
-// (the parent block hash lands in the history-storage contract), and block-end runs
-// EIP-7002/7251 (bare-STOP stand-ins: succeed with empty output, no state). The state
-// root is cross-checked against independent manual slot applications.
+// (the parent block hash lands in the history-storage contract), and block-end runs the
+// REAL EIP-7002/7251 runtime code against seeded queue state, so the system call writes
+// zeros back over non-zero parent slots (count reset, queue head/tail cleared when the
+// queue drains, excess decaying to zero). That drives the zero-value write-back path
+// (Storage2State::applyModifiedEntry -> storage2::removeOne -> DELETED tombstone ->
+// incremental MPT build) end to end through the real system contracts. The state root
+// is cross-checked against independent manual slot applications, the committed state is
+// checked for the deleted slots, and the returned EIP-7685 requests are asserted
+// against the seeded queue entries through a direct applyBlockEndSystemCalls probe.
 BOOST_FIXTURE_TEST_CASE(pragueSystemCallsVerify, EEBVFixture)
 {
     task::syncWait([&, this]() -> task::Task<void> {
@@ -930,6 +986,8 @@ BOOST_FIXTURE_TEST_CASE(pragueSystemCallsVerify, EEBVFixture)
         auto recipient = EEBVAddress(0x21);
         auto beaconRoots = EEBVAddressFromHex(kEEBVBeaconRootsAddress);
         auto historyStorage = EEBVAddressFromHex(kEEBVHistoryStorageAddress);
+        auto withdrawalRequest = EEBVAddressFromHex(kEEBVWithdrawalRequestAddress);
+        auto consolidationRequest = EEBVAddressFromHex(kEEBVConsolidationRequestAddress);
 
         co_await EEBVFundAccount(backendStorage, sender, EEBVFunding);
         co_await EEBVFundAccount(backendStorage, recipient, 0);
@@ -937,10 +995,78 @@ BOOST_FIXTURE_TEST_CASE(pragueSystemCallsVerify, EEBVFixture)
             backendStorage, beaconRoots, bcos::fromHex(std::string(kEEBVBeaconRootsCode)));
         co_await EEBVDeployCode(
             backendStorage, historyStorage, bcos::fromHex(std::string(kEEBVHistoryStorageCode)));
-        co_await EEBVDeployCode(backendStorage,
-            EEBVAddressFromHex(kEEBVWithdrawalRequestAddress), bcos::bytes{0x00});
-        co_await EEBVDeployCode(backendStorage,
-            EEBVAddressFromHex(kEEBVConsolidationRequestAddress), bcos::bytes{0x00});
+        co_await EEBVDeployCode(backendStorage, withdrawalRequest,
+            bcos::fromHex(std::string(kEEBVWithdrawalRequestCode)));
+        co_await EEBVDeployCode(backendStorage, consolidationRequest,
+            bcos::fromHex(std::string(kEEBVConsolidationRequestCode)));
+
+        // Seed both request contracts with a parent state that forces the block-end
+        // system call to write zeros back over NON-ZERO slots: one pending request at
+        // queue index 1 (head=1, tail=2 — both reset to 0 when the queue drains) and
+        // excess/count values that decay to 0. The queue body slots stay non-zero
+        // (dequeue does not clear them).
+        auto withdrawalSource = EEBVAddress(0x31);
+        auto consolidationSource = EEBVAddress(0x32);
+        auto withdrawalPubkey0 =
+            EEBVBytes32FromH256(cryptoSuite->hashImpl()->hash(std::string("wr-pubkey0")));
+        auto consolidationSrcPubkey0 =
+            EEBVBytes32FromH256(cryptoSuite->hashImpl()->hash(std::string("cr-spubkey0")));
+        auto consolidationTgtPubkey1 =
+            EEBVBytes32FromH256(cryptoSuite->hashImpl()->hash(std::string("cr-tpubkey1")));
+        // Withdrawal entry slot +2, as the real add path stores it: pubkey[32:48] ++
+        // the caller-supplied BIG-endian uint64 amount (the request returns it
+        // little-endian) ++ zero padding.
+        evmc::bytes32 withdrawalEntry2{};
+        for (int i = 0; i < 16; ++i)
+        {
+            withdrawalEntry2.bytes[i] = static_cast<uint8_t>(0xa0 + i);
+        }
+        for (int i = 0; i < 8; ++i)
+        {
+            withdrawalEntry2.bytes[16 + i] = static_cast<uint8_t>(i + 1);  // 0x0102030405060708
+        }
+        // Consolidation entry slot +2: source pubkey[32:48] ++ target pubkey[0:16].
+        evmc::bytes32 consolidationEntry2{};
+        for (int i = 0; i < 16; ++i)
+        {
+            consolidationEntry2.bytes[i] = static_cast<uint8_t>(0xb0 + i);
+            consolidationEntry2.bytes[16 + i] = static_cast<uint8_t>(0xc0 + i);
+        }
+        const uint64_t kQueueIndex = 1;
+        const uint64_t kWithdrawalEntrySlot =
+            kEEBVRequestQueueStorageOffset + kQueueIndex * kEEBVWithdrawalEntrySlots;
+        const uint64_t kConsolidationEntrySlot =
+            kEEBVRequestQueueStorageOffset + kQueueIndex * kEEBVConsolidationEntrySlots;
+        co_await EEBVWriteSlot(backendStorage, withdrawalRequest, kEEBVRequestExcessSlot,
+            EEBVBytes32FromU64(1));
+        co_await EEBVWriteSlot(backendStorage, withdrawalRequest, kEEBVRequestCountSlot,
+            EEBVBytes32FromU64(1));
+        co_await EEBVWriteSlot(backendStorage, withdrawalRequest, kEEBVRequestQueueHeadSlot,
+            EEBVBytes32FromU64(kQueueIndex));
+        co_await EEBVWriteSlot(backendStorage, withdrawalRequest, kEEBVRequestQueueTailSlot,
+            EEBVBytes32FromU64(kQueueIndex + 1));
+        co_await EEBVWriteSlot(backendStorage, withdrawalRequest, kWithdrawalEntrySlot,
+            EEBVBytes32FromAddress(withdrawalSource));
+        co_await EEBVWriteSlot(
+            backendStorage, withdrawalRequest, kWithdrawalEntrySlot + 1, withdrawalPubkey0);
+        co_await EEBVWriteSlot(
+            backendStorage, withdrawalRequest, kWithdrawalEntrySlot + 2, withdrawalEntry2);
+        // 7251's TARGET is 1, so excess=1 + count=0 also decays to zero (seeding
+        // count=1 would leave excess at 1); the count reset is covered on the 7002 side.
+        co_await EEBVWriteSlot(backendStorage, consolidationRequest, kEEBVRequestExcessSlot,
+            EEBVBytes32FromU64(1));
+        co_await EEBVWriteSlot(backendStorage, consolidationRequest, kEEBVRequestQueueHeadSlot,
+            EEBVBytes32FromU64(kQueueIndex));
+        co_await EEBVWriteSlot(backendStorage, consolidationRequest, kEEBVRequestQueueTailSlot,
+            EEBVBytes32FromU64(kQueueIndex + 1));
+        co_await EEBVWriteSlot(backendStorage, consolidationRequest, kConsolidationEntrySlot,
+            EEBVBytes32FromAddress(consolidationSource));
+        co_await EEBVWriteSlot(backendStorage, consolidationRequest,
+            kConsolidationEntrySlot + 1, consolidationSrcPubkey0);
+        co_await EEBVWriteSlot(backendStorage, consolidationRequest,
+            kConsolidationEntrySlot + 2, consolidationEntry2);
+        co_await EEBVWriteSlot(backendStorage, consolidationRequest,
+            kConsolidationEntrySlot + 3, consolidationTgtPubkey1);
 
         auto genesisHash = cryptoSuite->hashImpl()->hash(std::string("genesis"));
         co_await EEBVWriteBlockHash(backendStorage, 0, genesisHash);
@@ -992,6 +1118,24 @@ BOOST_FIXTURE_TEST_CASE(pragueSystemCallsVerify, EEBVFixture)
             EEBVBytes32FromH256(kParentBeaconRoot));
         // EIP-2935: slot (number-1) % 8191 <- parent block hash (block 1 -> slot 0).
         co_await EEBVWriteSlot(view, historyStorage, 0, EEBVBytes32FromH256(genesisHash));
+        // EIP-7002 block-end oracle: the queue (one request at index 1) drains, so head
+        // and tail reset to 0; excess 1 + count 1 is not above TARGET(2), so excess
+        // resets to 0; count resets to 0. Every write lands zero on a non-zero parent
+        // slot — the queue body slots are untouched by the dequeue.
+        co_await EEBVWriteSlot(view, withdrawalRequest, kEEBVRequestExcessSlot, evmc::bytes32{});
+        co_await EEBVWriteSlot(view, withdrawalRequest, kEEBVRequestCountSlot, evmc::bytes32{});
+        co_await EEBVWriteSlot(
+            view, withdrawalRequest, kEEBVRequestQueueHeadSlot, evmc::bytes32{});
+        co_await EEBVWriteSlot(
+            view, withdrawalRequest, kEEBVRequestQueueTailSlot, evmc::bytes32{});
+        // EIP-7251 block-end oracle: excess 1 + count 0 is not above TARGET(1), so
+        // excess resets to 0; the drained queue's head/tail reset to 0.
+        co_await EEBVWriteSlot(
+            view, consolidationRequest, kEEBVRequestExcessSlot, evmc::bytes32{});
+        co_await EEBVWriteSlot(
+            view, consolidationRequest, kEEBVRequestQueueHeadSlot, evmc::bytes32{});
+        co_await EEBVWriteSlot(
+            view, consolidationRequest, kEEBVRequestQueueTailSlot, evmc::bytes32{});
 
         auto computation =
             co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
@@ -1020,6 +1164,48 @@ BOOST_FIXTURE_TEST_CASE(pragueSystemCallsVerify, EEBVFixture)
         ethHeader.blobGasUsed = u256(0);
         ethHeader.excessBlobGas = u256(0);
         ethHeader.parentBeaconRoot = kParentBeaconRoot;
+
+        // The returned EIP-7685 requests never leave verifyAndCommit (the requestsHash
+        // cross-check is a documented leftover there), so probe the block-end path
+        // directly on a throwaway fork: the real contracts must return the seeded
+        // queue entries as requests.
+        auto probeView = multiLayerStorage.fork();
+        probeView.newMutable();
+        auto blockEnd =
+            applyBlockEndSystemCalls(probeView, executor->vm(), ethHeader, EVMC_PRAGUE);
+        BOOST_REQUIRE(!blockEnd.error.has_value());
+        BOOST_REQUIRE_EQUAL(blockEnd.requests.size(), 2u);
+        BOOST_CHECK(blockEnd.requests[0].type() == evmone::state::Requests::Type::withdrawal);
+        BOOST_CHECK(blockEnd.requests[1].type() == evmone::state::Requests::Type::consolidation);
+        // Withdrawal request: source(20) ++ pubkey(48) ++ amount(uint64 little-endian).
+        bcos::bytes expectedWithdrawal;
+        expectedWithdrawal.insert(expectedWithdrawal.end(), std::begin(withdrawalSource.bytes),
+            std::end(withdrawalSource.bytes));
+        expectedWithdrawal.insert(expectedWithdrawal.end(), std::begin(withdrawalPubkey0.bytes),
+            std::end(withdrawalPubkey0.bytes));
+        expectedWithdrawal.insert(expectedWithdrawal.end(), std::begin(withdrawalEntry2.bytes),
+            std::begin(withdrawalEntry2.bytes) + 16);
+        for (int i = 0; i < 8; ++i)
+        {
+            expectedWithdrawal.push_back(static_cast<bcos::byte>(8 - i));  // amount, little-endian
+        }
+        BOOST_CHECK_EQUAL_COLLECTIONS(blockEnd.requests[0].data().begin(),
+            blockEnd.requests[0].data().end(), expectedWithdrawal.begin(),
+            expectedWithdrawal.end());
+        // Consolidation request: source(20) ++ source pubkey(48) ++ target pubkey(48) —
+        // the queue slots verbatim.
+        bcos::bytes expectedConsolidation;
+        expectedConsolidation.insert(expectedConsolidation.end(),
+            std::begin(consolidationSource.bytes), std::end(consolidationSource.bytes));
+        expectedConsolidation.insert(expectedConsolidation.end(),
+            std::begin(consolidationSrcPubkey0.bytes), std::end(consolidationSrcPubkey0.bytes));
+        expectedConsolidation.insert(expectedConsolidation.end(),
+            std::begin(consolidationEntry2.bytes), std::end(consolidationEntry2.bytes));
+        expectedConsolidation.insert(expectedConsolidation.end(),
+            std::begin(consolidationTgtPubkey1.bytes), std::end(consolidationTgtPubkey1.bytes));
+        BOOST_CHECK_EQUAL_COLLECTIONS(blockEnd.requests[1].data().begin(),
+            blockEnd.requests[1].data().end(), expectedConsolidation.begin(),
+            expectedConsolidation.end());
 
         auto fakeLedger = std::make_shared<bcos::test::FakeLedger>();
         scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor> verifier(
@@ -1053,6 +1239,36 @@ BOOST_FIXTURE_TEST_CASE(pragueSystemCallsVerify, EEBVFixture)
         auto committedParentHash =
             co_await EEBVReadSlot(multiLayerStorage.latestBackend(), historyStorage, 0);
         BOOST_CHECK(committedParentHash == EEBVBytes32FromH256(genesisHash));
+
+        // The zeroed slots must be GONE from the committed state (the zero write-backs
+        // became DELETED tombstones and merged), not lingering zero rows — and the
+        // untouched queue bodies must survive the commit.
+        for (auto slot : {kEEBVRequestExcessSlot, kEEBVRequestCountSlot,
+                 kEEBVRequestQueueHeadSlot, kEEBVRequestQueueTailSlot})
+        {
+            auto committed = co_await EEBVReadSlot(
+                multiLayerStorage.latestBackend(), withdrawalRequest, slot);
+            BOOST_CHECK(committed == evmc::bytes32{});
+        }
+        for (auto slot : {kEEBVRequestExcessSlot, kEEBVRequestQueueHeadSlot,
+                 kEEBVRequestQueueTailSlot})
+        {
+            auto committed = co_await EEBVReadSlot(
+                multiLayerStorage.latestBackend(), consolidationRequest, slot);
+            BOOST_CHECK(committed == evmc::bytes32{});
+        }
+        auto committedWithdrawalPubkey = co_await EEBVReadSlot(
+            multiLayerStorage.latestBackend(), withdrawalRequest, kWithdrawalEntrySlot + 1);
+        BOOST_CHECK(committedWithdrawalPubkey == withdrawalPubkey0);
+        auto committedWithdrawalAmount = co_await EEBVReadSlot(
+            multiLayerStorage.latestBackend(), withdrawalRequest, kWithdrawalEntrySlot + 2);
+        BOOST_CHECK(committedWithdrawalAmount == withdrawalEntry2);
+        auto committedConsolidationEntry = co_await EEBVReadSlot(
+            multiLayerStorage.latestBackend(), consolidationRequest, kConsolidationEntrySlot + 2);
+        BOOST_CHECK(committedConsolidationEntry == consolidationEntry2);
+        auto committedConsolidationTgt = co_await EEBVReadSlot(
+            multiLayerStorage.latestBackend(), consolidationRequest, kConsolidationEntrySlot + 3);
+        BOOST_CHECK(committedConsolidationTgt == consolidationTgtPubkey1);
     }());
 }
 

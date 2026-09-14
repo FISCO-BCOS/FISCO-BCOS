@@ -277,7 +277,8 @@ BOOST_AUTO_TEST_CASE(forkIdMainnetChain)
 BOOST_AUTO_TEST_CASE(forkIdLadderAllPassed)
 {
     // Sepolia-style ladder (shanghai..bpo2) all in the past for the local head.
-    auto forkId = eth::forkIdFromTimeLadder(0x12345678u, 1765000000ull,
+    // Genesis timestamp is Sepolia's real one (1633267481), below every fork point.
+    auto forkId = eth::forkIdFromTimeLadder(0x12345678u, 1633267481ull, 1765000000ull,
         {1677557088ull, 1706655072ull, 1741159776ull, 1760427360ull, 1761017184ull,
             1761607008ull});
     // Every fork point was chained into the checksum.
@@ -295,7 +296,7 @@ BOOST_AUTO_TEST_CASE(forkIdLadderAllPassed)
 // is chained.
 BOOST_AUTO_TEST_CASE(forkIdLadderFutureForkAnnounced)
 {
-    auto forkId = eth::forkIdFromTimeLadder(0u, 1700000000ull,
+    auto forkId = eth::forkIdFromTimeLadder(0u, 1633267481ull /*genesis*/, 1700000000ull,
         {1677557088ull /*passed*/, 1706655072ull /*future*/, 1741159776ull /*further*/});
     uint32_t expected = eth::forkIdAddForkPoint(0u, 1677557088ull);
     BOOST_CHECK_EQUAL(forkId.hash, expected);
@@ -308,7 +309,7 @@ BOOST_AUTO_TEST_CASE(forkIdLadderFutureForkAnnounced)
 BOOST_AUTO_TEST_CASE(forkIdLadderOmittedTailFork)
 {
     // Only scheduled up to Prague; osaka/bpo1/bpo2 are absent (UINT64_MAX).
-    auto forkId = eth::forkIdFromTimeLadder(0x12345678u, 1760000000ull,
+    auto forkId = eth::forkIdFromTimeLadder(0x12345678u, 1633267481ull, 1760000000ull,
         {1677557088ull, 1706655072ull, 1741159776ull,
             std::numeric_limits<uint64_t>::max(), std::numeric_limits<uint64_t>::max(),
             std::numeric_limits<uint64_t>::max()});
@@ -323,7 +324,7 @@ BOOST_AUTO_TEST_CASE(forkIdLadderOmittedTailFork)
 
     // A node whose head has not passed Prague yet still announces Prague as next,
     // even when the post-Prague tail is unscheduled.
-    auto beforePrague = eth::forkIdFromTimeLadder(0x12345678u, 1740000000ull,
+    auto beforePrague = eth::forkIdFromTimeLadder(0x12345678u, 1633267481ull, 1740000000ull,
         {1677557088ull, 1706655072ull, 1741159776ull,
             std::numeric_limits<uint64_t>::max(), std::numeric_limits<uint64_t>::max(),
             std::numeric_limits<uint64_t>::max()});
@@ -339,11 +340,41 @@ BOOST_AUTO_TEST_CASE(forkIdLadderOmittedTailFork)
 // forkIdFromTimeLadder: 0 (active from genesis) is never a fork-id point.
 BOOST_AUTO_TEST_CASE(forkIdLadderZeroSkipped)
 {
-    auto forkId = eth::forkIdFromTimeLadder(0x12345678u, 1760000000ull,
+    auto forkId = eth::forkIdFromTimeLadder(0x12345678u, 1633267481ull, 1760000000ull,
         {0 /*london at genesis*/, 1677557088ull, 0 /*another at-genesis fork*/});
     uint32_t expected = eth::forkIdAddForkPoint(0x12345678u, 1677557088ull);
     BOOST_CHECK_EQUAL(forkId.hash, expected);
     BOOST_CHECK_EQUAL(forkId.next, 0u);
+}
+
+// forkIdFromTimeLadder: two forks at the SAME timestamp chain into the checksum
+// only once — geth's gatherForks deduplicates adjacent equal fork points.
+BOOST_AUTO_TEST_CASE(forkIdLadderDuplicateForkDeduplicated)
+{
+    auto single = eth::forkIdFromTimeLadder(0x12345678u, 1633267481ull, 1760000000ull,
+        {1677557088ull, 1706655072ull});
+    auto duplicated = eth::forkIdFromTimeLadder(0x12345678u, 1633267481ull, 1760000000ull,
+        {1677557088ull, 1706655072ull, 1706655072ull});
+    BOOST_CHECK(duplicated == single);
+    uint32_t expected = eth::forkIdAddForkPoint(0x12345678u, 1677557088ull);
+    expected = eth::forkIdAddForkPoint(expected, 1706655072ull);
+    BOOST_CHECK_EQUAL(duplicated.hash, expected);
+}
+
+// forkIdFromTimeLadder: a fork at/before the genesis timestamp is active from the
+// genesis block itself and never enters the checksum — geth's gatherForks drops it.
+BOOST_AUTO_TEST_CASE(forkIdLadderForkAtGenesisSkipped)
+{
+    // Genesis time == shanghai: the at-genesis fork must not enter the checksum.
+    auto atGenesis = eth::forkIdFromTimeLadder(0x12345678u, 1677557088ull, 1760000000ull,
+        {1677557088ull /* == genesis time */, 1706655072ull});
+    // Genesis time AFTER shanghai: the before-genesis fork is dropped too.
+    auto beforeGenesis = eth::forkIdFromTimeLadder(0x12345678u, 1700000000ull, 1760000000ull,
+        {1677557088ull /* < genesis time */, 1706655072ull});
+    uint32_t expected = eth::forkIdAddForkPoint(0x12345678u, 1706655072ull);
+    BOOST_CHECK_EQUAL(atGenesis.hash, expected);
+    BOOST_CHECK_EQUAL(beforeGenesis.hash, expected);
+    BOOST_CHECK(atGenesis == beforeGenesis);
 }
 
 // Hello message golden (RLP built with an independent encoder).

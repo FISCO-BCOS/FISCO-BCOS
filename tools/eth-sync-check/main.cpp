@@ -37,6 +37,7 @@
 #include <bcos-ledger/mpt/EthTrieRoots.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
+#include <bcos-rlp-protocol/EthGenesisHeader.h>
 #include <bcos-rlp-protocol/EthWithdrawal.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -186,10 +187,10 @@ protocol::EthBlockHeaderData headerFromJson(Json::Value const& j)
     return h;
 }
 
-/// The Sepolia chain configuration (public chain spec). Current tool limitation:
-/// the schedule stops at Prague and does not model Osaka/BPO1/BPO2 blob
-/// parameters yet, so post-Prague blob-bearing headers can fail this standalone
-/// check until the fork-tail follow-up lands.
+/// The Sepolia chain configuration (public chain spec; the fork tail matches the
+/// repo's tools/BcosBuilder/src/tpl/config.genesis.el template, which carries the
+/// scheduled Osaka/BPO1/BPO2 timestamps). With the tail filled, post-Osaka headers
+/// validate with the EIP-7840 blob-schedule / EIP-7918 excess-blob-gas rules.
 ChainConfig sepoliaConfig()
 {
     ChainConfig config;
@@ -198,6 +199,9 @@ ChainConfig sepoliaConfig()
     config.shanghaiTime = 1677557088;
     config.cancunTime = 1706655072;
     config.pragueTime = 1741159776;
+    config.osakaTime = 1760427360;
+    config.bpo1Time = 1761017184;
+    config.bpo2Time = 1761607008;
     // The Merge (terminal total difficulty) block: blocks below it are PoW
     // (non-zero difficulty, ommers allowed); from it onward PoS rules apply.
     // Without this the PoS field checks misjudge every pre-merge block.
@@ -475,35 +479,13 @@ void runGenesisIniCheck(std::string const& path, std::optional<std::string> cons
             std::string_view(stripHexPrefix(*expect)), crypto::HashType::FromHex);
         report("genesis stateRoot match", trie.root == expected, trie.root.hex());
     }
-    // Genesis header hash: re-encode the [eth_genesis_header] fields the same
-    // way Ledger::applyEthGenesisHeader does (fork-gated fields only when
-    // present) and compare keccak256(rlp(header)) against the artifact's hash
-    // claim. This is the byte-exact check — a mismatch means the config cannot
-    // reproduce the canonical genesis hash.
+    // Genesis header hash: re-encode the [eth_genesis_header] fields via the shared
+    // toEthBlockHeaderData mapping (fork-gated fields only when present) and compare
+    // keccak256(rlp(header)) against the artifact's hash claim. This is the byte-exact
+    // check — a mismatch means the config cannot reproduce the canonical genesis hash.
     if (auto const& eth = cfg.genesisConfig().m_ethGenesisHeader; eth.has_value())
     {
-        protocol::EthBlockHeaderData h;
-        h.parentInfo.blockHash = eth->m_parentHash;
-        h.uncleHash = eth->m_sha3Uncles;
-        h.coinbase = eth->m_miner;
-        h.stateRoot = eth->m_stateRoot;
-        h.txsRoot = eth->m_transactionsRoot;
-        h.receiptsRoot = eth->m_receiptsRoot;
-        std::copy(eth->m_logsBloom.begin(), eth->m_logsBloom.end(), h.logsBloom.begin());
-        h.difficulty = eth->m_difficulty;
-        h.gasLimit = eth->m_gasLimit;
-        h.gasUsed = eth->m_gasUsed;
-        h.number = eth->m_number;
-        h.timestamp = eth->m_timestamp;
-        h.extraData = eth->m_extraData;
-        std::copy(eth->m_mixHash.begin(), eth->m_mixHash.end(), h.prevRandao.begin());
-        std::copy(eth->m_nonce.begin(), eth->m_nonce.end(), h.nonce.begin());
-        h.baseFee = eth->m_baseFeePerGas;
-        h.withdrawalsHash = eth->m_withdrawalsRoot;
-        h.blobGasUsed = eth->m_blobGasUsed;
-        h.excessBlobGas = eth->m_excessBlobGas;
-        h.parentBeaconRoot = eth->m_parentBeaconBlockRoot;
-        h.requestsHash = eth->m_requestsHash;
+        auto h = protocol::toEthBlockHeaderData(*eth);
         auto computed = bcos::protocol::ethHeaderHash(h);
         report("genesis header hash match", computed == eth->m_hash,
             computed.hex() + " vs " + eth->m_hash.hex());

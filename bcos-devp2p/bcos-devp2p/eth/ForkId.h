@@ -46,24 +46,30 @@ uint32_t forkIdAddForkPoint(uint32_t _hash, uint64_t _forkPoint);
 // chained into the checksum and the first not-yet-passed one is announced as
 // `next`. `_forks` must be in activation order. Semantics:
 //   * fork == 0          -> active from genesis, never a fork-id point (skipped);
+//   * fork <= _genesisTime -> active at the genesis block itself: geth's gatherForks
+//     drops it, so it never enters the checksum either;
+//   * fork == previous fork point -> geth's gatherForks deduplicates adjacent equal
+//     time-based fork points; a duplicate chains into the checksum only once;
 //   * fork == UINT64_MAX -> unscheduled ("not yet active", the NodeConfig default
 //     for an absent key); it is the END of the ladder: nothing after it is chained
 //     and `next` falls back to 0 — geth announces next = 0 when no future fork is
 //     known, never UINT64_MAX.
-inline ForkId forkIdFromTimeLadder(uint32_t _checksum, uint64_t _localHeadTime,
-    std::initializer_list<uint64_t> const& _forks)
+inline ForkId forkIdFromTimeLadder(uint32_t _checksum, uint64_t _genesisTime,
+    uint64_t _localHeadTime, std::initializer_list<uint64_t> const& _forks)
 {
     uint32_t hash = _checksum;
+    uint64_t previousFork = 0;
     for (uint64_t fork : _forks)
     {
         if (fork == std::numeric_limits<uint64_t>::max())
         {
             break;  // unscheduled tail fork: no future fork known -> next = 0
         }
-        if (fork == 0)
+        if (fork == 0 || fork <= _genesisTime || fork == previousFork)
         {
-            continue;  // active from genesis, never a fork-id point
+            continue;  // active at/from genesis, or a duplicate of the previous point
         }
+        previousFork = fork;
         if (fork <= _localHeadTime)
         {
             hash = forkIdAddForkPoint(hash, fork);
