@@ -913,6 +913,16 @@ private:
                             break;
                         }
                     }
+                    catch (scheduler_v1::StaleOrOutOfOrderBlock const& e)
+                    {
+                        // The verifier's height guard: the block is not the ledger
+                        // head + 1. Deterministic — no peer retry repairs a
+                        // wrong-height request.
+                        if (onDeterministicFailure(e))
+                        {
+                            break;
+                        }
+                    }
                     catch (std::exception const& e)
                     {
                         // Transient (network-/peer-shaped): connect failures,

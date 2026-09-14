@@ -385,6 +385,15 @@ struct EthereumBlockVerificationResult
     crypto::HashType stateRoot;
 };
 
+/// Thrown when the block to verify is not the direct child of the ledger head. A wrong-height
+/// block reaching the verifier is sync-loop bookkeeping gone wrong, never a peer-supplied
+/// invalid block, so the type lets the caller classify it as a deterministic failure (no
+/// retry against another peer can fix it) instead of a transient one.
+struct StaleOrOutOfOrderBlock : public std::runtime_error
+{
+    using std::runtime_error::runtime_error;
+};
+
 /// Verifies and commits one external Ethereum block. Shared by the devp2p sync path
 /// and the Engine API external-payload path.
 ///
@@ -474,12 +483,14 @@ public:
         //     is purely local until step 8's pushView, so throwing discards it
         //     with zero state pollution. Throwing (rather than an invalid
         //     result) matches the caller contract: a wrong-height block reaching
-        //     this point is a sync-loop bug, not a peer-supplied invalid block.
+        //     this point is a sync-loop bug, not a peer-supplied invalid block —
+        //     hence the typed StaleOrOutOfOrderBlock, so the caller classifies it
+        //     as a deterministic failure rather than a transient one.
         auto const currentNumber =
             co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
         if (ethHeader.number != currentNumber + 1)
         {
-            BOOST_THROW_EXCEPTION(std::runtime_error{
+            BOOST_THROW_EXCEPTION(StaleOrOutOfOrderBlock{
                 "EthereumBlockVerifier: block number " + std::to_string(ethHeader.number) +
                 " is not the ledger head + 1 (head " + std::to_string(currentNumber) +
                 "): refusing to execute a stale (already committed) or out-of-order block"});

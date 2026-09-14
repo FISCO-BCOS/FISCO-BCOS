@@ -250,10 +250,71 @@ BOOST_AUTO_TEST_CASE(posValidationRejectsBadBaseFee)
         config.cancunTime = std::numeric_limits<uint64_t>::max();
         config.pragueTime = std::numeric_limits<uint64_t>::max();
         sync::BlockExchange exchange(1, chain[0].header, config);
+        // The typed classification is load-bearing: the sync loop routes
+        // HeaderRuleViolation to the deterministic-failure path (no retry
+        // against further bootnodes), so this must not regress to a plain
+        // std::runtime_error (which would be classified as transient).
         BOOST_CHECK_THROW(
             exchange.downloadRange(established.session, chain.size() - 1,
                 [](sync::Block const&) {}),
-            std::runtime_error);
+            sync::HeaderRuleViolation);
+    }  // close the client connection
+
+    serverThread.join();
+}
+
+// A first header whose parentHash is not the anchor signals a fork/reorg and
+// must throw ParentHashMismatch specifically — the sync loop's three-strike
+// reorg FATAL keys on exactly that type, so a regression to a plain
+// std::runtime_error would silently turn the reorg signal into a transient
+// retry. (brokenParentChainRejected above corrupts a LATER link, which is the
+// untyped "broken parent chain" throw and does not pin this type.)
+BOOST_AUTO_TEST_CASE(firstHeaderParentMismatchThrowsTyped)
+{
+    auto chain = test::makeTestChain(3);
+    // Corrupt the FIRST header's parent link so it no longer matches the
+    // anchor, and re-encode its header RLP (the server serves raw RLP).
+    chain[0].header.parentInfo.blockHash = h256{0xdeadbeef};
+    {
+        bcos::bytes rlp;
+        bcos::codec::rlp::encode(rlp, chain[0].header);
+        chain[0].headerRlp = rlp;
+        chain[0].hash = bcos::crypto::keccak256Hash(
+            bcos::bytesConstRef(rlp.data(), rlp.size()));
+    }
+
+    rlpx::EccKeyPair serverKey;
+    rlpx::EccKeyPair clientKey;
+    rlpx::PeerConfig serverConfig;
+    serverConfig.clientId = "fake-peer";
+    rlpx::RlpxServer server(serverKey, 0, serverConfig);
+    uint16_t port = server.port();
+
+    std::thread serverThread([&] {
+        try
+        {
+            auto established = server.accept();
+            test::serveRequests(established.session, chain);
+        }
+        catch (...)
+        {
+        }
+    });
+
+    rlpx::PeerConfig clientConfig;
+    clientConfig.host = "127.0.0.1";
+    clientConfig.port = port;
+    clientConfig.peerPublicKey = serverKey.publicKey();
+
+    {
+        rlpx::RlpxClient client(std::move(clientKey), clientConfig);
+        auto established = client.connect();
+
+        sync::BlockExchange exchange(0, h256{});
+        BOOST_CHECK_THROW(
+            exchange.downloadRange(established.session, chain.size(),
+                [](sync::Block const&) {}),
+            sync::ParentHashMismatch);
     }  // close the client connection
 
     serverThread.join();
