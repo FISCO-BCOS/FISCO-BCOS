@@ -19,10 +19,5 @@ namespace gateway
 #define SERVICE2_LOG(LEVEL) BCOS_LOG(LEVEL) << "[P2PService][Service2]"
 #define SERVICE_ROUTER_LOG(LEVEL) BCOS_LOG(LEVEL) << "[P2PService][Router]"
 
-/// default compress threshold: 1KB
-const uint64_t c_compressThreshold = 1024;
-/// default zstd compress level:
-const uint64_t c_zstdCompressLevel = 1;
-
 }  // namespace gateway
 }  // namespace bcos

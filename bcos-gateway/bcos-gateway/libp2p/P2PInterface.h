@@ -6,7 +6,7 @@
 #pragma once
 
 #include "bcos-gateway/libnetwork/Host.h"
-#include "bcos-gateway/libp2p/P2PMessage.h"
+#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-task/Task.h"
 
 namespace bcos
@@ -19,11 +19,10 @@ class ChannelNetworkStatHandler;
 
 namespace gateway
 {
-class P2PMessage;
 class MessageFactory;
 class P2PSession;
 using CallbackFuncWithSession =
-    std::function<void(NetworkException, std::shared_ptr<P2PSession>, std::shared_ptr<P2PMessage>)>;
+    std::function<void(NetworkException, std::shared_ptr<P2PSession>, std::shared_ptr<Message>)>;
 using DisconnectCallbackFuncWithSession =
     std::function<void(NetworkException, std::shared_ptr<P2PSession>)>;
 class P2PInterface
@@ -37,13 +36,13 @@ public:
 
     virtual P2pID id() const = 0;
 
-    virtual task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, P2PMessage& header,
+    virtual task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, Message& header,
         ::ranges::any_view<bytesConstRef> payloads, Options options = {}) = 0;
 
     // (coroutine) broadcast a message to all connected/reachable nodes. The message is handed over
     // as a shared_ptr: the per-peer fan-out tasks keep it alive (the payload rides as a view,
     // zero-copy).
-    virtual task::Task<void> broadcastMessageToAll(P2PMessage::Ptr message,
+    virtual task::Task<void> broadcastMessageToAll(Message::Ptr message,
         ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads,
         Options options = {}) = 0;
 
@@ -66,13 +65,13 @@ public:
     virtual std::shared_ptr<P2PSession> getP2PSessionByNodeId(P2pID const& _nodeID) const = 0;
 
     using MessageHandler =
-        std::function<void(NetworkException, std::shared_ptr<P2PSession>, P2PMessage::Ptr)>;
+        std::function<void(NetworkException, std::shared_ptr<P2PSession>, Message::Ptr)>;
 
     virtual bool registerHandlerByMsgType(uint16_t _type, MessageHandler const& _msgHandler) = 0;
 
     virtual void eraseHandlerByMsgType(uint16_t _type) = 0;
 
-    virtual void sendRespMessageBySession(bytesConstRef _payload, P2PMessage::Ptr _p2pMessage,
+    virtual void sendRespMessageBySession(bytesConstRef _payload, Message::Ptr _p2pMessage,
         std::shared_ptr<P2PSession> _p2pSession) = 0;
 
     virtual void updatePeerBlacklist(const std::set<std::string>& _strList, const bool _enable) = 0;
