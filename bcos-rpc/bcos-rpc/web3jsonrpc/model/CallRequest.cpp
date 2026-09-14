@@ -82,7 +82,7 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
         gasLimit = *chainBlockGasLimit;
     }
     // The request is consumed by this call (noexcept, single use), so move the optional
-    // strings out instead of value_or's copy (5593 round-3 S).
+    // strings out rather than copying them through value_or.
     auto tx = factory->createTransaction(1, std::move(this->to), std::move(this->data),
         pendingNonce.value_or(std::string{}), 0, {}, {}, 0, "",
         this->value.has_value() ? std::move(*this->value) : std::string{},

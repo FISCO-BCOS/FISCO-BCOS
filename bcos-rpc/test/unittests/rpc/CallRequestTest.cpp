@@ -216,7 +216,7 @@ BOOST_AUTO_TEST_CASE(deployEstimateGasLeavesCorruptNonceUnset)
 
 BOOST_AUTO_TEST_CASE(nonceFromPendingEntryBoundsTheU256Range)
 {
-    // 5593 round-4 F22: the length bound must not let an all-digit row that overflows
+    // The length bound must not let an all-digit row that overflows
     // u256 reach the constructor. 2^256-1 has 78 decimal digits, but 10^78-1 exceeds it,
     // so a 78-digit value above the max (and anything longer) must fall back to nullopt
     // like any other corrupt row — not throw.

@@ -112,10 +112,9 @@ task::Task<void> EthEndpoint::coinbase(const Json::Value&, Json::Value& response
 }
 task::Task<void> EthEndpoint::chainId(const Json::Value&, Json::Value& response)
 {
-    // Reads via LedgerConfig (not a raw SYS_CONFIG single-key read) so that L2-mode
-    // governance (SystemConfig.sol via L2ConfigLoader, wired in A4) flows through one
-    // path. getLedgerConfig over-fetches (~5 storage reads) per call; per plan decision,
-    // RPC-side caching is deferred to Phase B.
+    // Reads via LedgerConfig (not a raw SYS_CONFIG single-key read) so L2-mode governance
+    // (SystemConfig.sol via L2ConfigLoader) flows through one path. getLedgerConfig
+    // over-fetches (~5 storage reads) per call; a per-request cache is a follow-up.
     auto const ledger = m_nodeService->ledger();
     auto const ledgerConfig = co_await ledger::getLedgerConfig(*ledger);
     Json::Value result;
@@ -316,7 +315,7 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
         // row is absent, so "latest" reads the tip block's committed state root when it IS an
         // MPT root. A flat-storage chain's tip root is not (its state lives in the flat
         // rows), so tryResolveLatestMptContext answers nullopt there and the flat read below
-        // serves the request — the pre-5593 behaviour the Air Hardhat suite depends on.
+        // serves the request.
         auto const mptReader = m_nodeService->mptNodeReader();
         if (mptReader)
         {

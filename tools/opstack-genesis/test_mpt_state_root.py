@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (c) FISCO-BCOS, Apache-2.0
 # SPDX-License-Identifier: Apache-2.0
-"""Consensus oracle pin for mpt_state_root.compute_state_root (5593 review F6).
+"""Consensus oracle pin for mpt_state_root.compute_state_root.
 
 compute_state_root produces the C2 genesis state root; before this test it had no
 committed vector — its docstring anchors were /tmp paths no third party can replay.
@@ -48,7 +48,7 @@ def test_state_root_matches_independent_golden_oracle():
 
 
 def test_off_width_address_is_rejected_loudly():
-    # 5593 review F5: the slot lane raised on len != 32 while the address lane
+    # The slot lane raised on len != 32 while the address lane
     # silently keccak'd a 19/21-byte address into a different trie. The guard must
     # reject before any hashing happens.
     for bad in ("0x" + "11" * 19, "0x" + "11" * 21, "11" * 19):
@@ -62,7 +62,7 @@ def test_off_width_address_is_rejected_loudly():
 
 
 def test_duplicate_slot_key_inside_one_section_is_rejected(tmp_path):
-    # 5593 review F15: duplicate slot lines used to survive parsing and crash with
+    # Duplicate slot lines used to survive parsing and crash with
     # an IndexError at depth 64 inside build_branch — the failure mode the
     # duplicate-address guard's comment says was fixed, left open for slots.
     import pytest

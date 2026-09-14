@@ -93,7 +93,7 @@ BOOST_AUTO_TEST_CASE(ethNextBaseFeeHoldsAtTarget)
 
 // geth clamps the EIP-1559 decrease branch to MinimumBaseFee (1 wei): a base fee never
 // reaches 0 through the rule, so the trailing feeHistory prediction must not report 0x0
-// where geth/op-geth report 0x1 (5593 round-3 F8).
+// where geth/op-geth report 0x1.
 BOOST_AUTO_TEST_CASE(ethNextBaseFeeDecreaseClampsToOneWeiNotZero)
 {
     // An engaged-but-zero parent base fee (a malformed London header): deltaFee floors to
@@ -289,7 +289,7 @@ BOOST_AUTO_TEST_CASE(buildFeeHistoryRejectsOutOfRangeBlockCount)
 
     // Rewards: 1000 blocks is over the 128-block body-loading bound -> rejected, not
     // shortened. The code is pinned: an InternalError from a fixture fault must not pass
-    // what claims to be the InvalidParams bounds check (5593 round-3 F13).
+    // what claims to be the InvalidParams bounds check.
     auto const isInvalidParams = [](JsonRpcException const& e) {
         return e.code() == InvalidParams;
     };

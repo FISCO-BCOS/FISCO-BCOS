@@ -76,7 +76,7 @@ ATTRS_GAS_LIMIT = "0x1c9c380"
 
 # Set by --deposit-rejected: the target chain runs the Eth lane (executor_version=2),
 # where a 0x7e deposit envelope in payloadAttributes.transactions is answered with a
-# terminal INVALID (deposits are an OP-lane extension; PR #5593 round-3 L). Under this
+# terminal INVALID (deposits are an OP-lane extension). Under this
 # flag the block flow injects no forced deposit and a dedicated negative case pins the
 # rejection instead.
 DEPOSIT_REJECTED = False

@@ -19,9 +19,9 @@
 set -euo pipefail
 
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
-# The e2e harness lives in FISCO-BCOS/op-stack-e2e-tests (migrated out of
-# tools/op-e2e in PR #5593's follow-up); the workflow checks it out at a pinned
-# ref into OP_E2E_DIR. Point OP_E2E_DIR at any harness checkout for local runs.
+# The e2e harness lives in FISCO-BCOS/op-stack-e2e-tests (the former in-repo
+# tools/op-e2e); the workflow checks it out at a pinned ref into OP_E2E_DIR.
+# Point OP_E2E_DIR at any harness checkout for local runs.
 OP_E2E_DIR="${OP_E2E_DIR:-${REPO_ROOT}/.ci-op-e2e-tests}"
 VERSIONS="${OP_E2E_DIR}/tools/op-e2e/versions.json"
 OP_MONOREPO="${OP_MONOREPO:-${REPO_ROOT}/.ci-op-monorepo}"

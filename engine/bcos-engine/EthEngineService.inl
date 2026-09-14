@@ -173,9 +173,8 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
         m_memPool.seal(m_blockTxCountLimit, view, std::back_inserter(sealedTxs));
     }
 
-    // Payload ID: deterministic derive from attributes + parent (op-geth-aligned). Do not
-    // switch back to a process-local sequence counter — that was release EngineServiceImpl
-    // only and is not the EthEngineService cutover contract (option B). The version byte is
+    // Payload ID: deterministic derive from attributes + parent (op-geth-aligned), never a
+    // process-local sequence counter (not reproducible across restarts). The version byte is
     // the PAYLOAD SHAPE version, exactly as the OP lane derives it and as the cache entry
     // below stores it: two methods that build the same shape must mint one id for the same
     // content (a raw-version byte would mint two once maxEngineVersion exceeds V3).
@@ -544,7 +543,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         {
             const auto txHash = hashImpl.hash(raw);
             // allowDeposit=false: a 0x7e deposit envelope is an OP-Stack extension and
-            // invalid on the Eth lane — the shared decode rejects it here (5593 round-3 L).
+            // invalid on the Eth lane.
             auto tarsTx = engine_common::op::opEnvelopeToTars(raw, txHash, /*allowDeposit=*/false);
             if (!tarsTx)
             {

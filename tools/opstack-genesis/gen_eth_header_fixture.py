@@ -185,7 +185,7 @@ def main(argv=None):
         allocs = parse_allocs_ini(args.allocs)
         fields["state_root"] = "0x" + compute_state_root(allocs).hex()
         # Isthmus+ genesis: withdrawalsRoot = L2ToL1MessagePasser storage root
-        # (isthmus/exec-engine.md:100-101; op-geth core/genesis.go:711-719). Phase A deploys
+        # (isthmus/exec-engine.md:100-101; op-geth core/genesis.go:711-719). The chain deploys
         # the passer with empty storage -> empty-trie root; a proxied op-deployer layout
         # carries storage and the tool must track it.
         for alloc in allocs:

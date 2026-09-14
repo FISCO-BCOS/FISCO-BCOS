@@ -140,7 +140,7 @@ static protocol::Transaction::Ptr makeWeb3Tx(std::string_view senderBytes, uint6
 
 /// A genuinely RLP-decodable EIP-2718 (0x02) envelope, hex-encoded, to stand in for a
 /// payloadAttributes.transactions forced entry. The build path decodes every forced
-/// envelope into its executable form (opEnvelopeToTars), so a placeholder such as
+/// envelope into its executable form (opEnvelopeToTars), so a stub such as
 /// "0x02f8aabb" is no longer accepted — contrast the old raw-passthrough behaviour.
 static std::string makeForcedEnvelopeHex(uint64_t nonce)
 {
@@ -412,7 +412,7 @@ BOOST_AUTO_TEST_CASE(generic_stale_head_swallow_matches)
     checkForkchoiceParity(legacyStale, newStale);
 }
 
-// 5593 review F1: a forced envelope that passes the first-byte admission gate but fails
+// A forced envelope that passes the first-byte admission gate but fails
 // RLP decode must answer a terminal INVALID carrying fcuInvalidIfUndecodable's message —
 // not a retryable -32603 (untagged OpExecutionInternalError), and not the derivePayloadId
 // "contains undecodable hex" arm either.
@@ -448,7 +448,7 @@ BOOST_AUTO_TEST_CASE(eth_fcu_undecodable_forced_envelope_is_invalid_not_internal
 // payloadAttributes extension: admission (isRawTransactionPayloadAdmissible) is
 // lane-agnostic by design, so the Eth build path itself must refuse the type —
 // no Eth/L1 client would re-execute a 0x7e block, so executing one here would fork
-// the chain from every honest peer (5593 round-3 L).
+// the chain from every honest peer.
 BOOST_AUTO_TEST_CASE(eth_fcu_deposit_envelope_is_rejected_on_the_eth_lane)
 {
     ServicePair pair;

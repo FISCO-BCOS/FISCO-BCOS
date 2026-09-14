@@ -213,8 +213,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
     std::vector<bcos::bytes> decodedForcedTxs)
 {
-    // Same policy as EthEngineService (option B): deterministic derivePayloadId, not a
-    // process-local sequence counter. Reuse validate's decoded forced txs.
+    // Same policy as EthEngineService: deterministic derivePayloadId, not a process-local
+    // sequence counter. Reuse validate's decoded forced txs.
     // The id's version byte is the PAYLOAD SHAPE version (V3/V4-method → PayloadV3),
     // matching both the cache entry's version below and upstream: op-geth's
     // ForkchoiceUpdatedV3/V4 build the same PayloadV3 shape, so the same content under
@@ -874,8 +874,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpBloc
     for (auto const& env : detail::rawEnvelopes(payload))
     {
         const auto txHash = hashImpl.hash(env);
-        // allowDeposit=true: the OP lane accepts 0x7e deposit envelopes — the CL
-        // submits deposits via payloadAttributes.transactions (5593 round-3 L).
+        // allowDeposit=true: the OP lane accepts 0x7e deposit envelopes — the CL submits
+        // them via payloadAttributes.transactions.
         auto tarsTx = engine_common::op::opEnvelopeToTars(env, txHash, /*allowDeposit=*/true);
         if (!tarsTx)
         {

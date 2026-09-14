@@ -303,7 +303,7 @@ BOOST_AUTO_TEST_CASE(minerSetMaxDASizeAcceptsZeroMaxTxSizeFromTheBatcher)
     // miner_setMaxDASize call therefore sends ["0x0","0x1fbd0"] (0, 130000 =
     // DefaultThrottleBlockSizeUpperLimit). The batcher shuts itself down on any generic
     // RPC error from this call, so a zero-reject here silently kills safe/finalized
-    // derivation (PR #5593 C2 e2e regression). Zero must be stored, not refused.
+    // derivation (a C2 e2e regression). Zero must be stored, not refused.
     auto caps = std::make_shared<bcos::engine::DACaps>();
     nodeService->setDaCaps(caps);
     auto batcherFirstCall = call(req("miner_setMaxDASize", R"(["0x0","0x1fbd0"])"));
@@ -342,10 +342,9 @@ BOOST_AUTO_TEST_CASE(estimateGasWithoutLedgerFailsClosed)
     }
 }
 
-// The sibling null-ledger guards (round-3 I): gasPrice, maxPriorityFeePerGas and
-// feeHistory must all fail closed with InternalError on a node with no ledger —
-// the guards existed but no test reached them, so a reordering that put the deref
-// first (as round-2 B did for feeHistory) would have passed the suite.
+// The sibling null-ledger guards: gasPrice, maxPriorityFeePerGas and feeHistory must all
+// fail closed with InternalError on a node with no ledger — the guards existed but no test
+// reached them, so an ordering that dereferenced before checking would have passed.
 BOOST_AUTO_TEST_CASE(feeMethodsWithoutLedgerFailClosed)
 {
     auto noLedgerService = std::make_shared<rpc::NodeService>(
@@ -438,8 +437,8 @@ public:
 };
 }  // namespace
 
-// Round-3 F2: CallRequestTest pins only takeToTransaction with a hand-passed cap; the
-// ENDPOINT's own header read is pinned here — with a tip gasLimit != 30'000'000 so a
+// CallRequestTest pins only takeToTransaction with a hand-passed cap; the ENDPOINT's own
+// header read is pinned here — with a tip gasLimit != 30'000'000 so a
 // regression to the removed hardcoded constant (or to the RPC cap) fails visibly.
 BOOST_AUTO_TEST_CASE(estimateGasCapComesFromTheTipBlockHeaderAtTheEndpoint)
 {

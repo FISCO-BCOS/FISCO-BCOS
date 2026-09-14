@@ -33,7 +33,7 @@ predeploys:
     address: "0x42000000000000000000000000000000000000C1"
     sol_file: L2ValidatorSet.sol
 
-  # --- vendored OP fork predeploys (bytecode as-is, empty storage in Phase A) ---
+  # --- vendored OP fork predeploys (bytecode as-is, empty storage) ---
   - name: L1Block
     address: "0x4200000000000000000000000000000000000015"
     sol_file: L1Block.sol
@@ -55,17 +55,17 @@ predeploys:
   - name: SequencerFeeVault
     address: "0x4200000000000000000000000000000000000011"
     sol_file: SequencerFeeVault.sol
-    # zero immutables accepted for Phase A — RECIPIENT=address(0) means fee withdrawal is unusable until a re-genesis or a future patch rule; do NOT enable for other contracts without review.
+    # zero immutables accepted — RECIPIENT=address(0) makes fee withdrawal unusable; do NOT enable for other contracts without review.
     allow_unpatched_immutables: true
   - name: BaseFeeVault
     address: "0x4200000000000000000000000000000000000019"
     sol_file: BaseFeeVault.sol
-    # zero immutables accepted for Phase A — RECIPIENT=address(0) means fee withdrawal is unusable until a re-genesis or a future patch rule; do NOT enable for other contracts without review.
+    # zero immutables accepted — RECIPIENT=address(0) makes fee withdrawal unusable; do NOT enable for other contracts without review.
     allow_unpatched_immutables: true
   - name: L1FeeVault
     address: "0x420000000000000000000000000000000000001A"
     sol_file: L1FeeVault.sol
-    # zero immutables accepted for Phase A — RECIPIENT=address(0) means fee withdrawal is unusable until a re-genesis or a future patch rule; do NOT enable for other contracts without review.
+    # zero immutables accepted — RECIPIENT=address(0) makes fee withdrawal unusable; do NOT enable for other contracts without review.
     allow_unpatched_immutables: true
   - name: WETH
     address: "0x4200000000000000000000000000000000000006"
