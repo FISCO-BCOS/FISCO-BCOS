@@ -193,13 +193,13 @@ jobs:
         # `git status --porcelain` cleanliness gate over every mapped file.
         if: matrix.os == 'ubuntu-24.04' && github.event_name != 'release'
         run: |
-          # The variant patches are applied with `git apply --3way`, which needs the
-          # pre-image BLOBS the patches were authored against; a checkout made with
-          # the default fetch-depth=1 carries only HEAD's blobs, so the 3-way merge
-          # fails with "repository lacks the necessary blob". Deepen just enough
-          # history for those bases before the harness runs.
+          # The variant patches are applied with `git apply --3way`, which lazily
+          # fetches the pre-image BLOBS the patches were authored against; a
+          # fetch-depth=1 checkout cannot serve them and GitHub refuses blob-by-SHA
+          # lazy wants ("not our ref"), so unshallow once — the pack is ~2 GiB and
+          # takes about a minute on a hosted runner.
           if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
-            git fetch --deepen=400
+            git fetch --unshallow
           fi
           bash tools/mutation/run.sh
       - name: Download EEST fixtures
