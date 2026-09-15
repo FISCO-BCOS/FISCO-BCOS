@@ -45,6 +45,16 @@ inline void decodeCanonicalRlpUint(bcos::bytesRef& from, T& to)
     bcos::codec::rlp::decode(from, to);
 }
 
+/// Variadic sibling of decodeCanonicalRlpUint: decode several canonical RLP integers in order.
+/// The fold expression keeps the exact per-field sequencing (and error behaviour) of the
+/// scalar overload. Throws codec::rlp::RlpDecodeException on malformed input.
+/// (Template — must stay in the header.)
+template <typename... Ts>
+inline void decodeCanonicalRlpUints(bcos::bytesRef& from, Ts&... tos)
+{
+    (decodeCanonicalRlpUint(from, tos), ...);
+}
+
 /// Typed yParity: whole item must be 0x80 (0) or 0x01 (1). Bare 0x00 is rejected.
 [[nodiscard]] std::optional<uint64_t> canonicalTypedYParityItem(bcos::bytesConstRef item) noexcept;
 

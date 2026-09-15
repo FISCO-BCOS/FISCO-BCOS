@@ -48,8 +48,7 @@ inline RlpResult<Header> tryDecodeHeader(bytesRef& from)
 {
     if (from.size() == 0)
     {
-        return std::unexpected(
-            RlpError{.code = DecodingError::InputTooShort, .message = "Input data is too short"});
+        return rlpFail(DecodingError::InputTooShort, "Input data is too short");
     }
     Header header{.isList = false};
     const auto byte{from[0]};
@@ -68,13 +67,11 @@ inline RlpResult<Header> tryDecodeHeader(bytesRef& from)
         {
             if (from.empty())
             {
-                return std::unexpected(
-                    RlpError{.code = InputTooShort, .message = "Input data is too short"});
+                return rlpFail(InputTooShort, "Input data is too short");
             }
             if (from[0] < 0x80)
             {
-                return std::unexpected(
-                    RlpError{.code = NonCanonicalSize, .message = "NonCanonicalSize"});
+                return rlpFail(NonCanonicalSize, "NonCanonicalSize");
             }
         }
     }
@@ -85,8 +82,7 @@ inline RlpResult<Header> tryDecodeHeader(bytesRef& from)
         const auto lenOfLen{byte - LONG_BYTES_HEAD_BASE};
         if (std::cmp_greater(lenOfLen, from.size()))
         {
-            return std::unexpected(
-                RlpError{.code = InputTooShort, .message = "Input data is too short"});
+            return rlpFail(InputTooShort, "Input data is too short");
         }
         // C1 (final review batch B): a multi-byte length prefix whose leading byte is zero is
         // non-canonical — op-geth rlp/decode.go readUint() rejects it with ErrCanonSize (the
@@ -102,8 +98,7 @@ inline RlpResult<Header> tryDecodeHeader(bytesRef& from)
         // 56` check covers both paths with identical observable behavior.
         if (lenOfLen >= 2 && from[0] == 0)
         {
-            return std::unexpected(RlpError{.code = NonCanonicalSize,
-                .message = "Non-canonical length prefix: leading zero byte"});
+            return rlpFail(NonCanonicalSize, "Non-canonical length prefix: leading zero byte");
         }
         // Migration note (W8): canonicality now enforced for ALL consumers of this shared decoder,
         // not just the OP path. FISCO's own encoder (RLPEncode.h) always writes a minimal length
@@ -115,8 +110,7 @@ inline RlpResult<Header> tryDecodeHeader(bytesRef& from)
         from = from.getCroppedData(lenOfLen);
         if (header.payloadLength < 56)
         {
-            return std::unexpected(RlpError{
-                .code = NonCanonicalSize, .message = "The length of the payload is less than 56"});
+            return rlpFail(NonCanonicalSize, "The length of the payload is less than 56");
         }
     }
     else if (byte <= LONG_LIST_HEAD_BASE)
@@ -134,16 +128,15 @@ inline RlpResult<Header> tryDecodeHeader(bytesRef& from)
         const auto lenOfLen{byte - LONG_LIST_HEAD_BASE};
         if (std::cmp_greater(lenOfLen, from.size()))
         {
-            return std::unexpected(RlpError{
-                .code = DecodingError::InputTooShort, .message = "Input data is too short"});
+            return rlpFail(DecodingError::InputTooShort, "Input data is too short");
         }
         // C1 (final review batch B): long-list length prefix, same canonical rule as the
         // long-string branch above — op-geth rlp/decode.go readUint() `default` case. lenOfLen==1
         // (0xf8 ..) is left to the `< 56` check below to match op-geth's readUint `case 1`.
         if (lenOfLen >= 2 && from[0] == 0)
         {
-            return std::unexpected(RlpError{.code = DecodingError::NonCanonicalSize,
-                .message = "Non-canonical length prefix: leading zero byte"});
+            return rlpFail(
+                DecodingError::NonCanonicalSize, "Non-canonical length prefix: leading zero byte");
         }
         auto payloadSize =
             fromBigEndian<uint64_t, bcos::bytesConstRef>(from.getCroppedData(0, lenOfLen));
@@ -151,14 +144,13 @@ inline RlpResult<Header> tryDecodeHeader(bytesRef& from)
         from = from.getCroppedData(lenOfLen);
         if (header.payloadLength < 56)
         {
-            return std::unexpected(RlpError{.code = DecodingError::NonCanonicalSize,
-                .message = "The length of the payload is less than 56"});
+            return rlpFail(
+                DecodingError::NonCanonicalSize, "The length of the payload is less than 56");
         }
     }
     if (header.payloadLength > from.size())
     {
-        return std::unexpected(
-            RlpError{.code = DecodingError::InputTooShort, .message = "Input data is too short"});
+        return rlpFail(DecodingError::InputTooShort, "Input data is too short");
     }
     return header;
 }
@@ -179,29 +171,27 @@ inline Header decodeHeader(bytesRef& from)
 // directly so malformed wire input never unwinds.
 inline RlpResult<void> tryDecode(bytesRef& from, bcos::concepts::ByteBuffer auto& to)
 {
-    auto headerResult = tryDecodeHeader(from);
-    if (!headerResult)
+    auto const header = tryDecodeHeader(from);
+    if (!header)
     {
-        return std::unexpected(headerResult.error());
+        return std::unexpected(header.error());
     }
-    auto const header = *headerResult;
-    if (header.isList)
+    if (header->isList)
     {
-        return std::unexpected(
-            RlpError{.code = DecodingError::UnexpectedList, .message = "Unexpected list"});
+        return rlpFail(DecodingError::UnexpectedList, "Unexpected list");
     }
     if constexpr (std::same_as<std::decay_t<decltype(to)>, bcos::bytes>)
     {
-        to = from.getCroppedData(0, header.payloadLength).toBytes();
+        to = from.getCroppedData(0, header->payloadLength).toBytes();
     }
     else if constexpr (std::same_as<std::decay_t<decltype(to)>, bcos::bytesRef>)
     {
-        to = from.getCroppedData(0, header.payloadLength);
+        to = from.getCroppedData(0, header->payloadLength);
     }
     else if constexpr (bcos::concepts::StringLike<std::decay_t<decltype(to)>>)
     {
-        to =
-            from.getCroppedData(0, header.payloadLength).toStringLike<std::decay_t<decltype(to)>>();
+        to = from.getCroppedData(0, header->payloadLength)
+                 .toStringLike<std::decay_t<decltype(to)>>();
     }
     else if constexpr (std::same_as<std::decay_t<decltype(to)>, bcos::FixedBytes<32>> ||
                        std::same_as<std::decay_t<decltype(to)>, bcos::FixedBytes<20>> ||
@@ -215,12 +205,11 @@ inline RlpResult<void> tryDecode(bytesRef& from, bcos::concepts::ByteBuffer auto
         // all existing in-tree decode callers (Web3Transaction, MPT, ledger, tx RLP) have been
         // verified to only feed fixed-size payloads here.
         using FixedT = std::decay_t<decltype(to)>;
-        if (header.payloadLength != FixedT::SIZE)
+        if (header->payloadLength != FixedT::SIZE)
         {
-            return std::unexpected(RlpError{.code = DecodingError::UnexpectedLength,
-                .message = "Unexpected fixed-bytes length"});
+            return rlpFail(DecodingError::UnexpectedLength, "Unexpected fixed-bytes length");
         }
-        to = FixedT{from.getCroppedData(0, header.payloadLength)};
+        to = FixedT{from.getCroppedData(0, header->payloadLength)};
     }
     else if constexpr (std::same_as<std::decay_t<decltype(to)>, std::array<bcos::byte, 256>>)
     {
@@ -228,19 +217,18 @@ inline RlpResult<void> tryDecode(bytesRef& from, bcos::concepts::ByteBuffer auto
         // rather than silently padded/truncated (a padded bloom would re-encode differently
         // and change the keccak hash). Fixed-size byte blobs are left-aligned here, unlike the
         // big-endian scalar FixedBytes branches above which right-align.
-        if (header.payloadLength != to.size())
+        if (header->payloadLength != to.size())
         {
-            return std::unexpected(RlpError{
-                .code = DecodingError::UnexpectedLength, .message = "Unexpected bloom length"});
+            return rlpFail(DecodingError::UnexpectedLength, "Unexpected bloom length");
         }
-        auto payload = from.getCroppedData(0, header.payloadLength);
+        auto payload = from.getCroppedData(0, header->payloadLength);
         std::memcpy(to.data(), payload.data(), payload.size());
     }
     else
     {
         static_assert(!sizeof(to), "Unsupported type");
     }
-    from = from.getCroppedData(header.payloadLength);
+    from = from.getCroppedData(header->payloadLength);
     return {};
 }
 
@@ -255,38 +243,34 @@ inline void decode(bytesRef& from, bcos::concepts::ByteBuffer auto& to)
 // Non-throwing core of decode(UnsignedIntegral): the canonical-integer rules (not a list,
 // payload fits the target width, no non-canonical leading zero byte) reported as an
 // RlpResult value. This is the single source of truth for those rules — the devp2p wire
-// decoders (RlpTake.h takeUint, MessageCodec) call it instead of re-implementing them.
+// decoders (RlpTake.h take<T>, MessageCodec) call it instead of re-implementing them.
 inline RlpResult<void> tryDecode(bytesRef& from, UnsignedIntegral auto& to)
 {
-    auto headerResult = tryDecodeHeader(from);
-    if (!headerResult)
+    auto const header = tryDecodeHeader(from);
+    if (!header)
     {
-        return std::unexpected(headerResult.error());
+        return std::unexpected(header.error());
     }
-    auto const header = *headerResult;
-    if (header.isList)
+    if (header->isList)
     {
-        return std::unexpected(
-            RlpError{.code = DecodingError::UnexpectedList, .message = "Unexpected list"});
+        return rlpFail(DecodingError::UnexpectedList, "Unexpected list");
     }
     // Reject integers wider than the target type instead of silently truncating via fromBigEndian
     // (op-geth parity). Use digits/8, NOT sizeof(T): boost u256 has sizeof 48 but 32 payload bytes.
     constexpr auto maxBytes = std::numeric_limits<std::decay_t<decltype(to)>>::digits / 8;
-    if (header.payloadLength > maxBytes)
+    if (header->payloadLength > maxBytes)
     {
-        return std::unexpected(RlpError{
-            .code = DecodingError::UnexpectedLength, .message = "integer wider than target type"});
+        return rlpFail(DecodingError::UnexpectedLength, "integer wider than target type");
     }
     // Canonical integers carry no leading zero byte, and zero is the empty string 0x80, never a
     // single 0x00 (op-geth ErrCanonInt). tryDecodeHeader only checks length prefixes (issue #5353).
-    if (header.payloadLength >= 1 && from[0] == 0)
+    if (header->payloadLength >= 1 && from[0] == 0)
     {
-        return std::unexpected(RlpError{.code = DecodingError::NonCanonicalSize,
-            .message = "Non-canonical integer: leading zero byte"});
+        return rlpFail(DecodingError::NonCanonicalSize, "Non-canonical integer: leading zero byte");
     }
     to = fromBigEndian<std::decay_t<decltype(to)>, bcos::bytesRef>(
-        from.getCroppedData(0, header.payloadLength));
-    from = from.getCroppedData(header.payloadLength);
+        from.getCroppedData(0, header->payloadLength));
+    from = from.getCroppedData(header->payloadLength);
     return {};
 }
 
@@ -377,6 +361,23 @@ inline void decode(bytesRef& from, Args&... args)
         throwRlpDecodeError(DecodingError::UnexpectedListElements, "Unexpected list elements");
     }
     from = from.getCroppedData(header.payloadLength);
+}
+
+// Decodes a buffer that must hold exactly one top-level RLP item (geth's rlp.DecodeBytes
+// semantics, ErrMoreThanOneValue): trailing bytes after the item are rejected, so two
+// distinct wire encodings cannot map to the same decoded object. The codec's decode only
+// advances a view cursor and never writes the buffer, so the const_cast is confined to
+// this read-only entry point. The element decode overload is found by ADL on T.
+template <typename T>
+void decodeExact(bcos::bytesConstRef from, T& to)
+{
+    bytesRef in(const_cast<bcos::byte*>(from.data()), from.size());
+    decode(in, to);
+    if (!in.empty())
+    {
+        throwRlpDecodeError(
+            DecodingError::UnexpectedListElements, "trailing bytes after top-level RLP item");
+    }
 }
 
 }  // namespace bcos::codec::rlp

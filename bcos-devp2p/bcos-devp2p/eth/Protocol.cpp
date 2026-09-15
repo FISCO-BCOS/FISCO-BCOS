@@ -31,9 +31,8 @@ namespace bcos::devp2p::eth
 {
 using bcos::codec::rlp::RlpResult;
 using bcos::devp2p::detail::genericError;
-using bcos::devp2p::detail::takeBytes;
+using bcos::devp2p::detail::take;
 using bcos::devp2p::detail::takeListPayload;
-using bcos::devp2p::detail::takeUint;
 
 namespace
 {
@@ -78,7 +77,7 @@ bcos::bytes rlpList(std::vector<bcos::bytes> const& _items)
 // --- decode helpers (non-throwing; the shared take* item extractors and
 // genericError live in bcos-devp2p/RlpTake.h — these are the eth-specific ones) ---
 // Extracts one COMPLETE RLP element (prefix + payload) as opaque bytes. Unlike
-// takeBytes (which only accepts RLP strings), this handles list elements too —
+// take<bcos::bytes> (which only accepts RLP strings), this handles list elements too —
 // required for BlockHeaders entries (headers are RLP lists), BlockBodies
 // transactions (legacy txs are RLP lists) and withdrawals (RLP lists).
 RlpResult<bcos::bytes> takeRlpItem(bcos::bytesRef& _view)
@@ -113,7 +112,7 @@ RlpResult<bcos::bytes> takeTx(bcos::bytesRef& _view)
     {
         // Typed transaction wrapped as an RLP string: return its content
         // (0xNN || rlp(payload)) without the string prefix.
-        return takeBytes(_view);
+        return take<bcos::bytes>(_view);
     }
     if (_view[0] >= 0xc0)
     {
@@ -127,32 +126,16 @@ RlpResult<bcos::bytes> takeTx(bcos::bytesRef& _view)
     }
     bcos::byte const type = _view[0];
     _view = bcos::bytesRef(_view.data() + 1, _view.size() - 1);
-    // Manual propagation: the payload is post-processed (type byte re-prepended)
-    // before returning, so RLP_TRY does not apply here.
-    auto payload = takeRlpItem(_view);
-    if (!payload)
-    {
-        return std::unexpected(payload.error());
-    }
-    payload->insert(payload->begin(), type);
-    return std::move(*payload);
-}
-
-RlpResult<h256> takeH256(bcos::bytesRef& _view)
-{
-    h256 out;
-    if (auto result = bcos::codec::rlp::tryDecode(_view, out); !result) [[unlikely]]
-    {
-        return std::unexpected(result.error());
-    }
-    return out;
+    RLP_TRY(auto payload, takeRlpItem(_view));
+    payload.insert(payload.begin(), type);
+    return payload;
 }
 
 // forkid = [forkHash(4 bytes), next]
 RlpResult<ForkId> takeForkId(bcos::bytesRef& _view)
 {
     RLP_TRY(auto items, takeListPayload(_view, "eth: expected an RLP list"));
-    RLP_TRY(auto forkHashBytes, takeBytes(items));
+    RLP_TRY(auto forkHashBytes, take<bcos::bytes>(items));
     if (forkHashBytes.size() != 4)
     {
         return std::unexpected(genericError("decodeStatus: invalid fork hash size"));
@@ -162,7 +145,7 @@ RlpResult<ForkId> takeForkId(bcos::bytesRef& _view)
                   (static_cast<uint32_t>(forkHashBytes[1]) << 16) |
                   (static_cast<uint32_t>(forkHashBytes[2]) << 8) |
                   static_cast<uint32_t>(forkHashBytes[3]);
-    RLP_TRY(forkId.next, takeUint(items));
+    RLP_TRY(forkId.next, take<uint64_t>(items));
     return forkId;
 }
 }  // namespace
@@ -200,8 +183,8 @@ RlpResult<StatusMessage> decodeStatus(bytesConstRef _data, uint8_t _negotiatedVe
     bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
     RLP_TRY(auto items, takeListPayload(view, "eth: expected an RLP list"));
 
-    RLP_TRY(msg.protocolVersion, takeUint(items));
-    RLP_TRY(msg.networkId, takeUint(items));
+    RLP_TRY(msg.protocolVersion, take<uint64_t>(items));
+    RLP_TRY(msg.networkId, take<uint64_t>(items));
     // The wire layout (eth/68 vs eth/69+) is selected from the version NEGOTIATED
     // in the Hello exchange when the caller knows it, never from the
     // peer-supplied field alone; a mismatched embedded version is rejected.
@@ -216,11 +199,11 @@ RlpResult<StatusMessage> decodeStatus(bytesConstRef _data, uint8_t _negotiatedVe
     {
         // EIP-7642: [version, networkId, genesis, forkid, earliest, latest, latestHash]
         msg.eip7642 = true;
-        RLP_TRY(msg.genesisHash, takeH256(items));
+        RLP_TRY(msg.genesisHash, take<h256>(items));
         RLP_TRY(msg.forkId, takeForkId(items));
-        RLP_TRY(msg.earliestBlock, takeUint(items));
-        RLP_TRY(msg.latestBlock, takeUint(items));
-        RLP_TRY(msg.latestBlockHash, takeH256(items));
+        RLP_TRY(msg.earliestBlock, take<uint64_t>(items));
+        RLP_TRY(msg.latestBlock, take<uint64_t>(items));
+        RLP_TRY(msg.latestBlockHash, take<h256>(items));
         // Consumers still read headHash (e.g. for the peer-head log line); point it
         // at the latest advertised block hash.
         msg.headHash = msg.latestBlockHash;
@@ -228,9 +211,9 @@ RlpResult<StatusMessage> decodeStatus(bytesConstRef _data, uint8_t _negotiatedVe
     else
     {
         // eth/68: [version, networkId, td, head, genesis, forkid]
-        RLP_TRY(msg.totalDifficulty, takeBytes(items));
-        RLP_TRY(msg.headHash, takeH256(items));
-        RLP_TRY(msg.genesisHash, takeH256(items));
+        RLP_TRY(msg.totalDifficulty, take<bcos::bytes>(items));
+        RLP_TRY(msg.headHash, take<h256>(items));
+        RLP_TRY(msg.genesisHash, take<h256>(items));
         RLP_TRY(msg.forkId, takeForkId(items));
     }
     return msg;
@@ -262,11 +245,11 @@ RlpResult<GetBlockHeadersMessage> decodeGetBlockHeaders(bytesConstRef _data)
     GetBlockHeadersMessage msg;
     bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
     RLP_TRY(auto items, takeListPayload(view, "eth: expected an RLP list"));
-    RLP_TRY(msg.requestId, takeUint(items));
+    RLP_TRY(msg.requestId, take<uint64_t>(items));
 
     RLP_TRY(auto inner, takeListPayload(items, "eth: expected an RLP list"));
     // origin: either a hash (32 bytes) or a minimal big-endian number.
-    RLP_TRY(auto originBytes, takeBytes(inner));
+    RLP_TRY(auto originBytes, take<bcos::bytes>(inner));
     if (originBytes.size() == 32)
     {
         msg.originHash = h256(bytesConstRef(originBytes.data(), originBytes.size()));
@@ -280,9 +263,9 @@ RlpResult<GetBlockHeadersMessage> decodeGetBlockHeaders(bytesConstRef _data)
         }
         msg.originNumber = originNumber;
     }
-    RLP_TRY(msg.amount, takeUint(inner));
-    RLP_TRY(msg.skip, takeUint(inner));
-    RLP_TRY(auto reverse, takeUint(inner));
+    RLP_TRY(msg.amount, take<uint64_t>(inner));
+    RLP_TRY(msg.skip, take<uint64_t>(inner));
+    RLP_TRY(auto reverse, take<uint64_t>(inner));
     msg.reverse = (reverse != 0);
     return msg;
 }
@@ -309,7 +292,7 @@ RlpResult<BlockHeadersMessage> decodeBlockHeaders(bytesConstRef _data)
     BlockHeadersMessage msg;
     bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
     RLP_TRY(auto items, takeListPayload(view, "eth: expected an RLP list"));
-    RLP_TRY(msg.requestId, takeUint(items));
+    RLP_TRY(msg.requestId, take<uint64_t>(items));
     RLP_TRY(auto headers, takeListPayload(items, "eth: expected an RLP list"));
     while (!headers.empty())
     {
@@ -338,11 +321,11 @@ RlpResult<GetBlockBodiesMessage> decodeGetBlockBodies(bytesConstRef _data)
     GetBlockBodiesMessage msg;
     bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
     RLP_TRY(auto items, takeListPayload(view, "eth: expected an RLP list"));
-    RLP_TRY(msg.requestId, takeUint(items));
+    RLP_TRY(msg.requestId, take<uint64_t>(items));
     RLP_TRY(auto hashes, takeListPayload(items, "eth: expected an RLP list"));
     while (!hashes.empty())
     {
-        RLP_TRY(auto hash, takeH256(hashes));
+        RLP_TRY(auto hash, take<h256>(hashes));
         msg.hashes.push_back(hash);
     }
     return msg;
@@ -407,7 +390,7 @@ RlpResult<BlockBodiesMessage> decodeBlockBodies(bytesConstRef _data)
     BlockBodiesMessage msg;
     bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
     RLP_TRY(auto items, takeListPayload(view, "eth: expected an RLP list"));
-    RLP_TRY(msg.requestId, takeUint(items));
+    RLP_TRY(msg.requestId, take<uint64_t>(items));
     RLP_TRY(auto bodies, takeListPayload(items, "eth: expected an RLP list"));
     while (!bodies.empty())
     {
@@ -464,8 +447,8 @@ RlpResult<NewBlockHashesMessage> decodeNewBlockHashes(bytesConstRef _data)
     {
         RLP_TRY(auto entry, takeListPayload(items, "eth: expected an RLP list"));
         NewBlockHashesMessage::Entry e;
-        RLP_TRY(e.hash, takeH256(entry));
-        RLP_TRY(e.number, takeUint(entry));
+        RLP_TRY(e.hash, take<h256>(entry));
+        RLP_TRY(e.number, take<uint64_t>(entry));
         msg.entries.push_back(std::move(e));
     }
     return msg;

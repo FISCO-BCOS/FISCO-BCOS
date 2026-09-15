@@ -56,29 +56,16 @@ inline bcos::codec::rlp::RlpResult<bcos::bytesRef> takeListPayload(
     return payload;
 }
 
-inline bcos::codec::rlp::RlpResult<uint64_t> takeUint(bcos::bytesRef& _view)
+// One item extractor for every type with a non-throwing tryDecode overload
+// (uint64_t, bcos::bytes, std::string, h256); advances `_view` past the item.
+template <typename T>
+inline bcos::codec::rlp::RlpResult<T> take(bcos::bytesRef& _view)
 {
-    uint64_t value = 0;
-    if (auto result = bcos::codec::rlp::tryDecode(_view, value); !result) [[unlikely]]
-    {
-        return std::unexpected(result.error());
-    }
-    return value;
-}
-
-inline bcos::codec::rlp::RlpResult<bcos::bytes> takeBytes(bcos::bytesRef& _view)
-{
-    bcos::bytes out;
+    T out{};
     if (auto result = bcos::codec::rlp::tryDecode(_view, out); !result) [[unlikely]]
     {
         return std::unexpected(result.error());
     }
     return out;
-}
-
-inline bcos::codec::rlp::RlpResult<std::string> takeString(bcos::bytesRef& _view)
-{
-    RLP_TRY(auto bytes, takeBytes(_view));
-    return std::string(bytes.begin(), bytes.end());
 }
 }  // namespace bcos::devp2p::detail

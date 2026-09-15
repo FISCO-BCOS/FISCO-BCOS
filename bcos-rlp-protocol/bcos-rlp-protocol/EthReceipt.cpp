@@ -166,17 +166,7 @@ void EthReceipt::rlpEncode(bcos::bytes& out) const
 
 void EthReceipt::rlpDecode(bcos::bytesConstRef data)
 {
-    // The codec's decode only advances a view cursor and never writes the buffer, so
-    // take the view directly; the const_cast is confined to this read-only entry point.
-    bytesRef in(const_cast<bcos::byte*>(data.data()), data.size());
-    codec::rlp::decode(in, m_data);
-    // geth's rlp.DecodeBytes rejects trailing bytes (ErrMoreThanOneValue); mirror that so
-    // two distinct wire encodings cannot map to the same decoded object.
-    if (!in.empty())
-    {
-        codec::rlp::throwRlpDecodeError(codec::rlp::DecodingError::UnexpectedListElements,
-            "trailing bytes after top-level RLP item");
-    }
+    codec::rlp::decodeExact(data, m_data);
 }
 
 void toEthReceiptData(TransactionReceipt const& receipt, uint8_t txType, EthReceiptData& eth)

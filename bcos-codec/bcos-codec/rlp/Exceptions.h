@@ -34,31 +34,22 @@ DERIVE_BCOS_EXCEPTION(RlpEncodeException);
 //   boost::get_error_info<errinfo_rlpErrorCode>(e)
 using errinfo_rlpErrorCode = boost::error_info<struct tag_rlpErrorCode, int32_t>;
 
-[[noreturn]] inline void throwRlpDecodeError(int32_t code, std::string_view message)
-{
-    BOOST_THROW_EXCEPTION(RlpDecodeException{} << errinfo_rlpErrorCode(code)
-                                               << bcos::errinfo_comment(std::string(message)));
-}
-
-[[noreturn]] inline void throwRlpEncodeError(int32_t code, std::string_view message)
-{
-    BOOST_THROW_EXCEPTION(RlpEncodeException{} << errinfo_rlpErrorCode(code)
-                                               << bcos::errinfo_comment(std::string(message)));
-}
-
-// Enum convenience overloads: accept DecodingError, protocol::EthBlockHeaderError, etc.
+// Accepts any error code: an unscoped enum (DecodingError), an enum class
+// (protocol::EthBlockHeaderError, ...) or a raw int32.
 template <typename E>
-    requires std::is_enum_v<E>
+    requires(std::is_enum_v<E> || std::is_same_v<E, int32_t>)
 [[noreturn]] inline void throwRlpDecodeError(E code, std::string_view message)
 {
-    throwRlpDecodeError(static_cast<int32_t>(code), message);
+    BOOST_THROW_EXCEPTION(RlpDecodeException{} << errinfo_rlpErrorCode(static_cast<int32_t>(code))
+                                               << bcos::errinfo_comment(std::string(message)));
 }
 
 template <typename E>
-    requires std::is_enum_v<E>
+    requires(std::is_enum_v<E> || std::is_same_v<E, int32_t>)
 [[noreturn]] inline void throwRlpEncodeError(E code, std::string_view message)
 {
-    throwRlpEncodeError(static_cast<int32_t>(code), message);
+    BOOST_THROW_EXCEPTION(RlpEncodeException{} << errinfo_rlpErrorCode(static_cast<int32_t>(code))
+                                               << bcos::errinfo_comment(std::string(message)));
 }
 
 // Shared accessors for the two error_info fields, so catch sites stop re-deriving

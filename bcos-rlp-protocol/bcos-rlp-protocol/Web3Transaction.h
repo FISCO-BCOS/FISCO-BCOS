@@ -177,11 +177,8 @@ void decode(bcos::bytesRef& in, rpc::AccessListEntry&);
 void decode(bcos::bytesRef& in, rpc::AuthorizationListEntry&);
 void decode(bcos::bytesRef& in, rpc::Web3Transaction&);
 void decodeFromPayload(bcos::bytesRef& in, rpc::Web3Transaction&);
-void decodeTransaction(bcos::bytesRef& in, rpc::Web3Transaction&, bool withSignature);
 // Value-returning boundary wrappers around the throwing entry points above (see captureRlp):
 // use these on hot ingress paths where malformed input is routine.
 RlpResult<void> tryDecodeFromPayload(bcos::bytesRef& in, rpc::Web3Transaction& out);
-RlpResult<void> tryDecodeTransaction(
-    bcos::bytesRef& in, rpc::Web3Transaction& out, bool withSignature);
 }  // namespace codec::rlp
 }  // namespace bcos

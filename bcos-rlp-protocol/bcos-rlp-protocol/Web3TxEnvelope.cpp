@@ -133,24 +133,19 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
     // non-throwing tryDecodeHeader/tryDecode cores keep this hot admission path free of
     // exception unwinds on attacker-controlled input.
     auto const takeHeader = [](bcos::bytesRef& view, bcos::codec::rlp::Header& header) {
-        auto result = bcos::codec::rlp::tryDecodeHeader(view);
-        if (!result) [[unlikely]]
+        if (auto result = bcos::codec::rlp::tryDecodeHeader(view)) [[likely]]
         {
-            return false;
+            header = *result;
+            return true;
         }
-        header = *result;
-        return true;
+        return false;
     };
     if (firstByte > 0 && firstByte < bcos::codec::rlp::BYTES_HEAD_BASE)
     {
         // Typed: chainId is inner-list field 0. Non-minimal RLP is Malformed.
         cursor = cursor.getCroppedData(1);
         bcos::codec::rlp::Header header{};
-        if (!takeHeader(cursor, header)) [[unlikely]]
-        {
-            return malformed();
-        }
-        if (!header.isList) [[unlikely]]
+        if (!takeHeader(cursor, header) || !header.isList) [[unlikely]]
         {
             return malformed();
         }
@@ -190,11 +185,7 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
     // and fields 8/9 are the non-empty r/s scalars (EIP-2 keeps r,s in [1,n-1], never empty).
     // Distinguish by whether field 8 is an empty byte string.
     bcos::codec::rlp::Header header{};
-    if (!takeHeader(cursor, header)) [[unlikely]]
-    {
-        return malformed();
-    }
-    if (!header.isList) [[unlikely]]
+    if (!takeHeader(cursor, header) || !header.isList) [[unlikely]]
     {
         return malformed();
     }
@@ -266,17 +257,15 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
         {
             return false;  // no 0,0 placeholders — treat as full form (or malformed)
         }
-        // Emptiness is computed once as the full predicate and doubles as the guard, so
-        // the values handed to the shared discriminator are the real decoded results —
-        // never a tautology re-derived after a guard that already proved them (Codacy:
+        // Emptiness is checked once, directly on the decoded header, doubling as the guard —
+        // never re-derived after a guard that already proved it (Codacy:
         // 'field9Header.payloadLength == 0 is always true').
         bcos::codec::rlp::Header field8Header{};
         if (!takeHeader(tailProbe, field8Header)) [[unlikely]]
         {
             return std::nullopt;
         }
-        bool const field8Empty = !field8Header.isList && field8Header.payloadLength == 0;
-        if (!field8Empty)
+        if (field8Header.isList || field8Header.payloadLength != 0)
         {
             return false;
         }
@@ -289,8 +278,7 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
         {
             return std::nullopt;
         }
-        bool const field9Empty = !field9Header.isList && field9Header.payloadLength == 0;
-        if (!field9Empty)
+        if (field9Header.isList || field9Header.payloadLength != 0)
         {
             return false;
         }
@@ -300,7 +288,7 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
         {
             return std::nullopt;
         }
-        return isLegacyPreimageTail(field7, field8Empty, field9Empty);
+        return true;
     }();
     if (!isPreimageTail.has_value()) [[unlikely]]
     {

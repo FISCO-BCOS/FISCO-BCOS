@@ -270,10 +270,7 @@ RlpResult<Message> MessageCodec::decode(bytesConstRef _frameData) const
     // The message id is RLP-encoded (RLP(0) == 0x80), so decode it properly, with the
     // codec's canonical-integer rules via the non-throwing core.
     bcos::bytesRef view(const_cast<bcos::byte*>(_frameData.data()), _frameData.size());
-    if (auto result = bcos::codec::rlp::tryDecode(view, message.id); !result) [[unlikely]]
-    {
-        return std::unexpected(result.error());
-    }
+    RLP_TRY(message.id, detail::take<uint8_t>(view));
     auto payload = _frameData.getCroppedData(_frameData.size() - view.size());
     if (!m_compressionEnabled)
     {

@@ -285,23 +285,9 @@ void decodeFromPayload(bcos::bytesRef& in, rpc::Web3Transaction& out)
     out.decode(in, false);
 }
 
-void decodeTransaction(bcos::bytesRef& in, rpc::Web3Transaction& out, bool withSignature)
-{
-    // Kept as the entry point (the call target of decodeOpEnvelope/decodeOpEnvelopeWithSig,
-    // EthEndpoint.cpp:73); it now delegates to the member function so the new handler dispatch
-    // path is used.
-    out.decode(in, withSignature);
-}
-
 RlpResult<void> tryDecodeFromPayload(bcos::bytesRef& in, rpc::Web3Transaction& out)
 {
     return captureRlp([&] { decodeFromPayload(in, out); });
-}
-
-RlpResult<void> tryDecodeTransaction(
-    bcos::bytesRef& in, rpc::Web3Transaction& out, bool withSignature)
-{
-    return captureRlp([&] { decodeTransaction(in, out, withSignature); });
 }
 }  // namespace codec::rlp
 }  // namespace bcos

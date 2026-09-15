@@ -252,16 +252,7 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
                 transaction.extraTransactionBytes().size());
         // The decode result is intentionally ignored: on undecodable extraTransactionBytes
         // the zero/default fields already filled above are the observable answer.
-        try
-        {
-            codec::rlp::decodeFromPayload(extraBytesRef, web3Tx);
-        }
-        catch (codec::rlp::RlpDecodeException const& e)
-        {
-            RPC_IMPL_LOG(DEBUG)
-                << LOG_DESC("toJsonResp: undecodable web3 payload, keeping default fields")
-                << LOG_KV("reason", codec::rlp::rlpErrorMessage(e, "RLP decode failed"));
-        }
+        (void)codec::rlp::tryDecodeFromPayload(extraBytesRef, web3Tx);
         jResp["value"] = web3Tx.value.str();
         jResp["gasLimit"] = web3Tx.gasLimit;
         if (web3Tx.type >= TransactionType::EIP1559)
@@ -1448,9 +1439,9 @@ void JsonRpcImpl_2_0::getGroupPeers(std::string_view _groupID, RespFunc _respFun
         Json::Value jResp(Json::arrayValue);
         if (error)
         {
-            RPC_IMPL_LOG(INFO) << LOG_BADGE("getGroupPeers failed")
-                               << LOG_KV("code", error->errorCode())
-                               << LOG_KV("message", error->errorMessage());
+            RPC_IMPL_LOG(INFO)
+                << LOG_BADGE("getGroupPeers failed") << LOG_KV("code", error->errorCode())
+                << LOG_KV("message", error->errorMessage());
             respFunc(error, jResp);
             co_return;
         }

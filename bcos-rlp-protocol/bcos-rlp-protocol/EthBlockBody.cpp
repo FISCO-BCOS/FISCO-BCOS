@@ -41,14 +41,21 @@ size_t txWireLength(bcos::bytes const& _tx) noexcept
     return _tx.size();
 }
 
-// RLP length of the complete transactions list element (header + payload).
-size_t txListLength(std::vector<bcos::bytes> const& _txs) noexcept
+// Summed RLP length of all transaction elements (the transactions list payload).
+size_t txPayloadLength(std::vector<bcos::bytes> const& _txs) noexcept
 {
     size_t payload = 0;
     for (auto const& tx : _txs)
     {
         payload += txWireLength(tx);
     }
+    return payload;
+}
+
+// RLP length of the complete transactions list element (header + payload).
+size_t txListLength(std::vector<bcos::bytes> const& _txs) noexcept
+{
+    size_t const payload = txPayloadLength(_txs);
     return lengthOfLength(payload) + payload;
 }
 
@@ -57,11 +64,7 @@ size_t txListLength(std::vector<bcos::bytes> const& _txs) noexcept
 // is the single length source so length()/encode() stay in agreement.
 void encodeTxList(bcos::bytes& _out, std::vector<bcos::bytes> const& _txs) noexcept
 {
-    size_t payload = 0;
-    for (auto const& tx : _txs)
-    {
-        payload += txWireLength(tx);
-    }
+    size_t const payload = txPayloadLength(_txs);
     encodeHeader(_out, {.isList = true, .payloadLength = payload});
     _out.reserve(_out.size() + payload);
     for (auto const& tx : _txs)
@@ -75,6 +78,19 @@ void encodeTxList(bcos::bytes& _out, std::vector<bcos::bytes> const& _txs) noexc
             _out.insert(_out.end(), tx.begin(), tx.end());
         }
     }
+}
+
+// RLP payload length of the whole block body list (header + transactions + ommers +
+// withdrawals?); shared by length() and encode() so the two cannot drift apart.
+size_t bodyPayloadLength(protocol::EthBlockData const& _body) noexcept
+{
+    size_t payload = bcos::codec::rlp::length(_body.header) + txListLength(_body.transactions) +
+                     length(_body.ommers);
+    if (_body.withdrawals.has_value())
+    {
+        payload += length(*_body.withdrawals);
+    }
+    return payload;
 }
 }  // namespace
 
@@ -102,18 +118,14 @@ void decodeTx(bcos::bytesRef& _in, bcos::bytes& _out)
             throwRlpDecodeError(DecodingError::UnsupportedTransactionType,
                 "typed transaction too short in block body (errShortTypedTx)");
         }
-        if (_out[0] == 0)
+        // EIP-2718 types are confined to 0x01..0x7f: 0x00 is the reserved type byte, and
+        // a content byte >= 0x80 would be classified as a legacy list on re-encode (the
+        // encoder's discriminator is tx.front() < LIST_HEAD_BASE), so decode and encode
+        // would not be the identity.
+        if (_out[0] == 0 || _out[0] >= BYTES_HEAD_BASE)
         {
             throwRlpDecodeError(DecodingError::UnsupportedTransactionType,
-                "invalid EIP-2718 type byte 0x00 in block body");
-        }
-        if (_out[0] >= BYTES_HEAD_BASE)
-        {
-            // A content byte >= 0x80 would be classified as a legacy list on re-encode
-            // (the encoder's discriminator is tx.front() < LIST_HEAD_BASE), so decode and
-            // encode would not be the identity. EIP-2718 types are confined to 0x01..0x7f.
-            throwRlpDecodeError(DecodingError::UnsupportedTransactionType,
-                "EIP-2718 transaction type byte out of range in block body");
+                "EIP-2718 transaction type byte out of range 0x01..0x7f in block body");
         }
         return;
     }
@@ -124,18 +136,15 @@ void decodeTx(bcos::bytesRef& _in, bcos::bytes& _out)
         // fields, so a payload shorter than 9 bytes cannot be one (this also rejects the
         // bare 0xc0 empty-list element that would otherwise cause ~50x memory
         // amplification via one-element-per-input-byte).
-        size_t const originalSize = _in.size();
+        auto* begin = _in.data();
         auto header = decodeHeader(_in);
         if (header.payloadLength < 9)
         {
             throwRlpDecodeError(DecodingError::UnexpectedListElements,
                 "legacy transaction element too short in block body");
         }
-        size_t const prefixLen = originalSize - _in.size();
-        size_t const payloadLen = header.payloadLength;
-        bcos::byte const* begin = _in.data() - static_cast<std::ptrdiff_t>(prefixLen);
-        _out.assign(begin, begin + prefixLen + payloadLen);
-        _in = bcos::bytesRef(_in.data() + payloadLen, _in.size() - payloadLen);
+        _out.assign(begin, _in.data() + header.payloadLength);
+        _in = _in.getCroppedData(header.payloadLength);
         return;
     }
     // A bare single-byte element (0x00..0x7f) is not a valid EIP-2718 transaction.
@@ -146,22 +155,12 @@ void decodeTx(bcos::bytesRef& _in, bcos::bytes& _out)
 
 size_t length(const protocol::EthBlockData& _body) noexcept
 {
-    size_t const txsLen = txListLength(_body.transactions);
-    size_t payload = bcos::codec::rlp::length(_body.header) + txsLen + length(_body.ommers);
-    if (_body.withdrawals.has_value())
-    {
-        payload += length(*_body.withdrawals);
-    }
+    size_t const payload = bodyPayloadLength(_body);
     return lengthOfLength(payload) + payload;
 }
 void encode(bcos::bytes& _out, const protocol::EthBlockData& _body) noexcept
 {
-    size_t const txsLen = txListLength(_body.transactions);
-    size_t payload = bcos::codec::rlp::length(_body.header) + txsLen + length(_body.ommers);
-    if (_body.withdrawals.has_value())
-    {
-        payload += length(*_body.withdrawals);
-    }
+    size_t const payload = bodyPayloadLength(_body);
     encodeHeader(_out, {.isList = true, .payloadLength = payload});
     _out.reserve(_out.size() + payload);
     bcos::codec::rlp::encode(_out, _body.header);
@@ -213,9 +212,8 @@ void decode(bcos::bytesRef& _in, protocol::EthBlockData& _body)
     // otherwise the fourth item is decoded as the withdrawals list.
     if (!items.empty())
     {
-        std::vector<bcos::protocol::EthWithdrawalData> withdrawals;
-        decode(items, withdrawals);
-        _body.withdrawals = std::move(withdrawals);
+        _body.withdrawals.emplace();
+        decode(items, *_body.withdrawals);
     }
     else
     {
@@ -255,10 +253,8 @@ void EthBlock::rlpEncode(bcos::bytes& out) const
             // pass as one element — encode-then-decode would then yield a different set.
             bytesRef view(const_cast<bcos::byte*>(tx.data()), tx.size());
             auto headerResult = codec::rlp::tryDecodeHeader(view);
-            bool const valid = headerResult.has_value() && headerResult->isList &&
-                               headerResult->payloadLength >= 9 &&
-                               headerResult->payloadLength == view.size();
-            if (!valid)
+            if (!headerResult.has_value() || !headerResult->isList ||
+                headerResult->payloadLength < 9 || headerResult->payloadLength != view.size())
             {
                 codec::rlp::throwRlpEncodeError(codec::rlp::DecodingError::UnexpectedListElements,
                     "EthBlock::rlpEncode: invalid legacy transaction element");
@@ -292,18 +288,5 @@ void EthBlock::rlpDecode(bcos::bytesConstRef data)
         codec::rlp::throwRlpDecodeError(codec::rlp::DecodingError::UnexpectedListElements,
             "trailing bytes after top-level RLP item");
     }
-}
-
-size_t length(const EthBlockData& _body) noexcept
-{
-    return codec::rlp::length(_body);
-}
-void encode(bcos::bytes& _out, const EthBlockData& _body) noexcept
-{
-    codec::rlp::encode(_out, _body);
-}
-void decode(bcos::bytesRef& _in, EthBlockData& _body)
-{
-    codec::rlp::decode(_in, _body);
 }
 }  // namespace bcos::protocol

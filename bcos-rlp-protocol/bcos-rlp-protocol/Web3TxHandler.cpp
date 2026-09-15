@@ -30,7 +30,7 @@ bcos::bytesConstRef trimLeadingZeroBytes(bcos::bytesConstRef input) noexcept
     return {input.data() + i, input.size() - i};
 }
 
-// Signature length padding matching the end of decodeTransaction (32 bytes each for R/S).
+// Signature length padding matching the end of Web3Transaction::decode (32 bytes each for R/S).
 void padSignature(bcos::bytes& signatureR, bcos::bytes& signatureS) noexcept
 {
     if (signatureR.size() < bcos::crypto::SECP256K1_SIGNATURE_R_LEN)
@@ -75,9 +75,37 @@ void decodeCanonicalSignatureBytes(bcos::bytesRef& from, bcos::bytes& to)
     bcos::toBigEndian(value, to);
 }
 
+// Shared prologue of the typed decode handlers: reject empty input, consume and check the
+// EIP-2718 type byte, set out.type, then consume the RLP list header; returns the declared
+// list payload length. Error codes/messages are load-bearing (pinned by tests) — Deposit
+// passes its own not-a-list message.
+size_t decodeTypedListHead(bcos::bytesRef& in, TransactionType type, Web3Transaction& out,
+    std::string_view notListMessage = "Unexpected String")
+{
+    if (in.empty())
+    {
+        bcos::codec::rlp::throwRlpDecodeError(
+            codec::rlp::DecodingError::InputTooShort, "Input too short");
+    }
+    if (in[0] != static_cast<bcos::byte>(type))
+    {
+        bcos::codec::rlp::throwRlpDecodeError(
+            codec::rlp::DecodingError::UnsupportedTransactionType, "Unsupported transaction type");
+    }
+    out.type = type;
+    in = in.getCroppedData(1);
+    auto const head = codec::rlp::decodeHeader(in);
+    if (!head.isList)
+    {
+        bcos::codec::rlp::throwRlpDecodeError(
+            codec::rlp::DecodingError::UnexpectedString, notListMessage);
+    }
+    return head.payloadLength;
+}
+
 // ⚠️ decode contract: each handler's decode is self-contained (consumes the envelope itself —
 // Legacy: RLP list header; typed: type byte + RLP list header), copied field-by-field from the
-// corresponding branch of Web3Transaction.cpp decodeTransaction. The dispatcher
+// corresponding branch of Web3Transaction::decode. The dispatcher
 // (Web3Transaction::decode member) should determine the type from the first byte, set out.type,
 // then call handlerFor(type).decode(in, out, withSig), and must not consume the type byte first.
 
@@ -190,8 +218,7 @@ struct LegacyTxHandler : Web3TxHandler
         bcos::byte* const payloadStart = in.data();
         auto const payloadLength = head.payloadLength;
         out.type = TransactionType::Legacy;
-        bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.nonce);
-        bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxPriorityFeePerGas);
+        bcos::rlp::protocol::decodeCanonicalRlpUints(in, out.nonce, out.maxPriorityFeePerGas);
         out.maxFeePerGas = out.maxPriorityFeePerGas;
 
         bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.gasLimit);
@@ -418,33 +445,13 @@ struct EIP2930TxHandler : Web3TxHandler
     // yParity, r, s])
     void decode(bcos::bytesRef& in, Web3Transaction& out, bool withSig) const override
     {
-        if (in.empty())
-        {
-            bcos::codec::rlp::throwRlpDecodeError(
-                codec::rlp::DecodingError::InputTooShort, "Input too short");
-        }
-        if (in[0] != static_cast<bcos::byte>(TransactionType::EIP2930))
-        {
-            bcos::codec::rlp::throwRlpDecodeError(
-                codec::rlp::DecodingError::UnsupportedTransactionType,
-                "Unsupported transaction type");
-        }
-        out.type = TransactionType::EIP2930;
-        in = in.getCroppedData(1);
-        auto const head = codec::rlp::decodeHeader(in);
-        if (!head.isList)
-        {
-            bcos::codec::rlp::throwRlpDecodeError(
-                codec::rlp::DecodingError::UnexpectedString, "Unexpected String");
-        }
+        auto const payloadLength = decodeTypedListHead(in, TransactionType::EIP2930, out);
         // Fields must stay within the declared list payload (op-geth ListEnd parity).
         bcos::byte* const payloadStart = in.data();
-        auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
         // Canonical RLP integers.
-        bcos::rlp::protocol::decodeCanonicalRlpUint(in, chainId);
-        bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.nonce);
-        bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxPriorityFeePerGas);
+        bcos::rlp::protocol::decodeCanonicalRlpUints(
+            in, chainId, out.nonce, out.maxPriorityFeePerGas);
         out.chainId.emplace(chainId);
         // EIP2930: gasPrice is carried in maxFeePerGas
         out.maxFeePerGas = out.maxPriorityFeePerGas;
@@ -481,15 +488,6 @@ struct EIP2930TxHandler : Web3TxHandler
             bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
             decodeCanonicalSignatureBytes(in, out.signatureR);
             decodeCanonicalSignatureBytes(in, out.signatureS);
-            // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
-            // input (same for EIP-2930/1559/4844); silently accepting it would hide bad
-            // transactions.
-            if (out.signatureV > 1)
-            {
-                bcos::codec::rlp::throwRlpDecodeError(
-                    codec::rlp::DecodingError::InvalidVInSignature,
-                    "typed tx y_parity must be 0 or 1");
-            }
         }
         // Rehandle signature and chainId. Pad whenever a signature is present, in BOTH
         // modes (finding BN): a withSig=false RPC-readback decode of a sealed envelope
@@ -601,33 +599,13 @@ struct EIP1559TxHandler : Web3TxHandler
     // destination, amount, data, access_list, yParity, r, s])
     void decode(bcos::bytesRef& in, Web3Transaction& out, bool withSig) const override
     {
-        if (in.empty())
-        {
-            bcos::codec::rlp::throwRlpDecodeError(
-                codec::rlp::DecodingError::InputTooShort, "Input too short");
-        }
-        if (in[0] != static_cast<bcos::byte>(TransactionType::EIP1559))
-        {
-            bcos::codec::rlp::throwRlpDecodeError(
-                codec::rlp::DecodingError::UnsupportedTransactionType,
-                "Unsupported transaction type");
-        }
-        out.type = TransactionType::EIP1559;
-        in = in.getCroppedData(1);
-        auto const head = codec::rlp::decodeHeader(in);
-        if (!head.isList)
-        {
-            bcos::codec::rlp::throwRlpDecodeError(
-                codec::rlp::DecodingError::UnexpectedString, "Unexpected String");
-        }
+        auto const payloadLength = decodeTypedListHead(in, TransactionType::EIP1559, out);
         // Fields must stay within the declared list payload (op-geth ListEnd parity).
         bcos::byte* const payloadStart = in.data();
-        auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
         // Canonical RLP integers.
-        bcos::rlp::protocol::decodeCanonicalRlpUint(in, chainId);
-        bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.nonce);
-        bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxPriorityFeePerGas);
+        bcos::rlp::protocol::decodeCanonicalRlpUints(
+            in, chainId, out.nonce, out.maxPriorityFeePerGas);
         out.chainId.emplace(chainId);
         bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxFeePerGas);
 
@@ -663,15 +641,6 @@ struct EIP1559TxHandler : Web3TxHandler
             bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
             decodeCanonicalSignatureBytes(in, out.signatureR);
             decodeCanonicalSignatureBytes(in, out.signatureS);
-            // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
-            // input (same for EIP-2930/1559/4844); silently accepting it would hide bad
-            // transactions.
-            if (out.signatureV > 1)
-            {
-                bcos::codec::rlp::throwRlpDecodeError(
-                    codec::rlp::DecodingError::InvalidVInSignature,
-                    "typed tx y_parity must be 0 or 1");
-            }
         }
         // Rehandle signature and chainId. Pad whenever a signature is present, in BOTH
         // modes (finding BN): a withSig=false RPC-readback decode of a sealed envelope
@@ -750,28 +719,10 @@ struct DepositTxHandler : Web3TxHandler
     // itself); the dispatcher (Web3Transaction::decode) does not trim the type byte first.
     void decode(bcos::bytesRef& in, Web3Transaction& out, bool /*withSig*/) const override
     {
-        if (in.empty())
-        {
-            bcos::codec::rlp::throwRlpDecodeError(
-                codec::rlp::DecodingError::InputTooShort, "Input too short");
-        }
-        if (in[0] != static_cast<bcos::byte>(TransactionType::Deposit))
-        {
-            bcos::codec::rlp::throwRlpDecodeError(
-                codec::rlp::DecodingError::UnsupportedTransactionType,
-                "Unsupported transaction type");
-        }
-        out.type = TransactionType::Deposit;
-        in = in.getCroppedData(1);
-        auto const head = codec::rlp::decodeHeader(in);
-        if (!head.isList)
-        {
-            bcos::codec::rlp::throwRlpDecodeError(
-                codec::rlp::DecodingError::UnexpectedString, "deposit: expected RLP list");
-        }
+        auto const payloadLength =
+            decodeTypedListHead(in, TransactionType::Deposit, out, "deposit: expected RLP list");
         // Fields must stay within the declared list payload (op-geth ListEnd parity).
         bcos::byte* const payloadStart = in.data();
-        auto const payloadLength = head.payloadLength;
         // Decode failures throw on every field decode (must not swallow silently)
         codec::rlp::decode(in, out.sourceHash);  // h256
         codec::rlp::decode(in, out.from);        // Address
@@ -792,10 +743,9 @@ struct DepositTxHandler : Web3TxHandler
             codec::rlp::decode(in, addr);
             out.to.emplace(addr);
         }
-        // mint/value/gas: same canonical integers as the executor deposit decoder.
-        bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.mint);      // u256
-        bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.value);     // u256
-        bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.gasLimit);  // uint64
+        // mint/value/gas (u256/u256/uint64): same canonical integers as the executor deposit
+        // decoder.
+        bcos::rlp::protocol::decodeCanonicalRlpUints(in, out.mint, out.value, out.gasLimit);
         // isSystemTx: only 0x80 (false) or 0x01 (true). decode(bool) rejects 0x80.
         {
             auto const* const start = in.data();
@@ -921,33 +871,13 @@ struct EIP4844TxHandler : Web3TxHandler
     // to, value, data, access_list, max_fee_per_blob_gas, blob_versioned_hashes, yParity, r, s])
     void decode(bcos::bytesRef& in, Web3Transaction& out, bool withSig) const override
     {
-        if (in.empty())
-        {
-            bcos::codec::rlp::throwRlpDecodeError(
-                codec::rlp::DecodingError::InputTooShort, "Input too short");
-        }
-        if (in[0] != static_cast<bcos::byte>(TransactionType::EIP4844))
-        {
-            bcos::codec::rlp::throwRlpDecodeError(
-                codec::rlp::DecodingError::UnsupportedTransactionType,
-                "Unsupported transaction type");
-        }
-        out.type = TransactionType::EIP4844;
-        in = in.getCroppedData(1);
-        auto const head = codec::rlp::decodeHeader(in);
-        if (!head.isList)
-        {
-            bcos::codec::rlp::throwRlpDecodeError(
-                codec::rlp::DecodingError::UnexpectedString, "Unexpected String");
-        }
+        auto const payloadLength = decodeTypedListHead(in, TransactionType::EIP4844, out);
         // Fields must stay within the declared list payload (op-geth ListEnd parity).
         bcos::byte* const payloadStart = in.data();
-        auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
         // Canonical RLP integers.
-        bcos::rlp::protocol::decodeCanonicalRlpUint(in, chainId);
-        bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.nonce);
-        bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxPriorityFeePerGas);
+        bcos::rlp::protocol::decodeCanonicalRlpUints(
+            in, chainId, out.nonce, out.maxPriorityFeePerGas);
         out.chainId.emplace(chainId);
         bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxFeePerGas);
 
@@ -986,15 +916,6 @@ struct EIP4844TxHandler : Web3TxHandler
             bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
             decodeCanonicalSignatureBytes(in, out.signatureR);
             decodeCanonicalSignatureBytes(in, out.signatureS);
-            // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
-            // input (same for EIP-2930/1559/4844); silently accepting it would hide bad
-            // transactions.
-            if (out.signatureV > 1)
-            {
-                bcos::codec::rlp::throwRlpDecodeError(
-                    codec::rlp::DecodingError::InvalidVInSignature,
-                    "typed tx y_parity must be 0 or 1");
-            }
         }
         // Rehandle signature and chainId. Pad whenever a signature is present, in BOTH
         // modes (finding BN): a withSig=false RPC-readback decode of a sealed envelope
@@ -1109,33 +1030,13 @@ struct EIP7702TxHandler : Web3TxHandler
     // destination, amount, data, access_list, authorization_list, yParity, r, s])
     void decode(bcos::bytesRef& in, Web3Transaction& out, bool withSig) const override
     {
-        if (in.empty())
-        {
-            bcos::codec::rlp::throwRlpDecodeError(
-                codec::rlp::DecodingError::InputTooShort, "Input too short");
-        }
-        if (in[0] != static_cast<bcos::byte>(TransactionType::EIP7702))
-        {
-            bcos::codec::rlp::throwRlpDecodeError(
-                codec::rlp::DecodingError::UnsupportedTransactionType,
-                "Unsupported transaction type");
-        }
-        out.type = TransactionType::EIP7702;
-        in = in.getCroppedData(1);
-        auto const head = codec::rlp::decodeHeader(in);
-        if (!head.isList)
-        {
-            bcos::codec::rlp::throwRlpDecodeError(
-                codec::rlp::DecodingError::UnexpectedString, "Unexpected String");
-        }
+        auto const payloadLength = decodeTypedListHead(in, TransactionType::EIP7702, out);
         // Fields must stay within the declared list payload (op-geth ListEnd parity).
         bcos::byte* const payloadStart = in.data();
-        auto const payloadLength = head.payloadLength;
         uint64_t chainId = 0;
         // Canonical RLP integers.
-        bcos::rlp::protocol::decodeCanonicalRlpUint(in, chainId);
-        bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.nonce);
-        bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxPriorityFeePerGas);
+        bcos::rlp::protocol::decodeCanonicalRlpUints(
+            in, chainId, out.nonce, out.maxPriorityFeePerGas);
         out.chainId.emplace(chainId);
         bcos::rlp::protocol::decodeCanonicalRlpUint(in, out.maxFeePerGas);
 
@@ -1173,15 +1074,6 @@ struct EIP7702TxHandler : Web3TxHandler
             bcos::rlp::protocol::decodeCanonicalYParity(in, out.signatureV);
             decodeCanonicalSignatureBytes(in, out.signatureR);
             decodeCanonicalSignatureBytes(in, out.signatureS);
-            // For EIP-2718 typed txs the v field is y_parity (0 or 1): signatureV > 1 is invalid
-            // input (same for EIP-2930/1559/4844/7702); silently accepting it would hide bad
-            // transactions.
-            if (out.signatureV > 1)
-            {
-                bcos::codec::rlp::throwRlpDecodeError(
-                    codec::rlp::DecodingError::InvalidVInSignature,
-                    "typed tx y_parity must be 0 or 1");
-            }
         }
         // Rehandle signature and chainId. Pad whenever a signature is present, in BOTH
         // modes (finding BN): a withSig=false RPC-readback decode of a sealed envelope

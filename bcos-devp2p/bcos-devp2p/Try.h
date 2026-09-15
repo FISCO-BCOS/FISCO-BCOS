@@ -24,7 +24,7 @@
 #define RLP_TRY_DETAIL_CONCAT(x, y) RLP_TRY_DETAIL_CONCAT_INNER(x, y)
 
 // Rust-? style early return for RlpResult-returning functions:
-//   RLP_TRY(msg.field, takeUint(items));         // assign to an existing field
+//   RLP_TRY(msg.field, take<uint64_t>(items));    // assign to an existing field
 //   RLP_TRY(auto payload, takeListPayload(view)); // or declare a new variable
 // Evaluates expr (an RlpResult<T>); on error returns std::unexpected(error) from the
 // enclosing function, otherwise moves the value into `target`. Only for functions that

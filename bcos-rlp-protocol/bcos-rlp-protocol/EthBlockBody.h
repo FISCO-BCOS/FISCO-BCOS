@@ -102,12 +102,3 @@ size_t length(const protocol::EthBlockData& _body) noexcept;
 void encode(bcos::bytes& _out, const protocol::EthBlockData& _body) noexcept;
 void decode(bcos::bytesRef& _in, protocol::EthBlockData& _body);
 }  // namespace bcos::codec::rlp
-
-namespace bcos::protocol
-{
-// ADL-visible delegators (see EthLog.h): let EthBlockData participate in
-// variadic-list encode/decode.
-size_t length(const EthBlockData& _body) noexcept;
-void encode(bcos::bytes& _out, const EthBlockData& _body) noexcept;
-void decode(bcos::bytesRef& _in, EthBlockData& _body);
-}  // namespace bcos::protocol

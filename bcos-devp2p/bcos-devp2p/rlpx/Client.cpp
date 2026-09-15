@@ -52,6 +52,17 @@ Session makeSession(Socket&& _socket, AuthKeys const& _keys, bool _isInitiator)
 // exception style is kept here).
 using bcos::codec::rlp::unwrapOrThrow;
 
+// Formats the peer's Disconnect reason for a log/exception message.
+std::string disconnectReason(bytesConstRef _data)
+{
+    auto disc = decodeDisconnect(_data);
+    if (disc)
+    {
+        return "reason=" + std::to_string(static_cast<int>(disc->reason));
+    }
+    return "reason undecodable: " + disc.error().message;
+}
+
 // Shared Hello/Status exchange once the encrypted session exists.
 EstablishedSession exchangeHandshake(
     Session&& _session, EccKeyPair const& _keyPair, PeerConfig const& _config)
@@ -76,16 +87,9 @@ EstablishedSession exchangeHandshake(
     {
         if (helloMsg.id == baseMsg::Disconnect)
         {
-            auto disc = decodeDisconnect(bytesConstRef(helloMsg.data.data(), helloMsg.data.size()));
-            if (disc)
-            {
-                throw std::runtime_error(
-                    "exchangeHandshake: peer disconnected during Hello: reason=" +
-                    std::to_string(static_cast<int>(disc->reason)));
-            }
             throw std::runtime_error(
-                "exchangeHandshake: peer disconnected during Hello (reason undecodable: " +
-                disc.error().message + ")");
+                "exchangeHandshake: peer disconnected during Hello: " +
+                disconnectReason(bytesConstRef(helloMsg.data.data(), helloMsg.data.size())));
         }
         throw std::runtime_error(
             "exchangeHandshake: expected Hello, got message id=" + std::to_string(helloMsg.id));
@@ -157,21 +161,10 @@ EstablishedSession exchangeHandshake(
     {
         if (statusMsg.id == baseMsg::Disconnect)
         {
-            auto disc =
-                decodeDisconnect(bytesConstRef(statusMsg.data.data(), statusMsg.data.size()));
-            if (disc)
-            {
-                BCOS_LOG(INFO) << LOG_BADGE("handshake") << "peer disconnected during Status"
-                               << LOG_KV("peerClient", peerHello.clientId)
-                               << LOG_KV("reason", static_cast<int>(disc->reason));
-            }
-            else
-            {
-                BCOS_LOG(INFO) << LOG_BADGE("handshake")
-                               << "peer disconnected during Status (reason undecodable)"
-                               << LOG_KV("peerClient", peerHello.clientId)
-                               << LOG_KV("error", disc.error().message);
-            }
+            BCOS_LOG(INFO) << LOG_BADGE("handshake") << "peer disconnected during Status"
+                           << LOG_KV("peerClient", peerHello.clientId)
+                           << disconnectReason(
+                                  bytesConstRef(statusMsg.data.data(), statusMsg.data.size()));
         }
         throw std::runtime_error("exchangeHandshake: expected eth Status, got message id=" +
                                  std::to_string(statusMsg.id));

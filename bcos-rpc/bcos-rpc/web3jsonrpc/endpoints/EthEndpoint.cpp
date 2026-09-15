@@ -1577,14 +1577,11 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
         if (!entry.value.empty())
         {
             auto valueRef = bcos::ref(entry.value);
-            try
+            if (auto decodeResult = codec::rlp::tryDecode(valueRef, payload); !decodeResult)
+                [[unlikely]]
             {
-                codec::rlp::decode(valueRef, payload);
-            }
-            catch (codec::rlp::RlpDecodeException const&)
-            {
-                BOOST_THROW_EXCEPTION(
-                    JsonRpcException(InternalError, "Malformed storage leaf RLP"));
+                BOOST_THROW_EXCEPTION(JsonRpcException(
+                    InternalError, "Malformed storage leaf RLP: " + decodeResult.error().message));
             }
         }
         entryJson["value"] = toQuantity(payload);

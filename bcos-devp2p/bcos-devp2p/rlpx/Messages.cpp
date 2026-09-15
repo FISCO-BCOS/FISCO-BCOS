@@ -33,10 +33,8 @@ namespace bcos::devp2p::rlpx
 {
 using bcos::codec::rlp::RlpResult;
 using bcos::devp2p::detail::genericError;
-using bcos::devp2p::detail::takeBytes;
+using bcos::devp2p::detail::take;
 using bcos::devp2p::detail::takeListPayload;
-using bcos::devp2p::detail::takeString;
-using bcos::devp2p::detail::takeUint;
 
 namespace
 {
@@ -97,8 +95,8 @@ RlpResult<HelloMessage> decodeHello(bytesConstRef _data)
     bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
     RLP_TRY(auto items, takeListPayload(view, "rlpx: expected an RLP list"));
 
-    RLP_TRY(msg.version, takeUint(items));
-    RLP_TRY(msg.clientId, takeString(items));
+    RLP_TRY(msg.version, take<uint64_t>(items));
+    RLP_TRY(msg.clientId, take<std::string>(items));
 
     // caps list
     RLP_TRY(auto capsPayload, takeListPayload(items, "rlpx: expected an RLP list"));
@@ -106,8 +104,8 @@ RlpResult<HelloMessage> decodeHello(bytesConstRef _data)
     {
         RLP_TRY(auto capItems, takeListPayload(capsPayload, "rlpx: expected an RLP list"));
         Capability cap;
-        RLP_TRY(cap.name, takeString(capItems));
-        RLP_TRY(auto capVersion, takeUint(capItems));
+        RLP_TRY(cap.name, take<std::string>(capItems));
+        RLP_TRY(auto capVersion, take<uint64_t>(capItems));
         if (capVersion > 0xff)
         {
             return std::unexpected(genericError("decodeHello: capability version out of range"));
@@ -116,8 +114,8 @@ RlpResult<HelloMessage> decodeHello(bytesConstRef _data)
         msg.capabilities.push_back(std::move(cap));
     }
 
-    RLP_TRY(msg.listenPort, takeUint(items));
-    RLP_TRY(msg.id, takeBytes(items));
+    RLP_TRY(msg.listenPort, take<uint64_t>(items));
+    RLP_TRY(msg.id, take<bcos::bytes>(items));
     return msg;
 }
 
@@ -141,33 +139,25 @@ RlpResult<DisconnectMessage> decodeDisconnect(bytesConstRef _data)
         auto items = takeListPayload(view, "rlpx: expected an RLP list");
         if (items)
         {
+            // The reason is the first element; every remaining element must
+            // still decode as an integer for the list form to apply.
+            std::vector<uint64_t> values;
+            while (auto value = take<uint64_t>(*items))
+            {
+                values.push_back(*value);
+            }
             if (items->empty())
             {
-                msg.reason = DisconnectReason::DisconnectRequested;
+                msg.reason = values.empty() ? DisconnectReason::DisconnectRequested :
+                                              static_cast<DisconnectReason>(values.front());
                 return msg;
-            }
-            auto first = takeUint(*items);
-            if (first)
-            {
-                // The reason is the first element; every remaining element must
-                // still decode as an integer for the list form to apply.
-                bool restOk = true;
-                while (restOk && !items->empty())
-                {
-                    restOk = takeUint(*items).has_value();
-                }
-                if (restOk)
-                {
-                    msg.reason = static_cast<DisconnectReason>(*first);
-                    return msg;
-                }
             }
         }
     }
     // Not the list form; fall back to the bare-integer form.
     {
         bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
-        auto reason = takeUint(view);
+        auto reason = take<uint64_t>(view);
         if (reason)
         {
             msg.reason = static_cast<DisconnectReason>(*reason);

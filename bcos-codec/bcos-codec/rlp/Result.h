@@ -14,11 +14,9 @@
  *  limitations under the License.
  *
  * @file Result.h
- * @brief std::expected-based value returns for the hot RLP ingress paths
- *        (devp2p frames, P2P transactions, eth_sendRawTransaction), where
- *        malformed input is routine and its rate is attacker-controlled.
- *        Cold paths (local storage, encoding, hashing) keep throwing
- *        RlpDecodeException/RlpEncodeException (see Exceptions.h).
+ * @brief std::expected-based value returns for hot RLP ingress paths (devp2p frames,
+ *        P2P transactions, eth_sendRawTransaction), where malformed input is routine.
+ *        Cold paths keep throwing RlpDecodeException/RlpEncodeException (Exceptions.h).
  */
 #pragma once
 
@@ -49,6 +47,15 @@ inline constexpr int32_t kRlpGenericError{-1};
 template <typename T>
 using RlpResult = std::expected<T, RlpError>;
 
+// Builds the failure half of an RlpResult from any error code (an unscoped enum such as
+// DecodingError, an enum class such as protocol::EthBlockHeaderError, or a raw int32).
+template <typename E>
+auto rlpFail(E code, std::string_view message)
+{
+    return std::unexpected(
+        RlpError{.code = static_cast<int32_t>(code), .message = std::string(message)});
+}
+
 // Boundary adapter: runs f and converts any thrown failure into an RlpError value, so
 // callers at a hot ingress boundary branch on values instead of catching. The success path
 // is zero-cost, but note this is an adapter, not a non-throwing core: when f rejects
@@ -77,13 +84,7 @@ auto captureRlp(F&& f) -> RlpResult<std::invoke_result_t<F>>
         // boost::exception) — NOT from bcos::Error, so catch (bcos::Error const&) handlers
         // elsewhere do not see them; the code travels in errinfo_rlpErrorCode precisely
         // because errorCode() is unavailable.
-        // Default-construct then set the one field rather than writing {.code = ...}: a partial
-        // designated initialiser trips GCC's -Wmissing-field-initializers (-Werror) at every
-        // instantiation of this template (same rule as Eip7702Recover.h's Account init).
-        RlpError error;
-        error.code = rlpErrorCode(e, kRlpGenericError);
-        error.message = rlpErrorMessage(e, "");
-        return std::unexpected(std::move(error));
+        return rlpFail(rlpErrorCode(e, kRlpGenericError), rlpErrorMessage(e, ""));
     }
     catch (std::exception const& e)
     {

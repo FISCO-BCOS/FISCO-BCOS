@@ -46,11 +46,7 @@ std::optional<bcostars::Transaction> opEnvelopeToTars(
 {
     bcos::rpc::Web3Transaction web3Tx;
     bcos::bytesRef envRef{const_cast<bcos::byte*>(env.data()), env.size()};
-    try
-    {
-        bcos::codec::rlp::decode(envRef, web3Tx);
-    }
-    catch (bcos::codec::rlp::RlpDecodeException const&)
+    if (!web3Tx.tryDecode(envRef))
     {
         return std::nullopt;
     }

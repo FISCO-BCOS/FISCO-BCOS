@@ -30,25 +30,23 @@ bcos::Error::UniquePtr bcos::rpc::decodeDepositTransaction(
     bcos::bytesRef& in, DepositTransaction& out) noexcept
 {
     // The RLP layer reports errors by throwing RlpDecodeException; this function keeps its
-    // Error::UniquePtr interface, so the whole body is wrapped and the exception's code
-    // (errinfo_rlpErrorCode) and message (errinfo_comment) are folded back into an Error.
-    try
-    {
+    // Error::UniquePtr interface, so the whole body runs inside captureRlp and the exception's
+    // code (errinfo_rlpErrorCode) and message (errinfo_comment) are folded back into an Error.
+    auto result = captureRlp([&] {
         if (in.empty() || in[0] != c_depositTxType)
         {
-            return BCOS_ERROR_UNIQUE_PTR(
+            throwRlpDecodeError(
                 UnexpectedEip2718Serialization, "Not a 0x7e deposit transaction envelope");
         }
         in = in.getCroppedData(1);
         auto header = decodeHeader(in);
         if (!header.isList)
         {
-            return BCOS_ERROR_UNIQUE_PTR(
-                UnexpectedString, "Deposit transaction body must be a list");
+            throwRlpDecodeError(UnexpectedString, "Deposit transaction body must be a list");
         }
         if (header.payloadLength > in.size())
         {
-            return BCOS_ERROR_UNIQUE_PTR(InputTooShort, "Deposit transaction body too short");
+            throwRlpDecodeError(InputTooShort, "Deposit transaction body too short");
         }
         bytesRef body(in.data(), header.payloadLength);
 
@@ -56,7 +54,7 @@ bcos::Error::UniquePtr bcos::rpc::decodeDepositTransaction(
         // `to`: empty RLP item = contract creation (same convention as every Ethereum tx type).
         if (body.empty())
         {
-            return BCOS_ERROR_UNIQUE_PTR(InputTooShort, "Deposit transaction missing to field");
+            throwRlpDecodeError(InputTooShort, "Deposit transaction missing to field");
         }
         if (body[0] == BYTES_HEAD_BASE)
         {
@@ -74,7 +72,7 @@ bcos::Error::UniquePtr bcos::rpc::decodeDepositTransaction(
         // (both encode to 0x80), so nullopt here matches op-geth's decode-side behavior.
         if (body.empty())
         {
-            return BCOS_ERROR_UNIQUE_PTR(InputTooShort, "Deposit transaction missing mint field");
+            throwRlpDecodeError(InputTooShort, "Deposit transaction missing mint field");
         }
         if (body[0] == BYTES_HEAD_BASE)
         {
@@ -95,17 +93,16 @@ bcos::Error::UniquePtr bcos::rpc::decodeDepositTransaction(
         out.isSystemTx = isSystemTxValue != 0;
         if (!body.empty())
         {
-            return BCOS_ERROR_UNIQUE_PTR(
+            throwRlpDecodeError(
                 UnexpectedListElements, "Trailing bytes in deposit transaction body");
         }
         in = in.getCroppedData(header.payloadLength);
-        return nullptr;
-    }
-    catch (RlpDecodeException const& e)
+    });
+    if (!result)
     {
-        return BCOS_ERROR_UNIQUE_PTR(rlpErrorCode(e, UnexpectedEip2718Serialization),
-            rlpErrorMessage(e, "RLP decode failed"));
+        return BCOS_ERROR_UNIQUE_PTR(result.error().code, result.error().message);
     }
+    return nullptr;
 }
 
 void bcos::rpc::combineDepositTxResponse(Json::Value& result, const DepositTransaction& deposit)
