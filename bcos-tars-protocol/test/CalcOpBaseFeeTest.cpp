@@ -37,8 +37,7 @@ static void expectThrowMessage(const std::function<void()>& call, std::string_vi
         BOOST_CHECK_MESSAGE(std::string_view(e.what()).find(expectedText) != std::string_view::npos,
             "expected \"" << expectedText << "\" in what(): " << e.what());
     }
-    BOOST_CHECK_MESSAGE(
-        threw, "expected an exception containing \"" << expectedText << "\"");
+    BOOST_CHECK_MESSAGE(threw, "expected an exception containing \"" << expectedText << "\"");
 }
 
 namespace
@@ -98,8 +97,8 @@ BOOST_AUTO_TEST_CASE(ExactTargetReturnsParentBaseFee)
 }
 
 // Finding BT: the exact-target arm is NOT exempt from the Jovian minBaseFee floor — a
-// parent whose base fee sits below a raised floor must clamp, not let the feeHistory
-// prediction quote below the protocol floor.
+// parent whose base fee sits below a raised floor must clamp, so the quote never falls
+// below the protocol floor.
 BOOST_AUTO_TEST_CASE(ExactTargetStillClampsToJovianMinBaseFee)
 {
     // parent base fee 100 << minBaseFee 1_000, usage exactly at target.

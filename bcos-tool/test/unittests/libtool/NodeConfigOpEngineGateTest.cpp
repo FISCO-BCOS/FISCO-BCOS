@@ -130,8 +130,7 @@ BOOST_AUTO_TEST_CASE(minerApiDefaultsOff)
 BOOST_AUTO_TEST_CASE(minerApiScopedPerListener)
 {
     LoaderProbe probe;
-    probe.loadOpEngineRpcConfig(
-        fromIni("[op_engine_rpc]\nenable=true\nenable_miner_api=true\n"));
+    probe.loadOpEngineRpcConfig(fromIni("[op_engine_rpc]\nenable=true\nenable_miner_api=true\n"));
     BOOST_CHECK(probe.enableOpEngineMinerApi());
     BOOST_CHECK(!probe.enableMinerApi());
 
@@ -142,12 +141,21 @@ BOOST_AUTO_TEST_CASE(minerApiScopedPerListener)
     BOOST_CHECK(!probe2.enableOpEngineMinerApi());
 }
 
-BOOST_AUTO_TEST_CASE(minerApiPopulated)
+// The default is OFF on both listeners, and the web3 key reaches only the web3 listener: a
+// [web3_rpc] section that says nothing about the miner namespace must not expose it, which is
+// the half the scoped-per-listener case above does not state.
+BOOST_AUTO_TEST_CASE(minerApiDefaultsToOff)
 {
-    LoaderProbe probe;
-    probe.loadWeb3RpcConfig(
+    LoaderProbe plainWeb3;
+    plainWeb3.loadWeb3RpcConfig(fromIni("[web3_rpc]\nenable=true\nlisten_port=8545\n"));
+    BOOST_CHECK(!plainWeb3.enableMinerApi());
+    BOOST_CHECK(!plainWeb3.enableOpEngineMinerApi());
+
+    LoaderProbe web3On;
+    web3On.loadWeb3RpcConfig(
         fromIni("[web3_rpc]\nenable=true\nlisten_port=8545\nenable_miner_api=true\n"));
-    BOOST_CHECK(probe.enableMinerApi());
+    BOOST_CHECK(web3On.enableMinerApi());
+    BOOST_CHECK(!web3On.enableOpEngineMinerApi());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

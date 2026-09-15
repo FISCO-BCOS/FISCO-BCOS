@@ -155,11 +155,33 @@ BOOST_AUTO_TEST_CASE(executorVersionOpstackSlotIsGenesisOnly)
         return systemConfigPrecompiled.call(executiveForVersion, setParameters);
     };
 
+    // "No throw" cannot tell an accepted write from an ignored one: read the row back the way a
+    // client would.
+    auto const readBack = [&](uint32_t blockVersion) {
+        auto readParameters = std::make_shared<PrecompiledExecResult>();
+        auto readInput = codec.encodeWithSig("getValueByKey(string)", key);
+        readParameters->m_input = bcos::ref(readInput);
+        std::shared_ptr<BlockContext> blockContext =
+            std::make_shared<BlockContext>(executive->blockContext().storage(), ledgerCache,
+                executive->blockContext().hashHandler(), 1, h256(), utcTime(), blockVersion, false,
+                backendStorage);
+        auto readExecutive = std::make_shared<MockTransactionExecutive>(*blockContext, "", 100, 0);
+        auto const result = systemConfigPrecompiled.call(readExecutive, readParameters);
+        std::string value;
+        codec.decode(bcos::ref(result->execResult()), value);
+        return value;
+    };
+
     // From this release on the OPSTACK slot cannot be written by a transaction.
     BOOST_CHECK_THROW(
         callOn(static_cast<uint32_t>(protocol::BlockVersion::V3_18_0_VERSION)), PrecompiledError);
     // A pre-3.18 block that did set it still replays: the refusal is version-gated.
     BOOST_CHECK_NO_THROW(callOn(static_cast<uint32_t>(protocol::BlockVersion::V3_17_0_VERSION)));
+    BOOST_CHECK_EQUAL(
+        readBack(static_cast<uint32_t>(protocol::BlockVersion::V3_17_0_VERSION)), opstack);
+    // ...and the refused write at V3_18_0 left the row where the replayed block put it.
+    BOOST_CHECK_EQUAL(
+        readBack(static_cast<uint32_t>(protocol::BlockVersion::V3_18_0_VERSION)), opstack);
 }
 
 BOOST_AUTO_TEST_CASE(executorVersionOffTheOpstackSlotIsRefused)
@@ -186,18 +208,39 @@ BOOST_AUTO_TEST_CASE(executorVersionOffTheOpstackSlotIsRefused)
         setParameters->m_input = bcos::ref(input);
         return systemConfigPrecompiled.call(executiveForVersion, setParameters);
     };
+
+    // "No throw" cannot tell an accepted write from an ignored one: read the row back the way a
+    // client would.
+    auto const readBack = [&](uint32_t blockVersion) {
+        auto readParameters = std::make_shared<PrecompiledExecResult>();
+        auto readInput = codec.encodeWithSig("getValueByKey(string)", key);
+        readParameters->m_input = bcos::ref(readInput);
+        std::shared_ptr<BlockContext> blockContext =
+            std::make_shared<BlockContext>(executive->blockContext().storage(), ledgerCache,
+                executive->blockContext().hashHandler(), 1, h256(), utcTime(), blockVersion, false,
+                backendStorage);
+        auto readExecutive = std::make_shared<MockTransactionExecutive>(*blockContext, "", 100, 0);
+        auto const result = systemConfigPrecompiled.call(readExecutive, readParameters);
+        std::string value;
+        codec.decode(bcos::ref(result->execResult()), value);
+        return value;
+    };
     auto const v3_17 = static_cast<uint32_t>(protocol::BlockVersion::V3_17_0_VERSION);
     auto const v3_18 = static_cast<uint32_t>(protocol::BlockVersion::V3_18_0_VERSION);
 
     // An OP chain carries the OPSTACK row; a pre-3.18 block may still land it through here.
     BOOST_CHECK_NO_THROW(callOn(v3_17, opstack));
+    BOOST_CHECK_EQUAL(readBack(v3_17), opstack);
 
     BOOST_CHECK_THROW(
         callOn(v3_18, std::to_string(bcos::ledger::ETHEREUM_EXECUTOR_VERSION)), PrecompiledError);
+    BOOST_CHECK_EQUAL(readBack(v3_18), opstack);  // refused: the OP row is still there
     // The refused write left the row alone: the next write is still judged against the OP slot.
     BOOST_CHECK_THROW(callOn(v3_18, std::to_string(0)), PrecompiledError);
+    BOOST_CHECK_EQUAL(readBack(v3_18), opstack);
     // A pre-3.18 block that moved the row off OP still replays.
     BOOST_CHECK_NO_THROW(callOn(v3_17, std::to_string(bcos::ledger::ETHEREUM_EXECUTOR_VERSION)));
+    BOOST_CHECK_EQUAL(readBack(v3_17), std::to_string(bcos::ledger::ETHEREUM_EXECUTOR_VERSION));
 }
 
 BOOST_AUTO_TEST_CASE(executorVersionAboveTheDefinedLadderIsRefused)
@@ -224,11 +267,30 @@ BOOST_AUTO_TEST_CASE(executorVersionAboveTheDefinedLadderIsRefused)
         return systemConfigPrecompiled.call(executiveForVersion, setParameters);
     };
 
+    // "No throw" cannot tell an accepted write from an ignored one: read the row back the way a
+    // client would.
+    auto const readBack = [&](uint32_t blockVersion) {
+        auto readParameters = std::make_shared<PrecompiledExecResult>();
+        auto readInput = codec.encodeWithSig("getValueByKey(string)", key);
+        readParameters->m_input = bcos::ref(readInput);
+        std::shared_ptr<BlockContext> blockContext =
+            std::make_shared<BlockContext>(executive->blockContext().storage(), ledgerCache,
+                executive->blockContext().hashHandler(), 1, h256(), utcTime(), blockVersion, false,
+                backendStorage);
+        auto readExecutive = std::make_shared<MockTransactionExecutive>(*blockContext, "", 100, 0);
+        auto const result = systemConfigPrecompiled.call(readExecutive, readParameters);
+        std::string value;
+        codec.decode(bcos::ref(result->execResult()), value);
+        return value;
+    };
+
     // From this release on an undefined lane cannot be written by a transaction.
     BOOST_CHECK_THROW(
         callOn(static_cast<uint32_t>(protocol::BlockVersion::V3_18_0_VERSION)), PrecompiledError);
     // A pre-3.18 block that did set it still replays: the refusal is version-gated.
     BOOST_CHECK_NO_THROW(callOn(static_cast<uint32_t>(protocol::BlockVersion::V3_17_0_VERSION)));
+    BOOST_CHECK_EQUAL(
+        readBack(static_cast<uint32_t>(protocol::BlockVersion::V3_17_0_VERSION)), beyondLadder);
 
     // The in-lane values remain writable (the ladder top itself is the genesis-only
     // OPSTACK case above; the Eth lane must keep its ordinary governance semantics).
