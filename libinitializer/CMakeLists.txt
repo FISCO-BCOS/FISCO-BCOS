@@ -70,5 +70,11 @@ endif()
 set_target_properties(init PROPERTIES UNITY_BUILD "ON")
 add_dependencies(init BuildInfo.h)
 if(TESTS)
+    # enable_testing() BEFORE add_subdirectory, exactly as bcos-rpc/CMakeLists.txt does: ctest
+    # registration is inherited through the parent scope, and this directory is added by the root
+    # before the root's own enable_testing() runs. Without the call the child's
+    # CTestTestfile.cmake is written but never linked from here, so an add_test below it is
+    # compiled yet silently never executed — the suite runs nowhere.
+    enable_testing()
     add_subdirectory(tests)
 endif()
