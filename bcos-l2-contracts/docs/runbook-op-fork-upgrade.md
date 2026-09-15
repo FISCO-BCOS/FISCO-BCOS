@@ -40,7 +40,8 @@ writing:
   - `solady` `502cc1ea718e6fa73b380635ee0868b0740595f0`
   - `solmate` `8f9b23f8838670afda0fd8983f2c41e8037ae6bc`
 - The runtime OP predeploy set is asserted by the `expected_predeploys`
-  checklist in `tools/opstack-genesis/chain-config.template.yaml` (existence
+  checklist in the harness's `tools/opstack-genesis/chain-config.template.yaml`
+  (FISCO-BCOS/op-stack-e2e-tests; existence
   + non-empty code against the op-deployer base allocs); `op-fork-pin.toml`
   no longer enumerates source paths.
 

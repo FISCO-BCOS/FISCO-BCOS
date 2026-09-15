@@ -4,6 +4,7 @@
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerConfigState.h"
 #include "bcos-utilities/Exceptions.h"
+#include <atomic>
 
 namespace bcos::scheduler_v1
 {
@@ -41,7 +42,13 @@ private:
     static constexpr size_t SUPPORTED_EXECUTOR_VERSION_COUNT = 4;
 
     std::array<scheduler::SchedulerInterface::Ptr, SUPPORTED_EXECUTOR_VERSION_COUNT> m_schedulers;
-    int m_currentIndex;
+    /// The slot traffic is routed to. setVersion() writes it from TWO execution contexts — the
+    /// PBFT stable-checkpoint callback (bcos-pbft LedgerStorage::commitStableCheckPoint) and the
+    /// block-sync commit callback (bcos-sync DownloadingQueue) — while getScheduler() reads it
+    /// from whichever thread serves a request, so the access is atomic. Atomicity is all that is
+    /// claimed: the slot array is immutable after construction, and an index one commit stale
+    /// routes to the lane the node was running a moment ago.
+    std::atomic<int> m_currentIndex;
     /// Republished after every commit, whichever scheduler performed it. Transaction admission
     /// reads its chain configuration from this holder and nowhere else, so the publisher has to
     /// see every commit on every executor version -- and this dispatcher is the node's single

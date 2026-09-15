@@ -138,11 +138,11 @@ BOOST_AUTO_TEST_CASE(ZeroStorageSlotIgnored)
 }
 
 // GOLDEN: op-geth-compatible state root for a fixed single-account alloc, frozen
-// against the independent Python MPT reference in
-// tools/opstack-genesis/gen_trieroot_golden.py (the "golden_state" vector there
-// recomputes this value from scratch — run it to audit). The same value is
-// independently verifiable against op-deployer / go-ethereum `Genesis.ToBlock()`
-// output for the same account.
+// against the independent Python MPT reference gen_trieroot_golden.py in the
+// harness (FISCO-BCOS/op-stack-e2e-tests, tools/opstack-genesis); its
+// "golden_state" vector recomputes this value from scratch — run it to audit.
+// The same value is independently verifiable against op-deployer /
+// go-ethereum `Genesis.ToBlock()` output for the same account.
 BOOST_AUTO_TEST_CASE(GoldenVector)
 {
     GenesisConfig genesis;

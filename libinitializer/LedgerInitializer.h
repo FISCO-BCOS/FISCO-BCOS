@@ -27,6 +27,21 @@
 
 namespace bcos::initializer
 {
+/// The on-chain executor_version and its activation block, read once for both the lane
+/// wiring (Initializer) and the OP-mode boot invariant (validateOpModeGenesisOnly).
+struct OnChainExecutorVersion
+{
+    int version = 0;
+    bcos::protocol::BlockNumber activation = 0;
+    bool present = false;
+};
+
+/// Read executor_version from the ledger. A row that exists but does not parse is a boot
+/// failure with a diagnosable message (never a bare boost::bad_lexical_cast out of the
+/// initializer); an absent row falls back to the genesis config's value.
+OnChainExecutorVersion readOnChainExecutorVersion(
+    bcos::ledger::LedgerInterface& ledger, int fallbackVersion);
+
 class LedgerInitializer
 {
 public:

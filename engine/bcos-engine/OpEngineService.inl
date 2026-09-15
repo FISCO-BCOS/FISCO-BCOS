@@ -21,12 +21,12 @@
 
 // This is the DEFINITION half of the split: OpEngineService.h is declarations-only.
 // Including this.inl is the opt-in instantiation point — members use
-// EthBlockHeader::computeHash and bcos::evm::opstack::estimatedDaSize. engine links
-// rlp-protocol PUBLIC so installed consumers inherit the include dirs;
+// the canonical block hash (bcos-rlp-protocol) and bcos::evm::opstack::estimatedDaSize.
+// engine links rlp-protocol PUBLIC so installed consumers inherit the include dirs;
 // instantiators still need to link bcos-evm-opstack.
 #include "OpEngineService.h"
 #include <bcos-evm/opstack/RollupCost.h>
-#include <bcos-rlp-protocol/EthBlockHeader.h>
+#include <bcos-rlp-protocol/BlockHeaderHash.h>
 
 #include <iterator>
 #include <range/v3/algorithm/any_of.hpp>
@@ -53,30 +53,8 @@ inline auto rawEnvelopes(ExecutionPayload const& payload)
                [](EngineTransaction const& tx) -> bytes const& { return tx.raw; });
 }
 
-/// True when the OpExecutionInternalError carries the OpPayloadUndecodable tag:
-/// a payload-content fault (an envelope the CL submitted cannot be decoded),
-/// not a node-internal fault. Single predicate for both answer shapes — the FCU
-/// path maps it to an Invalid FCU status, the newPayload path to an Invalid
-/// PayloadStatus; any OTHER OpExecutionInternalError must keep propagating as
-/// -32603, never be flattened into a consensus INVALID.
-inline bool isUndecodablePayloadFault(OpExecutionInternalError const& error)
-{
-    return boost::get_error_info<OpPayloadUndecodable>(error) != nullptr;
-}
-
-inline std::optional<ForkchoiceUpdatedResult> fcuInvalidIfUndecodable(
-    OpExecutionInternalError const& error)
-{
-    if (!isUndecodablePayloadFault(error))
-    {
-        return std::nullopt;
-    }
-    return ForkchoiceUpdatedResult{
-        .payloadStatus = engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
-            std::string("undecodable payload transaction envelope")),
-        .payloadId = std::nullopt,
-    };
-}
+// isUndecodablePayloadFault / fcuInvalidIfUndecodable live in EngineServiceCommon.h
+// (namespace bcos::engine::detail) so the Eth build path maps the same fault the same way.
 }  // namespace detail
 
 template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
@@ -237,8 +215,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
     std::vector<bcos::bytes> decodedForcedTxs)
 {
-    // Same policy as EthEngineService (option B): deterministic derivePayloadId, not a
-    // process-local sequence counter. Reuse validate's decoded forced txs.
+    // Same policy as EthEngineService: deterministic derivePayloadId, not a process-local
+    // sequence counter. Reuse validate's decoded forced txs.
     // The id's version byte is the PAYLOAD SHAPE version (V3/V4-method → PayloadV3),
     // matching both the cache entry's version below and upstream: op-geth's
     // ForkchoiceUpdatedV3/V4 build the same PayloadV3 shape, so the same content under
@@ -543,7 +521,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     auto finalHeader =
         engine_common::op::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(), payload,
             SchedulerType::computeTxRoot(detail::rawEnvelopes(payload)), parentBeaconBlockRoot);
-    payload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*finalHeader);
+    payload.blockHash = bcos::protocol::canonicalBlockHash(*finalHeader);
 
     bcos::protocol::Block::Ptr finalBlock;
     try
@@ -675,7 +653,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
     const auto ethHeader =
         engine_common::op::rebuildOpEthHeader(m_blockFactory->blockHeaderFactory(), payload,
             transactionsRoot, *request.parentBeaconBlockRoot);
-    if (bcos::protocol::EthBlockHeader::computeHash(*ethHeader) != payload.blockHash)
+    if (bcos::protocol::canonicalBlockHash(*ethHeader) != payload.blockHash)
     {
         co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
             std::string("blockHash does not match the reconstructed block header"));
@@ -699,8 +677,15 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
             }
             requireDelegate();
             bcos::Error::Ptr commitError;
-            m_delegate->commitBlock(
-                builtHeader, [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr) {
+            // The callback's LedgerConfig is deliberately dropped rather than published into
+            // the admission holder: the delegate is an OpScheduler, whose
+            // loadCommitLedgerConfig carries only number + timestamp -- chainId nullopt and
+            // features empty -- and TxValidator reads chainId from the holder, so publishing it
+            // fail-closes EIP-155 admission from the first committed block on. The holder is
+            // republished from the ledger after every commit instead; see
+            // OpLedgerConfigRepublish.h.
+            m_delegate->commitBlock(builtHeader,
+                [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr /*ledgerConfig*/) {
                     commitError = std::move(error);
                 });
             if (!commitError)
@@ -885,8 +870,10 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
     }
 
     bcos::Error::Ptr commitError;
-    m_delegate->commitBlock(
-        executedHeader, [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr) {
+    // Not published: see the built-pending commit above (the delegate's LedgerConfig is the
+    // number+timestamp stub; the holder is republished from the ledger by the notifier).
+    m_delegate->commitBlock(executedHeader,
+        [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr /*ledgerConfig*/) {
             commitError = std::move(error);
         });
     if (commitError)
@@ -912,7 +899,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpBloc
     for (auto const& env : detail::rawEnvelopes(payload))
     {
         const auto txHash = hashImpl.hash(env);
-        auto tarsTx = engine_common::op::opEnvelopeToTars(env, txHash);
+        // allowDeposit=true: the OP lane accepts 0x7e deposit envelopes — the CL submits
+        // them via payloadAttributes.transactions.
+        auto tarsTx = engine_common::op::opEnvelopeToTars(env, txHash, /*allowDeposit=*/true);
         if (!tarsTx)
         {
             BOOST_THROW_EXCEPTION(OpExecutionInternalError{}
@@ -920,9 +909,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpBloc
                                   << bcos::errinfo_comment{"undecodable payload "
                                                            "transaction envelope"});
         }
-        tarsTx->extraTransactionBytes.assign(env.begin(), env.end());
-        auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
-            [tars = std::move(*tarsTx)]() mutable { return &tars; });
+        auto tx = engine_common::decodedTransactionFromEnvelope(std::move(*tarsTx), env);
         block->appendTransaction(std::move(tx));
     }
     return block;

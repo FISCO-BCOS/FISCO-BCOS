@@ -1,5 +1,8 @@
 #include <bcos-protocol/TransactionStatus.h>
+#include <bcos-rlp-protocol/BlockHeaderHash.h>
+#include <bcos-rpc/filter/Common.h>
 #include <bcos-rpc/filter/LogMatcher.h>
+#include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
 
@@ -12,10 +15,11 @@ uint32_t LogMatcher::matches(
 {
     uint32_t count = 0;
     auto receipts = _block->receipts();
+    auto const blockHash = bcos::protocol::canonicalBlockHash(*_block->blockHeader());
     for (std::size_t index = 0; index < _block->transactionsMetaDataSize(); index++)
     {
         auto receipt = receipts[index];
-        count += matches(_params, _block->blockHeader()->hash(), *receipt,
+        count += matches(_params, crypto::HashType(blockHash), *receipt,
             _block->transactionHash(index), index, _result);
     }
 
@@ -48,7 +52,9 @@ uint32_t LogMatcher::matches(FilterRequest::ConstPtr _params, bcos::crypto::Hash
             log["transactionIndex"] = toQuantity(_txIndex);
             log["transactionHash"] = _txHash.hexPrefixed();
             log["removed"] = false;
-            log["address"] = "0x" + std::string(logEntry.address());
+            // Same lane-dependent address form as the receipt encoder: normalize through
+            // the shared helper so eth_getLogs and eth_getTransactionReceipt agree.
+            log["address"] = "0x" + logEntryAddressHex(logEntry);
             Json::Value jTopics(Json::arrayValue);
             for (const auto& topic : logEntry.topics())
             {
@@ -70,8 +76,11 @@ bool LogMatcher::matches(FilterRequest::ConstPtr _params, const bcos::protocol::
     FILTER_LOG(TRACE) << LOG_BADGE("matches") << LOG_KV("address", _logEntry.address())
                       << LOG_KV("logEntry topics", _logEntry.topics().size());
 
-    // An empty address array matches all values otherwise log.address must be in addresses
-    if (!addresses.empty() && !addresses.count("0x" + std::string(_logEntry.address())))
+    // An empty address array matches all values otherwise log.address must be in addresses.
+    // Normalize through logEntryAddressHex like every other consumer: the OP lane stores the
+    // raw 20 bytes in LogEntry::address, so concatenating "0x" with the raw form can never
+    // equal a requested hex address and every address-filtered query would match nothing.
+    if (!addresses.empty() && !addresses.count("0x" + logEntryAddressHex(_logEntry)))
     {
         return false;
     }

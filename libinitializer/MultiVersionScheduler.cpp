@@ -23,7 +23,7 @@ bcos::scheduler::SchedulerInterface& bcos::scheduler_v1::MultiVersionScheduler::
 
 bcos::scheduler::SchedulerInterface& bcos::scheduler_v1::MultiVersionScheduler::getScheduler()
 {
-    return checkedSchedulerAt(m_currentIndex);
+    return checkedSchedulerAt(m_currentIndex.load());
 }
 
 bcos::scheduler_v1::MultiVersionScheduler::MultiVersionScheduler(
@@ -126,9 +126,15 @@ void bcos::scheduler_v1::MultiVersionScheduler::stop()
     // stop() is idempotent and safe on a never-started slot (BaselineScheduler::stop() only
     // resets its observer under m_commitMutex; SchedulerManager::stop() short-circuits on
     // STOPPED and tolerates a null scheduler).
+    // A slot can also be UNWIRED: Initializer publishes a null slot when the lane is not wired on
+    // this node, so the sweep must skip nulls — an unwired slot has no observer to detach, and
+    // calling through the null pointer is a virtual call on address 0.
     for (auto const& scheduler : m_schedulers)
     {
-        scheduler->stop();
+        if (scheduler)
+        {
+            scheduler->stop();
+        }
     }
 }
 void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
@@ -175,10 +181,10 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
         // hard refusal for an unwired version belongs at boot (Initializer::init).
         INITIALIZER_LOG(ERROR)
             << LOG_DESC("executor_version has no wired scheduler; keeping the current executor")
-            << LOG_KV("requested", version) << LOG_KV("keeping", m_currentIndex);
+            << LOG_KV("requested", version) << LOG_KV("keeping", m_currentIndex.load());
         return;
     }
-    m_currentIndex = static_cast<int>(selected);
+    m_currentIndex.store(static_cast<int>(selected));
 }
 bcos::scheduler::SchedulerInterface& bcos::scheduler_v1::MultiVersionScheduler::scheduler(
     int version)
