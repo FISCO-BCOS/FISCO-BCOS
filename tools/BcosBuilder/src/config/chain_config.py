@@ -48,7 +48,7 @@ class GenesisConfig:
         self.gas_limit = utilities.get_item_value(
             self.config, "gas_limit", "3000000000", False, self.desc)
         self.compatibility_version = utilities.get_item_value(
-            self.config, "compatibility_version", "3.1.0", False, self.desc)
+            self.config, "compatibility_version", "3.18.0", False, self.desc)
         self.vm_type = utilities.get_item_value(
             self.config, "vm_type", "evm", False, self.desc)
         self.auth_check = utilities.get_item_value(

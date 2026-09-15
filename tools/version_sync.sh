@@ -11,8 +11,9 @@
 #
 # NOTE: this is a STRICT-CONTRACT tool wired into CI (tools/.ci/check-commit.sh).
 #       It fails closed (exit 2) when any managed file no longer matches the
-#       patterns below. If you reformat the README version line, the BcosBuilder
-#       config templates, or the BlockVersion enum declaration in Protocol.h,
+#       patterns below. If you reformat the README / README_EN version lines, the
+#       BcosBuilder config templates or parser fallback, build_chain.sh's
+#       default_version, or the BlockVersion enum declaration in Protocol.h,
 #       update the corresponding pattern here in the same PR.
 
 set -u
@@ -157,6 +158,19 @@ for toml in \
         "s/^compatibility_version = \"[0-9.]*\"/compatibility_version = \"${VERSION}\"/"
 done
 
+# ---- AIR build_chain.sh: default_version="vx.y.z", stamped into genesis compatibility_version
+#      when -v is omitted (was two releases stale at v3.17.0, see #5586) ----
+process_simple_target "${REPO_ROOT}/tools/BcosAirBuilder/build_chain.sh" \
+    '^default_version="v' \
+    's/^default_version="v\([0-9.]*\)".*/\1/p' \
+    "s/^default_version=\"v[0-9.]*\"/default_version=\"v${VERSION}\"/"
+
+# ---- Pro/Max builder parser: fallback when a user config omits compatibility_version ----
+process_simple_target "${REPO_ROOT}/tools/BcosBuilder/src/config/chain_config.py" \
+    '"compatibility_version", "[0-9.]*"' \
+    's/.*"compatibility_version", "\([0-9.]*\)".*/\1/p' \
+    "s/\"compatibility_version\", \"[0-9.]*\"/\"compatibility_version\", \"${VERSION}\"/"
+
 # ---- genesis template: indented compatibility_version=x.y.z (no quotes) ----
 process_simple_target "${REPO_ROOT}/tools/BcosBuilder/src/tpl/config.genesis" \
     '^[[:space:]]*compatibility_version=' \
@@ -204,6 +218,49 @@ process_readme() {
         "${lineno}s/v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*/v${VERSION}/g"
 }
 process_readme
+
+# ---- docs/README_EN.md: the "Latest Version" line and the link line right after it ----
+process_readme_en() {
+    local file="${REPO_ROOT}/docs/README_EN.md"
+    local rel="docs/README_EN.md"
+    if [ ! -f "${file}" ]; then
+        LOG_ERROR "not found: ${rel}"
+        PATTERN_BROKEN=1
+        return
+    fi
+    local count
+    count=$(grep -c "Latest Version" "${file}")
+    if [ "${count}" -ne 1 ]; then
+        LOG_ERROR "${rel}: expected exactly 1 line containing 'Latest Version', found ${count} (update tools/version_sync.sh if README_EN changed)"
+        PATTERN_BROKEN=1
+        return
+    fi
+    local lineno
+    lineno=$(grep -n "Latest Version" "${file}" | head -1 | cut -d: -f1)
+    local last=$((lineno + 1))
+    local lines
+    lines=$(sed -n "${lineno},${last}p" "${file}")
+    if ! echo "${lines}" | grep -q "releases/tag/v"; then
+        LOG_ERROR "${rel}:${lineno}-${last}: expected a releases/tag/v link on the Latest Version lines"
+        PATTERN_BROKEN=1
+        return
+    fi
+    local found
+    found=$(echo "${lines}" | grep -o 'v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*' | sort -u)
+    if [ -z "${found}" ]; then
+        LOG_ERROR "${rel}:${lineno}-${last}: cannot parse current version value (unexpected format), refusing to rewrite"
+        PATTERN_BROKEN=1
+        return
+    fi
+    if [ "$(echo "${found}" | wc -l | tr -d ' ')" -ne 1 ]; then
+        LOG_ERROR "${rel}:${lineno}-${last}: mixed versions on the Latest Version lines: $(echo "${found}" | tr '\n' ' ')"
+        PATTERN_BROKEN=1
+        return
+    fi
+    handle_target "${file}" "${lineno}" "${found#v}" \
+        "${lineno},${last}s/v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*/v${VERSION}/g"
+}
+process_readme_en
 
 # ---- Protocol.h: BlockVersion enum entry + MAX_VERSION ----
 PROTOCOL_H="${REPO_ROOT}/bcos-framework/bcos-framework/protocol/Protocol.h"
