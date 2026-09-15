@@ -1,7 +1,14 @@
 ---
 # C2 OP full-stack e2e harness (shell + Python); not production node code.
-# The harness lives in the FISCO-BCOS/op-stack-e2e-tests repo (pinned ref in
-# .github/workflows/c2-e2e.yml); the in-repo entrypoint is tools/.ci/c2-e2e.sh,
-# and the genesis toolchain it drives (setup_c2.sh, build-allocs.py, the pytest
-# suite over them) comes from that same checkout.
-exclude_paths: []
+# The harness itself lives in the FISCO-BCOS/op-stack-e2e-tests repo (pinned ref in
+# .github/workflows/c2-e2e.yml); the genesis toolchain it drives (setup_c2.sh,
+# build-allocs.py, the pytest suite over them) comes from that same checkout. What IS in this
+# repository is the entrypoint and its helpers — they drive a devnet rather than the node, so
+# the analyzer is pointed away from them here instead of at the empty list this file used to
+# carry.
+exclude_paths:
+  - tools/.ci/c2-e2e.sh
+  - tools/.ci/c2-e2e-requirements.txt
+  - tools/.ci/fetch-l2-contract-deps.sh
+  - tools/.ci/ci_opnode_startup_check.sh
+  - tools/.ci/l2-integration/**

@@ -558,7 +558,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: FISCO-BCOS/op-stack-e2e-tests
-          ref: 6b2d17878050b5f959bee95a94e6a63ffa0bb9ac
+          # The pin below carries the --legacy L2 pricing this node needs (its method set has no
+          # eth_feeHistory): FISCO-BCOS/op-stack-e2e-tests#2. It is that PR's branch commit until
+          # the PR lands — replace it with the merge commit then (a branch commit is not a stable pin).
+          ref: 349b0b918b3ba78562fe3065acf790454f4f7f56
           path: .ci-op-e2e-tests
 
       - name: Download fisco-bcos from L2 unit job
