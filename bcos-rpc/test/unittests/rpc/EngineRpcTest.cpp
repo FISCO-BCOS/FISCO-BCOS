@@ -116,8 +116,8 @@ public:
         }
         if (m_state->throwBcosError)
         {
-            BOOST_THROW_EXCEPTION(BCOS_ERROR(bcos::ledger::LedgerError::GetStorageError,
-                "missing SYS_HASH_2_TX row"));
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(
+                bcos::ledger::LedgerError::GetStorageError, "missing SYS_HASH_2_TX row"));
         }
         co_return m_state->forkchoiceUpdatedResult;
     }
@@ -127,6 +127,12 @@ public:
     {
         m_state->capturedPayloadId = payloadId;
         m_state->capturedGetPayloadVersion = version;
+        if (m_state->throwUnsupportedFork)
+        {
+            BOOST_THROW_EXCEPTION(
+                engine::UnsupportedFork{} << bcos::errinfo_comment{"engine_getPayloadV5 requires a "
+                                                                   "Karst payload"});
+        }
         if (m_state->throwUnknownPayload)
         {
             BOOST_THROW_EXCEPTION(engine::UnknownPayload{});
@@ -146,8 +152,8 @@ public:
         }
         if (m_state->throwBcosError)
         {
-            BOOST_THROW_EXCEPTION(BCOS_ERROR(bcos::ledger::LedgerError::GetStorageError,
-                "missing SYS_HASH_2_TX row"));
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(
+                bcos::ledger::LedgerError::GetStorageError, "missing SYS_HASH_2_TX row"));
         }
         co_return std::make_unique<engine::GetPayloadData>(*m_state->getPayloadResult);
     }
@@ -185,8 +191,8 @@ public:
         }
         if (m_state->throwBcosError)
         {
-            BOOST_THROW_EXCEPTION(BCOS_ERROR(bcos::ledger::LedgerError::GetStorageError,
-                "missing SYS_HASH_2_TX row"));
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(
+                bcos::ledger::LedgerError::GetStorageError, "missing SYS_HASH_2_TX row"));
         }
         co_return m_state->forkchoiceUpdatedResult.payloadStatus;
     }
@@ -616,6 +622,26 @@ BOOST_AUTO_TEST_CASE(getPayloadUnsupportedEngineApiVersionMapsTo38005)
     Json::Value response;
     BOOST_CHECK_EXCEPTION(CALL_ENGINE(getPayloadV3, params, response), JsonRpcException,
         [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
+}
+
+// The payload's fork is outside the method's window: execution-apis osaka.md requires -38005
+// (EngineError::UnsupportedFork), not the generic -32603 the catch-all would produce.
+BOOST_AUTO_TEST_CASE(getPayloadForkOutsideMethodWindowMapsTo38005)
+{
+    mockService.m_state->throwUnsupportedFork = true;
+
+    Json::Value params(Json::arrayValue);
+    params.append("0x00000000deadbeef");
+    Json::Value response;
+
+    auto const isUnsupportedFork = [](JsonRpcException const& e) {
+        return e.code() == EngineError::UnsupportedFork &&
+               e.msg() == "Unsupported fork: engine_getPayloadV5 requires a Karst payload";
+    };
+    BOOST_CHECK_EXCEPTION(
+        CALL_ENGINE(getPayloadV5, params, response), JsonRpcException, isUnsupportedFork);
+    BOOST_CHECK_EXCEPTION(
+        CALL_ENGINE(getPayloadV4, params, response), JsonRpcException, isUnsupportedFork);
 }
 
 BOOST_AUTO_TEST_CASE(getPayloadV5MissingParams)

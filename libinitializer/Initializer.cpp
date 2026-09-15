@@ -555,6 +555,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     if (opStackMode)
     {
+        if (m_nodeConfig->mptPruneWindow() > 0)
+        {
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                    "storage.mpt_prune_window is not supported in OP mode (executor_version>=3) "
+                    "yet: the OP commit path has no MPT pruning observer"));
+        }
         if (!m_nodeConfig->engineDrivenBlockProduction())
         {
             BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
@@ -571,26 +578,29 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                                       "OP mode (executor_version==3, the OPSTACK slot) requires "
                                       "an [op_fork_timestamps] section in config.genesis"));
         }
-        // OP mode uses [web3] chain_id for EIP-155, not FISCO chain_id.
-        auto const& web3ChainId = m_nodeConfig->genesisConfig().m_web3ChainID;
-        auto parsedChainId = ledger::parseWeb3ChainId(web3ChainId);
-        if (!parsedChainId.has_value())
+        // OP mode executes with the chain id admission judges against: the snapshot published
+        // at boot, which already parsed the on-chain web3_chain_id row (TxValidator's
+        // readChainView). The genesis file only seeds that row, so it is the fallback, not the
+        // source -- reading it here would let an edited config.genesis execute (and EIP-155-sign)
+        // with a chain id no other node uses.
+        // Hold the snapshot: get() hands back a temporary shared_ptr, and chainId() returns a
+        // reference into the object it owns.
+        auto const chainConfig = m_ledgerConfigState->get();
+        std::optional<u256> parsedChainId;
+        if (auto const& snapshotChainId = chainConfig->chainId())
         {
-            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "OP mode (executor_version==3, the OPSTACK slot) requires "
-                                      "a numeric [web3] chain_id (decimal or 0x-prefixed hex)"));
+            parsedChainId = fromBigEndian<u256>(snapshotChainId->bytes);
         }
-        if (*parsedChainId == 0)
+        else
         {
-            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "OP mode (executor_version==3, the OPSTACK slot) requires "
-                                      "a non-zero [web3] chain_id"));
+            parsedChainId = ledger::parseWeb3ChainId(m_nodeConfig->genesisConfig().m_web3ChainID);
         }
-        if (*parsedChainId > std::numeric_limits<uint64_t>::max())
+        if (!parsedChainId || *parsedChainId == 0 ||
+            *parsedChainId > std::numeric_limits<uint64_t>::max())
         {
             BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "OP mode (executor_version==3, the OPSTACK slot) [web3] "
-                                      "chain_id exceeds uint64"));
+                                      "OP mode (executor_version>=3) requires a non-zero [web3] "
+                                      "chain_id that fits uint64"));
         }
         uint64_t const opChainId = static_cast<uint64_t>(*parsedChainId);
         auto opScheduler =
@@ -607,13 +617,45 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_engineServiceInitializer = EngineServiceInitializer::buildOp(
             m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
             m_memPoolInitializer->memPool(), bcos::engine::c_defaultBlockTxCountLimit, opDelegate,
-            m_daCaps, /*allowSynthesizedL1Attributes=*/false, m_ledgerConfigState);
+            m_daCaps,
+            /*allowSynthesizedL1Attributes=*/false,
+            // No holder for the engine: its commit callbacks would publish
+            // OpScheduler::loadCommitLedgerConfig's number+timestamp stub, and admission reads
+            // chainId/features from the holder -- the republish notifier below keeps it complete.
+            /*ledgerConfigState=*/nullptr);
 
         m_opScheduler = opDelegate;
-        m_setOpSchedulerBlockNumberNotifier =
-            [opDelegate](std::function<void(bcos::protocol::BlockNumber)> notifier) {
-                opDelegate->setBlockNumberNotifier(std::move(notifier));
-            };
+        // Read the FULL config from the ledger after every OP commit:
+        // OpScheduler::loadCommitLedgerConfig carries only number + timestamp, so publishing that
+        // would wipe chainId and fail-close EIP-155 admission (TxValidator reads the holder and
+        // nowhere else). On failure the previous snapshot stays, which is strictly better than an
+        // empty one.
+        auto republishLedgerConfig = [this](bcos::protocol::BlockNumber number) {
+            try
+            {
+                m_ledgerConfigState->set(task::syncWait(ledger::getLedgerConfig(*m_ledger)));
+            }
+            catch (...)
+            {
+                INITIALIZER_LOG(ERROR)
+                    << LOG_DESC(
+                           "republish ledger config after OP commit failed; admission keeps "
+                           "the previous snapshot")
+                    << LOG_KV("number", number)
+                    << LOG_KV("error", boost::current_exception_diagnostic_information());
+            }
+        };
+        opDelegate->setBlockNumberNotifier(republishLedgerConfig);
+        // The scheduler holds one notifier slot; compose so installing the RPC notifier later
+        // does not drop the republish.
+        m_setOpSchedulerBlockNumberNotifier = [opDelegate, republishLedgerConfig](
+                                                  std::function<void(protocol::BlockNumber)> rpc) {
+            opDelegate->setBlockNumberNotifier(
+                [republishLedgerConfig, rpc = std::move(rpc)](protocol::BlockNumber number) {
+                    republishLedgerConfig(number);
+                    rpc(number);
+                });
+        };
     }
 
     executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(

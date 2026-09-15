@@ -175,16 +175,8 @@ inline void validateOpModeGenesisOnly(bcos::ledger::Features const& features, in
     using Flag = bcos::ledger::Features::Flag;
     bool const flagOn = features.get(Flag::feature_l2_ethereum_compat);
     bool const opMode = (executorVersion >= bcos::ledger::OPSTACK_EXECUTOR_VERSION);
-    if (opMode && !flagOn)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidMPTFlagMatrix{} << bcos::errinfo_comment(
-                "OP mode must be decided at chain creation: executor_version=" +
-                std::to_string(executorVersion) +
-                " (the OPSTACK slot) requires feature_l2_ethereum_compat=on, but it is off; "
-                "the OP lane commits account state in MPT only, so the flag is genesis-bound "
-                "with the mode"));
-    }
+    // The activation check runs first so that any mid-chain row -- with or without the L2 flag
+    // -- reaches the recovery sentence instead of only the flag message.
     if (opMode && executorVersionActivation != 0)
     {
         BOOST_THROW_EXCEPTION(
@@ -195,6 +187,16 @@ inline void validateOpModeGenesisOnly(bcos::ledger::Features const& features, in
                 "wrote this row before upgrading: run the previous binary and set "
                 "executor_version back to the value that chain ran with (2 = Eth lane), then "
                 "upgrade again. A new chain is only needed if that write is impossible"));
+    }
+    if (opMode && !flagOn)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidMPTFlagMatrix{} << bcos::errinfo_comment(
+                "OP mode must be decided at chain creation: executor_version=" +
+                std::to_string(executorVersion) +
+                " (the OPSTACK slot) requires feature_l2_ethereum_compat=on, but it is off; "
+                "the OP lane commits account state in MPT only, so the flag is genesis-bound "
+                "with the mode"));
     }
 }
 
