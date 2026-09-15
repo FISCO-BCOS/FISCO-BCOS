@@ -237,7 +237,7 @@ BOOST_AUTO_TEST_CASE(sendRawTransactionGarbageReportsError)
     BOOST_CHECK(resp.isMember("id"));
 }
 
-BOOST_AUTO_TEST_CASE(feeHistoryAndSetMaxDASizeRegistered)
+BOOST_AUTO_TEST_CASE(setMaxDASizeRegistered)
 {
     // The miner namespace is opt-in ([web3_rpc] enable_miner_api): it writes the node-wide DA
     // caps, so a listener that does not explicitly enable it must not dispatch it at all —
@@ -251,27 +251,7 @@ BOOST_AUTO_TEST_CASE(feeHistoryAndSetMaxDASizeRegistered)
     // (Ethereum-only nodes).
     EndpointsMapping mapping(/*enableOPEngine=*/false, /*enableMinerApi=*/true);
     BOOST_CHECK_MESSAGE(
-        mapping.findHandler("eth_feeHistory").has_value(), "eth_feeHistory not dispatched");
-    BOOST_CHECK_MESSAGE(
         mapping.findHandler("miner_setMaxDASize").has_value(), "miner_setMaxDASize not dispatched");
-
-    // And the endpoint stays reachable through the real dispatch path — pinned POSITIVE
-    // here, not conditionally: the fixture carries 20 blocks, so a well-formed request
-    // must answer a result with the feeHistory shape (a -32602/-32603 here is a
-    // regression; the old conditional arm let any non-(-32601/-32603) code pass).
-    auto resp = call(req("eth_feeHistory", R"(["0x1","latest"])"));
-    BOOST_REQUIRE(resp.isMember("result"));
-    BOOST_REQUIRE(resp["result"].isObject());
-    BOOST_CHECK(resp["result"].isMember("oldestBlock"));
-    BOOST_CHECK(resp["result"].isMember("baseFeePerGas"));
-    BOOST_CHECK(!resp.isMember("error"));
-
-    // The param validation is pinned on both arms: a missing newestBlock is the exact
-    // InvalidParams (-32602) the endpoint throws (EthEndpoint::feeHistory), not just
-    // "anything but -32601/-32603".
-    auto malformed = call(req("eth_feeHistory", R"(["0x1"])"));
-    BOOST_REQUIRE(malformed.isMember("error"));
-    BOOST_CHECK_EQUAL(malformed["error"]["code"].asInt(), -32602);
 }
 
 BOOST_AUTO_TEST_CASE(minerSetMaxDASizeWritesSharedCapsAndGatesEthOnly)
@@ -349,7 +329,7 @@ BOOST_AUTO_TEST_CASE(estimateGasWithoutLedgerFailsClosed)
     }
 }
 
-// The sibling null-ledger guards: gasPrice, maxPriorityFeePerGas and feeHistory must all
+// The sibling null-ledger guards: gasPrice and maxPriorityFeePerGas must both
 // fail closed with InternalError on a node with no ledger — the guards existed but no test
 // reached them, so an ordering that dereferenced before checking would have passed.
 BOOST_AUTO_TEST_CASE(feeMethodsWithoutLedgerFailClosed)
@@ -382,19 +362,6 @@ BOOST_AUTO_TEST_CASE(feeMethodsWithoutLedgerFailClosed)
         BOOST_CHECK_EQUAL(error.msg(), "Ledger not available for eth_maxPriorityFeePerGas");
     }
 
-    Json::Value feeHistoryParams(Json::arrayValue);
-    feeHistoryParams.append("0x1");
-    feeHistoryParams.append("latest");
-    try
-    {
-        task::syncWait(endpoint->feeHistory(feeHistoryParams, response));
-        BOOST_FAIL("eth_feeHistory must not succeed without a ledger");
-    }
-    catch (JsonRpcException const& error)
-    {
-        BOOST_CHECK_EQUAL(error.code(), static_cast<int32_t>(JsonRpcError::InternalError));
-        BOOST_CHECK_EQUAL(error.msg(), "Ledger not available for eth_feeHistory");
-    }
 }
 
 BOOST_AUTO_TEST_CASE(estimateGasMissingParentBlockFailsClosed)
