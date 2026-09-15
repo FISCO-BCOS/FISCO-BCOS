@@ -39,7 +39,7 @@ ca_dir=""
 prometheus_dir=""
 config_path=""
 docker_mode=
-default_version="v3.16.0"
+default_version="v3.18.0"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
@@ -2389,7 +2389,7 @@ find_fisco_bcos_for_account()
   return 1
 }
 
-# Released binaries before 3.18 (build_chain's default download, v3.16.0) and their docker images
+# Released binaries before 3.18 (build_chain's default download before 3.18, v3.16.0) and their docker images
 # have no `account new` and exit 0 on unknown arguments, so the probe reads the help text.
 fisco_bcos_has_account_new()
 {
