@@ -155,41 +155,26 @@ inline void validateMPTFlagMatrix(bcos::ledger::Features const& features)
     }
 }
 
-/// OP mode (executor_version == OPSTACK_EXECUTOR_VERSION) is a genesis-only property: it is
+/// OP mode (executor_version >= OPSTACK_EXECUTOR_VERSION) is a genesis-only property: it is
 /// decided when the chain is created and cannot change afterwards. It requires the
 /// genesis-only feature_l2_ethereum_compat (the OP lane commits account state in MPT only),
-/// and executor_version must be genesis-bound (activation block 0). No higher
-/// executor_version is a defined lane.
+/// and executor_version must be genesis-bound (activation block 0). A value above the newest
+/// declared lane is not a lane of its own: MultiVersionScheduler::setVersion saturates it onto
+/// the newest WIRED slot, so boot does not refuse it (and must not, or a chain that wrote such
+/// a row before 3.18 could not start to fix it) — what remains here is the lane's own
+/// preconditions, which apply to every value at or above OPSTACK.
 /// The converse does NOT hold: feature_l2_ethereum_compat is the LEDGER's L2 state shape,
 /// and the Ethereum lane (executor_version == ETHEREUM_EXECUTOR_VERSION) serves L2 chains
 /// with it — the pure-Ethereum executor on an MPT root, sealing through the consensus
 /// layer (the executor integration harness has covered that pairing since #5397). Such a
 /// chain is Eth mode, not OP mode; only the OP lane needs engine-driven production.
 ///
-/// chainVersion is the version of the chain's current block. The above-the-ladder refusal is
-/// scoped to chains that reached V3_18_0, for the same reason the write path's refusals are
-/// (SystemConfigPrecompiled::validate): before this release nothing bounded executor_version
-/// on-chain, so a row above the ladder can exist on a legacy chain, and turning that into a boot
-/// refusal would strand it — the node could not start to fix the row it is refusing. Older
-/// chains keep the pre-cutover behaviour (setVersion saturates to the newest wired slot and logs).
 inline void validateOpModeGenesisOnly(bcos::ledger::Features const& features, int executorVersion,
-    bcos::protocol::BlockNumber executorVersionActivation, uint32_t chainVersion)
+    bcos::protocol::BlockNumber executorVersionActivation)
 {
     using Flag = bcos::ledger::Features::Flag;
     bool const flagOn = features.get(Flag::feature_l2_ethereum_compat);
     bool const opMode = (executorVersion >= bcos::ledger::OPSTACK_EXECUTOR_VERSION);
-    bool const ladderIsEnforced = bcos::protocol::versionCompareTo(chainVersion,
-                                      bcos::protocol::BlockVersion::V3_18_0_VERSION) >= 0;
-    if (executorVersion > bcos::ledger::OPSTACK_EXECUTOR_VERSION && ladderIsEnforced)
-    {
-        BOOST_THROW_EXCEPTION(InvalidMPTFlagMatrix{} << bcos::errinfo_comment(
-                                  "executor_version " + std::to_string(executorVersion) +
-                                  " is above OPSTACK_EXECUTOR_VERSION; OP mode is exactly " +
-                                  std::to_string(bcos::ledger::OPSTACK_EXECUTOR_VERSION) +
-                                  ". Recovery on a chain that wrote this row before upgrading: "
-                                  "run the previous binary and set executor_version back to the "
-                                  "value that chain ran with, then upgrade again"));
-    }
     if (opMode && !flagOn)
     {
         BOOST_THROW_EXCEPTION(

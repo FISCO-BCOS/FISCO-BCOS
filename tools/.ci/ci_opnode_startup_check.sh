@@ -9,10 +9,11 @@
 #   4. start op-node --sequencer.stopped and require it to survive rollup
 #      Config.Check() + L1/L2 genesis validation
 #
-# If op-node or anvil is not installed the script reports SKIP and exits 0, so it
-# is safe to wire into CI before the toolchain image carries those binaries.
-# REQUIRE_HARNESS=1 turns the missing-harness SKIP into a failure: a caller that does check the
-# harness out must not accept a green run that measured nothing.
+# If op-node or anvil is not installed, or the harness checkout is absent, the script reports
+# SKIP and exits 0, so it is safe to wire into CI before the toolchain image carries those
+# binaries — the SKIP line is the signal, and the step that runs it must not be read as "op-node
+# was checked" when it prints one. A caller that does provision the harness should grep for the
+# SKIP instead of relying on the exit code; a knob that no caller sets would not change that.
 #
 # Usage: bash tools/.ci/ci_opnode_startup_check.sh [REPO_ROOT]
 set -euo pipefail
@@ -24,12 +25,7 @@ BUILDER="${REPO_ROOT}/tools/BcosAirBuilder/build_chain.sh"
 # point OP_E2E_DIR at a checkout of it. Missing checkout is a SKIP, like the binaries.
 OP_E2E_DIR="${OP_E2E_DIR:-${REPO_ROOT}/.ci-op-e2e-tests}"
 GEN_ROLLUP="${OP_E2E_DIR}/tools/opstack-genesis/gen_rollup_config.py"
-REQUIRE_HARNESS="${REQUIRE_HARNESS:-0}"
 if [ ! -f "${GEN_ROLLUP}" ]; then
-    if [ "${REQUIRE_HARNESS}" = "1" ]; then
-        echo "[opnode-ci] ERROR: ${GEN_ROLLUP} not found — check out FISCO-BCOS/op-stack-e2e-tests into ${OP_E2E_DIR}" >&2
-        exit 1
-    fi
     echo "SKIP: ${GEN_ROLLUP} not found — check out FISCO-BCOS/op-stack-e2e-tests into ${OP_E2E_DIR}"
     exit 0
 fi

@@ -5,14 +5,6 @@
 using namespace bcos;
 using namespace bcos::scheduler_v1;
 
-namespace
-{
-/// Chain-version arguments for validateOpModeGenesisOnly. The above-the-ladder refusal only
-/// applies once the chain reached V3_18_0, the same scope the write path's refusals carry.
-constexpr uint32_t c_chainV3_17 = static_cast<uint32_t>(protocol::BlockVersion::V3_17_0_VERSION);
-constexpr uint32_t c_chainV3_18 = static_cast<uint32_t>(protocol::BlockVersion::V3_18_0_VERSION);
-}  // namespace
-
 BOOST_AUTO_TEST_SUITE(BaselineSchedulerMPTHelpersSuite)
 
 BOOST_AUTO_TEST_CASE(BothFlagsOff_AlwaysXOR)
@@ -113,12 +105,12 @@ BOOST_AUTO_TEST_CASE(OpMode_V3RequiresTheL2FeatureAtGenesis)
     using Flag = ledger::Features::Flag;
     ledger::Features features;  // flag off
     BOOST_CHECK_THROW(
-        validateOpModeGenesisOnly(features, ledger::OPSTACK_EXECUTOR_VERSION, 0, c_chainV3_18),
+        validateOpModeGenesisOnly(features, ledger::OPSTACK_EXECUTOR_VERSION, 0),
         InvalidMPTFlagMatrix);
 
     features.set(Flag::feature_l2_ethereum_compat);  // flag on, genesis-bound
     BOOST_CHECK_NO_THROW(
-        validateOpModeGenesisOnly(features, ledger::OPSTACK_EXECUTOR_VERSION, 0, c_chainV3_18));
+        validateOpModeGenesisOnly(features, ledger::OPSTACK_EXECUTOR_VERSION, 0));
 }
 
 BOOST_AUTO_TEST_CASE(OpMode_EthLaneMayCarryTheL2Feature)
@@ -132,30 +124,32 @@ BOOST_AUTO_TEST_CASE(OpMode_EthLaneMayCarryTheL2Feature)
     // marker. Only the OP lane requires engine-driven production, so an Eth-lane chain
     // with the flag must boot.
     BOOST_CHECK_NO_THROW(
-        validateOpModeGenesisOnly(features, ledger::ETHEREUM_EXECUTOR_VERSION, 0, c_chainV3_18));
+        validateOpModeGenesisOnly(features, ledger::ETHEREUM_EXECUTOR_VERSION, 0));
     // ...and the same holds without it (the plain Eth lane).
     ledger::Features plain;
     BOOST_CHECK_NO_THROW(
-        validateOpModeGenesisOnly(plain, ledger::ETHEREUM_EXECUTOR_VERSION, 0, c_chainV3_18));
+        validateOpModeGenesisOnly(plain, ledger::ETHEREUM_EXECUTOR_VERSION, 0));
 }
 
-BOOST_AUTO_TEST_CASE(OpMode_AboveOpstackAndLateActivationRefused)
+BOOST_AUTO_TEST_CASE(OpMode_AboveTheLadderSaturatesAndLateActivationIsRefused)
 {
     using Flag = ledger::Features::Flag;
     ledger::Features features;
     features.set(Flag::feature_l2_ethereum_compat);
 
-    BOOST_CHECK_THROW(
-        validateOpModeGenesisOnly(features, ledger::OPSTACK_EXECUTOR_VERSION + 1, 0, c_chainV3_18),
+    // Above the newest declared lane there is no lane of its own: the scheduler saturates such a
+    // value onto the newest WIRED slot (MultiVersionScheduler::setVersion, pinned by the
+    // libinitializer suite's setVersionSaturatesToNewestWiredSlot), so boot accepts it. Refusing
+    // it here would strand a chain that wrote the row before 3.18 — nothing bounded that key then
+    // — with no way to lower it (the precompile refuses writes at or above OPSTACK).
+    BOOST_CHECK_NO_THROW(validateOpModeGenesisOnly(features, ledger::OPSTACK_EXECUTOR_VERSION + 1, 0));
+    // The OP lane's own preconditions still apply to every value at or above the slot.
+    ledger::Features flagOff;
+    BOOST_CHECK_THROW(validateOpModeGenesisOnly(flagOff, ledger::OPSTACK_EXECUTOR_VERSION + 1, 0),
         InvalidMPTFlagMatrix);
-    // ...but only once the chain reached V3_18_0. Nothing bounded executor_version on-chain
-    // before this release, so a legacy chain may carry a row above the ladder; refusing to boot
-    // it would strand the chain with no way to fix the row it is refusing. Those chains start
-    // and saturate to the newest wired slot, which is the pre-cutover behaviour.
-    BOOST_CHECK_NO_THROW(
-        validateOpModeGenesisOnly(features, ledger::OPSTACK_EXECUTOR_VERSION + 1, 0, c_chainV3_17));
-    BOOST_CHECK_THROW(
-        validateOpModeGenesisOnly(features, ledger::OPSTACK_EXECUTOR_VERSION, 1, c_chainV3_18),
+    BOOST_CHECK_THROW(validateOpModeGenesisOnly(features, ledger::OPSTACK_EXECUTOR_VERSION, 1),
+        InvalidMPTFlagMatrix);
+    BOOST_CHECK_THROW(validateOpModeGenesisOnly(features, ledger::OPSTACK_EXECUTOR_VERSION + 1, 1),
         InvalidMPTFlagMatrix);
 }
 
