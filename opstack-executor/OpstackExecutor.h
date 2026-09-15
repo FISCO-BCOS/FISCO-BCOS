@@ -23,7 +23,7 @@
 #include "opstack-executor/OpDepositEncode.h"  // detail::encodeRlpItem (call-path sizing envelope)
 #include "opstack-executor/Storage2State.h"    // Storage2State / SharedErrorSlot
 #include <bcos-codec/rlp/Common.h>     // BYTES_HEAD_BASE (consensus deposit-envelope decode)
-#include <bcos-codec/rlp/RLPDecode.h>  // decodeHeader / decode / decodeItems
+#include <bcos-codec/rlp/RLPDecode.h>  // tryDecodeHeader / decode / decodeItems / captureRlp
 #include <bcos-rlp-protocol/Web3Transaction.h>  // AuthorizationListEntry decode (EIP-7702 bind)
 #include <bcos-rlp-protocol/Web3TxEnvelope.h>   // isTypedWeb3Envelope (header-only)
 #include <bcos-utilities/BoostLog.h>            // BCOS_LOG
@@ -306,51 +306,56 @@ namespace engine = bcos::evm::engine;
     return std::nullopt;  // list (not an integer)
 }
 
+/// Read one fixed-width RLP string item from `walker` into `out`: tryDecodeHeader plus an
+/// exact-width check (decodeHeader does not bound the payload against the remaining view, so
+/// the width equality must be established before the memcpy), then crop. Returns false when
+/// the item is missing, a list, or not exactly sizeof(out) payload bytes; the caller maps the
+/// failure to its own error message.
+template <typename Out>
+[[nodiscard]] inline bool readFixedRlpItem(bcos::bytesRef& walker, Out& out)
+{
+    auto header = bcos::codec::rlp::tryDecodeHeader(walker);
+    if (!header || header->isList || header->payloadLength != sizeof(out.bytes) ||
+        header->payloadLength > walker.size())
+        return false;
+    std::memcpy(out.bytes, walker.data(), sizeof(out.bytes));
+    walker = walker.getCroppedData(header->payloadLength);
+    return true;
+}
+
 /// Decode the envelope's accessList item (EIP-2930 shape: [[address20, [keys32...]],...]) and
 /// require element-wise equality with the mirror the executor will run. Shared by the two bind
 /// call sites below so both block paths reject the same divergence with the same message.
 [[nodiscard]] inline std::optional<std::string> bindEnvelopeAccessList(
     bcos::bytesConstRef listPayload, bool isList, evmone::state::AccessList const& mirror)
 {
-    namespace rlp = bcos::codec::rlp;
     if (!isList)
         return "accessList field is an RLP string";
     bcos::bytesRef walker(const_cast<bcos::byte*>(listPayload.data()), listPayload.size());
     size_t envEntries = 0;
     while (!walker.empty())
     {
-        auto [entryErr, entryHeader] = rlp::decodeHeader(walker);
-        if (entryErr || !entryHeader.isList || entryHeader.payloadLength > walker.size())
+        auto entryHeader = bcos::codec::rlp::tryDecodeHeader(walker);
+        if (!entryHeader || !entryHeader->isList || entryHeader->payloadLength > walker.size())
             return "accessList entry is malformed";
-        bcos::bytesRef entry = walker.getCroppedData(0, entryHeader.payloadLength);
-        walker = walker.getCroppedData(entryHeader.payloadLength);
+        bcos::bytesRef entry = walker.getCroppedData(0, entryHeader->payloadLength);
+        walker = walker.getCroppedData(entryHeader->payloadLength);
 
-        auto [addrErr, addrHeader] = rlp::decodeHeader(entry);
-        // decodeHeader does not bound the payload against the remaining view (every other
-        // call site re-checks explicitly); a 20-declaring header on a shorter tail would
-        // otherwise memcpy past the buffer below.
-        if (addrErr || addrHeader.isList || addrHeader.payloadLength != sizeof(evmc_address) ||
-            addrHeader.payloadLength > entry.size())
-            return "accessList address is malformed";
         evmc::address addr{};
-        std::memcpy(addr.bytes, entry.data(), sizeof(addr.bytes));
-        entry = entry.getCroppedData(addrHeader.payloadLength);
+        if (!readFixedRlpItem(entry, addr))
+            return "accessList address is malformed";
 
-        auto [keysErr, keysHeader] = rlp::decodeHeader(entry);
-        if (keysErr || !keysHeader.isList || keysHeader.payloadLength > entry.size())
+        auto keysHeader = bcos::codec::rlp::tryDecodeHeader(entry);
+        if (!keysHeader || !keysHeader->isList || keysHeader->payloadLength > entry.size())
             return "accessList storageKeys is malformed";
-        bcos::bytesRef keys = entry.getCroppedData(0, keysHeader.payloadLength);
+        bcos::bytesRef keys = entry.getCroppedData(0, keysHeader->payloadLength);
         std::vector<evmc::bytes32> storageKeys;
         while (!keys.empty())
         {
-            auto [keyErr, keyHeader] = rlp::decodeHeader(keys);
-            if (keyErr || keyHeader.isList || keyHeader.payloadLength != sizeof(evmc::bytes32) ||
-                keyHeader.payloadLength > keys.size())
-                return "accessList storage key is malformed";
             evmc::bytes32 key{};
-            std::memcpy(key.bytes, keys.data(), sizeof(key.bytes));
+            if (!readFixedRlpItem(keys, key))
+                return "accessList storage key is malformed";
             storageKeys.push_back(key);
-            keys = keys.getCroppedData(keyHeader.payloadLength);
         }
         if (envEntries >= mirror.size() || mirror[envEntries].first != addr ||
             mirror[envEntries].second.size() != storageKeys.size())
@@ -372,23 +377,18 @@ namespace engine = bcos::evm::engine;
 [[nodiscard]] inline std::optional<std::string> bindEnvelopeBlobHashes(
     bcos::bytesConstRef listPayload, bool isList, std::vector<evmc::bytes32> const& mirror)
 {
-    namespace rlp = bcos::codec::rlp;
     if (!isList)
         return "blobVersionedHashes field is an RLP string";
     bcos::bytesRef walker(const_cast<bcos::byte*>(listPayload.data()), listPayload.size());
     size_t count = 0;
     while (!walker.empty())
     {
-        auto [hashErr, hashHeader] = rlp::decodeHeader(walker);
-        if (hashErr || hashHeader.isList || hashHeader.payloadLength != sizeof(evmc::bytes32) ||
-            hashHeader.payloadLength > walker.size())
-            return "blobVersionedHashes entry is malformed";
         evmc::bytes32 hash{};
-        std::memcpy(hash.bytes, walker.data(), sizeof(hash.bytes));
+        if (!readFixedRlpItem(walker, hash))
+            return "blobVersionedHashes entry is malformed";
         if (count >= mirror.size() || mirror[count] != hash)
             return "blobVersionedHashes is not bound to the signed envelope";
         ++count;
-        walker = walker.getCroppedData(hashHeader.payloadLength);
     }
     if (count != mirror.size())
         return "blobVersionedHashes is not bound to the signed envelope";
@@ -411,7 +411,7 @@ namespace engine = bcos::evm::engine;
     while (!walker.empty())
     {
         bcos::rpc::AuthorizationListEntry entry{};
-        if (auto err = rlp::decode(walker, entry); err != nullptr)
+        if (!rlp::captureRlp([&] { rlp::decode(walker, entry); }))
             return "authorizationList entry is malformed";
         if (count >= mirror.size())
             return "authorizationList is not bound to the signed envelope";
@@ -473,10 +473,10 @@ namespace engine = bcos::evm::engine;
     {
         cursor = cursor.getCroppedData(1);  // drop the EIP-2718 type byte
     }
-    auto [listErr, header] = rlp::decodeHeader(cursor);
-    if (listErr || !header.isList || header.payloadLength > cursor.size())
+    auto header = rlp::tryDecodeHeader(cursor);
+    if (!header || !header->isList || header->payloadLength > cursor.size())
         return "unparseable envelope list";
-    bcos::bytesRef walker(cursor.data(), header.payloadLength);
+    bcos::bytesRef walker(cursor.data(), header->payloadLength);
 
     // Execution-field indices per shape (chainId is checked separately in m_prepare):
     // legacy: [nonce, gasPrice, gasLimit, to, value, data,...]
@@ -533,9 +533,10 @@ namespace engine = bcos::evm::engine;
     while (!walker.empty())
     {
         auto const itemStart = walker;
-        auto [itemErr, itemHeader] = rlp::decodeHeader(walker);
-        if (itemErr || itemHeader.payloadLength > walker.size())
+        auto itemHeaderOpt = rlp::tryDecodeHeader(walker);
+        if (!itemHeaderOpt || itemHeaderOpt->payloadLength > walker.size())
             return "malformed envelope item";
+        auto const itemHeader = *itemHeaderOpt;
         size_t const headerLen = static_cast<size_t>(walker.data() - itemStart.data());
         bcos::bytesRef const wholeItem(itemStart.data(), headerLen + itemHeader.payloadLength);
         bcos::bytesRef const payload = walker.getCroppedData(0, itemHeader.payloadLength);
@@ -636,7 +637,7 @@ namespace engine = bcos::evm::engine;
         if (*noncePlen > sizeof(uint64_t))
             return "nonce over-wide";
         uint64_t envNonce = 0;
-        if (auto e = rlp::decode(*nonceItem, envNonce); e != nullptr)
+        if (!rlp::captureRlp([&] { rlp::decode(*nonceItem, envNonce); }))
             return "nonce decode failed";
         if (evmTx.nonce != envNonce)
             return "nonce mismatch";
@@ -650,7 +651,7 @@ namespace engine = bcos::evm::engine;
         if (*gasPlen > sizeof(uint64_t))
             return "gasLimit over-wide";
         uint64_t envGas = 0;
-        if (auto e = rlp::decode(*gasItem, envGas); e != nullptr)
+        if (!rlp::captureRlp([&] { rlp::decode(*gasItem, envGas); }))
             return "gasLimit decode failed";
         if (static_cast<uint64_t>(evmTx.gas_limit) != envGas)
             return "gasLimit mismatch";
@@ -671,7 +672,7 @@ namespace engine = bcos::evm::engine;
                 return std::string(name) + " over-wide";
             bcos::u256 env{};
             bcos::bytesRef cursor = *item;
-            if (auto e = rlp::decode(cursor, env); e != nullptr)
+            if (!rlp::captureRlp([&] { rlp::decode(cursor, env); }))
                 return std::string(name) + " decode failed";
             if (eth::toIntxU256(env) != mirror)
                 return std::string(name) + " mismatch";
@@ -729,7 +730,7 @@ namespace engine = bcos::evm::engine;
         if (*valuePlen > sizeof(intx::uint256))
             return "value over-wide";
         bcos::u256 envValue{};
-        if (auto e = rlp::decode(*valueItem, envValue); e != nullptr)
+        if (!rlp::captureRlp([&] { rlp::decode(*valueItem, envValue); }))
             return "value decode failed";
         if (eth::toIntxU256(envValue) != evmTx.value)
             return "value mismatch";
@@ -944,21 +945,26 @@ public:
     auto fail = [](std::string const& msg) {
         BOOST_THROW_EXCEPTION(OpTxValidationFailed{} << bcos::errinfo_comment(msg));
     };
+    // decode-or-fail for the single-item field reads below.
+    auto decodeField = [&fail](bcos::bytesRef& ref, auto& out, std::string const& msg) {
+        if (!rlp::captureRlp([&] { rlp::decode(ref, out); }))
+            fail(msg);
+    };
     // Canonicality gate shared with the envelope↔mirror walker (integerPayloadLength above).
     if (env.size() < 2 || env[0] != static_cast<uint8_t>(op::kDepositTxType))
         fail("deposit envelope: not a 0x7e deposit");
     bcos::bytesRef body{const_cast<bcos::byte*>(env.data() + 1), env.size() - 1};
-    auto [err, header] = rlp::decodeHeader(body);
-    if (err != nullptr || !header.isList)
+    auto header = rlp::tryDecodeHeader(body);
+    if (!header || !header->isList)
         fail("deposit envelope: body must be an RLP list");
-    if (header.payloadLength != body.size())
+    if (header->payloadLength != body.size())
         fail("deposit envelope: trailing bytes after the RLP list");
-    bcos::bytesRef items(body.data(), header.payloadLength);
+    bcos::bytesRef items(body.data(), header->payloadLength);
 
     bcos::crypto::HashType sourceHash;
     bcos::Address from;
-    if (auto e = rlp::decodeItems(items, sourceHash, from); e != nullptr)
-        fail("deposit envelope: sourceHash/from decode failed: " + e->errorMessage());
+    if (auto const r = rlp::captureRlp([&] { rlp::decodeItems(items, sourceHash, from); }); !r)
+        fail("deposit envelope: sourceHash/from decode failed: " + r.error().message);
 
     op::DepositTx dep;
     std::copy_n(sourceHash.begin(), sizeof(evmc::bytes32), dep.source_hash.bytes);
@@ -974,8 +980,7 @@ public:
     else
     {
         bcos::Address to{};
-        if (auto e = rlp::decode(items, to); e != nullptr)
-            fail("deposit envelope: to decode failed");
+        decodeField(items, to, "deposit envelope: to decode failed");
         evmc::address ta{};
         std::copy_n(to.begin(), sizeof(evmc::address), ta.bytes);
         dep.to = ta;
@@ -994,8 +999,7 @@ public:
         if (auto pl = integerPayloadLength(items); !pl || *pl > 32)
             fail("deposit envelope: mint non-canonical or over-wide (>32 bytes)");
         bcos::u256 m{0};
-        if (auto e = rlp::decode(items, m); e != nullptr)
-            fail("deposit envelope: mint decode failed");
+        decodeField(items, m, "deposit envelope: mint decode failed");
         mint = m;
     }
     bcos::u256 value{0};
@@ -1005,25 +1009,21 @@ public:
     // value (u256): width + canonicality check before decode — over-wide would truncate silently.
     if (auto pl = integerPayloadLength(items); !pl || *pl > 32)
         fail("deposit envelope: value non-canonical or over-wide (>32 bytes)");
-    if (auto e = rlp::decode(items, value); e != nullptr)
-        fail("deposit envelope: value decode failed");
+    decodeField(items, value, "deposit envelope: value decode failed");
     // gas: width + canonicality, then int64 range. Over-range would wrap to -1.
     if (auto pl = integerPayloadLength(items); !pl || *pl > 8)
         fail("deposit envelope: gas non-canonical or over-wide (>8 bytes)");
-    if (auto e = rlp::decode(items, gas); e != nullptr)
-        fail("deposit envelope: gas decode failed");
+    decodeField(items, gas, "deposit envelope: gas decode failed");
     if (gas > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
         fail("deposit envelope: gas exceeds int64 range");
     // isSystemTx: 0 or 1 only, matching op-geth decodeBool. Decoded as uint64 because
     // the bool overload rejects the empty-item false.
     if (auto pl = integerPayloadLength(items); !pl || *pl > 8)
         fail("deposit envelope: isSystemTx non-canonical or over-wide (>8 bytes)");
-    if (auto e = rlp::decode(items, isSystemTxValue); e != nullptr)
-        fail("deposit envelope: isSystemTx decode failed");
+    decodeField(items, isSystemTxValue, "deposit envelope: isSystemTx decode failed");
     if (isSystemTxValue > 1)
         fail("deposit envelope: isSystemTx must be 0 or 1");
-    if (auto e = rlp::decode(items, data); e != nullptr)
-        fail("deposit envelope: data decode failed");
+    decodeField(items, data, "deposit envelope: data decode failed");
     if (!items.empty())
         fail("deposit envelope: trailing bytes inside the RLP list");
 

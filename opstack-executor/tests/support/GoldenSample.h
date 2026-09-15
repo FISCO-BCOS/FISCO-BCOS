@@ -104,9 +104,19 @@ inline bcostars::protocol::BlockHeaderImpl::Ptr decodeGoldenHeader(GoldenSample 
     auto bytes = bcos::fromHex(sample.golden["encodedHeaderHex"].asString());
     auto header = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     // release-3.18.0: decodeTarsHeader is not present; toTarsHeader is the RLP→BlockHeader bridge.
-    if (auto err = bcos::protocol::EthBlockHeader::toTarsHeader(header, bcos::ref(bytes));
-        err != nullptr)
-        throw std::runtime_error("decodeGoldenHeader: " + err->errorMessage());
+    // toTarsHeader throws codec::rlp::RlpDecodeException on malformed input; keep this helper's
+    // contract of a plain std::runtime_error carrying the decoder's message.
+    try
+    {
+        bcos::protocol::EthBlockHeader::toTarsHeader(header, bcos::ref(bytes));
+    }
+    catch (const bcos::Exception& e)
+    {
+        auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
+        throw std::runtime_error(
+            "decodeGoldenHeader: " +
+            (comment != nullptr ? *comment : boost::diagnostic_information(e)));
+    }
     return header;
 }
 

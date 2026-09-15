@@ -31,63 +31,36 @@ namespace bcos::rlp::protocol
 {
 /// True if the envelope's first byte is a typed-transaction marker (EIP-2718: type byte < 0x80).
 /// Used to key typed/legacy decisions on the envelope rather than the forgeable mirror kind.
-[[nodiscard]] inline bool isTypedWeb3Envelope(bcos::bytesConstRef payload) noexcept
-{
-    return !payload.empty() && payload[0] > 0 && payload[0] < bcos::codec::rlp::BYTES_HEAD_BASE;
-}
+[[nodiscard]] bool isTypedWeb3Envelope(bcos::bytesConstRef payload) noexcept;
 
 /// Decode an RLP unsigned integer, rejecting non-minimal encodings (leading zeros, bare 0x00,
 /// oversized prefixes) with NonCanonicalSize. Since #5353 the shared decoder enforces all of
 /// that itself (RLPDecode.h: width gate, header canonicality, leading-zero payload), so this is
-/// a plain forward kept for its name at the ~60 Web3TxHandler call sites.
+/// a plain forward kept for its name at the ~60 Web3TxHandler call sites. Throws
+/// codec::rlp::RlpDecodeException on malformed input.
+/// (Template — must stay in the header.)
 template <typename T>
-[[nodiscard]] inline bcos::Error::UniquePtr decodeCanonicalRlpUint(
-    bcos::bytesRef& from, T& to) noexcept
+inline void decodeCanonicalRlpUint(bcos::bytesRef& from, T& to)
 {
-    return bcos::codec::rlp::decode(from, to);
+    bcos::codec::rlp::decode(from, to);
+}
+
+/// Variadic sibling of decodeCanonicalRlpUint: decode several canonical RLP integers in order.
+/// The fold expression keeps the exact per-field sequencing (and error behaviour) of the
+/// scalar overload. Throws codec::rlp::RlpDecodeException on malformed input.
+/// (Template — must stay in the header.)
+template <typename... Ts>
+inline void decodeCanonicalRlpUints(bcos::bytesRef& from, Ts&... tos)
+{
+    (decodeCanonicalRlpUint(from, tos), ...);
 }
 
 /// Typed yParity: whole item must be 0x80 (0) or 0x01 (1). Bare 0x00 is rejected.
-[[nodiscard]] inline std::optional<uint64_t> canonicalTypedYParityItem(
-    bcos::bytesConstRef item) noexcept
-{
-    if (item.size() == 1 && item[0] == 0x80)
-    {
-        return uint64_t{0};
-    }
-    if (item.size() == 1 && item[0] == 0x01)
-    {
-        return uint64_t{1};
-    }
-    return std::nullopt;
-}
+[[nodiscard]] std::optional<uint64_t> canonicalTypedYParityItem(bcos::bytesConstRef item) noexcept;
 
 /// Consume one canonical yParity item (0x80 / 0x01) from the cursor.
-[[nodiscard]] inline bcos::Error::UniquePtr decodeCanonicalYParity(
-    bcos::bytesRef& from, uint64_t& to) noexcept
-{
-    auto const* const start = from.data();
-    auto&& [error, header] = bcos::codec::rlp::decodeHeader(from);
-    if (error != nullptr)
-    {
-        return std::move(error);
-    }
-    if (header.isList)
-    {
-        return BCOS_ERROR_UNIQUE_PTR(
-            bcos::codec::rlp::DecodingError::UnexpectedList, "y_parity: expected a scalar");
-    }
-    auto const itemLength = static_cast<size_t>(from.data() - start) + header.payloadLength;
-    auto const parity = canonicalTypedYParityItem({start, itemLength});
-    if (!parity.has_value()) [[unlikely]]
-    {
-        return BCOS_ERROR_UNIQUE_PTR(bcos::codec::rlp::DecodingError::InvalidVInSignature,
-            "typed tx y_parity must be the canonical 0x80/0x01 form");
-    }
-    to = *parity;
-    from = from.getCroppedData(header.payloadLength);
-    return nullptr;
-}
+/// Throws codec::rlp::RlpDecodeException on malformed input.
+void decodeCanonicalYParity(bcos::bytesRef& from, uint64_t& to);
 
 /// Consume one EIP-7702 authorization yParity item the way op-geth's RLP decoder reads a
 /// uint8: an empty byte string is 0, a single non-zero payload byte is its value, and a
@@ -100,42 +73,13 @@ template <typename T>
 /// decodes the authorization's V as a plain uint8 and skips the entry at execution when it is
 /// not 0/1, so the transaction stays valid. Rejecting it at decode would reject a whole block
 /// op-geth accepts (minus the bad entry).
-[[nodiscard]] inline bcos::Error::UniquePtr decodeAuthorizationYParity(
-    bcos::bytesRef& from, uint64_t& to) noexcept
-{
-    auto&& [error, header] = bcos::codec::rlp::decodeHeader(from);
-    if (error != nullptr)
-    {
-        return std::move(error);
-    }
-    if (header.isList)
-    {
-        return BCOS_ERROR_UNIQUE_PTR(
-            bcos::codec::rlp::DecodingError::UnexpectedList, "y_parity: expected a scalar");
-    }
-    uint64_t value = 0;
-    if (header.payloadLength > 1)
-    {
-        return BCOS_ERROR_UNIQUE_PTR(bcos::codec::rlp::DecodingError::InvalidVInSignature,
-            "authorization y_parity must be a canonical uint8");
-    }
-    if (header.payloadLength == 1)
-    {
-        if (from.data()[0] == 0)
-        {
-            return BCOS_ERROR_UNIQUE_PTR(bcos::codec::rlp::DecodingError::InvalidVInSignature,
-                "authorization y_parity has a leading zero byte");
-        }
-        value = from.data()[0];
-    }
-    to = value;
-    from = from.getCroppedData(header.payloadLength);
-    return nullptr;
-}
-
+///
+/// Throws codec::rlp::RlpDecodeException on malformed input.
+void decodeAuthorizationYParity(bcos::bytesRef& from, uint64_t& to);
 
 /// Empty r/s => EIP-155 preimage (chainId, 0, 0); otherwise sealed (v, r, s).
 /// chainId 27/28 is indistinguishable from an erased Homestead signature.
+/// (constexpr — must stay in the header.)
 [[nodiscard]] constexpr bool isLegacyPreimageTail(
     [[maybe_unused]] uint64_t field7, bool field8Empty, bool field9Empty) noexcept
 {
@@ -175,21 +119,7 @@ struct Web3EnvelopeChainIdResult
 /// Log names; spelled out so this header does not pull in magic_enum. The trailing
 /// "Unknown" return is unreachable today (MSVC C4715 totality) and does NOT mask -Wswitch:
 /// a kind added later fires that warning, since there is no default: label.
-[[nodiscard]] inline std::string_view toString(Web3EnvelopeChainIdKind kind) noexcept
-{
-    switch (kind)
-    {
-    case Web3EnvelopeChainIdKind::Unprotected:
-        return "Unprotected";
-    case Web3EnvelopeChainIdKind::Protected:
-        return "Protected";
-    case Web3EnvelopeChainIdKind::Malformed:
-        return "Malformed";
-    case Web3EnvelopeChainIdKind::Deposit:
-        return "Deposit";
-    }
-    return "Unknown";
-}
+[[nodiscard]] std::string_view toString(Web3EnvelopeChainIdKind kind) noexcept;
 
 [[nodiscard]] Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payload);
 }  // namespace bcos::rlp::protocol

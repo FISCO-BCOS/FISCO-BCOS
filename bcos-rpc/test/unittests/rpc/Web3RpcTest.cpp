@@ -356,7 +356,9 @@ BOOST_AUTO_TEST_CASE(handleLegacyTxTest)
             auto const chainId = txs[0]->chainId();
             BOOST_TEST(chainId == std::to_string(rawWeb3Tx.chainId.value_or(0)));
             Web3Transaction tx;
-            bcos::codec::rlp::decode(ref, tx);
+            // extraTransactionBytes stores the encodeForSign() preimage (no signature), so
+            // decode it without the signature arm.
+            bcos::codec::rlp::decodeFromPayload(ref, tx);
             BOOST_TEST(tx.type == rawWeb3Tx.type);
             BOOST_TEST(tx.data == rawWeb3Tx.data);
             BOOST_TEST(tx.nonce == rawWeb3Tx.nonce);
@@ -428,7 +430,9 @@ BOOST_AUTO_TEST_CASE(handleEIP1559TxTest)
             auto ref = bytesRef(const_cast<unsigned char*>(txs[0]->extraTransactionBytes().data()),
                 txs[0]->extraTransactionBytes().size());
             Web3Transaction tx;
-            bcos::codec::rlp::decode(ref, tx);
+            // extraTransactionBytes stores the encodeForSign() preimage (no signature), so
+            // decode it without the signature arm.
+            bcos::codec::rlp::decodeFromPayload(ref, tx);
             BOOST_TEST(tx.type == rawWeb3Tx.type);
             BOOST_TEST(tx.data == rawWeb3Tx.data);
             BOOST_TEST(tx.nonce == rawWeb3Tx.nonce);
@@ -800,21 +804,21 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadVersion.has_value());
     BOOST_TEST(*testEngineService.m_state->capturedNewPayloadVersion == 4);
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload
-            .withdrawalsRoot.has_value());
+                      .withdrawalsRoot.has_value());
     BOOST_REQUIRE(
         testEngineService.m_state->capturedNewPayloadRequest->executionRequests.has_value());
     BOOST_TEST(testEngineService.m_state->capturedNewPayloadRequest->executionRequests->empty());
     BOOST_TEST(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.transactions
                    .size() == 1);
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals
-            .has_value());
+                      .has_value());
     BOOST_TEST(
         testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals->front()
             .amount == expectedLargeValue);
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed
-            .has_value());
+                      .has_value());
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload
-            .excessBlobGas.has_value());
+                      .excessBlobGas.has_value());
     BOOST_TEST(
         *testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed ==
         expectedLargeValue);
@@ -824,8 +828,8 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
 
     // Raw-bytes carrier: newPayload preserves the wire bytes verbatim (no decoding).
     BOOST_TEST(toHexStringWithPrefix(testEngineService.m_state->capturedNewPayloadRequest
-                       ->executionPayload.transactions.front()
-                       .raw) == encodedTxHex);
+                                         ->executionPayload.transactions.front()
+                                         .raw) == encodedTxHex);
 
     testEngineService.m_state->getPayloadResult->executionPayload =
         testEngineService.m_state->capturedNewPayloadRequest->executionPayload;

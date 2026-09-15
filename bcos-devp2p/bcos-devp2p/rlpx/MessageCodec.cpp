@@ -19,11 +19,17 @@
  */
 #include "MessageCodec.h"
 
+#include "../RlpTake.h"
+#include "../Try.h"
+#include <bcos-codec/rlp/Exceptions.h>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <stdexcept>
 namespace bcos::devp2p::rlpx
 {
+using bcos::codec::rlp::RlpResult;
+using bcos::devp2p::detail::genericError;
+
 namespace
 {
 // --- Raw snappy (the wire format geth/erigon/reth/ethrex all use for devp2p
@@ -51,7 +57,7 @@ void appendUvarint(bcos::bytes& _out, uint64_t _value)
     _out.push_back(static_cast<bcos::byte>(_value));
 }
 
-uint64_t readUvarint(bytesConstRef _data, size_t& _pos)
+RlpResult<uint64_t> readUvarint(bytesConstRef _data, size_t& _pos)
 {
     uint64_t value = 0;
     uint32_t shift = 0;
@@ -59,7 +65,7 @@ uint64_t readUvarint(bytesConstRef _data, size_t& _pos)
     {
         if (_pos >= _data.size())
         {
-            throw std::runtime_error("MessageCodec: truncated snappy varint");
+            return std::unexpected(genericError("MessageCodec: truncated snappy varint"));
         }
         uint8_t const b = _data[_pos++];
         value |= static_cast<uint64_t>(b & 0x7F) << shift;
@@ -70,7 +76,7 @@ uint64_t readUvarint(bytesConstRef _data, size_t& _pos)
         shift += 7;
         if (shift >= 64)
         {
-            throw std::runtime_error("MessageCodec: snappy varint overflow");
+            return std::unexpected(genericError("MessageCodec: snappy varint overflow"));
         }
     }
 }
@@ -120,15 +126,13 @@ bcos::bytes rawSnappyBlockCompress(bytesConstRef _data)
 }
 
 // Decodes one raw block starting at _pos; advances _pos to the end of the block.
-bcos::bytes rawSnappyDecompressBlock(bytesConstRef _data, size_t& _pos, size_t _maxOutput)
+RlpResult<bcos::bytes> rawSnappyDecompressBlock(
+    bytesConstRef _data, size_t& _pos, size_t _maxOutput)
 {
     bcos::bytes out;
     size_t const n = _data.size();
-    auto need = [&](size_t k) {
-        if (_pos + k > n)
-        {
-            throw std::runtime_error("MessageCodec: truncated snappy data");
-        }
+    auto truncated = [] {
+        return std::unexpected(genericError("MessageCodec: truncated snappy data"));
     };
     while (_pos < n)
     {
@@ -141,7 +145,10 @@ bcos::bytes rawSnappyDecompressBlock(bytesConstRef _data, size_t& _pos, size_t _
             if (dataBits >= 60)
             {
                 size_t const lenBytes = dataBits - 59;  // 60->1, 61->2, 62->3, 63->4
-                need(lenBytes);
+                if (_pos + lenBytes > n)
+                {
+                    return truncated();
+                }
                 uint64_t value = 0;
                 for (size_t i = 0; i < lenBytes; ++i)
                 {
@@ -152,7 +159,7 @@ bcos::bytes rawSnappyDecompressBlock(bytesConstRef _data, size_t& _pos, size_t _
             }
             if (out.size() + len > _maxOutput || _pos + len > n)
             {
-                throw std::runtime_error("MessageCodec: snappy literal exceeds limits");
+                return std::unexpected(genericError("MessageCodec: snappy literal exceeds limits"));
             }
             out.insert(out.end(), _data.begin() + _pos, _data.begin() + _pos + len);
             _pos += len;
@@ -164,13 +171,19 @@ bcos::bytes rawSnappyDecompressBlock(bytesConstRef _data, size_t& _pos, size_t _
             if (type == 1)  // copy-1: 3-bit length + 5-bit offset
             {
                 len = (dataBits & 0x7) + 4;
-                need(1);
+                if (_pos + 1 > n)
+                {
+                    return truncated();
+                }
                 offset = (static_cast<size_t>(dataBits >> 3) << 8) | _data[_pos++];
             }
             else if (type == 2)  // copy-2
             {
                 len = dataBits + 1;
-                need(2);
+                if (_pos + 2 > n)
+                {
+                    return truncated();
+                }
                 offset =
                     static_cast<size_t>(_data[_pos]) | (static_cast<size_t>(_data[_pos + 1]) << 8);
                 _pos += 2;
@@ -178,7 +191,10 @@ bcos::bytes rawSnappyDecompressBlock(bytesConstRef _data, size_t& _pos, size_t _
             else  // copy-4
             {
                 len = dataBits + 1;
-                need(4);
+                if (_pos + 4 > n)
+                {
+                    return truncated();
+                }
                 offset = static_cast<size_t>(_data[_pos]) |
                          (static_cast<size_t>(_data[_pos + 1]) << 8) |
                          (static_cast<size_t>(_data[_pos + 2]) << 16) |
@@ -187,7 +203,7 @@ bcos::bytes rawSnappyDecompressBlock(bytesConstRef _data, size_t& _pos, size_t _
             }
             if (offset == 0 || offset > out.size() || out.size() + len > _maxOutput)
             {
-                throw std::runtime_error("MessageCodec: invalid snappy copy");
+                return std::unexpected(genericError("MessageCodec: invalid snappy copy"));
             }
             for (size_t i = 0; i < len; ++i)
             {
@@ -207,18 +223,18 @@ bcos::bytes rawSnappyCompress(bytesConstRef _data)
     return out;
 }
 
-bcos::bytes rawSnappyDecompress(bytesConstRef _data, size_t _maxOutput)
+RlpResult<bcos::bytes> rawSnappyDecompress(bytesConstRef _data, size_t _maxOutput)
 {
     size_t pos = 0;
-    uint64_t const declared = readUvarint(_data, pos);
+    RLP_TRY(auto declared, readUvarint(_data, pos));
     if (declared > _maxOutput)
     {
-        throw std::runtime_error("MessageCodec: snappy declared length exceeds limits");
+        return std::unexpected(genericError("MessageCodec: snappy declared length exceeds limits"));
     }
-    bcos::bytes out = rawSnappyDecompressBlock(_data, pos, _maxOutput);
+    RLP_TRY(auto out, rawSnappyDecompressBlock(_data, pos, _maxOutput));
     if (out.size() != declared)
     {
-        throw std::runtime_error("MessageCodec: snappy declared length mismatch");
+        return std::unexpected(genericError("MessageCodec: snappy declared length mismatch"));
     }
     return out;
 }
@@ -244,29 +260,25 @@ bcos::bytes MessageCodec::encode(Message const& _message) const
     return frameData;
 }
 
-Message MessageCodec::decode(bytesConstRef _frameData) const
+RlpResult<Message> MessageCodec::decode(bytesConstRef _frameData) const
 {
     if (_frameData.empty())
     {
-        throw std::runtime_error("MessageCodec: frame data too short");
+        return std::unexpected(genericError("MessageCodec: frame data too short"));
     }
     Message message;
-    // The message id is RLP-encoded (RLP(0) == 0x80), so decode it properly.
+    // The message id is RLP-encoded (RLP(0) == 0x80), so decode it properly, with the
+    // codec's canonical-integer rules via the non-throwing core.
+    bcos::bytesRef view(const_cast<bcos::byte*>(_frameData.data()), _frameData.size());
+    RLP_TRY(message.id, detail::take<uint8_t>(view));
+    auto payload = _frameData.getCroppedData(_frameData.size() - view.size());
+    if (!m_compressionEnabled)
     {
-        bcos::bytesRef view(const_cast<bcos::byte*>(_frameData.data()), _frameData.size());
-        if (auto err = bcos::codec::rlp::decode(view, message.id))
-        {
-            throw std::runtime_error("MessageCodec: failed to decode message id");
-        }
-        auto payload = _frameData.getCroppedData(_frameData.size() - view.size());
-        if (!m_compressionEnabled)
-        {
-            message.data.assign(payload.begin(), payload.end());
-        }
-        else
-        {
-            message.data = rawSnappyDecompress(payload, kMaxFrameSize);
-        }
+        message.data.assign(payload.begin(), payload.end());
+    }
+    else
+    {
+        RLP_TRY(message.data, rawSnappyDecompress(payload, kMaxFrameSize));
     }
     return message;
 }

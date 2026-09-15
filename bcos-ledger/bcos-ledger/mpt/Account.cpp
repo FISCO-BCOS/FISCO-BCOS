@@ -35,19 +35,26 @@ namespace rlp = bcos::codec::rlp;
 
 namespace
 {
+// tryDecodeHeader or throw MPTDecodeError with errorPrefix + the codec's message.
+bcos::codec::rlp::Header readHeaderOrThrow(bcos::bytesRef& cursor, std::string const& errorPrefix)
+{
+    auto headerResult = rlp::tryDecodeHeader(cursor);
+    if (!headerResult) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(
+            MPTDecodeError{} << bcos::errinfo_comment(errorPrefix + headerResult.error().message));
+    }
+    return *headerResult;
+}
+
 // Decode one RLP string item into `out`, rejecting any payload whose length != 32. The generic
 // FixedBytes<32> decoder zero-pads a short payload (RLPDecode.h: FixedBytes<32>{getCroppedData(0,
 // payloadLength)}), silently accepting malformed input; Ethereum consensus requires storageRoot
 // and codeHash to be exactly 32-byte strings, so enforce that here.
 void decodeHash32(bcos::bytesRef& cursor, bcos::h256& out, char const* field)
 {
-    auto [error, header] = rlp::decodeHeader(cursor);
-    if (error)
-    {
-        BOOST_THROW_EXCEPTION(
-            MPTDecodeError{} << bcos::errinfo_comment(
-                std::string("Account RLP: bad ") + field + " header: " + error->errorMessage()));
-    }
+    auto const header =
+        readHeaderOrThrow(cursor, std::string("Account RLP: bad ") + field + " header: ");
     if (header.isList)
     {
         BOOST_THROW_EXCEPTION(
@@ -86,12 +93,7 @@ Account Account::decode(bcos::bytesConstRef rlp)
 {
     bcos::bytesRef cursor{const_cast<bcos::byte*>(rlp.data()), rlp.size()};
 
-    auto [headerError, header] = ::bcos::codec::rlp::decodeHeader(cursor);
-    if (headerError)
-    {
-        BOOST_THROW_EXCEPTION(MPTDecodeError{} << bcos::errinfo_comment(
-                                  "Account RLP: bad list header: " + headerError->errorMessage()));
-    }
+    auto const header = readHeaderOrThrow(cursor, "Account RLP: bad list header: ");
     if (!header.isList)
     {
         BOOST_THROW_EXCEPTION(
@@ -104,15 +106,15 @@ Account Account::decode(bcos::bytesConstRef rlp)
     }
 
     Account account;
-    if (auto error = ::bcos::codec::rlp::decode(cursor, account.nonce); error)
+    if (auto result = ::bcos::codec::rlp::tryDecode(cursor, account.nonce); !result) [[unlikely]]
     {
         BOOST_THROW_EXCEPTION(MPTDecodeError{} << bcos::errinfo_comment(
-                                  "Account RLP: bad nonce: " + error->errorMessage()));
+                                  "Account RLP: bad nonce: " + result.error().message));
     }
-    if (auto error = ::bcos::codec::rlp::decode(cursor, account.balance); error)
+    if (auto result = ::bcos::codec::rlp::tryDecode(cursor, account.balance); !result) [[unlikely]]
     {
         BOOST_THROW_EXCEPTION(MPTDecodeError{} << bcos::errinfo_comment(
-                                  "Account RLP: bad balance: " + error->errorMessage()));
+                                  "Account RLP: bad balance: " + result.error().message));
     }
     // storageRoot/codeHash must be exactly 32-byte RLP strings (decodeHash32 rejects shorter
     // payloads that the generic FixedBytes<32> decoder would silently zero-pad).

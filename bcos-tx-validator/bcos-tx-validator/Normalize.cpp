@@ -25,6 +25,7 @@
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/Web3RawTransaction.h"
 #include "bcos-utilities/BoostLog.h"
+#include <bcos-codec/rlp/Exceptions.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <cstring>
 
@@ -139,7 +140,7 @@ TransactionStatus normalize(Transaction& tx)
 
     // Step 3 -- decode the envelope. This is the authoritative content of the transaction.
     // Decoded from a COPY, not through a const_cast over tx.extraTransactionBytes(). That
-    // buffer is the only thing the signature covers, and decodeFromPayload takes a mutable
+    // buffer is the only thing the signature covers, and tryDecodeFromPayload takes a mutable
     // bytesRef because decodeHeader crops the header off the cursor as it parses --
     // reassembleWeb3RawTransaction copies for the same reason and says so. The copy is paid for
     // again inside canonicalHash() on the next line; this adds one buffer, not a new order of
@@ -147,8 +148,7 @@ TransactionStatus normalize(Transaction& tx)
     rpc::Web3Transaction decoded;
     bcos::bytes preimage(payload.begin(), payload.end());
     auto payloadRef = bcos::bytesRef(preimage.data(), preimage.size());
-    if (auto error = codec::rlp::decodeFromPayload(payloadRef, decoded); error != nullptr)
-        [[unlikely]]
+    if (!codec::rlp::tryDecodeFromPayload(payloadRef, decoded))
     {
         return TransactionStatus::Malformed;
     }

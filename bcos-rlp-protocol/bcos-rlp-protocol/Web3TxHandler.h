@@ -7,7 +7,6 @@
 #pragma once
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/Error.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <json/json.h>
 #include <cstdint>
@@ -33,10 +32,9 @@ struct Web3TxHandler
     // RLP header (length computation)
     virtual bcos::codec::rlp::Header header(const Web3Transaction&) const = 0;
     // Decode (populates Web3Transaction; withSig controls whether the signature is parsed).
-    // ⚠️ Returns Error::UniquePtr (not void): decode errors must propagate, not be silently
-    // swallowed.
-    virtual bcos::Error::UniquePtr decode(
-        bcos::bytesRef&, Web3Transaction&, bool withSig) const = 0;
+    // ⚠️ Throws codec::rlp::RlpDecodeException on malformed input: decode errors must
+    // propagate, not be silently swallowed.
+    virtual void decode(bcos::bytesRef&, Web3Transaction&, bool withSig) const = 0;
 };
 
 // Dispatch by type via a switch over the known type bytes. Unknown types get a fail-loud

@@ -19,6 +19,7 @@
  */
 #pragma once
 
+#include <bcos-codec/rlp/Result.h>
 #include <bcos-utilities/Common.h>
 #include <string>
 #include <vector>
@@ -70,7 +71,8 @@ struct HelloMessage
 };
 
 bcos::bytes encodeHello(HelloMessage const& _msg);
-HelloMessage decodeHello(bytesConstRef _data);
+// Malformed input is reported as an RlpError value, never thrown.
+bcos::codec::rlp::RlpResult<HelloMessage> decodeHello(bytesConstRef _data);
 
 // RLP: [reason]
 struct DisconnectMessage
@@ -79,7 +81,7 @@ struct DisconnectMessage
 };
 
 bcos::bytes encodeDisconnect(DisconnectMessage const& _msg);
-DisconnectMessage decodeDisconnect(bytesConstRef _data);
+bcos::codec::rlp::RlpResult<DisconnectMessage> decodeDisconnect(bytesConstRef _data);
 
 // Ping/Pong are the empty list RLP: 0xc0.
 bcos::bytes encodePing();

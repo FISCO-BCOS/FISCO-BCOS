@@ -24,6 +24,7 @@
 
 #include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-rlp-protocol/Web3TxEnvelope.h"
+#include <bcos-codec/rlp/Exceptions.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <boost/test/unit_test.hpp>
 
@@ -284,14 +285,14 @@ BOOST_AUTO_TEST_CASE(eip2SignatureBoundaryGrid)
     auto const sHigh = be32(crypto::c_secp256k1n - 1);
     auto const zero = bcos::bytes(32, 0x00);
 
-    BOOST_CHECK(bcos::checkEip2Signature(bcos::ref(rOne), bcos::ref(sOne)) == nullptr);
-    BOOST_CHECK(bcos::checkEip2Signature(bcos::ref(rOne), bcos::ref(sMax)) == nullptr);
-    BOOST_CHECK(bcos::checkEip2Signature(bcos::ref(rMax), bcos::ref(sOne)) == nullptr);
-    BOOST_CHECK(bcos::checkEip2Signature(bcos::ref(zero), bcos::ref(sOne)) != nullptr);
-    BOOST_CHECK(bcos::checkEip2Signature(bcos::ref(rOne), bcos::ref(zero)) != nullptr);
-    BOOST_CHECK(bcos::checkEip2Signature(bcos::ref(rN), bcos::ref(sOne)) != nullptr);
-    BOOST_CHECK(bcos::checkEip2Signature(bcos::ref(rOne), bcos::ref(sOver)) != nullptr);
-    BOOST_CHECK(bcos::checkEip2Signature(bcos::ref(rOne), bcos::ref(sHigh)) != nullptr);
+    BOOST_CHECK(bcos::checkEip2Signature(bcos::ref(rOne), bcos::ref(sOne)));
+    BOOST_CHECK(bcos::checkEip2Signature(bcos::ref(rOne), bcos::ref(sMax)));
+    BOOST_CHECK(bcos::checkEip2Signature(bcos::ref(rMax), bcos::ref(sOne)));
+    BOOST_CHECK(!bcos::checkEip2Signature(bcos::ref(zero), bcos::ref(sOne)));
+    BOOST_CHECK(!bcos::checkEip2Signature(bcos::ref(rOne), bcos::ref(zero)));
+    BOOST_CHECK(!bcos::checkEip2Signature(bcos::ref(rN), bcos::ref(sOne)));
+    BOOST_CHECK(!bcos::checkEip2Signature(bcos::ref(rOne), bcos::ref(sOver)));
+    BOOST_CHECK(!bcos::checkEip2Signature(bcos::ref(rOne), bcos::ref(sHigh)));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

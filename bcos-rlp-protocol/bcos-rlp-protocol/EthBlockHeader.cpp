@@ -30,19 +30,14 @@ using namespace bcos::codec::rlp;
 
 namespace bcos::protocol
 {
-bcos::Error::UniquePtr EthBlockHeader::calculateRLPHash(bcos::protocol::BlockHeader& header)
+void EthBlockHeader::calculateRLPHash(bcos::protocol::BlockHeader& header)
 {
-    bcos::Error::UniquePtr error;
-    if (!validateHeader(header, error))
-    {
-        return error;
-    }
+    validateHeader(header);
 
     EthBlockHeader ethHeader(header);
     bcos::bytes encoded;
     ethHeader.rlpEncode(encoded);
     header.setRLPHash(bcos::crypto::keccak256Hash(bcos::ref(encoded)));
-    return nullptr;
 }
 
 bcos::crypto::HashType EthBlockHeader::computeHash(
@@ -57,13 +52,13 @@ bcos::crypto::HashType EthBlockHeader::computeHash(
     return bcos::crypto::keccak256Hash(bcos::ref(encoded));
 }
 
-bcos::Error::UniquePtr EthBlockHeader::toTarsHeader(
+void EthBlockHeader::toTarsHeader(
     bcos::protocol::BlockHeader::Ptr header, bcos::bytesConstRef _data)
 {
     if (header == nullptr)
     {
-        return BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::InvalidHeaderType),
-            "EthBlockHeader: header is null");
+        codec::rlp::throwRlpDecodeError(
+            EthBlockHeaderError::InvalidHeaderType, "EthBlockHeader: header is null");
     }
 
     // Reset the destination first so reusing a header (previously holding higher-version
@@ -71,10 +66,7 @@ bcos::Error::UniquePtr EthBlockHeader::toTarsHeader(
     header->clear();
 
     EthBlockHeader ethHeader;
-    if (auto err = toEthBlockHeader(ethHeader, _data))
-    {
-        return err;
-    }
+    toEthBlockHeader(ethHeader, _data);
 
     // The Ethereum header RLP carries only the parent hash, not the parent block number.
     // parentInfo.blockNumber is therefore left at its default (0) after decode; callers that
@@ -92,15 +84,14 @@ bcos::Error::UniquePtr EthBlockHeader::toTarsHeader(
     // EthBlockHeaderData stores SECONDS; the internal BlockHeader stores MILLISECONDS.
     // Bound by int64 before the ×1000 so a hostile wire value cannot trigger signed
     // overflow on the conversion.
-    if (ethHeader.data().timestamp >
-        std::numeric_limits<int64_t>::max() / 1000)
+    if (ethHeader.data().timestamp > std::numeric_limits<int64_t>::max() / 1000)
     {
         // Leave the destination in the same defined empty state as the validateHeader
         // failure path below: the fields above are already written, so without a clear a
         // caller that checks the error but reuses the header could observe a half-populated
         // header from rejected hostile input.
         header->clear();
-        return BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::InvalidHeader),
+        codec::rlp::throwRlpDecodeError(EthBlockHeaderError::InvalidHeader,
             "EthBlockHeader: timestamp out of representable millisecond range");
     }
     header->setTimestamp(ethHeader.data().timestamp * 1000);
@@ -143,14 +134,20 @@ bcos::Error::UniquePtr EthBlockHeader::toTarsHeader(
 
     // The RLP-to-header path requires the same fields the header-to-hash path requires for
     // the decoded fork version, so both directions agree on what constitutes a valid header.
-    bcos::Error::UniquePtr validationError;
-    if (!validateHeader(*header, validationError))
+    try
+    {
+        validateHeader(*header);
+    }
+    catch (boost::exception const& e)
     {
         // Leave the destination header in a defined state on failure: the fields written
         // above are rolled back so the caller cannot mistake a half-populated header for a
-        // valid one.
+        // valid one. Translate the failure to the decode exception type: this is a decode
+        // entry point, so a caller catching RlpDecodeException (the natural choice for a
+        // decode call) must not see validateHeader's encode exception escape.
         header->clear();
-        return validationError;
+        codec::rlp::throwRlpDecodeError(EthBlockHeaderError::InvalidHeader,
+            codec::rlp::rlpErrorMessage(e, "EthBlockHeader: header validation failed"));
     }
 
     // Inject keccak256 of the canonical re-encoding (not of the raw input bytes): this is
@@ -159,43 +156,40 @@ bcos::Error::UniquePtr EthBlockHeader::toTarsHeader(
     bcos::bytes reencoded;
     ethHeader.rlpEncode(reencoded);
     header->setRLPHash(bcos::crypto::keccak256Hash(bcos::ref(reencoded)));
-    return nullptr;
 }
 
-bcos::Error::UniquePtr EthBlockHeader::toEthBlockHeader(
-    EthBlockHeader& ethHeader, bcos::bytesConstRef _data)
+void EthBlockHeader::toEthBlockHeader(EthBlockHeader& ethHeader, bcos::bytesConstRef _data)
 {
-    auto err = ethHeader.rlpDecode(_data);
-    if (err)
+    try
     {
-        return BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::RlpDecodeFailed),
-            "EthBlockHeader: rlpDecode failed: " + err->errorMessage());
+        ethHeader.rlpDecode(_data);
     }
-    return nullptr;
+    catch (codec::rlp::RlpDecodeException const& e)
+    {
+        codec::rlp::throwRlpDecodeError(EthBlockHeaderError::RlpDecodeFailed,
+            "EthBlockHeader: rlpDecode failed: " + codec::rlp::rlpErrorMessage(e, ""));
+    }
 }
 
 // Validate that the header carries every field its EthBlockVersion requires.
 // can be removed if we can guarantee the header is always valid.
-bool EthBlockHeader::validateHeader(
-    const bcos::protocol::BlockHeader& _header, bcos::Error::UniquePtr& error)
+void EthBlockHeader::validateHeader(const bcos::protocol::BlockHeader& _header)
 {
-    auto invalid = [&error](const std::string& msg) {
-        error =
-            BCOS_ERROR_UNIQUE_PTR(static_cast<int32_t>(EthBlockHeaderError::InvalidHeader), msg);
-        return false;
+    auto invalid = [](const std::string& msg) {
+        codec::rlp::throwRlpEncodeError(EthBlockHeaderError::InvalidHeader, msg);
     };
 
     auto version = _header.ethBlockVersion();
     if (version == EthBlockVersion::NON_ETH)
     {
-        return invalid("EthBlockHeader: not an Ethereum header (EthBlockVersion == NON_ETH)");
+        invalid("EthBlockHeader: not an Ethereum header (EthBlockVersion == NON_ETH)");
     }
     // Reject wire-supplied versions outside the known fork range: an unknown value would
     // behave like PRAGUE (demanding every fork field) without being a named enum value.
     if (static_cast<uint8_t>(version) > static_cast<uint8_t>(EthBlockVersion::PRAGUE))
     {
-        return invalid("EthBlockHeader: unsupported EthBlockVersion " +
-                       std::to_string(static_cast<int>(version)));
+        invalid("EthBlockHeader: unsupported EthBlockVersion " +
+                std::to_string(static_cast<int>(version)));
     }
 
     // Mandatory fields, required by every Eth version.
@@ -206,7 +200,7 @@ bool EthBlockHeader::validateHeader(
     auto parent = _header.parentInfo();
     if (_header.number() != 0 && parent.blockHash == bcos::crypto::HashType{})
     {
-        return invalid("EthBlockHeader: missing or bad parentInfo.blockHash");
+        invalid("EthBlockHeader: missing or bad parentInfo.blockHash");
     }
     // The base-class accessors return fixed-size FixedBytes: a "not set" field surfaces as
     // all-zero bytes. Check for all-zero rather than size.
@@ -215,43 +209,43 @@ bool EthBlockHeader::validateHeader(
     // which can be zero on real chains).
     if (_header.uncleHash() == bcos::crypto::HashType{})
     {
-        return invalid("EthBlockHeader: missing or bad uncleHash");
+        invalid("EthBlockHeader: missing or bad uncleHash");
     }
     if (_header.stateRoot() == bcos::crypto::HashType{})
     {
-        return invalid("EthBlockHeader: missing or bad stateRoot");
+        invalid("EthBlockHeader: missing or bad stateRoot");
     }
     if (_header.txsRoot() == bcos::crypto::HashType{})
     {
-        return invalid("EthBlockHeader: missing or bad txsRoot");
+        invalid("EthBlockHeader: missing or bad txsRoot");
     }
     if (_header.receiptsRoot() == bcos::crypto::HashType{})
     {
-        return invalid("EthBlockHeader: missing or bad receiptRoot");
+        invalid("EthBlockHeader: missing or bad receiptRoot");
     }
     if (_header.logsBloom().size() != bcos::Bloom{}.size())
     {
-        return invalid("EthBlockHeader: missing or bad logsBloom");
+        invalid("EthBlockHeader: missing or bad logsBloom");
     }
 
     // Required scalar fields.
     if (_header.number() < 0)
     {
-        return invalid("EthBlockHeader: negative blockNumber");
+        invalid("EthBlockHeader: negative blockNumber");
     }
     if (_header.timestamp() < 0)
     {
-        return invalid("EthBlockHeader: invalid timestamp");
+        invalid("EthBlockHeader: invalid timestamp");
     }
     // Internal timestamps are milliseconds and must be whole seconds so the ms->s
     // conversion (constructor /1000) is lossless. Rejecting here keeps the calculateRLPHash
-    // path on its Error-return contract (and BlockHeaderImpl::calculateHash's
+    // path on its throwing contract (and BlockHeaderImpl::calculateHash's
     // clear-on-failure promise); the constructor throws the same condition for direct
     // ctor+rlpEncode callers that skip validateHeader.
     if (_header.timestamp() % 1000 != 0)
     {
-        return invalid("EthBlockHeader: timestamp must be a whole number of seconds, got " +
-                       std::to_string(_header.timestamp()) + " ms");
+        invalid("EthBlockHeader: timestamp must be a whole number of seconds, got " +
+                std::to_string(_header.timestamp()) + " ms");
     }
 
     // Fork-gated optional fields: a version N header must carry every field introduced by
@@ -260,41 +254,19 @@ bool EthBlockHeader::validateHeader(
                                 bool _present) {
         if (static_cast<uint8_t>(version) >= static_cast<uint8_t>(_minVersion) && !_present)
         {
-            return invalid("EthBlockHeader: missing " + _field + " for EthBlockVersion " +
-                           std::to_string(static_cast<int>(version)));
+            invalid("EthBlockHeader: missing " + _field + " for EthBlockVersion " +
+                    std::to_string(static_cast<int>(version)));
         }
-        return true;
     };
 
-    if (!requireForkField(EthBlockVersion::LONDON, "baseFee", _header.baseFee().has_value()))
-    {
-        return false;
-    }
-    if (!requireForkField(
-            EthBlockVersion::SHANGHAI, "withdrawalsRoot", _header.withdrawalsRoot().has_value()))
-    {
-        return false;
-    }
-    if (!requireForkField(
-            EthBlockVersion::CANCUN, "blobGasUsed", _header.blobGasUsed().has_value()))
-    {
-        return false;
-    }
-    if (!requireForkField(
-            EthBlockVersion::CANCUN, "excessBlobGas", _header.excessBlobGas().has_value()))
-    {
-        return false;
-    }
-    if (!requireForkField(EthBlockVersion::CANCUN, "parentBeaconBlockRoot",
-            _header.parentBeaconBlockRoot().has_value()))
-    {
-        return false;
-    }
-    if (!requireForkField(
-            EthBlockVersion::PRAGUE, "requestsHash", _header.requestsHash().has_value()))
-    {
-        return false;
-    }
+    requireForkField(EthBlockVersion::LONDON, "baseFee", _header.baseFee().has_value());
+    requireForkField(
+        EthBlockVersion::SHANGHAI, "withdrawalsRoot", _header.withdrawalsRoot().has_value());
+    requireForkField(EthBlockVersion::CANCUN, "blobGasUsed", _header.blobGasUsed().has_value());
+    requireForkField(EthBlockVersion::CANCUN, "excessBlobGas", _header.excessBlobGas().has_value());
+    requireForkField(EthBlockVersion::CANCUN, "parentBeaconBlockRoot",
+        _header.parentBeaconBlockRoot().has_value());
+    requireForkField(EthBlockVersion::PRAGUE, "requestsHash", _header.requestsHash().has_value());
 
     // Symmetric check: a fork-gated field must not be present when the header's version is
     // older than the fork that introduced it. RLP lists are positional — a field above the
@@ -304,42 +276,19 @@ bool EthBlockHeader::validateHeader(
                                bool _present) {
         if (static_cast<uint8_t>(version) < static_cast<uint8_t>(_minVersion) && _present)
         {
-            return invalid("EthBlockHeader: unexpected " + _field + " for EthBlockVersion " +
-                           std::to_string(static_cast<int>(version)));
+            invalid("EthBlockHeader: unexpected " + _field + " for EthBlockVersion " +
+                    std::to_string(static_cast<int>(version)));
         }
-        return true;
     };
 
-    if (!forbidForkField(EthBlockVersion::LONDON, "baseFee", _header.baseFee().has_value()))
-    {
-        return false;
-    }
-    if (!forbidForkField(
-            EthBlockVersion::SHANGHAI, "withdrawalsRoot", _header.withdrawalsRoot().has_value()))
-    {
-        return false;
-    }
-    if (!forbidForkField(EthBlockVersion::CANCUN, "blobGasUsed", _header.blobGasUsed().has_value()))
-    {
-        return false;
-    }
-    if (!forbidForkField(
-            EthBlockVersion::CANCUN, "excessBlobGas", _header.excessBlobGas().has_value()))
-    {
-        return false;
-    }
-    if (!forbidForkField(EthBlockVersion::CANCUN, "parentBeaconBlockRoot",
-            _header.parentBeaconBlockRoot().has_value()))
-    {
-        return false;
-    }
-    if (!forbidForkField(
-            EthBlockVersion::PRAGUE, "requestsHash", _header.requestsHash().has_value()))
-    {
-        return false;
-    }
-
-    return true;
+    forbidForkField(EthBlockVersion::LONDON, "baseFee", _header.baseFee().has_value());
+    forbidForkField(
+        EthBlockVersion::SHANGHAI, "withdrawalsRoot", _header.withdrawalsRoot().has_value());
+    forbidForkField(EthBlockVersion::CANCUN, "blobGasUsed", _header.blobGasUsed().has_value());
+    forbidForkField(EthBlockVersion::CANCUN, "excessBlobGas", _header.excessBlobGas().has_value());
+    forbidForkField(EthBlockVersion::CANCUN, "parentBeaconBlockRoot",
+        _header.parentBeaconBlockRoot().has_value());
+    forbidForkField(EthBlockVersion::PRAGUE, "requestsHash", _header.requestsHash().has_value());
 }
 
 EthBlockHeader::EthBlockHeader(const bcos::protocol::BlockHeader& _header)
@@ -357,9 +306,9 @@ EthBlockHeader::EthBlockHeader(const bcos::protocol::BlockHeader& _header)
     // the calculateRLPHash path, and this covers every direct ctor+rlpEncode caller.
     if (_header.timestamp() % 1000 != 0)
     {
-        BOOST_THROW_EXCEPTION(std::invalid_argument(
-            "timestamp must be a whole number of seconds, got " +
-            std::to_string(_header.timestamp()) + " ms"));
+        BOOST_THROW_EXCEPTION(
+            std::invalid_argument("timestamp must be a whole number of seconds, got " +
+                                  std::to_string(_header.timestamp()) + " ms"));
     }
     m_version = _header.ethBlockVersion();
     auto parent = _header.parentInfo();
@@ -442,7 +391,7 @@ void EthBlockHeader::rlpEncode(bcos::bytes& out) const
     codec::rlp::encode(out, m_data);
 }
 
-bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesConstRef data)
+void EthBlockHeader::rlpDecode(bcos::bytesConstRef data)
 {
     // The shared scalar codec fails closed on over-wide uint payloads (> target width) and,
     // since #5353, on non-canonical integers (leading zero byte, lone 0x00; geth ErrCanonInt),
@@ -456,11 +405,7 @@ bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesConstRef data)
     // The EthBlockHeaderData codec decodes the full 21-field list and bounds number /
     // timestamp to int64 (rejecting over-wide wire scalars). m_data.timestamp is the wire
     // SECONDS value; the ×1000 to internal milliseconds happens at the tar boundary.
-    auto error = codec::rlp::decode(out, m_data);
-    if (error)
-    {
-        return error;
-    }
+    codec::rlp::decode(out, m_data);
 
     // Optional fork fields are decoded positionally, so the set of present optionals is
     // always a contiguous prefix — a later field can only be present if the view was still
@@ -490,8 +435,19 @@ bcos::Error::UniquePtr EthBlockHeader::rlpDecode(bcos::bytesConstRef data)
     {
         m_version = EthBlockVersion::PRE_LONDON;
     }
+}
 
-    return nullptr;
+size_t length(const EthBlockHeaderData& _headerData) noexcept
+{
+    return codec::rlp::length(_headerData);
+}
+void encode(bcos::bytes& _out, const EthBlockHeaderData& _headerData) noexcept
+{
+    codec::rlp::encode(_out, _headerData);
+}
+void decode(bcos::bytesRef& _in, EthBlockHeaderData& _headerData)
+{
+    codec::rlp::decode(_in, _headerData);
 }
 }  // namespace bcos::protocol
 
@@ -521,37 +477,30 @@ void encode(bcos::bytes& _out, const protocol::EthBlockHeaderData& _header) noex
         _header.nonce, _header.baseFee, _header.withdrawalsHash, _header.blobGasUsed,
         _header.excessBlobGas, _header.parentBeaconRoot, _header.requestsHash);
 }
-bcos::Error::UniquePtr decode(bcos::bytesRef& _in, protocol::EthBlockHeaderData& _header) noexcept
+void decode(bcos::bytesRef& _in, protocol::EthBlockHeaderData& _header)
 {
     uint64_t number = 0;
     uint64_t timestamp = 0;
-    auto err = decode(_in, _header.parentInfo.blockHash, _header.uncleHash, _header.coinbase,
+    decode(_in, _header.parentInfo.blockHash, _header.uncleHash, _header.coinbase,
         _header.stateRoot, _header.txsRoot, _header.receiptsRoot, _header.logsBloom,
         _header.difficulty, number, _header.gasLimit, _header.gasUsed, timestamp, _header.extraData,
         _header.prevRandao, _header.nonce, _header.baseFee, _header.withdrawalsHash,
         _header.blobGasUsed, _header.excessBlobGas, _header.parentBeaconRoot, _header.requestsHash);
-    if (err)
-    {
-        return err;
-    }
     // Block number is internal int64; reject wire values above INT64_MAX instead
     // of narrowing into a negative number (downstream code assumes a non-negative
     // BlockNumber).
     if (number > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
     {
-        return BCOS_ERROR_UNIQUE_PTR(
-            DecodingError::UnexpectedLength, "block number exceeds int64 range");
+        throwRlpDecodeError(DecodingError::UnexpectedLength, "block number exceeds int64 range");
     }
     // The timestamp arm of the same narrowing: a wire value in (INT64_MAX, UINT64_MAX]
     // would otherwise become a negative int64 (EthBlock and the ommers list decode via
     // this codec with no bridge to catch it).
     if (timestamp > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
     {
-        return BCOS_ERROR_UNIQUE_PTR(
-            DecodingError::UnexpectedLength, "block timestamp exceeds int64 range");
+        throwRlpDecodeError(DecodingError::UnexpectedLength, "block timestamp exceeds int64 range");
     }
     _header.number = static_cast<int64_t>(number);
     _header.timestamp = static_cast<int64_t>(timestamp);
-    return nullptr;
 }
 }  // namespace bcos::codec::rlp

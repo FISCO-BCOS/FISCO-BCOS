@@ -19,7 +19,7 @@
 
 #add_definitions(-Wno-unused-value -Wunused-parameter)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 set(Boost_NO_WARN_NEW_VERSIONS ON)
 message(STATUS "COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
@@ -137,7 +137,6 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         endif()
 
         if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14.0)
-            # set(CMAKE_CXX_STANDARD 23)
             add_compile_options(-Wno-error=uninitialized)
             add_compile_options(-Wno-error=tsan)
             add_compile_options(-fconcepts-diagnostics-depth=10)
