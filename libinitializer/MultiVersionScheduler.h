@@ -32,14 +32,24 @@ namespace bcos::scheduler_v1
 /// an unwired slot at runtime — see its definition.
 DERIVE_BCOS_EXCEPTION(ExecutorVersionNotSupported);
 
+/// Version-selection contract for the slot array below: version 0, 1 and 2 name slots 0
+/// (legacy SchedulerManager), 1 (baseline) and 2 (pure-Ethereum EthereumExecutor); version 3
+/// names slot 3 (OP). A version ABOVE the newest declared slot -- and only such a version --
+/// saturates down to the newest slot this node actually wired, so "every version >= 2 runs
+/// the v2 executor" is no longer the contract. A version that names a DECLARED slot this node
+/// did not wire (version 3 on a build without the OP engine) neither saturates nor switches:
+/// setVersion keeps the current executor and logs ERROR, see its definition.
+///
 /// The executor version that selects the pure-Ethereum EthereumExecutor
 /// (ethereum-executor). It is index 2 of MultiVersionScheduler's scheduler array.
 /// The canonical value lives in bcos-framework/ledger (so lower layers can gate on
 /// it without depending on libinitializer); this keeps the scheduler_v1 spelling.
 constexpr static int ETHEREUM_EXECUTOR_VERSION = ledger::ETHEREUM_EXECUTOR_VERSION;
 
-/// executor_version == this selects OP mode; higher values are not a defined lane
-/// (LedgerInitializer refuses to boot above it).
+/// executor_version == this selects OP mode (OpScheduler, slot 3); higher values are not a
+/// defined lane (LedgerInitializer refuses to boot above it). It is a genesis property:
+/// SystemConfigPrecompiled refuses a governance write of this value from 3.18.0 on, so on a
+/// running chain the value can only reach here from config.genesis via Initializer::init.
 constexpr static int OPSTACK_EXECUTOR_VERSION = ledger::OPSTACK_EXECUTOR_VERSION;
 /// Version ordering invariant: OP sits strictly above the Ethereum executor.
 static_assert(OPSTACK_EXECUTOR_VERSION > ETHEREUM_EXECUTOR_VERSION,

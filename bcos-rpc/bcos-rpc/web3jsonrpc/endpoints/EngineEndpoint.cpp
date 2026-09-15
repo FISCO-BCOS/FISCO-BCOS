@@ -184,7 +184,7 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
     }
     catch (engine::UnsupportedEngineApiVersion const& e)
     {
-        // Method-version mismatch maps to -38005.
+        // Method-version mismatch is a -38005, same class as an unsupported fork.
         BOOST_THROW_EXCEPTION(JsonRpcException(
             EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
     }
@@ -356,6 +356,7 @@ task::Task<void> EngineEndpoint::handleNewPayload(
     }
     catch (engine::UnsupportedEngineApiVersion const& e)
     {
+        // Method-version mismatch is a -38005, same class as an unsupported fork.
         BOOST_THROW_EXCEPTION(JsonRpcException(
             EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
     }

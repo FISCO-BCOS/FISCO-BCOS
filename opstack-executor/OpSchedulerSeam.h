@@ -3,10 +3,18 @@
 #pragma once
 
 // Engine-facing OP seam. executeBlock exists only for the scheduler concept check.
+//
+// Accepts BOTH fork-schedule declarations the merged genesis surface allows:
+//  - the karst line's canonical [op_fork_schedule] (ledger-codec validated, any
+//    contiguous EL fork range) via the shared_ptr<opstack::OpForkSchedule> ctor, and
+//  - the release line's [op_fork_timestamps] shorthand (jovian_time/karst_time on the
+//    Isthmus baseline) via the bcos::ledger::OpForkSchedule ctor, which converts to the
+//    canonical form so a single schedule member serves every fork query.
 
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-framework/engine/OpForkId.h>
 #include <bcos-framework/engine/Types.h>
+#include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/ledger/OpForkScheduleCodec.h>
 #include <bcos-framework/protocol/BlockHeader.h>
@@ -19,6 +27,7 @@
 #include <opstack-executor/OpCommon.h>
 #include <opstack-executor/OpDepositEncode.h>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <range/v3/range/concepts.hpp>
@@ -78,6 +87,13 @@ public:
         }
     }
 
+    explicit OpSchedulerSeam(
+        bcos::ledger::OpForkSchedule forkSchedule, bcos::evm::opstack::L1BlockInfo l1BlockInfo)
+      : OpSchedulerSeam(std::make_shared<const bcos::evm::opstack::OpForkSchedule>(
+                            bcos::evm::opstack::OpForkSchedule::fromLedgerSchedule(forkSchedule)),
+            std::move(l1BlockInfo))
+    {}
+
     using BlockEnv = bcos::protocol::BlockHeader;
     using ExecuteResult = OpExecuteBlockResult;
     using ConsensusError = OpConsensusError;
@@ -136,6 +152,30 @@ public:
         return bcos::evm::opstack::isNoUserTxActivationBlock(*m_schedule, parentTsSec, blockTsSec);
     }
 
+    /// Jovian semantics or later for a block whose internal (millisecond) timestamp is
+    /// @p internalTimestampMs — blobGasUsed is the DA footprint, the operator fee uses the
+    /// ×100 formula and extraData is the 17-byte Jovian shape; Isthmus keeps blobGasUsed 0.
+    /// Derived from the fork the schedule resolves rather than a single flag: Karst is a
+    /// superset of Jovian and leaves the L1-attributes / DA-footprint shape unchanged, and
+    /// OpFork is declared in fork order (OpForkSchedule.h), so `>= Jovian` is the predicate.
+    /// The CALLER picks which block's timestamp to pass: op-geth keys base fee on the parent
+    /// (eip1559.go CalcBaseFee), op-node keys the L1-attributes layout and the payload
+    /// attributes on the child (derive/l1_block_info.go, derive/attributes.go).
+    [[nodiscard]] bool isJovianActive(int64_t internalTimestampMs) const noexcept
+    {
+        return static_cast<int>(m_schedule->forkAt(detail::forkTimestampSec(
+                   internalTimestampMs))) >= static_cast<int>(bcos::evm::opstack::OpFork::Jovian);
+    }
+
+    /// Karst semantics for a block whose internal (millisecond) timestamp is
+    /// @p internalTimestampMs: Jovian's fee and receipt rules on an Osaka EVM base. Used by
+    /// the engine's getPayload method-version gate (V5 is Karst-only, V4 is pre-Karst).
+    [[nodiscard]] bool isKarstActive(int64_t internalTimestampMs) const noexcept
+    {
+        return static_cast<int>(m_schedule->forkAt(detail::forkTimestampSec(
+                   internalTimestampMs))) >= static_cast<int>(bcos::evm::opstack::OpFork::Karst);
+    }
+
     /// `timestampSeconds` is Unix seconds. Callers must convert payload/header internal
     /// milliseconds with `unixSecondsFromInternalMillis`. Never pass raw header.timestamp().
     [[nodiscard]] bcos::engine::EngineForkResolution resolveEngineForkAt(
@@ -170,20 +210,23 @@ public:
     /// `timestampSeconds` is the block Unix seconds (FCU attrs / payload), never configAt(0).
     [[nodiscard]] bcos::bytes synthesizeL1AttributesEnvelope(uint64_t timestampSeconds) const
     {
-        if (bcos::evm::opstack::isUnsetL1BlockInfo(m_l1BlockInfo))
-        {
-            throw std::invalid_argument(
-                "OpSchedulerSeam: refuse to synthesize L1-attributes from an unset "
-                "L1BlockInfo (number, time, and blockHash are all zero)");
-        }
-        if (bcos::evm::opstack::isUnsetSystemConfig(m_l1BlockInfo))
-        {
-            throw std::invalid_argument(
-                "OpSchedulerSeam: refuse to synthesize L1-attributes with an unset "
-                "SystemConfig (baseFeeScalar and batcherHash must be non-zero)");
-        }
+        refuseUnsetSynthesisInputs();
         return bcos::evm::opstack::synthesizeL1AttributesDeposit(
             m_l1BlockInfo, configAt(timestampSeconds).has_da_footprint);
+    }
+
+    /// Two-timestamp overload keyed on internal milliseconds: the calldata layout is picked
+    /// by the CHILD block's fork, but the Jovian ACTIVATION block still emits the previous
+    /// fork's Isthmus layout (op-node's isJovianButNotFirstBlock, derive/l1_block_info.go:462)
+    /// because the L1Block predeploy is upgraded by that very block — the PARENT's fork is
+    /// what distinguishes the activation block from every later Jovian block.
+    [[nodiscard]] bcos::bytes synthesizeL1AttributesEnvelope(
+        int64_t l2InternalTimestampMs, int64_t parentInternalTimestampMs) const
+    {
+        refuseUnsetSynthesisInputs();
+        const bool jovianLayout =
+            isJovianActive(l2InternalTimestampMs) && isJovianActive(parentInternalTimestampMs);
+        return bcos::evm::opstack::synthesizeL1AttributesDeposit(m_l1BlockInfo, jovianLayout);
     }
 
     OpSchedulerSeam(const OpSchedulerSeam&) = delete;
@@ -204,6 +247,23 @@ public:
     }
 
 private:
+    void refuseUnsetSynthesisInputs() const
+    {
+        if (bcos::evm::opstack::isUnsetL1BlockInfo(m_l1BlockInfo))
+        {
+            throw std::invalid_argument(
+                "OpSchedulerSeam: refuse to synthesize L1-attributes from an unset "
+                "L1BlockInfo (number, time, and blockHash are all zero)");
+        }
+        if (bcos::evm::opstack::isUnsetSystemConfig(m_l1BlockInfo))
+        {
+            throw std::invalid_argument(
+                "OpSchedulerSeam: refuse to synthesize L1-attributes with an unset "
+                "SystemConfig (baseFeeScalar and batcherHash must be non-zero)");
+        }
+    }
+
+
     std::shared_ptr<const bcos::evm::opstack::OpForkSchedule> m_schedule;
     bcos::evm::opstack::L1BlockInfo m_l1BlockInfo;
 };

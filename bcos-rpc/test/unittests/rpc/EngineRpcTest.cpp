@@ -123,13 +123,14 @@ public:
         {
             BOOST_THROW_EXCEPTION(engine::UnknownPayload{});
         }
-        if (m_state->throwUnsupportedFork)
-        {
-            BOOST_THROW_EXCEPTION(engine::UnsupportedFork{});
-        }
         if (m_state->throwUnsupportedEngineApiVersion)
         {
             BOOST_THROW_EXCEPTION(engine::UnsupportedEngineApiVersion{});
+        }
+        if (m_state->throwUnsupportedFork)
+        {
+            BOOST_THROW_EXCEPTION(engine::UnsupportedFork{} << bcos::errinfo_comment{
+                                      "engine_getPayloadV5 requires a Karst payload"});
         }
         if (m_state->throwOpExecutionInternalError)
         {
@@ -579,15 +580,25 @@ BOOST_AUTO_TEST_CASE(getPayloadUnsupportedEngineApiVersionMapsTo38005)
         [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
 }
 
-BOOST_AUTO_TEST_CASE(getPayloadUnsupportedForkMapsTo38005)
+// OpEngineService throws UnsupportedFork when the built payload's fork is outside the
+// method's window (execution-apis osaka.md: V5 with a pre-Karst payload, V4 with a Karst one).
+// The endpoint must answer -38005, not fall through to the generic -32603.
+BOOST_AUTO_TEST_CASE(getPayloadForkOutsideMethodWindowMapsTo38005)
 {
     mockService.m_state->throwUnsupportedFork = true;
 
     Json::Value params(Json::arrayValue);
     params.append("0x00000000deadbeef");
     Json::Value response;
-    BOOST_CHECK_EXCEPTION(CALL_ENGINE(getPayloadV4, params, response), JsonRpcException,
-        [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
+
+    auto const isUnsupportedFork = [](JsonRpcException const& e) {
+        return e.code() == EngineError::UnsupportedFork &&
+               e.msg() == "Unsupported fork: engine_getPayloadV5 requires a Karst payload";
+    };
+    BOOST_CHECK_EXCEPTION(
+        CALL_ENGINE(getPayloadV5, params, response), JsonRpcException, isUnsupportedFork);
+    BOOST_CHECK_EXCEPTION(
+        CALL_ENGINE(getPayloadV4, params, response), JsonRpcException, isUnsupportedFork);
 }
 
 BOOST_AUTO_TEST_CASE(getPayloadV5MissingParams)
@@ -683,6 +694,55 @@ BOOST_AUTO_TEST_CASE(newPayloadUnsupportedEngineApiVersionMapsTo38005)
     Json::Value response;
     BOOST_CHECK_EXCEPTION(CALL_ENGINE(newPayloadV1, params, response), JsonRpcException,
         [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
+}
+
+// OpEngineService throws UnsupportedEngineApiVersion for a method-version mismatch; the
+// endpoint must surface it as -38005, not the generic -32603.
+BOOST_AUTO_TEST_CASE(unsupportedEngineApiVersionMapsTo38005)
+{
+    mockService.m_state->throwUnsupportedEngineApiVersion = true;
+    auto const isUnsupportedFork = [](JsonRpcException const& e) {
+        return e.code() == EngineError::UnsupportedFork &&
+               e.msg().starts_with("Unsupported fork: ");
+    };
+
+    Json::Value response;
+    Json::Value fcParams(Json::arrayValue);
+    Json::Value fc;
+    fc["headBlockHash"] = "0x1111111111111111111111111111111111111111111111111111111111111111";
+    fc["safeBlockHash"] = "0x2222222222222222222222222222222222222222222222222222222222222222";
+    fc["finalizedBlockHash"] = "0x3333333333333333333333333333333333333333333333333333333333333333";
+    fcParams.append(fc);
+    BOOST_CHECK_EXCEPTION(
+        CALL_ENGINE(forkchoiceUpdatedV3, fcParams, response), JsonRpcException, isUnsupportedFork);
+
+    Json::Value getParams(Json::arrayValue);
+    getParams.append("0x00000000deadbeef");
+    BOOST_CHECK_EXCEPTION(
+        CALL_ENGINE(getPayloadV3, getParams, response), JsonRpcException, isUnsupportedFork);
+
+    Json::Value newParams(Json::arrayValue);
+    newParams.append(makeV1ExecutionPayloadJson());
+    BOOST_CHECK_EXCEPTION(
+        CALL_ENGINE(newPayloadV1, newParams, response), JsonRpcException, isUnsupportedFork);
+}
+
+// OpExecutionInternalError stays a -32603 but carries the service message, not Boost
+// diagnostics.
+BOOST_AUTO_TEST_CASE(opExecutionInternalErrorMapsTo32603)
+{
+    mockService.m_state->throwOpExecutionInternalError = true;
+    auto const isInternal = [](JsonRpcException const& e) {
+        return e.code() == InternalError &&
+               e.msg().find("Null receipt returned by scheduler") != std::string::npos &&
+               e.msg().find("Diagnostic") == std::string::npos;
+    };
+
+    Json::Value response;
+    Json::Value newParams(Json::arrayValue);
+    newParams.append(makeV1ExecutionPayloadJson());
+    BOOST_CHECK_EXCEPTION(
+        CALL_ENGINE(newPayloadV1, newParams, response), JsonRpcException, isInternal);
 }
 
 BOOST_AUTO_TEST_CASE(newPayloadV1)

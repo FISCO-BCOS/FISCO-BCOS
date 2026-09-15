@@ -39,9 +39,16 @@ constexpr PrecompileOverrides::Entry kJovianEntries[] = {
     {.addr = evmc::address{0x0f}, .gas_cost_override = -1, .max_input_size = 156672},
 };
 
-// Karst / Osaka: bn256 pairing 300 pairs → 57600 (Osaka default; no op-geth
-// Bn256PairingMaxInputSizeKarst). P256VerifyGas 6900 is protocol_params.go:184.
-// BLS MSM/pairing caps stay at the Jovian values.
+// Karst (OP "Upgrade 19") has no op-geth constant to cite: the optimism branch of
+// params/protocol_params.go carries nothing named Karst, its newest is
+// Bn256PairingMaxInputSizeJovian = 81984. Source is the spec —
+// specs.optimism.io/protocol/karst/exec-engine.html: bn256Pairing drops "from the Jovian limit of
+// 81,984 bytes (427 pairs) to 57,600 bytes (300 pairs)", and "the other variable-input precompile
+// limits are unchanged from Jovian", which is why the three BLS entries below are Jovian's.
+// P256VERIFY (EIP-7951, gas 6900) is pinned by an explicit 0x100 entry with the EIP-7951
+// pricing — matching op-revm's karst() (clones jovian(), swaps modexp/P256/bn254-pair), the
+// oracle contract in OpPrecompilesTest.cpp; the pre-Karst 3450 (RIP-7212 P256VerifyGasFjord)
+// pricing stops at Jovian.
 constexpr PrecompileOverrides::Entry kKarstEntries[] = {
     {.addr = evmc::address{0x08}, .gas_cost_override = -1, .max_input_size = 57600},
     {.addr = kP256VerifyAddress, .gas_cost_override = 6900, .max_input_size = 0},

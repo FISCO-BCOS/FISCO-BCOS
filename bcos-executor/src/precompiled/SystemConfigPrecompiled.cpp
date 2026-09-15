@@ -23,6 +23,7 @@
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/FeaturesStorage.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
@@ -113,13 +114,19 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
         [defaultCmp](int64_t _value, uint32_t version) {
             defaultCmp(magic_enum::enum_name(ledger::SystemConfig::executor_version), _value, 0,
                 version, BlockVersion::V3_15_0_VERSION);
-            // OP mode is genesis-only: validateOpModeGenesisOnly refuses to boot an OP chain
-            // whose on-chain executor_version activation block is non-zero, and the genesis
-            // row is written by Ledger::buildGenesisBlock (activation 0) — never through this
-            // per-block validator. A mid-chain write to the OPSTACK slot would therefore land
+            // OP mode is a GENESIS property, not a governable one: validateOpModeGenesisOnly
+            // refuses to boot an OP chain whose on-chain executor_version activation block is
+            // non-zero, and the genesis row is written by Ledger::buildGenesisBlock (activation
+            // 0) — never through this per-block validator. Entering OP mode changes the block
+            // producer (an external op-node over the Engine API), the scheduler slot and the
+            // fork schedule — all three are chosen once, at boot, from the on-chain
+            // executor_version row. A mid-chain write into the OPSTACK slot would land
             // activation N+1 and make every node's NEXT START fail closed: the chain keeps
-            // producing and cannot be restarted. Refuse the value; version-gated on this
-            // release so replay/resync of pre-3.18 blocks that set it stays valid.
+            // producing and cannot be restarted. Refuse the value; version-gated on
+            // V3_18_0_VERSION so replay/resync of pre-3.18 blocks that set it stays valid (the
+            // gate is the on-chain compatibility version, so a chain still below 3.18.0 on a
+            // 3.18.0 binary is not covered here — there the boot refusals in Initializer::init
+            // stop such a node, fail-stop rather than a second lane).
             if (_value == bcos::ledger::OPSTACK_EXECUTOR_VERSION &&
                 versionCompareTo(version, BlockVersion::V3_18_0_VERSION) >= 0)
             {
@@ -147,13 +154,17 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
                         "); an accepted write would leave a chain that keeps "
                         "producing but cannot restart"));
             }
-            // NOTE: no other bound here. MultiVersionScheduler::setVersion keeps the node
+            // NOTE: below the OP boundary there is deliberately no other bound — banning
+            // values here would be an unversioned consensus change that breaks replay/resync
+            // of historical blocks. MultiVersionScheduler::setVersion keeps the node
             // running when the value names an unwired or unknown executor, in two fail-open
             // branches with different keep-behaviours: a value ABOVE the wired set saturates
             // to the newest wired slot, while an in-range but unwired slot keeps the CURRENT
-            // scheduler — both log ERROR rather than throwing. The remaining hard guardrails
-            // live in node-local startup (Initializer refuses to boot a v2 chain without an
-            // on-chain evmc_revision, and an OP chain without the OP wiring).
+            // scheduler — both log ERROR rather than throwing. Neither ethereum-executor nor
+            // the OP lane serves address 0x1000, so an OP chain cannot write executor_version
+            // back down either. The remaining hard guardrails live in node-local startup
+            // (Initializer refuses to boot a v2 chain without an on-chain evmc_revision, and
+            // an OP chain without the OP wiring).
         });
     // for compatibility
     // Note: the compatibility_version is not compatibility

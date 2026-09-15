@@ -67,3 +67,8 @@ add_dependencies(init BuildInfo.h)
 if(TESTS)
     add_subdirectory(tests)
 endif()
+
+if (TESTS)
+    enable_testing()
+    add_subdirectory(test)
+endif()

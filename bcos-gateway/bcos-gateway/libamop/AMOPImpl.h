@@ -21,8 +21,8 @@
 #include "bcos-framework/protocol/AMOPRequest.h"
 #include "bcos-gateway/libamop/AMOPMessage.h"
 #include "bcos-gateway/libamop/TopicManager.h"
+#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libp2p/P2PInterface.h"
-#include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/Timer.h"
@@ -41,8 +41,7 @@ public:
     AMOPImpl(TopicManager::Ptr _topicManager, AMOPMessageFactory::Ptr _messageFactory,
         bcos::protocol::AMOPRequestFactory::Ptr _requestFactory,
         bcos::gateway::P2PInterface::Ptr _network, bcos::gateway::P2pID const& _p2pNodeID,
-        boost::asio::io_context& _ioContext,
-        bcos::IOServicePool::Ptr _ioServicePool);
+        boost::asio::io_context& _ioContext, bcos::IOServicePool::Ptr _ioServicePool);
     virtual ~AMOPImpl();
 
     virtual void start();
@@ -71,15 +70,13 @@ public:
         const std::string& _topic, bcos::bytesConstRef _data);
 
     virtual void onAMOPMessage(bcos::gateway::NetworkException const& _e,
-        bcos::gateway::P2PSession::Ptr _session,
-        std::shared_ptr<bcos::gateway::P2PMessage> _message);
+        bcos::gateway::P2PSession::Ptr _session, std::shared_ptr<bcos::gateway::Message> _message);
 
     virtual TopicManager::Ptr topicManager();
 
 protected:
     virtual void dispatcherAMOPMessage(bcos::gateway::NetworkException const& _e,
-        bcos::gateway::P2PSession::Ptr _session,
-        std::shared_ptr<bcos::gateway::P2PMessage> _message);
+        bcos::gateway::P2PSession::Ptr _session, std::shared_ptr<bcos::gateway::Message> _message);
     /**
      * @brief: periodically send topicSeq to all other nodes
      * @return void
@@ -145,7 +142,7 @@ private:
      *         the topic
      */
     task::Task<std::optional<std::tuple<Error::Ptr, int16_t, bcos::bytes>>>
-        trySendTopicMessageToLocalClient(const std::string& _topic, bcos::bytesConstRef _data);
+    trySendTopicMessageToLocalClient(const std::string& _topic, bcos::bytesConstRef _data);
 
     std::shared_ptr<TopicManager> m_topicManager;
     std::shared_ptr<AMOPMessageFactory> m_messageFactory;

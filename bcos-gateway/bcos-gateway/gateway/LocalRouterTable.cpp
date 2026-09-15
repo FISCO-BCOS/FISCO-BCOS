@@ -21,7 +21,7 @@
 #include "bcos-framework/protocol/CommonError.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
 #include "bcos-gateway/Common.h"
-#include "bcos-gateway/libp2p/P2PMessage.h"
+#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-tars-protocol/client/FrontServiceClient.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-task/Wait.h>
@@ -32,15 +32,15 @@ using namespace bcos::front;
 using namespace bcos::crypto;
 
 LocalRouterTable::LocalRouterTable(bcos::crypto::KeyFactory::Ptr _keyFactory)
-    : m_keyFactory(_keyFactory)
+  : m_keyFactory(_keyFactory)
 {}
 
 LocalRouterTable::~LocalRouterTable() = default;
 
 LocalRouterTable::GroupNodeListType LocalRouterTable::nodeList() const
 {
-        ReadGuard guard(x_nodeList);
-        return m_nodeList;
+    ReadGuard guard(x_nodeList);
+    return m_nodeList;
 }
 
 FrontServiceInfo::Ptr LocalRouterTable::getFrontService(
@@ -263,7 +263,7 @@ bool LocalRouterTable::eraseUnreachableNodes()
 }
 
 bool LocalRouterTable::broadcastMsg(uint16_t _nodeType, const std::string& _groupID,
-    uint16_t _moduleID, NodeIDPtr _srcNodeID, std::shared_ptr<P2PMessage> _msg) const
+    uint16_t _moduleID, NodeIDPtr _srcNodeID, std::shared_ptr<Message> _msg) const
 {
     auto frontServiceList = getGroupFrontServiceList(_groupID);
     if (frontServiceList.empty())
@@ -271,7 +271,7 @@ bool LocalRouterTable::broadcastMsg(uint16_t _nodeType, const std::string& _grou
         return false;
     }
     auto srcNodeIDHex = _srcNodeID->hex();
-    // zero-copy: each dispatch task below owns the P2PMessage, so the payload view into it
+    // zero-copy: each dispatch task below owns the Message, so the payload view into it
     // stays valid for the whole (possibly deferred) per-front dispatch
     auto payloadSize = _msg->payload().size();
     for (auto const& it : frontServiceList)
@@ -293,17 +293,17 @@ bool LocalRouterTable::broadcastMsg(uint16_t _nodeType, const std::string& _grou
                           << LOG_KV("moduleID", _moduleID) << LOG_KV("payloadSize", payloadSize)
                           << LOG_KV("dst", dstNodeID);
         task::wait([](bcos::front::FrontServiceInterface::Ptr _frontService, std::string _groupID,
-                       uint16_t _moduleID, NodeIDPtr _srcNodeID, std::shared_ptr<P2PMessage> _msg,
+                       uint16_t _moduleID, NodeIDPtr _srcNodeID, std::shared_ptr<Message> _msg,
                        std::string _dstNodeID) -> task::Task<void> {
             auto error =
                 co_await _frontService->onReceiveMessage(_groupID, _srcNodeID, _msg->payload());
             if (error)
             {
-                GATEWAY_LOG(ERROR) << LOG_DESC("ROUTER_LOG error") << LOG_KV("groupID", _groupID)
-                                   << LOG_KV("moduleID", _moduleID)
-                                   << LOG_KV("src", _srcNodeID->hex()) << LOG_KV("dst", _dstNodeID)
-                                   << LOG_KV("code", error->errorCode())
-                                   << LOG_KV("msg", error->errorMessage());
+                GATEWAY_LOG(ERROR)
+                    << LOG_DESC("ROUTER_LOG error") << LOG_KV("groupID", _groupID)
+                    << LOG_KV("moduleID", _moduleID) << LOG_KV("src", _srcNodeID->hex())
+                    << LOG_KV("dst", _dstNodeID) << LOG_KV("code", error->errorCode())
+                    << LOG_KV("msg", error->errorMessage());
             }
         }(frontService, _groupID, _moduleID, _srcNodeID, _msg, dstNodeID));
     }
@@ -312,8 +312,8 @@ bool LocalRouterTable::broadcastMsg(uint16_t _nodeType, const std::string& _grou
 
 
 // send message to the local nodes
-task::Task<bcos::Error::Ptr> LocalRouterTable::sendMessage(std::string _groupID,
-    NodeIDPtr _srcNodeID, NodeIDPtr _dstNodeID, bytesConstRef _payload)
+task::Task<bcos::Error::Ptr> LocalRouterTable::sendMessage(
+    std::string _groupID, NodeIDPtr _srcNodeID, NodeIDPtr _dstNodeID, bytesConstRef _payload)
 {
     auto frontServiceInfo = getFrontService(_groupID, _dstNodeID);
     if (!frontServiceInfo)

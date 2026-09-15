@@ -35,11 +35,13 @@ class RecordingScheduler : public bcos::scheduler::SchedulerInterface
 {
 public:
     unsigned stopped = 0;
+    unsigned executed = 0;
 
     void executeBlock(bcos::protocol::Block::Ptr, bool,
         std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool)> callback)
         override
     {
+        ++executed;
         callback(nullptr, nullptr, false);
     }
     void commitBlock(bcos::protocol::BlockHeader::Ptr,
@@ -125,10 +127,19 @@ BOOST_AUTO_TEST_CASE(opRunningSlotIsFrozenAgainstGovernanceWrites)
 
     ladder.dispatcher->setVersion(bcos::scheduler_v1::ETHEREUM_EXECUTOR_VERSION, {});
     ladder.dispatcher->setVersion(1, l2FeatureConfig());
+    // Both governance writes were rejected: execution still routes to the OP slot.
+    ladder.dispatcher->executeBlock(
+        {}, false, [](bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool) {});
+    BOOST_CHECK_EQUAL(ladder.at(3).executed, 1u);
+    BOOST_CHECK_EQUAL(ladder.at(2).executed, 0u);
+    BOOST_CHECK_EQUAL(ladder.at(1).executed, 0u);
+    // stop() tears down EVERY slot (merged contract: the shared MPT commit observer is wired
+    // into each BaselineScheduler, and a slot left running would deref the pruner after the
+    // storage backend is torn down), so stopped counts no longer discriminate the freeze.
     ladder.dispatcher->stop();
-    BOOST_CHECK_EQUAL(ladder.at(3).stopped, 1u);  // still the OP slot
-    BOOST_CHECK_EQUAL(ladder.at(2).stopped, 0u);
-    BOOST_CHECK_EQUAL(ladder.at(1).stopped, 0u);
+    BOOST_CHECK_EQUAL(ladder.at(3).stopped, 1u);
+    BOOST_CHECK_EQUAL(ladder.at(2).stopped, 1u);
+    BOOST_CHECK_EQUAL(ladder.at(1).stopped, 1u);
 }
 
 // The discriminator for the guard's keying: an Eth-lane chain may legitimately carry
@@ -141,9 +152,14 @@ BOOST_AUTO_TEST_CASE(ethLaneL2FeatureDoesNotFreezeVersionSwitches)
     ladder.dispatcher->setVersion(bcos::scheduler_v1::ETHEREUM_EXECUTOR_VERSION, {});
 
     ladder.dispatcher->setVersion(1, l2FeatureConfig());
+    // The flag is not a freeze key: the switch to slot 1 landed and execution follows it.
+    ladder.dispatcher->executeBlock(
+        {}, false, [](bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool) {});
+    BOOST_CHECK_EQUAL(ladder.at(1).executed, 1u);
+    BOOST_CHECK_EQUAL(ladder.at(2).executed, 0u);
+    // Merged stop-all shutdown contract (see opRunningSlotIsFrozenAgainstGovernanceWrites).
     ladder.dispatcher->stop();
-    BOOST_CHECK_EQUAL(ladder.at(1).stopped, 1u);  // switched: the flag is not a freeze key
-    BOOST_CHECK_EQUAL(ladder.at(2).stopped, 0u);
+    BOOST_CHECK_EQUAL(ladder.at(1).stopped, 1u);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

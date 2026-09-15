@@ -24,15 +24,17 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-ledger/Ledger.h"
+#include "bcos-ledger/LedgerMethods.h"
 #include "bcos-rpc/jsonrpc/Common.h"
 #include "bcos-rpc/jsonrpc/JsonRpcInterface.h"
 #include <bcos-framework/storage/StorageInterface.h>
+#include <bcos-task/Wait.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Error.h>
 #include <json/json.h>
 #include <functional>
 #include <future>
 #include <utility>
-#include <bcos-utilities/BoostLog.h>
 
 #define ARCHIVE_SERVICE_LOG(LEVEL) BCOS_LOG(LEVEL) << "[ARCHIVE]"
 
@@ -45,20 +47,22 @@ public:
     virtual ~ArchiveService() = default;
     ArchiveService(bcos::storage::StorageInterface::Ptr _storage,
         std::shared_ptr<bcos::ledger::Ledger> _ledger,
+        bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::storage::StorageInterface::Ptr _blockStorage, std::string _listenIP,
         uint16_t _listenPort)
       : m_storage(std::move(_storage)),
         m_blockStorage(std::move(_blockStorage)),
         m_ledger(std::move(_ledger)),
+        m_blockFactory(std::move(_blockFactory)),
         m_listenIP(std::move(_listenIP)),
         m_listenPort(_listenPort)
     {
-        m_ioServicePool = std::make_shared<IOServicePool>(std::thread::hardware_concurrency() + 1, "archive");
+        m_ioServicePool =
+            std::make_shared<IOServicePool>(std::thread::hardware_concurrency() + 1, "archive");
         m_httpServer = std::make_shared<bcos::boostssl::http::HttpServer>(
             m_listenIP, m_listenPort, -1, bcos::boostssl::http::CorsConfig());
         m_httpServer->setDisableSsl(true);
-        m_httpServer->setAcceptor(
-            boost::asio::ip::tcp::acceptor{*m_ioServicePool->getIOService()});
+        m_httpServer->setAcceptor(boost::asio::ip::tcp::acceptor{*m_ioServicePool->getIOService()});
         m_httpServer->setHttpStreamFactory(bcos::boostssl::http::HttpStreamFactory{});
         m_httpServer->setIOServicePool(m_ioServicePool);
         // m_httpServer->setThreadPool(std::make_shared<ThreadPool>("archiveThread", 1));
@@ -188,7 +192,8 @@ public:
                 }
             }
         };
-        m_httpServer->setHttpReqHandler([this](const bcos::boostssl::http::HttpRequest& req, auto sender) {
+        m_httpServer->setHttpReqHandler([this](const bcos::boostssl::http::HttpRequest& req,
+                                            auto sender) {
             handleHttpRequest(req.body(), [sender = std::move(sender)](bcos::bytes resp) mutable {
                 sender(std::move(resp), boost::beast::http::status::ok);
             });
@@ -214,47 +219,56 @@ public:
         auto blockFlag = bcos::ledger::HEADER;
         for (int64_t blockNumber = startBlock; blockNumber < endBlock; blockNumber++)
         {
-            std::promise<Error::Ptr> promise;
-            m_ledger->asyncGetBlockTransactionHashes(
-                blockNumber, [&](Error::Ptr&& error, std::vector<std::string>&& txHashes) {
-                    if (error)
-                    {
-                        std::cerr << "get block failed: " << error->errorMessage();
-                        promise.set_value(error);
-                        return;
-                    }
-                    ARCHIVE_SERVICE_LOG(INFO)
-                        << LOG_BADGE("deleteArchivedData") << LOG_KV("number", blockNumber)
-                        << LOG_KV("size", txHashes.size());
-                    auto blockStorage = m_blockStorage ? m_blockStorage : m_storage;
-                    // delete block data: txs, receipts
-                    auto err = blockStorage->deleteRows(ledger::SYS_HASH_2_TX, txHashes);
-                    if (err)
-                    {
-                        ARCHIVE_SERVICE_LOG(WARNING)
-                            << LOG_BADGE("delete transactions") << LOG_KV("number", blockNumber)
-                            << LOG_KV("message", err->errorMessage());
-                        promise.set_value(error);
-                        return;
-                    }
-                    err = blockStorage->deleteRows(ledger::SYS_HASH_2_RECEIPT, txHashes);
-                    if (err)
-                    {
-                        ARCHIVE_SERVICE_LOG(WARNING)
-                            << LOG_BADGE("delete receipts") << LOG_KV("number", blockNumber)
-                            << LOG_KV("message", err->errorMessage());
-                        promise.set_value(error);
-                        return;
-                    }
-                    promise.set_value(nullptr);
-                });
-            auto error = promise.get_future().get();
-            if (error)
+            std::vector<std::string> txHashes;
+            try
             {
+                // Hash strings carry the raw hash bytes (NOT hex): they are the
+                // SYS_HASH_2_TX / SYS_HASH_2_RECEIPT row keys deleted below.
+                txHashes = task::syncWait(ledger::getBlockTransactionHashStrings(
+                    *m_storage, blockNumber, *m_blockFactory));
+            }
+            catch (bcos::Error& e)
+            {
+                std::cerr << "get block failed: " << e.errorMessage();
+                ARCHIVE_SERVICE_LOG(WARNING)
+                    << LOG_BADGE("deleteArchivedData failed") << LOG_KV("number", blockNumber)
+                    << LOG_KV("message", e.errorMessage());
+                return std::make_shared<Error>(std::move(e));
+            }
+            catch (std::exception& e)
+            {
+                auto error =
+                    BCOS_ERROR_WITH_PREV_PTR(ledger::LedgerError::CollectAsyncCallbackError,
+                        "Get block transaction hashes failed with errors!", e);
+                std::cerr << "get block failed: " << error->errorMessage();
                 ARCHIVE_SERVICE_LOG(WARNING)
                     << LOG_BADGE("deleteArchivedData failed") << LOG_KV("number", blockNumber)
                     << LOG_KV("message", error->errorMessage());
                 return error;
+            }
+            ARCHIVE_SERVICE_LOG(INFO)
+                << LOG_BADGE("deleteArchivedData") << LOG_KV("number", blockNumber)
+                << LOG_KV("size", txHashes.size());
+            auto blockStorage = m_blockStorage ? m_blockStorage : m_storage;
+            // delete block data: txs, receipts
+            auto err = blockStorage->deleteRows(ledger::SYS_HASH_2_TX, txHashes);
+            if (err)
+            {
+                // Historical behavior: the delete failure is only logged and the block
+                // is skipped (the old callback set the null hash-list error on the
+                // promise), so archiving continues.
+                ARCHIVE_SERVICE_LOG(WARNING)
+                    << LOG_BADGE("delete transactions") << LOG_KV("number", blockNumber)
+                    << LOG_KV("message", err->errorMessage());
+                continue;
+            }
+            err = blockStorage->deleteRows(ledger::SYS_HASH_2_RECEIPT, txHashes);
+            if (err)
+            {
+                ARCHIVE_SERVICE_LOG(WARNING)
+                    << LOG_BADGE("delete receipts") << LOG_KV("number", blockNumber)
+                    << LOG_KV("message", err->errorMessage());
+                continue;
             }
         }
         return nullptr;
@@ -328,6 +342,7 @@ private:
     bcos::storage::StorageInterface::Ptr m_storage;
     bcos::storage::StorageInterface::Ptr m_blockStorage = nullptr;
     std::shared_ptr<bcos::ledger::Ledger> m_ledger;
+    bcos::protocol::BlockFactory::Ptr m_blockFactory;
     std::string m_listenIP;
     uint16_t m_listenPort;
     IOServicePool::Ptr m_ioServicePool;

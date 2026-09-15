@@ -183,7 +183,11 @@ public:
     /// Profile-gated: payload timestamp (internal ms → Unix seconds) selects
     /// Jovian V4 / Karst V5. Never keys on head. Does not use EngineTracker::getPayload
     /// (that applies the Eth static V1–V5 window first).
+    /// execution-apis prague.md / osaka.md: V4 serves payloads inside the pre-Karst time
+    /// frame and V5 serves Karst ones; asking for the wrong one is -38005 Unsupported fork.
+    /// The fork comes from the built payload's OWN timestamp (op-node's GetPayloadVersion).
     task::Task<GetPayloadResult> getPayload(const PayloadID& payloadId, std::uint32_t version);
+
 
     task::Task<PayloadStatus> newPayload(const NewPayloadRequest& request, std::uint32_t version);
 
@@ -258,9 +262,16 @@ private:
                version <= static_cast<std::uint32_t>(ApiVersion::V3);
     }
 
-    /// OP newPayload window: V2 from Bedrock, V3 at Ecotone, V4 at Isthmus. Which one
-    /// is live comes from the payload timestamp (engineApiFor); V1 stays out because
-    /// op-node's first fork is Bedrock, whose newPayload is V2.
+    /// OP newPayload window: V2 from Bedrock, V3 at Ecotone, V4 at Isthmus — and V4 STAYS
+    /// the window top through Karst. That asymmetry is upstream's own, not an oversight:
+    /// op-node's NewPayloadVersion(ts) (op-node/rollup/types.go) has a single Isthmus branch
+    /// returning NewPayloadV4 and no Karst branch, while GetPayloadVersion(ts) does rise to
+    /// GetPayloadV5 on Karst — which is why getPayload gates V4/V5 on the payload's fork and
+    /// this window does not move. exchangeCapabilities therefore advertises
+    /// engine_getPayloadV5 but no engine_newPayloadV5. Which one is live comes from the
+    /// payload timestamp (engineApiFor); V1 stays out because op-node's first fork is
+    /// Bedrock, whose newPayload is V2. Not the Eth V1..V4 window.
+
     static bool isNewPayloadVersionSupported(std::uint32_t version)
     {
         return version >= static_cast<std::uint32_t>(ApiVersion::V2) &&

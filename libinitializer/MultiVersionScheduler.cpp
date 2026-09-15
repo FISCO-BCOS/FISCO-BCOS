@@ -145,8 +145,17 @@ void bcos::scheduler_v1::MultiVersionScheduler::adoptProbeAsPending(
 }
 void bcos::scheduler_v1::MultiVersionScheduler::stop()
 {
-    auto& scheduler = getScheduler();
-    scheduler.stop();
+    // Every slot must be stopped, not just the active one: Initializer wires the same shared
+    // MPT commit observer into each BaselineScheduler slot, and a slot's stop() is what
+    // detaches it — an inactive slot left running would keep dereferencing the pruner while
+    // Initializer::stop() drops it and tears down the storage backend beneath. Each slot's
+    // stop() is idempotent and safe on a never-started slot (BaselineScheduler::stop() only
+    // resets its observer under m_commitMutex; SchedulerManager::stop() short-circuits on
+    // STOPPED and tolerates a null scheduler).
+    for (auto const& scheduler : m_schedulers)
+    {
+        scheduler->stop();
+    }
 }
 void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
     int version, [[maybe_unused]] ledger::LedgerConfig::Ptr ledgerConfig)
@@ -184,15 +193,14 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
     auto selected = static_cast<size_t>(version);
     if (selected >= m_schedulers.size())
     {
-        // Unknown version above the wired set: saturate to the newest wired slot, as before.
+        // Saturate the upper bound onto the newest WIRED slot: the version space stays
+        // open-ended above the newest known executor, and an empty slot above it (OP wiring
+        // absent on this node) never becomes the target.
         selected = m_schedulers.size() - 1;
         while (selected > 0 && !m_schedulers.at(selected))
         {
             --selected;
         }
-    }
-    if (!m_schedulers.at(selected))
-    {
         INITIALIZER_LOG(ERROR)
             << LOG_DESC("executor_version has no wired scheduler; keeping the current executor")
             << LOG_KV("requested", version) << LOG_KV("onChain", onChainVersion)

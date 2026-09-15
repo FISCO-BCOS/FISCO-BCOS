@@ -568,11 +568,21 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
     tx.nonce = preNonce;
 
     // Skip fee-cap checks; still charge intrinsic gas and the block gas pool.
+    //
+    // The revision is clamped to Prague for this call ONLY: deposits are exempt from the
+    // EIP-7825 per-tx gas cap that Karst's Osaka base enforces (docs.optimism.io/notices/
+    // upgrade-19), yet validate_transaction enforces it at Osaka+ (state.cpp:385). The only
+    // other Osaka-gated rule in that function is the blob count (state.cpp:338), and a deposit
+    // carries no blobs; compute_tx_intrinsic_cost has no Osaka-gated term (highest is Prague,
+    // state.cpp:79). Execution below still runs at the real cfg.rev.
     evmone::state::BlockInfo validateBlock = block;
     validateBlock.base_fee = 0;
     const DepositValidationView maskedView{view, dep.from};
     const auto props = evmone::state::validate_transaction(maskedView, validateBlock, tx, cfg.rev,
         blockGasLeft, 0, {.enforce_max_tx_gas = !cfg.deposit_exempt_from_max_tx_gas});
+    // Deposit EIP-7825 exemption (release-line #5576 used a rev clamp to Prague here): the
+    // policy flag achieves the same exemption at the real OSAKA rev, driven by
+    // karstConfig().deposit_exempt_from_max_tx_gas.
 
     evmone::state::TransactionReceipt receipt;
     receipt.type = kDepositTxType;

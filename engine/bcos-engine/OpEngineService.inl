@@ -163,6 +163,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
                 .payloadId = std::nullopt,
             };
         }
+        // Jovian attribute fields (minBaseFee) are keyed on the CHILD block's time — the
+        // block these attributes build (op-node derive/attributes.go, nextL2Time); ctx.forkId
+        // is resolved from exactly that timestamp.
         if (auto validationError =
                 engine_common::op::validateOpPayloadAttributes(*payloadAttributes, ctx.forkId);
             validationError.has_value())
@@ -421,6 +424,10 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
         bcos::bytes parentHeaderBytes(stored.begin(), stored.end());
         auto parentHeader =
             m_blockFactory->blockHeaderFactory()->createBlockHeader(parentHeaderBytes);
+        // PARENT time, not the child's: op-geth's CalcBaseFee(config, parent, time) keys both
+        // the Holocene extraData decode and the Jovian DA-footprint branch on parent.Time
+        // (consensus/misc/eip1559/eip1559.go:64-110) — baseFeeClockFor(parent, fork) resolves
+        // that parent fork from the parent's own timestamp.
         parentTsSec =
             unixSecondsFromInternalMillis(static_cast<uint64_t>(parentHeader->timestamp()));
         baseFee = calcOpNextBlockBaseFee(*parentHeader, baseFeeClockFor(*parentHeader, ctx.forkId));
@@ -464,6 +471,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     // op_engine_rpc never invents this envelope (op-geth does not either).
     if (!payloadAttributes.transactions.has_value() || payloadAttributes.transactions->empty())
     {
+        // CHILD time picks the calldata layout, with the parent's fork deciding whether the
+        // Jovian ACTIVATION block still emits the Isthmus layout (op-node's
+        // isJovianButNotFirstBlock, derive/l1_block_info.go:462) — handled inside the seam.
         forcedEnvelopes.push_back(m_scheduler.synthesizeL1AttributesEnvelope(
             unixSecondsFromInternalMillis(payloadAttributes.timestamp)));
     }
@@ -1033,6 +1043,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
         // The clock is shared with the FCU build (baseFeeClockFor). A Holocene
         // activation block still prices with the chain constants, because its parent
         // is pre-Holocene and the parent's fork is what selects the 1559 source.
+        // PARENT time keys the choice (op-geth eip1559.go:64-110 CalcBaseFee on parent.Time).
         auto const expectedBaseFee =
             calcOpNextBlockBaseFee(*parentHeader, baseFeeClockFor(*parentHeader, ctx.forkId));
         if (payload.baseFeePerGas != expectedBaseFee)

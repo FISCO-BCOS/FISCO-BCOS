@@ -28,6 +28,7 @@
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/ledger/FeaturesStorage.h>
+#include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/ledger/Ledger.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
@@ -488,6 +489,19 @@ public:
     }
 
     /// ledger may be null (execute only). ioServicePool is required (SchedulerSerialImpl GC).
+    /// Release-line shorthand ctor: [op_fork_timestamps] genesis schedule (jovian_time /
+    /// karst_time) converted to the canonical schedule via fromLedgerSchedule.
+    OpScheduler(bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory,
+        bcos::crypto::Hash::Ptr hashImpl, uint64_t chainId,
+        bcos::ledger::OpForkSchedule forkSchedule, bcos::protocol::BlockFactory::Ptr blockFactory,
+        MultiLayerStorage& multiLayerStorage, bcos::ledger::LedgerInterface::Ptr ledger,
+        bcos::IOServicePool::Ptr ioServicePool)
+      : OpScheduler(std::move(receiptFactory), std::move(hashImpl), chainId,
+            std::make_shared<const bcos::evm::opstack::OpForkSchedule>(
+                bcos::evm::opstack::OpForkSchedule::fromLedgerSchedule(forkSchedule)),
+            std::move(blockFactory), multiLayerStorage, std::move(ledger), std::move(ioServicePool))
+    {}
+
     OpScheduler(bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory,
         bcos::crypto::Hash::Ptr hashImpl, uint64_t chainId,
         std::shared_ptr<const bcos::evm::opstack::OpForkSchedule> schedule,
@@ -1275,6 +1289,9 @@ private:
         };
         try
         {
+            // The block being executed decides its own fork (op-node keys IsJovian/IsKarst on
+            // the L2 block's own timestamp); unixSecondsFromInternalMillis is the single ms->s
+            // conversion.
             auto const tsSec = bcos::engine::unixSecondsFromInternalMillis(
                 static_cast<uint64_t>(header.timestamp()));
             const auto& cfg = m_schedule->configAt(tsSec);
@@ -1772,6 +1789,7 @@ private:
         namespace op = bcos::evm::opstack;
         namespace detail = bcos::evm::engine::detail;
 
+        // The block the call is evaluated AGAINST decides the fork.
         const auto& cfg = m_schedule->configAt(
             bcos::engine::unixSecondsFromInternalMillis(static_cast<uint64_t>(header.timestamp())));
         bcos::evm::evmstate::Storage2State<AnyView> stateView(view);
@@ -1854,6 +1872,7 @@ private:
         auto blockHeader = block->blockHeader();
         auto const& header = *blockHeader;
 
+        // The block the call is evaluated AGAINST decides the fork.
         const auto& cfg = m_schedule->configAt(
             bcos::engine::unixSecondsFromInternalMillis(static_cast<uint64_t>(header.timestamp())));
 
@@ -1934,6 +1953,7 @@ private:
                 protocol::TransactionReceipt::Ptr{nullptr}};
         }
 
+        // The block the call is evaluated AGAINST decides the fork.
         const auto& cfg = m_schedule->configAt(
             bcos::engine::unixSecondsFromInternalMillis(static_cast<uint64_t>(header.timestamp())));
 

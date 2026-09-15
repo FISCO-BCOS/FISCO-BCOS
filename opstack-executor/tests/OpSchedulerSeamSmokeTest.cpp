@@ -13,6 +13,7 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>
+#include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
@@ -92,6 +93,22 @@ bcos::evm::opstack::L1BlockInfo filledL1Info()
     return l1Info;
 }
 
+}  // namespace
+
+namespace
+{
+// One genesis schedule in SECONDS; the arms below differ only in the block timestamp
+// (MILLISECONDS, the internal unit) handed to the seam.
+constexpr uint64_t kSeamJovianTime = 1000;
+constexpr uint64_t kSeamKarstTime = 2000;
+const bcos::ledger::OpForkSchedule kSeamSchedule{.m_jovianTime = kSeamJovianTime,
+    .m_karstTime = kSeamKarstTime};
+/// Isthmus-era block time in ms (one second before Jovian activates).
+constexpr int64_t kIsthmusMs = static_cast<int64_t>(kSeamJovianTime - 1) * 1000;
+/// Jovian-era block time in ms (one second before Karst activates).
+constexpr int64_t kJovianMs = static_cast<int64_t>(kSeamKarstTime - 1) * 1000;
+/// Karst-era block time in ms (exactly karst_time).
+constexpr int64_t kKarstMs = static_cast<int64_t>(kSeamKarstTime) * 1000;
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(OpSchedulerSeamSmokeSuite)
@@ -335,5 +352,38 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositJovianLayout)
 // OpSchedulerSeam is a pure engine seam and no longer executes blocks, so there is no
 // matching execution case here. The EIP-7702 authorization yParity width test was removed
 // with the RLP decode primitives (decodeAuthYParityScalar retired in OpCommon.h).
+
+// op-node emits the PREVIOUS fork's L1-attributes layout on the Jovian ACTIVATION block —
+// isJovianButNotFirstBlock (derive/l1_block_info.go:462-470) — because the L1Block predeploy
+// is upgraded by that very block and cannot already speak the 178-byte Jovian ABI. The parent
+// is what distinguishes the activation block from every later Jovian block.
+BOOST_AUTO_TEST_CASE(JovianActivationBlockKeepsIsthmusL1AttributesLayout)
+{
+    auto const l1Info = filledL1Info();
+    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(kSeamSchedule, l1Info);
+
+    constexpr int64_t kJovianActivationMs = static_cast<int64_t>(kSeamJovianTime) * 1000;
+    constexpr int64_t kParentOfActivationMs = kJovianActivationMs - 1000;
+
+    auto layoutSize = [&](int64_t childMs, int64_t parentMs) {
+        auto const env = scheduler.synthesizeL1AttributesEnvelope(childMs, parentMs);
+        return bcos::executor_v1::opstack::decodeDepositEnvelope(
+            bcos::bytesConstRef(env.data(), env.size()))
+            .data.size();
+    };
+
+    // Activation block: child is Jovian, parent is not -> still Isthmus's 176 bytes.
+    BOOST_CHECK_EQUAL(layoutSize(kJovianActivationMs, kParentOfActivationMs),
+        bcos::evm::opstack::IsthmusL1AttributesLen);
+    // The very next block: parent is Jovian too -> the 178-byte Jovian layout.
+    BOOST_CHECK_EQUAL(layoutSize(kJovianActivationMs + 1000, kJovianActivationMs),
+        bcos::evm::opstack::JovianL1AttributesLen);
+    // Well before the fork: Isthmus on both sides.
+    BOOST_CHECK_EQUAL(
+        layoutSize(kIsthmusMs, kIsthmusMs - 1000), bcos::evm::opstack::IsthmusL1AttributesLen);
+    // Karst is a superset of Jovian and has no activation-block exception of its own.
+    BOOST_CHECK_EQUAL(
+        layoutSize(kKarstMs, kKarstMs - 1000), bcos::evm::opstack::JovianL1AttributesLen);
+}
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -33,9 +33,9 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
+#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SessionReadLoop.h"
-#include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/asio/error.hpp>
@@ -60,8 +60,7 @@ BOOST_FIXTURE_TEST_SUITE(FIB184_SessionAsyncLifetimeTest, TestPromptFixture)
 class FakeASIO_Lifetime : public bcos::gateway::ASIOInterface
 {
 public:
-    using ReadCompletion =
-        task::detail::FireCompletion<boost::system::error_code, std::size_t>;
+    using ReadCompletion = task::detail::FireCompletion<boost::system::error_code, std::size_t>;
 
     FakeASIO_Lifetime()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_Lifetime"), "0.0.0.0", 0)
@@ -82,10 +81,7 @@ public:
 
     // Read-policy target (see FakeASIO_Lifetime::ReadPolicy): park the read's completion in a
     // manually-fired slot so a test can hold a read "in flight" and complete it deterministically.
-    void parkRead(ReadCompletion completion)
-    {
-        m_readHandler.emplace(std::move(completion));
-    }
+    void parkRead(ReadCompletion completion) { m_readHandler.emplace(std::move(completion)); }
 
     bool hasReadHandler() const { return m_readHandler.has_value(); }
 
@@ -163,7 +159,7 @@ BOOST_AUTO_TEST_CASE(InFlightReadKeepsSessionAlive)
 {
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_Lifetime>();
-    auto messageFactory = std::make_shared<P2PMessageFactory>();
+    auto messageFactory = std::make_shared<MessageFactory>();
     auto fakeAsio = std::make_shared<FakeASIO_Lifetime>();
     auto fakeHost =
         std::make_shared<FakeHost_Lifetime>(hashImpl, fakeAsio, nullptr, messageFactory);
@@ -236,7 +232,7 @@ BOOST_AUTO_TEST_CASE(DropClosesSocketInlineWhenNetworkDown)
 {
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_Lifetime>();
-    auto messageFactory = std::make_shared<P2PMessageFactory>();
+    auto messageFactory = std::make_shared<MessageFactory>();
     auto fakeAsio = std::make_shared<FakeASIO_Lifetime>();
     auto fakeHost =
         std::make_shared<FakeHost_Lifetime>(hashImpl, fakeAsio, nullptr, messageFactory);

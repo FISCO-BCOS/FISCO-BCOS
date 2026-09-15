@@ -71,6 +71,10 @@ namespace single_consensus
 {
 class SingleNodeConsensus;
 }
+namespace ledger::mpt
+{
+class CommitObserver;
+}
 namespace storage2
 {
 template <class Key, class ValueT>
@@ -196,6 +200,11 @@ private:
     std::shared_ptr<bcos::archive::ArchiveService> m_archiveService = nullptr;
 #endif
     std::shared_ptr<GlobalStateStorageInitializer> m_globalStateStorageInitializer;
+    /// The shared MPT pruner (storage.mpt_prune_window > 0), injected into every baseline
+    /// scheduler variant at build time. Declared right after the storage initializer so the
+    /// pruner — which borrows the committed backend — is always destroyed before it.
+    /// Null when pruning is disabled (the schedulers then keep their NoopCommitObserver).
+    std::shared_ptr<bcos::ledger::mpt::CommitObserver> m_mptCommitObserver;
     std::shared_ptr<EngineServiceInitializer> m_engineServiceInitializer;
 
     std::shared_ptr<bcos::engine::DACaps> m_daCaps;
@@ -225,7 +234,10 @@ private:
     /// Installs the OP block-number notifier on OpScheduler.
     std::function<void(std::function<void(protocol::BlockNumber)>)>
         m_setOpSchedulerBlockNumberNotifier;
-    /// Cached executor version for initSysContract.
+    /// Resolved executor version (0 = legacy SchedulerManager, 1 = TransactionExecutorImpl,
+    /// 2 = EthereumExecutor, >= 3 = OP mode). Cached during initNode so initSysContract can
+    /// decide whether the FISCO system-contract deployment block applies (it does not for the
+    /// ethereum executor).
     int m_executorVersion = 0;
 
     protocol::BlockNumber getCurrentBlockNumber(

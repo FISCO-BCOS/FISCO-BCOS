@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bcos-framework/ledger/GenesisConfig.h>
 #include <evmc/evmc.hpp>
 
 #include <cstdint>
@@ -29,17 +30,18 @@ namespace bcos::evm::opstack
 //   Holocene | Cancun        | EVMC_CANCUN   | modeled; EIP-1559 via 9B extraData
 //   Isthmus  | Prague/Pectra | EVMC_PRAGUE   | modeled; EIP-7702/7623/2935/2537 + deposits
 //   Jovian   | Prague        | EVMC_PRAGUE   | modeled; +DA footprint, operator fee ×100
-//   Karst    | Osaka         | EVMC_OSAKA    | modeled; Osaka EVM + Karst precompile caps
-// clang-format on
+//   Karst    | Osaka         | EVMC_OSAKA    | modeled; Jovian fees + Osaka EVM + Karst caps
 //
 // Key facts:
 //   * Isthmus = all Prague/Pectra features that apply to L2s (optimism docs
 //     pectra-changes: "the upcoming Isthmus hardfork will contain all Prague
 //     features"); Jovian adds OP-only DA footprint + operator-fee-fix on the
 //     same Prague base — hence both map to EVMC_PRAGUE.
-//   * Karst maps to EVMC_OSAKA with an independent precompile-override object.
-//     Production parse accepts any contiguous EL fork range, so Karst is
-//     nameable as a baseline or after any earlier activation.
+//   * Karst maps to EVMC_OSAKA with an independent precompile-override object
+//     (bn256Pairing's input limit tightens to 57600; 0x100 is no longer overridden so
+//     EIP-7951 pricing applies). EIP-7825 per-tx gas cap gates on Osaka with deposits
+//     exempt (see runDeposit). Production parse accepts any contiguous EL fork range,
+//     so Karst is nameable as a baseline or after any earlier activation.
 // ────────────────────────────────────────────────────────────────────────────
 enum class OpFork
 {
@@ -108,6 +110,11 @@ class OpForkSchedule
 public:
     static OpForkSchedule parse(std::string_view canonical);
     static OpForkSchedule legacy(bool jovianActive);
+    /// Release line's [op_fork_timestamps] shorthand (jovian_time/karst_time, UINT64_MAX =
+    /// unscheduled) converted to the canonical activation list: timestamp-0 baseline, forks in
+    /// protocol order, strictly increasing timestamps. jovian_time == 0 makes Jovian the
+    /// baseline itself; an unscheduled Jovian is the all-Isthmus legacy chain.
+    static OpForkSchedule fromLedgerSchedule(const bcos::ledger::OpForkSchedule& schedule);
     explicit OpForkSchedule(std::vector<OpForkActivation> activations);
     /// Test-only: skip ledger codec validation (and the Karst/Osaka consistency check).
     struct TestBypass
@@ -124,4 +131,27 @@ public:
 private:
     std::vector<OpForkActivation> m_activations;
 };
+
+/// Resolves the OP fork config for a block from the chain's genesis fork schedule
+/// ([op_fork_timestamps] in config.genesis, ledger::OpForkSchedule) and that block's
+/// timestamp IN SECONDS. This is op-node's own keying: rollup.json carries jovian_time /
+/// karst_time and `IsJovian(ts)` is `Time != nil && ts >= *Time`
+/// (op-node/rollup/types.go), with UINT64_MAX standing in for op-node's nil.
+///
+/// Latest fork first: Karst when `timestampSec >= m_karstTime`, else Jovian when
+/// `>= m_jovianTime`, else Isthmus. Isthmus is always the baseline — there is no
+/// pre-Isthmus config (the minimal loop is Isthmus+-only and the engine gate rejects
+/// pre-Isthmus payloads by construction).
+///
+/// The schedule's non-decreasing order is validated once, at config load
+/// (NodeConfig::loadOpForkTimestamps); this function does not re-check it.
+///
+/// WHICH block's timestamp is the caller's decision and differs per rule — op-geth keys the
+/// Holocene extraData decode and the Jovian DA-footprint branch on the PARENT header's time
+/// (consensus/misc/eip1559/eip1559.go CalcBaseFee), while the L1-attributes calldata layout
+/// and the Jovian payload attributes key on the CHILD's (op-node derive/l1_block_info.go,
+/// derive/attributes.go). Every caller in this tree converts through
+/// opstack-executor/OpCommon.h's forkTimestampSec (internal timestamps are milliseconds).
+const OpForkConfig& configAt(
+    const bcos::ledger::OpForkSchedule& schedule, uint64_t timestampSec) noexcept;
 }  // namespace bcos::evm::opstack

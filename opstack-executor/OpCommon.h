@@ -200,6 +200,19 @@ template <class T>
 }
 
 
+/// Internal timestamps are MILLISECONDS everywhere in this node (BlockHeader::timestamp,
+/// PayloadAttributes::timestamp, ExecutionPayload::timestamp); the OP fork schedule
+/// ([op_fork_timestamps], op-node's rollup.json jovian_time/karst_time) is SECONDS.
+/// Every fork judgement on the OP lane converts here and nowhere else — each production
+/// caller of opstack::configAt goes through this helper — so the unit cannot drift between
+/// call sites. (Other ms->s divisions exist for unrelated jobs: PayloadId.h derives the
+/// payload id from seconds, and the Web3 RPC boundary converts on the way in. Neither
+/// decides a fork.)
+[[nodiscard]] inline uint64_t forkTimestampSec(int64_t internalTimestampMs) noexcept
+{
+    return static_cast<uint64_t>(internalTimestampMs) / 1000;
+}
+
 /// Build the OP block context from a FISCO header. `gasLimitOverride` injects the head block's
 /// gasLimit as blockGasLeft (a minimal test header may leave gasLimit==0); `lenientOptionals`
 /// tolerates unset optional header fields as 0 (eth_call path), while block execution uses
@@ -219,9 +232,10 @@ inline evmone::state::BlockInfo toBlockInfo(const bcos::protocol::BlockHeader& e
     // engineSecondsToInternalMillis / EngineTimestampBoundaryTest), so a header built by the
     // engine already carries ms; feeding it to the EVM un-divided would make every timestamp
     // 1000× too large and diverge from op-geth (which stores seconds). Fork selection is
-    // the timestamp OpForkSchedule (configAt(unix seconds)); this helper only converts
-    // the header unit for evmone. If a future header source writes seconds directly,
-    // convert at THAT boundary — never remove this conversion.
+    // the timestamp OpForkSchedule (configAt(unix seconds)) — the same conversion the fork
+    // decision uses, so the EVM's TIMESTAMP opcode and the fork decision agree on the unit
+    // by construction. If a future header source writes seconds directly, convert at THAT
+    // boundary — never remove this conversion.
     blk.timestamp =
         bcos::engine::unixSecondsFromInternalMillis(static_cast<uint64_t>(env.timestamp()));
     blk.gas_limit = gasLimitOverride.has_value() ?

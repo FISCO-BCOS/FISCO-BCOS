@@ -30,7 +30,7 @@
 
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-evm/test/opstack/support/OpForkFlagsCompat.h>
+#include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/TransactionFactory.h>
 #include <bcos-framework/storage/Entry.h>
@@ -52,6 +52,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <engine/bcos-engine/OpEngineService.inl>
+#include <limits>
 
 #include <algorithm>
 #include <filesystem>
@@ -161,9 +162,14 @@ bcos::protocol::TransactionReceiptFactory::Ptr makeReceiptFactory()
     return std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(makeCryptoSuite());
 }
 
-bcos::evm::opstack::OpForkFlags forkFlagsFor(bool jovian)
+/// Genesis fork schedule for a golden vector: Jovian from genesis, or unscheduled so every
+/// block stays on the Isthmus baseline. Karst is never scheduled here — these vectors predate
+/// it (their EVM base is Prague).
+bcos::ledger::OpForkSchedule forkScheduleFor(bool jovian)
 {
-    return bcos::evm::opstack::OpForkFlags{.jovianActive = jovian};
+    return bcos::ledger::OpForkSchedule{
+        .m_jovianTime = jovian ? 0 : std::numeric_limits<uint64_t>::max(),
+        .m_karstTime = std::numeric_limits<uint64_t>::max()};
 }
 
 void seedSysTables(MLS& multiLayerStorage)
@@ -261,12 +267,10 @@ struct OpE2eFixture
     std::shared_ptr<bcos::executor_v1::opstack::OpScheduler<MLS>> opDelegate;
     OpEngine service;
 
-    explicit OpE2eFixture(bcos::evm::opstack::OpForkFlags forkFlags)
+    explicit OpE2eFixture(bcos::ledger::OpForkSchedule forkSchedule)
       : hashImpl(makeCryptoSuite()->hashImpl()),
         receiptFactory(makeReceiptFactory()),
-        scheduler(std::make_shared<bcos::evm::opstack::OpForkSchedule>(
-                      bcos::evm::opstack::OpForkSchedule::legacy(forkFlags.jovianActive)),
-            {}),
+        scheduler(forkSchedule, {}),
         legacyLedgerStorage(
             std::make_shared<bcos::storage::LegacyStorageWrapper<BackendMemStorage>>(
                 backendStorage)),
@@ -274,7 +278,8 @@ struct OpE2eFixture
         opDelegate(std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory,
             hashImpl, kChainId,
             std::make_shared<bcos::evm::opstack::OpForkSchedule>(
-                bcos::evm::opstack::OpForkSchedule::legacy(forkFlags.jovianActive)),
+                bcos::evm::opstack::OpForkSchedule::legacy(
+                    forkSchedule.m_jovianTime != std::numeric_limits<uint64_t>::max())),
             blockFactory, multiLayerStorage, ledger, ioServicePool)),
         service(memPool, multiLayerStorage, scheduler, blockFactory,
             bcos::engine::c_defaultBlockTxCountLimit, opDelegate)
@@ -325,7 +330,7 @@ void assertRebuiltAnnouncement(std::string const& id,
 void runGoldenVector(std::string const& id)
 {
     auto sample = w6test::loadVectorSample(id);
-    auto fixture = std::make_unique<OpE2eFixture>(forkFlagsFor(sample.jovian));
+    auto fixture = std::make_unique<OpE2eFixture>(forkScheduleFor(sample.jovian));
     opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
     const auto goldenHeader = w6test::decodeGoldenHeader(sample);
     registerVerifiedBlock(fixture->multiLayerStorage, goldenHeader->parentInfo().blockHash, 0);
@@ -352,7 +357,7 @@ void runGoldenVector(std::string const& id)
 void runInvalidFieldParity(std::string const& vectorId, std::string const& corruptField)
 {
     auto sample = w6test::loadVectorSample(vectorId);
-    auto fixture = std::make_unique<OpE2eFixture>(forkFlagsFor(sample.jovian));
+    auto fixture = std::make_unique<OpE2eFixture>(forkScheduleFor(sample.jovian));
     opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
     const auto goldenHeader = w6test::decodeGoldenHeader(sample);
     registerVerifiedBlock(fixture->multiLayerStorage, goldenHeader->parentInfo().blockHash, 0);
@@ -491,7 +496,7 @@ BOOST_AUTO_TEST_CASE(s6_request_rebuild_matches_golden_without_calling_newpayloa
     // runGoldenVector must therefore read lastExecutedHeader(), not this rebuild.
     SKIP_IF_NO_T8N_CORPUS();
     auto sample = w6test::loadVectorSample("isthmus_deposit_only");
-    auto fixture = std::make_unique<OpE2eFixture>(forkFlagsFor(sample.jovian));
+    auto fixture = std::make_unique<OpE2eFixture>(forkScheduleFor(sample.jovian));
     const auto goldenHeader = w6test::decodeGoldenHeader(sample);
     auto params = w6test::makeParamsJson(sample);
     auto request = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
