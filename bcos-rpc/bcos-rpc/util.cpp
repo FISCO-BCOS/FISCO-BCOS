@@ -22,7 +22,6 @@
 #include "bcos-rpc/jsonrpc/Common.h"
 #include "bcos-rpc/util.h"
 #include "bcos-utilities/DataConvertUtility.h"
-#include <bcos-ledger/Ledger.h>
 #include <boost/regex.hpp>
 #include <limits>
 #include <optional>
@@ -30,6 +29,12 @@
 
 using namespace bcos;
 using namespace bcos::rpc;
+
+// geth answers "header not found" with the implementation-defined server error -32000 for a
+// safe/finalized head that has not been set yet; keep that wire shape rather than surfacing the
+// fail-closed case as a node-internal -32603.
+constexpr int32_t c_headerNotFoundCode = -32000;
+constexpr std::string_view c_headerNotFoundMessage = "header not found";
 
 // return (actual block number, isLatest block)
 std::tuple<protocol::BlockNumber, bool> bcos::rpc::getBlockNumberByTag(
@@ -60,7 +65,8 @@ std::tuple<protocol::BlockNumber, bool> bcos::rpc::getBlockNumberByTag(
         }
         if (failClosedOnMissingForkchoice)
         {
-            BOOST_THROW_EXCEPTION(bcos::ledger::NotFoundBlockHeader{});
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(c_headerNotFoundCode, std::string(c_headerNotFoundMessage)));
         }
         auto const number = (std::max)(latest - safeDepth, protocol::BlockNumber{0});
         return std::make_tuple(number, std::cmp_equal(latest, number));
@@ -69,11 +75,13 @@ std::tuple<protocol::BlockNumber, bool> bcos::rpc::getBlockNumberByTag(
     {
         if (forkchoiceFinalized.has_value())
         {
-            return std::make_tuple(*forkchoiceFinalized, std::cmp_equal(latest, *forkchoiceFinalized));
+            return std::make_tuple(
+                *forkchoiceFinalized, std::cmp_equal(latest, *forkchoiceFinalized));
         }
         if (failClosedOnMissingForkchoice)
         {
-            BOOST_THROW_EXCEPTION(bcos::ledger::NotFoundBlockHeader{});
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(c_headerNotFoundCode, std::string(c_headerNotFoundMessage)));
         }
         auto const number = (std::max)(latest - finalizedDepth, protocol::BlockNumber{0});
         return std::make_tuple(number, std::cmp_equal(latest, number));

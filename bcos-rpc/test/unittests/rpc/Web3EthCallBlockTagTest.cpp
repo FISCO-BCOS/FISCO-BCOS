@@ -16,7 +16,7 @@
  */
 
 #include "../common/RPCFixture.h"
-#include <bcos-ledger/Ledger.h>
+#include <bcos-framework/engine/AnyEngineService.h>
 #include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
@@ -73,6 +73,40 @@ public:
     }
 };
 
+/// An engine service whose tracker has never received a forkchoice — safe/finalized answer
+/// nullopt, the exact state an EL is in before op-node's first engine_forkchoiceUpdated. Used to
+/// pin the endpoint-level not-found (JSON null) behaviour the fail-closed resolver drives.
+class EmptyEngineService
+{
+public:
+    task::Task<std::vector<std::string>> exchangeCapabilities(
+        std::vector<std::string> remoteCapabilities)
+    {
+        co_return remoteCapabilities;
+    }
+    task::Task<bcos::engine::ForkchoiceUpdatedResult> updateForkchoice(
+        const bcos::engine::ForkchoiceState&, const bcos::engine::PayloadAttributes*,
+        std::uint32_t)
+    {
+        co_return bcos::engine::ForkchoiceUpdatedResult{};
+    }
+    task::Task<bcos::engine::GetPayloadResult> getPayload(
+        const bcos::engine::PayloadID&, std::uint32_t)
+    {
+        co_return std::make_unique<bcos::engine::GetPayloadData>();
+    }
+    task::Task<bcos::engine::PayloadStatus> newPayload(
+        const bcos::engine::NewPayloadRequest&, std::uint32_t)
+    {
+        co_return bcos::engine::PayloadStatus{};
+    }
+    std::optional<protocol::BlockNumber> getSafeBlockNumber() const { return std::nullopt; }
+    std::optional<protocol::BlockNumber> getFinalizedBlockNumber() const
+    {
+        return std::nullopt;
+    }
+};
+
 class Web3EthCallBlockTagFixture : public RPCFixture
 {
 public:
@@ -88,8 +122,17 @@ public:
         protocol::BlockNumber safeDepth = 0, protocol::BlockNumber finalizedDepth = 0,
         std::int64_t mptPruneWindow = -1, bool withMptReader = true)
     {
-        auto service = std::make_shared<rpc::NodeService>(
-            m_ledger, std::move(sched), txPool, nullptr, nullptr, m_blockFactory, nullptr);
+        return buildWeb3RpcWithEngine(
+            std::move(sched), nullptr, safeDepth, finalizedDepth);
+    }
+
+    Web3JsonRpcImpl::Ptr buildWeb3RpcWithEngine(
+        std::shared_ptr<bcos::scheduler::SchedulerInterface> sched,
+        std::shared_ptr<bcos::engine::AnyEngineService> engine,
+        protocol::BlockNumber safeDepth = 0, protocol::BlockNumber finalizedDepth = 0)
+    {
+        auto service = std::make_shared<rpc::NodeService>(m_ledger, std::move(sched), txPool,
+            nullptr, nullptr, m_blockFactory, std::move(engine));
         // The default depths are 0 (safe/finalized == latest); a positive depth routes them
         // through callAtBlock (covered in configuredDepthsRouteThroughCallAtBlock).
         service->setSafeBlockDepth(safeDepth);
@@ -123,6 +166,23 @@ public:
             std::string(
                 R"({"jsonrpc":"2.0","id":1,"method":"eth_call","params":[{"to":"0x1234567890123456789012345678901234567890","data":"0x"},)") +
             std::string(blockTag) + "]}";
+        std::promise<bcos::bytes> promise;
+        web3->onRPCRequest(
+            payload, [&promise](bcos::bytes resp, boost::beast::http::status) { promise.set_value(std::move(resp)); });
+        auto jsonBytes = promise.get_future().get();
+        Json::Value value;
+        Json::Reader reader;
+        std::string_view json((char*)jsonBytes.data(), jsonBytes.size());
+        reader.parse(json.begin(), json.end(), value);
+        return value;
+    }
+
+    /// eth_getBlockByNumber(tag, false) → the parsed JSON-RPC response envelope.
+    static Json::Value requestBlockByNumber(Web3JsonRpcImpl::Ptr const& web3, std::string_view blockTag)
+    {
+        auto payload = std::string(
+                           R"({"jsonrpc":"2.0","id":1,"method":"eth_getBlockByNumber","params":[)") +
+                       std::string(blockTag) + ",false]}";
         std::promise<bcos::bytes> promise;
         web3->onRPCRequest(
             payload, [&promise](bcos::bytes resp, boost::beast::http::status) { promise.set_value(std::move(resp)); });
@@ -352,7 +412,8 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByTagDirect)
 
 // Forkchoice overrides (op-node drives safe/finalized via engine_forkchoiceUpdated): the
 // tracker values are preferred over the depth fallback, and on the engine lane an unset value
-// fails closed (NotFoundBlockHeader) rather than silently reporting the unsafe tip.
+// fails closed (JsonRpcException -32000 "header not found") rather than silently reporting the
+// unsafe tip.
 BOOST_AUTO_TEST_CASE(getBlockNumberByTagForkchoiceOverride)
 {
     using bcos::rpc::getBlockNumberByTag;
@@ -376,14 +437,15 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByTagForkchoiceOverride)
         BOOST_CHECK_EQUAL(number, latest);
         BOOST_CHECK(isLatest);
     }
-    // Engine lane, no forkchoice value yet: fail closed, not the depth fallback.
+    // Engine lane, no forkchoice value yet: fail closed with geth's -32000 "header not found",
+    // not the depth fallback.
     {
         BOOST_CHECK_THROW(getBlockNumberByTag(latest, "safe", 0, 0, std::nullopt, std::nullopt,
                               /*failClosedOnMissingForkchoice=*/true),
-            bcos::ledger::NotFoundBlockHeader);
+            bcos::rpc::JsonRpcException);
         BOOST_CHECK_THROW(getBlockNumberByTag(latest, "finalized", 0, 0, std::nullopt,
                               std::nullopt, /*failClosedOnMissingForkchoice=*/true),
-            bcos::ledger::NotFoundBlockHeader);
+            bcos::rpc::JsonRpcException);
     }
     // PBFT lane (failClosed=false), no forkchoice value: depth fallback still applies.
     {
@@ -392,6 +454,29 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByTagForkchoiceOverride)
         BOOST_CHECK_EQUAL(number, 17);
         BOOST_CHECK(!isLatest);
     }
+}
+
+// F4(a): the op-node-facing shape for an unset engine-lane safe/finalized — eth_getBlockByNumber
+// answers JSON null (via its local catch) rather than -32603 or the unsafe tip. op-node's head
+// discovery depends on exactly this null, not a node-internal error.
+BOOST_AUTO_TEST_CASE(engineLaneUnsetSafeAnswersNull)
+{
+    auto recording = std::make_shared<RecordingScheduler>(m_ledger, m_blockFactory);
+    auto emptyEngine = std::make_shared<bcos::engine::AnyEngineService>(EmptyEngineService{});
+    auto web3 = buildWeb3RpcWithEngine(recording, std::move(emptyEngine));
+
+    for (auto tag : {R"("safe")", R"("finalized")"})
+    {
+        auto resp = requestBlockByNumber(web3, tag);
+        BOOST_REQUIRE(!resp.isMember("error"));
+        BOOST_REQUIRE(resp.isMember("result"));
+        BOOST_CHECK(resp["result"].isNull());
+    }
+    // "latest" is still served normally on the engine lane (only safe/finalized fail closed).
+    auto respLatest = requestBlockByNumber(web3, R"("latest")");
+    BOOST_REQUIRE(!respLatest.isMember("error"));
+    BOOST_REQUIRE(respLatest.isMember("result"));
+    BOOST_CHECK(!respLatest["result"].isNull());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
