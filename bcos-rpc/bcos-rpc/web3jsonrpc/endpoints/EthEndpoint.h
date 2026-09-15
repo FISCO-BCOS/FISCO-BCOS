@@ -23,6 +23,7 @@
 #include <bcos-rpc/groupmgr/GroupManager.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
 #include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
+#include <bcos-rpc/web3jsonrpc/model/CallRequest.h>
 #include <json/json.h>
 
 namespace bcos::rpc
@@ -84,7 +85,16 @@ private:
     FilterSystem::Ptr m_filterSystem;
     bool m_syncTransaction;
 
-    task::Task<void> call(const Json::Value&, Json::Value&, u256* gasUsed, bool isEstimate);
+    struct CallOutcome
+    {
+        int32_t status = 0;
+        std::string message;
+        bytes output;
+        u256 gasUsed = 0;
+    };
+    // Runs one eth_call-style execution and reports status/output/gasUsed without building JSON.
+    task::Task<CallOutcome> executeCall(CallRequest call, bool isEstimate);
+    static void buildCallResponse(CallOutcome const& outcome, Json::Value& response);
 };
 
 }  // namespace bcos::rpc

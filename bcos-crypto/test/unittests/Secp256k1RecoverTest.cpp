@@ -39,7 +39,7 @@ BOOST_AUTO_TEST_CASE(recoverFromInputRejectsBad)
     BOOST_CHECK(!okBadSig);
 }
 
-// recoverAddress rejects a wrong-length signature (checkSigLen) and a
+// recoverAddress rejects a wrong-length signature (checkSignatureFormat) and a
 // correctly-sized but unrecoverable signature (secp256k1Recover failure).
 BOOST_AUTO_TEST_CASE(recoverAddressRejectsBadSignature)
 {

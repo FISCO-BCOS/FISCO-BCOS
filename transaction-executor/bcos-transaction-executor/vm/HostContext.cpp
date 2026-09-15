@@ -71,8 +71,13 @@ bcos::executor_v1::hostcontext::getCacheExecutables()
 
         CacheExecutables()
         {
+            // The LRU charges getSize(key) + getSize(value) per entry, so budget
+            // for both; otherwise the cache holds fewer entries than intended.
+            // This is a per-bucket ceiling, and a CONCURRENT storage has
+            // hardware_concurrency() * 2 + 1 buckets.
             constexpr static auto maxContracts = 100;
-            m_cachedExecutables.setMaxCapacity(sizeof(std::shared_ptr<Executable>) * maxContracts);
+            m_cachedExecutables.setMaxCapacity(
+                (sizeof(ExecutableKey) + sizeof(std::shared_ptr<Executable>)) * maxContracts);
         }
     } static cachedExecutables;
 
