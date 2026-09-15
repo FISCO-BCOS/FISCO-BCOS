@@ -34,19 +34,12 @@ inline constexpr uint64_t c_minSuggestedPriorityFeeWei = 1'000'000;
 /// semantics follow geth (eth_gasPrice = head.baseFee + tip, never below the base fee).
 /// This is the lane predicate the endpoints consume; OP mode itself is a fixed genesis
 /// value (== OPSTACK_EXECUTOR_VERSION), decided at chain creation and never re-derived.
+/// Note the deliberate difference from the ledger's feature_l2_ethereum_compat state shape:
+/// the Eth lane may carry that flag too (an MPT-state chain still sealed by the consensus
+/// layer), so lane decisions key on executor_version and never on the flag.
 inline bool usesEthereumFeeSemantics(int executorVersion)
 {
     return executorVersion >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
-}
-
-/// True when the chain runs the OP lane (exactly OPSTACK_EXECUTOR_VERSION). This is a LANE
-/// predicate, distinct from the ledger's feature_l2_ethereum_compat state shape: the Eth
-/// lane may carry that flag too (an MPT-state chain still sealed by the consensus layer),
-/// and on such a chain the OP base-fee rule must not apply. The historical fee methods
-/// consume this, so they and eth_gasPrice agree on every configuration.
-inline bool isOpStackLane(int executorVersion)
-{
-    return executorVersion == bcos::ledger::OPSTACK_EXECUTOR_VERSION;
 }
 
 /// Suggested priority fee (wei): the Ethereum/OP lanes suggest a non-zero tip (OP floors at
@@ -63,7 +56,7 @@ inline uint64_t suggestedPriorityFeeWei(int executorVersion)
 inline bcos::u256 blockBaseFee(bcos::protocol::BlockHeader const& header)
 {
     auto const versionAtLeast = [](bcos::protocol::EthBlockVersion version,
-                                   bcos::protocol::EthBlockVersion fork) {
+                                    bcos::protocol::EthBlockVersion fork) {
         return static_cast<std::uint8_t>(version) >= static_cast<std::uint8_t>(fork);
     };
     if (bcos::protocol::isOpEthereumBlock(header))
