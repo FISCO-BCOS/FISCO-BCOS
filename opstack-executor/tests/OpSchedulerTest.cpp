@@ -1315,6 +1315,14 @@ BOOST_AUTO_TEST_CASE(ExecuteBlockSelectsForkFromTheBlockTimestamp)
 
     auto gasUsedWithKarstAt = [&](uint64_t karstTime) {
         Fixture f(bcos::ledger::OpForkSchedule{.m_jovianTime = 0, .m_karstTime = karstTime});
+        // A scheduled Jovian makes jovianAndLaterActivations() non-empty, so for a block
+        // numbered > 0 OpScheduler fetches the parent header (Q5 activation-window input,
+        // parentTsSec) and fails closed with OpStorageFault when the row is absent (pinned
+        // by OpKarstActivationTest::JovianActivationWithoutParentHeaderFailsClosed). The
+        // fusion of this case (from #5576) with the karst schedule needs that genesis row;
+        // makeCallGenesisHeader is block 0 @ second 1000 < 0x3f2, so both arms keep the
+        // parent pre-karst and only the executed block's own timestamp selects the fork.
+        seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader());
         auto dep = makeDeposit();
         dep.to = kP256Verify;  // empty input: the precompile succeeds and only the price moves
         auto const depEnv = encodeDepositEnvelope(dep);
