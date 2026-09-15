@@ -10,6 +10,7 @@
 #include "bcos-transaction-scheduler/SchedulerParallelImpl.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
 #include "ethereum-executor/EthereumExecutor.h"
+#include <bcos-ledger/mpt/CommitObserver.h>
 #include <memory>
 
 // The production BaselineScheduler specializations are explicitly instantiated once in
@@ -41,12 +42,18 @@ public:
         std::shared_ptr<SchedulerType> scheduler, std::shared_ptr<txpool::TxPoolInterface> txpool,
         std::shared_ptr<protocol::TransactionSubmitResultFactory> transactionSubmitResultFactory,
         std::shared_ptr<ledger::LedgerInterface> ledger,
-        std::shared_ptr<Executor> transactionExecutor, bool notifyTransactions = true)
+        std::shared_ptr<Executor> transactionExecutor,
+        std::shared_ptr<ledger::mpt::CommitObserver> mptCommitObserver = nullptr,
+        bool notifyTransactions = true)
     {
         auto baselineScheduler = std::make_shared<BaselineScheduler<initializer::GlobalStateStorage,
             Executor, SchedulerType, ledger::LedgerInterface>>(
             storageInitializer->storage(), *scheduler, *transactionExecutor, *blockFactory, *ledger,
             *txpool, *transactionSubmitResultFactory, *blockFactory->cryptoSuite()->hashImpl());
+        // MPT pruning seam (CommitObserver.h): a null observer keeps the built-in Noop — the
+        // scheduler then pays nothing on the commit path (setMPTCommitObserver contract) and
+        // skips the refCountDeltas tally on the execute path (needsRefCountDeltas).
+        baselineScheduler->setMPTCommitObserver(std::move(mptCommitObserver));
         if (notifyTransactions)
         {
             baselineScheduler->registerTransactionNotifier(

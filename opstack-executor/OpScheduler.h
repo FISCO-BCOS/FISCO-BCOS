@@ -27,6 +27,7 @@
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/ledger/FeaturesStorage.h>
+#include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/ledger/Ledger.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
@@ -432,13 +433,13 @@ public:
     /// ledger may be null (execute only). ioServicePool is required (SchedulerSerialImpl GC).
     OpScheduler(bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory,
         bcos::crypto::Hash::Ptr hashImpl, uint64_t chainId,
-        bcos::evm::opstack::OpForkFlags forkFlags, bcos::protocol::BlockFactory::Ptr blockFactory,
+        bcos::ledger::OpForkSchedule forkSchedule, bcos::protocol::BlockFactory::Ptr blockFactory,
         MultiLayerStorage& multiLayerStorage, bcos::ledger::LedgerInterface::Ptr ledger,
         bcos::IOServicePool::Ptr ioServicePool)
       : m_receiptFactory(std::move(receiptFactory)),
         m_hashImpl(std::move(hashImpl)),
         m_chainId(chainId),
-        m_forkFlags(forkFlags),
+        m_forkSchedule(forkSchedule),
         m_multiLayerStorage(&multiLayerStorage),
         m_blockFactory(std::move(blockFactory)),
         m_ledger(std::move(ledger)),
@@ -1007,7 +1008,11 @@ private:
         };
         try
         {
-            const auto& cfg = op::configAt(m_forkFlags);
+            // The block being executed decides its own fork (op-node keys IsJovian/IsKarst on
+            // the L2 block's own timestamp); detail::forkTimestampSec is the single ms->s
+            // conversion.
+            const auto& cfg =
+                op::configAt(m_forkSchedule, detail::forkTimestampSec(header.timestamp()));
 
             // Split deposits from other typed envelopes.
             std::vector<op::DepositTx> deposits;
@@ -1474,7 +1479,9 @@ private:
         namespace op = bcos::evm::opstack;
         namespace detail = bcos::evm::engine::detail;
 
-        const auto& cfg = op::configAt(m_forkFlags);
+        // The block the call is evaluated AGAINST decides the fork.
+        const auto& cfg =
+            op::configAt(m_forkSchedule, detail::forkTimestampSec(header.timestamp()));
         bcos::evm::evmstate::Storage2State<AnyView> stateView(view);
         auto fee = op::loadOpFeeParams(stateView);
         // Fail if Storage2State poisoned the fee-param read.
@@ -1555,7 +1562,9 @@ private:
         auto blockHeader = block->blockHeader();
         auto const& header = *blockHeader;
 
-        const auto& cfg = op::configAt(m_forkFlags);
+        // The block the call is evaluated AGAINST decides the fork.
+        const auto& cfg = op::configAt(
+            m_forkSchedule, bcos::evm::engine::detail::forkTimestampSec(header.timestamp()));
 
         auto ledgerConfig = std::make_shared<bcos::ledger::LedgerConfig>();
         ledgerConfig->setBlockNumber(blockNumber);
@@ -1634,7 +1643,9 @@ private:
                 protocol::TransactionReceipt::Ptr{nullptr}};
         }
 
-        const auto& cfg = op::configAt(m_forkFlags);
+        // The block the call is evaluated AGAINST decides the fork.
+        const auto& cfg = op::configAt(
+            m_forkSchedule, bcos::evm::engine::detail::forkTimestampSec(header.timestamp()));
 
         auto ledgerConfig = std::make_shared<bcos::ledger::LedgerConfig>();
         ledgerConfig->setBlockNumber(blockNumber);
@@ -1655,7 +1666,7 @@ private:
     bcos::protocol::TransactionReceiptFactory::Ptr m_receiptFactory;
     bcos::crypto::Hash::Ptr m_hashImpl;
     uint64_t m_chainId;
-    bcos::evm::opstack::OpForkFlags m_forkFlags;
+    bcos::ledger::OpForkSchedule m_forkSchedule;
 
     MultiLayerStorage* m_multiLayerStorage = nullptr;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;

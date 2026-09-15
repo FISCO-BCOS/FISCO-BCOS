@@ -93,11 +93,12 @@ public:
     std::string const& groupId() const;
     size_t blockLimit() const;
 
-    /// OP-Stack Jovian fork selection: enabled iff `feature_op_jovian` is set in the genesis
-    /// [features] section (the FISCO-native feature-flag mechanism — replaces the former
-    /// chain.isthmus_time / chain.jovian_time timestamp thresholds). Isthmus is the OP-mode
-    /// baseline; this flag selects Jovian semantics (DA footprint, operator fee ×100).
-    bool opJovianActive() const;
+    /// OP-lane fork schedule from the genesis [op_fork_timestamps] section: activation times
+    /// in SECONDS, keyed per block by the L2 block timestamp exactly as op-node keys
+    /// rollup.json's jovian_time / karst_time. Present iff the section is present, which
+    /// validateL2Invariants binds both ways to executor.version >= OPSTACK_EXECUTOR_VERSION.
+    /// Isthmus is the lane baseline and has no entry.
+    std::optional<ledger::OpForkSchedule> const& opForkSchedule() const;
 
     std::string const& privateKeyPath() const;
     std::string const& hsmLibPath() const;
@@ -126,6 +127,13 @@ public:
     int minWriteBufferNumberToMerge() const;
     size_t blockCacheSize() const;
     bool enableRocksDBBlob() const;
+    // MPT pruning (pathdb spec §4.8): retention window in blocks, -1 = disabled (default,
+    // archive behavior).
+    std::int64_t mptPruneWindow() const;
+    // Whether the startup rebuild also DELETES the pre-existing unreachable "/mpt/" garbage it
+    // finds (init Phase 3). Default false: the scan is skipped entirely (only a hint is
+    // logged — counting the garbage would itself cost the full-table scan).
+    bool mptPruneSweepGarbage() const;
     std::vector<std::string> const& pdAddrs() const;
     std::string const& pdCaPath() const;
     std::string const& pdCertPath() const;
@@ -382,6 +390,8 @@ protected:
     void loadExecutorConfig(boost::property_tree::ptree const& _pt);
     // EL-mode timestamp fork schedule ([fork_timestamps] in config.genesis)
     void loadForkTimestamps(boost::property_tree::ptree const& _genesisConfig);
+    // OP-lane fork schedule ([op_fork_timestamps] in config.genesis)
+    void loadOpForkTimestamps(boost::property_tree::ptree const& _genesisConfig);
 
     // load config.ini
     void loadExecutorNormalConfig(boost::property_tree::ptree const& _pt);
@@ -392,7 +402,7 @@ protected:
     void checkService(std::string const& _serviceType, std::string const& _serviceName);
 
     // [features] section loader — exposed to the LoaderProbe test harness like the other
-    // per-section loaders (feature_op_jovian drives OP-Stack fork selection).
+    // per-section loaders.
     void loadGenesisFeatures(boost::property_tree::ptree const& ptree);
 
 private:
@@ -491,6 +501,13 @@ private:
     int m_minWriteBufferNumberToMerge = 2;
     size_t m_blockCacheSize = 128 << 20;
     bool m_enableRocksDBBlob = false;
+    // MPT pruning (pathdb spec §4.8): a node whose refcount hits 0 at block b is deleted once
+    // block b + mptPruneWindow commits; state roots in [head - N, head] stay fully reachable.
+    std::int64_t m_mptPruneWindow = -1;  // -1 = disabled (default, archive behavior)
+    // Startup garbage sweep (init Phase 3): delete pre-existing unreachable "/mpt/" rows while
+    // booting. Default off — the boot skips the scan entirely and only logs a hint (counting
+    // the garbage would itself cost the full-table scan).
+    bool m_mptPruneSweepGarbage = false;
 
     bool m_enableArchive = false;
     bool m_syncArchivedBlocks = false;
