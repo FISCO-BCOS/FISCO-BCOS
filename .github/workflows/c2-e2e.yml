@@ -46,11 +46,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: FISCO-BCOS/op-stack-e2e-tests
-          # The --legacy L2 pricing this node needs (its method set has no eth_feeHistory) lives in
-          # FISCO-BCOS/op-stack-e2e-tests#2; this pin deliberately stays on that repository's
-          # default branch rather than on the PR's branch tip, which a rebase or a closed PR can
-          # take away. Bump it to #2's merge commit once that lands.
-          ref: 6b2d17878050b5f959bee95a94e6a63ffa0bb9ac
+          # The --legacy L2 pricing this node needs (its method set has no eth_feeHistory) landed in
+          # FISCO-BCOS/op-stack-e2e-tests#2; this is that PR's merge commit, on the harness's
+          # default branch, so the pin is a stable revision rather than a PR branch tip.
+          ref: 0451c8bf3601c502a36be4633c0e2f4cc38e9c9b
           path: .ci-op-e2e-tests
 
       - name: Initialize vcpkg submodule
