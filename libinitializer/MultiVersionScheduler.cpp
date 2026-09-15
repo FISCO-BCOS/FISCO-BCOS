@@ -152,9 +152,16 @@ void bcos::scheduler_v1::MultiVersionScheduler::stop()
     // stop() is idempotent and safe on a never-started slot (BaselineScheduler::stop() only
     // resets its observer under m_commitMutex; SchedulerManager::stop() short-circuits on
     // STOPPED and tolerates a null scheduler).
+    // A slot can also be UNWIRED: Initializer publishes a null slot 3 on non-OP nodes, so the
+    // sweep must skip nulls — an unwired slot has no observer to detach, and calling through
+    // the null pointer is a virtual call on address 0 (node shutdown crash on every non-OP
+    // node, hit before the observer teardown this loop exists to protect).
     for (auto const& scheduler : m_schedulers)
     {
-        scheduler->stop();
+        if (scheduler)
+        {
+            scheduler->stop();
+        }
     }
 }
 void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
