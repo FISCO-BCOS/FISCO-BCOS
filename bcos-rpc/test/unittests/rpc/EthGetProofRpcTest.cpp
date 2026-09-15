@@ -285,5 +285,23 @@ BOOST_AUTO_TEST_CASE(ReaderUnsetReturns32603)
     BOOST_CHECK(resp["error"]["message"].asString().find("MPT not enabled") != std::string::npos);
 }
 
+// F4 regression: a 66-char "0x…" third parameter is a block hash (op-node passes it). A
+// malformed hex hash is a client error ("Invalid block hash"), not the misleading
+// "Block not found" the earlier catch-all produced for both malformed hex and storage faults.
+BOOST_AUTO_TEST_CASE(MalformedBlockHashReturnsInvalidBlockHash)
+{
+    buildTrie();
+    wireReader();
+
+    // 66 chars ("0x" + 64) so the hash branch is taken, but the payload is not valid hex — the
+    // decode fails before any ledger lookup, so the fixture needs no hash->number support.
+    std::string malformed = "0x" + std::string(64, 'z');
+    auto resp = getProof(address.hexPrefixed(), {}, malformed);
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32602);  // InvalidParams
+    BOOST_CHECK(
+        resp["error"]["message"].asString().find("Invalid block hash") != std::string::npos);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
