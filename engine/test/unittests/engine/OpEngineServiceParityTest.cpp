@@ -434,6 +434,26 @@ using OpEngine = bcos::engine::OpEngineService<StubMemPool, MLS, EngineOpSchedul
 static_assert(bcos::engine::EngineServiceConcept<EthLegacyEngine>);
 static_assert(bcos::engine::EngineServiceConcept<OpEngine>);
 
+// Negative control for the OP-lane admission holder: the engine must NOT be constructible with a
+// LedgerConfigState. A holder handed to this lane is only ever written from its commit callback,
+// which carries OpScheduler::loadCommitLedgerConfig's number+timestamp object -- publishing that
+// refuses every EIP-155 envelope after block 1 with -32602 (engine/bcos-engine/
+// OpLedgerConfigRepublish.h). The lane's holder is republished from the ledger by the notifier
+// the initializer installs instead, pinned at runtime by
+// OpLedgerConfigRepublishTest/commit_republish_keeps_the_holder_complete.
+static_assert(
+    std::is_constructible_v<OpEngine, StubMemPool&, MLS&, EngineOpScheduler&,
+        bcos::protocol::BlockFactory::Ptr, int64_t, bcos::scheduler::SchedulerInterface::Ptr,
+        std::shared_ptr<bcos::engine::DACaps>, bool>,
+    "positive control: the OP engine is constructible at its documented arity");
+static_assert(
+    !std::is_constructible_v<OpEngine, StubMemPool&, MLS&, EngineOpScheduler&,
+        bcos::protocol::BlockFactory::Ptr, int64_t, bcos::scheduler::SchedulerInterface::Ptr,
+        std::shared_ptr<bcos::engine::DACaps>, bool, bcos::ledger::LedgerConfigState::Ptr>,
+    "OpEngineService must not take a LedgerConfigState: the only configuration its commit "
+    "callback can publish is the delegate's number+timestamp stub, which fail-closes EIP-155 "
+    "admission for every later transaction");
+
 constexpr bcos::protocol::BlockNumber c_headOrderingBlockNumber = 40;
 constexpr bcos::protocol::BlockNumber c_safeOrderingBlockNumber = 41;
 constexpr bcos::protocol::BlockNumber c_finalizedOrderingBlockNumber = 42;

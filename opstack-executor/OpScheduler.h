@@ -1325,16 +1325,11 @@ private:
         co_return ledgerConfig;
     }
 
-    /// Commit-path LedgerConfig (number + timestamp only).
-    /// KNOWN GAP, deferred to a follow-up PR: this is the config the commit callback hands back
-    /// and OpEngineService publishes into LedgerConfigState — the holder transaction admission
-    /// reads its chain configuration from and nowhere else (TxValidator). Number and timestamp
-    /// alone are not enough for that contract: chainId() (the web3_chain_id row), features(),
-    /// gasPrice(), evmcRevisionForBlock() and executorVersion() have to be filled in here as well.
-    /// With them empty, every envelope that claims a chain id is refused with -32602
-    /// "invalid chain id for signer" (TxValidator's ChainId check sees no chainId in the holder),
-    /// and the OP native-transaction gate reads an empty feature set. The C2 withdraw leg is the
-    /// first place a user-signed L2 transaction is sent, which is where this surfaces.
+    /// Commit-path LedgerConfig: number + timestamp only, and never published anywhere.
+    /// The admission holder is republished from the LEDGER by the notifier this scheduler fires
+    /// after every commit (engine/bcos-engine/OpLedgerConfigRepublish.h) — publishing THIS object
+    /// instead would refuse every EIP-155 envelope from the first committed block on (-32602),
+    /// because chainId()/features()/executorVersion() are empty here.
     task::Task<ledger::LedgerConfig::Ptr> loadCommitLedgerConfig(protocol::BlockHeader::Ptr header)
     {
         auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();

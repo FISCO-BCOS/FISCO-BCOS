@@ -383,6 +383,16 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // OP mode is the newest declared lane and everything above it (a value above the wired
     // slot count saturates onto the newest wired slot, see MultiVersionScheduler::setVersion).
     const bool opStackMode = (m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION);
+    // Refused here, ahead of the MPT pruner's boot-time init below: that init walks the window's
+    // state roots and, with storage.mpt_prune_sweep_garbage on, deletes unreachable "/mpt/" rows,
+    // so a refusal placed after it would turn a fail-fast into a slow, side-effectful one.
+    if (opStackMode && m_nodeConfig->mptPruneWindow() > 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                "storage.mpt_prune_window is not supported in OP mode (executor_version>=3) yet: "
+                "the OP commit path has no MPT pruning observer"));
+    }
 
     // [op_engine_rpc] requires the v2 pure-Ethereum executor: on executor_version < 2 the
     // endpoint would silently serve EthEngineService over the v1 TransactionExecutorImpl
@@ -556,13 +566,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     if (opStackMode)
     {
-        if (m_nodeConfig->mptPruneWindow() > 0)
-        {
-            BOOST_THROW_EXCEPTION(
-                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                    "storage.mpt_prune_window is not supported in OP mode (executor_version>=3) "
-                    "yet: the OP commit path has no MPT pruning observer"));
-        }
         if (!m_nodeConfig->engineDrivenBlockProduction())
         {
             BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
