@@ -39,9 +39,9 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <boost/throw_exception.hpp>
 #include <oneapi/tbb/parallel_for.h>
 #include <oneapi/tbb/task_group.h>
+#include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
@@ -69,8 +69,8 @@ namespace bcos::ledger::mpt
 template <class Backend>
 inline constexpr bool kParallelSweepSafe = true;
 template <class K, class V, uint8_t A, class H, class E, class B>
-inline constexpr bool kParallelSweepSafe<
-    bcos::storage2::memory_storage::MemoryStorage<K, V, A, H, E, B>> = false;
+inline constexpr bool
+    kParallelSweepSafe<bcos::storage2::memory_storage::MemoryStorage<K, V, A, H, E, B>> = false;
 
 /// Reference-counting MPT pruning (spec §4.8), one instance per chain over the committed-state
 /// backend (production: GlobalStateStorage::latestBackend()).
@@ -257,16 +257,15 @@ public:
         // Phase 1: count the head state's references.
         MPT_PRUNER_LOG(INFO) << "MPT pruning: rebuild phase 1 — counting the head state's "
                                 "references (a full trie walk, progress logged every "
-                             << REBUILD_LOG_INTERVAL << " nodes)"
-                             << LOG_KV("head", currentBlock);
+                             << REBUILD_LOG_INTERVAL << " nodes)" << LOG_KV("head", currentBlock);
         co_await countWalk(*headRoot, true);
 
         // Phase 2: newest-first over [head−N, head): attribute each no-longer-live node to the
         // newest root still referencing it, deadline = s+1+N. The oldest in-window root head−N
         // MUST be walked too: its unique nodes carry the future deadline head+1 in steady
         // state — skipping them would let Phase 3 misclassify them as garbage.
-        auto const windowStart = std::max<bcos::protocol::BlockNumber>(
-            *firstMptBlock, currentBlock - m_pruneWindow);
+        auto const windowStart =
+            std::max<bcos::protocol::BlockNumber>(*firstMptBlock, currentBlock - m_pruneWindow);
         for (auto block = currentBlock - 1; block >= windowStart; --block)
         {
             auto const root = co_await stateRootAt(block);
@@ -288,8 +287,7 @@ public:
             // so stop the downward walk here — the effective window starts at block+1, the
             // first surviving root (the same shape as a shrunken window).
             if (*root != emptyRootHash() &&
-                !co_await bcos::storage2::readOne(
-                    *m_backend, bcos::ledger::mptNodeStateKey(*root)))
+                !co_await bcos::storage2::readOne(*m_backend, bcos::ledger::mptNodeStateKey(*root)))
             {
                 MPT_PRUNER_LOG(INFO)
                     << "MPT pruning: in-window state root already pruned by a previous smaller "
@@ -300,8 +298,7 @@ public:
             }
             co_await deadlineWalk(*root, true, static_cast<uint64_t>(block + 1 + m_pruneWindow));
             MPT_PRUNER_LOG(INFO) << "MPT pruning: rebuild phase 2 — in-window root walked"
-                                 << LOG_KV("block", block)
-                                 << LOG_KV("windowStart", windowStart)
+                                 << LOG_KV("block", block) << LOG_KV("windowStart", windowStart)
                                  << LOG_KV("tracked", m_counts.size())
                                  << LOG_KV("scheduled", pendingCount());
         }
@@ -398,8 +395,8 @@ public:
                             << "MPT pruning: garbage sweep scan progress"
                             << LOG_KV("scanned", scanned.load(std::memory_order_relaxed))
                             << LOG_KV("garbage", garbage.load(std::memory_order_relaxed))
-                            << LOG_KV("garbageDeleted",
-                                   garbageDeleted.load(std::memory_order_relaxed))
+                            << LOG_KV(
+                                   "garbageDeleted", garbageDeleted.load(std::memory_order_relaxed))
                             << LOG_KV("tracked", m_counts.size());
                     }
                     if (!std::get_if<storage::Entry>(std::addressof(std::get<1>(*item))))
@@ -413,8 +410,7 @@ public:
                             << keyView.m_key.size() << " bytes, expected 32)";
                         continue;
                     }
-                    bcos::h256 const hash{reinterpret_cast<bcos::byte const*>(
-                                              keyView.m_key.data()),
+                    bcos::h256 const hash{reinterpret_cast<bcos::byte const*>(keyView.m_key.data()),
                         bcos::h256::SIZE};
                     if (m_counts.contains(hash))
                     {
@@ -498,18 +494,16 @@ public:
             (!delta.newNodes.empty() || !delta.obsoletedNodes.empty() ||
                 !delta.intraBlockObsoleted.empty()))
         {
-            BOOST_THROW_EXCEPTION(MPTInvariantViolation{}
-                                  << bcos::errinfo_comment(
-                                         "MPT pruning: block " + std::to_string(blockNumber) +
-                                         " carries node changes but no refCountDeltas tally "
-                                         "(newNodes=" +
-                                         std::to_string(delta.newNodes.size()) +
-                                         ", obsoletedNodes=" +
-                                         std::to_string(delta.obsoletedNodes.size()) +
-                                         ", intraBlockObsoleted=" +
-                                         std::to_string(delta.intraBlockObsoleted.size()) +
-                                         ") — the producer ran without trackRefCounts; check "
-                                         "the observer's needsRefCountDeltas wiring"));
+            BOOST_THROW_EXCEPTION(
+                MPTInvariantViolation{} << bcos::errinfo_comment(
+                    "MPT pruning: block " + std::to_string(blockNumber) +
+                    " carries node changes but no refCountDeltas tally "
+                    "(newNodes=" +
+                    std::to_string(delta.newNodes.size()) +
+                    ", obsoletedNodes=" + std::to_string(delta.obsoletedNodes.size()) +
+                    ", intraBlockObsoleted=" + std::to_string(delta.intraBlockObsoleted.size()) +
+                    ") — the producer ran without trackRefCounts; check "
+                    "the observer's needsRefCountDeltas wiring"));
         }
 
         auto const horizon = static_cast<uint64_t>(blockNumber);
@@ -552,8 +546,8 @@ public:
             auto& entry = m_stagedCounts[hash];  // seeded above, or a fresh {0, none}
             uint64_t const newCount = static_cast<uint64_t>(
                 std::max<int64_t>(0, static_cast<int64_t>(entry.count) + movement));
-            bool const wasObsoleted = delta.obsoletedNodes.contains(hash) ||
-                                      delta.intraBlockObsoleted.contains(hash);
+            bool const wasObsoleted =
+                delta.obsoletedNodes.contains(hash) || delta.intraBlockObsoleted.contains(hash);
             if (newCount == 0 && wasObsoleted && !entry.deadline)
             {
                 // >0→0, or the saturating 0→0 of a node with no counted history: schedule the
@@ -573,7 +567,7 @@ public:
         // the staged erases (a bucket entry this block's movements already revoked is skipped);
         // the removals themselves are only staged — onCommit mutates the base buckets.
         for (auto bucketIt = m_pending.begin();
-             bucketIt != m_pending.end() && bucketIt->first <= horizon; ++bucketIt)
+            bucketIt != m_pending.end() && bucketIt->first <= horizon; ++bucketIt)
         {
             uint64_t const deadline = bucketIt->first;
             for (auto const& hash : bucketIt->second)
@@ -648,19 +642,21 @@ public:
         // after the block's WriteBatch landed).
         if (!out.deletions.empty())
         {
-            MPT_PRUNER_LOG(DEBUG)
-                << "MPT pruning: block deletions confirmed" << LOG_KV("block", blockNumber)
-                << LOG_KV("deletions", out.deletions.size());
+            MPT_PRUNER_LOG(DEBUG) << "MPT pruning: block deletions confirmed"
+                                  << LOG_KV("block", blockNumber)
+                                  << LOG_KV("deletions", out.deletions.size());
         }
         if (blockNumber % summaryLogInterval(m_pruneWindow) == 0)
         {
             auto const nextDeadline = nextPendingDeadline();
-            MPT_PRUNER_LOG(INFO)
-                << "MPT pruning: steady-state summary" << LOG_KV("block", blockNumber)
-                << LOG_KV("deletions", out.deletions.size())
-                << LOG_KV("tracked", trackedCount()) << LOG_KV("pending", pendingCount())
-                << LOG_KV("nextDeadline",
-                       nextDeadline ? std::to_string(*nextDeadline) : std::string{"-"});
+            MPT_PRUNER_LOG(INFO) << "MPT pruning: steady-state summary"
+                                 << LOG_KV("block", blockNumber)
+                                 << LOG_KV("deletions", out.deletions.size())
+                                 << LOG_KV("tracked", trackedCount())
+                                 << LOG_KV("pending", pendingCount())
+                                 << LOG_KV("nextDeadline", nextDeadline ?
+                                                               std::to_string(*nextDeadline) :
+                                                               std::string{"-"});
         }
         co_return out;
     }
@@ -674,8 +670,7 @@ public:
     /// commit retry reproduces the identical batch. Deletions already landed with the batch —
     /// there is nothing to hand off. The CommitObserver contract forbids throwing and blocking
     /// here.
-    void onCommit(
-        bcos::protocol::BlockNumber blockNumber, MPTDeltaLayer const& /*delta*/) override
+    void onCommit(bcos::protocol::BlockNumber blockNumber, MPTDeltaLayer const& /*delta*/) override
     {
         for (auto const& [deadline, hashes] : m_stagedDeadlineErases)
         {
@@ -713,8 +708,7 @@ public:
 
         auto current = m_watermark.load(std::memory_order_relaxed);
         while (current < blockNumber &&
-               !m_watermark.compare_exchange_weak(
-                   current, blockNumber, std::memory_order_relaxed))
+               !m_watermark.compare_exchange_weak(current, blockNumber, std::memory_order_relaxed))
         {
         }
     }
@@ -800,8 +794,8 @@ private:
     /// storage root. Inline node refs are embedded in their parent and never stored as rows, so
     /// they carry no count and are not descended into (an inline subtree is < 32 bytes and can
     /// hold no hash ref of its own).
-    static void descend(TrieNode const& node, bool accountTrie,
-        std::vector<std::pair<bcos::h256, bool>>& stack)
+    static void descend(
+        TrieNode const& node, bool accountTrie, std::vector<std::pair<bcos::h256, bool>>& stack)
     {
         if (auto const* ext = std::get_if<ExtensionNode>(&node))
         {
@@ -809,7 +803,7 @@ private:
             {
                 stack.emplace_back(
                     bcos::h256(bcos::bytesConstRef(ext->child.data(), ext->child.size())
-                                   .getCroppedData(1)),
+                            .getCroppedData(1)),
                     accountTrie);
             }
         }
@@ -900,8 +894,8 @@ private:
         };
         std::vector<Way> ways(WALK_READ_WAYS);
         std::unordered_map<bcos::h256, size_t> dedup;  // hash -> slot, per sub-batch
-        size_t head = 0;  // oldest in-flight sub-batch, next to apply
-        size_t tail = 0;  // next slot to collect into
+        size_t head = 0;                               // oldest in-flight sub-batch, next to apply
+        size_t tail = 0;                               // next slot to collect into
         size_t inFlight = 0;
         // A throw anywhere below (onNode, a rethrown fetch error) must first join the
         // in-flight fetch tasks: they reference this frame.
@@ -920,8 +914,7 @@ private:
                     way.keyHashes.clear();
                     way.keys.clear();
                     dedup.clear();
-                    for (size_t popped = 0; popped < WALK_READ_BATCH && !stack.empty();
-                         ++popped)
+                    for (size_t popped = 0; popped < WALK_READ_BATCH && !stack.empty(); ++popped)
                     {
                         auto const [hash, isAccount] = stack.back();
                         stack.pop_back();
@@ -966,8 +959,7 @@ private:
                                 }
                                 auto const raw = entry->get();
                                 way.decoded[slot] = decodeNode(bcos::bytesConstRef(
-                                    reinterpret_cast<bcos::byte const*>(raw.data()),
-                                    raw.size()));
+                                    reinterpret_cast<bcos::byte const*>(raw.data()), raw.size()));
                             }
                         }
                         catch (...)
@@ -1020,9 +1012,9 @@ private:
             ++m_counts[hash].count;
             if (++visited % REBUILD_LOG_INTERVAL == 0)
             {
-                MPT_PRUNER_LOG(INFO) << "MPT pruning: rebuild phase 1 progress"
-                                     << LOG_KV("nodes", visited)
-                                     << LOG_KV("tracked", m_counts.size());
+                MPT_PRUNER_LOG(INFO)
+                    << "MPT pruning: rebuild phase 1 progress" << LOG_KV("nodes", visited)
+                    << LOG_KV("tracked", m_counts.size());
             }
             return true;
         });
