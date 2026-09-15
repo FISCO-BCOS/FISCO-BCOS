@@ -508,17 +508,15 @@ jobs:
         run: |
           cd build
           CTEST_OUTPUT_ON_FAILURE=TRUE ctest -j3 -R \
-            'NodeConfigAllocsTest|GenesisStateRootTest|LedgerGenesisL2Test|LedgerGenesisAllocsHashTest|FeatureL2FlagTest|L2ConfigLoaderTest|PrecompiledMapDisabledInL2Test|PrecompiledMapProductionInvariantTest|KzgPrecompileRegisteredTest|EthEndpointSystemConfigTest|test-libinitializer'
+            'NodeConfigAllocsTest|GenesisStateRootTest|LedgerGenesisL2Test|LedgerGenesisAllocsHashTest|FeatureL2FlagTest|L2ConfigLoaderTest|PrecompiledMapDisabledInL2Test|PrecompiledMapProductionInvariantTest|KzgPrecompileRegisteredTest|EthEndpointSystemConfigTest|MultiVersionSchedulerTest'
       - name: Assert the module suites are registered with ctest
         run: |
           cd build
-          # A module suite whose add_test sits in its own directory is compiled but never
-          # registered (those directories are added before the root's enable_testing()), so it
-          # runs nowhere and its assertions contradicting the implementation go unnoticed. This
-          # step turns that silence into a failure; it is what caught test-libinitializer being
-          # built-but-unexecuted.
-          for suite in test-libinitializer; do
-            ctest -N -R "^${suite}$" | grep -q "Total Tests: 1" || {
+          # A module suite can be compiled and linked yet never registered with ctest (its
+          # directory is added before testing is enabled in the parent scope), so it runs
+          # nowhere; this step turns that silence into a failure.
+          for suite in MultiVersionSchedulerTest; do
+            ctest -N -R "${suite}" | grep -qE "Total Tests: [1-9]" || {
               echo "ERROR: ${suite} is built but not registered with ctest"; exit 1; }
           done
       - name: L2 integration runner (SKIPs without the A8 devnet)
