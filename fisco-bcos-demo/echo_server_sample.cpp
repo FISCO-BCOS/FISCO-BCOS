@@ -58,16 +58,16 @@ int main(int argc, char** argv)
 
 
     service->registerHandlerByMsgType(
-        999, [](NetworkException _e, std::shared_ptr<P2PSession> _session, Message::Ptr _msg) {
+        999, [](NetworkException _e, std::shared_ptr<P2PSession> _session, Message _msg) {
             if (_e.errorCode())
             {
                 return;
             }
             auto startT = utcTime();
-            _msg->setRespPacket();
+            _msg.setRespPacket();
             _session->session()->asyncSendMessage(_msg);
             BCOS_LOG(INFO) << LOG_DESC("sendResponse") << LOG_KV("timeCost", (utcTime() - startT))
-                           << LOG_KV("msgSize", (_msg->payload().size()));
+                           << LOG_KV("msgSize", (_msg.payload().size()));
         });
     while (true)
     {

@@ -63,7 +63,7 @@ public:
     Host& operator=(const Host&) = delete;
     Host& operator=(Host&&) = delete;
     Host(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface,
-        std::shared_ptr<SessionFactory> _sessionFactory, MessageFactory::Ptr _messageFactory);
+        std::shared_ptr<SessionFactory> _sessionFactory);
     virtual ~Host();
 
     using Ptr = std::shared_ptr<Host>;
@@ -115,7 +115,10 @@ public:
 
     virtual const std::shared_ptr<ASIOInterface>& asioInterface() const;
     virtual std::shared_ptr<SessionFactory> sessionFactory() const;
-    virtual MessageFactory::Ptr messageFactory() const;
+    // Host-wide message seq allocator. The response-callback manager is shared by every session
+    // of this host (and a routed response can be claimed on a different session than the request
+    // went out on), so seqs must be unique host-wide, not per-connection.
+    virtual uint32_t newSeq();
     virtual P2PInfo p2pInfo();
 
     virtual void setPeerBlacklist(PeerBlackWhitelistInterface::Ptr _peerBlacklist);
@@ -316,7 +319,8 @@ protected:
 
     std::set<NodeIPEndpoint> m_pendingConns;
     bcos::Mutex x_pendingConns;
-    MessageFactory::Ptr m_messageFactory;
+    // host-wide seq source, see newSeq()
+    std::atomic<uint32_t> m_seq{1};
 
     std::string m_listenHost;
     uint16_t m_listenPort = 0;

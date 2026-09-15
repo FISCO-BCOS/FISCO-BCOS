@@ -485,7 +485,7 @@ void Session::drop(DisconnectReason _reason)
             postCallback(std::move(callback->callback),
                 "response callback exception during drop",
                 NetworkException(P2PExceptionType::NetworkTimeout, "NetworkTimeout"),
-                Message::Ptr());
+                std::nullopt);
         }
     }
 
@@ -523,7 +523,7 @@ void Session::drop(DisconnectReason _reason)
                 return;
             }
             session->m_messageHandler(
-                NetworkException(errorCode, errorMsg), session, Message::Ptr());
+                NetworkException(errorCode, errorMsg), session, Message{});
         };
         // Once haveNetwork() is false the Host is on its way out, so run the notification inline
         // rather than handing it to an executor whose remaining lifetime we do not control here.
@@ -698,10 +698,10 @@ bool Session::checkRead(boost::system::error_code _ec)
 }
 
 
-void Session::onMessage(NetworkException const& e, Message::Ptr message)
+void Session::onMessage(NetworkException const& e, Message message)
 {
     m_server.get().asioInterface()->post(
-        [self = weak_from_this(), e, message = std::move(message)]() {
+        [self = weak_from_this(), e, message = std::move(message)]() mutable {
             try
             {
                 auto session = self.lock();
@@ -710,11 +710,11 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
                     return;
                 }
                 // TODO: move the logic to Service for deal with the forwarding message
-                if (!message->dstP2PNodeID().empty() &&
-                    message->dstP2PNodeID() != session->m_hostInfo.p2pID &&
-                    message->dstP2PNodeID() != session->m_hostInfo.rawP2pID)
+                if (!message.dstP2PNodeID().empty() &&
+                    message.dstP2PNodeID() != session->m_hostInfo.p2pID &&
+                    message.dstP2PNodeID() != session->m_hostInfo.rawP2pID)
                 {
-                    session->m_messageHandler(e, session, message);
+                    session->m_messageHandler(e, session, std::move(message));
                     return;
                 }
                 // in-activate session
@@ -723,14 +723,14 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
                     return;
                 }
 
-                if (!message->isRespPacket())
+                if (!message.isRespPacket())
                 {
-                    session->m_messageHandler(e, session, message);
+                    session->m_messageHandler(e, session, std::move(message));
                     return;
                 }
 
                 auto callbackManager = session->sessionCallbackManager();
-                auto callbackPtr = callbackManager->getCallback(message->seq(), true);
+                auto callbackPtr = callbackManager->getCallback(message.seq(), true);
                 // without callback, call default handler
                 if (!callbackPtr)
                 {
@@ -738,7 +738,7 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
                         << LOG_BADGE("onMessage")
                         << LOG_DESC("callback not found, maybe the callback timeout")
                         << LOG_KV("endpoint", session->nodeIPEndpoint())
-                        << LOG_KV("seq", message->seq()) << LOG_KV("resp", message->isRespPacket());
+                        << LOG_KV("seq", message.seq()) << LOG_KV("resp", message.isRespPacket());
                     return;
                 }
                 // erase on the session that REGISTERED the seq: the callback manager is
@@ -746,7 +746,7 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
                 // request went out on — erasing here would miss the owner's bookkeeping
                 if (auto owner = callbackPtr->owner.lock())
                 {
-                    owner->removePendingResponseSeq(message->seq());
+                    owner->removePendingResponseSeq(message.seq());
                 }
 
                 // with callback
@@ -759,7 +759,7 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
                 {
                     return;
                 }
-                callback(e, message);
+                callback(e, std::move(message));
             }
             catch (std::exception const& e)
             {
@@ -784,7 +784,7 @@ void Session::onTimeout(const boost::system::error_code& error, uint32_t seq)
     }
     removePendingResponseSeq(seq);
     NetworkException e(P2PExceptionType::NetworkTimeout, "NetworkTimeout");
-    callback->callback(e, Message::Ptr());
+    callback->callback(e, std::nullopt);
 }
 
 void Session::checkNetworkStatus()
@@ -822,7 +822,7 @@ void Session::checkNetworkStatus()
 }
 
 template <typename View>
-task::Task<Message::Ptr> fastSendMessageWithResponse(
+task::Task<std::optional<Message>> fastSendMessageWithResponse(
     Session& session, const Message& message, View& view, Options& options)
 {
     auto sessionPtr = session.shared_from_this();
@@ -831,12 +831,12 @@ task::Task<Message::Ptr> fastSendMessageWithResponse(
     // complete it through the registered callback. The frame stays alive across the whole
     // send + wait, so the callback's captured reference stays valid until the waiter has been
     // completed and the callback removed from the manager (every exit path below removes it).
-    task::GetResultAwaitable<NetworkException, Message::Ptr>::Result result;
+    task::GetResultAwaitable<NetworkException, std::optional<Message>>::Result result;
 
     // register the response callback before sending: ack / timeout / drop-flush complete result
     auto handler = std::make_shared<ResponseCallback>();
-    handler->callback = [&result](NetworkException exception, Message::Ptr response) {
-        task::GetResultAwaitable<NetworkException, Message::Ptr>::complete(
+    handler->callback = [&result](NetworkException exception, std::optional<Message> response) {
+        task::GetResultAwaitable<NetworkException, std::optional<Message>>::complete(
             result, std::move(exception), std::move(response));
     };
     if (options.timeout > 0)
@@ -883,14 +883,14 @@ task::Task<Message::Ptr> fastSendMessageWithResponse(
             {
                 claimed->timeoutHandler->cancel();
             }
-            task::GetResultAwaitable<NetworkException, Message::Ptr>::complete(result,
-                NetworkException(ec.value(), ec.message()), Message::Ptr());
+            task::GetResultAwaitable<NetworkException, std::optional<Message>>::complete(result,
+                NetworkException(ec.value(), ec.message()), std::nullopt);
         }
     }
 
     // wait for ack / timeout / drop-flush (returns inline when already completed above)
     auto [exception, response] =
-        co_await task::GetResultAwaitable<NetworkException, Message::Ptr>(result);
+        co_await task::GetResultAwaitable<NetworkException, std::optional<Message>>(result);
     if (exception.errorCode() != 0)
     {
         BOOST_THROW_EXCEPTION(exception);
@@ -909,7 +909,7 @@ task::Task<void> fastSendMessageWithoutResponse(Session& session, View view)
     co_return;
 }
 
-bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
+bcos::task::Task<std::optional<bcos::gateway::Message>> bcos::gateway::Session::fastSendMessage(
     const Message& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
 {
     if (!active())
@@ -1136,14 +1136,6 @@ void bcos::gateway::Session::setSocket(const std::shared_ptr<SocketFace>& socket
 {
     m_socket = socket;
 }
-bcos::gateway::MessageFactory::Ptr bcos::gateway::Session::messageFactory() const
-{
-    return m_messageFactory;
-}
-void bcos::gateway::Session::setMessageFactory(const MessageFactory::Ptr& _messageFactory)
-{
-    m_messageFactory = _messageFactory;
-}
 bcos::gateway::SessionCallbackManagerInterface::Ptr bcos::gateway::Session::sessionCallbackManager()
     const
 {
@@ -1154,13 +1146,13 @@ void bcos::gateway::Session::setSessionCallbackManager(
 {
     m_sessionCallbackManager = _sessionCallbackManager;
 }
-const std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)>&
+const std::function<void(NetworkException, SessionFace::Ptr, Message)>&
 bcos::gateway::Session::messageHandler()
 {
     return m_messageHandler;
 }
 void bcos::gateway::Session::setMessageHandler(
-    std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler)
+    std::function<void(NetworkException, SessionFace::Ptr, Message)> messageHandler)
 
 {
     m_messageHandler = std::move(messageHandler);
@@ -1215,13 +1207,12 @@ const bcos::gateway::SessionRecvBuffer& bcos::gateway::Session::recvBuffer() con
     return m_recvBuffer;
 }
 std::shared_ptr<SessionFace> bcos::gateway::SessionFactory::createSession(Host& _server,
-    std::shared_ptr<SocketFace> const& _socket, MessageFactory::Ptr& _messageFactory,
+    std::shared_ptr<SocketFace> const& _socket,
     SessionCallbackManagerInterface::Ptr& _sessionCallbackManager)
 {
     std::shared_ptr<Session> session =
         std::make_shared<Session>(_socket, _server, m_sessionRecvBufferSize);
     session->setHostInfo(m_hostInfo);
-    session->setMessageFactory(_messageFactory);
     session->setSessionCallbackManager(_sessionCallbackManager);
     session->setAllowMaxMsgSize(m_allowMaxMsgSize);
     session->setMaxReadDataSize(m_maxReadDataSize);

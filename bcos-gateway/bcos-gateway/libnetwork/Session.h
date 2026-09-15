@@ -127,7 +127,7 @@ public:
     void startWithPolicy();
     void disconnect(DisconnectReason _reason) override;
 
-    task::Task<Message::Ptr> fastSendMessage(const Message& message,
+    task::Task<std::optional<Message>> fastSendMessage(const Message& message,
         ::ranges::any_view<bytesConstRef> payloads, Options options) override;
 
     NodeIPEndpoint nodeIPEndpoint() const override;
@@ -143,17 +143,14 @@ public:
     std::shared_ptr<SocketFace> socket() override;
     virtual void setSocket(const std::shared_ptr<SocketFace>& socket);
 
-    virtual MessageFactory::Ptr messageFactory() const;
-    virtual void setMessageFactory(const MessageFactory::Ptr& _messageFactory);
-
     SessionCallbackManagerInterface::Ptr sessionCallbackManager() const;
     void setSessionCallbackManager(
         const SessionCallbackManagerInterface::Ptr& _sessionCallbackManager);
 
-    virtual const std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)>&
+    virtual const std::function<void(NetworkException, SessionFace::Ptr, Message)>&
     messageHandler();
     void setMessageHandler(
-        std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler)
+        std::function<void(NetworkException, SessionFace::Ptr, Message)> messageHandler)
         override;
 
     // handle before sending message: if the check fails (returns an error), the message is not
@@ -263,12 +260,12 @@ public:
     void write();
 
     /// called by the read loop to deal with a decoded message
-    void onMessage(NetworkException const& e, Message::Ptr message);
+    void onMessage(NetworkException const& e, Message message);
 
     /// Settle one queued callback that resumes a suspended waiter, delivering `args...` to it.
     /// The settle error is chosen at the call site, per callback signature: a payload callback
     /// takes a boost::system::error_code, whereas a response callback
-    /// (ResponseCallback::callback) takes (NetworkException, Message::Ptr).
+    /// (ResponseCallback::callback) takes (NetworkException, std::optional<Message>).
     ///
     /// Run it on the shared io pool while the host is alive, inline once it is gone, containing any
     /// exception either way. Three reasons for that shape, all of them load-bearing:
@@ -312,7 +309,6 @@ public:
     std::reference_wrapper<Host> m_server;  ///< The host that owns us. Never null.
     std::shared_ptr<SocketFace> m_socket;   ///< Socket of peer's connection.
 
-    MessageFactory::Ptr m_messageFactory;
     tbb::concurrent_queue<Payload> m_writeQueue;
     // Single-flight flag guarding the write path: write() CASes it to true to claim the writer
     // role (exactly one writeLoop runs at a time); writeLoop's exit guard clears it and re-arms
@@ -326,7 +322,7 @@ public:
     std::atomic<bool> m_active{false};
 
     SessionCallbackManagerInterface::Ptr m_sessionCallbackManager;
-    std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> m_messageHandler;
+    std::function<void(NetworkException, SessionFace::Ptr, Message)> m_messageHandler;
     std::function<std::optional<bcos::Error>(
         SessionFace&, const Message&, uint32_t)> m_beforeMessageHandler;
 
@@ -388,7 +384,7 @@ public:
     virtual ~SessionFactory() = default;
 
     virtual std::shared_ptr<SessionFace> createSession(Host& _server,
-        std::shared_ptr<SocketFace> const& _socket, MessageFactory::Ptr& _messageFactory,
+        std::shared_ptr<SocketFace> const& _socket,
         SessionCallbackManagerInterface::Ptr& _sessionCallbackManager);
 
 private:

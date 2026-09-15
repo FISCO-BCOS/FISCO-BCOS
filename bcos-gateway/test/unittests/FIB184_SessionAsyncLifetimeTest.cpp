@@ -112,9 +112,8 @@ class FakeHost_Lifetime : public bcos::gateway::Host
 {
 public:
     FakeHost_Lifetime(bcos::crypto::Hash::Ptr hash, std::shared_ptr<ASIOInterface> asioInterface,
-        std::shared_ptr<SessionFactory> sessionFactory, MessageFactory::Ptr messageFactory)
-      : Host(std::move(hash), std::move(asioInterface), std::move(sessionFactory),
-            std::move(messageFactory))
+        std::shared_ptr<SessionFactory> sessionFactory)
+      : Host(std::move(hash), std::move(asioInterface), std::move(sessionFactory))
     {
         m_run = true;
     }
@@ -163,16 +162,13 @@ BOOST_AUTO_TEST_CASE(InFlightReadKeepsSessionAlive)
 {
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_Lifetime>();
-    auto messageFactory = std::make_shared<MessageFactory>();
     auto fakeAsio = std::make_shared<FakeASIO_Lifetime>();
-    auto fakeHost =
-        std::make_shared<FakeHost_Lifetime>(hashImpl, fakeAsio, nullptr, messageFactory);
+    auto fakeHost = std::make_shared<FakeHost_Lifetime>(hashImpl, fakeAsio, nullptr);
 
     std::weak_ptr<Session> weakSession;
     {
         auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 1024, true);
-        session->setMessageFactory(messageFactory);
-        session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message::Ptr) {});
+        session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message) {});
         weakSession = session;
 
         // startWithPolicy() arms the first read synchronously (the old code used to defer the
@@ -236,14 +232,11 @@ BOOST_AUTO_TEST_CASE(DropClosesSocketInlineWhenNetworkDown)
 {
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_Lifetime>();
-    auto messageFactory = std::make_shared<MessageFactory>();
     auto fakeAsio = std::make_shared<FakeASIO_Lifetime>();
-    auto fakeHost =
-        std::make_shared<FakeHost_Lifetime>(hashImpl, fakeAsio, nullptr, messageFactory);
+    auto fakeHost = std::make_shared<FakeHost_Lifetime>(hashImpl, fakeAsio, nullptr);
 
     auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 1024, true);
-    session->setMessageFactory(messageFactory);
-    session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message::Ptr) {});
+    session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message) {});
     BOOST_REQUIRE(fakeSocket->isConnected());
 
     // Host::stop() has already joined the io_context threads: the socket's io_context will never

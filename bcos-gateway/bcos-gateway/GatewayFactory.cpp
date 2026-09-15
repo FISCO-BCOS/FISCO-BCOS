@@ -691,8 +691,6 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     asioInterface->setClientContext(std::move(clientCtx));
     asioInterface->setType(ASIOInterface::ASIO_TYPE::SSL);
 
-    // Message Factory
-    auto messageFactory = std::make_shared<MessageFactory>();
     auto nodeIDHash = _config->calculateShortNodeID(pubHex);
     P2PInfo selfInfo(nodeIDHash, pubHex);
     // Session Factory
@@ -712,8 +710,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
         std::make_shared<PeerWhitelist>(_config->peerWhitelist(), _config->enableWhitelist());
 
     // init Host
-    auto host =
-        std::make_shared<Host>(_config->hashImpl(), asioInterface, sessionFactory, messageFactory);
+    auto host = std::make_shared<Host>(_config->hashImpl(), asioInterface, sessionFactory);
     host->setHostPort(_config->listenIP(), _config->listenPort());
     host->setSSLContextPubHandler(m_sslContextPubHandler);
     host->setSSLContextPubHandlerWithoutExtInfo(m_sslContextPubHandlerWithoutExtInfo);
@@ -757,7 +754,6 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
                               << LOG_KV("enable compress", _config->enableCompress())
                               << LOG_KV("myself pub id", printShortP2pID(pubHex))
                               << LOG_KV("myself_pub_id_hash", printShortP2pID(nodeIDHash));
-    service->setMessageFactory(messageFactory);
     service->setKeyFactory(keyFactory);
     return service;
 }
@@ -815,7 +811,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                 service->registerHandlerByMsgType(GatewayMessageType::AMOPMessageType,
                     [](const bcos::gateway::NetworkException& _e,
                         const bcos::gateway::P2PSession::Ptr& session,
-                        const std::shared_ptr<bcos::gateway::Message>& message) {
+                        const bcos::gateway::Message& message) {
                         // 只读模式下, 不处理其它节点的amop消息
                         // In read-only mode, AMOP messages from other nodes are not processed
                         return;
@@ -885,38 +881,40 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         {
             auto gatewayRateLimiterWeakPtr =
                 std::weak_ptr<ratelimiter::GatewayRateLimiter>(gatewayRateLimiter);
-            service->setBeforeMessageHandler([gatewayRateLimiterWeakPtr](SessionFace& _session,
-                                                 const Message& _msg,
-                                                 uint32_t _wireLength) -> std::optional<bcos::Error> {
-                auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
-                if (!gatewayRateLimiter)
-                {
-                    return std::nullopt;
-                }
+            service->setBeforeMessageHandler(
+                [gatewayRateLimiterWeakPtr](SessionFace& _session, const Message& _msg,
+                    uint32_t _wireLength) -> std::optional<bcos::Error> {
+                    auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
+                    if (!gatewayRateLimiter)
+                    {
+                        return std::nullopt;
+                    }
 
-                if (const auto* msgExtAttributes =
-                        std::any_cast<const GatewayMessageExtAttributes*>(_msg.extAttributes()))
-                {
-                    std::string groupID =
-                        msgExtAttributes ? msgExtAttributes->groupID() : std::string();
-                    uint16_t moduleID = msgExtAttributes ? msgExtAttributes->moduleID() : 0;
-                    std::string endpoint = _session.nodeIPEndpoint().address();
-                    // charge the actual wire bytes (payload views included): a zero-copy message
-                    // does not carry its payload, so message.length() alone would under-count
-                    int64_t msgLength = _wireLength;
-                    auto pkgType = _msg.packetType();
+                    if (const auto* msgExtAttributes =
+                            std::any_cast<const GatewayMessageExtAttributes*>(_msg.extAttributes()))
+                    {
+                        std::string groupID =
+                            msgExtAttributes ? msgExtAttributes->groupID() : std::string();
+                        uint16_t moduleID = msgExtAttributes ? msgExtAttributes->moduleID() : 0;
+                        std::string endpoint = _session.nodeIPEndpoint().address();
+                        // charge the actual wire bytes (payload views included): a zero-copy
+                        // message does not carry its payload, so message.length() alone would
+                        // under-count
+                        int64_t msgLength = _wireLength;
+                        auto pkgType = _msg.packetType();
 
-                    auto result = gatewayRateLimiter->checkOutGoing(
-                        endpoint, pkgType, groupID, moduleID, msgLength);
-                    return result ? std::make_optional(bcos::Error::buildError(
-                                        "", OutBWOverflow, result.value())) :
-                                    std::nullopt;
-                }
-                return {};
-            });
+                        auto result = gatewayRateLimiter->checkOutGoing(
+                            endpoint, pkgType, groupID, moduleID, msgLength);
+                        return result ? std::make_optional(bcos::Error::buildError(
+                                            "", OutBWOverflow, result.value())) :
+                                        std::nullopt;
+                    }
+                    return {};
+                });
 
-            service->setOnMessageHandler([gatewayRateLimiterWeakPtr](SessionFace::Ptr _session,
-                                             Message::Ptr _message) -> std::optional<bcos::Error> {
+            service->setOnMessageHandler([gatewayRateLimiterWeakPtr](
+                                             SessionFace::Ptr _session, const Message& _message)
+                                             -> std::optional<bcos::Error> {
                 auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
                 if (!gatewayRateLimiter)
                 {
@@ -924,8 +922,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                 }
 
                 auto endpoint = _session->nodeIPEndpoint().address();
-                auto packetType = _message->packetType();
-                auto msgLength = _message->length();
+                auto packetType = _message.packetType();
+                auto msgLength = _message.length();
 
                 auto result =
                     gatewayRateLimiter->checkInComing(endpoint, packetType, msgLength, true);
