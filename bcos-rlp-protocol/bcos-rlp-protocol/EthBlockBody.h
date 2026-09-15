@@ -102,3 +102,13 @@ size_t length(const protocol::EthBlockData& _body) noexcept;
 void encode(bcos::bytes& _out, const protocol::EthBlockData& _body) noexcept;
 void decode(bcos::bytesRef& _in, protocol::EthBlockData& _body);
 }  // namespace bcos::codec::rlp
+
+namespace bcos::protocol
+{
+// ADL-visible delegator: the generic codecs (bcos::codec::rlp, e.g. decodeExact) resolve
+// overloads for element types via argument-dependent lookup, which only searches the element
+// type's own namespaces (bcos::protocol). The canonical implementation lives in
+// bcos::codec::rlp above (qualified codec::rlp::decode(in, body) still works). Only decode
+// needs a delegator: no generic codec encodes or measures EthBlockData.
+void decode(bcos::bytesRef& _in, EthBlockData& _body);
+}  // namespace bcos::protocol

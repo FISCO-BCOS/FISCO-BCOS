@@ -139,14 +139,25 @@ RlpResult<DisconnectMessage> decodeDisconnect(bytesConstRef _data)
         auto items = takeListPayload(view, "rlpx: expected an RLP list");
         if (items)
         {
-            // The reason is the first element; every remaining element must
-            // still decode as an integer for the list form to apply.
+            // The reason is the first element; the list form applies only if every
+            // remaining element also decodes as an integer. A failing take can consume
+            // the remainder before it fails (tryDecodeHeader advances past the prefix
+            // and length bytes before its bound check), so any take failure must reject
+            // the list form outright — checking items->empty() alone is not enough.
             std::vector<uint64_t> values;
-            while (auto value = take<uint64_t>(*items))
+            bool allIntegers = true;
+            while (allIntegers && !items->empty())
             {
-                values.push_back(*value);
+                if (auto value = take<uint64_t>(*items))
+                {
+                    values.push_back(*value);
+                }
+                else
+                {
+                    allIntegers = false;
+                }
             }
-            if (items->empty())
+            if (allIntegers)
             {
                 msg.reason = values.empty() ? DisconnectReason::DisconnectRequested :
                                               static_cast<DisconnectReason>(values.front());

@@ -138,13 +138,16 @@ void EthBlockHeader::toTarsHeader(
     {
         validateHeader(*header);
     }
-    catch (...)
+    catch (boost::exception const& e)
     {
         // Leave the destination header in a defined state on failure: the fields written
         // above are rolled back so the caller cannot mistake a half-populated header for a
-        // valid one.
+        // valid one. Translate the failure to the decode exception type: this is a decode
+        // entry point, so a caller catching RlpDecodeException (the natural choice for a
+        // decode call) must not see validateHeader's encode exception escape.
         header->clear();
-        throw;
+        codec::rlp::throwRlpDecodeError(EthBlockHeaderError::InvalidHeader,
+            codec::rlp::rlpErrorMessage(e, "EthBlockHeader: header validation failed"));
     }
 
     // Inject keccak256 of the canonical re-encoding (not of the raw input bytes): this is

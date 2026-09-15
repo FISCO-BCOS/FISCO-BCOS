@@ -140,6 +140,14 @@ BOOST_AUTO_TEST_CASE(disconnectCodecs)
     decoded = decodeDisconnect(bytesConstRef(subreason.data(), subreason.size()));
     BOOST_REQUIRE(decoded.has_value());
     BOOST_CHECK(decoded->reason == DisconnectReason::SubprotocolReason);
+
+    // A list whose element fails to decode must NOT be accepted as the list form:
+    // c2 b8 38 declares a one-element list whose long-string header (0xb8 0x38 = 56
+    // bytes) is truncated; a failing take consumes both bytes before it fails, so an
+    // items->empty() check alone would wrongly report DisconnectRequested.
+    auto malformed = fromHex("c2b838");
+    decoded = decodeDisconnect(bytesConstRef(malformed.data(), malformed.size()));
+    BOOST_CHECK(!decoded.has_value());
 }
 
 // Ping/Pong payloads are the empty list.

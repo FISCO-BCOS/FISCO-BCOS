@@ -35,20 +35,26 @@ namespace rlp = bcos::codec::rlp;
 
 namespace
 {
+// tryDecodeHeader or throw MPTDecodeError with errorPrefix + the codec's message.
+bcos::codec::rlp::Header readHeaderOrThrow(bcos::bytesRef& cursor, std::string const& errorPrefix)
+{
+    auto headerResult = rlp::tryDecodeHeader(cursor);
+    if (!headerResult) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(
+            MPTDecodeError{} << bcos::errinfo_comment(errorPrefix + headerResult.error().message));
+    }
+    return *headerResult;
+}
+
 // Decode one RLP string item into `out`, rejecting any payload whose length != 32. The generic
 // FixedBytes<32> decoder zero-pads a short payload (RLPDecode.h: FixedBytes<32>{getCroppedData(0,
 // payloadLength)}), silently accepting malformed input; Ethereum consensus requires storageRoot
 // and codeHash to be exactly 32-byte strings, so enforce that here.
 void decodeHash32(bcos::bytesRef& cursor, bcos::h256& out, char const* field)
 {
-    auto headerResult = rlp::tryDecodeHeader(cursor);
-    if (!headerResult) [[unlikely]]
-    {
-        BOOST_THROW_EXCEPTION(
-            MPTDecodeError{} << bcos::errinfo_comment(std::string("Account RLP: bad ") + field +
-                                                      " header: " + headerResult.error().message));
-    }
-    auto const header = *headerResult;
+    auto const header =
+        readHeaderOrThrow(cursor, std::string("Account RLP: bad ") + field + " header: ");
     if (header.isList)
     {
         BOOST_THROW_EXCEPTION(
@@ -87,13 +93,7 @@ Account Account::decode(bcos::bytesConstRef rlp)
 {
     bcos::bytesRef cursor{const_cast<bcos::byte*>(rlp.data()), rlp.size()};
 
-    auto headerResult = ::bcos::codec::rlp::tryDecodeHeader(cursor);
-    if (!headerResult) [[unlikely]]
-    {
-        BOOST_THROW_EXCEPTION(MPTDecodeError{} << bcos::errinfo_comment(
-                                  "Account RLP: bad list header: " + headerResult.error().message));
-    }
-    auto const header = *headerResult;
+    auto const header = readHeaderOrThrow(cursor, "Account RLP: bad list header: ");
     if (!header.isList)
     {
         BOOST_THROW_EXCEPTION(

@@ -84,7 +84,12 @@ auto captureRlp(F&& f) -> RlpResult<std::invoke_result_t<F>>
         // boost::exception) — NOT from bcos::Error, so catch (bcos::Error const&) handlers
         // elsewhere do not see them; the code travels in errinfo_rlpErrorCode precisely
         // because errorCode() is unavailable.
-        return rlpFail(rlpErrorCode(e, kRlpGenericError), rlpErrorMessage(e, ""));
+        // BOOST_THROW_EXCEPTION(std::invalid_argument(...)) — the repo's default idiom —
+        // lands here as a boost::wrapexcept with no errinfo_comment; fall back to what()
+        // so the message is not silently blanked.
+        auto const* asStd = dynamic_cast<std::exception const*>(&e);
+        return rlpFail(rlpErrorCode(e, kRlpGenericError),
+            rlpErrorMessage(e, asStd != nullptr ? asStd->what() : ""));
     }
     catch (std::exception const& e)
     {

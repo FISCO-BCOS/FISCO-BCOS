@@ -250,8 +250,9 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
         auto extraBytesRef =
             bcos::bytesRef(const_cast<byte*>(transaction.extraTransactionBytes().data()),
                 transaction.extraTransactionBytes().size());
-        // The decode result is intentionally ignored: on undecodable extraTransactionBytes
-        // the zero/default fields already filled above are the observable answer.
+        // The decode result is intentionally ignored (unchanged from the base behaviour):
+        // on undecodable extraTransactionBytes the fields decoded before the failure are
+        // emitted as-is.
         (void)codec::rlp::tryDecodeFromPayload(extraBytesRef, web3Tx);
         jResp["value"] = web3Tx.value.str();
         jResp["gasLimit"] = web3Tx.gasLimit;
