@@ -25,6 +25,7 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-table/src/ContractShardUtils.h"
 #include <boost/throw_exception.hpp>
+#include <range/v3/algorithm/find.hpp>
 #include <range/v3/algorithm/find_if.hpp>
 
 using namespace bcos;

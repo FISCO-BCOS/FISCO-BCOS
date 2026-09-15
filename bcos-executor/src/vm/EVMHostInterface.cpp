@@ -231,16 +231,19 @@ void log(evmc_host_context* _context, const evmc_address* _addr, uint8_t const* 
 
 evmc_access_status access_account(evmc_host_context* _context, const evmc_address* _addr)
 {
-    auto& hostContext = *reinterpret_cast<HostContext*>(_context);
-    return hostContext.accessAccount(*_addr, hostContext.revision());
+    std::ignore = _context;
+    std::ignore = _addr;
+    return EVMC_ACCESS_COLD;
 }
 
 
 evmc_access_status access_storage(
     evmc_host_context* _context, const evmc_address* _addr, const evmc_bytes32* _key)
 {
-    auto& hostContext = *reinterpret_cast<HostContext*>(_context);
-    return hostContext.accessStorage(*_addr, *_key, hostContext.revision());
+    std::ignore = _context;
+    std::ignore = _addr;
+    std::ignore = _key;
+    return EVMC_ACCESS_COLD;
 }
 
 evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
@@ -256,8 +259,7 @@ evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
     result.tx_gas_price = toEvmC(hostContext.gasPrice());
     result.chain_id = hostContext.chainId();
 
-    // TODO(EIP-3651): set block_coinbase from blockHeader sealer (not zero); keep in sync with
-    // Eip2929AccessState W1 warm-up. Ref: bcos-rpc/.../BlockResponse.cpp "miner" mapping.
+    // TODO(EIP-3651): set block_coinbase from blockHeader sealer (not zero).
     memset(result.block_coinbase.bytes, 0, 20);
     memset(result.block_prev_randao.bytes, 0, 32);
     memset(result.block_base_fee.bytes, 0, 32);

@@ -22,8 +22,6 @@ BOOST_AUTO_TEST_CASE(FC_R_cancun_without_prague)
 
     BOOST_CHECK_EQUAL(toRevision(FiscoBcosScheduleCancun), EVMC_CANCUN);
     BOOST_CHECK(FiscoBcosScheduleCancun.enableCanCun);
-    BOOST_CHECK(!FiscoBcosScheduleCancun.enablePrague);
-    BOOST_CHECK(!FiscoBcosScheduleCancun.enableOsaka);
 }
 
 BOOST_AUTO_TEST_CASE(FC_R_london_without_cancun)
@@ -32,8 +30,6 @@ BOOST_AUTO_TEST_CASE(FC_R_london_without_cancun)
 
     BOOST_CHECK_EQUAL(toRevision(FiscoBcosSchedule), EVMC_LONDON);
     BOOST_CHECK(!FiscoBcosSchedule.enableCanCun);
-    BOOST_CHECK(!FiscoBcosSchedule.enablePrague);
-    BOOST_CHECK(!FiscoBcosSchedule.enableOsaka);
 }
 
 BOOST_AUTO_TEST_CASE(FC_R_shanghai_via_pairs)
@@ -44,16 +40,12 @@ BOOST_AUTO_TEST_CASE(FC_R_shanghai_via_pairs)
     BOOST_CHECK_EQUAL(toRevision(FiscoBcosScheduleV320), EVMC_PARIS);
     BOOST_CHECK(FiscoBcosScheduleV320.enablePairs);
     BOOST_CHECK(!FiscoBcosScheduleV320.enableCanCun);
-    BOOST_CHECK(!FiscoBcosScheduleV320.enablePrague);
-    BOOST_CHECK(!FiscoBcosScheduleV320.enableOsaka);
 }
 
 BOOST_AUTO_TEST_CASE(FC_R_revision_priority_order)
 {
     using namespace bcos::executor;
 
-    BOOST_CHECK_EQUAL(toRevision(FiscoBcosScheduleOsaka), EVMC_OSAKA);
-    BOOST_CHECK_EQUAL(toRevision(FiscoBcosSchedulePrague), EVMC_PRAGUE);
     BOOST_CHECK_EQUAL(toRevision(FiscoBcosScheduleCancun), EVMC_CANCUN);
     BOOST_CHECK_EQUAL(toRevision(FiscoBcosScheduleV320), EVMC_PARIS);
     BOOST_CHECK_EQUAL(toRevision(FiscoBcosSchedule), EVMC_LONDON);
@@ -73,13 +65,6 @@ BOOST_AUTO_TEST_CASE(FC_R_features_block_version_ladder)
     f.set(ledger::Features::Flag::feature_evm_cancun);
     BOOST_CHECK_EQUAL(
         toRevision(f, static_cast<uint32_t>(BlockVersion::V3_2_VERSION)), EVMC_CANCUN);
-
-    f.set(ledger::Features::Flag::feature_evm_prague);
-    BOOST_CHECK_EQUAL(
-        toRevision(f, static_cast<uint32_t>(BlockVersion::V3_2_VERSION)), EVMC_PRAGUE);
-
-    f.set(ledger::Features::Flag::feature_evm_osaka);
-    BOOST_CHECK_EQUAL(toRevision(f, static_cast<uint32_t>(BlockVersion::V3_2_VERSION)), EVMC_OSAKA);
 }
 
 BOOST_AUTO_TEST_SUITE_END()  // CompatRevision
