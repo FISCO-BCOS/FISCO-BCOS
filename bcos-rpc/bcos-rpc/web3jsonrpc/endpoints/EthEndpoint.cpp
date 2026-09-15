@@ -1173,8 +1173,13 @@ task::Task<void> EthEndpoint::call(
         catch (bcos::Error const& e)
         {
             // Some ledger implementations report a missing block as an error rather than a
-            // null block: swallow it here so the refusal below is the diagnosable answer,
-            // instead of leaking the raw ledger exception as a bare -32603.
+            // null block: keep the refusal below as the caller's answer instead of leaking the
+            // raw ledger exception as a bare -32603. Logged because that refusal is generic —
+            // without this line a storage fault and a genuinely absent block look identical to
+            // an operator, and the error object is the only place the cause exists.
+            WEB3_LOG(WARNING) << LOG_DESC("eth_estimateGas: reading the target block failed")
+                              << LOG_KV("blockNumber", blockNumber)
+                              << LOG_KV("error", e.errorMessage());
         }
         if (block)
         {
