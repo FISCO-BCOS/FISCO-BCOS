@@ -9,23 +9,23 @@
 // the skeleton's unconditional six-way verify asserts FISCO reproduces op-geth's block commitments.
 //
 // Scope (per vector):
-//   - isthmus/jovian (incl. chain): route A MUST succeed — the six-way verify is a hard gate
-//     (FISCO == op-geth commitments) — then the golden three-way (path A.stateRoot ==
+//   - isthmus/jovian: route A MUST succeed — the six-way verify is a hard gate (FISCO ==
+//     op-geth commitments) — then the golden three-way (path A.stateRoot ==
 //     `_op_expected.header.stateRoot`) is hard for non-contract_create, soft REPORT for
 //     contract_create (the create-output divergence is a known base-layer issue); green guard
 //     (deposit_basefee ×2) is always hard; receipt-count sanity is asserted.
-//   - pre-isthmus (ecotone/fjord/granite) SINGLE-BLOCK vectors: FISCO executes under isthmus
-//     semantics by design (the golden fork mismatch is expected output); the announced golden
-//     commitments are a different fork's, so route A is expected to be rejected at the six-way
-//     verify → soft REPORT (never hard). Any OTHER failure (shape/validation) is a real bug →
-//     BOOST_ERROR. Chain blocks are EXEMPT from this pin: each block executes under its own
-//     `_info.hardfork`, so its golden is that fork's and the commitments are comparable.
+//   - pre-isthmus (regolith..holocene) vectors: since P4 (2026-09-14) they execute under their
+//     OWN declared fork — single vectors per-vector, chain blocks per-block (the legacy
+//     single-vector isthmus pin is retired) — so their op-geth golden is the same fork's and
+//     the six-way verify hard-gates them too. A pre-isthmus commitment mismatch reaching the
+//     defensive soft-REPORT branch is a REAL divergence finding, never a fork-pin artifact.
+//     Any OTHER failure (shape/validation) is a real bug → BOOST_ERROR.
 //
-// Fork model: a chain block's execution fork is selected PER BLOCK from `_info.hardfork`
-// (mirroring OpT8nReplayTest.loadBlockContext's name→config switch) by building a timestamp-0
-// single-activation schedule `"0:<hardfork>"`; a single-block vector keeps the legacy
-// vector-level pin (isthmus, or jovian when the vector is jovian). Fork parity is asserted by
-// checking the schedule's resolved config self-identifies as the intended exec fork (cfg.fork).
+// Fork model: the execution fork is selected from `_info.hardfork` — PER BLOCK for chain
+// vectors, PER VECTOR for single-block vectors (P4, 2026-09-14) — by building a timestamp-0
+// single-activation schedule `"0:<hardfork>"` (mirroring OpT8nReplayTest.loadBlockContext's
+// name→config switch). Fork parity is asserted by checking the schedule's resolved config
+// self-identifies as the intended exec fork (cfg.fork).
 // Exception handling: per-vector catches use catch(std::exception)/catch(...) (libevmone -fno-rtti
 // makes typed catch unreliable) — catch → BOOST_ERROR + continue.
 // has_storage scan (same-block create pre-triage) + /sys tripwire derived-table prefix assertion
@@ -541,9 +541,10 @@ void reportGolden(const std::string& id, const JsonValue& vec, const bcos::h256&
 /// Single-block execution: seedPreState is already done externally; the announced header carries
 /// the golden commitments (filled by the caller via fillAnnouncedHeaderFromGolden), route A runs
 /// through OpScheduler.executeBlock, and the golden three-way + receipt sanity are checked.
-/// isthmus/jovian must pass the six-way verify (FISCO == op-geth commitments); pre-isthmus is
-/// expected to be rejected at the verify (single-block isthmus pin / chain announce-shape gap) →
-/// soft REPORT. mergeBackStorage persists route A's authoritative post-state (chain inheritance).
+/// Since the P4 true-fork change (2026-09-14) every caller executes under its own declared fork
+/// (chain per block, single per vector), so the six-way verify is a hard FISCO-vs-op-geth gate for
+/// ALL of them — the pre-isthmus soft-REPORT branch below is defensive only (see its comment).
+/// mergeBackStorage persists route A's authoritative post-state (chain inheritance).
 /// persistStateOnSoftReject: only chain callers set this — see the soft-reject branch; the
 /// scheduler throws the verify rejection BEFORE its pushView, so a soft-rejected block leaves no
 /// state behind for the next chain block unless we re-derive and adopt it.
@@ -553,9 +554,9 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
     bool persistStateOnSoftReject, GoldenStats& stats)
 {
     // Declared fork (`_info.hardfork`) drives the hard/soft golden gate. The EXECUTED fork is
-    // execFork: equal to the declared fork for chain blocks (per-block fork config), but pinned to
-    // isthmus/jovian for single-block vectors (legacy vector-level pin; pre-isthmus singles stay
-    // soft-REPORT).
+    // execFork: equal to the declared fork for both chain blocks (per-block fork config) and
+    // single-block vectors (per-vector true fork, P4 2026-09-14 — the legacy isthmus/jovian pin
+    // that kept pre-isthmus singles soft-REPORT is retired).
     const auto hardfork = jAt(jAt(vec, "_info"), "hardfork").asString();
     const bool isIsthmusJovian = (hardfork == "isthmus" || hardfork == "jovian");
     const bool hardGolden = isIsthmusJovian && (id.find("contract_create") == std::string::npos);
@@ -629,8 +630,12 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
         {
             // isthmus/jovian: any executeBlock error is a real failure (FISCO must reproduce
             // op-geth). pre-isthmus: a six-way commitment mismatch is a soft REPORT, never hard.
-            // Shape feeding this: single-block pre-isthmus vectors execute under the isthmus pin,
-            // so the announced (pre-isthmus) golden cannot match the isthmus-computed header.
+            // DEFENSIVE since P4 (2026-09-14): single-block vectors now ALSO execute under their
+            // own declared fork (per-vector schedule), so — like the chain blocks, which already
+            // hard-pass under per-block forks — they are expected to pass the six-way verify and
+            // this branch is expected NOT to trigger for either path. If it DOES fire, the
+            // fork-pin excuse is gone: it is a REAL divergence signal of the production scheduler
+            // path for that pre-isthmus fork — report it as-is, never mask or re-pin semantics.
             // (The harness's old announced-zero requestsHash default that soft-reported
             // pre-isthmus CHAIN blocks is gone — the announced header now carries requestsHash
             // only when the golden does.) Any OTHER error is a real bug → BOOST_ERROR below.
@@ -768,12 +773,11 @@ void runSingleVector(const std::string& id, const JsonValue& vec, Fixture& fixtu
     }
     bcos::protocol::BlockHeader::Ptr header;
     // Single-block vector header: isthmus/jovian use decodeGoldenHeader (golden authoritative
-    // op-geth header); pre-isthmus (ecotone/fjord/granite) encodedHeaderHex would throw under
+    // op-geth header); pre-isthmus (regolith..holocene) encodedHeaderHex would throw under
     // decodeOpHeader's strict 21-field decode (RTTI-bypass runtime_error, verified empirically),
-    // so fall back to buildHeaderFromEnv (same source as chain). Both execute under the legacy
-    // vector-level pin (execFork below → isthmusConfig, or jovianConfig for a jovian vector); the
-    // golden three-way REPORTs a fork mismatch for pre-isthmus (soft) and the six-way verify is
-    // expected to reject them (see runBlockEquivalence).
+    // so fall back to buildHeaderFromEnv (same source as chain). Since P4 both shapes execute
+    // under the vector's own declared fork (execFork below), with the announced commitments
+    // filled from the same-fork golden — see runBlockEquivalence for the hard/soft gates.
     const auto hardfork = jAt(jAt(vec, "_info"), "hardfork").asString();
     try
     {
@@ -802,11 +806,16 @@ void runSingleVector(const std::string& id, const JsonValue& vec, Fixture& fixtu
     // The announced header carries the golden commitments (route A's six-way verify = the
     // FISCO-vs-op-geth gate).
     fillAnnouncedHeaderFromGolden(header, vec, rawTxBytes);
-    // Single-block execution fork: the legacy vector-level pin — isthmus unless the vector is
-    // jovian. Pre-isthmus single vectors deliberately execute under isthmus semantics (their
-    // golden is a different fork's, so route A softly REPORTs the fork mismatch). This is NOT a
-    // per-block fork choice; only chain vectors route by `_info.hardfork`.
-    const auto execFork = jovian ? op::OpFork::Jovian : op::OpFork::Isthmus;
+    // Single-block execution fork (P4, 2026-09-14): the vector's OWN declared fork
+    // (`_info.hardfork`), routed through the same name→enum→"0:<fork>" schedule machinery as the
+    // chain path (forkEnumForName + OpForkSchedule::parse). The op-geth golden was generated under
+    // this very fork, so the announced golden commitments and FISCO's same-semantics execution are
+    // comparable → route A's six-way verify is a hard FISCO-vs-op-geth gate here too (the legacy
+    // vector-level isthmus/jovian pin — which mis-executed every pre-isthmus single and forced its
+    // soft REPORT — is retired). A pre-isthmus single that still fails the verify is therefore a
+    // REAL divergence finding of the production scheduler path for that fork, never a fork-pin
+    // artifact.
+    const auto execFork = forkEnumForName(id, hardfork);
     runBlockEquivalence(id, fixture, header, rawTxBytes, vec, execFork, greenGuard,
         /*persistStateOnSoftReject=*/false, stats);
 }
