@@ -53,10 +53,19 @@ std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::buil
     // is read from the ledger (written at genesis), with the genesis config as the fallback
     // when the on-chain entry is absent. The Eth lane (executor_version == ETHEREUM) may
     // carry the same feature for an L2 state shape — that is Eth mode, not OP mode.
+    // The chain's current block version scopes the above-the-ladder refusal: nothing bounded
+    // that key before V3_18_0, so a legacy chain may carry such a row and has to keep starting
+    // (the same version scope the write-path refusals carry).
+    uint32_t chainVersion = 0;
+    if (auto const head = bcos::task::syncWait(
+            bcos::ledger::getBlockData(*ledger, blockNumber, bcos::ledger::HEADER)))
+    {
+        chainVersion = head->blockHeader()->version();
+    }
     {
         auto const onChain = readOnChainExecutorVersion(*ledger, nodeConfig->executorVersion());
         bcos::scheduler_v1::validateOpModeGenesisOnly(
-            features, onChain.version, onChain.activation);
+            features, onChain.version, onChain.activation, chainVersion);
     }
 
     return ledger;

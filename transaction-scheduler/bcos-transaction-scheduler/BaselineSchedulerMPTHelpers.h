@@ -165,13 +165,22 @@ inline void validateMPTFlagMatrix(bcos::ledger::Features const& features)
 /// with it — the pure-Ethereum executor on an MPT root, sealing through the consensus
 /// layer (the executor integration harness has covered that pairing since #5397). Such a
 /// chain is Eth mode, not OP mode; only the OP lane needs engine-driven production.
+///
+/// chainVersion is the version of the chain's current block. The above-the-ladder refusal is
+/// scoped to chains that reached V3_18_0, for the same reason the write path's refusals are
+/// (SystemConfigPrecompiled::validate): before this release nothing bounded executor_version
+/// on-chain, so a row above the ladder can exist on a legacy chain, and turning that into a boot
+/// refusal would strand it — the node could not start to fix the row it is refusing. Older
+/// chains keep the pre-cutover behaviour (setVersion saturates to the newest wired slot and logs).
 inline void validateOpModeGenesisOnly(bcos::ledger::Features const& features, int executorVersion,
-    bcos::protocol::BlockNumber executorVersionActivation)
+    bcos::protocol::BlockNumber executorVersionActivation, uint32_t chainVersion)
 {
     using Flag = bcos::ledger::Features::Flag;
     bool const flagOn = features.get(Flag::feature_l2_ethereum_compat);
     bool const opMode = (executorVersion == bcos::ledger::OPSTACK_EXECUTOR_VERSION);
-    if (executorVersion > bcos::ledger::OPSTACK_EXECUTOR_VERSION)
+    bool const ladderIsEnforced = bcos::protocol::versionCompareTo(chainVersion,
+                                      bcos::protocol::BlockVersion::V3_18_0_VERSION) >= 0;
+    if (executorVersion > bcos::ledger::OPSTACK_EXECUTOR_VERSION && ladderIsEnforced)
     {
         BOOST_THROW_EXCEPTION(InvalidMPTFlagMatrix{} << bcos::errinfo_comment(
                                   "executor_version " + std::to_string(executorVersion) +
