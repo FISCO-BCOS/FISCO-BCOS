@@ -120,8 +120,8 @@ config_console()
 
     cp -r ${node_path}/sdk/* ./dist/conf/
     cp ./dist/conf/config-example.toml ./dist/conf/config.toml
-    # 单节点模式：peer指向node0(20200)
-    ${sed_cmd} "s/peers=\[\"127.0.0.1:20200\", \"127.0.0.1:20201\"\]/peers=\[\"127.0.0.1:20200\"\]/g" ./dist/conf/config.toml
+    # 单节点模式：peer指向node0（RPC_PORT 由主脚本按阶段设置，默认20200）
+    ${sed_cmd} "s/peers=\[[^]]*\]/peers=\[\"127.0.0.1:${RPC_PORT:-20200}\"\]/g" ./dist/conf/config.toml
     ${sed_cmd} "s/messageTimeout = \"10000\"/messageTimeout = \"10000000\"/g" ./dist/conf/config.toml
 
     # config test contract
@@ -159,8 +159,8 @@ config_java_sdk_demo()
 
     cp -r ${node_path}/sdk/* ./dist/conf/
     cp ./dist/conf/config-example.toml ./dist/conf/config.toml
-    # 单节点模式：peer指向node0(20200)
-    ${sed_cmd} "s/peers=\[\"127.0.0.1:20200\", \"127.0.0.1:20201\"\]/peers=\[\"127.0.0.1:20200\"\]/g" ./dist/conf/config.toml
+    # 单节点模式：peer指向node0（RPC_PORT 由主脚本按阶段设置，默认20200）
+    ${sed_cmd} "s/peers=\[[^]]*\]/peers=\[\"127.0.0.1:${RPC_PORT:-20200}\"\]/g" ./dist/conf/config.toml
     ${sed_cmd} "s/messageTimeout = \"10000\"/messageTimeout = \"10000000\"/g" ./dist/conf/config.toml
 
     # config admin
