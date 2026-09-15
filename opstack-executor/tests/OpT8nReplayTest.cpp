@@ -8,13 +8,13 @@
 //
 // Hard assertion discipline: A) dir *.json set == manifest.txt set; parse
 // failure / missing required field = named ADD_FAILURE; per-vector comparison
-// count recorded, 0 = FAILURE. B) required fields via jAt(); hardfork must be
-// exactly regolith|canyon|ecotone|fjord|granite|holocene|isthmus|jovian (no default fork);
-// unknown _op_type / receipt count mismatch = FAILURE (no zip-min).
-// D) comparisons routed through checkField/checkOptional into DivergenceLedger;
-// checkOptional never gated on has_value() (one-sided absence = DIVERGE
-// <absent>); bloom always 512 hex; postState bidirectional with zero-slot trie
-// reduction (0 == absent) + write-set coverage. E) exemptions only from
+// count recorded, 0 = FAILURE; the critical differential vectors
+// (kCriticalStems below) must stay manifested AND replayed = REQUIRE. B) required fields via jAt();
+// hardfork must be exactly regolith|canyon|ecotone|fjord|granite|holocene|isthmus|jovian (no
+// default fork); unknown _op_type / receipt count mismatch = FAILURE (no zip-min). D) comparisons
+// routed through checkField/checkOptional into DivergenceLedger; checkOptional never gated on
+// has_value() (one-sided absence = DIVERGE <absent>); bloom always 512 hex; postState bidirectional
+// with zero-slot trie reduction (0 == absent) + write-set coverage. E) exemptions only from
 // DIVERGENCES.md ALLOWLIST tuples (a:PENDING-FIX / c:SIGNED-OFF); dangling
 // entry= or never-hit exemptions = FAILURE.
 
@@ -38,6 +38,7 @@
 #include <opstack-executor/Storage2State.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
+#include <array>
 #include <bcos-evm/eth/state/hash_utils.hpp>
 #include <evmone_precompiles/secp256k1.hpp>
 #include <filesystem>
@@ -1830,6 +1831,13 @@ BOOST_AUTO_TEST_CASE(Vectors)
     auto hashImpl = std::make_shared<bcos::crypto::Keccak256>();
     auto ioServicePool = std::make_shared<bcos::IOServicePool>(1);
 
+    // Stems this suite actually dispatched to a replay path (chain replay /
+    // reject replay / full vector replay). The engine-consumer reject class is
+    // owned by OpNewPayloadRpcE2eTest and is deliberately NOT registered here —
+    // registration means "this suite executed the vector", which is what the
+    // critical-vector guard below asserts on.
+    std::set<std::string> replayedStems;
+
     // Replay only the set intersection (missing/extra already FAILURE'd; don't let set errors
     // cascade into parse crashes).
     for (const auto& name : manifest)
@@ -1864,6 +1872,7 @@ BOOST_AUTO_TEST_CASE(Vectors)
             // invalid_argument; must test blocks first.
             if (vec->isMember("blocks"))
             {
+                replayedStems.insert(stem);
                 replayChainVector(id, *vec, ledger, receiptFactory, hashImpl, ioServicePool);
                 continue;
             }
@@ -1872,9 +1881,11 @@ BOOST_AUTO_TEST_CASE(Vectors)
                 const auto consumer = rejectConsumer(*vec);
                 if (consumer == "engine")
                     continue;  // field-corruption class: OpNewPayloadRpcE2eTest only
+                replayedStems.insert(stem);
                 assertRejectThrow(id, *vec, receiptFactory, hashImpl, ioServicePool);
                 continue;
             }
+            replayedStems.insert(stem);
             replayVector(id, *vec, ledger, receiptFactory, hashImpl, ioServicePool);
         }
         catch (const std::exception& e)
@@ -1889,6 +1900,25 @@ BOOST_AUTO_TEST_CASE(Vectors)
             BOOST_ERROR(name << ": exception escaped typed catch (exception type: "
                              << (excType ? excType->name() : "<unknown>") << ")");
         }
+    }
+
+    // ── Critical-vector guard (carrier integrity, same hard-fail discipline as
+    // jAt): these two stems are the suite's core differential assets — the
+    // 8-fork synthetic ladder baseline (1000 blocks, regolith→jovian) and the
+    // real-derivation devnet snapshot (chainexport; the DIVERGENCES.md P3-1b
+    // create-output exemptions bind to this stem). Removing either from
+    // manifest.txt must fail loudly here, never silently shrink the gate.
+    // Single source of truth: the stem *strings* are derived by the Go side
+    // (generator prints LADDER-STEM into manifest.txt; chainexport derives
+    // digest8 — see manifest.txt stem-rule comments); THIS list is the only
+    // place the "critical" designation itself is pinned, and nothing else
+    // (no run.sh / README) duplicates it.
+    static constexpr std::array<const char*, 2> kCriticalStems{
+        "ladder_1000_69292b10", "devnet_884_007399eb"};
+    for (const auto* stem : kCriticalStems)
+    {
+        BOOST_REQUIRE_MESSAGE(
+            replayedStems.contains(stem), "critical vector missing from replay: " << stem);
     }
 
     // 22 = 8 *_deposit_only (1 receipt each) + 7 *_transfer_basic (2 receipts each); bump
