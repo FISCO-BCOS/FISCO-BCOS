@@ -42,7 +42,12 @@ namespace
 // The op-geth checkout the corpus was generated from (tag v1.101702.2), also
 // enforced by t8n/generator/regen.sh's PIN at generation time.
 constexpr std::string_view c_pinnedOpGethCommit = "e8800cffe53d459cde8a07c8e8f1de9d86e79e07";
-constexpr std::string_view c_pinnedGeneratorName = "opt8n-ref";
+// The pipeline's first-party generators: "opt8n-ref" synthesizes the case corpus;
+// "chainexport" (corpus repo tools/devnet/chainexport, P3) replays a REAL devnet
+// chain through the SAME pinned op-geth t8n binary, so its vectors carry the same
+// generator_commit pin under their own name. Any other generator name means the
+// vector was not produced by this pipeline.
+constexpr std::string_view c_registeredGenerators[] = {"opt8n-ref", "chainexport"};
 
 /// One `<sha256hex>  <relative path>` line of golden/engine/SHA256SUMS.
 struct ChecksumEntry
@@ -249,8 +254,14 @@ BOOST_AUTO_TEST_CASE(GoldenCorpusProvenanceIsPinned, * boost::unit_test::label("
         BOOST_CHECK_EQUAL(
             jAt(provenance, "generator_commit", entry.path().filename().string()).asString(),
             std::string(c_pinnedOpGethCommit));
-        BOOST_CHECK_EQUAL(jAt(provenance, "generator", entry.path().filename().string()).asString(),
-            std::string(c_pinnedGeneratorName));
+        auto const generator =
+            jAt(provenance, "generator", entry.path().filename().string()).asString();
+        BOOST_CHECK_MESSAGE(
+            std::find(std::begin(c_registeredGenerators), std::end(c_registeredGenerators),
+                generator) != std::end(c_registeredGenerators),
+            entry.path().filename().string() << ": unregistered generator \"" << generator
+                                             << "\" -- vectors must come from the pipeline's "
+                                                "first-party generators (opt8n-ref / chainexport)");
     }
     // The vectors are tracked alongside the corpus; an empty sweep means a
     // broken checkout, not a provenance pass.
