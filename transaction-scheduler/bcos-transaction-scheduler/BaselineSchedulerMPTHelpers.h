@@ -177,7 +177,7 @@ inline void validateOpModeGenesisOnly(bcos::ledger::Features const& features, in
 {
     using Flag = bcos::ledger::Features::Flag;
     bool const flagOn = features.get(Flag::feature_l2_ethereum_compat);
-    bool const opMode = (executorVersion == bcos::ledger::OPSTACK_EXECUTOR_VERSION);
+    bool const opMode = (executorVersion >= bcos::ledger::OPSTACK_EXECUTOR_VERSION);
     bool const ladderIsEnforced = bcos::protocol::versionCompareTo(chainVersion,
                                       bcos::protocol::BlockVersion::V3_18_0_VERSION) >= 0;
     if (executorVersion > bcos::ledger::OPSTACK_EXECUTOR_VERSION && ladderIsEnforced)

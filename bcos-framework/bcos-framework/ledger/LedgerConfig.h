@@ -28,7 +28,6 @@
 #include <cctype>
 #include <charconv>
 #include <evmc/evmc.hpp>
-#include <magic_enum/magic_enum.hpp>
 #include <map>
 #include <optional>
 #include <sstream>
@@ -278,46 +277,17 @@ private:
 /// EEST-runner convenience.
 inline constexpr evmc_revision EVMC_REVISION_DEFAULT = EVMC_OSAKA;
 
-/// The executor-slot ladder: which scheduler an executor_version value selects. The
-/// values are the MultiVersionScheduler slot indices and the on-chain decimal string.
-/// Add an enumerator ONLY in the release that actually wires that slot: the governance
-/// write bound (MAX_GOVERNANCE_EXECUTOR_VERSION) is derived from this list, so a
-/// "reserved for later" entry would let a transaction write a value the running binary
-/// refuses to boot on (validateOpModeGenesisOnly rejects anything above the ladder).
-enum class ExecutorLane : int
-{
-    LegacyDispatcher = 0,  ///< v1 SchedulerManager dispatch path
-    Baseline = 1,          ///< v1 baseline scheduler
-    Ethereum = 2,          ///< pure-Ethereum EthereumExecutor (ethereum-executor)
-    Opstack = 3,           ///< OP-Stack OpSchedulerSeam (op composition root)
-};
-
-static_assert(static_cast<int>(ExecutorLane::Ethereum) == 2);
-static_assert(static_cast<int>(ExecutorLane::Opstack) == 3);
-
 /// Executor version selecting the pure-Ethereum EthereumExecutor (ethereum-executor).
 /// Canonical value kept here so lower layers (bcos-ledger, bcos-tool) can gate on it
 /// without depending on libinitializer; libinitializer/MultiVersionScheduler.h keeps a
-/// scheduler_v1-scoped alias for the same value. Below it the v1 schedulers run; above
-/// it, exactly OPSTACK selects the OP lane.
-inline constexpr int ETHEREUM_EXECUTOR_VERSION = static_cast<int>(ExecutorLane::Ethereum);
+/// scheduler_v1-scoped alias for the same value. Version 3 names the OP lane below; a value
+/// above the newest DECLARED slot saturates down to the newest slot the node actually wired,
+/// which is this one only when the OP slot is unwired.
+inline constexpr int ETHEREUM_EXECUTOR_VERSION = 2;
 
 /// The executor version that selects the OP-Stack OpSchedulerSeam (op composition root).
-/// Exactly this value enters OP mode (spec 2026-08-07-op-composition-root-design.md D1);
-/// it is genesis-only (validateOpModeGenesisOnly), and any higher value is not a defined
-/// lane — refused at boot and, from this release on, refused as a governance write.
-inline constexpr int OPSTACK_EXECUTOR_VERSION = static_cast<int>(ExecutorLane::Opstack);
-
-/// The highest executor_version a GOVERNANCE WRITE may ever accept: the newest defined
-/// lane, derived from the ladder above and never hand-copied — wiring a new lane moves the
-/// bound with it. Note the TRANSACTION ceiling is one lane BELOW this constant: the newest
-/// lane (OPSTACK) is genesis-only, so SystemConfigPrecompiled refuses a transaction-set
-/// value of MAX_GOVERNANCE_EXECUTOR_VERSION itself, and the highest version a transaction
-/// may actually set is ETHEREUM_EXECUTOR_VERSION. Above this constant an accepted write
-/// would land activation N+1 while every node's next start fails closed (the runtime
-/// setVersion fail-opens, so the chain would keep producing but could never restart).
-inline constexpr int MAX_GOVERNANCE_EXECUTOR_VERSION =
-    static_cast<int>(magic_enum::enum_values<ExecutorLane>().back());
+/// executor_version >= this enters OP mode (spec 2026-08-07-op-composition-root-design.md D1).
+inline constexpr int OPSTACK_EXECUTOR_VERSION = 3;
 
 /// Convert a canonical EVM fork name (case-insensitive, e.g. "cancun"/"osaka") to an
 /// EVMC revision. Returns nullopt for unknown names so callers can fall back to a default.

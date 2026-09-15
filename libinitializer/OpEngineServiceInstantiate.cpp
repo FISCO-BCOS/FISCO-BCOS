@@ -14,11 +14,11 @@
  *  limitations under the License.
  *
  * @file OpEngineServiceInstantiate.cpp
- * @brief Production instantiation point for OpEngineService template definitions.
+ * @brief Production instantiation point for the OpEngineService template definitions.
  *
- * OpEngineService.h is declarations-only; OpEngineService.inl is opt-in (see
- * engine/CMakeLists.txt). libinitializer wires the concrete MemPoolImpl +
- * GlobalStateStorage + OpSchedulerSeam specialization used by Initializer::init.
+ * OpEngineService.h is declarations-only; the definitions live in OpEngineService.inl.
+ * This TU instantiates the one specialization Initializer::init wires (MemPoolImpl +
+ * GlobalStateStorage + OpSchedulerSeam), so the .inl is compiled exactly once.
  */
 #include "GlobalStateStorageInitializer.h"
 #include "bcos-mempool/MemPoolImpl.h"

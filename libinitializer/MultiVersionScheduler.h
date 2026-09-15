@@ -1,22 +1,3 @@
-/**
- *  Copyright (C) 2021 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- *
- * @file MultiVersionScheduler.h
- * @brief Multi-version scheduler dispatch
- */
-
 #pragma once
 
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
@@ -28,21 +9,29 @@
 namespace bcos::scheduler_v1
 {
 
-/// Thrown for a negative version, and by scheduler(version)/getScheduler() when the
-/// selected slot is out of range or unwired. setVersion() deliberately does NOT throw on
+/// Thrown for a negative executor version, and by scheduler(version) / getScheduler() when
+/// the selected slot is out of range or unwired. setVersion() deliberately does NOT throw on
 /// an unwired slot at runtime — see its definition.
 DERIVE_BCOS_EXCEPTION(ExecutorVersionNotSupported);
 
+/// Version-selection contract for the slot array below: version 0, 1 and 2 name slots 0
+/// (legacy SchedulerManager), 1 (baseline) and 2 (pure-Ethereum EthereumExecutor); version 3
+/// names slot 3 (OP). A version ABOVE the newest declared slot -- and only such a version --
+/// saturates down to the newest slot this node actually wired, so "every version >= 2 runs
+/// the v2 executor" is no longer the contract. A version that names a DECLARED slot this node
+/// did not wire (version 3 on a build without the OP engine) neither saturates nor switches:
+/// setVersion keeps the current executor and logs ERROR, see its definition.
+///
 /// The executor version that selects the pure-Ethereum EthereumExecutor
-/// (ethereum-executor). It is index 2 of MultiVersionScheduler's scheduler array.
+/// (ethereum-executor); index 2 of MultiVersionScheduler's scheduler array.
 /// The canonical value lives in bcos-framework/ledger (so lower layers can gate on
 /// it without depending on libinitializer); this keeps the scheduler_v1 spelling.
 constexpr static int ETHEREUM_EXECUTOR_VERSION = ledger::ETHEREUM_EXECUTOR_VERSION;
 
-/// executor_version == this selects OP mode; higher values are not a defined lane
-/// (LedgerInitializer refuses to boot above it).
+/// executor_version >= this selects OP mode (OpScheduler, slot 3). It is a genesis property:
+/// SystemConfigPrecompiled refuses a governance write of this value from 3.18.0 on, so on a
+/// running chain the value can only reach here from config.genesis via Initializer::init.
 constexpr static int OPSTACK_EXECUTOR_VERSION = ledger::OPSTACK_EXECUTOR_VERSION;
-/// Version ordering invariant: OP sits strictly above the Ethereum executor.
 static_assert(OPSTACK_EXECUTOR_VERSION > ETHEREUM_EXECUTOR_VERSION,
     "OPSTACK_EXECUTOR_VERSION must be strictly greater than ETHEREUM_EXECUTOR_VERSION");
 
@@ -51,21 +40,14 @@ class MultiVersionScheduler : public bcos::scheduler::SchedulerInterface
 private:
     // Slots: 0 legacy, 1 baseline, 2 Ethereum, 3 OP (may be null).
     static constexpr size_t SUPPORTED_EXECUTOR_VERSION_COUNT = 4;
-    // The slot array is the LADDER + the zero index: one slot per executor version from 0 up
-    // to the newest defined lane. Link the two cardinalities so wiring a new lane without
-    // growing the slot array fails the build instead of failing a node's setVersion at runtime.
-    static_assert(SUPPORTED_EXECUTOR_VERSION_COUNT ==
-                      static_cast<size_t>(ledger::MAX_GOVERNANCE_EXECUTOR_VERSION) + 1,
-        "SUPPORTED_EXECUTOR_VERSION_COUNT must stay in lockstep with the executor lane ladder: "
-        "one slot per version from 0 (legacy) to MAX_GOVERNANCE_EXECUTOR_VERSION");
 
     std::array<scheduler::SchedulerInterface::Ptr, SUPPORTED_EXECUTOR_VERSION_COUNT> m_schedulers;
     /// The slot traffic is routed to. setVersion() writes it from TWO execution contexts — the
     /// PBFT stable-checkpoint callback (bcos-pbft LedgerStorage::commitStableCheckPoint) and the
     /// block-sync commit callback (bcos-sync DownloadingQueue) — while getScheduler() reads it
     /// from whichever thread serves a request, so the access is atomic. Atomicity is all that is
-    /// claimed: the slot array is immutable after construction, and an index that is one commit
-    /// stale routes to the lane the node was running a moment ago.
+    /// claimed: the slot array is immutable after construction, and an index one commit stale
+    /// routes to the lane the node was running a moment ago.
     std::atomic<int> m_currentIndex;
     /// Republished after every commit, whichever scheduler performed it. Transaction admission
     /// reads its chain configuration from this holder and nowhere else, so the publisher has to

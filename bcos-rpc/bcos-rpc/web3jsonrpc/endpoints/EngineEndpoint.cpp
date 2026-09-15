@@ -280,6 +280,7 @@ task::Task<void> EngineEndpoint::handleGetPayload(
     }
     catch (engine::UnsupportedEngineApiVersion const& e)
     {
+        // Method-version mismatch is a -38005, same class as an unsupported fork.
         BOOST_THROW_EXCEPTION(JsonRpcException(
             EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
     }
@@ -360,11 +361,14 @@ task::Task<void> EngineEndpoint::handleNewPayload(
     }
     catch (engine::UnsupportedFork const& e)
     {
+        // The payload's fork is outside this method's window (getPayloadV4 for a Karst payload,
+        // V5 for a pre-Karst one).
         BOOST_THROW_EXCEPTION(JsonRpcException(
             EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
     }
     catch (engine::UnsupportedEngineApiVersion const& e)
     {
+        // Method-version mismatch is a -38005, same class as an unsupported fork.
         BOOST_THROW_EXCEPTION(JsonRpcException(
             EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
     }

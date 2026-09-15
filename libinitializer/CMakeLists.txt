@@ -45,17 +45,12 @@ target_link_libraries(init PUBLIC
     engine
     ledger
     transaction-scheduler transaction-executor
+    bcosevm::opstack
+    opstack-executor
     ethereum-executor
     scheduler storage executor rpc
     bcos-boostssl
     tomlplusplus::tomlplusplus
-)
-# PRIVATE: only the implementation TUs (Initializer.cpp, OpEngineServiceInstantiate.cpp)
-# include opstack headers — no installed init header does, so consumers of the init target
-# need no opstack include dirs (the repo's usage-based PUBLIC/PRIVATE rule, cf. engine).
-target_link_libraries(init PRIVATE
-    bcosevm::opstack
-    opstack-executor
 )
 if(WITH_LEDGER_ELECTION)
     target_link_libraries(init PUBLIC leader_election)
@@ -69,12 +64,8 @@ if(WITH_TIKV)
 endif()
 set_target_properties(init PROPERTIES UNITY_BUILD "ON")
 add_dependencies(init BuildInfo.h)
-if(TESTS)
-    # enable_testing() BEFORE add_subdirectory, exactly as bcos-rpc/CMakeLists.txt does: ctest
-    # registration is inherited through the parent scope, and this directory is added by the root
-    # before the root's own enable_testing() runs. Without the call the child's
-    # CTestTestfile.cmake is written but never linked from here, so an add_test below it is
-    # compiled yet silently never executed — the suite runs nowhere.
+
+if (TESTS)
     enable_testing()
-    add_subdirectory(tests)
+    add_subdirectory(test)
 endif()
