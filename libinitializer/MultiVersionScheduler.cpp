@@ -49,7 +49,7 @@ bcos::scheduler::SchedulerInterface& bcos::scheduler_v1::MultiVersionScheduler::
 
 bcos::scheduler::SchedulerInterface& bcos::scheduler_v1::MultiVersionScheduler::getScheduler()
 {
-    return checkedSchedulerAt(m_currentIndex);
+    return checkedSchedulerAt(m_currentIndex.load());
 }
 
 bcos::scheduler_v1::MultiVersionScheduler::MultiVersionScheduler(
@@ -173,12 +173,13 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
     // shape and the Eth lane may carry it as well, so keying on it would freeze (and
     // mislabel) an Eth-lane L2 chain. Keep the current executor and log loudly instead of
     // switching: a throw here would halt the commit callbacks.
-    if (m_currentIndex == bcos::ledger::OPSTACK_EXECUTOR_VERSION &&
+    if (m_currentIndex.load() == bcos::ledger::OPSTACK_EXECUTOR_VERSION &&
         version != bcos::ledger::OPSTACK_EXECUTOR_VERSION)
     {
         INITIALIZER_LOG(ERROR) << LOG_DESC(
                                       "executor_version change rejected: OP mode is genesis-frozen")
-                               << LOG_KV("requested", version) << LOG_KV("keeping", m_currentIndex);
+                               << LOG_KV("requested", version)
+                               << LOG_KV("keeping", m_currentIndex.load());
         return;
     }
     // Runtime callers are the two commit callbacks (LedgerStorage::onStableCheckPointCommitted
@@ -212,15 +213,15 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
         INITIALIZER_LOG(ERROR)
             << LOG_DESC("executor_version has no wired scheduler; keeping the current executor")
             << LOG_KV("requested", version) << LOG_KV("onChain", onChainVersion)
-            << LOG_KV("keeping", m_currentIndex)
+            << LOG_KV("keeping", m_currentIndex.load())
             << LOG_DESC(
                    "align genesis/boot config with on-chain executor_version or enable the "
                    "matching engine wiring (OP mode / single-node consensus)");
-        if (onChainVersion != m_currentIndex)
+        if (onChainVersion != m_currentIndex.load())
         {
             INITIALIZER_LOG(ERROR)
                 << LOG_DESC("executor_version drift: on-chain config != runtime executor")
-                << LOG_KV("onChain", onChainVersion) << LOG_KV("runtime", m_currentIndex);
+                << LOG_KV("onChain", onChainVersion) << LOG_KV("runtime", m_currentIndex.load());
         }
         return;
     }
@@ -232,9 +233,10 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
                                << LOG_KV("requested", version) << LOG_KV("selected", selected)
                                << LOG_KV("onChain", onChainVersion);
     }
-    auto const previousIndex = m_currentIndex;
-    m_currentIndex = static_cast<int>(selected);
-    if (previousIndex != m_currentIndex && onChainVersion == m_currentIndex && ledgerConfig)
+    auto const previousIndex = m_currentIndex.load();
+    m_currentIndex.store(static_cast<int>(selected));
+    if (previousIndex != m_currentIndex.load() && onChainVersion == m_currentIndex.load() &&
+        ledgerConfig)
     {
         // The drift log below keys on onChainVersion != m_currentIndex, so a governance tx
         // that downgrades executor_version to a WIRED lower slot (e.g. 3 -> 2 on an OP-wired
@@ -245,15 +247,15 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
         // and firing here would label every OP node's startup as a lane switch.
         INITIALIZER_LOG(WARNING)
             << LOG_DESC("executor_version switched at runtime: consensus commits moved lanes")
-            << LOG_KV("from", previousIndex) << LOG_KV("to", m_currentIndex)
+            << LOG_KV("from", previousIndex) << LOG_KV("to", m_currentIndex.load())
             << LOG_KV("onChain", onChainVersion)
             << LOG_DESC("the wired engine service still answers Engine API on its own scheduler");
     }
-    if (onChainVersion != m_currentIndex)
+    if (onChainVersion != m_currentIndex.load())
     {
         INITIALIZER_LOG(ERROR)
             << LOG_DESC("executor_version drift: on-chain config != runtime executor")
-            << LOG_KV("onChain", onChainVersion) << LOG_KV("runtime", m_currentIndex)
+            << LOG_KV("onChain", onChainVersion) << LOG_KV("runtime", m_currentIndex.load())
             << LOG_DESC(
                    "governance wrote a version this node cannot wire; blocks still execute on "
                    "the runtime executor above");
