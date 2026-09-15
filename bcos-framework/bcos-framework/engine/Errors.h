@@ -80,7 +80,7 @@ using OpPendingDropped = boost::error_info<struct OpPendingDroppedTag, bool>;
 /// (fcuInvalidIfUndecodable), never to -32603 — an untagged OpExecutionInternalError must
 /// keep propagating as an internal error. Same carrier convention as
 /// OpCulpritTxHash/OpRejectIsCapacity; shared by the Eth and OP build paths.
-using OpPayloadUndecodable = boost::error_info<struct tag_op_payload_undecodable, bool>;
+using OpPayloadUndecodable = boost::error_info<struct OpPayloadUndecodableTag, bool>;
 
 /// Consumed by OpEngineService (#5549) to classify execute-reject culprits; unused
 /// within #5547 itself.

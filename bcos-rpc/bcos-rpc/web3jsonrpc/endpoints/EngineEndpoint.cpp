@@ -208,10 +208,6 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::InvalidForkchoiceState,
             std::string("Invalid forkchoice state: ") + e.what()));
     }
-    catch (engine::OpExecutionInternalError const& e)
-    {
-        rethrowAsEngineInternalError(e);
-    }
     catch (bcos::Error const& e)
     {
         rethrowAsEngineInternalError(e);
@@ -286,10 +282,6 @@ task::Task<void> EngineEndpoint::handleGetPayload(
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(
             EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
-    }
-    catch (engine::OpExecutionInternalError const& e)
-    {
-        rethrowAsEngineInternalError(e);
     }
     catch (bcos::Error const& e)
     {
@@ -380,10 +372,6 @@ task::Task<void> EngineEndpoint::handleNewPayload(
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::InvalidPayloadAttributes,
             std::string("Invalid payload attributes: ") + e.what()));
-    }
-    catch (engine::OpExecutionInternalError const& e)
-    {
-        rethrowAsEngineInternalError(e);
     }
     catch (bcos::Error const& e)
     {
