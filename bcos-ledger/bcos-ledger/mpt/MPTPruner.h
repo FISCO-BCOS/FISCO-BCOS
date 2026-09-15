@@ -40,6 +40,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/throw_exception.hpp>
+#include <oneapi/tbb/parallel_for.h>
 #include <oneapi/tbb/task_group.h>
 #include <algorithm>
 #include <atomic>
@@ -142,10 +143,9 @@ inline constexpr bool kParallelSweepSafe<
 ///    enabled deletes the rows WHILE scanning, in SWEEP_DELETE_CHUNK batches — the full garbage
 ///    set is never materialized (each range iterator survives deleting already-passed keys:
 ///    MemoryStorage's ordered index invalidates only erased elements, RocksDBStorage2 pins a
-///    snapshot). The scan runs sharded: one iterator per first hash byte (SWEEP_SHARDS spans),
-///    the shards executing as tbb::task_group tasks; backends that disallow concurrent
-///    iterators (kParallelSweepSafe — the in-memory test backends) take the same code with a
-///    single table-wide shard.
+///    snapshot). The scan runs sharded: one tbb::parallel_for body per first hash byte
+///    (SWEEP_SHARDS spans); backends that disallow concurrent iterators (kParallelSweepSafe —
+///    the in-memory test backends) take the same code with a single table-wide shard.
 ///
 /// A chain whose MPT is not yet active at boot (head < activation) skips the rebuild entirely:
 /// the activation block's full first build (FlatToMPT) emits every node as that block's
@@ -332,13 +332,22 @@ public:
         // the full garbage set: each range iterator survives deleting already-passed keys
         // (MemoryStorage's ordered index invalidates only erased elements; RocksDBStorage2's
         // RANGE_SEEK pins a snapshot). Garbage rows are by definition not in m_counts, so no
-        // in-memory table needs a fix-up. The scan is SHARDED on the first hash byte: one
-        // tbb::task_group task per span, each driving the coroutine storage API with
-        // tbb::syncWait (the walkTrie fetch pattern). init runs before the scheduler starts
-        // committing, so m_counts is READ-ONLY for the whole sweep and the shards share it
-        // without synchronization; the counters are atomic. A backend without concurrent
-        // iterators (kParallelSweepSafe) runs ONE shard spanning the whole table instead — the
-        // same code, sequential, with the first-byte bound compiled out.
+        // in-memory table needs a fix-up. The scan is SHARDED on the first hash byte:
+        // tbb::parallel_for runs one body per span, driving the coroutine storage API with
+        // tbb::syncWait. init runs before the scheduler starts committing, so m_counts is
+        // READ-ONLY for the whole sweep and the shards share it without synchronization; the
+        // counters are atomic. A backend without concurrent iterators (kParallelSweepSafe) runs
+        // ONE shard spanning the whole table instead — the same code, sequential, with the
+        // first-byte bound compiled out.
+        //
+        // parallel_for (not task_group) is safe HERE because every storage call below —
+        // range(), iterator.next(), removeSome() — is an AwaitableValue that completes
+        // synchronously inline, so tbb::syncWait always takes its ready path and never reaches
+        // tbb::task::suspend; the TBBWait.h caveat (syncWait blocks the worker under
+        // parallel_for once the awaited task really suspends) therefore never triggers. Do NOT
+        // keep this shape if the storage layer ever becomes truly asynchronous. An exception in
+        // any shard propagates out of parallel_for (siblings are cancelled) — the fail-loud
+        // boot semantics this phase wants.
         constexpr size_t shardCount = kParallelSweepSafe<Backend> ? SWEEP_SHARDS : 1;
         std::atomic<uint64_t> scanned{0};
         std::atomic<uint64_t> garbage{0};
@@ -346,121 +355,98 @@ public:
         MPT_PRUNER_LOG(INFO) << "MPT pruning: garbage sweep — scanning the \"/mpt/\" table in "
                              << shardCount << " shard(s) (progress logged every "
                              << SWEEP_SCAN_LOG_INTERVAL << " rows)";
-        std::vector<std::exception_ptr> shardErrors(shardCount);
-        {
-            oneapi::tbb::task_group shards;
-            for (size_t shard = 0; shard < shardCount; ++shard)
-            {
-                shards.run([this, shard, &scanned, &garbage, &garbageDeleted, &shardErrors,
-                               &progress] {
-                    try
+        oneapi::tbb::parallel_for(size_t{0}, shardCount,
+            [this, &scanned, &garbage, &garbageDeleted, &progress](size_t shard) {
+                auto const startKey = [shard] {
+                    if constexpr (shardCount > 1)
                     {
-                        auto const startKey = [shard] {
-                            if constexpr (shardCount > 1)
-                            {
-                                // The shard's span: row keys whose first hash byte is `shard`.
-                                bcos::h256 startHash{};
-                                startHash.data()[0] = static_cast<bcos::byte>(shard);
-                                return bcos::ledger::mptNodeStateKey(startHash);
-                            }
-                            else
-                            {
-                                return bcos::executor_v1::StateKey{
-                                    bcos::storage2::kMPTTable, std::string_view{}};
-                            }
-                        }();
-                        auto iterator = bcos::task::tbb::syncWait(bcos::storage2::range(
-                            *m_backend, bcos::storage2::RANGE_SEEK, startKey));
-                        std::vector<bcos::executor_v1::StateKey> chunk;
-                        while (auto item = bcos::task::tbb::syncWait(iterator.next()))
+                        // The shard's span: row keys whose first hash byte is `shard`.
+                        bcos::h256 startHash{};
+                        startHash.data()[0] = static_cast<bcos::byte>(shard);
+                        return bcos::ledger::mptNodeStateKey(startHash);
+                    }
+                    else
+                    {
+                        return bcos::executor_v1::StateKey{
+                            bcos::storage2::kMPTTable, std::string_view{}};
+                    }
+                }();
+                auto iterator = bcos::task::tbb::syncWait(
+                    bcos::storage2::range(*m_backend, bcos::storage2::RANGE_SEEK, startKey));
+                std::vector<bcos::executor_v1::StateKey> chunk;
+                while (auto item = bcos::task::tbb::syncWait(iterator.next()))
+                {
+                    auto const& key = std::get<0>(*item);
+                    bcos::executor_v1::StateKeyView const keyView{key};
+                    if (keyView.m_table != bcos::storage2::kMPTTable)
+                    {
+                        break;
+                    }
+                    if constexpr (shardCount > 1)
+                    {
+                        if (!keyView.m_key.empty() &&
+                            static_cast<uint8_t>(keyView.m_key[0]) != shard)
                         {
-                            auto const& key = std::get<0>(*item);
-                            bcos::executor_v1::StateKeyView const keyView{key};
-                            if (keyView.m_table != bcos::storage2::kMPTTable)
-                            {
-                                break;
-                            }
-                            if constexpr (shardCount > 1)
-                            {
-                                if (!keyView.m_key.empty() &&
-                                    static_cast<uint8_t>(keyView.m_key[0]) != shard)
-                                {
-                                    break;  // past this shard's span
-                                }
-                            }
-                            if ((scanned.fetch_add(1, std::memory_order_relaxed) + 1) %
-                                    SWEEP_SCAN_LOG_INTERVAL ==
-                                0)
-                            {
-                                MPT_PRUNER_LOG(INFO)
-                                    << "MPT pruning: garbage sweep scan progress"
-                                    << LOG_KV("scanned", scanned.load(std::memory_order_relaxed))
-                                    << LOG_KV("garbage", garbage.load(std::memory_order_relaxed))
-                                    << LOG_KV("garbageDeleted",
-                                           garbageDeleted.load(std::memory_order_relaxed))
-                                    << LOG_KV("tracked", m_counts.size());
-                            }
-                            if (!std::get_if<storage::Entry>(std::addressof(std::get<1>(*item))))
-                            {
-                                continue;  // tombstone on a logical-deletion backend
-                            }
-                            if (keyView.m_key.size() != bcos::h256::SIZE)
-                            {
-                                MPT_PRUNER_LOG(WARNING)
-                                    << "MPT pruning: skipping malformed \"/mpt/\" row (key part "
-                                    << keyView.m_key.size() << " bytes, expected 32)";
-                                continue;
-                            }
-                            bcos::h256 const hash{reinterpret_cast<bcos::byte const*>(
-                                                      keyView.m_key.data()),
-                                bcos::h256::SIZE};
-                            if (m_counts.contains(hash))
-                            {
-                                continue;
-                            }
-                            garbage.fetch_add(1, std::memory_order_relaxed);
-                            chunk.push_back(bcos::ledger::mptNodeStateKey(hash));
-                            if (chunk.size() >= SWEEP_DELETE_CHUNK)
-                            {
-                                garbageDeleted.fetch_add(
-                                    chunk.size(), std::memory_order_relaxed);
-                                bcos::task::tbb::syncWait(bcos::storage2::removeSome(
-                                    *m_backend, std::move(chunk)));
-                                chunk.clear();
-                                if (progress)
-                                {
-                                    progress(garbageDeleted.load(std::memory_order_relaxed),
-                                        garbage.load(std::memory_order_relaxed));
-                                }
-                            }
-                        }
-                        if (!chunk.empty())
-                        {
-                            garbageDeleted.fetch_add(chunk.size(), std::memory_order_relaxed);
-                            bcos::task::tbb::syncWait(
-                                bcos::storage2::removeSome(*m_backend, std::move(chunk)));
-                            if (progress)
-                            {
-                                progress(garbageDeleted.load(std::memory_order_relaxed),
-                                    garbage.load(std::memory_order_relaxed));
-                            }
+                            break;  // past this shard's span
                         }
                     }
-                    catch (...)
+                    if ((scanned.fetch_add(1, std::memory_order_relaxed) + 1) %
+                            SWEEP_SCAN_LOG_INTERVAL ==
+                        0)
                     {
-                        shardErrors[shard] = std::current_exception();
+                        MPT_PRUNER_LOG(INFO)
+                            << "MPT pruning: garbage sweep scan progress"
+                            << LOG_KV("scanned", scanned.load(std::memory_order_relaxed))
+                            << LOG_KV("garbage", garbage.load(std::memory_order_relaxed))
+                            << LOG_KV("garbageDeleted",
+                                   garbageDeleted.load(std::memory_order_relaxed))
+                            << LOG_KV("tracked", m_counts.size());
                     }
-                });
-            }
-            shards.wait();
-        }
-        for (auto const& error : shardErrors)
-        {
-            if (error)
-            {
-                std::rethrow_exception(error);
-            }
-        }
+                    if (!std::get_if<storage::Entry>(std::addressof(std::get<1>(*item))))
+                    {
+                        continue;  // tombstone on a logical-deletion backend
+                    }
+                    if (keyView.m_key.size() != bcos::h256::SIZE)
+                    {
+                        MPT_PRUNER_LOG(WARNING)
+                            << "MPT pruning: skipping malformed \"/mpt/\" row (key part "
+                            << keyView.m_key.size() << " bytes, expected 32)";
+                        continue;
+                    }
+                    bcos::h256 const hash{reinterpret_cast<bcos::byte const*>(
+                                              keyView.m_key.data()),
+                        bcos::h256::SIZE};
+                    if (m_counts.contains(hash))
+                    {
+                        continue;
+                    }
+                    garbage.fetch_add(1, std::memory_order_relaxed);
+                    chunk.push_back(bcos::ledger::mptNodeStateKey(hash));
+                    if (chunk.size() >= SWEEP_DELETE_CHUNK)
+                    {
+                        garbageDeleted.fetch_add(chunk.size(), std::memory_order_relaxed);
+                        bcos::task::tbb::syncWait(
+                            bcos::storage2::removeSome(*m_backend, std::move(chunk)));
+                        chunk.clear();
+                        if (progress)
+                        {
+                            progress(garbageDeleted.load(std::memory_order_relaxed),
+                                garbage.load(std::memory_order_relaxed));
+                        }
+                    }
+                }
+                if (!chunk.empty())
+                {
+                    garbageDeleted.fetch_add(chunk.size(), std::memory_order_relaxed);
+                    bcos::task::tbb::syncWait(
+                        bcos::storage2::removeSome(*m_backend, std::move(chunk)));
+                    if (progress)
+                    {
+                        progress(garbageDeleted.load(std::memory_order_relaxed),
+                            garbage.load(std::memory_order_relaxed));
+                    }
+                }
+            });
 
         MPT_PRUNER_LOG(INFO) << "MPT pruning: reference counts rebuilt from the state roots"
                              << LOG_KV("head", currentBlock)
