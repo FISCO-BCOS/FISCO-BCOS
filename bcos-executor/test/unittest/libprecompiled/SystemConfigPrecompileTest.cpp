@@ -1,5 +1,6 @@
 #include "../mock/MockLedger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/protocol/Exceptions.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/storage2/Storage.h"
@@ -10,6 +11,7 @@
 #include "precompiled/SystemConfigPrecompiled.h"
 #include "precompiled/common/PrecompiledResult.h"
 #include <boost/test/unit_test.hpp>
+#include <magic_enum/magic_enum.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -247,6 +249,58 @@ BOOST_AUTO_TEST_CASE(genesisOnlyFeatureIsRefusedByGovernance)
         std::string("bugfix_eip161_1052_account_semantics"), std::string("1"));
     setParameters->m_input = bcos::ref(setInput);
     BOOST_CHECK_NO_THROW(systemConfigPrecompiled.call(executive, setParameters));
+}
+
+// OP mode (executor_version >= ledger::OPSTACK_EXECUTOR_VERSION) is chosen once at boot from
+// the on-chain executor_version row: it decides the block producer (an external op-node over
+// the Engine API), the scheduler slot and the fork schedule. This precompile is the only
+// RUNTIME writer of that row -- genesis writes it directly, without validate() -- so refusing
+// the value here is what makes the boundary un-crossable on a running chain. Versioned on
+// 3.18.0 so replaying a pre-3.18.0 block that already wrote such a value still reproduces the
+// old acceptance.
+BOOST_AUTO_TEST_CASE(executorVersionOpModeIsNotGovernable)
+{
+    SystemConfigPrecompiled systemConfigPrecompiled(hashImpl);
+    CodecWrapper codec(hashImpl);
+    auto const executorVersionKey =
+        std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version));
+
+    // Accepted values must actually be WRITTEN, not merely not-thrown: the guard sits before
+    // the write, so a check that only asserts "no throw" would still pass if the whole setter
+    // silently became a no-op.
+    auto expectWritten = [&](PrecompiledExecResult::Ptr const& result) {
+        bcos::s256 code = -1;
+        codec.decode(bcos::ref(result->execResult()), code);
+        BOOST_CHECK_EQUAL(code, (int)CODE_SUCCESS);
+    };
+    auto trySetAt = [&](protocol::BlockVersion blockVersion, std::string const& value) {
+        auto ledgerCacheAt =
+            std::make_shared<LedgerCache>(std::make_shared<bcos::test::MockLedger>());
+        auto contextAt = std::make_shared<BlockContext>(stateStorage, ledgerCacheAt, hashImpl, 0,
+            h256(), utcTime(), static_cast<uint32_t>(blockVersion), false, backendStorage);
+        auto executiveAt = std::make_shared<MockTransactionExecutive>(*contextAt, "", 100, 0);
+        executiveAt->setStorageWrapper();
+
+        auto setParameters = std::make_shared<PrecompiledExecResult>();
+        auto setInput =
+            codec.encodeWithSig("setValueByKey(string,string)", executorVersionKey, value);
+        setParameters->m_input = bcos::ref(setInput);
+        return systemConfigPrecompiled.call(executiveAt, setParameters);
+    };
+
+    // 3.18.0: the OP boundary is closed. 3 is the first OP value; anything above it is OP too.
+    BOOST_CHECK_THROW(trySetAt(protocol::BlockVersion::V3_18_0_VERSION, "3"), PrecompiledError);
+    BOOST_CHECK_THROW(trySetAt(protocol::BlockVersion::V3_18_0_VERSION, "4"), PrecompiledError);
+    // ...and only the OP boundary is closed: every value below it stays governable, so a v1
+    // chain can still be moved onto the pure-Ethereum executor by governance.
+    for (auto const* accepted : {"2", "1", "0"})
+    {
+        expectWritten(trySetAt(protocol::BlockVersion::V3_18_0_VERSION, accepted));
+    }
+    // Pre-3.18.0 blocks keep the old acceptance: the gate is the on-chain compatibility
+    // version, and making the refusal unconditional would be an unversioned consensus change
+    // that breaks replay/resync of a chain which already wrote 3.
+    expectWritten(trySetAt(protocol::BlockVersion::V3_17_0_VERSION, "3"));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
