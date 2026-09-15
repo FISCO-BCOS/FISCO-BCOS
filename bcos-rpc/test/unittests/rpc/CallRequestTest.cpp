@@ -253,24 +253,37 @@ BOOST_AUTO_TEST_CASE(estimateGasGasCapComesOnlyFromTheParentHeader)
             std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
     auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
 
-    CallRequest req;
-    req.to = "0x1234567890abcdef1234567890abcdef12345678";
+    // takeToTransaction consumes the request (it moves `to`, `data` and the fee fields out), so
+    // every conversion below needs its own: reusing one would silently convert an empty `to`
+    // (contract creation) and still satisfy the gasLimit assertions.
+    auto const makeRequest = [] {
+        CallRequest request;
+        request.to = "0x1234567890abcdef1234567890abcdef12345678";
+        return request;
+    };
 
-    auto const noLimit = req.takeToTransaction(txFactory, std::nullopt, std::nullopt);
+    auto request = makeRequest();
+    auto const noLimit = request.takeToTransaction(txFactory, std::nullopt, std::nullopt);
     BOOST_CHECK_EQUAL(noLimit->gasLimit(), 0);
 
-    auto const capped = req.takeToTransaction(txFactory, std::nullopt, uint64_t{30'000'000});
+    auto cappedRequest = makeRequest();
+    auto const capped =
+        cappedRequest.takeToTransaction(txFactory, std::nullopt, uint64_t{30'000'000});
     BOOST_CHECK_EQUAL(capped->gasLimit(), 30'000'000);
 
-    req.gas = 21000;
-    auto const explicitGas = req.takeToTransaction(txFactory, std::nullopt, uint64_t{30'000'000});
+    auto explicitRequest = makeRequest();
+    explicitRequest.gas = 21000;
+    auto const explicitGas =
+        explicitRequest.takeToTransaction(txFactory, std::nullopt, uint64_t{30'000'000});
     BOOST_CHECK_EQUAL(explicitGas->gasLimit(), 21000);
 
     // gas:"0x0" is present-but-zero: op-geth's estimator keeps the header cap for anything
     // below params.TxGas, and the endpoint's guard reads the header for it, so the conversion
     // must apply the same cap (the old code left it at zero and always failed validation).
-    req.gas = 0;
-    auto const explicitZero = req.takeToTransaction(txFactory, std::nullopt, uint64_t{30'000'000});
+    auto zeroRequest = makeRequest();
+    zeroRequest.gas = 0;
+    auto const explicitZero =
+        zeroRequest.takeToTransaction(txFactory, std::nullopt, uint64_t{30'000'000});
     BOOST_CHECK_EQUAL(explicitZero->gasLimit(), 30'000'000);
 }
 

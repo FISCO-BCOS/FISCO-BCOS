@@ -131,71 +131,20 @@ BOOST_AUTO_TEST_CASE(getAndSetFeature)
     BOOST_CHECK_THROW(systemConfigPrecompiled.call(newExecutive, setParameters), PrecompiledError);
 }
 
-BOOST_AUTO_TEST_CASE(executorVersionOpstackSlotIsGenesisOnly)
+BOOST_AUTO_TEST_CASE(executorVersionOffTheOpstackSlotIsRefused)
 {
-    // OP mode is genesis-only (validateOpModeGenesisOnly): the genesis row is written by
-    // Ledger::buildGenesisBlock with activation 0, never through this precompile. A
-    // transaction that set the OPSTACK slot would land activation N+1 and make every node's
-    // next start fail closed. Refused from this release on, and older blocks that could set
-    // it must still replay, hence the version gate.
+    // The other half of the genesis-only invariant: the write-path gate refuses a write TO the
+    // OPSTACK slot, and this refuses a write OFF it. The runtime freeze keeps the running process
+    // on the OP lane but still lands the row, and the next start re-derives the lane from that
+    // row — so an accepted downgrade moves the chain off OP at the first restart. Version-scoped
+    // like the other gates, so a pre-3.18 block that moved it still replays.
     SystemConfigPrecompiled systemConfigPrecompiled(hashImpl);
     auto setParameters = std::make_shared<PrecompiledExecResult>();
     CodecWrapper codec(hashImpl);
     auto const key =
         std::string(magic_enum::enum_name(bcos::ledger::SystemConfig::executor_version));
     auto const opstack = std::to_string(bcos::ledger::OPSTACK_EXECUTOR_VERSION);
-    auto const callOn = [&](uint32_t blockVersion) {
-        std::shared_ptr<BlockContext> blockContext =
-            std::make_shared<BlockContext>(executive->blockContext().storage(), ledgerCache,
-                executive->blockContext().hashHandler(), 1, h256(), utcTime(), blockVersion, false,
-                backendStorage);
-        auto executiveForVersion =
-            std::make_shared<MockTransactionExecutive>(*blockContext, "", 100, 0);
-        auto input = codec.encodeWithSig("setValueByKey(string,string)", key, opstack);
-        setParameters->m_input = bcos::ref(input);
-        return systemConfigPrecompiled.call(executiveForVersion, setParameters);
-    };
-
-    // From this release on the OPSTACK slot cannot be written by a transaction.
-    BOOST_CHECK_THROW(
-        callOn(static_cast<uint32_t>(protocol::BlockVersion::V3_18_0_VERSION)), PrecompiledError);
-    // A pre-3.18 block that did set it still replays: the refusal is version-gated.
-    BOOST_CHECK_NO_THROW(callOn(static_cast<uint32_t>(protocol::BlockVersion::V3_17_0_VERSION)));
-}
-
-BOOST_AUTO_TEST_CASE(executorVersionAboveTheDefinedLadderIsRefused)
-{
-    // A value above MAX_GOVERNANCE_EXECUTOR_VERSION names no defined lane: the runtime
-    // setVersion fail-opens (chain keeps producing) while every node's next start throws in
-    // validateOpModeGenesisOnly — an accepted write bricks restarts. Refused from this
-    // release on; a pre-3.18 block that set it still replays, hence the version gate.
-    SystemConfigPrecompiled systemConfigPrecompiled(hashImpl);
-    auto setParameters = std::make_shared<PrecompiledExecResult>();
-    CodecWrapper codec(hashImpl);
-    auto const key =
-        std::string(magic_enum::enum_name(bcos::ledger::SystemConfig::executor_version));
-    auto const beyondLadder = std::to_string(bcos::ledger::MAX_GOVERNANCE_EXECUTOR_VERSION + 1);
-    auto const callOn = [&](uint32_t blockVersion) {
-        std::shared_ptr<BlockContext> blockContext =
-            std::make_shared<BlockContext>(executive->blockContext().storage(), ledgerCache,
-                executive->blockContext().hashHandler(), 1, h256(), utcTime(), blockVersion, false,
-                backendStorage);
-        auto executiveForVersion =
-            std::make_shared<MockTransactionExecutive>(*blockContext, "", 100, 0);
-        auto input = codec.encodeWithSig("setValueByKey(string,string)", key, beyondLadder);
-        setParameters->m_input = bcos::ref(input);
-        return systemConfigPrecompiled.call(executiveForVersion, setParameters);
-    };
-
-    // From this release on an undefined lane cannot be written by a transaction.
-    BOOST_CHECK_THROW(
-        callOn(static_cast<uint32_t>(protocol::BlockVersion::V3_18_0_VERSION)), PrecompiledError);
-    // A pre-3.18 block that did set it still replays: the refusal is version-gated.
-    BOOST_CHECK_NO_THROW(callOn(static_cast<uint32_t>(protocol::BlockVersion::V3_17_0_VERSION)));
-
-    // The in-lane values remain writable (the ladder top itself is the genesis-only
-    // OPSTACK case above; the Eth lane must keep its ordinary governance semantics).
-    auto const setVersion = [&](uint32_t blockVersion, std::string const& value) {
+    auto const callOn = [&](uint32_t blockVersion, std::string const& value) {
         std::shared_ptr<BlockContext> blockContext =
             std::make_shared<BlockContext>(executive->blockContext().storage(), ledgerCache,
                 executive->blockContext().hashHandler(), 1, h256(), utcTime(), blockVersion, false,
@@ -206,8 +155,39 @@ BOOST_AUTO_TEST_CASE(executorVersionAboveTheDefinedLadderIsRefused)
         setParameters->m_input = bcos::ref(input);
         return systemConfigPrecompiled.call(executiveForVersion, setParameters);
     };
-    BOOST_CHECK_NO_THROW(setVersion(static_cast<uint32_t>(protocol::BlockVersion::V3_18_0_VERSION),
-        std::to_string(bcos::ledger::ETHEREUM_EXECUTOR_VERSION)));
+
+    // "No throw" cannot tell an accepted write from an ignored one: read the row back the way a
+    // client would.
+    auto const readBack = [&](uint32_t blockVersion) {
+        auto readParameters = std::make_shared<PrecompiledExecResult>();
+        auto readInput = codec.encodeWithSig("getValueByKey(string)", key);
+        readParameters->m_input = bcos::ref(readInput);
+        std::shared_ptr<BlockContext> blockContext =
+            std::make_shared<BlockContext>(executive->blockContext().storage(), ledgerCache,
+                executive->blockContext().hashHandler(), 1, h256(), utcTime(), blockVersion, false,
+                backendStorage);
+        auto readExecutive = std::make_shared<MockTransactionExecutive>(*blockContext, "", 100, 0);
+        auto const result = systemConfigPrecompiled.call(readExecutive, readParameters);
+        std::string value;
+        codec.decode(bcos::ref(result->execResult()), value);
+        return value;
+    };
+    auto const v3_17 = static_cast<uint32_t>(protocol::BlockVersion::V3_17_0_VERSION);
+    auto const v3_18 = static_cast<uint32_t>(protocol::BlockVersion::V3_18_0_VERSION);
+
+    // An OP chain carries the OPSTACK row; a pre-3.18 block may still land it through here.
+    BOOST_CHECK_NO_THROW(callOn(v3_17, opstack));
+    BOOST_CHECK_EQUAL(readBack(v3_17), opstack);
+
+    BOOST_CHECK_THROW(
+        callOn(v3_18, std::to_string(bcos::ledger::ETHEREUM_EXECUTOR_VERSION)), PrecompiledError);
+    BOOST_CHECK_EQUAL(readBack(v3_18), opstack);  // refused: the OP row is still there
+    // The refused write left the row alone: the next write is still judged against the OP slot.
+    BOOST_CHECK_THROW(callOn(v3_18, std::to_string(0)), PrecompiledError);
+    BOOST_CHECK_EQUAL(readBack(v3_18), opstack);
+    // A pre-3.18 block that moved the row off OP still replays.
+    BOOST_CHECK_NO_THROW(callOn(v3_17, std::to_string(bcos::ledger::ETHEREUM_EXECUTOR_VERSION)));
+    BOOST_CHECK_EQUAL(readBack(v3_17), std::to_string(bcos::ledger::ETHEREUM_EXECUTOR_VERSION));
 }
 
 BOOST_AUTO_TEST_CASE(upgradeVersion)

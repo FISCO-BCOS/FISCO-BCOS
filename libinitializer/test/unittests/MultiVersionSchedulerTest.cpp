@@ -14,7 +14,8 @@
  *  limitations under the License.
  *
  * @file MultiVersionSchedulerTest.cpp
- * @brief Slot selection of MultiVersionScheduler with an unwired OP slot.
+ * @brief Slot selection of MultiVersionScheduler with an unwired OP slot, plus the OP
+ * running-slot freeze keying pinned by the karst integration.
  */
 #include "libinitializer/MultiVersionScheduler.h"
 #include <boost/test/unit_test.hpp>
@@ -26,6 +27,15 @@ using namespace bcos::scheduler_v1;
 
 namespace
 {
+bcos::ledger::LedgerConfig::Ptr l2FeatureConfig()
+{
+    auto config = std::make_shared<bcos::ledger::LedgerConfig>();
+    bcos::ledger::Features features;
+    features.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
+    config->setFeatures(features);
+    return config;
+}
+
 /// Records which forwarded call reached this slot.
 class RecordingScheduler : public bcos::scheduler::SchedulerInterface
 {
@@ -35,10 +45,16 @@ public:
     int m_tag;
     int m_callAtBlockCount = 0;
     int m_adoptCount = 0;
+    int m_stopCount = 0;
+    int m_executeCount = 0;
 
     void executeBlock(bcos::protocol::Block::Ptr, bool,
-        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool)>) override
-    {}
+        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool)> callback)
+        override
+    {
+        ++m_executeCount;
+        callback(nullptr, nullptr, false);
+    }
     void commitBlock(bcos::protocol::BlockHeader::Ptr,
         std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)>) override
     {}
@@ -56,6 +72,7 @@ public:
     {
         ++m_adoptCount;
     }
+    void stop() override { ++m_stopCount; }
     void reset(std::function<void(Error::Ptr)>) override {}
     void getCode(std::string_view, std::function<void(Error::Ptr, bcos::bytes)>) override {}
     void getABI(std::string_view, std::function<void(Error::Ptr, std::string)>) override {}
@@ -149,6 +166,72 @@ BOOST_AUTO_TEST_CASE(callAtBlockAndAdoptProbeReachSelectedScheduler)
     BOOST_CHECK_EQUAL(slots[3]->m_adoptCount, 1);
     BOOST_CHECK_EQUAL(slots[2]->m_callAtBlockCount, 0);
     BOOST_CHECK_EQUAL(slots[2]->m_adoptCount, 0);
+}
+
+// The shutdown sweep reaches every WIRED slot and tolerates the unwired one. Initializer
+// publishes a null slot for a lane this node did not wire -- the normal shape of slot 3 on a
+// non-OP node -- and calling through that null pointer is a virtual call on address 0, on the
+// shutdown path, before the observer teardown the sweep exists to protect. The inactive wired
+// slots still have to be stopped: each holds the shared MPT commit observer and stop() is what
+// detaches it.
+BOOST_AUTO_TEST_CASE(stopSweepsEveryWiredSlotAndSkipsTheUnwiredOne)
+{
+    auto wired = make(true);
+    wired->stop();
+    BOOST_CHECK_EQUAL(slots[0]->m_stopCount, 1);
+    BOOST_CHECK_EQUAL(slots[1]->m_stopCount, 1);
+    BOOST_CHECK_EQUAL(slots[2]->m_stopCount, 1);
+    BOOST_CHECK_EQUAL(slots[3]->m_stopCount, 1);
+
+    Fixture nonOpNode;  // a non-OP node: slot 3 is null
+    auto unwired = nonOpNode.make(false);
+    unwired->stop();
+    BOOST_CHECK_EQUAL(nonOpNode.slots[0]->m_stopCount, 1);
+    BOOST_CHECK_EQUAL(nonOpNode.slots[1]->m_stopCount, 1);
+    BOOST_CHECK_EQUAL(nonOpNode.slots[2]->m_stopCount, 1);
+    BOOST_CHECK_EQUAL(nonOpNode.slots[3]->m_stopCount, 0);
+}
+
+// A chain RUNNING the OP executor must not be moved off it by a governance write: the
+// freeze keys on the running slot, with or without the L2 feature flag in the config.
+BOOST_AUTO_TEST_CASE(opRunningSlotIsFrozenAgainstGovernanceWrites)
+{
+    auto scheduler = make(true);
+    scheduler->setVersion(OPSTACK_EXECUTOR_VERSION, {});
+    scheduler->setVersion(ETHEREUM_EXECUTOR_VERSION, {});
+    scheduler->setVersion(1, l2FeatureConfig());
+
+    // Both governance writes were rejected: execution still routes to the OP slot.
+    scheduler->executeBlock(
+        {}, false, [](bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool) {});
+    BOOST_CHECK_EQUAL(slots[3]->m_executeCount, 1);
+    BOOST_CHECK_EQUAL(slots[2]->m_executeCount, 0);
+    BOOST_CHECK_EQUAL(slots[1]->m_executeCount, 0);
+    // stop() tears down every WIRED slot (see stopSweepsEveryWiredSlotAndSkipsTheUnwiredOne),
+    // so stop counts do not discriminate the freeze either.
+    scheduler->stop();
+    BOOST_CHECK_EQUAL(slots[3]->m_stopCount, 1);
+    BOOST_CHECK_EQUAL(slots[2]->m_stopCount, 1);
+    BOOST_CHECK_EQUAL(slots[1]->m_stopCount, 1);
+}
+
+// The discriminator for the guard's keying: an Eth-lane chain may legitimately carry
+// feature_l2_ethereum_compat (it is the ledger's L2 state shape, not an OP-mode marker).
+// Flag-keyed freezing (the pre-fix guard) froze and mislabelled such a chain on an
+// ordinary executor_version switch; slot-keyed freezing must let it switch.
+BOOST_AUTO_TEST_CASE(ethLaneL2FeatureDoesNotFreezeVersionSwitches)
+{
+    auto scheduler = make(true);
+    scheduler->setVersion(ETHEREUM_EXECUTOR_VERSION, {});
+    scheduler->setVersion(1, l2FeatureConfig());
+
+    // The flag is not a freeze key: the switch to slot 1 landed and execution follows it.
+    scheduler->executeBlock(
+        {}, false, [](bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool) {});
+    BOOST_CHECK_EQUAL(slots[1]->m_executeCount, 1);
+    BOOST_CHECK_EQUAL(slots[2]->m_executeCount, 0);
+    scheduler->stop();
+    BOOST_CHECK_EQUAL(slots[1]->m_stopCount, 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

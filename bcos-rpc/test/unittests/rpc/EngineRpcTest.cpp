@@ -20,11 +20,13 @@
 #include "../common/RPCFixture.h"
 #include <bcos-framework/engine/AnyEngineService.h>
 #include <bcos-framework/engine/Errors.h>
+#include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/Endpoints.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Error.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <chrono>
@@ -67,6 +69,7 @@ public:
         bool throwInvalidForkchoiceState = false;
         bool throwOpExecutionInternalError = false;
         bool throwStdRuntimeError = false;
+        bool throwBcosError = false;
         std::atomic<bool> hangNewPayload{false};
         std::atomic<bool> enteredNewPayload{false};
     };
@@ -111,6 +114,11 @@ public:
         {
             throw std::runtime_error{"untreated scheduler fault"};
         }
+        if (m_state->throwBcosError)
+        {
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(
+                bcos::ledger::LedgerError::GetStorageError, "missing SYS_HASH_2_TX row"));
+        }
         co_return m_state->forkchoiceUpdatedResult;
     }
 
@@ -119,6 +127,12 @@ public:
     {
         m_state->capturedPayloadId = payloadId;
         m_state->capturedGetPayloadVersion = version;
+        if (m_state->throwUnsupportedFork)
+        {
+            BOOST_THROW_EXCEPTION(
+                engine::UnsupportedFork{} << bcos::errinfo_comment{"engine_getPayloadV5 requires a "
+                                                                   "Karst payload"});
+        }
         if (m_state->throwUnknownPayload)
         {
             BOOST_THROW_EXCEPTION(engine::UnknownPayload{});
@@ -126,11 +140,6 @@ public:
         if (m_state->throwUnsupportedEngineApiVersion)
         {
             BOOST_THROW_EXCEPTION(engine::UnsupportedEngineApiVersion{});
-        }
-        if (m_state->throwUnsupportedFork)
-        {
-            BOOST_THROW_EXCEPTION(engine::UnsupportedFork{} << bcos::errinfo_comment{
-                                      "engine_getPayloadV5 requires a Karst payload"});
         }
         if (m_state->throwOpExecutionInternalError)
         {
@@ -140,6 +149,11 @@ public:
         if (m_state->throwStdRuntimeError)
         {
             throw std::runtime_error{"untreated scheduler fault"};
+        }
+        if (m_state->throwBcosError)
+        {
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(
+                bcos::ledger::LedgerError::GetStorageError, "missing SYS_HASH_2_TX row"));
         }
         co_return std::make_unique<engine::GetPayloadData>(*m_state->getPayloadResult);
     }
@@ -174,6 +188,11 @@ public:
         if (m_state->throwStdRuntimeError)
         {
             throw std::runtime_error{"untreated scheduler fault"};
+        }
+        if (m_state->throwBcosError)
+        {
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(
+                bcos::ledger::LedgerError::GetStorageError, "missing SYS_HASH_2_TX row"));
         }
         co_return m_state->forkchoiceUpdatedResult.payloadStatus;
     }
@@ -379,6 +398,31 @@ BOOST_AUTO_TEST_CASE(engineRpcInternalFaultsMapToShort32603)
         });
 }
 
+// A bcos::Error from the scheduler/ledger carries its reason in ErrorMessage, not in what()
+// (Exception::what() returns only errinfo_comment, which BCOS_ERROR never sets). The catch-all
+// must not collapse it to a bare "Internal error" — the reason is the operator's only
+// diagnostic on the -32603.
+BOOST_AUTO_TEST_CASE(bcosErrorReasonSurvivesInternalError)
+{
+    auto const params = makeForkchoiceParams();
+
+    mockService.m_state->throwBcosError = true;
+    Json::Value response;
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(forkchoiceUpdatedV3, params, response), JsonRpcException,
+        [](JsonRpcException const& e) {
+            return isShortInternalError(e, "missing SYS_HASH_2_TX row");
+        });
+
+    Json::Value getParams(Json::arrayValue);
+    getParams.append("0x00000000deadbeef");
+    BOOST_CHECK_EXCEPTION(CALL_ENGINE(getPayloadV3, getParams, response), JsonRpcException,
+        [](JsonRpcException const& e) {
+            return isShortInternalError(e, "missing SYS_HASH_2_TX row");
+        });
+
+    mockService.m_state->throwBcosError = false;
+}
+
 
 BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV3)
 {
@@ -580,9 +624,8 @@ BOOST_AUTO_TEST_CASE(getPayloadUnsupportedEngineApiVersionMapsTo38005)
         [](JsonRpcException const& e) { return e.code() == EngineError::UnsupportedFork; });
 }
 
-// OpEngineService throws UnsupportedFork when the built payload's fork is outside the
-// method's window (execution-apis osaka.md: V5 with a pre-Karst payload, V4 with a Karst one).
-// The endpoint must answer -38005, not fall through to the generic -32603.
+// The payload's fork is outside the method's window: execution-apis osaka.md requires -38005
+// (EngineError::UnsupportedFork), not the generic -32603 the catch-all would produce.
 BOOST_AUTO_TEST_CASE(getPayloadForkOutsideMethodWindowMapsTo38005)
 {
     mockService.m_state->throwUnsupportedFork = true;

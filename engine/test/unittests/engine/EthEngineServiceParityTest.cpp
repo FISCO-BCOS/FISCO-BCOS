@@ -38,6 +38,7 @@
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/testutils/faker/FakeBlock.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-ledger/mpt/Constants.h>
 #include <bcos-mempool/MemPoolImpl.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
@@ -1233,6 +1234,32 @@ BOOST_AUTO_TEST_CASE(mirror_forced_transactions_enter_payload_first)
     BOOST_CHECK(newPayload->executionPayload.transactions[0].decoded != nullptr);
     BOOST_CHECK(newPayload->executionPayload.transactions[1].decoded != nullptr);
     BOOST_CHECK(newPayload->executionPayload.transactions[2].decoded == newTx);
+
+    // Receipts-side invariant (N == M, EthEngineService.inl's buildPayload): the forced
+    // entries are executed, so each one must contribute to the receipts root. Build payloads
+    // over the same head with an empty forced set and a single-entry forced set: the empty
+    // payload's receipts root must be the canonical empty-trie root, and every added forced
+    // envelope must move it. A receipts side covering fewer transactions than
+    // transactionsRoot (the pre-#5593 divergence risk) would leave these roots equal.
+    auto emptyAttributes = makePayloadAttributesV3();
+    emptyAttributes.noTxPool = true;
+    auto emptyResult =
+        task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &emptyAttributes, 3));
+    auto emptyPayload = task::syncWait(pair.fresh.getPayload(*emptyResult.payloadId, 3));
+
+    auto singleAttributes = makePayloadAttributesV3();
+    singleAttributes.noTxPool = true;
+    singleAttributes.transactions = std::vector<std::string>{forcedA};
+    auto singleResult =
+        task::syncWait(pair.fresh.updateForkchoice(forkchoiceState, &singleAttributes, 3));
+    auto singlePayload = task::syncWait(pair.fresh.getPayload(*singleResult.payloadId, 3));
+
+    BOOST_CHECK_EQUAL(emptyPayload->executionPayload.receiptsRoot.hex(),
+        bcos::ledger::mpt::emptyRootHash().hex());
+    auto const emptyRoot = emptyPayload->executionPayload.receiptsRoot.hex();
+    auto const singleRoot = singlePayload->executionPayload.receiptsRoot.hex();
+    BOOST_CHECK_NE(singleRoot, emptyRoot);
+    BOOST_CHECK_NE(newPayload->executionPayload.receiptsRoot.hex(), singleRoot);
 }
 
 BOOST_AUTO_TEST_CASE(mirror_no_tx_pool_excludes_mempool)

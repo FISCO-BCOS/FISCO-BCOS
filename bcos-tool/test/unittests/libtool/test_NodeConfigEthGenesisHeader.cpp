@@ -64,8 +64,9 @@ constexpr auto kEthAlloc0 =
 constexpr std::string_view kEthEmptyTrieRoot =
     "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421";
 
-// Fixture values match tools/opstack-genesis/gen_eth_header_fixture.py
-// (DEFAULT_FIELDS); the expected hash below was computed by that script.
+// Fixture values match gen_eth_header_fixture.py (DEFAULT_FIELDS) from the
+// genesis toolchain in the harness (FISCO-BCOS/op-stack-e2e-tests,
+// tools/opstack-genesis); the expected hash below was computed by that script.
 const std::vector<std::pair<std::string, std::string>> kEthHeaderFields = {
     {"parent_hash", "0x0000000000000000000000000000000000000000000000000000000000000000"},
     {"sha3_uncles", "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"},

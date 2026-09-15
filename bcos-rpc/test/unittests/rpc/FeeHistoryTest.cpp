@@ -19,6 +19,8 @@
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-framework/engine/Errors.h>
+#include <bcos-framework/engine/OpBaseFee.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/FeeHistory.h>

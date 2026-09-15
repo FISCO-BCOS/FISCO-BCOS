@@ -25,6 +25,7 @@
 #include <bcos-tars-protocol/tars/Block.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
+#include <string_view>
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -95,8 +96,14 @@ BOOST_AUTO_TEST_CASE(opLaneUsesTheRlpIdentityHash)
     header->setBaseFee(u256(1000000000));
     BOOST_REQUIRE(isOpEthereumBlock(*header));
 
-    auto const expected = EthBlockHeader::computeHash(*header);
-    BOOST_CHECK_EQUAL(canonicalBlockHash(*header).hex(), expected.hex());
+    // Golden pinned externally: keccak256 over the RLP encoding of exactly this header's
+    // field set (captured by an independent harness, not via canonicalBlockHash), so a
+    // broken hash implementation cannot pass just because both sides of the comparison
+    // share code.
+    constexpr std::string_view c_opLaneGoldenHash =
+        "ce126e95af4dacf1efa887b5aaa32a6f65b42b9c39e80d7494cd13d8f144760b";
+    BOOST_CHECK_EQUAL(EthBlockHeader::computeHash(*header).hex(), std::string(c_opLaneGoldenHash));
+    BOOST_CHECK_EQUAL(canonicalBlockHash(*header).hex(), std::string(c_opLaneGoldenHash));
 
     auto hashImpl = std::make_shared<bcos::crypto::Keccak256>();
     header->calculateHash(*hashImpl);  // native form: fills the TARS hash

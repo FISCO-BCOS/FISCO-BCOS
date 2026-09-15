@@ -15,10 +15,19 @@
 
 namespace bcos::initializer
 {
-/// Wires EthEngineService or OpEngineService for production Engine API use.
-///
-/// - build(...)   → EthEngineService
-/// - buildOp(...) → OpEngineService
+/// Wires the Engine API (forkchoiceUpdated / getPayload / newPayload) to a scheduler +
+/// executor pipeline. Called from Initializer when engine-driven block production is enabled:
+///   * build(...)   → EthEngineService (executor_version==2 + single-node consensus or
+///   op_engine_rpc, and also the executor_version<2 engineApiForV1Only escape, which boots
+///   the same service over the v1 TransactionExecutorImpl)
+///   * buildOp(...) → OpEngineService (executor_version==3, the genesis-frozen OPSTACK slot)
+/// executor_version alone does not enable the Engine API on v2 chains. Both lanes bypass
+/// MultiVersionScheduler's publishing wrapper, so each keeps the LedgerConfigState holder
+/// current itself — transaction admission reads it and nowhere else: build() hands the holder
+/// to EthEngineService, which republishes after every durable commit; buildOp() does not take
+/// one at all, and the initializer instead installs the republish notifier OpScheduler fires
+/// after every OP commit (OpLedgerConfigRepublish.h explains why the engine must not publish
+/// there).
 class EngineServiceInitializer
 {
 public:
@@ -34,21 +43,18 @@ public:
         std::shared_ptr<ledger::mpt::CommitObserver> commitObserver = nullptr)
     {
         auto initializer = Ptr(new EngineServiceInitializer());
-        // The split Eth service takes no LedgerConfigState: the process-wide snapshot is published
-        // once at boot (Initializer) and then by MultiVersionScheduler::commitBlock on every
-        // commit (#5535), which is what transaction admission reads. The legacy EngineServiceImpl
-        // used to publish it from its own build path; that parameter is intentionally not carried
-        // over here -- do not re-add it to the Eth service. It stays in the signature so the
-        // boot call sites can pass it uniformly; the MPT-pruning commitObserver below IS wired
-        // through (the release line's pruning hooks fire on the split service's commits).
-        (void)ledgerConfigState;
+        // Engine-driven commits bypass MultiVersionScheduler's publishing wrapper, so the split
+        // Eth service republishes the LedgerConfigState itself after every durable commit —
+        // transaction admission reads that holder and nowhere else, so an engine-produced block
+        // must not leave it stale. The MPT-pruning commitObserver below is wired through as well
+        // (the release line's pruning hooks fire on the split service's commits).
         using ConcreteEngineService = bcos::engine::EthEngineService<bcos::txpool::MemPoolImpl,
             GlobalStateStorage, ExecutorType, SchedulerType>;
         auto holder =
             std::make_shared<ConcreteModel<SchedulerType, ExecutorType, ConcreteEngineService>>(
                 std::move(storageInitializer), std::move(blockFactory), std::move(scheduler),
                 std::move(transactionExecutor), memPool, std::move(ledger), blockTxCountLimit,
-                std::move(commitObserver));
+                std::move(ledgerConfigState), std::move(commitObserver));
         initializer->m_holder = holder;
         initializer->m_engineService =
             std::shared_ptr<bcos::engine::AnyEngineService>(holder, &holder->m_any);
@@ -103,6 +109,7 @@ private:
             std::shared_ptr<SchedulerType> scheduler,
             std::shared_ptr<ExecutorType> transactionExecutor, bcos::txpool::MemPoolImpl& memPool,
             bcos::ledger::LedgerInterface::Ptr ledger, int64_t blockTxCountLimit,
+            bcos::ledger::LedgerConfigState::Ptr ledgerConfigState,
             std::shared_ptr<ledger::mpt::CommitObserver> commitObserver)
           : m_storageInitializer(std::move(storageInitializer)),
             m_memPool(memPool),
@@ -112,7 +119,7 @@ private:
                 m_storageInitializer->storage(), *m_transactionExecutor, *m_scheduler,
                 std::move(blockFactory), std::move(ledger), blockTxCountLimit,
                 /*maxEngineVersion=*/static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3),
-                std::move(commitObserver))
+                std::move(commitObserver), std::move(ledgerConfigState))
         {}
 
         std::shared_ptr<GlobalStateStorageInitializer> m_storageInitializer;

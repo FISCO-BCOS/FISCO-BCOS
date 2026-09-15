@@ -213,19 +213,6 @@ struct HistoricalMptContext
     bool fullTrie = false;
 };
 
-/// Resolve a block's committed MPT state root and scenario flag, applying the same checks as
-/// getProof (generateProof's BlockNotCommitted): the block must exist, the node must have a
-/// local MPT node reader, and — for historical tags — the state root must be present in MPT
-/// node storage. `requireRootInStorage` is false only for the latest/pending tags: a
-/// flat-storage chain's tip header still carries a non-empty root that is NOT an MPT root,
-/// and such a request must fall back to the flat state read instead of failing, so the core
-/// answers std::nullopt for a missing reader/root there and the caller decides. Historical
-/// tags keep the strict contract: a committed historical root that cannot be read is a
-/// -32004, never a silent serve from the latest state. The empty root is a legal "no
-/// accounts" root (genesis / pre-MPT / empty blocks): the empty trie has no node rows, so it
-/// is NOT a "root not committed" error — the scenario flag below still governs how absence
-/// at it reads.
-///
 /// The -32004 message for a missing stateRoot. @p mptActive tells whether the block's header
 /// stateRoot was ever expected to be an MPT root (mptStateRootExpectedAt): a pre-activation
 /// block commits a legacy XOR root, which ALWAYS misses the /mpt/ probe — claiming "State
@@ -271,12 +258,26 @@ bcos::task::Task<bool> mptStateRootExpectedAt(
     }
     co_return co_await ledger::getFeature(ledger, Flag::feature_mpt_state_root, blockNumber - 1);
 }
-
+/// Resolve a block's committed MPT state root and scenario flag, applying the same checks as
+/// getProof (generateProof's BlockNotCommitted): the block must exist, the node must have a
+/// local MPT node reader, and — for historical tags — the state root must be present in MPT
+/// node storage. `requireRootInStorage` is false only for the latest/pending tags: a
+/// flat-storage chain's tip header still carries a non-empty root that is NOT an MPT root,
+/// and such a request must fall back to the flat state read instead of failing, so the core
+/// answers std::nullopt for a missing reader/root there and the caller decides. Historical
+/// tags keep the strict contract: a committed historical root that cannot be read is a
+/// -32004 — worded by stateRootMissingMessage with pruning-window awareness (#5552) — never
+/// a silent serve from the latest state. The empty root is a legal "no accounts" root
+/// (genesis / pre-MPT / empty blocks): the empty trie has no node rows, so it is NOT a "root
+/// not committed" error — the scenario flag below still governs how absence at it reads.
+/// @p head is the chain head the CALLER already resolved for the request
+/// (getBlockNumberAndHeadByTag); @p mptPruneWindow is the node's configured retention window
+/// (NodeService::mptPruneWindow, <=0 disables pruning) — both feed the -32004 wording only.
 task::Task<std::optional<HistoricalMptContext>> tryResolveMptContext(
     bcos::ledger::LedgerInterface& ledger, bcos::protocol::BlockNumber blockNumber,
     bcos::protocol::BlockNumber head,
-    std::shared_ptr<rpc::NodeService::MPTNodeReader> const& mptReader, std::int64_t mptPruneWindow,
-    bool requireRootInStorage)
+    std::shared_ptr<rpc::NodeService::MPTNodeReader> const& mptReader, bool requireRootInStorage,
+    std::int64_t mptPruneWindow)
 {
     auto const block = co_await ledger::getBlockData(ledger, blockNumber, bcos::ledger::HEADER);
     if (!block || !block->blockHeader()) [[unlikely]]
@@ -330,8 +331,8 @@ bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
     bcos::protocol::BlockNumber head,
     std::shared_ptr<rpc::NodeService::MPTNodeReader> const& mptReader, std::int64_t mptPruneWindow)
 {
-    auto const ctx =
-        co_await tryResolveMptContext(ledger, blockNumber, head, mptReader, mptPruneWindow, true);
+    auto const ctx = co_await tryResolveMptContext(
+        ledger, blockNumber, head, mptReader, /*requireRootInStorage=*/true, mptPruneWindow);
     co_return *ctx;
 }
 
@@ -341,10 +342,11 @@ bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
 /// the strict error path, which this entry never takes.
 task::Task<std::optional<HistoricalMptContext>> tryResolveLatestMptContext(
     bcos::ledger::LedgerInterface& ledger, bcos::protocol::BlockNumber blockNumber,
-    std::shared_ptr<rpc::NodeService::MPTNodeReader> const& mptReader)
+    bcos::protocol::BlockNumber head,
+    std::shared_ptr<rpc::NodeService::MPTNodeReader> const& mptReader, std::int64_t mptPruneWindow)
 {
     co_return co_await tryResolveMptContext(
-        ledger, blockNumber, /*head=*/0, mptReader, /*mptPruneWindow=*/0, false);
+        ledger, blockNumber, head, mptReader, /*requireRootInStorage=*/false, mptPruneWindow);
 }
 
 /// Run a historical MPT walk (@p walk), mapping a missing INTERNAL node to the same -32004 the
@@ -404,7 +406,8 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
         auto const mptReader = m_nodeService->mptNodeReader();
         if (mptReader)
         {
-            auto const ctx = co_await tryResolveLatestMptContext(*ledger, blockNumber, mptReader);
+            auto const ctx = co_await tryResolveLatestMptContext(
+                *ledger, blockNumber, head, mptReader, m_nodeService->mptPruneWindow());
             if (ctx && ctx->fullTrie)
             {
                 bcos::ledger::mpt::MPTReadView view{*mptReader, ctx->stateRoot};
@@ -537,14 +540,17 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     {
         // Latest state: fork a fresh view of GlobalStateStorage's COMMITTED plane and read
         // the flat KV — a consistent point-in-time snapshot of the last committed block
-        // (cache -> committed backend, no in-flight pending layers). This is the same plane
-        // getBalance / getTransactionCount / getCode read (committed ledger / scheduler):
-        // "latest" means the last committed block, per Ethereum semantics. Operators who
-        // want the pending window (in-flight executed, not yet committed layers) visible
-        // can wire a provider that forks GlobalStateStorage::fork() instead — the default
-        // wiring (AirNodeInitializer) is committed-only. The provider is unset on nodes
-        // with no local state storage (tars-built NodeService); those fall back to the
-        // ledger, which serves the same committed plane.
+        // (cache -> committed backend, no in-flight pending layers). NOTE this is the FLAT
+        // read; getBalance / getTransactionCount branch first: on an MPT-committed chain
+        // (OP / scenario-B) they read the tip block's committed state root through the MPT
+        // reader and never touch this plane — the flat rows are the fallback there, and
+        // getCode has its own path. "latest" means the last committed block, per Ethereum
+        // semantics, on all of them. Operators who want the pending window (in-flight
+        // executed, not yet committed layers) visible can wire a provider that forks
+        // GlobalStateStorage::fork() instead — the default wiring (AirNodeInitializer) is
+        // committed-only. The provider is unset on nodes with no local state storage
+        // (tars-built NodeService); those fall back to the ledger, which serves the same
+        // committed plane.
         Json::Value result;
         auto const& stateStorageProvider = m_nodeService->stateStorageProvider();
         if (stateStorageProvider)
@@ -702,7 +708,8 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
         auto const mptReader = m_nodeService->mptNodeReader();
         if (mptReader)
         {
-            auto const ctx = co_await tryResolveLatestMptContext(*ledger, blockNumber, mptReader);
+            auto const ctx = co_await tryResolveLatestMptContext(
+                *ledger, blockNumber, head, mptReader, m_nodeService->mptPruneWindow());
             if (ctx && ctx->fullTrie)
             {
                 bcos::ledger::mpt::MPTReadView view{*mptReader, ctx->stateRoot};
@@ -1026,8 +1033,8 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
             // verify() throws, by contract, when the data it needs cannot be read
             // (TxValidator.h). A storage fault is the node's fault, not a verdict on the
             // transaction, and its diagnostic is for the log: the client gets the same answer
-            // the txpool branch gives, where verifyAndSubmitTransaction catches this and refuses
-            // with Unknown.
+            // the txpool branch gives, where verifyAndSubmitTransaction catches this and
+            // refuses with Unknown.
             WEB3_LOG(ERROR) << LOG_DESC("sendRawTransaction: admission could not be decided")
                             << LOG_KV("txHash", encodeTxHash.hexPrefixed())
                             << LOG_KV("reason", boost::current_exception_diagnostic_information());
@@ -1066,17 +1073,17 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     catch (bcos::Error const& e)
     {
         // The pool's refusal arrives as an Error whose code is the TransactionStatus
-        // (MemoryStorage::submitTransaction's await_resume); left alone it reaches the catch-all
-        // above this method, which answers -32603 with the status name. Same table as the
-        // mempool branch instead, so both pools refuse the same transaction the same way.
+        // (MemoryStorage::submitTransaction's await_resume); left alone it reaches the
+        // catch-all above this method, which answers -32603 with the status name. Same table as
+        // the mempool branch instead, so both pools refuse the same transaction the same way.
         //
         // Only for a code that is a verdict. This interface also carries faults that are the
         // node's own -- a MAX/TARS deployment's TxPoolServiceClient throws "No value!" and TARS
         // transport codes through it -- and those keep going to the catch-all, which answers
         // -32603 with the message they came with, as they did before this table existed.
         // bcos::Error only, where the mempool branch catches everything: an in-process pool has
-        // already turned verify()'s throw into Unknown (verifyAndSubmitTransaction), so anything
-        // that is not an Error is not a verdict either.
+        // already turned verify()'s throw into Unknown (verifyAndSubmitTransaction), so
+        // anything that is not an Error is not a verdict either.
         if (!isAdmissionVerdict(e.errorCode())) [[unlikely]]
         {
             WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction: pool fault, not a verdict")
@@ -1169,8 +1176,13 @@ task::Task<void> EthEndpoint::call(
         catch (bcos::Error const& e)
         {
             // Some ledger implementations report a missing block as an error rather than a
-            // null block: swallow it here so the refusal below is the diagnosable answer,
-            // instead of leaking the raw ledger exception as a bare -32603.
+            // null block: keep the refusal below as the caller's answer instead of leaking the
+            // raw ledger exception as a bare -32603. Logged because that refusal is generic —
+            // without this line a storage fault and a genuinely absent block look identical to
+            // an operator, and the error object is the only place the cause exists.
+            WEB3_LOG(WARNING) << LOG_DESC("eth_estimateGas: reading the target block failed")
+                              << LOG_KV("blockNumber", blockNumber)
+                              << LOG_KV("error", e.errorMessage());
         }
         if (block)
         {
@@ -1199,7 +1211,8 @@ task::Task<void> EthEndpoint::call(
         // Plain eth_call: geth / op-geth size an omitted gas against the RPC gas cap, never 0
         // (a zero budget is rejected downstream as "intrinsic gas too low"). Bound the default
         // by the target block's gasLimit when its header is readable and non-zero; otherwise
-        // (unreadable / genesis / zero gasLimit) keep the cap so a call is never run with gas 0.
+        // (unreadable / genesis / zero gasLimit) keep the cap so a call is never run with gas
+        // 0.
         uint64_t gasDefault = c_ethCallGasCap;
         if (ledger)
         {
@@ -1237,8 +1250,14 @@ task::Task<void> EthEndpoint::call(
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(InvalidParams, "invalid `from` address in call request"));
         }
-        pendingNonce = CallRequest::nonceFromPendingEntry(co_await scheduler->getPendingStorageAt(
-            bcos::precompiled::trimHexPrefix(call.from.value()), "nonce", 0));
+        // The account row key is the lowercase hex text on chains without feature_raw_address,
+        // and clients (ethers/viem) send an EIP-55 mixed-case `from` — normalize the lookup key
+        // the same way every other address lookup in this file does, or the read misses and the
+        // call falls back to the state nonce (NONCE_TOO_LOW for an in-flight sender).
+        auto lookupAddress = std::string(bcos::precompiled::trimHexPrefix(call.from.value()));
+        boost::algorithm::to_lower(lookupAddress);
+        pendingNonce = CallRequest::nonceFromPendingEntry(
+            co_await scheduler->getPendingStorageAt(lookupAddress, "nonce", 0));
     }
     auto tx = call.takeToTransaction(m_nodeService->blockFactory()->transactionFactory(),
         std::move(pendingNonce), chainBlockGasLimit);
@@ -1678,88 +1697,6 @@ task::Task<void> EthEndpoint::maxPriorityFeePerGas(
     co_return;
 }
 
-task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value& response)
-{
-    // params: blockCount(QTY), newestBlock(QTY|TAG), rewardPercentiles(FLOAT[] optional)
-    if (request.empty() || !request[0U].isString())
-    {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            InvalidParams, "eth_feeHistory expects [blockCount, newestBlock, ...]"));
-    }
-    auto const blockCountParsed = bcos::safeFromQuantity(request[0U].asString());
-    if (!blockCountParsed.has_value())
-    {
-        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid blockCount"));
-    }
-    if (request.size() < 2 || !request[1U].isString())
-    {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            InvalidParams, "eth_feeHistory expects [blockCount, newestBlock, ...]"));
-    }
-
-    // Capture the ledger once and fail closed BEFORE any deref: getBlockNumberByTag
-    // calls getCurrentBlockNumber(*ledger), so a null-ledger node must refuse here
-    // instead of crashing inside the helper (sibling fee methods guard the same way).
-    auto ledger = m_nodeService->ledger();
-    if (!ledger)
-    {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            JsonRpcError::InternalError, "Ledger not available for eth_feeHistory"));
-    }
-
-    auto const newestTag = toView(request[1U]);
-    auto [newestBlock, _] = co_await getBlockNumberByTag(newestTag);
-
-    std::vector<double> rewardPercentiles;
-    if (request.size() >= 3)
-    {
-        // geth rejects a non-array third parameter rather than ignoring it.
-        if (!request[2U].isArray())
-        {
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(InvalidParams, "rewardPercentiles must be an array"));
-        }
-        // Same query limit as geth (eth/gasprice/feehistory.go maxQueryLimit).
-        constexpr std::size_t c_maxRewardPercentiles = 100;
-        if (request[2U].size() > c_maxRewardPercentiles)
-        {
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(InvalidParams, "rewardPercentiles over the query limit 100"));
-        }
-        for (auto const& entry : request[2U])
-        {
-            if (!entry.isNumeric())
-            {
-                BOOST_THROW_EXCEPTION(
-                    JsonRpcException(InvalidParams, "rewardPercentiles must be numbers"));
-            }
-            auto const percentile = entry.asDouble();
-            if (percentile < 0.0 || percentile > 100.0)
-            {
-                BOOST_THROW_EXCEPTION(
-                    JsonRpcException(InvalidParams, "rewardPercentiles must be in [0, 100]"));
-            }
-            // geth rejects a non-increasing array (errInvalidPercentile).
-            if (!rewardPercentiles.empty() && percentile <= rewardPercentiles.back())
-            {
-                BOOST_THROW_EXCEPTION(JsonRpcException(
-                    InvalidParams, "rewardPercentiles must be monotonically increasing"));
-            }
-            rewardPercentiles.push_back(percentile);
-        }
-    }
-
-    // The OP base-fee rule follows the LANE, not the ledger's feature_l2_ethereum_compat
-    // state shape: an Eth-lane chain may carry that flag (the pure-Ethereum executor on an
-    // MPT root) and must keep EIP-1559 fee semantics, which is what eth_gasPrice /
-    // eth_maxPriorityFeePerGas (RpcChainPolicy) already report. Lane is genesis-frozen, so
-    // the tip config answers for newestBlock too.
-    auto const ledgerConfig = co_await ledger::getLedgerConfig(*ledger);
-    auto const opStackMode = isOpStackLane(ledgerConfig->executorVersion());
-    auto result = co_await buildFeeHistory(*ledger, newestBlock,
-        static_cast<std::size_t>(*blockCountParsed), rewardPercentiles, opStackMode);
-    buildJsonContent(result, response);
-}
 
 /// eth_getProof custom error code (spec §5.9): both request-level proof failures — dormant
 /// account and unknown/uncommitted state root — map to -32004; the message distinguishes them.
@@ -1883,7 +1820,8 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
             // it proves against the requested block's stateRoot — so the flat half must target
             // the same block. Ledger::getStorageAt ignores the argument today and serves
             // latest-committed state; passing it keeps this call site correct once historical
-            // flat reads land, instead of silently staying latest-only. Unset slot reads as zero.
+            // flat reads land, instead of silently staying latest-only. Unset slot reads as
+            // zero.
             std::string quantity = "0x0";
             if (auto const flat = co_await ledger::getStorageAt(
                     *ledger, addressHex, entry.key.toRawString(), blockNumber);
@@ -1930,3 +1868,86 @@ bcos::rpc::EthEndpoint::EthEndpoint(
     m_filterSystem(std::move(filterSystem)),
     m_syncTransaction(syncTransaction)
 {}
+
+task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value& response)
+{
+    // params: blockCount(QTY), newestBlock(QTY|TAG), rewardPercentiles(FLOAT[] optional)
+    if (request.empty() || !request[0U].isString())
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "eth_feeHistory expects [blockCount, newestBlock, ...]"));
+    }
+    auto const blockCountParsed = bcos::safeFromQuantity(request[0U].asString());
+    if (!blockCountParsed.has_value())
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid blockCount"));
+    }
+    if (request.size() < 2 || !request[1U].isString())
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "eth_feeHistory expects [blockCount, newestBlock, ...]"));
+    }
+
+    // Capture the ledger once and fail closed BEFORE any deref: getBlockNumberByTag
+    // calls getCurrentBlockNumber(*ledger), so a null-ledger node must refuse here
+    // instead of crashing inside the helper (sibling fee methods guard the same way).
+    auto ledger = m_nodeService->ledger();
+    if (!ledger)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            JsonRpcError::InternalError, "Ledger not available for eth_feeHistory"));
+    }
+
+    auto const newestTag = toView(request[1U]);
+    auto [newestBlock, _] = co_await getBlockNumberByTag(newestTag);
+
+    std::vector<double> rewardPercentiles;
+    if (request.size() >= 3)
+    {
+        // geth rejects a non-array third parameter rather than ignoring it.
+        if (!request[2U].isArray())
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "rewardPercentiles must be an array"));
+        }
+        // Same query limit as geth (eth/gasprice/feehistory.go maxQueryLimit).
+        constexpr std::size_t c_maxRewardPercentiles = 100;
+        if (request[2U].size() > c_maxRewardPercentiles)
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "rewardPercentiles over the query limit 100"));
+        }
+        for (auto const& entry : request[2U])
+        {
+            if (!entry.isNumeric())
+            {
+                BOOST_THROW_EXCEPTION(
+                    JsonRpcException(InvalidParams, "rewardPercentiles must be numbers"));
+            }
+            auto const percentile = entry.asDouble();
+            if (percentile < 0.0 || percentile > 100.0)
+            {
+                BOOST_THROW_EXCEPTION(
+                    JsonRpcException(InvalidParams, "rewardPercentiles must be in [0, 100]"));
+            }
+            // geth rejects a non-increasing array (errInvalidPercentile).
+            if (!rewardPercentiles.empty() && percentile <= rewardPercentiles.back())
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(
+                    InvalidParams, "rewardPercentiles must be monotonically increasing"));
+            }
+            rewardPercentiles.push_back(percentile);
+        }
+    }
+
+    // The OP base-fee rule follows the LANE, not the ledger's feature_l2_ethereum_compat
+    // state shape: an Eth-lane chain may carry that flag (the pure-Ethereum executor on an
+    // MPT root) and must keep EIP-1559 fee semantics, which is what eth_gasPrice /
+    // eth_maxPriorityFeePerGas (RpcChainPolicy) already report. Lane is genesis-frozen, so
+    // the tip config answers for newestBlock too.
+    auto const ledgerConfig = co_await ledger::getLedgerConfig(*ledger);
+    auto const opStackMode = isOpStackLane(ledgerConfig->executorVersion());
+    auto result = co_await buildFeeHistory(*ledger, newestBlock,
+        static_cast<std::size_t>(*blockCountParsed), rewardPercentiles, opStackMode);
+    buildJsonContent(result, response);
+}

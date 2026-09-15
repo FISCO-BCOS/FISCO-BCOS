@@ -173,9 +173,10 @@ public:
     protocol::BlockNumber finalizedBlockDepth() const noexcept { return m_finalizedBlockDepth; }
 
     /// OP DA size caps, read by OpEngineService during payload assembly. The producer is the
-    /// miner_setMaxDASize RPC handler (MinerEndpoint), registered unconditionally in
-    /// EndpointsMapping and wired here by AirNodeInitializer::initNodeService — but the
-    /// handler fails closed with MethodNotFound while daCaps() is null (Ethereum-only nodes).
+    /// miner_setMaxDASize RPC handler (MinerEndpoint), registered only for a listener whose
+    /// own enable_miner_api key ([op_engine_rpc] or [web3_rpc]) is set and wired here by
+    /// AirNodeInitializer::initNodeService — that key is the gate; the handler's
+    /// MethodNotFound on null daCaps() is just the Ethereum-only-node fallback.
     void setDaCaps(std::shared_ptr<bcos::engine::DACaps> caps) noexcept
     {
         m_daCaps = std::move(caps);

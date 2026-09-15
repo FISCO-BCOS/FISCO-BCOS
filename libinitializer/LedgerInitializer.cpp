@@ -48,11 +48,14 @@ std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::buil
     auto features = bcos::task::syncWait(ledger->fetchAllFeatures(blockNumber + 1));
     bcos::scheduler_v1::validateMPTFlagMatrix(features);
 
-    // OP mode is a genesis-only property: executor_version == OPSTACK requires the
+    // OP mode is a genesis-only property: executor_version >= OPSTACK requires the
     // genesis-only feature_l2_ethereum_compat and must itself be genesis-bound. The value
     // is read from the ledger (written at genesis), with the genesis config as the fallback
     // when the on-chain entry is absent. The Eth lane (executor_version == ETHEREUM) may
     // carry the same feature for an L2 state shape — that is Eth mode, not OP mode.
+    // A value above the newest declared lane is not refused here: the scheduler saturates it
+    // onto the newest wired slot (MultiVersionScheduler::setVersion), and refusing it at boot
+    // would strand a chain that wrote such a row before 3.18 with no way to lower it.
     {
         auto const onChain = readOnChainExecutorVersion(*ledger, nodeConfig->executorVersion());
         bcos::scheduler_v1::validateOpModeGenesisOnly(

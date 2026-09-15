@@ -89,6 +89,7 @@ class EngineServiceInitializer;
 class Initializer
 {
 public:
+    std::shared_ptr<bcos::engine::DACaps> daCaps() const { return m_daCaps; }
     using Ptr = std::shared_ptr<Initializer>;
     Initializer() = default;
     virtual ~Initializer() { stop(); }
@@ -112,9 +113,6 @@ public:
         return m_engineServiceInitializer;
     }
     std::shared_ptr<bcos::engine::AnyEngineService> engineService();
-
-    /// DA caps for the OP engine path; null outside OP mode.
-    std::shared_ptr<bcos::engine::DACaps> daCaps() const { return m_daCaps; }
 
     std::shared_ptr<bcos::single_consensus::SingleNodeConsensus> singleNodeConsensus()
     {
@@ -184,6 +182,9 @@ private:
     FrontServiceInitializer::Ptr m_frontServiceInitializer;
     bcos::IOServicePool::Ptr m_ioServicePool;
     bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState;
+    /// Built only in engine-driven mode, where the mempool is the pool a transaction enters.
+    std::shared_ptr<bcos::engine::DACaps> m_daCaps;
+    std::shared_ptr<bcos::txvalidator::TxValidator> m_memPoolValidator;
     TxPoolInitializer::Ptr m_txpoolInitializer;
     PBFTInitializer::Ptr m_pbftInitializer;
 #ifdef WITH_LIGHTNODE
@@ -206,16 +207,12 @@ private:
     /// Null when pruning is disabled (the schedulers then keep their NoopCommitObserver).
     std::shared_ptr<bcos::ledger::mpt::CommitObserver> m_mptCommitObserver;
     std::shared_ptr<EngineServiceInitializer> m_engineServiceInitializer;
-
-    std::shared_ptr<bcos::engine::DACaps> m_daCaps;
     std::shared_ptr<bcos::single_consensus::SingleNodeConsensus> m_singleNodeConsensus;
     std::shared_ptr<executor_v1::PrecompiledManager> m_precompiledManager;
     bcos::storage::TransactionalStorageInterface::Ptr m_storage = nullptr;
     // if enable SeparateBlockAndState,txs and receipts will be stored in m_blockStorage
     bcos::storage::TransactionalStorageInterface::Ptr m_blockStorage = nullptr;
     std::shared_ptr<MemPoolInitializer> m_memPoolInitializer;
-    /// Built only in engine-driven mode, where the mempool is the pool a transaction enters.
-    std::shared_ptr<bcos::txvalidator::TxValidator> m_memPoolValidator;
     std::optional<oneapi::tbb::global_control> m_tbbGlobalControl;
 
     std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_baselineSchedulerHolder;
@@ -229,9 +226,9 @@ private:
         m_setEthereumSchedulerBlockNumberNotifier;
     /// Resolved OP fork schedule (OP mode only). Injected into OpSchedulerSeam / OpScheduler.
     std::shared_ptr<bcos::evm::opstack::OpForkSchedule> m_opForkSchedule;
-    /// OP scheduler wired to MultiVersionScheduler slot 3.
+    /// OP scheduler (executor_version == 3), wired to MultiVersionScheduler slot 3.
     std::shared_ptr<scheduler::SchedulerInterface> m_opScheduler;
-    /// Installs the OP block-number notifier on OpScheduler.
+    /// Installs the OP block-number notifier on the OpScheduler.
     std::function<void(std::function<void(protocol::BlockNumber)>)>
         m_setOpSchedulerBlockNumberNotifier;
     /// Resolved executor version (0 = legacy SchedulerManager, 1 = TransactionExecutorImpl,

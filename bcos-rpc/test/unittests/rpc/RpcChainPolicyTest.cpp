@@ -45,15 +45,17 @@ BOOST_AUTO_TEST_CASE(laneBoundaries)
     BOOST_CHECK(usesEthereumFeeSemantics(ledger::OPSTACK_EXECUTOR_VERSION));
     BOOST_CHECK_EQUAL(suggestedPriorityFeeWei(ledger::OPSTACK_EXECUTOR_VERSION), 1'000'000u);
     BOOST_CHECK_EQUAL(suggestedPriorityFeeWei(ledger::OPSTACK_EXECUTOR_VERSION + 5), 1'000'000u);
-
     // isOpStackLane is the LANE predicate eth_feeHistory consumes for the OP base-fee rule.
-    // It must stay distinct from the ledger's feature_l2_ethereum_compat state shape: the
-    // Eth lane may carry that flag (the pure-Ethereum executor on an MPT root), and on such
-    // a chain feeHistory must keep EIP-1559 semantics, matching eth_gasPrice.
     BOOST_CHECK(isOpStackLane(ledger::OPSTACK_EXECUTOR_VERSION));
     BOOST_CHECK(!isOpStackLane(ledger::ETHEREUM_EXECUTOR_VERSION));
     BOOST_CHECK(!isOpStackLane(0));
-    BOOST_CHECK(!isOpStackLane(ledger::OPSTACK_EXECUTOR_VERSION + 1));
+    BOOST_CHECK(!isOpStackLane(ledger::OPSTACK_EXECUTOR_VERSION + 5));
+
+    // The lane distinction that matters here is executor_version vs the ledger's
+    // feature_l2_ethereum_compat state shape: the Eth lane may carry that flag (the
+    // pure-Ethereum executor on an MPT root) and must keep EIP-1559 semantics, matching
+    // eth_gasPrice. There is no separate OP-only predicate in this policy: blockBaseFee keys
+    // on the header shape (isOpEthereumBlock) and the tip on the >= ETHEREUM floor above.
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -21,13 +21,13 @@
 
 // This is the DEFINITION half of the split: OpEngineService.h is declarations-only.
 // Including this.inl is the opt-in instantiation point — members use
-// the canonical block hash (bcos-rlp-protocol) and bcos::evm::opstack::estimatedDaSize. engine links
-// rlp-protocol PUBLIC so installed consumers inherit the include dirs;
+// the canonical block hash (bcos-rlp-protocol) and bcos::evm::opstack::estimatedDaSize.
+// engine links rlp-protocol PUBLIC so installed consumers inherit the include dirs;
 // instantiators still need to link bcos-evm-opstack.
 #include "OpEngineService.h"
 #include <bcos-evm/opstack/RollupCost.h>
-#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
+#include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <opstack-executor/OpCommitments.h>
 
 #include <iterator>
@@ -939,8 +939,15 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
             }
             requireDelegate();
             bcos::Error::Ptr commitError;
-            m_delegate->commitBlock(
-                builtHeader, [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr) {
+            // The callback's LedgerConfig is deliberately dropped rather than published into
+            // the admission holder: the delegate is an OpScheduler, whose
+            // loadCommitLedgerConfig carries only number + timestamp -- chainId nullopt and
+            // features empty -- and TxValidator reads chainId from the holder, so publishing it
+            // fail-closes EIP-155 admission from the first committed block on. The holder is
+            // republished from the ledger after every commit instead; see
+            // OpLedgerConfigRepublish.h.
+            m_delegate->commitBlock(builtHeader,
+                [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr /*ledgerConfig*/) {
                     commitError = std::move(error);
                 });
             if (!commitError)
@@ -1195,6 +1202,11 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
     // commitment gate (design §4.2 newPayload VALID condition 2 — the full
     // mismatchedFieldOf set, gasUsed/logsBloom included). A mismatch is a payload
     // fault: INVALID + parent, and the block is NOT stored (§4.5).
+    // (Merge note: engine-cutover's commitBlock-at-newPayload arm is not carried over —
+    // this tree's newPayload only imports into the parent plane; the delegate commit is
+    // owned by the FCU canonicalize batch, so committing here would commit every block
+    // twice. The delegate's LedgerConfig stub concern is covered by the republish
+    // notifier wiring, see engine/OpLedgerConfigRepublish.h.)
     if (auto mismatch = bcos::evm::engine::mismatchedFieldOf(
             commitmentsOfHeader(*executedHeader), commitmentsOfHeader(*ethHeader)))
     {
@@ -1528,8 +1540,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::canonicaliz
         // abandoned branch (C → B′ → back to C) walks B-C with A canonical at 1 while
         // the tip is B′@2 — classifying it as forward would merge the deltas onto the
         // WRONG plane (review NEW-2).
-        bool const rootsAtCanonicalTip = currentTip != -1 && rootParentNumber.has_value() &&
-                                          *rootParentNumber == currentTip;
+        bool const rootsAtCanonicalTip =
+            currentTip != -1 && rootParentNumber.has_value() && *rootParentNumber == currentTip;
         if (currentTip != -1 && !rootsAtCanonicalTip)
         {
             auto const headBlock = chain.back();
@@ -1547,8 +1559,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::canonicaliz
             }
             else
             {
-                flat = co_await reconstructSwitchFlat<
-                    typename GlobalStateStorageType::MutableStorage>(chain);
+                flat =
+                    co_await reconstructSwitchFlat<typename GlobalStateStorageType::MutableStorage>(
+                        chain);
             }
             if (!flat)
             {
@@ -1661,12 +1674,12 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::canonicaliz
                             occupantBytes, bcos::crypto::HashType::FromBinary);
                         if (occupant != block.hash)
                         {
+                            co_await storage2::removeOne(
+                                stagedDelta, executor_v1::StateKey{bcos::ledger::SYS_HASH_2_NUMBER,
+                                                 bcos::concepts::bytebuffer::toView(occupant)});
                             co_await storage2::removeOne(stagedDelta,
-                                executor_v1::StateKey{bcos::ledger::SYS_HASH_2_NUMBER,
-                                    bcos::concepts::bytebuffer::toView(occupant)});
-                            co_await storage2::removeOne(stagedDelta,
-                                executor_v1::StateKey{bcos::ledger::SYS_BLOCK_NUMBER_2_NONCES,
-                                    blockNumberStr});
+                                executor_v1::StateKey{
+                                    bcos::ledger::SYS_BLOCK_NUMBER_2_NONCES, blockNumberStr});
                         }
                     }
                 }
@@ -1790,8 +1803,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::canonicaliz
                         executor_v1::StateKeyView(bcos::ledger::SYS_HASH_2_RECEIPT, txHashView);
                     bcos::storage::Entry receiptEntry;
                     receiptEntry.set(headBlock.receipts[i]);
-                    co_await storage2::writeOne(
-                        stagedDelta, executor_v1::StateKey(receiptKeyView), std::move(receiptEntry));
+                    co_await storage2::writeOne(stagedDelta, executor_v1::StateKey(receiptKeyView),
+                        std::move(receiptEntry));
                 }
             }
             // SYS_NUMBER_2_TXS[number]: the by-number tx list ledger::getBlockData reads
@@ -1803,8 +1816,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::canonicaliz
                 bcos::storage::Entry numberToTxsEntry;
                 numberToTxsEntry.set(encodeNumberToTxsRow(
                     *m_blockFactory, headBlock.txHashes, headBlock.txRecipients));
-                co_await storage2::writeOne(stagedDelta,
-                    executor_v1::StateKey(numberToTxsKeyView), std::move(numberToTxsEntry));
+                co_await storage2::writeOne(stagedDelta, executor_v1::StateKey(numberToTxsKeyView),
+                    std::move(numberToTxsEntry));
             }
             // Same-height replacement: drop the replaced block's hash→number mapping and
             // its height's nonces (never rewritten by this branch). The trim loop below
@@ -2056,9 +2069,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpBloc
                                   << bcos::errinfo_comment{"undecodable payload "
                                                            "transaction envelope"});
         }
-        tarsTx->extraTransactionBytes.assign(env.begin(), env.end());
-        auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
-            [tars = std::move(*tarsTx)]() mutable { return &tars; });
+        auto tx = engine_common::decodedTransactionFromEnvelope(std::move(*tarsTx), env);
         block->appendTransaction(std::move(tx));
     }
     return block;

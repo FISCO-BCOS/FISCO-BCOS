@@ -7,10 +7,15 @@ hex_privatekey=$(openssl ec -in "$pem_file" -text -noout |
            tr -d ': \n' | 
            sed 's/^00//; s/$.\{64\}$$/\\1/')
 
+# The hardhat suite is a hard gate (its exit code is propagated below), so its corpus must be
+# reproducible: a floating HEAD means an upstream commit can turn this PR red, or silently stop
+# covering what it used to. Pin the revision and never `git pull` on top of it.
+# Bump deliberately, together with a node change that requires it.
+BCOS_TESTING_REF="${BCOS_TESTING_REF:-f9b8338a46a2857f5ba64b4df74e981c9297fabc}"
 git clone https://github.com/FISCO-BCOS/bcos-testing
 cd bcos-testing
-
-git pull
+git checkout --quiet "$BCOS_TESTING_REF" || {
+    echo "[ERROR] cannot check out bcos-testing at ${BCOS_TESTING_REF}" >&2; exit 1; }
 
 # 缓存 node_modules，避免每次重复安装
 if [ -d "node_modules" ] && [ -f "package.json" ]; then

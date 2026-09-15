@@ -419,14 +419,16 @@ bcos::protocol::BlockHeader::Ptr rebuildOpEthHeader(
     const h256& transactionsRoot, std::optional<h256> const& parentBeaconBlockRoot, OpForkId forkId)
 {
     // Intentionally NO setEthBlockVersion (unlike detail::finalizeEthBlockHeader): the OP
-    // header is a FISCO BlockHeader whose ethBlockVersion stays NON_ETH, which is exactly
-    // the canonical block hash documents itself for ("block-identity
-    // hash for FISCO-native/OP headers... that validateHeader rejects"). The RLP encoding
-    // cannot depend on that field: the ctor builds EthBlockHeaderData from field presence
-    // (each optional fork field copied when set) and the shared codec encodes exactly the
-    // set optionals positionally — EthBlockHeaderData carries no version input at all. With
-    // every fork field stamped below, the encoding is the full 21-field form op-geth
-    // produces, and the external-oracle golden test
+    // header is a FISCO BlockHeader whose ethBlockVersion stays NON_ETH. That is exactly
+    // what EthBlockHeader::computeHash documents itself for ("usable for FISCO-native/OP
+    // headers (EthBlockVersion::NON_ETH) that calculateRLPHash's validateHeader rejects"),
+    // while canonicalBlockHash routes OP-shaped headers (isOpEthereumBlock: NON_ETH plus
+    // the fork fields, BlockHeaderHash.cpp) to that same computeHash. The RLP encoding
+    // cannot depend on the version field: the ctor builds EthBlockHeaderData from field
+    // presence (each optional fork field copied when set) and the shared codec encodes
+    // exactly the set optionals positionally — EthBlockHeaderData carries no version input
+    // at all. With every fork field stamped below, the encoding is the full 21-field form
+    // op-geth produces, and the external-oracle golden test
     // (op_golden_vector_rebuild_matches_op_geth_block_hash, vendored corpus) pins it byte
     // for byte. calculateRLPHash (validateHeader path) is not usable on these headers by
     // design; finalizeEthBlockHeader needs setEthBlockVersion only because it goes through

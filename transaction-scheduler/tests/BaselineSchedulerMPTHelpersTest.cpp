@@ -127,15 +127,26 @@ BOOST_AUTO_TEST_CASE(OpMode_EthLaneMayCarryTheL2Feature)
     BOOST_CHECK_NO_THROW(validateOpModeGenesisOnly(plain, ledger::ETHEREUM_EXECUTOR_VERSION, 0));
 }
 
-BOOST_AUTO_TEST_CASE(OpMode_AboveOpstackAndLateActivationRefused)
+BOOST_AUTO_TEST_CASE(OpMode_AboveTheLadderSaturatesAndLateActivationIsRefused)
 {
     using Flag = ledger::Features::Flag;
     ledger::Features features;
     features.set(Flag::feature_l2_ethereum_compat);
 
-    BOOST_CHECK_THROW(validateOpModeGenesisOnly(features, ledger::OPSTACK_EXECUTOR_VERSION + 1, 0),
+    // Above the newest declared lane there is no lane of its own: the scheduler saturates such a
+    // value onto the newest WIRED slot (MultiVersionScheduler::setVersion, pinned by the
+    // libinitializer suite's setVersionSaturatesToNewestWiredSlot), so boot accepts it. Refusing
+    // it here would strand a chain that wrote the row before 3.18 — nothing bounded that key then
+    // — with no way to lower it (the precompile refuses writes at or above OPSTACK).
+    BOOST_CHECK_NO_THROW(
+        validateOpModeGenesisOnly(features, ledger::OPSTACK_EXECUTOR_VERSION + 1, 0));
+    // The OP lane's own preconditions still apply to every value at or above the slot.
+    ledger::Features flagOff;
+    BOOST_CHECK_THROW(validateOpModeGenesisOnly(flagOff, ledger::OPSTACK_EXECUTOR_VERSION + 1, 0),
         InvalidMPTFlagMatrix);
     BOOST_CHECK_THROW(validateOpModeGenesisOnly(features, ledger::OPSTACK_EXECUTOR_VERSION, 1),
+        InvalidMPTFlagMatrix);
+    BOOST_CHECK_THROW(validateOpModeGenesisOnly(features, ledger::OPSTACK_EXECUTOR_VERSION + 1, 1),
         InvalidMPTFlagMatrix);
 }
 

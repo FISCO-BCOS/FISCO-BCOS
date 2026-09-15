@@ -122,11 +122,15 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
             // fork schedule — all three are chosen once, at boot, from the on-chain
             // executor_version row. A mid-chain write into the OPSTACK slot would land
             // activation N+1 and make every node's NEXT START fail closed: the chain keeps
-            // producing and cannot be restarted. Refuse the value; version-gated on
-            // V3_18_0_VERSION so replay/resync of pre-3.18 blocks that set it stays valid (the
-            // gate is the on-chain compatibility version, so a chain still below 3.18.0 on a
-            // 3.18.0 binary is not covered here — there the boot refusals in Initializer::init
-            // stop such a node, fail-stop rather than a second lane).
+            // producing and cannot be restarted. This precompile — registered on the v0
+            // executor (executor/TransactionExecutor.cpp) and the v1 one
+            // (transaction-executor/.../PrecompiledManager.cpp) — is the only RUNTIME writer
+            // of the row; neither ethereum-executor nor the OP lane serves address 0x1000, so
+            // an OP chain cannot write executor_version back down either. Refuse the value;
+            // version-gated on V3_18_0_VERSION so replay/resync of pre-3.18 blocks that set it
+            // stays valid (the gate is the on-chain compatibility version, so a chain still
+            // below 3.18.0 on a 3.18.0 binary is not covered here — there the boot refusals in
+            // Initializer::init stop such a node, fail-stop rather than a second lane).
             if (_value == bcos::ledger::OPSTACK_EXECUTOR_VERSION &&
                 versionCompareTo(version, BlockVersion::V3_18_0_VERSION) >= 0)
             {
@@ -160,11 +164,9 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
             // running when the value names an unwired or unknown executor, in two fail-open
             // branches with different keep-behaviours: a value ABOVE the wired set saturates
             // to the newest wired slot, while an in-range but unwired slot keeps the CURRENT
-            // scheduler — both log ERROR rather than throwing. Neither ethereum-executor nor
-            // the OP lane serves address 0x1000, so an OP chain cannot write executor_version
-            // back down either. The remaining hard guardrails live in node-local startup
-            // (Initializer refuses to boot a v2 chain without an on-chain evmc_revision, and
-            // an OP chain without the OP wiring).
+            // scheduler — both log ERROR rather than throwing. The remaining hard guardrails
+            // live in node-local startup (Initializer refuses to boot a v2 chain without an
+            // on-chain evmc_revision, and an OP chain without the OP wiring).
         });
     // for compatibility
     // Note: the compatibility_version is not compatibility
@@ -406,6 +408,46 @@ int64_t SystemConfigPrecompiled::validate(
     if (m_sysValueCmp.contains(key))
     {
         (m_sysValueCmp.at(key))(configuredValue, blockVersion);
+    }
+
+    // The OP boundary is closed in BOTH directions: the comparator above refuses a write at or
+    // above the OP slot, and this refuses a write that moves a running OP chain off it. The lane
+    // is resolved once at boot (Initializer::init reads the row) and MultiVersionScheduler only
+    // saturates, so an accepted downgrade would leave the on-chain row and every running node
+    // diverged until a restart, which then comes up on the other lane. Versioned on
+    // V3_18_0_VERSION for the same replay reason as the refusal above.
+    constexpr std::string_view c_executorVersionKey =
+        magic_enum::enum_name(bcos::ledger::SystemConfig::executor_version);
+    if (key == c_executorVersionKey && configuredValue < bcos::ledger::OPSTACK_EXECUTOR_VERSION &&
+        versionCompareTo(blockVersion, BlockVersion::V3_18_0_VERSION) >= 0)
+    {
+        auto const currentRow = getSysConfigByKey(_executive, key);
+        int64_t currentExecutorVersion = -1;
+        if (!currentRow.first.empty())
+        {
+            try
+            {
+                currentExecutorVersion = boost::lexical_cast<int64_t>(currentRow.first);
+            }
+            catch (boost::bad_lexical_cast const&)
+            {
+                // A non-numeric row is not a lane; the boot path reports it
+                // (readOnChainExecutorVersion throws there), so there is nothing to refuse here.
+                currentExecutorVersion = -1;
+            }
+        }
+        if (currentExecutorVersion >= bcos::ledger::OPSTACK_EXECUTOR_VERSION)
+        {
+            BOOST_THROW_EXCEPTION(
+                PrecompiledError{} << errinfo_comment(
+                    "executor_version " + std::to_string(configuredValue) + " cannot replace " +
+                    std::to_string(currentExecutorVersion) + ": OP mode (executor_version >= " +
+                    std::to_string(bcos::ledger::OPSTACK_EXECUTOR_VERSION) +
+                    ") is a genesis property, so a running chain cannot be "
+                    "moved off it by governance; the node keeps executing the "
+                    "lane it booted with and the next start would derive the "
+                    "other one from this row"));
+        }
     }
     return configuredValue;
 }

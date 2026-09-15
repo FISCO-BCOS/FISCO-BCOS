@@ -1638,7 +1638,11 @@ private:
         co_return ledgerConfig;
     }
 
-    /// Commit-path LedgerConfig (number + timestamp only).
+    /// Commit-path LedgerConfig: number + timestamp only, and never published anywhere.
+    /// The admission holder is republished from the LEDGER by the notifier this scheduler fires
+    /// after every commit (engine/bcos-engine/OpLedgerConfigRepublish.h) — publishing THIS object
+    /// instead would refuse every EIP-155 envelope from the first committed block on (-32602),
+    /// because chainId()/features()/executorVersion() are empty here.
     task::Task<ledger::LedgerConfig::Ptr> loadCommitLedgerConfig(protocol::BlockHeader::Ptr header)
     {
         auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();

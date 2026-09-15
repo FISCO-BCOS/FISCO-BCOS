@@ -112,9 +112,10 @@ for b in op-deployer op-node op-batcher; do
   [ -x "$BIN_DIR/$b" ] || die "missing $BIN_DIR/$b"
 done
 
-if [[ "${SKIP_FISCO_BUILD:-0}" != "1" ]]; then
-  [ -x "$FISCO_BIN" ] || die "FISCO_BIN not found: $FISCO_BIN (build WITH_L2_CONTRACTS=ON first)"
-fi
+# The existence check runs in BOTH modes: SKIP_FISCO_BUILD=1 only documents that the
+# binary came from the prebuilt artifact instead of a local build — it must not skip the
+# check, or a failed artifact download surfaces deep inside the harness instead of here.
+[ -x "$FISCO_BIN" ] || die "FISCO_BIN not found: $FISCO_BIN (build WITH_L2_CONTRACTS=ON first)"
 
 # setup_c2 / build-allocs need forge artifacts from bcos-l2-contracts.
 if ! command -v forge >/dev/null; then
@@ -144,9 +145,12 @@ log "running withdraw_e2e_ephemeral (CONTEST=${CONTEST} XDM=${XDM})…"
 # MONOREPO/L2CONTRACTS/FISCO_REPO are what setup_c2.sh (reached through
 # withdraw_e2e_ephemeral.sh) reads; its own defaults are repo-relative, but the
 # monorepo clone and the contracts dir are CI-layout specific, so pin them here.
+# OPGEN points at the harness checkout: the genesis toolchain lives in
+# op-stack-e2e-tests (the harness defaults to its own copy, this only makes the
+# CI-pinned one explicit).
 BIN_DIR="$BIN_DIR" \
 FISCO_BIN="$FISCO_BIN" \
-OPGEN="${REPO_ROOT}/tools/opstack-genesis" \
+OPGEN="${OP_E2E_DIR}/tools/opstack-genesis" \
 MONOREPO="$OP_MONOREPO" \
 L2CONTRACTS="${REPO_ROOT}/bcos-l2-contracts" \
 FISCO_REPO="$REPO_ROOT" \

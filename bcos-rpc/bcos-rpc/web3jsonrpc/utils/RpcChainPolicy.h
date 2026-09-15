@@ -21,6 +21,8 @@
 #pragma once
 
 #include <bcos-framework/ledger/LedgerConfig.h>
+#include <bcos-framework/protocol/BlockHeader.h>
+#include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <cstdint>
 
 namespace bcos::rpc
@@ -32,6 +34,9 @@ inline constexpr uint64_t c_minSuggestedPriorityFeeWei = 1'000'000;
 /// semantics follow geth (eth_gasPrice = head.baseFee + tip, never below the base fee).
 /// This is the lane predicate the endpoints consume; OP mode itself is a fixed genesis
 /// value (== OPSTACK_EXECUTOR_VERSION), decided at chain creation and never re-derived.
+/// Note the deliberate difference from the ledger's feature_l2_ethereum_compat state shape:
+/// the Eth lane may carry that flag too (an MPT-state chain still sealed by the consensus
+/// layer), so lane decisions key on executor_version and never on the flag.
 inline bool usesEthereumFeeSemantics(int executorVersion)
 {
     return executorVersion >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
@@ -52,5 +57,26 @@ inline bool isOpStackLane(int executorVersion)
 inline uint64_t suggestedPriorityFeeWei(int executorVersion)
 {
     return usesEthereumFeeSemantics(executorVersion) ? c_minSuggestedPriorityFeeWei : 0;
+}
+
+/// A committed block's base fee under the lane rules. OP-Stack headers are NON_ETH yet
+/// carry a real base fee (rebuildOpEthHeader deliberately leaves ethBlockVersion NON_ETH)
+/// — check that case before the NON_ETH short-circuit, which is for native FISCO headers
+/// that have no base fee at all. Eth-lane headers take the London+ rule (0 pre-London).
+inline bcos::u256 blockBaseFee(bcos::protocol::BlockHeader const& header)
+{
+    auto const versionAtLeast = [](bcos::protocol::EthBlockVersion version,
+                                    bcos::protocol::EthBlockVersion fork) {
+        return static_cast<std::uint8_t>(version) >= static_cast<std::uint8_t>(fork);
+    };
+    if (bcos::protocol::isOpEthereumBlock(header))
+    {
+        return header.baseFee().value_or(0);
+    }
+    if (!versionAtLeast(header.ethBlockVersion(), bcos::protocol::EthBlockVersion::LONDON))
+    {
+        return 0;
+    }
+    return header.baseFee().value_or(0);
 }
 }  // namespace bcos::rpc

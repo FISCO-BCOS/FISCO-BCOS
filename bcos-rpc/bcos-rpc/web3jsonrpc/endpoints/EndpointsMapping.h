@@ -31,7 +31,15 @@ class EndpointsMapping
 {
 public:
     using Handler = task::Task<void> (Endpoints::*)(const Json::Value&, Json::Value&);
-    EndpointsMapping(bool enableOPEngine = false) { addHandlers(enableOPEngine); };
+    /// enableOPEngine: register the engine_* methods (JWT-guarded engine listener only).
+    /// enableMinerApi: register the OP miner namespace (miner_setMaxDASize) on THIS listener
+    /// only. Off by default — it writes the node-wide DA caps. Each listener has its own
+    /// config key ([op_engine_rpc] vs [web3_rpc] enable_miner_api), so enabling the batcher's
+    /// handshake on the engine port never exposes it on the web3 port, and vice versa.
+    EndpointsMapping(bool enableOPEngine = false, bool enableMinerApi = false)
+    {
+        addHandlers(enableOPEngine, enableMinerApi);
+    };
     ~EndpointsMapping() = default;
     EndpointsMapping(const EndpointsMapping&) = delete;
     EndpointsMapping& operator=(const EndpointsMapping&) = delete;
@@ -39,7 +47,7 @@ public:
     [[nodiscard]] std::optional<Handler> findHandler(const std::string& _method) const;
 
 private:
-    void addHandlers(bool enableOPEngine = false);
+    void addHandlers(bool enableOPEngine = false, bool enableMinerApi = false);
     void addEngineHandlers();
     void addEthHandlers();
     void addMinerHandlers();

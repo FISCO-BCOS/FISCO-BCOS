@@ -29,6 +29,7 @@
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/BlockHeaderFactory.h>
 #include <bcos-ledger/mpt/Constants.h>
+#include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/tars/Transaction.h>
 #include <evmc/evmc.h>
 
@@ -119,6 +120,20 @@ inline bcos::h256 withdrawalsRootFor(const ExecutionPayload& /*payload*/)
 /// #5548/#5549), so they get a named home instead of the private detail namespace.
 namespace engine_common
 {
+/// The envelope → executable-transaction carrier step both build paths share: stamp the
+/// raw EIP-2718 envelope onto extraTransactionBytes (the executor must see the exact wire
+/// form a pool transaction would carry) and wrap the Tars transaction in its lazy
+/// self-pointer. One home, because the carrier shape decides what the executor hashes and
+/// executes — a drift between the lanes would fork the payload composition.
+inline std::shared_ptr<bcostars::protocol::TransactionImpl> decodedTransactionFromEnvelope(
+    bcostars::Transaction tars, bcos::bytes const& raw)
+{
+    tars.extraTransactionBytes.assign(raw.begin(), raw.end());
+    return std::make_shared<bcostars::protocol::TransactionImpl>(
+        [tars = std::move(tars)]() mutable { return &tars; });
+}
+
+
 /// Engine API behavior follows op-geth.
 /// op-geth d401af16f2dd94b010a72eaef10e07ac10b31931
 /// (eth/catalyst/api.go, miner/payload_building.go).

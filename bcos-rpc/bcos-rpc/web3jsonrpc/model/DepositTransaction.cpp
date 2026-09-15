@@ -20,8 +20,7 @@
 #include "DepositTransaction.h"
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPDecode.h>
-#include <bcos-crypto/ChecksumAddress.h>
-#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-rpc/web3jsonrpc/utils/util.h>
 
 using namespace bcos;
 using namespace bcos::codec::rlp;
@@ -119,14 +118,10 @@ void bcos::rpc::combineDepositTxResponse(Json::Value& result, const DepositTrans
 {
     result["type"] = toQuantity(static_cast<uint64_t>(c_depositTxType));
     result["sourceHash"] = deposit.sourceHash.hexPrefixed();
-    auto from = deposit.from.hex();
-    toChecksumAddress(from, bcos::crypto::keccak256Hash(bcos::bytesConstRef(from)).hex());
-    result["from"] = "0x" + std::move(from);
+    result["from"] = "0x" + checksummedHexAddress(deposit.from.hex());
     if (deposit.to.has_value())
     {
-        auto to = deposit.to->hex();
-        toChecksumAddress(to, bcos::crypto::keccak256Hash(bcos::bytesConstRef(to)).hex());
-        result["to"] = "0x" + std::move(to);
+        result["to"] = "0x" + checksummedHexAddress(deposit.to->hex());
     }
     else
     {

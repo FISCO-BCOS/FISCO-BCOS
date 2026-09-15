@@ -31,6 +31,7 @@
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/ledger/Ledger.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
+#include <bcos-framework/ledger/LedgerConfigState.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/storage/Entry.h>
@@ -152,7 +153,8 @@ public:
         bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
         int64_t blockTxCountLimit = c_defaultBlockTxCountLimit,
         std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(ApiVersion::V3),
-        std::shared_ptr<ledger::mpt::CommitObserver> commitObserver = nullptr)
+        std::shared_ptr<ledger::mpt::CommitObserver> commitObserver = nullptr,
+        bcos::ledger::LedgerConfigState::Ptr ledgerConfigState = nullptr)
       : m_memPool(memPool),
         m_globalStateStorage(globalStateStorage),
         m_executor(executor),
@@ -162,7 +164,8 @@ public:
         m_blockTxCountLimit(blockTxCountLimit),
         m_maxEngineVersion(maxEngineVersion),
         m_commitObserver(commitObserver ? std::move(commitObserver) :
-                                          std::make_shared<ledger::mpt::NoopCommitObserver>())
+                                          std::make_shared<ledger::mpt::NoopCommitObserver>()),
+        m_ledgerConfigState(std::move(ledgerConfigState))
     {
         if (!m_blockFactory)
         {
@@ -262,6 +265,12 @@ private:
     /// build time via needsRefCountDeltas() (passed to resolveEngineBlockStateRoot so the
     /// tally decision cannot drift from the commit hook).
     std::shared_ptr<ledger::mpt::CommitObserver> m_commitObserver;
+
+    /// Published after every durable commit (whoever commits a block publishes the new
+    /// configuration — TxValidator's contract): this lane commits via direct storage merges,
+    /// not through MultiVersionScheduler's publishing wrapper, so without this holder the
+    /// engine-driven modes would admit every later transaction against the boot snapshot.
+    bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState;
 };
 
 }  // namespace bcos::engine

@@ -96,8 +96,8 @@ BOOST_AUTO_TEST_CASE(ExactTargetReturnsParentBaseFee)
 }
 
 // Finding BT: the exact-target arm is NOT exempt from the Jovian minBaseFee floor — a
-// parent whose base fee sits below a raised floor must clamp, not let the feeHistory
-// prediction quote below the protocol floor.
+// parent whose base fee sits below a raised floor must clamp, so the quote never falls
+// below the protocol floor.
 BOOST_AUTO_TEST_CASE(ExactTargetStillClampsToJovianMinBaseFee)
 {
     // parent base fee 100 << minBaseFee 1_000, usage exactly at target.

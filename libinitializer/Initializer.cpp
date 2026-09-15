@@ -48,9 +48,7 @@
 #include "bcos-storage/RocksDBStorage.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
-// OpEngineService.h is declarations-only after the header split; this TU is the
-// #5550 production instantiator (buildOp) and must see newPayload/updateForkchoice.
-#include "engine/bcos-engine/OpEngineService.inl"
+#include "engine/bcos-engine/OpLedgerConfigRepublish.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include "libinitializer/BaselineSchedulerInitializer.h"
@@ -404,6 +402,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // with a boot refusal above 3 was not carried over since that refusal is not part of the
     // merged tree.)
     const bool engineApiForV1Only = (m_executorVersion < scheduler_v1::ETHEREUM_EXECUTOR_VERSION);
+    // OP mode is the newest declared lane and everything above it (a value above the wired
+    // slot count saturates onto the newest wired slot, see MultiVersionScheduler::setVersion).
     const bool opStackMode = (m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION);
     // OP mode is fixed for the process lifetime: from compatibility_version 3.18.0 on,
     // SystemConfigPrecompiled refuses a governance write of executor_version >= 3, so the
@@ -413,7 +413,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // MPT pruning is wired through the baseline schedulers' and the Eth engines'
     // CommitObserver (below); OpScheduler / OpEngineService have no such hook yet, so on the
     // OP lane a pruner would observe no commit and prune nothing while the config says
-    // otherwise. Refuse rather than run a silent no-op.
+    // otherwise. Refuse rather than run a silent no-op — and refuse AHEAD of the pruner's
+    // boot-time init below: that init walks the window's state roots and, with
+    // storage.mpt_prune_sweep_garbage on, deletes unreachable "/mpt/" rows, so a refusal
+    // placed after it would turn a fail-fast into a slow, side-effectful one.
     if (opStackMode && m_nodeConfig->mptPruneWindow() > 0)
     {
         BOOST_THROW_EXCEPTION(
@@ -612,6 +615,16 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                     "enable_single_node_consensus is not supported in OP mode "
                     "(executor_version>=3): an OP chain is driven by an external op-node"));
         }
+        // The OP lane's fork schedule comes from [op_fork_timestamps] (genesis config);
+        // NodeConfig refuses an OP chain without it and a non-OP chain with it. Kept as a
+        // local fail-fast so a hand-built config cannot silently run the Isthmus baseline.
+        auto const& opForkSchedule = m_nodeConfig->opForkSchedule();
+        if (!opForkSchedule.has_value())
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                      "OP mode (executor_version==3, the OPSTACK slot) requires "
+                                      "an [op_fork_timestamps] section in config.genesis"));
+        }
         // OP mode signs with the web3 chain id (EIP-155), not the FISCO group chain id. Take it
         // from the snapshot published at boot, which already parsed the on-chain web3_chain_id
         // row -- the same value admission judges against (TxValidator's readChainView). The
@@ -649,8 +662,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             auto stored =
                 task::syncWait(ledger::readOpForkScheduleMetadata(*m_storage, genesisHash));
             auto const& genesisSchedule = m_nodeConfig->genesisConfig().m_opstackForkSchedule;
+            // featureOpJovian=false: the resolver's third branch (legacy jovian via the
+            // feature_op_jovian row) is unreachable here — the [op_fork_timestamps] fail-fast
+            // above guarantees the genesis schedule is present, and the merged framework
+            // retired the feature_op_jovian name outright (Features.h bit 60; a genesis still
+            // carrying it fails loudly at load). This fixes the karst integration's dangling
+            // NodeConfig::opJovianActive() call (the accessor upstream #5576 removed).
             auto canonical = ledger::resolveOpForkScheduleCanonical(
-                stored, genesisSchedule, m_nodeConfig->opJovianActive(), genesisHash);
+                stored, genesisSchedule, /*featureOpJovian=*/false, genesisHash);
             if (stored.has_value() &&
                 ledger::storedOpForkScheduleDivergesFromGenesis(canonical, genesisSchedule))
             {
@@ -698,42 +717,32 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             /*allowSynthesizedL1Attributes=*/false);
 
         m_opScheduler = opDelegate;
-        // OP commits go engine -> OpScheduler and reach neither MultiVersionScheduler::commitBlock
-        // nor EngineServiceImpl, the two places that republish the chain configuration. Without
-        // this the admission snapshot (m_memPoolValidator) would keep the values read at boot --
-        // including the block number the EVM revision is derived from. Read the FULL config from
-        // the ledger: OpScheduler::loadCommitLedgerConfig carries only number + timestamp, so
-        // publishing that would wipe chainId and fail-close EIP-155 admission.
-        // Must not throw: OpScheduler calls this from INSIDE coCommitBlock's try block, after
-        // mergeBackStorage already succeeded, so an escaping exception would report an already
-        // committed block as a failed commit and leave op-node retrying a block that is on
-        // disk. Keeping the previous snapshot for one block is the lesser failure.
-        auto republishLedgerConfig = [this](bcos::protocol::BlockNumber number) {
-            try
-            {
-                m_ledgerConfigState->set(task::syncWait(ledger::getLedgerConfig(*m_ledger)));
-            }
-            catch (...)
-            {
-                INITIALIZER_LOG(ERROR)
-                    << LOG_DESC(
-                           "republish ledger config after OP commit failed; admission keeps "
-                           "the previous snapshot")
-                    << LOG_KV("number", number)
-                    << LOG_KV("error", boost::current_exception_diagnostic_information());
-            }
-        };
-        opDelegate->setBlockNumberNotifier(republishLedgerConfig);
+        // Republish the full ledger configuration after every OP commit. OP commits go
+        // engine -> OpScheduler and reach neither MultiVersionScheduler::commitBlock nor
+        // EngineServiceImpl, the two places that otherwise republish the chain configuration;
+        // without this the admission snapshot would keep the values read at boot -- including
+        // the block number the EVM revision is derived from. The helper reads the FULL config
+        // from the ledger (OpScheduler::loadCommitLedgerConfig carries only number + timestamp,
+        // so publishing that would wipe chainId and fail-close EIP-155 admission) and keeps the
+        // previous snapshot on failure (see engine/OpLedgerConfigRepublish.h; failures are
+        // pinned by OpLedgerConfigRepublishTest).
+        auto republishLedgerConfig =
+            bcos::engine::makeOpLedgerConfigRepublisher(m_ledgerConfigState, m_ledger,
+                [](bcos::protocol::BlockNumber number, bcos::Error::Ptr error) {
+                    INITIALIZER_LOG(ERROR)
+                        << LOG_DESC(
+                               "republish ledger config after OP commit failed; admission keeps "
+                               "the previous snapshot")
+                        << LOG_KV("number", number) << LOG_KV("error", error->errorMessage());
+                });
         // The scheduler holds one notifier slot; compose so installing the RPC notifier later
         // does not drop the republish.
-        m_setOpSchedulerBlockNumberNotifier = [opDelegate, republishLedgerConfig](
-                                                  std::function<void(protocol::BlockNumber)> rpc) {
-            opDelegate->setBlockNumberNotifier(
-                [republishLedgerConfig, rpc = std::move(rpc)](protocol::BlockNumber number) {
-                    republishLedgerConfig(number);
-                    rpc(number);
-                });
-        };
+        opDelegate->setBlockNumberNotifier(republishLedgerConfig);
+        m_setOpSchedulerBlockNumberNotifier = bcos::engine::composeOpBlockNumberNotifier(
+            [opDelegate](bcos::engine::BlockNumberNotifier notifier) {
+                opDelegate->setBlockNumberNotifier(std::move(notifier));
+            },
+            republishLedgerConfig);
     }
 
     executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(
@@ -803,7 +812,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // (NodeConfig requires an explicit evm_revision for executor_version>=2), so a one-time
     // INFO line is accurate and stays off the per-block / per-RPC getLedgerConfig hot path.
     // The CI integration test greps this line to pin the effective revision.
-    else if (m_executorVersion >= scheduler_v1::ETHEREUM_EXECUTOR_VERSION)
+    //
+    // The OP lane is outside this probe: NodeConfig rejects an explicit revision there and
+    // Ledger::buildGenesisBlock therefore writes no evmc_revision row, because OpScheduler
+    // derives it per block from [op_fork_timestamps] (configAt(schedule, blockTime).rev). Its
+    // absence is the expected shape, not the runtime-switch hazard this guard targets.
+    if (m_executorVersion >= scheduler_v1::ETHEREUM_EXECUTOR_VERSION &&
+        m_executorVersion < scheduler_v1::OPSTACK_EXECUTOR_VERSION)
     {
         if (auto evmcRev = task::syncWait(ledger::getSystemConfig(
                 *m_ledger, magic_enum::enum_name(ledger::SystemConfig::evmc_revision))))
@@ -815,19 +830,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             ledger::applyEVMCRevisionConfig(probe, std::get<0>(*evmcRev));
             INITIALIZER_LOG(INFO) << LOG_DESC("Effective EVMC revision (v2)")
                                   << LOG_KV("evmcRevision", std::get<0>(*evmcRev));
-            if (opStackMode)
-            {
-                // MERGE NOTE (engine-cutover-on-prereqs): that branch refused to boot when
-                // the on-chain evmc_revision mismatched the fork config's rev
-                // (configAt(forkFlags).rev). The karst line replaced the single global
-                // fork-config model with a timestamp-keyed OpForkSchedule, so there is no
-                // single "expected rev" to compare against at boot (different rungs carry
-                // different revs). The invariant is still enforced per block by
-                // OpstackExecutor::checkForkRevision (OpForkRevisionMismatch), and the
-                // schedule itself is validated above (InvalidOpForkSchedule refuses boot).
-                // A rev/fork mismatch therefore fails loudly on the first Engine API
-                // submission instead of at boot.
-            }
         }
         else
         {

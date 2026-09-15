@@ -182,9 +182,9 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
     // the PAYLOAD SHAPE version, exactly as the OP lane derives it and as the cache entry
     // below stores it: two methods that build the same shape must mint one id for the same
     // content (a raw-version byte would mint two once maxEngineVersion exceeds V3).
-    auto payloadIdOpt = engine_common::derivePayloadId(*payloadAttributes,
-        forkchoiceState.headBlockHash, engine_common::payloadShapeVersion(version),
-        decodedForcedTxs);
+    auto payloadIdOpt =
+        engine_common::derivePayloadId(*payloadAttributes, forkchoiceState.headBlockHash,
+            engine_common::payloadShapeVersion(version), decodedForcedTxs);
     if (!payloadIdOpt.has_value())
     {
         co_return ForkchoiceUpdatedResult{
@@ -567,6 +567,20 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
             guard, m_artifacts, payloadId, cached->executionPayload.blockHash, cached);
     }
 
+    // Publish the post-commit configuration into the admission holder (TxValidator's
+    // "whoever commits a block publishes" contract). This lane bypasses
+    // MultiVersionScheduler's publishing wrapper, so without this the engine-driven modes
+    // would admit every later transaction against the boot snapshot. Fires on every VALID
+    // answer — including the idempotent-duplicate path — so a failed refetch is retried by
+    // the CL's resubmission instead of silently leaving admission one block behind. A
+    // failing refetch propagates: the block is durable and the CL retries, the same
+    // fail-stop the per-block refetch elsewhere applies.
+    if (m_ledgerConfigState && m_ledger)
+    {
+        auto ledgerConfig = co_await ledger::getLedgerConfig(*m_ledger);
+        m_ledgerConfigState->set(std::make_shared<const bcos::ledger::LedgerConfig>(*ledgerConfig));
+    }
+
     co_return engine_common::makeStatus(
         PayloadValidationStatus::Valid, cached->executionPayload.blockHash, std::nullopt);
 }
@@ -612,17 +626,16 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
                 // (same contract as the OP lane's fcuInvalidIfUndecodable) — an untagged
                 // OpExecutionInternalError would surface as -32603 and the CL would resubmit
                 // the identical attributes forever.
-                BOOST_THROW_EXCEPTION(OpExecutionInternalError{}
-                                      << OpPayloadUndecodable{true} << bcos::errinfo_comment{
-                                          "forced payloadAttributes.transactions envelope "
-                                          "is undecodable"});
+                BOOST_THROW_EXCEPTION(
+                    OpExecutionInternalError{}
+                    << OpPayloadUndecodable{true}
+                    << bcos::errinfo_comment{"forced payloadAttributes.transactions envelope "
+                                             "is undecodable"});
             }
             // Same carrier the OP build path uses (OpEngineService::buildOpBlock): keep the
             // raw EIP-2718 envelope on extraTransactionBytes so the executor sees the exact
             // wire form.
-            tarsTx->extraTransactionBytes.assign(raw.begin(), raw.end());
-            auto decoded = std::make_shared<bcostars::protocol::TransactionImpl>(
-                [tars = std::move(*tarsTx)]() mutable { return &tars; });
+            auto decoded = engine_common::decodedTransactionFromEnvelope(std::move(*tarsTx), raw);
             engineTransactions.push_back(EngineTransaction{
                 .raw = std::move(raw),
                 .decoded = std::move(decoded),
@@ -793,8 +806,10 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     auto receipts = co_await m_scheduler.executeBlock(view, m_executor, *blockHeader,
         executable.transactions | ::ranges::views::indirect, ledgerConfig);
 
-    // The Ethereum header commitments, shared with EngineServiceImpl so the two producers cannot
-    // drift. transactionsRoot is the index-keyed MPT over the raw EIP-2718 envelopes and MUST
+    // The Ethereum header commitments, built by the shared engine_common helper that
+    // EngineServiceImpl also uses (that class has no production caller left; the parity tests
+    // keep it as an oracle) so the implementations cannot drift.
+    // transactionsRoot is the index-keyed MPT over the raw EIP-2718 envelopes and MUST
     // match the cache-miss reconstruction (EngineServiceCommon.cpp transactionsRootFromPayload)
     // and the OP path's computeTxRoot, otherwise newPayload rejects this node's own payloads
     // with INVALID_BLOCK_HASH. receiptsRoot is the same construction over the RLP receipt leaves

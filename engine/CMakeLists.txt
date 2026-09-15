@@ -26,7 +26,8 @@ target_include_directories(engine PRIVATE
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/transaction-scheduler>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/bcos-storage>)
 # PUBLIC rlp-protocol: EthEngineService.h includes EthEngineService.inl, and the
-# installed OpEngineService.inl uses <bcos-rlp-protocol/EthBlockHeader.h>. PRIVATE
+# installed OpEngineService.inl uses both <bcos-rlp-protocol/EthBlockHeader.h> (the
+# pre-Canyon computeHash identity) and <bcos-rlp-protocol/BlockHeaderHash.h>. PRIVATE
 # would drop include dirs for consumers that instantiate the templates.
 # PRIVATE opstack-executor: OpEngineService.cpp's Jovian blobGasUsed equality gate uses the
 # header-inline bcos::evm::opstack::daFootprintOfEnvelopes (OpBlockExecute.h), so this is an
