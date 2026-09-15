@@ -40,10 +40,13 @@ namespace bcos::initializer
 ///   op_engine_rpc, and also the executor_version<2 engineApiForV1Only escape, which boots
 ///   the same service over the v1 TransactionExecutorImpl)
 ///   * buildOp(...) → OpEngineService (executor_version==3, the genesis-frozen OPSTACK slot)
-/// executor_version alone does not enable the Engine API on v2 chains. Both engines take the
-/// LedgerConfigState holder and republish the configuration after every durable commit —
-/// these lanes bypass MultiVersionScheduler's publishing wrapper, and transaction admission
-/// reads that holder.
+/// executor_version alone does not enable the Engine API on v2 chains. Both lanes bypass
+/// MultiVersionScheduler's publishing wrapper, so each keeps the LedgerConfigState holder
+/// current itself — transaction admission reads it and nowhere else: build() hands the holder
+/// to EthEngineService, which republishes after every durable commit; buildOp() does not take
+/// one at all, and the initializer instead installs the republish notifier OpScheduler fires
+/// after every OP commit (OpLedgerConfigRepublish.h explains why the engine must not publish
+/// there).
 class EngineServiceInitializer
 {
 public:
@@ -82,16 +85,15 @@ public:
         int64_t blockTxCountLimit = bcos::engine::c_defaultBlockTxCountLimit,
         bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
         std::shared_ptr<bcos::engine::DACaps> daCaps = nullptr,
-        bool allowSynthesizedL1Attributes = false,
-        bcos::ledger::LedgerConfigState::Ptr ledgerConfigState = nullptr)
+        bool allowSynthesizedL1Attributes = false)
     {
         auto initializer = Ptr(new EngineServiceInitializer());
         using ConcreteEngineService = bcos::engine::OpEngineService<bcos::txpool::MemPoolImpl,
             GlobalStateStorage, SchedulerType>;
         auto holder = std::make_shared<ConcreteOpModel<SchedulerType, ConcreteEngineService>>(
             std::move(storageInitializer), std::move(blockFactory), std::move(scheduler), memPool,
-            blockTxCountLimit, std::move(delegate), std::move(daCaps), allowSynthesizedL1Attributes,
-            std::move(ledgerConfigState));
+            blockTxCountLimit, std::move(delegate), std::move(daCaps),
+            allowSynthesizedL1Attributes);
         initializer->m_holder = holder;
         initializer->m_engineService =
             std::shared_ptr<bcos::engine::AnyEngineService>(holder, &holder->m_any);
@@ -144,15 +146,14 @@ private:
             bcos::protocol::BlockFactory::Ptr blockFactory,
             std::shared_ptr<SchedulerType> scheduler, bcos::txpool::MemPoolImpl& memPool,
             int64_t blockTxCountLimit, bcos::scheduler::SchedulerInterface::Ptr delegate,
-            std::shared_ptr<bcos::engine::DACaps> daCaps, bool allowSynthesizedL1Attributes,
-            bcos::ledger::LedgerConfigState::Ptr ledgerConfigState)
+            std::shared_ptr<bcos::engine::DACaps> daCaps, bool allowSynthesizedL1Attributes)
           : m_storageInitializer(std::move(storageInitializer)),
             m_memPool(memPool),
             m_scheduler(std::move(scheduler)),
             m_any(std::in_place_type<ConcreteEngineService>, m_memPool,
                 m_storageInitializer->storage(), *m_scheduler, std::move(blockFactory),
                 blockTxCountLimit, std::move(delegate), std::move(daCaps),
-                allowSynthesizedL1Attributes, std::move(ledgerConfigState))
+                allowSynthesizedL1Attributes)
         {}
 
         std::shared_ptr<GlobalStateStorageInitializer> m_storageInitializer;

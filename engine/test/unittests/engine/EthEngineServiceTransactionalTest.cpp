@@ -25,6 +25,7 @@
 
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
+#include <bcos-framework/ledger/LedgerConfigState.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage/Serialize.h>
@@ -1020,6 +1021,59 @@ BOOST_AUTO_TEST_CASE(engine_tracker_bounded_put_fifo_evicts_oldest)
     BOOST_CHECK(!guard.findPayload(ids.front()));
     BOOST_REQUIRE(guard.findPayload(ids[1]));
     BOOST_REQUIRE(guard.findPayload(ids.back()));
+}
+
+// The Eth lane bypasses MultiVersionScheduler's publishing wrapper, so the engine itself must
+// leave the admission holder carrying the POST-commit configuration: TxValidator reads chainId
+// and features from that holder and nowhere else, and a holder left on the boot snapshot would
+// admit every later transaction against stale values. Sibling of
+// OpLedgerConfigRepublishTest's cases, which pin the OP lane's notifier.
+BOOST_AUTO_TEST_CASE(commit_publishes_the_post_commit_configuration_into_the_holder)
+{
+    GateMergeStorage storage;
+    MemPoolImpl memPool;
+    StubExecutor executor;
+    StubScheduler scheduler;
+    auto blockFactory = bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+    auto ledger = std::make_shared<PersistingFakeLedger>(blockFactory, 20, 10, 10);
+    ledger->setSystemConfig(bcos::ledger::SYSTEM_KEY_WEB3_CHAIN_ID, "1234");
+    bcos::ledger::Features features;
+    features.set(bcos::ledger::Features::Flag::feature_sharding);
+    ledger->setFeatures(features);
+
+    auto ledgerConfigState = std::make_shared<bcos::ledger::LedgerConfigState>();
+    // The boot snapshot, before the engine's first commit: no chain id, no features.
+    ledgerConfigState->set(std::make_shared<const bcos::ledger::LedgerConfig>());
+
+    using Service = EthEngineService<MemPoolImpl, GateMergeStorage, StubExecutor, StubScheduler>;
+    Service service(memPool, storage, executor, scheduler, blockFactory, ledger,
+        bcos::engine::c_defaultBlockTxCountLimit, static_cast<std::uint32_t>(ApiVersion::V3),
+        nullptr, ledgerConfigState);
+
+    auto forkchoice = makeForkchoiceState();
+    seedForkchoiceStorage(storage, forkchoice);
+
+    PayloadAttributes attrs = makeAttrs(1'700'000'001'000ULL);
+    auto build = task::syncWait(service.updateForkchoice(forkchoice, &attrs, 3));
+    BOOST_REQUIRE(build.payloadId.has_value());
+    auto payload = task::syncWait(service.getPayload(*build.payloadId, 3));
+
+    storage.mergeGate->store(true);
+
+    NewPayloadRequest request;
+    request.executionPayload = payload->executionPayload;
+    request.parentBeaconBlockRoot = attrs.parentBeaconBlockRoot;
+
+    auto status = task::syncWait(service.newPayload(request, 3));
+    BOOST_REQUIRE_EQUAL(
+        static_cast<int>(status.status), static_cast<int>(PayloadValidationStatus::Valid));
+
+    auto published = ledgerConfigState->get();
+    BOOST_REQUIRE_MESSAGE(published->chainId().has_value(),
+        "the engine must republish the ledger's chain id after a commit: admission fails every "
+        "EIP-155 transaction closed while the holder carries the boot snapshot");
+    BOOST_CHECK(published->features().get(bcos::ledger::Features::Flag::feature_sharding));
+    BOOST_CHECK_EQUAL(published->blockNumber(), ledger->blockNumber());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

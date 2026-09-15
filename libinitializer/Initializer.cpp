@@ -46,6 +46,7 @@
 #include "bcos-storage/RocksDBStorage.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
+#include "engine/bcos-engine/OpLedgerConfigRepublish.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include "libinitializer/BaselineSchedulerInitializer.h"
@@ -617,45 +618,30 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_engineServiceInitializer = EngineServiceInitializer::buildOp(
             m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
             m_memPoolInitializer->memPool(), bcos::engine::c_defaultBlockTxCountLimit, opDelegate,
-            m_daCaps,
-            /*allowSynthesizedL1Attributes=*/false,
-            // No holder for the engine: its commit callbacks would publish
-            // OpScheduler::loadCommitLedgerConfig's number+timestamp stub, and admission reads
-            // chainId/features from the holder -- the republish notifier below keeps it complete.
-            /*ledgerConfigState=*/nullptr);
+            m_daCaps, /*allowSynthesizedL1Attributes=*/false);
 
         m_opScheduler = opDelegate;
-        // Read the FULL config from the ledger after every OP commit:
-        // OpScheduler::loadCommitLedgerConfig carries only number + timestamp, so publishing that
-        // would wipe chainId and fail-close EIP-155 admission (TxValidator reads the holder and
-        // nowhere else). On failure the previous snapshot stays, which is strictly better than an
-        // empty one.
-        auto republishLedgerConfig = [this](bcos::protocol::BlockNumber number) {
-            try
-            {
-                m_ledgerConfigState->set(task::syncWait(ledger::getLedgerConfig(*m_ledger)));
-            }
-            catch (...)
-            {
-                INITIALIZER_LOG(ERROR)
-                    << LOG_DESC(
-                           "republish ledger config after OP commit failed; admission keeps "
-                           "the previous snapshot")
-                    << LOG_KV("number", number)
-                    << LOG_KV("error", boost::current_exception_diagnostic_information());
-            }
-        };
-        opDelegate->setBlockNumberNotifier(republishLedgerConfig);
+        // Republish the full ledger configuration after every OP commit (see
+        // engine/OpLedgerConfigRepublish.h for why the engine must not publish the
+        // scheduler's own LedgerConfig instead). On failure the previous snapshot stays, which
+        // is strictly better than an empty one.
+        auto republishLedgerConfig =
+            bcos::engine::makeOpLedgerConfigRepublisher(m_ledgerConfigState, m_ledger,
+                [](bcos::protocol::BlockNumber number, bcos::Error::Ptr error) {
+                    INITIALIZER_LOG(ERROR)
+                        << LOG_DESC(
+                               "republish ledger config after OP commit failed; admission keeps "
+                               "the previous snapshot")
+                        << LOG_KV("number", number) << LOG_KV("error", error->errorMessage());
+                });
         // The scheduler holds one notifier slot; compose so installing the RPC notifier later
         // does not drop the republish.
-        m_setOpSchedulerBlockNumberNotifier = [opDelegate, republishLedgerConfig](
-                                                  std::function<void(protocol::BlockNumber)> rpc) {
-            opDelegate->setBlockNumberNotifier(
-                [republishLedgerConfig, rpc = std::move(rpc)](protocol::BlockNumber number) {
-                    republishLedgerConfig(number);
-                    rpc(number);
-                });
-        };
+        opDelegate->setBlockNumberNotifier(republishLedgerConfig);
+        m_setOpSchedulerBlockNumberNotifier = bcos::engine::composeOpBlockNumberNotifier(
+            [opDelegate](bcos::engine::BlockNumberNotifier notifier) {
+                opDelegate->setBlockNumberNotifier(std::move(notifier));
+            },
+            republishLedgerConfig);
     }
 
     executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(

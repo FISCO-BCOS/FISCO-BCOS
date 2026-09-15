@@ -677,17 +677,16 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
             }
             requireDelegate();
             bcos::Error::Ptr commitError;
+            // The callback's LedgerConfig is deliberately dropped rather than published into
+            // the admission holder: the delegate is an OpScheduler, whose
+            // loadCommitLedgerConfig carries only number + timestamp -- chainId nullopt and
+            // features empty -- and TxValidator reads chainId from the holder, so publishing it
+            // fail-closes EIP-155 admission from the first committed block on. The holder is
+            // republished from the ledger after every commit instead; see
+            // OpLedgerConfigRepublish.h.
             m_delegate->commitBlock(builtHeader,
-                [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr ledgerConfig) {
+                [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr /*ledgerConfig*/) {
                     commitError = std::move(error);
-                    // Publish the post-commit configuration (TxValidator's "whoever commits
-                    // a block publishes" contract): this lane bypasses
-                    // MultiVersionScheduler's publishing wrapper.
-                    if (!commitError && m_ledgerConfigState && ledgerConfig)
-                    {
-                        m_ledgerConfigState->set(
-                            std::make_shared<const bcos::ledger::LedgerConfig>(*ledgerConfig));
-                    }
                 });
             if (!commitError)
             {
@@ -871,17 +870,11 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
     }
 
     bcos::Error::Ptr commitError;
+    // Not published: see the built-pending commit above (the delegate's LedgerConfig is the
+    // number+timestamp stub; the holder is republished from the ledger by the notifier).
     m_delegate->commitBlock(executedHeader,
-        [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr ledgerConfig) {
+        [&](bcos::Error::Ptr error, bcos::ledger::LedgerConfig::Ptr /*ledgerConfig*/) {
             commitError = std::move(error);
-            // Publish the post-commit configuration (TxValidator's "whoever commits a block
-            // publishes" contract): this lane bypasses MultiVersionScheduler's publishing
-            // wrapper.
-            if (!commitError && m_ledgerConfigState && ledgerConfig)
-            {
-                m_ledgerConfigState->set(
-                    std::make_shared<const bcos::ledger::LedgerConfig>(*ledgerConfig));
-            }
         });
     if (commitError)
     {
