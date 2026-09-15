@@ -58,7 +58,8 @@ std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::buil
     // would strand a chain that wrote such a row before 3.18 with no way to lower it.
     {
         auto const onChain = readOnChainExecutorVersion(*ledger, nodeConfig->executorVersion());
-        bcos::scheduler_v1::validateOpModeGenesisOnly(features, onChain.version, onChain.activation);
+        bcos::scheduler_v1::validateOpModeGenesisOnly(
+            features, onChain.version, onChain.activation);
     }
 
     return ledger;
