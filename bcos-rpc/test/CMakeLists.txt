@@ -26,6 +26,12 @@ add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE .)
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-unused-variable)
 
+# WI-E2: verbatim op-geth (e8800cffe) eth_getTransactionReceipt goldens captured from the
+# corpus devnet (Web3ResponseTest.cpp block comment; capture recipe in the corpus
+# tools/devnet/README.md §WI-E2).
+target_compile_definitions(${TEST_BINARY_NAME} PRIVATE
+    WEB3_RPC_OPGETH_DEPOSIT_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/unittests/rpc/golden/op-geth-deposit-receipt")
+
 # transaction-scheduler: EthGetProofIntegrationTest.cpp drives the FullChainFixture
 # end-to-end harness (transaction-scheduler/tests/FullChainFixture.h); it brings
 # ledger/storage (RocksDB) transitively. Deliberately NOT linking `executor` here even

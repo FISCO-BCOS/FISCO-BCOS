@@ -20,6 +20,9 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 
+#include <fstream>
+#include <sstream>
+
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::rpc;
@@ -1070,6 +1073,314 @@ BOOST_AUTO_TEST_CASE(combineTxResponseAccessAndAuthLists)
         BOOST_CHECK(!result.isMember("maxFeePerBlobGas"));
         BOOST_CHECK(!result.isMember("blobVersionedHashes"));
     }
+}
+
+// ---------------------------------------------------------------------------
+// WI-E2: pin the deposit (0x7e) receipt RPC shape against REAL op-geth output.
+//
+// The goldens under rpc/golden/op-geth-deposit-receipt/ are verbatim
+// eth_getTransactionReceipt / eth_getTransactionByHash responses captured from a live
+// op-geth devnet (geth built from e8800cffe53d459cde8a07c8e8f1de9d86e79e07, corpus
+// opdevnet.sh, L2 RPC :9545; capture recipe: corpus tools/devnet/README.md §WI-E2).
+// This closes the "FISCO writes its own fixtures and passes its own tests" gap: the
+// replica receipt/tx are BUILT FROM the golden JSON, driven through FISCO's production
+// serializer (combineReceiptResponse), and compared field-by-field — field names
+// (spelling included), values, and the full field-set both directions.
+//
+// Captured cases:
+//   user-deposit                        OptimismPortal.depositTransaction(isCreation=false),
+//                                       first deposit of that sender → depositNonce 0x0
+//   user-deposit-creation               isCreation=true → to=null + contractAddress set,
+//                                       depositNonce 0x1
+//   attributes-deposit-canyon-onward    per-block L1 attributes deposit (post-Canyon):
+//                                       depositNonce + depositReceiptVersion 0x1
+//   attributes-deposit-pre-canyon       pre-Canyon: depositReceiptVersion ABSENT
+//
+// op-geth emission conditions (internal/ethapi/api.go MarshalReceipt + core/state_processor.go
+// MakeReceipt), confirmed at the pinned commit:
+//   - depositNonce: every deposit receipt post-Regolith, = the executing sender account's
+//     EVM nonce at execution time (statedb.GetNonce(msg.From)) — NOT a global deposit
+//     counter; MarshalReceipt gates on `receipt.DepositNonce != nil`.
+//   - depositReceiptVersion: additionally from Canyon (CanyonDepositReceiptVersion = 1).
+//   - l1GasPrice/l1Fee/... are NEVER emitted on deposit receipts (gated on !IsDepositTx).
+//   - contractAddress: emitted iff a contract was created (non-zero address), else null.
+//
+// Pinned representation divergence (corpus DIVERGENCES.md §WI-E2, D1):
+//   op-geth emits from/to/contractAddress as all-lowercase hex; FISCO emits EIP-55
+//   checksummed. Same 20 bytes — tools comparing raw JSON (not parsing addresses) see a
+//   difference. Compared case-insensitively here; the casing itself is pinned by literal
+//   assertions in the concrete cases below. Do NOT "fix" FISCO to lowercase silently:
+//   that changes the wire representation and must re-open the divergence entry.
+// ---------------------------------------------------------------------------
+
+#ifndef WEB3_RPC_OPGETH_DEPOSIT_GOLDEN_DIR
+#define WEB3_RPC_OPGETH_DEPOSIT_GOLDEN_DIR ""
+#endif
+
+namespace
+{
+Json::Value wiE2LoadGoldenJson(std::string const& fileName)
+{
+    auto const path = std::string(WEB3_RPC_OPGETH_DEPOSIT_GOLDEN_DIR) + "/" + fileName;
+    std::ifstream in(path);
+    BOOST_REQUIRE_MESSAGE(in, "WI-E2 golden fixture not found: " << path);
+    std::stringstream buffer;
+    buffer << in.rdbuf();
+    Json::Value root;
+    Json::Reader reader;
+    BOOST_REQUIRE_MESSAGE(
+        reader.parse(buffer.str(), root), "WI-E2 golden JSON parse failed: " << path);
+    return root;
+}
+
+std::string wiE2Without0x(std::string const& hex)
+{
+    return hex.starts_with("0x") ? hex.substr(2) : hex;
+}
+
+// Goldens carry 0x-prefixed quantities (op-geth hexutil). boost cpp_int parses the 0x
+// prefix itself (same form already used by the deposit tx test above).
+bcos::u256 wiE2GoldenU256(std::string const& hexQuantity)
+{
+    return bcos::u256(hexQuantity);
+}
+
+struct WiE2Replica
+{
+    std::shared_ptr<bcostars::protocol::TransactionImpl> tx;
+    bcos::protocol::TransactionReceipt::Ptr receipt;
+    bcos::crypto::HashType blockHash;
+};
+
+// Build the FISCO-side equivalent of a captured deposit purely from the golden JSON:
+// the tx envelope via the production Web3Transaction → tars bridge, the receipt via the
+// production receipt factory + OpStackReceiptMeta. Nothing is hard-coded per-case.
+WiE2Replica wiE2BuildReplica(bcos::protocol::BlockFactory::Ptr const& blockFactory,
+    Json::Value const& txGolden, Json::Value const& receiptGolden)
+{
+    bcos::rpc::Web3Transaction web3Tx;
+    web3Tx.type = bcos::rpc::TransactionType::Deposit;
+    web3Tx.from = bcos::Address(txGolden["from"].asString());
+    if (txGolden["to"].isString())
+    {
+        web3Tx.to = bcos::Address(txGolden["to"].asString());
+    }
+    web3Tx.gasLimit = wiE2GoldenU256(txGolden["gas"].asString()).convert_to<unsigned long long>();
+    web3Tx.value = wiE2GoldenU256(txGolden["value"].asString());
+    web3Tx.data = bcos::fromHex(wiE2Without0x(txGolden["input"].asString()));
+    // nonce is NOT part of the deposit RLP envelope (op-geth DepositTx has no nonce
+    // field); the golden's `nonce` is the sender account nonce mirrored by the RPC.
+    web3Tx.mint = wiE2GoldenU256(txGolden["mint"].asString());
+    // Regolith+ deposits: isSystemTx false on all captured goldens (field absent).
+    web3Tx.isSystemTx = false;
+    web3Tx.sourceHash = bcos::crypto::HashType(wiE2Without0x(txGolden["sourceHash"].asString()));
+
+    auto tarsTx = web3Tx.takeToTarsTransaction();
+    // takeToTarsTransaction fills extraTransactionHash = keccak(full 0x7E envelope) itself;
+    // the case below pins it against the golden transactionHash.
+    auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
+        [tarsTx = std::move(tarsTx)]() mutable { return &tarsTx; });
+
+    std::vector<bcos::protocol::LogEntry> logs;
+    auto receipt = blockFactory->receiptFactory()->createReceipt(
+        wiE2GoldenU256(receiptGolden["gasUsed"].asString()),
+        receiptGolden["contractAddress"].isString() ? receiptGolden["contractAddress"].asString() :
+                                                      std::string(),
+        logs,
+        /*status=*/0,  // FISCO internal 0 == success → serializer emits 0x1 like the golden
+        bcos::bytesConstRef{},
+        static_cast<bcos::protocol::BlockNumber>(
+            wiE2GoldenU256(receiptGolden["blockNumber"].asString()).convert_to<long long>()));
+    receipt->setTransactionIndex(
+        static_cast<size_t>(wiE2GoldenU256(receiptGolden["transactionIndex"].asString())
+                                .convert_to<unsigned long long>()));
+    // cumulativeGasUsed is a DECIMAL string on the FISCO side (TransactionReceipt.h note).
+    receipt->setCumulativeGasUsed(
+        wiE2GoldenU256(receiptGolden["cumulativeGasUsed"].asString()).str());
+    // op-geth receipts always carry the 256-byte bloom (all-zero for these no-log
+    // deposits); the tars receipt leaves it empty unless set explicitly.
+    bcos::bytes zeroBloom(256, 0x00);
+    receipt->setLogsBloom(bcos::ref(zeroBloom));
+
+    bcos::protocol::OpStackReceiptMeta meta;
+    if (receiptGolden.isMember("depositNonce"))
+    {
+        meta.deposit_nonce =
+            wiE2GoldenU256(receiptGolden["depositNonce"].asString()).convert_to<uint64_t>();
+    }
+    if (receiptGolden.isMember("depositReceiptVersion"))
+    {
+        meta.deposit_receipt_version =
+            wiE2GoldenU256(receiptGolden["depositReceiptVersion"].asString())
+                .convert_to<uint64_t>();
+    }
+    receipt->setOpStackMeta(std::move(meta));
+
+    return {.tx = std::move(tx),
+        .receipt = std::move(receipt),
+        .blockHash = bcos::crypto::HashType(wiE2Without0x(receiptGolden["blockHash"].asString()))};
+}
+
+// Full field-set diff (both directions) + per-field value comparison. Address fields are
+// compared case-insensitively (pinned divergence D1, see block comment); every other
+// field must match byte-for-byte. Any failure is a REAL representation-layer divergence
+// — fix the code or re-capture the golden; never loosen this comparator.
+void wiE2CompareGoldenReceipt(
+    Json::Value const& golden, Json::Value const& actual, std::string const& label)
+{
+    std::vector<std::string> missingInFisco;
+    std::vector<std::string> extraInFisco;
+    for (auto const& key : golden.getMemberNames())
+    {
+        if (!actual.isMember(key))
+        {
+            missingInFisco.push_back(key);
+        }
+    }
+    for (auto const& key : actual.getMemberNames())
+    {
+        if (!golden.isMember(key))
+        {
+            extraInFisco.push_back(key);
+        }
+    }
+    std::string diffMessage = label + ": op-geth-only fields (FISCO does not emit):";
+    for (auto const& key : missingInFisco)
+    {
+        diffMessage += " " + key;
+    }
+    diffMessage += "; FISCO-only fields (op-geth does not emit):";
+    for (auto const& key : extraInFisco)
+    {
+        diffMessage += " " + key;
+    }
+    BOOST_CHECK_MESSAGE(
+        missingInFisco.empty() && extraInFisco.empty(), "field-set divergence: " << diffMessage);
+
+    for (auto const& key : golden.getMemberNames())
+    {
+        if (!actual.isMember(key))
+        {
+            continue;  // already reported above
+        }
+        if (key == "from" || key == "to" || key == "contractAddress")
+        {
+            BOOST_CHECK_MESSAGE(golden[key].isNull() == actual[key].isNull(),
+                label << "." << key << ": nullness differs");
+            if (!golden[key].isNull() && actual[key].isString())
+            {
+                BOOST_CHECK_MESSAGE(boost::algorithm::to_lower_copy(actual[key].asString()) ==
+                                        boost::algorithm::to_lower_copy(golden[key].asString()),
+                    label << "." << key << " address bytes differ: actual="
+                          << actual[key].asString() << " golden=" << golden[key].asString());
+            }
+            continue;
+        }
+        if (golden[key].isString())
+        {
+            BOOST_CHECK_MESSAGE(actual[key].isString(),
+                label << "." << key << ": type differs (golden string, actual " << actual[key]
+                      << ")");
+            BOOST_CHECK_EQUAL(actual[key].asString(), golden[key].asString());
+        }
+        else
+        {
+            BOOST_CHECK_MESSAGE(actual[key] == golden[key],
+                label << "." << key << ": value differs (actual " << actual[key] << " golden "
+                      << golden[key] << ")");
+        }
+    }
+}
+}  // namespace
+
+// First captured user deposit (call-type): the canonical no-mint-surprise shape —
+// depositNonce 0x0 must be EMITTED (op-geth emits the field for the nil-vs-zero
+// distinction; a falsy presence check would drop it).
+BOOST_AUTO_TEST_CASE(opgethGoldenUserDepositReceipt)
+{
+    auto const receiptGolden = wiE2LoadGoldenJson("user-deposit.receipt.json");
+    auto const txGolden = wiE2LoadGoldenJson("user-deposit.tx.json");
+    auto parts = wiE2BuildReplica(m_blockFactory, txGolden, receiptGolden);
+
+    // Envelope equivalence pin: FISCO's deposit tx hash (keccak of the full 0x7E envelope
+    // assembled from the same golden fields) must reproduce op-geth's transactionHash.
+    BOOST_CHECK_EQUAL(parts.tx->hash().hexPrefixed(), receiptGolden["transactionHash"].asString());
+
+    Json::Value result = Json::objectValue;
+    combineReceiptResponse(result, *parts.receipt, *parts.tx, parts.blockHash);
+    wiE2CompareGoldenReceipt(receiptGolden, result, "user-deposit");
+
+    // D1 concrete pin: FISCO emits the EIP-55 CHECKSUMMED sender for op-geth's lowercase
+    // 0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266 (same 20 bytes).
+    BOOST_CHECK_EQUAL(result["from"].asString(), "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266");
+    // The zero depositNonce survives serialization and renders as "0x0".
+    BOOST_REQUIRE(result.isMember("depositNonce"));
+    BOOST_CHECK_EQUAL(result["depositNonce"].asString(), "0x0");
+}
+
+// Creation-type user deposit (isCreation=true): the only capture with a non-null
+// contractAddress, and to=null on both sides.
+BOOST_AUTO_TEST_CASE(opgethGoldenUserDepositCreationReceipt)
+{
+    auto const receiptGolden = wiE2LoadGoldenJson("user-deposit-creation.receipt.json");
+    auto const txGolden = wiE2LoadGoldenJson("user-deposit-creation.tx.json");
+    auto parts = wiE2BuildReplica(m_blockFactory, txGolden, receiptGolden);
+
+    BOOST_CHECK_EQUAL(parts.tx->hash().hexPrefixed(), receiptGolden["transactionHash"].asString());
+
+    Json::Value result = Json::objectValue;
+    combineReceiptResponse(result, *parts.receipt, *parts.tx, parts.blockHash);
+    wiE2CompareGoldenReceipt(receiptGolden, result, "user-deposit-creation");
+
+    BOOST_CHECK(result["to"].isNull());
+    // D1 concrete pin for contractAddress: FISCO checksummed vs op-geth lowercase
+    // 0xe7f1725e7734ce288f8367e1bb143e90bb3f0512.
+    BOOST_CHECK_EQUAL(
+        result["contractAddress"].asString(), "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512");
+    BOOST_CHECK_EQUAL(result["depositNonce"].asString(), "0x1");
+}
+
+// Per-block L1 attributes deposit post-Canyon: both OP fields present; the real
+// l1info calldata exercises the envelope round-trip beyond a minimal stub.
+BOOST_AUTO_TEST_CASE(opgethGoldenAttributesDepositReceipt)
+{
+    auto const receiptGolden = wiE2LoadGoldenJson("attributes-deposit-canyon-onward.receipt.json");
+    auto const txGolden = wiE2LoadGoldenJson("attributes-deposit-canyon-onward.tx.json");
+    auto parts = wiE2BuildReplica(m_blockFactory, txGolden, receiptGolden);
+
+    BOOST_CHECK_EQUAL(parts.tx->hash().hexPrefixed(), receiptGolden["transactionHash"].asString());
+
+    Json::Value result = Json::objectValue;
+    combineReceiptResponse(result, *parts.receipt, *parts.tx, parts.blockHash);
+    wiE2CompareGoldenReceipt(receiptGolden, result, "attributes-deposit-canyon-onward");
+
+    // depositNonce = L1 attributes depositor's account nonce (block 3000 → 0xbb9);
+    // depositReceiptVersion = 1 from Canyon on.
+    BOOST_CHECK_EQUAL(result["depositNonce"].asString(), "0xbb9");
+    BOOST_CHECK_EQUAL(result["depositReceiptVersion"].asString(), "0x1");
+}
+
+// Pre-Canyon attributes deposit: op-geth OMITS depositReceiptVersion (field absent, not
+// null) — FISCO must omit it too. Pins the absence semantics on both sides.
+BOOST_AUTO_TEST_CASE(opgethGoldenAttributesDepositPreCanyonReceipt)
+{
+    auto const receiptGolden = wiE2LoadGoldenJson("attributes-deposit-pre-canyon.receipt.json");
+    auto const txGolden = wiE2LoadGoldenJson("attributes-deposit-pre-canyon.tx.json");
+    auto parts = wiE2BuildReplica(m_blockFactory, txGolden, receiptGolden);
+
+    BOOST_CHECK_EQUAL(parts.tx->hash().hexPrefixed(), receiptGolden["transactionHash"].asString());
+
+    // The fixture itself predates Canyon: no depositReceiptVersion anywhere.
+    BOOST_CHECK(!receiptGolden.isMember("depositReceiptVersion"));
+    BOOST_REQUIRE(parts.receipt->opStackMeta().has_value());
+    BOOST_CHECK(!parts.receipt->opStackMeta()->deposit_receipt_version.has_value());
+
+    Json::Value result = Json::objectValue;
+    combineReceiptResponse(result, *parts.receipt, *parts.tx, parts.blockHash);
+    wiE2CompareGoldenReceipt(receiptGolden, result, "attributes-deposit-pre-canyon");
+
+    BOOST_CHECK(!result.isMember("depositReceiptVersion"));
+    BOOST_CHECK_EQUAL(result["depositNonce"].asString(), "0x63");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
