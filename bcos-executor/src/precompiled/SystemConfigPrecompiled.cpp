@@ -396,6 +396,48 @@ int64_t SystemConfigPrecompiled::validate(
     {
         (m_sysValueCmp.at(key))(configuredValue, blockVersion);
     }
+
+    // OP mode is genesis-only in BOTH directions: the comparator above refuses a write TO the
+    // OPSTACK slot, and this refuses a write OFF it. The runtime freeze
+    // (MultiVersionScheduler::setVersion) only holds the RUNNING process on the OP lane — a
+    // governance write still lands the row, so the on-chain value and every node's lane diverge
+    // until the next start, where the lane is re-derived from that row and
+    // validateOpModeGenesisOnly no longer sees OP mode at all (it keys on the value, not on the
+    // lane the chain was created with). Refuse instead of bricking the restart. Version-gated
+    // like the two refusals above, so blocks from before V3_18_0 that set this key replay.
+    constexpr std::string_view c_executorVersionKey =
+        magic_enum::enum_name(bcos::ledger::SystemConfig::executor_version);
+    if (key == c_executorVersionKey && configuredValue != bcos::ledger::OPSTACK_EXECUTOR_VERSION &&
+        versionCompareTo(blockVersion, BlockVersion::V3_18_0_VERSION) >= 0)
+    {
+        auto const currentRow = getSysConfigByKey(_executive, key);
+        int64_t currentExecutorVersion = -1;
+        if (!currentRow.first.empty())
+        {
+            try
+            {
+                currentExecutorVersion = boost::lexical_cast<int64_t>(currentRow.first);
+            }
+            catch (boost::bad_lexical_cast const&)
+            {
+                // A non-numeric row is not a lane; the boot path reports it
+                // (readOnChainExecutorVersion throws there), so there is nothing to refuse here.
+                currentExecutorVersion = -1;
+            }
+        }
+        if (currentExecutorVersion == bcos::ledger::OPSTACK_EXECUTOR_VERSION)
+        {
+            BOOST_THROW_EXCEPTION(
+                PrecompiledError{} << errinfo_comment(
+                    "executor_version " + std::to_string(configuredValue) + " cannot replace " +
+                    std::to_string(bcos::ledger::OPSTACK_EXECUTOR_VERSION) +
+                    " (the OPSTACK slot): OP mode is genesis-only, so moving a "
+                    "running chain off it is refused. The nodes keep running the "
+                    "OP lane, and the next start would derive the written lane "
+                    "from this row instead. Create a new chain for another "
+                    "executor; there is no in-place transition"));
+        }
+    }
     return configuredValue;
 }
 
