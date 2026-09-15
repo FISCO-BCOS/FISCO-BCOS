@@ -1326,6 +1326,15 @@ private:
     }
 
     /// Commit-path LedgerConfig (number + timestamp only).
+    /// KNOWN GAP, deferred to a follow-up PR: this is the config the commit callback hands back
+    /// and OpEngineService publishes into LedgerConfigState — the holder transaction admission
+    /// reads its chain configuration from and nowhere else (TxValidator). Number and timestamp
+    /// alone are not enough for that contract: chainId() (the web3_chain_id row), features(),
+    /// gasPrice(), evmcRevisionForBlock() and executorVersion() have to be filled in here as well.
+    /// With them empty, every envelope that claims a chain id is refused with -32602
+    /// "invalid chain id for signer" (TxValidator's ChainId check sees no chainId in the holder),
+    /// and the OP native-transaction gate reads an empty feature set. The C2 withdraw leg is the
+    /// first place a user-signed L2 transaction is sent, which is where this surfaces.
     task::Task<ledger::LedgerConfig::Ptr> loadCommitLedgerConfig(protocol::BlockHeader::Ptr header)
     {
         auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
