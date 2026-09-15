@@ -535,8 +535,10 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
     values.reserve(pending.size());
     for (auto const& item : pending)
     {
-        keys.push_back(std::string_view((const char*)item.hash.data(), item.hash.size()));
-        values.push_back(std::string_view((const char*)item.encoded.data(), item.encoded.size()));
+        keys.push_back(
+            std::string_view(reinterpret_cast<char const*>(item.hash.data()), item.hash.size()));
+        values.push_back(std::string_view(
+            reinterpret_cast<char const*>(item.encoded.data()), item.encoded.size()));
     }
     if (!keys.empty())
     {

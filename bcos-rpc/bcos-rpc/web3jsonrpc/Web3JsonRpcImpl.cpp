@@ -62,7 +62,7 @@ task::Task<Json::Value> Web3JsonRpcImpl::handleRequest(
 
         if (m_web3Subscribe && m_web3Subscribe->isSubscribeRequest(method))
         {
-            auto result = handleSubscribeRequest(_request, std::move(method), std::move(_session));
+            auto result = handleSubscribeRequest(_request, method, std::move(_session));
             co_return result;
         }
 
@@ -150,8 +150,8 @@ void Web3JsonRpcImpl::handleBatchRequest(
     }
 }
 
-Json::Value Web3JsonRpcImpl::handleSubscribeRequest(
-    Json::Value _request, std::string _method, std::shared_ptr<boostssl::ws::WsSession> _session)
+Json::Value Web3JsonRpcImpl::handleSubscribeRequest(Json::Value _request,
+    std::string const& _method, std::shared_ptr<boostssl::ws::WsSession> _session)
 {
     if (!_session)
     {

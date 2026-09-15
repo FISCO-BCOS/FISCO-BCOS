@@ -737,7 +737,7 @@ def generate_jwt(secret_file: str) -> str:
 
 
 def main() -> int:
-    global RPC_URL, HEADERS, DEPOSIT_REJECTED
+    global RPC_URL, DEPOSIT_REJECTED
 
     positional = [a for a in sys.argv[1:] if not a.startswith("--")]
     DEPOSIT_REJECTED = "--deposit-rejected" in sys.argv[1:]

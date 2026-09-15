@@ -64,7 +64,7 @@ private:
         Json::Value _request, std::shared_ptr<boostssl::ws::WsSession> _session = nullptr);
     void handleBatchRequest(Json::Value _request, std::shared_ptr<boostssl::ws::WsSession> _session,
         const Sender& _sender);
-    Json::Value handleSubscribeRequest(Json::Value _request, std::string _method,
+    Json::Value handleSubscribeRequest(Json::Value _request, std::string const& _method,
         std::shared_ptr<boostssl::ws::WsSession> _session);
 
     Endpoints m_endpoints;
