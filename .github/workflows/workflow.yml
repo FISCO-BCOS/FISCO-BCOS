@@ -508,7 +508,19 @@ jobs:
         run: |
           cd build
           CTEST_OUTPUT_ON_FAILURE=TRUE ctest -j3 -R \
-            'NodeConfigAllocsTest|GenesisStateRootTest|LedgerGenesisL2Test|LedgerGenesisAllocsHashTest|FeatureL2FlagTest|L2ConfigLoaderTest|PrecompiledMapDisabledInL2Test|PrecompiledMapProductionInvariantTest|KzgPrecompileRegisteredTest|EthEndpointSystemConfigTest'
+            'NodeConfigAllocsTest|GenesisStateRootTest|LedgerGenesisL2Test|LedgerGenesisAllocsHashTest|FeatureL2FlagTest|L2ConfigLoaderTest|PrecompiledMapDisabledInL2Test|PrecompiledMapProductionInvariantTest|KzgPrecompileRegisteredTest|EthEndpointSystemConfigTest|test-libinitializer'
+      - name: Assert the module suites are registered with ctest
+        run: |
+          cd build
+          # A module suite whose add_test sits in its own directory is compiled but never
+          # registered (those directories are added before the root's enable_testing()), so it
+          # runs nowhere and its assertions contradicting the implementation go unnoticed. This
+          # step turns that silence into a failure; it is what caught test-libinitializer being
+          # built-but-unexecuted.
+          for suite in test-libinitializer; do
+            ctest -N -R "^${suite}$" | grep -q "Total Tests: 1" || {
+              echo "ERROR: ${suite} is built but not registered with ctest"; exit 1; }
+          done
       - name: L2 integration runner (SKIPs without the A8 devnet)
         run: bash tools/.ci/l2-integration/run-all.sh
       - name: Upload fisco-bcos for C2 e2e
@@ -582,8 +594,11 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.26.4"
-          cache-dependency-path: |
-            go.sum
+          # STEP-SET TWIN of c2-e2e.yml's Set up Go step: same "no go.mod/go.sum in this
+          # repository" reasoning (setup-go's cache restore failed with "Some specified paths
+          # were not resolved" every run), and the OP monorepo clone it would key on happens
+          # later in this job.
+          cache: false
 
       - name: Read OP monorepo pin
         id: op-pin
@@ -615,6 +630,14 @@ jobs:
           git -C .ci-op-monorepo submodule update --init superchain-registry
           bash .ci-op-monorepo/op-core/superchain/sync-superchain.sh
           # Plain go build omits artifacts.tzst; op-deployer apply fails without just build.
+          # STEP-SET TWIN of c2-e2e.yml's Build OP stack binaries step, including this forge-pin
+          # assertion: this job builds the binaries itself, so the e2e step runs with
+          # SKIP_OP_BUILD=1 and tools/.ci/c2-e2e.sh's ensure_op_forge never executes.
+          MISE_FORGE=$(yq -r '.tools.forge' .ci-op-monorepo/mise.toml 2>/dev/null || true)
+          if [ -n "${MISE_FORGE}" ] && [ "${MISE_FORGE}" != "null" ]; then
+            forge --version | grep -q "${MISE_FORGE}" || {
+              echo "ERROR: forge $(forge --version) is not the mise.toml pin ${MISE_FORGE}"; exit 1; }
+          fi
           (cd .ci-op-monorepo/op-deployer && just build)
           cp .ci-op-monorepo/op-deployer/bin/op-deployer "$GITHUB_WORKSPACE/.ci-c2-bins/op-deployer"
           (cd .ci-op-monorepo && go build -o "$GITHUB_WORKSPACE/.ci-c2-bins/op-batcher" ./op-batcher/cmd)

@@ -86,8 +86,12 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.26.4"
-          cache-dependency-path: |
-            go.sum
+          # No cache-dependency-path: this repository has no go.mod/go.sum, so setup-go's cache
+          # restore failed with "Some specified paths were not resolved" on every run. The Go
+          # code lives in the OP monorepo, which is cloned LATER in the same job (see Build OP
+          # stack binaries) and is keyed by its own commit; the artifact cache below covers the
+          # binaries, so a module cache here would buy nothing and its key would be a fiction.
+          cache: false
 
       - name: Install just (op-deployer build)
         run: |
@@ -125,7 +129,15 @@ jobs:
           git -C .ci-op-monorepo submodule update --init superchain-registry
           bash .ci-op-monorepo/op-core/superchain/sync-superchain.sh
           # Plain go build omits artifacts.tzst; op-deployer apply fails without just build.
-          # Mirrors tools/.ci/c2-e2e.sh's op-deployer build exactly.
+          # Same step as tools/.ci/c2-e2e.sh, with one deliberate difference: this job builds the
+          # binaries itself, so the e2e step runs with SKIP_OP_BUILD=1 and the script's
+          # ensure_op_forge never executes. Keep its assertion by hand — a forge other than the
+          # monorepo's mise.toml pin fails forge-lint inside the build, far from the cause.
+          MISE_FORGE=$(yq -r '.tools.forge' .ci-op-monorepo/mise.toml 2>/dev/null || true)
+          if [ -n "${MISE_FORGE}" ] && [ "${MISE_FORGE}" != "null" ]; then
+            forge --version | grep -q "${MISE_FORGE}" || {
+              echo "ERROR: forge $(forge --version) is not the mise.toml pin ${MISE_FORGE}"; exit 1; }
+          fi
           (cd .ci-op-monorepo/op-deployer && just build)
           cp .ci-op-monorepo/op-deployer/bin/op-deployer "$GITHUB_WORKSPACE/.ci-c2-bins/op-deployer"
           (cd .ci-op-monorepo && go build -o "$GITHUB_WORKSPACE/.ci-c2-bins/op-batcher" ./op-batcher/cmd)

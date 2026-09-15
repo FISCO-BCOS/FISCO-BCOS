@@ -13,10 +13,16 @@
 #       "ALL <n> INTEGRATION TESTS PASSED" (exit 0)
 #   - every scenario skipped -> "ALL SKIPPED (devnet absent)" (exit 0)
 #   - any scenario failed -> non-zero exit
+#
+# REQUIRE_DEVNET=1 turns the all-skipped case into a failure. The lenient default is for the
+# callers that have no A8 devnet by design (CI's "L2 integration runner (SKIPs without the A8
+# devnet)" step), where a run that measures nothing is expected; a caller that DOES provision the
+# devnet should set this so a broken provisioning step cannot leave the gate green.
 set -uo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKIP_EXIT=77
+REQUIRE_DEVNET="${REQUIRE_DEVNET:-0}"
 
 # Ordered scenario list. Gates run last.
 SCENARIOS=(
@@ -75,6 +81,10 @@ if [[ "${fail}" -gt 0 ]]; then
 fi
 if [[ "${ran}" -eq 0 ]]; then
     echo "ALL SKIPPED (devnet absent)"
+    if [[ "${REQUIRE_DEVNET}" == "1" ]]; then
+        echo "REQUIRE_DEVNET=1: every scenario skipped, so nothing was measured"
+        exit 1
+    fi
     exit 0
 fi
 echo "ALL ${pass} INTEGRATION TESTS PASSED"
