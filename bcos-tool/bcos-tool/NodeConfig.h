@@ -123,6 +123,8 @@ public:
     int maxWriteBufferNumber() const;
     bool enableStatistics() const;
     int maxBackgroundJobs() const;
+    // RocksDB table-cache bound: -1 (default) keeps every touched SST open; >= 64 bounds it.
+    int maxOpenFiles() const;
     size_t writeBufferSize() const;
     int minWriteBufferNumberToMerge() const;
     size_t blockCacheSize() const;
@@ -502,6 +504,7 @@ private:
     bool m_enableDBStatistics = false;
     int m_maxWriteBufferNumber = 3;
     int m_maxBackgroundJobs = 3;
+    int m_maxOpenFiles = -1;
     size_t m_writeBufferSize = 64 << 21;
     int m_minWriteBufferNumberToMerge = 2;
     size_t m_blockCacheSize = 128 << 20;

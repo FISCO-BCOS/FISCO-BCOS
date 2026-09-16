@@ -71,11 +71,12 @@ public:
         // options.compaction_pri = rocksdb::kMinOverlappingRatio;
         options.compression = rocksdb::kZSTD;
         options.bottommost_compression = rocksdb::kZSTD;  // last level compression
-        // -1 (unlimited): an archive-scale DB holds tens of thousands of SSTs, and a small
-        // table cache thrashes — every random read evicts a reader and re-reads its
-        // index/filter/properties blocks (observed ~900MB/s of throwaway reads during an MPT
-        // prune rebuild with the previous 256). The storage/archive tools already use -1.
-        options.max_open_files = -1;
+        // -1 (unlimited, the default): an archive-scale DB holds tens of thousands of SSTs,
+        // and a small table cache thrashes — every random read evicts a reader and re-reads
+        // its index/filter/properties blocks (observed ~900MB/s of throwaway reads during an
+        // MPT prune rebuild with the previous 256). See
+        // RocksDBCheckpointOption::maxOpenFiles for the fd/memory cost.
+        options.max_open_files = rocksDBOption.maxOpenFiles;
         options.write_buffer_size =
             rocksDBOption.writeBufferSize;  // default is 64MB, set 256MB here
         options.min_write_buffer_number_to_merge =
@@ -107,12 +108,25 @@ public:
         }
 
         // open DB
+        bcos::storage2::rocksdb::detail::warnIfMaxOpenFilesUnbounded(
+            options.max_open_files, _path);
         rocksdb::Status status = rocksdb::DB::Open(options, _path, &db);
         if (!status.ok())
         {
             BCOS_LOG(INFO) << LOG_DESC("open rocksDB failed")
                            << LOG_KV("message", status.ToString());
-            throw std::runtime_error("open rocksDB failed, msg:" + status.ToString());
+            std::string message = "open rocksDB failed, msg:" + status.ToString();
+            if (options.max_open_files == -1)
+            {
+                message +=
+                    "; max_open_files=-1 keeps every touched SST open — if this is 'Too many "
+                    "open files', raise the nofile ulimit or bound the table cache with "
+                    "[storage].rocksdb_max_open_files (soft rlimit_nofile=" +
+                    std::to_string(
+                        bcos::storage2::rocksdb::detail::softOpenFileLimit()) +
+                    ")";
+            }
+            throw std::runtime_error(message);
         }
         return std::unique_ptr<rocksdb::DB, std::function<void(rocksdb::DB*)>>(
             db, [](rocksdb::DB* rocksDB) {
