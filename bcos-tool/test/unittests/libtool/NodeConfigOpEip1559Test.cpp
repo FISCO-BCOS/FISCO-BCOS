@@ -159,5 +159,31 @@ BOOST_AUTO_TEST_CASE(sectionWithoutOpLaneRejected)
         });
 }
 
+// The triple is a chain-level, genesis-frozen property: two nodes that disagree about it would
+// price the same height differently, so it must be part of the genesis pin. It is emitted ONLY
+// when declared (mirroring txGasPrice / evmRevision / excessBlobGas), so every pre-existing
+// chain's pin string stays byte-identical; the value emitted is the EFFECTIVE one, so an
+// explicit denominator_canyon=250 and an omitted key pin the same string.
+BOOST_AUTO_TEST_CASE(genesisDataCarriesTheDeclaredEip1559Triple)
+{
+    NodeConfig withoutCfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+    BOOST_REQUIRE_NO_THROW(
+        withoutCfg.loadGenesisConfigFromString(opGenesis(opExecutor(), kSchedule)));
+    BOOST_REQUIRE(withoutCfg.ledgerConfig());
+    auto const without =
+        bcos::tool::generateGenesisData(withoutCfg.genesisConfig(), *withoutCfg.ledgerConfig());
+    BOOST_CHECK(without.find("eip1559") == std::string::npos);
+
+    NodeConfig withCfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+    BOOST_REQUIRE_NO_THROW(withCfg.loadGenesisConfigFromString(opGenesis(
+        opExecutor(), std::string(kSchedule) + "[op_eip1559]\nelasticity=2\ndenominator=8\n")));
+    BOOST_REQUIRE(withCfg.ledgerConfig());
+    auto const with =
+        bcos::tool::generateGenesisData(withCfg.genesisConfig(), *withCfg.ledgerConfig());
+    // denominator_canyon was omitted, so the pin must carry the normalized 250.
+    BOOST_CHECK(with.find("eip1559:2,8,250") != std::string::npos);
+    BOOST_CHECK_NE(without, with);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

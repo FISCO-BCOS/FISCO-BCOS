@@ -3441,6 +3441,21 @@ std::string bcos::tool::generateGenesisData(
            << (genesisConfig.m_excessBlobGas ?
                       "excessBlobGas:" + std::to_string(*genesisConfig.m_excessBlobGas) + "\n" :
                       "")
+           << (genesisConfig.m_opEip1559.has_value() ?
+                      [&genesisConfig] {
+                          // The chain's EIP-1559 parameters price every pre-Holocene block, so
+                          // they are part of the genesis pin for the same reason evmRevision
+                          // is. Emitted only when DECLARED so a chain without [op_eip1559]
+                          // keeps the byte-identical pin it had before this key existed; the
+                          // value is the EFFECTIVE triple (effectiveOpEip1559), so "explicitly
+                          // 250" and "omitted canyon" pin the same string.
+                          auto const params =
+                              bcos::engine::effectiveOpEip1559(genesisConfig.m_opEip1559);
+                          return "eip1559:" + std::to_string(params.elasticity) + ',' +
+                                 std::to_string(params.denominator) + ',' +
+                                 std::to_string(params.denominatorCanyon) + "\n";
+                      }() :
+                      "")
            << "[executor]" << '\n'
            << "iswasm: " << genesisConfig.m_isWasm << '\n'
            << "isAuthCheck:" << genesisConfig.m_isAuthCheck << '\n'
