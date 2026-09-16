@@ -147,22 +147,22 @@ BOOST_AUTO_TEST_CASE(ConfigAtSelectsForkByFeatureFlag, * boost::unit_test::label
     BOOST_CHECK(jov.has_da_footprint);
 }
 
-// 覆盖剩余字段 has_ecotone_l1_formula（Ecotone 用 calldataGas、Fjord+ 用 FastLZ），
+// 覆盖剩余字段 l1_fee_model（Ecotone 用 calldataGas、Fjord+ 用 FastLZ），
 // 以及 configAt 三个分支的引用稳定性（timestamp 版）。
 // 测试专用 configAt(OpForkFlags) 只有 Isthmus/Jovian 两分支，选不出 Karst。
 // 生产路径是 timestamp OpForkSchedule::configAt，Karst 时间戳返回 karstConfig()/Osaka。
 // clang-format off
-BOOST_AUTO_TEST_CASE(EcotoneFormulaFlagAndFlagsWrapperDoesNotSelectKarst, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+BOOST_AUTO_TEST_CASE(EcotoneFeeModelAndFlagsWrapperDoesNotSelectKarst, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
 // clang-format on
 {
-    BOOST_CHECK(ecotoneConfig().has_ecotone_l1_formula);
-    BOOST_CHECK(!(fjordConfig().has_ecotone_l1_formula));
-    BOOST_CHECK(!(graniteConfig().has_ecotone_l1_formula));
-    BOOST_CHECK(!(holoceneConfig().has_ecotone_l1_formula));
-    BOOST_CHECK(!(isthmusConfig().has_ecotone_l1_formula));
-    BOOST_CHECK(!(jovianConfig().has_ecotone_l1_formula));
+    BOOST_CHECK(ecotoneConfig().l1_fee_model == L1FeeModel::Ecotone);
+    BOOST_CHECK(fjordConfig().l1_fee_model == L1FeeModel::Fjord);
+    BOOST_CHECK(graniteConfig().l1_fee_model == L1FeeModel::Fjord);
+    BOOST_CHECK(holoceneConfig().l1_fee_model == L1FeeModel::Fjord);
+    BOOST_CHECK(isthmusConfig().l1_fee_model == L1FeeModel::Fjord);
+    BOOST_CHECK(jovianConfig().l1_fee_model == L1FeeModel::Fjord);
 
-    BOOST_CHECK(!(karstConfig().has_ecotone_l1_formula));
+    BOOST_CHECK(karstConfig().l1_fee_model == L1FeeModel::Fjord);
 
     // configAt's three branches; each returns a reference to the same static config.
     BOOST_CHECK_EQUAL(&configAt(sched(1000, 2000), 999), &isthmusConfig());
@@ -184,8 +184,8 @@ BOOST_AUTO_TEST_CASE(L1FeeModelPinnedOnExistingConfigs, * boost::unit_test::labe
     BOOST_CHECK(isthmusConfig().l1_fee_model == L1FeeModel::Fjord);
     BOOST_CHECK(jovianConfig().l1_fee_model == L1FeeModel::Fjord);
     BOOST_CHECK(karstConfig().l1_fee_model == L1FeeModel::Fjord);
-    BOOST_CHECK(ecotoneConfig().has_ecotone_l1_formula);
-    BOOST_CHECK(!fjordConfig().has_ecotone_l1_formula);
+    BOOST_CHECK(ecotoneConfig().l1_fee_model == L1FeeModel::Ecotone);
+    BOOST_CHECK(fjordConfig().l1_fee_model == L1FeeModel::Fjord);
 }
 
 // clang-format off
@@ -299,19 +299,19 @@ BOOST_AUTO_TEST_CASE(PreIsthmusConfigsPinned, * boost::unit_test::label("fork-re
     BOOST_CHECK_EQUAL(fjordConfig().fork, OpFork::Fjord);
     BOOST_CHECK_EQUAL(graniteConfig().fork, OpFork::Granite);
     BOOST_CHECK_EQUAL(holoceneConfig().fork, OpFork::Holocene);
-    BOOST_CHECK(ecotoneConfig().has_ecotone_l1_formula);
-    BOOST_CHECK(!(fjordConfig().has_ecotone_l1_formula));
-    BOOST_CHECK(!(graniteConfig().has_ecotone_l1_formula));
-    BOOST_CHECK(!(holoceneConfig().has_ecotone_l1_formula));
+    BOOST_CHECK(ecotoneConfig().l1_fee_model == L1FeeModel::Ecotone);
+    BOOST_CHECK(fjordConfig().l1_fee_model == L1FeeModel::Fjord);
+    BOOST_CHECK(graniteConfig().l1_fee_model == L1FeeModel::Fjord);
+    BOOST_CHECK(holoceneConfig().l1_fee_model == L1FeeModel::Fjord);
 }
 
 // clang-format off
-BOOST_AUTO_TEST_CASE(IsthmusPlusDisableEcotoneL1Formula, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+BOOST_AUTO_TEST_CASE(IsthmusPlusUseFjordFeeModel, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
 // clang-format on
 {
-    BOOST_CHECK(!(isthmusConfig().has_ecotone_l1_formula));
-    BOOST_CHECK(!(jovianConfig().has_ecotone_l1_formula));
-    BOOST_CHECK(!(karstConfig().has_ecotone_l1_formula));
+    BOOST_CHECK(isthmusConfig().l1_fee_model == L1FeeModel::Fjord);
+    BOOST_CHECK(jovianConfig().l1_fee_model == L1FeeModel::Fjord);
+    BOOST_CHECK(karstConfig().l1_fee_model == L1FeeModel::Fjord);
 }
 
 // D-15：op-geth 自 Fjord 起 0x100 P256VERIFY 活跃（contracts.go:193，gas 3450 params:183）；

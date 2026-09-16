@@ -111,7 +111,7 @@ intx::uint256 computeL1Cost(
             gasPlusOverhead, params.l1_base_fee, params.bedrock_scalar, intx::uint256{1'000'000});
     }
 
-    if (cfg.l1_fee_model == L1FeeModel::Ecotone || cfg.has_ecotone_l1_formula)
+    if (cfg.l1_fee_model == L1FeeModel::Ecotone)
     {
         // op-geth newL1CostFuncEcotone:
         //   calldataGas*(l1BaseFee*16*baseScalar + blobBaseFee*blobScalar)/16e6
@@ -138,11 +138,11 @@ intx::uint256 computeOperatorCost(
     if (jovianFormula)
     {
         return intx::uint256{gas} * intx::uint256{params.operator_fee_scalar} *
-                   intx::uint256{detail::kJovianOperatorFeeMultiplier} +
+                   intx::uint256{detail::c_jovianOperatorFeeMultiplier} +
                intx::uint256{params.operator_fee_constant};
     }
     return intx::uint256{gas} * intx::uint256{params.operator_fee_scalar} /
-               intx::uint256{detail::kOperatorFeeScalarDivisor} +
+               intx::uint256{detail::c_operatorFeeScalarDivisor} +
            intx::uint256{params.operator_fee_constant};
 }
 

@@ -180,8 +180,9 @@ void checkConfig(Boundary const& b, OpForkConfig const& cfg)
     BOOST_CHECK_EQUAL(static_cast<int>(cfg.rev), static_cast<int>(b.rev));
     BOOST_CHECK(cfg.precompiles == b.precompiles);
     BOOST_CHECK(cfg.l1_fee_model == b.feeModel);
-    BOOST_CHECK_EQUAL(cfg.has_ecotone_l1_formula, b.hasEcotoneFormula);
-    BOOST_CHECK_EQUAL(cfg.has_ecotone_l1_formula, cfg.l1_fee_model == L1FeeModel::Ecotone);
+    // The fee model is the single selector; hasEcotoneFormula pins the derived boolean
+    // against the boundary table (Ecotone model iff formula flag) with no second field.
+    BOOST_CHECK_EQUAL(cfg.l1_fee_model == L1FeeModel::Ecotone, b.hasEcotoneFormula != 0);
     BOOST_CHECK_EQUAL(cfg.has_operator_fee, b.hasOperatorFee);
     BOOST_CHECK_EQUAL(cfg.has_jovian_operator_formula, b.hasJovianOperatorFormula);
     BOOST_CHECK_EQUAL(cfg.has_da_footprint, b.hasDaFootprint);

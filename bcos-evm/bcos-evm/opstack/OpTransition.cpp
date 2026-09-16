@@ -248,7 +248,7 @@ OpReceiptMeta deriveOpReceiptMeta(const OpTxProperties& props, intx::uint256 ope
     else
     {
         // Ecotone/Fjord receipt shape: the L1 passthrough scalars ride along, and L1FeeScalar
-        // must be absent (design §4.6: FeeScalar 必须缺席 from Ecotone on).
+        // must be absent (op-geth deriveOPStackFields leaves L1FeeScalar nil from Ecotone on).
         m.l1_blob_base_fee = fee.blob_base_fee;
         m.l1_base_fee_scalar = fee.base_fee_scalar;
         m.l1_blob_base_fee_scalar = fee.blob_base_fee_scalar;
@@ -415,10 +415,10 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
 
     uint32_t flzLen = 0;
     intx::uint256 l1Cost;
-    // FastLZ only prices the Fjord formula (Fjord model, no Ecotone flag). Bedrock and Ecotone
+    // FastLZ only prices the Fjord formula. Bedrock and Ecotone
     // (including its zero-slot fallback) both route through computeL1Cost — routing them through
     // the flz branch here would price every pre-Fjord block as Fjord.
-    if (cfg.l1_fee_model == L1FeeModel::Fjord && !cfg.has_ecotone_l1_formula)
+    if (cfg.l1_fee_model == L1FeeModel::Fjord)
     {
         flzLen = flzCompressLen(signedTxEnvelope);
         l1Cost = computeL1CostFromFlz(fee, flzLen, cfg);
@@ -642,9 +642,9 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
 
     // Deposit nonce/version on opStackMeta (op-geth deposit receipt has no L1/operator/DA
     // fields); effectiveGasPrice is 0 for deposits (op-geth emits "0x0").
-    // Consensus-RLP gating (deposits spec): pre-Canyon receipts carry neither depositNonce nor
-    // version; from Canyon on both are present with version=1. OpFork is protocol-ordered, so
-    // >= Canyon covers every modeled later fork.
+    // Deposit receipt fields (deposits spec): the FISCO opStackMeta carries the nonce on
+    // every fork, while deposit_receipt_version appears only from Canyon on (op-geth leaves
+    // it nil pre-Canyon). OpFork is protocol-ordered, so >= Canyon covers every modeled fork.
     bcos::protocol::OpStackReceiptMeta meta;
     meta.deposit_nonce = preNonce;
     if (cfg.fork >= OpFork::Canyon)

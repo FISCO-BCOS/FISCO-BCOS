@@ -12,20 +12,20 @@ struct OpForkConfig;
 
 namespace detail
 {
-constexpr int64_t kL1CostIntercept = -42585600;
-constexpr int64_t kL1CostFastlzCoef = 836500;
-constexpr int64_t kMinTxSizeScaled = 100000000;
+constexpr int64_t c_l1CostIntercept = -42585600;
+constexpr int64_t c_l1CostFastlzCoef = 836500;
+constexpr int64_t c_minTxSizeScaled = 100000000;
 // The 1e6 scaling factor for estimatedDaSizeScaled (semantically unrelated to the operator
 // scalar's 1e6; do not merge them).
-constexpr int64_t kDaSizeScaleDivisor = 1'000'000;
+constexpr int64_t c_daSizeScaleDivisor = 1'000'000;
 
 // Operator-fee formula primitives (see computeOperatorCost below). Exposed here rather than
 // file-local so the op-revm oracle parity test asserts against the SAME constants the
 // production formula consumes, not against a copy of their literals.
-//   * Isthmus+: gas * scalar / kOperatorFeeScalarDivisor + constant
-inline constexpr int64_t kOperatorFeeScalarDivisor = 1000000;
-//   * Jovian:  gas * scalar * kJovianOperatorFeeMultiplier + constant
-inline constexpr int64_t kJovianOperatorFeeMultiplier = 100;
+//   * Isthmus+: gas * scalar / c_operatorFeeScalarDivisor + constant
+inline constexpr int64_t c_operatorFeeScalarDivisor = 1000000;
+//   * Jovian:  gas * scalar * c_jovianOperatorFeeMultiplier + constant
+inline constexpr int64_t c_jovianOperatorFeeMultiplier = 100;
 
 // Port of op-geth FlzCompressLen: length of output if serializedTx were FastLZ-compressed.
 // Inline so header-only callers (the engine's Jovian DA-footprint equality gate reaches it via
@@ -137,8 +137,8 @@ inline uint32_t flzCompressLen(evmc::bytes_view data) noexcept
 inline intx::uint256 estimatedDaSizeScaled(uint32_t fastlzSize) noexcept
 {
     const int64_t scaled =
-        detail::kL1CostIntercept + detail::kL1CostFastlzCoef * static_cast<int64_t>(fastlzSize);
-    const int64_t clamped = scaled < detail::kMinTxSizeScaled ? detail::kMinTxSizeScaled : scaled;
+        detail::c_l1CostIntercept + detail::c_l1CostFastlzCoef * static_cast<int64_t>(fastlzSize);
+    const int64_t clamped = scaled < detail::c_minTxSizeScaled ? detail::c_minTxSizeScaled : scaled;
     return intx::uint256{static_cast<uint64_t>(clamped)};
 }
 
@@ -162,7 +162,7 @@ inline uint64_t estimatedDaSizeFromFlz(uint32_t flzLen) noexcept
     if (flzLen == 0)
         return 0;
     return static_cast<uint64_t>(
-        estimatedDaSizeScaled(flzLen) / intx::uint256{detail::kDaSizeScaleDivisor});
+        estimatedDaSizeScaled(flzLen) / intx::uint256{detail::c_daSizeScaleDivisor});
 }
 
 /// estimatedSize = estimatedDaSizeScaled(flz) / 1e6; returns 0 for an empty envelope (same

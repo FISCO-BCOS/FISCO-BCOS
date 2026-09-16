@@ -62,8 +62,8 @@ struct PrecompileOverrides;
 /// Bedrock = (calldataGas + overhead) * l1BaseFee * scalar / 1e6 (slots 1/5/6),
 /// Ecotone = calldataGas * (16*l1BaseFee*l1BaseFeeScalar + blob...) / 16e6 (slots 1/3/7),
 /// Fjord   = FastLZ calldata estimate feeding the Ecotone formula.
-/// Never encode Bedrock via has_ecotone_l1_formula=false — that flag only
-/// separates Ecotone from Fjord's FastLZ.
+/// Single selector for the L1 data-fee formula. The Ecotone activation block's
+/// zero slots are handled at use time (ecotoneL1SlotsLive), not by a second flag.
 enum class L1FeeModel
 {
     Bedrock,
@@ -83,7 +83,6 @@ struct OpForkConfig
     // When true, runDeposit passes enforce_max_tx_gas=false (EIP-7825 deposit exemption).
     bool deposit_exempt_from_max_tx_gas{};
     L1FeeModel l1_fee_model{};
-    bool has_ecotone_l1_formula{};  // must equal (l1_fee_model == L1FeeModel::Ecotone)
 };
 
 const OpForkConfig& regolithConfig() noexcept;

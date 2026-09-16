@@ -105,7 +105,6 @@ const OpForkConfig& regolithConfig() noexcept
         .has_da_footprint = false,
         .deposit_exempt_from_max_tx_gas = false,
         .l1_fee_model = L1FeeModel::Bedrock,
-        .has_ecotone_l1_formula = false,
     };
     return cfg;
 }
@@ -122,7 +121,6 @@ const OpForkConfig& canyonConfig() noexcept
         .has_da_footprint = false,
         .deposit_exempt_from_max_tx_gas = false,
         .l1_fee_model = L1FeeModel::Bedrock,
-        .has_ecotone_l1_formula = false,
     };
     return cfg;
 }
@@ -139,7 +137,6 @@ const OpForkConfig& ecotoneConfig() noexcept
         .has_da_footprint = false,
         .deposit_exempt_from_max_tx_gas = false,
         .l1_fee_model = L1FeeModel::Ecotone,
-        .has_ecotone_l1_formula = true,
     };
     return cfg;
 }
@@ -156,7 +153,6 @@ const OpForkConfig& fjordConfig() noexcept
         .has_da_footprint = false,
         .deposit_exempt_from_max_tx_gas = false,
         .l1_fee_model = L1FeeModel::Fjord,
-        .has_ecotone_l1_formula = false,
     };
     return cfg;
 }
@@ -197,7 +193,6 @@ const OpForkConfig& isthmusConfig() noexcept
         .has_da_footprint = false,
         .deposit_exempt_from_max_tx_gas = false,
         .l1_fee_model = L1FeeModel::Fjord,
-        .has_ecotone_l1_formula = false,
     };
     return cfg;
 }
@@ -214,25 +209,23 @@ const OpForkConfig& jovianConfig() noexcept
         .has_da_footprint = true,
         .deposit_exempt_from_max_tx_gas = false,
         .l1_fee_model = L1FeeModel::Fjord,
-        .has_ecotone_l1_formula = false,
     };
     return cfg;
 }
 
 const OpForkConfig& karstConfig() noexcept
 {
-    static const OpForkConfig cfg{
-        .fork = OpFork::Karst,
-        .rev = EVMC_OSAKA,
-        .precompiles = &karstPrecompileOverrides(),
-        .disable_prague_requests = true,
-        .has_operator_fee = true,
-        .has_jovian_operator_formula = true,
-        .has_da_footprint = true,
-        .deposit_exempt_from_max_tx_gas = true,
-        .l1_fee_model = L1FeeModel::Fjord,
-        .has_ecotone_l1_formula = false,
-    };
+    // Derive from Jovian so its fee/receipt semantics keep carrying into Karst; Karst
+    // overrides only the Osaka EVM base, the tightened precompile table, and the
+    // EIP-7825 deposit exemption.
+    static const OpForkConfig cfg = [] {
+        OpForkConfig c = jovianConfig();
+        c.fork = OpFork::Karst;
+        c.rev = EVMC_OSAKA;
+        c.precompiles = &karstPrecompileOverrides();
+        c.deposit_exempt_from_max_tx_gas = true;
+        return c;
+    }();
     return cfg;
 }
 

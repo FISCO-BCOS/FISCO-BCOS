@@ -161,7 +161,7 @@ BOOST_AUTO_TEST_CASE(ReceiptCarriesL1AndOperatorMeta, * boost::unit_test::label(
     BOOST_CHECK_EQUAL(*meta->l1_fee, bcosU256FromIntx(props.l1_cost));
     BOOST_REQUIRE(meta->l1_gas_price.has_value());
     BOOST_CHECK_EQUAL(*meta->l1_gas_price, bcosU256FromIntx(fee.l1_base_fee));
-    // l1_gas_used：Isthmus 的 has_ecotone_l1_formula=false（Fjord+ 语义）→ 走
+    // l1_gas_used：Isthmus 的 l1_fee_model=Fjord（FastLZ 语义）→ 走
     // estimatedDaSizeScaled(flz) * 16 / 1e6 公式（op-geth rollup_cost.go:623-624）。
     // 公式本体由 RollupCostTest 的任意精度字面量锚定；此处断言钉的是接线（l1_gas_used
     // 必须来自 props.flz_len 的 Fjord 路径而非其他来源）。

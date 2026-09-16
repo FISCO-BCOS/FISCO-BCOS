@@ -52,7 +52,7 @@ BOOST_AUTO_TEST_CASE(IsthmusHasFeesWithoutDa, * boost::unit_test::label("fork-re
     BOOST_CHECK_EQUAL(*m.l1_blob_base_fee, 2000_u256);
     BOOST_CHECK_EQUAL(*m.l1_base_fee_scalar, 7u);
     BOOST_CHECK_EQUAL(*m.l1_blob_base_fee_scalar, 9u);
-    // Isthmus（has_ecotone_l1_formula=false）下 l1_gas_used 必有值，走 Fjord 公式。
+    // Isthmus（l1_fee_model=Fjord）下 l1_gas_used 必有值，走 FastLZ 公式。
     BOOST_REQUIRE(m.l1_gas_used.has_value());
     BOOST_CHECK_EQUAL(
         *m.l1_gas_used, static_cast<uint64_t>(estimatedDaSizeScaled(flz) * 16 / 1'000'000));

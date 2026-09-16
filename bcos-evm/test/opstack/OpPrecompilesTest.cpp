@@ -262,14 +262,14 @@ BOOST_AUTO_TEST_CASE(HoloceneJovianAnchorsMatchOpRevmOracle, * boost::unit_test:
 
     // Operator fee: Isthmus+ divides by the scalar's 1e6 decimal; Jovian multiplies it by 100.
     const auto divisor = oracle["operator_fee_scalar_decimal"].asInt64();
-    BOOST_CHECK_MESSAGE(detail::kOperatorFeeScalarDivisor == divisor,
-        "our operator-fee divisor (RollupCost.h detail::kOperatorFeeScalarDivisor="
-            << detail::kOperatorFeeScalarDivisor << ") must equal oracle "
+    BOOST_CHECK_MESSAGE(detail::c_operatorFeeScalarDivisor == divisor,
+        "our operator-fee divisor (RollupCost.h detail::c_operatorFeeScalarDivisor="
+            << detail::c_operatorFeeScalarDivisor << ") must equal oracle "
             << "operator_fee_scalar_decimal=" << divisor);
     const auto multiplier = oracle["operator_fee_jovian_multiplier"].asInt64();
-    BOOST_CHECK_MESSAGE(detail::kJovianOperatorFeeMultiplier == multiplier,
-        "our Jovian operator-fee multiplier (RollupCost.h detail::kJovianOperatorFeeMultiplier="
-            << detail::kJovianOperatorFeeMultiplier << ") must equal oracle "
+    BOOST_CHECK_MESSAGE(detail::c_jovianOperatorFeeMultiplier == multiplier,
+        "our Jovian operator-fee multiplier (RollupCost.h detail::c_jovianOperatorFeeMultiplier="
+            << detail::c_jovianOperatorFeeMultiplier << ") must equal oracle "
             << "operator_fee_jovian_multiplier=" << multiplier);
 }
 BOOST_AUTO_TEST_SUITE_END()
