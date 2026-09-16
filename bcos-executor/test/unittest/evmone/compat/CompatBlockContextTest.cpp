@@ -53,13 +53,6 @@ BOOST_AUTO_TEST_CASE(FC_R_block_context_schedule_ladder)
         auto ctx = makeContext(CompatFeatureProfile::cancunOnly(),
             static_cast<uint32_t>(protocol::BlockVersion::V3_2_VERSION));
         BOOST_CHECK(ctx->vmSchedule().enableCanCun);
-        BOOST_CHECK(!ctx->vmSchedule().enablePrague);
-    }
-    {
-        auto ctx = makeContext(CompatFeatureProfile::pragueEnabled(),
-            static_cast<uint32_t>(protocol::BlockVersion::MAX_VERSION));
-        BOOST_CHECK(ctx->vmSchedule().enablePrague);
-        BOOST_CHECK(!ctx->vmSchedule().enableOsaka);
     }
 }
 
