@@ -19,6 +19,7 @@
  * @date 2021-06-10
  */
 #include "NodeConfig.h"
+#include "ChainLaneConfig.h"
 #include "VersionConverter.h"
 #include "bcos-framework/bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
@@ -495,9 +496,42 @@ void NodeConfig::loadEthGenesisHeader(boost::property_tree::ptree const& _genesi
                          << LOG_KV("timestamp", m_genesisConfig.m_ethGenesisHeader->m_timestamp);
 }
 
+namespace
+{
+/// Refuse a section the lane matrix reserves for another lane (ChainLaneConfig.h). Only the
+/// PRESENCE direction is table-driven: the "OP lane REQUIRES a schedule" direction stays in
+/// validateL2Invariants below because it needs the section-set notion (either of two equivalent
+/// declarations), not a single key. Each rule throws its own message, so the schedule family
+/// keeps the combined wording the existing tests pin while [op_eip1559] names itself.
+void rejectForbiddenLaneSections(ledger::GenesisConfig const& genesis,
+    std::initializer_list<std::pair<std::string_view, bool>> presentKeys)
+{
+    auto const lane = laneForExecutorVersion(genesis.m_executorVersion);
+    for (auto const& rule : laneKeyRules())
+    {
+        if (rule.lane == lane)
+        {
+            continue;  // allowed by definition on its own lane
+        }
+        for (auto const& [section, present] : presentKeys)
+        {
+            if (section == rule.section && present)
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidConfig() << errinfo_comment(std::string(rule.rejectMessage)));
+            }
+        }
+    }
+}
+}  // namespace
+
 void NodeConfig::validateL2Invariants()
 {
     auto const& genesis = m_genesisConfig;
+    rejectForbiddenLaneSections(
+        genesis, {{"op_fork_timestamps", genesis.m_opForkSchedule.has_value()},
+                     {"op_fork_schedule", genesis.m_opstackForkSchedule.has_value()},
+                     {"op_eip1559", genesis.m_opEip1559.has_value()}});
     // L2 mode is signalled by the feature_l2_ethereum_compat flag in [features];
     // there is no separate chain_mode. allocs and the flag must agree.
     bool l2Enabled = std::any_of(genesis.m_features.begin(), genesis.m_features.end(),
@@ -597,13 +631,9 @@ void NodeConfig::validateL2Invariants()
     // accepted: the karst line's [op_fork_schedule] canonical (ledger-codec validated,
     // persisted to chain metadata, any contiguous EL fork range) and the release line's
     // [op_fork_timestamps] shorthand (jovian_time/karst_time on the Isthmus baseline).
-    if ((genesis.m_opForkSchedule.has_value() || genesis.m_opstackForkSchedule.has_value()) &&
-        genesis.m_executorVersion < ledger::OPSTACK_EXECUTOR_VERSION)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment("[op_fork_timestamps]/[op_fork_schedule] requires "
-                                               "executor.version >= 3 (OP lane)"));
-    }
+    // The OP lane's EIP-1559 parameters and schedule share the lane binding above; what
+    // remains here is the requirement direction: an OP chain without any schedule has no way
+    // to say when Jovian or Karst activate.
     if (genesis.m_executorVersion >= ledger::OPSTACK_EXECUTOR_VERSION &&
         !genesis.m_opForkSchedule.has_value() && !genesis.m_opstackForkSchedule.has_value())
     {
@@ -625,16 +655,6 @@ void NodeConfig::validateL2Invariants()
             InvalidConfig() << errinfo_comment(
                 "the OP lane derives the EVM revision from [op_fork_timestamps]; remove "
                 "executor.evm_revision / evm_revision_forks"));
-    }
-    // The chain's EIP-1559 parameters only mean anything on the OP lane: on a v1/v2 chain
-    // nothing reads the section, and an operator would reasonably expect it to change
-    // execution. Presence of the OP schedule is already bound to the lane above; this binds
-    // the parameters to the same lane so a stray section cannot ride along unread.
-    if (genesis.m_opEip1559.has_value() &&
-        genesis.m_executorVersion < ledger::OPSTACK_EXECUTOR_VERSION)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "[op_eip1559] requires executor.version >= 3 (OP lane)"));
     }
 }
 
