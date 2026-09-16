@@ -207,6 +207,8 @@ public:
         "    enable=true\n"
         "    listen_ip=127.0.0.1\n"
         "    listen_port=8555\n"
+        "    ; the OP miner namespace is opt-in; these fixtures emulate the devnet config\n"
+        "    enable_miner_api=true\n"
         "\n"
         "[rpc]\n"
         "    listen_ip=0.0.0.0\n"

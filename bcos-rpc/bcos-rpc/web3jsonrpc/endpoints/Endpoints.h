@@ -21,18 +21,24 @@
 #pragma once
 #include "EngineEndpoint.h"
 #include "EthEndpoint.h"
+#include "MinerEndpoint.h"
 #include "NetEndpoint.h"
 #include "Web3Endpoint.h"
 #include <bcos-rpc/groupmgr/NodeService.h>
 
 namespace bcos::rpc
 {
-class Endpoints : public EngineEndpoint, public EthEndpoint, public NetEndpoint, public Web3Endpoint
+class Endpoints : public EngineEndpoint,
+                  public EthEndpoint,
+                  public MinerEndpoint,
+                  public NetEndpoint,
+                  public Web3Endpoint
 {
 public:
     Endpoints(NodeService::Ptr _nodeService, FilterSystem::Ptr filterSystem, bool syncTransaction)
       : EngineEndpoint(_nodeService),
         EthEndpoint(_nodeService, filterSystem, syncTransaction),
+        MinerEndpoint(_nodeService),
         NetEndpoint(_nodeService),
         Web3Endpoint(_nodeService)
     {}

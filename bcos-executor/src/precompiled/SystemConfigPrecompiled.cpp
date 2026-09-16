@@ -395,6 +395,46 @@ int64_t SystemConfigPrecompiled::validate(
     {
         (m_sysValueCmp.at(key))(configuredValue, blockVersion);
     }
+
+    // The OP boundary is closed in BOTH directions: the comparator above refuses a write at or
+    // above the OP slot, and this refuses a write that moves a running OP chain off it. The lane
+    // is resolved once at boot (Initializer::init reads the row) and MultiVersionScheduler only
+    // saturates, so an accepted downgrade would leave the on-chain row and every running node
+    // diverged until a restart, which then comes up on the other lane. Versioned on
+    // V3_18_0_VERSION for the same replay reason as the refusal above.
+    constexpr std::string_view c_executorVersionKey =
+        magic_enum::enum_name(bcos::ledger::SystemConfig::executor_version);
+    if (key == c_executorVersionKey && configuredValue < bcos::ledger::OPSTACK_EXECUTOR_VERSION &&
+        versionCompareTo(blockVersion, BlockVersion::V3_18_0_VERSION) >= 0)
+    {
+        auto const currentRow = getSysConfigByKey(_executive, key);
+        int64_t currentExecutorVersion = -1;
+        if (!currentRow.first.empty())
+        {
+            try
+            {
+                currentExecutorVersion = boost::lexical_cast<int64_t>(currentRow.first);
+            }
+            catch (boost::bad_lexical_cast const&)
+            {
+                // A non-numeric row is not a lane; the boot path reports it
+                // (readOnChainExecutorVersion throws there), so there is nothing to refuse here.
+                currentExecutorVersion = -1;
+            }
+        }
+        if (currentExecutorVersion >= bcos::ledger::OPSTACK_EXECUTOR_VERSION)
+        {
+            BOOST_THROW_EXCEPTION(
+                PrecompiledError{} << errinfo_comment(
+                    "executor_version " + std::to_string(configuredValue) + " cannot replace " +
+                    std::to_string(currentExecutorVersion) + ": OP mode (executor_version >= " +
+                    std::to_string(bcos::ledger::OPSTACK_EXECUTOR_VERSION) +
+                    ") is a genesis property, so a running chain cannot be "
+                    "moved off it by governance; the node keeps executing the "
+                    "lane it booted with and the next start would derive the "
+                    "other one from this row"));
+        }
+    }
     return configuredValue;
 }
 

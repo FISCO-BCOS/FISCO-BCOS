@@ -18,9 +18,10 @@
  *        calculateReceiptsRoot / calculateWithdrawalsRoot and calculateLogsBloom.
  *
  *        Expected roots are produced by an independent Python MPT reference implementation
- *        (real keccak-256 via pycryptodome; checked in at
- *        tools/opstack-genesis/gen_trieroot_golden.py), NOT by the C++ builder — so
- *        encode(key=rlp(index)) + sort + build are anchored to a second implementation.
+ *        (real keccak-256 via pycryptodome; checked in at the harness's
+ *        tools/opstack-genesis/gen_trieroot_golden.py, FISCO-BCOS/op-stack-e2e-tests),
+ *        NOT by the C++ builder — so encode(key=rlp(index)) + sort + build are
+ *        anchored to a second implementation.
  *        The empty-trie root is also pinned to the Ethereum constant.
  */
 #include "bcos-ledger/mpt/EthTrieRoots.h"

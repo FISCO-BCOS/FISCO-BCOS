@@ -800,21 +800,21 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadVersion.has_value());
     BOOST_TEST(*testEngineService.m_state->capturedNewPayloadVersion == 4);
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload
-            .withdrawalsRoot.has_value());
+                      .withdrawalsRoot.has_value());
     BOOST_REQUIRE(
         testEngineService.m_state->capturedNewPayloadRequest->executionRequests.has_value());
     BOOST_TEST(testEngineService.m_state->capturedNewPayloadRequest->executionRequests->empty());
     BOOST_TEST(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.transactions
                    .size() == 1);
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals
-            .has_value());
+                      .has_value());
     BOOST_TEST(
         testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals->front()
             .amount == expectedLargeValue);
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed
-            .has_value());
+                      .has_value());
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload
-            .excessBlobGas.has_value());
+                      .excessBlobGas.has_value());
     BOOST_TEST(
         *testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed ==
         expectedLargeValue);
@@ -824,8 +824,8 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
 
     // Raw-bytes carrier: newPayload preserves the wire bytes verbatim (no decoding).
     BOOST_TEST(toHexStringWithPrefix(testEngineService.m_state->capturedNewPayloadRequest
-                       ->executionPayload.transactions.front()
-                       .raw) == encodedTxHex);
+                                         ->executionPayload.transactions.front()
+                                         .raw) == encodedTxHex);
 
     testEngineService.m_state->getPayloadResult->executionPayload =
         testEngineService.m_state->capturedNewPayloadRequest->executionPayload;
@@ -894,8 +894,12 @@ BOOST_AUTO_TEST_CASE(logMatcherTest)
         params2->addAddress(toHexStringWithPrefix(address1));
         BOOST_TEST(matcher.matches(params1, log1));
         BOOST_TEST(matcher.matches(params1, log2));
-        BOOST_TEST(!matcher.matches(params2, log1));
-        BOOST_TEST(!matcher.matches(params2, log2));
+        // The address predicate normalizes through logEntryAddressHex (round-8 N-H1): the
+        // raw-byte log address and the hex-text filter entry refer to the SAME address, so
+        // the filter matches. (This assertion previously pinned the pre-fix no-match
+        // behaviour — the lane-form mismatch bug.)
+        BOOST_TEST(matcher.matches(params2, log1));
+        BOOST_TEST(matcher.matches(params2, log2));
     }
     // 2.[A] "A in first position (and anything after)"
     {

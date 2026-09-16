@@ -44,6 +44,7 @@
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/Errors.h>
 #include <bcos-ledger/mpt/MPTBuilder.h>
+#include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
@@ -580,7 +581,7 @@ private:
                 auto const canonicalAtHeight =
                     co_await ledger::getBlockHash(tipView, number, ledger::fromStorage);
                 if (canonicalAtHeight.has_value() &&
-                    *canonicalAtHeight == bcos::protocol::EthBlockHeader::computeHash(*blockHeader))
+                    *canonicalAtHeight == bcos::protocol::canonicalBlockHash(*blockHeader))
                 {
                     OP_SCHEDULER_LOG(INFO)
                         << "Block " << number
@@ -794,10 +795,8 @@ private:
                 co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
                     nullptr, false};
             }
-            auto const announcedBlockHash =
-                bcos::protocol::EthBlockHeader::computeHash(*blockHeader);
-            auto const probeHash =
-                bcos::protocol::EthBlockHeader::computeHash(*m_lastProbe->executedHeader);
+            auto const announcedBlockHash = bcos::protocol::canonicalBlockHash(*blockHeader);
+            auto const probeHash = bcos::protocol::canonicalBlockHash(*m_lastProbe->executedHeader);
             if (probeHash != announcedBlockHash)
             {
                 auto message = std::string{
@@ -886,8 +885,8 @@ private:
             // Compare the executed headers directly — announcedBlockHash is the CL hash of the
             // announced header and cannot be recomputed from the executed header (engine wiring
             // passes the executed header back into commitBlock).
-            if (bcos::protocol::EthBlockHeader::computeHash(*header) !=
-                bcos::protocol::EthBlockHeader::computeHash(*pending.executedHeader))
+            if (bcos::protocol::canonicalBlockHash(*header) !=
+                bcos::protocol::canonicalBlockHash(*pending.executedHeader))
             {
                 auto message = fmt::format(
                     "Commit block {} does not match the announced block being committed", number);
@@ -955,8 +954,7 @@ private:
         {
             return std::nullopt;
         }
-        if (m_pending->announcedBlockHash !=
-            bcos::protocol::EthBlockHeader::computeHash(announcedHeader))
+        if (m_pending->announcedBlockHash != bcos::protocol::canonicalBlockHash(announcedHeader))
         {
             OP_SCHEDULER_LOG(INFO) << "Fast-path cache holds a different block at height " << number
                                    << "; ignoring cache and re-executing";
@@ -1168,8 +1166,7 @@ private:
 
         // Commit keys on the announced payload hash; finishExecute() mirrors announced
         // metadata + execution commitments onto executedHeader, which stays out of this identity.
-        bcos::crypto::HashType announcedBlockHash =
-            bcos::protocol::EthBlockHeader::computeHash(header);
+        bcos::crypto::HashType announcedBlockHash = bcos::protocol::canonicalBlockHash(header);
         co_return ExecuteOutcome{std::move(result), announcedBlockHash};
     }
 
@@ -1328,7 +1325,11 @@ private:
         co_return ledgerConfig;
     }
 
-    /// Commit-path LedgerConfig (number + timestamp only).
+    /// Commit-path LedgerConfig: number + timestamp only, and never published anywhere.
+    /// The admission holder is republished from the LEDGER by the notifier this scheduler fires
+    /// after every commit (engine/bcos-engine/OpLedgerConfigRepublish.h) — publishing THIS object
+    /// instead would refuse every EIP-155 envelope from the first committed block on (-32602),
+    /// because chainId()/features()/executorVersion() are empty here.
     task::Task<ledger::LedgerConfig::Ptr> loadCommitLedgerConfig(protocol::BlockHeader::Ptr header)
     {
         auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();

@@ -24,6 +24,9 @@
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
+#include <bcos-utilities/Error.h>
+#include <exception>
+#include <string_view>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -48,6 +51,34 @@ struct OpPayloadBusyReset
         }
     }
 };
+
+/// Map unexpected service errors to a SHORT -32603: the reason is echoed so the operator can
+/// diagnose it, but boost's file/line diagnostics are not. EngineRpcTest pins both halves
+/// (isShortInternalError), so this is a deliberate contract, not an accident.
+[[noreturn]] void rethrowAsEngineInternalError(std::string_view reason)
+{
+    std::string message = "Internal error";
+    if (!reason.empty())
+    {
+        message += ": ";
+        message += reason;
+    }
+    BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, std::move(message)));
+}
+
+[[noreturn]] void rethrowAsEngineInternalError(std::exception const& e)
+{
+    rethrowAsEngineInternalError(std::string_view(e.what()));
+}
+
+/// bcos::Error carries its reason in ErrorMessage, not in what() (Exception::what() returns
+/// only errinfo_comment, which BCOS_ERROR never sets) — a catch(std::exception) arm would
+/// collapse every BCOS_ERROR from the scheduler/ledger to a bare "Internal error". Catch it
+/// explicitly so the reason survives into the -32603.
+[[noreturn]] void rethrowAsEngineInternalError(bcos::Error const& e)
+{
+    rethrowAsEngineInternalError(std::string_view(e.errorMessage()));
+}
 }  // namespace
 
 EngineEndpoint::EngineEndpoint(NodeService::Ptr nodeService) : m_nodeService(std::move(nodeService))
@@ -162,12 +193,13 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
     }
     catch (engine::UnsupportedFork const& e)
     {
+        // Keep -38005 and preserve the service error text.
         BOOST_THROW_EXCEPTION(JsonRpcException(
             EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
     }
     catch (engine::UnsupportedEngineApiVersion const& e)
     {
-        // Method-version mismatch is a -38005, same class as an unsupported fork.
+        // Method-version mismatch maps to -38005.
         BOOST_THROW_EXCEPTION(JsonRpcException(
             EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
     }
@@ -176,10 +208,13 @@ task::Task<void> EngineEndpoint::handleForkchoiceUpdated(
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::InvalidForkchoiceState,
             std::string("Invalid forkchoice state: ") + e.what()));
     }
-    catch (engine::OpExecutionInternalError const& e)
+    catch (bcos::Error const& e)
     {
-        BOOST_THROW_EXCEPTION(
-            JsonRpcException(InternalError, std::string("Internal error: ") + e.what()));
+        rethrowAsEngineInternalError(e);
+    }
+    catch (std::exception const& e)
+    {
+        rethrowAsEngineInternalError(e);
     }
     auto jsonResult = combineForkchoiceUpdatedResult(engineResult, version);
     buildJsonContent(jsonResult, response);
@@ -239,14 +274,14 @@ task::Task<void> EngineEndpoint::handleGetPayload(
     }
     catch (engine::IncompatiblePayloadVersion const&)
     {
-        // Payload was built under a different method version.
+        // Payload was built by a different Engine API method version.
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::UnsupportedFork,
             "Unsupported fork: payload was built by a different method version"));
     }
     catch (engine::UnsupportedFork const& e)
     {
-        // The payload's fork is outside this method's window (getPayloadV4 for a Karst
-        // payload, V5 for a pre-Karst one).
+        // The payload's fork is outside this method's window (getPayloadV4 for a Karst payload,
+        // V5 for a pre-Karst one).
         BOOST_THROW_EXCEPTION(JsonRpcException(
             EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
     }
@@ -256,10 +291,13 @@ task::Task<void> EngineEndpoint::handleGetPayload(
         BOOST_THROW_EXCEPTION(JsonRpcException(
             EngineError::UnsupportedFork, std::string("Unsupported fork: ") + e.what()));
     }
-    catch (engine::OpExecutionInternalError const& e)
+    catch (bcos::Error const& e)
     {
-        BOOST_THROW_EXCEPTION(
-            JsonRpcException(InternalError, std::string("Internal error: ") + e.what()));
+        rethrowAsEngineInternalError(e);
+    }
+    catch (std::exception const& e)
+    {
+        rethrowAsEngineInternalError(e);
     }
     if (!engineResult)
     {
@@ -344,10 +382,13 @@ task::Task<void> EngineEndpoint::handleNewPayload(
         BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::InvalidPayloadAttributes,
             std::string("Invalid payload attributes: ") + e.what()));
     }
-    catch (engine::OpExecutionInternalError const& e)
+    catch (bcos::Error const& e)
     {
-        BOOST_THROW_EXCEPTION(
-            JsonRpcException(InternalError, std::string("Internal error: ") + e.what()));
+        rethrowAsEngineInternalError(e);
+    }
+    catch (std::exception const& e)
+    {
+        rethrowAsEngineInternalError(e);
     }
     auto result = serializePayloadStatus(engineResult, version);
     buildJsonContent(result, response);

@@ -34,6 +34,7 @@
 #include <bcos-rpc/jwtAuth/JwtVerifier.h>
 #include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FileUtility.h>
 #include <bcos-utilities/NewTimer.h>
@@ -41,7 +42,6 @@
 #include <string>
 #include <string_view>
 #include <utility>
-#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -172,10 +172,9 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
             }
             if (nodeKeyContent.empty())
             {
-                BOOST_THROW_EXCEPTION(
-                    InvalidParameter()
-                    << errinfo_comment("RpcFactory::initConfig: unable read content of key:" +
-                                       _nodeConfig->nodeKey()));
+                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                          "RpcFactory::initConfig: unable read content of key:" +
+                                          _nodeConfig->nodeKey()));
             }
             certConfig.nodeKey.resize(nodeKeyContent.size());
             memcpy(certConfig.nodeKey.data(), nodeKeyContent.data(), nodeKeyContent.size());
@@ -286,10 +285,9 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
             }
             if (smNodeKeyContent.empty())
             {
-                BOOST_THROW_EXCEPTION(
-                    InvalidParameter()
-                    << errinfo_comment("RpcFactory::initConfig: unable read content of key:" +
-                                       _nodeConfig->smNodeKey()));
+                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                          "RpcFactory::initConfig: unable read content of key:" +
+                                          _nodeConfig->smNodeKey()));
             }
             certConfig.nodeKey.resize(smNodeKeyContent.size());
             memcpy(certConfig.nodeKey.data(), smNodeKeyContent.data(), smNodeKeyContent.size());
@@ -358,14 +356,13 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
             }
             if (enSmNodeKeyContent.empty())
             {
-                BOOST_THROW_EXCEPTION(
-                    InvalidParameter()
-                    << errinfo_comment("RpcFactory::initConfig: unable read content of key:" +
-                                       _nodeConfig->enSmNodeKey()));
+                BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                          "RpcFactory::initConfig: unable read content of key:" +
+                                          _nodeConfig->enSmNodeKey()));
             }
             certConfig.enNodeKey.resize(enSmNodeKeyContent.size());
-            memcpy(certConfig.enNodeKey.data(), enSmNodeKeyContent.data(),
-                enSmNodeKeyContent.size());
+            memcpy(
+                certConfig.enNodeKey.data(), enSmNodeKeyContent.data(), enSmNodeKeyContent.size());
         }
 
         contextConfig->setIsCertPath(false);
@@ -484,7 +481,8 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
 }
 
 bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(int sendTxTimeout,
-    boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager, bool _enableOPEngine)
+    boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager, bool _enableOPEngine,
+    bool _enableMinerApi)
 {
     // Each RPC surface (web3 / op-engine) gets its own FilterSystem so that
     // filter stores are isolated across ports (filters created on one port
@@ -498,7 +496,7 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(int sendTxTimeout,
         _enableOPEngine ? m_nodeConfig->opEngineBatchRequestSizeLimit() :
                           m_nodeConfig->web3BatchRequestSizeLimit(),
         std::move(_groupManager), std::move(filterSystem), m_nodeConfig->web3SyncTransaction(),
-        _enableOPEngine);
+        _enableOPEngine, _enableMinerApi);
 
     // if enable op engine, set jwt verifier and register op engine json http request handler
     if (_enableOPEngine)
@@ -598,8 +596,11 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
         auto opEngineWsService = buildWsService(std::move(opEngineConfig));
         // buildWeb3JsonRpc creates a dedicated FilterSystem for this port, so
         // filter stores are isolated between the OP Engine (8551) and web3 (8545).
-        auto opEngineJsonRpc =
-            buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), opEngineWsService, groupManager, true);
+        // The miner namespace is scoped per listener: the op-engine port carries it under
+        // [op_engine_rpc] enable_miner_api, the web3 port under [web3_rpc] enable_miner_api —
+        // the batcher handshake can no longer leak onto the public listener.
+        auto opEngineJsonRpc = buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), opEngineWsService,
+            groupManager, true, m_nodeConfig->enableOpEngineMinerApi());
 
         rpc->setOpEngineJsonRpcImpl(std::move(opEngineJsonRpc));
         rpc->setOpEngineService(std::move(opEngineWsService));
@@ -609,8 +610,8 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
         auto web3Config = initWeb3RpcServiceConfig(m_nodeConfig);
         auto web3WsService = buildWsService(std::move(web3Config));
 
-        auto web3JsonRpc =
-            buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), web3WsService, groupManager);
+        auto web3JsonRpc = buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), web3WsService,
+            groupManager, false, m_nodeConfig->enableMinerApi());
 
         auto weakPtrWeb3JsonRpc = std::weak_ptr<Web3JsonRpcImpl>(web3JsonRpc);
 

@@ -1,3 +1,22 @@
+/**
+ *  Copyright (C) 2021 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file EngineServiceInitializer.h
+ * @brief Engine service composition root (Eth/Op wiring)
+ */
+
 #pragma once
 
 #include "GlobalStateStorageInitializer.h"
@@ -6,7 +25,7 @@
 #include "bcos-framework/ledger/LedgerConfigState.h"
 #include "bcos-mempool/MemPoolImpl.h"
 #include "bcos-transaction-executor/TransactionExecutorImpl.h"
-#include "engine/bcos-engine/EngineServiceImpl.h"
+#include "engine/bcos-engine/EthEngineService.h"
 #include "engine/bcos-engine/OpEngineService.h"
 #include <bcos-ledger/mpt/CommitObserver.h>
 #include <functional>
@@ -15,6 +34,19 @@
 
 namespace bcos::initializer
 {
+/// Wires the Engine API (forkchoiceUpdated / getPayload / newPayload) to a scheduler +
+/// executor pipeline. Called from Initializer when engine-driven block production is enabled:
+///   * build(...)   → EthEngineService (executor_version==2 + single-node consensus or
+///   op_engine_rpc, and also the executor_version<2 engineApiForV1Only escape, which boots
+///   the same service over the v1 TransactionExecutorImpl)
+///   * buildOp(...) → OpEngineService (executor_version==3, the genesis-frozen OPSTACK slot)
+/// executor_version alone does not enable the Engine API on v2 chains. Both lanes bypass
+/// MultiVersionScheduler's publishing wrapper, so each keeps the LedgerConfigState holder
+/// current itself — transaction admission reads it and nowhere else: build() hands the holder
+/// to EthEngineService, which republishes after every durable commit; buildOp() does not take
+/// one at all, and the initializer instead installs the republish notifier OpScheduler fires
+/// after every OP commit (OpLedgerConfigRepublish.h explains why the engine must not publish
+/// there).
 class EngineServiceInitializer
 {
 public:
@@ -30,7 +62,7 @@ public:
         std::shared_ptr<ledger::mpt::CommitObserver> commitObserver = nullptr)
     {
         auto initializer = Ptr(new EngineServiceInitializer());
-        using ConcreteEngineService = bcos::engine::EngineServiceImpl<bcos::txpool::MemPoolImpl,
+        using ConcreteEngineService = bcos::engine::EthEngineService<bcos::txpool::MemPoolImpl,
             GlobalStateStorage, ExecutorType, SchedulerType>;
         auto holder =
             std::make_shared<ConcreteModel<SchedulerType, ExecutorType, ConcreteEngineService>>(
@@ -43,8 +75,9 @@ public:
         return initializer;
     }
 
-    /// OP path (executor_version >= 3): OpSchedulerSeam drives the engine, an OpScheduler
-    /// delegate executes and commits. The engine takes no ledger (the delegate owns it).
+    /// OP path: OpSchedulerSeam + OpScheduler delegate. The ledger and the max Engine API
+    /// version are not parameters: the engine keeps ledger=nullptr (the OP scheduler owns
+    /// the ledger) and OpEngineService has no maxEngineVersion field.
     template <class SchedulerType>
     static Ptr buildOp(std::shared_ptr<GlobalStateStorageInitializer> storageInitializer,
         bcos::protocol::BlockFactory::Ptr blockFactory, std::shared_ptr<SchedulerType> scheduler,
@@ -95,7 +128,8 @@ private:
             m_any(std::in_place_type<ConcreteEngineService>, m_memPool,
                 m_storageInitializer->storage(), *m_transactionExecutor, *m_scheduler,
                 std::move(blockFactory), std::move(ledger), blockTxCountLimit,
-                std::move(ledgerConfigState), std::move(commitObserver))
+                /*maxEngineVersion=*/static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3),
+                std::move(commitObserver), std::move(ledgerConfigState))
         {}
 
         std::shared_ptr<GlobalStateStorageInitializer> m_storageInitializer;

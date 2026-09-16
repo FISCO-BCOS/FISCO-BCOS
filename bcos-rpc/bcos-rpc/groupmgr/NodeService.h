@@ -24,6 +24,7 @@
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/engine/AnyEngineService.h>
+#include <bcos-framework/engine/DACaps.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/multigroup/ChainNodeInfo.h>
 #include <bcos-framework/multigroup/GroupInfo.h>
@@ -171,6 +172,16 @@ public:
     }
     protocol::BlockNumber finalizedBlockDepth() const noexcept { return m_finalizedBlockDepth; }
 
+    /// OP DA size caps, read by OpEngineService during payload assembly. The producer is the
+    /// miner_setMaxDASize RPC handler (MinerEndpoint), registered only for a listener whose
+    /// own enable_miner_api key ([op_engine_rpc] or [web3_rpc]) is set and wired here by
+    /// AirNodeInitializer::initNodeService — that key is the gate; the handler's
+    /// MethodNotFound on null daCaps() is just the Ethereum-only-node fallback.
+    void setDaCaps(std::shared_ptr<bcos::engine::DACaps> caps) noexcept
+    {
+        m_daCaps = std::move(caps);
+    }
+    std::shared_ptr<bcos::engine::DACaps> daCaps() const noexcept { return m_daCaps; }
     /// MPT pruning retention window (storage.mpt_prune_window; pathdb spec §4.8), wired from
     /// the node config so historical-state endpoints can distinguish "state root pruned on
     /// schedule" from an unexpected node-storage miss. <= 0 (default): pruning disabled.
@@ -218,6 +229,9 @@ private:
     /// else keeps it alive. Null until set, which is every mode that has no mempool.
     std::shared_ptr<txvalidator::TxValidator> m_admissionValidator;
     txvalidator::AdmissionContext m_admissionContext = txvalidator::AdmissionContext::PoolAdmission;
+
+    /// Shared OP DA caps (see setDaCaps); nullptr on Ethereum-only nodes.
+    std::shared_ptr<bcos::engine::DACaps> m_daCaps;
 
     bcostars::LedgerServicePrx m_ledgerPrx;
 };

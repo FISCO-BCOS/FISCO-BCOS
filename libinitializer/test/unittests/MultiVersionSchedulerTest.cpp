@@ -35,6 +35,7 @@ public:
     int m_tag;
     int m_callAtBlockCount = 0;
     int m_adoptCount = 0;
+    int m_stopCount = 0;
 
     void executeBlock(bcos::protocol::Block::Ptr, bool,
         std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool)>) override
@@ -56,6 +57,7 @@ public:
     {
         ++m_adoptCount;
     }
+    void stop() override { ++m_stopCount; }
     void reset(std::function<void(Error::Ptr)>) override {}
     void getCode(std::string_view, std::function<void(Error::Ptr, bcos::bytes)>) override {}
     void getABI(std::string_view, std::function<void(Error::Ptr, std::string)>) override {}
@@ -149,6 +151,30 @@ BOOST_AUTO_TEST_CASE(callAtBlockAndAdoptProbeReachSelectedScheduler)
     BOOST_CHECK_EQUAL(slots[3]->m_adoptCount, 1);
     BOOST_CHECK_EQUAL(slots[2]->m_callAtBlockCount, 0);
     BOOST_CHECK_EQUAL(slots[2]->m_adoptCount, 0);
+}
+
+// The shutdown sweep reaches every WIRED slot and tolerates the unwired one. Initializer
+// publishes a null slot for a lane this node did not wire -- the normal shape of slot 3 on a
+// non-OP node -- and calling through that null pointer is a virtual call on address 0, on the
+// shutdown path, before the observer teardown the sweep exists to protect. The inactive wired
+// slots still have to be stopped: each holds the shared MPT commit observer and stop() is what
+// detaches it.
+BOOST_AUTO_TEST_CASE(stopSweepsEveryWiredSlotAndSkipsTheUnwiredOne)
+{
+    auto wired = make(true);
+    wired->stop();
+    BOOST_CHECK_EQUAL(slots[0]->m_stopCount, 1);
+    BOOST_CHECK_EQUAL(slots[1]->m_stopCount, 1);
+    BOOST_CHECK_EQUAL(slots[2]->m_stopCount, 1);
+    BOOST_CHECK_EQUAL(slots[3]->m_stopCount, 1);
+
+    Fixture nonOpNode;  // a non-OP node: slot 3 is null
+    auto unwired = nonOpNode.make(false);
+    unwired->stop();
+    BOOST_CHECK_EQUAL(nonOpNode.slots[0]->m_stopCount, 1);
+    BOOST_CHECK_EQUAL(nonOpNode.slots[1]->m_stopCount, 1);
+    BOOST_CHECK_EQUAL(nonOpNode.slots[2]->m_stopCount, 1);
+    BOOST_CHECK_EQUAL(nonOpNode.slots[3]->m_stopCount, 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

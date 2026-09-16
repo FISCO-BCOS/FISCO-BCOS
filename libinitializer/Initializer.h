@@ -28,6 +28,7 @@
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include "libinitializer/MultiVersionScheduler.h"
+#include <bcos-framework/engine/DACaps.h>
 #ifdef TOOLS
 #include "tools/archive-tool/ArchiveService.h"
 #endif
@@ -84,6 +85,7 @@ class EngineServiceInitializer;
 class Initializer
 {
 public:
+    std::shared_ptr<bcos::engine::DACaps> daCaps() const { return m_daCaps; }
     using Ptr = std::shared_ptr<Initializer>;
     Initializer() = default;
     virtual ~Initializer() { stop(); }
@@ -177,6 +179,7 @@ private:
     bcos::IOServicePool::Ptr m_ioServicePool;
     bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState;
     /// Built only in engine-driven mode, where the mempool is the pool a transaction enters.
+    std::shared_ptr<bcos::engine::DACaps> m_daCaps;
     std::shared_ptr<bcos::txvalidator::TxValidator> m_memPoolValidator;
     TxPoolInitializer::Ptr m_txpoolInitializer;
     PBFTInitializer::Ptr m_pbftInitializer;
