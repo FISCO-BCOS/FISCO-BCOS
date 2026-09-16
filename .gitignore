@@ -101,3 +101,6 @@ CLAUDE.local.md
 
 # RocksDB unittest working directory (created by UT runs, never commit).
 unittestdb/
+
+# Process/planning documents stay local-only (archived under ~/octo/docs-archive).
+docs/plans/
