@@ -341,7 +341,8 @@ struct OpE2eFixture
 
     /// Explicit schedule: lets a case pin a historical fork window (e.g. Regolith) while the
     /// engine, the seam and the real OpScheduler delegate all share it.
-    explicit OpE2eFixture(std::shared_ptr<const bcos::evm::opstack::OpForkSchedule> schedule)
+    explicit OpE2eFixture(std::shared_ptr<const bcos::evm::opstack::OpForkSchedule> schedule,
+        bcos::engine::OpEip1559Params eip1559 = bcos::engine::kLegacyOpEip1559Params)
       : hashImpl(makeCryptoSuite()->hashImpl()),
         receiptFactory(makeReceiptFactory()),
         scheduler(schedule, {}),
@@ -354,7 +355,7 @@ struct OpE2eFixture
             ioServicePool)),
         service(memPool, multiLayerStorage, scheduler, blockFactory,
             bcos::engine::c_defaultBlockTxCountLimit, opDelegate, nullptr,
-            /*allowSynthesizedL1Attributes=*/true)
+            /*allowSynthesizedL1Attributes=*/true, eip1559)
     {
         seedSysTables(multiLayerStorage);
     }

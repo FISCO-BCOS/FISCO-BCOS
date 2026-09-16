@@ -1344,10 +1344,15 @@ BOOST_AUTO_TEST_CASE(RegolithPayloadBuildsAndImportsAgainstRealScheduler)
 // eip1559.CalcBaseFee on that parent — the same "golden from the reference
 // implementation" rule the corpus generator follows.
 // ═══════════════════════════════════════════════════════════════════════════════
-BOOST_AUTO_TEST_CASE(PreCanyonBaseFeeIgnoresTheChainsEip1559Denominator)
+BOOST_AUTO_TEST_CASE(PreCanyonBaseFeeUsesTheChainsEip1559Denominator)
 {
+    // The chain this node serves declares denominator 8 (the corpus devnet and the C2 e2e
+    // both do), so the engine must price with 8 — not with the legacy preset it hardcoded
+    // before [op_eip1559] existed.
     constexpr std::uint64_t kOpGethGoldenDenominator8 = 1'375'000'000ULL;
-    constexpr std::uint64_t kFiscoHardcodedDenominator50 = 1'060'000'000ULL;
+    constexpr std::uint64_t kLegacyDenominator50 = 1'060'000'000ULL;
+    bcos::engine::OpEip1559Params const chainTriple{
+        .elasticity = 6, .denominator = 8, .denominatorCanyon = 250};
 
     auto const genesis = regolithGenesisHash();
 
@@ -1357,8 +1362,8 @@ BOOST_AUTO_TEST_CASE(PreCanyonBaseFeeIgnoresTheChainsEip1559Denominator)
     attrs.suggestedFeeRecipient = bcos::Address{};
     attrs.gasLimit = 30'000'000;
 
-    // ── builder side: the price FISCO would SEQUENCE for a denom-8 chain ──────────
-    auto builder = std::make_unique<OpE2eFixture>(regolithOnlySchedule());
+    // ── builder side: the price sequenced for a denom-8 chain ─────────────────────
+    auto builder = std::make_unique<OpE2eFixture>(regolithOnlySchedule(), chainTriple);
     registerRegolithGenesis(*builder, genesis);
     bcos::engine::ForkchoiceState fc{genesis, genesis, genesis};
     auto built = bcos::task::syncWait(builder->service.updateForkchoice(
@@ -1377,50 +1382,29 @@ BOOST_AUTO_TEST_CASE(PreCanyonBaseFeeIgnoresTheChainsEip1559Denominator)
     auto const produced = got->executionPayload.baseFeePerGas;
     BOOST_TEST_INFO("produced=" << produced
                                 << " opGeth(denominator 8)=" << kOpGethGoldenDenominator8
-                                << " fisco(denominator 50)=" << kFiscoHardcodedDenominator50);
-    // FISCO prices with the hardcoded constant, so the payload it announces for a denom-8
-    // chain carries the denom-50 base fee. This pair is the reproduction: flip it to
-    //   BOOST_CHECK_EQUAL(produced, bcos::u256(kOpGethGoldenDenominator8));
-    // once the chain's eip1559 triple is plumbed through config.genesis. The equality with
-    // the denom-50 golden also proves the formula itself matches op-geth's (same denominator
-    // in, same base fee out), so the whole gap is the missing parameter, not the arithmetic.
-    BOOST_CHECK_EQUAL(produced, bcos::u256(kFiscoHardcodedDenominator50));
-    BOOST_CHECK(produced != bcos::u256(kOpGethGoldenDenominator8));
+                                << " legacy(denominator 50)=" << kLegacyDenominator50);
+    // The payload announced for a denom-8 chain carries the denom-8 base fee. If this goes
+    // red with produced == kLegacyDenominator50, the chain's denominator stopped reaching
+    // the engine. The equality with the golden also proves the formula matches op-geth's
+    // (same denominator in, same base fee out).
+    BOOST_CHECK_EQUAL(produced, bcos::u256(kOpGethGoldenDenominator8));
+    BOOST_CHECK(produced != bcos::u256(kLegacyDenominator50));
 
-    // ── validator side: the block the chain's own op-geth would have built ────────
-    // Same payload, repriced to the value op-geth produces for a denom-8 chain. blockHash
-    // covers baseFeePerGas, so it has to be recomputed too — otherwise the reconstruction
-    // check (OpEngineService.inl:918) fires before the base-fee check and the case would
-    // "pass" for the wrong reason.
-    auto payload = got->executionPayload;
-    payload.baseFeePerGas = bcos::u256(kOpGethGoldenDenominator8);
-    auto const txRoot = EngineOpScheduler::computeTxRoot(rawEnvelopesFromPayload(payload));
-    auto const rebuilt = bcos::engine::engine_common::op::rebuildOpEthHeader(
-        builder->blockFactory->blockHeaderFactory(), payload, txRoot, {},
-        bcos::engine::OpForkId::Regolith);
-    payload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*rebuilt);
-
-    auto importer = std::make_unique<OpE2eFixture>(regolithOnlySchedule());
+    // ── validator side: the very payload the builder announced must IMPORT ────────
+    // (The reproduction this case grew out of had to reprice the payload to the golden and
+    // watch newPayload reject it; with the parameter flowing, the builder's own payload is
+    // the golden and must be accepted verbatim by a fresh node.)
+    auto importer = std::make_unique<OpE2eFixture>(regolithOnlySchedule(), chainTriple);
     registerRegolithGenesis(*importer, genesis);
-    bcos::engine::NewPayloadRequest request{.executionPayload = payload,
+    bcos::engine::NewPayloadRequest request{.executionPayload = got->executionPayload,
         .expectedBlobVersionedHashes = {},
         .parentBeaconBlockRoot = {},
         .executionRequests = {}};
     auto status = bcos::task::syncWait(importer->service.newPayload(
         request, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V2)));
-
-    // REPRODUCTION: a block that is valid on its own chain is answered INVALID here. The
-    // rejection must name the base fee (not the hash), which pins the cause to the
-    // denominator rather than to the payload's shape.
-    BOOST_CHECK_MESSAGE(status.status == bcos::engine::PayloadValidationStatus::Invalid,
-        "expected the denom-8 block to be REJECTED (reproduction), got "
-            << static_cast<int>(status.status) << " " << status.validationError.value_or(""));
-    BOOST_CHECK(status.validationError.has_value());
-    if (status.validationError.has_value())
-    {
-        BOOST_CHECK_MESSAGE(status.validationError->find("baseFeePerGas") != std::string::npos,
-            "rejection must name baseFeePerGas, got: " << *status.validationError);
-    }
+    BOOST_CHECK_MESSAGE(status.status == bcos::engine::PayloadValidationStatus::Valid,
+        "the denom-8 block must be ACCEPTED, got " << static_cast<int>(status.status) << " "
+                                                   << status.validationError.value_or(""));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
