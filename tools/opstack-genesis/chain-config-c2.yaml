@@ -48,8 +48,9 @@ expected_predeploys:
   - name: L1FeeVault
     address: "0x420000000000000000000000000000000000001A"
 
-# Pin of the COMMITTED frozen artifact op-fork-base-allocs.json (setup_op_node.sh's
-# default --base-allocs). setup_c2.sh rewrites this line to the fresh l2genesis.json's
-# sha256 before build-allocs, so a C2 run always self-pins; this committed value keeps
-# the setup_op_node.sh default path (no fresh devnet) verifiable.
+# op-fork-base-allocs.json was removed from the karst branch (2026-09-16): it is
+# regenerable via setup_c2.sh (anvil L1 → op-deployer → inspect genesis).
+# This pin retains the SHA of the last committed frozen artifact for provenance.
+# setup_c2.sh rewrites this line to the fresh l2genesis.json's sha256 before
+# build-allocs, so a C2 run always self-pins.
 base_allocs_sha256: "9b33b2433446f67d0efa7e9f2da8e59366ccf9b6ceb4e98f9351f9c8c6da57f8"
