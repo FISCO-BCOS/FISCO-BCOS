@@ -149,7 +149,8 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
             buffer.insert(buffer.end(), data.begin(), data.end());
         }
         GATEWAY_LOG(DEBUG) << LOG_DESC("local delivery of sendMessageByNodeID")
-                           << LOG_KV("groupID", _groupID) << LOG_KV("srcNodeID", _srcNodeID->hex())
+                           << LOG_KV("groupID", _groupID)
+                           << LOG_KV("srcNodeID", _srcNodeID->hex())
                            << LOG_KV("dstNodeID", _dstNodeID->hex());
         // the joined buffer lives in this frame, so the view stays valid across the co_await
         co_return co_await m_gatewayNodeManager->localRouterTable()->sendMessage(
@@ -193,8 +194,8 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
                 continue;
             }
             auto payload = respMessage->payload();
-            int respCode = boost::lexical_cast<int>(
-                std::string_view(reinterpret_cast<const char*>(payload.data()), payload.size()));
+            int respCode = boost::lexical_cast<int>(std::string_view(
+                reinterpret_cast<const char*>(payload.data()), payload.size()));
             if (respCode == bcos::protocol::CommonError::SUCCESS)
             {
                 co_return nullptr;
@@ -205,12 +206,12 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
                 // re-sending the identical payload to another gateway cannot succeed, and
                 // reporting GatewaySendMsgFailed here would misdirect the diagnosis. Return the
                 // real code the destination front produced (Round-3 review finding).
-                GATEWAY_LOG(DEBUG)
-                    << LOG_BADGE("Gateway::sendMessageByNodeID")
-                    << LOG_KV("p2pid", printShortP2pID(p2pID)) << LOG_KV("moduleID", _moduleID)
-                    << LOG_KV("message",
-                           "destination front failed to decode the message, "
-                           "terminal");
+                GATEWAY_LOG(DEBUG) << LOG_BADGE("Gateway::sendMessageByNodeID")
+                                   << LOG_KV("p2pid", printShortP2pID(p2pID))
+                                   << LOG_KV("moduleID", _moduleID)
+                                   << LOG_KV("message",
+                                          "destination front failed to decode the message, "
+                                          "terminal");
                 co_return BCOS_ERROR_PTR(bcos::protocol::CommonError::MessageDecodeFailed,
                     "the destination front failed to decode the message");
             }
@@ -228,7 +229,8 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
             }
             if (e.errorCode() == P2PExceptionType::InQPSOverflow)
             {
-                co_return BCOS_ERROR_PTR(bcos::protocol::CommonError::GatewayQPSOverFlow, e.what());
+                co_return BCOS_ERROR_PTR(
+                    bcos::protocol::CommonError::GatewayQPSOverFlow, e.what());
             }
             GATEWAY_LOG(DEBUG) << LOG_BADGE("Gateway::sendMessageByNodeID")
                                << LOG_DESC("network callback")
@@ -296,11 +298,13 @@ void Gateway::onReceiveP2PMessage(const std::string& _groupID, NodeIDPtr _srcNod
             _errorRespFunc(error);
         }
         GATEWAY_LOG(TRACE) << LOG_DESC("onReceiveP2PMessage callback")
-                           << LOG_KV("groupID", _groupID) << LOG_KV("srcNodeID", _srcNodeID->hex())
+                           << LOG_KV("groupID", _groupID)
+                           << LOG_KV("srcNodeID", _srcNodeID->hex())
                            << LOG_KV("dstNodeID", _dstNodeID->hex())
                            << LOG_KV("code", (error ? error->errorCode() : 0))
                            << LOG_KV("msg", (error ? error->errorMessage() : ""));
-    }(frontService, _groupID, _srcNodeID, _dstNodeID, std::move(_msg), std::move(_errorRespFunc)));
+    }(frontService, _groupID, _srcNodeID, _dstNodeID, std::move(_msg),
+        std::move(_errorRespFunc)));
 }
 
 bool Gateway::checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
@@ -384,9 +388,9 @@ void Gateway::onReceiveP2PMessage(
         if (result.has_value())
         {
             auto errorCode = std::to_string((int)protocol::CommonError::GatewayQPSOverFlow);
-            m_p2pInterface->sendRespMessageBySession(
-                bytesConstRef((byte*)errorCode.data(), errorCode.size()), _msg.seq(),
-                _msg.srcP2PNodeID(), _session);
+            m_p2pInterface->sendRespMessageBySession(bytesConstRef(
+                                                         (byte*)errorCode.data(), errorCode.size()),
+                _msg.seq(), _msg.srcP2PNodeID(), _session);
             return;
         }
     }
@@ -495,7 +499,8 @@ void Gateway::onReceiveBroadcastMessage(
         }
     }
 
-    auto srcNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey((_msg.options().srcNodeID()));
+    auto srcNodeIDPtr =
+        m_gatewayNodeManager->keyFactory()->createKey((_msg.options().srcNodeID()));
 
     auto type = _msg.ext();
     // broadcastMsg fans out one dispatch task per local front service, each keeping the message
@@ -578,8 +583,8 @@ bcos::gateway::Gateway::sendMessageByTopic(const std::string& _topic, bcos::byte
     {
         co_return co_await m_amop->sendMessageByTopic(_topic, _data);
     }
-    co_return std::make_tuple(
-        BCOS_ERROR_PTR(-1, "AMOP is not initialized"), (int16_t)0, bcos::bytes{});
+    co_return std::make_tuple(BCOS_ERROR_PTR(-1, "AMOP is not initialized"), (int16_t)0,
+        bcos::bytes{});
 }
 bcos::task::Task<void> bcos::gateway::Gateway::sendBroadcastMessageByTopic(
     const std::string& _topic, bcos::bytesConstRef _data)

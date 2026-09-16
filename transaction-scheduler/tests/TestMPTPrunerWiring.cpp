@@ -50,8 +50,7 @@ constexpr int64_t c_pruneWindow = 2;
 /// The committed-state backend type: MultiLayerStorage::latestBackend() is the checkpoint
 /// storage's OPENED handle (RocksDBStorage2) — what the pruner and the production
 /// initializer (decltype over the same expression) are parameterized on.
-using FCBackend =
-    std::remove_cvref_t<decltype(std::declval<FCMultiLayerStorage&>().latestBackend())>;
+using FCBackend = std::remove_cvref_t<decltype(std::declval<FCMultiLayerStorage&>().latestBackend())>;
 using FCPruner = mpt::MPTPruner<FCBackend>;
 
 /// The production init lookup (Initializer.cpp): the committed header's stateRoot, nullopt
@@ -161,8 +160,7 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoCommitPath)
     // window's state roots — no guard, no replay: every deletion already landed with its
     // block's commit, and the rebuilt state matches the running pruner's exactly.
     auto pruner2 = std::make_shared<FCPruner>(backend, c_pruneWindow);
-    task::syncWait(
-        pruner2->init(c_head, stateRootLookup(fixture.m_ledger), /*sweepGarbage=*/false));
+    task::syncWait(pruner2->init(c_head, stateRootLookup(fixture.m_ledger), /*sweepGarbage=*/false));
     BOOST_CHECK_EQUAL(pruner2->watermark(), c_head);
     BOOST_CHECK_EQUAL(pruner2->trackedCount(), pruner->trackedCount());
     BOOST_CHECK_EQUAL(pruner2->pendingCount(), pruner->pendingCount());
@@ -209,8 +207,7 @@ BOOST_AUTO_TEST_CASE(midChainEnableRebuildsFromStateRoots)
     // feature_mpt_state_root activated at block 1 and the head is 3: init walks the roots of
     // blocks 2..3 (the whole post-activation history) and adopts every node on disk.
     auto pruner = std::make_shared<FCPruner>(backend, c_pruneWindow);
-    BOOST_CHECK_NO_THROW(
-        task::syncWait(pruner->init(3, stateRootLookup(fixture.m_ledger), /*sweepGarbage=*/false)));
+    BOOST_CHECK_NO_THROW(task::syncWait(pruner->init(3, stateRootLookup(fixture.m_ledger), /*sweepGarbage=*/false)));
     BOOST_CHECK_EQUAL(pruner->trackedCount(), fixture.backendNodeCount());
     fixture.m_baselineScheduler.setMPTCommitObserver(pruner);
 

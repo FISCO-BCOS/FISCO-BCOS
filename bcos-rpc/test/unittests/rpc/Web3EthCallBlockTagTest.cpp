@@ -123,9 +123,8 @@ public:
                 R"({"jsonrpc":"2.0","id":1,"method":"eth_call","params":[{"to":"0x1234567890123456789012345678901234567890","data":"0x"},)") +
             std::string(blockTag) + "]}";
         std::promise<bcos::bytes> promise;
-        web3->onRPCRequest(payload, [&promise](bcos::bytes resp, boost::beast::http::status) {
-            promise.set_value(std::move(resp));
-        });
+        web3->onRPCRequest(
+            payload, [&promise](bcos::bytes resp, boost::beast::http::status) { promise.set_value(std::move(resp)); });
         auto jsonBytes = promise.get_future().get();
         Json::Value value;
         Json::Reader reader;
@@ -248,8 +247,8 @@ BOOST_AUTO_TEST_CASE(historicalCallBeyondPruneWindowAnswers32004)
     BOOST_CHECK_EQUAL(respInWindow["error"]["code"].asInt(), -32004);
     BOOST_CHECK(respInWindow["error"]["message"].asString().find(
                     "Block stateRoot not in MPT node storage") != std::string::npos);
-    BOOST_CHECK(
-        respInWindow["error"]["message"].asString().find("State pruned") == std::string::npos);
+    BOOST_CHECK(respInWindow["error"]["message"].asString().find("State pruned") ==
+                std::string::npos);
 }
 
 // Only MPTStateUnavailable is remapped: any other scheduler error (here InvalidStatus, the
@@ -289,8 +288,8 @@ BOOST_AUTO_TEST_CASE(historicalCallWithoutMptReaderStillReachesScheduler)
 // callAtBlock forwarding keeps it working.
 BOOST_AUTO_TEST_CASE(historicalCallWithoutMptReaderKeepsLegacySchedulerWorking)
 {
-    auto web3 = buildWeb3Rpc(std::make_shared<FakeScheduler2>(m_ledger, m_blockFactory), 0, 0, -1,
-        /*withMptReader=*/false);
+    auto web3 = buildWeb3Rpc(std::make_shared<FakeScheduler2>(m_ledger, m_blockFactory), 0, 0,
+        -1, /*withMptReader=*/false);
 
     auto resp = request(web3, R"("0x1")");
     BOOST_CHECK(resp.isMember("result"));
@@ -336,8 +335,8 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByTagDirect)
         BOOST_CHECK(!isLatest);
         // 0x8000000000000000 = 2^63 > INT64_MAX: would wrap to a negative height if
         // unchecked.
-        BOOST_CHECK_THROW(
-            getBlockNumberByTag(latest, "0x8000000000000000", 0, 0), bcos::rpc::JsonRpcException);
+        BOOST_CHECK_THROW(getBlockNumberByTag(latest, "0x8000000000000000", 0, 0),
+            bcos::rpc::JsonRpcException);
         // > UINT64_MAX: fromQuantity rejects it too.
         BOOST_CHECK_THROW(getBlockNumberByTag(latest, "0xffffffffffffffffffff", 0, 0),
             bcos::rpc::JsonRpcException);

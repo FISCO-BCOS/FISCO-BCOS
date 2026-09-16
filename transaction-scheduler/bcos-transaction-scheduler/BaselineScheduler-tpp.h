@@ -938,7 +938,8 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::stop
 };
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
-void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::resetMPTCommitObserver()
+void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::
+    resetMPTCommitObserver()
 {
     // Blocking lock, unlike coCommitBlock's try_to_lock: wait out any in-flight commit so
     // that once this returns, no thread will ever dereference the previous observer from the

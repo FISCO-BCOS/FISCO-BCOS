@@ -394,8 +394,8 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
         std::vector<std::string> txHashes;
         try
         {
-            txHashes = task::syncWait(
-                ledger::getBlockTransactionHashStrings(*localStorage, blockNumber, *blockFactory));
+            txHashes = task::syncWait(ledger::getBlockTransactionHashStrings(
+                *localStorage, blockNumber, *blockFactory));
         }
         catch (std::exception& e)
         {

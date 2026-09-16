@@ -76,8 +76,8 @@ public:
     void setMessageHandler(
         std::function<void(NetworkException, SessionFace::Ptr, Message)>) override
     {}
-    void setBeforeMessageHandler(
-        std::function<std::optional<bcos::Error>(SessionFace&, const Message&, uint32_t)>) override
+    void setBeforeMessageHandler(std::function<std::optional<bcos::Error>(
+        SessionFace&, const Message&, uint32_t)>) override
     {}
     NodeIPEndpoint nodeIPEndpoint() const override { return {}; }
     bool active() const override { return true; }

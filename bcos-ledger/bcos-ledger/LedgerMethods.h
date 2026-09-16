@@ -105,9 +105,9 @@ inline std::vector<EncodedBlockTransaction> encodeUnsavedBlockTransactions(
     // An external tx list is iterated by its own size (the historical needStoreUnsavedTxs
     // semantics): indexing it by the block's tx count would overrun a shorter list and
     // silently drop the tail of a longer one.
-    auto const txCount = blockTxs ?
-                             blockTxs->size() :
-                             std::max(block->transactionsSize(), block->transactionsMetaDataSize());
+    auto const txCount = blockTxs ? blockTxs->size() :
+                                    std::max(block->transactionsSize(),
+                                        block->transactionsMetaDataSize());
     auto inlineTxs = block->transactions();
     std::vector<EncodedBlockTransaction> out;
     out.reserve(txCount);
@@ -216,7 +216,8 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
         storage::Entry txEntry;
         txEntry.set(std::move(pending.encoded));
         co_await storage2::writeOne(storage,
-            executor_v1::StateKey{SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(pending.hash)},
+            executor_v1::StateKey{
+                SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(pending.hash)},
             std::move(txEntry));
 
         if (pending.tx)
@@ -436,8 +437,8 @@ task::Task<TransactionCount> tag_invoke(ledger::tag_t<getTransactionCount> /*unu
             }
             catch (boost::bad_lexical_cast& e)
             {
-                LEDGER_LOG(WARNING)
-                    << "Lexical cast transaction count failed, entry value: " << entry->get();
+                LEDGER_LOG(WARNING) << "Lexical cast transaction count failed, entry value: "
+                                    << entry->get();
                 BOOST_THROW_EXCEPTION(e);
             }
         }

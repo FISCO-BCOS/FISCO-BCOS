@@ -195,21 +195,22 @@ void GatewayNodeManager::onReceiveStatusSeq(
     auto p2pInterface = m_p2pInterface;
     // fire-and-forget through the coroutine fast path: the message is built in the frame and the
     // (empty) payload rides as a view; an unreachable peer is an expected, recoverable state.
-    task::wait([](P2PInterface::Ptr _p2pInterface, uint16_t _type,
-                   P2pID _nodeID) -> task::Task<void> {
+    task::wait([](P2PInterface::Ptr _p2pInterface, uint16_t _type, P2pID _nodeID)
+                   -> task::Task<void> {
         Message message;
         message.setPacketType(_type);
         message.setSeq(_p2pInterface->newSeq());
         try
         {
-            co_await _p2pInterface->sendMessageByNodeID(
-                _nodeID, message, ::ranges::views::single(message.payload()), Options{0, false});
+            co_await _p2pInterface->sendMessageByNodeID(_nodeID, message,
+                ::ranges::views::single(message.payload()), Options{0, false});
         }
         catch (NetworkException const& e)
         {
-            NODE_MANAGER_LOG(INFO) << LOG_DESC("onReceiveStatusSeq send RequestNodeStatus failed")
-                                   << LOG_KV("nodeid", printShortP2pID(_nodeID))
-                                   << LOG_KV("code", e.errorCode()) << LOG_KV("msg", e.what());
+            NODE_MANAGER_LOG(INFO)
+                << LOG_DESC("onReceiveStatusSeq send RequestNodeStatus failed")
+                << LOG_KV("nodeid", printShortP2pID(_nodeID)) << LOG_KV("code", e.errorCode())
+                << LOG_KV("msg", e.what());
         }
     }(p2pInterface, GatewayMessageType::RequestNodeStatus, from));
 }
@@ -302,14 +303,15 @@ void GatewayNodeManager::onRequestNodeStatus(
         message.setPayload(std::move(_payload));
         try
         {
-            co_await _p2pInterface->sendMessageByNodeID(
-                _nodeID, message, ::ranges::views::single(message.payload()), Options{0, false});
+            co_await _p2pInterface->sendMessageByNodeID(_nodeID, message,
+                ::ranges::views::single(message.payload()), Options{0, false});
         }
         catch (NetworkException const& e)
         {
-            NODE_MANAGER_LOG(INFO) << LOG_DESC("onRequestNodeStatus send ResponseNodeStatus failed")
-                                   << LOG_KV("nodeid", printShortP2pID(_nodeID))
-                                   << LOG_KV("code", e.errorCode()) << LOG_KV("msg", e.what());
+            NODE_MANAGER_LOG(INFO)
+                << LOG_DESC("onRequestNodeStatus send ResponseNodeStatus failed")
+                << LOG_KV("nodeid", printShortP2pID(_nodeID)) << LOG_KV("code", e.errorCode())
+                << LOG_KV("msg", e.what());
         }
     }(p2pInterface, GatewayMessageType::ResponseNodeStatus, from, std::move(*nodeStatusData)));
 }
@@ -415,7 +417,8 @@ void GatewayNodeManager::broadcastStatusSeq()
     // value message held by shared_ptr; the 4-byte seq payload is owned by it (zero-copy view
     // send). The p2p interface is passed as a coroutine parameter so it is copied into the frame
     // and stays alive for the whole (possibly deferred) send.
-    task::wait([](P2PInterface::Ptr _p2p, bcos::bytes _payload) mutable -> task::Task<void> {
+    task::wait([](P2PInterface::Ptr _p2p, bcos::bytes _payload) mutable
+                   -> task::Task<void> {
         auto message = std::make_shared<Message>();
         message->setPacketType(GatewayMessageType::SyncNodeSeq);
         message->setPayload(std::move(_payload));
@@ -436,20 +439,20 @@ void GatewayNodeManager::syncLatestNodeIDList()
                                << LOG_KV("nodeCount", groupNodeInfos->nodeIDList().size());
         for (const auto& entry : localNodeEntryPoints)
         {
-            task::wait(
-                [](bcos::front::FrontServiceInterface::Ptr _frontService, std::string _groupID,
-                    GroupNodeInfo::Ptr _groupNodeInfo) -> task::Task<void> {
-                    auto error = co_await _frontService->onReceiveGroupNodeInfo(
-                        std::move(_groupID), std::move(_groupNodeInfo));
-                    if (!error)
-                    {
-                        co_return;
-                    }
-                    NODE_MANAGER_LOG(WARNING)
-                        << LOG_DESC("syncLatestNodeIDList onReceiveGroupNodeInfo callback")
-                        << LOG_KV("codeCode", error->errorCode())
-                        << LOG_KV("codeMessage", error->errorMessage());
-                }(entry.second->frontService(), groupID, groupNodeInfos));
+            task::wait([](bcos::front::FrontServiceInterface::Ptr _frontService,
+                           std::string _groupID,
+                           GroupNodeInfo::Ptr _groupNodeInfo) -> task::Task<void> {
+                auto error = co_await _frontService->onReceiveGroupNodeInfo(
+                    std::move(_groupID), std::move(_groupNodeInfo));
+                if (!error)
+                {
+                    co_return;
+                }
+                NODE_MANAGER_LOG(WARNING)
+                    << LOG_DESC("syncLatestNodeIDList onReceiveGroupNodeInfo callback")
+                    << LOG_KV("codeCode", error->errorCode())
+                    << LOG_KV("codeMessage", error->errorMessage());
+            }(entry.second->frontService(), groupID, groupNodeInfos));
         }
     }
 }

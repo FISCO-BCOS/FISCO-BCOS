@@ -41,7 +41,8 @@ public:
     AMOPImpl(TopicManager::Ptr _topicManager, AMOPMessageFactory::Ptr _messageFactory,
         bcos::protocol::AMOPRequestFactory::Ptr _requestFactory,
         bcos::gateway::P2PInterface::Ptr _network, bcos::gateway::P2pID const& _p2pNodeID,
-        boost::asio::io_context& _ioContext, bcos::IOServicePool::Ptr _ioServicePool);
+        boost::asio::io_context& _ioContext,
+        bcos::IOServicePool::Ptr _ioServicePool);
     virtual ~AMOPImpl();
 
     virtual void start();
@@ -142,7 +143,7 @@ private:
      *         the topic
      */
     task::Task<std::optional<std::tuple<Error::Ptr, int16_t, bcos::bytes>>>
-    trySendTopicMessageToLocalClient(const std::string& _topic, bcos::bytesConstRef _data);
+        trySendTopicMessageToLocalClient(const std::string& _topic, bcos::bytesConstRef _data);
 
     std::shared_ptr<TopicManager> m_topicManager;
     std::shared_ptr<AMOPMessageFactory> m_messageFactory;

@@ -99,10 +99,10 @@ BOOST_FIXTURE_TEST_CASE(l2GenesisUsesMptRootNotXor, L2MptStorageFixture)
     auto mptHeader = blockFactory->blockHeaderFactory()->createBlockHeader();
     mptHeader->setNumber(0);
     mptHeader->setVersion(kBlockVersion);
-    auto mptRoot =
-        task::syncWait(bcos::engine::engine_common::resolveEngineBlockStateRoot(mptView, *mptHeader,
-                           ledgerConfig, *cryptoSuite->hashImpl(), *blockFactory, commitObserver))
-            .stateRoot;
+    auto mptRoot = task::syncWait(bcos::engine::engine_common::resolveEngineBlockStateRoot(
+        mptView, *mptHeader, ledgerConfig, *cryptoSuite->hashImpl(), *blockFactory,
+        commitObserver))
+                       .stateRoot;
 
     BOOST_CHECK_NE(mptRoot, xorRoot);
 }
@@ -117,10 +117,9 @@ BOOST_FIXTURE_TEST_CASE(nonL2ChainKeepsXorRoot, L2MptStorageFixture)
 
     auto xorRoot = task::syncWait(bcos::scheduler_v1::xorStateRoot(
         view, header->version(), *cryptoSuite->hashImpl(), legacyConfig.features()));
-    auto resolved =
-        task::syncWait(bcos::engine::engine_common::resolveEngineBlockStateRoot(view, *header,
-                           legacyConfig, *cryptoSuite->hashImpl(), *blockFactory, commitObserver))
-            .stateRoot;
+    auto resolved = task::syncWait(bcos::engine::engine_common::resolveEngineBlockStateRoot(
+        view, *header, legacyConfig, *cryptoSuite->hashImpl(), *blockFactory, commitObserver))
+                        .stateRoot;
     BOOST_CHECK_EQUAL(resolved, xorRoot);
 }
 
@@ -156,8 +155,8 @@ BOOST_FIXTURE_TEST_CASE(l2BlocksChainParentRootAndPublishHeader, L2MptStorageFix
     auto const resolve = [&](RealGlobalStateStorage::ViewType& view,
                              bcos::protocol::BlockHeader& header,
                              ledger::LedgerConfig const& config) {
-        return task::syncWait(bcos::engine::engine_common::resolveEngineBlockStateRoot(view, header,
-                                  config, *cryptoSuite->hashImpl(), *blockFactory, commitObserver))
+        return task::syncWait(bcos::engine::engine_common::resolveEngineBlockStateRoot(
+            view, header, config, *cryptoSuite->hashImpl(), *blockFactory, commitObserver))
             .stateRoot;
     };
 
@@ -212,9 +211,10 @@ BOOST_FIXTURE_TEST_CASE(l2BlocksChainParentRootAndPublishHeader, L2MptStorageFix
         auto header = control.blockFactory->blockHeaderFactory()->createBlockHeader();
         header->setNumber(2);
         header->setVersion(kBlockVersion);
-        BOOST_CHECK_THROW(task::syncWait(bcos::engine::engine_common::resolveEngineBlockStateRoot(
-                              view, *header, control.ledgerConfig, *control.cryptoSuite->hashImpl(),
-                              *control.blockFactory, control.commitObserver)),
+        BOOST_CHECK_THROW(
+            task::syncWait(bcos::engine::engine_common::resolveEngineBlockStateRoot(view, *header,
+                control.ledgerConfig, *control.cryptoSuite->hashImpl(), *control.blockFactory,
+                control.commitObserver)),
             bcos::ledger::NotFoundBlockHeader);
     }
 }

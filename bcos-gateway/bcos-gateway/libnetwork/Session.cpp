@@ -233,9 +233,9 @@ void Session::write()
                 // the loop's own catches make this unreachable in practice; if the frame
                 // allocation itself threw, release the flag and settle the queue
                 self->m_writingInFlight.store(false);
-                SESSION_LOG(ERROR)
-                    << LOG_DESC("write loop launch failed")
-                    << LOG_KV("what", boost::current_exception_diagnostic_information());
+                SESSION_LOG(ERROR) << LOG_DESC("write loop launch failed")
+                                   << LOG_KV("what",
+                                          boost::current_exception_diagnostic_information());
                 self->drop(TCPError);
             }
         });
@@ -482,8 +482,10 @@ void Session::drop(DisconnectReason _reason)
             {
                 callback->timeoutHandler->cancel();
             }
-            postCallback(std::move(callback->callback), "response callback exception during drop",
-                NetworkException(P2PExceptionType::NetworkTimeout, "NetworkTimeout"), std::nullopt);
+            postCallback(std::move(callback->callback),
+                "response callback exception during drop",
+                NetworkException(P2PExceptionType::NetworkTimeout, "NetworkTimeout"),
+                std::nullopt);
         }
     }
 
@@ -520,7 +522,8 @@ void Session::drop(DisconnectReason _reason)
             {
                 return;
             }
-            session->m_messageHandler(NetworkException(errorCode, errorMsg), session, Message{});
+            session->m_messageHandler(
+                NetworkException(errorCode, errorMsg), session, Message{});
         };
         // Once haveNetwork() is false the Host is on its way out, so run the notification inline
         // rather than handing it to an executor whose remaining lifetime we do not control here.
@@ -880,8 +883,8 @@ task::Task<std::optional<Message>> fastSendMessageWithResponse(
             {
                 claimed->timeoutHandler->cancel();
             }
-            task::GetResultAwaitable<NetworkException, std::optional<Message>>::complete(
-                result, NetworkException(ec.value(), ec.message()), std::nullopt);
+            task::GetResultAwaitable<NetworkException, std::optional<Message>>::complete(result,
+                NetworkException(ec.value(), ec.message()), std::nullopt);
         }
     }
 

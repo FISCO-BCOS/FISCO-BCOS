@@ -223,10 +223,11 @@ void writeMptActivation(PruneBackend& backend, bcos::protocol::BlockNumber activ
 }
 
 /// A StateRootLookup over a recorded (block → stateRoot) map; absent blocks report nullopt.
-Pruner::StateRootLookup rootLookupOf(std::map<bcos::protocol::BlockNumber, bcos::h256> const& roots)
+Pruner::StateRootLookup rootLookupOf(
+    std::map<bcos::protocol::BlockNumber, bcos::h256> const& roots)
 {
-    return [&roots](
-               bcos::protocol::BlockNumber number) -> bcos::task::Task<std::optional<bcos::h256>> {
+    return [&roots](bcos::protocol::BlockNumber number)
+               -> bcos::task::Task<std::optional<bcos::h256>> {
         auto const it = roots.find(number);
         co_return it == roots.end() ? std::nullopt : std::optional<bcos::h256>{it->second};
     };
@@ -262,8 +263,8 @@ void runEmptyBlocks(PruneBackend& backend, Pruner& pruner, bcos::protocol::Block
 /// One block of the account-trie chain the pruning tests drive, in the production commit order:
 /// build the trie delta → flush its nodes → prepare + apply the pruning batch + onCommit (the
 /// deletions of expired nodes, the prewriteStorage stand-in). Returns the delta for inspection.
-MPTDeltaLayer commitAccountBlock(PruneBackend& backend, BackendNodeStorage& nodes, Pruner& pruner,
-    std::map<bcos::Address, Account>& accounts, bcos::h256 priorRoot,
+MPTDeltaLayer commitAccountBlock(PruneBackend& backend, BackendNodeStorage& nodes,
+    Pruner& pruner, std::map<bcos::Address, Account>& accounts, bcos::h256 priorRoot,
     std::map<bcos::Address, std::optional<Account>> const& accountChanges,
     bcos::protocol::BlockNumber blockNumber)
 {
@@ -362,7 +363,8 @@ BOOST_AUTO_TEST_CASE(SummaryLogIntervalFloorsAtHundred)
     // prune window from printing one line per block.
     BOOST_CHECK_EQUAL(Pruner::summaryLogInterval(0), Pruner::SUMMARY_LOG_MIN_INTERVAL);
     BOOST_CHECK_EQUAL(Pruner::summaryLogInterval(1), Pruner::SUMMARY_LOG_MIN_INTERVAL);
-    BOOST_CHECK_EQUAL(Pruner::summaryLogInterval(100), Pruner::SUMMARY_LOG_MIN_INTERVAL);
+    BOOST_CHECK_EQUAL(
+        Pruner::summaryLogInterval(100), Pruner::SUMMARY_LOG_MIN_INTERVAL);
     BOOST_CHECK_EQUAL(Pruner::summaryLogInterval(101), 101);
     BOOST_CHECK_EQUAL(Pruner::summaryLogInterval(10'000), 10'000);
 }
@@ -633,8 +635,9 @@ BOOST_AUTO_TEST_CASE(CrossTrieSharingSurvivesUntilLastReferenceDrops)
     constexpr int64_t N = 3;
     Pruner pruner(backend, N);
 
-    std::map<bcos::h256, bcos::bytes> const content{{makeHash(0x11), bcos::bytes{0x01}},
-        {makeHash(0x22), bcos::bytes(40, 0x02)}, {makeHash(0x33), bcos::bytes(20, 0x03)}};
+    std::map<bcos::h256, bcos::bytes> const content{
+        {makeHash(0x11), bcos::bytes{0x01}}, {makeHash(0x22), bcos::bytes(40, 0x02)},
+        {makeHash(0x33), bcos::bytes(20, 0x03)}};
     std::map<bcos::h256, std::optional<bcos::bytes>> const contentChanges{
         content.begin(), content.end()};
 
@@ -791,8 +794,7 @@ BOOST_AUTO_TEST_CASE(WindowedRandomWorkloadInvariants)
                 changes[address] = makePruneAccount(++versions[address], 1000 + rng() % 1000);
             }
         }
-        auto const delta =
-            commitAccountBlock(backend, nodes, pruner, accounts, root, changes, block);
+        auto const delta = commitAccountBlock(backend, nodes, pruner, accounts, root, changes, block);
         root = delta.stateRoot;
         history.push_back(Version{.number = block, .root = root, .accounts = accounts});
         while (history.size() > static_cast<size_t>(N) + 1)
@@ -809,8 +811,8 @@ BOOST_AUTO_TEST_CASE(WindowedRandomWorkloadInvariants)
             size_t proven = 0;
             for (auto const& [address, account] : version.accounts)
             {
-                auto proof = bcos::task::syncWait(
-                    generateProof(nodes, version.root, address, std::span<bcos::h256 const>{}));
+                auto proof = bcos::task::syncWait(generateProof(
+                    nodes, version.root, address, std::span<bcos::h256 const>{}));
                 BOOST_REQUIRE_MESSAGE(std::holds_alternative<EIP1186Proof>(proof),
                     "window root failed generateProof at block " << version.number);
                 ++proven;
@@ -861,8 +863,7 @@ BOOST_AUTO_TEST_CASE(OnCommitAdvancesWatermarkAfterBatchDeletion)
             auto const older = makeAddress(static_cast<uint8_t>(block - 1));
             changes[older] = makePruneAccount(++versions[older], 7 * block);
         }
-        auto const delta =
-            commitAccountBlock(backend, nodes, pruner, accounts, root, changes, block);
+        auto const delta = commitAccountBlock(backend, nodes, pruner, accounts, root, changes, block);
         root = delta.stateRoot;
         history.emplace_back(block, root);
     }
@@ -940,7 +941,8 @@ BOOST_AUTO_TEST_CASE(RebuildCountsCrossTrieSharing)
     Pruner pruner(backend, N);
 
     std::map<bcos::h256, std::optional<bcos::bytes>> const storageChanges{
-        {makeHash(0x11), bcos::bytes{0x01}}, {makeHash(0x22), bcos::bytes(40, 0x02)},
+        {makeHash(0x11), bcos::bytes{0x01}},
+        {makeHash(0x22), bcos::bytes(40, 0x02)},
         {makeHash(0x33), bcos::bytes(20, 0x03)}};
     auto resultA = bcos::task::syncWait(commitTrie(nodes, emptyRootHash(), storageChanges));
     auto resultB = bcos::task::syncWait(commitTrie(nodes, emptyRootHash(), storageChanges));
@@ -1102,8 +1104,8 @@ BOOST_AUTO_TEST_CASE(RebuildAfterRestartMatchesIncrementalState)
             size_t proven = 0;
             for (auto const& [address, account] : accountsAt[v])
             {
-                auto proof = bcos::task::syncWait(
-                    generateProof(nodes, roots[v], address, std::span<bcos::h256 const>{}));
+                auto proof = bcos::task::syncWait(generateProof(
+                    nodes, roots[v], address, std::span<bcos::h256 const>{}));
                 BOOST_REQUIRE_MESSAGE(std::holds_alternative<EIP1186Proof>(proof),
                     "post-restart window root failed generateProof at block " << v);
                 if (++proven >= 2)
@@ -1133,8 +1135,7 @@ BOOST_AUTO_TEST_CASE(RebuildDeletesSmallGarbageAtStartup)
     {
         std::map<bcos::Address, std::optional<Account>> changes;
         changes[makeAddress(static_cast<uint8_t>(block))] = makePruneAccount(0, 10 * block);
-        auto const delta =
-            commitAccountBlock(backend, nodes, prunerA, accounts, root, changes, block);
+        auto const delta = commitAccountBlock(backend, nodes, prunerA, accounts, root, changes, block);
         root = delta.stateRoot;
         roots[block] = root;
     }
@@ -1254,7 +1255,8 @@ BOOST_AUTO_TEST_CASE(StartupSweepEnabled)
                 // garbage keys order by their trailing counter) is already deleted, the last
                 // garbage row is still on disk awaiting the scan.
                 BOOST_CHECK(!nodeRowExists(backend, garbageHash(0)));
-                BOOST_CHECK(!nodeRowExists(backend, garbageHash(Pruner::SWEEP_DELETE_CHUNK - 1)));
+                BOOST_CHECK(
+                    !nodeRowExists(backend, garbageHash(Pruner::SWEEP_DELETE_CHUNK - 1)));
                 BOOST_CHECK(nodeRowExists(backend, garbageHash(garbageCount - 1)));
             }
         }));
@@ -1293,15 +1295,14 @@ BOOST_AUTO_TEST_CASE(RebuildTruncatesAtScenarioAActivation)
     {
         std::map<bcos::Address, std::optional<Account>> changes;
         changes[makeAddress(static_cast<uint8_t>(block))] = makePruneAccount(0, block);
-        auto const delta =
-            commitAccountBlock(backend, nodes, prunerA, accounts, root, changes, block);
+        auto const delta = commitAccountBlock(backend, nodes, prunerA, accounts, root, changes, block);
         root = delta.stateRoot;
         roots[block] = root;
     }
 
     Pruner prunerB(backend, N);
-    BOOST_CHECK_NO_THROW(
-        bcos::task::syncWait(prunerB.init(8, rootLookupOf(roots), /*sweepGarbage=*/false)));
+    BOOST_CHECK_NO_THROW(bcos::task::syncWait(
+        prunerB.init(8, rootLookupOf(roots), /*sweepGarbage=*/false)));
 
     // The rebuilt counts cover every node of blocks 6..8 — the whole post-activation history.
     std::unordered_set<bcos::h256> allLive;
@@ -1441,7 +1442,8 @@ BOOST_AUTO_TEST_CASE(ShrinkChurnWidenRebuildsCleanly)
         {
             std::map<bcos::Address, std::optional<Account>> changes;
             changes[makeAddress(static_cast<uint8_t>(block))] = makePruneAccount(0, 10 * block);
-            changes[makeAddress(static_cast<uint8_t>(block - 3))] = makePruneAccount(2, 10 * block);
+            changes[makeAddress(static_cast<uint8_t>(block - 3))] =
+                makePruneAccount(2, 10 * block);
             root = commitAccountBlock(backend, nodes, prunerB, accounts, root, changes, block)
                        .stateRoot;
             roots[block] = root;
@@ -1547,8 +1549,7 @@ BOOST_AUTO_TEST_CASE(RebuildFailsLoudOnMissingNode)
 
     std::map<bcos::protocol::BlockNumber, bcos::h256> const roots{{1, makeHash(0x01)}};
     BOOST_CHECK_THROW(
-        bcos::task::syncWait(pruner.init(1, rootLookupOf(roots), /*sweepGarbage=*/false)),
-        MPTInvariantViolation);
+        bcos::task::syncWait(pruner.init(1, rootLookupOf(roots), /*sweepGarbage=*/false)), MPTInvariantViolation);
 }
 
 BOOST_AUTO_TEST_CASE(NewNodesGuardKeepsQueueEntryForRecheck)

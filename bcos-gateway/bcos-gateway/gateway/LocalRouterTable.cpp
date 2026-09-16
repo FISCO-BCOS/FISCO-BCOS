@@ -32,15 +32,15 @@ using namespace bcos::front;
 using namespace bcos::crypto;
 
 LocalRouterTable::LocalRouterTable(bcos::crypto::KeyFactory::Ptr _keyFactory)
-  : m_keyFactory(_keyFactory)
+    : m_keyFactory(_keyFactory)
 {}
 
 LocalRouterTable::~LocalRouterTable() = default;
 
 LocalRouterTable::GroupNodeListType LocalRouterTable::nodeList() const
 {
-    ReadGuard guard(x_nodeList);
-    return m_nodeList;
+        ReadGuard guard(x_nodeList);
+        return m_nodeList;
 }
 
 FrontServiceInfo::Ptr LocalRouterTable::getFrontService(
@@ -299,11 +299,11 @@ bool LocalRouterTable::broadcastMsg(uint16_t _nodeType, const std::string& _grou
                 co_await _frontService->onReceiveMessage(_groupID, _srcNodeID, _msg->payload());
             if (error)
             {
-                GATEWAY_LOG(ERROR)
-                    << LOG_DESC("ROUTER_LOG error") << LOG_KV("groupID", _groupID)
-                    << LOG_KV("moduleID", _moduleID) << LOG_KV("src", _srcNodeID->hex())
-                    << LOG_KV("dst", _dstNodeID) << LOG_KV("code", error->errorCode())
-                    << LOG_KV("msg", error->errorMessage());
+                GATEWAY_LOG(ERROR) << LOG_DESC("ROUTER_LOG error") << LOG_KV("groupID", _groupID)
+                                   << LOG_KV("moduleID", _moduleID)
+                                   << LOG_KV("src", _srcNodeID->hex()) << LOG_KV("dst", _dstNodeID)
+                                   << LOG_KV("code", error->errorCode())
+                                   << LOG_KV("msg", error->errorMessage());
             }
         }(frontService, _groupID, _moduleID, _srcNodeID, _msg, dstNodeID));
     }
@@ -312,8 +312,8 @@ bool LocalRouterTable::broadcastMsg(uint16_t _nodeType, const std::string& _grou
 
 
 // send message to the local nodes
-task::Task<bcos::Error::Ptr> LocalRouterTable::sendMessage(
-    std::string _groupID, NodeIDPtr _srcNodeID, NodeIDPtr _dstNodeID, bytesConstRef _payload)
+task::Task<bcos::Error::Ptr> LocalRouterTable::sendMessage(std::string _groupID,
+    NodeIDPtr _srcNodeID, NodeIDPtr _dstNodeID, bytesConstRef _payload)
 {
     auto frontServiceInfo = getFrontService(_groupID, _dstNodeID);
     if (!frontServiceInfo)

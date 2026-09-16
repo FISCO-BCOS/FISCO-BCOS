@@ -54,8 +54,7 @@ constexpr int64_t c_pruneWindow = 2;
 /// The committed-state backend type: MultiLayerStorage::latestBackend() is the checkpoint
 /// storage's OPENED handle (RocksDBStorage2) — what the pruner and the production
 /// initializer (decltype over the same expression) are parameterized on.
-using FCBackend =
-    std::remove_cvref_t<decltype(std::declval<FCMultiLayerStorage&>().latestBackend())>;
+using FCBackend = std::remove_cvref_t<decltype(std::declval<FCMultiLayerStorage&>().latestBackend())>;
 using FCPruner = mpt::MPTPruner<FCBackend>;
 
 /// The production init lookup (Initializer.cpp): the committed header's stateRoot, nullopt
@@ -94,12 +93,11 @@ size_t pruneMetadataRowCount(FCBackend& backend)
 /// A SYS_CONFIG row a governance action would write ({value, enableNumber}); the engine's
 /// getLedgerConfig reads the executor_version / evmc_revision pair through the same
 /// production readFromStorage path as the features.
-void writeSysConfig(FullChainFixture& fixture, std::string_view key, std::string value,
-    protocol::BlockNumber enableNumber = 0)
+void writeSysConfig(
+    FullChainFixture& fixture, std::string_view key, std::string value, protocol::BlockNumber enableNumber = 0)
 {
     storage::Entry entry;
-    entry.set(
-        storage::serialize::encode(ledger::SystemConfigEntry{std::move(value), enableNumber}));
+    entry.set(storage::serialize::encode(ledger::SystemConfigEntry{std::move(value), enableNumber}));
     task::syncWait(storage2::writeOne(fixture.m_multiLayerStorage.latestBackend(),
         executor_v1::StateKey{ledger::SYS_CONFIG, key}, std::move(entry)));
 }
@@ -117,8 +115,8 @@ public:
 /// transactions have no EIP-2718 wire form and are excluded). The stub scheduler never
 /// executes it, so only encodability matters. One fresh nonce per block keeps the tx
 /// hashes distinct across blocks.
-protocol::Transaction::Ptr makeWeb3Tx(
-    crypto::Hash const& hashImpl, std::string_view senderBytes, uint64_t nonce)
+protocol::Transaction::Ptr makeWeb3Tx(crypto::Hash const& hashImpl, std::string_view senderBytes,
+    uint64_t nonce)
 {
     bytes body;
     bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));  // chainId
@@ -162,8 +160,7 @@ struct StubMemPool
 
     void remove(storage2::ReadableStorage<executor_v1::StateKeyView> auto& /*state*/) {}
     void seal(int64_t /*limit*/,
-        storage2::ReadWriteStorage<executor_v1::StateKeyView,
-            executor_v1::StateValue> auto& /*state*/,
+        storage2::ReadWriteStorage<executor_v1::StateKeyView, executor_v1::StateValue> auto& /*state*/,
         std::output_iterator<protocol::Transaction::Ptr> auto out)
     {
         if (m_tx)
@@ -192,8 +189,8 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoEngineCommitPath)
     // (forkchoiceUpdatedV3 / getPayloadV3 / newPayloadV3).
     writeSysConfig(fixture, magic_enum::enum_name(ledger::SystemConfig::executor_version),
         std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
-    writeSysConfig(fixture, ledger::SYSTEM_KEY_EVMC_REVISION,
-        ledger::encodeEVMCRevisionConfig(EVMC_CANCUN, {}));
+    writeSysConfig(
+        fixture, ledger::SYSTEM_KEY_EVMC_REVISION, ledger::encodeEVMCRevisionConfig(EVMC_CANCUN, {}));
 
     auto& backend = fixture.m_multiLayerStorage.latestBackend();
     auto pruner = std::make_shared<FCPruner>(backend, c_pruneWindow);
@@ -210,11 +207,13 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoEngineCommitPath)
     auto const genesisHash = task::syncWait(ledger::getBlockHash(*fixture.m_ledger, 0));
     // Whole-second millisecond timestamps, strictly past the genesis header's (the Eth RLP
     // boundary rejects sub-second timestamps).
-    auto const baseTimestamp = (fixture.headerOnChain(0)->timestamp() / 1000 + 1) * 1000;
+    auto const baseTimestamp =
+        (fixture.headerOnChain(0)->timestamp() / 1000 + 1) * 1000;
 
     auto const addressA = FullChainFixture::makeAddress(0xA5);
     auto const sender = FullChainFixture::makeAddress(0xB0);
-    std::string const senderBytes(reinterpret_cast<char const*>(sender.data()), sender.size());
+    std::string const senderBytes(
+        reinterpret_cast<char const*>(sender.data()), sender.size());
 
     constexpr protocol::BlockNumber c_head = 8;
     std::map<protocol::BlockNumber, h256> roots;
@@ -232,7 +231,8 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoEngineCommitPath)
 
         bcos::engine::ForkchoiceState forkchoiceState{headHash, headHash, headHash};
         bcos::engine::PayloadAttributes payloadAttributes;
-        payloadAttributes.timestamp = static_cast<std::uint64_t>(baseTimestamp + number * 12000);
+        payloadAttributes.timestamp =
+            static_cast<std::uint64_t>(baseTimestamp + number * 12000);
         payloadAttributes.prevRandao =
             fixture.m_hashImpl->hash(std::string("randao") + std::to_string(number));
         payloadAttributes.suggestedFeeRecipient =
@@ -245,8 +245,7 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoEngineCommitPath)
             engineService.updateForkchoice(forkchoiceState, &payloadAttributes, /*version=*/3));
         BOOST_REQUIRE_MESSAGE(fcResult.payloadId.has_value(),
             "forkchoiceUpdated returned no payload id for block " + std::to_string(number) +
-                (fcResult.payloadStatus.validationError ? *fcResult.payloadStatus.validationError :
-                                                          ""));
+                (fcResult.payloadStatus.validationError ? *fcResult.payloadStatus.validationError : ""));
         auto payload = task::syncWait(engineService.getPayload(*fcResult.payloadId, /*version=*/3));
         BOOST_REQUIRE(payload);
         BOOST_REQUIRE_EQUAL(payload->executionPayload.blockNumber, number);
@@ -256,7 +255,8 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoEngineCommitPath)
         request.executionPayload = payload->executionPayload;
         request.parentBeaconBlockRoot = payload->parentBeaconBlockRoot;
         auto status = task::syncWait(engineService.newPayload(request, /*version=*/3));
-        BOOST_REQUIRE_MESSAGE(status.status == bcos::engine::PayloadValidationStatus::Valid,
+        BOOST_REQUIRE_MESSAGE(
+            status.status == bcos::engine::PayloadValidationStatus::Valid,
             "newPayload rejected block " + std::to_string(number) +
                 (status.validationError ? ": " + *status.validationError : ""));
         headHash = payload->executionPayload.blockHash;

@@ -47,9 +47,9 @@ public:
         bool notifyTransactions = true)
     {
         auto baselineScheduler = std::make_shared<BaselineScheduler<initializer::GlobalStateStorage,
-            Executor, SchedulerType, ledger::LedgerInterface>>(storageInitializer->storage(),
-            *scheduler, *transactionExecutor, *blockFactory, *ledger, *txpool,
-            *transactionSubmitResultFactory, *blockFactory->cryptoSuite()->hashImpl());
+            Executor, SchedulerType, ledger::LedgerInterface>>(
+            storageInitializer->storage(), *scheduler, *transactionExecutor, *blockFactory, *ledger,
+            *txpool, *transactionSubmitResultFactory, *blockFactory->cryptoSuite()->hashImpl());
         // MPT pruning seam (CommitObserver.h): a null observer keeps the built-in Noop — the
         // scheduler then pays nothing on the commit path (setMPTCommitObserver contract) and
         // skips the refCountDeltas tally on the execute path (needsRefCountDeltas).

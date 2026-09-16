@@ -1188,8 +1188,8 @@ BOOST_AUTO_TEST_CASE(new_payload_concurrent_duplicate_is_idempotent)
     auto duplicateFuture = duplicateDone.get_future();
     std::thread duplicateAttempt(
         [&]() { duplicateDone.set_value(task::syncWait(engineService.newPayload(honest, 3))); });
-    BOOST_CHECK(
-        duplicateFuture.wait_for(std::chrono::milliseconds(200)) == std::future_status::timeout);
+    BOOST_CHECK(duplicateFuture.wait_for(std::chrono::milliseconds(200)) ==
+                std::future_status::timeout);
 
     gatedLedger->m_release = true;
     firstAttempt.join();

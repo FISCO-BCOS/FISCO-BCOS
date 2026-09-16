@@ -60,7 +60,8 @@ BOOST_FIXTURE_TEST_SUITE(FIB184_SessionAsyncLifetimeTest, TestPromptFixture)
 class FakeASIO_Lifetime : public bcos::gateway::ASIOInterface
 {
 public:
-    using ReadCompletion = task::detail::FireCompletion<boost::system::error_code, std::size_t>;
+    using ReadCompletion =
+        task::detail::FireCompletion<boost::system::error_code, std::size_t>;
 
     FakeASIO_Lifetime()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_Lifetime"), "0.0.0.0", 0)
@@ -81,7 +82,10 @@ public:
 
     // Read-policy target (see FakeASIO_Lifetime::ReadPolicy): park the read's completion in a
     // manually-fired slot so a test can hold a read "in flight" and complete it deterministically.
-    void parkRead(ReadCompletion completion) { m_readHandler.emplace(std::move(completion)); }
+    void parkRead(ReadCompletion completion)
+    {
+        m_readHandler.emplace(std::move(completion));
+    }
 
     bool hasReadHandler() const { return m_readHandler.has_value(); }
 

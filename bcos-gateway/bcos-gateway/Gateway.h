@@ -117,8 +117,8 @@ public:
     task::Task<Error::Ptr> subscribeTopic(
         std::string const& _clientID, std::string const& _topicInfo) override;
 
-    task::Task<Error::Ptr> removeTopic(
-        std::string const& _clientID, std::vector<std::string> const& _topicList) override;
+    task::Task<Error::Ptr> removeTopic(std::string const& _clientID,
+        std::vector<std::string> const& _topicList) override;
 
     bcos::amop::AMOPImpl::Ptr amop();
 

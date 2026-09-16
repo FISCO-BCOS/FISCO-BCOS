@@ -79,8 +79,8 @@ BOOST_AUTO_TEST_CASE(storageConfigMptPruneValidation)
     LoaderProbe windowOk;
     BOOST_CHECK_NO_THROW(windowOk.loadStorageConfig(fromIni("[storage]\nmpt_prune_window=128\n")));
     BOOST_CHECK_EQUAL(windowOk.mptPruneWindow(), 128);
-    for (auto const* bad :
-        {"mpt_prune_window=0\n", "mpt_prune_window=-2\n", "mpt_prune_window=10000001\n"})
+    for (auto const* bad : {"mpt_prune_window=0\n", "mpt_prune_window=-2\n",
+             "mpt_prune_window=10000001\n"})
     {
         LoaderProbe probe;
         BOOST_CHECK_THROW(probe.loadStorageConfig(fromIni(std::string("[storage]\n") + bad)),
