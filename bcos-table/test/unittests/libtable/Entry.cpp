@@ -609,16 +609,6 @@ struct TestValueA
         nameLen = static_cast<int32_t>(std::min(n.size(), nameBuf.size()));
         std::memcpy(nameBuf.data(), n.data(), nameLen);
     }
-    TestValueA(bytesConstRef data)
-    {
-        if (data.size() < 8)
-            return;
-        std::memcpy(&id, data.data(), 4);
-        std::memcpy(&nameLen, data.data() + 4, 4);
-        auto actualLen = std::min(static_cast<size_t>(nameLen), nameBuf.size());
-        if (data.size() >= 8 + actualLen)
-            std::memcpy(nameBuf.data(), data.data() + 8, actualLen);
-    }
     void encode(auto&& sink) const
     {
         uint8_t buf[32];
@@ -642,11 +632,6 @@ struct TestValueB
 
     TestValueB() = default;
     explicit TestValueB(int64_t v) : value(v) {}
-    TestValueB(bytesConstRef data)
-    {
-        if (data.size() >= 8)
-            std::memcpy(&value, data.data(), 8);
-    }
     void encode(auto&& sink) const
     {
         sink(bytesConstRef(reinterpret_cast<const bcos::byte*>(&value), 8));
@@ -662,21 +647,11 @@ void tag_invoke(bcos::storage::encode_t, const TestValueA& v, Sink&& sink)
 {
     v.encode(std::forward<Sink>(sink));
 }
-TestValueA tag_invoke(
-    bcos::storage::decode_t, std::type_identity<TestValueA>, bytesConstRef data)
-{
-    return TestValueA{data};
-}
 
 template <typename Sink>
 void tag_invoke(bcos::storage::encode_t, const TestValueB& v, Sink&& sink)
 {
     v.encode(std::forward<Sink>(sink));
-}
-TestValueB tag_invoke(
-    bcos::storage::decode_t, std::type_identity<TestValueB>, bytesConstRef data)
-{
-    return TestValueB{data};
 }
 
 // ─── Typed Entry tests ─────────────────────────────────────────────
@@ -717,11 +692,11 @@ BOOST_AUTO_TEST_CASE(setTypedGetTypedDifferentType)
     BOOST_TEST(!entry.holdsType<TestValueB>());
 }
 
-BOOST_AUTO_TEST_CASE(lazyDecodeFromByteMode)
+BOOST_AUTO_TEST_CASE(getTypedDoesNotDecodeByteMode)
 {
-    // Start with a byte-mode Entry (simulating data from RocksDB)
+    // Start with a byte-mode Entry (simulating data loaded from storage)
     Entry entry;
-    TestValueA original{99, "lazy"};
+    TestValueA original{99, "byte"};
     std::string encoded;
     encode(original, [&encoded](bytesConstRef d) {
         encoded.append(reinterpret_cast<const char*>(d.data()), d.size());
@@ -732,20 +707,16 @@ BOOST_AUTO_TEST_CASE(lazyDecodeFromByteMode)
     BOOST_TEST(!entry.holdsType<TestValueA>());
     BOOST_TEST(!entry.holdsType<TestValueB>());
 
-    // First getTyped triggers lazy decode
+    // getTyped never decodes: byte-mode entries return nullptr
     auto* ptr = entry.getTyped<TestValueA>();
-    BOOST_REQUIRE(ptr != nullptr);
-    BOOST_CHECK_EQUAL(ptr->id, 99);
-    BOOST_CHECK_EQUAL(ptr->nameStr(), "lazy");
+    BOOST_TEST(ptr == nullptr);
 
-    // After lazy decode, entry holds the typed model
-    BOOST_TEST(entry.holdsType<TestValueA>());
+    // The lookup has no side effects — the entry stays in byte-mode
+    BOOST_TEST(!entry.holdsType<TestValueA>());
     BOOST_TEST(!entry.holdsType<TestValueB>());
 
-    // Second getTyped is O(1) — no re-decode
-    auto* ptr2 = entry.getTyped<TestValueA>();
-    BOOST_REQUIRE(ptr2 != nullptr);
-    BOOST_CHECK(ptr == ptr2);  // Same pointer, same TypedHolderModel instance
+    // Raw bytes remain accessible
+    BOOST_CHECK_EQUAL(std::string(entry.get()), encoded);
 }
 
 BOOST_AUTO_TEST_CASE(encodeToBytesAfterSetTyped)

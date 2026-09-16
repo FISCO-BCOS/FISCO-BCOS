@@ -1,3 +1,4 @@
+#include "bcos-framework/storage/Common.h"
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include <bcos-utilities/BoostLog.h>
