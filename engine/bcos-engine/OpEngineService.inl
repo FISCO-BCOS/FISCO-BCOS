@@ -90,6 +90,7 @@ OpBaseFeeClock OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerTyp
         .parentIsHolocene = extraDataLayoutFor(parentFork) != OpExtraDataLayout::Empty,
         .parentIsJovian = extraDataLayoutFor(parentFork) == OpExtraDataLayout::Jovian17,
         .newBlockIsCanyon = newForkId != OpForkId::Regolith,
+        .eip1559 = m_eip1559,
     };
 }
 
@@ -581,7 +582,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
             .baseFeePerGas = baseFee,
             .blockHash = h256{},
             .transactions = std::move(candidateTransactions),
-            .extraData = detail::encodeOptimismExtraData(payloadAttributes),
+            .extraData = detail::encodeOptimismExtraData(payloadAttributes, m_eip1559),
             .feeRecipient = payloadAttributes.suggestedFeeRecipient,
             .timestamp = payloadAttributes.timestamp,
             .blockNumber = nextBlockNumber,

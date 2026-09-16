@@ -22,6 +22,7 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/engine/Constants.h>
 #include <bcos-framework/engine/Errors.h>
+#include <bcos-framework/engine/OpEip1559Params.h>
 #include <bcos-framework/engine/OpForkId.h>
 #include <bcos-framework/engine/RawTransactionDispatch.h>
 #include <bcos-framework/engine/Types.h>
@@ -65,8 +66,16 @@ using BuiltPayloadPtr = std::shared_ptr<const BuiltPayload>;
 
 namespace detail
 {
-/// Holocene/Jovian extraData from CL attributes. Attribute 0,0 becomes Canyon 250/6
-/// (op-core EncodeHoloceneExtraData / EncodeJovianExtraData).
+/// Holocene/Jovian extraData from CL attributes. Attribute 0,0 becomes the chain's Canyon pair
+/// (op-core EncodeHoloceneExtraData / EncodeJovianExtraData): op-node sends all-zero params
+/// when its L1 SystemConfig carries none, and the only value this node can justify is the one
+/// the chain declared in [op_eip1559]. The default keeps every non-OP caller (the Eth lane)
+/// behaviourally unchanged.
+bcos::bytes encodeOptimismExtraData(
+    const PayloadAttributes& payloadAttributes, OpEip1559Params eip1559);
+/// The legacy-preset form: every undeclared chain (and the Eth lane) prices with
+/// kLegacyOpEip1559Params. A separate overload rather than a defaulted parameter — a default
+/// declared in this header clashed with the redeclaration in EngineServiceImpl.h.
 bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes);
 
 std::optional<std::string> validateExecutionPayload(

@@ -709,12 +709,21 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // EngineServiceImpl is test-only (EthLegacyEngine / parity). buildOp still takes
         // maxEngineVersion=V4 and the Karst profile discards it in favor of timestamp-keyed
         // getPayload V4/V5.
+        // The chain's EIP-1559 triple (config.genesis [op_eip1559], legacy preset when
+        // undeclared) prices every pre-Holocene block; resolved through the SAME
+        // effectiveOpEip1559 the genesis pin uses, so admission and the pin cannot disagree.
+        auto const opEip1559 =
+            bcos::engine::effectiveOpEip1559(m_nodeConfig->genesisConfig().m_opEip1559);
+        INITIALIZER_LOG(INFO) << LOG_DESC("OP chain EIP-1559 parameters")
+                              << LOG_KV("elasticity", opEip1559.elasticity)
+                              << LOG_KV("denominator", opEip1559.denominator)
+                              << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
         m_engineServiceInitializer = EngineServiceInitializer::buildOp(
             m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
             m_memPoolInitializer->memPool(), /*ledger=*/nullptr,
             bcos::engine::c_defaultBlockTxCountLimit, opDelegate,
             /*maxEngineVersion=*/static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4), m_daCaps,
-            /*allowSynthesizedL1Attributes=*/false);
+            /*allowSynthesizedL1Attributes=*/false, opEip1559);
 
         m_opScheduler = opDelegate;
         // Republish the full ledger configuration after every OP commit. OP commits go

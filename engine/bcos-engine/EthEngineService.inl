@@ -664,7 +664,8 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
 
     // Match release EngineServiceImpl: stamp OP extraData and derive the Eth header fork
     // from the on-chain EVM revision, not from the Engine API method version.
-    bytes extraData = detail::encodeOptimismExtraData(payloadAttributes);
+    bytes extraData = detail::encodeOptimismExtraData(
+        payloadAttributes, bcos::engine::kLegacyOpEip1559Params);
 
     ExecutionPayload executionPayload{
         .logsBloom = Bloom{},

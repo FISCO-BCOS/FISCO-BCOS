@@ -280,6 +280,13 @@ namespace bcos::engine::detail
 
 bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes)
 {
+    // The legacy preset: the behaviour every undeclared chain and the Eth lane has always had.
+    return encodeOptimismExtraData(payloadAttributes, bcos::engine::kLegacyOpEip1559Params);
+}
+
+bcos::bytes encodeOptimismExtraData(
+    const PayloadAttributes& payloadAttributes, OpEip1559Params eip1559)
+{
     if (!payloadAttributes.eip1559Params.has_value())
     {
         // Pre-Holocene: extraData must be empty (op-core/eip1559/eip1559.go:27-28).
@@ -294,8 +301,11 @@ bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes)
     auto [denominator, elasticity] = decodeEip1559Params(*payloadAttributes.eip1559Params);
     if (denominator == 0 && elasticity == 0)
     {
-        denominator = bcos::engine::kLegacyOpEip1559Params.denominatorCanyon;
-        elasticity = bcos::engine::kLegacyOpEip1559Params.elasticity;
+        // op-node's zero params (its L1 SystemConfig carries none): encode the CHAIN's Canyon
+        // pair rather than a hardcoded preset, so a chain whose [op_eip1559] says (8, 2, 250)
+        // encodes (250, 2) — the only Canyon pair this node can justify for that chain.
+        denominator = eip1559.denominatorCanyon;
+        elasticity = eip1559.elasticity;
     }
 
     bool jovian = payloadAttributes.minBaseFee.has_value();

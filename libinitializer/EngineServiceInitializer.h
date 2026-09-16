@@ -94,7 +94,8 @@ public:
         bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
         std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4),
         std::shared_ptr<bcos::engine::DACaps> daCaps = nullptr,
-        bool allowSynthesizedL1Attributes = false)
+        bool allowSynthesizedL1Attributes = false,
+        bcos::engine::OpEip1559Params eip1559 = bcos::engine::kLegacyOpEip1559Params)
     {
         auto initializer = Ptr(new EngineServiceInitializer());
         using ConcreteEngineService = bcos::engine::OpEngineService<bcos::txpool::MemPoolImpl,
@@ -102,7 +103,7 @@ public:
         auto holder = std::make_shared<ConcreteOpModel<SchedulerType, ConcreteEngineService>>(
             std::move(storageInitializer), std::move(blockFactory), std::move(scheduler), memPool,
             std::move(ledger), blockTxCountLimit, std::move(delegate), maxEngineVersion,
-            std::move(daCaps), allowSynthesizedL1Attributes);
+            std::move(daCaps), allowSynthesizedL1Attributes, eip1559);
         initializer->m_holder = holder;
         initializer->m_engineService =
             std::shared_ptr<bcos::engine::AnyEngineService>(holder, &holder->m_any);
@@ -156,14 +157,15 @@ private:
             std::shared_ptr<SchedulerType> scheduler, bcos::txpool::MemPoolImpl& memPool,
             bcos::ledger::LedgerInterface::Ptr ledger, int64_t blockTxCountLimit,
             bcos::scheduler::SchedulerInterface::Ptr delegate, std::uint32_t maxEngineVersion,
-            std::shared_ptr<bcos::engine::DACaps> daCaps, bool allowSynthesizedL1Attributes)
+            std::shared_ptr<bcos::engine::DACaps> daCaps, bool allowSynthesizedL1Attributes,
+            bcos::engine::OpEip1559Params eip1559)
           : m_storageInitializer(std::move(storageInitializer)),
             m_memPool(memPool),
             m_scheduler(std::move(scheduler)),
             m_any(std::in_place_type<ConcreteEngineService>, m_memPool,
                 m_storageInitializer->storage(), *m_scheduler, std::move(blockFactory),
                 blockTxCountLimit, std::move(delegate), std::move(daCaps),
-                allowSynthesizedL1Attributes)
+                allowSynthesizedL1Attributes, eip1559)
         {
             (void)ledger;
             (void)maxEngineVersion;

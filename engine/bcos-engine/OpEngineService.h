@@ -148,7 +148,8 @@ public:
         SchedulerType& scheduler, bcos::protocol::BlockFactory::Ptr blockFactory,
         int64_t blockTxCountLimit = c_defaultBlockTxCountLimit,
         bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
-        std::shared_ptr<DACaps> daCaps = nullptr, bool allowSynthesizedL1Attributes = false)
+        std::shared_ptr<DACaps> daCaps = nullptr, bool allowSynthesizedL1Attributes = false,
+        OpEip1559Params eip1559 = kLegacyOpEip1559Params)
       : m_memPool(memPool),
         m_globalStateStorage(globalStateStorage),
         m_scheduler(scheduler),
@@ -156,7 +157,8 @@ public:
         m_blockTxCountLimit(blockTxCountLimit),
         m_delegate(std::move(delegate)),
         m_daCaps(std::move(daCaps)),
-        m_allowSynthesizedL1Attributes(allowSynthesizedL1Attributes)
+        m_allowSynthesizedL1Attributes(allowSynthesizedL1Attributes),
+        m_eip1559(eip1559)
     {
         if (!m_blockFactory)
         {
@@ -369,6 +371,10 @@ private:
     bcos::scheduler::SchedulerInterface::Ptr m_delegate;
     std::shared_ptr<DACaps> m_daCaps;
     bool m_allowSynthesizedL1Attributes;
+    /// The chain's EIP-1559 triple (config.genesis [op_eip1559]; kLegacyOpEip1559Params when
+    /// undeclared). Injected at boot and never mutated: it is a genesis-frozen chain property,
+    /// so a value that changed mid-flight could not be reconciled with blocks already produced.
+    OpEip1559Params m_eip1559{kLegacyOpEip1559Params};
     /// S5/S6 imported-tree lock (design §4.2): guards the ImportedStore decision
     /// sequence (occupancy check -> put) and the canonicalize gate — NOT the
     /// importExecute execution and NOT any storage co_await. A POSIX mutex must never
