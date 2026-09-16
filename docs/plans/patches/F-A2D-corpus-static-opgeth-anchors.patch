@@ -1,0 +1,215 @@
+diff --git a/opstack-executor/tests/t8n/generator/main.go b/opstack-executor/tests/t8n/generator/main.go
+index 15848a1..ba0919e 100644
+--- a/opstack-executor/tests/t8n/generator/main.go
++++ b/opstack-executor/tests/t8n/generator/main.go
+@@ -3485,6 +3485,26 @@ type staticItem struct {
+ 	fork         string
+ 	mutate       func(payload map[string]interface{}) error
+ 	fiscoMessage string
++	// opGethMessage is the EXTERNAL anchor: op-geth's own rejection wording for
++	// the same malformation, pinned from the op-geth commit recorded in
++	// _op_test_vectors.generator_commit. Format verbs are truncated at the first
++	// verb (both anchors are consumed as substrings). Empty means op-geth has no
++	// counterpart surface for the item -- the field is FISCO-only
++	// (rawTransactions, expectedBlobVersionedHashes), or op-geth accepts the shape
++	// (executionRequests may be non-empty post-Prague). emitStaticSurfaceVector
++	// then falls back to fiscoMessage, the corpus's documented weak anchor
++	// (main_test.go:741). Per-item pins against op-geth e8800cffe53d:
++	//   item 2  eth/catalyst/api_optimism.go:17   checkOptimismPayload
++	//   item 4  eth/catalyst/api.go:754           NewPayloadV4 param check
++	//   item 5  core/block_validator.go:190       post-Isthmus withdrawals root
++	//   item 7  core/block_validator.go:111       Cancun blob-gas branch (derived:
++	//                                             Isthmus takes it, body has no
++	//                                             blobs, so calculated = 0)
++	//   item 10 consensus/misc/eip1559/eip1559_optimism.go:149 via api_optimism.go:22
++	//   item 11 core/block_validator.go:129       equality gate; the range gate at
++	//                                             :132 reads "DA footprint %d
++	//                                             exceeds block gas limit %d"
++	opGethMessage string
+ }
+ 
+ // staticSurfaceItems enumerates the 12 §4c items. ⚠️ Expressibility through the
+@@ -3505,55 +3525,61 @@ var staticSurfaceItems = []staticItem{
+ 	{1, "rawTransactions_missing", "isthmus", func(p map[string]interface{}) error {
+ 		p["transactions"] = nil
+ 		return nil
+-	}, "executionPayload.rawTransactions is required on the OP path"},
++	}, "executionPayload.rawTransactions is required on the OP path", ""},
+ 	{2, "withdrawals_nonempty", "isthmus", func(p map[string]interface{}) error {
+ 		p["withdrawals"] = []map[string]interface{}{
+ 			{"index": "0x0", "validatorIndex": "0x0", "amount": "0x1", "address": "0x0000000000000000000000000000000000000001"},
+ 		}
+ 		return nil
+-	}, "withdrawals must be present and empty on the OP path"},
++	}, "withdrawals must be present and empty on the OP path", "non-empty withdrawals post-Canyon"},
+ 	{3, "expectedBlobVersionedHashes_nonempty", "isthmus", func(p map[string]interface{}) error {
+ 		p["expectedBlobVersionedHashes"] = []string{"0x0000000000000000000000000000000000000000000000000000000000000001"}
+ 		return nil
+-	}, "expectedBlobVersionedHashes must be an empty array on the OP path"},
++	}, "expectedBlobVersionedHashes must be an empty array on the OP path", ""},
+ 	{4, "parentBeaconBlockRoot_missing", "isthmus", func(p map[string]interface{}) error {
+ 		delete(p, "parentBeaconBlockRoot")
+ 		return nil
+-	}, "parentBeaconBlockRoot must be a 32-byte hash for newPayloadV4"},
++	}, "parentBeaconBlockRoot must be a 32-byte hash for newPayloadV4", "nil beaconRoot post-cancun"},
+ 	{5, "withdrawalsRoot_missing", "isthmus", func(p map[string]interface{}) error {
+ 		delete(p, "withdrawalsRoot")
+ 		return nil
+-	}, "withdrawalsRoot is required on the OP path (Isthmus+)"},
++	}, "withdrawalsRoot is required on the OP path (Isthmus+)", "expected withdrawals root in OP-Stack post-Isthmus block header"},
+ 	{6, "excessBlobGas_nonzero", "isthmus", func(p map[string]interface{}) error {
+ 		p["excessBlobGas"] = "0x1"
+ 		return nil
+-	}, "excessBlobGas must be present and zero on the OP path"},
++	}, "excessBlobGas must be present and zero on the OP path", ""},
+ 	{7, "isthmus_blobGasUsed_nonzero", "isthmus", func(p map[string]interface{}) error {
+ 		p["blobGasUsed"] = "0x1"
+ 		return nil
+-	}, "blobGasUsed must be zero before Jovian (OP Isthmus)"},
++	}, "blobGasUsed must be zero before Jovian (OP Isthmus)", "blob gas used mismatch"},
+ 	{8, "blockNumber_negative", "isthmus", func(p map[string]interface{}) error {
+ 		p["blockNumber"] = "0x8000000000000000" // uint64 2^63 wraps to negative int64
+ 		return nil
+-	}, "blockNumber must not be negative"},
++	}, "blockNumber must not be negative", ""},
+ 	{9, "gasLimit_overlimit", "isthmus", func(p map[string]interface{}) error {
+ 		p["gasLimit"] = "0xffffffffffffffff" // 2^64-1 > 2^63-1
+ 		return nil
+-	}, "gasLimit exceeds the maximum block gas limit (2^63-1)"},
++	}, "gasLimit exceeds the maximum block gas limit (2^63-1)", ""},
+ 	{10, "extraData_shape", "isthmus", func(p map[string]interface{}) error {
+ 		p["extraData"] = "0x0000000000000000" // 8 bytes, not 9
+ 		return nil
+-	}, "extraData must be exactly 9 bytes on the OP path (Isthmus)"},
++	}, "extraData must be exactly 9 bytes on the OP path (Isthmus)", "holocene extraData should be 9 bytes"},
+ 	{11, "jovian_da_footprint_over_gaslimit", "jovian", func(p map[string]interface{}) error {
++		// The engine evaluates the DA equality gate BEFORE the range gate, mirroring
++		// op-geth's block validator (core/block_validator.go:129 equality, :132 range).
++		// A payload whose blobGasUsed differs from the locally recomputed footprint is
++		// therefore rejected by the equality branch even when it also exceeds gasLimit.
++		// The stable prefix is used as a substring: the remote/local numbers are
++		// payload-specific.
+ 		p["blobGasUsed"] = "0x2000000" // 2^25 = 33554432 > 10M gasLimit
+ 		return nil
+-	}, "DA footprint (blobGasUsed) exceeds the block gas limit"},
++	}, "invalid DA footprint in blobGasUsed field", "invalid DA footprint in blobGasUsed field"},
+ 	{12, "executionRequests_nonempty", "isthmus", func(p map[string]interface{}) error {
+ 		p["executionRequests"] = []map[string]interface{}{
+ 			{"type": "0x0", "data": "0xdeadbeef"},
+ 		}
+ 		return nil
+-	}, "executionRequests must be absent or empty on the OP path"},
++	}, "executionRequests must be absent or empty on the OP path", ""},
+ }
+ 
+ // buildBasePayload assembles the FULL valid payload of a base block (all base
+@@ -3563,6 +3589,16 @@ func buildBasePayload(base *blockVector) map[string]interface{} {
+ 	return buildOpPayload(base, base.block.Header(), common.HexToHash(base.golden.BlockHash))
+ }
+ 
++// opGethAnchor returns the external (op-geth) anchor for a static item. When
++// op-geth has no counterpart surface the FISCO message stands in for it, the
++// corpus's documented weak anchor (main_test.go:741).
++func opGethAnchor(item staticItem) string {
++	if item.opGethMessage != "" {
++		return item.opGethMessage
++	}
++	return item.fiscoMessage
++}
++
+ // emitStaticSurfaceVector builds the invalid vector document for one §4c static
+ // item: base payload + the item's malformation + the FISCO static reject schema.
+ // All static items reject at validateOpNewPayloadRequest -> INVALID +
+@@ -3586,7 +3622,7 @@ func emitStaticSurfaceVector(base *blockVector, item staticItem) (invalidVectorD
+ 		OpPayload: payload,
+ 		OpExpected: invalidExpected{
+ 			Reject: &rejectExpected{
+-				OpGeth: item.fiscoMessage,
++				OpGeth: opGethAnchor(item),
+ 				Fisco: fiscoReject{
+ 					Consumer:                "engine",
+ 					Classification:          "INVALID",
+diff --git a/opstack-executor/tests/t8n/vectors/invalid_isthmus_transfer_basic_static_10.json b/opstack-executor/tests/t8n/vectors/invalid_isthmus_transfer_basic_static_10.json
+index 660a447..9d46a5b 100644
+--- a/opstack-executor/tests/t8n/vectors/invalid_isthmus_transfer_basic_static_10.json
++++ b/opstack-executor/tests/t8n/vectors/invalid_isthmus_transfer_basic_static_10.json
+@@ -57,7 +57,7 @@
+     },
+     "_op_expected": {
+       "reject": {
+-        "op_geth": "extraData must be exactly 9 bytes on the OP path (Isthmus)",
++        "op_geth": "holocene extraData should be 9 bytes",
+         "fisco": {
+           "consumer": "engine",
+           "classification": "INVALID",
+diff --git a/opstack-executor/tests/t8n/vectors/invalid_isthmus_transfer_basic_static_2.json b/opstack-executor/tests/t8n/vectors/invalid_isthmus_transfer_basic_static_2.json
+index 54bfc04..8e97ccc 100644
+--- a/opstack-executor/tests/t8n/vectors/invalid_isthmus_transfer_basic_static_2.json
++++ b/opstack-executor/tests/t8n/vectors/invalid_isthmus_transfer_basic_static_2.json
+@@ -64,7 +64,7 @@
+     },
+     "_op_expected": {
+       "reject": {
+-        "op_geth": "withdrawals must be present and empty on the OP path",
++        "op_geth": "non-empty withdrawals post-Canyon",
+         "fisco": {
+           "consumer": "engine",
+           "classification": "INVALID",
+diff --git a/opstack-executor/tests/t8n/vectors/invalid_isthmus_transfer_basic_static_4.json b/opstack-executor/tests/t8n/vectors/invalid_isthmus_transfer_basic_static_4.json
+index e2f607f..83b0e7e 100644
+--- a/opstack-executor/tests/t8n/vectors/invalid_isthmus_transfer_basic_static_4.json
++++ b/opstack-executor/tests/t8n/vectors/invalid_isthmus_transfer_basic_static_4.json
+@@ -56,7 +56,7 @@
+     },
+     "_op_expected": {
+       "reject": {
+-        "op_geth": "parentBeaconBlockRoot must be a 32-byte hash for newPayloadV4",
++        "op_geth": "nil beaconRoot post-cancun",
+         "fisco": {
+           "consumer": "engine",
+           "classification": "INVALID",
+diff --git a/opstack-executor/tests/t8n/vectors/invalid_isthmus_transfer_basic_static_5.json b/opstack-executor/tests/t8n/vectors/invalid_isthmus_transfer_basic_static_5.json
+index fe2edc2..62a60fb 100644
+--- a/opstack-executor/tests/t8n/vectors/invalid_isthmus_transfer_basic_static_5.json
++++ b/opstack-executor/tests/t8n/vectors/invalid_isthmus_transfer_basic_static_5.json
+@@ -56,7 +56,7 @@
+     },
+     "_op_expected": {
+       "reject": {
+-        "op_geth": "withdrawalsRoot is required on the OP path (Isthmus+)",
++        "op_geth": "expected withdrawals root in OP-Stack post-Isthmus block header",
+         "fisco": {
+           "consumer": "engine",
+           "classification": "INVALID",
+diff --git a/opstack-executor/tests/t8n/vectors/invalid_isthmus_transfer_basic_static_7.json b/opstack-executor/tests/t8n/vectors/invalid_isthmus_transfer_basic_static_7.json
+index 69c220c..d91675d 100644
+--- a/opstack-executor/tests/t8n/vectors/invalid_isthmus_transfer_basic_static_7.json
++++ b/opstack-executor/tests/t8n/vectors/invalid_isthmus_transfer_basic_static_7.json
+@@ -57,7 +57,7 @@
+     },
+     "_op_expected": {
+       "reject": {
+-        "op_geth": "blobGasUsed must be zero before Jovian (OP Isthmus)",
++        "op_geth": "blob gas used mismatch",
+         "fisco": {
+           "consumer": "engine",
+           "classification": "INVALID",
+diff --git a/opstack-executor/tests/t8n/vectors/invalid_jovian_transfer_basic_static_11.json b/opstack-executor/tests/t8n/vectors/invalid_jovian_transfer_basic_static_11.json
+index 38a0143..6676697 100644
+--- a/opstack-executor/tests/t8n/vectors/invalid_jovian_transfer_basic_static_11.json
++++ b/opstack-executor/tests/t8n/vectors/invalid_jovian_transfer_basic_static_11.json
+@@ -57,12 +57,12 @@
+     },
+     "_op_expected": {
+       "reject": {
+-        "op_geth": "DA footprint (blobGasUsed) exceeds the block gas limit",
++        "op_geth": "invalid DA footprint in blobGasUsed field",
+         "fisco": {
+           "consumer": "engine",
+           "classification": "INVALID",
+           "latest_valid_hash": null,
+-          "validation_error_contains": "DA footprint (blobGasUsed) exceeds the block gas limit"
++          "validation_error_contains": "invalid DA footprint in blobGasUsed field"
+         }
+       }
+     }

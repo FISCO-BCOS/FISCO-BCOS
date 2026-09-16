@@ -482,13 +482,13 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
         message.setPacketType(1);
         message.setSeq(seq);
         bcos::bytes payload = {'x'};
-        task::wait([](std::shared_ptr<Session> _session, Message _message,
-                       bcos::bytes _payload, std::atomic<int>& _completions,
+        task::wait([](std::shared_ptr<Session> _session, Message _message, bcos::bytes _payload,
+                       std::atomic<int>& _completions,
                        std::atomic<int64_t>& _errorCode) -> task::Task<void> {
             try
             {
-                co_await _session->fastSendMessage(_message,
-                    ::ranges::views::single(bcos::ref(_payload)), Options{2000, true});
+                co_await _session->fastSendMessage(
+                    _message, ::ranges::views::single(bcos::ref(_payload)), Options{2000, true});
                 ++_completions;
             }
             catch (NetworkException const& e)

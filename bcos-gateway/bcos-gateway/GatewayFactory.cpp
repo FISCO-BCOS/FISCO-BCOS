@@ -912,26 +912,26 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                     return {};
                 });
 
-            service->setOnMessageHandler([gatewayRateLimiterWeakPtr](
-                                             SessionFace::Ptr _session, const Message& _message)
-                                             -> std::optional<bcos::Error> {
-                auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
-                if (!gatewayRateLimiter)
-                {
+            service->setOnMessageHandler(
+                [gatewayRateLimiterWeakPtr](SessionFace::Ptr _session,
+                    const Message& _message) -> std::optional<bcos::Error> {
+                    auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
+                    if (!gatewayRateLimiter)
+                    {
+                        return std::nullopt;
+                    }
+
+                    auto endpoint = _session->nodeIPEndpoint().address();
+                    auto packetType = _message.packetType();
+                    auto msgLength = _message.length();
+
+                    auto result =
+                        gatewayRateLimiter->checkInComing(endpoint, packetType, msgLength, true);
+                    return result ? std::make_optional(bcos::Error::buildError(
+                                        "", InQPSOverflow, result.value())) :
+                                    std::nullopt;
                     return std::nullopt;
-                }
-
-                auto endpoint = _session->nodeIPEndpoint().address();
-                auto packetType = _message.packetType();
-                auto msgLength = _message.length();
-
-                auto result =
-                    gatewayRateLimiter->checkInComing(endpoint, packetType, msgLength, true);
-                return result ? std::make_optional(
-                                    bcos::Error::buildError("", InQPSOverflow, result.value())) :
-                                std::nullopt;
-                return std::nullopt;
-            });
+                });
         }
 
         GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("GatewayFactory::init ok");

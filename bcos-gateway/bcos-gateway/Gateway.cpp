@@ -384,9 +384,9 @@ void Gateway::onReceiveP2PMessage(
         if (result.has_value())
         {
             auto errorCode = std::to_string((int)protocol::CommonError::GatewayQPSOverFlow);
-            m_p2pInterface->sendRespMessageBySession(bytesConstRef(
-                                                         (byte*)errorCode.data(), errorCode.size()),
-                _msg.seq(), _msg.srcP2PNodeID(), _session);
+            m_p2pInterface->sendRespMessageBySession(
+                bytesConstRef((byte*)errorCode.data(), errorCode.size()), _msg.seq(),
+                _msg.srcP2PNodeID(), _session);
             return;
         }
     }
@@ -495,8 +495,7 @@ void Gateway::onReceiveBroadcastMessage(
         }
     }
 
-    auto srcNodeIDPtr =
-        m_gatewayNodeManager->keyFactory()->createKey((_msg.options().srcNodeID()));
+    auto srcNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey((_msg.options().srcNodeID()));
 
     auto type = _msg.ext();
     // broadcastMsg fans out one dispatch task per local front service, each keeping the message

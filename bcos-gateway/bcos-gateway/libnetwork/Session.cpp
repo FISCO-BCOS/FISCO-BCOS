@@ -483,8 +483,7 @@ void Session::drop(DisconnectReason _reason)
                 callback->timeoutHandler->cancel();
             }
             postCallback(std::move(callback->callback), "response callback exception during drop",
-                NetworkException(P2PExceptionType::NetworkTimeout, "NetworkTimeout"),
-                std::nullopt);
+                NetworkException(P2PExceptionType::NetworkTimeout, "NetworkTimeout"), std::nullopt);
         }
     }
 
@@ -521,8 +520,7 @@ void Session::drop(DisconnectReason _reason)
             {
                 return;
             }
-            session->m_messageHandler(
-                NetworkException(errorCode, errorMsg), session, Message{});
+            session->m_messageHandler(NetworkException(errorCode, errorMsg), session, Message{});
         };
         // Once haveNetwork() is false the Host is on its way out, so run the notification inline
         // rather than handing it to an executor whose remaining lifetime we do not control here.
@@ -882,8 +880,8 @@ task::Task<std::optional<Message>> fastSendMessageWithResponse(
             {
                 claimed->timeoutHandler->cancel();
             }
-            task::GetResultAwaitable<NetworkException, std::optional<Message>>::complete(result,
-                NetworkException(ec.value(), ec.message()), std::nullopt);
+            task::GetResultAwaitable<NetworkException, std::optional<Message>>::complete(
+                result, NetworkException(ec.value(), ec.message()), std::nullopt);
         }
     }
 

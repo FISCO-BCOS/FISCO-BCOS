@@ -656,4 +656,3 @@ const std::any& bcos::gateway::Message::extAttributes() const
 {
     return m_extAttr;
 }
-

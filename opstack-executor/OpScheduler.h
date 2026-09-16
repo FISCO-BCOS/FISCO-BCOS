@@ -664,8 +664,7 @@ private:
                 // The release line's canonicalBlockHash cutover never met a pre-Canyon header
                 // (its flows start post-Canyon); our nine-fork ladder does.
                 if (canonicalAtHeight.has_value() &&
-                    *canonicalAtHeight ==
-                        bcos::protocol::EthBlockHeader::computeHash(*blockHeader))
+                    *canonicalAtHeight == bcos::protocol::EthBlockHeader::computeHash(*blockHeader))
                 {
                     OP_SCHEDULER_LOG(INFO)
                         << "Block " << number

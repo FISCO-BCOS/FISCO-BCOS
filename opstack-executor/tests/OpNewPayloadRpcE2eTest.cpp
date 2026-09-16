@@ -1363,7 +1363,8 @@ BOOST_AUTO_TEST_CASE(PreCanyonBaseFeeIgnoresTheChainsEip1559Denominator)
     bcos::engine::ForkchoiceState fc{genesis, genesis, genesis};
     auto built = bcos::task::syncWait(builder->service.updateForkchoice(
         fc, &attrs, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V1)));
-    BOOST_REQUIRE_MESSAGE(built.payloadStatus.status == bcos::engine::PayloadValidationStatus::Valid,
+    BOOST_REQUIRE_MESSAGE(
+        built.payloadStatus.status == bcos::engine::PayloadValidationStatus::Valid,
         "Regolith FCU V1 build must be VALID, got "
             << static_cast<int>(built.payloadStatus.status) << " "
             << built.payloadStatus.validationError.value_or(""));
@@ -1374,7 +1375,8 @@ BOOST_AUTO_TEST_CASE(PreCanyonBaseFeeIgnoresTheChainsEip1559Denominator)
     BOOST_REQUIRE(got);
 
     auto const produced = got->executionPayload.baseFeePerGas;
-    BOOST_TEST_INFO("produced=" << produced << " opGeth(denominator 8)=" << kOpGethGoldenDenominator8
+    BOOST_TEST_INFO("produced=" << produced
+                                << " opGeth(denominator 8)=" << kOpGethGoldenDenominator8
                                 << " fisco(denominator 50)=" << kFiscoHardcodedDenominator50);
     // FISCO prices with the hardcoded constant, so the payload it announces for a denom-8
     // chain carries the denom-50 base fee. This pair is the reproduction: flip it to
@@ -1404,8 +1406,8 @@ BOOST_AUTO_TEST_CASE(PreCanyonBaseFeeIgnoresTheChainsEip1559Denominator)
         .expectedBlobVersionedHashes = {},
         .parentBeaconBlockRoot = {},
         .executionRequests = {}};
-    auto status = bcos::task::syncWait(
-        importer->service.newPayload(request, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V2)));
+    auto status = bcos::task::syncWait(importer->service.newPayload(
+        request, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V2)));
 
     // REPRODUCTION: a block that is valid on its own chain is answered INVALID here. The
     // rejection must name the base fee (not the hash), which pins the cause to the
@@ -1416,8 +1418,7 @@ BOOST_AUTO_TEST_CASE(PreCanyonBaseFeeIgnoresTheChainsEip1559Denominator)
     BOOST_CHECK(status.validationError.has_value());
     if (status.validationError.has_value())
     {
-        BOOST_CHECK_MESSAGE(
-            status.validationError->find("baseFeePerGas") != std::string::npos,
+        BOOST_CHECK_MESSAGE(status.validationError->find("baseFeePerGas") != std::string::npos,
             "rejection must name baseFeePerGas, got: " << *status.validationError);
     }
 }

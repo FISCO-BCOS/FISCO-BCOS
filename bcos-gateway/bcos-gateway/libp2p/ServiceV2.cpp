@@ -277,23 +277,23 @@ void ServiceV2::onReceiveRouterSeq(
     auto self = std::static_pointer_cast<ServiceV2>(shared_from_this());
     // fire-and-forget through the coroutine fast path: the message is built in the frame and the
     // (empty) payload rides as a view; an unreachable peer is an expected, recoverable state.
-    task::wait([](std::shared_ptr<ServiceV2> _self, uint16_t _type, P2pID _nodeID)
-                   -> task::Task<void> {
-        Message message;
-        message.setPacketType(_type);
-        message.setSeq(_self->newSeq());
-        try
-        {
-            co_await _self->sendMessageByNodeID(_nodeID, message,
-                ::ranges::views::single(message.payload()), Options{0, false});
-        }
-        catch (NetworkException const& e)
-        {
-            SERVICE2_LOG(INFO) << LOG_DESC("onReceiveRouterSeq send RouterTableRequest failed")
-                               << LOG_KV("nodeid", printShortP2pID(_nodeID))
-                               << LOG_KV("code", e.errorCode()) << LOG_KV("msg", e.what());
-        }
-    }(self, GatewayMessageType::RouterTableRequest, dstP2PNodeID));
+    task::wait(
+        [](std::shared_ptr<ServiceV2> _self, uint16_t _type, P2pID _nodeID) -> task::Task<void> {
+            Message message;
+            message.setPacketType(_type);
+            message.setSeq(_self->newSeq());
+            try
+            {
+                co_await _self->sendMessageByNodeID(_nodeID, message,
+                    ::ranges::views::single(message.payload()), Options{0, false});
+            }
+            catch (NetworkException const& e)
+            {
+                SERVICE2_LOG(INFO) << LOG_DESC("onReceiveRouterSeq send RouterTableRequest failed")
+                                   << LOG_KV("nodeid", printShortP2pID(_nodeID))
+                                   << LOG_KV("code", e.errorCode()) << LOG_KV("msg", e.what());
+            }
+        }(self, GatewayMessageType::RouterTableRequest, dstP2PNodeID));
 }
 
 void ServiceV2::onNewSession(P2PSession::Ptr _session)
@@ -492,7 +492,8 @@ void ServiceV2::sendRespMessageBySession(bytesConstRef _payload, uint32_t _reque
     // callback which does not outlive the deferred send). All state is passed as coroutine
     // parameters so it is copied into the frame and stays alive.
     task::wait([](std::shared_ptr<Service> _self, P2PSession::Ptr _p2pSession, bcos::bytes _payload,
-                   uint32_t _seq, std::string _dstP2PNodeID, P2pID _p2pid) -> task::Task<void> {
+                   uint32_t _seq, std::string _dstP2PNodeID,
+                   P2pID _p2pid) -> task::Task<void> {
         try
         {
             Message respMessage;
@@ -523,7 +524,7 @@ void ServiceV2::sendRespMessageBySession(bytesConstRef _payload, uint32_t _reque
                                   << LOG_KV("what", boost::diagnostic_information(e));
         }
     }(self, _p2pSession, bcos::bytes(_payload.begin(), _payload.end()), _requestSeq,
-        std::move(_requestSrcP2PNodeID), p2pid));
+                                     std::move(_requestSrcP2PNodeID), p2pid));
 }
 
 bcos::task::Task<std::optional<Message>> bcos::gateway::ServiceV2::sendMessageByNodeID(

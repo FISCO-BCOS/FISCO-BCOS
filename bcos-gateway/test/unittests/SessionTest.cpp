@@ -408,8 +408,8 @@ BOOST_AUTO_TEST_CASE(doReadTest)
                     BOOST_CHECK(message.lengthDirect() > 0);
                     // every payload byte of the reassembled frame must be 0xff
                     auto payload = message.payload();
-                    BOOST_CHECK(std::all_of(payload.begin(), payload.end(),
-                        [](auto b) { return b == 0xff; }));
+                    BOOST_CHECK(std::all_of(
+                        payload.begin(), payload.end(), [](auto b) { return b == 0xff; }));
                 }
 
                 recvBufferSize += message.lengthDirect();

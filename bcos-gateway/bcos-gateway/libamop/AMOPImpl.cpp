@@ -145,8 +145,8 @@ void AMOPImpl::onReceiveTopicSeqMessage(P2pID const& _nodeID, AMOPMessage::Ptr _
             message.setPayload(std::move(_payload));
             try
             {
-                co_await _network->sendMessageByNodeID(_nodeID, message,
-                    ::ranges::views::single(message.payload()), Options(0));
+                co_await _network->sendMessageByNodeID(
+                    _nodeID, message, ::ranges::views::single(message.payload()), Options(0));
             }
             catch (NetworkException const& e)
             {
@@ -229,8 +229,8 @@ void AMOPImpl::onReceiveRequestTopicMessage(P2pID const& _nodeID, AMOPMessage::P
             message.setPayload(std::move(_payload));
             try
             {
-                co_await _network->sendMessageByNodeID(_nodeID, message,
-                    ::ranges::views::single(message.payload()), Options(0));
+                co_await _network->sendMessageByNodeID(
+                    _nodeID, message, ::ranges::views::single(message.payload()), Options(0));
             }
             catch (NetworkException const& e)
             {
@@ -451,8 +451,7 @@ bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>> AMOPImpl::s
         try
         {
             auto respMessage = co_await network->sendMessageByNodeID(choosedNodeID, message,
-                ::ranges::views::single(message.payload()),
-                Options{c_amopResponseTimeoutMs, true});
+                ::ranges::views::single(message.payload()), Options{c_amopResponseTimeoutMs, true});
             if (!respMessage)
             {
                 // self-id sends and sessions expiring before the write co_return a null
@@ -542,8 +541,7 @@ bcos::task::Task<void> AMOPImpl::sendBroadcastMessageByTopic(
                     << LOG_KV("topic", _topic) << LOG_KV("data size", dataSize);
 }
 
-void AMOPImpl::onAMOPMessage(
-    NetworkException const& _e, P2PSession::Ptr _session, Message _message)
+void AMOPImpl::onAMOPMessage(NetworkException const& _e, P2PSession::Ptr _session, Message _message)
 {
     auto self = std::weak_ptr<AMOPImpl>(shared_from_this());
     m_strand.post([self, _e, _session, _message = std::move(_message)]() mutable {
@@ -580,8 +578,7 @@ void AMOPImpl::dispatcherAMOPMessage(
     // zero copy overhead
     auto amopMessage = m_messageFactory->buildMessage(_message.payload());
     auto amopMsgType = amopMessage->type();
-    auto fromNodeID =
-        _message.srcP2PNodeID().empty() ? _session->p2pID() : _message.srcP2PNodeID();
+    auto fromNodeID = _message.srcP2PNodeID().empty() ? _session->p2pID() : _message.srcP2PNodeID();
     switch (amopMsgType)
     {
     case AMOPMessage::Type::TopicSeq:
@@ -615,8 +612,7 @@ void AMOPImpl::dispatcherAMOPMessage(
                 // the response payload rides as a view (zero-copy): responseP2PMsg lives in this
                 // frame for the duration of the co_await
                 co_await _self->m_network->sendMessageByNodeID(responseP2PMsg.dstP2PNodeID(),
-                    responseP2PMsg, ::ranges::views::single(responseP2PMsg.payload()),
-                    Options{});
+                    responseP2PMsg, ::ranges::views::single(responseP2PMsg.payload()), Options{});
             }
             catch (std::exception const& e)
             {

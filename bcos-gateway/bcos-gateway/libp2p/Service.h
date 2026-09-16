@@ -174,8 +174,7 @@ protected:
 
     std::function<std::optional<bcos::Error>(SessionFace&, const Message&, uint32_t)>
         m_beforeMessageHandler;
-    std::function<std::optional<bcos::Error>(SessionFace::Ptr, const Message&)>
-        m_onMessageHandler;
+    std::function<std::optional<bcos::Error>(SessionFace::Ptr, const Message&)> m_onMessageHandler;
 };
 
 }  // namespace bcos::gateway

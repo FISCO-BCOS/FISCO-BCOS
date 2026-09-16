@@ -301,12 +301,12 @@ BOOST_AUTO_TEST_CASE(test_sendUsesFiniteResponseTimeout)
     auto expectedPayload = encodeAMOPResponse(0, "ok");
     auto observedOptions = std::make_shared<std::vector<Options>>();
     When(Method(fixture.networkMock, sendMessageByNodeID))
-        .AlwaysDo([observedOptions, expectedPayload](P2pID, Message&,
-                      ::ranges::any_view<bytesConstRef>, Options options)
-                      -> task::Task<std::optional<Message>> {
-            observedOptions->push_back(options);
-            co_return buildP2PResponse(expectedPayload);
-        });
+        .AlwaysDo(
+            [observedOptions, expectedPayload](P2pID, Message&, ::ranges::any_view<bytesConstRef>,
+                Options options) -> task::Task<std::optional<Message>> {
+                observedOptions->push_back(options);
+                co_return buildP2PResponse(expectedPayload);
+            });
 
     SendResult result;
     fixture.send("topic_finite_timeout", result);
