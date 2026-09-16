@@ -701,6 +701,36 @@ BOOST_AUTO_TEST_CASE(toTarsHeaderRejectsOverflowingTimestamp)
     BOOST_CHECK_EQUAL(decodedHeader->number(), 0);
 }
 
+// Negative control for toTarsHeader's single-exception-type contract: a header that decodes
+// but fails validateHeader (an all-zero stateRoot is valid 32-byte RLP, rejected only by
+// validation) must escape as RlpDecodeException carrying InvalidHeader — never as
+// validateHeader's RlpEncodeException — so a caller catching only the decode type (the eth
+// sync import will be the first) cannot miss it. expectRlpError catches both types, so the
+// type itself is pinned with BOOST_CHECK_THROW; reverting the translation (rethrow) turns
+// this test red.
+BOOST_AUTO_TEST_CASE(toTarsHeaderThrowsDecodeExceptionOnValidationFailure)
+{
+    auto header = makeEthHeader();
+    EthBlockHeader ethHeader(*header);
+    auto const& d = ethHeader.data();
+
+    bytes rlp;
+    codec::rlp::encode(rlp, d.parentInfo.blockHash, d.uncleHash, d.coinbase,
+        bcos::crypto::HashType{} /* zero stateRoot: decodes fine, validateHeader rejects */,
+        d.txsRoot, d.receiptsRoot, bcos::bytesConstRef(d.logsBloom.data(), d.logsBloom.size()),
+        d.difficulty, static_cast<uint64_t>(d.number), d.gasLimit, d.gasUsed,
+        static_cast<uint64_t>(d.timestamp), d.extraData, d.prevRandao, d.nonce, d.baseFee,
+        d.withdrawalsHash, d.blobGasUsed, d.excessBlobGas, d.parentBeaconRoot, d.requestsHash);
+
+    auto decodedHeader = makeEthHeader();
+    BOOST_CHECK_THROW(EthBlockHeader::toTarsHeader(decodedHeader, bcos::ref(rlp)),
+        codec::rlp::RlpDecodeException);
+    expectRlpError([&] { EthBlockHeader::toTarsHeader(decodedHeader, bcos::ref(rlp)); },
+        static_cast<int32_t>(EthBlockHeaderError::InvalidHeader), "stateRoot");
+    // The destination must be cleared on this failure too, as on the decode-failure paths.
+    BOOST_CHECK_EQUAL(decodedHeader->number(), 0);
+}
+
 // The constructor's sub-second guard is the sole protection for direct ctor+rlpEncode
 // callers (EthBlockHeader::computeHash — the OP scheduler's block-identity hash — is one):
 // rlpEncode rejects negatives only, so a non-whole-second millisecond timestamp would

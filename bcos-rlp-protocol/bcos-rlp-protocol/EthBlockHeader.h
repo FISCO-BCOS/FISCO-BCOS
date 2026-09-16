@@ -111,10 +111,13 @@ public:
     // first missing field; returns normally if the header is complete for its version.
     static void validateHeader(const bcos::protocol::BlockHeader& _header);
 
-    // Static helpers for the common upper-layer flows. Each throws a codec::rlp::Rlp*
-    // exception on failure and takes the destination object as an in/out parameter:
+    // Static helpers for the common upper-layer flows. Each takes the destination object as
+    // an in/out parameter:
     //  - toTarsHeader: decode an RLP header into the caller-provided base-class header
-    //    (writes all fields via the setter interface, sets its EthBlockVersion).
+    //    (writes all fields via the setter interface, sets its EthBlockVersion). Throws
+    //    codec::rlp::RlpDecodeException both on malformed input and on validateHeader
+    //    failure (translated from the encode type), so callers may catch
+    //    RlpDecodeException alone.
     //  - toEthBlockHeader: decode an RLP header into the caller-provided EthBlockHeader.
     //  - calculateRLPHash: compute keccak256(rlp(header)) and inject it into the
     //    base-class header via setRLPHash.

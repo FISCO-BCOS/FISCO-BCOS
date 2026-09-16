@@ -22,11 +22,14 @@
 #include <bcos-codec/rlp/Exceptions.h>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
+#include <bcos-codec/rlp/Result.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
+#include <boost/throw_exception.hpp>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 
@@ -519,6 +522,18 @@ BOOST_AUTO_TEST_CASE(decodeRejectsNonCanonicalLengthPrefix)
         BOOST_REQUIRE(err);
         BOOST_CHECK_EQUAL(*err, NonCanonicalSize);
     }
+}
+
+// Negative control for captureRlp's boost::exception arm: a BOOST_THROW_EXCEPTION'd
+// std::invalid_argument lands there as a boost::wrapexcept with no errinfo_comment, and the
+// adapter must fall back to what() rather than blanking the message into RlpError{-1, ""}.
+BOOST_AUTO_TEST_CASE(captureRlpRecoversWhatForBoostWrappedStdException)
+{
+    auto result =
+        captureRlp([] { BOOST_THROW_EXCEPTION(std::invalid_argument("hostile what()")); });
+    BOOST_REQUIRE(!result);
+    BOOST_CHECK_EQUAL(result.error().code, kRlpGenericError);
+    BOOST_CHECK_EQUAL(result.error().message, "hostile what()");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
