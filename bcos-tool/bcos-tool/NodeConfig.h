@@ -406,6 +406,8 @@ protected:
     void loadOpForkSchedule(boost::property_tree::ptree const& _genesisConfig);
     // OP-lane fork schedule ([op_fork_timestamps] in config.genesis)
     void loadOpForkTimestamps(boost::property_tree::ptree const& _genesisConfig);
+    // OP-lane chain EIP-1559 parameters ([op_eip1559] in config.genesis)
+    void loadOpEip1559(boost::property_tree::ptree const& _genesisConfig);
 
     // load config.ini
     void loadExecutorNormalConfig(boost::property_tree::ptree const& _pt);

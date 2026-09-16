@@ -29,6 +29,41 @@ namespace bcos::test
 {
 BOOST_AUTO_TEST_SUITE(NodeConfigOpEip1559Test)
 
+namespace
+{
+/// The OP schedule section every version=3 case needs (the lane requires one to be present).
+constexpr const char* kSchedule = "[op_fork_timestamps]\njovian_time=0\n";
+
+/// Genesis with a configurable [executor] tail and the OP sections passed verbatim; everything
+/// else is fixed so the EIP-1559 checks are the only guards that can fire (same skeleton as
+/// NodeConfigOpForkTimestampsTest::opGenesis, kept local: no shared header exists for these).
+/// The caller composes the OP sections so a case can isolate one section — e.g. the lane check
+/// for [op_eip1559] must not be pre-empted by the schedule section's own lane violation.
+std::string opGenesis(std::string const& executorTail, std::string const& opSections)
+{
+    const std::string node =
+        "1234567890123456789012345678901234567890123456789012345678901234"
+        "1234567890123456789012345678901234567890123456789012345678901234";
+    return "[version]\ncompatibility_version=3.18.0\n"
+           "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+           "[web3]\nchain_id=1\n"
+           "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+           "node.0=" +
+           node +
+           ":1:1\n"
+           "[tx]\ngas_limit=3000000000\n"
+           "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+           "auth_admin_account=0x0000000000000000000000000000000000000001\n" +
+           executorTail + opSections;
+}
+
+/// The OP lane's accepted [executor] tail: version 3, no evm_revision.
+std::string opExecutor()
+{
+    return "version=3\n";
+}
+}  // namespace
+
 BOOST_AUTO_TEST_CASE(effectiveValueFallsBackToTheLegacyPreset)
 {
     BOOST_CHECK_EQUAL(bcos::engine::effectiveOpEip1559(std::nullopt).elasticity, 6U);
@@ -39,6 +74,89 @@ BOOST_AUTO_TEST_CASE(effectiveValueFallsBackToTheLegacyPreset)
         .elasticity = 2, .denominator = 8, .denominatorCanyon = 250};
     BOOST_CHECK_EQUAL(bcos::engine::effectiveOpEip1559(declared).elasticity, 2U);
     BOOST_CHECK_EQUAL(bcos::engine::effectiveOpEip1559(declared).denominator, 8U);
+}
+
+BOOST_AUTO_TEST_CASE(loadsTheTripleAndDefaultsTheCanyonDenominator)
+{
+    NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+    BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(opGenesis(
+        opExecutor(), std::string(kSchedule) + "[op_eip1559]\nelasticity=2\ndenominator=8\n")));
+    BOOST_REQUIRE(cfg.opEip1559().has_value());
+    BOOST_CHECK_EQUAL(cfg.opEip1559()->elasticity, 2U);
+    BOOST_CHECK_EQUAL(cfg.opEip1559()->denominator, 8U);
+    // Absent denominator_canyon normalizes to op-deployer's standard value AT PARSE TIME, so
+    // exactly one place applies the default and the pin records the effective triple.
+    BOOST_CHECK_EQUAL(cfg.opEip1559()->denominatorCanyon, 250U);
+}
+
+BOOST_AUTO_TEST_CASE(absentSectionLeavesTheTripleUnset)
+{
+    NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+    BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(opGenesis(opExecutor(), kSchedule)));
+    BOOST_CHECK(!cfg.opEip1559().has_value());
+    // ... and the engine/pin both fall back to the legacy preset through ONE function.
+    BOOST_CHECK_EQUAL(bcos::engine::effectiveOpEip1559(cfg.opEip1559()).denominator, 50U);
+}
+
+BOOST_AUTO_TEST_CASE(missingRequiredKeyRejected)
+{
+    NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+    BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(opExecutor(),
+                              std::string(kSchedule) + "[op_eip1559]\ndenominator=8\n")),
+        InvalidConfig,
+        [](auto const& e) { return errinfoContains(e, "[op_eip1559].elasticity is required"); });
+}
+
+BOOST_AUTO_TEST_CASE(zeroValuesRejected)
+{
+    for (const auto* body : {"elasticity=0\ndenominator=8\n", "elasticity=2\ndenominator=0\n",
+             "elasticity=2\ndenominator=8\ndenominator_canyon=0\n"})
+    {
+        NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(
+                                  opExecutor(), std::string(kSchedule) + "[op_eip1559]\n" + body)),
+            InvalidConfig, [](auto const& e) {
+                return errinfoContains(e, "[op_eip1559] values must be non-zero");
+            });
+    }
+}
+
+BOOST_AUTO_TEST_CASE(hexValuesAcceptedLikeTheSiblingScheduleSection)
+{
+    // [op_fork_timestamps] accepts both spellings (loadsDecimalAndHexTimestamps); the EIP-1559
+    // triple must not surprise an operator who writes one section hex-formatted, the other
+    // decimal.
+    NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+    BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(opGenesis(
+        opExecutor(), std::string(kSchedule) + "[op_eip1559]\nelasticity=0x2\ndenominator=0x8\n")));
+    BOOST_REQUIRE(cfg.opEip1559().has_value());
+    BOOST_CHECK_EQUAL(cfg.opEip1559()->elasticity, 2U);
+    BOOST_CHECK_EQUAL(cfg.opEip1559()->denominator, 8U);
+}
+
+BOOST_AUTO_TEST_CASE(malformedValueRejected)
+{
+    for (const auto* value : {"abc", "-1", "8abc", "0x"})
+    {
+        NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(opExecutor(),
+                                  std::string(kSchedule) + "[op_eip1559]\nelasticity=" + value +
+                                      "\ndenominator=8\n")),
+            InvalidConfig, [](auto const& e) {
+                return errinfoContains(e, "[op_eip1559].elasticity is not a valid uint64");
+            });
+    }
+}
+
+BOOST_AUTO_TEST_CASE(sectionWithoutOpLaneRejected)
+{
+    NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+    BOOST_CHECK_EXCEPTION(
+        cfg.loadGenesisConfigFromString(opGenesis(
+            "version=2\nevm_revision=prague\n", "[op_eip1559]\nelasticity=2\ndenominator=8\n")),
+        InvalidConfig, [](auto const& e) {
+            return errinfoContains(e, "[op_eip1559] requires executor.version >= 3 (OP lane)");
+        });
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -261,6 +261,7 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
     loadForkTimestamps(_genesisConfig);
     loadOpForkSchedule(_genesisConfig);
     loadOpForkTimestamps(_genesisConfig);
+    loadOpEip1559(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
 
     // === A6.5: L2 genesis allocs; L2 mode is gated by feature_l2_ethereum_compat ===
@@ -624,6 +625,16 @@ void NodeConfig::validateL2Invariants()
             InvalidConfig() << errinfo_comment(
                 "the OP lane derives the EVM revision from [op_fork_timestamps]; remove "
                 "executor.evm_revision / evm_revision_forks"));
+    }
+    // The chain's EIP-1559 parameters only mean anything on the OP lane: on a v1/v2 chain
+    // nothing reads the section, and an operator would reasonably expect it to change
+    // execution. Presence of the OP schedule is already bound to the lane above; this binds
+    // the parameters to the same lane so a stray section cannot ride along unread.
+    if (genesis.m_opEip1559.has_value() &&
+        genesis.m_executorVersion < ledger::OPSTACK_EXECUTOR_VERSION)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[op_eip1559] requires executor.version >= 3 (OP lane)"));
     }
 }
 
@@ -1420,6 +1431,72 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
     NodeConfig_LOG(INFO) << LOG_DESC("loadOpForkTimestamps")
                          << LOG_KV("jovian", schedule.m_jovianTime)
                          << LOG_KV("karst", schedule.m_karstTime);
+}
+
+// OP-lane chain EIP-1559 parameters ([op_eip1559] in config.genesis): the chain's own
+// {elasticity, denominator, denominatorCanyon}, i.e. op-deployer's config.optimism (the same
+// numbers rollup.json carries as chain_op_config). They are a genesis-frozen chain property:
+// op-geth reads them from the chain config and they price every pre-Holocene block, so two
+// nodes disagreeing about them would compute different base fees for the same height.
+// validateL2Invariants binds the section to the OP lane; an ABSENT section means "use
+// kLegacyOpEip1559Params" (6/50/250), which keeps every pre-existing chain bit-identical.
+void NodeConfig::loadOpEip1559(boost::property_tree::ptree const& _genesisConfig)
+{
+    // Reload must not keep a previous triple (same shape as loadOpForkTimestamps): a stale
+    // optional would either pin or price with a value this config never declared.
+    m_genesisConfig.m_opEip1559.reset();
+    auto section = _genesisConfig.get_child_optional("op_eip1559");
+    if (!section)
+    {
+        return;
+    }
+    auto requireKey = [&](std::string const& key) -> uint64_t {
+        auto value = section->get_optional<std::string>(key);
+        if (!value || value->empty())
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment("[op_eip1559]." + key + " is required"));
+        }
+        // Decimal and 0x-hex both, matching the sibling [op_fork_timestamps] section: a chain
+        // operator writing one section hex-formatted must not be surprised by the other.
+        // NOT parseForkTimestamp — that helper's message says "invalid timestamp", which would
+        // misname an EIP-1559 parameter.
+        std::string_view digits = *value;
+        int base = 10;
+        if (digits.rfind("0x", 0) == 0 || digits.rfind("0X", 0) == 0)
+        {
+            base = 16;
+            digits.remove_prefix(2);
+        }
+        uint64_t out = 0;
+        auto [ptr, ec] = std::from_chars(digits.data(), digits.data() + digits.size(), out, base);
+        if (ec != std::errc{} || ptr != digits.data() + digits.size())
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "[op_eip1559]." + key + " is not a valid uint64: " + *value));
+        }
+        return out;
+    };
+    ledger::OpEip1559Params params{.elasticity = requireKey("elasticity"),
+        .denominator = requireKey("denominator"),
+        // op-deployer's standard value; the pin records the EFFECTIVE triple, so an explicit
+        // 250 and an omitted key are the same declaration.
+        .denominatorCanyon = section->get_optional<uint64_t>("denominator_canyon").value_or(250)};
+    if (params.elasticity == 0 || params.denominator == 0 || params.denominatorCanyon == 0)
+    {
+        // op-geth panics on a nil/zero denominator (params/config.go:1352-1355) and would
+        // divide by zero on a zero elasticity; a panic is not a model, so refuse at load.
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "[op_eip1559] values must be non-zero: elasticity=" +
+                std::to_string(params.elasticity) +
+                " denominator=" + std::to_string(params.denominator) +
+                " denominator_canyon=" + std::to_string(params.denominatorCanyon)));
+    }
+    m_genesisConfig.m_opEip1559 = params;
+    NodeConfig_LOG(INFO) << LOG_DESC("loadOpEip1559") << LOG_KV("elasticity", params.elasticity)
+                         << LOG_KV("denominator", params.denominator)
+                         << LOG_KV("denominatorCanyon", params.denominatorCanyon);
 }
 
 void NodeConfig::loadGatewayConfig(boost::property_tree::ptree const& _pt)
