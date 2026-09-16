@@ -1304,6 +1304,124 @@ BOOST_AUTO_TEST_CASE(RegolithPayloadBuildsAndImportsAgainstRealScheduler)
             << static_cast<int>(status.status) << " " << status.validationError.value_or(""));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// REPRODUCTION (P0): the chain's EIP-1559 denominator never reaches the engine.
+//
+// A real OP chain carries {elasticity, denominator, denominatorCanyon} in genesis
+// `config.optimism` (= rollup.json chain_op_config). op-geth reads them from the chain
+// config (params/config.go:1349-1368) and they decide the base-fee step of EVERY
+// descendant block (consensus/misc/eip1559/eip1559.go:97, parentGasTarget =
+// parent.GasLimit / elasticity). FISCO instead hardcodes the OP-mainnet triple
+// (bcos-framework/bcos-framework/engine/OpBaseFee.h:43-47 for the pre-Holocene path,
+// engine/bcos-engine/EngineServiceCommon.cpp:294-299 for the encode fallback), and no
+// section of config.genesis can carry the chain's own values — the ini schema has no
+// eip1559 key, so the values cannot reach the engine even in principle.
+//
+// The divergence is invisible whenever gasUsed == gasTarget (the step is zero, so any
+// denominator gives the parent's base fee back). That is exactly why the Regolith case
+// above — whose genesis is gasLimit 30M / gasUsed 20M / baseFee 1e9, i.e. 20M != 30M/6 —
+// never noticed: it asserts the payload's SHAPE but not its price. It is also why the
+// whole corpus missed it: the ladder generator pins EIP1559Denominator 50 too
+// (op-stack-e2e-tests opstack-executor/tests/t8n/generator/cases.go:820), so corpus and
+// implementation share the wrong assumption and agree with each other.
+//
+// Golden produced by op-geth at the pinned commit e8800cffe — NOT hand-computed — with
+//   ChainConfig{LondonBlock:0, BedrockBlock:0, RegolithTime:0, CanyonTime:future,
+//               Optimism:{EIP1559Elasticity:6, EIP1559Denominator:<col 1>,
+//                         EIP1559DenominatorCanyon:250}}
+// on this exact parent (number 0, time 0, gasLimit 30_000_000, gasUsed 20_000_000,
+// baseFee 1e9, extraData empty) and child time 1 (pre-Canyon):
+//
+//   EIP1559Denominator    op-geth CalcBaseFee
+//   ------------------    -------------------
+//     8                   1_375_000_000   <- devnet.toml:42 and C2 intent.toml:142
+//    50                   1_060_000_000   <- FISCO's hardcoded Bedrock constant
+//   250                   1_012_000_000
+//    gasUsed == target, 8 or 50 -> 1_000_000_000 (step is zero: denominator cannot show)
+//
+// Reproduce the columns with a two-line module that replaces
+// github.com/ethereum/go-ethereum with an op-geth checkout and calls
+// eip1559.CalcBaseFee on that parent — the same "golden from the reference
+// implementation" rule the corpus generator follows.
+// ═══════════════════════════════════════════════════════════════════════════════
+BOOST_AUTO_TEST_CASE(PreCanyonBaseFeeIgnoresTheChainsEip1559Denominator)
+{
+    constexpr std::uint64_t kOpGethGoldenDenominator8 = 1'375'000'000ULL;
+    constexpr std::uint64_t kFiscoHardcodedDenominator50 = 1'060'000'000ULL;
+
+    auto const genesis = regolithGenesisHash();
+
+    bcos::engine::PayloadAttributes attrs;
+    attrs.timestamp = 1'000;  // internal ms -> 1 s: the Regolith window of this schedule
+    attrs.prevRandao = bcos::crypto::HashType{};
+    attrs.suggestedFeeRecipient = bcos::Address{};
+    attrs.gasLimit = 30'000'000;
+
+    // ── builder side: the price FISCO would SEQUENCE for a denom-8 chain ──────────
+    auto builder = std::make_unique<OpE2eFixture>(regolithOnlySchedule());
+    registerRegolithGenesis(*builder, genesis);
+    bcos::engine::ForkchoiceState fc{genesis, genesis, genesis};
+    auto built = bcos::task::syncWait(builder->service.updateForkchoice(
+        fc, &attrs, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V1)));
+    BOOST_REQUIRE_MESSAGE(built.payloadStatus.status == bcos::engine::PayloadValidationStatus::Valid,
+        "Regolith FCU V1 build must be VALID, got "
+            << static_cast<int>(built.payloadStatus.status) << " "
+            << built.payloadStatus.validationError.value_or(""));
+    BOOST_REQUIRE(built.payloadId.has_value());
+
+    auto got = bcos::task::syncWait(builder->service.getPayload(
+        *built.payloadId, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V2)));
+    BOOST_REQUIRE(got);
+
+    auto const produced = got->executionPayload.baseFeePerGas;
+    BOOST_TEST_INFO("produced=" << produced << " opGeth(denominator 8)=" << kOpGethGoldenDenominator8
+                                << " fisco(denominator 50)=" << kFiscoHardcodedDenominator50);
+    // FISCO prices with the hardcoded constant, so the payload it announces for a denom-8
+    // chain carries the denom-50 base fee. This pair is the reproduction: flip it to
+    //   BOOST_CHECK_EQUAL(produced, bcos::u256(kOpGethGoldenDenominator8));
+    // once the chain's eip1559 triple is plumbed through config.genesis. The equality with
+    // the denom-50 golden also proves the formula itself matches op-geth's (same denominator
+    // in, same base fee out), so the whole gap is the missing parameter, not the arithmetic.
+    BOOST_CHECK_EQUAL(produced, bcos::u256(kFiscoHardcodedDenominator50));
+    BOOST_CHECK(produced != bcos::u256(kOpGethGoldenDenominator8));
+
+    // ── validator side: the block the chain's own op-geth would have built ────────
+    // Same payload, repriced to the value op-geth produces for a denom-8 chain. blockHash
+    // covers baseFeePerGas, so it has to be recomputed too — otherwise the reconstruction
+    // check (OpEngineService.inl:918) fires before the base-fee check and the case would
+    // "pass" for the wrong reason.
+    auto payload = got->executionPayload;
+    payload.baseFeePerGas = bcos::u256(kOpGethGoldenDenominator8);
+    auto const txRoot = EngineOpScheduler::computeTxRoot(rawEnvelopesFromPayload(payload));
+    auto const rebuilt = bcos::engine::engine_common::op::rebuildOpEthHeader(
+        builder->blockFactory->blockHeaderFactory(), payload, txRoot, {},
+        bcos::engine::OpForkId::Regolith);
+    payload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*rebuilt);
+
+    auto importer = std::make_unique<OpE2eFixture>(regolithOnlySchedule());
+    registerRegolithGenesis(*importer, genesis);
+    bcos::engine::NewPayloadRequest request{.executionPayload = payload,
+        .expectedBlobVersionedHashes = {},
+        .parentBeaconBlockRoot = {},
+        .executionRequests = {}};
+    auto status = bcos::task::syncWait(
+        importer->service.newPayload(request, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V2)));
+
+    // REPRODUCTION: a block that is valid on its own chain is answered INVALID here. The
+    // rejection must name the base fee (not the hash), which pins the cause to the
+    // denominator rather than to the payload's shape.
+    BOOST_CHECK_MESSAGE(status.status == bcos::engine::PayloadValidationStatus::Invalid,
+        "expected the denom-8 block to be REJECTED (reproduction), got "
+            << static_cast<int>(status.status) << " " << status.validationError.value_or(""));
+    BOOST_CHECK(status.validationError.has_value());
+    if (status.validationError.has_value())
+    {
+        BOOST_CHECK_MESSAGE(
+            status.validationError->find("baseFeePerGas") != std::string::npos,
+            "rejection must name baseFeePerGas, got: " << *status.validationError);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE(OpForkchoiceRpcE2eSuite)
