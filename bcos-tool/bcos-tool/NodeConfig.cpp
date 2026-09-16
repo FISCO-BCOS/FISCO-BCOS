@@ -662,6 +662,11 @@ std::optional<ledger::OpForkSchedule> const& NodeConfig::opForkSchedule() const
     return m_genesisConfig.m_opForkSchedule;
 }
 
+std::optional<ledger::OpEip1559Params> const& NodeConfig::opEip1559() const
+{
+    return m_genesisConfig.m_opEip1559;
+}
+
 std::string NodeConfig::getServiceName(boost::property_tree::ptree const& _pt,
     std::string const& _configSection, std::string const& _objName,
     std::string const& _defaultValue, bool _require)

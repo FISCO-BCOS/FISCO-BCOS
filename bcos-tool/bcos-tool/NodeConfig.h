@@ -100,6 +100,12 @@ public:
     /// Isthmus is the lane baseline and has no entry.
     std::optional<ledger::OpForkSchedule> const& opForkSchedule() const;
 
+    /// The chain's EIP-1559 triple from the genesis [op_eip1559] section, or nullopt when the
+    /// section is absent (the engine then prices with kLegacyOpEip1559Params). Chain-level and
+    /// genesis-frozen: two nodes disagreeing about it would price the same height differently,
+    /// so it is part of the genesis pin via generateGenesisData.
+    std::optional<ledger::OpEip1559Params> const& opEip1559() const;
+
     std::string const& privateKeyPath() const;
     std::string const& hsmLibPath() const;
     int const& keyIndex() const;
