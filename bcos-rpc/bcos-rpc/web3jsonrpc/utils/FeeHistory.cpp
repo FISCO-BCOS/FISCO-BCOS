@@ -199,7 +199,7 @@ bcos::u256 bcos::rpc::calcOpNextBaseFee(bcos::protocol::BlockHeader const& paren
     }
     // parentIsJovian is derived from the parent's extraData shape (17-byte Jovian form):
     // this RPC path has no fork schedule, and the header shape is the only signal available
-    // here. It agrees with m_scheduler.isJovianActive() for headers this node produced.
+    // here. It agrees with m_scheduler.isJovianOrLaterAt() for headers this node produced.
     return bcos::engine::calcOpBaseFee(parent, isJovianOpParent(parent));
 }
 

@@ -161,7 +161,7 @@ public:
     /// The CALLER picks which block's timestamp to pass: op-geth keys base fee on the parent
     /// (eip1559.go CalcBaseFee), op-node keys the L1-attributes layout and the payload
     /// attributes on the child (derive/l1_block_info.go, derive/attributes.go).
-    [[nodiscard]] bool isJovianActive(int64_t internalTimestampMs) const noexcept
+    [[nodiscard]] bool isJovianOrLaterAt(int64_t internalTimestampMs) const noexcept
     {
         return static_cast<int>(m_schedule->forkAt(detail::forkTimestampSec(
                    internalTimestampMs))) >= static_cast<int>(bcos::evm::opstack::OpFork::Jovian);
@@ -225,7 +225,8 @@ public:
     {
         refuseUnsetSynthesisInputs();
         const bool jovianLayout =
-            isJovianActive(l2InternalTimestampMs) && isJovianActive(parentInternalTimestampMs);
+            isJovianOrLaterAt(l2InternalTimestampMs) &&
+            isJovianOrLaterAt(parentInternalTimestampMs);
         return bcos::evm::opstack::synthesizeL1AttributesDeposit(m_l1BlockInfo, jovianLayout);
     }
 

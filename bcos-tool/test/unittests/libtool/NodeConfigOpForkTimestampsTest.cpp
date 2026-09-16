@@ -128,7 +128,7 @@ BOOST_AUTO_TEST_CASE(sectionWithoutOpLaneRejected)
             opGenesis("version=2\nevm_revision=prague\n", "[op_fork_timestamps]\njovian_time=0\n")),
         InvalidConfig, [](auto const& e) {
             return errinfoContains(
-                e, "[op_fork_timestamps] requires executor.version >= 3 (OP lane)");
+                e, "[op_fork_timestamps]/[op_fork_schedule] requires executor.version >= 3 (OP lane)");
         });
 }
 
@@ -139,7 +139,7 @@ BOOST_AUTO_TEST_CASE(opLaneWithoutSectionRejected)
     BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(opExecutor(), "")),
         InvalidConfig, [](auto const& e) {
             return errinfoContains(
-                e, "executor.version >= 3 (OP lane) requires an [op_fork_timestamps] section");
+                e, "executor.version >= 3 (OP lane) requires an [op_fork_schedule] canonical or an [op_fork_timestamps] section");
         });
 }
 
