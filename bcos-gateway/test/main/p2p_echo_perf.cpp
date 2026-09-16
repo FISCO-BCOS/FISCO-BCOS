@@ -27,12 +27,12 @@
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/RateCollector.h"
 #include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
-#include <bcos-utilities/BoostLog.h>
 #include <boost/asio/io_context.hpp>
 #include <chrono>
 #include <memory>
 #include <string>
 #include <thread>
+#include <bcos-utilities/BoostLog.h>
 
 using namespace std;
 using namespace bcos;
@@ -75,7 +75,8 @@ int main(int argc, const char** argv)
 
         constexpr static int RATE_REPORT_INTERVAL = 10000;  // 10s
         boost::asio::io_context ioService;
-        auto reporter = std::make_shared<RateCollector>(ioService, workModel, RATE_REPORT_INTERVAL);
+        auto reporter =
+            std::make_shared<RateCollector>(ioService, workModel, RATE_REPORT_INTERVAL);
         reporter->start();
 
         // load the config items
@@ -94,37 +95,38 @@ int main(int argc, const char** argv)
         if (asServer)  // server working
         {
             // register message handler for p2p echo message type
-            service->registerHandlerByMsgType(packageType, [reporter](NetworkException _exception,
-                                                               std::shared_ptr<P2PSession> _session,
-                                                               Message _message) {
-                if (_exception.errorCode() != 0)
-                {
-                    return;
-                }
+            service->registerHandlerByMsgType(
+                packageType, [reporter](NetworkException _exception,
+                                 std::shared_ptr<P2PSession> _session, Message _message) {
+                    if (_exception.errorCode() != 0)
+                    {
+                        return;
+                    }
 
-                // std::cerr << "\t[Server] recv request from client: "
-                //           << std::string(_message.payload().begin(),
-                //           _message.payload().end())
-                //           << std::endl;
-                // update rate stat
-                reporter->update(_message.length(), true);
-                _message.setRespPacket();
-                // echo message through the coroutine fast path: the message is moved into the
-                // coroutine frame as a parameter so it stays alive for the (possibly
-                // deferred) send; its payload rides as a view (zero-copy).
-                task::wait([](std::shared_ptr<P2PSession> _session,
-                               Message _message) -> task::Task<void> {
-                    try
-                    {
-                        co_await _session->fastSendP2PMessage(
-                            _message, ::ranges::views::single(_message.payload()), Options());
-                    }
-                    catch (std::exception const& e)
-                    {
-                        std::cerr << "\t[Server] echo send exception: " << e.what() << std::endl;
-                    }
-                }(_session, std::move(_message)));
-            });
+                    // std::cerr << "\t[Server] recv request from client: "
+                    //           << std::string(_message.payload().begin(),
+                    //           _message.payload().end())
+                    //           << std::endl;
+                    // update rate stat
+                    reporter->update(_message.length(), true);
+                    _message.setRespPacket();
+                    // echo message through the coroutine fast path: the message is moved into the
+                    // coroutine frame as a parameter so it stays alive for the (possibly
+                    // deferred) send; its payload rides as a view (zero-copy).
+                    task::wait([](std::shared_ptr<P2PSession> _session,
+                                   Message _message) -> task::Task<void> {
+                        try
+                        {
+                            co_await _session->fastSendP2PMessage(
+                                _message, ::ranges::views::single(_message.payload()), Options());
+                        }
+                        catch (std::exception const& e)
+                        {
+                            std::cerr << "\t[Server] echo send exception: " << e.what()
+                                      << std::endl;
+                        }
+                    }(_session, std::move(_message)));
+                });
 
             while (true)
             {
@@ -187,8 +189,8 @@ int main(int argc, const char** argv)
                 // the removed asyncSendMessageByNodeID callback path): the message is passed as a
                 // coroutine parameter so it is copied into the frame and stays alive for the whole
                 // (possibly deferred) send.
-                task::wait([](P2PInterface::Ptr _service, P2pID _p2pID,
-                               Message _message) -> task::Task<void> {
+                task::wait([](P2PInterface::Ptr _service, P2pID _p2pID, Message _message)
+                               -> task::Task<void> {
                     try
                     {
                         co_await _service->sendMessageByNodeID(_p2pID, _message,

@@ -24,16 +24,16 @@
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SessionReadLoop.h"
-#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/IOServicePool.h>
-#include <boost/test/unit_test.hpp>
-#include <atomic>
-#include <list>
-#include <optional>
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <queue>
 #include <thread>
+#include <atomic>
+#include <optional>
 #include <tuple>
+#include <list>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace gateway;
@@ -48,7 +48,8 @@ class FakeASIO_FIB : public bcos::gateway::ASIOInterface
 {
 public:
     using Packet = std::shared_ptr<std::vector<uint8_t>>;
-    using ReadCompletion = task::detail::FireCompletion<boost::system::error_code, std::size_t>;
+    using ReadCompletion =
+        task::detail::FireCompletion<boost::system::error_code, std::size_t>;
 
     FakeASIO_FIB()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"), "0.0.0.0", 0),
@@ -482,13 +483,13 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
         message.setPacketType(1);
         message.setSeq(seq);
         bcos::bytes payload = {'x'};
-        task::wait([](std::shared_ptr<Session> _session, Message _message, bcos::bytes _payload,
-                       std::atomic<int>& _completions,
+        task::wait([](std::shared_ptr<Session> _session, Message _message,
+                       bcos::bytes _payload, std::atomic<int>& _completions,
                        std::atomic<int64_t>& _errorCode) -> task::Task<void> {
             try
             {
-                co_await _session->fastSendMessage(
-                    _message, ::ranges::views::single(bcos::ref(_payload)), Options{2000, true});
+                co_await _session->fastSendMessage(_message,
+                    ::ranges::views::single(bcos::ref(_payload)), Options{2000, true});
                 ++_completions;
             }
             catch (NetworkException const& e)

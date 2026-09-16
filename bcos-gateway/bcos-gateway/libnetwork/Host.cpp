@@ -22,7 +22,6 @@
 #include "bcos-gateway/libnetwork/SocketFace.h"
 #include "bcos-utilities/IOServicePool.h"
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/BoostLog.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -32,6 +31,7 @@
 #include <memory>
 #include <set>
 #include <utility>
+#include <bcos-utilities/BoostLog.h>
 
 
 using namespace bcos;
@@ -153,7 +153,8 @@ task::Task<void> Host::acceptLoop()
                 // is not delayed — and never logged at ERROR.
                 if (ec && ec != boost::asio::error::operation_aborted)
                 {
-                    HOST_LOG(ERROR) << LOG_DESC("accept failed") << LOG_KV("message", ec.message());
+                    HOST_LOG(ERROR) << LOG_DESC("accept failed")
+                                    << LOG_KV("message", ec.message());
                     iterationFailed = true;
                 }
                 socket->close();
@@ -249,7 +250,9 @@ task::Task<void> Host::acceptLoop()
             {
                 auto retryTimer = m_asioInterface->newAcceptorTimer(ACCEPT_RETRY_INTERVAL_MS);
                 co_await task::makeFireAwaitable<boost::system::error_code>(
-                    [&retryTimer](auto handler) { retryTimer.async_wait(std::move(handler)); },
+                    [&retryTimer](auto handler) {
+                        retryTimer.async_wait(std::move(handler));
+                    },
                     boost::asio::error::operation_aborted);
             }
             catch (...)
@@ -836,29 +839,30 @@ task::Task<std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionFace>>> 
         /// if async connect timeout, close the socket directly
         auto connectTimer = std::make_shared<boost::asio::steady_timer>(
             socket->ioService(), std::chrono::milliseconds(m_connectTimeThre));
-        connectTimer->async_wait([this, socket, _nodeIPEndpoint](
-                                     const boost::system::error_code& error) {
-            /// return when cancel has been called
-            if (error == boost::asio::error::operation_aborted)
-            {
-                HOST_LOG(DEBUG) << LOG_DESC("AsyncConnect handshake handler revoke this operation");
-                return;
-            }
-            /// connection timer error
-            if (error && error != boost::asio::error::operation_aborted)
-            {
-                HOST_LOG(ERROR) << LOG_DESC("AsyncConnect timer failed")
-                                << LOG_KV("errorValue", error.value())
-                                << LOG_KV("message", error.message());
-            }
-            if (socket->isConnected())
-            {
-                HOST_LOG(WARNING) << LOG_DESC("AsyncConnect timeout erase")
-                                  << LOG_KV("endpoint", _nodeIPEndpoint);
-                erasePendingConns(_nodeIPEndpoint);
-                socket->close();
-            }
-        });
+        connectTimer->async_wait(
+            [this, socket, _nodeIPEndpoint](const boost::system::error_code& error) {
+                /// return when cancel has been called
+                if (error == boost::asio::error::operation_aborted)
+                {
+                    HOST_LOG(DEBUG)
+                        << LOG_DESC("AsyncConnect handshake handler revoke this operation");
+                    return;
+                }
+                /// connection timer error
+                if (error && error != boost::asio::error::operation_aborted)
+                {
+                    HOST_LOG(ERROR) << LOG_DESC("AsyncConnect timer failed")
+                                    << LOG_KV("errorValue", error.value())
+                                    << LOG_KV("message", error.message());
+                }
+                if (socket->isConnected())
+                {
+                    HOST_LOG(WARNING) << LOG_DESC("AsyncConnect timeout erase")
+                                      << LOG_KV("endpoint", _nodeIPEndpoint);
+                    erasePendingConns(_nodeIPEndpoint);
+                    socket->close();
+                }
+            });
         /// callback async connect
         auto [ec] = co_await m_asioInterface->awaitableResolveConnect(socket);
         if (ec)
@@ -1021,10 +1025,9 @@ void Host::stop()
             if (m_acceptLoopExit.get_future().wait_for(std::chrono::seconds(10)) !=
                 std::future_status::ready)
             {
-                HOST_LOG(ERROR) << LOG_DESC(
-                    "accept loop did not exit within 10s of stop(); "
-                    "the posted cancel was likely lost and this Host "
-                    "(ASIOInterface, acceptor, teardown pool) may leak");
+                HOST_LOG(ERROR) << LOG_DESC("accept loop did not exit within 10s of stop(); "
+                                            "the posted cancel was likely lost and this Host "
+                                            "(ASIOInterface, acceptor, teardown pool) may leak");
             }
         }
         catch (...)

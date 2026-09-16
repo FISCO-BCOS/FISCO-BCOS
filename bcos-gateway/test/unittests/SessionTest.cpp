@@ -18,19 +18,19 @@
  * @author: octopus
  * @date 2023-02-23
  */
-#include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SessionReadLoop.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libp2p/Service.h"
-#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/IOServicePool.h>
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
@@ -39,10 +39,10 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
-#include <list>
 #include <mutex>
 #include <optional>
 #include <queue>
+#include <list>
 #include <range/v3/view/single.hpp>
 #include <thread>
 #include <tuple>
@@ -61,13 +61,14 @@ class FakeASIO : public bcos::gateway::ASIOInterface
 {
 public:
     using Packet = std::shared_ptr<std::vector<uint8_t>>;
-    using ReadCompletion = task::detail::FireCompletion<boost::system::error_code, std::size_t>;
+    using ReadCompletion =
+        task::detail::FireCompletion<boost::system::error_code, std::size_t>;
 
     FakeASIO()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"), "0.0.0.0", 0),
         m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"))
     {}
-    virtual ~FakeASIO() noexcept override{};
+    virtual ~FakeASIO() noexcept override {};
 
     // Compile-time read-initiation policy (see ASIOInterface::awaitableReadSome): the read loop
     // is launched with this policy (startWithPolicy<FakeASIO::ReadPolicy>) so every read parks
@@ -98,8 +99,8 @@ public:
 
     // Synchronous helper for fakeClassTest (no session involved).
     template <typename Handler>
-    void readSome(
-        std::shared_ptr<SocketFace> /*socket*/, ba::mutable_buffer buffers, Handler&& handler)
+    void readSome(std::shared_ptr<SocketFace> /*socket*/, ba::mutable_buffer buffers,
+        Handler&& handler)
     {
         handler(boost::system::error_code(), drainPackets(buffers));
     }
@@ -408,8 +409,8 @@ BOOST_AUTO_TEST_CASE(doReadTest)
                     BOOST_CHECK(message.lengthDirect() > 0);
                     // every payload byte of the reassembled frame must be 0xff
                     auto payload = message.payload();
-                    BOOST_CHECK(std::all_of(
-                        payload.begin(), payload.end(), [](auto b) { return b == 0xff; }));
+                    BOOST_CHECK(std::all_of(payload.begin(), payload.end(),
+                        [](auto b) { return b == 0xff; }));
                 }
 
                 recvBufferSize += message.lengthDirect();
@@ -681,8 +682,8 @@ BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
     // The wire frame must actually be compressed: parse the header
     // [length:4][version:2][packetType:2][seq:4][ext:2] (Message::MESSAGE_HEADER_LENGTH = 14).
     BOOST_REQUIRE(received.size() >= Message::MESSAGE_HEADER_LENGTH);
-    uint16_t frameExt =
-        (static_cast<uint16_t>(received[12]) << 8) | static_cast<uint16_t>(received[13]);
+    uint16_t frameExt = (static_cast<uint16_t>(received[12]) << 8) |
+                        static_cast<uint16_t>(received[13]);
     BOOST_CHECK(frameExt & bcos::protocol::MessageExtFieldFlag::COMPRESS);
 }
 
@@ -1066,7 +1067,8 @@ BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
                            (uint32_t(received[pos + 10]) << 8) | received[pos + 11];
             // payload integrity: each thread sent 64 bytes of ('a' + threadIdx)
             uint8_t expect = static_cast<uint8_t>('a' + seq / msgPerThread);
-            for (size_t k = Message::MESSAGE_HEADER_LENGTH + extendedHeaderLen; k < frameLen; ++k)
+            for (size_t k = Message::MESSAGE_HEADER_LENGTH + extendedHeaderLen; k < frameLen;
+                 ++k)
             {
                 BOOST_CHECK_EQUAL(received[pos + k], expect);
             }
