@@ -1664,9 +1664,10 @@ EthEndpoint::getBlockNumberAndHeadByTag(std::string_view blockTag)
     auto [number, _] = bcos::rpc::getBlockNumberByTag(latest, blockTag,
         m_nodeService->safeBlockDepth(), m_nodeService->finalizedBlockDepth(), context.safe,
         context.finalized, context.engineLane);
-    // isLatest is "resolved height == latest", independent of the tag kind — a numeric tag that
-    // equals the tip is the latest state, the same way the pre-forkchoice code computed it.
-    co_return std::make_tuple(number, std::cmp_equal(latest, number));
+    // The head a caller resolved against is the current chain tip, whatever the resolved height
+    // is — stateRootMissingMessage compares the requested height against it to decide
+    // "pruned" vs "missing".
+    co_return std::make_tuple(number, latest);
 }
 
 EthEndpoint::ForkchoiceContext EthEndpoint::forkchoiceContext() const
@@ -1740,6 +1741,7 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
     // other eth_* endpoints take. Decode the hash FIRST (a malformed hex string is a client
     // error) and let getBlockNumber distinguish "not found" from a storage fault.
     protocol::BlockNumber blockNumber = 0;
+    protocol::BlockNumber head = 0;
     if (blockTag.size() == 66 && blockTag[0] == '0' && (blockTag[1] == 'x' || blockTag[1] == 'X'))
     {
         bcos::crypto::HashType hash;
@@ -1754,6 +1756,7 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
         try
         {
             blockNumber = co_await ledger::getBlockNumber(*m_nodeService->ledger(), hash);
+            head = co_await ledger::getCurrentBlockNumber(*m_nodeService->ledger());
         }
         catch (bcos::Error const& e)
         {
@@ -1771,7 +1774,7 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
     }
     else
     {
-        std::tie(blockNumber, std::ignore) = co_await getBlockNumberByTag(blockTag);
+        std::tie(blockNumber, head) = co_await getBlockNumberAndHeadByTag(blockTag);
     }
     if (c_fileLogLevel == TRACE)
     {
