@@ -294,8 +294,8 @@ bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes)
     auto [denominator, elasticity] = decodeEip1559Params(*payloadAttributes.eip1559Params);
     if (denominator == 0 && elasticity == 0)
     {
-        denominator = c_eip1559DenominatorCanyon;
-        elasticity = c_eip1559ElasticityCanyon;
+        denominator = bcos::engine::kLegacyOpEip1559Params.denominatorCanyon;
+        elasticity = bcos::engine::kLegacyOpEip1559Params.elasticity;
     }
 
     bool jovian = payloadAttributes.minBaseFee.has_value();

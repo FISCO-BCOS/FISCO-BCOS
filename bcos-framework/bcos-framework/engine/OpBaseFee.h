@@ -20,6 +20,7 @@
 #pragma once
 
 #include "Errors.h"
+#include <bcos-framework/engine/OpEip1559Params.h>
 #include <bcos-framework/engine/OpForkId.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-utilities/Common.h>
@@ -38,13 +39,10 @@ namespace bcos::engine
     BOOST_THROW_EXCEPTION(InvalidEngineEncoding{} << bcos::errinfo_comment{std::move(message)});
 }
 
-/// OP EIP-1559 parameters (op-geth params/config.go:402, the Optimism mainnet
-/// config: EIP1559Elasticity 6, EIP1559Denominator 50, EIP1559DenominatorCanyon 250).
-inline constexpr std::uint32_t c_eip1559DenominatorBedrock = 50;
-inline constexpr std::uint32_t c_eip1559DenominatorCanyon = 250;
-/// OP has exactly one elasticity (op-geth EIP1559Elasticity, no per-fork split), so
-/// despite the name this is the OP value for every fork, not a Canyon-only one.
-inline constexpr std::uint32_t c_eip1559ElasticityCanyon = 6;
+// The OP EIP-1559 parameters are a CHAIN property (kLegacyOpEip1559Params in
+// OpEip1559Params.h is the single legacy default), not constants: op-geth reads them from the
+// chain config (params/config.go:1349-1368) and they price every pre-Holocene block. The old
+// hardcoded 6/50/250 here priced a denom-8 chain's pre-Canyon blocks with the wrong denominator.
 
 /// Holocene extraData is 9 bytes (0x00 || denom || elasticity);
 /// Jovian extraData is 17 bytes (0x01 || same || minBaseFee).
@@ -289,11 +287,18 @@ struct OpFeeStepParams
 /// (OpForkId.h's extraDataLayoutFor): non-Empty means Holocene or later, Jovian17 means
 /// Jovian or later. The static_assert beside that table keeps the layout boundaries
 /// where the forks are, so the two notions cannot drift apart silently.
+///
+/// `eip1559` is WHAT the chain prices with — its declared triple (config.genesis
+/// [op_eip1559], kLegacyOpEip1559Params when undeclared). Carrying it here mirrors op-geth,
+/// which hands CalcBaseFee the whole *params.ChainConfig: fork times and optimism parameters
+/// together. The default keeps every pre-existing caller (tests included) on the legacy
+/// preset; only a caller that knows the chain's declaration changes it.
 struct OpBaseFeeClock
 {
     bool parentIsHolocene = false;
     bool parentIsJovian = false;
     bool newBlockIsCanyon = false;
+    OpEip1559Params eip1559 = kLegacyOpEip1559Params;
 };
 
 /// Next-block baseFee for newPayload validation and payload building — the single
@@ -311,12 +316,20 @@ struct OpBaseFeeClock
     {
         return calcOpBaseFee(parent, clock.parentIsJovian);
     }
-    // Pre-Holocene parent: empty extraData, so the chain constants apply and the
+    // Pre-Holocene parent: empty extraData, so the CHAIN'S triple applies and the
     // parent's extraData (if any) is deliberately ignored. Denominator by the new
-    // block, elasticity constant.
+    // block's fork (op-geth BaseFeeChangeDenominator(time)), elasticity for every fork.
     uint64_t const denominator =
-        clock.newBlockIsCanyon ? c_eip1559DenominatorCanyon : c_eip1559DenominatorBedrock;
-    uint64_t const elasticity = c_eip1559ElasticityCanyon;
+        clock.newBlockIsCanyon ? clock.eip1559.denominatorCanyon : clock.eip1559.denominator;
+    uint64_t const elasticity = clock.eip1559.elasticity;
+    // The declared triple is validated at config load; the legacy default is non-zero by
+    // construction. This guard keeps a zero from a hand-built clock out of the division below.
+    if (elasticity == 0 || denominator == 0) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidEngineEncoding{} << bcos::errinfo_comment{
+                "invalid OP base-fee parameters: zero elasticity or denominator"});
+    }
     // op-geth dereferences parent.BaseFee and panics on nil; fail closed instead.
     if (!parent.baseFee().has_value())
     {

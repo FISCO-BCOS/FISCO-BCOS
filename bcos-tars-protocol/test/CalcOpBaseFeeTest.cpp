@@ -350,13 +350,13 @@ BOOST_AUTO_TEST_CASE(ValidateExtraDataByLayout)
     BOOST_CHECK(bcos::engine::validateOpExtraDataForLayout(holocene, L::Jovian17).has_value());
 }
 
-// Two clocks (op-geth CalcBaseFee): the pre-Holocene path uses the chain constants
-// (elasticity 6, denominator 50 / 250 chosen by the NEW block's time), while a
-// Holocene parent switches to its own extraData. Parent: gasLimit 30M, gasUsed 20M,
+// Two clocks (op-geth CalcBaseFee): the pre-Holocene path uses the chain's configured
+// EIP-1559 triple (defaults 6/50/250; denominator 50 / 250 chosen by the NEW block's time),
+// while a Holocene parent switches to its own extraData. Parent: gasLimit 30M, gasUsed 20M,
 // baseFee 1e9 -> gasTarget 5M, delta 15M -> 3e9/denom.
 BOOST_AUTO_TEST_CASE(NextBlockBaseFeeTwoClocks)
 {
-    // Pre-Holocene parent: empty extraData, so the constants apply.
+    // Pre-Holocene parent: empty extraData, so the chain's triple applies.
     auto const pre =
         makeParent(bcos::u256(30'000'000), bcos::u256(20'000'000), bcos::u256(1'000'000'000), {});
     BOOST_CHECK_EQUAL(
@@ -385,6 +385,53 @@ BOOST_AUTO_TEST_CASE(NextBlockBaseFeeTwoClocks)
         bcos::engine::calcOpNextBlockBaseFee(holoceneParent,
             {.parentIsHolocene = true, .parentIsJovian = false, .newBlockIsCanyon = true}),
         bcos::u256(1'012'000'000));
+}
+
+// The chain's own EIP-1559 triple, not a hardcoded OP-mainnet preset. Golden values produced by
+// op-geth at pin e8800cffe calling eip1559.CalcBaseFee on THIS parent shape (gasLimit 30M,
+// gasUsed 20M, baseFee 1e9 -> gasTarget 5M, delta 15M -> 3e9/denominator) with elasticity 6 and
+// denominatorCanyon 250, child time 1 (pre-Canyon):
+//   denominator  8  -> 1_375_000_000   (devnet.toml:42 and the C2 e2e intent both declare 8)
+//   denominator 50  -> 1_060_000_000   (the legacy preset: the cases above)
+//   denominator 250 -> 1_012_000_000
+//   gasUsed == gasTarget, either denominator -> 1_000_000_000 (the step is zero, so NO
+//   denominator is observable — which is why a gasLimit/6 parent never caught the hardcoding)
+BOOST_AUTO_TEST_CASE(PreCanyonBaseFeeUsesTheChainsDenominator)
+{
+    auto const pre =
+        makeParent(bcos::u256(30'000'000), bcos::u256(20'000'000), bcos::u256(1'000'000'000), {});
+
+    // A denom-8 chain: the value op-geth produces for it.
+    BOOST_CHECK_EQUAL(
+        bcos::engine::calcOpNextBlockBaseFee(
+            pre, {.parentIsHolocene = false,
+                     .parentIsJovian = false,
+                     .newBlockIsCanyon = false,
+                     .eip1559 = {.elasticity = 6, .denominator = 8, .denominatorCanyon = 250}}),
+        bcos::u256(1'375'000'000));
+
+    // Same parent, declared legacy triple: unchanged behaviour (the compatibility pin).
+    BOOST_CHECK_EQUAL(bcos::engine::calcOpNextBlockBaseFee(
+                          pre, {.parentIsHolocene = false,
+                                   .parentIsJovian = false,
+                                   .newBlockIsCanyon = false,
+                                   .eip1559 = bcos::engine::kLegacyOpEip1559Params}),
+        bcos::u256(1'060'000'000));
+
+    // Control: at the exact gas target the step is zero, so no denominator can show up.
+    auto const atTarget =
+        makeParent(bcos::u256(30'000'000), bcos::u256(5'000'000), bcos::u256(1'000'000'000), {});
+    for (auto const denominator : {8U, 50U})
+    {
+        BOOST_CHECK_EQUAL(
+            bcos::engine::calcOpNextBlockBaseFee(atTarget, {.parentIsHolocene = false,
+                                                               .parentIsJovian = false,
+                                                               .newBlockIsCanyon = false,
+                                                               .eip1559 = {.elasticity = 6,
+                                                                   .denominator = denominator,
+                                                                   .denominatorCanyon = 250}}),
+            bcos::u256(1'000'000'000));
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

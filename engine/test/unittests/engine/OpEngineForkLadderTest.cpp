@@ -122,8 +122,8 @@ inline bcos::bytes extraDataFor(bcos::engine::OpExtraDataLayout layout)
             out.push_back(static_cast<bcos::byte>(value >> shift));
         }
     };
-    appendU32(bcos::engine::c_eip1559DenominatorCanyon);
-    appendU32(bcos::engine::c_eip1559ElasticityCanyon);
+    appendU32(bcos::engine::kLegacyOpEip1559Params.denominatorCanyon);
+    appendU32(bcos::engine::kLegacyOpEip1559Params.elasticity);
     if (layout == bcos::engine::OpExtraDataLayout::Jovian17)
     {
         out.insert(out.end(), 8, bcos::byte{0});  // minBaseFee floor 0
