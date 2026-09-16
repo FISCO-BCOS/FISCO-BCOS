@@ -1914,7 +1914,7 @@ BOOST_AUTO_TEST_CASE(Vectors)
     // place the "critical" designation itself is pinned, and nothing else
     // (no run.sh / README) duplicates it.
     static constexpr std::array<const char*, 2> kCriticalStems{
-        "ladder_1000_69292b10", "devnet_884_007399eb"};
+        "ladder_1000_69292b10", "devnet_1875-2274_c38db356"};
     for (const auto* stem : kCriticalStems)
     {
         BOOST_REQUIRE_MESSAGE(
