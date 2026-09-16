@@ -749,6 +749,9 @@ BOOST_AUTO_TEST_CASE(unsupportedEngineApiVersionMapsTo38005)
                e.msg().starts_with("Unsupported fork: ");
     };
 
+    Json::Value params(Json::arrayValue);
+    params.append(makeV1ExecutionPayloadJson());
+
     Json::Value response;
     Json::Value fcParams(Json::arrayValue);
     Json::Value fc;

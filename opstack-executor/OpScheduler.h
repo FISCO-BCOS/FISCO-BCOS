@@ -654,8 +654,18 @@ private:
                 auto tipView = m_multiLayerStorage->forkCommitted();
                 auto const canonicalAtHeight =
                     co_await ledger::getBlockHash(tipView, number, ledger::fromStorage);
+                // Identity comparisons in this file must use EthBlockHeader::computeHash
+                // directly, NOT protocol::canonicalBlockHash: this scheduler only ever sees
+                // OP-Stack blocks, and pre-Canyon rungs (Regolith/Genesis) carry no
+                // withdrawalsRoot, so isOpEthereumBlock is false for them and
+                // canonicalBlockHash falls back to the header's stored (tars) hash — which is
+                // both the wrong identity (op-geth blocks are identified by keccak256(rlp))
+                // and a throw for freshly rebuilt headers whose dataHash was never stamped.
+                // The release line's canonicalBlockHash cutover never met a pre-Canyon header
+                // (its flows start post-Canyon); our nine-fork ladder does.
                 if (canonicalAtHeight.has_value() &&
-                    *canonicalAtHeight == bcos::protocol::EthBlockHeader::computeHash(*blockHeader))
+                    *canonicalAtHeight ==
+                        bcos::protocol::EthBlockHeader::computeHash(*blockHeader))
                 {
                     OP_SCHEDULER_LOG(INFO)
                         << "Block " << number

@@ -44,7 +44,7 @@ void sendMessage(NodeIPEndpoint const& _endPoint, std::shared_ptr<Message> _msg,
     while (true)
     {
         _rateLimiter->acquire(1, true);
-        auto seq = _service->messageFactory()->newSeq();
+        auto seq = _service->newSeq();
         _msg->setSeq(seq);
         auto startT = utcTime();
         auto msgSize = _msg->payload().size();
@@ -101,7 +101,7 @@ int main(int argc, char** argv)
 
     gateway->start();
     // construct message
-    auto msg = std::static_pointer_cast<Message>(service->messageFactory()->buildMessage());
+    auto msg = std::make_shared<Message>();
     msg->setPacketType(999);
     std::string randStr(payLoadSize, 'a');
     msg->setPayload(bcos::bytes(randStr.begin(), randStr.end()));

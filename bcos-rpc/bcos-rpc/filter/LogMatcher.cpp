@@ -52,9 +52,10 @@ uint32_t LogMatcher::matches(FilterRequest::ConstPtr _params, bcos::crypto::Hash
             log["transactionIndex"] = toQuantity(_txIndex);
             log["transactionHash"] = _txHash.hexPrefixed();
             log["removed"] = false;
-            // Same lane-dependent address form as the receipt encoder: normalize through
-            // the shared helper so eth_getLogs and eth_getTransactionReceipt agree.
-            log["address"] = "0x" + logEntryAddressHex(logEntry);
+            // Same form as the receipt encoder, casing included: normalize the
+            // lane-dependent address, then EIP-55 it, so eth_getLogs and
+            // eth_getTransactionReceipt publish one address contract.
+            log["address"] = "0x" + checksummedHexAddress(logEntryAddressHex(logEntry));
             Json::Value jTopics(Json::arrayValue);
             for (const auto& topic : logEntry.topics())
             {

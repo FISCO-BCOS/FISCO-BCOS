@@ -101,8 +101,8 @@ class FakeHost_FIB97new : public bcos::gateway::Host
 {
 public:
     FakeHost_FIB97new(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface,
-        std::shared_ptr<SessionFactory> _sessionFactory, MessageFactory::Ptr _messageFactory)
-      : Host(_hash, _asioInterface, _sessionFactory, _messageFactory)
+        std::shared_ptr<SessionFactory> _sessionFactory)
+      : Host(_hash, _asioInterface, _sessionFactory)
     {
         m_run = true;
     }
@@ -122,13 +122,11 @@ inline SessionBundle_FIB97new makeSessionFib97new()
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_FIB97new>();
     auto fakeAsio = std::make_shared<FakeASIO_FIB97new>();
-    auto msgFactory = std::make_shared<MessageFactory>();
-    auto fakeHost = std::make_shared<FakeHost_FIB97new>(hashImpl, fakeAsio, nullptr, msgFactory);
+    auto fakeHost = std::make_shared<FakeHost_FIB97new>(hashImpl, fakeAsio, nullptr);
 
     auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
-    session->setMessageFactory(msgFactory);
     session->setMessageHandler(
-        [](NetworkException /*e*/, SessionFace::Ptr /*s*/, Message::Ptr /*m*/) {});
+        [](NetworkException /*e*/, SessionFace::Ptr /*s*/, Message /*m*/) {});
 
     return {fakeHost, fakeSocket, session};
 }

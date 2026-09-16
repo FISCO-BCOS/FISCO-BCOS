@@ -52,6 +52,7 @@ inline bool isOpStackLane(int executorVersion)
     return executorVersion == bcos::ledger::OPSTACK_EXECUTOR_VERSION;
 }
 
+
 /// Suggested priority fee (wei): the Ethereum/OP lanes suggest a non-zero tip (OP floors at
 /// 1e6 wei, matching op-geth); the legacy FISCO lane keeps its historic constant 0.
 inline uint64_t suggestedPriorityFeeWei(int executorVersion)

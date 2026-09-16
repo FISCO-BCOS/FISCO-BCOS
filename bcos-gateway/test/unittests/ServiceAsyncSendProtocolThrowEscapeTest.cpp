@@ -66,15 +66,15 @@ class RejectingSession : public SessionFace
 public:
     void start() override {}
     void disconnect(DisconnectReason) override {}
-    task::Task<Message::Ptr> fastSendMessage(const Message& /*header*/,
+    task::Task<std::optional<Message>> fastSendMessage(const Message& /*header*/,
         ::ranges::any_view<bytesConstRef> /*payloads*/, Options /*options*/) override
     {
         BOOST_THROW_EXCEPTION(NetworkException(-1, "outgoing bandwidth overflow"));
-        co_return nullptr;
+        co_return std::nullopt;
     }
     std::shared_ptr<SocketFace> socket() override { return nullptr; }
     void setMessageHandler(
-        std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)>) override
+        std::function<void(NetworkException, SessionFace::Ptr, Message)>) override
     {}
     void setBeforeMessageHandler(
         std::function<std::optional<bcos::Error>(SessionFace&, const Message&, uint32_t)>) override
@@ -97,7 +97,8 @@ BOOST_AUTO_TEST_CASE(SendProtocolDoesNotEscapeSendRejection)
     selfInfo.rawP2pID = "selfRawP2pID";
     selfInfo.p2pID = "selfP2pID";
     auto service = std::make_shared<ProbeService>(selfInfo);
-    service->setMessageFactory(std::make_shared<MessageFactory>());
+    // Service::newSeq() delegates to the host-wide seq allocator
+    service->setHost(std::make_shared<Host>(nullptr, nullptr, nullptr));
 
     auto p2pSession = std::make_shared<P2PSession>();
     p2pSession->setSession(std::make_shared<RejectingSession>());

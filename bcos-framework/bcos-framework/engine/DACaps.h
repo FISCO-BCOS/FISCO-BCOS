@@ -27,9 +27,11 @@ namespace bcos::engine
 
 /// Shared DA size limits for OP payload building. The only reader, OpEngineService
 /// (OpEngineService.inl, the `m_daCaps->txFits` / `Budget` guards), is constructed by
-/// libinitializer with `daCaps=nullptr`, which the reader treats as uncapped. The
-/// `miner_setMaxDASize` producer and the Pro/Max (tars) setDaCaps bootstrap live in the RPC
-/// follow-up (#5572); until it lands no caps are applied on any deployment.
+/// libinitializer with a real DACaps instance on the OP lane (Initializer's opStackMode
+/// block creates it and passes it to buildOp). The `miner_setMaxDASize` producer is the
+/// RPC's MinerEndpoint, gated per listener by its own enable_miner_api key; on an AIR
+/// deployment AirNodeInitializer publishes the same instance into NodeService. Only the
+/// Pro/Max (tars) setDaCaps bootstrap remains in the RPC follow-up (#5572).
 ///   maxTxSize    — drop sealed pool txs above this estimated DA size.
 ///   maxBlockSize — stop appending sealed txs once the cumulative estimate exceeds this.
 /// Zero means uncapped. Sizes use the Fjord FastLZ estimate over the EIP-2718 envelope.

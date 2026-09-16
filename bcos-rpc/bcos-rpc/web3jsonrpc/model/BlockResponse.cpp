@@ -7,6 +7,7 @@
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-utilities/Bloom.h>
+#include <bcos-rpc/web3jsonrpc/utils/util.h>
 
 #include <range/v3/view/enumerate.hpp>
 

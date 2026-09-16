@@ -74,11 +74,11 @@ protected:
     virtual void broadcastStatusSeq();
 
     virtual void onReceiveStatusSeq(
-        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<Message> _msg);
+        NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg);
     virtual void onRequestNodeStatus(
-        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<Message> _msg);
+        NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg);
     virtual void onReceiveNodeStatus(
-        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<Message> _msg);
+        NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg);
     virtual bytesPointer generateNodeStatus();
     virtual void syncLatestNodeIDList();
 

@@ -283,8 +283,8 @@ class FakeHost : public bcos::gateway::Host
 {
 public:
     FakeHost(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface,
-        std::shared_ptr<SessionFactory> _sessionFactory, MessageFactory::Ptr _messageFactory)
-      : Host(_hash, _asioInterface, _sessionFactory, _messageFactory)
+        std::shared_ptr<SessionFactory> _sessionFactory)
+      : Host(_hash, _asioInterface, _sessionFactory)
     {
         m_run = true;
     }
@@ -377,7 +377,6 @@ BOOST_AUTO_TEST_CASE(doReadTest)
 {
     auto totalPacketNum = 500;
     FakeMessagesBuilder messageBuilder(totalPacketNum);
-    auto fakeMessageFactory = std::make_shared<MessageFactory>();
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket>();
 
@@ -386,17 +385,16 @@ BOOST_AUTO_TEST_CASE(doReadTest)
     std::atomic<uint64_t> lastReadTime = utcSteadyTime();
     auto fakeAsio = std::make_shared<FakeASIO>();
     {
-        auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr, fakeMessageFactory);
+        auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr);
 
         // 16-byte initial buffer: a real frame needs its 14-byte fixed header decoded before the
         // read loop can learn the frame length and grow the buffer, so the growth path is now
         // exercised from header-size upward (frames run up to 254 bytes)
         auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 16, true);
-        session->setMessageFactory(fakeHost->messageFactory());
 
         session->setMessageHandler(
             [&recvPacketCnt, &recvBufferSize, &lastReadTime](
-                NetworkException e, SessionFace::Ptr sessionFace, Message::Ptr message) {
+                NetworkException e, SessionFace::Ptr sessionFace, Message message) {
                 // the read loop calls this function after reading a message
                 lastReadTime = utcSteadyTime();
                 if (e.errorCode() != P2PExceptionType::Success)
@@ -407,15 +405,14 @@ BOOST_AUTO_TEST_CASE(doReadTest)
                     static bcos::SharedMutex x_mutex;
                     bcos::WriteGuard guard(x_mutex);
                     BOOST_CHECK_EQUAL(e.errorCode(), P2PExceptionType::Success);
-                    BOOST_CHECK(message);
-                    BOOST_CHECK(message->lengthDirect() > 0);
+                    BOOST_CHECK(message.lengthDirect() > 0);
                     // every payload byte of the reassembled frame must be 0xff
-                    auto payload = message->payload();
-                    BOOST_CHECK(std::all_of(
-                        payload.begin(), payload.end(), [](auto b) { return b == 0xff; }));
+                    auto payload = message.payload();
+                    BOOST_CHECK(std::all_of(payload.begin(), payload.end(),
+                        [](auto b) { return b == 0xff; }));
                 }
 
-                recvBufferSize += message->lengthDirect();
+                recvBufferSize += message.lengthDirect();
                 recvPacketCnt++;
             });
 
@@ -445,7 +442,7 @@ BOOST_AUTO_TEST_CASE(doReadTest)
         // would otherwise reach the strict handler above with a Disconnect error — then let the
         // fake fail the read and wait for the read loop to unwind completely before nulling
         // the socket.
-        session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message::Ptr) {});
+        session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message) {});
         fakeAsio->stopReads();
         size_t drainRetry = 0;
         while (fakeAsio->readsInFlight() != 0 && drainRetry < 200)
@@ -469,18 +466,16 @@ BOOST_AUTO_TEST_CASE(startUsesDefaultReadPolicy)
     // with a posted operation_not_supported — and assert the read loop drops the session.
     // (m_type defaults to TCP_ONLY, so "unset" would arm a real async_read_some on the fake's
     // connected socket pair instead; the invalid type is what makes the branch deterministic.)
-    auto fakeMessageFactory = std::make_shared<MessageFactory>();
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket>();
     auto fakeAsio = std::make_shared<FakeASIO>();
     fakeAsio->setType(2);
     {
-        auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr, fakeMessageFactory);
+        auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr);
 
         auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
-        session->setMessageFactory(fakeHost->messageFactory());
         // Tolerant handler: the read error drops the session, and the drop notifies.
-        session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message::Ptr) {});
+        session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message) {});
 
         session->start();  // virtual production entry — NOT startWithPolicy<>
 
@@ -504,14 +499,12 @@ BOOST_AUTO_TEST_CASE(fastSendMessageOutboundRateLimit)
     // The fast path must honour the same pre-send (outgoing rate-limit) check the removed callback
     // path (asyncSendMessage) enforced: a beforeMessageHandler rejection surfaces as a thrown
     // NetworkException (e.g. OutBWOverflow) so coroutine retry loops can stop.
-    auto fakeMessageFactory = std::make_shared<MessageFactory>();
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket>();
     auto fakeAsio = std::make_shared<FakeASIO>();
     {
-        auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr, fakeMessageFactory);
+        auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr);
         auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
-        session->setMessageFactory(fakeHost->messageFactory());
         session->setBeforeMessageHandler(
             [](SessionFace&, const Message&, uint32_t) -> std::optional<bcos::Error> {
                 return bcos::Error::buildError(
@@ -598,7 +591,6 @@ BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
     // fan-out / retry loop) that compresses for one peer cannot leak the flag to a later peer that
     // receives an uncompressed frame (which would fail to decompress and drop the connection).
     // Also exercises the compression branch itself, which the FakeSocket-based tests cannot reach.
-    auto fakeMessageFactory = std::make_shared<MessageFactory>();
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeAsio = std::make_shared<FakeASIO>();
 
@@ -637,10 +629,9 @@ BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
     BOOST_REQUIRE(!connectError);
 
     {
-        auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr, fakeMessageFactory);
+        auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr);
         auto sessionSocket = std::make_shared<RealLoopbackSocket>(io, std::move(client));
         auto session = std::make_shared<Session>(sessionSocket, *fakeHost, 2, true);
-        session->setMessageFactory(fakeHost->messageFactory());
         session->startWithPolicy<FakeASIO::ReadPolicy>();
 
         // V2 wire format + payload well above the 1KB compress threshold -> compression must run
@@ -705,7 +696,6 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
     // carrying its OWN negotiated version: the shared message is stamped per-peer before each
     // header encode and the parallel fan-out tasks never cross-contaminate each other's wire
     // header.
-    auto fakeMessageFactory = std::make_shared<MessageFactory>();
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeAsio = std::make_shared<FakeASIO>();
 
@@ -787,19 +777,17 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
     selfInfo.rawP2pID = "selfRawP2pID";
     selfInfo.p2pID = "selfP2pID";
     auto service = std::make_shared<FanoutProbeService>(selfInfo);
-    service->setMessageFactory(fakeMessageFactory);
     // P2PSession::start() -> heartBeat() arms a timer on service->host()->asioInterface().
-    service->setHost(std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr, fakeMessageFactory));
+    service->setHost(std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr));
 
     // The FakeHosts must outlive the sessions (Session holds a reference_wrapper<Host>).
     std::vector<std::shared_ptr<FakeHost>> hosts;
     std::vector<std::shared_ptr<Session>> sessions;
     auto makePeerSession = [&](ba::ip::tcp::socket _client, P2pID _nodeID, uint32_t _version) {
-        auto host = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr, fakeMessageFactory);
+        auto host = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr);
         hosts.push_back(host);
         auto session = std::make_shared<Session>(
             std::make_shared<RealLoopbackSocket>(io, std::move(_client)), *host, 2, true);
-        session->setMessageFactory(fakeMessageFactory);
         session->startWithPolicy<FakeASIO::ReadPolicy>();
         sessions.push_back(session);
 
@@ -921,7 +909,6 @@ BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
     constexpr size_t msgPerThread = 50;
     constexpr size_t totalMsgs = threadCount * msgPerThread;
 
-    auto fakeMessageFactory = std::make_shared<MessageFactory>();
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeAsio = std::make_shared<FakeASIO>();
 
@@ -972,10 +959,9 @@ BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
     const size_t expectedBytes = frameSize * totalMsgs;
 
     {
-        auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr, fakeMessageFactory);
+        auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr);
         auto sessionSocket = std::make_shared<RealLoopbackSocket>(io, std::move(client));
         auto session = std::make_shared<Session>(sessionSocket, *fakeHost, 2, true);
-        session->setMessageFactory(fakeHost->messageFactory());
         session->startWithPolicy<FakeASIO::ReadPolicy>();
 
         std::vector<std::thread> senders;

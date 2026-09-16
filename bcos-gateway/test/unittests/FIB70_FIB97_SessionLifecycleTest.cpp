@@ -206,8 +206,8 @@ class FakeHost_FIB : public bcos::gateway::Host
 {
 public:
     FakeHost_FIB(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface,
-        std::shared_ptr<SessionFactory> _sessionFactory, MessageFactory::Ptr _messageFactory)
-      : Host(_hash, _asioInterface, _sessionFactory, _messageFactory)
+        std::shared_ptr<SessionFactory> _sessionFactory)
+      : Host(_hash, _asioInterface, _sessionFactory)
     {
         m_run = true;
     }
@@ -277,15 +277,13 @@ BOOST_AUTO_TEST_CASE(DecodeErrorTriggersSessionDrop)
 
     {
         auto fakeAsio = std::make_shared<FakeASIO_FIB>();
-        auto fakeHost = std::make_shared<FakeHost_FIB>(
-            hashImpl, fakeAsio, nullptr, std::make_shared<MessageFactory>());
+        auto fakeHost = std::make_shared<FakeHost_FIB>(hashImpl, fakeAsio, nullptr);
 
         // 16-byte initial buffer: the read loop must see the 14-byte fixed header before it can
         // make progress on a real frame
         auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 16, true);
-        session->setMessageFactory(fakeHost->messageFactory());
         session->setMessageHandler(
-            [](NetworkException e, SessionFace::Ptr sessionFace, Message::Ptr message) {});
+            [](NetworkException e, SessionFace::Ptr sessionFace, Message message) {});
 
         session->startWithPolicy<FakeASIO_FIB::ReadPolicy>();
 
@@ -320,13 +318,11 @@ BOOST_AUTO_TEST_CASE(DecodeExceptionTriggersSessionDrop)
 
     {
         auto fakeAsio = std::make_shared<FakeASIO_FIB>();
-        auto fakeHost = std::make_shared<FakeHost_FIB>(
-            hashImpl, fakeAsio, nullptr, std::make_shared<MessageFactory>());
+        auto fakeHost = std::make_shared<FakeHost_FIB>(hashImpl, fakeAsio, nullptr);
 
         auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 16, true);
-        session->setMessageFactory(fakeHost->messageFactory());
         session->setMessageHandler(
-            [](NetworkException e, SessionFace::Ptr sessionFace, Message::Ptr message) {});
+            [](NetworkException e, SessionFace::Ptr sessionFace, Message message) {});
 
         session->startWithPolicy<FakeASIO_FIB::ReadPolicy>();
 
@@ -364,13 +360,11 @@ BOOST_AUTO_TEST_CASE(SocketSharedPtrCaptureInAsyncHandler)
 
     {
         auto fakeAsio = std::make_shared<FakeASIO_FIB>();
-        auto fakeHost = std::make_shared<FakeHost_FIB>(
-            hashImpl, fakeAsio, nullptr, std::make_shared<MessageFactory>());
+        auto fakeHost = std::make_shared<FakeHost_FIB>(hashImpl, fakeAsio, nullptr);
 
         auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
-        session->setMessageFactory(fakeHost->messageFactory());
         session->setMessageHandler(
-            [](NetworkException e, SessionFace::Ptr sessionFace, Message::Ptr message) {});
+            [](NetworkException e, SessionFace::Ptr sessionFace, Message message) {});
 
         // After session creation, socket should be held by both fakeSocket and session
         BOOST_CHECK(fakeSocket.use_count() > 1);
@@ -396,16 +390,13 @@ BOOST_AUTO_TEST_CASE(DropFlushesOnlyOwnPendingResponseCallbacks)
 
     {
         auto fakeAsio = std::make_shared<FakeASIO_FIB>();
-        auto fakeHost = std::make_shared<FakeHost_FIB>(
-            hashImpl, fakeAsio, nullptr, std::make_shared<MessageFactory>());
+        auto fakeHost = std::make_shared<FakeHost_FIB>(hashImpl, fakeAsio, nullptr);
         // one manager shared by both sessions, as in production
         auto callbackManager = std::make_shared<SessionCallbackManagerBucket>();
 
         auto sessionA = std::make_shared<Session>(fakeSocketA, *fakeHost, 2, true);
-        sessionA->setMessageFactory(fakeHost->messageFactory());
         sessionA->setSessionCallbackManager(callbackManager);
         auto sessionB = std::make_shared<Session>(fakeSocketB, *fakeHost, 2, true);
-        sessionB->setMessageFactory(fakeHost->messageFactory());
         sessionB->setSessionCallbackManager(callbackManager);
 
         const uint32_t seqA = 1001;
@@ -413,14 +404,14 @@ BOOST_AUTO_TEST_CASE(DropFlushesOnlyOwnPendingResponseCallbacks)
         std::atomic<int> firedA{0};
         std::atomic<int> firedB{0};
         auto handlerA = std::make_shared<ResponseCallback>();
-        handlerA->callback = [&firedA](NetworkException e, Message::Ptr) {
+        handlerA->callback = [&firedA](NetworkException e, std::optional<Message>) {
             if (e.errorCode() != 0)
             {
                 ++firedA;
             }
         };
         auto handlerB = std::make_shared<ResponseCallback>();
-        handlerB->callback = [&firedB](NetworkException e, Message::Ptr) {
+        handlerB->callback = [&firedB](NetworkException e, std::optional<Message>) {
             if (e.errorCode() != 0)
             {
                 ++firedB;
@@ -474,33 +465,30 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
     const uint32_t seq = 4321;
     {
         auto fakeAsio = std::make_shared<FakeASIO_FIB>();
-        auto fakeHost = std::make_shared<FakeHost_FIB>(
-            hashImpl, fakeAsio, nullptr, std::make_shared<MessageFactory>());
+        auto fakeHost = std::make_shared<FakeHost_FIB>(hashImpl, fakeAsio, nullptr);
         auto callbackManager = std::make_shared<SessionCallbackManagerBucket>();
 
         auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
-        session->setMessageFactory(fakeHost->messageFactory());
         session->setSessionCallbackManager(callbackManager);
         session->setMessageHandler(
-            [](NetworkException e, SessionFace::Ptr sessionFace, Message::Ptr message) {});
+            [](NetworkException e, SessionFace::Ptr sessionFace, Message message) {});
         session->startWithPolicy<FakeASIO_FIB::ReadPolicy>();
 
         // the socket's io_context is never run by the fixture: drive it so the posted
         // async_write actually executes (and fails against the closed peer)
         std::thread ioThread([&]() { fakeSocket->ioService().run(); });
 
-        auto message =
-            std::static_pointer_cast<Message>(fakeHost->messageFactory()->buildMessage());
-        message->setPacketType(1);
-        message->setSeq(seq);
+        Message message;
+        message.setPacketType(1);
+        message.setSeq(seq);
         bcos::bytes payload = {'x'};
-        task::wait([](std::shared_ptr<Session> _session, std::shared_ptr<Message> _message,
+        task::wait([](std::shared_ptr<Session> _session, Message _message,
                        bcos::bytes _payload, std::atomic<int>& _completions,
                        std::atomic<int64_t>& _errorCode) -> task::Task<void> {
             try
             {
-                co_await _session->fastSendMessage(
-                    *_message, ::ranges::views::single(bcos::ref(_payload)), Options{2000, true});
+                co_await _session->fastSendMessage(_message,
+                    ::ranges::views::single(bcos::ref(_payload)), Options{2000, true});
                 ++_completions;
             }
             catch (NetworkException const& e)
@@ -508,7 +496,7 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
                 _errorCode.store(e.errorCode());
                 ++_completions;
             }
-        }(session, message, payload, completions, errorCode));
+        }(session, std::move(message), payload, completions, errorCode));
 
         // task::wait detaches: the coroutine completes on the io threads once the write fails
         // (or the 2s response timer fires as backstop) — poll for the completion

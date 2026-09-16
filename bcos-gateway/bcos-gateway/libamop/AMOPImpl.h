@@ -70,13 +70,13 @@ public:
         const std::string& _topic, bcos::bytesConstRef _data);
 
     virtual void onAMOPMessage(bcos::gateway::NetworkException const& _e,
-        bcos::gateway::P2PSession::Ptr _session, std::shared_ptr<bcos::gateway::Message> _message);
+        bcos::gateway::P2PSession::Ptr _session, bcos::gateway::Message _message);
 
     virtual TopicManager::Ptr topicManager();
 
 protected:
     virtual void dispatcherAMOPMessage(bcos::gateway::NetworkException const& _e,
-        bcos::gateway::P2PSession::Ptr _session, std::shared_ptr<bcos::gateway::Message> _message);
+        bcos::gateway::P2PSession::Ptr _session, bcos::gateway::Message _message);
     /**
      * @brief: periodically send topicSeq to all other nodes
      * @return void

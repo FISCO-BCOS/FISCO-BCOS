@@ -85,9 +85,8 @@ public:
 class FakeHost_Reactor : public bcos::gateway::Host
 {
 public:
-    FakeHost_Reactor(bcos::crypto::Hash::Ptr hash, std::shared_ptr<ASIOInterface> asioInterface,
-        MessageFactory::Ptr messageFactory)
-      : Host(std::move(hash), std::move(asioInterface), nullptr, std::move(messageFactory))
+    FakeHost_Reactor(bcos::crypto::Hash::Ptr hash, std::shared_ptr<ASIOInterface> asioInterface)
+      : Host(std::move(hash), std::move(asioInterface), nullptr)
     {
         m_run = true;
     }
@@ -140,9 +139,8 @@ BOOST_AUTO_TEST_CASE(TeardownFloodMustNotStarveMessageDelivery)
     // process-global TBB control, so "the flood would swamp the delivery reactor if it landed
     // there" is deterministic and independent of the host core count.
     auto hashImpl = std::make_shared<Keccak256>();
-    auto messageFactory = std::make_shared<MessageFactory>();
     auto fakeAsio = std::make_shared<FakeASIO_Reactor>();
-    auto fakeHost = std::make_shared<FakeHost_Reactor>(hashImpl, fakeAsio, messageFactory);
+    auto fakeHost = std::make_shared<FakeHost_Reactor>(hashImpl, fakeAsio);
 
     auto probe = std::make_shared<ReactorProbe>();
 
@@ -157,8 +155,7 @@ BOOST_AUTO_TEST_CASE(TeardownFloodMustNotStarveMessageDelivery)
     {
         auto socket = std::make_shared<FakeSocket_Reactor>();
         auto session = std::make_shared<Session>(socket, *fakeHost, 1024, true);
-        session->setMessageFactory(messageFactory);
-        session->setMessageHandler([probe](NetworkException, SessionFace::Ptr, Message::Ptr) {
+        session->setMessageHandler([probe](NetworkException, SessionFace::Ptr, Message) {
             probe->teardownRunning.fetch_add(1);
             while (!probe->release.load())
             {  // hold the reactor worker, as a batch of real teardowns would
