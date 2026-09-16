@@ -123,13 +123,14 @@ public:
         std::int64_t mptPruneWindow = -1, bool withMptReader = true)
     {
         return buildWeb3RpcWithEngine(
-            std::move(sched), nullptr, safeDepth, finalizedDepth);
+            std::move(sched), nullptr, safeDepth, finalizedDepth, mptPruneWindow, withMptReader);
     }
 
     Web3JsonRpcImpl::Ptr buildWeb3RpcWithEngine(
         std::shared_ptr<bcos::scheduler::SchedulerInterface> sched,
         std::shared_ptr<bcos::engine::AnyEngineService> engine,
-        protocol::BlockNumber safeDepth = 0, protocol::BlockNumber finalizedDepth = 0)
+        protocol::BlockNumber safeDepth = 0, protocol::BlockNumber finalizedDepth = 0,
+        std::int64_t mptPruneWindow = -1, bool withMptReader = true)
     {
         auto service = std::make_shared<rpc::NodeService>(m_ledger, std::move(sched), txPool,
             nullptr, nullptr, m_blockFactory, std::move(engine));
@@ -146,12 +147,14 @@ public:
         service->setMPTPruneWindow(mptPruneWindow);
         // Give every fake block a resolvable committed root (the empty root is a legal
         // "no accounts" root) so header-root lookups never interfere with the scheduler
-        // routing under test.
+        // routing under test. setStateRoot clears dataHash (BlockHeaderImpl), so recompute the
+        // hash afterwards — eth_getBlockByNumber needs a hashable header.
         for (auto const& block : m_ledger->ledgerData())
         {
             if (block && block->blockHeader())
             {
                 block->blockHeader()->setStateRoot(bcos::ledger::mpt::emptyRootHash());
+                block->blockHeader()->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
             }
         }
         rpc = factory->buildLocalRpc(groupInfo, service);
