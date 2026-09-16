@@ -48,6 +48,7 @@
 #include <exception>
 #include <functional>
 #include <map>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -61,16 +62,57 @@ namespace bcos::ledger::mpt
 
 /// Whether the Phase-3 garbage sweep may scan the "/mpt/" table with CONCURRENT shard
 /// iterators: the backend must tolerate independent RANGE_SEEK iterators plus delete batches
-/// issued from multiple threads at once. RocksDBStorage2 qualifies (each range pins its own
-/// snapshot, writes go through the thread-safe DB handle). The in-memory backends do not: a
-/// non-CONCURRENT MemoryStorage is a single unsynchronized index, and a CONCURRENT one shards
-/// its ordered index per bucket, losing the global key ordering the shard spans rely on — both
-/// shapes therefore take the single-shard sequential path.
+/// issued from multiple threads at once. Default FALSE — a backend opts IN explicitly by
+/// declaring `static constexpr bool kConcurrentSweepSafe = true`, so a new backend or wrapper
+/// author has to answer the question instead of silently getting concurrent deletes.
+/// RocksDBStorage2 opts in at its definition (each RANGE_SEEK pins its own snapshot, writes
+/// go through the thread-safe DB handle). The in-memory backends do not: a non-CONCURRENT
+/// MemoryStorage is a single unsynchronized index, and a CONCURRENT one shards its ordered
+/// index per bucket, losing the global key ordering the shard spans rely on — every backend
+/// without the marker takes the single-shard sequential path.
+///
+/// Concurrent READS are a separate, weaker requirement and are assumed safe on every
+/// backend: walkTrie issues up to WALK_READ_WAYS concurrent readSome/MultiGet calls during
+/// the rebuild phases, which issue no concurrent WRITES — read/read concurrency needs no
+/// synchronization even on a single unsynchronized index. Only the sweep mixes concurrent
+/// reads with delete batches, hence this trait.
+template <class Backend, class = void>
+inline constexpr bool kParallelSweepSafe = false;
 template <class Backend>
-inline constexpr bool kParallelSweepSafe = true;
-template <class K, class V, uint8_t A, class H, class E, class B>
 inline constexpr bool
-    kParallelSweepSafe<bcos::storage2::memory_storage::MemoryStorage<K, V, A, H, E, B>> = false;
+    kParallelSweepSafe<Backend, std::void_t<decltype(Backend::kConcurrentSweepSafe)>> =
+        Backend::kConcurrentSweepSafe;
+
+/// Whether an awaitable type is a bcos::task::AwaitableValue — the only awaitable that
+/// NEVER suspends by construction (await_ready is always true).
+template <class T>
+inline constexpr bool kIsAwaitableValue = false;
+template <class V>
+inline constexpr bool kIsAwaitableValue<bcos::task::AwaitableValue<V>> = true;
+
+/// Compile-time enforcement of the sweep's parallel_for safety argument (see init Phase 3):
+/// when the sweep may run multi-shard, the BACKEND-level storage calls must be
+/// never-suspending AwaitableValues, so tbb::syncWait always takes its ready path and never
+/// blocks a TBB worker under parallel_for. A backend that goes truly asynchronous breaks the
+/// build here instead of hanging the boot. Backends without the opt-in marker run the
+/// single-shard path and have nothing to prove — the expressions are not even formed.
+template <class Backend, bool = kParallelSweepSafe<Backend>>
+struct SweepInlineCompletionCheck
+{
+    static constexpr bool value = true;
+};
+template <class Backend>
+struct SweepInlineCompletionCheck<Backend, true>
+{
+    using RangeAwaitable = decltype(std::declval<Backend&>().range(
+        bcos::storage2::RANGE_SEEK, std::declval<bcos::executor_v1::StateKey&>()));
+    using Iterator = bcos::task::AwaitableReturnType<RangeAwaitable>;
+    static constexpr bool value =
+        kIsAwaitableValue<RangeAwaitable> &&
+        kIsAwaitableValue<decltype(std::declval<Iterator&>().next())> &&
+        kIsAwaitableValue<decltype(std::declval<Backend&>().removeSome(
+            std::declval<std::vector<bcos::executor_v1::StateKey>>()))>;
+};
 
 /// Reference-counting MPT pruning (spec §4.8), one instance per chain over the committed-state
 /// backend (production: GlobalStateStorage::latestBackend()).
@@ -192,7 +234,10 @@ public:
 
     /// Called after each deleted chunk of the startup sweep: rows deleted so far, garbage rows
     /// found so far (the total is unknown until the scan finishes; the last call reports the
-    /// final total in both).
+    /// final total in both). On a parallel-sweep-safe backend the shards make progress
+    /// concurrently, but the pruner SERIALIZES every invocation on an internal mutex, so the
+    /// callback keeps its original single-threaded contract; the arguments are a monotone
+    /// snapshot (a later call never reports smaller numbers).
     using GarbageProgress = std::function<void(uint64_t done, uint64_t total)>;
 
     /// @param backend         the committed-state backend; every read below hits it directly
@@ -338,22 +383,31 @@ public:
         // first-byte bound compiled out.
         //
         // parallel_for (not task_group) is safe HERE because every storage call below —
-        // range(), iterator.next(), removeSome() — is an AwaitableValue that completes
-        // synchronously inline, so tbb::syncWait always takes its ready path and never reaches
-        // tbb::task::suspend; the TBBWait.h caveat (syncWait blocks the worker under
-        // parallel_for once the awaited task really suspends) therefore never triggers. Do NOT
-        // keep this shape if the storage layer ever becomes truly asynchronous. An exception in
-        // any shard propagates out of parallel_for (siblings are cancelled) — the fail-loud
-        // boot semantics this phase wants.
+        // range(), iterator.next(), removeSome() — bottoms out in an AwaitableValue that
+        // completes synchronously inline, so tbb::syncWait always takes its ready path and
+        // never reaches tbb::task::suspend; the TBBWait.h caveat (syncWait blocks the worker
+        // under parallel_for once the awaited task really suspends) therefore never triggers.
+        // SweepInlineCompletionCheck turns that into a build error the moment an opted-in
+        // backend's calls go truly asynchronous — do NOT weaken the check instead. An
+        // exception in any shard propagates out of parallel_for (siblings are cancelled) —
+        // the fail-loud boot semantics this phase wants.
+        static_assert(SweepInlineCompletionCheck<Backend>::value,
+            "MPTPruner parallel sweep: the backend opted into kParallelSweepSafe but its "
+            "range()/iterator.next()/removeSome() are not all never-suspending AwaitableValues "
+            "— tbb::syncWait could block a worker under parallel_for");
         constexpr size_t shardCount = kParallelSweepSafe<Backend> ? SWEEP_SHARDS : 1;
         std::atomic<uint64_t> scanned{0};
         std::atomic<uint64_t> garbage{0};
         std::atomic<uint64_t> garbageDeleted{0};
+        // Serializes GarbageProgress invocations across shards — the callback contract
+        // predates the sharded sweep and does not require thread-safety.
+        std::mutex progressMutex;
         MPT_PRUNER_LOG(INFO) << "MPT pruning: garbage sweep — scanning the \"/mpt/\" table in "
                              << shardCount << " shard(s) (progress logged every "
                              << SWEEP_SCAN_LOG_INTERVAL << " rows)";
         oneapi::tbb::parallel_for(size_t{0}, shardCount,
-            [this, &scanned, &garbage, &garbageDeleted, &progress](size_t shard) {
+            [this, &scanned, &garbage, &garbageDeleted, &progress, &progressMutex](
+                size_t shard) {
                 auto const startKey = [shard] {
                     if constexpr (shardCount > 1)
                     {
@@ -426,6 +480,7 @@ public:
                         chunk.clear();
                         if (progress)
                         {
+                            std::lock_guard const lock{progressMutex};
                             progress(garbageDeleted.load(std::memory_order_relaxed),
                                 garbage.load(std::memory_order_relaxed));
                         }
@@ -438,6 +493,7 @@ public:
                         bcos::storage2::removeSome(*m_backend, std::move(chunk)));
                     if (progress)
                     {
+                        std::lock_guard const lock{progressMutex};
                         progress(garbageDeleted.load(std::memory_order_relaxed),
                             garbage.load(std::memory_order_relaxed));
                     }
