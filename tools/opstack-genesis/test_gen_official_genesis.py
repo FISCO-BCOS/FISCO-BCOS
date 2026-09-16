@@ -126,6 +126,15 @@ def test_header_field_set_by_genesis_time():
         assert "slot_number" not in gen.header_field_set(ts, forks7)
 
 
+def test_eip1559_section_comes_from_the_registry_optimism_table():
+    """The FISCO ini must declare the same triple rollup.json calls chain_op_config, from ONE
+    source (the registry toml's [optimism]) — if the EL and the CL read different numbers,
+    every pre-Canyon block prices differently."""
+    toml = gen.tomllib.loads(TOML)
+    assert gen.build_eip1559_section(toml) == (
+        "[op_eip1559]\nelasticity=6\ndenominator=50\ndenominator_canyon=250\n")
+
+
 def test_build_and_selfcheck_london_header():
     genesis = {
         "number": "0x0", "timestamp": "0x648a5ce3", "gasLimit": "0x1c9c380",

@@ -272,6 +272,18 @@ def to_ini_allocs(alloc):
     return out
 
 
+def build_eip1559_section(toml):
+    """`[op_eip1559]` for the FISCO ini, from the SAME toml keys `build_rollup` maps into
+    chain_op_config (superchain.go does the same mapping for op-node). One source, two views:
+    if the EL and the CL read different numbers, every pre-Canyon block prices differently —
+    which is exactly the P0 defect this section closes (the engine used to hardcode 6/50/250)."""
+    optimism = toml["optimism"]
+    return ("[op_eip1559]\n"
+            f"elasticity={optimism['eip1559_elasticity']}\n"
+            f"denominator={optimism['eip1559_denominator']}\n"
+            f"denominator_canyon={optimism['eip1559_denominator_canyon']}\n")
+
+
 # RegistryError is defined above (Task 2): this section reuses it rather than
 # re-declaring the class.
 
@@ -511,6 +523,7 @@ def generate(zip_path, chain, *, extra_forks=None, l1_chain_id=None,
     ini = "\n".join(header_lines) + "\n"
     ini += _build_allocs.emit_ini(to_ini_allocs(alloc))
     ini += "[op_fork_schedule]\ncanonical=" + schedule + "\n"
+    ini += build_eip1559_section(toml)
     if l1_chain_id is None:
         # The L1 chain id is not in the chain toml (op-node reads it from the
         # superchain config), so derive it from the registry layout.
