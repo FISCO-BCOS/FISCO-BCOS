@@ -800,9 +800,9 @@ BOOST_AUTO_TEST_CASE(CanyonActivationBlockDeploysCreate2Deployer)
     bcos::evm::evmstate::Storage2State<MutableStorage> view(f.storage);
     auto code = view.get_account_code(engine::create2DeployerAddress());
     BOOST_REQUIRE(!view.poisoned());
-    BOOST_CHECK_EQUAL(code.size(), engine::kCreate2DeployerCode.size());
-    BOOST_CHECK(std::equal(code.begin(), code.end(), engine::kCreate2DeployerCode.begin(),
-        engine::kCreate2DeployerCode.end()));
+    BOOST_CHECK_EQUAL(code.size(), engine::c_create2DeployerCode.size());
+    BOOST_CHECK(std::equal(code.begin(), code.end(), engine::c_create2DeployerCode.begin(),
+        engine::c_create2DeployerCode.end()));
     auto acct = view.get_account(engine::create2DeployerAddress());
     BOOST_REQUIRE(acct.has_value());
     BOOST_CHECK(acct->code_hash == engine::create2DeployerCodeHash());
@@ -835,14 +835,14 @@ BOOST_AUTO_TEST_CASE(PostCanyonActivationBlockKeepsCreate2Deployer)
     f.header.m_timestampMs = 1'000'000;  // activation writes the code
     f.run(op::canyonConfig(), {kDepositEnvelope}, {dep});
     BOOST_REQUIRE_EQUAL(
-        create2DeployerCodeIn(f.storage).size(), engine::kCreate2DeployerCode.size());
+        create2DeployerCodeIn(f.storage).size(), engine::c_create2DeployerCode.size());
 
     f.header.m_timestampMs = 1'001'000;  // 1001s: still Canyon, past the activation timestamp
     f.run(op::canyonConfig(), {kDepositEnvelope}, {dep});
     auto code = create2DeployerCodeIn(f.storage);
-    BOOST_CHECK_EQUAL(code.size(), engine::kCreate2DeployerCode.size());
-    BOOST_CHECK(std::equal(code.begin(), code.end(), engine::kCreate2DeployerCode.begin(),
-        engine::kCreate2DeployerCode.end()));
+    BOOST_CHECK_EQUAL(code.size(), engine::c_create2DeployerCode.size());
+    BOOST_CHECK(std::equal(code.begin(), code.end(), engine::c_create2DeployerCode.begin(),
+        engine::c_create2DeployerCode.end()));
 }
 
 // (c') A post-activation block against FRESH state must NOT deploy: upstream only fires at the

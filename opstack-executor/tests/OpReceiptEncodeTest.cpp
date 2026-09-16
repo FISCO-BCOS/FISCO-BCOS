@@ -68,6 +68,35 @@ BOOST_AUTO_TEST_CASE(DepositGoldenBytes)
     BOOST_CHECK_EQUAL(enc, expected);
 }
 
+// Pre-Canyon (Regolith): the version word is absent and op-geth's receipt hash
+// inadvertently omitted the deposit nonce too - the leaf is the plain shape with NO
+// nonce/version tail, even though the meta carries the API-level nonce (review F1).
+BOOST_AUTO_TEST_CASE(RegolithDepositLeafOmitsNonceAndVersion)
+{
+    auto r = minimalDepositReceipt();
+    bcos::protocol::OpStackReceiptMeta meta;
+    meta.deposit_nonce = 5;  // carried at API level, NOT part of the consensus leaf
+    r->setOpStackMeta(std::move(meta));
+    const auto enc =
+        encodeReceiptForRoot(*r, static_cast<uint8_t>(kDepositTxType), regolithConfig());
+    // payload = status 1 + cumGas 3 + bloom 259 + logs 1 = 264 = 0x108 -> f9 01 08
+    bcos::bytes expected{0x7e, 0xf9, 0x01, 0x08, 0x01, 0x82, 0x52, 0x08, 0xb9, 0x01, 0x00};
+    expected.insert(expected.end(), 256, 0x00);
+    expected.insert(expected.end(), {0xc0});
+    BOOST_REQUIRE_EQUAL(enc.size(), 268u);
+    BOOST_CHECK_EQUAL(enc, expected);
+}
+
+// The fork/meta agreement is the seal's consensus check, in BOTH directions: a version
+// word on a pre-Canyon deposit must be rejected exactly like a missing word post-Canyon.
+BOOST_AUTO_TEST_CASE(RegolithDepositWithVersionIsForkInconsistent)
+{
+    BOOST_CHECK_EXCEPTION(
+        static_cast<void>(encodeReceiptForRoot(*minimalDepositReceipt(),
+            static_cast<uint8_t>(kDepositTxType), regolithConfig())),
+        bcos::evm::OpConsensusError, consensusWhatContains("fork-inconsistent"));
+}
+
 // Production stores cumulativeGasUsed as decimal, while historical receipts may carry a 0x
 // quantity. Both representations must commit to exactly the same receipt leaf.
 BOOST_AUTO_TEST_CASE(DepositDecimalAndHexCumulativeGasAreEquivalent)

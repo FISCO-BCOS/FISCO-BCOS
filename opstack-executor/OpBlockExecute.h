@@ -93,6 +93,12 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
 
 /// Q5: any Jovian-or-later activation that is live at `blockTsSec` but not at `parentTsSec`.
 /// Timestamps are Unix seconds (convert header millis with `unixSecondsFromInternalMillis`).
+///
+/// KNOWN DIVERGENCE from op-geth (deliberate, spec-strict): upstream has no timestamp-window
+/// rule - its only deposits-only probe is length-keyed and inspects the LAST transaction
+/// (core/types/rollup_cost.go:571-576), so a block ordered [non-deposit..., deposit] on an
+/// activation timestamp is accepted by op-geth and rejected here. The corpus generator only
+/// produces deposits-first blocks, so differential replay cannot cover the shape.
 inline bool isNoUserTxActivationBlock(
     OpForkSchedule const& schedule, uint64_t parentTsSec, uint64_t blockTsSec)
 {
@@ -278,8 +284,9 @@ enum class DaFootprintError : uint8_t
         auto const term =
             estimatedDaSizeFromFlz(flzCompressLen(evmc::bytes_view{env.data(), env.size()})) *
             static_cast<uint64_t>(*scalar);
-        // op-geth accumulates into a Go uint64 (wraps). Wrapping would let a crafted block
-        // clear the equality gate; fail closed instead (no legitimate block overflows).
+        // KNOWN DIVERGENCE from op-geth (deliberate, fail-closed): upstream accumulates
+        // into a Go uint64 and wraps. Wrapping would let a crafted block clear the equality
+        // gate; this side rejects instead (no legitimate block overflows).
         if (sum > std::numeric_limits<uint64_t>::max() - term)
             return fail(DaFootprintError::Overflow);
         sum += term;
@@ -468,28 +475,28 @@ OpExecuteBlockResult finalizeOpBlockResult(bcos::executor_v1::opstack::OpstackEx
 // pre-block hook never runs, so no live chain is currently observed to diverge here.
 // ────────────────────────────────────────────────────────────────────────────
 // clang-format off
-inline constexpr std::array<uint8_t, 20> kCreate2DeployerAddressBytes = {
+inline constexpr std::array<uint8_t, 20> c_create2DeployerAddressBytes = {
     0x13, 0xb0, 0xd8, 0x5c, 0xcb, 0x8b, 0xf8, 0x60, 0xb6, 0xb7,
     0x9a, 0xf3, 0x02, 0x9f, 0xca, 0x08, 0x1a, 0xe9, 0xbe, 0xf2};
-inline constexpr std::array<uint8_t, 32> kCreate2DeployerCodeHashBytes = {
+inline constexpr std::array<uint8_t, 32> c_create2DeployerCodeHashBytes = {
     0xb0, 0x55, 0x0b, 0x5b, 0x43, 0x1e, 0x30, 0xd3, 0x80, 0x00, 0xef, 0xb7, 0x10, 0x7a, 0xaa, 0x0a,
     0xde, 0x03, 0xd4, 0x8a, 0x71, 0x98, 0xa1, 0x40, 0xed, 0xda, 0x9d, 0x27, 0x13, 0x44, 0x68, 0xb2};
 
 inline evmc::address create2DeployerAddress()
 {
     evmc::address addr{};
-    std::memcpy(addr.bytes, kCreate2DeployerAddressBytes.data(), sizeof(addr.bytes));
+    std::memcpy(addr.bytes, c_create2DeployerAddressBytes.data(), sizeof(addr.bytes));
     return addr;
 }
 
 inline evmc::bytes32 create2DeployerCodeHash()
 {
     evmc::bytes32 hash{};
-    std::memcpy(hash.bytes, kCreate2DeployerCodeHashBytes.data(), sizeof(hash.bytes));
+    std::memcpy(hash.bytes, c_create2DeployerCodeHashBytes.data(), sizeof(hash.bytes));
     return hash;
 }
 
-inline constexpr std::array<uint8_t, 1584> kCreate2DeployerCode = {
+inline constexpr std::array<uint8_t, 1584> c_create2DeployerCode = {
     0x60, 0x80, 0x60, 0x40, 0x52, 0x60, 0x04, 0x36, 0x10, 0x61, 0x00, 0x43, 0x57, 0x60, 0x00, 0x35,
     0x60, 0xe0, 0x1c, 0x80, 0x63, 0x07, 0x6c, 0x37, 0xb2, 0x14, 0x61, 0x00, 0x4f, 0x57, 0x80, 0x63,
     0x48, 0x12, 0x86, 0xe6, 0x14, 0x61, 0x00, 0x71, 0x57, 0x80, 0x63, 0x56, 0x29, 0x94, 0x81, 0x14,
@@ -631,7 +638,7 @@ void ensureCreate2Deployer(bcos::evm::evmstate::Storage2State<Storage>& stateVie
     entry.addr = addr;
     entry.nonce = existing.has_value() ? existing->nonce : 0;
     entry.balance = existing.has_value() ? existing->balance : intx::uint256{0};
-    entry.code = evmc::bytes(std::begin(kCreate2DeployerCode), std::end(kCreate2DeployerCode));
+    entry.code = evmc::bytes(std::begin(c_create2DeployerCode), std::end(c_create2DeployerCode));
 
     try
     {
