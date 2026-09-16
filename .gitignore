@@ -98,3 +98,6 @@ CLAUDE.local.md
 .agents/reviews/
 .claude/worktrees
 .claude/agents
+
+# RocksDB unittest working directory (created by UT runs, never commit).
+unittestdb/
