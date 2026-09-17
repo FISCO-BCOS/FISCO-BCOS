@@ -99,8 +99,8 @@ public:
             GlobalStateStorage, SchedulerType>;
         auto holder = std::make_shared<ConcreteOpModel<SchedulerType, ConcreteEngineService>>(
             std::move(storageInitializer), std::move(blockFactory), std::move(scheduler), memPool,
-            blockTxCountLimit, std::move(delegate), std::move(daCaps),
-            allowSynthesizedL1Attributes, eip1559);
+            blockTxCountLimit, std::move(delegate), std::move(daCaps), allowSynthesizedL1Attributes,
+            eip1559);
         initializer->m_holder = holder;
         initializer->m_engineService =
             std::shared_ptr<bcos::engine::AnyEngineService>(holder, &holder->m_any);

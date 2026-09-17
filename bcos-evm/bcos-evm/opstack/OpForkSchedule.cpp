@@ -296,8 +296,7 @@ std::string OpForkSchedule::canonicalText() const
 
 namespace
 {
-std::vector<OpForkActivation> jovianAndLaterOf(
-    std::vector<OpForkActivation> const& activations)
+std::vector<OpForkActivation> jovianAndLaterOf(std::vector<OpForkActivation> const& activations)
 {
     std::vector<OpForkActivation> out;
     out.reserve(activations.size());
@@ -325,16 +324,14 @@ std::vector<OpForkActivation> jovianAndLaterOf(
 }  // namespace
 
 OpForkSchedule::OpForkSchedule(std::vector<OpForkActivation> activations)
-  : m_activations(std::move(activations)),
-    m_jovianAndLater(jovianAndLaterOf(m_activations))
+  : m_activations(std::move(activations)), m_jovianAndLater(jovianAndLaterOf(m_activations))
 {
     validateActivations(m_activations);
     ensureKarstIsOsaka(m_activations);
 }
 
 OpForkSchedule::OpForkSchedule(std::vector<OpForkActivation> activations, TestBypass)
-  : m_activations(std::move(activations)),
-    m_jovianAndLater(jovianAndLaterOf(m_activations))
+  : m_activations(std::move(activations)), m_jovianAndLater(jovianAndLaterOf(m_activations))
 {}
 
 OpFork OpForkSchedule::forkAt(uint64_t timestampSeconds) const
