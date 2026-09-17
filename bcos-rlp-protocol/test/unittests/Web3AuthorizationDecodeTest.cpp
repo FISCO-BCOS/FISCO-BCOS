@@ -17,6 +17,7 @@
  * @brief EIP-7702 authorization-entry decode: op-geth's uint8 yParity domain.
  */
 
+#include <bcos-codec/rlp/Exceptions.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <boost/test/unit_test.hpp>
 #include <array>
@@ -51,11 +52,19 @@ std::optional<rpc::AuthorizationListEntry> decodeEntry(
 {
     walker = bytesRef(const_cast<byte*>(entry.data()), entry.size());
     rpc::AuthorizationListEntry out{};
-    if (auto err = codec::rlp::decode(walker, out); err != nullptr)
+    try
+    {
+        codec::rlp::decode(walker, out);
+    }
+    catch (bcos::codec::rlp::RlpDecodeException const& e)
     {
         if (error != nullptr)
         {
-            *error = err->errorMessage();
+            if (auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
+                comment != nullptr)
+            {
+                *error = *comment;
+            }
         }
         return std::nullopt;
     }

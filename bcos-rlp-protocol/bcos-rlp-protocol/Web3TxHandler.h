@@ -1,4 +1,6 @@
-// bcos-rlp-protocol/bcos-rlp-protocol/Web3TxHandler.h
+// Copyright (C) 2026 FISCO BCOS. SPDX-License-Identifier: Apache-2.0
+// @file Web3TxHandler.h
+// @brief Per-transaction-type RLP encode/decode handlers for Web3 transactions
 // ⚠️ isSystemTransaction encoding workaround: DepositTxHandler::encode() encodes it as uint32_t
 // (not uint8_t) because RLPEncode.h's generic uint8_t encoding odr-uses the non-template
 // toCompactBigEndian(byte, unsigned), defined only in DataConvertUtility.cpp (a pre-existing
@@ -7,7 +9,6 @@
 #pragma once
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/Error.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <json/json.h>
 #include <cstdint>
@@ -33,10 +34,9 @@ struct Web3TxHandler
     // RLP header (length computation)
     virtual bcos::codec::rlp::Header header(const Web3Transaction&) const = 0;
     // Decode (populates Web3Transaction; withSig controls whether the signature is parsed).
-    // ⚠️ Returns Error::UniquePtr (not void): decode errors must propagate, not be silently
-    // swallowed.
-    virtual bcos::Error::UniquePtr decode(
-        bcos::bytesRef&, Web3Transaction&, bool withSig) const = 0;
+    // ⚠️ Throws codec::rlp::RlpDecodeException on malformed input: decode errors must
+    // propagate, not be silently swallowed.
+    virtual void decode(bcos::bytesRef&, Web3Transaction&, bool withSig) const = 0;
 };
 
 // Dispatch by type via a switch over the known type bytes. Unknown types get a fail-loud

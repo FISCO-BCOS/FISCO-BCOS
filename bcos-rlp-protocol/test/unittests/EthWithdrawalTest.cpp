@@ -19,6 +19,7 @@
  */
 
 #include "bcos-rlp-protocol/EthWithdrawal.h"
+#include <bcos-codec/rlp/Exceptions.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 
@@ -55,8 +56,7 @@ BOOST_AUTO_TEST_CASE(goldenDecode)
 {
     EthWithdrawal w;
     auto rawkGolden = fromHex(kGoldenHex);
-    auto err = w.rlpDecode(ref(rawkGolden));
-    BOOST_CHECK(!err);
+    w.rlpDecode(ref(rawkGolden));
     BOOST_CHECK(w.data() == makeWithdrawal());
 }
 
@@ -67,7 +67,7 @@ BOOST_AUTO_TEST_CASE(roundTrip)
     bytes out;
     w.rlpEncode(out);
     EthWithdrawal decoded;
-    BOOST_CHECK(!decoded.rlpDecode(ref(out)));
+    BOOST_CHECK_NO_THROW(decoded.rlpDecode(ref(out)));
     BOOST_CHECK(decoded.data() == wd);
 }
 
@@ -80,7 +80,7 @@ BOOST_AUTO_TEST_CASE(rlpDecodeRejectsTrailingBytes)
     w.rlpEncode(out);
     out.push_back(0xff);
     EthWithdrawal decoded;
-    BOOST_REQUIRE(decoded.rlpDecode(ref(out)) != nullptr);
+    BOOST_REQUIRE_THROW(decoded.rlpDecode(ref(out)), bcos::codec::rlp::RlpDecodeException);
 }
 
 // std::vector<EthWithdrawalData> through the generic list codec (used by EthBlock).
@@ -92,7 +92,7 @@ BOOST_AUTO_TEST_CASE(vectorRoundTrip)
     std::vector<EthWithdrawalData> decoded;
     auto mutableData = out;
     bytesRef in(mutableData.data(), mutableData.size());
-    BOOST_CHECK(!codec::rlp::decode(in, decoded));
+    BOOST_CHECK_NO_THROW(codec::rlp::decode(in, decoded));
     BOOST_CHECK(decoded == ws);
 }
 

@@ -29,7 +29,7 @@ BOOST_AUTO_TEST_CASE(parse_eip1559_from_tars_structured_access_list)
     auto bytes = fromHexWithPrefix(rawTx);
     auto bRef = ref(bytes);
     Web3Transaction w3{};
-    BOOST_REQUIRE(bcos::codec::rlp::decode(bRef, w3) == nullptr);
+    BOOST_REQUIRE_NO_THROW(bcos::codec::rlp::decode(bRef, w3));
     BOOST_CHECK(w3.type == TransactionType::EIP1559);
     BOOST_CHECK(!w3.accessList.empty());
 
@@ -57,7 +57,7 @@ BOOST_AUTO_TEST_CASE(parse_eip1559_access_list_from_extra_when_tars_list_empty)
     auto bytes = fromHexWithPrefix(rawTx);
     auto bRef = ref(bytes);
     Web3Transaction w3{};
-    BOOST_REQUIRE(bcos::codec::rlp::decode(bRef, w3) == nullptr);
+    BOOST_REQUIRE_NO_THROW(bcos::codec::rlp::decode(bRef, w3));
 
     auto tarsHolder = std::make_shared<bcostars::Transaction>(w3.takeToTarsTransaction());
     auto const txHash = w3.txHash();
@@ -86,7 +86,7 @@ BOOST_AUTO_TEST_CASE(undecodable_extra_bytes_keeps_tars_access_list)
     auto bytes = fromHexWithPrefix(rawTx);
     auto bRef = ref(bytes);
     Web3Transaction w3{};
-    BOOST_REQUIRE(bcos::codec::rlp::decode(bRef, w3) == nullptr);
+    BOOST_REQUIRE_NO_THROW(bcos::codec::rlp::decode(bRef, w3));
     BOOST_REQUIRE(!w3.accessList.empty());
 
     auto tarsHolder = std::make_shared<bcostars::Transaction>(w3.takeToTarsTransaction());

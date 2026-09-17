@@ -307,9 +307,11 @@ TransactionStatus checkSignature(Envelope const& in)
             if (auto const sig = in.tx.signatureData();
                 sig.size() == static_cast<size_t>(crypto::SECP256K1_SIGNATURE_LEN))
             {
-                if (checkEip2Signature(sig.getCroppedData(0, crypto::SECP256K1_SIGNATURE_R_LEN),
-                        sig.getCroppedData(crypto::SECP256K1_SIGNATURE_R_LEN,
-                            crypto::SECP256K1_SIGNATURE_S_LEN)) != nullptr)
+                // Returns false on a high-s or out-of-range scalar; reject it as
+                // InvalidSignature, which is the old null-check's status too.
+                if (!checkEip2Signature(sig.getCroppedData(0, crypto::SECP256K1_SIGNATURE_R_LEN),
+                        sig.getCroppedData(
+                            crypto::SECP256K1_SIGNATURE_R_LEN, crypto::SECP256K1_SIGNATURE_S_LEN)))
                 {
                     return TransactionStatus::InvalidSignature;
                 }

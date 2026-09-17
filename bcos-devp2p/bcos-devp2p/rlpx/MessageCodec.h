@@ -20,6 +20,7 @@
  */
 #pragma once
 
+#include <bcos-codec/rlp/Result.h>
 #include <bcos-utilities/Common.h>
 
 namespace bcos::devp2p::rlpx
@@ -27,8 +28,8 @@ namespace bcos::devp2p::rlpx
 // A decoded RLPx message.
 struct Message
 {
-    uint8_t id{0};       // message code
-    bcos::bytes data;    // RLP-encoded payload
+    uint8_t id{0};     // message code
+    bcos::bytes data;  // RLP-encoded payload
 };
 
 // Encodes/decodes a Message into/from a frame payload:
@@ -39,7 +40,8 @@ public:
     static constexpr size_t kMaxFrameSize = 16 << 20;  // 16 MiB
 
     bcos::bytes encode(Message const& _message) const;
-    Message decode(bytesConstRef _frameData) const;
+    // Malformed frames are reported as an RlpError value, never thrown.
+    bcos::codec::rlp::RlpResult<Message> decode(bytesConstRef _frameData) const;
 
     void enableCompression() { m_compressionEnabled = true; }
 

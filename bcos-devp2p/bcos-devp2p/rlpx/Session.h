@@ -34,7 +34,9 @@ public:
     Session(Socket&& _socket, FramingCipher _cipher);
 
     void sendMessage(Message const& _message);
-    Message recvMessage();
+    // I/O and framing (MAC) failures still throw; a malformed frame payload is
+    // reported as an RlpError value by the codec.
+    bcos::codec::rlp::RlpResult<Message> recvMessage();
 
     void enableCompression() { m_codec.enableCompression(); }
 

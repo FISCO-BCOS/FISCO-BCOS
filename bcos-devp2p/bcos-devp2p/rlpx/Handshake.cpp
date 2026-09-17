@@ -19,7 +19,9 @@
  */
 #include "Handshake.h"
 
+#include "../RlpTake.h"
 #include <bcos-codec/rlp/Common.h>
+#include <bcos-codec/rlp/Exceptions.h>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/random/CryptoRandom.h>
@@ -27,6 +29,8 @@
 
 namespace bcos::devp2p::rlpx
 {
+using bcos::codec::rlp::unwrapOrThrow;
+
 namespace
 {
 // 2-byte big-endian size prefix (EIP-8 auth-size).
@@ -119,26 +123,14 @@ bcos::bytes AuthMessage::bodyAsRlp() const
 void AuthMessage::initFromRlp(bytesConstRef _data)
 {
     bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
-    auto [listError, listHeader] = bcos::codec::rlp::decodeHeader(view);
-    if (listError || !listHeader.isList)
-    {
-        throw std::runtime_error("AuthMessage: auth body is not an RLP list");
-    }
-    bcos::bytesRef items(view.data(), listHeader.payloadLength);
-    auto decodeBytes = [&items](bcos::bytes& out) {
-        if (auto err = bcos::codec::rlp::decode(items, out))
-        {
-            throw std::runtime_error("AuthMessage: item decode failed");
-        }
-    };
-    decodeBytes(m_signature);
-    decodeBytes(m_initiatorPublicKey);
-    decodeBytes(m_nonce);
-    uint64_t version = 0;
-    if (auto err = bcos::codec::rlp::decode(items, version))
-    {
-        throw std::runtime_error("AuthMessage: version decode failed");
-    }
+    auto items = unwrapOrThrow(
+        detail::takeListPayload(view, "auth body is not an RLP list"), "AuthMessage: ");
+    m_signature =
+        unwrapOrThrow(detail::take<bcos::bytes>(items), "AuthMessage: item decode failed: ");
+    m_initiatorPublicKey =
+        unwrapOrThrow(detail::take<bcos::bytes>(items), "AuthMessage: item decode failed: ");
+    m_nonce = unwrapOrThrow(detail::take<bcos::bytes>(items), "AuthMessage: item decode failed: ");
+    unwrapOrThrow(detail::take<uint64_t>(items), "AuthMessage: version decode failed: ");
     // Ignore trailing items (EIP-8 forward compatibility).
     if (m_signature.size() != 65 || m_initiatorPublicKey.size() != 64 || m_nonce.size() != 32)
     {
@@ -181,25 +173,13 @@ bcos::bytes AuthAckMessage::bodyAsRlp() const
 void AuthAckMessage::initFromRlp(bytesConstRef _data)
 {
     bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
-    auto [listError, listHeader] = bcos::codec::rlp::decodeHeader(view);
-    if (listError || !listHeader.isList)
-    {
-        throw std::runtime_error("AuthAckMessage: ack body is not an RLP list");
-    }
-    bcos::bytesRef items(view.data(), listHeader.payloadLength);
-    auto decodeBytes = [&items](bcos::bytes& out) {
-        if (auto err = bcos::codec::rlp::decode(items, out))
-        {
-            throw std::runtime_error("AuthAckMessage: item decode failed");
-        }
-    };
-    decodeBytes(m_ephemeralPublicKey);
-    decodeBytes(m_nonce);
-    uint64_t version = 0;
-    if (auto err = bcos::codec::rlp::decode(items, version))
-    {
-        throw std::runtime_error("AuthAckMessage: version decode failed");
-    }
+    auto items = unwrapOrThrow(
+        detail::takeListPayload(view, "ack body is not an RLP list"), "AuthAckMessage: ");
+    m_ephemeralPublicKey =
+        unwrapOrThrow(detail::take<bcos::bytes>(items), "AuthAckMessage: item decode failed: ");
+    m_nonce =
+        unwrapOrThrow(detail::take<bcos::bytes>(items), "AuthAckMessage: item decode failed: ");
+    unwrapOrThrow(detail::take<uint64_t>(items), "AuthAckMessage: version decode failed: ");
     if (m_ephemeralPublicKey.size() != 64 || m_nonce.size() != 32)
     {
         throw std::runtime_error("AuthAckMessage: invalid item sizes");

@@ -11,6 +11,7 @@
  *        integer payloads (leading zero bytes, and the single byte 0x00 for zero), matching
  *        go-ethereum's ErrCanonInt. Length prefixes were already checked; values were not.
  */
+#include "bcos-codec/rlp/Exceptions.h"
 #include "bcos-codec/rlp/RLPDecode.h"
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
@@ -30,8 +31,22 @@ int32_t decodeError(std::string_view hex)
     bcos::bytes bytes = fromHex(hex);
     auto ref = bcos::ref(bytes);
     T value{};
-    auto error = bcos::codec::rlp::decode(ref, value);
-    return error ? error->errorCode() : -1;
+    // -1 means "no error" (decode succeeded); any thrown code is returned as-is, so a real
+    // DecodingError::Overflow (== 0) is still distinguishable from success.
+    try
+    {
+        bcos::codec::rlp::decode(ref, value);
+        return -1;
+    }
+    catch (bcos::codec::rlp::RlpDecodeException const& e)
+    {
+        auto const* code = boost::get_error_info<bcos::codec::rlp::errinfo_rlpErrorCode>(e);
+        if (code == nullptr)
+        {
+            throw;  // exception without the code info: fail loudly, don't mask it
+        }
+        return *code;
+    }
 }
 template <typename T>
 T decodeOk(std::string_view hex)
@@ -39,8 +54,7 @@ T decodeOk(std::string_view hex)
     bcos::bytes bytes = fromHex(hex);
     auto ref = bcos::ref(bytes);
     T value{};
-    auto error = bcos::codec::rlp::decode(ref, value);
-    BOOST_REQUIRE(!error);
+    bcos::codec::rlp::decode(ref, value);
     return value;
 }
 }  // namespace

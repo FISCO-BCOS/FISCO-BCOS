@@ -24,7 +24,6 @@
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/Error.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <vector>
 
@@ -34,9 +33,9 @@ namespace bcos::protocol
 // RLP form (Ethereum yellow paper, Appendix B): rlp([address, topics, data]).
 struct EthLogData
 {
-    bcos::Address address;                        // 20 bytes, the emitting contract
-    std::vector<bcos::crypto::HashType> topics;   // 0..n 32-byte topics
-    bcos::bytes data;                             // arbitrary-length payload
+    bcos::Address address;                       // 20 bytes, the emitting contract
+    std::vector<bcos::crypto::HashType> topics;  // 0..n 32-byte topics
+    bcos::bytes data;                            // arbitrary-length payload
 
     bool operator==(const EthLogData& rhs) const
     {
@@ -55,7 +54,8 @@ public:
 
     void rlpEncode(bcos::bytes& out) const;
     // Decodes a single log item (a 3-element list) from `data`.
-    bcos::Error::UniquePtr rlpDecode(bcos::bytesConstRef data);
+    // Throws codec::rlp::RlpDecodeException on malformed input.
+    void rlpDecode(bcos::bytesConstRef data);
 
     const EthLogData& data() const { return m_data; }
     EthLogData& data() { return m_data; }
@@ -68,18 +68,10 @@ private:
 namespace bcos::codec::rlp
 {
 // Overloads so EthLogData works as an item inside the generic list/vector codecs.
-inline size_t length(const protocol::EthLogData& _log) noexcept
-{
-    return length(_log.address, _log.topics, _log.data);
-}
-inline void encode(bcos::bytes& _out, const protocol::EthLogData& _log) noexcept
-{
-    encode(_out, _log.address, _log.topics, _log.data);
-}
-inline bcos::Error::UniquePtr decode(bcos::bytesRef& _in, protocol::EthLogData& _log) noexcept
-{
-    return decode(_in, _log.address, _log.topics, _log.data);
-}
+// decode throws RlpDecodeException on malformed input.
+size_t length(const protocol::EthLogData& _log) noexcept;
+void encode(bcos::bytes& _out, const protocol::EthLogData& _log) noexcept;
+void decode(bcos::bytesRef& _in, protocol::EthLogData& _log);
 }  // namespace bcos::codec::rlp
 
 namespace bcos::protocol
@@ -89,16 +81,7 @@ namespace bcos::protocol
 // namespaces (bcos::protocol). These thin wrappers let EthLogData participate in
 // std::vector<EthLogData> / variadic-list encode/decode. The canonical implementations live in
 // bcos::codec::rlp above (qualified codec::rlp::encode(out, log) still works).
-inline size_t length(const EthLogData& _log) noexcept
-{
-    return codec::rlp::length(_log);
-}
-inline void encode(bcos::bytes& _out, const EthLogData& _log) noexcept
-{
-    codec::rlp::encode(_out, _log);
-}
-inline bcos::Error::UniquePtr decode(bcos::bytesRef& _in, EthLogData& _log) noexcept
-{
-    return codec::rlp::decode(_in, _log);
-}
+size_t length(const EthLogData& _log) noexcept;
+void encode(bcos::bytes& _out, const EthLogData& _log) noexcept;
+void decode(bcos::bytesRef& _in, EthLogData& _log);
 }  // namespace bcos::protocol
