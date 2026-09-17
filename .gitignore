@@ -112,3 +112,9 @@ docs/plans/
 .ci-op-monorepo/
 .ci-op-e2e-tests/
 .ci-c2-bins/
+
+# Dated working documents (audit/design snapshots) stay local: their baselines and
+# sibling documents live on other branches, so an in-tree copy carries dangling
+# cross-references and goes stale silently. Keep the files in the workspace and the
+# local archive; see ~/octo/docs-archive.
+docs/2*-*.md
