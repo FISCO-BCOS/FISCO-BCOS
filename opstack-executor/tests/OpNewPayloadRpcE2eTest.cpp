@@ -1785,6 +1785,113 @@ BOOST_AUTO_TEST_CASE(HoloceneParentPricesFromItsOwnExtraData)
     BOOST_CHECK_EQUAL(static_cast<int>(produced.extraData[8]), 6);  // elasticity 6 (chain)
 }
 
+// Reference-parity case for the zero-param substitution: an all-zero attribute pair is LEGAL
+// input. op-geth's ValidateHolocene1559Params rejects only the mixed zero/non-zero pair
+// (consensus/misc/eip1559/eip1559_optimism.go:117-128) and miner/worker.go:377-381 then
+// substitutes the CHAIN CONFIG's pair into the header ("If this is a holocene block and the
+// params are 0, we must convert them to their previous constants in the header"). FISCO's
+// substitute source must therefore be this node's declaration, not a hardcoded preset — which
+// is what this case distinguishes: the declaration below carries denominatorCanyon 8 /
+// elasticity 2, while the undeclared preset is 250 / 6.
+BOOST_AUTO_TEST_CASE(ZeroAttributeParamsSubstituteTheDeclaredPair)
+{
+    bcos::engine::OpEip1559Params const declared{
+        .elasticity = 2, .denominator = 8, .denominatorCanyon = 8};
+    auto const holoceneShaped = bcos::fromHex("0x00000000fa00000006");
+
+    auto const genesis = regolithGenesisHash();
+    auto schedule = std::make_shared<const bcos::evm::opstack::OpForkSchedule>(
+        std::vector<bcos::evm::opstack::OpForkActivation>{{bcos::evm::opstack::OpFork::Regolith, 0},
+            {bcos::evm::opstack::OpFork::Canyon, 0}, {bcos::evm::opstack::OpFork::Ecotone, 0},
+            {bcos::evm::opstack::OpFork::Fjord, 0}, {bcos::evm::opstack::OpFork::Granite, 0},
+            {bcos::evm::opstack::OpFork::Holocene, 0}},
+        bcos::evm::opstack::OpForkSchedule::TestBypass{});
+    auto fixture = std::make_unique<OpE2eFixture>(schedule, declared);
+    registerRegolithGenesis(*fixture, genesis, holoceneShaped);
+
+    bcos::engine::PayloadAttributes attrs;
+    attrs.timestamp = 1'000;
+    attrs.prevRandao = bcos::crypto::HashType{};
+    attrs.suggestedFeeRecipient = bcos::Address{};
+    attrs.gasLimit = 30'000'000;
+    attrs.noTxPool = true;
+    attrs.withdrawals = std::vector<bcos::engine::WithdrawalV1>{};
+    attrs.parentBeaconBlockRoot = bcos::h256{};
+    attrs.eip1559Params = bcos::fromHex("0x0000000000000000");  // op-node: SystemConfig unset
+
+    bcos::engine::ForkchoiceState const fc{genesis, genesis, genesis};
+    auto built = bcos::task::syncWait(fixture->service.updateForkchoice(
+        fc, &attrs, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
+    BOOST_REQUIRE_MESSAGE(
+        built.payloadStatus.status == bcos::engine::PayloadValidationStatus::Valid,
+        "zero-param build must be VALID (the reference never refuses it), got "
+            << static_cast<int>(built.payloadStatus.status) << " "
+            << built.payloadStatus.validationError.value_or(""));
+    BOOST_REQUIRE(built.payloadId.has_value());
+    auto got = bcos::task::syncWait(fixture->service.getPayload(
+        *built.payloadId, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
+    BOOST_REQUIRE(got != nullptr);
+    auto const& produced = got->executionPayload;
+    BOOST_REQUIRE_EQUAL(produced.extraData.size(), 9U);
+    BOOST_CHECK_EQUAL(static_cast<int>(produced.extraData[0]), 0x00);  // Holocene tag
+    BOOST_CHECK_MESSAGE(static_cast<int>(produced.extraData[4]) == 8,
+        "the substituted denominator must be the DECLARED Canyon value 8, not the preset 250");
+    BOOST_CHECK_MESSAGE(static_cast<int>(produced.extraData[8]) == 2,
+        "the substituted elasticity must be the DECLARED 2, not the preset 6");
+}
+
+// The other half of the same rule, and the one the operator can actually hit: the SAME zero
+// attribute pair on a node that declares nothing. Substitution still happens (the reference
+// never refuses), but the pair now comes from kLegacyOpEip1559Params — the OP-mainnet preset —
+// which is only correct for a standard op-deployer chain. The engine logs a WARNING the first
+// time it fires (OpEngineService.inl, "block extraData will carry the OP-mainnet PRESET pair");
+// this case pins the VALUE so the warning's claim is checkable, and pairs with the declared case
+// above to show the two sources different.
+BOOST_AUTO_TEST_CASE(ZeroAttributeParamsOnAnUndeclaredNodeUseThePreset)
+{
+    auto const holoceneShaped = bcos::fromHex("0x00000000fa00000006");
+
+    auto const genesis = regolithGenesisHash();
+    auto schedule = std::make_shared<const bcos::evm::opstack::OpForkSchedule>(
+        std::vector<bcos::evm::opstack::OpForkActivation>{{bcos::evm::opstack::OpFork::Regolith, 0},
+            {bcos::evm::opstack::OpFork::Canyon, 0}, {bcos::evm::opstack::OpFork::Ecotone, 0},
+            {bcos::evm::opstack::OpFork::Fjord, 0}, {bcos::evm::opstack::OpFork::Granite, 0},
+            {bcos::evm::opstack::OpFork::Holocene, 0}},
+        bcos::evm::opstack::OpForkSchedule::TestBypass{});
+    auto fixture = std::make_unique<OpE2eFixture>(schedule);  // no [op_eip1559] declaration
+    registerRegolithGenesis(*fixture, genesis, holoceneShaped);
+
+    bcos::engine::PayloadAttributes attrs;
+    attrs.timestamp = 1'000;
+    attrs.prevRandao = bcos::crypto::HashType{};
+    attrs.suggestedFeeRecipient = bcos::Address{};
+    attrs.gasLimit = 30'000'000;
+    attrs.noTxPool = true;
+    attrs.withdrawals = std::vector<bcos::engine::WithdrawalV1>{};
+    attrs.parentBeaconBlockRoot = bcos::h256{};
+    attrs.eip1559Params = bcos::fromHex("0x0000000000000000");
+
+    bcos::engine::ForkchoiceState const fc{genesis, genesis, genesis};
+    auto built = bcos::task::syncWait(fixture->service.updateForkchoice(
+        fc, &attrs, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
+    BOOST_REQUIRE_MESSAGE(
+        built.payloadStatus.status == bcos::engine::PayloadValidationStatus::Valid,
+        "the reference accepts zero params on an undeclared chain too, got "
+            << static_cast<int>(built.payloadStatus.status) << " "
+            << built.payloadStatus.validationError.value_or(""));
+    BOOST_REQUIRE(built.payloadId.has_value());
+    auto got = bcos::task::syncWait(fixture->service.getPayload(
+        *built.payloadId, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
+    BOOST_REQUIRE(got != nullptr);
+    auto const& produced = got->executionPayload;
+    BOOST_REQUIRE_EQUAL(produced.extraData.size(), 9U);
+    BOOST_CHECK_EQUAL(static_cast<int>(produced.extraData[0]), 0x00);
+    BOOST_CHECK_MESSAGE(static_cast<int>(produced.extraData[4]) == 250,
+        "undeclared ⇒ the preset's Canyon denominator 250");
+    BOOST_CHECK_MESSAGE(static_cast<int>(produced.extraData[8]) == 6,
+        "undeclared ⇒ the preset's elasticity 6 — the value the WARNING names");
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE(OpForkchoiceRpcE2eSuite)

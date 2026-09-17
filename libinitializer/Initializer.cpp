@@ -734,16 +734,37 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // The chain's EIP-1559 triple (config.genesis [op_eip1559], legacy preset when
         // undeclared) prices every pre-Holocene block; resolved through the SAME
         // effectiveOpEip1559 the genesis pin uses, so admission and the pin cannot disagree.
-        auto const opEip1559 =
-            bcos::engine::effectiveOpEip1559(m_nodeConfig->genesisConfig().m_opEip1559);
-        INITIALIZER_LOG(INFO) << LOG_DESC("OP chain EIP-1559 parameters")
-                              << LOG_KV("elasticity", opEip1559.elasticity)
-                              << LOG_KV("denominator", opEip1559.denominator)
-                              << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
+        // The declared-ness travels with it: an undeclared OP lane is announced at WARNING,
+        // because the engine will substitute this preset whenever op-node reports zero params
+        // and the preset need not be this chain's pair.
+        auto const& declaredOpEip1559 = m_nodeConfig->genesisConfig().m_opEip1559;
+        auto const opEip1559 = bcos::engine::effectiveOpEip1559(declaredOpEip1559);
+        if (declaredOpEip1559.has_value())
+        {
+            INITIALIZER_LOG(INFO) << LOG_DESC("OP chain EIP-1559 parameters")
+                                  << LOG_KV("declared", true)
+                                  << LOG_KV("elasticity", opEip1559.elasticity)
+                                  << LOG_KV("denominator", opEip1559.denominator)
+                                  << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
+        }
+        else
+        {
+            // Never silent: the engine substitutes exactly this preset into a block's extraData
+            // whenever op-node reports zero params (op-deployer leaves L1 SystemConfig's params
+            // zero unless setEIP1559Params is called), and the preset need not be this chain's
+            // pair.
+            INITIALIZER_LOG(WARNING)
+                << LOG_DESC(
+                       "OP chain EIP-1559 parameters UNDECLARED: assuming the OP-mainnet "
+                       "preset (declare [op_eip1559] if this chain's values differ)")
+                << LOG_KV("declared", false) << LOG_KV("elasticity", opEip1559.elasticity)
+                << LOG_KV("denominator", opEip1559.denominator)
+                << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
+        }
         m_engineServiceInitializer = EngineServiceInitializer::buildOp(
             m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
             m_memPoolInitializer->memPool(), bcos::engine::c_defaultBlockTxCountLimit, opDelegate,
-            m_daCaps, /*allowSynthesizedL1Attributes=*/false, opEip1559);
+            m_daCaps, /*allowSynthesizedL1Attributes=*/false, declaredOpEip1559);
 
         m_opScheduler = opDelegate;
         // Republish the full ledger configuration after every OP commit. OP commits go

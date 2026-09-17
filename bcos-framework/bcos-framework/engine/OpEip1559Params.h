@@ -26,6 +26,17 @@ struct OpEip1559Params
 /// and the value this node hardcoded before the chain's parameters became configurable. A chain
 /// that declares nothing keeps this triple, so its genesis pin and its pricing stay
 /// byte-identical to the pre-change behaviour and existing chains keep starting.
+///
+/// It is also the pair the engine substitutes into a block's extraData when op-node reports zero
+/// params and the node declares nothing (EngineServiceCommon.cpp encodeOptimismExtraData). The
+/// reference substitutes from its chain config, i.e. `config.optimism` as op-deployer writes it —
+/// for a standard deployment exactly this triple. op-geth has no else-branch for a chain config
+/// carrying no Optimism section at all (it drops to the protocol constants 8/2/8,
+/// params/config.go:1349-1368), but a real OP chain always has that section, so the preset is the
+/// realistic stand-in. Keeping the value is deliberate: `effectiveOpEip1559` is shared by the
+/// genesis pin (bcos-tool) and both pricing paths, so changing it would re-price every undeclared
+/// chain and split it away from the pin. An undeclared OP-lane node logs a WARNING at boot and
+/// again when the zero-param substitution fires, so the assumption is never silent.
 inline constexpr OpEip1559Params kLegacyOpEip1559Params{.elasticity = 6,
     .denominator = 50,
     .denominatorCanyon = 250};

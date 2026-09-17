@@ -153,8 +153,10 @@ std::uint32_t payloadShapeVersion(std::uint32_t methodVersion);
 std::optional<std::string> validateRawTransactionKind(
     bcos::engine::RawTransactionKind kind, std::size_t index);
 /// EIP-1559 attribute pairing rule: the pair must be both-zero or both
-/// non-zero. (0,0) is legal attribute input — encodeOptimismExtraData translates it to
-/// the Canyon constants 250/6 — but a mixed pair such as (d>0,e==0) would be encoded
+/// non-zero. (0,0) is legal attribute input — op-geth's ValidateHolocene1559Params accepts
+/// it and miner/worker.go:377-381 substitutes the chain config's pair, and
+/// encodeOptimismExtraData does the same from this node's declaration (the OP-mainnet preset
+/// when nothing is declared) — but a mixed pair such as (d>0,e==0) would be encoded
 /// verbatim as a zero-elasticity header that calcOpBaseFee can never extend, bricking
 /// the chain on top of it. Committed headers are validated separately with a strict
 /// non-zero rule (validateOpExtraDataShape) since encode never produces a zero header.

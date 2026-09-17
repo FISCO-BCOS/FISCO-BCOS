@@ -50,6 +50,7 @@
 #include <bcos-utilities/Exceptions.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <exception>
 #include <mutex>
@@ -147,7 +148,7 @@ public:
         int64_t blockTxCountLimit = c_defaultBlockTxCountLimit,
         bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
         std::shared_ptr<DACaps> daCaps = nullptr, bool allowSynthesizedL1Attributes = false,
-        OpEip1559Params eip1559 = kLegacyOpEip1559Params)
+        std::optional<OpEip1559Params> eip1559 = std::nullopt)
       : m_memPool(memPool),
         m_globalStateStorage(globalStateStorage),
         m_scheduler(scheduler),
@@ -374,10 +375,14 @@ private:
     bcos::scheduler::SchedulerInterface::Ptr m_delegate;
     std::shared_ptr<DACaps> m_daCaps;
     bool m_allowSynthesizedL1Attributes;
-    /// The chain's EIP-1559 triple (config.genesis [op_eip1559]; kLegacyOpEip1559Params when
-    /// undeclared). Injected at boot and never mutated: it is a genesis-frozen chain property,
-    /// so a value that changed mid-flight could not be reconciled with blocks already produced.
-    OpEip1559Params m_eip1559{kLegacyOpEip1559Params};
+    /// The chain's EIP-1559 triple as DECLARED (config.genesis [op_eip1559]); nullopt when the
+    /// node declares nothing, i.e. the chain is priced and pinned with kLegacyOpEip1559Params.
+    /// Kept as an optional rather than flattened through effectiveOpEip1559 so the engine can
+    /// still tell a declaration from a default: the zero-param substitution in
+    /// encodeOptimismExtraData warns only in the latter case. Injected at boot and never mutated:
+    /// it is a genesis-frozen chain property, so a value that changed mid-flight could not be
+    /// reconciled with blocks already produced.
+    std::optional<OpEip1559Params> m_eip1559;
     /// S5/S6 imported-tree lock (design §4.2): guards the ImportedStore decision
     /// sequence (occupancy check -> put) and the canonicalize gate — NOT the
     /// importExecute execution and NOT any storage co_await. A POSIX mutex must never

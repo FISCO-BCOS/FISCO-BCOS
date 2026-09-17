@@ -92,7 +92,7 @@ public:
         bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
         std::shared_ptr<bcos::engine::DACaps> daCaps = nullptr,
         bool allowSynthesizedL1Attributes = false,
-        bcos::engine::OpEip1559Params eip1559 = bcos::engine::kLegacyOpEip1559Params)
+        std::optional<bcos::engine::OpEip1559Params> eip1559 = std::nullopt)
     {
         auto initializer = Ptr(new EngineServiceInitializer());
         using ConcreteEngineService = bcos::engine::OpEngineService<bcos::txpool::MemPoolImpl,
@@ -154,7 +154,7 @@ private:
             std::shared_ptr<SchedulerType> scheduler, bcos::txpool::MemPoolImpl& memPool,
             int64_t blockTxCountLimit, bcos::scheduler::SchedulerInterface::Ptr delegate,
             std::shared_ptr<bcos::engine::DACaps> daCaps, bool allowSynthesizedL1Attributes,
-            bcos::engine::OpEip1559Params eip1559)
+            std::optional<bcos::engine::OpEip1559Params> eip1559)
           : m_storageInitializer(std::move(storageInitializer)),
             m_memPool(memPool),
             m_scheduler(std::move(scheduler)),

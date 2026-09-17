@@ -341,8 +341,10 @@ struct OpE2eFixture
 
     /// Explicit schedule: lets a case pin a historical fork window (e.g. Regolith) while the
     /// engine, the seam and the real OpScheduler delegate all share it.
+    /// `eip1559` stays an optional so a fixture can be honestly undeclared (the engine prices and
+    /// warns exactly as a node without [op_eip1559] does) instead of passing the preset in.
     explicit OpE2eFixture(std::shared_ptr<const bcos::evm::opstack::OpForkSchedule> schedule,
-        bcos::engine::OpEip1559Params eip1559 = bcos::engine::kLegacyOpEip1559Params)
+        std::optional<bcos::engine::OpEip1559Params> eip1559 = std::nullopt)
       : hashImpl(makeCryptoSuite()->hashImpl()),
         receiptFactory(makeReceiptFactory()),
         scheduler(schedule, {}),

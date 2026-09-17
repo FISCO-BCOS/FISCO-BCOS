@@ -92,7 +92,7 @@ OpBaseFeeClock OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerTyp
         .parentIsHolocene = extraDataLayoutFor(parentFork) != OpExtraDataLayout::Empty,
         .parentIsJovian = extraDataLayoutFor(parentFork) == OpExtraDataLayout::Jovian17,
         .newBlockIsCanyon = newForkId != OpForkId::Regolith,
-        .eip1559 = m_eip1559,
+        .eip1559 = effectiveOpEip1559(m_eip1559),
     };
 }
 
@@ -573,6 +573,52 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
             candidateTransactions.push_back(
                 EngineTransaction{.raw = std::move(env), .decoded = nullptr});
         }
+        // op-geth accepts an all-zero attribute pair and substitutes the chain config's pair
+        // (miner/worker.go:377-381); encodeOptimismExtraData does the same from this node's
+        // declaration, so the substitution is never a refusal. But when nothing is declared the
+        // pair written into this block is the OP-mainnet preset, which need not be this chain's —
+        // say so once, rather than leaving it to the boot line alone.
+        auto const effectiveEip1559 = effectiveOpEip1559(m_eip1559);
+        if (payloadAttributes.eip1559Params.has_value() &&
+            payloadAttributes.eip1559Params->size() == c_eip1559ParamsBytes)
+        {
+            auto const [attrDenominator, attrElasticity] =
+                decodeEip1559Params(*payloadAttributes.eip1559Params);
+            if (attrDenominator == 0 && attrElasticity == 0)
+            {
+                // Once per process PER SOURCE: a node declares or does not, so only one branch is
+                // reachable in production, but a shared guard would let the harmless INFO suppress
+                // the WARNING (and a test process runs both).
+                if (m_eip1559.has_value())
+                {
+                    static std::atomic<bool> declaredSubstitutionLogged{false};
+                    if (!declaredSubstitutionLogged.exchange(true))
+                    {
+                        BCOS_LOG(INFO) << LOG_BADGE("OpEngineService")
+                                       << LOG_DESC("attributes carry zero EIP-1559 params; "
+                                                   "substituting the DECLARED pair")
+                                       << LOG_KV("denominatorCanyon",
+                                              effectiveEip1559.denominatorCanyon)
+                                       << LOG_KV("elasticity", effectiveEip1559.elasticity);
+                    }
+                }
+                else
+                {
+                    static std::atomic<bool> presetSubstitutionLogged{false};
+                    if (!presetSubstitutionLogged.exchange(true))
+                    {
+                        BCOS_LOG(WARNING)
+                            << LOG_BADGE("OpEngineService")
+                            << LOG_DESC("attributes carry zero EIP-1559 params and this node "
+                                        "declares no [op_eip1559]: block extraData will carry "
+                                        "the OP-mainnet PRESET pair")
+                            << LOG_KV("denominatorCanyon", effectiveEip1559.denominatorCanyon)
+                            << LOG_KV("elasticity", effectiveEip1559.elasticity)
+                            << LOG_DESC("declare [op_eip1559] if this chain's own values differ");
+                    }
+                }
+            }
+        }
         ExecutionPayload candidate{
             .logsBloom = Bloom{},
             .parentHash = forkchoiceState.headBlockHash,
@@ -584,7 +630,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
             .baseFeePerGas = baseFee,
             .blockHash = h256{},
             .transactions = std::move(candidateTransactions),
-            .extraData = detail::encodeOptimismExtraData(payloadAttributes, m_eip1559),
+            .extraData = detail::encodeOptimismExtraData(payloadAttributes, effectiveEip1559),
             .feeRecipient = payloadAttributes.suggestedFeeRecipient,
             .timestamp = payloadAttributes.timestamp,
             .blockNumber = nextBlockNumber,
