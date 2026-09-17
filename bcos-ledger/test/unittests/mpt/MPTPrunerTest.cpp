@@ -27,10 +27,18 @@
 #include <bcos-ledger/mpt/Proof.h>
 #include <bcos-ledger/mpt/Trie.h>
 #include <bcos-storage/KeyPrefixes.h>
+#include <bcos-storage/RocksDBStorage2.h>
+#include <bcos-storage/StateKVResolver.h>
+#include <rocksdb/db.h>
+#include <rocksdb/options.h>
 #include <boost/test/unit_test.hpp>
+#include <atomic>
+#include <cstdint>
 #include <deque>
+#include <filesystem>
 #include <map>
 #include <optional>
+#include <random>
 #include <ranges>
 #include <string>
 #include <unordered_set>
@@ -52,15 +60,18 @@ using Pruner = MPTPruner<PruneBackend>;
 
 /// The (h256 → raw RLP) trie-node facade over the StateKey-keyed backend — the same mapping the
 /// production adapters (ViewNodeStorage / MPTNodeReadStorage) apply: StateKey{"/mpt/", digest}.
-/// Test-local because the production adapters live in bcos-storage / transaction-scheduler and
+/// Test-local because the production adapters live in transaction-scheduler / bcos-storage and
 /// are read-only or view-bound; the pruner tests need a writable one over a bare backend.
+/// Templated on the backend: PruneBackend for the single-shard suite, RocksDBStorage2 for the
+/// parallel-sweep test.
+template <class Backend>
 class BackendNodeStorage
 {
 public:
     using Key = bcos::h256;
     using Value = bcos::bytes;
 
-    explicit BackendNodeStorage(PruneBackend& backend) : m_backend(std::addressof(backend)) {}
+    explicit BackendNodeStorage(Backend& backend) : m_backend(std::addressof(backend)) {}
 
     bcos::task::Task<std::optional<bcos::bytes>> readOne(bcos::h256 key)
     {
@@ -106,13 +117,14 @@ public:
     }
 
 private:
-    PruneBackend* m_backend;
+    Backend* m_backend;
 };
 
 /// The hashes of every hash-addressed node reachable from @p root (the live set oracle, same
 /// walk as HashBuilderIncrementalTest's reachableHashes). BOOST_REQUIREs on a missing node, so
 /// a successful return also proves the trie version is fully resolvable.
-std::unordered_set<bcos::h256> liveNodeHashes(BackendNodeStorage& storage, bcos::h256 root)
+template <class NodeStorage>
+std::unordered_set<bcos::h256> liveNodeHashes(NodeStorage& storage, bcos::h256 root)
 {
     std::unordered_set<bcos::h256> out;
     if (root == emptyRootHash())
@@ -154,7 +166,7 @@ std::unordered_set<bcos::h256> liveNodeHashes(BackendNodeStorage& storage, bcos:
 }
 
 /// Number of live (non-tombstone) rows of @p table in @p backend.
-size_t countRowsInTable(PruneBackend& backend, std::string_view table)
+size_t countRowsInTable(auto& backend, std::string_view table)
 {
     auto iterator = bcos::task::syncWait(bcos::storage2::range(backend));
     size_t count = 0;
@@ -170,7 +182,7 @@ size_t countRowsInTable(PruneBackend& backend, std::string_view table)
     return count;
 }
 
-bool nodeRowExists(PruneBackend& backend, bcos::h256 const& hash)
+bool nodeRowExists(auto& backend, bcos::h256 const& hash)
 {
     return bcos::task::syncWait(
         bcos::storage2::existsOne(backend, bcos::ledger::mptNodeStateKey(hash)));
@@ -204,6 +216,55 @@ void writeGarbageRows(PruneBackend& backend, size_t count)
     bcos::task::syncWait(bcos::storage2::writeSome(backend, std::move(rows)));
 }
 
+// ---------------------------------------------------------------------------
+// RocksDB backend (the production persistence stack) for the parallel-sweep test: the opt-in
+// marker on RocksDBStorage2 makes kParallelSweepSafe true, so init's Phase 3 runs the
+// 256-shard tbb::parallel_for path the in-memory PruneBackend never exercises.
+// ---------------------------------------------------------------------------
+using RocksPruneBackend =
+    bcos::storage2::rocksdb::RocksDBStorage2<bcos::executor_v1::StateKey,
+        bcos::executor_v1::StateValue, bcos::storage2::rocksdb::StateKeyResolver,
+        bcos::storage2::rocksdb::StateValueResolver>;
+using RocksPruner = MPTPruner<RocksPruneBackend>;
+
+/// A temp-dir RocksDB opened create-if-missing, wiped on teardown.
+struct RocksDBSweepFixture
+{
+    RocksDBSweepFixture()
+    {
+        ::rocksdb::Options options;
+        options.create_if_missing = true;
+        ::rocksdb::DB* db = nullptr;
+        auto const status = ::rocksdb::DB::Open(options, path, &db);
+        BOOST_REQUIRE_MESSAGE(status.ok(), status.ToString());
+        rocksDB.reset(db);
+    }
+    ~RocksDBSweepFixture()
+    {
+        rocksDB.reset();
+        std::filesystem::remove_all(path);
+    }
+
+    std::string const path =
+        "./rocksdb-mpt-pruner-sweep-" + std::to_string(std::random_device{}());
+    std::unique_ptr<::rocksdb::DB> rocksDB;
+};
+
+/// A deterministic junk hash landing in Phase-3 shard @p shard (first hash byte), with @p index
+/// in the trailing 4 bytes (real node hashes are Keccak digests, so collisions are
+/// cryptographically absent).
+bcos::h256 shardGarbageHash(size_t shard, uint32_t index)
+{
+    bcos::h256 h{};
+    h.data()[0] = static_cast<bcos::byte>(shard);
+    for (size_t byte = 0; byte < 4; ++byte)
+    {
+        h.data()[bcos::h256::SIZE - 1 - byte] =
+            static_cast<bcos::byte>((index >> (8 * byte)) & 0xFF);
+    }
+    return h;
+}
+
 Account makePruneAccount(uint64_t nonce, uint64_t balance)
 {
     Account account;  // storageRoot=emptyRootHash(), codeHash=emptyCodeHash() by default
@@ -215,7 +276,7 @@ Account makePruneAccount(uint64_t nonce, uint64_t balance)
 /// The feature row marking the chain's MPT active from @p activation (enableNumber): the first
 /// MPT block is activation + 1 (the activation block itself keeps the legacy XOR root). With
 /// activation 0 the chain builds MPT roots from block 1 — the shape the pruning tests drive.
-void writeMptActivation(PruneBackend& backend, bcos::protocol::BlockNumber activation)
+void writeMptActivation(auto& backend, bcos::protocol::BlockNumber activation)
 {
     bcos::ledger::Features features;
     features.set(bcos::ledger::Features::Flag::feature_mpt_state_root);
@@ -263,7 +324,7 @@ void runEmptyBlocks(PruneBackend& backend, Pruner& pruner, bcos::protocol::Block
 /// One block of the account-trie chain the pruning tests drive, in the production commit order:
 /// build the trie delta → flush its nodes → prepare + apply the pruning batch + onCommit (the
 /// deletions of expired nodes, the prewriteStorage stand-in). Returns the delta for inspection.
-MPTDeltaLayer commitAccountBlock(PruneBackend& backend, BackendNodeStorage& nodes,
+MPTDeltaLayer commitAccountBlock(PruneBackend& backend, auto& nodes,
     Pruner& pruner, std::map<bcos::Address, Account>& accounts, bcos::h256 priorRoot,
     std::map<bcos::Address, std::optional<Account>> const& accountChanges,
     bcos::protocol::BlockNumber blockNumber)
@@ -1273,6 +1334,127 @@ BOOST_AUTO_TEST_CASE(StartupSweepEnabled)
     }
     // The live trie is untouched.
     BOOST_CHECK_NO_THROW(liveNodeHashes(nodes, root));
+}
+
+BOOST_FIXTURE_TEST_CASE(StartupSweepParallelShardsOnRocksDB, RocksDBSweepFixture)
+{
+    // Review F6: the Phase-3 sweep on the PRODUCTION backend. RocksDBStorage2 opts into
+    // kParallelSweepSafe, so this init runs the 256-shard tbb::parallel_for path — one
+    // RANGE_SEEK iterator per first-hash-byte span with concurrent delete batches — which the
+    // in-memory PruneBackend suite above never executes (single table-wide shard).
+    static_assert(kParallelSweepSafe<RocksPruneBackend>);
+    static_assert(!kParallelSweepSafe<PruneBackend>);
+
+    RocksPruneBackend backend(*rocksDB, bcos::storage2::rocksdb::StateKeyResolver{},
+        bcos::storage2::rocksdb::StateValueResolver{});
+    BackendNodeStorage nodes(backend);
+    writeMptActivation(backend, /*activation=*/0);
+    constexpr int64_t N = 2;
+
+    // The live set: one account trie whose nodes Phase 1 counts — the sweep must keep every row.
+    std::map<bcos::h256, bcos::bytes> entries;
+    for (uint8_t i = 1; i <= 24; ++i)
+    {
+        entries[accountKeyHash(makeAddress(i))] = makePruneAccount(0, 100 + i).encode();
+    }
+    auto const root = seedTrieFlushed(nodes, emptyRootHash(), entries).root;
+    auto const live = liveNodeHashes(nodes, root);
+    BOOST_REQUIRE(!live.empty());
+
+    // The garbage set: every one of the 256 shard spans holds junk rows, so no shard's
+    // RANGE_SEEK span goes unexercised. The hot shard additionally carries more than
+    // SWEEP_DELETE_CHUNK rows to drive the mid-scan full-chunk flush on RocksDB; every other
+    // shard ends with a tail flush.
+    constexpr size_t HOT_SHARD = 0xA5;
+    constexpr uint32_t PER_SHARD = 40;
+    constexpr uint32_t HOT_EXTRA = 37;
+    constexpr uint64_t garbageCount =
+        RocksPruner::SWEEP_DELETE_CHUNK + HOT_EXTRA + (RocksPruner::SWEEP_SHARDS - 1) * PER_SHARD;
+    {
+        std::vector<std::pair<bcos::executor_v1::StateKey, bcos::storage::Entry>> rows;
+        rows.reserve(garbageCount);
+        for (size_t shard = 0; shard < RocksPruner::SWEEP_SHARDS; ++shard)
+        {
+            uint32_t const count = shard == HOT_SHARD
+                                       ? RocksPruner::SWEEP_DELETE_CHUNK + HOT_EXTRA
+                                       : PER_SHARD;
+            for (uint32_t i = 0; i < count; ++i)
+            {
+                bcos::storage::Entry entry;
+                entry.set(bcos::bytes(4, 0x66));
+                rows.emplace_back(
+                    bcos::ledger::mptNodeStateKey(shardGarbageHash(shard, i)), std::move(entry));
+            }
+        }
+        bcos::task::syncWait(bcos::storage2::writeSome(backend, std::move(rows)));
+    }
+
+    // The progress callback must keep its single-threaded contract under the parallel sweep
+    // (the pruner serializes invocations on an internal mutex): an in-flight counter catches
+    // any concurrent entry, and the (done, total) snapshots must be monotone with done <= total.
+    std::vector<std::pair<uint64_t, uint64_t>> progress;
+    std::atomic<uint64_t> inFlight{0};
+    std::atomic<uint64_t> maxInFlight{0};
+    RocksPruner pruner(backend, N);
+    std::map<bcos::protocol::BlockNumber, bcos::h256> const roots{{1, root}};
+    bcos::task::syncWait(pruner.init(1, rootLookupOf(roots), /*sweepGarbage=*/true,
+        [&progress, &inFlight, &maxInFlight](uint64_t done, uint64_t total) {
+            auto const depth = inFlight.fetch_add(1, std::memory_order_acq_rel) + 1;
+            auto observed = maxInFlight.load(std::memory_order_relaxed);
+            while (depth > observed &&
+                   !maxInFlight.compare_exchange_weak(observed, depth,
+                       std::memory_order_relaxed))
+            {
+            }
+            progress.emplace_back(done, total);
+            inFlight.fetch_sub(1, std::memory_order_acq_rel);
+        }));
+    BOOST_CHECK_EQUAL(maxInFlight.load(), 1U);
+
+    // Sharding witness: exactly one tail-flush call per shard plus the hot shard's one mid-scan
+    // full-chunk call (SWEEP_SHARDS + 1). The single-shard path would chunk the same garbage
+    // into ceil(garbageCount / SWEEP_DELETE_CHUNK) = 3 calls instead — so the count alone
+    // proves the 256-span parallel_for ran.
+    BOOST_REQUIRE_EQUAL(progress.size(), RocksPruner::SWEEP_SHARDS + 1);
+    uint64_t prevDone = 0;
+    uint64_t prevTotal = 0;
+    for (auto const& [done, total] : progress)
+    {
+        BOOST_CHECK_GE(done, prevDone);
+        BOOST_CHECK_GE(total, prevTotal);
+        BOOST_CHECK_LE(done, total);
+        prevDone = done;
+        prevTotal = total;
+    }
+    // The last call reports the exact final figures (every shard's tail flush observes the
+    // totals after its own final add).
+    BOOST_CHECK_EQUAL(progress.back().first, garbageCount);
+    BOOST_CHECK_EQUAL(progress.back().second, garbageCount);
+    BOOST_CHECK_EQUAL(pruner.lastSweepDeleted(), garbageCount);
+
+    // Every garbage row is gone, from every shard; every live row survives; the table holds
+    // exactly the live set.
+    for (size_t shard = 0; shard < RocksPruner::SWEEP_SHARDS; ++shard)
+    {
+        uint32_t const count = shard == HOT_SHARD
+                                   ? RocksPruner::SWEEP_DELETE_CHUNK + HOT_EXTRA
+                                   : PER_SHARD;
+        for (uint32_t i = 0; i < count; ++i)
+        {
+            BOOST_CHECK(!nodeRowExists(backend, shardGarbageHash(shard, i)));
+        }
+    }
+    for (auto const& hash : live)
+    {
+        BOOST_CHECK(nodeRowExists(backend, hash));
+    }
+    BOOST_CHECK_EQUAL(countRowsInTable(backend, bcos::storage2::kMPTTable), live.size());
+    BOOST_CHECK_NO_THROW(liveNodeHashes(nodes, root));
+    // Phase 1 counted the live set over RocksDB too (MultiGet read path).
+    for (auto const& hash : live)
+    {
+        BOOST_CHECK(pruner.countOf(hash).has_value());
+    }
 }
 
 BOOST_AUTO_TEST_CASE(RebuildTruncatesAtScenarioAActivation)
