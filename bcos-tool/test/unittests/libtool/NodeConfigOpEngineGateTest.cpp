@@ -114,5 +114,49 @@ BOOST_AUTO_TEST_CASE(engineDrivenBlockProduction)
     BOOST_CHECK(probe2.engineDrivenBlockProduction());
 }
 
+// The OP miner namespace (miner_setMaxDASize) is opt-in: it writes the node-wide DA caps, so
+// a listener that has not enabled it must not register it at all. Default off is load-bearing —
+// an OP node creates the caps, so the runtime MethodNotFound guard would not stop a public caller.
+BOOST_AUTO_TEST_CASE(minerApiDefaultsOff)
+{
+    LoaderProbe probe;
+    probe.loadWeb3RpcConfig(fromIni("[web3_rpc]\nenable=true\nlisten_port=8545\n"));
+    BOOST_CHECK(!probe.enableMinerApi());
+}
+
+// The two listeners configure the miner namespace independently: the op-engine (8551) key
+// must not touch the web3 (8545) switch and vice versa — enabling the batcher handshake on
+// the private port can never expose it on the public one.
+BOOST_AUTO_TEST_CASE(minerApiScopedPerListener)
+{
+    LoaderProbe probe;
+    probe.loadOpEngineRpcConfig(fromIni("[op_engine_rpc]\nenable=true\nenable_miner_api=true\n"));
+    BOOST_CHECK(probe.enableOpEngineMinerApi());
+    BOOST_CHECK(!probe.enableMinerApi());
+
+    LoaderProbe probe2;
+    probe2.loadWeb3RpcConfig(
+        fromIni("[web3_rpc]\nenable=true\nlisten_port=8545\nenable_miner_api=true\n"));
+    BOOST_CHECK(probe2.enableMinerApi());
+    BOOST_CHECK(!probe2.enableOpEngineMinerApi());
+}
+
+// The default is OFF on both listeners, and the web3 key reaches only the web3 listener: a
+// [web3_rpc] section that says nothing about the miner namespace must not expose it, which is
+// the half the scoped-per-listener case above does not state.
+BOOST_AUTO_TEST_CASE(minerApiDefaultsToOff)
+{
+    LoaderProbe plainWeb3;
+    plainWeb3.loadWeb3RpcConfig(fromIni("[web3_rpc]\nenable=true\nlisten_port=8545\n"));
+    BOOST_CHECK(!plainWeb3.enableMinerApi());
+    BOOST_CHECK(!plainWeb3.enableOpEngineMinerApi());
+
+    LoaderProbe web3On;
+    web3On.loadWeb3RpcConfig(
+        fromIni("[web3_rpc]\nenable=true\nlisten_port=8545\nenable_miner_api=true\n"));
+    BOOST_CHECK(web3On.enableMinerApi());
+    BOOST_CHECK(!web3On.enableOpEngineMinerApi());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

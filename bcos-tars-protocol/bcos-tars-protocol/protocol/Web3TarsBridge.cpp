@@ -32,6 +32,7 @@
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
 #include "bcos-utilities/Common.h"
+#include <bcos-codec/rlp/Exceptions.h>
 #include "bcos-utilities/DataConvertUtility.h"
 #include <boost/throw_exception.hpp>
 #include <memory>
@@ -174,10 +175,14 @@ std::shared_ptr<bcostars::protocol::TransactionImpl> decodeWeb3RawTransaction(
 {
     Web3Transaction web3Tx;
     bcos::bytesRef input(const_cast<byte*>(raw.data()), raw.size());
-    if (auto error = codec::rlp::decode(input, web3Tx); error != nullptr)
+    try
     {
-        BOOST_THROW_EXCEPTION(
-            std::invalid_argument("decodeWeb3RawTransaction: " + error->errorMessage()));
+        codec::rlp::decode(input, web3Tx);
+    }
+    catch (codec::rlp::RlpDecodeException const& e)
+    {
+        BOOST_THROW_EXCEPTION(std::invalid_argument(
+            "decodeWeb3RawTransaction: " + codec::rlp::rlpErrorMessage(e, "malformed RLP")));
     }
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_tx = web3Tx.takeToTarsTransaction()]() mutable { return &m_tx; });

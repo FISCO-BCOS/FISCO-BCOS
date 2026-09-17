@@ -380,6 +380,31 @@ BOOST_AUTO_TEST_CASE(remove_by_hashes_respects_per_sender_max)
     BOOST_CHECK(fetched[4]);
 }
 
+// removeByHash drops exactly the named transactions. Contrast with the case above: the same
+// input (a1's hash) must leave a0 in the pool, because the OP payload builder evicts one
+// transaction that failed inside a candidate block and the sender's lower nonces are still
+// valid.
+BOOST_AUTO_TEST_CASE(remove_by_hash_keeps_lower_nonces_of_the_same_sender)
+{
+    MemPoolImpl pool;
+    constexpr int kSenderBytes = 20;
+    std::string senderA("VVVVVVVVVVVVVVVVVVVV", kSenderBytes);
+    std::string senderB("WWWWWWWWWWWWWWWWWWWW", kSenderBytes);
+    auto a0 = makeTx(senderA, 0);
+    auto a1 = makeTx(senderA, 1);
+    auto a2 = makeTx(senderA, 2);
+    auto b0 = makeTx(senderB, 0);
+    pool.add(std::vector{a0, a1, a2, b0});
+
+    pool.removeByHash(std::vector{a1->hash()});
+
+    auto fetched = pool.get(std::vector{a0->hash(), a1->hash(), a2->hash(), b0->hash()});
+    BOOST_CHECK(fetched[0]);   // lower nonce survives -- remove(hashes) would have dropped it
+    BOOST_CHECK(!fetched[1]);  // only the named transaction is gone
+    BOOST_CHECK(fetched[2]);
+    BOOST_CHECK(fetched[3]);
+}
+
 BOOST_AUTO_TEST_CASE(get_returns_in_order_with_null_for_missing)
 {
     MemPoolImpl pool;

@@ -325,9 +325,10 @@ BOOST_AUTO_TEST_CASE(op_envelope_to_tars_rejects_rlp_leftover)
 {
     auto env = bcos::evm::engine::testutil::synthesizeL1AttributesEnvelope(false);
     auto hash = crypto::keccak256Hash(bcos::ref(env));
-    BOOST_REQUIRE(engine_common::op::opEnvelopeToTars(env, hash).has_value());
+    BOOST_REQUIRE(
+        engine_common::op::opEnvelopeToTars(env, hash, /*allowDeposit=*/true).has_value());
     env.push_back(0x00);
-    BOOST_CHECK(!engine_common::op::opEnvelopeToTars(env, hash).has_value());
+    BOOST_CHECK(!engine_common::op::opEnvelopeToTars(env, hash, /*allowDeposit=*/true).has_value());
 }
 
 BOOST_AUTO_TEST_CASE(forkchoice_hash_canonical_helper_matches_op_geth)

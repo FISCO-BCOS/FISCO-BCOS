@@ -100,4 +100,54 @@ BOOST_AUTO_TEST_CASE(FlagMatrix_L2ActivationUnknownThrows)
     BOOST_CHECK_THROW(validateMPTFlagMatrix(features), InvalidMPTFlagMatrix);
 }
 
+BOOST_AUTO_TEST_CASE(OpMode_V3RequiresTheL2FeatureAtGenesis)
+{
+    using Flag = ledger::Features::Flag;
+    ledger::Features features;  // flag off
+    BOOST_CHECK_THROW(validateOpModeGenesisOnly(features, ledger::OPSTACK_EXECUTOR_VERSION, 0),
+        InvalidMPTFlagMatrix);
+
+    features.set(Flag::feature_l2_ethereum_compat);  // flag on, genesis-bound
+    BOOST_CHECK_NO_THROW(validateOpModeGenesisOnly(features, ledger::OPSTACK_EXECUTOR_VERSION, 0));
+}
+
+BOOST_AUTO_TEST_CASE(OpMode_EthLaneMayCarryTheL2Feature)
+{
+    using Flag = ledger::Features::Flag;
+    ledger::Features features;
+    features.set(Flag::feature_l2_ethereum_compat);
+
+    // The pure-Ethereum executor on an L2 state shape is a supported pairing (#5397's
+    // executor integration harness): the flag is the LEDGER's L2 shape, not an OP-mode
+    // marker. Only the OP lane requires engine-driven production, so an Eth-lane chain
+    // with the flag must boot.
+    BOOST_CHECK_NO_THROW(validateOpModeGenesisOnly(features, ledger::ETHEREUM_EXECUTOR_VERSION, 0));
+    // ...and the same holds without it (the plain Eth lane).
+    ledger::Features plain;
+    BOOST_CHECK_NO_THROW(validateOpModeGenesisOnly(plain, ledger::ETHEREUM_EXECUTOR_VERSION, 0));
+}
+
+BOOST_AUTO_TEST_CASE(OpMode_AboveTheLadderSaturatesAndLateActivationIsRefused)
+{
+    using Flag = ledger::Features::Flag;
+    ledger::Features features;
+    features.set(Flag::feature_l2_ethereum_compat);
+
+    // Above the newest declared lane there is no lane of its own: the scheduler saturates such a
+    // value onto the newest WIRED slot (MultiVersionScheduler::setVersion, pinned by the
+    // libinitializer suite's setVersionSaturatesToNewestWiredSlot), so boot accepts it. Refusing
+    // it here would strand a chain that wrote the row before 3.18 — nothing bounded that key then
+    // — with no way to lower it (the precompile refuses writes at or above OPSTACK).
+    BOOST_CHECK_NO_THROW(
+        validateOpModeGenesisOnly(features, ledger::OPSTACK_EXECUTOR_VERSION + 1, 0));
+    // The OP lane's own preconditions still apply to every value at or above the slot.
+    ledger::Features flagOff;
+    BOOST_CHECK_THROW(validateOpModeGenesisOnly(flagOff, ledger::OPSTACK_EXECUTOR_VERSION + 1, 0),
+        InvalidMPTFlagMatrix);
+    BOOST_CHECK_THROW(validateOpModeGenesisOnly(features, ledger::OPSTACK_EXECUTOR_VERSION, 1),
+        InvalidMPTFlagMatrix);
+    BOOST_CHECK_THROW(validateOpModeGenesisOnly(features, ledger::OPSTACK_EXECUTOR_VERSION + 1, 1),
+        InvalidMPTFlagMatrix);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

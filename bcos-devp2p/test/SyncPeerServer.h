@@ -20,6 +20,7 @@
  */
 #pragma once
 
+#include <bcos-codec/rlp/Result.h>
 #include <bcos-devp2p/eth/Protocol.h>
 #include <bcos-devp2p/rlpx/Client.h>
 #include <bcos-devp2p/rlpx/Messages.h>
@@ -32,6 +33,7 @@
 
 namespace bcos::devp2p::test
 {
+using bcos::codec::rlp::unwrapOrThrow;
 // Build a small in-memory Ethereum-like chain. Every block carries a real
 // keccak header hash; the last block is Shanghai-style (withdrawals present).
 inline std::vector<sync::Block> makeTestChain(size_t _count)
@@ -120,7 +122,8 @@ inline void serveRequests(rlpx::Session& _session, std::vector<sync::Block> cons
 
     for (;;)
     {
-        auto msg = _session.recvMessage();
+        auto msg = unwrapOrThrow(
+            _session.recvMessage(), "SyncPeerServer: failed to decode a frame: ");
         if (msg.id == rlpx::baseMsg::Ping)
         {
             _session.sendMessage(rlpx::Message{rlpx::baseMsg::Pong, rlpx::encodePong()});
@@ -128,7 +131,8 @@ inline void serveRequests(rlpx::Session& _session, std::vector<sync::Block> cons
         }
         if (msg.id == eth::frameId(eth::msg::GetBlockHeaders))
         {
-            auto request = eth::decodeGetBlockHeaders(ref(msg.data));
+            auto request = unwrapOrThrow(
+                eth::decodeGetBlockHeaders(ref(msg.data)), "SyncPeerServer: malformed GetBlockHeaders: ");
             eth::BlockHeadersMessage response;
             response.requestId = request.requestId;
             if (request.originHash.has_value())
@@ -162,7 +166,8 @@ inline void serveRequests(rlpx::Session& _session, std::vector<sync::Block> cons
         }
         if (msg.id == eth::frameId(eth::msg::GetBlockBodies))
         {
-            auto request = eth::decodeGetBlockBodies(ref(msg.data));
+            auto request = unwrapOrThrow(
+                eth::decodeGetBlockBodies(ref(msg.data)), "SyncPeerServer: malformed GetBlockBodies: ");
             eth::BlockBodiesMessage response;
             response.requestId = request.requestId;
             for (auto const& hash : request.hashes)

@@ -19,12 +19,74 @@
  */
 
 #pragma once
+#include <bcos-crypto/ChecksumAddress.h>
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
+#include <algorithm>
+#include <cctype>
+#include <string>
+#include <string_view>
 
 namespace bcos::rpc
 {
+/// The log entry's address as 40 hex digits, no 0x prefix. LogEntry::address() carries
+/// whichever form the executing lane produced, and the two lanes disagree:
+///   * the OP lane stores the raw 20 bytes (bcos-evm/opstack/OpTransition.cpp
+///     mapOpLogAddress — a byte copy, deliberately not a hex encode);
+///   * the FISCO / eth-mode lane stores the ASCII hex text (bcos-executor HostContext::log
+///     passes myAddress(), which is the text form on that lane).
+/// Every JSON producer of a log address must normalize through here: hex-encoding the text
+/// form yields hex-of-ASCII (ethers rejects the whole receipt), while copying the byte form
+/// verbatim yields non-printable garbage. One definition, because two copies is how one
+/// consumer ends up right on one lane and wrong on the other.
+[[nodiscard]] inline std::string logEntryAddressHex(bcos::protocol::LogEntry const& entry)
+{
+    auto const raw = entry.address();
+    constexpr std::size_t c_hexAddressChars = 40;
+    if (raw.size() == c_hexAddressChars && std::all_of(raw.begin(), raw.end(), [](char c) {
+            return std::isxdigit(static_cast<unsigned char>(c)) != 0;
+        }))
+    {
+        return std::string(raw);
+    }
+    return bcos::toHex(raw);
+}
+
+/// EIP-55 checksum an address given as hex text without the 0x prefix. Only the canonical
+/// 40-hex-digit form is checksummed; anything else (a FISCO-native tx.to may be a BFS link
+/// path, a feature_raw_address chain carries raw bytes) is returned unchanged. The guard is
+/// what makes the degradation real: bcos::toChecksumAddress walks its address argument and
+/// indexes addressHashHex[i] with the same i (bcos-crypto/ChecksumAddress.cpp), while that
+/// hash string is always 64 characters — a longer input reads past it (std::string_view's
+/// operator[], not an exception), and a shorter one takes its casing from the wrong nibble
+/// positions. A response producer must never fail, or read out of bounds, on transaction
+/// input, so unchecksummable addresses degrade to the unchecked form. One home for the
+/// idiom: the private copies this replaces had already drifted (one threw, the rest did not).
+[[nodiscard]] inline std::string checksummedHexAddress(std::string hexNoPrefix)
+{
+    constexpr std::size_t c_hexAddressChars = 40;
+    if (hexNoPrefix.size() != c_hexAddressChars ||
+        !std::all_of(hexNoPrefix.begin(), hexNoPrefix.end(),
+            [](char c) { return std::isxdigit(static_cast<unsigned char>(c)); }))
+    {
+        return hexNoPrefix;
+    }
+    bcos::toChecksumAddress(
+        hexNoPrefix, bcos::crypto::keccak256Hash(bcos::bytesConstRef(hexNoPrefix)).hex());
+    return hexNoPrefix;
+}
+
+/// 0x-tolerant form: strips an optional 0x prefix before checksumming (returns without
+/// the prefix; the caller adds it back).
+[[nodiscard]] inline std::string checksummedHexAddressFromHex(std::string_view hexAddress)
+{
+    auto const hexNoPrefix = hexAddress.starts_with("0x") ? hexAddress.substr(2) : hexAddress;
+    return checksummedHexAddress(std::string(hexNoPrefix));
+}
+
 void buildJsonContent(Json::Value& result, Json::Value& response);
 void buildJsonError(
     Json::Value const& request, int32_t code, std::string message, Json::Value& response);

@@ -95,7 +95,7 @@ GENESIS_EOF
 # hash against keccak256(rlp(header)) of the other 21 fields.
 #
 # Values below are the standard empty-chain defaults from
-# tools/opstack-genesis/gen_eth_header_fixture.py, EXCEPT:
+# the harness's tools/opstack-genesis/gen_eth_header_fixture.py, EXCEPT:
 #   state_root = 0x6ea0c8bc... — the genesis MPT root for the single alloc
 #     above, computed with the node's own Ledger::computeGenesisStateTrie;
 #     MUST be regenerated if [alloc.0] changes (a stale root fails genesis).

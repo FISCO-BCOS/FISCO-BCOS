@@ -70,7 +70,7 @@ public:
     // virtual is called for each session; a probe thread tries to take x_sessions EXCLUSIVELY: it
     // fails iff the broadcasting thread still holds it. No throw needed -- broadcastMessageToAll
     // touches no host; we just probe the lock state and stop.
-    task::Task<Message::Ptr> sendMessageByNodeID(P2pID /*nodeID*/, Message& /*header*/,
+    task::Task<std::optional<Message>> sendMessageByNodeID(P2pID /*nodeID*/, Message& /*header*/,
         ::ranges::any_view<bytesConstRef> /*payloads*/, Options /*options*/) override
     {
         bool acquiredExclusive = false;
@@ -91,7 +91,7 @@ public:
         probe.join();
         m_xSessionsHeldDuringSend = !acquiredExclusive;
         m_sendInvoked = true;
-        co_return nullptr;
+        co_return std::nullopt;
     }
 
     std::shared_mutex* m_xSessionsPtr = nullptr;

@@ -19,10 +19,12 @@
  */
 #include "BodySequence.h"
 
+#include <bcos-codec/rlp/Result.h>
 #include <stdexcept>
 
 namespace bcos::devp2p::sync
 {
+using bcos::codec::rlp::unwrapOrThrow;
 std::vector<Block> BodySequence::requestBodies(
     rlpx::Session& _session, std::vector<HeaderWithHash> const& _headers)
 {
@@ -48,7 +50,8 @@ std::vector<Block> BodySequence::requestBodies(
     std::vector<Block> out;
     while (true)
     {
-        auto response = _session.recvMessage();
+        auto response = unwrapOrThrow(
+            _session.recvMessage(), "BodySequence: failed to decode a frame: ");
         if (response.id == rlpx::baseMsg::Ping)
         {
             _session.sendMessage(rlpx::Message{rlpx::baseMsg::Pong, {}});
@@ -65,8 +68,9 @@ std::vector<Block> BodySequence::requestBodies(
                 auto disc = rlpx::decodeDisconnect(
                     bytesConstRef(response.data.data(), response.data.size()));
                 throw std::runtime_error(
-                    "BodySequence: peer disconnected: reason=" +
-                    std::to_string(static_cast<int>(disc.reason)));
+                    "BodySequence: peer disconnected: " +
+                    (disc ? "reason=" + std::to_string(static_cast<int>(disc->reason)) :
+                            "reason undecodable: " + disc.error().message));
             }
             if (response.id == eth::frameId(eth::msg::NewBlockHashes) ||
                 response.id == eth::frameId(eth::msg::Transactions) ||
@@ -83,8 +87,9 @@ std::vector<Block> BodySequence::requestBodies(
             throw std::runtime_error("BodySequence: expected BlockBodies, got message id=" +
                                      std::to_string(response.id));
         }
-        auto bodies = eth::decodeBlockBodies(
-            bytesConstRef(response.data.data(), response.data.size()));
+        auto bodies = unwrapOrThrow(
+            eth::decodeBlockBodies(bytesConstRef(response.data.data(), response.data.size())),
+            "BodySequence: malformed BlockBodies reply: ");
         if (bodies.requestId != request.requestId)
         {
             throw std::runtime_error("BodySequence: request id mismatch");

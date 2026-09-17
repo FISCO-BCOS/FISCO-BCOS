@@ -316,7 +316,11 @@ task::Task<void> accumulatePoWBlockRewards(ViewType& view,
     for (auto const& uncleRlp : rawUncles)
     {
         protocol::EthBlockHeader uncle;
-        if (auto err = uncle.rlpDecode(bcos::bytesConstRef(uncleRlp.data(), uncleRlp.size())))
+        try
+        {
+            uncle.rlpDecode(bcos::bytesConstRef(uncleRlp.data(), uncleRlp.size()));
+        }
+        catch (bcos::codec::rlp::RlpDecodeException const& e)
         {
             // A malformed uncle must not be silently skipped: its inclusion reward is
             // part of the world state, so skipping it would compute a wrong state root
@@ -324,7 +328,7 @@ task::Task<void> accumulatePoWBlockRewards(ViewType& view,
             // caller turns the exception into an invalid-block result).
             BOOST_THROW_EXCEPTION(
                 std::runtime_error{"EthereumBlockVerifier: malformed uncle header RLP: " +
-                                   err->errorMessage()});
+                                   bcos::codec::rlp::rlpErrorMessage(e, "malformed header")});
         }
         auto const& uncleHeader = uncle.data();
         // Depth bounds before any reward arithmetic (geth's accumulateRewards relies
@@ -626,7 +630,17 @@ public:
             for (auto const& raw : *rawWithdrawals)
             {
                 protocol::EthWithdrawal wd;
-                if (auto err = wd.rlpDecode(bcos::bytesConstRef(raw.data(), raw.size())))
+                bool decoded = true;
+                try
+                {
+                    wd.rlpDecode(bcos::bytesConstRef(raw.data(), raw.size()));
+                }
+                catch (bcos::codec::rlp::RlpDecodeException const&)
+                {
+                    // co_await is not permitted in a handler — flag and fail after the catch.
+                    decoded = false;
+                }
+                if (!decoded)
                 {
                     co_return co_await fail("EthereumBlockVerifier: withdrawal RLP decode failed");
                 }

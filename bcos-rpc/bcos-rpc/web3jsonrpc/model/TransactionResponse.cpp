@@ -1,8 +1,8 @@
 #include "TransactionResponse.h"
 #include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-rpc/web3jsonrpc/model/DepositTransaction.h"
-#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-rpc/jsonrpc/Common.h>  // WEB3_LOG
+#include <bcos-rpc/web3jsonrpc/utils/util.h>
 
 void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Transaction& tx,
     const protocol::TransactionReceipt& receipt, const crypto::HashType& blockHash)
@@ -26,19 +26,14 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     result["blockHash"] = blockHash.hexPrefixed();
     result["blockNumber"] = toQuantity(blockNumber);
     result["transactionIndex"] = toQuantity(transactionIndex);
-    auto from = toHex(tx.sender());
-    toChecksumAddress(from, bcos::crypto::keccak256Hash(bcos::bytesConstRef(from)).hex());
-    result["from"] = "0x" + std::move(from);
+    result["from"] = "0x" + checksummedHexAddress(toHex(tx.sender()));
     if (tx.to().empty())
     {
         result["to"] = Json::nullValue;
     }
     else
     {
-        auto toView = tx.to();
-        auto to = std::string(toView.starts_with("0x") ? toView.substr(2) : toView);
-        toChecksumAddress(to, bcos::crypto::keccak256Hash(bcos::bytesConstRef(to)).hex());
-        result["to"] = "0x" + std::move(to);
+        result["to"] = "0x" + checksummedHexAddressFromHex(tx.to());
     }
     result["gas"] = toQuantity(tx.gasLimit());
     auto gasPrice = tx.gasPrice();
@@ -73,6 +68,15 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
         return;
     }
 
+    // Legacy (type-0) EVM transactions carry an EIP-155 `v` in geth's JSON encoding
+    // (chainId*2 + 35 + yParity, or 27 + yParity pre-EIP-155); typed transactions carry the
+    // raw yParity. Track the legacy case so the `v` emitted below matches geth. Emitting the
+    // raw yParity for a legacy tx makes go-ethereum's signature recovery fail with
+    // "invalid transaction v, r, s values", which stalls op-node (or any geth-based CL) as
+    // soon as a block contains a legacy transaction.
+    bool isLegacyEvmTx = false;
+    std::optional<uint64_t> legacyChainId;
+
     if (tx.type() == bcos::protocol::TransactionType::BCOSTransaction) [[unlikely]]
     {
         result["type"] = toQuantity(0);
@@ -88,14 +92,15 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
         Web3Transaction web3Tx;
         auto extraBytesRef = bcos::bytesRef(const_cast<byte*>(tx.extraTransactionBytes().data()),
             tx.extraTransactionBytes().size());
-        if (auto error = codec::rlp::decodeFromPayload(extraBytesRef, web3Tx); error != nullptr)
+        if (auto decodeResult = codec::rlp::tryDecodeFromPayload(extraBytesRef, web3Tx);
+            !decodeResult)
         {
             // Undecodable web3 payload (corrupt extraTransactionBytes, or a tars mirror that
             // diverged from the envelope): never serialize half-decoded state. Emit zeroed
             // web3 fields instead (same posture as the deposit fallback above) and log once.
             WEB3_LOG(WARNING) << LOG_DESC("TransactionResponse: undecodable web3 payload")
                               << LOG_KV("hash", tx.hash().hexPrefixed())
-                              << LOG_KV("reason", error->errorMessage());
+                              << LOG_KV("reason", decodeResult.error().message);
             result["nonce"] = "0x0";
             result["type"] = toQuantity(0);
             result["value"] = "0x0";
@@ -134,6 +139,8 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
             result["maxFeePerGas"] = toQuantity(web3Tx.maxFeePerGas);
         }
         result["chainId"] = toQuantity(web3Tx.chainId.value_or(0));
+        isLegacyEvmTx = (web3Tx.type == TransactionType::Legacy);
+        legacyChainId = web3Tx.chainId;
         if (web3Tx.type == TransactionType::EIP4844)
         {
             result["maxFeePerBlobGas"] = toQuantity(web3Tx.maxFeePerBlobGas);
@@ -164,5 +171,16 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     }
     result["r"] = toQuantity(tx.signatureData().getCroppedData(0, 32));
     result["s"] = toQuantity(tx.signatureData().getCroppedData(32, 32));
-    result["v"] = toQuantity(tx.signatureData().getCroppedData(64, 1));
+    auto const parityRef = tx.signatureData().getCroppedData(64, 1);
+    uint64_t const yParity = parityRef.empty() ? 0 : static_cast<uint64_t>(parityRef[0]);
+    if (isLegacyEvmTx)
+    {
+        // EIP-155 (or pre-155 27/28) `v`, matching geth's RawSignatureValues for a legacy tx.
+        uint64_t const chainId = legacyChainId.value_or(0);
+        result["v"] = toQuantity(chainId != 0 ? chainId * 2 + 35 + yParity : 27 + yParity);
+    }
+    else
+    {
+        result["v"] = toQuantity(yParity);
+    }
 }

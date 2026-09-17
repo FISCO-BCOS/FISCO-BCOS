@@ -45,8 +45,47 @@ std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::buil
     {
         BOOST_THROW_EXCEPTION(*error);
     }
-    bcos::scheduler_v1::validateMPTFlagMatrix(
-        bcos::task::syncWait(ledger->fetchAllFeatures(blockNumber + 1)));
+    auto features = bcos::task::syncWait(ledger->fetchAllFeatures(blockNumber + 1));
+    bcos::scheduler_v1::validateMPTFlagMatrix(features);
+
+    // OP mode is a genesis-only property: executor_version >= OPSTACK requires the
+    // genesis-only feature_l2_ethereum_compat and must itself be genesis-bound. The value
+    // is read from the ledger (written at genesis), with the genesis config as the fallback
+    // when the on-chain entry is absent. The Eth lane (executor_version == ETHEREUM) may
+    // carry the same feature for an L2 state shape — that is Eth mode, not OP mode.
+    // A value above the newest declared lane is not refused here: the scheduler saturates it
+    // onto the newest wired slot (MultiVersionScheduler::setVersion), and refusing it at boot
+    // would strand a chain that wrote such a row before 3.18 with no way to lower it.
+    {
+        auto const onChain = readOnChainExecutorVersion(*ledger, nodeConfig->executorVersion());
+        bcos::scheduler_v1::validateOpModeGenesisOnly(
+            features, onChain.version, onChain.activation);
+    }
 
     return ledger;
+}
+
+bcos::initializer::OnChainExecutorVersion bcos::initializer::readOnChainExecutorVersion(
+    bcos::ledger::LedgerInterface& ledger, int fallbackVersion)
+{
+    OnChainExecutorVersion result{.version = fallbackVersion};
+    auto const raw = bcos::task::syncWait(bcos::ledger::getSystemConfig(
+        ledger, magic_enum::enum_name(bcos::ledger::SystemConfig::executor_version)));
+    if (!raw.has_value())
+    {
+        return result;
+    }
+    try
+    {
+        result.version = boost::lexical_cast<int>(std::get<0>(*raw));
+    }
+    catch (boost::bad_lexical_cast const&)
+    {
+        BOOST_THROW_EXCEPTION(
+            bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                "on-chain executor_version is not an integer: '" + std::get<0>(*raw) + "'"));
+    }
+    result.activation = std::get<1>(*raw);
+    result.present = true;
+    return result;
 }

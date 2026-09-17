@@ -352,10 +352,10 @@ static DecodableWeb3Tx makeDecodableWeb3Tx(
         bcos::rpc::Web3Transaction decoded;
         bcos::bytes copy = raw;
         bcos::bytesRef ref{copy.data(), copy.size()};
-        auto err = bcos::codec::rlp::decode(ref, decoded);
-        BOOST_REQUIRE(!err);
+        BOOST_REQUIRE_NO_THROW(bcos::codec::rlp::decode(ref, decoded));
         BOOST_REQUIRE(ref.empty());
-        BOOST_REQUIRE(bcos::engine::engine_common::op::opEnvelopeToTars(raw, bcos::h256{}));
+        BOOST_REQUIRE(bcos::engine::engine_common::op::opEnvelopeToTars(
+            raw, bcos::h256{}, /*allowDeposit=*/true));
     }
     bcos::bytes signature(65, 0);
     std::copy(w3.signatureR.begin(), w3.signatureR.end(), signature.begin());
@@ -366,7 +366,8 @@ static DecodableWeb3Tx makeDecodableWeb3Tx(
         reassembled = bcostars::protocol::reassembleWeb3RawTransaction(
             bcos::bytesConstRef(signPayload.data(), signPayload.size()),
             bcos::bytesConstRef(signature.data(), signature.size()));
-        BOOST_REQUIRE(bcos::engine::engine_common::op::opEnvelopeToTars(reassembled, bcos::h256{}));
+        BOOST_REQUIRE(bcos::engine::engine_common::op::opEnvelopeToTars(
+            reassembled, bcos::h256{}, /*allowDeposit=*/true));
     }
 
     auto tx = std::make_shared<TestTransactionImpl>();
@@ -431,6 +432,26 @@ using OpEngine = bcos::engine::OpEngineService<StubMemPool, MLS, EngineOpSchedul
 
 static_assert(bcos::engine::EngineServiceConcept<EthLegacyEngine>);
 static_assert(bcos::engine::EngineServiceConcept<OpEngine>);
+
+// Negative control for the OP-lane admission holder: the engine must NOT be constructible with a
+// LedgerConfigState. A holder handed to this lane is only ever written from its commit callback,
+// which carries OpScheduler::loadCommitLedgerConfig's number+timestamp object -- publishing that
+// refuses every EIP-155 envelope after block 1 with -32602 (engine/bcos-engine/
+// OpLedgerConfigRepublish.h). The lane's holder is republished from the ledger by the notifier
+// the initializer installs instead, pinned at runtime by
+// OpLedgerConfigRepublishTest/commit_republish_keeps_the_holder_complete.
+static_assert(
+    std::is_constructible_v<OpEngine, StubMemPool&, MLS&, EngineOpScheduler&,
+        bcos::protocol::BlockFactory::Ptr, int64_t, bcos::scheduler::SchedulerInterface::Ptr,
+        std::shared_ptr<bcos::engine::DACaps>, bool>,
+    "positive control: the OP engine is constructible at its documented arity");
+static_assert(
+    !std::is_constructible_v<OpEngine, StubMemPool&, MLS&, EngineOpScheduler&,
+        bcos::protocol::BlockFactory::Ptr, int64_t, bcos::scheduler::SchedulerInterface::Ptr,
+        std::shared_ptr<bcos::engine::DACaps>, bool, bcos::ledger::LedgerConfigState::Ptr>,
+    "OpEngineService must not take a LedgerConfigState: the only configuration its commit "
+    "callback can publish is the delegate's number+timestamp stub, which fail-closes EIP-155 "
+    "admission for every later transaction");
 
 constexpr bcos::protocol::BlockNumber c_headOrderingBlockNumber = 40;
 constexpr bcos::protocol::BlockNumber c_safeOrderingBlockNumber = 41;
@@ -1189,6 +1210,90 @@ BOOST_AUTO_TEST_CASE(op_da_skip_drops_higher_nonce_regardless_of_seal_order)
         BOOST_CHECK(tx.raw != nRaw);
         BOOST_CHECK(tx.raw != n1Raw);
     }
+}
+
+BOOST_AUTO_TEST_CASE(op_da_block_budget_admits_at_cap_then_drops_and_keeps_forced)
+{
+    // BU — maxBlockSize is a cumulative estimated-DA budget: the forced (undroppable)
+    // envelope preloads it and a sealed tx is admitted only while it fits the remaining
+    // budget. At exactly the remaining budget it lands; one estimated byte over it is
+    // dropped while the forced envelope still lands. (op_da_skip covers maxTxSize; this
+    // is the maxBlockSize/Budget engine path, previously tested only in isolation.)
+    bcos::crypto::Secp256k1Crypto secp;
+    auto key = secp.generateKeyPair();
+    bcos::bytes incompressible(200);
+    for (std::size_t i = 0; i < incompressible.size(); ++i)
+    {
+        incompressible[i] = static_cast<bcos::byte>(i * 7 + 1);
+    }
+    auto sealed = makeDecodableWeb3Tx(1, key.get(), incompressible);
+    auto const sealedRaw = bcostars::protocol::reassembleWeb3RawTransaction(
+        sealed.tx->extraTransactionBytes(), sealed.tx->signatureData());
+    auto const sealedEst =
+        bcos::evm::opstack::estimatedDaSize(evmc::bytes_view(sealedRaw.data(), sealedRaw.size()));
+
+    // Forced envelope carried through payloadAttributes.transactions (the same shape the
+    // txFits test uses); its estimate is what preloads the budget.
+    auto forced = makeDecodableWeb3Tx(0);
+    auto const forcedRaw = bcos::fromHex(forced.rawHex);
+    auto const forcedEst =
+        bcos::evm::opstack::estimatedDaSize(evmc::bytes_view(forcedRaw.data(), forcedRaw.size()));
+
+    auto buildWithBudget = [&](std::uint64_t maxBlockSize) {
+        auto daCaps = std::make_shared<bcos::engine::DACaps>();
+        daCaps->maxBlockSize.store(maxBlockSize, std::memory_order_relaxed);
+        auto delegate = std::make_shared<RecordingScheduler>();
+        delegate->failFirst = false;
+        OpServicePair pair(/*allowSynthesizedL1Attributes=*/true, delegate, daCaps);
+        delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+        pair.memPool.pool.push_back(sealed.tx);
+
+        auto attrs = makeOpPayloadAttributes();
+        attrs.minBaseFee = std::nullopt;
+        attrs.noTxPool = false;
+        attrs.transactions = std::vector<std::string>{forced.rawHex};
+        auto const hash =
+            bcos::h256("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        bcos::engine::ForkchoiceState forkchoice{hash, hash, hash};
+        registerVerifiedBlock(pair.storage, hash, 0);
+        registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+
+        auto result = bcos::task::syncWait(pair.service.updateForkchoice(forkchoice, &attrs, 3));
+        BOOST_REQUIRE_EQUAL(static_cast<int>(result.payloadStatus.status),
+            static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+        BOOST_REQUIRE(result.payloadId.has_value());
+        auto payload = bcos::task::syncWait(pair.service.getPayload(*result.payloadId, 3));
+        BOOST_REQUIRE(payload);
+        std::vector<bcos::bytes> raws;
+        raws.reserve(payload->executionPayload.transactions.size());
+        for (auto const& tx : payload->executionPayload.transactions)
+        {
+            raws.push_back(tx.raw);
+        }
+        return raws;
+    };
+    auto contains = [](std::vector<bcos::bytes> const& raws, bcos::bytes const& needle) {
+        for (auto const& raw : raws)
+        {
+            if (raw == needle)
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    // Exactly at the remaining budget: the sealed tx is admitted alongside forced.
+    auto const atCap = buildWithBudget(forcedEst + sealedEst);
+    BOOST_CHECK_MESSAGE(contains(atCap, forcedRaw), "forced envelope must always be present");
+    BOOST_CHECK_MESSAGE(contains(atCap, sealedRaw), "sealed tx must fit exactly at the budget");
+
+    // One estimated byte over: the sealed tx is dropped, the forced envelope still lands.
+    auto const overCap = buildWithBudget(forcedEst + sealedEst - 1);
+    BOOST_CHECK_MESSAGE(
+        contains(overCap, forcedRaw), "forced envelope must survive an over-budget sealed tx");
+    BOOST_CHECK_MESSAGE(
+        !contains(overCap, sealedRaw), "sealed tx exceeding the block budget must be dropped");
 }
 
 BOOST_AUTO_TEST_CASE(op_fcu_zero_head_is_invalid)

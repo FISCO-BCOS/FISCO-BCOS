@@ -52,5 +52,35 @@ BOOST_AUTO_TEST_CASE(logMatcherUsesReceiptLogIndexBase)
     BOOST_CHECK_EQUAL(result[1]["logIndex"].asString(), "0x6");
 }
 
+// The address filter must normalize through logEntryAddressHex like the JSON producers: the OP
+// lane stores LogEntry::address as the raw 20 bytes (OpTransition's mapOpLogAddress) while the
+// FISCO / eth-mode lane stores the ASCII hex text, and a client always requests "0x"-prefixed
+// hex. Concatenating "0x" with the raw form never equals a requested address, so every
+// address-filtered query on the OP lane returned an empty result set.
+BOOST_AUTO_TEST_CASE(opLaneRawAddressFormMatchesHexFilter)
+{
+    const bytes rawAddress = {0x7f, 0xa9, 0x68, 0x5f, 0x76, 0x42, 0x3c, 0x1c, 0x27, 0x26, 0x81,
+        0xc4, 0x8a, 0x4c, 0xd4, 0x37, 0x7f, 0x68, 0x59, 0x1d};
+    const std::string textAddress = "abababababababababababababababababababab";  // eth-mode form
+
+    LogMatcher matcher;
+
+    auto rawParams = std::make_shared<Web3FilterRequest>();
+    rawParams->addAddress("0x7fa9685f76423c1c272681c48a4cd4377f68591d");
+    BOOST_CHECK(matcher.matches(rawParams, protocol::LogEntry(rawAddress, {}, bytes{0x01})));
+
+    auto textParams = std::make_shared<Web3FilterRequest>();
+    textParams->addAddress("0x" + textAddress);
+    BOOST_CHECK(matcher.matches(
+        textParams, protocol::LogEntry(bytes(textAddress.begin(), textAddress.end()), {}, {})));
+
+    // a different requested address still filters the log out on either lane form
+    auto otherParams = std::make_shared<Web3FilterRequest>();
+    otherParams->addAddress("0xcccccccccccccccccccccccccccccccccccccccc");
+    BOOST_CHECK(!matcher.matches(otherParams, protocol::LogEntry(rawAddress, {}, bytes{0x01})));
+    BOOST_CHECK(!matcher.matches(
+        otherParams, protocol::LogEntry(bytes(textAddress.begin(), textAddress.end()), {}, {})));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

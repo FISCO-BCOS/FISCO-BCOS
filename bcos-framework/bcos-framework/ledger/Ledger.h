@@ -72,14 +72,6 @@ inline constexpr struct StoreTransactionsAndReceipts
     }
 } storeTransactionsAndReceipts{};
 
-inline constexpr struct RemoveExpiredNonce
-{
-    void operator()(auto& ledger, protocol::BlockNumber expiredNumber) const
-    {
-        tag_invoke(*this, ledger, expiredNumber);
-    }
-} removeExpiredNonce{};
-
 inline constexpr struct GetBlockData
 {
     task::Task<protocol::Block::Ptr> operator()(
@@ -105,6 +97,12 @@ inline constexpr struct GetTransactionCount
     task::Task<TransactionCount> operator()(auto& ledger) const
     {
         co_return co_await tag_invoke(*this, ledger);
+    }
+    task::Task<TransactionCount> operator()(
+        storage2::ReadableStorage<executor_v1::StateKey> auto& storage,
+        FromStorage fromStorage) const
+    {
+        co_return co_await tag_invoke(*this, storage, fromStorage);
     }
 } getTransactionCount{};
 

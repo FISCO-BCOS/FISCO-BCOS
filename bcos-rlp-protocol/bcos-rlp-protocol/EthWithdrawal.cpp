@@ -22,6 +22,25 @@
 using namespace bcos;
 using namespace bcos::codec::rlp;
 
+namespace bcos::codec::rlp
+{
+size_t length(const protocol::EthWithdrawalData& _withdrawal) noexcept
+{
+    return length(
+        _withdrawal.index, _withdrawal.validatorIndex, _withdrawal.address, _withdrawal.amount);
+}
+void encode(bcos::bytes& _out, const protocol::EthWithdrawalData& _withdrawal) noexcept
+{
+    encode(_out, _withdrawal.index, _withdrawal.validatorIndex, _withdrawal.address,
+        _withdrawal.amount);
+}
+void decode(bcos::bytesRef& _in, protocol::EthWithdrawalData& _withdrawal)
+{
+    decode(_in, _withdrawal.index, _withdrawal.validatorIndex, _withdrawal.address,
+        _withdrawal.amount);
+}
+}  // namespace bcos::codec::rlp
+
 namespace bcos::protocol
 {
 void EthWithdrawal::rlpEncode(bcos::bytes& out) const
@@ -29,22 +48,21 @@ void EthWithdrawal::rlpEncode(bcos::bytes& out) const
     codec::rlp::encode(out, m_data);
 }
 
-bcos::Error::UniquePtr EthWithdrawal::rlpDecode(bcos::bytesConstRef data)
+void EthWithdrawal::rlpDecode(bcos::bytesConstRef data)
 {
-    // The codec's decode only advances a view cursor and never writes the buffer, so
-    // take the view directly; the const_cast is confined to this read-only entry point.
-    bytesRef in(const_cast<bcos::byte*>(data.data()), data.size());
-    if (auto err = codec::rlp::decode(in, m_data))
-    {
-        return err;
-    }
-    // geth's rlp.DecodeBytes rejects trailing bytes (ErrMoreThanOneValue); mirror that so
-    // two distinct wire encodings cannot map to the same decoded object.
-    if (!in.empty())
-    {
-        return BCOS_ERROR_UNIQUE_PTR(
-            DecodingError::UnexpectedListElements, "trailing bytes after top-level RLP item");
-    }
-    return nullptr;
+    codec::rlp::decodeExact(data, m_data);
+}
+
+size_t length(const EthWithdrawalData& _withdrawal) noexcept
+{
+    return codec::rlp::length(_withdrawal);
+}
+void encode(bcos::bytes& _out, const EthWithdrawalData& _withdrawal) noexcept
+{
+    codec::rlp::encode(_out, _withdrawal);
+}
+void decode(bcos::bytesRef& _in, EthWithdrawalData& _withdrawal)
+{
+    codec::rlp::decode(_in, _withdrawal);
 }
 }  // namespace bcos::protocol

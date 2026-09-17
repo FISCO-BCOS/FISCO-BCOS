@@ -19,6 +19,8 @@
  */
 #include "HeaderChain.h"
 
+#include <bcos-codec/rlp/Exceptions.h>
+#include <bcos-codec/rlp/Result.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -26,6 +28,7 @@
 
 namespace bcos::devp2p::sync
 {
+using bcos::codec::rlp::unwrapOrThrow;
 HeaderChain::HeaderChain(uint64_t _nextNumber, bcos::h256 _anchorHash,
     uint64_t _maxHeadersPerRequest)
   : m_nextNumber(_nextNumber),
@@ -57,7 +60,8 @@ std::vector<bcos::bytes> recvBlockHeadersReply(
     int ignoredBroadcasts = 0;
     while (true)
     {
-        auto response = _session.recvMessage();
+        auto response = unwrapOrThrow(
+            _session.recvMessage(), "HeaderChain: failed to decode a frame: ");
         BCOS_LOG(TRACE) << LOG_BADGE("HeaderChain")
                         << "recv msg id=" << static_cast<int>(response.id)
                         << " size=" << response.data.size() << " data="
@@ -81,8 +85,9 @@ std::vector<bcos::bytes> recvBlockHeadersReply(
                 auto disc = rlpx::decodeDisconnect(
                     bytesConstRef(response.data.data(), response.data.size()));
                 throw std::runtime_error(
-                    "HeaderChain: peer disconnected: reason=" +
-                    std::to_string(static_cast<int>(disc.reason)));
+                    "HeaderChain: peer disconnected: " +
+                    (disc ? "reason=" + std::to_string(static_cast<int>(disc->reason)) :
+                            "reason undecodable: " + disc.error().message));
             }
             // Peers freely broadcast transactions/new blocks while we are
             // waiting for the BlockHeaders reply — NewBlockHashes(0x11),
@@ -103,8 +108,9 @@ std::vector<bcos::bytes> recvBlockHeadersReply(
             throw std::runtime_error("HeaderChain: expected BlockHeaders, got message id=" +
                                      std::to_string(response.id));
         }
-        auto headers = eth::decodeBlockHeaders(
-            bytesConstRef(response.data.data(), response.data.size()));
+        auto headers = unwrapOrThrow(
+            eth::decodeBlockHeaders(bytesConstRef(response.data.data(), response.data.size())),
+            "HeaderChain: malformed BlockHeaders reply: ");
         if (headers.requestId != _requestId)
         {
             throw std::runtime_error("HeaderChain: request id mismatch");
@@ -150,9 +156,14 @@ std::vector<HeaderWithHash> HeaderChain::requestHeaders(
         HeaderWithHash header;
         header.rlp = std::move(wireHeaders[i]);
         bcos::protocol::EthBlockHeader ethHeader;
-        if (auto err = ethHeader.rlpDecode(bytesConstRef(header.rlp.data(), header.rlp.size())))
+        try
         {
-            throw std::runtime_error("HeaderChain: header RLP decode failed");
+            ethHeader.rlpDecode(bytesConstRef(header.rlp.data(), header.rlp.size()));
+        }
+        catch (bcos::codec::rlp::RlpDecodeException const& e)
+        {
+            throw std::runtime_error("HeaderChain: header RLP decode failed: " +
+                                     bcos::codec::rlp::rlpErrorMessage(e, "malformed header"));
         }
         header.header = ethHeader.data();
         // The header hash is keccak of the received wire encoding.
@@ -226,9 +237,14 @@ std::optional<HeaderWithHash> HeaderChain::requestHeaderByHash(
     HeaderWithHash header;
     header.rlp = std::move(wireHeaders[0]);
     bcos::protocol::EthBlockHeader ethHeader;
-    if (auto err = ethHeader.rlpDecode(bytesConstRef(header.rlp.data(), header.rlp.size())))
+    try
     {
-        throw std::runtime_error("HeaderChain: header RLP decode failed");
+        ethHeader.rlpDecode(bytesConstRef(header.rlp.data(), header.rlp.size()));
+    }
+    catch (bcos::codec::rlp::RlpDecodeException const& e)
+    {
+        throw std::runtime_error("HeaderChain: header RLP decode failed: " +
+                                 bcos::codec::rlp::rlpErrorMessage(e, "malformed header"));
     }
     header.header = ethHeader.data();
     header.hash = bcos::crypto::keccak256Hash(

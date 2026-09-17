@@ -122,6 +122,8 @@ public:
     int maxWriteBufferNumber() const;
     bool enableStatistics() const;
     int maxBackgroundJobs() const;
+    // RocksDB table-cache bound: -1 (default) keeps every touched SST open; >= 64 bounds it.
+    int maxOpenFiles() const;
     size_t writeBufferSize() const;
     int minWriteBufferNumberToMerge() const;
     size_t blockCacheSize() const;
@@ -210,6 +212,11 @@ public:
 
     // op engine rpc configurations
     bool enableOpEngineRpc() const;
+    // scopes the OP miner namespace to the op-engine listener (8551) only; enableMinerApi()
+    // scopes it to the web3 listener (8545) only — the two ports are configured separately
+    // so the batcher's handshake never leaks onto the public port.
+    bool enableOpEngineMinerApi() const;
+    bool enableMinerApi() const;
     const std::string& opEngineRpcListenIP() const;
     uint16_t opEngineRpcListenPort() const;
     uint32_t opEngineHttpBodySizeLimit() const;
@@ -509,6 +516,7 @@ private:
     bool m_enableDBStatistics = false;
     int m_maxWriteBufferNumber = 3;
     int m_maxBackgroundJobs = 3;
+    int m_maxOpenFiles = -1;
     size_t m_writeBufferSize = 64 << 21;
     int m_minWriteBufferNumberToMerge = 2;
     size_t m_blockCacheSize = 128 << 20;
@@ -587,6 +595,8 @@ private:
 
     // config for op engine rpc
     bool m_enableOpEngineRpc = false;
+    bool m_enableMinerApi = false;
+    bool m_enableOpEngineMinerApi = false;
     std::string m_opEngineRpcListenIP = "127.0.0.1";
     uint16_t m_opEngineRpcListenPort{};
     uint32_t m_opEngineHttpBodySizeLimit{};

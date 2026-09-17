@@ -24,6 +24,7 @@
 #pragma once
 
 #include "EthTrieRoots.h"
+#include <bcos-codec/rlp/Exceptions.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
@@ -91,9 +92,14 @@ inline h256 calculateEthereumReceiptsRoot(
     for (auto const& receipt : receipts)
     {
         protocol::EthReceiptData eth;
-        if (auto err = protocol::toEthReceiptData(*receipt, txTypes[index], eth); err != nullptr)
+        try
         {
-            BOOST_THROW_EXCEPTION(std::runtime_error("toEthReceiptData: " + err->errorMessage()));
+            protocol::toEthReceiptData(*receipt, txTypes[index], eth);
+        }
+        catch (bcos::codec::rlp::RlpEncodeException const& e)
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error("toEthReceiptData: " +
+                bcos::codec::rlp::rlpErrorMessage(e, "receipt conversion failed")));
         }
         bcos::bytes encoded;
         protocol::EthReceipt ethReceipt(std::move(eth));

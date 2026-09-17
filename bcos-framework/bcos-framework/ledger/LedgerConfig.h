@@ -293,8 +293,9 @@ inline constexpr evmc_revision EVMC_REVISION_DEFAULT = EVMC_OSAKA;
 /// Executor version selecting the pure-Ethereum EthereumExecutor (ethereum-executor).
 /// Canonical value kept here so lower layers (bcos-ledger, bcos-tool) can gate on it
 /// without depending on libinitializer; libinitializer/MultiVersionScheduler.h keeps a
-/// scheduler_v1-scoped alias for the same value. Versions >= this all select the v2
-/// executor (setVersion saturates), leaving room above 2 for a future executor.
+/// scheduler_v1-scoped alias for the same value. Version 3 names the OP lane below; a value
+/// above the newest DECLARED slot saturates down to the newest slot the node actually wired,
+/// which is this one only when the OP slot is unwired.
 ///
 /// PRE-RELEASE SEMANTICS: executor_version = 2 was introduced mid-branch (2026-08) and is
 /// NOT part of any upstream release — upstream releases have no v2. The version gates

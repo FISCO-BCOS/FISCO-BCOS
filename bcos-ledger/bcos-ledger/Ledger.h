@@ -132,8 +132,6 @@ public:
 
     bool buildGenesisBlock(GenesisConfig const& genesis, ledger::LedgerConfig const& ledgerConfig);
 
-    void asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNumber,
-        std::function<void(Error::Ptr&&, std::vector<std::string>&&)> callback);
     void setKeyPageSize(size_t keyPageSize) { m_keyPageSize = keyPageSize; }
 
     task::Task<bcos::ledger::SystemConfigs> fetchAllSystemConfigs(
@@ -158,6 +156,13 @@ private:
     Error::Ptr checkTableValid(Error::UniquePtr&& error,
         const std::optional<bcos::storage::Table>& table, const std::string_view& tableName);
 
+    // The storage2 read path cannot distinguish a missing table from missing rows; the
+    // legacy async contract reports a missing table as OpenTableFailed, so the legacy
+    // SYS_* readers share this open-table gate. @p callback receives nullptr when the
+    // table exists and is valid, the OpenTableFailed error otherwise.
+    void asyncCheckStateTableValid(
+        std::string_view tableName, std::function<void(Error::Ptr)> callback);
+
     Error::Ptr checkEntryValid(Error::UniquePtr&& error,
         const std::optional<bcos::storage::Entry>& entry, const std::string_view& key);
 
@@ -173,9 +178,6 @@ private:
 
     void getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
         std::function<void(Error::Ptr&&, MerkleProofPtr&&)> _onGetProof);
-
-    void asyncGetSystemTableEntry(const std::string_view& table, const std::string_view& key,
-        std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> callback);
 
     void createFileSystemTables(uint32_t blockVersion);
 
@@ -194,10 +196,6 @@ private:
 
     task::Task<std::optional<ledger::StorageState>> getStorageState(
         std::string_view _address, protocol::BlockNumber _blockNumber) override;
-
-    std::tuple<bool, bcos::crypto::HashListPtr, std::shared_ptr<std::vector<bytesConstPtr>>>
-    needStoreUnsavedTxs(
-        bcos::protocol::ConstTransactionsPtr _blockTxs, bcos::protocol::Block::ConstPtr _block);
 
     bcos::consensus::ConsensusNodeList selectWorkingSealer(
         const bcos::ledger::LedgerConfig& _ledgerConfig, std::int64_t _epochSealerNum);

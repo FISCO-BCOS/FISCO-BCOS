@@ -107,33 +107,33 @@ task::Task<void> Session::readLoop()
             // decode every complete message already in the buffer, then loop back for more
             while (true)
             {
-                Message::Ptr message = m_messageFactory->buildMessage();
+                Message message;
                 try
                 {
                     auto bufferForWrite = recvBuffer.asWriteBuffer();
                     auto readBuffer = recvBuffer.asReadBuffer();
                     // Note: the decode function may throw exception
-                    ssize_t result = message->decode(readBuffer);
+                    ssize_t result = message.decode(readBuffer);
                     if (result > 0)
                     {
                         NetworkException e(P2PExceptionType::Success, "Success");
-                        onMessage(e, message);
+                        onMessage(e, std::move(message));
                         recvBuffer.onRead(result);
                     }
                     else if (result == 0)
                     {
-                        auto length = message->lengthDirect();
+                        auto length = message.lengthDirect();
                         if (length > allowMaxMsgSize())
                         {
                             SESSION_LOG(ERROR)
                                 << LOG_BADGE("readLoop")
                                 << LOG_DESC("the message size exceeded the allow maximum value")
-                                << LOG_KV("msgSize", message->length())
+                                << LOG_KV("msgSize", message.length())
                                 << LOG_KV("allowMaxMsgSize", allowMaxMsgSize());
 
                             onMessage(NetworkException(P2PExceptionType::ProtocolError,
                                           "ProtocolError(msg overflow)"),
-                                message);
+                                std::move(message));
                             drop(UserReason);
                             co_return;
                         }
@@ -176,7 +176,7 @@ task::Task<void> Session::readLoop()
                             << LOG_KV("result", result);
                         onMessage(NetworkException(P2PExceptionType::ProtocolError,
                                       "ProtocolError(decode msg error)"),
-                            message);
+                            std::move(message));
                         drop(UserReason);
                         co_return;
                     }
@@ -187,7 +187,7 @@ task::Task<void> Session::readLoop()
                                        << LOG_KV("message", boost::diagnostic_information(e));
                     onMessage(NetworkException(P2PExceptionType::ProtocolError,
                                   "ProtocolError(decode msg exception)"),
-                        message);
+                        std::move(message));
                     drop(UserReason);
                     co_return;
                 }
@@ -198,7 +198,7 @@ task::Task<void> Session::readLoop()
                         << LOG_KV("message", boost::current_exception_diagnostic_information());
                     onMessage(NetworkException(P2PExceptionType::ProtocolError,
                                   "ProtocolError(decode msg exception)"),
-                        message);
+                        std::move(message));
                     drop(UserReason);
                     co_return;
                 }

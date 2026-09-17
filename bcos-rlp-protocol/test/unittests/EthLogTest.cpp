@@ -19,6 +19,7 @@
  */
 
 #include "bcos-rlp-protocol/EthLog.h"
+#include <bcos-codec/rlp/Exceptions.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 
@@ -82,14 +83,12 @@ BOOST_AUTO_TEST_CASE(goldenDecode)
 {
     EthLog ethLog;
     auto rawkLog1 = fromHex(kLog1Hex);
-    auto err = ethLog.rlpDecode(ref(rawkLog1));
-    BOOST_CHECK(!err);
+    ethLog.rlpDecode(ref(rawkLog1));
     BOOST_CHECK(ethLog.data() == makeLog1());
 
     EthLog ethLog2;
     auto rawkLog2 = fromHex(kLog2Hex);
-    auto err2 = ethLog2.rlpDecode(ref(rawkLog2));
-    BOOST_CHECK(!err2);
+    ethLog2.rlpDecode(ref(rawkLog2));
     BOOST_CHECK(ethLog2.data() == makeLog2());
 }
 
@@ -100,7 +99,7 @@ BOOST_AUTO_TEST_CASE(roundTrip)
     bytes out;
     ethLog.rlpEncode(out);
     EthLog decoded;
-    BOOST_CHECK(!decoded.rlpDecode(ref(out)));
+    BOOST_CHECK_NO_THROW(decoded.rlpDecode(ref(out)));
     BOOST_CHECK(decoded.data() == log);
 }
 
@@ -113,7 +112,7 @@ BOOST_AUTO_TEST_CASE(rlpDecodeRejectsTrailingBytes)
     ethLog.rlpEncode(out);
     out.push_back(0xff);
     EthLog decoded;
-    BOOST_REQUIRE(decoded.rlpDecode(ref(out)) != nullptr);
+    BOOST_REQUIRE_THROW(decoded.rlpDecode(ref(out)), bcos::codec::rlp::RlpDecodeException);
 }
 
 // std::vector<EthLogData> through the generic list codec (used by EthReceipt).
@@ -125,7 +124,7 @@ BOOST_AUTO_TEST_CASE(vectorRoundTrip)
     std::vector<EthLogData> decoded;
     auto mutableData = out;
     bytesRef in(mutableData.data(), mutableData.size());
-    BOOST_CHECK(!codec::rlp::decode(in, decoded));
+    BOOST_CHECK_NO_THROW(codec::rlp::decode(in, decoded));
     BOOST_CHECK(decoded == logs);
 }
 
@@ -134,13 +133,11 @@ BOOST_AUTO_TEST_CASE(malformedRejected)
     // 0x80 (empty string) is not a log list.
     EthLog ethLog;
     auto rawMalformed1 = fromHex("80");
-    auto err = ethLog.rlpDecode(ref(rawMalformed1));
-    BOOST_CHECK(err != nullptr);
+    BOOST_CHECK_THROW(ethLog.rlpDecode(ref(rawMalformed1)), bcos::codec::rlp::RlpDecodeException);
     // A two-element list is missing the data field (decode succeeds? no: the variadic list
     // decode requires exactly 3 items, so a 2-item list leaves the view non-empty -> error).
     auto rawMalformed2 = fromHex("d60194999999999999999999999999999999999999999980");
-    auto err2 = ethLog.rlpDecode(ref(rawMalformed2));
-    BOOST_CHECK(err2 != nullptr);
+    BOOST_CHECK_THROW(ethLog.rlpDecode(ref(rawMalformed2)), bcos::codec::rlp::RlpDecodeException);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

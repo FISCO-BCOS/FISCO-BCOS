@@ -19,13 +19,17 @@
 
 #pragma once
 
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/engine/Constants.h>
+#include <bcos-framework/engine/Errors.h>
 #include <bcos-framework/engine/RawTransactionDispatch.h>
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/BlockHeaderFactory.h>
 #include <bcos-ledger/mpt/Constants.h>
+#include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <bcos-tars-protocol/tars/Transaction.h>
 #include <evmc/evmc.h>
 
 #include <cstddef>
@@ -115,6 +119,20 @@ inline bcos::h256 withdrawalsRootFor(const ExecutionPayload& /*payload*/)
 /// #5548/#5549), so they get a named home instead of the private detail namespace.
 namespace engine_common
 {
+/// The envelope → executable-transaction carrier step both build paths share: stamp the
+/// raw EIP-2718 envelope onto extraTransactionBytes (the executor must see the exact wire
+/// form a pool transaction would carry) and wrap the Tars transaction in its lazy
+/// self-pointer. One home, because the carrier shape decides what the executor hashes and
+/// executes — a drift between the lanes would fork the payload composition.
+inline std::shared_ptr<bcostars::protocol::TransactionImpl> decodedTransactionFromEnvelope(
+    bcostars::Transaction tars, bcos::bytes const& raw)
+{
+    tars.extraTransactionBytes.assign(raw.begin(), raw.end());
+    return std::make_shared<bcostars::protocol::TransactionImpl>(
+        [tars = std::move(tars)]() mutable { return &tars; });
+}
+
+
 /// Engine API behavior follows op-geth.
 /// op-geth d401af16f2dd94b010a72eaef10e07ac10b31931
 /// (eth/catalyst/api.go, miner/payload_building.go).
@@ -216,6 +234,51 @@ GetPayloadResult assembleGetPayloadData(const EntryT& entry, std::uint32_t versi
         .parentBeaconBlockRoot = entry.parentBeaconBlockRoot,
     });
 }
+
+namespace op
+{
+/// Decode one EIP-2718 (typed/legacy) Web3 raw envelope into its Tars transaction form,
+/// tagged with @p txHash (keccak256 of the same raw bytes). Returns nullopt when the
+/// envelope is not a decodable Web3 signing payload. Single home for both the Eth and OP
+/// build paths: a raw/forced envelope needs the same executable `decoded` form a sealed
+/// pool transaction already carries, or the scheduler skips it and receiptsRoot ends up
+/// covering fewer transactions than transactionsRoot.
+/// @param allowDeposit  deposit (0x7e) envelopes are an OP-Stack payloadAttributes
+///        extension: the OP build path passes true (deposits are the only OP-sanctioned
+///        forced-tx lane); the Eth build path passes false — a 0x7e type is invalid on
+///        an Eth/L1 chain, so no Eth client would re-execute such a block. No default:
+///        this is a consensus-shape decision, so every caller states its lane's policy.
+std::optional<bcostars::Transaction> opEnvelopeToTars(
+    bcos::bytes const& env, bcos::crypto::HashType const& txHash, bool allowDeposit);
+}  // namespace op
 }  // namespace engine_common
+
+namespace detail
+{
+/// True when the OpExecutionInternalError carries the OpPayloadUndecodable tag:
+/// a payload-content fault (an envelope the CL submitted cannot be decoded),
+/// not a node-internal fault. Single predicate for both answer shapes on BOTH
+/// lanes — the FCU path maps it to an Invalid FCU status, the newPayload path
+/// to an Invalid PayloadStatus; any OTHER OpExecutionInternalError must keep
+/// propagating as -32603, never be flattened into a consensus INVALID.
+inline bool isUndecodablePayloadFault(OpExecutionInternalError const& error)
+{
+    return boost::get_error_info<OpPayloadUndecodable>(error) != nullptr;
+}
+
+inline std::optional<ForkchoiceUpdatedResult> fcuInvalidIfUndecodable(
+    OpExecutionInternalError const& error)
+{
+    if (!isUndecodablePayloadFault(error))
+    {
+        return std::nullopt;
+    }
+    return ForkchoiceUpdatedResult{
+        .payloadStatus = engine_common::makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+            std::string("undecodable payload transaction envelope")),
+        .payloadId = std::nullopt,
+    };
+}
+}  // namespace detail
 
 }  // namespace bcos::engine

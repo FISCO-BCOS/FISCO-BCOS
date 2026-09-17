@@ -656,25 +656,3 @@ const std::any& bcos::gateway::Message::extAttributes() const
 {
     return m_extAttr;
 }
-bcos::gateway::Message::Ptr bcos::gateway::MessageFactory::buildMessage()
-{
-    auto message = std::make_shared<Message>();
-    return message;
-}
-uint32_t bcos::gateway::MessageFactory::newSeq()
-{
-    uint32_t seq = ++m_seq;
-    return seq;
-}
-std::ostream& bcos::gateway::operator<<(std::ostream& _out, const Message& _message)
-{
-    _out << "Message {" << " length: " << _message.length()
-         << " version: " << _message.version() << " packetType: " << _message.packetType()
-         << " seq: " << _message.seq() << " ext: " << _message.ext() << " }";
-    return _out;
-}
-std::ostream& bcos::gateway::operator<<(std::ostream& _out, Message::Ptr& _message)
-{
-    _out << (*_message.get());
-    return _out;
-}

@@ -22,6 +22,7 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/Ledger.h"
+#include "bcos-ledger/LedgerMethods.h"
 #include "bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h"
 #include "bcos-storage/TiKVStorage.h"
 #include "bcos-tars-protocol/bcos-tars-protocol/protocol/TransactionImpl.h"
@@ -41,6 +42,7 @@
 #include <bcos-security/bcos-security/BcosKmsDataEncryption.h>
 #include <bcos-storage/RocksDBStorage.h>
 #include <bcos-table/src/KeyPageStorage.h>
+#include <bcos-task/Wait.h>
 #include <json/value.h>
 #include <sys/queue.h>
 #include <boost/algorithm/hex.hpp>
@@ -366,8 +368,6 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
     // create factory
     auto protocolInitializer = std::make_shared<ProtocolInitializer>();
     protocolInitializer->init(nodeConfig);
-    auto ledger = std::make_shared<bcos::ledger::Ledger>(protocolInitializer->blockFactory(),
-        localStorage, nodeConfig->blockLimit(), localBlockStorage);
     auto blockFactory = protocolInitializer->blockFactory();
     auto transactionFactory = blockFactory->transactionFactory();
     auto receiptFactory = blockFactory->receiptFactory();
@@ -391,18 +391,18 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
     for (int64_t blockNumber = startBlockNumber; blockNumber < endBlockNumber; ++blockNumber)
     {
         // getBlockByNumber
-        std::promise<std::vector<std::string>> promiseHashes;
-        ledger->asyncGetBlockTransactionHashes(
-            blockNumber, [&](Error::Ptr&& error, std::vector<std::string>&& txHashes) {
-                if (error)
-                {
-                    std::cerr << "get block transaction hash list failed: "
-                              << error->errorMessage();
-                    exit(1);
-                }
-                promiseHashes.set_value(std::move(txHashes));
-            });
-        auto txHashes = promiseHashes.get_future().get();
+        std::vector<std::string> txHashes;
+        try
+        {
+            txHashes = task::syncWait(ledger::getBlockTransactionHashStrings(
+                *localStorage, blockNumber, *blockFactory));
+        }
+        catch (std::exception& e)
+        {
+            std::cerr << "get block transaction hash list failed: "
+                      << boost::diagnostic_information(e);
+            exit(1);
+        }
 
         // get transactions from archive database
         std::promise<std::vector<std::optional<Entry>>> promiseTxs;

@@ -26,8 +26,9 @@ target_include_directories(engine PRIVATE
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/transaction-scheduler>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/bcos-storage>)
 # PUBLIC rlp-protocol: EthEngineService.h includes EthEngineService.inl, and the
-# installed OpEngineService.inl uses <bcos-rlp-protocol/EthBlockHeader.h>. PRIVATE
-# would drop include dirs for consumers that instantiate the templates.
+# installed OpEngineService.inl uses <bcos-rlp-protocol/BlockHeaderHash.h>
+# (canonicalBlockHash). PRIVATE would drop include dirs for consumers that instantiate
+# the templates.
 target_link_libraries(engine PUBLIC bcos-framework bcos-task bcos-utilities ledger codec
     rlp-protocol)
 set_target_properties(engine PROPERTIES UNITY_BUILD "ON")

@@ -127,6 +127,16 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
         BOOST_THROW_EXCEPTION(std::invalid_argument(
             std::string("reassemble raw Web3 transaction: decode failed at ").append(stage)));
     };
+    // Shared tryDecodeHeader-or-throw step: every header read below gates a malformed-input
+    // failure through throwDecode with its own stage label.
+    auto readHeader = [&throwDecode](bcos::bytesRef& view, std::string_view stage) {
+        auto headerResult = bcos::codec::rlp::tryDecodeHeader(view);
+        if (!headerResult) [[unlikely]]
+        {
+            throwDecode(stage);
+        }
+        return *headerResult;
+    };
     // Finding N2: the tars parity byte feeds both the typed trailer encoding and the
     // legacy v derivation; parity > 1 is a valid secp256k1 recid and recovers an
     // uncontrollable sender, and the produced preimage is a form display-side decode
@@ -157,8 +167,8 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
         // bytes verbatim and re-emit just the header + signature.
         auto const txType = firstByte;
         cursor = cursor.getCroppedData(1);  // drop the EIP-2718 type byte
-        auto [error, header] = bcos::codec::rlp::decodeHeader(cursor);
-        if (error || !header.isList || header.payloadLength > cursor.size()) [[unlikely]]
+        auto const header = readHeader(cursor, "typed body");
+        if (!header.isList || header.payloadLength > cursor.size()) [[unlikely]]
         {
             throwDecode("typed body");
         }
@@ -191,8 +201,8 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
             bcos::bytesRef counter(cursor.data(), header.payloadLength);
             while (!counter.empty())
             {
-                auto [countError, itemHeader] = bcos::codec::rlp::decodeHeader(counter);
-                if (countError || itemHeader.payloadLength > counter.size()) [[unlikely]]
+                auto const itemHeader = readHeader(counter, "typed item count");
+                if (itemHeader.payloadLength > counter.size()) [[unlikely]]
                 {
                     throwDecode("typed item count");
                 }
@@ -212,8 +222,8 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
                 while (!tail.empty())
                 {
                     auto const* const itemStart = tail.data();
-                    auto [tailError, itemHeader] = bcos::codec::rlp::decodeHeader(tail);
-                    if (tailError || itemHeader.payloadLength > tail.size()) [[unlikely]]
+                    auto const itemHeader = readHeader(tail, "typed trailer");
+                    if (itemHeader.payloadLength > tail.size()) [[unlikely]]
                     {
                         throwDecode("typed trailer");
                     }
@@ -273,8 +283,8 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
         // trailing chainId,0,0 with v,r,s (v = chainId*2+35+yParity); pre-155 simply appends v,r,s
         // (v = yParity+27). We locate the end of the 6 field items, reuse those bytes, and emit a
         // fresh list header + v,r,s.
-        auto [error, header] = bcos::codec::rlp::decodeHeader(cursor);
-        if (error || !header.isList || header.payloadLength > cursor.size()) [[unlikely]]
+        auto const header = readHeader(cursor, "legacy header");
+        if (!header.isList || header.payloadLength > cursor.size()) [[unlikely]]
         {
             throwDecode("legacy header");
         }
@@ -286,8 +296,8 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
         bcos::bytesRef walker(cursor.data(), header.payloadLength);
         for (int i = 0; i < 6; ++i)
         {
-            auto [fieldError, fieldHeader] = bcos::codec::rlp::decodeHeader(walker);
-            if (fieldError || fieldHeader.payloadLength > walker.size()) [[unlikely]]
+            auto const fieldHeader = readHeader(walker, "legacy field");
+            if (fieldHeader.payloadLength > walker.size()) [[unlikely]]
             {
                 throwDecode("legacy field");
             }
@@ -308,12 +318,12 @@ bcos::bytes bcostars::protocol::reassembleWeb3RawTransaction(
             uint64_t item7 = 0;
             bcos::bytes item8, item9;
             // Canonical v / chainId; non-minimal RLP would fork txHash.
-            auto trailerError = bcos::rlp::protocol::decodeCanonicalRlpUint(walker, item7);
-            if (trailerError == nullptr)
+            try
             {
-                trailerError = bcos::codec::rlp::decodeItems(walker, item8, item9);
+                bcos::rlp::protocol::decodeCanonicalRlpUint(walker, item7);
+                bcos::codec::rlp::decodeItems(walker, item8, item9);
             }
-            if (trailerError) [[unlikely]]
+            catch (bcos::codec::rlp::RlpDecodeException const&)
             {
                 throwDecode("legacy trailer");
             }

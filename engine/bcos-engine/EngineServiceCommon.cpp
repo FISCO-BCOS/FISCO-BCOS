@@ -685,11 +685,13 @@ void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const Execution
     }
 
     header.setEthBlockVersion(forkVersion);
-    if (auto error = bcos::protocol::EthBlockHeader::calculateRLPHash(header))
+    if (auto const r = bcos::codec::rlp::captureRlp(
+            [&] { bcos::protocol::EthBlockHeader::calculateRLPHash(header); });
+        !r)
     {
         BOOST_THROW_EXCEPTION(
             OpExecutionInternalError{} << bcos::errinfo_comment{
-                "EngineService: failed to compute Eth RLP hash: " + error->errorMessage()});
+                "EngineService: failed to compute Eth RLP hash: " + r.error().message});
     }
 }
 

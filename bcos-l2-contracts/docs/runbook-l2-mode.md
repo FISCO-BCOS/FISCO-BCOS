@@ -27,14 +27,20 @@ start below produces those allocs.
 
 ## Quick start (5 steps)
 
-All paths are relative to the repo root. `tools/opstack-genesis/` holds the
-allocs generator; `bcos-l2-contracts/` holds the Solidity suite.
+The allocs generator lives in FISCO-BCOS/op-stack-e2e-tests under
+`tools/opstack-genesis/` (check it out, e.g. into `.ci-op-e2e-tests`);
+`bcos-l2-contracts/` holds the Solidity suite. Paths in steps 1–2 are relative
+to that harness checkout (or to wherever `OP_E2E_DIR` points); the node steps
+that follow are relative to the FISCO-BCOS repo root.
 
 ### 1. Build the contracts, obtain the base allocs, edit a chain config
 
 ```bash
-cd tools/opstack-genesis
-make contracts    # forge build of bcos-l2-contracts/src (the only artifacts genesis needs)
+FISCO_REPO=${FISCO_REPO:-.}    # path to the FISCO-BCOS checkout (holds bcos-l2-contracts/)
+cd "${OP_E2E_DIR:-.ci-op-e2e-tests}/tools/opstack-genesis"
+# CONTRACTS must point at bcos-l2-contracts in the FISCO-BCOS checkout; the
+# Makefile's relative default only fits a sibling layout.
+make contracts CONTRACTS="$FISCO_REPO/bcos-l2-contracts"    # forge build of bcos-l2-contracts/src (the only artifacts genesis needs)
 # obtain final-allocs.json: the op-deployer terminal alloc JSON for the pinned
 # Karst release (bcos-l2-contracts/op-fork-pin.toml [karst_pin]); generating it
 # needs the op-deployer binary — run it wherever that binary is available.

@@ -19,9 +19,17 @@
 
 #add_definitions(-Wno-unused-value -Wunused-parameter)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 set(Boost_NO_WARN_NEW_VERSIONS ON)
+
+# C++23 std::expected floor: GCC 12+ / Clang 16+ (Xcode 16+) / VS2022 17.3+ (MSVC 19.33+).
+if(("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 12) OR
+   ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 16) OR
+   (MSVC AND MSVC_VERSION LESS 1933))
+    message(FATAL_ERROR "FISCO-BCOS requires GCC 12+ / Clang 16+ (Xcode 16+) / VS2022 17.3+ for C++23 std::expected (found ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}${MSVC_VERSION})")
+endif()
+
 message(STATUS "COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
 if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang"))
     find_program(CCACHE_PROGRAM ccache)
@@ -137,7 +145,6 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         endif()
 
         if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14.0)
-            # set(CMAKE_CXX_STANDARD 23)
             add_compile_options(-Wno-error=uninitialized)
             add_compile_options(-Wno-error=tsan)
             add_compile_options(-fconcepts-diagnostics-depth=10)
@@ -165,11 +172,23 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     endif()
 
     if(SANITIZE_ADDRESS)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined -fno-sanitize=alignment -fsanitize-address-use-after-scope -fsanitize-recover=all")
+        # ASan + UBSan. Alignment checks stay off: packed protocol structs are
+        # intentional. recover=all keeps a test run going so we see every report.
+        set(_fisco_asan_flags "-ggdb -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined -fno-sanitize=alignment -fsanitize-address-use-after-scope -fsanitize-recover=all")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${_fisco_asan_flags}")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${_fisco_asan_flags}")
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address -fsanitize=undefined")
+        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=address -fsanitize=undefined")
+        unset(_fisco_asan_flags)
     endif()
 
     if(SANITIZE_THREAD)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb -fno-omit-frame-pointer -fsanitize=thread")
+        set(_fisco_tsan_flags "-ggdb -fno-omit-frame-pointer -fsanitize=thread")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${_fisco_tsan_flags}")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${_fisco_tsan_flags}")
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=thread")
+        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=thread")
+        unset(_fisco_tsan_flags)
     endif()
 
     if(COVERAGE)

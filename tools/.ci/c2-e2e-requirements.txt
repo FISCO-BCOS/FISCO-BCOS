@@ -1,0 +1,6 @@
+# Python deps for the op-e2e harness (withdraw_claim.py MPT proof helpers),
+# consumed from the FISCO-BCOS/op-stack-e2e-tests checkout (OP_E2E_DIR).
+pyyaml>=6.0
+eth-hash[pycryptodome]>=0.5
+trie>=2.0
+rlp>=3.0

@@ -1,10 +1,12 @@
 #include "bcos-storage/CheckpointRocksDBStorage.h"
 #include "bcos-storage/StateKVResolver.h"
+#include <bcos-utilities/BoostLog.h>
 #include <rocksdb/filter_policy.h>
 #include <rocksdb/statistics.h>
 #include <rocksdb/table.h>
 #include <rocksdb/utilities/checkpoint.h>
 #include <boost/throw_exception.hpp>
+#include <sys/resource.h>
 #include <filesystem>
 #include <optional>
 
@@ -39,17 +41,59 @@ std::optional<bcos::h256> parseCheckpointName(std::string const& checkpointName)
 
 namespace detail
 {
+long softOpenFileLimit()
+{
+    ::rlimit limit{};
+    if (::getrlimit(RLIMIT_NOFILE, &limit) != 0 || limit.rlim_cur == RLIM_INFINITY)
+    {
+        return -1;
+    }
+    return static_cast<long>(limit.rlim_cur);
+}
+
+void warnIfMaxOpenFilesUnbounded(int maxOpenFiles, std::string_view path)
+{
+    if (maxOpenFiles != -1)
+    {
+        return;
+    }
+    // With -1 RocksDB never evicts table readers: fd usage grows toward the live SST count
+    // and, with cache_index_and_filter_blocks off, every reader pins its index/filter blocks
+    // on the heap. On an archive-scale DB (10k+ SSTs) a small soft nofile runs the process
+    // out of fds mid-operation.
+    auto soft = softOpenFileLimit();
+    if (soft >= 0 && soft < 65536)
+    {
+        BCOS_LOG(WARNING) << LOG_BADGE("RocksDB")
+                          << LOG_DESC("max_open_files=-1 with a small soft fd limit")
+                          << LOG_KV("path", path) << LOG_KV("rlimit_nofile", soft)
+                          << LOG_KV("advice",
+                                 "raise the nofile ulimit (>= 65536) or bound the table cache "
+                                 "with [storage].rocksdb_max_open_files");
+    }
+}
+
 std::unique_ptr<::rocksdb::DB> openCheckpointRocksDB(
     const std::string& path, const ::rocksdb::Options& options, bool readOnly)
 {
+    warnIfMaxOpenFilesUnbounded(options.max_open_files, path);
     ::rocksdb::DB* rocksDB = nullptr;
     auto status = readOnly ? ::rocksdb::DB::OpenForReadOnly(options, path, &rocksDB) :
                              ::rocksdb::DB::Open(options, path, &rocksDB);
     if (!status.ok())
     {
+        std::string message = "Open rocksdb failed, path: " + path +
+                              ", error: " + status.ToString();
+        if (options.max_open_files == -1)
+        {
+            message +=
+                "; max_open_files=-1 keeps every touched SST open — if this is 'Too many open "
+                "files', raise the nofile ulimit or bound the table cache with "
+                "[storage].rocksdb_max_open_files (soft rlimit_nofile=" +
+                std::to_string(softOpenFileLimit()) + ")";
+        }
         BOOST_THROW_EXCEPTION(
-            CheckpointRocksDBException{} << bcos::errinfo_comment(
-                "Open rocksdb failed, path: " + path + ", error: " + status.ToString()));
+            CheckpointRocksDBException{} << bcos::errinfo_comment(message));
     }
     return std::unique_ptr<::rocksdb::DB>(rocksDB);
 }
@@ -75,10 +119,11 @@ template <class KeyType, class ValueType, Resolver<KeyType> KeyResolver,
     options.bytes_per_sync = 1 << 20;
     options.compression = ::rocksdb::kZSTD;
     options.bottommost_compression = ::rocksdb::kZSTD;
-    // -1 (unlimited): an archive-scale "latest" DB holds tens of thousands of SSTs; a small
-    // table cache thrashes, re-reading index/filter/properties blocks on every random read
-    // (observed ~900MB/s of throwaway reads during an MPT prune rebuild with the previous 256).
-    options.max_open_files = -1;
+    // -1 (unlimited, the default): an archive-scale "latest" DB holds tens of thousands of
+    // SSTs; a small table cache thrashes, re-reading index/filter/properties blocks on every
+    // random read (observed ~900MB/s of throwaway reads during an MPT prune rebuild with the
+    // previous 256). See RocksDBCheckpointOption::maxOpenFiles for the fd/memory cost.
+    options.max_open_files = m_option.maxOpenFiles;
     options.write_buffer_size = m_option.writeBufferSize;
     options.min_write_buffer_number_to_merge = m_option.minWriteBufferNumberToMerge;
     options.enable_pipelined_write = true;
@@ -108,9 +153,9 @@ template <class KeyType, class ValueType, Resolver<KeyType> KeyResolver,
     ::rocksdb::Options options;
     options.create_if_missing = false;
 
-    // -1 (unlimited): same table-cache thrash reasoning as latestCheckpointOptions — a
-    // historical checkpoint can hold thousands of SSTs.
-    options.max_open_files = -1;
+    // Same table-cache thrash reasoning as latestCheckpointOptions — a historical checkpoint
+    // can hold thousands of SSTs.
+    options.max_open_files = m_option.maxOpenFiles;
     options.compression = ::rocksdb::kZSTD;
     options.bottommost_compression = ::rocksdb::kZSTD;
 

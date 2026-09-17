@@ -167,7 +167,7 @@ void P2PSession::heartBeat()
     }
 }
 
-bcos::task::Task<Message::Ptr> P2PSession::fastSendP2PMessage(
+bcos::task::Task<std::optional<Message>> P2PSession::fastSendP2PMessage(
     Message& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
 {
     if (!m_session || !m_session->active()) [[unlikely]]
