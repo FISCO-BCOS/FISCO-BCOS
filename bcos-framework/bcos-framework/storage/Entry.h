@@ -103,7 +103,12 @@ public:
     SmallBuffer() = default;
     SmallBuffer(const char* data, size_t size) : m_size(static_cast<uint8_t>(size))
     {
-        std::memcpy(m_buffer.data(), data, size);
+        // data may be nullptr for an empty view; memcpy forbids null arguments
+        // even when size is 0
+        if (size > 0)
+        {
+            std::memcpy(m_buffer.data(), data, size);
+        }
     }
     const char* data() const noexcept { return m_buffer.data(); }
     size_t size() const noexcept { return m_size; }

@@ -769,6 +769,57 @@ BOOST_AUTO_TEST_CASE(emptyEntryGetTyped)
     BOOST_TEST(!entry.holdsType<TestValueA>());
 }
 
+BOOST_AUTO_TEST_CASE(typedEntrySpecialMembers)
+{
+    // Defaulted special members must preserve the typed model.
+    Entry entry;
+    entry.setTyped(TestValueA{42, "pin"});
+
+    // Copy-construct
+    Entry copied(entry);
+    BOOST_TEST(copied.holdsType<TestValueA>());
+    auto* copiedPtr = copied.getTyped<TestValueA>();
+    BOOST_REQUIRE(copiedPtr != nullptr);
+    BOOST_CHECK_EQUAL(copiedPtr->id, 42);
+    BOOST_CHECK_EQUAL(copiedPtr->nameStr(), "pin");
+
+    // The copy is deep: rewriting it leaves the source intact
+    copied.setTyped(TestValueA{1, "other"});
+    BOOST_REQUIRE(entry.getTyped<TestValueA>() != nullptr);
+    BOOST_CHECK_EQUAL(entry.getTyped<TestValueA>()->id, 42);
+
+    // Move-construct
+    Entry moveSource;
+    moveSource.setTyped(TestValueA{7, "move"});
+    Entry moved(std::move(moveSource));
+    BOOST_TEST(moved.holdsType<TestValueA>());
+    BOOST_REQUIRE(moved.getTyped<TestValueA>() != nullptr);
+    BOOST_CHECK_EQUAL(moved.getTyped<TestValueA>()->id, 7);
+
+    // Copy-assign
+    Entry copyAssigned;
+    copyAssigned = entry;
+    BOOST_TEST(copyAssigned.holdsType<TestValueA>());
+    BOOST_REQUIRE(copyAssigned.getTyped<TestValueA>() != nullptr);
+    BOOST_CHECK_EQUAL(copyAssigned.getTyped<TestValueA>()->id, 42);
+
+    // Move-assign
+    Entry moveAssignSource;
+    moveAssignSource.setTyped(TestValueA{9, "massign"});
+    Entry moveAssigned;
+    moveAssigned = std::move(moveAssignSource);
+    BOOST_TEST(moveAssigned.holdsType<TestValueA>());
+    BOOST_REQUIRE(moveAssigned.getTyped<TestValueA>() != nullptr);
+    BOOST_CHECK_EQUAL(moveAssigned.getTyped<TestValueA>()->id, 9);
+
+    // set() over a typed entry leaves no stale typed state
+    entry.set(std::string_view("bytes"));
+    BOOST_TEST(!entry.holdsType<TestValueA>());
+    BOOST_TEST(entry.getTyped<TestValueA>() == nullptr);
+    BOOST_TEST(entry.holdsBuffer());
+    BOOST_CHECK_EQUAL(entry.get(), "bytes");
+}
+
 BOOST_AUTO_TEST_CASE(holdsBuffer)
 {
     // EMPTY entry
