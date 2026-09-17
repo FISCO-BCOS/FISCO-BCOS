@@ -1711,6 +1711,80 @@ BOOST_AUTO_TEST_CASE(PreHoloceneParentExtraDataIsInertForPricing)
         "S7: the pricing decoded the parent's extraData on a pre-Holocene parent");
 }
 
+// S8/S9 — the 1559 parameter SOURCE across the fork boundary. Below Holocene the price comes
+// from the chain config (config.optimism / rollup chain_op_config); from Holocene on, op-geth
+// reads the params out of the PARENT's extraData (consensus/misc/eip1559/eip1559.go:64-110).
+// This case pins the post-boundary half, the mirror of PreHoloceneParentExtraDataIsInertForPricing:
+// a Holocene parent whose extraData declares denominator 250 while the node's declared chain
+// triple is (6, 8, 250). The two candidate sources are told apart by their op-geth goldens
+// (already pinned by PreCanyonBaseFeeUsesTheChainsEip1559Denominator):
+//   1_012_000_000 = parent extraData, denominator 250  <- correct from Holocene on
+//   1_375_000_000 = chain config, denominator 8        <- would mean the source never switched
+// The second assertion closes the loop: the new block must write the CHAIN's declared params
+// into its own 9-byte Holocene extraData, which is what the block after it will price from.
+BOOST_AUTO_TEST_CASE(HoloceneParentPricesFromItsOwnExtraData)
+{
+    constexpr std::uint64_t kOpGethGoldenExtraDataTriple = 1'012'000'000ULL;
+    constexpr std::uint64_t kOpGethGoldenChainTriple = 1'375'000'000ULL;
+    bcos::engine::OpEip1559Params const chainTriple{
+        .elasticity = 6, .denominator = 8, .denominatorCanyon = 250};
+    auto const holoceneShaped = bcos::fromHex("0x00000000fa00000006");  // version 0, 250, 6
+
+    auto const genesis = regolithGenesisHash();
+    auto schedule = std::make_shared<const bcos::evm::opstack::OpForkSchedule>(
+        std::vector<bcos::evm::opstack::OpForkActivation>{{bcos::evm::opstack::OpFork::Regolith, 0},
+            {bcos::evm::opstack::OpFork::Canyon, 0}, {bcos::evm::opstack::OpFork::Ecotone, 0},
+            {bcos::evm::opstack::OpFork::Fjord, 0}, {bcos::evm::opstack::OpFork::Granite, 0},
+            {bcos::evm::opstack::OpFork::Holocene, 0}},
+        bcos::evm::opstack::OpForkSchedule::TestBypass{});
+    auto fixture = std::make_unique<OpE2eFixture>(schedule, chainTriple);
+    registerRegolithGenesis(*fixture, genesis, holoceneShaped);
+
+    bcos::engine::PayloadAttributes attrs;
+    attrs.timestamp = 1'000;  // 1 s: inside the Holocene window
+    attrs.prevRandao = bcos::crypto::HashType{};
+    attrs.suggestedFeeRecipient = bcos::Address{};
+    attrs.gasLimit = 30'000'000;
+    attrs.noTxPool = true;
+    attrs.withdrawals = std::vector<bcos::engine::WithdrawalV1>{};
+    attrs.parentBeaconBlockRoot = bcos::h256{};
+    // op-node echoes the chain's declared params as 8 bytes (4-byte denominator + elasticity);
+    // the header form adds the leading version byte.
+    attrs.eip1559Params = bcos::fromHex("0x0000000800000006");
+
+    bcos::engine::ForkchoiceState const fc{genesis, genesis, genesis};
+    auto built = bcos::task::syncWait(fixture->service.updateForkchoice(
+        fc, &attrs, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
+    BOOST_REQUIRE_MESSAGE(
+        built.payloadStatus.status == bcos::engine::PayloadValidationStatus::Valid,
+        "S8 build must be VALID, got " << static_cast<int>(built.payloadStatus.status) << " "
+                                       << built.payloadStatus.validationError.value_or(""));
+    BOOST_REQUIRE(built.payloadId.has_value());
+    auto got = bcos::task::syncWait(fixture->service.getPayload(
+        *built.payloadId, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
+    BOOST_REQUIRE(got != nullptr);
+    auto const& produced = got->executionPayload;
+    // The API profile above is the Holocene one, so the layout checks the engine applies to the
+    // response are Holocene's: a 9-byte extraData (not Jovian's 17) and a withdrawals list.
+    BOOST_REQUIRE_EQUAL(produced.extraData.size(), 9U);
+
+    BOOST_TEST_INFO("S8 produced=" << produced.baseFeePerGas
+                                   << " extraDataGolden=" << kOpGethGoldenExtraDataTriple
+                                   << " chainGolden=" << kOpGethGoldenChainTriple);
+    BOOST_CHECK_MESSAGE(produced.baseFeePerGas == bcos::u256(kOpGethGoldenExtraDataTriple),
+        "S8: from Holocene on the parent's extraData is the 1559 source; got "
+            << produced.baseFeePerGas);
+    BOOST_CHECK_MESSAGE(produced.baseFeePerGas != bcos::u256(kOpGethGoldenChainTriple),
+        "S8: the price still came from the chain config across the boundary");
+
+    // Close the loop: the chain's declared triple is what the next block will read back.
+    BOOST_CHECK_MESSAGE(
+        produced.extraData[0] == 0x00, "S8: Holocene extraData carries the version-0 tag, got "
+                                           << static_cast<int>(produced.extraData[0]));
+    BOOST_CHECK_EQUAL(static_cast<int>(produced.extraData[4]), 8);  // denominator 8 (chain)
+    BOOST_CHECK_EQUAL(static_cast<int>(produced.extraData[8]), 6);  // elasticity 6 (chain)
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE(OpForkchoiceRpcE2eSuite)
