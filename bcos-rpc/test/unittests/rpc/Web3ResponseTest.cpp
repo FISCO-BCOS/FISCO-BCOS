@@ -699,8 +699,9 @@ BOOST_AUTO_TEST_CASE(combineReceiptResponseEmitsOpExtensionFieldsFromMeta)
     BOOST_CHECK_EQUAL(result["depositNonce"].asString(), "0x12");
     BOOST_CHECK_EQUAL(result["depositReceiptVersion"].asString(), "0x13");
     BOOST_CHECK_EQUAL(result["operatorFee"].asString(), "0x14");  // FISCO 扩展
-    // l1FeeScalar: raw 1e6 -> upstream scaled FeeScalar 1 (op-geth intToScaledFloat).
-    BOOST_CHECK_EQUAL(result["l1FeeScalar"].asString(), "0x1");
+    // l1FeeScalar: raw 1e6 -> upstream scaled FeeScalar "1" (op-geth intToScaledFloat decimal
+    // text; whole units render without a fractional part).
+    BOOST_CHECK_EQUAL(result["l1FeeScalar"].asString(), "1");
     // from = checksum of the raw sender bytes. Pinned against the independently-known
     // EIP-55 vector 0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed (deliberately NOT derived via the
     // same toChecksumAddress under test, so a checksum-casing regression is actually caught).
@@ -845,13 +846,13 @@ BOOST_AUTO_TEST_CASE(combineReceiptResponseL1FeeScalarFollowsMetaPresence)
         meta.l1_gas_price = bcos::u256(1);
         meta.l1_gas_used = 2;
         meta.l1_fee = bcos::u256(3);
-        meta.l1_fee_scalar = bcos::u256(2'000'000);  // raw 2e6 -> scaled FeeScalar 2
+        meta.l1_fee_scalar = bcos::u256(2'000'000);  // raw 2e6 -> scaled FeeScalar "2"
         receipt->setOpStackMeta(std::move(meta));
 
         Json::Value result = Json::objectValue;
         combineReceiptResponse(result, *receipt, *tx, blockHash);
         BOOST_CHECK(result.isMember("l1FeeScalar"));
-        BOOST_CHECK_EQUAL(result["l1FeeScalar"].asString(), "0x2");
+        BOOST_CHECK_EQUAL(result["l1FeeScalar"].asString(), "2");
         BOOST_CHECK(!result.isMember("l1BaseFeeScalar"));
         BOOST_CHECK(!result.isMember("l1BlobBaseFeeScalar"));
     }

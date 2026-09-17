@@ -62,35 +62,45 @@ std::string emittedScalar(bcos::protocol::BlockFactory::Ptr const& blockFactory,
 
 BOOST_FIXTURE_TEST_SUITE(ReceiptFieldBaselineTest, RPCFixture)
 
-/// Exact multiple of 1e6: op-geth's intToScaledFloat and this lane's integer division agree.
+/// Exact multiple of 1e6: whole units render without a fractional part, like op-geth's
+/// big.Float text ("2", not "2.0").
 // clang-format off
 BOOST_AUTO_TEST_CASE(L1FeeScalarExactMultipleIsUnscaled, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon"))
 // clang-format on
 {
-    BOOST_CHECK_EQUAL(
-        emittedScalar(m_blockFactory, chainId, groupId, bcos::u256(2'000'000)), "0x2");
+    BOOST_CHECK_EQUAL(emittedScalar(m_blockFactory, chainId, groupId, bcos::u256(2'000'000)), "2");
 }
 
-/// Non-multiple: 2'000'001 / 1e6 truncates to 2 here, while op-geth's intToScaledFloat would
-/// emit 2.000001. REGISTERED DEVIATION rpc_l1_fee_scalar_truncation
-/// (opstack-executor/tests/da-matrix/DIVERGENCES.md): pinned so a change in the scaling rule
-/// is caught, and so the deviation cannot silently disappear from the diff surface.
+/// Non-multiple: op-geth's intToScaledFloat keeps the fractional part and emits it as the
+/// decimal string "2.000001"; this lane now renders the same. (Was the REGISTERED DEVIATION
+/// rpc_l1_fee_scalar_truncation, opstack-executor/tests/da-matrix/DIVERGENCES.md — resolved.)
 // clang-format off
-BOOST_AUTO_TEST_CASE(L1FeeScalarNonMultipleTruncatesIsRegisteredDeviation, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon"))
+BOOST_AUTO_TEST_CASE(L1FeeScalarKeepsFractionLikeOpGeth, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon"))
 // clang-format on
 {
     BOOST_CHECK_EQUAL(
-        emittedScalar(m_blockFactory, chainId, groupId, bcos::u256(2'000'001)), "0x2");
+        emittedScalar(m_blockFactory, chainId, groupId, bcos::u256(2'000'001)), "2.000001");
 }
 
-/// Below one unit: 999'999 / 1e6 == 0, i.e. the field is emitted as an explicit zero rather
-/// than dropped. The empty-meta contract (no field) is a different case, already covered in
-/// Web3ResponseTest.cpp:661-704.
+/// Canonical Bedrock scalar: 684000 / 1e6 must render exactly like op-geth's
+/// intToScaledFloat — this was "0x0" under the old truncating quantity.
 // clang-format off
-BOOST_AUTO_TEST_CASE(L1FeeScalarBelowOneUnitEmitsExplicitZero, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon"))
+BOOST_AUTO_TEST_CASE(L1FeeScalarCanonicalBedrockScalarMatchesOpGeth, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon"))
 // clang-format on
 {
-    BOOST_CHECK_EQUAL(emittedScalar(m_blockFactory, chainId, groupId, bcos::u256(999'999)), "0x0");
+    BOOST_CHECK_EQUAL(
+        emittedScalar(m_blockFactory, chainId, groupId, bcos::u256(684'000)), "0.684");
+}
+
+/// Below one unit: 999'999 / 1e6 renders as the fractional "0.999999" — the field is still
+/// present (the empty-meta contract, no field at all, is a different case already covered in
+/// Web3ResponseTest.cpp:661-704).
+// clang-format off
+BOOST_AUTO_TEST_CASE(L1FeeScalarBelowOneUnitEmitsFractionalZero, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon"))
+// clang-format on
+{
+    BOOST_CHECK_EQUAL(
+        emittedScalar(m_blockFactory, chainId, groupId, bcos::u256(999'999)), "0.999999");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

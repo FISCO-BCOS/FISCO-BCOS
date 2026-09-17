@@ -101,32 +101,26 @@ ends by design:
   values are correct. Tracked here and in the task-5 report; a follow-up could
   file an upstream note against GasPriceOracle.sol.
 
-## `rpc_l1_fee_scalar_truncation` — RPC `l1FeeScalar` is integer-truncated, op-geth keeps the fractional part
+## `rpc_l1_fee_scalar_truncation` — RESOLVED: RPC `l1FeeScalar` now renders like op-geth
 
 - **Grid cases:** none (this is an RPC wire convention, not a da-matrix cost
   case; the grid compares L1 fee / operator fee, not the receipt scalar).
-- **Status:** registered, **intentional** deviation (previously unregistered).
-- **What happens (FISCO):** `bcos-rpc/bcos-rpc/web3jsonrpc/model/ReceiptResponse.cpp:118-119`
-  renders the Bedrock-era `l1FeeScalar` as `raw_scalar / 1e6` using `bcos::u256`
-  integer division, which truncates toward zero. It is exact only when the raw
-  slot-6 scalar is an exact multiple of `1e6`.
-- **What op-geth does:** the same `scalar/1e6` is computed by
-  `core/types/rollup_cost.go` `intToScaledFloat` as a `*big.Float`
-  (`scalar / 10^6`, 6 decimals) and emitted as the decimal `l1FeeScalar` field
-  (`core/types/gen_receipt_json.go:40`), so the fractional part is preserved;
-  it is nil from Ecotone on, which FISCO reproduces via the field's presence
-  (the meta stores the raw scalar only on the Bedrock formula path).
-- **Why deliberate:** FISCO's `opStackMeta` stores the *raw* slot-6 scalar and
-  the RPC boundary must emit a canonical integer hex quantity, consistent with
-  the rest of `ReceiptResponse`'s `toQuantity` fields. Every corpus and
-  canonical Bedrock config uses a `1e6` multiple, so the emitted value matches
-  op-geth there; emitting a fractional JSON number for the general case would
-  change the field's type away from a hex quantity.
-- **Impact:** for any scalar that is **not** a multiple of `1e6`, FISCO's
-  `l1FeeScalar` is the truncated integer while op-geth emits the fractional
-  value, so the two are not bit-comparable in that case. No grid case or known
-  chain config hits it (all use `1e6` multiples), so the da-matrix comparison is
-  unaffected.
+- **Status: RESOLVED (2026-09-17).** `bcos-rpc/bcos-rpc/web3jsonrpc/model/ReceiptResponse.cpp`
+  renders the Bedrock-era `l1FeeScalar` as the decimal string op-geth's
+  `intToScaledFloat` big.Float emits — `scalar/1e6` with the fractional part kept
+  and trailing zeros trimmed ("0.684", "1", "2.000001"); the truncating hex
+  quantity is gone. Pinned by `ReceiptFieldBaselineTest` (exact multiple,
+  fractional part, canonical Bedrock 684000 -> "0.684", sub-unit) and
+  `Web3ResponseTest`.
+- **Historical note:** the old entry justified truncation with "every corpus and
+  canonical Bedrock config uses a `1e6` multiple" — that premise was wrong. The
+  canonical Bedrock scalar is `684000` (`0.684`), which the old integer division
+  rendered as `"0x0"`; the divergence was reachable on the canonical config all
+  along. (What op-geth does is unchanged: `core/types/rollup_cost.go`
+  `intToScaledFloat` computes `scalar / 10^6` as a `*big.Float`, emitted as the
+  decimal `l1FeeScalar` field per `core/types/gen_receipt_json.go:40`; it is nil
+  from Ecotone on, which FISCO reproduces via the field's presence — the meta
+  stores the raw scalar only on the Bedrock formula path.)
 
 ### `eip7825_deposit_exemption` — deposits are exempt from the Osaka tx-gas cap on FISCO and on op-revm; op-geth applies the cap (spec is silent)
 
