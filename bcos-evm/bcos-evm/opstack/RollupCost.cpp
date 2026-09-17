@@ -92,12 +92,7 @@ intx::uint256 computeL1Cost(
     if (signedTxEnvelope.empty())
         return intx::uint256{0};
 
-    // Ecotone-timestamped blocks keep the Pre-Ecotone formula until the new-formula slots go
-    // live: the Ecotone activation block still runs setL1BlockValues (specs.optimism.io/
-    // protocol/ecotone/l1-attributes.html), so slot3 scalars and slot7 are still zero and the
-    // formula selection falls back on the same zero-probe op-geth uses.
-    const bool bedrock = cfg.l1_fee_model == L1FeeModel::Bedrock ||
-                         (cfg.l1_fee_model == L1FeeModel::Ecotone && !ecotoneL1SlotsLive(params));
+    const bool bedrock = bedrockFormulaActive(cfg, params);
     if (bedrock)
     {
         // op-geth newL1CostFuncBedrockHelper / l1CostHelper (exec-engine Pre-Ecotone):

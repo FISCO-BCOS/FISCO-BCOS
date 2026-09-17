@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bcos-evm/opstack/OpForkSchedule.h>
 #include <cstdint>
 #include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
@@ -35,6 +36,21 @@ struct OpFeeParams
 [[nodiscard]] inline bool ecotoneL1SlotsLive(const OpFeeParams& p) noexcept
 {
     return p.base_fee_scalar != 0 || p.blob_base_fee_scalar != 0 || p.blob_base_fee != 0;
+}
+
+/// Which L1 formula family a block actually runs: Bedrock on the Bedrock model, and ALSO
+/// on the Ecotone activation block itself — that block still executes the legacy
+/// setL1BlockValues, so the Ecotone formula's input slots are zero and the zero-probe
+/// falls back to the Pre-Ecotone rule (specs.optimism.io/protocol/ecotone/
+/// l1-attributes.html: steady state arrives with the next block). Single home for the
+/// selection: computeL1Cost (the fee) and deriveOpReceiptMeta (the receipt snapshot) must
+/// both consume this helper — a block priced with one formula while its receipt claims
+/// the other is a silent fee/receipt split.
+[[nodiscard]] inline bool bedrockFormulaActive(
+    const OpForkConfig& cfg, const OpFeeParams& fee) noexcept
+{
+    return cfg.l1_fee_model == L1FeeModel::Bedrock ||
+           (cfg.l1_fee_model == L1FeeModel::Ecotone && !ecotoneL1SlotsLive(fee));
 }
 
 /// Unpack from the four storage slots (Isthmus callers may ignore da_footprint_gas_scalar).

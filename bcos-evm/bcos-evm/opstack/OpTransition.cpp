@@ -454,9 +454,9 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
     // - Bedrock formula ran (Bedrock model, or the Ecotone zero-slot fallback): the receipt gets
     //   the pre-Ecotone shape — l1_gas_used = gas + overhead, L1FeeScalar = raw Bedrock scalar.
     // - Fjord+: both stay unset; flz_len drives l1_gas_used.
-    const bool bedrockFormula =
-        cfg.l1_fee_model == L1FeeModel::Bedrock ||
-        (cfg.l1_fee_model == L1FeeModel::Ecotone && !bcos::evm::opstack::ecotoneL1SlotsLive(fee));
+    // Same selection helper computeL1Cost consumes — the fee and the receipt snapshot
+    // cannot disagree about which formula ran.
+    const bool bedrockFormula = bedrockFormulaActive(cfg, fee);
     if (bedrockFormula)
     {
         // Pre-Ecotone receipt L1GasUsed = rollupDataGas + overhead. op-geth keeps it a

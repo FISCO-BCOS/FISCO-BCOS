@@ -310,6 +310,24 @@ BOOST_AUTO_TEST_CASE(EcotoneConfigUsesEcotoneWhenSlotsLive, * boost::unit_test::
     BOOST_CHECK(ecotone != intx::uint256{0});
 }
 
+/// The shared formula-selection helper (review finding B): computeL1Cost (the fee) and
+/// deriveOpReceiptMeta (the receipt snapshot) both consume bedrockFormulaActive, so this
+/// pins the one rule they must never disagree about — Bedrock model -> Bedrock; Ecotone
+/// with the new-formula slots still zero (the activation block) -> Bedrock; Ecotone with
+/// slots live, and every Fjord+ model, -> not Bedrock.
+// clang-format off
+BOOST_AUTO_TEST_CASE(BedrockFormulaActivePinsTheSharedSelectionRule, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
+{
+    OpFeeParams zero{};
+    const auto live = feeParams(1'000'000'000, 10'000'000, 2, 3);
+    BOOST_CHECK(bedrockFormulaActive(regolithConfig(), zero));
+    BOOST_CHECK(bedrockFormulaActive(regolithConfig(), live));
+    BOOST_CHECK(bedrockFormulaActive(ecotoneConfig(), zero));
+    BOOST_CHECK(!bedrockFormulaActive(ecotoneConfig(), live));
+    BOOST_CHECK(!bedrockFormulaActive(fjordConfig(), live));
+}
+
 // clang-format off
 BOOST_AUTO_TEST_CASE(BedrockEmptyEnvelopeIsZero, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
 // clang-format on
