@@ -3,7 +3,8 @@
 # The values here are judged by op-geth's own testdata, not by this repo's implementation.
 # (E4 will extend this contract with the EIP-2537 BLS vectors from the same source.)
 set -euo pipefail
-OP_GETH_REPO="${OP_GETH_REPO:-/Users/octopus/octo/code/blockchain-impl/op-geth}"
+OP_GETH_REPO="${OP_GETH_REPO:-}"
+[ -n "$OP_GETH_REPO" ] || { echo "OP_GETH_REPO is required (path to the pinned op-geth checkout; no machine default)" >&2; exit 1; }
 PIN="${OP_GETH_PIN:-e8800cffe53d459cde8a07c8e8f1de9d86e79e07}"
 OUT="${1:-$(cd "$(dirname "$0")/../.." && pwd -P)/bcos-evm/test/opstack/op_geth_oracle.json}"
 python3 - "$OP_GETH_REPO" "$PIN" "$OUT" <<'PY'

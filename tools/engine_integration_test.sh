@@ -12,7 +12,7 @@
 #   RPC_PORT  = 8551
 #
 # CI 用法:
-#   bash tools/engine_integration_test.sh build 8545
+#   bash tools/engine_integration_test.sh build 8551
 # =============================================================================
 
 set -e

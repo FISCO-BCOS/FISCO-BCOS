@@ -25,12 +25,12 @@
 # equal the revision the audit documents state (see EXPECTED_OP_REVM_REVISION).
 #
 # Corpus artifacts: the getPayload goldens and the matrix/ contract files must be
-# present AT THE PINNED REF. They are not (the pin predates the commits that add
-# them), and the regen action regenerates from that ref's generator, so under
-# GITHUB_ACTIONS (CMake auto-defines FISCO_REQUIRE_T8N_CORPUS) OpGoldenCorpusProvenanceTest's
-# getPayload case hard-fails while the matrix test degrades to "artifacts absent;
-# skipping". This script therefore FAILS FAST, naming the missing artifacts, the
-# corpus ref and the places to bump. See the blocking note in workflow.yml.
+# present AT THE PINNED REF. The current corpus ref b82691ac133a94637da9e6969a63f86279c6b0a2
+# carries them; if a future ref bump regresses to an older generator, this script
+# FAILS FAST, naming the missing artifacts, the corpus ref and the places to bump
+# (under GITHUB_ACTIONS CMake auto-defines FISCO_REQUIRE_T8N_CORPUS, so a stale pin
+# hard-fails OpGoldenCorpusProvenanceTest's getPayload case while the matrix test
+# degrades to "artifacts absent; skipping"). See the blocking note in workflow.yml.
 #
 # Registry citations (convention): every `specs/...:<line>` citation in
 # opstack-executor/tests/da-matrix/DIVERGENCES.md must resolve via
@@ -53,13 +53,16 @@ CORPUS_DIR="${CORPUS_DIR:-}"
 # (`specs/protocol/karst/overview.md:20` was checked at 564a0ce).
 SPECS_PIN="${SPECS_PIN:-564a0ceae302eaf465edc7ff8ab55850624a11a0}"
 WF="$REPO_ROOT/.github/workflows/workflow.yml"
+# The fork-matrix schedules pin the corpus ref too; Axis 3 covers them.
+WF_NIGHTLY="$REPO_ROOT/.github/workflows/opstack-fork-nightly.yml"
+WF_WEEKLY="$REPO_ROOT/.github/workflows/opstack-fork-weekly.yml"
 DIVERGENCES="$REPO_ROOT/opstack-executor/tests/da-matrix/DIVERGENCES.md"
 
 # The audit's stated op-revm revision:
 #   docs/2026-09-12-opstack-fork-allforks-delta-audit.md:13  "op-revm ... @ 5f90f749ca"
 #   docs/plans/2026-09-12-plan-e-spike-notes.md:8            "5f90f749caea14398554afb75062f7111b1fc554"
-# docs/ is not committed, so the value is pinned here; when the doc is present in
-# the working tree it is cross-checked too.
+# The value is pinned here: when the doc is present in the tree it is cross-checked
+# too; when docs/ is not committed the doc axis is skipped (::notice:: below).
 readonly EXPECTED_OP_REVM_REVISION="5f90f749caea14398554afb75062f7111b1fc554"
 readonly OP_REVM_DOC="docs/2026-09-12-opstack-fork-allforks-delta-audit.md"
 
@@ -163,16 +166,19 @@ if [ -f "$REPO_ROOT/$OP_REVM_DOC" ]; then
 update EXPECTED_OP_REVM_REVISION in $0 together with the oracle"
     fi
 else
-    echo "  ::notice::$OP_REVM_DOC not present (docs/ is not committed); \
-op-revm revision checked against the embedded pin only"
+    echo "  ::notice::$OP_REVM_DOC not present in the tree; skipping the docs \
+cross-check axis, the op-revm revision is checked against the embedded pin only"
 fi
 
 # -----------------------------------------------------------------------------
-# Axis 3 (F-A4): corpus-repo ref agreement.
+# Axis 3 (F-A4): corpus-repo ref agreement across workflow.yml and the
+# opstack-fork-nightly/weekly fork-matrix pins.
 # -----------------------------------------------------------------------------
-wf_refs="$(grep -A3 -E 'repository: FISCO-BCOS/op-stack-e2e-tests' "$WF" \
+wf_refs="$(grep -hA3 -E 'repository: FISCO-BCOS/op-stack-e2e-tests' \
+    "$WF" "$WF_NIGHTLY" "$WF_WEEKLY" \
     | grep -oE 'ref: [0-9a-f]{40}' | awk '{print $2}' | sort -u)"
-action_refs="$(grep -oE 'opstack-t8n-regen@[0-9a-f]{40}' "$WF" | sed 's/.*@//' | sort -u)"
+action_refs="$(grep -hoE 'opstack-t8n-regen@[0-9a-f]{40}' \
+    "$WF" "$WF_NIGHTLY" "$WF_WEEKLY" | sed 's/.*@//' | sort -u)"
 provision="$REPO_ROOT/tools/.ci/provision_t8n_corpus.sh"
 v_provision=""
 [ -f "$provision" ] && v_provision="$(sed -nE \
@@ -188,15 +194,28 @@ for r in $wf_refs $action_refs; do
     if [ -z "$corpus_ref" ]; then
         corpus_ref="$r"
     elif [ "$r" != "$corpus_ref" ]; then
-        fail "workflow.yml pins disagreeing corpus refs: $r != $corpus_ref"
+        fail "workflow pins disagreeing corpus refs: $r != $corpus_ref"
     fi
 done
 if [ -z "$corpus_ref" ]; then
-    fail "no corpus ref found in $WF"
+    fail "no corpus ref found in $WF, $WF_NIGHTLY or $WF_WEEKLY"
 else
-    echo "reference (workflow.yml): $corpus_ref"
+    echo "reference (workflow pins): $corpus_ref"
     echo "  workflow checkout refs = $(echo $wf_refs | tr '\n' ' ')"
     echo "  workflow action refs   = $(echo $action_refs | tr '\n' ' ')"
+fi
+# Per-file assertion (corpus context only: the e2e-tests checkout ref and the
+# opstack-t8n-regen action ref — other 40-hex refs in these files are unrelated).
+if [ -n "$corpus_ref" ]; then
+    for wfile in "$WF" "$WF_NIGHTLY" "$WF_WEEKLY"; do
+        wname="${wfile##*/}"
+        if grep -qE "ref: $corpus_ref" "$wfile" \
+            && grep -qE "opstack-t8n-regen@$corpus_ref" "$wfile"; then
+            echo "  OK $wname corpus pins = $corpus_ref (checkout + regen action)"
+        else
+            fail "$wname: missing or mismatched corpus-context ref (expected $corpus_ref)"
+        fi
+    done
 fi
 for entry in \
     "tools/.ci/provision_t8n_corpus.sh (T8N_CORPUS_PIN default):$v_provision" \
@@ -248,16 +267,17 @@ for rel in \
 done
 if [ -n "$missing" ]; then
     fail "corpus ref ${corpus_ref:-<unknown>} lacks:$missing
-This is the F-A4 CI risk: 759a9af0 predates the getPayload (afe06e2) and matrix (f1fc9a3)
-corpus commits, so the regen action runs an older generator. Under GITHUB_ACTIONS
-(CMake auto-defines FISCO_REQUIRE_T8N_CORPUS) OpGoldenCorpusProvenanceTest's getPayload
-case hard-fails and OpEngineApiMatrixTest degrades to 'artifacts absent; skipping'.
-Remedy (corpus must be pushed/merged first): bump the corpus ref in the THREE logical
-places in .github/workflows/workflow.yml —
+This is the F-A4 CI risk: ${corpus_ref:-<unknown>} predates the getPayload (afe06e2) and
+matrix (f1fc9a3) corpus commits, so the regen action runs an older generator. Under
+GITHUB_ACTIONS (CMake auto-defines FISCO_REQUIRE_T8N_CORPUS) OpGoldenCorpusProvenanceTest's
+getPayload case hard-fails and OpEngineApiMatrixTest degrades to 'artifacts absent; skipping'.
+Remedy (corpus must be pushed/merged first): bump the corpus ref in every pin —
+workflow.yml's THREE logical places —
   (1) the actions/checkout refs for FISCO-BCOS/op-stack-e2e-tests (build + coverage jobs);
   (2) the build job's  opstack-t8n-regen@<ref>  action ref;
   (3) the coverage job's opstack-t8n-regen@<ref> action ref —
-plus tools/.ci/provision_t8n_corpus.sh's default and the corpus .t8n-pin for local parity.
+plus the same checkout/action pins in opstack-fork-nightly.yml and opstack-fork-weekly.yml,
+tools/.ci/provision_t8n_corpus.sh's default, and the corpus .t8n-pin for local parity.
 Do NOT silence this by weakening the provenance/matrix tests."
 fi
 

@@ -88,7 +88,7 @@
     "filter": "OpOsakaSemanticsSuite/GraniteBn256PairingAt587PairsIsRejected",
     "also_green": ["OpPrecompilesSuite/Bn256PairingInputLimitNoGasOverride"],
     "expect": "only_mapped_red",
-    "why": "The Granite size cap must reject a 587-pair (112704B) input; widening it to 112704 makes the mapped case red. The table-value case is the negative control (it asserts the value, not the execution path)." },
+    "why": "The Granite size cap must reject a 587-pair (112704B) input; widening it to 112704 makes the mapped case red. The case reads the Isthmus precompile table only (isthmusPrecompileOverrides); the mutation touches kGraniteEntries, so this case stays green for a different reason." },
   { "variant": "V-DAFOOTPRINT-boundary", "mutated": "engine/bcos-engine/OpEngineService.cpp",
     "target": "opstack-executor-block-tests", "binary": "opstack-executor/tests/opstack-executor-block-tests",
     "filter": "OpL1EdgeGateSuite/JovianDaFootprintGasLimitBoundary",

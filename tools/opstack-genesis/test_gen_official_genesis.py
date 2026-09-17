@@ -356,12 +356,12 @@ def test_generate_hash_mismatch_raises(tmp_path):
                      decompress=lambda raw, dictionary: raw)
 
 
-# Registry zip: a machine default kept for the local ritual, overridable for CI
-# (Task 5's nightly will point OP_GETH_ZIP at the op-geth pin tree). When
-# OP_REQUIRE_REGISTRY_ZIP=1 a missing zip is a FAILURE, not a skip — a silent
-# skip here is how M5 degraded to "green but vacuous" (WI-11).
-_DEFAULT_OP_GETH_ZIP = Path("/Users/octopus/octo/code/op-geth/superchain/superchain-configs.zip")
-_OP_GETH_ZIP = Path(os.environ.get("OP_GETH_ZIP") or _DEFAULT_OP_GETH_ZIP)
+# Registry zip: OP_GETH_ZIP is required to run the real-registry tests — there is
+# no machine default (CI points it at the op-geth pin tree, e.g. the nightly's
+# "M5 registry sweep" step). When OP_REQUIRE_REGISTRY_ZIP=1 a missing zip is a
+# FAILURE, not a skip — a silent skip here is how M5 degraded to "green but
+# vacuous" (WI-11).
+_OP_GETH_ZIP = Path(os.environ["OP_GETH_ZIP"]) if os.environ.get("OP_GETH_ZIP") else None
 
 # Chains the generator deliberately does not reproduce, with the reason. Not a
 # silent skip: the sweep asserts the excluded set is exactly this set, so an
@@ -394,7 +394,7 @@ def test_real_registry_full_sweep_matches_documented_exclusions():
     deterministic, ~10s. Final assertion: passed == all - excluded.
     """
     import shutil
-    if not _OP_GETH_ZIP.exists() or shutil.which("zstd") is None:
+    if _OP_GETH_ZIP is None or not _OP_GETH_ZIP.exists() or shutil.which("zstd") is None:
         if os.environ.get("OP_REQUIRE_REGISTRY_ZIP", "").strip().lower() in ("1", "true", "yes"):
             pytest.fail(f"OP_REQUIRE_REGISTRY_ZIP=1 but registry zip/zstd unavailable "
                         f"(zip={_OP_GETH_ZIP})")
@@ -421,7 +421,7 @@ def test_real_registry_full_sweep_matches_documented_exclusions():
 @pytest.mark.parametrize("chain", _ALT_DA_CHAINS)
 def test_real_registry_alt_da_chains_emit_alt_da(chain):
     import shutil
-    if not _OP_GETH_ZIP.exists() or shutil.which("zstd") is None:
+    if _OP_GETH_ZIP is None or not _OP_GETH_ZIP.exists() or shutil.which("zstd") is None:
         if os.environ.get("OP_REQUIRE_REGISTRY_ZIP", "").strip().lower() in ("1", "true", "yes"):
             pytest.fail(f"OP_REQUIRE_REGISTRY_ZIP=1 but registry zip/zstd unavailable "
                         f"(zip={_OP_GETH_ZIP})")
@@ -553,7 +553,7 @@ def _assert_registry_zip_is_pre_karst(zip_path):
 
 
 def test_real_registry_zip_is_pre_karst_basis():
-    if not _OP_GETH_ZIP.exists():
+    if _OP_GETH_ZIP is None or not _OP_GETH_ZIP.exists():
         if os.environ.get("OP_REQUIRE_REGISTRY_ZIP", "").strip().lower() in ("1", "true", "yes"):
             pytest.fail(
                 f"OP_REQUIRE_REGISTRY_ZIP=1 but registry zip unavailable (zip={_OP_GETH_ZIP})"

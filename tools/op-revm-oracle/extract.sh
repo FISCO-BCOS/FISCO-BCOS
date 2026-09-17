@@ -4,7 +4,8 @@
 # not by its own literals (OpPrecompilesTest used to compare constants to themselves).
 set -euo pipefail
 
-OP_REVM_REPO="${OP_REVM_REPO:-/Users/octopus/octo/code/blockchain-impl/optimism}"
+OP_REVM_REPO="${OP_REVM_REPO:-}"
+[ -n "$OP_REVM_REPO" ] || { echo "OP_REVM_REPO is required (path to the pinned optimism checkout; no machine default)" >&2; exit 1; }
 OP_REVM_SUBDIR="${OP_REVM_SUBDIR:-rust/op-revm}"
 OUT="${1:-$(cd "$(dirname "$0")/../.." && pwd -P)/bcos-evm/test/opstack/op_revm_oracle.json}"
 
