@@ -276,6 +276,18 @@ OpForkSchedule OpForkSchedule::fromLedgerSchedule(const bcos::ledger::OpForkSche
     return OpForkSchedule(std::move(activations));
 }
 
+std::string OpForkSchedule::canonicalText() const
+{
+    std::vector<ledger::OpForkActivationRecord> records;
+    records.reserve(m_activations.size());
+    for (const auto& activation : m_activations)
+    {
+        records.push_back(ledger::OpForkActivationRecord{
+            .forkName = forkNameFromEnum(activation.fork), .timestamp = activation.timestamp});
+    }
+    return ledger::canonicalOpForkSchedule(records);
+}
+
 OpForkSchedule::OpForkSchedule(std::vector<OpForkActivation> activations)
   : m_activations(std::move(activations))
 {

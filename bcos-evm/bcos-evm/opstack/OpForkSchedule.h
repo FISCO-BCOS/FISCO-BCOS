@@ -114,6 +114,10 @@ public:
     /// protocol order, strictly increasing timestamps. jovian_time == 0 makes Jovian the
     /// baseline itself; an unscheduled Jovian is the all-Isthmus legacy chain.
     static OpForkSchedule fromLedgerSchedule(const bcos::ledger::OpForkSchedule& schedule);
+    /// Canonical ledger-codec text for this activation list ("0:isthmus,100:jovian,..." form):
+    /// the inverse of parse(). Lets the [op_fork_timestamps] shorthand fold into the canonical
+    /// channel at Initializer wiring time instead of bypassing the resolver.
+    [[nodiscard]] std::string canonicalText() const;
     explicit OpForkSchedule(std::vector<OpForkActivation> activations);
     /// Test-only: skip ledger codec validation (and the Karst/Osaka consistency check).
     struct TestBypass

@@ -447,4 +447,39 @@ BOOST_AUTO_TEST_CASE(TestBypassScheduleCanNameKarst, * boost::unit_test::label("
     BOOST_CHECK_EQUAL(only.configAt(2).rev, EVMC_OSAKA);
 }
 
+BOOST_AUTO_TEST_CASE(CanonicalTextFoldsLedgerShorthand, *boost::unit_test::label("fork-isthmus") *
+                                                            boost::unit_test::label("fork-jovian") *
+                                                            boost::unit_test::label("fork-karst"))
+// clang-format on
+{
+    // Both forks scheduled: Isthmus baseline, then the jovian/karst activations.
+    BOOST_CHECK_EQUAL(OpForkSchedule::fromLedgerSchedule(sched(100, 200)).canonicalText(),
+        "0:isthmus,100:jovian,200:karst");
+    // jovian_time == 0 makes Jovian the baseline itself.
+    BOOST_CHECK_EQUAL(
+        OpForkSchedule::fromLedgerSchedule(sched(0, 50)).canonicalText(), "0:jovian,50:karst");
+    // Unscheduled jovian is the all-Isthmus legacy chain.
+    BOOST_CHECK_EQUAL(
+        OpForkSchedule::fromLedgerSchedule(sched(kNever, kNever)).canonicalText(), "0:isthmus");
+    // Karst alone cannot be configured (NodeConfig binds it to jovian), but the fold
+    // must still drop an unscheduled karst rather than emit a never-activating row.
+    BOOST_CHECK_EQUAL(OpForkSchedule::fromLedgerSchedule(sched(100, kNever)).canonicalText(),
+        "0:isthmus,100:jovian");
+}
+
+BOOST_AUTO_TEST_CASE(CanonicalTextRoundTripsThroughParse,
+    *boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") *
+        boost::unit_test::label("fork-karst"))
+// clang-format on
+{
+    const auto folded = OpForkSchedule::fromLedgerSchedule(sched(100, 200));
+    const auto reparsed = OpForkSchedule::parse(folded.canonicalText());
+    // Same dispatch decisions at the boundaries and past both activations.
+    BOOST_CHECK_EQUAL(reparsed.forkAt(0), OpFork::Isthmus);
+    BOOST_CHECK_EQUAL(reparsed.forkAt(99), OpFork::Isthmus);
+    BOOST_CHECK_EQUAL(reparsed.forkAt(100), folded.forkAt(100));
+    BOOST_CHECK_EQUAL(reparsed.forkAt(200), folded.forkAt(200));
+    BOOST_CHECK_EQUAL(&reparsed.configAt(300), &karstConfig());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

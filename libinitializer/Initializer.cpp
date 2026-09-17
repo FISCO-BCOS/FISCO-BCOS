@@ -615,15 +615,21 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                     "enable_single_node_consensus is not supported in OP mode "
                     "(executor_version>=3): an OP chain is driven by an external op-node"));
         }
-        // The OP lane's fork schedule comes from [op_fork_timestamps] (genesis config);
-        // NodeConfig refuses an OP chain without it and a non-OP chain with it. Kept as a
-        // local fail-fast so a hand-built config cannot silently run the Isthmus baseline.
+        // The OP lane's fork schedule has two equivalent declarations in config.genesis:
+        // the karst line's [op_fork_schedule] canonical (ledger-codec validated, persisted
+        // to chain metadata) and the release line's [op_fork_timestamps] shorthand
+        // (jovian_time/karst_time on the Isthmus baseline, folded into the canonical form
+        // in the resolver block below). NodeConfig accepts either; this local fail-fast
+        // only guards a hand-built config that declares NEITHER, which would otherwise
+        // silently run the Isthmus baseline.
         auto const& opForkSchedule = m_nodeConfig->opForkSchedule();
-        if (!opForkSchedule.has_value())
+        auto const& canonicalSchedule = m_nodeConfig->genesisConfig().m_opstackForkSchedule;
+        if (!opForkSchedule.has_value() && !canonicalSchedule.has_value())
         {
             BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "OP mode (executor_version==3, the OPSTACK slot) requires "
-                                      "an [op_fork_timestamps] section in config.genesis"));
+                                      "OP mode (executor_version>=3) requires an "
+                                      "[op_fork_schedule] canonical or an [op_fork_timestamps] "
+                                      "section in config.genesis"));
         }
         // OP mode signs with the web3 chain id (EIP-155), not the FISCO group chain id. Take it
         // from the snapshot published at boot, which already parsed the on-chain web3_chain_id
@@ -661,13 +667,29 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             const auto genesisHash = genesisBlock->blockHeader()->hash();
             auto stored =
                 task::syncWait(ledger::readOpForkScheduleMetadata(*m_storage, genesisHash));
-            auto const& genesisSchedule = m_nodeConfig->genesisConfig().m_opstackForkSchedule;
+            auto const& canonicalSchedule = m_nodeConfig->genesisConfig().m_opstackForkSchedule;
+            // Fold the shorthand channel into the canonical form so BOTH declarations reach
+            // the resolver: a shorthand-only chain has no persisted metadata (the genesis
+            // write is gated on the canonical member) and would otherwise leave stored and
+            // genesisCanonical both absent, silently pinning the lane to the Isthmus
+            // baseline regardless of jovian_time/karst_time. A canonical-only chain needs no
+            // folding — its member feeds the resolver directly.
+            std::optional<std::string> foldedSchedule;
+            if (!canonicalSchedule.has_value() && opForkSchedule.has_value())
+            {
+                foldedSchedule =
+                    bcos::evm::opstack::OpForkSchedule::fromLedgerSchedule(*opForkSchedule)
+                        .canonicalText();
+            }
+            auto const& genesisSchedule =
+                canonicalSchedule.has_value() ? canonicalSchedule : foldedSchedule;
             // featureOpJovian=false: the resolver's third branch (legacy jovian via the
-            // feature_op_jovian row) is unreachable here — the [op_fork_timestamps] fail-fast
-            // above guarantees the genesis schedule is present, and the merged framework
-            // retired the feature_op_jovian name outright (Features.h bit 60; a genesis still
-            // carrying it fails loudly at load). This fixes the karst integration's dangling
-            // NodeConfig::opJovianActive() call (the accessor upstream #5576 removed).
+            // feature_op_jovian row) is unreachable here — the union fail-fast above
+            // guarantees at least one channel is present (folded into genesisSchedule when
+            // it is the shorthand), and the merged framework retired the feature_op_jovian
+            // name outright (Features.h bit 60; a genesis still carrying it fails loudly at
+            // load). This fixes the karst integration's dangling NodeConfig::opJovianActive()
+            // call (the accessor upstream #5576 removed).
             auto canonical = ledger::resolveOpForkScheduleCanonical(
                 stored, genesisSchedule, /*featureOpJovian=*/false, genesisHash);
             if (stored.has_value() &&
