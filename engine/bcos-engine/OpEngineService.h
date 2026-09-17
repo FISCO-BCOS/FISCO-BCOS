@@ -30,7 +30,6 @@
 #include <bcos-framework/engine/Errors.h>
 #include <bcos-framework/engine/OpBaseFee.h>
 #include <bcos-framework/engine/OpForkId.h>
-#include <bcos-framework/engine/OpTime.h>
 #include <bcos-framework/engine/Types.h>
 
 #include <bcos-framework/ledger/Ledger.h>
@@ -49,7 +48,6 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>
-#include <boost/lexical_cast.hpp>
 
 #include <algorithm>
 #include <cstdint>
@@ -238,6 +236,11 @@ private:
         return engine_common::makeStatus(status, latestValidHash, validationError);
     }
 
+    /// The load-bearing error router between this service and its scheduler delegate: ONLY
+    /// OpConsensusRejected may answer as a consensus INVALID (with latestValidHash);
+    /// everything else is rethrown as OpExecutionInternalError so the RPC surfaces -32603
+    /// — never a consensus INVALID for a valid payload. Both routes are pinned by
+    /// OpEngineServiceParityTest::op_commit_error_routing_unknown_error_is_never_invalid.
     static PayloadStatus mapDelegateError(
         bcos::Error const& error, std::optional<h256> latestValidHash)
     {

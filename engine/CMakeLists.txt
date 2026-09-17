@@ -55,12 +55,15 @@ install(TARGETS engine EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INST
 # Its EngineMPTStateRoot.h dependency is installed alongside it (and that header's
 # transaction-scheduler / bcos-storage includes are installed by their own packages), so an
 # external consumer can instantiate the legacy engine service in tests too.
+# Deliberately NOT installed: OpEngineService.h / OpEngineService.inl. The pair pulls
+# bcos-evm/opstack-executor headers (RollupCost.h, OpCommitments.h) whose packages install
+# no headers of their own, so the installed copies could not compile out of tree — they are
+# in-tree consumables (libinitializer). The Eth pair stays: its dependencies are all
+# installed packages (framework / bcos-ledger / bcos-crypto / rlp-protocol).
 install(DIRECTORY "bcos-engine" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
     FILES_MATCHING
     PATTERN "EthEngineService.h"
     PATTERN "EthEngineService.inl"
-    PATTERN "OpEngineService.h"
-    PATTERN "OpEngineService.inl"
     PATTERN "EngineServiceImpl.h"
     PATTERN "EngineMPTStateRoot.h"
     PATTERN "EngineStorageCommit.h"

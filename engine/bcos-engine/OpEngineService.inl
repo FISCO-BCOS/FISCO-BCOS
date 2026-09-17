@@ -26,8 +26,10 @@
 // instantiators still need to link bcos-evm-opstack.
 #include "OpEngineService.h"
 #include <bcos-evm/opstack/RollupCost.h>
+#include <bcos-framework/engine/OpTime.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
+#include <boost/lexical_cast.hpp>
 #include <opstack-executor/OpCommitments.h>
 
 #include <iterator>
