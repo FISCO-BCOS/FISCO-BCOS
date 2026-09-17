@@ -26,42 +26,26 @@ namespace bcos::codec::rlp
 {
 namespace
 {
-// RLP length of one transaction inside a block-body transactions list, with the
-// wire semantics geth uses: legacy txs (leading byte >= 0xc0 — already a complete
-// RLP list) are spliced raw; typed txs (leading byte 0x01..0x7f) are wrapped in an
-// RLP string (geth's Transaction.EncodeRLP). The generic bytes codec would wrap
-// EVERY element as a string, which corrupts legacy txs, so the list is built by
-// hand.
-size_t txWireLength(bcos::bytes const& _tx) noexcept
-{
-    if (!_tx.empty() && _tx.front() < LIST_HEAD_BASE)
-    {
-        return length(bytesConstRef(_tx.data(), _tx.size()));
-    }
-    return _tx.size();
-}
-
-// Summed RLP length of all transaction elements (the transactions list payload).
+// RLP payload length of all transaction elements, with the wire semantics geth uses:
+// legacy txs (leading byte >= 0xc0 — already a complete RLP list) are spliced raw; typed
+// txs (leading byte 0x01..0x7f) are wrapped in an RLP string (geth's Transaction.EncodeRLP).
+// The generic bytes codec would wrap EVERY element as a string, which corrupts legacy txs,
+// so the list is built by hand.
 size_t txPayloadLength(std::vector<bcos::bytes> const& _txs) noexcept
 {
     size_t payload = 0;
     for (auto const& tx : _txs)
     {
-        payload += txWireLength(tx);
+        payload += (!tx.empty() && tx.front() < LIST_HEAD_BASE) ?
+                       length(bytesConstRef(tx.data(), tx.size())) :
+                       tx.size();
     }
     return payload;
 }
 
-// RLP length of the complete transactions list element (header + payload).
-size_t txListLength(std::vector<bcos::bytes> const& _txs) noexcept
-{
-    size_t const payload = txPayloadLength(_txs);
-    return lengthOfLength(payload) + payload;
-}
-
 // Encode the complete transactions list element (header + payload) directly into
-// _out, splicing legacy txs raw and string-wrapping typed txs. txListLength above
-// is the single length source so length()/encode() stay in agreement.
+// _out, splicing legacy txs raw and string-wrapping typed txs. txPayloadLength is the
+// single length source so length()/encode() stay in agreement.
 void encodeTxList(bcos::bytes& _out, std::vector<bcos::bytes> const& _txs) noexcept
 {
     size_t const payload = txPayloadLength(_txs);
@@ -84,8 +68,9 @@ void encodeTxList(bcos::bytes& _out, std::vector<bcos::bytes> const& _txs) noexc
 // withdrawals?); shared by length() and encode() so the two cannot drift apart.
 size_t bodyPayloadLength(protocol::EthBlockData const& _body) noexcept
 {
-    size_t payload = bcos::codec::rlp::length(_body.header) + txListLength(_body.transactions) +
-                     length(_body.ommers);
+    size_t const txPayload = txPayloadLength(_body.transactions);
+    size_t payload = bcos::codec::rlp::length(_body.header) + lengthOfLength(txPayload) +
+                     txPayload + length(_body.ommers);
     if (_body.withdrawals.has_value())
     {
         payload += length(*_body.withdrawals);
@@ -275,15 +260,10 @@ void EthBlock::rlpEncode(bcos::bytes& out) const
     // Mirror the sibling guard in EthBlockHeader::rlpEncode: the header rides inside
     // m_data here, so EthBlockHeader's own rlpEncode is bypassed — reject a negative
     // number/timestamp before the shared codec would encode it as 2^64-1.
-    if (m_data.header.number < 0)
+    if (m_data.header.number < 0 || m_data.header.timestamp < 0)
     {
         codec::rlp::throwRlpEncodeError(codec::rlp::DecodingError::InvalidFieldset,
-            "EthBlock::rlpEncode: header number must be non-negative");
-    }
-    if (m_data.header.timestamp < 0)
-    {
-        codec::rlp::throwRlpEncodeError(codec::rlp::DecodingError::InvalidFieldset,
-            "EthBlock::rlpEncode: header timestamp must be non-negative");
+            "EthBlock::rlpEncode: header number/timestamp must be non-negative");
     }
     codec::rlp::encode(out, m_data);
 }

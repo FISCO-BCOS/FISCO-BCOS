@@ -35,8 +35,7 @@ bcos::Error::UniquePtr bcos::rpc::decodeDepositTransaction(
     auto result = captureRlp([&] {
         if (in.empty() || in[0] != c_depositTxType)
         {
-            throwRlpDecodeError(
-                UnexpectedEip2718Serialization, "Not a 0x7e deposit transaction envelope");
+            throwRlpDecodeError(UnexpectedEip2718Serialization, "Not a 0x7e deposit tx envelope");
         }
         in = in.getCroppedData(1);
         auto header = decodeHeader(in);
@@ -93,8 +92,7 @@ bcos::Error::UniquePtr bcos::rpc::decodeDepositTransaction(
         out.isSystemTx = isSystemTxValue != 0;
         if (!body.empty())
         {
-            throwRlpDecodeError(
-                UnexpectedListElements, "Trailing bytes in deposit transaction body");
+            throwRlpDecodeError(UnexpectedListElements, "Trailing bytes in deposit tx body");
         }
         in = in.getCroppedData(header.payloadLength);
     });

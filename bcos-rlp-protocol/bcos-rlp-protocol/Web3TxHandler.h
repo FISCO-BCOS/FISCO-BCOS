@@ -1,21 +1,6 @@
-/**
- *  Copyright (C) 2026 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- *
- * @file Web3TxHandler.h
- * @brief Per-transaction-type RLP encode/decode handlers for Web3 transactions
- */
+// Copyright (C) 2026 FISCO BCOS. SPDX-License-Identifier: Apache-2.0
+// @file Web3TxHandler.h
+// @brief Per-transaction-type RLP encode/decode handlers for Web3 transactions
 // ⚠️ isSystemTransaction encoding workaround: DepositTxHandler::encode() encodes it as uint32_t
 // (not uint8_t) because RLPEncode.h's generic uint8_t encoding odr-uses the non-template
 // toCompactBigEndian(byte, unsigned), defined only in DataConvertUtility.cpp (a pre-existing

@@ -98,7 +98,7 @@ inline RlpResult<Header> tryDecodeHeader(bytesRef& from)
         // 56` check covers both paths with identical observable behavior.
         if (lenOfLen >= 2 && from[0] == 0)
         {
-            return rlpFail(NonCanonicalSize, "Non-canonical length prefix: leading zero byte");
+            return rlpFail(NonCanonicalSize, "Non-canonical length: leading zero byte");
         }
         // Migration note (W8): canonicality now enforced for ALL consumers of this shared decoder,
         // not just the OP path. FISCO's own encoder (RLPEncode.h) always writes a minimal length
@@ -135,8 +135,7 @@ inline RlpResult<Header> tryDecodeHeader(bytesRef& from)
         // (0xf8 ..) is left to the `< 56` check below to match op-geth's readUint `case 1`.
         if (lenOfLen >= 2 && from[0] == 0)
         {
-            return rlpFail(
-                DecodingError::NonCanonicalSize, "Non-canonical length prefix: leading zero byte");
+            return rlpFail(NonCanonicalSize, "Non-canonical length: leading zero byte");
         }
         auto payloadSize =
             fromBigEndian<uint64_t, bcos::bytesConstRef>(from.getCroppedData(0, lenOfLen));
@@ -375,8 +374,7 @@ void decodeExact(bcos::bytesConstRef from, T& to)
     decode(in, to);
     if (!in.empty())
     {
-        throwRlpDecodeError(
-            DecodingError::UnexpectedListElements, "trailing bytes after top-level RLP item");
+        throwRlpDecodeError(UnexpectedListElements, "trailing bytes after top-level item");
     }
 }
 

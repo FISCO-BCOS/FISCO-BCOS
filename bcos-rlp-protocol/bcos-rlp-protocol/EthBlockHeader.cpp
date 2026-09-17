@@ -380,15 +380,10 @@ void EthBlockHeader::rlpEncode(bcos::bytes& out) const
     // but rlpEncode is public — reject here so a direct caller cannot produce a wrong
     // encoding. The field order itself is delegated to the EthBlockHeaderData codec (shared
     // with EthBlockBody).
-    if (m_data.number < 0)
+    if (m_data.number < 0 || m_data.timestamp < 0)
     {
         codec::rlp::throwRlpEncodeError(
-            EthBlockHeaderError::InvalidHeader, "number must be non-negative");
-    }
-    if (m_data.timestamp < 0)
-    {
-        codec::rlp::throwRlpEncodeError(
-            EthBlockHeaderError::InvalidHeader, "timestamp must be non-negative");
+            EthBlockHeaderError::InvalidHeader, "number/timestamp must be non-negative");
     }
     codec::rlp::encode(out, m_data);
 }

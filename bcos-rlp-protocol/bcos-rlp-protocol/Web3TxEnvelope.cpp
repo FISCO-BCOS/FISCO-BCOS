@@ -22,20 +22,19 @@
 
 namespace bcos::rlp::protocol
 {
+using codec::rlp::DecodingError;
+using codec::rlp::throwRlpDecodeError;
+
 bool isTypedWeb3Envelope(bcos::bytesConstRef payload) noexcept
 {
-    return !payload.empty() && payload[0] > 0 && payload[0] < bcos::codec::rlp::BYTES_HEAD_BASE;
+    return !payload.empty() && payload[0] > 0 && payload[0] < codec::rlp::BYTES_HEAD_BASE;
 }
 
 std::optional<uint64_t> canonicalTypedYParityItem(bcos::bytesConstRef item) noexcept
 {
-    if (item.size() == 1 && item[0] == 0x80)
+    if (item.size() == 1 && (item[0] == 0x80 || item[0] == 0x01))
     {
-        return uint64_t{0};
-    }
-    if (item.size() == 1 && item[0] == 0x01)
-    {
-        return uint64_t{1};
+        return uint64_t{static_cast<uint64_t>(item[0]) & 1};
     }
     return std::nullopt;
 }
@@ -43,17 +42,16 @@ std::optional<uint64_t> canonicalTypedYParityItem(bcos::bytesConstRef item) noex
 void decodeCanonicalYParity(bcos::bytesRef& from, uint64_t& to)
 {
     auto const* const start = from.data();
-    auto header = bcos::codec::rlp::decodeHeader(from);
+    auto header = codec::rlp::decodeHeader(from);
     if (header.isList)
     {
-        bcos::codec::rlp::throwRlpDecodeError(
-            bcos::codec::rlp::DecodingError::UnexpectedList, "y_parity: expected a scalar");
+        throwRlpDecodeError(DecodingError::UnexpectedList, "y_parity: expected a scalar");
     }
     auto const itemLength = static_cast<size_t>(from.data() - start) + header.payloadLength;
     auto const parity = canonicalTypedYParityItem({start, itemLength});
     if (!parity.has_value()) [[unlikely]]
     {
-        bcos::codec::rlp::throwRlpDecodeError(bcos::codec::rlp::DecodingError::InvalidVInSignature,
+        throwRlpDecodeError(DecodingError::InvalidVInSignature,
             "typed tx y_parity must be the canonical 0x80/0x01 form");
     }
     to = *parity;
@@ -62,24 +60,22 @@ void decodeCanonicalYParity(bcos::bytesRef& from, uint64_t& to)
 
 void decodeAuthorizationYParity(bcos::bytesRef& from, uint64_t& to)
 {
-    auto header = bcos::codec::rlp::decodeHeader(from);
+    auto header = codec::rlp::decodeHeader(from);
     if (header.isList)
     {
-        bcos::codec::rlp::throwRlpDecodeError(
-            bcos::codec::rlp::DecodingError::UnexpectedList, "y_parity: expected a scalar");
+        throwRlpDecodeError(DecodingError::UnexpectedList, "y_parity: expected a scalar");
     }
     uint64_t value = 0;
     if (header.payloadLength > 1)
     {
-        bcos::codec::rlp::throwRlpDecodeError(bcos::codec::rlp::DecodingError::InvalidVInSignature,
-            "authorization y_parity must be a canonical uint8");
+        throwRlpDecodeError(
+            DecodingError::InvalidVInSignature, "authorization y_parity must be a canonical uint8");
     }
     if (header.payloadLength == 1)
     {
         if (from.data()[0] == 0)
         {
-            bcos::codec::rlp::throwRlpDecodeError(
-                bcos::codec::rlp::DecodingError::InvalidVInSignature,
+            throwRlpDecodeError(DecodingError::InvalidVInSignature,
                 "authorization y_parity has a leading zero byte");
         }
         value = from.data()[0];
@@ -132,19 +128,19 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
     // Every RLP failure below surfaces as Malformed (the caller maps it to a reject); the
     // non-throwing tryDecodeHeader/tryDecode cores keep this hot admission path free of
     // exception unwinds on attacker-controlled input.
-    auto const takeHeader = [](bcos::bytesRef& view, bcos::codec::rlp::Header& header) {
-        if (auto result = bcos::codec::rlp::tryDecodeHeader(view)) [[likely]]
+    auto const takeHeader = [](bcos::bytesRef& view, codec::rlp::Header& header) {
+        if (auto result = codec::rlp::tryDecodeHeader(view)) [[likely]]
         {
             header = *result;
             return true;
         }
         return false;
     };
-    if (firstByte > 0 && firstByte < bcos::codec::rlp::BYTES_HEAD_BASE)
+    if (firstByte > 0 && firstByte < codec::rlp::BYTES_HEAD_BASE)
     {
         // Typed: chainId is inner-list field 0. Non-minimal RLP is Malformed.
         cursor = cursor.getCroppedData(1);
-        bcos::codec::rlp::Header header{};
+        codec::rlp::Header header{};
         if (!takeHeader(cursor, header) || !header.isList) [[unlikely]]
         {
             return malformed();
@@ -152,7 +148,7 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
         bcos::bytesRef listPayload = cursor.getCroppedData(0, header.payloadLength);
         cursor = cursor.getCroppedData(header.payloadLength);
         uint64_t chainId = 0;
-        if (!bcos::codec::rlp::tryDecode(listPayload, chainId)) [[unlikely]]
+        if (!codec::rlp::tryDecode(listPayload, chainId)) [[unlikely]]
         {
             return malformed();
         }
@@ -162,7 +158,7 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
         // the legacy ListEnd gate below).
         while (!listPayload.empty())
         {
-            bcos::codec::rlp::Header tailHeader{};
+            codec::rlp::Header tailHeader{};
             if (!takeHeader(listPayload, tailHeader)) [[unlikely]]
             {
                 return malformed();
@@ -184,7 +180,7 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
     // placeholders; in the full form field 7 is v (27/28 unprotected, or chainId*2+35+yParity)
     // and fields 8/9 are the non-empty r/s scalars (EIP-2 keeps r,s in [1,n-1], never empty).
     // Distinguish by whether field 8 is an empty byte string.
-    bcos::codec::rlp::Header header{};
+    codec::rlp::Header header{};
     if (!takeHeader(cursor, header) || !header.isList) [[unlikely]]
     {
         return malformed();
@@ -200,7 +196,7 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
     bcos::bytesRef walker(cursor.data(), header.payloadLength);
     for (int i = 0; i < 6; ++i)
     {
-        bcos::codec::rlp::Header fieldHeader{};
+        codec::rlp::Header fieldHeader{};
         if (!takeHeader(walker, fieldHeader)) [[unlikely]]
         {
             return malformed();
@@ -216,7 +212,7 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
     // Peek r/s emptiness before consuming field 7. Decode field 7 from the item start
     // (header + payload); a payload-only decode misreads multi-byte chainId/v.
     bcos::bytesRef field7Item = walker;
-    bcos::codec::rlp::Header field7Header{};
+    codec::rlp::Header field7Header{};
     if (!takeHeader(walker, field7Header)) [[unlikely]]
     {
         return malformed();
@@ -232,7 +228,7 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
         int tailItems = 0;
         while (!tail.empty())
         {
-            bcos::codec::rlp::Header tailHeader{};
+            codec::rlp::Header tailHeader{};
             if (!takeHeader(tail, tailHeader)) [[unlikely]]
             {
                 return malformed();
@@ -260,7 +256,7 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
         // Emptiness is checked once, directly on the decoded header, doubling as the guard —
         // never re-derived after a guard that already proved it (Codacy:
         // 'field9Header.payloadLength == 0 is always true').
-        bcos::codec::rlp::Header field8Header{};
+        codec::rlp::Header field8Header{};
         if (!takeHeader(tailProbe, field8Header)) [[unlikely]]
         {
             return std::nullopt;
@@ -273,7 +269,7 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
         {
             return false;
         }
-        bcos::codec::rlp::Header field9Header{};
+        codec::rlp::Header field9Header{};
         if (!takeHeader(tailProbe, field9Header)) [[unlikely]]
         {
             return std::nullopt;
@@ -284,7 +280,7 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
         }
         uint64_t field7 = 0;
         bcos::bytesRef field7Cursor = field7Item;
-        if (!bcos::codec::rlp::tryDecode(field7Cursor, field7)) [[unlikely]]
+        if (!codec::rlp::tryDecode(field7Cursor, field7)) [[unlikely]]
         {
             return std::nullopt;
         }
@@ -306,7 +302,7 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
         bool emptySeen = false;
         for (int i = 0; i < 2; ++i)
         {
-            bcos::codec::rlp::Header itemHeader{};
+            codec::rlp::Header itemHeader{};
             if (!takeHeader(tailCheck, itemHeader)) [[unlikely]]
             {
                 return malformed();
@@ -330,7 +326,7 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
     {
         // Preimage: field 7 is the EIP-155 chainId.
         uint64_t chainId = 0;
-        if (!bcos::codec::rlp::tryDecode(field7Item, chainId)) [[unlikely]]
+        if (!codec::rlp::tryDecode(field7Item, chainId)) [[unlikely]]
         {
             return malformed();
         }
@@ -340,7 +336,7 @@ Web3EnvelopeChainIdResult classifyWeb3EnvelopeChainId(bcos::bytesConstRef payloa
     // protected, chainId = (v - 35) >> 1. Anything else (0/1, 29-34) is malformed — fail
     // closed rather than folding it into the unprotected exemption.
     uint64_t v = 0;
-    if (!bcos::codec::rlp::tryDecode(field7Item, v)) [[unlikely]]
+    if (!codec::rlp::tryDecode(field7Item, v)) [[unlikely]]
     {
         return malformed();
     }

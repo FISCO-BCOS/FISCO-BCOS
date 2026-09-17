@@ -109,9 +109,9 @@ void Web3Transaction::decode(bcos::bytesRef& in, bool withSig)
         }
         type = txType.value();
     }
-    // ⚠️ Do not pre-strip the type byte: the typed handler consumes the envelope itself (see the
-    // Web3TxHandler.h decode contract); stripping it again here would skip the list header a second
-    // time and fail every typed tx decode.
+    // Do not pre-strip the type byte: the typed handler consumes the envelope itself (see the
+    // Web3TxHandler.h decode contract); stripping it again here would skip the list header a
+    // second time and fail every typed tx decode.
     handlerFor(type).decode(in, *this, withSig);
     if (!in.empty())
     {

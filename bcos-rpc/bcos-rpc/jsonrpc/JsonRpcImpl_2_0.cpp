@@ -1440,9 +1440,11 @@ void JsonRpcImpl_2_0::getGroupPeers(std::string_view _groupID, RespFunc _respFun
         Json::Value jResp(Json::arrayValue);
         if (error)
         {
+            // clang-format off
             RPC_IMPL_LOG(INFO)
                 << LOG_BADGE("getGroupPeers failed") << LOG_KV("code", error->errorCode())
                 << LOG_KV("message", error->errorMessage());
+            // clang-format on
             respFunc(error, jResp);
             co_return;
         }

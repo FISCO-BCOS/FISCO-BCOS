@@ -23,24 +23,11 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 set(Boost_NO_WARN_NEW_VERSIONS ON)
 
-# C++23 std::expected floor — fail at configure time with a readable message instead of a
-# deep parse error. Floor: GCC 12 / Clang 16 / Xcode 16 (AppleClang 16) / VS2022 17.3
-# (MSVC 19.33).
-if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND
-   CMAKE_CXX_COMPILER_VERSION VERSION_LESS 12)
-    message(FATAL_ERROR "FISCO-BCOS requires GCC >= 12 for C++23 std::expected "
-                        "(found ${CMAKE_CXX_COMPILER_VERSION})")
-elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" AND
-       CMAKE_CXX_COMPILER_VERSION VERSION_LESS 16)
-    message(FATAL_ERROR "FISCO-BCOS requires Clang >= 16 for C++23 std::expected "
-                        "(found ${CMAKE_CXX_COMPILER_VERSION})")
-elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang" AND
-       CMAKE_CXX_COMPILER_VERSION VERSION_LESS 16)
-    message(FATAL_ERROR "FISCO-BCOS requires Xcode >= 16 for C++23 std::expected "
-                        "(found AppleClang ${CMAKE_CXX_COMPILER_VERSION})")
-elseif(MSVC AND MSVC_VERSION LESS 1933)
-    message(FATAL_ERROR "FISCO-BCOS requires VS2022 17.3+ for C++23 std::expected "
-                        "(found MSVC ${MSVC_VERSION})")
+# C++23 std::expected floor: GCC 12+ / Clang 16+ (Xcode 16+) / VS2022 17.3+ (MSVC 19.33+).
+if(("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 12) OR
+   ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 16) OR
+   (MSVC AND MSVC_VERSION LESS 1933))
+    message(FATAL_ERROR "FISCO-BCOS requires GCC 12+ / Clang 16+ (Xcode 16+) / VS2022 17.3+ for C++23 std::expected (found ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}${MSVC_VERSION})")
 endif()
 
 message(STATUS "COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")

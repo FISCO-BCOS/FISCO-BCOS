@@ -62,9 +62,11 @@ enum class TransactionType : uint8_t
     Deposit = 0x7e,  // deposit-only system tx (OP Stack)
 };
 
-constexpr auto operator<=>(TransactionType const& ltype, auto rtype)
-    requires std::same_as<decltype(rtype), TransactionType> ||
-             std::unsigned_integral<decltype(rtype)>
+template <typename T>
+concept TransactionTypeTag = std::same_as<T, TransactionType> || std::unsigned_integral<T>;
+
+template <TransactionTypeTag T>
+constexpr auto operator<=>(TransactionType const& ltype, T rtype)
 {
     return static_cast<uint8_t>(ltype) <=> static_cast<uint8_t>(rtype);
 }

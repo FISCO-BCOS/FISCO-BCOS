@@ -1,21 +1,6 @@
-/**
- *  Copyright (C) 2026 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- *
- * @file Exceptions.h
- * @brief Exception types thrown by the RLP codec (decode/encode failures)
- */
+// Copyright (C) 2026 FISCO BCOS. SPDX-License-Identifier: Apache-2.0
+// @file Exceptions.h
+// @brief Exception types thrown by the RLP codec (decode/encode failures)
 #pragma once
 
 #include <bcos-utilities/Exceptions.h>
@@ -37,15 +22,16 @@ using errinfo_rlpErrorCode = boost::error_info<struct tag_rlpErrorCode, int32_t>
 // Accepts any error code: an unscoped enum (DecodingError), an enum class
 // (protocol::EthBlockHeaderError, ...) or a raw int32.
 template <typename E>
-    requires(std::is_enum_v<E> || std::is_same_v<E, int32_t>)
+concept RlpErrorCode = std::is_enum_v<E> || std::is_same_v<E, int32_t>;
+
+template <RlpErrorCode E>
 [[noreturn]] inline void throwRlpDecodeError(E code, std::string_view message)
 {
     BOOST_THROW_EXCEPTION(RlpDecodeException{} << errinfo_rlpErrorCode(static_cast<int32_t>(code))
                                                << bcos::errinfo_comment(std::string(message)));
 }
 
-template <typename E>
-    requires(std::is_enum_v<E> || std::is_same_v<E, int32_t>)
+template <RlpErrorCode E>
 [[noreturn]] inline void throwRlpEncodeError(E code, std::string_view message)
 {
     BOOST_THROW_EXCEPTION(RlpEncodeException{} << errinfo_rlpErrorCode(static_cast<int32_t>(code))
