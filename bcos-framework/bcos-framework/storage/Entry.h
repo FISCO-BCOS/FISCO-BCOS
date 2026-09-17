@@ -292,6 +292,21 @@ public:
     // data race; callers must ensure external synchronization.
 
     std::string_view get() const&;
+    // Returns the buffer content as a view type T (default std::string_view),
+    // or std::nullopt when the entry does not hold a byte buffer
+    // (EMPTY / DELETED / typed).  T must be a non-owning view
+    // (IsByteBufferViewV) constructible from (const value_type*, size_t) —
+    // e.g. std::string_view, bytesConstRef, std::span<const byte>.
+    // Owning types like std::string are rejected at compile time.
+    // Unlike get(), an engaged empty value unambiguously means
+    // "holds an empty buffer".  The returned view aliases the entry's
+    // internal storage — same lifetime rules as get().
+    template <ByteBuffer T = std::string_view>
+        requires(IsByteBufferViewV<T> && std::constructible_from<T,
+                     const typename std::remove_cvref_t<T>::value_type*, std::size_t>)
+    std::optional<T> getBuffer() const
+        noexcept(std::is_nothrow_constructible_v<T,
+            const typename std::remove_cvref_t<T>::value_type*, std::size_t>);
     const char* data() const&;
     int32_t size() const;
 
@@ -351,6 +366,14 @@ public:
 
     template <Encodable T>
     bool holdsType() const noexcept;
+
+    // True when the entry holds a byte buffer (set()/decode()).  Typed
+    // entries, DELETED tombstones and EMPTY entries return false.
+    bool holdsBuffer() const noexcept
+    {
+        return m_buffer.has_value() && m_buffer->getTypedPtr() == nullptr &&
+            m_buffer->status() != ENTRY_DELETED;
+    }
 
     // Encode for persistence via the facade's encode convention.
     // Passes raw bytes through the sink callback, avoiding intermediate
@@ -442,6 +465,22 @@ bool Entry::holdsType() const noexcept
         return false;
     }
     return m_buffer->typeIndex() == std::type_index(typeid(T));
+}
+
+template <ByteBuffer T>
+    requires(IsByteBufferViewV<T> && std::constructible_from<T,
+                 const typename std::remove_cvref_t<T>::value_type*, std::size_t>)
+std::optional<T> Entry::getBuffer() const
+    noexcept(std::is_nothrow_constructible_v<T,
+        const typename std::remove_cvref_t<T>::value_type*, std::size_t>)
+{
+    using RawType = std::remove_cvref_t<T>;
+    if (!holdsBuffer())
+    {
+        return std::nullopt;
+    }
+    return RawType{reinterpret_cast<const typename RawType::value_type*>(m_buffer->data()),
+        m_buffer->size()};
 }
 
 }  // namespace bcos::storage

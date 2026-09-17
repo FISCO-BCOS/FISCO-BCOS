@@ -656,6 +656,16 @@ void tag_invoke(bcos::storage::encode_t, const TestValueB& v, Sink&& sink)
 
 // ─── Typed Entry tests ─────────────────────────────────────────────
 
+// Compile-time probe for getBuffer<T>() constraint satisfaction.
+template <typename T>
+concept CanGetBuffer = requires(const Entry& e) { e.getBuffer<T>(); };
+static_assert(CanGetBuffer<std::string_view>);
+static_assert(CanGetBuffer<bytesConstRef>);
+static_assert(CanGetBuffer<std::span<const bcos::byte>>);
+// Owning types are rejected — only non-owning views are allowed.
+static_assert(!CanGetBuffer<std::string>);
+static_assert(!CanGetBuffer<bcos::bytes>);
+
 BOOST_AUTO_TEST_CASE(setTypedGetTypedSameType)
 {
     Entry entry;
@@ -757,6 +767,77 @@ BOOST_AUTO_TEST_CASE(emptyEntryGetTyped)
     auto* ptr = entry.getTyped<TestValueA>();
     BOOST_TEST(ptr == nullptr);
     BOOST_TEST(!entry.holdsType<TestValueA>());
+}
+
+BOOST_AUTO_TEST_CASE(holdsBuffer)
+{
+    // EMPTY entry
+    Entry entry;
+    BOOST_TEST(!entry.holdsBuffer());
+
+    // Byte-mode entry (small buffer)
+    entry.set(std::string("small"));
+    BOOST_TEST(entry.holdsBuffer());
+
+    // Byte-mode entry (large buffer)
+    entry.set(std::string(64, 'x'));
+    BOOST_TEST(entry.holdsBuffer());
+
+    // Typed entry
+    entry.setTyped(TestValueA{1, "typed"});
+    BOOST_TEST(!entry.holdsBuffer());
+
+    // DELETED tombstone
+    entry.set(std::string("gone"));
+    entry.setStatus(Entry::DELETED);
+    BOOST_TEST(!entry.holdsBuffer());
+}
+
+BOOST_AUTO_TEST_CASE(getBuffer)
+{
+    // EMPTY entry → nullopt
+    Entry entry;
+    BOOST_TEST(!entry.getBuffer().has_value());
+
+    // Empty buffer → engaged view of size 0 (distinguishable from nullopt)
+    entry.set(std::string_view{});
+    auto emptyView = entry.getBuffer();
+    BOOST_REQUIRE(emptyView.has_value());
+    BOOST_TEST(emptyView->empty());
+
+    // Non-empty buffer
+    entry.set(std::string("data"));
+    auto view = entry.getBuffer();
+    BOOST_REQUIRE(view.has_value());
+    BOOST_CHECK_EQUAL(*view, "data");
+
+    // Explicit std::string_view
+    auto svView = entry.getBuffer<std::string_view>();
+    BOOST_REQUIRE(svView.has_value());
+    BOOST_CHECK_EQUAL(*svView, "data");
+
+    // bytesConstRef (RefDataContainer<const byte>)
+    auto byteRef = entry.getBuffer<bytesConstRef>();
+    BOOST_REQUIRE(byteRef.has_value());
+    BOOST_TEST(byteRef->size() == 4);
+    BOOST_CHECK_EQUAL_COLLECTIONS(byteRef->data(), byteRef->data() + byteRef->size(),
+        reinterpret_cast<const byte*>("data"), reinterpret_cast<const byte*>("data") + 4);
+
+    // std::span<const byte>
+    auto span = entry.getBuffer<std::span<const bcos::byte>>();
+    BOOST_REQUIRE(span.has_value());
+    BOOST_TEST(span->size() == 4);
+
+    // Typed entry → nullopt for every requested type
+    entry.setTyped(TestValueA{1, "typed"});
+    BOOST_TEST(!entry.getBuffer().has_value());
+    BOOST_TEST(!entry.getBuffer<bytesConstRef>().has_value());
+    BOOST_TEST(entry.get().empty());
+
+    // DELETED tombstone → nullopt
+    entry.set(std::string("gone"));
+    entry.setStatus(Entry::DELETED);
+    BOOST_TEST(!entry.getBuffer().has_value());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
