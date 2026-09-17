@@ -169,9 +169,14 @@ BOOST_AUTO_TEST_CASE(GoldenHeaderFieldSetAndReencodeMatchForkBaseline, * boost::
         auto bytes = bcos::fromHex(hexWithPrefix);  // tolerates the 0x prefix
         BOOST_REQUIRE(!bytes.empty());
         bcos::protocol::EthBlockHeader eth;
-        auto err = eth.rlpDecode(bcos::ref(bytes));
-        BOOST_REQUIRE_MESSAGE(err == nullptr,
-            name << ": rlpDecode of encodedHeaderHex failed: " << (err ? err->errorMessage() : ""));
+        try
+        {
+            eth.rlpDecode(bcos::ref(bytes));
+        }
+        catch (bcos::codec::rlp::RlpDecodeException const& e)
+        {
+            BOOST_FAIL(name << ": rlpDecode of encodedHeaderHex failed: " << e.what());
+        }
         bcos::bytes reencoded;
         eth.rlpEncode(reencoded);
 

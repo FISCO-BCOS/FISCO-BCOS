@@ -423,8 +423,9 @@ inline DecodableWeb3Tx makeDecodableWeb3Tx(
         bcos::rpc::Web3Transaction decoded;
         bcos::bytes copy = raw;
         bcos::bytesRef ref{copy.data(), copy.size()};
-        auto err = bcos::codec::rlp::decode(ref, decoded);
-        BOOST_REQUIRE(!err);
+        // The merged rlp decode API throws RlpDecodeException on malformed input
+        // (release refactor #5598): a throw here fails the REQUIRE-equivalent loudly.
+        bcos::codec::rlp::decode(ref, decoded);
         BOOST_REQUIRE(ref.empty());
         BOOST_REQUIRE(bcos::engine::engine_common::op::opEnvelopeToTars(
             raw, bcos::h256{}, /*allowDeposit=*/true));
