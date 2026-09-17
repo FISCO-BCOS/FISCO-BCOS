@@ -1487,14 +1487,28 @@ void resealPayloadBlockHash(OpE2eFixture& fixture, bcos::engine::ExecutionPayloa
     payload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*header);
 }
 
+/// The Holocene/Jovian 1559 pair a payload's extraData declares, decoded exactly the way the
+/// engine's own validator decodes it (OpBaseFee.h decodeEip1559Params): the 8 bytes after the
+/// version tag. Byte-offset assertions against [4]/[8] rot when the layout grows; this pins
+/// the layout itself.
+auto extraDataPairOf(bcos::engine::ExecutionPayload const& payload)
+{
+    BOOST_REQUIRE_GT(payload.extraData.size(), bcos::engine::c_eip1559ParamsBytes);
+    return bcos::engine::decodeEip1559Params(std::span<const bcos::byte>(payload.extraData)
+                                                 .subspan(1, bcos::engine::c_eip1559ParamsBytes));
+}
+
 }  // namespace
 
 // S2 — "noTxPool / empty attributes": op-e2e actions/sequencer/l2_sequencer_test.go
 // (TestL2Sequencer_SequencerDrift) drives the engine with ForcedEmpty (noTxPool) past
-// the drift window and requires the block to be produced nonetheless. FISCO's build
-// path must (a) skip the mempool seal for noTxPool instead of refusing, and (b) emit a
-// block whose only transaction is the synthesized L1-attributes deposit — the verifier
-// side then imports it unchanged. Acceptance: FCU VALID, 1 deposit tx, import VALID.
+// the drift window and requires the block to be produced nonetheless. What THIS case can
+// pin is the outcome: an FCU carrying noTxPool builds a block whose only transaction is
+// the synthesized L1-attributes deposit, and the verifier side imports it unchanged. The
+// mempool-exclusion semantics itself is NOT observable here — the fixture's StubMemPool
+// never seals anything — so the comment does not claim it; the Eth lane covers the
+// real-pool exclusion in EthEngineServiceParityTest. Acceptance: FCU VALID, 1 deposit tx,
+// import VALID.
 BOOST_AUTO_TEST_CASE(AttributeNoTxPoolBuildsDepositsOnlyBlock)
 {
     auto const genesis = regolithGenesisHash();
@@ -1521,11 +1535,13 @@ BOOST_AUTO_TEST_CASE(AttributeNoTxPoolBuildsDepositsOnlyBlock)
 // S3 — invalid-signature transaction inside a payload. op-e2e
 // actions/upgrades/holocene_fork_test.go (TestHoloceneInvalidPayload) zeroes a tx
 // signature in the batcher and requires the verifier to reject that block; the
-// consensus-layer contract is INVALID with latestValidHash = the parent (op-geth
-// eth/catalyst: a payload failing execution returns INVALID plus the last valid tip).
-// FISCO's importer must reject the block during execution instead of accepting it or
-// flattening to an internal error. Acceptance: INVALID, latestValidHash = parent,
-// non-empty reason.
+// consensus-layer contract is INVALID with latestValidHash = the parent. Note the gate
+// CLASS: the reference also refuses a zero-signature tx at payload DECODE time, not at
+// execution — core/types/transaction_marshalling.go's sanityCheckSignature
+// (transaction.go:246-268, r/s == 0 → ErrInvalidSig) runs before execution and
+// eth/catalyst wraps it as INVALID + parent. So FISCO's decode-gate refusal and the
+// reference's are the same class, differing only in wording. Acceptance: INVALID,
+// latestValidHash = parent, non-empty reason.
 BOOST_AUTO_TEST_CASE(PayloadWithInvalidSignatureTxRejected)
 {
     auto const genesis = regolithGenesisHash();
@@ -1538,12 +1554,11 @@ BOOST_AUTO_TEST_CASE(PayloadWithInvalidSignatureTxRejected)
 
     // An EIP-1559 envelope (type 0x02, 12 RLP items: chainId 0x2105, nonce, both fee caps, gas,
     // to, value, data, accessList, y, r, s) whose signature triple is zero — the verifier-side
-    // face of the reference test's zeroed signature. Observed: FISCO refuses it at the payload's
-    // envelope decode gate ("undecodable payload transaction envelope"), one gate earlier than
-    // the reference's execution-side wording ("sender not an eoa" / insufficient funds for a
-    // recovered-but-empty sender). The outcome under test is the same INVALID + latestValidHash
-    // = parent, so the message is recorded rather than pinned: the corpus' invalid_* items are
-    // the place that pins the execution-side wording.
+    // face of the reference test's zeroed signature. Both implementations refuse it at the
+    // payload's decode gate — op-geth via sanityCheckSignature, FISCO via the failed sender
+    // recovery ("undecodable payload transaction envelope") — so the outcome under test is
+    // INVALID + latestValidHash = parent and the message is recorded rather than pinned: the
+    // corpus' invalid_* items are the place that pins the tx-level wording.
     bcos::bytes const badEnvelope = bcos::fromHex(
         "0x"
         "02"
@@ -1631,11 +1646,12 @@ BOOST_AUTO_TEST_CASE(DepositsOnlyBlockAcceptedThenChainBuildsOnTop)
 
 // S6 — attributes / payload timestamp must be strictly increasing. The reference rule is
 // op-geth's consensus timestamp check: a payload whose timestamp is not greater than its
-// parent's is refused (INVALID, latestValidHash = parent) rather than executed. FISCO's
-// gate sits at OpEngineService.inl:1045, but the blockHash gate runs ahead of it — so the
-// mutated payload is resealed, otherwise the rejection would name the hash and never reach
-// the timestamp rule. Acceptance: INVALID naming the timestamp rule, latestValidHash =
-// parent, and the parent still builds afterwards.
+// parent's is refused (INVALID, latestValidHash = parent) rather than executed. In FISCO the
+// blockHash gate runs ahead of the timestamp gate (the "timestamp must be strictly greater
+// than the parent's" check in OpEngineService.inl) — so the mutated payload is resealed,
+// otherwise the rejection would name the hash and never reach the timestamp rule. Acceptance:
+// INVALID naming the timestamp rule, latestValidHash = parent, and the parent still builds
+// afterwards.
 BOOST_AUTO_TEST_CASE(PayloadTimestampNotIncreasingRejected)
 {
     auto const genesis = regolithGenesisHash();
@@ -1767,6 +1783,8 @@ BOOST_AUTO_TEST_CASE(HoloceneParentPricesFromItsOwnExtraData)
     // The API profile above is the Holocene one, so the layout checks the engine applies to the
     // response are Holocene's: a 9-byte extraData (not Jovian's 17) and a withdrawals list.
     BOOST_REQUIRE_EQUAL(produced.extraData.size(), 9U);
+    BOOST_REQUIRE(produced.withdrawals.has_value());
+    BOOST_CHECK(produced.withdrawals->empty());
 
     BOOST_TEST_INFO("S8 produced=" << produced.baseFeePerGas
                                    << " extraDataGolden=" << kOpGethGoldenExtraDataTriple
@@ -1781,8 +1799,10 @@ BOOST_AUTO_TEST_CASE(HoloceneParentPricesFromItsOwnExtraData)
     BOOST_CHECK_MESSAGE(
         produced.extraData[0] == 0x00, "S8: Holocene extraData carries the version-0 tag, got "
                                            << static_cast<int>(produced.extraData[0]));
-    BOOST_CHECK_EQUAL(static_cast<int>(produced.extraData[4]), 8);  // denominator 8 (chain)
-    BOOST_CHECK_EQUAL(static_cast<int>(produced.extraData[8]), 6);  // elasticity 6 (chain)
+    auto const [echoedDenominator, echoedElasticity] = extraDataPairOf(produced);
+    BOOST_CHECK_MESSAGE(echoedDenominator == 8 && echoedElasticity == 6,
+        "S8: the block must echo the ATTRIBUTE pair (8, 6), got (" << echoedDenominator << ", "
+                                                                   << echoedElasticity << ")");
 }
 
 // Reference-parity case for the zero-param substitution: an all-zero attribute pair is LEGAL
@@ -1834,10 +1854,13 @@ BOOST_AUTO_TEST_CASE(ZeroAttributeParamsSubstituteTheDeclaredPair)
     auto const& produced = got->executionPayload;
     BOOST_REQUIRE_EQUAL(produced.extraData.size(), 9U);
     BOOST_CHECK_EQUAL(static_cast<int>(produced.extraData[0]), 0x00);  // Holocene tag
-    BOOST_CHECK_MESSAGE(static_cast<int>(produced.extraData[4]) == 8,
-        "the substituted denominator must be the DECLARED Canyon value 8, not the preset 250");
-    BOOST_CHECK_MESSAGE(static_cast<int>(produced.extraData[8]) == 2,
-        "the substituted elasticity must be the DECLARED 2, not the preset 6");
+    auto const [substitutedDenominator, substitutedElasticity] = extraDataPairOf(produced);
+    BOOST_CHECK_MESSAGE(substitutedDenominator == 8,
+        "the substituted denominator must be the DECLARED Canyon value 8, not the preset 250, got "
+            << substitutedDenominator);
+    BOOST_CHECK_MESSAGE(substitutedElasticity == 2,
+        "the substituted elasticity must be the DECLARED 2, not the preset 6, got "
+            << substitutedElasticity);
 }
 
 // The other half of the same rule, and the one the operator can actually hit: the SAME zero
@@ -1886,10 +1909,65 @@ BOOST_AUTO_TEST_CASE(ZeroAttributeParamsOnAnUndeclaredNodeUseThePreset)
     auto const& produced = got->executionPayload;
     BOOST_REQUIRE_EQUAL(produced.extraData.size(), 9U);
     BOOST_CHECK_EQUAL(static_cast<int>(produced.extraData[0]), 0x00);
-    BOOST_CHECK_MESSAGE(static_cast<int>(produced.extraData[4]) == 250,
-        "undeclared ⇒ the preset's Canyon denominator 250");
-    BOOST_CHECK_MESSAGE(static_cast<int>(produced.extraData[8]) == 6,
-        "undeclared ⇒ the preset's elasticity 6 — the value the WARNING names");
+    auto const [presetDenominator, presetElasticity] = extraDataPairOf(produced);
+    BOOST_CHECK_MESSAGE(presetDenominator == 250,
+        "undeclared ⇒ the preset's Canyon denominator 250, got " << presetDenominator);
+    BOOST_CHECK_MESSAGE(presetElasticity == 6,
+        "undeclared ⇒ the preset's elasticity 6 — the value the WARNING names, got "
+            << presetElasticity);
+}
+
+// Echo-vs-write discriminator: a NON-zero attribute pair is the CL's authority — op-geth's
+// builder uses the decoded pair as-is and substitutes only when d == 0
+// (miner/worker.go:377-381) — so the engine must ECHO the attribute pair even when it
+// differs from this node's declaration. The declaration here (canyon 8, elasticity 2) is the
+// mirror image of the attribute pair (250, 6), so any "write the declaration" variant fails
+// on BOTH bytes; the S8 case only discriminates the denominator because its attrs pair
+// shares the declaration's elasticity.
+BOOST_AUTO_TEST_CASE(NonZeroAttributeParamsAreEchoedOverTheDeclaration)
+{
+    bcos::engine::OpEip1559Params const declared{
+        .elasticity = 2, .denominator = 8, .denominatorCanyon = 8};
+    auto const holoceneShaped = bcos::fromHex("0x00000000fa00000006");
+
+    auto const genesis = regolithGenesisHash();
+    auto schedule = std::make_shared<const bcos::evm::opstack::OpForkSchedule>(
+        std::vector<bcos::evm::opstack::OpForkActivation>{{bcos::evm::opstack::OpFork::Regolith, 0},
+            {bcos::evm::opstack::OpFork::Canyon, 0}, {bcos::evm::opstack::OpFork::Ecotone, 0},
+            {bcos::evm::opstack::OpFork::Fjord, 0}, {bcos::evm::opstack::OpFork::Granite, 0},
+            {bcos::evm::opstack::OpFork::Holocene, 0}},
+        bcos::evm::opstack::OpForkSchedule::TestBypass{});
+    auto fixture = std::make_unique<OpE2eFixture>(schedule, declared);
+    registerRegolithGenesis(*fixture, genesis, holoceneShaped);
+
+    bcos::engine::PayloadAttributes attrs;
+    attrs.timestamp = 1'000;
+    attrs.prevRandao = bcos::crypto::HashType{};
+    attrs.suggestedFeeRecipient = bcos::Address{};
+    attrs.gasLimit = 30'000'000;
+    attrs.noTxPool = true;
+    attrs.withdrawals = std::vector<bcos::engine::WithdrawalV1>{};
+    attrs.parentBeaconBlockRoot = bcos::h256{};
+    attrs.eip1559Params = bcos::fromHex("0x000000fa00000006");  // (250, 6) ≠ declaration
+
+    bcos::engine::ForkchoiceState const fc{genesis, genesis, genesis};
+    auto built = bcos::task::syncWait(fixture->service.updateForkchoice(
+        fc, &attrs, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
+    BOOST_REQUIRE_MESSAGE(
+        built.payloadStatus.status == bcos::engine::PayloadValidationStatus::Valid,
+        "a legal non-zero attribute pair must build, got "
+            << static_cast<int>(built.payloadStatus.status) << " "
+            << built.payloadStatus.validationError.value_or(""));
+    BOOST_REQUIRE(built.payloadId.has_value());
+    auto got = bcos::task::syncWait(fixture->service.getPayload(
+        *built.payloadId, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
+    BOOST_REQUIRE(got != nullptr);
+    auto const [echoedDenominator, echoedElasticity] = extraDataPairOf(got->executionPayload);
+    BOOST_TEST_INFO("echoed=(" << echoedDenominator << ", " << echoedElasticity << ")");
+    BOOST_CHECK_MESSAGE(echoedDenominator == 250 && echoedElasticity == 6,
+        "the block must ECHO the attribute pair (250, 6), not write the declaration "
+        "(8, 2); got ("
+            << echoedDenominator << ", " << echoedElasticity << ")");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
