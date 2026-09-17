@@ -386,7 +386,8 @@ BOOST_AUTO_TEST_CASE(buildFeeHistoryNewestInt64MaxDoesNotOverflow)
 
     auto result = bcos::task::syncWait(buildFeeHistory(*ledger,
         /*newestBlock=*/std::numeric_limits<bcos::protocol::BlockNumber>::max(),
-        /*blockCount=*/2, /*rewardPercentiles=*/{}, /*opStackMode=*/false));
+        /*blockCount=*/2, /*rewardPercentiles=*/{}, /*opStackMode=*/false,
+        bcos::engine::kLegacyOpEip1559Params));
     BOOST_CHECK_EQUAL(result["oldestBlock"].asString(), toQuantity(bcos::u256(6)));
     BOOST_CHECK_EQUAL(result["baseFeePerGas"].size(), 3U);  // 2 clamped blocks + trailing fee
     BOOST_CHECK_EQUAL(result["gasUsedRatio"].size(), 2U);
