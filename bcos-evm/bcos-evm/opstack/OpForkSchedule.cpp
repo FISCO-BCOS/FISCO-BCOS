@@ -294,15 +294,47 @@ std::string OpForkSchedule::canonicalText() const
     return ledger::canonicalOpForkSchedule(records);
 }
 
+namespace
+{
+std::vector<OpForkActivation> jovianAndLaterOf(
+    std::vector<OpForkActivation> const& activations)
+{
+    std::vector<OpForkActivation> out;
+    out.reserve(activations.size());
+    for (auto const& activation : activations)
+    {
+        // No default: a new OpFork enumerator must be classified or -Wswitch/-Werror fails.
+        switch (activation.fork)
+        {
+        case OpFork::Regolith:
+        case OpFork::Canyon:
+        case OpFork::Ecotone:
+        case OpFork::Fjord:
+        case OpFork::Granite:
+        case OpFork::Holocene:
+        case OpFork::Isthmus:
+            break;
+        case OpFork::Jovian:
+        case OpFork::Karst:
+            out.push_back(activation);
+            break;
+        }
+    }
+    return out;
+}
+}  // namespace
+
 OpForkSchedule::OpForkSchedule(std::vector<OpForkActivation> activations)
-  : m_activations(std::move(activations))
+  : m_activations(std::move(activations)),
+    m_jovianAndLater(jovianAndLaterOf(m_activations))
 {
     validateActivations(m_activations);
     ensureKarstIsOsaka(m_activations);
 }
 
 OpForkSchedule::OpForkSchedule(std::vector<OpForkActivation> activations, TestBypass)
-  : m_activations(std::move(activations))
+  : m_activations(std::move(activations)),
+    m_jovianAndLater(jovianAndLaterOf(m_activations))
 {}
 
 OpFork OpForkSchedule::forkAt(uint64_t timestampSeconds) const
@@ -332,29 +364,8 @@ uint64_t OpForkSchedule::baselineTimestamp() const
     return m_activations.front().timestamp;
 }
 
-std::vector<OpForkActivation> OpForkSchedule::jovianAndLaterActivations() const
+std::span<const OpForkActivation> OpForkSchedule::jovianAndLaterActivations() const
 {
-    std::vector<OpForkActivation> out;
-    out.reserve(m_activations.size());
-    for (auto const& activation : m_activations)
-    {
-        // No default: a new OpFork enumerator must be classified or -Wswitch/-Werror fails.
-        switch (activation.fork)
-        {
-        case OpFork::Regolith:
-        case OpFork::Canyon:
-        case OpFork::Ecotone:
-        case OpFork::Fjord:
-        case OpFork::Granite:
-        case OpFork::Holocene:
-        case OpFork::Isthmus:
-            break;
-        case OpFork::Jovian:
-        case OpFork::Karst:
-            out.push_back(activation);
-            break;
-        }
-    }
-    return out;
+    return m_jovianAndLater;
 }
 }  // namespace bcos::evm::opstack

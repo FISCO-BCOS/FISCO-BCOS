@@ -80,19 +80,16 @@ public:
         return initializer;
     }
 
-    /// OP path: OpSchedulerSeam + OpScheduler delegate. The OP engine keeps
-    /// ledger=nullptr (the OP scheduler owns the ledger) and no maxEngineVersion field —
-    /// the karst profile keys payload versions on the payload timestamp — so both
-    /// parameters are accepted here only to keep the boot call site explicit, and are
-    /// discarded by the holder below (merge note: engine-cutover wanted them removed
-    /// from the signature; karst keeps them as documented no-ops).
+    /// OP path: OpSchedulerSeam + OpScheduler delegate. The OP engine takes neither a
+    /// ledger (the OP scheduler owns it) nor a maxEngineVersion (the karst profile keys
+    /// payload versions on the payload timestamp) — unlike the Eth-side build(), which
+    /// forwards both into its holder.
     template <class SchedulerType>
     static Ptr buildOp(std::shared_ptr<GlobalStateStorageInitializer> storageInitializer,
         bcos::protocol::BlockFactory::Ptr blockFactory, std::shared_ptr<SchedulerType> scheduler,
-        bcos::txpool::MemPoolImpl& memPool, bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
+        bcos::txpool::MemPoolImpl& memPool,
         int64_t blockTxCountLimit = bcos::engine::c_defaultBlockTxCountLimit,
         bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
-        std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4),
         std::shared_ptr<bcos::engine::DACaps> daCaps = nullptr,
         bool allowSynthesizedL1Attributes = false,
         bcos::engine::OpEip1559Params eip1559 = bcos::engine::kLegacyOpEip1559Params)
@@ -102,8 +99,8 @@ public:
             GlobalStateStorage, SchedulerType>;
         auto holder = std::make_shared<ConcreteOpModel<SchedulerType, ConcreteEngineService>>(
             std::move(storageInitializer), std::move(blockFactory), std::move(scheduler), memPool,
-            std::move(ledger), blockTxCountLimit, std::move(delegate), maxEngineVersion,
-            std::move(daCaps), allowSynthesizedL1Attributes, eip1559);
+            blockTxCountLimit, std::move(delegate), std::move(daCaps),
+            allowSynthesizedL1Attributes, eip1559);
         initializer->m_holder = holder;
         initializer->m_engineService =
             std::shared_ptr<bcos::engine::AnyEngineService>(holder, &holder->m_any);
@@ -155,8 +152,7 @@ private:
         ConcreteOpModel(std::shared_ptr<GlobalStateStorageInitializer> storageInitializer,
             bcos::protocol::BlockFactory::Ptr blockFactory,
             std::shared_ptr<SchedulerType> scheduler, bcos::txpool::MemPoolImpl& memPool,
-            bcos::ledger::LedgerInterface::Ptr ledger, int64_t blockTxCountLimit,
-            bcos::scheduler::SchedulerInterface::Ptr delegate, std::uint32_t maxEngineVersion,
+            int64_t blockTxCountLimit, bcos::scheduler::SchedulerInterface::Ptr delegate,
             std::shared_ptr<bcos::engine::DACaps> daCaps, bool allowSynthesizedL1Attributes,
             bcos::engine::OpEip1559Params eip1559)
           : m_storageInitializer(std::move(storageInitializer)),
@@ -166,10 +162,7 @@ private:
                 m_storageInitializer->storage(), *m_scheduler, std::move(blockFactory),
                 blockTxCountLimit, std::move(delegate), std::move(daCaps),
                 allowSynthesizedL1Attributes, eip1559)
-        {
-            (void)ledger;
-            (void)maxEngineVersion;
-        }
+        {}
 
         std::shared_ptr<GlobalStateStorageInitializer> m_storageInitializer;
         std::reference_wrapper<bcos::txpool::MemPoolImpl> m_memPool;

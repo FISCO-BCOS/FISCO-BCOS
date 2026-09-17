@@ -272,3 +272,27 @@ out-of-line definitions to `inline` in `bcos-evm/bcos-evm/opstack/RollupCost.h` 
 Consequence: a consumer of prebuilt artifacts sees an ABI/export change (the symbols are no
 longer emitted from the archive); a full source rebuild sees no behavioural change. Code-side
 motivation: `opstack-executor/OpBlockExecute.h:226-228`.
+
+## OpEngineService vs legacy EngineServiceImpl — intentional divergence register (review finding U)
+
+The OP lane's Engine API (`OpEngineService` over `OpSchedulerSeam`/`OpScheduler`) and the
+legacy Eth lane's service (`EngineServiceImpl` template, instantiated by tests only, and the
+production split `EthEngineService`) deliberately differ where the lane semantics differ.
+Each entry below is comment-anchored at the cited location and pinned by the named tests;
+editing either side without updating its counterpart is a registered-divergence change.
+
+| # | Divergence | Anchor | Pinned by |
+|---|---|---|---|
+| 1 | Eth lane: an older head is swallowed even when it carries L1 attributes (legacy parity) | `EthEngineService.inl:150` | EthEngineServiceParityTest |
+| 2 | Eth lane stamps OP extraData and derives the header fork like the release EngineServiceImpl | `EthEngineService.inl:665` | EthEngineServiceParityTest, JovianExtraDataTest |
+| 3 | GetPayloadV4 accepts only PayloadV3 builds | `EngineServiceCommon.cpp:57` | OpEngineApiVersionsTest |
+| 4 | Version-window contract: the four Engine-API surfaces deliberately differ per lane | `EthEngineService.h:181` | OpEngineApiVersionsTest |
+| 5 | Bounded FIFO payload cache (cap 64), matching the release service | `EngineTracker.h:239` | EngineTrackerTest |
+| 6 | OP lane: the FCU callback's LedgerConfig is deliberately dropped — republishing is owned by `makeOpLedgerConfigRepublisher` | `OpEngineService.inl:943` | OpLedgerConfigRepublishTest |
+| 7 | OP lane: withdrawalsRoot is projected through the announced header for the round-trip | `EngineHelper.cpp:734-740` | OpEnginePayloadShapeBaselineSuite |
+| 8 | OP lane: no maxEngineVersion field — the karst profile keys payload versions on the payload timestamp | `EngineServiceInitializer.h` (buildOp) | OpEngineKarstProfileSuite |
+| 9 | OP lane: no MPT-pruning commit observer — the initializer refuses OP mode with a prune window instead of silently no-oping | `Initializer.cpp` (OP gate) | OpEngineReviewFixTest |
+| 10 | Legacy lane: there is deliberately no ACCEPTED escape in the payload window check | `EngineServiceImpl.h:521` | EngineServiceTest |
+
+Plus one registered RISK (not a divergence): `OpEngineService.inl:1103` — with no L2
+derivation/sync path to rebuild the plane, a CL that waits for missing state waits forever.

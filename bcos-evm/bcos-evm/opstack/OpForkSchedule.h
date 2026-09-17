@@ -4,6 +4,7 @@
 #include <evmc/evmc.hpp>
 
 #include <cstdint>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -138,10 +139,13 @@ public:
     /// converts through bcos-framework/engine/OpTime.h's unixSecondsFromInternalMillis
     /// (internal timestamps are milliseconds).
     [[nodiscard]] const OpForkConfig& configAt(uint64_t timestampSeconds) const;
-    /// Named Jovian/Karst activations (Q5 deposits-only). Classify new forks in the .cpp switch.
-    [[nodiscard]] std::vector<OpForkActivation> jovianAndLaterActivations() const;
+    /// Named Jovian/Karst activations (Q5 deposits-only). Classify new forks in the .cpp
+    /// switch. Computed once at construction; called per block on hot paths, so this is a
+    /// view over the cached list, not a fresh vector.
+    [[nodiscard]] std::span<const OpForkActivation> jovianAndLaterActivations() const;
 
 private:
     std::vector<OpForkActivation> m_activations;
+    std::vector<OpForkActivation> m_jovianAndLater;
 };
 }  // namespace bcos::evm::opstack

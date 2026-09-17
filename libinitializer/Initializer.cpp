@@ -742,10 +742,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                               << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
         m_engineServiceInitializer = EngineServiceInitializer::buildOp(
             m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
-            m_memPoolInitializer->memPool(), /*ledger=*/nullptr,
-            bcos::engine::c_defaultBlockTxCountLimit, opDelegate,
-            /*maxEngineVersion=*/static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4), m_daCaps,
-            /*allowSynthesizedL1Attributes=*/false, opEip1559);
+            m_memPoolInitializer->memPool(), bcos::engine::c_defaultBlockTxCountLimit, opDelegate,
+            m_daCaps, /*allowSynthesizedL1Attributes=*/false, opEip1559);
 
         m_opScheduler = opDelegate;
         // Republish the full ledger configuration after every OP commit. OP commits go
