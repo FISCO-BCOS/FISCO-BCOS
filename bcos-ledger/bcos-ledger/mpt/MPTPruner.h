@@ -29,11 +29,11 @@
 #include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/ledger/FeaturesStorage.h>
 #include <bcos-framework/storage/Entry.h>
-#include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/GenesisStateRoot.h>
 #include <bcos-storage/KeyPrefixes.h>
+#include <bcos-task/AwaitableValue.h>
 #include <bcos-task/TBBWait.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/BoostLog.h>
@@ -409,8 +409,17 @@ public:
             [this, &scanned, &garbage, &garbageDeleted, &progress, &progressMutex](
                 size_t shard) {
                 auto const startKey = [shard] {
+                    (void)shard;  // unused when shardCount == 1 (clang -Wunused-lambda-capture)
                     if constexpr (shardCount > 1)
                     {
+                        if (shard == 0)
+                        {
+                            // Shard 0 starts at the table's first key so it also visits
+                            // malformed rows with an empty/short key part (they sort before
+                            // every 32-byte key), keeping the warn-and-skip below reachable.
+                            return bcos::executor_v1::StateKey{
+                                bcos::storage2::kMPTTable, std::string_view{}};
+                        }
                         // The shard's span: row keys whose first hash byte is `shard`.
                         bcos::h256 startHash{};
                         startHash.data()[0] = static_cast<bcos::byte>(shard);
@@ -474,27 +483,30 @@ public:
                     chunk.push_back(bcos::ledger::mptNodeStateKey(hash));
                     if (chunk.size() >= SWEEP_DELETE_CHUNK)
                     {
-                        garbageDeleted.fetch_add(chunk.size(), std::memory_order_relaxed);
+                        // Release/acquire pairs on garbageDeleted keep the progress
+                        // snapshot's done <= total: a shard that acquire-loads a deleted
+                        // count also sees the garbage increments sequenced before it.
+                        garbageDeleted.fetch_add(chunk.size(), std::memory_order_release);
                         bcos::task::tbb::syncWait(
                             bcos::storage2::removeSome(*m_backend, std::move(chunk)));
                         chunk.clear();
                         if (progress)
                         {
                             std::lock_guard const lock{progressMutex};
-                            progress(garbageDeleted.load(std::memory_order_relaxed),
+                            progress(garbageDeleted.load(std::memory_order_acquire),
                                 garbage.load(std::memory_order_relaxed));
                         }
                     }
                 }
                 if (!chunk.empty())
                 {
-                    garbageDeleted.fetch_add(chunk.size(), std::memory_order_relaxed);
+                    garbageDeleted.fetch_add(chunk.size(), std::memory_order_release);
                     bcos::task::tbb::syncWait(
                         bcos::storage2::removeSome(*m_backend, std::move(chunk)));
                     if (progress)
                     {
                         std::lock_guard const lock{progressMutex};
-                        progress(garbageDeleted.load(std::memory_order_relaxed),
+                        progress(garbageDeleted.load(std::memory_order_acquire),
                             garbage.load(std::memory_order_relaxed));
                     }
                 }
@@ -961,7 +973,9 @@ private:
             {
                 // Collect and launch sub-batches while the window has room. onNode still runs
                 // on this thread at pop time, so its side effects (the phase's counts/visited
-                // set) stay single-threaded and exactly as ordered as the serial walk's.
+                // set) stay single-threaded. Their ORDER is NOT the serial walk's — batching
+                // pops siblings before the earlier entries' children are pushed (see the
+                // visit-order note above); both phases are order-independent by design.
                 while (!stack.empty() && inFlight < WALK_READ_WAYS)
                 {
                     auto& way = ways[tail];
