@@ -37,12 +37,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: FISCO-BCOS/op-stack-e2e-tests
-          ref: 9237740bd3ee923eba8e8e4abcbf93a1463aedfb
+          ref: b82691ac133a94637da9e6969a63f86279c6b0a2
           path: e2e-tests
       - name: Symlink the t8n corpus into in-tree paths
         run: ln -s "$GITHUB_WORKSPACE/e2e-tests/opstack-executor/tests/t8n" "$GITHUB_WORKSPACE/opstack-executor/tests/t8n"
       - name: Regenerate opstack t8n vectors (corpus + goldens + getpayload envelopes)
-        uses: FISCO-BCOS/op-stack-e2e-tests/.github/actions/opstack-t8n-regen@9237740bd3ee923eba8e8e4abcbf93a1463aedfb
+        uses: FISCO-BCOS/op-stack-e2e-tests/.github/actions/opstack-t8n-regen@b82691ac133a94637da9e6969a63f86279c6b0a2
       - name: Install toolchain (matches the coverage job's recipe)
         run: |
           sudo apt update
