@@ -23,6 +23,8 @@
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-utilities/Common.h>
 
+#include <cstddef>
+#include <mutex>
 #include <optional>
 #include <unordered_map>
 #include <vector>

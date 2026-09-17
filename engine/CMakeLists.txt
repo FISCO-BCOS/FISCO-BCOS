@@ -6,9 +6,9 @@
 project(bcos-engine VERSION ${VERSION})
 
 file(GLOB_RECURSE SRC_LIST "bcos-engine/*.cpp")
-# EngineServiceImpl.h is the class libinitializer/EngineServiceInitializer.h instantiates in
-# production (engine-driven modes); it is header-only today and its helpers live in
-# EngineServiceCommon.cpp. It ships in the installed header set (see below).
+# EngineServiceImpl.h is the legacy template, instantiated by tests only (EthLegacyEngine /
+# parity); production builds EthEngineService / OpEngineService. It is header-only today and
+# its helpers live in EngineServiceCommon.cpp. It ships in the installed header set (see below).
 
 add_library(engine ${SRC_LIST})
 target_include_directories(engine PUBLIC
@@ -50,11 +50,11 @@ endif()
 
 include(GNUInstallDirs)
 install(TARGETS engine EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
-# Installed production headers, including EngineServiceImpl.h — the class
-# libinitializer/EngineServiceInitializer.h builds today. Its EngineMPTStateRoot.h dependency
-# is installed alongside it (and that header's transaction-scheduler / bcos-storage includes
-# are installed by their own packages), so an external consumer can construct the engine
-# service the product actually runs.
+# Installed headers, including EngineServiceImpl.h — the legacy template, instantiated by
+# tests only (EthLegacyEngine / parity); production builds EthEngineService / OpEngineService.
+# Its EngineMPTStateRoot.h dependency is installed alongside it (and that header's
+# transaction-scheduler / bcos-storage includes are installed by their own packages), so an
+# external consumer can instantiate the legacy engine service in tests too.
 install(DIRECTORY "bcos-engine" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
     FILES_MATCHING
     PATTERN "EthEngineService.h"

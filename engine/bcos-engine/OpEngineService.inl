@@ -1190,9 +1190,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
     // The announced header projects the payload per fork (pre-Canyon: absent → the seal's
     // present-zero sentinel; Canyon..Holocene: empty-trie root; Isthmus+: the payload's own
     // root) — the same presence-insensitive comparison the scheduler's verify arm makes
-    // (OpScheduler.h:712-717). Comparing the raw wire optional collapsed "absent" to zero,
-    // which can never equal the Canyon empty-trie seal and rejected every real CL payload
-    // in the Canyon..Holocene window (F-B2-1).
+    // (OpScheduler::coExecuteBlock's withdrawalsRoot comparison). Comparing the raw wire
+    // optional collapsed "absent" to zero, which can never equal the Canyon empty-trie seal
+    // and rejected every real CL payload in the Canyon..Holocene window (F-B2-1).
     if (executedHeader->withdrawalsRoot().value_or(bcos::h256{}) !=
         ethHeader->withdrawalsRoot().value_or(bcos::h256{}))
     {
@@ -1716,8 +1716,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::canonicaliz
                 // walks a chain that was imported but never pinned) has no body rows yet,
                 // so the by-number row staged above would list tx hashes with no
                 // resolvable body and ledger::getBlockData's batch get would fail the
-                // canonical block. Stage them per height, mirroring the forward branch
-                // (:1851-1868) and the head step (3) below.
+                // canonical block. Stage them per height, mirroring the trim loop in
+                // canonicalizeImportedHead, canonicalizeImportedHead's forward branch,
+                // and the head step (3) below.
                 for (std::size_t j = 0; j < block.encodedTxs.size(); ++j)
                 {
                     bcos::storage::Entry txEntry;

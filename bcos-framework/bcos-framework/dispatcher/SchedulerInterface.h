@@ -106,11 +106,11 @@ public:
     // S5 OP lane only (OpEngineService::newPayload): execute @p block on the parent
     // block's post-state WITHOUT any canonical-table write (no NUMBER_2_HASH / no
     // SYS_CURRENT_STATE / no prewriteBlockToBuffer / no pending slot).
-    // @p parentDeltas are the ImportedStore per-block storage deltas from genesis to
-    // the parent, ordered genesis-side FIRST, type-erased as shared_ptr<void> across
-    // this boundary (the real scheduler casts to its own MultiLayerStorage mutable
-    // type; empty = parent is canonical). Receipts are attached to @p block; the
-    // block's own storage delta returns type-erased for the caller's ImportedStore.
+    // @p parentFlat is the parent block's materialized post-state, type-erased as
+    // shared_ptr<void> across this boundary (the real scheduler casts to its own
+    // MultiLayerStorage mutable type; null = parent is the canonical tip). Receipts
+    // are attached to @p block; the block's own storage delta returns type-erased
+    // for the caller's ImportedStore.
     // S6 OP lane only (after the engine's SetCanonical merged an imported chain):
     // watermarks (lastCommitted / lastExecuted) move to @p number so the scheduler's
     // continuity view agrees with the new canonical tip. Default: no-op (Eth).
