@@ -13,6 +13,7 @@
 
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-framework/engine/OpForkId.h>
+#include <bcos-framework/engine/OpTime.h>
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
@@ -163,8 +164,9 @@ public:
     /// attributes on the child (derive/l1_block_info.go, derive/attributes.go).
     [[nodiscard]] bool isJovianOrLaterAt(int64_t internalTimestampMs) const noexcept
     {
-        return static_cast<int>(m_schedule->forkAt(detail::forkTimestampSec(
-                   internalTimestampMs))) >= static_cast<int>(bcos::evm::opstack::OpFork::Jovian);
+        return static_cast<int>(m_schedule->forkAt(bcos::engine::unixSecondsFromInternalMillis(
+                   static_cast<uint64_t>(internalTimestampMs)))) >=
+               static_cast<int>(bcos::evm::opstack::OpFork::Jovian);
     }
 
     /// Karst semantics for a block whose internal (millisecond) timestamp is
@@ -172,8 +174,9 @@ public:
     /// the engine's getPayload method-version gate (V5 is Karst-only, V4 is pre-Karst).
     [[nodiscard]] bool isKarstActive(int64_t internalTimestampMs) const noexcept
     {
-        return static_cast<int>(m_schedule->forkAt(detail::forkTimestampSec(
-                   internalTimestampMs))) >= static_cast<int>(bcos::evm::opstack::OpFork::Karst);
+        return static_cast<int>(m_schedule->forkAt(bcos::engine::unixSecondsFromInternalMillis(
+                   static_cast<uint64_t>(internalTimestampMs)))) >=
+               static_cast<int>(bcos::evm::opstack::OpFork::Karst);
     }
 
     /// `timestampSeconds` is Unix seconds. Callers must convert payload/header internal
@@ -224,9 +227,8 @@ public:
         int64_t l2InternalTimestampMs, int64_t parentInternalTimestampMs) const
     {
         refuseUnsetSynthesisInputs();
-        const bool jovianLayout =
-            isJovianOrLaterAt(l2InternalTimestampMs) &&
-            isJovianOrLaterAt(parentInternalTimestampMs);
+        const bool jovianLayout = isJovianOrLaterAt(l2InternalTimestampMs) &&
+                                  isJovianOrLaterAt(parentInternalTimestampMs);
         return bcos::evm::opstack::synthesizeL1AttributesDeposit(m_l1BlockInfo, jovianLayout);
     }
 

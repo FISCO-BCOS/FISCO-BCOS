@@ -150,7 +150,8 @@ private:
 /// (consensus/misc/eip1559/eip1559.go CalcBaseFee), while the L1-attributes calldata layout
 /// and the Jovian payload attributes key on the CHILD's (op-node derive/l1_block_info.go,
 /// derive/attributes.go). Every caller in this tree converts through
-/// opstack-executor/OpCommon.h's forkTimestampSec (internal timestamps are milliseconds).
+/// bcos-framework/engine/OpTime.h's unixSecondsFromInternalMillis (internal timestamps are
+/// milliseconds).
 const OpForkConfig& configAt(
     const bcos::ledger::OpForkSchedule& schedule, uint64_t timestampSec) noexcept;
 }  // namespace bcos::evm::opstack

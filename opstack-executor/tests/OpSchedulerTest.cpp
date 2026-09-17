@@ -609,7 +609,8 @@ bcos::evm::engine::OpExecuteBlockResult runExecutionProbe(Fixture& f, ViewType& 
 {
     namespace op = bcos::evm::opstack;
     namespace detail = bcos::evm::engine::detail;
-    const auto& cfg = op::configAt(f.forkSchedule, detail::forkTimestampSec(header.timestamp()));
+    const auto& cfg = op::configAt(f.forkSchedule,
+        bcos::engine::unixSecondsFromInternalMillis(static_cast<uint64_t>(header.timestamp())));
     // Build block-order transactions first (mirroring buildOpBlock: opEnvelopeToTars + full
     // envelope overwrite).
     std::vector<bcos::protocol::Transaction::ConstPtr> transactions;
