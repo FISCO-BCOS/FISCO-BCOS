@@ -29,6 +29,7 @@
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
+#include <limits>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -333,6 +334,45 @@ BOOST_AUTO_TEST_CASE(pickRewardPercentilesTruncatesThresholdLikeOpGeth)
     auto rewards = pickRewardPercentiles(samples, std::vector<double>{50.0}, 101);
     BOOST_REQUIRE_EQUAL(rewards.size(), 1);
     BOOST_CHECK_EQUAL(rewards[0], 1);
+}
+
+/// F29 regression: the endpoint passes a numeric newest through unclamped (util.cpp rejects
+/// only values above INT64_MAX), so 0x7fffffffffffffff is a legal input. buildFeeHistory must
+/// fold it down to the chain head (geth's resolveBlockRange) instead of overflowing
+/// newestBlock + 1 (UBSan: signed integer overflow) and walking the wrapped value: an
+/// 8-block ledger has head 7, so the clamped newest gives oldest = 7 + 1 - 2 = 6 — a bounded
+/// two-block window, not the wrap-around 2^63 - 2.
+BOOST_AUTO_TEST_CASE(buildFeeHistoryNewestInt64MaxDoesNotOverflow)
+{
+    auto suite =
+        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
+            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
+    auto blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(suite,
+        std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(suite),
+        std::make_shared<bcostars::protocol::TransactionFactoryImpl>(suite),
+        std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(suite));
+    auto ledger = std::make_shared<bcos::test::FakeLedger>(blockFactory, /*blocks=*/8, 0, 0);
+
+    auto result = bcos::task::syncWait(buildFeeHistory(*ledger,
+        /*newestBlock=*/std::numeric_limits<bcos::protocol::BlockNumber>::max(),
+        /*blockCount=*/2, /*rewardPercentiles=*/{}, /*opStackMode=*/false));
+    BOOST_CHECK_EQUAL(result["oldestBlock"].asString(), toQuantity(bcos::u256(6)));
+    BOOST_CHECK_EQUAL(result["baseFeePerGas"].size(), 3U);  // 2 clamped blocks + trailing fee
+    BOOST_CHECK_EQUAL(result["gasUsedRatio"].size(), 2U);
+}
+
+/// F30 regression: a malformed header saturates to blockGasUsed = UINT64_MAX (the same
+/// saturation buildFeeHistory applies), and a 100% percentile rounds the double threshold
+/// product up to 2^64 — exactly where the uint64 cast was UB (UBSan: 1.84467e+19 outside the
+/// range of representable values). The threshold must clamp to UINT64_MAX without crashing,
+/// and the end() clamp keeps the answer benign: the last (highest-tip) sample.
+BOOST_AUTO_TEST_CASE(pickRewardPercentilesThresholdSaturationClamps)
+{
+    std::vector<GasWeightedPriorityFee> samples{{1, 10}, {9, 10}};
+    auto rewards = pickRewardPercentiles(
+        samples, std::vector<double>{100.0}, std::numeric_limits<std::uint64_t>::max());
+    BOOST_REQUIRE_EQUAL(rewards.size(), 1);
+    BOOST_CHECK_EQUAL(rewards[0], 9);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

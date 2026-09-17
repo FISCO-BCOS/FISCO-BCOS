@@ -152,39 +152,12 @@ std::tuple<bool, CallRequest> rpc::decodeCallRequest(Json::Value const& _root)
     return {true, std::move(_request)};
 }
 
-void rpc::clampEstimateGasField(Json::Value& txObject)
-{
-    auto const cap = static_cast<uint64_t>(protocol::MAX_TX_GAS_LIMIT);
-    bool present = txObject.isMember("gas") && !txObject["gas"].isNull();
-    uint64_t gas = 0;
-    if (present)
-    {
-        auto const& g = txObject["gas"];
-        if (g.isString())
-        {
-            gas = fromQuantity(g.asString());
-        }
-        else if (g.isUInt64() || g.isUInt())
-        {
-            gas = g.asUInt64();
-        }
-        else
-        {
-            present = false;
-        }
-    }
-    if (!present || gas == 0 || gas > cap)
-    {
-        txObject["gas"] = toQuantity(cap);
-    }
-}
-
 void rpc::clampExplicitEstimateGasField(Json::Value& txObject)
 {
-    // Merge-arm variant for eth_estimateGas: caps an EXPLICIT non-zero gas to EIP-7825
-    // MAX_TX_GAS_LIMIT, but — unlike clampEstimateGasField — never back-fills an omitted
-    // or zero field: the estimate arm must size those from the target block's header and
-    // refuse when the header is unreadable (EthEndpoint::call's fail-closed contract).
+    // The only estimate-gas clamp: caps an EXPLICIT non-zero gas to EIP-7825
+    // MAX_TX_GAS_LIMIT but never back-fills an omitted or zero field: the estimate arm must
+    // size those from the target block's header and refuse when the header is unreadable
+    // (EthEndpoint::call's fail-closed contract).
     auto const cap = static_cast<uint64_t>(protocol::MAX_TX_GAS_LIMIT);
     bool present = txObject.isMember("gas") && !txObject["gas"].isNull();
     uint64_t gas = 0;

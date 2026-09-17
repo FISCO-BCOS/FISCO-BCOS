@@ -257,9 +257,17 @@ std::vector<bcos::u256> bcos::rpc::pickRewardPercentiles(
         // 100)); comparing the raw double would advance one sample further whenever a prefix sum
         // lands exactly on the truncated value. The threshold basis is the block header's
         // gasUsed — the same field the citation names — while the weights are the per-receipt
-        // gasUsed sums; the two coincide on every well-formed block.
+        // gasUsed sums; the two coincide on every well-formed block. A saturated malformed
+        // header (gasUsed = UINT64_MAX, the same saturation buildFeeHistory feeds here) near
+        // the 100% percentile rounds the double product up to 2^64, where the cast itself is
+        // UB: compare before casting and pin the threshold at UINT64_MAX. Every in-range
+        // double casts exactly as before, and the end() clamp below already makes a saturated
+        // threshold pick the last sample.
+        auto const scaled = static_cast<double>(blockGasUsed) * percentile / 100.0;
         auto const threshold =
-            static_cast<std::uint64_t>(static_cast<double>(blockGasUsed) * percentile / 100.0);
+            scaled < static_cast<double>(std::numeric_limits<std::uint64_t>::max()) ?
+                static_cast<std::uint64_t>(scaled) :
+                std::numeric_limits<std::uint64_t>::max();
         auto const boundary =
             std::lower_bound(cumulativeGas.begin(), cumulativeGas.end(), threshold);
         auto const index = boundary == cumulativeGas.end() ?
@@ -299,8 +307,21 @@ bcos::task::Task<Json::Value> bcos::rpc::buildFeeHistory(bcos::ledger::LedgerInt
             InvalidParams, "eth_feeHistory: blockCount over the query limit 1024"));
     }
 
+    // geth's resolveBlockRange folds a newest past the chain head down to the head instead of
+    // erroring on the first missing block. The endpoint passes numeric quantities through
+    // unclamped (util.cpp rejects only values above INT64_MAX), so 0x7fffffffffffffff reaches
+    // this function verbatim, where the naive newestBlock + 1 below was signed-overflow UB
+    // (UBSan-observed) that wrapped the block walk backwards. Reading the head here also
+    // bounds the loop below to blocks the ledger can actually serve.
+    auto const newest = (std::min)(newestBlock, co_await ledger::getCurrentBlockNumber(ledger));
+    // newest + 1 - blockCount computed in the uint64 domain: the signed expression would still
+    // overflow if a ledger ever reported an INT64_MAX head. uint64 arithmetic is exact while
+    // the true value is non-negative; an underflow converts back to a negative BlockNumber
+    // that the max() folds to 0 exactly as before, so the result always stays within
+    // [0, newest].
     auto const oldestBlock = static_cast<bcos::protocol::BlockNumber>(
-        (std::max)(static_cast<bcos::protocol::BlockNumber>(newestBlock + 1 - blockCount),
+        (std::max)(static_cast<bcos::protocol::BlockNumber>(static_cast<std::uint64_t>(newest) +
+                       1U - static_cast<std::uint64_t>(blockCount)),
             bcos::protocol::BlockNumber{0}));
 
     Json::Value result(Json::objectValue);
@@ -311,7 +332,7 @@ bcos::task::Task<Json::Value> bcos::rpc::buildFeeHistory(bcos::ledger::LedgerInt
     Json::Value rewards(Json::arrayValue);
 
     std::shared_ptr<bcos::protocol::BlockHeader> lastHeader;
-    for (auto number = oldestBlock; number <= newestBlock; ++number)
+    for (auto number = oldestBlock; number <= newest; ++number)
     {
         auto const block = co_await ledger::getBlockData(ledger, number,
             bcos::ledger::HEADER |

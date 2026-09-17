@@ -6,7 +6,6 @@
 #include "bcos-rpc/web3jsonrpc/model/CallRequest.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
-#include "bcos-framework/protocol/TxGasModel.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-utilities/DataConvertUtility.h"
 
@@ -285,24 +284,6 @@ BOOST_AUTO_TEST_CASE(estimateGasGasCapComesOnlyFromTheParentHeader)
     auto const explicitZero =
         zeroRequest.takeToTransaction(txFactory, std::nullopt, uint64_t{30'000'000});
     BOOST_CHECK_EQUAL(explicitZero->gasLimit(), 30'000'000);
-}
-
-// Merged from feat/karst-on-318-merged: eth_estimateGas EIP-7825 clamp contract.
-BOOST_AUTO_TEST_CASE(clampEstimateGasCapsOverEip7825)
-{
-    Json::Value tx(Json::objectValue);
-    tx["gas"] = toQuantity(static_cast<uint64_t>(protocol::MAX_TX_GAS_LIMIT) + 1);
-    clampEstimateGasField(tx);
-    BOOST_CHECK_EQUAL(
-        fromQuantity(tx["gas"].asString()), static_cast<uint64_t>(protocol::MAX_TX_GAS_LIMIT));
-}
-
-BOOST_AUTO_TEST_CASE(clampEstimateGasFillsOmittedGas)
-{
-    Json::Value tx(Json::objectValue);
-    clampEstimateGasField(tx);
-    BOOST_CHECK_EQUAL(
-        fromQuantity(tx["gas"].asString()), static_cast<uint64_t>(protocol::MAX_TX_GAS_LIMIT));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
