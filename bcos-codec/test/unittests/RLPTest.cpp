@@ -19,12 +19,17 @@
  */
 
 #include <bcos-codec/rlp/Common.h>
+#include <bcos-codec/rlp/Exceptions.h>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
+#include <bcos-codec/rlp/Result.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
+#include <boost/throw_exception.hpp>
+#include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 
@@ -65,19 +70,28 @@ static T decode(std::string_view hex, int32_t expectedErrorCode = -1)
     bcos::bytes bytes = fromHex(hex);
     auto bytesRef = bcos::ref(bytes);
     T result{};
-    auto&& error = bcos::codec::rlp::decode(bytesRef, result);
     // expectedErrorCode < 0 means "expect success"; note DecodingError::Overflow
     // is enum value 0, so 0 must mean "expect Overflow" (not success).
     if (expectedErrorCode < 0)
     {
-        BOOST_CHECK(!error);
+        bcos::codec::rlp::decode(bytesRef, result);
     }
     else
     {
-        // A regression where decode fails but error is null would be a null deref below — assert
-        // the error exists first so the failure is readable, not a UB crash.
-        BOOST_REQUIRE(error);
-        BOOST_CHECK_EQUAL(error->errorCode(), expectedErrorCode);
+        // decode now throws; the former errorCode() travels in errinfo_rlpErrorCode.
+        try
+        {
+            bcos::codec::rlp::decode(bytesRef, result);
+            BOOST_FAIL("expected RlpDecodeException with code " << expectedErrorCode);
+        }
+        catch (bcos::codec::rlp::RlpDecodeException const& e)
+        {
+            auto const* code = boost::get_error_info<bcos::codec::rlp::errinfo_rlpErrorCode>(e);
+            // A thrown exception without the code info would abort obscurely below — REQUIRE
+            // first so the failure is readable, not a null deref.
+            BOOST_REQUIRE(code != nullptr);
+            BOOST_CHECK_EQUAL(*code, expectedErrorCode);
+        }
     }
     return result;
 }
@@ -89,27 +103,34 @@ static std::tuple<T, T2> decode(std::string_view hex, int32_t expectedErrorCode 
     auto bytesRef = bcos::ref(bytes);
     T r1{};
     T2 r2{};
-    auto&& error = bcos::codec::rlp::decode(bytesRef, r1, r2);
     // expectedErrorCode < 0 means "expect success"; see the single-arg helper.
     if (expectedErrorCode < 0)
     {
-        BOOST_CHECK(!error);
+        bcos::codec::rlp::decode(bytesRef, r1, r2);
     }
     else
     {
-        BOOST_REQUIRE(error);
-        BOOST_CHECK_EQUAL(error->errorCode(), expectedErrorCode);
+        try
+        {
+            bcos::codec::rlp::decode(bytesRef, r1, r2);
+            BOOST_FAIL("expected RlpDecodeException with code " << expectedErrorCode);
+        }
+        catch (bcos::codec::rlp::RlpDecodeException const& e)
+        {
+            auto const* code = boost::get_error_info<bcos::codec::rlp::errinfo_rlpErrorCode>(e);
+            BOOST_REQUIRE(code != nullptr);
+            BOOST_CHECK_EQUAL(*code, expectedErrorCode);
+        }
     }
     return {std::move(r1), std::move(r2)};
 }
 
 template <typename T, typename T2, typename... Args>
-static bcos::Error::UniquePtr decode(std::string_view hex, T& r1, T2& r2, Args&... r3)
+static void decode(std::string_view hex, T& r1, T2& r2, Args&... r3)
 {
     bcos::bytes bytes = fromHex(hex);
     auto bytesRef = bcos::ref(bytes);
-    auto&& error = bcos::codec::rlp::decode(bytesRef, r1, r2, r3...);
-    return error;
+    bcos::codec::rlp::decode(bytesRef, r1, r2, r3...);
 }
 
 // template <typename T, typename T2, typename... Args>
@@ -304,8 +325,7 @@ BOOST_AUTO_TEST_CASE(vectorsDecode)
         std::string zw;
         std::vector<uint64_t> v;
         uint16_t one;
-        auto error = decode("c6827a77c10401"sv, zw, v, one);
-        BOOST_CHECK(!error);
+        decode("c6827a77c10401"sv, zw, v, one);
         BOOST_CHECK_EQUAL(zw, "zw");
         BOOST_CHECK_EQUAL(v.size(), 1u);
         BOOST_CHECK_EQUAL(v[0], 4u);
@@ -315,8 +335,7 @@ BOOST_AUTO_TEST_CASE(vectorsDecode)
     {
         std::vector<std::vector<std::string>> a;
         std::vector<uint64_t> b;
-        auto error = decode("c4c2c0c0c0"sv, a, b);
-        BOOST_CHECK(!error);
+        decode("c4c2c0c0c0"sv, a, b);
         BOOST_CHECK_EQUAL(a.size(), 2u);
         BOOST_CHECK_EQUAL(a[0].size(), 0u);
         BOOST_CHECK_EQUAL(a[1].size(), 0u);
@@ -327,8 +346,7 @@ BOOST_AUTO_TEST_CASE(vectorsDecode)
         std::vector<uint64_t> b;
         std::vector<std::vector<std::string>> a2;
         std::vector<std::vector<std::vector<std::string>>> a3;
-        auto error = decode("c7c0c1c0c3c0c1c0"sv, b, a2, a3);
-        BOOST_CHECK(!error);
+        decode("c7c0c1c0c3c0c1c0"sv, b, a2, a3);
         BOOST_CHECK_EQUAL(a2.size(), 1u);
         BOOST_CHECK_EQUAL(a2[0].size(), 0u);
         BOOST_CHECK_EQUAL(a3.size(), 2u);
@@ -345,59 +363,169 @@ BOOST_AUTO_TEST_CASE(vectorsDecode)
 // the error so a missing error aborts cleanly instead of dereferencing null.
 BOOST_AUTO_TEST_CASE(decodeRejectsMalformedInputs)
 {
-    auto decodeErr = [](std::string_view hex, auto& out) {
+    // std::nullopt means "decoded without error"; a value is the former DecodingError code
+    // extracted from the thrown RlpDecodeException.
+    auto decodeErr = [](std::string_view hex, auto& out) -> std::optional<int32_t> {
         bcos::bytes buffer = fromHex(hex);
         auto view = bcos::ref(buffer);
-        return bcos::codec::rlp::decode(view, out);
+        try
+        {
+            bcos::codec::rlp::decode(view, out);
+            return std::nullopt;
+        }
+        catch (bcos::codec::rlp::RlpDecodeException const& e)
+        {
+            auto const* code = boost::get_error_info<bcos::codec::rlp::errinfo_rlpErrorCode>(e);
+            if (code == nullptr)
+            {
+                throw;  // exception without the code info: fail loudly, don't mask it
+            }
+            return *code;
+        }
     };
 
     {  // empty buffer: nothing to read
         uint64_t value{};
         auto err = decodeErr(""sv, value);
         BOOST_REQUIRE(err);
-        BOOST_CHECK_EQUAL(err->errorCode(), InputTooShort);
+        BOOST_CHECK_EQUAL(*err, InputTooShort);
     }
     {  // short-string header claims one content byte but none follows
         std::string str;
         auto err = decodeErr("81"sv, str);
         BOOST_REQUIRE(err);
-        BOOST_CHECK_EQUAL(err->errorCode(), InputTooShort);
+        BOOST_CHECK_EQUAL(*err, InputTooShort);
     }
     {  // long-string header (0xb8) announces 56 bytes but the payload is missing
         std::string str;
         auto err = decodeErr("b838"sv, str);
         BOOST_REQUIRE(err);
-        BOOST_CHECK_EQUAL(err->errorCode(), InputTooShort);
+        BOOST_CHECK_EQUAL(*err, InputTooShort);
     }
     {  // a byte < 0x80 wrapped in a 1-byte string is a non-canonical encoding
         std::string str;
         auto err = decodeErr("8100"sv, str);
         BOOST_REQUIRE(err);
-        BOOST_CHECK_EQUAL(err->errorCode(), NonCanonicalSize);
+        BOOST_CHECK_EQUAL(*err, NonCanonicalSize);
     }
     {  // a list where a scalar is expected
         uint64_t value{};
         auto err = decodeErr("c0"sv, value);
         BOOST_REQUIRE(err);
-        BOOST_CHECK_EQUAL(err->errorCode(), UnexpectedList);
+        BOOST_CHECK_EQUAL(*err, UnexpectedList);
     }
     {  // a FixedBytes target with a payload shorter than its fixed size: must be rejected
         // (previously right-aligned/zero-padded silently, which would re-encode differently)
         bcos::h256 value{};
         auto err = decodeErr("9e" + std::string(60, '1'), value);  // 30-byte payload
         BOOST_REQUIRE(err);
-        BOOST_CHECK_EQUAL(err->errorCode(), UnexpectedLength);
+        BOOST_CHECK_EQUAL(*err, UnexpectedLength);
     }
     {  // a FixedBytes target with a payload longer than its fixed size: must be rejected
         bcos::h256 value{};
         auto err = decodeErr("a1" + std::string(66, '1'), value);  // 33-byte payload
         BOOST_REQUIRE(err);
-        BOOST_CHECK_EQUAL(err->errorCode(), UnexpectedLength);
+        BOOST_CHECK_EQUAL(*err, UnexpectedLength);
     }
     {  // a FixedBytes<32> target with an exactly-32-byte payload still decodes fine
         bcos::h256 value{};
         auto err = decodeErr("a0" + std::string(64, '1'), value);  // 32-byte payload
         BOOST_REQUIRE(!err);
+    }
+}
+
+// The non-throwing cores (tryDecodeHeader / tryDecode / decodeExact) are the single home of
+// the canonical rules for the hot ingress paths — pin that they reject the same malformed
+// inputs the throwing wrappers above reject, with the same codes, so a divergence between
+// decode() and tryDecode() is caught here instead of silently reaching devp2p.
+BOOST_AUTO_TEST_CASE(nonThrowingCoresRejectSameMalformedInputs)
+{
+    struct Uint64Vector
+    {
+        std::string_view hex;
+        DecodingError code;
+    };
+    constexpr Uint64Vector uint64Vectors[] = {
+        {""sv, InputTooShort},         // empty buffer: nothing to read
+        {"81"sv, InputTooShort},       // header claims one content byte but none follows
+        {"b838"sv, InputTooShort},     // long-string header announces 56 bytes, none follows
+        {"8100"sv, NonCanonicalSize},  // a byte < 0x80 wrapped in a 1-byte string
+        {"c0"sv, UnexpectedList},      // a list where a scalar is expected
+    };
+    for (auto const& v : uint64Vectors)
+    {
+        bcos::bytes buffer = fromHex(v.hex);
+        auto view = bcos::ref(buffer);
+        uint64_t value{};
+        auto result = tryDecode(view, value);
+        BOOST_REQUIRE(!result);
+        BOOST_CHECK_EQUAL(result.error().code, static_cast<int32_t>(v.code));
+    }
+
+    struct FixedBytesVector
+    {
+        std::string hex;
+        DecodingError code;
+    };
+    FixedBytesVector const fixedBytesVectors[] = {
+        {"9e" + std::string(60, '1'), UnexpectedLength},  // 30-byte payload for h256
+        {"a1" + std::string(66, '1'), UnexpectedLength},  // 33-byte payload for h256
+    };
+    for (auto const& v : fixedBytesVectors)
+    {
+        bcos::bytes buffer = fromHex(v.hex);
+        auto view = bcos::ref(buffer);
+        bcos::h256 value{};
+        auto result = tryDecode(view, value);
+        BOOST_REQUIRE(!result);
+        BOOST_CHECK_EQUAL(result.error().code, static_cast<int32_t>(v.code));
+    }
+    {  // canonical input still round-trips through the core and consumes the whole view
+        bcos::bytes buffer = fromHex("a0" + std::string(64, '1'));
+        auto view = bcos::ref(buffer);
+        bcos::h256 value{};
+        auto result = tryDecode(view, value);
+        BOOST_REQUIRE(result);
+        BOOST_CHECK(view.empty());
+    }
+
+    // tryDecodeHeader on its own: empty input, and a long-form header whose length byte is
+    // missing entirely.
+    {
+        bcos::bytes buffer;
+        auto view = bcos::ref(buffer);
+        auto header = tryDecodeHeader(view);
+        BOOST_REQUIRE(!header);
+        BOOST_CHECK_EQUAL(header.error().code, static_cast<int32_t>(InputTooShort));
+    }
+    {
+        bcos::bytes buffer = fromHex("b8"sv);  // long-string form, length byte missing
+        auto view = bcos::ref(buffer);
+        auto header = tryDecodeHeader(view);
+        BOOST_REQUIRE(!header);
+        BOOST_CHECK_EQUAL(header.error().code, static_cast<int32_t>(InputTooShort));
+    }
+
+    // decodeExact: trailing bytes after the top-level item are rejected (geth
+    // ErrMoreThanOneValue semantics); the exact item alone succeeds.
+    {
+        bcos::bytes good = fromHex("01"sv);
+        uint64_t value{};
+        BOOST_REQUIRE_NO_THROW(decodeExact(bcos::ref(good), value));
+        BOOST_CHECK_EQUAL(value, 1);
+
+        bcos::bytes trailing = fromHex("0102"sv);
+        try
+        {
+            decodeExact(bcos::ref(trailing), value);
+            BOOST_FAIL("expected RlpDecodeException for trailing bytes");
+        }
+        catch (RlpDecodeException const& e)
+        {
+            auto const* code = boost::get_error_info<errinfo_rlpErrorCode>(e);
+            BOOST_REQUIRE(code != nullptr);
+            BOOST_CHECK_EQUAL(*code, static_cast<int32_t>(UnexpectedListElements));
+        }
     }
 }
 
@@ -408,10 +536,25 @@ BOOST_AUTO_TEST_CASE(decodeRejectsMalformedInputs)
 // and long-list header branches must enforce this (fixing only one is the classic failure mode).
 BOOST_AUTO_TEST_CASE(decodeRejectsNonCanonicalLengthPrefix)
 {
-    auto decodeErr = [](std::string_view hex, auto& out) {
+    // std::nullopt means "decoded without error"; a value is the former DecodingError code
+    // extracted from the thrown RlpDecodeException.
+    auto decodeErr = [](std::string_view hex, auto& out) -> std::optional<int32_t> {
         bcos::bytes buffer = fromHex(hex);
         auto view = bcos::ref(buffer);
-        return bcos::codec::rlp::decode(view, out);
+        try
+        {
+            bcos::codec::rlp::decode(view, out);
+            return std::nullopt;
+        }
+        catch (bcos::codec::rlp::RlpDecodeException const& e)
+        {
+            auto const* code = boost::get_error_info<bcos::codec::rlp::errinfo_rlpErrorCode>(e);
+            if (code == nullptr)
+            {
+                throw;  // exception without the code info: fail loudly, don't mask it
+            }
+            return *code;
+        }
     };
     // 60 bytes of 0xaa as a hex payload, and 60 canonical single-byte list items (each 0x01).
     std::string const payload60(120, 'a');    // "aa" * 60
@@ -422,7 +565,7 @@ BOOST_AUTO_TEST_CASE(decodeRejectsNonCanonicalLengthPrefix)
         std::string str;
         auto err = decodeErr("b9003c" + payload60, str);
         BOOST_REQUIRE(err);
-        BOOST_CHECK_EQUAL(err->errorCode(), NonCanonicalSize);
+        BOOST_CHECK_EQUAL(*err, NonCanonicalSize);
     }
     {  // canonical 60-byte string, single-byte length 0xb8 3c — MUST STILL DECODE.
         std::string str;
@@ -436,7 +579,7 @@ BOOST_AUTO_TEST_CASE(decodeRejectsNonCanonicalLengthPrefix)
         std::string str;
         auto err = decodeErr("b800"sv, str);
         BOOST_REQUIRE(err);
-        BOOST_CHECK_EQUAL(err->errorCode(), NonCanonicalSize);
+        BOOST_CHECK_EQUAL(*err, NonCanonicalSize);
     }
     {  // canonical 2-byte length that is NOT a leading zero (256-byte string, 0xb9 01 00) — the
        // length prefix's first byte is 0x01, so it must decode, proving we reject only leading
@@ -452,7 +595,7 @@ BOOST_AUTO_TEST_CASE(decodeRejectsNonCanonicalLengthPrefix)
         std::vector<uint64_t> items;
         auto err = decodeErr("f9003c" + listItems60, items);
         BOOST_REQUIRE(err);
-        BOOST_CHECK_EQUAL(err->errorCode(), NonCanonicalSize);
+        BOOST_CHECK_EQUAL(*err, NonCanonicalSize);
     }
     {  // canonical 60-byte list, single-byte length 0xf8 3c — MUST STILL DECODE (60 items).
         std::vector<uint64_t> items;
@@ -472,8 +615,20 @@ BOOST_AUTO_TEST_CASE(decodeRejectsNonCanonicalLengthPrefix)
         std::vector<uint64_t> items;
         auto err = decodeErr("f800"sv, items);
         BOOST_REQUIRE(err);
-        BOOST_CHECK_EQUAL(err->errorCode(), NonCanonicalSize);
+        BOOST_CHECK_EQUAL(*err, NonCanonicalSize);
     }
+}
+
+// Negative control for captureRlp's boost::exception arm: a BOOST_THROW_EXCEPTION'd
+// std::invalid_argument lands there as a boost::wrapexcept with no errinfo_comment, and the
+// adapter must fall back to what() rather than blanking the message into RlpError{-1, ""}.
+BOOST_AUTO_TEST_CASE(captureRlpRecoversWhatForBoostWrappedStdException)
+{
+    auto result =
+        captureRlp([] { BOOST_THROW_EXCEPTION(std::invalid_argument("hostile what()")); });
+    BOOST_REQUIRE(!result);
+    BOOST_CHECK_EQUAL(result.error().code, c_rlpGenericError);
+    BOOST_CHECK_EQUAL(result.error().message, "hostile what()");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

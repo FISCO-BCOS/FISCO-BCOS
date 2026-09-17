@@ -250,7 +250,10 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
         auto extraBytesRef =
             bcos::bytesRef(const_cast<byte*>(transaction.extraTransactionBytes().data()),
                 transaction.extraTransactionBytes().size());
-        codec::rlp::decodeFromPayload(extraBytesRef, web3Tx);
+        // The decode result is intentionally ignored (unchanged from the base behaviour):
+        // on undecodable extraTransactionBytes the fields decoded before the failure are
+        // emitted as-is.
+        (void)codec::rlp::tryDecodeFromPayload(extraBytesRef, web3Tx);
         jResp["value"] = web3Tx.value.str();
         jResp["gasLimit"] = web3Tx.gasLimit;
         if (web3Tx.type >= TransactionType::EIP1559)
@@ -1437,9 +1440,11 @@ void JsonRpcImpl_2_0::getGroupPeers(std::string_view _groupID, RespFunc _respFun
         Json::Value jResp(Json::arrayValue);
         if (error)
         {
+            // clang-format off
             RPC_IMPL_LOG(INFO)
                 << LOG_BADGE("getGroupPeers failed") << LOG_KV("code", error->errorCode())
                 << LOG_KV("message", error->errorMessage());
+            // clang-format on
             respFunc(error, jResp);
             co_return;
         }

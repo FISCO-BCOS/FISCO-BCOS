@@ -19,7 +19,10 @@
  */
 #include "Messages.h"
 
+#include "../RlpTake.h"
+#include "../Try.h"
 #include <bcos-codec/rlp/Common.h>
+#include <bcos-codec/rlp/Exceptions.h>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -28,6 +31,11 @@
 
 namespace bcos::devp2p::rlpx
 {
+using bcos::codec::rlp::RlpResult;
+using bcos::devp2p::detail::genericError;
+using bcos::devp2p::detail::take;
+using bcos::devp2p::detail::takeListPayload;
+
 namespace
 {
 // Encode a pre-built payload as an RLP item (list or string).
@@ -48,20 +56,6 @@ bcos::bytes encodeString(bytesConstRef _data)
     bcos::bytes out;
     bcos::codec::rlp::encode(out, _data);
     return out;
-}
-
-// Expects a list at `_view` and returns a view over its payload.
-bcos::bytesRef takeListPayload(bcos::bytesRef& _view)
-{
-    auto [error, header] = bcos::codec::rlp::decodeHeader(_view);
-    if (error || !header.isList)
-    {
-        throw std::runtime_error("rlpx: expected an RLP list");
-    }
-    bcos::bytesRef payload(_view.data(), header.payloadLength);
-    _view =
-        bcos::bytesRef(_view.data() + header.payloadLength, _view.size() - header.payloadLength);
-    return payload;
 }
 }  // namespace
 
@@ -95,58 +89,33 @@ bcos::bytes encodeHello(HelloMessage const& _msg)
     return out;
 }
 
-HelloMessage decodeHello(bytesConstRef _data)
+RlpResult<HelloMessage> decodeHello(bytesConstRef _data)
 {
     HelloMessage msg;
     bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
-    auto items = takeListPayload(view);
+    RLP_TRY(auto items, takeListPayload(view, "rlpx: expected an RLP list"));
 
-    uint64_t version = 0;
-    if (auto err = bcos::codec::rlp::decode(items, version))
-    {
-        throw std::runtime_error("decodeHello: version decode failed");
-    }
-    msg.version = version;
-
-    if (auto err = bcos::codec::rlp::decode(items, msg.clientId))
-    {
-        throw std::runtime_error("decodeHello: clientId decode failed");
-    }
+    RLP_TRY(msg.version, take<uint64_t>(items));
+    RLP_TRY(msg.clientId, take<std::string>(items));
 
     // caps list
-    auto capsPayload = takeListPayload(items);
+    RLP_TRY(auto capsPayload, takeListPayload(items, "rlpx: expected an RLP list"));
     while (!capsPayload.empty())
     {
-        auto capItems = takeListPayload(capsPayload);
+        RLP_TRY(auto capItems, takeListPayload(capsPayload, "rlpx: expected an RLP list"));
         Capability cap;
-        if (auto err = bcos::codec::rlp::decode(capItems, cap.name))
-        {
-            throw std::runtime_error("decodeHello: cap name decode failed");
-        }
-        uint64_t capVersion = 0;
-        if (auto err = bcos::codec::rlp::decode(capItems, capVersion))
-        {
-            throw std::runtime_error("decodeHello: cap version decode failed");
-        }
+        RLP_TRY(cap.name, take<std::string>(capItems));
+        RLP_TRY(auto capVersion, take<uint64_t>(capItems));
         if (capVersion > 0xff)
         {
-            throw std::runtime_error("decodeHello: capability version out of range");
+            return std::unexpected(genericError("decodeHello: capability version out of range"));
         }
         cap.version = static_cast<uint8_t>(capVersion);
         msg.capabilities.push_back(std::move(cap));
     }
 
-    uint64_t listenPort = 0;
-    if (auto err = bcos::codec::rlp::decode(items, listenPort))
-    {
-        throw std::runtime_error("decodeHello: listenPort decode failed");
-    }
-    msg.listenPort = listenPort;
-
-    if (auto err = bcos::codec::rlp::decode(items, msg.id))
-    {
-        throw std::runtime_error("decodeHello: id decode failed");
-    }
+    RLP_TRY(msg.listenPort, take<uint64_t>(items));
+    RLP_TRY(msg.id, take<bcos::bytes>(items));
     return msg;
 }
 
@@ -160,32 +129,55 @@ bcos::bytes encodeDisconnect(DisconnectMessage const& _msg)
     return out;
 }
 
-DisconnectMessage decodeDisconnect(bytesConstRef _data)
+RlpResult<DisconnectMessage> decodeDisconnect(bytesConstRef _data)
 {
     DisconnectMessage msg;
     // Wire format varies by client: geth/erigon send the EIP-8 list form [reason],
     // while some clients (e.g. ethrex) send a bare integer. Accept both.
     {
         bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
-        std::vector<uint64_t> reasons;
-        if (auto err = bcos::codec::rlp::decode(view, reasons); err == nullptr)
+        auto items = takeListPayload(view, "rlpx: expected an RLP list");
+        if (items)
         {
-            msg.reason = reasons.empty() ? DisconnectReason::DisconnectRequested :
-                                           static_cast<DisconnectReason>(reasons[0]);
-            return msg;
+            // The reason is the first element; the list form applies only if every
+            // remaining element also decodes as an integer. A failing take can consume
+            // the remainder before it fails (tryDecodeHeader advances past the prefix
+            // and length bytes before its bound check), so any take failure must reject
+            // the list form outright — checking items->empty() alone is not enough.
+            std::vector<uint64_t> values;
+            bool allIntegers = true;
+            while (allIntegers && !items->empty())
+            {
+                if (auto value = take<uint64_t>(*items))
+                {
+                    values.push_back(*value);
+                }
+                else
+                {
+                    allIntegers = false;
+                }
+            }
+            if (allIntegers)
+            {
+                msg.reason = values.empty() ? DisconnectReason::DisconnectRequested :
+                                              static_cast<DisconnectReason>(values.front());
+                return msg;
+            }
         }
     }
+    // Not the list form; fall back to the bare-integer form.
     {
         bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
-        uint64_t reason = 0;
-        if (auto err = bcos::codec::rlp::decode(view, reason); err == nullptr)
+        auto reason = take<uint64_t>(view);
+        if (reason)
         {
-            msg.reason = static_cast<DisconnectReason>(reason);
+            msg.reason = static_cast<DisconnectReason>(*reason);
             return msg;
         }
     }
-    throw std::runtime_error("decodeDisconnect: reason decode failed payload=" +
-                             bcos::toHexStringWithPrefix(bcos::bytes(_data.begin(), _data.end())));
+    return std::unexpected(
+        genericError("decodeDisconnect: reason decode failed payload=" +
+                     bcos::toHexStringWithPrefix(bcos::bytes(_data.begin(), _data.end()))));
 }
 
 bcos::bytes encodePing()

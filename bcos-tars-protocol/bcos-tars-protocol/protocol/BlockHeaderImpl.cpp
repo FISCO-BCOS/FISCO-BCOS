@@ -29,6 +29,7 @@
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-utilities/BoostLog.h>
 #include <boost/endian/conversion.hpp>
 #include <boost/lexical_cast.hpp>
 #include <cstring>
@@ -36,7 +37,6 @@
 #include <range/v3/view/any_view.hpp>
 #include <range/v3/view/transform.hpp>
 #include <stdexcept>
-#include <bcos-utilities/BoostLog.h>
 
 DERIVE_BCOS_EXCEPTION(EmptyBlockHeaderHash);
 
@@ -79,12 +79,27 @@ void bcostars::protocol::BlockHeaderImpl::calculateHash(const bcos::crypto::Hash
         // off the wire — FIB-130's recompute-then-compare depends on calculateHash() never
         // leaving an attacker-supplied hash in place. hash() then throws EmptyBlockHeaderHash,
         // which is how the caller learns the header is not hashable.
-        auto err = bcos::protocol::EthBlockHeader::calculateRLPHash(*this);
-        if (err)
-        {
+        // calculateRLPHash throws RlpEncodeException for a version-invalid header, and its
+        // EthBlockHeader ctor / rlpEncode guards route through the same type. The trailing
+        // std::exception catch is a residual safety net (e.g. bad_alloc): calculateHash must
+        // stay fail-soft — FIB-130's recompute-then-compare depends on it never propagating
+        // an exception or leaving an attacker-supplied hash in place.
+        auto failSoft = [this](const std::string& message) {
             clearDataHash();
             BCOS_LOG(WARNING) << LOG_DESC("calculateHash: Eth header validation failed")
-                              << LOG_KV("error", err->errorMessage());
+                              << LOG_KV("error", message);
+        };
+        try
+        {
+            bcos::protocol::EthBlockHeader::calculateRLPHash(*this);
+        }
+        catch (bcos::codec::rlp::RlpEncodeException const& e)
+        {
+            failSoft(bcos::codec::rlp::rlpErrorMessage(e, ""));
+        }
+        catch (const std::exception& e)
+        {
+            failSoft(e.what());
         }
     }
     else

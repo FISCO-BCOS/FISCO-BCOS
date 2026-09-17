@@ -25,6 +25,7 @@
 
 #include "../common/RPCFixture.h"
 #include <bcos-codec/rlp/Common.h>
+#include <bcos-codec/rlp/Exceptions.h>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
@@ -64,13 +65,31 @@ constexpr std::string_view EIP1559_WIRE_HEX =
 constexpr std::string_view LEGACY_PRE155_PREIMAGE_HEX =
     "eb07847735940082520894727fc6a68321b754475c668a6abfb6e9e71c169a87038d7ea4c6800084deadbeef";
 
+// The RLP codec now reports decode failures by throwing RlpDecodeException instead of
+// returning Error::UniquePtr; the former errorCode() travels in errinfo_rlpErrorCode.
+// Asserts that fn() throws RlpDecodeException carrying the expected former DecodingError code.
+template <typename F>
+void requireRlpThrow(F&& fn, int32_t expectedCode)
+{
+    try
+    {
+        fn();
+        BOOST_FAIL("expected RlpDecodeException with error code " << expectedCode);
+    }
+    catch (bcos::codec::rlp::RlpDecodeException const& e)
+    {
+        auto const* code = boost::get_error_info<bcos::codec::rlp::errinfo_rlpErrorCode>(e);
+        BOOST_REQUIRE(code != nullptr);
+        BOOST_CHECK_EQUAL(*code, expectedCode);
+    }
+}
+
 Web3Transaction decodeNoSig(std::string_view hex)
 {
     auto bytes = fromHex(hex);
     auto ref = bcos::ref(bytes);
     Web3Transaction tx{};
-    auto error = codec::rlp::decodeFromPayload(ref, tx);
-    BOOST_REQUIRE(error == nullptr);
+    BOOST_REQUIRE_NO_THROW(codec::rlp::decodeFromPayload(ref, tx));
     // The dispatcher's trailing-bytes check must also have passed (ref fully consumed).
     BOOST_REQUIRE(ref.empty());
     return tx;
@@ -80,8 +99,7 @@ Web3Transaction decodeNoSigBytes(bcos::bytes bytes)
 {
     auto ref = bcos::ref(bytes);
     Web3Transaction tx{};
-    auto error = codec::rlp::decodeFromPayload(ref, tx);
-    BOOST_REQUIRE(error == nullptr);
+    BOOST_REQUIRE_NO_THROW(codec::rlp::decodeFromPayload(ref, tx));
     BOOST_REQUIRE(ref.empty());
     return tx;
 }
@@ -162,13 +180,11 @@ BOOST_AUTO_TEST_CASE(legacyGarbageTrailerRejected)
     auto bytes = fromHex(hex);
     auto ref = bcos::ref(bytes);
     Web3Transaction tx{};
-    auto error = codec::rlp::decodeFromPayload(ref, tx);
-    BOOST_REQUIRE(error != nullptr);
     // Pin the cause class: the failure must be the v<35 band
     // (InvalidVInSignature), not a generic or trailing-bytes error — a regression that
-    // moves the rejection cause would otherwise pass this null-check unnoticed.
-    BOOST_CHECK(
-        error->errorCode() == static_cast<int>(codec::rlp::DecodingError::InvalidVInSignature));
+    // moves the rejection cause would otherwise pass this throw-check unnoticed.
+    requireRlpThrow([&] { codec::rlp::decodeFromPayload(ref, tx); },
+        static_cast<int32_t>(codec::rlp::DecodingError::InvalidVInSignature));
 }
 
 // EIP-1559 signing preimage (9 items) — txpool-stage layout.
@@ -198,8 +214,7 @@ BOOST_AUTO_TEST_CASE(wireDecodeReencodesToCanonicalHash)
     auto bytes = fromHex(LEGACY_WIRE_HEX);
     auto ref = bcos::ref(bytes);
     Web3Transaction tx{};
-    auto error = codec::rlp::decode(ref, tx);  // withSig = true
-    BOOST_REQUIRE(error == nullptr);
+    BOOST_REQUIRE_NO_THROW(codec::rlp::decode(ref, tx));  // withSig = true
     BOOST_REQUIRE(tx.chainId.has_value());
     BOOST_CHECK_EQUAL(tx.chainId.value(), 1U);
     BOOST_CHECK_EQUAL(tx.getSignatureV(), 38U);  // 1*2 + 35 + parity 1
@@ -297,9 +312,8 @@ BOOST_AUTO_TEST_CASE(typedLeadingZeroRRejected)
 
     auto cursor = bcos::ref(envelope);
     Web3Transaction tx{};
-    auto err = codec::rlp::decodeFromPayload(cursor, tx);
-    BOOST_REQUIRE(err != nullptr);
-    BOOST_CHECK_EQUAL(err->errorCode(), static_cast<int>(rlp::DecodingError::NonCanonicalSize));
+    requireRlpThrow([&] { codec::rlp::decodeFromPayload(cursor, tx); },
+        static_cast<int32_t>(rlp::DecodingError::NonCanonicalSize));
 }
 
 // Minimal typed envelopes (type || rlp([chainId])) are enough for classifyWeb3EnvelopeChainId,
@@ -352,9 +366,8 @@ BOOST_AUTO_TEST_CASE(legacySealedLeadingZeroRRejected)
 
     auto cursor = bcos::ref(envelope);
     Web3Transaction tx{};
-    auto err = codec::rlp::decodeFromPayload(cursor, tx);
-    BOOST_REQUIRE(err != nullptr);
-    BOOST_CHECK_EQUAL(err->errorCode(), static_cast<int>(rlp::DecodingError::NonCanonicalSize));
+    requireRlpThrow([&] { codec::rlp::decodeFromPayload(cursor, tx); },
+        static_cast<int32_t>(rlp::DecodingError::NonCanonicalSize));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

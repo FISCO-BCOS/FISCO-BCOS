@@ -55,8 +55,9 @@ BOOST_AUTO_TEST_CASE(snappyRawBlockFormatCompatibility)
     rlpx::MessageCodec codec;
     codec.enableCompression();
     auto msg = codec.decode(bcos::bytesConstRef(frame.data(), frame.size()));
-    BOOST_CHECK_EQUAL(msg.id, 0x10u);
-    BOOST_CHECK(msg.data == expected);
+    BOOST_REQUIRE(msg.has_value());
+    BOOST_CHECK_EQUAL(msg->id, 0x10u);
+    BOOST_CHECK(msg->data == expected);
 
     // Encode the same payload: our literal-only output must be a valid raw
     // snappy block — uvarint(8)=0x08 then literal tag (7<<2)=0x1c + 8 literal
@@ -78,9 +79,9 @@ BOOST_AUTO_TEST_CASE(loopbackHandshakeAndMessageExchange)
     rlpx::PeerConfig serverConfig;
     serverConfig.clientId = "FISCO-BCOS-devp2p-server/v0.1.0";
     serverConfig.networkId = 11155111;
-    serverConfig.genesisHash = h256(
-        std::string_view("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9"),
-        h256::FromHex);
+    serverConfig.genesisHash =
+        h256(std::string_view("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9"),
+            h256::FromHex);
     serverConfig.forkId = {0x12345678, 0};
 
     rlpx::RlpxServer server(serverKey, 0, serverConfig);
@@ -93,12 +94,24 @@ BOOST_AUTO_TEST_CASE(loopbackHandshakeAndMessageExchange)
         try
         {
             auto established = server.accept();
-            auto msg = established.session.recvMessage();
+            auto msgResult = established.session.recvMessage();
+            if (!msgResult)
+            {
+                throw std::runtime_error(
+                    "server: failed to decode request frame: " + msgResult.error().message);
+            }
+            auto& msg = *msgResult;
             if (msg.id != eth::frameId(eth::msg::GetBlockHeaders))
             {
                 throw std::runtime_error("server: expected GetBlockHeaders");
             }
-            auto request = eth::decodeGetBlockHeaders(ref(msg.data));
+            auto requestResult = eth::decodeGetBlockHeaders(ref(msg.data));
+            if (!requestResult)
+            {
+                throw std::runtime_error(
+                    "server: failed to decode GetBlockHeaders: " + requestResult.error().message);
+            }
+            auto& request = *requestResult;
 
             eth::BlockHeadersMessage response;
             response.requestId = request.requestId;
@@ -133,9 +146,9 @@ BOOST_AUTO_TEST_CASE(loopbackHandshakeAndMessageExchange)
     config.port = port;
     config.peerPublicKey = serverKey.publicKey();
     config.networkId = 11155111;
-    config.genesisHash = h256(
-        std::string_view("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9"),
-        h256::FromHex);
+    config.genesisHash =
+        h256(std::string_view("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9"),
+            h256::FromHex);
     config.forkId = {0x12345678, 0};
 
     rlpx::RlpxClient client(std::move(clientKey), config);
@@ -157,11 +170,14 @@ BOOST_AUTO_TEST_CASE(loopbackHandshakeAndMessageExchange)
         Message{static_cast<uint8_t>(eth::frameId(eth::msg::GetBlockHeaders)),
             eth::encodeGetBlockHeaders(request)});
 
-    auto responseMsg = established.session.recvMessage();
+    auto responseMsgResult = established.session.recvMessage();
+    BOOST_REQUIRE(responseMsgResult.has_value());
+    auto& responseMsg = *responseMsgResult;
     BOOST_CHECK_EQUAL(responseMsg.id, eth::frameId(eth::msg::BlockHeaders));
     auto response = eth::decodeBlockHeaders(ref(responseMsg.data));
-    BOOST_CHECK_EQUAL(response.requestId, 42u);
-    BOOST_REQUIRE_EQUAL(response.headers.size(), 1u);
+    BOOST_REQUIRE(response.has_value());
+    BOOST_CHECK_EQUAL(response->requestId, 42u);
+    BOOST_REQUIRE_EQUAL(response->headers.size(), 1u);
 
     serverThread.join();
     BOOST_CHECK(serverOk);
