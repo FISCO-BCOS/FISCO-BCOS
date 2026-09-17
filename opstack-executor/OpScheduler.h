@@ -1100,13 +1100,12 @@ private:
                         doomed.push_back(executor_v1::StateKey(std::get<0>(*item).m_tableAndKey));
                     }
                 }
-                for (auto const& key : doomed)
-                {
-                    auto const tableAndKey = std::string_view(key.m_tableAndKey);
-                    co_await storage2::removeOne(
-                        view, executor_v1::StateKeyView(tableAndKey.substr(0, key.m_split),
-                                  tableAndKey.substr(key.m_split + 1)));
-                }
+                // Batch (review finding F31): one removeSome for the whole plane instead
+                // of one coroutine round-trip per key. Logical-tombstone semantics are
+                // identical — removeSome(keys) defaults to the same logical deletion the
+                // per-key removeOne used.
+                co_await storage2::removeSome(view, doomed);
+                std::vector<std::pair<executor_v1::StateKey, bcos::storage::Entry>> restore;
                 auto flatIterator = co_await parentFlatStorage->range();
                 while (true)
                 {
@@ -1118,10 +1117,11 @@ private:
                     auto& [stateKeyRef, valueVariant] = *item;
                     if (auto* entry = std::get_if<bcos::storage::Entry>(&valueVariant))
                     {
-                        co_await storage2::writeOne(view,
+                        restore.emplace_back(
                             executor_v1::StateKey(stateKeyRef.m_tableAndKey), std::move(*entry));
                     }
                 }
+                co_await storage2::writeSome(view, std::move(restore));
             }
 
             // BLOCKHASH and parent-header reads walk the PAYLOAD parent chain
@@ -1189,6 +1189,9 @@ private:
             // replay.
             auto blockFlat = std::make_shared<typename MultiLayerStorage::MutableStorage>();
             {
+                // Batch (F31): collect the live rows, then one writeSome into the flat —
+                // one task, no per-key coroutine round-trips.
+                std::vector<std::pair<executor_v1::StateKey, bcos::storage::Entry>> liveRows;
                 auto viewIterator = co_await view.range();
                 while (true)
                 {
@@ -1202,10 +1205,11 @@ private:
                     // snapshot only carries live values).
                     if (auto* entry = std::get_if<bcos::storage::Entry>(&valueVariant))
                     {
-                        co_await storage2::writeOne(*blockFlat,
+                        liveRows.emplace_back(
                             executor_v1::StateKey(stateKeyRef.m_tableAndKey), std::move(*entry));
                     }
                 }
+                co_await storage2::writeSome(*blockFlat, std::move(liveRows));
             }
 
             // The view's fresh mutable layer IS this block's delta. The view itself is
