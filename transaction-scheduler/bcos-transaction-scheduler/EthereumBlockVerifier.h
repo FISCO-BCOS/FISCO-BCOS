@@ -599,6 +599,7 @@ public:
         // 4. Execute the block.
         std::vector<protocol::TransactionReceipt::Ptr> receipts;
         std::exception_ptr executeFailure;
+        std::string executeDiag;
         try
         {
             receipts = co_await m_scheduler.get().executeBlock(view, m_executor.get(), *blockHeader,
@@ -606,11 +607,26 @@ public:
         }
         catch (...)
         {
+            // Capture the diagnostic INSIDE the catch block, like the decode path
+            // above: a bare "execution failed" would say nothing about which
+            // transaction or condition failed.
             executeFailure = std::current_exception();
+            try
+            {
+                std::rethrow_exception(executeFailure);
+            }
+            catch (std::exception const& e)
+            {
+                executeDiag = e.what();
+            }
+            catch (...)
+            {
+                executeDiag = boost::current_exception_diagnostic_information();
+            }
         }
         if (executeFailure)
         {
-            co_return co_await fail("EthereumBlockVerifier: execution failed");
+            co_return co_await fail("EthereumBlockVerifier: execution failed: " + executeDiag);
         }
         result.receipts = receipts;
 

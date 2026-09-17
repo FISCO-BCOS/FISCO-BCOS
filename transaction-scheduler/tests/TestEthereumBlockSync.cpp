@@ -964,8 +964,12 @@ BOOST_FIXTURE_TEST_CASE(secondPeerReplayRejectedByHeadGuard, EBSFixture)
                     block.header, prevHeader, block.transactions, block.withdrawals, forks, 1,
                     block.uncles, 0, decoder, stateRootCalc));
             }
-            catch (std::exception const& e)
+            catch (StaleOrOutOfOrderBlock const& e)
             {
+                // The TYPED StaleOrOutOfOrderBlock is what lets the sync loop
+                // classify the rejection as deterministic — catching it pins the
+                // type, so a revert to a plain std::runtime_error escapes this
+                // handler and fails the test.
                 BOOST_CHECK(std::string(e.what()).find("not the ledger head + 1") !=
                             std::string::npos);
                 ++rejected;

@@ -794,7 +794,11 @@ BOOST_FIXTURE_TEST_CASE(verifyRejectsStaleOrGapBlock, EEBVFixture)
                     std::vector<bcos::bytes>{raw}, std::nullopt, forks, 1, {}, 0, decoder,
                     stateRootCalc);
             }
-            catch (std::exception const& e)
+            // The guard throws the TYPED StaleOrOutOfOrderBlock (the sync loop
+            // classifies it as a deterministic failure) — catching the concrete
+            // type pins that contract: a revert to a plain std::runtime_error
+            // escapes this handler and fails the test.
+            catch (StaleOrOutOfOrderBlock const& e)
             {
                 BOOST_CHECK(std::string(e.what()).find("not the ledger head + 1") !=
                             std::string::npos);
