@@ -46,10 +46,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: FISCO-BCOS/op-stack-e2e-tests
-          # The --legacy L2 pricing this node needs (its method set has no eth_feeHistory) landed in
-          # FISCO-BCOS/op-stack-e2e-tests#2; this is that PR's merge commit, on the harness's
-          # default branch, so the pin is a stable revision rather than a PR branch tip.
-          ref: 0451c8bf3601c502a36be4633c0e2f4cc38e9c9b
+          # PR #3's squash-merge head on the harness's default branch (a stable revision, not a
+          # branch tip). It carries the C2 chain's own declarations in config.genesis:
+          # [op_eip1559] 2/8/250 (matching intent.toml; requires this repo's chain EIP-1559
+          # parameter channel, 483031396) and [op_fork_schedule] canonical=0:jovian (the merged
+          # framework's boot resolution ignores the [op_fork_timestamps] shorthand — without the
+          # canonical the node boots as Isthmus and rejects Jovian attributes; found by the first
+          # full-stack run of this stack).
+          ref: 6e19f18d38a8a68b214363ea479c9dffb695434a
           path: .ci-op-e2e-tests
 
       - name: Initialize vcpkg submodule
