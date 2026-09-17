@@ -319,10 +319,10 @@ bcos::task::Task<Json::Value> bcos::rpc::buildFeeHistory(bcos::ledger::LedgerInt
     // the true value is non-negative; an underflow converts back to a negative BlockNumber
     // that the max() folds to 0 exactly as before, so the result always stays within
     // [0, newest].
-    auto const oldestBlock = static_cast<bcos::protocol::BlockNumber>(
-        (std::max)(static_cast<bcos::protocol::BlockNumber>(static_cast<std::uint64_t>(newest) +
-                       1U - static_cast<std::uint64_t>(blockCount)),
-            bcos::protocol::BlockNumber{0}));
+    auto const oldestBlock = static_cast<bcos::protocol::BlockNumber>((std::max)(
+        static_cast<bcos::protocol::BlockNumber>(
+            static_cast<std::uint64_t>(newest) + 1U - static_cast<std::uint64_t>(blockCount)),
+        bcos::protocol::BlockNumber{0}));
 
     Json::Value result(Json::objectValue);
     result["oldestBlock"] = toQuantity(oldestBlock);
