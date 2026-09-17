@@ -1230,8 +1230,8 @@ bcos::h256 regolithGenesisHash()
 /// A London-shaped genesis header (pre-Canyon RLP: no withdrawals hash, no Cancun fields)
 /// registered as canonical height 0, the parent a Regolith block 1 prices and extends.
 /// `extraData` is parameterised because the 1559 clock keys its decode on the parent's FORK
-/// (op-geth eip1559.go:64-110 gates on IsHolocene(parent.Time)): a case plants a Holocene-shaped
-/// extraData on a pre-Holocene parent to prove the clock does not read it.
+/// (op-geth eip1559.go:64-110 gates on config.IsOptimismHolocene(parent.Time)): a case plants a
+/// Holocene-shaped extraData on a pre-Holocene parent to prove the clock does not read it.
 void registerRegolithGenesis(
     OpE2eFixture& fixture, bcos::h256 const& hash, bcos::bytes extraData = {})
 {
@@ -1676,9 +1676,9 @@ BOOST_AUTO_TEST_CASE(PayloadTimestampNotIncreasingRejected)
 
 // S7 — a pre-Holocene parent carrying a Holocene-shaped extraData. op-geth's CalcBaseFee reads
 // the 1559 params out of the parent's extraData only when the PARENT is Holocene
-// (consensus/misc/eip1559/eip1559.go:64-110, gated on IsHolocene(parent.Time)); before that
-// fork the chain config's triple is the only source, and the extraData bytes are inert. So the
-// controlled outcome is NOT a rejection: the build must succeed and price with the chain
+// (consensus/misc/eip1559/eip1559.go:64-110, gated on config.IsOptimismHolocene(parent.Time));
+// before that fork the chain config's triple is the only source, and the extraData bytes are inert.
+// So the controlled outcome is NOT a rejection: the build must succeed and price with the chain
 // triple. The case plants a triple in the parent's extraData that differs from the chain's, so
 // the two sources are distinguishable by their op-geth goldens — both already pinned by
 // PreCanyonBaseFeeUsesTheChainsEip1559Denominator:
