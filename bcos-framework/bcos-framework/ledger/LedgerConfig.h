@@ -461,10 +461,21 @@ inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view
         auto colon = entry.find(':');
         if (colon == std::string_view::npos)
         {
-            // Bare fork name -> explicit single revision for all blocks.
+            // Bare fork name -> explicit single revision for all blocks. An unknown
+            // name means this binary is OLDER than the chain config: skipping it would
+            // let mixed binaries execute the same blocks under different revisions (a
+            // silent state-root fork at upgrades). The boot-time probe reaches this
+            // before any block, so the operator sees the named entry.
             if (auto rev = evmcRevisionFromName(entry); rev)
             {
                 single = *rev;
+            }
+            else
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidEVMCRevisionConfig()
+                    << errinfo_comment("unknown EVM revision name '" + std::string(entry) +
+                                       "' in evmc_revision config value: " + std::string(value)));
             }
             continue;
         }
@@ -473,9 +484,11 @@ inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view
         auto name = entry.substr(colon + 1);
         bcos::protocol::BlockNumber block = 0;
         auto [ptr, ec] = std::from_chars(blockStr.data(), blockStr.data() + blockStr.size(), block);
-        if (ec != std::errc())
+        if (ec != std::errc() || ptr != blockStr.data() + blockStr.size())
         {
-            continue;
+            BOOST_THROW_EXCEPTION(InvalidEVMCRevisionConfig() << errinfo_comment(
+                                      "malformed block number '" + std::string(blockStr) +
+                                      "' in evmc_revision config value: " + std::string(value)));
         }
         if (auto rev = evmcRevisionFromName(name); rev)
         {
@@ -484,6 +497,15 @@ inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view
             {
                 base = *rev;
             }
+        }
+        else
+        {
+            // Same mixed-binary hazard as the bare-name branch, at the transition
+            // height: older binaries would keep executing the previous revision past
+            // this block while newer ones switch.
+            BOOST_THROW_EXCEPTION(InvalidEVMCRevisionConfig() << errinfo_comment(
+                                      "unknown EVM revision name '" + std::string(name) +
+                                      "' in evmc_revision config value: " + std::string(value)));
         }
     }
 
