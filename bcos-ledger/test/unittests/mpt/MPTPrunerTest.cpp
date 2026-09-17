@@ -59,8 +59,8 @@ using PruneBackend = bcos::storage2::memory_storage::MemoryStorage<bcos::executo
 using Pruner = MPTPruner<PruneBackend>;
 
 /// The (h256 → raw RLP) trie-node facade over the StateKey-keyed backend — the same mapping the
-/// production adapters (ViewNodeStorage / MPTNodeStorage) apply: StateKey{"/mpt/", digest}.
-/// Test-local because the production adapters live in bcos-storage / transaction-scheduler and
+/// production adapters (ViewNodeStorage / MPTNodeReadStorage) apply: StateKey{"/mpt/", digest}.
+/// Test-local because the production adapters live in transaction-scheduler / bcos-storage and
 /// are read-only or view-bound; the pruner tests need a writable one over a bare backend.
 /// Templated on the backend: PruneBackend for the single-shard suite, RocksDBStorage2 for the
 /// parallel-sweep test.
