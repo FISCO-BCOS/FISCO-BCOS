@@ -1229,7 +1229,11 @@ bcos::h256 regolithGenesisHash()
 
 /// A London-shaped genesis header (pre-Canyon RLP: no withdrawals hash, no Cancun fields)
 /// registered as canonical height 0, the parent a Regolith block 1 prices and extends.
-void registerRegolithGenesis(OpE2eFixture& fixture, bcos::h256 const& hash)
+/// `extraData` is parameterised because the 1559 clock keys its decode on the parent's FORK
+/// (op-geth eip1559.go:64-110 gates on IsHolocene(parent.Time)): a case plants a Holocene-shaped
+/// extraData on a pre-Holocene parent to prove the clock does not read it.
+void registerRegolithGenesis(
+    OpE2eFixture& fixture, bcos::h256 const& hash, bcos::bytes extraData = {})
 {
     registerVerifiedBlock(fixture.multiLayerStorage, hash, 0);
     auto header = fixture.blockFactory->blockHeaderFactory()->createBlockHeader();
@@ -1238,7 +1242,7 @@ void registerRegolithGenesis(OpE2eFixture& fixture, bcos::h256 const& hash)
     header->setGasLimit(30'000'000);
     header->setGasUsed(20'000'000);
     header->setBaseFee(bcos::u256(1'000'000'000));
-    header->setExtraData(bcos::bytes{});
+    header->setExtraData(std::move(extraData));
     header->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = 0, .blockHash = bcos::h256{}});
     bcos::bytes encoded;
     header->encode(encoded);
@@ -1668,6 +1672,43 @@ BOOST_AUTO_TEST_CASE(PayloadTimestampNotIncreasingRejected)
         buildBlockOn(*fixture, genesis, /*tsMillis=*/1'000, /*noTxPool=*/true, "S6 parent intact");
     BOOST_CHECK_MESSAGE(
         after.has_value(), "S6: the parent must remain buildable after the refusal");
+}
+
+// S7 — a pre-Holocene parent carrying a Holocene-shaped extraData. op-geth's CalcBaseFee reads
+// the 1559 params out of the parent's extraData only when the PARENT is Holocene
+// (consensus/misc/eip1559/eip1559.go:64-110, gated on IsHolocene(parent.Time)); before that
+// fork the chain config's triple is the only source, and the extraData bytes are inert. So the
+// controlled outcome is NOT a rejection: the build must succeed and price with the chain
+// triple. The case plants a triple in the parent's extraData that differs from the chain's, so
+// the two sources are distinguishable by their op-geth goldens — both already pinned by
+// PreCanyonBaseFeeUsesTheChainsEip1559Denominator:
+//   chain triple (elasticity 6, denominator 8)  -> 1_375_000_000  (correct here)
+//   extraData triple (denominator 250)          -> 1_012_000_000  (would mean the clock decoded
+//                                                                  a pre-Holocene parent's bytes)
+BOOST_AUTO_TEST_CASE(PreHoloceneParentExtraDataIsInertForPricing)
+{
+    constexpr std::uint64_t kOpGethGoldenChainTriple = 1'375'000'000ULL;
+    constexpr std::uint64_t kOpGethGoldenExtraDataTriple = 1'012'000'000ULL;
+    bcos::engine::OpEip1559Params const chainTriple{
+        .elasticity = 6, .denominator = 8, .denominatorCanyon = 250};
+    // 9-byte Holocene form as the corpus writes it (registerParentHeaderFromPayload): version 0,
+    // denominator 0xfa = 250, elasticity 6.
+    auto const holoceneShaped = bcos::fromHex("0x00000000fa00000006");
+
+    auto const genesis = regolithGenesisHash();
+    auto fixture = std::make_unique<OpE2eFixture>(regolithOnlySchedule(), chainTriple);
+    registerRegolithGenesis(*fixture, genesis, holoceneShaped);
+
+    auto built = buildBlockOn(*fixture, genesis, /*tsMillis=*/1'000, /*noTxPool=*/true, "S7");
+    BOOST_REQUIRE(built.has_value());
+    BOOST_TEST_INFO("S7 produced=" << built->baseFeePerGas
+                                   << " chainGolden=" << kOpGethGoldenChainTriple
+                                   << " extraDataGolden=" << kOpGethGoldenExtraDataTriple);
+    BOOST_CHECK_MESSAGE(built->baseFeePerGas == bcos::u256(kOpGethGoldenChainTriple),
+        "S7: a pre-Holocene parent's extraData must not feed the 1559 clock; got "
+            << built->baseFeePerGas);
+    BOOST_CHECK_MESSAGE(built->baseFeePerGas != bcos::u256(kOpGethGoldenExtraDataTriple),
+        "S7: the pricing decoded the parent's extraData on a pre-Holocene parent");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
