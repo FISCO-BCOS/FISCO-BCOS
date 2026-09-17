@@ -1,0 +1,83 @@
+# Task 2 (op-validator-minimal-loop spec §7.1) engine-gate golden manifest.
+# One <id>.golden.json per vectors/<id>.json (same id, 63/63, set-equal to
+# cases/*.in.json -- checked at generation time). Each file carries exactly
+# the fields the corpus's own v3-block vectors are structurally missing:
+# blockHash/transactionsRoot/extraData/excessBlobGas/rawTransactions/
+# encodedHeaderHex. vectors/*.json themselves are byte-for-byte untouched
+# (git diff --stat -- ../../vectors/ is empty by construction: golden output
+# and vector regeneration write to disjoint paths, see README.md ritual log).
+isthmus_deposit_only.golden.json
+jovian_deposit_only.golden.json
+isthmus_transfer_basic.golden.json
+jovian_transfer_basic.golden.json
+isthmus_transfer_multi.golden.json
+jovian_transfer_multi.golden.json
+isthmus_deposit_mint.golden.json
+jovian_deposit_mint.golden.json
+isthmus_deposit_failed.golden.json
+jovian_deposit_failed.golden.json
+isthmus_contract_logs.golden.json
+jovian_contract_logs.golden.json
+isthmus_message_passer_write.golden.json
+jovian_message_passer_write.golden.json
+isthmus_tx_reverted.golden.json
+jovian_tx_reverted.golden.json
+isthmus_setcode_7702.golden.json
+jovian_setcode_7702.golden.json
+isthmus_big_block_130tx.golden.json
+isthmus_system_contracts_real.golden.json
+jovian_system_contracts_real.golden.json
+jovian_first_block.golden.json
+jovian_da_mix.golden.json
+isthmus_fee_env_observer.golden.json
+jovian_fee_env_observer.golden.json
+isthmus_contract_create.golden.json
+jovian_contract_create.golden.json
+isthmus_access_list.golden.json
+jovian_access_list.golden.json
+isthmus_setcode_7702_skips.golden.json
+jovian_setcode_7702_skips.golden.json
+isthmus_empty_account_cleanup.golden.json
+jovian_empty_account_cleanup.golden.json
+# B-7 order-observable batch (W5): 1 single-fork (isthmus) case = +1 -> 34.
+isthmus_system_call_order_observable.golden.json
+#
+# Off-line chained pair (spec §7.1 rev.3 decision A2, Step 2): NOT part of
+# the 34-set above -- a dedicated 1->2 block chain (no vectors/ counterpart),
+# each file carrying the FULL v3-block payload merged flatly with the golden
+# extension. Lives in chained/, not listed by basename here (4 files, fixed
+# names, self-describing). The jovian pair (jovianChainA/B) exercises the DA
+# max/linear branch (block1 blobGasUsed > gasUsed).
+#   chained/chainA.golden.json  chained/chainA.pre.json  chained/chainA.post.json
+#   chained/chainB.golden.json  chained/chainB.pre.json  chained/chainB.post.json
+#   chained/jovianChainA.golden.json  chained/jovianChainA.pre.json  chained/jovianChainA.post.json
+#   chained/jovianChainB.golden.json  chained/jovianChainB.pre.json  chained/jovianChainB.post.json
+isthmus_precompile_blake2f.golden.json
+isthmus_precompile_bn256add.golden.json
+isthmus_precompile_bn256mul.golden.json
+isthmus_precompile_bn256pair_norm.golden.json
+isthmus_precompile_bls_g1add.golden.json
+isthmus_precompile_bls_g1msm.golden.json
+isthmus_precompile_bls_g1msm_overcap.golden.json
+isthmus_precompile_bls_g2add.golden.json
+isthmus_precompile_bls_g2msm.golden.json
+isthmus_precompile_bls_g2msm_overcap.golden.json
+isthmus_precompile_bls_map_g1.golden.json
+isthmus_precompile_bls_map_g2.golden.json
+isthmus_precompile_bls_pairing.golden.json
+isthmus_precompile_bls_pairing_overcap.golden.json
+isthmus_precompile_ecrecover.golden.json
+isthmus_precompile_expmod.golden.json
+isthmus_precompile_identity.golden.json
+isthmus_precompile_point_evaluation.golden.json
+isthmus_precompile_ripemd160.golden.json
+isthmus_precompile_sha256.golden.json
+isthmus_precompile_wrap_63of64.golden.json
+isthmus_precompile_wrap_eip7702.golden.json
+isthmus_precompile_wrap_returndata.golden.json
+jovian_precompile_bls_g1msm_overcap.golden.json
+jovian_precompile_bls_g2msm_overcap.golden.json
+jovian_precompile_bls_pairing_overcap.golden.json
+jovian_precompile_bn256pair_overcap.golden.json
+jovian_precompile_wrap_value_overcap.golden.json
+jovian_precompile_wrap_value_revert.golden.json

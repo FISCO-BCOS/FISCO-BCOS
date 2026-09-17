@@ -1,0 +1,82 @@
+[
+  {
+    "id": "baseline_isthmus",
+    "l1_cost": "0x599226",
+    "operator_cost": "0x116fb15b44a8049a"
+  },
+  {
+    "id": "baseline_jovian",
+    "l1_cost": "0x599226",
+    "operator_cost": "0x117085212f9678e4"
+  },
+  {
+    "id": "max_isthmus_scalars",
+    "l1_cost": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "operator_cost": "0x100000000006a0988"
+  },
+  {
+    "id": "max_jovian_scalars",
+    "l1_cost": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "operator_cost": "0x100027807fffd87f7"
+  },
+  {
+    "id": "overflow_isthmus",
+    "l1_cost": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "operator_cost": "0x10c7f7a0a5269595ee12"
+  },
+  {
+    "id": "overflow_jovian",
+    "l1_cost": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "operator_cost": "0x63ffffff9cffffff9c00000063"
+  },
+  {
+    "id": "pre_isthmus_fjord",
+    "l1_cost": "0x599226",
+    "operator_cost": "0x0"
+  },
+  {
+    "id": "pre_isthmus_granite",
+    "l1_cost": "0x599226",
+    "operator_cost": "0x0"
+  },
+  {
+    "id": "pre_isthmus_holocene",
+    "l1_cost": "0x599226",
+    "operator_cost": "0x0"
+  },
+  {
+    "id": "missing_isthmus_slot8_zero",
+    "l1_cost": "0x599226",
+    "operator_cost": "0x0"
+  },
+  {
+    "id": "switch_ecotone",
+    "l1_cost": "0x889a41",
+    "operator_cost": "0x0"
+  },
+  {
+    "id": "switch_fjord",
+    "l1_cost": "0x599226",
+    "operator_cost": "0x0"
+  },
+  {
+    "id": "switch_isthmus",
+    "l1_cost": "0x599226",
+    "operator_cost": "0x116fb15b44a8049a"
+  },
+  {
+    "id": "switch_jovian",
+    "l1_cost": "0x599226",
+    "operator_cost": "0x117085212f9678e4"
+  },
+  {
+    "id": "switch_karst",
+    "l1_cost": "0x599226",
+    "operator_cost": "0x117085212f9678e4"
+  },
+  {
+    "id": "blob_jovian_blob_scalar",
+    "l1_cost": "0xf4240",
+    "operator_cost": "0x0"
+  }
+]
