@@ -1,6 +1,5 @@
 #include "Web3AccessListResolver.h"
 #include "bcos-codec/rlp/Common.h"
-#include "bcos-codec/rlp/Exceptions.h"
 #include "bcos-codec/rlp/RLPDecode.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/Web3AccessList.h"

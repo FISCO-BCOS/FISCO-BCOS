@@ -367,6 +367,24 @@ BOOST_AUTO_TEST_CASE(rejectsReservedTypeByte)
     BOOST_REQUIRE_THROW(b.rlpEncode(out), bcos::codec::rlp::RlpEncodeException);
 }
 
+// The block encoder embeds the header via the shared codec, bypassing
+// EthBlockHeader::rlpEncode's non-negative guards — EthBlock::rlpEncode must reject a
+// negative header number/timestamp itself, or the codec would encode it as 2^64-1.
+BOOST_AUTO_TEST_CASE(rejectsNegativeHeaderNumberAndTimestamp)
+{
+    EthBlockData body;
+    body.header = makeLondonHeader();
+    body.header.number = -1;
+    EthBlock b(body);
+    bytes out;
+    BOOST_REQUIRE_THROW(b.rlpEncode(out), bcos::codec::rlp::RlpEncodeException);
+
+    body.header = makeLondonHeader();
+    body.header.timestamp = -1;
+    EthBlock b2(body);
+    BOOST_REQUIRE_THROW(b2.rlpEncode(out), bcos::codec::rlp::RlpEncodeException);
+}
+
 // A bare single-byte transaction element must be rejected by the encoder.
 BOOST_AUTO_TEST_CASE(rejectsBareSingleByteTransaction)
 {

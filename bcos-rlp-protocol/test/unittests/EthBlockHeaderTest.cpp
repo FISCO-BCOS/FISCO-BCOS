@@ -740,7 +740,9 @@ BOOST_AUTO_TEST_CASE(constructorRejectsSubSecondTimestamp)
     auto header = makeEthHeader();
     header->setTimestamp(1001);  // 1s + 1ms
 
-    BOOST_CHECK_THROW(EthBlockHeader ethHeader(*header), std::invalid_argument);
+    BOOST_CHECK_THROW(EthBlockHeader ethHeader(*header), codec::rlp::RlpEncodeException);
+    expectRlpError([&] { EthBlockHeader ethHeader(*header); },
+        static_cast<int32_t>(EthBlockHeaderError::InvalidHeader), "whole number of seconds");
     // validateHeader reports the same condition by throwing an InvalidHeader RLP error.
     expectRlpError([&] { EthBlockHeader::validateHeader(*header); },
         static_cast<int32_t>(EthBlockHeaderError::InvalidHeader), "whole number of seconds");

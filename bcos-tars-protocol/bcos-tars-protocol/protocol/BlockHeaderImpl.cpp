@@ -79,10 +79,11 @@ void bcostars::protocol::BlockHeaderImpl::calculateHash(const bcos::crypto::Hash
         // off the wire — FIB-130's recompute-then-compare depends on calculateHash() never
         // leaving an attacker-supplied hash in place. hash() then throws EmptyBlockHeaderHash,
         // which is how the caller learns the header is not hashable.
-        // calculateRLPHash throws RlpEncodeException for a version-invalid header, but its
-        // EthBlockHeader ctor / rlpEncode can also throw plain std::invalid_argument (e.g.
-        // negative number/timestamp) — the old Error-return covered both, so both keep the
-        // fail-soft path here.
+        // calculateRLPHash throws RlpEncodeException for a version-invalid header, and its
+        // EthBlockHeader ctor / rlpEncode guards route through the same type. The trailing
+        // std::exception catch is a residual safety net (e.g. bad_alloc): calculateHash must
+        // stay fail-soft — FIB-130's recompute-then-compare depends on it never propagating
+        // an exception or leaving an attacker-supplied hash in place.
         auto failSoft = [this](const std::string& message) {
             clearDataHash();
             BCOS_LOG(WARNING) << LOG_DESC("calculateHash: Eth header validation failed")

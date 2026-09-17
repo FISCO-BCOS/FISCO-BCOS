@@ -29,11 +29,11 @@
 
 namespace bcos::devp2p::detail
 {
-// kRlpGenericError with a fixed message: the wire-level validation failures that
+// c_rlpGenericError with a fixed message: the wire-level validation failures that
 // never carried an RLP code (formerly plain std::runtime_error texts).
 inline bcos::codec::rlp::RlpError genericError(std::string_view _message)
 {
-    return {.code = bcos::codec::rlp::kRlpGenericError, .message = std::string(_message)};
+    return {.code = bcos::codec::rlp::c_rlpGenericError, .message = std::string(_message)};
 }
 
 // RLP-layer and item-level failures both propagate the codec's tryDecodeHeader/tryDecode

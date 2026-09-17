@@ -306,9 +306,9 @@ EthBlockHeader::EthBlockHeader(const bcos::protocol::BlockHeader& _header)
     // the calculateRLPHash path, and this covers every direct ctor+rlpEncode caller.
     if (_header.timestamp() % 1000 != 0)
     {
-        BOOST_THROW_EXCEPTION(
-            std::invalid_argument("timestamp must be a whole number of seconds, got " +
-                                  std::to_string(_header.timestamp()) + " ms"));
+        codec::rlp::throwRlpEncodeError(EthBlockHeaderError::InvalidHeader,
+            "timestamp must be a whole number of seconds, got " +
+                std::to_string(_header.timestamp()) + " ms");
     }
     m_version = _header.ethBlockVersion();
     auto parent = _header.parentInfo();
@@ -382,11 +382,13 @@ void EthBlockHeader::rlpEncode(bcos::bytes& out) const
     // with EthBlockBody).
     if (m_data.number < 0)
     {
-        BOOST_THROW_EXCEPTION(std::invalid_argument("number must be non-negative"));
+        codec::rlp::throwRlpEncodeError(
+            EthBlockHeaderError::InvalidHeader, "number must be non-negative");
     }
     if (m_data.timestamp < 0)
     {
-        BOOST_THROW_EXCEPTION(std::invalid_argument("timestamp must be non-negative"));
+        codec::rlp::throwRlpEncodeError(
+            EthBlockHeaderError::InvalidHeader, "timestamp must be non-negative");
     }
     codec::rlp::encode(out, m_data);
 }

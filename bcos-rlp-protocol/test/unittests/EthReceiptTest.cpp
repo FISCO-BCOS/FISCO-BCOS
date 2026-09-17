@@ -449,17 +449,30 @@ BOOST_AUTO_TEST_CASE(toEthReceiptDataFailClosedGas)
         BOOST_CHECK_EQUAL(eth.cumulativeGasUsed, u256(21000));
     }
     // Over-256-bit values must fail closed (would wrap modulo 2^256 under boost's
-    // unchecked policy).
+    // unchecked policy). The hex arm needs the "0x" prefix opstack-executor actually
+    // writes — without it the string is rejected by the decimal shape check instead,
+    // never reaching the 64-hex-digit bound. Pin the code so this cannot regress into
+    // the shape-check arm.
     {
         auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
         auto& inner = receipt->inner();
         inner.data.status = 0;
         inner.data.gasUsed = "21000";
-        inner.cumulativeGasUsed = std::string(65, 'f');  // 65 hex digits > 256 bits
+        inner.cumulativeGasUsed = "0x1" + std::string(64, '0');  // 65 hex digits > 256 bits
         inner.logsBloom.assign(256, static_cast<char>(0xab));
         protocol::EthReceiptData eth;
-        BOOST_REQUIRE_THROW(
-            protocol::toEthReceiptData(*receipt, 1, eth), bcos::codec::rlp::RlpEncodeException);
+        try
+        {
+            protocol::toEthReceiptData(*receipt, 1, eth);
+            BOOST_FAIL("expected RlpEncodeException for an over-256-bit hex cumulativeGasUsed");
+        }
+        catch (bcos::codec::rlp::RlpEncodeException const& e)
+        {
+            auto const* code = boost::get_error_info<bcos::codec::rlp::errinfo_rlpErrorCode>(e);
+            BOOST_REQUIRE(code != nullptr);
+            BOOST_CHECK_EQUAL(
+                *code, static_cast<int32_t>(bcos::codec::rlp::DecodingError::UnexpectedLength));
+        }
     }
     {
         auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();

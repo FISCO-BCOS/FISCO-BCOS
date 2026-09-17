@@ -23,7 +23,6 @@
 #include "Exceptions.h"
 #include <bcos-utilities/Exceptions.h>
 #include <expected>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -32,7 +31,7 @@
 namespace bcos::codec::rlp
 {
 // Value-return error. `code` carries the same int32 as errinfo_rlpErrorCode (a DecodingError
-// or a module-specific code such as protocol::EthBlockHeaderError); kRlpGenericError marks
+// or a module-specific code such as protocol::EthBlockHeaderError); c_rlpGenericError marks
 // failures that never carried an RLP code (a plain std::runtime_error from a higher-level
 // helper such as the eth wire-message validators).
 struct RlpError
@@ -42,7 +41,7 @@ struct RlpError
     friend bool operator==(RlpError const&, RlpError const&) = default;
 };
 
-inline constexpr int32_t kRlpGenericError{-1};
+inline constexpr int32_t c_rlpGenericError{-1};
 
 template <typename T>
 using RlpResult = std::expected<T, RlpError>;
@@ -88,24 +87,25 @@ auto captureRlp(F&& f) -> RlpResult<std::invoke_result_t<F>>
         // lands here as a boost::wrapexcept with no errinfo_comment; fall back to what()
         // so the message is not silently blanked.
         auto const* asStd = dynamic_cast<std::exception const*>(&e);
-        return rlpFail(rlpErrorCode(e, kRlpGenericError),
+        return rlpFail(rlpErrorCode(e, c_rlpGenericError),
             rlpErrorMessage(e, asStd != nullptr ? asStd->what() : ""));
     }
     catch (std::exception const& e)
     {
-        return std::unexpected(RlpError{.code = kRlpGenericError, .message = e.what()});
+        return std::unexpected(RlpError{.code = c_rlpGenericError, .message = e.what()});
     }
 }
 
 // The inverse of captureRlp, for boundaries that keep the exception style (for example the
-// once-per-connection handshake): the value on success, a std::runtime_error with
-// _context + the error message on failure.
+// once-per-connection handshake): the value on success; on failure an RlpDecodeException
+// carrying the RlpError's code in errinfo_rlpErrorCode and _context + the error message in
+// errinfo_comment, so catchers keep the code classification the value form had.
 template <typename T>
 T unwrapOrThrow(RlpResult<T>&& _result, std::string_view _context)
 {
     if (!_result)
     {
-        throw std::runtime_error(std::string(_context) + _result.error().message);
+        throwRlpDecodeError(_result.error().code, std::string(_context) + _result.error().message);
     }
     return std::move(*_result);
 }

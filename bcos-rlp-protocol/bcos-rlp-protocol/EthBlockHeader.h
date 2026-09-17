@@ -133,10 +133,11 @@ public:
     /// validateHeader rejects. Returns the 32-byte Ethereum block hash.
     /// The header's timestamp is internal milliseconds (every version); the RLP surface
     /// carries seconds, converted at the bridge — the EthBlockHeader(BlockHeader) ctor
-    /// divides by 1000 and throws std::invalid_argument on a sub-second value, so a
-    /// non-whole-second timestamp fails loudly here. Callers that cannot tolerate
-    /// exceptions should use the fail-soft BlockHeaderImpl::calculateHash wrapper instead
-    /// (calculateRLPHash itself throws RlpEncodeException).
+    /// divides by 1000 and throws RlpEncodeException carrying
+    /// EthBlockHeaderError::InvalidHeader on a sub-second value, so a non-whole-second
+    /// timestamp fails loudly here. Callers that cannot tolerate exceptions should use the
+    /// fail-soft BlockHeaderImpl::calculateHash wrapper instead (calculateRLPHash itself
+    /// throws RlpEncodeException).
     static bcos::crypto::HashType computeHash(const bcos::protocol::BlockHeader& header) noexcept(
         false);
 

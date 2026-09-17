@@ -62,9 +62,13 @@ inline uint16_t frameId(uint8_t _messageId)
 }
 
 // eth Status message. Two wire formats exist:
-//   eth/68: [protocolVersion, networkId, totalDifficulty, headHash, genesisHash, [forkHash,
-//   forkNext]] eth/69+ (EIP-7642 block range): [protocolVersion, networkId, genesisHash,
-//           [forkHash, forkNext], earliestBlock, latestBlock, latestBlockHash]
+//
+//   eth/68:
+//   [protocolVersion, networkId, totalDifficulty, headHash, genesisHash, [forkHash, forkNext]]
+//
+//   eth/69+ (EIP-7642 block range):
+//   [protocolVersion, networkId, genesisHash, [forkHash, forkNext], earliestBlock, latestBlock,
+//    latestBlockHash]
 struct StatusMessage
 {
     uint64_t protocolVersion{kProtocolVersion};

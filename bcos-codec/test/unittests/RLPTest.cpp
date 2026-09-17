@@ -434,6 +434,101 @@ BOOST_AUTO_TEST_CASE(decodeRejectsMalformedInputs)
     }
 }
 
+// The non-throwing cores (tryDecodeHeader / tryDecode / decodeExact) are the single home of
+// the canonical rules for the hot ingress paths — pin that they reject the same malformed
+// inputs the throwing wrappers above reject, with the same codes, so a divergence between
+// decode() and tryDecode() is caught here instead of silently reaching devp2p.
+BOOST_AUTO_TEST_CASE(nonThrowingCoresRejectSameMalformedInputs)
+{
+    struct Uint64Vector
+    {
+        std::string_view hex;
+        DecodingError code;
+    };
+    constexpr Uint64Vector uint64Vectors[] = {
+        {""sv, InputTooShort},         // empty buffer: nothing to read
+        {"81"sv, InputTooShort},       // header claims one content byte but none follows
+        {"b838"sv, InputTooShort},     // long-string header announces 56 bytes, none follows
+        {"8100"sv, NonCanonicalSize},  // a byte < 0x80 wrapped in a 1-byte string
+        {"c0"sv, UnexpectedList},      // a list where a scalar is expected
+    };
+    for (auto const& v : uint64Vectors)
+    {
+        bcos::bytes buffer = fromHex(v.hex);
+        auto view = bcos::ref(buffer);
+        uint64_t value{};
+        auto result = tryDecode(view, value);
+        BOOST_REQUIRE(!result);
+        BOOST_CHECK_EQUAL(result.error().code, static_cast<int32_t>(v.code));
+    }
+
+    struct FixedBytesVector
+    {
+        std::string hex;
+        DecodingError code;
+    };
+    FixedBytesVector const fixedBytesVectors[] = {
+        {"9e" + std::string(60, '1'), UnexpectedLength},  // 30-byte payload for h256
+        {"a1" + std::string(66, '1'), UnexpectedLength},  // 33-byte payload for h256
+    };
+    for (auto const& v : fixedBytesVectors)
+    {
+        bcos::bytes buffer = fromHex(v.hex);
+        auto view = bcos::ref(buffer);
+        bcos::h256 value{};
+        auto result = tryDecode(view, value);
+        BOOST_REQUIRE(!result);
+        BOOST_CHECK_EQUAL(result.error().code, static_cast<int32_t>(v.code));
+    }
+    {  // canonical input still round-trips through the core and consumes the whole view
+        bcos::bytes buffer = fromHex("a0" + std::string(64, '1'));
+        auto view = bcos::ref(buffer);
+        bcos::h256 value{};
+        auto result = tryDecode(view, value);
+        BOOST_REQUIRE(result);
+        BOOST_CHECK(view.empty());
+    }
+
+    // tryDecodeHeader on its own: empty input, and a long-form header whose length byte is
+    // missing entirely.
+    {
+        bcos::bytes buffer;
+        auto view = bcos::ref(buffer);
+        auto header = tryDecodeHeader(view);
+        BOOST_REQUIRE(!header);
+        BOOST_CHECK_EQUAL(header.error().code, static_cast<int32_t>(InputTooShort));
+    }
+    {
+        bcos::bytes buffer = fromHex("b8"sv);  // long-string form, length byte missing
+        auto view = bcos::ref(buffer);
+        auto header = tryDecodeHeader(view);
+        BOOST_REQUIRE(!header);
+        BOOST_CHECK_EQUAL(header.error().code, static_cast<int32_t>(InputTooShort));
+    }
+
+    // decodeExact: trailing bytes after the top-level item are rejected (geth
+    // ErrMoreThanOneValue semantics); the exact item alone succeeds.
+    {
+        bcos::bytes good = fromHex("01"sv);
+        uint64_t value{};
+        BOOST_REQUIRE_NO_THROW(decodeExact(bcos::ref(good), value));
+        BOOST_CHECK_EQUAL(value, 1);
+
+        bcos::bytes trailing = fromHex("0102"sv);
+        try
+        {
+            decodeExact(bcos::ref(trailing), value);
+            BOOST_FAIL("expected RlpDecodeException for trailing bytes");
+        }
+        catch (RlpDecodeException const& e)
+        {
+            auto const* code = boost::get_error_info<errinfo_rlpErrorCode>(e);
+            BOOST_REQUIRE(code != nullptr);
+            BOOST_CHECK_EQUAL(*code, static_cast<int32_t>(UnexpectedListElements));
+        }
+    }
+}
+
 // C1 (final review batch B): a long-form RLP header (0xb8.. / 0xf8..) whose multi-byte length
 // prefix carries a leading zero byte is non-canonical. op-geth rlp/decode.go readUint() rejects it
 // with ErrCanonSize when lenOfLen>=2; the single-byte-length forms (0xb8/0xf8, lenOfLen==1) are
@@ -532,7 +627,7 @@ BOOST_AUTO_TEST_CASE(captureRlpRecoversWhatForBoostWrappedStdException)
     auto result =
         captureRlp([] { BOOST_THROW_EXCEPTION(std::invalid_argument("hostile what()")); });
     BOOST_REQUIRE(!result);
-    BOOST_CHECK_EQUAL(result.error().code, kRlpGenericError);
+    BOOST_CHECK_EQUAL(result.error().code, c_rlpGenericError);
     BOOST_CHECK_EQUAL(result.error().message, "hostile what()");
 }
 

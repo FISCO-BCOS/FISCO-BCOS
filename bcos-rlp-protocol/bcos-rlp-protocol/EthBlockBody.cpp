@@ -272,6 +272,19 @@ void EthBlock::rlpEncode(bcos::bytes& out) const
             }
         }
     }
+    // Mirror the sibling guard in EthBlockHeader::rlpEncode: the header rides inside
+    // m_data here, so EthBlockHeader's own rlpEncode is bypassed — reject a negative
+    // number/timestamp before the shared codec would encode it as 2^64-1.
+    if (m_data.header.number < 0)
+    {
+        codec::rlp::throwRlpEncodeError(codec::rlp::DecodingError::InvalidFieldset,
+            "EthBlock::rlpEncode: header number must be non-negative");
+    }
+    if (m_data.header.timestamp < 0)
+    {
+        codec::rlp::throwRlpEncodeError(codec::rlp::DecodingError::InvalidFieldset,
+            "EthBlock::rlpEncode: header timestamp must be non-negative");
+    }
     codec::rlp::encode(out, m_data);
 }
 

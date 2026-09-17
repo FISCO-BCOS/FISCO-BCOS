@@ -47,10 +47,11 @@ bcos::codec::rlp::Header readHeaderOrThrow(bcos::bytesRef& cursor, std::string c
     return *headerResult;
 }
 
-// Decode one RLP string item into `out`, rejecting any payload whose length != 32. The generic
-// FixedBytes<32> decoder zero-pads a short payload (RLPDecode.h: FixedBytes<32>{getCroppedData(0,
-// payloadLength)}), silently accepting malformed input; Ethereum consensus requires storageRoot
-// and codeHash to be exactly 32-byte strings, so enforce that here.
+// Decode one RLP string item into `out`, rejecting any payload whose length != 32. Account
+// decodes field-by-field through tryDecodeHeader rather than the generic FixedBytes<32> codec
+// decoder — which enforces the same exact-size rule (RLPDecode.h rejects payloadLength !=
+// FixedT::SIZE) — so the check is repeated here: Ethereum consensus requires storageRoot and
+// codeHash to be exactly 32-byte strings.
 void decodeHash32(bcos::bytesRef& cursor, bcos::h256& out, char const* field)
 {
     auto const header =
