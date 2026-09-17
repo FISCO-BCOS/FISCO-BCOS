@@ -104,3 +104,11 @@ unittestdb/
 
 # Process/planning documents stay local-only (archived under ~/octo/docs-archive).
 docs/plans/
+
+# Local C2 e2e scratch dirs (tools/.ci/c2-e2e.sh defaults for OP_MONOREPO /
+# OP_E2E_DIR / BIN_DIR). CI checks these out inside its own workspace, so they must
+# never be committed -- an unignored scratch dir is how a stray `git add -A` sweeps
+# third-party checkouts and local binaries into a PR.
+.ci-op-monorepo/
+.ci-op-e2e-tests/
+.ci-c2-bins/
