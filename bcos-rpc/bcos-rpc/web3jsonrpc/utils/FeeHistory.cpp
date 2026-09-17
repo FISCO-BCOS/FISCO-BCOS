@@ -41,6 +41,13 @@ constexpr std::size_t c_maxFeeHistoryBlocks = 1024;
 // Reward requests load full block bodies per block; see buildFeeHistory for why this is
 // tighter than the header-only cap.
 constexpr std::size_t c_maxRewardHistoryBlocks = 128;
+// Ethereum PROTOCOL constants, not chain configuration: EIP-1559 fixes the base-fee
+// change denominator at 8 and the elasticity multiplier at 2 for every non-OP chain, and
+// op-geth returns exactly these as its non-Optimism defaults (params/protocol_params.go
+// :144-145, returned by BaseFeeChangeDenominator/ElasticityMultiplier when Optimism ==
+// nil). The v2/Eth lane emulates that protocol, so there is deliberately no parameter
+// channel here — unlike the OP lane, where config.optimism makes the triple per-chain
+// and the engine carries it (see the [op_eip1559] channel).
 constexpr std::uint32_t c_eth1559Elasticity = 2;
 constexpr std::uint32_t c_eth1559Denominator = 8;
 
