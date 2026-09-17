@@ -189,24 +189,39 @@ bcos::u256 bcos::rpc::calcEthNextBaseFee(bcos::protocol::BlockHeader const& pare
     return parentBase - deltaFee;
 }
 
-bcos::u256 bcos::rpc::calcOpNextBaseFee(bcos::protocol::BlockHeader const& parent)
+bcos::u256 bcos::rpc::calcOpNextBaseFee(
+    bcos::protocol::BlockHeader const& parent, bcos::engine::OpEip1559Params const& eip1559)
 {
-    // Pre-check the parent's shape instead of catching everything: a genesis-adjacent OP
-    // parent (empty or not-yet-Holocene extraData) has no EIP-1559 parameters to decode, so
-    // keep its base fee. calcOpBaseFee's own fail-closed errors (missing baseFee, a Jovian
-    // parent missing blobGasUsed, u256 overflow) must surface rather than silently degrading
-    // to the parent fee — a bare catch (...) hid them all.
     auto const& extra = parent.extraData();
     auto const extraSpan = std::span<const bcos::byte>(
         reinterpret_cast<const bcos::byte*>(extra.data()), extra.size());
-    if (extra.empty() ||
-        bcos::engine::validateOpExtraDataShape(extraSpan, /*allowEmpty=*/true).has_value())
+    // Pre-Holocene parent (empty extraData): the step was previously SKIPPED here (the
+    // prediction returned the parent's fee — a flat line), because this path had no fork
+    // schedule to identify the era and no chain parameters to size the step. Both arrive
+    // now: the era comes from the header itself (ethBlockVersion >= SHANGHAI means the
+    // chain is past Canyon, choosing denominatorCanyon; the single Canyon activation
+    // block is the only ambiguity, the same tolerance as the engine's shape-derived
+    // forks), and the triple rides the LedgerConfig snapshot from the op_eip1559_params
+    // row. calcOpNextBlockBaseFee is the SAME function the engine's newPayload/FCU paths
+    // use, so the prediction can no longer drift from validation.
+    if (extra.empty())
+    {
+        auto const newBlockIsCanyon =
+            parent.ethBlockVersion() >= bcos::protocol::EthBlockVersion::SHANGHAI;
+        return bcos::engine::calcOpNextBlockBaseFee(
+            parent, {.parentIsHolocene = false,
+                        .parentIsJovian = false,
+                        .newBlockIsCanyon = newBlockIsCanyon,
+                        .eip1559 = eip1559});
+    }
+    // A malformed non-empty extraData must surface (fail closed), not degrade to the
+    // parent fee — a bare fallback here hid corrupt headers.
+    if (bcos::engine::validateOpExtraDataShape(extraSpan, /*allowEmpty=*/true).has_value())
     {
         return blockBaseFee(parent);
     }
     // parentIsJovian is derived from the parent's extraData shape (17-byte Jovian form):
-    // this RPC path has no fork schedule, and the header shape is the only signal available
-    // here. It agrees with m_scheduler.isJovianOrLaterAt() for headers this node produced.
+    // it agrees with m_scheduler.isJovianOrLaterAt() for headers this node produced.
     return bcos::engine::calcOpBaseFee(parent, isJovianOpParent(parent));
 }
 
@@ -287,7 +302,8 @@ std::vector<bcos::u256> bcos::rpc::pickRewardPercentiles(
 
 bcos::task::Task<Json::Value> bcos::rpc::buildFeeHistory(bcos::ledger::LedgerInterface& ledger,
     bcos::protocol::BlockNumber newestBlock, std::size_t blockCount,
-    std::vector<double> const& rewardPercentiles, bool opStackMode)
+    std::vector<double> const& rewardPercentiles, bool opStackMode,
+    bcos::engine::OpEip1559Params const& eip1559)
 {
     // The reward path loads each block's full body (transactions + receipts) and is reachable
     // unauthenticated on the public listener; the header-only path is cheap. geth's 1024 cap
@@ -377,7 +393,10 @@ bcos::task::Task<Json::Value> bcos::rpc::buildFeeHistory(bcos::ledger::LedgerInt
     {
         if (opStackMode)
         {
-            trailingBaseFee = calcOpNextBaseFee(*lastHeader);
+            // The chain's declared triple from the snapshot (legacy preset when
+            // [op_eip1559] was never declared — pre-existing chains keep the exact
+            // prediction they always had).
+            trailingBaseFee = calcOpNextBaseFee(*lastHeader, eip1559);
         }
         else if (versionAtLeast(
                      lastHeader->ethBlockVersion(), bcos::protocol::EthBlockVersion::LONDON))

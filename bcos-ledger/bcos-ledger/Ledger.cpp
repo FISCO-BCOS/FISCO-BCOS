@@ -2253,6 +2253,22 @@ bool Ledger::buildGenesisBlock(
                 executor_v1::StateKey(SYS_CONFIG, SYSTEM_KEY_EXCESS_BLOB_GAS), excessBlobGasEntry);
         }
 
+        if (genesis.m_opEip1559.has_value())
+        {
+            // The declared EIP-1559 triple rides the on-chain SYS_CONFIG so every
+            // snapshot read (getLedgerConfig -> RPC fee prediction) prices with the
+            // chain's own parameters, not a binary-side preset. Write-only at genesis:
+            // the triple is genesis-frozen, same policy as the fork-schedule metadata.
+            auto const params = bcos::engine::effectiveOpEip1559(genesis.m_opEip1559);
+            Entry eip1559Entry;
+            eip1559Entry.set(bcos::storage::serialize::encode(SystemConfigEntry{
+                std::to_string(params.elasticity) + "," + std::to_string(params.denominator) + "," +
+                    std::to_string(params.denominatorCanyon),
+                0}));
+            co_await storage2::writeOne(*m_stateStorage,
+                executor_v1::StateKey(SYS_CONFIG, INTERNAL_SYSTEM_KEY_OP_EIP1559_PARAMS),
+                std::move(eip1559Entry));
+        }
         if (genesis.m_opstackForkSchedule.has_value())
         {
             const auto metadata =

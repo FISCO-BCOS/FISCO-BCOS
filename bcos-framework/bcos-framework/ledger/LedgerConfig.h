@@ -24,6 +24,7 @@
 #include "Features.h"
 #include "LedgerTypeDef.h"
 #include "SystemConfigs.h"
+#include <bcos-framework/engine/OpEip1559Params.h>
 #include <algorithm>
 #include <cctype>
 #include <charconv>
@@ -158,6 +159,15 @@ public:
     // dedicated fields, so EEST runner stores them here.
     std::optional<uint64_t> excessBlobGas() const { return m_excessBlobGas; }
     void setExcessBlobGas(std::optional<uint64_t> v) { m_excessBlobGas = v; }
+
+    std::optional<bcos::engine::OpEip1559Params> const& opEip1559Params() const
+    {
+        return m_opEip1559Params;
+    }
+    void setOpEip1559Params(std::optional<bcos::engine::OpEip1559Params> v)
+    {
+        m_opEip1559Params = std::move(v);
+    }
     std::optional<uint64_t> blobGasUsed() const { return m_blobGasUsed; }
     void setBlobGasUsed(std::optional<uint64_t> v) { m_blobGasUsed = v; }
 
@@ -251,6 +261,11 @@ private:
     int64_t m_difficulty = 0;
     evmc::bytes32 m_prevRandao{};
     std::optional<uint64_t> m_excessBlobGas;
+    /// The OP lane's declared EIP-1559 triple, read from the op_eip1559_params
+    /// SYS_CONFIG row (written at genesis when [op_eip1559] is declared). Consumed by
+    /// the RPC fee prediction so pre-Holocene blocks are priced with the chain's own
+    /// parameters instead of the legacy preset.
+    std::optional<bcos::engine::OpEip1559Params> m_opEip1559Params;
     std::optional<uint64_t> m_blobGasUsed;
     std::tuple<uint64_t, protocol::BlockNumber> m_epochSealerNum = {DEFAULT_EPOCH_SEALER_NUM, 0};
     std::tuple<uint64_t, protocol::BlockNumber> m_epochBlockNum = {DEFAULT_EPOCH_BLOCK_NUM, 0};
@@ -444,6 +459,35 @@ inline std::string encodeEVMCRevisionConfig(std::optional<evmc_revision> explici
 
 /// Parse a SYS_CONFIG value string produced by encodeEVMCRevisionConfig and populate
 /// @p ledgerConfig's EVMC revision settings (explicit revision + fork transitions).
+/// Parse the op_eip1559_params SYS_CONFIG row ("elasticity,denominator,denominatorCanyon").
+/// Same fail-closed policy as applyEVMCRevisionConfig: a malformed persisted value must
+/// halt loudly rather than silently degrading the fee prediction to a preset.
+inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value)
+{
+    auto parseField = [&value](std::string_view field) -> std::uint64_t {
+        std::uint64_t out = 0;
+        auto [ptr, ec] = std::from_chars(field.data(), field.data() + field.size(), out);
+        if (ec != std::errc{} || ptr != field.data() + field.size())
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidEVMCRevisionConfig()
+                << errinfo_comment("cannot parse op_eip1559_params value: " + std::string(value)));
+        }
+        return out;
+    };
+    auto comma1 = value.find(',');
+    auto comma2 =
+        comma1 == std::string_view::npos ? std::string_view::npos : value.find(',', comma1 + 1);
+    if (comma1 == std::string_view::npos || comma2 == std::string_view::npos)
+    {
+        BOOST_THROW_EXCEPTION(InvalidEVMCRevisionConfig() << errinfo_comment(
+                                  "cannot parse op_eip1559_params value: " + std::string(value)));
+    }
+    return bcos::engine::OpEip1559Params{.elasticity = parseField(value.substr(0, comma1)),
+        .denominator = parseField(value.substr(comma1 + 1, comma2 - comma1 - 1)),
+        .denominatorCanyon = parseField(value.substr(comma2 + 1))};
+}
+
 inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view value)
 {
     ledgerConfig.clearForkTransitions();

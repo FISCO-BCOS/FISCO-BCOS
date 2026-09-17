@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include <bcos-framework/engine/OpEip1559Params.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/Transaction.h>
@@ -43,7 +44,8 @@ bcos::u256 calcEthNextBaseFee(bcos::protocol::BlockHeader const& parent);
 
 /// OP Stack next-block base fee (op-geth CalcBaseFee). Returns parent base fee when the parent
 /// header is not yet Holocene-shaped (genesis-adjacent OP chains).
-bcos::u256 calcOpNextBaseFee(bcos::protocol::BlockHeader const& parent);
+bcos::u256 calcOpNextBaseFee(
+    bcos::protocol::BlockHeader const& parent, bcos::engine::OpEip1559Params const& eip1559);
 
 /// Effective priority fee per gas for one transaction at a given block base fee.
 bcos::u256 effectivePriorityFeePerGas(
@@ -66,6 +68,7 @@ std::vector<bcos::u256> pickRewardPercentiles(std::vector<GasWeightedPriorityFee
 /// prediction for the trailing entry (and OP parent metering on Jovian parents).
 bcos::task::Task<Json::Value> buildFeeHistory(bcos::ledger::LedgerInterface& ledger,
     bcos::protocol::BlockNumber newestBlock, std::size_t blockCount,
-    std::vector<double> const& rewardPercentiles, bool opStackMode);
+    std::vector<double> const& rewardPercentiles, bool opStackMode,
+    bcos::engine::OpEip1559Params const& eip1559);
 
 }  // namespace bcos::rpc

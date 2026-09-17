@@ -117,11 +117,39 @@ BOOST_AUTO_TEST_CASE(ethNextBaseFeeDecreaseClampsToOneWeiNotZero)
     BOOST_CHECK_GT(calcEthNextBaseFee(partial), bcos::u256(1));
 }
 
+// The chain's DECLARED triple must drive the pre-Holocene step (the whole point of the
+// op_eip1559_params row): a denom-8 chain (devnet + C2 both declare 8) whose parent ran
+// 1 gwei with zero usage predicts 875'000'000 — the legacy preset would have said
+// 980'000'000. The child is pre-Canyon (LONDON header), so the base denominator applies.
+BOOST_AUTO_TEST_CASE(opNextBaseFeePreHoloceneUsesTheDeclaredTriple)
+{
+    auto parent = makeLondonParent(30'000'000, 0, 1'000'000'000);
+    auto const next = calcOpNextBaseFee(parent,
+        bcos::engine::OpEip1559Params{.elasticity = 6, .denominator = 8, .denominatorCanyon = 250});
+    BOOST_CHECK_EQUAL(next, bcos::u256(875'000'000));
+}
+
+// A parent PAST Canyon (SHANGHAI header) prices the next block with denominatorCanyon —
+// the header's own fork version is what this path has, and it is exact for every block
+// except the single Canyon activation boundary.
+BOOST_AUTO_TEST_CASE(opNextBaseFeePostCanyonUsesTheCanyonDenominator)
+{
+    auto parent = makeLondonParent(30'000'000, 0, 1'000'000'000);
+    parent.setEthBlockVersion(bcos::protocol::EthBlockVersion::SHANGHAI);
+    auto const next = calcOpNextBaseFee(parent,
+        bcos::engine::OpEip1559Params{.elasticity = 6, .denominator = 8, .denominatorCanyon = 250});
+    // delta 5M/5M target... denominator 250: 1e9 - 1e9*(5M/5M)/250 = 996'000'000.
+    BOOST_CHECK_EQUAL(next, bcos::u256(996'000'000));
+}
+
 BOOST_AUTO_TEST_CASE(opNextBaseFeeFallsBackWithoutHoloceneExtraData)
 {
     auto parent = makeLondonParent(30'000'000, 0, 1'000'000'000);
-    auto const next = calcOpNextBaseFee(parent);
-    BOOST_CHECK_EQUAL(next, bcos::u256(1'000'000'000));
+    // Was the flat-line BUG (returned the parent fee); the pre-Holocene step now applies
+    // with the chain's declared triple. Under the LEGACY preset {6, 50, 250} the step
+    // takes 20M: target 5M, gasUsed 0 -> 1e9 - 1e9*(5M/5M)/50 = 980'000'000.
+    auto const next = calcOpNextBaseFee(parent, bcos::engine::kLegacyOpEip1559Params);
+    BOOST_CHECK_EQUAL(next, bcos::u256(980'000'000));
 }
 
 /// A Holocene-shaped parent is NOT genesis-adjacent: calcOpBaseFee's own fail-closed
@@ -145,8 +173,8 @@ BOOST_AUTO_TEST_CASE(opNextBaseFeeThrowsOnHoloceneShapedParentMissingBaseFee)
     parent.setExtraData(extra);
     // InvalidEngineEncoding carries several distinct fail-closed messages, so pin the reason:
     // a wrong guard that throws the same type for another shape must not pass.
-    BOOST_CHECK_EXCEPTION((void)calcOpNextBaseFee(parent), bcos::engine::InvalidEngineEncoding,
-        [](bcos::engine::InvalidEngineEncoding const& e) {
+    BOOST_CHECK_EXCEPTION((void)calcOpNextBaseFee(parent, bcos::engine::kLegacyOpEip1559Params),
+        bcos::engine::InvalidEngineEncoding, [](bcos::engine::InvalidEngineEncoding const& e) {
             return std::string(e.what()).find("missing baseFee") != std::string::npos;
         });
 }
@@ -266,7 +294,8 @@ BOOST_AUTO_TEST_CASE(buildFeeHistoryWeightsRewardsByReceiptGasUsed)
     block->appendReceipt(makeReceipt(bcos::u256(21'000)));
 
     auto result = bcos::task::syncWait(buildFeeHistory(*ledger, /*newestBlock=*/1,
-        /*blockCount=*/1, std::vector<double>{50.0}, /*opStackMode=*/false));
+        /*blockCount=*/1, std::vector<double>{50.0}, /*opStackMode=*/false,
+        bcos::engine::kLegacyOpEip1559Params));
     BOOST_REQUIRE(result.isMember("reward"));
     BOOST_REQUIRE_EQUAL(result["reward"].size(), 1U);
     BOOST_REQUIRE_EQUAL(result["reward"][0U].size(), 1U);
@@ -296,20 +325,22 @@ BOOST_AUTO_TEST_CASE(buildFeeHistoryRejectsOutOfRangeBlockCount)
     auto const isInvalidParams = [](JsonRpcException const& e) {
         return e.code() == InvalidParams;
     };
-    BOOST_CHECK_EXCEPTION(
-        bcos::task::syncWait(buildFeeHistory(*ledger, /*newestBlock=*/200,
-            /*blockCount=*/1000, std::vector<double>{50.0}, /*opStackMode=*/false)),
+    BOOST_CHECK_EXCEPTION(bcos::task::syncWait(buildFeeHistory(*ledger, /*newestBlock=*/200,
+                              /*blockCount=*/1000, std::vector<double>{50.0}, /*opStackMode=*/false,
+                              bcos::engine::kLegacyOpEip1559Params)),
         JsonRpcException, isInvalidParams);
 
     // The 128-block bound itself is served: newest 200, 128 blocks -> oldest 200 - 127 = 73.
     auto atBound = bcos::task::syncWait(buildFeeHistory(*ledger, /*newestBlock=*/200,
-        /*blockCount=*/128, std::vector<double>{50.0}, /*opStackMode=*/false));
+        /*blockCount=*/128, std::vector<double>{50.0}, /*opStackMode=*/false,
+        bcos::engine::kLegacyOpEip1559Params));
     BOOST_CHECK_EQUAL(atBound["oldestBlock"].asString(), toQuantity(bcos::u256(73)));
     BOOST_CHECK_EQUAL(atBound["baseFeePerGas"].size(), 129U);  // 128 blocks + trailing fee
 
     // Headers only: 1000 is under the 1024 query limit -> served.
     auto headersOnly = bcos::task::syncWait(buildFeeHistory(*ledger, /*newestBlock=*/200,
-        /*blockCount=*/1000, /*rewardPercentiles=*/{}, /*opStackMode=*/false));
+        /*blockCount=*/1000, /*rewardPercentiles=*/{}, /*opStackMode=*/false,
+        bcos::engine::kLegacyOpEip1559Params));
     BOOST_CHECK_EQUAL(headersOnly["oldestBlock"].asString(), toQuantity(bcos::u256(0)));
     BOOST_CHECK_EQUAL(headersOnly["baseFeePerGas"].size(), 202U);  // 201 blocks + trailing fee
     BOOST_CHECK(!headersOnly.isMember("reward"));
@@ -317,11 +348,11 @@ BOOST_AUTO_TEST_CASE(buildFeeHistoryRejectsOutOfRangeBlockCount)
     // Over the geth query limit, and a zero count, are both InvalidParams.
     BOOST_CHECK_EXCEPTION(
         bcos::task::syncWait(buildFeeHistory(*ledger, /*newestBlock=*/200, /*blockCount=*/1025,
-            /*rewardPercentiles=*/{}, /*opStackMode=*/false)),
+            /*rewardPercentiles=*/{}, /*opStackMode=*/false, bcos::engine::kLegacyOpEip1559Params)),
         JsonRpcException, isInvalidParams);
     BOOST_CHECK_EXCEPTION(
         bcos::task::syncWait(buildFeeHistory(*ledger, /*newestBlock=*/200, /*blockCount=*/0,
-            /*rewardPercentiles=*/{}, /*opStackMode=*/false)),
+            /*rewardPercentiles=*/{}, /*opStackMode=*/false, bcos::engine::kLegacyOpEip1559Params)),
         JsonRpcException, isInvalidParams);
 }
 

@@ -110,6 +110,7 @@ constexpr static std::string_view SYSTEM_KEY_EXCESS_BLOB_GAS = magic_enum::enum_
 // A3: eth-genesis (L2) chains store the FISCO genesis pin here instead of in B0's
 // extraData — B0's extraData carries the genesis artifact bytes and enters the RLP hash.
 constexpr static std::string_view INTERNAL_SYSTEM_KEY_ETH_GENESIS_DATA = "eth_genesis_data";
+constexpr static std::string_view INTERNAL_SYSTEM_KEY_OP_EIP1559_PARAMS = "op_eip1559_params";
 // clang-format on
 constexpr static std::string_view PBFT_CONSENSUS_TYPE = "pbft";
 constexpr static std::string_view RPBFT_CONSENSUS_TYPE = "rpbft";

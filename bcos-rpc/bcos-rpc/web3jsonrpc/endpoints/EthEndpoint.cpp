@@ -1947,7 +1947,11 @@ task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value
     // the tip config answers for newestBlock too.
     auto const ledgerConfig = co_await ledger::getLedgerConfig(*ledger);
     auto const opStackMode = isOpStackLane(ledgerConfig->executorVersion());
+    // The OP prediction prices pre-Holocene blocks with the chain's own triple from the
+    // op_eip1559_params row (legacy preset when undeclared — pre-existing chains keep
+    // their exact prediction).
+    auto const opEip1559 = bcos::engine::effectiveOpEip1559(ledgerConfig->opEip1559Params());
     auto result = co_await buildFeeHistory(*ledger, newestBlock,
-        static_cast<std::size_t>(*blockCountParsed), rewardPercentiles, opStackMode);
+        static_cast<std::size_t>(*blockCountParsed), rewardPercentiles, opStackMode, opEip1559);
     buildJsonContent(result, response);
 }
