@@ -78,7 +78,7 @@ struct OpPayloadArtifacts
 namespace engine_common::op
 {
 std::vector<std::string> supportedOpCapabilities();
-std::optional<std::uint64_t> narrowU256ToU64(const u256& value);
+std::optional<std::uint64_t> tryNarrowU256ToU64(const u256& value);
 bcos::h2048 toEthLogsBloom(const Bloom& logsBloom);
 /// OP-only attrs rules, keyed on the fork the attributes timestamp selects: the fork
 /// determines which 1559 fields the block may carry (see OpBaseFee's extraData

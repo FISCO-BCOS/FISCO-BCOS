@@ -159,11 +159,11 @@ std::optional<std::string> validateOpPayloadHeaderFields(
     {
         return std::string("blockNumber must not be negative");
     }
-    if (!narrowU256ToU64(payload.gasLimit).has_value())
+    if (!tryNarrowU256ToU64(payload.gasLimit).has_value())
     {
         return std::string("gasLimit exceeds the uint64 range of the ETH header field");
     }
-    if (gasLimitExceedsOpCap(*narrowU256ToU64(payload.gasLimit)))
+    if (gasLimitExceedsOpCap(*tryNarrowU256ToU64(payload.gasLimit)))
     {
         return std::string(c_opMaxBlockGasLimitMessage);
     }
@@ -171,7 +171,7 @@ std::optional<std::string> validateOpPayloadHeaderFields(
     {
         return "executionPayload.extraData " + *error;
     }
-    if (!narrowU256ToU64(payload.gasUsed).has_value())
+    if (!tryNarrowU256ToU64(payload.gasUsed).has_value())
     {
         return std::string("gasUsed exceeds the uint64 range of the ETH header field");
     }
@@ -187,7 +187,7 @@ std::optional<std::string> validateOpBlobGasUsed(
     {
         return std::nullopt;
     }
-    auto const blobGasUsed = narrowU256ToU64(*payload.blobGasUsed);
+    auto const blobGasUsed = tryNarrowU256ToU64(*payload.blobGasUsed);
     if (!blobGasUsed.has_value())
     {
         return std::string("blobGasUsed exceeds the uint64 range of the ETH header field");
@@ -308,7 +308,7 @@ std::vector<std::string> supportedOpCapabilities()
     return caps;
 }
 
-std::optional<std::uint64_t> narrowU256ToU64(const u256& value)
+std::optional<std::uint64_t> tryNarrowU256ToU64(const u256& value)
 {
     if (!bcos::u256FitsUint64(value))
     {
