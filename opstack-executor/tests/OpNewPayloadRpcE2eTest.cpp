@@ -1407,6 +1407,269 @@ BOOST_AUTO_TEST_CASE(PreCanyonBaseFeeUsesTheChainsEip1559Denominator)
                                                    << status.validationError.value_or(""));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Batch-2 RPC scenarios S2/S3/S4/S6 (triage Selection; expectations quoted below
+// from the op-node/op-geth sibling tests they were ported from).
+//
+// The Regolith window is the vehicle: it is the only fork whose profile admits
+// ExecutionPayloadV1/V2 (EngineApiProfile) while still being a fork FISCO can
+// activate from genesis, so a V2 payload is a legal import at the same time as
+// being pre-Canyon (empty extraData, no withdrawals, no blob fields).
+// ═══════════════════════════════════════════════════════════════════════════════
+namespace
+{
+/// Attributes for a plain Regolith block: timestamp is internal ms (the engine
+/// divides by 1000), the rest are the Regolith-era minimums.
+bcos::engine::PayloadAttributes regolithAttrs(std::uint64_t tsMillis, bool noTxPool)
+{
+    bcos::engine::PayloadAttributes attrs;
+    attrs.timestamp = tsMillis;
+    attrs.prevRandao = bcos::crypto::HashType{};
+    attrs.suggestedFeeRecipient = bcos::Address{};
+    attrs.gasLimit = 30'000'000;
+    attrs.noTxPool = noTxPool;
+    return attrs;
+}
+
+/// FCU V1 + getPayload V2 against `parentHash`, asserting VALID; returns the payload.
+std::optional<bcos::engine::ExecutionPayload> buildBlockOn(OpE2eFixture& fixture,
+    bcos::h256 const& parentHash, std::uint64_t tsMillis, bool noTxPool, std::string_view what)
+{
+    auto attrs = regolithAttrs(tsMillis, noTxPool);
+    bcos::engine::ForkchoiceState const fc{parentHash, parentHash, parentHash};
+    auto built = bcos::task::syncWait(fixture.service.updateForkchoice(
+        fc, &attrs, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V1)));
+    BOOST_REQUIRE_MESSAGE(
+        built.payloadStatus.status == bcos::engine::PayloadValidationStatus::Valid,
+        what << ": FCU must be VALID, got " << static_cast<int>(built.payloadStatus.status) << " "
+             << built.payloadStatus.validationError.value_or(""));
+    BOOST_REQUIRE_MESSAGE(built.payloadId.has_value(), what << ": FCU returned no payloadId");
+    auto got = bcos::task::syncWait(fixture.service.getPayload(
+        *built.payloadId, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V2)));
+    BOOST_REQUIRE_MESSAGE(got != nullptr, what << ": getPayload returned nothing");
+    return got->executionPayload;
+}
+
+/// newPayload V2 of `payload` against a node whose canonical parent is its parent.
+bcos::engine::PayloadStatus importPayload(
+    OpE2eFixture& fixture, bcos::engine::ExecutionPayload const& payload)
+{
+    bcos::engine::NewPayloadRequest request{.executionPayload = payload,
+        .expectedBlobVersionedHashes = {},
+        .parentBeaconBlockRoot = {},
+        .executionRequests = {}};
+    return bcos::task::syncWait(fixture.service.newPayload(
+        request, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V2)));
+}
+
+/// True for an envelope the OP lane classifies as a deposit (EIP-2718 type 0x7e).
+bool isDepositEnvelope(bcos::bytes const& raw)
+{
+    return !raw.empty() && raw[0] == 0x7e;
+}
+
+/// Rebuild the canonical OP header for `payload` and stamp its hash back, exactly as
+/// OpL1EdgeGateTest does: without this the engine's hash gate would mask the field
+/// under test. `forkId` comes from the same schedule the engine resolves, so the
+/// rebuilt preimage matches byte for byte.
+void resealPayloadBlockHash(OpE2eFixture& fixture, bcos::engine::ExecutionPayload& payload)
+{
+    auto const tsSec =
+        bcos::engine::unixSecondsFromInternalMillis(static_cast<uint64_t>(payload.timestamp));
+    auto const txRoot = EngineOpScheduler::computeTxRoot(rawEnvelopesFromPayload(payload));
+    auto header = bcos::engine::engine_common::op::rebuildOpEthHeader(
+        fixture.blockFactory->blockHeaderFactory(), payload, txRoot, std::nullopt,
+        fixture.scheduler.forkIdAt(tsSec));
+    payload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*header);
+}
+
+}  // namespace
+
+// S2 — "noTxPool / empty attributes": op-e2e actions/sequencer/l2_sequencer_test.go
+// (TestL2Sequencer_SequencerDrift) drives the engine with ForcedEmpty (noTxPool) past
+// the drift window and requires the block to be produced nonetheless. FISCO's build
+// path must (a) skip the mempool seal for noTxPool instead of refusing, and (b) emit a
+// block whose only transaction is the synthesized L1-attributes deposit — the verifier
+// side then imports it unchanged. Acceptance: FCU VALID, 1 deposit tx, import VALID.
+BOOST_AUTO_TEST_CASE(AttributeNoTxPoolBuildsDepositsOnlyBlock)
+{
+    auto const genesis = regolithGenesisHash();
+    auto builder = std::make_unique<OpE2eFixture>(regolithOnlySchedule());
+    registerRegolithGenesis(*builder, genesis);
+
+    auto built = buildBlockOn(*builder, genesis, /*tsMillis=*/1'000, /*noTxPool=*/true, "S2");
+    BOOST_REQUIRE(built.has_value());
+    BOOST_CHECK_EQUAL(built->blockNumber, 1);
+    BOOST_CHECK(built->parentHash == genesis);
+    BOOST_TEST_INFO("txs=" << built->transactions.size());
+    BOOST_REQUIRE_EQUAL(built->transactions.size(), 1U);
+    BOOST_CHECK_MESSAGE(isDepositEnvelope(built->transactions.front().raw),
+        "S2: the noTxPool block's single transaction must be the L1-attributes deposit (0x7e)");
+
+    auto importer = std::make_unique<OpE2eFixture>(regolithOnlySchedule());
+    registerRegolithGenesis(*importer, genesis);
+    auto status = importPayload(*importer, *built);
+    BOOST_CHECK_MESSAGE(status.status == bcos::engine::PayloadValidationStatus::Valid,
+        "S2: the deposits-only block must import, got " << static_cast<int>(status.status) << " "
+                                                        << status.validationError.value_or(""));
+}
+
+// S3 — invalid-signature transaction inside a payload. op-e2e
+// actions/upgrades/holocene_fork_test.go (TestHoloceneInvalidPayload) zeroes a tx
+// signature in the batcher and requires the verifier to reject that block; the
+// consensus-layer contract is INVALID with latestValidHash = the parent (op-geth
+// eth/catalyst: a payload failing execution returns INVALID plus the last valid tip).
+// FISCO's importer must reject the block during execution instead of accepting it or
+// flattening to an internal error. Acceptance: INVALID, latestValidHash = parent,
+// non-empty reason.
+BOOST_AUTO_TEST_CASE(PayloadWithInvalidSignatureTxRejected)
+{
+    auto const genesis = regolithGenesisHash();
+    auto builder = std::make_unique<OpE2eFixture>(regolithOnlySchedule());
+    registerRegolithGenesis(*builder, genesis);
+
+    auto built = buildBlockOn(*builder, genesis, /*tsMillis=*/1'000, /*noTxPool=*/true, "S3");
+    BOOST_REQUIRE(built.has_value());
+    BOOST_REQUIRE_EQUAL(built->transactions.size(), 1U);
+
+    // An EIP-1559 envelope (type 0x02, 12 RLP items: chainId 0x2105, nonce, both fee caps, gas,
+    // to, value, data, accessList, y, r, s) whose signature triple is zero — the verifier-side
+    // face of the reference test's zeroed signature. Observed: FISCO refuses it at the payload's
+    // envelope decode gate ("undecodable payload transaction envelope"), one gate earlier than
+    // the reference's execution-side wording ("sender not an eoa" / insufficient funds for a
+    // recovered-but-empty sender). The outcome under test is the same INVALID + latestValidHash
+    // = parent, so the message is recorded rather than pinned: the corpus' invalid_* items are
+    // the place that pins the execution-side wording.
+    bcos::bytes const badEnvelope = bcos::fromHex(
+        "0x"
+        "02"
+        "e4"
+        "822105"
+        "80"
+        "01"
+        "01"
+        "825208"
+        "94"
+        "1111111111111111111111111111111111111111"
+        "80"
+        "80"
+        "c0"
+        "80"
+        "80"
+        "80");
+    auto mutated = *built;
+    auto appended = mutated.transactions.front();  // copy: keeps the element type opaque
+    appended.raw = badEnvelope;
+    mutated.transactions.push_back(std::move(appended));
+    resealPayloadBlockHash(*builder, mutated);
+
+    auto importer = std::make_unique<OpE2eFixture>(regolithOnlySchedule());
+    registerRegolithGenesis(*importer, genesis);
+    auto status = importPayload(*importer, mutated);
+    auto const reason = status.validationError.value_or("<no reason>");
+    BOOST_TEST_MESSAGE("S3 reject: status="
+                       << static_cast<int>(status.status) << " reason='" << reason << "' lvh="
+                       << (status.latestValidHash.has_value() ? status.latestValidHash->abridged() :
+                                                                std::string("<none>")));
+    BOOST_CHECK_MESSAGE(status.status == bcos::engine::PayloadValidationStatus::Invalid,
+        "S3: a payload carrying an unrecoverable-signature tx must be INVALID");
+    BOOST_CHECK_MESSAGE(status.validationError.has_value() && !status.validationError->empty(),
+        "S3: the rejection must carry a reason (a silent flatten hides the tx error)");
+    // The reseal above makes the header self-consistent, so a structural complaint here would
+    // mean the engine never looked at the transaction at all — i.e. it accepted the unbalanced
+    // payload instead of reporting the bad tx, which is the failure mode this scenario exists
+    // to catch. The observed decode-gate wording is allowed (see the envelope comment): the
+    // gate that catches it is FISCO's, but the tx is what is being refused.
+    BOOST_CHECK_MESSAGE(reason.find("blockHash does not match") == std::string::npos &&
+                            reason.find("stateRoot") == std::string::npos &&
+                            reason.find("gasUsed") == std::string::npos,
+        "S3: the rejection must name the bad transaction, not a structural gate (reason='" << reason
+                                                                                           << "')");
+    BOOST_CHECK_MESSAGE(status.latestValidHash.has_value() && *status.latestValidHash == genesis,
+        "S3: latestValidHash must be the parent genesis");
+}
+
+// S4 — deposits-only block accepted, then the chain keeps building on top of it.
+// Second half of TestHoloceneInvalidPayload: after the replacement block is accepted
+// ("building on top of reorg'd chain and deriving further works"), the node must produce
+// further blocks on the replacement head. Acceptance: import VALID, then FCU+getPayload
+// on the imported head VALID with number 2 and parentHash = replacement hash.
+BOOST_AUTO_TEST_CASE(DepositsOnlyBlockAcceptedThenChainBuildsOnTop)
+{
+    auto const genesis = regolithGenesisHash();
+    auto builder = std::make_unique<OpE2eFixture>(regolithOnlySchedule());
+    registerRegolithGenesis(*builder, genesis);
+
+    auto built = buildBlockOn(*builder, genesis, /*tsMillis=*/1'000, /*noTxPool=*/true, "S4");
+    BOOST_REQUIRE(built.has_value());
+    auto const replacement = built->blockHash;
+
+    // The substitution this scenario is named for: a fresh node learns the block by import
+    // (no build artifact cache) and must adopt it as canonical, not fall back to Syncing.
+    auto importer = std::make_unique<OpE2eFixture>(regolithOnlySchedule());
+    registerRegolithGenesis(*importer, genesis);
+    auto status = importPayload(*importer, *built);
+    BOOST_REQUIRE_MESSAGE(status.status == bcos::engine::PayloadValidationStatus::Valid,
+        "S4: the deposits-only block must be accepted, got "
+            << static_cast<int>(status.status) << " " << status.validationError.value_or(""));
+
+    auto const next = buildBlockOn(
+        *importer, replacement, /*tsMillis=*/2'000, /*noTxPool=*/true, "S4 continuation");
+    BOOST_REQUIRE(next.has_value());
+    BOOST_TEST_INFO(
+        "next.number=" << next->blockNumber << " parent=" << next->parentHash.abridged());
+    BOOST_CHECK_EQUAL(next->blockNumber, 2);
+    BOOST_CHECK_MESSAGE(next->parentHash == replacement,
+        "S4: block 2 must extend the imported replacement block, not the genesis");
+    BOOST_CHECK_EQUAL(next->transactions.size(), 1U);
+    BOOST_CHECK(isDepositEnvelope(next->transactions.front().raw));
+}
+
+// S6 — attributes / payload timestamp must be strictly increasing. The reference rule is
+// op-geth's consensus timestamp check: a payload whose timestamp is not greater than its
+// parent's is refused (INVALID, latestValidHash = parent) rather than executed. FISCO's
+// gate sits at OpEngineService.inl:1045, but the blockHash gate runs ahead of it — so the
+// mutated payload is resealed, otherwise the rejection would name the hash and never reach
+// the timestamp rule. Acceptance: INVALID naming the timestamp rule, latestValidHash =
+// parent, and the parent still builds afterwards.
+BOOST_AUTO_TEST_CASE(PayloadTimestampNotIncreasingRejected)
+{
+    auto const genesis = regolithGenesisHash();
+    auto fixture = std::make_unique<OpE2eFixture>(regolithOnlySchedule());
+    registerRegolithGenesis(*fixture, genesis);
+
+    auto built = buildBlockOn(*fixture, genesis, /*tsMillis=*/1'000, /*noTxPool=*/true, "S6");
+    BOOST_REQUIRE(built.has_value());
+
+    // Parent (genesis) timestamp is 0; equal is not "strictly greater".
+    auto mutated = *built;
+    mutated.timestamp = 0;
+    resealPayloadBlockHash(*fixture, mutated);
+    auto status = importPayload(*fixture, mutated);
+    BOOST_TEST_MESSAGE("S6 reject: status=" << static_cast<int>(status.status) << " reason='"
+                                            << status.validationError.value_or("<none>") << "' lvh="
+                                            << (status.latestValidHash.has_value() ?
+                                                       status.latestValidHash->abridged() :
+                                                       std::string("<none>")));
+    BOOST_CHECK_MESSAGE(status.status == bcos::engine::PayloadValidationStatus::Invalid,
+        "S6: a non-increasing payload timestamp must be INVALID");
+    BOOST_CHECK_MESSAGE(
+        status.validationError.value_or("").find(
+            "timestamp must be strictly greater than the parent's") != std::string::npos,
+        "S6: the rejection must name the timestamp rule, got '"
+            << status.validationError.value_or("<none>") << "'");
+    BOOST_CHECK_MESSAGE(status.latestValidHash.has_value() && *status.latestValidHash == genesis,
+        "S6: latestValidHash must be the parent genesis, got "
+            << (status.latestValidHash.has_value() ? status.latestValidHash->abridged() :
+                                                     std::string("<none>")));
+
+    // Parent intact: the same node still builds a legal block on the untouched parent.
+    auto after =
+        buildBlockOn(*fixture, genesis, /*tsMillis=*/1'000, /*noTxPool=*/true, "S6 parent intact");
+    BOOST_CHECK_MESSAGE(
+        after.has_value(), "S6: the parent must remain buildable after the refusal");
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE(OpForkchoiceRpcE2eSuite)
