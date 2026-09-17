@@ -244,4 +244,15 @@ inline crypto::HashType keccakOpForkScheduleHash(std::string_view canonical)
     return crypto::keccak256Hash(
         bytesConstRef(reinterpret_cast<const byte*>(normalized.data()), normalized.size()));
 }
+
+/// Hash an ALREADY-normalized canonical schedule text — the output of
+/// canonicalOpForkSchedule (e.g. the `.schedule` member buildOpForkScheduleMetadata just
+/// normalized). Unlike keccakOpForkScheduleHash this does not parse/normalize again:
+/// re-validating text that is normalized by construction is pure waste on the genesis
+/// write path.
+inline crypto::HashType keccakNormalizedOpForkScheduleHash(std::string_view normalizedCanonical)
+{
+    return crypto::keccak256Hash(bytesConstRef(
+        reinterpret_cast<const byte*>(normalizedCanonical.data()), normalizedCanonical.size()));
+}
 }  // namespace bcos::ledger

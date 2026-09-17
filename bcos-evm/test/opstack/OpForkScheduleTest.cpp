@@ -66,55 +66,79 @@ BOOST_AUTO_TEST_CASE(JovianAndKarstConfigs, * boost::unit_test::label("fork-rego
     BOOST_CHECK_NE(k.precompiles, j.precompiles);
 }
 
-// At and above karst_time configAt hands back the same static config karstConfig() does.
+// At and above karst_time the member configAt hands back the same static config karstConfig()
+// does. (The free configAt(schedule, ts) shorthand resolver was retired with review finding
+// F39 — every dispatch now goes through OpForkSchedule::configAt so the rule has one home.)
 BOOST_AUTO_TEST_CASE(ConfigAtSelectsKarst)
 {
-    // Value copies, not references: configAt returns a reference to a static config, but the
-    // schedule argument is a prvalue temporary — GCC-14 -Wdangling-reference flags the
-    // reference binding as potentially dangling (false positive; the returned ref never
-    // aliases the argument). Copy the ~32B config instead.
-    const auto karst = configAt(sched(1000, 2000), 2000);
+    // Fold the shorthand into this lane's schedule the same way the Initializer wiring does,
+    // then dispatch through the member. Bind the schedule to a local: configAt returns a
+    // reference to a static config, and a prvalue schedule would trip GCC-14
+    // -Wdangling-reference (false positive — the returned ref never aliases the argument).
+    const auto schedule = OpForkSchedule::fromLedgerSchedule(sched(1000, 2000));
+    const auto karst = schedule.configAt(2000);
     BOOST_CHECK_EQUAL(karst.fork, OpFork::Karst);
     BOOST_CHECK_EQUAL(karst.rev, EVMC_OSAKA);
     BOOST_CHECK_EQUAL(karst.precompiles, &karstPrecompileOverrides());
     BOOST_CHECK(karst.has_da_footprint);
     BOOST_CHECK(karst.has_jovian_operator_formula);
-    BOOST_CHECK_EQUAL(&configAt(sched(1000, 2000), 2000), &karstConfig());
+    BOOST_CHECK_EQUAL(&schedule.configAt(2000), &karstConfig());
 
-    // Karst is a superset of Jovian: a schedule that activates both at the same second is
-    // Karst, and one that (illegally, NodeConfig rejects it) leaves jovian unscheduled must
-    // still not downgrade a Karst block to Isthmus.
-    BOOST_CHECK_EQUAL(configAt(sched(0, 0), 0).fork, OpFork::Karst);
-    BOOST_CHECK_EQUAL(configAt(sched(kNever, 2000), 2000).fork, OpFork::Karst);
+    // Latest-fork-first on equal timestamps. The production constructor refuses this shape
+    // (strictly increasing activations), so pin it through the TestBypass lane.
+    const OpForkSchedule both{
+        {{OpFork::Jovian, 0}, {OpFork::Karst, 0}}, OpForkSchedule::TestBypass{}};
+    BOOST_CHECK_EQUAL(both.configAt(0).fork, OpFork::Karst);
+}
+
+// Karst is a superset of Jovian: a schedule that activates both at the same second is Karst.
+// A jovian-unscheduled schedule carrying karst_time is illegal (NodeConfig rejects it); the
+// member path REFUSES such shapes at construction instead of dispatching them.
+BOOST_AUTO_TEST_CASE(ConfigAtRejectsSimultaneousAndIllegalShapesAtConstruction)
+{
+    // jovian_time == karst_time: the strict-increasing validation throws.
+    BOOST_CHECK_THROW(
+        OpForkSchedule::fromLedgerSchedule(sched(0, 0)), bcos::ledger::InvalidOpForkSchedule);
+    // jovian unscheduled with karst scheduled: the fold drops the never-activating karst —
+    // the all-Isthmus legacy chain — rather than dispatching a karst the schedule cannot
+    // reach.
+    const auto legacy = OpForkSchedule::fromLedgerSchedule(sched(kNever, 2000));
+    BOOST_CHECK_EQUAL(legacy.configAt(2000).fork, OpFork::Isthmus);
 }
 
 // The whole ladder on one schedule, at the exact boundary seconds. op-node's IsX(ts) is
 // `ts >= *Time`, so the activation second itself is already inside the fork.
 BOOST_AUTO_TEST_CASE(ConfigAtIsKeyedOnTheBlockTimestamp)
 {
-    const auto schedule = sched(1000, 2000);
-    BOOST_CHECK_EQUAL(configAt(schedule, 0).fork, OpFork::Isthmus);
-    BOOST_CHECK_EQUAL(configAt(schedule, 999).fork, OpFork::Isthmus);
-    BOOST_CHECK_EQUAL(configAt(schedule, 1000).fork, OpFork::Jovian);
-    BOOST_CHECK_EQUAL(configAt(schedule, 1999).fork, OpFork::Jovian);
-    BOOST_CHECK_EQUAL(configAt(schedule, 2000).fork, OpFork::Karst);
-    BOOST_CHECK_EQUAL(configAt(schedule, 2001).fork, OpFork::Karst);
+    const auto schedule = OpForkSchedule::fromLedgerSchedule(sched(1000, 2000));
+    BOOST_CHECK_EQUAL(schedule.configAt(0).fork, OpFork::Isthmus);
+    BOOST_CHECK_EQUAL(schedule.configAt(999).fork, OpFork::Isthmus);
+    BOOST_CHECK_EQUAL(schedule.configAt(1000).fork, OpFork::Jovian);
+    BOOST_CHECK_EQUAL(schedule.configAt(1999).fork, OpFork::Jovian);
+    BOOST_CHECK_EQUAL(schedule.configAt(2000).fork, OpFork::Karst);
+    BOOST_CHECK_EQUAL(schedule.configAt(2001).fork, OpFork::Karst);
 }
 
 // UINT64_MAX is op-node's nil: the fork is not scheduled and never activates, not even at
 // the largest representable timestamp.
 BOOST_AUTO_TEST_CASE(UnscheduledForksNeverActivate)
 {
-    BOOST_CHECK_EQUAL(configAt(sched(kNever, kNever), 0).fork, OpFork::Isthmus);
-    BOOST_CHECK_EQUAL(configAt(sched(kNever, kNever), kNever - 1).fork, OpFork::Isthmus);
-    BOOST_CHECK_EQUAL(configAt(sched(0, kNever), kNever - 1).fork, OpFork::Jovian);
+    const auto isthmusOnly = OpForkSchedule::fromLedgerSchedule(sched(kNever, kNever));
+    BOOST_CHECK_EQUAL(isthmusOnly.configAt(0).fork, OpFork::Isthmus);
+    BOOST_CHECK_EQUAL(isthmusOnly.configAt(kNever - 1).fork, OpFork::Isthmus);
+    const auto jovianOnly = OpForkSchedule::fromLedgerSchedule(sched(0, kNever));
+    BOOST_CHECK_EQUAL(jovianOnly.configAt(kNever - 1).fork, OpFork::Jovian);
 }
 
 // A genesis-activated fork is active for block 0 itself (timestamp 0 >= 0).
 BOOST_AUTO_TEST_CASE(ZeroMeansActiveFromGenesis)
 {
-    BOOST_CHECK_EQUAL(configAt(sched(0, kNever), 0).fork, OpFork::Jovian);
-    BOOST_CHECK_EQUAL(configAt(sched(0, 0), 0).fork, OpFork::Karst);
+    const auto jovianAtGenesis = OpForkSchedule::fromLedgerSchedule(sched(0, kNever));
+    BOOST_CHECK_EQUAL(jovianAtGenesis.configAt(0).fork, OpFork::Jovian);
+    // jovian == karst == 0: strict-increasing validation throws (latest-fork-first dispatch
+    // on this shape is pinned via the TestBypass construction in ConfigAtSelectsKarst).
+    BOOST_CHECK_THROW(
+        OpForkSchedule::fromLedgerSchedule(sched(0, 0)), bcos::ledger::InvalidOpForkSchedule);
 }
 
 // clang-format off
@@ -165,9 +189,10 @@ BOOST_AUTO_TEST_CASE(EcotoneFeeModelAndFlagsWrapperDoesNotSelectKarst, * boost::
     BOOST_CHECK(karstConfig().l1_fee_model == L1FeeModel::Fjord);
 
     // configAt's three branches; each returns a reference to the same static config.
-    BOOST_CHECK_EQUAL(&configAt(sched(1000, 2000), 999), &isthmusConfig());
-    BOOST_CHECK_EQUAL(&configAt(sched(1000, 2000), 1000), &jovianConfig());
-    BOOST_CHECK_EQUAL(&configAt(sched(1000, 2000), 2000), &karstConfig());
+    const auto schedule = OpForkSchedule::fromLedgerSchedule(sched(1000, 2000));
+    BOOST_CHECK_EQUAL(&schedule.configAt(999), &isthmusConfig());
+    BOOST_CHECK_EQUAL(&schedule.configAt(1000), &jovianConfig());
+    BOOST_CHECK_EQUAL(&schedule.configAt(2000), &karstConfig());
 
     BOOST_CHECK_EQUAL(&configAt(OpForkFlags{.jovianActive = false}), &isthmusConfig());
     BOOST_CHECK_EQUAL(&configAt(OpForkFlags{.jovianActive = true}), &jovianConfig());

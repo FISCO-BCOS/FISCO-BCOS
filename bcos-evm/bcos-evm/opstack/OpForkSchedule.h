@@ -127,6 +127,16 @@ public:
     [[nodiscard]] OpFork forkAt(uint64_t timestampSeconds) const;
     /// Unix-second baseline of the first activation record.
     [[nodiscard]] uint64_t baselineTimestamp() const;
+    /// Config for the fork active at a block timestamp IN SECONDS: latest activation with
+    /// `timestamp <= timestampSeconds` wins — op-node's own keying (rollup/types.go:
+    /// `IsJovian(ts)` is `Time != nil && ts >= *Time`, with UINT64_MAX standing in for
+    /// nil). WHICH block's timestamp each rule keys on is the caller's decision: op-geth
+    /// keys the Holocene extraData decode and the Jovian DA-footprint branch on the PARENT
+    /// header's time (consensus/misc/eip1559/eip1559.go CalcBaseFee), while the
+    /// L1-attributes calldata layout and the Jovian payload attributes key on the CHILD's
+    /// (op-node derive/l1_block_info.go, derive/attributes.go). Every caller in this tree
+    /// converts through bcos-framework/engine/OpTime.h's unixSecondsFromInternalMillis
+    /// (internal timestamps are milliseconds).
     [[nodiscard]] const OpForkConfig& configAt(uint64_t timestampSeconds) const;
     /// Named Jovian/Karst activations (Q5 deposits-only). Classify new forks in the .cpp switch.
     [[nodiscard]] std::vector<OpForkActivation> jovianAndLaterActivations() const;
@@ -134,28 +144,4 @@ public:
 private:
     std::vector<OpForkActivation> m_activations;
 };
-
-/// Resolves the OP fork config for a block from the chain's genesis fork schedule
-/// ([op_fork_timestamps] in config.genesis, ledger::OpForkSchedule) and that block's
-/// timestamp IN SECONDS. This is op-node's own keying: rollup.json carries jovian_time /
-/// karst_time and `IsJovian(ts)` is `Time != nil && ts >= *Time`
-/// (op-node/rollup/types.go), with UINT64_MAX standing in for op-node's nil.
-///
-/// Latest fork first: Karst when `timestampSec >= m_karstTime`, else Jovian when
-/// `>= m_jovianTime`, else Isthmus. Isthmus is always the baseline — there is no
-/// pre-Isthmus config (the minimal loop is Isthmus+-only and the engine gate rejects
-/// pre-Isthmus payloads by construction).
-///
-/// The schedule's non-decreasing order is validated once, at config load
-/// (NodeConfig::loadOpForkTimestamps); this function does not re-check it.
-///
-/// WHICH block's timestamp is the caller's decision and differs per rule — op-geth keys the
-/// Holocene extraData decode and the Jovian DA-footprint branch on the PARENT header's time
-/// (consensus/misc/eip1559/eip1559.go CalcBaseFee), while the L1-attributes calldata layout
-/// and the Jovian payload attributes key on the CHILD's (op-node derive/l1_block_info.go,
-/// derive/attributes.go). Every caller in this tree converts through
-/// bcos-framework/engine/OpTime.h's unixSecondsFromInternalMillis (internal timestamps are
-/// milliseconds).
-const OpForkConfig& configAt(
-    const bcos::ledger::OpForkSchedule& schedule, uint64_t timestampSec) noexcept;
 }  // namespace bcos::evm::opstack

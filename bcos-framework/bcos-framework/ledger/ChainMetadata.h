@@ -91,7 +91,9 @@ struct OpForkScheduleMetadataRows
     std::string_view canonical, crypto::HashType const& genesisHash)
 {
     auto normalized = canonicalOpForkSchedule(parseOpForkSchedule(canonical));
-    const auto scheduleHash = keccakOpForkScheduleHash(normalized);
+    // normalized is normalized by construction — hash it directly instead of paying a
+    // second parse+normalize inside keccakOpForkScheduleHash.
+    const auto scheduleHash = keccakNormalizedOpForkScheduleHash(normalized);
     return OpForkScheduleMetadata{
         .schedule = std::move(normalized),
         .scheduleHash = scheduleHash,

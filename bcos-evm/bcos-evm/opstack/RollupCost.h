@@ -34,7 +34,21 @@ inline constexpr int64_t c_jovianOperatorFeeMultiplier = 100;
 inline uint32_t flzCompressLenImpl(evmc::bytes_view ib) noexcept
 {
     uint32_t n = 0;
-    std::array<uint32_t, 8192> ht{};
+    // The 32 KiB hash table is reused across calls via a per-entry generation tag instead
+    // of being stack-allocated and zero-filled on every run: the engine's DA-footprint gate
+    // and the per-tx Jovian pricing each compress every envelope, and the 32 KiB clear
+    // dominated small envelopes. An entry tagged with the current generation holds exactly
+    // what the zeroed table held; an entry from an older generation reads as empty
+    // (position 0) — the same candidates a fresh table produced, so the compressed length
+    // is unchanged. The 64-bit generation cannot wrap onto a live entry.
+    struct HashEntry
+    {
+        uint32_t position;
+        std::uint64_t generation;
+    };
+    thread_local std::array<HashEntry, 8192> ht{};
+    thread_local std::uint64_t htGeneration = 0;
+    const auto thisGeneration = ++htGeneration;
 
     auto const* const bytes = ib.data();
     auto const len = static_cast<uint32_t>(ib.size());
@@ -76,7 +90,7 @@ inline uint32_t flzCompressLenImpl(evmc::bytes_view ib) noexcept
     };
     auto hash = [](uint32_t v) -> uint32_t { return ((2654435769U * v) >> 19) & 0x1fff; };
     auto setNextHash = [&](uint32_t ip) -> uint32_t {
-        ht[hash(u24(ip))] = ip;
+        ht[hash(u24(ip))] = HashEntry{ip, thisGeneration};
         return ip + 1;
     };
 
@@ -94,8 +108,8 @@ inline uint32_t flzCompressLenImpl(evmc::bytes_view ib) noexcept
         {
             auto const s = u24(ip);
             auto const h = hash(s);
-            r = ht[h];
-            ht[h] = ip;
+            r = ht[h].generation == thisGeneration ? ht[h].position : 0;
+            ht[h] = HashEntry{ip, thisGeneration};
             const uint32_t d = ip - r;
             if (ip >= ipLimit)
             {

@@ -609,7 +609,8 @@ bcos::evm::engine::OpExecuteBlockResult runExecutionProbe(Fixture& f, ViewType& 
 {
     namespace op = bcos::evm::opstack;
     namespace detail = bcos::evm::engine::detail;
-    const auto& cfg = op::configAt(f.forkSchedule,
+    const auto foldedSchedule = op::OpForkSchedule::fromLedgerSchedule(f.forkSchedule);
+    const auto& cfg = foldedSchedule.configAt(
         bcos::engine::unixSecondsFromInternalMillis(static_cast<uint64_t>(header.timestamp())));
     // Build block-order transactions first (mirroring buildOpBlock: opEnvelopeToTars + full
     // envelope overwrite).

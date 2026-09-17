@@ -213,6 +213,12 @@ const OpForkConfig& jovianConfig() noexcept
     return cfg;
 }
 
+// Karst (OP "Upgrade 19") on top of Jovian: the EVM revision moves to Osaka — EIP-7825 per-tx
+// gas cap (normal transactions only; deposits stay exempt, see runDeposit), EIP-7823/7883
+// MODEXP, EIP-7939 CLZ and EIP-7951 P256VERIFY all gate on EVMC_OSAKA in the vendored state
+// layer — and bn256Pairing's input limit tightens to 57600 (karstPrecompileOverrides, which
+// also stops overriding 0x100 so EIP-7951 pricing applies). Fee/receipt semantics (operator
+// fee, DA footprint) match jovianConfig so future Jovian changes carry into Karst.
 const OpForkConfig& karstConfig() noexcept
 {
     // Derive from Jovian so its fee/receipt semantics keep carrying into Karst; Karst
@@ -350,31 +356,5 @@ std::vector<OpForkActivation> OpForkSchedule::jovianAndLaterActivations() const
         }
     }
     return out;
-}
-
-// Karst (OP "Upgrade 19") on top of Jovian: the EVM revision moves to Osaka — EIP-7825 per-tx
-// gas cap (normal transactions only; deposits stay exempt, see runDeposit), EIP-7823/7883
-// MODEXP, EIP-7939 CLZ and EIP-7951 P256VERIFY all gate on EVMC_OSAKA in the vendored state
-// layer — and bn256Pairing's input limit tightens to 57600 (karstPrecompileOverrides, which
-// also stops overriding 0x100 so EIP-7951 pricing applies). Fee/receipt semantics (operator
-// fee, DA footprint) match jovianConfig so future Jovian changes carry into Karst.
-const OpForkConfig& configAt(
-    const bcos::ledger::OpForkSchedule& schedule, uint64_t timestampSec) noexcept
-{
-    // op-node keying (op-node/rollup/types.go): IsKarst(ts) / IsJovian(ts) are
-    // `Time != nil && ts >= *Time`, with UINT64_MAX standing in for nil, so an unscheduled
-    // fork never activates. Latest fork first — a chain that activates Jovian and Karst at
-    // the same second is Karst, matching op-node's own ordering of the IsX checks.
-    // The schedule's non-decreasing order is a config-load invariant
-    // (NodeConfig::loadOpForkTimestamps), not re-checked here.
-    if (timestampSec >= schedule.m_karstTime)
-    {
-        return karstConfig();
-    }
-    if (timestampSec >= schedule.m_jovianTime)
-    {
-        return jovianConfig();
-    }
-    return isthmusConfig();
 }
 }  // namespace bcos::evm::opstack

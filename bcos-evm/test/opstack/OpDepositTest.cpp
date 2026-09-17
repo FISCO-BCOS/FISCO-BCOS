@@ -56,6 +56,14 @@ inline int64_t receiptGasUsed(const bcos::protocol::TransactionReceipt& r)
 
 BOOST_AUTO_TEST_SUITE(OpDepositSuite)
 
+// The DepositTx wire-struct facts are pinned here BEHAVIORALLY through runDeposit, not by
+// asserting struct fields: to == nullopt means contract creation (ContractCreation...,
+// which also pins the address derivation), an absent mint credits nothing while a present
+// mint credits unconditionally and independently of value (SuccessMints..., EvmRevert...,
+// EntryFailure...), and is_system_tx = true is a block error (SystemTx...). A former
+// OpDepositTxTest.cpp asserted these facts on a locally-constructed struct instead —
+// tautologies that executed no production code — and was removed with review finding F48.
+
 // clang-format off
 BOOST_AUTO_TEST_CASE(SuccessMintsAndAdvancesNonce, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
 // clang-format on

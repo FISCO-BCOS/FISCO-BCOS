@@ -127,7 +127,8 @@ public:
         // RESERVED, never reuse. Bit 60 was feature_op_jovian on release-3.18.0 (introduced by
         // 63e131920), which selected OP-Stack Jovian semantics chain-wide. The OP lane now
         // activates forks by L2 block timestamp from the genesis [op_fork_timestamps] schedule
-        // (ledger::OpForkSchedule, bcos::evm::opstack::configAt), so nothing reads this bit any
+        // (ledger::OpForkSchedule folded into evm OpForkSchedule::configAt), so nothing reads
+        // this bit any
         // more. It stays declared because the value is persisted on-chain and the rule above is
         // "never delete a flag's number": #5571 has since numbered
         // bugfix_eip161_1052_account_semantics at 61 on top of it, so deleting 60 would renumber
