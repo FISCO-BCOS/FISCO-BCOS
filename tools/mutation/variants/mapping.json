@@ -56,8 +56,12 @@
     "also_green": [
       "OpPrecompilesSuite/BlsMsmPairingInputLimits"
     ],
-    "expect": "only_mapped_red",
-    "why": "The Karst oracle comparison must fail when the bn254 pairing cap drifts from op-revm's 57600; the Isthmus-constants case must stay green (the mutation touches only the Karst table)."
+    "also_red": [
+      "OpPrecompilesSuite/KarstTightensBn256AndDropsP256Override",
+      "OpKarstSuite/KarstBn256PairingInputLimitBoundary"
+    ],
+    "expect": "mapped_plus_table_literal_red",
+    "why": "The Karst oracle comparison must fail when the bn254 pairing cap drifts from op-revm's 57600; the Isthmus-constants case must stay green (the mutation touches only the Karst table). The two table-value cases read the same mutated literal (57600), so they are listed in also_red for complete red attribution instead of being silently unaccounted (F44)."
   },
   {
     "variant": "V-M2-withdrawalsRoot",

@@ -6,14 +6,31 @@
 # REQUIRE it to fail -- a variant that leaves the matrix green is a blind spot, i.e.
 # the matrix does not actually guard the fix it claims to.
 #
-# Red is decided by the process exit code AND the failure marker: Boost prints
-# "*** No errors detected" on success, so a bare "errors detected" substring test
-# would report every green run as red.
+# Red requires BOTH a non-zero run AND Boost's failure summary ("*** N failure(s)
+# (is|are) detected" / "*** Errors were detected"). A non-zero exit without that
+# summary is a configuration error, not a caught mutation: the drift demo (a stale
+# filter exits 200 with "Test setup error: no test cases matching filter") used to
+# count as RED and hide a dead filter behind an all-green matrix (review finding
+# F43). Such runs are reported as HARNESS ERROR and fail the whole run.
 #
-# Attribution: every filter in the variant's `also_green` list must stay GREEN. That
-# is the negative control -- it shows the mutation killed specifically the mapped
-# behaviour and not, say, the whole engine lane. (Boost's --run_test does not accept
-# comma-separated filters, so the list is run one entry at a time.)
+# Corpus gate: several mapped tests skip themselves when the getpayload/t8n corpus
+# is absent, and a skipped mapped test PASSES -- the harness would read that as
+# "mutation survived", or worse, report a clean all-green round (review finding
+# F49: the two reported "matrix blind spots" were exactly these skips, not real
+# gaps). Provision the corpus automatically from MUTATION_CORPUS_DIR or
+# ~/.cache/fisco-t8n-corpus (the layout tools/.ci/provision_t8n_corpus.sh
+# produces; the link matches CI's workflow.yml step) and refuse to run without it.
+#
+# Attribution: every filter in the variant's `also_green` list must stay GREEN
+# (exit 0) and every filter in its `also_red` list must be RED -- table-value cases
+# that read the same mutated literal belong in `also_red` so their reds are
+# attributed instead of silently ignored (review finding F44). (Boost's --run_test
+# does not accept comma-separated filters, so the lists are run one entry at a
+# time.)
+#
+# Build location: MUTATION_BUILD_DIR overrides the in-tree ./build -- set it when
+# the build lives outside the tree (a detached repro worktree with a sibling build
+# cannot be reached by the old hardcoded path).
 #
 # Usage: run.sh [variant ...]   (default: every variant in mapping.json)
 # Exit:  0 only when every selected variant is RED as required and attributed.
@@ -21,6 +38,7 @@
 set -uo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
+build_dir="${MUTATION_BUILD_DIR:-$root/build}"
 map="$root/tools/mutation/variants/mapping.json"
 # Default file the legacy (N1/N2/NEW-3) variants mutate. Newer variants declare their own
 # "mutated" file in the mapping (still used as the legacy single-file default). A variant
@@ -36,6 +54,9 @@ field() {
 must_stay_green() {
   python3 -c "import json;m=json.load(open('$map'));print('\n'.join(next(v.get('also_green',[]) for v in m if v['variant']=='$1')))"
 }
+must_go_red() {
+  python3 -c "import json;m=json.load(open('$map'));print('\n'.join(next(v.get('also_red',[]) for v in m if v['variant']=='$1')))"
+}
 
 ids=("$@")
 if [ "${#ids[@]}" -eq 0 ]; then
@@ -44,9 +65,37 @@ if [ "${#ids[@]}" -eq 0 ]; then
 fi
 if [ "${#ids[@]}" -eq 0 ]; then echo "no variants selected (empty mapping?)" >&2; exit 1; fi
 
-is_red() {  # $1 = output, $2 = exit code
-  [ "$2" -ne 0 ] && return 0
-  echo "$1" | grep -qE '\*\*\* [0-9]+ failures? (is|are) detected|\*\*\* Errors were detected'
+# --- corpus gate (F49): a skipped mapped test is counted as a pass by Boost, so the
+# harness must not run without the corpus the mapped tests gate themselves on. ---
+corpus_src="${MUTATION_CORPUS_DIR:-$HOME/.cache/fisco-t8n-corpus/opstack-executor/tests/t8n}"
+corpus_link="$root/opstack-executor/tests/t8n"
+corpus_provisioned=""
+if [ ! -e "$corpus_link" ]; then
+  if [ -d "$corpus_src" ]; then
+    ln -s "$corpus_src" "$corpus_link" && corpus_provisioned="$corpus_link"
+  else
+    echo "harness: no getpayload/t8n corpus at $corpus_link" >&2
+    echo "  corpus-gated mapped tests skip themselves when it is absent, and a skipped" >&2
+    echo "  mapped test would be counted as a green (silent) run." >&2
+    echo "  Provision it first, e.g.: ln -sfn <e2e-tests>/opstack-executor/tests/t8n $corpus_link" >&2
+    echo "  or point MUTATION_CORPUS_DIR at the checked-out corpus t8n directory." >&2
+    exit 1
+  fi
+fi
+cleanup_corpus() { [ -n "$corpus_provisioned" ] && rm -f "$corpus_provisioned"; return 0; }
+trap cleanup_corpus EXIT
+
+# RED | GREEN | CONFIG_ERROR. GREEN only on exit 0 (a survived mutation); RED only on a
+# non-zero exit that carries Boost's failure summary; anything else (exit 200 "no test
+# cases matching filter", a missing binary, a crash without a summary) is a harness or
+# configuration error and fails the run loudly instead of being judged either way (F43).
+classify() {  # $1 = output, $2 = exit code
+  if [ "$2" -eq 0 ]; then echo GREEN; return; fi
+  if echo "$1" | grep -qE '\*\*\* [0-9]+ failures? (is|are) detected|\*\*\* Errors were detected'; then
+    echo RED
+  else
+    echo CONFIG_ERROR
+  fi
 }
 
 # NOTE: `git apply --3way` implies --index, so it stages the mutation as well as
@@ -76,25 +125,41 @@ for id in "${ids[@]}"; do
   # Restore on ANY exit (interrupt included) so the tree never stays patched.
   trap 'restore_patch "$patch"' EXIT INT TERM
 
-  if ! ninja -C "$root/build" "$target" >/dev/null 2>&1; then
+  if ! ninja -C "$build_dir" "$target" >/dev/null 2>&1; then
     echo "[$id] BUILD FAILED under the variant (variant is unusable)"; rc_all=1
     restore_patch "$patch"; trap - EXIT INT TERM; continue
   fi
 
-  out="$("$root/build/$bin" "--run_test=$filter" 2>&1)"; code=$?
-  if is_red "$out" "$code"; then
-    echo "[$id] RED as required ($filter)"
-  else
-    echo "[$id] STILL GREEN -- matrix blind spot ($filter)"; rc_all=1
-  fi
+  out="$("$build_dir/$bin" "--run_test=$filter" 2>&1)"; code=$?
+  case "$(classify "$out" "$code")" in
+    RED)
+      echo "[$id] RED as required ($filter)"
+      ;;
+    GREEN)
+      echo "[$id] STILL GREEN -- matrix blind spot ($filter)"; rc_all=1
+      ;;
+    CONFIG_ERROR)
+      echo "[$id] HARNESS ERROR -- non-zero exit without a Boost failure summary"
+      echo "      (filter=$filter exit=$code; drifted filter or setup failure? F43)"
+      rc_all=1
+      ;;
+  esac
 
   while IFS= read -r other; do
     [ -n "$other" ] || continue
-    out2="$("$root/build/$bin" "--run_test=$other" 2>&1)"; code2=$?
-    if is_red "$out2" "$code2"; then
-      echo "[$id] NOT ATTRIBUTED -- negative control also failed ($other)"; rc_all=1
+    out2="$("$build_dir/$bin" "--run_test=$other" 2>&1)"; code2=$?
+    if [ "$code2" -ne 0 ]; then
+      echo "[$id] NOT ATTRIBUTED -- negative control failed ($other, exit=$code2)"; rc_all=1
     fi
   done < <(must_stay_green "$id")
+
+  while IFS= read -r other; do
+    [ -n "$other" ] || continue
+    out3="$("$build_dir/$bin" "--run_test=$other" 2>&1)"; code3=$?
+    if [ "$(classify "$out3" "$code3")" != RED ]; then
+      echo "[$id] EXPECTED RED missing in also_red ($other)"; rc_all=1
+    fi
+  done < <(must_go_red "$id")
 
   restore_patch "$patch"; trap - EXIT INT TERM
 done
@@ -107,4 +172,6 @@ while IFS= read -r f; do
     echo "variant file still modified after run: $f" >&2; rc_all=1
   fi
 done < <({ python3 -c "import json;print('\n'.join(sorted({v.get('mutated','') or '$mutated' for v in json.load(open('$map'))})))"; for pf in "$root"/tools/mutation/variants/*.patch; do patch_files "$pf"; done; } | sort -u)
+cleanup_corpus
+trap - EXIT
 exit $rc_all
