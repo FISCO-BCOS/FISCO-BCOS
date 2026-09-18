@@ -240,8 +240,10 @@ public:
         /// blob_gas_left is the block's remaining blob gas (max_blob_gas_per_block
         /// minus already-included blobs). It must NOT be the tx's own blob gas,
         /// otherwise a tx with too many blobs would pass validation.
-        /// EIP-7840 blob schedule constants live in EthereumTransition.h so
-        /// both this executor and buildBlockInfo share them.
+        /// The EIP-7840 blob schedule is resolved per block from the ledger
+        /// config (stamped by the block verifier from the chain's fork
+        /// timestamps; revision-keyed fallback otherwise) — see
+        /// blobParamsForBlock in EthereumTransition.h.
         task::Task<void> prepare()
         {
             auto revOpt = ledgerConfig.get().evmcRevisionForBlock(blockHeader.get().number());
@@ -286,8 +288,8 @@ public:
                 //   state read, so it is resolved in execute() (the only
                 //   phase allowed to touch state).
             }
-            m_blobGasLeft =
-                static_cast<int64_t>(evm::max_blob_gas_per_block(blobParamsForRevision(m_rev)));
+            m_blobGasLeft = static_cast<int64_t>(
+                evm::max_blob_gas_per_block(blobParamsForBlock(ledgerConfig.get(), m_rev)));
             co_return;
         }
 

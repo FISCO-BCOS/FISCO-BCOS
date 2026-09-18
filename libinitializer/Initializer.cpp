@@ -387,6 +387,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // Refused here, ahead of the MPT pruner's boot-time init below: that init walks the window's
     // state roots and, with storage.mpt_prune_sweep_garbage on, deletes unreachable "/mpt/" rows,
     // so a refusal placed after it would turn a fail-fast into a slow, side-effectful one.
+    // Only OP mode is refused: EL mode is SUPPORTED — the devp2p sync commit path
+    // (EthereumBlockVerifier::verifyAndCommit) feeds the same CommitObserver hooks as the
+    // PBFT and Engine API paths (wired through EthereumSyncInitializer), so the window prunes
+    // at runtime there, not just at boot.
     if (opStackMode && m_nodeConfig->mptPruneWindow() > 0)
     {
         BOOST_THROW_EXCEPTION(
@@ -500,11 +504,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // ordered against a chunk reading that account's has_storage (an EIP-7610
         // CREATE-collision input) — a consensus divergence. Revisit (record the range read)
         // before v2 is allowed to run on a parallel scheduler.
-        auto ethereumSerialScheduler =
+        m_ethereumSerialScheduler =
             std::make_shared<scheduler_v1::SchedulerSerialImpl>(m_ioServicePool);
+        m_ethereumExecutor = ethereumExecutor;
         std::tie(m_ethereumSchedulerHolder, m_setEthereumSchedulerBlockNumberNotifier) =
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
-                m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
+                m_protocolInitializer->blockFactory(), m_ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 ethereumExecutor, m_mptCommitObserver,
                 !m_nodeConfig->engineDrivenBlockProduction());
@@ -521,7 +526,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger,
+                m_ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger,
                 bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState, m_mptCommitObserver);
         }
     }
@@ -543,11 +548,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         }
 
         // executor_version=2 baseline scheduler, driven by a dedicated serial pipeline.
-        auto ethereumSerialScheduler =
+        m_ethereumSerialScheduler =
             std::make_shared<scheduler_v1::SchedulerSerialImpl>(m_ioServicePool);
+        m_ethereumExecutor = ethereumExecutor;
         std::tie(m_ethereumSchedulerHolder, m_setEthereumSchedulerBlockNumberNotifier) =
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
-                m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
+                m_protocolInitializer->blockFactory(), m_ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 ethereumExecutor, m_mptCommitObserver,
                 !m_nodeConfig->engineDrivenBlockProduction());
@@ -560,7 +566,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger,
+                m_ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger,
                 bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState, m_mptCommitObserver);
         }
     }
@@ -682,13 +688,17 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // (NodeConfig requires an explicit evm_revision for executor_version=2), so a one-time
     // INFO line is accurate and stays off the per-block / per-RPC getLedgerConfig hot path.
     // The CI integration test greps this line to pin the effective revision.
+    // Ethereum L1 EL mode (ethereum.mode=el) is exempt: its EVMC revision is derived from the
+    // per-block timestamp via the [fork_timestamps] schedule (EthereumBlockVerifier's
+    // fillExecutionLedgerConfig), never from an on-chain evmc_revision row.
     //
     // The OP lane is outside this probe: NodeConfig rejects an explicit revision there and
     // Ledger::buildGenesisBlock therefore writes no evmc_revision row, because OpScheduler
     // derives it per block from [op_fork_timestamps] (configAt(schedule, blockTime).rev). Its
     // absence is the expected shape, not the runtime-switch hazard this guard targets.
     if (m_executorVersion >= scheduler_v1::ETHEREUM_EXECUTOR_VERSION &&
-        m_executorVersion < scheduler_v1::OPSTACK_EXECUTOR_VERSION)
+        m_executorVersion < scheduler_v1::OPSTACK_EXECUTOR_VERSION &&
+        !m_nodeConfig->ethereumELModeEnabled())
     {
         if (auto evmcRev = task::syncWait(ledger::getSystemConfig(
                 *m_ledger, magic_enum::enum_name(ledger::SystemConfig::evmc_revision))))
@@ -848,7 +858,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // keeps the EngineService the sole block producer; otherwise PBFT and the engine driver
     // would write blocks to the same global storage concurrently. The front service is
     // still wired for gateway bookkeeping, but its dispatchers are inert with no peers.
-    if (!m_nodeConfig->engineDrivenBlockProduction())
+    //
+    // Ethereum L1 EL mode (ethereum.mode=el) skips them for the same reason, one level
+    // further out: blocks arrive over devp2p download (EthereumSyncInitializer) and there
+    // is no local block production at all, so the txpool's ledger reads at init and the
+    // consensus/sync handlers pbft->init() registers would serve nothing. start() below
+    // already skips both modes.
+    if (!m_nodeConfig->engineDrivenBlockProduction() && !m_nodeConfig->ethereumELModeEnabled())
     {
         // init the txpool
         m_txpoolInitializer->init();
@@ -856,6 +872,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // Note: must init PBFT after txpool, in case of pbft calls txpool to verifyBlock before
         // txpool init finished
         m_pbftInitializer->init();
+    }
+    else if (m_nodeConfig->ethereumELModeEnabled())
+    {
+        INITIALIZER_LOG(INFO) << LOG_DESC(
+            "EthereumELMode: skip txpool/pbft/sealer init (blocks arrive via devp2p download; "
+            "no local block production)");
     }
     else
     {
@@ -1131,7 +1153,10 @@ void Initializer::start()
 {
     // Engine-driven modes (single-node consensus / op_engine_rpc): txpool/pbft (and the
     // sealer inside pbft) stay dormant — block production goes through the EngineService.
-    if (!m_nodeConfig->engineDrivenBlockProduction())
+    // Ethereum L1 EL mode (ethereum.mode=el): the node is a pure Ethereum execution-layer
+    // client; blocks come from bootnode download (EthereumSyncInitializer), never from
+    // FISCO consensus/txpool, so those pipelines also stay dormant.
+    if (!m_nodeConfig->engineDrivenBlockProduction() && !m_nodeConfig->ethereumELModeEnabled())
     {
         if (m_txpoolInitializer)
         {

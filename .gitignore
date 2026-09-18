@@ -69,6 +69,9 @@ tools/BcosProBuilder/generated**
 tools/BcosAirBuilder/*
 *.log
 
+# CI clones FISCO-BCOS/console here (tools/.ci/ci_check_air.sh); never track it
+tools/console/
+
 # t8n reference vectors: the vendored S6 subset that OpEngineServiceExecParityTest
 # executes is TRACKED (6 JSON under vectors/ + golden/engine/); other locally
 # regenerated vector/golden files stay untracked.

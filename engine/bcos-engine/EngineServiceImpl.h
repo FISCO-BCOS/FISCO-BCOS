@@ -1111,7 +1111,9 @@ private:
                 *emptyHeader, ledgerConfig, *m_blockFactory->cryptoSuite()->hashImpl(),
                 *m_blockFactory, *m_commitObserver);
             // An empty block's transaction/receipt tries are the canonical empty-trie root, not
-            // the all-zero hash (validateHeader rejects a zero receiptsRoot/txsRoot).
+            // the all-zero hash: finalizeEthBlockHeader always goes through
+            // EthBlockHeader::calculateRLPHash -> validateHeader, which rejects a zero
+            // receiptsRoot/txsRoot — this holds for legacy executors too.
             emptyHeader->setReceiptsRoot(bcos::ledger::mpt::emptyRootHash());
             emptyHeader->setTxsRoot(bcos::ledger::mpt::emptyRootHash());
             emptyHeader->setGasUsed(0);
