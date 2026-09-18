@@ -516,7 +516,7 @@ private:
     bool m_enableDBStatistics = false;
     int m_maxWriteBufferNumber = 3;
     int m_maxBackgroundJobs = 3;
-    int m_maxOpenFiles = -1;
+    int m_maxOpenFiles = 256;
     size_t m_writeBufferSize = 64 << 21;
     int m_minWriteBufferNumberToMerge = 2;
     size_t m_blockCacheSize = 128 << 20;

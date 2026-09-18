@@ -1907,7 +1907,7 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     m_enableRocksDBBlob = _pt.get<bool>("storage.enable_rocksdb_blob", false);
     // Read via get_optional so a malformed value fails loudly: ptree's defaulted get()
     // swallows translation failures together with absence, and a typo must not silently
-    // select the unbounded (-1) table cache.
+    // fall back to the default table-cache bound.
     if (auto const child = _pt.get_child_optional("storage.rocksdb_max_open_files"))
     {
         auto const parsed = child->get_value_optional<int32_t>();
