@@ -176,12 +176,12 @@ NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
 
 NodeConfig::NodeConfig() : m_ledgerConfig(std::make_shared<LedgerConfig>()) {}
 
-void NodeConfig::loadConfig(std::string const& _configPath, bool _enforceMemberID,
-    bool enforceChainConfig, bool enforceGroupId)
+void NodeConfig::loadConfig(std::string const& _configPath, bool enforceChainConfig,
+    bool enforceGroupId)
 {
     boost::property_tree::ptree iniConfig;
     boost::property_tree::read_ini(_configPath, iniConfig);
-    loadConfig(iniConfig, _enforceMemberID, enforceChainConfig, enforceGroupId);
+    loadConfig(iniConfig, enforceChainConfig, enforceGroupId);
 }
 
 void NodeConfig::loadGenesisConfig(std::string const& _genesisConfigPath)
@@ -207,8 +207,8 @@ void NodeConfig::loadGenesisConfigFromString(std::string const& _content)
     loadGenesisConfig(genesisConfig);
 }
 
-void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID,
-    bool _enforceChainConfig, bool _enforceGroupId)
+void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforceChainConfig,
+    bool _enforceGroupId)
 {
     // if version < 3.1.0, config.ini include chainConfig
     if (_enforceChainConfig || (m_genesisConfig.m_compatibilityVersion <
@@ -232,7 +232,6 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     loadExecutorNormalConfig(_pt);
     loadEthereumConfig(_pt);
 
-    loadFailOverConfig(_pt, _enforceMemberID);
     loadStorageConfig(_pt);
     loadConsensusConfig(_pt);
     loadSyncConfig(_pt);
@@ -1926,38 +1925,6 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("enableLRUCacheStorage", m_enableLRUCacheStorage);
 }
 
-// Note: In components that do not require failover, do not need to set member_id
-void NodeConfig::loadFailOverConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID)
-{
-    m_enableFailOver = _pt.get("failover.enable", false);
-    if (!m_enableFailOver)
-    {
-        return;
-    }
-    m_failOverClusterUrl = _pt.get<std::string>("failover.cluster_url", "127.0.0.1:2379");
-    m_memberID = _pt.get("failover.member_id", "");
-    if (m_memberID.size() == 0 && _enforceMemberID)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment("Please set failover.member_id must be non-empty "));
-    }
-    auto leaseTTL =
-        checkAndGetValue(_pt, "failover.lease_ttl", std::to_string(DEFAULT_MIN_LEASE_TTL_SECONDS));
-    if (leaseTTL < static_cast<int64_t>(DEFAULT_MIN_LEASE_TTL_SECONDS))
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "Please set failover.lease_ttl to no less than " +
-                                  std::to_string(DEFAULT_MIN_LEASE_TTL_SECONDS) + " seconds!"));
-    }
-    m_leaseTTL = static_cast<unsigned>(leaseTTL);
-
-    NodeConfig_LOG(INFO) << LOG_DESC("loadFailOverConfig")
-                         << LOG_KV("failOverClusterUrl", m_failOverClusterUrl)
-                         << LOG_KV("memberID", m_memberID.size() > 0 ? m_memberID : "not-set")
-                         << LOG_KV("leaseTTL", m_leaseTTL)
-                         << LOG_KV("enableFailOver", m_enableFailOver);
-}
-
 void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
 {
     m_sendTxTimeout = _pt.get<int>("others.send_tx_timeout", -1);
@@ -3139,26 +3106,6 @@ std::string NodeConfig::compatibilityVersionStr() const
     std::stringstream ss;
     ss << (bcos::protocol::BlockVersion)m_genesisConfig.m_compatibilityVersion;
     return ss.str();
-}
-
-std::string const& NodeConfig::memberID() const
-{
-    return m_memberID;
-}
-
-unsigned NodeConfig::leaseTTL() const
-{
-    return m_leaseTTL;
-}
-
-bool NodeConfig::enableFailOver() const
-{
-    return m_enableFailOver;
-}
-
-std::string const& NodeConfig::failOverClusterUrl() const
-{
-    return m_failOverClusterUrl;
 }
 
 bool NodeConfig::storageSecurityEnable() const

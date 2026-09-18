@@ -42,7 +42,6 @@ class NodeConfig
 public:
     constexpr static ssize_t DEFAULT_CACHE_SIZE = 32 * 1024 * 1024;
     constexpr static ssize_t DEFAULT_MIN_CONSENSUS_TIME_MS = 3000;
-    constexpr static ssize_t DEFAULT_MIN_LEASE_TTL_SECONDS = 3;
     constexpr static ssize_t DEFAULT_MAX_SEAL_TIME_MS = 600000;
     constexpr static ssize_t DEFAULT_PIPELINE_SIZE = 50;
 
@@ -56,8 +55,8 @@ public:
     explicit NodeConfig(bcos::crypto::KeyFactory::Ptr _keyFactory);
     virtual ~NodeConfig() = default;
 
-    virtual void loadConfig(std::string const& _configPath, bool _enforceMemberID = true,
-        bool enforceChainConfig = false, bool enforceGroupId = true);
+    virtual void loadConfig(std::string const& _configPath, bool enforceChainConfig = false,
+        bool enforceGroupId = true);
     virtual void loadServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadGatewayServiceConfig(boost::property_tree::ptree const& _pt);
@@ -79,7 +78,7 @@ public:
 
     virtual void loadGenesisConfigFromString(std::string const& _content);
 
-    virtual void loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID = true,
+    virtual void loadConfig(boost::property_tree::ptree const& _pt,
         bool _enforceChainConfig = false, bool _enforceGroupId = true);
     virtual void loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig);
 
@@ -304,11 +303,6 @@ public:
     uint32_t compatibilityVersion() const;
     std::string compatibilityVersionStr() const;
 
-    std::string const& memberID() const;
-    unsigned leaseTTL() const;
-    bool enableFailOver() const;
-    std::string const& failOverClusterUrl() const;
-
     bool storageSecurityEnable() const;
     std::string storageSecuirtyKeyCenterUrl() const;
     std::string storageSecurityCipherDataKey() const;
@@ -383,8 +377,6 @@ protected:
     virtual void loadStorageConfig(boost::property_tree::ptree const& _pt);
     virtual void loadConsensusConfig(boost::property_tree::ptree const& _pt);
 
-    virtual void loadFailOverConfig(
-        boost::property_tree::ptree const& _pt, bool _enforceMemberID = true);
     virtual void loadOthersConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadLedgerConfig(boost::property_tree::ptree const& _genesisConfig);
@@ -642,13 +634,6 @@ private:
 
     bool m_enableLRUCacheStorage = true;
     ssize_t m_cacheSize = DEFAULT_CACHE_SIZE;  // 32MB for default
-
-    // failover config
-    std::string m_memberID;
-    unsigned m_leaseTTL = 0;
-    bool m_enableFailOver = false;
-    // etcd/zookeeper/consual url
-    std::string m_failOverClusterUrl;
 
     // others config
     int m_sendTxTimeout = -1;

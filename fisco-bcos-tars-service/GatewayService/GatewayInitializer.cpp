@@ -21,15 +21,10 @@
 #include "GatewayInitializer.h"
 #include "../Common/TarsUtils.h"
 #include "libinitializer/ProtocolInitializer.h"
-#include <bcos-framework/election/FailOverTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
-#ifdef WITH_LEDGER_ELECTION
-#include <bcos-leader-election/src/LeaderEntryPoint.h>
-#endif
-#include <bcos-tars-protocol/protocol/MemberImpl.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
 // #include "bcos-framework/security/KeyEncryptionType.h"
@@ -48,25 +43,15 @@ void GatewayInitializer::init(std::string const& _configPath)
 
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("load nodeConfig");
     auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>();
-    nodeConfig->loadConfig(_configPath, false, true, false);
+    nodeConfig->loadConfig(_configPath, true, false);
 
     boost::property_tree::ptree pt;
     boost::property_tree::read_ini(_configPath, pt);
     nodeConfig->loadServiceConfig(pt);
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("load nodeConfig success");
-#ifdef WITH_LEDGER_ELECTION
-    if (nodeConfig->enableFailOver())
-    {
-        GATEWAYSERVICE_LOG(INFO) << LOG_DESC("enable failover");
-        auto memberFactory = std::make_shared<bcostars::protocol::MemberFactoryImpl>();
-        auto leaderEntryPointFactory =
-            std::make_shared<bcos::election::LeaderEntryPointFactoryImpl>(memberFactory);
-        auto watchDir = "/" + nodeConfig->chainId() + bcos::election::CONSENSUS_LEADER_DIR;
-        m_leaderEntryPoint = leaderEntryPointFactory->createLeaderEntryPoint(
-            nodeConfig->failOverClusterUrl(), watchDir, "watchLeaderChange", "", "", "");
-    }
-#endif
 
+    // Consensus failover (etcd leader election) was retired together with the TiKV-based
+    // MAX topology; the gateway never watches leader changes anymore.
     auto protocolInitializer = std::make_shared<bcos::initializer::ProtocolInitializer>();
     protocolInitializer->init(nodeConfig);
 
@@ -84,8 +69,7 @@ void GatewayInitializer::init(std::string const& _configPath)
                              << LOG_KV("certPath", m_gatewayConfig->certPath())
                              << LOG_KV("nodePath", m_gatewayConfig->nodePath())
                              << LOG_KV("gatewayServiceName", gatewayServiceName);
-    auto gateway =
-        factory.buildGateway(m_gatewayConfig, false, m_leaderEntryPoint, gatewayServiceName);
+    auto gateway = factory.buildGateway(m_gatewayConfig, false, nullptr, gatewayServiceName);
 
     m_gateway = gateway;
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("buildGateway success");
@@ -99,11 +83,6 @@ void GatewayInitializer::start()
         return;
     }
     m_running = true;
-    if (m_leaderEntryPoint)
-    {
-        GATEWAYSERVICE_LOG(INFO) << LOG_DESC("start leader-entry-point");
-        m_leaderEntryPoint->start();
-    }
     // start the gateway
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("start the gateway");
     m_gateway->start();
@@ -119,10 +98,6 @@ void GatewayInitializer::stop()
     }
     m_running = false;
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("Stop the GatewayService");
-    if (m_leaderEntryPoint)
-    {
-        m_leaderEntryPoint->stop();
-    }
     if (m_gateway)
     {
         m_gateway->stop();

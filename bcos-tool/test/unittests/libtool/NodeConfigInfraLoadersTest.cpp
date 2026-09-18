@@ -96,16 +96,6 @@ BOOST_AUTO_TEST_CASE(storageConfigMptPruneValidation)
 }
 
 
-BOOST_AUTO_TEST_CASE(failOverConfigDisabledAndError)
-{
-    LoaderProbe a;  // disabled → early return
-    BOOST_CHECK_NO_THROW(a.loadFailOverConfig(fromIni("[failover]\nenable=false\n"), true));
-    LoaderProbe b;  // enabled, enforce member id, empty → throws
-    BOOST_CHECK_THROW(b.loadFailOverConfig(fromIni("[failover]\nenable=true\n"), true),
-        bcos::tool::InvalidConfig);
-}
-
-
 BOOST_AUTO_TEST_CASE(othersConfigDefaultsAndForceSender)
 {
     LoaderProbe a;

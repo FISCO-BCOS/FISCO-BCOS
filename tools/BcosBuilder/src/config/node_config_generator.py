@@ -6,7 +6,6 @@ import shutil
 from common import utilities
 from common.utilities import ConfigInfo
 from service.key_center_service import KeyCenterService
-import uuid
 import os
 import sys
 
@@ -126,7 +125,6 @@ class NodeConfigGenerator:
         ini_config.read(self.node_tpl_config)
         # self.__update_chain_info(ini_config, node_config)
         self.__update_service_info(ini_config, node_config, node_name)
-        self.__update_failover_info(ini_config, node_config, node_type)
         # set storage config
         self.__update_storage_info(ini_config, node_config, node_type)
         # set storage_security config
@@ -160,18 +158,6 @@ class NodeConfigGenerator:
         if hasattr(node_config, 'executor_service'):
             ini_config[service_section]["executor"] = self.config.chain_id + \
                                                       "." + node_config.executor_service.service_name
-
-    def __update_failover_info(self, ini_config, node_config, node_type):
-        # generate the member_id for failover
-        failover_section = "failover"
-        ini_config[failover_section]["member_id"] = str(uuid.uuid1())
-        if node_type == "max":
-            ini_config[failover_section]["enable"] = utilities.convert_bool_to_str(
-                True)
-            ini_config[failover_section]["cluster_url"] = node_config.agency_config.failover_cluster_url
-        else:
-            ini_config[failover_section]["enable"] = utilities.convert_bool_to_str(
-                False)
 
     def __update_storage_info(self, ini_config, node_config, node_type):
         if node_type != "max":

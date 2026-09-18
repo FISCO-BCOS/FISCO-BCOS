@@ -113,12 +113,6 @@
         "ethereum-tests"
       ]
     },
-    "etcd": {
-      "description": "ETCD dependencies",
-      "dependencies": [
-        "etcd-cpp-apiv3"
-      ]
-    },
     "tcmalloc": {
       "description": "tcmalloc dependencies",
       "dependencies": [
