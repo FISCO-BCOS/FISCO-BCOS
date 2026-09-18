@@ -18,9 +18,9 @@
  *        - computeMptStateDelta / computeMptStateRoot: the real Ethereum world-state MPT
  *          root (plus the node delta for the commit observer), used by the EL sync
  *          commit path (EthereumBlockVerifier::verifyAndCommit) and the verifier tests;
- *          the PBFT lane and the engine services build through their own
- *          buildMPTStateRootForView (BaselineSchedulerMPTHelpers.h), which additionally
- *          resolves the parent root from the ledger;
+ *          the PBFT lane and the engine services go through buildMPTStateRootForView
+ *          (BaselineSchedulerMPTHelpers.h), which resolves the parent root from the
+ *          ledger and then delegates to computeMptStateDelta;
  *        - computeLegacyStateRoot: the legacy XOR fold for non-MPT chains (moved from
  *          scheduler_v1::calculateStateRoot in BaselineScheduler.h);
  *        - parentStateRootFor: the parent-root selection rule every incremental MPT

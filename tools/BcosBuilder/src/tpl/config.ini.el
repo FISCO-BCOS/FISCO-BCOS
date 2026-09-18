@@ -39,7 +39,7 @@
     ; total difficulty are NOT verified, and there is no consensus-layer finality
     ; feed. Configure ONLY bootnodes you trust, and consider pinning
     ; finalized_checkpoint below. A full checkpoint/finality mechanism is a known
-    ; limitation and tracked as follow-up work.
+    ; limitation and tracked as follow-up work (#5622).
     bootnodes_file=./bootnodes.json
     ; secp256k1 node identity: a file holding the 32-byte private key as hex
     ; (optional 0x prefix). Empty = auto-generate a persistent key on first start

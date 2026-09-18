@@ -134,13 +134,8 @@ task::Task<ledger::mpt::MPTDeltaLayer> buildMPTStateRootForView(ViewType& view,
 {
     h256 parentStateRoot = co_await ledger::mpt::parentStateRootFor(
         view, ledgerConfig.features(), blockHeader.number(), blockFactory);
-    // Node reads resolve through the full view (parent nodes live in the pending layers /
-    // backend); node writes land in this block's own mutable layer (ViewNodeStorage.h).
-    ledger::mpt::ViewNodeStorage<ViewType> nodeStorage(view);
-    bool const l2Mode =
-        ledgerConfig.features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
-    co_return co_await ledger::mpt::buildAndCollect(
-        nodeStorage, parentStateRoot, view, l2Mode, trackRefCounts);
+    co_return co_await ledger::mpt::computeMptStateDelta(
+        view, parentStateRoot, ledgerConfig, trackRefCounts);
 }
 
 /// Publish the header under SYS_NUMBER_2_BLOCK_HEADER so the next block's MPT build can read
