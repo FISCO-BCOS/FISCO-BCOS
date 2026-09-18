@@ -1484,12 +1484,14 @@ void JsonRpcImpl_2_0::newFilter(
         Json::Value jRes;
         // Resolve "latest"/"safe"/"finalized" against the real head and the configured
         // depths, exactly like the Web3 entry — fromJson has no defaults, so a filter's
-        // blockTags cannot silently degrade to block 0 / depth 0 here.
+        // blockTags cannot silently degrade to block 0 / depth 0 here. The legacy JSON-RPC
+        // entry has no engine service, so safe/finalized keep the PBFT static-depth semantics
+        // (nullopt forkchoice + failClosed=false).
         auto const nodeService = self->getNodeService(groupID, "", "newFilter");
         auto const latest = co_await ledger::getCurrentBlockNumber(*nodeService->ledger());
         auto params = self->filterSystem().requestFactory()->create();
-        params->fromJson(
-            jParams, latest, nodeService->safeBlockDepth(), nodeService->finalizedBlockDepth());
+        params->fromJson(jParams, latest, nodeService->safeBlockDepth(),
+            nodeService->finalizedBlockDepth(), std::nullopt, std::nullopt, false);
         jRes = co_await self->filterSystem().newFilter(groupID, std::move(params));
         respFunc(nullptr, jRes);
     }(this, _groupID, std::move(_respFunc)));
@@ -1532,12 +1534,13 @@ void JsonRpcImpl_2_0::getLogs(
                    RespFunc respFunc) -> task::Task<void> {
         // Resolve blockTags against the real head + configured depths, exactly like the
         // Web3 entry (fromJson has no defaults) — otherwise "latest" would silently mean
-        // block 0 here.
+        // block 0 here. The legacy JSON-RPC entry has no engine service, so safe/finalized
+        // keep the PBFT static-depth semantics (nullopt forkchoice + failClosed=false).
         auto const nodeService = self->getNodeService(groupID, "", "getLogs");
         auto const latest = co_await ledger::getCurrentBlockNumber(*nodeService->ledger());
         auto params = self->filterSystem().requestFactory()->create();
-        params->fromJson(
-            jParams, latest, nodeService->safeBlockDepth(), nodeService->finalizedBlockDepth());
+        params->fromJson(jParams, latest, nodeService->safeBlockDepth(),
+            nodeService->finalizedBlockDepth(), std::nullopt, std::nullopt, false);
         Json::Value jRes = co_await self->filterSystem().getLogs(groupID, std::move(params));
         respFunc(nullptr, jRes);
     }(this, _groupID, jParams, std::move(_respFunc)));

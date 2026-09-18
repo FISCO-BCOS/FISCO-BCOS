@@ -87,6 +87,17 @@ private:
     FilterSystem::Ptr m_filterSystem;
     bool m_syncTransaction;
 
+    // The engine lane's forkchoice safe/finalized heads, plus whether the engine is wired
+    // (which switches safe/finalized to fail-closed rather than the static-depth fallback).
+    // Shared by getBlockNumberByTag and the filter endpoints so one tag has one resolver.
+    struct ForkchoiceContext
+    {
+        std::optional<protocol::BlockNumber> safe;
+        std::optional<protocol::BlockNumber> finalized;
+        bool engineLane = false;
+    };
+    ForkchoiceContext forkchoiceContext() const;
+
     task::Task<void> call(const Json::Value&, Json::Value&, u256* gasUsed, bool isEstimate);
 };
 

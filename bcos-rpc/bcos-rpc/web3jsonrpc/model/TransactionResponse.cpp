@@ -86,6 +86,8 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
         result["maxPriorityFeePerGas"] = toQuantity(tx.maxPriorityFeePerGas().value_or(0));
         result["maxFeePerGas"] = toQuantity(tx.maxFeePerGas().value_or(0));
         result["chainId"] = "0x0";
+        // BCOS signature is r(32) || s(32) || v(1), v already the 0/1 recovery id.
+        result["v"] = toQuantity(tx.signatureData().getCroppedData(64, 1));
     }
     else [[likely]]
     {
@@ -168,6 +170,20 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
                 result["authorizationList"].append(std::move(entry));
             }
         }
+        // v field: typed transactions expose the raw yParity (0/1); legacy transactions expose
+        // the full recovery id (27/28 pre-EIP-155, or chainId*2+35+parity with EIP-155) — the
+        // form op-geth's legacy JSON decoder requires to reproduce the canonical tx hash.
+        //
+        // extraTransactionBytes is the signing preimage on the txpool lane (no signature
+        // trailer, so the decoder leaves signatureV at its default 0) and the sealed envelope
+        // only on the engine lane. The tars signature carries the parity on BOTH layouts, and it
+        // is exactly what reassembleWeb3RawTransaction uses for the canonical txHash, so read
+        // the parity from it rather than the decoded payload — otherwise typed v regresses to
+        // 0x0 and legacy drops the parity on the txpool lane.
+        auto const sig = tx.signatureData();
+        web3Tx.signatureV = sig.size() >= 65 ? static_cast<uint64_t>(sig[64]) : 0;
+        result["v"] = toQuantity(
+            web3Tx.type == TransactionType::Legacy ? web3Tx.getSignatureV() : web3Tx.signatureV);
     }
     result["r"] = toQuantity(tx.signatureData().getCroppedData(0, 32));
     result["s"] = toQuantity(tx.signatureData().getCroppedData(32, 32));
