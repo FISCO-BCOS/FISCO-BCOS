@@ -708,6 +708,33 @@ BOOST_FIXTURE_TEST_CASE(downloadRejectsTamperedCommitment, EBSFixture)
     }());
 }
 
+// Spy CommitObserver pinning the verifier's pruning wiring: records the hook sequence,
+// declares needsRefCountDeltas()=true and asserts the tally arrives non-empty — that is
+// what proves verifyAndCommit forwards needsRefCountDeltas() into the MPT build (a
+// producer that drops it would trip the real MPTPruner's fail-loud empty-delta check).
+class SpyCommitObserver : public ledger::mpt::CommitObserver
+{
+public:
+    bool needsRefCountDeltas() const noexcept override { return true; }
+
+    task::Task<ledger::mpt::PruneRowBatch> coPreparePruneRows(
+        protocol::BlockNumber blockNumber, ledger::mpt::MPTDeltaLayer const& delta) override
+    {
+        BOOST_CHECK(!delta.refCountDeltas.empty());
+        events.push_back("prepare:" + std::to_string(blockNumber));
+        co_return {};
+    }
+
+    void onCommit(
+        protocol::BlockNumber blockNumber, ledger::mpt::MPTDeltaLayer const& delta) override
+    {
+        BOOST_CHECK(!delta.newNodes.empty());
+        events.push_back("commit:" + std::to_string(blockNumber));
+    }
+
+    std::vector<std::string> events;
+};
+
 // Regression coverage for a stale sync resume point reused across bootnodes: when
 // the second peer IS asked for the exact blocks the first peer already committed,
 // the verifier's head+1 guard must reject every replayed block by throwing before
@@ -868,8 +895,9 @@ BOOST_FIXTURE_TEST_CASE(secondPeerReplayRejectedByHeadGuard, EBSFixture)
         std::vector<bcos::devp2p::sync::Block> chain{genesisBlock, block1, block2};
 
         auto fakeLedger = std::make_shared<bcos::test::FakeLedger>();
+        auto spyObserver = std::make_shared<SpyCommitObserver>();
         EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor> verifier(
-            scheduler, *executor, *blockFactory);
+            scheduler, *executor, *blockFactory, spyObserver);
 
         std::map<bcos::bytes, protocol::Transaction::Ptr> rawToTx;
         rawToTx[raw1] = tx1;
@@ -953,6 +981,14 @@ BOOST_FIXTURE_TEST_CASE(secondPeerReplayRejectedByHeadGuard, EBSFixture)
         });
         BOOST_CHECK_EQUAL(committed, 2);
 
+        // The pruning seam: each committed block fired [prepare -> onCommit] in order
+        // against the block's node delta (the spy's empty-delta checks ran above).
+        BOOST_REQUIRE_EQUAL(spyObserver->events.size(), 4);
+        BOOST_CHECK_EQUAL(spyObserver->events[0], "prepare:1");
+        BOOST_CHECK_EQUAL(spyObserver->events[1], "commit:1");
+        BOOST_CHECK_EQUAL(spyObserver->events[2], "prepare:2");
+        BOOST_CHECK_EQUAL(spyObserver->events[3], "commit:2");
+
         // ---- Peer 2: the stale resume point — the second peer is asked for the SAME
         //      blocks the first peer already committed. Every replayed block must be
         //      rejected by the head+1 guard (throw) before any state fork. ----
@@ -979,6 +1015,9 @@ BOOST_FIXTURE_TEST_CASE(secondPeerReplayRejectedByHeadGuard, EBSFixture)
                                                  << " was not rejected by the head guard");
         });
         BOOST_CHECK_EQUAL(rejected, 2);
+        // The replays were rejected before any state fork, so the observer never saw
+        // them: still exactly the two committed blocks' hook pairs.
+        BOOST_CHECK_EQUAL(spyObserver->events.size(), 4);
 
         // The replays changed nothing: the head is still 2 (no SYS_KEY_CURRENT_NUMBER
         // rewind) and the committed balances are exactly what peer 1's round produced.

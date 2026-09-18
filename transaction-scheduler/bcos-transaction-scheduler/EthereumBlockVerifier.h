@@ -38,12 +38,16 @@
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include "bcos-ledger/mpt/CommitObserver.h"
 #include "bcos-ledger/mpt/EthTrieRoots.h"
 #include "bcos-ledger/mpt/EthereumBlockRoots.h"
+#include "bcos-ledger/mpt/MPTBuilder.h"
 #include "bcos-ledger/mpt/StateRoots.h"
+#include "bcos-ledger/mpt/ViewNodeStorage.h"
 #include "bcos-rlp-protocol/EthBlockHeader.h"
 #include "bcos-rlp-protocol/EthWithdrawal.h"
 #include "bcos-task/Task.h"
+#include "bcos-transaction-scheduler/BaselineSchedulerMPTHelpers.h"
 #include "bcos-transaction-scheduler/EthereumSystemCalls.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
@@ -54,6 +58,8 @@
 #include <boost/throw_exception.hpp>
 #include <functional>
 #include <limits>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -408,6 +414,11 @@ struct StaleOrOutOfOrderBlock : public std::runtime_error
 /// NOTE: the MPT build is INCREMENTAL — it needs the parent block's trie nodes resolvable
 /// through the executed view (persisted by the previous block's commit), so blocks must be
 /// verified strictly in order from a known state root.
+///
+/// MPT pruning: the commit feeds the wired CommitObserver (step 8 of verifyAndCommit) — the
+/// pre-commit hook's deletions land in the block's own WriteBatch and onCommit fires after it
+/// lands, the same hook ordering as BaselineScheduler::coCommitBlock and EngineServiceImpl's
+/// newPayload commit. With the default NoopCommitObserver this is a no-op.
 template <class Scheduler, class Executor>
 class EthereumBlockVerifier
 {
@@ -417,8 +428,15 @@ public:
     using StateRootCalculator = std::function<task::Task<crypto::HashType>(Storage&, uint32_t)>;
 
     EthereumBlockVerifier(Scheduler& scheduler, Executor& executor,
-        protocol::BlockFactory& blockFactory)
-      : m_scheduler(scheduler), m_executor(executor), m_blockFactory(blockFactory)
+        protocol::BlockFactory& blockFactory,
+        std::shared_ptr<ledger::mpt::CommitObserver> commitObserver = nullptr)
+      : m_scheduler(scheduler),
+        m_executor(executor),
+        m_blockFactory(blockFactory),
+        // MPT pruning seam (CommitObserver.h): a null observer keeps the Noop — the
+        // commit path then pays nothing beyond carrying the delta.
+        m_commitObserver(commitObserver ? std::move(commitObserver) :
+                                          std::make_shared<ledger::mpt::NoopCommitObserver>())
     {}
 
     /// MPT state root over the executed view's Ethereum world state, built incrementally
@@ -754,12 +772,21 @@ public:
 
         // 6. State root over the executed view. v2: the Ethereum world-state MPT root
         //    (accounts + storage, incrementally from the parent root); v1: the injected
-        //    legacy fold.
+        //    legacy fold. The v2 build's node delta is KEPT (not discarded as in
+        //    computeMptStateRoot) for the commit observer hooks in step 8: the pruner
+        //    tallies its refCountDeltas, so the per-hash tally runs only when the wired
+        //    observer counts references (CommitObserver::needsRefCountDeltas) — with the
+        //    Noop observer the tally is skipped and the delta is simply never read.
         crypto::HashType stateRoot;
+        std::optional<ledger::mpt::MPTDeltaLayer> mptDelta;
         if (ledgerConfig.executorVersion() >= ledger::ETHEREUM_EXECUTOR_VERSION)
         {
-            stateRoot =
-                co_await computeMptStateRoot(view, parentHeader.stateRoot, ledgerConfig);
+            ledger::mpt::ViewNodeStorage<decltype(view)> nodeStorage(view);
+            bool const l2Mode =
+                ledgerConfig.features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
+            mptDelta = co_await ledger::mpt::buildAndCollect(nodeStorage,
+                parentHeader.stateRoot, view, l2Mode, m_commitObserver->needsRefCountDeltas());
+            stateRoot = mptDelta->stateRoot;
         }
         else
         {
@@ -781,6 +808,16 @@ public:
         //    pushed view back (popFrontStorage) so a dirty layer never stays on the
         //    storage stack to pollute later sync rounds — the same rollback pattern
         //    BaselineScheduler::coExecuteBlock uses around pushView.
+        //
+        //    MPT pruning (CommitObserver.h): the observer's pre-commit hook turns the
+        //    block's node delta into the deletion keys of expired "/mpt/" node rows,
+        //    applied to prewriteStorage so the deletions land in the SAME WriteBatch as
+        //    the block data; onCommit fires only after the batch has landed. The
+        //    [prepare -> merge -> onCommit] triple holds m_commitMutex for the whole
+        //    section (BaselineSchedulerMPTHelpers.h's serialization contract). A commit
+        //    that fails before onCommit is retried by the sync loop and simply re-runs
+        //    the hook — the pruner's staged overlay is discarded and re-derived.
+        std::unique_lock commitLock(m_commitMutex);
         globalStateStorage.pushView(std::move(view));
         try
         {
@@ -811,7 +848,20 @@ public:
                     return protocol::Transaction::ConstPtr(transaction);
                 }) | ::ranges::to<std::vector>());
             co_await ledger::prewriteBlockToBuffer(ledger, blockTxs, block, prewriteStorage);
+            if (mptDelta)
+            {
+                // The deletions of expired node rows land in the SAME WriteBatch as the
+                // block data (crash-atomicity contract, CommitObserver.h).
+                co_await prepareMPTPruneRows(
+                    *m_commitObserver, ethHeader.number, *mptDelta, prewriteStorage);
+            }
             co_await globalStateStorage.mergeBackStorage(prewriteStorage);
+            if (mptDelta)
+            {
+                // CommitObserver timing contract: AFTER the block's WriteBatch landed.
+                // Must not throw (Noop and MPTPruner don't).
+                m_commitObserver->onCommit(ethHeader.number, *mptDelta);
+            }
         }
         catch (...)
         {
@@ -930,6 +980,14 @@ private:
     std::reference_wrapper<Scheduler> m_scheduler;
     std::reference_wrapper<Executor> m_executor;
     std::reference_wrapper<protocol::BlockFactory> m_blockFactory;
+    std::shared_ptr<ledger::mpt::CommitObserver> m_commitObserver;
+    // Serializes the commit section's [prepareMPTPruneRows -> merge -> onCommit] triple
+    // against every other commit feeding the same observer (the MPTPruner stages the
+    // block's counting work on one shared overlay between prepare and onCommit —
+    // BaselineSchedulerMPTHelpers.h's serialization contract). The devp2p sync loop
+    // commits strictly sequentially; the mutex keeps the contract independent of that
+    // caller property.
+    std::mutex m_commitMutex;
 };
 
 }  // namespace bcos::scheduler_v1

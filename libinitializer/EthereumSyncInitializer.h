@@ -34,6 +34,7 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include "bcos-ledger/mpt/CommitObserver.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-transaction-scheduler/EthereumBlockVerifier.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
@@ -76,20 +77,25 @@ class EthereumSyncInitializer
 {
 public:
     // _globalStateStorage: production MultiLayerStorage (GlobalStateStorage).
+    // _commitObserver: the shared MPT pruner (storage.mpt_prune_window > 0), forwarded to
+    // the verifier so devp2p-synced commits feed pruning like every other commit path;
+    // null keeps the verifier's built-in NoopCommitObserver.
     EthereumSyncInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
         bcos::ledger::LedgerInterface::Ptr _ledger,
         bcos::protocol::BlockFactory::Ptr _blockFactory,
         std::shared_ptr<scheduler_v1::SchedulerSerialImpl> _scheduler,
         std::shared_ptr<executor_v1::eth::EthereumExecutor> _executor,
         GlobalStateStorageInitializer::Ptr _globalStateStorageInitializer,
-        bcos::IOServicePool::Ptr _ioServicePool)
+        bcos::IOServicePool::Ptr _ioServicePool,
+        std::shared_ptr<ledger::mpt::CommitObserver> _commitObserver = nullptr)
       : m_nodeConfig(std::move(_nodeConfig)),
         m_ledger(std::move(_ledger)),
         m_blockFactory(std::move(_blockFactory)),
         m_scheduler(std::move(_scheduler)),
         m_executor(std::move(_executor)),
         m_globalStateStorageInitializer(std::move(_globalStateStorageInitializer)),
-        m_ioServicePool(std::move(_ioServicePool))
+        m_ioServicePool(std::move(_ioServicePool)),
+        m_commitObserver(std::move(_commitObserver))
     {}
 
     ~EthereumSyncInitializer() { stop(); }
@@ -533,10 +539,13 @@ private:
 
     void syncLoopImpl()
     {
-        // The verifier runs on the shared v2 scheduler + EthereumExecutor.
+        // The verifier runs on the shared v2 scheduler + EthereumExecutor. The commit
+        // observer (the shared MPT pruner when storage.mpt_prune_window > 0, else null)
+        // is forwarded so synced commits feed pruning exactly like the PBFT and Engine
+        // API commit paths.
         using Verifier = bcos::scheduler_v1::EthereumBlockVerifier<scheduler_v1::SchedulerSerialImpl,
             executor_v1::eth::EthereumExecutor>;
-        Verifier verifier(*m_scheduler, *m_executor, *m_blockFactory);
+        Verifier verifier(*m_scheduler, *m_executor, *m_blockFactory, m_commitObserver);
         auto forks = evmcForkSchedule();
         auto chainId = m_nodeConfig->ethereumChainId();
         // v2 always computes the MPT state root itself; the injected calculator must never run.
@@ -1001,6 +1010,7 @@ private:
     std::shared_ptr<executor_v1::eth::EthereumExecutor> m_executor;
     GlobalStateStorageInitializer::Ptr m_globalStateStorageInitializer;
     bcos::IOServicePool::Ptr m_ioServicePool;
+    std::shared_ptr<ledger::mpt::CommitObserver> m_commitObserver;
 
     std::atomic_bool m_running{false};
     std::thread m_thread;

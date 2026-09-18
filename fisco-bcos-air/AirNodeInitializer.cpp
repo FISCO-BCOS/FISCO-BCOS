@@ -189,7 +189,8 @@ void AirNodeInitializer::init(bcos::initializer::Params const& _params)
         m_ethereumSync = std::make_shared<bcos::initializer::EthereumSyncInitializer>(nodeConfig,
             initializer->ledger(), initializer->protocolInitializer()->blockFactory(),
             initializer->ethereumSerialScheduler(), initializer->ethereumExecutor(),
-            initializer->globalStateStorageInitializer(), initializer->ioServicePool());
+            initializer->globalStateStorageInitializer(), initializer->ioServicePool(),
+            initializer->mptCommitObserver());
         m_ethereumSync->validateConfig();
     }
 }

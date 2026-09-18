@@ -172,6 +172,15 @@ public:
     /// nullptr before initNode() built the global state storage (e.g. config-only usage).
     std::shared_ptr<bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>> mptNodeReader();
 
+    /// The shared MPT pruner as a CommitObserver (storage.mpt_prune_window > 0), wired into
+    /// every baseline scheduler variant at build time and forwarded to the EL-mode sync path
+    /// (AirNodeInitializer hands it to EthereumSyncInitializer). Null when pruning is
+    /// disabled — callers keep their built-in NoopCommitObserver.
+    std::shared_ptr<bcos::ledger::mpt::CommitObserver> mptCommitObserver()
+    {
+        return m_mptCommitObserver;
+    }
+
     /// Provider for eth_getStorageAt's latest-state path: each call forks a fresh latest view
     /// of GlobalStateStorage and returns an AnyStorage handle owning it (see
     /// forkLatestStateView). Captures a shared_ptr to the GlobalStateStorageInitializer, so
