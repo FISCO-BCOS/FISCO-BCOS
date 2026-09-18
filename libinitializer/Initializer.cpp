@@ -387,12 +387,22 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // Refused here, ahead of the MPT pruner's boot-time init below: that init walks the window's
     // state roots and, with storage.mpt_prune_sweep_garbage on, deletes unreachable "/mpt/" rows,
     // so a refusal placed after it would turn a fail-fast into a slow, side-effectful one.
-    if (opStackMode && m_nodeConfig->mptPruneWindow() > 0)
+    // EL mode is refused for the same reason as OP mode: the pruner is fed only through the
+    // CommitObserver hooks (BaselineScheduler / EngineServiceImpl newPayload), and the devp2p
+    // sync commit path — EthereumBlockVerifier::verifyAndCommit — never fires them, so after
+    // the boot-time sweep the window would be silently inert while the RPC historical-state
+    // guard still refuses eth_call below it.
+    if ((opStackMode || m_nodeConfig->ethereumELModeEnabled()) && m_nodeConfig->mptPruneWindow() > 0)
     {
         BOOST_THROW_EXCEPTION(
             bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                "storage.mpt_prune_window is not supported in OP mode (executor_version>=3) yet: "
-                "the OP commit path has no MPT pruning observer"));
+                std::string("storage.mpt_prune_window is not supported in ") +
+                (opStackMode ? "OP mode (executor_version>=3)" :
+                               "Ethereum EL mode ([ethereum] mode=el)") +
+                " yet: the " +
+                (opStackMode ? "OP commit path" :
+                               "devp2p sync commit path (EthereumBlockVerifier::verifyAndCommit)") +
+                " has no MPT pruning observer"));
     }
 
     // [op_engine_rpc] requires the v2 pure-Ethereum executor: on executor_version < 2 the

@@ -693,18 +693,35 @@ public:
             // A malformed uncle throws (its reward is part of the world state, so it
             // cannot be skipped) — the block is invalid, not partially rewarded.
             std::exception_ptr rewardsFailure;
+            std::string rewardsDiag;
             try
             {
                 co_await accumulatePoWBlockRewards(view, ethHeader, rawUncles, ledgerConfig);
             }
             catch (...)
             {
+                // Capture the diagnostic INSIDE the catch block, like the executeBlock
+                // path above: the throw may be a malformed uncle RLP, an out-of-depth
+                // uncle, or a storage error from EVMAccount — a fixed "decode failed"
+                // message would send the operator after the wrong cause.
                 rewardsFailure = std::current_exception();
+                try
+                {
+                    std::rethrow_exception(rewardsFailure);
+                }
+                catch (std::exception const& e)
+                {
+                    rewardsDiag = e.what();
+                }
+                catch (...)
+                {
+                    rewardsDiag = boost::current_exception_diagnostic_information();
+                }
             }
             if (rewardsFailure)
             {
                 co_return co_await fail(
-                    "EthereumBlockVerifier: uncle header RLP decode failed");
+                    "EthereumBlockVerifier: PoW block rewards failed: " + rewardsDiag);
             }
         }
 
