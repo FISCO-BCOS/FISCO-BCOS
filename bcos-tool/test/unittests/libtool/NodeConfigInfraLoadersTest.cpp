@@ -61,15 +61,12 @@ BOOST_AUTO_TEST_CASE(syncConfigValidAndInvalid)
 }
 
 
-BOOST_AUTO_TEST_CASE(storageConfigDefaultsAndTikv)
+BOOST_AUTO_TEST_CASE(storageConfigDefaults)
 {
     LoaderProbe a;
     a.loadStorageConfig({});  // pure defaults — covers the bulk of the loader
     BOOST_CHECK_EQUAL(a.storageType(), "RocksDB");
-
-    LoaderProbe b;  // TiKV branch disables separate block/state
-    b.loadStorageConfig(fromIni("[storage]\ntype=TiKV\nenable_separate_block_state=true\n"));
-    BOOST_CHECK(!b.enableSeparateBlockAndState());
+    BOOST_CHECK(!a.enableSeparateBlockAndState());
 }
 
 

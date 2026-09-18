@@ -244,9 +244,6 @@ class MaxNodeConfig(NodeConfig):
         NodeConfig.__init__(self, config, chain_id, group_id, agency_config,
                             utilities.ServiceInfo.max_node_service, utilities.ServiceInfo.single_node_obj_name_list,
                             sm_crypto, "max")
-        # load the pd_addrs
-        self.pd_addrs = utilities.get_item_value(
-            self.config, "pd_addrs", None, True, self.desc)
         # the executor service config
         self.__parse_executor_service_config()
         # load service name(for executor)

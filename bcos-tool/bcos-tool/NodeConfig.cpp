@@ -1893,19 +1893,9 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     // pre-existing unreachable "/mpt/" rows entirely (only a hint is logged); enable to delete
     // them (in batches) while booting.
     m_mptPruneSweepGarbage = _pt.get<bool>("storage.mpt_prune_sweep_garbage", false);
-    m_pdCaPath = _pt.get<std::string>("storage.pd_ssl_ca_path", "");
-    m_pdCertPath = _pt.get<std::string>("storage.pd_ssl_cert_path", "");
-    m_pdKeyPath = _pt.get<std::string>("storage.pd_ssl_key_path", "");
     m_enableArchive = _pt.get<bool>("storage.enable_archive", false);
     m_syncArchivedBlocks = _pt.get<bool>("storage.sync_archived_blocks", false);
     m_enableSeparateBlockAndState = _pt.get<bool>("storage.enable_separate_block_state", false);
-    if (boost::iequals(m_storageType, bcos::storage::TiKV))
-    {
-        m_enableSeparateBlockAndState = false;
-        NodeConfig_LOG(INFO) << LOG_DESC("Only rocksDB support separate block and state")
-                             << LOG_KV("separateBlockAndState", m_enableSeparateBlockAndState)
-                             << LOG_KV("storageType", m_storageType);
-    }
     m_stateDBPath = m_storagePath;
     m_stateDBPath = m_storagePath + "/state";
     m_blockDBPath = m_storagePath + "/block";
@@ -1921,14 +1911,11 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     //     BOOST_THROW_EXCEPTION(
     //         InvalidConfig() << errinfo_comment("Please set storage.key_page_size in 4K~32M"));
     // }
-    auto pd_addrs = _pt.get<std::string>("storage.pd_addrs", "127.0.0.1:2379");
-    boost::split(m_pd_addrs, pd_addrs, boost::is_any_of(","));
     m_enableLRUCacheStorage = _pt.get<bool>("storage.enable_cache", true);
     m_cacheSize = _pt.get<ssize_t>("storage.cache_size", DEFAULT_CACHE_SIZE);
     g_BCOSConfig.setStorageType(m_storageType);  // Set storageType to global
     NodeConfig_LOG(INFO) << LOG_DESC("loadStorageConfig") << LOG_KV("storagePath", m_storagePath)
                          << LOG_KV("KeyPage", m_keyPageSize) << LOG_KV("storageType", m_storageType)
-                         << LOG_KV("pdAddrs", pd_addrs) << LOG_KV("pdCaPath", m_pdCaPath)
                          << LOG_KV("enableArchive", m_enableArchive)
                          << LOG_KV("enableSeparateBlockAndState", m_enableSeparateBlockAndState)
                          << LOG_KV("archiveListenIP", m_archiveListenIP)
@@ -1942,7 +1929,6 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
 // Note: In components that do not require failover, do not need to set member_id
 void NodeConfig::loadFailOverConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID)
 {
-    // only enable leaderElection when using tikv
     m_enableFailOver = _pt.get("failover.enable", false);
     if (!m_enableFailOver)
     {
@@ -2711,26 +2697,6 @@ std::int64_t NodeConfig::mptPruneWindow() const
 bool NodeConfig::mptPruneSweepGarbage() const
 {
     return m_mptPruneSweepGarbage;
-}
-
-std::vector<std::string> const& NodeConfig::pdAddrs() const
-{
-    return m_pd_addrs;
-}
-
-std::string const& NodeConfig::pdCaPath() const
-{
-    return m_pdCaPath;
-}
-
-std::string const& NodeConfig::pdCertPath() const
-{
-    return m_pdCertPath;
-}
-
-std::string const& NodeConfig::pdKeyPath() const
-{
-    return m_pdKeyPath;
 }
 
 std::string const& NodeConfig::storageDBName() const

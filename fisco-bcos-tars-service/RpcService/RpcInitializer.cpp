@@ -63,8 +63,7 @@ void RpcInitializer::init(std::string const& _configDir)
             std::make_shared<bcos::election::LeaderEntryPointFactoryImpl>(memberFactory);
         auto watchDir = "/" + m_nodeConfig->chainId() + bcos::election::CONSENSUS_LEADER_DIR;
         m_leaderEntryPoint = leaderEntryPointFactory->createLeaderEntryPoint(
-            m_nodeConfig->failOverClusterUrl(), watchDir, "watchLeaderChange",
-            m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
+            m_nodeConfig->failOverClusterUrl(), watchDir, "watchLeaderChange", "", "", "");
     }
 #endif
     // init rpc config
@@ -128,13 +127,6 @@ void RpcInitializer::start()
     }
     m_running = true;
 
-#ifdef WITH_TIKV
-    if (m_leaderEntryPoint)
-    {
-        RPCSERVICE_LOG(INFO) << LOG_DESC("start leader-entry-point");
-        m_leaderEntryPoint->start();
-    }
-#endif
     RPCSERVICE_LOG(INFO) << LOG_DESC("start rpc");
     m_rpc->start();
     RPCSERVICE_LOG(INFO) << LOG_DESC("start rpc success");
@@ -149,13 +141,6 @@ void RpcInitializer::stop()
     }
     m_running = false;
     RPCSERVICE_LOG(INFO) << LOG_DESC("Stop the RpcService");
-
-#ifdef WITH_TIKV
-    if (m_leaderEntryPoint)
-    {
-        m_leaderEntryPoint->stop();
-    }
-#endif
 
     if (m_rpc)
     {

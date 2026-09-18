@@ -33,6 +33,7 @@
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
 // #include "bcos-framework/security/KeyEncryptionType.h"
+#include <algorithm>
 
 using namespace tars;
 using namespace bcostars;
@@ -62,8 +63,7 @@ void GatewayInitializer::init(std::string const& _configPath)
             std::make_shared<bcos::election::LeaderEntryPointFactoryImpl>(memberFactory);
         auto watchDir = "/" + nodeConfig->chainId() + bcos::election::CONSENSUS_LEADER_DIR;
         m_leaderEntryPoint = leaderEntryPointFactory->createLeaderEntryPoint(
-            nodeConfig->failOverClusterUrl(), watchDir, "watchLeaderChange", nodeConfig->pdCaPath(),
-            nodeConfig->pdCertPath(), nodeConfig->pdKeyPath());
+            nodeConfig->failOverClusterUrl(), watchDir, "watchLeaderChange", "", "", "");
     }
 #endif
 
@@ -74,7 +74,7 @@ void GatewayInitializer::init(std::string const& _configPath)
     // In AIR mode this pool is shared across all modules; here each service
     // runs in its own process and needs its own pool.
     m_ioServicePool = std::make_shared<bcos::IOServicePool>(
-        std::thread::hardware_concurrency(), "gateway-io");
+        std::max(1u, std::thread::hardware_concurrency()), "gateway-io");
 
     bcos::gateway::GatewayFactory factory(nodeConfig->chainId(), nodeConfig->rpcServiceName(),
         protocolInitializer->getKeyEncryptionByType(nodeConfig->keyEncryptionType()));

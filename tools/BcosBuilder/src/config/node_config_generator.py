@@ -179,8 +179,6 @@ class NodeConfigGenerator:
         storage_section = "storage"
         if ini_config.has_option(storage_section, "data_path"):
             ini_config.remove_option(storage_section, "data_path")
-        ini_config[storage_section]["type"] = "tikv"
-        ini_config[storage_section]["pd_addrs"] = node_config.pd_addrs
         ini_config[storage_section]["key_page_size"] = str(
             node_config.key_page_size)
 

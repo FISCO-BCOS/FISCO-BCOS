@@ -136,10 +136,6 @@ public:
     // finds (init Phase 3). Default false: the scan is skipped entirely (only a hint is
     // logged — counting the garbage would itself cost the full-table scan).
     bool mptPruneSweepGarbage() const;
-    std::vector<std::string> const& pdAddrs() const;
-    std::string const& pdCaPath() const;
-    std::string const& pdCertPath() const;
-    std::string const& pdKeyPath() const;
     std::string const& storageDBName() const;
     std::string const& stateDBName() const;
     bool enableArchive() const;
@@ -497,10 +493,6 @@ private:
     std::string m_storagePath;
     std::string m_storageType = "RocksDB";
     size_t m_keyPageSize = 10240;
-    std::vector<std::string> m_pd_addrs;
-    std::string m_pdCaPath;
-    std::string m_pdCertPath;
-    std::string m_pdKeyPath;
     bool m_enableDBStatistics = false;
     int m_maxWriteBufferNumber = 3;
     int m_maxBackgroundJobs = 3;

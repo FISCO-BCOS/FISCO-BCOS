@@ -29,8 +29,6 @@ enable_storage_security = false
         [[agency.group.node]]
         # expand the existed-max-node
         node_name = "node1"
-        # the tikv storage pd-addresses
-        pd_addrs="172.25.0.5:2379"
         key_page_size=10240
         deploy_ip = ["172.25.0.5"]
         executor_deploy_ip=["172.25.0.5"]

@@ -616,8 +616,7 @@ void PBFTInitializer::initConsensusFailOver(KeyInterface::Ptr _nodeID)
 #ifdef WITH_LEDGER_ELECTION
     m_leaderElection = leaderElectionFactory->createLeaderElection(m_nodeConfig->memberID(),
         nodeConfig, m_nodeConfig->failOverClusterUrl(), leaderKey, "consensus_fault_tolerance",
-        m_nodeConfig->leaseTTL(), m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(),
-        m_nodeConfig->pdKeyPath(), *m_ioServicePool->getIOService());
+        m_nodeConfig->leaseTTL(), "", "", "", *m_ioServicePool->getIOService());
 
     // register the handler
     m_leaderElection->registerOnCampaignHandler(

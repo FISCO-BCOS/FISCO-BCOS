@@ -104,7 +104,7 @@ if(FULLNODE)
 
     if(WITH_TARS_SERVICES)
         add_subdirectory(fisco-bcos-tars-service)
-        add_subdirectory(bcos-leader-election)
+        add_subdirectory(legacy/bcos-leader-election)
     endif()
 
     if(TESTS)
@@ -114,11 +114,11 @@ if(FULLNODE)
         add_subdirectory(benchmark)
     endif()
 
-    # bcos-leader-election can also be built standalone (without the full Tars
-    # stack) when only WITH_LEDGER_ELECTION is set. Place this AFTER
-    # enable_testing() so that the module's UTs are visible to ctest.
+    # bcos-leader-election (archived under legacy/) can also be built standalone
+    # (without the full Tars stack) when only WITH_LEDGER_ELECTION is set. Place
+    # this AFTER enable_testing() so that the module's UTs are visible to ctest.
     if(NOT WITH_TARS_SERVICES AND WITH_LEDGER_ELECTION)
-        add_subdirectory(bcos-leader-election)
+        add_subdirectory(legacy/bcos-leader-election)
     endif()
 endif()
 
