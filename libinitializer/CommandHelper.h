@@ -18,11 +18,9 @@
  * @date 2021-06-10
  */
 #pragma once
-#include <iostream>
-#include <memory>
-namespace bcos
-{
-namespace initializer
+#include <string>
+
+namespace bcos::initializer
 {
 void printVersion();
 void showNodeVersionMetric();
@@ -34,6 +32,10 @@ struct Params
     std::string genesisFilePath;
     std::string snapshotPath;  // import from or export to
     float txSpeed;
+    bool isConsole = false;         // true when the "console" subcommand is used
+    std::string consoleConfigPath;  // path to config.toml for console mode
+    std::string consolePeer;        // direct peer "ip:port" (bypasses config.toml)
+    std::string consoleGroup;       // default group ID for direct peer mode
     enum class operation : int
     {
         None = 0,
@@ -59,5 +61,8 @@ inline Params::operation operator&(Params::operation left, Params::operation rig
 }
 
 Params initAirNodeCommandLine(int argc, const char* argv[], bool _autoSendTx);
-}  // namespace initializer
-}  // namespace bcos
+
+// Parse command line for the built-in console subcommand.
+// Returns a Params with isConsole=true when "console" is the first positional argument.
+Params initConsoleCommandLine(int argc, const char* argv[]);
+}  // namespace bcos::initializer
