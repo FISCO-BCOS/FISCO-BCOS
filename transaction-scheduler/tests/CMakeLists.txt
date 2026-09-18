@@ -45,6 +45,10 @@ set_source_files_properties(
 # the devp2p fake-peer headers.
 set_source_files_properties(
     "TestEthereumBlockSync.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+# TestMPTPrunerSyncWiring (real MPTPruner over the devp2p-sync verifyAndCommit lane)
+# shares the same standalone build model.
+set_source_files_properties(
+    "TestMPTPrunerSyncWiring.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # TestSepoliaGenesisSync (real Sepolia genesis state load + empty-block verify).
 set_source_files_properties(
     "TestSepoliaGenesisSync.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)

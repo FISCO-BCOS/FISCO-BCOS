@@ -106,21 +106,30 @@ public:
     /// Validate that the EL-mode prerequisites hold (executor v2, fork schedule, bootnode
     /// file readable, genesis anchor present and hashing to the configured
     /// [eth_genesis_header].hash). Throws InvalidConfig on failure.
-    void validateConfig() const
+    void validateConfig() const { validateNodeConfig(*m_nodeConfig); }
+
+    /// NodeConfig-only validation of the EL-mode prerequisites (mode, executor version,
+    /// [eth_genesis_header] presence and hash, bootnode file). Static on purpose: every
+    /// check reads only NodeConfig, so AirNodeInitializer runs this BEFORE the core node
+    /// init — which performs the MPT pruner's boot-time window walk and, with
+    /// storage.mpt_prune_sweep_garbage, a whole-keyspace garbage sweep — keeping a config
+    /// error fail-fast instead of slow and side-effectful (the same placement rule as the
+    /// OP-mode mpt_prune_window refusal, Initializer.cpp). validateConfig() delegates here.
+    static void validateNodeConfig(bcos::tool::NodeConfig const& nodeConfig)
     {
-        if (!m_nodeConfig->ethereumELModeEnabled())
+        if (!nodeConfig.ethereumELModeEnabled())
         {
             BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
                                       "EthereumSyncInitializer: [ethereum].mode != el"));
         }
-        if (m_nodeConfig->executorVersion() < ledger::ETHEREUM_EXECUTOR_VERSION)
+        if (nodeConfig.executorVersion() < ledger::ETHEREUM_EXECUTOR_VERSION)
         {
             BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
                                       "Ethereum L1 EL mode requires executor.version >= 2 "
                                       "(the pure-Ethereum executor); set [executor] version=2 "
                                       "in config.genesis"));
         }
-        if (!m_nodeConfig->genesisConfig().m_ethGenesisHeader.has_value())
+        if (!nodeConfig.genesisConfig().m_ethGenesisHeader.has_value())
         {
             BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
                                       "Ethereum L1 EL mode requires an [eth_genesis_header] "
@@ -131,8 +140,9 @@ public:
         // differs from m_hash, but the RLPx Status handshake (genesisHash) and the
         // EIP-2124 fork-id both derive from THIS projection — a drift between the two
         // would disconnect every bootnode with no config error.
-        auto const& ethGenesisHeader = m_nodeConfig->genesisConfig().m_ethGenesisHeader;
-        auto const projectedHash = bcos::protocol::ethHeaderHash(genesisAnchorHeader());
+        auto const& ethGenesisHeader = nodeConfig.genesisConfig().m_ethGenesisHeader;
+        auto const projectedHash = bcos::protocol::ethHeaderHash(
+            bcos::protocol::toEthBlockHeaderData(ethGenesisHeader.value()));
         if (projectedHash != ethGenesisHeader->m_hash)
         {
             BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
@@ -142,12 +152,12 @@ public:
                                       projectedHash.hex()));
         }
         // Bootnode file must exist and parse (validates the enode list eagerly).
-        auto nodes = bcos::devp2p::sync::loadBootnodes(m_nodeConfig->ethereumBootnodesFile());
+        auto nodes = bcos::devp2p::sync::loadBootnodes(nodeConfig.ethereumBootnodesFile());
         if (nodes.empty())
         {
             BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
                                       "Ethereum L1 EL mode: no bootnodes in " +
-                                      m_nodeConfig->ethereumBootnodesFile()));
+                                      nodeConfig.ethereumBootnodesFile()));
         }
     }
 

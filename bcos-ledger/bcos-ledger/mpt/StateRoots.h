@@ -14,10 +14,13 @@
  *  limitations under the License.
  *
  * @file StateRoots.h
- * @brief Block state-root computation, shared by every state-root producer
- *        (BaselineScheduler, EthereumBlockVerifier, EngineServiceImpl):
- *        - computeMptStateRoot: the real Ethereum world-state MPT root (moved from
- *          EthereumBlockVerifier::computeMptStateRoot);
+ * @brief Block state-root computation helpers:
+ *        - computeMptStateDelta / computeMptStateRoot: the real Ethereum world-state MPT
+ *          root (plus the node delta for the commit observer), used by the EL sync
+ *          commit path (EthereumBlockVerifier::verifyAndCommit) and the verifier tests;
+ *          the PBFT lane and the engine services build through their own
+ *          buildMPTStateRootForView (BaselineSchedulerMPTHelpers.h), which additionally
+ *          resolves the parent root from the ledger;
  *        - computeLegacyStateRoot: the legacy XOR fold for non-MPT chains (moved from
  *          scheduler_v1::calculateStateRoot in BaselineScheduler.h);
  *        - parentStateRootFor: the parent-root selection rule every incremental MPT
@@ -46,22 +49,37 @@
 namespace bcos::ledger::mpt
 {
 
-/// MPT state root over the executed view's Ethereum world state, built incrementally
-/// from the parent block's state root. Accounts and their storage sub-tries enter the
-/// trie; ledger metadata (SYS_* rows) never does.
+/// MPT state root AND node delta over the executed view's Ethereum world state, built
+/// incrementally from the parent block's state root. Accounts and their storage sub-tries
+/// enter the trie; ledger metadata (SYS_* rows) never does.
 ///
 /// NOTE: the build is INCREMENTAL — it needs the parent block's trie nodes resolvable
 /// through the executed view (persisted by the previous block's commit), so blocks must be
 /// built/verified strictly in order from a known state root. It also WRITES the new trie
 /// nodes into the view's top mutable layer, so it must run EXACTLY ONCE per block.
+///
+/// @param trackRefCounts  forwarded to buildAndCollect: true tallies the delta's per-hash
+///                        refCountDeltas for a pruning CommitObserver (pass the observer's
+///                        needsRefCountDeltas()); false skips the tally for producers whose
+///                        commit path never reads it.
 template <class ViewType>
-task::Task<crypto::HashType> computeMptStateRoot(ViewType& view,
-    crypto::HashType const& parentStateRoot, ledger::LedgerConfig const& ledgerConfig)
+task::Task<MPTDeltaLayer> computeMptStateDelta(ViewType& view,
+    crypto::HashType const& parentStateRoot, ledger::LedgerConfig const& ledgerConfig,
+    bool trackRefCounts = false)
 {
     ViewNodeStorage<ViewType> nodeStorage(view);
     bool const l2Mode =
         ledgerConfig.features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
-    auto delta = co_await buildAndCollect(nodeStorage, parentStateRoot, view, l2Mode);
+    co_return co_await buildAndCollect(nodeStorage, parentStateRoot, view, l2Mode,
+        trackRefCounts);
+}
+
+/// The root-only form, for callers that commit no MPT delta to an observer.
+template <class ViewType>
+task::Task<crypto::HashType> computeMptStateRoot(ViewType& view,
+    crypto::HashType const& parentStateRoot, ledger::LedgerConfig const& ledgerConfig)
+{
+    auto delta = co_await computeMptStateDelta(view, parentStateRoot, ledgerConfig);
     co_return delta.stateRoot;
 }
 

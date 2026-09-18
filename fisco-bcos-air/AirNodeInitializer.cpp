@@ -171,6 +171,17 @@ void AirNodeInitializer::init(bcos::initializer::Params const& _params)
     nodeConfig->loadConfig(_params.configFilePath);
     validateEthereumELParams(_params, *nodeConfig);
 
+    // EL mode's NodeConfig-only checks run BEFORE the core node init below: init performs
+    // the MPT pruner's boot-time window walk and, with storage.mpt_prune_sweep_garbage, a
+    // whole-keyspace garbage sweep, so a config error (mis-edited bootnode file, drifting
+    // genesis anchor hash) must fail fast instead of after that side effect — the same
+    // placement rule as the OP-mode mpt_prune_window refusal. The full object-level
+    // validateConfig() still runs after construction below.
+    if (nodeConfig->ethereumELModeEnabled())
+    {
+        bcos::initializer::EthereumSyncInitializer::validateNodeConfig(*nodeConfig);
+    }
+
     init(_params.configFilePath, _params.genesisFilePath);
 
     // Ethereum L1 EL mode: after the core node is initialized, build the self-sync driver

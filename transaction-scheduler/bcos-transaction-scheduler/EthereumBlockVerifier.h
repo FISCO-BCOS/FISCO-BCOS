@@ -441,8 +441,9 @@ public:
 
     /// MPT state root over the executed view's Ethereum world state, built incrementally
     /// from the parent block's state root. Forwards to the shared implementation
-    /// (ledger::mpt::computeMptStateRoot, bcos-ledger/mpt/StateRoots.h) that the Engine API
-    /// block builder also uses.
+    /// (ledger::mpt::computeMptStateRoot, bcos-ledger/mpt/StateRoots.h). verifyAndCommit
+    /// itself calls ledger::mpt::computeMptStateDelta (same build, delta kept for the
+    /// commit observer); this root-only form remains for the verifier's tests.
     template <class ViewType>
     static task::Task<crypto::HashType> computeMptStateRoot(ViewType& view,
         crypto::HashType const& parentStateRoot, ledger::LedgerConfig const& ledgerConfig)
@@ -771,21 +772,18 @@ public:
         result.computation = computation;
 
         // 6. State root over the executed view. v2: the Ethereum world-state MPT root
-        //    (accounts + storage, incrementally from the parent root); v1: the injected
-        //    legacy fold. The v2 build's node delta is KEPT (not discarded as in
-        //    computeMptStateRoot) for the commit observer hooks in step 8: the pruner
-        //    tallies its refCountDeltas, so the per-hash tally runs only when the wired
-        //    observer counts references (CommitObserver::needsRefCountDeltas) — with the
-        //    Noop observer the tally is skipped and the delta is simply never read.
+        //    (accounts + storage, incrementally from the parent root) via the shared
+        //    ledger helper, keeping the node delta for the commit observer hooks in
+        //    step 8; v1: the injected legacy fold. The per-hash refCountDeltas tally runs
+        //    only when the wired observer counts references
+        //    (CommitObserver::needsRefCountDeltas) — with the Noop observer the tally is
+        //    skipped and the delta is simply never read.
         crypto::HashType stateRoot;
         std::optional<ledger::mpt::MPTDeltaLayer> mptDelta;
         if (ledgerConfig.executorVersion() >= ledger::ETHEREUM_EXECUTOR_VERSION)
         {
-            ledger::mpt::ViewNodeStorage<decltype(view)> nodeStorage(view);
-            bool const l2Mode =
-                ledgerConfig.features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
-            mptDelta = co_await ledger::mpt::buildAndCollect(nodeStorage,
-                parentHeader.stateRoot, view, l2Mode, m_commitObserver->needsRefCountDeltas());
+            mptDelta = co_await ledger::mpt::computeMptStateDelta(view, parentHeader.stateRoot,
+                ledgerConfig, m_commitObserver->needsRefCountDeltas());
             stateRoot = mptDelta->stateRoot;
         }
         else
@@ -856,17 +854,23 @@ public:
                     *m_commitObserver, ethHeader.number, *mptDelta, prewriteStorage);
             }
             co_await globalStateStorage.mergeBackStorage(prewriteStorage);
-            if (mptDelta)
-            {
-                // CommitObserver timing contract: AFTER the block's WriteBatch landed.
-                // Must not throw (Noop and MPTPruner don't).
-                m_commitObserver->onCommit(ethHeader.number, *mptDelta);
-            }
         }
         catch (...)
         {
             globalStateStorage.popFrontStorage();
             throw;
+        }
+        // CommitObserver timing contract: AFTER the block's WriteBatch landed. Deliberately
+        // OUTSIDE the rollback try/catch (matching BaselineScheduler-tpp.h and
+        // EngineServiceImpl.h): by now mergeBackStorage has landed and popped this block's
+        // layer, so if an observer ever violated the no-throw contract, the catch above
+        // would pop a deque that no longer holds this block and the resulting
+        // NotExistsImmutableStorageError would mask the observer's own diagnostic for a
+        // block that is in fact committed. onCommit must not throw (Noop and MPTPruner
+        // don't); a violation propagates untouched.
+        if (mptDelta)
+        {
+            m_commitObserver->onCommit(ethHeader.number, *mptDelta);
         }
 
         result.valid = true;
