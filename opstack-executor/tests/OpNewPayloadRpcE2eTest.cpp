@@ -34,6 +34,9 @@
 #include <bcos-utilities/IOServicePool.h>
 #include <json/json.h>
 #include <boost/lexical_cast.hpp>
+#include <boost/log/core.hpp>
+#include <boost/log/sinks/sync_frontend.hpp>
+#include <boost/log/sinks/text_ostream_backend.hpp>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <fstream>
@@ -1327,7 +1330,11 @@ BOOST_AUTO_TEST_CASE(RegolithPayloadBuildsAndImportsAgainstRealScheduler)
 // never noticed: it asserts the payload's SHAPE but not its price. It is also why the
 // whole corpus missed it: the ladder generator pins EIP1559Denominator 50 too
 // (op-stack-e2e-tests opstack-executor/tests/t8n/generator/cases.go:820), so corpus and
-// implementation share the wrong assumption and agree with each other.
+// implementation share the wrong assumption and agree with each other. The corpus has
+// since gained the dedicated anchor for exactly this channel (generator cases.go
+// eip1559_denominator8_basefee_step: op-geth 875_000_000 vs the legacy 980_000_000 on its
+// own parent, triple carried in _info.eip1559), which replays green — the differential
+// proof that the declared denominator now reaches the engine.
 //
 // Golden produced by op-geth at the pinned commit e8800cffe — NOT hand-computed — with
 //   ChainConfig{LondonBlock:0, BedrockBlock:0, RegolithTime:0, CanyonTime:future,
@@ -1338,7 +1345,9 @@ BOOST_AUTO_TEST_CASE(RegolithPayloadBuildsAndImportsAgainstRealScheduler)
 //
 //   EIP1559Denominator    op-geth CalcBaseFee
 //   ------------------    -------------------
-//     8                   1_375_000_000   <- devnet.toml:42 and C2 intent.toml:142
+//     8                   1_375_000_000   <- the C2 chain (op-stack-e2e-tests
+//                                          tools/op-e2e/setup_c2.sh C2_EIP1559_DENOMINATOR)
+//                                          and the corpus' devnet/intent configs
 //    50                   1_060_000_000   <- FISCO's hardcoded Bedrock constant
 //   250                   1_012_000_000
 //    gasUsed == target, 8 or 50 -> 1_000_000_000 (step is zero: denominator cannot show)
@@ -1498,6 +1507,29 @@ auto extraDataPairOf(bcos::engine::ExecutionPayload const& payload)
                                                  .subspan(1, bcos::engine::c_eip1559ParamsBytes));
 }
 
+/// Collect everything boost::log emits while `trigger` runs (the engine's BCOS_LOG records
+/// flow through the log core, so a temporary string sink sees them). Closes the
+/// observability chain on the zero-param substitution warnings: the sentinels are
+/// once-per-process per source, so the capture must wrap the FIRST call that fires a given
+/// source — which the two zero-param cases below are in this binary. If a future test
+/// starts triggering a zero-param substitution earlier, the assertion here fails with a
+/// consumed-budget explanation rather than silently losing the closure.
+template <typename F>
+auto withCapturedLog(F&& trigger)
+{
+    using TextBackend = boost::log::sinks::text_ostream_backend;
+    // boost::log lives in boost::shared_ptr land — std::shared_ptr does not convert.
+    auto stream = boost::make_shared<std::ostringstream>();
+    auto backend = boost::make_shared<TextBackend>();
+    backend->add_stream(stream);
+    backend->auto_flush(true);
+    auto sink = boost::make_shared<boost::log::sinks::synchronous_sink<TextBackend>>(backend);
+    boost::log::core::get()->add_sink(sink);
+    trigger();
+    boost::log::core::get()->remove_sink(sink);
+    return stream->str();
+}
+
 }  // namespace
 
 // S2 — "noTxPool / empty attributes": op-e2e actions/sequencer/l2_sequencer_test.go
@@ -1597,13 +1629,15 @@ BOOST_AUTO_TEST_CASE(PayloadWithInvalidSignatureTxRejected)
     // The reseal above makes the header self-consistent, so a structural complaint here would
     // mean the engine never looked at the transaction at all — i.e. it accepted the unbalanced
     // payload instead of reporting the bad tx, which is the failure mode this scenario exists
-    // to catch. The observed decode-gate wording is allowed (see the envelope comment): the
-    // gate that catches it is FISCO's, but the tx is what is being refused.
-    BOOST_CHECK_MESSAGE(reason.find("blockHash does not match") == std::string::npos &&
-                            reason.find("stateRoot") == std::string::npos &&
-                            reason.find("gasUsed") == std::string::npos,
-        "S3: the rejection must name the bad transaction, not a structural gate (reason='" << reason
-                                                                                           << "')");
+    // to catch. The decode gate IS the tx-level refusal (zero r/s fails sender recovery before
+    // execution — the same gate class as op-geth's sanityCheckSignature), and the wording is
+    // FISCO's own stable message, so pin it positively instead of blocklisting structural words
+    // one by one.
+    BOOST_CHECK_MESSAGE(
+        reason.find("undecodable payload transaction envelope") != std::string::npos,
+        "S3: the rejection must come from the envelope decode gate (zero r/s fails sender "
+        "recovery before execution), got '"
+            << reason << "'");
     BOOST_CHECK_MESSAGE(status.latestValidHash.has_value() && *status.latestValidHash == genesis,
         "S3: latestValidHash must be the parent genesis");
 }
@@ -1840,16 +1874,23 @@ BOOST_AUTO_TEST_CASE(ZeroAttributeParamsSubstituteTheDeclaredPair)
     attrs.eip1559Params = bcos::fromHex("0x0000000000000000");  // op-node: SystemConfig unset
 
     bcos::engine::ForkchoiceState const fc{genesis, genesis, genesis};
-    auto built = bcos::task::syncWait(fixture->service.updateForkchoice(
-        fc, &attrs, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
-    BOOST_REQUIRE_MESSAGE(
-        built.payloadStatus.status == bcos::engine::PayloadValidationStatus::Valid,
+    std::optional<bcos::engine::ForkchoiceUpdatedResult> built;
+    auto const captured = withCapturedLog([&]() {
+        built = bcos::task::syncWait(fixture->service.updateForkchoice(
+            fc, &attrs, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
+    });
+    BOOST_REQUIRE_MESSAGE(built.has_value() && built->payloadStatus.status ==
+                                                   bcos::engine::PayloadValidationStatus::Valid,
         "zero-param build must be VALID (the reference never refuses it), got "
-            << static_cast<int>(built.payloadStatus.status) << " "
-            << built.payloadStatus.validationError.value_or(""));
-    BOOST_REQUIRE(built.payloadId.has_value());
+            << (built.has_value() ? static_cast<int>(built->payloadStatus.status) : -1) << " "
+            << (built.has_value() ? built->payloadStatus.validationError.value_or("") :
+                                    std::string("<no result>")));
+    BOOST_CHECK_MESSAGE(captured.find("substituting the DECLARED pair") != std::string::npos,
+        "the declared-source substitution must be announced (INFO), captured='"
+            << captured.substr(0, 400) << "'");
+    BOOST_REQUIRE(built.has_value() && built->payloadId.has_value());
     auto got = bcos::task::syncWait(fixture->service.getPayload(
-        *built.payloadId, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
+        *built->payloadId, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
     BOOST_REQUIRE(got != nullptr);
     auto const& produced = got->executionPayload;
     BOOST_REQUIRE_EQUAL(produced.extraData.size(), 9U);
@@ -1895,16 +1936,25 @@ BOOST_AUTO_TEST_CASE(ZeroAttributeParamsOnAnUndeclaredNodeUseThePreset)
     attrs.eip1559Params = bcos::fromHex("0x0000000000000000");
 
     bcos::engine::ForkchoiceState const fc{genesis, genesis, genesis};
-    auto built = bcos::task::syncWait(fixture->service.updateForkchoice(
-        fc, &attrs, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
-    BOOST_REQUIRE_MESSAGE(
-        built.payloadStatus.status == bcos::engine::PayloadValidationStatus::Valid,
+    std::optional<bcos::engine::ForkchoiceUpdatedResult> built;
+    auto const captured = withCapturedLog([&]() {
+        built = bcos::task::syncWait(fixture->service.updateForkchoice(
+            fc, &attrs, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
+    });
+    BOOST_REQUIRE_MESSAGE(built.has_value() && built->payloadStatus.status ==
+                                                   bcos::engine::PayloadValidationStatus::Valid,
         "the reference accepts zero params on an undeclared chain too, got "
-            << static_cast<int>(built.payloadStatus.status) << " "
-            << built.payloadStatus.validationError.value_or(""));
-    BOOST_REQUIRE(built.payloadId.has_value());
+            << (built.has_value() ? static_cast<int>(built->payloadStatus.status) : -1) << " "
+            << (built.has_value() ? built->payloadStatus.validationError.value_or("") :
+                                    std::string("<no result>")));
+    BOOST_CHECK_MESSAGE(captured.find("declares no [op_eip1559]") != std::string::npos &&
+                            captured.find("OP-mainnet PRESET pair") != std::string::npos,
+        "the preset-substitution WARNING must be logged once (observability closure), "
+        "captured='"
+            << captured.substr(0, 400) << "'");
+    BOOST_REQUIRE(built.has_value() && built->payloadId.has_value());
     auto got = bcos::task::syncWait(fixture->service.getPayload(
-        *built.payloadId, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
+        *built->payloadId, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
     BOOST_REQUIRE(got != nullptr);
     auto const& produced = got->executionPayload;
     BOOST_REQUIRE_EQUAL(produced.extraData.size(), 9U);
