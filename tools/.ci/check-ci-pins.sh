@@ -21,6 +21,14 @@
 #     checkout/action refs, tools/.ci/provision_t8n_corpus.sh's default and the
 #     corpus's own opstack-executor/tests/t8n/.t8n-pin.
 #
+#   * C2 harness ref (Axis 4): the op-stack-e2e-tests commit the C2 jobs check
+#     out to .ci-op-e2e-tests. Same repository as the corpus ref, deliberately a
+#     different commit — it supplies the C2 scripts and the versions.json whose
+#     op_monorepo.commit the jobs fetch from ethereum-optimism/optimism. The two
+#     C2 entry points (workflow.yml's c2_e2e job and c2-e2e.yml) must pin the
+#     same ref; when it equals the corpus ref, the versions.json at that ref is
+#     checked for the historical op-revm-revision confusion.
+#
 # op-revm oracle: bcos-evm/test/opstack/op_revm_oracle.json source.revision must
 # equal the revision the audit documents state (see EXPECTED_OP_REVM_REVISION).
 #
@@ -77,6 +85,28 @@ fail()
 {
     echo "::error::$*" >&2
     rc=1
+}
+
+# Print "<path> <ref>" for every checkout of the corpus repo in $1. YAML comments
+# are stripped first: the surrounding prose names hashes (Axis 4 documents
+# b82691ac, 5f90f749c) and those must not be parsed as the pin.
+checkout_pins() {
+    sed 's/#.*//' "$1" | awk '
+        /repository:[[:space:]]*FISCO-BCOS\/op-stack-e2e-tests/ {
+            look = 1; ref = ""; path = ""; next
+        }
+        # Block boundary: a new step or another repository: line ends the scan, so
+        # a checkout that names no ref cannot be paired with a later step ref.
+        look && /^[[:space:]]*-/ { look = 0 }
+        look && /^[[:space:]]*(uses|repository):/ { look = 0 }
+        look && match($0, /ref:[[:space:]]*[0-9a-zA-Z._\/-]+/) {
+            ref = substr($0, RSTART, RLENGTH); sub(/^ref:[[:space:]]*/, "", ref)
+        }
+        look && match($0, /path:[[:space:]]*[0-9a-zA-Z._\/-]+/) {
+            path = substr($0, RSTART, RLENGTH); sub(/^path:[[:space:]]*/, "", path)
+        }
+        look && path != "" && ref != "" { print path, ref; look = 0 }
+    '
 }
 
 if [ -z "$CORPUS_DIR" ]; then
@@ -174,9 +204,8 @@ fi
 # Axis 3 (F-A4): corpus-repo ref agreement across workflow.yml and the
 # opstack-fork-nightly/weekly fork-matrix pins.
 # -----------------------------------------------------------------------------
-wf_refs="$(grep -hA3 -E 'repository: FISCO-BCOS/op-stack-e2e-tests' \
-    "$WF" "$WF_NIGHTLY" "$WF_WEEKLY" \
-    | grep -oE 'ref: [0-9a-f]{40}' | awk '{print $2}' | sort -u)"
+wf_refs="$(for f in "$WF" "$WF_NIGHTLY" "$WF_WEEKLY"; do checkout_pins "$f"; done \
+    | awk '$1 != ".ci-op-e2e-tests" { print $2 }' | sort -u)"
 action_refs="$(grep -hoE 'opstack-t8n-regen@[0-9a-f]{40}' \
     "$WF" "$WF_NIGHTLY" "$WF_WEEKLY" | sed 's/.*@//' | sort -u)"
 provision="$REPO_ROOT/tools/.ci/provision_t8n_corpus.sh"
@@ -245,6 +274,74 @@ once bumped it should equal $corpus_ref"
         echo "  OK $name = $value"
     fi
 done
+
+# -----------------------------------------------------------------------------
+# Axis 4: the C2 harness ref — the third pin axis, inside the SAME repository as
+# the corpus ref but a different commit: it supplies the C2 scripts AND
+# tools/op-e2e/versions.json, whose op_monorepo.commit the C2 jobs check out of
+# ethereum-optimism/optimism. Nothing about that file is checked when only the
+# corpus ref is vetted, which is how workflow.yml came to carry the corpus ref
+# b82691ac in its C2 checkout — a valid harness commit, but an old one whose
+# versions.json still read op_monorepo.commit = 5f90f749c (the op-revm revision,
+# absent from the monorepo), so the job died in the monorepo checkout, on "not our ref".
+# Both C2 entry points must therefore pin the same harness ref, and whenever that
+# ref is the corpus ref itself the versions.json it carries is asserted sane here.
+# -----------------------------------------------------------------------------
+WF_C2="$REPO_ROOT/.github/workflows/c2-e2e.yml"
+
+echo "== C2 harness ref axis (same repo as the corpus ref, different commit) =="
+c2_ref=""
+if [ ! -f "$WF_C2" ]; then
+    fail "c2-e2e.yml not found under $REPO_ROOT/.github/workflows"
+else
+    for entry in "workflow.yml:$WF" "c2-e2e.yml:$WF_C2"; do
+        wname="${entry%%:*}"; wfile="${entry#*:}"
+        refs="$(checkout_pins "$wfile" | awk '$1 == ".ci-op-e2e-tests" { print $2 }' | sort -u)"
+        count="$(echo "$refs" | grep -c . || true)"
+        if [ "$count" -eq 0 ]; then
+            fail "$wname: no .ci-op-e2e-tests harness checkout found"
+            continue
+        fi
+        if [ "$count" -ne 1 ]; then
+            fail "$wname: $count .ci-op-e2e-tests harness refs ($(echo $refs | tr '\n' ' ')); the C2 harness must be pinned exactly once"
+            continue
+        fi
+        echo "  $wname harness ref = $refs"
+        if [ -z "$c2_ref" ]; then
+            c2_ref="$refs"
+        elif [ "$refs" != "$c2_ref" ]; then
+            fail "C2 harness refs disagree: $wname pins $refs, the other entry point pins $c2_ref — bump both together (this divergence is how PR #5615's C2 job got a stale versions.json)"
+        fi
+    done
+fi
+
+# versions.json is only consumed by C2 when the harness ref IS the corpus ref
+# (otherwise C2 reads the file at its own ref, which this checkout cannot see —
+# the workflow's reachability step vets that value on the network).
+v_versions_file="$CORPUS_DIR/tools/op-e2e/versions.json"
+if [ -n "$c2_ref" ] && [ "$c2_ref" = "$corpus_ref" ] && [ -f "$v_versions_file" ]; then
+    monorepo_pin="$(sed -n '/"op_monorepo"/,/}/p' "$v_versions_file" \
+        | sed -nE 's/.*"commit"[[:space:]]*:[[:space:]]*"([0-9a-zA-Z]+)".*/\1/p' | head -1)"
+    case "$monorepo_pin" in
+        "") fail "versions.json at $c2_ref: no op_monorepo.commit found" ;;
+        "$EXPECTED_OP_REVM_REVISION")
+            fail "versions.json at $c2_ref pins op_monorepo.commit = $monorepo_pin, which is the op-revm oracle revision — that object does not exist in ethereum-optimism/optimism and the C2 checkout dies on 'not our ref'; bump the C2 harness ref past the versions.json fix"
+            ;;
+        *)
+            if [ "${#monorepo_pin}" -eq 40 ]; then
+                echo "  OK versions.json at the shared ref pins op_monorepo.commit = $monorepo_pin"
+            else
+                fail "versions.json at $c2_ref: op_monorepo.commit '$monorepo_pin' is not a 40-hex sha"
+            fi
+            ;;
+    esac
+elif [ -f "$v_versions_file" ]; then
+    monorepo_pin="$(sed -n '/"op_monorepo"/,/}/p' "$v_versions_file" \
+        | sed -nE 's/.*"commit"[[:space:]]*:[[:space:]]*"([0-9a-zA-Z]+)".*/\1/p' | head -1)"
+    if [ "$monorepo_pin" = "$EXPECTED_OP_REVM_REVISION" ]; then
+        echo "  ::notice::corpus-ref versions.json still pins op_monorepo.commit = $monorepo_pin (the op-revm revision); harmless while C2 uses its own harness ref $c2_ref, but do not point C2 here"
+    fi
+fi
 
 # -----------------------------------------------------------------------------
 # Axis 3 continuation: the pinned corpus ref must carry the getPayload + matrix
