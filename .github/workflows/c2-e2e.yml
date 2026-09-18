@@ -53,7 +53,7 @@ jobs:
           # framework's boot resolution ignores the [op_fork_timestamps] shorthand — without the
           # canonical the node boots as Isthmus and rejects Jovian attributes; found by the first
           # full-stack run of this stack).
-          ref: e7cded8d35b4a8a68b214363ea479c9dffb695434a
+          ref: e7cded80ad98e9c85a1fecc475ce201d55f773ea
           path: .ci-op-e2e-tests
 
       - name: Initialize vcpkg submodule
