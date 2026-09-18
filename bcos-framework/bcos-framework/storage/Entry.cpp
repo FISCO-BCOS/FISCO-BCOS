@@ -1,3 +1,4 @@
+#include "bcos-framework/storage/Common.h"
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include <bcos-utilities/BoostLog.h>
@@ -12,7 +13,11 @@ std::string_view Entry::get() const&
 {
     if (!m_buffer.has_value()) [[unlikely]]
         return {};
-    return {m_buffer->data(), m_buffer->size()};
+    // Typed models return nullptr data — avoid string_view(nullptr, 0), which is UB.
+    auto* d = m_buffer->data();
+    if (d == nullptr) [[unlikely]]
+        return {};
+    return {d, m_buffer->size()};
 }
 
 const char* Entry::data() const&
