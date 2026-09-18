@@ -39,7 +39,6 @@ ExecutiveFactory::ExecutiveFactory(const BlockContext& blockContext,
     m_precompiled(std::move(precompiled)),
     m_staticPrecompiled(std::move(staticPrecompiled)),
     m_blockContext(blockContext),
-    m_isTiKVStorage(boost::iequals("tikv", protocol::g_BCOSConfig.storageType())),
     m_ioServicePool(std::move(ioServicePool))
 {}
 
@@ -64,19 +63,8 @@ std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
     switch (execType)
     {
     case ExecutiveType::coroutine:
-        /*
-        if (m_isTiKVStorage)
-        {
-            // this logic is just for version lesser than 3.3.0, bug fix
-            executive = std::make_shared<PromiseTransactionExecutive>(m_ioServicePool,
-                m_blockContext, _contractAddress, contextID, seq);
-        }
-        else
-        {
-         */
         executive = std::make_shared<CoroutineTransactionExecutive>(
             m_blockContext, _contractAddress, contextID, seq);
-        //}
         break;
     case ExecutiveType::billing:
         executive = std::make_shared<BillingTransactionExecutive>(
@@ -120,7 +108,6 @@ std::shared_ptr<TransactionExecutive> ShardingExecutiveFactory::build(
     switch (execType)
     {
     case ExecutiveType::coroutine:
-        needUsePromise = m_isTiKVStorage;  // tikv storage need to use promise executive
         executive = std::make_shared<ShardingTransactionExecutive>(
             m_blockContext, _contractAddress, contextID, seq, m_ioServicePool, needUsePromise);
         break;

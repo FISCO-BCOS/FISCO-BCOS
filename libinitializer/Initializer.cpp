@@ -184,7 +184,8 @@ std::shared_ptr<bcos::engine::AnyEngineService> Initializer::engineService()
 
 void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
-    bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion, const std::string& _logPath)
+    bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion,
+    [[maybe_unused]] const std::string& _logPath)
 {
     // Engine-driven block production (single-node consensus or [op_engine_rpc]) is AIR-only.
     // Both modes skip txpool/pbft init and wire the in-process mempool into NodeService via
@@ -259,31 +260,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_protocolInitializer->dataEncryption());
         }
     }
-#ifdef WITH_TIKV
-    else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
-    {
-        m_storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-            m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-        if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
-        {  // TODO: in max node, scheduler will use storage to commit but the ledger only use
-           // storage to read, the storage which ledger use should not trigger the switch when the
-           // scheduler is committing block
-            schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-            consensusStorage = m_storage;
-            airExecutorStorage = m_storage;
-        }
-        else
-        {  // in AIR/PRO node, scheduler and executor in one process so need different storage
-            schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-            consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-            airExecutorStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-        }
-    }
-#endif
     else
     {
         throw std::runtime_error("storage type not support");
@@ -296,8 +272,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     m_ledger = ledger;
 
     bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory = nullptr;
-    // Note: since tikv-storage store txs with transaction, batch writing is more efficient than
-    // writing one by one
     if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
     {
         executionMessageFactory =
@@ -719,27 +693,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     // Set scheduler to TxPoolInitializer after scheduler is created
     m_txpoolInitializer->setScheduler(m_scheduler);
-
-    if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
-    {
-#ifdef WITH_TIKV
-        std::weak_ptr<bcos::scheduler::SchedulerManager> schedulerWeakPtr =
-            std::dynamic_pointer_cast<bcos::scheduler::SchedulerManager>(m_scheduler);
-        auto switchHandler = [scheduler = schedulerWeakPtr]() {
-            if (scheduler.lock())
-            {
-                scheduler.lock()->triggerSwitch();
-            }
-        };
-        if (_nodeArchType != bcos::protocol::NodeArchitectureType::MAX)
-        {
-            dynamic_pointer_cast<bcos::storage::TiKVStorage>(airExecutorStorage)
-                ->setSwitchHandler(switchHandler);
-        }
-        dynamic_pointer_cast<bcos::storage::TiKVStorage>(schedulerStorage)
-            ->setSwitchHandler(switchHandler);
-#endif
-    }
 
     bcos::storage::CacheStorageFactory::Ptr cacheFactory = nullptr;
     if (m_nodeConfig->enableLRUCacheStorage())
@@ -1347,7 +1300,7 @@ bcos::Error::Ptr Initializer::generateSnapshot(const std::string& snapshotPath,
     bool withTxAndReceipts, const tool::NodeConfig::Ptr& nodeConfig)
 {
     if (!boost::iequals(nodeConfig->storageType(), "RocksDB"))
-    {  // TODO: support TiKV
+    {
         std::cerr << "only support RocksDB storage" << std::endl;
         return BCOS_ERROR_PTR(-1, "only support RocksDB storage");
     }
@@ -1620,7 +1573,7 @@ bcos::Error::Ptr Initializer::importSnapshot(
     const std::string& snapshotPath, const tool::NodeConfig::Ptr& nodeConfig)
 {
     if (!boost::iequals(nodeConfig->storageType(), "RocksDB"))
-    {  // TODO: support TiKV
+    {
         std::cerr << "only support RocksDB storage" << std::endl;
         return BCOS_ERROR_PTR(-1, "only support RocksDB storage");
     }
