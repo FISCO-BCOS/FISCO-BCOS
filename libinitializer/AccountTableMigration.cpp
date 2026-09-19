@@ -39,9 +39,9 @@ constexpr size_t kBatchSize = 10000;  // write ops per WriteBatch
     BOOST_THROW_EXCEPTION(
         bcos::tool::InvalidConfig() << bcos::errinfo_comment(
             "account-table hex->binary migration failed: " + reason +
-            ". The state DB is left partially migrated (safe: the next boot detects the "
-            "mixed layout as BinaryWithHexFallback); fix the cause and restart with "
-            "[storage] migrate_account_tables_to_binary=true to resume"));
+            ". The state DB is left partially migrated (a mixed layout; there is no runtime "
+            "mixed mode): fix the cause and restart with [storage] "
+            "migrate_account_tables_to_binary=true to resume the migration"));
 }
 
 void writeMarkerFile(std::string_view storageRootPath,

@@ -128,9 +128,12 @@ BOOST_AUTO_TEST_CASE(ResolvesModeFromLayout)
                 AddressTableMode::Binary);
     BOOST_CHECK(resolveNodeAddressTableMode({.markerFile = true}, false) ==
                 AddressTableMode::Binary);
-    BOOST_CHECK(
-        resolveNodeAddressTableMode({.sawHexTables = true, .sawBinaryTables = true}, false) ==
-        AddressTableMode::BinaryWithHexFallback);
+    // A mixed layout has no legal mode: an unfinished migration (or a hand-mixed backup) is
+    // resolved at boot — resume via [storage] migrate_account_tables_to_binary or roll back —
+    // so resolve refuses it loudly.
+    BOOST_CHECK_THROW(
+        resolveNodeAddressTableMode({.sawHexTables = true, .sawBinaryTables = true}, false),
+        bcos::tool::InvalidConfig);
 }
 
 BOOST_AUTO_TEST_CASE(HexOnlyLaneForcing)

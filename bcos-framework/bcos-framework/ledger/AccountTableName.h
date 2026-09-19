@@ -15,6 +15,12 @@
 /// logical state in different encodings commit identical roots. feature_raw_address
 /// (Features.h Flag=54) used to gate this; it is deprecated and drives nothing now.
 ///
+/// There is no runtime mixed mode: a node is either all-hex or all-binary in the steady
+/// state. A mixed layout on disk means an interrupted hex→binary migration (or a hand-mixed
+/// backup) and is resolved at BOOT — resume the migration ([storage]
+/// migrate_account_tables_to_binary) or refuse to start — never by falling back between
+/// tables per read.
+///
 /// This header is deliberately dependency-free (no ledger/LedgerTypeDef.h): the prefix is
 /// a literal mirror of ledger::SYS_DIRECTORY::USER_APPS, the same arrangement StateKey.h
 /// documents — LedgerTypeDef.h pulls in StateKey.h/Storage.h, and this header is included
@@ -112,16 +118,12 @@ inline std::string canonicalTableNameForHash(std::string_view table)
 ///   - Hex: "/apps/<40 lowercase hex chars>" — the legacy layout (existing chains default).
 ///   - Binary: "/apps/<20 raw address bytes>" — the raw-address layout (migrated chains and
 ///     new chains on a mode-aware lane).
-///   - BinaryWithHexFallback: Binary for every WRITE and the primary read, plus a read
-///     fallback to the Hex table. Every write also DELETES the hex twin row (write-time
-///     dedup): under the encoding-agnostic Entry::hash a logical row present in both
-///     encodings would fold into the XOR state root twice, so writes pin it to one copy.
-///     This is the mid-migration layout: rows not yet touched still live in hex tables.
+/// A node is in exactly one of the two: migration between them is a one-shot boot-time
+/// rewrite (libinitializer/AccountTableMigration), not a runtime mode.
 enum class AddressTableMode
 {
     Hex,
     Binary,
-    BinaryWithHexFallback,
 };
 
 namespace detail

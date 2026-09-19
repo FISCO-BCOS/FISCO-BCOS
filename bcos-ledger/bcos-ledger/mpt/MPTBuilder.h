@@ -299,7 +299,7 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
     {
         // First-touch fields the block left unwritten have no parent leaf to fall back on:
         // one O(1) flat metadata read through the fork view (spec §5.3 path 2), routed through
-        // the chain's account-table mode (binary table first, legacy-hex fallback when armed).
+        // the node's account-table mode (hex table or binary table, per the node layout).
         auto meta = co_await readFlatAccountMeta(flatView, address, context.accountMode);
         updated.nonce = meta.nonce;
         updated.balance = meta.balance;
@@ -430,9 +430,10 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
 /// @param l2Mode          scenario B (Ethereum-compatible chain): a KNOWN BCOS extension row in
 ///                        the delta throws UnexpectedBCOSFieldInL2; scenario A skips it.
 /// @param accountMode     the node's account-table mode (nodeAddressTableMode()), forwarded to
-///                        the first-touch flat-metadata read (readFlatAccountMeta): a node in the
-///                        BinaryWithHexFallback mid-migration layout keeps untouched rows in
-///                        legacy hex tables, which the fallback mode still reaches.
+///                        the first-touch flat-metadata read (readFlatAccountMeta): Hex reads the
+///                        legacy hex tables, Binary the raw-address tables — a node is in exactly
+///                        one layout (encoding changes go through the boot-time migration, not a
+///                        runtime fallback).
 ///                        The delta SCAN needs no mode — parseAccountTable accepts both table
 ///                        layouts by length. No default on purpose (MPTAccount.h's constructor
 ///                        rule): a guessed mode makes the first-touch back-fill silently miss on

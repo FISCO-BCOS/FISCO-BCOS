@@ -106,10 +106,10 @@ struct FlatAccountMeta
 ///
 /// @p mode is the node's account-table mode (nodeAddressTableMode(), threaded down from the
 /// build call sites). Table routing is delegated to EVMAccount itself — the single owner of the
-/// AddressTableMode name-derivation rule — so this function never re-derives a table name: mode
-/// Binary reads the 20-byte raw-address table, and BinaryWithHexFallback additionally falls back
-/// to the legacy hex table, which is where a mid-migration layout keeps the account's
-/// not-yet-touched rows. Reads only; this function never writes.
+/// AddressTableMode name-derivation rule — so this function never re-derives a table name:
+/// Hex reads the 40-hex table, Binary the 20-byte raw-address table, with no cross-layout
+/// fallback (a node is exactly one of the two; encoding changes go through the boot-time
+/// migration). Reads only; this function never writes.
 ///
 /// Missing rows take the Yellow Paper defaults: nonce/balance 0, codeHash = emptyCodeHash() —
 /// the account leaf encodes codeHash verbatim, so a zero h256 here would produce a wrong leaf

@@ -25,13 +25,11 @@
  * the production derivation (nodeAddressTableMode()), and flips the singleton
  * between blocks the way a node restart after migration would:
  *
- *   - mid-migration: a block committed in Hex mode leaves /apps/<40-hex> rows;
- *     after switching the node to BinaryWithHexFallback the next block reads
- *     those rows through the fallback and its writes land in the binary table
- *     while deleting the hex twin (write-time dedup);
  *   - encoding-agnostic root: the same committed state migrated in place from
  *     hex to binary table names folds the SAME xorStateRoot, and a Binary-mode
- *     block then reads the migrated rows directly.
+ *     block then reads the migrated rows directly. There is no runtime mixed
+ *     mode: a node is all-hex or all-binary, and the one-shot boot-time
+ *     migration (libinitializer/AccountTableMigration) is the only way between.
  *
  * Compiled standalone (SKIP_UNITY_BUILD_INCLUSION): it pulls bcos-ledger
  * LedgerMethods.h, whose namespace-scope entities collide with the other
@@ -89,8 +87,7 @@ using RAMultiLayerStorage = MultiLayerStorage<RAMutableStorage, void, RACheckpoi
 /// Probe scheduler: drives the account through EVMAccount with the mode taken from the
 /// node-local singleton — the exact derivation the production executor performs — and
 /// records what it saw for the test to assert. Blocks below m_writeBlock write m_balance;
-/// blocks from m_writeBlock on read the balance back (recording it) and write m_newBalance
-/// (which exercises the fallback mode's write-time dedup).
+/// blocks from m_writeBlock on read the balance back (recording it) and write m_newBalance.
 struct NMProbingScheduler
 {
     evmc_address m_account{};
@@ -374,55 +371,10 @@ public:
 
 BOOST_FIXTURE_TEST_SUITE(TestNodeAddressTableMode, NodeAddressTableModeFixture)
 
-// Mid-migration layout: block 100 commits the account in the hex layout; the node then
-// comes up in BinaryWithHexFallback (the singleton flip stands in for the boot-time
-// detection finding both encodings), and block 101 must still see the balance — and its
-// write must land in the binary table while deleting the hex twin row.
-BOOST_AUTO_TEST_CASE(midMigrationFallbackReadAndWriteDedup)
-{
-    namespace account = ledger::account;
-    account::setNodeAddressTableMode(account::AddressTableMode::Hex);
-    probingScheduler.m_account = unhexAddress("0x4200000000000000000000000000000000001234");
-    probingScheduler.m_writeBlock = 101;
-    probingScheduler.m_balance = u256(12345);
-    probingScheduler.m_newBalance = u256(54321);
-    std::string const hexTable = "/apps/4200000000000000000000000000000000001234";
-    std::string const binTable = account::hexToBinaryAccountTableName(hexTable);
-    BOOST_REQUIRE(!binTable.empty());
-
-    auto header100 = executeOneBlock(100);
-    BOOST_REQUIRE_EQUAL(probingScheduler.m_modes.size(), 1u);
-    BOOST_CHECK(probingScheduler.m_modes[0].second == account::AddressTableMode::Hex);
-    commitOneBlock(header100);
-    auto committedBalance = backendRow(hexTable, "balance");
-    BOOST_REQUIRE(committedBalance.has_value());
-    BOOST_CHECK_EQUAL(std::string(committedBalance->get()), "12345");
-
-    // The node restarts onto a partially migrated DB: the boot detection would resolve
-    // BinaryWithHexFallback.
-    account::setNodeAddressTableMode(account::AddressTableMode::BinaryWithHexFallback);
-
-    auto header101 = executeOneBlock(101);
-    BOOST_REQUIRE_EQUAL(probingScheduler.m_modes.size(), 2u);
-    BOOST_CHECK(probingScheduler.m_modes[1].second == account::AddressTableMode::BinaryWithHexFallback);
-    // The unmigrated hex row is still readable through the fallback...
-    BOOST_REQUIRE(probingScheduler.m_readBackBalance.has_value());
-    BOOST_CHECK_EQUAL(*probingScheduler.m_readBackBalance, u256(12345));
-    commitOneBlock(header101);
-
-    // ...and the write landed in the binary table and deleted the hex twin (dedup).
-    auto binaryBalance = backendRow(binTable, "balance");
-    BOOST_REQUIRE(binaryBalance.has_value());
-    BOOST_CHECK_EQUAL(std::string(binaryBalance->get()), "54321");
-    BOOST_CHECK(!backendRow(hexTable, "balance").has_value());
-
-    account::setNodeAddressTableMode(account::AddressTableMode::Hex);
-}
-
 // The XOR state root is a function of the logical state alone: the state block 100
 // commits in the hex layout folds the same root after the account rows are migrated in
-// place to the binary layout — and a Binary-mode node then reads the migrated rows with
-// no fallback.
+// place to the binary layout — and a Binary-mode node then reads the migrated rows
+// directly (no runtime fallback exists anymore).
 BOOST_AUTO_TEST_CASE(xorRootConsistentAfterInPlaceMigration)
 {
     namespace account = ledger::account;

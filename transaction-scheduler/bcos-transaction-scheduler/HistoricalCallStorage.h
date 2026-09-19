@@ -98,8 +98,7 @@ public:
     /// @param stateRoot the MPT state root block N committed — its header's stateRoot.
     /// @param accountMode the node's account-table mode (nodeAddressTableMode()): handed to
     ///        every cached MPTAccount so its inherited no-root flat reads/writes target the
-    ///        table layout this node actually uses (binary names with a legacy-hex read
-    ///        fallback in the BinaryWithHexFallback mid-migration layout). The rooted
+    ///        table layout this node actually uses (hex or binary, one per node). The rooted
     ///        historical reads are table-name-independent — the account leaf key is
     ///        keccak(address).
     HistoricalStateBackend(

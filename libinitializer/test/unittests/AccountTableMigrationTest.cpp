@@ -228,4 +228,46 @@ BOOST_AUTO_TEST_CASE(RefusesHexOnlyLane)
     BOOST_CHECK(!f.markerExists());
 }
 
+// The boot-time auto-resume shape: a crash mid-migration left a MIXED layout (one account
+// fully renamed to binary, the other still hex, no marker). resolveNodeAddressTableMode
+// refuses mixed layouts — the boot block answers them by resuming the migration, which is
+// what this case drives: after the resume the DB is pure binary and carries the marker.
+BOOST_AUTO_TEST_CASE(ResumesFromMixedLayoutToPureBinary)
+{
+    TempRocksDB f;
+    seedChain(f);
+    // kHexTable2 migrated, kHexTable untouched, no marker: the interrupted-migration shape.
+    f.put(binaryTable(kHexTable2) + ":code_hash", "deadbeef");
+    f.put("s_tables:" + binaryTable(kHexTable2), "value");
+    auto status = f.db->Delete(rocksdb::WriteOptions{}, std::string(kHexTable2) + ":code_hash");
+    BOOST_REQUIRE(status.ok());
+    status = f.db->Delete(rocksdb::WriteOptions{}, "s_tables:" + std::string(kHexTable2));
+    BOOST_REQUIRE(status.ok());
+
+    auto layout = detectAccountTableLayout(*f.db, f.dir.string());
+    BOOST_CHECK(layout.sawHexTables);
+    BOOST_CHECK(layout.sawBinaryTables);
+    BOOST_CHECK(!layout.markerFile);
+    BOOST_CHECK_THROW(resolveNodeAddressTableMode(layout, /*hexOnlyLane=*/false),
+        bcos::tool::InvalidConfig);
+
+    auto stats = migrateAccountTablesToBinary(*f.db, f.dir.string(), /*hexOnlyLane=*/false);
+    BOOST_CHECK_EQUAL(stats.migratedAccountRows, 2);   // kHexTable's balance + nonce
+    BOOST_CHECK_EQUAL(stats.migratedRegistrations, 1);
+    BOOST_CHECK_EQUAL(stats.dedupedRows, 0);
+
+    layout = detectAccountTableLayout(*f.db, f.dir.string());
+    BOOST_CHECK(!layout.sawHexTables);
+    BOOST_CHECK(layout.sawBinaryTables);
+    BOOST_CHECK(layout.markerFile);
+    BOOST_CHECK(resolveNodeAddressTableMode(layout, /*hexOnlyLane=*/false) ==
+                account::AddressTableMode::Binary);
+    // Both accounts' rows survive under the binary tables, values intact.
+    BOOST_CHECK(f.get(binaryTable(kHexTable) + ":balance") ==
+                std::optional<std::string>("1000"));
+    BOOST_CHECK(f.get(binaryTable(kHexTable2) + ":code_hash") ==
+                std::optional<std::string>("deadbeef"));
+    assertUntouched(f);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

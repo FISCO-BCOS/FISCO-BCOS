@@ -62,10 +62,28 @@ std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::buil
         }
         bool const hexOnlyLane = isHexOnlyExecutorLane(laneFeatures, onChain.version);
 
-        // One-shot offline migration ([storage] migrate_account_tables_to_binary) BEFORE the
-        // layout detection below: the detection must see the post-migration state (a pure
-        // binary layout with the marker file). Hex-only lanes are refused inside
-        // migrateAccountTablesToBinary. Order: lane check → migrate → detect → publish.
+        // Detect first, then handle the two migration shapes:
+        //   - a MIXED layout (hex AND binary registrations) is an interrupted migration (or
+        //     a hand-mixed backup). There is no runtime mixed mode: with the migration
+        //     switch on, resume it here (idempotent) and continue as Binary; with the switch
+        //     off, refuse to start (resolveNodeAddressTableMode throws the same refusal
+        //     below, with the recovery instructions).
+        //   - otherwise the switch requests the one-shot hex→binary rewrite.
+        // Either way the detection must be re-run afterwards so the published mode reflects
+        // the post-migration state (a pure binary layout with the marker file). Hex-only
+        // lanes are refused inside migrateAccountTablesToBinary.
+        auto layout = detectAccountTableLayout(
+            accountTableBoot->stateDB, accountTableBoot->storageRootPath);
+        if (layout.sawHexTables && layout.sawBinaryTables && accountTableBoot->migrateToBinary)
+        {
+            BCOS_LOG(WARNING)
+                << LOG_BADGE("LedgerInitializer")
+                << LOG_DESC(
+                       "unfinished hex->binary account-table migration detected (mixed "
+                       "s_tables:/apps/ registrations); resuming it now")
+                << LOG_KV("marker", binaryAccountTablesMarkerPath(
+                                        accountTableBoot->storageRootPath));
+        }
         if (accountTableBoot->migrateToBinary)
         {
             auto const stats = migrateAccountTablesToBinary(
@@ -76,10 +94,10 @@ std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::buil
                            << LOG_KV("accountRows", stats.migratedAccountRows)
                            << LOG_KV("registrations", stats.migratedRegistrations)
                            << LOG_KV("deduped", stats.dedupedRows);
+            layout = detectAccountTableLayout(
+                accountTableBoot->stateDB, accountTableBoot->storageRootPath);
         }
 
-        auto const layout = detectAccountTableLayout(
-            accountTableBoot->stateDB, accountTableBoot->storageRootPath);
         auto const mode = resolveNodeAddressTableMode(layout, hexOnlyLane);
         bcos::ledger::account::setNodeAddressTableMode(mode);
         BCOS_LOG(INFO) << LOG_BADGE("LedgerInitializer")

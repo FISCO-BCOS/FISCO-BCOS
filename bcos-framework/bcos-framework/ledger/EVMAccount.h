@@ -35,60 +35,12 @@ class EVMAccount
 private:
     std::reference_wrapper<Storage> m_storage;
     std::string m_tableName;
-    // The 40-hex account table name, non-empty only in AddressTableMode::BinaryWithHexFallback
-    // (the node's mid-migration layout, see AccountTableName.h). Reads consult it after a miss on m_tableName; writes land in
-    // m_tableName (the binary table) AND remove the hex twin row (write-time dedup, see
-    // removeHexTwinRow), so a touched logical row physically survives in exactly one copy.
-    std::string m_fallbackTableName;
-
-    /// Write-time dedup: alongside every binary-table write, delete the hex twin row.
-    /// Under the normalized Entry::hash (canonicalTableNameForHash) the XOR state root
-    /// folds a logical row per its canonical (hex) name, so the same logical row present
-    /// in BOTH encodings would be folded twice — dedup to at most one physical copy is a
-    /// necessary condition for the root to be encoding-agnostic. It also migrates the
-    /// chain row-by-row as accounts are touched. No-op unless the fallback is armed.
-    task::Task<void> removeHexTwinRow(std::string_view key)
-    {
-        if (!m_fallbackTableName.empty())
-        {
-            co_await storage2::removeOne(
-                m_storage.get(), executor_v1::StateKey{m_fallbackTableName, key});
-        }
-    }
-
-    /// Read one row of the account table: m_tableName first, then m_fallbackTableName when
-    /// the fallback is armed. Applies to every account-table row read below; the
-    /// hash-addressed global tables (s_code_binary / s_contract_abi) are shared by both
-    /// layouts and are read directly.
-    task::Task<std::optional<storage::Entry>> readRow(std::string_view key)
-    {
-        if (auto entry = co_await storage2::readOne(
-                m_storage.get(), executor_v1::StateKeyView{m_tableName, key}))
-        {
-            co_return entry;
-        }
-        if (!m_fallbackTableName.empty())
-        {
-            co_return co_await storage2::readOne(
-                m_storage.get(), executor_v1::StateKeyView{m_fallbackTableName, key});
-        }
-        co_return std::nullopt;
-    }
 
 public:
     task::Task<bool> exists()
     {
-        if (co_await storage2::existsOne(
-                m_storage.get(), executor_v1::StateKeyView(SYS_TABLES, m_tableName)))
-        {
-            co_return true;
-        }
-        if (!m_fallbackTableName.empty())
-        {
-            co_return co_await storage2::existsOne(
-                m_storage.get(), executor_v1::StateKeyView(SYS_TABLES, m_fallbackTableName));
-        }
-        co_return false;
+        co_return co_await storage2::existsOne(
+            m_storage.get(), executor_v1::StateKeyView(SYS_TABLES, m_tableName));
     }
 
     /// Ethereum-style existence (EIP-161 Spurious Dragon+): an account with nonce 0, balance 0
@@ -122,20 +74,14 @@ public:
     {
         co_await storage2::writeOne(m_storage.get(), executor_v1::StateKey(SYS_TABLES, m_tableName),
             storage::Entry{std::string_view{"value"}});
-        // The s_tables registration row's key IS the table name, so this twin lives in
-        // s_tables too (not under the account table like removeHexTwinRow assumes).
-        if (!m_fallbackTableName.empty())
-        {
-            co_await storage2::removeOne(
-                m_storage.get(), executor_v1::StateKey{SYS_TABLES, m_fallbackTableName});
-        }
     }
 
     task::Task<std::optional<storage::Entry>> code()
     {
         // 先通过code hash从s_code_binary找代码
         // Start by using the code hash to find the code from the s_code_binary
-        if (auto codeHashEntry = co_await readRow(ACCOUNT_TABLE_FIELDS::CODE_HASH))
+        if (auto codeHashEntry = co_await storage2::readOne(m_storage.get(),
+                executor_v1::StateKeyView{m_tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH}))
         {
             if (auto codeEntry = co_await storage2::readOne(m_storage.get(),
                     executor_v1::StateKeyView{ledger::SYS_CODE_BINARY, codeHashEntry->get()}))
@@ -148,7 +94,8 @@ public:
         // precompiled，代码在合约表的code字段里
         // Can't find it in the s_code_binary, it may be a contract deployed in the old version or
         // internal precompiled, and the code is in the code field of the contract table
-        if (auto codeEntry = co_await readRow(ACCOUNT_TABLE_FIELDS::CODE))
+        if (auto codeEntry = co_await storage2::readOne(m_storage.get(),
+                executor_v1::StateKeyView{m_tableName, ACCOUNT_TABLE_FIELDS::CODE}))
         {
             co_return codeEntry;
         }
@@ -178,12 +125,12 @@ public:
         co_await storage2::writeOne(m_storage.get(),
             executor_v1::StateKey{m_tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH},
             std::move(codeHashEntry));
-        co_await removeHexTwinRow(ACCOUNT_TABLE_FIELDS::CODE_HASH);
     }
 
     task::Task<h256> codeHash()
     {
-        if (auto codeHashEntry = co_await readRow(ACCOUNT_TABLE_FIELDS::CODE_HASH))
+        if (auto codeHashEntry = co_await storage2::readOne(m_storage.get(),
+                executor_v1::StateKeyView{m_tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH}))
         {
             auto view = codeHashEntry->get();
             h256 codeHash((const bcos::byte*)view.data(), view.size());
@@ -196,7 +143,8 @@ public:
     {
         // 先通过code hash从s_contract_abi找代码
         // Start by using the code hash to find the code from the s_contract_abi
-        if (auto codeHashEntry = co_await readRow(ACCOUNT_TABLE_FIELDS::CODE_HASH))
+        if (auto codeHashEntry = co_await storage2::readOne(m_storage.get(),
+                executor_v1::StateKeyView{m_tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH}))
         {
             if (auto abiEntry = co_await storage2::readOne(m_storage.get(),
                     executor_v1::StateKeyView{ledger::SYS_CONTRACT_ABI, codeHashEntry->get()}))
@@ -209,7 +157,8 @@ public:
         // precompiled，代码在合约表的code字段里
         // I can't find it in the s_code_binary, it may be a contract deployed in the old version or
         // internal precompiled, and the code is in the code field of the contract table
-        if (auto abiEntry = co_await readRow(ACCOUNT_TABLE_FIELDS::ABI))
+        if (auto abiEntry = co_await storage2::readOne(
+                m_storage.get(), executor_v1::StateKeyView{m_tableName, ACCOUNT_TABLE_FIELDS::ABI}))
         {
             co_return abiEntry;
         }
@@ -218,7 +167,8 @@ public:
 
     task::Task<u256> balance()
     {
-        if (auto balanceEntry = co_await readRow(ACCOUNT_TABLE_FIELDS::BALANCE))
+        if (auto balanceEntry = co_await storage2::readOne(m_storage.get(),
+                executor_v1::StateKeyView{m_tableName, ACCOUNT_TABLE_FIELDS::BALANCE}))
         {
             auto view = balanceEntry->get();
             auto balance = boost::lexical_cast<u256>(view);
@@ -233,12 +183,12 @@ public:
         co_await storage2::writeOne(m_storage.get(),
             executor_v1::StateKey{m_tableName, ACCOUNT_TABLE_FIELDS::BALANCE},
             std::move(balanceEntry));
-        co_await removeHexTwinRow(ACCOUNT_TABLE_FIELDS::BALANCE);
     }
 
     task::Task<std::optional<std::string>> nonce()
     {
-        if (auto entry = co_await readRow(ACCOUNT_TABLE_FIELDS::NONCE))
+        if (auto entry = co_await storage2::readOne(m_storage.get(),
+                executor_v1::StateKeyView{m_tableName, ACCOUNT_TABLE_FIELDS::NONCE}))
         {
             auto view = entry->get();
             co_return std::string(view);
@@ -251,7 +201,6 @@ public:
         storage::Entry nonceEntry(std::move(nonce));
         co_await storage2::writeOne(m_storage.get(),
             executor_v1::StateKey{m_tableName, ACCOUNT_TABLE_FIELDS::NONCE}, std::move(nonceEntry));
-        co_await removeHexTwinRow(ACCOUNT_TABLE_FIELDS::NONCE);
     }
 
     task::Task<void> increaseNonce()
@@ -269,7 +218,8 @@ public:
 
     task::Task<evmc_bytes32> storage(const evmc_bytes32& key)
     {
-        if (auto valueEntry = co_await readRow(concepts::bytebuffer::toView(key.bytes)))
+        if (auto valueEntry = co_await storage2::readOne(m_storage.get(),
+                executor_v1::StateKeyView{m_tableName, concepts::bytebuffer::toView(key.bytes)}))
         {
             auto field = valueEntry->get();
             evmc_bytes32 value;
@@ -285,18 +235,11 @@ public:
     // Tag-forwarding storage read: passes all tags through to the underlying
     // readOneRaw call. Callers compose the exact set of tags they need
     // (e.g. BYPASS_READ_SET | BYPASS_MULTILAYER for metadata reads that
-    // must skip both conflict tracking and layer resolution). Tags are taken
-    // by value so they can be forwarded to the fallback read as well.
+    // must skip both conflict tracking and layer resolution).
     task::Task<evmc_bytes32> storage(const evmc_bytes32& key, auto... tags)
     {
         auto rawValue = co_await m_storage.get().readOneRaw(
             executor_v1::StateKey{m_tableName, concepts::bytebuffer::toView(key.bytes)}, tags...);
-        if (!std::holds_alternative<storage::Entry>(rawValue) && !m_fallbackTableName.empty())
-        {
-            rawValue = co_await m_storage.get().readOneRaw(
-                executor_v1::StateKey{m_fallbackTableName, concepts::bytebuffer::toView(key.bytes)},
-                tags...);
-        }
         evmc_bytes32 value{};
         if (auto* entry = std::get_if<storage::Entry>(std::addressof(rawValue)))
         {
@@ -313,12 +256,12 @@ public:
         co_await storage2::writeOne(m_storage.get(),
             executor_v1::StateKey{m_tableName, concepts::bytebuffer::toView(key.bytes)},
             std::move(valueEntry));
-        co_await removeHexTwinRow(concepts::bytebuffer::toView(key.bytes));
     }
 
     task::Task<std::optional<bcos::storage::Entry>> storageEntry(const std::string_view& key)
     {
-        co_return co_await readRow(key);
+        co_return co_await storage2::readOne(
+            m_storage.get(), executor_v1::StateKeyView{m_tableName, key});
     }
 
     task::Task<std::string_view> path() { co_return m_tableName; }
@@ -328,8 +271,8 @@ public:
     EVMAccount& operator=(const EVMAccount&) = delete;
     EVMAccount& operator=(EVMAccount&&) noexcept = default;
     /// Construct directly from the account's table name, bypassing address→table-name routing
-    /// entirely. This constructor leaves the fallback table name empty, so every method of the
-    /// resulting object reads nothing but `m_tableName` — it is the primitive the two
+    /// entirely. Every method of this class reads nothing but `m_tableName`, so this is the
+    /// primitive the two
     /// address-taking constructors below are sugar for; it adds no new semantics and changes
     /// nothing for existing callers.
     ///
@@ -353,7 +296,7 @@ public:
         if (precompiled::contains(bcos::precompiled::c_systemTxsAddress, hexView))
         {
             // System-tx addresses always route to /sys/ with the hex name; those tables
-            // never moved, so no fallback applies regardless of mode.
+            // are not part of the account-table migration regardless of mode.
             m_tableName.reserve(ledger::SYS_DIRECTORY::SYS_APPS.size() + hexView.size());
             m_tableName.append(ledger::SYS_DIRECTORY::SYS_APPS);
             m_tableName.append(hexView);
@@ -373,13 +316,6 @@ public:
                 m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + hexView.size());
                 m_tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
                 m_tableName.append(hexView);
-            }
-            if (mode == AddressTableMode::BinaryWithHexFallback)
-            {
-                m_fallbackTableName.reserve(
-                    ledger::SYS_DIRECTORY::USER_APPS.size() + hexView.size());
-                m_fallbackTableName.append(ledger::SYS_DIRECTORY::USER_APPS);
-                m_fallbackTableName.append(hexView);
             }
         }
     }
@@ -414,13 +350,6 @@ public:
                 m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + address.size());
                 m_tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
                 m_tableName.append(address);
-            }
-            if (mode == AddressTableMode::BinaryWithHexFallback)
-            {
-                m_fallbackTableName.reserve(
-                    ledger::SYS_DIRECTORY::USER_APPS.size() + address.size());
-                m_fallbackTableName.append(ledger::SYS_DIRECTORY::USER_APPS);
-                m_fallbackTableName.append(address);
             }
         }
     }

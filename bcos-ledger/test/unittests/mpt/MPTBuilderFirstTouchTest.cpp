@@ -340,39 +340,12 @@ BOOST_AUTO_TEST_CASE(BinaryTableDeltaBuildsTheSameTrieAsHex)
     BOOST_CHECK(account->storageRoot == storageRootOracle({{slot, bcos::bytes{0x5A}}}));
 }
 
-BOOST_AUTO_TEST_CASE(RawAddressFallbackReadsPreActivationHexRows)
-{
-    // A node in the BinaryWithHexFallback mid-migration layout: the account's
-    // baseline rows live in the legacy HEX table (not yet migrated), and this block's delta
-    // writes binary-table rows. The first-touch metadata read must fall back to the hex table.
-    NodeStorage storage;
-    auto const addr = makeAddress(0xC4);
-
-    FlatBackendStorage flatBackend;
-    writeFlatRow(flatBackend, accountFieldKey(addr, ROW_NONCE), makeEntry("99"));
-    writeFlatRow(flatBackend, accountFieldKey(addr, ROW_BALANCE), makeEntry("1234"));
-    writeFlatRow(flatBackend, accountFieldKey(addr, ROW_CODE_HASH), codeHashEntry(makeHash(0x77)));
-
-    auto view = makeFlatView(flatBackend);
-    writeFlatRow(view, accountBinaryFieldKey(addr, ROW_NONCE), makeEntry("5"));
-
-    auto output = bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view,
-        /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::BinaryWithHexFallback));
-
-    MPTReadView<NodeStorage> readView(storage, output.stateRoot);
-    auto account = bcos::task::syncWait(readView.readAccount(addr));
-    BOOST_REQUIRE(account.has_value());
-    BOOST_CHECK_EQUAL(account->nonce, bcos::u256(5));       // the delta row wins
-    BOOST_CHECK_EQUAL(account->balance, bcos::u256(1234));  // back-filled from the hex table
-    BOOST_CHECK(account->codeHash == makeHash(0x77));       // back-filled from the hex table
-}
-
 BOOST_AUTO_TEST_CASE(RawAddressBinaryModeDoesNotReadHexTables)
 {
-    // The plain Binary mode (fully migrated / new chain) must NOT consult the legacy hex table:
-    // on such a chain every post-genesis row lives in binary tables, and a stray hex row is not
-    // this account's state. Same layout as the fallback test above, but balance/codeHash resolve
-    // to the Yellow Paper defaults.
+    // Binary mode must NOT consult the legacy hex table: a node is in exactly one layout
+    // (encoding changes go through the boot-time migration, not a runtime fallback), so on a
+    // binary chain a stray hex row is not this account's state and balance/codeHash resolve to
+    // the Yellow Paper defaults.
     NodeStorage storage;
     auto const addr = makeAddress(0xC5);
 

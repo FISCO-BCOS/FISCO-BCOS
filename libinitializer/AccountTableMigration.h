@@ -52,8 +52,9 @@ struct AccountTableMigrationStats
 /// interrupted previous run — the hex source is deleted and the scan continues; a DIFFERENT
 /// value is a data conflict and aborts the boot (bcos::tool::InvalidConfig). The
 /// .binary_account_tables marker is written (and fsync'd) only after the final synced batch,
-/// so a crash mid-migration leaves no marker: the next boot detects the mixed layout as
-/// BinaryWithHexFallback (safe to run on), and re-running with the flag resumes.
+/// so a crash mid-migration leaves no marker and a mixed layout on disk, which the next boot
+/// resolves explicitly: resume the migration when the switch stays on, refuse to start
+/// otherwise (there is no runtime mixed mode).
 ///
 /// @param hexOnlyLane the chain's executor lane is hex-only (OP / Eth engine / legacy v2
 ///        executor — isHexOnlyExecutorLane): migration is refused loudly, those executors

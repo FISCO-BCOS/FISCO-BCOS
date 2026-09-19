@@ -92,7 +92,15 @@ bcos::ledger::account::AddressTableMode bcos::initializer::resolveNodeAddressTab
     }
     if (layout.sawHexTables && layout.sawBinaryTables)
     {
-        return AddressTableMode::BinaryWithHexFallback;
+        // Defensive invariant: the boot sequence (LedgerInitializer::build) resolves a mixed
+        // layout before calling here — resume the migration when
+        // [storage] migrate_account_tables_to_binary is set, refuse to start otherwise.
+        BOOST_THROW_EXCEPTION(
+            bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                "the state DB holds an unfinished hex->binary account-table migration (both "
+                "s_tables:/apps/<40-hex> and s_tables:/apps/<20-byte> registrations exist): "
+                "set [storage] migrate_account_tables_to_binary=true and restart to finish "
+                "the migration, or roll the state DB back to a pre-migration snapshot"));
     }
     if (layout.sawBinaryTables)
     {

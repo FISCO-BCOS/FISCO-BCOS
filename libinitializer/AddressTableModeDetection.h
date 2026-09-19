@@ -54,24 +54,30 @@ bool isHexOnlyExecutorLane(const ledger::Features& features, int executorVersion
 ///     boot failure (throws bcos::tool::InvalidConfig with recovery instructions) — those
 ///     executors would split reads/writes onto disjoint tables;
 ///   - marker file → Binary (migration completed);
-///   - hex AND binary registrations → BinaryWithHexFallback (interrupted migration, or any
-///     mixed layout);
 ///   - binary only → Binary; hex only → Hex (every existing chain);
 ///   - neither (a brand-new chain) → Binary: the new encoding by default. The normalized
 ///     Entry::hash folds binary names to their hex form, so the genesis state root is
 ///     byte-identical either way — no fork risk from the default.
 ///
-/// @throws bcos::tool::InvalidConfig on the hex-only-lane/binary-data combination.
+/// A MIXED layout (hex AND binary registrations) has no legal mode: it means an interrupted
+/// hex→binary migration (or a hand-mixed backup), handled by the caller at boot — resume the
+/// migration when [storage] migrate_account_tables_to_binary is set, refuse to start
+/// otherwise. resolveNodeAddressTableMode throws on it as a defensive invariant.
+///
+/// @throws bcos::tool::InvalidConfig on the hex-only-lane/binary-data combination and on a
+///         mixed layout.
 ledger::account::AddressTableMode resolveNodeAddressTableMode(
     AccountTableLayout const& layout, bool hexOnlyLane);
 
 /// Boot-time account-table handling, carried from Initializer to LedgerInitializer::build:
 /// the already-open state DB (RocksDB's single-instance lock forbids a second open) plus the
-/// one-shot migration switch ([storage] migrate_account_tables_to_binary). The lane check,
-/// the migration and the layout detection all run inside LedgerInitializer::build, in that
-/// order, before the mode is published and the genesis block is built — the lane verdict
-/// needs the ledger's (decryption-aware) reads of the on-chain config rows, so none of this
-/// can happen in Initializer ahead of the ledger construction.
+/// one-shot migration switch ([storage] migrate_account_tables_to_binary). The boot sequence
+/// inside LedgerInitializer::build is: lane check → layout detection → (a mixed layout =
+/// interrupted migration: resume it when the switch is on, refuse to start otherwise) →
+/// optional one-shot migration → re-detection → mode publication, all before the genesis
+/// block is built. The lane verdict needs the ledger's (decryption-aware) reads of the
+/// on-chain config rows, so none of this can happen in Initializer ahead of the ledger
+/// construction.
 struct AccountTableBoot
 {
     std::reference_wrapper<::rocksdb::DB> stateDB;

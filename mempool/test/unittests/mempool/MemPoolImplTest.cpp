@@ -102,17 +102,6 @@ struct MapStateStorage
     }
 
     task::Task<bool> existsOne(StateKey key) { co_return co_await existsOne(StateKeyView{key}); }
-
-    task::Task<void> removeOne(StateKey key)
-    {
-        StateKeyView view{key};
-        auto [table, field] = view.get();
-        if (auto tIt = data.find(std::string(table)); tIt != data.end())
-        {
-            tIt->second.erase(std::string(field));
-        }
-        co_return;
-    }
 };
 
 static_assert(mempool::MemPool<MemPoolImpl, MapStateStorage>);
