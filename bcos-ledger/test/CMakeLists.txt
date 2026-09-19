@@ -30,6 +30,10 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/bcos-
 find_package(Boost REQUIRED unit_test_framework)
 
 target_link_libraries(${TEST_BINARY_NAME} PRIVATE ledger bcos-crypto protocol-tars Boost::unit_test_framework)
+# `storage` (RocksDB + StateKVResolver headers) is linked into the TEST binary only — the
+# ledger library itself deliberately keeps RocksDB out of its exported target (see
+# bcos-ledger/CMakeLists.txt); MPTPrunerTest's parallel-sweep case runs on a real RocksDB.
+target_link_libraries(${TEST_BINARY_NAME} PRIVATE storage)
 target_compile_definitions(${TEST_BINARY_NAME} PUBLIC _TESTS_)
 # ethereum/tests vectors (EthereumTrieVectorsTest.cpp), installed by the ethereum-tests
 # data port (ports-data/) under the tests manifest feature

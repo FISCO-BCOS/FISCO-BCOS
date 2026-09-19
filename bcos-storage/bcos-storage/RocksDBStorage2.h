@@ -29,6 +29,12 @@ template <class KeyType, class ValueType, Resolver<KeyType> KeyResolver,
     Resolver<ValueType> ValueResolver>
 class RocksDBStorage2
 {
+public:
+    // Opt-in marker for MPTPruner's kParallelSweepSafe (bcos-ledger/mpt/MPTPruner.h): every
+    // RANGE_SEEK iterator pins its own snapshot and deletes go through the thread-safe DB
+    // handle, so concurrent shard iterators plus delete batches are safe on this backend.
+    static constexpr bool kConcurrentSweepSafe = true;
+
 private:
     std::variant<std::reference_wrapper<::rocksdb::DB>, std::unique_ptr<::rocksdb::DB>> m_rocksDB;
     [[no_unique_address]] KeyResolver m_keyResolver;

@@ -27,10 +27,25 @@ struct RocksDBCheckpointOption
     bool optimizeLevelStyleCompaction = false;
     bool enableBlobFiles = false;
     bool enableDBStatistics = false;
+    // -1 (unlimited): never evict table readers. An archive-scale DB holds tens of thousands
+    // of SSTs, and a small table cache thrashes — every random read evicts a reader and
+    // re-reads its index/filter/properties blocks. Cost: fd usage grows toward the live SST
+    // count and, with cache_index_and_filter_blocks off, every reader pins its index/filter
+    // blocks on the heap. Bound it via [storage].rocksdb_max_open_files on fd-constrained
+    // hosts.
+    int maxOpenFiles = -1;
 };
 
 namespace detail
 {
+// The process soft RLIMIT_NOFILE, or -1 when unlimited / undeterminable.
+long softOpenFileLimit();
+
+// With maxOpenFiles == -1 RocksDB never evicts table readers, so fd usage grows toward the
+// live SST count. Log a loud warning when the soft fd limit leaves no headroom for an
+// archive-scale SST count; a no-op for any bounded value.
+void warnIfMaxOpenFilesUnbounded(int maxOpenFiles, std::string_view path);
+
 std::unique_ptr<::rocksdb::DB> openCheckpointRocksDB(
     const std::string& path, const ::rocksdb::Options& options, bool readOnly);
 

@@ -175,6 +175,7 @@ RocksDBOption getRocksDBOption(
     option.optimizeLevelStyleCompaction = optimizeLevelStyleCompaction;
     option.enableBlobFiles = nodeConfig->enableRocksDBBlob();
     option.enableDBStatistics = nodeConfig->enableStatistics();
+    option.maxOpenFiles = nodeConfig->maxOpenFiles();
     return option;
 }
 

@@ -33,16 +33,22 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/GenesisStateRoot.h>
 #include <bcos-storage/KeyPrefixes.h>
+#include <bcos-task/AwaitableValue.h>
+#include <bcos-task/TBBWait.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <oneapi/tbb/parallel_for.h>
+#include <oneapi/tbb/task_group.h>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
+#include <exception>
 #include <functional>
 #include <map>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -53,6 +59,60 @@
 namespace bcos::ledger::mpt
 {
 #define MPT_PRUNER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("MPT_PRUNER")
+
+/// Whether the Phase-3 garbage sweep may scan the "/mpt/" table with CONCURRENT shard
+/// iterators: the backend must tolerate independent RANGE_SEEK iterators plus delete batches
+/// issued from multiple threads at once. Default FALSE — a backend opts IN explicitly by
+/// declaring `static constexpr bool kConcurrentSweepSafe = true`, so a new backend or wrapper
+/// author has to answer the question instead of silently getting concurrent deletes.
+/// RocksDBStorage2 opts in at its definition (each RANGE_SEEK pins its own snapshot, writes
+/// go through the thread-safe DB handle). The in-memory backends do not: a non-CONCURRENT
+/// MemoryStorage is a single unsynchronized index, and a CONCURRENT one shards its ordered
+/// index per bucket, losing the global key ordering the shard spans rely on — every backend
+/// without the marker takes the single-shard sequential path.
+///
+/// Concurrent READS are a separate, weaker requirement and are assumed safe on every
+/// backend: walkTrie issues up to WALK_READ_WAYS concurrent readSome/MultiGet calls during
+/// the rebuild phases, which issue no concurrent WRITES — read/read concurrency needs no
+/// synchronization even on a single unsynchronized index. Only the sweep mixes concurrent
+/// reads with delete batches, hence this trait.
+template <class Backend, class = void>
+inline constexpr bool kParallelSweepSafe = false;
+template <class Backend>
+inline constexpr bool
+    kParallelSweepSafe<Backend, std::void_t<decltype(Backend::kConcurrentSweepSafe)>> =
+        Backend::kConcurrentSweepSafe;
+
+/// Whether an awaitable type is a bcos::task::AwaitableValue — the only awaitable that
+/// NEVER suspends by construction (await_ready is always true).
+template <class T>
+inline constexpr bool kIsAwaitableValue = false;
+template <class V>
+inline constexpr bool kIsAwaitableValue<bcos::task::AwaitableValue<V>> = true;
+
+/// Compile-time enforcement of the sweep's parallel_for safety argument (see init Phase 3):
+/// when the sweep may run multi-shard, the BACKEND-level storage calls must be
+/// never-suspending AwaitableValues, so tbb::syncWait always takes its ready path and never
+/// blocks a TBB worker under parallel_for. A backend that goes truly asynchronous breaks the
+/// build here instead of hanging the boot. Backends without the opt-in marker run the
+/// single-shard path and have nothing to prove — the expressions are not even formed.
+template <class Backend, bool = kParallelSweepSafe<Backend>>
+struct SweepInlineCompletionCheck
+{
+    static constexpr bool value = true;
+};
+template <class Backend>
+struct SweepInlineCompletionCheck<Backend, true>
+{
+    using RangeAwaitable = decltype(std::declval<Backend&>().range(
+        bcos::storage2::RANGE_SEEK, std::declval<bcos::executor_v1::StateKey&>()));
+    using Iterator = bcos::task::AwaitableReturnType<RangeAwaitable>;
+    static constexpr bool value =
+        kIsAwaitableValue<RangeAwaitable> &&
+        kIsAwaitableValue<decltype(std::declval<Iterator&>().next())> &&
+        kIsAwaitableValue<decltype(std::declval<Backend&>().removeSome(
+            std::declval<std::vector<bcos::executor_v1::StateKey>>()))>;
+};
 
 /// Reference-counting MPT pruning (spec §4.8), one instance per chain over the committed-state
 /// backend (production: GlobalStateStorage::latestBackend()).
@@ -123,9 +183,11 @@ namespace bcos::ledger::mpt
 ///    SKIPS the scan entirely — counting the garbage would itself cost the full-table scan the
 ///    option exists to avoid, so a disabled boot only logs the hint to enable the sweep;
 ///    enabled deletes the rows WHILE scanning, in SWEEP_DELETE_CHUNK batches — the full garbage
-///    set is never materialized (the range iterator survives deleting already-passed keys:
+///    set is never materialized (each range iterator survives deleting already-passed keys:
 ///    MemoryStorage's ordered index invalidates only erased elements, RocksDBStorage2 pins a
-///    snapshot).
+///    snapshot). The scan runs sharded: one tbb::parallel_for body per first hash byte
+///    (SWEEP_SHARDS spans); backends that disallow concurrent iterators (kParallelSweepSafe —
+///    the in-memory test backends) take the same code with a single table-wide shard.
 ///
 /// A chain whose MPT is not yet active at boot (head < activation) skips the rebuild entirely:
 /// the activation block's full first build (FlatToMPT) emits every node as that block's
@@ -148,6 +210,22 @@ public:
     /// leaves the rest on disk, re-detected at the next boot).
     static constexpr size_t SWEEP_DELETE_CHUNK = 10'000;
 
+    /// Garbage sweep sharding: the "/mpt/" row key is (table prefix + 32 raw hash bytes), so
+    /// one first-byte span per shard partitions the table into 256 disjoint key ranges, each
+    /// scanned by its own tbb task. A single sequential iterator leaves every core but one
+    /// idle on the scan loop (the per-row cost is tiny, so the iterator advance itself is the
+    /// bottleneck); 256 shards let the arena keep ~hardware_concurrency spans in flight, and a
+    /// dense span cannot strand the rest of the table behind one thread.
+    static constexpr size_t SWEEP_SHARDS = 256;
+
+    /// Startup progress logging cadence. Phase 1 walks the entire head trie and the phase-3
+    /// sweep scans the entire "/mpt/" table — on an archive-scale database both run for a
+    /// long time, and without a periodic line the boot looks hung. Phase 1 logs one line per
+    /// REBUILD_LOG_INTERVAL visited nodes, the sweep one per SWEEP_SCAN_LOG_INTERVAL examined
+    /// rows (phase 2 logs per block, so it needs no counter).
+    static constexpr uint64_t REBUILD_LOG_INTERVAL = 1'000'000;
+    static constexpr uint64_t SWEEP_SCAN_LOG_INTERVAL = 10'000'000;
+
     /// The stateRoot of block @p n (nullopt when that block's header is unavailable). A pre-MPT
     /// block may return its legacy XOR root — init truncates the walk at firstMptBlock via the
     /// features, so the callable need not distinguish.
@@ -156,7 +234,10 @@ public:
 
     /// Called after each deleted chunk of the startup sweep: rows deleted so far, garbage rows
     /// found so far (the total is unknown until the scan finishes; the last call reports the
-    /// final total in both).
+    /// final total in both). On a parallel-sweep-safe backend the shards make progress
+    /// concurrently, but the pruner SERIALIZES every invocation on an internal mutex, so the
+    /// callback keeps its original single-threaded contract; the arguments are a monotone
+    /// snapshot (a later call never reports smaller numbers).
     using GarbageProgress = std::function<void(uint64_t done, uint64_t total)>;
 
     /// @param backend         the committed-state backend; every read below hits it directly
@@ -219,14 +300,17 @@ public:
         }
 
         // Phase 1: count the head state's references.
+        MPT_PRUNER_LOG(INFO) << "MPT pruning: rebuild phase 1 — counting the head state's "
+                                "references (a full trie walk, progress logged every "
+                             << REBUILD_LOG_INTERVAL << " nodes)" << LOG_KV("head", currentBlock);
         co_await countWalk(*headRoot, true);
 
         // Phase 2: newest-first over [head−N, head): attribute each no-longer-live node to the
         // newest root still referencing it, deadline = s+1+N. The oldest in-window root head−N
         // MUST be walked too: its unique nodes carry the future deadline head+1 in steady
         // state — skipping them would let Phase 3 misclassify them as garbage.
-        auto const windowStart = std::max<bcos::protocol::BlockNumber>(
-            *firstMptBlock, currentBlock - m_pruneWindow);
+        auto const windowStart =
+            std::max<bcos::protocol::BlockNumber>(*firstMptBlock, currentBlock - m_pruneWindow);
         for (auto block = currentBlock - 1; block >= windowStart; --block)
         {
             auto const root = co_await stateRootAt(block);
@@ -248,8 +332,7 @@ public:
             // so stop the downward walk here — the effective window starts at block+1, the
             // first surviving root (the same shape as a shrunken window).
             if (*root != emptyRootHash() &&
-                !co_await bcos::storage2::readOne(
-                    *m_backend, bcos::ledger::mptNodeStateKey(*root)))
+                !co_await bcos::storage2::readOne(*m_backend, bcos::ledger::mptNodeStateKey(*root)))
             {
                 MPT_PRUNER_LOG(INFO)
                     << "MPT pruning: in-window state root already pruned by a previous smaller "
@@ -259,6 +342,10 @@ public:
                 break;
             }
             co_await deadlineWalk(*root, true, static_cast<uint64_t>(block + 1 + m_pruneWindow));
+            MPT_PRUNER_LOG(INFO) << "MPT pruning: rebuild phase 2 — in-window root walked"
+                                 << LOG_KV("block", block) << LOG_KV("windowStart", windowStart)
+                                 << LOG_KV("tracked", m_counts.size())
+                                 << LOG_KV("scheduled", pendingCount());
         }
 
         // Phase 3: unreachable-garbage sweep. With the sweep disabled (the config default) the
@@ -284,62 +371,146 @@ public:
         }
         // sweepGarbage=true: scan the "/mpt/" table for unreachable rows (never counted, never
         // queued) and delete WHILE scanning in SWEEP_DELETE_CHUNK batches, never materializing
-        // the full garbage set: the range iterator survives deleting already-passed keys
+        // the full garbage set: each range iterator survives deleting already-passed keys
         // (MemoryStorage's ordered index invalidates only erased elements; RocksDBStorage2's
         // RANGE_SEEK pins a snapshot). Garbage rows are by definition not in m_counts, so no
-        // in-memory table needs a fix-up.
-        uint64_t garbage = 0;
-        uint64_t garbageDeleted = 0;
-        std::vector<bcos::executor_v1::StateKey> chunk;
-        auto iterator = co_await bcos::storage2::range(*m_backend, bcos::storage2::RANGE_SEEK,
-            bcos::executor_v1::StateKey{bcos::storage2::kMPTTable, std::string_view{}});
-        while (auto item = co_await iterator.next())
-        {
-            auto const& key = std::get<0>(*item);
-            bcos::executor_v1::StateKeyView const keyView{key};
-            if (keyView.m_table != bcos::storage2::kMPTTable)
-            {
-                break;
-            }
-            if (!std::get_if<storage::Entry>(std::addressof(std::get<1>(*item))))
-            {
-                continue;  // tombstone on a logical-deletion backend: not a live node row
-            }
-            if (keyView.m_key.size() != bcos::h256::SIZE)
-            {
-                MPT_PRUNER_LOG(WARNING)
-                    << "MPT pruning: skipping malformed \"/mpt/\" row (key part "
-                    << keyView.m_key.size() << " bytes, expected 32)";
-                continue;
-            }
-            bcos::h256 const hash{
-                reinterpret_cast<bcos::byte const*>(keyView.m_key.data()), bcos::h256::SIZE};
-            if (m_counts.contains(hash))
-            {
-                continue;
-            }
-            ++garbage;
-            chunk.push_back(bcos::ledger::mptNodeStateKey(hash));
-            if (chunk.size() >= SWEEP_DELETE_CHUNK)
-            {
-                garbageDeleted += chunk.size();
-                co_await bcos::storage2::removeSome(*m_backend, std::move(chunk));
-                chunk.clear();
-                if (progress)
+        // in-memory table needs a fix-up. The scan is SHARDED on the first hash byte:
+        // tbb::parallel_for runs one body per span, driving the coroutine storage API with
+        // tbb::syncWait. init runs before the scheduler starts committing, so m_counts is
+        // READ-ONLY for the whole sweep and the shards share it without synchronization; the
+        // counters are atomic. A backend without concurrent iterators (kParallelSweepSafe) runs
+        // ONE shard spanning the whole table instead — the same code, sequential, with the
+        // first-byte bound compiled out.
+        //
+        // parallel_for (not task_group) is safe HERE because every storage call below —
+        // range(), iterator.next(), removeSome() — bottoms out in an AwaitableValue that
+        // completes synchronously inline, so tbb::syncWait always takes its ready path and
+        // never reaches tbb::task::suspend; the TBBWait.h caveat (syncWait blocks the worker
+        // under parallel_for once the awaited task really suspends) therefore never triggers.
+        // SweepInlineCompletionCheck turns that into a build error the moment an opted-in
+        // backend's calls go truly asynchronous — do NOT weaken the check instead. An
+        // exception in any shard propagates out of parallel_for (siblings are cancelled) —
+        // the fail-loud boot semantics this phase wants.
+        static_assert(SweepInlineCompletionCheck<Backend>::value,
+            "MPTPruner parallel sweep: the backend opted into kParallelSweepSafe but its "
+            "range()/iterator.next()/removeSome() are not all never-suspending AwaitableValues "
+            "— tbb::syncWait could block a worker under parallel_for");
+        constexpr size_t shardCount = kParallelSweepSafe<Backend> ? SWEEP_SHARDS : 1;
+        std::atomic<uint64_t> scanned{0};
+        std::atomic<uint64_t> garbage{0};
+        std::atomic<uint64_t> garbageDeleted{0};
+        // Serializes GarbageProgress invocations across shards — the callback contract
+        // predates the sharded sweep and does not require thread-safety.
+        std::mutex progressMutex;
+        MPT_PRUNER_LOG(INFO) << "MPT pruning: garbage sweep — scanning the \"/mpt/\" table in "
+                             << shardCount << " shard(s) (progress logged every "
+                             << SWEEP_SCAN_LOG_INTERVAL << " rows)";
+        oneapi::tbb::parallel_for(size_t{0}, shardCount,
+            [this, &scanned, &garbage, &garbageDeleted, &progress, &progressMutex](
+                size_t shard) {
+                auto const startKey = [shard] {
+                    (void)shard;  // unused when shardCount == 1 (clang -Wunused-lambda-capture)
+                    if constexpr (shardCount > 1)
+                    {
+                        if (shard == 0)
+                        {
+                            // Shard 0 starts at the table's first key so it also visits
+                            // malformed rows with an empty/short key part (they sort before
+                            // every 32-byte key), keeping the warn-and-skip below reachable.
+                            return bcos::executor_v1::StateKey{
+                                bcos::storage2::kMPTTable, std::string_view{}};
+                        }
+                        // The shard's span: row keys whose first hash byte is `shard`.
+                        bcos::h256 startHash{};
+                        startHash.data()[0] = static_cast<bcos::byte>(shard);
+                        return bcos::ledger::mptNodeStateKey(startHash);
+                    }
+                    else
+                    {
+                        return bcos::executor_v1::StateKey{
+                            bcos::storage2::kMPTTable, std::string_view{}};
+                    }
+                }();
+                auto iterator = bcos::task::tbb::syncWait(
+                    bcos::storage2::range(*m_backend, bcos::storage2::RANGE_SEEK, startKey));
+                std::vector<bcos::executor_v1::StateKey> chunk;
+                while (auto item = bcos::task::tbb::syncWait(iterator.next()))
                 {
-                    progress(garbageDeleted, garbage);
+                    auto const& key = std::get<0>(*item);
+                    bcos::executor_v1::StateKeyView const keyView{key};
+                    if (keyView.m_table != bcos::storage2::kMPTTable)
+                    {
+                        break;
+                    }
+                    if constexpr (shardCount > 1)
+                    {
+                        if (!keyView.m_key.empty() &&
+                            static_cast<uint8_t>(keyView.m_key[0]) != shard)
+                        {
+                            break;  // past this shard's span
+                        }
+                    }
+                    if ((scanned.fetch_add(1, std::memory_order_relaxed) + 1) %
+                            SWEEP_SCAN_LOG_INTERVAL ==
+                        0)
+                    {
+                        MPT_PRUNER_LOG(INFO)
+                            << "MPT pruning: garbage sweep scan progress"
+                            << LOG_KV("scanned", scanned.load(std::memory_order_relaxed))
+                            << LOG_KV("garbage", garbage.load(std::memory_order_relaxed))
+                            << LOG_KV(
+                                   "garbageDeleted", garbageDeleted.load(std::memory_order_relaxed))
+                            << LOG_KV("tracked", m_counts.size());
+                    }
+                    if (!std::get_if<storage::Entry>(std::addressof(std::get<1>(*item))))
+                    {
+                        continue;  // tombstone on a logical-deletion backend
+                    }
+                    if (keyView.m_key.size() != bcos::h256::SIZE)
+                    {
+                        MPT_PRUNER_LOG(WARNING)
+                            << "MPT pruning: skipping malformed \"/mpt/\" row (key part "
+                            << keyView.m_key.size() << " bytes, expected 32)";
+                        continue;
+                    }
+                    bcos::h256 const hash{reinterpret_cast<bcos::byte const*>(keyView.m_key.data()),
+                        bcos::h256::SIZE};
+                    if (m_counts.contains(hash))
+                    {
+                        continue;
+                    }
+                    garbage.fetch_add(1, std::memory_order_relaxed);
+                    chunk.push_back(bcos::ledger::mptNodeStateKey(hash));
+                    if (chunk.size() >= SWEEP_DELETE_CHUNK)
+                    {
+                        // Release/acquire pairs on garbageDeleted keep the progress
+                        // snapshot's done <= total: a shard that acquire-loads a deleted
+                        // count also sees the garbage increments sequenced before it.
+                        garbageDeleted.fetch_add(chunk.size(), std::memory_order_release);
+                        bcos::task::tbb::syncWait(
+                            bcos::storage2::removeSome(*m_backend, std::move(chunk)));
+                        chunk.clear();
+                        if (progress)
+                        {
+                            std::lock_guard const lock{progressMutex};
+                            progress(garbageDeleted.load(std::memory_order_acquire),
+                                garbage.load(std::memory_order_relaxed));
+                        }
+                    }
                 }
-            }
-        }
-        if (!chunk.empty())
-        {
-            garbageDeleted += chunk.size();
-            co_await bcos::storage2::removeSome(*m_backend, std::move(chunk));
-            if (progress)
-            {
-                progress(garbageDeleted, garbage);
-            }
-        }
+                if (!chunk.empty())
+                {
+                    garbageDeleted.fetch_add(chunk.size(), std::memory_order_release);
+                    bcos::task::tbb::syncWait(
+                        bcos::storage2::removeSome(*m_backend, std::move(chunk)));
+                    if (progress)
+                    {
+                        std::lock_guard const lock{progressMutex};
+                        progress(garbageDeleted.load(std::memory_order_acquire),
+                            garbage.load(std::memory_order_relaxed));
+                    }
+                }
+            });
 
         MPT_PRUNER_LOG(INFO) << "MPT pruning: reference counts rebuilt from the state roots"
                              << LOG_KV("head", currentBlock)
@@ -347,10 +518,12 @@ public:
                              << LOG_KV("windowStart", windowStart)
                              << LOG_KV("tracked", m_counts.size())
                              << LOG_KV("scheduled", pendingCount())
-                             << LOG_KV("garbage", garbage)
-                             << LOG_KV("garbageDeleted", garbageDeleted)
+                             << LOG_KV("scanned", scanned.load(std::memory_order_relaxed))
+                             << LOG_KV("garbage", garbage.load(std::memory_order_relaxed))
+                             << LOG_KV("garbageDeleted",
+                                    garbageDeleted.load(std::memory_order_relaxed))
                              << LOG_KV("sweepGarbage", sweepGarbage);
-        m_lastSweepDeleted = garbageDeleted;
+        m_lastSweepDeleted = garbageDeleted.load(std::memory_order_relaxed);
     }
 
     /// The pruning rows for @p blockNumber: only the deletions of expired nodes — pruning keeps
@@ -389,18 +562,16 @@ public:
             (!delta.newNodes.empty() || !delta.obsoletedNodes.empty() ||
                 !delta.intraBlockObsoleted.empty()))
         {
-            BOOST_THROW_EXCEPTION(MPTInvariantViolation{}
-                                  << bcos::errinfo_comment(
-                                         "MPT pruning: block " + std::to_string(blockNumber) +
-                                         " carries node changes but no refCountDeltas tally "
-                                         "(newNodes=" +
-                                         std::to_string(delta.newNodes.size()) +
-                                         ", obsoletedNodes=" +
-                                         std::to_string(delta.obsoletedNodes.size()) +
-                                         ", intraBlockObsoleted=" +
-                                         std::to_string(delta.intraBlockObsoleted.size()) +
-                                         ") — the producer ran without trackRefCounts; check "
-                                         "the observer's needsRefCountDeltas wiring"));
+            BOOST_THROW_EXCEPTION(
+                MPTInvariantViolation{} << bcos::errinfo_comment(
+                    "MPT pruning: block " + std::to_string(blockNumber) +
+                    " carries node changes but no refCountDeltas tally "
+                    "(newNodes=" +
+                    std::to_string(delta.newNodes.size()) +
+                    ", obsoletedNodes=" + std::to_string(delta.obsoletedNodes.size()) +
+                    ", intraBlockObsoleted=" + std::to_string(delta.intraBlockObsoleted.size()) +
+                    ") — the producer ran without trackRefCounts; check "
+                    "the observer's needsRefCountDeltas wiring"));
         }
 
         auto const horizon = static_cast<uint64_t>(blockNumber);
@@ -443,8 +614,8 @@ public:
             auto& entry = m_stagedCounts[hash];  // seeded above, or a fresh {0, none}
             uint64_t const newCount = static_cast<uint64_t>(
                 std::max<int64_t>(0, static_cast<int64_t>(entry.count) + movement));
-            bool const wasObsoleted = delta.obsoletedNodes.contains(hash) ||
-                                      delta.intraBlockObsoleted.contains(hash);
+            bool const wasObsoleted =
+                delta.obsoletedNodes.contains(hash) || delta.intraBlockObsoleted.contains(hash);
             if (newCount == 0 && wasObsoleted && !entry.deadline)
             {
                 // >0→0, or the saturating 0→0 of a node with no counted history: schedule the
@@ -464,7 +635,7 @@ public:
         // the staged erases (a bucket entry this block's movements already revoked is skipped);
         // the removals themselves are only staged — onCommit mutates the base buckets.
         for (auto bucketIt = m_pending.begin();
-             bucketIt != m_pending.end() && bucketIt->first <= horizon; ++bucketIt)
+            bucketIt != m_pending.end() && bucketIt->first <= horizon; ++bucketIt)
         {
             uint64_t const deadline = bucketIt->first;
             for (auto const& hash : bucketIt->second)
@@ -539,19 +710,21 @@ public:
         // after the block's WriteBatch landed).
         if (!out.deletions.empty())
         {
-            MPT_PRUNER_LOG(DEBUG)
-                << "MPT pruning: block deletions confirmed" << LOG_KV("block", blockNumber)
-                << LOG_KV("deletions", out.deletions.size());
+            MPT_PRUNER_LOG(DEBUG) << "MPT pruning: block deletions confirmed"
+                                  << LOG_KV("block", blockNumber)
+                                  << LOG_KV("deletions", out.deletions.size());
         }
         if (blockNumber % summaryLogInterval(m_pruneWindow) == 0)
         {
             auto const nextDeadline = nextPendingDeadline();
-            MPT_PRUNER_LOG(INFO)
-                << "MPT pruning: steady-state summary" << LOG_KV("block", blockNumber)
-                << LOG_KV("deletions", out.deletions.size())
-                << LOG_KV("tracked", trackedCount()) << LOG_KV("pending", pendingCount())
-                << LOG_KV("nextDeadline",
-                       nextDeadline ? std::to_string(*nextDeadline) : std::string{"-"});
+            MPT_PRUNER_LOG(INFO) << "MPT pruning: steady-state summary"
+                                 << LOG_KV("block", blockNumber)
+                                 << LOG_KV("deletions", out.deletions.size())
+                                 << LOG_KV("tracked", trackedCount())
+                                 << LOG_KV("pending", pendingCount())
+                                 << LOG_KV("nextDeadline", nextDeadline ?
+                                                               std::to_string(*nextDeadline) :
+                                                               std::string{"-"});
         }
         co_return out;
     }
@@ -565,8 +738,7 @@ public:
     /// commit retry reproduces the identical batch. Deletions already landed with the batch —
     /// there is nothing to hand off. The CommitObserver contract forbids throwing and blocking
     /// here.
-    void onCommit(
-        bcos::protocol::BlockNumber blockNumber, MPTDeltaLayer const& /*delta*/) override
+    void onCommit(bcos::protocol::BlockNumber blockNumber, MPTDeltaLayer const& /*delta*/) override
     {
         for (auto const& [deadline, hashes] : m_stagedDeadlineErases)
         {
@@ -604,8 +776,7 @@ public:
 
         auto current = m_watermark.load(std::memory_order_relaxed);
         while (current < blockNumber &&
-               !m_watermark.compare_exchange_weak(
-                   current, blockNumber, std::memory_order_relaxed))
+               !m_watermark.compare_exchange_weak(current, blockNumber, std::memory_order_relaxed))
         {
         }
     }
@@ -691,8 +862,8 @@ private:
     /// storage root. Inline node refs are embedded in their parent and never stored as rows, so
     /// they carry no count and are not descended into (an inline subtree is < 32 bytes and can
     /// hold no hash ref of its own).
-    static void descend(TrieNode const& node, bool accountTrie,
-        std::vector<std::pair<bcos::h256, bool>>& stack)
+    static void descend(
+        TrieNode const& node, bool accountTrie, std::vector<std::pair<bcos::h256, bool>>& stack)
     {
         if (auto const* ext = std::get_if<ExtensionNode>(&node))
         {
@@ -700,7 +871,7 @@ private:
             {
                 stack.emplace_back(
                     bcos::h256(bcos::bytesConstRef(ext->child.data(), ext->child.size())
-                                   .getCroppedData(1)),
+                            .getCroppedData(1)),
                     accountTrie);
             }
         }
@@ -733,6 +904,14 @@ private:
     /// key/result vectors.
     static constexpr size_t WALK_READ_BATCH = 64;
 
+    /// In-flight sub-batch fetches in walkTrie's pipeline. The per-node rebuild cost is
+    /// dominated by the 64KB data-block read + decompress behind every hash-random key —
+    /// synchronous, single-threaded work one MultiGet serializes. The walk keeps up to
+    /// WALK_READ_WAYS sub-batches' MultiGets running CONCURRENTLY as tbb::task_group tasks,
+    /// multiplying the startup-rebuild throughput on multi-core hosts; 32 outstanding fetches
+    /// keep the storage queue fed without meaningful queueing overhead.
+    static constexpr size_t WALK_READ_WAYS = 32;
+
     /// The single trie-traversal implementation behind BOTH rebuild phases (countWalk and
     /// deadlineWalk below are thin wrappers supplying the per-node callback): iterative over an
     /// explicit (hash, accountTrie) stack, descended per descend(). @p onNode runs per POPPED
@@ -740,20 +919,26 @@ private:
     /// for — skip the read and the whole subtree). The empty root short-circuits: an empty
     /// trie stores no nodes.
     ///
-    /// Node rows are fetched in BATCHES: up to WALK_READ_BATCH entries are popped per round,
-    /// each run through @p onNode in pop order, and the accepted rows are fetched with ONE
-    /// storage2::readSome (rocksdb::MultiGet underneath on the production backend) instead of
-    /// a point read per node — the dominant startup-rebuild cost on a cold RocksDB. Batching
-    /// changes the VISIT ORDER versus the serial per-node walk (up to 64 siblings are popped
-    /// before the earlier entries' children are pushed), and both phases are correct under any
-    /// visit order: Phase 1 counts every encounter, so any order yields the same per-hash
-    /// tally, and Phase 2's try_emplace makes the visited set a reachability closure, likewise
-    /// order-independent. The same hash may be accepted several times within one round (two
-    /// accounts sharing a storage trie push the same storageRoot); duplicate keys are fetched
-    /// and decoded ONCE per round, then descended once per accepted entry, so the
-    /// per-encounter tally is preserved without relying on MultiGet's duplicate-key contract.
-    /// The fail-loud contract is unchanged: a reachable row missing from the batch's results
-    /// throws the same MPTInvariantViolation.
+    /// Node rows are fetched in BATCHES: up to WALK_READ_BATCH entries are popped per
+    /// sub-batch, each run through @p onNode in pop order, and the accepted rows are fetched
+    /// with one storage2::readSome (rocksdb::MultiGet underneath on the production backend)
+    /// instead of a point read per node — the dominant startup-rebuild cost on a cold RocksDB.
+    /// Collection, fetch and application are PIPELINED: each sub-batch's fetch (the blocking
+    /// MultiGet AND the RLP decode of its rows, both inside the tbb task) is launched as soon
+    /// as the sub-batch is collected, up to WALK_READ_WAYS fetches stay in flight, and the
+    /// decoded nodes are applied (descended into) strictly in collection order — each
+    /// application waits only on its OWN sub-batch's fetch, so there is no per-round barrier
+    /// and later fetches overlap earlier applications. Batching changes the VISIT ORDER versus
+    /// the serial per-node walk (siblings are popped before the earlier entries' children are
+    /// pushed), and both phases are correct under any visit order: Phase 1 counts every
+    /// encounter, so any order yields the same per-hash tally, and Phase 2's try_emplace makes
+    /// the visited set a reachability closure, likewise order-independent. The same hash may be
+    /// accepted several times within one sub-batch (two accounts sharing a storage trie push
+    /// the same storageRoot); duplicate keys are fetched and decoded ONCE per sub-batch, then
+    /// descended once per accepted entry, so the per-encounter tally is preserved without
+    /// relying on MultiGet's duplicate-key contract. The fail-loud contract is unchanged: a
+    /// reachable row missing from the batch's results throws the same MPTInvariantViolation,
+    /// captured inside the fetch task and rethrown on the walk's thread.
     template <typename OnNode>
     bcos::task::Task<void> walkTrie(bcos::h256 root, bool accountTrie, OnNode&& onNode)
     {
@@ -762,70 +947,127 @@ private:
             co_return;
         }
         std::vector<std::pair<bcos::h256, bool>> stack{{root, accountTrie}};
-        // Per-round scratch, hoisted out of the loop so a batch costs no container
-        // constructions: clear() keeps the capacity across rounds.
-        std::vector<std::pair<bcos::h256, bool>> accepted;
-        std::vector<size_t> resultIndex;  // accepted[i] -> its row's slot in keys/entries
-        std::vector<bcos::executor_v1::StateKey> keys;
-        std::unordered_map<bcos::h256, size_t> dedup;  // hash -> slot, this round only
-        std::vector<std::optional<TrieNode>> decoded;  // slot -> parsed node, this round only
-        accepted.reserve(WALK_READ_BATCH);
-        resultIndex.reserve(WALK_READ_BATCH);
-        keys.reserve(WALK_READ_BATCH);
-        dedup.reserve(WALK_READ_BATCH);
-        while (!stack.empty())
+        // Pipeline slots: WALK_READ_WAYS sub-batches in flight, applied strictly in collection
+        // order. Each slot's task_group owns ONE fetch task at a time — the blocking MultiGet
+        // plus the RLP decode of every fetched row — and is reused after wait().
+        struct Way
         {
-            accepted.clear();
-            resultIndex.clear();
-            keys.clear();
-            dedup.clear();
-            for (size_t popped = 0; popped < WALK_READ_BATCH && !stack.empty(); ++popped)
+            oneapi::tbb::task_group fetch;
+            std::vector<std::pair<bcos::h256, bool>> accepted;
+            std::vector<size_t> resultIndex;
+            std::vector<bcos::h256> keyHashes;
+            std::vector<bcos::executor_v1::StateKey> keys;
+            std::vector<std::optional<TrieNode>> decoded;  // slot -> parsed node
+            std::exception_ptr error;
+        };
+        std::vector<Way> ways(WALK_READ_WAYS);
+        std::unordered_map<bcos::h256, size_t> dedup;  // hash -> slot, per sub-batch
+        size_t head = 0;                               // oldest in-flight sub-batch, next to apply
+        size_t tail = 0;                               // next slot to collect into
+        size_t inFlight = 0;
+        // A throw anywhere below (onNode, a rethrown fetch error) must first join the
+        // in-flight fetch tasks: they reference this frame.
+        try
+        {
+            while (!stack.empty() || inFlight > 0)
             {
-                auto const [hash, isAccount] = stack.back();
-                stack.pop_back();
-                if (!onNode(hash))
+                // Collect and launch sub-batches while the window has room. onNode still runs
+                // on this thread at pop time, so its side effects (the phase's counts/visited
+                // set) stay single-threaded. Their ORDER is NOT the serial walk's — batching
+                // pops siblings before the earlier entries' children are pushed (see the
+                // visit-order note above); both phases are order-independent by design.
+                while (!stack.empty() && inFlight < WALK_READ_WAYS)
                 {
-                    continue;
-                }
-                auto const [it, inserted] = dedup.try_emplace(hash, keys.size());
-                if (inserted)
-                {
-                    keys.push_back(bcos::ledger::mptNodeStateKey(hash));
-                }
-                accepted.emplace_back(hash, isAccount);
-                resultIndex.push_back(it->second);
-            }
-            if (accepted.empty())
-            {
-                continue;
-            }
-            auto const entries = co_await bcos::storage2::readSome(*m_backend, std::move(keys));
-            decoded.clear();
-            decoded.resize(entries.size());
-            for (size_t i = 0; i < accepted.size(); ++i)
-            {
-                auto const& [hash, isAccount] = accepted[i];
-                auto const slot = resultIndex[i];
-                if (!decoded[slot])
-                {
-                    auto const& entry = entries[slot];
-                    if (!entry)
+                    auto& way = ways[tail];
+                    way.accepted.clear();
+                    way.resultIndex.clear();
+                    way.keyHashes.clear();
+                    way.keys.clear();
+                    dedup.clear();
+                    for (size_t popped = 0; popped < WALK_READ_BATCH && !stack.empty(); ++popped)
                     {
-                        // A reachable node row missing from the committed backend violates
-                        // the window guarantee the rebuild relies on — fail loud, same
-                        // convention as Trie.h.
-                        BOOST_THROW_EXCEPTION(MPTInvariantViolation{}
-                                              << bcos::errinfo_comment(
-                                                     "MPT pruning rebuild: reachable node row "
-                                                     "missing from the committed backend (hash " +
-                                                     hash.abridged() + ")"));
+                        auto const [hash, isAccount] = stack.back();
+                        stack.pop_back();
+                        if (!onNode(hash))
+                        {
+                            continue;
+                        }
+                        auto const [it, inserted] = dedup.try_emplace(hash, way.keys.size());
+                        if (inserted)
+                        {
+                            way.keyHashes.push_back(hash);
+                            way.keys.push_back(bcos::ledger::mptNodeStateKey(hash));
+                        }
+                        way.accepted.emplace_back(hash, isAccount);
+                        way.resultIndex.push_back(it->second);
                     }
-                    auto const raw = entry->get();
-                    decoded[slot] = decodeNode(bcos::bytesConstRef(
-                        reinterpret_cast<bcos::byte const*>(raw.data()), raw.size()));
+                    if (way.accepted.empty())
+                    {
+                        continue;
+                    }
+                    way.error = nullptr;
+                    way.decoded.clear();
+                    way.decoded.resize(way.keys.size());
+                    way.fetch.run([this, &way] {
+                        try
+                        {
+                            auto const entries = bcos::task::tbb::syncWait(
+                                bcos::storage2::readSome(*m_backend, std::move(way.keys)));
+                            for (size_t slot = 0; slot < entries.size(); ++slot)
+                            {
+                                auto const& entry = entries[slot];
+                                if (!entry)
+                                {
+                                    // A reachable node row missing from the committed backend
+                                    // violates the window guarantee the rebuild relies on —
+                                    // fail loud, same convention as Trie.h.
+                                    BOOST_THROW_EXCEPTION(
+                                        MPTInvariantViolation{} << bcos::errinfo_comment(
+                                            "MPT pruning rebuild: reachable node row missing "
+                                            "from the committed backend (hash " +
+                                            way.keyHashes[slot].abridged() + ")"));
+                                }
+                                auto const raw = entry->get();
+                                way.decoded[slot] = decodeNode(bcos::bytesConstRef(
+                                    reinterpret_cast<bcos::byte const*>(raw.data()), raw.size()));
+                            }
+                        }
+                        catch (...)
+                        {
+                            way.error = std::current_exception();
+                        }
+                    });
+                    tail = (tail + 1) % WALK_READ_WAYS;
+                    ++inFlight;
                 }
-                descend(*decoded[slot], isAccount, stack);
+
+                // Apply the oldest in-flight sub-batch in collection order, exactly the
+                // serial walk's descend; waiting blocks only on THIS sub-batch's fetch.
+                if (inFlight == 0)
+                {
+                    break;  // the last pops were all rejected by onNode; nothing to apply
+                }
+                auto& way = ways[head];
+                way.fetch.wait();
+                if (way.error)
+                {
+                    std::rethrow_exception(way.error);
+                }
+                for (size_t i = 0; i < way.accepted.size(); ++i)
+                {
+                    descend(*way.decoded[way.resultIndex[i]], way.accepted[i].second, stack);
+                }
+                head = (head + 1) % WALK_READ_WAYS;
+                --inFlight;
             }
+        }
+        catch (...)
+        {
+            for (size_t i = 0; i < inFlight; ++i)
+            {
+                ways[(head + i) % WALK_READ_WAYS].fetch.wait();
+            }
+            throw;
         }
     }
 
@@ -835,8 +1077,15 @@ private:
     /// set is kept.
     bcos::task::Task<void> countWalk(bcos::h256 root, bool accountTrie)
     {
-        co_await walkTrie(root, accountTrie, [this](bcos::h256 const& hash) {
+        uint64_t visited = 0;
+        co_await walkTrie(root, accountTrie, [this, &visited](bcos::h256 const& hash) {
             ++m_counts[hash].count;
+            if (++visited % REBUILD_LOG_INTERVAL == 0)
+            {
+                MPT_PRUNER_LOG(INFO)
+                    << "MPT pruning: rebuild phase 1 progress" << LOG_KV("nodes", visited)
+                    << LOG_KV("tracked", m_counts.size());
+            }
             return true;
         });
     }

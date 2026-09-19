@@ -1995,6 +1995,30 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     m_blockCacheSize = _pt.get<size_t>("storage.block_cache_size", 128 << 20);
     m_enableDBStatistics = _pt.get<bool>("storage.enable_statistics", false);
     m_enableRocksDBBlob = _pt.get<bool>("storage.enable_rocksdb_blob", false);
+    // Read via get_optional so a malformed value fails loudly: ptree's defaulted get()
+    // swallows translation failures together with absence, and a typo must not silently
+    // select the unbounded (-1) table cache.
+    if (auto const child = _pt.get_child_optional("storage.rocksdb_max_open_files"))
+    {
+        auto const parsed = child->get_value_optional<int32_t>();
+        if (!parsed)
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "[storage].rocksdb_max_open_files must be an integer: "
+                                      "-1 (unlimited) or >= 64, got '" +
+                                      child->get_value<std::string>() + "'"));
+        }
+        m_maxOpenFiles = *parsed;
+    }
+    // -1 keeps every touched SST open (no table-cache thrash on archive-scale DBs) at the
+    // cost of one fd per live SST; a bounded value must still leave the table cache usable.
+    if (m_maxOpenFiles < -1 || (m_maxOpenFiles >= 0 && m_maxOpenFiles < 64))
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[storage].rocksdb_max_open_files must be -1 (unlimited) "
+                                  "or >= 64, got " +
+                                  std::to_string(m_maxOpenFiles)));
+    }
     m_mptPruneWindow = _pt.get<int64_t>("storage.mpt_prune_window", -1);
     // MPT pruning retention window: -1 disables; 0 would delete nodes in the very block that
     // obsoletes them (the head root itself must stay provable), and a huge window is a config
@@ -2793,6 +2817,11 @@ bool NodeConfig::enableStatistics() const
 int NodeConfig::maxBackgroundJobs() const
 {
     return m_maxBackgroundJobs;
+}
+
+int NodeConfig::maxOpenFiles() const
+{
+    return m_maxOpenFiles;
 }
 
 size_t NodeConfig::writeBufferSize() const

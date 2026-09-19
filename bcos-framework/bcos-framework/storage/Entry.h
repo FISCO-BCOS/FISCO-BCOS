@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Common.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -11,7 +10,6 @@
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <array>
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -21,7 +19,6 @@
 #include <range/v3/range/concepts.hpp>
 #include <string>
 #include <string_view>
-#include <thread>
 #include <type_traits>
 #include <typeindex>
 
@@ -106,7 +103,12 @@ public:
     SmallBuffer() = default;
     SmallBuffer(const char* data, size_t size) : m_size(static_cast<uint8_t>(size))
     {
-        std::memcpy(m_buffer.data(), data, size);
+        // data may be nullptr for an empty view; memcpy forbids null arguments
+        // even when size is 0
+        if (size > 0)
+        {
+            std::memcpy(m_buffer.data(), data, size);
+        }
     }
     const char* data() const noexcept { return m_buffer.data(); }
     size_t size() const noexcept { return m_size; }
@@ -207,7 +209,7 @@ public:
 
 // ─── tag_invoke infrastructure ─────────────────────────────────────
 // ADL anchor declared in bcos::storage.  Users must overload tag_invoke
-// in their own namespaces to provide encode/decode for their types.
+// in their own namespaces to provide encode for their types.
 void tag_invoke();  // not defined — poison pill to prevent unqualified calls
 
 // ─── Encode customization point object ────────────────────────────
@@ -223,28 +225,16 @@ struct encode_t
 };
 inline constexpr encode_t encode{};
 
-// ─── Decode customization point object ────────────────────────────
-// Requires: tag_invoke(decode_t, std::type_identity<T>, bytesConstRef)
-// to be defined in T's associated namespace.
-struct decode_t
-{
-    template <typename T>
-    T operator()(std::type_identity<T>, bytesConstRef data) const
-    {
-        return tag_invoke(*this, std::type_identity<T>{}, data);
-    }
-};
-inline constexpr decode_t decode{};
-
 // ─── Encodable concept ─────────────────────────────────────────────
-// Satisfied when tag_invoke(encode_t, v, sink) and
-// tag_invoke(decode_t, type_identity<T>{}, bytes) are well-formed.
+// Satisfied when tag_invoke(encode_t, v, sink) is well-formed.
+// Decode is intentionally NOT part of the protocol: nothing in Entry
+// reconstructs a typed value from raw bytes (getTyped() only returns a
+// pointer when the entry already holds a T).
 template <typename T>
-concept Encodable = requires(const T& v, bytesConstRef bytes) {
+concept Encodable = requires(const T& v) {
     {
         encode(v, [](bytesConstRef) {})
     } -> std::same_as<void>;
-    { decode(std::type_identity<T>{}, bytes) } -> std::same_as<T>;
 };
 
 // ─── Typed holder model ────────────────────────────────────────────
@@ -292,44 +282,36 @@ public:
     Entry() = default;
     explicit Entry(auto input) { set(std::move(input)); }
 
-    Entry(const Entry& other) : m_buffer(other.m_buffer)
-    {
-        // Propagate TYPED state so copies of typed entries hit the fast path.
-        // LOCKED state is not copied — the source must not be under concurrent
-        // mutation during copy (that would be UB regardless).
-        if (other.m_decodeState.load(std::memory_order_acquire) == DECODE_TYPED)
-            m_decodeState.store(DECODE_TYPED, std::memory_order_relaxed);
-    }
-    Entry(Entry&& other) noexcept : m_buffer(std::move(other.m_buffer))
-    {
-        if (other.m_decodeState.load(std::memory_order_acquire) == DECODE_TYPED)
-            m_decodeState.store(DECODE_TYPED, std::memory_order_relaxed);
-    }
-    bcos::storage::Entry& operator=(const Entry& other)
-    {
-        m_buffer = other.m_buffer;
-        // Propagate TYPED state; if other is BYTE we keep current state.
-        if (other.m_decodeState.load(std::memory_order_acquire) == DECODE_TYPED)
-            m_decodeState.store(DECODE_TYPED, std::memory_order_relaxed);
-        return *this;
-    }
-    bcos::storage::Entry& operator=(Entry&& other) noexcept
-    {
-        m_buffer = std::move(other.m_buffer);
-        if (other.m_decodeState.load(std::memory_order_acquire) == DECODE_TYPED)
-            m_decodeState.store(DECODE_TYPED, std::memory_order_relaxed);
-        return *this;
-    }
+    // m_buffer is the sole member: defaulted special members preserve the
+    // held model (typed entries stay typed).  Move is noexcept thanks to
+    // the facade's nothrow relocation support.
+    Entry(const Entry& other) = default;
+    Entry(Entry&& other) noexcept = default;
+    bcos::storage::Entry& operator=(const Entry& other) = default;
+    bcos::storage::Entry& operator=(Entry&& other) noexcept = default;
     ~Entry() noexcept = default;
 
     // ── Accessors ──────────────────────────────────────────────────
-    // NOTE: get()/data()/size() do not participate in the decode state
-    // machine.  They read m_buffer directly without acquiring DECODE_LOCKED.
-    // Concurrent get() + getTyped() (slow path) on the same Entry is a data
-    // race — callers must ensure external synchronization or use getTyped()
-    // exclusively once typed access begins.
+    // NOTE: get()/data()/size() read m_buffer directly.  Entry performs no
+    // internal synchronization — concurrent access to the same Entry is a
+    // data race; callers must ensure external synchronization.
 
     std::string_view get() const&;
+    // Returns the buffer content as a view type T (default std::string_view),
+    // or std::nullopt when the entry does not hold a byte buffer
+    // (EMPTY / DELETED / typed).  T must be a non-owning view
+    // (IsByteBufferViewV) constructible from (const value_type*, size_t) —
+    // e.g. std::string_view, bytesConstRef, std::span<const byte>.
+    // Owning types like std::string are rejected at compile time.
+    // Unlike get(), an engaged empty value unambiguously means
+    // "holds an empty buffer".  The returned view aliases the entry's
+    // internal storage — same lifetime rules as get().
+    template <ByteBuffer T = std::string_view>
+        requires(IsByteBufferViewV<T> && std::constructible_from<T,
+                     const typename std::remove_cvref_t<T>::value_type*, std::size_t>)
+    std::optional<T> getBuffer() const
+        noexcept(std::is_nothrow_constructible_v<T,
+            const typename std::remove_cvref_t<T>::value_type*, std::size_t>);
     const char* data() const&;
     int32_t size() const;
 
@@ -378,6 +360,9 @@ public:
     }
 
     // ── Typed storage API ──────────────────────────────────────────
+    // Typed access never decodes: getTyped<T>() returns a pointer only if
+    // the entry already holds a T stored via setTyped<T>(); byte-model
+    // entries and type mismatches return nullptr.
     template <Encodable T>
     void setTyped(T value);
 
@@ -386,6 +371,14 @@ public:
 
     template <Encodable T>
     bool holdsType() const noexcept;
+
+    // True when the entry holds a byte buffer (set()/decode()).  Typed
+    // entries, DELETED tombstones and EMPTY entries return false.
+    bool holdsBuffer() const noexcept
+    {
+        return m_buffer.has_value() && m_buffer->getTypedPtr() == nullptr &&
+            m_buffer->status() != ENTRY_DELETED;
+    }
 
     // Encode for persistence via the facade's encode convention.
     // Passes raw bytes through the sink callback, avoiding intermediate
@@ -438,44 +431,6 @@ private:
 
     mutable Holder m_buffer;
 
-    // ── Decode synchronization ────────────────────────────────────
-    // Tri-state atomic for lazy-decode in getTyped<T>().
-    //
-    // acquire-release ordering: store(DECODE_TYPED, release) pairs with
-    // load(acquire)==DECODE_TYPED in the fast path, guaranteeing visibility
-    // of m_buffer writes on weakly-ordered architectures.
-    static constexpr int DECODE_BYTE = 0;    // m_buffer holds a byte model (unlocked)
-    static constexpr int DECODE_LOCKED = 1;  // decode in progress — m_buffer being written
-    static constexpr int DECODE_TYPED =
-        2;  // m_buffer holds TypedHolderModel<T> (stable, immutable)
-    mutable std::atomic<int> m_decodeState{DECODE_BYTE};
-
-    // CAS-spin to acquire exclusive access to m_buffer.
-    // Returns the state that was replaced: DECODE_BYTE or DECODE_TYPED.
-    // Spins with backoff if another thread holds DECODE_LOCKED.
-    int acquireDecodeLock() const
-    {
-        int spins = 0;
-        while (true)
-        {
-            int expected = m_decodeState.load(std::memory_order_relaxed);
-            if (expected != DECODE_LOCKED)
-            {
-                if (m_decodeState.compare_exchange_weak(expected, DECODE_LOCKED,
-                        std::memory_order_acquire, std::memory_order_relaxed))
-                {
-                    return expected;
-                }
-                continue;
-            }
-            if (++spins > 64)
-            {
-                spins = 0;
-                std::this_thread::yield();
-            }
-        }
-    }
-
     // Unit-test accessor.
     friend const Holder& entryTestHolder(const Entry& e) noexcept { return e.m_buffer; }
 };
@@ -485,9 +440,7 @@ private:
 template <Encodable T>
 void Entry::setTyped(T value)
 {
-    acquireDecodeLock();  // CAS BYTE→LOCKED or TYPED→LOCKED; spin-waits if LOCKED
     m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(TypedHolderModel<T>{std::move(value)});
-    m_decodeState.store(DECODE_TYPED, std::memory_order_release);
 }
 
 template <Encodable T>
@@ -498,74 +451,15 @@ const T* Entry::getTyped() const
         return nullptr;
     }
 
-    // ── Fast path: already typed, lock-free ───────────────────────
-    // DECODE_TYPED: m_buffer is typed AND immutable (no concurrent
-    // writer will ever modify it).  acquire-load synchronizes with the
-    // release-store in setTyped() or the slow-path decode completion,
-    // guaranteeing full visibility of the TypedHolderModel<T> inline data.
-    if (m_decodeState.load(std::memory_order_acquire) == DECODE_TYPED)
+    // No decoding here: only entries stored via setTyped<T>() are typed.
+    // Byte-model entries (e.g. loaded from storage) and type mismatches
+    // return nullptr — callers must decode the raw bytes explicitly.
+    const auto* ptr = m_buffer->getTypedPtr();
+    if (ptr == nullptr || m_buffer->typeIndex() != std::type_index(typeid(T)))
     {
-        auto* ptr = m_buffer->getTypedPtr();
-        if (ptr != nullptr && m_buffer->typeIndex() == std::type_index(typeid(T)))
-        {
-            return static_cast<const T*>(ptr);
-        }
-        // Rare edge case: DECODE_TYPED but getTypedPtr() is null.
-        // Can happen if set() overwrites a previously-typed entry
-        // (m_buffer now holds bytes, state is stale).  Fall through
-        // to the CAS loop which resets state→DECODE_BYTE and retries.
-    }
-
-    // ── Slow path: CAS-based synchronization ──────────────────────
-    int prevState = acquireDecodeLock();
-
-    // RAII guard: on exception (e.g. T ctor throws on corrupt data),
-    // reset state to DECODE_BYTE so future callers can retry.
-    struct StateGuard
-    {
-        std::atomic<int>* state;
-        bool dismissed = false;
-        ~StateGuard()
-        {
-            if (!dismissed) [[unlikely]]
-                state->store(DECODE_BYTE, std::memory_order_release);
-        }
-    } guard{std::addressof(m_decodeState)};
-
-    // Double-check m_buffer regardless of prevState.  Handles:
-    // - Another thread finished decoding while we waited (prevState==TYPED).
-    // - Copy/move of a typed entry where state is stale BYTE (prevState==BYTE
-    //   but m_buffer already holds TypedHolderModel).
-    if (const auto* ptr = m_buffer->getTypedPtr(); ptr != nullptr)
-    {
-        if (m_buffer->typeIndex() == std::type_index(typeid(T)))
-        {
-            guard.dismissed = true;
-            m_decodeState.store(DECODE_TYPED, std::memory_order_release);
-            return static_cast<const T*>(ptr);
-        }
-        // Typed, but wrong type — immutable.
-        guard.dismissed = true;
-        m_decodeState.store(DECODE_TYPED, std::memory_order_release);
         return nullptr;
     }
-
-    // Not typed — must be byte-buffer.  Perform the lazy decode.
-    auto view = get();
-    if (view.empty())
-    {
-        guard.dismissed = true;
-        m_decodeState.store(DECODE_BYTE, std::memory_order_release);
-        return nullptr;
-    }
-
-    auto obj = bcos::storage::decode(std::type_identity<T>{},
-        bytesConstRef(reinterpret_cast<const bcos::byte*>(view.data()), view.size()));
-    m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(TypedHolderModel<T>{std::move(obj)});
-
-    guard.dismissed = true;
-    m_decodeState.store(DECODE_TYPED, std::memory_order_release);
-    return static_cast<const T*>(m_buffer->getTypedPtr());
+    return static_cast<const T*>(ptr);
 }
 
 template <Encodable T>
@@ -576,6 +470,22 @@ bool Entry::holdsType() const noexcept
         return false;
     }
     return m_buffer->typeIndex() == std::type_index(typeid(T));
+}
+
+template <ByteBuffer T>
+    requires(IsByteBufferViewV<T> && std::constructible_from<T,
+                 const typename std::remove_cvref_t<T>::value_type*, std::size_t>)
+std::optional<T> Entry::getBuffer() const
+    noexcept(std::is_nothrow_constructible_v<T,
+        const typename std::remove_cvref_t<T>::value_type*, std::size_t>)
+{
+    using RawType = std::remove_cvref_t<T>;
+    if (!holdsBuffer())
+    {
+        return std::nullopt;
+    }
+    return RawType{reinterpret_cast<const typename RawType::value_type*>(m_buffer->data()),
+        m_buffer->size()};
 }
 
 }  // namespace bcos::storage
