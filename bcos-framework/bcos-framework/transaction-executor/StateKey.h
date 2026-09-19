@@ -1,6 +1,7 @@
 #pragma once
 #include "../storage/Entry.h"
 #include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/FixedBytes.h"
 #include "bcos-utilities/ThreeWay4Apple.h"
 #include <boost/throw_exception.hpp>
 #include <compare>
@@ -43,10 +44,24 @@ public:
     // split inside the table name. The binary form is fixed-length, and a ':' at
     // exactly that offset is unambiguous: the legacy 40-hex form holds only hex
     // digits there, never ':'. Everything else keeps first-':' semantics.
+    //
+    // Overall invariant: this rule assumes the "/apps/" tables come in exactly two
+    // shapes — 20 raw address bytes or the 40 lowercase hex chars of the same address.
+    // The encoding is NOT prefix-free: a shorter "/apps/" table whose name plus the
+    // start of its key happens to place a ':' at the fixed offset is misread as a
+    // binary-address table (e.g. "/apps/foo" + key "<16 chars>:bar" splits as table
+    // "/apps/foo:<16 chars>"). No reachable case exists today — the BFS directory
+    // tables under /apps/ never carry ':' in their keys — and the known-ambiguity
+    // test in TestKeyPrefixes.cpp pins the current behaviour.
+    //
+    // Constants: the 20 is bcos::Address::SIZE. The "/apps/" prefix is deliberately a
+    // literal: it is ledger::SYS_DIRECTORY::USER_APPS (ledger/LedgerTypeDef.h), but
+    // LedgerTypeDef.h includes this header, so naming the constant here would close an
+    // include cycle.
     static size_t splitPosition(std::string_view tableAndKey) noexcept
     {
-        constexpr std::string_view appsPrefix = "/apps/";
-        constexpr size_t rawAddressTableSize = appsPrefix.size() + 20;
+        constexpr std::string_view appsPrefix = "/apps/";  // ledger::SYS_DIRECTORY::USER_APPS
+        constexpr size_t rawAddressTableSize = appsPrefix.size() + bcos::Address::SIZE;
         if (tableAndKey.size() > rawAddressTableSize && tableAndKey.starts_with(appsPrefix) &&
             tableAndKey[rawAddressTableSize] == ':')
         {

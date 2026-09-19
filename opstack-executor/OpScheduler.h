@@ -48,6 +48,7 @@
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
+#include <bcos-transaction-scheduler/BaselineSchedulerMPTHelpers.h>
 #include <bcos-transaction-scheduler/HistoricalCallStorage.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <bcos-utilities/Common.h>
@@ -1324,6 +1325,12 @@ private:
         ledgerConfig->setBlockNumber(number);
         bcos::ledger::Features features;
         co_await bcos::ledger::readFromStorage(features, view, number);
+        // Per-block raw_address guard: the boot check (validateMPTFlagMatrix) rejects
+        // raw_address + feature_l2_ethereum_compat, but raw_address can activate mid-chain
+        // via governance after boot. The OP bridge is hex-only (Storage2State.h), so
+        // production must halt loudly instead of splitting mode-aware RPC reads from
+        // hex-only executor writes.
+        bcos::scheduler_v1::rejectRawAddressOnEngineLanes(features, number);
         ledgerConfig->setFeatures(features);
         co_return ledgerConfig;
     }

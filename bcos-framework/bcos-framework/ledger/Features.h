@@ -142,13 +142,20 @@ public:
                                                     // hasher's hash("") (keccak on a non-SM
                                                     // chain) for a code-less live account, 0 for
                                                     // an absent/empty one; was true / 0.
+        // Gates the hex-fallback account-table read (AddressTableMode::BinaryWithHexFallback,
+        // EVMAccount.h): the fallback changes execution semantics (a pre-activation hex row
+        // becomes visible after feature_raw_address turns on), so it needs its own on-chain
+        // flag rather than riding on feature_raw_address's activation block alone. Only when
+        // this flag is on does a chain that activated feature_raw_address mid-chain
+        // (activationBlockOf > 0) enable the fallback read.
+        bugfix_raw_address_hex_fallback = 62,
     };
 
     // feature_flags bit = enum value. Pin the newest flag so a value beyond
     // magic_enum's default reflection range [-128,127] is caught at compile time.
     // Values must stay CONTIGUOUS from zero: m_flags indexes by value order,
     // toFlagsNumber packs bit = enum value — a gap desyncs the two encodings.
-    static_assert(magic_enum::enum_contains(Flag::bugfix_eip161_1052_account_semantics),
+    static_assert(magic_enum::enum_contains(Flag::bugfix_raw_address_hex_fallback),
         "newest Flag fell outside magic_enum's reflection range — check enum values");
     static_assert(magic_enum::enum_integer(
                       magic_enum::enum_value<Flag>(magic_enum::enum_count<Flag>() - 1)) <= 127,

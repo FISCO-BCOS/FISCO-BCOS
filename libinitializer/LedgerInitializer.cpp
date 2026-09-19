@@ -1,7 +1,9 @@
 #include "LedgerInitializer.h"
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
+#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-task/Wait.h>
 #include <bcos-transaction-scheduler/BaselineSchedulerMPTHelpers.h>
+#include <bcos-utilities/BoostLog.h>
 #include <legacy/bcos-ledger/LedgerImpl.h>
 #include <legacy/bcos-storage/StorageWrapperImpl.h>
 #include <future>
@@ -47,6 +49,20 @@ std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::buil
     }
     auto features = bcos::task::syncWait(ledger->fetchAllFeatures(blockNumber + 1));
     bcos::scheduler_v1::validateMPTFlagMatrix(features);
+
+    // One-time startup visibility for the raw-address hex fallback (accountTableMode):
+    // BinaryWithHexFallback changes account-table reads chain-wide (binary table first, hex
+    // fallback for pre-activation rows), so log the mode and the activation block once at
+    // boot — never on the per-block / per-transaction paths that consume the mode.
+    if (bcos::ledger::account::accountTableMode(features) ==
+        bcos::ledger::account::AddressTableMode::BinaryWithHexFallback)
+    {
+        BCOS_LOG(INFO) << LOG_BADGE("LedgerInitializer")
+                       << LOG_DESC("feature_raw_address active with hex-table fallback reads")
+                       << LOG_KV("activationBlock",
+                              features.activationBlockOf(
+                                  bcos::ledger::Features::Flag::feature_raw_address));
+    }
 
     // OP mode is a genesis-only property: executor_version >= OPSTACK requires the
     // genesis-only feature_l2_ethereum_compat and must itself be genesis-bound. The value

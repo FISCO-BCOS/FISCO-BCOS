@@ -51,8 +51,11 @@ namespace bcos::ledger::mpt
 // Code                  : "code" (enters the MPT indirectly via its paired codeHash row)
 // Storage slot          : a 32-byte binary row key (length 32, not a field name)
 //
-// The table prefix "/apps/" contains no ':' so the first ':' is always the
-// StateKey separator; we split there.
+// The table/key split is NOT a plain first-':' split under the raw-address layout: the
+// "/apps/" prefix itself contains no ':', but a 20-byte binary address can hold 0x3a (':')
+// verbatim, so the first ':' of "<table>:<key>" may sit INSIDE the table name. The split
+// rule lives in StateKey.h splitPosition (a fixed-offset rule for the two known /apps/
+// shapes); this parser only ever sees the already-split table name.
 
 inline constexpr std::string_view APPS_TABLE_PREFIX = "/apps/";
 inline constexpr size_t ADDRESS_HEX_LEN = 40;  // 20-byte address as hex (pre-feature layout)
@@ -86,6 +89,10 @@ inline bool isKnownBcosExtensionField(std::string_view rowKey)
 /// bytes) has no producer here on purpose: the MPT layer only ever PARSES table names
 /// (parseAccountTable); names are produced by EVMAccount's AddressTableMode routing, which owns
 /// the feature gate.
+///
+/// Has a PRODUCTION caller — the OP lane bridge (opstack-executor/Storage2StateHelpers.h
+/// accountTableName delegates here), which needs the hex name independent of any feature —
+/// so this helper stays in the production header.
 inline std::string accountTableName(bcos::Address const& addr)
 {
     std::string table;
@@ -101,9 +108,20 @@ inline std::string accountTableName(bcos::Address const& addr)
 ///     taken verbatim — any byte pattern (including ':' or non-ASCII) is a valid address, so no
 ///     validation applies;
 ///   - "/apps/" + 40 hex chars: the legacy layout, hex-decoded.
-/// Anything else — system tables (/sys/, /tables/, _accessAuth), BCOS private short-name
-/// contracts, a 40-char suffix with a non-hex digit, any other length — is nullopt: those rows
-/// never enter the MPT. Never throws.
+/// Anything else — system tables (/sys/, /tables/, _accessAuth), a 40-char suffix with a
+/// non-hex digit, any other length — is nullopt: those rows never enter the MPT. Never throws.
+///
+/// KNOWN LIMITATION, loud not silent: a "/apps/" suffix of exactly 20 bytes is taken as a
+/// binary address whatever its content, so a non-account table whose suffix happens to be 20
+/// bytes is misclassified as an account table. The only reachable producer of such a name is
+/// the BFS link table "/apps/<name>/<version>" (bcos-executor BFSPrecompiled, also registered
+/// in the v1 transaction-executor's PrecompiledManager at 0x100e, so it CAN appear in a v1
+/// chain's block delta) when name + '/' + version totals 20 chars. The misclassification
+/// fails LOUD, not silently: a link table's rows ("type"/"sub"/"link_address"/"link_abi")
+/// are neither 32-byte slots nor known account fields, so classifyRowKey reports
+/// UnknownField and the MPT build throws instead of committing a root over misread state.
+/// Short-name contract tables of the legacy (v0) executor never reach this scan: v1 writes
+/// account tables by address only.
 inline std::optional<bcos::Address> parseAccountTable(std::string_view table)
 {
     if (!table.starts_with(APPS_TABLE_PREFIX))

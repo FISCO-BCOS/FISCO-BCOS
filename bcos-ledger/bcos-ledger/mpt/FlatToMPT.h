@@ -115,6 +115,16 @@ struct FlatAccountMeta
 /// the account leaf encodes codeHash verbatim, so a zero h256 here would produce a wrong leaf
 /// hash. A codeHash row that is present but decodes to zero violates the executor contract
 /// (codeHash = keccak(code), never zero) and throws rather than committing a forking leaf.
+/// Known divergence, currently unreachable: this address-taking EVMAccount constructor routes
+/// the c_systemTxsAddress members to /sys/ (EVMAccount.h), while the OP lane's Storage2State
+/// bridge deliberately writes those addresses under /apps/ like any other account (in Ethereum
+/// they ARE ordinary accounts; Storage2State.h applyModifiedEntry explains). A first-touch
+/// back-fill for a system address would therefore read /sys/ and miss rows the bridge wrote to
+/// /apps/. Two facts keep that unreachable today: in scenario B a first-touch account has NO
+/// flat rows at all (account state lives in the committed MPT only, so there is nothing to
+/// back-fill), and the fields this block did write come from the block's own delta rows, which
+/// cover meta ahead of any flat read. Resolve together with the bridge's mode-aware naming
+/// (the same follow-up the raw_address guards in BaselineSchedulerMPTHelpers.h point at).
 bcos::task::Task<FlatAccountMeta> readFlatAccountMeta(
     auto& flatView, bcos::Address const& addr, account::AddressTableMode mode)
 {

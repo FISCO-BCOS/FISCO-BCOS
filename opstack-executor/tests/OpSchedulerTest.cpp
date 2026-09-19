@@ -1664,6 +1664,49 @@ BOOST_AUTO_TEST_CASE(CallAtBlockRefusesNonScenarioB)
     BOOST_CHECK(receipt == nullptr);
 }
 
+/// The per-block raw_address guard (rejectRawAddressOnEngineLanes, called from
+/// loadLedgerConfig): feature_raw_address is not genesis-only, so a mid-chain governance
+/// activation slips past the boot-time validateMPTFlagMatrix check. The OP bridge is
+/// hex-only (Storage2State), so execute must halt loudly instead of splitting mode-aware
+/// RPC reads from hex-only executor writes.
+BOOST_AUTO_TEST_CASE(ExecuteBlockRefusesWhenRawAddressActive)
+{
+    Fixture f;
+    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader());
+    // The mid-chain activation shape the boot guard cannot see: the L2 flag at genesis
+    // (the lane's normal state), raw_address appearing at block 1.
+    seedL2CompatFeature(f.multiLayerStorage);
+    {
+        auto view = f.multiLayerStorage.fork();
+        view.newMutable();
+        bcos::ledger::Features features;
+        features.set(bcos::ledger::Features::Flag::feature_raw_address);
+        bcos::task::syncWait(bcos::ledger::writeToStorage(features, view, 1));
+        bcos::task::syncWait(f.multiLayerStorage.mergeView(std::move(view)));
+    }
+
+    auto depTx = makeDeposit();
+    bcos::bytes depEnv = encodeDepositEnvelope(depTx);
+    auto out = executeOpBlock(f, makeHeader(), {depEnv}, /*verify=*/true);
+    BOOST_REQUIRE(out.err != nullptr);
+    BOOST_CHECK(out.err->errorMessage().find("hex-only") != std::string::npos);
+    BOOST_CHECK(out.header == nullptr);
+}
+
+/// Control for the guard above: the same block WITHOUT raw_address executes fine (no L2 flag
+/// here, so the run stays on the full-rebuild path and needs no persisted genesis trie).
+BOOST_AUTO_TEST_CASE(ExecuteBlockAcceptedWithoutRawAddress)
+{
+    Fixture f;
+    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader());
+
+    auto depTx = makeDeposit();
+    bcos::bytes depEnv = encodeDepositEnvelope(depTx);
+    auto out = executeOpBlock(f, makeHeader(), {depEnv}, /*verify=*/true);
+    BOOST_CHECK(out.err == nullptr);
+    BOOST_CHECK(out.header != nullptr);
+}
+
 /// The empty-root gate: a historical header with stateRoot == 0 (never recorded) must refuse
 /// loudly with InvalidStatus — not walk an "empty" trie and answer as if every account were
 /// absent. Blocks are committed with the flag OFF (full-rebuild roots, no trie reads needed);
@@ -2250,7 +2293,8 @@ BOOST_AUTO_TEST_CASE(IncrementalMPTRootMatchesFullRebuild)
         {
             bcos::scheduler_v1::ViewNodeStorage<ViewType> nodeStorage(view);
             delta = bcos::task::syncWait(
-                bcos::ledger::mpt::buildAndCollect(nodeStorage, parentRoot, view, /*l2Mode=*/true));
+                bcos::ledger::mpt::buildAndCollect(nodeStorage, parentRoot, view,
+                    /*l2Mode=*/true, bcos::ledger::account::AddressTableMode::Hex));
         }
         catch (std::exception const& e)
         {

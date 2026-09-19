@@ -5,12 +5,14 @@
 using namespace bcos;
 using namespace bcos::scheduler_v1;
 
-// feature_raw_address and the MPT state root COEXIST: the MPT delta scan classifies both
-// account-table layouts (Classify.h parseAccountTable accepts the 40-hex and the 20-byte
-// raw-address forms), and the first-touch flat back-fill reads through the chain's
-// AddressTableMode (FlatToMPT.h readFlatAccountMeta). These tests pin the acceptance — the
-// former mutual-exclusion guard (rejectRawAddressWithMPT and the raw_address arm of
-// validateMPTFlagMatrix) is deleted, not relaxed.
+// feature_raw_address and the MPT state root coexist ONLY on the mode-aware mainline (v1
+// baseline) lane: the MPT delta scan classifies both account-table layouts (Classify.h
+// parseAccountTable accepts the 40-hex and the 20-byte raw-address forms), and the
+// first-touch flat back-fill reads through the chain's AddressTableMode (FlatToMPT.h
+// readFlatAccountMeta). The hex-only lanes (OP / Eth engine) keep a loud-fail guard:
+// validateMPTFlagMatrix rejects raw_address + feature_l2_ethereum_compat at boot, and
+// rejectRawAddressOnEngineLanes re-checks raw_address per block (mid-chain governance
+// activation is invisible to the boot guard).
 BOOST_AUTO_TEST_SUITE(RawAddressMPTGuardSuite)
 
 BOOST_AUTO_TEST_CASE(FlagMatrix_RawAddressWithMPTStateRootAccepted)
@@ -22,13 +24,16 @@ BOOST_AUTO_TEST_CASE(FlagMatrix_RawAddressWithMPTStateRootAccepted)
     BOOST_CHECK_NO_THROW(validateMPTFlagMatrix(features));
 }
 
-BOOST_AUTO_TEST_CASE(FlagMatrix_RawAddressWithL2AtGenesisAccepted)
+// raw_address + L2 is rejected again: the OP lane's Storage2State bridge and the
+// ethereum-executor are hex-only, so the combination would split mode-aware RPC reads from
+// hex-only executor writes.
+BOOST_AUTO_TEST_CASE(FlagMatrix_RawAddressWithL2AtGenesisRejected)
 {
     ledger::Features features;
     features.set(ledger::Features::Flag::feature_raw_address);
     features.set(ledger::Features::Flag::feature_l2_ethereum_compat);
     features.setActivationBlock(ledger::Features::Flag::feature_l2_ethereum_compat, 0);
-    BOOST_CHECK_NO_THROW(validateMPTFlagMatrix(features));
+    BOOST_CHECK_THROW(validateMPTFlagMatrix(features), InvalidMPTFlagMatrix);
 }
 
 BOOST_AUTO_TEST_CASE(FlagMatrix_RawAddressAlonePasses)
@@ -40,7 +45,7 @@ BOOST_AUTO_TEST_CASE(FlagMatrix_RawAddressAlonePasses)
 
 BOOST_AUTO_TEST_CASE(FlagMatrix_MPTFlagsWithoutRawAddressStillPass)
 {
-    // Regression: the raw_address acceptance must not disturb the previously-legal matrices.
+    // Regression: the raw_address rejection must not disturb the previously-legal matrices.
     ledger::Features scenarioA;
     scenarioA.set(ledger::Features::Flag::feature_mpt_state_root);
     scenarioA.setActivationBlock(ledger::Features::Flag::feature_mpt_state_root, 500);
@@ -52,8 +57,8 @@ BOOST_AUTO_TEST_CASE(FlagMatrix_MPTFlagsWithoutRawAddressStillPass)
     BOOST_CHECK_NO_THROW(validateMPTFlagMatrix(scenarioB));
 }
 
-// The surviving half of validateMPTFlagMatrix is scenario B's genesis-only rule; it applies
-// with or without raw_address.
+// The other surviving half of validateMPTFlagMatrix is scenario B's genesis-only rule; it
+// applies with or without raw_address.
 BOOST_AUTO_TEST_CASE(FlagMatrix_L2MidChainStillThrowsEvenWithRawAddress)
 {
     ledger::Features features;
@@ -61,6 +66,28 @@ BOOST_AUTO_TEST_CASE(FlagMatrix_L2MidChainStillThrowsEvenWithRawAddress)
     features.set(ledger::Features::Flag::feature_l2_ethereum_compat);
     features.setActivationBlock(ledger::Features::Flag::feature_l2_ethereum_compat, 42);
     BOOST_CHECK_THROW(validateMPTFlagMatrix(features), InvalidMPTFlagMatrix);
+}
+
+// The per-block guard on the hex-only lanes: raw_address throws whatever the MPT flags say
+// (the OP/Eth executors are hex-only with or without an MPT root); without raw_address every
+// matrix passes.
+BOOST_AUTO_TEST_CASE(EngineLaneGuard_RawAddressThrowsAtAnyBlock)
+{
+    ledger::Features features;
+    features.set(ledger::Features::Flag::feature_raw_address);
+    BOOST_CHECK_THROW(rejectRawAddressOnEngineLanes(features, 0), InvalidMPTFlagMatrix);
+    BOOST_CHECK_THROW(rejectRawAddressOnEngineLanes(features, 1000), InvalidMPTFlagMatrix);
+
+    ledger::Features scenarioA;
+    scenarioA.set(ledger::Features::Flag::feature_raw_address);
+    scenarioA.set(ledger::Features::Flag::feature_mpt_state_root);
+    scenarioA.setActivationBlock(ledger::Features::Flag::feature_mpt_state_root, 100);
+    BOOST_CHECK_THROW(rejectRawAddressOnEngineLanes(scenarioA, 101), InvalidMPTFlagMatrix);
+
+    ledger::Features noRaw;
+    noRaw.set(ledger::Features::Flag::feature_l2_ethereum_compat);
+    noRaw.setActivationBlock(ledger::Features::Flag::feature_l2_ethereum_compat, 0);
+    BOOST_CHECK_NO_THROW(rejectRawAddressOnEngineLanes(noRaw, 1000));
 }
 
 // shouldBuildMPT stays a PURE state-root predicate: raw_address changes the account-table

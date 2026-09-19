@@ -19,11 +19,14 @@
 //   * account tables are "/apps/<hex(addr)>" paths (mainline MPT classifier), same for every
 //     address incl. c_systemTxsAddress. The bridge derives the hex name itself
 //     (Storage2StateHelpers.h accountTableName) and is NOT feature_raw_address-aware: with
-//     raw_address active the mainline executor routes accounts to 20-byte binary tables, and
-//     this bridge would not find them. The MPT layer no longer rejects the flag combination
-//     (the raw_address/MPT guard is gone — parseAccountTable classifies both layouts), so the
-//     constraint now stands on this bridge alone; keep feature_raw_address off for OP lanes
-//     until the bridge grows mode-aware naming.
+//     raw_address active the mode-aware read paths route accounts to 20-byte binary tables,
+//     and this bridge would not find them. That constraint is now enforced by guards, not
+//     by this comment: validateMPTFlagMatrix refuses raw_address +
+//     feature_l2_ethereum_compat at boot (LedgerInitializer), and
+//     rejectRawAddressOnEngineLanes (called from OpScheduler::loadLedgerConfig) halts block
+//     production if governance activates raw_address mid-chain — both in
+//     BaselineSchedulerMPTHelpers.h. Keep feature_raw_address off for OP lanes until the
+//     bridge grows mode-aware naming.
 //   * nested syncWait is safe only inside the x_state-serialized segment (backends complete
 //     synchronously in-thread).
 

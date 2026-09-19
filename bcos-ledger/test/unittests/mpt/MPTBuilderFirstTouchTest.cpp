@@ -123,7 +123,7 @@ BOOST_AUTO_TEST_CASE(FirstTouchOfBrandNewAccountWithoutStorage)
     writeFlatRow(view, accountFieldKey(addr, ROW_CODE_HASH), codeHashEntry(makeHash(0xC0)));
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));
@@ -158,7 +158,7 @@ BOOST_AUTO_TEST_CASE(FirstTouchDoesNotBackfillColdSlots)
     writeFlatRow(view, accountSlotKey(addr, hotSlot), slotEntry(bcos::bytes{0x99}));
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));
@@ -191,7 +191,7 @@ BOOST_AUTO_TEST_CASE(UnwrittenFieldsComeFromFlatWrittenOnesWin)
     writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("5"));
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));
@@ -215,7 +215,7 @@ BOOST_AUTO_TEST_CASE(MissingCodeHashRowMeansEmptyCodeHash)
     writeFlatRow(view, accountFieldKey(addr, ROW_BALANCE), makeEntry("10"));
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));
@@ -239,7 +239,7 @@ BOOST_AUTO_TEST_CASE(ZeroCodeHashRowInFlatThrows)
     writeFlatRow(view, accountFieldKey(addr, ROW_BALANCE), makeEntry("10"));
 
     BOOST_CHECK_EXCEPTION(
-        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false)),
+        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex)),
         MPTInvariantViolation,
         [](auto const& e) { return errinfoContains(e, "decodes to a zero h256"); });
 }
@@ -257,7 +257,7 @@ BOOST_AUTO_TEST_CASE(DeleteOfNeverWrittenSlotIsNoop)
     deleteFlatRowLogically(view, accountSlotKey(addr, slotKeyAt(3)));
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));
@@ -286,13 +286,13 @@ BOOST_AUTO_TEST_CASE(NextBlockContinuesIncrementallyOverThePartialTrie)
     auto viewN = makeFlatView(flatBackend);
     writeFlatRow(viewN, accountSlotKey(addr, slotA), slotEntry(bcos::bytes{0x0A}));
     auto outputN =
-        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), viewN, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), viewN, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     // Block N+1: subsequent-touch with slot B on top of block N's root.
     auto viewN1 = makeFlatView(flatBackend);
     writeFlatRow(viewN1, accountSlotKey(addr, slotB), slotEntry(bcos::bytes{0x0B}));
     auto outputN1 =
-        bcos::task::syncWait(buildAndCollect(storage, outputN.stateRoot, viewN1, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, outputN.stateRoot, viewN1, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     MPTReadView<NodeStorage> readView(storage, outputN1.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));

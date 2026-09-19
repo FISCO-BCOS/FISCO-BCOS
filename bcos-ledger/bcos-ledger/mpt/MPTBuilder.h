@@ -434,7 +434,9 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
 ///                        activated feature_raw_address mid-chain keeps pre-activation rows in
 ///                        legacy hex tables, which the BinaryWithHexFallback mode still reaches.
 ///                        The delta SCAN needs no mode — parseAccountTable accepts both table
-///                        layouts by length.
+///                        layouts by length. No default on purpose (MPTAccount.h's constructor
+///                        rule): a guessed mode makes the first-touch back-fill silently miss on
+///                        a raw-address chain.
 /// @param trackRefCounts  false leaves the returned delta's refCountDeltas EMPTY (the per-hash
 ///                        tally is skipped) — for callers whose CommitObserver does not count
 ///                        references (CommitObserver::needsRefCountDeltas). stateRoot, newNodes,
@@ -449,9 +451,7 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
 ///         either mode (spec §5.2).
 template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage>
 bcos::task::Task<MPTDeltaLayer> buildAndCollect(Storage& nodeStorage, bcos::h256 parentStateRoot,
-    auto& flatView, bool l2Mode,
-    bcos::ledger::account::AddressTableMode accountMode =
-        bcos::ledger::account::AddressTableMode::Hex,
+    auto& flatView, bool l2Mode, bcos::ledger::account::AddressTableMode accountMode,
     bool trackRefCounts = false)
 {
     MPTDeltaLayer output;
