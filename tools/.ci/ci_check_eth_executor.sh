@@ -68,8 +68,8 @@ perl -p -i -e 's/version=1/version=2/' config.genesis
 perl -p -i -e 's/^(\s*is_serial_execute=true)/$1\n    evm_revision=cancun/' config.genesis
 
 # L2 mode is required so genesis [alloc] can pre-fund an EOA sender
-# (the same mode the ethereum-executor targets). feature_raw_address stays off:
-# it is mutually exclusive with the L2 MPT state root.
+# (the same mode the ethereum-executor targets). The account-table encoding stays hex:
+# the Eth lane is hex-only and the boot detection forces Hex there.
 cat >> config.genesis <<'GENESIS_EOF'
 
 [features]

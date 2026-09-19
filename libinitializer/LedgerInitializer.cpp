@@ -1,7 +1,11 @@
 #include "LedgerInitializer.h"
+#include "AccountTableMigration.h"
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
+#include <bcos-framework/ledger/EVMAccount.h>
+#include <bcos-ledger/LedgerMethods.h>
 #include <bcos-task/Wait.h>
 #include <bcos-transaction-scheduler/BaselineSchedulerMPTHelpers.h>
+#include <bcos-utilities/BoostLog.h>
 #include <legacy/bcos-ledger/LedgerImpl.h>
 #include <legacy/bcos-storage/StorageWrapperImpl.h>
 #include <future>
@@ -10,7 +14,7 @@
 std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::build(
     bcos::protocol::BlockFactory::Ptr blockFactory, bcos::storage::StorageInterface::Ptr storage,
     bcos::tool::NodeConfig::Ptr nodeConfig, bcos::storage::StorageInterface::Ptr blockStorage,
-    bcos::IOServicePool::Ptr ioServicePool)
+    bcos::IOServicePool::Ptr ioServicePool, std::optional<AccountTableBoot> accountTableBoot)
 {
     bcos::storage::StorageImpl storageWrapper(storage);
     std::shared_ptr<bcos::ledger::Ledger> ledger;
@@ -27,6 +31,83 @@ std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::buil
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher{}, std::move(storageWrapper),
             blockFactory, storage, nodeConfig->blockLimit(), blockStorage);
+    }
+
+    // Publish the node-local account-table encoding BEFORE buildGenesisBlock: genesis state
+    // loading (Ledger::importGenesisState / GenesisStateLoader) routes account-table names
+    // through nodeAddressTableMode(), so a fresh chain must be born in the resolved encoding.
+    if (accountTableBoot.has_value())
+    {
+        // Lane determination without a genesis block: on an existing chain the committed
+        // rows answer (the L2 feature row, executor_version); on a fresh chain the genesis
+        // config is the only source. feature_l2_ethereum_compat is genesis-only, so "ever
+        // enabled" is the same question as "enabled now".
+        auto const onChain = readOnChainExecutorVersion(*ledger, nodeConfig->executorVersion());
+        bcos::ledger::Features laneFeatures;
+        if (auto l2Row = bcos::task::syncWait(bcos::ledger::getSystemConfig(*ledger,
+                std::string(magic_enum::enum_name(
+                    bcos::ledger::Features::Flag::feature_l2_ethereum_compat))));
+            l2Row.has_value() && std::get<0>(*l2Row) == "1")
+        {
+            laneFeatures.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
+        }
+        else if (std::ranges::any_of(nodeConfig->genesisConfig().m_features,
+                     [](bcos::ledger::FeatureSet const& featureSet) {
+                         return featureSet.flag ==
+                                    bcos::ledger::Features::Flag::feature_l2_ethereum_compat &&
+                                featureSet.enable > 0;
+                     }))
+        {
+            laneFeatures.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
+        }
+        bool const hexOnlyLane = isHexOnlyExecutorLane(laneFeatures, onChain.version);
+
+        // Detect first, then handle the two migration shapes:
+        //   - a MIXED layout (hex AND binary registrations) is an interrupted migration (or
+        //     a hand-mixed backup). There is no runtime mixed mode: with the migration
+        //     switch on, resume it here (idempotent) and continue as Binary; with the switch
+        //     off, refuse to start (resolveNodeAddressTableMode throws the same refusal
+        //     below, with the recovery instructions).
+        //   - otherwise the switch requests the one-shot hex→binary rewrite.
+        // Either way the detection must be re-run afterwards so the published mode reflects
+        // the post-migration state (a pure binary layout with the marker file). Hex-only
+        // lanes are refused inside migrateAccountTablesToBinary.
+        auto layout = detectAccountTableLayout(
+            accountTableBoot->stateDB, accountTableBoot->storageRootPath);
+        if (layout.sawHexTables && layout.sawBinaryTables && accountTableBoot->migrateToBinary)
+        {
+            BCOS_LOG(WARNING)
+                << LOG_BADGE("LedgerInitializer")
+                << LOG_DESC(
+                       "unfinished hex->binary account-table migration detected (mixed "
+                       "s_tables:/apps/ registrations); resuming it now")
+                << LOG_KV("marker", binaryAccountTablesMarkerPath(
+                                        accountTableBoot->storageRootPath));
+        }
+        if (accountTableBoot->migrateToBinary)
+        {
+            auto const stats = migrateAccountTablesToBinary(
+                accountTableBoot->stateDB, accountTableBoot->storageRootPath, hexOnlyLane);
+            BCOS_LOG(INFO) << LOG_BADGE("LedgerInitializer")
+                           << LOG_DESC("account-table migration finished")
+                           << LOG_KV("alreadyMigrated", stats.alreadyMigrated)
+                           << LOG_KV("accountRows", stats.migratedAccountRows)
+                           << LOG_KV("registrations", stats.migratedRegistrations)
+                           << LOG_KV("deduped", stats.dedupedRows);
+            layout = detectAccountTableLayout(
+                accountTableBoot->stateDB, accountTableBoot->storageRootPath);
+        }
+
+        auto const mode = resolveNodeAddressTableMode(layout, hexOnlyLane);
+        bcos::ledger::account::setNodeAddressTableMode(mode);
+        BCOS_LOG(INFO) << LOG_BADGE("LedgerInitializer")
+                       << LOG_DESC("node-local account-table encoding")
+                       << LOG_KV("mode", magic_enum::enum_name(mode))
+                       << LOG_KV("markerFile", layout.markerFile)
+                       << LOG_KV("hexTables", layout.sawHexTables)
+                       << LOG_KV("binaryTables", layout.sawBinaryTables)
+                       << LOG_KV("hexOnlyLane", hexOnlyLane)
+                       << LOG_KV("executorVersion", onChain.version);
     }
 
     ledger->buildGenesisBlock(nodeConfig->genesisConfig(), *nodeConfig->ledgerConfig());

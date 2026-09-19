@@ -7,6 +7,7 @@
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/ledger/EVMAccount.h"
+#include "bcos-framework/ledger/AccountTableName.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/protocol/Protocol.h"
@@ -442,7 +443,7 @@ static bcos::task::Task<void> testNestConstructor(auto* self, bool web3)
 
     if (web3)
     {
-        bcos::ledger::account::EVMAccount account(self->storage, address1, false);
+        bcos::ledger::account::EVMAccount account(self->storage, address1, bcos::ledger::account::AddressTableMode::Hex);
         auto nonce = co_await account.nonce();
         BOOST_REQUIRE(nonce.has_value());
         BOOST_TEST(nonce.value() == "11");
@@ -465,7 +466,7 @@ static bcos::task::Task<void> testNestConstructor(auto* self, bool web3)
         BOOST_CHECK_NE(address2, bcos::Address{});
         if (web3)
         {
-            bcos::ledger::account::EVMAccount account(self->storage, address2, false);
+            bcos::ledger::account::EVMAccount account(self->storage, address2, bcos::ledger::account::AddressTableMode::Hex);
             auto nonce = co_await account.nonce();
             BOOST_REQUIRE(nonce.has_value());
             BOOST_TEST(nonce.value() == "1");
@@ -533,10 +534,10 @@ BOOST_AUTO_TEST_CASE(transferBalance)
         message.gas = 21000;
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> senderAccount(
-            rollbackableStorage, message.sender, false);
+            rollbackableStorage, message.sender, bcos::ledger::account::AddressTableMode::Hex);
         co_await senderAccount.setBalance(bcos::u256(1001));
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> recipientAccount(
-            rollbackableStorage, message.recipient, false);
+            rollbackableStorage, message.recipient, bcos::ledger::account::AddressTableMode::Hex);
         co_await recipientAccount.setBalance(bcos::u256(0));
 
         evmc_address origin{};
@@ -694,6 +695,203 @@ BOOST_AUTO_TEST_CASE(setStorageStatusLegacy)
 
         auto status4 = iface->set_storage(hostCtx, &helloworldAddress, &storageKey, &zeroValue);
         BOOST_CHECK_EQUAL(status4, EVMC_STORAGE_DELETED);  // buggy: should be ASSIGNED
+
+        co_return;
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(nodeAddressTableModeSingleton)
+{
+    namespace account = bcos::ledger::account;
+    // Default without the startup flow: Hex — the pre-detection behavior every library and
+    // test inherits.
+    BOOST_CHECK(account::nodeAddressTableMode() == account::AddressTableMode::Hex);
+
+    // Set/get round trip through both modes. The singleton is process-global, so restore
+    // the Hex default on the way out (the startup flow sets it exactly once, single-threaded).
+    for (auto mode : {account::AddressTableMode::Hex, account::AddressTableMode::Binary})
+    {
+        account::setNodeAddressTableMode(mode);
+        BOOST_CHECK(account::nodeAddressTableMode() == mode);
+    }
+    account::setNodeAddressTableMode(account::AddressTableMode::Hex);
+    BOOST_CHECK(account::nodeAddressTableMode() == account::AddressTableMode::Hex);
+}
+
+// The two layouts are disjoint namespaces: there is no runtime mixed mode, so a Binary-mode
+// account sees nothing of the hex table's rows and vice versa. A chain changes encoding only
+// through the one-shot boot-time migration ([storage] migrate_account_tables_to_binary),
+// which rewrites the physical keys — never through a per-read fallback.
+BOOST_AUTO_TEST_CASE(binaryAndHexLayoutsAreDisjoint)
+{
+    syncWait([this]() -> Task<void> {
+        namespace account = bcos::ledger::account;
+        auto address = bcos::unhexAddress("0x4200000000000000000000000000000000001234");
+        std::string const hexTable = "/apps/4200000000000000000000000000000000001234";
+
+        evmc_bytes32 slotKey{};
+        slotKey.bytes[31] = 0x11;
+        evmc_bytes32 slotValue{};
+        slotValue.bytes[31] = 0x42;
+
+        bcos::bytes code{0x60, 0x00, 0x60, 0x00, 0xf3};
+        auto const codeHash = hashImpl->hash(code);
+
+        // Old-layout rows: written through the Hex-mode account, exactly as an unmigrated
+        // node's blocks would have written them.
+        account::EVMAccount hexAccount(storage, address, account::AddressTableMode::Hex);
+        BOOST_CHECK_EQUAL(hexAccount.address(), hexTable);
+        co_await hexAccount.create();
+        co_await hexAccount.setNonce("7");
+        co_await hexAccount.setBalance(bcos::u256(12345));
+        co_await hexAccount.setCode(code, "the-abi", codeHash);
+        co_await hexAccount.setStorage(slotKey, slotValue);
+
+        // (a) Plain Binary mode sees nothing of the hex-table data.
+        account::EVMAccount binaryAccount(storage, address, account::AddressTableMode::Binary);
+        BOOST_CHECK(binaryAccount.address() != hexTable);
+        BOOST_CHECK(!(co_await binaryAccount.exists()));
+        BOOST_CHECK(!(co_await binaryAccount.nonce()).has_value());
+        BOOST_CHECK_EQUAL(co_await binaryAccount.balance(), bcos::u256(0));
+        BOOST_CHECK_EQUAL(co_await binaryAccount.codeHash(), bcos::h256{});
+        BOOST_CHECK(!(co_await binaryAccount.code()).has_value());
+        evmc_bytes32 const zeroValue{};
+        auto zeroSlot = co_await binaryAccount.storage(slotKey);
+        BOOST_CHECK(std::equal(std::begin(zeroSlot.bytes), std::end(zeroSlot.bytes),
+            std::begin(zeroValue.bytes), std::end(zeroValue.bytes)));
+
+        // (b) And the other way around: a fresh binary table is invisible in Hex mode.
+        co_await binaryAccount.create();
+        co_await binaryAccount.setNonce("8");
+        evmc_bytes32 newSlotKey{};
+        newSlotKey.bytes[31] = 0x22;
+        evmc_bytes32 newSlotValue{};
+        newSlotValue.bytes[31] = 0x77;
+        co_await binaryAccount.setStorage(newSlotKey, newSlotValue);
+
+        BOOST_CHECK(co_await binaryAccount.nonce() == std::optional<std::string>{"8"});
+        auto writtenSlot = co_await binaryAccount.storage(newSlotKey);
+        BOOST_CHECK(std::equal(std::begin(writtenSlot.bytes), std::end(writtenSlot.bytes),
+            std::begin(newSlotValue.bytes), std::end(newSlotValue.bytes)));
+        // The hex table keeps its old rows, untouched by the binary writes (no write-time
+        // twin removal exists anymore).
+        BOOST_CHECK(co_await hexAccount.nonce() == std::optional<std::string>{"7"});
+        auto untouchedSlot = co_await hexAccount.storage(newSlotKey);
+        BOOST_CHECK(std::equal(std::begin(untouchedSlot.bytes), std::end(untouchedSlot.bytes),
+            std::begin(zeroValue.bytes), std::end(zeroValue.bytes)));
+
+        co_return;
+    }());
+}
+
+// Account table-name coding helpers (ledger/AccountTableName.h): the two physical
+// encodings of one logical account table and the canonical form used for hashing.
+BOOST_AUTO_TEST_CASE(accountTableNameCoding)
+{
+    namespace account = bcos::ledger::account;
+    std::string const hexTable = "/apps/4200000000000000000000000000000000001234";
+    std::string const binTable = [&] {
+        auto address = bcos::unhexAddress("0x4200000000000000000000000000000000001234");
+        std::string name("/apps/");
+        name.append(reinterpret_cast<const char*>(address.bytes), sizeof(address.bytes));  // NOLINT
+        return name;
+    }();
+    BOOST_REQUIRE_EQUAL(binTable.size(), 26u);
+
+    // Probes: length alone disambiguates the two encodings.
+    BOOST_CHECK(account::isHexAccountTableName(hexTable));
+    BOOST_CHECK(!account::isBinaryAccountTableName(hexTable));
+    BOOST_CHECK(account::isBinaryAccountTableName(binTable));
+    BOOST_CHECK(!account::isHexAccountTableName(binTable));
+
+    // Negative probes: wrong prefix, wrong length, uppercase hex, non-hex char.
+    BOOST_CHECK(!account::isHexAccountTableName("/sys/4200000000000000000000000000000000001234"));
+    BOOST_CHECK(!account::isHexAccountTableName("/apps/42000000000000000000000000000000000012"));  // 38
+    BOOST_CHECK(!account::isHexAccountTableName("/apps/4200000000000000000000000000000000001234ff"));  // 42
+    BOOST_CHECK(!account::isHexAccountTableName("/apps/420000000000000000000000000000000000ABCD"));
+    BOOST_CHECK(!account::isHexAccountTableName("/apps/zz00000000000000000000000000000000001234"));
+    BOOST_CHECK(!account::isBinaryAccountTableName(hexTable.substr(0, 25)));  // 19 bytes
+    BOOST_CHECK(!account::isBinaryAccountTableName("/apps/"));
+    // An "_accessAuth" auth table is neither encoding — it is out of scope (not migrated,
+    // not normalized).
+    BOOST_CHECK(!account::isHexAccountTableName(hexTable + "_accessAuth"));
+    BOOST_CHECK(!account::isBinaryAccountTableName(binTable + "_accessAuth"));
+
+    // Round trip, lowercase canonical hex.
+    BOOST_CHECK_EQUAL(account::binaryToHexAccountTableName(binTable), hexTable);
+    BOOST_CHECK(account::hexToBinaryAccountTableName(hexTable) == binTable);
+
+    // Invalid input → empty string (documented caller error).
+    BOOST_CHECK(account::binaryToHexAccountTableName(hexTable).empty());
+    BOOST_CHECK(account::binaryToHexAccountTableName("/apps/short").empty());
+    BOOST_CHECK(account::hexToBinaryAccountTableName(binTable).empty());
+
+    // Canonicalization: binary → hex, hex identical, everything else untouched.
+    BOOST_CHECK_EQUAL(account::canonicalTableNameForHash(binTable), hexTable);
+    BOOST_CHECK_EQUAL(account::canonicalTableNameForHash(hexTable), hexTable);
+    BOOST_CHECK_EQUAL(account::canonicalTableNameForHash("s_tables"), "s_tables");
+    BOOST_CHECK_EQUAL(account::canonicalTableNameForHash("/sys/status"), "/sys/status");
+    BOOST_CHECK_EQUAL(account::canonicalTableNameForHash("/apps/someContract"),
+        "/apps/someContract");
+    BOOST_CHECK_EQUAL(
+        account::canonicalTableNameForHash(hexTable + "_accessAuth"), hexTable + "_accessAuth");
+}
+
+// Write-side isolation: with the runtime fallback mode gone, a Binary-mode write touches
+// only the binary table and leaves any hex twin row alone (and symmetrically for Hex mode).
+// Physical consolidation is the migration tool's job, not the write path's.
+BOOST_AUTO_TEST_CASE(binaryWritesLeaveHexRowsUntouched)
+{
+    syncWait([this]() -> Task<void> {
+        namespace account = bcos::ledger::account;
+        auto address = bcos::unhexAddress("0x4200000000000000000000000000000000005678");
+        std::string const hexTable = "/apps/4200000000000000000000000000000000005678";
+        std::string const binTable = account::hexToBinaryAccountTableName(hexTable);
+        BOOST_REQUIRE(!binTable.empty());
+
+        evmc_bytes32 slotKey{};
+        slotKey.bytes[31] = 0x33;
+        evmc_bytes32 slotValue{};
+        slotValue.bytes[31] = 0x55;
+        evmc_bytes32 newSlotValue{};
+        newSlotValue.bytes[31] = 0x66;
+        bcos::bytes code{0x60, 0x00, 0x60, 0x00, 0xf3};
+        auto const codeHash = hashImpl->hash(code);
+
+        // Rows in the legacy hex layout.
+        account::EVMAccount hexAccount(storage, address, account::AddressTableMode::Hex);
+        co_await hexAccount.create();
+        co_await hexAccount.setNonce("3");
+        co_await hexAccount.setBalance(bcos::u256(999));
+        co_await hexAccount.setStorage(slotKey, slotValue);
+
+        // (a) Binary-mode writes land in the binary table only; the hex twins stay put.
+        account::EVMAccount binaryAccount(storage, address, account::AddressTableMode::Binary);
+        co_await binaryAccount.create();
+        co_await binaryAccount.setNonce("4");
+        co_await binaryAccount.setBalance(bcos::u256(1000));
+        co_await binaryAccount.setStorage(slotKey, newSlotValue);
+        co_await binaryAccount.setCode(code, "the-abi", codeHash);
+
+        // Both registrations and both row sets now exist side by side...
+        BOOST_CHECK(co_await storage2::existsOne(storage, StateKeyView{bcos::ledger::SYS_TABLES, hexTable}));
+        BOOST_CHECK(co_await storage2::existsOne(storage, StateKeyView{bcos::ledger::SYS_TABLES, binTable}));
+        BOOST_CHECK(co_await hexAccount.nonce() == std::optional<std::string>{"3"});
+        BOOST_CHECK_EQUAL(co_await hexAccount.balance(), bcos::u256(999));
+        BOOST_CHECK(co_await binaryAccount.nonce() == std::optional<std::string>{"4"});
+        BOOST_CHECK_EQUAL(co_await binaryAccount.balance(), bcos::u256(1000));
+        BOOST_CHECK_EQUAL(co_await binaryAccount.codeHash(), codeHash);
+        auto binSlot = co_await binaryAccount.storage(slotKey);
+        BOOST_CHECK(std::equal(std::begin(binSlot.bytes), std::end(binSlot.bytes),
+            std::begin(newSlotValue.bytes), std::end(newSlotValue.bytes)));
+        auto hexSlot = co_await hexAccount.storage(slotKey);
+        BOOST_CHECK(std::equal(std::begin(hexSlot.bytes), std::end(hexSlot.bytes),
+            std::begin(slotValue.bytes), std::end(slotValue.bytes)));
+
+        // (b) And Hex mode is symmetric: its writes touch only the hex table.
+        co_await hexAccount.setNonce("5");
+        BOOST_CHECK(co_await hexAccount.nonce() == std::optional<std::string>{"5"});
+        BOOST_CHECK(co_await binaryAccount.nonce() == std::optional<std::string>{"4"});
 
         co_return;
     }());

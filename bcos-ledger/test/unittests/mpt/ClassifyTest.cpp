@@ -39,6 +39,14 @@ bcos::Address classifyTestAddress()
 {
     return bcos::Address(std::string{CLASSIFY_TEST_ADDR_HEX}, bcos::Address::FromHex);
 }
+
+/// "/apps/" + the 20 raw address bytes — the binary account-table layout.
+std::string binaryTestTable(bcos::Address const& addr)
+{
+    std::string table{APPS_TABLE_PREFIX};
+    table.append(reinterpret_cast<char const*>(addr.data()), addr.size());
+    return table;
+}
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(ClassifySuite)
@@ -56,6 +64,45 @@ BOOST_AUTO_TEST_CASE(ParseAccountTableAcceptsAppsAddressOnly)
     BOOST_CHECK(!parseAccountTable("/apps/zz112233445566778899aabbccddeeff001122").has_value());
 }
 
+BOOST_AUTO_TEST_CASE(ParseAccountTableAcceptsRawAddressTable)
+{
+    // The binary layout: "/apps/" + the 20 raw address bytes, taken verbatim.
+    auto const addr = classifyTestAddress();
+    auto parsed = parseAccountTable(binaryTestTable(addr));
+    BOOST_REQUIRE(parsed.has_value());
+    BOOST_CHECK(*parsed == addr);
+
+    // Bytes that are NOT ASCII hex digits are still address bytes — no hex decoding applies.
+    bcos::Address nonAscii{};
+    nonAscii.data()[0] = static_cast<bcos::byte>(0xFF);
+    nonAscii.data()[19] = static_cast<bcos::byte>(0xFE);
+    auto parsedNonAscii = parseAccountTable(binaryTestTable(nonAscii));
+    BOOST_REQUIRE(parsedNonAscii.has_value());
+    BOOST_CHECK(*parsedNonAscii == nonAscii);
+
+    // A suffix that is 20 hex-LOOKING chars is raw bytes, not a hex decode of 10 bytes.
+    std::string const twentyHexChars{APPS_TABLE_PREFIX};
+    auto const twentyAsBytes = twentyHexChars + std::string("01234567890123456789");
+    auto parsedRaw = parseAccountTable(twentyAsBytes);
+    BOOST_REQUIRE(parsedRaw.has_value());
+    BOOST_CHECK_EQUAL(parsedRaw->data()[0], static_cast<bcos::byte>('0'));
+    BOOST_CHECK_EQUAL(parsedRaw->data()[19], static_cast<bcos::byte>('9'));
+
+    // Lengths other than 20 and 40 reject; a 21st raw byte (a row key bleeding into the table
+    // view) is not an account table.
+    BOOST_CHECK(!parseAccountTable(std::string(APPS_TABLE_PREFIX) + std::string(19, 'a'))
+                    .has_value());
+    BOOST_CHECK(!parseAccountTable(std::string(APPS_TABLE_PREFIX) + std::string(21, 'a'))
+                    .has_value());
+    BOOST_CHECK(!parseAccountTable(std::string(APPS_TABLE_PREFIX) + std::string(39, 'a'))
+                    .has_value());
+    BOOST_CHECK(!parseAccountTable(std::string(APPS_TABLE_PREFIX) + std::string(41, 'a'))
+                    .has_value());
+    // The bare prefix and a prefix-only lookalike reject.
+    BOOST_CHECK(!parseAccountTable(APPS_TABLE_PREFIX).has_value());
+    BOOST_CHECK(!parseAccountTable("/apps").has_value());
+}
+
 BOOST_AUTO_TEST_CASE(AccountTableNameRoundTrips)
 {
     auto const addr = classifyTestAddress();
@@ -64,6 +111,13 @@ BOOST_AUTO_TEST_CASE(AccountTableNameRoundTrips)
     auto parsed = parseAccountTable(table);
     BOOST_REQUIRE(parsed.has_value());
     BOOST_CHECK(*parsed == addr);
+
+    // The raw-address layout round-trips through the parser as well.
+    auto const binaryTable = binaryTestTable(addr);
+    BOOST_CHECK_EQUAL(binaryTable.size(), APPS_TABLE_PREFIX.size() + 20);
+    auto parsedBinary = parseAccountTable(binaryTable);
+    BOOST_REQUIRE(parsedBinary.has_value());
+    BOOST_CHECK(*parsedBinary == addr);
 }
 
 BOOST_AUTO_TEST_CASE(ClassifyRowKeyKinds)

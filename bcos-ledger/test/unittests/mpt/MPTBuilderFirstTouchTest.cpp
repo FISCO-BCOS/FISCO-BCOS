@@ -88,6 +88,26 @@ bcos::storage::Entry codeHashEntry(bcos::h256 const& hash)
         std::string_view{reinterpret_cast<char const*>(hash.data()), bcos::h256::SIZE});
 }
 
+// "/apps/" + the 20 raw address bytes — the binary account-table layout
+// (EVMAccount's AddressTableMode::Binary naming, Classify.h ADDRESS_BIN_LEN).
+std::string binaryAccountTable(bcos::Address const& addr)
+{
+    std::string table{APPS_TABLE_PREFIX};
+    table.append(reinterpret_cast<char const*>(addr.data()), addr.size());
+    return table;
+}
+
+bcos::executor_v1::StateKey accountBinaryFieldKey(bcos::Address const& addr, std::string_view row)
+{
+    return bcos::executor_v1::StateKey{binaryAccountTable(addr), row};
+}
+
+bcos::executor_v1::StateKey accountBinarySlotKey(bcos::Address const& addr, bcos::h256 const& slot)
+{
+    return bcos::executor_v1::StateKey{binaryAccountTable(addr),
+        std::string_view{reinterpret_cast<char const*>(slot.data()), bcos::h256::SIZE}};
+}
+
 }  // namespace
 
 BOOST_AUTO_TEST_CASE(FirstTouchOfBrandNewAccountWithoutStorage)
@@ -103,7 +123,7 @@ BOOST_AUTO_TEST_CASE(FirstTouchOfBrandNewAccountWithoutStorage)
     writeFlatRow(view, accountFieldKey(addr, ROW_CODE_HASH), codeHashEntry(makeHash(0xC0)));
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));
@@ -138,7 +158,7 @@ BOOST_AUTO_TEST_CASE(FirstTouchDoesNotBackfillColdSlots)
     writeFlatRow(view, accountSlotKey(addr, hotSlot), slotEntry(bcos::bytes{0x99}));
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));
@@ -171,7 +191,7 @@ BOOST_AUTO_TEST_CASE(UnwrittenFieldsComeFromFlatWrittenOnesWin)
     writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("5"));
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));
@@ -195,7 +215,7 @@ BOOST_AUTO_TEST_CASE(MissingCodeHashRowMeansEmptyCodeHash)
     writeFlatRow(view, accountFieldKey(addr, ROW_BALANCE), makeEntry("10"));
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));
@@ -219,7 +239,7 @@ BOOST_AUTO_TEST_CASE(ZeroCodeHashRowInFlatThrows)
     writeFlatRow(view, accountFieldKey(addr, ROW_BALANCE), makeEntry("10"));
 
     BOOST_CHECK_EXCEPTION(
-        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false)),
+        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex)),
         MPTInvariantViolation,
         [](auto const& e) { return errinfoContains(e, "decodes to a zero h256"); });
 }
@@ -237,7 +257,7 @@ BOOST_AUTO_TEST_CASE(DeleteOfNeverWrittenSlotIsNoop)
     deleteFlatRowLogically(view, accountSlotKey(addr, slotKeyAt(3)));
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));
@@ -266,19 +286,85 @@ BOOST_AUTO_TEST_CASE(NextBlockContinuesIncrementallyOverThePartialTrie)
     auto viewN = makeFlatView(flatBackend);
     writeFlatRow(viewN, accountSlotKey(addr, slotA), slotEntry(bcos::bytes{0x0A}));
     auto outputN =
-        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), viewN, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), viewN, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     // Block N+1: subsequent-touch with slot B on top of block N's root.
     auto viewN1 = makeFlatView(flatBackend);
     writeFlatRow(viewN1, accountSlotKey(addr, slotB), slotEntry(bcos::bytes{0x0B}));
     auto outputN1 =
-        bcos::task::syncWait(buildAndCollect(storage, outputN.stateRoot, viewN1, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, outputN.stateRoot, viewN1, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     MPTReadView<NodeStorage> readView(storage, outputN1.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));
     BOOST_REQUIRE(account.has_value());
     BOOST_CHECK(account->storageRoot ==
                 storageRootOracle({{slotA, bcos::bytes{0x0A}}, {slotB, bcos::bytes{0x0B}}}));
+}
+
+BOOST_AUTO_TEST_CASE(BinaryTableDeltaBuildsTheSameTrieAsHex)
+{
+    // Binary layout: the block's delta carries "/apps/<20 raw bytes>" table names. The
+    // trie key is keccak(address) either way, so the SAME logical delta expressed with hex
+    // tables (Hex mode) and with binary tables (Binary mode) must commit the same state root.
+    auto const addr = makeAddress(0xC3);
+    auto const slot = slotKeyAt(7);
+
+    NodeStorage hexStorage;
+    FlatBackendStorage hexBackend;
+    auto hexView = makeFlatView(hexBackend);
+    writeFlatRow(hexView, accountFieldKey(addr, ROW_NONCE), makeEntry("2"));
+    writeFlatRow(hexView, accountFieldKey(addr, ROW_BALANCE), makeEntry("500"));
+    writeFlatRow(hexView, accountFieldKey(addr, ROW_CODE_HASH), codeHashEntry(makeHash(0xC3)));
+    writeFlatRow(hexView, accountSlotKey(addr, slot), slotEntry(bcos::bytes{0x5A}));
+    auto hexOutput = bcos::task::syncWait(buildAndCollect(hexStorage, emptyRootHash(), hexView,
+        /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
+
+    NodeStorage binStorage;
+    FlatBackendStorage binBackend;
+    auto binView = makeFlatView(binBackend);
+    writeFlatRow(binView, accountBinaryFieldKey(addr, ROW_NONCE), makeEntry("2"));
+    writeFlatRow(binView, accountBinaryFieldKey(addr, ROW_BALANCE), makeEntry("500"));
+    writeFlatRow(binView, accountBinaryFieldKey(addr, ROW_CODE_HASH), codeHashEntry(makeHash(0xC3)));
+    writeFlatRow(binView, accountBinarySlotKey(addr, slot), slotEntry(bcos::bytes{0x5A}));
+    auto binOutput = bcos::task::syncWait(buildAndCollect(binStorage, emptyRootHash(), binView,
+        /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Binary));
+
+    BOOST_CHECK(binOutput.stateRoot == hexOutput.stateRoot);
+
+    MPTReadView<NodeStorage> readView(binStorage, binOutput.stateRoot);
+    auto account = bcos::task::syncWait(readView.readAccount(addr));
+    BOOST_REQUIRE(account.has_value());
+    BOOST_CHECK_EQUAL(account->nonce, bcos::u256(2));
+    BOOST_CHECK_EQUAL(account->balance, bcos::u256(500));
+    BOOST_CHECK(account->codeHash == makeHash(0xC3));
+    BOOST_CHECK(account->storageRoot == storageRootOracle({{slot, bcos::bytes{0x5A}}}));
+}
+
+BOOST_AUTO_TEST_CASE(RawAddressBinaryModeDoesNotReadHexTables)
+{
+    // Binary mode must NOT consult the legacy hex table: a node is in exactly one layout
+    // (encoding changes go through the boot-time migration, not a runtime fallback), so on a
+    // binary chain a stray hex row is not this account's state and balance/codeHash resolve to
+    // the Yellow Paper defaults.
+    NodeStorage storage;
+    auto const addr = makeAddress(0xC5);
+
+    FlatBackendStorage flatBackend;
+    writeFlatRow(flatBackend, accountFieldKey(addr, ROW_BALANCE), makeEntry("1234"));
+    writeFlatRow(flatBackend, accountFieldKey(addr, ROW_CODE_HASH), codeHashEntry(makeHash(0x77)));
+
+    auto view = makeFlatView(flatBackend);
+    writeFlatRow(view, accountBinaryFieldKey(addr, ROW_NONCE), makeEntry("5"));
+
+    auto output = bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view,
+        /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Binary));
+
+    MPTReadView<NodeStorage> readView(storage, output.stateRoot);
+    auto account = bcos::task::syncWait(readView.readAccount(addr));
+    BOOST_REQUIRE(account.has_value());
+    BOOST_CHECK_EQUAL(account->nonce, bcos::u256(5));
+    BOOST_CHECK_EQUAL(account->balance, bcos::u256(0));
+    BOOST_CHECK(account->codeHash == emptyCodeHash());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

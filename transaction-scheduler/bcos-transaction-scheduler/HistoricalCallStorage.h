@@ -21,6 +21,7 @@
 #pragma once
 
 #include "MPTNodeStorage.h"
+#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/Storage.h>
@@ -48,8 +49,10 @@ namespace bcos::scheduler_v1
 /// and read back (read-your-writes, the PR #5324 review blocker), while every MISS resolves
 /// here against the state block N committed:
 ///
-///  - account-table rows ("/apps/<40-hex>": nonce / balance / codeHash / 32-byte slots)
-///    answer from the block's MPT via MPTAccount's rooted reads, re-encoded in the exact
+///  - account-table rows ("/apps/<40-hex>" or, in the binary node-local layout,
+///    "/apps/<20 raw bytes>":
+///    nonce / balance / codeHash / 32-byte slots) answer from the block's MPT via MPTAccount's
+///    rooted reads, re-encoded in the exact
 ///    flat representations EVMAccount reads (decimal strings for nonce and balance, raw
 ///    32 bytes for codeHash and slot values). An account or slot with no leaf at that root
 ///    reads as absent — Ethereum semantics, exact for scenario B where the trie is the
@@ -93,8 +96,17 @@ public:
     constexpr static bool isHistoricalStateStorage = true;
 
     /// @param stateRoot the MPT state root block N committed — its header's stateRoot.
-    HistoricalStateBackend(LatestView& latestView, h256 stateRoot)
-      : m_latestView(std::addressof(latestView)), m_nodeStorage(latestView), m_stateRoot(stateRoot)
+    /// @param accountMode the node's account-table mode (nodeAddressTableMode()): handed to
+    ///        every cached MPTAccount so its inherited no-root flat reads/writes target the
+    ///        table layout this node actually uses (hex or binary, one per node). The rooted
+    ///        historical reads are table-name-independent — the account leaf key is
+    ///        keccak(address).
+    HistoricalStateBackend(
+        LatestView& latestView, h256 stateRoot, ledger::account::AddressTableMode accountMode)
+      : m_latestView(std::addressof(latestView)),
+        m_nodeStorage(latestView),
+        m_stateRoot(stateRoot),
+        m_accountMode(accountMode)
     {}
     // Not movable either: cached MPTAccounts hold reference_wrappers into this object's
     // m_nodeStorage member, which a defaulted move would leave dangling. The one consumer
@@ -207,13 +219,13 @@ private:
         auto it = m_accounts.find(address);
         if (it == m_accounts.end())
         {
-            // binaryAddress is false by construction: feature_raw_address is mutually
-            // exclusive with both MPT flags for the life of a chain
-            // (BaselineSchedulerMPTHelpers.h::validateMPTFlagMatrix), and callAtBlock only
-            // builds this backend for MPT blocks.
+            // The node's real table mode (nodeAddressTableMode(), threaded from the
+            // caller): with the binary layout active the account tables are 20-byte binary
+            // names (parseAccountTable classifies both layouts), and the MPTAccount's
+            // inherited flat path must read/write the same names the executor uses.
             it = m_accounts
                      .try_emplace(address, *m_latestView, m_nodeStorage, *m_latestView, address,
-                         /*binaryAddress*/ false)
+                         m_accountMode)
                      .first;
         }
         return it->second;
@@ -280,6 +292,7 @@ private:
     LatestView* m_latestView;
     ViewNodeStorage<LatestView> m_nodeStorage;
     h256 m_stateRoot;
+    ledger::account::AddressTableMode m_accountMode;
     std::map<Address, AccountType> m_accounts;
 };
 

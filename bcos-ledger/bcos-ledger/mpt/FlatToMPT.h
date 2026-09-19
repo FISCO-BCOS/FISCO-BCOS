@@ -22,6 +22,7 @@
 #include "Classify.h"
 #include "Constants.h"
 #include "Errors.h"
+#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
@@ -103,30 +104,43 @@ struct FlatAccountMeta
 /// parent flat state (spec §5.3 path 2: delta 层无该字段行的取 flat 值). Three O(1) named-row
 /// reads; NEVER a slot scan (spec §4.2).
 ///
+/// @p mode is the node's account-table mode (nodeAddressTableMode(), threaded down from the
+/// build call sites). Table routing is delegated to EVMAccount itself — the single owner of the
+/// AddressTableMode name-derivation rule — so this function never re-derives a table name:
+/// Hex reads the 40-hex table, Binary the 20-byte raw-address table, with no cross-layout
+/// fallback (a node is exactly one of the two; encoding changes go through the boot-time
+/// migration). Reads only; this function never writes.
+///
 /// Missing rows take the Yellow Paper defaults: nonce/balance 0, codeHash = emptyCodeHash() —
 /// the account leaf encodes codeHash verbatim, so a zero h256 here would produce a wrong leaf
 /// hash. A codeHash row that is present but decodes to zero violates the executor contract
 /// (codeHash = keccak(code), never zero) and throws rather than committing a forking leaf.
-bcos::task::Task<FlatAccountMeta> readFlatAccountMeta(auto& flatView, bcos::Address const& addr)
+/// Known divergence, currently unreachable: this address-taking EVMAccount constructor routes
+/// the c_systemTxsAddress members to /sys/ (EVMAccount.h), while the OP lane's Storage2State
+/// bridge deliberately writes those addresses under /apps/ like any other account (in Ethereum
+/// they ARE ordinary accounts; Storage2State.h applyModifiedEntry explains). A first-touch
+/// back-fill for a system address would therefore read /sys/ and miss rows the bridge wrote to
+/// /apps/. Two facts keep that unreachable today: in scenario B a first-touch account has NO
+/// flat rows at all (account state lives in the committed MPT only, so there is nothing to
+/// back-fill), and the fields this block did write come from the block's own delta rows, which
+/// cover meta ahead of any flat read. Resolve together with the bridge's mode-aware naming
+/// (the same follow-up the hex-only-lane enforcement in libinitializer
+/// (AddressTableModeDetection.h) points at).
+bcos::task::Task<FlatAccountMeta> readFlatAccountMeta(
+    auto& flatView, bcos::Address const& addr, account::AddressTableMode mode)
 {
-    auto const table = accountTableName(addr);
+    account::EVMAccount<std::remove_reference_t<decltype(flatView)>> account(flatView, addr, mode);
     FlatAccountMeta meta;
 
-    auto nonceEntry =
-        co_await bcos::storage2::readOne(flatView, executor_v1::StateKeyView{table, ROW_NONCE});
-    if (nonceEntry)
+    if (auto nonceEntry = co_await account.storageEntry(ROW_NONCE))
     {
         meta.nonce = detail::entryToU256(*nonceEntry);
     }
-    auto balanceEntry =
-        co_await bcos::storage2::readOne(flatView, executor_v1::StateKeyView{table, ROW_BALANCE});
-    if (balanceEntry)
+    if (auto balanceEntry = co_await account.storageEntry(ROW_BALANCE))
     {
         meta.balance = detail::entryToU256(*balanceEntry);
     }
-    auto codeHashEntry =
-        co_await bcos::storage2::readOne(flatView, executor_v1::StateKeyView{table, ROW_CODE_HASH});
-    if (codeHashEntry)
+    if (auto codeHashEntry = co_await account.storageEntry(ROW_CODE_HASH))
     {
         meta.codeHash = detail::entryToH256(*codeHashEntry);
         if (meta.codeHash == bcos::h256{})

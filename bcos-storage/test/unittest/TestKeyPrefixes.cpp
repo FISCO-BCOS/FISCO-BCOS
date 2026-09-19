@@ -94,6 +94,42 @@ BOOST_AUTO_TEST_CASE(NodeRowResolverRoundTrip)
         view.m_key, std::string_view(reinterpret_cast<char const*>(original.data()), h256::SIZE));
 }
 
+BOOST_AUTO_TEST_CASE(RawAddressTableWithColonByteRoundTrip)
+{
+    // Binary-layout account tables are "/apps/" + 20 raw address bytes, and the
+    // address itself can contain 0x3A (':'). decode must split at the fixed offset
+    // ("/apps/".size() + 20), not at the first ':' inside the address.
+    std::string address(20, 'a');
+    address[0] = ':';   // first-':' would land here without the fixed-offset rule
+    address[7] = ':';   // ':' strictly inside the address
+    address[19] = ':';  // ':' as the last address byte, right before the real separator
+
+    executor_v1::StateKey const stateKey("/apps/" + address, "nonce");
+    std::string const physical = resolverPhysicalKey(stateKey);
+
+    auto decoded = StateKeyResolver::decode(std::string_view(physical));
+    BOOST_CHECK(decoded == stateKey);
+    executor_v1::StateKeyView const view{decoded};
+    BOOST_CHECK_EQUAL(view.m_table, "/apps/" + address);
+    BOOST_CHECK_EQUAL(view.m_key, "nonce");
+}
+
+BOOST_AUTO_TEST_CASE(HexAddressTableKeepsFirstColonSplit)
+{
+    // The legacy 40-hex form never holds ':' at the fixed binary split offset (hex
+    // digits only), so it must keep first-':' semantics and decode exactly as before.
+    std::string const table = "/apps/" + std::string(40, 'b');
+    executor_v1::StateKey const stateKey(table, "nonce");
+    std::string const physical = resolverPhysicalKey(stateKey);
+
+    auto decoded = StateKeyResolver::decode(std::string_view(physical));
+    BOOST_CHECK(decoded == stateKey);
+    executor_v1::StateKeyView const view{decoded};
+    BOOST_CHECK_EQUAL(view.m_table, table);
+    BOOST_CHECK_EQUAL(view.m_key, "nonce");
+    BOOST_CHECK_EQUAL(decoded.m_split, 46U);
+}
+
 BOOST_AUTO_TEST_CASE(RetiredColonFreeLayoutIsNotAStateKey)
 {
     // The RETIRED 37-byte layout ("/mpt/" + raw digest, no ':') cannot even be decoded as a
@@ -150,6 +186,32 @@ BOOST_AUTO_TEST_CASE(RocksDBAccessorExposed)
     }  // storage destructor, then dbOwner destructor (LIFO) — DB fully closed here
 
     boost::filesystem::remove_all(path);
+}
+
+BOOST_AUTO_TEST_CASE(ShortAppsTableWithColonAtBinaryOffsetIsAmbiguous)
+{
+    // KNOWN AMBIGUITY, pinned — not desired semantics. splitPosition() assumes "/apps/"
+    // tables come in exactly two shapes (20 raw address bytes, 40 hex chars). A shorter
+    // "/apps/" table whose key places a ':' at the fixed binary split offset
+    // ("/apps/".size() + 20) is misread as a binary-address table. No such table/key
+    // combination is reachable on storage2 chains today (BFS directory-table keys under
+    // /apps/ never contain ':'), so this test pins the current behaviour: if the split
+    // rule ever changes, this case must change with it.
+    std::string const table = "/apps/foo";  // 9 chars, shorter than the binary form
+    std::string const key = std::string(16, 'x') + ":bar";  // ':' at flat offset 6+20 == 26
+
+    executor_v1::StateKey const stateKey(table, key);
+    std::string const physical = resolverPhysicalKey(stateKey);
+    // The flat form really is "table:key" with the constructor's ':' at offset 9.
+    BOOST_CHECK_EQUAL(physical, table + ":" + key);
+
+    // decode splits at the fixed binary offset instead, corrupting table and key.
+    auto decoded = StateKeyResolver::decode(std::string_view(physical));
+    BOOST_CHECK(decoded != stateKey);
+    executor_v1::StateKeyView const view{decoded};
+    BOOST_CHECK_EQUAL(view.m_table, table + ":" + std::string(16, 'x'));
+    BOOST_CHECK_EQUAL(view.m_key, "bar");
+    BOOST_CHECK_EQUAL(decoded.m_split, 26U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

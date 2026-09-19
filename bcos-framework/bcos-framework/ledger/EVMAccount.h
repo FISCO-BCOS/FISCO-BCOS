@@ -1,6 +1,8 @@
 #pragma once
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
+#include "bcos-framework/ledger/AccountTableName.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/Storage.h"
@@ -15,12 +17,16 @@ namespace bcos::ledger::account
 
 DERIVE_BCOS_EXCEPTION(NonceNotInitialized);
 
-/// Tag for the table-name constructor below. A distinct type (not a bool) so it can never be
-/// confused with the `binaryAddress` flag the address-taking constructors carry.
+/// Tag for the table-name constructor below. A distinct type so it can never be
+/// confused with the AddressTableMode the address-taking constructors carry.
 struct FromTableName
 {
     explicit FromTableName() = default;
 };
+
+// AddressTableMode (the node-local account-table encoding) and the node-wide
+// nodeAddressTableMode() singleton live in ledger/AccountTableName.h; callers pass
+// nodeAddressTableMode() to the mode-taking constructors below.
 
 template <class Storage>
 class EVMAccount
@@ -266,8 +272,9 @@ public:
     EVMAccount& operator=(EVMAccount&&) noexcept = default;
     /// Construct directly from the account's table name, bypassing address→table-name routing
     /// entirely. Every method of this class reads nothing but `m_tableName`, so this is the
-    /// primitive the two address-taking constructors below are sugar for; it adds no new
-    /// semantics and changes nothing for existing callers.
+    /// primitive the two
+    /// address-taking constructors below are sugar for; it adds no new semantics and changes
+    /// nothing for existing callers.
     ///
     /// It exists for callers that must derive the table name themselves and need the *write*
     /// side pinned to the exact same string as their own reads. The address-taking constructors
@@ -280,21 +287,23 @@ public:
       : m_storage(storage), m_tableName(std::move(tableName))
     {}
 
-    EVMAccount(Storage& storage, const evmc_address& address, bool binaryAddress)
+    EVMAccount(Storage& storage, const evmc_address& address, AddressTableMode mode)
       : m_storage(storage)
     {
         std::array<char, sizeof(address.bytes) * 2> table;  // NOLINT
         boost::algorithm::hex_lower(concepts::bytebuffer::toView(address.bytes), table.data());
-        if (auto view = std::string_view(table.data(), table.size());
-            precompiled::contains(bcos::precompiled::c_systemTxsAddress, view))
+        auto hexView = std::string_view(table.data(), table.size());
+        if (precompiled::contains(bcos::precompiled::c_systemTxsAddress, hexView))
         {
-            m_tableName.reserve(ledger::SYS_DIRECTORY::SYS_APPS.size() + table.size());
+            // System-tx addresses always route to /sys/ with the hex name; those tables
+            // are not part of the account-table migration regardless of mode.
+            m_tableName.reserve(ledger::SYS_DIRECTORY::SYS_APPS.size() + hexView.size());
             m_tableName.append(ledger::SYS_DIRECTORY::SYS_APPS);
-            m_tableName.append(std::string_view(table.data(), table.size()));
+            m_tableName.append(hexView);
         }
         else
         {
-            if (binaryAddress)
+            if (mode != AddressTableMode::Hex)
             {
                 auto addressView = std::span(address.bytes);
                 m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + addressView.size());
@@ -304,9 +313,9 @@ public:
             }
             else
             {
-                m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + table.size());
+                m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + hexView.size());
                 m_tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
-                m_tableName.append(std::string_view(table.data(), table.size()));
+                m_tableName.append(hexView);
             }
         }
     }
@@ -315,8 +324,10 @@ public:
      * @brief Construct a new EVMAccount object
      * @param storage storage instance
      * @param address address of the account, hex string, should not contain 0x prefix
+     * @param mode how the account table name is derived (see AddressTableMode)
      */
-    EVMAccount(Storage& storage, std::string_view address, bool binaryAddress) : m_storage(storage)
+    EVMAccount(Storage& storage, std::string_view address, AddressTableMode mode)
+      : m_storage(storage)
     {
         if (precompiled::contains(bcos::precompiled::c_systemTxsAddress, address))
         {
@@ -326,7 +337,7 @@ public:
         }
         else
         {
-            if (binaryAddress)
+            if (mode != AddressTableMode::Hex)
             {
                 assert(address.size() % 2 == 0);
                 m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + (address.size() / 2));
@@ -343,7 +354,7 @@ public:
         }
     }
 
-    EVMAccount(Storage& storage, const bcos::Address& address, bool binaryAddress)
+    EVMAccount(Storage& storage, const bcos::Address& address, AddressTableMode mode)
       : EVMAccount(
             storage,
             [](const bcos::Address& address) {
@@ -351,7 +362,7 @@ public:
                 ::ranges::copy(address, std::span{evmcAddress.bytes}.data());
                 return evmcAddress;
             }(address),
-            binaryAddress)
+            mode)
     {}
     ~EVMAccount() noexcept = default;
 

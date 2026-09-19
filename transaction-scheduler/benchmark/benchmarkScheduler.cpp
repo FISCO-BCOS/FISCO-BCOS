@@ -103,9 +103,9 @@ struct Fixture
             m_scheduler.emplace<SchedulerSerialImpl>(m_ioServicePool);
         }
 
-        ledger::Features features;
-        features.set(ledger::Features::Flag::feature_raw_address);
-        m_ledgerConfig.setFeatures(features);
+        // Exercise the binary account-table layout: the encoding is node-local now, so arm
+        // the node-mode singleton directly (the benchmark binary never resets it).
+        ledger::account::setNodeAddressTableMode(ledger::account::AddressTableMode::Binary);
     }
 
     void deployContract()

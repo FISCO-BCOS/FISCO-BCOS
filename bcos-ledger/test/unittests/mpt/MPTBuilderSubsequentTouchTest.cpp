@@ -129,7 +129,7 @@ BOOST_AUTO_TEST_CASE(IncrementalUpdateOfExistingAccountStorage)
     writeFlatRow(view, accountSlotKey(addr, slotKey(0x03)), slotEntry(bcos::bytes{0x33}));
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     BOOST_CHECK(output.stateRoot != parentRoot);
     BOOST_REQUIRE(!output.newNodes.empty());
@@ -190,7 +190,7 @@ BOOST_AUTO_TEST_CASE(ZeroValueWriteLeavesTheTrieLikeADelete)
         view, accountSlotKey(addr, slotKey(0x01)), slotEntry(bcos::bytes{0x00, 0x00, 0x00}));
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto updated = bcos::task::syncWait(readView.readAccount(addr));
@@ -212,7 +212,7 @@ BOOST_AUTO_TEST_CASE(NoStorageChangesKeepsPriorStorageRoot)
     writeFlatRow(view, accountFieldKey(addr, ROW_BALANCE), makeEntry("8"));
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto updated = bcos::task::syncWait(readView.readAccount(addr));
@@ -253,7 +253,7 @@ BOOST_AUTO_TEST_CASE(NonAccountTablesDoNotSplitOrPolluteAccountRuns)
         view, bcos::executor_v1::StateKey{addrATable + "zz", ROW_BALANCE}, makeEntry("888"));
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     // Exactly the two real accounts moved, with exactly the values their own rows carried.
     Account expectedA = priorA;
@@ -284,7 +284,7 @@ BOOST_AUTO_TEST_CASE(MultipleAccountsInOneBlock)
     writeFlatRow(view, accountSlotKey(addrB, slotKey(0x05)), slotEntry(bcos::bytes{0x55}));
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     Account expectedA = priorA;
     expectedA.nonce = 2;
@@ -310,7 +310,7 @@ BOOST_AUTO_TEST_CASE(DeletedFieldOutsideTombstoneThrows)
     deleteFlatRowLogically(view, accountFieldKey(addr, ROW_NONCE));
 
     BOOST_CHECK_EXCEPTION(
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false)),
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex)),
         MPTInvariantViolation,
         [](auto const& e) { return errinfoContains(e, "deleted outside a tombstone"); });
 }
@@ -334,7 +334,7 @@ BOOST_AUTO_TEST_CASE(ExtensionOnlyAccountAbsentFromParentStaysOutOfTheMPT)
     writeFlatRow(view, accountFieldKey(extensionOnly, "abi"), makeEntry("[]"));
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     BOOST_CHECK(output.stateRoot == parentRoot);  // nothing entered the trie
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
@@ -358,7 +358,7 @@ BOOST_AUTO_TEST_CASE(CodeOnlyAccountAbsentFromParentStaysOutOfTheMPT)
     writeFlatRow(view, accountFieldKey(codeOnly, ROW_CODE), makeEntry("\x60\x80\x60\x40"));
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     BOOST_CHECK(output.stateRoot == parentRoot);
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
@@ -381,7 +381,7 @@ BOOST_AUTO_TEST_CASE(ExtensionRowAlongsideACoreFieldStillCommitsTheAccount)
     writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("7"));
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     BOOST_CHECK(output.stateRoot != parentRoot);
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
@@ -425,7 +425,7 @@ BOOST_AUTO_TEST_CASE(Eip7702DelegatedEoaCommitsLikeAnyOtherAccount)
     writeFlatRow(view, accountSlotKey(eoa, slotKey(0x01)), slotEntry(bcos::bytes{0x2a}));
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto updated = bcos::task::syncWait(readView.readAccount(eoa));
@@ -464,7 +464,7 @@ BOOST_AUTO_TEST_CASE(ClearingA7702DelegationWritesEmptyCodeHash)
     writeFlatRow(view, accountFieldKey(eoa, ROW_NONCE), makeEntry("4"));
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto updated = bcos::task::syncWait(readView.readAccount(eoa));
@@ -494,7 +494,7 @@ BOOST_AUTO_TEST_CASE(DeletedCodeHashRowOnALiveAccountThrows)
     writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("4"));
 
     BOOST_CHECK_EXCEPTION(bcos::task::syncWait(buildAndCollect(storage, parentRoot, view,
-                              /*l2Mode=*/false)),
+                              /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex)),
         MPTInvariantViolation,
         [](auto const& e) { return errinfoContains(e, "deleted outside a tombstone"); });
 }
@@ -514,7 +514,7 @@ BOOST_AUTO_TEST_CASE(LoneDeletedCodeHashOnAFirstTouchAccountThrowsInsteadOfInser
     deleteFlatRowLogically(view, accountFieldKey(addr, ROW_CODE_HASH));
 
     BOOST_CHECK_EXCEPTION(bcos::task::syncWait(buildAndCollect(storage, parentRoot, view,
-                              /*l2Mode=*/false)),
+                              /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex)),
         MPTInvariantViolation,
         [](auto const& e) { return errinfoContains(e, "deleted outside a tombstone"); });
 }
@@ -536,7 +536,7 @@ BOOST_AUTO_TEST_CASE(BcosExtensionRowSkippedInScenarioAThrowsInL2)
     writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("5"));
     // Scenario A (native chain): the extension row is ignored, the nonce lands.
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto updated = bcos::task::syncWait(readView.readAccount(addr));
     BOOST_REQUIRE(updated.has_value());
@@ -545,7 +545,7 @@ BOOST_AUTO_TEST_CASE(BcosExtensionRowSkippedInScenarioAThrowsInL2)
     // Scenario B (Ethereum-compatible): the same delta throws — an unrecognized row must not
     // silently fall out of the state commitment.
     BOOST_CHECK_EXCEPTION(
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/true)),
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/true, bcos::ledger::account::AddressTableMode::Hex)),
         UnexpectedBCOSFieldInL2,
         [](auto const& e) { return errinfoContains(e, "BCOS extension field present in L2"); });
 }
@@ -568,11 +568,11 @@ BOOST_AUTO_TEST_CASE(UnclassifiedRowFieldThrowsInBothModes)
     writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("5"));
 
     BOOST_CHECK_EXCEPTION(
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false)),
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex)),
         UnknownAccountRowField,
         [](auto const& e) { return errinfoContains(e, "unclassified account row field"); });
     BOOST_CHECK_EXCEPTION(
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/true)),
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/true, bcos::ledger::account::AddressTableMode::Hex)),
         UnknownAccountRowField,
         [](auto const& e) { return errinfoContains(e, "unclassified account row field"); });
 }
@@ -600,7 +600,7 @@ BOOST_AUTO_TEST_CASE(DeleteLastLeafThenInsertNewSlotRecomputesStorageRoot)
     writeFlatRow(view, accountSlotKey(addr, slotKey(0x01)), slotEntry(bcos::bytes{0x22}));
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     // The storage trie must now hold ONLY the new slot — never the prior root, never empty.
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
@@ -639,8 +639,8 @@ BOOST_AUTO_TEST_CASE(UntrackedBuildSkipsRefCountTallyOnly)
         writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("2"));
         writeFlatRow(view, accountSlotKey(addr, slotKey(0x00)), slotEntry(bcos::bytes{0xFF}));
         deleteFlatRowLogically(view, accountSlotKey(addr, slotKey(0x01)));
-        return bcos::task::syncWait(
-            buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false, trackRefCounts));
+        return bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false,
+            /*accountMode=*/bcos::ledger::account::AddressTableMode::Hex, trackRefCounts));
     };
 
     auto const tracked = runBuild(true);

@@ -170,11 +170,13 @@ struct SeededState
 
     TestMPTAccount account()
     {
-        return {execStorage, nodeStorage, backendStorage, addr, /*binaryAddress*/ false};
+        return {execStorage, nodeStorage, backendStorage, addr,
+            bcos::ledger::account::AddressTableMode::Hex};
     }
     TestMPTAccount accountAt(bcos::Address const& address)
     {
-        return {execStorage, nodeStorage, backendStorage, address, /*binaryAddress*/ false};
+        return {execStorage, nodeStorage, backendStorage, address,
+            bcos::ledger::account::AddressTableMode::Hex};
     }
     std::string tableName() const { return "/apps/" + addr.hex(); }
     /// The historical root, in the optional form every read takes.
@@ -286,14 +288,15 @@ BOOST_AUTO_TEST_CASE(DefaultReadsAreFlatWithReadYourWrites)
     BOOST_CHECK_EQUAL(flatAbi->get(), "the-abi");
 }
 
-// binaryAddress is what makes the no-root path address the right table on a feature_raw_address
-// chain, which is why the constructor takes it without a default. With it set, the inherited
-// reads and writes must use the raw-byte table name, not the hex one.
+// The AddressTableMode is what makes the no-root path address the right table on a
+// binary-layout node, which is why the constructor takes it without a default. In Binary
+// mode the inherited reads and writes must use the raw-byte table name, not the hex one.
 BOOST_AUTO_TEST_CASE(BinaryAddressSelectsTheRawTable)
 {
     SeededState state;
     TestMPTAccount account{
-        state.execStorage, state.nodeStorage, state.backendStorage, state.addr, true};
+        state.execStorage, state.nodeStorage, state.backendStorage, state.addr,
+            bcos::ledger::account::AddressTableMode::Binary};
 
     std::string expected{bcos::ledger::SYS_DIRECTORY::USER_APPS};
     expected.append(reinterpret_cast<const char*>(state.addr.data()), state.addr.size());
@@ -578,7 +581,7 @@ static_assert(!HistoricalStorageContext<FlatStorage>);
 
 }  // namespace
 
-// The (storage, address, binaryAddress) constructor — HostContext's fixed construction shape —
+// The (storage, address, AddressTableMode) constructor — HostContext's fixed construction shape —
 // pulls the trie handles off the storage type and reads the same state both ways.
 BOOST_AUTO_TEST_CASE(HostContextConstructionShape)
 {
@@ -591,7 +594,7 @@ BOOST_AUTO_TEST_CASE(HostContextConstructionShape)
     std::copy(state.addr.begin(), state.addr.end(), std::begin(evmcAddr.bytes));
 
     MPTAccount<StubHistoricalStorage, NodeStorage, FlatStorage> account{
-        stub, evmcAddr, /*binaryAddress*/ false};
+        stub, evmcAddr, bcos::ledger::account::AddressTableMode::Hex};
     BOOST_CHECK_EQUAL(bcos::task::syncWait(account.balance(state.stateRoot)), 1000);
     BOOST_CHECK_EQUAL(*bcos::task::syncWait(account.nonce(state.stateRoot)), "7");
     BOOST_CHECK_EQUAL(

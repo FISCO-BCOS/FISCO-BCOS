@@ -1,6 +1,7 @@
 #pragma once
 #include "../storage/Entry.h"
 #include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/FixedBytes.h"
 #include "bcos-utilities/ThreeWay4Apple.h"
 #include <boost/throw_exception.hpp>
 #include <compare>
@@ -29,12 +30,44 @@ public:
         m_tableAndKey.append(key);
     }
     explicit StateKey(std::string tableAndKey)
-      : m_tableAndKey(std::move(tableAndKey)), m_split(m_tableAndKey.find_first_of(':'))
+      : m_tableAndKey(std::move(tableAndKey)), m_split(splitPosition(m_tableAndKey))
     {
         if (m_split == std::string::npos)
         {
             throwTrace(NoTableSpliterError());
         }
+    }
+
+    // Locate the table/key separator in the flat "table:key" form. Raw-address
+    // account tables (the binary node-local layout: "/apps/" + 20 raw address bytes) can
+    // contain 0x3a (':') inside the address, so a plain find_first_of(':') would
+    // split inside the table name. The binary form is fixed-length, and a ':' at
+    // exactly that offset is unambiguous: the legacy 40-hex form holds only hex
+    // digits there, never ':'. Everything else keeps first-':' semantics.
+    //
+    // Overall invariant: this rule assumes the "/apps/" tables come in exactly two
+    // shapes — 20 raw address bytes or the 40 lowercase hex chars of the same address.
+    // The encoding is NOT prefix-free: a shorter "/apps/" table whose name plus the
+    // start of its key happens to place a ':' at the fixed offset is misread as a
+    // binary-address table (e.g. "/apps/foo" + key "<16 chars>:bar" splits as table
+    // "/apps/foo:<16 chars>"). No reachable case exists today — the BFS directory
+    // tables under /apps/ never carry ':' in their keys — and the known-ambiguity
+    // test in TestKeyPrefixes.cpp pins the current behaviour.
+    //
+    // Constants: the 20 is bcos::Address::SIZE. The "/apps/" prefix is deliberately a
+    // literal: it is ledger::SYS_DIRECTORY::USER_APPS (ledger/LedgerTypeDef.h), but
+    // LedgerTypeDef.h includes this header, so naming the constant here would close an
+    // include cycle.
+    static size_t splitPosition(std::string_view tableAndKey) noexcept
+    {
+        constexpr std::string_view appsPrefix = "/apps/";  // ledger::SYS_DIRECTORY::USER_APPS
+        constexpr size_t rawAddressTableSize = appsPrefix.size() + bcos::Address::SIZE;
+        if (tableAndKey.size() > rawAddressTableSize && tableAndKey.starts_with(appsPrefix) &&
+            tableAndKey[rawAddressTableSize] == ':')
+        {
+            return rawAddressTableSize;
+        }
+        return tableAndKey.find_first_of(':');
     }
     explicit StateKey(StateKeyView const& view);
 

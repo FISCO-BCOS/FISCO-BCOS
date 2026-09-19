@@ -367,7 +367,7 @@ BOOST_AUTO_TEST_CASE(historicalBackendResolvesAccountRows)
     auto const table = ledger::mpt::accountTableName(hcAddress());
 
     auto latestView = multiLayerStorage.fork();
-    HCHistoricalBackend backendAt1(latestView, headers[0]->stateRoot());
+    HCHistoricalBackend backendAt1(latestView, headers[0]->stateRoot(), ledger::account::AddressTableMode::Hex);
 
     // Slot: the block-1 value, not the block-2 overwrite.
     auto slotEntry =
@@ -390,7 +390,7 @@ BOOST_AUTO_TEST_CASE(historicalBackendResolvesAccountRows)
     BOOST_CHECK(existsEntry.has_value());
 
     // A root later in the chain serves the overwrite and the balance bump.
-    HCHistoricalBackend backendAt3(latestView, headers[2]->stateRoot());
+    HCHistoricalBackend backendAt3(latestView, headers[2]->stateRoot(), ledger::account::AddressTableMode::Hex);
     auto slotAt3 =
         task::syncWait(storage2::readOne(backendAt3, StateKeyView{table, hcSlotRowKey()}));
     BOOST_REQUIRE(slotAt3);
@@ -425,7 +425,7 @@ BOOST_AUTO_TEST_CASE(historicalViewReadYourWrites)
     auto const table = ledger::mpt::accountTableName(hcAddress());
 
     auto latestView = multiLayerStorage.fork();
-    HCHistoricalBackend historicalBackend(latestView, headers[0]->stateRoot());
+    HCHistoricalBackend historicalBackend(latestView, headers[0]->stateRoot(), ledger::account::AddressTableMode::Hex);
     HCHistoricalView historicalView(std::addressof(historicalBackend));
     historicalView.newMutable();
 
@@ -581,7 +581,7 @@ BOOST_AUTO_TEST_CASE(executableCacheBypassForHistoricalStorage)
     task::syncWait(storage2::writeOne(hostcontext::getCacheExecutables(), cachedAddress, poisoned));
 
     auto latestView = multiLayerStorage.fork();
-    HCHistoricalBackend historicalBackend(latestView, headers[0]->stateRoot());
+    HCHistoricalBackend historicalBackend(latestView, headers[0]->stateRoot(), ledger::account::AddressTableMode::Hex);
     HCHistoricalView historicalView(std::addressof(historicalBackend));
     historicalView.newMutable();
     Rollbackable<HCHistoricalView> rollbackable(historicalView);
@@ -589,7 +589,7 @@ BOOST_AUTO_TEST_CASE(executableCacheBypassForHistoricalStorage)
     // Historical storage: the poisoned cache entry must NOT be served. The address has no
     // leaf at the block-1 root, so its code resolves to nothing — "no executable".
     auto historicalResult = task::syncWait(hostcontext::getExecutable(
-        rollbackable, cachedAddress, EVMC_CANCUN, /*binaryAddress*/ false));
+        rollbackable, cachedAddress, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
     BOOST_CHECK(!historicalResult);
 
     // Positive control: a latest-state storage IS served from the cache for the same
@@ -598,7 +598,7 @@ BOOST_AUTO_TEST_CASE(executableCacheBypassForHistoricalStorage)
     plainView.newMutable();
     Rollbackable<decltype(plainView)> plainRollbackable(plainView);
     auto latestResult = task::syncWait(hostcontext::getExecutable(
-        plainRollbackable, cachedAddress, EVMC_CANCUN, /*binaryAddress*/ false));
+        plainRollbackable, cachedAddress, EVMC_CANCUN, ledger::account::AddressTableMode::Hex));
     BOOST_CHECK_EQUAL(latestResult.get(), poisoned.get());
 
     // Clean up the global cache so no other test sees this entry.

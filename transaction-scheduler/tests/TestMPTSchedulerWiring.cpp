@@ -554,7 +554,8 @@ BOOST_AUTO_TEST_CASE(pipelineVisibilityNegativeControl)
     {
         ViewNodeStorage<MWMultiLayerStorage::ViewType> nodeStorage(freshView);
         auto delta =
-            task::syncWait(mpt::buildAndCollect(nodeStorage, parentRoot, freshView, false));
+            task::syncWait(mpt::buildAndCollect(nodeStorage, parentRoot, freshView, false,
+                ledger::account::AddressTableMode::Hex));
         mpt::Account accountA;
         accountA.balance = 11;
         mpt::Account accountB;
@@ -567,7 +568,8 @@ BOOST_AUTO_TEST_CASE(pipelineVisibilityNegativeControl)
     {
         ViewNodeStorage<MWMultiLayerStorage::ViewType> nodeStorage(staleView);
         BOOST_CHECK_THROW(
-            task::syncWait(mpt::buildAndCollect(nodeStorage, parentRoot, staleView, false)),
+            task::syncWait(mpt::buildAndCollect(nodeStorage, parentRoot, staleView, false,
+                               ledger::account::AddressTableMode::Hex)),
             mpt::MPTInvariantViolation);
     }
 }

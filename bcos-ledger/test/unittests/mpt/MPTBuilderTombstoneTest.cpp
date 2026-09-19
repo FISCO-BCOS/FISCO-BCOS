@@ -124,8 +124,8 @@ BOOST_AUTO_TEST_CASE(SelfdestructRemovesAccountFromTrie)
 
     // A tombstone account still reaches the scan: logical deletion keeps its keys in the delta
     // layer, so the run is seen and settled as a tombstone.
-    auto output = bcos::task::syncWait(buildAndCollect(
-        storage, parentRoot, view, /*l2Mode=*/false, /*trackRefCounts=*/true));
+    auto output = bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false,
+        /*accountMode=*/bcos::ledger::account::AddressTableMode::Hex, /*trackRefCounts=*/true));
 
     // The destroyed account is gone; the untouched one still reads back.
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
@@ -169,8 +169,8 @@ BOOST_AUTO_TEST_CASE(UntrackedTombstoneSkipsManualRefCountEntry)
     auto view = makeFlatView(flatBackend);
     writeTombstoneEntries(view, addrA);
 
-    auto output = bcos::task::syncWait(buildAndCollect(
-        storage, parentRoot, view, /*l2Mode=*/false, /*trackRefCounts=*/false));
+    auto output = bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false,
+        /*accountMode=*/bcos::ledger::account::AddressTableMode::Hex, /*trackRefCounts=*/false));
 
     BOOST_CHECK(output.refCountDeltas.empty());
     BOOST_CHECK(output.obsoletedNodes.contains(accountA.storageRoot));
@@ -195,7 +195,7 @@ BOOST_AUTO_TEST_CASE(TombstoneOfSoleAccountEmptiesTheTrie)
     deleteFlatRowLogically(view, accountFieldKey(addr, ROW_CODE_HASH));
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     BOOST_CHECK(output.stateRoot == emptyRootHash());  // sole account gone
     BOOST_CHECK(output.obsoletedNodes.contains(account.storageRoot));
@@ -226,7 +226,7 @@ BOOST_AUTO_TEST_CASE(TombstoneIgnoresStorageChanges)
     writeFlatRow(view, accountSlotKey(addrA, slotKey(0x09)), slotEntry(bcos::bytes{0x99}));
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto goneA = bcos::task::syncWait(readView.readAccount(addrA));
@@ -249,7 +249,7 @@ BOOST_AUTO_TEST_CASE(TombstoneOfAccountAbsentFromParentIsNoop)
     writeTombstoneEntries(view, absent);
 
     auto output =
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     BOOST_CHECK(output.stateRoot == parentRoot);
     BOOST_CHECK(output.obsoletedNodes.empty());
@@ -282,7 +282,7 @@ BOOST_AUTO_TEST_CASE(RebornNextBlockWalksFirstTouchWithIndependentStorage)
     auto viewN = makeFlatView(flatBackend);
     writeTombstoneEntries(viewN, addrA);
     auto outputN =
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, viewN, /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, viewN, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
     {
         MPTReadView<NodeStorage> readView(storage, outputN.stateRoot);
         auto gone = bcos::task::syncWait(readView.readAccount(addrA));
@@ -298,7 +298,7 @@ BOOST_AUTO_TEST_CASE(RebornNextBlockWalksFirstTouchWithIndependentStorage)
         makeEntry(std::string_view{
             reinterpret_cast<char const*>(makeHash(0xCE).data()), bcos::h256::SIZE}));
     auto outputBare = bcos::task::syncWait(
-        buildAndCollect(storage, outputN.stateRoot, viewBare, /*l2Mode=*/false));
+        buildAndCollect(storage, outputN.stateRoot, viewBare, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
     {
         MPTReadView<NodeStorage> readView(storage, outputBare.stateRoot);
         auto reborn = bcos::task::syncWait(readView.readAccount(addrA));
@@ -318,7 +318,7 @@ BOOST_AUTO_TEST_CASE(RebornNextBlockWalksFirstTouchWithIndependentStorage)
             reinterpret_cast<char const*>(makeHash(0xCE).data()), bcos::h256::SIZE}));
     writeFlatRow(viewSlot, accountSlotKey(addrA, newSlot), slotEntry(bcos::bytes{0x99}));
     auto outputSlot = bcos::task::syncWait(
-        buildAndCollect(storage, outputN.stateRoot, viewSlot, /*l2Mode=*/false));
+        buildAndCollect(storage, outputN.stateRoot, viewSlot, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
     {
         MPTReadView<NodeStorage> readView(storage, outputSlot.stateRoot);
         auto reborn = bcos::task::syncWait(readView.readAccount(addrA));
