@@ -309,12 +309,6 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coExecute
         std::optional<h256> mptStateRoot;
         if (shouldBuildMPT(ledgerConfig->features(), blockHeader->number()))
         {
-            // Reaching here means an MPT IS being built, so the flag-matrix rule the
-            // build depends on has to hold. Re-checked per block rather than at startup
-            // only: a mid-chain activation of either flag is invisible to the boot-time
-            // guard (LedgerInitializer). Inside the branch, so shouldBuildMPT stays a
-            // pure predicate AND is evaluated once.
-            rejectRawAddressWithMPT(ledgerConfig->features(), blockHeader->number());
             try
             {
                 mptDelta.emplace(co_await buildMPTStateRoot(view, *blockHeader, *ledgerConfig));
@@ -818,7 +812,8 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
             }
 
             HistoricalStateBackend<typename MultiLayerStorage::ViewType> historicalBackend(
-                latestView, stateRoot);
+                latestView, stateRoot,
+                ledger::account::accountTableMode(ledgerConfig->features()));
             storage2::View<typename MultiLayerStorage::MutableStorage, void,
                 HistoricalStateBackend<typename MultiLayerStorage::ViewType>>
                 historicalView(std::addressof(historicalBackend));
@@ -872,7 +867,7 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::getC
             co_await ledger::getLedgerConfig(view, blockNumber, self->m_blockFactory.get());
 
         ledger::account::EVMAccount account(view, contractAddress,
-            ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
+            ledger::account::accountTableMode(ledgerConfig->features()));
         auto code = co_await account.code();
 
         if (!code)
@@ -898,7 +893,7 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::getA
             co_await ledger::getLedgerConfig(view, blockNumber, self->m_blockFactory.get());
 
         ledger::account::EVMAccount account(view, contractAddress,
-            ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
+            ledger::account::accountTableMode(ledgerConfig->features()));
         auto abi = co_await account.abi();
 
         if (!abi)
@@ -919,7 +914,7 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::getPendin
     auto ledgerConfig = co_await ledger::getLedgerConfig(view, number, m_blockFactory.get());
 
     ledger::account::EVMAccount account(
-        view, address, ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
+        view, address, ledger::account::accountTableMode(ledgerConfig->features()));
     co_return co_await account.storageEntry(key);
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>

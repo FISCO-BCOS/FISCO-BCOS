@@ -1,6 +1,7 @@
 #pragma once
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/Storage.h"
@@ -15,12 +16,46 @@ namespace bcos::ledger::account
 
 DERIVE_BCOS_EXCEPTION(NonceNotInitialized);
 
-/// Tag for the table-name constructor below. A distinct type (not a bool) so it can never be
-/// confused with the `binaryAddress` flag the address-taking constructors carry.
+/// Tag for the table-name constructor below. A distinct type so it can never be
+/// confused with the AddressTableMode the address-taking constructors carry.
 struct FromTableName
 {
     explicit FromTableName() = default;
 };
+
+/// How an account's table name is derived from its address (feature_raw_address, Flag=54):
+///   - Hex: "/apps/<40 lowercase hex chars>" — the pre-feature layout.
+///   - Binary: "/apps/<20 raw address bytes>" — the post-feature layout.
+///   - BinaryWithHexFallback: Binary for every WRITE and the primary read, plus a read
+///     fallback to the Hex table. Only meaningful for a chain that activated
+///     feature_raw_address mid-chain: the blocks before activation wrote hex tables, and
+///     without the fallback those rows would be invisible once the feature turns on.
+enum class AddressTableMode
+{
+    Hex,
+    Binary,
+    BinaryWithHexFallback,
+};
+
+/// The mode for @p features, and the consensus-deterministic gate on the fallback: the
+/// fallback changes execution results, so it is enabled exactly when the chain can hold
+/// pre-activation hex data — feature_raw_address is on AND its activation block is known
+/// and non-genesis (activationBlockOf > 0). A bare set() (genesis loading, tests) reports
+/// activationBlockOf() == -1, so genesis-enabled chains stay plain Binary and pay zero
+/// extra reads.
+inline AddressTableMode accountTableMode(const ledger::Features& features)
+{
+    constexpr auto flag = ledger::Features::Flag::feature_raw_address;
+    if (!features.get(flag))
+    {
+        return AddressTableMode::Hex;
+    }
+    if (features.activationBlockOf(flag) > 0)
+    {
+        return AddressTableMode::BinaryWithHexFallback;
+    }
+    return AddressTableMode::Binary;
+}
 
 template <class Storage>
 class EVMAccount
@@ -29,12 +64,45 @@ class EVMAccount
 private:
     std::reference_wrapper<Storage> m_storage;
     std::string m_tableName;
+    // The 40-hex account table name, non-empty only in AddressTableMode::BinaryWithHexFallback
+    // (see accountTableMode). Reads consult it after a miss on m_tableName; writes NEVER touch
+    // it — every write lands in m_tableName (the binary table), so a new write naturally
+    // shadows the pre-activation hex row.
+    std::string m_fallbackTableName;
+
+    /// Read one row of the account table: m_tableName first, then m_fallbackTableName when
+    /// the fallback is armed. Applies to every account-table row read below; the
+    /// hash-addressed global tables (s_code_binary / s_contract_abi) are shared by both
+    /// layouts and are read directly.
+    task::Task<std::optional<storage::Entry>> readRow(std::string_view key)
+    {
+        if (auto entry = co_await storage2::readOne(
+                m_storage.get(), executor_v1::StateKeyView{m_tableName, key}))
+        {
+            co_return entry;
+        }
+        if (!m_fallbackTableName.empty())
+        {
+            co_return co_await storage2::readOne(
+                m_storage.get(), executor_v1::StateKeyView{m_fallbackTableName, key});
+        }
+        co_return std::nullopt;
+    }
 
 public:
     task::Task<bool> exists()
     {
-        co_return co_await storage2::existsOne(
-            m_storage.get(), executor_v1::StateKeyView(SYS_TABLES, m_tableName));
+        if (co_await storage2::existsOne(
+                m_storage.get(), executor_v1::StateKeyView(SYS_TABLES, m_tableName)))
+        {
+            co_return true;
+        }
+        if (!m_fallbackTableName.empty())
+        {
+            co_return co_await storage2::existsOne(
+                m_storage.get(), executor_v1::StateKeyView(SYS_TABLES, m_fallbackTableName));
+        }
+        co_return false;
     }
 
     /// Ethereum-style existence (EIP-161 Spurious Dragon+): an account with nonce 0, balance 0
@@ -74,8 +142,7 @@ public:
     {
         // 先通过code hash从s_code_binary找代码
         // Start by using the code hash to find the code from the s_code_binary
-        if (auto codeHashEntry = co_await storage2::readOne(m_storage.get(),
-                executor_v1::StateKeyView{m_tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH}))
+        if (auto codeHashEntry = co_await readRow(ACCOUNT_TABLE_FIELDS::CODE_HASH))
         {
             if (auto codeEntry = co_await storage2::readOne(m_storage.get(),
                     executor_v1::StateKeyView{ledger::SYS_CODE_BINARY, codeHashEntry->get()}))
@@ -88,8 +155,7 @@ public:
         // precompiled，代码在合约表的code字段里
         // Can't find it in the s_code_binary, it may be a contract deployed in the old version or
         // internal precompiled, and the code is in the code field of the contract table
-        if (auto codeEntry = co_await storage2::readOne(m_storage.get(),
-                executor_v1::StateKeyView{m_tableName, ACCOUNT_TABLE_FIELDS::CODE}))
+        if (auto codeEntry = co_await readRow(ACCOUNT_TABLE_FIELDS::CODE))
         {
             co_return codeEntry;
         }
@@ -123,8 +189,7 @@ public:
 
     task::Task<h256> codeHash()
     {
-        if (auto codeHashEntry = co_await storage2::readOne(m_storage.get(),
-                executor_v1::StateKeyView{m_tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH}))
+        if (auto codeHashEntry = co_await readRow(ACCOUNT_TABLE_FIELDS::CODE_HASH))
         {
             auto view = codeHashEntry->get();
             h256 codeHash((const bcos::byte*)view.data(), view.size());
@@ -137,8 +202,7 @@ public:
     {
         // 先通过code hash从s_contract_abi找代码
         // Start by using the code hash to find the code from the s_contract_abi
-        if (auto codeHashEntry = co_await storage2::readOne(m_storage.get(),
-                executor_v1::StateKeyView{m_tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH}))
+        if (auto codeHashEntry = co_await readRow(ACCOUNT_TABLE_FIELDS::CODE_HASH))
         {
             if (auto abiEntry = co_await storage2::readOne(m_storage.get(),
                     executor_v1::StateKeyView{ledger::SYS_CONTRACT_ABI, codeHashEntry->get()}))
@@ -151,8 +215,7 @@ public:
         // precompiled，代码在合约表的code字段里
         // I can't find it in the s_code_binary, it may be a contract deployed in the old version or
         // internal precompiled, and the code is in the code field of the contract table
-        if (auto abiEntry = co_await storage2::readOne(
-                m_storage.get(), executor_v1::StateKeyView{m_tableName, ACCOUNT_TABLE_FIELDS::ABI}))
+        if (auto abiEntry = co_await readRow(ACCOUNT_TABLE_FIELDS::ABI))
         {
             co_return abiEntry;
         }
@@ -161,8 +224,7 @@ public:
 
     task::Task<u256> balance()
     {
-        if (auto balanceEntry = co_await storage2::readOne(m_storage.get(),
-                executor_v1::StateKeyView{m_tableName, ACCOUNT_TABLE_FIELDS::BALANCE}))
+        if (auto balanceEntry = co_await readRow(ACCOUNT_TABLE_FIELDS::BALANCE))
         {
             auto view = balanceEntry->get();
             auto balance = boost::lexical_cast<u256>(view);
@@ -181,8 +243,7 @@ public:
 
     task::Task<std::optional<std::string>> nonce()
     {
-        if (auto entry = co_await storage2::readOne(m_storage.get(),
-                executor_v1::StateKeyView{m_tableName, ACCOUNT_TABLE_FIELDS::NONCE}))
+        if (auto entry = co_await readRow(ACCOUNT_TABLE_FIELDS::NONCE))
         {
             auto view = entry->get();
             co_return std::string(view);
@@ -212,8 +273,7 @@ public:
 
     task::Task<evmc_bytes32> storage(const evmc_bytes32& key)
     {
-        if (auto valueEntry = co_await storage2::readOne(m_storage.get(),
-                executor_v1::StateKeyView{m_tableName, concepts::bytebuffer::toView(key.bytes)}))
+        if (auto valueEntry = co_await readRow(concepts::bytebuffer::toView(key.bytes)))
         {
             auto field = valueEntry->get();
             evmc_bytes32 value;
@@ -229,11 +289,18 @@ public:
     // Tag-forwarding storage read: passes all tags through to the underlying
     // readOneRaw call. Callers compose the exact set of tags they need
     // (e.g. BYPASS_READ_SET | BYPASS_MULTILAYER for metadata reads that
-    // must skip both conflict tracking and layer resolution).
+    // must skip both conflict tracking and layer resolution). Tags are taken
+    // by value so they can be forwarded to the fallback read as well.
     task::Task<evmc_bytes32> storage(const evmc_bytes32& key, auto... tags)
     {
         auto rawValue = co_await m_storage.get().readOneRaw(
             executor_v1::StateKey{m_tableName, concepts::bytebuffer::toView(key.bytes)}, tags...);
+        if (!std::holds_alternative<storage::Entry>(rawValue) && !m_fallbackTableName.empty())
+        {
+            rawValue = co_await m_storage.get().readOneRaw(
+                executor_v1::StateKey{m_fallbackTableName, concepts::bytebuffer::toView(key.bytes)},
+                tags...);
+        }
         evmc_bytes32 value{};
         if (auto* entry = std::get_if<storage::Entry>(std::addressof(rawValue)))
         {
@@ -254,8 +321,7 @@ public:
 
     task::Task<std::optional<bcos::storage::Entry>> storageEntry(const std::string_view& key)
     {
-        co_return co_await storage2::readOne(
-            m_storage.get(), executor_v1::StateKeyView{m_tableName, key});
+        co_return co_await readRow(key);
     }
 
     task::Task<std::string_view> path() { co_return m_tableName; }
@@ -265,9 +331,10 @@ public:
     EVMAccount& operator=(const EVMAccount&) = delete;
     EVMAccount& operator=(EVMAccount&&) noexcept = default;
     /// Construct directly from the account's table name, bypassing address→table-name routing
-    /// entirely. Every method of this class reads nothing but `m_tableName`, so this is the
-    /// primitive the two address-taking constructors below are sugar for; it adds no new
-    /// semantics and changes nothing for existing callers.
+    /// entirely. This constructor leaves the fallback table name empty, so every method of the
+    /// resulting object reads nothing but `m_tableName` — it is the primitive the two
+    /// address-taking constructors below are sugar for; it adds no new semantics and changes
+    /// nothing for existing callers.
     ///
     /// It exists for callers that must derive the table name themselves and need the *write*
     /// side pinned to the exact same string as their own reads. The address-taking constructors
@@ -280,21 +347,23 @@ public:
       : m_storage(storage), m_tableName(std::move(tableName))
     {}
 
-    EVMAccount(Storage& storage, const evmc_address& address, bool binaryAddress)
+    EVMAccount(Storage& storage, const evmc_address& address, AddressTableMode mode)
       : m_storage(storage)
     {
         std::array<char, sizeof(address.bytes) * 2> table;  // NOLINT
         boost::algorithm::hex_lower(concepts::bytebuffer::toView(address.bytes), table.data());
-        if (auto view = std::string_view(table.data(), table.size());
-            precompiled::contains(bcos::precompiled::c_systemTxsAddress, view))
+        auto hexView = std::string_view(table.data(), table.size());
+        if (precompiled::contains(bcos::precompiled::c_systemTxsAddress, hexView))
         {
-            m_tableName.reserve(ledger::SYS_DIRECTORY::SYS_APPS.size() + table.size());
+            // System-tx addresses always route to /sys/ with the hex name; those tables
+            // never moved, so no fallback applies regardless of mode.
+            m_tableName.reserve(ledger::SYS_DIRECTORY::SYS_APPS.size() + hexView.size());
             m_tableName.append(ledger::SYS_DIRECTORY::SYS_APPS);
-            m_tableName.append(std::string_view(table.data(), table.size()));
+            m_tableName.append(hexView);
         }
         else
         {
-            if (binaryAddress)
+            if (mode != AddressTableMode::Hex)
             {
                 auto addressView = std::span(address.bytes);
                 m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + addressView.size());
@@ -304,9 +373,16 @@ public:
             }
             else
             {
-                m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + table.size());
+                m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + hexView.size());
                 m_tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
-                m_tableName.append(std::string_view(table.data(), table.size()));
+                m_tableName.append(hexView);
+            }
+            if (mode == AddressTableMode::BinaryWithHexFallback)
+            {
+                m_fallbackTableName.reserve(
+                    ledger::SYS_DIRECTORY::USER_APPS.size() + hexView.size());
+                m_fallbackTableName.append(ledger::SYS_DIRECTORY::USER_APPS);
+                m_fallbackTableName.append(hexView);
             }
         }
     }
@@ -315,8 +391,10 @@ public:
      * @brief Construct a new EVMAccount object
      * @param storage storage instance
      * @param address address of the account, hex string, should not contain 0x prefix
+     * @param mode how the account table name is derived (see AddressTableMode)
      */
-    EVMAccount(Storage& storage, std::string_view address, bool binaryAddress) : m_storage(storage)
+    EVMAccount(Storage& storage, std::string_view address, AddressTableMode mode)
+      : m_storage(storage)
     {
         if (precompiled::contains(bcos::precompiled::c_systemTxsAddress, address))
         {
@@ -326,7 +404,7 @@ public:
         }
         else
         {
-            if (binaryAddress)
+            if (mode != AddressTableMode::Hex)
             {
                 assert(address.size() % 2 == 0);
                 m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + (address.size() / 2));
@@ -340,10 +418,17 @@ public:
                 m_tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
                 m_tableName.append(address);
             }
+            if (mode == AddressTableMode::BinaryWithHexFallback)
+            {
+                m_fallbackTableName.reserve(
+                    ledger::SYS_DIRECTORY::USER_APPS.size() + address.size());
+                m_fallbackTableName.append(ledger::SYS_DIRECTORY::USER_APPS);
+                m_fallbackTableName.append(address);
+            }
         }
     }
 
-    EVMAccount(Storage& storage, const bcos::Address& address, bool binaryAddress)
+    EVMAccount(Storage& storage, const bcos::Address& address, AddressTableMode mode)
       : EVMAccount(
             storage,
             [](const bcos::Address& address) {
@@ -351,7 +436,7 @@ public:
                 ::ranges::copy(address, std::span{evmcAddress.bytes}.data());
                 return evmcAddress;
             }(address),
-            binaryAddress)
+            mode)
     {}
     ~EVMAccount() noexcept = default;
 

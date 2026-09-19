@@ -285,7 +285,7 @@ public:
                     co_await bcos::ledger::readFromStorage(features, view, blockNumber);
 
                     bcos::ledger::account::EVMAccount account(view, parseAddress(contract),
-                        features.get(bcos::ledger::Features::Flag::feature_raw_address));
+                        bcos::ledger::account::accountTableMode(features));
                     auto code = co_await account.code();
                     if (!code)
                     {
@@ -332,7 +332,7 @@ public:
                     co_await bcos::ledger::readFromStorage(features, view, blockNumber);
 
                     bcos::ledger::account::EVMAccount account(view, parseAddress(contract),
-                        features.get(bcos::ledger::Features::Flag::feature_raw_address));
+                        bcos::ledger::account::accountTableMode(features));
                     auto abi = co_await account.abi();
                     if (!abi)
                     {
@@ -387,8 +387,8 @@ public:
             // "can read the pending slot"). Scenario B keeps account fields in the committed
             // MPT, so when the pending/flat plane has no row, fall back to the committed tip's
             // MPT state.
-            bcos::ledger::account::EVMAccount pendingAccount(view, addressOwned,
-                features.get(bcos::ledger::Features::Flag::feature_raw_address));
+            bcos::ledger::account::EVMAccount pendingAccount(
+                view, addressOwned, bcos::ledger::account::accountTableMode(features));
             if (auto pending = co_await pendingAccount.storageEntry(keyOwned))
             {
                 co_return pending;
@@ -403,11 +403,13 @@ public:
             if (stateRoot != bcos::crypto::HashType{})
             {
                 using HistoricalBackend = bcos::scheduler_v1::HistoricalStateBackend<ViewType>;
-                HistoricalBackend historicalBackend(view, stateRoot);
+                HistoricalBackend historicalBackend(
+                    view, stateRoot, bcos::ledger::account::accountTableMode(features));
                 storage2::View<typename MultiLayerStorage::MutableStorage, void, HistoricalBackend>
                     historicalView(std::addressof(historicalBackend));
-                bcos::ledger::account::EVMAccount<decltype(historicalView)> account(historicalView,
-                    addressOwned, features.get(bcos::ledger::Features::Flag::feature_raw_address));
+                bcos::ledger::account::EVMAccount<decltype(historicalView)> account(
+                    historicalView, addressOwned,
+                    bcos::ledger::account::accountTableMode(features));
                 if (auto nonce = co_await account.nonce())
                 {
                     storage::Entry entry;
@@ -418,7 +420,7 @@ public:
             }
         }
         bcos::ledger::account::EVMAccount account(
-            view, addressOwned, features.get(bcos::ledger::Features::Flag::feature_raw_address));
+            view, addressOwned, bcos::ledger::account::accountTableMode(features));
         co_return co_await account.storageEntry(keyOwned);
     }
 
@@ -1100,8 +1102,9 @@ private:
                 auto const parentRoot = parentBlock->blockHeader()->stateRoot();
                 try
                 {
-                    auto delta = co_await ledger::mpt::buildAndCollect(
-                        nodeStorage, parentRoot, view, /*l2Mode=*/true);
+                    auto delta = co_await ledger::mpt::buildAndCollect(nodeStorage, parentRoot,
+                        view, /*l2Mode=*/true,
+                        bcos::ledger::account::accountTableMode(ledgerConfig.features()));
                     if (m_crossCheckIncrementalRoot)
                     {
                         bcos::evm::evmstate::Storage2State<ViewType> fullCheck(
@@ -1656,7 +1659,8 @@ private:
 
         // Fresh mutable layer over the historical MPT; call writes are not persisted.
         using HistoricalBackend = bcos::scheduler_v1::HistoricalStateBackend<ViewType>;
-        HistoricalBackend historicalBackend(latestView, stateRoot);
+        HistoricalBackend historicalBackend(
+            latestView, stateRoot, bcos::ledger::account::accountTableMode(features));
         storage2::View<typename MultiLayerStorage::MutableStorage, void, HistoricalBackend>
             historicalView(std::addressof(historicalBackend));
         historicalView.newMutable();

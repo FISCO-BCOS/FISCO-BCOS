@@ -16,8 +16,14 @@
 //   * poison-flag channel: reads are noexcept and swallow storage errors into poisoned()/
 //     firstError(); consumers must fail the whole block on poisoned() — never degrade a storage
 //     fault to “account missing”. applyDiff write-back failures poison AND rethrow (tripwire);
-//   * account tables are “/apps/<hex(addr)>” paths (mainline MPT classifier), same for every
-//     address incl. c_systemTxsAddress; requires feature_raw_address=off;
+//   * account tables are "/apps/<hex(addr)>" paths (mainline MPT classifier), same for every
+//     address incl. c_systemTxsAddress. The bridge derives the hex name itself
+//     (Storage2StateHelpers.h accountTableName) and is NOT feature_raw_address-aware: with
+//     raw_address active the mainline executor routes accounts to 20-byte binary tables, and
+//     this bridge would not find them. The MPT layer no longer rejects the flag combination
+//     (the raw_address/MPT guard is gone — parseAccountTable classifies both layouts), so the
+//     constraint now stands on this bridge alone; keep feature_raw_address off for OP lanes
+//     until the bridge grows mode-aware naming.
 //   * nested syncWait is safe only inside the x_state-serialized segment (backends complete
 //     synchronously in-thread).
 
@@ -366,7 +372,8 @@ private:
 
         // The table name is derived exactly once and shared by reads and writes. Deliberately
         // built via EVMAccount's `FromTableName` constructor rather than
-        // `EVMAccount(storage, addr, false)`: the latter routes the 8 c_systemTxsAddress
+        // `EVMAccount(storage, addr, AddressTableMode::Hex)`: the latter routes the 8
+        // c_systemTxsAddress
         // addresses into `/sys/` (EVMAccount.h:239-245), while every read/write here goes to
         // `/apps/` — a mismatch would split-brain (read /apps/, write /sys/). There must be a
         // single derivation of this rule, not two independent copies (two copies of one rule is

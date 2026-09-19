@@ -46,7 +46,7 @@ namespace bcos::ledger::mpt
 {
 
 /// A Storage that carries the MPT node/backend handles, letting MPTAccount keep EVMAccount's
-/// fixed (storage, address, binaryAddress) construction shape — the one HostContext uses.
+/// fixed (storage, address, AddressTableMode) construction shape — the one HostContext uses.
 ///
 /// Reserved for PR-43; nothing outside the tests satisfies it yet. It exists so a historical
 /// storage stack can hand HostContext an Account type without widening HostContext's three
@@ -118,13 +118,13 @@ private:
 
 public:
     /// Direct construction, for callers that already hold the trie handles (tests, tooling).
-    /// @param binaryAddress the caller's feature_raw_address setting, exactly as EVMAccount
-    /// takes it — deliberately without a default: it decides the flat table name every
-    /// no-root read and every inherited write uses, and guessing it wrong makes those reads
-    /// silently miss on a raw-address chain.
+    /// @param mode the caller's feature_raw_address table mode (ledger::account::AddressTableMode,
+    /// usually from accountTableMode(features)), exactly as EVMAccount takes it — deliberately
+    /// without a default: it decides the flat table name every no-root read and every inherited
+    /// write uses, and guessing it wrong makes those reads silently miss on a raw-address chain.
     MPTAccount(Storage& storage, NodeStorage& nodeStorage, BackendStorage& backendStorage,
-        bcos::Address address, bool binaryAddress)
-      : Base(storage, address, binaryAddress),
+        bcos::Address address, account::AddressTableMode mode)
+      : Base(storage, address, mode),
         m_nodeStorage(nodeStorage),
         m_backendStorage(backendStorage),
         m_address(address)
@@ -139,9 +139,9 @@ public:
     /// EVMAccount. Historical base state comes from the storage stack PR-43 builds (a writable
     /// layer over a read-through layer that resolves misses through the rooted reads below), not
     /// from the account type.
-    MPTAccount(Storage& storage, const evmc_address& address, bool binaryAddress)
+    MPTAccount(Storage& storage, const evmc_address& address, account::AddressTableMode mode)
         requires HistoricalStorageContext<Storage>
-      : Base(storage, address, binaryAddress),
+      : Base(storage, address, mode),
         m_nodeStorage(storage.mptNodeStorage()),
         m_backendStorage(storage.mptBackendStorage()),
         m_address(bcos::bytesConstRef{address.bytes, sizeof(address.bytes)})

@@ -29,12 +29,30 @@ public:
         m_tableAndKey.append(key);
     }
     explicit StateKey(std::string tableAndKey)
-      : m_tableAndKey(std::move(tableAndKey)), m_split(m_tableAndKey.find_first_of(':'))
+      : m_tableAndKey(std::move(tableAndKey)), m_split(splitPosition(m_tableAndKey))
     {
         if (m_split == std::string::npos)
         {
             throwTrace(NoTableSpliterError());
         }
+    }
+
+    // Locate the table/key separator in the flat "table:key" form. Raw-address
+    // account tables (feature_raw_address: "/apps/" + 20 raw address bytes) can
+    // contain 0x3a (':') inside the address, so a plain find_first_of(':') would
+    // split inside the table name. The binary form is fixed-length, and a ':' at
+    // exactly that offset is unambiguous: the legacy 40-hex form holds only hex
+    // digits there, never ':'. Everything else keeps first-':' semantics.
+    static size_t splitPosition(std::string_view tableAndKey) noexcept
+    {
+        constexpr std::string_view appsPrefix = "/apps/";
+        constexpr size_t rawAddressTableSize = appsPrefix.size() + 20;
+        if (tableAndKey.size() > rawAddressTableSize && tableAndKey.starts_with(appsPrefix) &&
+            tableAndKey[rawAddressTableSize] == ':')
+        {
+            return rawAddressTableSize;
+        }
+        return tableAndKey.find_first_of(':');
     }
     explicit StateKey(StateKeyView const& view);
 

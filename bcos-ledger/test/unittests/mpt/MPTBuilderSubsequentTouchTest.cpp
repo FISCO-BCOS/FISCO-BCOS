@@ -639,8 +639,8 @@ BOOST_AUTO_TEST_CASE(UntrackedBuildSkipsRefCountTallyOnly)
         writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("2"));
         writeFlatRow(view, accountSlotKey(addr, slotKey(0x00)), slotEntry(bcos::bytes{0xFF}));
         deleteFlatRowLogically(view, accountSlotKey(addr, slotKey(0x01)));
-        return bcos::task::syncWait(
-            buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false, trackRefCounts));
+        return bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false,
+            /*accountMode=*/bcos::ledger::account::AddressTableMode::Hex, trackRefCounts));
     };
 
     auto const tracked = runBuild(true);

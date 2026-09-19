@@ -918,7 +918,7 @@ public:
             evmc_address addr;
             std::copy(addrBytes.begin(), addrBytes.end(), addr.bytes);
 
-            ledger::account::EVMAccount<MutableStorage> evmAccount(storage, addr, false);
+            ledger::account::EVMAccount<MutableStorage> evmAccount(storage, addr, bcos::ledger::account::AddressTableMode::Hex);
 
             task::tbb::syncWait([&]() -> task::Task<void> {
                 if (!co_await evmAccount.exists())
@@ -1208,7 +1208,7 @@ public:
             evmc_address addr;
             std::copy(addrBytes.begin(), addrBytes.end(), addr.bytes);
 
-            ledger::account::EVMAccount<MutableStorage> evmAccount(storage, addr, false);
+            ledger::account::EVMAccount<MutableStorage> evmAccount(storage, addr, bcos::ledger::account::AddressTableMode::Hex);
 
             task::tbb::syncWait([&]() -> task::Task<void> {
                 // nonce
@@ -1335,7 +1335,7 @@ public:
             {
                 evmc_address senderAddr{};
                 std::copy(senderBytes.begin(), senderBytes.end(), senderAddr.bytes);
-                ledger::account::EVMAccount<MutableStorage> senderAcct(storage, senderAddr, false);
+                ledger::account::EVMAccount<MutableStorage> senderAcct(storage, senderAddr, bcos::ledger::account::AddressTableMode::Hex);
                 auto txNonce = test::hexToU256(fixture.transaction.nonce);
                 auto nonceStr = txNonce.str(0, std::ios_base::dec);
                 task::tbb::syncWait([&]() -> task::Task<void> {
@@ -1650,7 +1650,7 @@ public:
                 }
                 evmc_address senderAddr{};
                 std::copy(senderBytes.begin(), senderBytes.end(), senderAddr.bytes);
-                ledger::account::EVMAccount<MutableStorage> senderAcct(storage, senderAddr, false);
+                ledger::account::EVMAccount<MutableStorage> senderAcct(storage, senderAddr, bcos::ledger::account::AddressTableMode::Hex);
                 auto txNonce = test::hexToU256(tx.nonce);
                 auto nonceStr = txNonce.str(0, std::ios_base::dec);
                 task::tbb::syncWait([&]() -> task::Task<void> {

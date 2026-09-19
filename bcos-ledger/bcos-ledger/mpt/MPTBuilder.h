@@ -29,6 +29,7 @@
 #include "StorageValueCodec.h"
 // Named directly for the hash context buildAndCollect owns (also reachable transitively).
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
+#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
@@ -58,6 +59,10 @@ struct BuildContext
     MPTReadView<Storage> const& parentView;  ///< the parent block's MPT, for baseline lookups
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher& hasher;  ///< reused slot-key context
     bool l2Mode;  ///< scenario B: a BCOS extension row is an error rather than a skip
+    /// The chain's account-table mode (feature_raw_address): forwarded to readFlatAccountMeta,
+    /// which reads the binary table first and falls back to the legacy hex table when the mode
+    /// says so (EVMAccount owns the routing).
+    bcos::ledger::account::AddressTableMode accountMode;
     /// Forwarded to every mergeNodeDelta / hand tally: false when the configured CommitObserver
     /// does not count references (CommitObserver::needsRefCountDeltas).
     bool trackRefCounts;
@@ -293,8 +298,9 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
     else if (!rows.nonce.value || !rows.balance.value || !rows.codeHash.value)
     {
         // First-touch fields the block left unwritten have no parent leaf to fall back on:
-        // one O(1) flat metadata read through the fork view (spec §5.3 path 2).
-        auto meta = co_await readFlatAccountMeta(flatView, address);
+        // one O(1) flat metadata read through the fork view (spec §5.3 path 2), routed through
+        // the chain's account-table mode (binary table first, legacy-hex fallback when armed).
+        auto meta = co_await readFlatAccountMeta(flatView, address, context.accountMode);
         updated.nonce = meta.nonce;
         updated.balance = meta.balance;
         updated.codeHash = meta.codeHash;
@@ -423,6 +429,12 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
 ///                        stops advancing.
 /// @param l2Mode          scenario B (Ethereum-compatible chain): a KNOWN BCOS extension row in
 ///                        the delta throws UnexpectedBCOSFieldInL2; scenario A skips it.
+/// @param accountMode     the chain's account-table mode (feature_raw_address), forwarded to the
+///                        first-touch flat-metadata read (readFlatAccountMeta): a chain that
+///                        activated feature_raw_address mid-chain keeps pre-activation rows in
+///                        legacy hex tables, which the BinaryWithHexFallback mode still reaches.
+///                        The delta SCAN needs no mode — parseAccountTable accepts both table
+///                        layouts by length.
 /// @param trackRefCounts  false leaves the returned delta's refCountDeltas EMPTY (the per-hash
 ///                        tally is skipped) — for callers whose CommitObserver does not count
 ///                        references (CommitObserver::needsRefCountDeltas). stateRoot, newNodes,
@@ -436,8 +448,10 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
 /// @throws UnknownAccountRowField on an account row whose field name is not classified, in
 ///         either mode (spec §5.2).
 template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage>
-bcos::task::Task<MPTDeltaLayer> buildAndCollect(
-    Storage& nodeStorage, bcos::h256 parentStateRoot, auto& flatView, bool l2Mode,
+bcos::task::Task<MPTDeltaLayer> buildAndCollect(Storage& nodeStorage, bcos::h256 parentStateRoot,
+    auto& flatView, bool l2Mode,
+    bcos::ledger::account::AddressTableMode accountMode =
+        bcos::ledger::account::AddressTableMode::Hex,
     bool trackRefCounts = false)
 {
     MPTDeltaLayer output;
@@ -447,6 +461,7 @@ bcos::task::Task<MPTDeltaLayer> buildAndCollect(
         .parentView = parentView,
         .hasher = hasher,
         .l2Mode = l2Mode,
+        .accountMode = accountMode,
         .trackRefCounts = trackRefCounts};
 
     // The ACCOUNT trie's change-set: accountKeyHash(addr) → the account's new leaf encoding

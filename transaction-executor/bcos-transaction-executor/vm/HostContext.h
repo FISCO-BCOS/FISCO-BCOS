@@ -139,7 +139,8 @@ using CacheExecutables =
 CacheExecutables& getCacheExecutables();
 
 task::Task<std::shared_ptr<Executable>> getExecutable(
-    auto& storage, const evmc_address& address, const evmc_revision& revision, bool binaryAddress)
+    auto& storage, const evmc_address& address, const evmc_revision& revision,
+    ledger::account::AddressTableMode addressTableMode)
 {
     constexpr bool useGlobalCache = !isHistoricalStorage<decltype(storage)>();
     if constexpr (useGlobalCache)
@@ -150,7 +151,7 @@ task::Task<std::shared_ptr<Executable>> getExecutable(
         }
     }
 
-    if (Account<std::decay_t<decltype(storage)>> account(storage, address, binaryAddress);
+    if (Account<std::decay_t<decltype(storage)>> account(storage, address, addressTableMode);
         auto codeEntry = co_await account.code())
     {
         auto executable = std::make_shared<Executable>(std::move(*codeEntry));
@@ -309,8 +310,7 @@ public:
     friend auto getAccount(HostContext& hostContext, const evmc_address& address)
     {
         return Account<std::decay_t<Storage>>(hostContext.m_rollbackableStorage.get(), address,
-            hostContext.m_ledgerConfig.get().features().get(
-                ledger::Features::Flag::feature_raw_address));
+            ledger::account::accountTableMode(hostContext.m_ledgerConfig.get().features()));
     }
 
     // Tag-forwarding variant: passes all tags through to the underlying
@@ -371,7 +371,7 @@ public:
     {
         if (auto executable = co_await getExecutable(m_rollbackableStorage.get(), address,
                 m_revision,
-                m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
+                ledger::account::accountTableMode(m_ledgerConfig.get().features()));
             executable && executable->m_code)
         {
             co_return executable->m_code;
@@ -397,7 +397,7 @@ public:
     task::Task<h256> codeHashAt(const evmc_address& address, auto&&... /*unused*/)
     {
         Account<Storage> account(m_rollbackableStorage.get(), address,
-            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
+            ledger::account::accountTableMode(m_ledgerConfig.get().features()));
         if (!m_ledgerConfig.get().features().get(
                 ledger::Features::Flag::bugfix_eip161_1052_account_semantics))
         {
@@ -431,7 +431,7 @@ public:
         // EIP-161: empty == absent; feeds evmone's new-account gas and SELFDESTRUCT beneficiary
         // handling through account_exists (issue #5371).
         Account<Storage> account(m_rollbackableStorage.get(), address,
-            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
+            ledger::account::accountTableMode(m_ledgerConfig.get().features()));
         auto const emptyCodeHash = m_hashImpl.get().hash(bytesConstRef{});
         co_return co_await account.existsEthereum(emptyCodeHash);
     }
@@ -927,7 +927,7 @@ private:
 
         if (m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
                 m_revision,
-                m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
+                ledger::account::accountTableMode(m_ledgerConfig.get().features()));
             !m_executable)
         {
             if (ref.input_size > 0)

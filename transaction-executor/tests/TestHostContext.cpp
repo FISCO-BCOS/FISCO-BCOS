@@ -442,7 +442,7 @@ static bcos::task::Task<void> testNestConstructor(auto* self, bool web3)
 
     if (web3)
     {
-        bcos::ledger::account::EVMAccount account(self->storage, address1, false);
+        bcos::ledger::account::EVMAccount account(self->storage, address1, bcos::ledger::account::AddressTableMode::Hex);
         auto nonce = co_await account.nonce();
         BOOST_REQUIRE(nonce.has_value());
         BOOST_TEST(nonce.value() == "11");
@@ -465,7 +465,7 @@ static bcos::task::Task<void> testNestConstructor(auto* self, bool web3)
         BOOST_CHECK_NE(address2, bcos::Address{});
         if (web3)
         {
-            bcos::ledger::account::EVMAccount account(self->storage, address2, false);
+            bcos::ledger::account::EVMAccount account(self->storage, address2, bcos::ledger::account::AddressTableMode::Hex);
             auto nonce = co_await account.nonce();
             BOOST_REQUIRE(nonce.has_value());
             BOOST_TEST(nonce.value() == "1");
@@ -533,10 +533,10 @@ BOOST_AUTO_TEST_CASE(transferBalance)
         message.gas = 21000;
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> senderAccount(
-            rollbackableStorage, message.sender, false);
+            rollbackableStorage, message.sender, bcos::ledger::account::AddressTableMode::Hex);
         co_await senderAccount.setBalance(bcos::u256(1001));
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> recipientAccount(
-            rollbackableStorage, message.recipient, false);
+            rollbackableStorage, message.recipient, bcos::ledger::account::AddressTableMode::Hex);
         co_await recipientAccount.setBalance(bcos::u256(0));
 
         evmc_address origin{};
@@ -694,6 +694,113 @@ BOOST_AUTO_TEST_CASE(setStorageStatusLegacy)
 
         auto status4 = iface->set_storage(hostCtx, &helloworldAddress, &storageKey, &zeroValue);
         BOOST_CHECK_EQUAL(status4, EVMC_STORAGE_DELETED);  // buggy: should be ASSIGNED
+
+        co_return;
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(accountTableModeGate)
+{
+    namespace account = bcos::ledger::account;
+    bcos::ledger::Features features;
+    BOOST_CHECK(account::accountTableMode(features) == account::AddressTableMode::Hex);
+
+    // Bare set() (genesis loading): no activation context, plain Binary, no fallback.
+    features.set(bcos::ledger::Features::Flag::feature_raw_address);
+    BOOST_CHECK(account::accountTableMode(features) == account::AddressTableMode::Binary);
+
+    // Activated AT genesis: no pre-activation hex data can exist, still no fallback.
+    features.setActivationBlock(bcos::ledger::Features::Flag::feature_raw_address, 0);
+    BOOST_CHECK(account::accountTableMode(features) == account::AddressTableMode::Binary);
+
+    // Mid-chain activation: hex tables may hold pre-activation rows — fallback on.
+    features.setActivationBlock(bcos::ledger::Features::Flag::feature_raw_address, 100);
+    BOOST_CHECK(
+        account::accountTableMode(features) == account::AddressTableMode::BinaryWithHexFallback);
+}
+
+// The feature_raw_address hex-table fallback: a mid-chain activation leaves pre-activation
+// state in the /apps/<40-hex> tables, and BinaryWithHexFallback must still serve it.
+BOOST_AUTO_TEST_CASE(hexTableFallbackRead)
+{
+    syncWait([this]() -> Task<void> {
+        namespace account = bcos::ledger::account;
+        auto address = bcos::unhexAddress("0x4200000000000000000000000000000000001234");
+        std::string const hexTable = "/apps/4200000000000000000000000000000000001234";
+
+        evmc_bytes32 slotKey{};
+        slotKey.bytes[31] = 0x11;
+        evmc_bytes32 slotValue{};
+        slotValue.bytes[31] = 0x42;
+
+        bcos::bytes code{0x60, 0x00, 0x60, 0x00, 0xf3};
+        auto const codeHash = hashImpl->hash(code);
+
+        // Old-layout rows: written through the Hex-mode account, exactly as a
+        // pre-activation block would have written them.
+        account::EVMAccount hexAccount(storage, address, account::AddressTableMode::Hex);
+        BOOST_CHECK_EQUAL(hexAccount.address(), hexTable);
+        co_await hexAccount.create();
+        co_await hexAccount.setNonce("7");
+        co_await hexAccount.setBalance(bcos::u256(12345));
+        co_await hexAccount.setCode(code, "the-abi", codeHash);
+        co_await hexAccount.setStorage(slotKey, slotValue);
+
+        // (a) BinaryWithHexFallback reads every field from the hex table.
+        account::EVMAccount fallbackAccount(
+            storage, address, account::AddressTableMode::BinaryWithHexFallback);
+        BOOST_CHECK(fallbackAccount.address() != hexTable);
+        BOOST_CHECK(co_await fallbackAccount.exists());
+        BOOST_CHECK(co_await fallbackAccount.nonce() == std::optional<std::string>{"7"});
+        BOOST_CHECK_EQUAL(co_await fallbackAccount.balance(), bcos::u256(12345));
+        BOOST_CHECK_EQUAL(co_await fallbackAccount.codeHash(), codeHash);
+        auto codeEntry = co_await fallbackAccount.code();
+        BOOST_REQUIRE(codeEntry.has_value());
+        auto codeView = codeEntry->get();
+        BOOST_CHECK(bcos::bytes(codeView.begin(), codeView.end()) == code);
+        auto abiEntry = co_await fallbackAccount.abi();
+        BOOST_REQUIRE(abiEntry.has_value());
+        BOOST_CHECK_EQUAL(abiEntry->get(), "the-abi");
+        auto slot = co_await fallbackAccount.storage(slotKey);
+        BOOST_CHECK(std::equal(std::begin(slot.bytes), std::end(slot.bytes),
+            std::begin(slotValue.bytes), std::end(slotValue.bytes)));
+
+        // (b) Control: plain Binary mode sees nothing of the hex-table data.
+        account::EVMAccount binaryAccount(storage, address, account::AddressTableMode::Binary);
+        BOOST_CHECK(!(co_await binaryAccount.exists()));
+        BOOST_CHECK(!(co_await binaryAccount.nonce()).has_value());
+        BOOST_CHECK_EQUAL(co_await binaryAccount.balance(), bcos::u256(0));
+        BOOST_CHECK_EQUAL(co_await binaryAccount.codeHash(), bcos::h256{});
+        BOOST_CHECK(!(co_await binaryAccount.code()).has_value());
+        evmc_bytes32 const zeroValue{};
+        auto zeroSlot = co_await binaryAccount.storage(slotKey);
+        BOOST_CHECK(std::equal(std::begin(zeroSlot.bytes), std::end(zeroSlot.bytes),
+            std::begin(zeroValue.bytes), std::end(zeroValue.bytes)));
+
+        // (c) Writes in fallback mode land ONLY in the binary table: the new nonce is
+        // visible through the binary table, and the hex table keeps its old rows untouched.
+        co_await fallbackAccount.setNonce("8");
+        evmc_bytes32 newSlotKey{};
+        newSlotKey.bytes[31] = 0x22;
+        evmc_bytes32 newSlotValue{};
+        newSlotValue.bytes[31] = 0x77;
+        co_await fallbackAccount.setStorage(newSlotKey, newSlotValue);
+
+        BOOST_CHECK(co_await binaryAccount.nonce() == std::optional<std::string>{"8"});
+        auto writtenSlot = co_await binaryAccount.storage(newSlotKey);
+        BOOST_CHECK(std::equal(std::begin(writtenSlot.bytes), std::end(writtenSlot.bytes),
+            std::begin(newSlotValue.bytes), std::end(newSlotValue.bytes)));
+        BOOST_CHECK(co_await hexAccount.nonce() == std::optional<std::string>{"7"});
+        auto untouchedSlot = co_await hexAccount.storage(newSlotKey);
+        BOOST_CHECK(std::equal(std::begin(untouchedSlot.bytes), std::end(untouchedSlot.bytes),
+            std::begin(zeroValue.bytes), std::end(zeroValue.bytes)));
+
+        // (d) The binary-table row shadows the hex-table row in fallback mode, while a key
+        // present only in the hex table still falls back.
+        BOOST_CHECK(co_await fallbackAccount.nonce() == std::optional<std::string>{"8"});
+        auto shadowedSlot = co_await fallbackAccount.storage(slotKey);
+        BOOST_CHECK(std::equal(std::begin(shadowedSlot.bytes), std::end(shadowedSlot.bytes),
+            std::begin(slotValue.bytes), std::end(slotValue.bytes)));
 
         co_return;
     }());

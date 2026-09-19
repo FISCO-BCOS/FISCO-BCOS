@@ -93,8 +93,7 @@ task::Task<bcos::h256> importEthereumGenesisState(
             slots.emplace_back(evmKey, evmValue);
         }
 
-        account::EVMAccount account(
-            storage, address, features.get(Features::Flag::feature_raw_address));
+        account::EVMAccount account(storage, address, account::accountTableMode(features));
         co_await account.create();
 
         if (codeHash.has_value())

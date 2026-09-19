@@ -302,7 +302,7 @@ struct RealGlobalStateStorageFixture
     {
         evmc_address addr{};
         std::copy_n(sender.begin(), std::min(sender.size(), sizeof(addr.bytes)), addr.bytes);
-        ledger::account::EVMAccount account{backendStorage, addr, false};
+        ledger::account::EVMAccount account{backendStorage, addr, bcos::ledger::account::AddressTableMode::Hex};
         task::syncWait(account.setNonce(std::move(nonce)));
     }
 };

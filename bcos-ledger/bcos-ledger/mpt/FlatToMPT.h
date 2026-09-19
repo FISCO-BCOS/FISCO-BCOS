@@ -22,6 +22,7 @@
 #include "Classify.h"
 #include "Constants.h"
 #include "Errors.h"
+#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
@@ -103,30 +104,32 @@ struct FlatAccountMeta
 /// parent flat state (spec §5.3 path 2: delta 层无该字段行的取 flat 值). Three O(1) named-row
 /// reads; NEVER a slot scan (spec §4.2).
 ///
+/// @p mode is the chain's account-table mode (accountTableMode(features), threaded down from the
+/// build call sites). Table routing is delegated to EVMAccount itself — the single owner of the
+/// AddressTableMode name-derivation rule — so this function never re-derives a table name: mode
+/// Binary reads the 20-byte raw-address table, and BinaryWithHexFallback additionally falls back
+/// to the legacy hex table, which is where a mid-chain feature_raw_address activation leaves the
+/// account's pre-activation rows. Reads only; this function never writes.
+///
 /// Missing rows take the Yellow Paper defaults: nonce/balance 0, codeHash = emptyCodeHash() —
 /// the account leaf encodes codeHash verbatim, so a zero h256 here would produce a wrong leaf
 /// hash. A codeHash row that is present but decodes to zero violates the executor contract
 /// (codeHash = keccak(code), never zero) and throws rather than committing a forking leaf.
-bcos::task::Task<FlatAccountMeta> readFlatAccountMeta(auto& flatView, bcos::Address const& addr)
+bcos::task::Task<FlatAccountMeta> readFlatAccountMeta(
+    auto& flatView, bcos::Address const& addr, account::AddressTableMode mode)
 {
-    auto const table = accountTableName(addr);
+    account::EVMAccount<std::remove_reference_t<decltype(flatView)>> account(flatView, addr, mode);
     FlatAccountMeta meta;
 
-    auto nonceEntry =
-        co_await bcos::storage2::readOne(flatView, executor_v1::StateKeyView{table, ROW_NONCE});
-    if (nonceEntry)
+    if (auto nonceEntry = co_await account.storageEntry(ROW_NONCE))
     {
         meta.nonce = detail::entryToU256(*nonceEntry);
     }
-    auto balanceEntry =
-        co_await bcos::storage2::readOne(flatView, executor_v1::StateKeyView{table, ROW_BALANCE});
-    if (balanceEntry)
+    if (auto balanceEntry = co_await account.storageEntry(ROW_BALANCE))
     {
         meta.balance = detail::entryToU256(*balanceEntry);
     }
-    auto codeHashEntry =
-        co_await bcos::storage2::readOne(flatView, executor_v1::StateKeyView{table, ROW_CODE_HASH});
-    if (codeHashEntry)
+    if (auto codeHashEntry = co_await account.storageEntry(ROW_CODE_HASH))
     {
         meta.codeHash = detail::entryToH256(*codeHashEntry);
         if (meta.codeHash == bcos::h256{})

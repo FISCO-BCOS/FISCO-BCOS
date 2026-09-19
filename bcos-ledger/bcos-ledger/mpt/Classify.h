@@ -39,9 +39,9 @@ namespace bcos::ledger::mpt
 // ---------------------------------------------------------------------------
 // A flat-state row is keyed by an executor_v1::StateKey, whose serialized form is
 //   "<table>:<key>"
-// with a single ':' separator (StateKey.h:24-30, find_first_of(':') at line 32).
-// For an account/contract the table is "/apps/<40-hex-address>" (executor
-// Common.h:73 USER_APPS_PREFIX, TransactionExecutive::getContractTableName), and
+// with a single ':' separator (StateKey.h:24-30). For an account/contract the table is
+// "/apps/<40-hex-address>" — or, once feature_raw_address is active, "/apps/<20 raw address
+// bytes>" (executor Common.h USER_APPS_PREFIX; EVMAccount.h AddressTableMode) — and
 // the row <key> is one of the field-name strings below (Common.h:79-85,99) or a
 // 32-byte binary storage slot (HostContext::setStore writes a 32-byte evmc key).
 //
@@ -55,7 +55,9 @@ namespace bcos::ledger::mpt
 // StateKey separator; we split there.
 
 inline constexpr std::string_view APPS_TABLE_PREFIX = "/apps/";
-inline constexpr size_t ADDRESS_HEX_LEN = 40;  // 20-byte address as hex
+inline constexpr size_t ADDRESS_HEX_LEN = 40;  // 20-byte address as hex (pre-feature layout)
+// The raw-address layout (feature_raw_address): the 20 address bytes appended verbatim.
+inline constexpr size_t ADDRESS_BIN_LEN = bcos::Address::SIZE;
 
 inline constexpr std::string_view ROW_NONCE = "nonce";
 inline constexpr std::string_view ROW_BALANCE = "balance";
@@ -79,7 +81,11 @@ inline bool isKnownBcosExtensionField(std::string_view rowKey)
            KNOWN_BCOS_EXTENSION_FIELDS.end();
 }
 
-/// The flat table name of an account: "/apps/" + 40 lowercase hex chars (no 0x).
+/// The flat table name of an account in the LEGACY (pre-feature_raw_address) layout:
+/// "/apps/" + 40 lowercase hex chars (no 0x). The raw-address layout ("/apps/" + the 20 raw
+/// bytes) has no producer here on purpose: the MPT layer only ever PARSES table names
+/// (parseAccountTable); names are produced by EVMAccount's AddressTableMode routing, which owns
+/// the feature gate.
 inline std::string accountTableName(bcos::Address const& addr)
 {
     std::string table;
@@ -89,17 +95,28 @@ inline std::string accountTableName(bcos::Address const& addr)
     return table;
 }
 
-/// Parse "/apps/<40-hex-address>" into the address. Anything else — system tables (/sys/,
-/// /tables/, _accessAuth), BCOS private short-name contracts (table suffix not 40-hex) — is
-/// nullopt: those rows never enter the MPT. Never throws.
+/// Parse an account table name into the address. Two layouts are accepted, told apart by length
+/// alone (20 vs 40 — disjoint, so no ambiguity):
+///   - "/apps/" + 20 bytes: the feature_raw_address layout. The bytes ARE the address and are
+///     taken verbatim — any byte pattern (including ':' or non-ASCII) is a valid address, so no
+///     validation applies;
+///   - "/apps/" + 40 hex chars: the legacy layout, hex-decoded.
+/// Anything else — system tables (/sys/, /tables/, _accessAuth), BCOS private short-name
+/// contracts, a 40-char suffix with a non-hex digit, any other length — is nullopt: those rows
+/// never enter the MPT. Never throws.
 inline std::optional<bcos::Address> parseAccountTable(std::string_view table)
 {
     if (!table.starts_with(APPS_TABLE_PREFIX))
     {
         return std::nullopt;
     }
-    std::string_view const addrHex = table.substr(APPS_TABLE_PREFIX.size());
-    if (addrHex.size() != ADDRESS_HEX_LEN)
+    std::string_view const suffix = table.substr(APPS_TABLE_PREFIX.size());
+    if (suffix.size() == ADDRESS_BIN_LEN)
+    {
+        return bcos::Address{bcos::bytesConstRef(
+            reinterpret_cast<bcos::byte const*>(suffix.data()), suffix.size())};
+    }
+    if (suffix.size() != ADDRESS_HEX_LEN)
     {
         return std::nullopt;
     }
@@ -108,7 +125,7 @@ inline std::optional<bcos::Address> parseAccountTable(std::string_view table)
     // no-throw contract holds for arbitrary input.
     try
     {
-        return bcos::Address(addrHex, bcos::Address::FromHex);
+        return bcos::Address(suffix, bcos::Address::FromHex);
     }
     catch (...)
     {
