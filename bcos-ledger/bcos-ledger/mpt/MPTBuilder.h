@@ -59,7 +59,7 @@ struct BuildContext
     MPTReadView<Storage> const& parentView;  ///< the parent block's MPT, for baseline lookups
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher& hasher;  ///< reused slot-key context
     bool l2Mode;  ///< scenario B: a BCOS extension row is an error rather than a skip
-    /// The chain's account-table mode (feature_raw_address): forwarded to readFlatAccountMeta,
+    /// The node's account-table mode (node-local layout): forwarded to readFlatAccountMeta,
     /// which reads the binary table first and falls back to the legacy hex table when the mode
     /// says so (EVMAccount owns the routing).
     bcos::ledger::account::AddressTableMode accountMode;
@@ -429,14 +429,14 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
 ///                        stops advancing.
 /// @param l2Mode          scenario B (Ethereum-compatible chain): a KNOWN BCOS extension row in
 ///                        the delta throws UnexpectedBCOSFieldInL2; scenario A skips it.
-/// @param accountMode     the chain's account-table mode (feature_raw_address), forwarded to the
-///                        first-touch flat-metadata read (readFlatAccountMeta): a chain that
-///                        activated feature_raw_address mid-chain keeps pre-activation rows in
-///                        legacy hex tables, which the BinaryWithHexFallback mode still reaches.
+/// @param accountMode     the node's account-table mode (nodeAddressTableMode()), forwarded to
+///                        the first-touch flat-metadata read (readFlatAccountMeta): a node in the
+///                        BinaryWithHexFallback mid-migration layout keeps untouched rows in
+///                        legacy hex tables, which the fallback mode still reaches.
 ///                        The delta SCAN needs no mode — parseAccountTable accepts both table
 ///                        layouts by length. No default on purpose (MPTAccount.h's constructor
 ///                        rule): a guessed mode makes the first-touch back-fill silently miss on
-///                        a raw-address chain.
+///                        a binary-layout node.
 /// @param trackRefCounts  false leaves the returned delta's refCountDeltas EMPTY (the per-hash
 ///                        tally is skipped) — for callers whose CommitObserver does not count
 ///                        references (CommitObserver::needsRefCountDeltas). stateRoot, newNodes,

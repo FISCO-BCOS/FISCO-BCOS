@@ -18,15 +18,13 @@
 //     fault to “account missing”. applyDiff write-back failures poison AND rethrow (tripwire);
 //   * account tables are "/apps/<hex(addr)>" paths (mainline MPT classifier), same for every
 //     address incl. c_systemTxsAddress. The bridge derives the hex name itself
-//     (Storage2StateHelpers.h accountTableName) and is NOT feature_raw_address-aware: with
-//     raw_address active the mode-aware read paths route accounts to 20-byte binary tables,
-//     and this bridge would not find them. That constraint is now enforced by guards, not
-//     by this comment: validateMPTFlagMatrix refuses raw_address +
-//     feature_l2_ethereum_compat at boot (LedgerInitializer), and
-//     rejectRawAddressOnEngineLanes (called from OpScheduler::loadLedgerConfig) halts block
-//     production if governance activates raw_address mid-chain — both in
-//     BaselineSchedulerMPTHelpers.h. Keep feature_raw_address off for OP lanes until the
-//     bridge grows mode-aware naming.
+//     (Storage2StateHelpers.h accountTableName) and is NOT aware of the node-local binary
+//     account-table layout: on a node whose account tables are 20-byte binary names this
+//     bridge would not find them. That constraint is enforced at boot, not by this comment:
+//     libinitializer's resolveNodeAddressTableMode (AddressTableModeDetection.h) forces the
+//     node mode to Hex on the OP lane and refuses to boot when the state DB holds binary
+//     account tables. Keep the OP lane on the hex layout until the bridge grows mode-aware
+//     naming.
 //   * nested syncWait is safe only inside the x_state-serialized segment (backends complete
 //     synchronously in-thread).
 

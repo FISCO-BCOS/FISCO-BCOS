@@ -289,7 +289,7 @@ BOOST_AUTO_TEST_CASE(DefaultReadsAreFlatWithReadYourWrites)
 }
 
 // The AddressTableMode is what makes the no-root path address the right table on a
-// feature_raw_address chain, which is why the constructor takes it without a default. In Binary
+// binary-layout node, which is why the constructor takes it without a default. In Binary
 // mode the inherited reads and writes must use the raw-byte table name, not the hex one.
 BOOST_AUTO_TEST_CASE(BinaryAddressSelectsTheRawTable)
 {

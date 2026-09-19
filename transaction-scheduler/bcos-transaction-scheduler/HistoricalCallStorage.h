@@ -49,7 +49,8 @@ namespace bcos::scheduler_v1
 /// and read back (read-your-writes, the PR #5324 review blocker), while every MISS resolves
 /// here against the state block N committed:
 ///
-///  - account-table rows ("/apps/<40-hex>" or, with feature_raw_address, "/apps/<20 raw bytes>":
+///  - account-table rows ("/apps/<40-hex>" or, in the binary node-local layout,
+///    "/apps/<20 raw bytes>":
 ///    nonce / balance / codeHash / 32-byte slots) answer from the block's MPT via MPTAccount's
 ///    rooted reads, re-encoded in the exact
 ///    flat representations EVMAccount reads (decimal strings for nonce and balance, raw
@@ -95,11 +96,12 @@ public:
     constexpr static bool isHistoricalStateStorage = true;
 
     /// @param stateRoot the MPT state root block N committed — its header's stateRoot.
-    /// @param accountMode the chain's account-table mode (accountTableMode(features)): handed to
+    /// @param accountMode the node's account-table mode (nodeAddressTableMode()): handed to
     ///        every cached MPTAccount so its inherited no-root flat reads/writes target the
-    ///        table layout this chain actually uses (binary names with a legacy-hex read
-    ///        fallback once feature_raw_address is active). The rooted historical reads are
-    ///        table-name-independent — the account leaf key is keccak(address).
+    ///        table layout this node actually uses (binary names with a legacy-hex read
+    ///        fallback in the BinaryWithHexFallback mid-migration layout). The rooted
+    ///        historical reads are table-name-independent — the account leaf key is
+    ///        keccak(address).
     HistoricalStateBackend(
         LatestView& latestView, h256 stateRoot, ledger::account::AddressTableMode accountMode)
       : m_latestView(std::addressof(latestView)),
@@ -218,11 +220,10 @@ private:
         auto it = m_accounts.find(address);
         if (it == m_accounts.end())
         {
-            // The chain's real table mode, threaded from the caller's features: with
-            // feature_raw_address active the account tables are 20-byte binary names (the
-            // raw_address/MPT mutual exclusion no longer exists — parseAccountTable classifies
-            // both layouts), and the MPTAccount's inherited flat path must read/write the
-            // same names the executor uses.
+            // The node's real table mode (nodeAddressTableMode(), threaded from the
+            // caller): with the binary layout active the account tables are 20-byte binary
+            // names (parseAccountTable classifies both layouts), and the MPTAccount's
+            // inherited flat path must read/write the same names the executor uses.
             it = m_accounts
                      .try_emplace(address, *m_latestView, m_nodeStorage, *m_latestView, address,
                          m_accountMode)

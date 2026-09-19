@@ -1,6 +1,7 @@
 #pragma once
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
+#include "bcos-framework/ledger/AccountTableName.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/Entry.h"
@@ -23,39 +24,9 @@ struct FromTableName
     explicit FromTableName() = default;
 };
 
-/// How an account's table name is derived from its address (feature_raw_address, Flag=54):
-///   - Hex: "/apps/<40 lowercase hex chars>" — the pre-feature layout.
-///   - Binary: "/apps/<20 raw address bytes>" — the post-feature layout.
-///   - BinaryWithHexFallback: Binary for every WRITE and the primary read, plus a read
-///     fallback to the Hex table. Only meaningful for a chain that activated
-///     feature_raw_address mid-chain: the blocks before activation wrote hex tables, and
-///     without the fallback those rows would be invisible once the feature turns on.
-enum class AddressTableMode
-{
-    Hex,
-    Binary,
-    BinaryWithHexFallback,
-};
-
-/// The mode for @p features, and the consensus-deterministic gate on the fallback: the
-/// fallback changes execution results, so it is enabled exactly when the chain can hold
-/// pre-activation hex data — feature_raw_address is on AND its activation block is known
-/// and non-genesis (activationBlockOf > 0). A bare set() (genesis loading, tests) reports
-/// activationBlockOf() == -1, so genesis-enabled chains stay plain Binary and pay zero
-/// extra reads.
-inline AddressTableMode accountTableMode(const ledger::Features& features)
-{
-    constexpr auto flag = ledger::Features::Flag::feature_raw_address;
-    if (!features.get(flag))
-    {
-        return AddressTableMode::Hex;
-    }
-    if (features.activationBlockOf(flag) > 0)
-    {
-        return AddressTableMode::BinaryWithHexFallback;
-    }
-    return AddressTableMode::Binary;
-}
+// AddressTableMode (the node-local account-table encoding) and the node-wide
+// nodeAddressTableMode() singleton live in ledger/AccountTableName.h; callers pass
+// nodeAddressTableMode() to the mode-taking constructors below.
 
 template <class Storage>
 class EVMAccount
@@ -65,10 +36,25 @@ private:
     std::reference_wrapper<Storage> m_storage;
     std::string m_tableName;
     // The 40-hex account table name, non-empty only in AddressTableMode::BinaryWithHexFallback
-    // (see accountTableMode). Reads consult it after a miss on m_tableName; writes NEVER touch
-    // it — every write lands in m_tableName (the binary table), so a new write naturally
-    // shadows the pre-activation hex row.
+    // (the node's mid-migration layout, see AccountTableName.h). Reads consult it after a miss on m_tableName; writes land in
+    // m_tableName (the binary table) AND remove the hex twin row (write-time dedup, see
+    // removeHexTwinRow), so a touched logical row physically survives in exactly one copy.
     std::string m_fallbackTableName;
+
+    /// Write-time dedup: alongside every binary-table write, delete the hex twin row.
+    /// Under the normalized Entry::hash (canonicalTableNameForHash) the XOR state root
+    /// folds a logical row per its canonical (hex) name, so the same logical row present
+    /// in BOTH encodings would be folded twice — dedup to at most one physical copy is a
+    /// necessary condition for the root to be encoding-agnostic. It also migrates the
+    /// chain row-by-row as accounts are touched. No-op unless the fallback is armed.
+    task::Task<void> removeHexTwinRow(std::string_view key)
+    {
+        if (!m_fallbackTableName.empty())
+        {
+            co_await storage2::removeOne(
+                m_storage.get(), executor_v1::StateKey{m_fallbackTableName, key});
+        }
+    }
 
     /// Read one row of the account table: m_tableName first, then m_fallbackTableName when
     /// the fallback is armed. Applies to every account-table row read below; the
@@ -136,6 +122,13 @@ public:
     {
         co_await storage2::writeOne(m_storage.get(), executor_v1::StateKey(SYS_TABLES, m_tableName),
             storage::Entry{std::string_view{"value"}});
+        // The s_tables registration row's key IS the table name, so this twin lives in
+        // s_tables too (not under the account table like removeHexTwinRow assumes).
+        if (!m_fallbackTableName.empty())
+        {
+            co_await storage2::removeOne(
+                m_storage.get(), executor_v1::StateKey{SYS_TABLES, m_fallbackTableName});
+        }
     }
 
     task::Task<std::optional<storage::Entry>> code()
@@ -185,6 +178,7 @@ public:
         co_await storage2::writeOne(m_storage.get(),
             executor_v1::StateKey{m_tableName, ACCOUNT_TABLE_FIELDS::CODE_HASH},
             std::move(codeHashEntry));
+        co_await removeHexTwinRow(ACCOUNT_TABLE_FIELDS::CODE_HASH);
     }
 
     task::Task<h256> codeHash()
@@ -239,6 +233,7 @@ public:
         co_await storage2::writeOne(m_storage.get(),
             executor_v1::StateKey{m_tableName, ACCOUNT_TABLE_FIELDS::BALANCE},
             std::move(balanceEntry));
+        co_await removeHexTwinRow(ACCOUNT_TABLE_FIELDS::BALANCE);
     }
 
     task::Task<std::optional<std::string>> nonce()
@@ -256,6 +251,7 @@ public:
         storage::Entry nonceEntry(std::move(nonce));
         co_await storage2::writeOne(m_storage.get(),
             executor_v1::StateKey{m_tableName, ACCOUNT_TABLE_FIELDS::NONCE}, std::move(nonceEntry));
+        co_await removeHexTwinRow(ACCOUNT_TABLE_FIELDS::NONCE);
     }
 
     task::Task<void> increaseNonce()
@@ -317,6 +313,7 @@ public:
         co_await storage2::writeOne(m_storage.get(),
             executor_v1::StateKey{m_tableName, concepts::bytebuffer::toView(key.bytes)},
             std::move(valueEntry));
+        co_await removeHexTwinRow(concepts::bytebuffer::toView(key.bytes));
     }
 
     task::Task<std::optional<bcos::storage::Entry>> storageEntry(const std::string_view& key)

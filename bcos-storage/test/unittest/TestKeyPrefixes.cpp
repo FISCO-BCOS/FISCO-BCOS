@@ -96,7 +96,7 @@ BOOST_AUTO_TEST_CASE(NodeRowResolverRoundTrip)
 
 BOOST_AUTO_TEST_CASE(RawAddressTableWithColonByteRoundTrip)
 {
-    // feature_raw_address account tables are "/apps/" + 20 raw address bytes, and the
+    // Binary-layout account tables are "/apps/" + 20 raw address bytes, and the
     // address itself can contain 0x3A (':'). decode must split at the fixed offset
     // ("/apps/".size() + 20), not at the first ':' inside the address.
     std::string address(20, 'a');

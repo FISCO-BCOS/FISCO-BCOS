@@ -44,6 +44,18 @@ void Features::validate(Flag flag) const
         BOOST_THROW_EXCEPTION(bcos::tool::InvalidSetFeature{}
                               << errinfo_comment("must set feature_balance_precompiled first"));
     }
+    // DEPRECATED, unactivatable. feature_raw_address used to gate the binary account-table
+    // encoding; the encoding is a node-local physical layout now (published by the boot-time
+    // detection as ledger::account::nodeAddressTableMode()), so the flag drives nothing and a
+    // governance activation would record a no-op row that pretends to mean something.
+    if (flag == Flag::feature_raw_address)
+    {
+        BOOST_THROW_EXCEPTION(
+            bcos::tool::InvalidSetFeature{} << errinfo_comment(
+                "feature_raw_address is deprecated: the account-table encoding is a node-local "
+                "property (detected at startup, see ledger::account::nodeAddressTableMode), not "
+                "a chain feature. It cannot be enabled by governance."));
+    }
     // Genesis-only. validate() has exactly one production caller --
     // SystemConfigPrecompiled::validate (SystemConfigPrecompiled.cpp:309), the governance
     // setSystemConfig path, which reaches this overload through the string overload above --

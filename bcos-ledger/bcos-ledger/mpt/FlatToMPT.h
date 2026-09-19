@@ -104,12 +104,12 @@ struct FlatAccountMeta
 /// parent flat state (spec §5.3 path 2: delta 层无该字段行的取 flat 值). Three O(1) named-row
 /// reads; NEVER a slot scan (spec §4.2).
 ///
-/// @p mode is the chain's account-table mode (accountTableMode(features), threaded down from the
+/// @p mode is the node's account-table mode (nodeAddressTableMode(), threaded down from the
 /// build call sites). Table routing is delegated to EVMAccount itself — the single owner of the
 /// AddressTableMode name-derivation rule — so this function never re-derives a table name: mode
 /// Binary reads the 20-byte raw-address table, and BinaryWithHexFallback additionally falls back
-/// to the legacy hex table, which is where a mid-chain feature_raw_address activation leaves the
-/// account's pre-activation rows. Reads only; this function never writes.
+/// to the legacy hex table, which is where a mid-migration layout keeps the account's
+/// not-yet-touched rows. Reads only; this function never writes.
 ///
 /// Missing rows take the Yellow Paper defaults: nonce/balance 0, codeHash = emptyCodeHash() —
 /// the account leaf encodes codeHash verbatim, so a zero h256 here would produce a wrong leaf
@@ -124,7 +124,8 @@ struct FlatAccountMeta
 /// flat rows at all (account state lives in the committed MPT only, so there is nothing to
 /// back-fill), and the fields this block did write come from the block's own delta rows, which
 /// cover meta ahead of any flat read. Resolve together with the bridge's mode-aware naming
-/// (the same follow-up the raw_address guards in BaselineSchedulerMPTHelpers.h point at).
+/// (the same follow-up the hex-only-lane enforcement in libinitializer
+/// (AddressTableModeDetection.h) points at).
 bcos::task::Task<FlatAccountMeta> readFlatAccountMeta(
     auto& flatView, bcos::Address const& addr, account::AddressTableMode mode)
 {

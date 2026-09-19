@@ -13,26 +13,25 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file TestRawAddressActivation.cpp
- * @brief Scheduler-level e2e for mid-chain activation of the raw-address hex
- *        fallback (feature_raw_address).
+ * @file TestNodeAddressTableMode.cpp
+ * @brief Scheduler-level e2e for the node-local account-table encoding
+ *        (ledger::account::nodeAddressTableMode), the successor of the
+ *        feature-gated raw-address activation test.
  *
- * Unlike the sibling BaselineScheduler tests, this TU deliberately defines NO
- * getLedgerConfig tag_invoke stub, so BaselineScheduler's per-block
- * ledger::getLedgerConfig(view, number, blockFactory) resolves to the REAL
- * storage2 implementation (bcos-ledger LedgerMethods.h), which loads the
- * features through Features::readFromStorage — SYS_CONFIG rows with an
- * enableNumber, exactly what the governance setSystemConfig path persists.
- * That is the difference this test exists to pin: the fallback arms only when
- * the activation block is filled by the real storage-load path (a bare
- * set()/setActivationBlock fixture would bypass the mechanism under test).
+ * The encoding is a node-local physical layout now: a block's executor derives
+ * the mode from the process-wide singleton (set once at startup by the
+ * storage-layout detection), NOT from the block's feature set. This test drives
+ * blocks through a real BaselineScheduler whose probing scheduler uses exactly
+ * the production derivation (nodeAddressTableMode()), and flips the singleton
+ * between blocks the way a node restart after migration would:
  *
- * Scenario: block 100 executes with the flag off and writes an account
- * balance into the legacy "/apps/<40-hex>" table; the governance row
- * (enableNumber = 101) then lands in the committed state; block 101 executes and
- * its ledgerConfig must report BinaryWithHexFallback with
- * activationBlockOf(feature_raw_address) == 101, and the balance written at
- * block 100 must be readable through the fallback.
+ *   - mid-migration: a block committed in Hex mode leaves /apps/<40-hex> rows;
+ *     after switching the node to BinaryWithHexFallback the next block reads
+ *     those rows through the fallback and its writes land in the binary table
+ *     while deleting the hex twin (write-time dedup);
+ *   - encoding-agnostic root: the same committed state migrated in place from
+ *     hex to binary table names folds the SAME xorStateRoot, and a Binary-mode
+ *     block then reads the migrated rows directly.
  *
  * Compiled standalone (SKIP_UNITY_BUILD_INCLUSION): it pulls bcos-ledger
  * LedgerMethods.h, whose namespace-scope entities collide with the other
@@ -60,6 +59,7 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-task/AwaitableValue.h"
 #include "bcos-transaction-scheduler/BaselineScheduler-tpp.h"
+#include "bcos-transaction-scheduler/BaselineSchedulerMPTHelpers.h"
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
@@ -86,32 +86,33 @@ struct RABackendStorage
 using RACheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, RABackendStorage>;
 using RAMultiLayerStorage = MultiLayerStorage<RAMutableStorage, void, RACheckpointBackend>;
 
-/// Probe scheduler: drives the account through EVMAccount with the mode derived
-/// from the ledgerConfig BaselineScheduler hands in — the exact derivation the
-/// production executor performs — and records what it saw for the test to assert.
-struct RAProbingScheduler
+/// Probe scheduler: drives the account through EVMAccount with the mode taken from the
+/// node-local singleton — the exact derivation the production executor performs — and
+/// records what it saw for the test to assert. Blocks below m_writeBlock write m_balance;
+/// blocks from m_writeBlock on read the balance back (recording it) and write m_newBalance
+/// (which exercises the fallback mode's write-time dedup).
+struct NMProbingScheduler
 {
     evmc_address m_account{};
-    protocol::BlockNumber m_activationBlock{};
+    protocol::BlockNumber m_writeBlock{};
     u256 m_balance{};
+    u256 m_newBalance{};
 
     std::vector<std::pair<protocol::BlockNumber, ledger::account::AddressTableMode>> m_modes;
-    std::optional<protocol::BlockNumber> m_rawAddressActivation;
-    std::optional<u256> m_fallbackBalance;
-    std::optional<u256> m_binaryOnlyBalance;
+    std::optional<u256> m_readBackBalance;
 
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(auto& storage,
         auto& /*executor*/, protocol::BlockHeader const& blockHeader,
         ::ranges::input_range auto const& transactions, ledger::LedgerConfig const& ledgerConfig)
     {
-        auto const mode = ledger::account::accountTableMode(ledgerConfig.features());
+        auto const mode = ledger::account::nodeAddressTableMode();
         m_modes.emplace_back(blockHeader.number(), mode);
         ledger::account::EVMAccount account(storage, m_account, mode);
-        if (blockHeader.number() < m_activationBlock)
+        if (blockHeader.number() < m_writeBlock)
         {
-            // Pre-activation block: feature_raw_address is off, so the mode must be Hex
-            // and the balance lands in the legacy "/apps/<40-hex>" table — the data a
-            // mid-chain activation leaves behind.
+            // Unmigrated-layout block: the node is in Hex mode and the balance lands in the
+            // legacy "/apps/<40-hex>" table — the data a migration leaves behind until the
+            // account is touched.
             if (!co_await account.exists())
             {
                 co_await account.create();
@@ -120,15 +121,8 @@ struct RAProbingScheduler
         }
         else
         {
-            // Post-activation block: record the activation block the real
-            // readFromStorage filled, and read the pre-activation balance back.
-            m_rawAddressActivation = ledgerConfig.features().activationBlockOf(
-                ledger::Features::Flag::feature_raw_address);
-            m_fallbackBalance = co_await account.balance();
-            // Control: without the fallback (plain Binary) the hex row is invisible.
-            ledger::account::EVMAccount binaryOnly(
-                storage, m_account, ledger::account::AddressTableMode::Binary);
-            m_binaryOnlyBalance = co_await binaryOnly.balance();
+            m_readBackBalance = co_await account.balance();
+            co_await account.setBalance(m_newBalance);
         }
 
         auto receipts = ::ranges::iota_view<size_t, size_t>(0, ::ranges::size(transactions)) |
@@ -183,10 +177,10 @@ task::Task<ledger::Features> emptyFeaturesTaskRA()
     co_return ledger::Features{};
 }
 
-class RawAddressActivationFixture
+class NodeAddressTableModeFixture
 {
 public:
-    RawAddressActivationFixture()
+    NodeAddressTableModeFixture()
       : checkpointBackend(backendStorage),
         cryptoSuite(std::make_shared<crypto::CryptoSuite>(
             std::make_shared<crypto::Keccak256>(), nullptr, nullptr)),
@@ -306,23 +300,53 @@ public:
             "commitBlock failed: " + (commitError ? commitError->errorMessage() : ""));
     }
 
-    /// Persist one SYS_CONFIG feature row into the committed backend — the row the
-    /// governance setSystemConfig transaction writes, with the flag taking effect
-    /// from @p enableNumber on (readFromStorage activates a flag whose
-    /// enableNumber <= the executing block's number).
-    void writeFeatureEntry(std::string_view flagName, protocol::BlockNumber enableNumber)
-    {
-        task::syncWait([&]() -> task::Task<void> {
-            storage::Entry entry;
-            entry.set(storage::serialize::encode(ledger::SystemConfigEntry{"1", enableNumber}));
-            co_await storage2::writeOne(
-                backendStorage, StateKey{ledger::SYS_CONFIG, flagName}, std::move(entry));
-        }());
-    }
-
     std::optional<storage::Entry> backendRow(std::string_view table, std::string_view key)
     {
         return task::syncWait(storage2::readOne(backendStorage, StateKey{table, key}));
+    }
+
+    h256 committedXorRoot()
+    {
+        ledger::Features features;
+        return task::syncWait(
+            xorStateRoot(backendStorage, blockVersion, *hashImpl, features));
+    }
+
+    /// What the migration tool does, row by row: rewrite every row of the hex account
+    /// table (and its s_tables registration) under the binary table name, then delete the
+    /// hex originals.
+    void migrateAccountRowsToBinary(std::string_view hexTable)
+    {
+        auto const binTable = ledger::account::hexToBinaryAccountTableName(hexTable);
+        BOOST_REQUIRE(!binTable.empty());
+        task::syncWait([&]() -> task::Task<void> {
+            auto range = co_await storage2::range(backendStorage);
+            std::vector<std::pair<std::string, storage::Entry>> rows;
+            while (auto keyValue = co_await range.next())
+            {
+                auto& [key, value] = *keyValue;
+                auto* entry = std::get_if<storage::Entry>(std::addressof(value));
+                if (entry == nullptr)
+                {
+                    continue;
+                }
+                StateKeyView view(key);
+                auto&& [table, rowKey] = view.get();
+                if (table == hexTable)
+                {
+                    rows.emplace_back(std::string(rowKey), *entry);
+                }
+            }
+            for (auto& [rowKey, entry] : rows)
+            {
+                co_await storage2::writeOne(
+                    backendStorage, StateKey{binTable, rowKey}, std::move(entry));
+                co_await storage2::removeOne(backendStorage, StateKey{hexTable, rowKey});
+            }
+            co_await storage2::writeOne(backendStorage, StateKey{ledger::SYS_TABLES, binTable},
+                storage::Entry{std::string_view{"value"}});
+            co_await storage2::removeOne(backendStorage, StateKey{ledger::SYS_TABLES, hexTable});
+        }());
     }
 
     static constexpr uint32_t blockVersion = 200;
@@ -338,77 +362,94 @@ public:
 
     crypto::Hash::Ptr hashImpl = std::make_shared<crypto::Keccak256>();
 
-    RAProbingScheduler probingScheduler;
+    NMProbingScheduler probingScheduler;
     fakeit::Mock<ledger::LedgerInterface> mockLedger;
     fakeit::Mock<txpool::TxPoolInterface> mockTxPool;
     RAMultiLayerStorage multiLayerStorage;
     RAExecutor mockExecutor;
-    BaselineScheduler<decltype(multiLayerStorage), RAExecutor, RAProbingScheduler,
+    BaselineScheduler<decltype(multiLayerStorage), RAExecutor, NMProbingScheduler,
         ledger::LedgerInterface>
         baselineScheduler;
 };
 
-BOOST_FIXTURE_TEST_SUITE(TestRawAddressActivation, RawAddressActivationFixture)
+BOOST_FIXTURE_TEST_SUITE(TestNodeAddressTableMode, NodeAddressTableModeFixture)
 
-BOOST_AUTO_TEST_CASE(midChainActivationEnablesHexFallback)
+// Mid-migration layout: block 100 commits the account in the hex layout; the node then
+// comes up in BinaryWithHexFallback (the singleton flip stands in for the boot-time
+// detection finding both encodings), and block 101 must still see the balance — and its
+// write must land in the binary table while deleting the hex twin row.
+BOOST_AUTO_TEST_CASE(midMigrationFallbackReadAndWriteDedup)
 {
-    constexpr protocol::BlockNumber activationBlock = 101;
+    namespace account = ledger::account;
+    account::setNodeAddressTableMode(account::AddressTableMode::Hex);
     probingScheduler.m_account = unhexAddress("0x4200000000000000000000000000000000001234");
-    probingScheduler.m_activationBlock = activationBlock;
+    probingScheduler.m_writeBlock = 101;
     probingScheduler.m_balance = u256(12345);
+    probingScheduler.m_newBalance = u256(54321);
     std::string const hexTable = "/apps/4200000000000000000000000000000000001234";
+    std::string const binTable = account::hexToBinaryAccountTableName(hexTable);
+    BOOST_REQUIRE(!binTable.empty());
 
-    // Block 100: no SYS_CONFIG feature rows, so the real readFromStorage leaves
-    // feature_raw_address off and the block executes in Hex mode, writing the
-    // legacy hex table.
     auto header100 = executeOneBlock(100);
     BOOST_REQUIRE_EQUAL(probingScheduler.m_modes.size(), 1u);
-    BOOST_CHECK_EQUAL(probingScheduler.m_modes[0].first, 100);
-    BOOST_CHECK(probingScheduler.m_modes[0].second == ledger::account::AddressTableMode::Hex);
+    BOOST_CHECK(probingScheduler.m_modes[0].second == account::AddressTableMode::Hex);
     commitOneBlock(header100);
     auto committedBalance = backendRow(hexTable, "balance");
     BOOST_REQUIRE(committedBalance.has_value());
     BOOST_CHECK_EQUAL(std::string(committedBalance->get()), "12345");
 
-    // Governance activates the feature from block 101 on: the SYS_CONFIG row carries
-    // enableNumber = 101, the shape SystemConfigPrecompiled persists.
-    writeFeatureEntry("feature_raw_address", activationBlock);
+    // The node restarts onto a partially migrated DB: the boot detection would resolve
+    // BinaryWithHexFallback.
+    account::setNodeAddressTableMode(account::AddressTableMode::BinaryWithHexFallback);
 
-    // Block 101: getLedgerConfig reloads the features from the committed SYS_CONFIG
-    // rows — the readFromStorage path fills the activation block — so the fallback
-    // arms and the pre-activation hex balance is visible again.
     auto header101 = executeOneBlock(101);
     BOOST_REQUIRE_EQUAL(probingScheduler.m_modes.size(), 2u);
-    BOOST_CHECK_EQUAL(probingScheduler.m_modes[1].first, activationBlock);
-    BOOST_CHECK(probingScheduler.m_modes[1].second ==
-                ledger::account::AddressTableMode::BinaryWithHexFallback);
-    BOOST_REQUIRE(probingScheduler.m_rawAddressActivation.has_value());
-    BOOST_CHECK_EQUAL(*probingScheduler.m_rawAddressActivation, activationBlock);
-    BOOST_REQUIRE(probingScheduler.m_fallbackBalance.has_value());
-    BOOST_CHECK_EQUAL(*probingScheduler.m_fallbackBalance, u256(12345));
-    // The control proves the fallback did the work, not the binary table.
-    BOOST_REQUIRE(probingScheduler.m_binaryOnlyBalance.has_value());
-    BOOST_CHECK_EQUAL(*probingScheduler.m_binaryOnlyBalance, u256(0));
+    BOOST_CHECK(probingScheduler.m_modes[1].second == account::AddressTableMode::BinaryWithHexFallback);
+    // The unmigrated hex row is still readable through the fallback...
+    BOOST_REQUIRE(probingScheduler.m_readBackBalance.has_value());
+    BOOST_CHECK_EQUAL(*probingScheduler.m_readBackBalance, u256(12345));
+    commitOneBlock(header101);
+
+    // ...and the write landed in the binary table and deleted the hex twin (dedup).
+    auto binaryBalance = backendRow(binTable, "balance");
+    BOOST_REQUIRE(binaryBalance.has_value());
+    BOOST_CHECK_EQUAL(std::string(binaryBalance->get()), "54321");
+    BOOST_CHECK(!backendRow(hexTable, "balance").has_value());
+
+    account::setNodeAddressTableMode(account::AddressTableMode::Hex);
 }
 
-// Gate complement: a chain born with feature_raw_address (enableNumber = 0, the
-// genesis-activation shape) has no pre-activation hex data, so it stays plain
-// Binary — no fallback reads, even though the feature is on from the first block.
-BOOST_AUTO_TEST_CASE(genesisActivationKeepsBinary)
+// The XOR state root is a function of the logical state alone: the state block 100
+// commits in the hex layout folds the same root after the account rows are migrated in
+// place to the binary layout — and a Binary-mode node then reads the migrated rows with
+// no fallback.
+BOOST_AUTO_TEST_CASE(xorRootConsistentAfterInPlaceMigration)
 {
+    namespace account = ledger::account;
+    account::setNodeAddressTableMode(account::AddressTableMode::Hex);
     probingScheduler.m_account = unhexAddress("0x4200000000000000000000000000000000005678");
-    // m_activationBlock = 0: every block takes the post-activation (read) branch.
-    probingScheduler.m_activationBlock = 0;
+    probingScheduler.m_writeBlock = 101;
+    probingScheduler.m_balance = u256(12345);
+    probingScheduler.m_newBalance = u256(54321);
+    std::string const hexTable = "/apps/4200000000000000000000000000000000005678";
+    std::string const binTable = account::hexToBinaryAccountTableName(hexTable);
+    BOOST_REQUIRE(!binTable.empty());
 
-    writeFeatureEntry("feature_raw_address", 0);
+    commitOneBlock(executeOneBlock(100));
+    auto const rootHex = committedXorRoot();
+    BOOST_CHECK_NE(rootHex, h256{});
 
-    auto header100 = executeOneBlock(100);
-    BOOST_REQUIRE_EQUAL(probingScheduler.m_modes.size(), 1u);
-    BOOST_CHECK(probingScheduler.m_modes[0].second == ledger::account::AddressTableMode::Binary);
-    // The activation block IS recorded — it is 0, not a missing activation context,
-    // that keeps the fallback off.
-    BOOST_REQUIRE(probingScheduler.m_rawAddressActivation.has_value());
-    BOOST_CHECK_EQUAL(*probingScheduler.m_rawAddressActivation, 0);
+    migrateAccountRowsToBinary(hexTable);
+    auto const rootBinary = committedXorRoot();
+    BOOST_CHECK_EQUAL(rootHex, rootBinary);
+
+    // A fully migrated node (Binary, no fallback) reads the migrated rows directly.
+    account::setNodeAddressTableMode(account::AddressTableMode::Binary);
+    executeOneBlock(101);
+    BOOST_REQUIRE(probingScheduler.m_readBackBalance.has_value());
+    BOOST_CHECK_EQUAL(*probingScheduler.m_readBackBalance, u256(12345));
+
+    account::setNodeAddressTableMode(account::AddressTableMode::Hex);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

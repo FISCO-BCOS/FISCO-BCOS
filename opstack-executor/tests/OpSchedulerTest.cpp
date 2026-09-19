@@ -1664,18 +1664,20 @@ BOOST_AUTO_TEST_CASE(CallAtBlockRefusesNonScenarioB)
     BOOST_CHECK(receipt == nullptr);
 }
 
-/// The per-block raw_address guard (rejectRawAddressOnEngineLanes, called from
-/// loadLedgerConfig): feature_raw_address is not genesis-only, so a mid-chain governance
-/// activation slips past the boot-time validateMPTFlagMatrix check. The OP bridge is
-/// hex-only (Storage2State), so execute must halt loudly instead of splitting mode-aware
-/// RPC reads from hex-only executor writes.
-BOOST_AUTO_TEST_CASE(ExecuteBlockRefusesWhenRawAddressActive)
+/// feature_raw_address is deprecated: the account-table encoding is a node-local layout
+/// (nodeAddressTableMode), so the flag drives nothing and validate() refuses to activate
+/// it through governance. The OP lane's hex-only constraint is now enforced at boot by
+/// libinitializer's lane check (resolveNodeAddressTableMode forces Hex / refuses binary
+/// state), not by a per-block guard — an inert raw_address row in the committed state must
+/// not disturb block production.
+BOOST_AUTO_TEST_CASE(ExecuteBlockUnmovedByDeprecatedRawAddressFlag)
 {
     Fixture f;
-    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader());
-    // The mid-chain activation shape the boot guard cannot see: the L2 flag at genesis
-    // (the lane's normal state), raw_address appearing at block 1.
+    // Scenario-B genesis (the OP lane's normal state): L2 flag plus a persisted genesis trie
+    // so block 1 can do its incremental MPT build.
     seedL2CompatFeature(f.multiLayerStorage);
+    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
     {
         auto view = f.multiLayerStorage.fork();
         view.newMutable();
@@ -1688,12 +1690,11 @@ BOOST_AUTO_TEST_CASE(ExecuteBlockRefusesWhenRawAddressActive)
     auto depTx = makeDeposit();
     bcos::bytes depEnv = encodeDepositEnvelope(depTx);
     auto out = executeOpBlock(f, makeHeader(), {depEnv}, /*verify=*/true);
-    BOOST_REQUIRE(out.err != nullptr);
-    BOOST_CHECK(out.err->errorMessage().find("hex-only") != std::string::npos);
-    BOOST_CHECK(out.header == nullptr);
+    BOOST_CHECK(out.err == nullptr);
+    BOOST_CHECK(out.header != nullptr);
 }
 
-/// Control for the guard above: the same block WITHOUT raw_address executes fine (no L2 flag
+/// Control: the same block without the deprecated flag executes fine as well (no L2 flag
 /// here, so the run stays on the full-rebuild path and needs no persisted genesis trie).
 BOOST_AUTO_TEST_CASE(ExecuteBlockAcceptedWithoutRawAddress)
 {

@@ -111,6 +111,12 @@ public:
         feature_evm_timestamp = 51,
         feature_evm_address = 52,
         feature_rpbft_term_weight = 53,
+        // DEPRECATED: the account-table encoding (hex vs binary /apps/ names) is a
+        // node-local physical layout, published by the startup detection as
+        // ledger::account::nodeAddressTableMode() (ledger/AccountTableName.h) — this flag no
+        // longer drives any behavior. The value 54 stays reserved (feature values are
+        // permanent) and string2Flag still recognizes the name, but validate() rejects
+        // activating it through governance.
         feature_raw_address = 54,
         feature_rpbft_vrf_type_secp256k1 = 55,
         feature_balance_policy2 = 56,     // 转账白名单 Transfer whitelist

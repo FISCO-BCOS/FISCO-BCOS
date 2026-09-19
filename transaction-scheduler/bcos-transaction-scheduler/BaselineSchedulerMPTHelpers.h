@@ -33,9 +33,10 @@ DERIVE_BCOS_EXCEPTION(InvalidMPTFlagMatrix);
 // the legacy XOR root (spec 5.6 / 5.10). The execute path (coExecuteBlock) consults it once
 // per block when the MPT branch is wired in.
 //
-// Pure: no throw, no side effect. feature_raw_address is NOT part of the decision: the MPT
-// delta scan classifies both the 40-hex and the 20-byte raw-address account table layouts
-// (Classify.h parseAccountTable), so raw_address and the MPT state root combine freely.
+// Pure: no throw, no side effect. The account-table encoding is NOT part of the decision:
+// it is a node-local physical layout (nodeAddressTableMode), and the MPT delta scan
+// classifies both the 40-hex and the 20-byte raw-address account table layouts
+// (Classify.h parseAccountTable), so the encoding and the MPT state root combine freely.
 inline bool shouldBuildMPT(
     bcos::ledger::Features const& features, bcos::protocol::BlockNumber blockNumber)
 {
@@ -73,39 +74,16 @@ inline bool shouldBuildMPT(
 // populated; a bare set() leaves activationBlockOf at -1, which this guard rejects for
 // the same reason (an unverifiable activation must not pass a consistency check).
 //
-// feature_raw_address combines freely with feature_mpt_state_root (scenario A, mainline):
-// the MPT delta scan classifies both account-table layouts (Classify.h parseAccountTable
-// accepts the 40-hex and the 20-byte raw-address forms), the first-touch flat back-fill
-// reads through the chain's AddressTableMode (FlatToMPT.h readFlatAccountMeta), and the
-// mainline executor is mode-aware. It does NOT combine with feature_l2_ethereum_compat:
-// the OP lane's Storage2State bridge and the ethereum-executor still name account tables
-// /apps/<40-hex> (Storage2StateHelpers.h accountTableName; EthereumState.h), while the
-// mode-aware RPC read paths (OpScheduler getCode/getABI/getStorageAt, accountTableMode)
-// would route to 20-byte binary tables once raw_address activates — reads and writes split
-// onto disjoint tables and the RPC silently reads empty state. Refuse the combination;
-// OpScheduler additionally re-checks raw_address per block, because feature_raw_address is
-// not genesis-only and a mid-chain governance activation is invisible to this boot guard.
+// The account-table encoding plays no role here: it is a node-local physical layout
+// (nodeAddressTableMode), and the deprecated feature_raw_address flag drives nothing.
+// The OP/Eth lanes' hex-only naming constraint is enforced at boot by libinitializer
+// (resolveNodeAddressTableMode refuses binary data on a hex-only lane), not by a flag.
 //
-// @throws InvalidMPTFlagMatrix when feature_raw_address is set together with
-//         feature_l2_ethereum_compat, or when feature_l2_ethereum_compat is set with a
-//         non-zero (or unknown) activation block. A features object without the L2 flag
-//         always passes (raw_address + feature_mpt_state_root included).
+// @throws InvalidMPTFlagMatrix when feature_l2_ethereum_compat is set with a non-zero (or
+//         unknown) activation block. A features object without the L2 flag always passes.
 inline void validateMPTFlagMatrix(bcos::ledger::Features const& features)
 {
     using Flag = bcos::ledger::Features::Flag;
-    if (features.get(Flag::feature_raw_address) && features.get(Flag::feature_l2_ethereum_compat))
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidMPTFlagMatrix{} << bcos::errinfo_comment(
-                "feature_raw_address cannot be combined with feature_l2_ethereum_compat: "
-                "the OP lane's Storage2State bridge and the ethereum-executor still name "
-                "account tables /apps/<40-hex>, but with raw_address active the mode-aware "
-                "RPC read paths (OpScheduler getCode/getABI/getStorageAt via "
-                "accountTableMode) route to 20-byte binary tables — the RPC read path and "
-                "the executor write path would split onto disjoint tables and reads would "
-                "silently come back empty. Keep feature_raw_address off on L2 chains until "
-                "those lanes grow mode-aware naming"));
-    }
     if (!features.get(Flag::feature_l2_ethereum_compat))
     {
         return;
@@ -165,46 +143,6 @@ inline void validateOpModeGenesisOnly(bcos::ledger::Features const& features, in
                 " (the OPSTACK slot) requires feature_l2_ethereum_compat=on, but it is off; "
                 "the OP lane commits account state in MPT only, so the flag is genesis-bound "
                 "with the mode"));
-    }
-}
-
-/// Per-block half of the raw_address guard for the lanes whose executors are still
-/// hex-only — the OP lane (opstack-executor's Storage2State bridge derives
-/// /apps/<40-hex> names itself) and the Eth engine lane (ethereum-executor's
-/// EthereumState hard-codes AddressTableMode::Hex). The boot guard
-/// (validateMPTFlagMatrix) rejects raw_address + feature_l2_ethereum_compat, but
-/// feature_raw_address is NOT genesis-only: a governance activation after boot never
-/// re-runs the boot check, so the lanes re-check at the point where they read the block's
-/// features (OpScheduler::loadLedgerConfig, EthEngineService::buildPayload). The mainline
-/// v1 baseline lane is mode-aware and deliberately NOT covered here — raw_address +
-/// feature_mpt_state_root stays legal there (this PR's purpose).
-///
-/// @throws InvalidMPTFlagMatrix when feature_raw_address is set. Halting block production
-///         loudly beats the alternative: with raw_address active the mode-aware RPC read
-///         paths route to 20-byte binary tables while the hex-only executor keeps writing
-///         /apps/<40-hex>, and the two split silently. @p blockNumber is diagnostic only.
-///
-/// OPERATIONAL CONSEQUENCE, deliberate (same trade-off as the base's
-/// rejectRawAddressWithMPT): turning feature_raw_address on mid-chain halts these lanes'
-/// block production from the activation block, and there is no in-protocol recovery — the
-/// flag cannot be turned off again through consensus once every node refuses to execute.
-inline void rejectRawAddressOnEngineLanes(
-    bcos::ledger::Features const& features, bcos::protocol::BlockNumber blockNumber)
-{
-    if (features.get(ledger::Features::Flag::feature_raw_address))
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidMPTFlagMatrix{} << bcos::errinfo_comment(
-                "feature_raw_address is active on a lane whose executor is still hex-only "
-                "(block " +
-                std::to_string(blockNumber) +
-                "): the OP/Eth engine lanes name account tables /apps/<40-hex> "
-                "(opstack-executor Storage2State, ethereum-executor EthereumState), but "
-                "raw_address routes the mode-aware read paths to 20-byte binary tables — "
-                "reads and writes would split onto disjoint tables and RPC reads would "
-                "silently come back empty. Halting block production; do not activate "
-                "feature_raw_address on these lanes until their executors grow mode-aware "
-                "naming"));
     }
 }
 
@@ -293,7 +231,7 @@ task::Task<ledger::mpt::MPTDeltaLayer> buildMPTStateRootForView(ViewType& view,
     bool const l2Mode =
         ledgerConfig.features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
     co_return co_await ledger::mpt::buildAndCollect(nodeStorage, parentStateRoot, view, l2Mode,
-        ledger::account::accountTableMode(ledgerConfig.features()), trackRefCounts);
+        ledger::account::nodeAddressTableMode(), trackRefCounts);
 }
 
 /// Publish the header under SYS_NUMBER_2_BLOCK_HEADER so the next block's MPT build can read

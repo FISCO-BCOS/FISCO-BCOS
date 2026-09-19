@@ -1143,8 +1143,8 @@ void TransactionExecutor::updateEoaNonce(std::unordered_map<std::string, u256> c
         {
             LEDGER_LOG(TRACE) << METRIC << LOG_DESC("updateEoaNonce") << LOG_KV("sender", sender)
                               << LOG_KV("nonce", nonce);
-            auto eoa = ledger::account::EVMAccount(*m_blockContext->storage(), sender,
-                ledger::account::accountTableMode(m_blockContext->features()));
+            auto eoa = ledger::account::EVMAccount(
+                *m_blockContext->storage(), sender, ledger::account::nodeAddressTableMode());
             auto nonceInStorage = task::syncWait(eoa.nonce());
             auto nonceToUpdate = std::max(u256(nonceInStorage.value_or("0")), nonce) + 1;
             task::syncWait(eoa.setNonce(nonceToUpdate.convert_to<std::string>()));
@@ -2207,9 +2207,8 @@ bcos::task::Task<std::optional<bcos::storage::Entry>> TransactionExecutor::getPe
         }
     }
 
-    const auto features = co_await ledger::getFeatures(*m_ledger);
     auto eoa = bcos::ledger::account::EVMAccount(
-        *stateStorage, address, ledger::account::accountTableMode(features));
+        *stateStorage, address, bcos::ledger::account::nodeAddressTableMode());
     co_return co_await eoa.storageEntry(key);
 }
 

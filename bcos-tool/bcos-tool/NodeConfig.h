@@ -136,6 +136,10 @@ public:
     // finds (init Phase 3). Default false: the scan is skipped entirely (only a hint is
     // logged — counting the garbage would itself cost the full-table scan).
     bool mptPruneSweepGarbage() const;
+    // One-shot offline hex→binary account-table migration at boot
+    // ([storage] migrate_account_tables_to_binary, default false). Safe to leave on: once the
+    // .binary_account_tables marker exists the boot skips the scan entirely.
+    bool migrateAccountTablesToBinary() const;
     std::vector<std::string> const& pdAddrs() const;
     std::string const& pdCaPath() const;
     std::string const& pdCertPath() const;
@@ -516,6 +520,9 @@ private:
     // booting. Default off — the boot skips the scan entirely and only logs a hint (counting
     // the garbage would itself cost the full-table scan).
     bool m_mptPruneSweepGarbage = false;
+    // One-shot boot-time migration of the account tables to the binary encoding
+    // (libinitializer/AccountTableMigration). Hex-only executor lanes refuse it at boot.
+    bool m_migrateAccountTablesToBinary = false;
 
     bool m_enableArchive = false;
     bool m_syncArchivedBlocks = false;

@@ -115,7 +115,6 @@ private:
 
     Transactions m_transactions;
     std::mutex m_mutex;
-    ledger::account::AddressTableMode m_accountTableMode{};
 
     /// The mempool stores the sender as raw address bytes (TransactionImpl::sender());
     /// convert them to an evmc_address so EVMAccount resolves the same account table path
@@ -221,7 +220,8 @@ public:
             // and compute a wrong table path, so the nonce read below would miss the account
             // entirely. Build an evmc_address instead so the same table path is used as the
             // executor.
-            ledger::account::EVMAccount account(state, senderToAddress(sender), m_accountTableMode);
+            ledger::account::EVMAccount account(
+                state, senderToAddress(sender), ledger::account::nodeAddressTableMode());
 
             int64_t currentNonce = 0;
             if (auto nonceStr = task::syncWait(account.nonce()))
@@ -273,7 +273,8 @@ public:
             auto nextIt = senderIndex.equal_range(sender).second;
             // Same table-path note as in seal(): the raw sender bytes must go through the
             // evmc_address overload so the account nonce read finds the executor's account.
-            ledger::account::EVMAccount account(state, senderToAddress(sender), m_accountTableMode);
+            ledger::account::EVMAccount account(
+                state, senderToAddress(sender), ledger::account::nodeAddressTableMode());
             if (auto nonceStr = task::syncWait(account.nonce()))
             {
                 int64_t nonce = 0;

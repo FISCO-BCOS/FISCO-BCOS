@@ -1610,7 +1610,7 @@ static task::Task<void> importGenesisState(
             slots.emplace_back(evmKey, evmValue);
         }
 
-        account::EVMAccount account(storage, address, account::accountTableMode(features));
+        account::EVMAccount account(storage, address, account::nodeAddressTableMode());
         co_await account.create();
 
         if (codeHash.has_value())

@@ -88,7 +88,7 @@ bcos::storage::Entry codeHashEntry(bcos::h256 const& hash)
         std::string_view{reinterpret_cast<char const*>(hash.data()), bcos::h256::SIZE});
 }
 
-// "/apps/" + the 20 raw address bytes — the feature_raw_address account-table layout
+// "/apps/" + the 20 raw address bytes — the binary account-table layout
 // (EVMAccount's AddressTableMode::Binary naming, Classify.h ADDRESS_BIN_LEN).
 std::string binaryAccountTable(bcos::Address const& addr)
 {
@@ -303,7 +303,7 @@ BOOST_AUTO_TEST_CASE(NextBlockContinuesIncrementallyOverThePartialTrie)
 
 BOOST_AUTO_TEST_CASE(BinaryTableDeltaBuildsTheSameTrieAsHex)
 {
-    // feature_raw_address: the block's delta carries "/apps/<20 raw bytes>" table names. The
+    // Binary layout: the block's delta carries "/apps/<20 raw bytes>" table names. The
     // trie key is keccak(address) either way, so the SAME logical delta expressed with hex
     // tables (Hex mode) and with binary tables (Binary mode) must commit the same state root.
     auto const addr = makeAddress(0xC3);
@@ -342,8 +342,8 @@ BOOST_AUTO_TEST_CASE(BinaryTableDeltaBuildsTheSameTrieAsHex)
 
 BOOST_AUTO_TEST_CASE(RawAddressFallbackReadsPreActivationHexRows)
 {
-    // A chain that activated feature_raw_address MID-CHAIN (BinaryWithHexFallback): the account's
-    // baseline rows live in the legacy HEX table (written pre-activation), and this block's delta
+    // A node in the BinaryWithHexFallback mid-migration layout: the account's
+    // baseline rows live in the legacy HEX table (not yet migrated), and this block's delta
     // writes binary-table rows. The first-touch metadata read must fall back to the hex table.
     NodeStorage storage;
     auto const addr = makeAddress(0xC4);
@@ -369,7 +369,7 @@ BOOST_AUTO_TEST_CASE(RawAddressFallbackReadsPreActivationHexRows)
 
 BOOST_AUTO_TEST_CASE(RawAddressBinaryModeDoesNotReadHexTables)
 {
-    // The plain Binary mode (genesis-enabled raw_address) must NOT consult the legacy hex table:
+    // The plain Binary mode (fully migrated / new chain) must NOT consult the legacy hex table:
     // on such a chain every post-genesis row lives in binary tables, and a stray hex row is not
     // this account's state. Same layout as the fallback test above, but balance/codeHash resolve
     // to the Yellow Paper defaults.

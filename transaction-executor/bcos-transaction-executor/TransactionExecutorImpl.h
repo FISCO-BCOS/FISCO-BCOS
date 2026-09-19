@@ -168,8 +168,7 @@ public:
             {
                 auto& callNonce = m_data->m_nonce;
                 ledger::account::EVMAccount account(m_data->m_rollbackableStorage,
-                    m_data->m_origin,
-                    ledger::account::accountTableMode(m_data->m_ledgerConfig.get().features()));
+                    m_data->m_origin, ledger::account::nodeAddressTableMode());
 
                 if (!co_await account.exists())
                 {

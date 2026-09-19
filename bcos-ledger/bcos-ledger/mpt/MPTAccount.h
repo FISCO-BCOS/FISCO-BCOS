@@ -118,10 +118,10 @@ private:
 
 public:
     /// Direct construction, for callers that already hold the trie handles (tests, tooling).
-    /// @param mode the caller's feature_raw_address table mode (ledger::account::AddressTableMode,
-    /// usually from accountTableMode(features)), exactly as EVMAccount takes it — deliberately
+    /// @param mode the node's account-table mode (ledger::account::AddressTableMode,
+    /// usually nodeAddressTableMode()), exactly as EVMAccount takes it — deliberately
     /// without a default: it decides the flat table name every no-root read and every inherited
-    /// write uses, and guessing it wrong makes those reads silently miss on a raw-address chain.
+    /// write uses, and guessing it wrong makes those reads silently miss on a binary-layout node.
     MPTAccount(Storage& storage, NodeStorage& nodeStorage, BackendStorage& backendStorage,
         bcos::Address address, account::AddressTableMode mode)
       : Base(storage, address, mode),

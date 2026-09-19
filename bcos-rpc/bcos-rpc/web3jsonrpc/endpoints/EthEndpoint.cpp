@@ -1244,7 +1244,7 @@ task::Task<void> EthEndpoint::call(
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(InvalidParams, "invalid `from` address in call request"));
         }
-        // The account row key is the lowercase hex text on chains without feature_raw_address,
+        // The account row key is the lowercase hex text on hex-layout nodes (the default),
         // and clients (ethers/viem) send an EIP-55 mixed-case `from` — normalize the lookup key
         // the same way every other address lookup in this file does, or the read misses and the
         // call falls back to the state nonce (NONCE_TOO_LOW for an in-flight sender).

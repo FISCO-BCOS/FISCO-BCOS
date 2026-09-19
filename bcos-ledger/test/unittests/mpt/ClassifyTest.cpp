@@ -40,7 +40,7 @@ bcos::Address classifyTestAddress()
     return bcos::Address(std::string{CLASSIFY_TEST_ADDR_HEX}, bcos::Address::FromHex);
 }
 
-/// "/apps/" + the 20 raw address bytes — the feature_raw_address table layout.
+/// "/apps/" + the 20 raw address bytes — the binary account-table layout.
 std::string binaryTestTable(bcos::Address const& addr)
 {
     std::string table{APPS_TABLE_PREFIX};
@@ -66,7 +66,7 @@ BOOST_AUTO_TEST_CASE(ParseAccountTableAcceptsAppsAddressOnly)
 
 BOOST_AUTO_TEST_CASE(ParseAccountTableAcceptsRawAddressTable)
 {
-    // The feature_raw_address layout: "/apps/" + the 20 raw address bytes, taken verbatim.
+    // The binary layout: "/apps/" + the 20 raw address bytes, taken verbatim.
     auto const addr = classifyTestAddress();
     auto parsed = parseAccountTable(binaryTestTable(addr));
     BOOST_REQUIRE(parsed.has_value());

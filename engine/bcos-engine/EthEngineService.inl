@@ -686,12 +686,6 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
 
     ledger::LedgerConfig ledgerConfig;
     co_await ledger::getLedgerConfig(view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
-    // Per-block raw_address guard: the Eth lane's executor (ethereum-executor
-    // EthereumState) is hex-only, and feature_raw_address can activate mid-chain via
-    // governance after boot, past the boot-time matrix check. buildPayload is the lane's
-    // only production entry (newPayload only accepts payloads built here — anything else
-    // answers SYNCING), so this one check halts all Eth-lane production.
-    scheduler_v1::rejectRawAddressOnEngineLanes(ledgerConfig.features(), nextBlockNumber);
     auto blockVersion = ledgerConfig.compatibilityVersion();
 
     auto chainRevision = ledgerConfig.evmcRevisionForBlock(nextBlockNumber);

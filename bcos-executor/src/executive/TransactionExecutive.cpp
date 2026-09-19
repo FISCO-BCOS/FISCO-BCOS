@@ -388,8 +388,7 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
             !callParameters->internalCreate)
         {
             ledger::account::EVMAccount address(*m_blockContext.storage(),
-                callParameters->senderAddress,
-                ledger::account::accountTableMode(m_blockContext.features()));
+                callParameters->senderAddress, ledger::account::nodeAddressTableMode());
             if (m_blockContext.features().get(ledger::Features::Flag::bugfix_nonce_initialize))
             {
                 if (!precompiled::contains(bcos::precompiled::c_systemTxsAddress,
@@ -423,8 +422,7 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
             {
                 // TODO)): set nonce here will be better
                 ledger::account::EVMAccount address(*m_blockContext.storage(),
-                    callParameters->senderAddress,
-                    ledger::account::accountTableMode(m_blockContext.features()));
+                    callParameters->senderAddress, ledger::account::nodeAddressTableMode());
                 task::wait([](decltype(address) addr, u256 callNonce) -> task::Task<void> {
                     if (!co_await addr.exists())
                     {

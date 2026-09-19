@@ -39,7 +39,7 @@ public:
     }
 
     // Locate the table/key separator in the flat "table:key" form. Raw-address
-    // account tables (feature_raw_address: "/apps/" + 20 raw address bytes) can
+    // account tables (the binary node-local layout: "/apps/" + 20 raw address bytes) can
     // contain 0x3a (':') inside the address, so a plain find_first_of(':') would
     // split inside the table name. The binary form is fixed-length, and a ':' at
     // exactly that offset is unambiguous: the legacy 40-hex form holds only hex

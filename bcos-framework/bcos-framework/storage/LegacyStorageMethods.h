@@ -28,8 +28,7 @@ inline executor_v1::StateKeyView toStateKeyView(auto&& stateKey)
 
 inline task::Task<std::optional<Entry>> tag_invoke(
     storage2::tag_t<storage2::readOne> /*unused*/, StorageInterface& storage, auto stateKey)
-{
-    struct Awaitable
+{    struct Awaitable
     {
         StorageInterface& m_storage;
         std::string_view m_table;
@@ -135,6 +134,17 @@ inline task::Task<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*
         .m_entry = std::move(entry),
         .m_result = {}};
     co_await awaitable;
+}
+
+/// Deletion for the legacy interface is a tombstone: StorageInterface has no erase call,
+/// a DELETED-status entry written through asyncSetRow is the convention every legacy
+/// caller (e.g. TablePrecompiled) already uses.
+inline task::Task<void> tag_invoke(
+    storage2::tag_t<storage2::removeOne> /*unused*/, StorageInterface& storage, auto stateKey)
+{
+    Entry deleted;
+    deleted.setStatus(Entry::DELETED);
+    co_await storage2::writeOne(storage, std::move(stateKey), std::move(deleted));
 }
 
 }  // namespace bcos::storage

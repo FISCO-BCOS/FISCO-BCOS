@@ -1,6 +1,8 @@
 #include "LedgerInitializer.h"
+#include "AccountTableMigration.h"
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/ledger/EVMAccount.h>
+#include <bcos-ledger/LedgerMethods.h>
 #include <bcos-task/Wait.h>
 #include <bcos-transaction-scheduler/BaselineSchedulerMPTHelpers.h>
 #include <bcos-utilities/BoostLog.h>
@@ -12,7 +14,7 @@
 std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::build(
     bcos::protocol::BlockFactory::Ptr blockFactory, bcos::storage::StorageInterface::Ptr storage,
     bcos::tool::NodeConfig::Ptr nodeConfig, bcos::storage::StorageInterface::Ptr blockStorage,
-    bcos::IOServicePool::Ptr ioServicePool)
+    bcos::IOServicePool::Ptr ioServicePool, std::optional<AccountTableBoot> accountTableBoot)
 {
     bcos::storage::StorageImpl storageWrapper(storage);
     std::shared_ptr<bcos::ledger::Ledger> ledger;
@@ -29,6 +31,65 @@ std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::buil
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher{}, std::move(storageWrapper),
             blockFactory, storage, nodeConfig->blockLimit(), blockStorage);
+    }
+
+    // Publish the node-local account-table encoding BEFORE buildGenesisBlock: genesis state
+    // loading (Ledger::importGenesisState / GenesisStateLoader) routes account-table names
+    // through nodeAddressTableMode(), so a fresh chain must be born in the resolved encoding.
+    if (accountTableBoot.has_value())
+    {
+        // Lane determination without a genesis block: on an existing chain the committed
+        // rows answer (the L2 feature row, executor_version); on a fresh chain the genesis
+        // config is the only source. feature_l2_ethereum_compat is genesis-only, so "ever
+        // enabled" is the same question as "enabled now".
+        auto const onChain = readOnChainExecutorVersion(*ledger, nodeConfig->executorVersion());
+        bcos::ledger::Features laneFeatures;
+        if (auto l2Row = bcos::task::syncWait(bcos::ledger::getSystemConfig(*ledger,
+                std::string(magic_enum::enum_name(
+                    bcos::ledger::Features::Flag::feature_l2_ethereum_compat))));
+            l2Row.has_value() && std::get<0>(*l2Row) == "1")
+        {
+            laneFeatures.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
+        }
+        else if (std::ranges::any_of(nodeConfig->genesisConfig().m_features,
+                     [](bcos::ledger::FeatureSet const& featureSet) {
+                         return featureSet.flag ==
+                                    bcos::ledger::Features::Flag::feature_l2_ethereum_compat &&
+                                featureSet.enable > 0;
+                     }))
+        {
+            laneFeatures.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
+        }
+        bool const hexOnlyLane = isHexOnlyExecutorLane(laneFeatures, onChain.version);
+
+        // One-shot offline migration ([storage] migrate_account_tables_to_binary) BEFORE the
+        // layout detection below: the detection must see the post-migration state (a pure
+        // binary layout with the marker file). Hex-only lanes are refused inside
+        // migrateAccountTablesToBinary. Order: lane check → migrate → detect → publish.
+        if (accountTableBoot->migrateToBinary)
+        {
+            auto const stats = migrateAccountTablesToBinary(
+                accountTableBoot->stateDB, accountTableBoot->storageRootPath, hexOnlyLane);
+            BCOS_LOG(INFO) << LOG_BADGE("LedgerInitializer")
+                           << LOG_DESC("account-table migration finished")
+                           << LOG_KV("alreadyMigrated", stats.alreadyMigrated)
+                           << LOG_KV("accountRows", stats.migratedAccountRows)
+                           << LOG_KV("registrations", stats.migratedRegistrations)
+                           << LOG_KV("deduped", stats.dedupedRows);
+        }
+
+        auto const layout = detectAccountTableLayout(
+            accountTableBoot->stateDB, accountTableBoot->storageRootPath);
+        auto const mode = resolveNodeAddressTableMode(layout, hexOnlyLane);
+        bcos::ledger::account::setNodeAddressTableMode(mode);
+        BCOS_LOG(INFO) << LOG_BADGE("LedgerInitializer")
+                       << LOG_DESC("node-local account-table encoding")
+                       << LOG_KV("mode", magic_enum::enum_name(mode))
+                       << LOG_KV("markerFile", layout.markerFile)
+                       << LOG_KV("hexTables", layout.sawHexTables)
+                       << LOG_KV("binaryTables", layout.sawBinaryTables)
+                       << LOG_KV("hexOnlyLane", hexOnlyLane)
+                       << LOG_KV("executorVersion", onChain.version);
     }
 
     ledger->buildGenesisBlock(nodeConfig->genesisConfig(), *nodeConfig->ledgerConfig());
@@ -49,20 +110,6 @@ std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::buil
     }
     auto features = bcos::task::syncWait(ledger->fetchAllFeatures(blockNumber + 1));
     bcos::scheduler_v1::validateMPTFlagMatrix(features);
-
-    // One-time startup visibility for the raw-address hex fallback (accountTableMode):
-    // BinaryWithHexFallback changes account-table reads chain-wide (binary table first, hex
-    // fallback for pre-activation rows), so log the mode and the activation block once at
-    // boot — never on the per-block / per-transaction paths that consume the mode.
-    if (bcos::ledger::account::accountTableMode(features) ==
-        bcos::ledger::account::AddressTableMode::BinaryWithHexFallback)
-    {
-        BCOS_LOG(INFO) << LOG_BADGE("LedgerInitializer")
-                       << LOG_DESC("feature_raw_address active with hex-table fallback reads")
-                       << LOG_KV("activationBlock",
-                              features.activationBlockOf(
-                                  bcos::ledger::Features::Flag::feature_raw_address));
-    }
 
     // OP mode is a genesis-only property: executor_version >= OPSTACK requires the
     // genesis-only feature_l2_ethereum_compat and must itself be genesis-bound. The value

@@ -19,11 +19,13 @@
  * @date 2021-06-10
  */
 #pragma once
+#include "AddressTableModeDetection.h"
 #include "bcos-ledger/Ledger.h"
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/IOServicePool.h>
+#include <optional>
 
 namespace bcos::initializer
 {
@@ -45,10 +47,16 @@ OnChainExecutorVersion readOnChainExecutorVersion(
 class LedgerInitializer
 {
 public:
+    /// @param accountTableBoot the boot-time account-table handling (AccountTableBoot): lane
+    ///        check → optional one-shot hex→binary migration → physical layout detection →
+    ///        node-mode publication, all before buildGenesisBlock. Nullopt skips the whole
+    ///        sequence (tools that never serve execution, e.g. archive-tool): the singleton
+    ///        keeps its Hex default, the pre-detection behavior.
     static std::shared_ptr<bcos::ledger::Ledger> build(
         bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::storage::StorageInterface::Ptr storage, bcos::tool::NodeConfig::Ptr nodeConfig,
         bcos::storage::StorageInterface::Ptr blockStorage,
-        bcos::IOServicePool::Ptr ioServicePool = nullptr);
+        bcos::IOServicePool::Ptr ioServicePool = nullptr,
+        std::optional<AccountTableBoot> accountTableBoot = std::nullopt);
 };
 }  // namespace bcos::initializer

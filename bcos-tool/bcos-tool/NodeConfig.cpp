@@ -1893,6 +1893,10 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     // pre-existing unreachable "/mpt/" rows entirely (only a hint is logged); enable to delete
     // them (in batches) while booting.
     m_mptPruneSweepGarbage = _pt.get<bool>("storage.mpt_prune_sweep_garbage", false);
+    // One-shot hex→binary account-table migration at boot (AccountTableMigration.cpp).
+    // Idempotent and crash-safe; the .binary_account_tables marker short-circuits later boots.
+    m_migrateAccountTablesToBinary =
+        _pt.get<bool>("storage.migrate_account_tables_to_binary", false);
     m_pdCaPath = _pt.get<std::string>("storage.pd_ssl_ca_path", "");
     m_pdCertPath = _pt.get<std::string>("storage.pd_ssl_cert_path", "");
     m_pdKeyPath = _pt.get<std::string>("storage.pd_ssl_key_path", "");
@@ -1936,6 +1940,7 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("enable_rocksdb_blob", m_enableRocksDBBlob)
                          << LOG_KV("mptPruneWindow", m_mptPruneWindow)
                          << LOG_KV("mptPruneSweepGarbage", m_mptPruneSweepGarbage)
+                         << LOG_KV("migrateAccountTablesToBinary", m_migrateAccountTablesToBinary)
                          << LOG_KV("enableLRUCacheStorage", m_enableLRUCacheStorage);
 }
 
@@ -2711,6 +2716,11 @@ std::int64_t NodeConfig::mptPruneWindow() const
 bool NodeConfig::mptPruneSweepGarbage() const
 {
     return m_mptPruneSweepGarbage;
+}
+
+bool NodeConfig::migrateAccountTablesToBinary() const
+{
+    return m_migrateAccountTablesToBinary;
 }
 
 std::vector<std::string> const& NodeConfig::pdAddrs() const
