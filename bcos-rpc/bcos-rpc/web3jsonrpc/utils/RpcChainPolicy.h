@@ -42,6 +42,17 @@ inline bool usesEthereumFeeSemantics(int executorVersion)
     return executorVersion >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
 }
 
+/// True when the chain runs the OP lane (exactly OPSTACK_EXECUTOR_VERSION). This is a LANE
+/// predicate, distinct from the ledger's feature_l2_ethereum_compat state shape: the Eth
+/// lane may carry that flag too (an MPT-state chain still sealed by the consensus layer),
+/// and on such a chain the OP base-fee rule must not apply. eth_feeHistory consumes this,
+/// so feeHistory and eth_gasPrice agree on every configuration.
+inline bool isOpStackLane(int executorVersion)
+{
+    return executorVersion == bcos::ledger::OPSTACK_EXECUTOR_VERSION;
+}
+
+
 /// Suggested priority fee (wei): the Ethereum/OP lanes suggest a non-zero tip (OP floors at
 /// 1e6 wei, matching op-geth); the legacy FISCO lane keeps its historic constant 0.
 inline uint64_t suggestedPriorityFeeWei(int executorVersion)

@@ -12,6 +12,7 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/Transaction.h>
+#include <bcos-framework/protocol/TxGasModel.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
@@ -233,6 +234,33 @@ BOOST_AUTO_TEST_CASE(LegacyCallPathExecutesSimulation)
     auto receipt = bcos::task::syncWait(executor.executeTransaction(
         storage, *header, tx, /*contextID=*/0, ledgerConfig, /*call=*/true));
 
+    BOOST_REQUIRE(receipt != nullptr);
+    BOOST_CHECK_EQUAL(countRows(storage), 0u);
+}
+
+/// R3-2: call=true must keep `enforce_max_tx_gas = false` (OpstackExecutor). A Karst/Osaka
+/// tx over EIP-7825 would fail under the default policy; this pins the shared eth_call
+/// exemption (geth #32641). estimateGas clamps at the RPC layer instead.
+BOOST_AUTO_TEST_CASE(KarstCallPathAllowsGasOverEip7825Cap)
+{
+    MutableStorage storage;
+    auto header = makeCallHeader();
+
+    bcos::ledger::LedgerConfig ledgerConfig;
+    auto cfg = bcos::evm::opstack::karstConfig();
+    ledgerConfig.setEVMCRevision(cfg.rev);
+    evmc_uint256be chainIdBe{};
+    chainIdBe.bytes[31] = 10;
+    ledgerConfig.setChainId(chainIdBe);
+
+    FakeTransaction tx;
+    tx.m_gasLimit = bcos::protocol::MAX_TX_GAS_LIMIT + 1;
+    bcos::executor_v1::opstack::OpstackExecutor executor{
+        bcos::evm::opstack::testutil::kOpTestReceiptFactory,
+        std::make_shared<bcos::crypto::Keccak256>(), cfg};
+
+    auto receipt = bcos::task::syncWait(executor.executeTransaction(
+        storage, *header, tx, /*contextID=*/0, ledgerConfig, /*call=*/true));
     BOOST_REQUIRE(receipt != nullptr);
     BOOST_CHECK_EQUAL(countRows(storage), 0u);
 }

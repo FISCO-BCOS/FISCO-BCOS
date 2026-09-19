@@ -46,10 +46,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: FISCO-BCOS/op-stack-e2e-tests
-          # The --legacy L2 pricing this node needs (its method set has no eth_feeHistory) landed in
-          # FISCO-BCOS/op-stack-e2e-tests#2; this is that PR's merge commit, on the harness's
-          # default branch, so the pin is a stable revision rather than a PR branch tip.
-          ref: 0451c8bf3601c502a36be4633c0e2f4cc38e9c9b
+          # PR #3's squash-merge head on the harness's default branch (a stable revision, not a
+          # branch tip). It carries the C2 chain's own declarations in config.genesis:
+          # [op_eip1559] 2/8/250 (matching intent.toml; requires this repo's chain EIP-1559
+          # parameter channel, 483031396) and [op_fork_schedule] canonical=0:jovian (the merged
+          # framework's boot resolution ignores the [op_fork_timestamps] shorthand — without the
+          # canonical the node boots as Isthmus and rejects Jovian attributes; found by the first
+          # full-stack run of this stack).
+          ref: e7cded80ad98e9c85a1fecc475ce201d55f773ea
           path: .ci-op-e2e-tests
 
       - name: Initialize vcpkg submodule
@@ -109,6 +113,42 @@ jobs:
           COMMIT=$(python3 -c "import json; print(json.load(open('.ci-op-e2e-tests/tools/op-e2e/versions.json'))['op_monorepo']['commit'])")
           echo "commit=${COMMIT}" >> "$GITHUB_OUTPUT"
 
+      # STEP-SET TWIN of workflow.yml's "Assert the OP monorepo pin is reachable":
+      # the pin above is data, and a stale harness ref can carry a wrong one (PR
+      # #5615: op_monorepo.commit held the op-revm oracle revision 5f90f749c, an
+      # object ethereum-optimism/optimism never had — the job died late, inside the
+      # monorepo fetch, on a bare "not our ref"). Vet the value here instead, where
+      # the message can name its source. GitHub answers 200 for a commit it serves
+      # and 404/422 for one it cannot (rewritten away, or a sha from another repo);
+      # any other status is an API hiccup or rate limit, so it only warns.
+      - name: Assert the OP monorepo pin is reachable
+        run: |
+          set -euo pipefail
+          COMMIT="${{ steps.op-pin.outputs.commit }}"
+          case "${COMMIT}" in
+            [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*) ;;
+            *)
+              echo "::error::op_monorepo.commit read from the harness ref is not a sha: '${COMMIT}'"
+              exit 1
+              ;;
+          esac
+          if [ "${#COMMIT}" -ne 40 ]; then
+            echo "::error::op_monorepo.commit is ${#COMMIT} chars, want 40: '${COMMIT}'"
+            exit 1
+          fi
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            "https://api.github.com/repos/ethereum-optimism/optimism/commits/${COMMIT}")
+          case "${code}" in
+            200) echo "OP monorepo pin ${COMMIT} is reachable" ;;
+            404 | 422)
+              echo "::error::op_monorepo.commit=${COMMIT} does not exist in ethereum-optimism/optimism (HTTP ${code}). The harness ref pinned for this job (see the checkout step) carries a bad versions.json — bump the harness ref, do not retry."
+              exit 1
+              ;;
+            *)
+              echo "::notice::reachability check inconclusive (HTTP ${code}); continuing"
+              ;;
+          esac
+
       - name: Cache OP monorepo + binaries
         id: op-cache
         uses: actions/cache@v4
@@ -129,6 +169,14 @@ jobs:
           git -C .ci-op-monorepo fetch --depth=1 origin "${{ steps.op-pin.outputs.commit }}" \
             || git -C .ci-op-monorepo fetch origin
           git -C .ci-op-monorepo checkout -q "${{ steps.op-pin.outputs.commit }}"
+          # STEP-SET TWIN of workflow.yml's assertion: the fetch above falls back to
+          # a full fetch, and checkout of a missing object would then take whatever
+          # HEAD the clone carried — assert the pin is what actually landed.
+          actual=$(git -C .ci-op-monorepo rev-parse HEAD)
+          if [ "${actual}" != "${{ steps.op-pin.outputs.commit }}" ]; then
+            echo "::error::monorepo checkout is ${actual}, pin is ${{ steps.op-pin.outputs.commit }} (cache key and binaries would be attributed to the wrong revision)"
+            exit 1
+          fi
           git -C .ci-op-monorepo submodule update --init superchain-registry
           bash .ci-op-monorepo/op-core/superchain/sync-superchain.sh
           # Plain go build omits artifacts.tzst; op-deployer apply fails without just build.

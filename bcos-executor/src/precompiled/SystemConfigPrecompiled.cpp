@@ -114,45 +114,59 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
         [defaultCmp](int64_t _value, uint32_t version) {
             defaultCmp(magic_enum::enum_name(ledger::SystemConfig::executor_version), _value, 0,
                 version, BlockVersion::V3_15_0_VERSION);
-            // OP mode is a GENESIS property, not a governable one. Entering it changes the
-            // block producer (an external op-node over the Engine API), the scheduler slot and
-            // the fork schedule -- all three are chosen once, at boot, from the on-chain
-            // executor_version row (Initializer::init; executor.version in config.genesis seeds
-            // that row and is the fallback when it is absent). A governance write flipping the
-            // row to >= 3 would leave every already-running node executing its boot-time lane
-            // while a restarted node picks the OP lane: same chain, two state transitions.
-            // Refuse it here, the only RUNTIME writer of the row -- this precompile, registered
-            // on the v0 executor (executor/TransactionExecutor.cpp) and the v1 one
-            // (transaction-executor/.../PrecompiledManager.cpp), is the only implementation of
-            // setValueByKey; neither ethereum-executor nor the OP lane serves address 0x1000, so
-            // an OP chain cannot write executor_version back down either. Genesis is the other
-            // writer and the legitimate way an OP chain gets the value: Ledger.cpp's genesis
-            // build sets the row directly, without going through validate().
-            // Versioned on V3_18_0_VERSION because validate() runs inside block execution:
-            // a chain replaying blocks that predate 3.18.0 must keep whatever the old binary
-            // accepted, or resync diverges. The gate is the on-chain compatibility version, not
-            // the binary's, so a chain still at < 3.18.0 running a 3.18.0 binary is NOT covered
-            // here; there the boot refusals in Initializer::init (no [op_fork_timestamps], no
-            // [op_engine_rpc]) are what stop such a node, fail-stop rather than a second lane.
-            if (versionCompareTo(version, BlockVersion::V3_18_0_VERSION) >= 0 &&
-                _value >= ledger::OPSTACK_EXECUTOR_VERSION) [[unlikely]]
+            // OP mode is a GENESIS property, not a governable one: validateOpModeGenesisOnly
+            // refuses to boot an OP chain whose on-chain executor_version activation block is
+            // non-zero, and the genesis row is written by Ledger::buildGenesisBlock (activation
+            // 0) — never through this per-block validator. Entering OP mode changes the block
+            // producer (an external op-node over the Engine API), the scheduler slot and the
+            // fork schedule — all three are chosen once, at boot, from the on-chain
+            // executor_version row. A mid-chain write into the OPSTACK slot would land
+            // activation N+1 and make every node's NEXT START fail closed: the chain keeps
+            // producing and cannot be restarted. This precompile — registered on the v0
+            // executor (executor/TransactionExecutor.cpp) and the v1 one
+            // (transaction-executor/.../PrecompiledManager.cpp) — is the only RUNTIME writer
+            // of the row; neither ethereum-executor nor the OP lane serves address 0x1000, so
+            // an OP chain cannot write executor_version back down either. Refuse the value;
+            // version-gated on V3_18_0_VERSION so replay/resync of pre-3.18 blocks that set it
+            // stays valid (the gate is the on-chain compatibility version, so a chain still
+            // below 3.18.0 on a 3.18.0 binary is not covered here — there the boot refusals in
+            // Initializer::init stop such a node, fail-stop rather than a second lane).
+            if (_value == bcos::ledger::OPSTACK_EXECUTOR_VERSION &&
+                versionCompareTo(version, BlockVersion::V3_18_0_VERSION) >= 0)
+            {
+                BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
+                                          "executor_version " + std::to_string(_value) +
+                                          " (the OPSTACK slot) is genesis-only and cannot be set "
+                                          "by a transaction: the resulting activation block "
+                                          "would make every node restart fail. Create the chain "
+                                          "with executor.version=3 instead"));
+            }
+            // Values above the defined lane ladder are refused for the same reason: the
+            // runtime setVersion fail-opens (the chain keeps producing), but every node's
+            // next start throws in validateOpModeGenesisOnly, which rejects anything above
+            // the ladder — an accepted write bricks restarts. The bound derives from the
+            // ladder (MAX_GOVERNANCE_EXECUTOR_VERSION), so wiring a new lane moves it with
+            // the wiring; version-gated so pre-3.18 blocks that set such a value replay.
+            if (_value > bcos::ledger::MAX_GOVERNANCE_EXECUTOR_VERSION &&
+                versionCompareTo(version, BlockVersion::V3_18_0_VERSION) >= 0)
             {
                 BOOST_THROW_EXCEPTION(
                     PrecompiledError{} << errinfo_comment(
-                        "Invalid value " + std::to_string(_value) + " for " +
-                        std::string{magic_enum::enum_name(ledger::SystemConfig::executor_version)} +
-                        ": OP mode (executor_version >= " +
-                        std::to_string(ledger::OPSTACK_EXECUTOR_VERSION) +
-                        ") is a genesis property set by executor.version in config.genesis and "
-                        "cannot be entered by governance on a running chain"));
+                        "executor_version " + std::to_string(_value) +
+                        " is above the highest defined executor lane (" +
+                        std::to_string(bcos::ledger::MAX_GOVERNANCE_EXECUTOR_VERSION) +
+                        "); an accepted write would leave a chain that keeps "
+                        "producing but cannot restart"));
             }
-            // Below the OP boundary there is deliberately no upper bound: banning values here
-            // would be an unversioned consensus change that breaks replay/resync of historical
-            // blocks which set executor_version on the old binary. What such a value does is
-            // node-local -- MultiVersionScheduler::setVersion saturates anything at or above the
-            // wired slot count down to the newest NON-NULL slot, and an in-range but unwired slot
-            // keeps the current executor and logs ERROR rather than throwing, because a
-            // governance write must not halt the chain.
+            // NOTE: below the OP boundary there is deliberately no other bound — banning
+            // values here would be an unversioned consensus change that breaks replay/resync
+            // of historical blocks. MultiVersionScheduler::setVersion keeps the node
+            // running when the value names an unwired or unknown executor, in two fail-open
+            // branches with different keep-behaviours: a value ABOVE the wired set saturates
+            // to the newest wired slot, while an in-range but unwired slot keeps the CURRENT
+            // scheduler — both log ERROR rather than throwing. The remaining hard guardrails
+            // live in node-local startup (Initializer refuses to boot a v2 chain without an
+            // on-chain evmc_revision, and an OP chain without the OP wiring).
         });
     // for compatibility
     // Note: the compatibility_version is not compatibility

@@ -6,16 +6,17 @@
 // t8n 覆盖，故本文件不建「提取」测试名）：
 //   - 178B + JovianL1AttributesSelector 0x3db6be2b（对照 op-geth rollup_cost.go）
 //     的 attributes tx → no-throw；
-//   - 176B 分支只查长度 + deposits-only，**不校验 0x098999be selector**
-//     （validateJovianBlockShape 的 activation-block 分支）——测试注明；
+//   - 176B 分支只查长度（DA scalar 0），**不校验 selector，也不做 last-tx deposits-only**
+//     （Q5 才扫 envelope）——测试注明；
 //   - 非 176/178 长度 → throw("too short")；错 selector → throw("does not have Jovian
-//     selector")；含非 deposit tx 的激活块 → throw("unexpected non-deposit transactions")；
+//     selector")；176B + 普通 tx 仍 no-throw（shape-only）；
 //   - pre-Jovian 配置（cfg.has_da_footprint==false）恒 no-op。
 
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <opstack-executor/OpBlockExecute.h>
+#include <boost/test/tree/decorator.hpp>
 #include <boost/test/unit_test.hpp>
 
 #include <algorithm>
@@ -54,7 +55,9 @@ OpBlockTx normalTx()
 
 BOOST_AUTO_TEST_SUITE(OpJovianShapeSuite)
 
-BOOST_AUTO_TEST_CASE(ValidateJovianBlockShapeAcceptReject)
+// clang-format off
+BOOST_AUTO_TEST_CASE(ValidateJovianBlockShapeAcceptReject, * boost::unit_test::label("fork-jovian"))
+// clang-format on
 {
     const auto& jovian = jovianConfig();
 
@@ -72,7 +75,7 @@ BOOST_AUTO_TEST_CASE(ValidateJovianBlockShapeAcceptReject)
         BOOST_CHECK_NO_THROW(validateJovianBlockShape(txs, jovian));
     }
     {
-        // 激活块：176B，deposits-only（多笔 deposit 仍合法）；176B 分支不校验 0x098999be selector
+        // 176B：多笔 deposit 合法；176B 分支不校验 0x098999be selector
         std::vector<OpBlockTx> txs;
         txs.push_back(attributesDeposit(IsthmusL1AttributesLen));
         txs.push_back(attributesDeposit(IsthmusL1AttributesLen));
@@ -126,20 +129,30 @@ BOOST_AUTO_TEST_CASE(ValidateJovianBlockShapeAcceptReject)
             "178B 错 selector 应报 does not have Jovian selector,got: " << shapeError(txs));
     }
     {
-        // 激活块（176B）带非 deposit tx → unexpected non-deposit transactions
+        // 176B + 普通 tx：op-geth 的 Isthmus 长度（176B）deposits-only 规则要求末笔为
+        // deposit（CalcDAFootprint），由长度键触发、与时间戳窗无关，任何 Jovian+ 块都适用。
         std::vector<OpBlockTx> txs;
         txs.push_back(attributesDeposit(IsthmusL1AttributesLen));
         txs.push_back(normalTx());
         BOOST_CHECK_MESSAGE(
             shapeError(txs).find("unexpected non-deposit transactions") != std::string::npos,
-            "176B 激活块带普通 tx 应报 unexpected non-deposit transactions,got: " << shapeError(
-                txs));
+            "176B + user tx 应报 unexpected non-deposit transactions，got: " << shapeError(txs));
+    }
+    {
+        // 176B + 末笔为 deposit（用户 tx 在前、deposit 在后的极端序）：op-geth 只看末笔，
+        // 故仍接受——全量扫描会在这里多拒，反而与上游分歧。
+        std::vector<OpBlockTx> txs;
+        txs.push_back(attributesDeposit(IsthmusL1AttributesLen));
+        txs.push_back(OpBlockTx{.tx = DepositTx{}, .signedEnvelope = {}});
+        BOOST_CHECK_NO_THROW(validateJovianBlockShape(txs, jovian));
     }
 }
 
 // 第二个 shape 用例：pre-Jovian 配置（has_da_footprint==false）恒 no-op，
 // 任意畸形 shape 不抛（validateJovianBlockShape 开头直接 return）。
-BOOST_AUTO_TEST_CASE(ValidateJovianBlockShapeNoOpPreJovian)
+// clang-format off
+BOOST_AUTO_TEST_CASE(ValidateJovianBlockShapeNoOpPreJovian, * boost::unit_test::label("fork-jovian"))
+// clang-format on
 {
     for (const OpForkConfig* cfg :
         {&ecotoneConfig(), &fjordConfig(), &graniteConfig(), &holoceneConfig()})

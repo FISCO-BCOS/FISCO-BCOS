@@ -4,19 +4,26 @@
 bcos::scheduler::SchedulerInterface& bcos::scheduler_v1::MultiVersionScheduler::checkedSchedulerAt(
     int version) const
 {
-    if (version < 0 || static_cast<size_t>(version) >= m_schedulers.size())
+    if (version < 0)
     {
         BOOST_THROW_EXCEPTION(ExecutorVersionNotSupported()
                               << errinfo_comment("executor version " + std::to_string(version) +
-                                                 " is out of range (wired slots: 0.." +
+                                                 " is not supported (must be >= 0)"));
+    }
+    if (static_cast<size_t>(version) >= m_schedulers.size())
+    {
+        BOOST_THROW_EXCEPTION(ExecutorVersionNotSupported()
+                              << errinfo_comment("executor version " + std::to_string(version) +
+                                                 " is not supported (max wired slot is " +
                                                  std::to_string(m_schedulers.size() - 1) + ")"));
     }
     auto const& scheduler = m_schedulers.at(static_cast<size_t>(version));
     if (!scheduler)
     {
-        BOOST_THROW_EXCEPTION(ExecutorVersionNotSupported()
-                              << errinfo_comment("executor version " + std::to_string(version) +
-                                                 " has no scheduler wired at node startup"));
+        BOOST_THROW_EXCEPTION(ExecutorVersionNotSupported() << errinfo_comment(
+                                  "executor_version " + std::to_string(version) +
+                                  " requires a wired scheduler at slot " + std::to_string(version) +
+                                  " but none was assembled at node startup"));
     }
     return *scheduler;
 }
@@ -149,6 +156,25 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
                                                  " is not supported "
                                                  "(must be >= 0)"));
     }
+    // OP mode is genesis-only (see scheduler_v1::validateOpModeGenesisOnly): a chain already
+    // RUNNING the OP executor must not be moved off it by a governance write. Keyed on the
+    // running slot, not on feature_l2_ethereum_compat — that flag is the ledger's L2 state
+    // shape and the Eth lane may carry it as well, so keying on it would freeze (and
+    // mislabel) an Eth-lane L2 chain. Keep the current executor and log loudly instead of
+    // switching: a throw here would halt the commit callbacks.
+    if (m_currentIndex == bcos::ledger::OPSTACK_EXECUTOR_VERSION &&
+        version != bcos::ledger::OPSTACK_EXECUTOR_VERSION)
+    {
+        INITIALIZER_LOG(ERROR) << LOG_DESC(
+                                      "executor_version change rejected: OP mode is genesis-frozen")
+                               << LOG_KV("requested", version) << LOG_KV("keeping", m_currentIndex);
+        return;
+    }
+    // The on-chain row is the drift reference in the logs below; the bare argument is the
+    // fallback for the boot call, where Initializer::init passes a null config.
+    auto const onChainVersion = ledgerConfig && ledgerConfig->executorVersion() > 0 ?
+                                    ledgerConfig->executorVersion() :
+                                    version;
     // Saturate the upper bound onto the newest WIRED slot: the version space stays
     // open-ended above the newest known executor, and an empty slot above it (OP wiring
     // absent on this node) never becomes the target.
@@ -163,7 +189,8 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
         INITIALIZER_LOG(ERROR) << LOG_DESC(
                                       "executor version above the newest wired executor; "
                                       "saturating to the newest wired one")
-                               << LOG_KV("requested", version) << LOG_KV("selected", selected);
+                               << LOG_KV("requested", version) << LOG_KV("selected", selected)
+                               << LOG_KV("onChain", onChainVersion);
     }
     if (!m_schedulers.at(selected))
     {
@@ -181,10 +208,42 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
         // hard refusal for an unwired version belongs at boot (Initializer::init).
         INITIALIZER_LOG(ERROR)
             << LOG_DESC("executor_version has no wired scheduler; keeping the current executor")
-            << LOG_KV("requested", version) << LOG_KV("keeping", m_currentIndex.load());
+            << LOG_KV("requested", version) << LOG_KV("onChain", onChainVersion)
+            << LOG_KV("keeping", m_currentIndex.load());
+        if (onChainVersion != m_currentIndex)
+        {
+            INITIALIZER_LOG(ERROR)
+                << LOG_DESC("executor_version drift: on-chain config != runtime executor")
+                << LOG_KV("onChain", onChainVersion) << LOG_KV("runtime", m_currentIndex.load());
+        }
         return;
     }
+    auto const previousIndex = m_currentIndex.load();
     m_currentIndex.store(static_cast<int>(selected));
+    if (previousIndex != m_currentIndex && onChainVersion == m_currentIndex && ledgerConfig)
+    {
+        // The drift log below keys on onChainVersion != m_currentIndex, so a governance tx
+        // that downgrades executor_version to a WIRED lower slot (e.g. 3 -> 2 on an OP-wired
+        // node) is otherwise silent: consensus commits move to the generic lane while the
+        // engine service keeps answering on its wired engine. Make the switch loud.
+        // ledgerConfig gates out the boot call (Initializer.cpp passes a null config):
+        // at boot previousIndex(0) -> wired is the initial selection, not a runtime switch,
+        // and firing here would label every OP node's startup as a lane switch.
+        INITIALIZER_LOG(WARNING)
+            << LOG_DESC("executor_version switched at runtime: consensus commits moved lanes")
+            << LOG_KV("from", previousIndex) << LOG_KV("to", m_currentIndex)
+            << LOG_KV("onChain", onChainVersion)
+            << LOG_DESC("the wired engine service still answers Engine API on its own scheduler");
+    }
+    if (onChainVersion != m_currentIndex)
+    {
+        INITIALIZER_LOG(ERROR)
+            << LOG_DESC("executor_version drift: on-chain config != runtime executor")
+            << LOG_KV("onChain", onChainVersion) << LOG_KV("runtime", m_currentIndex.load())
+            << LOG_DESC(
+                   "governance wrote a version this node cannot wire; blocks still execute on "
+                   "the runtime executor above");
+    }
 }
 bcos::scheduler::SchedulerInterface& bcos::scheduler_v1::MultiVersionScheduler::scheduler(
     int version)

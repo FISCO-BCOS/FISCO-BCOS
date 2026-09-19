@@ -148,8 +148,8 @@ void encodeLogsList(bcos::bytes& to, gsl::span<const bcos::protocol::LogEntry> l
 }
 }  // namespace
 
-bcos::bytes encodeReceiptLeaf(
-    bcos::protocol::TransactionReceipt const& receipt, std::uint8_t txType)
+bcos::bytes encodeReceiptLeaf(bcos::protocol::TransactionReceipt const& receipt,
+    std::uint8_t txType, bool includeDepositNonceVersion)
 {
     constexpr std::uint8_t c_legacyTxType = 0x00;
     constexpr std::uint8_t c_depositTxType = 0x7e;
@@ -172,7 +172,7 @@ bcos::bytes encodeReceiptLeaf(
     codec::rlp::encode(payload, bloom);
     encodeLogsList(payload, receipt.logEntries());
 
-    if (txType == c_depositTxType)
+    if (txType == c_depositTxType && includeDepositNonceVersion)
     {
         auto const& meta = receipt.opStackMeta();
         if (!meta || !meta->deposit_nonce || !meta->deposit_receipt_version)

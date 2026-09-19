@@ -126,6 +126,8 @@ inline bcos::protocol::OpStackReceiptMeta toOpStackMeta(const OpReceiptMeta& met
         out.l1_gas_used = *meta.l1_gas_used;
     if (meta.operator_fee)
         out.operator_fee = intxToBcosU256(*meta.operator_fee);
+    if (meta.l1_fee_scalar)
+        out.l1_fee_scalar = intxToBcosU256(*meta.l1_fee_scalar);
     return out;
 }
 
@@ -234,21 +236,34 @@ OpReceiptMeta deriveOpReceiptMeta(const OpTxProperties& props, intx::uint256 ope
     const auto& fee = props.fee;
     OpReceiptMeta m;
     m.l1_gas_price = fee.l1_base_fee;
-    m.l1_blob_base_fee = fee.blob_base_fee;
-    m.l1_base_fee_scalar = fee.base_fee_scalar;
-    m.l1_blob_base_fee_scalar = fee.blob_base_fee_scalar;
     m.l1_fee = props.l1_cost;
-    // L1 calldata gas used. Ecotone: bedrockCalldataGasUsed on the envelope (zeroes*4 + ones*16),
-    // snapped into props at validate time. Fjord+ (op-geth rollup_cost.go:623-624):
-    //   L1GasUsed = estimatedDASizeScaled(fastLzSize) * 16 / 1e6.
-    // deriveOPStackFields emits it on every non-deposit receipt; ecotone_calldata_gas_used is
-    // unset under Fjord+, where flz_len drives the formula. Bounded: with uint32 flz the scaled
-    // term is ≤ 5.8e10, far below uint64 max, so the cast cannot wrap.
-    if (props.ecotone_calldata_gas_used.has_value())
-        m.l1_gas_used = *props.ecotone_calldata_gas_used;
+    if (props.bedrock_l1_gas_used.has_value())
+    {
+        // Pre-Ecotone receipt shape (op-geth deriveOPStackFields pre-Ecotone): L1GasUsed =
+        // rollupDataGas + overhead, L1FeeScalar = the raw Bedrock scalar. The Ecotone
+        // scalar/blob passthrough fields stay absent — op-geth leaves them nil pre-Ecotone.
+        m.l1_gas_used = *props.bedrock_l1_gas_used;
+        m.l1_fee_scalar = props.bedrock_l1_fee_scalar;
+    }
     else
-        m.l1_gas_used =
-            static_cast<uint64_t>(estimatedDaSizeScaled(props.flz_len) * 16 / 1'000'000);
+    {
+        // Ecotone/Fjord receipt shape: the L1 passthrough scalars ride along, and L1FeeScalar
+        // must be absent (op-geth deriveOPStackFields leaves L1FeeScalar nil from Ecotone on).
+        m.l1_blob_base_fee = fee.blob_base_fee;
+        m.l1_base_fee_scalar = fee.base_fee_scalar;
+        m.l1_blob_base_fee_scalar = fee.blob_base_fee_scalar;
+        // L1 calldata gas used. Ecotone: bedrockCalldataGasUsed on the envelope (zeroes*4 +
+        // ones*16), snapped into props at validate time. Fjord+ (op-geth rollup_cost.go:623-624):
+        //   L1GasUsed = estimatedDASizeScaled(fastLzSize) * 16 / 1e6.
+        // deriveOPStackFields emits it on every non-deposit receipt; ecotone_calldata_gas_used is
+        // unset under Fjord+, where flz_len drives the formula. Bounded: with uint32 flz the
+        // scaled term is ≤ 5.8e10, far below uint64 max, so the cast cannot wrap.
+        if (props.ecotone_calldata_gas_used.has_value())
+            m.l1_gas_used = *props.ecotone_calldata_gas_used;
+        else
+            m.l1_gas_used =
+                static_cast<uint64_t>(estimatedDaSizeScaled(props.flz_len) * 16 / 1'000'000);
+    }
     if (props.has_operator_fee)
     {
         m.operator_fee = operator_fee_at_used;
@@ -372,7 +387,7 @@ bcos::protocol::TransactionReceipt::Ptr opTransition(const evmone::state::StateV
 std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::StateView& view,
     const evmone::state::BlockInfo& block, const evmone::state::Transaction& tx,
     evmc::bytes_view signedTxEnvelope, const OpForkConfig& cfg, const OpFeeParams& fee,
-    int64_t blockGasLeft)
+    int64_t blockGasLeft, evmone::state::TxValidationPolicy policy)
 {
     // Whitelist, not a blacklist. Transaction::Type has uint8_t as its underlying type and
     // validate_transaction's type switch (state.cpp:365-383) carries no default label, so EVERY
@@ -393,20 +408,24 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
     if (signedTxEnvelope.empty())
         return make_error_code(std::errc::invalid_argument);
 
-    auto base = evmone::state::validate_transaction(view, block, tx, cfg.rev, blockGasLeft, 0);
+    auto base =
+        evmone::state::validate_transaction(view, block, tx, cfg.rev, blockGasLeft, 0, policy);
     if (auto* err = std::get_if<std::error_code>(&base))
         return *err;
 
     uint32_t flzLen = 0;
     intx::uint256 l1Cost;
-    if (cfg.has_ecotone_l1_formula)
-    {
-        l1Cost = computeL1Cost(fee, signedTxEnvelope, cfg);
-    }
-    else
+    // FastLZ only prices the Fjord formula. Bedrock and Ecotone
+    // (including its zero-slot fallback) both route through computeL1Cost — routing them through
+    // the flz branch here would price every pre-Fjord block as Fjord.
+    if (cfg.l1_fee_model == L1FeeModel::Fjord)
     {
         flzLen = flzCompressLen(signedTxEnvelope);
         l1Cost = computeL1CostFromFlz(fee, flzLen, cfg);
+    }
+    else
+    {
+        l1Cost = computeL1Cost(fee, signedTxEnvelope, cfg);
     }
     const auto opCost = cfg.has_operator_fee ?
                             computeOperatorCost(fee, static_cast<uint64_t>(tx.gas_limit), cfg) :
@@ -430,22 +449,49 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
 
     OpTxProperties props{std::get<evmone::state::TransactionProperties>(base), l1Cost, opCost, fee,
         flzLen, cfg.has_operator_fee, cfg.has_jovian_operator_formula, cfg.has_da_footprint};
-    // Under the Ecotone formula, snapshot the envelope's bedrockCalldataGasUsed (zeroes*4 +
-    // ones*16) for deriveOpReceiptMeta to read as l1_gas_used -- preserving the no-cfg invariant.
-    // Under Fjord+ it stays nullopt; l1_gas_used uses the Fjord formula on flz_len.
-    props.ecotone_calldata_gas_used =
-        cfg.has_ecotone_l1_formula ?
-            std::optional<uint64_t>{bcos::evm::opstack::bedrockCalldataGasUsed(signedTxEnvelope)} :
-            std::nullopt;
+    // Receipt-shape snapshot, frozen at validate time (deriveOpReceiptMeta takes no cfg):
+    // - Ecotone formula actually ran (slots live): calldataGas becomes l1_gas_used.
+    // - Bedrock formula ran (Bedrock model, or the Ecotone zero-slot fallback): the receipt gets
+    //   the pre-Ecotone shape — l1_gas_used = gas + overhead, L1FeeScalar = raw Bedrock scalar.
+    // - Fjord+: both stay unset; flz_len drives l1_gas_used.
+    // Same selection helper computeL1Cost consumes — the fee and the receipt snapshot
+    // cannot disagree about which formula ran.
+    const bool bedrockFormula = bedrockFormulaActive(cfg, fee);
+    if (bedrockFormula)
+    {
+        // Pre-Ecotone receipt L1GasUsed = rollupDataGas + overhead. op-geth keeps it a
+        // *big.Int: `gasWithOverhead := new(big.Int).SetUint64(gas); Add(gasWithOverhead,
+        // overhead)` where overhead = GetState(OverheadSlot).Big() and L1GasUsed is
+        // `*big.Int` (core/types/rollup_cost.go:301-315, receipt.go:91). op-reth keeps its
+        // RPC field a u128 with saturating_add/saturating_to (crates/rpc/src/eth/receipt.rs:
+        // 184-190). FISCO's non-consensus snapshot is uint64. `fee.overhead` is the
+        // whole-slot uint256 read from slot 5 / calldata arg 6, but the canonical
+        // L1Block.setL1BlockValues writes a uint64, so the sum fits on a valid chain.
+        // Saturate (never wrap mod 2^64) if adversarial state exceeds it; upstream never
+        // wraps either. NB: there is no params.L1FeeOverhead symbol at the pin.
+        const auto gasWithOverhead =
+            intx::uint256{bcos::evm::opstack::bedrockCalldataGasUsed(signedTxEnvelope)} +
+            fee.overhead;
+        props.bedrock_l1_gas_used = gasWithOverhead > std::numeric_limits<uint64_t>::max() ?
+                                        std::numeric_limits<uint64_t>::max() :
+                                        static_cast<uint64_t>(gasWithOverhead);
+        props.bedrock_l1_fee_scalar = fee.bedrock_scalar;
+    }
+    else if (cfg.l1_fee_model == L1FeeModel::Ecotone)
+    {
+        props.ecotone_calldata_gas_used =
+            std::optional<uint64_t>{bcos::evm::opstack::bedrockCalldataGasUsed(signedTxEnvelope)};
+    }
     return props;
 }
 
 std::variant<OpTxProperties, std::error_code> opValidateFromState(
     const evmone::state::StateView& view, const evmone::state::BlockInfo& block,
     const evmone::state::Transaction& tx, evmc::bytes_view signedTxEnvelope,
-    const OpForkConfig& cfg, int64_t blockGasLeft)
+    const OpForkConfig& cfg, int64_t blockGasLeft, evmone::state::TxValidationPolicy policy)
 {
-    return opValidate(view, block, tx, signedTxEnvelope, cfg, loadOpFeeParams(view), blockGasLeft);
+    return opValidate(
+        view, block, tx, signedTxEnvelope, cfg, loadOpFeeParams(view), blockGasLeft, policy);
 }
 
 // ---- 0x7E deposit tx (formerly OpDepositTx.cpp) ----
@@ -532,8 +578,11 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
     evmone::state::BlockInfo validateBlock = block;
     validateBlock.base_fee = 0;
     const DepositValidationView maskedView{view, dep.from};
-    const auto props = evmone::state::validate_transaction(
-        maskedView, validateBlock, tx, std::min(cfg.rev, EVMC_PRAGUE), blockGasLeft, 0);
+    const auto props = evmone::state::validate_transaction(maskedView, validateBlock, tx, cfg.rev,
+        blockGasLeft, 0, {.enforce_max_tx_gas = !cfg.deposit_exempt_from_max_tx_gas});
+    // Deposit EIP-7825 exemption (release-line #5576 used a rev clamp to Prague here): the
+    // policy flag achieves the same exemption at the real OSAKA rev, driven by
+    // karstConfig().deposit_exempt_from_max_tx_gas.
 
     evmone::state::TransactionReceipt receipt;
     receipt.type = kDepositTxType;
@@ -593,9 +642,13 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
 
     // Deposit nonce/version on opStackMeta (op-geth deposit receipt has no L1/operator/DA
     // fields); effectiveGasPrice is 0 for deposits (op-geth emits "0x0").
+    // Deposit receipt fields (deposits spec): the FISCO opStackMeta carries the nonce on
+    // every fork, while deposit_receipt_version appears only from Canyon on (op-geth leaves
+    // it nil pre-Canyon). OpFork is protocol-ordered, so >= Canyon covers every modeled fork.
     bcos::protocol::OpStackReceiptMeta meta;
     meta.deposit_nonce = preNonce;
-    meta.deposit_receipt_version = 1;
+    if (cfg.fork >= OpFork::Canyon)
+        meta.deposit_receipt_version = 1;
     out->setOpStackMeta(std::move(meta));
     out->setEffectiveGasPrice("0x0");
     // Write the out-param only after the projection above has fully succeeded (see opTransition).

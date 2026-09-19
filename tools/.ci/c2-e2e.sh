@@ -112,6 +112,15 @@ for b in op-deployer op-node op-batcher; do
   [ -x "$BIN_DIR/$b" ] || die "missing $BIN_DIR/$b"
 done
 
+if [[ "${SKIP_OP_BUILD:-0}" == "1" ]]; then
+  # The enforced pin check downstream compares the MONOREPO CHECKOUT's git HEAD, not these
+  # pre-placed binaries — with a cache-restored BIN_DIR nothing here proves the binaries were
+  # built from that commit. CI's cache key provides that linkage implicitly; a local run does
+  # not. Say so instead of letting "enforced" overstate the guarantee (review P1).
+  log "WARN: SKIP_OP_BUILD=1 - binaries in $BIN_DIR are used as-is; their provenance vs the"
+  log "WARN: versions.json pins is NOT verified (CI relies on its cache key for that)"
+fi
+
 # The existence check runs in BOTH modes: SKIP_FISCO_BUILD=1 only documents that the
 # binary came from the prebuilt artifact instead of a local build — it must not skip the
 # check, or a failed artifact download surfaces deep inside the harness instead of here.

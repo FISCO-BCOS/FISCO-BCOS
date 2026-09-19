@@ -38,8 +38,8 @@
 #include <bcos-rpc/web3jsonrpc/endpoints/EthEndpoint.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <boost/test/unit_test.hpp>
 #include <boost/algorithm/hex.hpp>
+#include <boost/test/unit_test.hpp>
 #include <optional>
 #include <string>
 #include <vector>
@@ -185,6 +185,7 @@ mpt::EIP1186Proof epiProofFromJson(Json::Value const& result)
         {
             entry.proof.push_back(fromHexWithPrefix(node.asString()));
         }
+        entry.inMPT = entryJson["inMPT"].asBool();
         out.storageProof.push_back(std::move(entry));
     }
     return out;
@@ -320,6 +321,98 @@ BOOST_AUTO_TEST_CASE(ScenarioB_AllAllocAccountsProve)
         BOOST_CHECK(verify.storageValid[1]);
         BOOST_CHECK(verify.storageValid[2]);  // valid EXCLUSION proof
     }
+}
+
+// Historical numeric block tag: eth_getProof anchors at the REQUESTED block's stateRoot
+// (EthEndpoint.cpp reads the header AT the tag, not the head). Block 4 moves `active`'s
+// balance AFTER block 3 (first MPT block), so a "0x3" proof must recover the block-3
+// balance/nonce and verify ONLY against the block-3 header root; a "latest" proof must
+// recover the block-4 balance and verify against the block-4 root — the tag genuinely
+// selected the anchor block.
+BOOST_AUTO_TEST_CASE(HistoricalNumericBlockTag_ProvesAgainstThatBlocksRoot)
+{
+    FullChainFixture fixture{"epi_history_tag"};
+    fixture.buildGenesis(FullChainFixture::baseGenesis());
+    fixture.enableFeatureFromBlock("feature_mpt_state_root", 2);
+
+    auto const filler = FullChainFixture::makeAddress(0xF2);
+    auto const active = FullChainFixture::makeAddress(0xAC);
+
+    fixture.planBlock(1, {FullChainFixture::balanceRow(active, "1000000")});  // XOR era
+    fixture.planBlock(2, {FullChainFixture::balanceRow(filler, "1")});  // activation block, XOR
+    fixture.planBlock(3, {FullChainFixture::balanceRow(active, "2000000"),
+                             FullChainFixture::nonceRow(active, "1")});       // first MPT block
+    fixture.planBlock(4, {FullChainFixture::balanceRow(active, "3000000")});  // head moves on
+    fixture.runBlock(1);
+    fixture.runBlock(2);
+    auto header3 = fixture.runBlock(3);
+    auto header4 = fixture.runBlock(4);
+    BOOST_REQUIRE_NE(header3->stateRoot(), header4->stateRoot());
+
+    EpiNodeStorage nodes;
+    epiLoadNodes(fixture, nodes);
+    EpiEndpointHarness harness{fixture, nodes};
+
+    // (i) "0x3": the BLOCK-3 account state, proven against the block-3 header root.
+    auto historical = harness.getProof(active.hexPrefixed(), {}, "0x3");
+    BOOST_REQUIRE(!historical.isNull());
+    BOOST_CHECK_EQUAL(historical["balance"].asString(), "0x1e8480");  // 2000000
+    BOOST_CHECK_EQUAL(historical["nonce"].asString(), "0x1");
+    auto historicalProof = epiProofFromJson(historical);
+    BOOST_CHECK(mpt::verifyProof(header3->stateRoot(), historicalProof).accountValid);
+
+    // Control: the same proof must NOT verify against the head root.
+    BOOST_CHECK(!mpt::verifyProof(header4->stateRoot(), historicalProof).accountValid);
+
+    // (ii) "latest" on the same chain: the block-4 balance, verified at the block-4 root.
+    auto latest = harness.getProof(active.hexPrefixed(), {}, "latest");
+    BOOST_REQUIRE(!latest.isNull());
+    BOOST_CHECK_EQUAL(latest["balance"].asString(), "0x2dc6c0");  // 3000000
+    BOOST_CHECK(mpt::verifyProof(header4->stateRoot(), epiProofFromJson(latest)).accountValid);
+}
+
+// Negative: a slot the trie never wrote (scenario A — the storage trie omits slots never
+// written after MPT activation) yields an inMPT=false entry with an EMPTY proof and the
+// flat-KV value 0x0 — no lying exclusion proof — while the ACCOUNT proof still verifies
+// against the requested block's root (slot status honestly Unverifiable, never Invalid).
+BOOST_AUTO_TEST_CASE(HistoricalBlockTag_AbsentKeyEmptyProof_AccountStillValid)
+{
+    FullChainFixture fixture{"epi_history_absent_key"};
+    fixture.buildGenesis(FullChainFixture::baseGenesis());
+    fixture.enableFeatureFromBlock("feature_mpt_state_root", 2);
+
+    auto const filler = FullChainFixture::makeAddress(0xF3);
+    auto const active = FullChainFixture::makeAddress(0xAD);
+
+    fixture.planBlock(1, {FullChainFixture::balanceRow(active, "1000000")});  // XOR era
+    fixture.planBlock(2, {FullChainFixture::balanceRow(filler, "1")});  // activation block, XOR
+    fixture.planBlock(3, {FullChainFixture::balanceRow(active, "2000000"),
+                             FullChainFixture::nonceRow(active, "1")});  // first MPT block
+    fixture.planBlock(4, {FullChainFixture::balanceRow(filler, "2")});   // head moves past 3
+    fixture.runBlock(1);
+    fixture.runBlock(2);
+    auto header3 = fixture.runBlock(3);
+    fixture.runBlock(4);
+
+    EpiNodeStorage nodes;
+    epiLoadNodes(fixture, nodes);
+    EpiEndpointHarness harness{fixture, nodes};
+
+    auto const absent = epiSlotHexPrefixed('9');
+    auto result = harness.getProof(active.hexPrefixed(), {absent}, "0x3");
+    BOOST_REQUIRE(!result.isNull());
+    BOOST_REQUIRE_EQUAL(result["storageProof"].size(), 1U);
+    BOOST_CHECK_EQUAL(result["storageProof"][0U]["key"].asString(), absent);
+    BOOST_CHECK_EQUAL(result["storageProof"][0U]["value"].asString(), "0x0");
+    BOOST_CHECK_EQUAL(result["storageProof"][0U]["proof"].size(), 0U);  // empty, not a lie
+    BOOST_CHECK_EQUAL(result["storageProof"][0U]["inMPT"].asBool(), false);
+
+    // The account half still proves against the block-3 root; the absent slot is an
+    // Unverifiable flat-KV assertion, not a failed chain.
+    auto verify = mpt::verifyProof(header3->stateRoot(), epiProofFromJson(result));
+    BOOST_CHECK(verify.accountValid);
+    BOOST_REQUIRE_EQUAL(verify.storageStatus.size(), 1U);
+    BOOST_CHECK(verify.storageStatus[0] == mpt::SlotProofStatus::Unverifiable);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

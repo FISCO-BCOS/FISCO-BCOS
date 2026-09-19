@@ -69,11 +69,18 @@ evmc::Result execute_system_call(State& state, const BlockInfo& block,
 {
     const evmc_message msg{
         .kind = EVMC_CALL,
+        .flags = 0,
+        .depth = 0,
         .gas = 30'000'000,
         .recipient = addr,
         .sender = SYSTEM_ADDRESS,
         .input_data = input.data(),
         .input_size = input.size(),
+        .value = {},
+        .create2_salt = {},
+        .code_address = {},
+        .code = nullptr,
+        .code_size = 0,
     };
 
     const Transaction empty_tx{};

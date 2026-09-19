@@ -24,6 +24,7 @@
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <evmone/evmone.h>
+#include <boost/test/tree/decorator.hpp>
 #include <boost/test/unit_test.hpp>
 #include <bcos-evm/eth/state/state.hpp>
 #include <test/utils/test_state.hpp>
@@ -46,7 +47,9 @@ inline int64_t floorReceiptGasUsed(const bcos::protocol::TransactionReceipt& r)
 
 BOOST_AUTO_TEST_SUITE(OpFloorGasSuite)
 
-BOOST_AUTO_TEST_CASE(UserTxGasUsedRaisedToFloor)
+// clang-format off
+BOOST_AUTO_TEST_CASE(UserTxGasUsedRaisedToFloor, * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     constexpr auto sender = 0x00000000000000000000000000000000000000aa_address;
     constexpr auto dest = 0x00000000000000000000000000000000000000bb_address;
@@ -97,7 +100,9 @@ BOOST_AUTO_TEST_CASE(UserTxGasUsedRaisedToFloor)
     BOOST_CHECK_GT(props.props.min_gas_cost, kIntrinsic3000);  // floor 51000 > intrinsic 33000
 }
 
-BOOST_AUTO_TEST_CASE(DepositGasUsedRaisedToFloor)
+// clang-format off
+BOOST_AUTO_TEST_CASE(DepositGasUsedRaisedToFloor, * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     constexpr auto depositor = OP_DEPOSITOR;
     auto vm = evmc::VM{evmc_create_evmone()};

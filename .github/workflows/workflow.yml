@@ -131,11 +131,92 @@ jobs:
         run: |
           cd build
           cmake --build .
+      - name: Checkout op-stack-e2e-tests assets
+        # Black-box e2e drivers, genesis toolchain and t8n generator live in the
+        # standalone repo FISCO-BCOS/op-stack-e2e-tests (CI triggers stay here).
+        # Symlinked into the historical in-tree paths so scripts, CMake macros and
+        # the regen action below are unchanged. Pin = the asset-repo commit this
+        # repo's tests are verified against; bump deliberately.
+        if: matrix.os != 'windows-2025'
+        uses: actions/checkout@v4
+        with:
+          repository: FISCO-BCOS/op-stack-e2e-tests
+          ref: b82691ac133a94637da9e6969a63f86279c6b0a2
+          path: e2e-tests
+      - name: Symlink e2e assets into in-tree paths
+        if: matrix.os != 'windows-2025'
+        # Clear destinations first: plain `ln -s` into an existing path nests the link
+        # inside it (tools/opstack-genesis is a tracked directory), and `ln -sfn` cannot
+        # overwrite a real directory either. The trailing test fails the step if the
+        # opstack-genesis link did not land.
+        run: |
+          rm -rf "$GITHUB_WORKSPACE/tools/op-e2e" \
+            "$GITHUB_WORKSPACE/tools/opstack-genesis" \
+            "$GITHUB_WORKSPACE/opstack-executor/tests/t8n"
+          ln -s "$GITHUB_WORKSPACE/e2e-tests/tools/op-e2e" "$GITHUB_WORKSPACE/tools/op-e2e"
+          ln -s "$GITHUB_WORKSPACE/e2e-tests/tools/opstack-genesis" "$GITHUB_WORKSPACE/tools/opstack-genesis"
+          ln -s "$GITHUB_WORKSPACE/e2e-tests/opstack-executor/tests/t8n" "$GITHUB_WORKSPACE/opstack-executor/tests/t8n"
+          test -f tools/opstack-genesis/build-allocs.py
+      - name: Regenerate opstack t8n vectors
+        # The opstack t8n tests (opstack-executor-block-tests) read reference vectors
+        # from the source tree at runtime; the JSON is git-ignored and regenerated here
+        # from pinned op-geth before `ctest`. Windows builds with -DTESTS=OFF, so no tests.
+        if: matrix.os != 'windows-2025'
+        uses: FISCO-BCOS/op-stack-e2e-tests/.github/actions/opstack-t8n-regen@b82691ac133a94637da9e6969a63f86279c6b0a2
       - name: Test
         if: matrix.os != 'windows-2025'
         run: |
           cd build
           CTEST_OUTPUT_ON_FAILURE=TRUE ctest -j3
+      - name: Fork-label coverage guard
+        # WI-32 gate 3/4.
+        # Read-only, so it MUST run before the mutation harness below (which leaves
+        # variant-mutated BINARIES behind even after restoring the source — see the
+        # ordering contract on that step). Boost.Test renders decorator labels in
+        # `--list_content=DOT` as `labels: @fork-<name> ...`; all nine fork labels
+        # must still be present on each fork-labelled binary, so a refactor that
+        # drops a fork's cases (or its decorator) fails fast instead of silently
+        # shrinking the matrix. Counting rule: presence/positive counts, never the
+        # "errors detected" substring (Boost's success banner contains it).
+        # Linux-only: the corpus is regenerated only on the non-Windows legs and one
+        # leg is enough for a label inventory.
+        if: matrix.os == 'ubuntu-24.04'
+        run: |
+          bash tools/.ci/check-fork-labels.sh \
+            build/bcos-evm/test/bcos-evm-opstack-tests \
+            build/engine/test/test-bcos-engine \
+            build/opstack-executor/tests/opstack-executor-block-tests
+      - name: Mutation harness (reverse-fix variants must go RED)
+        # WI-32 gate 1/4.
+        # ORDERING CONTRACT — do not move this before the build/ctest phase without
+        # first fixing run.sh: tools/mutation/run.sh restores each variant's mutated
+        # SOURCE (`git checkout HEAD -- <file>`) but does NOT rebuild the target back
+        # to the unmutated state, so it leaves a variant-mutated BINARY behind (the
+        # last variant processed). Any test step running after this would execute
+        # that mutated binary and report false failures. It therefore runs AFTER
+        # `Test` above, which is also the phase whose validity it audits: a variant
+        # that stays GREEN under its mapped filter is a matrix blind spot, and a
+        # negative-control filter that goes RED means the mutation is not attributed.
+        # The harness restores the source on every exit path and ends with a
+        # `git status --porcelain` cleanliness gate over every mapped file.
+        if: matrix.os == 'ubuntu-24.04' && github.event_name != 'release'
+        run: |
+          # The variant patches are applied with `git apply --3way`, which lazily
+          # fetches the pre-image BLOBS the patches were authored against; a
+          # fetch-depth=1 checkout cannot serve them and GitHub refuses blob-by-SHA
+          # lazy wants ("not our ref"), so unshallow once — the pack is ~2 GiB and
+          # takes about a minute on a hosted runner.
+          #
+          # --unshallow fetches every origin ref, and if submodule recursion is on
+          # it then walks the populated vcpkg submodule too: some historical ref of
+          # this repo records a vcpkg gitlink (d14033c16…) that microsoft/vcpkg no
+          # longer serves, and the resulting "not our ref" kills the step before
+          # run.sh starts (PR #5615). Only superproject blobs are needed here, so
+          # recursion is off for this fetch.
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            git -c fetch.recurseSubmodules=no fetch --unshallow
+          fi
+          bash tools/mutation/run.sh
       - name: Download EEST fixtures
         if: matrix.os != 'windows-2025'
         run: |
@@ -362,6 +443,19 @@ jobs:
         run: |
           cd build
           cmake --build . --parallel 3
+      - name: Checkout op-stack-e2e-tests assets
+        uses: actions/checkout@v4
+        with:
+          repository: FISCO-BCOS/op-stack-e2e-tests
+          ref: b82691ac133a94637da9e6969a63f86279c6b0a2
+          path: e2e-tests
+      - name: Symlink e2e assets into in-tree paths
+        run: |
+          ln -s "$GITHUB_WORKSPACE/e2e-tests/tools/op-e2e" "$GITHUB_WORKSPACE/tools/op-e2e"
+          ln -s "$GITHUB_WORKSPACE/e2e-tests/tools/opstack-genesis" "$GITHUB_WORKSPACE/tools/opstack-genesis"
+          ln -s "$GITHUB_WORKSPACE/e2e-tests/opstack-executor/tests/t8n" "$GITHUB_WORKSPACE/opstack-executor/tests/t8n"
+      - name: Regenerate opstack t8n vectors
+        uses: FISCO-BCOS/op-stack-e2e-tests/.github/actions/opstack-t8n-regen@b82691ac133a94637da9e6969a63f86279c6b0a2
       - name: Run tests
         run: |
           cd build
@@ -528,6 +622,83 @@ jobs:
           path: build/fisco-bcos-air/fisco-bcos
           retention-days: 1
 
+  # ==========================================================================
+  # WI-32 gates 2/4 (oracle pin consistency) + 4/4 (F-A4 corpus ref) + the
+  # registry-citation convention check (deliverable 5).
+  #
+  # Deliberately NOT a build leg: it needs only git metadata, the corpus checkout
+  # and (optionally) a specs checkout, so it finishes in seconds and fails with a
+  # precise message instead of surfacing as a cryptic test failure inside the
+  # heavy build matrix.
+  #
+  # F-A4 — THREE INDEPENDENT PIN AXES, never conflate them:
+  #   * op-geth pin (authoritative) e8800cffe53d459cde8a07c8e8f1de9d86e79e07:
+  #     the execution-client revision the oracle / golden samples are generated
+  #     from. Asserted consistent across regen.sh, op_geth_oracle.json,
+  #     tools/op-geth-oracle/extract.sh, GoldenSample.h and the provenance test.
+  #   * corpus-repo ref b82691ac133a94637da9e6969a63f86279c6b0a2: the
+  #     FISCO-BCOS/op-stack-e2e-tests commit whose generator CI runs. A DIFFERENT
+  #     axis, NOT an op-geth pin (this conflation was F-A4).
+  #   * C2 harness ref e7cded80ad98e9c85a1fecc475ce201d55f773ea: same repo as the
+  #     corpus ref, deliberately a different commit — the C2 jobs need a harness
+  #     whose tools/op-e2e/versions.json pins a real monorepo commit (see Axis 4 in
+  #     check-ci-pins.sh). Carrying the corpus ref there broke the C2 job in #5615.
+  #
+  # RESOLVED (was the BLOCKING NOTE): the corpus ref now postdates the getPayload
+  # goldens (afe06e2), the matrix/ artifacts (f1fc9a3) and the generator-side
+  # bookkeeping + envelope wiring (625f0f6, a908a6d) — the pinned ref's regen
+  # produces everything the provenance/matrix tests require, so the ci_pins gate
+  # below passes and the getPayload provenance case is satisfiable in CI. The gate
+  # stays as the canary: a future ref bump that regresses below those corpus
+  # commits fails fast again, by design. Never silence it by weakening the tests.
+  # ==========================================================================
+  ci_pins:
+    name: CI pin gates
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+      - name: Checkout op-stack-e2e-tests (clone; ref applied next step)
+        # Cloned via actions/checkout so the token/auth setup matches the build job
+        # (works whether the corpus repo is public or org-private). The commit ref
+        # itself is NOT hardcoded here: it is parsed from workflow.yml in the next
+        # step, so this job adds no fourth place to bump.
+        uses: actions/checkout@v4
+        with:
+          repository: FISCO-BCOS/op-stack-e2e-tests
+          path: e2e-tests
+      - name: Pin the corpus at the ref workflow.yml names
+        run: |
+          set -euo pipefail
+          REF="$(grep -oE 'opstack-t8n-regen@[0-9a-f]{40}' .github/workflows/workflow.yml \
+            | sed 's/.*@//' | sort -u | head -1)"
+          if [ -z "$REF" ]; then
+            echo "::error::no opstack-t8n-regen@<40-hex> ref found in workflow.yml"
+            exit 1
+          fi
+          git -C e2e-tests fetch -q --depth 1 origin "$REF"
+          git -C e2e-tests checkout -q --detach FETCH_HEAD
+          echo "corpus checkout: $(git -C e2e-tests rev-parse HEAD)"
+      - name: Checkout ethereum-optimism/specs for citation resolution
+        # Deliverable 5. Enforcing when the tree is present, but a third-party
+        # outage must not block this repo: continue-on-error degrades to a
+        # ::notice:: inside the script. The script hard-fails a citation that does
+        # not resolve at the pinned specs revision.
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: ethereum-optimism/specs
+          ref: 564a0ceae302eaf465edc7ff8ab55850624a11a0
+          path: ci-specs
+      - name: Pin consistency, corpus artifacts, citation reproducibility
+        env:
+          CORPUS_DIR: ${{ github.workspace }}/e2e-tests
+          SPECS_DIR: ${{ github.workspace }}/ci-specs
+        run: bash tools/.ci/check-ci-pins.sh
+
   # Full-stack C2 devnet e2e. Reuses the fisco-bcos binary built by
   # l2_unit_suites (artifact) so this job skips vcpkg configure + C++ build.
   # STEP-SET TWIN of c2-e2e.yml's c2_e2e job (that one builds fisco-bcos from
@@ -552,14 +723,25 @@ jobs:
 
       # The e2e harness lives in FISCO-BCOS/op-stack-e2e-tests; pinned ref — bump it
       # in lockstep with node changes (its CI gates the harness itself).
+      #
+      # THIRD PIN AXIS — do not conflate with the t8n corpus ref (see the
+      # pin-consistency gate comment above): the corpus ref b82691ac feeds
+      # opstack-t8n-regen and the in-tree vectors; THIS ref supplies the C2
+      # scripts AND tools/op-e2e/versions.json, whose op_monorepo.commit the job
+      # checks out of ethereum-optimism/optimism. At corpus ref b82691ac that
+      # file still carried op_monorepo.commit = 5f90f749c… — the op-revm oracle
+      # revision, which does not exist in the monorepo — so the C2 job died
+      # during the monorepo checkout ("not our ref", PR #5615). Hence: this ref must be a
+      # harness commit that postdates the versions.json fix; keep it equal to
+      # c2-e2e.yml's (check-ci-pins.sh asserts the equality) and let the
+      # reachability step below vet the value it carries.
+      # e7cded80 = harness PR#4 tip: --legacy L2 pricing (#2), the [op_eip1559]
+      # declaration (#3) and the mid-chain Jovian parameterization (#4).
       - name: Check out the op-e2e harness (op-stack-e2e-tests)
         uses: actions/checkout@v4
         with:
           repository: FISCO-BCOS/op-stack-e2e-tests
-          # The --legacy L2 pricing this node needs (its method set has no eth_feeHistory) landed in
-          # FISCO-BCOS/op-stack-e2e-tests#2; this is that PR's merge commit, on the harness's
-          # default branch, so the pin is a stable revision rather than a PR branch tip.
-          ref: 0451c8bf3601c502a36be4633c0e2f4cc38e9c9b
+          ref: e7cded80ad98e9c85a1fecc475ce201d55f773ea
           path: .ci-op-e2e-tests
 
       - name: Download fisco-bcos from L2 unit job
@@ -608,6 +790,41 @@ jobs:
           COMMIT=$(python3 -c "import json; print(json.load(open('.ci-op-e2e-tests/tools/op-e2e/versions.json'))['op_monorepo']['commit'])")
           echo "commit=${COMMIT}" >> "$GITHUB_OUTPUT"
 
+      # The pin above is data, and a stale harness ref can carry a wrong one (PR
+      # #5615: op_monorepo.commit held the op-revm oracle revision 5f90f749c, an
+      # object ethereum-optimism/optimism never had — the job died late, inside the
+      # monorepo fetch, on a bare "not our ref"). Vet the value here instead, where
+      # the message can name its source. GitHub answers 200 for a commit it serves
+      # and 404/422 for one it cannot (rewritten away, or a sha from another repo);
+      # any other status is an API hiccup or rate limit, so it only warns.
+      - name: Assert the OP monorepo pin is reachable
+        run: |
+          set -euo pipefail
+          COMMIT="${{ steps.op-pin.outputs.commit }}"
+          case "${COMMIT}" in
+            [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*) ;;
+            *)
+              echo "::error::op_monorepo.commit read from the harness ref is not a sha: '${COMMIT}'"
+              exit 1
+              ;;
+          esac
+          if [ "${#COMMIT}" -ne 40 ]; then
+            echo "::error::op_monorepo.commit is ${#COMMIT} chars, want 40: '${COMMIT}'"
+            exit 1
+          fi
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            "https://api.github.com/repos/ethereum-optimism/optimism/commits/${COMMIT}")
+          case "${code}" in
+            200) echo "OP monorepo pin ${COMMIT} is reachable" ;;
+            404 | 422)
+              echo "::error::op_monorepo.commit=${COMMIT} does not exist in ethereum-optimism/optimism (HTTP ${code}). The harness ref pinned for this job (see the checkout step) carries a bad versions.json — bump the harness ref, do not retry."
+              exit 1
+              ;;
+            *)
+              echo "::notice::reachability check inconclusive (HTTP ${code}); continuing"
+              ;;
+          esac
+
       - name: Cache OP monorepo + binaries
         id: op-cache
         uses: actions/cache@v4
@@ -628,6 +845,14 @@ jobs:
           git -C .ci-op-monorepo fetch --depth=1 origin "${{ steps.op-pin.outputs.commit }}" \
             || git -C .ci-op-monorepo fetch origin
           git -C .ci-op-monorepo checkout -q "${{ steps.op-pin.outputs.commit }}"
+          # The fetch above falls back to a full fetch, and checkout of a missing
+          # object would then take whatever HEAD the clone carried — assert the pin
+          # is what actually landed, so a bad pin can never build silently.
+          actual=$(git -C .ci-op-monorepo rev-parse HEAD)
+          if [ "${actual}" != "${{ steps.op-pin.outputs.commit }}" ]; then
+            echo "::error::monorepo checkout is ${actual}, pin is ${{ steps.op-pin.outputs.commit }} (cache key and binaries would be attributed to the wrong revision)"
+            exit 1
+          fi
           git -C .ci-op-monorepo submodule update --init superchain-registry
           bash .ci-op-monorepo/op-core/superchain/sync-superchain.sh
           # Plain go build omits artifacts.tzst; op-deployer apply fails without just build.

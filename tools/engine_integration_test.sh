@@ -12,7 +12,7 @@
 #   RPC_PORT  = 8551
 #
 # CI 用法:
-#   bash tools/engine_integration_test.sh build 8545
+#   bash tools/engine_integration_test.sh build 8551
 # =============================================================================
 
 set -e
@@ -202,8 +202,8 @@ listen_ip=0.0.0.0
 listen_port=${RPC_PORT}
 jwt_secret_file=${WORK_DIR}/jwt.hex
 clock_skew_secs=300
-; The Karst Engine API surface is served by the v2 pure-Ethereum executor (executor_version=2
-; + executor.evm_revision=cancun below), matching the production [op_engine_rpc] configuration.
+; Eth Cancun Engine API (executor_version=2 + evm_revision=cancun). This harness
+; is EthEngineService, not OpEngineService / Karst.
 
 [p2p]
 listen_ip=0.0.0.0
@@ -438,7 +438,7 @@ else
     log_fail "No result: ${RESP}"
 fi
 
-# 3.2 engine_exchangeCapabilities — everything implemented, pre-Karst included (B4)
+# 3.2 engine_exchangeCapabilities — Eth supportedCapabilities() (not the OP list)
 log_test "engine_exchangeCapabilities (implemented surface)"
 RESP=$(rpc_call "engine_exchangeCapabilities" '[["engine_newPayloadV4"]]')
 if echo "${RESP}" | grep -q '"result"'; then

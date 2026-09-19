@@ -254,6 +254,32 @@ BOOST_AUTO_TEST_CASE(setMaxDASizeRegistered)
         mapping.findHandler("miner_setMaxDASize").has_value(), "miner_setMaxDASize not dispatched");
 }
 
+// karst-318 keeps eth_feeHistory shipping (release-3.18.0 baseline): the handler is
+// registered and the endpoint stays reachable through the real dispatch path — pinned
+// POSITIVE here, not conditionally: the fixture carries 20 blocks, so a well-formed request
+// must answer a result with the feeHistory shape (a -32602/-32603 here is a regression; the
+// old conditional arm let any non-(-32601/-32603) code pass).
+BOOST_AUTO_TEST_CASE(feeHistoryRegisteredAndServes)
+{
+    EndpointsMapping mapping;
+    BOOST_CHECK_MESSAGE(
+        mapping.findHandler("eth_feeHistory").has_value(), "eth_feeHistory not dispatched");
+
+    auto resp = call(req("eth_feeHistory", R"(["0x1","latest"])"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    BOOST_REQUIRE(resp["result"].isObject());
+    BOOST_CHECK(resp["result"].isMember("oldestBlock"));
+    BOOST_CHECK(resp["result"].isMember("baseFeePerGas"));
+    BOOST_CHECK(!resp.isMember("error"));
+
+    // The param validation is pinned on both arms: a missing newestBlock is the exact
+    // InvalidParams (-32602) the endpoint throws (EthEndpoint::feeHistory), not just
+    // "anything but -32601/-32603".
+    auto malformed = call(req("eth_feeHistory", R"(["0x1"])"));
+    BOOST_REQUIRE(malformed.isMember("error"));
+    BOOST_CHECK_EQUAL(malformed["error"]["code"].asInt(), -32602);
+}
+
 BOOST_AUTO_TEST_CASE(minerSetMaxDASizeWritesSharedCapsAndGatesEthOnly)
 {
     // Regression for the miner_setMaxDASize producer (previously the handler was never
@@ -362,6 +388,21 @@ BOOST_AUTO_TEST_CASE(feeMethodsWithoutLedgerFailClosed)
         BOOST_CHECK_EQUAL(error.msg(), "Ledger not available for eth_maxPriorityFeePerGas");
     }
 
+    // Same guard for eth_feeHistory (karst-318 keeps the method shipping).
+    Json::Value feeHistoryParams(Json::arrayValue);
+    feeHistoryParams.append("0x1");
+    feeHistoryParams.append("latest");
+    Json::Value feeHistoryResponse;
+    try
+    {
+        task::syncWait(endpoint->feeHistory(feeHistoryParams, feeHistoryResponse));
+        BOOST_FAIL("eth_feeHistory must not succeed without a ledger");
+    }
+    catch (JsonRpcException const& error)
+    {
+        BOOST_CHECK_EQUAL(error.code(), static_cast<int32_t>(JsonRpcError::InternalError));
+        BOOST_CHECK_EQUAL(error.msg(), "Ledger not available for eth_feeHistory");
+    }
 }
 
 BOOST_AUTO_TEST_CASE(estimateGasMissingParentBlockFailsClosed)
@@ -426,8 +467,10 @@ public:
 // regression to the removed hardcoded constant (or to the RPC cap) fails visibly.
 BOOST_AUTO_TEST_CASE(estimateGasCapComesFromTheTipBlockHeaderAtTheEndpoint)
 {
-    // Give block 1's header a distinctive gas limit the endpoint must read.
-    auto const distinctiveLimit = u256(21'000'000);
+    // Give block 1's header a distinctive gas limit the endpoint must read. 15M is below
+    // the karst EIP-7825 per-tx ceiling (2^24) but still != 30M/50M, so a regression to a
+    // hardcoded constant (or to the RPC cap) fails visibly.
+    auto const distinctiveLimit = u256(15'000'000);
     m_ledger->ledgerData().at(1)->blockHeader()->setGasLimit(distinctiveLimit);
 
     auto recordingScheduler = std::make_shared<RecordingScheduler>(m_ledger, m_blockFactory);
@@ -448,7 +491,16 @@ BOOST_AUTO_TEST_CASE(estimateGasCapComesFromTheTipBlockHeaderAtTheEndpoint)
     // The estimate proceeded through the header read (no refusal) and the budget handed
     // to the scheduler is the target block's gasLimit — not 30M, not the 50M RPC cap.
     BOOST_REQUIRE(recordingScheduler->lastTx != nullptr);
-    BOOST_CHECK_EQUAL(recordingScheduler->lastTx->gasLimit(), 21'000'000u);
+    BOOST_CHECK_EQUAL(recordingScheduler->lastTx->gasLimit(), 15'000'000u);
+
+    // Merged (karst) ceiling: the estimate arm bounds the header-derived budget by
+    // EIP-7825 MAX_TX_GAS_LIMIT (2^24) — the call=true executor path skips the per-tx
+    // admission check, so a 50M header must still estimate against a 2^24 budget.
+    m_ledger->ledgerData().at(1)->blockHeader()->setGasLimit(u256(50'000'000));
+    Json::Value response2;
+    task::syncWait(endpoint->estimateGas(params, response2));
+    BOOST_REQUIRE(recordingScheduler->lastTx != nullptr);
+    BOOST_CHECK_EQUAL(recordingScheduler->lastTx->gasLimit(), 16'777'216u);
 }
 
 // A client sends an EIP-55 mixed-case `from` (ethers/viem default). The account row key is

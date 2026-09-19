@@ -3,6 +3,7 @@
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-evm/opstack/RollupCost.h>
+#include <boost/test/tree/decorator.hpp>
 #include <boost/test/unit_test.hpp>
 #include <vector>
 
@@ -29,7 +30,9 @@ namespace
 
 BOOST_AUTO_TEST_SUITE(OpReceiptMetaSuite)
 
-BOOST_AUTO_TEST_CASE(IsthmusHasFeesWithoutDa)
+// clang-format off
+BOOST_AUTO_TEST_CASE(IsthmusHasFeesWithoutDa, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     OpFeeParams fee{};
     fee.l1_base_fee = 1000_u256;
@@ -49,7 +52,7 @@ BOOST_AUTO_TEST_CASE(IsthmusHasFeesWithoutDa)
     BOOST_CHECK_EQUAL(*m.l1_blob_base_fee, 2000_u256);
     BOOST_CHECK_EQUAL(*m.l1_base_fee_scalar, 7u);
     BOOST_CHECK_EQUAL(*m.l1_blob_base_fee_scalar, 9u);
-    // Isthmus（has_ecotone_l1_formula=false）下 l1_gas_used 必有值，走 Fjord 公式。
+    // Isthmus（l1_fee_model=Fjord）下 l1_gas_used 必有值，走 FastLZ 公式。
     BOOST_REQUIRE(m.l1_gas_used.has_value());
     BOOST_CHECK_EQUAL(
         *m.l1_gas_used, static_cast<uint64_t>(estimatedDaSizeScaled(flz) * 16 / 1'000'000));
@@ -59,7 +62,9 @@ BOOST_AUTO_TEST_CASE(IsthmusHasFeesWithoutDa)
     BOOST_CHECK(!(m.da_footprint.has_value()));
 }
 
-BOOST_AUTO_TEST_CASE(OperatorScalarsOmittedWhenBothZero)
+// clang-format off
+BOOST_AUTO_TEST_CASE(OperatorScalarsOmittedWhenBothZero, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     OpFeeParams fee{};  // operator scalar/constant both 0
     std::vector<uint8_t> env{0x02};
@@ -71,7 +76,9 @@ BOOST_AUTO_TEST_CASE(OperatorScalarsOmittedWhenBothZero)
     BOOST_CHECK(!(m.operator_fee_constant.has_value()));
 }
 
-BOOST_AUTO_TEST_CASE(JovianFillsDaFootprint)
+// clang-format off
+BOOST_AUTO_TEST_CASE(JovianFillsDaFootprint, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     OpFeeParams fee{};
     fee.da_footprint_gas_scalar = 2;
@@ -94,7 +101,9 @@ BOOST_AUTO_TEST_CASE(JovianFillsDaFootprint)
 // 所以 props.flz_len 被置 0），opTransition 跑在 Jovian（cfg.has_da_footprint=true）。若这里
 // 读 cfg，回执会为一笔按 Ecotone 定价的交易报出 da_footprint_gas_scalar，而 da_footprint 由
 // flz_len=0 算出恒为 0。deriveOpReceiptMeta 现在根本不收 cfg，该形态已不可表达。
-BOOST_AUTO_TEST_CASE(DaFootprintFollowsSnapshotNotTransitionCfg)
+// clang-format off
+BOOST_AUTO_TEST_CASE(DaFootprintFollowsSnapshotNotTransitionCfg, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     OpFeeParams fee{};
     fee.da_footprint_gas_scalar = 2;
@@ -127,7 +136,9 @@ BOOST_AUTO_TEST_CASE(DaFootprintFollowsSnapshotNotTransitionCfg)
 
 // Ecotone 分支：ecotone_calldata_gas_used 快照（zeroes*4 + ones*16）直接成为 l1_gas_used，
 // 不走 Fjord 公式。此前该分支零覆盖（props 助手从不设置该字段）。
-BOOST_AUTO_TEST_CASE(EcotoneCalldataGasUsedBecomesL1GasUsed)
+// clang-format off
+BOOST_AUTO_TEST_CASE(EcotoneCalldataGasUsedBecomesL1GasUsed, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     OpFeeParams fee{};
     auto p = props(fee, /*flzLen=*/0, 0_u256, ecotoneConfig());

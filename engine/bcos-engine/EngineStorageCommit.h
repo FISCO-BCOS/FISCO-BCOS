@@ -168,7 +168,20 @@ HeaderCommitments buildHeaderCommitments(PayloadTransactions const& payloadTrans
     receiptLeaves.reserve(receipts.size());
     for (std::size_t i = 0; i < receipts.size(); ++i)
     {
-        receiptLeaves.push_back(bcos::ledger::mpt::encodeReceiptLeaf(*receipts[i], types[i]));
+        // op-geth Receipts.EncodeIndex keys the deposit leaf shape on the receipt's own
+        // version word: present -> 0x7e || rlp([..., nonce, version]), absent (pre-Canyon)
+        // -> both omitted. Keying on the meta keeps this producer byte-identical with the
+        // executor's seal (encodeReceiptForRoot) for every fork without threading a fork
+        // schedule here; meta/fork agreement is enforced at the producing executor.
+        constexpr std::uint8_t c_depositTxType = 0x7e;  // kDepositTxType (OpTransition.h)
+        bool includeDepositNonceVersion = true;
+        if (types[i] == c_depositTxType)
+        {
+            const auto& meta = receipts[i]->opStackMeta();
+            includeDepositNonceVersion = meta && meta->deposit_receipt_version.has_value();
+        }
+        receiptLeaves.push_back(bcos::ledger::mpt::encodeReceiptLeaf(
+            *receipts[i], types[i], includeDepositNonceVersion));
     }
     std::vector<bcos::bytesConstRef> receiptLeafRefs;
     receiptLeafRefs.reserve(receiptLeaves.size());

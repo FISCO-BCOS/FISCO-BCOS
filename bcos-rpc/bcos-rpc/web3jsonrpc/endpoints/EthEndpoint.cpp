@@ -23,6 +23,7 @@
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/protocol/TxGasModel.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-mempool/MemPoolImpl.h"
 #include "bcos-protocol/TransactionStatus.h"
@@ -48,6 +49,7 @@
 #include <bcos-rpc/web3jsonrpc/model/ReceiptResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
 #include <bcos-rpc/web3jsonrpc/utils/AdmissionError.h>
+#include <bcos-rpc/web3jsonrpc/utils/FeeHistory.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tx-validator/TxValidator.h>
@@ -323,7 +325,7 @@ task::Task<std::optional<HistoricalMptContext>> tryResolveMptContext(
 }
 
 /// Historical-tag entry: strict — a missing reader or a root absent from MPT node storage
-/// throws (see tryResolveMptContext).
+/// throws, with pruning-aware wording (see tryResolveMptContext).
 bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
     bcos::ledger::LedgerInterface& ledger, bcos::protocol::BlockNumber blockNumber,
     bcos::protocol::BlockNumber head,
@@ -336,7 +338,8 @@ bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
 
 /// latest/pending entry: lenient — a missing reader or a tip root absent from MPT node
 /// storage yields std::nullopt so the caller serves the request from the flat state instead
-/// of failing the tag every client sends by default.
+/// of failing the tag every client sends by default. head/mptPruneWindow are only read on
+/// the strict error path, which this entry never takes.
 task::Task<std::optional<HistoricalMptContext>> tryResolveLatestMptContext(
     bcos::ledger::LedgerInterface& ledger, bcos::protocol::BlockNumber blockNumber,
     bcos::protocol::BlockNumber head,
@@ -1189,7 +1192,11 @@ task::Task<void> EthEndpoint::call(
             auto const limit = block->blockHeader()->gasLimit();
             if (bcos::u256FitsUint64(limit))
             {
-                chainBlockGasLimit = static_cast<uint64_t>(limit);
+                // Ours (karst) EIP-7825 ceiling: the call=true executor path skips the
+                // per-tx admission check (geth #32641), so the header-derived budget must
+                // also stay under MAX_TX_GAS_LIMIT, not just the explicit-gas clamp above.
+                chainBlockGasLimit =
+                    std::min<uint64_t>(static_cast<uint64_t>(limit), protocol::MAX_TX_GAS_LIMIT);
             }
         }
         // No default cap: an unreadable header or an over-wide gasLimit must fail the request
@@ -1255,6 +1262,13 @@ task::Task<void> EthEndpoint::call(
     }
     auto tx = call.takeToTransaction(m_nodeService->blockFactory()->transactionFactory(),
         std::move(pendingNonce), chainBlockGasLimit);
+    // No root-presence probe here (unlike the five direct historical endpoints): callAtBlock
+    // owns the historical walk, so it also owns the pruned-walk mapping — a root or internal
+    // node lost to the pruning window surfaces as SchedulerError::MPTStateUnavailable and is
+    // answered -32004 below. Probing here would re-resolve the context callAtBlock resolves
+    // anyway (one header read + one node-row read per request) and still miss the
+    // pruned-mid-request race the scheduler-side mapping covers exactly.
+
     struct Awaitable
     {
         bcos::scheduler::SchedulerInterface& m_scheduler;
@@ -1365,7 +1379,15 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
 
     u256 gasUsed;
     Json::Value callResponse;
-    co_await call(request, callResponse, std::addressof(gasUsed), true);
+    Json::Value estimateRequest = request;
+    if (estimateRequest.isArray() && !estimateRequest.empty() && estimateRequest[0U].isObject())
+    {
+        // Merge semantics: an explicit gas keeps ours' EIP-7825 ceiling, but an omitted or
+        // zero gas is NOT back-filled here — the estimate arm below must size those from
+        // the target block's header and refuse on an unreadable header (fail-closed).
+        clampExplicitEstimateGasField(estimateRequest[0U]);
+    }
+    co_await call(estimateRequest, callResponse, std::addressof(gasUsed), true);
 
     if (!callResponse.isMember("error"))
     {
@@ -1848,3 +1870,90 @@ bcos::rpc::EthEndpoint::EthEndpoint(
     m_filterSystem(std::move(filterSystem)),
     m_syncTransaction(syncTransaction)
 {}
+
+task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value& response)
+{
+    // params: blockCount(QTY), newestBlock(QTY|TAG), rewardPercentiles(FLOAT[] optional)
+    if (request.empty() || !request[0U].isString())
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "eth_feeHistory expects [blockCount, newestBlock, ...]"));
+    }
+    auto const blockCountParsed = bcos::safeFromQuantity(request[0U].asString());
+    if (!blockCountParsed.has_value())
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid blockCount"));
+    }
+    if (request.size() < 2 || !request[1U].isString())
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "eth_feeHistory expects [blockCount, newestBlock, ...]"));
+    }
+
+    // Capture the ledger once and fail closed BEFORE any deref: getBlockNumberByTag
+    // calls getCurrentBlockNumber(*ledger), so a null-ledger node must refuse here
+    // instead of crashing inside the helper (sibling fee methods guard the same way).
+    auto ledger = m_nodeService->ledger();
+    if (!ledger)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            JsonRpcError::InternalError, "Ledger not available for eth_feeHistory"));
+    }
+
+    auto const newestTag = toView(request[1U]);
+    auto [newestBlock, _] = co_await getBlockNumberByTag(newestTag);
+
+    std::vector<double> rewardPercentiles;
+    if (request.size() >= 3)
+    {
+        // geth rejects a non-array third parameter rather than ignoring it.
+        if (!request[2U].isArray())
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "rewardPercentiles must be an array"));
+        }
+        // Same query limit as geth (eth/gasprice/feehistory.go maxQueryLimit).
+        constexpr std::size_t c_maxRewardPercentiles = 100;
+        if (request[2U].size() > c_maxRewardPercentiles)
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "rewardPercentiles over the query limit 100"));
+        }
+        for (auto const& entry : request[2U])
+        {
+            if (!entry.isNumeric())
+            {
+                BOOST_THROW_EXCEPTION(
+                    JsonRpcException(InvalidParams, "rewardPercentiles must be numbers"));
+            }
+            auto const percentile = entry.asDouble();
+            if (percentile < 0.0 || percentile > 100.0)
+            {
+                BOOST_THROW_EXCEPTION(
+                    JsonRpcException(InvalidParams, "rewardPercentiles must be in [0, 100]"));
+            }
+            // geth rejects a non-increasing array (errInvalidPercentile).
+            if (!rewardPercentiles.empty() && percentile <= rewardPercentiles.back())
+            {
+                BOOST_THROW_EXCEPTION(JsonRpcException(
+                    InvalidParams, "rewardPercentiles must be monotonically increasing"));
+            }
+            rewardPercentiles.push_back(percentile);
+        }
+    }
+
+    // The OP base-fee rule follows the LANE, not the ledger's feature_l2_ethereum_compat
+    // state shape: an Eth-lane chain may carry that flag (the pure-Ethereum executor on an
+    // MPT root) and must keep EIP-1559 fee semantics, which is what eth_gasPrice /
+    // eth_maxPriorityFeePerGas (RpcChainPolicy) already report. Lane is genesis-frozen, so
+    // the tip config answers for newestBlock too.
+    auto const ledgerConfig = co_await ledger::getLedgerConfig(*ledger);
+    auto const opStackMode = isOpStackLane(ledgerConfig->executorVersion());
+    // The OP prediction prices pre-Holocene blocks with the chain's own triple from the
+    // op_eip1559_params row (legacy preset when undeclared — pre-existing chains keep
+    // their exact prediction).
+    auto const opEip1559 = bcos::engine::effectiveOpEip1559(ledgerConfig->opEip1559Params());
+    auto result = co_await buildFeeHistory(*ledger, newestBlock,
+        static_cast<std::size_t>(*blockCountParsed), rewardPercentiles, opStackMode, opEip1559);
+    buildJsonContent(result, response);
+}

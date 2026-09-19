@@ -1,0 +1,14 @@
+diff --git a/engine/bcos-engine/OpEngineService.cpp b/engine/bcos-engine/OpEngineService.cpp
+index d0f402acc..cc0367be7 100644
+--- a/engine/bcos-engine/OpEngineService.cpp
++++ b/engine/bcos-engine/OpEngineService.cpp
+@@ -167,7 +167,8 @@ std::optional<std::string> validateOpPayloadHeaderFields(
+     {
+         return std::string(c_opMaxBlockGasLimitMessage);
+     }
+-    if (auto error = validateOpExtraDataForLayout(payload.extraData, extraDataLayoutFor(forkId)))
++    if (auto error = validateOpExtraDataForLayout(payload.extraData, extraDataLayoutFor(forkId));
++        false && error.has_value())
+     {
+         return "executionPayload.extraData " + *error;
+     }

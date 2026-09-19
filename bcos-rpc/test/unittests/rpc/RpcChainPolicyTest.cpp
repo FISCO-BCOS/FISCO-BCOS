@@ -45,6 +45,11 @@ BOOST_AUTO_TEST_CASE(laneBoundaries)
     BOOST_CHECK(usesEthereumFeeSemantics(ledger::OPSTACK_EXECUTOR_VERSION));
     BOOST_CHECK_EQUAL(suggestedPriorityFeeWei(ledger::OPSTACK_EXECUTOR_VERSION), 1'000'000u);
     BOOST_CHECK_EQUAL(suggestedPriorityFeeWei(ledger::OPSTACK_EXECUTOR_VERSION + 5), 1'000'000u);
+    // isOpStackLane is the LANE predicate eth_feeHistory consumes for the OP base-fee rule.
+    BOOST_CHECK(isOpStackLane(ledger::OPSTACK_EXECUTOR_VERSION));
+    BOOST_CHECK(!isOpStackLane(ledger::ETHEREUM_EXECUTOR_VERSION));
+    BOOST_CHECK(!isOpStackLane(0));
+    BOOST_CHECK(!isOpStackLane(ledger::OPSTACK_EXECUTOR_VERSION + 5));
 
     // The lane distinction that matters here is executor_version vs the ledger's
     // feature_l2_ethereum_compat state shape: the Eth lane may carry that flag (the

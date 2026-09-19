@@ -6,7 +6,7 @@
 // that its engine-facing seam surface works. Exercises only:
 //   1. construction over a real MultiLayerStorage ViewType;
 //   2. the static seam surface the engine reaches as dependent names
-//      (computeTxRoot / commitmentsOf / isJovianActive).
+//      (computeTxRoot / commitmentsOf / configAt).
 //      (The block-pre shape checks live in PreBlockOpStepsTest; the seam itself no longer
 //      executes blocks — see the note at the end of this file.)
 #include "OpSchedulerSeamTestHelpers.h"
@@ -22,6 +22,7 @@
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <array>
+#include <memory>
 #include <span>
 #include <stdexcept>
 #include <vector>
@@ -122,18 +123,17 @@ BOOST_AUTO_TEST_CASE(ConstructAndSeamSurface)
 
     // L1BlockInfo is required (no silent default). Construction with the unset sentinel is
     // allowed; synthesizeL1AttributesEnvelope is what refuses it.
-    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(kSeamSchedule, {});
+    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(
+        std::make_shared<bcos::evm::opstack::OpForkSchedule>(
+            bcos::evm::opstack::OpForkSchedule::legacy(false)),
+        {});
 
-    // Fork predicate: per block, from the block's own timestamp against the genesis schedule.
-    // The ms->s conversion is pinned here: kSeamKarstTime * 1000 - 1 is still Jovian.
-    BOOST_CHECK(!scheduler.isJovianActive(kIsthmusMs));
-    BOOST_CHECK(scheduler.isJovianActive(kJovianMs));
-    BOOST_CHECK(!scheduler.isKarstActive(kKarstMs - 1));
-    BOOST_CHECK(scheduler.isKarstActive(kKarstMs));
-    // Karst is a superset of Jovian and leaves the L1-attributes / DA-footprint shape alone,
-    // so isJovianActive must follow the fork configAt resolves: a Karst block still mints the
-    // Jovian-shaped L1-attributes deposit.
-    BOOST_CHECK(scheduler.isJovianActive(kKarstMs));
+    BOOST_CHECK(!scheduler.configAt(0).has_da_footprint);
+    bcos::evm::engine::OpSchedulerSeam<ViewType> jovianScheduler(
+        std::make_shared<bcos::evm::opstack::OpForkSchedule>(
+            bcos::evm::opstack::OpForkSchedule::legacy(true)),
+        {});
+    BOOST_CHECK(jovianScheduler.configAt(0).has_da_footprint);
 
     // computeTxRoot over the empty range: the standard empty-trie root (0x56e81f...), which
     // proves the trie built and hashed end-to-end.
@@ -170,9 +170,11 @@ BOOST_AUTO_TEST_CASE(SynthesizeL1AttributesIsDepositEnvelope)
 
 BOOST_AUTO_TEST_CASE(SynthesizeRefusesUnsetL1BlockInfo)
 {
-    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(kSeamSchedule, {});
-    BOOST_CHECK_THROW((void)scheduler.synthesizeL1AttributesEnvelope(kJovianMs, kJovianMs),
-        std::invalid_argument);
+    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(
+        std::make_shared<bcos::evm::opstack::OpForkSchedule>(
+            bcos::evm::opstack::OpForkSchedule::legacy(false)),
+        {});
+    BOOST_CHECK_THROW((void)scheduler.synthesizeL1AttributesEnvelope(0), std::invalid_argument);
 }
 
 BOOST_AUTO_TEST_CASE(SynthesizeRefusesZeroSystemConfig)
@@ -180,9 +182,11 @@ BOOST_AUTO_TEST_CASE(SynthesizeRefusesZeroSystemConfig)
     auto l1Info = filledL1Info();
     l1Info.baseFeeScalar = 0;
     std::fill(l1Info.batcherHash.bytes, l1Info.batcherHash.bytes + 32, 0);
-    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(kSeamSchedule, l1Info);
-    BOOST_CHECK_THROW((void)scheduler.synthesizeL1AttributesEnvelope(kJovianMs, kJovianMs),
-        std::invalid_argument);
+    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(
+        std::make_shared<bcos::evm::opstack::OpForkSchedule>(
+            bcos::evm::opstack::OpForkSchedule::legacy(false)),
+        l1Info);
+    BOOST_CHECK_THROW((void)scheduler.synthesizeL1AttributesEnvelope(0), std::invalid_argument);
 }
 
 BOOST_AUTO_TEST_CASE(SynthesizedDepositMatchesIsthmusLayout)
@@ -226,8 +230,11 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsCalldataFieldOffsets)
     std::copy_n(l1Info.blockHash.bytes, 32, hashBytes.begin());
     std::copy_n(l1Info.batcherHash.bytes, 32, batcherBytes.begin());
 
-    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(kSeamSchedule, l1Info);
-    const auto env = scheduler.synthesizeL1AttributesEnvelope(kJovianMs, kJovianMs);
+    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(
+        std::make_shared<bcos::evm::opstack::OpForkSchedule>(
+            bcos::evm::opstack::OpForkSchedule::legacy(true)),
+        l1Info);
+    const auto env = scheduler.synthesizeL1AttributesEnvelope(0);
     auto const dep = bcos::executor_v1::opstack::decodeDepositEnvelope(
         bcos::bytesConstRef(env.data(), env.size()));
     BOOST_REQUIRE_EQUAL(dep.data.size(), bcos::evm::opstack::JovianL1AttributesLen);
@@ -278,8 +285,11 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsIsthmusCalldataFieldOffsets)
     std::copy_n(l1Info.blockHash.bytes, 32, hashBytes.begin());
     std::copy_n(l1Info.batcherHash.bytes, 32, batcherBytes.begin());
 
-    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(kSeamSchedule, l1Info);
-    const auto env = scheduler.synthesizeL1AttributesEnvelope(kIsthmusMs, kIsthmusMs);
+    bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(
+        std::make_shared<bcos::evm::opstack::OpForkSchedule>(
+            bcos::evm::opstack::OpForkSchedule::legacy(false)),
+        l1Info);
+    const auto env = scheduler.synthesizeL1AttributesEnvelope(0);
     auto const dep = bcos::executor_v1::opstack::decodeDepositEnvelope(
         bcos::bytesConstRef(env.data(), env.size()));
     BOOST_REQUIRE_EQUAL(dep.data.size(), bcos::evm::opstack::IsthmusL1AttributesLen);

@@ -1,0 +1,12 @@
+diff --git a/bcos-evm/bcos-evm/opstack/OpTransition.cpp b/bcos-evm/bcos-evm/opstack/OpTransition.cpp
+index 7c5da7014..15b82c103 100644
+--- a/bcos-evm/bcos-evm/opstack/OpTransition.cpp
++++ b/bcos-evm/bcos-evm/opstack/OpTransition.cpp
+@@ -244,6 +244,7 @@ OpReceiptMeta deriveOpReceiptMeta(const OpTxProperties& props, intx::uint256 ope
+         // scalar/blob passthrough fields stay absent — op-geth leaves them nil pre-Ecotone.
+         m.l1_gas_used = *props.bedrock_l1_gas_used;
+         m.l1_fee_scalar = props.bedrock_l1_fee_scalar;
++        m.l1_blob_base_fee = fee.blob_base_fee;
+     }
+     else
+     {

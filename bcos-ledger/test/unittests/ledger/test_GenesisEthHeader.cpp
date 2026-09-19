@@ -100,6 +100,42 @@ GenesisConfig makeEthGenesisConfig()
     return genesisConfig;
 }
 
+// Pre-Holocene (London/Bedrock) L2 genesis: non-empty extraData is the spec
+// exception S1 must accept. 16-field header; the hash was computed OFFLINE by
+// tools/opstack-genesis/gen_eth_header_fixture.py (independent python rlp + keccak),
+// which is the same construction Base's official genesis.l2.hash comes from.
+//   extraData = "all your base are belong to you." (ASCII, 32 bytes)
+constexpr std::string_view c_preHoloceneGenesisHash =
+    "d043c3480e0aa1b2163f2790e622f8cf404bc188a4e4da0097f276a477f459a9";
+
+ledger::EthGenesisHeader makePreHoloceneArtifactHeader()
+{
+    ledger::EthGenesisHeader header;
+    header.m_parentHash = HashType{};
+    header.m_sha3Uncles =
+        HashType("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347");
+    header.m_miner = Address("4200000000000000000000000000000000000011");
+    header.m_stateRoot = HashType(std::string(c_emptyTrieRoot));
+    header.m_transactionsRoot = HashType(std::string(c_emptyTrieRoot));
+    header.m_receiptsRoot = HashType(std::string(c_emptyTrieRoot));
+    header.m_logsBloom = bcos::bytes(256, 0);
+    header.m_difficulty = 0;
+    header.m_number = 0;
+    header.m_gasLimit = 30'000'000;
+    header.m_gasUsed = 0;
+    header.m_timestamp = 0x648a5ce3;  // Base genesis time (2023-06), before Canyon
+    header.m_extraData =
+        fromHex(std::string("616c6c20796f75722062617365206172652062656c6f6e6720746f20796f752e"));
+    header.m_mixHash = h256{};
+    header.m_nonce = h64{};
+    header.m_baseFeePerGas = 1'000'000'000;
+    // pre-Holocene: withdrawalsRoot/blobGasUsed/excessBlobGas/parentBeaconBlockRoot/
+    // requestsHash stay nullopt — this is the 16-field London form, and their absence
+    // is what makes the RLP match the official hash.
+    header.m_hash = HashType(std::string(c_preHoloceneGenesisHash));
+    return header;
+}
+
 struct EthGenesisFixture
 {
     EthGenesisFixture() { m_blockFactory = createBlockFactory(createNormalCryptoSuite()); }
@@ -287,6 +323,34 @@ BOOST_AUTO_TEST_CASE(RestartWithSwappedArtifactRefuses)
             bcos::tool::InvalidConfig, [](auto const& e) {
                 return errinfoContains(e, "hash does not match the stored genesis block");
             });
+        co_return;
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(PreHoloceneNonEmptyExtraDataBuilds)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto storage = makeL2GenesisTestStorage();
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+
+        LedgerConfig param;
+        param.setBlockNumber(0);
+        param.setHash(HashType(""));
+        param.setBlockTxCountLimit(0);
+
+        auto genesisConfig = makeEthGenesisConfig();
+        genesisConfig.m_ethGenesisHeader = makePreHoloceneArtifactHeader();
+
+        BOOST_CHECK(co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param));
+
+        auto block = co_await ledger::getBlockData(*ledger, 0, HEADER);
+        BOOST_REQUIRE(block);
+        auto header = block->blockHeader();
+        // Non-empty pre-Holocene extraData is accepted: the S3 engine layout rule does
+        // not run on the genesis path, and S1 must not add a rejection for it.
+        BOOST_CHECK_EQUAL(header->extraData().size(), 32U);
+        BOOST_CHECK(header->ethBlockVersion() == EthBlockVersion::LONDON);
+        BOOST_CHECK_EQUAL(header->hash().hex(), std::string(c_preHoloceneGenesisHash));
         co_return;
     }());
 }

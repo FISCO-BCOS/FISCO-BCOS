@@ -63,6 +63,10 @@ namespace engine
 {
 class AnyEngineService;
 }
+namespace evm::opstack
+{
+class OpForkSchedule;
+}
 namespace single_consensus
 {
 class SingleNodeConsensus;
@@ -220,7 +224,9 @@ private:
     std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_ethereumSchedulerHolder;
     std::function<void(std::function<void(protocol::BlockNumber)>)>
         m_setEthereumSchedulerBlockNumberNotifier;
-    /// OP scheduler (executor_version >= 3), wired to MultiVersionScheduler slot 3.
+    /// Resolved OP fork schedule (OP mode only). Injected into OpSchedulerSeam / OpScheduler.
+    std::shared_ptr<bcos::evm::opstack::OpForkSchedule> m_opForkSchedule;
+    /// OP scheduler (executor_version == 3), wired to MultiVersionScheduler slot 3.
     std::shared_ptr<scheduler::SchedulerInterface> m_opScheduler;
     /// Installs the OP block-number notifier on the OpScheduler.
     std::function<void(std::function<void(protocol::BlockNumber)>)>

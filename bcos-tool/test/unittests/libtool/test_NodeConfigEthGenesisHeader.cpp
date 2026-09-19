@@ -343,4 +343,47 @@ BOOST_AUTO_TEST_CASE(GenesisDataCoversEthHeader)
     BOOST_CHECK(withoutHeader.find("[ethGenesisHeader]") == std::string::npos);
 }
 
+// The pre-Holocene genesis form S1 generates: London's 16 fields plus the artifact's
+// own hash, with the fork-gated keys absent and non-empty extraData. NodeConfig must
+// parse it (it is the shape Base's real genesis has).
+BOOST_AUTO_TEST_CASE(PreHoloceneHeaderParses)
+{
+    const std::vector<std::pair<std::string, std::string>> london = {
+        {"parent_hash", "0x" + std::string(64, '0')},
+        {"sha3_uncles", "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"},
+        {"miner", "0x4200000000000000000000000000000000000011"},
+        {"state_root", std::string(kEthEmptyTrieRoot)},
+        {"transactions_root", std::string(kEthEmptyTrieRoot)},
+        {"receipts_root", std::string(kEthEmptyTrieRoot)},
+        {"logs_bloom", "0x" + std::string(512, '0')},
+        {"difficulty", "0x0"},
+        {"number", "0x0"},
+        {"gas_limit", "0x1c9c380"},
+        {"gas_used", "0x0"},
+        {"timestamp", "0x648a5ce3"},
+        // "all your base are belong to you." (32 bytes): the pre-Holocene exception
+        {"extra_data", "0x616c6c20796f75722062617365206172652062656c6f6e6720746f20796f752e"},
+        {"mix_hash", "0x" + std::string(64, '0')},
+        {"nonce", "0x0000000000000000"},
+        {"base_fee_per_gas", "0x3b9aca00"},
+        {"hash", "0xd043c3480e0aa1b2163f2790e622f8cf404bc188a4e4da0097f276a477f459a9"},
+    };
+    std::string section = "[eth_genesis_header]\n";
+    for (auto const& [key, value] : london)
+    {
+        section += key + "=" + value + "\n";
+    }
+
+    auto cfg = makeEthNodeConfig();
+    cfg->loadGenesisConfig(parseEthIni(l2EthConfig(section)));
+    auto const& header = cfg->genesisConfig().m_ethGenesisHeader;
+    BOOST_REQUIRE(header.has_value());
+    BOOST_CHECK_EQUAL(header->m_extraData.size(), 32U);
+    // The fork-gated keys are genuinely absent, not defaulted.
+    BOOST_CHECK(!header->m_withdrawalsRoot.has_value());
+    BOOST_CHECK(!header->m_requestsHash.has_value());
+    BOOST_CHECK_EQUAL(header->m_hash.hexPrefixed(),
+        "0xd043c3480e0aa1b2163f2790e622f8cf404bc188a4e4da0097f276a477f459a9");
+}
+
 BOOST_AUTO_TEST_SUITE_END()

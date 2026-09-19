@@ -49,6 +49,11 @@ enum class SystemConfig
     executor_version,
     evmc_revision,
     excess_blob_gas,
+    /// OP lane: the chain's EIP-1559 triple ("elasticity,denominator,denominatorCanyon"
+    /// as a comma string), written at genesis when config.genesis declares [op_eip1559].
+    /// Read into the LedgerConfig snapshot so the RPC fee-prediction prices with the
+    /// chain's own parameters (the engine got the same values via boot injection).
+    op_eip1559_params,
 };
 
 struct SystemConfigs

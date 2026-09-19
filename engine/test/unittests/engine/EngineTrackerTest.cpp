@@ -276,12 +276,22 @@ BOOST_AUTO_TEST_CASE(engine_tracker_zero_head_hash_is_rejected)
     BOOST_CHECK(!tracker.trackedHead().has_value());
 }
 
-BOOST_AUTO_TEST_CASE(engine_tracker_swallows_parent_even_with_attributes)
+BOOST_AUTO_TEST_CASE(engine_tracker_rebuilds_on_parent_with_attributes)
 {
-    // Matrix: S2 — release EngineServiceImpl never rebuilds on parent; older head is swallowed.
     EngineTracker tracker;
     tracker.applyForkchoice(resolved(h256(10), 10, true, false));
     auto outcome = tracker.applyForkchoice(resolved(h256(9), 9, true, true));
+    BOOST_CHECK(outcome == ForkchoiceApplyResult::RebuildOnParent);
+    BOOST_REQUIRE(tracker.trackedHead().has_value());
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->hash, h256(10));
+}
+
+BOOST_AUTO_TEST_CASE(engine_tracker_swallows_parent_without_attributes)
+{
+    EngineTracker tracker;
+    tracker.applyForkchoice(resolved(h256(10), 10, true, false));
+    auto outcome = tracker.applyForkchoice(resolved(h256(9), 9, true, false));
     BOOST_CHECK(outcome == ForkchoiceApplyResult::Swallowed);
     BOOST_REQUIRE(tracker.trackedHead().has_value());
     BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
@@ -349,22 +359,22 @@ BOOST_AUTO_TEST_CASE(engine_tracker_swallows_old_head_without_attributes)
     BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
 }
 
-BOOST_AUTO_TEST_CASE(engine_tracker_swallows_noncanonical_parent_even_with_attributes)
+BOOST_AUTO_TEST_CASE(engine_tracker_rebuilds_on_noncanonical_parent_with_attributes)
 {
     EngineTracker tracker;
     tracker.applyForkchoice(resolved(h256(10), 10, true, false));
     auto outcome = tracker.applyForkchoice(resolved(h256(9), 9, false, true));
-    BOOST_CHECK(outcome == ForkchoiceApplyResult::Swallowed);
+    BOOST_CHECK(outcome == ForkchoiceApplyResult::RebuildOnParent);
     BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
     BOOST_CHECK_EQUAL(tracker.trackedHead()->hash, h256(10));
 }
 
-BOOST_AUTO_TEST_CASE(engine_tracker_swallows_older_than_parent_with_attributes)
+BOOST_AUTO_TEST_CASE(engine_tracker_rebuilds_on_older_than_parent_with_attributes)
 {
     EngineTracker tracker;
     tracker.applyForkchoice(resolved(h256(10), 10, true, false));
     auto outcome = tracker.applyForkchoice(resolved(h256(8), 8, true, true));
-    BOOST_CHECK(outcome == ForkchoiceApplyResult::Swallowed);
+    BOOST_CHECK(outcome == ForkchoiceApplyResult::RebuildOnParent);
     BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
     BOOST_CHECK_EQUAL(tracker.trackedHead()->hash, h256(10));
 }
@@ -447,6 +457,76 @@ BOOST_AUTO_TEST_CASE(engine_tracker_rejects_head_jump)
     checkExceptionMessage<InvalidForkchoiceState>(
         [&]() { tracker.applyForkchoice(resolved(h256(12), 12, true, false)); },
         "Forkchoice head block number must increase by exactly 1");
+}
+
+// ---- S5+S6 Task 2: OP 策略位 allowNonLinearHead（默认分支零行为变化）----
+
+BOOST_AUTO_TEST_CASE(engine_tracker_op_flag_allows_jump)
+{
+    EngineTracker tracker;
+    tracker.applyForkchoice(resolved(h256(10), 10, true, false));
+    ResolvedForkchoice jump = resolved(h256(12), 12, true, false);
+    jump.allowNonLinearHead = true;
+    BOOST_CHECK(tracker.applyForkchoice(jump) == ForkchoiceApplyResult::Applied);
+    BOOST_REQUIRE(tracker.trackedHead().has_value());
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 12);
+}
+
+BOOST_AUTO_TEST_CASE(engine_tracker_default_still_rejects_jump)
+{
+    // 原 engine_tracker_rejects_head_jump 语义必须仍绿：无 OP 位时默认仍是 +1 门。
+    EngineTracker tracker;
+    tracker.applyForkchoice(resolved(h256(10), 10, true, false));
+    ResolvedForkchoice jump = resolved(h256(12), 12, true, false);
+    BOOST_CHECK(!jump.allowNonLinearHead);
+    checkExceptionMessage<InvalidForkchoiceState>([&]() { tracker.applyForkchoice(jump); },
+        "Forkchoice head block number must increase by exactly 1");
+}
+
+// 默认分支：更矮且无 attrs 仍 Swallowed（不拨矮 tracked、不更新）。
+BOOST_AUTO_TEST_CASE(engine_tracker_default_lower_head_still_swallowed)
+{
+    EngineTracker tracker;
+    tracker.applyForkchoice(resolved(h256(10), 10, true, false));
+    BOOST_CHECK(tracker.applyForkchoice(resolved(h256(9), 9, true, false)) ==
+                ForkchoiceApplyResult::Swallowed);
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
+}
+
+// OP 位 + old-head（head 已规范、号更矮）：不把 tracked 拨矮；safe/finalized 仍更新；
+// 有 attrs 才 RebuildOnParent。
+BOOST_AUTO_TEST_CASE(engine_tracker_op_old_head_does_not_rewind_tracked)
+{
+    EngineTracker tracker;
+    tracker.applyForkchoice(resolved(h256(10), 10, true, false));
+
+    ResolvedForkchoice oldHead = resolved(h256(8), 8, true, false);
+    oldHead.allowNonLinearHead = true;
+    oldHead.state.safeBlockHash = h256(8);
+    oldHead.state.finalizedBlockHash = h256(8);
+    BOOST_CHECK(tracker.applyForkchoice(oldHead) == ForkchoiceApplyResult::Swallowed);
+    BOOST_REQUIRE(tracker.trackedHead().has_value());
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->hash.hex(), h256(10).hex());
+    BOOST_CHECK_EQUAL(*tracker.safeBlockNumber(), 8);
+    BOOST_CHECK_EQUAL(*tracker.finalizedBlockNumber(), 8);
+
+    oldHead.payloadAttributesPresent = true;
+    BOOST_CHECK(tracker.applyForkchoice(oldHead) == ForkchoiceApplyResult::RebuildOnParent);
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
+}
+
+// OP 位 + 侧链换头（headCanonical=false）：Applied 并更新 tracked。
+BOOST_AUTO_TEST_CASE(engine_tracker_op_side_chain_switch_applies)
+{
+    EngineTracker tracker;
+    tracker.applyForkchoice(resolved(h256(10), 10, true, false));
+    ResolvedForkchoice imported = resolved(h256(77), 12, false, false);
+    imported.allowNonLinearHead = true;
+    BOOST_CHECK(tracker.applyForkchoice(imported) == ForkchoiceApplyResult::Applied);
+    BOOST_REQUIRE(tracker.trackedHead().has_value());
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 12);
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->hash.hex(), h256(77).hex());
 }
 
 BOOST_AUTO_TEST_CASE(engine_tracker_updates_safe_and_finalized_on_apply)

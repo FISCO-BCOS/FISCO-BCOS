@@ -120,6 +120,7 @@ void EndpointsMapping::addEthHandlers()
     m_handlers[methodString(EthMethod::eth_getLogs)] = &Endpoints::getLogs;
     m_handlers[methodString(EthMethod::eth_maxPriorityFeePerGas)] = &Endpoints::maxPriorityFeePerGas;
     m_handlers[methodString(EthMethod::eth_getProof)] = &Endpoints::getProof;
+    m_handlers[methodString(EthMethod::eth_feeHistory)] = &Endpoints::feeHistory;
     // clang-format on
 }
 

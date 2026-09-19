@@ -6,6 +6,7 @@
 #include <bcos-evm/opstack/OpTransition.h>
 #include <evmone/evmone.h>
 #include <boost/test/unit_test.hpp>
+#include <boost/test/tree/decorator.hpp>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
 #include <bcos-evm/eth/state/host.hpp>
 #include <bcos-evm/eth/state/state.hpp>
@@ -55,7 +56,17 @@ inline int64_t receiptGasUsed(const bcos::protocol::TransactionReceipt& r)
 
 BOOST_AUTO_TEST_SUITE(OpDepositSuite)
 
-BOOST_AUTO_TEST_CASE(SuccessMintsAndAdvancesNonce)
+// The DepositTx wire-struct facts are pinned here BEHAVIORALLY through runDeposit, not by
+// asserting struct fields: to == nullopt means contract creation (ContractCreation...,
+// which also pins the address derivation), an absent mint credits nothing while a present
+// mint credits unconditionally and independently of value (SuccessMints..., EvmRevert...,
+// EntryFailure...), and is_system_tx = true is a block error (SystemTx...). A former
+// OpDepositTxTest.cpp asserted these facts on a locally-constructed struct instead —
+// tautologies that executed no production code — and was removed with review finding F48.
+
+// clang-format off
+BOOST_AUTO_TEST_CASE(SuccessMintsAndAdvancesNonce, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -85,7 +96,69 @@ BOOST_AUTO_TEST_CASE(SuccessMintsAndAdvancesNonce)
     BOOST_CHECK_EQUAL(ts.count(OP_L1_FEE_VAULT), 0u);
 }
 
-BOOST_AUTO_TEST_CASE(EvmRevertKeepsMintAndChargesActualGas)
+// 共识 RLP：Canyon 前收据不得含 depositNonce/version（deposits spec）；API 字段从 Regolith 起才有
+// nonce。这里的 meta 是 FISCO 的 opStackMeta 扩展——version 必须缺席，nonce 仍在。
+// clang-format off
+BOOST_AUTO_TEST_CASE(RegolithDepositOmitsReceiptVersion, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    ts[kFrom] = {.nonce = 5, .balance = intx::uint256{0}, .storage = {}, .code = {}};
+    test::TestBlockHashes hashes;
+
+    DepositTx dep{.source_hash = 0x01_bytes32,
+        .from = kFrom,
+        .to = kFrom,
+        .mint = intx::uint256{100},
+        .value = intx::uint256{0},
+        .gas_limit = 100000,
+        .is_system_tx = false,
+        .data = {}};
+    evmone::state::StateDiff diff;
+    const auto r = runDeposit(ts, blkDeposit(), hashes, dep, regolithConfig(), vm, 1234, 30000000,
+        kOpTestReceiptFactory, diff);
+    bcos::evm::applyStateDiffStrict(ts, diff);
+
+    BOOST_CHECK_EQUAL(r->status(), 0);
+    const auto& meta = r->opStackMeta();
+    BOOST_REQUIRE(meta.has_value());
+    BOOST_CHECK(meta->deposit_nonce.has_value());
+    BOOST_CHECK(!meta->deposit_receipt_version.has_value());
+}
+
+// clang-format off
+BOOST_AUTO_TEST_CASE(CanyonDepositSetsReceiptVersion, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    ts[kFrom] = {.nonce = 5, .balance = intx::uint256{0}, .storage = {}, .code = {}};
+    test::TestBlockHashes hashes;
+
+    DepositTx dep{.source_hash = 0x01_bytes32,
+        .from = kFrom,
+        .to = kFrom,
+        .mint = intx::uint256{100},
+        .value = intx::uint256{0},
+        .gas_limit = 100000,
+        .is_system_tx = false,
+        .data = {}};
+    evmone::state::StateDiff diff;
+    const auto r = runDeposit(ts, blkDeposit(), hashes, dep, canyonConfig(), vm, 1234, 30000000,
+        kOpTestReceiptFactory, diff);
+    bcos::evm::applyStateDiffStrict(ts, diff);
+
+    BOOST_CHECK_EQUAL(r->status(), 0);
+    const auto& meta = r->opStackMeta();
+    BOOST_REQUIRE(meta.has_value());
+    BOOST_CHECK_EQUAL(*meta->deposit_nonce, 5u);
+    BOOST_CHECK_EQUAL(*meta->deposit_receipt_version, 1u);
+}
+
+// clang-format off
+BOOST_AUTO_TEST_CASE(EvmRevertKeepsMintAndChargesActualGas, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -118,7 +191,9 @@ BOOST_AUTO_TEST_CASE(EvmRevertKeepsMintAndChargesActualGas)
     BOOST_CHECK_EQUAL(ts.at(kFrom).nonce, 1u);
 }
 
-BOOST_AUTO_TEST_CASE(EntryFailureChargesFullGasLimitButKeepsMint)
+// clang-format off
+BOOST_AUTO_TEST_CASE(EntryFailureChargesFullGasLimitButKeepsMint, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -143,7 +218,9 @@ BOOST_AUTO_TEST_CASE(EntryFailureChargesFullGasLimitButKeepsMint)
     BOOST_CHECK_EQUAL(ts.at(kFrom).nonce, 1u);
 }
 
-BOOST_AUTO_TEST_CASE(ContractCreationDerivesAddressFromPreExecutionNonce)
+// clang-format off
+BOOST_AUTO_TEST_CASE(ContractCreationDerivesAddressFromPreExecutionNonce, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -180,7 +257,9 @@ BOOST_AUTO_TEST_CASE(ContractCreationDerivesAddressFromPreExecutionNonce)
     BOOST_CHECK_EQUAL(r->effectiveGasPrice(), "0x0");
 }
 
-BOOST_AUTO_TEST_CASE(SystemTxIsBlockError)
+// clang-format off
+BOOST_AUTO_TEST_CASE(SystemTxIsBlockError, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -204,7 +283,9 @@ BOOST_AUTO_TEST_CASE(SystemTxIsBlockError)
 // D-03：SSTORE 清零 refund 从 deposit gasUsed 扣除（op-geth Regolith+ 无条件 calcRefund）
 // intrinsic 21000 + PUSH1(3)+PUSH1(3)+SSTORE(2100冷+2900重置=5000) = 26006；
 // refund = min(4800, 26006/5=5201) = 4800 → 21206；floor 21000 不抬。
-BOOST_AUTO_TEST_CASE(RefundLowersDepositGasUsed)
+// clang-format off
+BOOST_AUTO_TEST_CASE(RefundLowersDepositGasUsed, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -233,7 +314,9 @@ BOOST_AUTO_TEST_CASE(RefundLowersDepositGasUsed)
 // D-03 反作弊（红队 F-4）：refund 受 EIP-3529 /5 上限约束。
 // 4 槽清零：pre-refund = 21000 + 4*(3+3+5000) = 41024；cap = 41024/5 = 8204 → 32820。
 // /2 或无上限作弊 → 21824，当场暴露。/5 结构性入断言。
-BOOST_AUTO_TEST_CASE(RefundIsCappedAtOneFifthOfGasUsed)
+// clang-format off
+BOOST_AUTO_TEST_CASE(RefundIsCappedAtOneFifthOfGasUsed, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -262,7 +345,9 @@ BOOST_AUTO_TEST_CASE(RefundIsCappedAtOneFifthOfGasUsed)
 }
 
 // D-07：有日志的 deposit receipt 携带非零 bloom
-BOOST_AUTO_TEST_CASE(DepositReceiptCarriesLogsBloom)
+// clang-format off
+BOOST_AUTO_TEST_CASE(DepositReceiptCarriesLogsBloom, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -299,7 +384,9 @@ BOOST_AUTO_TEST_CASE(DepositReceiptCarriesLogsBloom)
 }
 
 // D-07 反向（红队 F-5）：LOG 后 REVERT——logs 必须空、bloom 必须全零
-BOOST_AUTO_TEST_CASE(RevertedDepositHasEmptyLogsAndZeroBloom)
+// clang-format off
+BOOST_AUTO_TEST_CASE(RevertedDepositHasEmptyLogsAndZeroBloom, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -332,7 +419,9 @@ BOOST_AUTO_TEST_CASE(RevertedDepositHasEmptyLogsAndZeroBloom)
 }
 
 // D-08：deposit 调用 7702 委托 EOA 执行委托目标代码（storage 落在 EOA 上下文）
-BOOST_AUTO_TEST_CASE(DepositResolvesEip7702Delegation)
+// clang-format off
+BOOST_AUTO_TEST_CASE(DepositResolvesEip7702Delegation, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -366,7 +455,9 @@ BOOST_AUTO_TEST_CASE(DepositResolvesEip7702Delegation)
 
 // D-08 反作弊（红队 F-7）：委托指向 0x100——必须带 EVMC_DELEGATED 走空码回退，gas=21000；
 // 未设旗的作弊实现派发 P256 override → 24450。
-BOOST_AUTO_TEST_CASE(DelegationToPrecompileFallsBackToEmptyCode)
+// clang-format off
+BOOST_AUTO_TEST_CASE(DelegationToPrecompileFallsBackToEmptyCode, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -394,7 +485,9 @@ BOOST_AUTO_TEST_CASE(DelegationToPrecompileFallsBackToEmptyCode)
 }
 
 // D-09：sender 预热——BALANCE(ORIGIN) 收 warm 100（修复前 cold 2600 → 23604）
-BOOST_AUTO_TEST_CASE(DepositWarmsSenderPerEip2929)
+// clang-format off
+BOOST_AUTO_TEST_CASE(DepositWarmsSenderPerEip2929, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -421,7 +514,9 @@ BOOST_AUTO_TEST_CASE(DepositWarmsSenderPerEip2929)
 }
 
 // D-09 补强（红队 F-2）：EIP-3651 coinbase 预热——BALANCE(COINBASE) 同价 21104
-BOOST_AUTO_TEST_CASE(DepositWarmsCoinbasePerEip3651)
+// clang-format off
+BOOST_AUTO_TEST_CASE(DepositWarmsCoinbasePerEip3651, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -452,7 +547,9 @@ BOOST_AUTO_TEST_CASE(DepositWarmsCoinbasePerEip3651)
 // 差分锚定（红队 F-2，「断言数值纪律」的锚）：同形探针（PUSH20 目标 BALANCE POP STOP），
 // 仅目标不同：sender（必暖）vs 表外冷地址。Δ = 2600-100 = 2500（EIP-2929 常数）。
 // sender 未预热 → Δ=0；全体乱暖 → Δ=0；均被抓。
-BOOST_AUTO_TEST_CASE(WarmColdDifferentialIs2500)
+// clang-format off
+BOOST_AUTO_TEST_CASE(WarmColdDifferentialIs2500, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     constexpr auto kCold = 0x00000000000000000000000000000000000000fe_address;
@@ -485,7 +582,9 @@ BOOST_AUTO_TEST_CASE(WarmColdDifferentialIs2500)
 }
 
 // D-01：标准 L1→L2 桥接——from 余额 0，mint 供资再转给收款人，必须成功
-BOOST_AUTO_TEST_CASE(BridgeDepositSpendsMintedValue)
+// clang-format off
+BOOST_AUTO_TEST_CASE(BridgeDepositSpendsMintedValue, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -512,7 +611,9 @@ BOOST_AUTO_TEST_CASE(BridgeDepositSpendsMintedValue)
 
 // D-01 反作弊（红队 F-1）：value 由既有余额供资（mint=nullopt）——
 // 可支付性对象必须是铸币后余额，不是 mint 本身
-BOOST_AUTO_TEST_CASE(ValueFundedByPreexistingBalanceWithoutMint)
+// clang-format off
+BOOST_AUTO_TEST_CASE(ValueFundedByPreexistingBalanceWithoutMint, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -537,7 +638,9 @@ BOOST_AUTO_TEST_CASE(ValueFundedByPreexistingBalanceWithoutMint)
 }
 
 // D-01 反作弊（红队 F-1）：余额+mint 联合供资（value > mint 但 ≤ 铸币后余额）
-BOOST_AUTO_TEST_CASE(ValueFundedJointlyByBalanceAndMint)
+// clang-format off
+BOOST_AUTO_TEST_CASE(ValueFundedJointlyByBalanceAndMint, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -563,7 +666,9 @@ BOOST_AUTO_TEST_CASE(ValueFundedJointlyByBalanceAndMint)
 
 // D-02：带（非委托）code 的 sender 发 deposit——op-geth 对 deposit 跳过 EOA 检查。
 // 注意不得用 ef0100 委托码：evmone state.cpp:496 对委托码本来就豁免，测不到面具。
-BOOST_AUTO_TEST_CASE(SenderWithCodeIsAllowed)
+// clang-format off
+BOOST_AUTO_TEST_CASE(SenderWithCodeIsAllowed, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -588,7 +693,9 @@ BOOST_AUTO_TEST_CASE(SenderWithCodeIsAllowed)
 
 // D-01 边界（rev.2 更正）：value 超铸币后余额 = op-geth 共识层错误
 // （state_transition.go:578 clause 6）→ 失败 receipt 收满 gasLimit（:498），非 intrinsic。
-BOOST_AUTO_TEST_CASE(ValueOverPostMintBalanceFailsWithFullGasLimit)
+// clang-format off
+BOOST_AUTO_TEST_CASE(ValueOverPostMintBalanceFailsWithFullGasLimit, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -615,7 +722,9 @@ BOOST_AUTO_TEST_CASE(ValueOverPostMintBalanceFailsWithFullGasLimit)
 
 // D-04：deposit gasLimit 超块剩余 gas = 块级错误（op-geth 豁免名单恰两个：
 // ErrSystemTxNotSupported 与 ErrGasLimitReached，state_transition.go:486）
-BOOST_AUTO_TEST_CASE(GasLimitOverBlockBudgetIsBlockError)
+// clang-format off
+BOOST_AUTO_TEST_CASE(GasLimitOverBlockBudgetIsBlockError, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -636,7 +745,9 @@ BOOST_AUTO_TEST_CASE(GasLimitOverBlockBudgetIsBlockError)
 }
 
 // D-04 边界（红队 F-6）：恰等于块剩余 gas 必须接受——">=" 作弊在此暴露
-BOOST_AUTO_TEST_CASE(GasLimitExactlyBlockBudgetIsAccepted)
+// clang-format off
+BOOST_AUTO_TEST_CASE(GasLimitExactlyBlockBudgetIsAccepted, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -659,7 +770,9 @@ BOOST_AUTO_TEST_CASE(GasLimitExactlyBlockBudgetIsAccepted)
 
 // D-04×D-05 交界（红队 F-11）：create 型 deposit intrinsic 失败——
 // nonce 仍 +1、mint 保留、不得部署任何合约
-BOOST_AUTO_TEST_CASE(FailedCreateDepositStillBumpsNonceAndDeploysNothing)
+// clang-format off
+BOOST_AUTO_TEST_CASE(FailedCreateDepositStillBumpsNonceAndDeploysNothing, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -686,7 +799,9 @@ BOOST_AUTO_TEST_CASE(FailedCreateDepositStillBumpsNonceAndDeploysNothing)
 }
 
 // Mint wraps mod 2^256 (op-geth AddBalance).
-BOOST_AUTO_TEST_CASE(MintAdditionWrapsLikeOpGethUint256Add)
+// clang-format off
+BOOST_AUTO_TEST_CASE(MintAdditionWrapsLikeOpGethUint256Add, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;

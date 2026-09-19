@@ -19,7 +19,7 @@
 
 #include "EngineServiceCommon.h"
 
-// Upstream pin: op-geth d401af16f2dd94b010a72eaef10e07ac10b31931
+// Upstream pin: op-geth v1.101702.2 e8800cff
 // (eth/catalyst/api.go GetPayloadVn / forkchoiceUpdated, miner/payload_building.go).
 
 #include "bcos-crypto/hash/Keccak256.h"
@@ -79,9 +79,11 @@ std::vector<std::string> supportedCapabilities()
     // here would also break the pre-Karst callers this node still serves — the v1 Engine
     // API harness behind unsafe_allow_v1_executor and the V1-V3 integration suites.
     //
-    // Eth and Op advertise the same list. FCU V4 is unimplemented (Endpoint -38005)
-    // and absent upstream (op-geth / op-node top out at V3), so it is not listed.
-    // A V4-shaped build still stores PayloadV3 (payloadShapeVersion).
+    // This is the Eth lane list. The OP lane uses supportedOpCapabilities() and
+    // drops the V1–V3 newPayload / getPayload methods its gates reject. FCU V4
+    // does exist upstream (op-geth api.go ForkchoiceUpdatedV4, Amsterdam) but is
+    // unimplemented in this lane (Endpoint -38005), so it is not advertised. A
+    // V4-shaped build still stores PayloadV3 (payloadShapeVersion).
     static const std::vector<std::string> caps{"engine_exchangeCapabilities",
         "engine_forkchoiceUpdatedV1", "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3",
         "engine_getPayloadV1", "engine_getPayloadV2", "engine_getPayloadV3", "engine_getPayloadV4",
@@ -278,6 +280,13 @@ namespace bcos::engine::detail
 
 bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes)
 {
+    // The legacy preset: the behaviour every undeclared chain and the Eth lane has always had.
+    return encodeOptimismExtraData(payloadAttributes, bcos::engine::kLegacyOpEip1559Params);
+}
+
+bcos::bytes encodeOptimismExtraData(
+    const PayloadAttributes& payloadAttributes, OpEip1559Params eip1559)
+{
     if (!payloadAttributes.eip1559Params.has_value())
     {
         // Pre-Holocene: extraData must be empty (op-core/eip1559/eip1559.go:27-28).
@@ -292,8 +301,11 @@ bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes)
     auto [denominator, elasticity] = decodeEip1559Params(*payloadAttributes.eip1559Params);
     if (denominator == 0 && elasticity == 0)
     {
-        denominator = c_eip1559DenominatorCanyon;
-        elasticity = c_eip1559ElasticityCanyon;
+        // op-node's zero params (its L1 SystemConfig carries none): encode the CHAIN's Canyon
+        // pair rather than a hardcoded preset, so a chain whose [op_eip1559] says (8, 2, 250)
+        // encodes (250, 2) — the only Canyon pair this node can justify for that chain.
+        denominator = eip1559.denominatorCanyon;
+        elasticity = eip1559.elasticity;
     }
 
     bool jovian = payloadAttributes.minBaseFee.has_value();

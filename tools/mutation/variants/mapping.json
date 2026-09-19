@@ -1,0 +1,132 @@
+[
+  {
+    "variant": "N1",
+    "finding": "N1",
+    "target": "test-bcos-engine",
+    "binary": "engine/test/test-bcos-engine",
+    "filter": "OpEngineSequenceMatrixSuite/S1_ForwardCanonicalizeBlockByBlock",
+    "also_green": [
+      "OpEngineSequenceMatrixSuite/S3_SameHeightSwitchDropsSibling"
+    ],
+    "expect": "only_mapped_red",
+    "why": "I2 (by-number tx list) must fail on the forward branch; the switch branch writes its own SYS_NUMBER_2_TXS row, so a switch-final sequence is the negative control."
+  },
+  {
+    "variant": "N2",
+    "finding": "N2",
+    "target": "test-bcos-engine",
+    "binary": "engine/test/test-bcos-engine",
+    "filter": "OpEngineSequenceMatrixSuite/S3_SameHeightSwitchDropsSibling",
+    "also_green": [
+      "OpEngineSequenceMatrixSuite/S1_ForwardCanonicalizeBlockByBlock"
+    ],
+    "expect": "only_mapped_red",
+    "why": "I1 must fail because the whole-plane scrub deletes the still-canonical ancestor A's hash->number row; a forward-only sequence never runs that scrub."
+  },
+  {
+    "variant": "NEW-3",
+    "finding": "NEW-3",
+    "target": "test-bcos-engine",
+    "binary": "engine/test/test-bcos-engine",
+    "filter": "OpEngineSequenceMatrixSuite/S13_WarmCacheSameHeightSwitch",
+    "also_green": [
+      "OpEngineSequenceMatrixSuite/S3_SameHeightSwitchDropsSibling"
+    ],
+    "expect": "only_mapped_red",
+    "why": "The same-height switch must go red on the cache-bound composition (S13); the cache-less composition (S3) reads the backend directly, so it must stay green."
+  },
+  {
+    "variant": "V-M7-extraData",
+    "mutated": "bcos-framework/bcos-framework/engine/OpForkId.h",
+    "target": "test-bcos-engine",
+    "binary": "engine/test/test-bcos-engine",
+    "filter": "OpForkBoundarySweepSuite/EachForkSwitchesExactlyAtItsActivation",
+    "also_green": [
+      "OpEnginePayloadShapeBaselineSuite/DumpedEnvelopeShapeIsPinnedPerCell"
+    ],
+    "expect": "only_mapped_red",
+    "why": "M7 boundary sweep must catch a downgraded Jovian/Karst extraData layout. The mutation reverses the WHOLE judgement: the table AND its static_assert guard move to Holocene9 together (a table-only mutation is caught at compile time, before any runtime test can judge); the external-oracle M7 sweep is the layer that goes red. The M2 dump-shape lane never reads this table and is the negative control."
+  },
+  {
+    "variant": "V-KARST-blscap",
+    "mutated": "bcos-evm/bcos-evm/opstack/OpPrecompiles.cpp",
+    "target": "bcos-evm-opstack-tests",
+    "binary": "bcos-evm/test/bcos-evm-opstack-tests",
+    "filter": "OpPrecompilesSuite/KarstTableMatchesOpRevmOracle",
+    "also_green": [
+      "OpPrecompilesSuite/BlsMsmPairingInputLimits"
+    ],
+    "also_red": [
+      "OpPrecompilesSuite/KarstTightensBn256AndDropsP256Override",
+      "OpKarstSuite/KarstBn256PairingInputLimitBoundary"
+    ],
+    "expect": "mapped_plus_table_literal_red",
+    "why": "The Karst oracle comparison must fail when the bn254 pairing cap drifts from op-revm's 57600; the Isthmus-constants case must stay green (the mutation touches only the Karst table). The two table-value cases read the same mutated literal (57600), so they are listed in also_red for complete red attribution instead of being silently unaccounted (F44)."
+  },
+  {
+    "variant": "V-M2-withdrawalsRoot",
+    "mutated": "bcos-rpc/bcos-rpc/web3jsonrpc/utils/EngineHelper.cpp",
+    "target": "test-bcos-engine",
+    "binary": "engine/test/test-bcos-engine",
+    "filter": "OpEnginePayloadShapeBaselineSuite/ClShapedParamsRoundTripThroughThisLanesWireParser",
+    "also_green": [
+      "OpForkBoundarySweepSuite/ActivationTimestampsAreExact"
+    ],
+    "expect": "only_mapped_red",
+    "why": "The wire round-trip must lose withdrawalsRoot if the serializer stops writing it; the config sweep never touches the serializer, so it is the negative control."
+  },
+  {
+    "variant": "V-M2B-valueDrift",
+    "mutated": "bcos-rpc/bcos-rpc/web3jsonrpc/utils/EngineHelper.cpp",
+    "target": "test-bcos-engine",
+    "binary": "engine/test/test-bcos-engine",
+    "filter": "OpEnginePayloadShapeBaselineSuite/ClShapedParamsRoundTripThroughThisLanesWireParser",
+    "also_green": [
+      "OpEnginePayloadShapeBaselineSuite/DumpedEnvelopeShapeIsPinnedPerCell"
+    ],
+    "expect": "only_mapped_red",
+    "why": "The value-level round-trip comparator (review fix F2) must catch a serializer that keeps the withdrawalsRoot KEY but writes a wrong hex; sibling V-M2 covers the presence flip. The dump-shape lane never touches the serializer and is the negative control."
+  },
+  { "variant": "V-GRANITE-bn254cap", "mutated": "bcos-evm/bcos-evm/opstack/OpPrecompiles.cpp",
+    "target": "bcos-evm-opstack-tests", "binary": "bcos-evm/test/bcos-evm-opstack-tests",
+    "filter": "OpOsakaSemanticsSuite/GraniteBn256PairingAt587PairsIsRejected",
+    "also_green": ["OpPrecompilesSuite/Bn256PairingInputLimitNoGasOverride"],
+    "expect": "only_mapped_red",
+    "why": "The Granite size cap must reject a 587-pair (112704B) input; widening it to 112704 makes the mapped case red. The case reads the Isthmus precompile table only (isthmusPrecompileOverrides); the mutation touches kGraniteEntries, so this case stays green for a different reason." },
+  { "variant": "V-DAFOOTPRINT-boundary", "mutated": "engine/bcos-engine/OpEngineService.cpp",
+    "target": "opstack-executor-block-tests", "binary": "opstack-executor/tests/opstack-executor-block-tests",
+    "filter": "OpL1EdgeGateSuite/JovianDaFootprintGasLimitBoundary",
+    "also_green": [
+      "OpL1EdgeGateSuite/DAFootprintExceedsGasLimitRejected",
+      "OpL1EdgeGateSuite/JovianDaFootprintMustEqualLocalRecomputation"
+    ],
+    "expect": "only_mapped_red",
+    "why": "The Jovian DA-footprint range gate must accept footprint == gasLimit (op-geth block_validator.go:131 uses '>'); flipping it to '>=' makes the mapped three-sided boundary case red on the == side. The B-5b rejection case only probes the strict 'footprint = gasLimit+1' side, which '>' and '>=' judge identically, so it is the negative control — as is the F-A2 equality-gap case, whose remote (golden Σ − 1 = 593599) sits far below gasLimit and never touches this comparison." },
+  { "variant": "V-META-feeArm", "mutated": "bcos-evm/bcos-evm/opstack/OpTransition.cpp",
+    "target": "opstack-executor-block-tests", "binary": "opstack-executor/tests/opstack-executor-block-tests",
+    "filter": "OpT8nReplay/Vectors",
+    "also_green": ["GoldenSampleSuite/ManifestCorpusConsistency"],
+    "expect": "only_mapped_red",
+    "why": "fee 臂写错一个字段 ⇒ 逐 fork meta 字段集双向断言必红；语料一致性用例与 meta 形状无关，须保持 GREEN。" },
+  { "variant": "V-NEG-order", "mutated": "engine/bcos-engine/OpEngineService.cpp",
+    "target": "test-bcos-engine", "binary": "engine/test/test-bcos-engine",
+    "filter": "OpForkNegativeCoverageSuite/OPFirstErrorOrderPrefersTransactionsOverHeaderFields",
+    "also_green": ["OpForkNegativeCoverageSuite/OPStaleHeadForkchoiceDoesNotRewindTheTip"],
+    "expect": "only_mapped_red",
+    "why": "首错顺序被对调 ⇒ transactions-first 的消息断言必红；同套件的 stale-head 用例与本机制无关，须保持 GREEN。" },
+  { "variant": "V-SCHED-genesisBind", "mutated": "bcos-framework/bcos-framework/ledger/ChainMetadata.h",
+    "target": "test-bcos-ledger", "binary": "bcos-ledger/test/test-bcos-ledger",
+    "filter": "OpForkScheduleMetadataTest/genesisBindingMismatchFailClosed",
+    "also_green": ["OpForkScheduleMetadataTest/hashMismatchFailClosed"],
+    "expect": "only_mapped_red",
+    "why": "genesis 绑定校验被旁路 ⇒ 绑定负向必红；hash 校验是相邻但独立的机制，须保持 GREEN。" },
+  { "variant": "V-CANYON-rootProjection", "mutated": "engine/bcos-engine/OpEngineService.inl",
+    "target": "test-bcos-engine", "binary": "engine/test/test-bcos-engine",
+    "filter": "OpCanyonWindowImportSuite/CanyonAbsentWithdrawalsRootImports",
+    "also_green": ["OpEngineServiceParityTest/op_newpayload_missing_executed_withdrawals_root_is_internal_error"],
+    "expect": "only_mapped_red",
+    "why": "The F-B2-1 regression cell: reverting the announced-header projection back to the raw payload optional must flip the Canyon absent-root import back to INVALID, while the sibling -32603 guard (different mechanism) stays GREEN." },
+  {"variant": "V-LADDER-layoutGuard", "target": "test-bcos-engine", "binary": "engine/test/test-bcos-engine", "filter": "OpEngineForkLadderSuite/NineForkLadderIsContinuous", "also_green": ["OpEngineServiceParityTest/op_newpayload_missing_executed_withdrawals_root_is_internal_error"], "expect": "only_mapped_red", "mutated": "engine/bcos-engine/OpEngineService.cpp", "why": "WI-16: defeating the extraData layout guard must make the ladder's per-rung foreign-layout negative controls accept a wrong layout, reddening the ladder; the -32603 executed-root guard is an unrelated mechanism and stays GREEN."},
+  {"variant": "V-CANYON-create2", "target": "opstack-executor-tests", "binary": "opstack-executor/tests/opstack-executor-tests", "filter": "PreBlockOpStepsTest/CanyonActivationBlockDeploysCreate2Deployer", "also_green": ["PreBlockOpStepsTest/PreCanyonActivationBlockDoesNotDeployCreate2Deployer"], "expect": "only_mapped_red", "mutated": "opstack-executor/OpBlockExecute.h", "why": "WI-E7: reversing the Canyon gate (prev-fork `< Canyon` -> `== Canyon`) suppresses the deploy at the activation timestamp, so the mapped activation cell goes red; the pre-activation cell early-returns on `forkAt(ts) != Canyon` under BOTH the real and mutated gate, so it is the negative control."},
+  {"variant": "V-JOVIAN-revSpec", "target": "bcos-evm-opstack-tests", "binary": "bcos-evm/test/bcos-evm-opstack-tests", "filter": "OpPrecompilesSuite/HoloceneJovianAnchorsMatchOpRevmOracle", "also_green": ["OpPrecompilesSuite/BlsMsmPairingInputLimits"], "expect": "only_mapped_red", "mutated": "bcos-evm/bcos-evm/opstack/OpForkSchedule.cpp", "why": "WI-E5/E6: the new Holocene/Jovian oracle cells must redden when the Jovian rev is mutated (EVMC_PRAGUE -> EVMC_CANCUN); an unrelated case stays GREEN."}
+]

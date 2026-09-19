@@ -1,0 +1,39 @@
+diff --git a/bcos-framework/bcos-framework/engine/OpForkId.h b/bcos-framework/bcos-framework/engine/OpForkId.h
+index 19f736c6b..b3e83e60a 100644
+--- a/bcos-framework/bcos-framework/engine/OpForkId.h
++++ b/bcos-framework/bcos-framework/engine/OpForkId.h
+@@ -125,7 +125,7 @@ struct EngineForkContext
+         return OpExtraDataLayout::Holocene9;
+     case OpForkId::Jovian:
+     case OpForkId::Karst:
+-        return OpExtraDataLayout::Jovian17;
++        return OpExtraDataLayout::Holocene9;
+     }
+     return OpExtraDataLayout::Empty;
+ }
+@@ -140,8 +140,8 @@ static_assert(extraDataLayoutFor(OpForkId::Regolith) == OpExtraDataLayout::Empty
+               extraDataLayoutFor(OpForkId::Granite) == OpExtraDataLayout::Empty &&
+               extraDataLayoutFor(OpForkId::Holocene) == OpExtraDataLayout::Holocene9 &&
+               extraDataLayoutFor(OpForkId::Isthmus) == OpExtraDataLayout::Holocene9 &&
+-              extraDataLayoutFor(OpForkId::Jovian) == OpExtraDataLayout::Jovian17 &&
+-              extraDataLayoutFor(OpForkId::Karst) == OpExtraDataLayout::Jovian17);
++              extraDataLayoutFor(OpForkId::Jovian) == OpExtraDataLayout::Holocene9 &&
++              extraDataLayoutFor(OpForkId::Karst) == OpExtraDataLayout::Holocene9);
+ 
+ using EngineForkResolution = std::variant<EngineForkContext, OpForkResolutionError>;
+ }  // namespace bcos::engine
+diff --git a/engine/test/unittests/engine/OpEngineForkLadderTest.cpp b/engine/test/unittests/engine/OpEngineForkLadderTest.cpp
+index ebf47422c..76162db60 100644
+--- a/engine/test/unittests/engine/OpEngineForkLadderTest.cpp
++++ b/engine/test/unittests/engine/OpEngineForkLadderTest.cpp
+@@ -77,8 +77,8 @@ static constexpr Rung c_rungs[] = {
+     {bcos::engine::OpForkId::Holocene, 5000, true, true,
+         bcos::engine::OpExtraDataLayout::Holocene9},
+     {bcos::engine::OpForkId::Isthmus, 6000, true, true, bcos::engine::OpExtraDataLayout::Holocene9},
+-    {bcos::engine::OpForkId::Jovian, 7000, true, true, bcos::engine::OpExtraDataLayout::Jovian17},
+-    {bcos::engine::OpForkId::Karst, 8000, true, true, bcos::engine::OpExtraDataLayout::Jovian17},
++    {bcos::engine::OpForkId::Jovian, 7000, true, true, bcos::engine::OpExtraDataLayout::Holocene9},
++    {bcos::engine::OpForkId::Karst, 8000, true, true, bcos::engine::OpExtraDataLayout::Holocene9},
+ };
+ 
+ // The shape columns must agree with the production tables they claim to mirror: the layout

@@ -19,6 +19,7 @@
  * @date 2021-06-10
  */
 #include "NodeConfig.h"
+#include "ChainLaneConfig.h"
 #include "VersionConverter.h"
 #include "bcos-framework/bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
@@ -30,6 +31,7 @@
 #include "bcos-utilities/Common.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/ledger/GenesisConfig.h>
+#include <bcos-framework/ledger/OpForkScheduleCodec.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -258,7 +260,9 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
     // EVMC-revision / auth_admin_account guards exempt chains that declare EL mode
     // ([ethereum] mode=el, with its mandatory [fork_timestamps] section).
     loadForkTimestamps(_genesisConfig);
+    loadOpForkSchedule(_genesisConfig);
     loadOpForkTimestamps(_genesisConfig);
+    loadOpEip1559(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
 
     // === A6.5: L2 genesis allocs; L2 mode is gated by feature_l2_ethereum_compat ===
@@ -492,9 +496,42 @@ void NodeConfig::loadEthGenesisHeader(boost::property_tree::ptree const& _genesi
                          << LOG_KV("timestamp", m_genesisConfig.m_ethGenesisHeader->m_timestamp);
 }
 
+namespace
+{
+/// Refuse a section the lane matrix reserves for another lane (ChainLaneConfig.h). Only the
+/// PRESENCE direction is table-driven: the "OP lane REQUIRES a schedule" direction stays in
+/// validateL2Invariants below because it needs the section-set notion (either of two equivalent
+/// declarations), not a single key. Each rule throws its own message, so the schedule family
+/// keeps the combined wording the existing tests pin while [op_eip1559] names itself.
+void rejectForbiddenLaneSections(ledger::GenesisConfig const& genesis,
+    std::initializer_list<std::pair<std::string_view, bool>> presentKeys)
+{
+    auto const lane = laneForExecutorVersion(genesis.m_executorVersion);
+    for (auto const& rule : laneKeyRules())
+    {
+        if (rule.lane == lane)
+        {
+            continue;  // allowed by definition on its own lane
+        }
+        for (auto const& [section, present] : presentKeys)
+        {
+            if (section == rule.section && present)
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidConfig() << errinfo_comment(std::string(rule.rejectMessage)));
+            }
+        }
+    }
+}
+}  // namespace
+
 void NodeConfig::validateL2Invariants()
 {
     auto const& genesis = m_genesisConfig;
+    rejectForbiddenLaneSections(
+        genesis, {{"op_fork_timestamps", genesis.m_opForkSchedule.has_value()},
+                     {"op_fork_schedule", genesis.m_opstackForkSchedule.has_value()},
+                     {"op_eip1559", genesis.m_opEip1559.has_value()}});
     // L2 mode is signalled by the feature_l2_ethereum_compat flag in [features];
     // there is no separate chain_mode. allocs and the flag must agree.
     bool l2Enabled = std::any_of(genesis.m_features.begin(), genesis.m_features.end(),
@@ -586,24 +623,25 @@ void NodeConfig::validateL2Invariants()
                                       "in config.genesis (e.g. 11155111 for Sepolia)"));
         }
     }
-    // The OP lane and its fork schedule are bound both ways. A [op_fork_timestamps] section on
-    // a non-OP chain would be a section nothing reads (and, worse, one an operator would
-    // reasonably expect to change execution); an OP chain without one has no way to say when
-    // Jovian or Karst activate, and would silently run Isthmus forever.
-    if (genesis.m_opForkSchedule.has_value() &&
-        genesis.m_executorVersion < ledger::OPSTACK_EXECUTOR_VERSION)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "[op_fork_timestamps] requires executor.version >= 3 (OP lane)"));
-    }
+    // The OP lane and its fork schedule are bound both ways (release line #5576, widened for
+    // the karst line's canonical channel). A schedule section on a non-OP chain would be a
+    // section nothing reads (and, worse, one an operator would reasonably expect to change
+    // execution); an OP chain without any schedule has no way to say when Jovian or Karst
+    // activate, and would silently run Isthmus forever. Two equivalent declarations are
+    // accepted: the karst line's [op_fork_schedule] canonical (ledger-codec validated,
+    // persisted to chain metadata, any contiguous EL fork range) and the release line's
+    // [op_fork_timestamps] shorthand (jovian_time/karst_time on the Isthmus baseline).
+    // The OP lane's EIP-1559 parameters and schedule share the lane binding above; what
+    // remains here is the requirement direction: an OP chain without any schedule has no way
+    // to say when Jovian or Karst activate.
     if (genesis.m_executorVersion >= ledger::OPSTACK_EXECUTOR_VERSION &&
-        !genesis.m_opForkSchedule.has_value())
+        !genesis.m_opForkSchedule.has_value() && !genesis.m_opstackForkSchedule.has_value())
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
-                "executor.version >= 3 (OP lane) requires an [op_fork_timestamps] section "
-                "carrying at least one entry: boost's INI reader drops a section with no "
-                "keys, so an empty one reads as absent"));
+                "executor.version >= 3 (OP lane) requires an [op_fork_schedule] canonical or an "
+                "[op_fork_timestamps] section carrying at least one entry: boost's INI reader "
+                "drops a section with no keys, so an empty one reads as absent"));
     }
     // On the OP lane the EVM revision is a FUNCTION of the fork schedule: OpScheduler feeds
     // the executor configAt(schedule, blockTime).rev, so a configured executor.evm_revision is
@@ -653,6 +691,11 @@ void NodeConfig::validateELModeInvariants() const
 std::optional<ledger::OpForkSchedule> const& NodeConfig::opForkSchedule() const
 {
     return m_genesisConfig.m_opForkSchedule;
+}
+
+std::optional<ledger::OpEip1559Params> const& NodeConfig::opEip1559() const
+{
+    return m_genesisConfig.m_opEip1559;
 }
 
 std::string NodeConfig::getServiceName(boost::property_tree::ptree const& _pt,
@@ -1318,6 +1361,38 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
                          << LOG_KV("bpo2", schedule.m_bpo2Time);
 }
 
+void NodeConfig::loadOpForkSchedule(boost::property_tree::ptree const& _genesisConfig)
+{
+    // Reload must not keep a previous schedule: an absent section means "legacy via
+    // feature_op_jovian", and a stale optional would pin the wrong canonical.
+    m_genesisConfig.m_opstackForkSchedule.reset();
+    auto section = _genesisConfig.get_child_optional("op_fork_schedule");
+    if (!section)
+    {
+        return;
+    }
+    auto canonical = section->get_optional<std::string>("canonical");
+    if (!canonical)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment("[op_fork_schedule].canonical is required"));
+    }
+    try
+    {
+        m_genesisConfig.m_opstackForkSchedule =
+            ledger::canonicalOpForkSchedule(ledger::parseOpForkSchedule(*canonical));
+    }
+    catch (ledger::InvalidOpForkSchedule const& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                std::string("[op_fork_schedule].canonical invalid: ") + e.what()));
+    }
+    NodeConfig_LOG(INFO) << LOG_DESC("loadOpForkSchedule")
+                         << LOG_KV("canonical", *m_genesisConfig.m_opstackForkSchedule);
+}
+
+
 // OP-lane fork schedule ([op_fork_timestamps] in config.genesis). OP forks activate by L2
 // block TIMESTAMP IN SECONDS from the schedule op-node carries in rollup.json
 // (jovian_time / karst_time; op-node/rollup/types.go IsJovian(ts) == ts >= *Time). Isthmus is
@@ -1376,6 +1451,72 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
     NodeConfig_LOG(INFO) << LOG_DESC("loadOpForkTimestamps")
                          << LOG_KV("jovian", schedule.m_jovianTime)
                          << LOG_KV("karst", schedule.m_karstTime);
+}
+
+// OP-lane chain EIP-1559 parameters ([op_eip1559] in config.genesis): the chain's own
+// {elasticity, denominator, denominatorCanyon}, i.e. op-deployer's config.optimism (the same
+// numbers rollup.json carries as chain_op_config). They are a genesis-frozen chain property:
+// op-geth reads them from the chain config and they price every pre-Holocene block, so two
+// nodes disagreeing about them would compute different base fees for the same height.
+// validateL2Invariants binds the section to the OP lane; an ABSENT section means "use
+// kLegacyOpEip1559Params" (6/50/250), which keeps every pre-existing chain bit-identical.
+void NodeConfig::loadOpEip1559(boost::property_tree::ptree const& _genesisConfig)
+{
+    // Reload must not keep a previous triple (same shape as loadOpForkTimestamps): a stale
+    // optional would either pin or price with a value this config never declared.
+    m_genesisConfig.m_opEip1559.reset();
+    auto section = _genesisConfig.get_child_optional("op_eip1559");
+    if (!section)
+    {
+        return;
+    }
+    auto requireKey = [&](std::string const& key) -> uint64_t {
+        auto value = section->get_optional<std::string>(key);
+        if (!value || value->empty())
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment("[op_eip1559]." + key + " is required"));
+        }
+        // Decimal and 0x-hex both, matching the sibling [op_fork_timestamps] section: a chain
+        // operator writing one section hex-formatted must not be surprised by the other.
+        // NOT parseForkTimestamp — that helper's message says "invalid timestamp", which would
+        // misname an EIP-1559 parameter.
+        std::string_view digits = *value;
+        int base = 10;
+        if (digits.rfind("0x", 0) == 0 || digits.rfind("0X", 0) == 0)
+        {
+            base = 16;
+            digits.remove_prefix(2);
+        }
+        uint64_t out = 0;
+        auto [ptr, ec] = std::from_chars(digits.data(), digits.data() + digits.size(), out, base);
+        if (ec != std::errc{} || ptr != digits.data() + digits.size())
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "[op_eip1559]." + key + " is not a valid uint64: " + *value));
+        }
+        return out;
+    };
+    ledger::OpEip1559Params params{.elasticity = requireKey("elasticity"),
+        .denominator = requireKey("denominator"),
+        // op-deployer's standard value; the pin records the EFFECTIVE triple, so an explicit
+        // 250 and an omitted key are the same declaration.
+        .denominatorCanyon = section->get_optional<uint64_t>("denominator_canyon").value_or(250)};
+    if (params.elasticity == 0 || params.denominator == 0 || params.denominatorCanyon == 0)
+    {
+        // op-geth panics on a nil/zero denominator (params/config.go:1352-1355) and would
+        // divide by zero on a zero elasticity; a panic is not a model, so refuse at load.
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "[op_eip1559] values must be non-zero: elasticity=" +
+                std::to_string(params.elasticity) +
+                " denominator=" + std::to_string(params.denominator) +
+                " denominator_canyon=" + std::to_string(params.denominatorCanyon)));
+    }
+    m_genesisConfig.m_opEip1559 = params;
+    NodeConfig_LOG(INFO) << LOG_DESC("loadOpEip1559") << LOG_KV("elasticity", params.elasticity)
+                         << LOG_KV("denominator", params.denominator)
+                         << LOG_KV("denominatorCanyon", params.denominatorCanyon);
 }
 
 void NodeConfig::loadGatewayConfig(boost::property_tree::ptree const& _pt)
@@ -3348,6 +3489,21 @@ std::string bcos::tool::generateGenesisData(
                       "")
            << (genesisConfig.m_excessBlobGas ?
                       "excessBlobGas:" + std::to_string(*genesisConfig.m_excessBlobGas) + "\n" :
+                      "")
+           << (genesisConfig.m_opEip1559.has_value() ?
+                      [&genesisConfig] {
+                          // The chain's EIP-1559 parameters price every pre-Holocene block, so
+                          // they are part of the genesis pin for the same reason evmRevision
+                          // is. Emitted only when DECLARED so a chain without [op_eip1559]
+                          // keeps the byte-identical pin it had before this key existed; the
+                          // value is the EFFECTIVE triple (effectiveOpEip1559), so "explicitly
+                          // 250" and "omitted canyon" pin the same string.
+                          auto const params =
+                              bcos::engine::effectiveOpEip1559(genesisConfig.m_opEip1559);
+                          return "eip1559:" + std::to_string(params.elasticity) + ',' +
+                                 std::to_string(params.denominator) + ',' +
+                                 std::to_string(params.denominatorCanyon) + "\n";
+                      }() :
                       "")
            << "[executor]" << '\n'
            << "iswasm: " << genesisConfig.m_isWasm << '\n'

@@ -69,12 +69,28 @@ struct ResolvedForkchoice
     /// omits the flags must not fail-open a non-canonical safe/finalized.
     bool safeCanonical = false;
     bool finalizedCanonical = false;
+    /// OP-lane strategy bit ONLY (OpEngineService::updateForkchoice sets it). Default
+    /// false keeps the Eth/single-node contract byte-for-byte: head must be exactly
+    /// +1 and canonical, a lower head is Swallowed. With the bit set: jumps and
+    /// same-height side-chain switches are Applied (SetCanonical already ran in the
+    /// caller when needed), and an old canonical head never rewinds the tracked tip —
+    /// it only refreshes safe/finalized and returns RebuildOnParent/Swallowed by attrs
+    /// (design §4.2 fourth row).
+    bool allowNonLinearHead = false;
+    /// The CURRENT canonical tip number (SYS_CURRENT_STATE) at resolution time. OP
+    /// branch only: a head whose number EQUALS the canonical tip is the post-
+    /// SetCanonical new tip (rewind tracked); a lower number is the true old-head
+    /// (never rewind). Default -1: unset (the default Eth branch ignores it).
+    bcos::protocol::BlockNumber canonicalTipNumber = -1;
 };
 
 enum class ForkchoiceApplyResult
 {
     Applied,
-    Swallowed
+    Swallowed,
+    /// Older head with payload attributes: build a sibling at head+1 without rewinding
+    /// the tracked tip (OP sequencer rebuild-on-parent).
+    RebuildOnParent,
 };
 
 class EngineTracker

@@ -1,0 +1,95 @@
+name: harness-pin-freshness
+
+# Weekly check that the op-stack-e2e-tests pins used by our workflows are not stale
+# relative to the harness repo's blessed heads. Policy (decided 2026-09-17): the pins
+# are STABLE COMMITS, bumped manually — reproducibility and coordinated two-sided
+# changes (harness config requiring new engine support) outrank automatic follow. This
+# job is the "forgot to bump" backstop: when a blessed head moved and the pin no
+# longer matches, it opens an issue naming every stale spot; it never edits pins by
+# itself.
+#
+# Two blessed heads, one per consumer class:
+#   t8n corpus (vectors + generator + regen action)
+#     -> feat/real-derivation-pipeline tip
+#        consumed by workflow.yml (symlink + regen action) and
+#        opstack-fork-nightly.yml (corpus checkout + regen action)
+#   C2 full-stack harness (tools/op-e2e + tools/opstack-genesis)
+#     -> main tip (PR squash heads land here)
+#        consumed by c2-e2e.yml
+#
+# A stale pin is EXPECTED between "harness fix merged" and "FISCO-side bump" — the
+# issue is the reminder that closes that window, and its body carries the exact
+# one-line ref change for whoever does the bump.
+
+on:
+  schedule:
+    - cron: "0 4 * * 1" # Mondays 04:00 UTC, before the work week's PRs
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  freshness:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - name: Compare pins against the harness's blessed heads
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HARNESS_REPO: FISCO-BCOS/op-stack-e2e-tests
+          T8N_BLESSED: feat/real-derivation-pipeline
+          C2_BLESSED: main
+        run: |
+          set -euo pipefail
+          stale_json=""
+          check_class() { # <class> <pinned-ref> <blessed-branch>
+            local class="$1" pinned="$2" blessed="$3"
+            local head
+            head=$(gh api "repos/$HARNESS_REPO/commits/$blessed" --jq '.sha')
+            if [ "$pinned" != "$head" ]; then
+              echo "STALE: $class pin $pinned != $blessed@$head"
+              stale_json="$stale_json{\"class\":\"$class\",\"pinned\":\"$pinned\",\"head\":\"$head\"},"
+            else
+              echo "fresh: $class @ ${pinned:0:9}"
+            fi
+          }
+          # Gather every distinct pin per consumer class from the workflow files.
+          t8n_pins=$(grep -rhoE '[0-9a-f]{40}' .github/workflows/workflow.yml \
+            .github/workflows/opstack-fork-nightly.yml | sort -u)
+          c2_pin=$(grep -hoE 'ref: [0-9a-f]{40}' .github/workflows/c2-e2e.yml \
+            | awk '{print $2}' | sort -u)
+          # Each distinct t8n pin is checked against the blessed pipeline head.
+          for pin in $t8n_pins; do
+            check_class "t8n-corpus" "$pin" "$T8N_BLESSED"
+          done
+          for pin in $c2_pin; do
+            check_class "c2-harness" "$pin" "$C2_BLESSED"
+          done
+          if [ -n "$stale_json" ]; then
+            echo "STALE_PINS=[${stale_json%,}]" >> "$GITHUB_ENV"
+            echo "HAS_STALE=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: Open a reminder issue naming every stale spot
+        if: env.HAS_STALE == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STALE_PINS: ${{ env.STALE_PINS }}
+        run: |
+          gh issue create \
+            --title "harness pin stale: op-stack-e2e-tests blessed heads moved" \
+            --body "The pinned op-stack-e2e-tests revisions no longer match their blessed heads.
+
+          \`STALE_PINS=$STALE_PINS\`
+
+          Bump the \`ref:\` lines in the named workflow files to the blessed head (policy:
+          stable commits, bumped manually — see harness-pin-freshness.yml). If a harness
+          change requires a FISCO-side engine change, land that first, then bump." \
+            --label "ci" || \
+          echo "issue creation failed (label may be missing) — the staleness above is still recorded in this run's log"

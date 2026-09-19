@@ -1,4 +1,5 @@
 find_package(Boost REQUIRED unit_test_framework)
+find_package(OpenSSL REQUIRED)
 
 add_executable(bcos-evm-eth-tests
     eth/EthTransitionTest.cpp
@@ -15,10 +16,11 @@ if(NOT BCOS_EVM_STANDALONE)
     add_executable(bcos-evm-opstack-tests
         opstack/TestMain.cpp
         opstack/OpForkScheduleTest.cpp
+        opstack/OpForkScheduleCodecTest.cpp
         opstack/OpHostTest.cpp
         opstack/OpPrecompilesTest.cpp
+        opstack/OpOsakaSemanticsTest.cpp
         opstack/OpFeeParamsTest.cpp
-        opstack/OpDepositTxTest.cpp
         opstack/OpPredeploysTest.cpp
         opstack/RollupCostTest.cpp
         opstack/OpValidateTest.cpp
@@ -47,6 +49,7 @@ if(NOT BCOS_EVM_STANDALONE)
         bcos-crypto
         bcos-utilities
         ledger
+        OpenSSL::Crypto
         Boost::unit_test_framework
     )
     add_test(NAME BcosEvmOpstackTests COMMAND bcos-evm-opstack-tests)

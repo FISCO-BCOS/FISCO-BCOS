@@ -49,6 +49,10 @@ struct OpStackReceiptMeta
     std::optional<uint64_t> deposit_receipt_version;
     std::optional<uint64_t> l1_gas_used;
     std::optional<bcos::u256> operator_fee;
+    // Bedrock-era receipt L1FeeScalar: the RAW L1Block slot-6 scalar (op-geth's receipt
+    // FeeScalar is scalar/1e6; the raw word is kept here and scaled at the compare/RPC
+    // boundary). Absent from Ecotone on (l1_base_fee_scalar/l1_blob_base_fee_scalar take over).
+    std::optional<bcos::u256> l1_fee_scalar;
 };
 
 class LogEntry;

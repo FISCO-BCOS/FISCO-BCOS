@@ -73,4 +73,10 @@ struct CallRequest
         std::optional<uint64_t> chainBlockGasLimit = std::nullopt) noexcept;
 };
 [[maybe_unused]] std::tuple<bool, CallRequest> decodeCallRequest(Json::Value const& _root);
+
+/// eth_estimateGas (EthEndpoint::estimateGas merge arm): caps an EXPLICIT non-zero gas to
+/// EIP-7825 `MAX_TX_GAS_LIMIT` (2^24) but never back-fills an omitted or zero field — the
+/// estimate arm sizes those from the target block's header and refuses when the header
+/// is unreadable (fail-closed), with the same 2^24 ceiling applied to that derived cap.
+void clampExplicitEstimateGasField(Json::Value& txObject);
 }  // namespace bcos::rpc

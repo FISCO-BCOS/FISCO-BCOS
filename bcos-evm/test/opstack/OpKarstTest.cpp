@@ -45,16 +45,19 @@ constexpr uint64_t kJovianTime = 1000;
 constexpr uint64_t kKarstTime = 2000;
 const bcos::ledger::OpForkSchedule kSchedule{.m_jovianTime = kJovianTime,
     .m_karstTime = kKarstTime};
+// The folded dispatch schedule — the same fold the Initializer wiring performs for the
+// shorthand channel (review finding F39 retired the free configAt(schedule, ts) resolver).
+const OpForkSchedule kEvmSchedule = OpForkSchedule::fromLedgerSchedule(kSchedule);
 
 /// The config a block one second BEFORE karst_time runs under.
 const OpForkConfig& underJovian()
 {
-    return configAt(kSchedule, kKarstTime - 1);
+    return kEvmSchedule.configAt(kKarstTime - 1);
 }
 /// The config a block AT karst_time runs under.
 const OpForkConfig& underKarst()
 {
-    return configAt(kSchedule, kKarstTime);
+    return kEvmSchedule.configAt(kKarstTime);
 }
 
 state::BlockInfo karstBlock()

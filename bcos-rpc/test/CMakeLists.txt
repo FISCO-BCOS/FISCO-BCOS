@@ -26,6 +26,12 @@ add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE .)
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-unused-variable)
 
+# WI-E2: verbatim op-geth (e8800cffe) eth_getTransactionReceipt goldens captured from the
+# corpus devnet (Web3ResponseTest.cpp block comment; capture recipe in the corpus
+# tools/devnet/README.md §WI-E2).
+target_compile_definitions(${TEST_BINARY_NAME} PRIVATE
+    WEB3_RPC_OPGETH_DEPOSIT_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/unittests/rpc/golden/op-geth-deposit-receipt")
+
 # transaction-scheduler: EthGetProofIntegrationTest.cpp drives the FullChainFixture
 # end-to-end harness (transaction-scheduler/tests/FullChainFixture.h); it brings
 # ledger/storage (RocksDB) transitively. Deliberately NOT linking `executor` here even
@@ -42,6 +48,10 @@ set_source_files_properties("unittests/rpc/RpcReadHandlersTest.cpp" PROPERTIES S
 set_source_files_properties(
     "unittests/rpc/EthGetProofIntegrationTest.cpp" "unittests/rpc/FullChainFixtureInst.cpp"
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+# RPCFixture.h pulls in the same heavy headers; keep the M3 receipt baseline standalone
+# so its using-directives cannot leak into unity-merged TUs.
+set_source_files_properties(
+    "unittests/rpc/ReceiptFieldBaselineTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 #add_test(NAME ${TEST_BINARY_NAME} WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "" "")
