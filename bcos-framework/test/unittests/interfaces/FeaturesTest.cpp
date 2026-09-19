@@ -218,9 +218,6 @@ BOOST_AUTO_TEST_CASE(feature)
         "reserved_removed_op_jovian",
         // bugfix_eip161_1052_account_semantics = 61 (#5371/#5372), next unused value.
         "bugfix_eip161_1052_account_semantics",
-        // bugfix_raw_address_hex_fallback = 62: gates the BinaryWithHexFallback account-table
-        // read on chains that activated feature_raw_address mid-chain.
-        "bugfix_raw_address_hex_fallback",
     };
     // clang-format on
     BOOST_CHECK_EQUAL(keys.size(), compareKeys.size());
@@ -454,18 +451,6 @@ BOOST_AUTO_TEST_CASE(upgrade)
     features16.setUpgradeFeatures(bcos::protocol::BlockVersion::V3_16_5_VERSION,
         bcos::protocol::BlockVersion::V3_17_0_VERSION);
     BOOST_CHECK_EQUAL(validFlags(features16).size(), expect12.size());
-
-    // 3.17.0 to 3.18.0: the account-semantics bugfix and the raw-address hex-fallback gate
-    Features features17;
-    features17.setUpgradeFeatures(bcos::protocol::BlockVersion::V3_17_0_VERSION,
-        bcos::protocol::BlockVersion::V3_18_0_VERSION);
-    auto expect3_18 = std::to_array<std::string_view>(
-        {"bugfix_eip161_1052_account_semantics", "bugfix_raw_address_hex_fallback"});
-    BOOST_CHECK_EQUAL(validFlags(features17).size(), expect3_18.size());
-    for (auto feature : expect3_18)
-    {
-        BOOST_CHECK(features17.get(feature));
-    }
 }
 
 BOOST_AUTO_TEST_CASE(genesis)

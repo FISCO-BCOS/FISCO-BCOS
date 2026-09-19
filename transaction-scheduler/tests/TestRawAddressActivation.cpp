@@ -15,7 +15,7 @@
  *
  * @file TestRawAddressActivation.cpp
  * @brief Scheduler-level e2e for mid-chain activation of the raw-address hex
- *        fallback (feature_raw_address + bugfix_raw_address_hex_fallback).
+ *        fallback (feature_raw_address).
  *
  * Unlike the sibling BaselineScheduler tests, this TU deliberately defines NO
  * getLedgerConfig tag_invoke stub, so BaselineScheduler's per-block
@@ -27,9 +27,9 @@
  * the activation block is filled by the real storage-load path (a bare
  * set()/setActivationBlock fixture would bypass the mechanism under test).
  *
- * Scenario: block 100 executes with both flags off and writes an account
- * balance into the legacy "/apps/<40-hex>" table; the governance rows
- * (enableNumber = 101) then land in the committed state; block 101 executes and
+ * Scenario: block 100 executes with the flag off and writes an account
+ * balance into the legacy "/apps/<40-hex>" table; the governance row
+ * (enableNumber = 101) then lands in the committed state; block 101 executes and
  * its ledgerConfig must report BinaryWithHexFallback with
  * activationBlockOf(feature_raw_address) == 101, and the balance written at
  * block 100 must be readable through the fallback.
@@ -97,7 +97,6 @@ struct RAProbingScheduler
 
     std::vector<std::pair<protocol::BlockNumber, ledger::account::AddressTableMode>> m_modes;
     std::optional<protocol::BlockNumber> m_rawAddressActivation;
-    std::optional<protocol::BlockNumber> m_bugfixActivation;
     std::optional<u256> m_fallbackBalance;
     std::optional<u256> m_binaryOnlyBalance;
 
@@ -110,8 +109,8 @@ struct RAProbingScheduler
         ledger::account::EVMAccount account(storage, m_account, mode);
         if (blockHeader.number() < m_activationBlock)
         {
-            // Pre-activation block: both flags off, so the mode must be Hex and the
-            // balance lands in the legacy "/apps/<40-hex>" table — the data a
+            // Pre-activation block: feature_raw_address is off, so the mode must be Hex
+            // and the balance lands in the legacy "/apps/<40-hex>" table — the data a
             // mid-chain activation leaves behind.
             if (!co_await account.exists())
             {
@@ -121,12 +120,10 @@ struct RAProbingScheduler
         }
         else
         {
-            // Post-activation block: record the activation blocks the real
+            // Post-activation block: record the activation block the real
             // readFromStorage filled, and read the pre-activation balance back.
             m_rawAddressActivation = ledgerConfig.features().activationBlockOf(
                 ledger::Features::Flag::feature_raw_address);
-            m_bugfixActivation = ledgerConfig.features().activationBlockOf(
-                ledger::Features::Flag::bugfix_raw_address_hex_fallback);
             m_fallbackBalance = co_await account.balance();
             // Control: without the fallback (plain Binary) the hex row is invisible.
             ledger::account::EVMAccount binaryOnly(
@@ -361,8 +358,9 @@ BOOST_AUTO_TEST_CASE(midChainActivationEnablesHexFallback)
     probingScheduler.m_balance = u256(12345);
     std::string const hexTable = "/apps/4200000000000000000000000000000000001234";
 
-    // Block 100: no SYS_CONFIG feature rows, so the real readFromStorage leaves both
-    // flags off and the block executes in Hex mode, writing the legacy hex table.
+    // Block 100: no SYS_CONFIG feature rows, so the real readFromStorage leaves
+    // feature_raw_address off and the block executes in Hex mode, writing the
+    // legacy hex table.
     auto header100 = executeOneBlock(100);
     BOOST_REQUIRE_EQUAL(probingScheduler.m_modes.size(), 1u);
     BOOST_CHECK_EQUAL(probingScheduler.m_modes[0].first, 100);
@@ -372,13 +370,12 @@ BOOST_AUTO_TEST_CASE(midChainActivationEnablesHexFallback)
     BOOST_REQUIRE(committedBalance.has_value());
     BOOST_CHECK_EQUAL(std::string(committedBalance->get()), "12345");
 
-    // Governance activates the flags from block 101 on: the SYS_CONFIG rows carry
+    // Governance activates the feature from block 101 on: the SYS_CONFIG row carries
     // enableNumber = 101, the shape SystemConfigPrecompiled persists.
     writeFeatureEntry("feature_raw_address", activationBlock);
-    writeFeatureEntry("bugfix_raw_address_hex_fallback", activationBlock);
 
     // Block 101: getLedgerConfig reloads the features from the committed SYS_CONFIG
-    // rows — the readFromStorage path fills the activation blocks — so the fallback
+    // rows — the readFromStorage path fills the activation block — so the fallback
     // arms and the pre-activation hex balance is visible again.
     auto header101 = executeOneBlock(101);
     BOOST_REQUIRE_EQUAL(probingScheduler.m_modes.size(), 2u);
@@ -387,8 +384,6 @@ BOOST_AUTO_TEST_CASE(midChainActivationEnablesHexFallback)
                 ledger::account::AddressTableMode::BinaryWithHexFallback);
     BOOST_REQUIRE(probingScheduler.m_rawAddressActivation.has_value());
     BOOST_CHECK_EQUAL(*probingScheduler.m_rawAddressActivation, activationBlock);
-    BOOST_REQUIRE(probingScheduler.m_bugfixActivation.has_value());
-    BOOST_CHECK_EQUAL(*probingScheduler.m_bugfixActivation, activationBlock);
     BOOST_REQUIRE(probingScheduler.m_fallbackBalance.has_value());
     BOOST_CHECK_EQUAL(*probingScheduler.m_fallbackBalance, u256(12345));
     // The control proves the fallback did the work, not the binary table.
@@ -396,32 +391,24 @@ BOOST_AUTO_TEST_CASE(midChainActivationEnablesHexFallback)
     BOOST_CHECK_EQUAL(*probingScheduler.m_binaryOnlyBalance, u256(0));
 }
 
-// Gate complement: WITHOUT bugfix_raw_address_hex_fallback the same mid-chain
-// activation stays plain Binary — the fallback is opt-in, and the pre-activation
-// hex row stays invisible (the pre-flag behaviour this bugfix flag preserves for
-// chains that do not enable it).
-BOOST_AUTO_TEST_CASE(midChainActivationWithoutBugfixFlagKeepsBinary)
+// Gate complement: a chain born with feature_raw_address (enableNumber = 0, the
+// genesis-activation shape) has no pre-activation hex data, so it stays plain
+// Binary — no fallback reads, even though the feature is on from the first block.
+BOOST_AUTO_TEST_CASE(genesisActivationKeepsBinary)
 {
-    constexpr protocol::BlockNumber activationBlock = 101;
     probingScheduler.m_account = unhexAddress("0x4200000000000000000000000000000000005678");
-    probingScheduler.m_activationBlock = activationBlock;
-    probingScheduler.m_balance = u256(777);
+    // m_activationBlock = 0: every block takes the post-activation (read) branch.
+    probingScheduler.m_activationBlock = 0;
+
+    writeFeatureEntry("feature_raw_address", 0);
 
     auto header100 = executeOneBlock(100);
-    commitOneBlock(header100);
-
-    writeFeatureEntry("feature_raw_address", activationBlock);
-
-    auto header101 = executeOneBlock(101);
-    BOOST_REQUIRE_EQUAL(probingScheduler.m_modes.size(), 2u);
-    BOOST_CHECK(probingScheduler.m_modes[0].second == ledger::account::AddressTableMode::Hex);
-    BOOST_CHECK(probingScheduler.m_modes[1].second == ledger::account::AddressTableMode::Binary);
-    // The activation block is still recorded — it is the missing bugfix flag, not a
-    // missing activation context, that keeps the fallback off.
+    BOOST_REQUIRE_EQUAL(probingScheduler.m_modes.size(), 1u);
+    BOOST_CHECK(probingScheduler.m_modes[0].second == ledger::account::AddressTableMode::Binary);
+    // The activation block IS recorded — it is 0, not a missing activation context,
+    // that keeps the fallback off.
     BOOST_REQUIRE(probingScheduler.m_rawAddressActivation.has_value());
-    BOOST_CHECK_EQUAL(*probingScheduler.m_rawAddressActivation, activationBlock);
-    BOOST_REQUIRE(probingScheduler.m_fallbackBalance.has_value());
-    BOOST_CHECK_EQUAL(*probingScheduler.m_fallbackBalance, u256(0));
+    BOOST_CHECK_EQUAL(*probingScheduler.m_rawAddressActivation, 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

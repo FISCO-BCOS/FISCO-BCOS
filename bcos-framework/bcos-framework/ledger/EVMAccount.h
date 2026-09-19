@@ -30,7 +30,6 @@ struct FromTableName
 ///     fallback to the Hex table. Only meaningful for a chain that activated
 ///     feature_raw_address mid-chain: the blocks before activation wrote hex tables, and
 ///     without the fallback those rows would be invisible once the feature turns on.
-///     Armed only when bugfix_raw_address_hex_fallback is also enabled (see below).
 enum class AddressTableMode
 {
     Hex,
@@ -40,11 +39,10 @@ enum class AddressTableMode
 
 /// The mode for @p features, and the consensus-deterministic gate on the fallback: the
 /// fallback changes execution results, so it is enabled exactly when the chain can hold
-/// pre-activation hex data AND the chain has opted into the new read path —
-/// feature_raw_address is on AND its activation block is known and non-genesis
-/// (activationBlockOf > 0) AND bugfix_raw_address_hex_fallback is on. A bare set() (genesis
-/// loading, tests) reports activationBlockOf() == -1, so genesis-enabled chains stay plain
-/// Binary and pay zero extra reads; a chain without the bugfix flag keeps plain Binary too.
+/// pre-activation hex data — feature_raw_address is on AND its activation block is known
+/// and non-genesis (activationBlockOf > 0). A bare set() (genesis loading, tests) reports
+/// activationBlockOf() == -1, so genesis-enabled chains stay plain Binary and pay zero
+/// extra reads.
 inline AddressTableMode accountTableMode(const ledger::Features& features)
 {
     constexpr auto flag = ledger::Features::Flag::feature_raw_address;
@@ -52,8 +50,7 @@ inline AddressTableMode accountTableMode(const ledger::Features& features)
     {
         return AddressTableMode::Hex;
     }
-    if (features.activationBlockOf(flag) > 0 &&
-        features.get(ledger::Features::Flag::bugfix_raw_address_hex_fallback))
+    if (features.activationBlockOf(flag) > 0)
     {
         return AddressTableMode::BinaryWithHexFallback;
     }

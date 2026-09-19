@@ -225,8 +225,7 @@ void Features::setUpgradeFeatures(
                         Flag::bugfix_nonce_ordering,
                     }},
             {.to = protocol::BlockVersion::V3_18_0_VERSION,
-                .flags = {Flag::bugfix_eip161_1052_account_semantics,
-                    Flag::bugfix_raw_address_hex_fallback}}});
+                .flags = {Flag::bugfix_eip161_1052_account_semantics}}});
     for (const auto& upgradeFeatures : upgradeRoadmap)
     {
         if (((toVersion < protocol::BlockVersion::V3_2_7_VERSION) &&

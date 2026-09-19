@@ -713,21 +713,10 @@ BOOST_AUTO_TEST_CASE(accountTableModeGate)
     features.setActivationBlock(bcos::ledger::Features::Flag::feature_raw_address, 0);
     BOOST_CHECK(account::accountTableMode(features) == account::AddressTableMode::Binary);
 
-    // Mid-chain activation WITHOUT the bugfix flag: the fallback changes execution
-    // semantics, so the chain must opt in via bugfix_raw_address_hex_fallback first.
+    // Mid-chain activation: hex tables may hold pre-activation rows — fallback on.
     features.setActivationBlock(bcos::ledger::Features::Flag::feature_raw_address, 100);
-    BOOST_CHECK(account::accountTableMode(features) == account::AddressTableMode::Binary);
-
-    // Mid-chain activation with the bugfix flag on: hex tables may hold pre-activation
-    // rows — fallback on.
-    features.set(bcos::ledger::Features::Flag::bugfix_raw_address_hex_fallback);
     BOOST_CHECK(
         account::accountTableMode(features) == account::AddressTableMode::BinaryWithHexFallback);
-
-    // The bugfix flag alone (without feature_raw_address) changes nothing.
-    bcos::ledger::Features bugfixOnly;
-    bugfixOnly.set(bcos::ledger::Features::Flag::bugfix_raw_address_hex_fallback);
-    BOOST_CHECK(account::accountTableMode(bugfixOnly) == account::AddressTableMode::Hex);
 }
 
 // The feature_raw_address hex-table fallback: a mid-chain activation leaves pre-activation
