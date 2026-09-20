@@ -849,6 +849,43 @@ BOOST_AUTO_TEST_CASE(accountTableNameCoding)
         account::canonicalTableNameForHash(hexTable + "_accessAuth"), hexTable + "_accessAuth");
 }
 
+// accountTableName(string_view, Binary) is TOTAL: only a canonical 40-char lowercase-hex
+// address takes the Binary branch; every other input — the strings user-controlled
+// precompiled params (ShardingPrecompiled) and RPC/P2P ingress can actually deliver
+// (uppercase, non-hex, odd length, 38 chars) — falls through to the verbatim
+// /apps/<input> form, identical to the Hex branch. Both encodings therefore hash every
+// input to the same digest: no throw on the Binary side of a mixed-encoding network.
+BOOST_AUTO_TEST_CASE(accountTableNameIsTotalAcrossModes)
+{
+    namespace account = bcos::ledger::account;
+    using account::AddressTableMode;
+
+    std::string_view const canonical = "4200000000000000000000000000000000001234";
+    // Canonical input: Binary encodes raw, and the two forms normalize to the same name.
+    auto const hexName = account::accountTableName(canonical, AddressTableMode::Hex);
+    auto const binName = account::accountTableName(canonical, AddressTableMode::Binary);
+    BOOST_CHECK_EQUAL(hexName, "/apps/4200000000000000000000000000000000001234");
+    BOOST_CHECK(account::isBinaryAccountTableName(binName));
+    BOOST_CHECK_EQUAL(account::canonicalTableNameForHash(binName), hexName);
+
+    // Non-canonical inputs: no throw, and both modes return the SAME verbatim hex-layout
+    // name (a typically empty table), so Hex and Binary nodes agree on the digest.
+    for (std::string_view input : {
+             "420000000000000000000000000000000000ABCD",     // uppercase
+             "zz00000000000000000000000000000000001234",     // non-hex chars
+             "420000000000000000000000000000000000123",      // odd length (39)
+             "42000000000000000000000000000000000012",       // even but short (38)
+             "0x4200000000000000000000000000000000001234",   // 0x-prefixed (42)
+             "",                                             // empty
+         })
+    {
+        std::string const expect = "/apps/" + std::string(input);
+        BOOST_CHECK_EQUAL(account::accountTableName(input, AddressTableMode::Hex), expect);
+        BOOST_CHECK_EQUAL(account::accountTableName(input, AddressTableMode::Binary), expect);
+        BOOST_CHECK_EQUAL(account::canonicalTableNameForHash(expect), expect);
+    }
+}
+
 // Write-side isolation: with the runtime fallback mode gone, a Binary-mode write touches
 // only the binary table and leaves any hex twin row alone (and symmetrically for Hex mode).
 // Physical consolidation is the migration tool's job, not the write path's.

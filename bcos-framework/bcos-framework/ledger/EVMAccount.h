@@ -28,6 +28,17 @@ struct FromTableName
 // nodeAddressTableMode() singleton live in ledger/AccountTableName.h; callers pass
 // nodeAddressTableMode() to the mode-taking constructors below.
 
+/// Exactly 40 lowercase hex chars — the canonical address form (Address::hex(),
+/// boost::algorithm::hex_lower output). Uppercase is NOT accepted: it is a different
+/// string, not another encoding of the same address.
+inline bool isLowerHexAddress(std::string_view address) noexcept
+{
+    return address.size() == HEX_ADDRESS_SIZE &&
+           std::all_of(address.begin(), address.end(), [](char c) {
+               return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+           });
+}
+
 /// THE one address → account-table-name routing rule (the encoding contract itself is
 /// documented in AccountTableName.h): the 8 c_systemTxsAddress members always route to
 /// "/sys/<hex>", every other address routes to "/apps/<hex>" in Hex mode and to
@@ -35,6 +46,15 @@ struct FromTableName
 /// caller that needs the table name without an account object (Ledger's state reads, the
 /// web3 RPC endpoints, the v1 precompiled call sites) share this single derivation — never
 /// re-derive the name locally.
+///
+/// The function is TOTAL: the Binary branch is taken only for a canonical 40-char
+/// lowercase-hex address; every other input — uppercase, non-hex, odd or short length,
+/// user garbage from precompiled call params (ShardingPrecompiled) or RPC/P2P ingress —
+/// falls through to the verbatim "/apps/<input>" form, exactly what the Hex branch
+/// returns. Both encodings therefore map every input to the SAME logical (typically
+/// empty) table: a malformed input reads an empty table on both sides of a
+/// mixed-encoding network instead of throwing on the Binary side (different receipts,
+/// different receipt root — a fork) or tripping an assert.
 /// @param address the address as a hex string (no 0x prefix)
 /// @param mode this node's account-table encoding (see AddressTableMode)
 inline std::string accountTableName(std::string_view address, AddressTableMode mode)
@@ -49,10 +69,9 @@ inline std::string accountTableName(std::string_view address, AddressTableMode m
         tableName.append(address);
         return tableName;
     }
-    if (mode != AddressTableMode::Hex)
+    if (mode != AddressTableMode::Hex && isLowerHexAddress(address))
     {
-        assert(address.size() % 2 == 0);
-        tableName.reserve(BINARY_TABLE_PREFIX.size() + (address.size() / 2));
+        tableName.reserve(BINARY_TABLE_PREFIX.size() + ADDRESS_SIZE);
         tableName.append(BINARY_TABLE_PREFIX);
         boost::algorithm::unhex(address.begin(), address.end(), std::back_inserter(tableName));
         return tableName;

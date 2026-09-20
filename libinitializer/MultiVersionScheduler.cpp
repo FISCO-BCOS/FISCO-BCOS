@@ -188,15 +188,20 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
     // Hex-only lanes name account tables /apps/<40-hex> directly (ethereum-executor's
     // EthereumState constructs EVMAccount with AddressTableMode::Hex; the OP lane inherits
     // it), so they cannot serve a binary-layout ("/s/<20 raw bytes>") state DB: after such
-    // a switch every account reads absent until the next restart. The boot-time lane check
+    // a switch every account reads absent. The boot-time lane check
     // (LedgerInitializer::build -> resolveNodeAddressTableMode) cannot see this case —
     // executor_version is a governance system config applied mid-chain WITHOUT restart (the
     // two commit callbacks above call setVersion; version 0 never reaches here thanks to
     // their >0 gate, and feature_l2_ethereum_compat is genesis-only), so the runtime guard
-    // belongs here. Same fail-open semantics as the unwired-slot case above: the callers
-    // catch-and-log a throw and would then stop advancing the chain, so keep the current
-    // executor and make it loud instead. The operator must not switch a migrated chain to a
-    // hex-only lane (recover: switch back to the baseline executor, executor_version = 1).
+    // belongs here. THROW, don't keep the current executor: keeping it would commit blocks
+    // under an executor the on-chain config did not select, making executor selection
+    // depend on node-local state — Hex nodes in a mixed network would switch while Binary
+    // nodes did not, forking the chain at the first post-switch block, and a born-binary
+    // chain would be left committing blocks its own restart refuses to replay. The two
+    // commit callbacks (LedgerStorage::onStableCheckPointCommitted and DownloadingQueue)
+    // catch the throw and stop advancing — a halt, which is exactly the behavior a node
+    // that cannot honour the on-chain config must have. There is no way back to hex
+    // (no reverse migration): a Binary chain must not switch to a hex-only lane at all.
     bool const hexOnlyLane = selected == static_cast<size_t>(ETHEREUM_EXECUTOR_VERSION) ||
                              selected >= static_cast<size_t>(OPSTACK_EXECUTOR_VERSION);
     if (hexOnlyLane &&
@@ -207,11 +212,16 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
                    "executor_version selects a hex-only executor lane, but this node's "
                    "state DB uses the binary account-table layout: the lane would name "
                    "account tables /apps/<40-hex> and read every account as absent; "
-                   "keeping the current executor. Do not switch a migrated chain to a "
-                   "hex-only lane (use the baseline executor, executor_version = 1)")
+                   "refusing the switch. A binary-layout chain must not switch to a "
+                   "hex-only lane (there is no binary->hex reverse migration)")
             << LOG_KV("requested", version) << LOG_KV("selected", selected)
             << LOG_KV("keeping", m_currentIndex.load());
-        return;
+        BOOST_THROW_EXCEPTION(
+            ExecutorVersionNotSupported() << errinfo_comment(
+                "executor_version selects a hex-only executor lane, but this node's state "
+                "DB uses the binary account-table layout; refusing to commit blocks under "
+                "an executor the on-chain config cannot be honoured with (a Binary chain "
+                "must not switch to a hex-only lane — there is no reverse migration)"));
     }
     m_currentIndex.store(static_cast<int>(selected));
 }

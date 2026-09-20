@@ -120,18 +120,23 @@ BOOST_AUTO_TEST_CASE(setVersionSelectsWiredOpSlot)
 // executor_version is a governance system config applied mid-chain WITHOUT restart, so a
 // Binary-layout node must refuse to switch INTO a hex-only lane (the Ethereum / OP
 // executors name account tables /apps/<40-hex> directly and would read every account as
-// absent). Fail-open like the unwired-slot case: keep the current executor, no throw --
-// the commit-callback callers catch-and-log. A Hex-mode node switches freely.
-BOOST_AUTO_TEST_CASE(setVersionKeepsCurrentIndexOnHexOnlyLaneInBinaryMode)
+// absent). Fail-CLOSED: setVersion throws and keeps the current index — committing blocks
+// under an executor the on-chain config did not select would make executor selection
+// depend on node-local state and fork a mixed network; the commit-callback callers turn
+// the throw into a halt. A Hex-mode node switches freely.
+BOOST_AUTO_TEST_CASE(setVersionThrowsOnHexOnlyLaneInBinaryMode)
 {
     namespace account = ledger::account;
     {
         bcos::test::ScopedNodeAddressTableMode const modeGuard(
             account::AddressTableMode::Binary);
         auto scheduler = make(true);
-        BOOST_CHECK_NO_THROW(scheduler->setVersion(ETHEREUM_EXECUTOR_VERSION, {}));
-        BOOST_CHECK_NO_THROW(scheduler->setVersion(OPSTACK_EXECUTOR_VERSION, {}));
+        BOOST_CHECK_THROW(
+            scheduler->setVersion(ETHEREUM_EXECUTOR_VERSION, {}), ExecutorVersionNotSupported);
+        BOOST_CHECK_THROW(
+            scheduler->setVersion(OPSTACK_EXECUTOR_VERSION, {}), ExecutorVersionNotSupported);
 
+        // The throw kept the current lane: nothing switched.
         scheduler->callAtBlock(nullptr, 0, {});
         BOOST_CHECK_EQUAL(slots[0]->m_callAtBlockCount, 1);  // still the initial lane
         BOOST_CHECK_EQUAL(slots[2]->m_callAtBlockCount, 0);
