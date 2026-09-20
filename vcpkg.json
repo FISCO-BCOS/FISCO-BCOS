@@ -49,6 +49,7 @@
     },
     "fmt",
     "secp256k1",
+    "replxx",
     {
       "name": "aws-sdk-cpp",
       "features": [
