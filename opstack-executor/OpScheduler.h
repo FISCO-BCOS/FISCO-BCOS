@@ -23,6 +23,7 @@
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
 #include <bcos-framework/engine/Errors.h>
+#include <bcos-framework/engine/OpTime.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/Features.h>
@@ -44,7 +45,6 @@
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/Errors.h>
 #include <bcos-ledger/mpt/MPTBuilder.h>
-#include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
@@ -153,6 +153,63 @@ public:
                 -> task::Task<void> {
                 std::apply(callback, co_await self->coCommitBlock(std::move(header)));
             }(this, std::move(header), std::move(callback)));
+    }
+
+    /// S5: engine-driven import (newPayload = InsertBlockWithoutSetHead). Executes
+    /// @p block on the parent's post-state — the committed flat plus the parent-chain
+    /// deltas (genesis-side first, type-erased; empty = parent is canonical) — and
+    /// returns the commitment-filled header plus THIS block's storage delta. Nothing
+    /// canonical is written: no prewriteBlockToBuffer, no NUMBER_2_HASH / header /
+    /// SYS_CURRENT_STATE keys, no pending slot, no continuity check, no lastExecuted /
+    /// lastCommitted movement. Receipts are attached to @p block (commitPersist's
+    /// convention) so a later canonicalize can prewrite without a second channel.
+    void importExecute(bcos::protocol::Block::Ptr block,
+        std::vector<bcos::protocol::BlockHeader::Ptr> const& parentHeaders,
+        std::shared_ptr<void> const& parentFlat,
+        std::function<void(Error::Ptr, bcos::protocol::BlockHeader::Ptr,
+            std::shared_ptr<void> blockDelta, std::shared_ptr<void> blockFlat)>
+            callback) override
+    {
+        task::syncWait([](decltype(this) self, bcos::protocol::Block::Ptr block,
+                           std::vector<bcos::protocol::BlockHeader::Ptr> const& parentHeaders,
+                           std::shared_ptr<void> const& parentFlat,
+                           std::function<void(Error::Ptr, bcos::protocol::BlockHeader::Ptr,
+                               std::shared_ptr<void>, std::shared_ptr<void>)>
+                               callback) -> task::Task<void> {
+            std::apply(callback,
+                co_await self->coImportExecute(std::move(block), parentHeaders, parentFlat));
+        }(this, std::move(block), parentHeaders, parentFlat, std::move(callback)));
+    }
+
+    /// S6 post-condition: rebuild the committed world root and compare it with the
+    /// head's announced stateRoot. Mismatch means the canonicalize batch left the
+    /// backend inconsistent with the tip pointer (the exact failure mode a stale
+    /// plane produces) — throw, so the FCU can never answer VALID on it.
+    void verifyCanonicalStateRoot(const bcos::h256& expectedStateRoot) override
+    {
+        auto view = m_multiLayerStorage->forkCommitted();
+        bcos::evm::evmstate::Storage2State<ViewType> state(view);
+        auto const root = bcos::evm::stateRootOf(state);
+        if (state.poisoned())
+        {
+            throw bcos::evm::engine::OpStorageError(
+                "canonical state-root check: state traversal poisoned: " + state.firstError());
+        }
+        if (bcos::h256{root.bytes, sizeof(root.bytes)} != expectedStateRoot)
+        {
+            throw bcos::evm::OpConsensusError(
+                "canonical state-root check: SYS_CURRENT_STATE state does not match the head");
+        }
+    }
+
+    /// S6: the engine's SetCanonical merged the imported chain through this
+    /// scheduler's storage; move the continuity watermarks to the new tip.
+    void canonicalizedTo(bcos::protocol::BlockNumber number) override
+    {
+        m_lastCommittedBlockNumber.store(number);
+        m_lastExecutedBlockNumber.store(number);
+        OP_SCHEDULER_LOG(INFO) << "Canonicalized to " << number
+                               << " (imported chain merged by the engine)";
     }
 
     void status(
@@ -432,20 +489,37 @@ public:
     }
 
     /// ledger may be null (execute only). ioServicePool is required (SchedulerSerialImpl GC).
+    /// Release-line shorthand ctor: [op_fork_timestamps] genesis schedule (jovian_time /
+    /// karst_time) converted to the canonical schedule via fromLedgerSchedule.
     OpScheduler(bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory,
         bcos::crypto::Hash::Ptr hashImpl, uint64_t chainId,
         bcos::ledger::OpForkSchedule forkSchedule, bcos::protocol::BlockFactory::Ptr blockFactory,
         MultiLayerStorage& multiLayerStorage, bcos::ledger::LedgerInterface::Ptr ledger,
         bcos::IOServicePool::Ptr ioServicePool)
+      : OpScheduler(std::move(receiptFactory), std::move(hashImpl), chainId,
+            std::make_shared<const bcos::evm::opstack::OpForkSchedule>(
+                bcos::evm::opstack::OpForkSchedule::fromLedgerSchedule(forkSchedule)),
+            std::move(blockFactory), multiLayerStorage, std::move(ledger), std::move(ioServicePool))
+    {}
+
+    OpScheduler(bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory,
+        bcos::crypto::Hash::Ptr hashImpl, uint64_t chainId,
+        std::shared_ptr<const bcos::evm::opstack::OpForkSchedule> schedule,
+        bcos::protocol::BlockFactory::Ptr blockFactory, MultiLayerStorage& multiLayerStorage,
+        bcos::ledger::LedgerInterface::Ptr ledger, bcos::IOServicePool::Ptr ioServicePool)
       : m_receiptFactory(std::move(receiptFactory)),
         m_hashImpl(std::move(hashImpl)),
         m_chainId(chainId),
-        m_forkSchedule(forkSchedule),
+        m_schedule(std::move(schedule)),
         m_multiLayerStorage(&multiLayerStorage),
         m_blockFactory(std::move(blockFactory)),
         m_ledger(std::move(ledger)),
         m_ioServicePool(std::move(ioServicePool))
     {
+        if (!m_schedule)
+        {
+            throw std::invalid_argument("OpScheduler: null fork schedule");
+        }
         // execute() tolerates a null ledger; commit does not (see coCommitBlock).
         // Default no-op notifiers. An empty std::function would throw inside the async task.
         m_blockNumberNotifier = [](bcos::protocol::BlockNumber) {};
@@ -580,8 +654,17 @@ private:
                 auto tipView = m_multiLayerStorage->forkCommitted();
                 auto const canonicalAtHeight =
                     co_await ledger::getBlockHash(tipView, number, ledger::fromStorage);
+                // Identity comparisons in this file must use EthBlockHeader::computeHash
+                // directly, NOT protocol::canonicalBlockHash: this scheduler only ever sees
+                // OP-Stack blocks, and pre-Canyon rungs (Regolith/Genesis) carry no
+                // withdrawalsRoot, so isOpEthereumBlock is false for them and
+                // canonicalBlockHash falls back to the header's stored (tars) hash — which is
+                // both the wrong identity (op-geth blocks are identified by keccak256(rlp))
+                // and a throw for freshly rebuilt headers whose dataHash was never stamped.
+                // The release line's canonicalBlockHash cutover never met a pre-Canyon header
+                // (its flows start post-Canyon); our nine-fork ladder does.
                 if (canonicalAtHeight.has_value() &&
-                    *canonicalAtHeight == bcos::protocol::canonicalBlockHash(*blockHeader))
+                    *canonicalAtHeight == bcos::protocol::EthBlockHeader::computeHash(*blockHeader))
                 {
                     OP_SCHEDULER_LOG(INFO)
                         << "Block " << number
@@ -645,14 +728,19 @@ private:
             namespace engine = bcos::evm::engine;
             if (verify)
             {
-                if (executedHeader->withdrawalsRoot().has_value() !=
-                    blockHeader->withdrawalsRoot().has_value())
+                // Compare the projected values, matching engine::commitmentsOfHeader: below
+                // Canyon the announced header carries no withdrawalsRoot while finishExecute
+                // always writes the seal's zero sentinel, so absent and the zero hash are the
+                // same header there.
+                if (executedHeader->withdrawalsRoot().value_or(bcos::h256{}) !=
+                    blockHeader->withdrawalsRoot().value_or(bcos::h256{}))
                 {
                     throw bcos::evm::OpConsensusError(
                         "OpScheduler: commitment mismatch on field withdrawalsRoot");
                 }
-                if (auto mismatch = engine::mismatchedFieldOf(
-                        headerCommitments(*executedHeader), headerCommitments(*blockHeader)))
+                if (auto mismatch =
+                        engine::mismatchedFieldOf(engine::commitmentsOfHeader(*executedHeader),
+                            engine::commitmentsOfHeader(*blockHeader)))
                 {
                     throw bcos::evm::OpConsensusError(
                         "OpScheduler: commitment mismatch on field " + *mismatch);
@@ -784,9 +872,9 @@ private:
             }
 
             namespace engine = bcos::evm::engine;
-            if (auto mismatch =
-                    engine::mismatchedFieldOf(headerCommitments(*m_lastProbe->executedHeader),
-                        headerCommitments(*blockHeader)))
+            if (auto mismatch = engine::mismatchedFieldOf(
+                    engine::commitmentsOfHeader(*m_lastProbe->executedHeader),
+                    engine::commitmentsOfHeader(*blockHeader)))
             {
                 auto message =
                     fmt::format("adoptProbeAsPending: commitment mismatch on field {}", *mismatch);
@@ -795,8 +883,10 @@ private:
                 co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
                     nullptr, false};
             }
-            auto const announcedBlockHash = bcos::protocol::canonicalBlockHash(*blockHeader);
-            auto const probeHash = bcos::protocol::canonicalBlockHash(*m_lastProbe->executedHeader);
+            auto const announcedBlockHash =
+                bcos::protocol::EthBlockHeader::computeHash(*blockHeader);
+            auto const probeHash =
+                bcos::protocol::EthBlockHeader::computeHash(*m_lastProbe->executedHeader);
             if (probeHash != announcedBlockHash)
             {
                 auto message = std::string{
@@ -885,8 +975,8 @@ private:
             // Compare the executed headers directly — announcedBlockHash is the CL hash of the
             // announced header and cannot be recomputed from the executed header (engine wiring
             // passes the executed header back into commitBlock).
-            if (bcos::protocol::canonicalBlockHash(*header) !=
-                bcos::protocol::canonicalBlockHash(*pending.executedHeader))
+            if (bcos::protocol::EthBlockHeader::computeHash(*header) !=
+                bcos::protocol::EthBlockHeader::computeHash(*pending.executedHeader))
             {
                 auto message = fmt::format(
                     "Commit block {} does not match the announced block being committed", number);
@@ -945,6 +1035,212 @@ private:
         }
     }
 
+    task::Task<std::tuple<Error::Ptr, protocol::BlockHeader::Ptr, std::shared_ptr<void>,
+        std::shared_ptr<void>>>
+    coImportExecute(protocol::Block::Ptr block,
+        std::vector<bcos::protocol::BlockHeader::Ptr> const& parentHeaders,
+        std::shared_ptr<void> const& parentFlat)
+    {
+        try
+        {
+            auto blockHeader = block->blockHeader();
+            auto const number = blockHeader->number();
+            OP_SCHEDULER_LOG(INFO) << "Import execute: " << number;
+
+            // Same pair as coExecuteBlock: imports must not overlap an execute (shared
+            // m_executeMutex) or a commit's mergeBackStorage (m_commitMutex). Unlike
+            // coExecuteBlock: NO pending-slot classification, NO continuity check, NO
+            // fast path, NO lastExecuted/lastCommitted movement, NO pushView.
+            std::unique_lock executeLock(m_executeMutex, std::try_to_lock);
+            if (!executeLock.owns_lock())
+            {
+                auto message = std::string{"Another block is executing!"};
+                OP_SCHEDULER_LOG(INFO) << message;
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
+                    nullptr, nullptr, nullptr};
+            }
+            std::unique_lock commitLock(m_commitMutex, std::try_to_lock);
+            if (!commitLock.owns_lock())
+            {
+                auto message = std::string{"Another block is committing!"};
+                OP_SCHEDULER_LOG(INFO) << message;
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
+                    nullptr, nullptr, nullptr};
+            }
+
+            co_await hydrateCommittedTip();
+
+            // Parent post-state plane (design §4.4.2, revised by the Task 7 sibling
+            // work): when the parent plane IS the committed flat (parent == canonical
+            // tip) execute straight on forkCommitted. Otherwise the parent's
+            // materialized post-state flat REPLACES the plane: erase every committed
+            // row (logical tombstones in the fresh mutable layer), then re-materialize
+            // the parent flat — the block executes exactly on its parent's post-state,
+            // never on a tip plane that belongs to a different fork branch.
+            auto view = m_multiLayerStorage->forkCommitted();
+            view.newMutable();
+            auto parentFlatStorage =
+                parentFlat ? std::static_pointer_cast<typename MultiLayerStorage::MutableStorage>(
+                                 parentFlat) :
+                             nullptr;
+            if (parentFlatStorage != nullptr)
+            {
+                // Collection iterator scoped before the mutation loop: MemoryStorage's
+                // range() keeps the storage lock for the iterator's lifetime, so
+                // removing from the same storage while it is alive self-deadlocks.
+                std::vector<executor_v1::StateKey> doomed;
+                {
+                    auto viewIterator = co_await view.range();
+                    while (true)
+                    {
+                        auto item = co_await viewIterator.next();
+                        if (!item.has_value())
+                        {
+                            break;
+                        }
+                        doomed.push_back(executor_v1::StateKey(std::get<0>(*item).m_tableAndKey));
+                    }
+                }
+                // Batch (review finding F31): one removeSome for the whole plane instead
+                // of one coroutine round-trip per key. Logical-tombstone semantics are
+                // identical — removeSome(keys) defaults to the same logical deletion the
+                // per-key removeOne used.
+                co_await storage2::removeSome(view, doomed);
+                std::vector<std::pair<executor_v1::StateKey, bcos::storage::Entry>> restore;
+                auto flatIterator = co_await parentFlatStorage->range();
+                while (true)
+                {
+                    auto item = co_await flatIterator.next();
+                    if (!item.has_value())
+                    {
+                        break;
+                    }
+                    auto& [stateKeyRef, valueVariant] = *item;
+                    if (auto* entry = std::get_if<bcos::storage::Entry>(&valueVariant))
+                    {
+                        restore.emplace_back(
+                            executor_v1::StateKey(stateKeyRef.m_tableAndKey), std::move(*entry));
+                    }
+                }
+                co_await storage2::writeSome(view, std::move(restore));
+            }
+
+            // BLOCKHASH and parent-header reads walk the PAYLOAD parent chain
+            // (design §4.4.3): seed each ancestor's canonical keys into this view so
+            // RecentBlockHashes / getBlockData resolve them. The seeds land in this
+            // block's own delta — at canonicalize the same keys are rewritten with
+            // identical values (idempotent), and an abandoned chain merges nothing.
+            for (auto const& parentHeader : parentHeaders)
+            {
+                auto const parentHash = bcos::protocol::EthBlockHeader::computeHash(*parentHeader);
+                bcos::storage::Entry hashEntry;
+                hashEntry.set(parentHash.asBytes());
+                co_await storage2::writeOne(view,
+                    executor_v1::StateKey{
+                        ledger::SYS_NUMBER_2_HASH, std::to_string(parentHeader->number())},
+                    std::move(hashEntry));
+                bcos::bytes encodedParent;
+                parentHeader->encode(encodedParent);
+                bcos::storage::Entry headerEntry;
+                headerEntry.set(std::move(encodedParent));
+                co_await storage2::writeOne(view,
+                    executor_v1::StateKey{
+                        ledger::SYS_NUMBER_2_BLOCK_HEADER, std::to_string(parentHeader->number())},
+                    std::move(headerEntry));
+            }
+
+            auto transactions = co_await getTransactions(*block, view);
+            if (std::any_of(transactions.begin(), transactions.end(),
+                    [](auto const& tx) { return tx == nullptr; }))
+            {
+                auto message =
+                    fmt::format("Not found transactions in txpool for import block: {}", number);
+                OP_SCHEDULER_LOG(ERROR) << message;
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlocks, message),
+                    nullptr, nullptr, nullptr};
+            }
+
+            auto ledgerConfig = co_await loadLedgerConfig(view, number);
+            // Imports never persist trie nodes incrementally: that path reads the parent
+            // header BY NUMBER, which cannot see imported (un-canonicalized) parents.
+            // Canonicalize owns every canonical-table write (design §4.2 SetCanonical).
+            auto outcome = co_await execute(
+                view, *blockHeader, transactions, *ledgerConfig, /*persistTrieNodes=*/false);
+
+            bool sysBlock = false;
+            auto executedHeader = co_await finishExecute(
+                view, outcome, *blockHeader, *block, transactions, *ledgerConfig, sysBlock);
+
+            // Receipts ride on the block (commitPersist's convention): a later
+            // canonicalize prewrites them without another execution channel.
+            block->clearReceipts();
+            for (auto const& r : outcome.result.receipts)
+            {
+                block->appendReceipt(r);
+            }
+
+            // Materialize the block's FULL post-state (S6 switch support): a plain
+            // MutableStorage copy of every visible (key, value) on the view. This MUST
+            // run while the view still owns its mutable layer — that layer holds the
+            // parent-plane restore, the ancestor seeds and this block's own execution
+            // writes, so materializing after the move below would snapshot the stale
+            // committed plane instead of the block's post-state (and every chained
+            // import would then execute against the wrong world). Memory cost O(state)
+            // per imported block; the design's production alternative is §4.4.5 MPT
+            // replay.
+            auto blockFlat = std::make_shared<typename MultiLayerStorage::MutableStorage>();
+            {
+                // Batch (F31): collect the live rows, then one writeSome into the flat —
+                // one task, no per-key coroutine round-trips.
+                std::vector<std::pair<executor_v1::StateKey, bcos::storage::Entry>> liveRows;
+                auto viewIterator = co_await view.range();
+                while (true)
+                {
+                    auto item = co_await viewIterator.next();
+                    if (!item.has_value())
+                    {
+                        break;
+                    }
+                    auto& [stateKeyRef, valueVariant] = *item;
+                    // value variant: Entry | DELETED — deleted rows are skipped (a flat
+                    // snapshot only carries live values).
+                    if (auto* entry = std::get_if<bcos::storage::Entry>(&valueVariant))
+                    {
+                        liveRows.emplace_back(
+                            executor_v1::StateKey(stateKeyRef.m_tableAndKey), std::move(*entry));
+                    }
+                }
+                co_await storage2::writeSome(*blockFlat, std::move(liveRows));
+            }
+
+            // The view's fresh mutable layer IS this block's delta. The view itself is
+            // never pushed: it dies here, the delta survives through the shared_ptr.
+            auto blockDelta = std::shared_ptr<void>(std::move(view.m_mutableStorage));
+
+            co_return {
+                nullptr, std::move(executedHeader), std::move(blockDelta), std::move(blockFlat)};
+        }
+        catch (std::exception& e)
+        {
+            auto message =
+                fmt::format("Import execute failed! {}", boost::diagnostic_information(e));
+            OP_SCHEDULER_LOG(ERROR) << message;
+            auto error = BCOS_ERROR_PTR(classifyException(std::current_exception()), message);
+            attachOpRejectInfo(*error, std::current_exception());
+            co_return {std::move(error), nullptr, nullptr, nullptr};
+        }
+        catch (...)
+        {
+            auto message = std::string{"Import execute failed! ("} +
+                           describeException(std::current_exception()) + ")";
+            OP_SCHEDULER_LOG(ERROR) << message;
+            auto error =
+                BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message);
+            attachOpRejectInfo(*error, std::current_exception());
+            co_return {std::move(error), nullptr, nullptr, nullptr};
+        }
+    }
+
     /// Hit only when height and announced hash both match a verified pending.
     std::optional<std::pair<protocol::BlockHeader::Ptr, bool>> fastPathHit(
         protocol::BlockNumber number, protocol::BlockHeader const& announcedHeader)
@@ -954,7 +1250,8 @@ private:
         {
             return std::nullopt;
         }
-        if (m_pending->announcedBlockHash != bcos::protocol::canonicalBlockHash(announcedHeader))
+        if (m_pending->announcedBlockHash !=
+            bcos::protocol::EthBlockHeader::computeHash(announcedHeader))
         {
             OP_SCHEDULER_LOG(INFO) << "Fast-path cache holds a different block at height " << number
                                    << "; ignoring cache and re-executing";
@@ -1007,10 +1304,11 @@ private:
         try
         {
             // The block being executed decides its own fork (op-node keys IsJovian/IsKarst on
-            // the L2 block's own timestamp); detail::forkTimestampSec is the single ms->s
+            // the L2 block's own timestamp); unixSecondsFromInternalMillis is the single ms->s
             // conversion.
-            const auto& cfg =
-                op::configAt(m_forkSchedule, detail::forkTimestampSec(header.timestamp()));
+            auto const tsSec = bcos::engine::unixSecondsFromInternalMillis(
+                static_cast<uint64_t>(header.timestamp()));
+            const auto& cfg = m_schedule->configAt(tsSec);
 
             // Split deposits from other typed envelopes.
             std::vector<op::DepositTx> deposits;
@@ -1059,8 +1357,36 @@ private:
             std::optional<std::string> hashErr;
             std::optional<uint16_t> daFootprintGasScalar;
             std::optional<detail::RecentBlockHashes<ViewType>> hashes;
+            // Parent timestamp is only needed for Q5 (Jovian+ activation windows).
+            // Isthmus-only schedules have an empty jovianAndLaterActivations() list.
+            uint64_t parentTsSec = 0;
+            if (header.number() > 0 && !m_schedule->jovianAndLaterActivations().empty())
+            {
+                try
+                {
+                    auto parentBlock = co_await ledger::getBlockData(
+                        view, header.number() - 1, ledger::HEADER, *m_blockFactory);
+                    if (!parentBlock || !parentBlock->blockHeader())
+                    {
+                        throw bcos::evm::engine::OpStorageError(
+                            "OpScheduler: parent block header is missing from storage");
+                    }
+                    parentTsSec = bcos::engine::unixSecondsFromInternalMillis(
+                        static_cast<uint64_t>(parentBlock->blockHeader()->timestamp()));
+                }
+                catch (const bcos::evm::engine::OpStorageError&)
+                {
+                    throw;
+                }
+                catch (const std::exception& e)
+                {
+                    throw bcos::evm::engine::OpStorageError(
+                        std::string("OpScheduler: parent block header is missing from storage: ") +
+                        e.what());
+                }
+            }
             bcos::evm::engine::preBlockOpSteps(view, header, cfg, rawTxBytes, deposits, executor,
-                hashes, hashErr, daFootprintGasScalar);
+                hashes, hashErr, daFootprintGasScalar, m_schedule.get(), parentTsSec);
 
             // Fee params load on the first normal tx. blockGasLeft is narrowed from gasLimit.
             OpBlockExecutionContext ctx{.fee = {},
@@ -1097,6 +1423,15 @@ private:
                 bcos::scheduler_v1::ViewNodeStorage<ViewType> nodeStorage(view);
                 auto parentBlock = co_await ledger::getBlockData(
                     view, header.number() - 1, ledger::HEADER, *m_blockFactory);
+                if (!parentBlock)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        bcos::ledger::mpt::MPTInvariantViolation{}
+                        << bcos::errinfo_comment("op block: parent header missing at " +
+                                                 std::to_string(header.number() - 1) +
+                                                 "; cannot persist trie nodes without the "
+                                                 "parent state root"));
+                }
                 auto const parentRoot = parentBlock->blockHeader()->stateRoot();
                 try
                 {
@@ -1166,7 +1501,8 @@ private:
 
         // Commit keys on the announced payload hash; finishExecute() mirrors announced
         // metadata + execution commitments onto executedHeader, which stays out of this identity.
-        bcos::crypto::HashType announcedBlockHash = bcos::protocol::canonicalBlockHash(header);
+        bcos::crypto::HashType announcedBlockHash =
+            bcos::protocol::EthBlockHeader::computeHash(header);
         co_return ExecuteOutcome{std::move(result), announcedBlockHash};
     }
 
@@ -1212,8 +1548,8 @@ private:
         {
             // Seal omitted blobGasUsed (pre-Jovian): the OP spec fixes the field at 0 here, so a
             // non-zero announcement is an invalid payload. Reject it instead of copying — the
-            // copy feeds headerCommitments, and comparing the announced value against its own
-            // copy makes that verify arm self-referential (always pass).
+            // copy feeds engine::commitmentsOfHeader, and comparing the announced value against
+            // its own copy makes that verify arm self-referential (always pass).
             if (*announced != bcos::u256{0})
                 throw bcos::evm::OpConsensusError(
                     "OpScheduler: pre-Jovian payload must announce blobGasUsed=0");
@@ -1438,27 +1774,6 @@ public:
     }
 
 private:
-    /// Commitment fields used to compare executed vs announced headers.
-    static bcos::evm::engine::OpBlockCommitments headerCommitments(protocol::BlockHeader const& h)
-    {
-        namespace detail = bcos::evm::engine::detail;
-        auto bloom = h.logsBloom();
-        bcos::h2048 logsBloom(reinterpret_cast<const bcos::byte*>(bloom.data()), bloom.size());
-        std::optional<uint64_t> blobGasUsed;
-        if (auto bg = h.blobGasUsed())
-            blobGasUsed = detail::narrowU256ToU64(*bg, "headerCommitments blobGasUsed");
-        return bcos::evm::engine::OpBlockCommitments{
-            .receiptsRoot = h.receiptsRoot(),
-            .logsBloom = logsBloom,
-            .withdrawalsRoot = h.withdrawalsRoot().value_or(bcos::h256{}),
-            .stateRoot = h.stateRoot(),
-            .gasUsed = h.gasUsed(),
-            .txRoot = h.txsRoot(),
-            .blobGasUsed = blobGasUsed,
-            .requestsHash = h.requestsHash(),
-        };
-    }
-
     /// Strict hex-address parse for getCode/getABI.
     static evmc_address parseAddress(std::string_view view)
     {
@@ -1481,8 +1796,8 @@ private:
         namespace detail = bcos::evm::engine::detail;
 
         // The block the call is evaluated AGAINST decides the fork.
-        const auto& cfg =
-            op::configAt(m_forkSchedule, detail::forkTimestampSec(header.timestamp()));
+        const auto& cfg = m_schedule->configAt(
+            bcos::engine::unixSecondsFromInternalMillis(static_cast<uint64_t>(header.timestamp())));
         bcos::evm::evmstate::Storage2State<AnyView> stateView(view);
         auto fee = op::loadOpFeeParams(stateView);
         // Fail if Storage2State poisoned the fee-param read.
@@ -1564,8 +1879,8 @@ private:
         auto const& header = *blockHeader;
 
         // The block the call is evaluated AGAINST decides the fork.
-        const auto& cfg = op::configAt(
-            m_forkSchedule, bcos::evm::engine::detail::forkTimestampSec(header.timestamp()));
+        const auto& cfg = m_schedule->configAt(
+            bcos::engine::unixSecondsFromInternalMillis(static_cast<uint64_t>(header.timestamp())));
 
         auto ledgerConfig = std::make_shared<bcos::ledger::LedgerConfig>();
         ledgerConfig->setBlockNumber(blockNumber);
@@ -1645,8 +1960,8 @@ private:
         }
 
         // The block the call is evaluated AGAINST decides the fork.
-        const auto& cfg = op::configAt(
-            m_forkSchedule, bcos::evm::engine::detail::forkTimestampSec(header.timestamp()));
+        const auto& cfg = m_schedule->configAt(
+            bcos::engine::unixSecondsFromInternalMillis(static_cast<uint64_t>(header.timestamp())));
 
         auto ledgerConfig = std::make_shared<bcos::ledger::LedgerConfig>();
         ledgerConfig->setBlockNumber(blockNumber);
@@ -1667,7 +1982,7 @@ private:
     bcos::protocol::TransactionReceiptFactory::Ptr m_receiptFactory;
     bcos::crypto::Hash::Ptr m_hashImpl;
     uint64_t m_chainId;
-    bcos::ledger::OpForkSchedule m_forkSchedule;
+    std::shared_ptr<const bcos::evm::opstack::OpForkSchedule> m_schedule;
 
     MultiLayerStorage* m_multiLayerStorage = nullptr;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;

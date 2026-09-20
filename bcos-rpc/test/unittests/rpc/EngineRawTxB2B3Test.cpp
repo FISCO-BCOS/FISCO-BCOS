@@ -331,7 +331,12 @@ BOOST_AUTO_TEST_CASE(depositJsonMatchesGethShape)
     combineDepositTxResponse(systemResult, systemDeposit);
     BOOST_CHECK_EQUAL(systemResult["isSystemTx"].asBool(), true);
     BOOST_CHECK(systemResult["to"].isNull());
-    BOOST_CHECK(!systemResult.isMember("mint"));
+    // op-geth's RLP decoder always materializes Mint as a non-nil big.Int (0x80 -> big.Int(0)),
+    // and its RPC emits the field whenever the pointer is non-nil, so an L1-attributes deposit
+    // (empty mint item) is reported as "mint":"0x0" -- never omitted. The internal FISCO decoder
+    // still models the empty item as nullopt, so the shaper must treat nullopt as zero.
+    BOOST_CHECK(systemResult.isMember("mint"));
+    BOOST_CHECK_EQUAL(systemResult["mint"].asString(), "0x0");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

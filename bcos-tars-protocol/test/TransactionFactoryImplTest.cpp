@@ -397,6 +397,43 @@ BOOST_AUTO_TEST_CASE(depositMetadataAccessors)
     BOOST_CHECK(!forgedBcos->isDepositTx());
 }
 
+// U9-F4: TransactionImpl::size() must count the variable-length EIP-7702 authorizationList
+// (address/signer/r/s strings) and EIP-4844 blobVersionedHashes payloads, consistent with how
+// the other variable-length fields (accessList, signature, extraTransactionBytes) are counted.
+// Without this, a 0x04 SetCode tx makes BlockResponse["size"] under-report. 0x04 requires the
+// Prague revision (OP Isthmus+), so it is config-gated; blobVersionedHashes is defensive only
+// (0x03 is refused at admission). Structural assertion: size() >= the summed payload lengths
+// (the fixed scalars add more, they must not be subtracted).
+BOOST_AUTO_TEST_CASE(sizeCountsAuthorizationListAndBlobVersionedHashes)
+{
+    auto tx = std::make_shared<TransactionImpl>();
+    auto& inner = tx->mutableInner();
+    inner.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    inner.web3TypedTxKind = static_cast<tars::Char>(4);  // EIP-7702 SetCode
+
+    bcostars::AuthorizationEntry auth;
+    auth.chainID = 1;
+    auth.address = std::string(40, 'a');  // 20-byte address, hex without 0x (tars form)
+    auth.nonce = 7;
+    auth.signer = std::string(40, 'b');
+    auth.r = "0x" + std::string(64, 'c');
+    auth.s = "0x" + std::string(64, 'd');
+    auth.v = 1;
+    inner.data.authorizationList.push_back(auth);
+
+    bcostars::AuthorizationEntry auth2 = auth;
+    auth2.address = std::string(40, 'e');
+    inner.data.authorizationList.push_back(auth2);
+
+    inner.data.blobVersionedHashes.push_back(std::vector<tars::Char>(32, 0x11));
+    inner.data.blobVersionedHashes.push_back(std::vector<tars::Char>(32, 0x22));
+
+    std::size_t const authBytes =
+        2 * (auth.address.size() + auth.signer.size() + auth.r.size() + auth.s.size());
+    std::size_t const blobBytes = 64;
+    BOOST_CHECK_GE(tx->size(), authBytes + blobBytes);
+}
+
 // Deposit hash: the canonical txHash of a 0x7e tx is keccak256 of the full envelope (type byte
 // + RLP fields) — op-geth DepositTx.Hash() / op-reth TxDeposit::tx_hash(). calculateHash must
 // handle the deposit branch (deposits carry no signature, so the normal reassemble path would

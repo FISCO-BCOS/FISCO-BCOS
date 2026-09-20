@@ -8,6 +8,7 @@
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include <bcos-framework/protocol/TxGasModel.h>
 
 #include <boost/test/unit_test.hpp>
 using namespace bcos;

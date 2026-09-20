@@ -12,6 +12,7 @@
 
 #include <bcos-evm/test/opstack/OpTestReceiptFactory.h>
 
+#include <bcos-evm/opstack/OpForkSchedule.h>
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpDepositEncode.h>
 #include <opstack-executor/OpstackExecutor.h>
@@ -28,10 +29,13 @@
 #include <boost/test/unit_test.hpp>
 #include <evmc/evmc.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <optional>
+#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 using bcos::evm::OpConsensusError;
@@ -176,12 +180,13 @@ struct Fixture
     std::optional<engine::detail::RecentBlockHashes<MutableStorage>> hashes;
     std::optional<std::string> hashErr;
     std::optional<uint16_t> scalar;
+    op::OpForkSchedule schedule{op::OpForkSchedule::legacy(false)};
 
     void run(const op::OpForkConfig& cfg, const std::vector<bcos::bytes>& rawTxBytes,
         const std::vector<op::DepositTx>& deposits)
     {
-        engine::preBlockOpSteps(
-            storage, header, cfg, rawTxBytes, deposits, executor, hashes, hashErr, scalar);
+        engine::preBlockOpSteps(storage, header, cfg, rawTxBytes, deposits, executor, hashes,
+            hashErr, scalar, &schedule, /*parentTsSec=*/0);
     }
 };
 
@@ -190,6 +195,41 @@ const bcos::bytes kTypedEnvelope{bcos::byte{0x02}, bcos::byte{0x01}};
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(PreBlockOpStepsTest)
+
+BOOST_AUTO_TEST_CASE(RejectsNullSchedule)
+{
+    Fixture f;
+    auto dep = depositWithData(l1AttributesData(op::IsthmusL1AttributesLen));
+    BOOST_CHECK_EXCEPTION(
+        engine::preBlockOpSteps(f.storage, f.header, op::isthmusConfig(),
+            std::vector<bcos::bytes>{kDepositEnvelope}, std::vector<op::DepositTx>{dep}, f.executor,
+            f.hashes, f.hashErr, f.scalar, nullptr, /*parentTsSec=*/0),
+        std::invalid_argument, [](std::invalid_argument const& e) {
+            return std::string_view{e.what()} == "preBlockOpSteps: OpForkSchedule is required";
+        });
+}
+
+BOOST_AUTO_TEST_CASE(ProcessOpBlockRejectsNullSchedule)
+{
+    MutableStorage storage;
+    bcos::evm::evmstate::Storage2State<MutableStorage> view(storage);
+    evmone::state::BlockInfo block;
+    block.gas_limit = 30'000'000;
+    bcos::executor_v1::opstack::NullBlockHashes hashes;
+    auto vm = evmc::VM{evmc_create_evmone()};
+    op::DepositTx dep{};
+    dep.gas_limit = 1'000'000;
+    op::OpBlockTx depTx;
+    depTx.tx = dep;
+    std::vector<op::OpBlockTx> const txs{depTx};
+    BOOST_CHECK_EXCEPTION((void)op::processOpBlock(
+                              view, block, hashes, txs, op::isthmusConfig(), vm,
+                              /*chainId=*/10, bcos::evm::opstack::testutil::kOpTestReceiptFactory,
+                              [](const evmone::state::StateDiff&) {}, nullptr, /*parentTsSec=*/0),
+        std::invalid_argument, [](std::invalid_argument const& e) {
+            return std::string_view{e.what()} == "processOpBlock: OpForkSchedule is required";
+        });
+}
 
 BOOST_AUTO_TEST_CASE(RejectsEmptyBlock)
 {
@@ -232,14 +272,19 @@ BOOST_AUTO_TEST_CASE(RejectsMissingDeposits)
         });
 }
 
-BOOST_AUTO_TEST_CASE(JovianActivationRejectsTrailingNonDeposit)
+BOOST_AUTO_TEST_CASE(JovianRejectsUserTxOnIsthmusLenAttrs)
 {
     Fixture f;
-    // 176B attributes = the Jovian activation block, which must be deposits-only.
+    // Fixture schedule is Isthmus-only (no Q5 window), so the timestamp rule cannot fire:
+    // the 176B attributes length alone makes this a deposits-only block in op-geth
+    // (CalcDAFootprint), and the trailing typed envelope is the last transaction.
     auto dep = depositWithData(l1AttributesData(op::IsthmusL1AttributesLen));
-    BOOST_CHECK_THROW(
+    BOOST_CHECK_EXCEPTION(
         f.run(op::jovianConfig(), {kDepositEnvelope, kTypedEnvelope}, {dep, op::DepositTx{}}),
-        OpConsensusError);
+        OpConsensusError, [](OpConsensusError const& e) {
+            return std::string(e.what()).find("unexpected non-deposit transactions") !=
+                   std::string::npos;
+        });
 }
 
 BOOST_AUTO_TEST_CASE(JovianRejectsDataShorterThan178)
@@ -328,7 +373,7 @@ BOOST_AUTO_TEST_CASE(PrePoisonedSharedSlotFailsAtSystemCallStep)
     const std::vector<bcos::bytes> rawTxs{kDepositEnvelope};
     const std::vector<op::DepositTx> deps{dep};
     BOOST_CHECK_THROW(engine::preBlockOpSteps(f.storage, f.header, op::jovianConfig(), rawTxs, deps,
-                          executor, f.hashes, f.hashErr, f.scalar),
+                          executor, f.hashes, f.hashErr, f.scalar, &f.schedule, /*parentTsSec=*/0),
         engine::OpStorageError);
 }
 
@@ -348,12 +393,15 @@ BOOST_AUTO_TEST_CASE(ProcessOpBlockNormalizesWritebackFailure)
     bcos::executor_v1::opstack::NullBlockHashes hashes;
     auto vm = evmc::VM{evmc_create_evmone()};
 
-    BOOST_CHECK_EXCEPTION(
-        op::processOpBlock(view, block, hashes, /*txs=*/{}, op::jovianConfig(), vm,
-            /*chainId=*/10, bcos::evm::opstack::testutil::kOpTestReceiptFactory,
-            [](const evmone::state::StateDiff&) {
-                throw std::runtime_error("storage fault injected for the write-back test");
-            }),
+    auto const schedule = op::OpForkSchedule::legacy(false);
+    BOOST_CHECK_EXCEPTION(op::processOpBlock(
+                              view, block, hashes, /*txs=*/{}, op::jovianConfig(), vm,
+                              /*chainId=*/10, bcos::evm::opstack::testutil::kOpTestReceiptFactory,
+                              [](const evmone::state::StateDiff&) {
+                                  throw std::runtime_error(
+                                      "storage fault injected for the write-back test");
+                              },
+                              &schedule, /*parentTsSec=*/0),
         bcos::evm::engine::OpStorageError, [](bcos::evm::engine::OpStorageError const& e) {
             return std::string(e.what()).find("storage write-back failed") != std::string::npos;
         });
@@ -432,9 +480,11 @@ BOOST_AUTO_TEST_CASE(ProcessOpBlockCapacityFaultIsNotAnEvictableCulprit)
         normalTx.tx = tx;
         normalTx.signedEnvelope = envelope;
         std::vector<op::OpBlockTx> const txs{depTx, normalTx};
-        (void)op::processOpBlock(view, block, hashes, txs, op::isthmusConfig(), vm, /*chainId=*/10,
+        auto const schedule = op::OpForkSchedule::legacy(false);
+        (void)op::processOpBlock(
+            view, block, hashes, txs, op::isthmusConfig(), vm, /*chainId=*/10,
             bcos::evm::opstack::testutil::kOpTestReceiptFactory,
-            [](const evmone::state::StateDiff&) {});
+            [](const evmone::state::StateDiff&) {}, &schedule, /*parentTsSec=*/0);
         BOOST_FAIL("a tx over the remaining block gas must void the block");
     }
     catch (bcos::evm::OpConsensusError const& e)
@@ -592,8 +642,10 @@ BOOST_AUTO_TEST_CASE(ProcessOpBlockTagsRuntimeErrorWithCulpritHash)
         bcos::evm::opstack::testutil::kOpTestReceiptFactory, 2);
     try
     {
-        (void)op::processOpBlock(view, block, hashes, txs, op::isthmusConfig(), vm, /*chainId=*/10,
-            factory, [](const evmone::state::StateDiff&) {});
+        auto const schedule = op::OpForkSchedule::legacy(false);
+        (void)op::processOpBlock(
+            view, block, hashes, txs, op::isthmusConfig(), vm, /*chainId=*/10, factory,
+            [](const evmone::state::StateDiff&) {}, &schedule, /*parentTsSec=*/0);
         BOOST_FAIL("an injected receipt fault must void the block");
     }
     catch (bcos::evm::OpConsensusError const& e)
@@ -606,6 +658,207 @@ BOOST_AUTO_TEST_CASE(ProcessOpBlockTagsRuntimeErrorWithCulpritHash)
             std::string(e.what()).find("transaction execution failed") != std::string::npos,
             "unexpected reject: " << e.what());
     }
+}
+
+BOOST_AUTO_TEST_CASE(ProcessOpBlockKarstActivationRejectsUserTx)
+{
+    // 178B Jovian attrs: the 176B heuristic cannot be what rejects. Q5 must.
+    MutableStorage storage;
+    bcos::evm::evmstate::Storage2State<MutableStorage> view(storage);
+    evmone::state::BlockInfo block;
+    block.gas_limit = 30'000'000;
+    block.timestamp = 100;
+    bcos::executor_v1::opstack::NullBlockHashes hashes;
+    auto vm = evmc::VM{evmc_create_evmone()};
+    auto schedule = op::OpForkSchedule::parse("0:jovian,100:karst");
+
+    evmc::bytes data(op::JovianL1AttributesLen, uint8_t{0});
+    std::memcpy(
+        data.data(), op::JovianL1AttributesSelector.data(), op::JovianL1AttributesSelector.size());
+    op::DepositTx dep{};
+    dep.gas_limit = 1'000'000;
+    dep.data = std::move(data);
+
+    evmone::state::Transaction user{};
+    user.type = evmone::state::Transaction::Type::eip1559;
+    user.gas_limit = 21'000;
+
+    op::OpBlockTx depTx;
+    depTx.tx = dep;
+    auto const depEnvelope = bcos::evm::opstack::encodeDepositEnvelope(dep);
+    depTx.signedEnvelope.assign(depEnvelope.begin(), depEnvelope.end());
+    op::OpBlockTx userTx;
+    userTx.tx = user;
+    userTx.signedEnvelope = evmc::bytes{uint8_t{0x02}, uint8_t{0x01}};
+    std::vector<op::OpBlockTx> const txs{depTx, userTx};
+
+    BOOST_CHECK_EXCEPTION(
+        (void)op::processOpBlock(
+            view, block, hashes, txs, op::karstConfig(), vm, /*chainId=*/10,
+            bcos::evm::opstack::testutil::kOpTestReceiptFactory,
+            [](const evmone::state::StateDiff&) {}, &schedule, /*parentTsSec=*/99),
+        OpConsensusError, [](OpConsensusError const& e) {
+            return std::string_view{e.what()}.find("unexpected non-deposit") !=
+                   std::string_view::npos;
+        });
+}
+
+BOOST_AUTO_TEST_CASE(HasNonDepositTxUsesEnvelopeWhenPresent)
+{
+    op::OpBlockTx depositEmpty;
+    depositEmpty.tx = op::DepositTx{};
+    std::vector<op::OpBlockTx> onlyEmpty{depositEmpty};
+    BOOST_CHECK(!op::hasNonDepositTx(onlyEmpty));
+
+    op::OpBlockTx depositTyped;
+    depositTyped.tx = op::DepositTx{};
+    depositTyped.signedEnvelope = evmc::bytes{uint8_t{0x02}, uint8_t{0x01}};
+    std::vector<op::OpBlockTx> typedOnDeposit{depositTyped};
+    BOOST_CHECK(op::hasNonDepositTx(typedOnDeposit));
+
+    op::OpBlockTx deposit7e;
+    deposit7e.tx = op::DepositTx{};
+    deposit7e.signedEnvelope = evmc::bytes{uint8_t{0x7e}, uint8_t{0x01}};
+    std::vector<op::OpBlockTx> depositEnvelope{deposit7e};
+    BOOST_CHECK(!op::hasNonDepositTx(depositEnvelope));
+
+    op::OpBlockTx user7e;
+    user7e.tx = evmone::state::Transaction{};
+    user7e.signedEnvelope = evmc::bytes{uint8_t{0x7e}, uint8_t{0x01}};
+    std::vector<op::OpBlockTx> typedVariant{user7e};
+    BOOST_CHECK(op::hasNonDepositTx(typedVariant));
+}
+
+BOOST_AUTO_TEST_CASE(ProcessOpBlockQ5RejectsDepositVariantWithTypedEnvelope)
+{
+    MutableStorage storage;
+    bcos::evm::evmstate::Storage2State<MutableStorage> view(storage);
+    evmone::state::BlockInfo block;
+    block.gas_limit = 30'000'000;
+    block.timestamp = 100;
+    bcos::executor_v1::opstack::NullBlockHashes hashes;
+    auto vm = evmc::VM{evmc_create_evmone()};
+    auto schedule = op::OpForkSchedule::parse("0:jovian,100:karst");
+
+    evmc::bytes data(op::JovianL1AttributesLen, uint8_t{0});
+    std::memcpy(
+        data.data(), op::JovianL1AttributesSelector.data(), op::JovianL1AttributesSelector.size());
+    op::DepositTx dep{};
+    dep.gas_limit = 1'000'000;
+    dep.data = std::move(data);
+
+    op::OpBlockTx depTx;
+    depTx.tx = dep;
+    auto const depEnvelope = bcos::evm::opstack::encodeDepositEnvelope(dep);
+    depTx.signedEnvelope.assign(depEnvelope.begin(), depEnvelope.end());
+
+    op::OpBlockTx mismatched;
+    mismatched.tx = op::DepositTx{};
+    mismatched.signedEnvelope = evmc::bytes{uint8_t{0x02}, uint8_t{0x01}};
+    std::vector<op::OpBlockTx> const txs{depTx, mismatched};
+
+    BOOST_CHECK_EXCEPTION(
+        (void)op::processOpBlock(
+            view, block, hashes, txs, op::karstConfig(), vm, /*chainId=*/10,
+            bcos::evm::opstack::testutil::kOpTestReceiptFactory,
+            [](const evmone::state::StateDiff&) {}, &schedule, /*parentTsSec=*/99),
+        OpConsensusError, [](OpConsensusError const& e) {
+            return std::string_view{e.what()}.find("unexpected non-deposit") !=
+                   std::string_view::npos;
+        });
+}
+
+// ---- create2Deployer at the Canyon activation timestamp (op-geth EnsureCreate2Deployer) ----
+//
+// op-geth (consensus/misc/create2deployer.go:34-40) writes the create2Deployer code ONLY when
+// the block timestamp equals CanyonTime (`*c.CanyonTime != timestamp` returns), and does so
+// unconditionally. The three cells below pin that gate: the activation block deploys, a
+// pre-activation block does not, and a post-activation block observes the code as carried
+// state while not re-firing the gate itself. The code is observed through a fresh Storage2State
+// bridge over the same MemoryStorage the hook wrote into.
+
+namespace
+{
+const op::OpForkSchedule kCanyonAt1000 = op::OpForkSchedule::parse("0:regolith,1000:canyon");
+
+evmc::bytes create2DeployerCodeIn(MutableStorage& storage)
+{
+    bcos::evm::evmstate::Storage2State<MutableStorage> view(storage);
+    return view.get_account_code(engine::create2DeployerAddress());
+}
+}  // namespace
+
+// (a) Exactly at the Canyon activation timestamp the code is written, with the op-geth codeHash.
+BOOST_AUTO_TEST_CASE(CanyonActivationBlockDeploysCreate2Deployer)
+{
+    Fixture f;
+    f.schedule = kCanyonAt1000;
+    f.header.m_timestampMs = 1'000'000;  // blockTsSec == 1'000'000/1000 == 1000 (activation)
+    auto dep = depositWithData(l1AttributesData(op::IsthmusL1AttributesLen));
+    f.run(op::canyonConfig(), {kDepositEnvelope}, {dep});
+
+    bcos::evm::evmstate::Storage2State<MutableStorage> view(f.storage);
+    auto code = view.get_account_code(engine::create2DeployerAddress());
+    BOOST_REQUIRE(!view.poisoned());
+    BOOST_CHECK_EQUAL(code.size(), engine::c_create2DeployerCode.size());
+    BOOST_CHECK(std::equal(code.begin(), code.end(), engine::c_create2DeployerCode.begin(),
+        engine::c_create2DeployerCode.end()));
+    auto acct = view.get_account(engine::create2DeployerAddress());
+    BOOST_REQUIRE(acct.has_value());
+    BOOST_CHECK(acct->code_hash == engine::create2DeployerCodeHash());
+}
+
+// (b) One second below the activation: no code. This is the cell that proves the gate is the
+// activation timestamp, not `fork >= Canyon` (the config at 999s is still Regolith).
+BOOST_AUTO_TEST_CASE(PreCanyonActivationBlockDoesNotDeployCreate2Deployer)
+{
+    Fixture f;
+    f.schedule = kCanyonAt1000;
+    f.header.m_timestampMs = 999'000;  // blockTsSec == 999 (Canyon activates at 1000)
+    auto dep = depositWithData(l1AttributesData(op::IsthmusL1AttributesLen));
+    f.run(op::regolithConfig(), {kDepositEnvelope}, {dep});
+
+    bcos::evm::evmstate::Storage2State<MutableStorage> view(f.storage);
+    BOOST_REQUIRE(!view.poisoned());
+    BOOST_CHECK(view.get_account_code(engine::create2DeployerAddress()).empty());
+    BOOST_CHECK(!view.get_account(engine::create2DeployerAddress()).has_value());
+}
+
+// (c) Post-activation: the code persists as state across a later block (the gate does not run
+// again, but the earlier write survives).
+BOOST_AUTO_TEST_CASE(PostCanyonActivationBlockKeepsCreate2Deployer)
+{
+    Fixture f;
+    f.schedule = kCanyonAt1000;
+    auto dep = depositWithData(l1AttributesData(op::IsthmusL1AttributesLen));
+
+    f.header.m_timestampMs = 1'000'000;  // activation writes the code
+    f.run(op::canyonConfig(), {kDepositEnvelope}, {dep});
+    BOOST_REQUIRE_EQUAL(
+        create2DeployerCodeIn(f.storage).size(), engine::c_create2DeployerCode.size());
+
+    f.header.m_timestampMs = 1'001'000;  // 1001s: still Canyon, past the activation timestamp
+    f.run(op::canyonConfig(), {kDepositEnvelope}, {dep});
+    auto code = create2DeployerCodeIn(f.storage);
+    BOOST_CHECK_EQUAL(code.size(), engine::c_create2DeployerCode.size());
+    BOOST_CHECK(std::equal(code.begin(), code.end(), engine::c_create2DeployerCode.begin(),
+        engine::c_create2DeployerCode.end()));
+}
+
+// (c') A post-activation block against FRESH state must NOT deploy: upstream only fires at the
+// activation timestamp itself, so `fork >= Canyon` (or `timestamp >= CanyonTime`) would be
+// wrong. This is the post-direction counterpart to (b).
+BOOST_AUTO_TEST_CASE(PostCanyonTimestampOnFreshStateDoesNotDeployCreate2Deployer)
+{
+    Fixture f;
+    f.schedule = kCanyonAt1000;
+    f.header.m_timestampMs = 1'001'000;  // post-activation, gate must be false
+    auto dep = depositWithData(l1AttributesData(op::IsthmusL1AttributesLen));
+    f.run(op::canyonConfig(), {kDepositEnvelope}, {dep});
+
+    bcos::evm::evmstate::Storage2State<MutableStorage> view(f.storage);
+    BOOST_REQUIRE(!view.poisoned());
+    BOOST_CHECK(view.get_account_code(engine::create2DeployerAddress()).empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

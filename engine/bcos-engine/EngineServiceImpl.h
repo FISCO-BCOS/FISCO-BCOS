@@ -29,6 +29,7 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/engine/EngineService.h"
 #include "bcos-framework/engine/Errors.h"
+#include "bcos-framework/engine/OpEip1559Params.h"
 #include "bcos-framework/engine/Types.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
@@ -108,7 +109,8 @@ inline bcos::h256 syntheticHash(std::string_view seed)
 /// minBaseFee -> 17-byte Jovian form (op-core/eip1559/eip1559.go
 /// EncodeHoloceneExtraData / EncodeJovianExtraData). Requires attributes that passed
 /// validatePayloadAttributes (8-byte params, Holocene 1559 pairing).
-bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes);
+bcos::bytes encodeOptimismExtraData(
+    const PayloadAttributes& payloadAttributes, OpEip1559Params eip1559);
 
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
@@ -916,7 +918,8 @@ private:
         // via eth_getBlockByNumber (BlockResponse serves blockHeader->extraData()) and
         // re-validates it (op-core/eip1559/eip1559.go ValidateJovianExtraData), so the
         // two must match byte for byte.
-        bytes extraData = detail::encodeOptimismExtraData(payloadAttributes);
+        bytes extraData = detail::encodeOptimismExtraData(
+            payloadAttributes, bcos::engine::kLegacyOpEip1559Params);
 
         ExecutionPayload executionPayload{
             .logsBloom = Bloom{},
@@ -1165,7 +1168,11 @@ private:
         // FISCO Merkle fold here changes the block hash. Empty lists map to the canonical
         // empty-trie root.
         auto const commitments = engine_common::buildHeaderCommitments(
-            executionPayload.transactions, receipts, executable.types);
+            executionPayload.transactions, receipts, executable.types,
+            // Forced (deposit) envelopes stay raw-only in this service — they are never
+            // executed, so no deposit receipt can legitimately reach the helper and no
+            // fork context exists; one showing up anyway fails closed.
+            std::nullopt);
         h256 const txRoot = commitments.transactionsRoot;
         h256 const receiptRoot = commitments.receiptsRoot;
 
@@ -1175,9 +1182,9 @@ private:
         Bloom const& logsBloom = commitments.logsBloom;
 
         // Step 2g: Compute state root (MPT when enabled, otherwise legacy XOR fold).
-        auto resolution = co_await engine_common::resolveEngineBlockStateRoot(view, *blockHeader,
-            ledgerConfig, *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory,
-            *m_commitObserver);
+        auto resolution =
+            co_await engine_common::resolveEngineBlockStateRoot(view, *blockHeader, ledgerConfig,
+                *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory, *m_commitObserver);
         h256 const stateRoot = resolution.stateRoot;
 
         // Step 2h: Set computed values in the block header and calculate the block hash.

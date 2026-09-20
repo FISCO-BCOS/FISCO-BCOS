@@ -133,6 +133,8 @@ BOOST_AUTO_TEST_CASE(InsufficientForL1CostFails)
     test::TestState ts;
     ts[kSenderValidate] = {.nonce = 0, .balance = 100000000_u256, .storage = {}, .code = {}};
     OpFeeParams fee{.l1_base_fee = 1000000000_u256,
+        .overhead = 0_u256,
+        .bedrock_scalar = 0_u256,
         .base_fee_scalar = 2,
         .blob_base_fee_scalar = 3,
         .blob_base_fee = 10000000_u256,
@@ -167,6 +169,45 @@ BOOST_AUTO_TEST_CASE(SufficientBalancePasses)
     BOOST_CHECK_EQUAL(std::get<OpTxProperties>(r).l1_cost, intx::uint256{0});
 }
 
+// F3: the pre-Ecotone receipt L1GasUsed is gas + whole-slot overhead. Upstream never wraps:
+// op-geth sums a *big.Int (core/types/rollup_cost.go:301-315) and op-reth narrows its RPC
+// field with saturating_to (crates/rpc/src/eth/receipt.rs:184-190). Slot 5 is a uint256
+// read, but the canonical setter writes a uint64, so the sum fits on a valid chain; if
+// adversarial state supplies >= 2^64 the snapshot must saturate, never silently truncate.
+BOOST_AUTO_TEST_CASE(BedrockL1GasUsedSaturatesOverflowingOverhead)
+{
+    test::TestState ts;
+    ts[kSenderValidate] = {.nonce = 0,
+        .balance = std::numeric_limits<intx::uint256>::max(),
+        .storage = {},
+        .code = {}};
+    std::vector<uint8_t> env(50, 0x11);  // 50 non-zero bytes -> 800 rollup data gas
+
+    {  // normal overhead stays exact
+        OpFeeParams fee{};
+        fee.overhead = 2100_u256;
+        fee.bedrock_scalar = 1_u256;
+        const auto r = opValidate(
+            ts, blkValidate(), baseTx(), {env.data(), env.size()}, regolithConfig(), fee, 30000000);
+        BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(r));
+        const auto& props = std::get<OpTxProperties>(r);
+        BOOST_REQUIRE(props.bedrock_l1_gas_used.has_value());
+        BOOST_CHECK_EQUAL(*props.bedrock_l1_gas_used, 800u + 2100u);
+    }
+
+    {  // overhead = 2^64 saturates instead of wrapping to the gas-only value
+        OpFeeParams fee{};
+        fee.overhead = intx::uint256{1} << 64;
+        fee.bedrock_scalar = 1_u256;
+        const auto r = opValidate(
+            ts, blkValidate(), baseTx(), {env.data(), env.size()}, regolithConfig(), fee, 30000000);
+        BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(r));
+        const auto& props = std::get<OpTxProperties>(r);
+        BOOST_REQUIRE(props.bedrock_l1_gas_used.has_value());
+        BOOST_CHECK_EQUAL(*props.bedrock_l1_gas_used, std::numeric_limits<uint64_t>::max());
+    }
+}
+
 // 余额上限求和不得在 2^256 处回绕（对齐 evmone validate_transaction 的 512 位口径）。
 // 构造：balance = 2^256-1，value = balance - gasLimit*maxGasPrice，使 evmone 的 512 位
 // gasCost+value 检查恰好通过；再叠加任何非零 l1Cost，总额越过 2^256——
@@ -183,6 +224,8 @@ BOOST_AUTO_TEST_CASE(BalanceCapDoesNotWrapAt2Pow256)
 
     // 非零 L1 费用参数：l1Cost > 0 即足以触发回绕
     OpFeeParams fee{.l1_base_fee = 1000000000_u256,
+        .overhead = 0_u256,
+        .bedrock_scalar = 0_u256,
         .base_fee_scalar = 2,
         .blob_base_fee_scalar = 3,
         .blob_base_fee = 10000000_u256,
@@ -208,6 +251,8 @@ BOOST_AUTO_TEST_CASE(BalanceCapCountsEveryTermExactlyOnce)
     const std::vector<uint8_t> env(120, 0x11);
     // l1 与 operator 两项都非零，否则漏算任一项都察觉不到。
     const OpFeeParams fee{.l1_base_fee = 1000000000_u256,
+        .overhead = 0_u256,
+        .bedrock_scalar = 0_u256,
         .base_fee_scalar = 1100,
         .blob_base_fee_scalar = 0,
         .blob_base_fee = 0_u256,

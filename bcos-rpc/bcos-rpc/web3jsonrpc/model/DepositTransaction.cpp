@@ -118,11 +118,10 @@ void bcos::rpc::combineDepositTxResponse(Json::Value& result, const DepositTrans
     result["gas"] = toQuantity(deposit.gas);
     result["value"] = toQuantity(deposit.value);
     result["input"] = toHexStringWithPrefix(deposit.input);
-    if (deposit.mint.has_value())
-    {
-        // op-geth omits mint when nil and emits it when present (json:"mint,omitempty").
-        result["mint"] = toQuantity(*deposit.mint);
-    }
+    // op-geth always emits mint: its decoder materializes a non-nil *big.Int(0) for the
+    // empty item (0x80) and its RPC prints any non-nil pointer, so the L1-attributes deposit
+    // is "0x0" rather than omitted. Mirror that: treat the internal nullopt as zero.
+    result["mint"] = toQuantity(deposit.mint.has_value() ? *deposit.mint : u256{0});
     if (deposit.isSystemTx)
     {
         // op-geth emits isSystemTx only when true.

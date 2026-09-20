@@ -97,6 +97,17 @@ inline GoldenSample loadVectorSample(std::string const& id)
     return sample;
 }
 
+inline GoldenSample loadChainedSample(std::string const& name)
+{
+    GoldenSample sample;
+    sample.id = name;
+    sample.vector =
+        loadJsonFile(std::string(OP_T8N_GOLDEN_ENGINE_DIR) + "/chained/" + name + ".golden.json");
+    sample.golden = sample.vector;  // flat document is both vector and golden
+    sample.jovian = isJovianVector(sample.vector);
+    return sample;
+}
+
 /// Parses golden.encodedHeaderHex into a FISCO BlockHeaderImpl via
 /// EthBlockHeader::toTarsHeader. Throws on decode failure.
 inline bcostars::protocol::BlockHeaderImpl::Ptr decodeGoldenHeader(GoldenSample const& sample)
@@ -214,15 +225,22 @@ struct InvalidSample
 ///   wire-null into "field absent", so parseNewPayloadRequest never sees the -32602
 ///   quantity/type rejection those nulls must produce (finding E6);
 /// - `parentBeaconBlockRoot` is params[2] (not an ExecutionPayload field), so it does not
-///   enter ep.
+///   enter ep;
+/// - `expectedBlobVersionedHashes` and `executionRequests` are params[1]/params[3] (also not
+///   ExecutionPayload fields). When `_op_payload` carries them (WI-E13 static face §4c
+///   items 3/12: non-empty lists, WIRE form — a hex-string hash per element / a hex byte
+///   string per request) they pass through verbatim, so the engine's
+///   validateOpBlobVersionedHashes / executionRequests window gate see the malformation the
+///   vector anchors. Otherwise both stay the empty array (the legal OP shape).
 inline Json::Value makeInvalidParamsJson(InvalidSample const& sample)
 {
     auto const& op = sample.vector["_op_payload"];
     Json::Value ep(Json::objectValue);
     for (auto const& member : op.getMemberNames())
     {
-        if (member == "parentBeaconBlockRoot")
-            continue;  // not an ExecutionPayload field; passed via params[2]
+        if (member == "parentBeaconBlockRoot" || member == "expectedBlobVersionedHashes" ||
+            member == "executionRequests")
+            continue;  // engine_newPayloadV4 params, not ExecutionPayload fields
         ep[member] = op[member];
     }
     if (!ep.isMember("withdrawals"))
@@ -232,13 +250,31 @@ inline Json::Value makeInvalidParamsJson(InvalidSample const& sample)
 
     Json::Value params(Json::arrayValue);
     params.append(ep);
-    params.append(Json::Value(Json::arrayValue));  // expectedBlobVersionedHashes = []
+    if (op.isMember("expectedBlobVersionedHashes"))
+        params.append(op["expectedBlobVersionedHashes"]);
+    else
+        params.append(Json::Value(Json::arrayValue));  // expectedBlobVersionedHashes = []
     if (op.isMember("parentBeaconBlockRoot") && !op["parentBeaconBlockRoot"].isNull())
         params.append(op["parentBeaconBlockRoot"]);
     else
         params.append(Json::Value(Json::nullValue));
-    params.append(Json::Value(Json::arrayValue));  // executionRequests = []
+    if (op.isMember("executionRequests"))
+        params.append(op["executionRequests"]);
+    else
+        params.append(Json::Value(Json::arrayValue));  // executionRequests = []
     return params;
+}
+
+/// On-disk corpus loading (the generator emits `invalid_*.json`; the outer `{ "<stem>": {...} }`
+/// wrapper matches existing vectors).
+inline InvalidSample loadInvalidSample(std::string const& id)
+{
+    InvalidSample sample;
+    auto root = loadJsonFile(std::string(OP_T8N_VECTORS_DIR) + "/" + id + ".json");
+    sample.vector = root[id];
+    sample.hardfork = sample.vector["_info"]["hardfork"].asString();
+    sample.jovian = isJovianVector(sample.vector);
+    return sample;
 }
 
 }  // namespace w6test

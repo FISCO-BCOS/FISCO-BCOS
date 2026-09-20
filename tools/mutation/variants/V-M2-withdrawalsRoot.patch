@@ -1,0 +1,12 @@
+diff --git a/bcos-rpc/bcos-rpc/web3jsonrpc/utils/EngineHelper.cpp b/bcos-rpc/bcos-rpc/web3jsonrpc/utils/EngineHelper.cpp
+index c18c60b71..c84e6c80b 100644
+--- a/bcos-rpc/bcos-rpc/web3jsonrpc/utils/EngineHelper.cpp
++++ b/bcos-rpc/bcos-rpc/web3jsonrpc/utils/EngineHelper.cpp
+@@ -734,7 +734,6 @@ Json::Value bcos::rpc::serializeExecutionPayload(
+             BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
+                 "withdrawalsRoot missing on an ExecutionPayloadV4+ built by this node"));
+         }
+-        ep["withdrawalsRoot"] = payload.withdrawalsRoot->hexPrefixed();
+     }
+     return ep;
+ }

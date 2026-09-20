@@ -1092,11 +1092,14 @@ public:
 
     /// BlockInfo for tx execution, mirroring detail::toBlockInfo. Leniency follows the call
     /// kind: eth_call (lenientOptionals=true) reads unset header fields as 0; block execution
-    /// (false) rejects a malformed header at the point of use instead of failing open.
-    static evmone::state::BlockInfo buildBlockInfo(
-        protocol::BlockHeader const& header, uint64_t gasLimit, bool lenientOptionals = true)
+    /// (false) rejects a malformed header at the point of use instead of failing open. The
+    /// per-block fork config decides whether the Cancun/Ecotone fields must be present.
+    evmone::state::BlockInfo buildBlockInfo(
+        protocol::BlockHeader const& header, uint64_t gasLimit, bool lenientOptionals = true) const
     {
-        return bcos::evm::engine::detail::toBlockInfo(header, gasLimit, lenientOptionals);
+        return bcos::evm::engine::detail::toBlockInfo(header, gasLimit, lenientOptionals,
+            /*requireEcotoneHeaderFields=*/m_forkConfig.fork >=
+                bcos::evm::opstack::OpFork::Ecotone);
     }
 
     /// Real header gasLimit, falling back to the caller's blockGasLeft when the header leaves it
@@ -1209,7 +1212,7 @@ public:
                     m_ctx->fee.da_footprint_gas_scalar = *m_ctx->daFootprintGasScalar;
                 m_ctx->feeLoaded = true;
             }
-            m_blockInfo = buildBlockInfo(blockHeader,
+            m_blockInfo = executor.buildBlockInfo(blockHeader,
                 opBlockGasLimit(blockHeader, static_cast<uint64_t>(m_ctx->blockGasLeft)), call);
             try
             {  // Validation failure is a consensus reject.
@@ -1701,10 +1704,14 @@ private:
         // fresh sender) and lands in the simulated StateDiff — m_finish discards that diff for
         // call=true so none of it is written back. This is a decision on record, not an
         // accident (OpTransition.h CallSimulationView doc block).
-        auto validated = call ? op::opValidate(op::CallSimulationView{stateView, evmTx.sender},
-                                    blockInfo, evmTx, env, m_forkConfig, fee, blockGasLeft) :
-                                op::opValidate(stateView, blockInfo, evmTx, env, m_forkConfig, fee,
-                                    blockGasLeft);
+        // eth_call (geth #32641) skips EIP-7825. The TransactionExecutor dry-run
+        // (`call=true`) is also estimateGas, so both skip the 2^24 cap here.
+        evmone::state::TxValidationPolicy const policy{.enforce_max_tx_gas = !call};
+        auto validated = call ?
+                             op::opValidate(op::CallSimulationView{stateView, evmTx.sender},
+                                 blockInfo, evmTx, env, m_forkConfig, fee, blockGasLeft, policy) :
+                             op::opValidate(stateView, blockInfo, evmTx, env, m_forkConfig, fee,
+                                 blockGasLeft, policy);
         if (auto const* err = std::get_if<std::error_code>(&validated))
         {
             // On the block path, a full gas pool is a capacity fault, not a poisoned tx.

@@ -85,23 +85,40 @@ BOOST_AUTO_TEST_CASE(absentKeyMeansNeverActivates)
     BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_karstTime, kNever);
 }
 
-// Karst is Jovian's rules on an Osaka EVM, so it cannot activate first.
+// Karst is Jovian's rules on an Osaka EVM, so it cannot activate first. Equal times are
+// LEGAL though (op-geth CheckConfigForkOrder compares with `>`) — they fold into the
+// later fork downstream.
 BOOST_AUTO_TEST_CASE(decreasingScheduleRejected)
 {
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(opExecutor(),
                               "[op_fork_timestamps]\njovian_time=2000\nkarst_time=1000\n")),
         InvalidConfig, [](auto const& e) {
-            return errinfoContains(e, "fork activation times must be non-decreasing");
+            return errinfoContains(e, "fork activation times must be non-decreasing") &&
+                   errinfoContains(e, "jovian_time") && errinfoContains(e, "karst_time");
         });
 
-    // UINT64_MAX ("not scheduled") is terminal: karst cannot be scheduled after it.
+    // UINT64_MAX ("not scheduled") is terminal: karst cannot be scheduled after it. The
+    // message names the keys and never prints the sentinel as if it were a time.
     NodeConfig unscheduledJovian(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     BOOST_CHECK_EXCEPTION(unscheduledJovian.loadGenesisConfigFromString(
                               opGenesis(opExecutor(), "[op_fork_timestamps]\nkarst_time=1000\n")),
         InvalidConfig, [](auto const& e) {
-            return errinfoContains(e, "fork activation times must be non-decreasing");
+            return errinfoContains(e, "fork activation times must be non-decreasing") &&
+                   errinfoContains(e, "jovian_time is not") &&
+                   !errinfoContains(e, "18446744073709551615");
         });
+}
+
+// Simultaneous jovian/karst activation is the release line's genesis shape: it loads,
+// and the fold downstream merges it into the later fork.
+BOOST_AUTO_TEST_CASE(simultaneousTimesLoad)
+{
+    auto cfg = loadOk(
+        opGenesis(opExecutor(), "[op_fork_timestamps]\njovian_time=1000\nkarst_time=1000\n"));
+    BOOST_REQUIRE(cfg.opForkSchedule().has_value());
+    BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_jovianTime, 1000U);
+    BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_karstTime, 1000U);
 }
 
 // Garbage and negatives must fail fast rather than yield a wrong schedule.
@@ -127,8 +144,8 @@ BOOST_AUTO_TEST_CASE(sectionWithoutOpLaneRejected)
         cfg.loadGenesisConfigFromString(
             opGenesis("version=2\nevm_revision=prague\n", "[op_fork_timestamps]\njovian_time=0\n")),
         InvalidConfig, [](auto const& e) {
-            return errinfoContains(
-                e, "[op_fork_timestamps] requires executor.version >= 3 (OP lane)");
+            return errinfoContains(e,
+                "[op_fork_timestamps]/[op_fork_schedule] requires executor.version >= 3 (OP lane)");
         });
 }
 
@@ -138,8 +155,9 @@ BOOST_AUTO_TEST_CASE(opLaneWithoutSectionRejected)
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(opExecutor(), "")),
         InvalidConfig, [](auto const& e) {
-            return errinfoContains(
-                e, "executor.version >= 3 (OP lane) requires an [op_fork_timestamps] section");
+            return errinfoContains(e,
+                "executor.version >= 3 (OP lane) requires an [op_fork_schedule] canonical or an "
+                "[op_fork_timestamps] section");
         });
 }
 

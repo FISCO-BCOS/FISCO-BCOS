@@ -49,6 +49,16 @@ enum class SystemConfig
     executor_version,
     evmc_revision,
     excess_blob_gas,
+    /// OP lane: the chain's EIP-1559 triple ("elasticity,denominator,denominatorCanyon"
+    /// as a comma string), written at genesis when config.genesis declares [op_eip1559].
+    /// Read into the LedgerConfig snapshot so the RPC fee-prediction prices with the
+    /// chain's own parameters (the engine got the same values via boot injection).
+    op_eip1559_params,
+    /// OP lane: the resolved canonical fork schedule, written at genesis from either
+    /// declaration channel ([op_fork_schedule] or [op_fork_timestamps]). Read into the
+    /// LedgerConfig snapshot so the RPC estimate gas-cap gate applies EIP-7825 only where
+    /// the chain has actually activated Osaka (Karst) at the target block.
+    op_fork_schedule,
 };
 
 struct SystemConfigs

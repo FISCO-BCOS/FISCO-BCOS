@@ -1,0 +1,13 @@
+diff --git a/opstack-executor/OpBlockExecute.h b/opstack-executor/OpBlockExecute.h
+index 638c0de71..b3646c8d2 100644
+--- a/opstack-executor/OpBlockExecute.h
++++ b/opstack-executor/OpBlockExecute.h
+@@ -605,7 +605,7 @@ inline bool isCanyonCreate2DeployerActivation(
+         return false;
+     if (blockTsSec == 0)
+         return schedule.baselineTimestamp() == 0;
+-    return schedule.forkAt(blockTsSec - 1) < bcos::evm::opstack::OpFork::Canyon;
++    return schedule.forkAt(blockTsSec - 1) == bcos::evm::opstack::OpFork::Canyon;
+ }
+ 
+ /// Mirror op-geth core/state_processor.go:81 (EnsureCreate2Deployer), which runs before the

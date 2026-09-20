@@ -1,5 +1,6 @@
 #include "TestPrinters.h"
 #include <bcos-codec/rlp/RLPEncode.h>
+#include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-evm/test/opstack/OpTestReceiptFactory.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
@@ -58,8 +59,8 @@ BOOST_AUTO_TEST_SUITE(OpReceiptEncodeSuite)
 // (3B). Prefix 0x7e. Total 1+3+266 = 270.
 BOOST_AUTO_TEST_CASE(DepositGoldenBytes)
 {
-    const auto enc =
-        encodeReceiptForRoot(*minimalDepositReceipt(), static_cast<uint8_t>(kDepositTxType));
+    const auto enc = encodeReceiptForRoot(
+        *minimalDepositReceipt(), static_cast<uint8_t>(kDepositTxType), canyonConfig());
     bcos::bytes expected{0x7e, 0xf9, 0x01, 0x0a, 0x01, 0x82, 0x52, 0x08, 0xb9, 0x01, 0x00};
     expected.insert(expected.end(), 256, 0x00);
     expected.insert(expected.end(), {0xc0, 0x05, 0x01});
@@ -67,14 +68,43 @@ BOOST_AUTO_TEST_CASE(DepositGoldenBytes)
     BOOST_CHECK_EQUAL(enc, expected);
 }
 
+// Pre-Canyon (Regolith): the version word is absent and op-geth's receipt hash
+// inadvertently omitted the deposit nonce too - the leaf is the plain shape with NO
+// nonce/version tail, even though the meta carries the API-level nonce (review F1).
+BOOST_AUTO_TEST_CASE(RegolithDepositLeafOmitsNonceAndVersion)
+{
+    auto r = minimalDepositReceipt();
+    bcos::protocol::OpStackReceiptMeta meta;
+    meta.deposit_nonce = 5;  // carried at API level, NOT part of the consensus leaf
+    r->setOpStackMeta(std::move(meta));
+    const auto enc =
+        encodeReceiptForRoot(*r, static_cast<uint8_t>(kDepositTxType), regolithConfig());
+    // payload = status 1 + cumGas 3 + bloom 259 + logs 1 = 264 = 0x108 -> f9 01 08
+    bcos::bytes expected{0x7e, 0xf9, 0x01, 0x08, 0x01, 0x82, 0x52, 0x08, 0xb9, 0x01, 0x00};
+    expected.insert(expected.end(), 256, 0x00);
+    expected.insert(expected.end(), {0xc0});
+    BOOST_REQUIRE_EQUAL(enc.size(), 268u);
+    BOOST_CHECK_EQUAL(enc, expected);
+}
+
+// The fork/meta agreement is the seal's consensus check, in BOTH directions: a version
+// word on a pre-Canyon deposit must be rejected exactly like a missing word post-Canyon.
+BOOST_AUTO_TEST_CASE(RegolithDepositWithVersionIsForkInconsistent)
+{
+    BOOST_CHECK_EXCEPTION(
+        static_cast<void>(encodeReceiptForRoot(*minimalDepositReceipt(),
+            static_cast<uint8_t>(kDepositTxType), regolithConfig())),
+        bcos::evm::OpConsensusError, consensusWhatContains("fork-inconsistent"));
+}
+
 // Production stores cumulativeGasUsed as decimal, while historical receipts may carry a 0x
 // quantity. Both representations must commit to exactly the same receipt leaf.
 BOOST_AUTO_TEST_CASE(DepositDecimalAndHexCumulativeGasAreEquivalent)
 {
     const auto decimal = encodeReceiptForRoot(
-        *minimalDepositReceipt(0, "21000"), static_cast<uint8_t>(kDepositTxType));
+        *minimalDepositReceipt(0, "21000"), static_cast<uint8_t>(kDepositTxType), canyonConfig());
     const auto hex = encodeReceiptForRoot(
-        *minimalDepositReceipt(0, "0x5208"), static_cast<uint8_t>(kDepositTxType));
+        *minimalDepositReceipt(0, "0x5208"), static_cast<uint8_t>(kDepositTxType), canyonConfig());
     BOOST_CHECK_EQUAL(decimal, hex);
 }
 
@@ -85,7 +115,8 @@ BOOST_AUTO_TEST_CASE(DepositDecimalAndHexCumulativeGasAreEquivalent)
 BOOST_AUTO_TEST_CASE(FailedDepositStatusIsEmptyString)
 {
     auto dep = minimalDepositReceipt(/*status=*/1);  // FISCO non-zero = failed
-    const auto enc = encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType));
+    const auto enc =
+        encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType), canyonConfig());
     bcos::bytes expected{0x7e, 0xf9, 0x01, 0x0a, 0x80, 0x82, 0x52, 0x08, 0xb9, 0x01, 0x00};
     expected.insert(expected.end(), 256, 0x00);
     expected.insert(expected.end(), {0xc0, 0x05, 0x01});
@@ -122,7 +153,8 @@ BOOST_AUTO_TEST_CASE(DepositWithLogEmbedsEncodedLogsAndNonceTail)
     meta.deposit_receipt_version = 1;
     dep->setOpStackMeta(std::move(meta));
 
-    const auto enc = encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType));
+    const auto enc =
+        encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType), canyonConfig());
     BOOST_CHECK_EQUAL(enc[0], 0x7e);
     // evmone's vector<Log> list encoding (independent path) must appear whole — covers the list
     // wrapper bytes
@@ -174,7 +206,8 @@ BOOST_AUTO_TEST_CASE(DepositWithMultipleLogsEmbedsEncodedLogsAndNonceTail)
     meta.deposit_receipt_version = 1;
     dep->setOpStackMeta(std::move(meta));
 
-    const auto enc = encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType));
+    const auto enc =
+        encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType), canyonConfig());
     BOOST_CHECK_EQUAL(enc[0], 0x7e);
     const auto logsBytes = evmone::rlp::encode(std::vector<evmone::state::Log>{logA, logB});
     BOOST_CHECK(
@@ -205,8 +238,8 @@ BOOST_AUTO_TEST_CASE(NormalReceiptMatchesEvmoneEncoding)
     r->setCumulativeGasUsed("0xa410");  // 42000
     bcos::bytes bloom(256, 0x00);
     r->setLogsBloom(bcos::ref(bloom));
-    const auto enc =
-        encodeReceiptForRoot(*r, static_cast<uint8_t>(evmone::state::Transaction::Type::eip1559));
+    const auto enc = encodeReceiptForRoot(
+        *r, static_cast<uint8_t>(evmone::state::Transaction::Type::eip1559), canyonConfig());
 
     BOOST_CHECK_EQUAL(enc[0], 0x02);  // eip1559 typed prefix
     BOOST_CHECK_EQUAL(enc, bcos::bytes(expected.begin(), expected.end()));
@@ -231,7 +264,7 @@ BOOST_AUTO_TEST_CASE(NormalReceiptLegacyAndAccessListPrefixes)
         ref.status = EVMC_SUCCESS;
         ref.cumulative_gas_used = 42000;
         const auto expected = evmone::state::rlp_encode(ref);
-        const auto enc = encodeReceiptForRoot(*fisco, static_cast<uint8_t>(type));
+        const auto enc = encodeReceiptForRoot(*fisco, static_cast<uint8_t>(type), canyonConfig());
         BOOST_CHECK_EQUAL(enc, bcos::bytes(expected.begin(), expected.end()));
     };
 
@@ -244,15 +277,15 @@ BOOST_AUTO_TEST_CASE(NormalReceiptLegacyAndAccessListPrefixes)
 // Deposit and normal txs must produce different leaves (prefix and tail fields both differ)
 BOOST_AUTO_TEST_CASE(DepositAndNormalLeavesDiffer)
 {
-    const auto depEnc =
-        encodeReceiptForRoot(*minimalDepositReceipt(), static_cast<uint8_t>(kDepositTxType));
+    const auto depEnc = encodeReceiptForRoot(
+        *minimalDepositReceipt(), static_cast<uint8_t>(kDepositTxType), canyonConfig());
     auto normal = kOpTestReceiptFactory->createReceipt(bcos::u256(21000), std::string{},
         std::vector<bcos::protocol::LogEntry>{}, /*status=*/0, bcos::bytesConstRef{}, 1);
     normal->setCumulativeGasUsed("0x5208");
     bcos::bytes bloom(256, 0x00);
     normal->setLogsBloom(bcos::ref(bloom));
     const auto normalEnc = encodeReceiptForRoot(
-        *normal, static_cast<uint8_t>(evmone::state::Transaction::Type::eip1559));
+        *normal, static_cast<uint8_t>(evmone::state::Transaction::Type::eip1559), canyonConfig());
     BOOST_CHECK_NE(depEnc, normalEnc);
 }
 
@@ -341,12 +374,15 @@ BOOST_AUTO_TEST_CASE(ShortLogsBloomIsConsensusReject)
     bcos::bytes shortBloom(128, 0xab);
     dep->setLogsBloom(bcos::ref(shortBloom));
 
-    BOOST_CHECK_EXCEPTION((void)encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType)),
+    BOOST_CHECK_EXCEPTION(
+        (void)encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType), canyonConfig()),
         bcos::evm::OpConsensusError, consensusWhatContains("logsBloom must be 256 bytes"));
 }
 
-// Isthmus+ deposit receipts always carry both tail fields. A lost optional must reject instead
-// of silently committing a different leaf with a substituted zero.
+// Deposit receipts: the version tail follows the FORK (Canyon+ emits it), and meta presence
+// must agree with the fork in BOTH directions. A lost optional must reject instead of silently
+// committing a different leaf with a substituted zero; a Regolith receipt carrying a version
+// would silently LENGTHEN the pre-Canyon leaf, so it rejects too.
 BOOST_AUTO_TEST_CASE(DepositMissingNonceOrVersionIsConsensusReject)
 {
     auto makeReceipt = [] {
@@ -359,28 +395,63 @@ BOOST_AUTO_TEST_CASE(DepositMissingNonceOrVersionIsConsensusReject)
     };
 
     auto missingMeta = makeReceipt();
-    BOOST_CHECK_EXCEPTION(
-        (void)encodeReceiptForRoot(*missingMeta, static_cast<uint8_t>(kDepositTxType)),
+    BOOST_CHECK_EXCEPTION((void)encodeReceiptForRoot(
+                              *missingMeta, static_cast<uint8_t>(kDepositTxType), canyonConfig()),
         bcos::evm::OpConsensusError,
-        consensusWhatContains("missing deposit nonce/receipt version"));
+        consensusWhatContains("nonce/version missing or fork-inconsistent"));
 
     auto missingVersion = makeReceipt();
     bcos::protocol::OpStackReceiptMeta partialMeta;
     partialMeta.deposit_nonce = 5;
     missingVersion->setOpStackMeta(std::move(partialMeta));
-    BOOST_CHECK_EXCEPTION(
-        (void)encodeReceiptForRoot(*missingVersion, static_cast<uint8_t>(kDepositTxType)),
+    BOOST_CHECK_EXCEPTION((void)encodeReceiptForRoot(*missingVersion,
+                              static_cast<uint8_t>(kDepositTxType), canyonConfig()),
         bcos::evm::OpConsensusError,
-        consensusWhatContains("missing deposit nonce/receipt version"));
+        consensusWhatContains("nonce/version missing or fork-inconsistent"));
 
     auto missingNonce = makeReceipt();
     bcos::protocol::OpStackReceiptMeta versionOnly;
     versionOnly.deposit_receipt_version = 1;
     missingNonce->setOpStackMeta(std::move(versionOnly));
-    BOOST_CHECK_EXCEPTION(
-        (void)encodeReceiptForRoot(*missingNonce, static_cast<uint8_t>(kDepositTxType)),
+    // Version presence matches Canyon+ here, so the encoder proceeds to the nonce tail
+    // and rejects on the missing nonce specifically.
+    BOOST_CHECK_EXCEPTION((void)encodeReceiptForRoot(
+                              *missingNonce, static_cast<uint8_t>(kDepositTxType), canyonConfig()),
         bcos::evm::OpConsensusError,
-        consensusWhatContains("missing deposit nonce/receipt version"));
+        consensusWhatContains("deposit receipt missing deposit nonce"));
+
+    // Regolith (pre-Canyon) receipt that carries a version: fork-inconsistent, rejects.
+    auto regolithWithVersion = makeReceipt();
+    bcos::protocol::OpStackReceiptMeta fullMeta;
+    fullMeta.deposit_nonce = 5;
+    fullMeta.deposit_receipt_version = 1;
+    regolithWithVersion->setOpStackMeta(std::move(fullMeta));
+    BOOST_CHECK_EXCEPTION((void)encodeReceiptForRoot(*regolithWithVersion,
+                              static_cast<uint8_t>(kDepositTxType), regolithConfig()),
+        bcos::evm::OpConsensusError,
+        consensusWhatContains("nonce/version missing or fork-inconsistent"));
+}
+
+// Pre-Canyon leaf shape (deposits spec / receipt.go): the deposit tail fields are BOTH
+// absent — two bytes shorter than the Canyon+ golden leaf.
+BOOST_AUTO_TEST_CASE(RegolithDepositLeafOmitsVersion)
+{
+    auto dep = minimalDepositReceipt();
+    BOOST_REQUIRE(dep->opStackMeta().has_value());
+    auto meta = *dep->opStackMeta();
+    meta.deposit_receipt_version = std::nullopt;
+    dep->setOpStackMeta(std::move(meta));
+
+    const auto enc =
+        encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType), regolithConfig());
+    // Pre-Canyon receipt hash omits the nonce AND the version (receipt.go
+    // depositReceiptRLP comment: "post-Regolith but pre-Canyon inadvertently did not
+    // include the above DepositNonce") — the leaf is the plain 4-field receipt.
+    bcos::bytes expected{0x7e, 0xf9, 0x01, 0x08, 0x01, 0x82, 0x52, 0x08, 0xb9, 0x01, 0x00};
+    expected.insert(expected.end(), 256, 0x00);
+    expected.insert(expected.end(), {0xc0});  // logs [] — NO nonce, NO version
+    BOOST_REQUIRE_EQUAL(enc.size(), 268u);
+    BOOST_CHECK_EQUAL(enc, expected);
 }
 
 // Engaged optional 0 is present, not absent: RLP integer 0 is the empty item 0x80 (not 0x00),
@@ -394,7 +465,8 @@ BOOST_AUTO_TEST_CASE(DepositExplicitZeroNonceEncodesEmptyRlpItem)
     meta.deposit_nonce = uint64_t{0};
     dep->setOpStackMeta(std::move(meta));
 
-    const auto enc = encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType));
+    const auto enc =
+        encodeReceiptForRoot(*dep, static_cast<uint8_t>(kDepositTxType), canyonConfig());
     bcos::bytes expected{0x7e, 0xf9, 0x01, 0x0a, 0x01, 0x82, 0x52, 0x08, 0xb9, 0x01, 0x00};
     expected.insert(expected.end(), 256, 0x00);
     expected.insert(expected.end(), {0xc0, 0x80, 0x01});
@@ -412,7 +484,8 @@ BOOST_AUTO_TEST_CASE(TypedCatchBindsOpConsensusErrorOnReceiptSuite)
     receipt->setCumulativeGasUsed("21000");
     bcos::bytes bloom(256, 0x00);
     receipt->setLogsBloom(bcos::ref(bloom));
-    BOOST_CHECK_THROW((void)encodeReceiptForRoot(*receipt, static_cast<uint8_t>(kDepositTxType)),
+    BOOST_CHECK_THROW(
+        (void)encodeReceiptForRoot(*receipt, static_cast<uint8_t>(kDepositTxType), canyonConfig()),
         bcos::evm::OpConsensusError);
 }
 

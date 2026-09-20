@@ -126,6 +126,23 @@ BOOST_AUTO_TEST_CASE(holocene_without_min_base_fee_encodes_nine_bytes)
         "0x00000000fa00000006");
 }
 
+// The (0,0) eip1559Params fallback must encode the CHAIN'S Canyon pair, not a hardcoded
+// 250/6. The triple below is the C2 e2e's real one (its intent declares eip1559Denominator 8
+// and eip1559Elasticity 2): its Canyon pair is (250, 2), so the encoded extraData differs
+// observably from the old constant. NOTE a triple of {6, 8, 250} would NOT be observable here
+// — its Canyon pair equals the old constant exactly. The legacy path needs no new assertion:
+// holocene_without_min_base_fee_encodes_nine_bytes below already pins the single-argument call
+// to 0x00000000fa00000006, and it must stay green (that is the "undeclared chain keeps
+// today's bytes" guard).
+BOOST_AUTO_TEST_CASE(holocene_zero_params_fallback_uses_the_chains_canyon_pair)
+{
+    auto attributes = makeAttributes(bytes(8, 0), std::nullopt);
+    checkExtraData(engine::detail::encodeOptimismExtraData(attributes,
+                       bcos::engine::OpEip1559Params{
+                           .elasticity = 2, .denominator = 8, .denominatorCanyon = 250}),
+        "0x00000000fa00000002");
+}
+
 // Pre-Holocene: no eip1559Params in the attributes -> extraData must stay empty
 // (op-core/eip1559/eip1559.go:27-28).
 BOOST_AUTO_TEST_CASE(missing_eip1559_params_keeps_extra_data_empty)

@@ -55,7 +55,8 @@ template void bcos::evm::engine::preBlockOpSteps<MutableStorage, std::vector<bco
     std::vector<bcos::bytes> const&, std::vector<bcos::evm::opstack::DepositTx> const&,
     bcos::executor_v1::opstack::OpstackExecutor&,
     std::optional<bcos::evm::engine::detail::RecentBlockHashes<MutableStorage>>&,
-    std::optional<std::string>&, std::optional<uint16_t>&);
+    std::optional<std::string>&, std::optional<uint16_t>&,
+    bcos::evm::opstack::OpForkSchedule const*, uint64_t);
 
 BOOST_AUTO_TEST_SUITE(SmokeCompileTest)
 

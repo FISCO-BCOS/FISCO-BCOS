@@ -16,6 +16,7 @@
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <evmone/evmone.h>
+#include <boost/test/tree/decorator.hpp>
 #include <boost/test/unit_test.hpp>
 #include <evmone/delegation.hpp>
 #include <limits>
@@ -77,6 +78,8 @@ RunWithAuthResult runWithAuth(
     tx.authorization_list = {auth};
 
     OpFeeParams fee{.l1_base_fee = 0_u256,
+        .overhead = 0_u256,
+        .bedrock_scalar = 0_u256,
         .base_fee_scalar = 0,
         .blob_base_fee_scalar = 0,
         .blob_base_fee = 0_u256,
@@ -135,7 +138,9 @@ BOOST_AUTO_TEST_SUITE(Op7702Suite)
 
 // ─── 用例 1: 真实 ecrecover 成功 → 写 0xef0100||kDelegate，nonce 从 0→1 ───
 // signer = nullopt，强制走 ecrecover
-BOOST_AUTO_TEST_CASE(RecoversAuthorityAndWritesDelegation)
+// clang-format off
+BOOST_AUTO_TEST_CASE(RecoversAuthorityAndWritesDelegation, * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -174,7 +179,9 @@ BOOST_AUTO_TEST_CASE(RecoversAuthorityAndWritesDelegation)
 
 // ─── 用例 2: 无效 r → ecrecover 失败 → 不写 delegation ───
 // signer = nullopt，强制走 ecrecover；r=0 使恢复失败 → skip
-BOOST_AUTO_TEST_CASE(BadSignatureRecoverFailsNoDelegation)
+// clang-format off
+BOOST_AUTO_TEST_CASE(BadSignatureRecoverFailsNoDelegation, * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -215,7 +222,9 @@ BOOST_AUTO_TEST_CASE(BadSignatureRecoverFailsNoDelegation)
 
 // ─── 用例 3: nonce 不匹配 → 恢复出的正确 authority，但 auth.nonce=5 ≠ state_nonce=0 → skip ───
 // signer = nullopt，强制走 ecrecover
-BOOST_AUTO_TEST_CASE(NonceMismatchSkips)
+// clang-format off
+BOOST_AUTO_TEST_CASE(NonceMismatchSkips, * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -251,7 +260,9 @@ BOOST_AUTO_TEST_CASE(NonceMismatchSkips)
 
 // ─── 用例 4: chain_id 不匹配 → 步骤1 直接 skip，不进 ecrecover ───
 // signer = nullopt；chain_id 检查在最前，不依赖签名有效性
-BOOST_AUTO_TEST_CASE(ChainIdMismatchSkips)
+// clang-format off
+BOOST_AUTO_TEST_CASE(ChainIdMismatchSkips, * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -284,7 +295,9 @@ BOOST_AUTO_TEST_CASE(ChainIdMismatchSkips)
 
 // ─── 用例 5: 授权后委托调用 → kAuthority 预设委托代码，call to kAuthority 走 kDelegate 逻辑 ───
 // 使用预置 signer（此用例测委托调用路径，不测 ecrecover）
-BOOST_AUTO_TEST_CASE(DelegatedCallAfterAuthorization)
+// clang-format off
+BOOST_AUTO_TEST_CASE(DelegatedCallAfterAuthorization, * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -322,6 +335,8 @@ BOOST_AUTO_TEST_CASE(DelegatedCallAfterAuthorization)
     tx.nonce = 0;
 
     OpFeeParams fee{.l1_base_fee = 0_u256,
+        .overhead = 0_u256,
+        .bedrock_scalar = 0_u256,
         .base_fee_scalar = 0,
         .blob_base_fee_scalar = 0,
         .blob_base_fee = 0_u256,
@@ -357,7 +372,9 @@ BOOST_AUTO_TEST_CASE(DelegatedCallAfterAuthorization)
 
 // chain_id == 0 表示「对任何链有效」。丢掉 `auth.chain_id != 0 &&` 这半个条件，会把这类
 // universal 授权在所有链上一律误拒。
-BOOST_AUTO_TEST_CASE(ChainIdZeroIsUniversal)
+// clang-format off
+BOOST_AUTO_TEST_CASE(ChainIdZeroIsUniversal, * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -386,7 +403,9 @@ BOOST_AUTO_TEST_CASE(ChainIdZeroIsUniversal)
 
 // EIP-2：s 必须 <= secp256k1n/2。高 s 是同一签名的可延展变体，去掉该守卫后 ecrecover 仍会
 // 成功恢复出某个地址并写入委托。
-BOOST_AUTO_TEST_CASE(HighSValueIsRejected)
+// clang-format off
+BOOST_AUTO_TEST_CASE(HighSValueIsRejected, * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -412,7 +431,9 @@ BOOST_AUTO_TEST_CASE(HighSValueIsRejected)
 }
 
 // y-parity 只能是 0 或 1。去掉该守卫后 v=2 会被 `auth.v != 0` 当成 parity 1 送进 ecrecover。
-BOOST_AUTO_TEST_CASE(InvalidYParityIsRejected)
+// clang-format off
+BOOST_AUTO_TEST_CASE(InvalidYParityIsRejected, * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -448,7 +469,9 @@ BOOST_AUTO_TEST_CASE(InvalidYParityIsRejected)
 // 2^64-1，步骤 6 即放行，此时唯一还能拦住这条授权的就是步骤 2。
 constexpr auto kNonceMaxRecovered = 0x4e2cad1f006ebe3e4b701d4e77bc145167fb8ede_address;
 
-BOOST_AUTO_TEST_CASE(NonceMaxIsRejected)
+// clang-format off
+BOOST_AUTO_TEST_CASE(NonceMaxIsRejected, * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -483,7 +506,9 @@ BOOST_AUTO_TEST_CASE(NonceMaxIsRejected)
 
 // 步骤 5：authority 已有非委托代码（普通合约）时必须跳过，否则会把一个已部署合约的代码
 // 覆盖成委托描述符。这里签名与状态 nonce 都匹配，唯一该拦住它的就是这条代码检查。
-BOOST_AUTO_TEST_CASE(AuthorityWithNonDelegatedCodeIsSkipped)
+// clang-format off
+BOOST_AUTO_TEST_CASE(AuthorityWithNonDelegatedCodeIsSkipped, * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;

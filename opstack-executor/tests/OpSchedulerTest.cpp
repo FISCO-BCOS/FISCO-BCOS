@@ -9,7 +9,8 @@
 // finalizeOpBlockResult).
 // 2. ConsensusRejectionClassifiedAsOpConsensusRejected: 0x03 type byte → OpConsensusRejected.
 // 3. classifyException: OpConsensusError→OpConsensusRejected / OpStorageError→OpStorageFault /
-// other→UnknownError.
+//    other→UnknownError.
+#include <bcos-evm/test/opstack/support/OpForkFlagsCompat.h>
 #include <opstack-executor/OpCommitments.h>    // detail::toBcosH256
 #include <opstack-executor/OpDepositEncode.h>  // encodeDepositEnvelope
 #include <opstack-executor/OpScheduler.h>
@@ -341,9 +342,11 @@ struct Fixture
             std::make_shared<bcos::storage::LegacyStorageWrapper<BackendMemStorage>>(
                 backendStorage)),
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
-        scheduler(
-            std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory, hashImpl,
-                kChainId, forkSchedule, blockFactory, multiLayerStorage, ledger, ioServicePool))
+        scheduler(std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory,
+            hashImpl, kChainId,
+            std::make_shared<bcos::evm::opstack::OpForkSchedule>(
+                bcos::evm::opstack::OpForkSchedule::fromLedgerSchedule(schedule)),
+            blockFactory, multiLayerStorage, ledger, ioServicePool))
     {
         seedSender(multiLayerStorage, kSender, hashImpl);
         seedSysTables(multiLayerStorage);
@@ -606,7 +609,9 @@ bcos::evm::engine::OpExecuteBlockResult runExecutionProbe(Fixture& f, ViewType& 
 {
     namespace op = bcos::evm::opstack;
     namespace detail = bcos::evm::engine::detail;
-    const auto& cfg = op::configAt(f.forkSchedule, detail::forkTimestampSec(header.timestamp()));
+    const auto foldedSchedule = op::OpForkSchedule::fromLedgerSchedule(f.forkSchedule);
+    const auto& cfg = foldedSchedule.configAt(
+        bcos::engine::unixSecondsFromInternalMillis(static_cast<uint64_t>(header.timestamp())));
     // Build block-order transactions first (mirroring buildOpBlock: opEnvelopeToTars + full
     // envelope overwrite).
     std::vector<bcos::protocol::Transaction::ConstPtr> transactions;
@@ -629,8 +634,9 @@ bcos::evm::engine::OpExecuteBlockResult runExecutionProbe(Fixture& f, ViewType& 
     std::optional<std::string> hashErr;
     std::optional<uint16_t> daFootprintGasScalar;
     std::optional<detail::RecentBlockHashes<ViewType>> hashes;
-    bcos::evm::engine::preBlockOpSteps(
-        view, header, cfg, rawTxBytes, deposits, executor, hashes, hashErr, daFootprintGasScalar);
+    auto const schedule = op::OpForkSchedule::legacy(false);
+    bcos::evm::engine::preBlockOpSteps(view, header, cfg, rawTxBytes, deposits, executor, hashes,
+        hashErr, daFootprintGasScalar, &schedule, /*parentTsSec=*/0);
     bcos::executor_v1::opstack::OpBlockExecutionContext ctx{.fee = {},
         .blockGasLeft = static_cast<int64_t>(header.gasLimit()),
         .blockHashes = &*hashes,
@@ -680,6 +686,34 @@ std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeHeaderAt(
     h->setParentInfo(
         bcos::protocol::ParentInfo{.blockNumber = number - 1, .blockHash = bcos::h256{}});
     h->setBaseFee(baseFee);
+    return h;
+}
+
+/// A Regolith-timestamp header whose withdrawalsRoot is ABSENT, as the pre-Canyon RLP shape
+/// requires (EIP-4895 appears at Canyon, so rebuildOpEthHeader emits no such field at Regolith).
+/// blobGasUsed / parentBeaconBlockRoot are stamped only because the scheduler's non-lenient
+/// toBlockInfo demands them regardless of fork; they are inert under the London revision.
+/// Commitment fields are back-filled by the caller.
+std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeRegolithHeader()
+{
+    auto h = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
+    h->setNumber(1);
+    h->setTimestamp(0x3f2 * 1000);  // 1010 s (OP seconds) → 1_010_000 ms
+    h->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = 0,
+        .blockHash =
+            bcos::h256{"0x45daac1c62119a8624509cd80f0b2543f6c78fd21457213af891d8a6d8b14f74"}});
+    h->setCoinbase(bcos::Address{"0x4200000000000000000000000000000000000011"});
+    h->setStateRoot(bcos::h256{});
+    h->setTxsRoot(bcos::h256{});
+    h->setReceiptsRoot(bcos::h256{});
+    h->setGasLimit(bcos::u256(0x989680));
+    h->setGasUsed(bcos::u256(0));
+    h->setExtraData(bcos::bytes{});
+    h->setPrevRandao(bcos::h256{});
+    h->setBaseFee(bcos::u256(0x3a699d00));
+    h->setBlobGasUsed(bcos::u256(0));
+    h->setParentBeaconBlockRoot(
+        bcos::h256{"0x0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"});
     return h;
 }
 
@@ -1148,8 +1182,10 @@ BOOST_AUTO_TEST_CASE(CommitWithoutLedgerReturnsInvalidStatus)
 {
     Fixture f;
     auto execOnly = std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(f.receiptFactory,
-        f.hashImpl, kChainId, f.forkSchedule, f.blockFactory, f.multiLayerStorage, nullptr,
-        f.ioServicePool);
+        f.hashImpl, kChainId,
+        std::make_shared<bcos::evm::opstack::OpForkSchedule>(
+            bcos::evm::opstack::OpForkSchedule::fromLedgerSchedule(f.forkSchedule)),
+        f.blockFactory, f.multiLayerStorage, nullptr, f.ioServicePool);
     auto saved = f.scheduler;
     f.scheduler = execOnly;
 
@@ -1281,6 +1317,14 @@ BOOST_AUTO_TEST_CASE(ExecuteBlockSelectsForkFromTheBlockTimestamp)
 
     auto gasUsedWithKarstAt = [&](uint64_t karstTime) {
         Fixture f(bcos::ledger::OpForkSchedule{.m_jovianTime = 0, .m_karstTime = karstTime});
+        // A scheduled Jovian makes jovianAndLaterActivations() non-empty, so for a block
+        // numbered > 0 OpScheduler fetches the parent header (Q5 activation-window input,
+        // parentTsSec) and fails closed with OpStorageFault when the row is absent (pinned
+        // by OpKarstActivationTest::JovianActivationWithoutParentHeaderFailsClosed). The
+        // fusion of this case (from #5576) with the karst schedule needs that genesis row;
+        // makeCallGenesisHeader is block 0 @ second 1000 < 0x3f2, so both arms keep the
+        // parent pre-karst and only the executed block's own timestamp selects the fork.
+        seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader());
         auto dep = makeDeposit();
         dep.to = kP256Verify;  // empty input: the precompile succeeds and only the price moves
         auto const depEnv = encodeDepositEnvelope(dep);
@@ -2685,7 +2729,7 @@ BOOST_AUTO_TEST_CASE(adoptRejectsHashMismatchWhenCommitmentsMatch)
     BOOST_REQUIRE_MESSAGE(probeCb.err == nullptr,
         "probe executeBlock failed: " << (probeCb.err ? probeCb.err->errorMessage() : ""));
 
-    // Timestamp is outside headerCommitments; changing it after the probe keeps
+    // Timestamp is outside engine::commitmentsOfHeader; changing it after the probe keeps
     // commitment equality and must still fail the hash-identity gate.
     header->setTimestamp(header->timestamp() + 1000);
     auto adoptBlock = assembleBlock(f, header, rawTxBytes);
@@ -2770,6 +2814,51 @@ BOOST_AUTO_TEST_CASE(CommitAfterResetReportsOpPendingDroppedNotUnknownError)
     BOOST_CHECK_EQUAL(
         commitErr->errorCode(), static_cast<int>(bcos::scheduler::SchedulerError::UnknownError));
     BOOST_CHECK(commitErr->errorMessage().find("Unexpected empty results") != std::string::npos);
+}
+
+/// INT-F1: at Regolith the engine's rebuildOpEthHeader announces NO withdrawalsRoot (the field
+/// appears with EIP-4895 at Canyon), while finishExecute always writes the seal's field — the
+/// zero sentinel below Canyon. The verify arm must project absent and the zero sentinel to the
+/// same commitment, as engine::commitmentsOfHeader does, or every FCU V1 Regolith payload build
+/// fails at its canonical executeBlock(verify=true) pass.
+BOOST_AUTO_TEST_CASE(RegolithVerifyArmAcceptsAbsentWithdrawalsRoot)
+{
+    Fixture f;
+    // A Regolith-current schedule is what makes the executed seal carry the zero sentinel
+    // (sealOpBlock leaves withdrawalsRoot zero below Canyon).
+    f.scheduler = std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(f.receiptFactory,
+        f.hashImpl, kChainId,
+        std::make_shared<bcos::evm::opstack::OpForkSchedule>(
+            std::vector<bcos::evm::opstack::OpForkActivation>{
+                {bcos::evm::opstack::OpFork::Regolith, 0}}),
+        f.blockFactory, f.multiLayerStorage, f.ledger, f.ioServicePool);
+
+    std::vector<bcos::bytes> const rawTxBytes{encodeDepositEnvelope(makeDeposit())};
+
+    // Probe (verify=false) for the true Regolith commitments, as the build path does before
+    // announcing a payload.
+    auto probeHeader = makeRegolithHeader();
+    auto probe = invokeExecute(f, assembleBlock(f, probeHeader, rawTxBytes), /*verify=*/false);
+    BOOST_REQUIRE_MESSAGE(probe.err == nullptr,
+        "Regolith probe failed: " << (probe.err ? probe.err->errorMessage() : ""));
+    BOOST_REQUIRE(probe.header != nullptr);
+    BOOST_CHECK_MESSAGE(probe.header->withdrawalsRoot().has_value(),
+        "Regolith execution is expected to seal the present-zero withdrawalsRoot sentinel");
+
+    // The announced header is exactly what rebuildOpEthHeader produces at Regolith: the
+    // commitment batch back-filled, but no withdrawalsRoot field at all.
+    auto announced = makeRegolithHeader();
+    announced->setStateRoot(probe.header->stateRoot());
+    announced->setTxsRoot(probe.header->txsRoot());
+    announced->setReceiptsRoot(probe.header->receiptsRoot());
+    announced->setGasUsed(probe.header->gasUsed());
+    announced->setLogsBloom(probe.header->logsBloom());
+    BOOST_REQUIRE(!announced->withdrawalsRoot().has_value());
+
+    auto cb = invokeExecute(f, assembleBlock(f, announced, rawTxBytes), /*verify=*/true);
+    BOOST_REQUIRE_MESSAGE(cb.err == nullptr, "Regolith verify arm rejected the pre-Canyon header: "
+                                                 << (cb.err ? cb.err->errorMessage() : ""));
+    BOOST_REQUIRE(cb.header != nullptr);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

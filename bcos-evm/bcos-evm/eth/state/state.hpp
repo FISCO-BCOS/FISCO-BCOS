@@ -165,7 +165,14 @@ TransactionReceipt transition(const StateView& state, const BlockInfo& block,
 /// Validate a transaction.
 ///
 /// @return Computed execution gas limit or validation error.
+struct TxValidationPolicy
+{
+    /// When false, skip the Osaka EIP-7825 per-tx gas cap. OP deposits set this
+    /// from `deposit_exempt_from_max_tx_gas` so derivation cannot brick.
+    bool enforce_max_tx_gas = true;
+};
+
 [[nodiscard]] std::variant<TransactionProperties, std::error_code> validate_transaction(
     const StateView& state_view, const BlockInfo& block, const Transaction& tx, evmc_revision rev,
-    int64_t block_gas_left, int64_t blob_gas_left) noexcept;
+    int64_t block_gas_left, int64_t blob_gas_left, TxValidationPolicy policy = {}) noexcept;
 }  // namespace evmone::state

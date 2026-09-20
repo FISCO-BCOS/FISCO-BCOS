@@ -4,8 +4,8 @@ namespace bcos::evm::opstack
 {
 namespace
 {
-// All values below come from op-geth v1.101702.2; the citations are here so a future OP Stack
-// change can be diffed against a specific line rather than re-derived.
+// Granite / Jovian input-size limits come from op-geth v1.101702.2 (line citations
+// below). Karst / Osaka numbers are protocol defaults, not named op-geth constants.
 //
 // Input-size limits — params/protocol_params.go:
 //   bn256Pairing  112687 (:172, Bn256PairingMaxInputSizeGranite)
@@ -17,9 +17,8 @@ namespace
 // why its bn256 limit stays at the Granite value rather than getting one of its own; Jovian
 // re-tightens all four.
 //
-// P256Verify gas 3450 = P256VerifyGasFjord (protocol_params.go:183), NOT the default
-// P256VerifyGas 6900 (:184) — op-geth binds 0x100 to p256VerifyFjord from Fjord onward
-// (contracts.go:193).
+// P256Verify gas 3450 = P256VerifyGasFjord (protocol_params.go:183) through Jovian.
+// Karst/Osaka switches to the protocol default P256VerifyGas 6900 (:184).
 //
 // Addresses 0x0c / 0x0e / 0x0f are EIP-2537 G1 MSM / G2 MSM / pairing. op-geth caps only the
 // MSM and pairing precompiles; G1Add (0x0b), G2Add (0x0d) and the Map ops (0x10, 0x11) carry no
@@ -40,17 +39,19 @@ constexpr PrecompileOverrides::Entry kJovianEntries[] = {
     {.addr = evmc::address{0x0f}, .gas_cost_override = -1, .max_input_size = 156672},
 };
 
-// Karst has no op-geth constant to cite: the optimism branch of params/protocol_params.go carries
-// nothing named Karst, its newest is Bn256PairingMaxInputSizeJovian = 81984. Source is the spec —
+// Karst (OP "Upgrade 19") has no op-geth constant to cite: the optimism branch of
+// params/protocol_params.go carries nothing named Karst, its newest is
+// Bn256PairingMaxInputSizeJovian = 81984. Source is the spec —
 // specs.optimism.io/protocol/karst/exec-engine.html: bn256Pairing drops "from the Jovian limit of
 // 81,984 bytes (427 pairs) to 57,600 bytes (300 pairs)", and "the other variable-input precompile
 // limits are unchanged from Jovian", which is why the three BLS entries below are Jovian's.
-// P256Verify deliberately has NO Karst entry: Karst adopts EIP-7951 (P256VERIFY at gas 6900) and
-// karstConfig().rev is EVMC_OSAKA, so with no override OpHost::call falls through to the vendored
-// Osaka-gated p256verify (precompiles.cpp:807, gas 6900) with exactly the EIP-7951 pricing -- the
-// pre-Karst 3450 (RIP-7212 P256VerifyGasFjord) entries stop at Jovian.
+// P256VERIFY (EIP-7951, gas 6900) is pinned by an explicit 0x100 entry with the EIP-7951
+// pricing — matching op-revm's karst() (clones jovian(), swaps modexp/P256/bn254-pair), the
+// oracle contract in OpPrecompilesTest.cpp; the pre-Karst 3450 (RIP-7212 P256VerifyGasFjord)
+// pricing stops at Jovian.
 constexpr PrecompileOverrides::Entry kKarstEntries[] = {
     {.addr = evmc::address{0x08}, .gas_cost_override = -1, .max_input_size = 57600},
+    {.addr = kP256VerifyAddress, .gas_cost_override = 6900, .max_input_size = 0},
     {.addr = evmc::address{0x0c}, .gas_cost_override = -1, .max_input_size = 288960},
     {.addr = evmc::address{0x0e}, .gas_cost_override = -1, .max_input_size = 278784},
     {.addr = evmc::address{0x0f}, .gas_cost_override = -1, .max_input_size = 156672},

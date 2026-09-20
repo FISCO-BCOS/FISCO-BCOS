@@ -869,7 +869,8 @@ evmc::Result call_precompile(evmc_revision rev, const evmc_message& msg) noexcep
         execute(msg.input_data, msg.input_size, output_data, max_output_size);
     const evmc_result result{status_code, status_code == EVMC_SUCCESS ? gas_left : 0, 0,
         output_data, output_size,
-        [](const evmc_result* res) noexcept { delete[] res->output_data; }};
+        [](const evmc_result* res) noexcept { delete[] res->output_data; }, {},
+        {}};  // create_address, padding
     return evmc::Result{result};
 }
 }  // namespace evmone::state

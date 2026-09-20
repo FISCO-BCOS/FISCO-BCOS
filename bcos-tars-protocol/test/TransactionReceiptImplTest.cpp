@@ -204,6 +204,30 @@ BOOST_AUTO_TEST_CASE(sizeGasUsedAndLogIndex)
     BOOST_CHECK_EQUAL(impl->size(), before + 3);
 }
 
+// F1: size() must enumerate every field that opStackMetaEmpty() treats as present,
+// including the Bedrock-era l1_fee_scalar added for S4. The getter/setter and both
+// emptiness gates were updated, but size() was not, so an OP pre-Ecotone receipt
+// under-reported by the hex length of the scalar (block-size RPC estimate).
+BOOST_AUTO_TEST_CASE(opStackMetaSizeCountsL1FeeScalar)
+{
+    auto suite = makeSuite();
+    TransactionReceiptFactoryImpl factory(suite);
+    std::vector<bcos::protocol::LogEntry> logs;
+    bcos::bytes output;
+    auto receipt = factory.createReceipt(bcos::u256(0), "", logs, 0, bcos::ref(output), 1);
+    auto impl = std::dynamic_pointer_cast<TransactionReceiptImpl>(receipt);
+    BOOST_REQUIRE(impl);
+
+    auto before = impl->size();
+    bcos::protocol::OpStackReceiptMeta meta;
+    meta.l1_fee_scalar = bcos::u256(1'000'000);  // raw slot-6 scalar; hex "0xf4240"
+    impl->setOpStackMeta(std::move(meta));
+
+    // u256ToHex(1'000'000) is the 7-byte string "0xf4240"; the exact length is the point
+    // (a zero contribution would let l1_fee_scalar be present-but-uncounted).
+    BOOST_CHECK_EQUAL(impl->size(), before + 7);
+}
+
 // --- OpStackReceiptMeta: tars round-trip + legacy-data behavior (Task 6). ---
 // Every round-trip below goes through the real tars wire format: setOpStackMeta -> encode
 // -> decode -> opStackMeta.
@@ -362,6 +386,81 @@ BOOST_AUTO_TEST_CASE(opStackMetaRejectsCorruptAndOverwideHex)
     BOOST_CHECK(!got->da_footprint.has_value());    // 9-byte u64 rejected
     BOOST_REQUIRE(got->deposit_nonce.has_value());  // 8-byte u64 boundary accepted
     BOOST_CHECK_EQUAL(*got->deposit_nonce, std::numeric_limits<uint64_t>::max());
+}
+
+// U9-F1 (defensive completeness): opStackMeta()'s second all-null guard must count
+// l1_fee_scalar, symmetric with opStackMetaEmpty() which already counts it. A receipt whose
+// ONLY OP metadata is the Bedrock scalar must still report a present meta instead of
+// collapsing to nullopt.
+// NOTE: no live producer emits this shape -- OpTransition.cpp's deriveOpReceiptMeta always
+// sets l1_gas_price and l1_fee together (and runDeposit always sets deposit_nonce) -- so the
+// failing shape is reachable only through the public setOpStackMeta() API or a hand-built /
+// externally-decoded tars struct. This pins the invariant for those paths.
+BOOST_AUTO_TEST_CASE(opStackMetaLoneFeeScalarKeepsMetaPresent)
+{
+    // Shape A: hand-built tars inner carrying only the Bedrock scalar.
+    auto tars = std::make_shared<bcostars::TransactionReceipt>();
+    tars->opStackMeta.l1_fee_scalar = "0xf4240";
+    TransactionReceiptImpl impl([tars]() { return tars.get(); });
+    auto got = impl.opStackMeta();
+    BOOST_REQUIRE_MESSAGE(got.has_value(), "lone-scalar tars inner dropped by all-null guard");
+    BOOST_REQUIRE(got->l1_fee_scalar.has_value());
+    BOOST_CHECK_EQUAL(*got->l1_fee_scalar, bcos::u256(1'000'000));
+
+    // Shape B: public setOpStackMeta() with only l1_fee_scalar.
+    auto suite = makeSuite();
+    TransactionReceiptFactoryImpl factory(suite);
+    std::vector<bcos::protocol::LogEntry> logs;
+    bcos::bytes output;
+    auto receipt = factory.createReceipt(bcos::u256(0), "", logs, 0, bcos::ref(output), 1);
+    auto impl2 = std::dynamic_pointer_cast<TransactionReceiptImpl>(receipt);
+    BOOST_REQUIRE(impl2);
+    bcos::protocol::OpStackReceiptMeta meta;
+    meta.l1_fee_scalar = bcos::u256(1'000'000);
+    impl2->setOpStackMeta(std::move(meta));
+    auto got2 = impl2->opStackMeta();
+    BOOST_REQUIRE_MESSAGE(got2.has_value(), "lone-scalar via setter dropped by all-null guard");
+    BOOST_REQUIRE(got2->l1_fee_scalar.has_value());
+    BOOST_CHECK_EQUAL(*got2->l1_fee_scalar, bcos::u256(1'000'000));
+}
+
+// U9-F5: real tars wire round-trip for l1_fee_scalar. The existing tests only hand the field
+// through the in-memory struct for l1_fee/operator_fee/deposit fields; this one goes
+// setOpStackMeta -> encode -> decode -> opStackMeta and covers both an explicit zero (which
+// tars stores as the non-empty "0x0", so its presence must survive) and a non-zero value.
+// Because only the scalar is set, this test also guards the U9-F1 all-null gate.
+BOOST_AUTO_TEST_CASE(opStackMetaRoundTripL1FeeScalarWire)
+{
+    auto const roundTrip = [](bcos::u256 scalar) {
+        auto suite = makeSuite();
+        TransactionReceiptFactoryImpl factory(suite);
+        std::vector<bcos::protocol::LogEntry> logs;
+        bcos::bytes output;
+        auto receipt = factory.createReceipt(bcos::u256(0), "", logs, 0, bcos::ref(output), 1);
+        auto impl = std::dynamic_pointer_cast<TransactionReceiptImpl>(receipt);
+        BOOST_REQUIRE(impl);
+        bcos::protocol::OpStackReceiptMeta meta;
+        meta.l1_fee_scalar = scalar;
+        impl->setOpStackMeta(std::move(meta));
+
+        bcos::bytes encoded;
+        impl->encode(encoded);
+        TransactionReceiptImpl decoded;
+        decoded.decode(bcos::ref(encoded));
+        return decoded.opStackMeta();
+    };
+
+    // Explicit-zero scalar: present-with-0 must not be conflated with "never set".
+    auto zero = roundTrip(bcos::u256(0));
+    BOOST_REQUIRE_MESSAGE(zero.has_value(), "explicit-zero l1_fee_scalar dropped on the wire");
+    BOOST_REQUIRE(zero->l1_fee_scalar.has_value());
+    BOOST_CHECK_EQUAL(*zero->l1_fee_scalar, bcos::u256(0));
+
+    // Non-zero scalar: the u256 hex payload survives encode/decode.
+    auto nonZero = roundTrip(bcos::u256(1'000'000));
+    BOOST_REQUIRE_MESSAGE(nonZero.has_value(), "non-zero l1_fee_scalar dropped on the wire");
+    BOOST_REQUIRE(nonZero->l1_fee_scalar.has_value());
+    BOOST_CHECK_EQUAL(*nonZero->l1_fee_scalar, bcos::u256(1'000'000));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

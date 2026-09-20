@@ -69,9 +69,14 @@ tools/BcosProBuilder/generated**
 tools/BcosAirBuilder/*
 *.log
 
-# t8n reference vectors: the vendored S6 subset that OpEngineServiceExecParityTest
-# executes is TRACKED (6 JSON under vectors/ + golden/engine/); other locally
-# regenerated vector/golden files stay untracked.
+# t8n corpus: the path itself is a symlink to the FISCO-BCOS/op-stack-e2e-tests
+# checkout (CI provisions it via tools/.ci/provision_t8n_corpus.sh; tracking a
+# machine-absolute symlink broke CI checkouts — see finding F-CI-2). The patterns
+# below are leftovers from the earlier in-tree vendored subset; git cannot
+# re-include files under an ignored parent, so the ! entries are inert by design.
+opstack-executor/tests/t8n
+# Provisioning marker written next to the symlink (tools/.ci/provision_t8n_corpus.sh)
+opstack-executor/tests/.t8n-pin
 bcos-evm/test/opstack/t8n/cases/
 opstack-executor/tests/t8n/cases/
 opstack-executor/tests/t8n/vectors/*.json
@@ -90,5 +95,28 @@ test/*
 # Claude Code
 CLAUDE.local.md
 .worktrees/
+
+# Review intermediate artifacts — never commit into a product branch.
+.agents/reviews/
 .claude/worktrees
 .claude/agents
+
+# RocksDB unittest working directory (created by UT runs, never commit).
+unittestdb/
+
+# Process/planning documents stay local-only (archived under ~/octo/docs-archive).
+docs/plans/
+
+# Local C2 e2e scratch dirs (tools/.ci/c2-e2e.sh defaults for OP_MONOREPO /
+# OP_E2E_DIR / BIN_DIR). CI checks these out inside its own workspace, so they must
+# never be committed -- an unignored scratch dir is how a stray `git add -A` sweeps
+# third-party checkouts and local binaries into a PR.
+.ci-op-monorepo/
+.ci-op-e2e-tests/
+.ci-c2-bins/
+
+# Dated working documents (audit/design snapshots) stay local: their baselines and
+# sibling documents live on other branches, so an in-tree copy carries dangling
+# cross-references and goes stale silently. Keep the files in the workspace and the
+# local archive; see ~/octo/docs-archive.
+docs/2*-*.md

@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """
-mock_consensus_client.py — FISCO-BCOS Engine API Smoke Test (Karst dialect)
+mock_consensus_client.py — FISCO-BCOS Engine API Smoke Test (Eth Cancun)
 
-模拟 op-node 对 EL 节点的 Engine API 调用流程(W0 mock,B4 起说 Karst 方言):
+Pairs with tools/engine_integration_test.sh: executor_version=2 +
+evm_revision=cancun → EthEngineService / supportedCapabilities().
+This is not the OP lane (OpEngineService / supportedOpCapabilities()).
 
-  1. engine_exchangeCapabilities   — 节点实现的全部方法(Karst 三件套 + V1-V3 旧版本)
+  1. engine_exchangeCapabilities   — Eth method set, exact match
   2. engine_forkchoiceUpdatedV3    — 无 payloadAttributes(纯状态更新)
   3. engine_forkchoiceUpdatedV3    — 带 payloadAttributes:秒级时间戳、注入一笔 0x7e
                                      deposit 裸交易、noTxPool true/false 轮换
   4. engine_getPayloadV5           — 校验 V5 响应形状,断言 deposit 原字节在列
   5. engine_newPayloadV4           — [payload, [], beaconRoot, []] 提交
-  6. V2 旧版本回路                 — FCU V2 -> getPayloadV2 -> newPayloadV2 仍然可用
+  6. FCU V2                        — Cancun 链上 -38005（V2 属性形盖不住 parentBeacon）
   7. 负测                          — 未实现版本 -38005、未知 payloadId -38001、缺参 -32602
 
 用法:
@@ -48,9 +50,9 @@ ZERO_HASH = "0x" + "00" * 32
 FEE_RECIPIENT = "0x0000000000000000000000000000000000000001"
 PREV_RANDAO = "0x" + "00" * 31 + "01"
 
-# Everything the node implements (must match detail::supportedCapabilities()). The list is
-# NOT narrowed to the active fork: op-geth advertises its whole method set and lets the CL
-# pick, and the pre-Karst versions stay served.
+# Must match engine_common::supportedCapabilities() (Eth lane). Do not swap in
+# supportedOpCapabilities() — the OP list carries newPayload V2-V4 and getPayload
+# V2-V5 but no V1 methods, and would fail exact-match against this Cancun harness.
 EXPECTED_CAPABILITIES = {
     "engine_exchangeCapabilities",
     "engine_forkchoiceUpdatedV1",
@@ -749,13 +751,13 @@ def main() -> int:
         _log_info("JWT token generated")
 
     print("=" * 50)
-    print("  FISCO-BCOS Engine API Smoke Test (Karst dialect)")
+    print("  FISCO-BCOS Engine API Smoke Test (Eth Cancun)")
     print(f"  Target: {RPC_URL}")
     print("=" * 50)
     print()
 
     try:
-        # 1. Capability negotiation: Karst-only surface.
+        # 1. Capability negotiation: Eth supportedCapabilities() exact match.
         test_exchange_capabilities()
 
         # 2. Pure forkchoice update (no payload build).
@@ -771,7 +773,7 @@ def main() -> int:
         elif run_karst_block_flow(no_tx_pool=True):
             run_karst_block_flow(no_tx_pool=False)
 
-        # 6. The pre-Karst surface is still live.
+        # 6. FCU V2 on this Cancun chain is -38005, not a live V2 loop.
         run_v2_block_flow()
 
         # 7. Holocene/Jovian attribute fields are forkchoiceUpdatedV3-only.

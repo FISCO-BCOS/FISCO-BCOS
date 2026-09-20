@@ -110,6 +110,13 @@ constexpr static std::string_view SYSTEM_KEY_EXCESS_BLOB_GAS = magic_enum::enum_
 // A3: eth-genesis (L2) chains store the FISCO genesis pin here instead of in B0's
 // extraData — B0's extraData carries the genesis artifact bytes and enters the RLP hash.
 constexpr static std::string_view INTERNAL_SYSTEM_KEY_ETH_GENESIS_DATA = "eth_genesis_data";
+constexpr static std::string_view INTERNAL_SYSTEM_KEY_OP_EIP1559_PARAMS = "op_eip1559_params";
+// OP lane: the RESOLVED canonical fork schedule ("0:isthmus,1000:karst" form), written at
+// genesis for both declaration channels ([op_fork_schedule] verbatim, [op_fork_timestamps]
+// folded) so every snapshot read (getLedgerConfig -> RPC estimate gas-cap gate) keys fork
+// activation on the chain's own schedule (M1).
+constexpr static std::string_view INTERNAL_SYSTEM_KEY_OP_FORK_SCHEDULE =
+    magic_enum::enum_name(SystemConfig::op_fork_schedule);
 // clang-format on
 constexpr static std::string_view PBFT_CONSENSUS_TYPE = "pbft";
 constexpr static std::string_view RPBFT_CONSENSUS_TYPE = "rpbft";
@@ -153,6 +160,8 @@ constexpr static std::string_view SYS_NUMBER_2_BLOCK_HEADER{"s_number_2_header"}
 constexpr static std::string_view SYS_NUMBER_2_TXS{"s_number_2_txs"};
 constexpr static std::string_view SYS_HASH_2_TX{"s_hash_2_tx"};
 constexpr static std::string_view SYS_HASH_2_RECEIPT{"s_hash_2_receipt"};
+// OP fork schedule metadata (all-or-none triple; see ChainMetadata.h).
+constexpr static std::string_view SYS_CHAIN_METADATA{"s_chain_metadata"};
 constexpr static std::string_view DAG_TRANSFER{"/tables/dag_transfer"};
 constexpr static std::string_view SMALLBANK_TRANSFER{"/tables/smallbank_transfer"};
 constexpr static std::string_view SYS_CODE_BINARY{"s_code_binary"};

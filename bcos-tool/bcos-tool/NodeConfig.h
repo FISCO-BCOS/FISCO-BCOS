@@ -100,6 +100,12 @@ public:
     /// Isthmus is the lane baseline and has no entry.
     std::optional<ledger::OpForkSchedule> const& opForkSchedule() const;
 
+    /// The chain's EIP-1559 triple from the genesis [op_eip1559] section, or nullopt when the
+    /// section is absent (the engine then prices with kLegacyOpEip1559Params). Chain-level and
+    /// genesis-frozen: two nodes disagreeing about it would price the same height differently,
+    /// so it is part of the genesis pin via generateGenesisData.
+    std::optional<ledger::OpEip1559Params> const& opEip1559() const;
+
     std::string const& privateKeyPath() const;
     std::string const& hsmLibPath() const;
     int const& keyIndex() const;
@@ -397,8 +403,13 @@ protected:
     void loadExecutorConfig(boost::property_tree::ptree const& _pt);
     // EL-mode timestamp fork schedule ([fork_timestamps] in config.genesis)
     void loadForkTimestamps(boost::property_tree::ptree const& _genesisConfig);
+    // OP-Stack canonical fork schedule ([op_fork_schedule] in config.genesis).
+    // Missing section leaves m_opstackForkSchedule unset (legacy via feature_op_jovian).
+    void loadOpForkSchedule(boost::property_tree::ptree const& _genesisConfig);
     // OP-lane fork schedule ([op_fork_timestamps] in config.genesis)
     void loadOpForkTimestamps(boost::property_tree::ptree const& _genesisConfig);
+    // OP-lane chain EIP-1559 parameters ([op_eip1559] in config.genesis)
+    void loadOpEip1559(boost::property_tree::ptree const& _genesisConfig);
 
     // load config.ini
     void loadExecutorNormalConfig(boost::property_tree::ptree const& _pt);

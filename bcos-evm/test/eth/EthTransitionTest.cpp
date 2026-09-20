@@ -4,7 +4,9 @@
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <bcos-evm/eth/state/hash_utils.hpp>  // keccak256（Stub 的 code_hash 计算）
+#include <bcos-evm/eth/state/host.hpp>
 #include <bcos-evm/eth/state/state.hpp>
+#include <bcos-evm/eth/state/system_contracts.hpp>
 #include <map>
 #include <system_error>
 #include <variant>
@@ -320,6 +322,127 @@ BOOST_AUTO_TEST_CASE(AuthorizationForAnotherChainIsSkipped)
                 "no account may receive a delegation designator on a foreign chain");
         }
     }
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+// ==========================================================================
+// EIP-4788 beacon roots（BEACON_ROOTS_ADDRESS）钉子格。
+// 生产入口：OpBlockExecute.h 的 preBlockOpSteps → system_call_block_start；
+// 该 entry 由 bcos-evm/eth/state/system_contracts.cpp 以 EVMC_CANCUN（Ecotone）档启用。
+// kBeaconRootsCode 是主网真实部署的历史根合约字节码（97 字节），与语料
+// isthmus/jovian_system_contracts_real.json preState 中 0x000f...beac02 的 code
+// 逐字一致（语料只读，此处为拷贝常量）；golden 重放（OpNewPayloadRpcE2eTest
+// ::runGoldenVector）覆盖 Ecotone+ 正常写路径（WI-24 格①，不在此重建）。
+// ==========================================================================
+const auto kBeaconRootsCode = evmc::from_hex(
+    "3373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35"
+    "801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b"
+    "62001fff42064281555f359062001fff015500")
+                                  .value();
+
+BOOST_AUTO_TEST_SUITE(BeaconRootsSystemContractTest)
+
+// 格② pre-Ecotone 负向：beacon roots entry 的 since = EVMC_CANCUN，Ecotone 之前
+// （Regolith=EVMC_PARIS / Canyon=EVMC_SHANGHAI）不得执行该系统调用 —— 语义上等价于
+// EIP-4788 的"if no code exists at [address], the call must fail silently"：
+// 地址无合约 → 空码/空效果，绝不是 panic 或意外状态写入。本格故意把真实字节码
+// 预置在 BEACON_ROOTS_ADDRESS 并给非零 parent_beacon_block_root：一旦档位 gate
+// 被放开，写路径会把 SSTORE 写进 diff，断言立即失败（反向验证可 RED）。
+// clang-format off
+BOOST_AUTO_TEST_CASE(PreEcotoneDoesNotRunBeaconRootsSystemCall, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon"))
+// clang-format on
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+
+    // (a) 档位 gate：pre-Ecotone（Canyon = EVMC_SHANGHAI）即使地址有码也不执行。
+    {
+        StubState stub;
+        auto& acc = stub.accounts[state::BEACON_ROOTS_ADDRESS];
+        acc.code = kBeaconRootsCode;
+        acc.nonce = 1;
+        state::BlockInfo block;
+        block.number = 1000;
+        block.timestamp = 1000;
+        block.gas_limit = 30'000'000;
+        block.parent_beacon_block_root =
+            0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20_bytes32;
+        const StubBlockHashes hashes;
+
+        const auto diff = state::system_call_block_start(stub, block, hashes, EVMC_SHANGHAI, vm);
+        BOOST_CHECK_MESSAGE(diff.modified_accounts.empty(),
+            "pre-Ecotone must not execute the beacon roots system call");
+    }
+
+    // (b) Ecotone 档但地址无码（账户不存在）：EIP-4788 要求静默跳过 —— 空返回、
+    // 不 panic、diff 为空。
+    {
+        StubState stub;  // BEACON_ROOTS_ADDRESS 无账户、无码
+        state::BlockInfo block;
+        block.number = 1000;
+        block.timestamp = 1000;
+        block.gas_limit = 30'000'000;
+        block.parent_beacon_block_root =
+            0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20_bytes32;
+        const StubBlockHashes hashes;
+
+        const auto diff = state::system_call_block_start(stub, block, hashes, EVMC_CANCUN, vm);
+        BOOST_CHECK_MESSAGE(diff.modified_accounts.empty(),
+            "Cancun with no code at BEACON_ROOTS_ADDRESS must fail silently per EIP-4788");
+    }
+}
+
+// 格③ 未记录时间戳 → 空返回：Ecotone 档下以普通调用者向 BEACON_ROOTS_ADDRESS 发起
+// 32 字节 calldata 的查询（ring buffer 为空，时间戳必然未命中）。实现即主网真实
+// 字节码：查询路径在 sload(ts & 0x1fff) != ts 时执行 revert(0,0)——即 EVMC_REVERT
+// 且返回数据 0 长度。注意 EIP-4788 参考实现的未命中语义是"revert 空数据"而非
+// "返回 32 字节全零"，本断言以代码实际行为为准。
+// clang-format off
+BOOST_AUTO_TEST_CASE(UnknownTimestampRevertsWithEmptyOutput, * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    StubState stub;
+    auto& acc = stub.accounts[state::BEACON_ROOTS_ADDRESS];
+    acc.code = kBeaconRootsCode;
+    acc.nonce = 1;
+    // ring buffer 完全为空：没有任何时间戳被记录过。
+
+    state::BlockInfo block;
+    block.number = 1000;
+    block.timestamp = 1000;
+    block.gas_limit = 30'000'000;
+    const StubBlockHashes hashes;
+    const state::Transaction emptyTx{};
+    state::State st{stub};
+    state::Host host{EVMC_CANCUN, vm, st, block, hashes, emptyTx};
+
+    // 一个从未出块的未来时间戳（不在 ring 中，且非 0）。
+    const auto ts = 0x000000000000000000000000000000000000000000000000000000007fffffff_bytes32;
+    constexpr auto kCaller = 0x0000000000000000000000000000000000001234_address;
+    const evmc_message msg{
+        .kind = EVMC_CALL,
+        .flags = 0,
+        .depth = 0,
+        .gas = 30'000'000,
+        .recipient = state::BEACON_ROOTS_ADDRESS,
+        .sender = kCaller,  // 非 SYSTEM_ADDRESS → 走查询路径而非写路径
+        .input_data = ts.bytes,
+        .input_size = sizeof(ts.bytes),
+        .value = {},
+        .create2_salt = {},
+        .code_address = {},
+        .code = nullptr,
+        .code_size = 0,
+    };
+
+    const auto res =
+        vm.execute(host, EVMC_CANCUN, msg, kBeaconRootsCode.data(), kBeaconRootsCode.size());
+    BOOST_CHECK_MESSAGE(res.status_code == EVMC_REVERT,
+        "unknown timestamp must revert per the deployed EIP-4788 bytecode, got status "
+            << static_cast<int>(res.status_code));
+    BOOST_CHECK_MESSAGE(res.output_size == 0,
+        "miss path reverts with EMPTY revert data (revert(0,0)), not 32 zero bytes");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

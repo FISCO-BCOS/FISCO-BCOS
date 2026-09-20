@@ -413,17 +413,13 @@ evmc_tx_context Host::get_tx_context() const noexcept
 
     return evmc_tx_context{
         intx::be::store<uint256be>(effective_gas_price),  // By EIP-1559.
-        m_tx.sender,
-        m_block.coinbase,
-        m_block.number,
-        m_block.timestamp,
-        m_block.gas_limit,
+        m_tx.sender, m_block.coinbase, m_block.number, m_block.timestamp, m_block.gas_limit,
         m_block.prev_randao,
         0x01_bytes32,  // Chain ID is expected to be 1.
-        uint256be{m_block.base_fee},
-        intx::be::store<uint256be>(m_block.blob_base_fee.value_or(0)),
-        m_tx.blob_hashes.data(),
-        m_tx.blob_hashes.size(),
+        uint256be{m_block.base_fee}, intx::be::store<uint256be>(m_block.blob_base_fee.value_or(0)),
+        m_tx.blob_hashes.data(), m_tx.blob_hashes.size(),
+        nullptr,  // initcodes
+        0,        // initcodes_count
     };
 }
 
@@ -443,7 +439,11 @@ evmc_access_status Host::access_account(const address& addr) noexcept
     if (m_rev < EVMC_BERLIN)
         return EVMC_ACCESS_COLD;  // Ignore before Berlin.
 
-    auto& acc = m_state.get_or_insert(addr, {.erase_if_empty = true});
+    auto& acc = m_state.get_or_insert(addr, {.balance = {},
+                                                .storage = {},
+                                                .transient_storage = {},
+                                                .code = {},
+                                                .erase_if_empty = true});
 
     if (acc.access_status == EVMC_ACCESS_WARM || is_precompile(m_rev, addr))
         return EVMC_ACCESS_WARM;

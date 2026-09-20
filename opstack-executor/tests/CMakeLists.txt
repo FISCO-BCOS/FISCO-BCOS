@@ -142,5 +142,108 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
         -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
 endif()
 
-# OpEngineServiceParityTest lives in engine/test (S5); the t8n corpus vectors/goldens are
-# tracked under opstack-executor/tests/t8n/ and are exercised by the engine exec parity suite.
+# Block-level t8n replay + engine RPC e2e (full corpus external; see tools/.ci/provision_t8n_corpus.sh).
+add_executable(opstack-executor-block-tests
+    TestMain.cpp
+    OpT8nReplayTest.cpp
+    OpNewPayloadRpcE2eTest.cpp
+    OpL1EdgeGateTest.cpp
+    OpL1BlockDepositTest.cpp
+    OpBlockInjectorTest.cpp
+    OpEngineBranchSmokeTest.cpp
+    OpDualPathEquivalenceTest.cpp
+    OpGoldenCorpusProvenanceTest.cpp
+    OpDaMatrixSchemaTest.cpp
+    OpKarstActivationTest.cpp
+    OpKarstReleaseGateTest.cpp
+    support/GoldenSampleTest.cpp
+    support/KarstNutHelpers.cpp
+)
+set_target_properties(opstack-executor-block-tests PROPERTIES UNITY_BUILD OFF)
+target_link_libraries(opstack-executor-block-tests PRIVATE
+    opstack-executor
+    bcosevm::opstack
+    codec
+    protocol-tars
+    ledger
+    engine
+    bcos-utilities
+    jsoncpp_static
+    rpc
+    transaction-scheduler
+    evmone::evmone
+    Boost::unit_test_framework
+    blst
+)
+target_include_directories(opstack-executor-block-tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/bcos-ledger
+    ${CMAKE_SOURCE_DIR}/bcos-rpc
+    ${CMAKE_SOURCE_DIR}/bcos-evm/test/opstack)
+target_compile_definitions(opstack-executor-block-tests PRIVATE
+    OP_T8N_VECTORS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/t8n/vectors"
+    OP_T8N_GOLDEN_ENGINE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/t8n/golden/engine"
+    OP_DA_MATRIX_PATH="${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/da_matrix.json")
+# Mirrors engine/test/CMakeLists.txt:47-48. Without this the provenance test's
+# "corpus absent" branch skips in CI as well, and the M2 envelope baseline
+# degenerates into "no cells checked" while staying green.
+if(REQUIRE_T8N_CORPUS OR DEFINED ENV{GITHUB_ACTIONS} OR DEFINED ENV{CI})
+    target_compile_definitions(opstack-executor-block-tests PRIVATE FISCO_REQUIRE_T8N_CORPUS=1)
+endif()
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    target_compile_options(opstack-executor-block-tests PRIVATE
+        -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
+endif()
+add_test(NAME OpstackExecutorBlockTests COMMAND opstack-executor-block-tests)
+
+add_custom_target(op-karst-release-gate
+    COMMAND ${CMAKE_SOURCE_DIR}/tools/check-op-karst-release-gate.sh
+    COMMAND ${CMAKE_CURRENT_BINARY_DIR}/opstack-executor-block-tests --run_test=OpKarstReleaseGateSuite
+    DEPENDS opstack-executor-block-tests
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+add_test(NAME OpKarstReleaseGate
+    COMMAND bash -c
+    "${CMAKE_SOURCE_DIR}/tools/check-op-karst-release-gate.sh && \
+     ${CMAKE_CURRENT_BINARY_DIR}/opstack-executor-block-tests --run_test=OpKarstReleaseGateSuite")
+
+add_executable(opstack-executor-detail-tests
+    TestMain.cpp
+    OpMismatchedFieldTest.cpp
+)
+set_target_properties(opstack-executor-detail-tests PROPERTIES UNITY_BUILD OFF)
+target_link_libraries(opstack-executor-detail-tests PRIVATE
+    opstack-executor
+    codec
+    evmone::evmone
+    intx::intx
+    Boost::unit_test_framework
+    bcos-utilities
+    protocol-tars
+    blst
+)
+add_test(NAME OpstackExecutorDetailTests COMMAND opstack-executor-detail-tests)
+
+# DA/operator-fee matrix runner (op-alignment line).
+add_executable(opstack-da-matrix-runner da-matrix/run_fisco.cpp)
+set_target_properties(opstack-da-matrix-runner PROPERTIES UNITY_BUILD OFF)
+target_link_libraries(opstack-da-matrix-runner PRIVATE
+    opstack-executor
+    bcosevm::opstack
+    jsoncpp_static
+    evmone::evmone
+    intx::intx
+    bcos-utilities
+    blst
+)
+add_test(NAME DaMatrixFiscoBaseline COMMAND opstack-da-matrix-runner
+    --grid ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/da_matrix.json
+    --out ${CMAKE_CURRENT_BINARY_DIR}/out_fisco.json)
+add_test(NAME DaMatrixFiscoCheckOpgeth COMMAND opstack-da-matrix-runner
+    --grid ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/da_matrix.json
+    --check opgeth
+    --golden ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/golden/opgeth)
+add_test(NAME DaMatrixFiscoCheckOpRevm COMMAND opstack-da-matrix-runner
+    --grid ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/da_matrix.json
+    --check oprevm
+    --golden ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/golden/oprevm)
