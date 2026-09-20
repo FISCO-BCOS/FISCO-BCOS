@@ -16,10 +16,13 @@
  * @file EthereumSystemCalls.h
  * @brief Production wiring for the Cancun/Prague block-level system calls
  *        (EIP-4788 beacon roots, EIP-2935 historical block hashes at block start;
- *        EIP-7002/7251 execution-layer requests at block end): runs bcos-evm's
- *        evmone-ported system_call_block_start / system_call_block_end over the
- *        executed storage2 view through the shared Storage2State bridge and
- *        writes the resulting state diff back into the view.
+ *        EIP-7002/7251 execution-layer requests at block end): adapts the
+ *        external Ethereum header to ethereum-executor's EthSystemCalls.h
+ *        (systemCallBlockStart / systemCallBlockEnd), which executes the
+ *        system contracts over the executor's own EthereumState/EthereumHost
+ *        and writes the state updates straight into the view. This header is
+ *        a thin adapter only — no bcos-evm / evmone::state adapter types
+ *        (StateView / BlockHashes / StateDiff) are involved anymore.
  *
  *        Fork-activation contract-code model (why there is NO code injection
  *        here): all four system contracts are deployed "à la EIP-4788" — by an
@@ -28,45 +31,40 @@
  *        "fail silently if no code exists" clause exists precisely for chains
  *        where the deployment never happened). Syncing the chain executes that
  *        deployment transaction like any other, so the code is already in state
- *        when the fork activates — geth injects nothing either. evmone's
- *        block-start call skips a code-less contract silently (per EIP-4788/
- *        2935); its block-end call fails (std::nullopt) when the EIP-7002/7251
- *        contract is missing, which we surface as an invalid block: on a real
- *        chain both contracts are deployed, so a nullopt means our state or the
- *        execution diverged — never a block to commit.
+ *        when the fork activates — geth injects nothing either. The block-start
+ *        call skips a code-less contract silently (per EIP-4788/2935); the
+ *        block-end call fails when the EIP-7002/7251 contract is missing, which
+ *        we surface as an invalid block: on a real chain both contracts are
+ *        deployed, so a failure means our state or the execution diverged —
+ *        never a block to commit.
  * @date 2026/9/11
  */
 #pragma once
 
 #include "bcos-rlp-protocol/EthBlockHeader.h"
-#include <bcos-evm/adapter/RecentBlockHashes.h>
-#include <bcos-evm/adapter/StateDiffSanitize.h>
-#include <bcos-evm/adapter/Storage2State.h>
-#include <bcos-evm/eth/state/block.hpp>
-#include <bcos-evm/eth/state/requests.hpp>
-#include <bcos-evm/eth/state/system_contracts.hpp>
+#include "ethereum-executor/EthSystemCalls.h"
+#include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
 #include <evmc/evmc.hpp>
 #include <cstring>
 #include <limits>
 #include <optional>
 #include <string>
-#include <utility>
 #include <vector>
 
 namespace bcos::scheduler_v1
 {
 namespace eth_system_calls_detail
 {
-/// The evmone BlockInfo for the system-call surface, built from the external
+/// The EthBlockInfo for the system-call surface, built from the external
 /// Ethereum header. EthBlockHeaderData timestamps are already wire SECONDS (unlike
 /// the internal BlockHeader milliseconds), so no unit conversion here. Only the
 /// fields the system contracts actually read matter (NUMBER/TIMESTAMP/GASLIMIT/
 /// COINBASE opcodes, parent_beacon_block_root for EIP-4788); the rest stay default.
-inline evmone::state::BlockInfo blockInfoForSystemCalls(
+inline executor_v1::eth::EthBlockInfo blockInfoForSystemCalls(
     protocol::EthBlockHeaderData const& ethHeader)
 {
-    evmone::state::BlockInfo block{};
+    executor_v1::eth::EthBlockInfo block{};
     block.number = ethHeader.number;
     block.timestamp = ethHeader.timestamp;
     block.gas_limit = ethHeader.gasLimit > u256(std::numeric_limits<int64_t>::max()) ?
@@ -95,95 +93,41 @@ inline evmc::bytes32 toEvmcBytes32(bcos::h256 const& hash)
     std::memcpy(out.bytes, hash.data(), sizeof(out.bytes));
     return out;
 }
-
-/// Sanitize + write-back a system-call state diff, mapping every failure channel
-/// (block-hash poison, read poison, write-back throw/poison) onto an error string.
-template <class Storage>
-std::optional<std::string> applySystemCallDiff(
-    bcos::evm::evmstate::Storage2State<Storage>& stateView, evmone::state::StateDiff diff,
-    std::optional<std::string> const& hashErr, char const* phase)
-{
-    if (hashErr.has_value())
-    {
-        return std::string(phase) + ": block-hash lookup failed: " + *hashErr;
-    }
-    if (stateView.poisoned())
-    {
-        return std::string(phase) + ": state read failed: " + stateView.firstError();
-    }
-    try
-    {
-        stateView.applyDiff(bcos::evm::sanitizeStateDiff(stateView, std::move(diff)));
-    }
-    catch (const std::exception& e)
-    {
-        return std::string(phase) + ": state write-back failed: " + e.what();
-    }
-    catch (...)
-    {
-        return std::string(phase) + ": state write-back failed: unknown exception";
-    }
-    if (stateView.poisoned())
-    {
-        return std::string(phase) + ": state write-back failed: " + stateView.firstError();
-    }
-    return std::nullopt;
-}
 }  // namespace eth_system_calls_detail
 
 /// Block-start system calls: EIP-4788 beacon-roots write (Cancun+) and EIP-2935
-/// historical block-hash write (Prague+). evmone gates each contract by revision
-/// internally and silently skips a contract whose code is absent (per the EIPs).
-/// The diff is applied to `view` in place; returns an error string on failure.
+/// historical block-hash write (Prague+), each gated by revision and skipped
+/// silently when the contract has no code (per the EIPs). The state updates are
+/// written into `view` in place; returns an error string on failure.
 /// Call only when the block's revision >= EVMC_CANCUN.
 template <class Storage>
-std::optional<std::string> applyBlockStartSystemCalls(
+task::Task<std::optional<std::string>> applyBlockStartSystemCalls(
     Storage& view, evmc::VM& vm, protocol::EthBlockHeaderData const& ethHeader,
     evmc_revision rev)
 {
-    auto block = eth_system_calls_detail::blockInfoForSystemCalls(ethHeader);
-    std::optional<std::string> hashErr;
-    bcos::evm::engine::detail::RecentBlockHashes<Storage> blockHashes(view, block.number,
-        eth_system_calls_detail::toEvmcBytes32(ethHeader.parentInfo.blockHash), &hashErr);
-    bcos::evm::evmstate::Storage2State<Storage> stateView(view);
-    auto diff = evmone::state::system_call_block_start(stateView, block, blockHashes, rev, vm);
-    return eth_system_calls_detail::applySystemCallDiff(
-        stateView, std::move(diff), hashErr, "block-start system call (EIP-4788/2935)");
+    co_return co_await executor_v1::eth::systemCallBlockStart(view, vm,
+        eth_system_calls_detail::blockInfoForSystemCalls(ethHeader),
+        eth_system_calls_detail::toEvmcBytes32(ethHeader.parentInfo.blockHash), rev);
 }
 
 struct BlockEndSystemCallsResult
 {
     std::optional<std::string> error;
-    std::vector<evmone::state::Requests> requests;  ///< EIP-7002/7251 requests (EIP-7685)
+    std::vector<executor_v1::eth::EthRequests> requests;  ///< EIP-7002/7251 requests (EIP-7685)
 };
 
 /// Block-end system calls: EIP-7002 withdrawal requests and EIP-7251 consolidation
-/// requests (Prague+). A std::nullopt from evmone (system contract code missing or
-/// the call reverted) is an error here — on a real chain both contracts are deployed
-/// by ordinary pre-fork transactions, so a failure means divergent local state.
+/// requests (Prague+). A missing contract code or a reverted call is an error
+/// here — on a real chain both contracts are deployed by ordinary pre-fork
+/// transactions, so a failure means divergent local state.
 /// Call only when the block's revision >= EVMC_PRAGUE.
 template <class Storage>
-BlockEndSystemCallsResult applyBlockEndSystemCalls(
+task::Task<BlockEndSystemCallsResult> applyBlockEndSystemCalls(
     Storage& view, evmc::VM& vm, protocol::EthBlockHeaderData const& ethHeader,
     evmc_revision rev)
 {
-    BlockEndSystemCallsResult result;
-    auto block = eth_system_calls_detail::blockInfoForSystemCalls(ethHeader);
-    std::optional<std::string> hashErr;
-    bcos::evm::engine::detail::RecentBlockHashes<Storage> blockHashes(view, block.number,
-        eth_system_calls_detail::toEvmcBytes32(ethHeader.parentInfo.blockHash), &hashErr);
-    bcos::evm::evmstate::Storage2State<Storage> stateView(view);
-    auto endResult = evmone::state::system_call_block_end(stateView, block, blockHashes, rev, vm);
-    if (!endResult.has_value())
-    {
-        result.error =
-            "block-end system call (EIP-7002/7251) failed: system contract code missing "
-            "or execution reverted";
-        return result;
-    }
-    result.error = eth_system_calls_detail::applySystemCallDiff(stateView,
-        std::move(endResult->state_diff), hashErr, "block-end system call (EIP-7002/7251)");
-    result.requests = std::move(endResult->requests);
-    return result;
+    auto result = co_await executor_v1::eth::systemCallBlockEnd(
+        view, vm, eth_system_calls_detail::blockInfoForSystemCalls(ethHeader), rev);
+    co_return BlockEndSystemCallsResult{std::move(result.error), std::move(result.requests)};
 }
 }  // namespace bcos::scheduler_v1

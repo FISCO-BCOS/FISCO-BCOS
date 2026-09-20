@@ -1344,11 +1344,11 @@ BOOST_FIXTURE_TEST_CASE(pragueSystemCallsVerify, EEBVFixture)
         auto probeView = multiLayerStorage.fork();
         probeView.newMutable();
         auto blockEnd =
-            applyBlockEndSystemCalls(probeView, executor->vm(), ethHeader, EVMC_PRAGUE);
+            co_await applyBlockEndSystemCalls(probeView, executor->vm(), ethHeader, EVMC_PRAGUE);
         BOOST_REQUIRE(!blockEnd.error.has_value());
         BOOST_REQUIRE_EQUAL(blockEnd.requests.size(), 2u);
-        BOOST_CHECK(blockEnd.requests[0].type() == evmone::state::Requests::Type::withdrawal);
-        BOOST_CHECK(blockEnd.requests[1].type() == evmone::state::Requests::Type::consolidation);
+        BOOST_CHECK(blockEnd.requests[0].type() == EthRequests::Type::withdrawal);
+        BOOST_CHECK(blockEnd.requests[1].type() == EthRequests::Type::consolidation);
         // Withdrawal request: source(20) ++ pubkey(48) ++ amount(uint64 little-endian).
         bcos::bytes expectedWithdrawal;
         expectedWithdrawal.insert(expectedWithdrawal.end(), std::begin(withdrawalSource.bytes),

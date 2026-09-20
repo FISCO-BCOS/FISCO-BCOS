@@ -552,7 +552,7 @@ public:
         //     byte-identical to before this change.
         if (blockRevision >= EVMC_CANCUN)
         {
-            if (auto error = applyBlockStartSystemCalls(
+            if (auto error = co_await applyBlockStartSystemCalls(
                     view, m_executor.get().vm(), ethHeader, blockRevision);
                 error.has_value())
             {
@@ -758,7 +758,7 @@ public:
         //     mainnet address) — that plumbing is out of scope for this fix.
         if (blockRevision >= EVMC_PRAGUE)
         {
-            auto blockEnd = applyBlockEndSystemCalls(
+            auto blockEnd = co_await applyBlockEndSystemCalls(
                 view, m_executor.get().vm(), ethHeader, blockRevision);
             if (blockEnd.error.has_value())
             {

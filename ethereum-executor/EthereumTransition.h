@@ -494,7 +494,7 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
     }
 
     EthereumHost<Storage> host{
-        rev, vm, state, block, std::move(blockHashLookup), tx, callParams, chainId};
+        rev, vm, state, block, std::move(blockHashLookup), &tx, callParams, chainId};
 
     sender_acc.access_status = EVMC_ACCESS_WARM;  // Tx sender is always warm.
     if (to.has_value())
