@@ -22,6 +22,7 @@
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
+#include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/protocol/Exceptions.h"
 #include <boost/throw_exception.hpp>
 #include <range/v3/algorithm/find.hpp>
@@ -154,7 +155,10 @@ void AccountManagerPrecompiled::setAccountStatus(
     auto table = _executive->storage().openTable(accountTableName);
     if (!table)
     {
-        auto appsAccountTableName = getContractTableName(executor::USER_APPS_PREFIX, account.hex());
+        // Probe the contract table through the shared mode-aware derivation (the same rule
+        // EVMAccount writes with): on a binary-layout node the table is "/s/<20 raw
+        // bytes>", not "/apps/<hex>".
+        auto appsAccountTableName = ledger::account::accountTableName(account.hex());
         auto appsTable = _executive->storage().openTable(appsAccountTableName);
         if (appsTable)
         {

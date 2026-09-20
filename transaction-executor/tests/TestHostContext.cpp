@@ -23,6 +23,7 @@
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
+#include <bcos-framework/testutils/ScopedNodeAddressTableMode.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
@@ -893,6 +894,70 @@ BOOST_AUTO_TEST_CASE(binaryWritesLeaveHexRowsUntouched)
         BOOST_CHECK(co_await hexAccount.nonce() == std::optional<std::string>{"5"});
         BOOST_CHECK(co_await binaryAccount.nonce() == std::optional<std::string>{"4"});
 
+        co_return;
+    }());
+}
+
+// FIB-82 follow-up: on a Binary-mode node the create flow must create the auth table at the
+// HEX path ("/apps/<40 hex>_accessAuth") even with bugfix_auth_check OFF (the default
+// fixture ledgerConfig sets no bugfix flags) — ContractAuthMgrPrecompiled looks up auth
+// tables by hex path unconditionally, and auth table names are not normalized in
+// Entry::hash, so a binary auth path would both break the precompiled's lookup and fork
+// the XOR root against Hex nodes. The process-global mode is restored to Hex on the way
+// out by the scoped guard (the startup flow sets it exactly once, single-threaded).
+BOOST_AUTO_TEST_CASE(createOnBinaryNodeWritesHexAuthTable)
+{
+    namespace account = bcos::ledger::account;
+    bcos::test::ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Binary);
+    syncWait([this]() -> Task<void> {
+        auto codeAddress = bcos::unhexAddress("0x4200000000000000000000000000000000004321");
+        std::string const hexAuthTable = "/apps/4200000000000000000000000000000000004321_accessAuth";
+
+        // blockHeader.number() != 0 so executeCreate runs createAuthTable (the fixture's own
+        // deploy runs at number 0 and skips it).
+        bcostars::protocol::BlockHeaderImpl createBlockHeader;
+        createBlockHeader.setVersion(
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION));
+        createBlockHeader.setNumber(1);
+        createBlockHeader.calculateHash(*hashImpl);
+
+        std::string helloworldBytecodeBinary;
+        boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
+        evmc_message message = {.kind = EVMC_CREATE,
+            .flags = 0,
+            .depth = 0,
+            .gas = 300 * 10000,
+            .recipient = {},
+            .sender = {},
+            .input_data = (const uint8_t*)helloworldBytecodeBinary.data(),
+            .input_size = helloworldBytecodeBinary.size(),
+            .value = {},
+            .create2_salt = {},
+            .code_address = codeAddress,
+            .code = nullptr,
+            .code_size = 0};
+        evmc_address origin = {};
+
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
+            hostContext(rollbackableStorage, rollbackableTransientStorage, createBlockHeader,
+                message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false,
+                0, bcos::task::syncWait);
+        co_await hostContext.prepare();
+        auto result = co_await hostContext.execute();
+        BOOST_REQUIRE_EQUAL(result.status_code, 0);
+
+        // The auth table must exist at the hex path...
+        BOOST_CHECK(co_await storage2::existsOne(
+            storage, StateKeyView{bcos::ledger::SYS_TABLES, hexAuthTable}));
+        // ...and NOT at the binary path that the recipient account's path() would have
+        // produced before the fix.
+        auto const binAuthTable =
+            account::hexToBinaryAccountTableName(
+                "/apps/4200000000000000000000000000000000004321") +
+            "_accessAuth";
+        BOOST_REQUIRE(binAuthTable.size() > std::string_view{"_accessAuth"}.size());
+        BOOST_CHECK(!co_await storage2::existsOne(
+            storage, StateKeyView{bcos::ledger::SYS_TABLES, binAuthTable}));
         co_return;
     }());
 }

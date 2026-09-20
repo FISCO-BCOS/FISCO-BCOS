@@ -28,6 +28,62 @@ struct FromTableName
 // nodeAddressTableMode() singleton live in ledger/AccountTableName.h; callers pass
 // nodeAddressTableMode() to the mode-taking constructors below.
 
+/// THE one address → account-table-name routing rule (the encoding contract itself is
+/// documented in AccountTableName.h): the 8 c_systemTxsAddress members always route to
+/// "/sys/<hex>", every other address routes to "/apps/<hex>" in Hex mode and to
+/// "/apps/<20 raw bytes>" in any other mode. The EVMAccount constructors below and every
+/// caller that needs the table name without an account object (Ledger's state reads, the
+/// web3 RPC endpoints, the v1 precompiled call sites) share this single derivation — never
+/// re-derive the name locally.
+/// @param address the address as a hex string (no 0x prefix)
+/// @param mode this node's account-table encoding (see AddressTableMode)
+inline std::string accountTableName(std::string_view address, AddressTableMode mode)
+{
+    std::string tableName;
+    if (precompiled::contains(bcos::precompiled::c_systemTxsAddress, address))
+    {
+        // System-tx addresses always route to /sys/ with the hex name; those tables
+        // are not part of the account-table migration regardless of mode.
+        tableName.reserve(ledger::SYS_DIRECTORY::SYS_APPS.size() + address.size());
+        tableName.append(ledger::SYS_DIRECTORY::SYS_APPS);
+        tableName.append(address);
+        return tableName;
+    }
+    if (mode != AddressTableMode::Hex)
+    {
+        assert(address.size() % 2 == 0);
+        tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + (address.size() / 2));
+        tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
+        boost::algorithm::unhex(address.begin(), address.end(), std::back_inserter(tableName));
+        return tableName;
+    }
+    tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + address.size());
+    tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
+    tableName.append(address);
+    return tableName;
+}
+
+/// Raw-address overload: hex-encode (lowercase, the canonical form) and route through the
+/// string_view overload above, so there is still exactly one copy of the routing rule.
+inline std::string accountTableName(const evmc_address& address, AddressTableMode mode)
+{
+    std::array<char, sizeof(address.bytes) * 2> hexAddress;  // NOLINT
+    boost::algorithm::hex_lower(concepts::bytebuffer::toView(address.bytes), hexAddress.data());
+    return accountTableName(std::string_view(hexAddress.data(), hexAddress.size()), mode);
+}
+
+/// Convenience overloads for callers in the node process, where the mode is the
+/// process-global published once at boot (AccountTableName.h).
+inline std::string accountTableName(std::string_view address)
+{
+    return accountTableName(address, nodeAddressTableMode());
+}
+
+inline std::string accountTableName(const evmc_address& address)
+{
+    return accountTableName(address, nodeAddressTableMode());
+}
+
 template <class Storage>
 class EVMAccount
 {
@@ -288,37 +344,8 @@ public:
     {}
 
     EVMAccount(Storage& storage, const evmc_address& address, AddressTableMode mode)
-      : m_storage(storage)
-    {
-        std::array<char, sizeof(address.bytes) * 2> table;  // NOLINT
-        boost::algorithm::hex_lower(concepts::bytebuffer::toView(address.bytes), table.data());
-        auto hexView = std::string_view(table.data(), table.size());
-        if (precompiled::contains(bcos::precompiled::c_systemTxsAddress, hexView))
-        {
-            // System-tx addresses always route to /sys/ with the hex name; those tables
-            // are not part of the account-table migration regardless of mode.
-            m_tableName.reserve(ledger::SYS_DIRECTORY::SYS_APPS.size() + hexView.size());
-            m_tableName.append(ledger::SYS_DIRECTORY::SYS_APPS);
-            m_tableName.append(hexView);
-        }
-        else
-        {
-            if (mode != AddressTableMode::Hex)
-            {
-                auto addressView = std::span(address.bytes);
-                m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + addressView.size());
-                m_tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
-                m_tableName.append(reinterpret_cast<const char*>(addressView.data()),  // NOLINT
-                    addressView.size());
-            }
-            else
-            {
-                m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + hexView.size());
-                m_tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
-                m_tableName.append(hexView);
-            }
-        }
-    }
+      : m_storage(storage), m_tableName(accountTableName(address, mode))
+    {}
 
     /**
      * @brief Construct a new EVMAccount object
@@ -327,32 +354,8 @@ public:
      * @param mode how the account table name is derived (see AddressTableMode)
      */
     EVMAccount(Storage& storage, std::string_view address, AddressTableMode mode)
-      : m_storage(storage)
-    {
-        if (precompiled::contains(bcos::precompiled::c_systemTxsAddress, address))
-        {
-            m_tableName.reserve(ledger::SYS_DIRECTORY::SYS_APPS.size() + address.size());
-            m_tableName.append(ledger::SYS_DIRECTORY::SYS_APPS);
-            m_tableName.append(address);
-        }
-        else
-        {
-            if (mode != AddressTableMode::Hex)
-            {
-                assert(address.size() % 2 == 0);
-                m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + (address.size() / 2));
-                m_tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
-                boost::algorithm::unhex(
-                    address.begin(), address.end(), std::back_inserter(m_tableName));
-            }
-            else
-            {
-                m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + address.size());
-                m_tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
-                m_tableName.append(address);
-            }
-        }
-    }
+      : m_storage(storage), m_tableName(accountTableName(address, mode))
+    {}
 
     EVMAccount(Storage& storage, const bcos::Address& address, AddressTableMode mode)
       : EVMAccount(

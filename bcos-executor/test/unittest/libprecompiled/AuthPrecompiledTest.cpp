@@ -19,6 +19,8 @@
  */
 
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
+#include "bcos-framework/ledger/AccountTableName.h"
+#include "bcos-framework/testutils/ScopedNodeAddressTableMode.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include "precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include <boost/test/unit_test.hpp>
@@ -2039,6 +2041,48 @@ BOOST_AUTO_TEST_CASE(testInitAuth)
     // init again, it should throw
     auto re2 = initAuth(_number++, admin);
     BOOST_CHECK(re2->status() == (int32_t)TransactionStatus::PrecompiledError);
+}
+
+// D3: on a Binary-layout node the resetAdmin contract-existence probe must find the
+// contract table at "/s/<20 raw bytes>" (the shared mode-aware derivation), not at the
+// hex name. The process-global mode is restored to Hex on the way out by the scoped
+// guard (the startup flow sets it exactly once, single-threaded).
+BOOST_AUTO_TEST_CASE(resetAdminBinaryModeContractProbe)
+{
+    namespace account = bcos::ledger::account;
+    ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Binary);
+
+    // A contract table that exists ONLY at the binary name — the shape a Binary-mode v1
+    // executor leaves on disk.
+    Address contractAddress = Address("0x2234567890123456789012345678901234567890");
+    auto const binTable = account::hexToBinaryAccountTableName("/apps/" + contractAddress.hex());
+    BOOST_REQUIRE(!binTable.empty());
+    {
+        std::promise<std::optional<Table>> promise;
+        storage->asyncCreateTable(binTable, "value",
+            [&promise](Error::UniquePtr&& error, std::optional<Table>&& table) {
+                BOOST_CHECK(!error);
+                promise.set_value(std::move(table));
+            });
+        BOOST_CHECK(promise.get_future().get().has_value());
+    }
+
+    bcos::protocol::BlockNumber number = 2;
+    // The probe must find the binary table and reset the admin (the old hex-only probe
+    // threw "Contract address not found." here).
+    {
+        auto result = resetAdmin(number++, 1000, contractAddress,
+            Address("0x1234567890123456789012345678901234567890"));
+        BOOST_CHECK(result->status() == (int32_t)TransactionStatus::None);
+        BOOST_CHECK(result->data().toBytes() == codec->encode(u256(0)));
+    }
+    // The auth table is always created at the hex path — getAdmin reads it back through
+    // the precompiled's (unconditionally hex) auth-table lookup.
+    {
+        auto result = getAdmin(number++, 1000, contractAddress);
+        BOOST_CHECK(result->data().toBytes() ==
+                    codec->encode(Address("0x1234567890123456789012345678901234567890")));
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

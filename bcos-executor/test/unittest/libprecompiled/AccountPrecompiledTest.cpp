@@ -19,6 +19,8 @@
  */
 
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
+#include "bcos-framework/ledger/AccountTableName.h"
+#include "bcos-framework/testutils/ScopedNodeAddressTableMode.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include <boost/test/unit_test.hpp>
 
@@ -357,6 +359,57 @@ public:
         return result2;
     };
 
+    /// Call the AccountPrecompiled (ACCOUNT_ADDRESS) directly with a caller-supplied
+    /// account table name, the way BalancePrecompiled's internal requests do — sender is
+    /// the balance precompiled, which addAccountBalance authorizes.
+    ExecutionMessage::UniquePtr addAccountBalanceDirect(
+        protocol::BlockNumber _number, std::string const& accountTableName, u256 value)
+    {
+        nextBlock(_number, m_blockVersion);
+        auto balanceParams = codec->encodeWithSig("addAccountBalance(uint256)", value);
+        std::vector<std::string> tableNameVector = {accountTableName};
+        bytes in = codec->encode(tableNameVector, balanceParams);
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        auto balanceSender = Address(std::string(precompiled::BALANCE_PRECOMPILED_ADDRESS));
+        tx->forceSender(balanceSender.asBytes());
+        auto hash = tx->hash();
+        txpool->hash2Transaction[hash] = tx;
+        sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+        auto params = std::make_unique<NativeExecutionMessage>();
+        params->setTransactionHash(hash);
+        params->setContextID(_number);
+        params->setSeq(1000);
+        params->setDepth(0);
+        params->setFrom(sender);
+        params->setTo(std::string(precompiled::ACCOUNT_ADDRESS));
+        params->setOrigin(sender);
+        params->setStaticCall(false);
+        params->setGasAvailable(gas);
+        params->setData(std::move(in));
+        params->setType(NativeExecutionMessage::TXHASH);
+
+        std::promise<ExecutionMessage::UniquePtr> executePromise;
+        executor->executeTransaction(std::move(params),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise.set_value(std::move(result));
+            });
+        auto result = executePromise.get_future().get();
+        commitBlock(_number);
+        return result;
+    };
+
+    bool tableExists(std::string const& tableName)
+    {
+        std::promise<std::optional<Table>> promise;
+        storage->asyncOpenTable(
+            tableName, [&promise](Error::UniquePtr&&, std::optional<Table>&& table) {
+                promise.set_value(std::move(table));
+            });
+        return promise.get_future().get().has_value();
+    }
+
     std::string sender;
     std::string helloAddress;
 
@@ -661,6 +714,68 @@ BOOST_AUTO_TEST_CASE(parallelSetTest)
         auto response2 = helloSet(number++, "test2", 0, newAccount);
         BOOST_CHECK(response2->status() == (uint32_t)TransactionStatus::AccountFrozen);
     }
+}
+
+// D4: on a Binary-layout node the AccountManagerPrecompiled contract probe must find the
+// contract table at "/s/<20 raw bytes>" (the shared mode-aware derivation), not at the
+// hex name — an account whose contract table exists only at the binary name must answer
+// CODE_ACCOUNT_ALREADY_EXIST, not get a fresh /usr account created over it. The
+// process-global mode is restored to Hex on the way out by the scoped guard.
+BOOST_AUTO_TEST_CASE(setAccountStatusBinaryModeContractProbe)
+{
+    namespace account = bcos::ledger::account;
+    ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Binary);
+
+    Address contractAccount = Address("27505f128bd4d00c2698441b1f54ef843b837217");
+    auto const binTable = account::hexToBinaryAccountTableName("/apps/" + contractAccount.hex());
+    BOOST_REQUIRE(!binTable.empty());
+    {
+        std::promise<std::optional<Table>> promise;
+        storage->asyncCreateTable(binTable, "value",
+            [&promise](Error::UniquePtr&& error, std::optional<Table>&& table) {
+                BOOST_CHECK(!error);
+                promise.set_value(std::move(table));
+            });
+        BOOST_CHECK(promise.get_future().get().has_value());
+    }
+
+    bcos::protocol::BlockNumber number = 2;
+    auto response = setAccountStatus(number++, contractAccount, 0);
+    BOOST_CHECK(response->status() == 0);
+    int32_t result = -1;
+    codec->decode(response->data(), result);
+    BOOST_CHECK(result == CODE_ACCOUNT_ALREADY_EXIST);
+}
+
+// D6: AccountPrecompiled::addAccountBalance's create-on-miss path must recover the account
+// hex from a BINARY account table name ("/s/<20 raw bytes>") by fixed-offset extraction,
+// not by the last-path-segment regex — raw address bytes may themselves contain 0x2f
+// ('/'), which splits the name mid-address. The address used here has a 0x2f byte on
+// purpose. The process-global mode is restored to Hex on the way out by the scoped guard.
+BOOST_AUTO_TEST_CASE(addAccountBalanceBinaryTableNameExtraction)
+{
+    namespace account = bcos::ledger::account;
+    Address target = Address("2f505f128bd4d00c2698441b1f54ef843b837211");
+    auto const binTable = account::hexToBinaryAccountTableName("/apps/" + target.hex());
+    BOOST_REQUIRE(!binTable.empty());
+
+    ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Binary);
+    bcos::protocol::BlockNumber number = 2;
+    auto response = addAccountBalanceDirect(number++, binTable, u256(12345));
+    BOOST_CHECK(response->status() == 0);
+    int32_t result = -1;
+    codec->decode(response->data(), result);
+    BOOST_CHECK_EQUAL(result, CODE_SUCCESS);
+
+    // The account must have been created under the hex of the embedded address — exactly
+    // the downstream value a hex table name would have produced. The old regex path
+    // extracted the 19 bytes after the embedded '/', creating a garbage "/usr/" table.
+    BOOST_CHECK(tableExists("/usr/" + target.hex()));
+    // ...and the balance row landed in the binary table itself.
+    auto [error, entry] = storage->getRow(binTable, executor::ACCOUNT_BALANCE);
+    BOOST_CHECK(!error);
+    BOOST_REQUIRE(entry.has_value());
+    BOOST_CHECK_EQUAL(std::string(entry->get()), "12345");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

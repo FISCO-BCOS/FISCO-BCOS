@@ -152,18 +152,15 @@ task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
 {
     // TODO)): blockNumber is not used nowadays
     std::ignore = _blockNumber;
-    // System-contract addresses (0x1000 range, etc.) are stored under the
-    // "/sys/" prefix by EVMAccount; user accounts under "/apps/". Picking the
-    // right prefix here keeps eth_getBalance / eth_getStorageAt /
-    // eth_getTransactionCount consistent with both the genesis alloc import and
-    // the v2 executor (which both go through EVMAccount). Without this, reads
-    // for system-range accounts hit the wrong table and return empty (e.g.
-    // EEST static VMTests that call 0x1000 saw balance=0 / storage=0).
-    auto const tablePrefix =
-        precompiled::contains(bcos::precompiled::c_systemTxsAddress, _address) ?
-            SYS_DIRECTORY::SYS_APPS :
-            SYS_DIRECTORY::USER_APPS;
-    auto const contractTableName = getContractTableName(tablePrefix, _address);
+    // Derive the account table name through the one shared mode-aware routing rule
+    // (account::accountTableName — the same rule EVMAccount writes state with): on a
+    // binary-layout node the state lives under "/s/<20 raw bytes>", and the 8 system-tx
+    // addresses resolve to "/sys/<hex>" regardless of mode. Deriving "/apps/<hex>" here
+    // directly would read the wrong table on a Binary node (eth_getBalance /
+    // eth_getStorageAt / eth_getTransactionCount all reporting empty) and would also miss
+    // the /sys/ routing for system-range accounts (e.g. EEST static VMTests that call
+    // 0x1000 saw balance=0 / storage=0 before the /sys/ routing existed).
+    auto const contractTableName = account::accountTableName(_address);
     auto const stateStorage = getStateStorage();
     co_return co_await bcos::storage2::readOne(
         *stateStorage, executor_v1::StateKeyView{contractTableName, _key});

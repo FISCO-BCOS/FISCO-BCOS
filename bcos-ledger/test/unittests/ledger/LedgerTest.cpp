@@ -28,6 +28,7 @@
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
+#include "bcos-framework/ledger/AccountTableName.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/ledger/SystemConfigs.h"
@@ -48,6 +49,7 @@
 #include <bcos-framework/storage/Serialize.h>
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/storage/Table.h>
+#include <bcos-framework/testutils/ScopedNodeAddressTableMode.h>
 #include <bcos-framework/testutils/faker/FakeBlock.h>
 #include <bcos-table/src/StateStorage.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -2016,6 +2018,59 @@ BOOST_AUTO_TEST_CASE(nonceList)
         auto gotNonceList3 = co_await ledger::getNonceList(*ledger, 2, 1);
         BOOST_REQUIRE(gotNonceList3);
         BOOST_CHECK_EQUAL(gotNonceList3->size(), 0);
+    }());
+}
+
+// D1: Ledger::getStorageAt / getStorageState must derive the account table name through the
+// shared mode-aware rule (ledger::account::accountTableName): on a Binary-layout node the
+// account state lives under "/s/<20 raw bytes>", not "/apps/<hex>". keyPageSize=0 keeps
+// the state storage a plain view over the raw rows written below. The process-global mode
+// is restored to Hex on the way out by the scoped guard (the startup flow sets it exactly
+// once, single-threaded).
+BOOST_AUTO_TEST_CASE(getStorageAtFollowsNodeAddressTableMode)
+{
+    namespace account = bcos::ledger::account;
+    bcos::test::ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Hex);
+    task::syncWait([this]() -> task::Task<void> {
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr, false);
+        auto storage = std::make_shared<MockStorage>(memoryStorage);
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 0);
+
+        std::string const hexAddress = "4200000000000000000000000000000000009876";
+        std::string const hexTable = "/apps/" + hexAddress;
+        auto const binTable = account::hexToBinaryAccountTableName(hexTable);
+        BOOST_REQUIRE(!binTable.empty());
+
+        std::string const slotKey = "a-storage-slot-key";
+        auto writeRow = [&storage](std::string const& table, std::string const& key,
+                            std::string_view value) -> task::Task<void> {
+            co_await storage2::writeOne(
+                *storage, executor_v1::StateKey(table, key), storage::Entry{value});
+        };
+        co_await writeRow(hexTable, slotKey, "hex-value");
+        co_await writeRow(binTable, slotKey, "bin-value");
+        co_await writeRow(binTable, std::string(ledger::ACCOUNT_TABLE_FIELDS::NONCE), "9");
+        co_await writeRow(binTable, std::string(ledger::ACCOUNT_TABLE_FIELDS::BALANCE), "12345");
+
+        // Hex default (libraries/tests that never run the startup flow keep it).
+        auto hexEntry = co_await ledger->getStorageAt(hexAddress, slotKey, 0);
+        BOOST_REQUIRE(hexEntry.has_value());
+        BOOST_CHECK_EQUAL(std::string(hexEntry->get()), "hex-value");
+
+        account::setNodeAddressTableMode(account::AddressTableMode::Binary);
+        auto binEntry = co_await ledger->getStorageAt(hexAddress, slotKey, 0);
+        BOOST_REQUIRE(binEntry.has_value());
+        BOOST_CHECK_EQUAL(std::string(binEntry->get()), "bin-value");
+
+        // getStorageState routes through getStorageAt, so nonce/balance come from the
+        // binary table as well (the eth_getBalance / eth_getTransactionCount / Web3-nonce
+        // admission path). Ledger's override is private, so go through the public
+        // LedgerInterface like its real callers do.
+        bcos::ledger::LedgerInterface& ledgerInterface = *ledger;
+        auto state = co_await ledgerInterface.getStorageState(hexAddress, 0);
+        BOOST_REQUIRE(state.has_value());
+        BOOST_CHECK_EQUAL(state->nonce, "9");
+        BOOST_CHECK_EQUAL(state->balance, "12345");
     }());
 }
 

@@ -20,6 +20,7 @@
 
 #include "ContractAuthMgrPrecompiled.h"
 #include "bcos-codec/scale/Scale.h"
+#include "bcos-framework/ledger/EVMAccount.h"
 #include <utility>
 
 using namespace bcos;
@@ -247,7 +248,10 @@ void ContractAuthMgrPrecompiled::resetAdmin(
                                << LOG_DESC("contract ACL table not found") << LOG_KV("path", path);
         if (versionCompareTo(blockContext.blockVersion(), BlockVersion::V3_3_VERSION) >= 0)
         {
-            if (!_executive->storage().openTable(getContractTableName(USER_APPS_PREFIX, address)))
+            // Probe contract existence through the shared mode-aware derivation (the same
+            // rule EVMAccount writes with): on a binary-layout node the contract table is
+            // "/s/<20 raw bytes>", not "/apps/<hex>".
+            if (!_executive->storage().openTable(ledger::account::accountTableName(address)))
                 [[unlikely]]
             {
                 // not exist contract address

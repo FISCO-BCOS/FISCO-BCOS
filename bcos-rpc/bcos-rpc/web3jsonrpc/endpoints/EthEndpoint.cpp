@@ -20,6 +20,7 @@
 
 #include "EthEndpoint.h"
 #include "bcos-framework/engine/RawTransactionDispatch.h"
+#include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
@@ -519,15 +520,13 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     }
     auto const ledger = m_nodeService->ledger();
 
-    // System-contract addresses (0x1000 range, etc.) are stored under the "/sys/" prefix by
-    // EVMAccount; user accounts under "/apps/". Picking the right prefix here keeps
-    // eth_getStorageAt consistent with both the genesis alloc import and the v2 executor
-    // (which both go through EVMAccount) — same logic as Ledger::getStorageAt.
-    auto const tablePrefix =
-        precompiled::contains(bcos::precompiled::c_systemTxsAddress, std::string_view{addressStr}) ?
-            ledger::SYS_DIRECTORY::SYS_APPS :
-            ledger::SYS_DIRECTORY::USER_APPS;
-    auto const contractTableName = getContractTableName(tablePrefix, addressStr);
+    // Derive the account table name through the one shared mode-aware routing rule
+    // (account::accountTableName — the same rule EVMAccount writes state with): on a
+    // binary-layout node the flat read must hit "/s/<20 raw bytes>", and the 8
+    // system-tx addresses resolve to "/sys/<hex>" regardless of mode — same rule as
+    // Ledger::getStorageAt, which both the genesis alloc import and the v2 executor
+    // agree with (they go through EVMAccount).
+    auto const contractTableName = ledger::account::accountTableName(addressStr);
 
     // The empty-slot value: a 32-byte zero, matching the flat read's padded rendering.
     constexpr const char* c_emptyStorageValue =

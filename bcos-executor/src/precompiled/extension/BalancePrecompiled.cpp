@@ -20,6 +20,7 @@
 
 #include "BalancePrecompiled.h"
 #include "bcos-framework/bcos-framework/storage/Table.h"
+#include "bcos-framework/ledger/EVMAccount.h"
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/serialization/vector.hpp>
@@ -102,10 +103,15 @@ std::shared_ptr<PrecompiledExecResult> BalancePrecompiled::call(
 
 
 std::string BalancePrecompiled::getContractTableName(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    const std::shared_ptr<executor::TransactionExecutive>& /*_executive*/,
     const std::string_view& _address)
 {
-    return _executive->getContractTableName(_address);
+    // Route through the shared mode-aware derivation (account::accountTableName — the same
+    // rule EVMAccount writes state with) instead of the legacy executive rule: this
+    // precompiled also serves the v1 executor lane, where a binary-layout node keeps account
+    // state under "/s/<20 raw bytes>". TransactionExecutive::getContractTableName stays
+    // hex-only for the deliberately hex-only v0 lane and is not touched.
+    return account::accountTableName(_address);
 }
 
 void BalancePrecompiled::checkOriginAuth(

@@ -774,8 +774,10 @@ private:
             // FIB-82: in a binary node-local layout m_recipientAccount.path() returns a
             // binary path, but ContractAuthMgrPrecompiled always looks up auth tables using
             // hex paths (auth tables are not migrated). Force hex to match the lookup path.
-            if (m_ledgerConfig.get().features().get(ledger::Features::Flag::bugfix_auth_check) &&
-                ledger::account::nodeAddressTableMode() != ledger::account::AddressTableMode::Hex)
+            // This is not gated on bugfix_auth_check: the precompiled's hex lookup is
+            // unconditional, so the write side must agree with it in every feature
+            // configuration — on Hex nodes the branch is never taken and nothing changes.
+            if (ledger::account::nodeAddressTableMode() != ledger::account::AddressTableMode::Hex)
             {
                 authTablePath =
                     std::string(executor::USER_APPS_PREFIX) + address2HexString(ref.code_address);
