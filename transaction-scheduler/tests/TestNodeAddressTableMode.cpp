@@ -46,6 +46,7 @@
 #include "bcos-framework/storage/Serialize.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/MultiLayerStorage.h"
+#include "bcos-framework/testutils/ScopedNodeAddressTableMode.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
@@ -378,7 +379,9 @@ BOOST_FIXTURE_TEST_SUITE(TestNodeAddressTableMode, NodeAddressTableModeFixture)
 BOOST_AUTO_TEST_CASE(xorRootConsistentAfterInPlaceMigration)
 {
     namespace account = ledger::account;
-    account::setNodeAddressTableMode(account::AddressTableMode::Hex);
+    // The guard restores the pre-test mode on the way out; the explicit flips below
+    // mimic a node restart after migration, as the file header describes.
+    bcos::test::ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Hex);
     probingScheduler.m_account = unhexAddress("0x4200000000000000000000000000000000005678");
     probingScheduler.m_writeBlock = 101;
     probingScheduler.m_balance = u256(12345);
@@ -400,8 +403,6 @@ BOOST_AUTO_TEST_CASE(xorRootConsistentAfterInPlaceMigration)
     executeOneBlock(101);
     BOOST_REQUIRE(probingScheduler.m_readBackBalance.has_value());
     BOOST_CHECK_EQUAL(*probingScheduler.m_readBackBalance, u256(12345));
-
-    account::setNodeAddressTableMode(account::AddressTableMode::Hex);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

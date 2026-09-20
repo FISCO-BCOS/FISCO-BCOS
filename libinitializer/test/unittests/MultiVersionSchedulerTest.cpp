@@ -17,6 +17,8 @@
  * @brief Slot selection of MultiVersionScheduler with an unwired OP slot.
  */
 #include "libinitializer/MultiVersionScheduler.h"
+#include <bcos-framework/ledger/AccountTableName.h>
+#include <bcos-framework/testutils/ScopedNodeAddressTableMode.h>
 #include <boost/test/unit_test.hpp>
 #include <array>
 #include <memory>
@@ -112,6 +114,37 @@ BOOST_AUTO_TEST_CASE(setVersionSelectsWiredOpSlot)
 
     scheduler->callAtBlock(nullptr, 0, {});
     BOOST_CHECK_EQUAL(slots[3]->m_callAtBlockCount, 1);
+}
+
+// Runtime mirror of the boot-time hex-only-lane check (resolveNodeAddressTableMode):
+// executor_version is a governance system config applied mid-chain WITHOUT restart, so a
+// Binary-layout node must refuse to switch INTO a hex-only lane (the Ethereum / OP
+// executors name account tables /apps/<40-hex> directly and would read every account as
+// absent). Fail-open like the unwired-slot case: keep the current executor, no throw --
+// the commit-callback callers catch-and-log. A Hex-mode node switches freely.
+BOOST_AUTO_TEST_CASE(setVersionKeepsCurrentIndexOnHexOnlyLaneInBinaryMode)
+{
+    namespace account = ledger::account;
+    {
+        bcos::test::ScopedNodeAddressTableMode const modeGuard(
+            account::AddressTableMode::Binary);
+        auto scheduler = make(true);
+        BOOST_CHECK_NO_THROW(scheduler->setVersion(ETHEREUM_EXECUTOR_VERSION, {}));
+        BOOST_CHECK_NO_THROW(scheduler->setVersion(OPSTACK_EXECUTOR_VERSION, {}));
+
+        scheduler->callAtBlock(nullptr, 0, {});
+        BOOST_CHECK_EQUAL(slots[0]->m_callAtBlockCount, 1);  // still the initial lane
+        BOOST_CHECK_EQUAL(slots[2]->m_callAtBlockCount, 0);
+        BOOST_CHECK_EQUAL(slots[3]->m_callAtBlockCount, 0);
+    }
+
+    // Hex mode: the same switch proceeds.
+    bcos::test::ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Hex);
+    Fixture hexFixture;
+    auto scheduler = hexFixture.make(true);
+    scheduler->setVersion(ETHEREUM_EXECUTOR_VERSION, {});
+    scheduler->callAtBlock(nullptr, 0, {});
+    BOOST_CHECK_EQUAL(hexFixture.slots[2]->m_callAtBlockCount, 1);
 }
 
 // Above the array: saturate down to the newest NON-NULL slot, not to the empty one.

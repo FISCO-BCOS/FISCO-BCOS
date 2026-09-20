@@ -32,6 +32,7 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-ledger/test/unittests/ExceptionCheck.h"
 #include "bcos-task/Wait.h"
+#include <bcos-framework/testutils/ScopedNodeAddressTableMode.h>
 #include <bcos-framework/testutils/faker/FakeBlock.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
@@ -193,8 +194,9 @@ BOOST_AUTO_TEST_CASE(ImportValidatesAllocHexBeforeFirstWrite)
         auto storage = makeStorage();
 
         // Binary layout is a node-local mode now: arm it for this import; the singleton is
-        // process-global, so the test restores the Hex default on the way out.
-        ledger::account::setNodeAddressTableMode(ledger::account::AddressTableMode::Binary);
+        // process-global, so the guard restores the Hex default on the way out.
+        bcos::test::ScopedNodeAddressTableMode const modeGuard(
+            ledger::account::AddressTableMode::Binary);
 
         std::string goodAddress = "43000000000000000000000000000000000000c0";
         std::string badAddress = "43000000000000000000000000000000000000c1";
@@ -250,7 +252,6 @@ BOOST_AUTO_TEST_CASE(ImportValidatesAllocHexBeforeFirstWrite)
                                                                          goodAddress));
         BOOST_CHECK(!badNonceRow);
     }());
-    ledger::account::setNodeAddressTableMode(ledger::account::AddressTableMode::Hex);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -1,5 +1,6 @@
 #include "MultiVersionScheduler.h"
 #include "Common.h"
+#include <bcos-framework/ledger/AccountTableName.h>
 
 bcos::scheduler::SchedulerInterface& bcos::scheduler_v1::MultiVersionScheduler::checkedSchedulerAt(
     int version) const
@@ -182,6 +183,34 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
         INITIALIZER_LOG(ERROR)
             << LOG_DESC("executor_version has no wired scheduler; keeping the current executor")
             << LOG_KV("requested", version) << LOG_KV("keeping", m_currentIndex.load());
+        return;
+    }
+    // Hex-only lanes name account tables /apps/<40-hex> directly (ethereum-executor's
+    // EthereumState constructs EVMAccount with AddressTableMode::Hex; the OP lane inherits
+    // it), so they cannot serve a binary-layout ("/s/<20 raw bytes>") state DB: after such
+    // a switch every account reads absent until the next restart. The boot-time lane check
+    // (LedgerInitializer::build -> resolveNodeAddressTableMode) cannot see this case —
+    // executor_version is a governance system config applied mid-chain WITHOUT restart (the
+    // two commit callbacks above call setVersion; version 0 never reaches here thanks to
+    // their >0 gate, and feature_l2_ethereum_compat is genesis-only), so the runtime guard
+    // belongs here. Same fail-open semantics as the unwired-slot case above: the callers
+    // catch-and-log a throw and would then stop advancing the chain, so keep the current
+    // executor and make it loud instead. The operator must not switch a migrated chain to a
+    // hex-only lane (recover: switch back to the baseline executor, executor_version = 1).
+    bool const hexOnlyLane = selected == static_cast<size_t>(ETHEREUM_EXECUTOR_VERSION) ||
+                             selected >= static_cast<size_t>(OPSTACK_EXECUTOR_VERSION);
+    if (hexOnlyLane &&
+        ledger::account::nodeAddressTableMode() == ledger::account::AddressTableMode::Binary)
+    {
+        INITIALIZER_LOG(ERROR)
+            << LOG_DESC(
+                   "executor_version selects a hex-only executor lane, but this node's "
+                   "state DB uses the binary account-table layout: the lane would name "
+                   "account tables /apps/<40-hex> and read every account as absent; "
+                   "keeping the current executor. Do not switch a migrated chain to a "
+                   "hex-only lane (use the baseline executor, executor_version = 1)")
+            << LOG_KV("requested", version) << LOG_KV("selected", selected)
+            << LOG_KV("keeping", m_currentIndex.load());
         return;
     }
     m_currentIndex.store(static_cast<int>(selected));

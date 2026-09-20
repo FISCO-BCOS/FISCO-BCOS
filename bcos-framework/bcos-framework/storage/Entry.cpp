@@ -141,8 +141,15 @@ crypto::HashType Entry::hash(std::string_view table, std::string_view key,
     // no binary table name exists in committed history before this merged, so this is the
     // only semantic from merge onward. The pre-v3.1 format ignores table/key entirely;
     // normalizing unconditionally is harmless there.
-    std::string canonicalTable = ledger::account::canonicalTableNameForHash(table);
-    table = canonicalTable;
+    // The string is materialized ONLY for binary names: a 46-char "/apps/<hex>" name
+    // exceeds SSO, so an unconditional copy would allocate+free on every Entry::hash call
+    // (once per modified row per block) on every hex chain.
+    std::string canonicalTable;
+    if (ledger::account::isBinaryAccountTableName(table))
+    {
+        canonicalTable = ledger::account::binaryToHexAccountTableName(table);
+        table = canonicalTable;
+    }
     std::string canonicalKey;
     if (table == ledger::SYS_TABLES && ledger::account::isBinaryAccountTableName(key))
     {

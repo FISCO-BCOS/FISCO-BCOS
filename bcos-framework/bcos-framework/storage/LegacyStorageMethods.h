@@ -28,7 +28,8 @@ inline executor_v1::StateKeyView toStateKeyView(auto&& stateKey)
 
 inline task::Task<std::optional<Entry>> tag_invoke(
     storage2::tag_t<storage2::readOne> /*unused*/, StorageInterface& storage, auto stateKey)
-{    struct Awaitable
+{
+    struct Awaitable
     {
         StorageInterface& m_storage;
         std::string_view m_table;

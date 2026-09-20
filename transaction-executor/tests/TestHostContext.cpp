@@ -708,15 +708,15 @@ BOOST_AUTO_TEST_CASE(nodeAddressTableModeSingleton)
     // test inherits.
     BOOST_CHECK(account::nodeAddressTableMode() == account::AddressTableMode::Hex);
 
-    // Set/get round trip through both modes. The singleton is process-global, so restore
-    // the Hex default on the way out (the startup flow sets it exactly once, single-threaded).
+    // Set/get round trip through both modes. The singleton is process-global, so the guard
+    // restores the Hex default on the way out (the startup flow sets it exactly once,
+    // single-threaded).
+    bcos::test::ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Hex);
     for (auto mode : {account::AddressTableMode::Hex, account::AddressTableMode::Binary})
     {
         account::setNodeAddressTableMode(mode);
         BOOST_CHECK(account::nodeAddressTableMode() == mode);
     }
-    account::setNodeAddressTableMode(account::AddressTableMode::Hex);
-    BOOST_CHECK(account::nodeAddressTableMode() == account::AddressTableMode::Hex);
 }
 
 // The two layouts are disjoint namespaces: there is no runtime mixed mode, so a Binary-mode
