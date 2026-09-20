@@ -63,25 +63,29 @@ std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::buil
         bool const hexOnlyLane = isHexOnlyExecutorLane(laneFeatures, onChain.version);
 
         // Detect first, then handle the two migration shapes:
-        //   - a MIXED layout (hex AND binary registrations) is an interrupted migration (or
-        //     a hand-mixed backup). There is no runtime mixed mode: with the migration
-        //     switch on, resume it here (idempotent) and continue as Binary; with the switch
-        //     off, refuse to start (resolveNodeAddressTableMode throws the same refusal
-        //     below, with the recovery instructions).
+        //   - an UNFINISHED migration (the .binary_account_tables.in_progress marker
+        //     without the done marker, or — hand-mixed backup / pre-marker builds — a
+        //     MIXED layout of hex AND binary registrations). There is no runtime mixed
+        //     mode: with the migration switch on, resume it here (idempotent) and
+        //     continue as Binary; with the switch off, refuse to start
+        //     (resolveNodeAddressTableMode throws the refusal below, with the recovery
+        //     instructions).
         //   - otherwise the switch requests the one-shot hex→binary rewrite.
-        // Either way the detection must be re-run afterwards so the published mode reflects
-        // the post-migration state (a pure binary layout with the marker file). Hex-only
-        // lanes are refused inside migrateAccountTablesToBinary.
+        // Either way the detection must be re-run afterwards so the published mode
+        // reflects the post-migration state (a pure binary layout with the done marker).
+        // Hex-only lanes are refused inside migrateAccountTablesToBinary.
         auto layout = detectAccountTableLayout(
             accountTableBoot->stateDB, accountTableBoot->storageRootPath);
-        if (layout.sawHexTables && layout.sawBinaryTables && accountTableBoot->migrateToBinary)
+        if (accountTableBoot->migrateToBinary && !layout.markerFile &&
+            (layout.inProgressMarker || (layout.sawHexTables && layout.sawBinaryTables)))
         {
             BCOS_LOG(WARNING)
                 << LOG_BADGE("LedgerInitializer")
                 << LOG_DESC(
-                       "unfinished hex->binary account-table migration detected (mixed "
-                       "s_tables:/apps/ registrations); resuming it now")
-                << LOG_KV("marker", binaryAccountTablesMarkerPath(
+                       "unfinished hex->binary account-table migration detected "
+                       "(in-progress marker or mixed s_tables:/apps/ and s_tables:/s/ "
+                       "registrations); resuming it now")
+                << LOG_KV("marker", binaryAccountTablesInProgressMarkerPath(
                                         accountTableBoot->storageRootPath));
         }
         if (accountTableBoot->migrateToBinary)
@@ -104,6 +108,7 @@ std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::buil
                        << LOG_DESC("node-local account-table encoding")
                        << LOG_KV("mode", magic_enum::enum_name(mode))
                        << LOG_KV("markerFile", layout.markerFile)
+                       << LOG_KV("inProgressMarker", layout.inProgressMarker)
                        << LOG_KV("hexTables", layout.sawHexTables)
                        << LOG_KV("binaryTables", layout.sawBinaryTables)
                        << LOG_KV("hexOnlyLane", hexOnlyLane)

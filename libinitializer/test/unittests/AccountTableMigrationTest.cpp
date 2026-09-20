@@ -14,8 +14,9 @@
  *  limitations under the License.
  *
  * @file AccountTableMigrationTest.cpp
- * @brief The one-shot hex→binary account-table migration: rename coverage, marker file,
- *        idempotency/crash-resume, conflict abort, and the hex-only lane refusal.
+ * @brief The one-shot hex→binary account-table migration: rename coverage, the two-marker
+ *        state machine (in-progress / done), idempotency/crash-resume, conflict abort, the
+ *        hex-only lane refusal, and the F2 account-row-phase crash shape.
  */
 #include "libinitializer/AccountTableMigration.h"
 #include "libinitializer/AddressTableModeDetection.h"
@@ -79,6 +80,17 @@ struct TempRocksDB
     bool markerExists() const
     {
         return std::filesystem::exists(binaryAccountTablesMarkerPath(dir.string()));
+    }
+
+    bool inProgressMarkerExists() const
+    {
+        return std::filesystem::exists(binaryAccountTablesInProgressMarkerPath(dir.string()));
+    }
+
+    void writeInProgressMarker() const
+    {
+        std::ofstream marker(binaryAccountTablesInProgressMarkerPath(dir.string()));
+        marker << "in progress\n";
     }
 
     std::filesystem::path dir;
@@ -163,8 +175,10 @@ BOOST_AUTO_TEST_CASE(MigratesAccountRowsAndRegistrationsOnly)
     // 20-char "/apps/" BFS table is present here, so this is also the F1 pin: it must not
     // count as a binary (or hex) account table.
     BOOST_CHECK(f.markerExists());
+    BOOST_CHECK(!f.inProgressMarkerExists());  // lifecycle: removed after the done marker
     auto layout = detectAccountTableLayout(*f.db, f.dir.string());
     BOOST_CHECK(layout.markerFile);
+    BOOST_CHECK(!layout.inProgressMarker);
     BOOST_CHECK(!layout.sawHexTables);
     BOOST_CHECK(layout.sawBinaryTables);
     BOOST_CHECK(resolveNodeAddressTableMode(layout, /*hexOnlyLane=*/false) ==
@@ -195,7 +209,32 @@ BOOST_AUTO_TEST_CASE(SecondRunSkipsScanAndMarkerlessResumeIsIdempotent)
     BOOST_CHECK_EQUAL(stats.migratedRegistrations, 0);
     BOOST_CHECK_EQUAL(stats.dedupedRows, 0);
     BOOST_CHECK(f.markerExists());
+    BOOST_CHECK(!f.inProgressMarkerExists());
     assertUntouched(f);
+}
+
+// Marker lifecycle around the done-marker early return: with BOTH markers present (the
+// crash-between-done-and-delete window) the migration takes the alreadyMigrated path and
+// changes nothing — the done marker is authoritative, so the stale in-progress marker is
+// left alone (resolveNodeAddressTableMode checks the done marker first and reads this
+// state as completed).
+BOOST_AUTO_TEST_CASE(DoneMarkerEarlyReturnLeavesBothMarkersUntouched)
+{
+    TempRocksDB f;
+    seedChain(f);
+    migrateAccountTablesToBinary(*f.db, f.dir.string(), /*hexOnlyLane=*/false);
+    f.writeInProgressMarker();  // simulate the lost delete
+
+    auto stats = migrateAccountTablesToBinary(*f.db, f.dir.string(), /*hexOnlyLane=*/false);
+    BOOST_CHECK(stats.alreadyMigrated);
+    BOOST_CHECK(f.markerExists());
+    BOOST_CHECK(f.inProgressMarkerExists());  // untouched by the early return
+
+    auto layout = detectAccountTableLayout(*f.db, f.dir.string());
+    BOOST_CHECK(layout.markerFile);
+    BOOST_CHECK(layout.inProgressMarker);
+    BOOST_CHECK(resolveNodeAddressTableMode(layout, /*hexOnlyLane=*/false) ==
+                account::AddressTableMode::Binary);
 }
 
 BOOST_AUTO_TEST_CASE(DedupsInterruptedRun)
@@ -223,8 +262,10 @@ BOOST_AUTO_TEST_CASE(AbortsOnValueConflict)
 
     BOOST_CHECK_THROW(migrateAccountTablesToBinary(*f.db, f.dir.string(), /*hexOnlyLane=*/false),
         bcos::tool::InvalidConfig);
-    // No marker: the migration did not complete.
+    // No done marker: the migration did not complete. The in-progress marker stays, so the
+    // next boot refuses (switch off) or resumes (switch on) instead of publishing Hex.
     BOOST_CHECK(!f.markerExists());
+    BOOST_CHECK(f.inProgressMarkerExists());
 }
 
 BOOST_AUTO_TEST_CASE(RefusesHexOnlyLane)
@@ -233,10 +274,12 @@ BOOST_AUTO_TEST_CASE(RefusesHexOnlyLane)
     seedChain(f);
     BOOST_CHECK_THROW(migrateAccountTablesToBinary(*f.db, f.dir.string(), /*hexOnlyLane=*/true),
         bcos::tool::InvalidConfig);
-    // Nothing moved.
+    // Nothing moved — and no marker written either: the lane refusal fires before the
+    // in-progress marker lands.
     BOOST_CHECK(f.get(std::string(kHexTable) + ":balance") ==
                 std::optional<std::string>("1000"));
     BOOST_CHECK(!f.markerExists());
+    BOOST_CHECK(!f.inProgressMarkerExists());
 }
 
 // The boot-time auto-resume shape: a crash mid-migration left a MIXED layout (one account
@@ -271,6 +314,7 @@ BOOST_AUTO_TEST_CASE(ResumesFromMixedLayoutToPureBinary)
     BOOST_CHECK(!layout.sawHexTables);
     BOOST_CHECK(layout.sawBinaryTables);
     BOOST_CHECK(layout.markerFile);
+    BOOST_CHECK(!layout.inProgressMarker);
     BOOST_CHECK(resolveNodeAddressTableMode(layout, /*hexOnlyLane=*/false) ==
                 account::AddressTableMode::Binary);
     // Both accounts' rows survive under the binary tables, values intact.
@@ -278,6 +322,63 @@ BOOST_AUTO_TEST_CASE(ResumesFromMixedLayoutToPureBinary)
                 std::optional<std::string>("1000"));
     BOOST_CHECK(f.get(binaryTable(kHexTable2) + ":code_hash") ==
                 std::optional<std::string>("deadbeef"));
+    assertUntouched(f);
+}
+
+// F2 regression pin: a crash in the ACCOUNT-ROW phase. The /apps/ account rows (leading
+// byte 0x2f) all rename BEFORE the first s_tables:/apps/ registration (0x73), so this
+// shape holds binary account ROWS while every registration is still hex — the
+// registration scan alone reads a pure hex layout and, before the in-progress marker
+// existed, boot detection published silent Hex over the half-migrated DB: every migrated
+// account read as absent and the node's state roots diverged from the chain. Now the
+// in-progress marker forces a refusal with the migration switch off (on every lane), and
+// with the switch on the migration resumes and completes.
+BOOST_AUTO_TEST_CASE(CrashInAccountRowPhaseRefusesHexAndResumes)
+{
+    TempRocksDB f;
+    seedChain(f);
+    // kHexTable's rows renamed to /s/ — balance cleanly, nonce with its hex source left
+    // behind (a twin) — ALL registrations still hex, kHexTable2 untouched, in-progress
+    // marker present.
+    f.put(binaryTable(kHexTable) + ":balance", "1000");
+    f.put(binaryTable(kHexTable) + ":nonce", "7");
+    auto status = f.db->Delete(rocksdb::WriteOptions{}, std::string(kHexTable) + ":balance");
+    BOOST_REQUIRE(status.ok());
+    f.writeInProgressMarker();
+
+    auto layout = detectAccountTableLayout(*f.db, f.dir.string());
+    BOOST_CHECK(layout.sawHexTables);
+    BOOST_CHECK(!layout.sawBinaryTables);  // the registration scan reads pure hex
+    BOOST_CHECK(!layout.markerFile);
+    BOOST_CHECK(layout.inProgressMarker);
+    // Switch OFF: refuse to boot — on the baseline lane and on a hex-only lane alike
+    // (previously this exact shape resolved to silent Hex).
+    BOOST_CHECK_THROW(resolveNodeAddressTableMode(layout, /*hexOnlyLane=*/false),
+        bcos::tool::InvalidConfig);
+    BOOST_CHECK_THROW(resolveNodeAddressTableMode(layout, /*hexOnlyLane=*/true),
+        bcos::tool::InvalidConfig);
+
+    // Switch ON: the migration resumes — the done-marker early return must NOT skip a run
+    // that only carries the in-progress marker — and completes.
+    auto stats = migrateAccountTablesToBinary(*f.db, f.dir.string(), /*hexOnlyLane=*/false);
+    BOOST_CHECK(!stats.alreadyMigrated);
+    BOOST_CHECK_EQUAL(stats.migratedAccountRows, 1);  // kHexTable2's code_hash
+    BOOST_CHECK_EQUAL(stats.migratedRegistrations, 2);
+    BOOST_CHECK_EQUAL(stats.dedupedRows, 1);  // the nonce twin
+
+    layout = detectAccountTableLayout(*f.db, f.dir.string());
+    BOOST_CHECK(!layout.sawHexTables);
+    BOOST_CHECK(layout.sawBinaryTables);
+    BOOST_CHECK(layout.markerFile);
+    BOOST_CHECK(!layout.inProgressMarker);
+    BOOST_CHECK(resolveNodeAddressTableMode(layout, /*hexOnlyLane=*/false) ==
+                account::AddressTableMode::Binary);
+    BOOST_CHECK(f.get(binaryTable(kHexTable) + ":balance") ==
+                std::optional<std::string>("1000"));
+    BOOST_CHECK(f.get(binaryTable(kHexTable) + ":nonce") == std::optional<std::string>("7"));
+    BOOST_CHECK(f.get(binaryTable(kHexTable2) + ":code_hash") ==
+                std::optional<std::string>("deadbeef"));
+    BOOST_CHECK(!f.get(std::string(kHexTable) + ":nonce"));
     assertUntouched(f);
 }
 

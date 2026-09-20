@@ -14,12 +14,21 @@ std::string bcos::initializer::binaryAccountTablesMarkerPath(std::string_view st
     return (std::filesystem::path(storageRootPath) / BINARY_ACCOUNT_TABLES_MARKER).string();
 }
 
+std::string bcos::initializer::binaryAccountTablesInProgressMarkerPath(
+    std::string_view storageRootPath)
+{
+    return (std::filesystem::path(storageRootPath) / BINARY_ACCOUNT_TABLES_IN_PROGRESS_MARKER)
+        .string();
+}
+
 bcos::initializer::AccountTableLayout bcos::initializer::detectAccountTableLayout(
     ::rocksdb::DB& stateDB, std::string_view storageRootPath)
 {
     AccountTableLayout layout;
     layout.markerFile =
         std::filesystem::exists(binaryAccountTablesMarkerPath(storageRootPath));
+    layout.inProgressMarker =
+        std::filesystem::exists(binaryAccountTablesInProgressMarkerPath(storageRootPath));
 
     // Physical keys are the flat "table:key" form (executor_v1::StateKey encoding, shared
     // by the storage2 and the legacy storage layers — both use TABLE_KEY_SPLIT ':'), so the
@@ -77,14 +86,15 @@ bcos::ledger::account::AddressTableMode bcos::initializer::resolveNodeAddressTab
     using ledger::account::AddressTableMode;
     if (hexOnlyLane)
     {
-        if (layout.markerFile || layout.sawBinaryTables)
+        if (layout.markerFile || layout.inProgressMarker || layout.sawBinaryTables)
         {
             BOOST_THROW_EXCEPTION(
                 bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                    "this node's state DB holds binary-layout account tables ("
-                    ".binary_account_tables marker or s_tables:/s/<20-byte> rows), but "
-                    "the chain runs a hex-only executor lane (OP / Eth engine / legacy "
-                    "executor): those executors name account tables /apps/<40-hex> "
+                    "this node's state DB holds binary-layout account tables or an "
+                    "unfinished hex->binary migration (.binary_account_tables marker, "
+                    ".binary_account_tables.in_progress marker or s_tables:/s/<20-byte> "
+                    "rows), but the chain runs a hex-only executor lane (OP / Eth engine / "
+                    "legacy executor): those executors name account tables /apps/<40-hex> "
                     "directly and would split reads and writes onto disjoint tables. "
                     "Recovery: roll the state DB back to the pre-migration snapshot (or "
                     "delete the .binary_account_tables marker if migration never ran), or "
@@ -93,15 +103,36 @@ bcos::ledger::account::AddressTableMode bcos::initializer::resolveNodeAddressTab
         }
         return AddressTableMode::Hex;
     }
+    // Both markers present is COMPLETED, not in-progress: the done marker is written and
+    // fsync'd strictly after the final synced batch, so a crash between that fsync and the
+    // in-progress delete loses only the delete. The done marker is authoritative.
     if (layout.markerFile)
     {
         return AddressTableMode::Binary;
     }
+    if (layout.inProgressMarker)
+    {
+        // Unfinished migration. The registration scan alone CANNOT see this state: the
+        // migration renames the /apps/ account rows (0x2f) before the first
+        // s_tables:/apps/ registration (0x73), so a crash in the account-row phase leaves
+        // sawHexTables=true, sawBinaryTables=false — previously published as silent Hex,
+        // after which every migrated account read as absent and the node's state roots
+        // diverged from the chain. The in-progress marker closes that hole.
+        BOOST_THROW_EXCEPTION(
+            bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                "the state DB holds an unfinished hex->binary account-table migration "
+                "(.binary_account_tables.in_progress marker present): set [storage] "
+                "migrate_account_tables_to_binary=true and restart to resume and finish the "
+                "migration, or roll the state DB back to a pre-migration snapshot"));
+    }
     if (layout.sawHexTables && layout.sawBinaryTables)
     {
-        // Defensive invariant: the boot sequence (LedgerInitializer::build) resolves a mixed
-        // layout before calling here — resume the migration when
-        // [storage] migrate_account_tables_to_binary is set, refuse to start otherwise.
+        // Defensive invariant: with the in-progress marker written before the first batch,
+        // an interrupted migration always carries it and is caught above. Reaching here
+        // means a hand-mixed backup (or a crash on a build predating the marker) — the
+        // boot sequence (LedgerInitializer::build) resolves it the same way: resume the
+        // migration when [storage] migrate_account_tables_to_binary is set, refuse to
+        // start otherwise.
         BOOST_THROW_EXCEPTION(
             bcos::tool::InvalidConfig() << bcos::errinfo_comment(
                 "the state DB holds an unfinished hex->binary account-table migration (both "

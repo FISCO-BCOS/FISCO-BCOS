@@ -65,6 +65,12 @@ struct TempRocksDB
         BOOST_REQUIRE(status.ok());
     }
 
+    void writeInProgressMarker() const
+    {
+        std::ofstream marker(binaryAccountTablesInProgressMarkerPath(dir.string()));
+        marker << "in progress\n";
+    }
+
     std::filesystem::path dir;
     std::unique_ptr<rocksdb::DB> db;
 };
@@ -111,7 +117,21 @@ BOOST_AUTO_TEST_CASE(DetectsHexBinaryAndMixedLayouts)
         marker.close();
         auto layout = detectAccountTableLayout(*fixture.db, fixture.dir.string());
         BOOST_CHECK(layout.markerFile);
+        BOOST_CHECK(!layout.inProgressMarker);
         BOOST_CHECK(!layout.sawHexTables);
+        BOOST_CHECK(!layout.sawBinaryTables);
+    }
+    // In-progress marker alone (an interrupted migration whose registration rows are all
+    // still hex — the account-row-phase crash shape): the scan sees nothing binary, the
+    // marker file carries the verdict.
+    {
+        TempRocksDB fixture;
+        fixture.putRegistration(std::string(kHexTable));
+        fixture.writeInProgressMarker();
+        auto layout = detectAccountTableLayout(*fixture.db, fixture.dir.string());
+        BOOST_CHECK(!layout.markerFile);
+        BOOST_CHECK(layout.inProgressMarker);
+        BOOST_CHECK(layout.sawHexTables);
         BOOST_CHECK(!layout.sawBinaryTables);
     }
     // F1 regression pin: non-account registrations must NOT flip the verdict. A
@@ -152,6 +172,20 @@ BOOST_AUTO_TEST_CASE(ResolvesModeFromLayout)
     BOOST_CHECK_THROW(
         resolveNodeAddressTableMode({.sawHexTables = true, .sawBinaryTables = true}, false),
         bcos::tool::InvalidConfig);
+    // The in-progress marker refuses on its own — including over an all-hex registration
+    // scan, the account-row-phase crash shape that registration-only detection used to
+    // publish as silent Hex (F2).
+    BOOST_CHECK_THROW(resolveNodeAddressTableMode({.inProgressMarker = true}, false),
+        bcos::tool::InvalidConfig);
+    BOOST_CHECK_THROW(
+        resolveNodeAddressTableMode({.inProgressMarker = true, .sawHexTables = true}, false),
+        bcos::tool::InvalidConfig);
+    // Both markers present = COMPLETED: the done marker lands (fsync'd) strictly after the
+    // final synced batch, so a crash afterwards can only lose the in-progress delete. The
+    // done marker is authoritative.
+    BOOST_CHECK(resolveNodeAddressTableMode(
+                    {.markerFile = true, .inProgressMarker = true, .sawBinaryTables = true},
+                    false) == AddressTableMode::Binary);
 }
 
 BOOST_AUTO_TEST_CASE(HexOnlyLaneForcing)
@@ -168,6 +202,13 @@ BOOST_AUTO_TEST_CASE(HexOnlyLaneForcing)
         resolveNodeAddressTableMode({.markerFile = true}, true), bcos::tool::InvalidConfig);
     BOOST_CHECK_THROW(
         resolveNodeAddressTableMode({.sawHexTables = true, .sawBinaryTables = true}, true),
+        bcos::tool::InvalidConfig);
+    // The in-progress refusal fires on hex-only lanes too — even when the registration
+    // scan is still all-hex.
+    BOOST_CHECK_THROW(resolveNodeAddressTableMode({.inProgressMarker = true}, true),
+        bcos::tool::InvalidConfig);
+    BOOST_CHECK_THROW(
+        resolveNodeAddressTableMode({.inProgressMarker = true, .sawHexTables = true}, true),
         bcos::tool::InvalidConfig);
 }
 

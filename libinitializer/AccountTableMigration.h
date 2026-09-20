@@ -49,13 +49,23 @@ struct AccountTableMigrationStats
 /// contract tables, and any "/apps/" table whose name is not exactly 40 hex chars, e.g. a
 /// 20-char BFS table) is left untouched.
 ///
-/// Idempotent and crash-safe: a binary target already holding the SAME value means an
-/// interrupted previous run — the hex source is deleted and the scan continues; a DIFFERENT
-/// value is a data conflict and aborts the boot (bcos::tool::InvalidConfig). The
-/// .binary_account_tables marker is written (and fsync'd) only after the final synced batch,
-/// so a crash mid-migration leaves no marker and a mixed layout on disk, which the next boot
-/// resolves explicitly: resume the migration when the switch stays on, refuse to start
-/// otherwise (there is no runtime mixed mode).
+/// Idempotent and crash-safe, tracked by a two-marker state machine in the state-DB dir:
+///   1. .binary_account_tables.in_progress is written (fsync'd) BEFORE the first WriteBatch
+///      is flushed — the registration scan cannot witness an interruption in the
+///      account-row phase (all /apps/ rows sort before the first s_tables:/apps/
+///      registration), so this file is the only durable record of a started-but-unfinished
+///      migration;
+///   2. after the final SYNCED batch, .binary_account_tables is written (fsync'd) and only
+///      then the in-progress marker is deleted — a crash at any point leaves at least one
+///      marker telling the truth, and both-files-present means COMPLETED (the done marker
+///      lands strictly after the final synced batch; only the delete can be lost).
+/// A binary target already holding the SAME value means an interrupted previous run — the
+/// hex source is deleted and the scan continues; a DIFFERENT value is a data conflict and
+/// aborts the boot (bcos::tool::InvalidConfig). A crash mid-migration leaves the
+/// in-progress marker, which the next boot resolves explicitly: resume the migration when
+/// the switch stays on (the twin-dedup makes the resume idempotent), refuse to start
+/// otherwise — on every executor lane. There is no runtime mixed mode, and silently
+/// publishing Hex over a half-migrated DB would read every migrated account as absent.
 ///
 /// @param hexOnlyLane the chain's executor lane is hex-only (OP / Eth engine / legacy v2
 ///        executor — isHexOnlyExecutorLane): migration is refused loudly, those executors

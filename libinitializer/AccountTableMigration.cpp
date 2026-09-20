@@ -44,27 +44,31 @@ constexpr size_t kBatchSize = 10000;  // write ops per WriteBatch
             "migrate_account_tables_to_binary=true to resume the migration"));
 }
 
-void writeMarkerFile(std::string_view storageRootPath,
-    bcos::initializer::AccountTableMigrationStats const& stats)
+// stdio + fsync for both markers: they are the migration's commit records and must survive
+// the same power failure the synced RocksDB batches survive.
+void writeMarkerAt(std::string const& path, std::string const& body)
 {
-    auto const path = bcos::initializer::binaryAccountTablesMarkerPath(storageRootPath);
-    // stdio + fsync: the marker is the migration's commit record, it must survive the same
-    // power failure the synced RocksDB batches survive.
     std::unique_ptr<std::FILE, int (*)(std::FILE*)> file(
         std::fopen(path.c_str(), "w"), &std::fclose);
     if (!file)
     {
         throwMigrationFailure("cannot open marker file " + path);
     }
-    auto const body = "binary account tables migrated: accountRows=" +
-                      std::to_string(stats.migratedAccountRows) +
-                      " registrations=" + std::to_string(stats.migratedRegistrations) +
-                      " deduped=" + std::to_string(stats.dedupedRows) + "\n";
     if (std::fwrite(body.data(), 1, body.size(), file.get()) != body.size() ||
         std::fflush(file.get()) != 0 || ::fsync(::fileno(file.get())) != 0)
     {
         throwMigrationFailure("cannot write/fsync marker file " + path);
     }
+}
+
+void writeMarkerFile(std::string_view storageRootPath,
+    bcos::initializer::AccountTableMigrationStats const& stats)
+{
+    writeMarkerAt(bcos::initializer::binaryAccountTablesMarkerPath(storageRootPath),
+        "binary account tables migrated: accountRows=" +
+            std::to_string(stats.migratedAccountRows) +
+            " registrations=" + std::to_string(stats.migratedRegistrations) +
+            " deduped=" + std::to_string(stats.dedupedRows) + "\n");
 }
 }  // namespace
 
@@ -101,10 +105,27 @@ bcos::initializer::AccountTableMigrationStats bcos::initializer::migrateAccountT
                    << LOG_DESC("start hex->binary account-table migration")
                    << LOG_KV("estimatedKeys", estimatedTotal);
 
+    // In-progress marker BEFORE the first mutation. The registration scan cannot witness
+    // an interruption in the account-row phase (every /apps/ row sorts before the first
+    // s_tables:/apps/ registration), so this file is the only durable record that a
+    // migration has started but not finished: a crash from here on leaves it behind, and
+    // the next boot either resumes (switch on — the twin-dedup below makes the resume
+    // idempotent) or refuses to publish a mode over a half-migrated DB (switch off).
+    writeMarkerAt(binaryAccountTablesInProgressMarkerPath(storageRootPath),
+        "binary account table migration in progress\n");
+
     // Snapshot the scan: renames and deletes land in batches while the iterator walks, and a
-    // snapshot keeps the walk pinned to the pre-migration view.
+    // snapshot keeps the walk pinned to the pre-migration view. RAII release: every
+    // throwMigrationFailure path must unpin it too, not just the success path.
+    struct SnapshotRelease
+    {
+        ::rocksdb::DB* db;
+        void operator()(::rocksdb::Snapshot const* s) const { db->ReleaseSnapshot(s); }
+    };
     ::rocksdb::ReadOptions readOptions;
-    readOptions.snapshot = stateDB.GetSnapshot();
+    std::unique_ptr<::rocksdb::Snapshot const, SnapshotRelease> snapshotGuard(
+        stateDB.GetSnapshot(), SnapshotRelease{&stateDB});
+    readOptions.snapshot = snapshotGuard.get();
     std::unique_ptr<::rocksdb::Iterator> it(stateDB.NewIterator(readOptions));
 
     ::rocksdb::WriteBatch batch;
@@ -225,9 +246,27 @@ bcos::initializer::AccountTableMigrationStats bcos::initializer::migrateAccountT
         throwMigrationFailure("scan iterator failed: " + it->status().ToString());
     }
     flushBatch(true);  // final batch synced before the marker lands
-    stateDB.ReleaseSnapshot(readOptions.snapshot);
 
+    // Completion ordering: the done marker must be durable BEFORE the in-progress marker
+    // is removed, so a crash at any point leaves at least one marker telling the truth.
+    // A crash between the two leaves BOTH files — that state is completed, not
+    // in-progress, because the done marker only lands after the final synced batch (see
+    // resolveNodeAddressTableMode, which checks the done marker first).
     writeMarkerFile(storageRootPath, stats);
+    std::error_code removeError;
+    std::filesystem::remove(
+        binaryAccountTablesInProgressMarkerPath(storageRootPath), removeError);
+    if (removeError)
+    {
+        // Benign: both markers present resolves to completed at boot, and the next
+        // marker-present run early-returns before touching either file.
+        BCOS_LOG(WARNING) << LOG_BADGE("AccountTableMigration")
+                          << LOG_DESC("could not remove the in-progress marker; the done "
+                                      "marker is authoritative")
+                          << LOG_KV("marker", binaryAccountTablesInProgressMarkerPath(
+                                                  storageRootPath))
+                          << LOG_KV("error", removeError.message());
+    }
     BCOS_LOG(INFO) << LOG_BADGE("AccountTableMigration")
                    << LOG_DESC("migration completed") << LOG_KV("scanned", stats.scanned)
                    << LOG_KV("accountRows", stats.migratedAccountRows)

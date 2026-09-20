@@ -13,20 +13,34 @@ class DB;
 
 namespace bcos::initializer
 {
-/// Marker file in the state-DB directory (NodeConfig::storagePath()) declaring that the
-/// account tables have been fully migrated to the binary layout. Written by
-/// AccountTableMigration (migrateAccountTablesToBinary) after the final synced batch;
-/// read here at boot.
+/// Marker files in the state-DB directory (NodeConfig::storagePath()) recording the
+/// hex→binary account-table migration as a two-file state machine:
+///   - .binary_account_tables.in_progress: written (stdio + fsync) by
+///     migrateAccountTablesToBinary BEFORE the first WriteBatch is flushed, so a crash at
+///     any later point — including the account-row phase, where no registration row has
+///     moved yet and the registration scan alone would still read pure hex — leaves a
+///     durable "migration started, not finished" record.
+///   - .binary_account_tables: written (stdio + fsync) after the final SYNCED batch, then
+///     the in-progress marker is deleted.
+/// Both files present means COMPLETED: the done marker only lands after the final synced
+/// batch, so a crash in the narrow window between its fsync and the in-progress delete
+/// loses only the delete. Read here at boot.
 inline constexpr std::string_view BINARY_ACCOUNT_TABLES_MARKER = ".binary_account_tables";
+inline constexpr std::string_view BINARY_ACCOUNT_TABLES_IN_PROGRESS_MARKER =
+    ".binary_account_tables.in_progress";
 
 /// <storageRootPath>/.binary_account_tables — the one shared spelling of the marker path.
 std::string binaryAccountTablesMarkerPath(std::string_view storageRootPath);
+
+/// <storageRootPath>/.binary_account_tables.in_progress — ditto for the in-progress marker.
+std::string binaryAccountTablesInProgressMarkerPath(std::string_view storageRootPath);
 
 /// What the state RocksDB physically holds, as seen by the boot-time scan
 /// (detectAccountTableLayout).
 struct AccountTableLayout
 {
-    bool markerFile = false;     ///< .binary_account_tables present in the state-DB dir
+    bool markerFile = false;  ///< .binary_account_tables present in the state-DB dir
+    bool inProgressMarker = false;  ///< .binary_account_tables.in_progress present
     bool sawHexTables = false;   ///< an s_tables:/apps/<40 lowercase hex> registration row
     bool sawBinaryTables = false;  ///< an s_tables:/s/<20 raw bytes> registration row
 };
@@ -53,34 +67,44 @@ AccountTableLayout detectAccountTableLayout(
 bool isHexOnlyExecutorLane(const ledger::Features& features, int executorVersion);
 
 /// Resolve the node-local account-table mode from the physical layout and the lane:
-///   - hex-only lane: forced Hex; binary evidence (marker file or binary tables) is a loud
-///     boot failure (throws bcos::tool::InvalidConfig with recovery instructions) — those
-///     executors would split reads/writes onto disjoint tables;
-///   - marker file → Binary (migration completed);
+///   - hex-only lane: forced Hex; any migration evidence (either marker file or binary
+///     tables) is a loud boot failure (throws bcos::tool::InvalidConfig with recovery
+///     instructions) — those executors would split reads/writes onto disjoint tables;
+///   - done marker → Binary (migration completed). Both markers present is still
+///     completed: the done marker is fsync'd strictly after the final synced batch, so
+///     only the in-progress delete can be lost to a crash;
+///   - in-progress marker (without the done marker) → throw: an unfinished migration was
+///     interrupted, possibly mid account-row phase where the registration scan alone
+///     still reads pure hex. Resume by setting [storage]
+///     migrate_account_tables_to_binary and restarting, or roll the state DB back to a
+///     pre-migration snapshot. There is no runtime mixed mode and silently publishing
+///     Hex over a half-migrated DB would read every migrated account as absent;
 ///   - binary only → Binary; hex only → Hex (every existing chain);
 ///   - neither (a brand-new chain) → Binary: the new encoding by default. The normalized
 ///     Entry::hash folds binary names to their hex form, so the genesis state root is
 ///     byte-identical either way — no fork risk from the default.
 ///
-/// A MIXED layout (hex AND binary registrations) has no legal mode: it means an interrupted
-/// hex→binary migration (or a hand-mixed backup), handled by the caller at boot — resume the
-/// migration when [storage] migrate_account_tables_to_binary is set, refuse to start
-/// otherwise. resolveNodeAddressTableMode throws on it as a defensive invariant.
+/// A MIXED layout (hex AND binary registrations) with no marker at all has no legal mode
+/// either: a hand-mixed backup, or an interrupted migration from before the in-progress
+/// marker existed — handled by the caller at boot like an unfinished migration (resume
+/// when the switch is set, refuse otherwise). resolveNodeAddressTableMode throws on it as
+/// a defensive invariant.
 ///
-/// @throws bcos::tool::InvalidConfig on the hex-only-lane/binary-data combination and on a
-///         mixed layout.
+/// @throws bcos::tool::InvalidConfig on the hex-only-lane/migration-evidence combination,
+///         on an in-progress marker without the done marker, and on a mixed layout.
 ledger::account::AddressTableMode resolveNodeAddressTableMode(
     AccountTableLayout const& layout, bool hexOnlyLane);
 
 /// Boot-time account-table handling, carried from Initializer to LedgerInitializer::build:
 /// the already-open state DB (RocksDB's single-instance lock forbids a second open) plus the
 /// one-shot migration switch ([storage] migrate_account_tables_to_binary). The boot sequence
-/// inside LedgerInitializer::build is: lane check → layout detection → (a mixed layout =
-/// interrupted migration: resume it when the switch is on, refuse to start otherwise) →
-/// optional one-shot migration → re-detection → mode publication, all before the genesis
-/// block is built. The lane verdict needs the ledger's (decryption-aware) reads of the
-/// on-chain config rows, so none of this can happen in Initializer ahead of the ledger
-/// construction.
+/// inside LedgerInitializer::build is: lane check → layout detection (registration scan +
+/// both marker files) → (an unfinished migration — in-progress marker without the done
+/// marker, or a markerless mixed layout: resume it when the switch is on, refuse to start
+/// otherwise) → optional one-shot migration → re-detection → mode publication, all before
+/// the genesis block is built. The lane verdict needs the ledger's (decryption-aware) reads
+/// of the on-chain config rows, so none of this can happen in Initializer ahead of the
+/// ledger construction.
 struct AccountTableBoot
 {
     std::reference_wrapper<::rocksdb::DB> stateDB;
