@@ -39,31 +39,34 @@ public:
     }
 
     // Locate the table/key separator in the flat "table:key" form. Raw-address
-    // account tables (the binary node-local layout: "/apps/" + 20 raw address bytes) can
-    // contain 0x3a (':') inside the address, so a plain find_first_of(':') would
-    // split inside the table name. The binary form is fixed-length, and a ':' at
-    // exactly that offset is unambiguous: the legacy 40-hex form holds only hex
-    // digits there, never ':'. Everything else keeps first-':' semantics.
+    // account tables (the binary node-local layout: "/s/" + 20 raw address bytes,
+    // ledger/account/AccountTableName.h) can contain 0x3a (':') inside the address,
+    // so a plain find_first_of(':') would split inside the table name. The binary
+    // form is fixed-length, and a ':' at exactly that offset is unambiguous:
+    // "/s/" is a reserved namespace that only ever holds the 20-byte binary account
+    // tables (BFS cannot create "/s/" tables — checkPathPrefixValid whitelists only
+    // "/apps/", "/tables/", "/usr/"), so nothing else places a ':' there by
+    // coincidence. Everything else — including ALL "/apps/" tables — keeps
+    // first-':' semantics unconditionally.
     //
-    // Overall invariant: this rule assumes the "/apps/" tables come in exactly two
-    // shapes — 20 raw address bytes or the 40 lowercase hex chars of the same address.
-    // The encoding is NOT prefix-free: a shorter "/apps/" table whose name plus the
-    // start of its key happens to place a ':' at the fixed offset is misread as a
-    // binary-address table (e.g. "/apps/foo" + key "<16 chars>:bar" splits as table
-    // "/apps/foo:<16 chars>"). No reachable case exists today — the BFS directory
-    // tables under /apps/ never carry ':' in their keys — and the known-ambiguity
-    // test in TestKeyPrefixes.cpp pins the current behaviour.
+    // The earlier draft put the binary tables under "/apps/" and needed a fixed-offset
+    // rule there too, which had a known ambiguity: a short "/apps/" table whose key
+    // happened to place a ':' at the binary split offset was misread as a
+    // binary-address table. Moving the binary layout to "/s/" removes that whole
+    // class — and nothing binary ever shipped under "/apps/" (feature_raw_address
+    // never reached a release; this PR is unmerged), so no committed key needs the
+    // old rule and it is deleted outright rather than kept for compatibility.
     //
-    // Constants: the 20 is bcos::Address::SIZE. The "/apps/" prefix is deliberately a
-    // literal: it is ledger::SYS_DIRECTORY::USER_APPS (ledger/LedgerTypeDef.h), but
-    // LedgerTypeDef.h includes this header, so naming the constant here would close an
-    // include cycle.
+    // Constants: the 20 is bcos::Address::SIZE. The "/s/" prefix is deliberately a
+    // literal: it is ledger::account::BINARY_TABLE_PREFIX
+    // (ledger/AccountTableName.h), but that header is included from storage/Entry.h,
+    // and this header stays literal-only like the "/apps/" mirror it replaced.
     static size_t splitPosition(std::string_view tableAndKey) noexcept
     {
-        constexpr std::string_view appsPrefix = "/apps/";  // ledger::SYS_DIRECTORY::USER_APPS
-        constexpr size_t rawAddressTableSize = appsPrefix.size() + bcos::Address::SIZE;
-        if (tableAndKey.size() > rawAddressTableSize && tableAndKey.starts_with(appsPrefix) &&
-            tableAndKey[rawAddressTableSize] == ':')
+        constexpr std::string_view binaryTablePrefix = "/s/";  // account::BINARY_TABLE_PREFIX
+        constexpr size_t rawAddressTableSize = binaryTablePrefix.size() + bcos::Address::SIZE;
+        if (tableAndKey.size() > rawAddressTableSize &&
+            tableAndKey.starts_with(binaryTablePrefix) && tableAndKey[rawAddressTableSize] == ':')
         {
             return rawAddressTableSize;
         }

@@ -134,7 +134,11 @@ bcos::initializer::AccountTableMigrationStats bcos::initializer::migrateAccountT
     };
 
     // Queue the rename hexKey → binaryKey (both under hexTable), resolving an existing
-    // binary twin first.
+    // binary twin first. The probe stays unconditional: on a resume the twin may
+    // legitimately exist (interrupted previous run), and even on a first run it is the
+    // only guard against a hand-mixed backup that already carries /s/ rows — the cost is
+    // one point lookup per migrated row against the snapshot, cheap next to the batched
+    // writes.
     auto queueRename = [&](::rocksdb::Slice const& hexKey, std::string const& binaryKey,
                            std::string_view hexTable, bool isRegistration) {
         targetValue.clear();
@@ -180,6 +184,11 @@ bcos::initializer::AccountTableMigrationStats bcos::initializer::migrateAccountT
     constexpr std::string_view registrationPrefix = "s_tables:/apps/";
     constexpr size_t hexTableNameSize =
         ledger::account::APPS_PREFIX.size() + ledger::account::HEX_ADDRESS_SIZE;
+    // Key-ordering note: the binary rename targets can never feed back into this scan.
+    // "/s/<20 bytes>:<field>" row targets start with '/' (0x2f) and sort before every
+    // "s_tables:..." registration source (0x73), and even where families interleave the
+    // iterator is pinned to the pre-migration snapshot, so freshly written targets are
+    // invisible to it regardless of where they sort.
     for (it->SeekToFirst(); it->Valid(); it->Next())
     {
         auto const key = it->key();

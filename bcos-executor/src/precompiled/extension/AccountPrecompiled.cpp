@@ -309,7 +309,7 @@ void AccountPrecompiled::addAccountBalance(const std::string& accountTableName,
 
 
         // get account hex from /sys/xxxxx or /apps/xxxxx. A binary account table name
-        // ("/apps/<20 raw bytes>") carries raw address bytes that may themselves contain
+        // ("/s/<20 raw bytes>") carries raw address bytes that may themselves contain
         // 0x2f ('/'), so the last-path-segment regex cannot be used on it — the address
         // sits at a fixed offset instead. Hex-encoded (lowercase) it is exactly the value
         // the regex path yields for a hex name.
@@ -317,7 +317,7 @@ void AccountPrecompiled::addAccountBalance(const std::string& accountTableName,
         if (ledger::account::isBinaryAccountTableName(accountTableName))
         {
             const auto* addressBegin =
-                accountTableName.data() + ledger::account::APPS_PREFIX.size();  // NOLINT
+                accountTableName.data() + ledger::account::BINARY_TABLE_PREFIX.size();  // NOLINT
             accountHex.reserve(ledger::account::HEX_ADDRESS_SIZE);
             boost::algorithm::hex_lower(addressBegin,
                 addressBegin + ledger::account::ADDRESS_SIZE, std::back_inserter(accountHex));

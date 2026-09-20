@@ -46,7 +46,7 @@ using XorEncStorage = memory_storage::MemoryStorage<executor_v1::StateKey,
     executor_v1::StateValue, memory_storage::Attribute(memory_storage::ORDERED)>;
 
 // One logical account: registration row in s_tables plus nonce/balance/slot rows.
-// When @p binary is true the rows live in the "/apps/<20 raw bytes>" table, otherwise in
+// When @p binary is true the rows live in the "/s/<20 raw bytes>" table, otherwise in
 // the legacy "/apps/<40 lowercase hex>" table.
 task::Task<void> writeAccount(XorEncStorage& storage, std::string_view hexAddress,
     std::string_view nonce, std::string_view balance, bool binary)

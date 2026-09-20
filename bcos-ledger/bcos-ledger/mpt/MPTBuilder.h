@@ -60,8 +60,8 @@ struct BuildContext
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher& hasher;  ///< reused slot-key context
     bool l2Mode;  ///< scenario B: a BCOS extension row is an error rather than a skip
     /// The node's account-table mode (node-local layout): forwarded to readFlatAccountMeta,
-    /// which reads the binary table first and falls back to the legacy hex table when the mode
-    /// says so (EVMAccount owns the routing).
+    /// which reads the one table layout the node uses — hex or binary, never both
+    /// (EVMAccount owns the routing).
     bcos::ledger::account::AddressTableMode accountMode;
     /// Forwarded to every mergeNodeDelta / hand tally: false when the configured CommitObserver
     /// does not count references (CommitObserver::needsRefCountDeltas).
@@ -477,7 +477,9 @@ bcos::task::Task<MPTDeltaLayer> buildAndCollect(Storage& nodeStorage, bcos::h256
     // so one account's rows form a contiguous run and a table change marks its end. Scanning
     //     /apps/0a..:balance   /apps/0a..:nonce   /apps/0b..:nonce   /sys/config:x
     // settles account 0a when the /apps/0b.. row arrives, settles 0b when /sys/config arrives,
-    // and skips the system row — currentAddress stays unset for any table outside /apps/.
+    // and skips the system row — currentAddress stays unset for any table that is not an
+    // account table (parseAccountTable accepts the hex "/apps/" and the binary "/s/"
+    // shapes; everything else is not an account).
     //
     // currentTable is a view into the row the iterator last yielded: elements live in the delta
     // container, which this read-only scan never mutates, so it stays valid across iterations.

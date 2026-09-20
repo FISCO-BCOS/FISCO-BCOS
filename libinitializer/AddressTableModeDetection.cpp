@@ -23,8 +23,15 @@ bcos::initializer::AccountTableLayout bcos::initializer::detectAccountTableLayou
 
     // Physical keys are the flat "table:key" form (executor_v1::StateKey encoding, shared
     // by the storage2 and the legacy storage layers — both use TABLE_KEY_SPLIT ':'), so the
-    // account-table registration rows sort together under "s_tables:/apps/".
-    constexpr std::string_view prefix = "s_tables:/apps/";  // SYS_TABLES + ':' + USER_APPS
+    // account-table registration rows sort together under "s_tables:/": hex account tables
+    // register as "s_tables:/apps/<40 hex>", binary ones as "s_tables:/s/<20 raw bytes>"
+    // ("/apps/" < "/s/" < "/sys/", so both families land inside this one seek range).
+    // The scan also sees every OTHER "/"-rooted registration (/sys/, /tables/, auth
+    // tables, short-name BFS tables) — the is* probes below ignore all of them by
+    // prefix+shape, including a "/apps/" name of exactly 20 chars (a plain BFS table,
+    // never a binary account table: the binary layout lives under "/s/", prefix-free
+    // from everything BFS can produce — AccountTableName.h).
+    constexpr std::string_view prefix = "s_tables:/";  // SYS_TABLES + ':' + the "/" root
     std::unique_ptr<::rocksdb::Iterator> it(stateDB.NewIterator(::rocksdb::ReadOptions{}));
     for (it->Seek(::rocksdb::Slice(prefix)); it->Valid(); it->Next())
     {
@@ -75,7 +82,7 @@ bcos::ledger::account::AddressTableMode bcos::initializer::resolveNodeAddressTab
             BOOST_THROW_EXCEPTION(
                 bcos::tool::InvalidConfig() << bcos::errinfo_comment(
                     "this node's state DB holds binary-layout account tables ("
-                    ".binary_account_tables marker or s_tables:/apps/<20-byte> rows), but "
+                    ".binary_account_tables marker or s_tables:/s/<20-byte> rows), but "
                     "the chain runs a hex-only executor lane (OP / Eth engine / legacy "
                     "executor): those executors name account tables /apps/<40-hex> "
                     "directly and would split reads and writes onto disjoint tables. "
@@ -98,7 +105,7 @@ bcos::ledger::account::AddressTableMode bcos::initializer::resolveNodeAddressTab
         BOOST_THROW_EXCEPTION(
             bcos::tool::InvalidConfig() << bcos::errinfo_comment(
                 "the state DB holds an unfinished hex->binary account-table migration (both "
-                "s_tables:/apps/<40-hex> and s_tables:/apps/<20-byte> registrations exist): "
+                "s_tables:/apps/<40-hex> and s_tables:/s/<20-byte> registrations exist): "
                 "set [storage] migrate_account_tables_to_binary=true and restart to finish "
                 "the migration, or roll the state DB back to a pre-migration snapshot"));
     }

@@ -88,11 +88,11 @@ bcos::storage::Entry codeHashEntry(bcos::h256 const& hash)
         std::string_view{reinterpret_cast<char const*>(hash.data()), bcos::h256::SIZE});
 }
 
-// "/apps/" + the 20 raw address bytes — the binary account-table layout
-// (EVMAccount's AddressTableMode::Binary naming, Classify.h ADDRESS_BIN_LEN).
+// "/s/" + the 20 raw address bytes — the binary account-table layout
+// (EVMAccount's AddressTableMode::Binary naming, Classify.h BINARY_TABLE_PREFIX).
 std::string binaryAccountTable(bcos::Address const& addr)
 {
-    std::string table{APPS_TABLE_PREFIX};
+    std::string table{BINARY_TABLE_PREFIX};
     table.append(reinterpret_cast<char const*>(addr.data()), addr.size());
     return table;
 }
@@ -303,7 +303,7 @@ BOOST_AUTO_TEST_CASE(NextBlockContinuesIncrementallyOverThePartialTrie)
 
 BOOST_AUTO_TEST_CASE(BinaryTableDeltaBuildsTheSameTrieAsHex)
 {
-    // Binary layout: the block's delta carries "/apps/<20 raw bytes>" table names. The
+    // Binary layout: the block's delta carries "/s/<20 raw bytes>" table names. The
     // trie key is keccak(address) either way, so the SAME logical delta expressed with hex
     // tables (Hex mode) and with binary tables (Binary mode) must commit the same state root.
     auto const addr = makeAddress(0xC3);

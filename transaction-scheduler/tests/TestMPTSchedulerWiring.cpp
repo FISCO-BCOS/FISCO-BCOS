@@ -799,8 +799,9 @@ BOOST_AUTO_TEST_CASE(genesisBlockPublishesNoExecuteTimeHeader)
 }
 
 // Guard: a stray row under the reserved "/mpt/" table in the block's TOP delta layer must be
-// skipped by the build's account scan — parseAccountTable only accepts "/apps/<40-hex>"
-// tables — never classified as an account, and must not perturb the state root.
+// skipped by the build's account scan — parseAccountTable only accepts the account-table
+// shapes ("/apps/<40-hex>", "/s/<20 raw bytes>") — never classified as an account, and must
+// not perturb the state root.
 BOOST_AUTO_TEST_CASE(strayMptRowIsNotAnAccount)
 {
     namespace mpt = bcos::ledger::mpt;

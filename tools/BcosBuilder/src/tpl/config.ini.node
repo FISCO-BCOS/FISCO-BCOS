@@ -76,7 +76,7 @@
     ; fd-constrained hosts at the cost of re-reading SST metadata on eviction.
     ;rocksdb_max_open_files=-1
     ; One-shot offline migration of the account tables from the hex layout
-    ; (/apps/<40-hex>) to the binary layout (/apps/<20 raw bytes>) at boot.
+    ; (/apps/<40-hex>) to the binary layout (/s/<20 raw bytes>) at boot.
     ; Idempotent and crash-safe: an interrupted run resumes on the next start, and
     ; once the .binary_account_tables marker exists later boots skip the scan.
     ; Only the baseline executor lane (executor_version=1) accepts it; OP / Eth

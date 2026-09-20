@@ -793,17 +793,26 @@ BOOST_AUTO_TEST_CASE(accountTableNameCoding)
     std::string const hexTable = "/apps/4200000000000000000000000000000000001234";
     std::string const binTable = [&] {
         auto address = bcos::unhexAddress("0x4200000000000000000000000000000000001234");
-        std::string name("/apps/");
+        std::string name(account::BINARY_TABLE_PREFIX);
         name.append(reinterpret_cast<const char*>(address.bytes), sizeof(address.bytes));  // NOLINT
         return name;
     }();
-    BOOST_REQUIRE_EQUAL(binTable.size(), 26u);
+    BOOST_REQUIRE_EQUAL(binTable.size(), 23u);
 
-    // Probes: length alone disambiguates the two encodings.
+    // Probes: prefix+shape disambiguate the two encodings.
     BOOST_CHECK(account::isHexAccountTableName(hexTable));
     BOOST_CHECK(!account::isBinaryAccountTableName(hexTable));
     BOOST_CHECK(account::isBinaryAccountTableName(binTable));
     BOOST_CHECK(!account::isHexAccountTableName(binTable));
+
+    // F1 regression pin: a "/apps/" table with a 20-char name (mkdir/link/CNS can produce
+    // these) is a plain BFS table, NOT a binary account table — the binary layout lives
+    // under the reserved "/s/" namespace, so classification is never by length alone.
+    std::string const twentyCharAppsName = "/apps/" + std::string(20, 'x');
+    BOOST_CHECK(!account::isBinaryAccountTableName(twentyCharAppsName));
+    BOOST_CHECK(!account::isHexAccountTableName(twentyCharAppsName));
+    BOOST_CHECK(account::binaryToHexAccountTableName(twentyCharAppsName).empty());
+    BOOST_CHECK_EQUAL(account::canonicalTableNameForHash(twentyCharAppsName), twentyCharAppsName);
 
     // Negative probes: wrong prefix, wrong length, uppercase hex, non-hex char.
     BOOST_CHECK(!account::isHexAccountTableName("/sys/4200000000000000000000000000000000001234"));
@@ -811,7 +820,9 @@ BOOST_AUTO_TEST_CASE(accountTableNameCoding)
     BOOST_CHECK(!account::isHexAccountTableName("/apps/4200000000000000000000000000000000001234ff"));  // 42
     BOOST_CHECK(!account::isHexAccountTableName("/apps/420000000000000000000000000000000000ABCD"));
     BOOST_CHECK(!account::isHexAccountTableName("/apps/zz00000000000000000000000000000000001234"));
-    BOOST_CHECK(!account::isBinaryAccountTableName(hexTable.substr(0, 25)));  // 19 bytes
+    BOOST_CHECK(!account::isBinaryAccountTableName(binTable.substr(0, 22)));  // 19 address bytes
+    BOOST_CHECK(!account::isBinaryAccountTableName(binTable + "x"));          // 21 address bytes
+    BOOST_CHECK(!account::isBinaryAccountTableName("/s/"));
     BOOST_CHECK(!account::isBinaryAccountTableName("/apps/"));
     // An "_accessAuth" auth table is neither encoding — it is out of scope (not migrated,
     // not normalized).
@@ -824,7 +835,7 @@ BOOST_AUTO_TEST_CASE(accountTableNameCoding)
 
     // Invalid input → empty string (documented caller error).
     BOOST_CHECK(account::binaryToHexAccountTableName(hexTable).empty());
-    BOOST_CHECK(account::binaryToHexAccountTableName("/apps/short").empty());
+    BOOST_CHECK(account::binaryToHexAccountTableName("/s/short").empty());
     BOOST_CHECK(account::hexToBinaryAccountTableName(binTable).empty());
 
     // Canonicalization: binary → hex, hex identical, everything else untouched.

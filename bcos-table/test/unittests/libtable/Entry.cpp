@@ -241,7 +241,7 @@ BOOST_AUTO_TEST_CASE(entryHashAccountTableNormalization)
 
     std::string const hexTable = "/apps/4200000000000000000000000000000000001234";
     std::string const binTable = account::hexToBinaryAccountTableName(hexTable);
-    BOOST_REQUIRE_EQUAL(binTable.size(), 26u);
+    BOOST_REQUIRE_EQUAL(binTable.size(), 23u);
 
     auto data = "some-value"s;
     auto key = "nonce"s;

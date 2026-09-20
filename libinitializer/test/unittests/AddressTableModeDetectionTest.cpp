@@ -35,7 +35,7 @@ constexpr std::string_view kHexTable = "/apps/4200000000000000000000000000000000
 
 std::string binaryTableName()
 {
-    std::string name("/apps/");
+    std::string name("/s/");
     name.append(std::string(20, '\x42'));
     return name;
 }
@@ -113,6 +113,24 @@ BOOST_AUTO_TEST_CASE(DetectsHexBinaryAndMixedLayouts)
         BOOST_CHECK(layout.markerFile);
         BOOST_CHECK(!layout.sawHexTables);
         BOOST_CHECK(!layout.sawBinaryTables);
+    }
+    // F1 regression pin: non-account registrations must NOT flip the verdict. A
+    // "s_tables:/apps/<20 chars>" row is a plain BFS table (mkdir/link/CNS can produce
+    // 20-char names) — the binary layout lives under "/s/", so classification is by
+    // prefix, never by length alone. "/s/" names of the wrong length are not binary
+    // either.
+    {
+        TempRocksDB fixture;
+        fixture.putRegistration(std::string(kHexTable));
+        fixture.putRegistration("/apps/" + std::string(20, 'x'));  // 20-char BFS table
+        fixture.putRegistration("/s/" + std::string(19, 'b'));     // one byte short
+        fixture.putRegistration("/s/" + std::string(21, 'b'));     // one byte long
+        fixture.putRegistration("/tables/some_user_table");
+        auto layout = detectAccountTableLayout(*fixture.db, fixture.dir.string());
+        BOOST_CHECK(layout.sawHexTables);
+        BOOST_CHECK(!layout.sawBinaryTables);  // NOT mixed, NOT binary
+        BOOST_CHECK(resolveNodeAddressTableMode(layout, /*hexOnlyLane=*/false) ==
+                    account::AddressTableMode::Hex);
     }
 }
 

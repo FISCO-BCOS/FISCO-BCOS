@@ -56,8 +56,8 @@ namespace bcos::scheduler_v1
 ///
 /// Ordering inside one build is safe by construction: the flush runs after the delta scan
 /// completes, and a stray "/mpt/" row can never be classified as account state because
-/// parseAccountTable() only accepts "/apps/" tables whose suffix is exactly a 40-hex or a
-/// 20-byte raw address (pinned by the stray-row test in TestMPTSchedulerWiring.cpp).
+/// parseAccountTable() only accepts the two account-table shapes — "/apps/<40 hex>" and
+/// "/s/<20 raw bytes>" (pinned by the stray-row test in TestMPTSchedulerWiring.cpp).
 template <class View>
 class ViewNodeStorage
 {

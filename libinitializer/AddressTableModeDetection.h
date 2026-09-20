@@ -28,14 +28,17 @@ struct AccountTableLayout
 {
     bool markerFile = false;     ///< .binary_account_tables present in the state-DB dir
     bool sawHexTables = false;   ///< an s_tables:/apps/<40 lowercase hex> registration row
-    bool sawBinaryTables = false;  ///< an s_tables:/apps/<20 raw bytes> registration row
+    bool sawBinaryTables = false;  ///< an s_tables:/s/<20 raw bytes> registration row
 };
 
 /// Scan the state RocksDB for the account-table registration rows and check the marker
 /// file. Every account table is registered in s_tables (EVMAccount::create writes the
 /// SYS_TABLES row; the legacy executor's table-commit path registers every table it
 /// touches), and the registration row's key IS the table name, so the physical key prefix
-/// "s_tables:/apps/" enumerates every account table that has ever been created.
+/// "s_tables:/" enumerates every "/" -rooted table that has ever been created; the two
+/// account-table families ("s_tables:/apps/<40 hex>" and "s_tables:/s/<20 raw bytes>")
+/// are classified in-loop by the AccountTableName.h probes and everything else is
+/// ignored.
 AccountTableLayout detectAccountTableLayout(
     ::rocksdb::DB& stateDB, std::string_view storageRootPath);
 

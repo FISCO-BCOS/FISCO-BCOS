@@ -50,7 +50,7 @@ namespace bcos::scheduler_v1
 /// here against the state block N committed:
 ///
 ///  - account-table rows ("/apps/<40-hex>" or, in the binary node-local layout,
-///    "/apps/<20 raw bytes>":
+///    "/s/<20 raw bytes>":
 ///    nonce / balance / codeHash / 32-byte slots) answer from the block's MPT via MPTAccount's
 ///    rooted reads, re-encoded in the exact
 ///    flat representations EVMAccount reads (decimal strings for nonce and balance, raw
@@ -221,8 +221,9 @@ private:
         {
             // The node's real table mode (nodeAddressTableMode(), threaded from the
             // caller): with the binary layout active the account tables are 20-byte binary
-            // names (parseAccountTable classifies both layouts), and the MPTAccount's
-            // inherited flat path must read/write the same names the executor uses.
+            // names under "/s/" (parseAccountTable classifies both layouts), and the
+            // MPTAccount's inherited flat path must read/write the same names the
+            // executor uses.
             it = m_accounts
                      .try_emplace(address, *m_latestView, m_nodeStorage, *m_latestView, address,
                          m_accountMode)

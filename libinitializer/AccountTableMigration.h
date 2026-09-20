@@ -41,12 +41,13 @@ struct AccountTableMigrationStats
 };
 
 /// Rename every hex-layout account-table row in the state DB to its binary-layout twin:
-///   - "/apps/<40 lowercase hex>:<field>" → "/apps/<20 raw bytes>:<field>" (the ':' and the
+///   - "/apps/<40 lowercase hex>:<field>" → "/s/<20 raw bytes>:<field>" (the ':' and the
 ///     field part are preserved byte-for-byte);
-///   - "s_tables:/apps/<40hex>"           → "s_tables:/apps/<20bin>" (the registration row).
+///   - "s_tables:/apps/<40hex>"           → "s_tables:/s/<20bin>" (the registration row).
 /// Everything else (/sys/ rows, /mpt/ trie nodes, "/apps/<hex>_accessAuth" auth tables —
 /// 51 chars, not 40, so the length probe in AccountTableName.h excludes them — short-name
-/// contract tables) is left untouched.
+/// contract tables, and any "/apps/" table whose name is not exactly 40 hex chars, e.g. a
+/// 20-char BFS table) is left untouched.
 ///
 /// Idempotent and crash-safe: a binary target already holding the SAME value means an
 /// interrupted previous run — the hex source is deleted and the scan continues; a DIFFERENT

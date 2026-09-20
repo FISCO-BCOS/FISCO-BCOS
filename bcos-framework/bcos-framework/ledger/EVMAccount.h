@@ -31,7 +31,7 @@ struct FromTableName
 /// THE one address → account-table-name routing rule (the encoding contract itself is
 /// documented in AccountTableName.h): the 8 c_systemTxsAddress members always route to
 /// "/sys/<hex>", every other address routes to "/apps/<hex>" in Hex mode and to
-/// "/apps/<20 raw bytes>" in any other mode. The EVMAccount constructors below and every
+/// "/s/<20 raw bytes>" in any other mode. The EVMAccount constructors below and every
 /// caller that needs the table name without an account object (Ledger's state reads, the
 /// web3 RPC endpoints, the v1 precompiled call sites) share this single derivation — never
 /// re-derive the name locally.
@@ -52,8 +52,8 @@ inline std::string accountTableName(std::string_view address, AddressTableMode m
     if (mode != AddressTableMode::Hex)
     {
         assert(address.size() % 2 == 0);
-        tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + (address.size() / 2));
-        tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
+        tableName.reserve(BINARY_TABLE_PREFIX.size() + (address.size() / 2));
+        tableName.append(BINARY_TABLE_PREFIX);
         boost::algorithm::unhex(address.begin(), address.end(), std::back_inserter(tableName));
         return tableName;
     }

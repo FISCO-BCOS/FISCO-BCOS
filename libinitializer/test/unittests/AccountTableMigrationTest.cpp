@@ -102,6 +102,11 @@ void seedChain(TempRocksDB& f)
     f.put("s_tables:" + std::string(kHexTable) + "_accessAuth", "value");
     f.put("/apps/MyContract:balance", "5");  // short-name contract table
     f.put("s_tables:/apps/MyContract", "value");
+    // F1 shape: a "/apps/" table with a 20-char name (mkdir/link/CNS can produce these).
+    // It is a plain BFS table — the migration must not touch it, and the boot detection
+    // must not read it as a binary account table (the binary layout lives under "/s/").
+    f.put("/apps/" + std::string(20, 'y') + ":balance", "5");
+    f.put("s_tables:/apps/" + std::string(20, 'y'), "value");
 }
 
 void assertUntouched(TempRocksDB& f)
@@ -115,6 +120,10 @@ void assertUntouched(TempRocksDB& f)
                 std::optional<std::string>("value"));
     BOOST_CHECK(f.get("/apps/MyContract:balance") == std::optional<std::string>("5"));
     BOOST_CHECK(f.get("s_tables:/apps/MyContract") == std::optional<std::string>("value"));
+    BOOST_CHECK(f.get("/apps/" + std::string(20, 'y') + ":balance") ==
+                std::optional<std::string>("5"));
+    BOOST_CHECK(f.get("s_tables:/apps/" + std::string(20, 'y')) ==
+                std::optional<std::string>("value"));
 }
 }  // namespace
 
@@ -150,7 +159,9 @@ BOOST_AUTO_TEST_CASE(MigratesAccountRowsAndRegistrationsOnly)
     // Everything else untouched.
     assertUntouched(f);
 
-    // Marker written; the boot-time detection sees a pure binary layout.
+    // Marker written; the boot-time detection sees a pure binary layout — note the seeded
+    // 20-char "/apps/" BFS table is present here, so this is also the F1 pin: it must not
+    // count as a binary (or hex) account table.
     BOOST_CHECK(f.markerExists());
     auto layout = detectAccountTableLayout(*f.db, f.dir.string());
     BOOST_CHECK(layout.markerFile);

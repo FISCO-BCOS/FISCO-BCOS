@@ -96,28 +96,31 @@ BOOST_AUTO_TEST_CASE(NodeRowResolverRoundTrip)
 
 BOOST_AUTO_TEST_CASE(RawAddressTableWithColonByteRoundTrip)
 {
-    // Binary-layout account tables are "/apps/" + 20 raw address bytes, and the
+    // Binary-layout account tables are "/s/" + 20 raw address bytes, and the
     // address itself can contain 0x3A (':'). decode must split at the fixed offset
-    // ("/apps/".size() + 20), not at the first ':' inside the address.
+    // ("/s/".size() + 20 == 23), not at the first ':' inside the address.
     std::string address(20, 'a');
     address[0] = ':';   // first-':' would land here without the fixed-offset rule
     address[7] = ':';   // ':' strictly inside the address
     address[19] = ':';  // ':' as the last address byte, right before the real separator
 
-    executor_v1::StateKey const stateKey("/apps/" + address, "nonce");
+    executor_v1::StateKey const stateKey("/s/" + address, "nonce");
     std::string const physical = resolverPhysicalKey(stateKey);
 
     auto decoded = StateKeyResolver::decode(std::string_view(physical));
     BOOST_CHECK(decoded == stateKey);
     executor_v1::StateKeyView const view{decoded};
-    BOOST_CHECK_EQUAL(view.m_table, "/apps/" + address);
+    BOOST_CHECK_EQUAL(view.m_table, "/s/" + address);
     BOOST_CHECK_EQUAL(view.m_key, "nonce");
+    BOOST_CHECK_EQUAL(decoded.m_split, 23U);
 }
 
 BOOST_AUTO_TEST_CASE(HexAddressTableKeepsFirstColonSplit)
 {
-    // The legacy 40-hex form never holds ':' at the fixed binary split offset (hex
-    // digits only), so it must keep first-':' semantics and decode exactly as before.
+    // The legacy 40-hex form lives under "/apps/", which has NO fixed-offset rule at all:
+    // "/apps/" tables always split at the first ':' — the binary layout moved to the
+    // reserved "/s/" namespace, so nothing under "/apps/" can place a ':' inside a table
+    // name by design. Decodes exactly as before.
     std::string const table = "/apps/" + std::string(40, 'b');
     executor_v1::StateKey const stateKey(table, "nonce");
     std::string const physical = resolverPhysicalKey(stateKey);
@@ -188,30 +191,45 @@ BOOST_AUTO_TEST_CASE(RocksDBAccessorExposed)
     boost::filesystem::remove_all(path);
 }
 
-BOOST_AUTO_TEST_CASE(ShortAppsTableWithColonAtBinaryOffsetIsAmbiguous)
+BOOST_AUTO_TEST_CASE(ShortAppsTableWithColonAnywhereIsNotAmbiguous)
 {
-    // KNOWN AMBIGUITY, pinned — not desired semantics. splitPosition() assumes "/apps/"
-    // tables come in exactly two shapes (20 raw address bytes, 40 hex chars). A shorter
-    // "/apps/" table whose key places a ':' at the fixed binary split offset
-    // ("/apps/".size() + 20) is misread as a binary-address table. No such table/key
-    // combination is reachable on storage2 chains today (BFS directory-table keys under
-    // /apps/ never contain ':'), so this test pins the current behaviour: if the split
-    // rule ever changes, this case must change with it.
-    std::string const table = "/apps/foo";  // 9 chars, shorter than the binary form
-    std::string const key = std::string(16, 'x') + ":bar";  // ':' at flat offset 6+20 == 26
+    // The OLD known ambiguity is gone: when the binary layout lived under "/apps/", a short
+    // "/apps/" table whose key placed a ':' at the fixed binary split offset was misread as
+    // a binary-address table (the retired ShortAppsTableWithColonAtBinaryOffsetIsAmbiguous
+    // pin). With the binary layout under "/s/", "/apps/" tables split at the FIRST ':' —
+    // unconditionally, whatever the table/key content — so this exact former trap now
+    // round-trips cleanly.
+    std::string const table = "/apps/foo";              // 9 chars, shorter than any account name
+    std::string const key = std::string(16, 'x') + ":bar";  // ':' at flat offset 9+1+16 == 26
 
     executor_v1::StateKey const stateKey(table, key);
     std::string const physical = resolverPhysicalKey(stateKey);
-    // The flat form really is "table:key" with the constructor's ':' at offset 9.
     BOOST_CHECK_EQUAL(physical, table + ":" + key);
 
-    // decode splits at the fixed binary offset instead, corrupting table and key.
     auto decoded = StateKeyResolver::decode(std::string_view(physical));
-    BOOST_CHECK(decoded != stateKey);
+    BOOST_CHECK(decoded == stateKey);
     executor_v1::StateKeyView const view{decoded};
-    BOOST_CHECK_EQUAL(view.m_table, table + ":" + std::string(16, 'x'));
-    BOOST_CHECK_EQUAL(view.m_key, "bar");
-    BOOST_CHECK_EQUAL(decoded.m_split, 26U);
+    BOOST_CHECK_EQUAL(view.m_table, table);
+    BOOST_CHECK_EQUAL(view.m_key, key);
+    BOOST_CHECK_EQUAL(decoded.m_split, 9U);
+}
+
+BOOST_AUTO_TEST_CASE(WrongLengthBinaryPrefixTableFallsBackToFirstColon)
+{
+    // "/s/" is reserved for the 20-byte binary account tables, but splitPosition must still
+    // behave sanely on arbitrary input: a "/s/" name that is NOT exactly 23 bytes gets no
+    // fixed-offset rule and falls back to the first ':' split. 19 bytes here; a ':' inside
+    // the name is then the separator (garbage in, plain first-':' semantics out).
+    std::string const table = "/s/" + std::string(19, 'a');  // 22 chars — not a binary table
+    executor_v1::StateKey const stateKey(table, "nonce");
+    std::string const physical = resolverPhysicalKey(stateKey);
+
+    auto decoded = StateKeyResolver::decode(std::string_view(physical));
+    BOOST_CHECK(decoded == stateKey);
+    executor_v1::StateKeyView const view{decoded};
+    BOOST_CHECK_EQUAL(view.m_table, table);
+    BOOST_CHECK_EQUAL(view.m_key, "nonce");
+    BOOST_CHECK_EQUAL(decoded.m_split, 22U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

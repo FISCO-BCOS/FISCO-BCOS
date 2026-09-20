@@ -7,29 +7,50 @@
 
 /// Account table names have two physical encodings of the same logical table:
 ///   hex:    "/apps/" + 40 lowercase hex chars of the 20-byte address (the legacy layout)
-///   binary: "/apps/" + the 20 raw address bytes          (the raw-address layout)
+///   binary: "/s/" + the 20 raw address bytes              (the raw-address layout)
+///
+/// The binary encoding lives in its own reserved "/s/" namespace, NOT under "/apps/", so
+/// the two encodings are distinguished by PREFIX, never by length alone. An earlier draft
+/// put the binary form at "/apps/" + 20 raw bytes, classified by length alone — and any
+/// user-created BFS table under "/apps/" with a 20-char name (mkdir / link / CNS can
+/// produce those) was then misread as a binary account table (boot-detection false
+/// positives, MPT-scan halts). "/s/" eliminates that class rather than mitigating it:
+/// nothing BFS can produce ever starts with "/s/" — BFSPrecompiled::checkPathPrefixValid
+/// (bcos-executor/src/precompiled/BFSPrecompiled.cpp) whitelists only "/apps/", "/tables/"
+/// and "/usr/" (sharding forces "/shards/", TableManager forces "/tables/") — and no code
+/// in the repo constructs "/s/"-prefixed names for anything else. Sort order is
+/// undisturbed: "/s/" lands between "/mpt/" and "/shards/" / "/sys/", and every existing
+/// range scan classifies rows by in-loop prefix checks, not hardcoded end-bounds.
 ///
 /// The encoding is a NODE-LOCAL physical layout choice, not a chain property: the XOR state
-/// root normalizes binary names back to hex (canonicalTableNameForHash below, via
-/// Entry::hash) and the MPT leaf key is keccak(address), so two nodes holding the same
-/// logical state in different encodings commit identical roots. feature_raw_address
+/// root normalizes binary names back to hex (Entry::hash, via binaryToHexAccountTableName)
+/// and the MPT leaf key is keccak(address), so two nodes holding the same logical state in
+/// different encodings commit identical roots. feature_raw_address
 /// (Features.h Flag=54) used to gate this; it is deprecated and drives nothing now.
 ///
 /// There is no runtime mixed mode: a node is either all-hex or all-binary in the steady
 /// state. A mixed layout on disk means an interrupted hex→binary migration (or a hand-mixed
 /// backup) and is resolved at BOOT — resume the migration ([storage]
 /// migrate_account_tables_to_binary) or refuse to start — never by falling back between
-/// tables per read.
+/// tables per read. The migration's progress is NOT inferred from the registration rows
+/// alone (the /apps/ account rows rename before the first s_tables:/apps/ registration, so
+/// a crash in the account-row phase still scans as pure hex); it is tracked by two marker
+/// files in the state-DB dir: .binary_account_tables.in_progress (fsync'd before the first
+/// batch) and .binary_account_tables (fsync'd after the final synced batch, then the
+/// in-progress marker is deleted; both present = completed). See
+/// libinitializer/AddressTableModeDetection.h and AccountTableMigration.h.
 ///
-/// This header is deliberately dependency-free (no ledger/LedgerTypeDef.h): the prefix is
-/// a literal mirror of ledger::SYS_DIRECTORY::USER_APPS, the same arrangement StateKey.h
+/// This header is deliberately dependency-free (no ledger/LedgerTypeDef.h): the hex prefix
+/// is a literal mirror of ledger::SYS_DIRECTORY::USER_APPS, the same arrangement StateKey.h
 /// documents — LedgerTypeDef.h pulls in StateKey.h/Storage.h, and this header is included
 /// from storage/Entry.cpp, so naming the constant here would drag the world into every
-/// Entry translation unit for no benefit.
+/// Entry translation unit for no benefit. "/s/" has no LedgerTypeDef counterpart at all: it
+/// is a reserved namespace owned by this header alone.
 namespace bcos::ledger::account
 {
 inline constexpr std::string_view APPS_PREFIX = "/apps/";  // ledger::SYS_DIRECTORY::USER_APPS
-inline constexpr size_t ADDRESS_SIZE = 20;                 // bcos::Address::SIZE
+inline constexpr std::string_view BINARY_TABLE_PREFIX = "/s/";  // reserved, see above
+inline constexpr size_t ADDRESS_SIZE = 20;                      // bcos::Address::SIZE
 inline constexpr size_t HEX_ADDRESS_SIZE = ADDRESS_SIZE * 2;
 
 /// "/apps/" + exactly 40 [0-9a-f] chars. Uppercase hex is NOT accepted: the canonical
@@ -44,16 +65,19 @@ inline bool isHexAccountTableName(std::string_view table) noexcept
            });
 }
 
-/// "/apps/" + exactly 20 bytes (any byte values). The two encodings are distinguished by
-/// length alone: 6+20 vs 6+40 are mutually exclusive, so no byte-level ambiguity exists.
+/// "/s/" + exactly 20 bytes (any byte values). Prefix-based, not length-based: a
+/// "/apps/" table with a 20-char name is a plain BFS table, never a binary account
+/// table — the "/s/" namespace is unreachable for BFS (see the header doc), so this
+/// probe can never misfire on user-created tables.
 inline bool isBinaryAccountTableName(std::string_view table) noexcept
 {
-    return table.size() == APPS_PREFIX.size() + ADDRESS_SIZE && table.starts_with(APPS_PREFIX);
+    return table.size() == BINARY_TABLE_PREFIX.size() + ADDRESS_SIZE &&
+           table.starts_with(BINARY_TABLE_PREFIX);
 }
 
 constexpr char HEX_DIGITS[] = "0123456789abcdef";
 
-/// binary "/apps/<20 bytes>" → hex "/apps/<40 lowercase hex>". Returns an empty string
+/// binary "/s/<20 bytes>" → hex "/apps/<40 lowercase hex>". Returns an empty string
 /// for input that is not a binary account table name (caller error; see the is* probes).
 inline std::string binaryToHexAccountTableName(std::string_view table)
 {
@@ -64,7 +88,7 @@ inline std::string binaryToHexAccountTableName(std::string_view table)
     std::string result;
     result.reserve(APPS_PREFIX.size() + HEX_ADDRESS_SIZE);
     result.append(APPS_PREFIX);
-    for (size_t i = APPS_PREFIX.size(); i < table.size(); ++i)
+    for (size_t i = BINARY_TABLE_PREFIX.size(); i < table.size(); ++i)
     {
         const auto byte = static_cast<unsigned char>(table[i]);
         result.push_back(HEX_DIGITS[byte >> 4]);
@@ -73,7 +97,7 @@ inline std::string binaryToHexAccountTableName(std::string_view table)
     return result;
 }
 
-/// hex "/apps/<40 lowercase hex>" → binary "/apps/<20 bytes>". Returns an empty string
+/// hex "/apps/<40 lowercase hex>" → binary "/s/<20 bytes>". Returns an empty string
 /// for input that is not a hex account table name (caller error; see the is* probes).
 inline std::string hexToBinaryAccountTableName(std::string_view table)
 {
@@ -85,8 +109,8 @@ inline std::string hexToBinaryAccountTableName(std::string_view table)
         return c <= '9' ? static_cast<char>(c - '0') : static_cast<char>(c - 'a' + 10);
     };
     std::string result;
-    result.reserve(APPS_PREFIX.size() + ADDRESS_SIZE);
-    result.append(APPS_PREFIX);
+    result.reserve(BINARY_TABLE_PREFIX.size() + ADDRESS_SIZE);
+    result.append(BINARY_TABLE_PREFIX);
     for (size_t i = APPS_PREFIX.size(); i < table.size(); i += 2)
     {
         result.push_back(static_cast<char>((nibble(table[i]) << 4) | nibble(table[i + 1])));
@@ -104,6 +128,11 @@ inline std::string hexToBinaryAccountTableName(std::string_view table)
 /// fold the same digest for the same logical rows. No binary table name exists in
 /// committed history before this merged (feature_raw_address never shipped on any chain),
 /// so from the moment this merges this is the ONLY semantic — deliberately no feature gate.
+///
+/// Entry::hash does NOT call this helper: it needs the copy only for binary names (an
+/// unconditional std::string copy of a 46-char hex name exceeds SSO and would allocate on
+/// every call), so it inlines the isBinaryAccountTableName + binaryToHexAccountTableName
+/// pair. This remains the convenience form for callers that always want an owning string.
 inline std::string canonicalTableNameForHash(std::string_view table)
 {
     if (isBinaryAccountTableName(table))
@@ -116,7 +145,7 @@ inline std::string canonicalTableNameForHash(std::string_view table)
 /// How an account's table name is derived from its address on THIS node — a node-local
 /// physical layout, deliberately independent of the chain's feature set:
 ///   - Hex: "/apps/<40 lowercase hex chars>" — the legacy layout (existing chains default).
-///   - Binary: "/apps/<20 raw address bytes>" — the raw-address layout (migrated chains and
+///   - Binary: "/s/<20 raw address bytes>" — the raw-address layout (migrated chains and
 ///     new chains on a mode-aware lane).
 /// A node is in exactly one of the two: migration between them is a one-shot boot-time
 /// rewrite (libinitializer/AccountTableMigration), not a runtime mode.

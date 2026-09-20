@@ -298,7 +298,7 @@ BOOST_AUTO_TEST_CASE(BinaryAddressSelectsTheRawTable)
         state.execStorage, state.nodeStorage, state.backendStorage, state.addr,
             bcos::ledger::account::AddressTableMode::Binary};
 
-    std::string expected{bcos::ledger::SYS_DIRECTORY::USER_APPS};
+    std::string expected{bcos::ledger::account::BINARY_TABLE_PREFIX};
     expected.append(reinterpret_cast<const char*>(state.addr.data()), state.addr.size());
     BOOST_CHECK_EQUAL(account.address(), expected);
     BOOST_CHECK_EQUAL(bcos::task::syncWait(account.path()), expected);
