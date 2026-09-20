@@ -187,15 +187,6 @@ class ServiceConfigGenerator:
         ini_config["service"]['tars_proxy_conf'] = 'conf/tars_proxy.ini'
 
         ini_config["chain"]['chain_id'] = service_config.agency_config.chain_id
-        # generate failover config
-        failover_section = "failover"
-        if self.node_type == "max":
-            ini_config[failover_section]["enable"] = utilities.convert_bool_to_str(
-                True)
-        else:
-            ini_config[failover_section]["enable"] = utilities.convert_bool_to_str(
-                False)
-        ini_config[failover_section]["cluster_url"] = service_config.agency_config.failover_cluster_url
 
         # generate uuid according to chain_id and gateway_service_name
         uuid_name = ini_config["service"]['gateway']

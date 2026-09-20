@@ -284,8 +284,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
             });
 
         auto start = utcTime();
-        auto error =
-            getBlockStorage()->setRows(SYS_HASH_2_RECEIPT, txsHash, receiptsView);  // only for tikv
+        auto error = getBlockStorage()->setRows(SYS_HASH_2_RECEIPT, txsHash, receiptsView);
         auto writeReceiptsTime = utcTime() - start;
         if (error)
         {

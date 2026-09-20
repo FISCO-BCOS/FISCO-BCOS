@@ -46,7 +46,6 @@
     data_path=data
     enable_cache=true
     type=RocksDB
-    pd_addrs=
     key_page_size=10240
     ; MPT state-node pruning (pathdb): delete MPT nodes obsoleted more than
     ; mpt_prune_window blocks ago, bounding state-trie disk usage.
@@ -87,16 +86,6 @@
     sync_block_by_tree=false
     send_txs_by_tree=false
     tree_width=3
-
-[failover]
-    ; enable failover or not, default disable
-    enable = false
-    ; the uuid that uniquely identifies the node
-    member_id=
-    ; failover time, in seconds, default is 3s
-    lease_ttl=3
-    ; the address of etcd, can configure multiple comma-separated
-    cluster_url=127.0.0.1:2379
 
 [log]
     enable=true

@@ -19,9 +19,6 @@ add_library(pbft_init PBFTInitializer.cpp ProPBFTInitializer.cpp)
 target_link_libraries(pbft_init PUBLIC protocol_init ledger tool sealer rpbft pbft sync storage)
 set_target_properties(pbft_init PROPERTIES UNITY_BUILD "ON")
 add_dependencies(pbft_init BuildInfo.h)
-if(WITH_LEDGER_ELECTION)
-    target_link_libraries(pbft_init PUBLIC leader_election)
-endif()
 
 # --- init: merged from front_init, txpool_init, mempool_init, ledger_init, baseline_init, lightnodeinit ---
 # These intermediate targets had no external consumers and are now folded directly into init.
@@ -53,15 +50,9 @@ target_link_libraries(init PUBLIC
     bcos-devp2p
     tomlplusplus::tomlplusplus
 )
-if(WITH_LEDGER_ELECTION)
-    target_link_libraries(init PUBLIC leader_election)
-endif()
 if(WITH_LIGHTNODE)
     target_sources(init PRIVATE LightNodeInitializer.cpp LightNodeInitializer.h)
     target_link_libraries(init PUBLIC bcos-lightnode bcos-concepts bcos-legacy)
-endif()
-if(WITH_TIKV)
-    target_link_libraries(init PUBLIC storage-tikv bcos-legacy)
 endif()
 set_target_properties(init PROPERTIES UNITY_BUILD "ON")
 add_dependencies(init BuildInfo.h)

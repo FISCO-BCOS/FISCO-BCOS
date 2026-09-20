@@ -78,14 +78,5 @@ BOOST_AUTO_TEST_CASE(consensusCountsNegativeRejected)
     BOOST_CHECK_EQUAL(ok.pipelineSize(), 50U);
 }
 
-BOOST_AUTO_TEST_CASE(failoverLeaseTtlNegativeRejected)
-{
-    LoaderProbe a;
-    BOOST_CHECK_EXCEPTION(
-        a.loadFailOverConfig(
-            fromIni("[failover]\nenable=true\nmember_id=m\nlease_ttl=-1\n"), false),
-        bcos::tool::InvalidConfig, [](auto const& e) { return errinfoContains(e, "lease_ttl"); });
-}
-
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

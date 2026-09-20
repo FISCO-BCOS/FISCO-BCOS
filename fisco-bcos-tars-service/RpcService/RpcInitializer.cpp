@@ -24,13 +24,8 @@
 #include "bcos-utilities/BoostLog.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework/election/FailOverTypeDef.h>
-#ifdef WITH_LEDGER_ELECTION
-#include <bcos-leader-election/src/LeaderEntryPoint.h>
-#endif
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
-#include <bcos-tars-protocol/protocol/MemberImpl.h>
 
 using namespace bcos::group;
 using namespace bcostars;
@@ -54,19 +49,8 @@ void RpcInitializer::init(std::string const& _configDir)
         m_nodeConfig->setEnSmNodeCert(_configDir + "/" + "sm_enssl.crt");
         m_nodeConfig->setEnSmNodeKey(_configDir + "/" + "sm_enssl.key");
     }
-#ifdef WITH_LEDGER_ELECTION
-    if (m_nodeConfig->enableFailOver())
-    {
-        RPCSERVICE_LOG(INFO) << LOG_DESC("enable failover");
-        auto memberFactory = std::make_shared<bcostars::protocol::MemberFactoryImpl>();
-        auto leaderEntryPointFactory =
-            std::make_shared<bcos::election::LeaderEntryPointFactoryImpl>(memberFactory);
-        auto watchDir = "/" + m_nodeConfig->chainId() + bcos::election::CONSENSUS_LEADER_DIR;
-        m_leaderEntryPoint = leaderEntryPointFactory->createLeaderEntryPoint(
-            m_nodeConfig->failOverClusterUrl(), watchDir, "watchLeaderChange",
-            m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-    }
-#endif
+    // Consensus failover (etcd leader election) was retired together with the TiKV-based
+    // MAX topology; the RPC service never watches leader changes anymore.
     // init rpc config
     RPCSERVICE_LOG(INFO) << LOG_DESC("init rpc factory");
     auto factory = initRpcFactory(m_nodeConfig);
@@ -74,8 +58,7 @@ void RpcInitializer::init(std::string const& _configDir)
     auto rpcServiceName = bcostars::getProxyDesc(bcos::protocol::RPC_SERVANT_NAME);
     RPCSERVICE_LOG(INFO) << LOG_DESC("init rpc factory success")
                          << LOG_KV("rpcServiceName", rpcServiceName);
-    auto rpc =
-        factory->buildRpc(m_nodeConfig->gatewayServiceName(), rpcServiceName, m_leaderEntryPoint);
+    auto rpc = factory->buildRpc(m_nodeConfig->gatewayServiceName(), rpcServiceName, nullptr);
     m_rpc = rpc;
 }
 
@@ -128,13 +111,6 @@ void RpcInitializer::start()
     }
     m_running = true;
 
-#ifdef WITH_TIKV
-    if (m_leaderEntryPoint)
-    {
-        RPCSERVICE_LOG(INFO) << LOG_DESC("start leader-entry-point");
-        m_leaderEntryPoint->start();
-    }
-#endif
     RPCSERVICE_LOG(INFO) << LOG_DESC("start rpc");
     m_rpc->start();
     RPCSERVICE_LOG(INFO) << LOG_DESC("start rpc success");
@@ -149,13 +125,6 @@ void RpcInitializer::stop()
     }
     m_running = false;
     RPCSERVICE_LOG(INFO) << LOG_DESC("Stop the RpcService");
-
-#ifdef WITH_TIKV
-    if (m_leaderEntryPoint)
-    {
-        m_leaderEntryPoint->stop();
-    }
-#endif
 
     if (m_rpc)
     {

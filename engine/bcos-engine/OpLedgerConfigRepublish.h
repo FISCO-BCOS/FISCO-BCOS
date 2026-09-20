@@ -37,9 +37,9 @@ namespace bcos::engine
 /// basis), the block header, the number->hash row and getFeatures -- and every one of them
 /// bottoms out in StorageInterface::asyncGetRow on the ledger's state storage, invoked on the
 /// calling thread, so syncWait's slow path is never entered and the commit thread is not handed
-/// off. On a TiKV backend those are network round trips: "inline" means "on this thread", not
-/// "cheap". Bounded by a fixed number of point reads, and the same read boot runs to seed the
-/// holder and that MultiVersionScheduler performs as its own last commit step.
+/// off. On a remote storage backend those are network round trips: "inline" means "on this
+/// thread", not "cheap". Bounded by a fixed number of point reads, and the same read boot runs to
+/// seed the holder and that MultiVersionScheduler performs as its own last commit step.
 inline bcos::Error::Ptr republishLedgerConfig(
     bcos::ledger::LedgerConfigState& holder, bcos::ledger::LedgerInterface& ledger)
 {
