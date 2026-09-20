@@ -4,7 +4,14 @@
 # chains hash with SM3. The evmc/ headers are NOT modified (evmc_host_context stays
 # opaque upstream). The patch also carries the macOS static-lib combine and the
 # fork-parity exception-enabled build (noexcept stripped from the execute entry
-# points; NOT an exception-propagation guarantee). See fisco-sm3.patch.
+# points; NOT an exception-propagation guarantee). RTTI also stays enabled:
+# under -fno-rtti Clang cannot reference libc++'s exported typeinfo, so each
+# evmone TU emits its own hidden weak copy of e.g. __ZTISt9exception; ld64 then
+# resolves every `typeinfo for std::exception` reference in the final image to
+# that copy, and libc++abi's pointer-based type_info comparison makes
+# catch (std::exception const&) miss exceptions thrown by libc++ itself
+# (std::runtime_error, std::out_of_range, ...), silently breaking exception
+# handling in every macOS binary that links evmone. See fisco-sm3.patch.
 # Use the GitHub source archive (single tarball) rather than a full git history
 # fetch: official evmone's history is large and vcpkg_from_git kept disconnecting
 # mid-transfer. The archive contains the vendored evmc/ and lib/evmone_precompiles/
