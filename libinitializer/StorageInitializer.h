@@ -26,9 +26,6 @@
 #include "bcos-storage/CheckpointRocksDBStorage.h"
 #include "bcos-storage/RocksDBStorage.h"
 #include <rocksdb/statistics.h>
-#ifdef WITH_TIKV
-#include "bcos-storage/TiKVStorage.h"
-#endif
 #include "rocksdb/convenience.h"
 #include "rocksdb/filter_policy.h"
 #include <bcos-framework/security/StorageEncryptInterface.h>
@@ -141,18 +138,5 @@ public:
         return std::make_shared<bcos::storage::RocksDBStorage>(
             std::forward<decltype(rocksDB)>(rocksDB), _dataEncrypt);
     }
-
-#ifdef WITH_TIKV
-    static bcos::storage::TransactionalStorageInterface::Ptr build(
-        const std::vector<std::string>& _pdAddrs, const std::string& _logPath,
-        const std::string& caPath = std::string(""), const std::string& certPath = std::string(""),
-        const std::string& keyPath = std::string(""))
-    {
-        boost::filesystem::create_directories(_logPath);
-        static std::shared_ptr<tikv_client::TransactionClient> cluster =
-            storage::newTiKVClient(_pdAddrs, _logPath, caPath, certPath, keyPath);
-        return std::make_shared<bcos::storage::TiKVStorage>(cluster);
-    }
-#endif
 };
 }  // namespace bcos::initializer

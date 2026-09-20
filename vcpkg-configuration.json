@@ -24,7 +24,6 @@
     "./ports/ittapi",
     "./ports/group-sig",
     "./ports/paillier",
-    "./ports/tikv-client-cpp",
     "./ports-data/ethereum-tests"
   ]
 }
