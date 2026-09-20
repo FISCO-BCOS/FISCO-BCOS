@@ -13,7 +13,7 @@
 # least one covered case). One binary losing a label means a fork's whole lane
 # silently dropped out of the matrix.
 #
-# Counting rule (repo-wide, docs/plans/2026-09-12-plan-B-impl.md:19): red is
+# Counting rule (repo-wide): red is
 # decided by the process exit code / a positive-count assertion, NEVER by the
 # substring "errors detected" — Boost's success banner contains it.
 #

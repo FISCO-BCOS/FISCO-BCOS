@@ -1,5 +1,6 @@
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPrecompiles.h>
+#include <bcos-framework/engine/OpForkId.h>
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/ledger/OpForkScheduleCodec.h>
 
@@ -17,6 +18,29 @@ namespace bcos::evm::opstack
 // (an append past Karst is caught by the -Wswitch in configForFork).
 static_assert(ledger::detail::c_opForkNames.size() == static_cast<std::size_t>(OpFork::Karst) + 1,
     "OpFork and c_opForkNames disagree: fork order/count changed on one side only");
+
+// The engine's OpForkId (bcos-framework/engine) is the third spelling of the same ladder,
+// used for Engine-API profile selection. Bind it here too — alongside the codec table and
+// OpFork, in the one place that already guards the other two — so a one-sided insert or
+// reorder fails to compile instead of mis-profiling a fork at run time.
+static_assert(
+    static_cast<uint8_t>(engine::OpForkId::Regolith) ==
+            static_cast<std::size_t>(OpFork::Regolith) &&
+        static_cast<uint8_t>(engine::OpForkId::Canyon) ==
+            static_cast<std::size_t>(OpFork::Canyon) &&
+        static_cast<uint8_t>(engine::OpForkId::Ecotone) ==
+            static_cast<std::size_t>(OpFork::Ecotone) &&
+        static_cast<uint8_t>(engine::OpForkId::Fjord) == static_cast<std::size_t>(OpFork::Fjord) &&
+        static_cast<uint8_t>(engine::OpForkId::Granite) ==
+            static_cast<std::size_t>(OpFork::Granite) &&
+        static_cast<uint8_t>(engine::OpForkId::Holocene) ==
+            static_cast<std::size_t>(OpFork::Holocene) &&
+        static_cast<uint8_t>(engine::OpForkId::Isthmus) ==
+            static_cast<std::size_t>(OpFork::Isthmus) &&
+        static_cast<uint8_t>(engine::OpForkId::Jovian) ==
+            static_cast<std::size_t>(OpFork::Jovian) &&
+        static_cast<uint8_t>(engine::OpForkId::Karst) == static_cast<std::size_t>(OpFork::Karst),
+    "OpForkId and OpFork disagree: fork order/count changed on one side only");
 
 namespace
 {
@@ -217,7 +241,8 @@ const OpForkConfig& jovianConfig() noexcept
 // gas cap (normal transactions only; deposits stay exempt, see runDeposit), EIP-7823/7883
 // MODEXP, EIP-7939 CLZ and EIP-7951 P256VERIFY all gate on EVMC_OSAKA in the vendored state
 // layer — and bn256Pairing's input limit tightens to 57600 (karstPrecompileOverrides, which
-// also stops overriding 0x100 so EIP-7951 pricing applies). Fee/receipt semantics (operator
+// also re-pins P256VERIFY/0x100 from RIP-7212's 3450 to EIP-7951's 6900 through an explicit
+// 0x100 entry). Fee/receipt semantics (operator
 // fee, DA footprint) match jovianConfig so future Jovian changes carry into Karst.
 const OpForkConfig& karstConfig() noexcept
 {
@@ -257,27 +282,19 @@ OpForkSchedule OpForkSchedule::legacy(bool jovianActive)
 
 OpForkSchedule OpForkSchedule::fromLedgerSchedule(const bcos::ledger::OpForkSchedule& schedule)
 {
-    constexpr uint64_t kUnset = std::numeric_limits<uint64_t>::max();
-    if (schedule.m_jovianTime == kUnset)
-    {
-        return legacy(false);
-    }
+    // The shorthand and the canonical channel share ONE folding rule
+    // (ledger::foldOpForkShorthand): equal jovian/karst times merge into the later
+    // fork, so the release line's jovian_time == karst_time == 0 genesis shape folds
+    // to "0:karst" instead of dying on the codec's duplicate-timestamp check.
+    const auto records = ledger::foldOpForkShorthand(schedule.m_jovianTime, schedule.m_karstTime);
     std::vector<OpForkActivation> activations;
-    if (schedule.m_jovianTime == 0)
+    activations.reserve(records.size());
+    for (const auto& record : records)
     {
-        // jovian_time == 0 makes Jovian the baseline itself; legacy(true) is "0:jovian".
-        activations.push_back(OpForkActivation{.fork = OpFork::Jovian, .timestamp = 0});
-    }
-    else
-    {
-        activations.push_back(OpForkActivation{.fork = OpFork::Isthmus, .timestamp = 0});
-        activations.push_back(
-            OpForkActivation{.fork = OpFork::Jovian, .timestamp = schedule.m_jovianTime});
-    }
-    if (schedule.m_karstTime != kUnset)
-    {
-        activations.push_back(
-            OpForkActivation{.fork = OpFork::Karst, .timestamp = schedule.m_karstTime});
+        activations.push_back(OpForkActivation{
+            .fork = forkFromName(record.forkName),
+            .timestamp = record.timestamp,
+        });
     }
     return OpForkSchedule(std::move(activations));
 }

@@ -2269,11 +2269,34 @@ bool Ledger::buildGenesisBlock(
                 executor_v1::StateKey(SYS_CONFIG, INTERNAL_SYSTEM_KEY_OP_EIP1559_PARAMS),
                 std::move(eip1559Entry));
         }
+        // The resolved schedule also rides SYS_CONFIG so every getLedgerConfig snapshot —
+        // the RPC estimate gas-cap gate (M1) among them — keys fork activation on the
+        // chain's own schedule in every deployment. The SYS_CHAIN_METADATA triple is the
+        // integrity-bound copy the Initializer resolves at boot and is not reachable
+        // through LedgerInterface. Both declaration channels land here: the canonical
+        // section verbatim, the [op_fork_timestamps] shorthand folded by the same rule
+        // (foldOpForkShorthand) the executor applies.
+        std::optional<std::string> resolvedOpSchedule;
         if (genesis.m_opstackForkSchedule.has_value())
         {
             const auto metadata =
                 buildOpForkScheduleMetadata(*genesis.m_opstackForkSchedule, header->hash());
             co_await writeOpForkScheduleMetadata(*m_stateStorage, metadata);
+            resolvedOpSchedule = metadata.schedule;
+        }
+        else if (genesis.m_opForkSchedule.has_value())
+        {
+            resolvedOpSchedule = canonicalOpForkSchedule(foldOpForkShorthand(
+                genesis.m_opForkSchedule->m_jovianTime, genesis.m_opForkSchedule->m_karstTime));
+        }
+        if (resolvedOpSchedule.has_value())
+        {
+            Entry opForkScheduleEntry;
+            opForkScheduleEntry.set(
+                bcos::storage::serialize::encode(SystemConfigEntry{*resolvedOpSchedule, 0}));
+            co_await storage2::writeOne(*m_stateStorage,
+                executor_v1::StateKey(SYS_CONFIG, INTERNAL_SYSTEM_KEY_OP_FORK_SCHEDULE),
+                std::move(opForkScheduleEntry));
         }
 
         // write consensus node list

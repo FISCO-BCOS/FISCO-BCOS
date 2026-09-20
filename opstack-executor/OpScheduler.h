@@ -728,18 +728,19 @@ private:
             namespace engine = bcos::evm::engine;
             if (verify)
             {
-                // Compare the projected values, matching headerCommitments below: below Canyon
-                // the announced header carries no withdrawalsRoot while finishExecute always
-                // writes the seal's zero sentinel, so absent and the zero hash are the same
-                // header there.
+                // Compare the projected values, matching engine::commitmentsOfHeader: below
+                // Canyon the announced header carries no withdrawalsRoot while finishExecute
+                // always writes the seal's zero sentinel, so absent and the zero hash are the
+                // same header there.
                 if (executedHeader->withdrawalsRoot().value_or(bcos::h256{}) !=
                     blockHeader->withdrawalsRoot().value_or(bcos::h256{}))
                 {
                     throw bcos::evm::OpConsensusError(
                         "OpScheduler: commitment mismatch on field withdrawalsRoot");
                 }
-                if (auto mismatch = engine::mismatchedFieldOf(
-                        headerCommitments(*executedHeader), headerCommitments(*blockHeader)))
+                if (auto mismatch =
+                        engine::mismatchedFieldOf(engine::commitmentsOfHeader(*executedHeader),
+                            engine::commitmentsOfHeader(*blockHeader)))
                 {
                     throw bcos::evm::OpConsensusError(
                         "OpScheduler: commitment mismatch on field " + *mismatch);
@@ -871,9 +872,9 @@ private:
             }
 
             namespace engine = bcos::evm::engine;
-            if (auto mismatch =
-                    engine::mismatchedFieldOf(headerCommitments(*m_lastProbe->executedHeader),
-                        headerCommitments(*blockHeader)))
+            if (auto mismatch = engine::mismatchedFieldOf(
+                    engine::commitmentsOfHeader(*m_lastProbe->executedHeader),
+                    engine::commitmentsOfHeader(*blockHeader)))
             {
                 auto message =
                     fmt::format("adoptProbeAsPending: commitment mismatch on field {}", *mismatch);
@@ -1422,6 +1423,15 @@ private:
                 bcos::scheduler_v1::ViewNodeStorage<ViewType> nodeStorage(view);
                 auto parentBlock = co_await ledger::getBlockData(
                     view, header.number() - 1, ledger::HEADER, *m_blockFactory);
+                if (!parentBlock)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        bcos::ledger::mpt::MPTInvariantViolation{}
+                        << bcos::errinfo_comment("op block: parent header missing at " +
+                                                 std::to_string(header.number() - 1) +
+                                                 "; cannot persist trie nodes without the "
+                                                 "parent state root"));
+                }
                 auto const parentRoot = parentBlock->blockHeader()->stateRoot();
                 try
                 {
@@ -1538,8 +1548,8 @@ private:
         {
             // Seal omitted blobGasUsed (pre-Jovian): the OP spec fixes the field at 0 here, so a
             // non-zero announcement is an invalid payload. Reject it instead of copying — the
-            // copy feeds headerCommitments, and comparing the announced value against its own
-            // copy makes that verify arm self-referential (always pass).
+            // copy feeds engine::commitmentsOfHeader, and comparing the announced value against
+            // its own copy makes that verify arm self-referential (always pass).
             if (*announced != bcos::u256{0})
                 throw bcos::evm::OpConsensusError(
                     "OpScheduler: pre-Jovian payload must announce blobGasUsed=0");
@@ -1764,27 +1774,6 @@ public:
     }
 
 private:
-    /// Commitment fields used to compare executed vs announced headers.
-    static bcos::evm::engine::OpBlockCommitments headerCommitments(protocol::BlockHeader const& h)
-    {
-        namespace detail = bcos::evm::engine::detail;
-        auto bloom = h.logsBloom();
-        bcos::h2048 logsBloom(reinterpret_cast<const bcos::byte*>(bloom.data()), bloom.size());
-        std::optional<uint64_t> blobGasUsed;
-        if (auto bg = h.blobGasUsed())
-            blobGasUsed = detail::narrowU256ToU64(*bg, "headerCommitments blobGasUsed");
-        return bcos::evm::engine::OpBlockCommitments{
-            .receiptsRoot = h.receiptsRoot(),
-            .logsBloom = logsBloom,
-            .withdrawalsRoot = h.withdrawalsRoot().value_or(bcos::h256{}),
-            .stateRoot = h.stateRoot(),
-            .gasUsed = h.gasUsed(),
-            .txRoot = h.txsRoot(),
-            .blobGasUsed = blobGasUsed,
-            .requestsHash = h.requestsHash(),
-        };
-    }
-
     /// Strict hex-address parse for getCode/getABI.
     static evmc_address parseAddress(std::string_view view)
     {

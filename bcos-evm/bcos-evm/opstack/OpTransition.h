@@ -79,7 +79,9 @@ struct OpTxProperties
 /// `call=true` path is shared with estimateGas (TransactionExecutor has no
 /// isEstimate), so the executor must not re-enable the Osaka 2^24 cap there.
 /// eth_estimateGas clamps the request gas to MAX_TX_GAS_LIMIT in the RPC layer
-/// (geth #32348) before it reaches this path.
+/// (geth #32348) before it reaches this path — gated there on the target block
+/// actually running Osaka+ (Eth lane) or Karst+ (OP lane), so pre-Osaka blocks
+/// and other lanes keep the header gasLimit budget.
 [[nodiscard]] std::variant<OpTxProperties, std::error_code> opValidate(
     const evmone::state::StateView& view, const evmone::state::BlockInfo& block,
     const evmone::state::Transaction& tx, evmc::bytes_view signedTxEnvelope,

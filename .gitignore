@@ -75,6 +75,8 @@ tools/BcosAirBuilder/*
 # below are leftovers from the earlier in-tree vendored subset; git cannot
 # re-include files under an ignored parent, so the ! entries are inert by design.
 opstack-executor/tests/t8n
+# Provisioning marker written next to the symlink (tools/.ci/provision_t8n_corpus.sh)
+opstack-executor/tests/.t8n-pin
 bcos-evm/test/opstack/t8n/cases/
 opstack-executor/tests/t8n/cases/
 opstack-executor/tests/t8n/vectors/*.json

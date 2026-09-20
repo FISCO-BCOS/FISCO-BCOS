@@ -38,6 +38,7 @@
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/ledger/ChainMetadata.h"
 #include "bcos-framework/ledger/Ledger.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
@@ -404,8 +405,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // merged tree.)
     const bool engineApiForV1Only = (m_executorVersion < scheduler_v1::ETHEREUM_EXECUTOR_VERSION);
     // OP mode is the newest declared lane and everything above it (a value above the wired
-    // slot count saturates onto the newest wired slot, see MultiVersionScheduler::setVersion).
-    const bool opStackMode = (m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION);
+    // slot count saturates onto the newest wired slot, see MultiVersionScheduler::setVersion) —
+    // the shared lane predicate carries exactly that reading.
+    const bool opStackMode = bcos::ledger::isOpLaneVersion(m_executorVersion);
     // OP mode is fixed for the process lifetime: from compatibility_version 3.18.0 on,
     // SystemConfigPrecompiled refuses a governance write of executor_version >= 3, so the
     // on-chain row cannot move a running node across this boundary, and the OP lane serves
@@ -869,7 +871,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // derives it per block from [op_fork_timestamps] (configAt(schedule, blockTime).rev). Its
     // absence is the expected shape, not the runtime-switch hazard this guard targets.
     if (m_executorVersion >= scheduler_v1::ETHEREUM_EXECUTOR_VERSION &&
-        m_executorVersion < scheduler_v1::OPSTACK_EXECUTOR_VERSION)
+        !bcos::ledger::isOpLaneVersion(m_executorVersion))
     {
         if (auto evmcRev = task::syncWait(ledger::getSystemConfig(
                 *m_ledger, magic_enum::enum_name(ledger::SystemConfig::evmc_revision))))
@@ -1078,7 +1080,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     //
     // OP mode requires an external op-node; built-in single-node CL is unsupported.
     if (m_nodeConfig->enableSingleNodeConsensus() &&
-        m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION)
+        bcos::ledger::isOpLaneVersion(m_executorVersion))
     {
         BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
                                   "enable_single_node_consensus is not supported with "

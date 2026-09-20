@@ -84,26 +84,38 @@ BOOST_AUTO_TEST_CASE(ConfigAtSelectsKarst)
     BOOST_CHECK(karst.has_jovian_operator_formula);
     BOOST_CHECK_EQUAL(&schedule.configAt(2000), &karstConfig());
 
-    // Latest-fork-first on equal timestamps. The production constructor refuses this shape
-    // (strictly increasing activations), so pin it through the TestBypass lane.
+    // Latest-fork-first on equal timestamps: the production fold merges this shape into
+    // the later fork before construction, so pin the raw dispatch rule through the
+    // TestBypass lane.
     const OpForkSchedule both{
         {{OpFork::Jovian, 0}, {OpFork::Karst, 0}}, OpForkSchedule::TestBypass{}};
     BOOST_CHECK_EQUAL(both.configAt(0).fork, OpFork::Karst);
 }
 
-// Karst is a superset of Jovian: a schedule that activates both at the same second is Karst.
-// A jovian-unscheduled schedule carrying karst_time is illegal (NodeConfig rejects it); the
-// member path REFUSES such shapes at construction instead of dispatching them.
-BOOST_AUTO_TEST_CASE(ConfigAtRejectsSimultaneousAndIllegalShapesAtConstruction)
+// Karst is a superset of Jovian, and op-geth's CheckConfigForkOrder compares with `>`:
+// a schedule that activates both at the same second is LEGAL and folds into the later
+// fork. The only illegal shapes are karst earlier than jovian and karst scheduled with
+// jovian unscheduled — the fold (shared with NodeConfig) rejects both at construction.
+BOOST_AUTO_TEST_CASE(SimultaneousJovianKarstFoldsIntoTheLaterFork)
 {
-    // jovian_time == karst_time: the strict-increasing validation throws.
+    // jovian_time == karst_time == 0: the chain is Karst from block 0.
+    const auto bothAtGenesis = OpForkSchedule::fromLedgerSchedule(sched(0, 0));
+    BOOST_CHECK_EQUAL(bothAtGenesis.configAt(0).fork, OpFork::Karst);
+    BOOST_CHECK_EQUAL(bothAtGenesis.canonicalText(), "0:karst");
+
+    // jovian_time == karst_time == T: Isthmus until T, then straight to Karst — the
+    // canonical text skips jovian, the fold's one legal gap.
+    const auto bothAtT = OpForkSchedule::fromLedgerSchedule(sched(1000, 1000));
+    BOOST_CHECK_EQUAL(bothAtT.canonicalText(), "0:isthmus,1000:karst");
+    BOOST_CHECK_EQUAL(bothAtT.configAt(999).fork, OpFork::Isthmus);
+    BOOST_CHECK_EQUAL(bothAtT.configAt(1000).fork, OpFork::Karst);
+
+    // jovian unscheduled with karst scheduled: rejected, not silently Isthmus.
+    BOOST_CHECK_THROW(OpForkSchedule::fromLedgerSchedule(sched(kNever, 2000)),
+        bcos::ledger::InvalidOpForkSchedule);
+    // karst earlier than jovian: rejected.
     BOOST_CHECK_THROW(
-        OpForkSchedule::fromLedgerSchedule(sched(0, 0)), bcos::ledger::InvalidOpForkSchedule);
-    // jovian unscheduled with karst scheduled: the fold drops the never-activating karst —
-    // the all-Isthmus legacy chain — rather than dispatching a karst the schedule cannot
-    // reach.
-    const auto legacy = OpForkSchedule::fromLedgerSchedule(sched(kNever, 2000));
-    BOOST_CHECK_EQUAL(legacy.configAt(2000).fork, OpFork::Isthmus);
+        OpForkSchedule::fromLedgerSchedule(sched(2000, 1000)), bcos::ledger::InvalidOpForkSchedule);
 }
 
 // The whole ladder on one schedule, at the exact boundary seconds. op-node's IsX(ts) is
@@ -135,10 +147,9 @@ BOOST_AUTO_TEST_CASE(ZeroMeansActiveFromGenesis)
 {
     const auto jovianAtGenesis = OpForkSchedule::fromLedgerSchedule(sched(0, kNever));
     BOOST_CHECK_EQUAL(jovianAtGenesis.configAt(0).fork, OpFork::Jovian);
-    // jovian == karst == 0: strict-increasing validation throws (latest-fork-first dispatch
-    // on this shape is pinned via the TestBypass construction in ConfigAtSelectsKarst).
-    BOOST_CHECK_THROW(
-        OpForkSchedule::fromLedgerSchedule(sched(0, 0)), bcos::ledger::InvalidOpForkSchedule);
+    // jovian == karst == 0 folds into the later fork: the chain is Karst from block 0.
+    const auto bothAtGenesis = OpForkSchedule::fromLedgerSchedule(sched(0, 0));
+    BOOST_CHECK_EQUAL(bothAtGenesis.configAt(0).fork, OpFork::Karst);
 }
 
 // clang-format off
@@ -376,7 +387,13 @@ BOOST_AUTO_TEST_CASE(ConfigAtTimestampSelectsIsthmusThenJovian, * boost::unit_te
     BOOST_CHECK_EQUAL(schedule.configAt(1764691200).rev, EVMC_PRAGUE);
     BOOST_CHECK(!schedule.configAt(1764691200).has_da_footprint);
     BOOST_CHECK(schedule.configAt(1764691201).has_da_footprint);
-    BOOST_CHECK_THROW(OpForkSchedule::parse("0:isthmus,1:karst"), InvalidOpForkSchedule);
+
+    // foldOpForkShorthand merges a simultaneous jovian/karst activation into
+    // "isthmus,T:karst", so skipping jovian — and only jovian — is legal.
+    auto folded = OpForkSchedule::parse("0:isthmus,1:karst");
+    BOOST_CHECK_EQUAL(folded.forkAt(0), OpFork::Isthmus);
+    BOOST_CHECK_EQUAL(folded.forkAt(1), OpFork::Karst);
+    BOOST_CHECK_THROW(OpForkSchedule::parse("0:holocene,1:jovian"), InvalidOpForkSchedule);
 }
 
 // clang-format off
@@ -486,10 +503,15 @@ BOOST_AUTO_TEST_CASE(CanonicalTextFoldsLedgerShorthand, *boost::unit_test::label
     // Unscheduled jovian is the all-Isthmus legacy chain.
     BOOST_CHECK_EQUAL(
         OpForkSchedule::fromLedgerSchedule(sched(kNever, kNever)).canonicalText(), "0:isthmus");
-    // Karst alone cannot be configured (NodeConfig binds it to jovian), but the fold
-    // must still drop an unscheduled karst rather than emit a never-activating row.
+    // An unscheduled karst leaves no row; the jovian ladder stands alone.
     BOOST_CHECK_EQUAL(OpForkSchedule::fromLedgerSchedule(sched(100, kNever)).canonicalText(),
         "0:isthmus,100:jovian");
+    // Simultaneous jovian/karst times merge into the later fork (op-geth
+    // CheckConfigForkOrder compares with `>`): (0,0) is a Karst-baseline chain, (T,T)
+    // skips jovian — the fold's one legal gap.
+    BOOST_CHECK_EQUAL(OpForkSchedule::fromLedgerSchedule(sched(0, 0)).canonicalText(), "0:karst");
+    BOOST_CHECK_EQUAL(
+        OpForkSchedule::fromLedgerSchedule(sched(100, 100)).canonicalText(), "0:isthmus,100:karst");
 }
 
 BOOST_AUTO_TEST_CASE(CanonicalTextRoundTripsThroughParse,

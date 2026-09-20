@@ -26,6 +26,53 @@ using namespace bcos::rpc;
 
 BOOST_AUTO_TEST_SUITE(RpcChainPolicyTest)
 
+// M1: the EIP-7825 estimate gate answers "Osaka+ rules in force at the target block",
+// per lane.
+BOOST_AUTO_TEST_CASE(eip7825GateFollowsLaneAndRevision)
+{
+    // Legacy FISCO lane: never — no per-tx ceiling exists there at any revision input.
+    ledger::LedgerConfig legacy;
+    legacy.setExecutorVersion(0);
+    BOOST_CHECK(!eip7825InForceAt(legacy, 100, 1'000));
+
+    // Eth lane: the persisted revision map decides. Prague is not Osaka...
+    ledger::LedgerConfig eth;
+    eth.setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
+    eth.setEVMCRevision(EVMC_PRAGUE);
+    BOOST_CHECK(!eip7825InForceAt(eth, 100, 1'000));
+    // ...Osaka is, at any height (explicit revision covers every block).
+    eth.setEVMCRevision(EVMC_OSAKA);
+    BOOST_CHECK(eip7825InForceAt(eth, 100, 1'000));
+    // Fork transitions key on the block number: before the transition Prague rules,
+    // at/after it Osaka does.
+    eth.clearForkTransitions();
+    eth.addForkTransition(200, EVMC_OSAKA);
+    eth.setEVMCRevision(EVMC_PRAGUE);
+    BOOST_CHECK(!eip7825InForceAt(eth, 199, 1'000));
+    BOOST_CHECK(eip7825InForceAt(eth, 200, 1'000));
+    // An unconfigured revision (corrupt/legacy state) is not Osaka.
+    eth.clearForkTransitions();
+    ledger::LedgerConfig ethUnconfigured;
+    ethUnconfigured.setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
+    BOOST_CHECK(!eip7825InForceAt(ethUnconfigured, 100, 1'000));
+
+    // OP lane: Karst activation is timestamp-keyed (op-node IsKarst: ts >= karst_time).
+    ledger::LedgerConfig op;
+    op.setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+    // No schedule row (chain initialized before the row existed): treated as pre-Karst.
+    BOOST_CHECK(!eip7825InForceAt(op, 100, 1'000));
+    // Karst unscheduled ("0:jovian" folded shape): never in force.
+    op.setOpForkSchedule(ledger::OpForkSchedule{.m_jovianTime = 0});
+    BOOST_CHECK(!eip7825InForceAt(op, 100, 1'000));
+    // Karst at 1000: one second before is pre-Karst, the activation second is Karst.
+    op.setOpForkSchedule(ledger::OpForkSchedule{.m_jovianTime = 0, .m_karstTime = 1'000});
+    BOOST_CHECK(!eip7825InForceAt(op, 100, 999));
+    BOOST_CHECK(eip7825InForceAt(op, 100, 1'000));
+    // Karst at genesis ("0:karst"): in force from block 0's timestamp.
+    op.setOpForkSchedule(ledger::OpForkSchedule{.m_jovianTime = 0, .m_karstTime = 0});
+    BOOST_CHECK(eip7825InForceAt(op, 0, 0));
+}
+
 // Lane boundaries follow the canonical executor_version constants.
 BOOST_AUTO_TEST_CASE(laneBoundaries)
 {
@@ -38,9 +85,10 @@ BOOST_AUTO_TEST_CASE(laneBoundaries)
     // Ethereum executor (== ETHEREUM): geth fee semantics, non-zero tip.
     BOOST_CHECK(usesEthereumFeeSemantics(ledger::ETHEREUM_EXECUTOR_VERSION));
     BOOST_CHECK_EQUAL(suggestedPriorityFeeWei(ledger::ETHEREUM_EXECUTOR_VERSION), 1'000'000u);
-    // OP mode is exactly OPSTACK_EXECUTOR_VERSION (a fixed genesis value, not a floor):
-    // the == gate lives where the mode is selected (Initializer / EngineServiceInitializer),
-    // not in the fee policy. A higher version still gets the Ethereum tip via
+    // OP mode is OPSTACK_EXECUTOR_VERSION and anything above it: setVersion saturates a
+    // higher value onto the newest wired slot, so such a chain RUNS the OP executor and the
+    // fee policy must agree — the shared predicate (ledger::isOpLaneVersion) is the one
+    // place that reading lives. A higher version still gets the Ethereum tip via
     // usesEthereumFeeSemantics (>= ETHEREUM).
     BOOST_CHECK(usesEthereumFeeSemantics(ledger::OPSTACK_EXECUTOR_VERSION));
     BOOST_CHECK_EQUAL(suggestedPriorityFeeWei(ledger::OPSTACK_EXECUTOR_VERSION), 1'000'000u);
@@ -49,7 +97,10 @@ BOOST_AUTO_TEST_CASE(laneBoundaries)
     BOOST_CHECK(isOpStackLane(ledger::OPSTACK_EXECUTOR_VERSION));
     BOOST_CHECK(!isOpStackLane(ledger::ETHEREUM_EXECUTOR_VERSION));
     BOOST_CHECK(!isOpStackLane(0));
-    BOOST_CHECK(!isOpStackLane(ledger::OPSTACK_EXECUTOR_VERSION + 5));
+    // A saturated version (above the newest declared lane) runs the OP executor, so the RPC
+    // layer must answer OP fee semantics for it too — an == test would price that chain as
+    // FISCO-lane while the executor prices it as OP.
+    BOOST_CHECK(isOpStackLane(ledger::OPSTACK_EXECUTOR_VERSION + 5));
 
     // The lane distinction that matters here is executor_version vs the ledger's
     // feature_l2_ethereum_compat state shape: the Eth lane may carry that flag (the

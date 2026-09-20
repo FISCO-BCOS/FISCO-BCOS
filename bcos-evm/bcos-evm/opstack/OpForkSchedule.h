@@ -39,8 +39,9 @@ namespace bcos::evm::opstack
 //     features"); Jovian adds OP-only DA footprint + operator-fee-fix on the
 //     same Prague base — hence both map to EVMC_PRAGUE.
 //   * Karst maps to EVMC_OSAKA with an independent precompile-override object
-//     (bn256Pairing's input limit tightens to 57600; 0x100 is no longer overridden so
-//     EIP-7951 pricing applies). EIP-7825 per-tx gas cap gates on Osaka with deposits
+//     (bn256Pairing's input limit tightens to 57600; P256VERIFY/0x100's override moves
+//     from RIP-7212's 3450 to EIP-7951's 6900, pinned by an explicit 0x100 entry in
+//     karstPrecompileOverrides). EIP-7825 per-tx gas cap gates on Osaka with deposits
 //     exempt (see runDeposit). Production parse accepts any contiguous EL fork range,
 //     so Karst is nameable as a baseline or after any earlier activation.
 // ────────────────────────────────────────────────────────────────────────────
@@ -111,9 +112,11 @@ public:
     static OpForkSchedule parse(std::string_view canonical);
     static OpForkSchedule legacy(bool jovianActive);
     /// Release line's [op_fork_timestamps] shorthand (jovian_time/karst_time, UINT64_MAX =
-    /// unscheduled) converted to the canonical activation list: timestamp-0 baseline, forks in
-    /// protocol order, strictly increasing timestamps. jovian_time == 0 makes Jovian the
-    /// baseline itself; an unscheduled Jovian is the all-Isthmus legacy chain.
+    /// unscheduled) folded to the canonical activation list by ledger::foldOpForkShorthand:
+    /// timestamp-0 baseline, forks in protocol order; equal jovian/karst times merge into the
+    /// later fork (op-geth CheckConfigForkOrder compares with `>`), so jovian_time ==
+    /// karst_time == 0 folds to "0:karst". An unscheduled Jovian is the all-Isthmus legacy
+    /// chain; karst earlier than jovian (or set with jovian unscheduled) throws.
     static OpForkSchedule fromLedgerSchedule(const bcos::ledger::OpForkSchedule& schedule);
     /// Canonical ledger-codec text for this activation list ("0:isthmus,100:jovian,..." form):
     /// the inverse of parse(). Lets the [op_fork_timestamps] shorthand fold into the canonical

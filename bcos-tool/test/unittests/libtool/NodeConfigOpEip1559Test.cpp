@@ -148,6 +148,57 @@ BOOST_AUTO_TEST_CASE(malformedValueRejected)
     }
 }
 
+BOOST_AUTO_TEST_CASE(malformedCanyonDenominatorRejected)
+{
+    // denominator_canyon is optional (default 250), but a PRESENT value parses through the same
+    // strict path as the other two keys. get_optional<uint64_t> would silently truncate "0xfa"
+    // to 0, silently default "abc" or an overflowing value to 250, and silently accept "250abc"
+    // as 250 — three silent mispricings of every pre-Canyon block on this chain.
+    for (const auto* value : {"abc", "250abc", "", "18446744073709551616"})
+    {
+        NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadGenesisConfigFromString(opGenesis(opExecutor(),
+                std::string(kSchedule) +
+                    "[op_eip1559]\nelasticity=2\ndenominator=8\ndenominator_canyon=" + value +
+                    "\n")),
+            InvalidConfig, [](auto const& e) {
+                return errinfoContains(e, "[op_eip1559].denominator_canyon is not a valid uint64");
+            });
+    }
+}
+
+BOOST_AUTO_TEST_CASE(canyonDenominatorHexParsesStrictly)
+{
+    // "0xfa" is exactly the value get_optional<uint64_t> silently truncated to 0 (rejected as
+    // zero for the wrong reason); through the strict path it parses as hex 250 — the same
+    // effective value as the omitted-key default.
+    NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+    BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(opGenesis(
+        opExecutor(), std::string(kSchedule) +
+                          "[op_eip1559]\nelasticity=2\ndenominator=8\ndenominator_canyon=0xfa\n")));
+    BOOST_REQUIRE(cfg.opEip1559().has_value());
+    BOOST_CHECK_EQUAL(cfg.opEip1559()->denominatorCanyon, 250U);
+}
+
+BOOST_AUTO_TEST_CASE(valuesExceedingUint32Rejected)
+{
+    // The Holocene extraData encodes denominator/elasticity as uint32 (4-byte big-endian spans
+    // in encodeOptimismExtraData): a value above UINT32_MAX would silently truncate there, so
+    // every key refuses it at load. 2^32 fits a uint64, so this exercises the bound, not the
+    // from_chars range check.
+    for (const auto* body :
+        {"elasticity=4294967296\ndenominator=8\n", "elasticity=2\ndenominator=0x100000000\n",
+            "elasticity=2\ndenominator=8\ndenominator_canyon=4294967296\n"})
+    {
+        NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(
+                                  opExecutor(), std::string(kSchedule) + "[op_eip1559]\n" + body)),
+            InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "exceeds the uint32 range"); });
+    }
+}
+
 BOOST_AUTO_TEST_CASE(sectionWithoutOpLaneRejected)
 {
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());

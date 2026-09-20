@@ -493,14 +493,102 @@ BOOST_AUTO_TEST_CASE(estimateGasCapComesFromTheTipBlockHeaderAtTheEndpoint)
     BOOST_REQUIRE(recordingScheduler->lastTx != nullptr);
     BOOST_CHECK_EQUAL(recordingScheduler->lastTx->gasLimit(), 15'000'000u);
 
-    // Merged (karst) ceiling: the estimate arm bounds the header-derived budget by
-    // EIP-7825 MAX_TX_GAS_LIMIT (2^24) — the call=true executor path skips the per-tx
-    // admission check, so a 50M header must still estimate against a 2^24 budget.
+    // M1: this fixture carries no executor_version row — the legacy FISCO lane, which has
+    // no EIP-7825 per-tx ceiling (block gas up to 3e9). A 50M header must estimate
+    // against the full 50M; the pre-fix blanket clamp failed such estimates even though
+    // the chain admits those transactions.
     m_ledger->ledgerData().at(1)->blockHeader()->setGasLimit(u256(50'000'000));
     Json::Value response2;
     task::syncWait(endpoint->estimateGas(params, response2));
     BOOST_REQUIRE(recordingScheduler->lastTx != nullptr);
-    BOOST_CHECK_EQUAL(recordingScheduler->lastTx->gasLimit(), 16'777'216u);
+    BOOST_CHECK_EQUAL(recordingScheduler->lastTx->gasLimit(), 50'000'000u);
+}
+
+// M1: the 2^24 estimate clamp follows the target block's ACTUAL revision — only where
+// the chain runs Osaka+ rules there (Eth lane at an Osaka revision, OP lane at/after
+// Karst). Everywhere else the header gasLimit is the budget.
+BOOST_AUTO_TEST_CASE(estimateGasClampFollowsTheTargetBlocksRevision)
+{
+    m_ledger->ledgerData().at(1)->blockHeader()->setGasLimit(u256(50'000'000));
+    auto recordingScheduler = std::make_shared<RecordingScheduler>(m_ledger, m_blockFactory);
+    auto ledgerService = std::make_shared<rpc::NodeService>(
+        m_ledger, recordingScheduler, nullptr, nullptr, nullptr, m_blockFactory, nullptr);
+    auto endpoint = std::make_shared<EthEndpoint>(ledgerService, nullptr, false);
+
+    Json::Value params(Json::arrayValue);
+    Json::Value tx(Json::objectValue);
+    tx["to"] = "0x1234567890abcdef1234567890abcdef12345678";
+    tx["data"] = "0x";
+    params.append(tx);
+    params.append("0x1");
+
+    const auto estimate = [&]() {
+        Json::Value response;
+        task::syncWait(endpoint->estimateGas(params, response));
+        BOOST_REQUIRE(recordingScheduler->lastTx != nullptr);
+        return recordingScheduler->lastTx->gasLimit();
+    };
+
+    // Eth lane (executor_version=2): Cancun/Prague have no per-tx ceiling...
+    m_ledger->setSystemConfig("executor_version", "2");
+    m_ledger->setSystemConfig("evmc_revision", "prague");
+    BOOST_CHECK_EQUAL(estimate(), 50'000'000u);
+    // ...at Osaka the ceiling is in force (the call=true executor skips admission, so the
+    // budget itself must stay under it).
+    m_ledger->setSystemConfig("evmc_revision", "osaka");
+    BOOST_CHECK_EQUAL(estimate(), 16'777'216u);
+
+    // OP lane (executor_version=3): Jovian and earlier have no ceiling either...
+    m_ledger->setSystemConfig("executor_version", "3");
+    m_ledger->setSystemConfig("op_fork_schedule", "0:jovian");
+    BOOST_CHECK_EQUAL(estimate(), 50'000'000u);
+    // ...Karst at genesis clamps to 2^24.
+    m_ledger->setSystemConfig("op_fork_schedule", "0:karst");
+    BOOST_CHECK_EQUAL(estimate(), 16'777'216u);
+
+    // Karst is keyed on the block TIMESTAMP (op-node IsKarst: ts >= karst_time): one
+    // second before activation the budget is the full header limit; the activation
+    // second itself is already Karst.
+    m_ledger->setSystemConfig("op_fork_schedule", "0:isthmus,1000:karst");
+    auto const header = m_ledger->ledgerData().at(1)->blockHeader();
+    header->setTimestamp(999'000);  // 999 s, one second before Karst
+    BOOST_CHECK_EQUAL(estimate(), 50'000'000u);
+    header->setTimestamp(1'000'000);  // exactly 1000 s: the activation second
+    BOOST_CHECK_EQUAL(estimate(), 16'777'216u);
+}
+
+// M1: an EXPLICIT estimate gas gets the same gated ceiling — clamped where Osaka+ rules
+// are in force, untouched elsewhere (only the 50M RPC cap applies there).
+BOOST_AUTO_TEST_CASE(estimateGasExplicitGasClampFollowsTheRevision)
+{
+    m_ledger->ledgerData().at(1)->blockHeader()->setGasLimit(u256(50'000'000));
+    auto recordingScheduler = std::make_shared<RecordingScheduler>(m_ledger, m_blockFactory);
+    auto ledgerService = std::make_shared<rpc::NodeService>(
+        m_ledger, recordingScheduler, nullptr, nullptr, nullptr, m_blockFactory, nullptr);
+    auto endpoint = std::make_shared<EthEndpoint>(ledgerService, nullptr, false);
+
+    Json::Value params(Json::arrayValue);
+    Json::Value tx(Json::objectValue);
+    tx["to"] = "0x1234567890abcdef1234567890abcdef12345678";
+    tx["data"] = "0x";
+    tx["gas"] = "0x2000000";  // 32M: under the 50M RPC cap, over 2^24
+    params.append(tx);
+    params.append("0x1");
+
+    const auto estimate = [&]() {
+        Json::Value response;
+        task::syncWait(endpoint->estimateGas(params, response));
+        BOOST_REQUIRE(recordingScheduler->lastTx != nullptr);
+        return recordingScheduler->lastTx->gasLimit();
+    };
+
+    // Legacy lane: the explicit gas passes through untouched.
+    BOOST_CHECK_EQUAL(estimate(), 33'554'432u);
+    // OP lane at Karst: clamped to 2^24 — a larger budget would size execution for a
+    // transaction that can never be admitted.
+    m_ledger->setSystemConfig("executor_version", "3");
+    m_ledger->setSystemConfig("op_fork_schedule", "0:karst");
+    BOOST_CHECK_EQUAL(estimate(), 16'777'216u);
 }
 
 // A client sends an EIP-55 mixed-case `from` (ethers/viem default). The account row key is

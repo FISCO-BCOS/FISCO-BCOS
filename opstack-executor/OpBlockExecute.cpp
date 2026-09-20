@@ -323,14 +323,14 @@ bcos::bytes encodeReceiptForRoot(
     const bcos::protocol::TransactionReceipt& r, uint8_t txType, const OpForkConfig& cfg)
 {
     // One encoder for both producers (this seal and the engine's buildHeaderCommitments);
-    // the leaf shape keys on the receipt's version word (op-geth Receipts.EncodeIndex):
-    // Canyon+ (version present) -> rlp([status, cum, bloom, logs, nonce, version]);
-    // Regolith (version absent) -> rlp([status, cum, bloom, logs]) — the pre-Canyon
+    // both key the leaf shape on the fork (op-geth Receipts.EncodeIndex):
+    // Canyon+ -> rlp([status, cum, bloom, logs, nonce, version]);
+    // Regolith -> rlp([status, cum, bloom, logs]) — the pre-Canyon
     // receipt hash inadvertently omitted the deposit nonce too, so the meta's API-level
     // deposit_nonce is NOT part of the consensus leaf pre-Canyon. runDeposit fills the
     // version iff fork >= Canyon; meta presence and fork must agree in both directions
-    // or the leaf would silently change shape — this path's consensus check, before the
-    // shared encoder runs.
+    // or the leaf would silently change shape — this path's consensus check (and the
+    // engine helper's internal-error check), before the shared encoder runs.
     // The shared encoder throws the ledger's EthReceiptEncodeError; translate it into this
     // path's consensus-rejection type so callers keep mapping one error family (-32603).
     try
@@ -346,7 +346,8 @@ bcos::bytes encodeReceiptForRoot(
                 throw OpConsensusError("op block: deposit receipt missing deposit nonce");
             return bcos::ledger::mpt::encodeReceiptLeaf(r, txType, wantsVersion);
         }
-        return bcos::ledger::mpt::encodeReceiptLeaf(r, txType, /*includeDepositNonceVersion=*/false);
+        return bcos::ledger::mpt::encodeReceiptLeaf(
+            r, txType, /*includeDepositNonceVersion=*/false);
     }
     catch (bcos::ledger::mpt::EthReceiptEncodeError const& e)
     {
@@ -367,19 +368,24 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
         throw std::logic_error("op block: receipts/txTypes length mismatch (caller bug)");
     OpBlockSeal seal{};
 
-    // receipts-root: var-key trie (key = rlp(index), leaf = EncodeIndex encoding).
-    std::vector<std::pair<bcos::bytes, bcos::bytes>> receiptsEntries;
-    receiptsEntries.reserve(result.receipts.size());
+    // receipts-root: indexed trie (key = rlp(index)) over the EncodeIndex-encoded leaves —
+    // the shared bcos-ledger helper, the same path the engine-side commit uses
+    // (EngineStorageCommit.h); byte-equivalence is pinned by EthTrieRootsTest's golden vectors.
+    std::vector<bcos::bytes> receiptLeaves;
+    receiptLeaves.reserve(result.receipts.size());
     for (size_t i = 0; i < result.receipts.size(); ++i)
     {
-        bcos::bytes key;
-        bcos::codec::rlp::encode(key, static_cast<uint64_t>(i));
-        auto leaf = encodeReceiptForRoot(*result.receipts[i], result.txTypes[i], cfg);
-        receiptsEntries.emplace_back(std::move(key), std::move(leaf));
+        receiptLeaves.emplace_back(
+            encodeReceiptForRoot(*result.receipts[i], result.txTypes[i], cfg));
     }
-    auto receiptsResult = bcos::ledger::mpt::computeTrieRootVarKey(receiptsEntries);
-    std::memcpy(
-        seal.receiptsRoot.bytes, receiptsResult.root.data(), sizeof(seal.receiptsRoot.bytes));
+    std::vector<bcos::bytesConstRef> receiptLeafRefs;
+    receiptLeafRefs.reserve(receiptLeaves.size());
+    for (auto const& leaf : receiptLeaves)
+    {
+        receiptLeafRefs.emplace_back(leaf.data(), leaf.size());
+    }
+    auto const receiptsRoot = bcos::ledger::mpt::calculateReceiptsRoot(receiptLeafRefs);
+    std::memcpy(seal.receiptsRoot.bytes, receiptsRoot.data(), sizeof(seal.receiptsRoot.bytes));
 
     // Block-level logsBloom = bitwise-OR of each receipt's 256-byte bloom.
     for (const auto& r : result.receipts)

@@ -20,7 +20,6 @@
 
 #include "CallRequest.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include "bcos-framework/protocol/TxGasModel.h"
 #include "bcos-task/Wait.h"
 #include <algorithm>
 
@@ -150,35 +149,4 @@ std::tuple<bool, CallRequest> rpc::decodeCallRequest(Json::Value const& _root)
         _request.maxFeePerGas = value->asString();
     }
     return {true, std::move(_request)};
-}
-
-void rpc::clampExplicitEstimateGasField(Json::Value& txObject)
-{
-    // The only estimate-gas clamp: caps an EXPLICIT non-zero gas to EIP-7825
-    // MAX_TX_GAS_LIMIT but never back-fills an omitted or zero field: the estimate arm must
-    // size those from the target block's header and refuse when the header is unreadable
-    // (EthEndpoint::call's fail-closed contract).
-    auto const cap = static_cast<uint64_t>(protocol::MAX_TX_GAS_LIMIT);
-    bool present = txObject.isMember("gas") && !txObject["gas"].isNull();
-    uint64_t gas = 0;
-    if (present)
-    {
-        auto const& g = txObject["gas"];
-        if (g.isString())
-        {
-            gas = fromQuantity(g.asString());
-        }
-        else if (g.isUInt64() || g.isUInt())
-        {
-            gas = g.asUInt64();
-        }
-        else
-        {
-            return;  // malformed: leave it for decode/validation to reject
-        }
-    }
-    if (present && gas != 0 && gas > cap)
-    {
-        txObject["gas"] = toQuantity(cap);
-    }
 }

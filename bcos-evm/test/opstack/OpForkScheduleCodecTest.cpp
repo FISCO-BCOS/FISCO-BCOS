@@ -4,6 +4,8 @@
 #include <string>
 #include <string_view>
 
+using bcos::ledger::canonicalOpForkSchedule;
+using bcos::ledger::foldOpForkShorthand;
 using bcos::ledger::InvalidOpForkSchedule;
 using bcos::ledger::parseOpForkSchedule;
 
@@ -65,9 +67,22 @@ BOOST_AUTO_TEST_CASE(NormalizesCaseAndWhitespace, * boost::unit_test::label("for
     BOOST_CHECK_EQUAL(acts[1].forkName, "canyon");
 }
 
-// Baseline is any known EL fork, so both of these are now legal; the gap case is
-// still rejected, just by the general contiguity rule rather than a Karst/Jovian
-// special case.
+// The timestamp side of the colon trims too: a blank after the comma must not turn
+// " 1000" into an "invalid timestamp" rejection.
+// clang-format off
+BOOST_AUTO_TEST_CASE(TrimsTimestampWhitespace, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
+{
+    auto acts = parseOpForkSchedule("0:regolith, 1000:canyon");
+    BOOST_REQUIRE_EQUAL(acts.size(), 2u);
+    BOOST_CHECK_EQUAL(acts[1].timestamp, 1000u);
+    BOOST_CHECK_EQUAL(acts[1].forkName, "canyon");
+}
+
+// Baseline is any known EL fork. A gap is still rejected by the general contiguity
+// rule — with ONE exception: foldOpForkShorthand merges a simultaneous jovian/karst
+// activation into the later fork, so isthmus -> karst (jovian skipped) is the legal
+// folded shape and must parse.
 // clang-format off
 BOOST_AUTO_TEST_CASE(RejectsSkippedFork, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
 // clang-format on
@@ -77,9 +92,59 @@ BOOST_AUTO_TEST_CASE(RejectsSkippedFork, * boost::unit_test::label("fork-regolit
                std::string_view::npos;
     };
     BOOST_CHECK_EXCEPTION(
-        parseOpForkSchedule("0:isthmus,1783526401:karst"), InvalidOpForkSchedule, isGap);
-    BOOST_CHECK_EXCEPTION(
         parseOpForkSchedule("0:regolith,100:ecotone"), InvalidOpForkSchedule, isGap);
+    // A skip is not made legal by ending at karst's neighbour either: only the folded
+    // isthmus -> karst shape (jovian skipped) parses.
+    BOOST_CHECK_EXCEPTION(
+        parseOpForkSchedule("0:holocene,100:jovian"), InvalidOpForkSchedule, isGap);
+
+    const auto folded = parseOpForkSchedule("0:isthmus,1783526401:karst");
+    BOOST_REQUIRE_EQUAL(folded.size(), 2u);
+    BOOST_CHECK_EQUAL(folded[0].forkName, "isthmus");
+    BOOST_CHECK_EQUAL(folded[1].forkName, "karst");
+    BOOST_CHECK_EQUAL(folded[1].timestamp, 1783526401u);
+}
+
+// The shorthand fold itself: equal jovian/karst times merge into the later fork
+// (op-geth CheckConfigForkOrder compares with `>`), everything else keeps its ladder
+// shape, and the two illegal shapes name their keys.
+// clang-format off
+BOOST_AUTO_TEST_CASE(FoldShorthandMergesSimultaneousIntoLaterFork, * boost::unit_test::label("fork-regolith") * boost::unit_test::label("fork-canyon") * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
+{
+    constexpr uint64_t kUnset = bcos::ledger::c_opForkTimeUnset;
+    const auto fold = [](uint64_t jovianTime, uint64_t karstTime) {
+        return canonicalOpForkSchedule(foldOpForkShorthand(jovianTime, karstTime));
+    };
+    BOOST_CHECK_EQUAL(fold(kUnset, kUnset), "0:isthmus");
+    BOOST_CHECK_EQUAL(fold(0, kUnset), "0:jovian");
+    BOOST_CHECK_EQUAL(fold(100, kUnset), "0:isthmus,100:jovian");
+    BOOST_CHECK_EQUAL(fold(0, 0), "0:karst");
+    BOOST_CHECK_EQUAL(fold(100, 100), "0:isthmus,100:karst");
+    BOOST_CHECK_EQUAL(fold(0, 50), "0:jovian,50:karst");
+    BOOST_CHECK_EQUAL(fold(100, 200), "0:isthmus,100:jovian,200:karst");
+
+    const auto nonDecreasing = [](InvalidOpForkSchedule const& e) {
+        return std::string_view{e.what()}.find("fork activation times must be non-decreasing") !=
+               std::string_view::npos;
+    };
+    BOOST_CHECK_EXCEPTION(fold(2000, 1000), InvalidOpForkSchedule, nonDecreasing);
+    BOOST_CHECK_EXCEPTION(fold(kUnset, 1000), InvalidOpForkSchedule, nonDecreasing);
+
+    // karst set with jovian unscheduled names both keys and never prints the UNSET
+    // sentinel as if it were a configured time.
+    try
+    {
+        (void)fold(kUnset, 1000);
+        BOOST_FAIL("expected InvalidOpForkSchedule");
+    }
+    catch (InvalidOpForkSchedule const& e)
+    {
+        const std::string_view what{e.what()};
+        BOOST_CHECK(what.find("jovian_time") != std::string_view::npos);
+        BOOST_CHECK(what.find("karst_time") != std::string_view::npos);
+        BOOST_CHECK(what.find("18446744073709551615") == std::string_view::npos);
+    }
 }
 
 // clang-format off

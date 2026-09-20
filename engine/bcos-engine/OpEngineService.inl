@@ -908,36 +908,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::handleOpNew
     }
 }
 
-/// Header-level commitment snapshot for the engine-side import gate (the same field
-/// set OpScheduler's verify arm compares via mismatchedFieldOf). Namespace-scope
-/// inline: the .inl parses in TUs that never instantiate the consumer template.
-inline bcos::evm::engine::OpBlockCommitments commitmentsOfHeader(
-    bcos::protocol::BlockHeader const& h)
-{
-    auto bloom = h.logsBloom();
-    bcos::h2048 logsBloom(reinterpret_cast<const bcos::byte*>(bloom.data()), bloom.size());
-    std::optional<uint64_t> blobGasUsed;
-    if (auto bg = h.blobGasUsed())
-    {
-        // Same bounds-checked narrowing as OpScheduler's headerCommitments (the sibling
-        // projection of this surface): an out-of-range value fails closed with
-        // OpConsensusError instead of silently truncating modulo 2^64. The value is not
-        // wire-reachable (validateOpBlobGasUsed rejects it first); this keeps the two
-        // projections from diverging (U4-F1, merging U6-F4).
-        blobGasUsed =
-            bcos::evm::engine::detail::narrowU256ToU64(*bg, "commitmentsOfHeader blobGasUsed");
-    }
-    return bcos::evm::engine::OpBlockCommitments{
-        .receiptsRoot = h.receiptsRoot(),
-        .logsBloom = logsBloom,
-        .withdrawalsRoot = h.withdrawalsRoot().value_or(bcos::h256{}),
-        .stateRoot = h.stateRoot(),
-        .gasUsed = h.gasUsed(),
-        .txRoot = h.txsRoot(),
-        .blobGasUsed = blobGasUsed,
-        .requestsHash = h.requestsHash(),
-    };
-}
+/// Header-level commitment projection for the engine-side import gate lives in
+/// bcos::evm::engine::commitmentsOfHeader (opstack-executor/OpCommitments.h) — one
+/// projection shared with OpScheduler's verify arm, so the two paths cannot drift.
 
 template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
 task::Task<PayloadStatus>
@@ -1223,8 +1196,12 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
     }
     if (!executedHeader)
     {
-        co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
-            std::string("execution returned no header"));
+        // A no-error/no-header callback violates this node's own scheduler contract —
+        // the CL payload cannot cause it, so it is a node-internal fault (-32603),
+        // never a consensus INVALID the CL would discard (same classification as a
+        // missing withdrawalsRoot below and as the build loop's null-header endcase).
+        BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
+                                  "execution returned no header"});
     }
     // From Canyon the header field set includes withdrawalsRoot (the same gate
     // rebuildOpEthHeader uses, OpEngineService.cpp), and its presence is stamped by this
@@ -1257,7 +1234,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
     // twice. The delegate's LedgerConfig stub concern is covered by the republish
     // notifier wiring, see engine/OpLedgerConfigRepublish.h.)
     if (auto mismatch = bcos::evm::engine::mismatchedFieldOf(
-            commitmentsOfHeader(*executedHeader), commitmentsOfHeader(*ethHeader)))
+            bcos::evm::engine::commitmentsOfHeader(*executedHeader),
+            bcos::evm::engine::commitmentsOfHeader(*ethHeader)))
     {
         co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
             std::string("commitment mismatch on field ") + *mismatch);

@@ -21,6 +21,7 @@
 #pragma once
 
 #include <bcos-framework/engine/Errors.h>
+#include <bcos-framework/engine/OpForkId.h>
 #include <bcos-framework/engine/RawTransactionDispatch.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
@@ -31,6 +32,7 @@
 #include <bcos-utilities/Bloom.h>
 #include <bcos-utilities/Common.h>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 namespace bcos::engine::engine_common
@@ -124,10 +126,14 @@ struct HeaderCommitments
 /// Forced (decoded == nullptr) envelopes still enter transactionsRoot and do not
 /// produce receipts; receiptsRoot is therefore not externally verifiable until
 /// deposit execution lands (N envelopes vs M receipts).
+/// @p opFork is the block's OP fork when the lane executes deposits (the OP
+/// executor seals through encodeReceiptForRoot with the same fork), std::nullopt
+/// on a lane where deposits never execute — there a deposit receipt can only be
+/// a scheduler contract violation, and fails closed below.
 template <class PayloadTransactions>
 HeaderCommitments buildHeaderCommitments(PayloadTransactions const& payloadTransactions,
     std::vector<protocol::TransactionReceipt::Ptr>& receipts,
-    std::vector<std::uint8_t> const& types)
+    std::vector<std::uint8_t> const& types, std::optional<bcos::engine::OpForkId> opFork)
 {
     for (auto const& receipt : receipts)
     {
@@ -168,17 +174,40 @@ HeaderCommitments buildHeaderCommitments(PayloadTransactions const& payloadTrans
     receiptLeaves.reserve(receipts.size());
     for (std::size_t i = 0; i < receipts.size(); ++i)
     {
-        // op-geth Receipts.EncodeIndex keys the deposit leaf shape on the receipt's own
-        // version word: present -> 0x7e || rlp([..., nonce, version]), absent (pre-Canyon)
-        // -> both omitted. Keying on the meta keeps this producer byte-identical with the
-        // executor's seal (encodeReceiptForRoot) for every fork without threading a fork
-        // schedule here; meta/fork agreement is enforced at the producing executor.
+        // op-geth Receipts.EncodeIndex keys the deposit leaf shape on the fork:
+        // Canyon+ -> 0x7e || rlp([..., nonce, version]); pre-Canyon -> both omitted.
+        // The selector here is the block's fork — the same key the executor's seal
+        // (encodeReceiptForRoot) uses — never the receipt's own metadata, so a
+        // receipt whose meta disagrees with the fork fails closed instead of
+        // silently encoding a leaf the executor would never produce.
         constexpr std::uint8_t c_depositTxType = 0x7e;  // kDepositTxType (OpTransition.h)
         bool includeDepositNonceVersion = true;
         if (types[i] == c_depositTxType)
         {
+            if (!opFork.has_value())
+            {
+                BOOST_THROW_EXCEPTION(
+                    OpExecutionInternalError{} << bcos::errinfo_comment{
+                        "scheduler returned a deposit receipt on a lane that never "
+                        "executes deposits"});
+            }
+            const bool wantsVersion = *opFork >= bcos::engine::OpForkId::Canyon;
             const auto& meta = receipts[i]->opStackMeta();
-            includeDepositNonceVersion = meta && meta->deposit_receipt_version.has_value();
+            if (!meta || meta->deposit_receipt_version.has_value() != wantsVersion)
+            {
+                BOOST_THROW_EXCEPTION(
+                    OpExecutionInternalError{} << bcos::errinfo_comment{
+                        "scheduler returned a deposit receipt whose nonce/version metadata "
+                        "does not match the block's fork"});
+            }
+            if (wantsVersion && !meta->deposit_nonce)
+            {
+                BOOST_THROW_EXCEPTION(
+                    OpExecutionInternalError{} << bcos::errinfo_comment{
+                        "scheduler returned a Canyon+ deposit receipt without a deposit "
+                        "nonce"});
+            }
+            includeDepositNonceVersion = wantsVersion;
         }
         receiptLeaves.push_back(bcos::ledger::mpt::encodeReceiptLeaf(
             *receipts[i], types[i], includeDepositNonceVersion));

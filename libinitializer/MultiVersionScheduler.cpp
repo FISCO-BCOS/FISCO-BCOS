@@ -160,10 +160,11 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
     // RUNNING the OP executor must not be moved off it by a governance write. Keyed on the
     // running slot, not on feature_l2_ethereum_compat — that flag is the ledger's L2 state
     // shape and the Eth lane may carry it as well, so keying on it would freeze (and
-    // mislabel) an Eth-lane L2 chain. Keep the current executor and log loudly instead of
+    // mislabel) an Eth-lane L2 chain. Both sides use the shared lane predicate: a requested
+    // value above OPSTACK saturates back onto the OP slot below, so only a requested non-OP
+    // value is a real "move off". Keep the current executor and log loudly instead of
     // switching: a throw here would halt the commit callbacks.
-    if (m_currentIndex == bcos::ledger::OPSTACK_EXECUTOR_VERSION &&
-        version != bcos::ledger::OPSTACK_EXECUTOR_VERSION)
+    if (bcos::ledger::isOpLaneVersion(m_currentIndex) && !bcos::ledger::isOpLaneVersion(version))
     {
         INITIALIZER_LOG(ERROR) << LOG_DESC(
                                       "executor_version change rejected: OP mode is genesis-frozen")

@@ -142,11 +142,12 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
                                           "with executor.version=3 instead"));
             }
             // Values above the defined lane ladder are refused for the same reason: the
-            // runtime setVersion fail-opens (the chain keeps producing), but every node's
-            // next start throws in validateOpModeGenesisOnly, which rejects anything above
-            // the ladder — an accepted write bricks restarts. The bound derives from the
-            // ladder (MAX_GOVERNANCE_EXECUTOR_VERSION), so wiring a new lane moves it with
-            // the wiring; version-gated so pre-3.18 blocks that set such a value replay.
+            // runtime setVersion fail-opens (the chain keeps producing), but a governance
+            // write activates at block N+1 — non-zero — and validateOpModeGenesisOnly
+            // requires a genesis-bound (block 0) executor_version in OP mode, so every
+            // node's next start throws. An accepted write bricks restarts. The bound derives from
+            // the ladder (MAX_GOVERNANCE_EXECUTOR_VERSION), so wiring a new lane moves it with the
+            // wiring; version-gated so pre-3.18 blocks that set such a value replay.
             if (_value > bcos::ledger::MAX_GOVERNANCE_EXECUTOR_VERSION &&
                 versionCompareTo(version, BlockVersion::V3_18_0_VERSION) >= 0)
             {

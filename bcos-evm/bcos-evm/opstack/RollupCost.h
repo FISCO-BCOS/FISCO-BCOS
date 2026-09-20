@@ -34,9 +34,11 @@ inline constexpr int64_t c_jovianOperatorFeeMultiplier = 100;
 inline uint32_t flzCompressLenImpl(evmc::bytes_view ib) noexcept
 {
     uint32_t n = 0;
-    // The 32 KiB hash table is reused across calls via a per-entry generation tag instead
+    // The hash table — 8192 entries of 16 bytes, i.e. 128 KiB per thread (op-geth's original
+    // is 8192 4-byte positions = 32 KiB; the generation tag below is what widened the entry) —
+    // is reused across calls via a per-entry generation tag instead
     // of being stack-allocated and zero-filled on every run: the engine's DA-footprint gate
-    // and the per-tx Jovian pricing each compress every envelope, and the 32 KiB clear
+    // and the per-tx Jovian pricing each compress every envelope, and the table clear
     // dominated small envelopes. An entry tagged with the current generation holds exactly
     // what the zeroed table held; an entry from an older generation reads as empty
     // (position 0) — the same candidates a fresh table produced, so the compressed length

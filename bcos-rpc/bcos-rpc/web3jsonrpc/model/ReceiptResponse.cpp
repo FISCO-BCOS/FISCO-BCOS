@@ -19,7 +19,13 @@
 /// gen_receipt_json.go:40): a decimal JSON string that keeps the fractional part and
 /// trims trailing zeros ("0.684", "1", "2.000001"). The raw remainder is always six
 /// digits wide (the divisor is 1e6), so a u256 whole part plus a u64 remainder
-/// reproduces that rendering exactly for every scalar the field can carry.
+/// reproduces that rendering at the magnitudes the field carries. Known divergence:
+/// big.Float's 'g' formatting switches to exponent form for values below 1e-4 —
+/// rawScalar < 100 renders as "1e-06" there vs "0.000001" here — so tiny scalars do
+/// not match byte-for-byte; L1 fee scalars in practice sit far inside the agreeing
+/// plain-decimal range.
+namespace
+{
 std::string formatL1FeeScalar(const bcos::u256& rawScalar)
 {
     const bcos::u256 kScale{1'000'000};
@@ -37,6 +43,7 @@ std::string formatL1FeeScalar(const bcos::u256& rawScalar)
     }
     return whole + '.' + fractional;
 }
+}  // namespace
 
 void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::TransactionReceipt& receipt,
     const bcos::protocol::Transaction& tx, const crypto::HashType& blockHash)

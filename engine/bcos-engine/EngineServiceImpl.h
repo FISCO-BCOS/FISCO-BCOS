@@ -1168,7 +1168,11 @@ private:
         // FISCO Merkle fold here changes the block hash. Empty lists map to the canonical
         // empty-trie root.
         auto const commitments = engine_common::buildHeaderCommitments(
-            executionPayload.transactions, receipts, executable.types);
+            executionPayload.transactions, receipts, executable.types,
+            // Forced (deposit) envelopes stay raw-only in this service — they are never
+            // executed, so no deposit receipt can legitimately reach the helper and no
+            // fork context exists; one showing up anyway fails closed.
+            std::nullopt);
         h256 const txRoot = commitments.transactionsRoot;
         h256 const receiptRoot = commitments.receiptsRoot;
 

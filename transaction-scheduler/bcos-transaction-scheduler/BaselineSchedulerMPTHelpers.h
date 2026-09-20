@@ -174,7 +174,7 @@ inline void validateOpModeGenesisOnly(bcos::ledger::Features const& features, in
 {
     using Flag = bcos::ledger::Features::Flag;
     bool const flagOn = features.get(Flag::feature_l2_ethereum_compat);
-    bool const opMode = (executorVersion >= bcos::ledger::OPSTACK_EXECUTOR_VERSION);
+    bool const opMode = bcos::ledger::isOpLaneVersion(executorVersion);
     // The activation check runs first so that any mid-chain row -- with or without the L2 flag
     // -- reaches the recovery sentence instead of only the flag message.
     if (opMode && executorVersionActivation != 0)

@@ -28,8 +28,11 @@ DERIVE_BCOS_EXCEPTION(ExecutorVersionNotSupported);
 /// it without depending on libinitializer); this keeps the scheduler_v1 spelling.
 constexpr static int ETHEREUM_EXECUTOR_VERSION = ledger::ETHEREUM_EXECUTOR_VERSION;
 
-/// executor_version == this selects OP mode (OpScheduler, slot 3); higher values are not a
-/// defined lane (LedgerInitializer refuses to boot above it). It is a genesis property:
+/// executor_version == this selects OP mode (OpScheduler, slot 3). A higher value is not a
+/// defined lane: boot does not refuse it — setVersion saturates it onto the newest WIRED
+/// slot and the chain keeps producing; from 3.18.0 on SystemConfigPrecompiled refuses it as
+/// a governance write instead (whose non-zero activation block would fail the next start in
+/// validateOpModeGenesisOnly). It is a genesis property:
 /// SystemConfigPrecompiled refuses a governance write of this value from 3.18.0 on, so on a
 /// running chain the value can only reach here from config.genesis via Initializer::init.
 constexpr static int OPSTACK_EXECUTOR_VERSION = ledger::OPSTACK_EXECUTOR_VERSION;

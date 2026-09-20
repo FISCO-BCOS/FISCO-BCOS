@@ -600,7 +600,7 @@ inline void applyLedgerConfig(ledger::LedgerConfig& ledgerConfig,
             ledger::applyEVMCRevisionConfig(ledgerConfig, evmcRevision.value().first);
         }
     }
-    if (executorVersion >= ledger::OPSTACK_EXECUTOR_VERSION)
+    if (ledger::isOpLaneVersion(executorVersion))
     {
         // The OP lane's declared EIP-1559 triple rides the same snapshot so the RPC fee
         // prediction prices pre-Holocene blocks with the chain's own parameters. Fail
@@ -608,6 +608,16 @@ inline void applyLedgerConfig(ledger::LedgerConfig& ledgerConfig,
         if (auto opEip1559 = sysConfig.get(ledger::SystemConfig::op_eip1559_params); opEip1559)
         {
             ledgerConfig.setOpEip1559Params(ledger::parseOpEip1559Params(opEip1559.value().first));
+        }
+        // The resolved fork schedule rides the snapshot too: the RPC estimate gas-cap gate
+        // applies EIP-7825 only where the chain has actually activated Karst at the target
+        // block (M1). Absent on OP chains initialized before the row existed — the gate
+        // treats that as "no Karst activation known" and leaves the budget unclamped.
+        if (auto opForkSchedule = sysConfig.get(ledger::SystemConfig::op_fork_schedule);
+            opForkSchedule)
+        {
+            ledgerConfig.setOpForkSchedule(
+                ledger::opForkScheduleFromCanonical(opForkSchedule.value().first));
         }
     }
 }

@@ -39,13 +39,24 @@ BOOST_AUTO_TEST_CASE(acceptsKarstAfterJovian)
     BOOST_CHECK_EQUAL(*probe.genesisConfig().m_opstackForkSchedule, "0:jovian,1:karst");
 }
 
-// Karst after Isthmus is still rejected, now because the schedule skips Jovian
-// rather than because of a Karst-specific rule.
+// A simultaneous jovian/karst activation folds into the later fork
+// ("0:isthmus,T:karst"), so skipping jovian is legal.
+BOOST_AUTO_TEST_CASE(acceptsKarstAfterIsthmus)
+{
+    LoaderProbe probe;
+    probe.loadOpForkSchedule(
+        fromIni("[op_fork_schedule]\n"
+                "canonical=0:isthmus,1:karst\n"));
+    BOOST_REQUIRE(probe.genesisConfig().m_opstackForkSchedule.has_value());
+    BOOST_CHECK_EQUAL(*probe.genesisConfig().m_opstackForkSchedule, "0:isthmus,1:karst");
+}
+
+// Skipping any other fork is still rejected.
 BOOST_AUTO_TEST_CASE(rejectsSkippedFork)
 {
     LoaderProbe probe;
     BOOST_CHECK_EXCEPTION(probe.loadOpForkSchedule(fromIni("[op_fork_schedule]\n"
-                                                           "canonical=0:isthmus,1:karst\n")),
+                                                           "canonical=0:holocene,1:jovian\n")),
         InvalidConfig, [](auto const& e) { return errinfoContains(e, "protocol order"); });
 }
 

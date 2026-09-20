@@ -79,6 +79,18 @@ struct OpForkScheduleMetadataFixture
         genesisConfig.m_opstackForkSchedule = std::string(schedule);
         return genesisConfig;
     }
+
+    static GenesisConfig shorthandGenesis(std::uint64_t jovianTime, std::uint64_t karstTime)
+    {
+        GenesisConfig genesisConfig;
+        genesisConfig.m_txGasLimit = 3000000000;
+        genesisConfig.m_compatibilityVersion =
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_18_0_VERSION);
+        genesisConfig.m_chainID = "1";
+        genesisConfig.m_groupID = "group0";
+        genesisConfig.m_opForkSchedule = OpForkSchedule{jovianTime, karstTime};
+        return genesisConfig;
+    }
 };
 
 bool messageContains(std::exception const& e, std::string_view needle)
@@ -92,6 +104,18 @@ task::Task<void> writeMetadataRow(auto& storage, std::string_view key, std::stri
     entry.set(value);
     co_await storage2::writeOne(storage,
         executor_v1::StateKey(std::string_view(SYS_CHAIN_METADATA), key), std::move(entry));
+}
+
+task::Task<std::optional<std::string>> readOpForkScheduleSysConfigRow(auto& storage)
+{
+    const auto entry = co_await storage2::readOne(
+        storage, executor_v1::StateKeyView(std::string_view(SYS_CONFIG),
+                     std::string_view(INTERNAL_SYSTEM_KEY_OP_FORK_SCHEDULE)));
+    if (!entry.has_value())
+    {
+        co_return std::nullopt;
+    }
+    co_return std::get<0>(storage::serialize::decode<SystemConfigEntry>(entry->get()));
 }
 }  // namespace
 
@@ -365,7 +389,9 @@ BOOST_AUTO_TEST_CASE(persistNormalizesCanonicalText)
 }
 
 // Baseline may be any EL fork, so `0:karst` now writes; a gap is still rejected,
-// by the general contiguity rule rather than the Karst/Jovian special case.
+// by the general contiguity rule rather than the Karst/Jovian special case — with
+// the fold's one exception: isthmus -> karst (jovian skipped) is the merged
+// simultaneous-activation shape and writes.
 BOOST_AUTO_TEST_CASE(genesisWriteAcceptsKarstBaselineButRejectsSkippedFork)
 {
     task::syncWait([this]() -> task::Task<void> {
@@ -383,7 +409,23 @@ BOOST_AUTO_TEST_CASE(genesisWriteAcceptsKarstBaselineButRejectsSkippedFork)
             BOOST_CHECK_EQUAL(stored->schedule, karstBaseline);
         }
 
-        for (auto const* schedule : {"0:isthmus,1:karst", "0:regolith,1:ecotone"})
+        // The folded simultaneous-activation shape (jovian_time == karst_time == 1)
+        // skips jovian and is legal.
+        {
+            constexpr auto* foldedShape = "0:isthmus,1:karst";
+            auto storage = makeL2GenesisTestStorage();
+            auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+            BOOST_REQUIRE(co_await ledger::buildGenesisBlock(
+                *ledger, scheduleGenesis(foldedShape), emptyLedgerConfig()));
+            auto block = co_await ledger::getBlockData(*ledger, 0, HEADER);
+            BOOST_REQUIRE(block);
+            const auto stored =
+                co_await readOpForkScheduleMetadata(*storage, block->blockHeader()->hash());
+            BOOST_REQUIRE(stored.has_value());
+            BOOST_CHECK_EQUAL(stored->schedule, foldedShape);
+        }
+
+        for (auto const* schedule : {"0:regolith,1:ecotone", "0:holocene,1:jovian"})
         {
             auto storage = makeL2GenesisTestStorage();
             auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
@@ -502,6 +544,64 @@ BOOST_AUTO_TEST_CASE(genesisWriteAcceptsKarstAfterJovian)
             co_await readOpForkScheduleMetadata(*storage, block->blockHeader()->hash());
         BOOST_REQUIRE(stored.has_value());
         BOOST_CHECK_EQUAL(stored->schedule, schedule);
+        co_return;
+    }());
+}
+
+// The resolved schedule also rides SYS_CONFIG (key op_fork_schedule) so every
+// getLedgerConfig snapshot — the RPC estimate gas-cap gate (M1) among them —
+// keys fork activation on the chain's own times. The canonical declaration is
+// mirrored verbatim; the [op_fork_timestamps] shorthand lands folded.
+BOOST_AUTO_TEST_CASE(genesisWritesScheduleToSysConfig)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        {
+            auto storage = makeL2GenesisTestStorage();
+            auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+            BOOST_REQUIRE(co_await ledger::buildGenesisBlock(
+                *ledger, scheduleGenesis(c_isthmusJovianSchedule), emptyLedgerConfig()));
+            const auto row = co_await readOpForkScheduleSysConfigRow(*storage);
+            BOOST_REQUIRE(row.has_value());
+            BOOST_CHECK_EQUAL(*row, c_isthmusJovianSchedule);
+        }
+
+        // Simultaneous jovian/karst timestamps fold into the later fork.
+        {
+            auto storage = makeL2GenesisTestStorage();
+            auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+            BOOST_REQUIRE(co_await ledger::buildGenesisBlock(
+                *ledger, shorthandGenesis(1000, 1000), emptyLedgerConfig()));
+            const auto row = co_await readOpForkScheduleSysConfigRow(*storage);
+            BOOST_REQUIRE(row.has_value());
+            BOOST_CHECK_EQUAL(*row, "0:isthmus,1000:karst");
+        }
+
+        // (0, 0) means both active from genesis: the fold collapses to karst alone.
+        {
+            auto storage = makeL2GenesisTestStorage();
+            auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+            BOOST_REQUIRE(co_await ledger::buildGenesisBlock(
+                *ledger, shorthandGenesis(0, 0), emptyLedgerConfig()));
+            const auto row = co_await readOpForkScheduleSysConfigRow(*storage);
+            BOOST_REQUIRE(row.has_value());
+            BOOST_CHECK_EQUAL(*row, "0:karst");
+        }
+
+        // No OP schedule declared anywhere: no row, so the gate treats the chain
+        // as pre-Karst.
+        {
+            auto storage = makeL2GenesisTestStorage();
+            auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+            GenesisConfig plain;
+            plain.m_txGasLimit = 3000000000;
+            plain.m_compatibilityVersion =
+                static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_18_0_VERSION);
+            plain.m_chainID = "1";
+            plain.m_groupID = "group0";
+            BOOST_REQUIRE(co_await ledger::buildGenesisBlock(*ledger, plain, emptyLedgerConfig()));
+            const auto row = co_await readOpForkScheduleSysConfigRow(*storage);
+            BOOST_CHECK(!row.has_value());
+        }
         co_return;
     }());
 }

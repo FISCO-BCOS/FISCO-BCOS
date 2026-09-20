@@ -2729,7 +2729,7 @@ BOOST_AUTO_TEST_CASE(adoptRejectsHashMismatchWhenCommitmentsMatch)
     BOOST_REQUIRE_MESSAGE(probeCb.err == nullptr,
         "probe executeBlock failed: " << (probeCb.err ? probeCb.err->errorMessage() : ""));
 
-    // Timestamp is outside headerCommitments; changing it after the probe keeps
+    // Timestamp is outside engine::commitmentsOfHeader; changing it after the probe keeps
     // commitment equality and must still fail the hash-identity gate.
     header->setTimestamp(header->timestamp() + 1000);
     auto adoptBlock = assembleBlock(f, header, rawTxBytes);
@@ -2819,7 +2819,7 @@ BOOST_AUTO_TEST_CASE(CommitAfterResetReportsOpPendingDroppedNotUnknownError)
 /// INT-F1: at Regolith the engine's rebuildOpEthHeader announces NO withdrawalsRoot (the field
 /// appears with EIP-4895 at Canyon), while finishExecute always writes the seal's field — the
 /// zero sentinel below Canyon. The verify arm must project absent and the zero sentinel to the
-/// same commitment, as headerCommitments already does, or every FCU V1 Regolith payload build
+/// same commitment, as engine::commitmentsOfHeader does, or every FCU V1 Regolith payload build
 /// fails at its canonical executeBlock(verify=true) pass.
 BOOST_AUTO_TEST_CASE(RegolithVerifyArmAcceptsAbsentWithdrawalsRoot)
 {

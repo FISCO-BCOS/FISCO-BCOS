@@ -166,7 +166,11 @@ inline void validateScheduleRecords(std::span<const OpForkActivationRecord> acti
         // The baseline is the anchor; every later activation must be the next
         // fork exactly (op-node checkFork: a set fork's prior fork must be set).
         // Contiguity forces order to strictly increase, so no `seenForks` scan.
-        if (index != 0 && order != previousOrder + 1)
+        // One exception: foldOpForkShorthand merges a simultaneous jovian/karst
+        // activation into the later fork ("0:isthmus,T:karst"), so jovian — and
+        // only jovian — may be skipped.
+        if (index != 0 && order != previousOrder + 1 &&
+            !(order == previousOrder + 2 && c_opForkNames[previousOrder + 1] == "jovian"))
             throwInvalidOpForkSchedule("forks out of protocol order");
 
         previousOrder = order;
@@ -216,7 +220,10 @@ inline std::vector<OpForkActivationRecord> parseOpForkSchedule(std::string_view 
             throwInvalidOpForkSchedule("invalid activation entry");
 
         OpForkActivationRecord record;
-        record.timestamp = detail::parseTimestamp(entry.substr(0, colon));
+        // Both sides of the colon tolerate surrounding blanks — the fork name is trimmed
+        // inside normalizeForkName, the timestamp here — so "0:jovian, 100:karst" (a blank
+        // after the comma) parses the same as the canonical tight form.
+        record.timestamp = detail::parseTimestamp(detail::trimAscii(entry.substr(0, colon)));
         record.forkName = detail::normalizeForkName(entry.substr(colon + 1));
         activations.push_back(std::move(record));
 
@@ -235,6 +242,57 @@ inline std::string canonicalOpForkSchedule(std::span<const OpForkActivationRecor
 {
     detail::validateScheduleRecords(activations);
     return detail::serializeScheduleRecords(activations);
+}
+
+/// UNSET sentinel of the [op_fork_timestamps] shorthand: op-node's nil, "not scheduled".
+inline constexpr uint64_t c_opForkTimeUnset = std::numeric_limits<uint64_t>::max();
+
+/// Fold the [op_fork_timestamps] shorthand (jovian_time / karst_time in seconds,
+/// c_opForkTimeUnset = not scheduled) into the canonical activation list. op-geth's
+/// CheckConfigForkOrder compares with `>`, so EQUAL times are legal and mean the later
+/// fork's rules apply from that second: a simultaneous pair collapses into the later
+/// fork — (0,0) becomes "0:karst", (T,T) becomes "0:isthmus,T:karst". A later fork at
+/// an EARLIER second is rejected with the keys named, because Karst is defined as
+/// Jovian's rules on an Osaka EVM and cannot activate first. NodeConfig validates the
+/// section through this same function, so the shorthand and the canonical channel can
+/// never drift into two rule sets. The result passes validateScheduleRecords, i.e. it
+/// is always parseable canonical text.
+[[nodiscard]] inline std::vector<OpForkActivationRecord> foldOpForkShorthand(
+    uint64_t jovianTime, uint64_t karstTime)
+{
+    if (karstTime != c_opForkTimeUnset && jovianTime == c_opForkTimeUnset)
+        throwInvalidOpForkSchedule("karst_time (" + std::to_string(karstTime) +
+                                   ") is set but jovian_time is not: fork activation "
+                                   "times must be non-decreasing");
+    if (karstTime < jovianTime)
+        throwInvalidOpForkSchedule("karst_time (" + std::to_string(karstTime) +
+                                   ") is earlier than jovian_time (" + std::to_string(jovianTime) +
+                                   "): fork activation times must be non-decreasing");
+
+    std::vector<OpForkActivationRecord> records;
+    if (jovianTime == c_opForkTimeUnset)
+    {
+        // Neither fork scheduled: the all-Isthmus legacy chain.
+        records.push_back({std::string("isthmus"), 0});
+    }
+    else
+    {
+        // Isthmus is the implicit baseline unless Jovian itself activates at genesis.
+        if (jovianTime != 0)
+            records.push_back({std::string("isthmus"), 0});
+        records.push_back({std::string("jovian"), jovianTime});
+    }
+    if (karstTime != c_opForkTimeUnset)
+        records.push_back({std::string("karst"), karstTime});
+    // Equal times merge into the later fork. Only the jovian/karst pair can tie: the
+    // isthmus baseline above is emitted only when jovianTime > 0.
+    if (records.size() >= 2 &&
+        records[records.size() - 1].timestamp == records[records.size() - 2].timestamp)
+    {
+        records.erase(records.end() - 2);
+    }
+    detail::validateScheduleRecords(records);
+    return records;
 }
 
 inline crypto::HashType keccakOpForkScheduleHash(std::string_view canonical)

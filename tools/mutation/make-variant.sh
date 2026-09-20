@@ -28,9 +28,10 @@ if [ -z "$(git -C "$root" status --porcelain -- "$mutated")" ]; then
   exit 1
 fi
 
-git -C "$root" diff -- "$mutated" > "$out"
-# Reset both index and worktree: `git diff` here is worktree-vs-index, and a stray
-# `git add` would otherwise leave the mutation staged.
+git -C "$root" diff HEAD -- "$mutated" > "$out"
+# Reset both index and worktree: `git diff HEAD` (not bare `git diff`) so a stray
+# `git add` cannot leave the mutation out of the patch — worktree-vs-index would
+# record nothing for a fully staged edit and the checkout below would lose it.
 git -C "$root" checkout HEAD -- "$mutated"
 echo "wrote $out ($(wc -l < "$out" | tr -d ' ') lines); $mutated restored to HEAD"
 echo "now add $id to tools/mutation/variants/mapping.json and run tools/mutation/run.sh $id"

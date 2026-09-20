@@ -46,7 +46,7 @@ struct LaneKeyRule
 
 [[nodiscard]] inline ChainLane laneForExecutorVersion(int executorVersion) noexcept
 {
-    if (executorVersion >= ledger::OPSTACK_EXECUTOR_VERSION)
+    if (ledger::isOpLaneVersion(executorVersion))
     {
         return ChainLane::Op;
     }
@@ -58,8 +58,8 @@ struct LaneKeyRule
 }
 
 /// The OP section family, moved here from the hand-written if-pairs in
-/// NodeConfig::validateL2Invariants. TODO (deliberately NOT in this change, see
-/// docs/plans/2026-09-16-op-eip1559-params-design.md §3.5): the remaining pairs —
+/// NodeConfig::validateL2Invariants. TODO (deliberately NOT in this change): the
+/// remaining pairs —
 /// [eth_genesis_header] <-> feature_l2_ethereum_compat, [alloc.*] <-> the same feature,
 /// [fork_timestamps] <-> [ethereum] mode=el, mode=el -> [web3] chain_id, OP lane forbids
 /// executor.evm_revision, config.ini <-> genesis EL mode — still live where they were.

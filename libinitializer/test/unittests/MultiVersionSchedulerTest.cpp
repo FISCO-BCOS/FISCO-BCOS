@@ -215,6 +215,21 @@ BOOST_AUTO_TEST_CASE(opRunningSlotIsFrozenAgainstGovernanceWrites)
     BOOST_CHECK_EQUAL(slots[1]->m_stopCount, 1);
 }
 
+// A requested version ABOVE the OP slot while running OP is not a "move off": isOpLaneVersion
+// holds on both sides of the freeze, so the request falls through to the saturation arm and
+// lands back on the OP slot — execution stays on slot 3 through saturation, not rejection.
+BOOST_AUTO_TEST_CASE(opRunningSlotSaturatesRequestsAboveTheNewestLane)
+{
+    auto scheduler = make(true);
+    scheduler->setVersion(OPSTACK_EXECUTOR_VERSION, {});
+    scheduler->setVersion(OPSTACK_EXECUTOR_VERSION + 5, {});
+
+    scheduler->executeBlock(
+        {}, false, [](bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool) {});
+    BOOST_CHECK_EQUAL(slots[3]->m_executeCount, 1);
+    BOOST_CHECK_EQUAL(slots[2]->m_executeCount, 0);
+}
+
 // The discriminator for the guard's keying: an Eth-lane chain may legitimately carry
 // feature_l2_ethereum_compat (it is the ledger's L2 state shape, not an OP-mode marker).
 // Flag-keyed freezing (the pre-fix guard) froze and mislabelled such a chain on an

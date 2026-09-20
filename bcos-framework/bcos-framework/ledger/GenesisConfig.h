@@ -127,20 +127,6 @@ struct EthereumForkSchedule
     uint64_t m_bpo2Time = 0;
 };
 
-// OP-lane fork schedule, parsed from the [op_fork_timestamps] section of
-// config.genesis (executor_version >= OPSTACK_EXECUTOR_VERSION). OP forks
-// activate by L2 block TIMESTAMP IN SECONDS, exactly like op-node's
-// rollup.json jovian_time / karst_time (op-node/rollup/types.go:
-// IsJovian(ts) == Time != nil && ts >= *Time). 0 means "active from genesis";
-// std::numeric_limits<uint64_t>::max() encodes op-node's nil, i.e. "not
-// scheduled". Isthmus is the OP lane's baseline and therefore has no entry:
-// the engine's -38005 gate admits only Isthmus+ payloads.
-struct OpForkSchedule
-{
-    uint64_t m_jovianTime = std::numeric_limits<uint64_t>::max();
-    uint64_t m_karstTime = std::numeric_limits<uint64_t>::max();
-};
-
 class GenesisConfig
 {
 public:

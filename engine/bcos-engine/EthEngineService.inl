@@ -816,7 +816,10 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     // with INVALID_BLOCK_HASH. receiptsRoot is the same construction over the RLP receipt leaves
     // and MUST match the OP block seal (sealOpBlock).
     auto const commitments = engine_common::buildHeaderCommitments(
-        executionPayload.transactions, receipts, executable.types);
+        executionPayload.transactions, receipts, executable.types,
+        // Eth lane: 0x7e deposits are rejected as undecodable above (allowDeposit=false),
+        // so no fork context exists here — a deposit receipt would fail closed.
+        std::nullopt);
     h256 const txRoot = commitments.transactionsRoot;
     h256 const receiptRoot = commitments.receiptsRoot;
     // gas used and the block-level logsBloom come out of the same call, so neither can be

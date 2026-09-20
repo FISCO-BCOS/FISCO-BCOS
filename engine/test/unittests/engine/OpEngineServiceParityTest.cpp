@@ -1361,6 +1361,55 @@ BOOST_AUTO_TEST_CASE(op_newpayload_rejects_executed_withdrawals_root_mismatch)
     BOOST_CHECK(status.validationError->find("withdrawalsRoot") != std::string::npos);
 }
 
+/// importExecute answering the scheduler contract violation (no error AND no header):
+/// the CL payload cannot cause it, so the engine must surface OpExecutionInternalError
+/// (-32603) — a consensus INVALID would be terminal for the payload hash (same
+/// classification as a missing withdrawalsRoot and the build loop's null-header endcase).
+struct NullHeaderStub : FabricatedRootsStub
+{
+    void importExecute(bcos::protocol::Block::Ptr,
+        std::vector<bcos::protocol::BlockHeader::Ptr> const&, std::shared_ptr<void> const&,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr,
+            std::shared_ptr<void>, std::shared_ptr<void>)>
+            callback) override
+    {
+        callback(nullptr, nullptr, nullptr, nullptr);
+    }
+};
+
+BOOST_AUTO_TEST_CASE(op_newpayload_null_executed_header_is_internal_error_never_invalid)
+{
+    auto delegate = std::make_shared<NullHeaderStub>();
+    delegate->failFirst = false;
+    OpServicePair pair(/*allowSynthesizedL1Attributes=*/false, delegate);
+    delegate->headerFactory = pair.blockFactory->blockHeaderFactory();
+
+    auto const parent =
+        bcos::h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    registerVerifiedBlock(pair.storage, parent, 0);
+    registerParentHeader(pair.storage, *pair.blockFactory, 0, 1'699'000'000'000);
+
+    auto parentHeader = pair.blockFactory->blockHeaderFactory()->createBlockHeader();
+    parentHeader->setNumber(0);
+    parentHeader->setTimestamp(1'699'000'000'000);
+    parentHeader->setGasLimit(30'000'000);
+    parentHeader->setGasUsed(0);
+    parentHeader->setExtraData(bcos::fromHex("00000000fa00000006"));
+    parentHeader->setBaseFee(bcos::u256(1'000'000'000));
+
+    auto request = makeValidIsthmusNewPayload(*pair.blockFactory, parent, 1);
+    request.executionPayload.baseFeePerGas = bcos::engine::calcOpBaseFee(*parentHeader, false);
+    auto const txRoot = EngineOpScheduler::computeTxRoot(
+        bcos::engine::detail::rawEnvelopes(request.executionPayload));
+    auto header = bcos::engine::engine_common::op::rebuildOpEthHeader(
+        pair.blockFactory->blockHeaderFactory(), request.executionPayload, txRoot,
+        *request.parentBeaconBlockRoot, bcos::engine::OpForkId::Isthmus);
+    request.executionPayload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*header);
+
+    BOOST_CHECK_THROW(bcos::task::syncWait(pair.service.newPayload(request, 4)),
+        bcos::engine::OpExecutionInternalError);
+}
+
 /// The op-geth oracle for the rebuild path: the vendored corpus vector's payload (parsed
 /// through the production wire dialect) must re-hash to the op-geth golden block hash —
 /// rebuildOpEthHeader's field layout and the RLP hash match op-geth byte-for-byte.

@@ -30,11 +30,12 @@ BOOST_AUTO_TEST_CASE(ParseAllowsKarstAfterJovian)
     BOOST_CHECK_EQUAL(schedule.configAt(1).rev, EVMC_OSAKA);
 }
 
-// Rejected by the general contiguity rule (isthmus -> karst skips Fjord/Granite/
-// Holocene/Jovian), not by a Karst/Jovian special case.
+// Skipping jovian alone is legal (the shorthand fold produces "isthmus,T:karst"),
+// so the contiguity rule now bites one hop earlier: holocene -> karst skips
+// isthmus as well and is rejected by the general rule, not a Karst/Jovian special case.
 BOOST_AUTO_TEST_CASE(ParseRejectsSkippedForkBeforeKarst)
 {
-    BOOST_CHECK_THROW(OpForkSchedule::parse("0:isthmus,1:karst"), InvalidOpForkSchedule);
+    BOOST_CHECK_THROW(OpForkSchedule::parse("0:holocene,1:karst"), InvalidOpForkSchedule);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

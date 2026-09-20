@@ -634,7 +634,7 @@ void NodeConfig::validateL2Invariants()
     // The OP lane's EIP-1559 parameters and schedule share the lane binding above; what
     // remains here is the requirement direction: an OP chain without any schedule has no way
     // to say when Jovian or Karst activate.
-    if (genesis.m_executorVersion >= ledger::OPSTACK_EXECUTOR_VERSION &&
+    if (ledger::isOpLaneVersion(genesis.m_executorVersion) &&
         !genesis.m_opForkSchedule.has_value() && !genesis.m_opstackForkSchedule.has_value())
     {
         BOOST_THROW_EXCEPTION(
@@ -648,7 +648,7 @@ void NodeConfig::validateL2Invariants()
     // never read for execution and can only disagree with what the chain actually runs (a
     // prague pin on a Karst block, say). Reject the pair instead of carrying a value that
     // lies.
-    if (genesis.m_executorVersion >= ledger::OPSTACK_EXECUTOR_VERSION &&
+    if (ledger::isOpLaneVersion(genesis.m_executorVersion) &&
         (genesis.m_evmcRevision.has_value() || !genesis.m_evmcRevisionForks.empty()))
     {
         BOOST_THROW_EXCEPTION(
@@ -1434,17 +1434,24 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
     schedule.m_jovianTime =
         readOptionalForkTimestamp(*section, "op_fork_timestamps", "jovian_time");
     schedule.m_karstTime = readOptionalForkTimestamp(*section, "op_fork_timestamps", "karst_time");
-    // Same rule as the L1 ladder: activation times must be non-decreasing down the fork order,
-    // because a later fork is defined as a superset of the earlier one (Karst is Jovian's fee
-    // and receipt rules on an Osaka EVM). UINT64_MAX ("not scheduled") is terminal: any
-    // scheduled — therefore smaller — time after it is a decrease and is rejected.
-    if (schedule.m_karstTime < schedule.m_jovianTime)
+    // Validate through the same fold the resolver applies (ledger::foldOpForkShorthand), so
+    // the shorthand and the canonical channel share ONE rule set. op-geth's
+    // CheckConfigForkOrder compares with `>`, so equal jovian/karst times are LEGAL and merge
+    // into the later fork downstream; a later fork at an EARLIER second — or karst scheduled
+    // with jovian unscheduled — is rejected with the keys named.
+    try
     {
+        (void)ledger::foldOpForkShorthand(schedule.m_jovianTime, schedule.m_karstTime);
+    }
+    catch (ledger::InvalidOpForkSchedule const& e)
+    {
+        if (const auto* comment = boost::get_error_info<errinfo_comment>(e))
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment("[op_fork_timestamps] " + *comment));
+        }
         BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "[op_fork_timestamps].karst_time (" + std::to_string(schedule.m_karstTime) +
-                ") is earlier than jovian_time (" + std::to_string(schedule.m_jovianTime) +
-                "): fork activation times must be non-decreasing"));
+            InvalidConfig() << errinfo_comment(std::string("[op_fork_timestamps] ") + e.what()));
     }
     m_genesisConfig.m_opForkSchedule = schedule;
 
@@ -1470,18 +1477,12 @@ void NodeConfig::loadOpEip1559(boost::property_tree::ptree const& _genesisConfig
     {
         return;
     }
-    auto requireKey = [&](std::string const& key) -> uint64_t {
-        auto value = section->get_optional<std::string>(key);
-        if (!value || value->empty())
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidConfig() << errinfo_comment("[op_eip1559]." + key + " is required"));
-        }
+    auto parseStrictUint64 = [&](std::string const& key, std::string const& text) -> uint64_t {
         // Decimal and 0x-hex both, matching the sibling [op_fork_timestamps] section: a chain
         // operator writing one section hex-formatted must not be surprised by the other.
         // NOT parseForkTimestamp — that helper's message says "invalid timestamp", which would
         // misname an EIP-1559 parameter.
-        std::string_view digits = *value;
+        std::string_view digits = text;
         int base = 10;
         if (digits.rfind("0x", 0) == 0 || digits.rfind("0X", 0) == 0)
         {
@@ -1493,15 +1494,43 @@ void NodeConfig::loadOpEip1559(boost::property_tree::ptree const& _genesisConfig
         if (ec != std::errc{} || ptr != digits.data() + digits.size())
         {
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "[op_eip1559]." + key + " is not a valid uint64: " + *value));
+                                      "[op_eip1559]." + key + " is not a valid uint64: " + text));
+        }
+        if (out > std::numeric_limits<uint32_t>::max())
+        {
+            // The Holocene extraData encodes denominator and elasticity as uint32
+            // (encodeOptimismExtraData's 4-byte big-endian spans): a larger value would
+            // silently truncate there, so the loader refuses it instead.
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment(
+                    "[op_eip1559]." + key + " exceeds the uint32 range: " + text));
         }
         return out;
     };
+    auto requireKey = [&](std::string const& key) -> uint64_t {
+        auto value = section->get_optional<std::string>(key);
+        if (!value || value->empty())
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment("[op_eip1559]." + key + " is required"));
+        }
+        return parseStrictUint64(key, *value);
+    };
     ledger::OpEip1559Params params{.elasticity = requireKey("elasticity"),
         .denominator = requireKey("denominator"),
-        // op-deployer's standard value; the pin records the EFFECTIVE triple, so an explicit
-        // 250 and an omitted key are the same declaration.
-        .denominatorCanyon = section->get_optional<uint64_t>("denominator_canyon").value_or(250)};
+        // Optional: op-deployer's standard value is the default, and the pin records the
+        // EFFECTIVE triple, so an explicit 250 and an omitted key are the same declaration.
+        // A PRESENT key parses strictly like the other two — get_optional<uint64_t> would
+        // silently truncate "0xfa" to 0, silently default "abc" or an overflowing value to
+        // 250, and silently accept "250abc" as 250.
+        .denominatorCanyon = [&]() -> uint64_t {
+            auto value = section->get_optional<std::string>("denominator_canyon");
+            if (!value)
+            {
+                return 250;
+            }
+            return parseStrictUint64("denominator_canyon", *value);
+        }()};
     if (params.elasticity == 0 || params.denominator == 0 || params.denominatorCanyon == 0)
     {
         // op-geth panics on a nil/zero denominator (params/config.go:1352-1355) and would

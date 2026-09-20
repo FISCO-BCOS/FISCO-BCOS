@@ -59,9 +59,16 @@ jobs:
               echo "fresh: $class @ ${pinned:0:9}"
             fi
           }
-          # Gather every distinct pin per consumer class from the workflow files.
-          t8n_pins=$(grep -rhoE '[0-9a-f]{40}' .github/workflows/workflow.yml \
-            .github/workflows/opstack-fork-nightly.yml | sort -u)
+          # Gather every distinct pin per consumer class, scoped to corpus-semantic
+          # lines only: the regen action reference and checkouts of the harness repo
+          # itself. A blanket 40-hex grep also collected the ethereum-optimism/specs
+          # ref and the op-geth oracle pin, which never track this blessed head —
+          # permanent false positives. (weekly.yml is scanned too: it pins the same
+          # corpus and used to escape this check.)
+          WF_T8N=".github/workflows/workflow.yml .github/workflows/opstack-fork-nightly.yml .github/workflows/opstack-fork-weekly.yml"
+          t8n_pins=$( { grep -hoE 'opstack-t8n-regen@[0-9a-f]{40}' $WF_T8N | sed 's/.*@//'; \
+                        grep -hA1 'repository: FISCO-BCOS/op-stack-e2e-tests' $WF_T8N \
+                          | grep -oE 'ref: [0-9a-f]{40}' | awk '{print $2}'; } | sort -u)
           c2_pin=$(grep -hoE 'ref: [0-9a-f]{40}' .github/workflows/c2-e2e.yml \
             | awk '{print $2}' | sort -u)
           # Each distinct t8n pin is checked against the blessed pipeline head.
@@ -82,6 +89,19 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           STALE_PINS: ${{ env.STALE_PINS }}
         run: |
+          set -euo pipefail
+          # De-duplicate: one open tracker at a time — re-arm the existing issue with
+          # the current state instead of opening a fresh one every Monday.
+          existing=$(gh issue list --state open --limit 50 \
+            --search '"harness pin stale" in:title' --json number,title \
+            --jq '.[] | select(.title == "harness pin stale: op-stack-e2e-tests blessed heads moved") | .number' \
+            | head -n1)
+          if [ -n "$existing" ]; then
+            echo "open issue #$existing already tracks stale pins — commenting, not duplicating"
+            gh issue comment "$existing" \
+              --body "Still stale ($(date -u +%F) run): \`STALE_PINS=$STALE_PINS\`"
+            exit 0
+          fi
           gh issue create \
             --title "harness pin stale: op-stack-e2e-tests blessed heads moved" \
             --body "The pinned op-stack-e2e-tests revisions no longer match their blessed heads.

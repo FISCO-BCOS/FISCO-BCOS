@@ -23,6 +23,7 @@
 #include "../protocol/ProtocolTypeDef.h"
 #include "Features.h"
 #include "LedgerTypeDef.h"
+#include "OpForkScheduleCodec.h"
 #include "SystemConfigs.h"
 #include <bcos-framework/engine/OpEip1559Params.h>
 #include <algorithm>
@@ -57,6 +58,21 @@ constexpr static uint64_t DEFAULT_GAS_LIMIT = 3000000000;
 constexpr static std::uint64_t DEFAULT_EPOCH_SEALER_NUM = 4;
 constexpr static std::uint64_t DEFAULT_EPOCH_BLOCK_NUM = 1000;
 constexpr static std::uint64_t DEFAULT_INTERNAL_NOTIFY_FLAG = 0;
+
+// OP-lane fork schedule, parsed from the [op_fork_timestamps] section of
+// config.genesis (executor_version >= OPSTACK_EXECUTOR_VERSION). OP forks
+// activate by L2 block TIMESTAMP IN SECONDS, exactly like op-node's
+// rollup.json jovian_time / karst_time (op-node/rollup/types.go:
+// IsJovian(ts) == Time != nil && ts >= *Time). 0 means "active from genesis";
+// std::numeric_limits<uint64_t>::max() encodes op-node's nil, i.e. "not
+// scheduled". Isthmus is the OP lane's baseline and therefore has no entry:
+// the engine's -38005 gate admits only Isthmus+ payloads. Lives here (not
+// GenesisConfig.h) so LedgerConfig can snapshot the resolved schedule.
+struct OpForkSchedule
+{
+    uint64_t m_jovianTime = std::numeric_limits<uint64_t>::max();
+    uint64_t m_karstTime = std::numeric_limits<uint64_t>::max();
+};
 
 class LedgerConfig
 {
@@ -168,6 +184,13 @@ public:
     {
         m_opEip1559Params = std::move(v);
     }
+
+    /// OP lane: the chain's resolved fork schedule (jovian/karst activation seconds),
+    /// persisted on-chain as the op_fork_schedule SYS_CONFIG row at genesis and assembled
+    /// into every LedgerConfig snapshot. The RPC estimate gas-cap gate keys EIP-7825 (a
+    /// Karst/Osaka+ rule) on it.
+    std::optional<OpForkSchedule> const& opForkSchedule() const { return m_opForkSchedule; }
+    void setOpForkSchedule(std::optional<OpForkSchedule> v) { m_opForkSchedule = std::move(v); }
     std::optional<uint64_t> blobGasUsed() const { return m_blobGasUsed; }
     void setBlobGasUsed(std::optional<uint64_t> v) { m_blobGasUsed = v; }
 
@@ -266,6 +289,10 @@ private:
     /// the RPC fee prediction so pre-Holocene blocks are priced with the chain's own
     /// parameters instead of the legacy preset.
     std::optional<bcos::engine::OpEip1559Params> m_opEip1559Params;
+    /// The OP lane's resolved fork schedule, from the op_fork_schedule SYS_CONFIG row
+    /// (written at genesis from either declaration channel). nullopt off the OP lane and
+    /// on OP chains initialized before the row existed.
+    std::optional<OpForkSchedule> m_opForkSchedule;
     std::optional<uint64_t> m_blobGasUsed;
     std::tuple<uint64_t, protocol::BlockNumber> m_epochSealerNum = {DEFAULT_EPOCH_SEALER_NUM, 0};
     std::tuple<uint64_t, protocol::BlockNumber> m_epochBlockNum = {DEFAULT_EPOCH_BLOCK_NUM, 0};
@@ -297,8 +324,10 @@ inline constexpr evmc_revision EVMC_REVISION_DEFAULT = EVMC_OSAKA;
 /// values are the MultiVersionScheduler slot indices and the on-chain decimal string.
 /// Add an enumerator ONLY in the release that actually wires that slot: the governance
 /// write bound (MAX_GOVERNANCE_EXECUTOR_VERSION) is derived from this list, so a
-/// "reserved for later" entry would let a transaction write a value the running binary
-/// refuses to boot on (validateOpModeGenesisOnly rejects anything above the ladder).
+/// "reserved for later" entry would let a transaction write a value whose non-zero
+/// activation block makes every restart throw in validateOpModeGenesisOnly
+/// (genesis-bound in OP mode) while the runtime setVersion fail-opens — the chain
+/// would keep producing but could never restart.
 enum class ExecutorLane : int
 {
     LegacyDispatcher = 0,  ///< v1 SchedulerManager dispatch path
@@ -321,9 +350,23 @@ inline constexpr int ETHEREUM_EXECUTOR_VERSION = static_cast<int>(ExecutorLane::
 
 /// The executor version that selects the OP-Stack OpSchedulerSeam (op composition root).
 /// Exactly this value enters OP mode (spec 2026-08-07-op-composition-root-design.md D1);
-/// it is genesis-only (validateOpModeGenesisOnly), and any higher value is not a defined
-/// lane — refused at boot and, from this release on, refused as a governance write.
+/// it is genesis-only (validateOpModeGenesisOnly). A higher value is not a defined lane:
+/// boot does NOT refuse it — setVersion saturates it onto the newest wired slot so the
+/// chain keeps producing — so from this release on it is refused as a governance write
+/// instead (the write's non-zero activation block is what would make the next start throw).
 inline constexpr int OPSTACK_EXECUTOR_VERSION = static_cast<int>(ExecutorLane::Opstack);
+
+/// The ONE OP-lane predicate every runtime gate must share. The comparison is >=, not ==:
+/// MultiVersionScheduler::setVersion saturates any value above the newest wired slot down
+/// to it, so a chain carrying a higher executor_version RUNS the OP executor — and every
+/// lane decision (RPC fee semantics, boot gates, OP-only validation, the genesis-only
+/// freeze) must agree with that, or the RPC layer and the executor price the same block
+/// under different rules. (From 3.18.0 on SystemConfigPrecompiled refuses a governance
+/// write above OPSTACK, so in practice only config.genesis can set such a value.)
+inline constexpr bool isOpLaneVersion(int executorVersion)
+{
+    return executorVersion >= OPSTACK_EXECUTOR_VERSION;
+}
 
 /// The highest executor_version a TRANSACTION may set: the newest defined lane, derived
 /// from the ladder above and never hand-copied — wiring a new lane moves the bound with
@@ -486,6 +529,29 @@ inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value
     return bcos::engine::OpEip1559Params{.elasticity = parseField(value.substr(0, comma1)),
         .denominator = parseField(value.substr(comma1 + 1, comma2 - comma1 - 1)),
         .denominatorCanyon = parseField(value.substr(comma2 + 1))};
+}
+
+/// Inverse of the genesis op_fork_schedule row write (Ledger::buildGenesisBlock): the row
+/// carries the RESOLVED canonical ladder; the snapshot consumers key on the jovian/karst
+/// activation seconds, so extract exactly those (an absent fork keeps the not-scheduled
+/// sentinel, matching the [op_fork_timestamps] shorthand shape). Fail-closed on a
+/// malformed row — parseOpForkSchedule throws — same policy as evmc_revision and
+/// op_eip1559_params.
+[[nodiscard]] inline OpForkSchedule opForkScheduleFromCanonical(std::string_view canonical)
+{
+    OpForkSchedule schedule;
+    for (const auto& record : parseOpForkSchedule(canonical))
+    {
+        if (record.forkName == "jovian")
+        {
+            schedule.m_jovianTime = record.timestamp;
+        }
+        else if (record.forkName == "karst")
+        {
+            schedule.m_karstTime = record.timestamp;
+        }
+    }
+    return schedule;
 }
 
 inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view value)

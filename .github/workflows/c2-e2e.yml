@@ -49,10 +49,12 @@ jobs:
           # PR #3's squash-merge head on the harness's default branch (a stable revision, not a
           # branch tip). It carries the C2 chain's own declarations in config.genesis:
           # [op_eip1559] 2/8/250 (matching intent.toml; requires this repo's chain EIP-1559
-          # parameter channel, 483031396) and [op_fork_schedule] canonical=0:jovian (the merged
-          # framework's boot resolution ignores the [op_fork_timestamps] shorthand — without the
-          # canonical the node boots as Isthmus and rejects Jovian attributes; found by the first
-          # full-stack run of this stack).
+          # parameter channel, 483031396) and [op_fork_schedule] canonical=0:jovian (the
+          # canonical declared directly rather than via the [op_fork_timestamps] shorthand —
+          # boot resolution now folds the shorthand into the canonical, and pinning the
+          # canonical keeps this harness independent of the fold rules; without any Jovian
+          # schedule the node boots as Isthmus and rejects Jovian attributes — found by the
+          # first full-stack run of this stack).
           ref: e7cded80ad98e9c85a1fecc475ce201d55f773ea
           path: .ci-op-e2e-tests
 

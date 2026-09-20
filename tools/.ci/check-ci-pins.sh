@@ -66,7 +66,9 @@ WF_NIGHTLY="$REPO_ROOT/.github/workflows/opstack-fork-nightly.yml"
 WF_WEEKLY="$REPO_ROOT/.github/workflows/opstack-fork-weekly.yml"
 DIVERGENCES="$REPO_ROOT/opstack-executor/tests/da-matrix/DIVERGENCES.md"
 
-# The audit's stated op-revm revision:
+# The audit's stated op-revm revision (the audit notes are local-only per .gitignore —
+# docs/2*-*.md, docs/plans/ — so EXPECTED_OP_REVM_REVISION below is the operative record;
+# the doc:line citations are provenance for whoever has the archive, not a tree path):
 #   docs/2026-09-12-opstack-fork-allforks-delta-audit.md:13  "op-revm ... @ 5f90f749ca"
 #   docs/plans/2026-09-12-plan-e-spike-notes.md:8            "5f90f749caea14398554afb75062f7111b1fc554"
 # The value is pinned here: when the doc is present in the tree it is cross-checked

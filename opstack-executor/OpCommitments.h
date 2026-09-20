@@ -10,6 +10,7 @@
 #include <opstack-executor/OpCommon.h>  // OpBlockSeal / OpExecuteBlockResult
 
 #include <bcos-framework/ledger/Account.h>  // bcos::ledger::account::toH256
+#include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <array>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
@@ -79,6 +80,35 @@ inline bcos::h2048 payloadBloomToH2048(const std::array<bcos::byte, 256>& bloom)
     bcos::h2048 out;
     std::memcpy(out.data(), bloom.data(), bloom.size());
     return out;
+}
+
+/// Project a block header's eight commitment fields into OpBlockCommitments — the single
+/// projection used by BOTH the engine-side import gate (OpEngineService) and the
+/// scheduler-side verify arm (OpScheduler). Keeping one projection guarantees the two
+/// paths can never drift apart on field selection or narrowing; a divergence would let the
+/// import gate and the verify arm disagree about the same header.
+inline OpBlockCommitments commitmentsOfHeader(const bcos::protocol::BlockHeader& h)
+{
+    auto bloom = h.logsBloom();
+    bcos::h2048 logsBloom(reinterpret_cast<const bcos::byte*>(bloom.data()), bloom.size());
+    std::optional<uint64_t> blobGasUsed;
+    if (auto bg = h.blobGasUsed())
+    {
+        // Bounds-checked narrowing: an out-of-range value fails closed with OpConsensusError
+        // instead of silently truncating modulo 2^64. Not wire-reachable
+        // (validateOpBlobGasUsed rejects it first); the check keeps the projection total.
+        blobGasUsed = detail::narrowU256ToU64(*bg, "commitmentsOfHeader blobGasUsed");
+    }
+    return OpBlockCommitments{
+        .receiptsRoot = h.receiptsRoot(),
+        .logsBloom = logsBloom,
+        .withdrawalsRoot = h.withdrawalsRoot().value_or(bcos::h256{}),
+        .stateRoot = h.stateRoot(),
+        .gasUsed = h.gasUsed(),
+        .txRoot = h.txsRoot(),
+        .blobGasUsed = blobGasUsed,
+        .requestsHash = h.requestsHash(),
+    };
 }
 
 /// Compare the executed block's commitments against the payload's announced commitments; returns
