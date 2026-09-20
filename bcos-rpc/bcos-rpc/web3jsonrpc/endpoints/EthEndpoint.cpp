@@ -1664,6 +1664,17 @@ EthEndpoint::getBlockNumberAndHeadByTag(std::string_view blockTag)
     auto [number, _] = bcos::rpc::getBlockNumberByTag(latest, blockTag,
         m_nodeService->safeBlockDepth(), m_nodeService->finalizedBlockDepth(), context.safe,
         context.finalized, context.engineLane);
+    // Record which branch answered safe/finalized: an operator diagnosing op-node "defaulting
+    // to genesis" or a -32000 after a co-restart needs to know whether the tracker was empty,
+    // the engine was absent, or the static-depth fallback fired.
+    if (c_fileLogLevel == TRACE)
+    {
+        WEB3_LOG(TRACE) << LOG_DESC("getBlockNumberAndHeadByTag resolved")
+                        << LOG_KV("tag", blockTag) << LOG_KV("engineLane", context.engineLane)
+                        << LOG_KV("forkchoiceSafeSet", context.safe.has_value())
+                        << LOG_KV("forkchoiceFinalizedSet", context.finalized.has_value())
+                        << LOG_KV("resolved", number) << LOG_KV("latest", latest);
+    }
     // The head a caller resolved against is the current chain tip, whatever the resolved height
     // is — stateRootMissingMessage compares the requested height against it to decide
     // "pruned" vs "missing".

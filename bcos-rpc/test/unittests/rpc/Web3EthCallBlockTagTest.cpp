@@ -181,14 +181,18 @@ public:
     }
 
     /// eth_getBlockByNumber(tag, false) → the parsed JSON-RPC response envelope.
-    static Json::Value requestBlockByNumber(Web3JsonRpcImpl::Ptr const& web3, std::string_view blockTag)
+    static Json::Value requestBlockByNumber(
+        Web3JsonRpcImpl::Ptr const& web3, std::string_view blockTag)
     {
-        auto payload = std::string(
-                           R"({"jsonrpc":"2.0","id":1,"method":"eth_getBlockByNumber","params":[)") +
-                       std::string(blockTag) + ",false]}";
+        auto payload =
+            std::string(
+                R"({"jsonrpc":"2.0","id":1,"method":"eth_getBlockByNumber","params":[)") +
+            std::string(blockTag) + ",false]}";
         std::promise<bcos::bytes> promise;
-        web3->onRPCRequest(
-            payload, [&promise](bcos::bytes resp, boost::beast::http::status) { promise.set_value(std::move(resp)); });
+        web3->onRPCRequest(payload,
+            [&promise](bcos::bytes resp, boost::beast::http::status) {
+                promise.set_value(std::move(resp));
+            });
         auto jsonBytes = promise.get_future().get();
         Json::Value value;
         Json::Reader reader;

@@ -303,5 +303,52 @@ BOOST_AUTO_TEST_CASE(MalformedBlockHashReturnsInvalidBlockHash)
         resp["error"]["message"].asString().find("Invalid block hash") != std::string::npos);
 }
 
+// A valid 66-char hash (op-node passes the block hash for output-root computation) resolves to
+// the same proof as the equivalent block number: the hash branch lands on the same header.
+BOOST_AUTO_TEST_CASE(HashFormReturnsSameProofAsNumber)
+{
+    // Capture the latest block hash BEFORE buildTrie — setStateRoot clears dataHash, so
+    // hash() would throw afterwards. The fixture's FakeLedger maps this hash to its number.
+    auto const latestHash = m_ledger->ledgerData().back()->blockHeader()->hash();
+
+    buildTrie();
+    wireReader();
+
+    auto respByHash = getProof(address.hexPrefixed(), {slotA.hexPrefixed()}, latestHash.hexPrefixed());
+    BOOST_REQUIRE(!respByHash.isMember("error"));
+    BOOST_REQUIRE(respByHash.isMember("result"));
+
+    auto respByNumber = getProof(address.hexPrefixed(), {slotA.hexPrefixed()}, "latest");
+    BOOST_REQUIRE(!respByNumber.isMember("error"));
+    BOOST_REQUIRE(respByNumber.isMember("result"));
+
+    // The two paths must produce identical account and slot proofs (same stateRoot).
+    BOOST_CHECK_EQUAL(respByHash["result"]["balance"].asString(),
+        respByNumber["result"]["balance"].asString());
+    BOOST_CHECK_EQUAL(respByHash["result"]["nonce"].asString(), respByNumber["result"]["nonce"].asString());
+    BOOST_CHECK_EQUAL(respByHash["result"]["storageHash"].asString(),
+        respByNumber["result"]["storageHash"].asString());
+    BOOST_REQUIRE(respByHash["result"]["storageProof"].isArray());
+    BOOST_REQUIRE(respByNumber["result"]["storageProof"].isArray());
+    BOOST_CHECK_EQUAL(respByHash["result"]["storageProof"][0U]["value"].asString(),
+        respByNumber["result"]["storageProof"][0U]["value"].asString());
+}
+
+// An unknown 66-char hash answers InvalidParams "Block not found" — the GetStorageError without
+// a chained STDError is a not-found, not a storage fault (which would surface as an internal
+// error instead).
+BOOST_AUTO_TEST_CASE(UnknownHashReturnsBlockNotFound)
+{
+    buildTrie();
+    wireReader();
+
+    // 66-char valid hex that maps to no block in the fake ledger.
+    std::string unknownHash = "0x" + std::string(64, '0');
+    auto resp = getProof(address.hexPrefixed(), {}, unknownHash);
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32602);  // InvalidParams
+    BOOST_CHECK(resp["error"]["message"].asString().find("Block not found") != std::string::npos);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
