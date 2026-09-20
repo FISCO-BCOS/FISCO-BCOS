@@ -1,5 +1,6 @@
 #pragma once
 #include "../storage/Entry.h"
+#include "bcos-framework/ledger/AccountTableName.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
 #include "bcos-utilities/ThreeWay4Apple.h"
@@ -57,13 +58,14 @@ public:
     // never reached a release; this PR is unmerged), so no committed key needs the
     // old rule and it is deleted outright rather than kept for compatibility.
     //
-    // Constants: the 20 is bcos::Address::SIZE. The "/s/" prefix is deliberately a
-    // literal: it is ledger::account::BINARY_TABLE_PREFIX
-    // (ledger/AccountTableName.h), but that header is included from storage/Entry.h,
-    // and this header stays literal-only like the "/apps/" mirror it replaced.
+    // Constants: the 20 is bcos::Address::SIZE; the "/s/" prefix is
+    // ledger::account::BINARY_TABLE_PREFIX — that header is dependency-free
+    // (ledger/AccountTableName.h), so this header names the shared constant directly
+    // instead of mirroring the literal (Classify.h, which keeps no bcos-framework
+    // dependency, is the one remaining mirror).
     static size_t splitPosition(std::string_view tableAndKey) noexcept
     {
-        constexpr std::string_view binaryTablePrefix = "/s/";  // account::BINARY_TABLE_PREFIX
+        constexpr std::string_view binaryTablePrefix = ledger::account::BINARY_TABLE_PREFIX;
         constexpr size_t rawAddressTableSize = binaryTablePrefix.size() + bcos::Address::SIZE;
         if (tableAndKey.size() > rawAddressTableSize &&
             tableAndKey.starts_with(binaryTablePrefix) && tableAndKey[rawAddressTableSize] == ':')

@@ -26,7 +26,6 @@
 #include <rocksdb/snapshot.h>
 #include <rocksdb/write_batch.h>
 #include <boost/throw_exception.hpp>
-#include <algorithm>
 #include <chrono>
 
 namespace
@@ -106,11 +105,11 @@ bcos::initializer::AccountTableMigrationStats bcos::initializer::migrateAccountT
     std::string targetValue;  // reused conflict-probe buffer
 
     // Progress reporting: a migration over an archive-scale DB can run for a long time at
-    // boot with the node otherwise silent, so report scan progress periodically. Time-
-    // throttled (not per-batch): batch flushes only happen on renames, so a DB whose
-    // account rows are a minority of keys would otherwise log nothing for long stretches.
-    // estimatedTotal is RocksDB's rocksdb.estimate-num-keys guess — the percentage is an
-    // approximation (capped at 100) and may move non-linearly.
+    // boot with the node otherwise silent, so report progress periodically. Time-throttled
+    // (not per-batch): batch flushes only happen on renames, so a DB whose account rows are
+    // a minority of keys would otherwise log nothing for long stretches. The scan below is
+    // bounded to the two migratable ranges, so there is no honest total to divide by —
+    // report scanned keys, throughput and the renamed rows instead of a fake percentage.
     auto const startTime = std::chrono::steady_clock::now();
     auto lastProgressLog = startTime;
     auto logProgress = [&]() {
@@ -122,15 +121,11 @@ bcos::initializer::AccountTableMigrationStats bcos::initializer::migrateAccountT
         lastProgressLog = now;
         auto const elapsed =
             std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count();
-        uint64_t const percent =
-            estimatedTotal > 0 ? std::min<uint64_t>(100, stats.scanned * 100 / estimatedTotal) :
-                                 0;
         BCOS_LOG(INFO) << LOG_BADGE("AccountTableMigration")
                        << LOG_DESC("migration in progress")
                        << LOG_KV("scanned", stats.scanned)
-                       << LOG_KV("estimatedTotal", estimatedTotal)
-                       << LOG_KV("progress~", std::to_string(percent) + "%")
                        << LOG_KV("elapsedSec", elapsed)
+                       << LOG_KV("keysPerSec", elapsed > 0 ? stats.scanned / elapsed : 0)
                        << LOG_KV("accountRows", stats.migratedAccountRows)
                        << LOG_KV("registrations", stats.migratedRegistrations)
                        << LOG_KV("deduped", stats.dedupedRows);
@@ -203,36 +198,42 @@ bcos::initializer::AccountTableMigrationStats bcos::initializer::migrateAccountT
     constexpr std::string_view registrationPrefix = "s_tables:/apps/";
     constexpr size_t hexTableNameSize =
         ledger::account::APPS_PREFIX.size() + ledger::account::HEX_ADDRESS_SIZE;
-    // Key-ordering note: the binary rename targets can never feed back into this scan.
-    // "/s/<20 bytes>:<field>" row targets start with '/' (0x2f) and sort before every
-    // "s_tables:..." registration source (0x73), and even where families interleave the
-    // iterator is pinned to the pre-migration snapshot, so freshly written targets are
-    // invisible to it regardless of where they sort.
-    for (it->SeekToFirst(); it->Valid(); it->Next())
-    {
-        auto const key = it->key();
-        ++stats.scanned;
-        // Cheap pre-check: the clock read is throttled to 1/1024 keys, the log itself to
-        // one line per 5s.
-        if ((stats.scanned & 0x3FF) == 0)
+    // Exclusive upper bounds: increment the trailing '/' (0x2f → 0x30 '0').
+    auto const prefixSuccessor = [](std::string_view prefix) {
+        std::string successor(prefix);
+        ++successor.back();
+        return successor;
+    };
+    std::string const accountRowsUpper = prefixSuccessor(ledger::account::APPS_PREFIX);
+    std::string const registrationsUpper = prefixSuccessor(registrationPrefix);
+    // The migratable rows live in exactly two contiguous prefix ranges — the account rows
+    // under "/apps/" and their registrations under "s_tables:/apps/" ('/' is 0x2f, so '0'
+    // is the prefix successor and "<prefix>0" the exclusive upper bound). Nothing else in
+    // the DB — the /mpt/ trie nodes that dominate the key count on an MPT chain, /sys/
+    // rows, code/abi blobs — is walked. The binary rename targets can never feed back into
+    // either scan: "/s/<20 bytes>:<field>" rows sort after "/apps0", the "s_tables:/s/"
+    // registrations after "s_tables:/apps0", and the iterator is pinned to the
+    // pre-migration snapshot anyway, so freshly written targets are invisible regardless.
+    auto scanRange = [&](std::string_view lower, std::string_view upper, auto&& onKey) {
+        auto const upperSlice = ::rocksdb::Slice(upper.data(), upper.size());
+        for (it->Seek(::rocksdb::Slice(lower.data(), lower.size())); it->Valid(); it->Next())
         {
-            logProgress();
-        }
-        if (key.size() > registrationPrefix.size() &&
-            std::string_view(key.data(), registrationPrefix.size()) == registrationPrefix)
-        {
-            // Registration row: strip "s_tables:" and probe the registered table name.
-            std::string_view const table(key.data() + ledger::SYS_TABLES.size() + 1,
-                key.size() - ledger::SYS_TABLES.size() - 1);
-            if (ledger::account::isHexAccountTableName(table))
+            auto const key = it->key();
+            if (key.compare(upperSlice) >= 0)
             {
-                queueRename(key,
-                    std::string(ledger::SYS_TABLES) + ":" +
-                        ledger::account::hexToBinaryAccountTableName(table),
-                    table, true);
+                break;
             }
-            continue;
+            ++stats.scanned;
+            // Cheap pre-check: the clock read is throttled to 1/1024 keys, the log itself
+            // to one line per 5s.
+            if ((stats.scanned & 0x3FF) == 0)
+            {
+                logProgress();
+            }
+            onKey(key);
         }
+    };
+    scanRange(std::string(ledger::account::APPS_PREFIX), accountRowsUpper, [&](::rocksdb::Slice const& key) {
         // Account-table row: "/apps/<40hex>:<field>" — the ':' separator sits exactly after
         // the 46-char table name.
         if (key.size() > hexTableNameSize + 1 && key[hexTableNameSize] == ':' &&
@@ -244,7 +245,19 @@ bcos::initializer::AccountTableMigrationStats bcos::initializer::migrateAccountT
             binaryKey.append(key.data() + hexTableNameSize, key.size() - hexTableNameSize);
             queueRename(key, binaryKey, hexTable, false);
         }
-    }
+    });
+    scanRange(registrationPrefix, registrationsUpper, [&](::rocksdb::Slice const& key) {
+        // Registration row: strip "s_tables:" and probe the registered table name.
+        std::string_view const table(
+            key.data() + ledger::SYS_TABLES.size() + 1, key.size() - ledger::SYS_TABLES.size() - 1);
+        if (ledger::account::isHexAccountTableName(table))
+        {
+            queueRename(key,
+                std::string(ledger::SYS_TABLES) + ":" +
+                    ledger::account::hexToBinaryAccountTableName(table),
+                table, true);
+        }
+    });
     if (!it->status().ok())
     {
         throwMigrationFailure("scan iterator failed: " + it->status().ToString());

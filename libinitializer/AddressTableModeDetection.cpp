@@ -55,6 +55,47 @@ bool bcos::initializer::hasAnyTableRegistration(::rocksdb::DB& stateDB)
                               ::rocksdb::Slice(prefix.data(), prefix.size()));
 }
 
+bool bcos::initializer::hasBinaryTableRegistration(::rocksdb::DB& stateDB)
+{
+    // Binary registrations are "s_tables:/s/<20 raw bytes>"; "/s/" sorts right after
+    // "/apps/", so one Seek lands on the first candidate. Verify the shape: a "/s/" name
+    // of the wrong length is not a binary account table.
+    constexpr std::string_view prefix = "s_tables:/s/";
+    std::unique_ptr<::rocksdb::Iterator> it(stateDB.NewIterator(::rocksdb::ReadOptions{}));
+    it->Seek(::rocksdb::Slice(prefix.data(), prefix.size()));
+    if (!it->Valid() ||
+        !it->key().starts_with(::rocksdb::Slice(prefix.data(), prefix.size())))
+    {
+        return false;
+    }
+    auto const key = it->key();
+    std::string_view const table(key.data() + ledger::SYS_TABLES.size() + 1,
+        key.size() - ledger::SYS_TABLES.size() - 1);
+    return ledger::account::isBinaryAccountTableName(table);
+}
+
+void bcos::initializer::refuseBinaryDataWithoutFlag(
+    ::rocksdb::DB& stateDB, std::optional<std::string> const& layoutFlag)
+{
+    if (layoutFlag.has_value() || !hasBinaryTableRegistration(stateDB))
+    {
+        return;
+    }
+    // The flag is the only LEGAL witness of a binary layout, and it is absent — but
+    // binary registrations exist: the flag was lost (a partial backup/restore that
+    // dropped s_node_local:*). Refuse; re-running the migration is idempotent and
+    // rewrites the flag.
+    BOOST_THROW_EXCEPTION(
+        bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+            "the state DB holds binary-layout account tables (s_tables:/s/ registrations) "
+            "but the account-table layout flag (" +
+            std::string(ACCOUNT_TABLE_LAYOUT_KEY) +
+            ") is absent — the flag was lost, e.g. by a backup/restore that dropped the "
+            "s_node_local keys. Refusing to boot Hex over binary data: set [storage] "
+            "migrate_account_tables_to_binary=true and restart (the migration is "
+            "idempotent and rewrites the flag), or restore a consistent snapshot"));
+}
+
 bool bcos::initializer::isHexOnlyExecutorLane(
     const ledger::Features& features, int executorVersion)
 {

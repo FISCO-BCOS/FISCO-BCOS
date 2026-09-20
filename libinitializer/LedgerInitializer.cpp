@@ -4,10 +4,12 @@
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-ledger/LedgerMethods.h>
 #include <bcos-task/Wait.h>
+#include <bcos-tool/Exceptions.h>
 #include <bcos-transaction-scheduler/BaselineSchedulerMPTHelpers.h>
 #include <bcos-utilities/BoostLog.h>
 #include <legacy/bcos-ledger/LedgerImpl.h>
 #include <legacy/bcos-storage/StorageWrapperImpl.h>
+#include <boost/throw_exception.hpp>
 #include <future>
 #include <tuple>
 
@@ -66,15 +68,18 @@ std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::buil
         // (ACCOUNT_TABLE_LAYOUT_KEY — AddressTableModeDetection.h): absent = a pre-flag
         // hex chain or a brand-new DB, "migrating" = an unfinished migration, "bin" = a
         // binary-layout DB. Reading it is one point Get — no registration scan on the
-        // steady-state boot path. With the migration switch on, an unfinished migration is
-        // resumed here (idempotent) and completes as "bin"; with the switch off,
-        // resolveNodeAddressTableMode refuses to start with the recovery instructions.
-        // Hex-only lanes are refused inside migrateAccountTablesToBinary.
+        // steady-state boot path. The flag decides first: "bin" publishes Binary and the
+        // migration switch is ignored; only WITHOUT the flag does the switch get a say —
+        // it resumes an unfinished migration ("migrating", idempotent) or runs the
+        // one-shot rewrite. With the switch off, resolveNodeAddressTableMode refuses to
+        // start on "migrating", with the recovery instructions. Hex-only lanes are
+        // refused inside migrateAccountTablesToBinary.
         auto& stateDB = accountTableBoot->stateDB.get();
         auto layoutFlag = readAccountTableLayoutFlag(stateDB);
-        if (accountTableBoot->migrateToBinary)
+        if (accountTableBoot->migrateToBinary &&
+            (!layoutFlag.has_value() || *layoutFlag != ACCOUNT_TABLE_LAYOUT_BINARY))
         {
-            if (layoutFlag.has_value() && *layoutFlag == ACCOUNT_TABLE_LAYOUT_MIGRATING)
+            if (layoutFlag.has_value())
             {
                 BCOS_LOG(WARNING)
                     << LOG_BADGE("LedgerInitializer")
@@ -93,6 +98,10 @@ std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::buil
         }
 
         bool const chainHasState = hasAnyTableRegistration(stateDB);
+        // Cross-check the flag-absent Hex verdict with one bounded probe: a binary-layout
+        // DB whose flag was lost must refuse to boot, not publish Hex over data it cannot
+        // read (no-op when the flag is present).
+        refuseBinaryDataWithoutFlag(stateDB, layoutFlag);
         auto const mode = resolveNodeAddressTableMode(layoutFlag, hexOnlyLane, chainHasState);
         if (mode == ledger::account::AddressTableMode::Binary && !layoutFlag.has_value())
         {

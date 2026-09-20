@@ -4,6 +4,8 @@
 #include <atomic>
 #include <string>
 #include <string_view>
+#include <boost/algorithm/hex.hpp>
+#include <iterator>
 
 /// Account table names have two physical encodings of the same logical table:
 ///   hex:    "/apps/" + 40 lowercase hex chars of the 20-byte address (the legacy layout)
@@ -43,11 +45,12 @@
 /// AccountTableMigration.h.
 ///
 /// This header is deliberately dependency-free (no ledger/LedgerTypeDef.h): the hex prefix
-/// is a literal mirror of ledger::SYS_DIRECTORY::USER_APPS, the same arrangement StateKey.h
-/// documents — LedgerTypeDef.h pulls in StateKey.h/Storage.h, and this header is included
-/// from storage/Entry.cpp, so naming the constant here would drag the world into every
-/// Entry translation unit for no benefit. "/s/" has no LedgerTypeDef counterpart at all: it
-/// is a reserved namespace owned by this header alone.
+/// is a literal mirror of ledger::SYS_DIRECTORY::USER_APPS because LedgerTypeDef.h pulls in
+/// StateKey.h/Storage.h, and this header must stay includable from leaf contexts that avoid
+/// that weight (transaction-executor/StateKey.h references BINARY_TABLE_PREFIX from here;
+/// bcos-ledger's Classify.h keeps no bcos-framework dependency at all and therefore keeps
+/// its own literal mirror). "/s/" has no LedgerTypeDef counterpart at all: it is a reserved
+/// namespace owned by this header alone.
 namespace bcos::ledger::account
 {
 inline constexpr std::string_view APPS_PREFIX = "/apps/";  // ledger::SYS_DIRECTORY::USER_APPS
@@ -77,10 +80,10 @@ inline bool isBinaryAccountTableName(std::string_view table) noexcept
            table.starts_with(BINARY_TABLE_PREFIX);
 }
 
-constexpr char HEX_DIGITS[] = "0123456789abcdef";
-
 /// binary "/s/<20 bytes>" → hex "/apps/<40 lowercase hex>". Returns an empty string
 /// for input that is not a binary account table name (caller error; see the is* probes).
+/// boost::algorithm::hex_lower/unhex are header-only — no include cycle, so the codec is
+/// shared with every other hex user (EVMAccount.h) instead of hand-rolled here.
 inline std::string binaryToHexAccountTableName(std::string_view table)
 {
     if (!isBinaryAccountTableName(table))
@@ -90,12 +93,8 @@ inline std::string binaryToHexAccountTableName(std::string_view table)
     std::string result;
     result.reserve(APPS_PREFIX.size() + HEX_ADDRESS_SIZE);
     result.append(APPS_PREFIX);
-    for (size_t i = BINARY_TABLE_PREFIX.size(); i < table.size(); ++i)
-    {
-        const auto byte = static_cast<unsigned char>(table[i]);
-        result.push_back(HEX_DIGITS[byte >> 4]);
-        result.push_back(HEX_DIGITS[byte & 0x0f]);
-    }
+    boost::algorithm::hex_lower(
+        table.begin() + BINARY_TABLE_PREFIX.size(), table.end(), std::back_inserter(result));
     return result;
 }
 
@@ -107,16 +106,12 @@ inline std::string hexToBinaryAccountTableName(std::string_view table)
     {
         return {};
     }
-    auto nibble = [](char c) -> char {
-        return c <= '9' ? static_cast<char>(c - '0') : static_cast<char>(c - 'a' + 10);
-    };
     std::string result;
     result.reserve(BINARY_TABLE_PREFIX.size() + ADDRESS_SIZE);
     result.append(BINARY_TABLE_PREFIX);
-    for (size_t i = APPS_PREFIX.size(); i < table.size(); i += 2)
-    {
-        result.push_back(static_cast<char>((nibble(table[i]) << 4) | nibble(table[i + 1])));
-    }
+    // isHexAccountTableName validated lowercase hex of even length, so unhex cannot throw.
+    boost::algorithm::unhex(
+        table.begin() + APPS_PREFIX.size(), table.end(), std::back_inserter(result));
     return result;
 }
 

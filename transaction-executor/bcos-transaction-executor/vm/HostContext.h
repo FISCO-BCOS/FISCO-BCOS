@@ -777,10 +777,13 @@ private:
             // This is not gated on bugfix_auth_check: the precompiled's hex lookup is
             // unconditional, so the write side must agree with it in every feature
             // configuration — on Hex nodes the branch is never taken and nothing changes.
+            // Derive through the shared rule in Hex mode (never a local prefix + hex
+            // concat): accountTableName owns the routing, including the /sys/ special case
+            // for the c_systemTxsAddress members, so this call site cannot drift from it.
             if (ledger::account::nodeAddressTableMode() != ledger::account::AddressTableMode::Hex)
             {
-                authTablePath =
-                    std::string(executor::USER_APPS_PREFIX) + address2HexString(ref.code_address);
+                authTablePath = ledger::account::accountTableName(
+                    ref.code_address, ledger::account::AddressTableMode::Hex);
             }
             else
             {

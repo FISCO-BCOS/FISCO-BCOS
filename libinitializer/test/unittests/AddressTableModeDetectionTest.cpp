@@ -33,6 +33,13 @@ namespace
 {
 constexpr std::string_view kHexTable = "/apps/4200000000000000000000000000000000001234";
 
+std::string binaryTableName()
+{
+    std::string name("/s/");
+    name.append(std::string(20, '\x42'));
+    return name;
+}
+
 struct TempRocksDB
 {
     TempRocksDB() : dir(std::filesystem::temp_directory_path() / "addr_mode_detect_test")
@@ -144,6 +151,44 @@ BOOST_AUTO_TEST_CASE(HexOnlyLaneForcing)
         resolveNodeAddressTableMode(kBin, true, true), bcos::tool::InvalidConfig);
     BOOST_CHECK_THROW(
         resolveNodeAddressTableMode(kMigrating, true, true), bcos::tool::InvalidConfig);
+}
+
+BOOST_AUTO_TEST_CASE(RefuseBinaryDataWithoutFlag)
+{
+    const std::optional<std::string> kAbsent{std::nullopt};
+    const std::optional<std::string> kBin{std::string(ACCOUNT_TABLE_LAYOUT_BINARY)};
+
+    // Binary registrations but no flag: the flag was lost (partial backup/restore) —
+    // refuse to boot, never publish Hex over binary data.
+    {
+        TempRocksDB fixture;
+        fixture.putRegistration(std::string(kHexTable));
+        fixture.putRegistration(binaryTableName());
+        BOOST_CHECK(hasBinaryTableRegistration(*fixture.db));
+        BOOST_CHECK_THROW(
+            refuseBinaryDataWithoutFlag(*fixture.db, kAbsent), bcos::tool::InvalidConfig);
+    }
+    // Flag present (bin): the legal binary layout — no refusal, no probe needed.
+    {
+        TempRocksDB fixture;
+        fixture.putRegistration(binaryTableName());
+        BOOST_CHECK_NO_THROW(refuseBinaryDataWithoutFlag(*fixture.db, kBin));
+    }
+    // Hex-only chain, no flag: the pre-3.18 steady state — no refusal. A "/s/" name of
+    // the wrong length is not a binary account table and must not trip the probe.
+    {
+        TempRocksDB fixture;
+        fixture.putRegistration(std::string(kHexTable));
+        fixture.putRegistration("/s/" + std::string(19, 'b'));
+        BOOST_CHECK(!hasBinaryTableRegistration(*fixture.db));
+        BOOST_CHECK_NO_THROW(refuseBinaryDataWithoutFlag(*fixture.db, kAbsent));
+    }
+    // Brand-new DB: nothing at all.
+    {
+        TempRocksDB fixture;
+        BOOST_CHECK(!hasBinaryTableRegistration(*fixture.db));
+        BOOST_CHECK_NO_THROW(refuseBinaryDataWithoutFlag(*fixture.db, kAbsent));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(LaneClassification)

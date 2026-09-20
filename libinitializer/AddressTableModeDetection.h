@@ -50,6 +50,22 @@ void writeAccountTableLayoutFlag(::rocksdb::DB& stateDB, std::string_view value)
 /// and cannot count as chain state.
 bool hasAnyTableRegistration(::rocksdb::DB& stateDB);
 
+/// Does this DB hold binary-layout account tables (an "s_tables:/s/<20 bytes>"
+/// registration)? A single bounded Seek — the cross-check on the flag-absent path: the
+/// flag is the only LEGAL witness of a binary layout, but it is one key, and anything
+/// that copies the /s/ rows without s_node_local:* (a partial backup/restore) would
+/// otherwise boot Hex silently over binary data. Flag present → never called.
+bool hasBinaryTableRegistration(::rocksdb::DB& stateDB);
+
+/// Refuse to boot when the layout flag is absent but the DB holds binary-layout
+/// registrations (the flag was lost, e.g. by a backup/restore that dropped the
+/// s_node_local keys): booting Hex would read every migrated account as absent and fork
+/// the node's roots from the chain. No-op when the flag is present or no binary
+/// registration exists. Costs one bounded Seek, only on the flag-absent boot path.
+/// @throws bcos::tool::InvalidConfig with the resume instructions.
+void refuseBinaryDataWithoutFlag(
+    ::rocksdb::DB& stateDB, std::optional<std::string> const& layoutFlag);
+
 /// The executor lanes whose account-table writes are hex-only: the OP lane
 /// (feature_l2_ethereum_compat / executor_version >= OPSTACK_EXECUTOR_VERSION — the
 /// Storage2State bridge derives /apps/<40-hex> names itself), the Eth engine lane
@@ -73,12 +89,15 @@ bool isHexOnlyExecutorLane(const ledger::Features& features, int executorVersion
 ///     absent;
 ///   - an unknown value → throw (forward compatibility: a state written by a newer
 ///     binary must not be guessed at);
-///   - absent: an existing chain (chainHasState) is Hex — it predates the mechanism; a
-///     brand-new DB is born Binary (the normalized Entry::hash folds binary names back to
-///     hex, so the genesis state root is byte-identical either way — no fork risk from
-///     the default). The caller persists "bin" BEFORE building genesis, so binary tables
-///     never exist without the flag: a crash in between would otherwise read as a
-///     pre-flag hex chain and boot Hex over a binary genesis.
+///   - absent: an existing chain (chainHasState) is Hex — it predates the mechanism. The
+///     caller cross-checks this verdict with one bounded hasBinaryTableRegistration()
+///     probe first: a binary-layout DB whose flag was lost (a partial backup/restore)
+///     must refuse to boot, not publish Hex over data it cannot read. A brand-new DB is
+///     born Binary (the normalized Entry::hash folds binary names back to hex, so the
+///     genesis state root is byte-identical either way — no fork risk from the default).
+///     The caller persists "bin" BEFORE building genesis, so binary tables never exist
+///     without the flag: a crash in between would otherwise read as a pre-flag hex chain
+///     and boot Hex over a binary genesis.
 ///
 /// @throws bcos::tool::InvalidConfig on the combinations listed above.
 ledger::account::AddressTableMode resolveNodeAddressTableMode(

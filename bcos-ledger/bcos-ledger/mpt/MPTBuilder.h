@@ -435,7 +435,8 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
 ///                        one layout (encoding changes go through the boot-time migration, not a
 ///                        runtime fallback).
 ///                        The delta SCAN needs no mode — parseAccountTable accepts both table
-///                        layouts by length. No default on purpose (MPTAccount.h's constructor
+///                        layouts, told apart by prefix ("/apps/" hex vs the reserved "/s/"
+///                        namespace). No default on purpose (MPTAccount.h's constructor
 ///                        rule): a guessed mode makes the first-touch back-fill silently miss on
 ///                        a binary-layout node.
 /// @param trackRefCounts  false leaves the returned delta's refCountDeltas EMPTY (the per-hash

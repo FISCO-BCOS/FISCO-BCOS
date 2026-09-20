@@ -19,8 +19,7 @@
  *        layout (a node mid-migration between the hex and binary encodings) must fold to
  *        the same root.
  *        Entry::hash normalizes binary account table names (and binary s_tables keys)
- *        to the canonical hex form, and EVMAccount's write-time dedup keeps at most one
- *        physical copy of each logical row — this test pins the first half end to end.
+ *        to the canonical hex form — this test pins that normalization end to end.
  */
 
 #include "bcos-framework/ledger/AccountTableName.h"
