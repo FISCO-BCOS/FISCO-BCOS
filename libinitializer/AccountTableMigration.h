@@ -37,7 +37,7 @@ struct AccountTableMigrationStats
     uint64_t migratedRegistrations = 0;  ///< s_tables:/apps/<40hex> rows renamed to binary
     uint64_t dedupedRows = 0;  ///< hex sources dropped because the binary twin already held
                                ///< the same value (interrupted previous run)
-    bool alreadyMigrated = false;  ///< marker file present: no scan happened at all
+    bool alreadyMigrated = false;  ///< layout flag already "bin": no scan happened at all
 };
 
 /// Rename every hex-layout account-table row in the state DB to its binary-layout twin:
@@ -49,30 +49,30 @@ struct AccountTableMigrationStats
 /// contract tables, and any "/apps/" table whose name is not exactly 40 hex chars, e.g. a
 /// 20-char BFS table) is left untouched.
 ///
-/// Idempotent and crash-safe, tracked by a two-marker state machine in the state-DB dir:
-///   1. .binary_account_tables.in_progress is written (fsync'd) BEFORE the first WriteBatch
-///      is flushed — the registration scan cannot witness an interruption in the
-///      account-row phase (all /apps/ rows sort before the first s_tables:/apps/
-///      registration), so this file is the only durable record of a started-but-unfinished
-///      migration;
-///   2. after the final SYNCED batch, .binary_account_tables is written (fsync'd) and only
-///      then the in-progress marker is deleted — a crash at any point leaves at least one
-///      marker telling the truth, and both-files-present means COMPLETED (the done marker
-///      lands strictly after the final synced batch; only the delete can be lost).
+/// Idempotent and crash-safe, tracked by the ACCOUNT_TABLE_LAYOUT_KEY flag inside the
+/// state DB itself (AddressTableModeDetection.h) — a RocksDB checkpoint/backup therefore
+/// carries the state machine together with the data:
+///   1. "migrating" is written (synced) BEFORE the first WriteBatch is flushed — the
+///      registration scan cannot witness an interruption in the account-row phase (all
+///      /apps/ rows sort before the first s_tables:/apps/ registration), so this flag is
+///      the only durable record of a started-but-unfinished migration;
+///   2. "bin" is written INSIDE the final SYNCED batch — atomically with the last renames:
+///      a durable "bin" implies every rename is durable. A crash at any earlier point
+///      leaves "migrating", which the next boot resolves explicitly: resume the migration
+///      when the switch stays on (the twin-dedup makes the resume idempotent), refuse to
+///      start otherwise — on every executor lane. There is no runtime mixed mode, and
+///      silently publishing Hex over a half-migrated DB would read every migrated account
+///      as absent.
 /// A binary target already holding the SAME value means an interrupted previous run — the
 /// hex source is deleted and the scan continues; a DIFFERENT value is a data conflict and
-/// aborts the boot (bcos::tool::InvalidConfig). A crash mid-migration leaves the
-/// in-progress marker, which the next boot resolves explicitly: resume the migration when
-/// the switch stays on (the twin-dedup makes the resume idempotent), refuse to start
-/// otherwise — on every executor lane. There is no runtime mixed mode, and silently
-/// publishing Hex over a half-migrated DB would read every migrated account as absent.
+/// aborts the boot (bcos::tool::InvalidConfig).
 ///
 /// @param hexOnlyLane the chain's executor lane is hex-only (OP / Eth engine / legacy v2
 ///        executor — isHexOnlyExecutorLane): migration is refused loudly, those executors
 ///        name account tables /apps/<40-hex> themselves.
 ///
 /// @throws bcos::tool::InvalidConfig on a hex-only lane, a value conflict, or any RocksDB
-///         / filesystem failure.
+///         failure.
 AccountTableMigrationStats migrateAccountTablesToBinary(
-    ::rocksdb::DB& stateDB, std::string_view storageRootPath, bool hexOnlyLane);
+    ::rocksdb::DB& stateDB, bool hexOnlyLane);
 }  // namespace bcos::initializer

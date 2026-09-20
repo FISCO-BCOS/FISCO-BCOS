@@ -62,55 +62,51 @@ std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::buil
         }
         bool const hexOnlyLane = isHexOnlyExecutorLane(laneFeatures, onChain.version);
 
-        // Detect first, then handle the two migration shapes:
-        //   - an UNFINISHED migration (the .binary_account_tables.in_progress marker
-        //     without the done marker, or — hand-mixed backup / pre-marker builds — a
-        //     MIXED layout of hex AND binary registrations). There is no runtime mixed
-        //     mode: with the migration switch on, resume it here (idempotent) and
-        //     continue as Binary; with the switch off, refuse to start
-        //     (resolveNodeAddressTableMode throws the refusal below, with the recovery
-        //     instructions).
-        //   - otherwise the switch requests the one-shot hex→binary rewrite.
-        // Either way the detection must be re-run afterwards so the published mode
-        // reflects the post-migration state (a pure binary layout with the done marker).
+        // The layout state machine is one key inside the state DB
+        // (ACCOUNT_TABLE_LAYOUT_KEY — AddressTableModeDetection.h): absent = a pre-flag
+        // hex chain or a brand-new DB, "migrating" = an unfinished migration, "bin" = a
+        // binary-layout DB. Reading it is one point Get — no registration scan on the
+        // steady-state boot path. With the migration switch on, an unfinished migration is
+        // resumed here (idempotent) and completes as "bin"; with the switch off,
+        // resolveNodeAddressTableMode refuses to start with the recovery instructions.
         // Hex-only lanes are refused inside migrateAccountTablesToBinary.
-        auto layout = detectAccountTableLayout(
-            accountTableBoot->stateDB, accountTableBoot->storageRootPath);
-        if (accountTableBoot->migrateToBinary && !layout.markerFile &&
-            (layout.inProgressMarker || (layout.sawHexTables && layout.sawBinaryTables)))
-        {
-            BCOS_LOG(WARNING)
-                << LOG_BADGE("LedgerInitializer")
-                << LOG_DESC(
-                       "unfinished hex->binary account-table migration detected "
-                       "(in-progress marker or mixed s_tables:/apps/ and s_tables:/s/ "
-                       "registrations); resuming it now")
-                << LOG_KV("marker", binaryAccountTablesInProgressMarkerPath(
-                                        accountTableBoot->storageRootPath));
-        }
+        auto& stateDB = accountTableBoot->stateDB.get();
+        auto layoutFlag = readAccountTableLayoutFlag(stateDB);
         if (accountTableBoot->migrateToBinary)
         {
-            auto const stats = migrateAccountTablesToBinary(
-                accountTableBoot->stateDB, accountTableBoot->storageRootPath, hexOnlyLane);
+            if (layoutFlag.has_value() && *layoutFlag == ACCOUNT_TABLE_LAYOUT_MIGRATING)
+            {
+                BCOS_LOG(WARNING)
+                    << LOG_BADGE("LedgerInitializer")
+                    << LOG_DESC("unfinished hex->binary account-table migration detected "
+                                "(layout flag \"migrating\"); resuming it now")
+                    << LOG_KV("key", ACCOUNT_TABLE_LAYOUT_KEY);
+            }
+            auto const stats = migrateAccountTablesToBinary(stateDB, hexOnlyLane);
             BCOS_LOG(INFO) << LOG_BADGE("LedgerInitializer")
                            << LOG_DESC("account-table migration finished")
                            << LOG_KV("alreadyMigrated", stats.alreadyMigrated)
                            << LOG_KV("accountRows", stats.migratedAccountRows)
                            << LOG_KV("registrations", stats.migratedRegistrations)
                            << LOG_KV("deduped", stats.dedupedRows);
-            layout = detectAccountTableLayout(
-                accountTableBoot->stateDB, accountTableBoot->storageRootPath);
+            layoutFlag = readAccountTableLayoutFlag(stateDB);
         }
 
-        auto const mode = resolveNodeAddressTableMode(layout, hexOnlyLane);
+        bool const chainHasState = hasAnyTableRegistration(stateDB);
+        auto const mode = resolveNodeAddressTableMode(layoutFlag, hexOnlyLane, chainHasState);
+        if (mode == ledger::account::AddressTableMode::Binary && !layoutFlag.has_value())
+        {
+            // A brand-new chain born binary: persist the verdict BEFORE buildGenesisBlock,
+            // so binary tables never exist without the flag — a crash in between would
+            // otherwise read as a pre-flag hex chain and boot Hex over a binary genesis.
+            writeAccountTableLayoutFlag(stateDB, ACCOUNT_TABLE_LAYOUT_BINARY);
+        }
         bcos::ledger::account::setNodeAddressTableMode(mode);
         BCOS_LOG(INFO) << LOG_BADGE("LedgerInitializer")
                        << LOG_DESC("node-local account-table encoding")
                        << LOG_KV("mode", magic_enum::enum_name(mode))
-                       << LOG_KV("markerFile", layout.markerFile)
-                       << LOG_KV("inProgressMarker", layout.inProgressMarker)
-                       << LOG_KV("hexTables", layout.sawHexTables)
-                       << LOG_KV("binaryTables", layout.sawBinaryTables)
+                       << LOG_KV("layoutFlag", layoutFlag.value_or("<absent>"))
+                       << LOG_KV("chainHasState", chainHasState)
                        << LOG_KV("hexOnlyLane", hexOnlyLane)
                        << LOG_KV("executorVersion", onChain.version);
     }

@@ -1894,7 +1894,8 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     // them (in batches) while booting.
     m_mptPruneSweepGarbage = _pt.get<bool>("storage.mpt_prune_sweep_garbage", false);
     // One-shot hex→binary account-table migration at boot (AccountTableMigration.cpp).
-    // Idempotent and crash-safe; the .binary_account_tables marker short-circuits later boots.
+    // Idempotent and crash-safe; the "bin" layout flag in the state DB short-circuits later
+    // boots.
     m_migrateAccountTablesToBinary =
         _pt.get<bool>("storage.migrate_account_tables_to_binary", false);
     m_pdCaPath = _pt.get<std::string>("storage.pd_ssl_ca_path", "");

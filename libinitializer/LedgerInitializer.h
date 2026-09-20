@@ -48,10 +48,10 @@ class LedgerInitializer
 {
 public:
     /// @param accountTableBoot the boot-time account-table handling (AccountTableBoot): lane
-    ///        check → optional one-shot hex→binary migration → physical layout detection →
-    ///        node-mode publication, all before buildGenesisBlock. Nullopt skips the whole
-    ///        sequence (tools that never serve execution, e.g. archive-tool): the singleton
-    ///        keeps its Hex default, the pre-detection behavior.
+    ///        check → layout-flag read (one point Get) → optional one-shot hex→binary
+    ///        migration → node-mode publication, all before buildGenesisBlock. Nullopt skips
+    ///        the whole sequence (tools that never serve execution, e.g. archive-tool): the
+    ///        singleton keeps its Hex default, the pre-detection behavior.
     static std::shared_ptr<bcos::ledger::Ledger> build(
         bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::storage::StorageInterface::Ptr storage, bcos::tool::NodeConfig::Ptr nodeConfig,

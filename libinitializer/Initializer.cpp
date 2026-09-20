@@ -251,12 +251,11 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         GlobalStateStorageInitializer::build(m_nodeConfig->storagePath(), rocksDBOption);
 
     // Node-local account-table encoding, handled inside LedgerInitializer::build (lane check
-    // → optional one-shot migration → layout detection → mode publication, all before the
+    // → layout-flag read → optional one-shot migration → mode publication, all before the
     // genesis write). The open DB handle is passed down: RocksDB's single-instance lock
     // forbids opening the state DB twice, and the ledger's decryption-aware config reads are
     // what determine the executor lane.
     AccountTableBoot accountTableBoot{.stateDB = m_globalStateStorageInitializer->rocksDB(),
-        .storageRootPath = m_nodeConfig->storagePath(),
         .migrateToBinary = m_nodeConfig->migrateAccountTablesToBinary()};
 
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))

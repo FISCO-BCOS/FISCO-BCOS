@@ -138,7 +138,7 @@ public:
     bool mptPruneSweepGarbage() const;
     // One-shot offline hex→binary account-table migration at boot
     // ([storage] migrate_account_tables_to_binary, default false). Safe to leave on: once the
-    // .binary_account_tables marker exists the boot skips the scan entirely.
+    // layout flag in the state DB says "bin" the boot skips the scan entirely.
     bool migrateAccountTablesToBinary() const;
     std::vector<std::string> const& pdAddrs() const;
     std::string const& pdCaPath() const;

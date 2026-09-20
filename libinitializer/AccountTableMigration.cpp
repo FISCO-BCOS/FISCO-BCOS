@@ -26,9 +26,8 @@
 #include <rocksdb/snapshot.h>
 #include <rocksdb/write_batch.h>
 #include <boost/throw_exception.hpp>
-#include <cstdio>
-#include <filesystem>
-#include <unistd.h>
+#include <algorithm>
+#include <chrono>
 
 namespace
 {
@@ -43,37 +42,10 @@ constexpr size_t kBatchSize = 10000;  // write ops per WriteBatch
             "mixed mode): fix the cause and restart with [storage] "
             "migrate_account_tables_to_binary=true to resume the migration"));
 }
-
-// stdio + fsync for both markers: they are the migration's commit records and must survive
-// the same power failure the synced RocksDB batches survive.
-void writeMarkerAt(std::string const& path, std::string const& body)
-{
-    std::unique_ptr<std::FILE, int (*)(std::FILE*)> file(
-        std::fopen(path.c_str(), "w"), &std::fclose);
-    if (!file)
-    {
-        throwMigrationFailure("cannot open marker file " + path);
-    }
-    if (std::fwrite(body.data(), 1, body.size(), file.get()) != body.size() ||
-        std::fflush(file.get()) != 0 || ::fsync(::fileno(file.get())) != 0)
-    {
-        throwMigrationFailure("cannot write/fsync marker file " + path);
-    }
-}
-
-void writeMarkerFile(std::string_view storageRootPath,
-    bcos::initializer::AccountTableMigrationStats const& stats)
-{
-    writeMarkerAt(bcos::initializer::binaryAccountTablesMarkerPath(storageRootPath),
-        "binary account tables migrated: accountRows=" +
-            std::to_string(stats.migratedAccountRows) +
-            " registrations=" + std::to_string(stats.migratedRegistrations) +
-            " deduped=" + std::to_string(stats.dedupedRows) + "\n");
-}
 }  // namespace
 
 bcos::initializer::AccountTableMigrationStats bcos::initializer::migrateAccountTablesToBinary(
-    ::rocksdb::DB& stateDB, std::string_view storageRootPath, bool hexOnlyLane)
+    ::rocksdb::DB& stateDB, bool hexOnlyLane)
 {
     if (hexOnlyLane)
     {
@@ -88,14 +60,16 @@ bcos::initializer::AccountTableMigrationStats bcos::initializer::migrateAccountT
     }
 
     AccountTableMigrationStats stats;
-    // Marker present: a completed migration. Skip the full-table scan — on an archive-scale
-    // DB the scan itself is the expensive part, and there is nothing left to rename.
-    if (std::filesystem::exists(binaryAccountTablesMarkerPath(storageRootPath)))
+    // Flag already "bin": a completed migration. Skip the full-table scan — on an
+    // archive-scale DB the scan itself is the expensive part, and there is nothing left
+    // to rename.
+    if (auto const flag = readAccountTableLayoutFlag(stateDB);
+        flag.has_value() && *flag == ACCOUNT_TABLE_LAYOUT_BINARY)
     {
         stats.alreadyMigrated = true;
         BCOS_LOG(INFO) << LOG_BADGE("AccountTableMigration")
-                       << LOG_DESC("marker file present, migration already completed; skipping")
-                       << LOG_KV("marker", binaryAccountTablesMarkerPath(storageRootPath));
+                       << LOG_DESC("layout flag is already \"bin\"; skipping")
+                       << LOG_KV("key", ACCOUNT_TABLE_LAYOUT_KEY);
         return stats;
     }
 
@@ -105,14 +79,13 @@ bcos::initializer::AccountTableMigrationStats bcos::initializer::migrateAccountT
                    << LOG_DESC("start hex->binary account-table migration")
                    << LOG_KV("estimatedKeys", estimatedTotal);
 
-    // In-progress marker BEFORE the first mutation. The registration scan cannot witness
-    // an interruption in the account-row phase (every /apps/ row sorts before the first
-    // s_tables:/apps/ registration), so this file is the only durable record that a
-    // migration has started but not finished: a crash from here on leaves it behind, and
-    // the next boot either resumes (switch on — the twin-dedup below makes the resume
+    // "migrating" BEFORE the first mutation. The registration rows cannot witness an
+    // interruption in the account-row phase (every /apps/ row sorts before the first
+    // s_tables:/apps/ registration), so this synced flag is the only durable record that
+    // a migration has started but not finished: a crash from here on leaves it behind,
+    // and the next boot either resumes (switch on — the twin-dedup below makes the resume
     // idempotent) or refuses to publish a mode over a half-migrated DB (switch off).
-    writeMarkerAt(binaryAccountTablesInProgressMarkerPath(storageRootPath),
-        "binary account table migration in progress\n");
+    writeAccountTableLayoutFlag(stateDB, ACCOUNT_TABLE_LAYOUT_MIGRATING);
 
     // Snapshot the scan: renames and deletes land in batches while the iterator walks, and a
     // snapshot keeps the walk pinned to the pre-migration view. RAII release: every
@@ -132,6 +105,37 @@ bcos::initializer::AccountTableMigrationStats bcos::initializer::migrateAccountT
     size_t pendingOps = 0;
     std::string targetValue;  // reused conflict-probe buffer
 
+    // Progress reporting: a migration over an archive-scale DB can run for a long time at
+    // boot with the node otherwise silent, so report scan progress periodically. Time-
+    // throttled (not per-batch): batch flushes only happen on renames, so a DB whose
+    // account rows are a minority of keys would otherwise log nothing for long stretches.
+    // estimatedTotal is RocksDB's rocksdb.estimate-num-keys guess — the percentage is an
+    // approximation (capped at 100) and may move non-linearly.
+    auto const startTime = std::chrono::steady_clock::now();
+    auto lastProgressLog = startTime;
+    auto logProgress = [&]() {
+        auto const now = std::chrono::steady_clock::now();
+        if (now - lastProgressLog < std::chrono::seconds(5))
+        {
+            return;
+        }
+        lastProgressLog = now;
+        auto const elapsed =
+            std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count();
+        uint64_t const percent =
+            estimatedTotal > 0 ? std::min<uint64_t>(100, stats.scanned * 100 / estimatedTotal) :
+                                 0;
+        BCOS_LOG(INFO) << LOG_BADGE("AccountTableMigration")
+                       << LOG_DESC("migration in progress")
+                       << LOG_KV("scanned", stats.scanned)
+                       << LOG_KV("estimatedTotal", estimatedTotal)
+                       << LOG_KV("progress~", std::to_string(percent) + "%")
+                       << LOG_KV("elapsedSec", elapsed)
+                       << LOG_KV("accountRows", stats.migratedAccountRows)
+                       << LOG_KV("registrations", stats.migratedRegistrations)
+                       << LOG_KV("deduped", stats.dedupedRows);
+    };
+
     auto flushBatch = [&](bool sync) {
         if (pendingOps == 0)
         {
@@ -146,12 +150,6 @@ bcos::initializer::AccountTableMigrationStats bcos::initializer::migrateAccountT
         }
         batch.Clear();
         pendingOps = 0;
-        BCOS_LOG(INFO) << LOG_BADGE("AccountTableMigration")
-                       << LOG_DESC("progress") << LOG_KV("scanned", stats.scanned)
-                       << LOG_KV("estimatedTotal", estimatedTotal)
-                       << LOG_KV("accountRows", stats.migratedAccountRows)
-                       << LOG_KV("registrations", stats.migratedRegistrations)
-                       << LOG_KV("deduped", stats.dedupedRows);
     };
 
     // Queue the rename hexKey → binaryKey (both under hexTable), resolving an existing
@@ -214,6 +212,12 @@ bcos::initializer::AccountTableMigrationStats bcos::initializer::migrateAccountT
     {
         auto const key = it->key();
         ++stats.scanned;
+        // Cheap pre-check: the clock read is throttled to 1/1024 keys, the log itself to
+        // one line per 5s.
+        if ((stats.scanned & 0x3FF) == 0)
+        {
+            logProgress();
+        }
         if (key.size() > registrationPrefix.size() &&
             std::string_view(key.data(), registrationPrefix.size()) == registrationPrefix)
         {
@@ -245,33 +249,24 @@ bcos::initializer::AccountTableMigrationStats bcos::initializer::migrateAccountT
     {
         throwMigrationFailure("scan iterator failed: " + it->status().ToString());
     }
-    flushBatch(true);  // final batch synced before the marker lands
+    // The "bin" verdict rides the final SYNCED batch: atomically with the last renames, so
+    // a durable "bin" implies every rename is durable, and a crash at any earlier point
+    // leaves "migrating" — the next boot resumes (switch on) or refuses (switch off).
+    batch.Put(::rocksdb::Slice(ACCOUNT_TABLE_LAYOUT_KEY.data(), ACCOUNT_TABLE_LAYOUT_KEY.size()),
+        ::rocksdb::Slice(
+            ACCOUNT_TABLE_LAYOUT_BINARY.data(), ACCOUNT_TABLE_LAYOUT_BINARY.size()));
+    ++pendingOps;
+    flushBatch(true);
 
-    // Completion ordering: the done marker must be durable BEFORE the in-progress marker
-    // is removed, so a crash at any point leaves at least one marker telling the truth.
-    // A crash between the two leaves BOTH files — that state is completed, not
-    // in-progress, because the done marker only lands after the final synced batch (see
-    // resolveNodeAddressTableMode, which checks the done marker first).
-    writeMarkerFile(storageRootPath, stats);
-    std::error_code removeError;
-    std::filesystem::remove(
-        binaryAccountTablesInProgressMarkerPath(storageRootPath), removeError);
-    if (removeError)
-    {
-        // Benign: both markers present resolves to completed at boot, and the next
-        // marker-present run early-returns before touching either file.
-        BCOS_LOG(WARNING) << LOG_BADGE("AccountTableMigration")
-                          << LOG_DESC("could not remove the in-progress marker; the done "
-                                      "marker is authoritative")
-                          << LOG_KV("marker", binaryAccountTablesInProgressMarkerPath(
-                                                  storageRootPath))
-                          << LOG_KV("error", removeError.message());
-    }
     BCOS_LOG(INFO) << LOG_BADGE("AccountTableMigration")
                    << LOG_DESC("migration completed") << LOG_KV("scanned", stats.scanned)
                    << LOG_KV("accountRows", stats.migratedAccountRows)
                    << LOG_KV("registrations", stats.migratedRegistrations)
                    << LOG_KV("deduped", stats.dedupedRows)
-                   << LOG_KV("marker", binaryAccountTablesMarkerPath(storageRootPath));
+                   << LOG_KV("elapsedSec",
+                          std::chrono::duration_cast<std::chrono::seconds>(
+                              std::chrono::steady_clock::now() - startTime)
+                              .count())
+                   << LOG_KV("layoutFlag", ACCOUNT_TABLE_LAYOUT_KEY);
     return stats;
 }

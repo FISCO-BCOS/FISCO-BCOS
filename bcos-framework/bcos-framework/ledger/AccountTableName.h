@@ -29,16 +29,18 @@
 /// (Features.h Flag=54) used to gate this; it is deprecated and drives nothing now.
 ///
 /// There is no runtime mixed mode: a node is either all-hex or all-binary in the steady
-/// state. A mixed layout on disk means an interrupted hex→binary migration (or a hand-mixed
-/// backup) and is resolved at BOOT — resume the migration ([storage]
-/// migrate_account_tables_to_binary) or refuse to start — never by falling back between
-/// tables per read. The migration's progress is NOT inferred from the registration rows
-/// alone (the /apps/ account rows rename before the first s_tables:/apps/ registration, so
-/// a crash in the account-row phase still scans as pure hex); it is tracked by two marker
-/// files in the state-DB dir: .binary_account_tables.in_progress (fsync'd before the first
-/// batch) and .binary_account_tables (fsync'd after the final synced batch, then the
-/// in-progress marker is deleted; both present = completed). See
-/// libinitializer/AddressTableModeDetection.h and AccountTableMigration.h.
+/// state. A mixed layout on disk means an interrupted hex→binary migration and is resolved
+/// at BOOT — resume the migration ([storage] migrate_account_tables_to_binary) or refuse to
+/// start — never by falling back between tables per read. The migration's progress is NOT
+/// inferred from the registration rows (the /apps/ account rows rename before the first
+/// s_tables:/apps/ registration, so a crash in the account-row phase still scans as pure
+/// hex); it is tracked by a flag key inside the state DB itself
+/// (s_node_local:account_table_layout: "migrating" synced before the first batch, "bin"
+/// written inside the final synced batch — atomically with the data, so DB-level
+/// checkpoints and backups carry the state machine). A chain that predates the mechanism
+/// has no flag, which IS the hex verdict — boot detection is a single point Get, no
+/// registration scan. See libinitializer/AddressTableModeDetection.h and
+/// AccountTableMigration.h.
 ///
 /// This header is deliberately dependency-free (no ledger/LedgerTypeDef.h): the hex prefix
 /// is a literal mirror of ledger::SYS_DIRECTORY::USER_APPS, the same arrangement StateKey.h

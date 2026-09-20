@@ -3,72 +3,56 @@
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-tool/Exceptions.h>
-#include <bcos-utilities/BoostLog.h>
 #include <rocksdb/db.h>
 #include <rocksdb/iterator.h>
 #include <boost/throw_exception.hpp>
-#include <filesystem>
 
-std::string bcos::initializer::binaryAccountTablesMarkerPath(std::string_view storageRootPath)
+std::optional<std::string> bcos::initializer::readAccountTableLayoutFlag(::rocksdb::DB& stateDB)
 {
-    return (std::filesystem::path(storageRootPath) / BINARY_ACCOUNT_TABLES_MARKER).string();
-}
-
-std::string bcos::initializer::binaryAccountTablesInProgressMarkerPath(
-    std::string_view storageRootPath)
-{
-    return (std::filesystem::path(storageRootPath) / BINARY_ACCOUNT_TABLES_IN_PROGRESS_MARKER)
-        .string();
-}
-
-bcos::initializer::AccountTableLayout bcos::initializer::detectAccountTableLayout(
-    ::rocksdb::DB& stateDB, std::string_view storageRootPath)
-{
-    AccountTableLayout layout;
-    layout.markerFile =
-        std::filesystem::exists(binaryAccountTablesMarkerPath(storageRootPath));
-    layout.inProgressMarker =
-        std::filesystem::exists(binaryAccountTablesInProgressMarkerPath(storageRootPath));
-
-    // Physical keys are the flat "table:key" form (executor_v1::StateKey encoding, shared
-    // by the storage2 and the legacy storage layers — both use TABLE_KEY_SPLIT ':'), so the
-    // account-table registration rows sort together under "s_tables:/": hex account tables
-    // register as "s_tables:/apps/<40 hex>", binary ones as "s_tables:/s/<20 raw bytes>"
-    // ("/apps/" < "/s/" < "/sys/", so both families land inside this one seek range).
-    // The scan also sees every OTHER "/"-rooted registration (/sys/, /tables/, auth
-    // tables, short-name BFS tables) — the is* probes below ignore all of them by
-    // prefix+shape, including a "/apps/" name of exactly 20 chars (a plain BFS table,
-    // never a binary account table: the binary layout lives under "/s/", prefix-free
-    // from everything BFS can produce — AccountTableName.h).
-    constexpr std::string_view prefix = "s_tables:/";  // SYS_TABLES + ':' + the "/" root
-    std::unique_ptr<::rocksdb::Iterator> it(stateDB.NewIterator(::rocksdb::ReadOptions{}));
-    for (it->Seek(::rocksdb::Slice(prefix)); it->Valid(); it->Next())
+    std::string value;
+    auto status = stateDB.Get(::rocksdb::ReadOptions{},
+        ::rocksdb::Slice(ACCOUNT_TABLE_LAYOUT_KEY.data(), ACCOUNT_TABLE_LAYOUT_KEY.size()),
+        &value);
+    if (status.IsNotFound())
     {
-        auto key = it->key();
-        if (key.size() < prefix.size() ||
-            std::string_view(key.data(), prefix.size()) != prefix)
-        {
-            break;
-        }
-        // Strip "s_tables:": the rest is the registered table name itself.
-        std::string_view table(key.data() + ledger::SYS_TABLES.size() + 1,
-            key.size() - ledger::SYS_TABLES.size() - 1);
-        layout.sawHexTables |= ledger::account::isHexAccountTableName(table);
-        layout.sawBinaryTables |= ledger::account::isBinaryAccountTableName(table);
-        if (layout.sawHexTables && layout.sawBinaryTables)
-        {
-            break;  // the mixed verdict is already decided
-        }
+        return std::nullopt;
     }
-    if (!it->status().ok())
+    if (!status.ok())
     {
         BOOST_THROW_EXCEPTION(
             bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                "failed to scan the state DB for account-table registrations (" +
-                it->status().ToString() +
+                "failed to read the account-table layout flag (" + status.ToString() +
                 "); cannot determine the node-local account-table encoding"));
     }
-    return layout;
+    return value;
+}
+
+void bcos::initializer::writeAccountTableLayoutFlag(
+    ::rocksdb::DB& stateDB, std::string_view value)
+{
+    ::rocksdb::WriteOptions writeOptions;
+    writeOptions.sync = true;  // the flag is the migration's commit record: survive power loss
+    auto status = stateDB.Put(writeOptions,
+        ::rocksdb::Slice(ACCOUNT_TABLE_LAYOUT_KEY.data(), ACCOUNT_TABLE_LAYOUT_KEY.size()),
+        ::rocksdb::Slice(value.data(), value.size()));
+    if (!status.ok())
+    {
+        BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                  "failed to write the account-table layout flag (" +
+                                  status.ToString() + ")"));
+    }
+}
+
+bool bcos::initializer::hasAnyTableRegistration(::rocksdb::DB& stateDB)
+{
+    // Genesis registers the system tables, so any committed chain has "s_tables:" rows and
+    // a brand-new DB has none. One Seek: the flag key sorts before "s_tables:" and is
+    // skipped. Read-your-writes is not needed — this runs before any state write.
+    constexpr std::string_view prefix = "s_tables:";  // ledger::SYS_TABLES + ':'
+    std::unique_ptr<::rocksdb::Iterator> it(stateDB.NewIterator(::rocksdb::ReadOptions{}));
+    it->Seek(::rocksdb::Slice(prefix.data(), prefix.size()));
+    return it->Valid() && it->key().starts_with(
+                              ::rocksdb::Slice(prefix.data(), prefix.size()));
 }
 
 bool bcos::initializer::isHexOnlyExecutorLane(
@@ -81,75 +65,55 @@ bool bcos::initializer::isHexOnlyExecutorLane(
 }
 
 bcos::ledger::account::AddressTableMode bcos::initializer::resolveNodeAddressTableMode(
-    AccountTableLayout const& layout, bool hexOnlyLane)
+    std::optional<std::string> const& layoutFlag, bool hexOnlyLane, bool chainHasState)
 {
     using ledger::account::AddressTableMode;
     if (hexOnlyLane)
     {
-        if (layout.markerFile || layout.inProgressMarker || layout.sawBinaryTables)
+        if (layoutFlag.has_value())
         {
             BOOST_THROW_EXCEPTION(
                 bcos::tool::InvalidConfig() << bcos::errinfo_comment(
                     "this node's state DB holds binary-layout account tables or an "
-                    "unfinished hex->binary migration (.binary_account_tables marker, "
-                    ".binary_account_tables.in_progress marker or s_tables:/s/<20-byte> "
-                    "rows), but the chain runs a hex-only executor lane (OP / Eth engine / "
+                    "unfinished hex->binary migration (the " +
+                    std::string(ACCOUNT_TABLE_LAYOUT_KEY) + " flag is '" + *layoutFlag +
+                    "'), but the chain runs a hex-only executor lane (OP / Eth engine / "
                     "legacy executor): those executors name account tables /apps/<40-hex> "
                     "directly and would split reads and writes onto disjoint tables. "
-                    "Recovery: roll the state DB back to the pre-migration snapshot (or "
-                    "delete the .binary_account_tables marker if migration never ran), or "
+                    "Recovery: roll the state DB back to the pre-migration snapshot, or "
                     "switch the chain to the baseline executor (executor_version = 1) "
                     "before migrating"));
         }
         return AddressTableMode::Hex;
     }
-    // Both markers present is COMPLETED, not in-progress: the done marker is written and
-    // fsync'd strictly after the final synced batch, so a crash between that fsync and the
-    // in-progress delete loses only the delete. The done marker is authoritative.
-    if (layout.markerFile)
+    if (layoutFlag.has_value())
     {
-        return AddressTableMode::Binary;
-    }
-    if (layout.inProgressMarker)
-    {
-        // Unfinished migration. The registration scan alone CANNOT see this state: the
-        // migration renames the /apps/ account rows (0x2f) before the first
-        // s_tables:/apps/ registration (0x73), so a crash in the account-row phase leaves
-        // sawHexTables=true, sawBinaryTables=false — previously published as silent Hex,
-        // after which every migrated account read as absent and the node's state roots
-        // diverged from the chain. The in-progress marker closes that hole.
+        if (*layoutFlag == ACCOUNT_TABLE_LAYOUT_BINARY)
+        {
+            return AddressTableMode::Binary;
+        }
+        if (*layoutFlag == ACCOUNT_TABLE_LAYOUT_MIGRATING)
+        {
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                    "the state DB holds an unfinished hex->binary account-table migration "
+                    "(the " +
+                    std::string(ACCOUNT_TABLE_LAYOUT_KEY) +
+                    " flag is 'migrating'): set [storage] "
+                    "migrate_account_tables_to_binary=true and restart to resume and finish "
+                    "the migration, or roll the state DB back to a pre-migration snapshot"));
+        }
+        // Forward compatibility: refuse rather than guess at a state a newer binary wrote.
         BOOST_THROW_EXCEPTION(
             bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                "the state DB holds an unfinished hex->binary account-table migration "
-                "(.binary_account_tables.in_progress marker present): set [storage] "
-                "migrate_account_tables_to_binary=true and restart to resume and finish the "
-                "migration, or roll the state DB back to a pre-migration snapshot"));
+                "unknown account-table layout flag '" + *layoutFlag + "' at " +
+                std::string(ACCOUNT_TABLE_LAYOUT_KEY) +
+                ": written by a newer binary? Refusing to guess the node-local "
+                "account-table encoding"));
     }
-    if (layout.sawHexTables && layout.sawBinaryTables)
-    {
-        // Defensive invariant: with the in-progress marker written before the first batch,
-        // an interrupted migration always carries it and is caught above. Reaching here
-        // means a hand-mixed backup (or a crash on a build predating the marker) — the
-        // boot sequence (LedgerInitializer::build) resolves it the same way: resume the
-        // migration when [storage] migrate_account_tables_to_binary is set, refuse to
-        // start otherwise.
-        BOOST_THROW_EXCEPTION(
-            bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                "the state DB holds an unfinished hex->binary account-table migration (both "
-                "s_tables:/apps/<40-hex> and s_tables:/s/<20-byte> registrations exist): "
-                "set [storage] migrate_account_tables_to_binary=true and restart to finish "
-                "the migration, or roll the state DB back to a pre-migration snapshot"));
-    }
-    if (layout.sawBinaryTables)
-    {
-        return AddressTableMode::Binary;
-    }
-    if (layout.sawHexTables)
-    {
-        return AddressTableMode::Hex;
-    }
-    // Brand-new chain: default to the new encoding. The encoding is node-local and the
-    // normalized Entry::hash folds binary table names back to hex, so the genesis state
-    // root is byte-identical to the hex layout — no fork risk from this default.
-    return AddressTableMode::Binary;
+    // No flag: a chain that predates the mechanism (hex account tables only — nothing
+    // binary ever shipped) or a brand-new DB. The registration probe distinguishes them;
+    // the caller persists "bin" for a fresh chain BEFORE genesis so binary tables never
+    // exist without the flag.
+    return chainHasState ? AddressTableMode::Hex : AddressTableMode::Binary;
 }
