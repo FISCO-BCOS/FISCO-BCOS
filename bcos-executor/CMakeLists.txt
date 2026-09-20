@@ -30,6 +30,22 @@ set_source_files_properties(
 set_source_files_properties(
     "src/executive/CoroutineTransactionExecutive.cpp"
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+# TransactionExecutive.cpp has global-scope `using namespace bcos::codec;`,
+# which leaks into later files of the same unity TU and makes `abi` ambiguous
+# (bcos::codec::abi vs ::abi from <cxxabi.h>) in boost coroutine2 headers.
+set_source_files_properties(
+    "src/executive/TransactionExecutive.cpp"
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+# Files including range-v3 headers fail to compile when a global
+# `using namespace std;` from an earlier file in the same unity TU is in
+# effect (`ranges` becomes ambiguous with std::ranges). Build them standalone.
+set_source_files_properties(
+    "src/precompiled/ShardingPrecompiled.cpp"
+    "src/precompiled/SystemConfigPrecompiled.cpp"
+    "src/precompiled/common/WorkingSealerManagerImpl.cpp"
+    "src/precompiled/extension/AccountManagerPrecompiled.cpp"
+    "src/precompiled/extension/BalancePrecompiled.cpp"
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 if(SANITIZE_ADDRESS)
     set_source_files_properties(
         "src/executive/CoroutineTransactionExecutive.cpp"
