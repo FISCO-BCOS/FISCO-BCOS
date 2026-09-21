@@ -15,8 +15,8 @@
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpDepositEncode.h>
 #include <opstack-executor/OpstackExecutor.h>
-#include <opstack-executor/RecentBlockHashes.h>
-#include <opstack-executor/Storage2State.h>
+#include <bcos-evm/adapter/RecentBlockHashes.h>
+#include <bcos-evm/adapter/Storage2State.h>
 
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-framework/storage/Entry.h>

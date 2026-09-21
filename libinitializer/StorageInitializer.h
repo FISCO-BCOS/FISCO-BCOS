@@ -68,11 +68,12 @@ public:
         // options.compaction_pri = rocksdb::kMinOverlappingRatio;
         options.compression = rocksdb::kZSTD;
         options.bottommost_compression = rocksdb::kZSTD;  // last level compression
-        // -1 (unlimited, the default): an archive-scale DB holds tens of thousands of SSTs,
-        // and a small table cache thrashes — every random read evicts a reader and re-reads
-        // its index/filter/properties blocks (observed ~900MB/s of throwaway reads during an
-        // MPT prune rebuild with the previous 256). See
-        // RocksDBCheckpointOption::maxOpenFiles for the fd/memory cost.
+        // Bounded by default (256): caps fd usage for ordinary consortium-chain DBs.
+        // -1 (unlimited) is the archive-scale choice — a small table cache thrashes there,
+        // every random read evicting a reader and re-reading its index/filter/properties
+        // blocks (observed ~900MB/s of throwaway reads during an MPT prune rebuild with
+        // 256 on a ~942GB / 10k-SST database). See RocksDBCheckpointOption::maxOpenFiles
+        // for the fd/memory cost of -1.
         options.max_open_files = rocksDBOption.maxOpenFiles;
         options.write_buffer_size =
             rocksDBOption.writeBufferSize;  // default is 64MB, set 256MB here

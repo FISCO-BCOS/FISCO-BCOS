@@ -4,8 +4,8 @@
 //  - fetchAllStorage 未知短键行 → throw（isKnownAccountField 白名单——mainline MPT
 //    BcosExtension 行跳过）
 // 装配模式与 opstack-executor/tests（PR3）一致：MemoryStorage + StateKey + accountTableName。
-#include <opstack-executor/Storage2State.h>
-#include <opstack-executor/Storage2StateHelpers.h>
+#include <bcos-evm/adapter/Storage2State.h>
+#include <bcos-evm/adapter/Storage2StateHelpers.h>
 
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/Storage.h>

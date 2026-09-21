@@ -355,7 +355,8 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
     const std::string schedule =
         "[ethereum]\nmode=el\n"
         "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
-        "cancun_time=1710338135\nprague_time=1746612311\n";
+        "cancun_time=1710338135\nprague_time=1746612311\n"
+        "merge_block=0\n";
 
     // Parses into the GenesisConfig and lands in the genesis pin.
     NodeConfig cfg(keyFactory);
@@ -399,7 +400,8 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
     BOOST_REQUIRE_NO_THROW(cfg2.loadGenesisConfigFromString(
         base + "[ethereum]\nmode=el\n"
                "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
-               "cancun_time=1710338135\nprague_time=1746612312\n"));
+               "cancun_time=1710338135\nprague_time=1746612312\n"
+               "merge_block=0\n"));
     BOOST_CHECK(
         data != bcos::tool::generateGenesisData(cfg2.genesisConfig(), *cfg2.ledgerConfig()));
 
@@ -411,6 +413,7 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
         base + "[ethereum]\nmode=el\n"
                "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
                "cancun_time=1710338135\nprague_time=1746612311\n"
+               "merge_block=0\n"
                "osaka_time=1767225548\n"));
     BOOST_CHECK(
         data == bcos::tool::generateGenesisData(cfgTail.genesisConfig(), *cfgTail.ledgerConfig()));
@@ -467,7 +470,8 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRequireELDeclaration)
         "evm_revision=cancun\n";
     const std::string schedule =
         "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
-        "cancun_time=1710338135\nprague_time=1746612311\n";
+        "cancun_time=1710338135\nprague_time=1746612311\n"
+        "merge_block=0\n";
 
     // [fork_timestamps] without [ethereum] mode=el: rejected by validateL2Invariants.
     {
@@ -534,7 +538,8 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
         "evm_revision=cancun\n"
         "[ethereum]\nmode=el\n"
         "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
-        "cancun_time=1710338135\nprague_time=1746612311\n";
+        "cancun_time=1710338135\nprague_time=1746612311\n"
+        "merge_block=0\n";
     const std::string ini = "[ethereum]\nmode=el\n";
 
     // Explicit valid chain id -> parsed and pinned.
@@ -694,7 +699,8 @@ BOOST_AUTO_TEST_CASE(loadForkTimestampsReloadClears)
     BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(
         base + "[ethereum]\nmode=el\n"
                "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
-               "cancun_time=1710338135\nprague_time=1746612311\n"));
+               "cancun_time=1710338135\nprague_time=1746612311\n"
+               "merge_block=0\n"));
     BOOST_CHECK(cfg.genesisConfig().m_ethereumELMode);
     BOOST_CHECK(cfg.genesisConfig().m_ethereumForkSchedule.has_value());
 
@@ -746,7 +752,8 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectMalformed)
     // 0x-prefixed hex is still accepted.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(base + "0x67f9f25b\n"));
+        BOOST_REQUIRE_NO_THROW(
+            cfg.loadGenesisConfigFromString(base + "0x67f9f25b\nmerge_block=0\n"));
         BOOST_CHECK_EQUAL(
             cfg.genesisConfig().m_ethereumForkSchedule->m_pragueTime, 0x67f9f25bu);
     }
@@ -795,7 +802,8 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectOutOfOrder)
         BOOST_CHECK_EXCEPTION(
             cfg.loadGenesisConfigFromString(
                 head + "shanghai_time=1710338135\n"
-                       "cancun_time=1681338455\nprague_time=1746612311\n"),
+                       "cancun_time=1681338455\nprague_time=1746612311\n"
+                       "merge_block=0\n"),
             InvalidConfig,
             [](auto const& e) {
                 return errinfoContains(e, "cancun_time (1681338455) is earlier than");
@@ -808,6 +816,7 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectOutOfOrder)
             cfg.loadGenesisConfigFromString(
                 head + "shanghai_time=1681338455\n"
                        "cancun_time=1710338135\nprague_time=1746612311\n"
+                       "merge_block=0\n"
                        "bpo1_time=1750000000\n"),
             InvalidConfig,
             [](auto const& e) {
@@ -821,9 +830,143 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectOutOfOrder)
             cfg.loadGenesisConfigFromString(
                 head + "shanghai_time=1681338455\n"
                        "cancun_time=1710338135\nprague_time=1746612311\n"
+                       "merge_block=0\n"
                        "osaka_time=1767225548\n"));
         BOOST_CHECK_EQUAL(
             cfg.genesisConfig().m_ethereumForkSchedule->m_osakaTime, 1767225548u);
+    }
+}
+
+// merge_block ([fork_timestamps], config.genesis): the chain's only block-based
+// fork. REQUIRED whenever the section is present (no chain-agnostic default — a
+// non-Sepolia chain must declare its own); 0 = PoS from genesis. Parsed with the
+// same strict decimal/0x-hex rules as the timestamps.
+BOOST_AUTO_TEST_CASE(ethereumMergeBlockParsing)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    const std::string node =
+        "1234567890123456789012345678901234567890123456789012345678901234"
+        "1234567890123456789012345678901234567890123456789012345678901234";
+    const std::string base =
+        "[version]\ncompatibility_version=3.18.0\n"
+        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+        "[web3]\nchain_id=1\n"
+        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+        "node.0=" +
+        node +
+        ":1:1\n"
+        "[tx]\ngas_limit=3000000000\n"
+        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+        "version=2\n"
+        "evm_revision=cancun\n"
+        "[ethereum]\nmode=el\n"
+        "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
+        "cancun_time=1710338135\nprague_time=1746612311\n";
+
+    // Absent key -> rejected like the other non-tail ladder keys: there is no
+    // chain-agnostic default, and silently falling back to Sepolia's 1735371
+    // would route a non-Sepolia chain's early blocks through the (deliberately
+    // permissive) PoW validation branch.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(base), InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "merge_block is required"); });
+    }
+    // Explicit 0 -> PoS from genesis (pure-PoS chains).
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(base + "merge_block=0\n"));
+        BOOST_CHECK_EQUAL(cfg.ethereumMergeBlock(), 0u);
+    }
+    // 0x-prefixed hex is accepted, like the timestamps.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(base + "merge_block=0x1a7acb\n"));
+        BOOST_CHECK_EQUAL(cfg.ethereumMergeBlock(), 1735371u);
+    }
+    // Malformed values fail fast like every neighbouring parse.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadGenesisConfigFromString(base + "merge_block=-1\n"), InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "merge_block invalid timestamp"); });
+    }
+    // Reload without the section resets to the unset value (0), not a stale one.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(base + "merge_block=42\n"));
+        BOOST_CHECK_EQUAL(cfg.ethereumMergeBlock(), 42u);
+        const std::string plain =
+            "[version]\ncompatibility_version=3.18.0\n"
+            "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+            "[web3]\nchain_id=1\n"
+            "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+            "node.0=" +
+            node +
+            ":1:1\n"
+            "[tx]\ngas_limit=3000000000\n"
+            "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+            "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+            "version=2\nevm_revision=cancun\n";
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(plain));
+        BOOST_CHECK_EQUAL(cfg.ethereumMergeBlock(), 0u);
+    }
+}
+
+// ethereum.finalized_checkpoint (config.ini): optional operator-pinned
+// "<number>:<0xHASH>" trust anchor. Validated eagerly at config load.
+BOOST_AUTO_TEST_CASE(ethereumFinalizedCheckpointParsing)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    const std::string hash64 =
+        "0x1111111111111111111111111111111111111111111111111111111111111111";
+    // Absent / empty -> no checkpoint.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[ethereum]\nmode=el\n"));
+        BOOST_CHECK(!cfg.ethereumFinalizedCheckpoint().has_value());
+    }
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(
+            cfg.loadConfigFromString("[ethereum]\nmode=el\nfinalized_checkpoint=\n"));
+        BOOST_CHECK(!cfg.ethereumFinalizedCheckpoint().has_value());
+    }
+    // Valid "<number>:<0xHASH>" -> parsed.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString(
+            "[ethereum]\nmode=el\nfinalized_checkpoint=9200000:" + hash64 + "\n"));
+        auto const& checkpoint = cfg.ethereumFinalizedCheckpoint();
+        BOOST_REQUIRE(checkpoint.has_value());
+        BOOST_CHECK_EQUAL(checkpoint->number, 9200000u);
+        BOOST_CHECK(checkpoint->hash == crypto::HashType(hash64));
+    }
+    // Malformed values are rejected at load time.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadConfigFromString("[ethereum]\nmode=el\nfinalized_checkpoint=9200000\n"),
+            InvalidConfig, [](auto const& e) {
+                return errinfoContains(e, "finalized_checkpoint must be");
+            });
+    }
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadConfigFromString("[ethereum]\nmode=el\nfinalized_checkpoint=abc:" + hash64 + "\n"),
+            InvalidConfig, [](auto const& e) {
+                return errinfoContains(e, "finalized_checkpoint(number) must be decimal digits");
+            });
+    }
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadConfigFromString("[ethereum]\nmode=el\nfinalized_checkpoint=1:0x1234\n"),
+            InvalidConfig, [](auto const& e) {
+                return errinfoContains(e, "finalized_checkpoint(hash) must be 64 hex chars");
+            });
     }
 }
 

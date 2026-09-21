@@ -6,7 +6,7 @@
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
-#include <opstack-executor/Storage2State.h>
+#include <bcos-evm/adapter/Storage2State.h>
 #include <algorithm>  // std::copy
 #include <bcos-evm/eth/state/state_diff.hpp>
 #include <cstdint>  // std::uint64_t

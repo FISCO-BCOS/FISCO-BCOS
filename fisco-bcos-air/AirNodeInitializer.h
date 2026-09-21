@@ -20,6 +20,8 @@
  */
 
 #pragma once
+#include "libinitializer/CommandHelper.h"
+#include "libinitializer/EthereumSyncInitializer.h"
 #include "libinitializer/Initializer.h"
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/rpc/RPCInterface.h>
@@ -39,6 +41,12 @@ public:
     virtual ~AirNodeInitializer() { stop(); }
 
     virtual void init(std::string const& _configFilePath, std::string const& _genesisFile);
+    virtual void init(bcos::initializer::Params const& _params);
+    // Validate the command-line EL-mode mirrors against the loaded NodeConfig (config file is
+    // the source of truth): --el must agree with [ethereum].mode and --bootnodes must agree
+    // with [ethereum].bootnodes_file. Throws on conflict.
+    virtual void validateEthereumELParams(
+        bcos::initializer::Params const& _params, bcos::tool::NodeConfig const& _nodeConfig);
     virtual void start();
     virtual void stop();
     virtual bcos::initializer::Initializer::Ptr nodeInitializer() { return m_nodeInitializer; }
@@ -62,5 +70,8 @@ private:
     std::optional<rpc::RPCApplication> m_tarsApplication;
     std::optional<std::string> m_tarsConfig;
     std::optional<std::thread> m_tarsThread;
+
+    // Ethereum L1 EL-mode self-sync driver (only set when [ethereum] mode=el).
+    std::shared_ptr<bcos::initializer::EthereumSyncInitializer> m_ethereumSync;
 };
 }  // namespace bcos::node

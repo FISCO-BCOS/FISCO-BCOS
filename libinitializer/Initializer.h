@@ -27,6 +27,7 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
+#include "ethereum-executor/EthereumExecutor.h"
 #include "libinitializer/MultiVersionScheduler.h"
 #include <bcos-framework/engine/DACaps.h>
 #ifdef TOOLS
@@ -34,6 +35,7 @@
 #endif
 #include <bcos-executor/src/executor/SwitchExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
+#include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <bcos-tx-validator/TxValidator.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/IOServicePool.h>
@@ -118,6 +120,23 @@ public:
     bcos::ledger::LedgerInterface::Ptr ledger() { return m_ledger; }
     std::shared_ptr<bcos::scheduler::SchedulerInterface> scheduler() { return m_scheduler; }
 
+    // Ethereum L1 EL-mode wiring: the v2 EthereumExecutor and its serial scheduler, plus the
+    // global state storage and IO pool. Only valid after initNode() on an executor_version>=2
+    // node (EL mode); callers must guard on nodeConfig->ethereumELModeEnabled() first.
+    std::shared_ptr<executor_v1::eth::EthereumExecutor> ethereumExecutor()
+    {
+        return m_ethereumExecutor;
+    }
+    std::shared_ptr<scheduler_v1::SchedulerSerialImpl> ethereumSerialScheduler()
+    {
+        return m_ethereumSerialScheduler;
+    }
+    std::shared_ptr<GlobalStateStorageInitializer> globalStateStorageInitializer()
+    {
+        return m_globalStateStorageInitializer;
+    }
+    bcos::IOServicePool::Ptr ioServicePool() { return m_ioServicePool; }
+
     FrontServiceInitializer::Ptr frontService() { return m_frontServiceInitializer; }
 
     void setIOServicePool(bcos::IOServicePool::Ptr _ioServicePool)
@@ -152,6 +171,15 @@ public:
     /// GlobalStateStorageInitializer, so the handle must not outlive this Initializer.
     /// nullptr before initNode() built the global state storage (e.g. config-only usage).
     std::shared_ptr<bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>> mptNodeReader();
+
+    /// The shared MPT pruner as a CommitObserver (storage.mpt_prune_window > 0), wired into
+    /// every baseline scheduler variant at build time and forwarded to the EL-mode sync path
+    /// (AirNodeInitializer hands it to EthereumSyncInitializer). Null when pruning is
+    /// disabled — callers keep their built-in NoopCommitObserver.
+    std::shared_ptr<bcos::ledger::mpt::CommitObserver> mptCommitObserver()
+    {
+        return m_mptCommitObserver;
+    }
 
     /// Provider for eth_getStorageAt's latest-state path: each call forks a fresh latest view
     /// of GlobalStateStorage and returns an AnyStorage handle owning it (see
@@ -220,6 +248,12 @@ private:
     std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_ethereumSchedulerHolder;
     std::function<void(std::function<void(protocol::BlockNumber)>)>
         m_setEthereumSchedulerBlockNumberNotifier;
+    /// EthereumExecutor (executor_version=2) instance + its serial scheduler. Saved as members
+    /// (the executor is otherwise only captured by the holder lambda) so the Ethereum L1
+    /// EL-mode sync path (EthereumSyncInitializer) can drive the SAME executor/scheduler that
+    /// the rest of the v2 pipeline uses. Only meaningful when executor_version >= 2.
+    std::shared_ptr<executor_v1::eth::EthereumExecutor> m_ethereumExecutor;
+    std::shared_ptr<scheduler_v1::SchedulerSerialImpl> m_ethereumSerialScheduler;
     /// OP scheduler (executor_version >= 3), wired to MultiVersionScheduler slot 3.
     std::shared_ptr<scheduler::SchedulerInterface> m_opScheduler;
     /// Installs the OP block-number notifier on the OpScheduler.
