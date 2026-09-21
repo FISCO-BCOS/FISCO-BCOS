@@ -143,9 +143,7 @@ public:
     std::shared_ptr<SocketFace> socket() override;
     virtual void setSocket(const std::shared_ptr<SocketFace>& socket);
 
-    SessionCallbackManagerInterface::Ptr sessionCallbackManager() const;
-    void setSessionCallbackManager(
-        const SessionCallbackManagerInterface::Ptr& _sessionCallbackManager);
+    SessionCallbackManager& sessionCallbackManager() const;
 
     virtual const std::function<void(NetworkException, SessionFace::Ptr, Message)>&
     messageHandler();
@@ -321,7 +319,8 @@ public:
     // the whole liveness check atomic.
     std::atomic<bool> m_active{false};
 
-    SessionCallbackManagerInterface::Ptr m_sessionCallbackManager;
+    // Owned by the Host (m_server) that created us. Never null, like m_server.
+    std::reference_wrapper<SessionCallbackManager> m_sessionCallbackManager;
     std::function<void(NetworkException, SessionFace::Ptr, Message)> m_messageHandler;
     std::function<std::optional<bcos::Error>(
         SessionFace&, const Message&, uint32_t)> m_beforeMessageHandler;
@@ -383,9 +382,8 @@ public:
     SessionFactory& operator=(const SessionFactory&) = delete;
     virtual ~SessionFactory() = default;
 
-    virtual std::shared_ptr<SessionFace> createSession(Host& _server,
-        std::shared_ptr<SocketFace> const& _socket,
-        SessionCallbackManagerInterface::Ptr& _sessionCallbackManager);
+    virtual std::shared_ptr<SessionFace> createSession(
+        Host& _server, std::shared_ptr<SocketFace> const& _socket);
 
 private:
     P2PInfo m_hostInfo;
