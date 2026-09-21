@@ -7,6 +7,7 @@
 
 #include "bcos-utilities/FixedBytes.h"
 
+#include <atomic>
 #include <set>
 #include <string>
 
@@ -43,7 +44,9 @@ public:
 private:
     mutable bcos::Mutex x_peerList;
     Type m_type;
-    bool m_enable{false};
+    // atomic: has() runs on any IO thread during the TLS handshake while update()/setEnable()
+    // run on the SIGUSR1 reload path
+    std::atomic<bool> m_enable{false};
     std::set<P2PNodeID> m_peerList;
 };
 

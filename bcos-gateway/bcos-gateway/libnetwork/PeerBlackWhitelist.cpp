@@ -35,7 +35,7 @@ PeerBlackWhitelist::PeerBlackWhitelist(PeerBlackWhitelist&& _other) noexcept
 {
     bcos::Guard guard(_other.x_peerList);
     m_type = _other.m_type;
-    m_enable = _other.m_enable;
+    m_enable.store(_other.m_enable.load(std::memory_order_relaxed), std::memory_order_relaxed);
     m_peerList = std::move(_other.m_peerList);
 }
 
@@ -45,7 +45,7 @@ PeerBlackWhitelist& PeerBlackWhitelist::operator=(PeerBlackWhitelist&& _other) n
     {
         std::scoped_lock lock(x_peerList, _other.x_peerList);
         m_type = _other.m_type;
-        m_enable = _other.m_enable;
+        m_enable.store(_other.m_enable.load(std::memory_order_relaxed), std::memory_order_relaxed);
         m_peerList = std::move(_other.m_peerList);
     }
     return *this;
@@ -53,7 +53,7 @@ PeerBlackWhitelist& PeerBlackWhitelist::operator=(PeerBlackWhitelist&& _other) n
 
 bool PeerBlackWhitelist::has(P2PNodeID _peer) const
 {
-    if (!m_enable)
+    if (!m_enable.load(std::memory_order_relaxed))
     {
         // disabled blacklist blocks no one, disabled whitelist passes everyone
         return m_type == Type::Whitelist;
@@ -72,16 +72,17 @@ bool PeerBlackWhitelist::has(const std::string& _peer) const
 
 void PeerBlackWhitelist::setEnable(bool _enable)
 {
-    m_enable = _enable;
+    m_enable.store(_enable, std::memory_order_relaxed);
 }
 
 bool PeerBlackWhitelist::enable() const
 {
-    return m_enable;
+    return m_enable.load(std::memory_order_relaxed);
 }
 
 size_t PeerBlackWhitelist::size() const
 {
+    bcos::Guard guard(x_peerList);
     return m_peerList.size();
 }
 
@@ -90,7 +91,7 @@ std::string PeerBlackWhitelist::dump(bool _isAbridged)
     bcos::Guard guard(x_peerList);
 
     std::stringstream ret;
-    ret << LOG_KV("enable", m_enable) << LOG_KV("size", m_peerList.size()) << ",list[";
+    ret << LOG_KV("enable", m_enable.load()) << LOG_KV("size", m_peerList.size()) << ",list[";
     for (auto nodeID : m_peerList)
     {
         if (_isAbridged)

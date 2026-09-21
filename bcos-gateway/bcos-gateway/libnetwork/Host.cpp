@@ -1072,6 +1072,14 @@ bcos::gateway::Host::~Host()
     {
         HOST_LOG(WARNING) << LOG_DESC("Host destroyed without stop()");
     }
+    // Sessions reference this host's callback manager through std::reference_wrapper, so a
+    // session outliving its host is a use-after-free precondition — flag it instead of passing
+    // silently (SessionSlotGuard decrements m_sessionCount exactly when a session is destroyed).
+    if (m_sessionCount.load() != 0)
+    {
+        HOST_LOG(WARNING) << LOG_DESC("Host destroyed with live sessions")
+                          << LOG_KV("sessionCount", m_sessionCount.load());
+    }
     stop();
 };
 uint16_t bcos::gateway::Host::listenPort() const
