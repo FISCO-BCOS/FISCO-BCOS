@@ -941,7 +941,16 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
     auto linkTable = m_storageWrapper->createTable(tableName, std::string(STORAGE_VALUE));
 
     /// create code index contract
-    auto codeTable = getContractTableName(newAddress);
+    // The stub's code table must live where execution looks the address up: on a
+    // Binary-layout node every account read routes through EVMAccount ("/s/<20 raw
+    // bytes>"), so writing the stub under "/apps/<hex>" leaves every call to the link
+    // address with NotFoundCodeError. Hex nodes keep the historical getContractTableName
+    // byte-for-byte (including its /sys/ routing of the 35-zero prefix).
+    auto codeTable = ledger::account::nodeAddressTableMode() ==
+                             ledger::account::AddressTableMode::Binary ?
+                         ledger::account::accountTableName(
+                             newAddress, ledger::account::AddressTableMode::Binary) :
+                         getContractTableName(newAddress);
     m_storageWrapper->createTable(codeTable, std::string(STORAGE_VALUE));
 
     if (m_blockContext.features().get(

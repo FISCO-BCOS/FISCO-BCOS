@@ -24,6 +24,7 @@
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
+#include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-tool/BfsFileFactory.h"
@@ -202,7 +203,11 @@ int BFSPrecompiled::checkLinkParam(TransactionExecutive::Ptr _executive,
     boost::trim(_contractName);
     boost::trim(_contractVersion);
     // check the status of the contract(only print the error message to the log)
-    std::string tableName = getContractTableName(getLinkRootDir(), _contractAddress);
+    // Mode-aware probe (same as ShardingPrecompiled's shard rows): Binary layout keeps
+    // contract state under "/s/<20 raw bytes>" (the shared rule EVMAccount reads with);
+    // Hex layout reproduces the base "/apps/<hex>" probe byte-for-byte — the historical
+    // getContractTableName("/apps/", address) never routed system addresses to /sys/.
+    std::string tableName = ledger::account::legacyAppsAccountTableName(_contractAddress);
     ContractStatus contractStatus = getContractStatus(_executive, tableName);
 
     if (contractStatus != ContractStatus::Available)

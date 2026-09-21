@@ -19,6 +19,8 @@
  */
 
 #include "libprecompiled/PreCompiledFixture.h"
+#include "bcos-framework/ledger/EVMAccount.h"
+#include "bcos-framework/testutils/ScopedNodeAddressTableMode.h"
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -710,6 +712,44 @@ BOOST_AUTO_TEST_CASE(createTableTest)
         TableInfoTuple t = {"id", {"item_name", "item_id"}};
         BOOST_CHECK(r2->data().toBytes() == codec->encode(t));
     }
+}
+
+BOOST_AUTO_TEST_CASE(createTableBinaryModeStubTest)
+{
+    // On a Binary-layout node the dynamic-precompiled stub that internalCreate writes for a
+    // CRUD table's link address must land at "/s/<20 raw bytes>" — where EVMAccount-based
+    // execution looks the address up — not at the historical "/apps/<hex>" table (which left
+    // every call to the link address with NotFoundCodeError).
+    ScopedNodeAddressTableMode binaryMode(ledger::account::AddressTableMode::Binary);
+    auto callAddress = tableTestAddress;
+    bcos::protocol::BlockNumber number = 1;
+    creatTable(number++, "t_binary_stub", "id", {"item_name", "item_id"}, callAddress);
+
+    auto binaryTable = ledger::account::accountTableName(
+        callAddress, ledger::account::AddressTableMode::Binary);
+    BOOST_REQUIRE(ledger::account::isBinaryAccountTableName(binaryTable));
+
+    std::promise<std::optional<storage::Table>> tablePromise;
+    storage->asyncOpenTable(binaryTable,
+        [&tablePromise](Error::UniquePtr error, std::optional<storage::Table> table) {
+            BOOST_CHECK(!error);
+            tablePromise.set_value(std::move(table));
+        });
+    auto stubTable = tablePromise.get_future().get();
+    BOOST_REQUIRE(stubTable.has_value());
+    auto codeHashEntry = stubTable->getRow(executor::ACCOUNT_CODE_HASH);
+    BOOST_REQUIRE(codeHashEntry.has_value());
+    BOOST_CHECK(!codeHashEntry->get().empty());
+
+    // the historical hex account table must NOT carry the stub
+    auto hexTable = std::string(executor::USER_APPS_PREFIX) + callAddress;
+    std::promise<std::optional<storage::Table>> hexTablePromise;
+    storage->asyncOpenTable(hexTable,
+        [&hexTablePromise](Error::UniquePtr error, std::optional<storage::Table> table) {
+            BOOST_CHECK(!error);
+            hexTablePromise.set_value(std::move(table));
+        });
+    BOOST_CHECK(!hexTablePromise.get_future().get().has_value());
 }
 
 BOOST_AUTO_TEST_CASE(appendColumnsTest)
