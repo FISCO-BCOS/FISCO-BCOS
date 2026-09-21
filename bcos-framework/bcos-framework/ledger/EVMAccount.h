@@ -93,7 +93,13 @@ constexpr auto c_systemTxsBinaryAddress = [] {
 }();
 // The 8 hex-address members; the 3 name members are filtered out.
 static_assert(c_systemTxsBinaryAddress.size() == 8);
-static_assert(std::ranges::is_sorted(c_systemTxsBinaryAddress));
+// Sortedness must hold under the SAME ordering the runtime binary_search uses:
+// string_view comparison (char_traits::compare, unsigned/memcmp order). A plain
+// is_sorted on the char arrays would compare signed chars, which orders bytes >= 0x80
+// differently — fine for today's 8 low-byte addresses, silently wrong if a high-byte
+// system address is ever added.
+static_assert(std::ranges::is_sorted(c_systemTxsBinaryAddress, std::ranges::less{},
+    [](const auto& entry) { return std::string_view{entry.data(), entry.size()}; }));
 // Spot-check the decoder: 0x...1000 has byte[18] == 0x10.
 static_assert(
     unhexLowerHexAddress(precompiled::SYS_CONFIG_ADDRESS)[ADDRESS_SIZE - 2] == '\x10');
@@ -186,6 +192,21 @@ inline std::string accountTableName(std::string_view address)
 inline std::string accountTableName(const evmc_address& address)
 {
     return accountTableName(address, nodeAddressTableMode());
+}
+
+/// Table name for the v1-precompiled call sites that historically built their key as
+/// getContractTableName("/apps/", address) = "/apps/" + <verbatim input> and therefore NEVER
+/// routed system addresses to /sys/ (ShardingPrecompiled's shard rows, the AccountManager /
+/// ContractAuthMgr access probes). Binary mode must use the shared rule above — that is where
+/// the account state actually lives once EVMAccount writes it; Hex mode must reproduce the
+/// base string byte-for-byte. Callers pass a plain 40-char lowercase hex address (no prefix).
+inline std::string legacyAppsAccountTableName(std::string_view address)
+{
+    if (nodeAddressTableMode() == AddressTableMode::Binary)
+    {
+        return accountTableName(address, AddressTableMode::Binary);
+    }
+    return std::string(ledger::SYS_DIRECTORY::USER_APPS) + std::string(address);
 }
 
 template <class Storage>

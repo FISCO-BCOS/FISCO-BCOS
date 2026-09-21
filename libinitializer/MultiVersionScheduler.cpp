@@ -221,7 +221,11 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
                 "executor_version selects a hex-only executor lane, but this node's state "
                 "DB uses the binary account-table layout; refusing to commit blocks under "
                 "an executor the on-chain config cannot be honoured with (a Binary chain "
-                "must not switch to a hex-only lane — there is no reverse migration)"));
+                "must not switch to a hex-only lane — there is no reverse migration). "
+                "The governance block that wrote executor_version is already committed, "
+                "so the chain cannot simply vote it back: recovery is operational — roll "
+                "EVERY node's state DB back to a snapshot taken before that block and "
+                "re-form consensus without the offending config transaction"));
     }
     m_currentIndex.store(static_cast<int>(selected));
 }

@@ -121,9 +121,10 @@ bcos::ledger::account::AddressTableMode bcos::initializer::resolveNodeAddressTab
                     "'), but the chain runs a hex-only executor lane (OP / Eth engine / "
                     "legacy executor): those executors name account tables /apps/<40-hex> "
                     "directly and would split reads and writes onto disjoint tables. "
-                    "Recovery: roll the state DB back to the pre-migration snapshot, or "
-                    "switch the chain to the baseline executor (executor_version = 1) "
-                    "before migrating"));
+                    "Recovery: if this chain was migrated from hex, roll the state DB back "
+                    "to the pre-migration snapshot; a chain born binary has no hex "
+                    "snapshot to return to — keep it on the baseline executor "
+                    "(executor_version = 1) and do not switch lanes"));
         }
         return AddressTableMode::Hex;
     }

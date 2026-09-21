@@ -174,8 +174,8 @@ task::Task<void> clearAccountStorage(
 /// (c_systemTxsAddress) are ordinary accounts, so EVMAccount's mode-taking constructors —
 /// which route them to "/sys/" — must NOT be used here (this is the semantic the old
 /// treatSystemAsUser=true flag carried). The name is derived by the MPT classifier
-/// (Classify.h accountTableName, the single home of the "/apps/<hex>" rule) and pinned via
-/// FromTableName so reads and writes share exactly one derivation.
+/// (Classify.h accountTableName — the hex-layout naming used by every Ethereum-lane site)
+/// and pinned via FromTableName so reads and writes share exactly one derivation.
 template <class Storage>
 bcos::ledger::account::EVMAccount<Storage> ethViewAccount(Storage& storage, const address& addr)
 {

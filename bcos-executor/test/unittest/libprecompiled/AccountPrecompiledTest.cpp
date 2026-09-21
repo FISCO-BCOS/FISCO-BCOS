@@ -20,6 +20,7 @@
 
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/AccountTableName.h"
+#include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/testutils/ScopedNodeAddressTableMode.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include <boost/test/unit_test.hpp>
@@ -410,6 +411,40 @@ public:
         return promise.get_future().get().has_value();
     }
 
+    /// Call the BalancePrecompiled (BALANCE_PRECOMPILED_ADDRESS) getBalance entry end to end.
+    ExecutionMessage::UniquePtr getBalanceOf(protocol::BlockNumber _number, Address const& account)
+    {
+        nextBlock(_number, m_blockVersion);
+        bytes in = codec->encodeWithSig("getBalance(address)", account);
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        auto hash = tx->hash();
+        txpool->hash2Transaction[hash] = tx;
+        sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+        auto params = std::make_unique<NativeExecutionMessage>();
+        params->setTransactionHash(hash);
+        params->setContextID(_number);
+        params->setSeq(1000);
+        params->setDepth(0);
+        params->setFrom(sender);
+        params->setTo(std::string(precompiled::BALANCE_PRECOMPILED_ADDRESS));
+        params->setOrigin(sender);
+        params->setStaticCall(false);
+        params->setGasAvailable(gas);
+        params->setData(std::move(in));
+        params->setType(NativeExecutionMessage::TXHASH);
+
+        std::promise<ExecutionMessage::UniquePtr> executePromise;
+        executor->executeTransaction(std::move(params),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise.set_value(std::move(result));
+            });
+        auto result = executePromise.get_future().get();
+        commitBlock(_number);
+        return result;
+    }
+
     std::string sender;
     std::string helloAddress;
 
@@ -776,6 +811,87 @@ BOOST_AUTO_TEST_CASE(addAccountBalanceBinaryTableNameExtraction)
     BOOST_CHECK(!error);
     BOOST_REQUIRE(entry.has_value());
     BOOST_CHECK_EQUAL(std::string(entry->get()), "12345");
+}
+
+// F2 regression pin: legacyAppsAccountTableName backs the v1-precompiled call sites whose
+// BASE rule was getContractTableName("/apps/", address) — plain concatenation that never
+// routed system addresses to /sys/ (ShardingPrecompiled's shard rows, the AccountManager /
+// ContractAuthMgr contract probes). In Hex mode it must reproduce those strings
+// byte-for-byte; in Binary mode it must follow the shared accountTableName rule, because
+// that is where EVMAccount writes the account state.
+BOOST_AUTO_TEST_CASE(legacyAppsAccountTableNamePinsBaseStrings)
+{
+    namespace account = bcos::ledger::account;
+    constexpr std::string_view NORMAL_ADDRESS = "420f853b49838bd3e9466c85a4cc3428c960dde2";
+    {
+        ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Hex);
+        // Every address — the c_systemTxsAddress members included — stays under /apps/.
+        BOOST_CHECK_EQUAL(account::legacyAppsAccountTableName(precompiled::EMPTY_ADDRESS),
+            "/apps/0000000000000000000000000000000000000000");
+        BOOST_CHECK_EQUAL(account::legacyAppsAccountTableName(precompiled::SYS_CONFIG_ADDRESS),
+            "/apps/0000000000000000000000000000000000001000");
+        BOOST_CHECK_EQUAL(account::legacyAppsAccountTableName(NORMAL_ADDRESS),
+            "/apps/420f853b49838bd3e9466c85a4cc3428c960dde2");
+    }
+    {
+        ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Binary);
+        // System-tx addresses keep the /sys/ hex name in every mode; address(0) is NOT one
+        // of them, so it goes to "/s/<20 zero bytes>" like any other account.
+        BOOST_CHECK_EQUAL(account::legacyAppsAccountTableName(precompiled::SYS_CONFIG_ADDRESS),
+            "/sys/0000000000000000000000000000000000001000");
+        auto const zeroTable = account::legacyAppsAccountTableName(precompiled::EMPTY_ADDRESS);
+        BOOST_REQUIRE_EQUAL(zeroTable.size(), 3 + 20);
+        BOOST_CHECK(zeroTable.starts_with("/s/"));
+        BOOST_CHECK(std::all_of(zeroTable.begin() + 3, zeroTable.end(), [](char c) {
+            return c == 0;
+        }));
+        BOOST_CHECK_EQUAL(account::legacyAppsAccountTableName(NORMAL_ADDRESS),
+            account::hexToBinaryAccountTableName("/apps/" + std::string(NORMAL_ADDRESS)));
+    }
+}
+
+// F2 regression pin (BalancePrecompiled::getContractTableName): in Hex mode the balance of
+// address(0) lives at "/sys/000...0" — the TransactionExecutive rule routes EVERY address
+// with the 35-leading-zero prefix there (a far wider set than the 8 c_systemTxsAddress
+// members), and transferBalance writes with that same rule. getBalance must read the same
+// table; deriving the name through the shared account::accountTableName rule would read
+// "/apps/000...0" instead and split balance reads from writes on a mixed-version network.
+BOOST_AUTO_TEST_CASE(getBalanceOfZeroAddressReadsSysTableInHexMode)
+{
+    namespace account = bcos::ledger::account;
+    ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Hex);
+    // The balance precompiled is gated on feature_balance_precompiled (which requires
+    // feature_balance); enable both for this test the way createSysTable does.
+    for (auto const* feature : {"feature_balance", "feature_balance_precompiled"})
+    {
+        Entry featureEntry;
+        featureEntry.set(bcos::storage::serialize::encode(SystemConfigEntry{"1", 0}));
+        std::promise<bool> featurePromise;
+        storage->asyncSetRow(ledger::SYS_CONFIG, feature, std::move(featureEntry),
+            [&featurePromise](Error::UniquePtr&& error) { featurePromise.set_value(!error); });
+        BOOST_CHECK(featurePromise.get_future().get());
+    }
+    std::string const sysZeroTable = "/sys/0000000000000000000000000000000000000000";
+    {
+        std::promise<std::optional<Table>> promise;
+        storage->asyncCreateTable(sysZeroTable, "value",
+            [&promise](Error::UniquePtr&& error, std::optional<Table>&& table) {
+                BOOST_CHECK(!error);
+                promise.set_value(std::move(table));
+            });
+        BOOST_CHECK(promise.get_future().get().has_value());
+        std::promise<bool> rowPromise;
+        storage->asyncSetRow(sysZeroTable, executor::ACCOUNT_BALANCE, Entry("777"),
+            [&rowPromise](Error::UniquePtr&& error) { rowPromise.set_value(!error); });
+        BOOST_CHECK(rowPromise.get_future().get());
+    }
+
+    bcos::protocol::BlockNumber number = 2;
+    auto response = getBalanceOf(number++, Address(std::string(precompiled::EMPTY_ADDRESS)));
+    BOOST_CHECK(response->status() == 0);
+    u256 balance;
+    codec->decode(response->data(), balance);
+    BOOST_CHECK_EQUAL(balance, u256(777));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

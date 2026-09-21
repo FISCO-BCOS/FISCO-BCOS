@@ -96,8 +96,10 @@ inline bool isKnownBcosExtensionField(std::string_view rowKey)
 /// (parseAccountTable); names are produced by EVMAccount's AddressTableMode routing, which owns
 /// the node-local encoding.
 ///
-/// Has a PRODUCTION caller — the OP lane bridge (opstack-executor/Storage2StateHelpers.h
-/// accountTableName delegates here), which needs the hex name independent of any feature —
+/// Has PRODUCTION callers — the OP lane bridge (opstack-executor/Storage2StateHelpers.h
+/// accountTableName delegates here), the Ethereum state view (ethereum-executor/EthereumState.h
+/// ethViewAccount) and the Ethereum block verifier (transaction-scheduler's
+/// EthereumBlockVerifier.h) — all needing the hex name independent of any feature,
 /// so this helper stays in the production header.
 inline std::string accountTableName(bcos::Address const& addr)
 {

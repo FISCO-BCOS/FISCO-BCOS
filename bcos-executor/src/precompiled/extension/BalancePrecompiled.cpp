@@ -103,15 +103,20 @@ std::shared_ptr<PrecompiledExecResult> BalancePrecompiled::call(
 
 
 std::string BalancePrecompiled::getContractTableName(
-    const std::shared_ptr<executor::TransactionExecutive>& /*_executive*/,
+    const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const std::string_view& _address)
 {
-    // Route through the shared mode-aware derivation (account::accountTableName — the same
-    // rule EVMAccount writes state with) instead of the legacy executive rule: this
-    // precompiled also serves the v1 executor lane, where a binary-layout node keeps account
-    // state under "/s/<20 raw bytes>". TransactionExecutive::getContractTableName stays
-    // hex-only for the deliberately hex-only v0 lane and is not touched.
-    return account::accountTableName(_address);
+    if (account::nodeAddressTableMode() == account::AddressTableMode::Binary)
+    {
+        // Binary layout: account state lives where the shared rule (the same one
+        // EVMAccount writes with) puts it — "/s/<20 raw bytes>" or "/sys/<hex>".
+        return account::accountTableName(_address, account::AddressTableMode::Binary);
+    }
+    // Hex layout: reproduce the executive rule byte-for-byte. It routes EVERY address with
+    // the 35-leading-zero prefix (address(0), 0x1..0x9, ...) to /sys/ — a wider set than
+    // the 8 c_systemTxsAddress members — and transferBalance writes with that same rule, so
+    // any deviation here splits balance reads from writes on a mixed-version network.
+    return _executive->getContractTableName(_address);
 }
 
 void BalancePrecompiled::checkOriginAuth(

@@ -155,10 +155,11 @@ void AccountManagerPrecompiled::setAccountStatus(
     auto table = _executive->storage().openTable(accountTableName);
     if (!table)
     {
-        // Probe the contract table through the shared mode-aware derivation (the same rule
-        // EVMAccount writes with): on a binary-layout node the table is "/s/<20 raw
-        // bytes>", not "/apps/<hex>".
-        auto appsAccountTableName = ledger::account::accountTableName(account.hex());
+        // Probe the contract table where it actually lives: Binary layout puts account
+        // state under "/s/<20 raw bytes>" (shared rule, same as EVMAccount writes); Hex
+        // layout reproduces the base "/apps/<hex>" probe byte-for-byte — the historical
+        // getContractTableName("/apps/", hex) never routed system addresses to /sys/.
+        auto appsAccountTableName = ledger::account::legacyAppsAccountTableName(account.hex());
         auto appsTable = _executive->storage().openTable(appsAccountTableName);
         if (appsTable)
         {

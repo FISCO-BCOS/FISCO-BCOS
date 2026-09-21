@@ -260,16 +260,14 @@ void ShardingPrecompiled::linkShard(
         return;
     }
 
-    // Route through the shared mode-aware derivation (account::accountTableName — the same
-    // rule EVMAccount writes state with) instead of the hex-only link-root rule: this
-    // precompiled also serves the v1 executor lane (registered in transaction-executor's
-    // PrecompiledManager at 0x1010, gated on feature_sharding, invoked through
-    // callBcosPrecompiled/ExecutiveWrapper), where a binary-layout node keeps account state
-    // under "/s/<20 raw bytes>" and the shard row belongs in that same account table. The
-    // v0 lane is hex-only at boot, so the Hex-mode output is byte-identical to the old
-    // getContractTableName(linkRoot, address) result there; the XOR root normalizes the
-    // binary name back to hex, so mixed-mode networks stay root-consistent.
-    auto tableName = ledger::account::accountTableName(contractAddress);
+    // Binary layout routes through the shared rule (account::accountTableName — the same
+    // one EVMAccount writes state with): the shard row belongs in the account table at
+    // "/s/<20 raw bytes>" (or "/sys/<hex>" for a system address). Hex layout must reproduce
+    // the base string byte-for-byte: the historical getContractTableName("/apps/", address)
+    // NEVER routed system addresses to /sys/, so legacyAppsAccountTableName pins the Hex
+    // branch to "/apps/<hex>" verbatim. The XOR root normalizes the binary name back to
+    // hex, so mixed-mode networks stay root-consistent.
+    auto tableName = ledger::account::legacyAppsAccountTableName(contractAddress);
 
     auto historyShard = ContractShardUtils::getContractShard(_executive->storage(), tableName);
     if (!historyShard.empty())
@@ -365,7 +363,7 @@ void ShardingPrecompiled::handleGetContractShard(
                            << LOG_KV("contractAddress", contractAddress);
 
     // Mode-aware derivation, see linkShard: the shard row lives in the account table.
-    auto tableName = ledger::account::accountTableName(contractAddress);
+    auto tableName = ledger::account::legacyAppsAccountTableName(contractAddress);
 
     auto shardName = ContractShardUtils::getContractShard(_executive->storage(), tableName);
     _callParameters->setExecResult(codec.encode(s256(CODE_SUCCESS), shardName));
@@ -409,7 +407,7 @@ void ShardingPrecompiled::handleSetContractShard(
     contractAddress = trimHexPrefix(contractAddress);
 
     // Mode-aware derivation, see linkShard: the shard row lives in the account table.
-    auto tableName = ledger::account::accountTableName(contractAddress);
+    auto tableName = ledger::account::legacyAppsAccountTableName(contractAddress);
     ContractShardUtils::setContractShard(_executive->storage(), tableName, shardName);
 }
 
