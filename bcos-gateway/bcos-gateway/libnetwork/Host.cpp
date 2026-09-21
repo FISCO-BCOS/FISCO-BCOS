@@ -401,16 +401,14 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
 
             // If the node ID exists in the black and white lists at the same time, the black list
             // takes precedence
-            if (nullptr != hostPtr->peerBlacklist() &&
-                hostPtr->peerBlacklist()->has(nodeIDOutWithoutExtInfo))
+            if (hostPtr->peerBlacklist().has(nodeIDOutWithoutExtInfo))
             {
                 HOST_LOG(INFO) << LOG_DESC("NodeID in certificate blacklist")
                                << LOG_KV("nodeID", P2PNodeID(nodeIDOutWithoutExtInfo).abridged());
                 return false;
             }
 
-            if (nullptr != hostPtr->peerWhitelist() &&
-                !hostPtr->peerWhitelist()->has(nodeIDOutWithoutExtInfo))
+            if (!hostPtr->peerWhitelist().has(nodeIDOutWithoutExtInfo))
             {
                 HOST_LOG(INFO) << LOG_DESC("NodeID is not in certificate whitelist")
                                << LOG_KV("nodeID", P2PNodeID(nodeIDOutWithoutExtInfo).abridged());
@@ -772,7 +770,7 @@ std::shared_ptr<SessionFace> Host::startPeerSession(
     }
 
     std::shared_ptr<SessionFace> session =
-        m_sessionFactory->createSession(*this, socket, m_sessionCallbackManager);
+        m_sessionFactory->createSession(*this, socket);
     // Bind a slot-release guard to the session; the slot is freed when the session is destroyed.
     session->setLifetimeGuard(std::make_shared<SessionSlotGuard>(weakHost, remoteAddress));
 
@@ -1074,6 +1072,14 @@ bcos::gateway::Host::~Host()
     {
         HOST_LOG(WARNING) << LOG_DESC("Host destroyed without stop()");
     }
+    // Sessions reference this host's callback manager through std::reference_wrapper, so a
+    // session outliving its host is a use-after-free precondition — flag it instead of passing
+    // silently (SessionSlotGuard decrements m_sessionCount exactly when a session is destroyed).
+    if (m_sessionCount.load() != 0)
+    {
+        HOST_LOG(WARNING) << LOG_DESC("Host destroyed with live sessions")
+                          << LOG_KV("sessionCount", m_sessionCount.load());
+    }
     stop();
 };
 uint16_t bcos::gateway::Host::listenPort() const
@@ -1123,10 +1129,9 @@ void bcos::gateway::Host::setSSLContextPubHandlerWithoutExtInfo(
 {
     m_sslContextPubHandlerWithoutExtInfo = std::move(_sslContextPubHandlerWithoutExtInfo);
 }
-void bcos::gateway::Host::setSessionCallbackManager(
-    SessionCallbackManagerInterface::Ptr sessionCallbackManager)
+bcos::gateway::SessionCallbackManager& bcos::gateway::Host::sessionCallbackManager()
 {
-    m_sessionCallbackManager = std::move(sessionCallbackManager);
+    return m_sessionCallbackManager;
 }
 const std::shared_ptr<ASIOInterface>& bcos::gateway::Host::asioInterface() const
 {
@@ -1140,19 +1145,19 @@ uint32_t bcos::gateway::Host::newSeq()
 {
     return ++m_seq;
 }
-void bcos::gateway::Host::setPeerBlacklist(PeerBlackWhitelistInterface::Ptr _peerBlacklist)
+void bcos::gateway::Host::setPeerBlacklist(PeerBlackWhitelist _peerBlacklist)
 {
     m_peerBlacklist = std::move(_peerBlacklist);
 }
-bcos::gateway::PeerBlackWhitelistInterface::Ptr bcos::gateway::Host::peerBlacklist()
+bcos::gateway::PeerBlackWhitelist& bcos::gateway::Host::peerBlacklist()
 {
     return m_peerBlacklist;
 }
-void bcos::gateway::Host::setPeerWhitelist(PeerBlackWhitelistInterface::Ptr _peerWhitelist)
+void bcos::gateway::Host::setPeerWhitelist(PeerBlackWhitelist _peerWhitelist)
 {
     m_peerWhitelist = std::move(_peerWhitelist);
 }
-bcos::gateway::PeerBlackWhitelistInterface::Ptr bcos::gateway::Host::peerWhitelist()
+bcos::gateway::PeerBlackWhitelist& bcos::gateway::Host::peerWhitelist()
 {
     return m_peerWhitelist;
 }
