@@ -116,7 +116,7 @@ BOOST_AUTO_TEST_CASE(ParseAccountTableAcceptsRawAddressTable)
 BOOST_AUTO_TEST_CASE(AccountTableNameRoundTrips)
 {
     auto const addr = classifyTestAddress();
-    auto const table = accountTableName(addr);
+    auto const table = account::hexAccountTableName(addr);
     BOOST_CHECK_EQUAL(table, std::string{CLASSIFY_TEST_TABLE});
     auto parsed = parseAccountTable(table);
     BOOST_REQUIRE(parsed.has_value());

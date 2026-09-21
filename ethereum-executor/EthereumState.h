@@ -31,9 +31,9 @@
 #pragma once
 
 #include "EVMSupport.h"
+#include "bcos-framework/ledger/AccountTableName.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/storage2/RollbackableStorage.h"
-#include <bcos-ledger/mpt/Classify.h>
 #include "bcos-task/TBBWait.h"
 #include <evmc/evmc.h>
 #include <cassert>
@@ -173,16 +173,17 @@ task::Task<void> clearAccountStorage(
 /// "/apps/<40 lowercase hex>": in the Ethereum execution world the FISCO system addresses
 /// (c_systemTxsAddress) are ordinary accounts, so EVMAccount's mode-taking constructors —
 /// which route them to "/sys/" — must NOT be used here (this is the semantic the old
-/// treatSystemAsUser=true flag carried). The name is derived by the MPT classifier
-/// (Classify.h accountTableName — the hex-layout naming used by every Ethereum-lane site)
-/// and pinned via FromTableName so reads and writes share exactly one derivation.
+/// treatSystemAsUser=true flag carried). The name is derived by
+/// bcos::ledger::account::hexAccountTableName (AccountTableName.h — the single home of the
+/// hex-layout, no-/sys/-routing rule the Ethereum lanes share) and pinned via FromTableName
+/// so reads and writes share exactly one derivation.
 template <class Storage>
 bcos::ledger::account::EVMAccount<Storage> ethViewAccount(Storage& storage, const address& addr)
 {
     // bytesConstRef right-aligns by default; a 20-byte address fills it exactly, so the
     // alignment has no effect.
     return {storage, bcos::ledger::account::FromTableName{},
-        bcos::ledger::mpt::accountTableName(
+        bcos::ledger::account::hexAccountTableName(
             bcos::Address{bcos::bytesConstRef{addr.bytes, sizeof(addr.bytes)}})};
 }
 

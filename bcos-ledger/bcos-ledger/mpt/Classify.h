@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @file Classify.h
- * @brief Flat-state KEY parsing: accountTableName / parseAccountTable / classifyRowKey (spec §5.2,
+ * @brief Flat-state KEY parsing: parseAccountTable / classifyRowKey (spec §5.2,
  *        Revision 2026-07-09b). Key-only on purpose — the old classify() copied every changed
  *        value into an AccountDelta/MPTBuildInput layer the builder then consumed; the block's
  *        delta already sits in the fork view's ordered mutable storage, so MPTBuilder now
@@ -90,25 +90,13 @@ inline bool isKnownBcosExtensionField(std::string_view rowKey)
            KNOWN_BCOS_EXTENSION_FIELDS.end();
 }
 
-/// The flat table name of an account in the LEGACY hex layout:
-/// "/apps/" + 40 lowercase hex chars (no 0x). The binary layout ("/s/" + the 20 raw
-/// bytes) has no producer here on purpose: the MPT layer only ever PARSES table names
-/// (parseAccountTable); names are produced by EVMAccount's AddressTableMode routing, which owns
-/// the node-local encoding.
-///
-/// Has PRODUCTION callers — the OP lane bridge (opstack-executor/Storage2StateHelpers.h
-/// accountTableName delegates here), the Ethereum state view (ethereum-executor/EthereumState.h
-/// ethViewAccount) and the Ethereum block verifier (transaction-scheduler's
-/// EthereumBlockVerifier.h) — all needing the hex name independent of any feature,
-/// so this helper stays in the production header.
-inline std::string accountTableName(bcos::Address const& addr)
-{
-    std::string table;
-    table.reserve(APPS_TABLE_PREFIX.size() + ADDRESS_HEX_LEN);
-    table.append(APPS_TABLE_PREFIX);
-    table.append(addr.hex());  // toHex uses hex_lower: 40 lowercase chars
-    return table;
-}
+/// Account table names are PRODUCED elsewhere: the mode-aware routing lives in
+/// EVMAccount.h (account::accountTableName), and the hex-only "no /sys/ routing" form the
+/// Ethereum lanes need lives next to the encoding vocabulary in bcos-framework
+/// (account::hexAccountTableName, AccountTableName.h). The MPT layer only ever PARSES
+/// table names (parseAccountTable below); it cannot host the producer because this header
+/// deliberately keeps no bcos-framework dependency, so it could never become mode-aware
+/// here.
 
 /// Parse an account table name into the address. Two layouts are accepted, told apart by
 /// PREFIX — never by length alone:

@@ -292,7 +292,7 @@ public:
         // empty trie.
         writeHeaderToBackend(makeHeader(0, ledger::mpt::emptyRootHash()));
 
-        auto const table = ledger::mpt::accountTableName(hcAddress());
+        auto const table = ledger::account::hexAccountTableName(hcAddress());
         plan[1] = {{table, "balance", "1000"}, {table, "nonce", "5"},
             {table, hcSlotRowKey(), hcRawValue(0x01)}};
         plan[2] = {{table, hcSlotRowKey(), hcRawValue(0x02)}};
@@ -364,7 +364,7 @@ BOOST_FIXTURE_TEST_SUITE(TestEthCallHistory, EthCallHistoryFixture)
 BOOST_AUTO_TEST_CASE(historicalBackendResolvesAccountRows)
 {
     auto headers = runCanonicalChain();
-    auto const table = ledger::mpt::accountTableName(hcAddress());
+    auto const table = ledger::account::hexAccountTableName(hcAddress());
 
     auto latestView = multiLayerStorage.fork();
     HCHistoricalBackend backendAt1(latestView, headers[0]->stateRoot(), ledger::account::AddressTableMode::Hex);
@@ -402,7 +402,7 @@ BOOST_AUTO_TEST_CASE(historicalBackendResolvesAccountRows)
     // An account with no leaf at the root reads as absent, all four row kinds.
     Address stranger{};
     stranger.data()[0] = 0xBB;
-    auto strangerTable = ledger::mpt::accountTableName(stranger);
+    auto strangerTable = ledger::account::hexAccountTableName(stranger);
     BOOST_CHECK(
         !task::syncWait(storage2::readOne(backendAt1, StateKeyView{strangerTable, "balance"})));
     BOOST_CHECK(!task::syncWait(
@@ -422,7 +422,7 @@ BOOST_AUTO_TEST_CASE(historicalBackendResolvesAccountRows)
 BOOST_AUTO_TEST_CASE(historicalViewReadYourWrites)
 {
     auto headers = runCanonicalChain();
-    auto const table = ledger::mpt::accountTableName(hcAddress());
+    auto const table = ledger::account::hexAccountTableName(hcAddress());
 
     auto latestView = multiLayerStorage.fork();
     HCHistoricalBackend historicalBackend(latestView, headers[0]->stateRoot(), ledger::account::AddressTableMode::Hex);
@@ -514,7 +514,7 @@ BOOST_AUTO_TEST_CASE(writeThenReadInsideHistoricalCall)
     // And the live chain state is untouched.
     auto latestView = multiLayerStorage.fork();
     auto liveValue = task::syncWait(storage2::readOne(
-        latestView, StateKeyView{ledger::mpt::accountTableName(hcAddress()), hcSlotRowKey()}));
+        latestView, StateKeyView{ledger::account::hexAccountTableName(hcAddress()), hcSlotRowKey()}));
     BOOST_REQUIRE(liveValue);
     BOOST_CHECK(liveValue->get() == hcRawValue(0x02));
 }

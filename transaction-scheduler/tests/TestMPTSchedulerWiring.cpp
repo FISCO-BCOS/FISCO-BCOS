@@ -422,8 +422,8 @@ BOOST_AUTO_TEST_CASE(scenarioATransition)
 
     auto const addressA = makeAddress(0xAA);
     auto const addressB = makeAddress(0xBB);
-    auto const tableA = mpt::accountTableName(addressA);
-    auto const tableB = mpt::accountTableName(addressB);
+    auto const tableA = bcos::ledger::account::hexAccountTableName(addressA);
+    auto const tableB = bcos::ledger::account::hexAccountTableName(addressB);
 
     // Block 500 (activation block, XOR): A gets balance + nonce.
     plan[500] = {{tableA, "balance", "1000000"}, {tableA, "nonce", "1"}};
@@ -481,9 +481,9 @@ BOOST_AUTO_TEST_CASE(pipelineVisibility)
 
     auto const addressA = makeAddress(0xA1);
     auto const addressB = makeAddress(0xB2);
-    plan[500] = {{mpt::accountTableName(addressA), "balance", "5"}};
-    plan[501] = {{mpt::accountTableName(addressA), "balance", "11"}};
-    plan[502] = {{mpt::accountTableName(addressB), "balance", "13"}};
+    plan[500] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", "5"}};
+    plan[501] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", "11"}};
+    plan[502] = {{bcos::ledger::account::hexAccountTableName(addressB), "balance", "13"}};
 
     auto header500 = executeOneBlock(500);  // XOR
     commitOneBlock(header500);
@@ -520,8 +520,8 @@ BOOST_AUTO_TEST_CASE(pipelineVisibilityNegativeControl)
 
     auto const addressA = makeAddress(0xA7);
     auto const addressB = makeAddress(0xB8);
-    plan[500] = {{mpt::accountTableName(addressA), "balance", "5"}};
-    plan[501] = {{mpt::accountTableName(addressA), "balance", "11"}};
+    plan[500] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", "5"}};
+    plan[501] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", "11"}};
 
     auto header500 = executeOneBlock(500);  // XOR
     commitOneBlock(header500);
@@ -543,7 +543,7 @@ BOOST_AUTO_TEST_CASE(pipelineVisibilityNegativeControl)
         storage::Entry entry;
         entry.set("13");
         task::syncWait(storage2::writeOne(mutableStorage(view),
-            StateKey{mpt::accountTableName(addressB), "balance"}, std::move(entry)));
+            StateKey{bcos::ledger::account::hexAccountTableName(addressB), "balance"}, std::move(entry)));
     };
     writeDelta(freshView);
     writeDelta(staleView);
@@ -584,8 +584,8 @@ BOOST_AUTO_TEST_CASE(commitAtomicityAndObserverTiming)
     useScenarioA(500);
 
     auto const addressA = makeAddress(0xC3);
-    plan[500] = {{mpt::accountTableName(addressA), "balance", "9"}};
-    plan[501] = {{mpt::accountTableName(addressA), "nonce", "2"}};
+    plan[500] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", "9"}};
+    plan[501] = {{bcos::ledger::account::hexAccountTableName(addressA), "nonce", "2"}};
 
     auto header500 = executeOneBlock(500);  // XOR
     commitOneBlock(header500);
@@ -631,7 +631,7 @@ BOOST_AUTO_TEST_CASE(scenarioBParentFromLedgerHeader)
     writeHeaderToBackend(makeExecutedShapeHeader(499, mpt::emptyRootHash()));
 
     auto const addressA = makeAddress(0xD4);
-    plan[500] = {{mpt::accountTableName(addressA), "balance", "21"}};
+    plan[500] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", "21"}};
 
     auto header500 = executeOneBlock(500);
     mpt::Account accountA;
@@ -650,7 +650,7 @@ BOOST_AUTO_TEST_CASE(scenarioBBogusParentRootFailsLoud)
     writeHeaderToBackend(makeExecutedShapeHeader(499, bogusRoot));
 
     auto const addressA = makeAddress(0xE5);
-    plan[500] = {{mpt::accountTableName(addressA), "balance", "1"}};
+    plan[500] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", "1"}};
 
     auto [error, header] = executeBlockRaw(500);
     BOOST_REQUIRE(error);
@@ -666,7 +666,7 @@ BOOST_AUTO_TEST_CASE(mptParentHeaderMissingFailsLoud)
     useScenarioB();
 
     auto const addressA = makeAddress(0xE8);
-    plan[500] = {{mpt::accountTableName(addressA), "balance", "2"}};
+    plan[500] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", "2"}};
 
     auto [error, header] = executeBlockRaw(500);
     BOOST_REQUIRE(error);
@@ -754,8 +754,8 @@ BOOST_AUTO_TEST_CASE(executeTimeHeaderRowOnlyForMPTBlocks)
     useScenarioA(500);
 
     auto const address = makeAddress(0xD4);
-    plan[500] = {{mpt::accountTableName(address), "balance", "3"}};
-    plan[501] = {{mpt::accountTableName(address), "balance", "4"}};
+    plan[500] = {{bcos::ledger::account::hexAccountTableName(address), "balance", "3"}};
+    plan[501] = {{bcos::ledger::account::hexAccountTableName(address), "balance", "4"}};
 
     // Block 500 is the activation block itself: XOR root, so no header row.
     auto header500 = executeOneBlock(500);
@@ -786,7 +786,7 @@ BOOST_AUTO_TEST_CASE(genesisBlockPublishesNoExecuteTimeHeader)
     useScenarioB();
 
     auto const address = makeAddress(0xE2);
-    plan[0] = {{mpt::accountTableName(address), "balance", "1"}};
+    plan[0] = {{bcos::ledger::account::hexAccountTableName(address), "balance", "1"}};
 
     auto header0 = executeOneBlock(0);
     // The block really went down the MPT arm (an XOR root here would make the test vacuous).
@@ -809,12 +809,12 @@ BOOST_AUTO_TEST_CASE(strayMptRowIsNotAnAccount)
 
     useScenarioA(500);
     auto const addressA = makeAddress(0xC9);
-    plan[500] = {{mpt::accountTableName(addressA), "balance", "9"}};
+    plan[500] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", "9"}};
 
     h256 strayHash;
     strayHash.data()[0] = 0x5A;
     std::string const strayKey(reinterpret_cast<char const*>(strayHash.data()), h256::SIZE);
-    plan[501] = {{mpt::accountTableName(addressA), "balance", "10"},
+    plan[501] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", "10"},
         {std::string(storage2::kMPTTable), strayKey, "not-a-real-node"}};
 
     auto header500 = executeOneBlock(500);  // XOR
@@ -837,9 +837,9 @@ BOOST_AUTO_TEST_CASE(buildFailureNoXorFallback)
     useScenarioA(500);
 
     auto const addressA = makeAddress(0xF6);
-    plan[500] = {{mpt::accountTableName(addressA), "balance", "8"}};
+    plan[500] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", "8"}};
     // Lone deletion of a core-field row: not a tombstone (nonce/codeHash not deleted).
-    plan[501] = {{mpt::accountTableName(addressA), "balance", std::nullopt}};
+    plan[501] = {{bcos::ledger::account::hexAccountTableName(addressA), "balance", std::nullopt}};
 
     auto header500 = executeOneBlock(500);  // XOR
     commitOneBlock(header500);

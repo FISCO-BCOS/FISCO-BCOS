@@ -247,7 +247,7 @@ BOOST_AUTO_TEST_CASE(NonAccountTablesDoNotSplitOrPolluteAccountRuns)
     writeFlatRow(view, bcos::executor_v1::StateKey{"/apps/shortname", "abi"}, makeEntry("z"));
     // The interleaving pair: same prefix as addrA's table, so they sort between the two
     // accounts' runs. Were their rows mistaken for account rows, addrB would inherit them.
-    auto const addrATable = accountTableName(addrA);
+    auto const addrATable = account::hexAccountTableName(addrA);
     writeFlatRow(view, bcos::executor_v1::StateKey{addrATable + "0", ROW_NONCE}, makeEntry("999"));
     writeFlatRow(
         view, bcos::executor_v1::StateKey{addrATable + "zz", ROW_BALANCE}, makeEntry("888"));

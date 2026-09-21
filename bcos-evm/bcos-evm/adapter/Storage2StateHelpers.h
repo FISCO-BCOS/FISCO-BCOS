@@ -7,6 +7,7 @@
 // `bcos::evm::evmstate`, resolvable by ordinary lookup from inside the class body.
 // Account field classification follows the same key set as the mainline MPT path.
 
+#include <bcos-framework/ledger/AccountTableName.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-ledger/mpt/Classify.h>
@@ -92,9 +93,9 @@ inline std::optional<evmc::address> addressFromTableName(std::string_view tableK
     return addr;
 }
 
-/// Account table path: unconditionally "/apps/" + hex_lower(addr). Delegates to the mainline MPT
-/// classifier (Classify.h) so the `/apps/` prefix rule has a single home — same shape as the
-/// mainline `accountTableName` and strictly inverse to `parseAccountTable`.
+/// Account table path: unconditionally "/apps/" + hex_lower(addr). Delegates to
+/// `bcos::ledger::account::hexAccountTableName` (AccountTableName.h) so the `/apps/` prefix
+/// rule has a single home — strictly inverse to `parseAccountTable` above.
 ///
 /// The 8 `c_systemTxsAddress` addresses are ORDINARY accounts here and must be collected
 /// unconditionally — ordinary addresses on the Ethereum side. Current semantics (three answers,
@@ -105,7 +106,7 @@ inline std::optional<evmc::address> addressFromTableName(std::string_view tableK
 inline std::string accountTableName(const evmc::address& addr)
 {
     // bytesConstRef 构造默认 AlignRight——20 字节地址恰为 20 字节，对齐不影响结果。
-    return bcos::ledger::mpt::accountTableName(
+    return bcos::ledger::account::hexAccountTableName(
         bcos::Address{bcos::bytesConstRef{addr.bytes, sizeof(addr.bytes)}});
 }
 }  // namespace bcos::evm::evmstate

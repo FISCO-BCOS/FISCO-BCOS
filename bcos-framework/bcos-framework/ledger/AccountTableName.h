@@ -4,6 +4,7 @@
 #include <atomic>
 #include <string>
 #include <string_view>
+#include <bcos-utilities/FixedBytes.h>
 #include <boost/algorithm/hex.hpp>
 #include <iterator>
 
@@ -44,12 +45,13 @@
 /// registration scan. See libinitializer/AddressTableModeDetection.h and
 /// AccountTableMigration.h.
 ///
-/// This header is deliberately dependency-free (no ledger/LedgerTypeDef.h): the hex prefix
-/// is a literal mirror of ledger::SYS_DIRECTORY::USER_APPS because LedgerTypeDef.h pulls in
-/// StateKey.h/Storage.h, and this header must stay includable from leaf contexts that avoid
-/// that weight (transaction-executor/StateKey.h references BINARY_TABLE_PREFIX from here;
-/// bcos-ledger's Classify.h keeps no bcos-framework dependency at all and therefore keeps
-/// its own literal mirror). "/s/" has no LedgerTypeDef counterpart at all: it is a reserved
+/// This header keeps no dependency on the heavy ledger headers (LedgerTypeDef.h pulls in
+/// StateKey.h/Storage.h): the hex prefix is a literal mirror of ledger::SYS_DIRECTORY::USER_APPS,
+/// and this header must stay includable from leaf contexts that avoid that weight
+/// (transaction-executor/StateKey.h references BINARY_TABLE_PREFIX from here; bcos-ledger's
+/// Classify.h keeps no bcos-framework dependency at all and therefore keeps its own literal
+/// mirror). bcos-utilities/FixedBytes.h (bcos::Address) is a leaf utility and fine.
+/// "/s/" has no LedgerTypeDef counterpart at all: it is a reserved
 /// namespace owned by this header alone.
 namespace bcos::ledger::account
 {
@@ -172,5 +174,23 @@ inline void setNodeAddressTableMode(AddressTableMode mode) noexcept
 inline AddressTableMode nodeAddressTableMode() noexcept
 {
     return detail::g_nodeAddressTableMode.load(std::memory_order_relaxed);
+}
+
+/// The hex-layout account table name of an address: "/apps/" + 40 lowercase hex chars, with
+/// NO /sys/ routing — in the Ethereum execution world (the OP lane bridge, the Eth
+/// executor's state view, the PoW reward path) the c_systemTxsAddress members are ordinary
+/// accounts and must NOT be rerouted. This is the single home of that rule; contrast with
+/// EVMAccount.h's accountTableName, which is mode-aware and routes system addresses to
+/// /sys/. The binary layout deliberately has no producer here: the Ethereum lanes are
+/// hex-only (libinitializer refuses binary account data on them), and making this helper
+/// mode-aware is exactly the follow-up that requires it to live in bcos-framework rather
+/// than in bcos-ledger's Classify.h (which keeps no bcos-framework dependency).
+inline std::string hexAccountTableName(bcos::Address const& addr)
+{
+    std::string table;
+    table.reserve(APPS_PREFIX.size() + HEX_ADDRESS_SIZE);
+    table.append(APPS_PREFIX);
+    table.append(addr.hex());  // FixedBytes::hex uses hex_lower: 40 lowercase chars
+    return table;
 }
 }  // namespace bcos::ledger::account
