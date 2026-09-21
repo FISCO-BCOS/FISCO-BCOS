@@ -660,7 +660,7 @@ void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const Execution
     std::optional<bcos::h256> parentBeaconBlockRoot, bcos::protocol::EthBlockVersion forkVersion,
     std::optional<bcos::h256> withdrawalsRoot)
 {
-    header.setUncleHash(engine_common::c_emptyOmmersHash);
+    header.setUncleHash(bcos::protocol::c_emptyOmmersHash);
     header.setDifficulty(bcos::u256(0));
     header.setNonce(engine_common::c_posNonce);
 

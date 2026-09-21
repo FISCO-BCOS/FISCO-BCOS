@@ -1,105 +1,50 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file BaselineSchedulerMPTHelpers.h
+ * @brief MPT helpers shared by the PBFT baseline scheduler and the engine services.
+ *        The feature gates and the XOR fold themselves live in bcos-ledger
+ *        (mpt/MPTFeatureGates.h, mpt/StateRoots.h — namespace bcos::ledger::mpt) so every
+ *        state-root producer applies the SAME transition rule; this header aliases the
+ *        gates into scheduler_v1, forwards the XOR fold, and defines the shared
+ *        build/publish/prune helpers (buildMPTStateRootForView,
+ *        publishPendingBlockHeaderForMPT, prepareMPTPruneRows).
+ */
 #pragma once
 
-#include "MPTNodeStorage.h"  // ViewNodeStorage
-#include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
-#include <bcos-ledger/LedgerMethods.h>
 #include <bcos-ledger/mpt/CommitObserver.h>
-#include <bcos-ledger/mpt/Constants.h>
-#include <bcos-ledger/mpt/MPTBuilder.h>
 #include <bcos-ledger/mpt/MPTDeltaLayer.h>
-#include <bcos-task/TBBWait.h>
+#include <bcos-ledger/mpt/MPTFeatureGates.h>
+#include <bcos-ledger/mpt/StateRoots.h>
 #include <bcos-task/Task.h>
-#include <bcos-utilities/Exceptions.h>
-#include <tbb/parallel_pipeline.h>
-#include <tbb/task_arena.h>
 #include <boost/lexical_cast.hpp>
-#include <boost/throw_exception.hpp>
-#include <optional>
 
 namespace bcos::scheduler_v1
 {
-
-DERIVE_BCOS_EXCEPTION(InvalidMPTFlagMatrix);
-
-// Decide whether block @p blockNumber commits with an Ethereum MPT state root instead of
-// the legacy XOR root (spec 5.6 / 5.10). The execute path (coExecuteBlock) consults it once
-// per block when the MPT branch is wired in.
-//
-// Pure: no throw, no side effect. The account-table encoding is NOT part of the decision:
-// it is a node-local physical layout (nodeAddressTableMode), and the MPT delta scan
-// classifies both the 40-hex and the 20-byte raw-address account table layouts
-// (Classify.h parseAccountTable), so the encoding and the MPT state root combine freely.
-inline bool shouldBuildMPT(
-    bcos::ledger::Features const& features, bcos::protocol::BlockNumber blockNumber)
-{
-    bool buildMPT = false;
-    // Scenario B: L2 Ethereum-compat chains build the MPT from genesis on. Checked FIRST:
-    // at block 0 feature_mpt_state_root is not yet active, so consulting scenario A first
-    // would send an L2 chain down the XOR path.
-    if (features.get(ledger::Features::Flag::feature_l2_ethereum_compat))
-    {
-        buildMPT = true;
-    }
-    // Scenario A: MPT enabled mid-chain by feature_mpt_state_root. Strictly-greater keeps
-    // the activation block N itself on XOR as the transition boundary (spec 5.10). The
-    // >= 0 guard rejects activationBlockOf == -1 — a flag set() without a storage load —
-    // which would otherwise silently enable MPT since blockNumber > -1 is always true.
-    else if (features.get(ledger::Features::Flag::feature_mpt_state_root))
-    {
-        auto activationBlock =
-            features.activationBlockOf(ledger::Features::Flag::feature_mpt_state_root);
-        buildMPT = activationBlock >= 0 && blockNumber > activationBlock;
-    }
-    // Neither flag: legacy XOR state root (buildMPT stays false).
-    return buildMPT;
-}
-
-// Startup-time guard for the flag matrix shouldBuildMPT relies on (spec 5.10, M7.3).
-//
-// Scenario B has no transition rule: shouldBuildMPT returns true for EVERY block once
-// feature_l2_ethereum_compat is set, because the flag is assumed enabled at genesis
-// (activation block 0) — the chain never has XOR history to transition from. A mid-chain
-// enable would silently flip the state-root scheme with no boundary, forking any node
-// that replays the pre-flag blocks. Refuse to start instead.
-//
-// Call this with a Features loaded via readFromStorage so activation blocks are
-// populated; a bare set() leaves activationBlockOf at -1, which this guard rejects for
-// the same reason (an unverifiable activation must not pass a consistency check).
-//
-// The account-table encoding plays no role here: it is a node-local physical layout
-// (nodeAddressTableMode), and the deprecated feature_raw_address flag drives nothing.
-// The OP/Eth lanes' hex-only naming constraint is enforced at boot by libinitializer
-// (resolveNodeAddressTableMode refuses binary data on a hex-only lane), not by a flag.
-//
-// @throws InvalidMPTFlagMatrix when feature_l2_ethereum_compat is set with a non-zero (or
-//         unknown) activation block. A features object without the L2 flag always passes.
-inline void validateMPTFlagMatrix(bcos::ledger::Features const& features)
-{
-    using Flag = bcos::ledger::Features::Flag;
-    if (!features.get(Flag::feature_l2_ethereum_compat))
-    {
-        return;
-    }
-    auto activationBlock = features.activationBlockOf(Flag::feature_l2_ethereum_compat);
-    if (activationBlock != 0)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidMPTFlagMatrix{} << bcos::errinfo_comment(
-                "feature_l2_ethereum_compat must be enabled at genesis (activation block 0), "
-                "but its activation block is " +
-                std::to_string(activationBlock) +
-                "; enabling it mid-chain would switch the state-root scheme with no "
-                "transition rule (spec 5.10 scenario B)"));
-    }
-}
+using ledger::mpt::InvalidMPTFlagMatrix;
+using ledger::mpt::shouldBuildMPT;
+using ledger::mpt::validateMPTFlagMatrix;
 
 /// OP mode (executor_version >= OPSTACK_EXECUTOR_VERSION) is a genesis-only property: it is
 /// decided when the chain is created and cannot change afterwards. It requires the
@@ -147,49 +92,17 @@ inline void validateOpModeGenesisOnly(bcos::ledger::Features const& features, in
 }
 
 /// XOR fold over flat storage — the legacy (non-MPT) state-root path, shared by the PBFT
-/// scheduler and the engine service. BOTH callers must pass @p features to Entry::hash: the
-/// v3.17 bugfix flag (bugfix_statestorage_hash_v3_17) changes the digest, so an
-/// implementation that omits it commits a different root than the other for the same state.
+/// scheduler and the engine service. The implementation lives in bcos-ledger
+/// (ledger::mpt::computeLegacyStateRoot, StateRoots.h) so every producer folds the same way
+/// (BOTH callers must pass @p features to Entry::hash: the v3.17 bugfix flag
+/// bugfix_statestorage_hash_v3_17 changes the digest); this alias keeps the scheduler_v1
+/// spelling the engine services use.
 template <class StorageType>
 task::Task<h256> xorStateRoot(StorageType& storage, uint32_t blockVersion,
     crypto::Hash const& hashImpl, ledger::Features const& features)
 {
-    auto range = co_await storage2::range(storage);
-    storage::Entry deletedEntry;
-    deletedEntry.setStatus(storage::Entry::DELETED);
-
-    // Wrap once outside the parallel pipeline so the optional copy is paid only once,
-    // not per entry.
-    std::optional<ledger::Features> const featuresOpt(features);
-
-    h256 totalHash;
-    using KeyValueType = task::AwaitableReturnType<decltype(range.next())>;
-    tbb::parallel_pipeline(tbb::this_task_arena::max_concurrency(),
-        tbb::make_filter<void, KeyValueType>(tbb::filter_mode::serial_in_order,
-            [&](tbb::flow_control& control) -> KeyValueType {
-                if (auto keyValue = task::tbb::syncWait(range.next()))
-                {
-                    return keyValue;
-                }
-                control.stop();
-                return {};
-            }) &
-            tbb::make_filter<KeyValueType, h256>(tbb::filter_mode::parallel,
-                [&](KeyValueType keyValue) -> h256 {
-                    auto& [key, value] = *keyValue;
-                    executor_v1::StateKeyView view(key);
-                    auto [tableName, keyName] = view.get();
-
-                    const storage::Entry* entry = nullptr;
-                    if (entry = std::get_if<storage::Entry>(std::addressof(value)); !entry)
-                    {
-                        entry = std::addressof(deletedEntry);
-                    }
-                    return entry->hash(tableName, keyName, hashImpl, blockVersion, featuresOpt);
-                }) &
-            tbb::make_filter<h256, void>(
-                tbb::filter_mode::serial_out_of_order, [&](h256 hash) { totalHash ^= hash; }));
-    co_return totalHash;
+    co_return co_await ledger::mpt::computeLegacyStateRoot(
+        storage, blockVersion, hashImpl, features);
 }
 
 /// Backwards-compatible name for xorStateRoot, kept for the FIB-99/FIB-105 state-root tests.
@@ -200,9 +113,10 @@ task::Task<h256> calculateStateRoot(StorageType& storage, uint32_t blockVersion,
     co_return co_await xorStateRoot(storage, blockVersion, hashImpl, features);
 }
 
-/// Build an Ethereum MPT state root over @p view. Single source for the parent-root rule:
-/// the parent's committed state root is read only when the parent itself built an MPT, so an
-/// activation-boundary parent (XOR root) starts from the empty trie.
+/// Build an Ethereum MPT state root over @p view. The parent-root rule is single-sourced in
+/// bcos-ledger (ledger::mpt::parentStateRootFor, StateRoots.h): the parent's committed state
+/// root is read only when the parent itself built an MPT, so an activation-boundary parent
+/// (XOR root) starts the build from the empty trie.
 ///
 /// @param trackRefCounts  forwarded to buildAndCollect: false skips the per-hash
 ///                        refCountDeltas tally for callers whose commit path never reads it.
@@ -217,21 +131,10 @@ task::Task<ledger::mpt::MPTDeltaLayer> buildMPTStateRootForView(ViewType& view,
     protocol::BlockHeader const& blockHeader, ledger::LedgerConfig const& ledgerConfig,
     protocol::BlockFactory& blockFactory, bool trackRefCounts = false)
 {
-    auto const blockNumber = blockHeader.number();
-    h256 parentStateRoot = ledger::mpt::emptyRootHash();
-    if (blockNumber > 0 && shouldBuildMPT(ledgerConfig.features(), blockNumber - 1))
-    {
-        auto parentBlock =
-            co_await ledger::getBlockData(view, blockNumber - 1, ledger::HEADER, blockFactory);
-        parentStateRoot = parentBlock->blockHeader()->stateRoot();
-    }
-    // Node reads resolve through the full view (parent nodes live in the pending layers /
-    // backend); node writes land in this block's own mutable layer (MPTNodeStorage.h).
-    ViewNodeStorage<ViewType> nodeStorage(view);
-    bool const l2Mode =
-        ledgerConfig.features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
-    co_return co_await ledger::mpt::buildAndCollect(nodeStorage, parentStateRoot, view, l2Mode,
-        ledger::account::nodeAddressTableMode(), trackRefCounts);
+    h256 parentStateRoot = co_await ledger::mpt::parentStateRootFor(
+        view, ledgerConfig.features(), blockHeader.number(), blockFactory);
+    co_return co_await ledger::mpt::computeMptStateDelta(
+        view, parentStateRoot, ledgerConfig, trackRefCounts);
 }
 
 /// Publish the header under SYS_NUMBER_2_BLOCK_HEADER so the next block's MPT build can read

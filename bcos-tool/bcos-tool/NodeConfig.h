@@ -42,10 +42,8 @@ class NodeConfig
 public:
     constexpr static ssize_t DEFAULT_CACHE_SIZE = 32 * 1024 * 1024;
     constexpr static ssize_t DEFAULT_MIN_CONSENSUS_TIME_MS = 3000;
-    constexpr static ssize_t DEFAULT_MIN_LEASE_TTL_SECONDS = 3;
     constexpr static ssize_t DEFAULT_MAX_SEAL_TIME_MS = 600000;
     constexpr static ssize_t DEFAULT_PIPELINE_SIZE = 50;
-
     using Ptr = std::shared_ptr<NodeConfig>;
     NodeConfig();
 
@@ -56,8 +54,8 @@ public:
     explicit NodeConfig(bcos::crypto::KeyFactory::Ptr _keyFactory);
     virtual ~NodeConfig() = default;
 
-    virtual void loadConfig(std::string const& _configPath, bool _enforceMemberID = true,
-        bool enforceChainConfig = false, bool enforceGroupId = true);
+    virtual void loadConfig(std::string const& _configPath, bool enforceChainConfig = false,
+        bool enforceGroupId = true);
     virtual void loadServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadGatewayServiceConfig(boost::property_tree::ptree const& _pt);
@@ -79,7 +77,7 @@ public:
 
     virtual void loadGenesisConfigFromString(std::string const& _content);
 
-    virtual void loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID = true,
+    virtual void loadConfig(boost::property_tree::ptree const& _pt,
         bool _enforceChainConfig = false, bool _enforceGroupId = true);
     virtual void loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig);
 
@@ -140,10 +138,6 @@ public:
     // ([storage] migrate_account_tables_to_binary, default false). Safe to leave on: once the
     // layout flag in the state DB says "bin" the boot skips the scan entirely.
     bool migrateAccountTablesToBinary() const;
-    std::vector<std::string> const& pdAddrs() const;
-    std::string const& pdCaPath() const;
-    std::string const& pdCertPath() const;
-    std::string const& pdKeyPath() const;
     std::string const& storageDBName() const;
     std::string const& stateDBName() const;
     bool enableArchive() const;
@@ -250,12 +244,11 @@ public:
     // from RLPx bootnodes, verifies them with EthereumBlockVerifier and commits them
     // locally — no FISCO gateway / PBFT / txpool pipeline.
     bool ethereumELModeEnabled() const;
-    const std::string& ethereumListenIP() const;
-    uint16_t ethereumListenPort() const;
     // path to the bootnodes file (enode:// list, geth-style); default ./bootnodes.json
     const std::string& ethereumBootnodesFile() const;
-    // path to the secp256k1 node private key (PEM/hex), default empty => derive/load
-    // from the node's own key material
+    // path to a file holding the 32-byte secp256k1 node private key (hex, optional
+    // 0x prefix); empty => auto-generate a persistent key next to the FISCO node key
+    // on first start (conf/node.rlpx.key) so the RLPx identity survives restarts
     const std::string& ethereumNodeKeyFile() const;
     uint32_t ethereumMaxBatchSize() const;
     uint64_t ethereumChainId() const;
@@ -270,6 +263,20 @@ public:
     uint64_t ethereumForkOsakaTime() const;
     uint64_t ethereumForkBpo1Time() const;
     uint64_t ethereumForkBpo2Time() const;
+    // The merge (TTD) block number ([fork_timestamps].merge_block in config.genesis):
+    // blocks below it follow PoW header rules (non-zero difficulty, ommers allowed),
+    // from it onward PoS rules. 0 = PoS from genesis. REQUIRED whenever a
+    // [fork_timestamps] section is present — there is no chain-agnostic default.
+    uint64_t ethereumMergeBlock() const;
+    // Optional operator-pinned finalized checkpoint ([ethereum].finalized_checkpoint in
+    // config.ini, "<number>:<0xHASH>"): the committed block at `number` must carry
+    // `hash` — a mismatch means the bootnodes serve a wrong fork and is fatal.
+    struct EthereumFinalizedCheckpoint
+    {
+        uint64_t number = 0;
+        bcos::crypto::HashType hash;
+    };
+    std::optional<EthereumFinalizedCheckpoint> const& ethereumFinalizedCheckpoint() const;
 
     // the gateway configurations
     const std::string& p2pListenIP() const;
@@ -311,11 +318,6 @@ public:
 
     uint32_t compatibilityVersion() const;
     std::string compatibilityVersionStr() const;
-
-    std::string const& memberID() const;
-    unsigned leaseTTL() const;
-    bool enableFailOver() const;
-    std::string const& failOverClusterUrl() const;
 
     bool storageSecurityEnable() const;
     std::string storageSecuirtyKeyCenterUrl() const;
@@ -391,8 +393,6 @@ protected:
     virtual void loadStorageConfig(boost::property_tree::ptree const& _pt);
     virtual void loadConsensusConfig(boost::property_tree::ptree const& _pt);
 
-    virtual void loadFailOverConfig(
-        boost::property_tree::ptree const& _pt, bool _enforceMemberID = true);
     virtual void loadOthersConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadLedgerConfig(boost::property_tree::ptree const& _genesisConfig);
@@ -501,14 +501,10 @@ private:
     std::string m_storagePath;
     std::string m_storageType = "RocksDB";
     size_t m_keyPageSize = 10240;
-    std::vector<std::string> m_pd_addrs;
-    std::string m_pdCaPath;
-    std::string m_pdCertPath;
-    std::string m_pdKeyPath;
     bool m_enableDBStatistics = false;
     int m_maxWriteBufferNumber = 3;
     int m_maxBackgroundJobs = 3;
-    int m_maxOpenFiles = -1;
+    int m_maxOpenFiles = 256;
     size_t m_writeBufferSize = 64 << 21;
     int m_minWriteBufferNumberToMerge = 2;
     size_t m_blockCacheSize = 128 << 20;
@@ -624,11 +620,11 @@ private:
 
     // config for Ethereum L1 EL-mode self-sync ([ethereum] in config.ini)
     bool m_enableEthereumEL = false;
-    std::string m_ethereumListenIP = "0.0.0.0";
-    uint16_t m_ethereumListenPort = 30303;
     std::string m_ethereumBootnodesFile = "./bootnodes.json";
     std::string m_ethereumNodeKeyFile;
     uint32_t m_ethereumMaxBatchSize = 192;
+    uint64_t m_ethereumMergeBlock = 0;
+    std::optional<EthereumFinalizedCheckpoint> m_ethereumFinalizedCheckpoint;
     // The EL-mode chain id, validated and pinned from config.genesis's [web3] chain_id
     // (validateL2Invariants) when the genesis declares EL mode. 0 = unset: a read
     // outside EL mode is obviously invalid rather than silently Ethereum mainnet.
@@ -657,13 +653,6 @@ private:
 
     bool m_enableLRUCacheStorage = true;
     ssize_t m_cacheSize = DEFAULT_CACHE_SIZE;  // 32MB for default
-
-    // failover config
-    std::string m_memberID;
-    unsigned m_leaseTTL = 0;
-    bool m_enableFailOver = false;
-    // etcd/zookeeper/consual url
-    std::string m_failOverClusterUrl;
 
     // others config
     int m_sendTxTimeout = -1;

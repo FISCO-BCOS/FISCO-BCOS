@@ -46,7 +46,6 @@
     data_path=data
     enable_cache=true
     type=RocksDB
-    pd_addrs=
     key_page_size=10240
     ; MPT state-node pruning (pathdb): delete MPT nodes obsoleted more than
     ; mpt_prune_window blocks ago, bounding state-trie disk usage.
@@ -69,12 +68,11 @@
     ; before pruning was enabled). Default false skips the scan entirely; an INFO
     ; log at every boot notes how to enable it.
     ;mpt_prune_sweep_garbage=false
-    ; RocksDB table-cache bound. -1 (default) keeps every touched SST open — best for
-    ; archive-scale databases, but uses one file descriptor per live SST and pins each
-    ; open SST's index/filter blocks on the heap: raise the process nofile limit
-    ; (>= 65536) on archive-scale hosts. A value >= 64 bounds the table cache for
-    ; fd-constrained hosts at the cost of re-reading SST metadata on eviction.
-    ;rocksdb_max_open_files=-1
+    ; RocksDB table-cache bound. Default 256 caps file-descriptor usage for ordinary
+    ; databases. -1 keeps every touched SST open — best for archive-scale databases,
+    ; but uses one file descriptor per live SST and pins each open SST's index/filter
+    ; blocks on the heap: raise the process nofile limit (>= 65536) when enabling it.
+    ;rocksdb_max_open_files=256
     ; One-shot offline migration of the account tables from the hex layout
     ; (/apps/<40-hex>) to the binary layout (/s/<20 raw bytes>) at boot.
     ; Idempotent and crash-safe: an interrupted run resumes on the next start, and
@@ -96,16 +94,6 @@
     sync_block_by_tree=false
     send_txs_by_tree=false
     tree_width=3
-
-[failover]
-    ; enable failover or not, default disable
-    enable = false
-    ; the uuid that uniquely identifies the node
-    member_id=
-    ; failover time, in seconds, default is 3s
-    lease_ttl=3
-    ; the address of etcd, can configure multiple comma-separated
-    cluster_url=127.0.0.1:2379
 
 [log]
     enable=true

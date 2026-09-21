@@ -70,13 +70,10 @@ enable_storage_security = false
 
         [[agency.group.node]]
         node_name = "node0"
-        # the tikv storage pd-addresses
-        pd_addrs="127.0.0.1:2379"
         key_page_size=10240
         deploy_ip = ["127.0.0.1"]
         executor_deploy_ip= ["127.0.0.1"]
         monitor_listen_port = "3901"
-        # the tikv storage pd-addresses
         # monitor log path example:"/home/fisco/tars/framework/app_log/"
         monitor_log_path = ""
         # node tars server listen ip
@@ -119,13 +116,10 @@ enable_storage_security = false
 
         [[agency.group.node]]
         node_name = "node0"
-        # the tikv storage pd-addresses
-        pd_addrs="127.0.0.1:2381"
         key_page_size=10240
         deploy_ip = ["127.0.0.1"]
         executor_deploy_ip= ["127.0.0.1"]
         monitor_listen_port = "3901"
-        # the tikv storage pd-addresses
         # monitor log path example:"/home/fisco/tars/framework/app_log/"
         monitor_log_path = ""
         # node tars server listen ip
@@ -167,13 +161,10 @@ enable_storage_security = false
 
         [[agency.group.node]]
         node_name = "node0"
-        # the tikv storage pd-addresses
-        pd_addrs="127.0.0.1:2383"
         key_page_size=10240
         deploy_ip = ["127.0.0.1"]
         executor_deploy_ip= ["127.0.0.1"]
         monitor_listen_port = "3901"
-        # the tikv storage pd-addresses
         # monitor log path example:"/home/fisco/tars/framework/app_log/"
         monitor_log_path = ""
         # node tars server listen ip
@@ -214,13 +205,10 @@ enable_storage_security = false
 
         [[agency.group.node]]
         node_name = "node0"
-        # the tikv storage pd-addresses
-        pd_addrs="127.0.0.1:2385"
         key_page_size=10240
         deploy_ip = ["127.0.0.1"]
         executor_deploy_ip= ["127.0.0.1"]
         monitor_listen_port = "3901"
-        # the tikv storage pd-addresses
         # monitor log path example:"/home/fisco/tars/framework/app_log/"
         monitor_log_path = ""
         # node tars server listen ip

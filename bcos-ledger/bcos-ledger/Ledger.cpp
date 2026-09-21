@@ -281,8 +281,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
             });
 
         auto start = utcTime();
-        auto error =
-            getBlockStorage()->setRows(SYS_HASH_2_RECEIPT, txsHash, receiptsView);  // only for tikv
+        auto error = getBlockStorage()->setRows(SYS_HASH_2_RECEIPT, txsHash, receiptsView);
         auto writeReceiptsTime = utcTime() - start;
         if (error)
         {
@@ -1639,6 +1638,9 @@ static task::Task<void> importGenesisState(
 // Prague-era Ethereum header: calculateHash() computes keccak256(rlp(header))
 // instead of the Tars hash, and the RLP header carries no FISCO field (in
 // particular no compatibility_version — the D4 decoupling point).
+// The target here is the internal BlockHeader (millisecond timestamp), so the
+// mapping is kept separate from — but must stay field-aligned with — the
+// EthBlockHeaderData projection in rlp-protocol's toEthBlockHeaderData.
 static void applyEthGenesisHeader(
     bcos::protocol::BlockHeader& header, ledger::EthGenesisHeader const& ethHeader)
 {

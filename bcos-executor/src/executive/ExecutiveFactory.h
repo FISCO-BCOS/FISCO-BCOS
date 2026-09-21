@@ -62,7 +62,6 @@ protected:
     std::shared_ptr<PrecompiledMap> m_precompiled;
     std::shared_ptr<const std::set<std::string>> m_staticPrecompiled;
     const BlockContext& m_blockContext;
-    bool m_isTiKVStorage;
     bcos::IOServicePool::Ptr m_ioServicePool;
 };
 

@@ -98,7 +98,7 @@ private:
         using namespace bcos::ledger::account;
         auto& storage = const_cast<Storage&>(m_storage);
 
-        EVMAccount<Storage> evmAccount(storage, addr, bcos::ledger::account::AddressTableMode::Hex);
+        auto evmAccount = bcos::executor_v1::eth::ethViewAccount(storage, addr);
 
         if (!co_await evmAccount.exists())
             co_return std::nullopt;
@@ -165,7 +165,7 @@ private:
     {
         using namespace bcos::ledger::account;
         auto& storage = const_cast<Storage&>(m_storage);
-        EVMAccount<Storage> evmAccount(storage, addr, bcos::ledger::account::AddressTableMode::Hex);
+        auto evmAccount = bcos::executor_v1::eth::ethViewAccount(storage, addr);
 
         if (!co_await evmAccount.exists())
             co_return {};
@@ -182,7 +182,7 @@ private:
     {
         using namespace bcos::ledger::account;
         auto& storage = const_cast<Storage&>(m_storage);
-        EVMAccount<Storage> evmAccount(storage, addr, bcos::ledger::account::AddressTableMode::Hex);
+        auto evmAccount = bcos::executor_v1::eth::ethViewAccount(storage, addr);
 
         // SLOAD on a non-existent account returns 0 per EVM spec.
         co_return co_await evmAccount.storage(key);
@@ -203,7 +203,7 @@ task::Task<void> testApplyStateDiff(
     // Phase 1: Process modified_accounts FIRST so created accounts exist.
     for (auto const& m : diff.modified_accounts)
     {
-        EVMAccount<Storage> acc(storage, m.addr, bcos::ledger::account::AddressTableMode::Hex);
+        auto acc = bcos::executor_v1::eth::ethViewAccount(storage, m.addr);
         if (!co_await acc.exists())
             co_await acc.create();
         co_await acc.setNonce(std::to_string(m.nonce));
@@ -241,7 +241,7 @@ task::Task<void> testApplyStateDiff(
         if (inModified)
             continue;
 
-        EVMAccount<Storage> acc(storage, addr, bcos::ledger::account::AddressTableMode::Hex);
+        auto acc = bcos::executor_v1::eth::ethViewAccount(storage, addr);
         if (co_await acc.exists())
         {
             co_await acc.setBalance(0);

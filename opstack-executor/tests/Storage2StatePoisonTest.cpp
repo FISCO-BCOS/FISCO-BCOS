@@ -8,8 +8,8 @@
 // accumulating across the block). Without a shared slot the poison stays per-instance (the
 // pre-merge behaviour).
 
-#include <opstack-executor/Storage2State.h>
-#include <opstack-executor/Storage2StateHelpers.h>
+#include <bcos-evm/adapter/Storage2State.h>
+#include <bcos-evm/adapter/Storage2StateHelpers.h>
 
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/Storage.h>

@@ -27,13 +27,16 @@ struct RocksDBCheckpointOption
     bool optimizeLevelStyleCompaction = false;
     bool enableBlobFiles = false;
     bool enableDBStatistics = false;
-    // -1 (unlimited): never evict table readers. An archive-scale DB holds tens of thousands
-    // of SSTs, and a small table cache thrashes — every random read evicts a reader and
-    // re-reads its index/filter/properties blocks. Cost: fd usage grows toward the live SST
-    // count and, with cache_index_and_filter_blocks off, every reader pins its index/filter
-    // blocks on the heap. Bound it via [storage].rocksdb_max_open_files on fd-constrained
-    // hosts.
-    int maxOpenFiles = -1;
+    // RocksDB table-cache bound. The default 256 caps fd usage and pinned index/filter
+    // blocks for ordinary consortium-chain databases. -1 (unlimited) never evicts table
+    // readers — the right choice for an archive-scale DB (tens of thousands of SSTs),
+    // where a 256-entry cache thrashes: every random read evicts a reader and re-reads
+    // its index/filter/properties blocks (observed ~900MB/s of throwaway reads during an
+    // MPT prune rebuild on a ~942GB / 10k-SST database). Cost of -1: fd usage grows
+    // toward the live SST count and, with cache_index_and_filter_blocks off, every
+    // reader pins its index/filter blocks on the heap — raise the process nofile limit
+    // (>= 65536) when configuring it via [storage].rocksdb_max_open_files.
+    int maxOpenFiles = 256;
 };
 
 namespace detail

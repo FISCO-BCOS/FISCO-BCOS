@@ -176,12 +176,12 @@ NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
 
 NodeConfig::NodeConfig() : m_ledgerConfig(std::make_shared<LedgerConfig>()) {}
 
-void NodeConfig::loadConfig(std::string const& _configPath, bool _enforceMemberID,
-    bool enforceChainConfig, bool enforceGroupId)
+void NodeConfig::loadConfig(std::string const& _configPath, bool enforceChainConfig,
+    bool enforceGroupId)
 {
     boost::property_tree::ptree iniConfig;
     boost::property_tree::read_ini(_configPath, iniConfig);
-    loadConfig(iniConfig, _enforceMemberID, enforceChainConfig, enforceGroupId);
+    loadConfig(iniConfig, enforceChainConfig, enforceGroupId);
 }
 
 void NodeConfig::loadGenesisConfig(std::string const& _genesisConfigPath)
@@ -207,8 +207,8 @@ void NodeConfig::loadGenesisConfigFromString(std::string const& _content)
     loadGenesisConfig(genesisConfig);
 }
 
-void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID,
-    bool _enforceChainConfig, bool _enforceGroupId)
+void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforceChainConfig,
+    bool _enforceGroupId)
 {
     // if version < 3.1.0, config.ini include chainConfig
     if (_enforceChainConfig || (m_genesisConfig.m_compatibilityVersion <
@@ -232,7 +232,6 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     loadExecutorNormalConfig(_pt);
     loadEthereumConfig(_pt);
 
-    loadFailOverConfig(_pt, _enforceMemberID);
     loadStorageConfig(_pt);
     loadConsensusConfig(_pt);
     loadSyncConfig(_pt);
@@ -1124,15 +1123,20 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
         ; FISCO gateway / PBFT / txpool pipeline. Any other value (or absent
         ; section) leaves the node in the normal FISCO mode.
         mode=none
-        listen_ip=0.0.0.0
-        listen_port=30303
         ; geth-style enode:// list; path relative to the working directory
         bootnodes_file=./bootnodes.json
-        ; secp256k1 node identity (hex or PEM). Empty = derive deterministically.
+        ; secp256k1 node identity: a file holding the 32-byte private key as hex
+        ; (optional 0x prefix). Empty = auto-generate a persistent key on first
+        ; start (node.rlpx.key next to the FISCO node key) — a stable key is
+        ; strongly recommended so bootnodes can authenticate us.
         node_key_file=
         ; max blocks requested per batch (geth caps one request at
         ; MaxHeaderFetch=192 / MaxBodyFetch=128; accepted range here: 1..1024)
         max_batch_size=192
+        ; optional operator-pinned finalized checkpoint, "<number>:<0xHASH>": the
+        ; committed block at <number> must carry <0xHASH>; a mismatch is fatal
+        ; (the bootnodes serve a wrong fork). Empty = no checkpoint.
+        finalized_checkpoint=
     */
     const std::string mode = _pt.get<std::string>("ethereum.mode", "none");
     if (mode != "none" && mode != "el")
@@ -1170,14 +1174,6 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     // chain_id) in validateL2Invariants, and the config.ini->config.genesis
     // direction in validateELModeInvariants, which the node initializers call
     // after BOTH files are loaded.
-    m_ethereumListenIP = _pt.get<std::string>("ethereum.listen_ip", "0.0.0.0");
-    int listenPort = _pt.get<int>("ethereum.listen_port", 30303);
-    if (!isValidPort(listenPort))
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "ethereum.listen_port invalid: " + std::to_string(listenPort)));
-    }
-    m_ethereumListenPort = static_cast<uint16_t>(listenPort);
     m_ethereumBootnodesFile = _pt.get<std::string>("ethereum.bootnodes_file", "./bootnodes.json");
     m_ethereumNodeKeyFile = _pt.get<std::string>("ethereum.node_key_file", "");
     uint32_t maxBatch = _pt.get<uint32_t>("ethereum.max_batch_size", 192);
@@ -1194,12 +1190,52 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     }
     m_ethereumMaxBatchSize = maxBatch;
 
+    // Operator-pinned finalized checkpoint, "<number>:<0xHASH>". Validated eagerly
+    // like every neighbouring parse: a malformed value is a config error at load
+    // time, not a sync-time surprise. Empty = no checkpoint (default).
+    m_ethereumFinalizedCheckpoint.reset();
+    auto checkpoint = _pt.get<std::string>("ethereum.finalized_checkpoint", "");
+    boost::algorithm::trim(checkpoint);
+    if (!checkpoint.empty())
+    {
+        auto const colon = checkpoint.find(':');
+        if (colon == std::string::npos)
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment("ethereum.finalized_checkpoint must be "
+                                                   "\"<number>:<0xHASH>\", got: " +
+                                                   checkpoint));
+        }
+        auto numberStr = checkpoint.substr(0, colon);
+        auto hashStr = checkpoint.substr(colon + 1);
+        boost::algorithm::trim(numberStr);
+        boost::algorithm::trim(hashStr);
+        requireDecimalField("ethereum", "finalized_checkpoint(number)", numberStr);
+        requireHexField("ethereum", "finalized_checkpoint(hash)", hashStr, 64, false);
+        uint64_t number = 0;
+        try
+        {
+            number = boost::lexical_cast<uint64_t>(numberStr);
+        }
+        catch (boost::bad_lexical_cast const&)
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment(
+                    "ethereum.finalized_checkpoint number does not fit uint64: " + numberStr));
+        }
+        m_ethereumFinalizedCheckpoint =
+            EthereumFinalizedCheckpoint{number, crypto::HashType(hashStr)};
+    }
+
     NodeConfig_LOG(INFO) << LOG_DESC("loadEthereumConfig") << LOG_KV("mode", mode)
-                         << LOG_KV("listenIP", m_ethereumListenIP)
-                         << LOG_KV("listenPort", m_ethereumListenPort)
                          << LOG_KV("bootnodesFile", m_ethereumBootnodesFile)
                          << LOG_KV("nodeKeyFile", m_ethereumNodeKeyFile)
-                         << LOG_KV("maxBatchSize", m_ethereumMaxBatchSize);
+                         << LOG_KV("maxBatchSize", m_ethereumMaxBatchSize)
+                         << LOG_KV("finalizedCheckpoint",
+                                m_ethereumFinalizedCheckpoint ?
+                                    std::to_string(m_ethereumFinalizedCheckpoint->number) + ":" +
+                                        m_ethereumFinalizedCheckpoint->hash.hex() :
+                                    "none");
 }
 
 // EL-mode timestamp fork schedule ([fork_timestamps] in config.genesis). L1 PoS chains
@@ -1218,6 +1254,7 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     m_genesisConfig.m_ethereumELMode = false;
     m_genesisConfig.m_ethereumForkSchedule.reset();
     m_ethereumChainId = 0;  // reassigned by validateL2Invariants when EL is declared
+    m_ethereumMergeBlock = 0;  // reassigned by the REQUIRED merge_block key below
 
     if (auto ethSection = _genesisConfig.get_child_optional("ethereum"))
     {
@@ -1270,6 +1307,18 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     readOptionalTs("osaka_time", schedule.m_osakaTime);
     readOptionalTs("bpo1_time", schedule.m_bpo1Time);
     readOptionalTs("bpo2_time", schedule.m_bpo2Time);
+    // merge_block is REQUIRED like the rest of the non-tail ladder: the chain's only
+    // block-based fork (terminal total difficulty) — blocks below it follow PoW
+    // header rules, from it onward PoS rules. 0 = PoS from genesis (pure-PoS
+    // chains like Holesky). It must NOT silently default: an omitted key on a
+    // non-Sepolia chain would route millions of blocks through the (deliberately
+    // permissive) PoW validation branch and announce an EIP-2124 fork-id the
+    // remote rejects, with no config error to explain either. Not a timestamp, but
+    // it belongs to the same chain-level fork declaration and is parsed with the
+    // same strict decimal/0x-hex rules. Like the post-Prague tail it is
+    // deliberately NOT part of the genesis pin: divergence is caught by the
+    // fork-id handshake, which chains the merge block into the checksum.
+    m_ethereumMergeBlock = readTs("merge_block");
     // Activation times must be non-decreasing down the fork ladder — geth rejects an
     // out-of-order schedule at startup (ChainConfig.CheckConfigForkOrder), and the
     // EIP-2124 fork-id checksum chains activations IN ORDER, so a decreasing step
@@ -1315,7 +1364,8 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
                          << LOG_KV("prague", schedule.m_pragueTime)
                          << LOG_KV("osaka", schedule.m_osakaTime)
                          << LOG_KV("bpo1", schedule.m_bpo1Time)
-                         << LOG_KV("bpo2", schedule.m_bpo2Time);
+                         << LOG_KV("bpo2", schedule.m_bpo2Time)
+                         << LOG_KV("mergeBlock", m_ethereumMergeBlock);
 }
 
 // OP-lane fork schedule ([op_fork_timestamps] in config.genesis). OP forks activate by L2
@@ -1856,7 +1906,7 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     m_enableRocksDBBlob = _pt.get<bool>("storage.enable_rocksdb_blob", false);
     // Read via get_optional so a malformed value fails loudly: ptree's defaulted get()
     // swallows translation failures together with absence, and a typo must not silently
-    // select the unbounded (-1) table cache.
+    // fall back to the default table-cache bound.
     if (auto const child = _pt.get_child_optional("storage.rocksdb_max_open_files"))
     {
         auto const parsed = child->get_value_optional<int32_t>();
@@ -1898,19 +1948,9 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     // boots.
     m_migrateAccountTablesToBinary =
         _pt.get<bool>("storage.migrate_account_tables_to_binary", false);
-    m_pdCaPath = _pt.get<std::string>("storage.pd_ssl_ca_path", "");
-    m_pdCertPath = _pt.get<std::string>("storage.pd_ssl_cert_path", "");
-    m_pdKeyPath = _pt.get<std::string>("storage.pd_ssl_key_path", "");
     m_enableArchive = _pt.get<bool>("storage.enable_archive", false);
     m_syncArchivedBlocks = _pt.get<bool>("storage.sync_archived_blocks", false);
     m_enableSeparateBlockAndState = _pt.get<bool>("storage.enable_separate_block_state", false);
-    if (boost::iequals(m_storageType, bcos::storage::TiKV))
-    {
-        m_enableSeparateBlockAndState = false;
-        NodeConfig_LOG(INFO) << LOG_DESC("Only rocksDB support separate block and state")
-                             << LOG_KV("separateBlockAndState", m_enableSeparateBlockAndState)
-                             << LOG_KV("storageType", m_storageType);
-    }
     m_stateDBPath = m_storagePath;
     m_stateDBPath = m_storagePath + "/state";
     m_blockDBPath = m_storagePath + "/block";
@@ -1926,14 +1966,11 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
     //     BOOST_THROW_EXCEPTION(
     //         InvalidConfig() << errinfo_comment("Please set storage.key_page_size in 4K~32M"));
     // }
-    auto pd_addrs = _pt.get<std::string>("storage.pd_addrs", "127.0.0.1:2379");
-    boost::split(m_pd_addrs, pd_addrs, boost::is_any_of(","));
     m_enableLRUCacheStorage = _pt.get<bool>("storage.enable_cache", true);
     m_cacheSize = _pt.get<ssize_t>("storage.cache_size", DEFAULT_CACHE_SIZE);
     g_BCOSConfig.setStorageType(m_storageType);  // Set storageType to global
     NodeConfig_LOG(INFO) << LOG_DESC("loadStorageConfig") << LOG_KV("storagePath", m_storagePath)
                          << LOG_KV("KeyPage", m_keyPageSize) << LOG_KV("storageType", m_storageType)
-                         << LOG_KV("pdAddrs", pd_addrs) << LOG_KV("pdCaPath", m_pdCaPath)
                          << LOG_KV("enableArchive", m_enableArchive)
                          << LOG_KV("enableSeparateBlockAndState", m_enableSeparateBlockAndState)
                          << LOG_KV("archiveListenIP", m_archiveListenIP)
@@ -1943,39 +1980,6 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("mptPruneSweepGarbage", m_mptPruneSweepGarbage)
                          << LOG_KV("migrateAccountTablesToBinary", m_migrateAccountTablesToBinary)
                          << LOG_KV("enableLRUCacheStorage", m_enableLRUCacheStorage);
-}
-
-// Note: In components that do not require failover, do not need to set member_id
-void NodeConfig::loadFailOverConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID)
-{
-    // only enable leaderElection when using tikv
-    m_enableFailOver = _pt.get("failover.enable", false);
-    if (!m_enableFailOver)
-    {
-        return;
-    }
-    m_failOverClusterUrl = _pt.get<std::string>("failover.cluster_url", "127.0.0.1:2379");
-    m_memberID = _pt.get("failover.member_id", "");
-    if (m_memberID.size() == 0 && _enforceMemberID)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment("Please set failover.member_id must be non-empty "));
-    }
-    auto leaseTTL =
-        checkAndGetValue(_pt, "failover.lease_ttl", std::to_string(DEFAULT_MIN_LEASE_TTL_SECONDS));
-    if (leaseTTL < static_cast<int64_t>(DEFAULT_MIN_LEASE_TTL_SECONDS))
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "Please set failover.lease_ttl to no less than " +
-                                  std::to_string(DEFAULT_MIN_LEASE_TTL_SECONDS) + " seconds!"));
-    }
-    m_leaseTTL = static_cast<unsigned>(leaseTTL);
-
-    NodeConfig_LOG(INFO) << LOG_DESC("loadFailOverConfig")
-                         << LOG_KV("failOverClusterUrl", m_failOverClusterUrl)
-                         << LOG_KV("memberID", m_memberID.size() > 0 ? m_memberID : "not-set")
-                         << LOG_KV("leaseTTL", m_leaseTTL)
-                         << LOG_KV("enableFailOver", m_enableFailOver);
 }
 
 void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
@@ -2724,26 +2728,6 @@ bool NodeConfig::migrateAccountTablesToBinary() const
     return m_migrateAccountTablesToBinary;
 }
 
-std::vector<std::string> const& NodeConfig::pdAddrs() const
-{
-    return m_pd_addrs;
-}
-
-std::string const& NodeConfig::pdCaPath() const
-{
-    return m_pdCaPath;
-}
-
-std::string const& NodeConfig::pdCertPath() const
-{
-    return m_pdCertPath;
-}
-
-std::string const& NodeConfig::pdKeyPath() const
-{
-    return m_pdKeyPath;
-}
-
 std::string const& NodeConfig::storageDBName() const
 {
     return m_storageDBName;
@@ -3186,26 +3170,6 @@ std::string NodeConfig::compatibilityVersionStr() const
     return ss.str();
 }
 
-std::string const& NodeConfig::memberID() const
-{
-    return m_memberID;
-}
-
-unsigned NodeConfig::leaseTTL() const
-{
-    return m_leaseTTL;
-}
-
-bool NodeConfig::enableFailOver() const
-{
-    return m_enableFailOver;
-}
-
-std::string const& NodeConfig::failOverClusterUrl() const
-{
-    return m_failOverClusterUrl;
-}
-
 bool NodeConfig::storageSecurityEnable() const
 {
     return m_storageSecurityEnable;
@@ -3567,14 +3531,6 @@ bool bcos::tool::NodeConfig::ethereumELModeEnabled() const
 {
     return m_enableEthereumEL;
 }
-const std::string& bcos::tool::NodeConfig::ethereumListenIP() const
-{
-    return m_ethereumListenIP;
-}
-uint16_t bcos::tool::NodeConfig::ethereumListenPort() const
-{
-    return m_ethereumListenPort;
-}
 const std::string& bcos::tool::NodeConfig::ethereumBootnodesFile() const
 {
     return m_ethereumBootnodesFile;
@@ -3646,6 +3602,15 @@ uint64_t bcos::tool::NodeConfig::ethereumForkBpo2Time() const
     return m_genesisConfig.m_ethereumForkSchedule ?
                m_genesisConfig.m_ethereumForkSchedule->m_bpo2Time :
                std::numeric_limits<uint64_t>::max();
+}
+uint64_t bcos::tool::NodeConfig::ethereumMergeBlock() const
+{
+    return m_ethereumMergeBlock;
+}
+std::optional<NodeConfig::EthereumFinalizedCheckpoint> const&
+bcos::tool::NodeConfig::ethereumFinalizedCheckpoint() const
+{
+    return m_ethereumFinalizedCheckpoint;
 }
 bool bcos::tool::NodeConfig::singlePointConsensus() const
 {

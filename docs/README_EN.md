@@ -28,7 +28,6 @@ The architecture of FISCO BCOS system consists of the basic layer, core layer, s
 - Comprehensive Parallel Computing: Multi-group, intra-block sharding, DMC, DAG, and other parallel mechanisms that achieve powerful processing performance.
 - Blockchain File System: A contract data management system that provides a "what you see is what you get" interface.
 - Permission Governance Framework: A built-in permission governance framework that allows for multi-party voting to govern the blockchain.
-- Distributed Storage TiKV: Distributed transactional submission that supports massive storage.
 - SDK Basic Library: Multi-language SDK that provides easier access to national encryption on all platforms.
 
 ### Component Services:
@@ -41,7 +40,7 @@ The architecture of FISCO BCOS system consists of the basic layer, core layer, s
 - Chain Building Tool: A one-click chain building script that automates blockchain deployment.
 - Visualization Tool: A visualization management tool that reduces operational procedures.
 - Monitoring and Alerting Tool: A monitoring tool that tracks the operational status of the blockchain system in real-time and alerts users.
-- Data Archiving Tool: A cold data archiving tool that supports RocksDB and TiKV to release storage pressure.
+- Data Archiving Tool: A cold data archiving tool that supports RocksDB to release storage pressure.
 ## Documentation
 
 [《The FISCO BCOS Official Technical Documentation》](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/index.html) provides chain development guidelines, tool introductions, and design principle explanations. Users can quickly learn and use FISCO BCOS by reading the official technical documentation.

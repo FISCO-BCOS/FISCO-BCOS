@@ -860,7 +860,7 @@ BOOST_AUTO_TEST_CASE(blockHashHostNoexceptBoundary)
             throw std::runtime_error("simulated storage failure");
         };
         eth::EthereumHost<EEMutableStorage> host{EVMC_SHANGHAI, vm, state, block,
-            std::move(throwingLookup), *tx, callParams, 1};
+            std::move(throwingLookup), tx.get(), callParams, 1};
         auto result = vm.execute(host, EVMC_SHANGHAI, msg, code, sizeof(code));
         BOOST_CHECK_EQUAL(result.status_code, EVMC_SUCCESS);
     }
@@ -872,7 +872,7 @@ BOOST_AUTO_TEST_CASE(blockHashHostNoexceptBoundary)
             return evmc::bytes32{};
         };
         eth::EthereumHost<EEMutableStorage> host{EVMC_SHANGHAI, vm, state, block,
-            std::move(zeroLookup), *tx, callParams, 1};
+            std::move(zeroLookup), tx.get(), callParams, 1};
         auto result = vm.execute(host, EVMC_SHANGHAI, msg, code, sizeof(code));
         BOOST_CHECK_EQUAL(result.status_code, EVMC_SUCCESS);
     }

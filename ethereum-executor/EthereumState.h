@@ -33,6 +33,7 @@
 #include "EVMSupport.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/storage2/RollbackableStorage.h"
+#include <bcos-ledger/mpt/Classify.h>
 #include "bcos-task/TBBWait.h"
 #include <evmc/evmc.h>
 #include <cassert>
@@ -168,6 +169,23 @@ task::Task<void> clearAccountStorage(
         co_await storage2::removeSome(storage, keysToRemove);
 }
 
+/// Construct the account accessor for the Ethereum state view. The table name is ALWAYS
+/// "/apps/<40 lowercase hex>": in the Ethereum execution world the FISCO system addresses
+/// (c_systemTxsAddress) are ordinary accounts, so EVMAccount's mode-taking constructors —
+/// which route them to "/sys/" — must NOT be used here (this is the semantic the old
+/// treatSystemAsUser=true flag carried). The name is derived by the MPT classifier
+/// (Classify.h accountTableName, the single home of the "/apps/<hex>" rule) and pinned via
+/// FromTableName so reads and writes share exactly one derivation.
+template <class Storage>
+bcos::ledger::account::EVMAccount<Storage> ethViewAccount(Storage& storage, const address& addr)
+{
+    // bytesConstRef right-aligns by default; a 20-byte address fills it exactly, so the
+    // alignment has no effect.
+    return {storage, bcos::ledger::account::FromTableName{},
+        bcos::ledger::mpt::accountTableName(
+            bcos::Address{bcos::bytesConstRef{addr.bytes, sizeof(addr.bytes)}})};
+}
+
 /// Ported evmone::state::State, reading/writing BCOS storage directly.
 ///
 /// @tparam Storage the storage backend (raw scheduler storage or a
@@ -239,7 +257,7 @@ class EthereumState
         using namespace bcos::ledger::account;
         auto& storage = m_storage;
 
-        EVMAccount<Storage> evmAccount(storage, addr, bcos::ledger::account::AddressTableMode::Hex);
+        auto evmAccount = ethViewAccount(storage, addr);
 
         // Do NOT gate on SYS_TABLES existence alone: the PoW reward path writes
         // the flat BALANCE row but (historically) never registers the account
@@ -362,7 +380,7 @@ class EthereumState
     {
         using namespace bcos::ledger::account;
         auto& storage = m_storage;
-        EVMAccount<Storage> evmAccount(storage, addr, bcos::ledger::account::AddressTableMode::Hex);
+        auto evmAccount = ethViewAccount(storage, addr);
 
         if (!co_await evmAccount.exists())
             co_return {};
@@ -391,7 +409,7 @@ class EthereumState
     {
         using namespace bcos::ledger::account;
         auto& storage = m_storage;
-        EVMAccount<Storage> evmAccount(storage, addr, bcos::ledger::account::AddressTableMode::Hex);
+        auto evmAccount = ethViewAccount(storage, addr);
 
         // SLOAD on a non-existent account returns 0 per EVM spec.
         // EVMAccount::storage() already returns empty bytes32 for missing
@@ -679,7 +697,7 @@ task::Task<void> EthereumState<Storage>::applyToStorage(evmc_revision rev)
         if (acc.erase_if_empty && rev >= EVMC_SPURIOUS_DRAGON && acc.is_empty())
             continue;
 
-        EVMAccount<Storage> bcosAcc(m_storage, addr, bcos::ledger::account::AddressTableMode::Hex);
+        auto bcosAcc = ethViewAccount(m_storage, addr);
         if (!co_await bcosAcc.exists())
             co_await bcosAcc.create();
         co_await bcosAcc.setNonce(std::to_string(acc.nonce));
@@ -723,7 +741,7 @@ task::Task<void> EthereumState<Storage>::applyToStorage(evmc_revision rev)
         {
             // Genuine deletion: clear account state (including storage, so that
             // a later CREATE/CREATE2 at this address is not an EIP-7610 collision).
-            EVMAccount<Storage> bcosAcc(m_storage, addr, bcos::ledger::account::AddressTableMode::Hex);
+            auto bcosAcc = ethViewAccount(m_storage, addr);
             if (co_await bcosAcc.exists())
             {
                 co_await bcosAcc.setBalance(0);
@@ -736,7 +754,7 @@ task::Task<void> EthereumState<Storage>::applyToStorage(evmc_revision rev)
                  !acc.just_created)
         {
             // EIP-161: empty touched account is deleted.
-            EVMAccount<Storage> bcosAcc(m_storage, addr, bcos::ledger::account::AddressTableMode::Hex);
+            auto bcosAcc = ethViewAccount(m_storage, addr);
             if (co_await bcosAcc.exists())
             {
                 co_await bcosAcc.setBalance(0);

@@ -24,7 +24,9 @@ if(WITH_LEDGER_ELECTION)
     find_package(etcd-cpp-api CONFIG REQUIRED)
     find_package(gRPC REQUIRED)
     add_library(leader_election ${SRCS})
-    target_link_libraries(leader_election PUBLIC bcos-utilities bcos-framework etcd-cpp-api)
+    # bcos-legacy adds legacy/ to the include path so that consumers keep
+    # resolving <bcos-leader-election/...> includes after the move to legacy/.
+    target_link_libraries(leader_election PUBLIC bcos-utilities bcos-framework etcd-cpp-api bcos-legacy)
 
     if(TESTS)
         add_subdirectory(test)

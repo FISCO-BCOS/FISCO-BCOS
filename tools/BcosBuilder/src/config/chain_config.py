@@ -63,7 +63,7 @@ class GenesisConfig:
 
 
 class AgencyConfig:
-    def __init__(self, config, chain_id, default_url, enforce_failover):
+    def __init__(self, config, chain_id):
         """
         init the agencyConfig
         """
@@ -78,9 +78,6 @@ class AgencyConfig:
         self.rpc_service_name = self.name + utilities.ServiceInfo.rpc_service
         # the gateway service_name
         self.gateway_service_name = self.name + utilities.ServiceInfo.gateway_service
-        # the failover cluster url
-        self.failover_cluster_url = utilities.get_item_value(
-            self.config, "failover_cluster_url", default_url, enforce_failover, self.desc)
         # load storage_security config
         self.enable_storage_security = utilities.get_item_value(
             self.config, "enable_storage_security", False, False, self.desc)
@@ -241,37 +238,11 @@ class MaxNodeConfig(NodeConfig):
         """
         the max-node config
         """
-        NodeConfig.__init__(self, config, chain_id, group_id, agency_config,
-                            utilities.ServiceInfo.max_node_service, utilities.ServiceInfo.single_node_obj_name_list,
-                            sm_crypto, "max")
-        # load the pd_addrs
-        self.pd_addrs = utilities.get_item_value(
-            self.config, "pd_addrs", None, True, self.desc)
-        # the executor service config
-        self.__parse_executor_service_config()
-        # load service name(for executor)
-        self.__load_service_name()
-        # enforce turnoff the storage_security
-        self.enable_storage_security = False
-
-    def __parse_executor_service_config(self):
-        """
-        parse and load the executor service_config
-        """
-        executor_service_name = self.get_service_name(
-            utilities.ServiceInfo.executor_service)
-        executor_service_deploy_ip = utilities.get_item_value(
-            self.config, "executor_deploy_ip", None, True, self.desc)
-        self.executor_config_file_list = ["config.ini", "config.genesis"]
-        self.executor_service = NodeServiceConfig(self.chain_id, utilities.ServiceInfo.executor_service,
-                                                  executor_service_name,
-                                                  utilities.ServiceInfo.executor_service_obj,
-                                                  executor_service_deploy_ip, self.executor_config_file_list, False)
-        self.service_list.append(self.executor_service)
-
-    def __load_service_name(self):
-        self.scheduler_service_name = self.node_service_name
-        self.txpool_service_name = self.node_service_name
+        utilities.log_error(
+            "The MAX node topology (BcosNodeService + BcosExecutorService, backed by the "
+            "removed TiKV storage and etcd leader-election failover) is retired. "
+            "Please deploy a 'pro' or 'air' chain instead.")
+        sys.exit(-1)
 
 
 class GroupConfig:
@@ -302,10 +273,6 @@ class ChainConfig:
         self.config = config
         self.output_dir = output_dir
         self.node_type = node_type
-        self.enforce_failover = False
-        if self.node_type == "max":
-            self.enforce_failover = True
-        self.default_failover_url = "127.0.0.1:2379"
         self.tars_config = TarsConfig(config, require_tars_url)
         self.desc = "[chain]."
         self.__load_chain_config()
@@ -364,8 +331,7 @@ class ChainConfig:
             self.config, "agency", [], False, "")
         for agency in agency_list:
             # parse the agency config
-            agency_config = AgencyConfig(
-                agency, self.chain_id, self.default_failover_url, self.enforce_failover)
+            agency_config = AgencyConfig(agency, self.chain_id)
             self.agency_list[agency_config.name] = agency_config
             # parse the rpc service config
             rpc_config_section = utilities.get_item_value(
