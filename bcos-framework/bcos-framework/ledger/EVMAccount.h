@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/AccountTableName.h"
@@ -31,13 +32,72 @@ struct FromTableName
 /// Exactly 40 lowercase hex chars — the canonical address form (Address::hex(),
 /// boost::algorithm::hex_lower output). Uppercase is NOT accepted: it is a different
 /// string, not another encoding of the same address.
-inline bool isLowerHexAddress(std::string_view address) noexcept
+constexpr bool isLowerHexAddress(std::string_view address) noexcept
 {
     return address.size() == HEX_ADDRESS_SIZE &&
            std::all_of(address.begin(), address.end(), [](char c) {
                return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
            });
 }
+
+namespace detail
+{
+/// Compile-time nibble decode; caller guarantees lowercase hex (isLowerHexAddress).
+consteval char lowerHexNibble(char c)
+{
+    return static_cast<char>(c <= '9' ? c - '0' : c - 'a' + 10);
+}
+
+/// Compile-time unhex of one canonical 40-char lowercase-hex address.
+/// boost::algorithm::unhex is not constexpr, hence the hand-rolled decoder.
+consteval std::array<char, ADDRESS_SIZE> unhexLowerHexAddress(std::string_view hex)
+{
+    std::array<char, ADDRESS_SIZE> result{};
+    for (size_t i = 0; i < ADDRESS_SIZE; ++i)
+    {
+        result[i] = static_cast<char>(lowerHexNibble(hex[i * 2]) << 4 | lowerHexNibble(hex[i * 2 + 1]));
+    }
+    return result;
+}
+
+/// The c_systemTxsAddress members that are hex addresses, decoded to raw bytes at
+/// COMPILE TIME. Derived from c_systemTxsAddress itself — never maintained as a
+/// separate list: isLowerHexAddress filters out the name members ("/sys/...", which
+/// can never equal a hex_lower output anyway), and decoding preserves lexicographic
+/// order (lowercase hex chars sort like their nibble values), so the sorted input
+/// decodes to a sorted array and binary_search is valid. The evmc_address overload
+/// below binary-searches this set on the raw 20 bytes, so the Binary-mode
+/// non-system path does no hex work at all.
+constexpr auto c_systemTxsBinaryAddress = [] {
+    constexpr size_t count = [] {
+        size_t n = 0;
+        for (std::string_view address : precompiled::c_systemTxsAddress)
+        {
+            if (isLowerHexAddress(address))
+            {
+                ++n;
+            }
+        }
+        return n;
+    }();
+    std::array<std::array<char, ADDRESS_SIZE>, count> result{};
+    size_t i = 0;
+    for (std::string_view address : precompiled::c_systemTxsAddress)
+    {
+        if (isLowerHexAddress(address))
+        {
+            result[i++] = unhexLowerHexAddress(address);
+        }
+    }
+    return result;
+}();
+// The 8 hex-address members; the 3 name members are filtered out.
+static_assert(c_systemTxsBinaryAddress.size() == 8);
+static_assert(std::ranges::is_sorted(c_systemTxsBinaryAddress));
+// Spot-check the decoder: 0x...1000 has byte[18] == 0x10.
+static_assert(
+    unhexLowerHexAddress(precompiled::SYS_CONFIG_ADDRESS)[ADDRESS_SIZE - 2] == '\x10');
+}  // namespace detail
 
 /// THE one address → account-table-name routing rule (the encoding contract itself is
 /// documented in AccountTableName.h): the 8 c_systemTxsAddress members always route to
@@ -55,6 +115,11 @@ inline bool isLowerHexAddress(std::string_view address) noexcept
 /// empty) table: a malformed input reads an empty table on both sides of a
 /// mixed-encoding network instead of throwing on the Binary side (different receipts,
 /// different receipt root — a fork) or tripping an assert.
+///
+/// The evmc_address overload below mirrors this same rule on raw bytes: its system-tx
+/// membership test runs against detail::c_systemTxsBinaryAddress, decoded from
+/// c_systemTxsAddress at compile time — one rule, two representations of the system
+/// set, the binary one derived by the compiler so the two can never drift apart.
 /// @param address the address as a hex string (no 0x prefix)
 /// @param mode this node's account-table encoding (see AddressTableMode)
 inline std::string accountTableName(std::string_view address, AddressTableMode mode)
@@ -82,12 +147,32 @@ inline std::string accountTableName(std::string_view address, AddressTableMode m
     return tableName;
 }
 
-/// Raw-address overload: hex-encode (lowercase, the canonical form) and route through the
-/// string_view overload above, so there is still exactly one copy of the routing rule.
+/// Raw-address overload. The Binary-mode non-system path — the overwhelming hot path
+/// (every executor account access) — does NO hex work at all: the system-tx membership
+/// test runs a string_view over the raw 20 bytes against detail::c_systemTxsBinaryAddress
+/// (no copy of the address), and the "/s/" name is just prefix + raw bytes. Only a
+/// system-tx hit (which needs "/sys/<hex>") or Hex mode pays for hex_lower and routes
+/// through the string_view overload above. Equivalence with that overload holds because
+/// its hex_lower output is canonical by construction (isLowerHexAddress always passes,
+/// unhex is the exact inverse of the encode) and the name members of c_systemTxsAddress
+/// can never equal a 40-char hex string.
 inline std::string accountTableName(const evmc_address& address, AddressTableMode mode)
 {
+    const std::string_view rawAddress = concepts::bytebuffer::toView(address.bytes);
+    if (mode != AddressTableMode::Hex &&
+        !std::ranges::binary_search(detail::c_systemTxsBinaryAddress, rawAddress,
+            std::ranges::less{}, [](const auto& entry) {
+                return std::string_view{entry.data(), entry.size()};
+            }))
+    {
+        std::string tableName;
+        tableName.reserve(BINARY_TABLE_PREFIX.size() + ADDRESS_SIZE);
+        tableName.append(BINARY_TABLE_PREFIX);
+        tableName.append(rawAddress);
+        return tableName;
+    }
     std::array<char, sizeof(address.bytes) * 2> hexAddress;  // NOLINT
-    boost::algorithm::hex_lower(concepts::bytebuffer::toView(address.bytes), hexAddress.data());
+    boost::algorithm::hex_lower(rawAddress, hexAddress.data());
     return accountTableName(std::string_view(hexAddress.data(), hexAddress.size()), mode);
 }
 
