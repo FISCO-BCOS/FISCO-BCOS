@@ -84,7 +84,10 @@ public:
         bugfix_precompiled_feature_gate,      // FIB-84
         bugfix_evm_storage_status,            // FIB-94
         bugfix_statestorage_hash_v3_17,       // FIB-99/105
-        bugfix_nonce_ordering,  // web3 EOA nonce must be independent of intra-block tx order
+        bugfix_nonce_ordering,      // web3 EOA nonce must be independent of intra-block tx order
+        bugfix_v1_eoa_as_contract,  // executor v1: hide the dynamic account-precompiled marker from
+                                    // EXTCODESIZE / EXTCODECOPY / EXTCODEHASH / getCode, the way
+                                    // bugfix_eoa_as_contract already does in the legacy executor
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,

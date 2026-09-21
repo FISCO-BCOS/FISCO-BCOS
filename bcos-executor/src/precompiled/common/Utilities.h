@@ -99,6 +99,27 @@ inline bool isDynamicPrecompiledAccountCode(const std::string_view& _code)
     return getDynamicPrecompiledCodeString(ACCOUNT_ADDRESS, "") == _code;
 }
 
+// An account that only holds a balance is materialised as a dynamic account
+// precompiled: its stored "code" is the marker above, an internal dispatch token
+// rather than bytecode. Ethereum semantics expect an externally owned account to
+// have no code, so the marker must not reach EXTCODESIZE / EXTCODECOPY /
+// EXTCODEHASH / getCode. The legacy executor already hides it (see
+// bcos-executor/src/vm/HostContext.cpp externalCodeRequest and
+// TransactionExecutor::getCode); executor v1 does so under
+// bugfix_v1_eoa_as_contract.
+//
+// The flag is deliberately its own: bugfix_eoa_as_contract and
+// bugfix_eoa_match_failed have been on since 3.8 / 3.9, while executor v1 has
+// been committing blocks with the marker visible, so reusing them would change
+// how existing history replays. Callers on the code-reading path share this
+// predicate; the dispatch path (getExecutable -> processDynamicPrecompiled) must
+// NOT use it, it consumes the same marker to route the call.
+inline bool hideDynamicAccountCode(const ledger::Features& _features, std::string_view _code)
+{
+    return _features.get(ledger::Features::Flag::bugfix_v1_eoa_as_contract) &&
+           matchDynamicAccountCode(_code);
+}
+
 inline std::string& trimHexPrefix(std::string& _hex)
 {
     if (_hex.size() >= 2 && (_hex.starts_with("0x") || _hex.starts_with("0X")))

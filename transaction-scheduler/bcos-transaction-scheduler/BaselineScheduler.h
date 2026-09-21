@@ -3,6 +3,7 @@
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/dispatcher/SchedulerTypeDef.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
@@ -762,7 +763,11 @@ public:
                 ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
             auto code = co_await account.code();
 
-            if (!code)
+            // Report a balance-only account as codeless, the same way the EVM
+            // sees it (HostContext::code) and the legacy executor already
+            // reports it (TransactionExecutor::getCode). Shared predicate so the
+            // two paths cannot drift apart.
+            if (!code || precompiled::hideDynamicAccountCode(ledgerConfig->features(), code->get()))
             {
                 callback(nullptr, {});
                 co_return;
