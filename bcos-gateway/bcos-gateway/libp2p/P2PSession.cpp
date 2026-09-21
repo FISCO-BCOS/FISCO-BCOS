@@ -5,11 +5,15 @@
 
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/Common.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/ZstdCompress.h"
 #include <bcos-task/Wait.h>
+#include <boost/container/small_vector.hpp>
+#include <range/v3/view/all.hpp>
+#include <range/v3/view/single.hpp>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -190,5 +194,100 @@ bcos::task::Task<std::optional<Message>> P2PSession::fastSendP2PMessage(
     // so sending with the default (V0) version would silently drop the V2 routing fields and break
     // multi-hop forwarding through ServiceV2 router tables
     message.setVersion((uint16_t)m_protocolInfo->version());
-    co_return co_await m_session->fastSendMessage(message, std::move(payloads), options);
+
+    // Materialize the payload views once: the incoming any_view is category::input (single-pass),
+    // while the size/join passes below each iterate the payloads.
+    boost::container::small_vector<bytesConstRef, 3> payloadRefs;
+    uint32_t payloadSize = 0;
+    for (auto const& payloadRef : payloads)
+    {
+        payloadSize += payloadRef.size();
+        payloadRefs.push_back(payloadRef);
+    }
+
+    // The wire-format work that used to live in libnetwork's Session (compression, header
+    // encoding, length stamping, outgoing rate limiting) is collected here: the session now
+    // sends pure bytes and knows nothing about the P2P message format. Compression and its
+    // COMPRESS flag are decided per send and applied to the wire header only — the caller's
+    // message is never mutated, so a shared message (broadcast fan-out) cannot leak the flag
+    // to a peer that receives an uncompressed frame.
+    bcos::bytes joinedPayload;
+    bcos::bytes compressedPayload;
+    uint16_t wireExt = message.ext();
+    bool hasWirePayloadOverride = false;
+    bytesConstRef wirePayloadOverride;
+    if (service->enableCompress() && message.compressionSupported() &&
+        payloadSize > c_compressThreshold)
+    {
+        joinedPayload.reserve(payloadSize);
+        for (auto const& payloadRef : payloadRefs)
+        {
+            joinedPayload.insert(joinedPayload.end(), payloadRef.begin(), payloadRef.end());
+        }
+        if (ZstdCompress::compress(
+                ref(joinedPayload), compressedPayload, (int)c_zstdCompressLevel))
+        {
+            wireExt |= Message::COMPRESS_EXT_FLAG;
+            wirePayloadOverride = ref(std::as_const(compressedPayload));
+        }
+        else
+        {
+            wirePayloadOverride = ref(std::as_const(joinedPayload));
+        }
+        hasWirePayloadOverride = true;
+    }
+
+    bytes headerBuffer;
+    if (!message.encodeHeaderWithExt(headerBuffer, wireExt)) [[unlikely]]
+    {
+        // e.g. P2PMessageOptions::encode failed (empty/oversized src/dst IDs). Sending a frame
+        // whose header claims "has options" while the options are missing would make the peer
+        // drop the connection instead of the message.
+        BOOST_THROW_EXCEPTION(NetworkException(-1, "encode header failed"));
+    }
+    uint32_t totalLength = static_cast<uint32_t>(headerBuffer.size()) +
+                           (hasWirePayloadOverride ? wirePayloadOverride.size() : payloadSize);
+    Message::stampLength(headerBuffer, totalLength);
+
+    // The fast path must honour the same pre-send (outgoing rate-limit) check that the callback
+    // path (asyncSendMessage) enforces; judged on the ACTUAL wire bytes (a zero-copy message does
+    // not carry its payload, so message.length() alone would under-count the outgoing traffic).
+    // A rejection surfaces as a thrown NetworkException (e.g. OutBWOverflow / InQPSOverflow) so
+    // coroutine retry loops can stop.
+    if (auto result = service->onBeforeMessage(*m_session, message, totalLength))
+    {
+        const auto& error = result.value();
+        BOOST_THROW_EXCEPTION(NetworkException((int64_t)error.errorCode(), error.errorMessage()));
+    }
+
+    ::ranges::any_view<bytesConstRef> wirePayloads =
+        hasWirePayloadOverride ?
+            ::ranges::any_view<bytesConstRef>(::ranges::views::single(wirePayloadOverride)) :
+            ::ranges::any_view<bytesConstRef>(::ranges::views::all(payloadRefs));
+
+    if (c_fileLogLevel <= LogLevel::TRACE)
+    {
+        P2PSESSION_LOG(TRACE) << LOG_DESC("P2PSession fastSendP2PMessage")
+                              << LOG_KV("endpoint", m_session->nodeIPEndpoint())
+                              << LOG_KV("seq", message.seq())
+                              << LOG_KV("packetType", message.packetType())
+                              << LOG_KV("ext", wireExt) << LOG_KV("wireLength", totalLength);
+    }
+
+    // headerBuffer / joinedPayload / compressedPayload live in this coroutine frame; the co_await
+    // keeps them alive until the session's write no longer references the views.
+    auto response = co_await m_session->fastSendMessage(
+        ref(headerBuffer), std::move(wirePayloads), message.seq(), options);
+    if (!response)
+    {
+        co_return std::nullopt;
+    }
+    // Decode the response frame back into a Message (the session delivers raw frames now).
+    Message respMessage;
+    if (respMessage.decode(ref(response->frame)) < 0) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(NetworkException(
+            P2PExceptionType::ProtocolError, "ProtocolError(decode response message error)"));
+    }
+    co_return respMessage;
 }

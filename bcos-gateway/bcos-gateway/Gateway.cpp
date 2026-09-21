@@ -24,7 +24,7 @@
 #include "bcos-gateway/Common.h"
 #include "bcos-gateway/gateway/GatewayMessageExtAttributes.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"

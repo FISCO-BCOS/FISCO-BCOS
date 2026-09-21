@@ -6,7 +6,7 @@
 #pragma once
 
 #include "bcos-gateway/libnetwork/Host.h"
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include "bcos-task/Task.h"
 #include <optional>
 

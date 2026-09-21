@@ -7,8 +7,8 @@
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/libnetwork/Common.h"
-#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/PeerBlackWhitelist.h"
+#include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Common.h"
@@ -41,8 +41,6 @@ class IOServicePool;
 
 namespace bcos::gateway
 {
-class SessionFactory;
-class SessionFace;
 class SocketFace;
 class ASIOInterface;
 

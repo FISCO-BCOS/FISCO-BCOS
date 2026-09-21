@@ -19,7 +19,7 @@
  */
 #include "ServiceV2.h"
 #include "Common.h"
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include "bcos-utilities/BoostLog.h"
 #include <bcos-task/Wait.h>
 #include <cstring>

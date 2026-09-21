@@ -22,8 +22,8 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
-#include "bcos-gateway/libnetwork/Message.h"
-#include "bcos-gateway/libnetwork/Session.h"
+#include "bcos-gateway/libp2p/Message.h"
+#include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/test/unit_test.hpp>
@@ -126,7 +126,7 @@ inline SessionBundle_FIB97new makeSessionFib97new()
 
     auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
     session->setMessageHandler(
-        [](NetworkException /*e*/, SessionFace::Ptr /*s*/, Message /*m*/) {});
+        [](NetworkException /*e*/, SessionFace::Ptr /*s*/, FrameMeta /*m*/) {});
 
     return {fakeHost, fakeSocket, session};
 }

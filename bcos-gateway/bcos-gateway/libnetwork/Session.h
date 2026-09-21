@@ -7,7 +7,7 @@
 #pragma once
 
 #include "bcos-gateway/libnetwork/Common.h"
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libnetwork/FrameMeta.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
 #include "bcos-gateway/libnetwork/SessionFace.h"
 #include "bcos-utilities/Common.h"
@@ -92,9 +92,17 @@ struct Payload
     }
 };
 
-class Session : public SessionFace, public std::enable_shared_from_this<Session>
+// The session machinery (read loop, batched write loop, response-callback correlation) is
+// generic over the frame DECODER only — the session never sees a concrete message type.
+// Inbound, DecoderT splits the byte stream into FrameMeta (see FrameMeta.h); outbound, the
+// caller hands over an already-encoded header plus payload views. The member definitions live
+// in SessionImpl.h; the gateway instantiates this with libp2p's P2PDecoder.
+template <FrameDecoder DecoderT>
+class BasicSession : public SessionFace, public std::enable_shared_from_this<BasicSession<DecoderT>>
 {
 public:
+    using DecoderType = DecoderT;
+
     // Grow ceiling: the recv buffer never grows beyond this (see the read-loop grow path).
     constexpr static const std::size_t MIN_SESSION_RECV_BUFFER_SIZE = 512 * 1024UL;
     // FIB-184: initial recv-buffer size for a freshly created session. Previously every
@@ -105,16 +113,16 @@ public:
     // header length so the first read can always make forward progress.
     constexpr static const std::size_t INITIAL_SESSION_RECV_BUFFER_SIZE = 16 * 1024UL;
 
-    Session(std::shared_ptr<SocketFace> socket, Host& server,
+    BasicSession(std::shared_ptr<SocketFace> socket, Host& server,
         size_t _recvBufferSize = INITIAL_SESSION_RECV_BUFFER_SIZE, bool _forceSize = false);
 
-    Session(const Session&) = delete;
-    Session(Session&&) = delete;
-    Session& operator=(Session&&) = delete;
-    Session& operator=(const Session&) = delete;
-    ~Session() noexcept override;
+    BasicSession(const BasicSession&) = delete;
+    BasicSession(BasicSession&&) = delete;
+    BasicSession& operator=(BasicSession&&) = delete;
+    BasicSession& operator=(const BasicSession&) = delete;
+    ~BasicSession() noexcept override;
 
-    using Ptr = std::shared_ptr<Session>;
+    using Ptr = std::shared_ptr<BasicSession>;
 
     void start() override;
 
@@ -127,8 +135,8 @@ public:
     void startWithPolicy();
     void disconnect(DisconnectReason _reason) override;
 
-    task::Task<std::optional<Message>> fastSendMessage(const Message& message,
-        ::ranges::any_view<bytesConstRef> payloads, Options options) override;
+    task::Task<std::optional<FrameMeta>> fastSendMessage(bytesConstRef header,
+        ::ranges::any_view<bytesConstRef> payloads, uint32_t seq, Options options) override;
 
     NodeIPEndpoint nodeIPEndpoint() const override;
 
@@ -145,17 +153,10 @@ public:
 
     SessionCallbackManager& sessionCallbackManager() const;
 
-    virtual const std::function<void(NetworkException, SessionFace::Ptr, Message)>&
+    virtual const std::function<void(NetworkException, SessionFace::Ptr, FrameMeta)>&
     messageHandler();
     void setMessageHandler(
-        std::function<void(NetworkException, SessionFace::Ptr, Message)> messageHandler)
-        override;
-
-    // handle before sending message: if the check fails (returns an error), the message is not
-    // sent and a NetworkException surfaces so coroutine retry loops can stop. The handler receives
-    // the actual wire length (payload views included) as _wireLength.
-    void setBeforeMessageHandler(std::function<std::optional<bcos::Error>(
-        SessionFace&, const Message&, uint32_t _wireLength)> handler) override;
+        std::function<void(NetworkException, SessionFace::Ptr, FrameMeta)> messageHandler) override;
 
     void setHostInfo(P2PInfo _hostInfo);
 
@@ -176,9 +177,6 @@ public:
 
     uint32_t allowMaxMsgSize() const;
     void setAllowMaxMsgSize(uint32_t _allowMaxMsgSize);
-
-    void setEnableCompress(bool _enableCompress);
-    bool enableCompress() const;
 
     SessionRecvBuffer& recvBuffer();
     const SessionRecvBuffer& recvBuffer() const;
@@ -207,6 +205,10 @@ private:
 public:
     SessionRecvBuffer m_recvBuffer;
 
+    // The stream decoder for this session's wire format. Stateless decoders are empty classes;
+    // no_unique_address keeps them zero-cost.
+    [[no_unique_address]] DecoderT m_decoder{};
+
     // ------ for optimize send message parameters  begin ---------------
     //  // Maximum amount of data to read one time, default: 40K
     uint32_t m_maxReadDataSize = 40 * 1024;
@@ -214,8 +216,6 @@ public:
     uint32_t m_maxSendDataSize = 1024 * 1024;
     //  Maximum size of message that is allowed to send or receive, default: 32M
     uint32_t m_allowMaxMsgSize = 32 * 1024 * 1024;
-    //
-    bool m_enableCompress = true;
     // ------ for optimize send message parameters  end ---------------
 
     /// Drop the connection for the reason @a _reason.
@@ -257,13 +257,13 @@ public:
     /// single exit) to drain the queue.
     void write();
 
-    /// called by the read loop to deal with a decoded message
-    void onMessage(NetworkException const& e, Message message);
+    /// called by the read loop to deal with a decoded frame
+    void onMessage(NetworkException const& e, FrameMeta meta);
 
     /// Settle one queued callback that resumes a suspended waiter, delivering `args...` to it.
     /// The settle error is chosen at the call site, per callback signature: a payload callback
     /// takes a boost::system::error_code, whereas a response callback
-    /// (ResponseCallback::callback) takes (NetworkException, std::optional<Message>).
+    /// (ResponseCallback::callback) takes (NetworkException, std::optional<FrameMeta>).
     ///
     /// Run it on the shared io pool while the host is alive, inline once it is gone, containing any
     /// exception either way. Three reasons for that shape, all of them load-bearing:
@@ -276,33 +276,11 @@ public:
     ///    nest that waiter's whole continuation either.
     /// This is the single place that policy lives for write-queue settlement; the
     /// response-callback paths in onMessage / onTimeout settle inline under their own containment.
+    /// Defined out-of-line in SessionImpl.h: the body touches Host (incomplete here), and as a
+    /// member of a class template the compiler would check those non-dependent expressions
+    /// eagerly at the point of definition.
     template <class Callback, class... Args>
-    inline void postCallback(Callback&& callback, const char* description, Args... args)
-    {
-        static_assert(std::is_invocable_v<Callback&, Args...>,
-            "postCallback: the callback cannot be invoked with the given settle arguments");
-
-        auto deliver = [callback = std::forward<Callback>(callback), description,
-                           ... args = std::move(args)]() mutable {
-            try
-            {
-                callback(std::move(args)...);
-            }
-            catch (std::exception const& e)
-            {
-                SESSION_LOG(WARNING) << LOG_DESC(description)
-                                     << LOG_KV("what", boost::diagnostic_information(e));
-            }
-        };
-        if (m_server.get().haveNetwork())
-        {
-            m_server.get().asioInterface()->post(std::move(deliver));
-        }
-        else
-        {
-            deliver();  // no live executor: a posted task would never run
-        }
-    }
+    void postCallback(Callback&& callback, const char* description, Args... args);
 
     std::reference_wrapper<Host> m_server;  ///< The host that owns us. Never null.
     std::shared_ptr<SocketFace> m_socket;   ///< Socket of peer's connection.
@@ -321,9 +299,7 @@ public:
 
     // Owned by the Host (m_server) that created us. Never null, like m_server.
     std::reference_wrapper<SessionCallbackManager> m_sessionCallbackManager;
-    std::function<void(NetworkException, SessionFace::Ptr, Message)> m_messageHandler;
-    std::function<std::optional<bcos::Error>(
-        SessionFace&, const Message&, uint32_t)> m_beforeMessageHandler;
+    std::function<void(NetworkException, SessionFace::Ptr, FrameMeta)> m_messageHandler;
 
     // Seqs of with-response sends registered through this session. The callback manager above is
     // shared host-wide, so drop() uses this set to fail only THIS session's pending response
@@ -333,7 +309,7 @@ public:
         std::lock_guard lock(x_pendingResponseSeqs);
         m_pendingResponseSeqs.emplace(seq);
     }
-    void removePendingResponseSeq(uint32_t seq)
+    void removePendingResponseSeq(uint32_t seq) override
     {
         std::lock_guard lock(x_pendingResponseSeqs);
         m_pendingResponseSeqs.erase(seq);
@@ -363,19 +339,12 @@ public:
     std::unordered_set<uint32_t> m_pendingResponseSeqs;
 };
 
+// Session factory interface, held by Host (which is decoder-agnostic). The concrete factory is
+// BasicSessionFactory<DecoderT> below; the gateway instantiates it with libp2p's P2PDecoder.
 class SessionFactory
 {
 public:
-    SessionFactory(P2PInfo _hostInfo, uint32_t _sessionRecvBufferSize,  // NOLINT
-        uint32_t _allowMaxMsgSize, uint32_t _maxReadDataSize, uint32_t _maxSendDataSize,
-        bool _enableCompress)
-      : m_hostInfo(std::move(_hostInfo)),
-        m_sessionRecvBufferSize(_sessionRecvBufferSize),
-        m_allowMaxMsgSize(_allowMaxMsgSize),
-        m_maxReadDataSize(_maxReadDataSize),
-        m_maxSendDataSize(_maxSendDataSize),
-        m_enableCompress(_enableCompress)
-    {}
+    SessionFactory() = default;
     SessionFactory(const SessionFactory&) = delete;
     SessionFactory(SessionFactory&&) = delete;
     SessionFactory& operator=(SessionFactory&&) = delete;
@@ -383,7 +352,29 @@ public:
     virtual ~SessionFactory() = default;
 
     virtual std::shared_ptr<SessionFace> createSession(
-        Host& _server, std::shared_ptr<SocketFace> const& _socket);
+        Host& _server, std::shared_ptr<SocketFace> const& _socket) = 0;
+};
+
+template <FrameDecoder DecoderT>
+class BasicSessionFactory : public SessionFactory
+{
+public:
+    BasicSessionFactory(P2PInfo _hostInfo, uint32_t _sessionRecvBufferSize,  // NOLINT
+        uint32_t _allowMaxMsgSize, uint32_t _maxReadDataSize, uint32_t _maxSendDataSize)
+      : m_hostInfo(std::move(_hostInfo)),
+        m_sessionRecvBufferSize(_sessionRecvBufferSize),
+        m_allowMaxMsgSize(_allowMaxMsgSize),
+        m_maxReadDataSize(_maxReadDataSize),
+        m_maxSendDataSize(_maxSendDataSize)
+    {}
+    BasicSessionFactory(const BasicSessionFactory&) = delete;
+    BasicSessionFactory(BasicSessionFactory&&) = delete;
+    BasicSessionFactory& operator=(BasicSessionFactory&&) = delete;
+    BasicSessionFactory& operator=(const BasicSessionFactory&) = delete;
+    ~BasicSessionFactory() override = default;
+
+    std::shared_ptr<SessionFace> createSession(
+        Host& _server, std::shared_ptr<SocketFace> const& _socket) override;
 
 private:
     P2PInfo m_hostInfo;
@@ -391,7 +382,6 @@ private:
     uint32_t m_allowMaxMsgSize{0};
     uint32_t m_maxReadDataSize{0};
     uint32_t m_maxSendDataSize{0};
-    bool m_enableCompress = true;
 };
 
 }  // namespace bcos::gateway

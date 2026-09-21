@@ -1,5 +1,5 @@
 
-/** @file Session.h
+/** @file SessionFace.h
  * @author Gav Wood <i@gavwood.com>
  * @author Alex Leverington <nessence@gmail.com>
  * @date 2014
@@ -14,8 +14,7 @@
 #pragma once
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/libnetwork/Common.h"
-#include "bcos-gateway/libnetwork/Message.h"
-#include "bcos-gateway/libnetwork/SessionCallback.h"
+#include "bcos-gateway/libnetwork/FrameMeta.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Error.h"
 #include <boost/asio.hpp>
@@ -27,6 +26,10 @@ namespace bcos::gateway
 {
 class SocketFace;
 
+// The session interface of a framed byte-stream transport. Deliberately message-agnostic:
+// outbound, the caller supplies an already-encoded header plus payload views (the wire format
+// belongs to the layer above); inbound, frames arrive as FrameMeta produced by the session's
+// decoder (see FrameMeta.h).
 class SessionFace
 {
 public:
@@ -42,22 +45,20 @@ public:
     virtual void start() = 0;
     virtual void disconnect(DisconnectReason) = 0;
 
-    virtual task::Task<std::optional<Message>> fastSendMessage(
-        const Message& header, ::ranges::any_view<bytesConstRef> payloads, Options options) = 0;
+    // Send one frame: header (already encoded, WITHOUT the payload) followed by the payload
+    // views. The caller keeps every referenced buffer alive until the returned task completes.
+    // `seq` correlates a response when options.response is set; the response arrives as the
+    // decoded FrameMeta (nullopt on failure/timeout).
+    virtual task::Task<std::optional<FrameMeta>> fastSendMessage(bytesConstRef header,
+        ::ranges::any_view<bytesConstRef> payloads, uint32_t seq, Options options) = 0;
 
     virtual std::shared_ptr<SocketFace> socket() = 0;
 
-    // The handler is invoked with the decoded message by value (move it out if it must outlive
-    // the call); on error delivery the message is default-constructed and the error carries the
-    // cause.
+    // The handler is invoked with the decoded frame by value (move it out if it must outlive
+    // the call); on error delivery (e.g. teardown notification) the frame is
+    // default-constructed and the error carries the cause.
     virtual void setMessageHandler(
-        std::function<void(NetworkException, SessionFace::Ptr, Message)> messageHandler) = 0;
-
-    // Outgoing pre-send check (rate limiting). _wireLength is the actual frame size including the
-    // payload views — a zero-copy message does not carry its payload, so message.length() alone
-    // under-counts.
-    virtual void setBeforeMessageHandler(std::function<std::optional<bcos::Error>(
-        SessionFace&, const Message&, uint32_t _wireLength)> handler) = 0;
+        std::function<void(NetworkException, SessionFace::Ptr, FrameMeta)> messageHandler) = 0;
 
     virtual NodeIPEndpoint nodeIPEndpoint() const = 0;
 
@@ -68,5 +69,11 @@ public:
     virtual bool active() const = 0;
 
     virtual std::size_t writeQueueSize() = 0;
+
+    // Response-correlation bookkeeping: the response-callback manager is shared host-wide, so a
+    // routed response can be claimed on a different session than the request went out on — the
+    // claiming session clears the OWNER's pending seq through this hook (see
+    // ResponseCallback::owner).
+    virtual void removePendingResponseSeq(uint32_t seq) = 0;
 };
 }  // namespace bcos::gateway

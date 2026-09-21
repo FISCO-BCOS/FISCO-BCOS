@@ -19,7 +19,7 @@
  * @date 2021-05-13
  */
 #include "GatewayNodeManager.h"
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include <bcos-task/Wait.h>
 #include <cstring>
 

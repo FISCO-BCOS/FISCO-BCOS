@@ -7,7 +7,7 @@
 #include "bcos-framework/Common.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-gateway/libnetwork/Common.h"      // for SocketFace
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"  // for SocketFace
 #include "bcos-gateway/libp2p/Common.h"
 #include "bcos-gateway/libp2p/P2PInterface.h"  // for SessionCallbackFunc...
@@ -260,15 +260,27 @@ void Service::onConnect(
     p2pSession->setProtocolInfo(m_localProtocol);
 
     auto p2pSessionWeakPtr = std::weak_ptr<P2PSession>(p2pSession);
-    p2pSession->session()->setMessageHandler([self = shared_from_this(), p2pSessionWeakPtr](
-                                                 auto&& exception, auto&& session, auto&& message) {
-        self->onMessage(std::forward<decltype(exception)>(exception),
-            std::forward<decltype(session)>(session), std::forward<decltype(message)>(message),
-            p2pSessionWeakPtr);
-    });
-    p2pSession->session()->setBeforeMessageHandler(
-        [this](SessionFace& session, const Message& message, uint32_t wireLength) {
-            return onBeforeMessage(session, message, wireLength);
+    // The session delivers raw frames (FrameMeta) now; decode them back into Messages here, at
+    // the libp2p boundary. A decode failure is delivered as a ProtocolError so the error path
+    // below drops the session — the same treatment the old in-session decode gave it.
+    p2pSession->session()->setMessageHandler(
+        [self = shared_from_this(), p2pSessionWeakPtr](
+            NetworkException exception, SessionFace::Ptr session, FrameMeta meta) {
+            if (exception.errorCode() != 0)
+            {
+                self->onMessage(exception, std::move(session), Message{}, p2pSessionWeakPtr);
+                return;
+            }
+            Message message;
+            if (message.decode(ref(meta.frame)) < 0) [[unlikely]]
+            {
+                self->onMessage(NetworkException(P2PExceptionType::ProtocolError,
+                                    "ProtocolError(decode message error)"),
+                    std::move(session), Message{}, p2pSessionWeakPtr);
+                return;
+            }
+            self->onMessage(
+                exception, std::move(session), std::move(message), p2pSessionWeakPtr);
         });
 
     // Note: the lock must be here, otherwise there will be more than one started sessions,

@@ -21,7 +21,7 @@
 
 #include "bcos-gateway/gateway/GatewayMessageExtAttributes.h"
 #define BOOST_TEST_MAIN
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>

@@ -21,8 +21,8 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
-#include "bcos-gateway/libnetwork/Message.h"
-#include "bcos-gateway/libnetwork/Session.h"
+#include "bcos-gateway/libp2p/Message.h"
+#include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-gateway/libnetwork/SessionReadLoop.h"
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/IOServicePool.h>
@@ -284,7 +284,7 @@ BOOST_AUTO_TEST_CASE(DecodeErrorTriggersSessionDrop)
         // make progress on a real frame
         auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 16, true);
         session->setMessageHandler(
-            [](NetworkException e, SessionFace::Ptr sessionFace, Message message) {});
+            [](NetworkException e, SessionFace::Ptr sessionFace, FrameMeta meta) {});
 
         session->startWithPolicy<FakeASIO_FIB::ReadPolicy>();
 
@@ -323,7 +323,7 @@ BOOST_AUTO_TEST_CASE(DecodeExceptionTriggersSessionDrop)
 
         auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 16, true);
         session->setMessageHandler(
-            [](NetworkException e, SessionFace::Ptr sessionFace, Message message) {});
+            [](NetworkException e, SessionFace::Ptr sessionFace, FrameMeta meta) {});
 
         session->startWithPolicy<FakeASIO_FIB::ReadPolicy>();
 
@@ -365,7 +365,7 @@ BOOST_AUTO_TEST_CASE(SocketSharedPtrCaptureInAsyncHandler)
 
         auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
         session->setMessageHandler(
-            [](NetworkException e, SessionFace::Ptr sessionFace, Message message) {});
+            [](NetworkException e, SessionFace::Ptr sessionFace, FrameMeta meta) {});
 
         // After session creation, socket should be held by both fakeSocket and session
         BOOST_CHECK(fakeSocket.use_count() > 1);
@@ -403,14 +403,14 @@ BOOST_AUTO_TEST_CASE(DropFlushesOnlyOwnPendingResponseCallbacks)
         std::atomic<int> firedA{0};
         std::atomic<int> firedB{0};
         auto handlerA = std::make_shared<ResponseCallback>();
-        handlerA->callback = [&firedA](NetworkException e, std::optional<Message>) {
+        handlerA->callback = [&firedA](NetworkException e, std::optional<FrameMeta>) {
             if (e.errorCode() != 0)
             {
                 ++firedA;
             }
         };
         auto handlerB = std::make_shared<ResponseCallback>();
-        handlerB->callback = [&firedB](NetworkException e, std::optional<Message>) {
+        handlerB->callback = [&firedB](NetworkException e, std::optional<FrameMeta>) {
             if (e.errorCode() != 0)
             {
                 ++firedB;
@@ -469,24 +469,29 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
 
         auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
         session->setMessageHandler(
-            [](NetworkException e, SessionFace::Ptr sessionFace, Message message) {});
+            [](NetworkException e, SessionFace::Ptr sessionFace, FrameMeta meta) {});
         session->startWithPolicy<FakeASIO_FIB::ReadPolicy>();
 
         // the socket's io_context is never run by the fixture: drive it so the posted
         // async_write actually executes (and fails against the closed peer)
         std::thread ioThread([&]() { fakeSocket->ioService().run(); });
 
+        // the session sends pure bytes now: encode the P2P header at the caller and hand over
+        // header + payload views (packetType 0 carries no options, so the encode cannot fail)
         Message message;
-        message.setPacketType(1);
         message.setSeq(seq);
         bcos::bytes payload = {'x'};
-        task::wait([](std::shared_ptr<Session> _session, Message _message,
-                       bcos::bytes _payload, std::atomic<int>& _completions,
+        bcos::bytes headerBuffer;
+        message.encodeHeader(headerBuffer);
+        Message::stampLength(headerBuffer,
+            static_cast<uint32_t>(headerBuffer.size() + payload.size()));
+        task::wait([](std::shared_ptr<Session> _session, bcos::bytes _header,
+                       bcos::bytes _payload, uint32_t _seq, std::atomic<int>& _completions,
                        std::atomic<int64_t>& _errorCode) -> task::Task<void> {
             try
             {
-                co_await _session->fastSendMessage(_message,
-                    ::ranges::views::single(bcos::ref(_payload)), Options{2000, true});
+                co_await _session->fastSendMessage(bcos::ref(_header),
+                    ::ranges::views::single(bcos::ref(_payload)), _seq, Options{2000, true});
                 ++_completions;
             }
             catch (NetworkException const& e)
@@ -494,7 +499,7 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
                 _errorCode.store(e.errorCode());
                 ++_completions;
             }
-        }(session, std::move(message), payload, completions, errorCode));
+        }(session, std::move(headerBuffer), payload, seq, completions, errorCode));
 
         // task::wait detaches: the coroutine completes on the io threads once the write fails
         // (or the 2s response timer fires as backstop) — poll for the completion

@@ -7,7 +7,7 @@
  */
 #pragma once
 #include "bcos-gateway/libnetwork/Common.h"
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libnetwork/FrameMeta.h"
 #include <boost/asio/steady_timer.hpp>
 #include <array>
 #include <mutex>
@@ -17,11 +17,11 @@
 namespace bcos::gateway
 {
 
-class Session;
+class SessionFace;
 
-// The response message, or nullopt when the request failed / timed out / the session dropped
+// The response frame, or nullopt when the request failed / timed out / the session dropped
 // before any response arrived.
-using SessionCallbackFunc = std::function<void(NetworkException, std::optional<Message>)>;
+using SessionCallbackFunc = std::function<void(NetworkException, std::optional<FrameMeta>)>;
 
 struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
 {
@@ -33,7 +33,7 @@ struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
     // the session the request was registered through: the manager is shared host-wide, so a
     // routed response can be claimed on a different session than the owner — the owner's
     // pending-seq bookkeeping must be updated through this pointer, not the claiming session
-    std::weak_ptr<Session> owner;
+    std::weak_ptr<SessionFace> owner;
 };
 
 using SessionResponseCallback = ResponseCallback;

@@ -33,8 +33,8 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
-#include "bcos-gateway/libnetwork/Message.h"
-#include "bcos-gateway/libnetwork/Session.h"
+#include "bcos-gateway/libp2p/Message.h"
+#include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-gateway/libnetwork/SessionReadLoop.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
@@ -168,7 +168,7 @@ BOOST_AUTO_TEST_CASE(InFlightReadKeepsSessionAlive)
     std::weak_ptr<Session> weakSession;
     {
         auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 1024, true);
-        session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message) {});
+        session->setMessageHandler([](NetworkException, SessionFace::Ptr, FrameMeta) {});
         weakSession = session;
 
         // startWithPolicy() arms the first read synchronously (the old code used to defer the
@@ -236,7 +236,7 @@ BOOST_AUTO_TEST_CASE(DropClosesSocketInlineWhenNetworkDown)
     auto fakeHost = std::make_shared<FakeHost_Lifetime>(hashImpl, fakeAsio, nullptr);
 
     auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 1024, true);
-    session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message) {});
+    session->setMessageHandler([](NetworkException, SessionFace::Ptr, FrameMeta) {});
     BOOST_REQUIRE(fakeSocket->isConnected());
 
     // Host::stop() has already joined the io_context threads: the socket's io_context will never

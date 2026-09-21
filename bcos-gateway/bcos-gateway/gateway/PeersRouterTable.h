@@ -22,7 +22,7 @@
 #include "bcos-crypto/interfaces/crypto/KeyFactory.h"
 #include "bcos-framework/gateway/GroupNodeInfo.h"
 #include "bcos-framework/protocol/ProtocolInfo.h"
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PInterface.h"
 #include "bcos-gateway/protocol/GatewayNodeStatus.h"
 #include "bcos-task/Task.h"

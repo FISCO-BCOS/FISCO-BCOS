@@ -21,7 +21,7 @@
 #include "bcos-framework/protocol/AMOPRequest.h"
 #include "bcos-gateway/libamop/AMOPMessage.h"
 #include "bcos-gateway/libamop/TopicManager.h"
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PInterface.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-utilities/IOServicePool.h"

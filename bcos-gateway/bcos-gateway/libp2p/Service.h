@@ -106,6 +106,11 @@ public:
     void setBeforeMessageHandler(std::function<std::optional<bcos::Error>(
         SessionFace&, const Message&, uint32_t)> _handler);
 
+    // Outbound payload compression policy (was a per-session flag in libnetwork; the wire-format
+    // work moved up to P2PSession, so the flag lives here now).
+    bool enableCompress() const { return m_enableCompress; }
+    void setEnableCompress(bool _enableCompress) { m_enableCompress = _enableCompress; }
+
     bool registerHandlerByMsgType(uint16_t _type, MessageHandler const& _msgHandler) override;
 
     MessageHandler getMessageHandlerByMsgType(uint16_t _type);
@@ -176,6 +181,8 @@ protected:
         SessionFace&, const Message&, uint32_t)> m_beforeMessageHandler;
     std::function<std::optional<bcos::Error>(SessionFace::Ptr, const Message&)>
         m_onMessageHandler;
+
+    bool m_enableCompress = false;
 };
 
 }  // namespace bcos::gateway

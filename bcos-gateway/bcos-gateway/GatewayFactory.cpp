@@ -16,7 +16,8 @@
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/PeerBlackWhitelist.h"
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libp2p/Message.h"
+#include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
 #include "bcos-gateway/libp2p/Service.h"
@@ -691,10 +692,10 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
 
     auto nodeIDHash = _config->calculateShortNodeID(pubHex);
     P2PInfo selfInfo(nodeIDHash, pubHex);
-    // Session Factory
-    auto sessionFactory = std::make_shared<SessionFactory>(selfInfo,
+    // Session Factory: the gateway's wire format is the P2P one (see libp2p/P2PDecoder.h)
+    auto sessionFactory = std::make_shared<P2PSessionFactory>(selfInfo,
         _config->sessionRecvBufferSize(), _config->allowMaxMsgSize(), _config->maxReadDataSize(),
-        _config->maxSendDataSize(), _config->enableCompress());
+        _config->maxSendDataSize());
     // KeyFactory
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
 
@@ -732,6 +733,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
 
     service->setHost(host);
     service->setStaticNodes(_config->connectedNodes());
+    service->setEnableCompress(_config->enableCompress());
 
     GatewayP2PReloadHandler::config = _config;
     GatewayP2PReloadHandler::service = service;

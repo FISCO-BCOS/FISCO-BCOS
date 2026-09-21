@@ -44,8 +44,8 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
-#include "bcos-gateway/libnetwork/Message.h"
-#include "bcos-gateway/libnetwork/Session.h"
+#include "bcos-gateway/libp2p/Message.h"
+#include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <chrono>
@@ -155,7 +155,7 @@ BOOST_AUTO_TEST_CASE(TeardownFloodMustNotStarveMessageDelivery)
     {
         auto socket = std::make_shared<FakeSocket_Reactor>();
         auto session = std::make_shared<Session>(socket, *fakeHost, 1024, true);
-        session->setMessageHandler([probe](NetworkException, SessionFace::Ptr, Message) {
+        session->setMessageHandler([probe](NetworkException, SessionFace::Ptr, FrameMeta) {
             probe->teardownRunning.fetch_add(1);
             while (!probe->release.load())
             {  // hold the reactor worker, as a batch of real teardowns would

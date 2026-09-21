@@ -20,7 +20,7 @@
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-gateway/GatewayFactory.h"
 #include "bcos-gateway/libnetwork/Common.h"
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include "bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/BoostLogInitializer.h"

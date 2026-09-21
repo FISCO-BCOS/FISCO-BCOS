@@ -1,10 +1,10 @@
 /**
- * @brief Template definitions of Session::readLoop / startWithPolicy — the read path
+ * @brief Template definitions of BasicSession::readLoop / startWithPolicy — the read path
  *        is a compile-time policy (see ASIOInterface::awaitableReadSome), so production compiles
  *        against the default policy (a direct, inlined async_read_some) while read-loop test
  *        fakes instantiate the same code with their own parking policy. The bodies live in this
- *        separate header (included by Session.cpp and by the mock-using test TUs) to keep
- *        Session.h a pure class declaration.
+ *        separate header (included by the TUs instantiating a BasicSession specialization) to
+ *        keep Session.h a pure class declaration.
  * @file SessionReadLoop.h
  */
 #pragma once
@@ -23,8 +23,9 @@ namespace bcos::gateway
 // start() (the default policy), which delegates here with ASIOInterface::DefaultReadPolicy — this
 // template adds no runtime cost in production. Tests instantiate it with a fake policy, e.g.
 // session->startWithPolicy<FakeASIO::ReadPolicy>().
+template <FrameDecoder DecoderT>
 template <typename ReadPolicy>
-void Session::startWithPolicy()
+void BasicSession<DecoderT>::startWithPolicy()
 {
     SESSION_LOG(INFO) << "[Session::start] this=" << this;
     if (!m_active && m_server.get().haveNetwork())
@@ -37,7 +38,7 @@ void Session::startWithPolicy()
         task::wait(readLoop<ReadPolicy>());
     }
 
-    auto self = weak_from_this();
+    auto self = this->weak_from_this();
     m_idleCheckTimer->registerTimeoutHandler([self]() {
         auto session = self.lock();
         if (session)
@@ -48,8 +49,9 @@ void Session::startWithPolicy()
     m_idleCheckTimer->start();
 }
 
+template <FrameDecoder DecoderT>
 template <typename ReadPolicy>
-task::Task<void> Session::readLoop()
+task::Task<void> BasicSession<DecoderT>::readLoop()
 {
     // FIB-184: the coroutine frame holds a strong reference to the session for the whole read
     // loop. While the loop is suspended at the co_await below, the buffer handed to
@@ -57,7 +59,7 @@ task::Task<void> Session::readLoop()
     // keeps both alive until the read completes, so a concurrent teardown on another thread can
     // free them only after the read finishes. This supersedes the FIB-97/FIB-184 completion-
     // handler captures with a structural guarantee.
-    auto self = shared_from_this();
+    auto self = this->shared_from_this();
     try
     {
         while (m_active && m_server.get().haveNetwork())
@@ -104,36 +106,36 @@ task::Task<void> Session::readLoop()
                 co_return;
             }
 
-            // decode every complete message already in the buffer, then loop back for more
+            // decode every complete frame already in the buffer, then loop back for more
             while (true)
             {
-                Message message;
+                FrameMeta meta;
                 try
                 {
                     auto bufferForWrite = recvBuffer.asWriteBuffer();
                     auto readBuffer = recvBuffer.asReadBuffer();
-                    // Note: the decode function may throw exception
-                    ssize_t result = message.decode(readBuffer);
-                    if (result > 0)
+                    // Note: the decoder contract says no-throw; the catch is belt-and-braces
+                    meta = m_decoder.tryDecode(readBuffer);
+                    if (meta.status == FrameMeta::Status::Frame)
                     {
                         NetworkException e(P2PExceptionType::Success, "Success");
-                        onMessage(e, std::move(message));
-                        recvBuffer.onRead(result);
+                        onMessage(e, std::move(meta));
+                        recvBuffer.onRead(meta.consumed);
                     }
-                    else if (result == 0)
+                    else if (meta.status == FrameMeta::Status::NeedMoreData)
                     {
-                        auto length = message.lengthDirect();
+                        auto length = meta.declaredLength;
                         if (length > allowMaxMsgSize())
                         {
                             SESSION_LOG(ERROR)
                                 << LOG_BADGE("readLoop")
                                 << LOG_DESC("the message size exceeded the allow maximum value")
-                                << LOG_KV("msgSize", message.length())
+                                << LOG_KV("msgSize", length)
                                 << LOG_KV("allowMaxMsgSize", allowMaxMsgSize());
 
                             onMessage(NetworkException(P2PExceptionType::ProtocolError,
                                           "ProtocolError(msg overflow)"),
-                                std::move(message));
+                                FrameMeta{});
                             drop(UserReason);
                             co_return;
                         }
@@ -171,34 +173,32 @@ task::Task<void> Session::readLoop()
                     }
                     else
                     {
-                        SESSION_LOG(ERROR)
-                            << LOG_BADGE("readLoop") << LOG_DESC("decode message error")
-                            << LOG_KV("result", result);
+                        SESSION_LOG(ERROR) << LOG_BADGE("readLoop") << LOG_DESC("decode frame error");
                         onMessage(NetworkException(P2PExceptionType::ProtocolError,
-                                      "ProtocolError(decode msg error)"),
-                            std::move(message));
+                                      "ProtocolError(decode frame error)"),
+                            FrameMeta{});
                         drop(UserReason);
                         co_return;
                     }
                 }
                 catch (std::exception const& e)
                 {
-                    SESSION_LOG(ERROR) << LOG_DESC("Decode message exception")
+                    SESSION_LOG(ERROR) << LOG_DESC("Decode frame exception")
                                        << LOG_KV("message", boost::diagnostic_information(e));
                     onMessage(NetworkException(P2PExceptionType::ProtocolError,
-                                  "ProtocolError(decode msg exception)"),
-                        std::move(message));
+                                  "ProtocolError(decode frame exception)"),
+                        FrameMeta{});
                     drop(UserReason);
                     co_return;
                 }
                 catch (...)
                 {
                     SESSION_LOG(ERROR)
-                        << LOG_DESC("Decode message exception")
+                        << LOG_DESC("Decode frame exception")
                         << LOG_KV("message", boost::current_exception_diagnostic_information());
                     onMessage(NetworkException(P2PExceptionType::ProtocolError,
-                                  "ProtocolError(decode msg exception)"),
-                        std::move(message));
+                                  "ProtocolError(decode frame exception)"),
+                        FrameMeta{});
                     drop(UserReason);
                     co_return;
                 }

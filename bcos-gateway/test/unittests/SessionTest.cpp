@@ -22,8 +22,8 @@
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
-#include "bcos-gateway/libnetwork/Message.h"
-#include "bcos-gateway/libnetwork/Session.h"
+#include "bcos-gateway/libp2p/Message.h"
+#include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-gateway/libnetwork/SessionReadLoop.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libp2p/Service.h"
@@ -395,8 +395,10 @@ BOOST_AUTO_TEST_CASE(doReadTest)
 
         session->setMessageHandler(
             [&recvPacketCnt, &recvBufferSize, &lastReadTime](
-                NetworkException e, SessionFace::Ptr sessionFace, Message message) {
-                // the read loop calls this function after reading a message
+                NetworkException e, SessionFace::Ptr sessionFace, FrameMeta meta) {
+                // the read loop calls this function after reading a frame; the session delivers
+                // raw wire frames now, so decode the Message at the libp2p boundary (as
+                // Service::onConnect's handler wiring does)
                 lastReadTime = utcSteadyTime();
                 if (e.errorCode() != P2PExceptionType::Success)
                 {
@@ -406,14 +408,16 @@ BOOST_AUTO_TEST_CASE(doReadTest)
                     static bcos::SharedMutex x_mutex;
                     bcos::WriteGuard guard(x_mutex);
                     BOOST_CHECK_EQUAL(e.errorCode(), P2PExceptionType::Success);
+                    Message message;
+                    BOOST_REQUIRE(message.decode(ref(meta.frame)) > 0);
                     BOOST_CHECK(message.lengthDirect() > 0);
                     // every payload byte of the reassembled frame must be 0xff
                     auto payload = message.payload();
                     BOOST_CHECK(std::all_of(payload.begin(), payload.end(),
                         [](auto b) { return b == 0xff; }));
+                    recvBufferSize += message.lengthDirect();
                 }
 
-                recvBufferSize += message.lengthDirect();
                 recvPacketCnt++;
             });
 
@@ -443,7 +447,7 @@ BOOST_AUTO_TEST_CASE(doReadTest)
         // would otherwise reach the strict handler above with a Disconnect error — then let the
         // fake fail the read and wait for the read loop to unwind completely before nulling
         // the socket.
-        session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message) {});
+        session->setMessageHandler([](NetworkException, SessionFace::Ptr, FrameMeta) {});
         fakeAsio->stopReads();
         size_t drainRetry = 0;
         while (fakeAsio->readsInFlight() != 0 && drainRetry < 200)
@@ -476,7 +480,7 @@ BOOST_AUTO_TEST_CASE(startUsesDefaultReadPolicy)
 
         auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
         // Tolerant handler: the read error drops the session, and the drop notifies.
-        session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message) {});
+        session->setMessageHandler([](NetworkException, SessionFace::Ptr, FrameMeta) {});
 
         session->start();  // virtual production entry — NOT startWithPolicy<>
 
@@ -499,25 +503,36 @@ BOOST_AUTO_TEST_CASE(fastSendMessageOutboundRateLimit)
 {
     // The fast path must honour the same pre-send (outgoing rate-limit) check the removed callback
     // path (asyncSendMessage) enforced: a beforeMessageHandler rejection surfaces as a thrown
-    // NetworkException (e.g. OutBWOverflow) so coroutine retry loops can stop.
+    // NetworkException (e.g. OutBWOverflow) so coroutine retry loops can stop. The hook moved with
+    // the wire-format work: it now lives on the Service (invoked from
+    // P2PSession::fastSendP2PMessage), not on the session.
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket>();
     auto fakeAsio = std::make_shared<FakeASIO>();
     {
         auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr);
         auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
-        session->setBeforeMessageHandler(
+        session->startWithPolicy<FakeASIO::ReadPolicy>();
+
+        P2PInfo selfInfo;
+        selfInfo.rawP2pID = "selfRawP2pID";
+        selfInfo.p2pID = "selfP2pID";
+        auto service = std::make_shared<Service>(selfInfo);
+        service->setBeforeMessageHandler(
             [](SessionFace&, const Message&, uint32_t) -> std::optional<bcos::Error> {
                 return bcos::Error::buildError(
                     "", P2PExceptionType::OutBWOverflow, "outgoing bandwidth overflow");
             });
-        session->startWithPolicy<FakeASIO::ReadPolicy>();
+
+        auto p2pSession = std::make_shared<P2PSession>();
+        p2pSession->setSession(session);
+        p2pSession->setService(service);
 
         Message message;
         message.setSeq(1);
         bytes payload{1, 2, 3, 4};
         BOOST_CHECK_THROW(
-            task::syncWait(session->fastSendMessage(
+            task::syncWait(p2pSession->fastSendP2PMessage(
                 message, ::ranges::views::single(bcos::ref(std::as_const(payload))), Options{})),
             NetworkException);
 
@@ -587,11 +602,12 @@ public:
 
 BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
 {
-    // The COMPRESS ext flag is stamped only onto the encoded wire header inside fastSendMessage:
-    // the caller's message is const and never mutated, so a reused message object (broadcast
-    // fan-out / retry loop) that compresses for one peer cannot leak the flag to a later peer that
-    // receives an uncompressed frame (which would fail to decompress and drop the connection).
-    // Also exercises the compression branch itself, which the FakeSocket-based tests cannot reach.
+    // The COMPRESS ext flag is stamped only onto the encoded wire header inside
+    // P2PSession::fastSendP2PMessage: the caller's message is never mutated, so a reused message
+    // object (broadcast fan-out / retry loop) that compresses for one peer cannot leak the flag
+    // to a later peer that receives an uncompressed frame (which would fail to decompress and
+    // drop the connection). Also exercises the compression branch itself, which the
+    // FakeSocket-based tests cannot reach.
     auto hashImpl = std::make_shared<Keccak256>();
     auto fakeAsio = std::make_shared<FakeASIO>();
 
@@ -635,18 +651,32 @@ BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
         auto session = std::make_shared<Session>(sessionSocket, *fakeHost, 2, true);
         session->startWithPolicy<FakeASIO::ReadPolicy>();
 
+        P2PInfo selfInfo;
+        selfInfo.rawP2pID = "selfRawP2pID";
+        selfInfo.p2pID = "selfP2pID";
+        auto service = std::make_shared<Service>(selfInfo);
+        service->setEnableCompress(true);
+
+        auto p2pSession = std::make_shared<P2PSession>();
+        p2pSession->setSession(session);
+        p2pSession->setService(service);
         // V2 wire format + payload well above the 1KB compress threshold -> compression must run
+        // (fastSendP2PMessage stamps the session-negotiated version onto the message)
+        auto protocolInfo = std::make_shared<bcos::protocol::ProtocolInfo>(
+            bcos::protocol::ProtocolModuleID::GatewayService, 0, 2);
+        protocolInfo->setVersion((uint16_t)bcos::protocol::ProtocolVersion::V2);
+        p2pSession->setProtocolInfo(protocolInfo);
+
         Message message;
-        message.setVersion((uint16_t)bcos::protocol::ProtocolVersion::V2);
         message.setSeq(1);
         bytes payload(2000, 'x');
         auto originalExt = message.ext();
 
-        task::syncWait(session->fastSendMessage(
+        task::syncWait(p2pSession->fastSendP2PMessage(
             message, ::ranges::views::single(bcos::ref(std::as_const(payload))), Options{}));
 
-        // fastSendMessage takes the message by const ref and never mutates it — the COMPRESS flag
-        // only rides on the wire header, so the caller's ext is untouched.
+        // fastSendP2PMessage never mutates the caller's message — the COMPRESS flag only rides on
+        // the wire header, so the caller's ext is untouched.
         BOOST_CHECK_EQUAL(message.ext(), originalExt);
 
         // Clean teardown: disconnect closes the socket and stops the read loop. Do NOT null the
@@ -972,14 +1002,24 @@ BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
             senders.emplace_back([t, session] {
                 for (size_t i = 0; i < msgPerThread; ++i)
                 {
+                    // The session sends pure bytes now: encode the P2P header at the caller (the
+                    // libp2p layer; P2PSession::fastSendP2PMessage does this in production)
                     Message message;
                     message.setVersion((uint16_t)bcos::protocol::ProtocolVersion::V2);
                     message.setSeq(static_cast<uint32_t>(t * msgPerThread + i));
                     bytes payload(64, static_cast<uint8_t>('a' + t));
+                    bytes headerBuffer;
+                    if (!message.encodeHeader(headerBuffer))
+                    {
+                        continue;
+                    }
+                    Message::stampLength(headerBuffer,
+                        static_cast<uint32_t>(headerBuffer.size() + payload.size()));
                     try
                     {
-                        task::syncWait(session->fastSendMessage(message,
-                            ::ranges::views::single(bcos::ref(std::as_const(payload))), Options{}));
+                        task::syncWait(session->fastSendMessage(bcos::ref(headerBuffer),
+                            ::ranges::views::single(bcos::ref(std::as_const(payload))),
+                            message.seq(), Options{}));
                     }
                     catch (std::exception const&)
                     {

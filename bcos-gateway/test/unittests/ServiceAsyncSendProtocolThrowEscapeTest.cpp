@@ -20,8 +20,9 @@
  * @file ServiceAsyncSendProtocolThrowEscapeTest.cpp
  * @date 2026-08-25
  *
- * The pre-send checks in Session::fastSendMessage (allowMaxMsgSize / beforeMessageHandler) run
- * synchronously on the caller thread and BOOST_THROW_EXCEPTION. That exception propagates out of
+ * The pre-send checks on the send path (P2PSession::fastSendP2PMessage's rate limit via
+ * Service::onBeforeMessage, the session's allowMaxMsgSize / write failures) run synchronously on
+ * the caller thread and BOOST_THROW_EXCEPTION. That exception propagates out of
  * task::wait synchronously (the nested co_await chain unwinds inside AsyncTask::start()). If
  * sendProtocol did not catch it, onConnect's lines after the handshake call —
  * updateStaticNodes, m_sessions[p2pID] = p2pSession, callNewSessionHandlers — would all be
@@ -31,7 +32,7 @@
 
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libnetwork/SessionFace.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
@@ -57,28 +58,29 @@ public:
     using Service::sendProtocol;
 };
 
-// A SessionFace whose fastSendMessage rejects synchronously — the same way Session::
-// fastSendMessage throws NetworkException for a rate-limit / oversize rejection before any
-// suspension. P2PSession::fastSendP2PMessage therefore throws synchronously out of the co_await,
-// which (pre-fix) escaped task::wait inside Service::sendProtocol.
+// A SessionFace whose fastSendMessage rejects synchronously — the same way the send path throws
+// NetworkException for a rate-limit / oversize rejection before any suspension (the rate-limit
+// check itself now lives in P2PSession::fastSendP2PMessage via Service::onBeforeMessage; the
+// session still throws on write/oversize failures). P2PSession::fastSendP2PMessage therefore
+// throws synchronously out of the co_await, which (pre-fix) escaped task::wait inside
+// Service::sendProtocol.
 class RejectingSession : public SessionFace
 {
 public:
     void start() override {}
     void disconnect(DisconnectReason) override {}
-    task::Task<std::optional<Message>> fastSendMessage(const Message& /*header*/,
-        ::ranges::any_view<bytesConstRef> /*payloads*/, Options /*options*/) override
+    task::Task<std::optional<FrameMeta>> fastSendMessage(bytesConstRef /*header*/,
+        ::ranges::any_view<bytesConstRef> /*payloads*/, uint32_t /*seq*/,
+        Options /*options*/) override
     {
         BOOST_THROW_EXCEPTION(NetworkException(-1, "outgoing bandwidth overflow"));
         co_return std::nullopt;
     }
     std::shared_ptr<SocketFace> socket() override { return nullptr; }
     void setMessageHandler(
-        std::function<void(NetworkException, SessionFace::Ptr, Message)>) override
+        std::function<void(NetworkException, SessionFace::Ptr, FrameMeta)>) override
     {}
-    void setBeforeMessageHandler(std::function<std::optional<bcos::Error>(
-        SessionFace&, const Message&, uint32_t)>) override
-    {}
+    void removePendingResponseSeq(uint32_t /*seq*/) override {}
     NodeIPEndpoint nodeIPEndpoint() const override { return {}; }
     bool active() const override { return true; }
     std::size_t writeQueueSize() override { return 0; }

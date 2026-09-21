@@ -7,7 +7,7 @@
 
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-gateway/libnetwork/Common.h"
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libnetwork/SessionFace.h"
 #include <boost/asio/steady_timer.hpp>
 #include <memory>
