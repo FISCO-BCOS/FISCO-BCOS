@@ -10,16 +10,19 @@ namespace bcos::evm::opstack
 // OP-Stack fork schedule (Bedrock onward) ↔ Ethereum base fork
 //
 // Reference: op-geth v1.101702.2 (authority) + optimism docs / specs.
-// FB only MODELS Ecotone+ (the enum below): the minimal validator loop is
-// Isthmus+-only and the engine -38005 gate rejects pre-Isthmus payloads, so
-// Bedrock/Regolith/Canyon are unreachable — they are listed for mapping
-// completeness only, NOT implemented.
+// The FULL Bedrock..Karst ladder is modeled so opstack-executor + devp2p can
+// replay an OP chain (e.g. op-sepolia) from genesis. op-sepolia is post-merge
+// (the Merge happened at genesis), so Bedrock/Regolith map to a Paris EVM —
+// never London.
 //
 //   OP fork      | Ethereum base | EVM rev (FB)      | FB status
 //   -------------+---------------+-------------------+----------------------
-//   Bedrock      | London        | —                 | not modeled (unreachable)
-//   Regolith     | London        | —                 | not modeled; deposit-tx fixes
-//   Canyon       | Shanghai      | —                 | not modeled; EIP-4895/1153/5656/6780
+//   Bedrock      | Paris (merge@ | EVMC_PARIS        | modeled (sync); genesis fork,
+//                | genesis)      |                   | legacy overhead/scalar L1 fee
+//   Regolith     | Paris         | EVMC_PARIS        | modeled (sync); deposit-tx fixes
+//   Canyon       | Shanghai      | EVMC_SHANGHAI     | modeled (sync); EIP-4895/1153/5656/
+//                |               |                   | 6780, deposit receipt version
+//   Delta        | Shanghai      | EVMC_SHANGHAI     | modeled (sync); no EL change
 //   Ecotone      | Cancun        | EVMC_CANCUN       | modeled; blob L1 fee (EIP-4844/4788/7516)
 //   Fjord        | Cancun        | EVMC_CANCUN       | modeled; FastLZ L1 fee, p256 active
 //   Granite      | Cancun        | EVMC_CANCUN       | modeled; 8 precompile size limits
@@ -29,6 +32,12 @@ namespace bcos::evm::opstack
 //   Jovian       | Prague        | EVMC_PRAGUE       | modeled; +DA footprint, operator fee ×100
 //   Karst        | Osaka (Fusaka | EVMC_OSAKA        | modeled; Jovian fees + Osaka EVM
 //                | EL half)      |                   |
+//
+// Baseline compatibility: when the schedule carries no isthmus_time (the only
+// shape existing chains have — they configure jovian_time/karst_time at most),
+// Isthmus stays the zero-start baseline and everything below Jovian resolves to
+// it (configAt). Only a schedule with isthmus_time explicitly set activates the
+// full ladder, whose fallback is Bedrock.
 //
 // Key facts:
 //   * Isthmus = all Prague/Pectra features that apply to L2s (optimism docs
@@ -43,6 +52,10 @@ namespace bcos::evm::opstack
 // ────────────────────────────────────────────────────────────────────────────
 enum class OpFork
 {
+    Bedrock,
+    Regolith,
+    Canyon,
+    Delta,
     Ecotone,
     Fjord,
     Granite,
@@ -63,9 +76,25 @@ struct OpForkConfig
     bool has_operator_fee;
     bool has_jovian_operator_formula;
     bool has_da_footprint;
-    bool has_ecotone_l1_formula;  // true -> Ecotone calldataGas L1; false -> Fjord+ FastLZ
+    // L1 data-fee formula is a three-state across these two flags:
+    //   has_legacy_l1_formula=true            -> Bedrock..Delta overhead/scalar formula
+    //   has_ecotone_l1_formula=true           -> Ecotone calldataGas formula
+    //   both false                            -> Fjord+ FastLZ formula
+    // (has_legacy_l1_formula implies has_ecotone_l1_formula=false.)
+    bool has_ecotone_l1_formula;
+    bool has_legacy_l1_formula;
+    // Regolith deposit fixes: deposits count a nonce, is_system_tx is deprecated, etc.
+    bool regolith_deposit_fixes;
+    // Canyon+: deposit receipts carry depositReceiptVersion=1.
+    bool has_deposit_receipt_version;
+    // Canyon+: headers carry the (always empty) withdrawals list field.
+    bool has_withdrawals;
 };
 
+const OpForkConfig& bedrockConfig() noexcept;
+const OpForkConfig& regolithConfig() noexcept;
+const OpForkConfig& canyonConfig() noexcept;
+const OpForkConfig& deltaConfig() noexcept;
 const OpForkConfig& ecotoneConfig() noexcept;
 const OpForkConfig& fjordConfig() noexcept;
 const OpForkConfig& graniteConfig() noexcept;
@@ -81,9 +110,15 @@ const OpForkConfig& karstConfig() noexcept;
 /// (op-node/rollup/types.go), with UINT64_MAX standing in for op-node's nil.
 ///
 /// Latest fork first: Karst when `timestampSec >= m_karstTime`, else Jovian when
-/// `>= m_jovianTime`, else Isthmus. Isthmus is always the baseline — there is no
-/// pre-Isthmus config (the minimal loop is Isthmus+-only and the engine gate rejects
-/// pre-Isthmus payloads by construction).
+/// `>= m_jovianTime`, then Isthmus .. Regolith down the ladder, skipping every entry
+/// left at UINT64_MAX ("not scheduled", op-node's nil).
+///
+/// Baseline compatibility: when m_isthmusTime is NOT set (the only shape existing
+/// chains have), Isthmus is the zero-start baseline — every timestamp below
+/// jovian_time resolves to isthmusConfig() and the pre-Isthmus rungs are never
+/// consulted, bit-identical to the two-key schedule. When m_isthmusTime IS set the
+/// full ladder is live and timestamps before the earliest scheduled fork fall back
+/// to bedrockConfig() (Bedrock is the genesis fork and has no schedule entry).
 ///
 /// The schedule's non-decreasing order is validated once, at config load
 /// (NodeConfig::loadOpForkTimestamps); this function does not re-check it.

@@ -124,13 +124,27 @@ struct EthereumForkSchedule
 // OP-lane fork schedule, parsed from the [op_fork_timestamps] section of
 // config.genesis (executor_version >= OPSTACK_EXECUTOR_VERSION). OP forks
 // activate by L2 block TIMESTAMP IN SECONDS, exactly like op-node's
-// rollup.json jovian_time / karst_time (op-node/rollup/types.go:
+// rollup.json *_time fields (op-node/rollup/types.go:
 // IsJovian(ts) == Time != nil && ts >= *Time). 0 means "active from genesis";
 // std::numeric_limits<uint64_t>::max() encodes op-node's nil, i.e. "not
-// scheduled". Isthmus is the OP lane's baseline and therefore has no entry:
-// the engine's -38005 gate admits only Isthmus+ payloads.
+// scheduled". Bedrock is the genesis fork and has no entry.
+//
+// m_isthmusTime carries a compatibility sentinel: unset (UINT64_MAX) means
+// "Isthmus is the zero-start baseline", the only shape existing chains have
+// (they configure jovian_time / karst_time at most) — configAt then resolves
+// every timestamp below jovian_time to isthmusConfig(). An explicitly set
+// isthmus_time activates the full Bedrock..Karst ladder for from-genesis
+// replay, whose fallback below the earliest scheduled fork is bedrockConfig().
 struct OpForkSchedule
 {
+    uint64_t m_regolithTime = std::numeric_limits<uint64_t>::max();
+    uint64_t m_canyonTime = std::numeric_limits<uint64_t>::max();
+    uint64_t m_deltaTime = std::numeric_limits<uint64_t>::max();
+    uint64_t m_ecotoneTime = std::numeric_limits<uint64_t>::max();
+    uint64_t m_fjordTime = std::numeric_limits<uint64_t>::max();
+    uint64_t m_graniteTime = std::numeric_limits<uint64_t>::max();
+    uint64_t m_holoceneTime = std::numeric_limits<uint64_t>::max();
+    uint64_t m_isthmusTime = std::numeric_limits<uint64_t>::max();
     uint64_t m_jovianTime = std::numeric_limits<uint64_t>::max();
     uint64_t m_karstTime = std::numeric_limits<uint64_t>::max();
 };
@@ -212,6 +226,15 @@ public:
     // [fork_timestamps] section pasted into an ordinary v2 genesis cannot waive
     // them. validateL2Invariants binds it to m_ethereumForkSchedule both ways.
     bool m_ethereumELMode = false;
+
+    // True iff config.genesis declares "[ethereum] mode=opstack-el" — the chain is
+    // an OP-Stack chain synced over devp2p (OpStackSyncInitializer), executor
+    // version >= OPSTACK_EXECUTOR_VERSION. Same chain-level pin semantics as
+    // m_ethereumELMode; validateL2Invariants binds it to m_opForkSchedule, the L2
+    // genesis shape ([eth_genesis_header] + [alloc.*]) and a non-zero [web3]
+    // chain_id. Mutually exclusive with m_ethereumELMode by construction (one
+    // mode string).
+    bool m_opStackELMode = false;
 
 };  // namespace genesisConfig
 }  // namespace bcos::ledger

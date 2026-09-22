@@ -93,9 +93,10 @@ public:
 
     /// OP-lane fork schedule from the genesis [op_fork_timestamps] section: activation times
     /// in SECONDS, keyed per block by the L2 block timestamp exactly as op-node keys
-    /// rollup.json's jovian_time / karst_time. Present iff the section is present, which
+    /// rollup.json's *_time fields. Present iff the section is present, which
     /// validateL2Invariants binds both ways to executor.version >= OPSTACK_EXECUTOR_VERSION.
-    /// Isthmus is the lane baseline and has no entry.
+    /// An unset isthmus_time keeps Isthmus as the zero-start baseline (existing chains); a
+    /// set one activates the full Bedrock..Karst ladder (Bedrock is genesis, no entry).
     std::optional<ledger::OpForkSchedule> const& opForkSchedule() const;
 
     std::string const& privateKeyPath() const;
@@ -240,6 +241,15 @@ public:
     // from RLPx bootnodes, verifies them with EthereumBlockVerifier and commits them
     // locally — no FISCO gateway / PBFT / txpool pipeline.
     bool ethereumELModeEnabled() const;
+    // mode=opstack-el: same self-sync shape for an OP-Stack chain (executor_version >= 3):
+    // blocks download from op-geth EL peers over devp2p and commit through OpBlockVerifier.
+    // Mutually exclusive with mode=el and with [op_engine_rpc] (the sync client replaces
+    // the engine-API driver, it does not complement it).
+    bool opStackELModeEnabled() const;
+    // [ethereum] op_block_time_seconds: the OP chain's block cadence in seconds (rollup.json
+    // block_time; 2 on every superchain chain). Feeds the header validator's soft
+    // block-interval check. Default 2, accepted range [1, 60].
+    uint64_t opBlockTimeSeconds() const;
     // path to the bootnodes file (enode:// list, geth-style); default ./bootnodes.json
     const std::string& ethereumBootnodesFile() const;
     // path to a file holding the 32-byte secp256k1 node private key (hex, optional
@@ -247,6 +257,8 @@ public:
     // on first start (conf/node.rlpx.key) so the RLPx identity survives restarts
     const std::string& ethereumNodeKeyFile() const;
     uint32_t ethereumMaxBatchSize() const;
+    // the EL-sync chain id ([web3] chain_id in config.genesis), pinned when the genesis
+    // declares an EL-sync mode (el or opstack-el); 0 = unset (never a mainnet fallback)
     uint64_t ethereumChainId() const;
     // EL-mode fork schedule ([fork_timestamps] in config.genesis): L1 PoS chains fork on
     // timestamps (not block heights); 0 means active from genesis, and an absent
@@ -613,14 +625,19 @@ private:
 
     // config for Ethereum L1 EL-mode self-sync ([ethereum] in config.ini)
     bool m_enableEthereumEL = false;
+    // mode=opstack-el: OP-Stack devp2p self-sync (executor_version >= 3). Shares the
+    // bootnodes/node_key/max_batch/finalized_checkpoint knobs with mode=el.
+    bool m_enableOpStackEL = false;
+    uint64_t m_opBlockTimeSeconds = 2;
     std::string m_ethereumBootnodesFile = "./bootnodes.json";
     std::string m_ethereumNodeKeyFile;
     uint32_t m_ethereumMaxBatchSize = 192;
     uint64_t m_ethereumMergeBlock = 0;
     std::optional<EthereumFinalizedCheckpoint> m_ethereumFinalizedCheckpoint;
-    // The EL-mode chain id, validated and pinned from config.genesis's [web3] chain_id
-    // (validateL2Invariants) when the genesis declares EL mode. 0 = unset: a read
-    // outside EL mode is obviously invalid rather than silently Ethereum mainnet.
+    // The EL-sync chain id, validated and pinned from config.genesis's [web3] chain_id
+    // (validateL2Invariants) when the genesis declares an EL-sync mode (el or
+    // opstack-el). 0 = unset: a read outside EL-sync mode is obviously invalid rather
+    // than silently Ethereum mainnet.
     uint64_t m_ethereumChainId = 0;
     // The EL-mode fork schedule ([fork_timestamps] in config.genesis) lives on
     // m_genesisConfig.m_ethereumForkSchedule; the REQUIRED pre-Prague ladder
