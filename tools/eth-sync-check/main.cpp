@@ -227,32 +227,32 @@ OpChainConfig opSepoliaConfig()
     OpChainConfig config;
     config.chainId = 11155420;
     config.blockTimeSeconds = 2;
-    config.regolithTime = 0;  // active from genesis
-    config.canyonTime = 1699981200;
-    config.deltaTime = 1703203200;
-    config.ecotoneTime = 1708534800;
-    config.fjordTime = 1716998400;
-    config.graniteTime = 1723478400;
-    config.holoceneTime = 1732633200;
-    config.isthmusTime = 1744905600;
-    config.jovianTime = 1763568001;
-    config.karstTime = 1781712001;
+    config.forkSchedule.m_regolithTime = 0;  // active from genesis
+    config.forkSchedule.m_canyonTime = 1699981200;
+    config.forkSchedule.m_deltaTime = 1703203200;
+    config.forkSchedule.m_ecotoneTime = 1708534800;
+    config.forkSchedule.m_fjordTime = 1716998400;
+    config.forkSchedule.m_graniteTime = 1723478400;
+    config.forkSchedule.m_holoceneTime = 1732633200;
+    config.forkSchedule.m_isthmusTime = 1744905600;
+    config.forkSchedule.m_jovianTime = 1763568001;
+    config.forkSchedule.m_karstTime = 1781712001;
     return config;
 }
 
 /// --op-fork <name> <timestamp>: override one OP fork activation time.
 bool setOpForkTime(OpChainConfig& config, std::string const& name, uint64_t ts)
 {
-    if (name == "regolith") { config.regolithTime = ts; }
-    else if (name == "canyon") { config.canyonTime = ts; }
-    else if (name == "delta") { config.deltaTime = ts; }
-    else if (name == "ecotone") { config.ecotoneTime = ts; }
-    else if (name == "fjord") { config.fjordTime = ts; }
-    else if (name == "granite") { config.graniteTime = ts; }
-    else if (name == "holocene") { config.holoceneTime = ts; }
-    else if (name == "isthmus") { config.isthmusTime = ts; }
-    else if (name == "jovian") { config.jovianTime = ts; }
-    else if (name == "karst") { config.karstTime = ts; }
+    if (name == "regolith") { config.forkSchedule.m_regolithTime = ts; }
+    else if (name == "canyon") { config.forkSchedule.m_canyonTime = ts; }
+    else if (name == "delta") { config.forkSchedule.m_deltaTime = ts; }
+    else if (name == "ecotone") { config.forkSchedule.m_ecotoneTime = ts; }
+    else if (name == "fjord") { config.forkSchedule.m_fjordTime = ts; }
+    else if (name == "granite") { config.forkSchedule.m_graniteTime = ts; }
+    else if (name == "holocene") { config.forkSchedule.m_holoceneTime = ts; }
+    else if (name == "isthmus") { config.forkSchedule.m_isthmusTime = ts; }
+    else if (name == "jovian") { config.forkSchedule.m_jovianTime = ts; }
+    else if (name == "karst") { config.forkSchedule.m_karstTime = ts; }
     else { return false; }
     return true;
 }

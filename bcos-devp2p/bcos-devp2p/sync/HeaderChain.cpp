@@ -45,12 +45,10 @@ HeaderChain::HeaderChain(uint64_t _nextNumber,
     m_config(_config),
     m_maxHeadersPerRequest(_maxHeadersPerRequest)
 {
-    // Default policy: the Ethereum PoS field rules. Replaceable via
-    // setHeaderValidator (e.g. the OP Stack validator).
-    m_validator = [this](bcos::protocol::EthBlockHeaderData const& _header,
-                      bcos::protocol::EthBlockHeaderData const& _parent) {
-        return validateHeaderPoS(_header, _parent, m_config);
-    };
+    // Default policy: the Ethereum PoS field rules, applied at the call site when
+    // m_validator is empty. Never install a `this`-capturing default here: the class
+    // keeps implicit copy/move, and a copied instance would keep dispatching to the
+    // original object's m_config.
 }
 
 namespace
@@ -206,7 +204,8 @@ std::vector<HeaderWithHash> HeaderChain::requestHeaders(
         {
             auto const& parentHeader =
                 i == 0 ? *m_anchorHeader : out[i - 1].header;
-            auto result = m_validator(header.header, parentHeader);
+            auto result = m_validator ? m_validator(header.header, parentHeader) :
+                                        validateHeaderPoS(header.header, parentHeader, m_config);
             if (!result.valid)
             {
                 throw HeaderRuleViolation(
