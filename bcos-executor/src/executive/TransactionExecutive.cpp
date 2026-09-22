@@ -941,16 +941,16 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
     auto linkTable = m_storageWrapper->createTable(tableName, std::string(STORAGE_VALUE));
 
     /// create code index contract
-    // The stub's code table must live where execution looks the address up: on a
-    // Binary-layout node every account read routes through EVMAccount ("/s/<20 raw
-    // bytes>"), so writing the stub under "/apps/<hex>" leaves every call to the link
-    // address with NotFoundCodeError. Hex nodes keep the historical getContractTableName
-    // byte-for-byte (including its /sys/ routing of the 35-zero prefix).
-    auto codeTable = ledger::account::nodeAddressTableMode() ==
-                             ledger::account::AddressTableMode::Binary ?
-                         ledger::account::accountTableName(
-                             newAddress, ledger::account::AddressTableMode::Binary) :
-                         getContractTableName(newAddress);
+    // Derive the stub's code table through the SAME Hex-era executive rule on both
+    // layouts and re-encode only the physical layout (toNodeLayout): "/apps/<hex>"
+    // becomes "/s/<20 raw bytes>" where EVMAccount execution reads it, and the
+    // executive rule's /sys/ routing of the 35-leading-zero prefix (address(0),
+    // 0x...01-0x...0fff — a wider set than the 8 c_systemTxsAddress members) passes
+    // through untouched. Deriving the Binary name through the shared rule instead
+    // would write the stub to "/s/<zeros>" (canonical "/apps/<hex>") while Hex writes
+    // "/sys/<hex>": different logical rows, different XOR root — a mixed-mode fork on
+    // a create-on-miss from BalancePrecompiled/AccountPrecompiled/AccountManager.
+    auto codeTable = ledger::account::toNodeLayout(getContractTableName(newAddress));
     m_storageWrapper->createTable(codeTable, std::string(STORAGE_VALUE));
 
     if (m_blockContext.features().get(

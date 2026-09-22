@@ -203,10 +203,8 @@ int BFSPrecompiled::checkLinkParam(TransactionExecutive::Ptr _executive,
     boost::trim(_contractName);
     boost::trim(_contractVersion);
     // check the status of the contract(only print the error message to the log)
-    // Mode-aware probe (same as ShardingPrecompiled's shard rows): Binary layout keeps
-    // contract state under "/s/<20 raw bytes>" (the shared rule EVMAccount reads with);
-    // Hex layout reproduces the base "/apps/<hex>" probe byte-for-byte — the historical
-    // getContractTableName("/apps/", address) never routed system addresses to /sys/.
+    // Binary is a physical re-encoding of the Hex string (legacyAppsAccountTableName);
+    // no /sys/ routing in either mode.
     std::string tableName = ledger::account::legacyAppsAccountTableName(_contractAddress);
     ContractStatus contractStatus = getContractStatus(_executive, tableName);
 

@@ -112,18 +112,10 @@ std::string BalancePrecompiled::getContractTableName(
     // c_systemTxsAddress members — so deriving the two layouts from different rules
     // (e.g. the shared rule) would route e.g. address(0) to /apps/ on Hex nodes and
     // /sys/ on Binary nodes, splitting balance rows across a mixed-mode network.
-    auto name = _executive->getContractTableName(_address);
-    if (account::nodeAddressTableMode() == account::AddressTableMode::Binary)
-    {
-        // Binary layout is a pure physical re-encoding of the same logical row:
-        // /apps/<hex> becomes /s/<20 raw bytes>; /sys/ names stay untouched
-        // (canonicalTableNameForHash does not normalize them either).
-        if (auto bin = account::hexToBinaryAccountTableName(name); !bin.empty())
-        {
-            return bin;
-        }
-    }
-    return name;
+    // toNodeLayout re-encodes only the physical layout: /apps/<hex> becomes
+    // /s/<20 raw bytes>; /sys/ names stay untouched (canonicalTableNameForHash does
+    // not normalize them either).
+    return account::toNodeLayout(_executive->getContractTableName(_address));
 }
 
 void BalancePrecompiled::checkOriginAuth(

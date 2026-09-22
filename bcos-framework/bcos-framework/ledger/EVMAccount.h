@@ -194,27 +194,44 @@ inline std::string accountTableName(const evmc_address& address)
     return accountTableName(address, nodeAddressTableMode());
 }
 
+/// Re-encode a table name derived through a Hex-era rule (the executive
+/// getContractTableName, "/apps/" + address) into this node's physical layout. Binary
+/// mode maps "/apps/<40 lowercase hex>" to "/s/<20 raw bytes>"; every other name —
+/// "/sys/<hex>" from the executive rule's 35-leading-zero routing, non-canonical
+/// inputs — passes through unchanged, the same treatment canonicalTableNameForHash
+/// gives it. Hex mode returns the input byte-for-byte. Sites that historically derived
+/// their name from such a rule must keep deriving it from that rule and re-encode ONLY
+/// the physical layout through this helper, so Hex and Binary nodes write the same
+/// logical row (deriving the Binary name through the shared rule instead splits e.g.
+/// address(0) — "/sys/<hex>" by the executive rule — onto "/s/<zeros>", canonical
+/// "/apps/<hex>": different logical rows, different XOR root, a mixed-mode fork).
+inline std::string toNodeLayout(std::string hexRuleName)
+{
+    if (nodeAddressTableMode() == AddressTableMode::Binary)
+    {
+        if (auto bin = hexToBinaryAccountTableName(hexRuleName); !bin.empty())
+        {
+            return bin;
+        }
+    }
+    return hexRuleName;
+}
+
 /// Table name for the v1-precompiled call sites that historically built their key as
 /// getContractTableName("/apps/", address) = "/apps/" + <verbatim input> and therefore NEVER
 /// routed system addresses to /sys/ (ShardingPrecompiled's shard rows, the AccountManager /
 /// ContractAuthMgr / BFSPrecompiled access probes). Both layouts must resolve to the same
 /// logical row: Hex keeps the base string byte-for-byte, and Binary only re-encodes it
-/// physically (/apps/<hex> -> /s/<20 raw bytes>). Routing Binary through the shared rule
-/// instead would send the 8 c_systemTxsAddress members to /sys/ while Hex keeps them under
-/// /apps/, splitting the row across a mixed-mode network — /sys/ names are not normalized
-/// by canonicalTableNameForHash. Callers pass a plain 40-char lowercase hex address.
+/// physically (/apps/<hex> -> /s/<20 raw bytes>) — no /sys/ routing in either mode.
+/// Routing Binary through the shared rule instead would send the 8 c_systemTxsAddress
+/// members to /sys/ while Hex keeps them under /apps/, splitting the row across a
+/// mixed-mode network — /sys/ names are not normalized by canonicalTableNameForHash.
+/// Callers pass a plain 40-char lowercase hex address.
 inline std::string legacyAppsAccountTableName(std::string_view address)
 {
     std::string hexName(ledger::SYS_DIRECTORY::USER_APPS);
     hexName.append(address);
-    if (nodeAddressTableMode() == AddressTableMode::Binary)
-    {
-        if (auto bin = hexToBinaryAccountTableName(hexName); !bin.empty())
-        {
-            return bin;
-        }
-    }
-    return hexName;
+    return toNodeLayout(std::move(hexName));
 }
 
 template <class Storage>

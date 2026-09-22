@@ -155,10 +155,9 @@ void AccountManagerPrecompiled::setAccountStatus(
     auto table = _executive->storage().openTable(accountTableName);
     if (!table)
     {
-        // Probe the contract table where it actually lives: Binary layout puts account
-        // state under "/s/<20 raw bytes>" (shared rule, same as EVMAccount writes); Hex
-        // layout reproduces the base "/apps/<hex>" probe byte-for-byte — the historical
-        // getContractTableName("/apps/", hex) never routed system addresses to /sys/.
+        // Probe the contract table where it actually lives. Binary is a physical
+        // re-encoding of the Hex string (legacyAppsAccountTableName); no /sys/
+        // routing in either mode.
         auto appsAccountTableName = ledger::account::legacyAppsAccountTableName(account.hex());
         auto appsTable = _executive->storage().openTable(appsAccountTableName);
         if (appsTable)

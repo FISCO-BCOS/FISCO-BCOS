@@ -248,11 +248,9 @@ void ContractAuthMgrPrecompiled::resetAdmin(
                                << LOG_DESC("contract ACL table not found") << LOG_KV("path", path);
         if (versionCompareTo(blockContext.blockVersion(), BlockVersion::V3_3_VERSION) >= 0)
         {
-            // Probe contract existence where the contract table actually lives: Binary
-            // layout puts it under "/s/<20 raw bytes>" (shared rule, same as EVMAccount
-            // writes); Hex layout reproduces the base "/apps/<hex>" probe byte-for-byte —
-            // the historical getContractTableName(USER_APPS_PREFIX, address) never routed
-            // system addresses to /sys/.
+            // Probe contract existence where the contract table actually lives. Binary
+            // is a physical re-encoding of the Hex string (legacyAppsAccountTableName);
+            // no /sys/ routing in either mode.
             if (!_executive->storage().openTable(ledger::account::legacyAppsAccountTableName(address)))
                 [[unlikely]]
             {

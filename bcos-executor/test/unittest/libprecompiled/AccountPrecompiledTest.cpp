@@ -445,6 +445,43 @@ public:
         return result;
     }
 
+    /// Call the BalancePrecompiled end to end with a caller-supplied sender: registerCaller
+    /// needs a governor origin (admin), addBalance/subBalance/transfer need a registered
+    /// caller.
+    ExecutionMessage::UniquePtr balanceCall(
+        protocol::BlockNumber _number, bytes const& in, Address _sender)
+    {
+        nextBlock(_number, m_blockVersion);
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
+        tx->forceSender(_sender.asBytes());
+        auto hash = tx->hash();
+        txpool->hash2Transaction[hash] = tx;
+        sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+        auto params = std::make_unique<NativeExecutionMessage>();
+        params->setTransactionHash(hash);
+        params->setContextID(_number);
+        params->setSeq(1000);
+        params->setDepth(0);
+        params->setFrom(sender);
+        params->setTo(std::string(precompiled::BALANCE_PRECOMPILED_ADDRESS));
+        params->setOrigin(sender);
+        params->setStaticCall(false);
+        params->setGasAvailable(gas);
+        params->setData(in);
+        params->setType(NativeExecutionMessage::TXHASH);
+
+        std::promise<ExecutionMessage::UniquePtr> executePromise;
+        executor->executeTransaction(std::move(params),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise.set_value(std::move(result));
+            });
+        auto result = executePromise.get_future().get();
+        commitBlock(_number);
+        return result;
+    }
+
     std::string sender;
     std::string helloAddress;
 
@@ -916,6 +953,63 @@ BOOST_AUTO_TEST_CASE(getBalanceOfZeroAddressReadsSysTableInHexMode)
     u256 balance;
     codec->decode(response->data(), balance);
     BOOST_CHECK_EQUAL(balance, u256(777));
+}
+
+// Round-8 F1 regression pin: the account stub that BalancePrecompiled's create-on-miss path
+// writes through internalCreate must land on the SAME logical table in both layouts.
+// address(0) is routed to /sys/ by the executive getContractTableName rule (35-leading-zero
+// prefix, auth on) but is NOT one of the 8 c_systemTxsAddress members, so deriving the
+// Binary-mode stub table through the shared account::accountTableName rule (the round-7
+// code) wrote it to "/s/<20 zero bytes>" — canonical "/apps/000...0" — while Hex wrote
+// "/sys/000...0": different logical rows, different XOR root, a mixed-mode fork. After the
+// toNodeLayout fix the stub lands at "/sys/000...0" in both modes, and the follow-up
+// addAccountBalance finds the table the way the Hex node does.
+BOOST_AUTO_TEST_CASE(addBalanceOfZeroAddressWritesSysTableInBinaryMode)
+{
+    namespace account = bcos::ledger::account;
+    ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Binary);
+    // The balance precompiled is gated on feature_balance_precompiled (which requires
+    // feature_balance); enable both for this test the way createSysTable does.
+    for (auto const* feature : {"feature_balance", "feature_balance_precompiled"})
+    {
+        Entry featureEntry;
+        featureEntry.set(bcos::storage::serialize::encode(SystemConfigEntry{"1", 0}));
+        std::promise<bool> featurePromise;
+        storage->asyncSetRow(ledger::SYS_CONFIG, feature, std::move(featureEntry),
+            [&featurePromise](Error::UniquePtr&& error) { featurePromise.set_value(!error); });
+        BOOST_CHECK(featurePromise.get_future().get());
+    }
+
+    bcos::protocol::BlockNumber number = 2;
+    // registerCaller: the origin must be the governor admin.
+    Address caller = Address("420f853b49838bd3e9466c85a4cc3428c960dde2");
+    auto registerResult = balanceCall(
+        number++, codec->encodeWithSig("registerCaller(address)", caller), Address(admin));
+    BOOST_CHECK_EQUAL(registerResult->status(), 0);
+    int32_t registerCode = -1;
+    codec->decode(registerResult->data(), registerCode);
+    BOOST_CHECK_EQUAL(registerCode, CODE_SUCCESS);
+
+    // addBalance(address(0), 100): the account table does not exist, so BalancePrecompiled
+    // takes its create-on-miss path — internalCreate writes the stub's code table.
+    auto addResult = balanceCall(number++,
+        codec->encodeWithSig("addBalance(address,uint256)",
+            Address(std::string(precompiled::EMPTY_ADDRESS)), u256(100)),
+        caller);
+    BOOST_CHECK_EQUAL(addResult->status(), 0);
+
+    // The stub and the balance row must live at the executive-rule table "/sys/000...0" —
+    // the same logical row a Hex node writes...
+    std::string const sysZeroTable = "/sys/0000000000000000000000000000000000000000";
+    BOOST_CHECK(tableExists(sysZeroTable));
+    auto [error, entry] = storage->getRow(sysZeroTable, executor::ACCOUNT_BALANCE);
+    BOOST_CHECK(!error);
+    BOOST_REQUIRE(entry.has_value());
+    BOOST_CHECK_EQUAL(std::string(entry->get()), "100");
+    // ...and NOT at "/s/<20 zero bytes>" (canonical "/apps/000...0"), where the round-7
+    // shared-rule derivation put the stub on Binary nodes.
+    std::string const binZeroTable = std::string("/s/").append(20, '\0');
+    BOOST_CHECK(!tableExists(binZeroTable));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

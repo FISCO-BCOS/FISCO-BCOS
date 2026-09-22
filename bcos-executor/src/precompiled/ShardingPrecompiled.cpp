@@ -260,13 +260,8 @@ void ShardingPrecompiled::linkShard(
         return;
     }
 
-    // Binary layout routes through the shared rule (account::accountTableName — the same
-    // one EVMAccount writes state with): the shard row belongs in the account table at
-    // "/s/<20 raw bytes>" (or "/sys/<hex>" for a system address). Hex layout must reproduce
-    // the base string byte-for-byte: the historical getContractTableName("/apps/", address)
-    // NEVER routed system addresses to /sys/, so legacyAppsAccountTableName pins the Hex
-    // branch to "/apps/<hex>" verbatim. The XOR root normalizes the binary name back to
-    // hex, so mixed-mode networks stay root-consistent.
+    // Binary layout is a physical re-encoding of the Hex string
+    // (legacyAppsAccountTableName); no /sys/ routing in either mode.
     auto tableName = ledger::account::legacyAppsAccountTableName(contractAddress);
 
     auto historyShard = ContractShardUtils::getContractShard(_executive->storage(), tableName);
