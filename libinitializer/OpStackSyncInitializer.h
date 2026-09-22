@@ -271,23 +271,15 @@ private:
 
     /// The header-validation chain config: chain id ([web3] chain_id, pinned by
     /// validateL2Invariants for opstack-el), the block cadence knob ([ethereum]
-    /// op_block_time_seconds) and the ten OP fork times from [op_fork_timestamps].
+    /// op_block_time_seconds) and the OP fork schedule from [op_fork_timestamps],
+    /// carried whole so the validator resolves forks through the same
+    /// bcos::ledger::resolveOpFork ladder the executor uses.
     bcos::devp2p::sync::OpChainConfig opChainConfig() const
     {
-        auto const& schedule = m_nodeConfig->opForkSchedule().value();
         bcos::devp2p::sync::OpChainConfig config;
         config.chainId = m_nodeConfig->ethereumChainId();
         config.blockTimeSeconds = m_nodeConfig->opBlockTimeSeconds();
-        config.regolithTime = schedule.m_regolithTime;
-        config.canyonTime = schedule.m_canyonTime;
-        config.deltaTime = schedule.m_deltaTime;
-        config.ecotoneTime = schedule.m_ecotoneTime;
-        config.fjordTime = schedule.m_fjordTime;
-        config.graniteTime = schedule.m_graniteTime;
-        config.holoceneTime = schedule.m_holoceneTime;
-        config.isthmusTime = schedule.m_isthmusTime;
-        config.jovianTime = schedule.m_jovianTime;
-        config.karstTime = schedule.m_karstTime;
+        config.forkSchedule = m_nodeConfig->opForkSchedule().value();
         return config;
     }
 
@@ -547,7 +539,7 @@ private:
 
         // Caught-up backoff: when a whole round over the bootnode list yields no
         // download window (and no peer failure) AND at least one bootnode actually
-        // served its head lookup, the local head sits inside that peer's finality
+        // served its head lookup, the local head sits inside that peer's sync-lag
         // window — retry after ~one block interval instead of the 3s behind-cadence.
         // A round where NO bootnode served the by-hash head lookup is not "caught
         // up" — it is a connectivity signal and logs a WARNING instead (same
@@ -693,20 +685,27 @@ private:
                         // round trip, amount 1 — shares the exchange's request ids).
                         auto peerHead = exchange.requestHeaderByHash(
                             established.session, established.peerStatus.headHash);
-                        // Finality lag: download only up to 64 blocks behind the peer
-                        // head (~128 s at the OP 2s cadence). A block committed at the
-                        // RAW tip is vulnerable to a routine tip reorg — which the
-                        // three-strike detector below would then turn into a FATAL
-                        // stop plus a manual rollback on the next round. Keeping the
-                        // committed anchor under the finality lag makes a routine
-                        // reorg harmless (the next round simply downloads the new
-                        // tip). Real rollback stays a follow-up.
-                        constexpr uint64_t c_finalityLag = 64;
+                        // Sync lag heuristic: download only up to
+                        // [ethereum] op_sync_lag_blocks behind the peer's announced
+                        // head. The head a peer announces over eth/68 is its UNSAFE
+                        // head — the OP safe/finalized heads are defined by L1 batch
+                        // derivation and can trail the unsafe head by a whole
+                        // sequencing window (~12h, ~21600 L2 blocks on superchain
+                        // chains), so a dropped-batch or sequencer-switch reorg can
+                        // be FAR deeper than any value of this knob. The lag is only
+                        // a heuristic that lowers the chance of committing a block a
+                        // routine small tip reorg then unwinds (such reorgs are
+                        // common at the unsafe tip); it is NOT a finality boundary.
+                        // A reorg that still reaches the committed anchor remains
+                        // the three-strike FATAL + full-resync path below — bounding
+                        // the download by the safe/finalized head instead, plus a
+                        // rollback tool, is follow-up work.
+                        uint64_t const syncLag = m_nodeConfig->opSyncLagBlocks();
                         uint64_t downloadEnd = 0;
                         if (peerHead)
                         {
-                            downloadEnd = peerHead->number() > c_finalityLag ?
-                                              peerHead->number() - c_finalityLag :
+                            downloadEnd = peerHead->number() > syncLag ?
+                                              peerHead->number() - syncLag :
                                               0;
                         }
                         else
@@ -720,7 +719,7 @@ private:
                         {
                             // No safe download window: the peer is behind us, did not
                             // serve the by-hash lookup, or we are already inside the
-                            // finality window (caught up). Leave the committed chain
+                            // sync-lag window (caught up). Leave the committed chain
                             // untouched and try the next bootnode / retry next round.
                             INITIALIZER_LOG(DEBUG)
                                 << LOG_DESC("OP-EL sync: no safe download window")
@@ -739,9 +738,16 @@ private:
                             << LOG_KV("downloadEnd", downloadEnd)
                             << LOG_KV("downloadCount", downloadCount)
                             << LOG_KV("peerHead", peerHead->number())
-                            << LOG_KV("finalityLag", c_finalityLag)
+                            << LOG_KV("syncLag", syncLag)
                             << LOG_KV("batch", m_nodeConfig->ethereumMaxBatchSize());
 
+                        // Per-block commit logging is batched: one INFO every
+                        // c_commitLogInterval blocks plus one batch-complete line
+                        // after downloadRange returns. (A per-block line at the OP
+                        // 2s cadence — thousands per catch-up round — would drown
+                        // every other log; stall/FATAL/caught-up lines stay as-is.)
+                        constexpr uint64_t c_commitLogInterval = 1000;
+                        uint64_t committed = 0;
                         exchange.downloadRange(established.session, downloadCount,
                             [&](bcos::devp2p::sync::Block const& block) {
                                 if (!m_running.load())
@@ -777,13 +783,25 @@ private:
                                 // six-way commitment comparison and the FIB-104 commit.
                                 // Its typed exceptions drive the classification below.
                                 auto result = task::syncWait(verifier.verifyAndCommit(block));
-                                INITIALIZER_LOG(INFO)
-                                    << LOG_DESC("OP-EL sync: committed block")
-                                    << LOG_KV("number", block.header.number)
-                                    << LOG_KV("hash", block.hash.hex().substr(0, 18))
-                                    << LOG_KV("stateRoot",
-                                        result.commitments.stateRoot.hex().substr(0, 18));
+                                ++committed;
+                                if (committed % c_commitLogInterval == 0)
+                                {
+                                    INITIALIZER_LOG(INFO)
+                                        << LOG_DESC("OP-EL sync: download progress")
+                                        << LOG_KV("number", block.header.number)
+                                        << LOG_KV("committed", committed)
+                                        << LOG_KV("downloadCount", downloadCount)
+                                        << LOG_KV("hash", block.hash.hex().substr(0, 18))
+                                        << LOG_KV("stateRoot",
+                                            result.commitments.stateRoot.hex().substr(0, 18));
+                                }
                             });
+                        INITIALIZER_LOG(INFO)
+                            << LOG_DESC("OP-EL sync: batch download complete")
+                            << LOG_KV("host", peer.host) << LOG_KV("port", peer.port)
+                            << LOG_KV("startNumber", resume.startNumber)
+                            << LOG_KV("downloadEnd", downloadEnd)
+                            << LOG_KV("committed", committed);
                         // Successful download: end the round here rather than
                         // chaining another bounded download from the next
                         // bootnode. madeProgress is already true, so the round
@@ -921,7 +939,7 @@ private:
                         // Caught up: at least one peer served its head/window answer
                         // (a peer merely behind us counts as served), no peer offered
                         // a safe download window and none failed, so the local head
-                        // sits inside the serving bootnodes' finality window. Back off
+                        // sits inside the serving bootnodes' sync-lag window. Back off
                         // to ~one block interval and log the state once per round
                         // instead of per-peer-per-round.
                         INITIALIZER_LOG(INFO)

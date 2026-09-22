@@ -1200,6 +1200,13 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
         ; (rollup.json block_time; 2 on every superchain chain). Feeds the
         ; header validator's block-interval check. Range [1, 60].
         op_block_time_seconds=2
+        ; mode=opstack-el only: how far behind the peer's UNSAFE head the
+        ; download stops (the peer head announced over eth/68 is the unsafe
+        ; head; this lag does NOT track the OP safe/finalized head, which L1
+        ; batch derivation defines and which can lag the unsafe head by a
+        ; whole sequencing window). A tip-reorg-avoidance heuristic, not a
+        ; finality boundary. Range [0, 10000]; 0 = download up to the tip.
+        op_sync_lag_blocks=64
     */
     const std::string mode = _pt.get<std::string>("ethereum.mode", "none");
     if (mode != "none" && mode != "el" && mode != "opstack-el")
@@ -1272,6 +1279,23 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     }
     m_opBlockTimeSeconds = blockTime;
 
+    // mode=opstack-el: the download lag behind the peer's UNSAFE head. The head a
+    // peer announces over eth/68 is its unsafe head; the OP safe/finalized heads are
+    // defined by L1 batch derivation and can trail the unsafe head by a whole
+    // sequencing window (~12h ≈ 21600 L2 blocks on superchain chains), so this knob
+    // is NOT a finality boundary and cannot be — it only lowers the chance of
+    // committing a block that a routine small tip reorg then unwinds. 0 means
+    // "download right up to the peer's tip". Bounded like every neighbouring knob.
+    uint64_t syncLag = _pt.get<uint64_t>("ethereum.op_sync_lag_blocks", 64);
+    if (syncLag > 10000)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "ethereum.op_sync_lag_blocks must be in [0, 10000], got " +
+                std::to_string(syncLag)));
+    }
+    m_opSyncLagBlocks = syncLag;
+
     // Operator-pinned finalized checkpoint, "<number>:<0xHASH>". Validated eagerly
     // like every neighbouring parse: a malformed value is a config error at load
     // time, not a sync-time surprise. Empty = no checkpoint (default).
@@ -1314,6 +1338,7 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("nodeKeyFile", m_ethereumNodeKeyFile)
                          << LOG_KV("maxBatchSize", m_ethereumMaxBatchSize)
                          << LOG_KV("opBlockTimeSeconds", m_opBlockTimeSeconds)
+                         << LOG_KV("opSyncLagBlocks", m_opSyncLagBlocks)
                          << LOG_KV("finalizedCheckpoint",
                                 m_ethereumFinalizedCheckpoint ?
                                     std::to_string(m_ethereumFinalizedCheckpoint->number) + ":" +
@@ -3709,6 +3734,10 @@ bool bcos::tool::NodeConfig::opStackELModeEnabled() const
 uint64_t bcos::tool::NodeConfig::opBlockTimeSeconds() const
 {
     return m_opBlockTimeSeconds;
+}
+uint64_t bcos::tool::NodeConfig::opSyncLagBlocks() const
+{
+    return m_opSyncLagBlocks;
 }
 const std::string& bcos::tool::NodeConfig::ethereumBootnodesFile() const
 {

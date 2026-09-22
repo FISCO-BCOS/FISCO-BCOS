@@ -327,6 +327,36 @@ BOOST_AUTO_TEST_CASE(opBlockTimeSecondsBounds)
     }
 }
 
+// [ethereum] op_sync_lag_blocks: the download lag behind the peer's UNSAFE head
+// (a tip-reorg heuristic, not a finality boundary), default 64, bounded to
+// [0, 10000] like every neighbouring knob; 0 = download right up to the tip.
+BOOST_AUTO_TEST_CASE(opSyncLagBlocksBounds)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[ethereum]\nmode=opstack-el\n"));
+        BOOST_CHECK_EQUAL(cfg.opSyncLagBlocks(), 64u);
+    }
+    for (const auto* value : {"0", "1", "10000"})
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString(
+            std::string("[ethereum]\nmode=opstack-el\nop_sync_lag_blocks=") + value + "\n"));
+        BOOST_CHECK_EQUAL(cfg.opSyncLagBlocks(), std::stoull(value));
+    }
+    for (const auto* value : {"10001", "999999"})
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadConfigFromString(
+                std::string("[ethereum]\nmode=opstack-el\nop_sync_lag_blocks=") + value + "\n"),
+            InvalidConfig, [](auto const& e) {
+                return errinfoContains(e, "op_sync_lag_blocks must be in [0, 10000]");
+            });
+    }
+}
+
 // Reload is a supported shape: a second genesis without the declaration must clear the
 // flag, or a stale opstack-el declaration would leak into the next chain's genesis pin.
 BOOST_AUTO_TEST_CASE(reloadWithoutDeclarationClears)

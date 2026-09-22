@@ -1,6 +1,5 @@
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPrecompiles.h>
-#include <bcos-framework/ledger/GenesisConfig.h>
 
 namespace bcos::evm::opstack
 {
@@ -184,63 +183,33 @@ const OpForkConfig& karstConfig() noexcept
 const OpForkConfig& configAt(
     const bcos::ledger::OpForkSchedule& schedule, uint64_t timestampSec) noexcept
 {
-    // op-node keying (op-node/rollup/types.go): IsKarst(ts) / IsJovian(ts) / ... are
-    // `Time != nil && ts >= *Time`, with UINT64_MAX standing in for nil, so an unscheduled
-    // fork never activates and `ts >= UINT64_MAX` skips its rung. Latest fork first — a
-    // chain that activates two forks at the same second runs the later one, matching
-    // op-node's own ordering of the IsX checks. The schedule's non-decreasing order over
-    // the scheduled entries is a config-load invariant (NodeConfig::loadOpForkTimestamps),
-    // not re-checked here.
-    if (timestampSec >= schedule.m_karstTime)
+    // The ladder itself is resolved by the single shared parser (ledger/OpForkSchedule.h);
+    // this only maps the resolved fork onto its executor config.
+    switch (bcos::ledger::resolveOpFork(schedule, timestampSec))
     {
+    case OpFork::Bedrock:
+        return bedrockConfig();
+    case OpFork::Regolith:
+        return regolithConfig();
+    case OpFork::Canyon:
+        return canyonConfig();
+    case OpFork::Delta:
+        return deltaConfig();
+    case OpFork::Ecotone:
+        return ecotoneConfig();
+    case OpFork::Fjord:
+        return fjordConfig();
+    case OpFork::Granite:
+        return graniteConfig();
+    case OpFork::Holocene:
+        return holoceneConfig();
+    case OpFork::Isthmus:
+        return isthmusConfig();
+    case OpFork::Jovian:
+        return jovianConfig();
+    case OpFork::Karst:
         return karstConfig();
     }
-    if (timestampSec >= schedule.m_jovianTime)
-    {
-        return jovianConfig();
-    }
-    // Baseline compatibility: an unset isthmus_time means "Isthmus is the zero-start
-    // baseline" — the only shape existing chains have (they configure jovian/karst at
-    // most). Every timestamp below jovian_time resolves to Isthmus and the pre-Isthmus
-    // rungs are never consulted, keeping the two-key schedule's behaviour bit-identical.
-    // An explicitly set isthmus_time turns the full Bedrock..Karst ladder live, with
-    // Bedrock — the genesis fork, which has no schedule entry — as the fallback.
-    if (schedule.m_isthmusTime == std::numeric_limits<uint64_t>::max())
-    {
-        return isthmusConfig();
-    }
-    if (timestampSec >= schedule.m_isthmusTime)
-    {
-        return isthmusConfig();
-    }
-    if (timestampSec >= schedule.m_holoceneTime)
-    {
-        return holoceneConfig();
-    }
-    if (timestampSec >= schedule.m_graniteTime)
-    {
-        return graniteConfig();
-    }
-    if (timestampSec >= schedule.m_fjordTime)
-    {
-        return fjordConfig();
-    }
-    if (timestampSec >= schedule.m_ecotoneTime)
-    {
-        return ecotoneConfig();
-    }
-    if (timestampSec >= schedule.m_deltaTime)
-    {
-        return deltaConfig();
-    }
-    if (timestampSec >= schedule.m_canyonTime)
-    {
-        return canyonConfig();
-    }
-    if (timestampSec >= schedule.m_regolithTime)
-    {
-        return regolithConfig();
-    }
-    return bedrockConfig();
+    return bedrockConfig();  // unreachable: resolveOpFork is total
 }
 }  // namespace bcos::evm::opstack

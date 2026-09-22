@@ -31,6 +31,10 @@ namespace
 {
 constexpr int64_t kParentTs = 1700000000;
 constexpr int64_t kChildTs = kParentTs + 2;  // 2-second OP block cadence
+// A fork time far above every test timestamp: with isthmus_time SET to this the full
+// Bedrock..Karst ladder is live (no Isthmus zero-start baseline), so schedules can
+// express genuine pre-Isthmus forks.
+constexpr uint64_t kFullLadderLive = 4102444800;  // 2100-01-01
 
 bcos::bytes holoceneExtra(uint32_t denominator, uint32_t elasticity)
 {
@@ -63,16 +67,19 @@ struct OpPair
     OpChainConfig config;
 };
 
-// Set every fork field a header's own fork position requires (forks keyed on
+// Set every fork field a header's own fork position requires, resolving the fork
+// through the same single ladder parser the validator uses (resolveOpFork on
 // _header.timestamp), so tests can flip a single fork time without tripping unrelated
 // presence checks.
 void stampForkFields(bcos::protocol::EthBlockHeaderData& h, OpChainConfig const& config)
 {
-    bool canyon = isForkActive(config.canyonTime, h.timestamp);
-    bool ecotone = isForkActive(config.ecotoneTime, h.timestamp);
-    bool isthmus = isForkActive(config.isthmusTime, h.timestamp);
-    bool holocene = isForkActive(config.holoceneTime, h.timestamp);
-    bool jovian = isForkActive(config.jovianTime, h.timestamp);
+    OpFork const fork =
+        bcos::ledger::resolveOpFork(config.forkSchedule, static_cast<uint64_t>(h.timestamp));
+    bool canyon = fork >= OpFork::Canyon;
+    bool ecotone = fork >= OpFork::Ecotone;
+    bool isthmus = fork >= OpFork::Isthmus;
+    bool holocene = fork >= OpFork::Holocene;
+    bool jovian = fork >= OpFork::Jovian;
     h.withdrawalsHash.reset();
     h.blobGasUsed.reset();
     h.excessBlobGas.reset();
@@ -109,12 +116,16 @@ void stampForkFields(bcos::protocol::EthBlockHeaderData& h, OpChainConfig const&
 
 // A minimal valid Bedrock parent/child pair: no fork fields anywhere (pre-Canyon),
 // empty extraData, the child's baseFee recomputed with the Bedrock 50/6 constants.
+// isthmus_time is set to a far-future time so the FULL ladder is live — an unset
+// isthmus_time means "Isthmus is the zero-start baseline" (resolveOpFork), which is
+// not the pre-Canyon world this fixture models. Every other rung stays UINT64_MAX
+// ("not scheduled", implied/skipped), so both timestamps resolve to Bedrock.
 OpPair makeBedrockPair()
 {
     OpPair p;
     p.config.chainId = 11155420;
     p.config.blockTimeSeconds = 2;
-    // Every fork stays UINT64_MAX ("not scheduled") — pure Bedrock rules.
+    p.config.forkSchedule.m_isthmusTime = kFullLadderLive;
 
     auto& parent = p.parent;
     parent.number = 100;
@@ -145,11 +156,17 @@ void stampForkFields(OpPair& p)
 // boilerplate from the presence/gating tests.
 u256 expectedBaseFee(OpPair const& p)
 {
-    bool parentHolocene = isForkActive(p.config.holoceneTime, p.parent.timestamp);
-    bool parentJovian = isForkActive(p.config.jovianTime, p.parent.timestamp);
-    uint64_t denominator = isForkActive(p.config.canyonTime, p.child.timestamp) ?
-                               p.config.eip1559DenominatorCanyon :
-                               p.config.eip1559DenominatorBedrock;
+    bool parentHolocene =
+        bcos::ledger::resolveOpFork(p.config.forkSchedule, static_cast<uint64_t>(p.parent.timestamp)) >=
+        OpFork::Holocene;
+    bool parentJovian =
+        bcos::ledger::resolveOpFork(p.config.forkSchedule, static_cast<uint64_t>(p.parent.timestamp)) >=
+        OpFork::Jovian;
+    uint64_t denominator =
+        bcos::ledger::resolveOpFork(p.config.forkSchedule, static_cast<uint64_t>(p.child.timestamp)) >=
+                OpFork::Canyon ?
+            p.config.eip1559DenominatorCanyon :
+            p.config.eip1559DenominatorBedrock;
     std::span<const bcos::byte> extra{p.parent.extraData.data(), p.parent.extraData.size()};
     return bcos::engine::calcOpBaseFeeFromFields(p.parent.gasLimit, p.parent.gasUsed,
         *p.parent.baseFee, p.parent.blobGasUsed, extra, parentHolocene, parentJovian, denominator,
@@ -187,7 +204,7 @@ BOOST_AUTO_TEST_CASE(bedrockBaseFeeGoldenVectors)
 BOOST_AUTO_TEST_CASE(canyonDenominatorSwitch)
 {
     auto p = makeBedrockPair();
-    p.config.canyonTime = kChildTs;  // child is the first Canyon block
+    p.config.forkSchedule.m_canyonTime = kChildTs;  // child is the first Canyon block
     stampForkFields(p);
     // deltaFee = 1e9 * 5M / 5M / 250 = 4'000'000
     BOOST_CHECK_EQUAL(expectedBaseFee(p), u256(1004000000));
@@ -195,7 +212,7 @@ BOOST_AUTO_TEST_CASE(canyonDenominatorSwitch)
     BOOST_CHECK(validateOpHeader(p.child, p.parent, p.config).valid);
 
     // One block earlier the Bedrock denominator still applies.
-    p.config.canyonTime = kChildTs + 2;
+    p.config.forkSchedule.m_canyonTime = kChildTs + 2;
     stampForkFields(p);
     BOOST_CHECK_EQUAL(expectedBaseFee(p), u256(1020000000));
     p.child.baseFee = u256(1020000000);
@@ -207,7 +224,7 @@ BOOST_AUTO_TEST_CASE(canyonDenominatorSwitch)
 BOOST_AUTO_TEST_CASE(holoceneExtraDataParamsDriveBaseFee)
 {
     auto p = makeBedrockPair();
-    p.config.holoceneTime = kParentTs;  // parent already Holocene
+    p.config.forkSchedule.m_holoceneTime = kParentTs;  // parent already Holocene
     p.parent.extraData = holoceneExtra(100, 4);
     stampForkFields(p);
     // target = 30M/4 = 7.5M, delta = 2.5M, deltaFee = 1e9 * 2.5M/7.5M/100 = 3'333'333
@@ -226,7 +243,7 @@ BOOST_AUTO_TEST_CASE(holoceneExtraDataParamsDriveBaseFee)
 BOOST_AUTO_TEST_CASE(holoceneExtraDataShapeIsEnforced)
 {
     auto p = makeBedrockPair();
-    p.config.holoceneTime = kChildTs;  // parent pre-Holocene, child Holocene
+    p.config.forkSchedule.m_holoceneTime = kChildTs;  // parent pre-Holocene, child Holocene
     stampForkFields(p);
     p.child.baseFee = expectedBaseFee(p);  // pre-Holocene parent -> config constants
     BOOST_CHECK(validateOpHeader(p.child, p.parent, p.config).valid);
@@ -253,7 +270,7 @@ BOOST_AUTO_TEST_CASE(preHoloceneExtraDataMustBeEmpty)
     BOOST_CHECK(!validateOpHeader(p.child, p.parent, p.config).valid);
     // The generic 32-byte bound applies on every fork.
     p.child.extraData = bcos::bytes(33, 0x42);
-    p.config.holoceneTime = kChildTs;
+    p.config.forkSchedule.m_holoceneTime = kChildTs;
     stampForkFields(p);  // resets extraData to the Holocene shape
     p.child.extraData = bcos::bytes(33, 0x42);
     BOOST_CHECK(!validateOpHeader(p.child, p.parent, p.config).valid);
@@ -264,10 +281,10 @@ BOOST_AUTO_TEST_CASE(preHoloceneExtraDataMustBeEmpty)
 BOOST_AUTO_TEST_CASE(jovianMinBaseFeeFloorAndDaMetering)
 {
     auto p = makeBedrockPair();
-    p.config.canyonTime = kParentTs;  // Jovian implies the whole ladder below it
-    p.config.ecotoneTime = kParentTs;
-    p.config.holoceneTime = kParentTs;
-    p.config.jovianTime = kParentTs;                       // parent already Jovian
+    p.config.forkSchedule.m_canyonTime = kParentTs;  // Jovian implies the whole ladder below it
+    p.config.forkSchedule.m_ecotoneTime = kParentTs;
+    p.config.forkSchedule.m_holoceneTime = kParentTs;
+    p.config.forkSchedule.m_jovianTime = kParentTs;                       // parent already Jovian
     p.parent.extraData = jovianExtra(100, 4, 2000000000);  // 2 gwei floor
     p.parent.blobGasUsed = u256(20000000);                 // DA footprint > gasUsed
     p.parent.gasUsed = 1000000;
@@ -312,7 +329,7 @@ BOOST_AUTO_TEST_CASE(withdrawalsHashGating)
     p.child.withdrawalsHash = c_opEmptyWithdrawalsHash;  // pre-Canyon: must be absent
     BOOST_CHECK(!validateOpHeader(p.child, p.parent, p.config).valid);
 
-    p.config.canyonTime = kParentTs;  // Canyon active for the child
+    p.config.forkSchedule.m_canyonTime = kParentTs;  // Canyon active for the child
     stampForkFields(p);
     p.child.baseFee = expectedBaseFee(p);
     BOOST_CHECK(validateOpHeader(p.child, p.parent, p.config).valid);
@@ -324,7 +341,7 @@ BOOST_AUTO_TEST_CASE(withdrawalsHashGating)
     BOOST_CHECK(!validateOpHeader(bad.child, bad.parent, bad.config).valid);
 
     // Isthmus: the value is the message-passer storage root — unchecked, any value passes.
-    p.config.isthmusTime = kChildTs;
+    p.config.forkSchedule.m_isthmusTime = kChildTs;
     stampForkFields(p);  // stamps a non-empty stand-in root
     p.child.baseFee = expectedBaseFee(p);
     BOOST_CHECK(validateOpHeader(p.child, p.parent, p.config).valid);
@@ -340,8 +357,8 @@ BOOST_AUTO_TEST_CASE(ecotoneBlobFieldsGating)
     p.child.parentBeaconRoot = h256{};
     BOOST_CHECK(!validateOpHeader(p.child, p.parent, p.config).valid);
 
-    p.config.canyonTime = kParentTs;
-    p.config.ecotoneTime = kChildTs;  // child is the first Ecotone block
+    p.config.forkSchedule.m_canyonTime = kParentTs;
+    p.config.forkSchedule.m_ecotoneTime = kChildTs;  // child is the first Ecotone block
     stampForkFields(p);
     p.child.baseFee = expectedBaseFee(p);
     BOOST_CHECK(validateOpHeader(p.child, p.parent, p.config).valid);
@@ -365,9 +382,9 @@ BOOST_AUTO_TEST_CASE(isthmusRequestsHashGating)
     p.child.requestsHash = c_opEmptyRequestsHash;  // pre-Isthmus: must be absent
     BOOST_CHECK(!validateOpHeader(p.child, p.parent, p.config).valid);
 
-    p.config.canyonTime = kParentTs;
-    p.config.ecotoneTime = kParentTs;
-    p.config.isthmusTime = kChildTs;
+    p.config.forkSchedule.m_canyonTime = kParentTs;
+    p.config.forkSchedule.m_ecotoneTime = kParentTs;
+    p.config.forkSchedule.m_isthmusTime = kChildTs;
     stampForkFields(p);
     p.child.baseFee = expectedBaseFee(p);
     BOOST_CHECK(validateOpHeader(p.child, p.parent, p.config).valid);
@@ -442,16 +459,16 @@ BOOST_AUTO_TEST_CASE(opSepoliaForkLadder)
     OpChainConfig config;
     config.chainId = 11155420;
     config.blockTimeSeconds = 2;
-    config.regolithTime = 0;  // active from genesis
-    config.canyonTime = 1699981200;
-    config.deltaTime = 1703203200;
-    config.ecotoneTime = 1708534800;
-    config.fjordTime = 1716998400;
-    config.graniteTime = 1723478400;
-    config.holoceneTime = 1732633200;
-    config.isthmusTime = 1744905600;
-    config.jovianTime = 1763568001;
-    config.karstTime = 1781712001;
+    config.forkSchedule.m_regolithTime = 0;  // active from genesis
+    config.forkSchedule.m_canyonTime = 1699981200;
+    config.forkSchedule.m_deltaTime = 1703203200;
+    config.forkSchedule.m_ecotoneTime = 1708534800;
+    config.forkSchedule.m_fjordTime = 1716998400;
+    config.forkSchedule.m_graniteTime = 1723478400;
+    config.forkSchedule.m_holoceneTime = 1732633200;
+    config.forkSchedule.m_isthmusTime = 1744905600;
+    config.forkSchedule.m_jovianTime = 1763568001;
+    config.forkSchedule.m_karstTime = 1781712001;
 
     struct Run
     {
@@ -504,4 +521,55 @@ BOOST_AUTO_TEST_CASE(opSepoliaForkLadder)
         parent = child;
     }
 }
-}  // namespace
+
+// F1 defect scenario (single fork-activation parser): a schedule that sets ONLY
+// jovian_time/karst_time — isthmus_time unset, the only shape existing chains
+// configure (NodeConfigOpStackELTest's opGenesis fixture is exactly this) — must
+// resolve to Isthmus+ under the SAME ladder semantics the executor uses. Before the
+// fix the validator kept its own per-field reading (unset field == fork inactive),
+// so this config booted fine, executed as Isthmus+, and then rejected block 1 with
+// "withdrawalsHash present before Canyon" — a permanent slow-probe stall with no
+// config error.
+BOOST_AUTO_TEST_CASE(jovianKarstOnlyScheduleAcceptsIsthmusShapeHeaders)
+{
+    auto p = makeBedrockPair();
+    p.config.forkSchedule = bcos::ledger::OpForkSchedule{};  // every rung unset...
+    p.config.forkSchedule.m_jovianTime = 0;                  // ...except jovian/karst,
+    p.config.forkSchedule.m_karstTime = 0;                   // active from genesis
+    // resolveOpFork -> Karst for both headers: withdrawalsHash, Cancun blob fields,
+    // requestsHash and the 17-byte Jovian extraData are all required.
+    stampForkFields(p.parent, p.config);
+    stampForkFields(p);
+    p.child.baseFee = expectedBaseFee(p);
+    auto result = validateOpHeader(p.child, p.parent, p.config);
+    BOOST_CHECK_MESSAGE(result.valid, "error: " << result.error);
+
+    // The Baseline half of the same shape: isthmus/jovian/karst unset -> every
+    // timestamp resolves to the Isthmus zero-start baseline.
+    p.config.forkSchedule = bcos::ledger::OpForkSchedule{};
+    stampForkFields(p.parent, p.config);
+    stampForkFields(p);
+    BOOST_CHECK_EQUAL(
+        static_cast<int>(bcos::ledger::resolveOpFork(p.config.forkSchedule, kParentTs)),
+        static_cast<int>(OpFork::Isthmus));
+    p.child.baseFee = expectedBaseFee(p);
+    result = validateOpHeader(p.child, p.parent, p.config);
+    BOOST_CHECK_MESSAGE(result.valid, "error: " << result.error);
+}
+
+// isthmus_time set with canyon/ecotone/holocene UNSET: the ladder implies the lower
+// rungs (an unscheduled intermediate fork is skipped, not "inactive"), so a ts >= T
+// Isthmus-shaped header passes. The pre-fix per-field reading rejected it.
+BOOST_AUTO_TEST_CASE(isthmusTimeAloneImpliesLowerRungs)
+{
+    auto p = makeBedrockPair();
+    p.config.forkSchedule = bcos::ledger::OpForkSchedule{};
+    p.config.forkSchedule.m_isthmusTime = kParentTs;  // parent already Isthmus
+    stampForkFields(p.parent, p.config);              // Isthmus: 9B Holocene extraData shape
+    stampForkFields(p);
+    p.child.baseFee = expectedBaseFee(p);
+    auto result = validateOpHeader(p.child, p.parent, p.config);
+    BOOST_CHECK_MESSAGE(result.valid, "error: " << result.error);
+}
+
+BOOST_AUTO_TEST_SUITE_END()

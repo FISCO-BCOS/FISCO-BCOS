@@ -24,8 +24,11 @@
  *            (Holocene 9-byte / Jovian 17-byte extraData, empty before Holocene)
  *          - consensus/misc/eip4844/eip4844.go VerifyEIP4844Header / CalcExcessBlobGas
  *            (OP chains short-circuit excessBlobGas to 0)
- *        Fork activation follows op-node's rollup.json semantics (IsX(ts) ==
- *        ts >= forkTime), timestamp-based like every OP fork.
+ *        Fork activation resolves through bcos::ledger::resolveOpFork
+ *        (bcos-framework/ledger/OpForkSchedule.h) — the single ladder parser the
+ *        executor's configAt also delegates to, with op-node's rollup.json semantics
+ *        (IsX(ts) == ts >= forkTime, unscheduled rungs implied by later forks,
+ *        isthmus_time unset = Isthmus zero-start baseline).
  * @date 2026/9/21
  */
 #pragma once
@@ -33,14 +36,18 @@
 #include "HeaderValidator.h"
 #include <bcos-framework/engine/Constants.h>
 #include <bcos-framework/engine/OpBaseFee.h>
+#include <bcos-framework/ledger/OpForkSchedule.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
+#include <atomic>
 #include <functional>
 #include <limits>
 
 namespace bcos::devp2p::sync
 {
+using bcos::ledger::OpFork;
+
 /// Predeploy that conventionally receives the OP sequencer fees and shows up as the
 /// header coinbase. op-geth does NOT check the coinbase at header level (it is fixed by
 /// the payload attributes on the derivation path), so a mismatch is a warning here, not
@@ -62,27 +69,18 @@ inline const bcos::h256 c_opEmptyRequestsHash =
 /// op-geth params.MaxGasLimit: every header's gasLimit must fit in a signed 63 bits.
 constexpr bcos::u256 c_opMaxGasLimit{bcos::u256(std::numeric_limits<int64_t>::max())};
 
-/// Minimal OP chain configuration for header validation. The ten fork timestamps carry
-/// the exact semantics of bcos::ledger::GenesisConfig::OpForkSchedule (and op-node's
-/// rollup.json *_time fields): 0 = active from genesis, UINT64_MAX = not scheduled.
-/// (The struct is duplicated rather than reused because ledger/GenesisConfig.h pulls in
-/// bcos-tool, which devp2p does not link.)
+/// Minimal OP chain configuration for header validation. forkSchedule is the genesis
+/// [op_fork_timestamps] schedule (bcos::ledger::OpForkSchedule); every fork gate below
+/// resolves through bcos::ledger::resolveOpFork — the SAME ladder parser the executor
+/// uses (bcos::evm::opstack::configAt delegates to it), so a schedule the executor
+/// accepts can never be read differently here (an unset isthmus_time means "Isthmus is
+/// the zero-start baseline", not "Isthmus inactive"; an unscheduled intermediate rung
+/// is implied by a later scheduled fork).
 struct OpChainConfig
 {
     uint64_t chainId{10};
     uint64_t blockTimeSeconds{2};
-    // Listed for parity with the rollup config; no header rules attach to Regolith,
-    // Delta, Fjord, Granite or Karst.
-    uint64_t regolithTime{std::numeric_limits<uint64_t>::max()};
-    uint64_t canyonTime{std::numeric_limits<uint64_t>::max()};
-    uint64_t deltaTime{std::numeric_limits<uint64_t>::max()};
-    uint64_t ecotoneTime{std::numeric_limits<uint64_t>::max()};
-    uint64_t fjordTime{std::numeric_limits<uint64_t>::max()};
-    uint64_t graniteTime{std::numeric_limits<uint64_t>::max()};
-    uint64_t holoceneTime{std::numeric_limits<uint64_t>::max()};
-    uint64_t isthmusTime{std::numeric_limits<uint64_t>::max()};
-    uint64_t jovianTime{std::numeric_limits<uint64_t>::max()};
-    uint64_t karstTime{std::numeric_limits<uint64_t>::max()};
+    bcos::ledger::OpForkSchedule forkSchedule{};
     // op-geth params ChainConfig.Optimism constants (superchain-registry [optimism]
     // section; identical on every superchain chain: 50 / 250 / 6).
     uint64_t eip1559DenominatorBedrock{50};
@@ -110,8 +108,12 @@ inline std::optional<std::string> validateOpBaseFee(
     {
         return "parent header is missing baseFee";
     }
-    bool const parentIsHolocene = isForkActive(_config.holoceneTime, _parent.timestamp);
-    bool const parentIsJovian = isForkActive(_config.jovianTime, _parent.timestamp);
+    bool const parentIsHolocene =
+        bcos::ledger::resolveOpFork(_config.forkSchedule,
+            static_cast<uint64_t>(_parent.timestamp)) >= OpFork::Holocene;
+    bool const parentIsJovian =
+        bcos::ledger::resolveOpFork(_config.forkSchedule,
+            static_cast<uint64_t>(_parent.timestamp)) >= OpFork::Jovian;
     std::span<const bcos::byte> parentExtra{_parent.extraData.data(), _parent.extraData.size()};
     if (parentIsHolocene)
     {
@@ -124,9 +126,11 @@ inline std::optional<std::string> validateOpBaseFee(
             return "OP parent extraData " + *err;
         }
     }
-    uint64_t const fallbackDenominator = isForkActive(_config.canyonTime, _header.timestamp) ?
-                                             _config.eip1559DenominatorCanyon :
-                                             _config.eip1559DenominatorBedrock;
+    uint64_t const fallbackDenominator =
+        bcos::ledger::resolveOpFork(_config.forkSchedule, static_cast<uint64_t>(_header.timestamp)) >=
+                OpFork::Canyon ?
+            _config.eip1559DenominatorCanyon :
+            _config.eip1559DenominatorBedrock;
     try
     {
         auto const expected = bcos::engine::calcOpBaseFeeFromFields(_parent.gasLimit,
@@ -159,7 +163,9 @@ inline std::optional<std::string> validateOpExtraData(
     {
         return "extraData exceeds the 32-byte bound";
     }
-    if (isForkActive(_config.jovianTime, _header.timestamp))
+    OpFork const fork =
+        bcos::ledger::resolveOpFork(_config.forkSchedule, static_cast<uint64_t>(_header.timestamp));
+    if (fork >= OpFork::Jovian)
     {
         if (_header.extraData.size() != bcos::engine::c_jovianExtraDataBytes)
         {
@@ -179,7 +185,7 @@ inline std::optional<std::string> validateOpExtraData(
         }
         return std::nullopt;
     }
-    if (isForkActive(_config.holoceneTime, _header.timestamp))
+    if (fork >= OpFork::Holocene)
     {
         if (_header.extraData.size() != bcos::engine::c_holoceneExtraDataBytes)
         {
@@ -216,10 +222,12 @@ inline std::optional<std::string> validateOpExtraData(
 inline std::optional<std::string> validateOpForkFields(
     bcos::protocol::EthBlockHeaderData const& _header, OpChainConfig const& _config)
 {
-    bool const canyon = isForkActive(_config.canyonTime, _header.timestamp);
-    bool const ecotone = isForkActive(_config.ecotoneTime, _header.timestamp);
-    bool const isthmus = isForkActive(_config.isthmusTime, _header.timestamp);
-    bool const jovian = isForkActive(_config.jovianTime, _header.timestamp);
+    OpFork const fork =
+        bcos::ledger::resolveOpFork(_config.forkSchedule, static_cast<uint64_t>(_header.timestamp));
+    bool const canyon = fork >= OpFork::Canyon;
+    bool const ecotone = fork >= OpFork::Ecotone;
+    bool const isthmus = fork >= OpFork::Isthmus;
+    bool const jovian = fork >= OpFork::Jovian;
 
     if (canyon && !_header.withdrawalsHash.has_value())
     {
@@ -295,7 +303,8 @@ inline std::optional<std::string> validateOpForkFields(
 ///    retarget it between adjacent blocks), so the 1/1024 adjacency bound does not apply;
 ///    the 5000 lower bound and the 2^63-1 upper bound (params.MaxGasLimit) are kept.
 ///  - coinbase: not part of op-geth header validation at all; a non-SequencerFeeVault
-///    coinbase is logged at WARNING level only.
+///    coinbase is logged at WARNING level only, once per process (per-header logging
+///    would spam the whole sync on a chain that legitimately differs).
 inline HeaderValidationResult validateOpHeader(bcos::protocol::EthBlockHeaderData const& _header,
     bcos::protocol::EthBlockHeaderData const& _parent, OpChainConfig const& _config)
 {
@@ -347,10 +356,22 @@ inline HeaderValidationResult validateOpHeader(bcos::protocol::EthBlockHeaderDat
     }
     if (_header.coinbase != c_opSequencerFeeVault)
     {
-        BCOS_LOG(WARNING) << LOG_BADGE("OpHeaderValidator")
-                          << LOG_DESC("coinbase is not the SequencerFeeVault")
-                          << LOG_KV("number", _header.number)
-                          << LOG_KV("coinbase", _header.coinbase.hexPrefixed());
+        // Once per process, not per header: this check runs on every downloaded
+        // header, and a chain that legitimately carries a non-vault coinbase would
+        // otherwise emit one WARNING per block for the whole sync. The function-
+        // local static is deliberate — this validator is a header-only free
+        // function (no instance state to hang a flag on) and is called from the
+        // single-threaded sync loop today; the atomic keeps it sound if that ever
+        // becomes multi-threaded.
+        static std::atomic<bool> coinbaseWarned{false};
+        if (!coinbaseWarned.exchange(true))
+        {
+            BCOS_LOG(WARNING) << LOG_BADGE("OpHeaderValidator")
+                              << LOG_DESC("coinbase is not the SequencerFeeVault")
+                              << LOG_KV("number", _header.number)
+                              << LOG_KV("coinbase", _header.coinbase.hexPrefixed())
+                              << LOG_KV("note", "further mismatches are not logged");
+        }
     }
 
     // Fork-gated extraData shape (Holocene 9B / Jovian 17B / empty before Holocene).

@@ -250,6 +250,12 @@ public:
     // block_time; 2 on every superchain chain). Feeds the header validator's soft
     // block-interval check. Default 2, accepted range [1, 60].
     uint64_t opBlockTimeSeconds() const;
+    // [ethereum] op_sync_lag_blocks: how far behind the peer's UNSAFE head the OP-EL sync
+    // caps its download (a tip-reorg-avoidance heuristic only — it does NOT track the OP
+    // safe/finalized head, which L1 batch derivation defines and which can lag the unsafe
+    // head by a whole sequencing window). Default 64, accepted range [0, 10000];
+    // 0 = download right up to the peer's tip.
+    uint64_t opSyncLagBlocks() const;
     // path to the bootnodes file (enode:// list, geth-style); default ./bootnodes.json
     const std::string& ethereumBootnodesFile() const;
     // path to a file holding the 32-byte secp256k1 node private key (hex, optional
@@ -629,6 +635,7 @@ private:
     // bootnodes/node_key/max_batch/finalized_checkpoint knobs with mode=el.
     bool m_enableOpStackEL = false;
     uint64_t m_opBlockTimeSeconds = 2;
+    uint64_t m_opSyncLagBlocks = 64;
     std::string m_ethereumBootnodesFile = "./bootnodes.json";
     std::string m_ethereumNodeKeyFile;
     uint32_t m_ethereumMaxBatchSize = 192;

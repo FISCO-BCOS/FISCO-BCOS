@@ -22,6 +22,7 @@
 
 #include "Features.h"
 #include "LedgerConfig.h"
+#include "OpForkSchedule.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tool/VersionConverter.h"
@@ -121,33 +122,10 @@ struct EthereumForkSchedule
     uint64_t m_bpo2Time = 0;
 };
 
-// OP-lane fork schedule, parsed from the [op_fork_timestamps] section of
-// config.genesis (executor_version >= OPSTACK_EXECUTOR_VERSION). OP forks
-// activate by L2 block TIMESTAMP IN SECONDS, exactly like op-node's
-// rollup.json *_time fields (op-node/rollup/types.go:
-// IsJovian(ts) == Time != nil && ts >= *Time). 0 means "active from genesis";
-// std::numeric_limits<uint64_t>::max() encodes op-node's nil, i.e. "not
-// scheduled". Bedrock is the genesis fork and has no entry.
-//
-// m_isthmusTime carries a compatibility sentinel: unset (UINT64_MAX) means
-// "Isthmus is the zero-start baseline", the only shape existing chains have
-// (they configure jovian_time / karst_time at most) — configAt then resolves
-// every timestamp below jovian_time to isthmusConfig(). An explicitly set
-// isthmus_time activates the full Bedrock..Karst ladder for from-genesis
-// replay, whose fallback below the earliest scheduled fork is bedrockConfig().
-struct OpForkSchedule
-{
-    uint64_t m_regolithTime = std::numeric_limits<uint64_t>::max();
-    uint64_t m_canyonTime = std::numeric_limits<uint64_t>::max();
-    uint64_t m_deltaTime = std::numeric_limits<uint64_t>::max();
-    uint64_t m_ecotoneTime = std::numeric_limits<uint64_t>::max();
-    uint64_t m_fjordTime = std::numeric_limits<uint64_t>::max();
-    uint64_t m_graniteTime = std::numeric_limits<uint64_t>::max();
-    uint64_t m_holoceneTime = std::numeric_limits<uint64_t>::max();
-    uint64_t m_isthmusTime = std::numeric_limits<uint64_t>::max();
-    uint64_t m_jovianTime = std::numeric_limits<uint64_t>::max();
-    uint64_t m_karstTime = std::numeric_limits<uint64_t>::max();
-};
+// The OP-lane fork schedule ([op_fork_timestamps]) now lives in
+// ledger/OpForkSchedule.h next to the OpFork ladder enum and resolveOpFork, the
+// single fork-activation parser shared by the executor and the devp2p header
+// validator; this header re-exports it for the config/genesis side.
 
 class GenesisConfig
 {
