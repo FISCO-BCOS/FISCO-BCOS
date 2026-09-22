@@ -22,6 +22,10 @@
  *
  *        Usage: eth-sync-check --rpc <url> [--rpc2 <url>] --start <number> --count <n>
  *               [--merge-block <n>]   (override the merge/TTD block; default Sepolia 1735371)
+ *        Usage: eth-sync-check --op [--rpc <url>] --start <number> --count <n>
+ *               [--op-chain-id <n>] [--op-block-time <s>] [--op-fork <name> <timestamp>]
+ *                                   (OP Stack header validation; defaults: op-sepolia,
+ *                                    RPC https://sepolia.optimism.io)
  *        Usage: eth-sync-check --verify-tx <blockNumber> [--rpc <url>]
  *        Usage: eth-sync-check --genesis <file> [--expect <root>]
  *        Usage: eth-sync-check --genesis-ini <config.genesis> [--expect <root>]
@@ -29,6 +33,7 @@
  */
 #include <bcos-devp2p/sync/Block.h>
 #include <bcos-devp2p/sync/HeaderValidator.h>
+#include <bcos-devp2p/sync/OpHeaderValidator.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-task/Wait.h>
@@ -39,6 +44,7 @@
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rlp-protocol/EthGenesisHeader.h>
 #include <bcos-rlp-protocol/EthWithdrawal.h>
+#include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -207,6 +213,48 @@ ChainConfig sepoliaConfig()
     // Without this the PoS field checks misjudge every pre-merge block.
     config.mergeBlock = 1735371;
     return config;
+}
+
+/// The OP Sepolia chain configuration (superchain-registry
+/// superchain/configs/sepolia/op.toml): chain id 11155420, 2-second blocks, the
+/// historical OP fork timestamps, and the standard EIP-1559 constants
+/// (Bedrock denominator 50 / Canyon denominator 250 / elasticity 6). Regolith was
+/// active from genesis on op-sepolia; it has no header-level rules. Jovian and Karst
+/// are scheduled (and already active): Jovian switches extraData to 17 bytes, meters
+/// the DA footprint in blobGasUsed and applies the minBaseFee floor.
+OpChainConfig opSepoliaConfig()
+{
+    OpChainConfig config;
+    config.chainId = 11155420;
+    config.blockTimeSeconds = 2;
+    config.regolithTime = 0;  // active from genesis
+    config.canyonTime = 1699981200;
+    config.deltaTime = 1703203200;
+    config.ecotoneTime = 1708534800;
+    config.fjordTime = 1716998400;
+    config.graniteTime = 1723478400;
+    config.holoceneTime = 1732633200;
+    config.isthmusTime = 1744905600;
+    config.jovianTime = 1763568001;
+    config.karstTime = 1781712001;
+    return config;
+}
+
+/// --op-fork <name> <timestamp>: override one OP fork activation time.
+bool setOpForkTime(OpChainConfig& config, std::string const& name, uint64_t ts)
+{
+    if (name == "regolith") { config.regolithTime = ts; }
+    else if (name == "canyon") { config.canyonTime = ts; }
+    else if (name == "delta") { config.deltaTime = ts; }
+    else if (name == "ecotone") { config.ecotoneTime = ts; }
+    else if (name == "fjord") { config.fjordTime = ts; }
+    else if (name == "granite") { config.graniteTime = ts; }
+    else if (name == "holocene") { config.holoceneTime = ts; }
+    else if (name == "isthmus") { config.isthmusTime = ts; }
+    else if (name == "jovian") { config.jovianTime = ts; }
+    else if (name == "karst") { config.karstTime = ts; }
+    else { return false; }
+    return true;
 }
 
 int failures = 0;
@@ -505,10 +553,34 @@ int main(int argc, char** argv)
     std::optional<int64_t> verifyTxBlock;
     std::optional<std::string> rawTxHex;
     std::optional<uint64_t> mergeBlockOverride;
+    bool opMode = false;
+    OpChainConfig opConfig = opSepoliaConfig();
     for (int i = 1; i < argc; ++i)
     {
         std::string arg = argv[i];
-        if (arg == "--rpc" && i + 1 < argc)
+        if (arg == "--op")
+        {
+            opMode = true;
+        }
+        else if (arg == "--op-chain-id" && i + 1 < argc)
+        {
+            opConfig.chainId = std::stoull(argv[++i]);
+        }
+        else if (arg == "--op-block-time" && i + 1 < argc)
+        {
+            opConfig.blockTimeSeconds = std::stoull(argv[++i]);
+        }
+        else if (arg == "--op-fork" && i + 2 < argc)
+        {
+            std::string name = argv[++i];
+            uint64_t ts = std::stoull(argv[++i]);
+            if (!setOpForkTime(opConfig, name, ts))
+            {
+                std::cerr << "unknown OP fork name: " << name << std::endl;
+                return 1;
+            }
+        }
+        else if (arg == "--rpc" && i + 1 < argc)
         {
             rpcs.push_back(argv[++i]);
         }
@@ -574,8 +646,16 @@ int main(int argc, char** argv)
     }
     if (rpcs.empty())
     {
-        rpcs.push_back("https://1rpc.io/sepolia");
-        rpcs.push_back("https://ethereum-sepolia-rpc.publicnode.com");
+        if (opMode)
+        {
+            rpcs.push_back("https://sepolia.optimism.io");
+            rpcs.push_back("https://optimism-sepolia-rpc.publicnode.com");
+        }
+        else
+        {
+            rpcs.push_back("https://1rpc.io/sepolia");
+            rpcs.push_back("https://ethereum-sepolia-rpc.publicnode.com");
+        }
     }
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
@@ -615,22 +695,34 @@ int main(int argc, char** argv)
             crypto::HashType::FromHex);
         report("header hash", bcos::protocol::ethHeaderHash(h) == canonical);
 
-        // 2. PoS header field rules against the parent (base fee, gas limit, timestamp...),
-        //    plus the EIP-1559 base-fee recomputation from the PARENT.
+        // 2. Header field rules against the parent: OP Stack rules in --op mode
+        //    (validateOpHeader covers the base-fee recomputation, the fork-gated field
+        //    presence and the extraData shapes), Ethereum PoS rules otherwise.
         if (prev)
         {
-            auto pos = validateHeaderPoS(h, *prev, config);
-            report("PoS header fields", pos.valid, pos.error);
-            if (h.baseFee && prev->baseFee)
+            if (opMode)
             {
-                auto expected = computeNextBaseFee(*prev);
-                report("baseFee recompute", *h.baseFee == expected);
+                auto op = validateOpHeader(h, *prev, opConfig);
+                report("OP header fields", op.valid, op.error);
+            }
+            else
+            {
+                auto pos = validateHeaderPoS(h, *prev, config);
+                report("PoS header fields", pos.valid, pos.error);
+                if (h.baseFee && prev->baseFee)
+                {
+                    auto expected = computeNextBaseFee(*prev);
+                    report("baseFee recompute", *h.baseFee == expected);
+                }
             }
         }
         prev = h;
 
         // 3. Withdrawals trie root (Shanghai+): rebuild the RLP and compare.
-        if (h.withdrawalsHash && (*block).isMember("withdrawals"))
+        //    Skipped in --op mode: OP blocks never carry withdrawals, and from Isthmus
+        //    the withdrawalsHash is the L2ToL1MessagePasser storage root, not a
+        //    withdrawals trie root.
+        if (!opMode && h.withdrawalsHash && (*block).isMember("withdrawals"))
         {
             std::vector<bytes> wdRlps;
             for (auto const& wdJson : (*block)["withdrawals"])

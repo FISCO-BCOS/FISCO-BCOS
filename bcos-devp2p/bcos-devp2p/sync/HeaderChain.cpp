@@ -44,7 +44,14 @@ HeaderChain::HeaderChain(uint64_t _nextNumber,
     m_anchorHeader(std::move(_anchorHeader)),
     m_config(_config),
     m_maxHeadersPerRequest(_maxHeadersPerRequest)
-{}
+{
+    // Default policy: the Ethereum PoS field rules. Replaceable via
+    // setHeaderValidator (e.g. the OP Stack validator).
+    m_validator = [this](bcos::protocol::EthBlockHeaderData const& _header,
+                      bcos::protocol::EthBlockHeaderData const& _parent) {
+        return validateHeaderPoS(_header, _parent, m_config);
+    };
+}
 
 namespace
 {
@@ -192,17 +199,18 @@ std::vector<HeaderWithHash> HeaderChain::requestHeaders(
             throw std::runtime_error("HeaderChain: broken parent chain");
         }
 
-        // When the anchor header is known, validate the Ethereum PoS field
-        // rules against the actual parent header.
+        // When the anchor header is known, validate the per-header field rules
+        // against the actual parent header (Ethereum PoS by default, or the injected
+        // policy — e.g. the OP Stack rules).
         if (m_anchorHeader.has_value())
         {
             auto const& parentHeader =
                 i == 0 ? *m_anchorHeader : out[i - 1].header;
-            auto result = validateHeaderPoS(header.header, parentHeader, m_config);
+            auto result = m_validator(header.header, parentHeader);
             if (!result.valid)
             {
                 throw HeaderRuleViolation(
-                    "HeaderChain: PoS validation failed at block " +
+                    "HeaderChain: header validation failed at block " +
                     std::to_string(header.number()) + ": " + result.error);
             }
         }
