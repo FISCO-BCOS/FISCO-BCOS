@@ -22,7 +22,7 @@
 #include "bcos-gateway/libamop/AMOPMessage.h"
 #include "bcos-gateway/libamop/TopicManager.h"
 #include "bcos-gateway/libp2p/Message.h"
-#include "bcos-gateway/libp2p/P2PInterface.h"
+#include "bcos-gateway/libp2p/Service.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/Timer.h"
@@ -40,7 +40,7 @@ public:
     using Ptr = std::shared_ptr<AMOPImpl>;
     AMOPImpl(TopicManager::Ptr _topicManager, AMOPMessageFactory::Ptr _messageFactory,
         bcos::protocol::AMOPRequestFactory::Ptr _requestFactory,
-        bcos::gateway::P2PInterface::Ptr _network, bcos::gateway::P2pID const& _p2pNodeID,
+        bcos::gateway::Service::Ptr _network, bcos::gateway::P2pID const& _p2pNodeID,
         boost::asio::io_context& _ioContext,
         bcos::IOServicePool::Ptr _ioServicePool);
     virtual ~AMOPImpl();
@@ -149,7 +149,7 @@ private:
     std::shared_ptr<AMOPMessageFactory> m_messageFactory;
     std::shared_ptr<bcos::protocol::AMOPRequestFactory> m_requestFactory;
     std::shared_ptr<Timer> m_timer;
-    bcos::gateway::P2PInterface::Ptr m_network;
+    bcos::gateway::Service::Ptr m_network;
     bcos::gateway::P2pID m_p2pNodeID;
     bcos::Strand m_strand;
 

@@ -53,7 +53,7 @@ std::shared_ptr<bcos::crypto::KeyFactory> GatewayNodeManager::keyFactory()
 }
 
 GatewayNodeManager::GatewayNodeManager(std::string const& _uuid,
-    std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
+    std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, Service::Ptr _p2pInterface)
   : m_uuid(_uuid),
     m_keyFactory(_keyFactory),
     m_localRouterTable(std::make_shared<LocalRouterTable>(_keyFactory)),
@@ -73,7 +73,7 @@ uint32_t GatewayNodeManager::statusSeq()
 }
 
 GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _nodeID,
-    std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface,
+    std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, Service::Ptr _p2pInterface,
     boost::asio::io_context& _ioContext)
   : GatewayNodeManager(_uuid, _keyFactory, _p2pInterface)
 {
@@ -172,7 +172,7 @@ void GatewayNodeManager::onReceiveStatusSeq(
         return;
     }
     // FIB-183: onReceiveStatusSeq reads a 4-byte sequence via *(uint32_t*)payload().data()
-    // with no size check (same defect class fixed in ServiceV2::onReceiveRouterSeq); a 0-3 byte
+    // with no size check (same defect class fixed in Service::onReceiveRouterSeq); a 0-3 byte
     // payload reads past the decoded buffer. Drop short payloads and use memcpy for the read.
     if (_msg.payload().size() < sizeof(uint32_t))
     {
@@ -195,7 +195,7 @@ void GatewayNodeManager::onReceiveStatusSeq(
     auto p2pInterface = m_p2pInterface;
     // fire-and-forget through the coroutine fast path: the message is built in the frame and the
     // (empty) payload rides as a view; an unreachable peer is an expected, recoverable state.
-    task::wait([](P2PInterface::Ptr _p2pInterface, uint16_t _type, P2pID _nodeID)
+    task::wait([](Service::Ptr _p2pInterface, uint16_t _type, P2pID _nodeID)
                    -> task::Task<void> {
         Message message;
         message.setPacketType(_type);
@@ -295,7 +295,7 @@ void GatewayNodeManager::onRequestNodeStatus(
     // fire-and-forget through the coroutine fast path: the message is built in the frame and the
     // node status payload is moved into it (the caller's buffer does not outlive the deferred
     // send); an unreachable peer is an expected, recoverable state.
-    task::wait([](P2PInterface::Ptr _p2pInterface, uint16_t _type, P2pID _nodeID,
+    task::wait([](Service::Ptr _p2pInterface, uint16_t _type, P2pID _nodeID,
                    bcos::bytes _payload) -> task::Task<void> {
         Message message;
         message.setPacketType(_type);
@@ -417,7 +417,7 @@ void GatewayNodeManager::broadcastStatusSeq()
     // value message held by shared_ptr; the 4-byte seq payload is owned by it (zero-copy view
     // send). The p2p interface is passed as a coroutine parameter so it is copied into the frame
     // and stays alive for the whole (possibly deferred) send.
-    task::wait([](P2PInterface::Ptr _p2p, bcos::bytes _payload) mutable
+    task::wait([](Service::Ptr _p2p, bcos::bytes _payload) mutable
                    -> task::Task<void> {
         auto message = std::make_shared<Message>();
         message->setPacketType(GatewayMessageType::SyncNodeSeq);

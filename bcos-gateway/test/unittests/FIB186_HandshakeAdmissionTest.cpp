@@ -22,6 +22,7 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
+#include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 
@@ -43,18 +44,19 @@ public:
     FakeASIO_FIB186()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB186"), "0.0.0.0", 0)
     {}
-    ~FakeASIO_FIB186() noexcept override {}
+    ~FakeASIO_FIB186() noexcept {}
 };
 
 // Exposes the protected handshake-admission helpers for direct testing, mirroring the FIB-184
-// session-cap test harness.
-class FakeHost_FIB186 : public bcos::gateway::Host
+// session-cap test harness. No session is ever created in these tests, so the default SocketT
+// (the production Socket) is fine.
+class FakeHost_FIB186 : public bcos::gateway::Host<P2PDecoder>
 {
 public:
     FakeHost_FIB186(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface)
-      : Host(_hash, _asioInterface, nullptr)
+      : Host<P2PDecoder>(std::move(_hash), std::move(_asioInterface), nullptr)
     {
-        m_run = true;
+        this->m_run = true;
     }
     bool callTryAcquireHandshakeSlot() { return tryAcquireHandshakeSlot(); }
     void callReleaseHandshakeSlot() { releaseHandshakeSlot(); }

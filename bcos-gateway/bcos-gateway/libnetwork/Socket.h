@@ -6,8 +6,8 @@
 
 #pragma once
 
+#include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/libnetwork/Common.h"
-#include "bcos-gateway/libnetwork/SocketFace.h"
 #include "bcos-utilities/BoostLog.h"
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
@@ -17,30 +17,30 @@
 
 namespace bcos::gateway
 {
-class Socket : public SocketFace, public std::enable_shared_from_this<Socket>
+class Socket : public std::enable_shared_from_this<Socket>
 {
 public:
     Socket(std::shared_ptr<ba::io_context> _ioService, ba::ssl::context& _sslContext,
         NodeIPEndpoint _nodeIPEndpoint);
     ~Socket();
 
-    bool isConnected() const override;
+    bool isConnected() const;
 
-    void close() override;
+    void close();
 
     bi::tcp::endpoint remoteEndpoint(
-        boost::system::error_code ec = boost::system::error_code()) override;
+        boost::system::error_code ec = boost::system::error_code());
 
     bi::tcp::endpoint localEndpoint(
-        boost::system::error_code ec = boost::system::error_code()) override;
+        boost::system::error_code ec = boost::system::error_code());
 
-    bi::tcp::socket& ref() override;
-    ba::ssl::stream<bi::tcp::socket>& sslref() override;
+    bi::tcp::socket& ref();
+    ba::ssl::stream<bi::tcp::socket>& sslref();
 
-    const NodeIPEndpoint& nodeIPEndpoint() const override;
-    void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) override;
+    const NodeIPEndpoint& nodeIPEndpoint() const;
+    void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint);
 
-    ba::io_context& ioService() override;
+    ba::io_context& ioService();
 
 protected:
     NodeIPEndpoint m_nodeIPEndpoint;

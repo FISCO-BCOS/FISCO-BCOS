@@ -8,7 +8,7 @@
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libp2p/Message.h"
-#include "bcos-gateway/libnetwork/SessionFace.h"
+#include "bcos-gateway/libp2p/P2PDecoder.h"
 #include <boost/asio/steady_timer.hpp>
 #include <memory>
 #include <utility>
@@ -32,8 +32,8 @@ public:
     virtual bool active();
     virtual void heartBeat();
 
-    virtual SessionFace::Ptr session();
-    virtual void setSession(std::shared_ptr<SessionFace> session);
+    virtual Session::Ptr session();
+    virtual void setSession(Session::Ptr session);
 
     virtual P2pID p2pID();
     virtual std::string printP2pID();
@@ -53,7 +53,7 @@ public:
         Message& message, ::ranges::any_view<bytesConstRef> payloads, Options options);
 
 private:
-    SessionFace::Ptr m_session;
+    Session::Ptr m_session;
     /// gateway p2p info
     std::shared_ptr<P2PInfo> m_p2pInfo;
     std::weak_ptr<Service> m_service;

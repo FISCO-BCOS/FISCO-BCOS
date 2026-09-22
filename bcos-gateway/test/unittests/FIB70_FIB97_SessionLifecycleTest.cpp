@@ -55,17 +55,18 @@ public:
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"), "0.0.0.0", 0),
         m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"))
     {}
-    ~FakeASIO_FIB() noexcept override {}
+    ~FakeASIO_FIB() noexcept {}
 
     // Compile-time read-initiation policy (see ASIOInterface::awaitableReadSome): the read loop
     // is launched with this policy (startWithPolicy<FakeASIO_FIB::ReadPolicy>) so every read
     // parks its completion here instead of arming the real async_read_some.
     struct ReadPolicy
     {
-        static void invoke(ASIOInterface* asio, const std::shared_ptr<SocketFace>& /*socket*/,
+        template <typename SocketT>
+        static void invoke(ASIOInterface* asio, const std::shared_ptr<SocketT>& /*socket*/,
             ba::mutable_buffer buffers, ReadCompletion completion)
         {
-            dynamic_cast<FakeASIO_FIB*>(asio)->parkRead(buffers, std::move(completion));
+            static_cast<FakeASIO_FIB*>(asio)->parkRead(buffers, std::move(completion));
         }
     };
 
@@ -203,29 +204,17 @@ inline std::shared_ptr<std::vector<uint8_t>> buildDecodeExceptionFrame()
     return frame;
 }
 
-class FakeHost_FIB : public bcos::gateway::Host
-{
-public:
-    FakeHost_FIB(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface,
-        std::shared_ptr<SessionFactory> _sessionFactory)
-      : Host(_hash, _asioInterface, _sessionFactory)
-    {
-        m_run = true;
-    }
-};
-
 // A FakeSocket backed by a real SSL context and stream so that drop() can safely
 // call sslref().async_shutdown() without crashing.
 // We create a connected TCP socket-pair (accept → connect) so the underlying TCP
 // socket is in a valid ESTABLISHED state. Without this, async_shutdown on an
 // unconnected SSL stream triggers a null-pointer dereference in some SSL
 // implementations (e.g. Apple's SecureTransport / LibreSSL on macOS).
-class FakeSocket_FIB : public SocketFace
+class FakeSocket_FIB
 {
 public:
     FakeSocket_FIB()
-      : SocketFace(),
-        m_ioContext(std::make_shared<ba::io_context>()),
+      : m_ioContext(std::make_shared<ba::io_context>()),
         m_sslContext(ba::ssl::context::tlsv12)
     {
         // Create a connected TCP socket pair so the SSL stream has a valid transport.
@@ -241,23 +230,23 @@ public:
         m_sslSocket = std::make_shared<ba::ssl::stream<bi::tcp::socket>>(
             std::move(clientSocket), m_sslContext);
     }
-    ~FakeSocket_FIB() override = default;
+    ~FakeSocket_FIB() = default;
 
-    bool isConnected() const override { return m_connected; }
-    void close() override { m_connected = false; }
-    boost::asio::ip::tcp::endpoint remoteEndpoint(boost::system::error_code ec) override
+    bool isConnected() const { return m_connected; }
+    void close() { m_connected = false; }
+    boost::asio::ip::tcp::endpoint remoteEndpoint(boost::system::error_code ec = {})
     {
         return {};
     }
-    boost::asio::ip::tcp::endpoint localEndpoint(boost::system::error_code ec) override
+    boost::asio::ip::tcp::endpoint localEndpoint(boost::system::error_code ec = {})
     {
         return {};
     }
-    bi::tcp::socket& ref() override { return m_sslSocket->next_layer(); }
-    ba::ssl::stream<bi::tcp::socket>& sslref() override { return *m_sslSocket; }
-    const NodeIPEndpoint& nodeIPEndpoint() const override { return m_nodeIPEndpoint; }
-    void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) override {}
-    ba::io_context& ioService() override { return *m_ioContext; }
+    bi::tcp::socket& ref() { return m_sslSocket->next_layer(); }
+    ba::ssl::stream<bi::tcp::socket>& sslref() { return *m_sslSocket; }
+    const NodeIPEndpoint& nodeIPEndpoint() const { return m_nodeIPEndpoint; }
+    void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) {}
+    ba::io_context& ioService() { return *m_ioContext; }
 
     bool m_connected{true};
 
@@ -267,6 +256,20 @@ private:
     std::shared_ptr<ba::ssl::stream<bi::tcp::socket>> m_sslSocket;
     NodeIPEndpoint m_nodeIPEndpoint;
 };
+
+class FakeHost_FIB : public bcos::gateway::Host<P2PDecoder, FakeSocket_FIB>
+{
+public:
+    FakeHost_FIB(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface,
+        std::shared_ptr<BasicSessionFactory<P2PDecoder, FakeSocket_FIB>> _sessionFactory)
+      : Host<P2PDecoder, FakeSocket_FIB>(
+            std::move(_hash), std::move(_asioInterface), std::move(_sessionFactory))
+    {
+        this->m_run = true;
+    }
+};
+
+using Session_FIB = BasicSession<P2PDecoder, FakeSocket_FIB>;
 
 // FIB-70: Verify that decode error (negative return from decode()) triggers session drop.
 // Before the fix, the session would remain active as a "zombie" until the idle timeout.
@@ -282,9 +285,9 @@ BOOST_AUTO_TEST_CASE(DecodeErrorTriggersSessionDrop)
 
         // 16-byte initial buffer: the read loop must see the 14-byte fixed header before it can
         // make progress on a real frame
-        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 16, true);
+        auto session = std::make_shared<Session_FIB>(fakeSocket, *fakeHost, 16, true);
         session->setMessageHandler(
-            [](NetworkException e, SessionFace::Ptr sessionFace, FrameMeta meta) {});
+            [](NetworkException e, Session_FIB::Ptr sessionFace, FrameMeta meta) {});
 
         session->startWithPolicy<FakeASIO_FIB::ReadPolicy>();
 
@@ -321,9 +324,9 @@ BOOST_AUTO_TEST_CASE(DecodeExceptionTriggersSessionDrop)
         auto fakeAsio = std::make_shared<FakeASIO_FIB>();
         auto fakeHost = std::make_shared<FakeHost_FIB>(hashImpl, fakeAsio, nullptr);
 
-        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 16, true);
+        auto session = std::make_shared<Session_FIB>(fakeSocket, *fakeHost, 16, true);
         session->setMessageHandler(
-            [](NetworkException e, SessionFace::Ptr sessionFace, FrameMeta meta) {});
+            [](NetworkException e, Session_FIB::Ptr sessionFace, FrameMeta meta) {});
 
         session->startWithPolicy<FakeASIO_FIB::ReadPolicy>();
 
@@ -363,9 +366,9 @@ BOOST_AUTO_TEST_CASE(SocketSharedPtrCaptureInAsyncHandler)
         auto fakeAsio = std::make_shared<FakeASIO_FIB>();
         auto fakeHost = std::make_shared<FakeHost_FIB>(hashImpl, fakeAsio, nullptr);
 
-        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
+        auto session = std::make_shared<Session_FIB>(fakeSocket, *fakeHost, 2, true);
         session->setMessageHandler(
-            [](NetworkException e, SessionFace::Ptr sessionFace, FrameMeta meta) {});
+            [](NetworkException e, Session_FIB::Ptr sessionFace, FrameMeta meta) {});
 
         // After session creation, socket should be held by both fakeSocket and session
         BOOST_CHECK(fakeSocket.use_count() > 1);
@@ -395,21 +398,21 @@ BOOST_AUTO_TEST_CASE(DropFlushesOnlyOwnPendingResponseCallbacks)
         // both sessions share their host's callback manager, as in production
         auto& callbackManager = fakeHost->sessionCallbackManager();
 
-        auto sessionA = std::make_shared<Session>(fakeSocketA, *fakeHost, 2, true);
-        auto sessionB = std::make_shared<Session>(fakeSocketB, *fakeHost, 2, true);
+        auto sessionA = std::make_shared<Session_FIB>(fakeSocketA, *fakeHost, 2, true);
+        auto sessionB = std::make_shared<Session_FIB>(fakeSocketB, *fakeHost, 2, true);
 
         const uint32_t seqA = 1001;
         const uint32_t seqB = 1002;
         std::atomic<int> firedA{0};
         std::atomic<int> firedB{0};
-        auto handlerA = std::make_shared<ResponseCallback>();
+        auto handlerA = std::make_shared<ResponseCallback<Session_FIB>>();
         handlerA->callback = [&firedA](NetworkException e, std::optional<FrameMeta>) {
             if (e.errorCode() != 0)
             {
                 ++firedA;
             }
         };
-        auto handlerB = std::make_shared<ResponseCallback>();
+        auto handlerB = std::make_shared<ResponseCallback<Session_FIB>>();
         handlerB->callback = [&firedB](NetworkException e, std::optional<FrameMeta>) {
             if (e.errorCode() != 0)
             {
@@ -467,9 +470,9 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
         auto fakeHost = std::make_shared<FakeHost_FIB>(hashImpl, fakeAsio, nullptr);
         auto& callbackManager = fakeHost->sessionCallbackManager();
 
-        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
+        auto session = std::make_shared<Session_FIB>(fakeSocket, *fakeHost, 2, true);
         session->setMessageHandler(
-            [](NetworkException e, SessionFace::Ptr sessionFace, FrameMeta meta) {});
+            [](NetworkException e, Session_FIB::Ptr sessionFace, FrameMeta meta) {});
         session->startWithPolicy<FakeASIO_FIB::ReadPolicy>();
 
         // the socket's io_context is never run by the fixture: drive it so the posted
@@ -485,7 +488,7 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
         message.encodeHeader(headerBuffer);
         Message::stampLength(headerBuffer,
             static_cast<uint32_t>(headerBuffer.size() + payload.size()));
-        task::wait([](std::shared_ptr<Session> _session, bcos::bytes _header,
+        task::wait([](std::shared_ptr<Session_FIB> _session, bcos::bytes _header,
                        bcos::bytes _payload, uint32_t _seq, std::atomic<int>& _completions,
                        std::atomic<int64_t>& _errorCode) -> task::Task<void> {
             try

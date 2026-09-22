@@ -24,7 +24,8 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-gateway/Common.h"
 #include "bcos-gateway/libnetwork/FrameMeta.h"
-#include "bcos-gateway/libnetwork/SessionImpl.h"
+#include "bcos-gateway/libnetwork/Host.h"
+#include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libp2p/Message.h"
 #include <boost/asio/detail/socket_ops.hpp>
 
@@ -125,4 +126,6 @@ public:
 // P2P wire decoder. No `Session` alias remains in libnetwork.
 using Session = BasicSession<P2PDecoder>;
 using P2PSessionFactory = BasicSessionFactory<P2PDecoder>;
+// The gateway's host type: the generic libnetwork Host instantiated with the P2P wire decoder.
+using P2PHost = Host<P2PDecoder>;
 }  // namespace bcos::gateway

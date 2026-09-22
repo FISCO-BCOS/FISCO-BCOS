@@ -19,13 +19,13 @@ namespace bcos::gateway
 {
 // Read-policy seam (compile-time): identical lifecycle to start(), but the read loop is compiled
 // against an explicit ReadPolicy so read-loop test fakes can inject a policy that parks/controls
-// read completions (see ASIOInterface::awaitableReadSome). Production call sites use the virtual
-// start() (the default policy), which delegates here with ASIOInterface::DefaultReadPolicy — this
+// read completions (see ASIOInterface::awaitableReadSome). Production call sites use start()
+// (the default policy), which delegates here with ASIOInterface::DefaultReadPolicy — this
 // template adds no runtime cost in production. Tests instantiate it with a fake policy, e.g.
 // session->startWithPolicy<FakeASIO::ReadPolicy>().
-template <FrameDecoder DecoderT>
+template <FrameDecoder DecoderT, typename SocketT>
 template <typename ReadPolicy>
-void BasicSession<DecoderT>::startWithPolicy()
+void BasicSession<DecoderT, SocketT>::startWithPolicy()
 {
     SESSION_LOG(INFO) << "[Session::start] this=" << this;
     if (!m_active && m_server.get().haveNetwork())
@@ -49,9 +49,9 @@ void BasicSession<DecoderT>::startWithPolicy()
     m_idleCheckTimer->start();
 }
 
-template <FrameDecoder DecoderT>
+template <FrameDecoder DecoderT, typename SocketT>
 template <typename ReadPolicy>
-task::Task<void> BasicSession<DecoderT>::readLoop()
+task::Task<void> BasicSession<DecoderT, SocketT>::readLoop()
 {
     // FIB-184: the coroutine frame holds a strong reference to the session for the whole read
     // loop. While the loop is suspended at the co_await below, the buffer handed to

@@ -48,43 +48,42 @@ public:
     FakeASIO_FIB97new()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB97new"), "0.0.0.0", 0)
     {}
-    ~FakeASIO_FIB97new() noexcept override = default;
+    ~FakeASIO_FIB97new() noexcept = default;
 };
 
-class FakeSocket_FIB97new : public SocketFace
+class FakeSocket_FIB97new
 {
 public:
     FakeSocket_FIB97new()
-      : SocketFace(),
-        m_ioContext(std::make_shared<boost::asio::io_context>()),
+      : m_ioContext(std::make_shared<boost::asio::io_context>()),
         m_sslContext(boost::asio::ssl::context::tlsv12),
         m_sslSocket(std::make_shared<boost::asio::ssl::stream<boost::asio::ip::tcp::socket>>(
             *m_ioContext, m_sslContext))
     {}
-    ~FakeSocket_FIB97new() override = default;
+    ~FakeSocket_FIB97new() = default;
 
-    bool isConnected() const override { return m_connected.load(); }
-    void close() override
+    bool isConnected() const { return m_connected.load(); }
+    void close()
     {
         m_connected.store(false);
         ++m_closeCount;
     }
-    boost::asio::ip::tcp::endpoint remoteEndpoint(boost::system::error_code /*ec*/) override
+    boost::asio::ip::tcp::endpoint remoteEndpoint(boost::system::error_code /*ec*/ = {})
     {
         return {};
     }
-    boost::asio::ip::tcp::endpoint localEndpoint(boost::system::error_code /*ec*/) override
+    boost::asio::ip::tcp::endpoint localEndpoint(boost::system::error_code /*ec*/ = {})
     {
         return {};
     }
-    boost::asio::ip::tcp::socket& ref() override { return m_sslSocket->next_layer(); }
-    boost::asio::ssl::stream<boost::asio::ip::tcp::socket>& sslref() override
+    boost::asio::ip::tcp::socket& ref() { return m_sslSocket->next_layer(); }
+    boost::asio::ssl::stream<boost::asio::ip::tcp::socket>& sslref()
     {
         return *m_sslSocket;
     }
-    const NodeIPEndpoint& nodeIPEndpoint() const override { return m_nodeIPEndpoint; }
-    void setNodeIPEndpoint(NodeIPEndpoint /*unused*/) override {}
-    boost::asio::io_context& ioService() override { return *m_ioContext; }
+    const NodeIPEndpoint& nodeIPEndpoint() const { return m_nodeIPEndpoint; }
+    void setNodeIPEndpoint(NodeIPEndpoint /*unused*/) {}
+    boost::asio::io_context& ioService() { return *m_ioContext; }
 
     // Counts to detect double-teardown
     std::atomic<int> m_closeCount{0};
@@ -97,16 +96,19 @@ private:
     NodeIPEndpoint m_nodeIPEndpoint;
 };
 
-class FakeHost_FIB97new : public bcos::gateway::Host
+class FakeHost_FIB97new : public bcos::gateway::Host<P2PDecoder, FakeSocket_FIB97new>
 {
 public:
     FakeHost_FIB97new(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface,
-        std::shared_ptr<SessionFactory> _sessionFactory)
-      : Host(_hash, _asioInterface, _sessionFactory)
+        std::shared_ptr<BasicSessionFactory<P2PDecoder, FakeSocket_FIB97new>> _sessionFactory)
+      : Host<P2PDecoder, FakeSocket_FIB97new>(
+            std::move(_hash), std::move(_asioInterface), std::move(_sessionFactory))
     {
-        m_run = true;
+        this->m_run = true;
     }
 };
+
+using Session_FIB97new = BasicSession<P2PDecoder, FakeSocket_FIB97new>;
 
 // Session owns a reference_wrapper<Host> — the Host must outlive the session.
 // Return both from the helper so tests keep the host alive.
@@ -114,7 +116,7 @@ struct SessionBundle_FIB97new
 {
     std::shared_ptr<FakeHost_FIB97new> host;
     std::shared_ptr<FakeSocket_FIB97new> socket;
-    std::shared_ptr<bcos::gateway::Session> session;
+    std::shared_ptr<Session_FIB97new> session;
 };
 
 inline SessionBundle_FIB97new makeSessionFib97new()
@@ -124,9 +126,9 @@ inline SessionBundle_FIB97new makeSessionFib97new()
     auto fakeAsio = std::make_shared<FakeASIO_FIB97new>();
     auto fakeHost = std::make_shared<FakeHost_FIB97new>(hashImpl, fakeAsio, nullptr);
 
-    auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
+    auto session = std::make_shared<Session_FIB97new>(fakeSocket, *fakeHost, 2, true);
     session->setMessageHandler(
-        [](NetworkException /*e*/, SessionFace::Ptr /*s*/, FrameMeta /*m*/) {});
+        [](NetworkException /*e*/, Session_FIB97new::Ptr /*s*/, FrameMeta /*m*/) {});
 
     return {fakeHost, fakeSocket, session};
 }

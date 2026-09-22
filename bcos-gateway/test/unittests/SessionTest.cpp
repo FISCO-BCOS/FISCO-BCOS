@@ -68,17 +68,19 @@ public:
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"), "0.0.0.0", 0),
         m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"))
     {}
-    virtual ~FakeASIO() noexcept override {};
+    ~FakeASIO() noexcept {};
 
     // Compile-time read-initiation policy (see ASIOInterface::awaitableReadSome): the read loop
     // is launched with this policy (startWithPolicy<FakeASIO::ReadPolicy>) so every read parks
-    // its completion here instead of arming the real async_read_some.
+    // its completion here instead of arming the real async_read_some. Generic over the socket
+    // type — the tests drive it with both FakeSocket and the production Socket.
     struct ReadPolicy
     {
-        static void invoke(ASIOInterface* asio, const std::shared_ptr<SocketFace>& /*socket*/,
+        template <typename SocketT>
+        static void invoke(ASIOInterface* asio, const std::shared_ptr<SocketT>& /*socket*/,
             ba::mutable_buffer buffers, ReadCompletion completion)
         {
-            dynamic_cast<FakeASIO*>(asio)->parkRead(buffers, std::move(completion));
+            static_cast<FakeASIO*>(asio)->parkRead(buffers, std::move(completion));
         }
     };
 
@@ -99,8 +101,7 @@ public:
 
     // Synchronous helper for fakeClassTest (no session involved).
     template <typename Handler>
-    void readSome(std::shared_ptr<SocketFace> /*socket*/, ba::mutable_buffer buffers,
-        Handler&& handler)
+    void readSome(ba::mutable_buffer buffers, Handler&& handler)
     {
         handler(boost::system::error_code(), drainPackets(buffers));
     }
@@ -280,23 +281,27 @@ private:
     std::queue<Packet> m_sendPackets;
 };
 
-class FakeHost : public bcos::gateway::Host
+// Templated on the socket type: the FakeSocket-based session tests instantiate it with
+// FakeSocket, the wire-level tests (which wrap the session in a P2PSession and therefore need the
+// production Session = BasicSession<P2PDecoder>) with the default Socket.
+template <typename SocketT>
+class FakeHost : public bcos::gateway::Host<P2PDecoder, SocketT>
 {
 public:
     FakeHost(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface,
-        std::shared_ptr<SessionFactory> _sessionFactory)
-      : Host(_hash, _asioInterface, _sessionFactory)
+        std::shared_ptr<BasicSessionFactory<P2PDecoder, SocketT>> _sessionFactory)
+      : Host<P2PDecoder, SocketT>(
+            std::move(_hash), std::move(_asioInterface), std::move(_sessionFactory))
     {
-        m_run = true;
+        this->m_run = true;
     }
 };
 
-class FakeSocket : public SocketFace
+class FakeSocket
 {
 public:
     FakeSocket()
-      : SocketFace(),
-        m_sslContext(ba::ssl::context::tlsv12),
+      : m_sslContext(ba::ssl::context::tlsv12),
         m_workGuard(boost::asio::make_work_guard(m_ioService))
     {
         // A connected TCP pair backs the SSL stream so drop()/closeSocket() can call
@@ -313,7 +318,7 @@ public:
             std::move(clientSocket), m_sslContext);
         m_worker = std::thread([this]() { m_ioService.run(); });
     };
-    ~FakeSocket() override
+    ~FakeSocket()
     {
         m_workGuard.reset();
         m_ioService.stop();
@@ -322,21 +327,21 @@ public:
             m_worker.join();
         }
     }
-    bool isConnected() const override { return m_connected; }
-    void close() override { m_connected = false; }
-    boost::asio::ip::tcp::endpoint remoteEndpoint(boost::system::error_code ec) override
+    bool isConnected() const { return m_connected; }
+    void close() { m_connected = false; }
+    boost::asio::ip::tcp::endpoint remoteEndpoint(boost::system::error_code ec = {})
     {
         return {};
     }
-    boost::asio::ip::tcp::endpoint localEndpoint(boost::system::error_code ec) override
+    boost::asio::ip::tcp::endpoint localEndpoint(boost::system::error_code ec = {})
     {
         return {};
     }
-    bi::tcp::socket& ref() override { return m_sslSocket->next_layer(); }
-    ba::ssl::stream<bi::tcp::socket>& sslref() override { return *m_sslSocket; }
-    const NodeIPEndpoint& nodeIPEndpoint() const override { return m_nodeIPEndpoint; }
-    void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) override {}
-    ba::io_context& ioService() override { return m_ioService; }
+    bi::tcp::socket& ref() { return m_sslSocket->next_layer(); }
+    ba::ssl::stream<bi::tcp::socket>& sslref() { return *m_sslSocket; }
+    const NodeIPEndpoint& nodeIPEndpoint() const { return m_nodeIPEndpoint; }
+    void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) {}
+    ba::io_context& ioService() { return m_ioService; }
 
 private:
     // Declaration order matters: members are destroyed in reverse, so the io_context must
@@ -350,6 +355,22 @@ private:
     bool m_connected{true};
 };
 
+using FakeSession = BasicSession<P2PDecoder, FakeSocket>;
+
+// Wrap a connected TCP socket in the production Socket: tests that wrap the session in a
+// P2PSession must drive the production Session = BasicSession<P2PDecoder> (SocketT = Socket), and
+// the wire-level tests additionally need ASIOInterface::awaitableWrite to actually complete on
+// the wire — the FakeSocket above cannot reach those branches because its write path is inert.
+// The ssl::context must outlive the returned Socket (the ssl::stream references it).
+inline std::shared_ptr<Socket> makeLoopbackSocket(
+    std::shared_ptr<ba::io_context> _ioContext, ba::ssl::context& _sslContext,
+    bi::tcp::socket _socket)
+{
+    auto socket = std::make_shared<Socket>(std::move(_ioContext), _sslContext, NodeIPEndpoint());
+    socket->ref() = std::move(_socket);
+    return socket;
+}
+
 BOOST_AUTO_TEST_CASE(fakeClassTest)
 {
     auto totalPacketNum = 50;
@@ -362,7 +383,7 @@ BOOST_AUTO_TEST_CASE(fakeClassTest)
     {
         std::vector<uint8_t> readBuffer(10240);
         asio->appendRecvPacket(packet);
-        asio->readSome(nullptr, boost::asio::buffer(readBuffer),
+        asio->readSome(boost::asio::buffer(readBuffer),
             [&recvBuffer, &readBuffer](
                 const boost::system::error_code& ec, std::size_t bytesTransferred) {
                 recvBuffer.insert(
@@ -386,16 +407,16 @@ BOOST_AUTO_TEST_CASE(doReadTest)
     std::atomic<uint64_t> lastReadTime = utcSteadyTime();
     auto fakeAsio = std::make_shared<FakeASIO>();
     {
-        auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr);
+        auto fakeHost = std::make_shared<FakeHost<FakeSocket>>(hashImpl, fakeAsio, nullptr);
 
         // 16-byte initial buffer: a real frame needs its 14-byte fixed header decoded before the
         // read loop can learn the frame length and grow the buffer, so the growth path is now
         // exercised from header-size upward (frames run up to 254 bytes)
-        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 16, true);
+        auto session = std::make_shared<FakeSession>(fakeSocket, *fakeHost, 16, true);
 
         session->setMessageHandler(
             [&recvPacketCnt, &recvBufferSize, &lastReadTime](
-                NetworkException e, SessionFace::Ptr sessionFace, FrameMeta meta) {
+                NetworkException e, FakeSession::Ptr sessionFace, FrameMeta meta) {
                 // the read loop calls this function after reading a frame; the session delivers
                 // raw wire frames now, so decode the Message at the libp2p boundary (as
                 // Service::onConnect's handler wiring does)
@@ -426,7 +447,7 @@ BOOST_AUTO_TEST_CASE(doReadTest)
         // send packets
         while (auto packet = messageBuilder.nextPacket())
         {
-            std::dynamic_pointer_cast<FakeASIO>(fakeHost->asioInterface())
+            std::static_pointer_cast<FakeASIO>(fakeHost->asioInterface())
                 ->asyncAppendRecvPacket(packet);
         }
 
@@ -447,7 +468,7 @@ BOOST_AUTO_TEST_CASE(doReadTest)
         // would otherwise reach the strict handler above with a Disconnect error — then let the
         // fake fail the read and wait for the read loop to unwind completely before nulling
         // the socket.
-        session->setMessageHandler([](NetworkException, SessionFace::Ptr, FrameMeta) {});
+        session->setMessageHandler([](NetworkException, FakeSession::Ptr, FrameMeta) {});
         fakeAsio->stopReads();
         size_t drainRetry = 0;
         while (fakeAsio->readsInFlight() != 0 && drainRetry < 200)
@@ -476,13 +497,13 @@ BOOST_AUTO_TEST_CASE(startUsesDefaultReadPolicy)
     auto fakeAsio = std::make_shared<FakeASIO>();
     fakeAsio->setType(2);
     {
-        auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr);
+        auto fakeHost = std::make_shared<FakeHost<FakeSocket>>(hashImpl, fakeAsio, nullptr);
 
-        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
+        auto session = std::make_shared<FakeSession>(fakeSocket, *fakeHost, 2, true);
         // Tolerant handler: the read error drops the session, and the drop notifies.
-        session->setMessageHandler([](NetworkException, SessionFace::Ptr, FrameMeta) {});
+        session->setMessageHandler([](NetworkException, FakeSession::Ptr, FrameMeta) {});
 
-        session->start();  // virtual production entry — NOT startWithPolicy<>
+        session->start();  // production entry — NOT startWithPolicy<>
 
         size_t retryTimes = 0;
         while (session->active() && retryTimes < 200)
@@ -507,11 +528,29 @@ BOOST_AUTO_TEST_CASE(fastSendMessageOutboundRateLimit)
     // the wire-format work: it now lives on the Service (invoked from
     // P2PSession::fastSendP2PMessage), not on the session.
     auto hashImpl = std::make_shared<Keccak256>();
-    auto fakeSocket = std::make_shared<FakeSocket>();
     auto fakeAsio = std::make_shared<FakeASIO>();
+
+    // Real loopback pair: the session must be the production Session (BasicSession<P2PDecoder>,
+    // SocketT = Socket) so it can be wrapped in a P2PSession. The send never reaches the wire —
+    // the beforeMessageHandler rejects it pre-send — but active() requires a connected socket.
+    auto io = std::make_shared<ba::io_context>();
+    boost::asio::executor_work_guard<ba::io_context::executor_type> workGuard(io->get_executor());
+    std::thread ioThread([io] { io->run(); });
+
+    ba::ip::tcp::acceptor acceptor(*io, ba::ip::tcp::endpoint(ba::ip::tcp::v4(), 0));
+    ba::ip::tcp::socket client(*io);
+    boost::system::error_code connectError;
+    client.connect(acceptor.local_endpoint(), connectError);
+    BOOST_REQUIRE(!connectError);
+    // Kept open until the session is destroyed so drop()'s ssl async_shutdown completes.
+    ba::ip::tcp::socket serverSide(*io);
+    acceptor.accept(serverSide);
+
+    ba::ssl::context sslContext(ba::ssl::context::tlsv12);
     {
-        auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr);
-        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
+        auto fakeHost = std::make_shared<FakeHost<Socket>>(hashImpl, fakeAsio, nullptr);
+        auto sessionSocket = makeLoopbackSocket(io, sslContext, std::move(client));
+        auto session = std::make_shared<Session>(sessionSocket, *fakeHost, 2, true);
         session->startWithPolicy<FakeASIO::ReadPolicy>();
 
         P2PInfo selfInfo;
@@ -519,7 +558,7 @@ BOOST_AUTO_TEST_CASE(fastSendMessageOutboundRateLimit)
         selfInfo.p2pID = "selfP2pID";
         auto service = std::make_shared<Service>(selfInfo);
         service->setBeforeMessageHandler(
-            [](SessionFace&, const Message&, uint32_t) -> std::optional<bcos::Error> {
+            [](Session&, const Message&, uint32_t) -> std::optional<bcos::Error> {
                 return bcos::Error::buildError(
                     "", P2PExceptionType::OutBWOverflow, "outgoing bandwidth overflow");
             });
@@ -536,7 +575,9 @@ BOOST_AUTO_TEST_CASE(fastSendMessageOutboundRateLimit)
                 message, ::ranges::views::single(bcos::ref(std::as_const(payload))), Options{})),
             NetworkException);
 
-        // drain the parked read so the read loop unwinds before the socket is nulled
+        session->disconnect(DisconnectReason::DisconnectRequested);
+
+        // drain the parked read so the read loop unwinds before the fake is destroyed
         fakeAsio->stopReads();
         size_t drainRetry = 0;
         while (fakeAsio->readsInFlight() != 0 && drainRetry < 200)
@@ -545,48 +586,17 @@ BOOST_AUTO_TEST_CASE(fastSendMessageOutboundRateLimit)
             drainRetry++;
         }
         BOOST_REQUIRE_EQUAL(fakeAsio->readsInFlight(), 0);
-        session->setSocket(nullptr);
-    }
-    fakeSocket->close();
-}
-
-// A SocketFace backed by a real connected TCP socket so the ASIOInterface::awaitableWrite path
-// actually completes on the wire — the FakeSocket above cannot reach the compression branch
-// because its write path is inert.
-class RealLoopbackSocket : public SocketFace
-{
-public:
-    RealLoopbackSocket(std::shared_ptr<ba::io_context> _ioContext, bi::tcp::socket _socket)
-      : m_ioContext(std::move(_ioContext)),
-        m_sslContext(ba::ssl::context::tlsv12),
-        m_sslSocket(std::make_shared<ba::ssl::stream<bi::tcp::socket>>(*m_ioContext, m_sslContext))
-    {
-        m_sslSocket->next_layer() = std::move(_socket);
     }
 
-    bool isConnected() const override { return m_sslSocket->next_layer().is_open(); }
-    void close() override
+    workGuard.reset();
     {
         boost::system::error_code ec;
-        m_sslSocket->next_layer().close(ec);
+        serverSide.close(ec);
+        acceptor.close(ec);
     }
-    bi::tcp::endpoint remoteEndpoint(boost::system::error_code) override { return {}; }
-    bi::tcp::endpoint localEndpoint(boost::system::error_code) override { return {}; }
-    bi::tcp::socket& ref() override { return m_sslSocket->next_layer(); }
-    ba::ssl::stream<bi::tcp::socket>& sslref() override { return *m_sslSocket; }
-    const NodeIPEndpoint& nodeIPEndpoint() const override { return m_nodeIPEndpoint; }
-    void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) override
-    {
-        m_nodeIPEndpoint = std::move(_nodeIPEndpoint);
-    }
-    ba::io_context& ioService() override { return *m_ioContext; }
-
-private:
-    std::shared_ptr<ba::io_context> m_ioContext;
-    ba::ssl::context m_sslContext;
-    std::shared_ptr<ba::ssl::stream<bi::tcp::socket>> m_sslSocket;
-    NodeIPEndpoint m_nodeIPEndpoint;
-};
+    io->stop();
+    ioThread.join();
+}
 
 // Service::m_sessions is protected; expose insertion for the fan-out test below.
 class FanoutProbeService : public bcos::gateway::Service
@@ -645,9 +655,10 @@ BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
     client.connect(listenEndpoint, connectError);
     BOOST_REQUIRE(!connectError);
 
+    ba::ssl::context sslContext(ba::ssl::context::tlsv12);
     {
-        auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr);
-        auto sessionSocket = std::make_shared<RealLoopbackSocket>(io, std::move(client));
+        auto fakeHost = std::make_shared<FakeHost<Socket>>(hashImpl, fakeAsio, nullptr);
+        auto sessionSocket = makeLoopbackSocket(io, sslContext, std::move(client));
         auto session = std::make_shared<Session>(sessionSocket, *fakeHost, 2, true);
         session->startWithPolicy<FakeASIO::ReadPolicy>();
 
@@ -809,16 +820,18 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
     selfInfo.p2pID = "selfP2pID";
     auto service = std::make_shared<FanoutProbeService>(selfInfo);
     // P2PSession::start() -> heartBeat() arms a timer on service->host()->asioInterface().
-    service->setHost(std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr));
+    service->setHost(std::make_shared<FakeHost<Socket>>(hashImpl, fakeAsio, nullptr));
 
-    // The FakeHosts must outlive the sessions (Session holds a reference_wrapper<Host>).
-    std::vector<std::shared_ptr<FakeHost>> hosts;
+    // The FakeHosts must outlive the sessions (Session holds a reference_wrapper<Host>); the
+    // ssl::context must outlive every Socket (the ssl::stream references it).
+    ba::ssl::context sslContext(ba::ssl::context::tlsv12);
+    std::vector<std::shared_ptr<FakeHost<Socket>>> hosts;
     std::vector<std::shared_ptr<Session>> sessions;
     auto makePeerSession = [&](ba::ip::tcp::socket _client, P2pID _nodeID, uint32_t _version) {
-        auto host = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr);
+        auto host = std::make_shared<FakeHost<Socket>>(hashImpl, fakeAsio, nullptr);
         hosts.push_back(host);
         auto session = std::make_shared<Session>(
-            std::make_shared<RealLoopbackSocket>(io, std::move(_client)), *host, 2, true);
+            makeLoopbackSocket(io, sslContext, std::move(_client)), *host, 2, true);
         session->startWithPolicy<FakeASIO::ReadPolicy>();
         sessions.push_back(session);
 
@@ -934,7 +947,7 @@ BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
     // write loop (Session::writeLoop, guarded by the m_writingInFlight single-flight flag) must
     // put a complete, non-interleaved frame for every message on the wire — if the serialization
     // were ever broken, frames would be torn or interleaved. Uses a real loopback socket
-    // (RealLoopbackSocket) so the full awaitableWrite -> async_write path runs, then parses the
+    // (a real loopback Socket) so the full awaitableWrite -> async_write path runs, then parses the
     // accumulated byte stream into frames by their length prefix.
     constexpr size_t threadCount = 8;
     constexpr size_t msgPerThread = 50;
@@ -989,9 +1002,10 @@ BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
     const size_t frameSize = Message::MESSAGE_HEADER_LENGTH + extendedHeaderLen + 64;
     const size_t expectedBytes = frameSize * totalMsgs;
 
+    ba::ssl::context sslContext(ba::ssl::context::tlsv12);
     {
-        auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr);
-        auto sessionSocket = std::make_shared<RealLoopbackSocket>(io, std::move(client));
+        auto fakeHost = std::make_shared<FakeHost<Socket>>(hashImpl, fakeAsio, nullptr);
+        auto sessionSocket = makeLoopbackSocket(io, sslContext, std::move(client));
         auto session = std::make_shared<Session>(sessionSocket, *fakeHost, 2, true);
         session->startWithPolicy<FakeASIO::ReadPolicy>();
 

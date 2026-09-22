@@ -21,7 +21,7 @@
 
 #include "bcos-framework/rpc/RPCInterface.h"
 #include "bcos-gateway/libamop/Common.h"
-#include "bcos-gateway/libp2p/P2PInterface.h"
+#include "bcos-gateway/libp2p/Service.h"
 #include "bcos-utilities/Common.h"
 #include <servant/Application.h>
 #include <shared_mutex>
@@ -34,7 +34,7 @@ class TopicManager : public std::enable_shared_from_this<TopicManager>
 {
 public:
     using Ptr = std::shared_ptr<TopicManager>;
-    TopicManager(std::string const& _rpcServiceName, bcos::gateway::P2PInterface::Ptr _network);
+    TopicManager(std::string const& _rpcServiceName, bcos::gateway::Service::Ptr _network);
     virtual ~TopicManager();
 
     virtual void start();
@@ -156,7 +156,7 @@ protected:
     mutable SharedMutex x_clientInfo;
 
     std::string m_rpcServiceName;
-    bcos::gateway::P2PInterface::Ptr m_network;
+    bcos::gateway::Service::Ptr m_network;
 };
 }  // namespace amop
 }  // namespace bcos

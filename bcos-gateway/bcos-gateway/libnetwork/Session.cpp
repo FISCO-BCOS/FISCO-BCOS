@@ -8,8 +8,8 @@
  *
  * Only the non-template SessionRecvBuffer / Payload definitions live here. BasicSession /
  * BasicSessionFactory are templates over the frame decoder (see FrameMeta.h); their member
- * definitions live in SessionImpl.h and are instantiated by the concrete decoder's TU (the
- * gateway: libp2p's P2PDecoder).
+ * definitions live at the bottom of Session.h and are instantiated by the concrete decoder's TU
+ * (the gateway: libp2p's P2PDecoder).
  */
 
 #include "bcos-gateway/libnetwork/Session.h"

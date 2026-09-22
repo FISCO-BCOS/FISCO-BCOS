@@ -24,7 +24,7 @@
 #include "bcos-gateway/libamop/AMOPMessage.h"
 #include "bcos-gateway/libamop/TopicManager.h"
 #include "bcos-gateway/libp2p/Message.h"
-#include "bcos-gateway/libp2p/P2PInterface.h"
+#include "bcos-gateway/libp2p/Service.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 
@@ -88,7 +88,7 @@ struct AMOPSendFixture
         When(Method(networkMock, isReachable)).AlwaysReturn(true);
         When(Method(networkMock, newSeq)).AlwaysReturn(0);
 
-        network = P2PInterface::Ptr(&networkMock.get(), [](P2PInterface*) {});
+        network = Service::Ptr(&networkMock.get(), [](Service*) {});
         topicManager = std::make_shared<TopicManager>("amopSendPathTest", network);
         ioServicePool = std::make_shared<bcos::IOServicePool>(1, "amopSendPathTest");
         amop = std::make_shared<AMOPImpl>(topicManager, std::make_shared<AMOPMessageFactory>(),
@@ -117,10 +117,10 @@ struct AMOPSendFixture
         _result.responseData = std::move(responseData);
     }
 
-    Mock<P2PInterface> networkMock;
+    Mock<Service> networkMock;
     boost::asio::io_context ioContext;
     bcos::IOServicePool::Ptr ioServicePool;
-    P2PInterface::Ptr network;
+    Service::Ptr network;
     TopicManager::Ptr topicManager;
     std::shared_ptr<AMOPImpl> amop;
     P2pID localNodeID = std::string(128, 'f');
