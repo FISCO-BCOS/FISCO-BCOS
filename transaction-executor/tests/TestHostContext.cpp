@@ -1010,4 +1010,127 @@ BOOST_AUTO_TEST_CASE(createOnBinaryNodeWritesHexAuthTable)
     }());
 }
 
+// Round-7 review F4: the internalCreate stub fix must hold on the v1 lane (the
+// transaction-executor HostContext every production transaction runs through), not only on
+// the v0 TransactionExecutor fixture. End to end on a Binary-layout node: (a) create a CRUD
+// table through the TableManager precompiled, (b) insert + select through the link address
+// the create flow returned — the call resolves the stub's code via EVMAccount at
+// "/s/<20 raw bytes>", so before the fix it failed with NotFoundCodeError — and (c) the
+// stub's account table exists ONLY in the binary layout (no "/apps/<hex>" registration).
+BOOST_AUTO_TEST_CASE(createTableOnBinaryNodeV1Lane)
+{
+    namespace account = bcos::ledger::account;
+    bcos::test::ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Binary);
+    syncWait([this]() -> Task<void> {
+        // Genesis + BFS init, the same arrangement as the `precompiled` test above.
+        auto storageWrapper =
+            std::make_shared<bcos::storage::LegacyStorageWrapper<std::decay_t<decltype(storage)>>>(
+                storage);
+        auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
+            std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr);
+        bcos::ledger::Ledger ledger(
+            std::make_shared<bcostars::protocol::BlockFactoryImpl>(cryptoSuite,
+                std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(cryptoSuite),
+                std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite),
+                std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite)),
+            storageWrapper, 1000);
+        bcos::ledger::GenesisConfig genesis;
+        genesis.m_txGasLimit = 100000;
+        genesis.m_compatibilityVersion = bcos::tool::toVersionNumber("3.6.0");
+        ledger.buildGenesisBlock(genesis, ledgerConfig);
+
+        bcostars::protocol::BlockHeaderImpl blockHeader;
+        blockHeader.inner().data.version = (int)bcos::protocol::BlockVersion::V3_5_VERSION;
+        // The block number feeds newEVMAddress(blockNumber, contextID, seq) — the stub's
+        // link address. The process-global executable cache (getCacheExecutables) is keyed
+        // by address alone and SHARED across test cases, so the link address must not
+        // collide with any address another case in this binary creates: their creates use
+        // small block numbers (the call() helper's static counter starts at 0), hence a
+        // large, odd one here.
+        blockHeader.setNumber(1000003);
+        blockHeader.calculateHash(*bcos::executor::GlobalHashImpl::g_hashImpl);
+        co_await initBFS(blockHeader, *hashImpl);
+
+        bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
+        auto callAddress = [&](evmc_address callAddress, bcos::bytes const& input)
+            -> Task<EVMCResult> {
+            evmc_message message = {.kind = EVMC_CALL,
+                .flags = 0,
+                .depth = 0,
+                .gas = 10000000,
+                .recipient = callAddress,
+                .sender = {},
+                .input_data = input.data(),
+                .input_size = input.size(),
+                .value = {},
+                .create2_salt = {},
+                .code_address = callAddress,
+                .code = nullptr,
+                .code_size = 0};
+            evmc_address origin = {};
+
+            HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
+                hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader,
+                    message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
+                    false, 0, bcos::task::syncWait);
+            co_await hostContext.prepare();
+            co_return co_await hostContext.execute();
+        };
+
+        // (a) Create the table through the TableManager precompiled (0x1002); the link
+        // address is chosen by the create flow (ExecutiveWrapper assigns it via
+        // newEVMAddress), so read it back from the BFS link row below.
+        evmc_address tableManagerAddress{};
+        {
+            auto address = bcos::Address(0x1002);
+            ::ranges::copy(address, tableManagerAddress.bytes);
+        }
+        using TableInfoTuple = std::tuple<std::string, std::vector<std::string>>;
+        auto createResult = co_await callAddress(tableManagerAddress,
+            abiCodec.abiIn(std::string("createTable(string,(string,string[]))"),
+                std::string("t_v1_binary"), TableInfoTuple{"id", {"item_name", "item_id"}}));
+        BOOST_REQUIRE_EQUAL(createResult.status_code, EVMC_SUCCESS);
+        int32_t createCode = -1;
+        abiCodec.abiOut(
+            bcos::bytesConstRef(createResult.output_data, createResult.output_size), createCode);
+        BOOST_REQUIRE_EQUAL(createCode, 0);  // CODE_SUCCESS
+
+        // The link row carries the address internalCreate registered the stub under.
+        auto linkEntry = co_await storage2::readOne(storage,
+            StateKeyView{"/tables/t_v1_binary", bcos::executor::FS_LINK_ADDRESS});
+        BOOST_REQUIRE(linkEntry.has_value());
+        std::string const linkAddress(linkEntry->get());
+        BOOST_REQUIRE_EQUAL(linkAddress.size(), 40);
+
+        // (b) insert + select through the link address: the call resolves code via
+        // EVMAccount in Binary mode, so it only succeeds if the stub landed at
+        // "/s/<20 raw bytes>".
+        auto linkEvmcAddress = bcos::unhexAddress("0x" + linkAddress);
+        using EntryTuple = std::tuple<std::string, std::vector<std::string>>;
+        auto insertResult = co_await callAddress(linkEvmcAddress,
+            abiCodec.abiIn(std::string("insert((string,string[]))"),
+                EntryTuple{"1", {"apple", "100"}}));
+        BOOST_REQUIRE_EQUAL(insertResult.status_code, EVMC_SUCCESS);
+
+        auto selectResult = co_await callAddress(
+            linkEvmcAddress, abiCodec.abiIn(std::string("select(string)"), std::string("1")));
+        BOOST_REQUIRE_EQUAL(selectResult.status_code, EVMC_SUCCESS);
+        EntryTuple selected;
+        abiCodec.abiOut(
+            bcos::bytesConstRef(selectResult.output_data, selectResult.output_size), selected);
+        BOOST_CHECK_EQUAL(std::get<0>(selected), "1");
+        BOOST_CHECK(std::get<1>(selected) == std::vector<std::string>({"apple", "100"}));
+
+        // (c) The stub's account table is registered ONLY at the binary name.
+        auto const binTable =
+            account::accountTableName(linkAddress, account::AddressTableMode::Binary);
+        BOOST_REQUIRE(account::isBinaryAccountTableName(binTable));
+        BOOST_CHECK(
+            co_await storage2::existsOne(storage, StateKeyView{bcos::ledger::SYS_TABLES, binTable}));
+        BOOST_CHECK(!co_await storage2::existsOne(
+            storage, StateKeyView{bcos::ledger::SYS_TABLES, "/apps/" + linkAddress}));
+        co_return;
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
