@@ -197,16 +197,24 @@ inline std::string accountTableName(const evmc_address& address)
 /// Table name for the v1-precompiled call sites that historically built their key as
 /// getContractTableName("/apps/", address) = "/apps/" + <verbatim input> and therefore NEVER
 /// routed system addresses to /sys/ (ShardingPrecompiled's shard rows, the AccountManager /
-/// ContractAuthMgr access probes). Binary mode must use the shared rule above — that is where
-/// the account state actually lives once EVMAccount writes it; Hex mode must reproduce the
-/// base string byte-for-byte. Callers pass a plain 40-char lowercase hex address (no prefix).
+/// ContractAuthMgr / BFSPrecompiled access probes). Both layouts must resolve to the same
+/// logical row: Hex keeps the base string byte-for-byte, and Binary only re-encodes it
+/// physically (/apps/<hex> -> /s/<20 raw bytes>). Routing Binary through the shared rule
+/// instead would send the 8 c_systemTxsAddress members to /sys/ while Hex keeps them under
+/// /apps/, splitting the row across a mixed-mode network — /sys/ names are not normalized
+/// by canonicalTableNameForHash. Callers pass a plain 40-char lowercase hex address.
 inline std::string legacyAppsAccountTableName(std::string_view address)
 {
+    std::string hexName(ledger::SYS_DIRECTORY::USER_APPS);
+    hexName.append(address);
     if (nodeAddressTableMode() == AddressTableMode::Binary)
     {
-        return accountTableName(address, AddressTableMode::Binary);
+        if (auto bin = hexToBinaryAccountTableName(hexName); !bin.empty())
+        {
+            return bin;
+        }
     }
-    return std::string(ledger::SYS_DIRECTORY::USER_APPS) + std::string(address);
+    return hexName;
 }
 
 template <class Storage>

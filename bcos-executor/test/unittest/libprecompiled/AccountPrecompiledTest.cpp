@@ -816,9 +816,11 @@ BOOST_AUTO_TEST_CASE(addAccountBalanceBinaryTableNameExtraction)
 // F2 regression pin: legacyAppsAccountTableName backs the v1-precompiled call sites whose
 // BASE rule was getContractTableName("/apps/", address) — plain concatenation that never
 // routed system addresses to /sys/ (ShardingPrecompiled's shard rows, the AccountManager /
-// ContractAuthMgr contract probes). In Hex mode it must reproduce those strings
-// byte-for-byte; in Binary mode it must follow the shared accountTableName rule, because
-// that is where EVMAccount writes the account state.
+// ContractAuthMgr / BFSPrecompiled contract probes). Both layouts must resolve to the same
+// logical row: Hex reproduces those strings byte-for-byte, and Binary is only a physical
+// re-encoding of them (/apps/<hex> -> /s/<20 raw bytes>) — /sys/ names are NOT normalized
+// by canonicalTableNameForHash, so routing a system address to /sys/ in one mode only would
+// split the row across a mixed-mode network.
 BOOST_AUTO_TEST_CASE(legacyAppsAccountTableNamePinsBaseStrings)
 {
     namespace account = bcos::ledger::account;
@@ -835,10 +837,15 @@ BOOST_AUTO_TEST_CASE(legacyAppsAccountTableNamePinsBaseStrings)
     }
     {
         ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Binary);
-        // System-tx addresses keep the /sys/ hex name in every mode; address(0) is NOT one
-        // of them, so it goes to "/s/<20 zero bytes>" like any other account.
-        BOOST_CHECK_EQUAL(account::legacyAppsAccountTableName(precompiled::SYS_CONFIG_ADDRESS),
-            "/sys/0000000000000000000000000000000000001000");
+        // Binary keeps the SAME logical row as Hex: the /apps/<hex> name re-encoded to
+        // "/s/<20 raw bytes>" — system-tx addresses included (Hex keeps them under /apps/).
+        auto const sysConfigTable =
+            account::legacyAppsAccountTableName(precompiled::SYS_CONFIG_ADDRESS);
+        BOOST_REQUIRE_EQUAL(sysConfigTable.size(), 3 + 20);
+        BOOST_CHECK(sysConfigTable.starts_with("/s/"));
+        bytes sysConfigRaw;
+        boost::algorithm::unhex(precompiled::SYS_CONFIG_ADDRESS, std::back_inserter(sysConfigRaw));
+        BOOST_CHECK_EQUAL(sysConfigTable.substr(3), std::string(sysConfigRaw.begin(), sysConfigRaw.end()));
         auto const zeroTable = account::legacyAppsAccountTableName(precompiled::EMPTY_ADDRESS);
         BOOST_REQUIRE_EQUAL(zeroTable.size(), 3 + 20);
         BOOST_CHECK(zeroTable.starts_with("/s/"));
@@ -847,6 +854,23 @@ BOOST_AUTO_TEST_CASE(legacyAppsAccountTableNamePinsBaseStrings)
         }));
         BOOST_CHECK_EQUAL(account::legacyAppsAccountTableName(NORMAL_ADDRESS),
             account::hexToBinaryAccountTableName("/apps/" + std::string(NORMAL_ADDRESS)));
+    }
+    // Cross-mode pin: the two layouts of the same address must canonicalize to one logical
+    // row for state hashing (canonicalTableNameForHash maps /s/<raw> back to /apps/<hex>).
+    for (auto const address : {precompiled::EMPTY_ADDRESS, precompiled::SYS_CONFIG_ADDRESS,
+             NORMAL_ADDRESS})
+    {
+        std::string hexName;
+        std::string binName;
+        {
+            ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Hex);
+            hexName = account::legacyAppsAccountTableName(address);
+        }
+        {
+            ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Binary);
+            binName = account::legacyAppsAccountTableName(address);
+        }
+        BOOST_CHECK_EQUAL(account::canonicalTableNameForHash(binName), hexName);
     }
 }
 

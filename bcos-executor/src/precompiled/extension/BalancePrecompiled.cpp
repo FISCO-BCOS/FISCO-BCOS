@@ -106,17 +106,24 @@ std::string BalancePrecompiled::getContractTableName(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const std::string_view& _address)
 {
+    // One logical name for both layouts, from the executive rule (the same rule
+    // transferBalance writes with). It routes EVERY address with the 35-leading-zero
+    // prefix (address(0), 0x1..0x9, ...) to /sys/ — a wider set than the 8
+    // c_systemTxsAddress members — so deriving the two layouts from different rules
+    // (e.g. the shared rule) would route e.g. address(0) to /apps/ on Hex nodes and
+    // /sys/ on Binary nodes, splitting balance rows across a mixed-mode network.
+    auto name = _executive->getContractTableName(_address);
     if (account::nodeAddressTableMode() == account::AddressTableMode::Binary)
     {
-        // Binary layout: account state lives where the shared rule (the same one
-        // EVMAccount writes with) puts it — "/s/<20 raw bytes>" or "/sys/<hex>".
-        return account::accountTableName(_address, account::AddressTableMode::Binary);
+        // Binary layout is a pure physical re-encoding of the same logical row:
+        // /apps/<hex> becomes /s/<20 raw bytes>; /sys/ names stay untouched
+        // (canonicalTableNameForHash does not normalize them either).
+        if (auto bin = account::hexToBinaryAccountTableName(name); !bin.empty())
+        {
+            return bin;
+        }
     }
-    // Hex layout: reproduce the executive rule byte-for-byte. It routes EVERY address with
-    // the 35-leading-zero prefix (address(0), 0x1..0x9, ...) to /sys/ — a wider set than
-    // the 8 c_systemTxsAddress members — and transferBalance writes with that same rule, so
-    // any deviation here splits balance reads from writes on a mixed-version network.
-    return _executive->getContractTableName(_address);
+    return name;
 }
 
 void BalancePrecompiled::checkOriginAuth(
