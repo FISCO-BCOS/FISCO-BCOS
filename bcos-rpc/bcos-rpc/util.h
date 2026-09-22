@@ -20,6 +20,7 @@
 
 #pragma once
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include <optional>
 
 namespace bcos::rpc
 {
@@ -28,7 +29,18 @@ namespace bcos::rpc
 /// equal "latest" (PBFT commits are final); a positive depth makes them historical blocks,
 /// matching Ethereum semantics with configurable depths ([web3_rpc] safe_block_depth /
 /// finalized_block_depth).
+///
+/// When the Engine API is wired (op-node drives forkchoice), @p forkchoiceSafe /
+/// @p forkchoiceFinalized carry the tracker values and are preferred over the depth fallback.
+/// With @p failClosedOnMissingForkchoice set (the engine lane), a "safe"/"finalized" tag whose
+/// forkchoice value is still unset throws a JsonRpcException(-32000, "header not found") — the
+/// geth not-found shape — instead of silently answering "latest" before the first
+/// engine_forkchoiceUpdated. eth_getBlockByNumber maps that to JSON null; other endpoints carry
+/// the -32000 code so "not yet known" is not misreported as a node-internal error.
 std::tuple<protocol::BlockNumber, bool> getBlockNumberByTag(protocol::BlockNumber latest,
     std::string_view blockTag, protocol::BlockNumber safeDepth = 0,
-    protocol::BlockNumber finalizedDepth = 0);
+    protocol::BlockNumber finalizedDepth = 0,
+    std::optional<protocol::BlockNumber> forkchoiceSafe = std::nullopt,
+    std::optional<protocol::BlockNumber> forkchoiceFinalized = std::nullopt,
+    bool failClosedOnMissingForkchoice = false);
 }  // namespace bcos::rpc

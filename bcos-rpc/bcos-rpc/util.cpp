@@ -24,15 +24,25 @@
 #include "bcos-utilities/DataConvertUtility.h"
 #include <boost/regex.hpp>
 #include <limits>
+#include <optional>
 #include <string_view>
 
 using namespace bcos;
 using namespace bcos::rpc;
 
+// geth answers "header not found" with the implementation-defined server error -32000 for a
+// safe/finalized head that has not been set yet; keep that wire shape rather than surfacing the
+// fail-closed case as a node-internal -32603.
+constexpr int32_t c_headerNotFoundCode = -32000;
+constexpr std::string_view c_headerNotFoundMessage = "header not found";
+
 // return (actual block number, isLatest block)
 std::tuple<protocol::BlockNumber, bool> bcos::rpc::getBlockNumberByTag(
     protocol::BlockNumber latest, std::string_view blockTag, protocol::BlockNumber safeDepth,
-    protocol::BlockNumber finalizedDepth)
+    protocol::BlockNumber finalizedDepth,
+    std::optional<protocol::BlockNumber> forkchoiceSafe,
+    std::optional<protocol::BlockNumber> forkchoiceFinalized,
+    bool failClosedOnMissingForkchoice)
 {
     if (blockTag.data() == nullptr || blockTag.empty())
     {
@@ -42,16 +52,37 @@ std::tuple<protocol::BlockNumber, bool> bcos::rpc::getBlockNumberByTag(
     {
         return std::make_tuple(0, false);
     }
-    // safe / finalized: latest - depth (clamped at 0). Default depth 0 makes them "latest"
-    // (isLatest = true) — byte-identical to pre-upgrade behaviour; a configured depth turns
-    // them into committed historical blocks.
+    // safe / finalized: forkchoice value first, then latest - depth (clamped at 0). Default
+    // depth 0 makes them "latest" (isLatest = true) — byte-identical to pre-upgrade behaviour;
+    // a configured depth turns them into committed historical blocks. On the engine lane an
+    // unset forkchoice value is a not-found result, never the unsafe tip (op-node treats a
+    // wrong safe/finalized as immutable, a not-found as "not yet known").
     if (blockTag == SafeBlock)
     {
+        if (forkchoiceSafe.has_value())
+        {
+            return std::make_tuple(*forkchoiceSafe, std::cmp_equal(latest, *forkchoiceSafe));
+        }
+        if (failClosedOnMissingForkchoice)
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(c_headerNotFoundCode, std::string(c_headerNotFoundMessage)));
+        }
         auto const number = (std::max)(latest - safeDepth, protocol::BlockNumber{0});
         return std::make_tuple(number, std::cmp_equal(latest, number));
     }
     if (blockTag == FinalizedBlock)
     {
+        if (forkchoiceFinalized.has_value())
+        {
+            return std::make_tuple(
+                *forkchoiceFinalized, std::cmp_equal(latest, *forkchoiceFinalized));
+        }
+        if (failClosedOnMissingForkchoice)
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(c_headerNotFoundCode, std::string(c_headerNotFoundMessage)));
+        }
         auto const number = (std::max)(latest - finalizedDepth, protocol::BlockNumber{0});
         return std::make_tuple(number, std::cmp_equal(latest, number));
     }
