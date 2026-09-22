@@ -207,7 +207,8 @@ void fillAnnouncedHeader(bcos::protocol::BlockHeader::Ptr const& header,
     header->setReceiptsRoot(detail::toBcosH256(result.seal.receiptsRoot));
     header->setGasUsed(bcos::u256(result.gasUsed));
     header->setLogsBloom(bcos::bytesConstRef(result.seal.logsBloom.bytes, 256));
-    header->setWithdrawalsRoot(detail::toBcosH256(result.seal.withdrawalsRoot));
+    if (result.seal.withdrawalsRoot.has_value())
+        header->setWithdrawalsRoot(detail::toBcosH256(*result.seal.withdrawalsRoot));
     if (result.seal.requestsHash.has_value())
         header->setRequestsHash(detail::toBcosH256(*result.seal.requestsHash));
     if (result.seal.blobGasUsed.has_value())
@@ -2331,9 +2332,10 @@ bcos::h256 commitmentCorruption(unsigned char tag)
 /// announced header must be rejected with OpConsensusRejected, naming that field
 /// ("commitment mismatch on field <name>"). Exercises six discriminating rejections: five names
 /// from mismatchedFieldOf's ordered chain (withdrawalsRoot is tampered in VALUE — presence stays
-/// equal — so it hits the comparison arm after the dedicated presence gate passes) plus the
-/// blobGasUsed guard: pre-Jovian seals omit the field, so announcing a non-zero value is invalid
-/// rather than merely unequal to execution.
+/// equal — so it hits the comparison arm after the dedicated presence gate passes) plus
+/// blobGasUsed: the Isthmus seal carries the spec-fixed 0 from Ecotone on, so a non-zero
+/// announcement mismatches the comparison (the finishExecute "must announce blobGasUsed=0" guard
+/// remains as the fail-closed arm for a pre-Ecotone announcement, which the seal never engages).
 BOOST_AUTO_TEST_CASE(VerifyRejectsMismatchedAnnouncedCommitments)
 {
     using Mutator = void (*)(bcostars::protocol::BlockHeaderImpl&);
@@ -2374,7 +2376,7 @@ BOOST_AUTO_TEST_CASE(VerifyRejectsMismatchedAnnouncedCommitments)
             {}},
         {"blobGasUsed",
             [](bcostars::protocol::BlockHeaderImpl& h) { h.setBlobGasUsed(bcos::u256{7}); },
-            "must announce blobGasUsed=0"},
+            {}},
     };
 
     std::vector<bcos::bytes> const rawTxBytes{encodeDepositEnvelope(makeDeposit())};

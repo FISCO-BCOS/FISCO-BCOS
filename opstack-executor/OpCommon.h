@@ -59,15 +59,19 @@ struct OpBlockSeal
 {
     evmone::hash256 receiptsRoot;
     evmone::state::BloomFilter logsBloom;
-    evmone::hash256 withdrawalsRoot;
-    std::optional<evmone::hash256> requestsHash;  // Isthmus+ has a value; CANCUN-family fork
+    /// Canyon+ (cfg.has_withdrawals): Canyon–Holocene the withdrawals list is always empty so
+    /// the header field is the empty-trie root; Isthmus+ it is the MessagePasser storage root.
+    /// Pre-Canyon headers have no withdrawals field at all — nullopt (the commitment surface
+    /// treats absence as first-class, same as blobGasUsed/requestsHash).
+    std::optional<evmone::hash256> withdrawalsRoot;
+    std::optional<evmone::hash256> requestsHash;  // Isthmus+ has a value; pre-Isthmus
                                                   // headers lack this field
-    /// Jovian block-header BlobGasUsed reuse slot = DA footprint (only non-deposit txs accumulate,
-    /// each tx = EstimatedDASize × scalar). Implemented as Σ of meta.da_footprint over non-deposit
-    /// receipts (deposits carry nullopt and are skipped); a missing optional on a non-deposit
-    /// receipt is a consensus reject, not a silent 0. A deposits-only block sums no terms and is
-    /// always 0 ≡ op-geth's first-Jovian-block special case. When has_da_footprint is false there
-    /// is always no value.
+    /// Ecotone+ headers carry blobGasUsed: Jovian+ it is the DA footprint (Σ of
+    /// meta.da_footprint over non-deposit receipts, each tx = EstimatedDASize × scalar;
+    /// deposits carry nullopt and are skipped; a missing optional on a non-deposit receipt is
+    /// a consensus reject, not a silent 0 — a deposits-only block sums no terms and is always
+    /// 0 ≡ op-geth's first-Jovian-block special case). Ecotone–Isthmus the OP spec fixes it at
+    /// 0. Pre-Ecotone the header has no blob fields — nullopt.
     std::optional<uint64_t> blobGasUsed;
 };
 

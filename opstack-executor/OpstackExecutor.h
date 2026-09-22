@@ -1209,8 +1209,12 @@ public:
                     m_ctx->fee.da_footprint_gas_scalar = *m_ctx->daFootprintGasScalar;
                 m_ctx->feeLoaded = true;
             }
+            // Same pre-Ecotone leniency as preBlockOpSteps (OpBlockExecute.h): pre-Ecotone
+            // headers legitimately lack parentBeaconBlockRoot / blobGasUsed; both are dead
+            // EVM inputs pre-Cancun. call=true keeps its lenient behavior either way.
             m_blockInfo = buildBlockInfo(blockHeader,
-                opBlockGasLimit(blockHeader, static_cast<uint64_t>(m_ctx->blockGasLeft)), call);
+                opBlockGasLimit(blockHeader, static_cast<uint64_t>(m_ctx->blockGasLeft)),
+                call || executor.m_forkConfig.fork < bcos::evm::opstack::OpFork::Ecotone);
             try
             {  // Validation failure is a consensus reject.
                 m_props = co_await executor.m_prepare(*stateView, blockHeader, transaction,
@@ -1425,8 +1429,11 @@ public:
         // EIP155Signer/modernSigner ErrInvalidChainId).
         // Same Storage2State for prepare and execute.
         bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
-        auto blockInfo = buildBlockInfo(
-            blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)), call);
+        // Same pre-Ecotone leniency as ExecuteContext::prepare: Bedrock..Delta headers carry
+        // no parentBeaconBlockRoot / blobGasUsed (devp2p sync lane, OpBlockVerifier).
+        auto blockInfo = buildBlockInfo(blockHeader,
+            opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)),
+            call || m_forkConfig.fork < bcos::evm::opstack::OpFork::Ecotone);
         bcos::evm::opstack::OpTxProperties props;
         try
         {  // Validation failure is a consensus reject.
@@ -1470,8 +1477,11 @@ public:
             throw bcos::evm::OpConsensusError(
                 "OpstackExecutor: block execution requires wired RecentBlockHashes");
 
-        auto blockInfo = buildBlockInfo(
-            blockHeader, opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)), call);
+        auto blockInfo = buildBlockInfo(blockHeader,
+            opBlockGasLimit(blockHeader, static_cast<uint64_t>(blockGasLeft)),
+            // Same pre-Ecotone leniency as ExecuteContext::prepare: Bedrock..Delta headers
+            // carry no parentBeaconBlockRoot / blobGasUsed (devp2p sync lane, OpBlockVerifier).
+            call || m_forkConfig.fork < bcos::evm::opstack::OpFork::Ecotone);
         bcos::evm::evmstate::Storage2State<Storage> stateView(storage, m_sharedError);
         NullBlockHashes nullBlockHashes;
         auto const& bh = (blockHashes != nullptr) ? *blockHashes : nullBlockHashes;

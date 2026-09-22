@@ -21,7 +21,8 @@ uint64_t readBE(const evmc::bytes32& w, size_t byteOff, size_t len) noexcept
 }  // namespace
 
 OpFeeParams unpackOpFeeParams(const evmc::bytes32& slot1, const evmc::bytes32& slot3,
-    const evmc::bytes32& slot7, const evmc::bytes32& slot8) noexcept
+    const evmc::bytes32& slot5, const evmc::bytes32& slot6, const evmc::bytes32& slot7,
+    const evmc::bytes32& slot8) noexcept
 {
     return OpFeeParams{
         .l1_base_fee = intx::be::load<intx::uint256>(slot1),
@@ -31,6 +32,8 @@ OpFeeParams unpackOpFeeParams(const evmc::bytes32& slot1, const evmc::bytes32& s
         .operator_fee_scalar = static_cast<uint32_t>(readBE(slot8, 20, 4)),
         .operator_fee_constant = readBE(slot8, 24, 8),
         .da_footprint_gas_scalar = static_cast<uint16_t>(readBE(slot8, 18, 2)),
+        .l1_fee_overhead = intx::be::load<intx::uint256>(slot5),
+        .l1_fee_scalar = intx::be::load<intx::uint256>(slot6),
     };
 }
 OpFeeParams loadOpFeeParams(const evmone::state::StateView& view) noexcept
@@ -41,7 +44,8 @@ OpFeeParams loadOpFeeParams(const evmone::state::StateView& view) noexcept
         return k;
     };
     return unpackOpFeeParams(view.get_storage(OP_L1_BLOCK, slot(1)),
-        view.get_storage(OP_L1_BLOCK, slot(3)), view.get_storage(OP_L1_BLOCK, slot(7)),
+        view.get_storage(OP_L1_BLOCK, slot(3)), view.get_storage(OP_L1_BLOCK, slot(5)),
+        view.get_storage(OP_L1_BLOCK, slot(6)), view.get_storage(OP_L1_BLOCK, slot(7)),
         view.get_storage(OP_L1_BLOCK, slot(8)));
 }
 }  // namespace bcos::evm::opstack

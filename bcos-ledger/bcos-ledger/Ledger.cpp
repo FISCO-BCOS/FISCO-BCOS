@@ -1562,8 +1562,16 @@ static void verifyL2FeatureFlagsSlot(
     }
 }
 
-static task::Task<void> importGenesisState(
-    ::ranges::forward_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
+// Genesis import writes go to the node's local state storage, whose operations
+// complete inline (never suspend on I/O). Drive them with task::syncWait instead of
+// co_await on purpose: a per-account co_await loop accumulates one native-stack
+// frame chain per iteration on toolchains that do not tail-call the coroutine
+// symmetric-transfer resume (this repo's ASAN configuration), and real alloc sets
+// (op-sepolia: 2066 accounts) overflow the default 8 MiB stack. syncWait starts
+// each operation with a fresh stack; the surrounding function stays a coroutine
+// for its callers.
+static void importGenesisAccount(auto& storage, crypto::Hash const& hashImpl,
+    Features const& features, auto const& importAccount)
 {
     // allocs from NodeConfig carry 0x-prefixed hex; LedgerTest builds them without
     // a prefix. Strip a leading 0x so both shapes unhex cleanly. The exact-width /
@@ -1572,6 +1580,61 @@ static task::Task<void> importGenesisState(
     // state root can never be computed over hex this importer would reject.
     auto strip0x = [](std::string_view hex) { return hex.starts_with("0x") ? hex.substr(2) : hex; };
 
+    // Decode & validate EVERY hex field of the alloc BEFORE the first
+    // write: genesis import is not transactional, so a bad code/slot hex
+    // discovered after create() would leave a partially-written account in
+    // the genesis batch.
+    auto addressHex = strip0x(importAccount.address);
+    evmc_address address{};
+    ledger::unhexAllocExact(addressHex, "address", address.bytes, sizeof(address.bytes));
+
+    bcos::bytes binaryCode;
+    std::optional<crypto::HashType> codeHash;
+    if (!strip0x(importAccount.code).empty())
+    {
+        binaryCode = ledger::unhexAllocBytes(importAccount.code, "code");
+        codeHash = hashImpl.hash(binaryCode);
+    }
+    std::vector<std::pair<evmc_bytes32, evmc_bytes32>> slots;
+    slots.reserve(importAccount.storage.size());
+    for (auto const& [key, value] : importAccount.storage)
+    {
+        evmc_bytes32 evmKey{};
+        ledger::unhexAllocExact(key, "storage slot key", evmKey.bytes, sizeof(evmKey.bytes));
+        evmc_bytes32 evmValue{};
+        ledger::unhexAllocExact(
+            value, "storage slot value", evmValue.bytes, sizeof(evmValue.bytes));
+        slots.emplace_back(evmKey, evmValue);
+    }
+
+    account::EVMAccount account(
+        storage, address, features.get(Features::Flag::feature_raw_address));
+    task::syncWait(account.create());
+
+    if (codeHash.has_value())
+    {
+        task::syncWait(account.setCode(std::move(binaryCode), std::string{}, *codeHash));
+    }
+
+    if (!importAccount.nonce.empty())
+    {
+        task::syncWait(account.setNonce(importAccount.nonce));
+    }
+
+    if (importAccount.balance > 0)
+    {
+        task::syncWait(account.setBalance(importAccount.balance));
+    }
+
+    for (auto const& [evmKey, evmValue] : slots)
+    {
+        task::syncWait(account.setStorage(evmKey, evmValue));
+    }
+}
+
+static task::Task<void> importGenesisState(
+    ::ranges::forward_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
+{
     Features features;
     co_await ledger::readFromStorage(features, storage, 0);
 
@@ -1582,56 +1645,7 @@ static task::Task<void> importGenesisState(
 
     for (auto&& importAccount : allocs)
     {
-        // Decode & validate EVERY hex field of the alloc BEFORE the first
-        // write: genesis import is not transactional, so a bad code/slot hex
-        // discovered after create() would leave a partially-written account in
-        // the genesis batch.
-        auto addressHex = strip0x(importAccount.address);
-        evmc_address address{};
-        ledger::unhexAllocExact(addressHex, "address", address.bytes, sizeof(address.bytes));
-
-        bcos::bytes binaryCode;
-        std::optional<crypto::HashType> codeHash;
-        if (!strip0x(importAccount.code).empty())
-        {
-            binaryCode = ledger::unhexAllocBytes(importAccount.code, "code");
-            codeHash = hashImpl.hash(binaryCode);
-        }
-        std::vector<std::pair<evmc_bytes32, evmc_bytes32>> slots;
-        slots.reserve(importAccount.storage.size());
-        for (auto const& [key, value] : importAccount.storage)
-        {
-            evmc_bytes32 evmKey{};
-            ledger::unhexAllocExact(key, "storage slot key", evmKey.bytes, sizeof(evmKey.bytes));
-            evmc_bytes32 evmValue{};
-            ledger::unhexAllocExact(
-                value, "storage slot value", evmValue.bytes, sizeof(evmValue.bytes));
-            slots.emplace_back(evmKey, evmValue);
-        }
-
-        account::EVMAccount account(
-            storage, address, features.get(Features::Flag::feature_raw_address));
-        co_await account.create();
-
-        if (codeHash.has_value())
-        {
-            co_await account.setCode(std::move(binaryCode), std::string{}, *codeHash);
-        }
-
-        if (!importAccount.nonce.empty())
-        {
-            co_await account.setNonce(std::move(importAccount.nonce));
-        }
-
-        if (importAccount.balance > 0)
-        {
-            co_await account.setBalance(importAccount.balance);
-        }
-
-        for (auto const& [evmKey, evmValue] : slots)
-        {
-            co_await account.setStorage(evmKey, evmValue);
-        }
+        importGenesisAccount(storage, hashImpl, features, importAccount);
     }
 }
 
@@ -2165,12 +2179,17 @@ bool Ledger::buildGenesisBlock(
         // seeding: its counts are rebuilt from the state roots at every startup (MPTPruner.h).
         if (l2EthereumCompat)
         {
+            // task::syncWait per node, not co_await: same stack-depth constraint as
+            // importGenesisState — a real genesis emits thousands of trie nodes
+            // (op-sepolia: 2066 accounts) and a per-node co_await loop overflows
+            // the native stack on sanitizer builds. The local state storage
+            // completes these writes inline, so syncWait never blocks on I/O.
             for (auto& [nodeHash, nodeRlp] : ethStateTrie.nodes)
             {
                 Entry nodeEntry;
                 nodeEntry.set(std::move(nodeRlp));
-                co_await storage2::writeOne(
-                    *m_stateStorage, storage2::mptNodeStateKey(nodeHash), std::move(nodeEntry));
+                task::syncWait(storage2::writeOne(
+                    *m_stateStorage, storage2::mptNodeStateKey(nodeHash), std::move(nodeEntry)));
             }
         }
 

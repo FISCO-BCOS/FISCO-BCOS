@@ -3,6 +3,7 @@
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <boost/test/unit_test.hpp>
+#include <evmc/hex.hpp>
 #include <limits>
 #include <test/utils/test_state.hpp>
 #include <vector>
@@ -295,6 +296,162 @@ BOOST_AUTO_TEST_CASE(CallSimulationViewDoesNotBlankSenderCode)
     const auto r = opValidate(masked, blkValidate(), tx, {env.data(), env.size()}, isthmusConfig(),
         OpFeeParams{}, 30000000);
     BOOST_REQUIRE(std::holds_alternative<std::error_code>(r));
+}
+
+// ── Legacy (Bedrock–Delta) L1 fee 分支（M3a）─────────────────────────────────
+// op-geth rollup_cost_test.go TestBedrockL1CostFunc 的黄金值：emptyTx 字节 + baseFee=1e9,
+// overhead=50, scalar=7e6 → Bedrock fee 11326000000000 / gas 1618；Regolith 3710000000000 /
+// 530。此处钉 opValidate 的三态分叉接线（props.l1_cost 与 legacy_l1_gas_used 快照）。
+namespace
+{
+// 与 RollupCostTest 的 kEmptyTx 同一字节（op-geth emptyTx.MarshalBinary）。
+const evmc::bytes kLegacyEmptyTx =
+    evmc::from_hex("dd80808094095e7baea6a6c7c4c2dfeb977efac326af552d878080808080").value();
+
+OpFeeParams legacyFee()
+{
+    OpFeeParams fee{};
+    fee.l1_base_fee = intx::uint256{1000000000};
+    fee.l1_fee_overhead = intx::uint256{50};
+    fee.l1_fee_scalar = intx::uint256{7000000};
+    return fee;
+}
+}  // namespace
+
+BOOST_AUTO_TEST_CASE(LegacyL1CostBedrockGoldenAndSnapshot)
+{
+    test::TestState ts;
+    ts[kSenderValidate] = {
+        .nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
+    const evmc::bytes_view env = kLegacyEmptyTx;
+    const auto r =
+        opValidate(ts, blkValidate(), baseTx(), env, bedrockConfig(), legacyFee(), 30000000);
+    BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(r));
+    const auto& p = std::get<OpTxProperties>(r);
+    BOOST_CHECK_EQUAL(p.l1_cost, 11326000000000_u256);
+    BOOST_REQUIRE(p.legacy_l1_gas_used.has_value());
+    BOOST_CHECK_EQUAL(*p.legacy_l1_gas_used, 1618u);
+    // legacy 分支不得填 Ecotone/Fjord 的快照字段。
+    BOOST_CHECK(!p.ecotone_calldata_gas_used.has_value());
+    BOOST_CHECK_EQUAL(p.flz_len, 0u);
+    // Bedrock–Delta 无 operator fee。
+    BOOST_CHECK_EQUAL(p.operator_cost_at_gas_limit, intx::uint256{0});
+}
+
+BOOST_AUTO_TEST_CASE(LegacyL1CostRegolithDropsPlus68)
+{
+    test::TestState ts;
+    ts[kSenderValidate] = {
+        .nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
+    const evmc::bytes_view env = kLegacyEmptyTx;
+    const auto r =
+        opValidate(ts, blkValidate(), baseTx(), env, regolithConfig(), legacyFee(), 30000000);
+    BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(r));
+    const auto& p = std::get<OpTxProperties>(r);
+    BOOST_CHECK_EQUAL(p.l1_cost, 3710000000000_u256);
+    BOOST_REQUIRE(p.legacy_l1_gas_used.has_value());
+    BOOST_CHECK_EQUAL(*p.legacy_l1_gas_used, 530u);
+}
+
+// Canyon/Delta 与 Regolith 同公式（legacy 三态），只是 fork 字段不同。
+BOOST_AUTO_TEST_CASE(LegacyL1CostCanyonDeltaSameAsRegolith)
+{
+    const evmc::bytes_view env = kLegacyEmptyTx;
+    for (const auto* cfg : {&canyonConfig(), &deltaConfig()})
+    {
+        test::TestState ts;
+        ts[kSenderValidate] = {
+            .nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
+        const auto r = opValidate(ts, blkValidate(), baseTx(), env, *cfg, legacyFee(), 30000000);
+        BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(r));
+        BOOST_CHECK_EQUAL(std::get<OpTxProperties>(r).l1_cost, 3710000000000_u256);
+    }
+}
+
+// 512 位上限必须计入 legacy l1Cost：余额恰好差 legacy fee 一个 wei 也要拒绝。
+BOOST_AUTO_TEST_CASE(LegacyL1CostJoinsThe512BitCap)
+{
+    const evmc::bytes_view env = kLegacyEmptyTx;
+    const auto fee = legacyFee();
+    const auto tx = baseTx();
+    const auto l1Cost = 11326000000000_u256;  // Bedrock 黄金值
+    const auto needed = intx::uint256{static_cast<uint64_t>(tx.gas_limit)} * tx.max_gas_price +
+                        tx.value + l1Cost;
+    {
+        test::TestState ts;
+        ts[kSenderValidate] = {.nonce = 0, .balance = needed, .storage = {}, .code = {}};
+        const auto r = opValidate(ts, blkValidate(), tx, env, bedrockConfig(), fee, 30000000);
+        BOOST_CHECK(std::holds_alternative<OpTxProperties>(r));
+    }
+    {
+        test::TestState ts;
+        ts[kSenderValidate] = {.nonce = 0, .balance = needed - 1, .storage = {}, .code = {}};
+        const auto r = opValidate(ts, blkValidate(), tx, env, bedrockConfig(), fee, 30000000);
+        BOOST_REQUIRE(std::holds_alternative<std::error_code>(r));
+        BOOST_CHECK_EQUAL(std::get<std::error_code>(r), std::errc::result_out_of_range);
+    }
+}
+
+// ── 首个 Ecotone 块回退（M3b）───────────────────────────────────────────────
+// op-geth rollup_cost.go NewL1CostFunc selectFunc：Ecotone 已激活但 L1Block 的 Ecotone 参数
+// （L1BlobBaseFeeSlot==0 且 L1FeeScalarsSlot 的两个 32 位 scalar 全零）→ Bedrock legacy 公式，
+// isRegolith=true（无 +68 幻影子节）。该判断在 Fjord 分支之前——「the first block of Fjord and
+// Ecotone could be the same block」。legacyFee() 只填 legacy slot（overhead=50, scalar=7e6,
+// l1BaseFee=1e9），Ecotone 参数天然全零 → 触发回退；与 Regolith 同公式 → 黄金值
+// 3710000000000 / 530。
+
+BOOST_AUTO_TEST_CASE(FirstEcotoneBlockFallsBackToBedrockFormula)
+{
+    test::TestState ts;
+    ts[kSenderValidate] = {
+        .nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
+    const evmc::bytes_view env = kLegacyEmptyTx;
+    const auto r =
+        opValidate(ts, blkValidate(), baseTx(), env, ecotoneConfig(), legacyFee(), 30000000);
+    BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(r));
+    const auto& p = std::get<OpTxProperties>(r);
+    BOOST_CHECK_EQUAL(p.l1_cost, 3710000000000_u256);
+    BOOST_REQUIRE(p.legacy_l1_gas_used.has_value());
+    BOOST_CHECK_EQUAL(*p.legacy_l1_gas_used, 530u);
+    // 回退块按 legacy 定价：不得填 Ecotone/Fjord 快照。
+    BOOST_CHECK(!p.ecotone_calldata_gas_used.has_value());
+    BOOST_CHECK_EQUAL(p.flz_len, 0u);
+}
+
+// Fjord 与 Ecotone 可在同一块激活——回退判断先于 Fjord 分支。
+BOOST_AUTO_TEST_CASE(FirstFjordBlockAlsoFallsBackToBedrockFormula)
+{
+    test::TestState ts;
+    ts[kSenderValidate] = {
+        .nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
+    const evmc::bytes_view env = kLegacyEmptyTx;
+    const auto r =
+        opValidate(ts, blkValidate(), baseTx(), env, fjordConfig(), legacyFee(), 30000000);
+    BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(r));
+    const auto& p = std::get<OpTxProperties>(r);
+    BOOST_CHECK_EQUAL(p.l1_cost, 3710000000000_u256);
+    BOOST_REQUIRE(p.legacy_l1_gas_used.has_value());
+    BOOST_CHECK_EQUAL(*p.legacy_l1_gas_used, 530u);
+}
+
+// 任一 Ecotone 参数已写入即脱离回退：Ecotone 公式照常运行并快照 ecotone_calldata_gas_used。
+// kLegacyEmptyTx 的 calldataGas = 480（30 字节全非零 → 30*16）；fee = 480*(1e9*16*2 + 0)/16e6
+// = 960000。
+BOOST_AUTO_TEST_CASE(EcotoneParamsWrittenUsesEcotoneFormula)
+{
+    auto fee = legacyFee();
+    fee.base_fee_scalar = 2;  // slot 3 非零 → 非首个 Ecotone 块
+    test::TestState ts;
+    ts[kSenderValidate] = {
+        .nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
+    const evmc::bytes_view env = kLegacyEmptyTx;
+    const auto r = opValidate(ts, blkValidate(), baseTx(), env, ecotoneConfig(), fee, 30000000);
+    BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(r));
+    const auto& p = std::get<OpTxProperties>(r);
+    BOOST_CHECK_EQUAL(p.l1_cost, 960000_u256);
+    BOOST_CHECK(!p.legacy_l1_gas_used.has_value());
+    BOOST_REQUIRE(p.ecotone_calldata_gas_used.has_value());
+    BOOST_CHECK_EQUAL(*p.ecotone_calldata_gas_used, 480u);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
