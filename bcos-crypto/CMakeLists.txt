@@ -20,6 +20,13 @@ target_include_directories(bcos-crypto PUBLIC
     $<INSTALL_INTERFACE:include/bcos-crypto>)
 target_link_libraries(bcos-crypto PUBLIC ${LIB_LIST} fmt::fmt)
 target_link_libraries(bcos-crypto PUBLIC bcos-concepts)
+# KZG (EIP-4844) is fullnode-only: the c-kzg-4844 port is a fullnode manifest feature, and
+# its only consumers (mempool / engine / rpc) build in that configuration. PUBLIC so
+# consumers of kzg/Kzg4844.h get ckzg's include dir and the archive on their link line.
+if(FULLNODE)
+    find_package(c-kzg-4844 CONFIG REQUIRED)
+    target_link_libraries(bcos-crypto PUBLIC ckzg)
+endif()
 set_target_properties(bcos-crypto PROPERTIES UNITY_BUILD "ON")
 
 if(NOT WIN32)
