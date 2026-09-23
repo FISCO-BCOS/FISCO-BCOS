@@ -53,6 +53,7 @@ private:
     void addMinerHandlers();
     void addNetHandlers();
     void addWeb3Handlers();
+    void addDebugHandlers();
 
     std::unordered_map<std::string, Handler> m_handlers;
 };
