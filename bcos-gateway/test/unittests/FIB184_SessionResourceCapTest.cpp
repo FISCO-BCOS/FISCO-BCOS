@@ -83,9 +83,8 @@ private:
 class FakeHost_FIB184 : public bcos::gateway::Host<P2PDecoder, FakeSocket_FIB184>
 {
 public:
-    FakeHost_FIB184(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface)
-      : Host<P2PDecoder, FakeSocket_FIB184>(
-            std::move(_hash), std::move(_asioInterface), nullptr)
+    explicit FakeHost_FIB184(std::shared_ptr<ASIOInterface> _asioInterface)
+      : Host<P2PDecoder, FakeSocket_FIB184>(std::move(_asioInterface), nullptr)
     {
         this->m_run = true;
     }
@@ -99,10 +98,9 @@ using Session_FIB184 = BasicSession<P2PDecoder, FakeSocket_FIB184>;
 // 512KB floor that was unconditionally applied before.
 BOOST_AUTO_TEST_CASE(ForcedSmallRecvBufferIsHonored)
 {
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_FIB184>();
     auto fakeAsio = std::make_shared<FakeASIO_FIB184>();
-    auto fakeHost = std::make_shared<FakeHost_FIB184>(hashImpl, fakeAsio);
+    auto fakeHost = std::make_shared<FakeHost_FIB184>(fakeAsio);
 
     auto session = std::make_shared<Session_FIB184>(fakeSocket, *fakeHost, /*size*/ 2, /*forceSize*/ true);
     BOOST_CHECK_EQUAL(session->recvBuffer().recvBufferSize(), 2u);
@@ -117,10 +115,9 @@ BOOST_AUTO_TEST_CASE(ForcedSmallRecvBufferIsHonored)
 // it starts at the (much smaller) lazy initial size and relies on the grow path.
 BOOST_AUTO_TEST_CASE(DefaultRecvBufferStartsSmall)
 {
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_FIB184>();
     auto fakeAsio = std::make_shared<FakeASIO_FIB184>();
-    auto fakeHost = std::make_shared<FakeHost_FIB184>(hashImpl, fakeAsio);
+    auto fakeHost = std::make_shared<FakeHost_FIB184>(fakeAsio);
 
     auto session = std::make_shared<Session_FIB184>(fakeSocket, *fakeHost);
     BOOST_CHECK_EQUAL(
@@ -140,10 +137,9 @@ BOOST_AUTO_TEST_CASE(DefaultRecvBufferStartsSmall)
 // heap-exhaustion crash source). This is the production path the two tests above do not cover.
 BOOST_AUTO_TEST_CASE(ProductionLargeRecvBufferDoesNotPreallocate)
 {
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_FIB184>();
     auto fakeAsio = std::make_shared<FakeASIO_FIB184>();
-    auto fakeHost = std::make_shared<FakeHost_FIB184>(hashImpl, fakeAsio);
+    auto fakeHost = std::make_shared<FakeHost_FIB184>(fakeAsio);
 
     constexpr size_t k64MB =
         64UL * 1024 * 1024;  // == 2 * MAX_MESSAGE_LENGTH, the production ceiling
@@ -164,9 +160,8 @@ BOOST_AUTO_TEST_CASE(ProductionLargeRecvBufferDoesNotPreallocate)
 // makes room again.
 BOOST_AUTO_TEST_CASE(PerIPSessionCapIsEnforced)
 {
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeAsio = std::make_shared<FakeASIO_FIB184>();
-    auto fakeHost = std::make_shared<FakeHost_FIB184>(hashImpl, fakeAsio);
+    auto fakeHost = std::make_shared<FakeHost_FIB184>(fakeAsio);
 
     fakeHost->setMaxSessionsPerIP(3);
     fakeHost->setMaxConcurrentSessions(100);
@@ -194,9 +189,8 @@ BOOST_AUTO_TEST_CASE(PerIPSessionCapIsEnforced)
 // distinct source IPs.
 BOOST_AUTO_TEST_CASE(GlobalSessionCapIsEnforced)
 {
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeAsio = std::make_shared<FakeASIO_FIB184>();
-    auto fakeHost = std::make_shared<FakeHost_FIB184>(hashImpl, fakeAsio);
+    auto fakeHost = std::make_shared<FakeHost_FIB184>(fakeAsio);
 
     fakeHost->setMaxConcurrentSessions(2);
     fakeHost->setMaxSessionsPerIP(100);
@@ -215,10 +209,9 @@ BOOST_AUTO_TEST_CASE(GlobalSessionCapIsEnforced)
 // FIB-184 Fix 1: the lifetime guard releases the slot exactly when the session is destroyed.
 BOOST_AUTO_TEST_CASE(LifetimeGuardReleasesSlotOnSessionDestruction)
 {
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_FIB184>();
     auto fakeAsio = std::make_shared<FakeASIO_FIB184>();
-    auto fakeHost = std::make_shared<FakeHost_FIB184>(hashImpl, fakeAsio);
+    auto fakeHost = std::make_shared<FakeHost_FIB184>(fakeAsio);
 
     const std::string ip = "9.9.9.9";
     BOOST_CHECK(fakeHost->callTryAcquireSessionSlot(ip));

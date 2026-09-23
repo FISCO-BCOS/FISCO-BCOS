@@ -71,8 +71,8 @@ public:
 class TestHost : public Host<P2PDecoder>
 {
 public:
-    TestHost(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface)
-      : Host<P2PDecoder>(std::move(_hash), std::move(_asioInterface), nullptr)
+    explicit TestHost(std::shared_ptr<ASIOInterface> _asioInterface)
+      : Host<P2PDecoder>(std::move(_asioInterface), nullptr)
     {
         m_run = true;
     }
@@ -119,7 +119,7 @@ BOOST_AUTO_TEST_CASE(SendProtocolDoesNotEscapeSendRejection)
     ba::ip::tcp::socket serverSide(*io);
     acceptor.accept(serverSide);
 
-    auto testHost = std::make_shared<TestHost>(nullptr,
+    auto testHost = std::make_shared<TestHost>(
         std::make_shared<ASIOInterface>(
             std::make_shared<bcos::IOServicePool>(1, "sendProtocolTest"), "0.0.0.0", 0));
     // Service::newSeq() delegates to the host-wide seq allocator

@@ -99,10 +99,10 @@ private:
 class FakeHost_FIB97new : public bcos::gateway::Host<P2PDecoder, FakeSocket_FIB97new>
 {
 public:
-    FakeHost_FIB97new(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface,
+    FakeHost_FIB97new(std::shared_ptr<ASIOInterface> _asioInterface,
         std::shared_ptr<BasicSessionFactory<P2PDecoder, FakeSocket_FIB97new>> _sessionFactory)
       : Host<P2PDecoder, FakeSocket_FIB97new>(
-            std::move(_hash), std::move(_asioInterface), std::move(_sessionFactory))
+            std::move(_asioInterface), std::move(_sessionFactory))
     {
         this->m_run = true;
     }
@@ -121,10 +121,9 @@ struct SessionBundle_FIB97new
 
 inline SessionBundle_FIB97new makeSessionFib97new()
 {
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_FIB97new>();
     auto fakeAsio = std::make_shared<FakeASIO_FIB97new>();
-    auto fakeHost = std::make_shared<FakeHost_FIB97new>(hashImpl, fakeAsio, nullptr);
+    auto fakeHost = std::make_shared<FakeHost_FIB97new>(fakeAsio, nullptr);
 
     auto session = std::make_shared<Session_FIB97new>(fakeSocket, *fakeHost, 2, true);
     session->setMessageHandler(

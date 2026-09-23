@@ -10,6 +10,7 @@
 #include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PDecoder.h"
 #include <boost/asio/steady_timer.hpp>
+#include <range/v3/range/concepts.hpp>
 #include <memory>
 #include <utility>
 
@@ -49,8 +50,15 @@ public:
     // empty when negotiate failed or negotiate unfinished
     virtual bcos::protocol::ProtocolInfo::ConstPtr protocolInfo() const;
 
+    // Send a P2P message (header + zero-copy payload views); with Options::response, co_await the
+    // peer's response. payloads is a plain range (no any_view type erasure) taken by value — views
+    // are cheap to copy and a by-value parameter is moved into the coroutine frame. Defined at the
+    // bottom of Service.h: the body drives Service (compression policy, resetP2pID, the pre-send
+    // rate-limit hook), and that header completes both types.
+    template <::ranges::input_range Payloads>
+        requires std::convertible_to<::ranges::range_reference_t<Payloads>, bytesConstRef>
     task::Task<std::optional<Message>> fastSendP2PMessage(
-        Message& message, ::ranges::any_view<bytesConstRef> payloads, Options options);
+        Message& message, Payloads payloads, Options options);
 
 private:
     Session::Ptr m_session;

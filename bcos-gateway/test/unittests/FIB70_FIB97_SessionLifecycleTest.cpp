@@ -260,10 +260,9 @@ private:
 class FakeHost_FIB : public bcos::gateway::Host<P2PDecoder, FakeSocket_FIB>
 {
 public:
-    FakeHost_FIB(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface,
+    FakeHost_FIB(std::shared_ptr<ASIOInterface> _asioInterface,
         std::shared_ptr<BasicSessionFactory<P2PDecoder, FakeSocket_FIB>> _sessionFactory)
-      : Host<P2PDecoder, FakeSocket_FIB>(
-            std::move(_hash), std::move(_asioInterface), std::move(_sessionFactory))
+      : Host<P2PDecoder, FakeSocket_FIB>(std::move(_asioInterface), std::move(_sessionFactory))
     {
         this->m_run = true;
     }
@@ -276,12 +275,11 @@ using Session_FIB = BasicSession<P2PDecoder, FakeSocket_FIB>;
 // After the fix, drop(UserReason) is called immediately, setting m_active = false.
 BOOST_AUTO_TEST_CASE(DecodeErrorTriggersSessionDrop)
 {
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_FIB>();
 
     {
         auto fakeAsio = std::make_shared<FakeASIO_FIB>();
-        auto fakeHost = std::make_shared<FakeHost_FIB>(hashImpl, fakeAsio, nullptr);
+        auto fakeHost = std::make_shared<FakeHost_FIB>(fakeAsio, nullptr);
 
         // 16-byte initial buffer: the read loop must see the 14-byte fixed header before it can
         // make progress on a real frame
@@ -317,12 +315,11 @@ BOOST_AUTO_TEST_CASE(DecodeErrorTriggersSessionDrop)
 // After the fix, drop(UserReason) is called in the catch block.
 BOOST_AUTO_TEST_CASE(DecodeExceptionTriggersSessionDrop)
 {
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_FIB>();
 
     {
         auto fakeAsio = std::make_shared<FakeASIO_FIB>();
-        auto fakeHost = std::make_shared<FakeHost_FIB>(hashImpl, fakeAsio, nullptr);
+        auto fakeHost = std::make_shared<FakeHost_FIB>(fakeAsio, nullptr);
 
         auto session = std::make_shared<Session_FIB>(fakeSocket, *fakeHost, 16, true);
         session->setMessageHandler(
@@ -355,7 +352,6 @@ BOOST_AUTO_TEST_CASE(DecodeExceptionTriggersSessionDrop)
 // keeping the socket alive even if Session::drop() is called concurrently.
 BOOST_AUTO_TEST_CASE(SocketSharedPtrCaptureInAsyncHandler)
 {
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_FIB>();
 
     // Verify socket has expected reference count before session creation
@@ -364,7 +360,7 @@ BOOST_AUTO_TEST_CASE(SocketSharedPtrCaptureInAsyncHandler)
 
     {
         auto fakeAsio = std::make_shared<FakeASIO_FIB>();
-        auto fakeHost = std::make_shared<FakeHost_FIB>(hashImpl, fakeAsio, nullptr);
+        auto fakeHost = std::make_shared<FakeHost_FIB>(fakeAsio, nullptr);
 
         auto session = std::make_shared<Session_FIB>(fakeSocket, *fakeHost, 2, true);
         session->setMessageHandler(
@@ -388,13 +384,12 @@ BOOST_AUTO_TEST_CASE(SocketSharedPtrCaptureInAsyncHandler)
 // spuriously fail every in-flight request/response on every other session.
 BOOST_AUTO_TEST_CASE(DropFlushesOnlyOwnPendingResponseCallbacks)
 {
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocketA = std::make_shared<FakeSocket_FIB>();
     auto fakeSocketB = std::make_shared<FakeSocket_FIB>();
 
     {
         auto fakeAsio = std::make_shared<FakeASIO_FIB>();
-        auto fakeHost = std::make_shared<FakeHost_FIB>(hashImpl, fakeAsio, nullptr);
+        auto fakeHost = std::make_shared<FakeHost_FIB>(fakeAsio, nullptr);
         // both sessions share their host's callback manager, as in production
         auto& callbackManager = fakeHost->sessionCallbackManager();
 
@@ -459,7 +454,6 @@ BOOST_AUTO_TEST_CASE(DropFlushesOnlyOwnPendingResponseCallbacks)
 // fails deterministically once the socket's io_context runs.
 BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
 {
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_FIB>();
 
     std::atomic<int> completions{0};
@@ -467,7 +461,7 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
     const uint32_t seq = 4321;
     {
         auto fakeAsio = std::make_shared<FakeASIO_FIB>();
-        auto fakeHost = std::make_shared<FakeHost_FIB>(hashImpl, fakeAsio, nullptr);
+        auto fakeHost = std::make_shared<FakeHost_FIB>(fakeAsio, nullptr);
         auto& callbackManager = fakeHost->sessionCallbackManager();
 
         auto session = std::make_shared<Session_FIB>(fakeSocket, *fakeHost, 2, true);

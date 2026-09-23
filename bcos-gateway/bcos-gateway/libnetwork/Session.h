@@ -18,6 +18,7 @@
 #include <boost/container/small_vector.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/heap/priority_queue.hpp>
+#include <range/v3/range/concepts.hpp>
 #include <atomic>
 #include <cstddef>
 #include <functional>
@@ -136,8 +137,15 @@ public:
     void startWithPolicy();
     void disconnect(DisconnectReason _reason);
 
-    task::Task<std::optional<FrameMeta>> fastSendMessage(bytesConstRef header,
-        ::ranges::any_view<bytesConstRef> payloads, uint32_t seq, Options options);
+    // payloads: any input range of byte-view-like elements (bytesConstRef-convertible) — a plain
+    // range, NOT a type-erased any_view: the send path is header-only and instantiated per caller
+    // view type, so the per-element access compiles down to direct reads. Taken by value: views
+    // are cheap to copy, and a by-value parameter is moved into the coroutine frame, so the view
+    // stays valid no matter how the caller's temporaries are scoped.
+    template <::ranges::input_range Payloads>
+        requires std::convertible_to<::ranges::range_reference_t<Payloads>, bytesConstRef>
+    task::Task<std::optional<FrameMeta>> fastSendMessage(
+        bytesConstRef header, Payloads payloads, uint32_t seq, Options options);
 
     NodeIPEndpoint nodeIPEndpoint() const;
 
@@ -157,8 +165,6 @@ public:
     const std::function<void(NetworkException, Ptr, FrameMeta)>& messageHandler();
     void setMessageHandler(
         std::function<void(NetworkException, Ptr, FrameMeta)> messageHandler);
-
-    void setHostInfo(P2PInfo _hostInfo);
 
     // FIB-184: attach an opaque object whose lifetime is bound to this session. It is destroyed
     // exactly when the session object is destroyed, which Host uses to release a session-cap
@@ -260,6 +266,14 @@ public:
     /// called by the read loop to deal with a decoded frame
     void onMessage(NetworkException const& e, FrameMeta meta);
 
+    // Response-correlation mechanism for the protocol layer's message handler: settle the pending
+    // with-response send registered under meta.seq — claim its callback from the host-wide
+    // manager, cancel its timeout, update the owner session's pending-seq bookkeeping and invoke
+    // the callback with the frame. Returns false when nothing is registered for the seq (it
+    // already timed out or was settled elsewhere). DECIDING which frames are responses for this
+    // node is the protocol layer's policy — libnetwork never interprets FrameMeta::isResp/dstID.
+    bool claimResponse(NetworkException const& e, FrameMeta meta);
+
     /// Settle one queued callback that resumes a suspended waiter, delivering `args...` to it.
     /// The settle error is chosen at the call site, per callback signature: a payload callback
     /// takes a boost::system::error_code, whereas a response callback
@@ -329,7 +343,6 @@ public:
     // shared_ptr capture (FIB-97 primary fix) kept alive. CAS to true ensures the
     // actual teardown body runs exactly once; all subsequent callers no-op.
     std::atomic_bool m_dropped{false};
-    P2PInfo m_hostInfo;
 
     // FIB-184: opaque guard whose destructor releases the Host session-cap slot. Destroyed with
     // the session, so the slot is freed exactly once on session teardown.
@@ -345,10 +358,9 @@ template <FrameDecoder DecoderT, typename SocketT = Socket>
 class BasicSessionFactory
 {
 public:
-    BasicSessionFactory(P2PInfo _hostInfo, uint32_t _sessionRecvBufferSize,  // NOLINT
-        uint32_t _allowMaxMsgSize, uint32_t _maxReadDataSize, uint32_t _maxSendDataSize)
-      : m_hostInfo(std::move(_hostInfo)),
-        m_sessionRecvBufferSize(_sessionRecvBufferSize),
+    BasicSessionFactory(uint32_t _sessionRecvBufferSize, uint32_t _allowMaxMsgSize,
+        uint32_t _maxReadDataSize, uint32_t _maxSendDataSize)
+      : m_sessionRecvBufferSize(_sessionRecvBufferSize),
         m_allowMaxMsgSize(_allowMaxMsgSize),
         m_maxReadDataSize(_maxReadDataSize),
         m_maxSendDataSize(_maxSendDataSize)
@@ -363,7 +375,6 @@ public:
         Host<DecoderT, SocketT>& _server, std::shared_ptr<SocketT> const& _socket);
 
 private:
-    P2PInfo m_hostInfo;
     uint32_t m_sessionRecvBufferSize;
     uint32_t m_allowMaxMsgSize{0};
     uint32_t m_maxReadDataSize{0};
@@ -1116,59 +1127,16 @@ void BasicSession<DecoderT, SocketT>::onMessage(NetworkException const& e, Frame
                 {
                     return;
                 }
-                // Routed-message bypass: a frame addressed to another node is handed straight to
-                // the message handler, skipping the response-callback claim below — a routed
-                // response must never consume a LOCAL pending callback on a seq collision.
-                // (dstID is empty for protocols without multi-hop routing.)
-                if (!meta.dstID.empty() && meta.dstID != session->m_hostInfo.p2pID &&
-                    meta.dstID != session->m_hostInfo.rawP2pID)
-                {
-                    session->m_messageHandler(e, session, std::move(meta));
-                    return;
-                }
                 // in-activate session
                 if (!session->m_active || !session->m_server.get().haveNetwork())
                 {
                     return;
                 }
-
-                if (!meta.isResp)
-                {
-                    session->m_messageHandler(e, session, std::move(meta));
-                    return;
-                }
-
-                auto& callbackManager = session->sessionCallbackManager();
-                auto callbackPtr = callbackManager.getCallback(meta.seq, true);
-                // without callback, call default handler
-                if (!callbackPtr)
-                {
-                    SESSION_LOG(WARNING)
-                        << LOG_BADGE("onMessage")
-                        << LOG_DESC("callback not found, maybe the callback timeout")
-                        << LOG_KV("endpoint", session->nodeIPEndpoint())
-                        << LOG_KV("seq", meta.seq) << LOG_KV("resp", meta.isResp);
-                    return;
-                }
-                // erase on the session that REGISTERED the seq: the callback manager is
-                // host-shared, so a routed response can arrive on a different session than the
-                // request went out on — erasing here would miss the owner's bookkeeping
-                if (auto owner = callbackPtr->owner.lock())
-                {
-                    owner->removePendingResponseSeq(meta.seq);
-                }
-
-                // with callback
-                if (callbackPtr->timeoutHandler)
-                {
-                    callbackPtr->timeoutHandler->cancel();
-                }
-                auto& callback = callbackPtr->callback;
-                if (!callback)
-                {
-                    return;
-                }
-                callback(e, std::move(meta));
+                // Every decoded frame goes to the message handler: interpreting the metadata
+                // (is this a response? is it addressed to this node?) is the protocol layer's
+                // policy — libnetwork only transports frames. The handler drives the
+                // response-correlation mechanism through claimResponse when it wants it.
+                session->m_messageHandler(e, session, std::move(meta));
             }
             catch (std::exception const& e)
             {
@@ -1176,6 +1144,41 @@ void BasicSession<DecoderT, SocketT>::onMessage(NetworkException const& e, Frame
                                      << LOG_KV("msg", boost::diagnostic_information(e));
             }
         });
+}
+
+template <FrameDecoder DecoderT, typename SocketT>
+bool BasicSession<DecoderT, SocketT>::claimResponse(NetworkException const& e, FrameMeta meta)
+{
+    auto callbackPtr = m_sessionCallbackManager.get().getCallback(meta.seq, true);
+    // without callback: it already timed out or was settled elsewhere
+    if (!callbackPtr)
+    {
+        SESSION_LOG(WARNING) << LOG_BADGE("claimResponse")
+                             << LOG_DESC("callback not found, maybe the callback timeout")
+                             << LOG_KV("endpoint", nodeIPEndpoint())
+                             << LOG_KV("seq", meta.seq) << LOG_KV("resp", meta.isResp);
+        return false;
+    }
+    // erase on the session that REGISTERED the seq: the callback manager is host-shared, so the
+    // response can be claimed on a different session than the request went out on — erasing here
+    // would miss the owner's bookkeeping
+    if (auto owner = callbackPtr->owner.lock())
+    {
+        owner->removePendingResponseSeq(meta.seq);
+    }
+
+    // with callback
+    if (callbackPtr->timeoutHandler)
+    {
+        callbackPtr->timeoutHandler->cancel();
+    }
+    auto& callback = callbackPtr->callback;
+    if (!callback)
+    {
+        return false;
+    }
+    callback(e, std::move(meta));
+    return true;
 }
 
 template <FrameDecoder DecoderT, typename SocketT>
@@ -1324,8 +1327,10 @@ task::Task<void> fastSendMessageWithoutResponse(auto& session, View view)
 }  // namespace detail
 
 template <FrameDecoder DecoderT, typename SocketT>
-task::Task<std::optional<FrameMeta>> BasicSession<DecoderT, SocketT>::fastSendMessage(bytesConstRef header,
-    ::ranges::any_view<bytesConstRef> payloads, uint32_t seq, Options options)
+template <::ranges::input_range Payloads>
+    requires std::convertible_to<::ranges::range_reference_t<Payloads>, bytesConstRef>
+task::Task<std::optional<FrameMeta>> BasicSession<DecoderT, SocketT>::fastSendMessage(
+    bytesConstRef header, Payloads payloads, uint32_t seq, Options options)
 {
     if (!active())
     {
@@ -1333,10 +1338,9 @@ task::Task<std::optional<FrameMeta>> BasicSession<DecoderT, SocketT>::fastSendMe
         co_return {};
     }
 
-    // Materialize the payload views once: the incoming any_view is category::input (single-pass),
-    // while the length pass below iterates the payloads. Copying the (cheap) views into a
-    // forward container makes every later pass multi-pass safe without changing the interface
-    // contract.
+    // Materialize the payload views once: the input range may be single-pass, while the length
+    // pass below iterates the payloads. Copying the (cheap) views into a forward container makes
+    // every later pass multi-pass safe without changing the interface contract.
     boost::container::small_vector<bytesConstRef, 3> payloadRefs;
     for (auto const& ref : payloads)
     {
@@ -1345,9 +1349,8 @@ task::Task<std::optional<FrameMeta>> BasicSession<DecoderT, SocketT>::fastSendMe
 
     // The frame on the wire is header + payloads, zero-copy: both stay as views into
     // caller-owned buffers that outlive this coroutine (the caller co_awaits the task).
-    ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloadViews =
-        ::ranges::views::all(payloadRefs);
-    auto view = ::ranges::views::concat(::ranges::views::single(header), std::move(payloadViews));
+    auto view = ::ranges::views::concat(
+        ::ranges::views::single(header), ::ranges::views::all(payloadRefs));
     uint32_t totalLength = header.size();
     for (auto ref : payloadRefs)
     {
@@ -1416,11 +1419,6 @@ void BasicSession<DecoderT, SocketT>::setMessageHandler(
     m_messageHandler = std::move(messageHandler);
 }
 template <FrameDecoder DecoderT, typename SocketT>
-void BasicSession<DecoderT, SocketT>::setHostInfo(P2PInfo _hostInfo)
-{
-    m_hostInfo = std::move(_hostInfo);
-}
-template <FrameDecoder DecoderT, typename SocketT>
 uint32_t BasicSession<DecoderT, SocketT>::maxReadDataSize() const
 {
     return m_maxReadDataSize;
@@ -1467,7 +1465,6 @@ BasicSessionFactory<DecoderT, SocketT>::createSession(
 {
     std::shared_ptr<BasicSession<DecoderT, SocketT>> session =
         std::make_shared<BasicSession<DecoderT, SocketT>>(_socket, _server, m_sessionRecvBufferSize);
-    session->setHostInfo(m_hostInfo);
     session->setAllowMaxMsgSize(m_allowMaxMsgSize);
     session->setMaxReadDataSize(m_maxReadDataSize);
     session->setMaxSendDataSize(m_maxSendDataSize);

@@ -10,7 +10,10 @@
 #include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libnetwork/Socket.h"
 #include "bcos-gateway/libp2p/Common.h"
+#include "bcos-gateway/libp2p/P2PIdentity.h"  // for P2PPeerIdentity
 #include "bcos-gateway/libp2p/P2PSession.h"  // for P2PSession
+#include "bcos-gateway/libnetwork/ASIOInterface.h"
+#include <openssl/x509.h>
 #include "bcos-gateway/libp2p/ServiceRouter.h"  // for Service::RouterState
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
@@ -73,12 +76,16 @@ void Service::start()
         m_run = true;
 
         auto self = std::weak_ptr<Service>(shared_from_this());
-        m_host->setConnectionHandler([self](NetworkException e, P2PInfo const& p2pInfo,
+        // the IdentityToken Host hands over is the P2PInfo that the injected P2PPeerIdentity
+        // filled during the TLS handshake (libnetwork/PeerIdentity.h); a null token means no
+        // identity was extracted — onConnect rejects it
+        m_host->setConnectionHandler([self](NetworkException e, IdentityToken const& identity,
                                          Session::Ptr session) {
             auto service = self.lock();
             if (service)
             {
-                service->onConnect(std::move(e), p2pInfo, std::move(session));
+                service->onConnect(std::move(e), P2PPeerIdentity::p2pInfoOf(identity),
+                    std::move(session));
             }
         });
         m_host->start();
@@ -162,10 +169,11 @@ void Service::heartBeat()
                        NodeIPEndpoint _endpoint) -> task::Task<void> {
             try
             {
-                auto [error, p2pInfo, session] = co_await _service->m_host->connect(_endpoint);
+                auto [error, peerIdentity, session] = co_await _service->m_host->connect(_endpoint);
                 if (session || error.errorCode() != 0)
                 {
-                    _service->onConnect(std::move(error), p2pInfo, std::move(session));
+                    _service->onConnect(std::move(error),
+                        P2PPeerIdentity::p2pInfoOf(peerIdentity), std::move(session));
                 }
             }
             catch (std::exception const& e)
@@ -237,9 +245,9 @@ void Service::updateStaticNodes(std::shared_ptr<Socket> const& _s, P2pID const& 
     }
 }
 
-void Service::onConnect(NetworkException e, P2PInfo const& p2pInfo, Session::Ptr session)
+void Service::onConnect(NetworkException e, std::shared_ptr<P2PInfo> p2pInfo, Session::Ptr session)
 {
-    P2pID p2pID = p2pInfo.rawP2pID;
+    P2pID p2pID = p2pInfo ? p2pInfo->rawP2pID : P2pID();
     std::string peer = "unknown";
     if (session)
     {
@@ -250,9 +258,23 @@ void Service::onConnect(NetworkException e, P2PInfo const& p2pInfo, Session::Ptr
     {
         SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("code", e.errorCode())
                              << LOG_KV("p2pid", printShortP2pID(p2pID))
-                             << LOG_KV("nodeName", p2pInfo.nodeName) << LOG_KV("endpoint", peer)
-                             << LOG_KV("message", e.what());
+                             << LOG_KV("nodeName", p2pInfo ? p2pInfo->nodeName : "")
+                             << LOG_KV("endpoint", peer) << LOG_KV("message", e.what());
 
+        return;
+    }
+
+    // A TLS handshake that produced no peer identity (the PeerIdentity skipped every
+    // certificate) is unusable; drop it here. (This check used to live in Host before the
+    // identity seam made the token opaque to libnetwork.)
+    if (!p2pInfo || p2pInfo->rawP2pID.empty())
+    {
+        SERVICE_LOG(WARNING) << LOG_DESC("onConnect: no peer identity, disconnect")
+                             << LOG_KV("endpoint", peer);
+        if (session)
+        {
+            session->disconnect(DisconnectReason::NullIdentity);
+        }
         return;
     }
 
@@ -269,7 +291,7 @@ void Service::onConnect(NetworkException e, P2PInfo const& p2pInfo, Session::Ptr
 
     auto p2pSession = std::make_shared<P2PSession>();
     p2pSession->setSession(session);
-    p2pSession->setP2PInfo(p2pInfo);
+    p2pSession->setP2PInfo(*p2pInfo);
     p2pSession->setService(weak_from_this());
     p2pSession->setProtocolInfo(m_localProtocol);
 
@@ -283,6 +305,17 @@ void Service::onConnect(NetworkException e, P2PInfo const& p2pInfo, Session::Ptr
             if (exception.errorCode() != 0)
             {
                 self->onMessage(exception, std::move(session), Message{}, p2pSessionWeakPtr);
+                return;
+            }
+            // Response correlation is P2P policy, so it lives here rather than in libnetwork: a
+            // response frame addressed to THIS node (or carrying no dstID, the V0 form) settles
+            // the pending request's callback; a frame addressed to another node falls through to
+            // the router like any other — a routed response must never consume a LOCAL pending
+            // callback on a seq collision.
+            if (meta.isResp && (meta.dstID.empty() || meta.dstID == self->m_nodeID ||
+                                   meta.dstID == self->m_selfInfo.p2pID))
+            {
+                session->claimResponse(exception, std::move(meta));
                 return;
             }
             Message message;
@@ -327,7 +360,7 @@ void Service::onConnect(NetworkException e, P2PInfo const& p2pInfo, Session::Ptr
     }
     SERVICE_LOG(INFO) << LOG_DESC("Connection established")
                       << LOG_KV("p2pid", printShortP2pID(p2pID))
-                      << LOG_KV("shortP2pid", printShortP2pID(p2pInfo.p2pID))
+                      << LOG_KV("shortP2pid", printShortP2pID(p2pInfo->p2pID))
                       << LOG_KV("endpoint", session->nodeIPEndpoint());
 }
 
@@ -908,8 +941,16 @@ void Service::onReceiveProtocol(
 
 void Service::updatePeerBlacklist(const std::set<std::string>& _strList, const bool _enable)
 {
-    // update the config
-    m_host->peerBlacklist().update(_strList, _enable);
+    // update the admission list (lives in the P2P identity object)
+    if (m_peerIdentity)
+    {
+        m_peerIdentity->peerBlacklist().update(_strList, _enable);
+    }
+    else
+    {
+        SERVICE_LOG(WARNING) << LOG_DESC("updatePeerBlacklist: no peer identity wired, "
+                                         "skip list update");
+    }
     // disconnect nodes in the blacklist
     if (_enable)
     {
@@ -933,8 +974,16 @@ void Service::updatePeerBlacklist(const std::set<std::string>& _strList, const b
 
 void Service::updatePeerWhitelist(const std::set<std::string>& _strList, const bool _enable)
 {
-    // update the config
-    m_host->peerWhitelist().update(_strList, _enable);
+    // update the admission list (lives in the P2P identity object)
+    if (m_peerIdentity)
+    {
+        m_peerIdentity->peerWhitelist().update(_strList, _enable);
+    }
+    else
+    {
+        SERVICE_LOG(WARNING) << LOG_DESC("updatePeerWhitelist: no peer identity wired, "
+                                         "skip list update");
+    }
     // disconnect nodes not in the whitelist
     if (_enable)
     {
@@ -969,28 +1018,6 @@ bcos::task::Task<std::optional<Message>> bcos::gateway::Service::sendMessageByNo
     }
     co_return co_await directSendMessageByNodeID(
         std::move(nodeID), header, std::move(payloads), options);
-}
-
-bcos::task::Task<std::optional<Message>> bcos::gateway::Service::directSendMessageByNodeID(
-    P2pID nodeID, Message& header, ::ranges::any_view<bytesConstRef> payloads, Options options)
-{
-    if (nodeID == id())
-    {
-        co_return {};
-    }
-
-    auto session = getP2PSessionByNodeId(nodeID);
-    if (!session || !session->active())
-    {
-        BOOST_THROW_EXCEPTION(
-            NetworkException(-1, "send message failed for no network established"));
-    }
-    if (header.seq() == 0)
-    {
-        header.setSeq(newSeq());
-    }
-
-    co_return co_await session->fastSendP2PMessage(header, std::move(payloads), options);
 }
 bool bcos::gateway::Service::active()
 {
@@ -1028,7 +1055,16 @@ void bcos::gateway::Service::setStaticNodes(const std::set<NodeIPEndpoint>& stat
 }
 bcos::gateway::P2PInfo bcos::gateway::Service::localP2pInfo()
 {
-    auto p2pInfo = m_host->p2pInfo();
+    // the identity fields come from the P2P identity object (was Host::p2pInfo before the
+    // identity seam moved P2PInfo out of libnetwork); the endpoint is transport state
+    P2PInfo p2pInfo;
+    if (m_peerIdentity && m_host && m_host->asioInterface() &&
+        m_host->asioInterface()->srvContext())
+    {
+        auto* cert = SSL_CTX_get0_certificate(m_host->asioInterface()->srvContext()->native_handle());
+        p2pInfo = m_peerIdentity->selfIdentity(cert);
+        p2pInfo.nodeIPEndpoint = NodeIPEndpoint(m_host->listenHost(), m_host->listenPort());
+    }
     p2pInfo.p2pID = m_nodeID;
     return p2pInfo;
 }
@@ -1048,6 +1084,10 @@ bcos::gateway::P2PHost::Ptr bcos::gateway::Service::host()
 void bcos::gateway::Service::setHost(P2PHost::Ptr host)
 {
     m_host = std::move(host);
+}
+void bcos::gateway::Service::setPeerIdentity(std::shared_ptr<P2PPeerIdentity> _peerIdentity)
+{
+    m_peerIdentity = std::move(_peerIdentity);
 }
 uint32_t bcos::gateway::Service::newSeq()
 {

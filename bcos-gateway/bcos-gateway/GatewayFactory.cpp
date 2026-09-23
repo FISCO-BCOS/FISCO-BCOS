@@ -15,9 +15,10 @@
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/Host.h"
-#include "bcos-gateway/libnetwork/PeerBlackWhitelist.h"
+#include "bcos-gateway/libp2p/PeerBlackWhitelist.h"
 #include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PDecoder.h"
+#include "bcos-gateway/libp2p/P2PIdentity.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
 #include "bcos-gateway/libp2p/Service.h"
@@ -691,23 +692,26 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
 
     auto nodeIDHash = _config->calculateShortNodeID(pubHex);
     P2PInfo selfInfo(nodeIDHash, pubHex);
-    // Session Factory: the gateway's wire format is the P2P one (see libp2p/P2PDecoder.h)
-    auto sessionFactory = std::make_shared<P2PSessionFactory>(selfInfo,
-        _config->sessionRecvBufferSize(), _config->allowMaxMsgSize(), _config->maxReadDataSize(),
-        _config->maxSendDataSize());
+    // Session Factory: the gateway's wire format is the P2P one (see libp2p/P2PDecoder.h).
+    auto sessionFactory = std::make_shared<P2PSessionFactory>(_config->sessionRecvBufferSize(),
+        _config->allowMaxMsgSize(), _config->maxReadDataSize(), _config->maxSendDataSize());
     // KeyFactory
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
 
     // init Host
-    auto host = std::make_shared<P2PHost>(_config->hashImpl(), asioInterface, sessionFactory);
+    auto host = std::make_shared<P2PHost>(asioInterface, sessionFactory);
     host->setHostPort(_config->listenIP(), _config->listenPort());
-    host->setSSLContextPubHandler(m_sslContextPubHandler);
-    host->setSSLContextPubHandlerWithoutExtInfo(m_sslContextPubHandlerWithoutExtInfo);
+    // Identity seam (libp2p/P2PIdentity.h): FISCO-BCOS cert → node-id extraction and cert
+    // black/white-list admission, injected into the generic Host. The identity object owns the
+    // admission lists; Service keeps a reference for config-reload updates.
+    auto peerIdentity = std::make_shared<P2PPeerIdentity>(
+        _config->hashImpl(), m_sslContextPubHandler, m_sslContextPubHandlerWithoutExtInfo);
     // init peer black/white list
-    host->setPeerBlacklist(PeerBlackWhitelist(PeerBlackWhitelist::Type::Blacklist,
+    peerIdentity->setPeerBlacklist(PeerBlackWhitelist(PeerBlackWhitelist::Type::Blacklist,
         _config->peerBlacklist(), _config->enableBlacklist()));
-    host->setPeerWhitelist(PeerBlackWhitelist(PeerBlackWhitelist::Type::Whitelist,
+    peerIdentity->setPeerWhitelist(PeerBlackWhitelist(PeerBlackWhitelist::Type::Whitelist,
         _config->peerWhitelist(), _config->enableWhitelist()));
+    host->setPeerIdentity(peerIdentity);
     host->setEnableSslVerify(_config->enableSSLVerify());
     // FIB-184: apply the configured inbound-session caps (no longer hardcoded in Host)
     host->setMaxConcurrentSessions(_config->maxConcurrentSessions());
@@ -725,6 +729,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
         enableRIPProtocol ? ioServicePool->getIOService().get() : nullptr);
 
     service->setHost(host);
+    service->setPeerIdentity(peerIdentity);
     service->setStaticNodes(_config->connectedNodes());
     service->setEnableCompress(_config->enableCompress());
 

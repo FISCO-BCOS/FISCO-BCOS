@@ -4,10 +4,9 @@
  */
 #pragma once
 
-#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/libnetwork/Common.h"
-#include "bcos-gateway/libnetwork/PeerBlackWhitelist.h"
+#include "bcos-gateway/libnetwork/PeerIdentity.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
 #include "bcos-gateway/libnetwork/Socket.h"
@@ -45,8 +44,6 @@ namespace bcos::gateway
 {
 class ASIOInterface;
 
-using x509PubHandler = std::function<bool(X509* x509, std::string& pubHex)>;
-
 // Lifetime contract: a started Host must be stopped (stop()) BEFORE its last strong reference
 // is released. The acceptLoop coroutine frame holds a strong Host reference for its whole life
 // and exits only when stop() clears m_run and cancels the acceptor, so a Host that is started
@@ -58,6 +55,8 @@ using x509PubHandler = std::function<bool(X509* x509, std::string& pubHex)>;
 // DecoderT: the wire-format decoder of the sessions this host creates (see FrameMeta.h);
 // SocketT: the socket type of those sessions (production: Socket, the default — see the forward
 // declaration in Session.h; tests instantiate fakes). The gateway instantiates Host<P2PDecoder>.
+// WHO a peer is (certificate → node identity, admission) is not Host's business either — it is
+// injected as a PeerIdentity (libnetwork/PeerIdentity.h).
 // Member definitions follow at the bottom of this header (self-contained template header).
 template <FrameDecoder DecoderT, typename SocketT>
 class Host : public std::enable_shared_from_this<Host<DecoderT, SocketT>>
@@ -67,7 +66,7 @@ public:
     Host(Host&&) = delete;
     Host& operator=(const Host&) = delete;
     Host& operator=(Host&&) = delete;
-    Host(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface,
+    Host(std::shared_ptr<ASIOInterface> _asioInterface,
         std::shared_ptr<BasicSessionFactory<DecoderT, SocketT>> _sessionFactory);
     ~Host();
 
@@ -82,16 +81,18 @@ public:
     /**
      * @brief: (coroutine) connect to the server
      * @param _nodeIPEndpoint : the endpoint of the connected server
-     * @return {error, p2pInfo, session}: on success the error code is 0 and the session is the
-     *         established peer session; on failure the session is nullptr and the error describes
-     *         the failure. A skipped connect (host not running, or the endpoint is already in the
-     *         pending list) returns a success error with a nullptr session.
+     * @return {error, peerIdentity, session}: on success the error code is 0 and the session is
+     *         the established peer session; on failure the session is nullptr and the error
+     *         describes the failure. peerIdentity is the opaque IdentityToken filled by the
+     *         injected PeerIdentity during the TLS handshake. A skipped connect (host not
+     *         running, or the endpoint is already in the pending list) returns a success error
+     *         with a nullptr session.
      * @note the caller must keep this Host alive until the returned task completes (e.g. own a
      *       shared_ptr in the awaiting coroutine frame); on success the task resumes on the
      *       connected socket's io_context thread, on failure it may resume on the resolver's
      *       thread or complete synchronously on the caller's thread.
      */
-    task::Task<std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionType>>> connect(
+    task::Task<std::tuple<NetworkException, IdentityToken, std::shared_ptr<SessionType>>> connect(
         NodeIPEndpoint _nodeIPEndpoint);
 
     bool haveNetwork() const;
@@ -99,22 +100,16 @@ public:
     std::string listenHost() const;
     void setHostPort(std::string host, uint16_t port);
 
-    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionType>)>
+    std::function<void(NetworkException, IdentityToken const&, std::shared_ptr<SessionType>)>
     connectionHandler() const;
     void setConnectionHandler(
-        std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionType>)>
+        std::function<void(NetworkException, IdentityToken const&, std::shared_ptr<SessionType>)>
             connectionHandler);
 
-    std::function<bool(X509* x509, std::string& pubHex)> sslContextPubHandler();
-
-    void setSSLContextPubHandler(
-        std::function<bool(X509* x509, std::string& pubHex)> _sslContextPubHandler);
-
-    std::function<bool(X509* x509, std::string& pubHex)>
-    sslContextPubHandlerWithoutExtInfo();
-
-    void setSSLContextPubHandlerWithoutExtInfo(
-        std::function<bool(X509* x509, std::string& pubHex)> _sslContextPubHandlerWithoutExtInfo);
+    // The identity seam (libnetwork/PeerIdentity.h): certificate → node-identity extraction and
+    // admission policy, injected by the factory (the gateway uses libp2p::P2PPeerIdentity)
+    // before start(). Fail-closed: a handshake with no identity wired in is rejected.
+    void setPeerIdentity(std::shared_ptr<PeerIdentity> _identity) { m_identity = std::move(_identity); }
 
     // host-wide response-callback manager shared by every session this host creates
     SessionCallbackManager<SessionType>& sessionCallbackManager();
@@ -125,12 +120,6 @@ public:
     // of this host (and a routed response can be claimed on a different session than the request
     // went out on), so seqs must be unique host-wide, not per-connection.
     uint32_t newSeq();
-    P2PInfo p2pInfo();
-
-    void setPeerBlacklist(PeerBlackWhitelist _peerBlacklist);
-    PeerBlackWhitelist& peerBlacklist();
-    void setPeerWhitelist(PeerBlackWhitelist _peerWhitelist);
-    PeerBlackWhitelist& peerWhitelist();
 
     // FIB-186 (vector D): run a session-teardown notification on the dedicated teardown executor
     // instead of the shared I/O pool. Teardown of established sessions (Service::onMessage's error
@@ -255,33 +244,27 @@ public:
     constexpr static uint32_t ACCEPT_RETRY_INTERVAL_MS = 200;
 
 protected:
-    /// obtain the common name from the subject:
-    /// the subject format is: /CN=xx/O=xxx/OU=xxx/ commonly
-    std::string obtainCommonNameFromSubject(std::string const& subject);
-
     /// called by 'startedWorking' to accept connections
     void startAccept(boost::system::error_code error = boost::system::error_code());
     /// functions called after openssl handshake,
     /// maily to get node id and verify whether the certificate has been expired
-    /// @return: node id of the connected peer
+    /// @param identitySlot: per-handshake opaque slot filled by the injected PeerIdentity with
+    ///        the connected peer's identity
     std::function<bool(bool, boost::asio::ssl::verify_context&)> newVerifyCallback(
-        std::shared_ptr<std::string> nodeIDOut);
-
-    /// obtain nodeInfo from given vector
-    void obtainNodeInfo(P2PInfo& info, std::string const& node_info);
+        IdentityToken identitySlot);
 
     /// server calls handshakeServer to after handshake, mainly calls
     /// RLPxHandshake to obtain informations(client version, caps, etc),start peer
     /// session and start accepting procedure repeatedly
+    /// @param peerIdentity: the opaque identity token filled during the TLS handshake
     void handshakeServer(const boost::system::error_code& error,
-        std::shared_ptr<std::string> endpointPublicKey, std::shared_ptr<SocketT> socket);
+        IdentityToken peerIdentity, std::shared_ptr<SocketT> socket);
 
-    std::shared_ptr<SessionType> startPeerSession(
-        P2PInfo const& p2pInfo, std::shared_ptr<SocketT> const& socket);
+    std::shared_ptr<SessionType> startPeerSession(std::shared_ptr<SocketT> const& socket);
 
-    std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionType>> handshakeClient(
+    std::tuple<NetworkException, IdentityToken, std::shared_ptr<SessionType>> handshakeClient(
         const boost::system::error_code& error, std::shared_ptr<SocketT> socket,
-        std::shared_ptr<std::string> endpointPublicKey, NodeIPEndpoint _nodeIPEndpoint);
+        IdentityToken peerIdentity, NodeIPEndpoint _nodeIPEndpoint);
 
     void erasePendingConns(NodeIPEndpoint const& nodeIPEndpoint);
 
@@ -301,7 +284,7 @@ private:
     // implementation detail of the member definitions below.
     task::Task<void> serverHandshake(
         std::shared_ptr<SocketT> socket, std::shared_ptr<void> handshakeGuard);
-    task::Task<std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionType>>> clientConnect(
+    task::Task<std::tuple<NetworkException, IdentityToken, std::shared_ptr<SessionType>>> clientConnect(
         std::shared_ptr<SocketT> socket, NodeIPEndpoint _nodeIPEndpoint);
 
 protected:
@@ -319,7 +302,10 @@ protected:
     // creates (sessions hold a non-owning pointer to it).
     SessionCallbackManager<SessionType> m_sessionCallbackManager;
 
-    bcos::crypto::Hash::Ptr m_hashImpl;
+    // The injected identity seam (libnetwork/PeerIdentity.h). Null until the factory wires it;
+    // the handshake paths fail closed (reject) when it is missing.
+    std::shared_ptr<PeerIdentity> m_identity;
+
     /// representing to the network state
     std::shared_ptr<ASIOInterface> m_asioInterface;
     std::shared_ptr<BasicSessionFactory<DecoderT, SocketT>> m_sessionFactory;
@@ -335,12 +321,8 @@ protected:
     // enable ssl verify or not
     bool m_enableSSLVerify = true;
 
-    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionType>)>
+    std::function<void(NetworkException, IdentityToken const&, std::shared_ptr<SessionType>)>
         m_connectionHandler;
-
-    // get the hex public key of the peer from the the SSL connection
-    std::function<bool(X509* x509, std::string& pubHex)> m_sslContextPubHandler;
-    std::function<bool(X509* x509, std::string& pubHex)> m_sslContextPubHandlerWithoutExtInfo;
 
     // Network run flag. Written by start()/stop() from the caller's thread, read as the accept
     // loop's condition on the acceptor's io_context thread (Host::acceptLoop) and by
@@ -362,14 +344,6 @@ protected:
     // satisfies it, which is exactly the case the timeout exists to diagnose.
     std::atomic<bool> m_acceptLoopStarted{false};
     std::promise<void> m_acceptLoopExit;
-
-    P2PInfo m_p2pInfo;
-
-    // Peer black/white list, disabled by default (blocks/rejects no one)
-    PeerBlackWhitelist m_peerBlacklist{
-        PeerBlackWhitelist::Type::Blacklist, std::set<std::string>{}};
-    PeerBlackWhitelist m_peerWhitelist{
-        PeerBlackWhitelist::Type::Whitelist, std::set<std::string>{}};
 
     // FIB-184: session-cap accounting.
     std::size_t m_maxConcurrentSessions{DEFAULT_MAX_CONCURRENT_SESSIONS};
@@ -407,9 +381,6 @@ protected:
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/IOServicePool.h"
 #include <bcos-task/Wait.h>
-#include <boost/algorithm/string/case_conv.hpp>
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
 #include <algorithm>
 #include <chrono>
 #include <functional>
@@ -718,13 +689,14 @@ task::Task<void> Host<DecoderT, SocketT>::serverHandshake(
                 socket->close();
             }
         });
-        /// register ssl callback to get the NodeID of peers
-        std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
-        m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
+        /// register ssl callback to get the NodeID of peers; the identity slot is created and
+        /// filled by the injected PeerIdentity — Host carries it opaquely
+        IdentityToken peerIdentity = m_identity ? m_identity->newIdentitySlot() : nullptr;
+        m_asioInterface->setVerifyCallback(socket, newVerifyCallback(peerIdentity));
         auto [handshakeError] =
             co_await m_asioInterface->awaitableHandshake(socket, ba::ssl::stream_base::server);
         handshakeTimer->cancel();
-        handshakeServer(handshakeError, endpointPublicKey, socket);
+        handshakeServer(handshakeError, peerIdentity, socket);
     }
     catch (...)
     {
@@ -740,19 +712,19 @@ task::Task<void> Host<DecoderT, SocketT>::serverHandshake(
  * @brief : functions called after openssl handshake,
  *          maily to get node id and verify whether the certificate has been
  * expired
- * @param nodeIDOut : also return value, pointer points to the node id string
+ * @param identitySlot : per-handshake opaque slot filled by the injected PeerIdentity with the
+ *  peer's identity
  * @return std::function<bool(bool, boost::asio::ssl::verify_context&)>:
  *  return true: verify success
  *  return false: verify failed
- * modifications 2019.03.20: append subject name and issuer name after nodeIDOut
- * for demand of fisco-bcos-browser
  */
 template <FrameDecoder DecoderT, typename SocketT>
 std::function<bool(bool, boost::asio::ssl::verify_context&)> Host<DecoderT, SocketT>::newVerifyCallback(
-    std::shared_ptr<std::string> nodeIDOut)
+    IdentityToken identitySlot)
 {
     auto host = std::weak_ptr<Host>(this->shared_from_this());
-    return [host, nodeIDOut](bool preverified, boost::asio::ssl::verify_context& ctx) {
+    return [host, identitySlot = std::move(identitySlot)](
+               bool preverified, boost::asio::ssl::verify_context& ctx) {
         auto hostPtr = host.lock();
         if (!hostPtr)
         {
@@ -775,73 +747,22 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host<DecoderT, Sock
                 HOST_LOG(ERROR) << LOG_DESC("Get cert failed");
                 return preverified;
             }
-            // For compatibility, p2p communication between nodes still uses the old public key
-            // analysis method
-            if (!hostPtr->sslContextPubHandler()(cert, *nodeIDOut))
+            // WHO the peer is — identity extraction and admission policy — is the injected
+            // PeerIdentity's business (the gateway wires in libp2p/P2PIdentity.h); libnetwork
+            // only runs the TLS plumbing and the generic chain policy. Fail closed when the
+            // seam was never wired.
+            if (!hostPtr->m_identity || !identitySlot)
             {
-                return preverified;
+                HOST_LOG(ERROR) << LOG_DESC("No peer identity set, reject connection");
+                return false;
+            }
+            if (hostPtr->m_identity->verifyPeer(cert, identitySlot) ==
+                PeerIdentity::Verdict::Reject)
+            {
+                return false;
             }
             ////  always return true when disable ssl, return preverified when enable ssl ///
-            int crit = 0;
-            auto* basic =
-                (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, &crit, NULL);
-            if (!basic)
-            {
-                HOST_LOG(INFO) << LOG_DESC("Get ca basic failed");
-                return preverified || (!hostPtr->m_enableSSLVerify);
-            }
-
-            /// ignore ca
-            if (basic->ca)
-            {
-                // ca or agency certificate
-                HOST_LOG(TRACE) << LOG_DESC("Ignore CA certificate");
-                BASIC_CONSTRAINTS_free(basic);
-                return preverified || (!hostPtr->m_enableSSLVerify);
-            }
-
-            BASIC_CONSTRAINTS_free(basic);
-
-            // The new public key analysis method is used for black and white lists
-            std::string nodeIDOutWithoutExtInfo;
-            if (!hostPtr->sslContextPubHandlerWithoutExtInfo()(cert, nodeIDOutWithoutExtInfo))
-            {
-                return preverified;
-            }
-            nodeIDOutWithoutExtInfo = boost::to_upper_copy(nodeIDOutWithoutExtInfo);
-
-            // If the node ID exists in the black and white lists at the same time, the black list
-            // takes precedence
-            if (hostPtr->peerBlacklist().has(nodeIDOutWithoutExtInfo))
-            {
-                HOST_LOG(INFO) << LOG_DESC("NodeID in certificate blacklist")
-                               << LOG_KV("nodeID", P2PNodeID(nodeIDOutWithoutExtInfo).abridged());
-                return false;
-            }
-
-            if (!hostPtr->peerWhitelist().has(nodeIDOutWithoutExtInfo))
-            {
-                HOST_LOG(INFO) << LOG_DESC("NodeID is not in certificate whitelist")
-                               << LOG_KV("nodeID", P2PNodeID(nodeIDOutWithoutExtInfo).abridged());
-                return false;
-            }
-
-            /// append cert-name and issuer name after node ID
-            /// get subject name
-            const char* certName = X509_NAME_oneline(X509_get_subject_name(cert), NULL, 0);
-            /// get issuer name
-            const char* issuerName = X509_NAME_oneline(X509_get_issuer_name(cert), NULL, 0);
-            /// format: {nodeID}#{issuer-name}#{cert-name}
-            nodeIDOut->append("#");
-            nodeIDOut->append(nodeIDOutWithoutExtInfo);
-            nodeIDOut->append("#");
-            nodeIDOut->append(issuerName);
-            nodeIDOut->append("#");
-            nodeIDOut->append(certName);
-            OPENSSL_free((void*)certName);
-            OPENSSL_free((void*)issuerName);
-
-            return preverified || (!hostPtr->m_enableSSLVerify);
+            return preverified || !hostPtr->m_enableSSLVerify;
         }
         catch (std::exception& e)
         {
@@ -851,137 +772,18 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host<DecoderT, Sock
     };
 }
 
-template <FrameDecoder DecoderT, typename SocketT>
-P2PInfo Host<DecoderT, SocketT>::p2pInfo()
-{
-    try
-    {
-        if (m_p2pInfo.p2pID.empty())
-        {
-            /// get certificate
-            auto* sslContext = m_asioInterface->srvContext()->native_handle();
-            X509* cert = SSL_CTX_get0_certificate(sslContext);
-
-            /// get issuer name
-            const char* issuer = X509_NAME_oneline(X509_get_issuer_name(cert), NULL, 0);
-            std::string issuerName(issuer);
-
-            /// get subject name
-            const char* subject = X509_NAME_oneline(X509_get_subject_name(cert), NULL, 0);
-            std::string subjectName(subject);
-
-            /// get p2pID
-            std::string nodeIDOut;
-            if (m_sslContextPubHandler(cert, nodeIDOut))
-            {
-                m_p2pInfo.p2pID = boost::to_upper_copy(nodeIDOut);
-                HOST_LOG(INFO) << LOG_DESC("Get node information from cert")
-                               << LOG_KV("shortP2pid", printShortP2pID(m_p2pInfo.p2pID))
-                               << LOG_KV("rawP2pID", printShortP2pID(m_p2pInfo.rawP2pID));
-            }
-
-            std::string nodeIDOutWithoutExtInfo;
-            if (m_sslContextPubHandlerWithoutExtInfo(cert, nodeIDOutWithoutExtInfo))
-            {
-                m_p2pInfo.p2pIDWithoutExtInfo = boost::to_upper_copy(nodeIDOutWithoutExtInfo);
-                HOST_LOG(INFO) << LOG_DESC("Get node information without ext info from cert")
-                               << LOG_KV("p2pid without ext info", m_p2pInfo.p2pIDWithoutExtInfo);
-            }
-
-            /// fill in the node informations
-            m_p2pInfo.agencyName = obtainCommonNameFromSubject(issuerName);
-            m_p2pInfo.nodeName = obtainCommonNameFromSubject(subjectName);
-            m_p2pInfo.nodeIPEndpoint = NodeIPEndpoint(m_listenHost, m_listenPort);
-            /// free resources
-            OPENSSL_free((void*)issuer);
-            OPENSSL_free((void*)subject);
-        }
-    }
-    catch (std::exception& e)
-    {
-        HOST_LOG(ERROR) << LOG_DESC("Get node information from cert failed.")
-                        << boost::diagnostic_information(e);
-        return m_p2pInfo;
-    }
-    return m_p2pInfo;
-}
-
-/**
- * @brief: obtain the common name from the subject of certificate
- *
- * @param subject : the subject of the certificat
- *   the subject format is: /CN=xx/O=xxx/OU=xxx/ commonly
- * @return std::string: the common name of the certificate
- */
-template <FrameDecoder DecoderT, typename SocketT>
-std::string Host<DecoderT, SocketT>::obtainCommonNameFromSubject(std::string const& subject)
-{
-    std::vector<std::string> fields;
-    boost::split(fields, subject, boost::is_any_of("/"), boost::token_compress_on);
-    for (auto field : fields)
-    {
-        std::size_t pos = field.find("CN");
-        if (pos != std::string::npos)
-        {
-            std::vector<std::string> cn_fields;
-            boost::split(cn_fields, field, boost::is_any_of("="), boost::token_compress_on);
-            /// use the whole fields as the common name
-            if (cn_fields.size() < 2)
-            {
-                return field;
-            }
-            /// return real common name
-            return cn_fields[1];
-        }
-    }
-    return subject;
-}
-
-/// obtain p2pInfo from given vector
-template <FrameDecoder DecoderT, typename SocketT>
-void Host<DecoderT, SocketT>::obtainNodeInfo(P2PInfo& info, std::string const& node_info)
-{
-    std::vector<std::string> node_info_vec;
-    boost::split(node_info_vec, node_info, boost::is_any_of("#"), boost::token_compress_on);
-    if (!node_info_vec.empty())
-    {
-        // raw p2pID
-        info.rawP2pID = node_info_vec[0];
-        bcos::crypto::HashType p2pIDHash = m_hashImpl->hash(
-            bcos::bytesConstRef((bcos::byte const*)info.rawP2pID.data(), info.rawP2pID.size()));
-        // the p2pID, hash(rawP2pID)
-        info.p2pID = std::string(p2pIDHash.begin(), p2pIDHash.end());
-    }
-    if (node_info_vec.size() > 1)
-    {
-        info.p2pIDWithoutExtInfo = node_info_vec[1];
-    }
-    if (node_info_vec.size() > 2)
-    {
-        info.agencyName = obtainCommonNameFromSubject(node_info_vec[2]);
-    }
-    if (node_info_vec.size() > 3)
-    {
-        info.nodeName = obtainCommonNameFromSubject(node_info_vec[3]);
-    }
-
-    HOST_LOG(INFO) << "obtainP2pInfo " << LOG_KV("node_info", node_info)
-                   << LOG_KV("p2pid", printShortP2pID(info.p2pID))
-                   << LOG_KV("rawP2pID", printShortP2pID(info.rawP2pID));
-}
-
 /**
  * @brief: server calls handshakeServer to after handshake
  *         mainly calls RLPxHandshake to obtain informations(client version,
  * caps, etc), start peer session and start accepting procedure repeatedly
  * @param error: error information triggered in the procedure of ssl handshake
- * @param endpointPublicKey: public key obtained from certificate during
+ * @param peerIdentity: opaque identity token filled by the injected PeerIdentity during the
  * handshake
  * @param socket: socket related to the endpoint of the connected client
  */
 template <FrameDecoder DecoderT, typename SocketT>
 void Host<DecoderT, SocketT>::handshakeServer(const boost::system::error_code& error,
-    std::shared_ptr<std::string> endpointPublicKey, std::shared_ptr<SocketT> socket)
+    IdentityToken peerIdentity, std::shared_ptr<SocketT> socket)
 {
     if (error)
     {
@@ -991,25 +793,15 @@ void Host<DecoderT, SocketT>::handshakeServer(const boost::system::error_code& e
         socket->close();
         return;
     }
-    const std::string& nodeInfo = *endpointPublicKey;
-    if (nodeInfo.empty())
-    {
-        HOST_LOG(INFO) << LOG_DESC("handshakeServer get p2pID failed")
-                       << LOG_KV("remote endpoint", socket->remoteEndpoint());
-        socket->close();
-        return;
-    }
     if (m_run)
     {
-        /// node info splitted with #
-        /// format: {nodeId}{#}{agencyName}{#}{nodeName}
-        P2PInfo info;
-        obtainNodeInfo(info, nodeInfo);
+        // NOTE: Host cannot tell whether the handshake actually produced a peer identity —
+        // the token is opaque. A handshake that extracted none (every certificate skipped by
+        // the PeerIdentity) is dropped downstream by the connection handler (Service::onConnect
+        // rejects an empty identity).
         HOST_LOG(INFO) << LOG_DESC("handshakeServer succ")
-                       << LOG_KV("remote endpoint", socket->remoteEndpoint())
-                       << LOG_KV("shortP2pid", printShortP2pID(info.p2pID))
-                       << LOG_KV("rawP2pID", printShortP2pID(info.rawP2pID));
-        auto session = startPeerSession(info, socket);
+                       << LOG_KV("remote endpoint", socket->remoteEndpoint());
+        auto session = startPeerSession(socket);
         if (!session)
         {
             return;
@@ -1018,21 +810,22 @@ void Host<DecoderT, SocketT>::handshakeServer(const boost::system::error_code& e
         // session, so deliver it to the registered connection handler — posted to the socket's
         // io_context so the handler runs off the accept path
         auto weakHost = this->weak_from_this();
-        boost::asio::post(socket->ioService(), [weakHost, session = std::move(session), info]() {
-            auto host = weakHost.lock();
-            if (!host)
-            {
-                return;
-            }
-            if (host->m_connectionHandler)
-            {
-                host->m_connectionHandler(NetworkException(0, ""), info, session);
-            }
-            else
-            {
-                HOST_LOG(WARNING) << LOG_DESC("No connectionHandler, new connection may lost");
-            }
-        });
+        boost::asio::post(socket->ioService(),
+            [weakHost, session = std::move(session), peerIdentity = std::move(peerIdentity)]() {
+                auto host = weakHost.lock();
+                if (!host)
+                {
+                    return;
+                }
+                if (host->m_connectionHandler)
+                {
+                    host->m_connectionHandler(NetworkException(0, ""), peerIdentity, session);
+                }
+                else
+                {
+                    HOST_LOG(WARNING) << LOG_DESC("No connectionHandler, new connection may lost");
+                }
+            });
     }
 }
 
@@ -1132,21 +925,13 @@ bool Host<DecoderT, SocketT>::tryAcquireConnectionToken()
 }
 
 /**
- * @brief: start peer sessions after handshake succeed(called by
- * RLPxHandshake), mainly include four functions:
- *         1. disconnect connecting host with invalid capability
- *         2. modify m_peers && disconnect already-connected session
- *         3. modify m_sessions and m_staticNodes
- *         4. start new session (session->start())
- * @param _pub: node id of the connecting client
- * @param _rlp: informations obtained from the client-peer during handshake
- *              now include protocolVersion, clientVersion, caps and
- * listenPort
- * @param _s : connected socket(used to init session object)
+ * @brief: start a peer session after the handshake succeeded: enforce the FIB-184 session
+ *         caps, create the session via the factory and bind its slot-release guard
+ * @param socket : connected socket(used to init session object)
  */
 template <FrameDecoder DecoderT, typename SocketT>
 std::shared_ptr<typename Host<DecoderT, SocketT>::SessionType> Host<DecoderT, SocketT>::startPeerSession(
-    P2PInfo const& p2pInfo, std::shared_ptr<SocketT> const& socket)
+    std::shared_ptr<SocketT> const& socket)
 {
     auto weakHost = this->weak_from_this();
 
@@ -1172,9 +957,7 @@ std::shared_ptr<typename Host<DecoderT, SocketT>::SessionType> Host<DecoderT, So
         std::make_shared<detail::SessionSlotGuard<Host>>(weakHost, remoteAddress));
 
     HOST_LOG(INFO) << LOG_DESC("startPeerSession, Remote=") << socket->remoteEndpoint()
-                   << LOG_KV("local endpoint", socket->localEndpoint())
-                   << LOG_KV("shortP2pid", printShortP2pID(p2pInfo.p2pID))
-                   << LOG_KV("rawP2pID", printShortP2pID(p2pInfo.rawP2pID));
+                   << LOG_KV("local endpoint", socket->localEndpoint());
     return session;
 }
 
@@ -1202,12 +985,13 @@ void Host<DecoderT, SocketT>::start()
  * @param _nodeIPEndpoint : the endpoint of the connected server
  */
 template <FrameDecoder DecoderT, typename SocketT>
-task::Task<std::tuple<NetworkException, P2PInfo, std::shared_ptr<typename Host<DecoderT, SocketT>::SessionType>>>
+task::Task<std::tuple<NetworkException, IdentityToken, std::shared_ptr<typename Host<DecoderT, SocketT>::SessionType>>>
 Host<DecoderT, SocketT>::connect(NodeIPEndpoint _nodeIPEndpoint)
 {
     if (!m_run)
     {
-        co_return std::make_tuple(NetworkException(0, ""), P2PInfo{}, std::shared_ptr<SessionType>());
+        co_return std::make_tuple(
+            NetworkException(0, ""), IdentityToken(), std::shared_ptr<SessionType>());
     }
     HOST_LOG(INFO) << LOG_DESC("Connecting to node") << LOG_KV("endpoint", _nodeIPEndpoint);
     {
@@ -1218,7 +1002,7 @@ Host<DecoderT, SocketT>::connect(NodeIPEndpoint _nodeIPEndpoint)
             BCOS_LOG(TRACE) << LOG_DESC("connected node is in the pending list")
                             << LOG_KV("endpoint", _nodeIPEndpoint);
             co_return std::make_tuple(
-                NetworkException(0, ""), P2PInfo{}, std::shared_ptr<SessionType>());
+                NetworkException(0, ""), IdentityToken(), std::shared_ptr<SessionType>());
         }
     }
 
@@ -1227,7 +1011,7 @@ Host<DecoderT, SocketT>::connect(NodeIPEndpoint _nodeIPEndpoint)
 }
 
 template <FrameDecoder DecoderT, typename SocketT>
-task::Task<std::tuple<NetworkException, P2PInfo, std::shared_ptr<typename Host<DecoderT, SocketT>::SessionType>>>
+task::Task<std::tuple<NetworkException, IdentityToken, std::shared_ptr<typename Host<DecoderT, SocketT>::SessionType>>>
 Host<DecoderT, SocketT>::clientConnect(std::shared_ptr<SocketT> socket, NodeIPEndpoint _nodeIPEndpoint)
 {
     auto self = this->shared_from_this();
@@ -1275,13 +1059,14 @@ Host<DecoderT, SocketT>::clientConnect(std::shared_ptr<SocketT> socket, NodeIPEn
                 socket->close();
                 connectTimer->cancel();
             });
-            co_return std::make_tuple(NetworkException(ConnectError, "Connect failed"), P2PInfo{},
-                std::shared_ptr<SessionType>());
+            co_return std::make_tuple(NetworkException(ConnectError, "Connect failed"),
+                IdentityToken(), std::shared_ptr<SessionType>());
         }
         insertPendingConns(_nodeIPEndpoint);
-        /// get the public key of the server during handshake
-        std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
-        m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
+        /// get the public key of the server during handshake; the identity slot is created and
+        /// filled by the injected PeerIdentity — Host carries it opaquely
+        IdentityToken peerIdentity = m_identity ? m_identity->newIdentitySlot() : nullptr;
+        m_asioInterface->setVerifyCallback(socket, newVerifyCallback(peerIdentity));
         /// call handshakeClient after handshake succeed
         auto [handshakeError] =
             co_await m_asioInterface->awaitableHandshake(socket, ba::ssl::stream_base::client);
@@ -1291,7 +1076,7 @@ Host<DecoderT, SocketT>::clientConnect(std::shared_ptr<SocketT> socket, NodeIPEn
         // erasePendingConns(_nodeIPEndpoint) — both would be moved-from here had they been moved
         // into the call.
         co_return handshakeClient(
-            handshakeError, socket, std::move(endpointPublicKey), _nodeIPEndpoint);
+            handshakeError, socket, std::move(peerIdentity), _nodeIPEndpoint);
     }
     catch (...)
     {
@@ -1300,7 +1085,7 @@ Host<DecoderT, SocketT>::clientConnect(std::shared_ptr<SocketT> socket, NodeIPEn
                         << LOG_KV("endpoint", _nodeIPEndpoint)
                         << LOG_KV("what", boost::current_exception_diagnostic_information());
         // Total completion for the awaiting caller: an exception between insertPendingConns() and
-        // handshakeClient() (bad_alloc on endpointPublicKey, setVerifyCallback, or an initiation
+        // handshakeClient() (bad_alloc on peerIdentity, setVerifyCallback, or an initiation
         // failure rethrown by await_resume) would otherwise leak the pending-connection entry —
         // permanently blocking every future reconnect to this peer — and orphan the caller's
         // co_await. Settle the operation exactly like the error paths do: erase the entry, close
@@ -1310,8 +1095,8 @@ Host<DecoderT, SocketT>::clientConnect(std::shared_ptr<SocketT> socket, NodeIPEn
         // from here would race the connect timer's handler ("Shared objects: Unsafe").
         erasePendingConns(_nodeIPEndpoint);
         boost::asio::post(socket->ioService(), [socket]() { socket->close(); });
-        co_return std::make_tuple(NetworkException(ConnectError, "Connect failed"), P2PInfo{},
-            std::shared_ptr<SessionType>());
+        co_return std::make_tuple(NetworkException(ConnectError, "Connect failed"),
+            IdentityToken(), std::shared_ptr<SessionType>());
     }
 }
 
@@ -1319,14 +1104,14 @@ Host<DecoderT, SocketT>::clientConnect(std::shared_ptr<SocketT> socket, NodeIPEn
  * @brief : start RLPxHandshake procedure after ssl handshake succeed
  * @param error: error returned by ssl handshake
  * @param socket : ssl socket
- * @param endpointPublicKey: public key of the server obtained from the
- * certificate
+ * @param peerIdentity: opaque identity token filled by the injected PeerIdentity from the
+ * server's certificate during the handshake
  * @param _nodeIPEndpoint : endpoint of the server to connect
  */
 template <FrameDecoder DecoderT, typename SocketT>
-std::tuple<NetworkException, P2PInfo, std::shared_ptr<typename Host<DecoderT, SocketT>::SessionType>>
+std::tuple<NetworkException, IdentityToken, std::shared_ptr<typename Host<DecoderT, SocketT>::SessionType>>
 Host<DecoderT, SocketT>::handshakeClient(const boost::system::error_code& error,
-    std::shared_ptr<SocketT> socket, std::shared_ptr<std::string> endpointPublicKey,
+    std::shared_ptr<SocketT> socket, IdentityToken peerIdentity,
     NodeIPEndpoint _nodeIPEndpoint)
 {
     erasePendingConns(_nodeIPEndpoint);
@@ -1340,34 +1125,28 @@ Host<DecoderT, SocketT>::handshakeClient(const boost::system::error_code& error,
         {
             socket->close();
         }
-        return std::make_tuple(NetworkException(ConnectError, "Handshake failed"), P2PInfo{},
-            std::shared_ptr<SessionType>());
-    }
-    const std::string& nodeInfo = *endpointPublicKey;
-    if (nodeInfo.empty())
-    {
-        HOST_LOG(WARNING) << LOG_DESC("handshakeClient get p2pID failed")
-                          << LOG_KV("local endpoint", socket->localEndpoint());
-        socket->close();
-        return std::make_tuple(NetworkException(ConnectError, "Handshake failed"), P2PInfo{},
+        return std::make_tuple(NetworkException(ConnectError, "Handshake failed"), IdentityToken{},
             std::shared_ptr<SessionType>());
     }
 
+    // NOTE: Host cannot tell whether the handshake actually produced a peer identity — the
+    // token is opaque. A handshake that extracted none (every certificate skipped by the
+    // PeerIdentity) is dropped downstream by the caller (Service::onConnect rejects an empty
+    // identity).
     if (m_run)
     {
-        P2PInfo info;
-        obtainNodeInfo(info, nodeInfo);
         HOST_LOG(INFO) << LOG_DESC("handshakeClient succ")
                        << LOG_KV("local endpoint", socket->localEndpoint());
-        auto session = startPeerSession(info, socket);
+        auto session = startPeerSession(socket);
         if (!session)
         {
-            return std::make_tuple(NetworkException(ConnectError, "Session cap reached"), P2PInfo{},
-                std::shared_ptr<SessionType>());
+            return std::make_tuple(NetworkException(ConnectError, "Session cap reached"),
+                IdentityToken{}, std::shared_ptr<SessionType>());
         }
-        return std::make_tuple(NetworkException(0, ""), std::move(info), std::move(session));
+        return std::make_tuple(
+            NetworkException(0, ""), std::move(peerIdentity), std::move(session));
     }
-    return std::make_tuple(NetworkException(0, ""), P2PInfo{}, std::shared_ptr<SessionType>());
+    return std::make_tuple(NetworkException(0, ""), IdentityToken{}, std::shared_ptr<SessionType>());
 }
 
 /// stop the network and worker thread
@@ -1447,11 +1226,9 @@ void Host<DecoderT, SocketT>::stop()
 }
 
 template <FrameDecoder DecoderT, typename SocketT>
-Host<DecoderT, SocketT>::Host(bcos::crypto::Hash::Ptr _hash,
-    std::shared_ptr<ASIOInterface> _asioInterface,
+Host<DecoderT, SocketT>::Host(std::shared_ptr<ASIOInterface> _asioInterface,
     std::shared_ptr<BasicSessionFactory<DecoderT, SocketT>> _sessionFactory)
-  : m_hashImpl(std::move(_hash)),
-    m_asioInterface(std::move(_asioInterface)),
+  : m_asioInterface(std::move(_asioInterface)),
     m_sessionFactory(std::move(_sessionFactory))
 {
     // FIB-186 (vector D): a single dedicated thread for session-teardown notifications, off the
@@ -1518,7 +1295,7 @@ void Host<DecoderT, SocketT>::setHostPort(std::string host, uint16_t port)
 
 template <FrameDecoder DecoderT, typename SocketT>
 std::function<void(
-    NetworkException, P2PInfo const&, std::shared_ptr<typename Host<DecoderT, SocketT>::SessionType>)>
+    NetworkException, IdentityToken const&, std::shared_ptr<typename Host<DecoderT, SocketT>::SessionType>)>
 Host<DecoderT, SocketT>::connectionHandler() const
 {
     return m_connectionHandler;
@@ -1526,37 +1303,10 @@ Host<DecoderT, SocketT>::connectionHandler() const
 
 template <FrameDecoder DecoderT, typename SocketT>
 void Host<DecoderT, SocketT>::setConnectionHandler(
-    std::function<void(NetworkException, P2PInfo const&,
+    std::function<void(NetworkException, IdentityToken const&,
         std::shared_ptr<typename Host<DecoderT, SocketT>::SessionType>)> connectionHandler)
 {
     m_connectionHandler = std::move(connectionHandler);
-}
-
-template <FrameDecoder DecoderT, typename SocketT>
-std::function<bool(X509* x509, std::string& pubHex)> Host<DecoderT, SocketT>::sslContextPubHandler()
-{
-    return m_sslContextPubHandler;
-}
-
-template <FrameDecoder DecoderT, typename SocketT>
-void Host<DecoderT, SocketT>::setSSLContextPubHandler(
-    std::function<bool(X509* x509, std::string& pubHex)> _sslContextPubHandler)
-{
-    m_sslContextPubHandler = std::move(_sslContextPubHandler);
-}
-
-template <FrameDecoder DecoderT, typename SocketT>
-std::function<bool(X509* x509, std::string& pubHex)>
-Host<DecoderT, SocketT>::sslContextPubHandlerWithoutExtInfo()
-{
-    return m_sslContextPubHandlerWithoutExtInfo;
-}
-
-template <FrameDecoder DecoderT, typename SocketT>
-void Host<DecoderT, SocketT>::setSSLContextPubHandlerWithoutExtInfo(
-    std::function<bool(X509* x509, std::string& pubHex)> _sslContextPubHandlerWithoutExtInfo)
-{
-    m_sslContextPubHandlerWithoutExtInfo = std::move(_sslContextPubHandlerWithoutExtInfo);
 }
 
 template <FrameDecoder DecoderT, typename SocketT>
@@ -1582,30 +1332,6 @@ template <FrameDecoder DecoderT, typename SocketT>
 uint32_t Host<DecoderT, SocketT>::newSeq()
 {
     return ++m_seq;
-}
-
-template <FrameDecoder DecoderT, typename SocketT>
-void Host<DecoderT, SocketT>::setPeerBlacklist(PeerBlackWhitelist _peerBlacklist)
-{
-    m_peerBlacklist = std::move(_peerBlacklist);
-}
-
-template <FrameDecoder DecoderT, typename SocketT>
-PeerBlackWhitelist& Host<DecoderT, SocketT>::peerBlacklist()
-{
-    return m_peerBlacklist;
-}
-
-template <FrameDecoder DecoderT, typename SocketT>
-void Host<DecoderT, SocketT>::setPeerWhitelist(PeerBlackWhitelist _peerWhitelist)
-{
-    m_peerWhitelist = std::move(_peerWhitelist);
-}
-
-template <FrameDecoder DecoderT, typename SocketT>
-PeerBlackWhitelist& Host<DecoderT, SocketT>::peerWhitelist()
-{
-    return m_peerWhitelist;
 }
 
 template <FrameDecoder DecoderT, typename SocketT>

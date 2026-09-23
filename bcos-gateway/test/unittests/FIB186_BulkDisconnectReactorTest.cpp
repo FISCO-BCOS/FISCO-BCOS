@@ -114,9 +114,8 @@ private:
 class FakeHost_Reactor : public bcos::gateway::Host<P2PDecoder, FakeSocket_Reactor>
 {
 public:
-    FakeHost_Reactor(bcos::crypto::Hash::Ptr hash, std::shared_ptr<ASIOInterface> asioInterface)
-      : Host<P2PDecoder, FakeSocket_Reactor>(
-            std::move(hash), std::move(asioInterface), nullptr)
+    FakeHost_Reactor(std::shared_ptr<ASIOInterface> asioInterface)
+      : Host<P2PDecoder, FakeSocket_Reactor>(std::move(asioInterface), nullptr)
     {
         this->m_run = true;
     }
@@ -141,9 +140,8 @@ BOOST_AUTO_TEST_CASE(TeardownFloodMustNotStarveMessageDelivery)
     // The reactor width is pinned by FakeASIO_Reactor's own IOServicePool(2) rather than by a
     // process-global TBB control, so "the flood would swamp the delivery reactor if it landed
     // there" is deterministic and independent of the host core count.
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeAsio = std::make_shared<FakeASIO_Reactor>();
-    auto fakeHost = std::make_shared<FakeHost_Reactor>(hashImpl, fakeAsio);
+    auto fakeHost = std::make_shared<FakeHost_Reactor>(fakeAsio);
 
     auto probe = std::make_shared<ReactorProbe>();
 

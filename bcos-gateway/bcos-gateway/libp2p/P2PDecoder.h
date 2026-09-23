@@ -82,8 +82,8 @@ public:
         meta.isResp = (ext & bcos::protocol::MessageExtFieldFlag::RESPONSE) != 0;
 
         // Extended header (version > V0): ttl(2) + srcP2PNodeID + dstP2PNodeID. Only the
-        // destination id is needed at the session layer, for the routed-message bypass in
-        // BasicSession::onMessage; the full parse happens later in Message::decode.
+        // destination id is lifted into the frame metadata — the message handler uses it to tell
+        // local delivery from forwarding; the full parse happens later in Message::decode.
         if (version > static_cast<uint16_t>(bcos::protocol::ProtocolVersion::V0))
         {
             uint32_t offset = Message::MESSAGE_HEADER_LENGTH + 2;  // skip ttl

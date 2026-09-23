@@ -143,11 +143,10 @@ private:
 class FakeHost_Lifetime : public bcos::gateway::Host<P2PDecoder, FakeSocket_Lifetime>
 {
 public:
-    FakeHost_Lifetime(bcos::crypto::Hash::Ptr hash,
-        std::shared_ptr<ASIOInterface> asioInterface,
+    FakeHost_Lifetime(std::shared_ptr<ASIOInterface> asioInterface,
         std::shared_ptr<BasicSessionFactory<P2PDecoder, FakeSocket_Lifetime>> sessionFactory)
       : Host<P2PDecoder, FakeSocket_Lifetime>(
-            std::move(hash), std::move(asioInterface), std::move(sessionFactory))
+            std::move(asioInterface), std::move(sessionFactory))
     {
         this->m_run = true;
     }
@@ -165,10 +164,9 @@ using Session_Lifetime = BasicSession<P2PDecoder, FakeSocket_Lifetime>;
 // async_read_some writing into a freed recv buffer.
 BOOST_AUTO_TEST_CASE(InFlightReadKeepsSessionAlive)
 {
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_Lifetime>();
     auto fakeAsio = std::make_shared<FakeASIO_Lifetime>();
-    auto fakeHost = std::make_shared<FakeHost_Lifetime>(hashImpl, fakeAsio, nullptr);
+    auto fakeHost = std::make_shared<FakeHost_Lifetime>(fakeAsio, nullptr);
 
     std::weak_ptr<Session_Lifetime> weakSession;
     {
@@ -235,10 +233,9 @@ BOOST_AUTO_TEST_CASE(InFlightReadKeepsSessionAlive)
 // test deliberately never runs the socket's io_context, mirroring the joined-thread state.
 BOOST_AUTO_TEST_CASE(DropClosesSocketInlineWhenNetworkDown)
 {
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_Lifetime>();
     auto fakeAsio = std::make_shared<FakeASIO_Lifetime>();
-    auto fakeHost = std::make_shared<FakeHost_Lifetime>(hashImpl, fakeAsio, nullptr);
+    auto fakeHost = std::make_shared<FakeHost_Lifetime>(fakeAsio, nullptr);
 
     auto session = std::make_shared<Session_Lifetime>(fakeSocket, *fakeHost, 1024, true);
     session->setMessageHandler([](NetworkException, Session_Lifetime::Ptr, FrameMeta) {});

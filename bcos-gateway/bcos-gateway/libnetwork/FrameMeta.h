@@ -16,9 +16,10 @@
  * @file FrameMeta.h
  * @brief FrameMeta + the FrameDecoder concept: the seam that keeps libnetwork a generic
  *        framed-transport engine. The session layer never sees a concrete message type —
- *        inbound, a Decoder splits the byte stream into owned frames plus the metadata the
- *        session needs for dispatch (response correlation, routed-message bypass); outbound,
- *        the caller hands over an already-encoded header and payload views.
+ *        inbound, a Decoder splits the byte stream into owned frames plus opaque metadata
+ *        (sequence number, response flag, destination id) that the session delivers,
+ *        uninterpreted, to the message handler; outbound, the caller hands over an
+ *        already-encoded header and payload views.
  */
 #pragma once
 
@@ -44,10 +45,12 @@ struct FrameMeta
     uint32_t declaredLength = 0;  ///< Status::NeedMoreData: the frame length the header declares
     uint32_t consumed = 0;        ///< Status::Frame: bytes consumed from the read buffer
     uint32_t seq = 0;             ///< response-correlation key
-    bool isResp = false;          ///< response frames claim a pending callback instead of the handler
-    /// Routing bypass: non-empty and not this node → delivered straight to the message handler,
-    /// skipping the response-callback claim (a routed response must never consume a LOCAL pending
-    /// callback on a seq collision). Empty for protocols without multi-hop routing.
+    bool isResp = false;          ///< response flag, opaque to libnetwork: the message handler
+                                  ///< decides whether it settles a pending request
+                                  ///< (BasicSession::claimResponse)
+    /// Destination node id, opaque to libnetwork (empty for protocols without multi-hop
+    /// routing): the message handler uses it to tell local delivery from forwarding — a routed
+    /// response must never claim a LOCAL pending callback on a seq collision.
     std::string dstID;
     /// The complete wire frame (header + payload), owned. Owned because dispatch is asynchronous
     /// (posted to another executor) while the read buffer is reused and resized.
@@ -59,8 +62,7 @@ struct FrameMeta
 /// frames, per-connection compression contexts) keep their state in the instance.
 ///
 /// tryDecode MUST be bounds-safe on arbitrary attacker-controlled input: it runs before any
-/// other validation, and its result gates the response-callback claim. It must not throw —
-/// return ProtocolError instead.
+/// other validation on the receive path. It must not throw — return ProtocolError instead.
 template <typename D>
 concept FrameDecoder = std::default_initializable<D> && requires(D& decoder, const bytesConstRef& buffer) {
     { decoder.tryDecode(buffer) } -> std::same_as<FrameMeta>;

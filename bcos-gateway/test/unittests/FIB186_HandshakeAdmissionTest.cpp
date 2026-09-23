@@ -53,8 +53,8 @@ public:
 class FakeHost_FIB186 : public bcos::gateway::Host<P2PDecoder>
 {
 public:
-    FakeHost_FIB186(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface)
-      : Host<P2PDecoder>(std::move(_hash), std::move(_asioInterface), nullptr)
+    explicit FakeHost_FIB186(std::shared_ptr<ASIOInterface> _asioInterface)
+      : Host<P2PDecoder>(std::move(_asioInterface), nullptr)
     {
         this->m_run = true;
     }
@@ -68,9 +68,8 @@ public:
 // one IP to a handful while risking false rejections of legitimate peers behind a shared egress IP.
 BOOST_AUTO_TEST_CASE(GlobalHandshakeCapIsEnforced)
 {
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeAsio = std::make_shared<FakeASIO_FIB186>();
-    auto fakeHost = std::make_shared<FakeHost_FIB186>(hashImpl, fakeAsio);
+    auto fakeHost = std::make_shared<FakeHost_FIB186>(fakeAsio);
 
     fakeHost->setMaxPendingHandshakes(2);
 
@@ -90,9 +89,8 @@ BOOST_AUTO_TEST_CASE(GlobalHandshakeCapIsEnforced)
 // frame destruction, which is what this drives).
 BOOST_AUTO_TEST_CASE(GuardReleasesSlotExactlyOnce)
 {
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeAsio = std::make_shared<FakeASIO_FIB186>();
-    auto fakeHost = std::make_shared<FakeHost_FIB186>(hashImpl, fakeAsio);
+    auto fakeHost = std::make_shared<FakeHost_FIB186>(fakeAsio);
 
     {
         // Acquiring through the real factory reserves the slot and binds it to the guard.
@@ -119,9 +117,8 @@ BOOST_AUTO_TEST_CASE(GuardReleasesSlotExactlyOnce)
 // FIB-186: releasing an unknown / already-drained address never underflows the global counter.
 BOOST_AUTO_TEST_CASE(ReleaseNeverUnderflows)
 {
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeAsio = std::make_shared<FakeASIO_FIB186>();
-    auto fakeHost = std::make_shared<FakeHost_FIB186>(hashImpl, fakeAsio);
+    auto fakeHost = std::make_shared<FakeHost_FIB186>(fakeAsio);
 
     fakeHost->callReleaseHandshakeSlot();  // release with no slot held
     BOOST_CHECK_EQUAL(fakeHost->currentPendingHandshakes(), 0u);
@@ -138,9 +135,8 @@ BOOST_AUTO_TEST_CASE(ReleaseNeverUnderflows)
 // not.
 BOOST_AUTO_TEST_CASE(ConnectionRateLimitBoundsAcceptBurst)
 {
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeAsio = std::make_shared<FakeASIO_FIB186>();
-    auto fakeHost = std::make_shared<FakeHost_FIB186>(hashImpl, fakeAsio);
+    auto fakeHost = std::make_shared<FakeHost_FIB186>(fakeAsio);
 
     // unlimited: every accept passes
     fakeHost->setMaxConnectionsPerSecond(0);

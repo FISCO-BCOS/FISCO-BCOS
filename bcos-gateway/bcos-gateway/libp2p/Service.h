@@ -28,6 +28,7 @@ namespace bcos::gateway
 class Gateway;
 class RouterTableFactory;
 class RouterTableInterface;
+class P2PPeerIdentity;
 
 class Service : public std::enable_shared_from_this<Service>
 {
@@ -51,8 +52,9 @@ public:
     virtual bool active();
     virtual P2pID id() const;
 
+    // p2pInfo is null when the handshake produced no peer identity; onConnect drops such peers
     virtual void onConnect(
-        NetworkException e, P2PInfo const& p2pInfo, Session::Ptr session);
+        NetworkException e, std::shared_ptr<P2PInfo> p2pInfo, Session::Ptr session);
     virtual void onDisconnect(NetworkException e, P2PSession::Ptr p2pSession);
     virtual void onMessage(NetworkException e, Session::Ptr session, Message message,
         std::weak_ptr<P2PSession> p2pSessionWeakPtr);
@@ -100,6 +102,10 @@ public:
 
     P2PHost::Ptr host();
     virtual void setHost(P2PHost::Ptr host);
+
+    // The cert black/white lists live in the P2P identity object (libp2p/P2PIdentity.h), not in
+    // the generic Host; updatePeerBlacklist/updatePeerWhitelist update them through this pointer.
+    void setPeerIdentity(std::shared_ptr<P2PPeerIdentity> _peerIdentity);
 
     virtual uint32_t newSeq();
 
@@ -168,14 +174,19 @@ private:
 
     // (coroutine) forward a received message to its destination through the router table. Unlike
     // sendMessageByNodeID it does NOT rewrite srcP2PNodeID: the original sender must be preserved
-    // so the final destination can reply to it directly.
-    task::Task<std::optional<Message>> forwardMessageByNodeID(P2pID nodeID, Message& message,
-        ::ranges::any_view<bytesConstRef> payloads, Options options = Options());
+    // so the final destination can reply to it directly. Defined at the bottom of
+    // ServiceRouter.h: the body touches the RouterState pimpl, which only that header completes.
+    template <::ranges::input_range Payloads>
+        requires std::convertible_to<::ranges::range_reference_t<Payloads>, bytesConstRef>
+    task::Task<std::optional<Message>> forwardMessageByNodeID(
+        P2pID nodeID, Message& message, Payloads payloads, Options options = Options());
     // the direct-send path shared by the router-less sendMessageByNodeID and by the router
     // module's last-hop/forward fallback (split out so the fallback cannot recurse back into the
-    // router path)
-    task::Task<std::optional<Message>> directSendMessageByNodeID(P2pID nodeID, Message& message,
-        ::ranges::any_view<bytesConstRef> payloads, Options options = Options());
+    // router path). Defined at the bottom of this header, next to fastSendP2PMessage.
+    template <::ranges::input_range Payloads>
+        requires std::convertible_to<::ranges::range_reference_t<Payloads>, bytesConstRef>
+    task::Task<std::optional<Message>> directSendMessageByNodeID(
+        P2pID nodeID, Message& message, Payloads payloads, Options options = Options());
 
     void onReceivePeersRouterTable(
         NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message);
@@ -212,6 +223,9 @@ protected:
     std::map<NodeIPEndpoint, P2pID> m_staticNodes;
     std::shared_mutex x_nodes;
     P2PHost::Ptr m_host;
+    // cert black/white-list admission lists (owned by the P2P identity object); null in tests
+    // that never wire one — updatePeerBlacklist/Whitelist then skip the list update
+    std::shared_ptr<P2PPeerIdentity> m_peerIdentity;
 
     // long p2pID to session
     SessionsType m_sessions;
@@ -241,4 +255,176 @@ protected:
     bool m_enableCompress = false;
 };
 
+}  // namespace bcos::gateway
+
+// ---------------------------------------------------------------------------
+// Template send-path definitions. They live at the bottom of this header — after both Service
+// and P2PSession are complete — because P2PSession::fastSendP2PMessage drives Service
+// (compression policy, resetP2pID, the pre-send rate-limit hook) while Service's own send
+// template drives P2PSession; the declarations sit in the classes' headers. The payloads
+// parameters are plain ranges (no any_view type erasure): every call site instantiates the view
+// type it actually has, and the per-element access compiles down to direct reads.
+// (Service::forwardMessageByNodeID is defined at the bottom of ServiceRouter.h instead — its
+// body touches the RouterState pimpl, which only that header completes.)
+#include "bcos-gateway/libp2p/Common.h"
+#include "bcos-utilities/ZstdCompress.h"
+#include <boost/container/small_vector.hpp>
+#include <boost/throw_exception.hpp>
+#include <range/v3/view/all.hpp>
+#include <range/v3/view/single.hpp>
+#include <utility>
+
+namespace bcos::gateway
+{
+template <::ranges::input_range Payloads>
+    requires std::convertible_to<::ranges::range_reference_t<Payloads>, bytesConstRef>
+task::Task<std::optional<Message>> P2PSession::fastSendP2PMessage(
+    Message& message, Payloads payloads, Options options)
+{
+    if (!m_session || !m_session->active()) [[unlikely]]
+    {
+        P2PSESSION_LOG(WARNING) << LOG_DESC("fastSendP2PMessage failed for invalid session")
+                                << LOG_KV("from", message.printSrcP2PNodeID())
+                                << LOG_KV("dst", message.printDstP2PNodeID());
+        co_return {};
+    }
+    auto service = m_service.lock();
+    if (!service)
+    {
+        co_return {};
+    }
+    // reset message using original long nodeID or short nodeID according to the protocol version
+    // Note: m_protocolInfo be setted when create P2PSession
+    service->resetP2pID(message, (bcos::protocol::ProtocolVersion)m_protocolInfo->version());
+    // the p2p message version must match the negotiated protocol version of this session: the
+    // encodeHeaderImpl of Message only encodes the ttl/src/dst routing fields for version > V0,
+    // so sending with the default (V0) version would silently drop the V2 routing fields and break
+    // multi-hop forwarding through the router tables
+    message.setVersion((uint16_t)m_protocolInfo->version());
+
+    // Materialize the payload views once: the input range may be single-pass, while the
+    // size/join passes below each iterate the payloads.
+    boost::container::small_vector<bytesConstRef, 3> payloadRefs;
+    uint32_t payloadSize = 0;
+    for (auto const& payloadRef : payloads)
+    {
+        payloadSize += payloadRef.size();
+        payloadRefs.push_back(payloadRef);
+    }
+
+    // The wire-format work that used to live in libnetwork's Session (compression, header
+    // encoding, length stamping, outgoing rate limiting) is collected here: the session now
+    // sends pure bytes and knows nothing about the P2P message format. Compression and its
+    // COMPRESS flag are decided per send and applied to the wire header only — the caller's
+    // message is never mutated, so a shared message (broadcast fan-out) cannot leak the flag
+    // to a peer that receives an uncompressed frame.
+    bcos::bytes joinedPayload;
+    bcos::bytes compressedPayload;
+    uint16_t wireExt = message.ext();
+    bool hasWirePayloadOverride = false;
+    bytesConstRef wirePayloadOverride;
+    if (service->enableCompress() && message.compressionSupported() &&
+        payloadSize > c_compressThreshold)
+    {
+        joinedPayload.reserve(payloadSize);
+        for (auto const& payloadRef : payloadRefs)
+        {
+            joinedPayload.insert(joinedPayload.end(), payloadRef.begin(), payloadRef.end());
+        }
+        if (ZstdCompress::compress(
+                ref(joinedPayload), compressedPayload, (int)c_zstdCompressLevel))
+        {
+            wireExt |= Message::COMPRESS_EXT_FLAG;
+            wirePayloadOverride = ref(std::as_const(compressedPayload));
+        }
+        else
+        {
+            wirePayloadOverride = ref(std::as_const(joinedPayload));
+        }
+        hasWirePayloadOverride = true;
+    }
+
+    bytes headerBuffer;
+    if (!message.encodeHeaderWithExt(headerBuffer, wireExt)) [[unlikely]]
+    {
+        // e.g. P2PMessageOptions::encode failed (empty/oversized src/dst IDs). Sending a frame
+        // whose header claims "has options" while the options are missing would make the peer
+        // drop the connection instead of the message.
+        BOOST_THROW_EXCEPTION(NetworkException(-1, "encode header failed"));
+    }
+    uint32_t totalLength = static_cast<uint32_t>(headerBuffer.size()) +
+                           (hasWirePayloadOverride ? wirePayloadOverride.size() : payloadSize);
+    Message::stampLength(headerBuffer, totalLength);
+
+    // The fast path must honour the same pre-send (outgoing rate-limit) check that the callback
+    // path (asyncSendMessage) enforces; judged on the ACTUAL wire bytes (a zero-copy message does
+    // not carry its payload, so message.length() alone would under-count the outgoing traffic).
+    // A rejection surfaces as a thrown NetworkException (e.g. OutBWOverflow / InQPSOverflow) so
+    // coroutine retry loops can stop.
+    if (auto result = service->onBeforeMessage(*m_session, message, totalLength))
+    {
+        const auto& error = result.value();
+        BOOST_THROW_EXCEPTION(NetworkException((int64_t)error.errorCode(), error.errorMessage()));
+    }
+
+    if (c_fileLogLevel <= LogLevel::TRACE)
+    {
+        P2PSESSION_LOG(TRACE) << LOG_DESC("P2PSession fastSendP2PMessage")
+                              << LOG_KV("endpoint", m_session->nodeIPEndpoint())
+                              << LOG_KV("seq", message.seq())
+                              << LOG_KV("packetType", message.packetType())
+                              << LOG_KV("ext", wireExt) << LOG_KV("wireLength", totalLength);
+    }
+
+    // headerBuffer / joinedPayload / compressedPayload live in this coroutine frame; the co_await
+    // keeps them alive until the session's write no longer references the views.
+    std::optional<FrameMeta> response;
+    if (hasWirePayloadOverride)
+    {
+        response = co_await m_session->fastSendMessage(
+            ref(headerBuffer), ::ranges::views::single(wirePayloadOverride), message.seq(),
+            options);
+    }
+    else
+    {
+        response = co_await m_session->fastSendMessage(
+            ref(headerBuffer), ::ranges::views::all(payloadRefs), message.seq(), options);
+    }
+    if (!response)
+    {
+        co_return std::nullopt;
+    }
+    // Decode the response frame back into a Message (the session delivers raw frames now).
+    Message respMessage;
+    if (respMessage.decode(ref(response->frame)) < 0) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(NetworkException(
+            P2PExceptionType::ProtocolError, "ProtocolError(decode response message error)"));
+    }
+    co_return respMessage;
+}
+
+template <::ranges::input_range Payloads>
+    requires std::convertible_to<::ranges::range_reference_t<Payloads>, bytesConstRef>
+task::Task<std::optional<Message>> Service::directSendMessageByNodeID(
+    P2pID nodeID, Message& header, Payloads payloads, Options options)
+{
+    if (nodeID == id())
+    {
+        co_return {};
+    }
+
+    auto session = getP2PSessionByNodeId(nodeID);
+    if (!session || !session->active())
+    {
+        BOOST_THROW_EXCEPTION(
+            NetworkException(-1, "send message failed for no network established"));
+    }
+    if (header.seq() == 0)
+    {
+        header.setSeq(newSeq());
+    }
+
+    co_return co_await session->fastSendP2PMessage(header, std::move(payloads), options);
+}
 }  // namespace bcos::gateway

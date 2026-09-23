@@ -146,10 +146,9 @@ template <typename SocketT>
 class FakeHost_Debounce : public bcos::gateway::Host<P2PDecoder, SocketT>
 {
 public:
-    FakeHost_Debounce(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface,
+    FakeHost_Debounce(std::shared_ptr<ASIOInterface> _asioInterface,
         std::shared_ptr<BasicSessionFactory<P2PDecoder, SocketT>> _sessionFactory)
-      : Host<P2PDecoder, SocketT>(
-            std::move(_hash), std::move(_asioInterface), std::move(_sessionFactory))
+      : Host<P2PDecoder, SocketT>(std::move(_asioInterface), std::move(_sessionFactory))
     {
         this->m_run = true;
     }
@@ -225,7 +224,6 @@ std::vector<uint8_t> readExactFrame(bi::tcp::socket& _peer)
 
 BOOST_AUTO_TEST_CASE(MembershipChurnCoalescesRouterSeqToOneLeadingEdgeBroadcast)
 {
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeAsio = std::make_shared<FakeASIO_Debounce>();
 
     auto io = std::make_shared<ba::io_context>();
@@ -281,7 +279,7 @@ BOOST_AUTO_TEST_CASE(MembershipChurnCoalescesRouterSeqToOneLeadingEdgeBroadcast)
     // subclass-based test created by overriding the broadcast away.
     boost::asio::io_context routerIo;
     auto service = std::make_shared<RouterProbeService>(selfInfo, factory, &routerIo);
-    service->setHost(std::make_shared<FakeHost_Debounce<Socket>>(hashImpl, fakeAsio, nullptr));
+    service->setHost(std::make_shared<FakeHost_Debounce<Socket>>(fakeAsio, nullptr));
 
     // One real neighbour session ("recorder") over the loopback: the leading-edge broadcast must
     // reach it exactly once. The FakeHosts must outlive the sessions (Session holds a
@@ -290,7 +288,7 @@ BOOST_AUTO_TEST_CASE(MembershipChurnCoalescesRouterSeqToOneLeadingEdgeBroadcast)
     std::vector<std::shared_ptr<FakeHost_Debounce<Socket>>> hosts;
     std::shared_ptr<Session> recorderSession;
     {
-        auto host = std::make_shared<FakeHost_Debounce<Socket>>(hashImpl, fakeAsio, nullptr);
+        auto host = std::make_shared<FakeHost_Debounce<Socket>>(fakeAsio, nullptr);
         hosts.push_back(host);
         recorderSession = std::make_shared<Session>(
             makeLoopbackSocketDebounce(io, sslContext, std::move(client)), *host, 2, true);

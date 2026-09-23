@@ -347,45 +347,6 @@ bool Service::eraseSeq(std::string const& _p2pNodeID)
     return true;
 }
 
-bcos::task::Task<std::optional<Message>> bcos::gateway::Service::forwardMessageByNodeID(
-    P2pID nodeID, Message& header, ::ranges::any_view<bytesConstRef> payloads, Options options)
-{
-    // Forwarding path (a message received from another node being relayed): unlike
-    // sendMessageByNodeID it must NOT rewrite srcP2PNodeID — the original sender is preserved so
-    // the final destination can reply directly to it. Only the next hop is resolved here.
-    auto dstNodeID = header.dstP2PNodeID();
-    // without nextHop: maybe network unreachable or with distance equal to 1
-    auto nextHop = m_router->routerTable->getNextHop(dstNodeID);
-    if (nextHop.empty())
-    {
-        if (c_fileLogLevel == TRACE) [[unlikely]]
-        {
-            SERVICE2_LOG(TRACE) << LOG_BADGE("forwardMessageByNodeID")
-                                << LOG_DESC("sendMessage to dstNode")
-                                << LOG_KV("from", header.printSrcP2PNodeID())
-                                << LOG_KV("to", header.printDstP2PNodeID())
-                                << LOG_KV("type", header.packetType())
-                                << LOG_KV("seq", header.seq())
-                                << LOG_KV("rsp", header.isRespPacket());
-        }
-        co_return co_await directSendMessageByNodeID(
-            std::move(dstNodeID), header, std::move(payloads), options);
-    }
-    // with nextHop, send the message to nextHop
-    if (c_fileLogLevel == TRACE) [[unlikely]]
-    {
-        SERVICE2_LOG(TRACE) << LOG_BADGE("forwardMessageByNodeID")
-                            << LOG_DESC("forwardMessage to nextHop")
-                            << LOG_KV("from", header.printSrcP2PNodeID())
-                            << LOG_KV("to", header.printDstP2PNodeID())
-                            << LOG_KV("nextHop", printShortP2pID(nextHop))
-                            << LOG_KV("type", header.packetType()) << LOG_KV("seq", header.seq())
-                            << LOG_KV("rsp", header.isRespPacket());
-    }
-    co_return co_await directSendMessageByNodeID(
-        std::move(nextHop), header, std::move(payloads), options);
-}
-
 std::string bcos::gateway::Service::getShortP2pID(std::string const& rawP2pID) const
 {
     if (!m_router)
