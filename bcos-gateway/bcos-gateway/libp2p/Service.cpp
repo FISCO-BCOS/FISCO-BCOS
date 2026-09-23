@@ -170,7 +170,7 @@ void Service::heartBeat()
             try
             {
                 auto [error, peerIdentity, session] = co_await _service->m_host->connect(_endpoint);
-                if (session || error.errorCode() != 0)
+                if (session || errorCodeOf(error) != 0)
                 {
                     _service->onConnect(std::move(error),
                         P2PPeerIdentity::p2pInfoOf(peerIdentity), std::move(session));
@@ -254,9 +254,9 @@ void Service::onConnect(NetworkException e, std::shared_ptr<P2PInfo> p2pInfo, Se
         peer = session->nodeIPEndpoint().address() + ":" +
                std::to_string(session->nodeIPEndpoint().port());
     }
-    if (e.errorCode())
+    if (errorCodeOf(e))
     {
-        SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("code", e.errorCode())
+        SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("code", errorCodeOf(e))
                              << LOG_KV("p2pid", printShortP2pID(p2pID))
                              << LOG_KV("nodeName", p2pInfo ? p2pInfo->nodeName : "")
                              << LOG_KV("endpoint", peer) << LOG_KV("message", e.what());
@@ -302,7 +302,7 @@ void Service::onConnect(NetworkException e, std::shared_ptr<P2PInfo> p2pInfo, Se
     p2pSession->session()->setMessageHandler(
         [self = shared_from_this(), p2pSessionWeakPtr](
             NetworkException exception, Session::Ptr session, FrameMeta meta) {
-            if (exception.errorCode() != 0)
+            if (errorCodeOf(exception) != 0)
             {
                 self->onMessage(exception, std::move(session), Message{}, p2pSessionWeakPtr);
                 return;
@@ -321,7 +321,7 @@ void Service::onConnect(NetworkException e, std::shared_ptr<P2PInfo> p2pInfo, Se
             Message message;
             if (message.decode(ref(meta.frame)) < 0) [[unlikely]]
             {
-                self->onMessage(NetworkException(P2PExceptionType::ProtocolError,
+                self->onMessage(makeNetworkException(P2PExceptionType::ProtocolError,
                                     "ProtocolError(decode message error)"),
                     std::move(session), Message{}, p2pSessionWeakPtr);
                 return;
@@ -383,11 +383,11 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
         }
         callDeleteSessionHandlers(p2pSession);
 
-        if (e.errorCode() == P2PExceptionType::DuplicateSession)
+        if (errorCodeOf(e) == P2PExceptionType::DuplicateSession)
         {
             return;
         }
-        SERVICE_LOG(INFO) << LOG_DESC("onDisconnect") << LOG_KV("code", e.errorCode())
+        SERVICE_LOG(INFO) << LOG_DESC("onDisconnect") << LOG_KV("code", errorCodeOf(e))
                           << LOG_KV("what", boost::diagnostic_information(e));
         std::unique_lock nodeLock(x_nodes);
         for (auto& it : m_staticNodes)
@@ -506,9 +506,9 @@ void Service::onMessage(NetworkException e, Session::Ptr session, Message messag
     // translated back to the raw ids before the common handling below
     if (m_router)
     {
-        if (e.errorCode() != 0)
+        if (errorCodeOf(e) != 0)
         {
-            SERVICE2_LOG(WARNING) << LOG_BADGE("onMessage") << LOG_KV("code", e.errorCode())
+            SERVICE2_LOG(WARNING) << LOG_BADGE("onMessage") << LOG_KV("code", errorCodeOf(e))
                                   << LOG_KV("msg", e.what());
             // fall through to the common handling below to trigger disconnectHandler
         }
@@ -608,11 +608,11 @@ void Service::onMessage(NetworkException e, Session::Ptr session, Message messag
             nodeIPEndpoint = session->nodeIPEndpoint();
         }
 
-        if (e.errorCode())
+        if (errorCodeOf(e))
         {
             SERVICE_LOG(INFO) << LOG_DESC("disconnect failed in P2PSession")
                               << LOG_KV("p2pid", printShortP2pID(p2pID))
-                              << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("code", e.errorCode())
+                              << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("code", errorCodeOf(e))
                               << LOG_KV("message", e.what());
 
             if (p2pSession)
@@ -826,7 +826,7 @@ bcos::task::Task<void> Service::sendMessageByNodeIDs(uint16_t _type,
             {
                 SERVICE_LOG(INFO) << LOG_DESC("sendMessageByNodeIDs send failed")
                                   << LOG_KV("nodeid", printShortP2pID(_nodeID))
-                                  << LOG_KV("code", e.errorCode()) << LOG_KV("message", e.what());
+                                  << LOG_KV("code", errorCodeOf(e)) << LOG_KV("message", e.what());
             }
             catch (std::exception const& e)
             {
@@ -894,10 +894,10 @@ void Service::Service::onReceiveHeartbeat(
 void Service::onReceiveProtocol(
     NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message)
 {
-    if (_error.errorCode())
+    if (errorCodeOf(_error))
     {
         SERVICE_LOG(WARNING) << LOG_DESC("onReceiveProtocol failed")
-                             << LOG_KV("code", _error.errorCode()) << LOG_KV("msg", _error.what())
+                             << LOG_KV("code", errorCodeOf(_error)) << LOG_KV("msg", _error.what())
                              << LOG_KV("peer", _session ? _session->printP2pID() : "unknown");
         return;
     }

@@ -899,7 +899,7 @@ void BasicSession<DecoderT, SocketT>::drop(DisconnectReason _reason)
         }
         postCallback(std::move(callback->callback),
             "response callback exception during drop",
-            NetworkException(P2PExceptionType::NetworkTimeout, "NetworkTimeout"), std::nullopt);
+            makeNetworkException(P2PExceptionType::NetworkTimeout, "NetworkTimeout"), std::nullopt);
     }
 
     int errorCode = P2PExceptionType::Disconnect;
@@ -936,7 +936,7 @@ void BasicSession<DecoderT, SocketT>::drop(DisconnectReason _reason)
                 return;
             }
             session->m_messageHandler(
-                NetworkException(errorCode, errorMsg), session, FrameMeta{});
+                makeNetworkException(errorCode, errorMsg), session, FrameMeta{});
         };
         // Once haveNetwork() is false the Host is on its way out, so run the notification inline
         // rather than handing it to an executor whose remaining lifetime we do not control here.
@@ -1197,7 +1197,7 @@ void BasicSession<DecoderT, SocketT>::onTimeout(const boost::system::error_code&
         return;
     }
     removePendingResponseSeq(seq);
-    NetworkException e(P2PExceptionType::NetworkTimeout, "NetworkTimeout");
+    NetworkException e = makeNetworkException(P2PExceptionType::NetworkTimeout, "NetworkTimeout");
     callback->callback(e, std::nullopt);
 }
 
@@ -1300,14 +1300,14 @@ task::Task<std::optional<FrameMeta>> fastSendMessageWithResponse(
                 claimed->timeoutHandler->cancel();
             }
             task::GetResultAwaitable<NetworkException, std::optional<FrameMeta>>::complete(result,
-                NetworkException(ec.value(), ec.message()), std::nullopt);
+                makeNetworkException(ec.value(), ec.message()), std::nullopt);
         }
     }
 
     // wait for ack / timeout / drop-flush (returns inline when already completed above)
     auto [exception, response] =
         co_await task::GetResultAwaitable<NetworkException, std::optional<FrameMeta>>(result);
-    if (exception.errorCode() != 0)
+    if (errorCodeOf(exception) != 0)
     {
         BOOST_THROW_EXCEPTION(exception);
     }
@@ -1320,7 +1320,7 @@ task::Task<void> fastSendMessageWithoutResponse(auto& session, View view)
     auto errorCode = co_await detail::send(session, ::ranges::views::all(view));
     if (errorCode.failed())
     {
-        BOOST_THROW_EXCEPTION(NetworkException(errorCode.value(), errorCode.message()));
+        BOOST_THROW_EXCEPTION(makeNetworkException(errorCode.value(), errorCode.message()));
     }
     co_return;
 }
@@ -1362,7 +1362,7 @@ task::Task<std::optional<FrameMeta>> BasicSession<DecoderT, SocketT>::fastSendMe
         SESSION_LOG(WARNING) << LOG_BADGE("fastSendMessage") << LOG_DESC("msg size overflow")
                              << LOG_KV("msgSize", totalLength)
                              << LOG_KV("allowMaxMsgSize", allowMaxMsgSize());
-        BOOST_THROW_EXCEPTION(NetworkException(-1, "Msg size overflow"));
+        BOOST_THROW_EXCEPTION(makeNetworkException(-1, "Msg size overflow"));
     }
 
     if (c_fileLogLevel <= LogLevel::TRACE)

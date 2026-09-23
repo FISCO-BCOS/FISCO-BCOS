@@ -345,7 +345,7 @@ BOOST_AUTO_TEST_CASE(MembershipChurnCoalescesRouterSeqToOneLeadingEdgeBroadcast)
         Message message;
         message.setPacketType(GatewayMessageType::RouterTableResponse);
         message.setPayload(std::move(tableData));
-        handler(NetworkException(0, ""), std::make_shared<FakeSessionVB>(senderID),
+        handler(NetworkException{}, std::make_shared<FakeSessionVB>(senderID),
             std::move(message));
     }
 
@@ -376,7 +376,7 @@ BOOST_AUTO_TEST_CASE(MembershipChurnCoalescesRouterSeqToOneLeadingEdgeBroadcast)
         auto socket = std::make_shared<Socket>(io, sslContext, NodeIPEndpoint());
         peer->setSession(std::make_shared<Session>(socket, *hosts.front(), 2, true));
         service->addSession(peer->p2pID(), peer);
-        service->onDisconnect(NetworkException(0, ""), std::move(peer));
+        service->onDisconnect(NetworkException{}, std::move(peer));
     }
     // A per-erase broadcast regression would put more RouterTableSyncSeq frames on the wire
     // immediately; give any (bogus) fan-out a grace window to land before asserting.

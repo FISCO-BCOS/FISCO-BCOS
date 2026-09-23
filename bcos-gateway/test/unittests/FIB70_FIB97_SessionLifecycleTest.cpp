@@ -402,14 +402,14 @@ BOOST_AUTO_TEST_CASE(DropFlushesOnlyOwnPendingResponseCallbacks)
         std::atomic<int> firedB{0};
         auto handlerA = std::make_shared<ResponseCallback<Session_FIB>>();
         handlerA->callback = [&firedA](NetworkException e, std::optional<FrameMeta>) {
-            if (e.errorCode() != 0)
+            if (errorCodeOf(e) != 0)
             {
                 ++firedA;
             }
         };
         auto handlerB = std::make_shared<ResponseCallback<Session_FIB>>();
         handlerB->callback = [&firedB](NetworkException e, std::optional<FrameMeta>) {
-            if (e.errorCode() != 0)
+            if (errorCodeOf(e) != 0)
             {
                 ++firedB;
             }
@@ -493,7 +493,7 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
             }
             catch (NetworkException const& e)
             {
-                _errorCode.store(e.errorCode());
+                _errorCode.store(errorCodeOf(e));
                 ++_completions;
             }
         }(session, std::move(headerBuffer), payload, seq, completions, errorCode));

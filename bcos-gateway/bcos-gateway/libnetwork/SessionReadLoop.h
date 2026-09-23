@@ -118,7 +118,7 @@ task::Task<void> BasicSession<DecoderT, SocketT>::readLoop()
                     meta = m_decoder.tryDecode(readBuffer);
                     if (meta.status == FrameMeta::Status::Frame)
                     {
-                        NetworkException e(P2PExceptionType::Success, "Success");
+                        NetworkException e;
                         onMessage(e, std::move(meta));
                         recvBuffer.onRead(meta.consumed);
                     }
@@ -133,7 +133,7 @@ task::Task<void> BasicSession<DecoderT, SocketT>::readLoop()
                                 << LOG_KV("msgSize", length)
                                 << LOG_KV("allowMaxMsgSize", allowMaxMsgSize());
 
-                            onMessage(NetworkException(P2PExceptionType::ProtocolError,
+                            onMessage(makeNetworkException(P2PExceptionType::ProtocolError,
                                           "ProtocolError(msg overflow)"),
                                 FrameMeta{});
                             drop(UserReason);
@@ -174,7 +174,7 @@ task::Task<void> BasicSession<DecoderT, SocketT>::readLoop()
                     else
                     {
                         SESSION_LOG(ERROR) << LOG_BADGE("readLoop") << LOG_DESC("decode frame error");
-                        onMessage(NetworkException(P2PExceptionType::ProtocolError,
+                        onMessage(makeNetworkException(P2PExceptionType::ProtocolError,
                                       "ProtocolError(decode frame error)"),
                             FrameMeta{});
                         drop(UserReason);
@@ -185,7 +185,7 @@ task::Task<void> BasicSession<DecoderT, SocketT>::readLoop()
                 {
                     SESSION_LOG(ERROR) << LOG_DESC("Decode frame exception")
                                        << LOG_KV("message", boost::diagnostic_information(e));
-                    onMessage(NetworkException(P2PExceptionType::ProtocolError,
+                    onMessage(makeNetworkException(P2PExceptionType::ProtocolError,
                                   "ProtocolError(decode frame exception)"),
                         FrameMeta{});
                     drop(UserReason);
@@ -196,7 +196,7 @@ task::Task<void> BasicSession<DecoderT, SocketT>::readLoop()
                     SESSION_LOG(ERROR)
                         << LOG_DESC("Decode frame exception")
                         << LOG_KV("message", boost::current_exception_diagnostic_information());
-                    onMessage(NetworkException(P2PExceptionType::ProtocolError,
+                    onMessage(makeNetworkException(P2PExceptionType::ProtocolError,
                                   "ProtocolError(decode frame exception)"),
                         FrameMeta{});
                     drop(UserReason);

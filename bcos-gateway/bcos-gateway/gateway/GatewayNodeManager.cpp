@@ -165,10 +165,10 @@ bool GatewayNodeManager::unregisterNode(const std::string& _groupID, std::string
 void GatewayNodeManager::onReceiveStatusSeq(
     NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg)
 {
-    if (_e.errorCode())
+    if (errorCodeOf(_e))
     {
         NODE_MANAGER_LOG(WARNING) << LOG_DESC("onReceiveStatusSeq error")
-                                  << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
+                                  << LOG_KV("code", errorCodeOf(_e)) << LOG_KV("msg", _e.what());
         return;
     }
     // FIB-183: onReceiveStatusSeq reads a 4-byte sequence via *(uint32_t*)payload().data()
@@ -209,7 +209,7 @@ void GatewayNodeManager::onReceiveStatusSeq(
         {
             NODE_MANAGER_LOG(INFO)
                 << LOG_DESC("onReceiveStatusSeq send RequestNodeStatus failed")
-                << LOG_KV("nodeid", printShortP2pID(_nodeID)) << LOG_KV("code", e.errorCode())
+                << LOG_KV("nodeid", printShortP2pID(_nodeID)) << LOG_KV("code", errorCodeOf(e))
                 << LOG_KV("msg", e.what());
         }
     }(p2pInterface, GatewayMessageType::RequestNodeStatus, from));
@@ -227,10 +227,10 @@ bool GatewayNodeManager::statusChanged(std::string const& _p2pNodeID, uint32_t _
 void GatewayNodeManager::onReceiveNodeStatus(
     NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg)
 {
-    if (_e.errorCode())
+    if (errorCodeOf(_e))
     {
         NODE_MANAGER_LOG(WARNING) << LOG_DESC("onReceiveNodeStatus error")
-                                  << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
+                                  << LOG_KV("code", errorCodeOf(_e)) << LOG_KV("msg", _e.what());
         return;
     }
     auto gatewayNodeStatus = m_gatewayNodeStatusFactory->createGatewayNodeStatus();
@@ -275,10 +275,10 @@ bool GatewayNodeManager::updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _gro
 void GatewayNodeManager::onRequestNodeStatus(
     NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg)
 {
-    if (_e.errorCode())
+    if (errorCodeOf(_e))
     {
         NODE_MANAGER_LOG(WARNING) << LOG_DESC("onRequestNodeStatus network error")
-                                  << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
+                                  << LOG_KV("code", errorCodeOf(_e)) << LOG_KV("msg", _e.what());
         return;
     }
     auto const& from = (!_msg.srcP2PNodeID().empty()) ? _msg.srcP2PNodeID() : _session->p2pID();
@@ -310,7 +310,7 @@ void GatewayNodeManager::onRequestNodeStatus(
         {
             NODE_MANAGER_LOG(INFO)
                 << LOG_DESC("onRequestNodeStatus send ResponseNodeStatus failed")
-                << LOG_KV("nodeid", printShortP2pID(_nodeID)) << LOG_KV("code", e.errorCode())
+                << LOG_KV("nodeid", printShortP2pID(_nodeID)) << LOG_KV("code", errorCodeOf(e))
                 << LOG_KV("msg", e.what());
         }
     }(p2pInterface, GatewayMessageType::ResponseNodeStatus, from, std::move(*nodeStatusData)));

@@ -829,8 +829,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         service->registerDisconnectHandler(
             [gatewayNodeManagerWeakPtr, serviceWeakPtr = std::weak_ptr<Service>(service)](
                 NetworkException e, P2PSession::Ptr p2pSession) {
-                if (e.errorCode() == P2PExceptionType::DuplicateSession ||
-                    e.errorCode() == P2PExceptionType::Success)
+                if (errorCodeOf(e) == P2PExceptionType::DuplicateSession ||
+                    errorCodeOf(e) == P2PExceptionType::Success)
                 {
                     return;
                 }
@@ -1025,8 +1025,8 @@ void GatewayFactory::registerAMOPHandlers(
     // register disconnect handler
     service->registerDisconnectHandler(
         [weakTopicManager](NetworkException e, P2PSession::Ptr p2pSession) {
-            if (e.errorCode() == P2PExceptionType::DuplicateSession ||
-                e.errorCode() == P2PExceptionType::Success)
+            if (errorCodeOf(e) == P2PExceptionType::DuplicateSession ||
+                errorCodeOf(e) == P2PExceptionType::Success)
             {
                 return;
             }

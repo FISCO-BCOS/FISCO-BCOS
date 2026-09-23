@@ -158,7 +158,7 @@ BOOST_AUTO_TEST_CASE(test_allCandidatesFail)
             attempts->push_back(nodeID);
             if (!nodeID.empty())
             {
-                throw NetworkException(-1, "mock network failure");
+                throw makeNetworkException(-1, "mock network failure");
             }
             co_return std::nullopt;
         });
@@ -202,7 +202,7 @@ BOOST_AUTO_TEST_CASE(test_retrySucceedsAfterNetworkException)
                 attempts->push_back(nodeID);
                 if (attempts->size() == 1)
                 {
-                    throw NetworkException(-1, "mock network failure");
+                    throw makeNetworkException(-1, "mock network failure");
                 }
                 co_return buildP2PResponse(expectedPayload);
             });

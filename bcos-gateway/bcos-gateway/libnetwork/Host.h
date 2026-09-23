@@ -819,7 +819,7 @@ void Host<DecoderT, SocketT>::handshakeServer(const boost::system::error_code& e
                 }
                 if (host->m_connectionHandler)
                 {
-                    host->m_connectionHandler(NetworkException(0, ""), peerIdentity, session);
+                    host->m_connectionHandler(NetworkException{}, peerIdentity, session);
                 }
                 else
                 {
@@ -991,7 +991,7 @@ Host<DecoderT, SocketT>::connect(NodeIPEndpoint _nodeIPEndpoint)
     if (!m_run)
     {
         co_return std::make_tuple(
-            NetworkException(0, ""), IdentityToken(), std::shared_ptr<SessionType>());
+            NetworkException{}, IdentityToken(), std::shared_ptr<SessionType>());
     }
     HOST_LOG(INFO) << LOG_DESC("Connecting to node") << LOG_KV("endpoint", _nodeIPEndpoint);
     {
@@ -1002,7 +1002,7 @@ Host<DecoderT, SocketT>::connect(NodeIPEndpoint _nodeIPEndpoint)
             BCOS_LOG(TRACE) << LOG_DESC("connected node is in the pending list")
                             << LOG_KV("endpoint", _nodeIPEndpoint);
             co_return std::make_tuple(
-                NetworkException(0, ""), IdentityToken(), std::shared_ptr<SessionType>());
+                NetworkException{}, IdentityToken(), std::shared_ptr<SessionType>());
         }
     }
 
@@ -1059,7 +1059,7 @@ Host<DecoderT, SocketT>::clientConnect(std::shared_ptr<SocketT> socket, NodeIPEn
                 socket->close();
                 connectTimer->cancel();
             });
-            co_return std::make_tuple(NetworkException(ConnectError, "Connect failed"),
+            co_return std::make_tuple(makeNetworkException(ConnectError, "Connect failed"),
                 IdentityToken(), std::shared_ptr<SessionType>());
         }
         insertPendingConns(_nodeIPEndpoint);
@@ -1095,7 +1095,7 @@ Host<DecoderT, SocketT>::clientConnect(std::shared_ptr<SocketT> socket, NodeIPEn
         // from here would race the connect timer's handler ("Shared objects: Unsafe").
         erasePendingConns(_nodeIPEndpoint);
         boost::asio::post(socket->ioService(), [socket]() { socket->close(); });
-        co_return std::make_tuple(NetworkException(ConnectError, "Connect failed"),
+        co_return std::make_tuple(makeNetworkException(ConnectError, "Connect failed"),
             IdentityToken(), std::shared_ptr<SessionType>());
     }
 }
@@ -1125,7 +1125,7 @@ Host<DecoderT, SocketT>::handshakeClient(const boost::system::error_code& error,
         {
             socket->close();
         }
-        return std::make_tuple(NetworkException(ConnectError, "Handshake failed"), IdentityToken{},
+        return std::make_tuple(makeNetworkException(ConnectError, "Handshake failed"), IdentityToken{},
             std::shared_ptr<SessionType>());
     }
 
@@ -1140,13 +1140,13 @@ Host<DecoderT, SocketT>::handshakeClient(const boost::system::error_code& error,
         auto session = startPeerSession(socket);
         if (!session)
         {
-            return std::make_tuple(NetworkException(ConnectError, "Session cap reached"),
+            return std::make_tuple(makeNetworkException(ConnectError, "Session cap reached"),
                 IdentityToken{}, std::shared_ptr<SessionType>());
         }
         return std::make_tuple(
-            NetworkException(0, ""), std::move(peerIdentity), std::move(session));
+            NetworkException{}, std::move(peerIdentity), std::move(session));
     }
-    return std::make_tuple(NetworkException(0, ""), IdentityToken{}, std::shared_ptr<SessionType>());
+    return std::make_tuple(NetworkException{}, IdentityToken{}, std::shared_ptr<SessionType>());
 }
 
 /// stop the network and worker thread

@@ -350,7 +350,7 @@ task::Task<std::optional<Message>> P2PSession::fastSendP2PMessage(
         // e.g. P2PMessageOptions::encode failed (empty/oversized src/dst IDs). Sending a frame
         // whose header claims "has options" while the options are missing would make the peer
         // drop the connection instead of the message.
-        BOOST_THROW_EXCEPTION(NetworkException(-1, "encode header failed"));
+        BOOST_THROW_EXCEPTION(makeNetworkException(-1, "encode header failed"));
     }
     uint32_t totalLength = static_cast<uint32_t>(headerBuffer.size()) +
                            (hasWirePayloadOverride ? wirePayloadOverride.size() : payloadSize);
@@ -364,7 +364,7 @@ task::Task<std::optional<Message>> P2PSession::fastSendP2PMessage(
     if (auto result = service->onBeforeMessage(*m_session, message, totalLength))
     {
         const auto& error = result.value();
-        BOOST_THROW_EXCEPTION(NetworkException((int64_t)error.errorCode(), error.errorMessage()));
+        BOOST_THROW_EXCEPTION(makeNetworkException((int64_t)error.errorCode(), error.errorMessage()));
     }
 
     if (c_fileLogLevel <= LogLevel::TRACE)
@@ -398,7 +398,7 @@ task::Task<std::optional<Message>> P2PSession::fastSendP2PMessage(
     Message respMessage;
     if (respMessage.decode(ref(response->frame)) < 0) [[unlikely]]
     {
-        BOOST_THROW_EXCEPTION(NetworkException(
+        BOOST_THROW_EXCEPTION(makeNetworkException(
             P2PExceptionType::ProtocolError, "ProtocolError(decode response message error)"));
     }
     co_return respMessage;
@@ -418,7 +418,7 @@ task::Task<std::optional<Message>> Service::directSendMessageByNodeID(
     if (!session || !session->active())
     {
         BOOST_THROW_EXCEPTION(
-            NetworkException(-1, "send message failed for no network established"));
+            makeNetworkException(-1, "send message failed for no network established"));
     }
     if (header.seq() == 0)
     {

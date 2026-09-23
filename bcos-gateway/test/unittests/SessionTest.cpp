@@ -419,14 +419,14 @@ BOOST_AUTO_TEST_CASE(doReadTest)
                 // raw wire frames now, so decode the Message at the libp2p boundary (as
                 // Service::onConnect's handler wiring does)
                 lastReadTime = utcSteadyTime();
-                if (e.errorCode() != P2PExceptionType::Success)
+                if (errorCodeOf(e) != P2PExceptionType::Success)
                 {
-                    std::cout << "error: " << e.errorCode() << " " << e.what() << std::endl;
+                    std::cout << "error: " << errorCodeOf(e) << " " << e.what() << std::endl;
                 }
                 {
                     static bcos::SharedMutex x_mutex;
                     bcos::WriteGuard guard(x_mutex);
-                    BOOST_CHECK_EQUAL(e.errorCode(), P2PExceptionType::Success);
+                    BOOST_CHECK_EQUAL(errorCodeOf(e), P2PExceptionType::Success);
                     Message message;
                     BOOST_REQUIRE(message.decode(ref(meta.frame)) > 0);
                     BOOST_CHECK(message.lengthDirect() > 0);

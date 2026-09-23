@@ -221,12 +221,12 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
         }
         catch (NetworkException const& e)
         {
-            if (e.errorCode() == P2PExceptionType::OutBWOverflow)
+            if (errorCodeOf(e) == P2PExceptionType::OutBWOverflow)
             {
                 co_return BCOS_ERROR_PTR(
                     bcos::protocol::CommonError::GatewayBandwidthOverFlow, e.what());
             }
-            if (e.errorCode() == P2PExceptionType::InQPSOverflow)
+            if (errorCodeOf(e) == P2PExceptionType::InQPSOverflow)
             {
                 co_return BCOS_ERROR_PTR(
                     bcos::protocol::CommonError::GatewayQPSOverFlow, e.what());
@@ -234,7 +234,7 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
             GATEWAY_LOG(DEBUG) << LOG_BADGE("Gateway::sendMessageByNodeID")
                                << LOG_DESC("network callback")
                                << LOG_KV("dstP2P", printShortP2pID(p2pID))
-                               << LOG_KV("code", e.errorCode()) << LOG_KV("moduleID", _moduleID)
+                               << LOG_KV("code", errorCodeOf(e)) << LOG_KV("moduleID", _moduleID)
                                << LOG_KV("message", e.what());
             // try another gateway
         }
@@ -339,10 +339,10 @@ bcos::task::Task<Error::Ptr> Gateway::notifyGroupInfo(bcos::group::GroupInfo::Pt
 void Gateway::onReceiveP2PMessage(
     NetworkException const& _e, P2PSession::Ptr _session, Message _msg)
 {
-    if (_e.errorCode())
+    if (errorCodeOf(_e))
     {
         GATEWAY_LOG(WARNING) << LOG_DESC("onReceiveP2PMessage error")
-                             << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
+                             << LOG_KV("code", errorCodeOf(_e)) << LOG_KV("msg", _e.what());
         return;
     }
 
@@ -442,10 +442,10 @@ void Gateway::onReceiveP2PMessage(
 void Gateway::onReceiveBroadcastMessage(
     NetworkException const& _e, P2PSession::Ptr _session, Message _msg)
 {
-    if (_e.errorCode() != 0)
+    if (errorCodeOf(_e) != 0)
     {
         GATEWAY_LOG(WARNING) << LOG_DESC("onReceiveBroadcastMessage failed")
-                             << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
+                             << LOG_KV("code", errorCodeOf(_e)) << LOG_KV("msg", _e.what());
         return;
     }
 

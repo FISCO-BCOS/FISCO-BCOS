@@ -89,10 +89,10 @@ void Service::initRouter(
 void Service::onReceivePeersRouterTable(
     NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message)
 {
-    if (_error.errorCode() != 0)
+    if (errorCodeOf(_error) != 0)
     {
         SERVICE2_LOG(WARNING) << LOG_BADGE("onReceivePeersRouterTable")
-                              << LOG_KV("code", _error.errorCode()) << LOG_KV("msg", _error.what());
+                              << LOG_KV("code", errorCodeOf(_error)) << LOG_KV("msg", _error.what());
         return;
     }
     auto routerTable = m_router->routerTableFactory->createRouterTable(_message.payload());
@@ -154,10 +154,10 @@ void Service::joinRouterTable(
 void Service::onReceiveRouterTableRequest(
     NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message)
 {
-    if (_error.errorCode() != 0)
+    if (errorCodeOf(_error) != 0)
     {
         SERVICE2_LOG(WARNING) << LOG_BADGE("onReceiveRouterTableRequest")
-                              << LOG_KV("code", _error.errorCode()) << LOG_KV("msg", _error.what());
+                              << LOG_KV("code", errorCodeOf(_error)) << LOG_KV("msg", _error.what());
         return;
     }
     SERVICE2_LOG(INFO) << LOG_BADGE("onReceiveRouterTableRequest")
@@ -187,7 +187,7 @@ void Service::onReceiveRouterTableRequest(
         {
             SERVICE2_LOG(INFO)
                 << LOG_DESC("onReceiveRouterTableRequest send RouterTableResponse failed")
-                << LOG_KV("nodeid", printShortP2pID(_nodeID)) << LOG_KV("code", e.errorCode())
+                << LOG_KV("nodeid", printShortP2pID(_nodeID)) << LOG_KV("code", errorCodeOf(e))
                 << LOG_KV("msg", e.what());
         }
     }(self, GatewayMessageType::RouterTableResponse, dstP2PNodeID, std::move(*routerTableData)));
@@ -235,10 +235,10 @@ void Service::markRouterSeqChanged()
 void Service::onReceiveRouterSeq(
     NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message)
 {
-    if (_error.errorCode() != 0)
+    if (errorCodeOf(_error) != 0)
     {
         SERVICE2_LOG(WARNING) << LOG_BADGE("onReceiveRouterSeq")
-                              << LOG_KV("code", _error.errorCode())
+                              << LOG_KV("code", errorCodeOf(_error))
                               << LOG_KV("message", _error.what());
         return;
     }
@@ -281,7 +281,7 @@ void Service::onReceiveRouterSeq(
         {
             SERVICE2_LOG(INFO) << LOG_DESC("onReceiveRouterSeq send RouterTableRequest failed")
                                << LOG_KV("nodeid", printShortP2pID(_nodeID))
-                               << LOG_KV("code", e.errorCode()) << LOG_KV("msg", e.what());
+                               << LOG_KV("code", errorCodeOf(e)) << LOG_KV("msg", e.what());
         }
     }(self, GatewayMessageType::RouterTableRequest, dstP2PNodeID));
 }

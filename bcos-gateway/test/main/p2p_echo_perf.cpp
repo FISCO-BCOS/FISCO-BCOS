@@ -98,7 +98,7 @@ int main(int argc, const char** argv)
             service->registerHandlerByMsgType(
                 packageType, [reporter](NetworkException _exception,
                                  std::shared_ptr<P2PSession> _session, Message _message) {
-                    if (_exception.errorCode() != 0)
+                    if (errorCodeOf(_exception) != 0)
                     {
                         return;
                     }
@@ -198,7 +198,7 @@ int main(int argc, const char** argv)
                     }
                     catch (NetworkException const& e)
                     {
-                        std::cerr << "\t[Client] recv exception, error code: " << e.errorCode()
+                        std::cerr << "\t[Client] recv exception, error code: " << errorCodeOf(e)
                                   << " ,error message: " << e.what() << std::endl;
                     }
                 }(service, p2pID, message));

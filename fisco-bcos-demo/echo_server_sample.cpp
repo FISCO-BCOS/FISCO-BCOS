@@ -59,7 +59,7 @@ int main(int argc, char** argv)
 
     service->registerHandlerByMsgType(
         999, [](NetworkException _e, std::shared_ptr<P2PSession> _session, Message _msg) {
-            if (_e.errorCode())
+            if (errorCodeOf(_e))
             {
                 return;
             }
