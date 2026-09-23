@@ -94,7 +94,10 @@ enum class EthMethod
     txpool_status,
     txpool_content,
     eth_getProof,
-    miner_setMaxDASize
+    miner_setMaxDASize,
+    debug_dbGet,
+    debug_getRawHeader,
+    debug_executePayload
 };
 
 [[maybe_unused]] static std::string methodString(EthMethod _method)

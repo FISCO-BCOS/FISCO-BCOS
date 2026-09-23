@@ -50,6 +50,7 @@ void EndpointsMapping::addHandlers(bool enableOPEngine, bool enableMinerApi)
     }
     addNetHandlers();
     addWeb3Handlers();
+    addDebugHandlers();
     for (auto& [method, _] : m_handlers)
     {
         WEB3_LOG(INFO) << LOG_BADGE("initHandler") << LOG_KV("method", method);
@@ -159,6 +160,15 @@ void EndpointsMapping::addWeb3Handlers()
     // clang-format off
     m_handlers[methodString(EthMethod::web3_clientVersion)] = &Endpoints::clientVersion;
     m_handlers[methodString(EthMethod::web3_sha3)] = &Endpoints::sha3;
+    // clang-format on
+}
+
+void EndpointsMapping::addDebugHandlers()
+{
+    // clang-format off
+    m_handlers[methodString(EthMethod::debug_dbGet)] = &Endpoints::dbGet;
+    m_handlers[methodString(EthMethod::debug_getRawHeader)] = &Endpoints::getRawHeader;
+    m_handlers[methodString(EthMethod::debug_executePayload)] = &Endpoints::executePayload;
     // clang-format on
 }
 }  // namespace bcos::rpc
