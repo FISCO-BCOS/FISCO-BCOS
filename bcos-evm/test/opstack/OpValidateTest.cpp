@@ -434,6 +434,54 @@ BOOST_AUTO_TEST_CASE(FirstFjordBlockAlsoFallsBackToBedrockFormula)
     BOOST_CHECK_EQUAL(*p.legacy_l1_gas_used, 530u);
 }
 
+// ── 回退在 engine lane（Isthmus 存量链）上的触发面 ──────────────────────────
+// 回退分支对每条 OP 交易求值且 l1_cost 是共识状态，因此钉死它在 Isthmus 配置下的边界：
+// 只有从真实 op-geth 数据迁移、L1Block 带着非零 legacy slot（1/5/6）且 Ecotone scalar 全零
+// 的存量链才会触发；FISCO 全新部署的链 slot 5/6 为零，永不触发。
+
+// Isthmus 存量链、legacy slot 非零但 Ecotone scalar 已写入 → 不触发回退，走 Fjord 公式。
+// kLegacyEmptyTx flz=31；fee = 31 缩放后的 Fjord 成本（与 RollupCostTest 同一字节与参数）
+// 黄金值 3203000。
+BOOST_AUTO_TEST_CASE(IsthmusWithEcotoneScalarsDoesNotFallBack)
+{
+    OpFeeParams fee{};
+    fee.l1_base_fee = intx::uint256{1000000000};
+    fee.blob_base_fee = intx::uint256{10000000};
+    fee.base_fee_scalar = 2;
+    fee.blob_base_fee_scalar = 3;
+    // 迁移链残留的非零 legacy slot 不得影响分支选择。
+    fee.l1_fee_overhead = intx::uint256{50};
+    fee.l1_fee_scalar = intx::uint256{7000000};
+    test::TestState ts;
+    ts[kSenderValidate] = {
+        .nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
+    const evmc::bytes_view env = kLegacyEmptyTx;
+    const auto r = opValidate(ts, blkValidate(), baseTx(), env, isthmusConfig(), fee, 30000000);
+    BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(r));
+    const auto& p = std::get<OpTxProperties>(r);
+    BOOST_CHECK_EQUAL(p.l1_cost, 3203000_u256);
+    BOOST_CHECK(!p.legacy_l1_gas_used.has_value());
+    BOOST_CHECK_EQUAL(p.flz_len, 31u);
+}
+
+// Isthmus 存量链、legacy slot 非零且 Ecotone scalar 全零 → 触发回退，按 Bedrock legacy
+// 公式定价（与 Ecotone/Fjord 首块同一黄金值 3710000000000 / 530）。
+BOOST_AUTO_TEST_CASE(IsthmusWithZeroEcotoneScalarsFallsBack)
+{
+    test::TestState ts;
+    ts[kSenderValidate] = {
+        .nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
+    const evmc::bytes_view env = kLegacyEmptyTx;
+    const auto r =
+        opValidate(ts, blkValidate(), baseTx(), env, isthmusConfig(), legacyFee(), 30000000);
+    BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(r));
+    const auto& p = std::get<OpTxProperties>(r);
+    BOOST_CHECK_EQUAL(p.l1_cost, 3710000000000_u256);
+    BOOST_REQUIRE(p.legacy_l1_gas_used.has_value());
+    BOOST_CHECK_EQUAL(*p.legacy_l1_gas_used, 530u);
+    BOOST_CHECK_EQUAL(p.flz_len, 0u);
+}
+
 // 任一 Ecotone 参数已写入即脱离回退：Ecotone 公式照常运行并快照 ecotone_calldata_gas_used。
 // kLegacyEmptyTx 的 calldataGas = 480（30 字节全非零 → 30*16）；fee = 480*(1e9*16*2 + 0)/16e6
 // = 960000。
