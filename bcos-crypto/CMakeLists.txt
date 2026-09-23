@@ -33,11 +33,13 @@ set_target_properties(bcos-crypto PROPERTIES UNITY_BUILD "ON")
 # toolchain can actually be inspected.
 find_program(NM_EXECUTABLE nm)
 if(UNIX AND NM_EXECUTABLE)
-    get_target_property(WEDPRCRYPTO_LIB_LOC wedprcrypto::crypto IMPORTED_LOCATION)
-    get_filename_component(WEDPRCRYPTO_LIB_DIR "${WEDPRCRYPTO_LIB_LOC}" DIRECTORY)
+    # The archive directory is resolved per configuration at build time through the
+    # generator expression — a plain IMPORTED_LOCATION lookup at configure time misses
+    # imported targets that only carry per-config IMPORTED_LOCATION_<CONFIG>.
     add_custom_target(check-wedpr-secp256k1 ALL
         COMMAND ${CMAKE_COMMAND} -DBINARY_DIR=${CMAKE_BINARY_DIR}
-            "-DGENERATOR=${CMAKE_GENERATOR}" -DWEDPR_LIB_DIR=${WEDPRCRYPTO_LIB_DIR}
+            "-DGENERATOR=${CMAKE_GENERATOR}"
+            "-DWEDPR_LIB_DIR=$<TARGET_FILE_DIR:wedprcrypto::crypto>"
             -P ${CMAKE_SOURCE_DIR}/cmake/CheckWedprSecp256k1.cmake
         COMMENT "Checking the wedprcrypto link surface for bundled secp256k1")
 endif()
