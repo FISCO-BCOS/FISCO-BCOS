@@ -251,8 +251,8 @@ void ContractAuthMgrPrecompiled::resetAdmin(
             // Probe contract existence where the contract table actually lives. Binary
             // is a physical re-encoding of the Hex string (legacyAppsAccountTableName);
             // no /sys/ routing in either mode.
-            if (!_executive->storage().openTable(ledger::account::legacyAppsAccountTableName(address)))
-                [[unlikely]]
+            if (!_executive->storage().openTable(
+                    ledger::account::legacyAppsAccountTableName(address))) [[unlikely]]
             {
                 // not exist contract address
                 BOOST_THROW_EXCEPTION(

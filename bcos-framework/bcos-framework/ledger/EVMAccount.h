@@ -1,5 +1,4 @@
 #pragma once
-#include <algorithm>
 #include "bcos-concepts/ByteBuffer.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/AccountTableName.h"
@@ -11,6 +10,7 @@
 #include "bcos-utilities/Exceptions.h"
 #include <evmc/evmc.h>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
 #include <range/v3/algorithm/copy.hpp>
 
 namespace bcos::ledger::account
@@ -35,9 +35,8 @@ struct FromTableName
 constexpr bool isLowerHexAddress(std::string_view address) noexcept
 {
     return address.size() == HEX_ADDRESS_SIZE &&
-           std::all_of(address.begin(), address.end(), [](char c) {
-               return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
-           });
+           std::all_of(address.begin(), address.end(),
+               [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); });
 }
 
 namespace detail
@@ -55,7 +54,8 @@ consteval std::array<char, ADDRESS_SIZE> unhexLowerHexAddress(std::string_view h
     std::array<char, ADDRESS_SIZE> result{};
     for (size_t i = 0; i < ADDRESS_SIZE; ++i)
     {
-        result[i] = static_cast<char>(lowerHexNibble(hex[i * 2]) << 4 | lowerHexNibble(hex[i * 2 + 1]));
+        result[i] =
+            static_cast<char>(lowerHexNibble(hex[i * 2]) << 4 | lowerHexNibble(hex[i * 2 + 1]));
     }
     return result;
 }
@@ -101,8 +101,7 @@ static_assert(c_systemTxsBinaryAddress.size() == 8);
 static_assert(std::ranges::is_sorted(c_systemTxsBinaryAddress, std::ranges::less{},
     [](const auto& entry) { return std::string_view{entry.data(), entry.size()}; }));
 // Spot-check the decoder: 0x...1000 has byte[18] == 0x10.
-static_assert(
-    unhexLowerHexAddress(precompiled::SYS_CONFIG_ADDRESS)[ADDRESS_SIZE - 2] == '\x10');
+static_assert(unhexLowerHexAddress(precompiled::SYS_CONFIG_ADDRESS)[ADDRESS_SIZE - 2] == '\x10');
 }  // namespace detail
 
 /// THE one address → account-table-name routing rule (the encoding contract itself is
@@ -167,9 +166,8 @@ inline std::string accountTableName(const evmc_address& address, AddressTableMod
     const std::string_view rawAddress = concepts::bytebuffer::toView(address.bytes);
     if (mode != AddressTableMode::Hex &&
         !std::ranges::binary_search(detail::c_systemTxsBinaryAddress, rawAddress,
-            std::ranges::less{}, [](const auto& entry) {
-                return std::string_view{entry.data(), entry.size()};
-            }))
+            std::ranges::less{},
+            [](const auto& entry) { return std::string_view{entry.data(), entry.size()}; }))
     {
         std::string tableName;
         tableName.reserve(BINARY_TABLE_PREFIX.size() + ADDRESS_SIZE);

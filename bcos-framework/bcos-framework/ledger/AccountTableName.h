@@ -1,12 +1,12 @@
 #pragma once
 
-#include <algorithm>
-#include <atomic>
-#include <string>
-#include <string_view>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/algorithm/hex.hpp>
+#include <algorithm>
+#include <atomic>
 #include <iterator>
+#include <string>
+#include <string_view>
 
 /// Account table names have two physical encodings of the same logical table:
 ///   hex:    "/apps/" + 40 lowercase hex chars of the 20-byte address (the legacy layout)
@@ -55,7 +55,7 @@
 /// namespace owned by this header alone.
 namespace bcos::ledger::account
 {
-inline constexpr std::string_view APPS_PREFIX = "/apps/";  // ledger::SYS_DIRECTORY::USER_APPS
+inline constexpr std::string_view APPS_PREFIX = "/apps/";       // ledger::SYS_DIRECTORY::USER_APPS
 inline constexpr std::string_view BINARY_TABLE_PREFIX = "/s/";  // reserved, see above
 inline constexpr size_t ADDRESS_SIZE = 20;                      // bcos::Address::SIZE
 inline constexpr size_t HEX_ADDRESS_SIZE = ADDRESS_SIZE * 2;
@@ -67,9 +67,8 @@ inline bool isHexAccountTableName(std::string_view table) noexcept
 {
     return table.size() == APPS_PREFIX.size() + HEX_ADDRESS_SIZE &&
            table.starts_with(APPS_PREFIX) &&
-           std::all_of(table.begin() + APPS_PREFIX.size(), table.end(), [](char c) {
-               return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
-           });
+           std::all_of(table.begin() + APPS_PREFIX.size(), table.end(),
+               [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); });
 }
 
 /// "/s/" + exactly 20 bytes (any byte values). Prefix-based, not length-based: a

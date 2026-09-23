@@ -21,8 +21,8 @@
 #include "libinitializer/AddressTableModeDetection.h"
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-tool/Exceptions.h>
-#include <boost/test/unit_test.hpp>
 #include <rocksdb/db.h>
+#include <boost/test/unit_test.hpp>
 #include <filesystem>
 
 using namespace bcos;
@@ -131,8 +131,8 @@ BOOST_AUTO_TEST_CASE(ResolvesModeFromFlag)
     BOOST_CHECK_THROW(
         resolveNodeAddressTableMode(kMigrating, false, true), bcos::tool::InvalidConfig);
     // An unknown value is refused, not guessed (forward compatibility).
-    BOOST_CHECK_THROW(resolveNodeAddressTableMode(std::optional<std::string>("future"), false,
-                          true),
+    BOOST_CHECK_THROW(
+        resolveNodeAddressTableMode(std::optional<std::string>("future"), false, true),
         bcos::tool::InvalidConfig);
 }
 
@@ -147,8 +147,7 @@ BOOST_AUTO_TEST_CASE(HexOnlyLaneForcing)
     BOOST_CHECK(resolveNodeAddressTableMode(kAbsent, true, true) == AddressTableMode::Hex);
     BOOST_CHECK(resolveNodeAddressTableMode(kAbsent, true, false) == AddressTableMode::Hex);
     // Binary evidence on a hex-only lane is a loud boot failure with recovery instructions.
-    BOOST_CHECK_THROW(
-        resolveNodeAddressTableMode(kBin, true, true), bcos::tool::InvalidConfig);
+    BOOST_CHECK_THROW(resolveNodeAddressTableMode(kBin, true, true), bcos::tool::InvalidConfig);
     BOOST_CHECK_THROW(
         resolveNodeAddressTableMode(kMigrating, true, true), bcos::tool::InvalidConfig);
 }

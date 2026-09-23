@@ -199,7 +199,7 @@ BOOST_AUTO_TEST_CASE(ShortAppsTableWithColonAnywhereIsNotAmbiguous)
     // pin). With the binary layout under "/s/", "/apps/" tables split at the FIRST ':' —
     // unconditionally, whatever the table/key content — so this exact former trap now
     // round-trips cleanly.
-    std::string const table = "/apps/foo";              // 9 chars, shorter than any account name
+    std::string const table = "/apps/foo";  // 9 chars, shorter than any account name
     std::string const key = std::string(16, 'x') + ":bar";  // ':' at flat offset 9+1+16 == 26
 
     executor_v1::StateKey const stateKey(table, key);

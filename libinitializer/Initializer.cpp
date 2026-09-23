@@ -211,8 +211,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
                 "[storage] migrate_account_tables_to_binary requires RocksDB storage (the "
-                "state DB it rewrites); storage.type=" + m_nodeConfig->storageType() +
-                " keeps its chain state elsewhere"));
+                "state DB it rewrites); storage.type=" +
+                m_nodeConfig->storageType() + " keeps its chain state elsewhere"));
     }
 
     // TBB global thread control

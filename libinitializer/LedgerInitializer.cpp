@@ -46,9 +46,9 @@ std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::buil
         // enabled" is the same question as "enabled now".
         auto const onChain = readOnChainExecutorVersion(*ledger, nodeConfig->executorVersion());
         bcos::ledger::Features laneFeatures;
-        if (auto l2Row = bcos::task::syncWait(bcos::ledger::getSystemConfig(*ledger,
-                std::string(magic_enum::enum_name(
-                    bcos::ledger::Features::Flag::feature_l2_ethereum_compat))));
+        if (auto l2Row = bcos::task::syncWait(bcos::ledger::getSystemConfig(
+                *ledger, std::string(magic_enum::enum_name(
+                             bcos::ledger::Features::Flag::feature_l2_ethereum_compat))));
             l2Row.has_value() && std::get<0>(*l2Row) == "1")
         {
             laneFeatures.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
@@ -81,11 +81,11 @@ std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::buil
         {
             if (layoutFlag.has_value())
             {
-                BCOS_LOG(WARNING)
-                    << LOG_BADGE("LedgerInitializer")
-                    << LOG_DESC("unfinished hex->binary account-table migration detected "
-                                "(layout flag \"migrating\"); resuming it now")
-                    << LOG_KV("key", ACCOUNT_TABLE_LAYOUT_KEY);
+                BCOS_LOG(WARNING) << LOG_BADGE("LedgerInitializer")
+                                  << LOG_DESC(
+                                         "unfinished hex->binary account-table migration detected "
+                                         "(layout flag \"migrating\"); resuming it now")
+                                  << LOG_KV("key", ACCOUNT_TABLE_LAYOUT_KEY);
             }
             auto const stats = migrateAccountTablesToBinary(stateDB, hexOnlyLane);
             BCOS_LOG(INFO) << LOG_BADGE("LedgerInitializer")

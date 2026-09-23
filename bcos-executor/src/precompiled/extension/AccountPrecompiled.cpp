@@ -319,8 +319,8 @@ void AccountPrecompiled::addAccountBalance(const std::string& accountTableName,
             const auto* addressBegin =
                 accountTableName.data() + ledger::account::BINARY_TABLE_PREFIX.size();  // NOLINT
             accountHex.reserve(ledger::account::HEX_ADDRESS_SIZE);
-            boost::algorithm::hex_lower(addressBegin,
-                addressBegin + ledger::account::ADDRESS_SIZE, std::back_inserter(accountHex));
+            boost::algorithm::hex_lower(addressBegin, addressBegin + ledger::account::ADDRESS_SIZE,
+                std::back_inserter(accountHex));
         }
         else
         {

@@ -138,9 +138,8 @@ using CacheExecutables =
         std::hash<evmc_address>>;
 CacheExecutables& getCacheExecutables();
 
-task::Task<std::shared_ptr<Executable>> getExecutable(
-    auto& storage, const evmc_address& address, const evmc_revision& revision,
-    ledger::account::AddressTableMode addressTableMode)
+task::Task<std::shared_ptr<Executable>> getExecutable(auto& storage, const evmc_address& address,
+    const evmc_revision& revision, ledger::account::AddressTableMode addressTableMode)
 {
     constexpr bool useGlobalCache = !isHistoricalStorage<decltype(storage)>();
     if constexpr (useGlobalCache)

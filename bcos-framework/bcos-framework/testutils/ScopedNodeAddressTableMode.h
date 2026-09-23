@@ -39,10 +39,7 @@ public:
     {
         ledger::account::setNodeAddressTableMode(mode);
     }
-    ~ScopedNodeAddressTableMode() noexcept
-    {
-        ledger::account::setNodeAddressTableMode(m_previous);
-    }
+    ~ScopedNodeAddressTableMode() noexcept { ledger::account::setNodeAddressTableMode(m_previous); }
 
     ScopedNodeAddressTableMode(ScopedNodeAddressTableMode const&) = delete;
     ScopedNodeAddressTableMode(ScopedNodeAddressTableMode&&) = delete;

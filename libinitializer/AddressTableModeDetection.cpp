@@ -11,8 +11,7 @@ std::optional<std::string> bcos::initializer::readAccountTableLayoutFlag(::rocks
 {
     std::string value;
     auto status = stateDB.Get(::rocksdb::ReadOptions{},
-        ::rocksdb::Slice(ACCOUNT_TABLE_LAYOUT_KEY.data(), ACCOUNT_TABLE_LAYOUT_KEY.size()),
-        &value);
+        ::rocksdb::Slice(ACCOUNT_TABLE_LAYOUT_KEY.data(), ACCOUNT_TABLE_LAYOUT_KEY.size()), &value);
     if (status.IsNotFound())
     {
         return std::nullopt;
@@ -27,8 +26,7 @@ std::optional<std::string> bcos::initializer::readAccountTableLayoutFlag(::rocks
     return value;
 }
 
-void bcos::initializer::writeAccountTableLayoutFlag(
-    ::rocksdb::DB& stateDB, std::string_view value)
+void bcos::initializer::writeAccountTableLayoutFlag(::rocksdb::DB& stateDB, std::string_view value)
 {
     ::rocksdb::WriteOptions writeOptions;
     writeOptions.sync = true;  // the flag is the migration's commit record: survive power loss
@@ -37,9 +35,9 @@ void bcos::initializer::writeAccountTableLayoutFlag(
         ::rocksdb::Slice(value.data(), value.size()));
     if (!status.ok())
     {
-        BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                  "failed to write the account-table layout flag (" +
-                                  status.ToString() + ")"));
+        BOOST_THROW_EXCEPTION(
+            bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                "failed to write the account-table layout flag (" + status.ToString() + ")"));
     }
 }
 
@@ -51,8 +49,7 @@ bool bcos::initializer::hasAnyTableRegistration(::rocksdb::DB& stateDB)
     constexpr std::string_view prefix = "s_tables:";  // ledger::SYS_TABLES + ':'
     std::unique_ptr<::rocksdb::Iterator> it(stateDB.NewIterator(::rocksdb::ReadOptions{}));
     it->Seek(::rocksdb::Slice(prefix.data(), prefix.size()));
-    return it->Valid() && it->key().starts_with(
-                              ::rocksdb::Slice(prefix.data(), prefix.size()));
+    return it->Valid() && it->key().starts_with(::rocksdb::Slice(prefix.data(), prefix.size()));
 }
 
 bool bcos::initializer::hasBinaryTableRegistration(::rocksdb::DB& stateDB)
@@ -63,14 +60,13 @@ bool bcos::initializer::hasBinaryTableRegistration(::rocksdb::DB& stateDB)
     constexpr std::string_view prefix = "s_tables:/s/";
     std::unique_ptr<::rocksdb::Iterator> it(stateDB.NewIterator(::rocksdb::ReadOptions{}));
     it->Seek(::rocksdb::Slice(prefix.data(), prefix.size()));
-    if (!it->Valid() ||
-        !it->key().starts_with(::rocksdb::Slice(prefix.data(), prefix.size())))
+    if (!it->Valid() || !it->key().starts_with(::rocksdb::Slice(prefix.data(), prefix.size())))
     {
         return false;
     }
     auto const key = it->key();
-    std::string_view const table(key.data() + ledger::SYS_TABLES.size() + 1,
-        key.size() - ledger::SYS_TABLES.size() - 1);
+    std::string_view const table(
+        key.data() + ledger::SYS_TABLES.size() + 1, key.size() - ledger::SYS_TABLES.size() - 1);
     return ledger::account::isBinaryAccountTableName(table);
 }
 
@@ -96,8 +92,7 @@ void bcos::initializer::refuseBinaryDataWithoutFlag(
             "idempotent and rewrites the flag), or restore a consistent snapshot"));
 }
 
-bool bcos::initializer::isHexOnlyExecutorLane(
-    const ledger::Features& features, int executorVersion)
+bool bcos::initializer::isHexOnlyExecutorLane(const ledger::Features& features, int executorVersion)
 {
     return features.get(ledger::Features::Flag::feature_l2_ethereum_compat) ||
            executorVersion == 0 ||  // legacy bcos-executor lane (SchedulerManager)
@@ -149,12 +144,11 @@ bcos::ledger::account::AddressTableMode bcos::initializer::resolveNodeAddressTab
                     "the migration, or roll the state DB back to a pre-migration snapshot"));
         }
         // Forward compatibility: refuse rather than guess at a state a newer binary wrote.
-        BOOST_THROW_EXCEPTION(
-            bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                "unknown account-table layout flag '" + *layoutFlag + "' at " +
-                std::string(ACCOUNT_TABLE_LAYOUT_KEY) +
-                ": written by a newer binary? Refusing to guess the node-local "
-                "account-table encoding"));
+        BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                  "unknown account-table layout flag '" + *layoutFlag + "' at " +
+                                  std::string(ACCOUNT_TABLE_LAYOUT_KEY) +
+                                  ": written by a newer binary? Refusing to guess the node-local "
+                                  "account-table encoding"));
     }
     // No flag: a chain that predates the mechanism (hex account tables only — nothing
     // binary ever shipped) or a brand-new DB. The registration probe distinguishes them;

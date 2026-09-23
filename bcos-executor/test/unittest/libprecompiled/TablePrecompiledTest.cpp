@@ -18,9 +18,9 @@
  * @date 2022-04-13
  */
 
-#include "libprecompiled/PreCompiledFixture.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/testutils/ScopedNodeAddressTableMode.h"
+#include "libprecompiled/PreCompiledFixture.h"
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -725,13 +725,13 @@ BOOST_AUTO_TEST_CASE(createTableBinaryModeStubTest)
     bcos::protocol::BlockNumber number = 1;
     creatTable(number++, "t_binary_stub", "id", {"item_name", "item_id"}, callAddress);
 
-    auto binaryTable = ledger::account::accountTableName(
-        callAddress, ledger::account::AddressTableMode::Binary);
+    auto binaryTable =
+        ledger::account::accountTableName(callAddress, ledger::account::AddressTableMode::Binary);
     BOOST_REQUIRE(ledger::account::isBinaryAccountTableName(binaryTable));
 
     std::promise<std::optional<storage::Table>> tablePromise;
-    storage->asyncOpenTable(binaryTable,
-        [&tablePromise](Error::UniquePtr error, std::optional<storage::Table> table) {
+    storage->asyncOpenTable(
+        binaryTable, [&tablePromise](Error::UniquePtr error, std::optional<storage::Table> table) {
             BOOST_CHECK(!error);
             tablePromise.set_value(std::move(table));
         });
@@ -744,8 +744,8 @@ BOOST_AUTO_TEST_CASE(createTableBinaryModeStubTest)
     // the historical hex account table must NOT carry the stub
     auto hexTable = std::string(executor::USER_APPS_PREFIX) + callAddress;
     std::promise<std::optional<storage::Table>> hexTablePromise;
-    storage->asyncOpenTable(hexTable,
-        [&hexTablePromise](Error::UniquePtr error, std::optional<storage::Table> table) {
+    storage->asyncOpenTable(
+        hexTable, [&hexTablePromise](Error::UniquePtr error, std::optional<storage::Table> table) {
             BOOST_CHECK(!error);
             hexTablePromise.set_value(std::move(table));
         });

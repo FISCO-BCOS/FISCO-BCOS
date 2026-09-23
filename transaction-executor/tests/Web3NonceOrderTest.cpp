@@ -84,7 +84,8 @@ public:
             BOOST_CHECK_EQUAL(
                 lowReceipt->status(), static_cast<int32_t>(protocol::TransactionStatus::None));
 
-            ledger::account::EVMAccount senderAccount(storage, sender, bcos::ledger::account::AddressTableMode::Hex);
+            ledger::account::EVMAccount senderAccount(
+                storage, sender, bcos::ledger::account::AddressTableMode::Hex);
             co_return (co_await senderAccount.nonce()).value();
         }());
     }

@@ -121,10 +121,8 @@ bcos::initializer::AccountTableMigrationStats bcos::initializer::migrateAccountT
         lastProgressLog = now;
         auto const elapsed =
             std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count();
-        BCOS_LOG(INFO) << LOG_BADGE("AccountTableMigration")
-                       << LOG_DESC("migration in progress")
-                       << LOG_KV("scanned", stats.scanned)
-                       << LOG_KV("elapsedSec", elapsed)
+        BCOS_LOG(INFO) << LOG_BADGE("AccountTableMigration") << LOG_DESC("migration in progress")
+                       << LOG_KV("scanned", stats.scanned) << LOG_KV("elapsedSec", elapsed)
                        << LOG_KV("keysPerSec", elapsed > 0 ? stats.scanned / elapsed : 0)
                        << LOG_KV("accountRows", stats.migratedAccountRows)
                        << LOG_KV("registrations", stats.migratedRegistrations)
@@ -161,8 +159,7 @@ bcos::initializer::AccountTableMigrationStats bcos::initializer::migrateAccountT
         {
             if (targetValue != it->value())
             {
-                throwMigrationFailure("data conflict on account table " +
-                                      std::string(hexTable) +
+                throwMigrationFailure("data conflict on account table " + std::string(hexTable) +
                                       ": the binary twin key already exists with a different "
                                       "value");
             }
@@ -233,19 +230,20 @@ bcos::initializer::AccountTableMigrationStats bcos::initializer::migrateAccountT
             onKey(key);
         }
     };
-    scanRange(std::string(ledger::account::APPS_PREFIX), accountRowsUpper, [&](::rocksdb::Slice const& key) {
-        // Account-table row: "/apps/<40hex>:<field>" — the ':' separator sits exactly after
-        // the 46-char table name.
-        if (key.size() > hexTableNameSize + 1 && key[hexTableNameSize] == ':' &&
-            ledger::account::isHexAccountTableName(
-                std::string_view(key.data(), hexTableNameSize)))
-        {
-            std::string_view const hexTable(key.data(), hexTableNameSize);
-            std::string binaryKey = ledger::account::hexToBinaryAccountTableName(hexTable);
-            binaryKey.append(key.data() + hexTableNameSize, key.size() - hexTableNameSize);
-            queueRename(key, binaryKey, hexTable, false);
-        }
-    });
+    scanRange(std::string(ledger::account::APPS_PREFIX), accountRowsUpper,
+        [&](::rocksdb::Slice const& key) {
+            // Account-table row: "/apps/<40hex>:<field>" — the ':' separator sits exactly after
+            // the 46-char table name.
+            if (key.size() > hexTableNameSize + 1 && key[hexTableNameSize] == ':' &&
+                ledger::account::isHexAccountTableName(
+                    std::string_view(key.data(), hexTableNameSize)))
+            {
+                std::string_view const hexTable(key.data(), hexTableNameSize);
+                std::string binaryKey = ledger::account::hexToBinaryAccountTableName(hexTable);
+                binaryKey.append(key.data() + hexTableNameSize, key.size() - hexTableNameSize);
+                queueRename(key, binaryKey, hexTable, false);
+            }
+        });
     scanRange(registrationPrefix, registrationsUpper, [&](::rocksdb::Slice const& key) {
         // Registration row: strip "s_tables:" and probe the registered table name.
         std::string_view const table(
@@ -266,20 +264,18 @@ bcos::initializer::AccountTableMigrationStats bcos::initializer::migrateAccountT
     // a durable "bin" implies every rename is durable, and a crash at any earlier point
     // leaves "migrating" — the next boot resumes (switch on) or refuses (switch off).
     batch.Put(::rocksdb::Slice(ACCOUNT_TABLE_LAYOUT_KEY.data(), ACCOUNT_TABLE_LAYOUT_KEY.size()),
-        ::rocksdb::Slice(
-            ACCOUNT_TABLE_LAYOUT_BINARY.data(), ACCOUNT_TABLE_LAYOUT_BINARY.size()));
+        ::rocksdb::Slice(ACCOUNT_TABLE_LAYOUT_BINARY.data(), ACCOUNT_TABLE_LAYOUT_BINARY.size()));
     ++pendingOps;
     flushBatch(true);
 
-    BCOS_LOG(INFO) << LOG_BADGE("AccountTableMigration")
-                   << LOG_DESC("migration completed") << LOG_KV("scanned", stats.scanned)
+    BCOS_LOG(INFO) << LOG_BADGE("AccountTableMigration") << LOG_DESC("migration completed")
+                   << LOG_KV("scanned", stats.scanned)
                    << LOG_KV("accountRows", stats.migratedAccountRows)
                    << LOG_KV("registrations", stats.migratedRegistrations)
                    << LOG_KV("deduped", stats.dedupedRows)
-                   << LOG_KV("elapsedSec",
-                          std::chrono::duration_cast<std::chrono::seconds>(
-                              std::chrono::steady_clock::now() - startTime)
-                              .count())
+                   << LOG_KV("elapsedSec", std::chrono::duration_cast<std::chrono::seconds>(
+                                               std::chrono::steady_clock::now() - startTime)
+                                               .count())
                    << LOG_KV("layoutFlag", ACCOUNT_TABLE_LAYOUT_KEY);
     return stats;
 }

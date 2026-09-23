@@ -213,8 +213,7 @@ BOOST_AUTO_TEST_CASE(ImportValidatesAllocHexBeforeFirstWrite)
             .code = "",
             .storage = {{std::string(64, '0'), "01"}}});
 
-        BOOST_CHECK_EXCEPTION(
-            co_await importEthereumGenesisState(*storage, allocs, *hashImpl),
+        BOOST_CHECK_EXCEPTION(co_await importEthereumGenesisState(*storage, allocs, *hashImpl),
             bcos::tool::InvalidConfig, [](auto const& e) {
                 return errinfoContains(e, "storage slot value must be exactly 64 hex digits");
             });

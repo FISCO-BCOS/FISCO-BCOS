@@ -289,8 +289,8 @@ BOOST_AUTO_TEST_CASE(LatestStateFromCommittedViewBinaryMode)
         storage::Entry entry;
         entry.set(bcos::bytes(value32));
         task::syncWait(storage2::writeOne(m_latestState,
-            executor_v1::StateKey{table,
-                std::string{reinterpret_cast<char const*>(slot.ref().data()), h256::SIZE}},
+            executor_v1::StateKey{
+                table, std::string{reinterpret_cast<char const*>(slot.ref().data()), h256::SIZE}},
             std::move(entry)));
     };
     auto const hexTable = std::string(bcos::ledger::SYS_DIRECTORY::USER_APPS) + address.hex();

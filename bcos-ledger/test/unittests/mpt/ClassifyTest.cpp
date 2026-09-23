@@ -83,31 +83,31 @@ BOOST_AUTO_TEST_CASE(ParseAccountTableAcceptsRawAddressTable)
     // F1 regression pin: a "/apps/" suffix of exactly 20 chars is NOT a binary account
     // table — classification is by prefix, never by length alone. A 20-char BFS table
     // name (link/mkdir/CNS can produce these) simply does not parse.
-    BOOST_CHECK(!parseAccountTable(std::string(APPS_TABLE_PREFIX) + std::string(20, 'a'))
-                    .has_value());
+    BOOST_CHECK(
+        !parseAccountTable(std::string(APPS_TABLE_PREFIX) + std::string(20, 'a')).has_value());
     // ...even when the 20 chars are hex-looking: not a 40-hex name either.
     BOOST_CHECK(
         !parseAccountTable(std::string(APPS_TABLE_PREFIX) + "01234567890123456789").has_value());
 
     // "/s/" lengths other than 20 reject; a 21st raw byte (a row key bleeding into the table
     // view) is not an account table.
-    BOOST_CHECK(!parseAccountTable(std::string(BINARY_TABLE_PREFIX) + std::string(19, 'a'))
-                    .has_value());
-    BOOST_CHECK(!parseAccountTable(std::string(BINARY_TABLE_PREFIX) + std::string(21, 'a'))
-                    .has_value());
+    BOOST_CHECK(
+        !parseAccountTable(std::string(BINARY_TABLE_PREFIX) + std::string(19, 'a')).has_value());
+    BOOST_CHECK(
+        !parseAccountTable(std::string(BINARY_TABLE_PREFIX) + std::string(21, 'a')).has_value());
     // The bare binary prefix and a prefix-only lookalike reject.
     BOOST_CHECK(!parseAccountTable(BINARY_TABLE_PREFIX).has_value());
     BOOST_CHECK(!parseAccountTable("/s").has_value());
 
     // "/apps/" lengths other than 40 reject.
-    BOOST_CHECK(!parseAccountTable(std::string(APPS_TABLE_PREFIX) + std::string(19, 'a'))
-                    .has_value());
-    BOOST_CHECK(!parseAccountTable(std::string(APPS_TABLE_PREFIX) + std::string(21, 'a'))
-                    .has_value());
-    BOOST_CHECK(!parseAccountTable(std::string(APPS_TABLE_PREFIX) + std::string(39, 'a'))
-                    .has_value());
-    BOOST_CHECK(!parseAccountTable(std::string(APPS_TABLE_PREFIX) + std::string(41, 'a'))
-                    .has_value());
+    BOOST_CHECK(
+        !parseAccountTable(std::string(APPS_TABLE_PREFIX) + std::string(19, 'a')).has_value());
+    BOOST_CHECK(
+        !parseAccountTable(std::string(APPS_TABLE_PREFIX) + std::string(21, 'a')).has_value());
+    BOOST_CHECK(
+        !parseAccountTable(std::string(APPS_TABLE_PREFIX) + std::string(39, 'a')).has_value());
+    BOOST_CHECK(
+        !parseAccountTable(std::string(APPS_TABLE_PREFIX) + std::string(41, 'a')).has_value());
     // The bare prefix and a prefix-only lookalike reject.
     BOOST_CHECK(!parseAccountTable(APPS_TABLE_PREFIX).has_value());
     BOOST_CHECK(!parseAccountTable("/apps").has_value());

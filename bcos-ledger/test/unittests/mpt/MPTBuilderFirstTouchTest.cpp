@@ -122,8 +122,8 @@ BOOST_AUTO_TEST_CASE(FirstTouchOfBrandNewAccountWithoutStorage)
     writeFlatRow(view, accountFieldKey(addr, ROW_BALANCE), makeEntry("1000"));
     writeFlatRow(view, accountFieldKey(addr, ROW_CODE_HASH), codeHashEntry(makeHash(0xC0)));
 
-    auto output =
-        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
+    auto output = bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view,
+        /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));
@@ -157,8 +157,8 @@ BOOST_AUTO_TEST_CASE(FirstTouchDoesNotBackfillColdSlots)
     auto const hotSlot = slotKeyAt(500);
     writeFlatRow(view, accountSlotKey(addr, hotSlot), slotEntry(bcos::bytes{0x99}));
 
-    auto output =
-        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
+    auto output = bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view,
+        /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));
@@ -190,8 +190,8 @@ BOOST_AUTO_TEST_CASE(UnwrittenFieldsComeFromFlatWrittenOnesWin)
     auto view = makeFlatView(flatBackend);
     writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("5"));
 
-    auto output =
-        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
+    auto output = bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view,
+        /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));
@@ -214,8 +214,8 @@ BOOST_AUTO_TEST_CASE(MissingCodeHashRowMeansEmptyCodeHash)
     auto view = makeFlatView(flatBackend);
     writeFlatRow(view, accountFieldKey(addr, ROW_BALANCE), makeEntry("10"));
 
-    auto output =
-        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
+    auto output = bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view,
+        /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));
@@ -238,8 +238,8 @@ BOOST_AUTO_TEST_CASE(ZeroCodeHashRowInFlatThrows)
     auto view = makeFlatView(flatBackend);
     writeFlatRow(view, accountFieldKey(addr, ROW_BALANCE), makeEntry("10"));
 
-    BOOST_CHECK_EXCEPTION(
-        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex)),
+    BOOST_CHECK_EXCEPTION(bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view,
+                              /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex)),
         MPTInvariantViolation,
         [](auto const& e) { return errinfoContains(e, "decodes to a zero h256"); });
 }
@@ -256,8 +256,8 @@ BOOST_AUTO_TEST_CASE(DeleteOfNeverWrittenSlotIsNoop)
     writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("1"));
     deleteFlatRowLogically(view, accountSlotKey(addr, slotKeyAt(3)));
 
-    auto output =
-        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
+    auto output = bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view,
+        /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));
@@ -285,14 +285,14 @@ BOOST_AUTO_TEST_CASE(NextBlockContinuesIncrementallyOverThePartialTrie)
     // Block N: first-touch with slot A.
     auto viewN = makeFlatView(flatBackend);
     writeFlatRow(viewN, accountSlotKey(addr, slotA), slotEntry(bcos::bytes{0x0A}));
-    auto outputN =
-        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), viewN, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
+    auto outputN = bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), viewN,
+        /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     // Block N+1: subsequent-touch with slot B on top of block N's root.
     auto viewN1 = makeFlatView(flatBackend);
     writeFlatRow(viewN1, accountSlotKey(addr, slotB), slotEntry(bcos::bytes{0x0B}));
-    auto outputN1 =
-        bcos::task::syncWait(buildAndCollect(storage, outputN.stateRoot, viewN1, /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
+    auto outputN1 = bcos::task::syncWait(buildAndCollect(storage, outputN.stateRoot, viewN1,
+        /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Hex));
 
     MPTReadView<NodeStorage> readView(storage, outputN1.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));
@@ -324,7 +324,8 @@ BOOST_AUTO_TEST_CASE(BinaryTableDeltaBuildsTheSameTrieAsHex)
     auto binView = makeFlatView(binBackend);
     writeFlatRow(binView, accountBinaryFieldKey(addr, ROW_NONCE), makeEntry("2"));
     writeFlatRow(binView, accountBinaryFieldKey(addr, ROW_BALANCE), makeEntry("500"));
-    writeFlatRow(binView, accountBinaryFieldKey(addr, ROW_CODE_HASH), codeHashEntry(makeHash(0xC3)));
+    writeFlatRow(
+        binView, accountBinaryFieldKey(addr, ROW_CODE_HASH), codeHashEntry(makeHash(0xC3)));
     writeFlatRow(binView, accountBinarySlotKey(addr, slot), slotEntry(bcos::bytes{0x5A}));
     auto binOutput = bcos::task::syncWait(buildAndCollect(binStorage, emptyRootHash(), binView,
         /*l2Mode=*/false, bcos::ledger::account::AddressTableMode::Binary));

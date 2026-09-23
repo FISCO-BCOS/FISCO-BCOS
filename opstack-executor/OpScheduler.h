@@ -280,8 +280,8 @@ public:
                 try
                 {
                     auto view = self->m_multiLayerStorage->forkCommitted();
-                    bcos::ledger::account::EVMAccount account(
-                        view, parseAddress(contract), bcos::ledger::account::nodeAddressTableMode());
+                    bcos::ledger::account::EVMAccount account(view, parseAddress(contract),
+                        bcos::ledger::account::nodeAddressTableMode());
                     auto code = co_await account.code();
                     if (!code)
                     {
@@ -322,8 +322,8 @@ public:
                 try
                 {
                     auto view = self->m_multiLayerStorage->forkCommitted();
-                    bcos::ledger::account::EVMAccount account(
-                        view, parseAddress(contract), bcos::ledger::account::nodeAddressTableMode());
+                    bcos::ledger::account::EVMAccount account(view, parseAddress(contract),
+                        bcos::ledger::account::nodeAddressTableMode());
                     auto abi = co_await account.abi();
                     if (!abi)
                     {

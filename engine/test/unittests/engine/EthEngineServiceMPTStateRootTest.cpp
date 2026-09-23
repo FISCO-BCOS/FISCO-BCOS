@@ -70,7 +70,8 @@ struct L2MptStorageFixture
     {
         ledgerConfig.setFeatures(makeL2Features());
         auto address = decodeAddress(c_senderHex);
-        ledger::account::EVMAccount account{backendStorage, address, bcos::ledger::account::AddressTableMode::Hex};
+        ledger::account::EVMAccount account{
+            backendStorage, address, bcos::ledger::account::AddressTableMode::Hex};
         task::syncWait(account.setBalance(bcos::u256("1000000000000000000000")));
         task::syncWait(account.setNonce("0"));
     }
@@ -149,7 +150,8 @@ BOOST_FIXTURE_TEST_CASE(l2BlocksChainParentRootAndPublishHeader, L2MptStorageFix
         // The MPT build scans only the view's mutable (delta) layer
         // (MPTBuilder.h: storage2::range(mutableStorage(flatView))), so each block seeds its
         // own change set; the parent root is the only thing read from the backend.
-        ledger::account::EVMAccount account{view, decodeAddress(c_senderHex), bcos::ledger::account::AddressTableMode::Hex};
+        ledger::account::EVMAccount account{
+            view, decodeAddress(c_senderHex), bcos::ledger::account::AddressTableMode::Hex};
         task::syncWait(account.setBalance(bcos::u256(balance)));
     };
     auto const resolve = [&](RealGlobalStateStorage::ViewType& view,
@@ -206,7 +208,8 @@ BOOST_FIXTURE_TEST_CASE(l2BlocksChainParentRootAndPublishHeader, L2MptStorageFix
     {
         L2MptStorageFixture control;
         auto view = control.forkMutableView();
-        ledger::account::EVMAccount account{view, decodeAddress(c_senderHex), bcos::ledger::account::AddressTableMode::Hex};
+        ledger::account::EVMAccount account{
+            view, decodeAddress(c_senderHex), bcos::ledger::account::AddressTableMode::Hex};
         task::syncWait(account.setBalance(bcos::u256("3000000000000000000000")));
         auto header = control.blockFactory->blockHeaderFactory()->createBlockHeader();
         header->setNumber(2);

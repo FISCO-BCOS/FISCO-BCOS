@@ -35,8 +35,8 @@ struct AccountTableMigrationStats
     uint64_t scanned = 0;                ///< physical keys visited
     uint64_t migratedAccountRows = 0;    ///< /apps/<40hex>:<field> rows renamed to binary
     uint64_t migratedRegistrations = 0;  ///< s_tables:/apps/<40hex> rows renamed to binary
-    uint64_t dedupedRows = 0;  ///< hex sources dropped because the binary twin already held
-                               ///< the same value (interrupted previous run)
+    uint64_t dedupedRows = 0;      ///< hex sources dropped because the binary twin already held
+                                   ///< the same value (interrupted previous run)
     bool alreadyMigrated = false;  ///< layout flag already "bin": no scan happened at all
 };
 
@@ -73,6 +73,5 @@ struct AccountTableMigrationStats
 ///
 /// @throws bcos::tool::InvalidConfig on a hex-only lane, a value conflict, or any RocksDB
 ///         failure.
-AccountTableMigrationStats migrateAccountTablesToBinary(
-    ::rocksdb::DB& stateDB, bool hexOnlyLane);
+AccountTableMigrationStats migrateAccountTablesToBinary(::rocksdb::DB& stateDB, bool hexOnlyLane);
 }  // namespace bcos::initializer

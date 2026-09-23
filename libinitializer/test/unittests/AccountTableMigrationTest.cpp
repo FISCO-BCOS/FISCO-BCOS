@@ -21,8 +21,8 @@
 #include "libinitializer/AccountTableMigration.h"
 #include "libinitializer/AddressTableModeDetection.h"
 #include <bcos-tool/Exceptions.h>
-#include <boost/test/unit_test.hpp>
 #include <rocksdb/db.h>
+#include <boost/test/unit_test.hpp>
 #include <filesystem>
 
 using namespace bcos;
@@ -82,10 +82,7 @@ struct TempRocksDB
         return value;
     }
 
-    std::optional<std::string> layoutFlag()
-    {
-        return readAccountTableLayoutFlag(*db);
-    }
+    std::optional<std::string> layoutFlag() { return readAccountTableLayoutFlag(*db); }
 
     std::filesystem::path dir;
     std::unique_ptr<rocksdb::DB> db;
@@ -120,16 +117,16 @@ void assertUntouched(TempRocksDB& f)
     BOOST_CHECK(f.get("s_tables:/sys/status") == std::optional<std::string>("value"));
     BOOST_CHECK(f.get("s_current_state:current_number") == std::optional<std::string>("42"));
     BOOST_CHECK(f.get("/mpt/" + std::string(64, 'a')) == std::optional<std::string>("node"));
-    BOOST_CHECK(f.get(std::string(kHexTable) + "_accessAuth:value") ==
-                std::optional<std::string>("admin"));
+    BOOST_CHECK(
+        f.get(std::string(kHexTable) + "_accessAuth:value") == std::optional<std::string>("admin"));
     BOOST_CHECK(f.get("s_tables:" + std::string(kHexTable) + "_accessAuth") ==
                 std::optional<std::string>("value"));
     BOOST_CHECK(f.get("/apps/MyContract:balance") == std::optional<std::string>("5"));
     BOOST_CHECK(f.get("s_tables:/apps/MyContract") == std::optional<std::string>("value"));
-    BOOST_CHECK(f.get("/apps/" + std::string(20, 'y') + ":balance") ==
-                std::optional<std::string>("5"));
-    BOOST_CHECK(f.get("s_tables:/apps/" + std::string(20, 'y')) ==
-                std::optional<std::string>("value"));
+    BOOST_CHECK(
+        f.get("/apps/" + std::string(20, 'y') + ":balance") == std::optional<std::string>("5"));
+    BOOST_CHECK(
+        f.get("s_tables:/apps/" + std::string(20, 'y')) == std::optional<std::string>("value"));
 }
 }  // namespace
 
@@ -147,15 +144,13 @@ BOOST_AUTO_TEST_CASE(MigratesAccountRowsAndRegistrationsOnly)
     BOOST_CHECK_EQUAL(stats.dedupedRows, 0);
 
     // Renamed, values preserved.
-    BOOST_CHECK(f.get(binaryTable(kHexTable) + ":balance") ==
-                std::optional<std::string>("1000"));
+    BOOST_CHECK(f.get(binaryTable(kHexTable) + ":balance") == std::optional<std::string>("1000"));
     BOOST_CHECK(f.get(binaryTable(kHexTable) + ":nonce") == std::optional<std::string>("7"));
-    BOOST_CHECK(f.get(binaryTable(kHexTable2) + ":code_hash") ==
-                std::optional<std::string>("deadbeef"));
-    BOOST_CHECK(f.get("s_tables:" + binaryTable(kHexTable)) ==
-                std::optional<std::string>("value"));
-    BOOST_CHECK(f.get("s_tables:" + binaryTable(kHexTable2)) ==
-                std::optional<std::string>("value"));
+    BOOST_CHECK(
+        f.get(binaryTable(kHexTable2) + ":code_hash") == std::optional<std::string>("deadbeef"));
+    BOOST_CHECK(f.get("s_tables:" + binaryTable(kHexTable)) == std::optional<std::string>("value"));
+    BOOST_CHECK(
+        f.get("s_tables:" + binaryTable(kHexTable2)) == std::optional<std::string>("value"));
     // Hex sources gone.
     BOOST_CHECK(!f.get(std::string(kHexTable) + ":balance"));
     BOOST_CHECK(!f.get(std::string(kHexTable) + ":nonce"));
@@ -168,8 +163,8 @@ BOOST_AUTO_TEST_CASE(MigratesAccountRowsAndRegistrationsOnly)
 
     // The layout flag landed inside the final synced batch: the boot-time resolution now
     // reads "bin" and publishes Binary with no scan.
-    BOOST_CHECK(f.layoutFlag() ==
-                std::optional<std::string>(std::string(ACCOUNT_TABLE_LAYOUT_BINARY)));
+    BOOST_CHECK(
+        f.layoutFlag() == std::optional<std::string>(std::string(ACCOUNT_TABLE_LAYOUT_BINARY)));
     BOOST_CHECK(resolveNodeAddressTableMode(f.layoutFlag(), /*hexOnlyLane=*/false,
                     hasAnyTableRegistration(*f.db)) == account::AddressTableMode::Binary);
 }
@@ -197,8 +192,8 @@ BOOST_AUTO_TEST_CASE(SecondRunSkipsScanAndFlagLossRerunsIdempotently)
     BOOST_CHECK_EQUAL(stats.migratedAccountRows, 0);
     BOOST_CHECK_EQUAL(stats.migratedRegistrations, 0);
     BOOST_CHECK_EQUAL(stats.dedupedRows, 0);
-    BOOST_CHECK(f.layoutFlag() ==
-                std::optional<std::string>(std::string(ACCOUNT_TABLE_LAYOUT_BINARY)));
+    BOOST_CHECK(
+        f.layoutFlag() == std::optional<std::string>(std::string(ACCOUNT_TABLE_LAYOUT_BINARY)));
     assertUntouched(f);
 }
 
@@ -213,8 +208,7 @@ BOOST_AUTO_TEST_CASE(DedupsInterruptedRun)
     BOOST_CHECK_EQUAL(stats.migratedAccountRows, 2);  // nonce + code_hash
     BOOST_CHECK_EQUAL(stats.dedupedRows, 1);          // balance
     BOOST_CHECK(!f.get(std::string(kHexTable) + ":balance"));
-    BOOST_CHECK(f.get(binaryTable(kHexTable) + ":balance") ==
-                std::optional<std::string>("1000"));
+    BOOST_CHECK(f.get(binaryTable(kHexTable) + ":balance") == std::optional<std::string>("1000"));
     assertUntouched(f);
 }
 
@@ -229,8 +223,8 @@ BOOST_AUTO_TEST_CASE(AbortsOnValueConflict)
         migrateAccountTablesToBinary(*f.db, /*hexOnlyLane=*/false), bcos::tool::InvalidConfig);
     // No "bin": the migration did not complete. The "migrating" flag stays, so the next
     // boot refuses (switch off) or resumes (switch on) instead of publishing Hex.
-    BOOST_CHECK(f.layoutFlag() ==
-                std::optional<std::string>(std::string(ACCOUNT_TABLE_LAYOUT_MIGRATING)));
+    BOOST_CHECK(
+        f.layoutFlag() == std::optional<std::string>(std::string(ACCOUNT_TABLE_LAYOUT_MIGRATING)));
 }
 
 BOOST_AUTO_TEST_CASE(RefusesHexOnlyLane)
@@ -241,8 +235,7 @@ BOOST_AUTO_TEST_CASE(RefusesHexOnlyLane)
         migrateAccountTablesToBinary(*f.db, /*hexOnlyLane=*/true), bcos::tool::InvalidConfig);
     // Nothing moved — and no flag written either: the lane refusal fires before the
     // "migrating" flag lands.
-    BOOST_CHECK(f.get(std::string(kHexTable) + ":balance") ==
-                std::optional<std::string>("1000"));
+    BOOST_CHECK(f.get(std::string(kHexTable) + ":balance") == std::optional<std::string>("1000"));
     BOOST_CHECK(!f.layoutFlag().has_value());
 }
 
@@ -271,15 +264,14 @@ BOOST_AUTO_TEST_CASE(ResumesFromMixedLayoutToPureBinary)
     BOOST_CHECK_EQUAL(stats.migratedRegistrations, 1);
     BOOST_CHECK_EQUAL(stats.dedupedRows, 0);
 
-    BOOST_CHECK(f.layoutFlag() ==
-                std::optional<std::string>(std::string(ACCOUNT_TABLE_LAYOUT_BINARY)));
+    BOOST_CHECK(
+        f.layoutFlag() == std::optional<std::string>(std::string(ACCOUNT_TABLE_LAYOUT_BINARY)));
     BOOST_CHECK(resolveNodeAddressTableMode(f.layoutFlag(), /*hexOnlyLane=*/false,
                     hasAnyTableRegistration(*f.db)) == account::AddressTableMode::Binary);
     // Both accounts' rows survive under the binary tables, values intact.
-    BOOST_CHECK(f.get(binaryTable(kHexTable) + ":balance") ==
-                std::optional<std::string>("1000"));
-    BOOST_CHECK(f.get(binaryTable(kHexTable2) + ":code_hash") ==
-                std::optional<std::string>("deadbeef"));
+    BOOST_CHECK(f.get(binaryTable(kHexTable) + ":balance") == std::optional<std::string>("1000"));
+    BOOST_CHECK(
+        f.get(binaryTable(kHexTable2) + ":code_hash") == std::optional<std::string>("deadbeef"));
     assertUntouched(f);
 }
 
@@ -319,15 +311,14 @@ BOOST_AUTO_TEST_CASE(CrashInAccountRowPhaseRefusesHexAndResumes)
     BOOST_CHECK_EQUAL(stats.migratedRegistrations, 2);
     BOOST_CHECK_EQUAL(stats.dedupedRows, 1);  // the nonce twin
 
-    BOOST_CHECK(f.layoutFlag() ==
-                std::optional<std::string>(std::string(ACCOUNT_TABLE_LAYOUT_BINARY)));
+    BOOST_CHECK(
+        f.layoutFlag() == std::optional<std::string>(std::string(ACCOUNT_TABLE_LAYOUT_BINARY)));
     BOOST_CHECK(resolveNodeAddressTableMode(f.layoutFlag(), /*hexOnlyLane=*/false,
                     hasAnyTableRegistration(*f.db)) == account::AddressTableMode::Binary);
-    BOOST_CHECK(f.get(binaryTable(kHexTable) + ":balance") ==
-                std::optional<std::string>("1000"));
+    BOOST_CHECK(f.get(binaryTable(kHexTable) + ":balance") == std::optional<std::string>("1000"));
     BOOST_CHECK(f.get(binaryTable(kHexTable) + ":nonce") == std::optional<std::string>("7"));
-    BOOST_CHECK(f.get(binaryTable(kHexTable2) + ":code_hash") ==
-                std::optional<std::string>("deadbeef"));
+    BOOST_CHECK(
+        f.get(binaryTable(kHexTable2) + ":code_hash") == std::optional<std::string>("deadbeef"));
     BOOST_CHECK(!f.get(std::string(kHexTable) + ":nonce"));
     assertUntouched(f);
 }

@@ -400,9 +400,8 @@ BOOST_AUTO_TEST_CASE(BlockOneIncrementalBuildOverGenesisRoot)
                 reinterpret_cast<char const*>(newSlotValue.data()), newSlotValue.size()}));
 
         LedgerNodeStorage nodeStorage(*storage);
-        auto output =
-            co_await mpt::buildAndCollect(nodeStorage, genesisRoot, view, /*l2Mode=*/true,
-                bcos::ledger::account::AddressTableMode::Hex);
+        auto output = co_await mpt::buildAndCollect(nodeStorage, genesisRoot, view, /*l2Mode=*/true,
+            bcos::ledger::account::AddressTableMode::Hex);
 
         // Oracle: from-scratch trie over the expected post-block state.
         auto keccak = [](bcos::bytes const& data) {

@@ -1628,7 +1628,8 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_create_fail_keeps_contract_warm)
         co_await host.prepare();
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> senderAcc(
-            rollbackableStorage, host.message().recipient, bcos::ledger::account::AddressTableMode::Hex);
+            rollbackableStorage, host.message().recipient,
+            bcos::ledger::account::AddressTableMode::Hex);
         auto const nonceStr = co_await senderAcc.nonce();
         u256 const nonce(nonceStr.value_or(std::string("0")));
 
@@ -1679,7 +1680,8 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_create_fail_evmone_inner_warm_rolled_back)
         co_await host.prepare();
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> senderAcc(
-            rollbackableStorage, host.message().recipient, bcos::ledger::account::AddressTableMode::Hex);
+            rollbackableStorage, host.message().recipient,
+            bcos::ledger::account::AddressTableMode::Hex);
         auto const nonceStr = co_await senderAcc.nonce();
         u256 const nonce(nonceStr.value_or(std::string("0")));
 
@@ -1727,7 +1729,8 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_create2_fail_keeps_contract_warm)
         co_await host.prepare();
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> senderAcc(
-            rollbackableStorage, host.message().recipient, bcos::ledger::account::AddressTableMode::Hex);
+            rollbackableStorage, host.message().recipient,
+            bcos::ledger::account::AddressTableMode::Hex);
         auto const nonceStr = co_await senderAcc.nonce();
         u256 const nonce(nonceStr.value_or(std::string("0")));
 

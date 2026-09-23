@@ -2059,8 +2059,8 @@ BOOST_AUTO_TEST_CASE(resetAdminBinaryModeContractProbe)
     BOOST_REQUIRE(!binTable.empty());
     {
         std::promise<std::optional<Table>> promise;
-        storage->asyncCreateTable(binTable, "value",
-            [&promise](Error::UniquePtr&& error, std::optional<Table>&& table) {
+        storage->asyncCreateTable(
+            binTable, "value", [&promise](Error::UniquePtr&& error, std::optional<Table>&& table) {
                 BOOST_CHECK(!error);
                 promise.set_value(std::move(table));
             });
@@ -2071,8 +2071,8 @@ BOOST_AUTO_TEST_CASE(resetAdminBinaryModeContractProbe)
     // The probe must find the binary table and reset the admin (the old hex-only probe
     // threw "Contract address not found." here).
     {
-        auto result = resetAdmin(number++, 1000, contractAddress,
-            Address("0x1234567890123456789012345678901234567890"));
+        auto result = resetAdmin(
+            number++, 1000, contractAddress, Address("0x1234567890123456789012345678901234567890"));
         BOOST_CHECK(result->status() == (int32_t)TransactionStatus::None);
         BOOST_CHECK(result->data().toBytes() == codec->encode(u256(0)));
     }

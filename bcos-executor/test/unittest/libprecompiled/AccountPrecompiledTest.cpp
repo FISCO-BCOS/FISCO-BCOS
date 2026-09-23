@@ -803,8 +803,8 @@ BOOST_AUTO_TEST_CASE(setAccountStatusBinaryModeContractProbe)
     BOOST_REQUIRE(!binTable.empty());
     {
         std::promise<std::optional<Table>> promise;
-        storage->asyncCreateTable(binTable, "value",
-            [&promise](Error::UniquePtr&& error, std::optional<Table>&& table) {
+        storage->asyncCreateTable(
+            binTable, "value", [&promise](Error::UniquePtr&& error, std::optional<Table>&& table) {
                 BOOST_CHECK(!error);
                 promise.set_value(std::move(table));
             });
@@ -882,20 +882,20 @@ BOOST_AUTO_TEST_CASE(legacyAppsAccountTableNamePinsBaseStrings)
         BOOST_CHECK(sysConfigTable.starts_with("/s/"));
         bytes sysConfigRaw;
         boost::algorithm::unhex(precompiled::SYS_CONFIG_ADDRESS, std::back_inserter(sysConfigRaw));
-        BOOST_CHECK_EQUAL(sysConfigTable.substr(3), std::string(sysConfigRaw.begin(), sysConfigRaw.end()));
+        BOOST_CHECK_EQUAL(
+            sysConfigTable.substr(3), std::string(sysConfigRaw.begin(), sysConfigRaw.end()));
         auto const zeroTable = account::legacyAppsAccountTableName(precompiled::EMPTY_ADDRESS);
         BOOST_REQUIRE_EQUAL(zeroTable.size(), 3 + 20);
         BOOST_CHECK(zeroTable.starts_with("/s/"));
-        BOOST_CHECK(std::all_of(zeroTable.begin() + 3, zeroTable.end(), [](char c) {
-            return c == 0;
-        }));
+        BOOST_CHECK(
+            std::all_of(zeroTable.begin() + 3, zeroTable.end(), [](char c) { return c == 0; }));
         BOOST_CHECK_EQUAL(account::legacyAppsAccountTableName(NORMAL_ADDRESS),
             account::hexToBinaryAccountTableName("/apps/" + std::string(NORMAL_ADDRESS)));
     }
     // Cross-mode pin: the two layouts of the same address must canonicalize to one logical
     // row for state hashing (canonicalTableNameForHash maps /s/<raw> back to /apps/<hex>).
-    for (auto const address : {precompiled::EMPTY_ADDRESS, precompiled::SYS_CONFIG_ADDRESS,
-             NORMAL_ADDRESS})
+    for (auto const address :
+        {precompiled::EMPTY_ADDRESS, precompiled::SYS_CONFIG_ADDRESS, NORMAL_ADDRESS})
     {
         std::string hexName;
         std::string binName;

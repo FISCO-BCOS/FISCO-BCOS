@@ -123,8 +123,8 @@ inline std::optional<bcos::Address> parseAccountTable(std::string_view table)
         table.starts_with(BINARY_TABLE_PREFIX))
     {
         std::string_view const suffix = table.substr(BINARY_TABLE_PREFIX.size());
-        return bcos::Address{bcos::bytesConstRef(
-            reinterpret_cast<bcos::byte const*>(suffix.data()), suffix.size())};
+        return bcos::Address{
+            bcos::bytesConstRef(reinterpret_cast<bcos::byte const*>(suffix.data()), suffix.size())};
     }
     if (!table.starts_with(APPS_TABLE_PREFIX))
     {

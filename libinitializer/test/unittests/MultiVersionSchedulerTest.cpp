@@ -128,8 +128,7 @@ BOOST_AUTO_TEST_CASE(setVersionThrowsOnHexOnlyLaneInBinaryMode)
 {
     namespace account = ledger::account;
     {
-        bcos::test::ScopedNodeAddressTableMode const modeGuard(
-            account::AddressTableMode::Binary);
+        bcos::test::ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Binary);
         auto scheduler = make(true);
         BOOST_CHECK_THROW(
             scheduler->setVersion(ETHEREUM_EXECUTOR_VERSION, {}), ExecutorVersionNotSupported);

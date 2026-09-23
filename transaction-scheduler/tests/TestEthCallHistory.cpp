@@ -367,7 +367,8 @@ BOOST_AUTO_TEST_CASE(historicalBackendResolvesAccountRows)
     auto const table = ledger::account::hexAccountTableName(hcAddress());
 
     auto latestView = multiLayerStorage.fork();
-    HCHistoricalBackend backendAt1(latestView, headers[0]->stateRoot(), ledger::account::AddressTableMode::Hex);
+    HCHistoricalBackend backendAt1(
+        latestView, headers[0]->stateRoot(), ledger::account::AddressTableMode::Hex);
 
     // Slot: the block-1 value, not the block-2 overwrite.
     auto slotEntry =
@@ -390,7 +391,8 @@ BOOST_AUTO_TEST_CASE(historicalBackendResolvesAccountRows)
     BOOST_CHECK(existsEntry.has_value());
 
     // A root later in the chain serves the overwrite and the balance bump.
-    HCHistoricalBackend backendAt3(latestView, headers[2]->stateRoot(), ledger::account::AddressTableMode::Hex);
+    HCHistoricalBackend backendAt3(
+        latestView, headers[2]->stateRoot(), ledger::account::AddressTableMode::Hex);
     auto slotAt3 =
         task::syncWait(storage2::readOne(backendAt3, StateKeyView{table, hcSlotRowKey()}));
     BOOST_REQUIRE(slotAt3);
@@ -425,7 +427,8 @@ BOOST_AUTO_TEST_CASE(historicalViewReadYourWrites)
     auto const table = ledger::account::hexAccountTableName(hcAddress());
 
     auto latestView = multiLayerStorage.fork();
-    HCHistoricalBackend historicalBackend(latestView, headers[0]->stateRoot(), ledger::account::AddressTableMode::Hex);
+    HCHistoricalBackend historicalBackend(
+        latestView, headers[0]->stateRoot(), ledger::account::AddressTableMode::Hex);
     HCHistoricalView historicalView(std::addressof(historicalBackend));
     historicalView.newMutable();
 
@@ -513,8 +516,8 @@ BOOST_AUTO_TEST_CASE(writeThenReadInsideHistoricalCall)
 
     // And the live chain state is untouched.
     auto latestView = multiLayerStorage.fork();
-    auto liveValue = task::syncWait(storage2::readOne(
-        latestView, StateKeyView{ledger::account::hexAccountTableName(hcAddress()), hcSlotRowKey()}));
+    auto liveValue = task::syncWait(storage2::readOne(latestView,
+        StateKeyView{ledger::account::hexAccountTableName(hcAddress()), hcSlotRowKey()}));
     BOOST_REQUIRE(liveValue);
     BOOST_CHECK(liveValue->get() == hcRawValue(0x02));
 }
@@ -581,7 +584,8 @@ BOOST_AUTO_TEST_CASE(executableCacheBypassForHistoricalStorage)
     task::syncWait(storage2::writeOne(hostcontext::getCacheExecutables(), cachedAddress, poisoned));
 
     auto latestView = multiLayerStorage.fork();
-    HCHistoricalBackend historicalBackend(latestView, headers[0]->stateRoot(), ledger::account::AddressTableMode::Hex);
+    HCHistoricalBackend historicalBackend(
+        latestView, headers[0]->stateRoot(), ledger::account::AddressTableMode::Hex);
     HCHistoricalView historicalView(std::addressof(historicalBackend));
     historicalView.newMutable();
     Rollbackable<HCHistoricalView> rollbackable(historicalView);

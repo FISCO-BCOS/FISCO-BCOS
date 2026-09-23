@@ -144,7 +144,8 @@ template <class Storage>
 task::Task<u256> ESSReadBalance(Storage& storage, std::string_view hexAddr)
 {
     using namespace bcos::ledger::account;
-    EVMAccount<std::remove_reference_t<Storage>> acc(storage, ESSAddress(hexAddr), AddressTableMode::Hex);
+    EVMAccount<std::remove_reference_t<Storage>> acc(
+        storage, ESSAddress(hexAddr), AddressTableMode::Hex);
     co_return co_await acc.balance();
 }
 

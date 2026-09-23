@@ -22,13 +22,13 @@
  *        to the canonical hex form — this test pins that normalization end to end.
  */
 
+#include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/AccountTableName.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
-#include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-scheduler/BaselineSchedulerMPTHelpers.h"
 #include <boost/test/unit_test.hpp>
@@ -41,8 +41,8 @@ namespace
 using namespace bcos;
 using namespace bcos::storage2;
 
-using XorEncStorage = memory_storage::MemoryStorage<executor_v1::StateKey,
-    executor_v1::StateValue, memory_storage::Attribute(memory_storage::ORDERED)>;
+using XorEncStorage = memory_storage::MemoryStorage<executor_v1::StateKey, executor_v1::StateValue,
+    memory_storage::Attribute(memory_storage::ORDERED)>;
 
 // One logical account: registration row in s_tables plus nonce/balance/slot rows.
 // When @p binary is true the rows live in the "/s/<20 raw bytes>" table, otherwise in
@@ -52,8 +52,7 @@ task::Task<void> writeAccount(XorEncStorage& storage, std::string_view hexAddres
 {
     namespace account = ledger::account;
     std::string const hexTable = "/apps/" + std::string(hexAddress);
-    std::string const table =
-        binary ? account::hexToBinaryAccountTableName(hexTable) : hexTable;
+    std::string const table = binary ? account::hexToBinaryAccountTableName(hexTable) : hexTable;
     BOOST_REQUIRE(!table.empty());
 
     co_await storage2::writeOne(storage, executor_v1::StateKey{ledger::SYS_TABLES, table},
@@ -71,11 +70,11 @@ task::Task<void> writeAccount(XorEncStorage& storage, std::string_view hexAddres
         storage, executor_v1::StateKey{table, slotKey}, storage::Entry{slotValue});
 }
 
-task::Task<h256> rootOf(XorEncStorage& storage, crypto::Hash const& hashImpl,
-    ledger::Features const& features)
+task::Task<h256> rootOf(
+    XorEncStorage& storage, crypto::Hash const& hashImpl, ledger::Features const& features)
 {
-    co_return co_await scheduler_v1::xorStateRoot(storage,
-        static_cast<uint32_t>(protocol::BlockVersion::V3_6_VERSION), hashImpl, features);
+    co_return co_await scheduler_v1::xorStateRoot(
+        storage, static_cast<uint32_t>(protocol::BlockVersion::V3_6_VERSION), hashImpl, features);
 }
 }  // namespace
 
@@ -100,7 +99,7 @@ BOOST_AUTO_TEST_CASE(sameLogicalStateSameRootAcrossLayouts)
         co_await writeAccount(allBinary, address2, "7", "12345", true);
 
         XorEncStorage mixed;
-        co_await writeAccount(mixed, address1, "5", "999", false);  // unmigrated account
+        co_await writeAccount(mixed, address1, "5", "999", false);   // unmigrated account
         co_await writeAccount(mixed, address2, "7", "12345", true);  // migrated account
 
         // v3.1 digest format (bugfix_statestorage_hash_v3_17 off).

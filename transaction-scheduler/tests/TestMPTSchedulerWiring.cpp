@@ -543,7 +543,8 @@ BOOST_AUTO_TEST_CASE(pipelineVisibilityNegativeControl)
         storage::Entry entry;
         entry.set("13");
         task::syncWait(storage2::writeOne(mutableStorage(view),
-            StateKey{bcos::ledger::account::hexAccountTableName(addressB), "balance"}, std::move(entry)));
+            StateKey{bcos::ledger::account::hexAccountTableName(addressB), "balance"},
+            std::move(entry)));
     };
     writeDelta(freshView);
     writeDelta(staleView);
@@ -553,9 +554,8 @@ BOOST_AUTO_TEST_CASE(pipelineVisibilityNegativeControl)
     // GREEN: the view whose immutable chain carries 501's node rows resolves the parent trie.
     {
         ViewNodeStorage<MWMultiLayerStorage::ViewType> nodeStorage(freshView);
-        auto delta =
-            task::syncWait(mpt::buildAndCollect(nodeStorage, parentRoot, freshView, false,
-                ledger::account::AddressTableMode::Hex));
+        auto delta = task::syncWait(mpt::buildAndCollect(
+            nodeStorage, parentRoot, freshView, false, ledger::account::AddressTableMode::Hex));
         mpt::Account accountA;
         accountA.balance = 11;
         mpt::Account accountB;
@@ -567,9 +567,8 @@ BOOST_AUTO_TEST_CASE(pipelineVisibilityNegativeControl)
     // walk must fail with the missing-node invariant, never silently rebuild from empty.
     {
         ViewNodeStorage<MWMultiLayerStorage::ViewType> nodeStorage(staleView);
-        BOOST_CHECK_THROW(
-            task::syncWait(mpt::buildAndCollect(nodeStorage, parentRoot, staleView, false,
-                               ledger::account::AddressTableMode::Hex)),
+        BOOST_CHECK_THROW(task::syncWait(mpt::buildAndCollect(nodeStorage, parentRoot, staleView,
+                              false, ledger::account::AddressTableMode::Hex)),
             mpt::MPTInvariantViolation);
     }
 }

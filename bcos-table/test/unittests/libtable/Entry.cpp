@@ -272,10 +272,8 @@ BOOST_AUTO_TEST_CASE(entryHashAccountTableNormalization)
 
         // (3) Negative control: "_accessAuth" auth tables are NOT normalized (out of
         // scope — they stay hex, unmigrated), so the two spellings hash differently.
-        auto hexAuthHash =
-            entry.hash(hexTable + "_accessAuth", key, *sm3, v3_1, std::nullopt);
-        auto binAuthHash =
-            entry.hash(binTable + "_accessAuth", key, *sm3, v3_1, std::nullopt);
+        auto hexAuthHash = entry.hash(hexTable + "_accessAuth", key, *sm3, v3_1, std::nullopt);
+        auto binAuthHash = entry.hash(binTable + "_accessAuth", key, *sm3, v3_1, std::nullopt);
         BOOST_CHECK_NE(hexAuthHash, binAuthHash);
 
         // (4) Non-account tables hash by their literal name (no accidental rewrite).

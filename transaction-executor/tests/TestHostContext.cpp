@@ -6,8 +6,8 @@
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-executor/src/Common.h"
-#include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/AccountTableName.h"
+#include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/protocol/Protocol.h"
@@ -25,6 +25,7 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/testutils/ScopedNodeAddressTableMode.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
+#include <bcos-utilities/BoostLog.h>
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
@@ -34,7 +35,6 @@
 #include <memory>
 #include <range/v3/algorithm/sort.hpp>
 #include <range/v3/algorithm/unique.hpp>
-#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos::task;
 using namespace bcos::storage2;
@@ -444,7 +444,8 @@ static bcos::task::Task<void> testNestConstructor(auto* self, bool web3)
 
     if (web3)
     {
-        bcos::ledger::account::EVMAccount account(self->storage, address1, bcos::ledger::account::AddressTableMode::Hex);
+        bcos::ledger::account::EVMAccount account(
+            self->storage, address1, bcos::ledger::account::AddressTableMode::Hex);
         auto nonce = co_await account.nonce();
         BOOST_REQUIRE(nonce.has_value());
         BOOST_TEST(nonce.value() == "11");
@@ -467,7 +468,8 @@ static bcos::task::Task<void> testNestConstructor(auto* self, bool web3)
         BOOST_CHECK_NE(address2, bcos::Address{});
         if (web3)
         {
-            bcos::ledger::account::EVMAccount account(self->storage, address2, bcos::ledger::account::AddressTableMode::Hex);
+            bcos::ledger::account::EVMAccount account(
+                self->storage, address2, bcos::ledger::account::AddressTableMode::Hex);
             auto nonce = co_await account.nonce();
             BOOST_REQUIRE(nonce.has_value());
             BOOST_TEST(nonce.value() == "1");
@@ -816,8 +818,10 @@ BOOST_AUTO_TEST_CASE(accountTableNameCoding)
 
     // Negative probes: wrong prefix, wrong length, uppercase hex, non-hex char.
     BOOST_CHECK(!account::isHexAccountTableName("/sys/4200000000000000000000000000000000001234"));
-    BOOST_CHECK(!account::isHexAccountTableName("/apps/42000000000000000000000000000000000012"));  // 38
-    BOOST_CHECK(!account::isHexAccountTableName("/apps/4200000000000000000000000000000000001234ff"));  // 42
+    BOOST_CHECK(
+        !account::isHexAccountTableName("/apps/42000000000000000000000000000000000012"));  // 38
+    BOOST_CHECK(
+        !account::isHexAccountTableName("/apps/4200000000000000000000000000000000001234ff"));  // 42
     BOOST_CHECK(!account::isHexAccountTableName("/apps/420000000000000000000000000000000000ABCD"));
     BOOST_CHECK(!account::isHexAccountTableName("/apps/zz00000000000000000000000000000000001234"));
     BOOST_CHECK(!account::isBinaryAccountTableName(binTable.substr(0, 22)));  // 19 address bytes
@@ -843,8 +847,8 @@ BOOST_AUTO_TEST_CASE(accountTableNameCoding)
     BOOST_CHECK_EQUAL(account::canonicalTableNameForHash(hexTable), hexTable);
     BOOST_CHECK_EQUAL(account::canonicalTableNameForHash("s_tables"), "s_tables");
     BOOST_CHECK_EQUAL(account::canonicalTableNameForHash("/sys/status"), "/sys/status");
-    BOOST_CHECK_EQUAL(account::canonicalTableNameForHash("/apps/someContract"),
-        "/apps/someContract");
+    BOOST_CHECK_EQUAL(
+        account::canonicalTableNameForHash("/apps/someContract"), "/apps/someContract");
     BOOST_CHECK_EQUAL(
         account::canonicalTableNameForHash(hexTable + "_accessAuth"), hexTable + "_accessAuth");
 }
@@ -871,12 +875,12 @@ BOOST_AUTO_TEST_CASE(accountTableNameIsTotalAcrossModes)
     // Non-canonical inputs: no throw, and both modes return the SAME verbatim hex-layout
     // name (a typically empty table), so Hex and Binary nodes agree on the digest.
     for (std::string_view input : {
-             "420000000000000000000000000000000000ABCD",     // uppercase
-             "zz00000000000000000000000000000000001234",     // non-hex chars
-             "420000000000000000000000000000000000123",      // odd length (39)
-             "42000000000000000000000000000000000012",       // even but short (38)
-             "0x4200000000000000000000000000000000001234",   // 0x-prefixed (42)
-             "",                                             // empty
+             "420000000000000000000000000000000000ABCD",    // uppercase
+             "zz00000000000000000000000000000000001234",    // non-hex chars
+             "420000000000000000000000000000000000123",     // odd length (39)
+             "42000000000000000000000000000000000012",      // even but short (38)
+             "0x4200000000000000000000000000000000001234",  // 0x-prefixed (42)
+             "",                                            // empty
          })
     {
         std::string const expect = "/apps/" + std::string(input);
@@ -923,8 +927,10 @@ BOOST_AUTO_TEST_CASE(binaryWritesLeaveHexRowsUntouched)
         co_await binaryAccount.setCode(code, "the-abi", codeHash);
 
         // Both registrations and both row sets now exist side by side...
-        BOOST_CHECK(co_await storage2::existsOne(storage, StateKeyView{bcos::ledger::SYS_TABLES, hexTable}));
-        BOOST_CHECK(co_await storage2::existsOne(storage, StateKeyView{bcos::ledger::SYS_TABLES, binTable}));
+        BOOST_CHECK(co_await storage2::existsOne(
+            storage, StateKeyView{bcos::ledger::SYS_TABLES, hexTable}));
+        BOOST_CHECK(co_await storage2::existsOne(
+            storage, StateKeyView{bcos::ledger::SYS_TABLES, binTable}));
         BOOST_CHECK(co_await hexAccount.nonce() == std::optional<std::string>{"3"});
         BOOST_CHECK_EQUAL(co_await hexAccount.balance(), bcos::u256(999));
         BOOST_CHECK(co_await binaryAccount.nonce() == std::optional<std::string>{"4"});
@@ -959,7 +965,8 @@ BOOST_AUTO_TEST_CASE(createOnBinaryNodeWritesHexAuthTable)
     bcos::test::ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Binary);
     syncWait([this]() -> Task<void> {
         auto codeAddress = bcos::unhexAddress("0x4200000000000000000000000000000000004321");
-        std::string const hexAuthTable = "/apps/4200000000000000000000000000000000004321_accessAuth";
+        std::string const hexAuthTable =
+            "/apps/4200000000000000000000000000000000004321_accessAuth";
 
         // blockHeader.number() != 0 so executeCreate runs createAuthTable (the fixture's own
         // deploy runs at number 0 and skips it).
@@ -988,8 +995,8 @@ BOOST_AUTO_TEST_CASE(createOnBinaryNodeWritesHexAuthTable)
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
             hostContext(rollbackableStorage, rollbackableTransientStorage, createBlockHeader,
-                message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false,
-                0, bcos::task::syncWait);
+                message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
+                bcos::task::syncWait);
         co_await hostContext.prepare();
         auto result = co_await hostContext.execute();
         BOOST_REQUIRE_EQUAL(result.status_code, 0);
@@ -1000,8 +1007,7 @@ BOOST_AUTO_TEST_CASE(createOnBinaryNodeWritesHexAuthTable)
         // ...and NOT at the binary path that the recipient account's path() would have
         // produced before the fix.
         auto const binAuthTable =
-            account::hexToBinaryAccountTableName(
-                "/apps/4200000000000000000000000000000000004321") +
+            account::hexToBinaryAccountTableName("/apps/4200000000000000000000000000000000004321") +
             "_accessAuth";
         BOOST_REQUIRE(binAuthTable.size() > std::string_view{"_accessAuth"}.size());
         BOOST_CHECK(!co_await storage2::existsOne(
@@ -1052,8 +1058,8 @@ BOOST_AUTO_TEST_CASE(createTableOnBinaryNodeV1Lane)
         co_await initBFS(blockHeader, *hashImpl);
 
         bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
-        auto callAddress = [&](evmc_address callAddress, bcos::bytes const& input)
-            -> Task<EVMCResult> {
+        auto callAddress = [&](evmc_address callAddress,
+                               bcos::bytes const& input) -> Task<EVMCResult> {
             evmc_message message = {.kind = EVMC_CALL,
                 .flags = 0,
                 .depth = 0,
@@ -1070,9 +1076,9 @@ BOOST_AUTO_TEST_CASE(createTableOnBinaryNodeV1Lane)
             evmc_address origin = {};
 
             HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
-                hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader,
-                    message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl,
-                    false, 0, bcos::task::syncWait);
+                hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
+                    origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
+                    bcos::task::syncWait);
             co_await hostContext.prepare();
             co_return co_await hostContext.execute();
         };
@@ -1096,8 +1102,8 @@ BOOST_AUTO_TEST_CASE(createTableOnBinaryNodeV1Lane)
         BOOST_REQUIRE_EQUAL(createCode, 0);  // CODE_SUCCESS
 
         // The link row carries the address internalCreate registered the stub under.
-        auto linkEntry = co_await storage2::readOne(storage,
-            StateKeyView{"/tables/t_v1_binary", bcos::executor::FS_LINK_ADDRESS});
+        auto linkEntry = co_await storage2::readOne(
+            storage, StateKeyView{"/tables/t_v1_binary", bcos::executor::FS_LINK_ADDRESS});
         BOOST_REQUIRE(linkEntry.has_value());
         std::string const linkAddress(linkEntry->get());
         BOOST_REQUIRE_EQUAL(linkAddress.size(), 40);
@@ -1107,9 +1113,9 @@ BOOST_AUTO_TEST_CASE(createTableOnBinaryNodeV1Lane)
         // "/s/<20 raw bytes>".
         auto linkEvmcAddress = bcos::unhexAddress("0x" + linkAddress);
         using EntryTuple = std::tuple<std::string, std::vector<std::string>>;
-        auto insertResult = co_await callAddress(linkEvmcAddress,
-            abiCodec.abiIn(std::string("insert((string,string[]))"),
-                EntryTuple{"1", {"apple", "100"}}));
+        auto insertResult = co_await callAddress(
+            linkEvmcAddress, abiCodec.abiIn(std::string("insert((string,string[]))"),
+                                 EntryTuple{"1", {"apple", "100"}}));
         BOOST_REQUIRE_EQUAL(insertResult.status_code, EVMC_SUCCESS);
 
         auto selectResult = co_await callAddress(
@@ -1125,8 +1131,8 @@ BOOST_AUTO_TEST_CASE(createTableOnBinaryNodeV1Lane)
         auto const binTable =
             account::accountTableName(linkAddress, account::AddressTableMode::Binary);
         BOOST_REQUIRE(account::isBinaryAccountTableName(binTable));
-        BOOST_CHECK(
-            co_await storage2::existsOne(storage, StateKeyView{bcos::ledger::SYS_TABLES, binTable}));
+        BOOST_CHECK(co_await storage2::existsOne(
+            storage, StateKeyView{bcos::ledger::SYS_TABLES, binTable}));
         BOOST_CHECK(!co_await storage2::existsOne(
             storage, StateKeyView{bcos::ledger::SYS_TABLES, "/apps/" + linkAddress}));
         co_return;

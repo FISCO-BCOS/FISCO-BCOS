@@ -294,9 +294,8 @@ BOOST_AUTO_TEST_CASE(DefaultReadsAreFlatWithReadYourWrites)
 BOOST_AUTO_TEST_CASE(BinaryAddressSelectsTheRawTable)
 {
     SeededState state;
-    TestMPTAccount account{
-        state.execStorage, state.nodeStorage, state.backendStorage, state.addr,
-            bcos::ledger::account::AddressTableMode::Binary};
+    TestMPTAccount account{state.execStorage, state.nodeStorage, state.backendStorage, state.addr,
+        bcos::ledger::account::AddressTableMode::Binary};
 
     std::string expected{bcos::ledger::account::BINARY_TABLE_PREFIX};
     expected.append(reinterpret_cast<const char*>(state.addr.data()), state.addr.size());
