@@ -35,5 +35,5 @@ config_test_cases("" "${SOURCES}" "${TEST_BINARY_NAME}" "" "")
 get_target_property(WEDPRCRYPTO_LIB_LOC wedprcrypto::crypto IMPORTED_LOCATION)
 get_filename_component(WEDPRCRYPTO_LIB_DIR "${WEDPRCRYPTO_LIB_LOC}" DIRECTORY)
 add_test(NAME wedpr-no-bundled-secp256k1
-    COMMAND ${CMAKE_COMMAND} -DBINARY_DIR=${CMAKE_BINARY_DIR}
+    COMMAND ${CMAKE_COMMAND} -DBINARY_DIR=${CMAKE_BINARY_DIR} "-DGENERATOR=${CMAKE_GENERATOR}"
         -DWEDPR_LIB_DIR=${WEDPRCRYPTO_LIB_DIR} -P ${CMAKE_SOURCE_DIR}/cmake/CheckWedprSecp256k1.cmake)
