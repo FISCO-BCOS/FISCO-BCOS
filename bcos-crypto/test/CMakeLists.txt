@@ -30,3 +30,10 @@ target_link_libraries(${TEST_BINARY_NAME} Boost::unit_test_framework bcos-utilit
 set_source_files_properties("unittests/main.cpp" "unittests/testMerkle.cpp" "unittests/Secp256k1RecoverTest.cpp" "unittests/Ed25519RecoverTest.cpp" "unittests/SM2RecoverTest.cpp" "unittests/ChecksumAddressExtraTest.cpp" "unittests/HashImplHasherTest.cpp" "unittests/SignatureRoundtripTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 config_test_cases("" "${SOURCES}" "${TEST_BINARY_NAME}" "" "")
+
+# Regression guard against the bundled-secp256k1 link hijack (see the script header).
+get_target_property(WEDPRCRYPTO_LIB_LOC wedprcrypto::crypto IMPORTED_LOCATION)
+get_filename_component(WEDPRCRYPTO_LIB_DIR "${WEDPRCRYPTO_LIB_LOC}" DIRECTORY)
+add_test(NAME wedpr-no-bundled-secp256k1
+    COMMAND ${CMAKE_COMMAND} -DBINARY_DIR=${CMAKE_BINARY_DIR}
+        -DWEDPR_LIB_DIR=${WEDPRCRYPTO_LIB_DIR} -P ${CMAKE_SOURCE_DIR}/cmake/CheckWedprSecp256k1.cmake)
