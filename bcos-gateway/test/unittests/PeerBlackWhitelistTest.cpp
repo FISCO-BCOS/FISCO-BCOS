@@ -8,8 +8,8 @@
  *   http://www.apache.org/licenses/LICENSE-2.0
  */
 
-#include <bcos-gateway/libnetwork/PeerBlacklist.h>
-#include <bcos-gateway/libnetwork/PeerWhitelist.h>
+#include <bcos-gateway/libnetwork/Host.h>
+#include <bcos-gateway/libnetwork/PeerBlackWhitelist.h>
 #include <boost/test/unit_test.hpp>
 #include <set>
 #include <string>
@@ -29,7 +29,8 @@ BOOST_AUTO_TEST_SUITE(PeerBlackWhitelistTest)
 
 BOOST_AUTO_TEST_CASE(whitelistMembershipAndSize)
 {
-    PeerWhitelist wl(std::set<std::string>{kNodeA, kNodeB}, /*enable=*/true);
+    PeerBlackWhitelist wl(
+        PeerBlackWhitelist::Type::Whitelist, std::set<std::string>{kNodeA, kNodeB}, /*enable=*/true);
     BOOST_CHECK(wl.enable());
     BOOST_CHECK_EQUAL(wl.size(), 2U);
     BOOST_CHECK(wl.has(kNodeA));
@@ -40,16 +41,16 @@ BOOST_AUTO_TEST_CASE(whitelistMembershipAndSize)
 
 BOOST_AUTO_TEST_CASE(whitelistDisabledMatchesAll)
 {
-    // A disabled whitelist "has" every peer (hasValueWhenDisable() == true).
-    PeerWhitelist wl(std::set<std::string>{kNodeA}, /*enable=*/false);
+    // A disabled whitelist "has" every peer.
+    PeerBlackWhitelist wl(
+        PeerBlackWhitelist::Type::Whitelist, std::set<std::string>{kNodeA}, /*enable=*/false);
     BOOST_CHECK(!wl.enable());
-    BOOST_CHECK(wl.hasValueWhenDisable());
     BOOST_CHECK(wl.has(kNodeC));  // disabled → everyone passes
 }
 
 BOOST_AUTO_TEST_CASE(whitelistUpdateAndSetEnable)
 {
-    PeerWhitelist wl(std::set<std::string>{kNodeA}, true);
+    PeerBlackWhitelist wl(PeerBlackWhitelist::Type::Whitelist, std::set<std::string>{kNodeA}, true);
     wl.update(std::set<std::string>{kNodeB, kNodeC}, true);
     BOOST_CHECK(!wl.has(kNodeA));
     BOOST_CHECK(wl.has(kNodeB));
@@ -61,18 +62,29 @@ BOOST_AUTO_TEST_CASE(whitelistUpdateAndSetEnable)
 
 BOOST_AUTO_TEST_CASE(blacklistMembership)
 {
-    PeerBlacklist bl(std::set<std::string>{kNodeA}, /*enable=*/true);
+    PeerBlackWhitelist bl(
+        PeerBlackWhitelist::Type::Blacklist, std::set<std::string>{kNodeA}, /*enable=*/true);
     BOOST_CHECK(bl.enable());
     BOOST_CHECK(bl.has(kNodeA));
     BOOST_CHECK(!bl.has(kNodeB));
-    // A disabled blacklist blocks no one (hasValueWhenDisable() == false).
-    BOOST_CHECK(!bl.hasValueWhenDisable());
 }
 
 BOOST_AUTO_TEST_CASE(blacklistDisabledMatchesNone)
 {
-    PeerBlacklist bl(std::set<std::string>{kNodeA}, /*enable=*/false);
+    // A disabled blacklist blocks no one.
+    PeerBlackWhitelist bl(
+        PeerBlackWhitelist::Type::Blacklist, std::set<std::string>{kNodeA}, /*enable=*/false);
     BOOST_CHECK(!bl.has(kNodeA));  // disabled → nobody is blacklisted
+}
+
+BOOST_AUTO_TEST_CASE(hostDefaultListsMatchRemovedNullptrGuards)
+{
+    // A freshly built Host's default (disabled, empty) lists must behave like the nullptr guards
+    // that used to short-circuit the verify callback: blacklist blocks no one, whitelist passes
+    // everyone — a swapped Type default here would only surface as rejected live handshakes.
+    Host host(nullptr, nullptr, nullptr);
+    BOOST_CHECK(!host.peerBlacklist().has(kNodeA));
+    BOOST_CHECK(host.peerWhitelist().has(kNodeA));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

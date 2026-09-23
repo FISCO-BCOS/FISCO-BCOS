@@ -330,19 +330,21 @@ public:
         _callback(nullptr, block);
     }
 
-    void asyncGetBlockNumberByHash(crypto::HashType const& _hash,
-        std::function<void(Error::Ptr, BlockNumber)> _callback) override
+    void asyncGetBlockNumberByHash(
+        crypto::HashType const& _hash, std::function<void(Error::Ptr, BlockNumber)> _onGetBlock)
+        override
     {
-        ReadGuard l(x_ledger);
-        for (auto const& block : m_ledger)
+        // Mirror Ledger::asyncGetBlockNumberByHash: a known hash answers its block number, an
+        // unknown one answers GetStorageError WITHOUT a chained STDError (the "not found" shape
+        // the eth_getProof hash branch discriminates from a storage fault).
+        auto const it = m_hash2Block.find(_hash);
+        if (it != m_hash2Block.end())
         {
-            if (block->blockHeader()->hash() == _hash)
-            {
-                _callback(nullptr, block->blockHeader()->number());
-                return;
-            }
+            _onGetBlock(nullptr, it->second);
+            return;
         }
-        _callback(BCOS_ERROR_PTR(-1, "block hash not found"), -1);
+        _onGetBlock(
+            BCOS_ERROR_PTR(LedgerError::GetStorageError, "GetBlockNumberByHash failed"), -1);
     }
 
     void asyncGetBlockHashByNumber(BlockNumber _blockNumber,
