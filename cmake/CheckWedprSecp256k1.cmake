@@ -8,16 +8,18 @@
 # library. See the NOTE in bcos-executor/CMakeLists.txt.
 #
 # Two invariants are checked:
-#   1. no link rule in the build references libffi_c_fisco_bcos (the archive has no live
+#   1. no link rule in the build references ffi_c_fisco_bcos (the archive has no live
 #      callers since the alt_bn128 precompiles moved to evmmax::bn254 in #5194);
 #   2. the wedprcrypto archives that ARE linked (ffi_c_crypto_binary / ffi_c_zkp) export
 #      no secp256k1_* symbols, so a wedprcrypto update cannot reintroduce the collision.
 #
 # Both invariants fail closed: an empty inspection is an error, never a pass. Generators
 # without greppable link rules (Xcode, Visual Studio) cannot verify invariant 1 and emit
-# a loud WARNING instead of a silent pass.
+# a loud WARNING instead of a silent pass; a missing nm likewise downgrades invariant 2
+# to a WARNING (the ALL-target registration is already gated on UNIX + nm, so this only
+# matters for a standalone or ctest invocation on a toolchain without nm).
 #
-# Expects -DBINARY_DIR=<build dir> -DWEDPR_LIB_DIR=<dir of libffi_c_*.a>
+# Expects -DBINARY_DIR=<build dir> -DWEDPR_LIB_DIR=<dir of libffi_c_*.a / ffi_c_*.lib>
 # and optionally -DGENERATOR=<CMAKE_GENERATOR>.
 
 if(NOT DEFINED BINARY_DIR OR NOT DEFINED WEDPR_LIB_DIR)
@@ -45,25 +47,35 @@ endif()
 set(rule_count 0)
 foreach(rule_file IN LISTS link_rules)
     file(READ "${rule_file}" rule_content)
-    if(rule_content MATCHES "libffi_c_fisco_bcos")
+    if(rule_content MATCHES "ffi_c_fisco_bcos")
         message(FATAL_ERROR
-            "${rule_file} links libffi_c_fisco_bcos.a, whose bundled stale libsecp256k1 "
+            "${rule_file} links ffi_c_fisco_bcos, whose bundled stale libsecp256k1 "
             "hijacks the node binary's secp256k1_* symbols; see bcos-executor/CMakeLists.txt")
     endif()
     math(EXPR rule_count "${rule_count} + 1")
 endforeach()
 
 # Invariant 2: the linked wedprcrypto FFI archives must not export secp256k1_* symbols.
-file(GLOB archives "${WEDPR_LIB_DIR}/libffi_c_*.a")
-if(NOT archives)
+# Both archive namings are globbed (Unix libffi_c_*.a, MSVC ffi_c_*.lib). An empty glob
+# stays fail-closed — a wedprcrypto packaging change must not read as "clean" — but a
+# missing nm means the toolchain cannot be inspected at all, so downgrade to the same
+# loud WARNING used for generators without greppable link rules.
+file(GLOB archives "${WEDPR_LIB_DIR}/libffi_c_*.a" "${WEDPR_LIB_DIR}/ffi_c_*.lib")
+find_program(NM_EXECUTABLE nm)
+if(NOT NM_EXECUTABLE)
+    message(WARNING
+        "nm not found: invariant 2 (wedprcrypto archives export no secp256k1_* symbols) "
+        "could NOT be verified in this build")
+    set(archives "")
+elseif(NOT archives)
     message(FATAL_ERROR "no wedprcrypto FFI archives found in ${WEDPR_LIB_DIR}")
 endif()
 list(LENGTH archives archive_count)
 foreach(archive IN LISTS archives)
-    if(archive MATCHES "libffi_c_fisco_bcos")
+    if(archive MATCHES "ffi_c_fisco_bcos")
         continue()  # not linked anywhere; covered by invariant 1
     endif()
-    execute_process(COMMAND nm -g --defined-only "${archive}"
+    execute_process(COMMAND ${NM_EXECUTABLE} -g --defined-only "${archive}"
         OUTPUT_VARIABLE symbols RESULT_VARIABLE rc)
     if(NOT rc EQUAL 0)
         message(FATAL_ERROR "nm failed on ${archive}")
