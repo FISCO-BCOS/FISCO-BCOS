@@ -2555,9 +2555,22 @@ void bcos::tool::NodeConfig::loadGenesisFeatures(boost::property_tree::ptree con
         {
             auto flag = it.first;
             auto enableNumber = it.second.get_value<bool>();
+            auto const flagEnum = ledger::Features::string2Flag(flag);
+            // Warn, never throw: rejecting here would break config.genesis files written
+            // before the deprecation, and the flag drives nothing either way.
+            if (enableNumber && ledger::Features::isDeprecated(flagEnum))
+            {
+                NodeConfig_LOG(WARNING)
+                    << LOG_BADGE("loadGenesisFeatures")
+                    << LOG_DESC(
+                           std::string(flag) +
+                           " is deprecated: the account-table encoding is a node-local property "
+                           "(detected at startup, see ledger::account::nodeAddressTableMode), not "
+                           "a chain feature. The flag drives nothing; remove it from "
+                           "config.genesis.");
+            }
             m_genesisConfig.m_features.emplace_back(
-                ledger::FeatureSet{.flag = ledger::Features::string2Flag(flag),
-                    .enable = static_cast<int>(enableNumber)});
+                ledger::FeatureSet{.flag = flagEnum, .enable = static_cast<int>(enableNumber)});
         }
     }
 }

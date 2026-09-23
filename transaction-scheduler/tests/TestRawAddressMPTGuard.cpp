@@ -60,6 +60,14 @@ BOOST_AUTO_TEST_CASE(GovernanceCannotActivateRawAddress)
     BOOST_CHECK(ledger::Features::contains("feature_raw_address"));
     BOOST_CHECK(ledger::Features::string2Flag("feature_raw_address") ==
                 ledger::Features::Flag::feature_raw_address);
+
+    // Genesis loading cannot reject the flag (that would break pre-deprecation
+    // config.genesis files), so entry points warn via isDeprecated instead — the
+    // genesis-only L2 flag is NOT deprecated: it is a valid genesis feature.
+    BOOST_CHECK(ledger::Features::isDeprecated(ledger::Features::Flag::feature_raw_address));
+    BOOST_CHECK(
+        !ledger::Features::isDeprecated(ledger::Features::Flag::feature_l2_ethereum_compat));
+    BOOST_CHECK(!ledger::Features::isDeprecated(ledger::Features::Flag::feature_balance));
 }
 
 // shouldBuildMPT stays a PURE state-root predicate: the account-table encoding never

@@ -188,6 +188,15 @@ public:
     /// which uses set() directly.
     void validate(Flag flag) const;
 
+    /// A deprecated flag is still parsed (its enum value is permanent and string2Flag
+    /// recognizes the name) but drives nothing. Genesis loading cannot reject it — that
+    /// would break config.genesis files written before the deprecation — so entry points
+    /// that accept it should warn instead (NodeConfig::loadGenesisFeatures does).
+    static constexpr bool isDeprecated(Flag flag) noexcept
+    {
+        return flag == Flag::feature_raw_address;
+    }
+
     bool get(Flag flag) const;
     bool get(std::string_view flag) const { return get(string2Flag(flag)); }
 

@@ -47,7 +47,9 @@ void Features::validate(Flag flag) const
     // DEPRECATED, unactivatable. feature_raw_address used to gate the binary account-table
     // encoding; the encoding is a node-local physical layout now (published by the boot-time
     // detection as ledger::account::nodeAddressTableMode()), so the flag drives nothing and a
-    // governance activation would record a no-op row that pretends to mean something.
+    // governance activation would record a no-op row that pretends to mean something. Genesis
+    // loading bypasses validate() (set() directly), so the genesis entry point warns instead
+    // of rejecting — NodeConfig::loadGenesisFeatures, see isDeprecated().
     if (flag == Flag::feature_raw_address)
     {
         BOOST_THROW_EXCEPTION(
