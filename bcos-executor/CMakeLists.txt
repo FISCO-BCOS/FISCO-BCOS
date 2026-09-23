@@ -2,7 +2,6 @@
 project(bcos-executor VERSION ${VERSION})
 
 find_package(TBB CONFIG REQUIRED)
-find_package(wedprcrypto REQUIRED)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
@@ -15,7 +14,14 @@ file(GLOB_RECURSE SRCS src/*.cpp)
 add_library(executor ${SRCS})
 target_include_directories(executor PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
-target_link_libraries(executor PUBLIC jsoncpp_static ledger codec tool bcos-crypto table wedprcrypto::fisco-bcos bcos-protocol
+# NOTE: never link wedprcrypto::fisco-bcos (libffi_c_fisco_bcos.a) here or anywhere on the
+# node link line: the archive bundles a stale vendored libsecp256k1 and, appearing before
+# libsecp256k1.a, hijacks every secp256k1_* symbol in the final binary (its old
+# secp256k1_ecdh ignores the hashfp argument and breaks the RLPx handshake with real
+# geth/op-geth; ECDSA sign/verify/recover are silently bound to the unaudited copy too).
+# Nothing references its entry points anymore: the alt_bn128 precompiles use
+# evmmax::bn254 (Precompiled.cpp) since the evmone 0.21 upgrade (#5194).
+target_link_libraries(executor PUBLIC jsoncpp_static ledger codec tool bcos-crypto table bcos-protocol
         Boost::context evmone::evmone GroupSig Paillier blst)
 # Web3AccessListResolver decodes extraTransactionBytes via rpc::Web3Transaction RLP.
 # TODO: move typed-tx RLP decode to bcos-codec to drop executor -> rpc dependency.

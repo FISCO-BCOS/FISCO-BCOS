@@ -36,6 +36,15 @@ secp256k1_context* secp256k1EcdhContext()
     return ctx;
 }
 
+// Degenerate hash that copies the x-coordinate — the RLPx ECIES shared secret
+// (matches geth's ecies.GenerateShared and silkworm's ecdh_hash_function_copy_x).
+int ecdhHashFunctionCopyX(
+    unsigned char* _output, const unsigned char* _x32, const unsigned char*, void*)
+{
+    memcpy(_output, _x32, 32);
+    return 1;
+}
+
 bytes secp256k1EcdhImpl(
     bytesConstRef _publicKey, bytesConstRef _privateKey, secp256k1_ecdh_hash_function _hashFunction)
 {
@@ -72,48 +81,7 @@ bytes secp256k1EcdhImpl(
 
 bytes secp256k1EcdhCopyX(bytesConstRef _publicKey, bytesConstRef _privateKey)
 {
-    // Do NOT route this through secp256k1_ecdh(hashfp=copyX): libffi_c_fisco_bcos.a
-    // bundles an old libsecp256k1 whose secp256k1_ecdh predates the hashfp argument
-    // and always returns SHA256(compressed point), and that archive precedes
-    // libsecp256k1.a on the node link line, so the caller's hashfn is silently
-    // ignored there (the unit-test binaries link only libsecp256k1.a, which is why
-    // the discrepancy is invisible in tests). tweak_mul + serialize compute the
-    // same point and have a stable ABI in both copies.
-    if (_publicKey.size() != 64)
-    {
-        throw std::invalid_argument("secp256k1Ecdh: public key must be 64 bytes");
-    }
-    if (_privateKey.size() != 32)
-    {
-        throw std::invalid_argument("secp256k1Ecdh: private key must be 32 bytes");
-    }
-
-    // The FISCO convention stores the uncompressed point without the 0x04 prefix.
-    std::array<unsigned char, 65> rawPublicKey{};
-    rawPublicKey[0] = 0x04;
-    memcpy(rawPublicKey.data() + 1, _publicKey.data(), 64);
-
-    secp256k1_pubkey publicKey;
-    if (secp256k1_ec_pubkey_parse(
-            secp256k1EcdhContext(), &publicKey, rawPublicKey.data(), rawPublicKey.size()) != 1)
-    {
-        throw std::invalid_argument("secp256k1Ecdh: failed to parse public key");
-    }
-    // publicKey *= privKey; fails on an invalid scalar or the point at infinity.
-    if (secp256k1_ec_pubkey_tweak_mul(
-            secp256k1EcdhContext(), &publicKey, _privateKey.data()) != 1)
-    {
-        throw std::runtime_error("secp256k1Ecdh: ECDH computation failed");
-    }
-    std::array<unsigned char, 65> serialized{};
-    size_t serializedSize = serialized.size();
-    if (secp256k1_ec_pubkey_serialize(secp256k1EcdhContext(), serialized.data(), &serializedSize,
-            &publicKey, SECP256K1_EC_UNCOMPRESSED) != 1 ||
-        serializedSize != serialized.size() || serialized[0] != 0x04)
-    {
-        throw std::runtime_error("secp256k1Ecdh: failed to serialize shared point");
-    }
-    return bytes(serialized.begin() + 1, serialized.begin() + 33);
+    return secp256k1EcdhImpl(_publicKey, _privateKey, ecdhHashFunctionCopyX);
 }
 
 bytes secp256k1EcdhSha256(bytesConstRef _publicKey, bytesConstRef _privateKey)
