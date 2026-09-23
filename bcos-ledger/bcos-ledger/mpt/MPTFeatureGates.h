@@ -81,7 +81,8 @@ inline bool shouldBuildMPT(
 //
 // The account-table encoding plays no role here: it is a node-local physical layout
 // (nodeAddressTableMode), and the deprecated feature_raw_address flag drives nothing
-// (Features::validate refuses to activate it). The OP/Eth lanes' hex-only naming
+// (Features::validate accepts it with a warning; the recorded row is an inert no-op).
+// The OP/Eth lanes' hex-only naming
 // constraint is enforced at boot by libinitializer (resolveNodeAddressTableMode refuses
 // binary data on a hex-only lane), not by a flag matrix.
 //

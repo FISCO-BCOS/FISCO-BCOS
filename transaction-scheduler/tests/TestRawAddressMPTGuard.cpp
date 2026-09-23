@@ -9,8 +9,8 @@ using namespace bcos::scheduler_v1;
 // The MPT state-root predicate and its boot guard no longer involve the account-table
 // encoding: the encoding is a node-local physical layout (nodeAddressTableMode), the MPT
 // delta scan classifies both layouts (Classify.h parseAccountTable), and the deprecated
-// feature_raw_address flag drives nothing — validate() refuses to activate it, and the
-// hex-only lanes' naming constraint is enforced by libinitializer's boot-time
+// feature_raw_address flag drives nothing — setting it is accepted with a warning, and
+// the hex-only lanes' naming constraint is enforced by libinitializer's boot-time
 // resolveNodeAddressTableMode instead of a flag matrix.
 BOOST_AUTO_TEST_SUITE(RawAddressMPTGuardSuite)
 
@@ -47,23 +47,23 @@ BOOST_AUTO_TEST_CASE(FlagMatrix_L2MidChainStillThrows)
     BOOST_CHECK_THROW(validateMPTFlagMatrix(features), InvalidMPTFlagMatrix);
 }
 
-// The deprecation half: the governance setSystemConfig path (SystemConfigPrecompiled ->
-// Features::validate) refuses to activate feature_raw_address.
-BOOST_AUTO_TEST_CASE(GovernanceCannotActivateRawAddress)
+// The deprecation half: setting feature_raw_address is accepted with a warning on every
+// entry point (governance setSystemConfig via SystemConfigPrecompiled -> Features::validate,
+// config.genesis via NodeConfig::loadGenesisFeatures) — rejecting would fail transactions
+// and genesis files written before the deprecation, while the flag is an inert no-op.
+BOOST_AUTO_TEST_CASE(DeprecatedRawAddressAcceptedWithWarning)
 {
     ledger::Features features;
-    BOOST_CHECK_THROW(features.validate(ledger::Features::Flag::feature_raw_address),
-        bcos::tool::InvalidSetFeature);
-    BOOST_CHECK_THROW(features.validate("feature_raw_address"), bcos::tool::InvalidSetFeature);
+    BOOST_CHECK_NO_THROW(features.validate(ledger::Features::Flag::feature_raw_address));
+    BOOST_CHECK_NO_THROW(features.validate("feature_raw_address"));
 
-    // The name still resolves (the enum value is permanent); only activation is refused.
+    // The name still resolves (the enum value is permanent).
     BOOST_CHECK(ledger::Features::contains("feature_raw_address"));
     BOOST_CHECK(ledger::Features::string2Flag("feature_raw_address") ==
                 ledger::Features::Flag::feature_raw_address);
 
-    // Genesis loading cannot reject the flag (that would break pre-deprecation
-    // config.genesis files), so entry points warn via isDeprecated instead — the
-    // genesis-only L2 flag is NOT deprecated: it is a valid genesis feature.
+    // isDeprecated is how the entry points know to warn — the genesis-only L2 flag is NOT
+    // deprecated: it is a valid genesis feature (and still rejected on the governance path).
     BOOST_CHECK(ledger::Features::isDeprecated(ledger::Features::Flag::feature_raw_address));
     BOOST_CHECK(
         !ledger::Features::isDeprecated(ledger::Features::Flag::feature_l2_ethereum_compat));

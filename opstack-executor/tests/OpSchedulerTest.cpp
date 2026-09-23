@@ -1670,11 +1670,11 @@ BOOST_AUTO_TEST_CASE(CallAtBlockRefusesNonScenarioB)
 }
 
 /// feature_raw_address is deprecated: the account-table encoding is a node-local layout
-/// (nodeAddressTableMode), so the flag drives nothing and validate() refuses to activate
-/// it through governance. The OP lane's hex-only constraint is now enforced at boot by
-/// libinitializer's lane check (resolveNodeAddressTableMode forces Hex / refuses binary
-/// state), not by a per-block guard — an inert raw_address row in the committed state must
-/// not disturb block production.
+/// (nodeAddressTableMode), so the flag drives nothing and setting it (governance or
+/// config.genesis) is accepted with a warning. The OP lane's hex-only constraint is now
+/// enforced at boot by libinitializer's lane check (resolveNodeAddressTableMode forces
+/// Hex / refuses binary state), not by a per-block guard — an inert raw_address row in
+/// the committed state must not disturb block production.
 BOOST_AUTO_TEST_CASE(ExecuteBlockUnmovedByDeprecatedRawAddressFlag)
 {
     Fixture f;
