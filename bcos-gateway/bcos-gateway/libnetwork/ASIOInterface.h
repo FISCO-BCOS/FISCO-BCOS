@@ -26,6 +26,11 @@ namespace bcos::gateway
 class ASIOInterface
 {
 public:
+    // Production always selects SSL (GatewayFactory::buildService). TCP_ONLY is kept because the
+    // test harness relies on it: m_type defaults to TCP_ONLY, so the wire-level tests write
+    // PLAINTEXT frames through socket->ref() to a raw tcp::socket peer — removing the runtime
+    // switch would force those writes through an un-handshaken ssl::stream. The medium-term
+    // replacement is a compile-time stream-type parameter on the socket, not deleting this enum.
     enum ASIO_TYPE
     {
         TCP_ONLY = 0,

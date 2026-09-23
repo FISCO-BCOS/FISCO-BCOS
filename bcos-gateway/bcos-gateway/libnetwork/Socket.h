@@ -17,7 +17,9 @@
 
 namespace bcos::gateway
 {
-class Socket : public std::enable_shared_from_this<Socket>
+// Note: deliberately NOT enable_shared_from_this — nothing ever calls shared_from_this() on a
+// Socket; every async user keeps it alive with an explicit shared_ptr capture instead.
+class Socket
 {
 public:
     Socket(std::shared_ptr<ba::io_context> _ioService, ba::ssl::context& _sslContext,
