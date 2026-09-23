@@ -147,6 +147,9 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14.0)
             add_compile_options(-Wno-error=uninitialized)
             add_compile_options(-Wno-error=tsan)
+            # GCC14 false positive on coroutine promise allocators
+            # (std::generator delete flagged in BucketMap.h TUs)
+            add_compile_options(-Wno-error=mismatched-new-delete)
             add_compile_options(-fconcepts-diagnostics-depth=10)
             add_compile_options(-fdiagnostics-all-candidates)
         endif()
