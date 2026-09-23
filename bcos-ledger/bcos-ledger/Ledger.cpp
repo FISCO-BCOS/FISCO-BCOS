@@ -147,20 +147,52 @@ void Ledger::asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTx
     _callback(nullptr);
 }
 
+task::Task<int> Ledger::cachedExecutorVersion()
+{
+    if (auto const cached = m_executorVersionCache.load(std::memory_order_relaxed); cached >= 0)
+    {
+        co_return static_cast<int>(cached);
+    }
+    int version = 0;  // an absent row is a pre-Ethereum-executor chain
+    if (auto const raw = co_await ledger::getSystemConfig(
+            *this, magic_enum::enum_name(ledger::SystemConfig::executor_version));
+        raw.has_value())
+    {
+        try
+        {
+            version = boost::lexical_cast<int>(std::get<0>(*raw));
+        }
+        catch (boost::bad_lexical_cast const&)
+        {
+            // Boot (readOnChainExecutorVersion) refuses an unparseable row, so reaching this
+            // means the row was corrupted afterwards -- corruption, not a legacy chain.
+            BOOST_THROW_EXCEPTION(std::runtime_error(
+                "on-chain executor_version is not an integer: '" + std::get<0>(*raw) + "'"));
+        }
+    }
+    m_executorVersionCache.store(version, std::memory_order_relaxed);
+    co_return version;
+}
+
 task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
     std::string_view _address, std::string_view _key, protocol::BlockNumber _blockNumber)
 {
     // TODO)): blockNumber is not used nowadays
     std::ignore = _blockNumber;
     // System-contract addresses (0x1000 range, etc.) are stored under the
-    // "/sys/" prefix by EVMAccount; user accounts under "/apps/". Picking the
+    // "/sys/" prefix by EVMAccount on the legacy executor; user accounts under
+    // "/apps/". The v2/v3 executors write EVERY address under "/apps/"
+    // (treatSystemAsUser=true) and the genesis import matches them there, so on
+    // those chains the prefix is USER_APPS for every address. Picking the
     // right prefix here keeps eth_getBalance / eth_getStorageAt /
     // eth_getTransactionCount consistent with both the genesis alloc import and
-    // the v2 executor (which both go through EVMAccount). Without this, reads
+    // the executor (which both go through EVMAccount). Without this, reads
     // for system-range accounts hit the wrong table and return empty (e.g.
     // EEST static VMTests that call 0x1000 saw balance=0 / storage=0).
+    auto const executorVersion = co_await cachedExecutorVersion();
     auto const tablePrefix =
-        precompiled::contains(bcos::precompiled::c_systemTxsAddress, _address) ?
+        (executorVersion < ETHEREUM_EXECUTOR_VERSION &&
+            precompiled::contains(bcos::precompiled::c_systemTxsAddress, _address)) ?
             SYS_DIRECTORY::SYS_APPS :
             SYS_DIRECTORY::USER_APPS;
     auto const contractTableName = getContractTableName(tablePrefix, _address);
@@ -1562,8 +1594,8 @@ static void verifyL2FeatureFlagsSlot(
     }
 }
 
-static task::Task<void> importGenesisState(
-    ::ranges::forward_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
+static task::Task<void> importGenesisState(::ranges::forward_range auto const& allocs,
+    auto& storage, const crypto::Hash& hashImpl, bool treatSystemAsUser)
 {
     // allocs from NodeConfig carry 0x-prefixed hex; LedgerTest builds them without
     // a prefix. Strip a leading 0x so both shapes unhex cleanly. The exact-width /
@@ -1609,8 +1641,8 @@ static task::Task<void> importGenesisState(
             slots.emplace_back(evmKey, evmValue);
         }
 
-        account::EVMAccount account(
-            storage, address, features.get(Features::Flag::feature_raw_address));
+        account::EVMAccount account(storage, address,
+            features.get(Features::Flag::feature_raw_address), treatSystemAsUser);
         co_await account.create();
 
         if (codeHash.has_value())
@@ -2151,8 +2183,14 @@ bool Ledger::buildGenesisBlock(
         }
 
         co_await setGenesisFeatures(genesis.m_features, features, *m_stateStorage);
-        co_await importGenesisState(
-            genesis.m_allocs, *m_stateStorage, *m_blockFactory->cryptoSuite()->hashImpl());
+        // The v2/v3 executors write every address under /apps/ (treatSystemAsUser=true), so
+        // the genesis import must too — a system-address alloc written under /sys/ here would
+        // sit next to, not inside, the state the executor maintains. The version comes from
+        // the genesis config, not from storage: the SYS_CONFIG executor_version row is written
+        // only after this import.
+        co_await importGenesisState(genesis.m_allocs, *m_stateStorage,
+            *m_blockFactory->cryptoSuite()->hashImpl(),
+            genesis.m_executorVersion >= ETHEREUM_EXECUTOR_VERSION);
 
         // Scenario B (L2): block 1 builds the MPT incrementally on top of the genesis state
         // root (buildAndCollect with the genesis root as parent) and reads the parent trie

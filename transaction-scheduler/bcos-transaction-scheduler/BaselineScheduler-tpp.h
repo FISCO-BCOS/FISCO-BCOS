@@ -901,8 +901,13 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::getC
         auto ledgerConfig =
             co_await ledger::getLedgerConfig(view, blockNumber, self->m_blockFactory.get());
 
+        // The v2/v3 executors write EVERY address under /apps/ (EVMAccount
+        // treatSystemAsUser=true), including the 0x1000 system-contract range, so the
+        // read side must match — same rule as EthEndpoint::getStorageAt /
+        // Ledger::getStorageAt.
         ledger::account::EVMAccount account(view, contractAddress,
-            ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
+            ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address),
+            ledgerConfig->executorVersion() >= ledger::ETHEREUM_EXECUTOR_VERSION);
         auto code = co_await account.code();
 
         if (!code)
@@ -927,8 +932,13 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::getA
         auto ledgerConfig =
             co_await ledger::getLedgerConfig(view, blockNumber, self->m_blockFactory.get());
 
+        // The v2/v3 executors write EVERY address under /apps/ (EVMAccount
+        // treatSystemAsUser=true), including the 0x1000 system-contract range, so the
+        // read side must match — same rule as EthEndpoint::getStorageAt /
+        // Ledger::getStorageAt.
         ledger::account::EVMAccount account(view, contractAddress,
-            ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
+            ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address),
+            ledgerConfig->executorVersion() >= ledger::ETHEREUM_EXECUTOR_VERSION);
         auto abi = co_await account.abi();
 
         if (!abi)
@@ -948,8 +958,10 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::getPendin
     auto view = m_multiLayerStorage.get().fork();
     auto ledgerConfig = co_await ledger::getLedgerConfig(view, number, m_blockFactory.get());
 
-    ledger::account::EVMAccount account(
-        view, address, ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
+    // Same /apps/-prefix rule as getCode above.
+    ledger::account::EVMAccount account(view, address,
+        ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address),
+        ledgerConfig->executorVersion() >= ledger::ETHEREUM_EXECUTOR_VERSION);
     co_return co_await account.storageEntry(key);
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>

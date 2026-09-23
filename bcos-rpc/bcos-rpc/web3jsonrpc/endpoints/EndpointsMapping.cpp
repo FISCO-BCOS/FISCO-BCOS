@@ -74,6 +74,11 @@ void EndpointsMapping::addEngineHandlers()
     m_handlers[methodString(EthMethod::engine_newPayloadV2)] = &Endpoints::newPayloadV2;
     m_handlers[methodString(EthMethod::engine_newPayloadV3)] = &Endpoints::newPayloadV3;
     m_handlers[methodString(EthMethod::engine_newPayloadV4)] = &Endpoints::newPayloadV4;
+    m_handlers[methodString(EthMethod::engine_getPayloadBodiesByHashV1)] = &Endpoints::getPayloadBodiesByHashV1;
+    m_handlers[methodString(EthMethod::engine_getPayloadBodiesByRangeV1)] = &Endpoints::getPayloadBodiesByRangeV1;
+    m_handlers[methodString(EthMethod::engine_getBlobsV1)] = &Endpoints::getBlobsV1;
+    m_handlers[methodString(EthMethod::engine_getClientVersionV1)] = &Endpoints::getClientVersionV1;
+    m_handlers[methodString(EthMethod::engine_exchangeClientVersionV1)] = &Endpoints::exchangeClientVersionV1;
     // clang-format on
 }
 

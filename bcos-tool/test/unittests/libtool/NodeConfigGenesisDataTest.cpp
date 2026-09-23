@@ -671,6 +671,87 @@ BOOST_AUTO_TEST_CASE(ethereumMaxBatchSizeBounds)
     }
 }
 
+// [ethereum] reorg_window bounds the EL shallow-reorg depth (EthereumChainRollback.h);
+// pairing with storage.mpt_prune_window is enforced by validateELModeInvariants: a
+// rollback target's trie nodes must still be on disk, so pruning (when enabled) must
+// retain at least as many blocks as a reorg may rewind.
+BOOST_AUTO_TEST_CASE(elReorgWindowVsMptPruneWindow)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    const std::string node =
+        "1234567890123456789012345678901234567890123456789012345678901234"
+        "1234567890123456789012345678901234567890123456789012345678901234";
+    const std::string genesis =
+        "[version]\ncompatibility_version=3.18.0\n"
+        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+        "[web3]\nchain_id=11155111\n"
+        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+        "node.0=" +
+        node +
+        ":1:1\n"
+        "[tx]\ngas_limit=3000000000\n"
+        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+        "version=2\n"
+        "[ethereum]\nmode=el\n"
+        "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
+        "cancun_time=1710338135\nprague_time=1746612311\n"
+        "merge_block=0\n";
+
+    auto loadBoth = [&](NodeConfig& cfg, std::string const& ini) {
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
+        BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString(ini));
+    };
+
+    // Default: reorg_window=256, pruning disabled (-1) — always safe.
+    {
+        NodeConfig cfg(keyFactory);
+        loadBoth(cfg, "[ethereum]\nmode=el\n");
+        BOOST_REQUIRE_NO_THROW(cfg.validateELModeInvariants());
+        BOOST_CHECK_EQUAL(cfg.ethereumReorgWindow(), 256);
+    }
+    // Pruning window larger than / equal to the reorg window: accepted.
+    for (auto const* ini : {"[ethereum]\nmode=el\n[storage]\nmpt_prune_window=300\n",
+             "[ethereum]\nmode=el\nreorg_window=100\n[storage]\nmpt_prune_window=100\n"})
+    {
+        NodeConfig cfg(keyFactory);
+        loadBoth(cfg, ini);
+        BOOST_REQUIRE_NO_THROW(cfg.validateELModeInvariants());
+    }
+    // Pruning enabled below the reorg window: rejected — an in-window rollback target
+    // would have its trie nodes pruned already.
+    {
+        NodeConfig cfg(keyFactory);
+        loadBoth(cfg, "[ethereum]\nmode=el\n[storage]\nmpt_prune_window=100\n");
+        BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(e, "must be -1 (disabled) or >= ethereum.reorg_window");
+            });
+    }
+    // Rollback disabled (reorg_window=0): no rewind can happen, so a small pruning
+    // window is fine.
+    {
+        NodeConfig cfg(keyFactory);
+        loadBoth(
+            cfg, "[ethereum]\nmode=el\nreorg_window=0\n[storage]\nmpt_prune_window=100\n");
+        BOOST_REQUIRE_NO_THROW(cfg.validateELModeInvariants());
+    }
+    // reorg_window itself: negative or absurdly large is a load-time error.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadConfigFromString("[ethereum]\nmode=el\nreorg_window=-1\n"), InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "ethereum.reorg_window must be"); });
+    }
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadConfigFromString("[ethereum]\nmode=el\nreorg_window=100001\n"),
+            InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "ethereum.reorg_window must be"); });
+    }
+}
+
 // Reload is a supported shape: a second loadGenesisConfig without the EL declaration /
 // fork schedule must clear the previous values (a stale m_ethereumELMode would waive both
 // the executor.evm_revision and the auth_admin_account guards).

@@ -90,6 +90,10 @@ enum class TransactionStatus : int32_t
     /// envelopes only (feature_l2_ethereum_compat). It has no envelope an OP verifier can
     /// re-derive, so one inside a block makes that verifier reject the whole block.
     BcosTxNotAllowed = 10024,
+    /// EIP-4844: a blob (type-0x03) transaction must carry a non-empty blobVersionedHashes list
+    /// and a `to` address. The empty-hashes case is also what normalize reports for a blob
+    /// envelope that decodes without any hashes.
+    BlobTxMissingHashes = 10025,
 };
 
 inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionStatus const& _er)
@@ -233,6 +237,9 @@ inline std::ostream& operator<<(std::ostream& _out, bcos::protocol::TransactionS
         break;
     case TransactionStatus::BcosTxNotAllowed:
         _out << "BcosTxNotAllowed";
+        break;
+    case TransactionStatus::BlobTxMissingHashes:
+        _out << "BlobTxMissingHashes";
         break;
     case TransactionStatus::AlreadyInTxPoolAndAccept:
         _out << "AlreadyInTxPoolAndAccept";

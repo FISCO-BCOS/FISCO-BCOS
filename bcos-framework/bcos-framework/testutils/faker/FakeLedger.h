@@ -330,9 +330,20 @@ public:
         _callback(nullptr, block);
     }
 
-    void asyncGetBlockNumberByHash(
-        crypto::HashType const&, std::function<void(Error::Ptr, BlockNumber)>) override
-    {}
+    void asyncGetBlockNumberByHash(crypto::HashType const& _hash,
+        std::function<void(Error::Ptr, BlockNumber)> _callback) override
+    {
+        ReadGuard l(x_ledger);
+        for (auto const& block : m_ledger)
+        {
+            if (block->blockHeader()->hash() == _hash)
+            {
+                _callback(nullptr, block->blockHeader()->number());
+                return;
+            }
+        }
+        _callback(BCOS_ERROR_PTR(-1, "block hash not found"), -1);
+    }
 
     void asyncGetBlockHashByNumber(BlockNumber _blockNumber,
         std::function<void(Error::Ptr, crypto::HashType)> _onGetBlock) override

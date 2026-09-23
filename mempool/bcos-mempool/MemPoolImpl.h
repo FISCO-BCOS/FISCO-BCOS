@@ -1,11 +1,13 @@
 #pragma once
 
 #include "bcos-framework/bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/bcos-framework/engine/Types.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-task/Wait.h"
+#include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
 #include <boost/multi_index/composite_key.hpp>
 #include <boost/multi_index/hashed_index.hpp>
@@ -17,6 +19,7 @@
 #include <algorithm>
 #include <concepts>
 #include <cstdint>
+#include <queue>
 #include <string_view>
 #include <unordered_set>
 
@@ -43,6 +46,77 @@ struct TransactionData
 
     TransactionData(protocol::Transaction::Ptr transaction);
 };
+
+/// Which chain shape the pool serves: L2 (the OP Stack default: no blob transactions, no
+/// fee market) or L1 (vanilla Ethereum: blob transactions admitted, fee-market ordering
+/// and replacement rules apply).
+enum class ChainKind : std::uint8_t
+{
+    L2,
+    L1,
+};
+
+struct MemPoolConfig
+{
+    ChainKind chainKind = ChainKind::L2;
+    /// Max pooled transactions; 0 = unlimited (the L2 default). When full, the cheapest
+    /// transaction by static tip key is evicted.
+    std::size_t capacity = 0;
+    /// Milliseconds a transaction may sit in the pool before it is evicted; 0 = never
+    /// expires (the L2 default).
+    int64_t txLifetimeMs = 0;
+    /// EIP-4844: max blob versioned hashes one transaction may carry (L1 only).
+    std::size_t maxBlobsPerTransaction = 6;
+};
+
+/// Static fee keys of a transaction, without the block's base fee: the most the
+/// transaction can pay. BCOS-native transactions carry no fee market and key to 0.
+inline u256 feeTipKey(protocol::Transaction const& transaction)
+{
+    if (auto const& tip = transaction.maxPriorityFeePerGas(); tip.has_value())
+    {
+        return *tip;
+    }
+    if (auto const& gasPrice = transaction.gasPrice(); gasPrice.has_value())
+    {
+        return *gasPrice;
+    }
+    return 0;
+}
+
+inline u256 feeCapKey(protocol::Transaction const& transaction)
+{
+    if (auto const& feeCap = transaction.maxFeePerGas(); feeCap.has_value())
+    {
+        return *feeCap;
+    }
+    if (auto const& gasPrice = transaction.gasPrice(); gasPrice.has_value())
+    {
+        return *gasPrice;
+    }
+    return 0;
+}
+
+/// The priority fee the transaction effectively pays under @p baseFee (geth's
+/// effectiveTip): min(tipCap, feeCap - baseFee), clamped at zero.
+inline u256 effectivePriorityTip(protocol::Transaction const& transaction, u256 const& baseFee)
+{
+    auto const feeCap = feeCapKey(transaction);
+    if (feeCap <= baseFee)
+    {
+        return 0;
+    }
+    return std::min(feeTipKey(transaction), feeCap - baseFee);
+}
+
+/// The EIP-1559 replacement rule (geth's PriceBump = 10%): the incoming transaction must
+/// bump BOTH its tip cap and its fee cap by at least 10% over the stored one. Computed
+/// exactly in u512 so no u256 product overflows.
+inline bool bumpsFee(protocol::Transaction const& stored, protocol::Transaction const& incoming)
+{
+    return u512(feeTipKey(incoming)) * 10 >= u512(feeTipKey(stored)) * 11 &&
+           u512(feeCapKey(incoming)) * 10 >= u512(feeCapKey(stored)) * 11;
+}
 
 template <class TransactionsType>
 concept InputTransactions =
@@ -114,8 +188,15 @@ private:
             boost::multi_index::sequenced<>>>;
 
     Transactions m_transactions;
-    std::mutex m_mutex;
+    /// EIP-4844 blob sidecars of pooled blob transactions, keyed by transaction hash (L1
+    /// only; the L2 pool never admits blob transactions). Registered atomically with the
+    /// admission that carries them and dropped at every eviction point below, so the map
+    /// can never hold a sidecar whose transaction is gone. Guarded by m_mutex.
+    std::unordered_map<crypto::HashType, engine::BlobTxSidecar> m_blobSidecars;
+    // mutable: the const query entries (blobSidecar / blobsByVersionedHashes) lock it too.
+    mutable std::mutex m_mutex;
     bool m_rawAddress{};
+    MemPoolConfig m_config;
 
     /// The mempool stores the sender as raw address bytes (TransactionImpl::sender());
     /// convert them to an evmc_address so EVMAccount resolves the same lower-case hex
@@ -137,9 +218,77 @@ private:
         Replace,  ///< add(): the newer transaction takes the slot
         Refuse,   ///< tryAdd(): first come first served
     };
-    /// Shared body of add() and tryAdd(); the caller holds m_mutex.
-    protocol::TransactionStatus insertLocked(
-        protocol::Transaction::Ptr transaction, OnTakenNonce onTakenNonce);
+    /// Shared body of add() and tryAdd(); the caller holds m_mutex. A blob sidecar handed
+    /// in with the transaction is registered on the same admission step (and the replaced
+    /// transaction's sidecar dropped on a taken-nonce replacement), so the pool never
+    /// observes a blob transaction without its sidecar.
+    protocol::TransactionStatus insertLocked(protocol::Transaction::Ptr transaction,
+        OnTakenNonce onTakenNonce, std::optional<engine::BlobTxSidecar> sidecar);
+
+    /// Drop transactions older than the configured lifetime; a no-op when the lifetime
+    /// is 0 (the default, always on L2). The sequenced index is insertion order and every
+    /// insert stamps importTime, so the expired transactions form a prefix of it.
+    void evictExpiredLocked()
+    {
+        if (m_config.txLifetimeMs <= 0)
+        {
+            return;
+        }
+        auto const cutoff = static_cast<int64_t>(utcTime()) - m_config.txLifetimeMs;
+        auto& sequenceIndex = m_transactions.get<3>();
+        while (!sequenceIndex.empty() && sequenceIndex.front().importTime() < cutoff)
+        {
+            m_blobSidecars.erase(sequenceIndex.front().hash());
+            sequenceIndex.pop_front();
+        }
+    }
+
+    /// Enforce the configured capacity by evicting the cheapest transaction (lowest
+    /// static tip key; the first minimum found wins the tie) until the pool fits. A no-op
+    /// when the capacity is 0 (unlimited — the default, always on L2).
+    void evictOverCapacityLocked()
+    {
+        if (m_config.capacity == 0)
+        {
+            return;
+        }
+        auto& sequenceIndex = m_transactions.get<3>();
+        while (m_transactions.size() > m_config.capacity)
+        {
+            auto cheapest = sequenceIndex.begin();
+            for (auto it = sequenceIndex.begin(); it != sequenceIndex.end(); ++it)
+            {
+                if (feeTipKey(*it->m_transaction) < feeTipKey(*cheapest->m_transaction))
+                {
+                    cheapest = it;
+                }
+            }
+            m_blobSidecars.erase(cheapest->hash());
+            sequenceIndex.erase(cheapest);
+        }
+    }
+
+    /// Read the sender's account nonce out of @p state; shared by both seal() variants.
+    template <class StateType>
+    int64_t accountNonce(StateType& state, std::string_view sender) const
+    {
+        // The mempool stores the sender as raw address bytes (forceSender), while the
+        // executor persists accounts under the lower-case hex path (/apps/<hex>) via the
+        // evmc_address EVMAccount overload, so the raw bytes must go through the
+        // evmc_address overload for the nonce read to find the executor's account.
+        ledger::account::EVMAccount account(state, senderToAddress(sender), m_rawAddress);
+        int64_t currentNonce = 0;
+        if (auto nonceStr = task::syncWait(account.nonce()))
+        {
+            if (auto result = std::from_chars(
+                    nonceStr->data(), nonceStr->data() + nonceStr->size(), currentNonce);
+                result.ec != std::errc{})
+            {
+                bcos::throwTrace(InvalidNonce{} << bcos::errinfo_comment(*nonceStr));
+            }
+        }
+        return currentNonce;
+    }
 
     void add(protocol::Transaction::Ptr transaction);
     void removeBySenderNonces(SenderNonces auto senderNonces)
@@ -152,12 +301,18 @@ private:
             auto end = senderNonceIndex.upper_bound(std::make_tuple(sender, nonce));
             for (auto it = start; it != end;)
             {
+                m_blobSidecars.erase(it->hash());
                 it = senderNonceIndex.erase(it);
             }
         }
     }
 
 public:
+    /// The default config is the L2 pool exactly as before; L1 wiring passes a config.
+    explicit MemPoolImpl(MemPoolConfig config = {}) : m_config(config) {}
+
+    MemPoolConfig const& config() const { return m_config; }
+
     void add(InputTransactions auto transactions)
     {
         std::unique_lock lock(m_mutex);
@@ -188,10 +343,36 @@ public:
     /// through that gap both pass -- the TOCTOU FIB-51 removed from the other pool.
     ///
     /// @return None when the transaction is now in the pool; AlreadyInTxPool, NonceCheckFail or
-    /// Malformed when it is not. THROWS on a null, tainted or blob transaction: none of those is
-    /// a verdict about an otherwise well-formed transaction -- they mean the caller skipped
-    /// admission, so they must not be reportable as one of its statuses.
-    protocol::TransactionStatus tryAdd(protocol::Transaction::Ptr transaction);
+    /// Malformed when it is not. THROWS on a null or tainted transaction, and on a blob
+    /// transaction on L2: none of those is a verdict about an otherwise well-formed
+    /// transaction -- they mean the caller skipped admission, so they must not be reportable as
+    /// one of its statuses. On L1 a blob transaction is admitted like any other, and a
+    /// taken-nonce replacement that does not meet the fee bump reports AlreadyInTxPool.
+    ///
+    /// A blob transaction's EIP-4844 sidecar (network-wrapper payload) is registered
+    /// atomically with the admission: passing it separately would open a window in which a
+    /// seal could pick the transaction without its sidecar.
+    protocol::TransactionStatus tryAdd(protocol::Transaction::Ptr transaction,
+        std::optional<engine::BlobTxSidecar> sidecar = std::nullopt);
+
+    /// The sidecar of a pooled blob transaction, or nullopt when the transaction is not
+    /// pooled or carries none.
+    std::optional<engine::BlobTxSidecar> blobSidecar(crypto::HashType const& txHash) const
+    {
+        std::unique_lock lock(m_mutex);
+        if (auto it = m_blobSidecars.find(txHash); it != m_blobSidecars.end())
+        {
+            return it->second;
+        }
+        return std::nullopt;
+    }
+
+    /// engine_getBlobsV1's pool half: for every requested versioned hash, the pooled blob
+    /// item whose commitment hashes to it (sha256(commitment) with the 0x01 version byte).
+    /// Versioned hashes are recomputed per call; the pool is small and this is a rare CL
+    /// recovery path, so no versioned-hash index is kept.
+    std::vector<std::optional<engine::BlobItem>> blobsByVersionedHashes(
+        std::span<const crypto::HashType> versionedHashes) const;
 
     void seal(int64_t limit,
         storage2::ReadWriteStorage<executor_v1::StateKeyView, executor_v1::StateValue> auto& state,
@@ -199,6 +380,7 @@ public:
     {
         int64_t count = 0;
         std::unique_lock lock(m_mutex);
+        evictExpiredLocked();
         auto& senderNonceIndex = m_transactions.get<0>();
         auto& senderIndex = m_transactions.get<2>();
         // senderIndex is hashed_non_unique: a sender appears once per transaction, so the same
@@ -261,6 +443,89 @@ public:
         }
     }
 
+    /// L1 fee-market seal: the per-sender selection is the same gapless prefix as
+    /// seal() above, but the prefixes are emitted ordered by effective priority fee —
+    /// geth's best_transactions(): one cursor per sender walks that sender's executable
+    /// nonces, and a heap picks the best cursor head by (effectivePriorityTip desc, hash
+    /// asc). @p baseFee is the block's base fee; transactions whose fee cap does not
+    /// cover it sort last with tip 0 (they are not dropped — admission already enforces
+    /// FeeCapLessThanBaseFee against its own base fee).
+    void seal(int64_t limit,
+        storage2::ReadWriteStorage<executor_v1::StateKeyView, executor_v1::StateValue> auto& state,
+        std::output_iterator<protocol::Transaction::Ptr> auto out, u256 const& baseFee)
+    {
+        int64_t count = 0;
+        std::unique_lock lock(m_mutex);
+        evictExpiredLocked();
+        auto& senderNonceIndex = m_transactions.get<0>();
+        auto& senderIndex = m_transactions.get<2>();
+
+        using SenderNonceIt = decltype(senderNonceIndex.begin());
+        struct Cursor
+        {
+            u256 tip;
+            crypto::HashType hash;
+            std::string_view sender;
+            SenderNonceIt it;
+            int64_t nextNonce;
+        };
+        // std::priority_queue keeps the "largest" element on top: the highest effective
+        // tip, ties broken by the smaller hash for determinism.
+        auto cursorLess = [](Cursor const& a, Cursor const& b) {
+            if (a.tip != b.tip)
+            {
+                return a.tip < b.tip;
+            }
+            return a.hash > b.hash;
+        };
+        std::priority_queue<Cursor, std::vector<Cursor>, decltype(cursorLess)> heap(
+            cursorLess);
+
+        // senderIndex is hashed_non_unique: a sender appears once per transaction, so
+        // track the senders whose cursor is already on the heap (same dedup seal()
+        // documents for its prefix pass).
+        std::unordered_set<std::string_view> queuedSenders;
+        for (const auto& data : senderIndex)
+        {
+            auto sender = data.sender();
+            if (!queuedSenders.emplace(sender).second)
+            {
+                continue;
+            }
+            int64_t currentNonce = accountNonce(state, sender);
+            auto it = senderNonceIndex.lower_bound(std::make_tuple(sender, currentNonce));
+            if (it != senderNonceIndex.end() && it->sender() == sender &&
+                it->nonce() == currentNonce)
+            {
+                heap.push(Cursor{.tip = effectivePriorityTip(*it->m_transaction, baseFee),
+                    .hash = it->hash(),
+                    .sender = sender,
+                    .it = it,
+                    .nextNonce = currentNonce + 1});
+            }
+        }
+
+        while (!heap.empty() && count < limit)
+        {
+            auto cursor = heap.top();
+            heap.pop();
+            *out++ = cursor.it->m_transaction;
+            ++count;
+            // Advance the cursor inside the same sender's gapless prefix; a nonce gap
+            // stops this sender for the block, exactly like seal()'s prefix walk.
+            auto next = std::next(cursor.it);
+            if (next != senderNonceIndex.end() && next->sender() == cursor.sender &&
+                next->nonce() == cursor.nextNonce)
+            {
+                heap.push(Cursor{.tip = effectivePriorityTip(*next->m_transaction, baseFee),
+                    .hash = next->hash(),
+                    .sender = cursor.sender,
+                    .it = next,
+                    .nextNonce = cursor.nextNonce + 1});
+            }
+        }
+    }
+
     void remove(storage2::ReadableStorage<executor_v1::StateKeyView> auto& state)
     {
         std::unique_lock lock(m_mutex);
@@ -288,7 +553,11 @@ public:
                 {
                     auto start = senderNonceIndex.lower_bound(std::make_tuple(sender, 0));
                     auto end = senderNonceIndex.upper_bound(std::make_tuple(sender, nonce - 1));
-                    senderNonceIndex.erase(start, end);
+                    for (auto eraseIt = start; eraseIt != end;)
+                    {
+                        m_blobSidecars.erase(eraseIt->hash());
+                        eraseIt = senderNonceIndex.erase(eraseIt);
+                    }
                 }
             }
 
@@ -303,6 +572,7 @@ public:
         auto& hashIndex = m_transactions.get<1>();
         for (auto const& hash : hashes)
         {
+            m_blobSidecars.erase(hash);
             hashIndex.erase(hash);
         }
     }

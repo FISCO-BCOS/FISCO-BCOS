@@ -28,6 +28,11 @@
 #include <bcos-rpc/tarsRPC/RPCServer.h>
 #include <utility>
 
+namespace bcos::rpc
+{
+class NodeService;
+}  // namespace bcos::rpc
+
 namespace bcos::node
 {
 class AirNodeInitializer
@@ -73,5 +78,9 @@ private:
 
     // Ethereum L1 EL-mode self-sync driver (only set when [ethereum] mode=el).
     std::shared_ptr<bcos::initializer::EthereumSyncInitializer> m_ethereumSync;
+    // The NodeService built in init(config, genesis), kept weak so the EL wiring in
+    // init(params) — which runs AFTER that — can still hang the tx-gossip announce hook
+    // on it. The RPC (m_rpc) owns the strong reference.
+    std::weak_ptr<bcos::rpc::NodeService> m_nodeService;
 };
 }  // namespace bcos::node

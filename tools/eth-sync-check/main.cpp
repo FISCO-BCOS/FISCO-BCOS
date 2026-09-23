@@ -39,6 +39,7 @@
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rlp-protocol/EthGenesisHeader.h>
 #include <bcos-rlp-protocol/EthWithdrawal.h>
+#include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -226,7 +227,11 @@ void report(std::string const& what, bool ok, std::string const& detail = {})
 }
 /// Parse a standard Ethereum genesis.json (alloc: {addr: {balance, code, storage, nonce}})
 /// into a GenesisConfig and compute the op-geth-compatible genesis state root.
-void runGenesisCheck(std::string const& path, std::optional<std::string> const& expect)
+/// executorVersion selects the executor lane the genesis is judged for: the system-address
+/// alloc guard only applies to the legacy lane (< ETHEREUM_EXECUTOR_VERSION); the v2/v3
+/// executors keep every alloc under /apps/, so a 0x1000-range alloc is ordinary there.
+void runGenesisCheck(std::string const& path, std::optional<std::string> const& expect,
+    int executorVersion)
 {
     Json::Value root;
     Json::Reader reader;
@@ -241,6 +246,7 @@ void runGenesisCheck(std::string const& path, std::optional<std::string> const& 
     }
 
     ledger::GenesisConfig genesis;
+    genesis.m_executorVersion = executorVersion;
     for (auto const& addr : root["alloc"].getMemberNames())
     {
         ledger::Alloc a;
@@ -505,6 +511,7 @@ int main(int argc, char** argv)
     std::optional<int64_t> verifyTxBlock;
     std::optional<std::string> rawTxHex;
     std::optional<uint64_t> mergeBlockOverride;
+    int executorVersion = 0;
     for (int i = 1; i < argc; ++i)
     {
         std::string arg = argv[i];
@@ -548,10 +555,14 @@ int main(int argc, char** argv)
         {
             mergeBlockOverride = static_cast<uint64_t>(std::stoull(argv[++i]));
         }
+        else if (arg == "--executor-version" && i + 1 < argc)
+        {
+            executorVersion = std::stoi(argv[++i]);
+        }
     }
     if (genesisPath)
     {
-        runGenesisCheck(*genesisPath, expectRoot);
+        runGenesisCheck(*genesisPath, expectRoot, executorVersion);
         return failures == 0 ? 0 : 1;
     }
     if (genesisIniPath)

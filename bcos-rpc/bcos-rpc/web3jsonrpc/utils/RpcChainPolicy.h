@@ -49,6 +49,15 @@ inline uint64_t suggestedPriorityFeeWei(int executorVersion)
     return usesEthereumFeeSemantics(executorVersion) ? c_minSuggestedPriorityFeeWei : 0;
 }
 
+/// True when the chain admits EIP-4844 blob transactions over RPC. Only the pure-Ethereum
+/// executor (== ETHEREUM_EXECUTOR_VERSION) does: OP (>= OPSTACK_EXECUTOR_VERSION) refuses them
+/// like any L2, and the legacy lane (0/1) has no blob support at all. EL-only concerns that are
+/// not about admission (sidecar gossip, Engine blob handling) still key on ethereumELMode.
+inline bool admitsBlobTransactions(int executorVersion)
+{
+    return executorVersion == bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
+}
+
 /// A committed block's base fee under the lane rules. OP-Stack headers are NON_ETH yet
 /// carry a real base fee (rebuildOpEthHeader deliberately leaves ethBlockVersion NON_ETH)
 /// — check that case before the NON_ETH short-circuit, which is for native FISCO headers

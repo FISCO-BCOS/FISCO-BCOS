@@ -64,6 +64,10 @@ task::Task<bcos::h256> importEthereumGenesisState(
     // it stays as the defensive invariant.
     GenesisConfig genesis;
     genesis.m_allocs = allocs;
+    // This loader exists for the Ethereum-executor lanes (EL sync, L2): those executors write
+    // every address under /apps/, so the trie builder's legacy-lane system-address guard does
+    // not apply, and the import below matches with treatSystemAsUser=true.
+    genesis.m_executorVersion = ledger::ETHEREUM_EXECUTOR_VERSION;
     auto trie = co_await computeGenesisStateTrie(genesis);
 
     for (auto const& alloc : allocs)
@@ -93,8 +97,8 @@ task::Task<bcos::h256> importEthereumGenesisState(
             slots.emplace_back(evmKey, evmValue);
         }
 
-        account::EVMAccount account(
-            storage, address, features.get(Features::Flag::feature_raw_address));
+        account::EVMAccount account(storage, address,
+            features.get(Features::Flag::feature_raw_address), /*treatSystemAsUser=*/true);
         co_await account.create();
 
         if (codeHash.has_value())

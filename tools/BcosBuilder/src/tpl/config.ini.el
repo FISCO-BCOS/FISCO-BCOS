@@ -48,12 +48,20 @@
     node_key_file=
     ; max blocks requested per batch
     max_batch_size=192
+    ; eth/68 transaction gossip: dedicated outbound sessions exchange pooled
+    ; transactions with bootnode peers and admit what arrives into the engine
+    ; mempool (locally injected RPC transactions are announced the same way).
+    tx_gossip=true
     ; optional operator-pinned finalized checkpoint, "<number>:<0xHASH>": the
     ; committed block at <number> must carry <0xHASH>; on a mismatch the sync loop
     ; stops with a fatal error (the bootnodes serve a wrong fork). Take the value
     ; from a trusted source (e.g. a block explorer or your own archive node).
     ; Empty = no checkpoint.
     ; finalized_checkpoint=9200000:0x...
+    ; EIP-6110 deposit contract address, used by the Prague+ requestsHash
+    ; cross-check when verifying blocks. The code default is the Ethereum mainnet
+    ; deposit contract; this template targets Sepolia, whose deposit contract is:
+    deposit_contract_address=0x7f02c3e3c98b133055b8b348b2ac625669182295
 
 [chain]
     ; use SM crypto or not — EL mode is always plain secp256k1/keccak
@@ -66,6 +74,22 @@
 [web3]
     ; Ethereum chain id used by web3 RPC (decimal string)
     chain_id=11155111
+
+[engine_rpc]
+    ; Authenticated Engine API listener (JSON-RPC over HTTP + JWT) for a consensus
+    ; client. Requires ethereum.mode=el; mutually exclusive with [op_engine_rpc] and
+    ; consensus.enable_single_node_consensus.
+    ; NOTE: block import still comes from devp2p sync — the listener answers
+    ; forkchoiceUpdated/newPayload for unknown payloads with SYNCING.
+    enable=false
+    listen_ip=127.0.0.1
+    listen_port=8551
+    ;request_body_size_limit=10485760
+    ;batch_request_size_limit=8
+    ; JWT secret file (32-byte hex) — MUST be identical to the CL client's jwtsecret
+    jwt_secret_file=conf/engine/jwt.hex
+    ; allowed JWT iat clock skew in seconds
+    ;clock_skew_secs=60
 
 [security]
     private_key_path=conf/node.pem

@@ -155,23 +155,28 @@ bcos::task::Task<bcos::ledger::GenesisStateTrie> bcos::ledger::computeGenesisSta
         evmc_address addr{};
         unhexAllocExact(alloc.address, "address", addr.bytes, sizeof(addr.bytes));
 
-        // Reject an alloc at a FISCO system address: EVMAccount routes those to the /sys/
-        // table prefix, while the state trie hashes every alloc as an ordinary /apps/
-        // account — the flat state and the returned root would disagree and the caller's
-        // root comparison would still pass. No known target chain trips this (Ethereum
-        // precompiles are 0x01-0x0a, OP predeploys are 0x4200...), but importEthereumGenesis
-        // State loads arbitrary L1 alloc sets not authored by FISCO tooling.
-        std::string addressHexLower(ledger::stripHexPrefix(alloc.address));
-        std::transform(addressHexLower.begin(), addressHexLower.end(), addressHexLower.begin(),
-            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        if (bcos::precompiled::contains(bcos::precompiled::c_systemTxsAddress,
-                std::string_view{addressHexLower}))
+        // Reject an alloc at a FISCO system address on a LEGACY executor: there EVMAccount
+        // routes those to the /sys/ table prefix, while the state trie hashes every alloc as an
+        // ordinary /apps/ account — the flat state and the returned root would disagree and the
+        // caller's root comparison would still pass. The v2/v3 executors write every address
+        // under /apps/ (treatSystemAsUser=true) and genesis imports match them there, so on
+        // those chains a system-address alloc is an ordinary account and must be admitted
+        // (EEST Cancun fixtures allocate the 0x1000-range precompile addresses).
+        if (genesis.m_executorVersion < ledger::ETHEREUM_EXECUTOR_VERSION)
         {
-            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "genesis alloc address is a FISCO system address: " +
-                                      alloc.address +
-                                      " (EVMAccount would write it to /sys/ but the state "
-                                      "root hashes it as an ordinary /apps/ account)"));
+            std::string addressHexLower(ledger::stripHexPrefix(alloc.address));
+            std::transform(addressHexLower.begin(), addressHexLower.end(),
+                addressHexLower.begin(),
+                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            if (bcos::precompiled::contains(bcos::precompiled::c_systemTxsAddress,
+                    std::string_view{addressHexLower}))
+            {
+                BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                          "genesis alloc address is a FISCO system address: " +
+                                          alloc.address +
+                                          " (EVMAccount would write it to /sys/ but the state "
+                                          "root hashes it as an ordinary /apps/ account)"));
+            }
         }
 
         auto addrKeyHash = keccak(bcos::bytesConstRef(addr.bytes, sizeof(addr.bytes)));

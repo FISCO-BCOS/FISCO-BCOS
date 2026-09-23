@@ -534,5 +534,24 @@ BOOST_AUTO_TEST_CASE(compare_absent_optional_follows_reconstructed_hash)
     BOOST_CHECK(engine::detail::compareWithBuiltPayload(disagreedExcess, built).has_value());
 }
 
+// The executor_version==2 (pure-Ethereum) lane lifts the OP blob refusal through
+// validateExecutionPayload's allowBlob argument; the refusal stays the default, and
+// unsupported type bytes are refused under either policy.
+BOOST_AUTO_TEST_CASE(allow_blob_lifts_only_the_blob_refusal)
+{
+    auto blobPayload = makePayloadWithTransactions({}, {bytes{0x03, 0xc0}});
+    auto error = engine::detail::validateExecutionPayload(blobPayload, 3);
+    BOOST_REQUIRE(error.has_value());
+    BOOST_CHECK_NE(error->find("blob transactions are not allowed"), std::string::npos);
+    BOOST_CHECK(
+        !engine::detail::validateExecutionPayload(blobPayload, 3, /*allowBlob=*/true).has_value());
+
+    auto unsupportedPayload = makePayloadWithTransactions({}, {bytes{0x09, 0xc0}});
+    auto unsupportedError =
+        engine::detail::validateExecutionPayload(unsupportedPayload, 3, /*allowBlob=*/true);
+    BOOST_REQUIRE(unsupportedError.has_value());
+    BOOST_CHECK_NE(unsupportedError->find("unsupported transaction type"), std::string::npos);
+}
+
 
 BOOST_AUTO_TEST_SUITE_END()

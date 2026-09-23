@@ -70,6 +70,27 @@ struct BlobsBundleV1
     std::vector<bytes> blobs;
 };
 
+/// EIP-4844 per-transaction sidecar (the network-wrapper payload of a type-3 transaction):
+/// the blob bodies with their KZG commitments and proofs, kept alongside the stripped
+/// transaction while it sits in the blob pool. A block's BlobsBundleV1 is the concatenation
+/// of its blob transactions' sidecars in block order.
+struct BlobTxSidecar
+{
+    std::vector<bytes> blobs;
+    std::vector<bytes> commitments;
+    std::vector<bytes> proofs;
+};
+
+/// One blob with its commitment and proof — the engine_getBlobsV1 answer unit. The wire
+/// object (BlobAndProofV1) carries only blob and proof; the commitment rides along because
+/// the versioned hash a CL asks by derives from it.
+struct BlobItem
+{
+    bytes commitment;
+    bytes proof;
+    bytes blob;
+};
+
 struct ForkchoiceState
 {
     h256 headBlockHash;

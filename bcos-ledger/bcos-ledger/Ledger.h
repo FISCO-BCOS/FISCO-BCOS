@@ -34,6 +34,7 @@
 #include <boost/compute/detail/lru_cache.hpp>
 #include <utility>
 #include <bcos-utilities/BoostLog.h>
+#include <atomic>
 
 #define LEDGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER")
 
@@ -218,5 +219,11 @@ private:
     size_t m_keyPageSize = 0;
     // null unless running in L2 chain mode; see setL2ConfigLoader/loadL2Config.
     ledger::IL2ConfigLoader::Ptr m_l2Loader;
+
+    /// Lazily resolved executor_version (the SYS_CONFIG row), cached after the first read: the
+    /// value is genesis-bound, so one read decides it for the process. -1 = not yet read.
+    /// getStorageAt's system-address prefix selection keys on it.
+    std::atomic<int64_t> m_executorVersionCache{-1};
+    task::Task<int> cachedExecutorVersion();
 };
 }  // namespace bcos::ledger

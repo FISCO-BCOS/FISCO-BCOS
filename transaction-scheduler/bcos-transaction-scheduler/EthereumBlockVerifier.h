@@ -47,6 +47,8 @@
 #include "bcos-rlp-protocol/EthBlockHeader.h"
 #include "bcos-rlp-protocol/EthWithdrawal.h"
 #include "bcos-task/Task.h"
+#include "bcos-transaction-scheduler/EthereumChainRollback.h"
+#include "bcos-transaction-scheduler/EthereumRequests.h"
 #include "bcos-transaction-scheduler/BaselineSchedulerMPTHelpers.h"
 #include "bcos-transaction-scheduler/EthereumSystemCalls.h"
 #include "bcos-utilities/Bloom.h"
@@ -90,6 +92,10 @@ struct EvmcForkTimestamps
     // fillExecutionLedgerConfig below.
     uint64_t bpo1Time{kForkDisabled};
     uint64_t bpo2Time{kForkDisabled};
+    // EIP-6110 deposit contract for the Prague+ requestsHash cross-check
+    // (EthereumRequests.h). Defaults to the Ethereum mainnet address; other chains
+    // override it through [ethereum] deposit_contract_address (config.ini).
+    bcos::Address depositContractAddress = c_mainnetDepositContractAddress;
 };
 
 inline constexpr uint64_t kSecondsToMilliseconds = 1000;
@@ -395,6 +401,31 @@ struct EthereumBlockVerificationResult
     crypto::HashType stateRoot;
 };
 
+/// Everything the shared execution phase (EthereumBlockVerifier::executeEthereumBlock)
+/// produces over the caller's view: the deterministic outputs plus the commit-time
+/// artifacts. `error` set means the block is INVALID (decode / execution / system-call
+/// failure) — it must never be committed.
+struct EthereumBlockExecution
+{
+    std::optional<std::string> error;
+    protocol::BlockHeader::Ptr header;  ///< the FISCO execution header
+    std::vector<protocol::Transaction::Ptr> transactions;
+    std::vector<protocol::TransactionReceipt::Ptr> receipts;
+    EthereumBlockComputation computation;
+    crypto::HashType stateRoot;
+    std::optional<ledger::mpt::MPTDeltaLayer> mptDelta;
+    /// Prague+: the computed EIP-7685 requestsHash (EIP-6110 deposits from the receipts
+    /// plus the EIP-7002/7251 block-end system-call requests).
+    std::optional<crypto::HashType> requestsHash;
+    /// The EIP-7685 execution requests in engine-API form (getPayloadV4+ / newPayloadV4+
+    /// executionRequests): for each NON-EMPTY request type in [deposit, withdrawal,
+    /// consolidation] order, type byte ++ request_data. Empty pre-Prague. Hashing this
+    /// list with engine_common's calculateRequestsHash (sha256 per entry, concatenated,
+    /// sha256 again) reproduces requestsHash — that identity is what makes a built
+    /// payload's round-trip through newPayloadV4 self-consistent.
+    std::vector<bcos::bytes> executionRequests;
+};
+
 /// Thrown when the block to verify is not the direct child of the ledger head. A wrong-height
 /// block reaching the verifier is sync-loop bookkeeping gone wrong, never a peer-supplied
 /// invalid block, so the type lets the caller classify it as a deterministic failure (no
@@ -429,14 +460,16 @@ public:
 
     EthereumBlockVerifier(Scheduler& scheduler, Executor& executor,
         protocol::BlockFactory& blockFactory,
-        std::shared_ptr<ledger::mpt::CommitObserver> commitObserver = nullptr)
+        std::shared_ptr<ledger::mpt::CommitObserver> commitObserver = nullptr,
+        int64_t reorgWindow = 0)
       : m_scheduler(scheduler),
         m_executor(executor),
         m_blockFactory(blockFactory),
         // MPT pruning seam (CommitObserver.h): a null observer keeps the Noop — the
         // commit path then pays nothing beyond carrying the delta.
         m_commitObserver(commitObserver ? std::move(commitObserver) :
-                                          std::make_shared<ledger::mpt::NoopCommitObserver>())
+                                          std::make_shared<ledger::mpt::NoopCommitObserver>()),
+        m_reorgWindow(reorgWindow)
     {}
 
     /// MPT state root over the executed view's Ethereum world state, built incrementally
@@ -450,87 +483,51 @@ public:
     {
         return ledger::mpt::computeMptStateRoot(view, parentStateRoot, ledgerConfig);
     }
-    /// Execute `ethHeader` (child of `parentHeader`) with the given raw EIP-2718
-    /// transactions, verify the deterministic roots + state root against the header,
-    /// and on success commit block/state/ledger rows atomically.
+
+    /// Execute one Ethereum block over @p view WITHOUT verifying the outputs against the
+    /// header and WITHOUT committing: ledger config + per-block EVM overlay, execution
+    /// header, Cancun+ block-start system calls, transaction decode + execution,
+    /// EIP-4895 withdrawals, PoW block rewards, Prague+ block-end system calls, the
+    /// deterministic roots and the MPT state delta. Shared by verifyAndCommit (which
+    /// then verifies the outputs against the external header and commits) and by the
+    /// EL block builder (IExternalPayloadVerifier::buildL1Block, which STAMPS the
+    /// outputs into the header it is building) — one implementation, so a block this
+    /// node builds is executed exactly the way this node would verify it.
     ///
-    /// Height guard (step 1a below): the block number MUST equal the current ledger
-    /// head + 1, read through the freshly forked view from the SYS_KEY_CURRENT_NUMBER
-    /// row before any execution. A stale replay (number <= head) or a gap
-    /// (number > head + 1) throws std::runtime_error instead of executing.
-    ///
-    /// @tparam GlobalStateStorage MultiLayerStorage-like: fork()/pushView()/mergeBackStorage()
-    /// @param rawUncles raw uncle-header RLP elements (PoW blocks only; empty on PoS)
-    /// @param mergeBlock first PoS (merge) block number; blocks below it are PoW and
-    ///        receive coinbase/uncle rewards, blocks at or above it pay none
-    /// @param stateRootCalculator computes the block's state root over the executed view
-    template <class GlobalStateStorage>
-    task::Task<EthereumBlockVerificationResult> verifyAndCommit(GlobalStateStorage& globalStateStorage,
-        ledger::LedgerInterface& ledger, protocol::EthBlockHeaderData const& ethHeader,
+    /// Same contract as verifyAndCommit on the MPT build: the state delta is computed
+    /// EXACTLY ONCE over @p view, incrementally from parentHeader.stateRoot, and the
+    /// caller owns the view's fate (verifyAndCommit pushes it; the builder stages it
+    /// into the payload artifact pushed at newPayload commit time).
+    template <class ViewType>
+    task::Task<EthereumBlockExecution> executeEthereumBlock(ViewType& view,
+        protocol::EthBlockHeaderData const& ethHeader,
         protocol::EthBlockHeaderData const& parentHeader,
         std::vector<bcos::bytes> const& rawTransactions,
         std::optional<std::vector<bcos::bytes>> const& rawWithdrawals,
         EvmcForkTimestamps const& forkSchedule, uint64_t chainId,
         std::vector<bcos::bytes> const& rawUncles, uint64_t mergeBlock,
         TransactionDecoder const& decoder,
-        StateRootCalculator<typename GlobalStateStorage::ViewType> const& stateRootCalculator)
+        StateRootCalculator<ViewType> const& stateRootCalculator)
     {
-        EthereumBlockVerificationResult result;
-        auto fail = [&](std::string message) -> task::Task<EthereumBlockVerificationResult> {
-            result.valid = false;
-            result.error = std::move(message);
-            co_return std::move(result);
+        EthereumBlockExecution execution;
+        auto fail = [&](std::string message) -> task::Task<EthereumBlockExecution> {
+            execution.error = std::move(message);
+            co_return std::move(execution);
         };
 
-        // 1. Fork the execution view, then the height guard.
+        // Ledger config (system config) + per-block EVM overlay.
         ledger::LedgerConfig ledgerConfig;
-        auto view = globalStateStorage.fork();
-        view.newMutable();
-
-        // 1a. Height guard: the block must be the DIRECT child of the ledger head
-        //     this call commits on top of; a replay or gap throws before any
-        //     execution or commit. Without it, a replayed block (number <= head)
-        //     executes against a NEWER state fork — and a state-neutral empty
-        //     block could verify and be RE-COMMITTED, since the commit's
-        //     prewriteBlockToBuffer unconditionally writes SYS_KEY_CURRENT_NUMBER
-        //     = N, rewinding the ledger head into a permanent stall — while a gap
-        //     (number > head + 1) breaks the incremental MPT build, which needs
-        //     the parent block's trie nodes from the immediately-preceding
-        //     commit. The head (the SYS_CURRENT_STATE / SYS_KEY_CURRENT_NUMBER
-        //     row the commit maintains) is read through the freshly forked view
-        //     with the tag-based ledger::getCurrentBlockNumber(view, fromStorage)
-        //     overload — the one designed for views (BaselineScheduler reads the
-        //     head the same way) — so the guard cannot disagree with the commit
-        //     target. A missing row reads as -1 (empty chain), keeping the
-        //     first-sync-from-genesis path (head 0 -> block 1) intact. The view
-        //     is purely local until step 8's pushView, so throwing discards it
-        //     with zero state pollution. Throwing (rather than an invalid
-        //     result) matches the caller contract: a wrong-height block reaching
-        //     this point is a sync-loop bug, not a peer-supplied invalid block —
-        //     hence the typed StaleOrOutOfOrderBlock, so the caller classifies it
-        //     as a deterministic failure rather than a transient one.
-        auto const currentNumber =
-            co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
-        if (ethHeader.number != currentNumber + 1)
-        {
-            BOOST_THROW_EXCEPTION(StaleOrOutOfOrderBlock{
-                "EthereumBlockVerifier: block number " + std::to_string(ethHeader.number) +
-                " is not the ledger head + 1 (head " + std::to_string(currentNumber) +
-                "): refusing to execute a stale (already committed) or out-of-order block"});
-        }
-
-        //     Ledger config (system config) + per-block EVM overlay.
         co_await ledger::getLedgerConfig(
             view, ledgerConfig, ethHeader.number - 1, m_blockFactory.get());
         fillExecutionLedgerConfig(ethHeader, ledgerConfig, forkSchedule, chainId);
 
-        // 2. Execution header carrying the block context for the EVM.
+        // Execution header carrying the block context for the EVM.
         auto blockHeader = makeExecutionBlockHeader(
             ethHeader, m_blockFactory.get(), ledgerConfig.compatibilityVersion());
-        result.header = blockHeader;
+        execution.header = blockHeader;
 
-        // 2a. The block's EVM revision, resolved once for every fork-gated step below
-        //     (system calls, withdrawals).
+        // The block's EVM revision, resolved once for every fork-gated step below
+        // (system calls, withdrawals).
         auto revOpt = ledgerConfig.evmcRevisionForBlock(ethHeader.number);
         if (!revOpt)
         {
@@ -539,17 +536,16 @@ public:
         }
         const evmc_revision blockRevision = *revOpt;
 
-        // 2b. Cancun+ block-start system calls (EIP-4788 beacon roots; EIP-2935
-        //     historical block hashes from Prague). geth runs these BEFORE the block's
-        //     transactions, so the write must land in the view before executeBlock;
-        //     from Cancun on the beacon-roots contract storage is part of every
-        //     block's state root, so skipping this makes every Cancun+ stateRoot
-        //     verification fail. The contract code is already in state (deployed by
-        //     ordinary pre-fork transactions — see EthereumSystemCalls.h); evmone
-        //     silently skips a code-less contract, per the EIPs. evmone gates each
-        //     contract by revision internally, so a Shanghai block (rev < CANCUN)
-        //     must not even call in — the gate below keeps pre-Cancun behavior
-        //     byte-identical to before this change.
+        // Cancun+ block-start system calls (EIP-4788 beacon roots; EIP-2935 historical
+        // block hashes from Prague). geth runs these BEFORE the block's transactions,
+        // so the write must land in the view before executeBlock; from Cancun on the
+        // beacon-roots contract storage is part of every block's state root, so
+        // skipping this makes every Cancun+ stateRoot verification fail. The contract
+        // code is already in state (deployed by ordinary pre-fork transactions — see
+        // EthereumSystemCalls.h); evmone silently skips a code-less contract, per the
+        // EIPs. evmone gates each contract by revision internally, so a Shanghai block
+        // (rev < CANCUN) must not even call in — the gate below keeps pre-Cancun
+        // behavior byte-identical to before this change.
         if (blockRevision >= EVMC_CANCUN)
         {
             if (auto error = co_await applyBlockStartSystemCalls(
@@ -560,9 +556,9 @@ public:
             }
         }
 
-        // 3. Decode every raw transaction. A failure is a hard invalid: a real block has
-        //    exactly one receipt per transaction, so we cannot skip any.
-        std::vector<protocol::Transaction::Ptr> transactions;
+        // Decode every raw transaction. A failure is a hard invalid: a real block has
+        // exactly one receipt per transaction, so we cannot skip any.
+        auto& transactions = execution.transactions;
         transactions.reserve(rawTransactions.size());
         std::exception_ptr decodeFailure;
         std::string decodeDiag;
@@ -613,10 +609,9 @@ public:
                 " raw=" + bcos::toHexStringWithPrefix(bytesConstRef(badRaw.data(), badRaw.size()))
                       .substr(0, 400));
         }
-        result.transactions = transactions;
 
-        // 4. Execute the block.
-        std::vector<protocol::TransactionReceipt::Ptr> receipts;
+        // Execute the block.
+        auto& receipts = execution.receipts;
         std::exception_ptr executeFailure;
         std::string executeDiag;
         try
@@ -647,17 +642,13 @@ public:
         {
             co_return co_await fail("EthereumBlockVerifier: execution failed: " + executeDiag);
         }
-        result.receipts = receipts;
 
-        // 4a. Finalize the block (EIP-4895 withdrawals, Shanghai+). geth applies the
-        //     CL's validator withdrawals to the recipients' balances AFTER the block's
-        //     transactions; this credit is part of the world state, so it must land in
-        //     the view before the MPT state root is computed. PoS blocks pay no block
-        //     reward here (pre-merge rewards are handled by accumulatePoWBlockRewards
-        //     below), so blockReward is always nullopt on this path. This was missing
-        //     entirely, which forked the first post-Shanghai block with withdrawals
-        //     (Sepolia block 2990908): the recipients' balances stayed short and the
-        //     computed state root diverged from the header's.
+        // Finalize the block (EIP-4895 withdrawals, Shanghai+). geth applies the CL's
+        // validator withdrawals to the recipients' balances AFTER the block's
+        // transactions; this credit is part of the world state, so it must land in the
+        // view before the MPT state root is computed. PoS blocks pay no block reward
+        // here (pre-merge rewards are handled by accumulatePoWBlockRewards below), so
+        // blockReward is always nullopt on this path.
         if (rawWithdrawals && !rawWithdrawals->empty())
         {
             std::vector<executor_v1::eth::EthWithdrawal> withdrawals;
@@ -691,21 +682,18 @@ public:
                 view, *blockHeader, ledgerConfig, blockRevision, std::nullopt, withdrawals);
         }
 
-        // 4b. PoW (pre-merge) blocks pay the coinbase block reward (2 ETH) plus
-        //     uncle rewards, exactly like geth's accumulateRewards. PoS blocks
-        //     (at/above mergeBlock) pay none. This mutates the executed view, so
-        //     it must happen before the state root is computed. mergeBlock == 0
-        //     means the chain has no PoW phase (pure PoS): no rewards are paid.
+        // PoW (pre-merge) blocks pay the coinbase block reward (2 ETH) plus uncle
+        // rewards, exactly like geth's accumulateRewards. PoS blocks (at/above
+        // mergeBlock) pay none. This mutates the executed view, so it must happen
+        // before the state root is computed. mergeBlock == 0 means the chain has no
+        // PoW phase (pure PoS): no rewards are paid.
         //
-        //     TTD caveat: on merge chains (Sepolia), the terminal blocks AFTER
-        //     the Terminal Total Difficulty has been reached carry difficulty 0
-        //     while still being pre-merge. geth stops calling accumulateRewards
-        //     once the TTD is reached (no more mining), so those zero-difficulty
-        //     pre-merge blocks pay NO block reward. We gate on difficulty != 0
-        //     to match — a nonzero-difficulty pre-merge block is always mined.
-        //
-        // NOTE: computeMptStateRoot is an INCREMENTAL build that writes MPT nodes
-        // into the view, so it must be called EXACTLY ONCE per block (in step 6).
+        // TTD caveat: on merge chains (Sepolia), the terminal blocks AFTER the
+        // Terminal Total Difficulty has been reached carry difficulty 0 while still
+        // being pre-merge. geth stops calling accumulateRewards once the TTD is
+        // reached (no more mining), so those zero-difficulty pre-merge blocks pay NO
+        // block reward. We gate on difficulty != 0 to match — a nonzero-difficulty
+        // pre-merge block is always mined.
         if (mergeBlock > 0 && static_cast<uint64_t>(ethHeader.number) < mergeBlock &&
             ethHeader.difficulty != 0)
         {
@@ -744,18 +732,18 @@ public:
             }
         }
 
-        // 4c. Prague+ block-end system calls (EIP-7002 withdrawal requests, EIP-7251
-        //     consolidation requests). geth runs these AFTER the block's transactions
-        //     and withdrawals, so the call must land after 4a/4b and before the state
-        //     root is computed: the contracts' storage updates are part of the block's
-        //     world state. evmone gates by revision internally; the explicit PRAGUE
-        //     gate keeps Cancun/Shanghai behavior identical to before this change.
+        // Prague+ block-end system calls (EIP-7002 withdrawal requests, EIP-7251
+        // consolidation requests). geth runs these AFTER the block's transactions and
+        // withdrawals, so the call must land after the withdrawals/rewards above and
+        // before the state root is computed: the contracts' storage updates are part
+        // of the block's world state. evmone gates by revision internally; the
+        // explicit PRAGUE gate keeps Cancun/Shanghai behavior identical to before this
+        // change.
         //
-        //     LEFTOVER (EIP-7685 requestsHash): the returned requests are not yet
-        //     cross-checked against ethHeader.requestsHash. A complete check also
-        //     needs the EIP-6110 deposit requests collected from the receipts, whose
-        //     deposit-contract address is per-chain (bcos-evm's requests.cpp pins the
-        //     mainnet address) — that plumbing is out of scope for this fix.
+        // The returned requests feed the EIP-7685 requestsHash (cross-checked against
+        // the header in verifyAndCommit; STAMPED into the header by the block
+        // builder), assembled with the EIP-6110 deposit requests collected from the
+        // receipts (deposit-contract address is per-chain: forkSchedule carries it).
         if (blockRevision >= EVMC_PRAGUE)
         {
             auto blockEnd = co_await applyBlockEndSystemCalls(
@@ -764,41 +752,219 @@ public:
             {
                 co_return co_await fail("EthereumBlockVerifier: " + *blockEnd.error);
             }
+            auto depositRequestsData =
+                collectDepositRequestsData(receipts, forkSchedule.depositContractAddress);
+            if (!depositRequestsData.has_value())
+            {
+                co_return co_await fail(
+                    "EthereumBlockVerifier: malformed deposit contract log (EIP-6110)");
+            }
+            execution.requestsHash = calculateRequestsHash(*depositRequestsData, blockEnd.requests);
+            // The same requests in engine-API executionRequests form (getPayloadV4+):
+            // non-empty types only, in [deposit, withdrawal, consolidation] order,
+            // each entry type byte ++ request_data. engine_common's
+            // calculateRequestsHash over this list reproduces requestsHash.
+            if (!depositRequestsData->empty())
+            {
+                bcos::bytes entry;
+                entry.reserve(1 + depositRequestsData->size());
+                entry.push_back(
+                    static_cast<uint8_t>(executor_v1::eth::EthRequests::Type::deposit));
+                entry.insert(
+                    entry.end(), depositRequestsData->begin(), depositRequestsData->end());
+                execution.executionRequests.push_back(std::move(entry));
+            }
+            for (auto const& request : blockEnd.requests)
+            {
+                auto const& data = request.data();
+                if (data.empty())
+                {
+                    continue;
+                }
+                bcos::bytes entry;
+                entry.reserve(1 + data.size());
+                entry.push_back(static_cast<uint8_t>(request.type()));
+                entry.insert(entry.end(), data.begin(), data.end());
+                execution.executionRequests.push_back(std::move(entry));
+            }
         }
 
-        // 5. Fill cumulativeGasUsed + logsBloom (v2) and compute the deterministic roots.
-        auto computation = co_await computeEthereumRoots(
+        // Fill cumulativeGasUsed + logsBloom (v2) and compute the deterministic roots.
+        execution.computation = co_await computeEthereumRoots(
             receipts, transactions | ::ranges::views::indirect, rawTransactions);
-        result.computation = computation;
 
-        // 6. State root over the executed view. v2: the Ethereum world-state MPT root
-        //    (accounts + storage, incrementally from the parent root) via the shared
-        //    ledger helper, keeping the node delta for the commit observer hooks in
-        //    step 8; v1: the injected legacy fold. The per-hash refCountDeltas tally runs
-        //    only when the wired observer counts references
-        //    (CommitObserver::needsRefCountDeltas) — with the Noop observer the tally is
-        //    skipped and the delta is simply never read.
-        crypto::HashType stateRoot;
-        std::optional<ledger::mpt::MPTDeltaLayer> mptDelta;
+        // State root over the executed view. v2: the Ethereum world-state MPT root
+        // (accounts + storage, incrementally from the parent root) via the shared
+        // ledger helper, keeping the node delta for the commit observer hooks; v1: the
+        // injected legacy fold. The per-hash refCountDeltas tally runs only when the
+        // wired observer counts references (CommitObserver::needsRefCountDeltas) —
+        // with the Noop observer the tally is skipped and the delta is simply never
+        // read.
         if (ledgerConfig.executorVersion() >= ledger::ETHEREUM_EXECUTOR_VERSION)
         {
-            mptDelta = co_await ledger::mpt::computeMptStateDelta(view, parentHeader.stateRoot,
-                ledgerConfig, m_commitObserver->needsRefCountDeltas());
-            stateRoot = mptDelta->stateRoot;
+            execution.mptDelta = co_await ledger::mpt::computeMptStateDelta(view,
+                parentHeader.stateRoot, ledgerConfig, m_commitObserver->needsRefCountDeltas());
+            execution.stateRoot = execution.mptDelta->stateRoot;
         }
         else
         {
-            stateRoot = co_await stateRootCalculator(view, blockHeader->version());
+            execution.stateRoot =
+                co_await stateRootCalculator(view, blockHeader->version());
         }
-        result.stateRoot = stateRoot;
+        co_return execution;
+    }
+    /// Execute `ethHeader` (child of `parentHeader`) with the given raw EIP-2718
+    /// transactions, verify the deterministic roots + state root against the header,
+    /// and on success commit block/state/ledger rows atomically.
+    ///
+    /// Height guard (step 1a below): the block number MUST equal the current ledger
+    /// head + 1, read through the freshly forked view from the SYS_KEY_CURRENT_NUMBER
+    /// row before any execution. A stale replay (number <= head) or a gap
+    /// (number > head + 1) throws std::runtime_error instead of executing.
+    ///
+    /// @tparam GlobalStateStorage MultiLayerStorage-like: fork()/pushView()/mergeBackStorage()
+    /// @param rawUncles raw uncle-header RLP elements (PoW blocks only; empty on PoS)
+    /// @param mergeBlock first PoS (merge) block number; blocks below it are PoW and
+    ///        receive coinbase/uncle rewards, blocks at or above it pay none
+    /// @param stateRootCalculator computes the block's state root over the executed view
+    template <class GlobalStateStorage>
+    task::Task<EthereumBlockVerificationResult> verifyAndCommit(GlobalStateStorage& globalStateStorage,
+        ledger::LedgerInterface& ledger, protocol::EthBlockHeaderData const& ethHeader,
+        protocol::EthBlockHeaderData const& parentHeader,
+        std::vector<bcos::bytes> const& rawTransactions,
+        std::optional<std::vector<bcos::bytes>> const& rawWithdrawals,
+        EvmcForkTimestamps const& forkSchedule, uint64_t chainId,
+        std::vector<bcos::bytes> const& rawUncles, uint64_t mergeBlock,
+        TransactionDecoder const& decoder,
+        StateRootCalculator<typename GlobalStateStorage::ViewType> const& stateRootCalculator)
+    {
+        EthereumBlockVerificationResult result;
+        auto fail = [&](std::string message) -> task::Task<EthereumBlockVerificationResult> {
+            result.valid = false;
+            result.error = std::move(message);
+            co_return std::move(result);
+        };
+
+        // Held from before the height guard to the end of the commit: this instance is
+        // shared between the devp2p sync loop and the Engine API external-payload lane,
+        // and two concurrent calls could otherwise BOTH pass the head+1 check below and
+        // double-commit the same height. (The lock also keeps its original role —
+        // serializing the commit section's [prepare -> merge -> onCommit] triple.)
+        std::unique_lock commitLock(m_commitMutex);
+
+        // 1. Fork the execution view, then the height guard.
+        auto view = globalStateStorage.fork();
+        view.newMutable();
+
+        // 1a. Height guard: the block must be the DIRECT child of the ledger head
+        //     this call commits on top of; a replay or gap throws before any
+        //     execution or commit. Without it, a replayed block (number <= head)
+        //     executes against a NEWER state fork — and a state-neutral empty
+        //     block could verify and be RE-COMMITTED, since the commit's
+        //     prewriteBlockToBuffer unconditionally writes SYS_KEY_CURRENT_NUMBER
+        //     = N, rewinding the ledger head into a permanent stall — while a gap
+        //     (number > head + 1) breaks the incremental MPT build, which needs
+        //     the parent block's trie nodes from the immediately-preceding
+        //     commit. The head (the SYS_CURRENT_STATE / SYS_KEY_CURRENT_NUMBER
+        //     row the commit maintains) is read through the freshly forked view
+        //     with the tag-based ledger::getCurrentBlockNumber(view, fromStorage)
+        //     overload — the one designed for views (BaselineScheduler reads the
+        //     head the same way) — so the guard cannot disagree with the commit
+        //     target. A missing row reads as -1 (empty chain), keeping the
+        //     first-sync-from-genesis path (head 0 -> block 1) intact. The view
+        //     is purely local until step 8's pushView, so throwing discards it
+        //     with zero state pollution. Before throwing, a stale block whose
+        //     parent IS the canonical block at number-1 gets ONE shallow-reorg
+        //     retry (window permitting): roll back to number-1 and re-fork — see
+        //     the retry block below. Throwing (rather than an invalid
+        //     result) matches the caller contract: a wrong-height block reaching
+        //     this point is a sync-loop bug, not a peer-supplied invalid block —
+        //     hence the typed StaleOrOutOfOrderBlock, so the caller classifies it
+        //     as a deterministic failure rather than a transient one.
+        auto currentNumber = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
+        if (ethHeader.number != currentNumber + 1)
+        {
+            // Shallow-reorg retry (Phase 3, EthereumChainRollback.h): a block at or below the
+            // head is stale ONLY when it does not extend the canonical chain — when its parent
+            // IS the canonical block at number-1, this is a sibling fork arriving through
+            // devp2p/engine (a reorg of depth head-(number-1)). Within the reorg window, roll
+            // the committed chain back to number-1 and re-run the height guard ONCE; outside
+            // it (window disabled, too deep, journal missing, or the parent is NOT canonical —
+            // a side-branch block we cannot place) fall through to the original throw.
+            bool retryReady = false;
+            if (m_reorgWindow > 0 && ethHeader.number > 0 && ethHeader.number <= currentNumber)
+            {
+                auto const rollbackDepth = currentNumber - ethHeader.number + 1;
+                if (rollbackDepth <= m_reorgWindow)
+                {
+                    auto const canonicalParentHash = co_await ledger::getBlockHash(
+                        view, ethHeader.number - 1, ledger::fromStorage);
+                    if (canonicalParentHash &&
+                        *canonicalParentHash == bcos::protocol::ethHeaderHash(parentHeader))
+                    {
+                        co_await rollbackChainLocked(globalStateStorage, ethHeader.number - 1);
+                        // Re-fork: the rolled-back state must be the view's backend.
+                        view = globalStateStorage.fork();
+                        view.newMutable();
+                        currentNumber =
+                            co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
+                        retryReady = (ethHeader.number == currentNumber + 1);
+                    }
+                }
+            }
+            if (!retryReady)
+            {
+                BOOST_THROW_EXCEPTION(StaleOrOutOfOrderBlock{
+                    "EthereumBlockVerifier: block number " + std::to_string(ethHeader.number) +
+                    " is not the ledger head + 1 (head " + std::to_string(currentNumber) +
+                    "): refusing to execute a stale (already committed) or out-of-order block"});
+            }
+        }
+
+        // 2-6. Execute the block over the forked view: the SHARED implementation
+        //      (executeEthereumBlock) that the EL block builder (Engine API
+        //      forkchoiceUpdated -> buildL1Block through the IExternalPayloadVerifier
+        //      seam) also runs, so a block this node builds is executed byte-identically
+        //      to a block it verifies.
+        auto execution = co_await executeEthereumBlock(view, ethHeader, parentHeader,
+            rawTransactions, rawWithdrawals, forkSchedule, chainId, rawUncles, mergeBlock,
+            decoder, stateRootCalculator);
+        if (execution.error.has_value())
+        {
+            co_return co_await fail(std::move(*execution.error));
+        }
+        auto& blockHeader = execution.header;
+        auto& transactions = execution.transactions;
+        auto& receipts = execution.receipts;
+        auto& computation = execution.computation;
+        auto& mptDelta = execution.mptDelta;
+        auto const& computedRequestsHash = execution.requestsHash;
+        result.header = blockHeader;
+        result.transactions = transactions;
+        result.receipts = receipts;
+        result.computation = computation;
+        result.stateRoot = execution.stateRoot;
 
         // 7. Verify against the header.
         if (auto error =
                 verifyAgainstHeader(ethHeader, computation, result.stateRoot, rawWithdrawals,
-                    rawUncles, transactions);
+                    rawUncles, transactions, computedRequestsHash);
             error.has_value())
         {
             co_return co_await fail(std::move(*error));
+        }
+
+        // 7a. Rollback journal (Phase 3 shallow reorg, EthereumChainRollback.h): capture the
+        //     pre-block values of every flat-state row this block dirtied, so a later reorg
+        //     can rewind to any block inside the reorg window. Captured only AFTER the block
+        //     verified (a rejected block must leave no journal) and BEFORE pushView moves the
+        //     mutable layer away; pre-block values read from the committed plane. Disabled
+        //     (window 0) by default — zero cost beyond the branch.
+        std::optional<RollbackJournal> rollbackJournal;
+        if (m_reorgWindow > 0)
+        {
+            auto committed = globalStateStorage.forkCommitted();
+            rollbackJournal = co_await captureRollbackJournal(view, committed);
         }
 
         // 8. Commit: FIB-104 pattern — push the executed view, then merge the ledger
@@ -811,11 +977,11 @@ public:
         //    block's node delta into the deletion keys of expired "/mpt/" node rows,
         //    applied to prewriteStorage so the deletions land in the SAME WriteBatch as
         //    the block data; onCommit fires only after the batch has landed. The
-        //    [prepare -> merge -> onCommit] triple holds m_commitMutex for the whole
-        //    section (BaselineSchedulerMPTHelpers.h's serialization contract). A commit
+        //    [prepare -> merge -> onCommit] triple runs under m_commitMutex, held from
+        //    this function's entry (BaselineSchedulerMPTHelpers.h's serialization
+        //    contract). A commit
         //    that fails before onCommit is retried by the sync loop and simply re-runs
         //    the hook — the pruner's staged overlay is discarded and re-derived.
-        std::unique_lock commitLock(m_commitMutex);
         globalStateStorage.pushView(std::move(view));
         try
         {
@@ -846,6 +1012,40 @@ public:
                     return protocol::Transaction::ConstPtr(transaction);
                 }) | ::ranges::to<std::vector>());
             co_await ledger::prewriteBlockToBuffer(ledger, blockTxs, block, prewriteStorage);
+            // EIP-4895 withdrawals sidecar (Shanghai+): the Block structure carries no
+            // withdrawals, so persist the raw per-item RLP as one number-keyed row (the
+            // RLP LIST of the items) for engine_getPayloadBodies* to serve. Written
+            // whenever the block carries the — possibly empty — withdrawals list; a
+            // pre-Shanghai block gets no row, which is exactly how the endpoint tells
+            // "pre-Shanghai" (withdrawals: null) apart from "Shanghai+, empty list".
+            if (rawWithdrawals.has_value())
+            {
+                bcos::bytes withdrawalsPayload;
+                for (auto const& withdrawal : *rawWithdrawals)
+                {
+                    withdrawalsPayload.insert(
+                        withdrawalsPayload.end(), withdrawal.begin(), withdrawal.end());
+                }
+                bcos::bytes encodedWithdrawals;
+                encodedWithdrawals.reserve(withdrawalsPayload.size() + 8);
+                bcos::codec::rlp::encodeHeader(encodedWithdrawals,
+                    bcos::codec::rlp::Header{
+                        .isList = true, .payloadLength = withdrawalsPayload.size()});
+                encodedWithdrawals.insert(encodedWithdrawals.end(), withdrawalsPayload.begin(),
+                    withdrawalsPayload.end());
+                storage::Entry withdrawalsEntry;
+                withdrawalsEntry.set(std::move(encodedWithdrawals));
+                co_await storage2::writeOne(prewriteStorage,
+                    executor_v1::StateKey{ledger::SYS_NUMBER_2_WITHDRAWALS,
+                                          std::to_string(ethHeader.number)},
+                    std::move(withdrawalsEntry));
+            }
+            if (rollbackJournal)
+            {
+                // Same WriteBatch as the block data: a committed block ALWAYS has its journal.
+                co_await writeRollbackJournalRows(
+                    prewriteStorage, ethHeader.number, *rollbackJournal, m_reorgWindow);
+            }
             if (mptDelta)
             {
                 // The deletions of expired node rows land in the SAME WriteBatch as the
@@ -877,6 +1077,20 @@ public:
         co_return std::move(result);
     }
 
+    /// Roll the committed chain back to @p targetNumber (EL shallow reorg, Phase 3 —
+    /// EthereumChainRollback.h), restoring flat state, counters and the ledger head and
+    /// deleting the rolled-back blocks' number-keyed rows, then re-sync the commit observer
+    /// (the MPT pruner rebuilds its counts from the new head). Serialized against
+    /// verifyAndCommit on m_commitMutex. @throws RollbackRefused when the target is beyond
+    /// the reorg window or a journal row is missing — the caller turns that into a resync.
+    template <class GlobalStateStorage>
+    task::Task<RollbackResult> rollbackChain(
+        GlobalStateStorage& globalStateStorage, protocol::BlockNumber targetNumber)
+    {
+        std::unique_lock commitLock(m_commitMutex);
+        co_return co_await rollbackChainLocked(globalStateStorage, targetNumber);
+    }
+
     /// Execute the block and compute the deterministic roots, without committing.
     /// Exposed for the Engine API external-payload path that needs the computation
     /// before deciding to commit. Forwards to the shared implementation
@@ -891,12 +1105,16 @@ public:
     }
 
     /// Compare the computed values against the external header's commitments.
+    /// `computedRequestsHash` is set exactly when the block executed at Prague+ (step
+    /// 4c assembled it from the receipts' EIP-6110 deposits and the block-end system
+    /// calls), which the requestsHash rule below mirrors against the header.
     static std::optional<std::string> verifyAgainstHeader(
         protocol::EthBlockHeaderData const& ethHeader, EthereumBlockComputation const& computation,
         crypto::HashType const& stateRoot,
         std::optional<std::vector<bcos::bytes>> const& rawWithdrawals,
         std::vector<bcos::bytes> const& rawUncles,
-        std::vector<protocol::Transaction::Ptr> const& transactions)
+        std::vector<protocol::Transaction::Ptr> const& transactions,
+        std::optional<crypto::HashType> const& computedRequestsHash)
     {
         if (computation.txsRoot != ethHeader.txsRoot)
         {
@@ -977,20 +1195,74 @@ public:
         {
             return "block carries withdrawals but the header has no withdrawalsHash";
         }
+        // EIP-7685 requestsHash (Prague+): the executed requests (EIP-6110 deposits from
+        // the receipts, EIP-7002/7251 block-end system-call outputs) must hash to the
+        // header's requestsHash; a pre-Prague block must not carry one at all. For the
+        // Engine API lane the header field derives from the CL's executionRequests, so
+        // this is also the executionRequests-vs-execution consistency check.
+        if (computedRequestsHash.has_value())
+        {
+            if (!ethHeader.requestsHash.has_value() ||
+                *ethHeader.requestsHash != *computedRequestsHash)
+            {
+                return "requestsHash mismatch (computed=" + computedRequestsHash->hex() +
+                       " header=" +
+                       (ethHeader.requestsHash.has_value() ? ethHeader.requestsHash->hex() :
+                                                             "absent") +
+                       ")";
+            }
+        }
+        else if (ethHeader.requestsHash.has_value())
+        {
+            return "pre-Prague block carries a requestsHash";
+        }
         return std::nullopt;
     }
 
 private:
+    /// m_commitMutex must already be held (verifyAndCommit's stale-reorg retry and the public
+    /// rollbackChain both are): the rollback body plus the observer re-sync.
+    template <class GlobalStateStorage>
+    task::Task<RollbackResult> rollbackChainLocked(
+        GlobalStateStorage& globalStateStorage, protocol::BlockNumber targetNumber)
+    {
+        auto result =
+            co_await rollbackCommittedChain(globalStateStorage, targetNumber, m_reorgWindow);
+        // Re-sync the observer's chain-derived in-memory state AFTER the rollback batch
+        // landed (MPTPruner re-walks the post-rollback roots; Noop ignores the hook). The
+        // lookup only ever resolves blocks <= newHead, whose header rows the rollback keeps.
+        typename ledger::mpt::CommitObserver::StateRootLookup stateRootAt =
+            [&globalStateStorage,
+                this](protocol::BlockNumber number) -> task::Task<std::optional<bcos::h256>> {
+            auto committed = globalStateStorage.forkCommitted();
+            auto block = co_await ledger::getBlockData(
+                committed, number, ledger::HEADER, m_blockFactory.get());
+            if (!block || !block->blockHeader())
+            {
+                co_return std::nullopt;
+            }
+            co_return std::make_optional(block->blockHeader()->stateRoot());
+        };
+        co_await m_commitObserver->coOnRollback(result.newHead, std::move(stateRootAt));
+        co_return result;
+    }
+
     std::reference_wrapper<Scheduler> m_scheduler;
     std::reference_wrapper<Executor> m_executor;
     std::reference_wrapper<protocol::BlockFactory> m_blockFactory;
     std::shared_ptr<ledger::mpt::CommitObserver> m_commitObserver;
-    // Serializes the commit section's [prepareMPTPruneRows -> merge -> onCommit] triple
-    // against every other commit feeding the same observer (the MPTPruner stages the
-    // block's counting work on one shared overlay between prepare and onCommit —
-    // BaselineSchedulerMPTHelpers.h's serialization contract). The devp2p sync loop
-    // commits strictly sequentially; the mutex keeps the contract independent of that
-    // caller property.
+    // EL shallow-reorg window (EthereumChainRollback.h): 0 disables journaling and the
+    // stale-reorg retry entirely (the default, keeping pre-Phase-3 behavior and cost);
+    // N > 0 journals every commit and allows rewinds of up to N committed blocks.
+    int64_t m_reorgWindow = 0;
+    // Serializes verifyAndCommit from the height guard to the commit's onCommit against
+    // every other call on this instance: the devp2p sync loop and the Engine API
+    // external-payload lane share one verifier (and could otherwise both pass the head+1
+    // guard and double-commit the height), and the commit section's
+    // [prepareMPTPruneRows -> merge -> onCommit] triple must stay serialized against
+    // every other commit feeding the same observer (the MPTPruner stages the block's
+    // counting work on one shared overlay between prepare and onCommit —
+    // BaselineSchedulerMPTHelpers.h's serialization contract).
     std::mutex m_commitMutex;
 };
 

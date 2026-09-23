@@ -29,6 +29,7 @@
 #include "bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h"
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/kzg/Kzg4844.h>
 #include <bcos-executor/src/Common.h>
 #include <bcos-executor/src/precompiled/common/Utilities.h>  // trimHexPrefix
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
@@ -40,6 +41,7 @@
 #include <bcos-ledger/mpt/Proof.h>
 #include <bcos-ledger/mpt/StorageValueCodec.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
+#include <bcos-rlp-protocol/Web3BlobTxWrapper.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/util.h>
@@ -520,11 +522,15 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     auto const ledger = m_nodeService->ledger();
 
     // System-contract addresses (0x1000 range, etc.) are stored under the "/sys/" prefix by
-    // EVMAccount; user accounts under "/apps/". Picking the right prefix here keeps
-    // eth_getStorageAt consistent with both the genesis alloc import and the v2 executor
-    // (which both go through EVMAccount) — same logic as Ledger::getStorageAt.
+    // EVMAccount on the legacy executor; user accounts under "/apps/". The v2/v3 executors write
+    // EVERY address under "/apps/" (EVMAccount with treatSystemAsUser=true, and genesis imports
+    // the same way there), so on those chains the prefix is USER_APPS for every address. Picking
+    // the right prefix here keeps eth_getStorageAt consistent with both the genesis alloc import
+    // and the executor — same logic as Ledger::getStorageAt.
     auto const tablePrefix =
-        precompiled::contains(bcos::precompiled::c_systemTxsAddress, std::string_view{addressStr}) ?
+        (m_nodeService->executorVersion() < ledger::ETHEREUM_EXECUTOR_VERSION &&
+                precompiled::contains(
+                    bcos::precompiled::c_systemTxsAddress, std::string_view{addressStr})) ?
             ledger::SYS_DIRECTORY::SYS_APPS :
             ledger::SYS_DIRECTORY::USER_APPS;
     auto const contractTableName = getContractTableName(tablePrefix, addressStr);
@@ -949,13 +955,21 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     auto rawTx = toView(request[0U]);
     auto rawTxBytes = fromHexWithPrefix(rawTx);
     auto bytesRef = bcos::ref(rawTxBytes);
-    // Reject blob txs at the RPC gate. Deposits (0x7e) enter only via Engine API. Both answer
-    // as the type refusal verify() would give (AdmissionError.h), with the type named.
+    // Reject blob txs at the RPC gate on every lane but the pure-Ethereum executor
+    // (executor_version==2); deposits (0x7e) enter only via Engine API. Both answer as the
+    // type refusal verify() would give (AdmissionError.h), with the type named. The gate keys
+    // on executor_version, not on EL mode: an executor_version==2 chain sealed by consensus
+    // (single-node EEST replay, for one) admits blobs without being an EL. verify() does the
+    // full validation downstream.
     switch (engine::dispatchRawTransaction(bytesRef))
     {
     case engine::RawTransactionKind::Blob:
-        BOOST_THROW_EXCEPTION(
-            admissionError(protocol::TransactionStatus::BlobTxNotAllowed, "blob"));
+        if (!admitsBlobTransactions(m_nodeService->executorVersion()))
+        {
+            BOOST_THROW_EXCEPTION(
+                admissionError(protocol::TransactionStatus::BlobTxNotAllowed, "blob"));
+        }
+        break;
     case engine::RawTransactionKind::Deposit:
         BOOST_THROW_EXCEPTION(admissionError(
             protocol::TransactionStatus::TxTypeNotSupported, "deposit, Engine API only"));
@@ -963,7 +977,48 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         break;
     }
     Web3Transaction web3Tx;
-    if (auto const result = web3Tx.tryDecode(bytesRef); !result.has_value())
+    // EIP-4844: a blob transaction reaches the EL through its network wrapper
+    // (0x03 || rlp([tx_body, blobs, commitments, proofs])) — the stripped form carries no
+    // blob bodies and could never be assembled into a blobsBundle. The sidecar is
+    // KZG-checked here (versioned hashes match the commitments, proofs verify) and
+    // registered with the pool atomically at admission below.
+    std::optional<engine::BlobTxSidecar> blobSidecar;
+    if (m_nodeService->ethereumELMode() &&
+        engine::dispatchRawTransaction(bytesRef) == engine::RawTransactionKind::Blob)
+    {
+        if (!isBlobTxNetworkWrapper(bcos::bytesConstRef(rawTxBytes.data(), rawTxBytes.size())))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,
+                "blob transaction must be submitted in the EIP-4844 network wrapper form"));
+        }
+        try
+        {
+            decodeBlobTxNetworkWrapper(
+                bcos::bytesConstRef(rawTxBytes.data(), rawTxBytes.size()), web3Tx,
+                blobSidecar.emplace());
+        }
+        catch (codec::rlp::RlpDecodeException const& e)
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, std::string("RLP decode failed: ") + e.what()));
+        }
+        for (std::size_t i = 0; i < blobSidecar->commitments.size(); ++i)
+        {
+            if (crypto::kzg::versionedHashFromCommitment(
+                    bcos::ref(blobSidecar->commitments[i])) != web3Tx.blobVersionedHashes[i])
+            {
+                BOOST_THROW_EXCEPTION(admissionError(protocol::TransactionStatus::Malformed,
+                    "blob sidecar commitment does not match its versioned hash"));
+            }
+        }
+        if (!crypto::kzg::verifyBlobKzgProofBatch(
+                blobSidecar->blobs, blobSidecar->commitments, blobSidecar->proofs))
+        {
+            BOOST_THROW_EXCEPTION(admissionError(
+                protocol::TransactionStatus::Malformed, "blob sidecar KZG proof invalid"));
+        }
+    }
+    else if (auto const result = web3Tx.tryDecode(bytesRef); !result.has_value())
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,
             result.error().message.empty() ? "RLP decode failed" : result.error().message));
@@ -1045,11 +1100,30 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         // tryAdd, not add: add() returns void and ends four different ways without saying so,
         // and this method answers with a transaction hash as soon as it returns. It is also
         // what reserves the (sender, nonce) pair -- checking first and adding second would let
-        // two concurrent submissions through the gap between the two calls.
-        if (auto const taken = memPool->tryAdd(std::move(tx));
+        // two concurrent submissions through the gap between the two calls. The blob sidecar
+        // (when this is a wrapper blob transaction) registers atomically with the admission.
+        if (auto const taken = memPool->tryAdd(std::move(tx), std::move(blobSidecar));
             taken != protocol::TransactionStatus::None)
         {
             BOOST_THROW_EXCEPTION(admissionError(taken));
+        }
+        // EL-mode transaction gossip ([ethereum] tx_gossip): announce the freshly admitted
+        // transaction to the devp2p peers. Best-effort by design — the announcement must
+        // never turn an admitted transaction into an RPC error.
+        if (auto const& announcer = m_nodeService->txGossipAnnouncer()) [[unlikely]]
+        {
+            try
+            {
+                announcer(encodeTxHash, static_cast<uint8_t>(web3Tx.type), rawTxBytes.size(),
+                    rawTxBytes);
+            }
+            catch (...)
+            {
+                WEB3_LOG(WARNING) << LOG_DESC("sendRawTransaction: gossip announce failed")
+                                  << LOG_KV("txHash", encodeTxHash.hexPrefixed())
+                                  << LOG_KV("reason",
+                                         boost::current_exception_diagnostic_information());
+            }
         }
         Json::Value result = encodeTxHash.hexPrefixed();
         buildJsonContent(result, response);

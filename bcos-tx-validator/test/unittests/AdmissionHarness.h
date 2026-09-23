@@ -89,6 +89,10 @@ struct TxSpec
     std::optional<Address> to = Address{"0x811a752c8cd697e3cb27279c330ed1ada745a8d7"};
     bcos::bytes data{};
     u256 value = 1;
+    /// EIP-4844 fields, inert unless type is EIP4844: a blob transaction with no hashes is what
+    /// normalize() rejects, so the blob cases set this explicitly.
+    u256 maxFeePerBlobGas = 0;
+    h256s blobVersionedHashes{};
     bool withAuthorization = false;
     /// Zero out r after signing: the envelope stays self-consistent (the hash commits to the
     /// signature bytes as sent) but recovery is impossible, so the rejection is the signature
@@ -112,6 +116,8 @@ inline std::shared_ptr<bcostars::protocol::TransactionImpl> admitTx(TxSpec const
     web3.to = spec.to;
     web3.data = spec.data;
     web3.value = spec.value;
+    web3.maxFeePerBlobGas = spec.maxFeePerBlobGas;
+    web3.blobVersionedHashes = spec.blobVersionedHashes;
     if (spec.withAuthorization)
     {
         rpc::AuthorizationListEntry entry;
@@ -230,6 +236,9 @@ struct AdmitHarness
     std::shared_ptr<NonceCheckerInterface> txPoolNonceChecker;
     /// Nothing is a system transaction unless a case says so.
     SystemTxPredicate isSystemTx = [](Transaction const&) { return false; };
+    /// Default {} is allow=false: blob envelopes stay refused unless a case opts in, matching
+    /// the chains most tests describe.
+    BlobPolicy blobPolicy{};
     AccountState account{};
     bool accountExists = true;
 
@@ -290,7 +299,7 @@ struct AdmitHarness
                 std::make_shared<crypto::Secp256k1Crypto>(), nullptr);
         auto validator =
             std::make_unique<CodeInjectingValidator>(cryptoSuite, ledger, ledgerConfigState,
-                txPoolNonceChecker, web3NonceChecker, isSystemTx, "group0", "chain0");
+                txPoolNonceChecker, web3NonceChecker, isSystemTx, "group0", "chain0", blobPolicy);
         validator->code = account.code;
         validator->setScheduler(scheduler);
         if (ledgerNonceChecker)

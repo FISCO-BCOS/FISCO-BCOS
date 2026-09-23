@@ -165,6 +165,71 @@ struct NewBlockHashesMessage
 bcos::bytes encodeNewBlockHashes(NewBlockHashesMessage const& _msg);
 bcos::codec::rlp::RlpResult<NewBlockHashesMessage> decodeNewBlockHashes(bytesConstRef _data);
 
+// ---------------------------------------------------------------------------
+// Transaction gossip (eth/68): message-count DoS caps, enforced by the decoders.
+// geth's own soft limits are far lower (it announces ~256 hashes and serves
+// ~256 pooled txs per request); these are wire-shape ceilings, not policy.
+// ---------------------------------------------------------------------------
+inline constexpr size_t kMaxTxsPerMessage = 1024;        // Transactions / PooledTransactions
+inline constexpr size_t kMaxAnnouncedHashes = 4096;      // NewPooledTransactionHashes
+inline constexpr size_t kMaxGetPooledTransactions = 256; // serving cap for GetPooledTransactions
+
+// Transactions (0x02): RLP list of EIP-2718 envelopes. Same element rules as
+// the BlockBodies transactions list (a legacy tx is a bare RLP list element, a
+// typed tx an RLP string whose content is 0xNN || rlp(payload)); `transactions`
+// holds the UNWRAPPED form (0xNN || rlp(payload) for typed txs — for a blob tx
+// that is the whole EIP-4844 network wrapper, sidecar included) and
+// encodeTransactions applies the string wrapping.
+struct TransactionsMessage
+{
+    std::vector<bcos::bytes> transactions;
+};
+
+bcos::bytes encodeTransactions(TransactionsMessage const& _msg);
+bcos::codec::rlp::RlpResult<TransactionsMessage> decodeTransactions(bytesConstRef _data);
+
+// NewPooledTransactionHashes (0x08), eth/68 layout:
+//   [types: bytes (one EIP-2718 type byte per hash), sizes: [uint, ...], hashes: [h256, ...]]
+// The three fields must name the same count; decode rejects a mismatch. (eth/68
+// is our negotiated floor, so the pre-68 bare-hashes form is never decoded.)
+struct NewPooledTransactionHashesMessage
+{
+    bcos::bytes types;
+    std::vector<uint64_t> sizes;
+    std::vector<bcos::h256> hashes;
+};
+
+bcos::bytes encodeNewPooledTransactionHashes(NewPooledTransactionHashesMessage const& _msg);
+bcos::codec::rlp::RlpResult<NewPooledTransactionHashesMessage> decodeNewPooledTransactionHashes(
+    bytesConstRef _data);
+
+// GetPooledTransactions (0x09), eth/66+ request-id form: [requestId, [hash, ...]]
+// (the pre-66 form without the id is not spoken: our floor is eth/68, same wire
+// convention as GetBlockHeaders above).
+struct GetPooledTransactionsMessage
+{
+    uint64_t requestId{0};
+    std::vector<bcos::h256> hashes;
+};
+
+bcos::bytes encodeGetPooledTransactions(GetPooledTransactionsMessage const& _msg);
+bcos::codec::rlp::RlpResult<GetPooledTransactionsMessage> decodeGetPooledTransactions(
+    bytesConstRef _data);
+
+// PooledTransactions (0x0a): [requestId, [tx, ...]] — the tx elements follow the
+// Transactions rules (typed txs are string-wrapped envelopes; a blob tx element
+// is the full network wrapper). The reply may carry FEWER txs than requested
+// (the serving side simply omits the ones it no longer holds).
+struct PooledTransactionsMessage
+{
+    uint64_t requestId{0};
+    std::vector<bcos::bytes> transactions;
+};
+
+bcos::bytes encodePooledTransactions(PooledTransactionsMessage const& _msg);
+bcos::codec::rlp::RlpResult<PooledTransactionsMessage> decodePooledTransactions(
+    bytesConstRef _data);
+
 // Capability entries advertised in the Hello message: eth/69 and eth/68. The
 // handshake negotiates the highest common version; eth/69 peers use the EIP-7642
 // Status format while eth/68 peers keep the legacy TD/head Status.

@@ -29,6 +29,8 @@
 #include "BfsInitializer.h"
 #include "EngineServiceInitializer.h"
 #include "EthereumBlockHashLookup.h"
+#include "EthereumSyncInitializer.h"
+#include "ExternalPayloadVerifier.h"
 #include "GlobalStateStorageInitializer.h"
 #include "LedgerInitializer.h"
 #include "MemPoolInitializer.h"
@@ -46,6 +48,8 @@
 #include "bcos-storage/RocksDBStorage.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
+#include "bcos-framework/protocol/BlobSchedule.h"
+#include "engine/bcos-engine/ClSyncCoordination.h"
 #include "engine/bcos-engine/OpLedgerConfigRepublish.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
@@ -56,6 +60,7 @@
 #include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-utilities/Common.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
 #include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
@@ -297,11 +302,45 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     m_ledgerConfigState = std::make_shared<bcos::ledger::LedgerConfigState>(
         task::syncWait(ledger::getLedgerConfig(*m_ledger)));
 
+    // Read executor_version from the ledger ahead of the txpool/mempool wiring below (the
+    // mempool's chain kind keys on it) and before wiring schedulers or Engine API.
+    auto const onChainVersion =
+        readOnChainExecutorVersion(*m_ledger, m_nodeConfig->executorVersion());
+    if (onChainVersion.present)
+    {
+        INITIALIZER_LOG(INFO) << "Use ledger executor version: " << onChainVersion.version;
+    }
+    m_executorVersion = onChainVersion.version;
+
     // init the txpool
     m_txpoolInitializer = std::make_shared<TxPoolInitializer>(m_nodeConfig, m_protocolInitializer,
         m_frontServiceInitializer->front(), ledger, *m_ioServicePool->getIOService(),
         m_ioServicePool, m_ledgerConfigState);
-    m_memPoolInitializer = MemPoolInitializer::build();
+    // executor_version==2 (the pure-Ethereum executor): the mempool runs the L1 fee market —
+    // blob transactions admitted, fee-ordered sealing, fee-bump replacement. EL mode
+    // (ethereum.mode=el) additionally sizes the pool (capacity, lifetime) and bounds blobs by
+    // the active blob schedule. Every other version keeps the L2 pool defaults (no fee market,
+    // blobs refused).
+    bcos::txpool::MemPoolConfig memPoolConfig;
+    if (m_executorVersion == bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
+    {
+        memPoolConfig.chainKind = bcos::txpool::ChainKind::L1;
+        if (m_nodeConfig->ethereumELModeEnabled())
+        {
+            auto const forkSchedule = EthereumSyncInitializer::evmcForkSchedule(*m_nodeConfig);
+            auto const blobSchedule = bcos::protocol::blobScheduleForTimestamp(
+                bcos::protocol::BlobForkTimes{.cancunTime = forkSchedule.cancunTime,
+                    .pragueTime = forkSchedule.pragueTime,
+                    .bpo1Time = forkSchedule.bpo1Time,
+                    .bpo2Time = forkSchedule.bpo2Time},
+                static_cast<uint64_t>(bcos::utcTime() / 1000));
+            memPoolConfig.capacity = 5120;
+            memPoolConfig.txLifetimeMs = 30 * 60 * 1000;
+            memPoolConfig.maxBlobsPerTransaction =
+                static_cast<std::size_t>(blobSchedule.maxBlobs);
+        }
+    }
+    m_memPoolInitializer = MemPoolInitializer::build(memPoolConfig);
 
     std::shared_ptr<bcos::scheduler::TarsExecutorManager> executorManager;
 
@@ -343,15 +382,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     auto ethereumExecutor = std::make_shared<executor_v1::eth::EthereumExecutor>(
         *m_protocolInitializer->blockFactory()->receiptFactory(),
         std::move(ethereumBlockHashLookup));
-
-    // Read executor_version from the ledger before wiring schedulers or Engine API.
-    auto const onChainVersion =
-        readOnChainExecutorVersion(*m_ledger, m_nodeConfig->executorVersion());
-    if (onChainVersion.present)
-    {
-        INITIALIZER_LOG(INFO) << "Use ledger executor version: " << onChainVersion.version;
-    }
-    m_executorVersion = onChainVersion.version;
 
     // v1 engine on executor_version < 2; Eth on 2; Op on exactly 3.
     const bool engineApiForV1Only = (m_executorVersion < scheduler_v1::ETHEREUM_EXECUTOR_VERSION);
@@ -494,14 +524,46 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // (enable_single_node_consensus) and an external op-node over the authenticated
         // [op_engine_rpc] endpoint. In either mode the EngineService is the sole block
         // producer — the legacy txpool/PBFT pipeline is never initialized or started (see
-        // engineDrivenBlockProduction() guards below and in start()).
+        // engineDrivenBlockProduction() guards below and in start()). EL mode
+        // (ethereum.mode=el) with [engine_rpc] enable also builds it, to serve the
+        // authenticated Engine API listener; there block import stays with devp2p sync.
         if (!engineApiForV1Only && !opStackMode &&
-            (m_nodeConfig->enableSingleNodeConsensus() || m_nodeConfig->enableOpEngineRpc()))
+            (m_nodeConfig->enableSingleNodeConsensus() || m_nodeConfig->enableOpEngineRpc() ||
+                m_nodeConfig->enableEngineRpc()))
         {
+            // EL mode ([engine_rpc]): ONE verifier instance serves both the Engine API
+            // external newPayload lane (through the type-erased adapter) and the devp2p
+            // sync loop (AirNodeInitializer forwards elBlockVerifier() to
+            // EthereumSyncInitializer) — the verifier's m_commitMutex serializes the two
+            // commit lanes.
+            std::shared_ptr<engine::engine_common::IExternalPayloadVerifier<GlobalStateStorage>>
+                externalPayloadVerifier;
+            if (m_nodeConfig->enableEngineRpc())
+            {
+                m_elBlockVerifier = std::make_shared<scheduler_v1::EthereumBlockVerifier<
+                    scheduler_v1::SchedulerSerialImpl, executor_v1::eth::EthereumExecutor>>(
+                    *m_ethereumSerialScheduler, *ethereumExecutor,
+                    *m_protocolInitializer->blockFactory(), m_mptCommitObserver,
+                    m_nodeConfig->ethereumReorgWindow());
+                externalPayloadVerifier =
+                    std::make_shared<ExternalPayloadVerifierImpl<GlobalStateStorage>>(
+                        m_elBlockVerifier, ledger, m_protocolInitializer->blockFactory(),
+                        EthereumSyncInitializer::evmcForkSchedule(*m_nodeConfig),
+                        m_nodeConfig->ethereumChainId(), m_nodeConfig->ethereumMergeBlock());
+                // One coordination instance shared with the devp2p sync loop
+                // (AirNodeInitializer forwards clSyncCoordination() to
+                // EthereumSyncInitializer): the first served forkchoiceUpdated latches
+                // CL-driven mode, and every SYNCING answer records a backfill target.
+                m_clSyncCoordination =
+                    std::make_shared<engine::engine_common::ClSyncCoordination>();
+            }
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
                 m_ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger,
-                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState, m_mptCommitObserver);
+                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState, m_mptCommitObserver,
+                std::move(externalPayloadVerifier), m_clSyncCoordination,
+                /*allowBlobTransactions=*/m_executorVersion ==
+                    bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
         }
     }
     else
@@ -534,14 +596,45 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // Engine-driven modes on the v2 EthereumExecutor (serial pipeline); see the parallel
         // branch above for why op_engine_rpc.enable also builds the EngineService here.
         // executor_version=2 alone does NOT enable the Engine API: one of
-        // [consensus] enable_single_node_consensus or [op_engine_rpc] enable must be set.
+        // [consensus] enable_single_node_consensus, [op_engine_rpc] enable or (in EL mode)
+        // [engine_rpc] enable must be set.
         if (!engineApiForV1Only && !opStackMode &&
-            (m_nodeConfig->enableSingleNodeConsensus() || m_nodeConfig->enableOpEngineRpc()))
+            (m_nodeConfig->enableSingleNodeConsensus() || m_nodeConfig->enableOpEngineRpc() ||
+                m_nodeConfig->enableEngineRpc()))
         {
+            // EL mode ([engine_rpc]): ONE verifier instance serves both the Engine API
+            // external newPayload lane (through the type-erased adapter) and the devp2p
+            // sync loop (AirNodeInitializer forwards elBlockVerifier() to
+            // EthereumSyncInitializer) — the verifier's m_commitMutex serializes the two
+            // commit lanes.
+            std::shared_ptr<engine::engine_common::IExternalPayloadVerifier<GlobalStateStorage>>
+                externalPayloadVerifier;
+            if (m_nodeConfig->enableEngineRpc())
+            {
+                m_elBlockVerifier = std::make_shared<scheduler_v1::EthereumBlockVerifier<
+                    scheduler_v1::SchedulerSerialImpl, executor_v1::eth::EthereumExecutor>>(
+                    *m_ethereumSerialScheduler, *ethereumExecutor,
+                    *m_protocolInitializer->blockFactory(), m_mptCommitObserver,
+                    m_nodeConfig->ethereumReorgWindow());
+                externalPayloadVerifier =
+                    std::make_shared<ExternalPayloadVerifierImpl<GlobalStateStorage>>(
+                        m_elBlockVerifier, ledger, m_protocolInitializer->blockFactory(),
+                        EthereumSyncInitializer::evmcForkSchedule(*m_nodeConfig),
+                        m_nodeConfig->ethereumChainId(), m_nodeConfig->ethereumMergeBlock());
+                // One coordination instance shared with the devp2p sync loop
+                // (AirNodeInitializer forwards clSyncCoordination() to
+                // EthereumSyncInitializer): the first served forkchoiceUpdated latches
+                // CL-driven mode, and every SYNCING answer records a backfill target.
+                m_clSyncCoordination =
+                    std::make_shared<engine::engine_common::ClSyncCoordination>();
+            }
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
                 m_ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger,
-                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState, m_mptCommitObserver);
+                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState, m_mptCommitObserver,
+                std::move(externalPayloadVerifier), m_clSyncCoordination,
+                /*allowBlobTransactions=*/m_executorVersion ==
+                    bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
         }
     }
 
@@ -837,24 +930,41 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         INITIALIZER_LOG(INFO) << LOG_DESC(
             "EngineDrivenBlockProduction: skip txpool/pbft/sealer init (block production via "
             "EngineService + mempool; driver = single-node consensus or external op-node)");
+    }
 
-        // Admission for the mempool path. Built here and not in the txpool initializer because
-        // in this mode there is no txpool: the RPC entry judges a transaction against this
-        // validator and then reserves its (sender, nonce) with MemPoolImpl::tryAdd.
-        //
-        // No pool nonce checker: those two checks are the BCOS transaction's replay protection,
-        // and this mode carries Web3 transactions only. The Web3 nonce checker IS needed -- the
-        // account nonce comes through its cache -- but nothing here calls updateNonceCache,
-        // which is the txpool's commit-time hook, so that cache is only ever raised by its own
-        // storage misses. The effect is a lower bound that can lag behind the chain: a
-        // transaction reusing an already-executed nonce is admitted here and refused at
-        // execution. That is where it was refused before this validator was wired, when the
-        // path checked no nonce at all.
+    // Admission for the mempool path: engine-driven modes, or EL mode with the [engine_rpc]
+    // listener (mempool admission over RPC while block import stays with devp2p sync).
+    // Built here and not in the txpool initializer because in these modes there is no txpool:
+    // the RPC entry judges a transaction against this validator and then reserves its
+    // (sender, nonce) with MemPoolImpl::tryAdd.
+    //
+    // No pool nonce checker: those two checks are the BCOS transaction's replay protection,
+    // and these modes carry Web3 transactions only. The Web3 nonce checker IS needed -- the
+    // account nonce comes through its cache -- but nothing here calls updateNonceCache,
+    // which is the txpool's commit-time hook, so that cache is only ever raised by its own
+    // storage misses. The effect is a lower bound that can lag behind the chain: a
+    // transaction reusing an already-executed nonce is admitted here and refused at
+    // execution. That is where it was refused before this validator was wired, when the
+    // path checked no nonce at all.
+    if (m_nodeConfig->engineDrivenBlockProduction() ||
+        (m_nodeConfig->ethereumELModeEnabled() && m_nodeConfig->enableEngineRpc()))
+    {
         auto web3NonceChecker = std::make_shared<bcos::txvalidator::Web3NonceChecker>(m_ledger);
+        // executor_version==2 (the pure-Ethereum executor): admission must match the pool —
+        // blob transactions are let through instead of refused. EL mode additionally bounds
+        // them by the same schedule the mempool enforces; a consensus-sealed v2 chain (the
+        // EEST replay topology) keeps the Cancun default.
+        bcos::txvalidator::BlobPolicy blobPolicy;
+        if (m_executorVersion == bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
+        {
+            blobPolicy = bcos::txvalidator::BlobPolicy{
+                .allow = true, .maxBlobsPerTransaction = memPoolConfig.maxBlobsPerTransaction};
+        }
         m_memPoolValidator = std::make_shared<bcos::txvalidator::TxValidator>(
             m_protocolInitializer->cryptoSuite(), m_ledger, m_ledgerConfigState,
             /*txPoolNonceChecker=*/nullptr, std::move(web3NonceChecker),
-            &bcos::txpool::isSystemTransaction, m_nodeConfig->groupId(), m_nodeConfig->chainId());
+            &bcos::txpool::isSystemTransaction, m_nodeConfig->groupId(), m_nodeConfig->chainId(),
+            blobPolicy);
         m_memPoolValidator->setScheduler(m_scheduler);
     }
 

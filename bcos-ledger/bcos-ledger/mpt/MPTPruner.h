@@ -228,9 +228,9 @@ public:
 
     /// The stateRoot of block @p n (nullopt when that block's header is unavailable). A pre-MPT
     /// block may return its legacy XOR root — init truncates the walk at firstMptBlock via the
-    /// features, so the callable need not distinguish.
-    using StateRootLookup =
-        std::function<bcos::task::Task<std::optional<bcos::h256>>(bcos::protocol::BlockNumber)>;
+    /// features, so the callable need not distinguish. Aliased from the observer base so the
+    /// rollback hook (coOnRollback) and the startup rebuild share one type.
+    using StateRootLookup = CommitObserver::StateRootLookup;
 
     /// Called after each deleted chunk of the startup sweep: rows deleted so far, garbage rows
     /// found so far (the total is unknown until the scan finishes; the last call reports the
@@ -731,6 +731,28 @@ public:
 
     /// The pruner counts references from the delta — the build must maintain the tally.
     bool needsRefCountDeltas() const noexcept override { return true; }
+
+    /// EL-mode shallow-reorg hook (EthereumChainRollback.h): after a rollback to @p newHead the
+    /// in-memory counts/queue no longer describe the chain — blocks above newHead armed or
+    /// consumed schedules that must be re-derived. Nothing was persisted, so the exact fix is
+    /// the same rebuild every startup runs: discard every table (including any uncommitted
+    /// staged overlay) and re-walk the post-rollback roots. Costs a full head-trie walk per
+    /// reorg — the accepted trade-off for exact self-healing, and only paid when pruning is
+    /// enabled (the default Noop observer keeps the hook a no-op). The startup window
+    /// invariant (mpt_prune_window >= reorg_window, enforced by NodeConfig) guarantees every
+    /// root in [newHead - N, newHead] is still fully resolvable on disk. The garbage sweep is
+    /// NOT re-run: a reorg deletes no node rows itself, and the next boot's sweep policy
+    /// covers whatever the rollback made unreachable.
+    bcos::task::Task<void> coOnRollback(
+        bcos::protocol::BlockNumber newHead, StateRootLookup stateRootAt) override
+    {
+        m_stagedCounts.clear();
+        m_stagedDeadlineErases.clear();
+        m_stagedDeadlineInserts.clear();
+        m_counts.clear();
+        m_pending.clear();
+        co_await init(newHead, std::move(stateRootAt), /*sweepGarbage=*/false);
+    }
 
     /// After the block's WriteBatch: apply the staged overlay to the base tables and advance
     /// the in-memory watermark. coPreparePruneRows staged the block's counting work precisely so

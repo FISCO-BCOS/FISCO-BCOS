@@ -26,6 +26,7 @@
 #include "bcos-tars-protocol/protocol/Web3RawTransaction.h"
 #include "bcos-utilities/BoostLog.h"
 #include <boost/exception/diagnostic_information.hpp>
+#include <algorithm>
 #include <cstring>
 
 using namespace bcos;
@@ -60,7 +61,7 @@ std::optional<crypto::HashType> canonicalHash(Transaction const& tx)
 }
 }  // namespace
 
-TransactionStatus normalize(Transaction& tx)
+TransactionStatus normalize(Transaction& tx, BlobPolicy blobPolicy)
 {
     // Step 0 -- outer type whitelist. An outer `type` outside the known set is neither a valid
     // BCOS transaction nor something to run Web3 normalization on; letting it through would
@@ -94,8 +95,13 @@ TransactionStatus normalize(Transaction& tx)
     {
     case engine::RawTransactionKind::Blob:
         // Same classifier and same verdict as the pool-side gate #5520 added, so the same code:
-        // a blob envelope is well-formed and simply never admitted here.
-        return TransactionStatus::BlobTxNotAllowed;
+        // on L2 a blob envelope is well-formed and simply never admitted here. On L1 it is
+        // admitted, subject to the per-transaction blob bound checked after the decode below.
+        if (!blobPolicy.allow)
+        {
+            return TransactionStatus::BlobTxNotAllowed;
+        }
+        break;
     case engine::RawTransactionKind::Deposit:
         // Deposits reach a node through the Engine newPayload path, where their trust anchor is
         // sourceHash. One arriving through a transaction pool is forged by construction: it
@@ -152,6 +158,30 @@ TransactionStatus normalize(Transaction& tx)
         return TransactionStatus::Malformed;
     }
 
+    // L1 blob admission (step 1 let the envelope through): the decoded blob list is the
+    // authoritative shape — EIP-4844 requires at least one blob, the per-transaction
+    // bound (the blob schedule's max) caps them, and every versioned hash must carry the
+    // 0x01 (KZG) version byte, the rule evmone reports as INVALID_BLOB_HASH_VERSION. All
+    // three run here, at decode time, because the admission chain view has no blob base fee
+    // to offer the remaining evmone blob rules — those stay execution-enforced.
+    if (decoded.type == rpc::TransactionType::EIP4844)
+    {
+        if (decoded.blobVersionedHashes.empty())
+        {
+            // evmone's EMPTY_BLOB_HASHES_LIST, surfaced at admission.
+            return TransactionStatus::BlobTxMissingHashes;
+        }
+        if (decoded.blobVersionedHashes.size() > blobPolicy.maxBlobsPerTransaction)
+        {
+            return TransactionStatus::Malformed;
+        }
+        if (std::ranges::any_of(decoded.blobVersionedHashes,
+                [](auto const& hash) { return hash[0] != 0x01; }))
+        {
+            return TransactionStatus::Malformed;
+        }
+    }
+
     // Step 4 -- recompute and compare. Still no mutation.
     auto const recomputed = canonicalHash(tx);
     if (!recomputed.has_value()) [[unlikely]]
@@ -175,8 +205,9 @@ TransactionStatus normalize(Transaction& tx)
     // takeToTarsTransaction produces a fresh struct whose `data` holds exactly the envelope's
     // values and leaves every other TransactionData field default-constructed. Moving the whole
     // sub-struct therefore covers both buckets at once -- authoritative fields get the signed
-    // value, and the ones a Web3 transaction must not carry (abi, extension, groupID,
-    // blockLimit, version, maxFeePerBlobGas, blobVersionedHashes) go back to their defaults.
+    // value (maxFeePerBlobGas and blobVersionedHashes included: Web3TarsBridge.cpp writes both
+    // from the envelope), and the ones a Web3 transaction must not carry (abi, extension,
+    // groupID, blockLimit, version) go back to their defaults.
     // Assigning field by field would silently miss the next field added to TransactionData,
     // which is exactly how #5364 came about.
     auto rebuilt = decoded.takeToTarsTransaction();

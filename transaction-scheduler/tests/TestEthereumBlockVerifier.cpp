@@ -49,6 +49,8 @@
 #include "ethereum-executor/EthereumHost.h"
 #include "EthereumBlockHashLookup.h"
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
+#include <array>
 #include <limits>
 #include <magic_enum/magic_enum.hpp>
 #include <memory>
@@ -1337,10 +1339,10 @@ BOOST_FIXTURE_TEST_CASE(pragueSystemCallsVerify, EEBVFixture)
         ethHeader.excessBlobGas = u256(0);
         ethHeader.parentBeaconRoot = kParentBeaconRoot;
 
-        // The returned EIP-7685 requests never leave verifyAndCommit (the requestsHash
-        // cross-check is a documented leftover there), so probe the block-end path
-        // directly on a throwaway fork: the real contracts must return the seeded
-        // queue entries as requests.
+        // The block-end requests also feed the EIP-7685 requestsHash cross-check inside
+        // verifyAndCommit: probe the block-end path directly on a throwaway fork (the
+        // requests depend only on the seeded queue state, untouched by the transfer tx),
+        // then pin the header's requestsHash to the assembled value so the block verifies.
         auto probeView = multiLayerStorage.fork();
         probeView.newMutable();
         auto blockEnd =
@@ -1378,6 +1380,12 @@ BOOST_FIXTURE_TEST_CASE(pragueSystemCallsVerify, EEBVFixture)
         BOOST_CHECK_EQUAL_COLLECTIONS(blockEnd.requests[1].data().begin(),
             blockEnd.requests[1].data().end(), expectedConsolidation.begin(),
             expectedConsolidation.end());
+
+        // No deposit logs in this block (the deposit contract is the default mainnet
+        // address and no tx emits its event), so the header commits to the hash of the
+        // two system-call requests alone.
+        ethHeader.requestsHash =
+            scheduler_v1::calculateRequestsHash(bcos::bytes{}, blockEnd.requests);
 
         auto fakeLedger = std::make_shared<bcos::test::FakeLedger>();
         scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor> verifier(
@@ -1442,6 +1450,187 @@ BOOST_FIXTURE_TEST_CASE(pragueSystemCallsVerify, EEBVFixture)
             multiLayerStorage.latestBackend(), consolidationRequest, kConsolidationEntrySlot + 3);
         BOOST_CHECK(committedConsolidationTgt == consolidationTgtPubkey1);
     }());
+}
+
+// ---------------------------------------------------------------------------
+// EIP-6110 deposit collection + EIP-7685 requestsHash assembly
+// (bcos-transaction-scheduler/EthereumRequests.h).
+// ---------------------------------------------------------------------------
+namespace
+{
+/// The EIP-6110 DepositEvent ABI encoding: five head offset words, then each dynamic
+/// bytes field as a length word + value padded to 32-byte words (576 bytes total).
+bcos::bytes EEBVDepositLogData(bcos::bytes const& pubkey48, bcos::bytes const& cred32,
+    bcos::bytes const& amount8, bcos::bytes const& sig96, bcos::bytes const& index8)
+{
+    bcos::bytes data(576, 0);
+    auto writeWord = [&data](size_t pos, uint32_t value) {
+        data[pos + 28] = static_cast<bcos::byte>((value >> 24) & 0xff);
+        data[pos + 29] = static_cast<bcos::byte>((value >> 16) & 0xff);
+        data[pos + 30] = static_cast<bcos::byte>((value >> 8) & 0xff);
+        data[pos + 31] = static_cast<bcos::byte>(value & 0xff);
+    };
+    constexpr std::array<uint32_t, 5> c_fieldOffsets{160, 256, 320, 384, 512};
+    for (size_t i = 0; i < 5; ++i)
+    {
+        writeWord(i * 32, c_fieldOffsets[i]);
+    }
+    auto writeField = [&data, &writeWord](size_t offset, bcos::bytes const& value) {
+        writeWord(offset, static_cast<uint32_t>(value.size()));
+        std::copy(value.begin(), value.end(), data.begin() + offset + 32);
+    };
+    writeField(160, pubkey48);
+    writeField(256, cred32);
+    writeField(320, amount8);
+    writeField(384, sig96);
+    writeField(512, index8);
+    return data;
+}
+
+bcos::protocol::TransactionReceipt::Ptr EEBVReceiptWithLog(
+    bcos::Address const& logAddress, bcos::h256 const& topic0, bcos::bytes logData)
+{
+    auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+    receipt->setLogEntries({bcos::protocol::LogEntry{
+        bcos::bytes(logAddress.begin(), logAddress.end()), {topic0}, std::move(logData)}});
+    return receipt;
+}
+}  // namespace
+
+BOOST_AUTO_TEST_CASE(depositRequestsCollection)
+{
+    bcos::bytes const pubkey(48, 0x11);
+    bcos::bytes const cred(32, 0x22);
+    bcos::bytes const amount(8, 0x33);
+    bcos::bytes const sig(96, 0x44);
+    bcos::bytes const index(8, 0x55);
+    auto const& contract = scheduler_v1::c_mainnetDepositContractAddress;
+
+    // A canonical DepositEvent log collects to its 192-byte deposit request
+    // (pubkey ‖ withdrawal_credentials ‖ amount ‖ signature ‖ index).
+    std::vector<protocol::TransactionReceipt::Ptr> receipts{EEBVReceiptWithLog(
+        contract, scheduler_v1::c_depositEventSignatureHash,
+        EEBVDepositLogData(pubkey, cred, amount, sig, index))};
+    auto collected = scheduler_v1::collectDepositRequestsData(receipts, contract);
+    BOOST_REQUIRE(collected.has_value());
+    bcos::bytes expected;
+    for (auto const& field : {pubkey, cred, amount, sig, index})
+    {
+        expected.insert(expected.end(), field.begin(), field.end());
+    }
+    BOOST_REQUIRE_EQUAL(collected->size(), 192u);
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        collected->begin(), collected->end(), expected.begin(), expected.end());
+
+    // Logs from another address or with another topic0 are ignored (an empty collection
+    // is NOT a failure).
+    auto const otherAddress = bcos::Address(std::string("0x1111111111111111111111111111111111111111"));
+    std::vector<protocol::TransactionReceipt::Ptr> otherReceipts{
+        EEBVReceiptWithLog(otherAddress, scheduler_v1::c_depositEventSignatureHash,
+            EEBVDepositLogData(pubkey, cred, amount, sig, index)),
+        EEBVReceiptWithLog(contract, bcos::h256{},
+            EEBVDepositLogData(pubkey, cred, amount, sig, index))};
+    auto ignored = scheduler_v1::collectDepositRequestsData(otherReceipts, contract);
+    BOOST_REQUIRE(ignored.has_value());
+    BOOST_CHECK(ignored->empty());
+
+    // A per-chain deposit contract override collects only from that address.
+    auto overridden = scheduler_v1::collectDepositRequestsData(otherReceipts, otherAddress);
+    BOOST_REQUIRE(overridden.has_value());
+    BOOST_CHECK_EQUAL(overridden->size(), 192u);
+
+    // Malformed layouts fail the collection (the block is invalid, EIP-6110): wrong
+    // total size, or a tampered head offset.
+    std::vector<protocol::TransactionReceipt::Ptr> shortData{EEBVReceiptWithLog(
+        contract, scheduler_v1::c_depositEventSignatureHash, bcos::bytes(575, 0))};
+    BOOST_CHECK(!scheduler_v1::collectDepositRequestsData(shortData, contract).has_value());
+    auto badOffsets = EEBVDepositLogData(pubkey, cred, amount, sig, index);
+    badOffsets[31] = 0xa1;  // first offset: 161 instead of 160
+    std::vector<protocol::TransactionReceipt::Ptr> badOffsetReceipts{EEBVReceiptWithLog(
+        contract, scheduler_v1::c_depositEventSignatureHash, std::move(badOffsets))};
+    BOOST_CHECK(
+        !scheduler_v1::collectDepositRequestsData(badOffsetReceipts, contract).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(requestsHashAssembly)
+{
+    // The empty requests list hashes to sha256("") — the canonical empty requestsHash
+    // every Prague+ header without requests carries.
+    auto const emptyHash = scheduler_v1::calculateRequestsHash(bcos::bytes{}, {});
+    BOOST_CHECK_EQUAL(emptyHash.hex(),
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+
+    // Entries hash as sha256(type_byte ‖ data), concatenated in [deposit, withdrawal,
+    // consolidation] order; empty entries are skipped.
+    bcos::bytes const depositData(192, 0x11);
+    bcos::bytes const withdrawalData(76, 0x22);
+    executor_v1::eth::EthRequests withdrawalRequest{
+        executor_v1::eth::EthRequests::Type::withdrawal,
+        evmc::bytes_view{withdrawalData.data(), withdrawalData.size()}};
+    auto const hash = scheduler_v1::calculateRequestsHash(depositData, {withdrawalRequest});
+
+    bcos::bytes depositEntry(1 + depositData.size(), 0);
+    std::copy(depositData.begin(), depositData.end(), depositEntry.begin() + 1);
+    auto const depositDigest = bcos::crypto::sha256Hash(bcos::ref(depositEntry));
+    bcos::bytes withdrawalEntry(1 + withdrawalData.size(), 0);
+    withdrawalEntry[0] = 1;
+    std::copy(withdrawalData.begin(), withdrawalData.end(), withdrawalEntry.begin() + 1);
+    auto const withdrawalDigest = bcos::crypto::sha256Hash(bcos::ref(withdrawalEntry));
+    bcos::bytes concatenated;
+    concatenated.insert(concatenated.end(), depositDigest.begin(), depositDigest.end());
+    concatenated.insert(concatenated.end(), withdrawalDigest.begin(), withdrawalDigest.end());
+    BOOST_CHECK(hash == bcos::crypto::sha256Hash(bcos::ref(concatenated)));
+
+    // An empty withdrawal entry is skipped: deposits alone give the same hash.
+    executor_v1::eth::EthRequests emptyWithdrawal{
+        executor_v1::eth::EthRequests::Type::withdrawal, {}};
+    BOOST_CHECK(scheduler_v1::calculateRequestsHash(depositData, {emptyWithdrawal}) ==
+                scheduler_v1::calculateRequestsHash(depositData, {}));
+}
+
+BOOST_AUTO_TEST_CASE(requestsHashVerifyAgainstHeader)
+{
+    using Verifier = scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>;
+    // A computation that matches the header on every rule before requestsHash, so only
+    // the EIP-7685 check decides.
+    auto header = EEBVPoSHeader(1, 100, bcos::h256{}, 30000000, bcos::u256(1000000000));
+    scheduler_v1::EthereumBlockComputation computation{.txsRoot = header.txsRoot,
+        .receiptsRoot = header.receiptsRoot,
+        .gasUsed = header.gasUsed,
+        .logsBloom = header.logsBloom};
+    std::vector<bcos::bytes> const noUncles;
+    std::vector<protocol::Transaction::Ptr> const noTransactions;
+
+    auto const requestsHash = scheduler_v1::calculateRequestsHash(bcos::bytes(192, 0x11), {});
+    header.requestsHash = requestsHash;
+    // Prague block, header matches the executed requests.
+    BOOST_CHECK(!Verifier::verifyAgainstHeader(header, computation, header.stateRoot,
+        std::nullopt, noUncles, noTransactions, requestsHash)
+                     .has_value());
+    // Tampered header commitment.
+    auto tampered = header;
+    tampered.requestsHash = bcos::h256(
+        std::string_view("0x9999999999999999999999999999999999999999999999999999999999999999"),
+        bcos::h256::FromHex);
+    auto error = Verifier::verifyAgainstHeader(
+        tampered, computation, header.stateRoot, std::nullopt, noUncles, noTransactions,
+        requestsHash);
+    BOOST_REQUIRE(error.has_value());
+    BOOST_CHECK(error->find("requestsHash mismatch") != std::string::npos);
+    // Prague block whose header lacks requestsHash entirely.
+    auto missing = header;
+    missing.requestsHash.reset();
+    BOOST_CHECK(Verifier::verifyAgainstHeader(missing, computation, header.stateRoot,
+                    std::nullopt, noUncles, noTransactions, requestsHash)
+                    .has_value());
+    // Pre-Prague block (no computed hash) must not carry a requestsHash.
+    BOOST_CHECK(Verifier::verifyAgainstHeader(header, computation, header.stateRoot,
+                    std::nullopt, noUncles, noTransactions, std::nullopt)
+                    .has_value());
+    missing.requestsHash.reset();
+    BOOST_CHECK(!Verifier::verifyAgainstHeader(missing, computation, header.stateRoot,
+                    std::nullopt, noUncles, noTransactions, std::nullopt)
+                     .has_value());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

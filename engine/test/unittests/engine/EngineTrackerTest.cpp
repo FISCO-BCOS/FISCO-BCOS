@@ -449,6 +449,38 @@ BOOST_AUTO_TEST_CASE(engine_tracker_rejects_head_jump)
         "Forkchoice head block number must increase by exactly 1");
 }
 
+// EL-mode relaxation (allowCanonicalHeadJump): the CL is the forkchoice authority and
+// the devp2p sync loop commits blocks without a per-block FCU, so a CANONICAL head may
+// jump arbitrarily far ahead of the tracked head. The canonical proof is still
+// required, and the block-producing lanes (flag unset) keep the strict +1 rule.
+BOOST_AUTO_TEST_CASE(engine_tracker_allows_canonical_head_jump_when_permitted)
+{
+    EngineTracker tracker;
+    tracker.applyForkchoice(resolved(h256(10), 10, true, false));
+
+    ResolvedForkchoice jump = resolved(h256(15), 15, true, false);
+    jump.allowCanonicalHeadJump = true;
+    BOOST_CHECK(tracker.applyForkchoice(jump) == ForkchoiceApplyResult::Applied);
+    BOOST_REQUIRE(tracker.trackedHead().has_value());
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 15);
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->hash, h256(15));
+
+    // A non-canonical jump stays rejected even with the relaxation armed.
+    ResolvedForkchoice nonCanonical = resolved(h256(18), 18, false, false);
+    nonCanonical.allowCanonicalHeadJump = true;
+    checkExceptionMessage<InvalidForkchoiceState>(
+        [&]() { tracker.applyForkchoice(nonCanonical); },
+        "Forkchoice head block number must increase by exactly 1");
+    BOOST_REQUIRE(tracker.trackedHead().has_value());
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 15);
+
+    // And a canonical jump WITHOUT the flag keeps the strict +1 rule.
+    checkExceptionMessage<InvalidForkchoiceState>(
+        [&]() { tracker.applyForkchoice(resolved(h256(18), 18, true, false)); },
+        "Forkchoice head block number must increase by exactly 1");
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 15);
+}
+
 BOOST_AUTO_TEST_CASE(engine_tracker_updates_safe_and_finalized_on_apply)
 {
     EngineTracker tracker;
@@ -995,7 +1027,9 @@ BOOST_AUTO_TEST_CASE(engine_common_capabilities_gold)
     std::vector<std::string> const gold{"engine_exchangeCapabilities", "engine_forkchoiceUpdatedV1",
         "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3", "engine_getPayloadV1",
         "engine_getPayloadV2", "engine_getPayloadV3", "engine_getPayloadV4", "engine_getPayloadV5",
-        "engine_newPayloadV1", "engine_newPayloadV2", "engine_newPayloadV3", "engine_newPayloadV4"};
+        "engine_newPayloadV1", "engine_newPayloadV2", "engine_newPayloadV3", "engine_newPayloadV4",
+        "engine_getPayloadBodiesByHashV1", "engine_getPayloadBodiesByRangeV1",
+        "engine_getBlobsV1", "engine_getClientVersionV1", "engine_exchangeClientVersionV1"};
     BOOST_CHECK(caps == gold);
 }
 

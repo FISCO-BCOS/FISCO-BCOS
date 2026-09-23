@@ -30,7 +30,7 @@ namespace bcos::test
 namespace
 {
 constexpr std::array kKinds{TxKind::Bcos, TxKind::Web3Legacy, TxKind::Web3AccessList,
-    TxKind::Web3DynamicFee, TxKind::Web3SetCode, TxKind::Rejected};
+    TxKind::Web3DynamicFee, TxKind::Web3Blob, TxKind::Web3SetCode, TxKind::Rejected};
 constexpr std::array kContexts{AdmissionContext::PoolAdmission,
     AdmissionContext::ProposalVerification, AdmissionContext::EESTReplay};
 constexpr std::array kPolicies{SignaturePolicy::Required, SignaturePolicy::Disabled};
@@ -57,6 +57,8 @@ BOOST_AUTO_TEST_CASE(poolAdmissionColumnIsExact)
                 (legacy | Check::TypeByRevision));
     BOOST_CHECK(checkSet(TxKind::Web3DynamicFee, AdmissionContext::PoolAdmission) ==
                 (legacy | Check::TypeByRevision | Check::TipNotAboveCap));
+    BOOST_CHECK(checkSet(TxKind::Web3Blob, AdmissionContext::PoolAdmission) ==
+                (legacy | Check::TypeByRevision | Check::TipNotAboveCap | Check::BlobHasTo));
     BOOST_CHECK(checkSet(TxKind::Web3SetCode, AdmissionContext::PoolAdmission) ==
                 (legacy | Check::TypeByRevision | Check::TipNotAboveCap | Check::SetCodeHasTo |
                     Check::AuthListNonEmpty));
@@ -246,14 +248,15 @@ BOOST_AUTO_TEST_CASE(typeGateIsEvaluatedFirstAndSignatureBeforeAccountState)
 
     // The items evmone's validate_transaction also has, in the order it reports them
     // (bcos-evm/bcos-evm/eth/state/state.cpp): the type-specific block -- revision gate, 7702
-    // "to" present, 7702 authorization list non-empty -- comes BEFORE the shared fee rules, so
+    // "to" present, 4844 "to" present (its "hashes non-empty" runs earlier, in normalize), 7702
+    // authorization list non-empty -- comes BEFORE the shared fee rules, so
     // a 7702 envelope with an empty authorization list and a tip above its fee cap reports the
     // list, not the tip. Asserted as a sequence so that inserting a check in the wrong place
     // fails here rather than in an EEST fixture's expected exception.
     constexpr std::array evmoneSequence{Check::TypeByRevision, Check::SetCodeHasTo,
-        Check::AuthListNonEmpty, Check::TipNotAboveCap, Check::MaxGasLimit, Check::FeeCapVsBaseFee,
-        Check::SenderIsEOA, Check::NonceNotMax, Check::Web3NonceWindow, Check::InitCodeSize,
-        Check::Balance, Check::IntrinsicGas};
+        Check::BlobHasTo, Check::AuthListNonEmpty, Check::TipNotAboveCap, Check::MaxGasLimit,
+        Check::FeeCapVsBaseFee, Check::SenderIsEOA, Check::NonceNotMax, Check::Web3NonceWindow,
+        Check::InitCodeSize, Check::Balance, Check::IntrinsicGas};
     const auto* const outOfOrder = std::ranges::adjacent_find(evmoneSequence,
         [&](Check earlier, Check later) { return indexOf(earlier) >= indexOf(later); });
     BOOST_CHECK_MESSAGE(outOfOrder == evmoneSequence.end(),
@@ -290,6 +293,8 @@ BOOST_AUTO_TEST_CASE(proposalVerificationKeepsProtocolInvariants)
     BOOST_CHECK(proposal(TxKind::Web3AccessList) == (legacy | Check::TypeByRevision));
     BOOST_CHECK(proposal(TxKind::Web3DynamicFee) ==
                 (legacy | Check::TypeByRevision | Check::TipNotAboveCap));
+    BOOST_CHECK(proposal(TxKind::Web3Blob) ==
+                (legacy | Check::TypeByRevision | Check::TipNotAboveCap | Check::BlobHasTo));
     BOOST_CHECK(
         proposal(TxKind::Web3SetCode) == (legacy | Check::TypeByRevision | Check::TipNotAboveCap |
                                              Check::SetCodeHasTo | Check::AuthListNonEmpty));
@@ -313,8 +318,8 @@ BOOST_AUTO_TEST_CASE(proposalVerificationKeepsProtocolInvariants)
     // ChainId above all: nothing downstream re-checks it. EthereumTransition.h states plainly
     // that validate_transaction does not look at tx.chain_id, so dropping it here would let a
     // leader have the whole network execute a transaction signed for a different chain.
-    for (auto kind :
-        {TxKind::Web3Legacy, TxKind::Web3AccessList, TxKind::Web3DynamicFee, TxKind::Web3SetCode})
+    for (auto kind : {TxKind::Web3Legacy, TxKind::Web3AccessList, TxKind::Web3DynamicFee,
+             TxKind::Web3Blob, TxKind::Web3SetCode})
     {
         BOOST_CHECK(contains(proposal(kind), Check::ChainId));
     }

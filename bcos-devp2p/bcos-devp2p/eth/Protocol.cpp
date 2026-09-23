@@ -454,4 +454,157 @@ RlpResult<NewBlockHashesMessage> decodeNewBlockHashes(bytesConstRef _data)
     return msg;
 }
 
+// ---------------------------------------------------------------------------
+// Transactions
+// ---------------------------------------------------------------------------
+// A gossip Transactions message carries each tx exactly like a BlockBodies
+// transactions element: a legacy tx is a bare RLP list, a typed (EIP-2718) tx is
+// an RLP string whose content is 0xNN || rlp(payload) — for a blob tx that
+// content is the whole EIP-4844 network wrapper, sidecar included.
+bcos::bytes encodeTransactions(TransactionsMessage const& _msg)
+{
+    std::vector<bcos::bytes> txs;
+    txs.reserve(_msg.transactions.size());
+    for (auto const& tx : _msg.transactions)
+    {
+        if (!tx.empty() && tx[0] < 0xc0)
+        {
+            txs.push_back(rlpItem(bytesConstRef(tx.data(), tx.size())));
+        }
+        else
+        {
+            txs.push_back(tx);
+        }
+    }
+    return rlpList(txs);
+}
+
+RlpResult<TransactionsMessage> decodeTransactions(bytesConstRef _data)
+{
+    TransactionsMessage msg;
+    bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
+    RLP_TRY(auto txs, takeListPayload(view, "eth: expected an RLP list"));
+    while (!txs.empty())
+    {
+        if (msg.transactions.size() >= kMaxTxsPerMessage)
+        {
+            return std::unexpected(genericError("eth: too many transactions in one message"));
+        }
+        RLP_TRY(auto tx, takeTx(txs));
+        msg.transactions.push_back(std::move(tx));
+    }
+    return msg;
+}
+
+// ---------------------------------------------------------------------------
+// NewPooledTransactionHashes (eth/68)
+// ---------------------------------------------------------------------------
+bcos::bytes encodeNewPooledTransactionHashes(NewPooledTransactionHashesMessage const& _msg)
+{
+    std::vector<bcos::bytes> sizes;
+    sizes.reserve(_msg.sizes.size());
+    for (auto const size : _msg.sizes)
+    {
+        sizes.push_back(rlpItem(size));
+    }
+    std::vector<bcos::bytes> hashes;
+    hashes.reserve(_msg.hashes.size());
+    for (auto const& hash : _msg.hashes)
+    {
+        hashes.push_back(rlpItem(hash));
+    }
+    return rlpList({rlpItem(bytesConstRef(_msg.types.data(), _msg.types.size())), rlpList(sizes),
+        rlpList(hashes)});
+}
+
+RlpResult<NewPooledTransactionHashesMessage> decodeNewPooledTransactionHashes(bytesConstRef _data)
+{
+    NewPooledTransactionHashesMessage msg;
+    bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
+    RLP_TRY(auto items, takeListPayload(view, "eth: expected an RLP list"));
+    RLP_TRY(msg.types, take<bcos::bytes>(items));
+    RLP_TRY(auto sizes, takeListPayload(items, "eth: expected an RLP list"));
+    while (!sizes.empty())
+    {
+        RLP_TRY(auto size, take<uint64_t>(sizes));
+        msg.sizes.push_back(size);
+    }
+    RLP_TRY(auto hashes, takeListPayload(items, "eth: expected an RLP list"));
+    while (!hashes.empty())
+    {
+        RLP_TRY(auto hash, take<h256>(hashes));
+        msg.hashes.push_back(hash);
+    }
+    if (msg.hashes.size() > kMaxAnnouncedHashes)
+    {
+        return std::unexpected(genericError("eth: too many announced transaction hashes"));
+    }
+    // eth/68: the three fields name the same transactions, so their counts must
+    // agree — a mismatch is a malformed announcement, not a partial one.
+    if (msg.types.size() != msg.hashes.size() || msg.sizes.size() != msg.hashes.size())
+    {
+        return std::unexpected(genericError(
+            "eth: NewPooledTransactionHashes types/sizes/hashes count mismatch"));
+    }
+    return msg;
+}
+
+// ---------------------------------------------------------------------------
+// GetPooledTransactions / PooledTransactions (eth/66+ request-id forms)
+// ---------------------------------------------------------------------------
+bcos::bytes encodeGetPooledTransactions(GetPooledTransactionsMessage const& _msg)
+{
+    std::vector<bcos::bytes> hashes;
+    hashes.reserve(_msg.hashes.size());
+    for (auto const& hash : _msg.hashes)
+    {
+        hashes.push_back(rlpItem(hash));
+    }
+    return rlpList({rlpItem(_msg.requestId), rlpList(hashes)});
+}
+
+RlpResult<GetPooledTransactionsMessage> decodeGetPooledTransactions(bytesConstRef _data)
+{
+    GetPooledTransactionsMessage msg;
+    bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
+    RLP_TRY(auto items, takeListPayload(view, "eth: expected an RLP list"));
+    RLP_TRY(msg.requestId, take<uint64_t>(items));
+    RLP_TRY(auto hashes, takeListPayload(items, "eth: expected an RLP list"));
+    while (!hashes.empty())
+    {
+        if (msg.hashes.size() >= kMaxAnnouncedHashes)
+        {
+            return std::unexpected(genericError("eth: too many pooled transaction hashes"));
+        }
+        RLP_TRY(auto hash, take<h256>(hashes));
+        msg.hashes.push_back(hash);
+    }
+    return msg;
+}
+
+bcos::bytes encodePooledTransactions(PooledTransactionsMessage const& _msg)
+{
+    TransactionsMessage txs{.transactions = _msg.transactions};
+    return rlpList({rlpItem(_msg.requestId), encodeTransactions(txs)});
+}
+
+RlpResult<PooledTransactionsMessage> decodePooledTransactions(bytesConstRef _data)
+{
+    PooledTransactionsMessage msg;
+    bcos::bytesRef view(const_cast<bcos::byte*>(_data.data()), _data.size());
+    RLP_TRY(auto items, takeListPayload(view, "eth: expected an RLP list"));
+    RLP_TRY(msg.requestId, take<uint64_t>(items));
+    RLP_TRY(auto txs, takeListPayload(items, "eth: expected an RLP list"));
+    while (!txs.empty())
+    {
+        if (msg.transactions.size() >= kMaxTxsPerMessage)
+        {
+            return std::unexpected(genericError("eth: too many transactions in one message"));
+        }
+        RLP_TRY(auto tx, takeTx(txs));
+        msg.transactions.push_back(std::move(tx));
+    }
+    return msg;
+}
+
 }  // namespace bcos::devp2p::eth
