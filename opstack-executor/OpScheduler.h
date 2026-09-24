@@ -280,8 +280,12 @@ public:
                 try
                 {
                     auto view = self->m_multiLayerStorage->forkCommitted();
-                    bcos::ledger::account::EVMAccount account(view, parseAddress(contract),
-                        bcos::ledger::account::nodeAddressTableMode());
+                    // The OP lane's naming rule (no /sys/ routing, re-encoded to the node
+                    // layout), NOT the v1-rule constructor — the bridge writes every
+                    // address, system-tx ones included, under its /apps/ logical name.
+                    bcos::ledger::account::EVMAccount account(view,
+                        bcos::ledger::account::FromTableName{},
+                        bcos::ledger::account::ethLaneAccountTableName(parseAddress(contract)));
                     auto code = co_await account.code();
                     if (!code)
                     {
@@ -322,8 +326,10 @@ public:
                 try
                 {
                     auto view = self->m_multiLayerStorage->forkCommitted();
-                    bcos::ledger::account::EVMAccount account(view, parseAddress(contract),
-                        bcos::ledger::account::nodeAddressTableMode());
+                    // Lane rule, as in getCode above.
+                    bcos::ledger::account::EVMAccount account(view,
+                        bcos::ledger::account::FromTableName{},
+                        bcos::ledger::account::ethLaneAccountTableName(parseAddress(contract)));
                     auto abi = co_await account.abi();
                     if (!abi)
                     {
@@ -377,9 +383,13 @@ public:
             // but uncommitted block may already have advanced it (the sibling note above: fork()
             // "can read the pending slot"). Scenario B keeps account fields in the committed
             // MPT, so when the pending/flat plane has no row, fall back to the committed tip's
-            // MPT state.
-            bcos::ledger::account::EVMAccount pendingAccount(
-                view, addressOwned, bcos::ledger::account::nodeAddressTableMode());
+            // MPT state. The OP lane's naming rule (verbatim /apps/ logical name, no /sys/
+            // routing, re-encoded to the node layout) is legacyAppsAccountTableName — the
+            // v1-rule constructor would route system-tx addresses to /sys/, where the bridge
+            // never writes.
+            bcos::ledger::account::EVMAccount pendingAccount(view,
+                bcos::ledger::account::FromTableName{},
+                bcos::ledger::account::legacyAppsAccountTableName(addressOwned));
             if (auto pending = co_await pendingAccount.storageEntry(keyOwned))
             {
                 co_return pending;
@@ -394,12 +404,14 @@ public:
             if (stateRoot != bcos::crypto::HashType{})
             {
                 using HistoricalBackend = bcos::scheduler_v1::HistoricalStateBackend<ViewType>;
-                HistoricalBackend historicalBackend(
-                    view, stateRoot, bcos::ledger::account::nodeAddressTableMode());
+                HistoricalBackend historicalBackend(view, stateRoot,
+                    bcos::ledger::account::nodeAddressTableMode(),
+                    /*ethLaneNaming=*/true);
                 storage2::View<typename MultiLayerStorage::MutableStorage, void, HistoricalBackend>
                     historicalView(std::addressof(historicalBackend));
-                bcos::ledger::account::EVMAccount<decltype(historicalView)> account(
-                    historicalView, addressOwned, bcos::ledger::account::nodeAddressTableMode());
+                bcos::ledger::account::EVMAccount<decltype(historicalView)> account(historicalView,
+                    bcos::ledger::account::FromTableName{},
+                    bcos::ledger::account::legacyAppsAccountTableName(addressOwned));
                 if (auto nonce = co_await account.nonce())
                 {
                     storage::Entry entry;
@@ -409,8 +421,8 @@ public:
                 co_return std::nullopt;
             }
         }
-        bcos::ledger::account::EVMAccount account(
-            view, addressOwned, bcos::ledger::account::nodeAddressTableMode());
+        bcos::ledger::account::EVMAccount account(view, bcos::ledger::account::FromTableName{},
+            bcos::ledger::account::legacyAppsAccountTableName(addressOwned));
         co_return co_await account.storageEntry(keyOwned);
     }
 
@@ -1648,8 +1660,8 @@ private:
 
         // Fresh mutable layer over the historical MPT; call writes are not persisted.
         using HistoricalBackend = bcos::scheduler_v1::HistoricalStateBackend<ViewType>;
-        HistoricalBackend historicalBackend(
-            latestView, stateRoot, bcos::ledger::account::nodeAddressTableMode());
+        HistoricalBackend historicalBackend(latestView, stateRoot,
+            bcos::ledger::account::nodeAddressTableMode(), /*ethLaneNaming=*/true);
         storage2::View<typename MultiLayerStorage::MutableStorage, void, HistoricalBackend>
             historicalView(std::addressof(historicalBackend));
         historicalView.newMutable();

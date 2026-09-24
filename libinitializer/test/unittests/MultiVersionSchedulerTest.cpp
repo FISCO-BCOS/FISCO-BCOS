@@ -116,30 +116,23 @@ BOOST_AUTO_TEST_CASE(setVersionSelectsWiredOpSlot)
     BOOST_CHECK_EQUAL(slots[3]->m_callAtBlockCount, 1);
 }
 
-// Runtime mirror of the boot-time hex-only-lane check (resolveNodeAddressTableMode):
-// executor_version is a governance system config applied mid-chain WITHOUT restart, so a
-// Binary-layout node must refuse to switch INTO a hex-only lane (the Ethereum / OP
-// executors name account tables /apps/<40-hex> directly and would read every account as
-// absent). Fail-CLOSED: setVersion throws and keeps the current index — committing blocks
-// under an executor the on-chain config did not select would make executor selection
-// depend on node-local state and fork a mixed network; the commit-callback callers turn
-// the throw into a halt. A Hex-mode node switches freely.
-BOOST_AUTO_TEST_CASE(setVersionThrowsOnHexOnlyLaneInBinaryMode)
+// The Eth/OP lanes are mode-aware (account::ethLaneAccountTableName), so switching INTO
+// them is honoured on a Binary-layout node exactly as on a Hex node — executor selection
+// stays a pure function of the on-chain config, identical on both sides of a
+// mixed-encoding network.
+BOOST_AUTO_TEST_CASE(setVersionSwitchesToEthOpLanesInBinaryMode)
 {
     namespace account = ledger::account;
     {
         bcos::test::ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Binary);
         auto scheduler = make(true);
-        BOOST_CHECK_THROW(
-            scheduler->setVersion(ETHEREUM_EXECUTOR_VERSION, {}), ExecutorVersionNotSupported);
-        BOOST_CHECK_THROW(
-            scheduler->setVersion(OPSTACK_EXECUTOR_VERSION, {}), ExecutorVersionNotSupported);
-
-        // The throw kept the current lane: nothing switched.
+        BOOST_CHECK_NO_THROW(scheduler->setVersion(ETHEREUM_EXECUTOR_VERSION, {}));
         scheduler->callAtBlock(nullptr, 0, {});
-        BOOST_CHECK_EQUAL(slots[0]->m_callAtBlockCount, 1);  // still the initial lane
-        BOOST_CHECK_EQUAL(slots[2]->m_callAtBlockCount, 0);
-        BOOST_CHECK_EQUAL(slots[3]->m_callAtBlockCount, 0);
+        BOOST_CHECK_EQUAL(slots[2]->m_callAtBlockCount, 1);
+
+        BOOST_CHECK_NO_THROW(scheduler->setVersion(OPSTACK_EXECUTOR_VERSION, {}));
+        scheduler->callAtBlock(nullptr, 0, {});
+        BOOST_CHECK_EQUAL(slots[3]->m_callAtBlockCount, 1);
     }
 
     // Hex mode: the same switch proceeds.

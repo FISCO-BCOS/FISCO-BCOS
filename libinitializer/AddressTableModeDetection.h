@@ -66,15 +66,13 @@ bool hasBinaryTableRegistration(::rocksdb::DB& stateDB);
 void refuseBinaryDataWithoutFlag(
     ::rocksdb::DB& stateDB, std::optional<std::string> const& layoutFlag);
 
-/// The executor lanes whose account-table writes are hex-only: the OP lane
-/// (feature_l2_ethereum_compat / executor_version >= OPSTACK_EXECUTOR_VERSION — the
-/// Storage2State bridge derives /apps/<40-hex> names itself), the Eth engine lane
-/// (executor_version == ETHEREUM_EXECUTOR_VERSION — ethereum-executor's EthereumState
-/// hard-codes AddressTableMode::Hex) and the legacy bcos-executor lane (executor_version
-/// == 0 — SchedulerManager's executor names hex tables directly). Only the baseline v1
-/// lane (executor_version == 1, no L2 flag) routes every account-table name through
-/// EVMAccount's mode routing.
-bool isHexOnlyExecutorLane(const ledger::Features& features, int executorVersion);
+/// The executor lane whose account-table writes are hex-only: the legacy bcos-executor
+/// lane (executor_version == 0 — SchedulerManager's executor names hex tables directly).
+/// Every other lane is mode-aware: the baseline v1 lane routes through EVMAccount's mode
+/// routing, and the Eth engine / OP lanes derive their names through
+/// account::ethLaneAccountTableName (the lane's /apps/ logical rule, no /sys/ routing,
+/// re-encoded to the node-local layout — EVMAccount.h), so they run on either encoding.
+bool isHexOnlyExecutorLane(int executorVersion);
 
 /// Resolve the node-local account-table mode from the layout flag and the lane:
 ///   - hex-only lane: any flag value is binary-layout evidence → a loud boot failure

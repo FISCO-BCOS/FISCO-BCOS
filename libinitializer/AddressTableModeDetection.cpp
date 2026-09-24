@@ -92,12 +92,13 @@ void bcos::initializer::refuseBinaryDataWithoutFlag(
             "idempotent and rewrites the flag), or restore a consistent snapshot"));
 }
 
-bool bcos::initializer::isHexOnlyExecutorLane(const ledger::Features& features, int executorVersion)
+bool bcos::initializer::isHexOnlyExecutorLane(int executorVersion)
 {
-    return features.get(ledger::Features::Flag::feature_l2_ethereum_compat) ||
-           executorVersion == 0 ||  // legacy bcos-executor lane (SchedulerManager)
-           executorVersion == ledger::ETHEREUM_EXECUTOR_VERSION ||
-           executorVersion >= ledger::OPSTACK_EXECUTOR_VERSION;
+    // Only the legacy bcos-executor lane (executor_version == 0, SchedulerManager) names
+    // hex account tables directly. The Eth engine and OP lanes are mode-aware: their
+    // account-table names derive through account::ethLaneAccountTableName (the lane's
+    // /apps/ logical rule re-encoded to the node layout — EVMAccount.h).
+    return executorVersion == 0;
 }
 
 bcos::ledger::account::AddressTableMode bcos::initializer::resolveNodeAddressTableMode(
@@ -113,8 +114,9 @@ bcos::ledger::account::AddressTableMode bcos::initializer::resolveNodeAddressTab
                     "this node's state DB holds binary-layout account tables or an "
                     "unfinished hex->binary migration (the " +
                     std::string(ACCOUNT_TABLE_LAYOUT_KEY) + " flag is '" + *layoutFlag +
-                    "'), but the chain runs a hex-only executor lane (OP / Eth engine / "
-                    "legacy executor): those executors name account tables /apps/<40-hex> "
+                    "'), but the chain runs the hex-only legacy executor lane "
+                    "(executor_version = 0): that executor names account tables "
+                    "/apps/<40-hex> "
                     "directly and would split reads and writes onto disjoint tables. "
                     "Recovery: if this chain was migrated from hex, roll the state DB back "
                     "to the pre-migration snapshot. A chain born binary has no hex snapshot "

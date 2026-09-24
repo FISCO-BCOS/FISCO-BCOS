@@ -232,6 +232,27 @@ inline std::string legacyAppsAccountTableName(std::string_view address)
     return toNodeLayout(std::move(hexName));
 }
 
+/// Table name for the Eth/OP executor lanes (the OP bridge, the Eth executor's state
+/// view, the PoW reward path): the LOGICAL name is always hexAccountTableName(addr) —
+/// "/apps/<40 lowercase hex>", no /sys/ routing, because the c_systemTxsAddress members
+/// are ordinary accounts in the Ethereum execution world — re-encoded to this node's
+/// physical layout ("/s/<20 raw bytes>" in Binary mode) through toNodeLayout. Both
+/// layouts resolve to the same logical row, so Hex and Binary nodes running these lanes
+/// commit identical roots. Contrast with accountTableName (the v1-lane rule, which routes
+/// system addresses to /sys/): a lane must use exactly one rule for all its account
+/// tables, and for these lanes this is it.
+inline std::string ethLaneAccountTableName(bcos::Address const& addr)
+{
+    return toNodeLayout(hexAccountTableName(addr));
+}
+
+/// evmc-address convenience form of the above.
+inline std::string ethLaneAccountTableName(const evmc_address& addr)
+{
+    return ethLaneAccountTableName(
+        bcos::Address{bcos::bytesConstRef{addr.bytes, sizeof(addr.bytes)}});
+}
+
 template <class Storage>
 class EVMAccount
 {

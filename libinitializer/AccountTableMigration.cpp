@@ -50,9 +50,9 @@ bcos::initializer::AccountTableMigrationStats bcos::initializer::migrateAccountT
     {
         BOOST_THROW_EXCEPTION(
             bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                "[storage] migrate_account_tables_to_binary is set, but the chain runs a "
-                "hex-only executor lane (OP / Eth engine / legacy executor): those executors "
-                "name account tables /apps/<40-hex> directly, and migrating the tables to the "
+                "[storage] migrate_account_tables_to_binary is set, but the chain runs the "
+                "hex-only legacy executor lane (executor_version = 0): that executor names "
+                "account tables /apps/<40-hex> directly, and migrating the tables to the "
                 "binary layout would split their reads and writes onto disjoint tables. "
                 "Remove the flag (or switch the chain to the baseline executor, "
                 "executor_version = 1, before migrating)"));

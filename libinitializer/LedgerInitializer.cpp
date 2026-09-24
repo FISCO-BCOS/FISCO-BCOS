@@ -41,28 +41,11 @@ std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::buil
     if (accountTableBoot.has_value())
     {
         // Lane determination without a genesis block: on an existing chain the committed
-        // rows answer (the L2 feature row, executor_version); on a fresh chain the genesis
-        // config is the only source. feature_l2_ethereum_compat is genesis-only, so "ever
-        // enabled" is the same question as "enabled now".
+        // rows answer executor_version; on a fresh chain the genesis config is the only
+        // source. Only the legacy v0 lane is hex-only — the Eth/OP lanes are mode-aware
+        // (account::ethLaneAccountTableName), so the L2 feature no longer plays a role.
         auto const onChain = readOnChainExecutorVersion(*ledger, nodeConfig->executorVersion());
-        bcos::ledger::Features laneFeatures;
-        if (auto l2Row = bcos::task::syncWait(bcos::ledger::getSystemConfig(
-                *ledger, std::string(magic_enum::enum_name(
-                             bcos::ledger::Features::Flag::feature_l2_ethereum_compat))));
-            l2Row.has_value() && std::get<0>(*l2Row) == "1")
-        {
-            laneFeatures.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
-        }
-        else if (std::ranges::any_of(nodeConfig->genesisConfig().m_features,
-                     [](bcos::ledger::FeatureSet const& featureSet) {
-                         return featureSet.flag ==
-                                    bcos::ledger::Features::Flag::feature_l2_ethereum_compat &&
-                                featureSet.enable > 0;
-                     }))
-        {
-            laneFeatures.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
-        }
-        bool const hexOnlyLane = isHexOnlyExecutorLane(laneFeatures, onChain.version);
+        bool const hexOnlyLane = isHexOnlyExecutorLane(onChain.version);
 
         // The layout state machine is one key inside the state DB
         // (ACCOUNT_TABLE_LAYOUT_KEY — AddressTableModeDetection.h): absent = a pre-flag

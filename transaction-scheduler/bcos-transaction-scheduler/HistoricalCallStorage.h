@@ -101,12 +101,17 @@ public:
     ///        table layout this node actually uses (hex or binary, one per node). The rooted
     ///        historical reads are table-name-independent — the account leaf key is
     ///        keccak(address).
-    HistoricalStateBackend(
-        LatestView& latestView, h256 stateRoot, ledger::account::AddressTableMode accountMode)
+    /// @param ethLaneNaming true on the Eth/OP lanes: the flat table names are derived
+    ///        through the lane rule (account::ethLaneAccountTableName — /apps/ logical name
+    ///        for every address, no /sys/ routing, re-encoded to the node layout) instead of
+    ///        the v1 rule the mode-taking MPTAccount constructor applies.
+    HistoricalStateBackend(LatestView& latestView, h256 stateRoot,
+        ledger::account::AddressTableMode accountMode, bool ethLaneNaming = false)
       : m_latestView(std::addressof(latestView)),
         m_nodeStorage(latestView),
         m_stateRoot(stateRoot),
-        m_accountMode(accountMode)
+        m_accountMode(accountMode),
+        m_ethLaneNaming(ethLaneNaming)
     {}
     // Not movable either: cached MPTAccounts hold reference_wrappers into this object's
     // m_nodeStorage member, which a defaulted move would leave dangling. The one consumer
@@ -223,11 +228,24 @@ private:
             // caller): with the binary layout active the account tables are 20-byte binary
             // names under "/s/" (parseAccountTable classifies both layouts), and the
             // MPTAccount's inherited flat path must read/write the same names the
-            // executor uses.
-            it = m_accounts
-                     .try_emplace(address, *m_latestView, m_nodeStorage, *m_latestView, address,
-                         m_accountMode)
-                     .first;
+            // executor uses. On the Eth/OP lanes (m_ethLaneNaming) the flat name comes
+            // from the lane rule instead — the bridge keeps system-tx addresses under
+            // their /apps/ logical name, which the v1 rule would reroute to /sys/.
+            if (m_ethLaneNaming)
+            {
+                it = m_accounts
+                         .try_emplace(address, *m_latestView, m_nodeStorage, *m_latestView, address,
+                             ledger::account::FromTableName{},
+                             ledger::account::ethLaneAccountTableName(address))
+                         .first;
+            }
+            else
+            {
+                it = m_accounts
+                         .try_emplace(address, *m_latestView, m_nodeStorage, *m_latestView, address,
+                             m_accountMode)
+                         .first;
+            }
         }
         return it->second;
     }
@@ -294,6 +312,7 @@ private:
     ViewNodeStorage<LatestView> m_nodeStorage;
     h256 m_stateRoot;
     ledger::account::AddressTableMode m_accountMode;
+    bool m_ethLaneNaming;
     std::map<Address, AccountType> m_accounts;
 };
 

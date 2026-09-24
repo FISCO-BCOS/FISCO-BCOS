@@ -92,7 +92,12 @@ task::Task<bcos::h256> importEthereumGenesisState(
             slots.emplace_back(evmKey, evmValue);
         }
 
-        account::EVMAccount account(storage, address, account::nodeAddressTableMode());
+        // The lane rule (this loader serves Ethereum-compatible chains only): the logical
+        // name is "/apps/<hex>" for every address — system-tx ones included — re-encoded
+        // to the node-local layout. EVMAccount's address-taking constructor would route
+        // c_systemTxsAddress members to /sys/, where the OP bridge never writes.
+        account::EVMAccount account(
+            storage, account::FromTableName{}, account::ethLaneAccountTableName(address));
         co_await account.create();
 
         if (codeHash.has_value())

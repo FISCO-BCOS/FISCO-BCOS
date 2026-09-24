@@ -143,13 +143,17 @@ BOOST_AUTO_TEST_CASE(HexOnlyLaneForcing)
     const std::optional<std::string> kMigrating{std::string(ACCOUNT_TABLE_LAYOUT_MIGRATING)};
     const std::optional<std::string> kAbsent{std::nullopt};
 
-    // A hex-only lane is pinned to Hex, over hex data and over an empty DB alike.
+    // The legacy v0 lane (the only hex-only lane) is pinned to Hex, over hex data and over
+    // an empty DB alike.
     BOOST_CHECK(resolveNodeAddressTableMode(kAbsent, true, true) == AddressTableMode::Hex);
     BOOST_CHECK(resolveNodeAddressTableMode(kAbsent, true, false) == AddressTableMode::Hex);
     // Binary evidence on a hex-only lane is a loud boot failure with recovery instructions.
     BOOST_CHECK_THROW(resolveNodeAddressTableMode(kBin, true, true), bcos::tool::InvalidConfig);
     BOOST_CHECK_THROW(
         resolveNodeAddressTableMode(kMigrating, true, true), bcos::tool::InvalidConfig);
+    // The mode-aware lanes (baseline v1, Eth engine, OP) accept binary evidence and publish
+    // Binary.
+    BOOST_CHECK(resolveNodeAddressTableMode(kBin, false, true) == AddressTableMode::Binary);
 }
 
 BOOST_AUTO_TEST_CASE(RefuseBinaryDataWithoutFlag)
@@ -192,22 +196,15 @@ BOOST_AUTO_TEST_CASE(RefuseBinaryDataWithoutFlag)
 
 BOOST_AUTO_TEST_CASE(LaneClassification)
 {
-    Features noL2;
-    Features l2;
-    l2.set(Features::Flag::feature_l2_ethereum_compat);
-
-    // The L2 flag makes every lane hex-only.
-    for (int version : {0, 1, 2, 3, 4})
-    {
-        BOOST_CHECK(isHexOnlyExecutorLane(l2, version));
-    }
-    // Without it: legacy (0), Eth engine (2) and OP (>= 3) are hex-only; only the baseline
-    // v1 lane routes account tables through the node mode.
-    BOOST_CHECK(isHexOnlyExecutorLane(noL2, 0));
-    BOOST_CHECK(!isHexOnlyExecutorLane(noL2, 1));
-    BOOST_CHECK(isHexOnlyExecutorLane(noL2, ledger::ETHEREUM_EXECUTOR_VERSION));
-    BOOST_CHECK(isHexOnlyExecutorLane(noL2, ledger::OPSTACK_EXECUTOR_VERSION));
-    BOOST_CHECK(isHexOnlyExecutorLane(noL2, ledger::OPSTACK_EXECUTOR_VERSION + 1));
+    // Only the legacy v0 lane is hex-only. The baseline (1), Eth engine (2) and OP (>= 3)
+    // lanes are all mode-aware: the Eth/OP lanes derive account-table names through
+    // account::ethLaneAccountTableName (the /apps/ logical rule re-encoded to the node
+    // layout), so they run on either encoding.
+    BOOST_CHECK(isHexOnlyExecutorLane(0));
+    BOOST_CHECK(!isHexOnlyExecutorLane(1));
+    BOOST_CHECK(!isHexOnlyExecutorLane(ledger::ETHEREUM_EXECUTOR_VERSION));
+    BOOST_CHECK(!isHexOnlyExecutorLane(ledger::OPSTACK_EXECUTOR_VERSION));
+    BOOST_CHECK(!isHexOnlyExecutorLane(ledger::OPSTACK_EXECUTOR_VERSION + 1));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

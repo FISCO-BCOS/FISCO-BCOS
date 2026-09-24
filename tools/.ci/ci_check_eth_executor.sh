@@ -68,8 +68,9 @@ perl -p -i -e 's/version=1/version=2/' config.genesis
 perl -p -i -e 's/^(\s*is_serial_execute=true)/$1\n    evm_revision=cancun/' config.genesis
 
 # L2 mode is required so genesis [alloc] can pre-fund an EOA sender
-# (the same mode the ethereum-executor targets). The account-table encoding stays hex:
-# the Eth lane is hex-only and the boot detection forces Hex there.
+# (the same mode the ethereum-executor targets). The Eth lane is mode-aware: a fresh
+# chain is born with the binary account-table layout ("/s/<20 raw bytes>") and the lane
+# reads and writes it through account::ethLaneAccountTableName.
 cat >> config.genesis <<'GENESIS_EOF'
 
 [features]

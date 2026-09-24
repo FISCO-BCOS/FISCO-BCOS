@@ -82,9 +82,8 @@ inline bool shouldBuildMPT(
 // The account-table encoding plays no role here: it is a node-local physical layout
 // (nodeAddressTableMode), and the deprecated feature_raw_address flag drives nothing
 // (Features::validate accepts it with a warning; the recorded row is an inert no-op).
-// The OP/Eth lanes' hex-only naming
-// constraint is enforced at boot by libinitializer (resolveNodeAddressTableMode refuses
-// binary data on a hex-only lane), not by a flag matrix.
+// Every lane except the legacy v0 lane is mode-aware (the Eth/OP lanes derive names
+// through account::ethLaneAccountTableName), so the encoding needs no flag matrix.
 //
 // @throws InvalidMPTFlagMatrix when feature_l2_ethereum_compat is set with a non-zero (or
 //         unknown) activation block. A features object without the L2 flag always passes.

@@ -169,21 +169,21 @@ task::Task<void> clearAccountStorage(
         co_await storage2::removeSome(storage, keysToRemove);
 }
 
-/// Construct the account accessor for the Ethereum state view. The table name is ALWAYS
-/// "/apps/<40 lowercase hex>": in the Ethereum execution world the FISCO system addresses
-/// (c_systemTxsAddress) are ordinary accounts, so EVMAccount's mode-taking constructors —
-/// which route them to "/sys/" — must NOT be used here (this is the semantic the old
-/// treatSystemAsUser=true flag carried). The name is derived by
-/// bcos::ledger::account::hexAccountTableName (AccountTableName.h — the single home of the
-/// hex-layout, no-/sys/-routing rule the Ethereum lanes share) and pinned via FromTableName
-/// so reads and writes share exactly one derivation.
+/// Construct the account accessor for the Ethereum state view. The LOGICAL table name is
+/// always "/apps/<40 lowercase hex>": in the Ethereum execution world the FISCO system
+/// addresses (c_systemTxsAddress) are ordinary accounts, so EVMAccount's mode-taking
+/// constructors — which route them to "/sys/" — must NOT be used here (this is the
+/// semantic the old treatSystemAsUser=true flag carried). The physical name is derived by
+/// bcos::ledger::account::ethLaneAccountTableName (EVMAccount.h): the lane rule above,
+/// re-encoded to this node's layout ("/s/<20 raw bytes>" in Binary mode), so Hex and
+/// Binary nodes running this lane commit identical roots.
 template <class Storage>
 bcos::ledger::account::EVMAccount<Storage> ethViewAccount(Storage& storage, const address& addr)
 {
     // bytesConstRef right-aligns by default; a 20-byte address fills it exactly, so the
     // alignment has no effect.
     return {storage, bcos::ledger::account::FromTableName{},
-        bcos::ledger::account::hexAccountTableName(
+        bcos::ledger::account::ethLaneAccountTableName(
             bcos::Address{bcos::bytesConstRef{addr.bytes, sizeof(addr.bytes)}})};
 }
 

@@ -27,6 +27,7 @@
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
+#include <bcos-framework/testutils/ScopedNodeAddressTableMode.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/Ledger.h>  // real bcos::ledger::Ledger for the commit hook
 #include <bcos-ledger/mpt/HashBuilder.h>
@@ -1196,6 +1197,41 @@ BOOST_AUTO_TEST_CASE(GetCodeEmpty)
     BOOST_REQUIRE(called);
 }
 
+/// getCode on a Binary-layout node: the lane's account table physically lives at
+/// "/s/<20 raw bytes>" (ethLaneAccountTableName re-encodes the logical "/apps/<40hex>"), and
+/// getCode must resolve the code from it. The contract is seeded with EVMAccount's Binary
+/// naming, i.e. exactly the rows the bridge's write-back produces on a binary node.
+BOOST_AUTO_TEST_CASE(GetCodeBinaryMode)
+{
+    const bcos::test::ScopedNodeAddressTableMode guard(
+        bcos::ledger::account::AddressTableMode::Binary);
+    Fixture f;
+    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader());
+
+    const bcos::Address contract{"0x30000000000000000000000000000000000000aa"};
+    const bcos::bytes code{0x60, 0x2a, 0x60, 0x00, 0x52, 0x60, 0x20, 0x60, 0x00, 0xf3};
+    {
+        auto view = f.multiLayerStorage.fork();
+        view.newMutable();
+        bcos::ledger::account::EVMAccount account(
+            view, contract, bcos::ledger::account::AddressTableMode::Binary);
+        bcos::task::syncWait(account.create());
+        bcos::task::syncWait(account.setCode(code, {}, f.hashImpl->hash(code)));
+        bcos::task::syncWait(account.setNonce("0"));
+        bcos::task::syncWait(account.setBalance(bcos::u256(0)));
+        bcos::task::syncWait(f.multiLayerStorage.mergeView(std::move(view)));
+    }
+
+    bool called = false;
+    f.scheduler->getCode(
+        "0x30000000000000000000000000000000000000aa", [&](bcos::Error::Ptr err, bcos::bytes got) {
+            called = true;
+            BOOST_REQUIRE(err == nullptr);
+            BOOST_CHECK(got == code);
+        });
+    BOOST_REQUIRE(called);
+}
+
 /// Invalid call (maxFeePerGas=1 < baseFee(1e9)) → JSON-RPC Error, never a status-0 receipt.
 /// call() classifies the validation fault (OpConsensusError → OpConsensusRejected) and returns
 /// rpcSafeReason ("consensus rejection"); the evmone detail is only in the node log.
@@ -1647,6 +1683,34 @@ BOOST_AUTO_TEST_CASE(PendingStorageAtPrefersThePendingLayerOverTheCommittedTrie)
     BOOST_CHECK_EQUAL(std::string(entry->get()), "7");
 }
 
+/// Binary-layout variant of the pending-layer test above: the pending nonce row lives at
+/// "/s/<20 raw bytes>", and the pending arm's lane-rule naming (legacyAppsAccountTableName
+/// re-encoded to the node layout) must find it.
+BOOST_AUTO_TEST_CASE(PendingStorageAtBinaryModeReadsThePendingLayer)
+{
+    const bcos::test::ScopedNodeAddressTableMode guard(
+        bcos::ledger::account::AddressTableMode::Binary);
+    Fixture f;
+    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
+    seedL2CompatFeature(f.multiLayerStorage);
+
+    // Pending layer (pushed, never merged), seeded with the binary account-table naming.
+    {
+        auto view = f.multiLayerStorage.fork();
+        view.newMutable();
+        bcos::ledger::account::EVMAccount account(
+            view, kSender, bcos::ledger::account::AddressTableMode::Binary);
+        bcos::task::syncWait(account.setNonce("7"));
+        f.multiLayerStorage.pushView(std::move(view));
+    }
+
+    auto entry = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
+        kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*number=*/0));
+    BOOST_REQUIRE_MESSAGE(entry.has_value(), "the pending nonce row must be visible");
+    BOOST_CHECK_EQUAL(std::string(entry->get()), "7");
+}
+
 /// The OQ6 gate: a chain WITHOUT feature_l2_ethereum_compat never committed its complete
 /// state to the trie — the historical path refuses loudly (InvalidStatus), never silently
 /// downgrading to the latest state.
@@ -1671,10 +1735,9 @@ BOOST_AUTO_TEST_CASE(CallAtBlockRefusesNonScenarioB)
 
 /// feature_raw_address is deprecated: the account-table encoding is a node-local layout
 /// (nodeAddressTableMode), so the flag drives nothing and setting it (governance or
-/// config.genesis) is accepted with a warning. The OP lane's hex-only constraint is now
-/// enforced at boot by libinitializer's lane check (resolveNodeAddressTableMode forces
-/// Hex / refuses binary state), not by a per-block guard — an inert raw_address row in
-/// the committed state must not disturb block production.
+/// config.genesis) is accepted with a warning. The OP lane is mode-aware
+/// (account::ethLaneAccountTableName), so an inert raw_address row in the committed state
+/// must not disturb block production on either encoding.
 BOOST_AUTO_TEST_CASE(ExecuteBlockUnmovedByDeprecatedRawAddressFlag)
 {
     Fixture f;

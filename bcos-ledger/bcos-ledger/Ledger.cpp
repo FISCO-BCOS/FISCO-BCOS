@@ -1577,6 +1577,12 @@ static task::Task<void> importGenesisState(
     // accounts in the genesis batch.
     verifyL2FeatureFlagsSlot(allocs, features);
 
+    // Naming rule: on an Ethereum-compatible (L2) chain the c_systemTxsAddress members are
+    // ordinary accounts living under their /apps/ logical name — the OP bridge writes them
+    // there — so the alloc tables derive through the lane rule; the v1 lane keeps
+    // EVMAccount's own /sys/ routing. Both re-encode to the node-local layout.
+    bool const ethLaneNaming = features.get(ledger::Features::Flag::feature_l2_ethereum_compat);
+
     for (auto&& importAccount : allocs)
     {
         // Decode & validate EVERY hex field of the alloc BEFORE the first
@@ -1606,7 +1612,10 @@ static task::Task<void> importGenesisState(
             slots.emplace_back(evmKey, evmValue);
         }
 
-        account::EVMAccount account(storage, address, account::nodeAddressTableMode());
+        auto tableName = ethLaneNaming ?
+                             account::ethLaneAccountTableName(address) :
+                             account::accountTableName(address, account::nodeAddressTableMode());
+        account::EVMAccount account(storage, account::FromTableName{}, std::move(tableName));
         co_await account.create();
 
         if (codeHash.has_value())

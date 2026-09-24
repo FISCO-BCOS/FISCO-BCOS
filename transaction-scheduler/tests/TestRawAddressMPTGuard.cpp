@@ -9,9 +9,10 @@ using namespace bcos::scheduler_v1;
 // The MPT state-root predicate and its boot guard no longer involve the account-table
 // encoding: the encoding is a node-local physical layout (nodeAddressTableMode), the MPT
 // delta scan classifies both layouts (Classify.h parseAccountTable), and the deprecated
-// feature_raw_address flag drives nothing — setting it is accepted with a warning, and
-// the hex-only lanes' naming constraint is enforced by libinitializer's boot-time
-// resolveNodeAddressTableMode instead of a flag matrix.
+// feature_raw_address flag drives nothing — setting it is accepted with a warning. Every
+// lane except the legacy v0 lane is mode-aware (the Eth/OP lanes via
+// account::ethLaneAccountTableName); only v0 keeps the boot-time hex-only enforcement
+// (resolveNodeAddressTableMode).
 BOOST_AUTO_TEST_SUITE(RawAddressMPTGuardSuite)
 
 BOOST_AUTO_TEST_CASE(FlagMatrix_MPTStateRootAccepted)

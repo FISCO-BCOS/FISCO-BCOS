@@ -130,6 +130,18 @@ public:
         m_address(address)
     {}
 
+    /// FromTableName form: the flat table name is pinned by the caller (e.g. the Eth/OP
+    /// lane's ethLaneAccountTableName, which keeps system-tx addresses under their /apps/
+    /// logical name where the v1 rule would route them to /sys/). The rooted historical
+    /// reads are table-name-independent either way (the leaf key is keccak(address)).
+    MPTAccount(Storage& storage, NodeStorage& nodeStorage, BackendStorage& backendStorage,
+        bcos::Address address, account::FromTableName /*tag*/, std::string tableName)
+      : Base(storage, account::FromTableName{}, std::move(tableName)),
+        m_nodeStorage(nodeStorage),
+        m_backendStorage(backendStorage),
+        m_address(address)
+    {}
+
     /// EVMAccount's construction shape, for the historical storage stack PR-43 builds: the trie
     /// handles ride on the storage type instead of being extra arguments. No production caller
     /// yet — HostContext still names EVMAccount at HostContext.h:100.

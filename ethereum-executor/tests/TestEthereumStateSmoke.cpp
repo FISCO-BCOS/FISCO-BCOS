@@ -19,6 +19,8 @@
 #include "ethereum-executor/EthereumState.h"
 #include "ethereum-executor/tests/TestMemoryStorage.h"
 
+#include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/testutils/ScopedNodeAddressTableMode.h"
 #include "bcos-task/TBBWait.h"
 #include <cstdint>
 #include <cstdlib>
@@ -303,6 +305,44 @@ void testHasStorageIgnoresTombstones()
     }
 }
 
+void testEthereumStateBinaryMode()
+{
+    // The Eth lane's account-table naming is mode-aware: with the node in the binary
+    // address-table layout the same logical account physically lives in "/s/<20 raw bytes>"
+    // (applyToStorage's write path and the cold-read path must agree on it).
+    const bcos::test::ScopedNodeAddressTableMode guard(
+        bcos::ledger::account::AddressTableMode::Binary);
+    bcos::executor_v1::MutableStorage storage;
+    const auto addr = addressFromHex("0x12000000000000000000000000000000000000ff");
+
+    {
+        eth::EthereumState<decltype(storage)> state(storage);
+        auto& acc = state.insert(addr);
+        acc.nonce = 1;
+        acc.balance = 42;
+        bcos::task::tbb::syncWait(state.applyToStorage(EVMC_SHANGHAI));
+    }
+    {
+        eth::EthereumState<decltype(storage)> state(storage);
+        const auto* acc = state.find(addr);
+        CHECK(acc != nullptr);
+        CHECK(acc->nonce == 1);
+        CHECK(acc->balance == 42);
+    }
+
+    // Physical layout: rows under "/s/<20 raw bytes>", none under "/apps/<40hex>".
+    std::string binName{"/s/"};
+    binName.append(reinterpret_cast<const char*>(addr.bytes), sizeof(addr.bytes));
+    auto binRow = bcos::task::tbb::syncWait(bcos::storage2::readOne(
+        storage, bcos::executor_v1::StateKey{
+                     binName, std::string{bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE}}));
+    CHECK(binRow.has_value());
+    auto hexRow = bcos::task::tbb::syncWait(bcos::storage2::readOne(storage,
+        bcos::executor_v1::StateKey{std::string{"/apps/12000000000000000000000000000000000000ff"},
+            std::string{bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE}}));
+    CHECK(!hexRow.has_value());
+}
+
 }  // namespace
 
 int main()
@@ -316,6 +356,7 @@ int main()
     testRecoverAuthorityRejectsBadSignature();
     testEthereumStateInstantiation();
     testHasStorageIgnoresTombstones();
+    testEthereumStateBinaryMode();
 
     if (g_failures > 0)
     {

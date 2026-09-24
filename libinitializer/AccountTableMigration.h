@@ -67,9 +67,10 @@ struct AccountTableMigrationStats
 /// hex source is deleted and the scan continues; a DIFFERENT value is a data conflict and
 /// aborts the boot (bcos::tool::InvalidConfig).
 ///
-/// @param hexOnlyLane the chain's executor lane is hex-only (OP / Eth engine / legacy v2
-///        executor — isHexOnlyExecutorLane): migration is refused loudly, those executors
-///        name account tables /apps/<40-hex> themselves.
+/// @param hexOnlyLane the chain's executor lane is hex-only (the legacy v0 executor —
+///        isHexOnlyExecutorLane): migration is refused loudly, that executor names account
+///        tables /apps/<40-hex> itself. The Eth/OP lanes are mode-aware
+///        (account::ethLaneAccountTableName) and migrate like the baseline lane.
 ///
 /// @throws bcos::tool::InvalidConfig on a hex-only lane, a value conflict, or any RocksDB
 ///         failure.

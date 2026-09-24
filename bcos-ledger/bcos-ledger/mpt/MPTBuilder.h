@@ -299,8 +299,11 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
     {
         // First-touch fields the block left unwritten have no parent leaf to fall back on:
         // one O(1) flat metadata read through the fork view (spec §5.3 path 2), routed through
-        // the node's account-table mode (hex table or binary table, per the node layout).
-        auto meta = co_await readFlatAccountMeta(flatView, address, context.accountMode);
+        // the node's account-table mode (hex table or binary table, per the node layout) and,
+        // on the OP lane (l2Mode), the lane's naming rule — the bridge keeps system-tx
+        // addresses under /apps/, where the v1 rule would look in /sys/.
+        auto meta =
+            co_await readFlatAccountMeta(flatView, address, context.accountMode, context.l2Mode);
         updated.nonce = meta.nonce;
         updated.balance = meta.balance;
         updated.codeHash = meta.codeHash;

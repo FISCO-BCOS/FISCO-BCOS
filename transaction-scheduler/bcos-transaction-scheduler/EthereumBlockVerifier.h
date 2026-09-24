@@ -298,12 +298,11 @@ task::Task<void> accumulatePoWBlockRewards(ViewType& view,
 
     auto addBalance = [&](bcos::Address const& address, u256 const& amount) -> task::Task<void> {
         // EL mode: a FISCO system-address (e.g. 0x...1000) is an ordinary Ethereum account and
-        // must live under /apps/ so the MPT builder sees it. The name comes from the shared
-        // hex-layout producer (account::hexAccountTableName — "/apps/<hex>", no /sys/ routing)
-        // and is pinned via FromTableName — the EL lane is hex-only (libinitializer refuses
-        // binary account data on it), and the deprecated feature_raw_address flag drives
-        // nothing.
-        EVMAccount<ViewType> account(view, FromTableName{}, hexAccountTableName(address));
+        // must live under the lane's logical /apps/ name so the MPT builder sees it. The
+        // physical name comes from account::ethLaneAccountTableName — the lane rule ("/apps/
+        // <hex>", no /sys/ routing) re-encoded to this node's layout — pinned via
+        // FromTableName so Hex and Binary nodes write the same logical row.
+        EVMAccount<ViewType> account(view, FromTableName{}, ethLaneAccountTableName(address));
         // Register the account table (SYS_TABLES) so the executor's
         // readAccountImpl can see it: it decides existence via the flat fields,
         // but the write-back path (applyToStorage) still needs a registered

@@ -368,6 +368,36 @@ BOOST_AUTO_TEST_CASE(RawAddressBinaryModeDoesNotReadHexTables)
     BOOST_CHECK(account->codeHash == emptyCodeHash());
 }
 
+BOOST_AUTO_TEST_CASE(L2ModeBinaryReadsBinaryTables)
+{
+    // The Eth/OP (l2Mode) lane derives its account-table name by the lane rule
+    // ("/apps/<40hex>", never "/sys/") and then re-encodes it to the node layout — under
+    // AddressTableMode::Binary that is "/s/<20 raw bytes>". readFlatAccountMeta must therefore
+    // resolve the account's metadata from the binary rows, exactly like the v1 lane does, and
+    // must NOT consult the legacy hex table (one node, one layout).
+    NodeStorage storage;
+    auto const addr = makeAddress(0xC7);
+
+    FlatBackendStorage flatBackend;
+    // A stray hex-layout row is not this account's state on a binary node.
+    writeFlatRow(flatBackend, accountFieldKey(addr, ROW_BALANCE), makeEntry("1234"));
+
+    auto view = makeFlatView(flatBackend);
+    writeFlatRow(view, accountBinaryFieldKey(addr, ROW_NONCE), makeEntry("9"));
+    writeFlatRow(view, accountBinaryFieldKey(addr, ROW_BALANCE), makeEntry("777"));
+    writeFlatRow(view, accountBinaryFieldKey(addr, ROW_CODE_HASH), codeHashEntry(makeHash(0xC7)));
+
+    auto output = bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view,
+        /*l2Mode=*/true, bcos::ledger::account::AddressTableMode::Binary));
+
+    MPTReadView<NodeStorage> readView(storage, output.stateRoot);
+    auto account = bcos::task::syncWait(readView.readAccount(addr));
+    BOOST_REQUIRE(account.has_value());
+    BOOST_CHECK_EQUAL(account->nonce, bcos::u256(9));
+    BOOST_CHECK_EQUAL(account->balance, bcos::u256(777));
+    BOOST_CHECK(account->codeHash == makeHash(0xC7));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace bcos::ledger::mpt::test

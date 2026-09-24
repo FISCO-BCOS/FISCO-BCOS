@@ -180,10 +180,10 @@ inline AddressTableMode nodeAddressTableMode() noexcept
 /// executor's state view, the PoW reward path) the c_systemTxsAddress members are ordinary
 /// accounts and must NOT be rerouted. This is the single home of that rule; contrast with
 /// EVMAccount.h's accountTableName, which is mode-aware and routes system addresses to
-/// /sys/. The binary layout deliberately has no producer here: the Ethereum lanes are
-/// hex-only (libinitializer refuses binary account data on them), and making this helper
-/// mode-aware is exactly the follow-up that requires it to live in bcos-framework rather
-/// than in bcos-ledger's Classify.h (which keeps no bcos-framework dependency).
+/// /sys/. The binary layout deliberately has no producer HERE: the Eth/OP lanes derive
+/// their physical name as toNodeLayout(hexAccountTableName(addr)) — see
+/// ethLaneAccountTableName in EVMAccount.h — keeping the lane's logical name on the hex
+/// form and re-encoding only the layout.
 inline std::string hexAccountTableName(bcos::Address const& addr)
 {
     std::string table;
