@@ -55,6 +55,12 @@ struct OpTxProperties
     // (flz_len drives the Fjord formula). Snapshot at validate time (the envelope is available
     // here); read by deriveOpReceiptMeta at transition -- preserving the no-cfg invariant.
     std::optional<uint64_t> ecotone_calldata_gas_used = std::nullopt;
+    // Bedrock–Delta legacy formula: l1GasUsed = txDataGas + overhead (the receipt's L1GasUsed,
+    // op-geth rollup_cost.go newL1CostFuncBedrockHelper's second return). Presence marks the
+    // transaction as legacy-priced: deriveOpReceiptMeta then reports this value and omits the
+    // Ecotone-only scalar/blob fields. Snapshot at validate time, same discipline as
+    // ecotone_calldata_gas_used.
+    std::optional<uint64_t> legacy_l1_gas_used = std::nullopt;
     // The fully-built evmone state::Transaction, carried from m_prepare (validate) to m_execute
     // (transition) so the hot path builds it once per tx instead of twice (calldata copy +
     // to-address hex decode + access_list/blob/auth allocation each time). Filled by
@@ -276,14 +282,26 @@ struct OpDepositGasLimitReached : std::runtime_error
 
 /// Execute one 0x7E deposit: skip buyGas; add balance when mint has a value; still deduct
 /// intrinsic + the EIP-7623 floor; both failure paths retain the mint and force-increment the
-/// nonce; is_system_tx==true throws std::runtime_error (block-level error); gas_limit
-/// exceeding blockGasLeft throws OpDepositGasLimitReached (op-geth ErrGasLimitReached,
-/// block-level error). Returns a bcos::protocol::TransactionReceipt::Ptr
+/// nonce; gas_limit exceeding blockGasLeft throws OpDepositGasLimitReached (op-geth
+/// ErrGasLimitReached, block-level error). Returns a bcos::protocol::TransactionReceipt::Ptr
 /// with the deposit_nonce/receipt_version carried via setOpStackMeta; the state diff is
 /// returned through `outStateDiff`.
 /// Deposits are exempt from the EIP-7825 per-tx gas cap that Karst's Osaka base enforces for
 /// normal transactions (docs.optimism.io/notices/upgrade-19: deposits are already capped at 20M
 /// gas total per L1 block, and rejecting on L2 a deposit L1 accepted would burn the minted ETH).
+///
+/// Fork gating (op-geth core/state_transition.go preCheck/execute/innerExecute):
+///  * is_system_tx: Regolith+ (regolith_deposit_fixes) throws std::runtime_error (op-geth
+///    ErrSystemTxNotSupported, block-level error). Pre-Regolith it marks the deposit unmetered:
+///    the block gas pool is never checked or charged (the Bedrock L1-attributes deposit carries
+///    gasLimit 150M, above the block gas limit) and the receipt reports gasUsed = 0.
+///  * Receipt gasUsed: Regolith+ reports the actual gas used; pre-Regolith a metered deposit
+///    always reports its full gasLimit (success, EVM revert, or entry failure alike — matches the
+///    pool, which was charged gasLimit and gets nothing back).
+///  * Nonce: incremented on every outcome (success, EVM revert, entry failure) under EVERY fork —
+///    spec deposits.md "Nonce Handling" and both the pre-Regolith (v1.101304.0) and current
+///    op-geth state_transition.go bump unconditionally; Regolith only made the RECEIPT record it
+///    (deposit_nonce, filled here from Regolith on; deposit_receipt_version=1 from Canyon on).
 bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateView& view,
     const evmone::state::BlockInfo& block, const evmone::state::BlockHashes& hashes,
     const DepositTx& dep, const OpForkConfig& cfg, evmc::VM& vm, uint64_t chainId,

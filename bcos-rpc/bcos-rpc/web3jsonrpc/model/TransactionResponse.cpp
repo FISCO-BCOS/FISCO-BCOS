@@ -70,13 +70,7 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
 
     // Legacy (type-0) EVM transactions carry an EIP-155 `v` in geth's JSON encoding
     // (chainId*2 + 35 + yParity, or 27 + yParity pre-EIP-155); typed transactions carry the
-    // raw yParity. Track the legacy case so the `v` emitted below matches geth. Emitting the
-    // raw yParity for a legacy tx makes go-ethereum's signature recovery fail with
-    // "invalid transaction v, r, s values", which stalls op-node (or any geth-based CL) as
-    // soon as a block contains a legacy transaction.
-    bool isLegacyEvmTx = false;
-    std::optional<uint64_t> legacyChainId;
-
+    // raw yParity. The `v` value is emitted per-branch below (see the BCOS and Web3 branches).
     if (tx.type() == bcos::protocol::TransactionType::BCOSTransaction) [[unlikely]]
     {
         result["type"] = toQuantity(0);
@@ -86,6 +80,8 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
         result["maxPriorityFeePerGas"] = toQuantity(tx.maxPriorityFeePerGas().value_or(0));
         result["maxFeePerGas"] = toQuantity(tx.maxFeePerGas().value_or(0));
         result["chainId"] = "0x0";
+        // BCOS signature is r(32) || s(32) || v(1), v already the 0/1 recovery id.
+        result["v"] = toQuantity(tx.signatureData().getCroppedData(64, 1));
     }
     else [[likely]]
     {
@@ -139,8 +135,6 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
             result["maxFeePerGas"] = toQuantity(web3Tx.maxFeePerGas);
         }
         result["chainId"] = toQuantity(web3Tx.chainId.value_or(0));
-        isLegacyEvmTx = (web3Tx.type == TransactionType::Legacy);
-        legacyChainId = web3Tx.chainId;
         if (web3Tx.type == TransactionType::EIP4844)
         {
             result["maxFeePerBlobGas"] = toQuantity(web3Tx.maxFeePerBlobGas);
@@ -168,19 +162,21 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
                 result["authorizationList"].append(std::move(entry));
             }
         }
+        // v field: typed transactions expose the raw yParity (0/1); legacy transactions expose
+        // the full recovery id (27/28 pre-EIP-155, or chainId*2+35+parity with EIP-155) — the
+        // form op-geth's legacy JSON decoder requires to reproduce the canonical tx hash.
+        //
+        // extraTransactionBytes is the signing preimage on the txpool lane (no signature
+        // trailer, so the decoder leaves signatureV at its default 0) and the sealed envelope
+        // only on the engine lane. The tars signature carries the parity on BOTH layouts, and it
+        // is exactly what reassembleWeb3RawTransaction uses for the canonical txHash, so read
+        // the parity from it rather than the decoded payload — otherwise typed v regresses to
+        // 0x0 and legacy drops the parity on the txpool lane.
+        auto const sig = tx.signatureData();
+        web3Tx.signatureV = sig.size() >= 65 ? static_cast<uint64_t>(sig[64]) : 0;
+        result["v"] = toQuantity(
+            web3Tx.type == TransactionType::Legacy ? web3Tx.getSignatureV() : web3Tx.signatureV);
     }
     result["r"] = toQuantity(tx.signatureData().getCroppedData(0, 32));
     result["s"] = toQuantity(tx.signatureData().getCroppedData(32, 32));
-    auto const parityRef = tx.signatureData().getCroppedData(64, 1);
-    uint64_t const yParity = parityRef.empty() ? 0 : static_cast<uint64_t>(parityRef[0]);
-    if (isLegacyEvmTx)
-    {
-        // EIP-155 (or pre-155 27/28) `v`, matching geth's RawSignatureValues for a legacy tx.
-        uint64_t const chainId = legacyChainId.value_or(0);
-        result["v"] = toQuantity(chainId != 0 ? chainId * 2 + 35 + yParity : 27 + yParity);
-    }
-    else
-    {
-        result["v"] = toQuantity(yParity);
-    }
 }

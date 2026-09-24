@@ -15,10 +15,8 @@
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/Host.h"
-#include "bcos-gateway/libnetwork/PeerBlackWhitelistInterface.h"
-#include "bcos-gateway/libnetwork/PeerBlacklist.h"
+#include "bcos-gateway/libnetwork/PeerBlackWhitelist.h"
 #include "bcos-gateway/libnetwork/Message.h"
-#include "bcos-gateway/libnetwork/PeerWhitelist.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
 #include "bcos-gateway/libp2p/Service.h"
@@ -699,24 +697,17 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
         _config->maxSendDataSize(), _config->enableCompress());
     // KeyFactory
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    // Session Callback manager
-    auto sessionCallbackManager = std::make_shared<SessionCallbackManagerBucket>();
-
-    // init peer black list
-    PeerBlackWhitelistInterface::Ptr peerBlacklist =
-        std::make_shared<PeerBlacklist>(_config->peerBlacklist(), _config->enableBlacklist());
-    // init peer white list
-    PeerBlackWhitelistInterface::Ptr peerWhitelist =
-        std::make_shared<PeerWhitelist>(_config->peerWhitelist(), _config->enableWhitelist());
 
     // init Host
     auto host = std::make_shared<Host>(_config->hashImpl(), asioInterface, sessionFactory);
     host->setHostPort(_config->listenIP(), _config->listenPort());
     host->setSSLContextPubHandler(m_sslContextPubHandler);
     host->setSSLContextPubHandlerWithoutExtInfo(m_sslContextPubHandlerWithoutExtInfo);
-    host->setPeerBlacklist(peerBlacklist);
-    host->setPeerWhitelist(peerWhitelist);
-    host->setSessionCallbackManager(sessionCallbackManager);
+    // init peer black/white list
+    host->setPeerBlacklist(PeerBlackWhitelist(PeerBlackWhitelist::Type::Blacklist,
+        _config->peerBlacklist(), _config->enableBlacklist()));
+    host->setPeerWhitelist(PeerBlackWhitelist(PeerBlackWhitelist::Type::Whitelist,
+        _config->peerWhitelist(), _config->enableWhitelist()));
     host->setEnableSslVerify(_config->enableSSLVerify());
     // FIB-184: apply the configured inbound-session caps (no longer hardcoded in Host)
     host->setMaxConcurrentSessions(_config->maxConcurrentSessions());

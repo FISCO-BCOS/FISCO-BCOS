@@ -88,8 +88,8 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
         "and receipts")(
         "output,o", boost::program_options::value<std::string>(), "snapshot output directory")(
         "import,i", boost::program_options::value<std::string>(), "import snapshot from directory")(
-        "el,e", "run in Ethereum L1 EL mode (mirror of [ethereum].mode=el; conflicts with the "
-                "config file are rejected)")(
+        "el,e", "run in EL self-sync mode (mirror of [ethereum].mode=el or mode=opstack-el; "
+                "conflicts with the config file are rejected)")(
         "bootnodes,b", boost::program_options::value<std::string>(),
         "path to the EL-mode bootnodes file (mirror of [ethereum].bootnodes_file; a value that "
         "differs from the config file is rejected)");

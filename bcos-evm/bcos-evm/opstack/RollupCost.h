@@ -40,6 +40,28 @@ uint64_t estimatedDaSize(evmc::bytes_view signedTxEnvelope) noexcept;
 /// Ecotone L1 calldata gas: zeroes*4 + nonZeroes*16 (no pre-Regolith +68).
 uint64_t bedrockCalldataGasUsed(evmc::bytes_view signedTxEnvelope) noexcept;
 
+/// Bedrock–Delta txDataGas over the signed envelope (op-geth newL1CostFuncBedrockHelper,
+/// core/types/rollup_cost.go): zeroes*4 + ones*16, plus a one-time +68 phantom non-zero bytes
+/// (+68*16 = 1088 gas) pre-Regolith. regolithActive is op-geth's IsRegolith(blockTime).
+uint64_t legacyTxDataGas(evmc::bytes_view signedTxEnvelope, bool regolithActive) noexcept;
+
+/// Bedrock–Delta (has_legacy_l1_formula) L1 data fee (op-geth newL1CostFuncBedrockHelper +
+/// l1CostHelper):
+///   l1GasUsed = txDataGas + l1FeeOverhead
+///   fee       = l1GasUsed * l1BaseFee * l1FeeScalar / 1e6
+/// Evaluated in 512-bit like the other formulas: op-geth uses big.Int (no wrap); a 512-bit
+/// product overflow implies fee >= 2^256, which saturates to uint256 max (it exceeds any
+/// representable balance, so the opValidate cap rejects either way).
+/// gas_used is the receipt's L1GasUsed — the overhead-inclusive gas. op-geth stores the big.Int
+/// via Uint64() (truncation mod 2^64); the same truncation is applied here.
+struct LegacyL1Cost
+{
+    intx::uint256 fee;
+    uint64_t gas_used;
+};
+LegacyL1Cost computeLegacyL1Cost(
+    const OpFeeParams& params, evmc::bytes_view signedTxEnvelope, bool regolithActive) noexcept;
+
 /// L1 data fee, Fjord+ FastLZ branch; takes an already-computed flz so the caller need not
 /// re-compress. flzLen==0 returns 0 — same deliberate divergence from op-geth's clamp as
 /// estimatedDaSizeFromFlz above, and the same caveat for callers holding a cached flz.

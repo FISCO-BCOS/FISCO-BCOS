@@ -1,9 +1,69 @@
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPrecompiles.h>
-#include <bcos-framework/ledger/GenesisConfig.h>
 
 namespace bcos::evm::opstack
 {
+// Bedrock and Regolith run a Paris EVM: op-sepolia-class OP chains are post-merge (the
+// Merge happened at genesis), so the pre-Canyon ladder never touches London. nullptr
+// precompiles selects evmone's built-in table for the revision (same pattern as
+// ecotoneConfig); the OP-specific override tables only exist Fjord+.
+const OpForkConfig& bedrockConfig() noexcept
+{
+    static const OpForkConfig cfg{
+        .fork = OpFork::Bedrock,
+        .rev = EVMC_PARIS,
+        .precompiles = nullptr,
+        .disable_prague_requests = true,
+        .has_operator_fee = false,
+        .has_jovian_operator_formula = false,
+        .has_da_footprint = false,
+        .has_ecotone_l1_formula = false,
+        .has_legacy_l1_formula = true,
+        .regolith_deposit_fixes = false,
+        .has_deposit_receipt_version = false,
+        .has_withdrawals = false,
+    };
+    return cfg;
+}
+
+const OpForkConfig& regolithConfig() noexcept
+{
+    static const OpForkConfig cfg = [] {
+        OpForkConfig c = bedrockConfig();
+        c.fork = OpFork::Regolith;
+        c.regolith_deposit_fixes = true;
+        return c;
+    }();
+    return cfg;
+}
+
+// Canyon moves the EVM base to Shanghai (EIP-1153/5656/6780; 4895 is consensus-only on an
+// L2 — headers carry an always-empty withdrawals list) and introduces depositReceiptVersion.
+const OpForkConfig& canyonConfig() noexcept
+{
+    static const OpForkConfig cfg = [] {
+        OpForkConfig c = regolithConfig();
+        c.fork = OpFork::Canyon;
+        c.rev = EVMC_SHANGHAI;
+        c.has_deposit_receipt_version = true;
+        c.has_withdrawals = true;
+        return c;
+    }();
+    return cfg;
+}
+
+// Delta changes nothing on the EL (span batches are a derivation-layer feature); it is
+// kept in the ladder to mirror op-node's naming and rollup.json keying.
+const OpForkConfig& deltaConfig() noexcept
+{
+    static const OpForkConfig cfg = [] {
+        OpForkConfig c = canyonConfig();
+        c.fork = OpFork::Delta;
+        return c;
+    }();
+    return cfg;
+}
+
 const OpForkConfig& ecotoneConfig() noexcept
 {
     static const OpForkConfig cfg{
@@ -15,6 +75,10 @@ const OpForkConfig& ecotoneConfig() noexcept
         .has_jovian_operator_formula = false,
         .has_da_footprint = false,
         .has_ecotone_l1_formula = true,
+        .has_legacy_l1_formula = false,
+        .regolith_deposit_fixes = true,
+        .has_deposit_receipt_version = true,
+        .has_withdrawals = true,
     };
     return cfg;
 }
@@ -30,6 +94,10 @@ const OpForkConfig& fjordConfig() noexcept
         .has_jovian_operator_formula = false,
         .has_da_footprint = false,
         .has_ecotone_l1_formula = false,
+        .has_legacy_l1_formula = false,
+        .regolith_deposit_fixes = true,
+        .has_deposit_receipt_version = true,
+        .has_withdrawals = true,
     };
     return cfg;
 }
@@ -67,6 +135,10 @@ const OpForkConfig& isthmusConfig() noexcept
         .has_jovian_operator_formula = false,
         .has_da_footprint = false,
         .has_ecotone_l1_formula = false,
+        .has_legacy_l1_formula = false,
+        .regolith_deposit_fixes = true,
+        .has_deposit_receipt_version = true,
+        .has_withdrawals = true,
     };
     return cfg;
 }
@@ -82,6 +154,10 @@ const OpForkConfig& jovianConfig() noexcept
         .has_jovian_operator_formula = true,
         .has_da_footprint = true,
         .has_ecotone_l1_formula = false,
+        .has_legacy_l1_formula = false,
+        .regolith_deposit_fixes = true,
+        .has_deposit_receipt_version = true,
+        .has_withdrawals = true,
     };
     return cfg;
 }
@@ -107,20 +183,33 @@ const OpForkConfig& karstConfig() noexcept
 const OpForkConfig& configAt(
     const bcos::ledger::OpForkSchedule& schedule, uint64_t timestampSec) noexcept
 {
-    // op-node keying (op-node/rollup/types.go): IsKarst(ts) / IsJovian(ts) are
-    // `Time != nil && ts >= *Time`, with UINT64_MAX standing in for nil, so an unscheduled
-    // fork never activates. Latest fork first — a chain that activates Jovian and Karst at
-    // the same second is Karst, matching op-node's own ordering of the IsX checks.
-    // The schedule's non-decreasing order is a config-load invariant
-    // (NodeConfig::loadOpForkTimestamps), not re-checked here.
-    if (timestampSec >= schedule.m_karstTime)
+    // The ladder itself is resolved by the single shared parser (ledger/OpForkSchedule.h);
+    // this only maps the resolved fork onto its executor config.
+    switch (bcos::ledger::resolveOpFork(schedule, timestampSec))
     {
+    case OpFork::Bedrock:
+        return bedrockConfig();
+    case OpFork::Regolith:
+        return regolithConfig();
+    case OpFork::Canyon:
+        return canyonConfig();
+    case OpFork::Delta:
+        return deltaConfig();
+    case OpFork::Ecotone:
+        return ecotoneConfig();
+    case OpFork::Fjord:
+        return fjordConfig();
+    case OpFork::Granite:
+        return graniteConfig();
+    case OpFork::Holocene:
+        return holoceneConfig();
+    case OpFork::Isthmus:
+        return isthmusConfig();
+    case OpFork::Jovian:
+        return jovianConfig();
+    case OpFork::Karst:
         return karstConfig();
     }
-    if (timestampSec >= schedule.m_jovianTime)
-    {
-        return jovianConfig();
-    }
-    return isthmusConfig();
+    return bedrockConfig();  // unreachable: resolveOpFork is total
 }
 }  // namespace bcos::evm::opstack

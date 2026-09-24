@@ -38,44 +38,23 @@ struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
 
 using SessionResponseCallback = ResponseCallback;
 
-class SessionCallbackManagerInterface
+// Host-wide manager of pending response callbacks. One instance is owned by the Host and
+// shared by every session of that host (a routed response can be claimed on a different
+// session than the request went out on), so lookups are sharded into buckets to reduce lock
+// contention.
+class SessionCallbackManager
 {
 public:
-    using Ptr = std::shared_ptr<SessionCallbackManagerInterface>;
-    using ConstPtr = std::shared_ptr<const SessionCallbackManagerInterface>;
-
-    SessionCallbackManagerInterface() = default;
-    SessionCallbackManagerInterface(const SessionCallbackManagerInterface&) = default;
-    SessionCallbackManagerInterface(SessionCallbackManagerInterface&&) = default;
-    SessionCallbackManagerInterface& operator=(const SessionCallbackManagerInterface&);
-    SessionCallbackManagerInterface& operator=(SessionCallbackManagerInterface&&) noexcept;
-
-    virtual ~SessionCallbackManagerInterface() = default;
-
-    virtual SessionResponseCallback::Ptr getCallback(uint32_t seq, bool isRemove) = 0;
-    virtual bool addCallback(uint32_t seq, SessionResponseCallback::Ptr callback) = 0;
-    virtual bool removeCallback(uint32_t seq) = 0;
-};
-
-class SessionCallbackManager : public SessionCallbackManagerInterface
-{
-public:
-    using Ptr = std::shared_ptr<SessionCallbackManager>;
-    using ConstPtr = std::shared_ptr<const SessionCallbackManager>;
-
     SessionCallbackManager() = default;
     SessionCallbackManager(const SessionCallbackManager&) = delete;
-    SessionCallbackManager(SessionCallbackManager&&) = delete;
     SessionCallbackManager& operator=(const SessionCallbackManager&) = delete;
-    SessionCallbackManager& operator=(SessionCallbackManager&&) noexcept = delete;
 
-    ~SessionCallbackManager() override = default;
-
-    SessionResponseCallback::Ptr getCallback(uint32_t seq, bool isRemove) override
+    SessionResponseCallback::Ptr getCallback(uint32_t seq, bool isRemove)
     {
-        std::lock_guard<std::mutex> lockGuard(x_sessionCallbackMap);
-        auto it = m_sessionCallbackMap.find(seq);
-        if (it == m_sessionCallbackMap.end())
+        auto& bucket = m_buckets.at(seq % BucketNum);
+        std::lock_guard<std::mutex> lockGuard(bucket.mutex);
+        auto it = bucket.callbacks.find(seq);
+        if (it == bucket.callbacks.end())
         {
             return nullptr;
         }
@@ -83,66 +62,35 @@ public:
         auto callback = it->second;
         if (isRemove)
         {
-            m_sessionCallbackMap.erase(it);
+            bucket.callbacks.erase(it);
         }
 
         return callback;
     }
 
-    bool addCallback(uint32_t seq, SessionResponseCallback::Ptr callback) override
+    bool addCallback(uint32_t seq, SessionResponseCallback::Ptr callback)
     {
-        std::lock_guard<std::mutex> lockGuard(x_sessionCallbackMap);
-        auto result = m_sessionCallbackMap.try_emplace(seq, std::move(callback));
-        return result.second;
+        auto& bucket = m_buckets.at(seq % BucketNum);
+        std::lock_guard<std::mutex> lockGuard(bucket.mutex);
+        return bucket.callbacks.try_emplace(seq, std::move(callback)).second;
     }
 
-    bool removeCallback(uint32_t seq) override
+    bool removeCallback(uint32_t seq)
     {
-        std::lock_guard<std::mutex> lockGuard(x_sessionCallbackMap);
-        auto result = m_sessionCallbackMap.erase(seq);
-        return result > 0;
-    }
-
-private:
-    std::mutex x_sessionCallbackMap;
-    std::unordered_map<uint32_t, SessionResponseCallback::Ptr> m_sessionCallbackMap;
-};
-
-class SessionCallbackManagerBucket : public SessionCallbackManagerInterface
-{
-public:
-    using Ptr = std::shared_ptr<SessionCallbackManagerBucket>;
-    using ConstPtr = std::shared_ptr<const SessionCallbackManagerBucket>;
-
-    SessionCallbackManagerBucket() = default;
-    SessionCallbackManagerBucket(const SessionCallbackManagerBucket&) = delete;
-    SessionCallbackManagerBucket(SessionCallbackManagerBucket&&) = delete;
-    SessionCallbackManagerBucket& operator=(const SessionCallbackManagerBucket&) = delete;
-    SessionCallbackManagerBucket& operator=(SessionCallbackManagerBucket&&) noexcept = delete;
-
-    ~SessionCallbackManagerBucket() override = default;
-
-    SessionResponseCallback::Ptr getCallback(uint32_t seq, bool isRemove) override
-    {
-        auto bucket = (seq % SessionCallbackBucketNum);
-        return m_sessionCallbackBucket.at(bucket).getCallback(seq, isRemove);
-    }
-
-    bool addCallback(uint32_t seq, SessionResponseCallback::Ptr callback) override
-    {
-        auto bucket = (seq % SessionCallbackBucketNum);
-        return m_sessionCallbackBucket.at(bucket).addCallback(seq, callback);
-    }
-
-    bool removeCallback(uint32_t seq) override
-    {
-        auto bucket = (seq % SessionCallbackBucketNum);
-        return m_sessionCallbackBucket.at(bucket).removeCallback(seq);
+        auto& bucket = m_buckets.at(seq % BucketNum);
+        std::lock_guard<std::mutex> lockGuard(bucket.mutex);
+        return bucket.callbacks.erase(seq) > 0;
     }
 
 private:
-    static constexpr uint32_t SessionCallbackBucketNum = 64;
-    std::array<SessionCallbackManager, SessionCallbackBucketNum> m_sessionCallbackBucket;
+    struct Bucket
+    {
+        std::mutex mutex;
+        std::unordered_map<uint32_t, SessionResponseCallback::Ptr> callbacks;
+    };
+
+    static constexpr uint32_t BucketNum = 64;
+    std::array<Bucket, BucketNum> m_buckets;
 };
 
 }  // namespace bcos::gateway

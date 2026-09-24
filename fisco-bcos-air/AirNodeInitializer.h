@@ -23,6 +23,7 @@
 #include "libinitializer/CommandHelper.h"
 #include "libinitializer/EthereumSyncInitializer.h"
 #include "libinitializer/Initializer.h"
+#include "libinitializer/OpStackSyncInitializer.h"
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/rpc/RPCInterface.h>
 #include <bcos-rpc/tarsRPC/RPCServer.h>
@@ -73,5 +74,7 @@ private:
 
     // Ethereum L1 EL-mode self-sync driver (only set when [ethereum] mode=el).
     std::shared_ptr<bcos::initializer::EthereumSyncInitializer> m_ethereumSync;
+    // OP-Stack EL-mode self-sync driver (only set when [ethereum] mode=opstack-el).
+    std::shared_ptr<bcos::initializer::OpStackSyncInitializer> m_opStackSync;
 };
 }  // namespace bcos::node

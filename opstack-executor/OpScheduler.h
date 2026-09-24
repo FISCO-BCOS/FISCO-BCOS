@@ -1207,9 +1207,17 @@ private:
         auto const& bloom = opResult.seal.logsBloom;
         executedBlockHeader->setLogsBloom(bcos::bytesConstRef(
             reinterpret_cast<const bcos::byte*>(bloom.bytes), sizeof(bloom.bytes)));
-        executedBlockHeader->setWithdrawalsRoot(detail::toBcosH256(opResult.seal.withdrawalsRoot));
+        // Optional seal fields follow seal presence (never invent a value the fork's header
+        // shape lacks): pre-Canyon seals carry no withdrawalsRoot, so the executed header
+        // — cloned from the announced header, itself field-less pre-Canyon — keeps it unset.
+        if (opResult.seal.withdrawalsRoot.has_value())
+            executedBlockHeader->setWithdrawalsRoot(
+                detail::toBcosH256(*opResult.seal.withdrawalsRoot));
         if (opResult.seal.requestsHash.has_value())
             executedBlockHeader->setRequestsHash(detail::toBcosH256(*opResult.seal.requestsHash));
+        // blobGasUsed is engaged from Ecotone on (0 through Isthmus), so the announced-value
+        // fallback below is only reachable for a pre-Ecotone announcement — never valid, but
+        // kept as the fail-closed arm.
         if (opResult.seal.blobGasUsed.has_value())
             executedBlockHeader->setBlobGasUsed(bcos::u256(*opResult.seal.blobGasUsed));
         else if (auto const announced = blockHeader.blobGasUsed())
@@ -1454,7 +1462,9 @@ private:
         return bcos::evm::engine::OpBlockCommitments{
             .receiptsRoot = h.receiptsRoot(),
             .logsBloom = logsBloom,
-            .withdrawalsRoot = h.withdrawalsRoot().value_or(bcos::h256{}),
+            // Pass the header's optional through: pre-Canyon headers carry no withdrawalsRoot,
+            // and presence asymmetry is a first-class mismatch in mismatchedFieldOf.
+            .withdrawalsRoot = h.withdrawalsRoot(),
             .stateRoot = h.stateRoot(),
             .gasUsed = h.gasUsed(),
             .txRoot = h.txsRoot(),
