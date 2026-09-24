@@ -65,6 +65,12 @@ struct TempRocksDB
         BOOST_REQUIRE(status.ok());
     }
 
+    void putRow(std::string const& key)
+    {
+        auto status = db->Put(rocksdb::WriteOptions{}, key, "value");
+        BOOST_REQUIRE(status.ok());
+    }
+
     std::filesystem::path dir;
     std::unique_ptr<rocksdb::DB> db;
 };
@@ -183,8 +189,24 @@ BOOST_AUTO_TEST_CASE(RefuseBinaryDataWithoutFlag)
         TempRocksDB fixture;
         fixture.putRegistration(std::string(kHexTable));
         fixture.putRegistration("/s/" + std::string(19, 'b'));
+        fixture.putRow("/s/" + std::string(19, 'b') + ":balance");  // short name, not a row
         BOOST_CHECK(!hasBinaryTableRegistration(*fixture.db));
+        BOOST_CHECK(!hasBinaryAccountRow(*fixture.db));
         BOOST_CHECK_NO_THROW(refuseBinaryDataWithoutFlag(*fixture.db, kAbsent));
+    }
+    // Flag lost over a migration crashed in its ACCOUNT-ROW phase (a partial backup that
+    // dropped s_node_local:*): registrations are still all hex, but "/s/<20 bytes>:<field>"
+    // rows exist. The registration probe alone reads this as pure hex — the account-row
+    // probe is what refuses the silent Hex boot.
+    {
+        TempRocksDB fixture;
+        fixture.putRegistration(std::string(kHexTable));
+        fixture.putRow(std::string(kHexTable) + ":nonce");
+        fixture.putRow(binaryTableName() + ":balance");
+        BOOST_CHECK(!hasBinaryTableRegistration(*fixture.db));
+        BOOST_CHECK(hasBinaryAccountRow(*fixture.db));
+        BOOST_CHECK_THROW(
+            refuseBinaryDataWithoutFlag(*fixture.db, kAbsent), bcos::tool::InvalidConfig);
     }
     // Brand-new DB: nothing at all.
     {

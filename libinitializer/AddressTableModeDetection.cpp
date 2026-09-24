@@ -70,20 +70,42 @@ bool bcos::initializer::hasBinaryTableRegistration(::rocksdb::DB& stateDB)
     return ledger::account::isBinaryAccountTableName(table);
 }
 
+bool bcos::initializer::hasBinaryAccountRow(::rocksdb::DB& stateDB)
+{
+    // The account-row half of the flag-lost cross-check: a crash in the migration's
+    // account-row phase leaves "/s/<20 raw bytes>:<field>" rows while every registration
+    // is still hex, so the registration probe alone cannot see it. Physical row keys use
+    // StateKey's fixed-offset rule for binary tables: the ':' separator sits at exactly
+    // offset 23 (3-byte prefix + 20-byte address), so the shape check is unambiguous even
+    // though the address bytes may themselves contain 0x3a. One bounded Seek.
+    constexpr std::string_view prefix = "/s/";
+    constexpr size_t separatorOffset = 23;  // BINARY_TABLE_PREFIX.size() + ADDRESS_SIZE
+    std::unique_ptr<::rocksdb::Iterator> it(stateDB.NewIterator(::rocksdb::ReadOptions{}));
+    it->Seek(::rocksdb::Slice(prefix.data(), prefix.size()));
+    if (!it->Valid() || !it->key().starts_with(::rocksdb::Slice(prefix.data(), prefix.size())))
+    {
+        return false;
+    }
+    auto const key = it->key();
+    return key.size() > separatorOffset && key[separatorOffset] == ':';
+}
+
 void bcos::initializer::refuseBinaryDataWithoutFlag(
     ::rocksdb::DB& stateDB, std::optional<std::string> const& layoutFlag)
 {
-    if (layoutFlag.has_value() || !hasBinaryTableRegistration(stateDB))
+    if (layoutFlag.has_value() ||
+        (!hasBinaryTableRegistration(stateDB) && !hasBinaryAccountRow(stateDB)))
     {
         return;
     }
     // The flag is the only LEGAL witness of a binary layout, and it is absent — but
-    // binary registrations exist: the flag was lost (a partial backup/restore that
-    // dropped s_node_local:*). Refuse; re-running the migration is idempotent and
-    // rewrites the flag.
+    // binary registrations or account rows exist: the flag was lost (a partial
+    // backup/restore that dropped s_node_local:*). Refuse; re-running the migration is
+    // idempotent and rewrites the flag.
     BOOST_THROW_EXCEPTION(
         bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-            "the state DB holds binary-layout account tables (s_tables:/s/ registrations) "
+            "the state DB holds binary-layout account data (s_tables:/s/ registrations or "
+            "/s/<20 bytes> account rows) "
             "but the account-table layout flag (" +
             std::string(ACCOUNT_TABLE_LAYOUT_KEY) +
             ") is absent — the flag was lost, e.g. by a backup/restore that dropped the "
