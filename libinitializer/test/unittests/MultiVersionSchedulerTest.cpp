@@ -144,6 +144,35 @@ BOOST_AUTO_TEST_CASE(setVersionSwitchesToEthOpLanesInBinaryMode)
     BOOST_CHECK_EQUAL(hexFixture.slots[2]->m_callAtBlockCount, 1);
 }
 
+// Slot 0 (the legacy bcos-executor) is hex-only, so on a Binary-layout node setVersion(0)
+// is refused at runtime: it must NOT throw (the runtime callers are commit callbacks that
+// catch-and-log a throw and would then stop advancing the chain) and must keep the current
+// index — the boot-time refusal lives in resolveNodeAddressTableMode instead.
+BOOST_AUTO_TEST_CASE(setVersionKeepsCurrentIndexOnLane0InBinaryMode)
+{
+    namespace account = ledger::account;
+    bcos::test::ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Binary);
+    auto scheduler = make(true);
+    scheduler->setVersion(ETHEREUM_EXECUTOR_VERSION, {});
+    BOOST_CHECK_NO_THROW(scheduler->setVersion(0, {}));
+
+    scheduler->callAtBlock(nullptr, 0, {});
+    BOOST_CHECK_EQUAL(slots[2]->m_callAtBlockCount, 1);
+    BOOST_CHECK_EQUAL(slots[0]->m_callAtBlockCount, 0);
+}
+
+// On a Hex-layout node the same switch selects slot 0 as before.
+BOOST_AUTO_TEST_CASE(setVersionSelectsLane0InHexMode)
+{
+    namespace account = ledger::account;
+    bcos::test::ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Hex);
+    auto scheduler = make(true);
+    BOOST_CHECK_NO_THROW(scheduler->setVersion(0, {}));
+
+    scheduler->callAtBlock(nullptr, 0, {});
+    BOOST_CHECK_EQUAL(slots[0]->m_callAtBlockCount, 1);
+}
+
 // Above the array: saturate down to the newest NON-NULL slot, not to the empty one.
 BOOST_AUTO_TEST_CASE(setVersionSaturatesToNewestWiredSlot)
 {

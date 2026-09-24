@@ -520,20 +520,26 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     }
     auto const ledger = m_nodeService->ledger();
 
-    // Derive the account table name through the one shared mode-aware routing rule
-    // (account::accountTableName — the same rule EVMAccount writes state with): on a
-    // binary-layout node the flat read must hit "/s/<20 raw bytes>", and the 8
-    // system-tx addresses resolve to "/sys/<hex>" regardless of mode — same rule as
-    // Ledger::getStorageAt, which both the genesis alloc import and the v2 executor
-    // agree with (they go through EVMAccount).
-    auto const contractTableName = ledger::account::accountTableName(addressStr);
-
     // The empty-slot value: a 32-byte zero, matching the flat read's padded rendering.
     constexpr const char* c_emptyStorageValue =
         "0x0000000000000000000000000000000000000000000000000000000000000000";
 
     if (isLatest)
     {
+        // One lane rule governs a lane end to end: the genesis alloc import, the executor,
+        // and this flat reader all derive the account table name through
+        // ledger::account::ethLaneAccountTableName when feature_l2_ethereum_compat is set —
+        // on an Ethereum-compatible chain the 8 system-tx addresses are ordinary accounts
+        // living under /apps/ — and through ledger::account::accountTableName otherwise
+        // (only the v1 lane keeps the /sys/ routing). Same single-flag read idiom as
+        // tryResolveMptContext above; derived only here because the historical path below
+        // reads the MPT, not the flat KV.
+        auto const contractTableName =
+            co_await ledger::getFeature(
+                *ledger, ledger::Features::Flag::feature_l2_ethereum_compat, blockNumber) ?
+                ledger::account::ethLaneAccountTableName(
+                    bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight}) :
+                ledger::account::accountTableName(addressStr);
         // Latest state: fork a fresh view of GlobalStateStorage's COMMITTED plane and read
         // the flat KV — a consistent point-in-time snapshot of the last committed block
         // (cache -> committed backend, no in-flight pending layers). NOTE this is the FLAT

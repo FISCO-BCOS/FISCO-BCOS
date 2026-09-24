@@ -1,4 +1,5 @@
 #include "MultiVersionScheduler.h"
+#include "AddressTableModeDetection.h"
 #include "Common.h"
 #include <bcos-framework/ledger/AccountTableName.h>
 
@@ -183,6 +184,24 @@ void bcos::scheduler_v1::MultiVersionScheduler::setVersion(
         INITIALIZER_LOG(ERROR)
             << LOG_DESC("executor_version has no wired scheduler; keeping the current executor")
             << LOG_KV("requested", version) << LOG_KV("keeping", m_currentIndex.load());
+        return;
+    }
+    if (bcos::initializer::isHexOnlyExecutorLane(static_cast<int>(selected)) &&
+        ledger::account::nodeAddressTableMode() == ledger::account::AddressTableMode::Binary)
+    {
+        // Slot 0 (the legacy bcos-executor) names hex account tables itself, so on a
+        // Binary-layout node switching to it would split reads/writes onto disjoint tables.
+        // The asymmetry with boot is deliberate: boot REFUSES executor_version=0 on a Binary
+        // node (resolveNodeAddressTableMode throws), but at runtime the callers are the two
+        // commit callbacks (LedgerStorage::onStableCheckPointCommitted and DownloadingQueue),
+        // which catch-and-log a throw and then stop advancing — so keep the current executor
+        // and make it loud instead, the same policy as the unwired-slot case above.
+        INITIALIZER_LOG(ERROR) << LOG_DESC(
+                                      "executor_version 0 is hex-only and this node runs "
+                                      "the binary account-table layout; keeping the "
+                                      "current executor")
+                               << LOG_KV("requested", version)
+                               << LOG_KV("keeping", m_currentIndex.load());
         return;
     }
     m_currentIndex.store(static_cast<int>(selected));

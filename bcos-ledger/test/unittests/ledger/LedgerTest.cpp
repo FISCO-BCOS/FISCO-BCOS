@@ -2074,5 +2074,48 @@ BOOST_AUTO_TEST_CASE(getStorageAtFollowsNodeAddressTableMode)
     }());
 }
 
+// F2: Ledger::getStorageAt must branch on feature_l2_ethereum_compat exactly like the
+// genesis alloc import and the executor do: on an Eth-lane chain the system-tx addresses
+// (e.g. SYS_CONFIG_ADDRESS 0x...1000) are ordinary accounts under /apps/, and only the v1
+// lane routes them to /sys/. The feature row is written straight into SYS_CONFIG
+// (enableNumber 0, as genesis sets it on L2 chains) instead of running a full genesis
+// import — fetchFeature reads exactly that one row.
+BOOST_AUTO_TEST_CASE(getStorageAtFollowsEthLaneOnL2Chains)
+{
+    namespace account = bcos::ledger::account;
+    bcos::test::ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Hex);
+    task::syncWait([this]() -> task::Task<void> {
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr, false);
+        auto storage = std::make_shared<MockStorage>(memoryStorage);
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 0);
+
+        // SYS_CONFIG_ADDRESS, a member of c_systemTxsAddress.
+        std::string const sysTxAddress = "0000000000000000000000000000000000001000";
+        std::string const laneTable = "/apps/" + sysTxAddress;
+        std::string const sysTable = "/sys/" + sysTxAddress;
+        std::string const slotKey = "a-storage-slot-key";
+        co_await storage2::writeOne(*storage, executor_v1::StateKey(laneTable, slotKey),
+            storage::Entry{std::string_view{"lane-value"}});
+        co_await storage2::writeOne(*storage, executor_v1::StateKey(sysTable, slotKey),
+            storage::Entry{std::string_view{"sys-value"}});
+
+        // v1 lane (no feature row): the /sys/ routing holds.
+        auto v1Entry = co_await ledger->getStorageAt(sysTxAddress, slotKey, 0);
+        BOOST_REQUIRE(v1Entry.has_value());
+        BOOST_CHECK_EQUAL(std::string(v1Entry->get()), "sys-value");
+
+        // Enable feature_l2_ethereum_compat at block 0: the same address now resolves
+        // through the lane rule to /apps/.
+        co_await storage2::writeOne(*storage,
+            executor_v1::StateKey(ledger::SYS_CONFIG,
+                std::string(
+                    magic_enum::enum_name(ledger::Features::Flag::feature_l2_ethereum_compat))),
+            storage::Entry{bcos::storage::serialize::encode(ledger::SystemConfigEntry{"1", 0})});
+        auto laneEntry = co_await ledger->getStorageAt(sysTxAddress, slotKey, 0);
+        BOOST_REQUIRE(laneEntry.has_value());
+        BOOST_CHECK_EQUAL(std::string(laneEntry->get()), "lane-value");
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

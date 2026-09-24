@@ -77,9 +77,11 @@
     ; (/apps/<40-hex>) to the binary layout (/s/<20 raw bytes>) at boot.
     ; Idempotent and crash-safe: an interrupted run resumes on the next start, and
     ; once the layout flag in the state DB says "bin" later boots skip the scan.
-    ; Only the baseline executor lane (executor_version=1) accepts it; OP / Eth
-    ; engine / legacy executor lanes refuse to boot with it. The parameter may be
-    ; removed after the migration has completed.
+    ; Only the legacy v0 executor lane (executor_version=0) refuses to boot with
+    ; it — that executor names hex account tables itself; the baseline v1, Eth
+    ; engine and OP lanes are mode-aware (account::ethLaneAccountTableName) and
+    ; migrate like the baseline lane. The parameter may be removed after the
+    ; migration has completed.
     ;migrate_account_tables_to_binary=false
 
 [txpool]

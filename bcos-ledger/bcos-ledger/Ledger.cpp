@@ -150,17 +150,20 @@ void Ledger::asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTx
 task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
     std::string_view _address, std::string_view _key, protocol::BlockNumber _blockNumber)
 {
-    // TODO)): blockNumber is not used nowadays
-    std::ignore = _blockNumber;
-    // Derive the account table name through the one shared mode-aware routing rule
-    // (account::accountTableName — the same rule EVMAccount writes state with): on a
-    // binary-layout node the state lives under "/s/<20 raw bytes>", and the 8 system-tx
-    // addresses resolve to "/sys/<hex>" regardless of mode. Deriving "/apps/<hex>" here
-    // directly would read the wrong table on a Binary node (eth_getBalance /
-    // eth_getStorageAt / eth_getTransactionCount all reporting empty) and would also miss
-    // the /sys/ routing for system-range accounts (e.g. EEST static VMTests that call
-    // 0x1000 saw balance=0 / storage=0 before the /sys/ routing existed).
-    auto const contractTableName = account::accountTableName(_address);
+    // One lane rule governs a lane end to end: the genesis alloc import
+    // (importGenesisState), the executor, and this flat reader all derive the account table
+    // name through account::ethLaneAccountTableName when feature_l2_ethereum_compat is set —
+    // on an Ethereum-compatible chain the 8 system-tx addresses are ordinary accounts living
+    // under /apps/ — and through account::accountTableName otherwise (only the v1 lane keeps
+    // the /sys/ routing for the system-tx addresses). Both rules re-encode to the node-local
+    // layout, so a Binary node reads "/s/<20 raw bytes>" either way. _blockNumber gates the
+    // feature read: the flag is genesis-set (enableNumber 0) on L2 chains, so any historical
+    // block number resolves it correctly; one SYS_CONFIG row read (fetchFeature).
+    auto const contractTableName =
+        co_await fetchFeature(ledger::Features::Flag::feature_l2_ethereum_compat, _blockNumber) ?
+            account::ethLaneAccountTableName(
+                bcos::Address{_address, bcos::Address::FromHex, bcos::Address::AlignRight}) :
+            account::accountTableName(_address);
     auto const stateStorage = getStateStorage();
     co_return co_await bcos::storage2::readOne(
         *stateStorage, executor_v1::StateKeyView{contractTableName, _key});
