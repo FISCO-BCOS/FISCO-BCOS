@@ -710,4 +710,256 @@ BOOST_AUTO_TEST_CASE(MintAdditionWrapsLikeOpGethUint256Add)
     BOOST_CHECK_EQUAL(ts.at(kFrom).nonce, 1u);
 }
 
+// ── Bedrock/Regolith/Canyon/Delta 分叉矩阵（M3a）────────────────────────────
+// 参照：op-geth core/state_transition.go（preCheck / execute 失败分支 / innerExecute 的
+// pre-Regolith gas 记账分支）与 specs/protocol/deposits.md（"Execution"、"Deposit Receipt"）。
+
+// pre-Regolith 的 is_system_tx 合法且"不计 gas"：receipt gasUsed=0，状态照常执行（mint+转账），
+// 回执不带 deposit_nonce / deposit_receipt_version。
+BOOST_AUTO_TEST_CASE(BedrockSystemTxIsUnmeteredAndAllowed)
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    ts[kFrom] = {.nonce = 5, .balance = intx::uint256{0}, .storage = {}, .code = {}};
+    test::TestBlockHashes hashes;
+    DepositTx dep{.source_hash = 0x01_bytes32,
+        .from = kFrom,
+        .to = kFrom,
+        .mint = intx::uint256{100},
+        .value = intx::uint256{0},
+        .gas_limit = 100000,
+        .is_system_tx = true,
+        .data = {}};
+    evmone::state::StateDiff diff;
+    const auto r = runDeposit(ts, blkDeposit(), hashes, dep, bedrockConfig(), vm, 1234, 30000000,
+        kOpTestReceiptFactory, diff);
+    bcos::evm::applyStateDiffStrict(ts, diff);
+
+    BOOST_CHECK_EQUAL(r->status(), 0);
+    BOOST_CHECK_EQUAL(receiptGasUsed(*r), 0);
+    BOOST_CHECK_EQUAL(ts.at(kFrom).balance, intx::uint256{100});
+    BOOST_CHECK_EQUAL(ts.at(kFrom).nonce, 6u);  // nonce 全分叉一致递增（spec Nonce Handling）
+    const auto& meta = r->opStackMeta();
+    // Bedrock 不设任何 meta 字段——opStackMeta() 在全空时可返回 nullopt。
+    if (meta.has_value())
+    {
+        BOOST_CHECK(!meta->deposit_nonce.has_value());
+        BOOST_CHECK(!meta->deposit_receipt_version.has_value());
+    }
+}
+
+// Bedrock L1 attributes deposit 的 gasLimit=150M 大于块 gas 上限——system tx 不查 gas pool，
+// 不得抛 OpDepositGasLimitReached（op-geth preCheck 对 system tx 直接 return nil）。
+BOOST_AUTO_TEST_CASE(BedrockSystemTxSkipsBlockGasPoolCheck)
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
+    test::TestBlockHashes hashes;
+    DepositTx dep{.source_hash = 0x01_bytes32,
+        .from = kFrom,
+        .to = kFrom,
+        .mint = std::nullopt,
+        .value = intx::uint256{0},
+        .gas_limit = 150000000,  // Bedrock L1-attributes deposit 的实际 gasLimit
+        .is_system_tx = true,
+        .data = {}};
+    evmone::state::StateDiff diff;
+    const auto r = runDeposit(ts, blkDeposit(), hashes, dep, bedrockConfig(), vm, 1234,
+        /*blockGasLeft=*/30000000, kOpTestReceiptFactory, diff);
+    BOOST_CHECK_EQUAL(r->status(), 0);
+    BOOST_CHECK_EQUAL(receiptGasUsed(*r), 0);
+}
+
+// 对照：Bedrock 非 system deposit 仍受 gas pool 约束（op-geth preCheck 的 SubGas）。
+BOOST_AUTO_TEST_CASE(BedrockMeteredDepositStillChecksBlockGasPool)
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
+    test::TestBlockHashes hashes;
+    DepositTx dep{.source_hash = 0x01_bytes32,
+        .from = kFrom,
+        .to = kFrom,
+        .mint = std::nullopt,
+        .value = intx::uint256{0},
+        .gas_limit = 60000,
+        .is_system_tx = false,
+        .data = {}};
+    evmone::state::StateDiff diff;
+    BOOST_CHECK_THROW(runDeposit(ts, blkDeposit(), hashes, dep, bedrockConfig(), vm, 1234,
+                          /*blockGasLeft=*/50000, kOpTestReceiptFactory, diff),
+        OpDepositGasLimitReached);
+}
+
+// pre-Regolith 计量 deposit：成功执行也按全额 gasLimit 记账（"Record deposits as using all
+// their gas (matches the gas pool)"），receipt 不带 deposit_nonce/version。
+BOOST_AUTO_TEST_CASE(BedrockMeteredDepositReportsFullGasLimitOnSuccess)
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
+    test::TestBlockHashes hashes;
+    DepositTx dep{.source_hash = 0x01_bytes32,
+        .from = kFrom,
+        .to = kFrom,
+        .mint = std::nullopt,
+        .value = intx::uint256{0},
+        .gas_limit = 100000,
+        .is_system_tx = false,
+        .data = {}};
+    evmone::state::StateDiff diff;
+    const auto r = runDeposit(ts, blkDeposit(), hashes, dep, bedrockConfig(), vm, 1234, 30000000,
+        kOpTestReceiptFactory, diff);
+    bcos::evm::applyStateDiffStrict(ts, diff);
+    BOOST_CHECK_EQUAL(r->status(), 0);
+    BOOST_CHECK_EQUAL(receiptGasUsed(*r), 100000);  // 非实际消耗 21000
+    BOOST_CHECK_EQUAL(ts.at(kFrom).nonce, 1u);
+    const auto& meta = r->opStackMeta();
+    // Bedrock 不设任何 meta 字段——opStackMeta() 在全空时可返回 nullopt。
+    if (meta.has_value())
+    {
+        BOOST_CHECK(!meta->deposit_nonce.has_value());
+        BOOST_CHECK(!meta->deposit_receipt_version.has_value());
+    }
+}
+
+// pre-Regolith 的 EVM 级失败（REVERT）同样报全额 gasLimit；对照 Regolith+ 报实际消耗
+// （EvmRevertKeepsMintAndChargesActualGas）。
+BOOST_AUTO_TEST_CASE(BedrockMeteredDepositReportsFullGasLimitOnRevert)
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
+    constexpr auto kRevert = 0x00000000000000000000000000000000000000dd_address;
+    ts[kRevert] = {.nonce = 0,
+        .balance = intx::uint256{0},
+        .storage = {},
+        .code = evmc::from_hex("60006000fd").value()};
+    test::TestBlockHashes hashes;
+    DepositTx dep{.source_hash = 0x01_bytes32,
+        .from = kFrom,
+        .to = kRevert,
+        .mint = intx::uint256{100},
+        .value = intx::uint256{0},
+        .gas_limit = 100000,
+        .is_system_tx = false,
+        .data = {}};
+    evmone::state::StateDiff diff;
+    const auto r = runDeposit(ts, blkDeposit(), hashes, dep, bedrockConfig(), vm, 1234, 30000000,
+        kOpTestReceiptFactory, diff);
+    bcos::evm::applyStateDiffStrict(ts, diff);
+    BOOST_CHECK_NE(r->status(), 0);
+    BOOST_CHECK_EQUAL(receiptGasUsed(*r), 100000);  // 全额，而非实际消耗
+    BOOST_CHECK_EQUAL(ts.at(kFrom).balance, intx::uint256{100});  // mint 保留
+    BOOST_CHECK_EQUAL(ts.at(kFrom).nonce, 1u);
+}
+
+// pre-Regolith system tx 入口级失败（intrinsic 不足）：receipt gasUsed=0，nonce 仍 +1。
+BOOST_AUTO_TEST_CASE(BedrockSystemTxEntryFailureReportsZeroGas)
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
+    test::TestBlockHashes hashes;
+    DepositTx dep{.source_hash = 0x01_bytes32,
+        .from = kFrom,
+        .to = kFrom,
+        .mint = intx::uint256{50},
+        .value = intx::uint256{0},
+        .gas_limit = 20999,  // < intrinsic 21000
+        .is_system_tx = true,
+        .data = {}};
+    evmone::state::StateDiff diff;
+    const auto r = runDeposit(ts, blkDeposit(), hashes, dep, bedrockConfig(), vm, 1234, 30000000,
+        kOpTestReceiptFactory, diff);
+    bcos::evm::applyStateDiffStrict(ts, diff);
+    BOOST_CHECK_EQUAL(r->status(), 1);
+    BOOST_CHECK_EQUAL(receiptGasUsed(*r), 0);
+    BOOST_CHECK_EQUAL(ts.at(kFrom).balance, intx::uint256{50});
+    BOOST_CHECK_EQUAL(ts.at(kFrom).nonce, 1u);
+}
+
+// Regolith 起 is_system_tx 是块级错误（op-geth ErrSystemTxNotSupported）——
+// 现有 SystemTxIsBlockError 只钉了 Isthmus；Regolith 是规则生效的起点，必须单独钉。
+BOOST_AUTO_TEST_CASE(RegolithRejectsSystemTxAsBlockError)
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    ts[kFrom] = {};
+    test::TestBlockHashes hashes;
+    DepositTx dep{.source_hash = 0x01_bytes32,
+        .from = kFrom,
+        .to = kFrom,
+        .mint = std::nullopt,
+        .value = intx::uint256{0},
+        .gas_limit = 100000,
+        .is_system_tx = true,
+        .data = {}};
+    evmone::state::StateDiff diff;
+    BOOST_CHECK_THROW(runDeposit(ts, blkDeposit(), hashes, dep, regolithConfig(), vm, 1234,
+                          30000000, kOpTestReceiptFactory, diff),
+        std::runtime_error);
+}
+
+// Regolith：receipt 记录 deposit_nonce（执行前 nonce），无 receipt version（Canyon 才引入）；
+// gasUsed 为实际消耗。
+BOOST_AUTO_TEST_CASE(RegolithDepositRecordsNonceWithoutReceiptVersion)
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    ts[kFrom] = {.nonce = 5, .balance = intx::uint256{0}, .storage = {}, .code = {}};
+    test::TestBlockHashes hashes;
+    DepositTx dep{.source_hash = 0x01_bytes32,
+        .from = kFrom,
+        .to = kFrom,
+        .mint = intx::uint256{100},
+        .value = intx::uint256{0},
+        .gas_limit = 100000,
+        .is_system_tx = false,
+        .data = {}};
+    evmone::state::StateDiff diff;
+    const auto r = runDeposit(ts, blkDeposit(), hashes, dep, regolithConfig(), vm, 1234, 30000000,
+        kOpTestReceiptFactory, diff);
+    bcos::evm::applyStateDiffStrict(ts, diff);
+    BOOST_CHECK_EQUAL(r->status(), 0);
+    BOOST_CHECK_EQUAL(receiptGasUsed(*r), 21000);  // Regolith 起按实际消耗记账
+    const auto& meta = r->opStackMeta();
+    BOOST_REQUIRE(meta.has_value());
+    BOOST_REQUIRE(meta->deposit_nonce.has_value());
+    BOOST_CHECK_EQUAL(*meta->deposit_nonce, 5u);
+    BOOST_CHECK(!meta->deposit_receipt_version.has_value());
+}
+
+// Canyon：deposit_receipt_version=1 与 deposit_nonce 同时出现（op-geth state_processor.go 的
+// IsOptimismCanyon 分支）；Delta 行为相同（EL 无变化）。
+BOOST_AUTO_TEST_CASE(CanyonAndDeltaAddDepositReceiptVersion)
+{
+    for (const auto* cfg : {&canyonConfig(), &deltaConfig()})
+    {
+        auto vm = evmc::VM{evmc_create_evmone()};
+        test::TestState ts;
+        ts[kFrom] = {.nonce = 2, .balance = intx::uint256{0}, .storage = {}, .code = {}};
+        test::TestBlockHashes hashes;
+        DepositTx dep{.source_hash = 0x01_bytes32,
+            .from = kFrom,
+            .to = kFrom,
+            .mint = std::nullopt,
+            .value = intx::uint256{0},
+            .gas_limit = 100000,
+            .is_system_tx = false,
+            .data = {}};
+        evmone::state::StateDiff diff;
+        const auto r = runDeposit(ts, blkDeposit(), hashes, dep, *cfg, vm, 1234, 30000000,
+            kOpTestReceiptFactory, diff);
+        BOOST_CHECK_EQUAL(r->status(), 0);
+        const auto& meta = r->opStackMeta();
+        BOOST_REQUIRE(meta.has_value());
+        BOOST_REQUIRE(meta->deposit_nonce.has_value());
+        BOOST_CHECK_EQUAL(*meta->deposit_nonce, 2u);
+        BOOST_REQUIRE(meta->deposit_receipt_version.has_value());
+        BOOST_CHECK_EQUAL(*meta->deposit_receipt_version, 1u);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()

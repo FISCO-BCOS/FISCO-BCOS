@@ -342,6 +342,36 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
     receiptLeaves.reserve(result.receipts.size());
     for (size_t i = 0; i < result.receipts.size(); ++i)
     {
+        // Deposit receipt fork matrix (op-geth state_processor.go MakeReceipt /
+        // receipt.go EncodeIndex + spec deposits.md "Deposit Receipt"): the meta fields the
+        // receipt carries must match the fork. Pre-Regolith: neither field. Regolith–Delta:
+        // deposit_nonce only (the receipts-root leaf still omits it — op-geth's EncodeIndex
+        // quirk, see encodeReceiptLeaf). Canyon+: deposit_nonce + deposit_receipt_version=1.
+        // The receipts on this path always come from this node's own runDeposit, so a matrix
+        // violation is an internal fault surfaced as a consensus rejection (fail-closed —
+        // the alternative is silently committing a leaf the peers did not).
+        if (result.txTypes[i] == static_cast<uint8_t>(kDepositTxType))
+        {
+            const auto& meta = result.receipts[i]->opStackMeta();
+            const bool hasNonce = meta.has_value() && meta->deposit_nonce.has_value();
+            const bool hasVersion =
+                meta.has_value() && meta->deposit_receipt_version.has_value();
+            if (cfg.has_deposit_receipt_version)  // Canyon+
+            {
+                if (!hasNonce || !hasVersion)
+                    throw OpConsensusError(
+                        "op block: Canyon+ deposit receipt missing deposit nonce/receipt version");
+            }
+            else
+            {
+                if (hasVersion)
+                    throw OpConsensusError(
+                        "op block: pre-Canyon deposit receipt carries deposit receipt version");
+                if (hasNonce && !cfg.regolith_deposit_fixes)
+                    throw OpConsensusError(
+                        "op block: pre-Regolith deposit receipt carries deposit nonce");
+            }
+        }
         receiptLeaves.push_back(encodeReceiptForRoot(*result.receipts[i], result.txTypes[i]));
     }
     std::vector<bcos::bytesConstRef> receiptLeafRefs;
@@ -366,22 +396,30 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
             seal.logsBloom.bytes[i] |= bloom[i];
     }
 
-    // Isthmus+: withdrawalsRoot = MessagePasser storage root, requestsHash = sha256("").
-    // Pre-Isthmus: withdrawals list is always empty → empty-trie root; no requests field.
+    // withdrawalsRoot by fork (op-geth: header field exists from Canyon on — the L2 never
+    // processes withdrawal credits; OP headers carry an always-empty withdrawals list):
+    //   pre-Canyon      -> field absent from the header (nullopt)
+    //   Canyon–Holocene -> empty-trie root (EmptyWithdrawalsHash 0x56e81f…b421)
+    //   Isthmus+        -> L2ToL1MessagePasser storage root (OP Isthmus withdrawal commitment)
+    // requestsHash: Isthmus+ sha256("") (EIP-7685 empty list); pre-Isthmus headers lack the
+    // field (nullopt).
     if (cfg.fork >= OpFork::Isthmus)
     {
         seal.withdrawalsRoot = opStorageRoot(messagePasserStorage);
         seal.requestsHash = OP_EMPTY_REQUESTS_HASH;
     }
-    else
+    else if (cfg.has_withdrawals)  // Canyon–Holocene
     {
         auto const emptyRoot = bcos::ledger::mpt::emptyRootHash();
-        std::memcpy(
-            seal.withdrawalsRoot.bytes, emptyRoot.data(), sizeof(seal.withdrawalsRoot.bytes));
+        evmone::hash256 empty{};
+        std::memcpy(empty.bytes, emptyRoot.data(), sizeof(empty.bytes));
+        seal.withdrawalsRoot = empty;
     }
 
-    // Jovian: header blobGasUsed slot = DA footprint (Σ da_footprint over non-deposit receipts).
-    // Deposits legitimately carry nullopt and are skipped. A missing optional on a non-deposit
+    // Header blobGasUsed by fork: pre-Ecotone the header has no blob fields (nullopt);
+    // Ecotone–Isthmus the OP spec fixes it at 0 (no blob txs on an L2); Jovian reclaims the
+    // slot as the DA footprint (Σ da_footprint over non-deposit receipts). Deposits
+    // legitimately carry nullopt and are skipped. A missing optional on a non-deposit
     // receipt must not silently contribute 0 — that under-counts the header commitment the
     // same way a missing deposit nonce used to under-encode the receipts-root leaf.
     if (cfg.has_da_footprint)
@@ -401,6 +439,10 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
             footprint += term;
         }
         seal.blobGasUsed = footprint;
+    }
+    else if (cfg.fork >= OpFork::Ecotone)
+    {
+        seal.blobGasUsed = uint64_t{0};
     }
     return seal;
 }

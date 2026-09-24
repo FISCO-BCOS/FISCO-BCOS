@@ -15,6 +15,23 @@ bcos::ledger::OpForkSchedule sched(uint64_t jovianTime, uint64_t karstTime)
 {
     return bcos::ledger::OpForkSchedule{.m_jovianTime = jovianTime, .m_karstTime = karstTime};
 }
+/// Full Bedrock..Karst ladder, 100 seconds per rung: regolith=100, canyon=200, ...,
+/// karst=1000. isthmus_time is SET, which is what turns the pre-Isthmus rungs live.
+bcos::ledger::OpForkSchedule fullSched()
+{
+    bcos::ledger::OpForkSchedule s;
+    s.m_regolithTime = 100;
+    s.m_canyonTime = 200;
+    s.m_deltaTime = 300;
+    s.m_ecotoneTime = 400;
+    s.m_fjordTime = 500;
+    s.m_graniteTime = 600;
+    s.m_holoceneTime = 700;
+    s.m_isthmusTime = 800;
+    s.m_jovianTime = 900;
+    s.m_karstTime = 1000;
+    return s;
+}
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(OpForkScheduleSuite)
@@ -185,6 +202,131 @@ BOOST_AUTO_TEST_CASE(FjordOnwardCarryP256VerifyAndGraniteCapsBn256)
         BOOST_CHECK_EQUAL(bn256->gas_cost_override, -1);
         BOOST_CHECK(!(cfg->precompiles->contains(evmc::address{0x0c})));  // BLS 是 PRAGUE 的
     }
+}
+
+// The pre-Isthmus rungs: Bedrock/Regolith run a Paris EVM (op-sepolia-class chains are
+// post-merge, Merge at genesis), Canyon/Delta run Shanghai. All carry the legacy
+// overhead/scalar L1 cost formula and none of the Canyon+ deposit/withdrawals changes
+// until their own rung. precompiles stays nullptr — evmone's built-in table for the
+// revision is authoritative before Fjord.
+BOOST_AUTO_TEST_CASE(PreIsthmusLadderConfigsPinned)
+{
+    const auto& bedrock = bedrockConfig();
+    BOOST_CHECK_EQUAL(bedrock.fork, OpFork::Bedrock);
+    BOOST_CHECK_EQUAL(bedrock.rev, EVMC_PARIS);
+    BOOST_CHECK_EQUAL(bedrock.precompiles, nullptr);
+    BOOST_CHECK(bedrock.disable_prague_requests);
+    BOOST_CHECK(!(bedrock.has_operator_fee));
+    BOOST_CHECK(bedrock.has_legacy_l1_formula);
+    BOOST_CHECK(!(bedrock.has_ecotone_l1_formula));
+    BOOST_CHECK(!(bedrock.regolith_deposit_fixes));
+    BOOST_CHECK(!(bedrock.has_deposit_receipt_version));
+    BOOST_CHECK(!(bedrock.has_withdrawals));
+
+    const auto& regolith = regolithConfig();
+    BOOST_CHECK_EQUAL(regolith.fork, OpFork::Regolith);
+    BOOST_CHECK_EQUAL(regolith.rev, EVMC_PARIS);
+    BOOST_CHECK_EQUAL(regolith.precompiles, nullptr);
+    BOOST_CHECK(regolith.has_legacy_l1_formula);
+    BOOST_CHECK(regolith.regolith_deposit_fixes);
+    BOOST_CHECK(!(regolith.has_deposit_receipt_version));
+    BOOST_CHECK(!(regolith.has_withdrawals));
+
+    for (const auto* cfg : {&canyonConfig(), &deltaConfig()})
+    {
+        BOOST_CHECK_EQUAL(cfg->rev, EVMC_SHANGHAI);
+        BOOST_CHECK_EQUAL(cfg->precompiles, nullptr);
+        BOOST_CHECK(cfg->has_legacy_l1_formula);
+        BOOST_CHECK(cfg->regolith_deposit_fixes);
+        BOOST_CHECK(cfg->has_deposit_receipt_version);
+        BOOST_CHECK(cfg->has_withdrawals);
+        BOOST_CHECK(!(cfg->has_operator_fee));
+        BOOST_CHECK(!(cfg->has_ecotone_l1_formula));
+    }
+    BOOST_CHECK_EQUAL(canyonConfig().fork, OpFork::Canyon);
+    BOOST_CHECK_EQUAL(deltaConfig().fork, OpFork::Delta);
+}
+
+// Ecotone+ carry the Regolith deposit fixes and Canyon's receipt version / withdrawals
+// header field; only the L1 formula flag moves (Ecotone calldataGas -> Fjord+ FastLZ).
+BOOST_AUTO_TEST_CASE(EcotoneOnwardCarryPreIsthmusFixes)
+{
+    for (const auto* cfg :
+        {&ecotoneConfig(), &fjordConfig(), &graniteConfig(), &holoceneConfig(),
+            &isthmusConfig(), &jovianConfig(), &karstConfig()})
+    {
+        BOOST_CHECK(cfg->regolith_deposit_fixes);
+        BOOST_CHECK(cfg->has_deposit_receipt_version);
+        BOOST_CHECK(cfg->has_withdrawals);
+        BOOST_CHECK(!(cfg->has_legacy_l1_formula));
+    }
+}
+
+// Full ladder at the exact boundary seconds: op-node's IsX(ts) is `ts >= *Time`, so the
+// activation second itself is already inside the fork, and the second before belongs to
+// the previous one. Below regolith_time the fallback is Bedrock (the genesis fork).
+BOOST_AUTO_TEST_CASE(ConfigAtFullLadderBoundaries)
+{
+    const auto s = fullSched();
+    BOOST_CHECK_EQUAL(configAt(s, 0).fork, OpFork::Bedrock);
+    BOOST_CHECK_EQUAL(configAt(s, 99).fork, OpFork::Bedrock);
+    BOOST_CHECK_EQUAL(configAt(s, 100).fork, OpFork::Regolith);
+    BOOST_CHECK_EQUAL(configAt(s, 199).fork, OpFork::Regolith);
+    BOOST_CHECK_EQUAL(configAt(s, 200).fork, OpFork::Canyon);
+    BOOST_CHECK_EQUAL(configAt(s, 299).fork, OpFork::Canyon);
+    BOOST_CHECK_EQUAL(configAt(s, 300).fork, OpFork::Delta);
+    BOOST_CHECK_EQUAL(configAt(s, 399).fork, OpFork::Delta);
+    BOOST_CHECK_EQUAL(configAt(s, 400).fork, OpFork::Ecotone);
+    BOOST_CHECK_EQUAL(configAt(s, 499).fork, OpFork::Ecotone);
+    BOOST_CHECK_EQUAL(configAt(s, 500).fork, OpFork::Fjord);
+    BOOST_CHECK_EQUAL(configAt(s, 599).fork, OpFork::Fjord);
+    BOOST_CHECK_EQUAL(configAt(s, 600).fork, OpFork::Granite);
+    BOOST_CHECK_EQUAL(configAt(s, 699).fork, OpFork::Granite);
+    BOOST_CHECK_EQUAL(configAt(s, 700).fork, OpFork::Holocene);
+    BOOST_CHECK_EQUAL(configAt(s, 799).fork, OpFork::Holocene);
+    BOOST_CHECK_EQUAL(configAt(s, 800).fork, OpFork::Isthmus);
+    BOOST_CHECK_EQUAL(configAt(s, 899).fork, OpFork::Isthmus);
+    BOOST_CHECK_EQUAL(configAt(s, 900).fork, OpFork::Jovian);
+    BOOST_CHECK_EQUAL(configAt(s, 999).fork, OpFork::Jovian);
+    BOOST_CHECK_EQUAL(configAt(s, 1000).fork, OpFork::Karst);
+    BOOST_CHECK_EQUAL(configAt(s, 1001).fork, OpFork::Karst);
+}
+
+// An unscheduled rung (UINT64_MAX, op-node's nil) never activates; the window between its
+// neighbours belongs to the previous scheduled fork.
+BOOST_AUTO_TEST_CASE(ConfigAtSkipsUnscheduledRungs)
+{
+    auto s = fullSched();
+    s.m_deltaTime = kNever;   // Delta unscheduled: Canyon runs 200..399
+    s.m_graniteTime = kNever; // Granite unscheduled: Fjord runs 500..699
+    BOOST_CHECK_EQUAL(configAt(s, 350).fork, OpFork::Canyon);
+    BOOST_CHECK_EQUAL(configAt(s, 650).fork, OpFork::Fjord);
+    // Unscheduled tail (isthmus_time still set, so ladder mode stays live): nothing past
+    // Isthmus ever activates.
+    s.m_jovianTime = kNever;
+    s.m_karstTime = kNever;
+    BOOST_CHECK_EQUAL(configAt(s, 100000).fork, OpFork::Isthmus);
+}
+
+// Compatibility path, isthmus_time unset (the only shape existing chains have): every
+// timestamp below jovian_time is Isthmus, bit-identical to the two-key schedule.
+BOOST_AUTO_TEST_CASE(UnsetIsthmusKeepsIsthmusBaseline)
+{
+    BOOST_CHECK_EQUAL(&configAt(sched(kNever, kNever), 0), &isthmusConfig());
+    BOOST_CHECK_EQUAL(&configAt(sched(1000, 2000), 999), &isthmusConfig());
+    // Even a schedule whose pre-Isthmus times would otherwise be live cannot reach them:
+    // an unset isthmus_time short-circuits the lower rungs.
+    auto s = sched(1000, 2000);
+    s.m_ecotoneTime = 100;  // constructible here; NodeConfig rejects this shape at load
+    BOOST_CHECK_EQUAL(configAt(s, 500).fork, OpFork::Isthmus);
+    // isthmus_time set turns the ladder live: with no pre-Isthmus rung scheduled, Bedrock
+    // runs from genesis until isthmus_time.
+    s = sched(1000, 2000);
+    s.m_isthmusTime = 500;
+    BOOST_CHECK_EQUAL(configAt(s, 0).fork, OpFork::Bedrock);
+    BOOST_CHECK_EQUAL(configAt(s, 499).fork, OpFork::Bedrock);
+    BOOST_CHECK_EQUAL(configAt(s, 500).fork, OpFork::Isthmus);
+    BOOST_CHECK_EQUAL(configAt(s, 999).fork, OpFork::Isthmus);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

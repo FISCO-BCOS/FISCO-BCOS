@@ -548,22 +548,23 @@ void NodeConfig::validateL2Invariants()
                                   "[ethereum] mode=el requires a [fork_timestamps] section in "
                                   "config.genesis (the EL-mode fork schedule)"));
     }
-    // EL mode's EIP-155 signature validation and geth's EIP-2124 fork-id handshake (parts
-    // 7-9) key on the CHAIN id: a silent fallback to mainnet (1) would accept transactions
-    // signed for another chain or announce a stale fork-id checksum. Require an explicit
-    // [web3] chain_id (the chain-level id, part of the genesis pin) on every EL-declaring
-    // genesis — "0" is loadWeb3ChainConfig's absent default, and a value that overflows
-    // uint64 is a config error, not a fallback. Keyed on the genesis declaration (not the
-    // per-node config.ini mode) so the check is independent of load order.
-    if (genesis.m_ethereumELMode)
+    // EL-sync mode's EIP-155 signature validation and geth's EIP-2124 fork-id handshake
+    // (parts 7-9) key on the CHAIN id: a silent fallback to mainnet (1) would accept
+    // transactions signed for another chain or announce a stale fork-id checksum. Require
+    // an explicit [web3] chain_id (the chain-level id, part of the genesis pin) on every
+    // EL-sync-declaring genesis (both el and opstack-el) — "0" is loadWeb3ChainConfig's
+    // absent default, and a value that overflows uint64 is a config error, not a
+    // fallback. Keyed on the genesis declaration (not the per-node config.ini mode) so
+    // the check is independent of load order.
+    if (genesis.m_ethereumELMode || genesis.m_opStackELMode)
     {
         auto const& web3ChainId = genesis.m_web3ChainID;
         if (web3ChainId.empty())
         {
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "[ethereum] mode=el requires [web3] chain_id in "
+                                      "[ethereum] mode=el/opstack-el requires [web3] chain_id in "
                                       "config.genesis (the Ethereum chain id, e.g. 11155111 "
-                                      "for Sepolia)"));
+                                      "for Sepolia, 11155420 for op-sepolia)"));
         }
         try
         {
@@ -572,8 +573,8 @@ void NodeConfig::validateL2Invariants()
         catch (boost::bad_lexical_cast const&)
         {
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "[ethereum] mode=el requires [web3] chain_id to fit "
-                                      "uint64: " +
+                                      "[ethereum] mode=el/opstack-el requires [web3] chain_id "
+                                      "to fit uint64: " +
                                       web3ChainId));
         }
         // Check the PARSED value, not the string: any zero spelling ("0", "00", ...)
@@ -581,8 +582,9 @@ void NodeConfig::validateL2Invariants()
         if (m_ethereumChainId == 0)
         {
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "[ethereum] mode=el requires a non-zero [web3] chain_id "
-                                      "in config.genesis (e.g. 11155111 for Sepolia)"));
+                                      "[ethereum] mode=el/opstack-el requires a non-zero [web3] "
+                                      "chain_id in config.genesis (e.g. 11155111 for Sepolia, "
+                                      "11155420 for op-sepolia)"));
         }
     }
     // The OP lane and its fork schedule are bound both ways. A [op_fork_timestamps] section on
@@ -617,6 +619,38 @@ void NodeConfig::validateL2Invariants()
                 "the OP lane derives the EVM revision from [op_fork_timestamps]; remove "
                 "executor.evm_revision / evm_revision_forks"));
     }
+    // The opstack-el declaration ([ethereum] mode=opstack-el) is bound to the OP lane and
+    // the L2 genesis shape: the sync client downloads OP blocks over devp2p and commits
+    // them through OpBlockVerifier, which requires the OP executor (fork resolution from
+    // [op_fork_timestamps]), the Ethereum genesis anchor ([eth_genesis_header], pinned
+    // through the L2 feature), and the genesis state ([alloc.*]). The chain-id requirement
+    // is the shared EL-sync block above.
+    if (genesis.m_opStackELMode)
+    {
+        if (genesis.m_executorVersion < ledger::OPSTACK_EXECUTOR_VERSION)
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "[ethereum] mode=opstack-el requires executor.version >= 3 "
+                                      "(the OP lane) in config.genesis"));
+        }
+        if (!genesis.m_opForkSchedule.has_value())
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "[ethereum] mode=opstack-el requires an "
+                                      "[op_fork_timestamps] section in config.genesis (the OP "
+                                      "fork schedule drives both header validation and the "
+                                      "EIP-2124 fork-id ladder)"));
+        }
+        if (!l2Enabled)
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "[ethereum] mode=opstack-el requires "
+                                      "feature_l2_ethereum_compat enabled in [features] (with "
+                                      "the [alloc.*] and [eth_genesis_header] sections it "
+                                      "binds): the sync client replays an Ethereum-shaped OP "
+                                      "chain"));
+        }
+    }
 }
 
 // Cross-file EL-mode invariant: config.ini's ethereum.mode=el must be backed by the
@@ -646,6 +680,26 @@ void NodeConfig::validateELModeInvariants() const
                                   "config.genesis declares [ethereum] mode=el but config.ini "
                                   "has ethereum.mode=none: an EL chain has no on-chain "
                                   "evmc_revision, so every node must run in EL mode"));
+    }
+    // Same two-way binding for opstack-el: the per-node mode must be backed by the
+    // chain-level declaration (which validateL2Invariants binds to the OP lane, the
+    // fork schedule and the L2 genesis shape), and an opstack-el-declaring genesis
+    // must not boot with its sync client disabled.
+    if (m_enableOpStackEL && !m_genesisConfig.m_opStackELMode)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "ethereum.mode=opstack-el requires config.genesis to declare "
+                                  "[ethereum] mode=opstack-el: the EL-mode declaration is part "
+                                  "of the genesis pin"));
+    }
+    if (m_genesisConfig.m_opStackELMode && !m_enableOpStackEL)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "config.genesis declares [ethereum] mode=opstack-el but "
+                                  "config.ini has ethereum.mode=" +
+                                  std::string(m_enableEthereumEL ? "el" : "none") +
+                                  ": an opstack-el chain must run its devp2p sync client on "
+                                  "every node"));
     }
 }
 
@@ -1118,12 +1172,17 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
 {
     /*
     [ethereum]
-        ; Ethereum L1 EL-mode self-sync. mode=el runs the node as an Ethereum
+        ; EL-mode self-sync. mode=el runs the node as an Ethereum L1
         ; execution-layer client (download via RLPx -> verify -> commit), with no
-        ; FISCO gateway / PBFT / txpool pipeline. Any other value (or absent
-        ; section) leaves the node in the normal FISCO mode.
+        ; FISCO gateway / PBFT / txpool pipeline. mode=opstack-el is the same
+        ; shape for an OP-Stack chain (executor_version >= 3): blocks download
+        ; from op-geth EL serving peers and commit through OpBlockVerifier.
+        ; Any other value (or absent section) leaves the node in the normal
+        ; FISCO mode.
         mode=none
-        ; geth-style enode:// list; path relative to the working directory
+        ; geth-style enode:// list; path relative to the working directory.
+        ; For mode=opstack-el these must be op-geth EL serving peers of the OP
+        ; chain (e.g. op-sepolia bootnodes).
         bootnodes_file=./bootnodes.json
         ; secp256k1 node identity: a file holding the 32-byte private key as hex
         ; (optional 0x prefix). Empty = auto-generate a persistent key on first
@@ -1137,34 +1196,50 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
         ; committed block at <number> must carry <0xHASH>; a mismatch is fatal
         ; (the bootnodes serve a wrong fork). Empty = no checkpoint.
         finalized_checkpoint=
+        ; mode=opstack-el only: the OP chain's block cadence in seconds
+        ; (rollup.json block_time; 2 on every superchain chain). Feeds the
+        ; header validator's block-interval check. Range [1, 60].
+        op_block_time_seconds=2
+        ; mode=opstack-el only: how far behind the peer's UNSAFE head the
+        ; download stops (the peer head announced over eth/68 is the unsafe
+        ; head; this lag does NOT track the OP safe/finalized head, which L1
+        ; batch derivation defines and which can lag the unsafe head by a
+        ; whole sequencing window). A tip-reorg-avoidance heuristic, not a
+        ; finality boundary. Range [0, 10000]; 0 = download up to the tip.
+        op_sync_lag_blocks=64
     */
     const std::string mode = _pt.get<std::string>("ethereum.mode", "none");
-    if (mode != "none" && mode != "el")
+    if (mode != "none" && mode != "el" && mode != "opstack-el")
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "ethereum.mode invalid: \"" + mode + "\" (supported: none, el)"));
+                                  "ethereum.mode invalid: \"" + mode +
+                                  "\" (supported: none, el, opstack-el)"));
     }
     const bool enableEL = (mode == "el");
-    // EL mode is a self-contained L1 sync client: it is mutually exclusive with the
+    const bool enableOpStackEL = (mode == "opstack-el");
+    // Both EL modes are self-contained sync clients: mutually exclusive with the
     // op-stack Engine API driver and the single-node consensus driver (both drive block
-    // production through the EngineService; EL mode drives it through devp2p download).
-    if (enableEL && m_enableOpEngineRpc)
+    // production through the EngineService; EL modes drive it through devp2p download).
+    if ((enableEL || enableOpStackEL) && m_enableOpEngineRpc)
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
-                "ethereum.mode=el and op_engine_rpc.enable are mutually exclusive: "
+                "ethereum.mode=" + mode +
+                " and op_engine_rpc.enable are mutually exclusive: "
                 "EL mode self-syncs from bootnodes; op_engine_rpc is driven by an "
                 "external op-node"));
     }
-    if (enableEL && m_enableSingleNodeConsensus)
+    if ((enableEL || enableOpStackEL) && m_enableSingleNodeConsensus)
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
-                "ethereum.mode=el and consensus.enable_single_node_consensus are mutually "
+                "ethereum.mode=" + mode +
+                " and consensus.enable_single_node_consensus are mutually "
                 "exclusive: EL mode self-syncs from bootnodes; single-node consensus "
                 "produces its own blocks"));
     }
     m_enableEthereumEL = enableEL;
+    m_enableOpStackEL = enableOpStackEL;
     // NOTE: this loader deliberately stays PURE parsing of the config.ini
     // [ethereum] section — it must NOT read m_genesisConfig members: tools
     // (archive-tool, storage-tool) call loadConfig BEFORE loadGenesisConfig, so
@@ -1189,6 +1264,37 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
                 "ethereum.max_batch_size must be in [1, 1024], got " + std::to_string(maxBatch)));
     }
     m_ethereumMaxBatchSize = maxBatch;
+
+    // mode=opstack-el: the OP chain's block cadence (rollup.json block_time). Bounded
+    // like every neighbouring knob: the header validator only WARNs on a deviation
+    // (op-geth enforces no fixed cadence at EL level), but a nonsensical value is a
+    // config error, not a tuning choice.
+    uint64_t blockTime = _pt.get<uint64_t>("ethereum.op_block_time_seconds", 2);
+    if (blockTime == 0 || blockTime > 60)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "ethereum.op_block_time_seconds must be in [1, 60], got " +
+                std::to_string(blockTime)));
+    }
+    m_opBlockTimeSeconds = blockTime;
+
+    // mode=opstack-el: the download lag behind the peer's UNSAFE head. The head a
+    // peer announces over eth/68 is its unsafe head; the OP safe/finalized heads are
+    // defined by L1 batch derivation and can trail the unsafe head by a whole
+    // sequencing window (~12h ≈ 21600 L2 blocks on superchain chains), so this knob
+    // is NOT a finality boundary and cannot be — it only lowers the chance of
+    // committing a block that a routine small tip reorg then unwinds. 0 means
+    // "download right up to the peer's tip". Bounded like every neighbouring knob.
+    uint64_t syncLag = _pt.get<uint64_t>("ethereum.op_sync_lag_blocks", 64);
+    if (syncLag > 10000)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "ethereum.op_sync_lag_blocks must be in [0, 10000], got " +
+                std::to_string(syncLag)));
+    }
+    m_opSyncLagBlocks = syncLag;
 
     // Operator-pinned finalized checkpoint, "<number>:<0xHASH>". Validated eagerly
     // like every neighbouring parse: a malformed value is a config error at load
@@ -1231,6 +1337,8 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("bootnodesFile", m_ethereumBootnodesFile)
                          << LOG_KV("nodeKeyFile", m_ethereumNodeKeyFile)
                          << LOG_KV("maxBatchSize", m_ethereumMaxBatchSize)
+                         << LOG_KV("opBlockTimeSeconds", m_opBlockTimeSeconds)
+                         << LOG_KV("opSyncLagBlocks", m_opSyncLagBlocks)
                          << LOG_KV("finalizedCheckpoint",
                                 m_ethereumFinalizedCheckpoint ?
                                     std::to_string(m_ethereumFinalizedCheckpoint->number) + ":" +
@@ -1252,6 +1360,7 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     // m_ethereumELMode would waive both the executor.evm_revision and the auth_admin_account
     // guards; a stale schedule would leak into the genesis pin of a chain that has none.
     m_genesisConfig.m_ethereumELMode = false;
+    m_genesisConfig.m_opStackELMode = false;
     m_genesisConfig.m_ethereumForkSchedule.reset();
     m_ethereumChainId = 0;  // reassigned by validateL2Invariants when EL is declared
     m_ethereumMergeBlock = 0;  // reassigned by the REQUIRED merge_block key below
@@ -1259,13 +1368,18 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     if (auto ethSection = _genesisConfig.get_child_optional("ethereum"))
     {
         auto mode = ethSection->get<std::string>("mode", "none");
-        if (mode != "none" && mode != "el")
+        if (mode != "none" && mode != "el" && mode != "opstack-el")
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment("config.genesis [ethereum].mode invalid: \"" +
-                                                   mode + "\" (supported: none, el)"));
+                                                   mode + "\" (supported: none, el, opstack-el)"));
         }
         m_genesisConfig.m_ethereumELMode = (mode == "el");
+        // opstack-el: the chain-level declaration of the OP devp2p self-sync lane
+        // (OpStackSyncInitializer). Bound to the OP fork schedule / L2 genesis shape /
+        // [web3] chain_id in validateL2Invariants, and to config.ini's
+        // [ethereum].mode=opstack-el in validateELModeInvariants.
+        m_genesisConfig.m_opStackELMode = (mode == "opstack-el");
     }
 
     auto section = _genesisConfig.get_child_optional("fork_timestamps");
@@ -1369,13 +1483,14 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
 }
 
 // OP-lane fork schedule ([op_fork_timestamps] in config.genesis). OP forks activate by L2
-// block TIMESTAMP IN SECONDS from the schedule op-node carries in rollup.json
-// (jovian_time / karst_time; op-node/rollup/types.go IsJovian(ts) == ts >= *Time). Isthmus is
-// the lane baseline and has no entry: the engine's -38005 gate admits only Isthmus+ payloads.
-// Both keys are OPTIONAL — an absent key is op-node's nil, encoded here as UINT64_MAX ("never
-// activates"). validateL2Invariants binds the section's presence to
-// executor.version >= OPSTACK_EXECUTOR_VERSION both ways; that check has to wait until
-// loadExecutorConfig has run, which is why it is not here.
+// block TIMESTAMP IN SECONDS from the schedule op-node carries in rollup.json (the *_time
+// fields; op-node/rollup/types.go IsJovian(ts) == ts >= *Time). All keys are OPTIONAL — an
+// absent key is op-node's nil, encoded here as UINT64_MAX ("never activates"). Bedrock is
+// the genesis fork and has no key. isthmus_time doubles as the ladder-mode switch: unset,
+// Isthmus is the zero-start baseline (the shape every existing chain has); set, the full
+// Bedrock..Karst ladder is live for from-genesis replay. validateL2Invariants binds the
+// section's presence to executor.version >= OPSTACK_EXECUTOR_VERSION both ways; that check
+// has to wait until loadExecutorConfig has run, which is why it is not here.
 void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesisConfig)
 {
     // Reload is a supported shape (loadForkTimestamps, loadAllocs): a second genesis load
@@ -1391,39 +1506,105 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
     {
         return;
     }
-    // Both keys are optional, so a misspelled one (jovain_time=0) would otherwise be read as
-    // "not scheduled" and the chain would run Isthmus forever without a word — the failure
-    // validateL2Invariants' presence check exists to prevent. Reject anything but the two
-    // names; boost's INI reader never yields an empty section, so this also guarantees at
-    // least one recognised entry.
+    // The ladder's entries, in fork order (Bedrock has no entry — it is genesis).
+    std::array<std::pair<std::string_view, uint64_t ledger::OpForkSchedule::*>, 10> const
+        keys{{
+            {"regolith_time", &ledger::OpForkSchedule::m_regolithTime},
+            {"canyon_time", &ledger::OpForkSchedule::m_canyonTime},
+            {"delta_time", &ledger::OpForkSchedule::m_deltaTime},
+            {"ecotone_time", &ledger::OpForkSchedule::m_ecotoneTime},
+            {"fjord_time", &ledger::OpForkSchedule::m_fjordTime},
+            {"granite_time", &ledger::OpForkSchedule::m_graniteTime},
+            {"holocene_time", &ledger::OpForkSchedule::m_holoceneTime},
+            {"isthmus_time", &ledger::OpForkSchedule::m_isthmusTime},
+            {"jovian_time", &ledger::OpForkSchedule::m_jovianTime},
+            {"karst_time", &ledger::OpForkSchedule::m_karstTime},
+        }};
+    // Every key is optional, so a misspelled one (jovain_time=0) would otherwise be read as
+    // "not scheduled" and the chain would run the wrong fork rules without a word — the
+    // failure validateL2Invariants' presence check exists to prevent. Reject anything but
+    // the ten names; boost's INI reader never yields an empty section, so this also
+    // guarantees at least one recognised entry.
     for (auto const& [key, _] : *section)
     {
-        if (key != "jovian_time" && key != "karst_time")
+        bool known = std::any_of(keys.begin(), keys.end(),
+            [&](auto const& entry) { return entry.first == key; });
+        if (!known)
         {
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                       "[op_fork_timestamps] has an unrecognised key \"" + key +
-                                      "\" (supported: jovian_time, karst_time)"));
+                                      "\" (supported: regolith_time, canyon_time, delta_time, "
+                                      "ecotone_time, fjord_time, granite_time, holocene_time, "
+                                      "isthmus_time, jovian_time, karst_time)"));
         }
     }
     ledger::OpForkSchedule schedule;
-    schedule.m_jovianTime =
-        readOptionalForkTimestamp(*section, "op_fork_timestamps", "jovian_time");
-    schedule.m_karstTime = readOptionalForkTimestamp(*section, "op_fork_timestamps", "karst_time");
-    // Same rule as the L1 ladder: activation times must be non-decreasing down the fork order,
-    // because a later fork is defined as a superset of the earlier one (Karst is Jovian's fee
-    // and receipt rules on an Osaka EVM). UINT64_MAX ("not scheduled") is terminal: any
-    // scheduled — therefore smaller — time after it is a decrease and is rejected.
-    if (schedule.m_karstTime < schedule.m_jovianTime)
+    for (auto const& [key, member] : keys)
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "[op_fork_timestamps].karst_time (" + std::to_string(schedule.m_karstTime) +
-                ") is earlier than jovian_time (" + std::to_string(schedule.m_jovianTime) +
-                "): fork activation times must be non-decreasing"));
+        schedule.*member = readOptionalForkTimestamp(*section, "op_fork_timestamps", std::string(key));
+    }
+    // Same rule as the L1 ladder: activation times must be non-decreasing down the fork
+    // order, because a later fork is defined as a superset of the earlier one (Karst is
+    // Jovian's fee and receipt rules on an Osaka EVM). An unscheduled fork (UINT64_MAX) is
+    // SKIPPED, not terminal: on the full ladder an intermediate fork may legitimately be
+    // unscheduled when a later fork's activation implies it (e.g. a chain that jumped
+    // straight to Canyon). Only the SCHEDULED entries are checked pairwise, in fork order.
+    uint64_t const kNever = std::numeric_limits<uint64_t>::max();
+    std::string_view prevKey;
+    uint64_t prevTime = 0;
+    bool hasPrev = false;
+    for (auto const& [key, member] : keys)
+    {
+        uint64_t const time = schedule.*member;
+        if (time == kNever)
+        {
+            continue;
+        }
+        if (hasPrev && time < prevTime)
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment(
+                    "[op_fork_timestamps]." + std::string(key) + " (" +
+                    std::to_string(time) + ") is earlier than " + std::string(prevKey) + " (" +
+                    std::to_string(prevTime) +
+                    "): fork activation times must be non-decreasing"));
+        }
+        prevKey = key;
+        prevTime = time;
+        hasPrev = true;
+    }
+    // Scheduling a pre-Isthmus fork without isthmus_time is silently meaningless: configAt
+    // treats an unset isthmus_time as "Isthmus is the zero-start baseline" and never
+    // consults the lower rungs. Fail fast instead of accepting a schedule nothing reads.
+    if (schedule.m_isthmusTime == kNever)
+    {
+        for (auto const& [key, member] : keys)
+        {
+            if (key == "isthmus_time")
+            {
+                break;
+            }
+            if (schedule.*member != kNever)
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidConfig() << errinfo_comment(
+                        "[op_fork_timestamps]." + std::string(key) +
+                        " requires isthmus_time: without it Isthmus is the zero-start "
+                        "baseline and the pre-Isthmus rungs are never consulted"));
+            }
+        }
     }
     m_genesisConfig.m_opForkSchedule = schedule;
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadOpForkTimestamps")
+                         << LOG_KV("regolith", schedule.m_regolithTime)
+                         << LOG_KV("canyon", schedule.m_canyonTime)
+                         << LOG_KV("delta", schedule.m_deltaTime)
+                         << LOG_KV("ecotone", schedule.m_ecotoneTime)
+                         << LOG_KV("fjord", schedule.m_fjordTime)
+                         << LOG_KV("granite", schedule.m_graniteTime)
+                         << LOG_KV("holocene", schedule.m_holoceneTime)
+                         << LOG_KV("isthmus", schedule.m_isthmusTime)
                          << LOG_KV("jovian", schedule.m_jovianTime)
                          << LOG_KV("karst", schedule.m_karstTime);
 }
@@ -3361,6 +3542,16 @@ std::string bcos::tool::generateGenesisData(
                << "[web3]" << '\n'
                << "chain_id:" << genesisConfig.m_web3ChainID << '\n';
         }
+        // opstack-el: same pin shape as the EL declaration above — the mode and the
+        // EIP-155/EIP-2124 chain id are chain-level decisions every node must agree
+        // on. (The [opForkTimestamps] block below keeps its own emit rules.)
+        if (genesisConfig.m_opStackELMode)
+        {
+            ss << "[ethereum]" << '\n'
+               << "mode:opstack-el" << '\n'
+               << "[web3]" << '\n'
+               << "chain_id:" << genesisConfig.m_web3ChainID << '\n';
+        }
         if (genesisConfig.m_ethereumForkSchedule.has_value())
         {
             auto const& schedule = *genesisConfig.m_ethereumForkSchedule;
@@ -3394,19 +3585,35 @@ std::string bcos::tool::generateGenesisData(
         //
         // Nothing is emitted when no entry is 0, so legacy chains and chains whose forks are
         // all in the future keep byte-identical genesis strings.
-        if (genesisConfig.m_opForkSchedule.has_value() &&
-            (genesisConfig.m_opForkSchedule->m_jovianTime == 0 ||
-                genesisConfig.m_opForkSchedule->m_karstTime == 0))
+        if (genesisConfig.m_opForkSchedule.has_value())
         {
             auto const& opSchedule = *genesisConfig.m_opForkSchedule;
-            ss << "[opForkTimestamps]" << '\n';
-            if (opSchedule.m_jovianTime == 0)
+            // Only the entries that are 0 ("active from genesis") reach the pin, in fork
+            // order. Bedrock has no entry — it IS genesis.
+            std::array<std::pair<std::string_view, uint64_t>, 10> const pinned{{
+                {"regolith_time", opSchedule.m_regolithTime},
+                {"canyon_time", opSchedule.m_canyonTime},
+                {"delta_time", opSchedule.m_deltaTime},
+                {"ecotone_time", opSchedule.m_ecotoneTime},
+                {"fjord_time", opSchedule.m_fjordTime},
+                {"granite_time", opSchedule.m_graniteTime},
+                {"holocene_time", opSchedule.m_holoceneTime},
+                {"isthmus_time", opSchedule.m_isthmusTime},
+                {"jovian_time", opSchedule.m_jovianTime},
+                {"karst_time", opSchedule.m_karstTime},
+            }};
+            bool const anyGenesisActive = std::any_of(pinned.begin(), pinned.end(),
+                [](auto const& entry) { return entry.second == 0; });
+            if (anyGenesisActive)
             {
-                ss << "jovian_time:0" << '\n';
-            }
-            if (opSchedule.m_karstTime == 0)
-            {
-                ss << "karst_time:0" << '\n';
+                ss << "[opForkTimestamps]" << '\n';
+                for (auto const& [key, time] : pinned)
+                {
+                    if (time == 0)
+                    {
+                        ss << key << ":0" << '\n';
+                    }
+                }
             }
         }
         // A3: the eth genesis header is part of the genesis pin. Emitted only
@@ -3519,6 +3726,18 @@ std::map<protocol::BlockNumber, evmc_revision> const& bcos::tool::NodeConfig::ev
 bool bcos::tool::NodeConfig::ethereumELModeEnabled() const
 {
     return m_enableEthereumEL;
+}
+bool bcos::tool::NodeConfig::opStackELModeEnabled() const
+{
+    return m_enableOpStackEL;
+}
+uint64_t bcos::tool::NodeConfig::opBlockTimeSeconds() const
+{
+    return m_opBlockTimeSeconds;
+}
+uint64_t bcos::tool::NodeConfig::opSyncLagBlocks() const
+{
+    return m_opSyncLagBlocks;
 }
 const std::string& bcos::tool::NodeConfig::ethereumBootnodesFile() const
 {

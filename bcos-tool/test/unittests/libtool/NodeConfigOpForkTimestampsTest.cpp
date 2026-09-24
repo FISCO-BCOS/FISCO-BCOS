@@ -9,10 +9,11 @@
  */
 
 // [op_fork_timestamps]: the OP lane's fork schedule in config.genesis. Activation is by L2
-// block timestamp in SECONDS, the same keying op-node applies to rollup.json's jovian_time /
-// karst_time. The section and executor.version=3 are bound both ways, the lane refuses an
-// executor.evm_revision (it derives the revision from this schedule per block), and only the
-// entries equal to 0 reach the genesis pin.
+// block timestamp in SECONDS, the same keying op-node applies to rollup.json's *_time
+// fields (regolith .. karst; bedrock is genesis and has no key). The section and
+// executor.version=3 are bound both ways, the lane refuses an executor.evm_revision (it
+// derives the revision from this schedule per block), and only the entries equal to 0
+// reach the genesis pin.
 
 #include "ExceptionCheck.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
@@ -85,7 +86,8 @@ BOOST_AUTO_TEST_CASE(absentKeyMeansNeverActivates)
     BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_karstTime, kNever);
 }
 
-// Karst is Jovian's rules on an Osaka EVM, so it cannot activate first.
+// Karst is Jovian's rules on an Osaka EVM, so it cannot activate first. The same holds for
+// any non-adjacent scheduled pair down the full ladder.
 BOOST_AUTO_TEST_CASE(decreasingScheduleRejected)
 {
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
@@ -95,13 +97,70 @@ BOOST_AUTO_TEST_CASE(decreasingScheduleRejected)
             return errinfoContains(e, "fork activation times must be non-decreasing");
         });
 
-    // UINT64_MAX ("not scheduled") is terminal: karst cannot be scheduled after it.
-    NodeConfig unscheduledJovian(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_CHECK_EXCEPTION(unscheduledJovian.loadGenesisConfigFromString(
-                              opGenesis(opExecutor(), "[op_fork_timestamps]\nkarst_time=1000\n")),
+    // Non-adjacent pair, full ladder: ecotone cannot precede canyon.
+    NodeConfig ladder(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+    BOOST_CHECK_EXCEPTION(ladder.loadGenesisConfigFromString(
+                              opGenesis(opExecutor(),
+                                  "[op_fork_timestamps]\nisthmus_time=5000\ncanyon_time=2000\n"
+                                  "ecotone_time=1000\n")),
         InvalidConfig, [](auto const& e) {
             return errinfoContains(e, "fork activation times must be non-decreasing");
         });
+}
+
+// An unscheduled intermediate fork is skipped, not terminal: a later fork's activation
+// implies it (a chain may jump straight to a later fork), so karst without jovian and
+// canyon without regolith are both valid schedules.
+BOOST_AUTO_TEST_CASE(unscheduledIntermediateForksAllowed)
+{
+    auto cfg = loadOk(opGenesis(opExecutor(), "[op_fork_timestamps]\nkarst_time=1000\n"));
+    BOOST_REQUIRE(cfg.opForkSchedule().has_value());
+    BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_jovianTime, kNever);
+    BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_karstTime, 1000U);
+
+    auto jump = loadOk(opGenesis(
+        opExecutor(), "[op_fork_timestamps]\nisthmus_time=500\ncanyon_time=100\n"));
+    BOOST_REQUIRE(jump.opForkSchedule().has_value());
+    BOOST_CHECK_EQUAL(jump.opForkSchedule()->m_regolithTime, kNever);
+    BOOST_CHECK_EQUAL(jump.opForkSchedule()->m_canyonTime, 100U);
+    BOOST_CHECK_EQUAL(jump.opForkSchedule()->m_isthmusTime, 500U);
+}
+
+// All ten keys parse, decimal and 0x hex alike, and land on the schedule in seconds.
+BOOST_AUTO_TEST_CASE(loadsFullLadder)
+{
+    auto cfg = loadOk(opGenesis(opExecutor(),
+        "[op_fork_timestamps]\nregolith_time=100\ncanyon_time=0xc8\ndelta_time=300\n"
+        "ecotone_time=400\nfjord_time=500\ngranite_time=600\nholocene_time=700\n"
+        "isthmus_time=800\njovian_time=900\nkarst_time=1000\n"));
+    BOOST_REQUIRE(cfg.opForkSchedule().has_value());
+    auto const& s = *cfg.opForkSchedule();
+    BOOST_CHECK_EQUAL(s.m_regolithTime, 100U);
+    BOOST_CHECK_EQUAL(s.m_canyonTime, 0xc8U);
+    BOOST_CHECK_EQUAL(s.m_deltaTime, 300U);
+    BOOST_CHECK_EQUAL(s.m_ecotoneTime, 400U);
+    BOOST_CHECK_EQUAL(s.m_fjordTime, 500U);
+    BOOST_CHECK_EQUAL(s.m_graniteTime, 600U);
+    BOOST_CHECK_EQUAL(s.m_holoceneTime, 700U);
+    BOOST_CHECK_EQUAL(s.m_isthmusTime, 800U);
+    BOOST_CHECK_EQUAL(s.m_jovianTime, 900U);
+    BOOST_CHECK_EQUAL(s.m_karstTime, 1000U);
+}
+
+// Without isthmus_time, configAt treats Isthmus as the zero-start baseline and never
+// consults the pre-Isthmus rungs — so scheduling one there is a silently-dead entry and
+// must fail fast. With isthmus_time set, the full ladder is live and the same keys load.
+BOOST_AUTO_TEST_CASE(preIsthmusKeysRequireIsthmusTime)
+{
+    NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+    BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(opExecutor(),
+                              "[op_fork_timestamps]\nholocene_time=100\njovian_time=200\n")),
+        InvalidConfig, [](auto const& e) {
+            return errinfoContains(e, "[op_fork_timestamps].holocene_time requires isthmus_time");
+        });
+
+    BOOST_REQUIRE_NO_THROW(loadOk(opGenesis(opExecutor(),
+        "[op_fork_timestamps]\nholocene_time=100\nisthmus_time=150\njovian_time=200\n")));
 }
 
 // Garbage and negatives must fail fast rather than yield a wrong schedule.
@@ -203,6 +262,17 @@ BOOST_AUTO_TEST_CASE(genesisPinCarriesOnlyGenesisActiveForks)
     auto bothData = bcos::tool::generateGenesisData(both.genesisConfig(), *both.ledgerConfig());
     BOOST_CHECK(
         bothData.find("[opForkTimestamps]\njovian_time:0\nkarst_time:0\n") != std::string::npos);
+
+    // Genesis-active entries from the full ladder are pinned the same way, in fork order;
+    // a future entry (karst_time=500) stays out.
+    auto ladder = loadOk(opGenesis(opExecutor(),
+        "[op_fork_timestamps]\nregolith_time=0\ncanyon_time=0\n"
+        "isthmus_time=0\njovian_time=0\nkarst_time=500\n"));
+    auto ladderData =
+        bcos::tool::generateGenesisData(ladder.genesisConfig(), *ladder.ledgerConfig());
+    BOOST_CHECK(ladderData.find("[opForkTimestamps]\nregolith_time:0\ncanyon_time:0\n"
+                                "isthmus_time:0\njovian_time:0\n") != std::string::npos);
+    BOOST_CHECK(ladderData.find("karst_time") == std::string::npos);
 }
 
 // An all-future (or unscheduled) schedule emits no section at all, so the genesis string of a

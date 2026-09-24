@@ -23,6 +23,7 @@
 #include <cstdint>
 #include <initializer_list>
 #include <limits>
+#include <span>
 
 namespace bcos::devp2p::eth
 {
@@ -55,7 +56,7 @@ uint32_t forkIdAddForkPoint(uint32_t _hash, uint64_t _forkPoint);
 //     and `next` falls back to 0 — geth announces next = 0 when no future fork is
 //     known, never UINT64_MAX.
 inline ForkId forkIdFromTimeLadder(uint32_t _checksum, uint64_t _genesisTime,
-    uint64_t _localHeadTime, std::initializer_list<uint64_t> const& _forks)
+    uint64_t _localHeadTime, std::span<const uint64_t> _forks)
 {
     uint32_t hash = _checksum;
     uint64_t previousFork = 0;
@@ -80,5 +81,15 @@ inline ForkId forkIdFromTimeLadder(uint32_t _checksum, uint64_t _genesisTime,
         }
     }
     return {hash, 0};
+}
+
+// initializer_list convenience form (fixed ladders); delegates to the span overload so
+// callers with a dynamically-compacted ladder (e.g. the OP schedule, whose unscheduled
+// rungs must be dropped rather than terminate the ladder) share the one implementation.
+inline ForkId forkIdFromTimeLadder(uint32_t _checksum, uint64_t _genesisTime,
+    uint64_t _localHeadTime, std::initializer_list<uint64_t> const& _forks)
+{
+    return forkIdFromTimeLadder(
+        _checksum, _genesisTime, _localHeadTime, std::span<const uint64_t>(_forks));
 }
 }  // namespace bcos::devp2p::eth
