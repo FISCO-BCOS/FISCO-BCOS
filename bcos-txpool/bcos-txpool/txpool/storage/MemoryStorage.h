@@ -30,6 +30,8 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
+#include <atomic>
+#include <mutex>
 
 namespace bcos::txpool
 {
@@ -95,7 +97,16 @@ public:
     void remove(crypto::HashType const& _txHash);
 
 protected:
-    virtual void notifyTxsSize(size_t _retryTime = 0);
+    // Deliver the current number of unsealed transactions to the consensus module (it drives
+    // PBFTConfig::setUnsealedTxsSize, i.e. whether the view-change timer needs to run while no
+    // proposal is in flight). Invoked synchronously at every transition of unsealTransactions
+    // (insert into an empty pool, seal, un-seal, removal), and by m_txsSizeNotifierTimer as a
+    // periodic backstop. The size is sampled and delivered under x_unsealedTxsNotify so that a
+    // value sampled earlier can never overwrite one sampled later.
+    virtual void notifyUnsealedTxsSize(size_t _retryTime = 0);
+    // Hot insert path: only notify when the last delivered count was 0, so steady-state
+    // inserts cost one relaxed atomic load and no cross-module call.
+    void notifyUnsealedTxsSizeIfWasEmpty();
 
     bcos::protocol::TransactionStatus enforceSubmitTransaction(
         bcos::protocol::Transaction::Ptr _tx);
@@ -125,6 +136,13 @@ protected:
         {}
     };
     BcosTransactions m_bcosTransactions;
+    // Serializes "sample unsealTransactions.size() + deliver it" so deliveries reach the
+    // consensus module in sampling order. Recursive because the notifier may invoke its
+    // completion callback synchronously, and that callback re-enters on retry.
+    // Declared before the timers below on purpose: members destroy in reverse order, and both
+    // timer handlers end in notifyUnsealedTxsSize(), so the mutex must outlive the timers.
+    std::recursive_mutex x_unsealedTxsNotify;
+    std::atomic<size_t> m_lastNotifiedUnsealedTxsSize = {0};
 
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};
     uint64_t m_blockNumberUpdatedTime;
@@ -133,7 +151,7 @@ protected:
     uint64_t m_txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME;
     // timer to clear up the expired txs in-period
     std::shared_ptr<Timer> m_cleanUpTimer;
-    // timer to notify txs size
+    // periodic backstop for notifyUnsealedTxsSize
     std::shared_ptr<Timer> m_txsSizeNotifierTimer;
     bcos::crypto::HashType m_knownLatestSealedTxHash;
 };

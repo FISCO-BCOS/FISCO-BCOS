@@ -62,7 +62,10 @@ MemoryStorage::MemoryStorage(
 {
     // Trigger a transaction cleanup operation every 3s
     m_cleanUpTimer->registerTimeoutHandler([this] { cleanUpExpiredTransactions(); });
-    m_txsSizeNotifierTimer->registerTimeoutHandler([this] { notifyTxsSize(); });
+    m_txsSizeNotifierTimer->registerTimeoutHandler([this] {
+        m_txsSizeNotifierTimer->restart();
+        notifyUnsealedTxsSize();
+    });
     TXPOOL_LOG(INFO) << LOG_DESC("init MemoryStorage of txpool")
                      << LOG_KV("txNotifierWorkerNum", _notifyWorkerNum)
                      << LOG_KV("txsExpirationTime", m_txsExpirationTime)
@@ -497,15 +500,22 @@ TransactionStatus MemoryStorage::insert(Transaction::Ptr transaction)
     auto* toMap = transaction->sealed() ? &m_bcosTransactions.sealedTransactions :
                                           &m_bcosTransactions.unsealTransactions;
     auto* ptr = transaction.get();
-    if (TxsMap::WriteAccessor accessor;
-        !toMap->insert(accessor, {transaction->hash(), std::move(transaction)}))
     {
-        if (ptr->submitCallback() && !accessor.value()->submitCallback())
+        TxsMap::WriteAccessor accessor;
+        if (!toMap->insert(accessor, {transaction->hash(), std::move(transaction)}))
         {
-            accessor.value()->setSubmitCallback(ptr->submitCallback());
-            return TransactionStatus::None;
+            if (ptr->submitCallback() && !accessor.value()->submitCallback())
+            {
+                accessor.value()->setSubmitCallback(ptr->submitCallback());
+                return TransactionStatus::None;
+            }
+            return TransactionStatus::AlreadyInTxPool;
         }
-        return TransactionStatus::AlreadyInTxPool;
+    }
+    // Notify outside the bucket lock: the consensus module may start its timer in the callback.
+    if (toMap == &m_bcosTransactions.unsealTransactions)
+    {
+        notifyUnsealedTxsSizeIfWasEmpty();
     }
     return TransactionStatus::None;
 }
@@ -687,6 +697,12 @@ void MemoryStorage::batchRemoveSealedTxs(
                      << LOG_KV("updateLedgerNonceT", updateLedgerNonceT)
                      << LOG_KV("updateWeb3NonceT", updateWeb3NonceT)
                      << LOG_KV("updateTxPoolNonceT", updateTxPoolNonceT);
+    // Removing sealed txs does not change the unsealed count, so correctness does not depend on
+    // this call or on its ordering against the scheduler's commit callback (SchedulerImpl calls
+    // the callback after this returns, BaselineScheduler dispatches it asynchronously). It is a
+    // cheap once-per-block refresh so the consensus side re-syncs even if a transition was
+    // missed elsewhere.
+    notifyUnsealedTxsSize();
 }
 
 bool MemoryStorage::batchSealTransactions(std::vector<protocol::TransactionMetaData::Ptr>& _txsList,
@@ -820,6 +836,7 @@ bool MemoryStorage::batchSealTransactions(std::vector<protocol::TransactionMetaD
         ::ranges::views::transform([](const auto& tx) { return std::make_pair(tx->hash(), tx); }) |
         ::ranges::to<std::vector>();
     m_bcosTransactions.sealedTransactions.batchInsert(::ranges::views::all(sealedPairs));
+    notifyUnsealedTxsSize();
 
     const auto fetchTxsT = utcTime() - startT;
     TXPOOL_LOG(INFO) << METRIC << LOG_DESC("batchFetchTxs success")
@@ -880,6 +897,8 @@ void MemoryStorage::removeInvalidTxs(std::span<bcos::protocol::Transaction::Ptr>
             }
         }
 
+        notifyUnsealedTxsSize();
+
         auto txs2Notify = txs2Remove | ::ranges::views::filter([](auto const& tx2Remove) {
             return tx2Remove.second != nullptr;
         });
@@ -909,6 +928,7 @@ void MemoryStorage::clear()
 {
     m_bcosTransactions.sealedTransactions.clear();
     m_bcosTransactions.unsealTransactions.clear();
+    notifyUnsealedTxsSize();
 }
 
 HashList MemoryStorage::filterUnknownTxs(crypto::HashListView _txsHashList, NodeIDPtr _peer)
@@ -1032,6 +1052,9 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
         ::ranges::views::transform(removedRange, [](const auto& tx) { return tx->hash(); }));
     toMap->batchInsert(::ranges::views::transform(
         removedRange, [](const auto& tx) { return std::make_pair(tx->hash(), tx); }));
+    // Sealing (prePrepare accepted) or un-sealing (proposal dropped by a view change) is the
+    // transition the consensus timer keys on; deliver it synchronously.
+    notifyUnsealedTxsSize();
 
     TXPOOL_LOG(INFO) << LOG_DESC("batchMarkTxs") << LOG_KV("txsSize", _txsHashList.size())
                      << LOG_KV("batchId", _batchId) << LOG_KV("hash", _batchHash.abridged())
@@ -1067,6 +1090,7 @@ void MemoryStorage::batchMarkAllTxs(bool _sealFlag)
             tx->setBatchHash(HashType());
         }
     }
+    notifyUnsealedTxsSize();
 }
 
 std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::ConstPtr _block)
@@ -1304,31 +1328,41 @@ bool MemoryStorage::batchVerifyAndSubmitTransaction(
                                 << LOG_KV("txBatchHash", tx->batchHash().abridged())
                                 << LOG_KV("consIndex", _header ? _header->number() : -1)
                                 << LOG_KV("propHash", _header ? _header->hash().abridged() : "");
+            // earlier txs of this batch may already have moved unsealed -> sealed
+            notifyUnsealedTxsSize();
             return false;
         }
     }
+    // enforceSubmitTransaction moves a locally-held unsealed copy to sealed; deliver the batch's
+    // net effect once rather than per tx.
+    notifyUnsealedTxsSize();
     TXPOOL_LOG(DEBUG) << LOG_DESC("batchVerifyAndSubmitTransaction success")
                       << LOG_KV("totalTxs", _txs->size()) << LOG_KV("lockT", lockT)
                       << LOG_KV("submitT", (utcTime() - recordT));
     return true;
 }
 
-void MemoryStorage::notifyTxsSize(size_t _retryTime)
+void MemoryStorage::notifyUnsealedTxsSize(size_t _retryTime)
 {
-    m_txsSizeNotifierTimer->restart();
     // Note: must set the notifier
     if (!m_txsNotifier)
     {
         return;
     }
-    auto txsSize = size();
+    // Sample and deliver under one lock so that deliveries are ordered by sampling time: a
+    // periodic tick that sampled a stale non-zero count can never land after the zero pushed
+    // by batchMarkTxs / batchRemoveSealedTxs. Only the unsealed set is counted: sealed txs
+    // belong to an in-flight proposal, whose timer PBFTCacheProcessor::resetTimer manages.
+    std::unique_lock lock(x_unsealedTxsNotify);
+    auto txsSize = m_bcosTransactions.unsealTransactions.size();
+    m_lastNotifiedUnsealedTxsSize.store(txsSize, std::memory_order_relaxed);
     auto self = weak_from_this();
     m_txsNotifier(txsSize, [_retryTime, self](Error::Ptr _error) {
         if (_error == nullptr)
         {
             return;
         }
-        TXPOOL_LOG(WARNING) << LOG_DESC("notifyTxsSize failed")
+        TXPOOL_LOG(WARNING) << LOG_DESC("notifyUnsealedTxsSize failed")
                             << LOG_KV("code", _error->errorCode())
                             << LOG_KV("msg", _error->errorMessage());
         auto memoryStorage = self.lock();
@@ -1340,21 +1374,38 @@ void MemoryStorage::notifyTxsSize(size_t _retryTime)
         {
             return;
         }
-        memoryStorage->notifyTxsSize((_retryTime + 1));
+        memoryStorage->notifyUnsealedTxsSize((_retryTime + 1));
     });
+}
+
+void MemoryStorage::notifyUnsealedTxsSizeIfWasEmpty()
+{
+    // Known window: a concurrent notifier may have sampled 0 but not yet stored it, so this
+    // load sees a stale non-zero value and skips. The pool then holds one unsealed tx while the
+    // consensus side still reads 0; the 100ms backstop tick delivers the correct count and
+    // PBFTConfig::setUnsealedTxsSize starts the timer at most 100ms late. Missing an
+    // empty -> non-empty transition is therefore delayed, never lost; the direction that
+    // matters (non-empty -> empty) never goes through this shortcut.
+    if (m_lastNotifiedUnsealedTxsSize.load(std::memory_order_relaxed) == 0)
+    {
+        notifyUnsealedTxsSize();
+    }
 }
 
 void MemoryStorage::remove(crypto::HashType const& _txHash)
 {
-    TxsMap::WriteAccessor accessor;
-    if (m_bcosTransactions.sealedTransactions.find(accessor, _txHash))
     {
-        m_bcosTransactions.sealedTransactions.remove(accessor);
+        TxsMap::WriteAccessor accessor;
+        if (m_bcosTransactions.sealedTransactions.find(accessor, _txHash))
+        {
+            m_bcosTransactions.sealedTransactions.remove(accessor);
+        }
+        else if (m_bcosTransactions.unsealTransactions.find(accessor, _txHash))
+        {
+            m_bcosTransactions.unsealTransactions.remove(accessor);
+        }
     }
-    else if (m_bcosTransactions.unsealTransactions.find(accessor, _txHash))
-    {
-        m_bcosTransactions.unsealTransactions.remove(accessor);
-    }
+    notifyUnsealedTxsSize();
 }
 bcos::txpool::MemoryStorage::~MemoryStorage()
 {
