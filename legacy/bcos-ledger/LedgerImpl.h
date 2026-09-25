@@ -1,30 +1,31 @@
 #pragma once
 
-#include <bcos-ledger/Ledger.h>
+#include "../concepts/bcos-concepts/ledger/Ledger.h"
+#include "../concepts/bcos-concepts/storage/Storage.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-task/Task.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-concepts/Hash.h>
-#include "../concepts/bcos-concepts/ledger/Ledger.h"
-#include "../concepts/bcos-concepts/storage/Storage.h"
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-executor/src/Common.h>
+#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-ledger/Ledger.h>
 #include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tool/VersionConverter.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <range/v3/range/access.hpp>
-#include <range/v3/range/concepts.hpp>
-#include <range/v3/range/traits.hpp>
-#include <range/v3/view/transform.hpp>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
+#include <range/v3/range/access.hpp>
+#include <range/v3/range/concepts.hpp>
+#include <range/v3/range/traits.hpp>
+#include <range/v3/view/transform.hpp>
 #include <type_traits>
-#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::ledger
 {
@@ -131,8 +132,17 @@ protected:
 
     task::Task<std::string> impl_getABI(std::string _contractAddress)
     {
-        // try to get compatibilityVersion
-        std::string contractTableName = getContractTableName("/apps/", _contractAddress);
+        // Mode-aware derivation (account::accountTableName — the same rule EVMAccount writes
+        // state with): this LedgerImpl serves light-client LIGHTNODE_GET_ABI requests on the
+        // FULL node (libinitializer/LightNodeInitializer::initLedgerServer, wired in
+        // Initializer.cpp under WITH_LIGHTNODE) against the node's own local state DB, in the
+        // same process that published nodeAddressTableMode() at boot — so the singleton is
+        // authoritative here, and a binary-layout node must read codeHash under
+        // "/s/<20 raw bytes>". The light-client side never resolves table names against the
+        // remote DB: LedgerClientImpl::impl_getABI ships only the contract address over the
+        // wire and the serving node owns the naming (likewise LightNodeRPC::getABI goes to
+        // remoteLedger), so routing mode-aware here covers both topologies.
+        std::string contractTableName = account::accountTableName(_contractAddress);
         auto versionEntry =
             storage().getRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_COMPATIBILITY_VERSION);
         auto [compatibilityVersionStr, number] =

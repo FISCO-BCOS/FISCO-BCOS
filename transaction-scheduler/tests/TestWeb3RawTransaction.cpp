@@ -161,7 +161,7 @@ task::Task<void> TRWFundAccount(
     using namespace bcos::ledger::account;
     evmc_address sender{};
     std::copy(senderRaw.begin(), senderRaw.end(), sender.bytes);
-    EVMAccount<TWBackendStorage> acc(storage, sender, false);
+    EVMAccount<TWBackendStorage> acc(storage, sender, AddressTableMode::Hex);
     if (!co_await acc.exists())
     {
         co_await acc.create();

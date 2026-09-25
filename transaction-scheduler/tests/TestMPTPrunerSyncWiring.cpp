@@ -123,7 +123,7 @@ public:
 task::Task<void> MPSFundAccount(MPSBackendStorage& storage, evmc_address const& addr, u256 balance)
 {
     using namespace bcos::ledger::account;
-    EVMAccount<MPSBackendStorage> acc(storage, addr, false);
+    EVMAccount<MPSBackendStorage> acc(storage, addr, AddressTableMode::Hex);
     if (!co_await acc.exists())
     {
         co_await acc.create();
@@ -136,7 +136,7 @@ template <class Storage>
 task::Task<u256> MPSReadBalance(Storage& storage, evmc_address const& addr)
 {
     using namespace bcos::ledger::account;
-    EVMAccount<std::remove_reference_t<Storage>> acc(storage, addr, false);
+    EVMAccount<std::remove_reference_t<Storage>> acc(storage, addr, AddressTableMode::Hex);
     co_return co_await acc.balance();
 }
 

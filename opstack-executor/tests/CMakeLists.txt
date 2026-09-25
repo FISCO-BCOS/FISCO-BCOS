@@ -23,6 +23,7 @@ add_executable(opstack-executor-tests
     PreBlockOpStepsTest.cpp
     Storage2StateHelpersTest.cpp
     Storage2StatePoisonTest.cpp
+    Storage2StateBinaryModeTest.cpp
     OpEnvelopeMirrorTest.cpp
     support/SeedPreStateTest.cpp
     OpJovianShapeTest.cpp

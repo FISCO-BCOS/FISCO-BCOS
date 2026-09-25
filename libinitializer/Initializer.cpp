@@ -203,6 +203,18 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 "deployments"));
     }
 
+    // The account-table migration rewrites the state RocksDB directly; on TiKV the chain
+    // state does not live there, so the flag would migrate the wrong store.
+    if (m_nodeConfig->migrateAccountTablesToBinary() &&
+        !boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "[storage] migrate_account_tables_to_binary requires RocksDB storage (the "
+                "state DB it rewrites); storage.type=" +
+                m_nodeConfig->storageType() + " keeps its chain state elsewhere"));
+    }
+
     // TBB global thread control
     auto tbbThreadCount = m_nodeConfig->tbbThreadCount();
     if (tbbThreadCount > 0)
@@ -239,6 +251,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     m_globalStateStorageInitializer =
         GlobalStateStorageInitializer::build(m_nodeConfig->storagePath(), rocksDBOption);
 
+    // Node-local account-table encoding, handled inside LedgerInitializer::build (lane check
+    // → layout-flag read → optional one-shot migration → mode publication, all before the
+    // genesis write). The open DB handle is passed down: RocksDB's single-instance lock
+    // forbids opening the state DB twice, and the ledger's decryption-aware config reads are
+    // what determine the executor lane.
+    AccountTableBoot accountTableBoot{.stateDB = m_globalStateStorageInitializer->rocksDB(),
+        .migrateToBinary = m_nodeConfig->migrateAccountTablesToBinary()};
+
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
         // Share CheckpointRocksDBStorage's RocksDB with the legacy storage layer.
@@ -267,7 +287,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     // build ledger
     auto ledger = LedgerInitializer::build(m_protocolInitializer->blockFactory(), m_storage,
-        m_nodeConfig, m_blockStorage, m_ioServicePool);
+        m_nodeConfig, m_blockStorage, m_ioServicePool, std::move(accountTableBoot));
     ledger->setKeyPageSize(m_nodeConfig->keyPageSize());
     m_ledger = ledger;
 

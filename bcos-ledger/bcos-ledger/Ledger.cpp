@@ -150,20 +150,20 @@ void Ledger::asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTx
 task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
     std::string_view _address, std::string_view _key, protocol::BlockNumber _blockNumber)
 {
-    // TODO)): blockNumber is not used nowadays
-    std::ignore = _blockNumber;
-    // System-contract addresses (0x1000 range, etc.) are stored under the
-    // "/sys/" prefix by EVMAccount; user accounts under "/apps/". Picking the
-    // right prefix here keeps eth_getBalance / eth_getStorageAt /
-    // eth_getTransactionCount consistent with both the genesis alloc import and
-    // the v2 executor (which both go through EVMAccount). Without this, reads
-    // for system-range accounts hit the wrong table and return empty (e.g.
-    // EEST static VMTests that call 0x1000 saw balance=0 / storage=0).
-    auto const tablePrefix =
-        precompiled::contains(bcos::precompiled::c_systemTxsAddress, _address) ?
-            SYS_DIRECTORY::SYS_APPS :
-            SYS_DIRECTORY::USER_APPS;
-    auto const contractTableName = getContractTableName(tablePrefix, _address);
+    // One lane rule governs a lane end to end: the genesis alloc import
+    // (importGenesisState), the executor, and this flat reader all derive the account table
+    // name through account::ethLaneAccountTableName when feature_l2_ethereum_compat is set —
+    // on an Ethereum-compatible chain the 8 system-tx addresses are ordinary accounts living
+    // under /apps/ — and through account::accountTableName otherwise (only the v1 lane keeps
+    // the /sys/ routing for the system-tx addresses). Both rules re-encode to the node-local
+    // layout, so a Binary node reads "/s/<20 raw bytes>" either way. _blockNumber gates the
+    // feature read: the flag is genesis-set (enableNumber 0) on L2 chains, so any historical
+    // block number resolves it correctly; one SYS_CONFIG row read (fetchFeature).
+    auto const contractTableName =
+        co_await fetchFeature(ledger::Features::Flag::feature_l2_ethereum_compat, _blockNumber) ?
+            account::ethLaneAccountTableName(
+                bcos::Address{_address, bcos::Address::FromHex, bcos::Address::AlignRight}) :
+            account::accountTableName(_address);
     auto const stateStorage = getStateStorage();
     co_return co_await bcos::storage2::readOne(
         *stateStorage, executor_v1::StateKeyView{contractTableName, _key});
@@ -1607,8 +1607,14 @@ static void importGenesisAccount(auto& storage, crypto::Hash const& hashImpl,
         slots.emplace_back(evmKey, evmValue);
     }
 
-    account::EVMAccount account(
-        storage, address, features.get(Features::Flag::feature_raw_address));
+    // Naming rule: on an Ethereum-compatible (L2) chain the c_systemTxsAddress members are
+    // ordinary accounts living under their /apps/ logical name — the OP bridge writes them
+    // there — so the alloc tables derive through the lane rule; the v1 lane keeps
+    // EVMAccount's own /sys/ routing. Both re-encode to the node-local layout.
+    auto tableName = features.get(Features::Flag::feature_l2_ethereum_compat) ?
+                         account::ethLaneAccountTableName(address) :
+                         account::accountTableName(address, account::nodeAddressTableMode());
+    account::EVMAccount account(storage, account::FromTableName{}, std::move(tableName));
     task::syncWait(account.create());
 
     if (codeHash.has_value())
@@ -1643,6 +1649,8 @@ static task::Task<void> importGenesisState(
     // accounts in the genesis batch.
     verifyL2FeatureFlagsSlot(allocs, features);
 
+    // The account-table naming rule (lane rule vs the v1 /sys/ routing) lives in
+    // importGenesisAccount, keyed on feature_l2_ethereum_compat.
     for (auto&& importAccount : allocs)
     {
         importGenesisAccount(storage, hashImpl, features, importAccount);

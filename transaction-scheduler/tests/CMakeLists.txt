@@ -35,9 +35,12 @@ set_source_files_properties(
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # TestEthereumExecutorScheduler pulls EthereumExecutor + bcos-ledger LedgerMethods.h
 # (executor / tars headers) whose namespace-scope entities would collide with the
-# other unity-merged TUs; compile standalone.
+# other unity-merged TUs; compile standalone. TestNodeAddressTableMode pulls
+# LedgerMethods.h for the REAL storage2 getLedgerConfig (its point — no stub), so
+# it is standalone for the same reason.
 set_source_files_properties(
-    "TestEthereumExecutorScheduler.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+    "TestEthereumExecutorScheduler.cpp" "TestNodeAddressTableMode.cpp"
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # TestEthereumBlockVerifier shares the same standalone build model.
 set_source_files_properties(
     "TestEthereumBlockVerifier.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)

@@ -57,7 +57,7 @@ namespace bcos::rpc
 
 /// EIP-55 checksum an address given as hex text without the 0x prefix. Only the canonical
 /// 40-hex-digit form is checksummed; anything else (a FISCO-native tx.to may be a BFS link
-/// path, a feature_raw_address chain carries raw bytes) is returned unchanged. The guard is
+/// path, a binary-layout node carries raw bytes) is returned unchanged. The guard is
 /// what makes the degradation real: bcos::toChecksumAddress walks its address argument and
 /// indexes addressHashHex[i] with the same i (bcos-crypto/ChecksumAddress.cpp), while that
 /// hash string is always 64 characters — a longer input reads past it (std::string_view's

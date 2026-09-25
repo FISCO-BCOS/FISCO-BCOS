@@ -159,7 +159,8 @@ void seedSender(MLS& mls, bcos::Address const& addr, bcos::crypto::Hash::Ptr con
 {
     auto view = mls.fork();
     view.newMutable();
-    bcos::ledger::account::EVMAccount account(view, addr, /*rawAddress=*/false);
+    bcos::ledger::account::EVMAccount account(
+        view, addr, bcos::ledger::account::AddressTableMode::Hex);
     bcos::task::syncWait(account.create());
     bcos::task::syncWait(account.setCode({}, {}, hashImpl->emptyHash()));
     bcos::task::syncWait(account.setNonce("0"));

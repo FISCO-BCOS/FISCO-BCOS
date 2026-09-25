@@ -338,12 +338,6 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coExecute
         std::optional<h256> mptStateRoot;
         if (shouldBuildMPT(ledgerConfig->features(), blockHeader->number()))
         {
-            // Reaching here means an MPT IS being built, so the flag-matrix rule the
-            // build depends on has to hold. Re-checked per block rather than at startup
-            // only: a mid-chain activation of either flag is invisible to the boot-time
-            // guard (LedgerInitializer). Inside the branch, so shouldBuildMPT stays a
-            // pure predicate AND is evaluated once.
-            rejectRawAddressWithMPT(ledgerConfig->features(), blockHeader->number());
             try
             {
                 mptDelta.emplace(co_await buildMPTStateRoot(view, *blockHeader, *ledgerConfig));
@@ -848,7 +842,7 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
             }
 
             HistoricalStateBackend<typename MultiLayerStorage::ViewType> historicalBackend(
-                latestView, stateRoot);
+                latestView, stateRoot, ledger::account::nodeAddressTableMode());
             storage2::View<typename MultiLayerStorage::MutableStorage, void,
                 HistoricalStateBackend<typename MultiLayerStorage::ViewType>>
                 historicalView(std::addressof(historicalBackend));
@@ -897,12 +891,9 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::getC
                    decltype(callback) callback) -> task::Task<void> {
         auto view = self->m_multiLayerStorage.get().fork();
         auto contractAddress = unhexAddress(contract);
-        auto blockNumber = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
-        auto ledgerConfig =
-            co_await ledger::getLedgerConfig(view, blockNumber, self->m_blockFactory.get());
 
-        ledger::account::EVMAccount account(view, contractAddress,
-            ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
+        ledger::account::EVMAccount account(
+            view, contractAddress, ledger::account::nodeAddressTableMode());
         auto code = co_await account.code();
 
         if (!code)
@@ -923,12 +914,9 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::getA
                    decltype(callback) callback) -> task::Task<void> {
         auto view = self->m_multiLayerStorage.get().fork();
         auto contractAddress = unhexAddress(contract);
-        auto blockNumber = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
-        auto ledgerConfig =
-            co_await ledger::getLedgerConfig(view, blockNumber, self->m_blockFactory.get());
 
-        ledger::account::EVMAccount account(view, contractAddress,
-            ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
+        ledger::account::EVMAccount account(
+            view, contractAddress, ledger::account::nodeAddressTableMode());
         auto abi = co_await account.abi();
 
         if (!abi)
@@ -943,13 +931,14 @@ template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Le
     requires BaselineSchedulerParams<MultiLayerStorage, Executor, SchedulerImpl, Ledger>
 task::Task<std::optional<bcos::storage::Entry>>
 BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::getPendingStorageAt(
-    std::string_view address, std::string_view key, bcos::protocol::BlockNumber number)
+    // `number` is unused: the account-table mode is node-local (nodeAddressTableMode()), not a
+    // property of the queried block's feature set.
+    std::string_view address, std::string_view key,
+    [[maybe_unused]] bcos::protocol::BlockNumber number)
 {
     auto view = m_multiLayerStorage.get().fork();
-    auto ledgerConfig = co_await ledger::getLedgerConfig(view, number, m_blockFactory.get());
 
-    ledger::account::EVMAccount account(
-        view, address, ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
+    ledger::account::EVMAccount account(view, address, ledger::account::nodeAddressTableMode());
     co_return co_await account.storageEntry(key);
 }
 template <class MultiLayerStorage, class Executor, class SchedulerImpl, class Ledger>
