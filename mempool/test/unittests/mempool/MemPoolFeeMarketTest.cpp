@@ -346,7 +346,8 @@ BOOST_AUTO_TEST_CASE(seal_respects_account_nonce_from_state)
     FeeMarketStateStorage state{};
     evmc_address addr{};
     std::copy_n(sender.begin(), sizeof(addr.bytes), addr.bytes);
-    ledger::account::EVMAccount account(state, addr, false);
+    ledger::account::EVMAccount account(
+        state, addr, ledger::account::nodeAddressTableMode());
     task::syncWait(account.setNonce("1"));
 
     std::vector<protocol::Transaction::Ptr> out;

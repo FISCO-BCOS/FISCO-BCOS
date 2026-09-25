@@ -94,7 +94,7 @@ task::Task<void> el1bFund(
     RealGlobalStateBackendStorage& storage, evmc_address const& addr, u256 balance)
 {
     using namespace bcos::ledger::account;
-    EVMAccount<RealGlobalStateBackendStorage> acc(storage, addr, false);
+    EVMAccount<RealGlobalStateBackendStorage> acc(storage, addr, nodeAddressTableMode());
     if (!co_await acc.exists())
     {
         co_await acc.create();
@@ -107,7 +107,7 @@ template <class Storage>
 task::Task<u256> el1bBalance(Storage& storage, evmc_address const& addr)
 {
     using namespace bcos::ledger::account;
-    EVMAccount<std::remove_reference_t<Storage>> acc(storage, addr, false);
+    EVMAccount<std::remove_reference_t<Storage>> acc(storage, addr, nodeAddressTableMode());
     co_return co_await acc.balance();
 }
 

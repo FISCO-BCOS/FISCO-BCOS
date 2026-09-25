@@ -107,7 +107,7 @@ public:
 task::Task<void> RBFundAccount(RBBackendStorage& storage, evmc_address const& addr, u256 balance)
 {
     using namespace bcos::ledger::account;
-    EVMAccount<RBBackendStorage> acc(storage, addr, false);
+    EVMAccount<RBBackendStorage> acc(storage, addr, nodeAddressTableMode());
     if (!co_await acc.exists())
     {
         co_await acc.create();
@@ -119,7 +119,7 @@ task::Task<void> RBFundAccount(RBBackendStorage& storage, evmc_address const& ad
 task::Task<u256> RBReadBalance(RBBackendStorage& storage, evmc_address const& addr)
 {
     using namespace bcos::ledger::account;
-    EVMAccount<RBBackendStorage> acc(storage, addr, false);
+    EVMAccount<RBBackendStorage> acc(storage, addr, nodeAddressTableMode());
     co_return co_await acc.balance();
 }
 
