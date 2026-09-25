@@ -303,7 +303,7 @@ bool compareTables(StorageInterface::Ptr local, StorageInterface::Ptr remote,
         [&remoteKeysPromise](Error::UniquePtr error, std::vector<std::string> keys) {
             if (error)
             {
-                std::cout << "get local primary keys failed: " << error << std::endl;
+                std::cout << "get remote primary keys failed: " << error << std::endl;
                 exit(1);
             }
             remoteKeysPromise.set_value(std::move(keys));
@@ -317,9 +317,9 @@ bool compareTables(StorageInterface::Ptr local, StorageInterface::Ptr remote,
     {
         std::cout << table << ", keys not equal" << LOG_KV("localSize", localKeys.size())
                   << LOG_KV("remoteSize", remoteKeys.size()) << std::endl;
-        std::cout << table << ", Remote:";
-        writeKeys(std::cout, localKeys, true);
         std::cout << table << ", Local:";
+        writeKeys(std::cout, localKeys, true);
+        std::cout << table << ", Remote:";
         writeKeys(std::cout, remoteKeys, true);
         return false;
     }
@@ -338,7 +338,7 @@ bool compareTables(StorageInterface::Ptr local, StorageInterface::Ptr remote,
         [&remoteValuesPromise](Error::UniquePtr error, std::vector<std::optional<Entry>> values) {
             if (error)
             {
-                std::cout << "get local values failed: " << error << std::endl;
+                std::cout << "get remote values failed: " << error << std::endl;
                 exit(1);
             }
             remoteValuesPromise.set_value(std::move(values));

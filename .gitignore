@@ -71,6 +71,9 @@ tools/BcosAirBuilder/*
 
 test/*
 /CMakeSettings.json
+.trae
+.codex
+openspec
 
 # Claude Code
 CLAUDE.local.md
