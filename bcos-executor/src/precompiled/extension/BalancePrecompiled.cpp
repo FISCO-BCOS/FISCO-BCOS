@@ -20,6 +20,7 @@
 
 #include "BalancePrecompiled.h"
 #include "bcos-framework/bcos-framework/storage/Table.h"
+#include "bcos-framework/ledger/EVMAccount.h"
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/serialization/vector.hpp>
@@ -105,7 +106,16 @@ std::string BalancePrecompiled::getContractTableName(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const std::string_view& _address)
 {
-    return _executive->getContractTableName(_address);
+    // One logical name for both layouts, from the executive rule (the same rule
+    // transferBalance writes with). It routes EVERY address with the 35-leading-zero
+    // prefix (address(0), 0x1..0x9, ...) to /sys/ — a wider set than the 8
+    // c_systemTxsAddress members — so deriving the two layouts from different rules
+    // (e.g. the shared rule) would route e.g. address(0) to /apps/ on Hex nodes and
+    // /sys/ on Binary nodes, splitting balance rows across a mixed-mode network.
+    // toNodeLayout re-encodes only the physical layout: /apps/<hex> becomes
+    // /s/<20 raw bytes>; /sys/ names stay untouched (canonicalTableNameForHash does
+    // not normalize them either).
+    return account::toNodeLayout(_executive->getContractTableName(_address));
 }
 
 void BalancePrecompiled::checkOriginAuth(

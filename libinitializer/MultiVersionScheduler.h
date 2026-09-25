@@ -20,7 +20,10 @@ DERIVE_BCOS_EXCEPTION(ExecutorVersionNotSupported);
 /// saturates down to the newest slot this node actually wired, so "every version >= 2 runs
 /// the v2 executor" is no longer the contract. A version that names a DECLARED slot this node
 /// did not wire (version 3 on a build without the OP engine) neither saturates nor switches:
-/// setVersion keeps the current executor and logs ERROR, see its definition.
+/// setVersion keeps the current executor and logs ERROR, see its definition. Lane switches
+/// are encoding-agnostic: every wired lane except the legacy v0 lane derives account-table
+/// names through a mode-aware rule (the Eth/OP lanes via account::ethLaneAccountTableName),
+/// so a switch to the Ethereum or OP executor is honoured on Hex and Binary nodes alike.
 ///
 /// The executor version that selects the pure-Ethereum EthereumExecutor
 /// (ethereum-executor); index 2 of MultiVersionScheduler's scheduler array.

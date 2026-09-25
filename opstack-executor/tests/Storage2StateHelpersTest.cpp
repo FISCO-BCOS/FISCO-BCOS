@@ -6,6 +6,7 @@
 
 #include <bcos-evm/adapter/Storage2StateHelpers.h>
 
+#include <bcos-framework/testutils/ScopedNodeAddressTableMode.h>
 #include <boost/test/unit_test.hpp>
 #include <cstring>
 
@@ -51,6 +52,57 @@ BOOST_AUTO_TEST_CASE(addressFromTableNameRejectsNonAccount)
     BOOST_CHECK(!addressFromTableName("not-a-table").has_value());
     // Wrong-length hex → nullopt.
     BOOST_CHECK(!addressFromTableName("/apps/abc123").has_value());
+}
+
+// The bridge's naming is mode-aware: the logical name is "/apps/<40hex>" for every
+// address (no /sys/ routing — the c_systemTxsAddress members are ordinary accounts on
+// this lane), re-encoded to "/s/<20 raw bytes>" when the node runs the binary layout.
+// Both encodings resolve to the same logical row.
+BOOST_AUTO_TEST_CASE(accountTableNameBothEncodings)
+{
+    evmc::address addr{};
+    addr.bytes[0] = 0x12;
+    addr.bytes[19] = 0xff;
+
+    std::string hexName;
+    {
+        bcos::test::ScopedNodeAddressTableMode const guard(
+            bcos::ledger::account::AddressTableMode::Hex);
+        hexName = accountTableName(addr);
+        BOOST_CHECK_EQUAL(hexName, "/apps/12000000000000000000000000000000000000ff");
+    }
+    {
+        bcos::test::ScopedNodeAddressTableMode const guard(
+            bcos::ledger::account::AddressTableMode::Binary);
+        auto const binName = accountTableName(addr);
+        BOOST_REQUIRE_EQUAL(binName.size(), std::string("/s/").size() + 20);
+        BOOST_CHECK_EQUAL(binName.substr(0, 3), "/s/");
+        BOOST_CHECK_EQUAL(std::memcmp(binName.data() + 3, addr.bytes, sizeof(addr.bytes)), 0);
+        // Round-trip in both encodings.
+        auto const parsed = addressFromTableName(binName);
+        BOOST_REQUIRE(parsed.has_value());
+        BOOST_CHECK_EQUAL(std::memcmp(parsed->bytes, addr.bytes, 20), 0);
+        // Same logical row: the binary name normalizes back to the hex one for hashing.
+        BOOST_CHECK_EQUAL(bcos::ledger::account::canonicalTableNameForHash(binName), hexName);
+    }
+    // A c_systemTxsAddress member is an ordinary account on this lane in BOTH encodings:
+    // no /sys/ routing.
+    evmc::address sysAddr{};
+    sysAddr.bytes[18] = 0x10;  // 0x0000000000000000000000000000000000001000
+    {
+        bcos::test::ScopedNodeAddressTableMode const guard(
+            bcos::ledger::account::AddressTableMode::Hex);
+        BOOST_CHECK_EQUAL(
+            accountTableName(sysAddr), "/apps/0000000000000000000000000000000000001000");
+    }
+    {
+        bcos::test::ScopedNodeAddressTableMode const guard(
+            bcos::ledger::account::AddressTableMode::Binary);
+        auto const binName = accountTableName(sysAddr);
+        BOOST_CHECK_EQUAL(binName.substr(0, 3), "/s/");
+        BOOST_CHECK_EQUAL(bcos::ledger::account::canonicalTableNameForHash(binName),
+            "/apps/0000000000000000000000000000000000001000");
+    }
 }
 
 BOOST_AUTO_TEST_CASE(isZeroSlotValueTest)

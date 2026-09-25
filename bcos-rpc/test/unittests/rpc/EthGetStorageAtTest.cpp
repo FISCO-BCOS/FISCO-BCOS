@@ -21,9 +21,11 @@
  */
 
 #include "../common/RPCFixture.h"
+#include <bcos-framework/ledger/AccountTableName.h>
 #include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
+#include <bcos-framework/testutils/ScopedNodeAddressTableMode.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/mpt/Account.h>
 #include <bcos-ledger/mpt/Constants.h>
@@ -265,6 +267,42 @@ BOOST_AUTO_TEST_CASE(LatestStateFromCommittedView)
     bcos::bytes value32(32, 0);
     value32.back() = 0x2a;
     setFlatSlot(slotA, value32);
+
+    auto resp = getStorageAt(address.hexPrefixed(), "0x1", "latest");
+    BOOST_TEST(!resp.isMember("error"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    BOOST_TEST(resp["result"].asString() == paddedHex(42));
+}
+
+// Binary node-local layout: the flat latest read must hit the binary account table name
+// ("/s/<20 raw bytes>"), not the hex name — a hex-only derivation would read the hex
+// twin (or nothing) on a migrated node. The process-global mode is restored to Hex on the
+// way out by the scoped guard (the startup flow sets it exactly once, single-threaded).
+BOOST_AUTO_TEST_CASE(LatestStateFromCommittedViewBinaryMode)
+{
+    namespace account = bcos::ledger::account;
+    bcos::test::ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Binary);
+    wireStateProvider();
+
+    auto writeFlatSlot = [this](std::string const& table, bcos::h256 const& slot,
+                             bcos::bytes const& value32) {
+        storage::Entry entry;
+        entry.set(bcos::bytes(value32));
+        task::syncWait(storage2::writeOne(m_latestState,
+            executor_v1::StateKey{
+                table, std::string{reinterpret_cast<char const*>(slot.ref().data()), h256::SIZE}},
+            std::move(entry)));
+    };
+    auto const hexTable = std::string(bcos::ledger::SYS_DIRECTORY::USER_APPS) + address.hex();
+    auto const binTable = account::hexToBinaryAccountTableName(hexTable);
+    BOOST_REQUIRE(!binTable.empty());
+
+    bcos::bytes binValue(32, 0);
+    binValue.back() = 0x2a;
+    bcos::bytes hexTwinValue(32, 0);
+    hexTwinValue.back() = 0x07;
+    writeFlatSlot(binTable, slotA, binValue);
+    writeFlatSlot(hexTable, slotA, hexTwinValue);  // distractor: the old hex-only read
 
     auto resp = getStorageAt(address.hexPrefixed(), "0x1", "latest");
     BOOST_TEST(!resp.isMember("error"));

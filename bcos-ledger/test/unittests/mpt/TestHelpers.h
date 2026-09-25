@@ -153,13 +153,13 @@ inline FlatStateView makeFlatView(FlatBackendStorage& backend)
 /// "<table>:<row>" StateKey for a named account field row.
 inline bcos::executor_v1::StateKey accountFieldKey(bcos::Address const& addr, std::string_view row)
 {
-    return bcos::executor_v1::StateKey{accountTableName(addr), row};
+    return bcos::executor_v1::StateKey{account::hexAccountTableName(addr), row};
 }
 
 /// "<table>:<32-byte-binary-slot>" StateKey for a storage slot row.
 inline bcos::executor_v1::StateKey accountSlotKey(bcos::Address const& addr, bcos::h256 const& slot)
 {
-    return bcos::executor_v1::StateKey{accountTableName(addr),
+    return bcos::executor_v1::StateKey{account::hexAccountTableName(addr),
         std::string_view{reinterpret_cast<char const*>(slot.data()), bcos::h256::SIZE}};
 }
 

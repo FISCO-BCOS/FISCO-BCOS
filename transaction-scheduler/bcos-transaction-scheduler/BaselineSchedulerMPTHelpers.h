@@ -43,7 +43,6 @@
 namespace bcos::scheduler_v1
 {
 using ledger::mpt::InvalidMPTFlagMatrix;
-using ledger::mpt::rejectRawAddressWithMPT;
 using ledger::mpt::shouldBuildMPT;
 using ledger::mpt::validateMPTFlagMatrix;
 

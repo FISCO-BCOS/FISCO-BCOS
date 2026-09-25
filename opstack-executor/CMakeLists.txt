@@ -20,6 +20,13 @@ target_include_directories(opstack-executor PUBLIC
 target_link_libraries(opstack-executor PUBLIC
     bcos-evm-opstack ethereum-executor bcos-framework bcos-protocol ledger rlp-protocol
     transaction-scheduler
+    # bcos-devp2p: OpBlockVerifier.h's public surface takes devp2p::sync::Block (header-only
+    # sync/Block.h; the link carries its include dir to consumers).
+    bcos-devp2p
+    # protocol-tars: OpBlockVerifier.h wraps p2p envelopes into bcostars::protocol::
+    # TransactionImpl and calls Web3Transaction::takeToTarsTransaction (defined in
+    # bcos-tars-protocol's Web3TarsBridge.cpp).
+    protocol-tars
     evmone::evmone intx::intx TBB::tbb)
 set_target_properties(opstack-executor PROPERTIES UNITY_BUILD OFF)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")

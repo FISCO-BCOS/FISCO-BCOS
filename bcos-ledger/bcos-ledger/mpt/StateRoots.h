@@ -71,7 +71,7 @@ task::Task<MPTDeltaLayer> computeMptStateDelta(ViewType& view,
     bool const l2Mode =
         ledgerConfig.features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
     co_return co_await buildAndCollect(nodeStorage, parentStateRoot, view, l2Mode,
-        trackRefCounts);
+        ledger::account::nodeAddressTableMode(), trackRefCounts);
 }
 
 /// The root-only form, for callers that commit no MPT delta to an observer.

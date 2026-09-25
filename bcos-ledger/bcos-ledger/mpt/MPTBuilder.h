@@ -29,6 +29,7 @@
 #include "StorageValueCodec.h"
 // Named directly for the hash context buildAndCollect owns (also reachable transitively).
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
+#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
@@ -58,6 +59,10 @@ struct BuildContext
     MPTReadView<Storage> const& parentView;  ///< the parent block's MPT, for baseline lookups
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher& hasher;  ///< reused slot-key context
     bool l2Mode;  ///< scenario B: a BCOS extension row is an error rather than a skip
+    /// The node's account-table mode (node-local layout): forwarded to readFlatAccountMeta,
+    /// which reads the one table layout the node uses — hex or binary, never both
+    /// (EVMAccount owns the routing).
+    bcos::ledger::account::AddressTableMode accountMode;
     /// Forwarded to every mergeNodeDelta / hand tally: false when the configured CommitObserver
     /// does not count references (CommitObserver::needsRefCountDeltas).
     bool trackRefCounts;
@@ -293,8 +298,12 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
     else if (!rows.nonce.value || !rows.balance.value || !rows.codeHash.value)
     {
         // First-touch fields the block left unwritten have no parent leaf to fall back on:
-        // one O(1) flat metadata read through the fork view (spec §5.3 path 2).
-        auto meta = co_await readFlatAccountMeta(flatView, address);
+        // one O(1) flat metadata read through the fork view (spec §5.3 path 2), routed through
+        // the node's account-table mode (hex table or binary table, per the node layout) and,
+        // on the OP lane (l2Mode), the lane's naming rule — the bridge keeps system-tx
+        // addresses under /apps/, where the v1 rule would look in /sys/.
+        auto meta =
+            co_await readFlatAccountMeta(flatView, address, context.accountMode, context.l2Mode);
         updated.nonce = meta.nonce;
         updated.balance = meta.balance;
         updated.codeHash = meta.codeHash;
@@ -423,6 +432,16 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
 ///                        stops advancing.
 /// @param l2Mode          scenario B (Ethereum-compatible chain): a KNOWN BCOS extension row in
 ///                        the delta throws UnexpectedBCOSFieldInL2; scenario A skips it.
+/// @param accountMode     the node's account-table mode (nodeAddressTableMode()), forwarded to
+///                        the first-touch flat-metadata read (readFlatAccountMeta): Hex reads the
+///                        legacy hex tables, Binary the raw-address tables — a node is in exactly
+///                        one layout (encoding changes go through the boot-time migration, not a
+///                        runtime fallback).
+///                        The delta SCAN needs no mode — parseAccountTable accepts both table
+///                        layouts, told apart by prefix ("/apps/" hex vs the reserved "/s/"
+///                        namespace). No default on purpose (MPTAccount.h's constructor
+///                        rule): a guessed mode makes the first-touch back-fill silently miss on
+///                        a binary-layout node.
 /// @param trackRefCounts  false leaves the returned delta's refCountDeltas EMPTY (the per-hash
 ///                        tally is skipped) — for callers whose CommitObserver does not count
 ///                        references (CommitObserver::needsRefCountDeltas). stateRoot, newNodes,
@@ -436,8 +455,8 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
 /// @throws UnknownAccountRowField on an account row whose field name is not classified, in
 ///         either mode (spec §5.2).
 template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage>
-bcos::task::Task<MPTDeltaLayer> buildAndCollect(
-    Storage& nodeStorage, bcos::h256 parentStateRoot, auto& flatView, bool l2Mode,
+bcos::task::Task<MPTDeltaLayer> buildAndCollect(Storage& nodeStorage, bcos::h256 parentStateRoot,
+    auto& flatView, bool l2Mode, bcos::ledger::account::AddressTableMode accountMode,
     bool trackRefCounts = false)
 {
     MPTDeltaLayer output;
@@ -447,6 +466,7 @@ bcos::task::Task<MPTDeltaLayer> buildAndCollect(
         .parentView = parentView,
         .hasher = hasher,
         .l2Mode = l2Mode,
+        .accountMode = accountMode,
         .trackRefCounts = trackRefCounts};
 
     // The ACCOUNT trie's change-set: accountKeyHash(addr) → the account's new leaf encoding
@@ -461,7 +481,9 @@ bcos::task::Task<MPTDeltaLayer> buildAndCollect(
     // so one account's rows form a contiguous run and a table change marks its end. Scanning
     //     /apps/0a..:balance   /apps/0a..:nonce   /apps/0b..:nonce   /sys/config:x
     // settles account 0a when the /apps/0b.. row arrives, settles 0b when /sys/config arrives,
-    // and skips the system row — currentAddress stays unset for any table outside /apps/.
+    // and skips the system row — currentAddress stays unset for any table that is not an
+    // account table (parseAccountTable accepts the hex "/apps/" and the binary "/s/"
+    // shapes; everything else is not an account).
     //
     // currentTable is a view into the row the iterator last yielded: elements live in the delta
     // container, which this read-only scan never mutates, so it stays valid across iterations.

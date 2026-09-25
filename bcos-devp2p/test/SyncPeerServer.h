@@ -26,6 +26,7 @@
 #include <bcos-devp2p/rlpx/Messages.h>
 #include <bcos-devp2p/sync/Block.h>
 #include <bcos-devp2p/sync/HeaderValidator.h>
+#include <bcos-devp2p/sync/OpHeaderValidator.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rlp-protocol/EthWithdrawal.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -108,6 +109,156 @@ inline std::vector<sync::Block> makeTestChain(size_t _count)
         parentHash = chain.back().hash;
     }
     return chain;
+}
+
+// ─── OP-Stack shapes ─────────────────────────────────────────────────────────
+// Genesis timestamp for the OP test chains: in the past, and (unless a test
+// sets an explicit 0 fork time) resolved through the chain's OpForkSchedule.
+constexpr int64_t kOpChainGenesisTs = 1700000000;
+
+// 9-byte Holocene extraData: version 0x00 || denominator(4B) || elasticity(4B).
+inline bcos::bytes opHoloceneExtraData(uint32_t _denominator, uint32_t _elasticity)
+{
+    bcos::bytes extra(bcos::engine::c_holoceneExtraDataBytes);
+    extra[0] = bcos::engine::c_holoceneExtraDataVersion;
+    bcos::bytesRef denomRef(extra.data() + 1, 4);
+    bcos::toBigEndian(_denominator, denomRef);
+    bcos::bytesRef elastRef(extra.data() + 5, 4);
+    bcos::toBigEndian(_elasticity, elastRef);
+    return extra;
+}
+
+// 17-byte Jovian extraData: version 0x01 || denominator(4B) || elasticity(4B)
+// || minBaseFee(8B).
+inline bcos::bytes opJovianExtraData(
+    uint32_t _denominator, uint32_t _elasticity, uint64_t _minBaseFee)
+{
+    bcos::bytes extra(bcos::engine::c_jovianExtraDataBytes);
+    extra[0] = bcos::engine::c_jovianExtraDataVersion;
+    bcos::bytesRef denomRef(extra.data() + 1, 4);
+    bcos::toBigEndian(_denominator, denomRef);
+    bcos::bytesRef elastRef(extra.data() + 5, 4);
+    bcos::toBigEndian(_elasticity, elastRef);
+    bcos::bytesRef minRef(extra.data() + 9, 8);
+    bcos::toBigEndian(_minBaseFee, minRef);
+    return extra;
+}
+
+// Build an OP-Stack-shaped chain that PASSES validateOpHeader under `_config`
+// (sync/OpHeaderValidator.h): post-merge constants, the SequencerFeeVault
+// coinbase, the fork-gated fields stamped per resolveOpFork at each header's own
+// timestamp (withdrawalsHash from Canyon, blob fields from Ecotone, requestsHash
+// from Isthmus, Holocene 9B / Jovian 17B extraData), and every baseFee recomputed
+// from its parent through calcOpBaseFeeFromFields — the same entry point the
+// validator uses, so a config the validator accepts always produces a servable
+// chain. Tests break rules by tampering a built header and re-encoding it (the
+// server serves raw RLP), never by hand-writing invalid fields.
+inline std::vector<sync::Block> makeOpTestChain(size_t _count, sync::OpChainConfig const& _config)
+{
+    std::vector<sync::Block> chain;
+    bcos::h256 parentHash;  // zeros: the parent of block 0 (the anchor)
+    for (size_t i = 0; i < _count; ++i)
+    {
+        sync::Block block;
+        auto& header = block.header;
+        header.number = static_cast<int64_t>(i);
+        header.parentInfo.blockNumber = 0;  // not on the wire — see makeTestChain
+        header.parentInfo.blockHash = parentHash;
+        header.uncleHash = bcos::protocol::c_emptyOmmersHash;
+        header.coinbase = sync::c_opSequencerFeeVault;
+        header.stateRoot = bcos::crypto::HashType(
+            std::string_view("0x1111111111111111111111111111111111111111111111111111111111111111"),
+            bcos::crypto::HashType::FromHex);
+        header.txsRoot = bcos::crypto::HashType(
+            std::string_view("0x2222222222222222222222222222222222222222222222222222222222222222"),
+            bcos::crypto::HashType::FromHex);
+        header.receiptsRoot = bcos::crypto::HashType(
+            std::string_view("0x3333333333333333333333333333333333333333333333333333333333333333"),
+            bcos::crypto::HashType::FromHex);
+        header.logsBloom = bcos::Bloom{};
+        header.difficulty = 0;
+        header.nonce = bcos::h64{};
+        header.gasLimit = 30000000;
+        header.gasUsed = 4000000;
+        header.timestamp =
+            kOpChainGenesisTs + static_cast<int64_t>(i * _config.blockTimeSeconds);
+        header.prevRandao = bcos::h256{};
+
+        // Fork-gated fields, keyed on THIS header's timestamp exactly like the
+        // validator's checks.
+        auto const fork = bcos::ledger::resolveOpFork(
+            _config.forkSchedule, static_cast<uint64_t>(header.timestamp));
+        if (fork >= bcos::ledger::OpFork::Canyon)
+        {
+            // Pre-Isthmus this MUST be the empty-withdrawals hash; Isthmus+ leaves
+            // it unchecked at header level, so the empty hash stays valid there too.
+            header.withdrawalsHash = sync::c_opEmptyWithdrawalsHash;
+            // An empty (but present) withdrawals list keeps the eth/68 body in the
+            // 3-item Shanghai+ shape matching the header.
+            block.withdrawals = std::vector<bcos::bytes>{};
+        }
+        if (fork >= bcos::ledger::OpFork::Ecotone)
+        {
+            header.blobGasUsed = bcos::u256(0);
+            header.excessBlobGas = bcos::u256(0);
+            header.parentBeaconRoot = bcos::h256{};
+        }
+        if (fork >= bcos::ledger::OpFork::Isthmus)
+        {
+            header.requestsHash = sync::c_opEmptyRequestsHash;
+        }
+        if (fork >= bcos::ledger::OpFork::Jovian)
+        {
+            header.extraData = opJovianExtraData(250, 6, 0);
+        }
+        else if (fork >= bcos::ledger::OpFork::Holocene)
+        {
+            header.extraData = opHoloceneExtraData(250, 6);
+        }
+
+        // baseFee: block 0 is the anchor (never validated), every later block must
+        // match the OP EIP-1559 recomputation from its parent.
+        if (i == 0)
+        {
+            header.baseFee = bcos::u256(1000000000);
+        }
+        else
+        {
+            auto const& parent = chain.back().header;
+            auto const parentFork = bcos::ledger::resolveOpFork(
+                _config.forkSchedule, static_cast<uint64_t>(parent.timestamp));
+            uint64_t const denominator = fork >= bcos::ledger::OpFork::Canyon ?
+                                             _config.eip1559DenominatorCanyon :
+                                             _config.eip1559DenominatorBedrock;
+            std::span<const bcos::byte> parentExtra{
+                parent.extraData.data(), parent.extraData.size()};
+            header.baseFee = bcos::engine::calcOpBaseFeeFromFields(parent.gasLimit,
+                parent.gasUsed, *parent.baseFee, parent.blobGasUsed, parentExtra,
+                parentFork >= bcos::ledger::OpFork::Holocene,
+                parentFork >= bcos::ledger::OpFork::Jovian, denominator,
+                _config.eip1559Elasticity);
+        }
+
+        bcos::bytes headerRlp;
+        bcos::codec::rlp::encode(headerRlp, header);
+        block.headerRlp = headerRlp;
+        block.hash = bcos::crypto::keccak256Hash(
+            bcos::bytesConstRef(headerRlp.data(), headerRlp.size()));
+
+        chain.push_back(std::move(block));
+        parentHash = chain.back().hash;
+    }
+    return chain;
+}
+
+// Re-encode a tampered header in place (the server serves the raw RLP, so a
+// field change only takes effect on the wire after this) and refresh the hash.
+inline void reencodeOpHeader(sync::Block& _block)
+{
+    bcos::bytes rlp;
+    bcos::codec::rlp::encode(rlp, _block.header);
+    _block.headerRlp = rlp;
+    _block.hash = bcos::crypto::keccak256Hash(bcos::bytesConstRef(rlp.data(), rlp.size()));
 }
 
 // Serve eth/68 requests over an established session until the peer disconnects

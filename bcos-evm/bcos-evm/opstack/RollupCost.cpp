@@ -16,6 +16,9 @@ constexpr int64_t kFjordDivisor = 1000000000000;
 constexpr int64_t kNonzeroByteCost = 16;
 constexpr int64_t kZeroByteCost = 4;
 constexpr int64_t kOperatorFeeScalarDivisor = 1000000;
+// Bedrock–Delta legacy L1 fee scalar precision (op-geth l1CostHelper's oneMillion). Same value
+// as the operator scalar divisor but a different quantity — do not merge them.
+constexpr int64_t kLegacyFeeScalarDivisor = 1000000;
 // The 1e6 scaling factor for estimatedDaSizeScaled (semantically unrelated to the operator
 // scalar's 1e6; do not merge them).
 constexpr int64_t kDaSizeScaleDivisor = 1'000'000;
@@ -153,6 +156,38 @@ uint64_t bedrockCalldataGasUsed(evmc::bytes_view env) noexcept
         (b == 0 ? zeroes : nonZeroes)++;
     return zeroes * static_cast<uint64_t>(kZeroByteCost) +
            nonZeroes * static_cast<uint64_t>(kNonzeroByteCost);
+}
+
+uint64_t legacyTxDataGas(evmc::bytes_view env, bool regolithActive) noexcept
+{
+    // op-geth newL1CostFuncBedrockHelper: pre-Regolith the calldata count carries a one-time
+    // +68 phantom non-zero bytes ((ones + 68) * 16); Regolith drops it (rollup_cost.go).
+    return bedrockCalldataGasUsed(env) +
+           (regolithActive ? 0 : 68 * static_cast<uint64_t>(kNonzeroByteCost));
+}
+
+LegacyL1Cost computeLegacyL1Cost(
+    const OpFeeParams& params, evmc::bytes_view signedTxEnvelope, bool regolithActive) noexcept
+{
+    const auto gasUsed =
+        intx::uint512{legacyTxDataGas(signedTxEnvelope, regolithActive)} +
+        intx::uint512{params.l1_fee_overhead};
+    const auto truncatedGasUsed = static_cast<uint64_t>(gasUsed);  // op-geth big.Int.Uint64()
+
+    // op-geth l1CostHelper: fee = gasUsed * l1BaseFee * scalar / 1e6 in big.Int (no wrap).
+    // A true fee < 2^256 implies the full product < 2^256 * 1e6 << 2^512, so a 512-bit
+    // multiplication overflow implies fee >= 2^256: saturate (same rule as the Ecotone/Fjord
+    // paths — the opValidate balance cap rejects a fee this large either way).
+    constexpr auto kMax512 = ~intx::uint512{0};
+    const auto baseFee = intx::uint512{params.l1_base_fee};
+    const auto scalar = intx::uint512{params.l1_fee_scalar};
+    if ((baseFee != 0 && gasUsed > kMax512 / baseFee) ||
+        (scalar != 0 && gasUsed * baseFee > kMax512 / scalar))
+        return {~intx::uint256{0}, truncatedGasUsed};
+    const auto fee = gasUsed * baseFee * scalar / intx::uint512{kLegacyFeeScalarDivisor};
+    if (fee > intx::uint512{~intx::uint256{0}})
+        return {~intx::uint256{0}, truncatedGasUsed};
+    return {static_cast<intx::uint256>(fee), truncatedGasUsed};
 }
 
 intx::uint256 computeL1CostFromFlz(

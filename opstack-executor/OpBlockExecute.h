@@ -184,7 +184,8 @@ inline const evmc::bytes32 OP_EMPTY_REQUESTS_HASH = [] {
     const std::map<evmc::bytes32, evmc::bytes32>& messagePasserStorage);
 
 /// Receipts-root leaf, byte-for-byte op-geth `Receipts.EncodeIndex` semantics:
-/// deposit 0x7E || rlp([status, cumGas, bloom, logs, nonce, version]);
+/// deposit 0x7E || rlp([status, cumGas, bloom, logs] + [nonce, version] only when the receipt
+/// carries depositReceiptVersion (Canyon+); the Regolith nonce stays out of the trie leaf);
 /// normal typed prefix + rlp([status, cumGas, bloom, logs]).
 [[nodiscard]] bcos::bytes encodeReceiptForRoot(
     const bcos::protocol::TransactionReceipt& r, uint8_t txType);
@@ -307,7 +308,14 @@ void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
 {
     namespace op = bcos::evm::opstack;
 
-    auto blk = detail::toBlockInfo(header);
+    // Pre-Ecotone leniency (devp2p sync, OpBlockVerifier): pre-Ecotone OP headers carry no
+    // parentBeaconBlockRoot / blobGasUsed fields at all (the fork-gated header shape,
+    // devp2p's OpHeaderValidator), so the strict toBlockInfo would reject every Bedrock..Delta
+    // block with "missing required header field". The zero-filled optionals are dead EVM
+    // inputs pre-Cancun (no EIP-4788 beacon-roots system call, no blob fee), so the leniency
+    // is semantics-neutral; Ecotone+ headers carry the fields and stay strict.
+    auto blk = detail::toBlockInfo(
+        header, std::nullopt, /*lenientOptionals=*/cfg.fork < op::OpFork::Ecotone);
     hashes.emplace(
         view, blk.number, detail::toEvmcBytes32(header.parentInfo().blockHash), &hashErr);
     bcos::evm::evmstate::Storage2State<Storage> stateView(view, executor.sharedError());

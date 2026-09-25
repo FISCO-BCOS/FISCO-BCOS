@@ -53,7 +53,13 @@ bcos::h256 keccak(bcos::bytesConstRef data)
 // Zero-valued slots are skipped (no-op in Ethereum state). Empty -> emptyRoot.
 // The slot keccak stays over the raw configured bytes (not mpt::slotKeyHash, which
 // right-aligns into a fixed 32 bytes) to keep genesis hashing byte-identical.
-bcos::task::Task<mpt::TrieBuildResult> storageTrieOf(std::vector<Alloc::State> const& storage)
+//
+// Deliberately a PLAIN function, not a task::Task: computeGenesisStateTrie calls it
+// once per alloc, and a per-account co_await loop overflows the native stack for
+// real-world alloc sets (op-sepolia: 2066 accounts) on builds where the compiler
+// does not tail-call the symmetric-transfer resume (this repo's ASAN configuration).
+// storageTrieOf performs no I/O — the coroutine wrapper bought nothing.
+mpt::TrieBuildResult storageTrieOf(std::vector<Alloc::State> const& storage)
 {
     std::map<bcos::h256, bcos::bytes> entries;
     std::set<bcos::h256> seenSlots;
@@ -90,10 +96,10 @@ bcos::task::Task<mpt::TrieBuildResult> storageTrieOf(std::vector<Alloc::State> c
     }
     if (entries.empty())
     {
-        co_return mpt::TrieBuildResult{.root = mpt::emptyRootHash(), .newNodes = {}};
+        return mpt::TrieBuildResult{.root = mpt::emptyRootHash(), .newNodes = {}};
     }
     // From-empty build through the stateless core: root + every produced node.
-    co_return mpt::computeTrieRoot(entries);
+    return mpt::computeTrieRoot(entries);
 }
 }  // namespace
 
@@ -118,7 +124,9 @@ bcos::task::Task<bcos::ledger::GenesisStateTrie> bcos::ledger::computeGenesisSta
 
     for (auto const& alloc : genesis.m_allocs)
     {
-        auto storageTrie = co_await storageTrieOf(alloc.storage);
+        // Synchronous call (not co_await): see storageTrieOf's comment — a per-alloc
+        // co_await loop overflows the stack on sanitizer builds for real alloc sets.
+        auto storageTrie = storageTrieOf(alloc.storage);
         auto storageRoot = storageTrie.root;
         nodes.merge(storageTrie.newNodes);
 

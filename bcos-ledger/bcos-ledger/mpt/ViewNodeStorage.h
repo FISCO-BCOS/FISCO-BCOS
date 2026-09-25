@@ -60,8 +60,8 @@ namespace bcos::ledger::mpt
 ///
 /// Ordering inside one build is safe by construction: the flush runs after the delta scan
 /// completes, and a stray "/mpt/" row can never be classified as account state because
-/// parseAccountTable() only accepts "/apps/<40-hex>" tables (pinned by the stray-row test in
-/// TestMPTSchedulerWiring.cpp).
+/// parseAccountTable() only accepts the two account-table shapes — "/apps/<40 hex>" and
+/// "/s/<20 raw bytes>" (pinned by the stray-row test in TestMPTSchedulerWiring.cpp).
 template <class View>
 class ViewNodeStorage
 {

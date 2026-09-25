@@ -46,7 +46,7 @@ BOOST_AUTO_TEST_CASE(UnpacksScalarsFromPackedSlots)
         return w;
     }();
 
-    const auto p = unpackOpFeeParams(slot1, slot3, slot7, slot8);
+    const auto p = unpackOpFeeParams(slot1, slot3, {}, {}, slot7, slot8);
     BOOST_CHECK_EQUAL(p.l1_base_fee, intx::uint256{1000});
     BOOST_CHECK_EQUAL(p.base_fee_scalar, 7u);
     BOOST_CHECK_EQUAL(p.blob_base_fee_scalar, 9u);
@@ -76,6 +76,7 @@ BOOST_AUTO_TEST_CASE(LoadFromStateEqualsManualUnpack)
     const auto loaded = loadOpFeeParams(ts);
     const auto manual =
         unpackOpFeeParams(ts.get_storage(OP_L1_BLOCK, key(1)), ts.get_storage(OP_L1_BLOCK, key(3)),
+            ts.get_storage(OP_L1_BLOCK, key(5)), ts.get_storage(OP_L1_BLOCK, key(6)),
             ts.get_storage(OP_L1_BLOCK, key(7)), ts.get_storage(OP_L1_BLOCK, key(8)));
     BOOST_CHECK_EQUAL(loaded.l1_base_fee, manual.l1_base_fee);
     BOOST_CHECK_EQUAL(loaded.blob_base_fee, manual.blob_base_fee);
@@ -103,10 +104,53 @@ BOOST_AUTO_TEST_CASE(UnpacksDaFootprintGasScalarFromSlot8)
         return w;
     }();
 
-    const auto p = unpackOpFeeParams(slot1, slot3, slot7, slot8);
+    const auto p = unpackOpFeeParams(slot1, slot3, {}, {}, slot7, slot8);
     BOOST_CHECK_EQUAL(p.da_footprint_gas_scalar, 0x1234u);
     BOOST_CHECK_EQUAL(p.operator_fee_scalar, 11u);
     BOOST_CHECK_EQUAL(p.operator_fee_constant, 13u);
+}
+
+// Bedrock–Delta legacy 布局（op-geth core/types/rollup_cost.go: L1BaseFeeSlot=1,
+// OverheadSlot=5, ScalarSlot=6；Bedrock L1Block.sol 的 number/timestamp 打包进 slot 0，
+// 所以 basefee 是 slot 1 而非 slot 2）。overhead/scalar 都是整槽 uint256。
+BOOST_AUTO_TEST_CASE(UnpacksLegacySlots5And6)
+{
+    const auto slot1 = fullWord(1000);   // l1_base_fee
+    const auto slot5 = fullWord(2100);   // l1FeeOverhead
+    const auto slot6 = fullWord(70000);  // l1FeeScalar（1e6 精度）
+
+    const auto p = unpackOpFeeParams(slot1, {}, slot5, slot6, {}, {});
+    BOOST_CHECK_EQUAL(p.l1_base_fee, intx::uint256{1000});
+    BOOST_CHECK_EQUAL(p.l1_fee_overhead, intx::uint256{2100});
+    BOOST_CHECK_EQUAL(p.l1_fee_scalar, intx::uint256{70000});
+    // 未给的槽读作零字，不影响既有字段
+    BOOST_CHECK_EQUAL(p.blob_base_fee, intx::uint256{0});
+    BOOST_CHECK_EQUAL(p.base_fee_scalar, 0u);
+}
+
+BOOST_AUTO_TEST_CASE(LoadFromStateReadsLegacySlots)
+{
+    using namespace evmone;
+    test::TestState ts;
+    auto key = [](uint8_t s) {
+        evmc::bytes32 k{};
+        k.bytes[31] = s;
+        return k;
+    };
+    auto low8 = [](uint64_t v) {
+        evmc::bytes32 w{};
+        for (int i = 0; i < 8; ++i)
+            w.bytes[31 - i] = static_cast<uint8_t>(v >> (8 * i));
+        return w;
+    };
+    ts[OP_L1_BLOCK].storage[key(1)] = low8(1000000000);
+    ts[OP_L1_BLOCK].storage[key(5)] = low8(2100);
+    ts[OP_L1_BLOCK].storage[key(6)] = low8(70000);
+
+    const auto loaded = loadOpFeeParams(ts);
+    BOOST_CHECK_EQUAL(loaded.l1_base_fee, 1000000000_u256);
+    BOOST_CHECK_EQUAL(loaded.l1_fee_overhead, 2100_u256);
+    BOOST_CHECK_EQUAL(loaded.l1_fee_scalar, 70000_u256);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -1,6 +1,8 @@
-#include "bcos-framework/storage/Common.h"
 #include "bcos-framework/storage/Entry.h"
+#include "bcos-framework/ledger/AccountTableName.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/storage/Common.h"
 #include <bcos-utilities/BoostLog.h>
 #include <boost/endian/conversion.hpp>
 
@@ -128,6 +130,31 @@ crypto::HashType Entry::hash(std::string_view table, std::string_view key,
     if (m_buffer.has_value() && m_buffer->getTypedPtr() != nullptr)
     {
         BOOST_THROW_EXCEPTION(TypedEntryHashCall{});
+    }
+
+    // Encoding-agnostic state root: the table name (and, for s_tables registration rows,
+    // the key — s_tables keys ARE table names) is mixed into the digest in both the v3.1
+    // and v3.17 formats, so the two physical encodings of one logical account table
+    // (binary vs hex, a node-local layout choice) must fold the same hash. Normalize binary
+    // account table names to the canonical hex form here, once, so every caller
+    // (xorStateRoot, StateStorage, KeyPageStorage) inherits the rule. No feature gate:
+    // no binary table name exists in committed history before this merged, so this is the
+    // only semantic from merge onward. The pre-v3.1 format ignores table/key entirely;
+    // normalizing unconditionally is harmless there.
+    // The string is materialized ONLY for binary names: a 46-char "/apps/<hex>" name
+    // exceeds SSO, so an unconditional copy would allocate+free on every Entry::hash call
+    // (once per modified row per block) on every hex chain.
+    std::string canonicalTable;
+    if (ledger::account::isBinaryAccountTableName(table))
+    {
+        canonicalTable = ledger::account::binaryToHexAccountTableName(table);
+        table = canonicalTable;
+    }
+    std::string canonicalKey;
+    if (table == ledger::SYS_TABLES && ledger::account::isBinaryAccountTableName(key))
+    {
+        canonicalKey = ledger::account::binaryToHexAccountTableName(key);
+        key = canonicalKey;
     }
 
     const bool enableHashCollisionFix =

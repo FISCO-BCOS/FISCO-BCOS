@@ -22,6 +22,7 @@
 
 #include "Features.h"
 #include "LedgerConfig.h"
+#include "OpForkSchedule.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tool/VersionConverter.h"
@@ -121,19 +122,10 @@ struct EthereumForkSchedule
     uint64_t m_bpo2Time = 0;
 };
 
-// OP-lane fork schedule, parsed from the [op_fork_timestamps] section of
-// config.genesis (executor_version >= OPSTACK_EXECUTOR_VERSION). OP forks
-// activate by L2 block TIMESTAMP IN SECONDS, exactly like op-node's
-// rollup.json jovian_time / karst_time (op-node/rollup/types.go:
-// IsJovian(ts) == Time != nil && ts >= *Time). 0 means "active from genesis";
-// std::numeric_limits<uint64_t>::max() encodes op-node's nil, i.e. "not
-// scheduled". Isthmus is the OP lane's baseline and therefore has no entry:
-// the engine's -38005 gate admits only Isthmus+ payloads.
-struct OpForkSchedule
-{
-    uint64_t m_jovianTime = std::numeric_limits<uint64_t>::max();
-    uint64_t m_karstTime = std::numeric_limits<uint64_t>::max();
-};
+// The OP-lane fork schedule ([op_fork_timestamps]) now lives in
+// ledger/OpForkSchedule.h next to the OpFork ladder enum and resolveOpFork, the
+// single fork-activation parser shared by the executor and the devp2p header
+// validator; this header re-exports it for the config/genesis side.
 
 class GenesisConfig
 {
@@ -212,6 +204,15 @@ public:
     // [fork_timestamps] section pasted into an ordinary v2 genesis cannot waive
     // them. validateL2Invariants binds it to m_ethereumForkSchedule both ways.
     bool m_ethereumELMode = false;
+
+    // True iff config.genesis declares "[ethereum] mode=opstack-el" — the chain is
+    // an OP-Stack chain synced over devp2p (OpStackSyncInitializer), executor
+    // version >= OPSTACK_EXECUTOR_VERSION. Same chain-level pin semantics as
+    // m_ethereumELMode; validateL2Invariants binds it to m_opForkSchedule, the L2
+    // genesis shape ([eth_genesis_header] + [alloc.*]) and a non-zero [web3]
+    // chain_id. Mutually exclusive with m_ethereumELMode by construction (one
+    // mode string).
+    bool m_opStackELMode = false;
 
 };  // namespace genesisConfig
 }  // namespace bcos::ledger

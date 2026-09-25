@@ -20,8 +20,13 @@
 //   * poison-flag channel: reads are noexcept and swallow storage errors into poisoned()/
 //     firstError(); consumers must fail the whole block on poisoned() — never degrade a storage
 //     fault to “account missing”. applyDiff write-back failures poison AND rethrow (tripwire);
-//   * account tables are “/apps/<hex(addr)>” paths (mainline MPT classifier), same for every
-//     address incl. c_systemTxsAddress; requires feature_raw_address=off;
+//   * account tables are "/apps/<hex(addr)>" paths in the hex layout and "/s/<20 raw
+//     bytes>" in the node-local binary layout (mainline MPT classifier), same logical
+//     table for every address incl. c_systemTxsAddress. The bridge derives the name
+//     through Storage2StateHelpers.h accountTableName → account::ethLaneAccountTableName,
+//     which re-encodes the logical "/apps/<hex>" name to this node's physical layout, so
+//     the bridge runs on either encoding; Hex and Binary nodes commit identical roots
+//     (MPT leaf keys are keccak(address), encoding-agnostic).
 //   * nested syncWait is safe only inside the x_state-serialized segment (backends complete
 //     synchronously in-thread).
 
@@ -370,7 +375,8 @@ private:
 
         // The table name is derived exactly once and shared by reads and writes. Deliberately
         // built via EVMAccount's `FromTableName` constructor rather than
-        // `EVMAccount(storage, addr, false)`: the latter routes the 8 c_systemTxsAddress
+        // `EVMAccount(storage, addr, AddressTableMode::Hex)`: the latter routes the 8
+        // c_systemTxsAddress
         // addresses into `/sys/` (EVMAccount.h:239-245), while every read/write here goes to
         // `/apps/` — a mismatch would split-brain (read /apps/, write /sys/). There must be a
         // single derivation of this rule, not two independent copies (two copies of one rule is
@@ -582,62 +588,68 @@ private:
         co_return storage;
     }
 
-    /// visitAccounts implementation: range-scans SYS_TABLES for the /apps/ prefix (`/sys/` is a
-    /// different prefix and is never scanned; a `c_systemTxsAddress` member with an
-    /// `/apps/<40hex>` table is an ordinary account here, collected unconditionally — see
-    /// accountTableName for why that is the *required* behaviour, not a missing guard), skips
-    /// non-account tables under /apps/ and tombstoned marker rows (same discrimination as
-    /// fetchAllStorage), and for each surviving candidate delegates to fetchAccount/
-    /// fetchAllStorage (which independently re-verify liveness through existsOne/readOne) before
-    /// invoking the visitor.
+    /// visitAccounts implementation: range-scans SYS_TABLES for the two account-table
+    /// prefixes — "/apps/" (hex layout) and "/s/" (the node-local binary layout; "/apps/"
+    /// sorts before "/s/", so two ordered scans visit every account exactly once, and a
+    /// node runs one layout at a time so in practice exactly one range is non-empty).
+    /// "/sys/" is a different prefix and is never scanned; a `c_systemTxsAddress` member's
+    /// account table is an ordinary account here, collected unconditionally — see
+    /// accountTableName for why that is the *required* behaviour, not a missing guard.
+    /// Each range skips non-account tables and tombstoned marker rows (same
+    /// discrimination as fetchAllStorage), and for each surviving candidate delegates to
+    /// fetchAccount/ fetchAllStorage (which independently re-verify liveness through
+    /// existsOne/readOne) before invoking the visitor.
     template <class Visitor>
     task::Task<bool> visitAccountsImpl(Visitor& visitor) const
     {
-        auto iterator = co_await storage2::range(m_storage.get(), storage2::RANGE_SEEK,
-            executor_v1::StateKeyView{
-                bcos::ledger::SYS_TABLES, bcos::ledger::SYS_DIRECTORY::USER_APPS});
-        while (auto item = co_await iterator.next())
+        for (auto prefix : {std::string_view{bcos::ledger::SYS_DIRECTORY::USER_APPS},
+                 std::string_view{bcos::ledger::account::BINARY_TABLE_PREFIX}})
         {
-            const auto& key = std::get<0>(*item);
-            const auto& rawValue = std::get<1>(*item);
-            executor_v1::StateKeyView keyView(key);
-            auto [table, tableKey] = keyView.get();
-            // Stop once the /apps/ prefix range ends (/sys/ is never scanned).
-            if (table != bcos::ledger::SYS_TABLES ||
-                !tableKey.starts_with(bcos::ledger::SYS_DIRECTORY::USER_APPS))
-                break;
+            auto iterator = co_await storage2::range(m_storage.get(), storage2::RANGE_SEEK,
+                executor_v1::StateKeyView{bcos::ledger::SYS_TABLES, prefix});
+            while (auto item = co_await iterator.next())
+            {
+                const auto& key = std::get<0>(*item);
+                const auto& rawValue = std::get<1>(*item);
+                executor_v1::StateKeyView keyView(key);
+                auto [table, tableKey] = keyView.get();
+                // Stop once this prefix range ends (/sys/ is never scanned).
+                if (table != bcos::ledger::SYS_TABLES || !tableKey.starts_with(prefix))
+                    break;
 
-            // Value-variant discrimination: skip NOT_EXISTS_TYPE/DELETED_TYPE tombstone rows, or
-            // a just-deleted account would resurrect into the stateRoot.
-            if (!liveContent(rawValue).has_value())
-                continue;
+                // Value-variant discrimination: skip NOT_EXISTS_TYPE/DELETED_TYPE tombstone
+                // rows, or a just-deleted account would resurrect into the stateRoot.
+                if (!liveContent(rawValue).has_value())
+                    continue;
 
-            // Skip non-account tables: `/apps/` also holds `_accessAuth` authorization tables and
-            // BFS link tables `<name>/<version>`, which are not accounts (criteria in
-            // addressFromTableName). continue, not break: these names interleave with account
-            // names within the /apps/ prefix range, so stopping at one would drop the real
-            // accounts after it; only the prefix check above ends the range.
-            const auto parsedAddr = addressFromTableName(tableKey);
-            if (!parsedAddr.has_value())
-                continue;
+                // Skip non-account tables: `/apps/` also holds `_accessAuth` authorization
+                // tables and BFS link tables `<name>/<version>`, which are not accounts
+                // (criteria in addressFromTableName). continue, not break: these names
+                // interleave with account names within the /apps/ prefix range, so stopping
+                // at one would drop the real accounts after it; only the prefix check above
+                // ends the range.
+                const auto parsedAddr = addressFromTableName(tableKey);
+                if (!parsedAddr.has_value())
+                    continue;
 
-            const std::string tableName{tableKey};
-            const auto addr = *parsedAddr;
+                const std::string tableName{tableKey};
+                const auto addr = *parsedAddr;
 
-            auto account = co_await fetchAccountForVisit(addr, tableName);
-            if (!account.has_value())
-                continue;  // double defense: same existsOne criterion as the tombstone check above
+                auto account = co_await fetchAccountForVisit(addr, tableName);
+                if (!account.has_value())
+                    continue;  // double defense: same existsOne criterion as the tombstone check
 
-            const auto storage = co_await fetchAllStorage(tableName);
+                const auto storage = co_await fetchAllStorage(tableName);
 
-            const AccountView accountView{.addr = addr,
-                .nonce = account->nonce,
-                .balance = account->balance,
-                .codeHash = account->code_hash,
-                .storage = storage,
-                .m_bridge = this};
-            if (!visitor(accountView))
-                co_return false;
+                const AccountView accountView{.addr = addr,
+                    .nonce = account->nonce,
+                    .balance = account->balance,
+                    .codeHash = account->code_hash,
+                    .storage = storage,
+                    .m_bridge = this};
+                if (!visitor(accountView))
+                    co_return false;
+            }
         }
         co_return true;
     }
