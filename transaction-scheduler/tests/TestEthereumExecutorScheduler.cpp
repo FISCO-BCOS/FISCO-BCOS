@@ -139,7 +139,7 @@ std::shared_ptr<bcostars::protocol::TransactionImpl> EEMakeTransferTx(
 task::Task<void> EEFundAccount(EEBackendStorage& storage, evmc_address const& addr, u256 balance)
 {
     using namespace bcos::ledger::account;
-    EVMAccount<EEBackendStorage> acc(storage, addr, false);
+    EVMAccount<EEBackendStorage> acc(storage, addr, bcos::ledger::account::AddressTableMode::Hex);
     if (!co_await acc.exists())
     {
         co_await acc.create();
@@ -152,7 +152,8 @@ template <class Storage>
 task::Task<u256> EEReadBalance(Storage& storage, evmc_address const& addr)
 {
     using namespace bcos::ledger::account;
-    EVMAccount<std::remove_reference_t<Storage>> acc(storage, addr, false);
+    EVMAccount<std::remove_reference_t<Storage>> acc(
+        storage, addr, bcos::ledger::account::AddressTableMode::Hex);
     co_return co_await acc.balance();
 }
 
@@ -906,14 +907,16 @@ BOOST_AUTO_TEST_CASE(ethereumStateHasStorageSemantics)
 
         EEMutableStorage storage;
         {
-            EVMAccount<EEMutableStorage> acc(storage, plainAcc, false);
+            EVMAccount<EEMutableStorage> acc(
+                storage, plainAcc, bcos::ledger::account::AddressTableMode::Hex);
             if (!co_await acc.exists())
                 co_await acc.create();
             co_await acc.setNonce("0");
             co_await acc.setBalance(u256(1));
         }
         {
-            EVMAccount<EEMutableStorage> acc(storage, slottedAcc, false);
+            EVMAccount<EEMutableStorage> acc(
+                storage, slottedAcc, bcos::ledger::account::AddressTableMode::Hex);
             if (!co_await acc.exists())
                 co_await acc.create();
             co_await acc.setNonce("0");
@@ -922,7 +925,8 @@ BOOST_AUTO_TEST_CASE(ethereumStateHasStorageSemantics)
 
         // Give slottedAcc one real storage slot (beyond the fixed fields).
         {
-            EVMAccount<EEMutableStorage> acc(storage, slottedAcc, false);
+            EVMAccount<EEMutableStorage> acc(
+                storage, slottedAcc, bcos::ledger::account::AddressTableMode::Hex);
             evmc_bytes32 key{};
             key.bytes[31] = 1;
             evmc_bytes32 value{};
@@ -965,7 +969,8 @@ BOOST_AUTO_TEST_CASE(callDryRunSkipsNonceAndGasValidation)
         // would be NONCE_TOO_LOW if the executor validated it like a real tx.
         {
             using namespace bcos::ledger::account;
-            EVMAccount<EEBackendStorage> acc(backendStorage, sender, false);
+            EVMAccount<EEBackendStorage> acc(
+                backendStorage, sender, bcos::ledger::account::AddressTableMode::Hex);
             co_await acc.setNonce("3");
         }
         co_await EEFundAccount(backendStorage, recipient, 0);

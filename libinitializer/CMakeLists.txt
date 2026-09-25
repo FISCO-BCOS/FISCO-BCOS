@@ -27,7 +27,7 @@ add_library(init
     FrontServiceInitializer.cpp
     TxPoolInitializer.cpp
     MemPoolInitializer.cpp
-    LedgerInitializer.cpp
+    LedgerInitializer.cpp AddressTableModeDetection.cpp AccountTableMigration.cpp
     GlobalStateStorageInitializer.cpp MultiVersionScheduler.cpp
     BaselineSchedulerInst.cpp
     OpEngineServiceInstantiate.cpp

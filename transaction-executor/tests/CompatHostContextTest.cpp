@@ -770,7 +770,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2930_access_list_multi_slot)
 
     syncWait([&]() -> task::Task<void> {
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> childAcc(
-            rollbackableStorage, childContract, false);
+            rollbackableStorage, childContract, bcos::ledger::account::AddressTableMode::Hex);
         co_await childAcc.create();
         auto const code = eip2929::warmAccountThenRevertBytecode(coldTarget);
         auto const hash = hashImpl->hash(bcos::bytesConstRef(code.data(), code.size()));
@@ -873,7 +873,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_revert_rolls_back_child_warm)
 
     syncWait([&]() -> task::Task<void> {
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> childAcc(
-            rollbackableStorage, childContract, false);
+            rollbackableStorage, childContract, bcos::ledger::account::AddressTableMode::Hex);
         co_await childAcc.create();
         auto const code = eip2929::warmAccountThenRevertBytecode(coldTarget);
         auto const hash = hashImpl->hash(bcos::bytesConstRef(code.data(), code.size()));
@@ -929,7 +929,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_success_commits_child_warm)
 
     syncWait([&]() -> task::Task<void> {
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> childAcc(
-            rollbackableStorage, childContract, false);
+            rollbackableStorage, childContract, bcos::ledger::account::AddressTableMode::Hex);
         co_await childAcc.create();
         auto const code = eip2929::warmAccountThenStopBytecode(coldTarget);
         auto const hash = hashImpl->hash(bcos::bytesConstRef(code.data(), code.size()));
@@ -981,7 +981,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_nested_inner_fail_outer_ok)
 
     syncWait([&]() -> task::Task<void> {
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> innerAcc(
-            rollbackableStorage, inner, false);
+            rollbackableStorage, inner, bcos::ledger::account::AddressTableMode::Hex);
         co_await innerAcc.create();
         auto const innerCode = eip2929::warmAccountThenRevertBytecode(bAddr);
         auto const innerHash =
@@ -989,7 +989,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_nested_inner_fail_outer_ok)
         co_await innerAcc.setCode(innerCode, "", innerHash);
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> outerAcc(
-            rollbackableStorage, outer, false);
+            rollbackableStorage, outer, bcos::ledger::account::AddressTableMode::Hex);
         co_await outerAcc.create();
         auto const outerCode = eip2929::callThenRevertBytecode(inner);
         auto const outerHash =
@@ -1046,7 +1046,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_parent_call_nested_revert_rolls_back_child_
 
     syncWait([&]() -> task::Task<void> {
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAcc(
-            rollbackableStorage, origin, false);
+            rollbackableStorage, origin, bcos::ledger::account::AddressTableMode::Hex);
         if (!co_await originAcc.exists())
         {
             co_await originAcc.create();
@@ -1054,7 +1054,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_parent_call_nested_revert_rolls_back_child_
         co_await originAcc.setBalance(bcos::u256(1) << 96);
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> childAcc(
-            rollbackableStorage, childContract, false);
+            rollbackableStorage, childContract, bcos::ledger::account::AddressTableMode::Hex);
         co_await childAcc.create();
         auto const childCode = eip2929::warmAccountThenRevertBytecode(coldTarget);
         auto const childHash =
@@ -1062,7 +1062,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_parent_call_nested_revert_rolls_back_child_
         co_await childAcc.setCode(childCode, "", childHash);
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> parentAcc(
-            rollbackableStorage, parentContract, false);
+            rollbackableStorage, parentContract, bcos::ledger::account::AddressTableMode::Hex);
         co_await parentAcc.create();
         auto const parentCode = eip2929::callThenRevertBytecode(childContract);
         auto const parentHash =
@@ -1104,7 +1104,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_sequential_child_revert_then_success_warm)
 
     syncWait([&]() -> task::Task<void> {
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> child1Acc(
-            rollbackableStorage, child1, false);
+            rollbackableStorage, child1, bcos::ledger::account::AddressTableMode::Hex);
         co_await child1Acc.create();
         auto const child1Code = eip2929::warmAccountThenRevertBytecode(warmFromChild1);
         auto const child1Hash =
@@ -1112,7 +1112,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_sequential_child_revert_then_success_warm)
         co_await child1Acc.setCode(child1Code, "", child1Hash);
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> child2Acc(
-            rollbackableStorage, child2, false);
+            rollbackableStorage, child2, bcos::ledger::account::AddressTableMode::Hex);
         co_await child2Acc.create();
         auto const child2Code = eip2929::warmAccountThenStopBytecode(warmFromChild2);
         auto const child2Hash =
@@ -1173,7 +1173,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_child_revert_preserves_parent_warm_same_add
 
     syncWait([&]() -> task::Task<void> {
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAcc(
-            rollbackableStorage, origin, false);
+            rollbackableStorage, origin, bcos::ledger::account::AddressTableMode::Hex);
         if (!co_await originAcc.exists())
         {
             co_await originAcc.create();
@@ -1181,7 +1181,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_child_revert_preserves_parent_warm_same_add
         co_await originAcc.setBalance(bcos::u256(1) << 96);
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> childAcc(
-            rollbackableStorage, childContract, false);
+            rollbackableStorage, childContract, bcos::ledger::account::AddressTableMode::Hex);
         co_await childAcc.create();
         auto const childCode = eip2929::warmAccountThenRevertBytecode(sharedAddr);
         auto const childHash =
@@ -1189,7 +1189,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_child_revert_preserves_parent_warm_same_add
         co_await childAcc.setCode(childCode, "", childHash);
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> parentAcc(
-            rollbackableStorage, parentContract, false);
+            rollbackableStorage, parentContract, bcos::ledger::account::AddressTableMode::Hex);
         co_await parentAcc.create();
         auto const parentCode = eip2929::warmAddressThenCallBytecode(sharedAddr, childContract);
         auto const parentHash =
@@ -1223,7 +1223,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_staticcall_child_revert_rollback)
 
     syncWait([&]() -> task::Task<void> {
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAcc(
-            rollbackableStorage, origin, false);
+            rollbackableStorage, origin, bcos::ledger::account::AddressTableMode::Hex);
         if (!co_await originAcc.exists())
         {
             co_await originAcc.create();
@@ -1231,7 +1231,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_staticcall_child_revert_rollback)
         co_await originAcc.setBalance(bcos::u256(1) << 96);
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> innerAcc(
-            rollbackableStorage, innerContract, false);
+            rollbackableStorage, innerContract, bcos::ledger::account::AddressTableMode::Hex);
         co_await innerAcc.create();
         auto const innerCode = eip2929::warmAccountThenRevertBytecode(coldTarget);
         auto const innerHash =
@@ -1239,7 +1239,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_staticcall_child_revert_rollback)
         co_await innerAcc.setCode(innerCode, "", innerHash);
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> parentAcc(
-            rollbackableStorage, parentContract, false);
+            rollbackableStorage, parentContract, bcos::ledger::account::AddressTableMode::Hex);
         co_await parentAcc.create();
         auto const parentCode = eip2929::staticCallThenRevertBytecode(innerContract);
         auto const parentHash =
@@ -1273,7 +1273,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_delegatecall_shares_warm_set)
 
     syncWait([&]() -> task::Task<void> {
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAcc(
-            rollbackableStorage, origin, false);
+            rollbackableStorage, origin, bcos::ledger::account::AddressTableMode::Hex);
         if (!co_await originAcc.exists())
         {
             co_await originAcc.create();
@@ -1281,7 +1281,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_delegatecall_shares_warm_set)
         co_await originAcc.setBalance(bcos::u256(1) << 96);
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> calleeAcc(
-            rollbackableStorage, delegateCallee, false);
+            rollbackableStorage, delegateCallee, bcos::ledger::account::AddressTableMode::Hex);
         co_await calleeAcc.create();
         auto const calleeCode = eip2929::warmAccountThenStopBytecode(warmAddr);
         auto const calleeHash =
@@ -1289,7 +1289,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_delegatecall_shares_warm_set)
         co_await calleeAcc.setCode(calleeCode, "", calleeHash);
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> parentAcc(
-            rollbackableStorage, parentContract, false);
+            rollbackableStorage, parentContract, bcos::ledger::account::AddressTableMode::Hex);
         co_await parentAcc.create();
         auto const parentCode = eip2929::delegateCallThenStopBytecode(delegateCallee);
         auto const parentHash =
@@ -1327,7 +1327,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_nested_inner_ok_outer_fail)
 
     syncWait([&]() -> task::Task<void> {
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAcc(
-            rollbackableStorage, origin, false);
+            rollbackableStorage, origin, bcos::ledger::account::AddressTableMode::Hex);
         if (!co_await originAcc.exists())
         {
             co_await originAcc.create();
@@ -1335,7 +1335,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_nested_inner_ok_outer_fail)
         co_await originAcc.setBalance(bcos::u256(1) << 96);
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> innerAcc(
-            rollbackableStorage, inner, false);
+            rollbackableStorage, inner, bcos::ledger::account::AddressTableMode::Hex);
         co_await innerAcc.create();
         auto const innerCode = eip2929::warmAccountThenStopBytecode(xAddr);
         auto const innerHash =
@@ -1343,7 +1343,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_nested_inner_ok_outer_fail)
         co_await innerAcc.setCode(innerCode, "", innerHash);
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> runnerAcc(
-            rollbackableStorage, runner, false);
+            rollbackableStorage, runner, bcos::ledger::account::AddressTableMode::Hex);
         co_await runnerAcc.create();
         auto const runnerCode = eip2929::callThenRevertBytecode(inner);
         auto const runnerHash =
@@ -1381,7 +1381,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_oog_rolls_back_child_warm)
 
     syncWait([&]() -> task::Task<void> {
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> childAcc(
-            rollbackableStorage, childContract, false);
+            rollbackableStorage, childContract, bcos::ledger::account::AddressTableMode::Hex);
         co_await childAcc.create();
         evmc_address coldTarget2{};
         coldTarget2.bytes[19] = 0x8a;
@@ -1439,7 +1439,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_revert_preserves_tx_baseline)
 
     syncWait([&]() -> task::Task<void> {
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> childAcc(
-            rollbackableStorage, childContract, false);
+            rollbackableStorage, childContract, bcos::ledger::account::AddressTableMode::Hex);
         co_await childAcc.create();
         auto const code = eip2929::warmAccountThenRevertBytecode(coldTarget);
         auto const hash = hashImpl->hash(bcos::bytesConstRef(code.data(), code.size()));
@@ -1499,7 +1499,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_revert_rolls_back_storage_slot)
 
     syncWait([&]() -> task::Task<void> {
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> childAcc(
-            rollbackableStorage, childContract, false);
+            rollbackableStorage, childContract, bcos::ledger::account::AddressTableMode::Hex);
         co_await childAcc.create();
         auto code = eip2929::storageWriterBytecode();
         code.pop_back();  // remove STOP
@@ -1548,7 +1548,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_top_level_create_execute_revert_keeps_contr
 
     syncWait([&]() -> task::Task<void> {
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAcc(
-            rollbackableStorage, origin, false);
+            rollbackableStorage, origin, bcos::ledger::account::AddressTableMode::Hex);
         if (!co_await originAcc.exists())
         {
             co_await originAcc.create();
@@ -1579,7 +1579,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_top_level_create_execute_oog_keeps_contract
 
     syncWait([&]() -> task::Task<void> {
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAcc(
-            rollbackableStorage, origin, false);
+            rollbackableStorage, origin, bcos::ledger::account::AddressTableMode::Hex);
         if (!co_await originAcc.exists())
         {
             co_await originAcc.create();
@@ -1628,7 +1628,8 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_create_fail_keeps_contract_warm)
         co_await host.prepare();
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> senderAcc(
-            rollbackableStorage, host.message().recipient, false);
+            rollbackableStorage, host.message().recipient,
+            bcos::ledger::account::AddressTableMode::Hex);
         auto const nonceStr = co_await senderAcc.nonce();
         u256 const nonce(nonceStr.value_or(std::string("0")));
 
@@ -1679,7 +1680,8 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_create_fail_evmone_inner_warm_rolled_back)
         co_await host.prepare();
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> senderAcc(
-            rollbackableStorage, host.message().recipient, false);
+            rollbackableStorage, host.message().recipient,
+            bcos::ledger::account::AddressTableMode::Hex);
         auto const nonceStr = co_await senderAcc.nonce();
         u256 const nonce(nonceStr.value_or(std::string("0")));
 
@@ -1727,7 +1729,8 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_create2_fail_keeps_contract_warm)
         co_await host.prepare();
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> senderAcc(
-            rollbackableStorage, host.message().recipient, false);
+            rollbackableStorage, host.message().recipient,
+            bcos::ledger::account::AddressTableMode::Hex);
         auto const nonceStr = co_await senderAcc.nonce();
         u256 const nonce(nonceStr.value_or(std::string("0")));
 
@@ -1762,7 +1765,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_top_level_revert_rolls_back_runtime_warm)
 
     syncWait([&]() -> task::Task<void> {
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAcc(
-            rollbackableStorage, origin, false);
+            rollbackableStorage, origin, bcos::ledger::account::AddressTableMode::Hex);
         if (!co_await originAcc.exists())
         {
             co_await originAcc.create();
@@ -1770,7 +1773,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_top_level_revert_rolls_back_runtime_warm)
         co_await originAcc.setBalance(bcos::u256(1) << 96);
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> runnerAcc(
-            rollbackableStorage, runner, false);
+            rollbackableStorage, runner, bcos::ledger::account::AddressTableMode::Hex);
         co_await runnerAcc.create();
         auto const runnerCode = eip2929::warmAccountThenRevertBytecode(runtimeTarget);
         auto const runnerHash =
@@ -1805,7 +1808,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_nested_commit_then_parent_revert)
 
     syncWait([&]() -> task::Task<void> {
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAcc(
-            rollbackableStorage, origin, false);
+            rollbackableStorage, origin, bcos::ledger::account::AddressTableMode::Hex);
         if (!co_await originAcc.exists())
         {
             co_await originAcc.create();
@@ -1813,7 +1816,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_nested_commit_then_parent_revert)
         co_await originAcc.setBalance(bcos::u256(1) << 96);
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> innerAcc(
-            rollbackableStorage, inner, false);
+            rollbackableStorage, inner, bcos::ledger::account::AddressTableMode::Hex);
         co_await innerAcc.create();
         auto const innerCode = eip2929::warmAccountThenStopBytecode(xAddr);
         auto const innerHash =
@@ -1821,7 +1824,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_nested_commit_then_parent_revert)
         co_await innerAcc.setCode(innerCode, "", innerHash);
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> runnerAcc(
-            rollbackableStorage, runner, false);
+            rollbackableStorage, runner, bcos::ledger::account::AddressTableMode::Hex);
         co_await runnerAcc.create();
         auto const runnerCode = eip2929::callThenRevertBytecode(inner);
         auto const runnerHash =
@@ -1858,7 +1861,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_checkpoint_off_nested_call)
 
     syncWait([&]() -> task::Task<void> {
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> childAcc(
-            rollbackableStorage, childContract, false);
+            rollbackableStorage, childContract, bcos::ledger::account::AddressTableMode::Hex);
         co_await childAcc.create();
         auto const code = eip2929::warmAccountThenStopBytecode(coldTarget);
         auto const hash = hashImpl->hash(bcos::bytesConstRef(code.data(), code.size()));

@@ -1,6 +1,7 @@
 #include "bcos-framework/ledger/Features.h"
 
 #include "bcos-tool/Exceptions.h"
+#include <bcos-utilities/BoostLog.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/throw_exception.hpp>
 
@@ -43,6 +44,21 @@ void Features::validate(Flag flag) const
     {
         BOOST_THROW_EXCEPTION(bcos::tool::InvalidSetFeature{}
                               << errinfo_comment("must set feature_balance_precompiled first"));
+    }
+    // DEPRECATED, inert. feature_raw_address used to gate the binary account-table
+    // encoding; the encoding is a node-local physical layout now (published by the boot-time
+    // detection as ledger::account::nodeAddressTableMode()), so the flag drives nothing.
+    // Accept-but-warn rather than reject: rejecting would fail governance transactions and
+    // config.genesis files written before the deprecation, while the recorded row is an
+    // inert no-op either way. Genesis loading (NodeConfig::loadGenesisFeatures) warns the
+    // same way.
+    if (flag == Flag::feature_raw_address)
+    {
+        BCOS_LOG(WARNING) << LOG_DESC(
+            "feature_raw_address is deprecated: the account-table encoding is a "
+            "node-local property (detected at startup, see "
+            "ledger::account::nodeAddressTableMode), not a chain feature. The flag "
+            "drives nothing; the recorded row is an inert no-op.");
     }
     // Genesis-only. validate() has exactly one production caller --
     // SystemConfigPrecompiled::validate (SystemConfigPrecompiled.cpp:309), the governance

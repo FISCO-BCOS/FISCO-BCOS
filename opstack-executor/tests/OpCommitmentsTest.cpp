@@ -128,6 +128,27 @@ BOOST_AUTO_TEST_CASE(RequestsHashPresenceAsymmetryIsMismatchBothWays)
     }
 }
 
+// withdrawalsRoot is fork-gated too (absent pre-Canyon): presence asymmetry must reject in
+// both directions, exactly like blobGasUsed/requestsHash.
+BOOST_AUTO_TEST_CASE(WithdrawalsRootPresenceAsymmetryIsMismatchBothWays)
+{
+    const auto base = baseCommitments();  // withdrawalsRoot engaged
+    {
+        auto announced = base;
+        announced.withdrawalsRoot = std::nullopt;
+        const auto mismatch = engine::mismatchedFieldOf(base, announced);
+        BOOST_REQUIRE(mismatch.has_value());
+        BOOST_CHECK_EQUAL(*mismatch, "withdrawalsRoot");
+    }
+    {
+        auto computed = base;
+        computed.withdrawalsRoot = std::nullopt;  // only announced has a value
+        const auto mismatch = engine::mismatchedFieldOf(computed, base);
+        BOOST_REQUIRE(mismatch.has_value());
+        BOOST_CHECK_EQUAL(*mismatch, "withdrawalsRoot");
+    }
+}
+
 BOOST_AUTO_TEST_CASE(CommitmentsOfProjectsEveryField)
 {
     op::OpBlockSeal seal;
@@ -144,7 +165,8 @@ BOOST_AUTO_TEST_CASE(CommitmentsOfProjectsEveryField)
 
     BOOST_CHECK(std::memcmp(c.receiptsRoot.data(), seal.receiptsRoot.bytes, 32) == 0);
     BOOST_CHECK(std::memcmp(c.logsBloom.data(), seal.logsBloom.bytes, 256) == 0);
-    BOOST_CHECK(std::memcmp(c.withdrawalsRoot.data(), seal.withdrawalsRoot.bytes, 32) == 0);
+    BOOST_REQUIRE(c.withdrawalsRoot.has_value());
+    BOOST_CHECK(std::memcmp(c.withdrawalsRoot->data(), seal.withdrawalsRoot->bytes, 32) == 0);
     BOOST_CHECK(c.stateRoot == stateRoot);
     BOOST_CHECK(c.gasUsed == bcos::u256{9001});
     BOOST_CHECK(c.txRoot == txRoot);
@@ -156,12 +178,12 @@ BOOST_AUTO_TEST_CASE(CommitmentsOfProjectsEveryField)
 
 BOOST_AUTO_TEST_CASE(CommitmentsOfWithoutRequestsHashLeavesItEmpty)
 {
-    op::OpBlockSeal seal;  // CANCUN-family: requestsHash disengaged
-    seal.blobGasUsed = std::nullopt;
+    op::OpBlockSeal seal;  // pre-Canyon shape: no withdrawalsRoot / requestsHash / blobGasUsed
 
     const auto c = engine::commitmentsOf(seal, bcos::h256{}, 0, bcos::h256{});
     BOOST_CHECK(!c.requestsHash.has_value());
     BOOST_CHECK(!c.blobGasUsed.has_value());
+    BOOST_CHECK(!c.withdrawalsRoot.has_value());
     BOOST_CHECK(c.gasUsed == bcos::u256{0});
 }
 

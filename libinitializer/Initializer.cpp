@@ -208,6 +208,18 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 "deployments"));
     }
 
+    // The account-table migration rewrites the state RocksDB directly; on TiKV the chain
+    // state does not live there, so the flag would migrate the wrong store.
+    if (m_nodeConfig->migrateAccountTablesToBinary() &&
+        !boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "[storage] migrate_account_tables_to_binary requires RocksDB storage (the "
+                "state DB it rewrites); storage.type=" +
+                m_nodeConfig->storageType() + " keeps its chain state elsewhere"));
+    }
+
     // TBB global thread control
     auto tbbThreadCount = m_nodeConfig->tbbThreadCount();
     if (tbbThreadCount > 0)
@@ -244,6 +256,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     m_globalStateStorageInitializer =
         GlobalStateStorageInitializer::build(m_nodeConfig->storagePath(), rocksDBOption);
 
+    // Node-local account-table encoding, handled inside LedgerInitializer::build (lane check
+    // → layout-flag read → optional one-shot migration → mode publication, all before the
+    // genesis write). The open DB handle is passed down: RocksDB's single-instance lock
+    // forbids opening the state DB twice, and the ledger's decryption-aware config reads are
+    // what determine the executor lane.
+    AccountTableBoot accountTableBoot{.stateDB = m_globalStateStorageInitializer->rocksDB(),
+        .migrateToBinary = m_nodeConfig->migrateAccountTablesToBinary()};
+
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
         // Share CheckpointRocksDBStorage's RocksDB with the legacy storage layer.
@@ -272,7 +292,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     // build ledger
     auto ledger = LedgerInitializer::build(m_protocolInitializer->blockFactory(), m_storage,
-        m_nodeConfig, m_blockStorage, m_ioServicePool);
+        m_nodeConfig, m_blockStorage, m_ioServicePool, std::move(accountTableBoot));
     ledger->setKeyPageSize(m_nodeConfig->keyPageSize());
     m_ledger = ledger;
 
@@ -395,16 +415,19 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // Refused here, ahead of the MPT pruner's boot-time init below: that init walks the window's
     // state roots and, with storage.mpt_prune_sweep_garbage on, deletes unreachable "/mpt/" rows,
     // so a refusal placed after it would turn a fail-fast into a slow, side-effectful one.
-    // Only OP mode is refused: EL mode is SUPPORTED — the devp2p sync commit path
-    // (EthereumBlockVerifier::verifyAndCommit) feeds the same CommitObserver hooks as the
+    // Only the engine-driven OP mode is refused: EL mode is SUPPORTED — the devp2p sync commit
+    // path (EthereumBlockVerifier::verifyAndCommit) feeds the same CommitObserver hooks as the
     // PBFT and Engine API paths (wired through EthereumSyncInitializer), so the window prunes
-    // at runtime there, not just at boot.
-    if (opStackMode && m_nodeConfig->mptPruneWindow() > 0)
+    // at runtime there, not just at boot. OP-Stack EL self-sync (ethereum.mode=opstack-el) is
+    // supported for the same reason: its commit path (OpBlockVerifier::verifyAndCommit) takes
+    // the observer too (wired through OpStackSyncInitializer).
+    if (opStackMode && m_nodeConfig->mptPruneWindow() > 0 && !m_nodeConfig->opStackELModeEnabled())
     {
         BOOST_THROW_EXCEPTION(
             bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                "storage.mpt_prune_window is not supported in OP mode (executor_version>=3) yet: "
-                "the OP commit path has no MPT pruning observer"));
+                "storage.mpt_prune_window is not supported in engine-driven OP mode "
+                "(executor_version>=3) yet: the engine-API OP commit path has no MPT pruning "
+                "observer (the opstack-el self-sync path does — prune is supported there)"));
     }
 
     // [op_engine_rpc] requires the v2 pure-Ethereum executor: on executor_version < 2 the
@@ -644,11 +667,16 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     if (opStackMode)
     {
-        if (!m_nodeConfig->engineDrivenBlockProduction())
+        // Two OP drivers: an external op-node over [op_engine_rpc] (engine-driven block
+        // production), or the devp2p self-sync client (ethereum.mode=opstack-el, wired by
+        // AirNodeInitializer through OpStackSyncInitializer). Anything else (a plain
+        // PBFT chain on executor_version>=3) has no block producer at all — refuse.
+        if (!m_nodeConfig->engineDrivenBlockProduction() && !m_nodeConfig->opStackELModeEnabled())
         {
             BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
                                       "OP mode (executor_version==3, the OPSTACK slot) requires "
-                                      "engine-driven block production ([op_engine_rpc] enable)"));
+                                      "engine-driven block production ([op_engine_rpc] enable) "
+                                      "or OP-Stack EL self-sync ([ethereum] mode=opstack-el)"));
         }
         // The OP lane's fork schedule comes from [op_fork_timestamps] (genesis config);
         // NodeConfig refuses an OP chain without it and a non-OP chain with it. Kept as a
@@ -695,11 +723,18 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_protocolInitializer->blockFactory(), m_globalStateStorageInitializer->storage(),
                 // Ledger on OpScheduler; engine keeps ledger=nullptr.
                 m_ledger, m_ioServicePool);
-        m_daCaps = std::make_shared<bcos::engine::DACaps>();
-        m_engineServiceInitializer = EngineServiceInitializer::buildOp(
-            m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
-            m_memPoolInitializer->memPool(), bcos::engine::c_defaultBlockTxCountLimit, opDelegate,
-            m_daCaps, /*allowSynthesizedL1Attributes=*/false);
+        // The Engine API service is the block producer only in engine-driven OP mode. In
+        // opstack-el self-sync mode blocks arrive over devp2p and commit through
+        // OpBlockVerifier (OpStackSyncInitializer), so no EngineService — and no DA-caps /
+        // mempool wiring that exists only to serve it — is built.
+        if (!m_nodeConfig->opStackELModeEnabled())
+        {
+            m_daCaps = std::make_shared<bcos::engine::DACaps>();
+            m_engineServiceInitializer = EngineServiceInitializer::buildOp(
+                m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
+                m_memPoolInitializer->memPool(), bcos::engine::c_defaultBlockTxCountLimit,
+                opDelegate, m_daCaps, /*allowSynthesizedL1Attributes=*/false);
+        }
 
         m_opScheduler = opDelegate;
         // Republish the full ledger configuration after every OP commit (see
@@ -909,12 +944,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // would write blocks to the same global storage concurrently. The front service is
     // still wired for gateway bookkeeping, but its dispatchers are inert with no peers.
     //
-    // Ethereum L1 EL mode (ethereum.mode=el) skips them for the same reason, one level
-    // further out: blocks arrive over devp2p download (EthereumSyncInitializer) and there
-    // is no local block production at all, so the txpool's ledger reads at init and the
-    // consensus/sync handlers pbft->init() registers would serve nothing. start() below
-    // already skips both modes.
-    if (!m_nodeConfig->engineDrivenBlockProduction() && !m_nodeConfig->ethereumELModeEnabled())
+    // Ethereum L1 EL mode (ethereum.mode=el) and OP-Stack EL self-sync
+    // (ethereum.mode=opstack-el) skip them for the same reason, one level further out:
+    // blocks arrive over devp2p download (EthereumSyncInitializer / OpStackSyncInitializer)
+    // and there is no local block production at all, so the txpool's ledger reads at init
+    // and the consensus/sync handlers pbft->init() registers would serve nothing. start()
+    // below already skips all three modes.
+    if (!m_nodeConfig->engineDrivenBlockProduction() && !m_nodeConfig->ethereumELModeEnabled() &&
+        !m_nodeConfig->opStackELModeEnabled())
     {
         // init the txpool
         m_txpoolInitializer->init();
@@ -923,11 +960,11 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // txpool init finished
         m_pbftInitializer->init();
     }
-    else if (m_nodeConfig->ethereumELModeEnabled())
+    else if (m_nodeConfig->ethereumELModeEnabled() || m_nodeConfig->opStackELModeEnabled())
     {
         INITIALIZER_LOG(INFO) << LOG_DESC(
-            "EthereumELMode: skip txpool/pbft/sealer init (blocks arrive via devp2p download; "
-            "no local block production)");
+            "EL self-sync mode (ethereum.mode=el|opstack-el): skip txpool/pbft/sealer init "
+            "(blocks arrive via devp2p download; no local block production)");
     }
     else
     {
@@ -1220,10 +1257,12 @@ void Initializer::start()
 {
     // Engine-driven modes (single-node consensus / op_engine_rpc): txpool/pbft (and the
     // sealer inside pbft) stay dormant — block production goes through the EngineService.
-    // Ethereum L1 EL mode (ethereum.mode=el): the node is a pure Ethereum execution-layer
-    // client; blocks come from bootnode download (EthereumSyncInitializer), never from
-    // FISCO consensus/txpool, so those pipelines also stay dormant.
-    if (!m_nodeConfig->engineDrivenBlockProduction() && !m_nodeConfig->ethereumELModeEnabled())
+    // EL self-sync modes (ethereum.mode=el / opstack-el): the node is a pure execution-layer
+    // client; blocks come from bootnode download (EthereumSyncInitializer /
+    // OpStackSyncInitializer), never from FISCO consensus/txpool, so those pipelines also
+    // stay dormant.
+    if (!m_nodeConfig->engineDrivenBlockProduction() && !m_nodeConfig->ethereumELModeEnabled() &&
+        !m_nodeConfig->opStackELModeEnabled())
     {
         if (m_txpoolInitializer)
         {

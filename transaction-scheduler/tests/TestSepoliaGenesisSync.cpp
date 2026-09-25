@@ -143,7 +143,8 @@ template <class Storage>
 task::Task<u256> ESSReadBalance(Storage& storage, std::string_view hexAddr)
 {
     using namespace bcos::ledger::account;
-    EVMAccount<std::remove_reference_t<Storage>> acc(storage, ESSAddress(hexAddr), false);
+    EVMAccount<std::remove_reference_t<Storage>> acc(
+        storage, ESSAddress(hexAddr), AddressTableMode::Hex);
     co_return co_await acc.balance();
 }
 
@@ -193,7 +194,7 @@ BOOST_FIXTURE_TEST_CASE(loadSepoliaGenesisVerifyEmptyBlock, ESSFixture)
         }
         ledger::Features features;
         auto genesisStateRoot = co_await ledger::importEthereumGenesisState(
-            backendStorage, allocs, *cryptoSuite->hashImpl(), features);
+            backendStorage, allocs, *cryptoSuite->hashImpl());
 
         // 2. The computed root MUST be the canonical Sepolia genesis state root,
         //    and the root node must be persisted as a "/mpt/" row.
@@ -315,7 +316,7 @@ BOOST_FIXTURE_TEST_CASE(sepoliaBlock1PoWRewardStateRoot, ESSFixture)
         }
         ledger::Features features;
         auto genesisStateRoot = co_await ledger::importEthereumGenesisState(
-            backendStorage, allocs, *cryptoSuite->hashImpl(), features);
+            backendStorage, allocs, *cryptoSuite->hashImpl());
         BOOST_CHECK_EQUAL(genesisStateRoot.hex(), std::string(kSepoliaStateRoot));
 
         // 2. PoW block-1 reward: +2 ETH to the block-1 coinbase.

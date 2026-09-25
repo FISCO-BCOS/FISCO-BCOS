@@ -174,14 +174,27 @@ bcos::bytes encodeReceiptLeaf(
 
     if (txType == c_depositTxType)
     {
+        // op-geth Receipts.EncodeIndex (core/types/receipt.go) DepositTxType branch: the
+        // receipts-ROOT leaf gains [depositNonce, depositReceiptVersion] only when
+        // DepositReceiptVersion is set (Canyon+; the state transition sets both together).
+        // Post-Regolith pre-Canyon deposit receipts DO carry DepositNonce, but EncodeIndex
+        // deliberately omits it from the trie leaf — "Receipt hash post-Regolith but pre-Canyon
+        // inadvertently did not include the above DepositNonce ... this behavior difference
+        // should not be changed to preserve backwards compatibility of receipt-root hash
+        // computation". So this is presence-of-version driven, never "encode every field the
+        // receipt happens to carry".
         auto const& meta = receipt.opStackMeta();
-        if (!meta || !meta->deposit_nonce || !meta->deposit_receipt_version)
+        if (meta && meta->deposit_receipt_version.has_value())
         {
-            BOOST_THROW_EXCEPTION(EthReceiptEncodeError{} << bcos::errinfo_comment(
-                                      "deposit receipt missing deposit nonce/receipt version"));
+            if (!meta->deposit_nonce.has_value())
+            {
+                BOOST_THROW_EXCEPTION(EthReceiptEncodeError{} << bcos::errinfo_comment(
+                                          "deposit receipt has depositReceiptVersion but no "
+                                          "depositNonce"));
+            }
+            codec::rlp::encode(payload, *meta->deposit_nonce);
+            codec::rlp::encode(payload, *meta->deposit_receipt_version);
         }
-        codec::rlp::encode(payload, *meta->deposit_nonce);
-        codec::rlp::encode(payload, *meta->deposit_receipt_version);
     }
 
     bcos::bytes out;

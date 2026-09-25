@@ -239,9 +239,9 @@ BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
 }
 
 // The guard above is the LEGACY lane's: the v2/v3 executors write every address under /apps/
-// (treatSystemAsUser=true) and the genesis import matches them there, so a system-address alloc
-// is an ordinary account on those chains and must be admitted — EEST Cancun fixtures allocate
-// the 0x1000-range precompile addresses.
+// (ethLaneAccountTableName, no /sys/ routing) and the genesis import matches them there, so a
+// system-address alloc is an ordinary account on those chains and must be admitted — EEST
+// Cancun fixtures allocate the 0x1000-range precompile addresses.
 BOOST_AUTO_TEST_CASE(SystemAddressAllocIsAdmittedOnTheEthereumExecutor)
 {
     auto v2 = gsrBaseConfig();

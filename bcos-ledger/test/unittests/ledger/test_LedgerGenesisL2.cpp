@@ -32,6 +32,7 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-ledger/test/unittests/ExceptionCheck.h"
 #include "bcos-task/Wait.h"
+#include <bcos-framework/testutils/ScopedNodeAddressTableMode.h>
 #include <bcos-framework/testutils/faker/FakeBlock.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
@@ -192,8 +193,10 @@ BOOST_AUTO_TEST_CASE(ImportValidatesAllocHexBeforeFirstWrite)
         auto hashImpl = std::make_shared<Keccak256>();
         auto storage = makeStorage();
 
-        ledger::Features features;
-        features.set(Features::Flag::feature_raw_address);
+        // Binary layout is a node-local mode now: arm it for this import; the singleton is
+        // process-global, so the guard restores the Hex default on the way out.
+        bcos::test::ScopedNodeAddressTableMode const modeGuard(
+            ledger::account::AddressTableMode::Binary);
 
         std::string goodAddress = "43000000000000000000000000000000000000c0";
         std::string badAddress = "43000000000000000000000000000000000000c1";
@@ -210,8 +213,7 @@ BOOST_AUTO_TEST_CASE(ImportValidatesAllocHexBeforeFirstWrite)
             .code = "",
             .storage = {{std::string(64, '0'), "01"}}});
 
-        BOOST_CHECK_EXCEPTION(
-            co_await importEthereumGenesisState(*storage, allocs, *hashImpl, features),
+        BOOST_CHECK_EXCEPTION(co_await importEthereumGenesisState(*storage, allocs, *hashImpl),
             bcos::tool::InvalidConfig, [](auto const& e) {
                 return errinfoContains(e, "storage slot value must be exactly 64 hex digits");
             });
@@ -239,7 +241,7 @@ BOOST_AUTO_TEST_CASE(ImportValidatesAllocHexBeforeFirstWrite)
             .code = "6080604052",
             .storage = {{std::string(64, '0'), std::string(64, '1')}}});
         BOOST_CHECK_EXCEPTION(
-            co_await importEthereumGenesisState(*storage, badNonceAllocs, *hashImpl, features),
+            co_await importEthereumGenesisState(*storage, badNonceAllocs, *hashImpl),
             bcos::tool::InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "nonce is not a valid uint64"); });
         auto badNonceRow = co_await storage2::readOne(

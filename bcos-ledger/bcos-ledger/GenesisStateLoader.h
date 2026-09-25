@@ -22,7 +22,6 @@
  */
 #pragma once
 
-#include "CoroutineStackReset.h"
 #include "GenesisStateRoot.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
@@ -30,6 +29,7 @@
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-task/Task.h"
+#include "bcos-task/Wait.h"
 #include "bcos-tool/Exceptions.h"
 #include <bcos-utilities/Exceptions.h>
 #include <boost/algorithm/hex.hpp>
@@ -51,8 +51,8 @@ namespace bcos::ledger
 /// @param allocs  addresses are 40-hex (with or without 0x); nonce is a DECIMAL string;
 ///                code is hex; storage slots/values are 32-byte hex.
 template <class Storage>
-task::Task<bcos::h256> importEthereumGenesisState(Storage& storage,
-    std::vector<Alloc> const& allocs, crypto::Hash const& hashImpl, Features const& features)
+task::Task<bcos::h256> importEthereumGenesisState(
+    Storage& storage, std::vector<Alloc> const& allocs, crypto::Hash const& hashImpl)
 {
     // Build the full genesis trie FIRST: genesis import is not transactional,
     // and computeGenesisStateTrie validates every alloc hex field (address /
@@ -66,14 +66,16 @@ task::Task<bcos::h256> importEthereumGenesisState(Storage& storage,
     genesis.m_allocs = allocs;
     // This loader exists for the Ethereum-executor lanes (EL sync, L2): those executors write
     // every address under /apps/, so the trie builder's legacy-lane system-address guard does
-    // not apply, and the import below matches with treatSystemAsUser=true.
+    // not apply, and the import below matches through ethLaneAccountTableName (no /sys/ routing).
     genesis.m_executorVersion = ledger::ETHEREUM_EXECUTOR_VERSION;
     auto trie = co_await computeGenesisStateTrie(genesis);
 
-    // Same stack-reset contract as Ledger's importGenesisState: the per-alloc
-    // co_awaits below complete inline, and where the symmetric-transfer tail
-    // call is not emitted the nested resume frames accumulate until a genuine
-    // suspension unwinds them.
+    // The per-alloc/per-node writes are driven by task::syncWait, not co_await: genesis
+    // storage operations complete inline (no I/O suspension), and a per-item co_await
+    // loop accumulates one native-stack frame chain per iteration on toolchains that do
+    // not tail-call the coroutine symmetric-transfer resume (this repo's ASAN
+    // configuration) — real alloc sets (op-sepolia: 2066 accounts, thousands of trie
+    // nodes) overflow the default 8 MiB stack. Each syncWait starts with a fresh stack.
     for (auto const& alloc : allocs)
     {
         // Decode & validate EVERY hex field of the alloc BEFORE the first
@@ -101,28 +103,30 @@ task::Task<bcos::h256> importEthereumGenesisState(Storage& storage,
             slots.emplace_back(evmKey, evmValue);
         }
 
-        account::EVMAccount account(storage, address,
-            features.get(Features::Flag::feature_raw_address), /*treatSystemAsUser=*/true);
-        co_await account.create();
+        // The lane rule (this loader serves Ethereum-compatible chains only): the logical
+        // name is "/apps/<hex>" for every address — system-tx ones included — re-encoded
+        // to the node-local layout. EVMAccount's address-taking constructor would route
+        // c_systemTxsAddress members to /sys/, where the OP bridge never writes.
+        account::EVMAccount account(
+            storage, account::FromTableName{}, account::ethLaneAccountTableName(address));
+        task::syncWait(account.create());
 
         if (codeHash.has_value())
         {
-            co_await account.setCode(std::move(binaryCode), std::string{}, *codeHash);
+            task::syncWait(account.setCode(std::move(binaryCode), std::string{}, *codeHash));
         }
         if (!alloc.nonce.empty())
         {
-            co_await account.setNonce(alloc.nonce);
+            task::syncWait(account.setNonce(alloc.nonce));
         }
         if (alloc.balance > 0)
         {
-            co_await account.setBalance(alloc.balance);
+            task::syncWait(account.setBalance(alloc.balance));
         }
         for (auto const& [evmKey, evmValue] : slots)
         {
-            co_await account.setStorage(evmKey, evmValue);
+            task::syncWait(account.setStorage(evmKey, evmValue));
         }
-
-        co_await detail::stackReset;
     }
 
     // Persist every produced genesis trie node as a "/mpt/" state row, exactly
@@ -134,9 +138,8 @@ task::Task<bcos::h256> importEthereumGenesisState(Storage& storage,
     {
         storage::Entry nodeEntry;
         nodeEntry.set(std::move(nodeRlp));
-        co_await storage2::writeOne(storage, mptNodeStateKey(nodeHash), std::move(nodeEntry));
-        // Same per-iteration stack-reset contract as the alloc loop above.
-        co_await detail::stackReset;
+        task::syncWait(
+            storage2::writeOne(storage, mptNodeStateKey(nodeHash), std::move(nodeEntry)));
     }
     co_return trie.root;
 }

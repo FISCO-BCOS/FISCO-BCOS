@@ -22,7 +22,6 @@
  */
 
 #include "Ledger.h"
-#include "CoroutineStackReset.h"
 #include "GenesisStateRoot.h"
 #include "LedgerMethods.h"
 #include "bcos-framework/ledger/EVMAccount.h"
@@ -148,55 +147,23 @@ void Ledger::asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTx
     _callback(nullptr);
 }
 
-task::Task<int> Ledger::cachedExecutorVersion()
-{
-    if (auto const cached = m_executorVersionCache.load(std::memory_order_relaxed); cached >= 0)
-    {
-        co_return static_cast<int>(cached);
-    }
-    int version = 0;  // an absent row is a pre-Ethereum-executor chain
-    if (auto const raw = co_await ledger::getSystemConfig(
-            *this, magic_enum::enum_name(ledger::SystemConfig::executor_version));
-        raw.has_value())
-    {
-        try
-        {
-            version = boost::lexical_cast<int>(std::get<0>(*raw));
-        }
-        catch (boost::bad_lexical_cast const&)
-        {
-            // Boot (readOnChainExecutorVersion) refuses an unparseable row, so reaching this
-            // means the row was corrupted afterwards -- corruption, not a legacy chain.
-            BOOST_THROW_EXCEPTION(std::runtime_error(
-                "on-chain executor_version is not an integer: '" + std::get<0>(*raw) + "'"));
-        }
-    }
-    m_executorVersionCache.store(version, std::memory_order_relaxed);
-    co_return version;
-}
-
 task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
     std::string_view _address, std::string_view _key, protocol::BlockNumber _blockNumber)
 {
-    // TODO)): blockNumber is not used nowadays
-    std::ignore = _blockNumber;
-    // System-contract addresses (0x1000 range, etc.) are stored under the
-    // "/sys/" prefix by EVMAccount on the legacy executor; user accounts under
-    // "/apps/". The v2/v3 executors write EVERY address under "/apps/"
-    // (treatSystemAsUser=true) and the genesis import matches them there, so on
-    // those chains the prefix is USER_APPS for every address. Picking the
-    // right prefix here keeps eth_getBalance / eth_getStorageAt /
-    // eth_getTransactionCount consistent with both the genesis alloc import and
-    // the executor (which both go through EVMAccount). Without this, reads
-    // for system-range accounts hit the wrong table and return empty (e.g.
-    // EEST static VMTests that call 0x1000 saw balance=0 / storage=0).
-    auto const executorVersion = co_await cachedExecutorVersion();
-    auto const tablePrefix =
-        (executorVersion < ETHEREUM_EXECUTOR_VERSION &&
-            precompiled::contains(bcos::precompiled::c_systemTxsAddress, _address)) ?
-            SYS_DIRECTORY::SYS_APPS :
-            SYS_DIRECTORY::USER_APPS;
-    auto const contractTableName = getContractTableName(tablePrefix, _address);
+    // One lane rule governs a lane end to end: the genesis alloc import
+    // (importGenesisState), the executor, and this flat reader all derive the account table
+    // name through account::ethLaneAccountTableName when feature_l2_ethereum_compat is set —
+    // on an Ethereum-compatible chain the 8 system-tx addresses are ordinary accounts living
+    // under /apps/ — and through account::accountTableName otherwise (only the v1 lane keeps
+    // the /sys/ routing for the system-tx addresses). Both rules re-encode to the node-local
+    // layout, so a Binary node reads "/s/<20 raw bytes>" either way. _blockNumber gates the
+    // feature read: the flag is genesis-set (enableNumber 0) on L2 chains, so any historical
+    // block number resolves it correctly; one SYS_CONFIG row read (fetchFeature).
+    auto const contractTableName =
+        co_await fetchFeature(ledger::Features::Flag::feature_l2_ethereum_compat, _blockNumber) ?
+            account::ethLaneAccountTableName(
+                bcos::Address{_address, bcos::Address::FromHex, bcos::Address::AlignRight}) :
+            account::accountTableName(_address);
     auto const stateStorage = getStateStorage();
     co_return co_await bcos::storage2::readOne(
         *stateStorage, executor_v1::StateKeyView{contractTableName, _key});
@@ -1594,8 +1561,16 @@ static void verifyL2FeatureFlagsSlot(
     }
 }
 
-static task::Task<void> importGenesisState(::ranges::forward_range auto const& allocs,
-    auto& storage, const crypto::Hash& hashImpl, bool treatSystemAsUser)
+// Genesis import writes go to the node's local state storage, whose operations
+// complete inline (never suspend on I/O). Drive them with task::syncWait instead of
+// co_await on purpose: a per-account co_await loop accumulates one native-stack
+// frame chain per iteration on toolchains that do not tail-call the coroutine
+// symmetric-transfer resume (this repo's ASAN configuration), and real alloc sets
+// (op-sepolia: 2066 accounts) overflow the default 8 MiB stack. syncWait starts
+// each operation with a fresh stack; the surrounding function stays a coroutine
+// for its callers.
+static void importGenesisAccount(auto& storage, crypto::Hash const& hashImpl,
+    Features const& features, auto const& importAccount)
 {
     // allocs from NodeConfig carry 0x-prefixed hex; LedgerTest builds them without
     // a prefix. Strip a leading 0x so both shapes unhex cleanly. The exact-width /
@@ -1604,6 +1579,67 @@ static task::Task<void> importGenesisState(::ranges::forward_range auto const& a
     // state root can never be computed over hex this importer would reject.
     auto strip0x = [](std::string_view hex) { return hex.starts_with("0x") ? hex.substr(2) : hex; };
 
+    // Decode & validate EVERY hex field of the alloc BEFORE the first
+    // write: genesis import is not transactional, so a bad code/slot hex
+    // discovered after create() would leave a partially-written account in
+    // the genesis batch.
+    auto addressHex = strip0x(importAccount.address);
+    evmc_address address{};
+    ledger::unhexAllocExact(addressHex, "address", address.bytes, sizeof(address.bytes));
+
+    bcos::bytes binaryCode;
+    std::optional<crypto::HashType> codeHash;
+    if (!strip0x(importAccount.code).empty())
+    {
+        binaryCode = ledger::unhexAllocBytes(importAccount.code, "code");
+        codeHash = hashImpl.hash(binaryCode);
+    }
+    std::vector<std::pair<evmc_bytes32, evmc_bytes32>> slots;
+    slots.reserve(importAccount.storage.size());
+    for (auto const& [key, value] : importAccount.storage)
+    {
+        evmc_bytes32 evmKey{};
+        ledger::unhexAllocExact(key, "storage slot key", evmKey.bytes, sizeof(evmKey.bytes));
+        evmc_bytes32 evmValue{};
+        ledger::unhexAllocExact(
+            value, "storage slot value", evmValue.bytes, sizeof(evmValue.bytes));
+        slots.emplace_back(evmKey, evmValue);
+    }
+
+    // Naming rule: on an Ethereum-compatible (L2) chain the c_systemTxsAddress members are
+    // ordinary accounts living under their /apps/ logical name — the OP bridge writes them
+    // there — so the alloc tables derive through the lane rule; the v1 lane keeps
+    // EVMAccount's own /sys/ routing. Both re-encode to the node-local layout.
+    auto tableName = features.get(Features::Flag::feature_l2_ethereum_compat) ?
+                         account::ethLaneAccountTableName(address) :
+                         account::accountTableName(address, account::nodeAddressTableMode());
+    account::EVMAccount account(storage, account::FromTableName{}, std::move(tableName));
+    task::syncWait(account.create());
+
+    if (codeHash.has_value())
+    {
+        task::syncWait(account.setCode(std::move(binaryCode), std::string{}, *codeHash));
+    }
+
+    if (!importAccount.nonce.empty())
+    {
+        task::syncWait(account.setNonce(importAccount.nonce));
+    }
+
+    if (importAccount.balance > 0)
+    {
+        task::syncWait(account.setBalance(importAccount.balance));
+    }
+
+    for (auto const& [evmKey, evmValue] : slots)
+    {
+        task::syncWait(account.setStorage(evmKey, evmValue));
+    }
+}
+
+static task::Task<void> importGenesisState(
+    ::ranges::forward_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
+{
     Features features;
     co_await ledger::readFromStorage(features, storage, 0);
 
@@ -1612,69 +1648,11 @@ static task::Task<void> importGenesisState(::ranges::forward_range auto const& a
     // accounts in the genesis batch.
     verifyL2FeatureFlagsSlot(allocs, features);
 
-    // Every per-alloc co_await below completes inline against the legacy
-    // storage, and where the symmetric-transfer tail call is not emitted each
-    // iteration nests ~25 fat ASAN/-O0 resume frames that only a genuine
-    // suspension unwinds — without one per alloc, importing tens of thousands
-    // of allocs overflows the thread stack (EEST test_many_delegations, 4800
-    // allocs). See CoroutineStackReset.h for why the worker is not a
-    // tbb::task_group; the per-alloc bounce costs microseconds against a
-    // genesis-time import.
-
+    // The account-table naming rule (lane rule vs the v1 /sys/ routing) lives in
+    // importGenesisAccount, keyed on feature_l2_ethereum_compat.
     for (auto&& importAccount : allocs)
     {
-        // Decode & validate EVERY hex field of the alloc BEFORE the first
-        // write: genesis import is not transactional, so a bad code/slot hex
-        // discovered after create() would leave a partially-written account in
-        // the genesis batch.
-        auto addressHex = strip0x(importAccount.address);
-        evmc_address address{};
-        ledger::unhexAllocExact(addressHex, "address", address.bytes, sizeof(address.bytes));
-
-        bcos::bytes binaryCode;
-        std::optional<crypto::HashType> codeHash;
-        if (!strip0x(importAccount.code).empty())
-        {
-            binaryCode = ledger::unhexAllocBytes(importAccount.code, "code");
-            codeHash = hashImpl.hash(binaryCode);
-        }
-        std::vector<std::pair<evmc_bytes32, evmc_bytes32>> slots;
-        slots.reserve(importAccount.storage.size());
-        for (auto const& [key, value] : importAccount.storage)
-        {
-            evmc_bytes32 evmKey{};
-            ledger::unhexAllocExact(key, "storage slot key", evmKey.bytes, sizeof(evmKey.bytes));
-            evmc_bytes32 evmValue{};
-            ledger::unhexAllocExact(
-                value, "storage slot value", evmValue.bytes, sizeof(evmValue.bytes));
-            slots.emplace_back(evmKey, evmValue);
-        }
-
-        account::EVMAccount account(
-            storage, address, features.get(Features::Flag::feature_raw_address), treatSystemAsUser);
-        co_await account.create();
-
-        if (codeHash.has_value())
-        {
-            co_await account.setCode(std::move(binaryCode), std::string{}, *codeHash);
-        }
-
-        if (!importAccount.nonce.empty())
-        {
-            co_await account.setNonce(std::move(importAccount.nonce));
-        }
-
-        if (importAccount.balance > 0)
-        {
-            co_await account.setBalance(importAccount.balance);
-        }
-
-        for (auto const& [evmKey, evmValue] : slots)
-        {
-            co_await account.setStorage(evmKey, evmValue);
-        }
-
-        co_await ledger::detail::stackReset;
+        importGenesisAccount(storage, hashImpl, features, importAccount);
     }
 }
 
@@ -2194,14 +2172,8 @@ bool Ledger::buildGenesisBlock(
         }
 
         co_await setGenesisFeatures(genesis.m_features, features, *m_stateStorage);
-        // The v2/v3 executors write every address under /apps/ (treatSystemAsUser=true), so
-        // the genesis import must too — a system-address alloc written under /sys/ here would
-        // sit next to, not inside, the state the executor maintains. The version comes from
-        // the genesis config, not from storage: the SYS_CONFIG executor_version row is written
-        // only after this import.
-        co_await importGenesisState(genesis.m_allocs, *m_stateStorage,
-            *m_blockFactory->cryptoSuite()->hashImpl(),
-            genesis.m_executorVersion >= ETHEREUM_EXECUTOR_VERSION);
+        co_await importGenesisState(
+            genesis.m_allocs, *m_stateStorage, *m_blockFactory->cryptoSuite()->hashImpl());
 
         // Scenario B (L2): block 1 builds the MPT incrementally on top of the genesis state
         // root (buildAndCollect with the genesis root as parent) and reads the parent trie
@@ -2214,17 +2186,17 @@ bool Ledger::buildGenesisBlock(
         // seeding: its counts are rebuilt from the state roots at every startup (MPTPruner.h).
         if (l2EthereumCompat)
         {
+            // task::syncWait per node, not co_await: same stack-depth constraint as
+            // importGenesisState — a real genesis emits thousands of trie nodes
+            // (op-sepolia: 2066 accounts) and a per-node co_await loop overflows
+            // the native stack on sanitizer builds. The local state storage
+            // completes these writes inline, so syncWait never blocks on I/O.
             for (auto& [nodeHash, nodeRlp] : ethStateTrie.nodes)
             {
                 Entry nodeEntry;
                 nodeEntry.set(std::move(nodeRlp));
-                co_await storage2::writeOne(
-                    *m_stateStorage, storage2::mptNodeStateKey(nodeHash), std::move(nodeEntry));
-                // One writeOne Task-await per node nests ~4 resume frames
-                // where the symmetric-transfer tail call is not emitted; the
-                // node count scales with the alloc count, so reset the stack
-                // per node exactly like importGenesisState does per alloc.
-                co_await ledger::detail::stackReset;
+                task::syncWait(storage2::writeOne(
+                    *m_stateStorage, storage2::mptNodeStateKey(nodeHash), std::move(nodeEntry)));
             }
         }
 

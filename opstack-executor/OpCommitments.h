@@ -39,12 +39,19 @@ inline bcos::h2048 toBcosBloom(const evmone::state::BloomFilter& bloom)
 /// The block-execution commitments the engine's newPayload OP branch compares against the
 /// payload, restated in bcos:: types: the six-way comparison surface (receiptsRoot/logsBloom/
 /// withdrawalsRoot from OpBlockSeal + stateRoot/gasUsed/txRoot) plus two seal-only outputs
-/// (blobGasUsed, engaged from Jovian on; requestsHash, engaged Isthmus+).
+/// (blobGasUsed, engaged from Ecotone on — 0 through Isthmus, DA footprint from Jovian;
+/// requestsHash, engaged Isthmus+).
+///
+/// Fork-field presence matrix (all three fork-gated fields compare presence AND value):
+///   withdrawalsRoot: nullopt pre-Canyon; empty-trie root Canyon–Holocene; MessagePasser
+///                    storage root Isthmus+.
+///   blobGasUsed:     nullopt pre-Ecotone; 0 Ecotone–Isthmus; DA footprint Jovian+.
+///   requestsHash:    nullopt pre-Isthmus; sha256("") Isthmus+.
 struct OpBlockCommitments
 {
     bcos::h256 receiptsRoot;
     bcos::h2048 logsBloom;
-    bcos::h256 withdrawalsRoot;
+    std::optional<bcos::h256> withdrawalsRoot;
     bcos::h256 stateRoot;
     bcos::u256 gasUsed;
     bcos::h256 txRoot;
@@ -59,13 +66,17 @@ inline OpBlockCommitments commitmentsOf(const bcos::evm::opstack::OpBlockSeal& s
     OpBlockCommitments out{
         .receiptsRoot = detail::toBcosH256(seal.receiptsRoot),
         .logsBloom = detail::toBcosBloom(seal.logsBloom),
-        .withdrawalsRoot = detail::toBcosH256(seal.withdrawalsRoot),
+        .withdrawalsRoot = std::nullopt,
         .stateRoot = stateRoot,
         .gasUsed = bcos::u256(gasUsed),
         .txRoot = txRoot,
         .blobGasUsed = seal.blobGasUsed,
         .requestsHash = std::nullopt,
     };
+    if (seal.withdrawalsRoot.has_value())
+    {
+        out.withdrawalsRoot = detail::toBcosH256(*seal.withdrawalsRoot);
+    }
     if (seal.requestsHash.has_value())
     {
         out.requestsHash = detail::toBcosH256(*seal.requestsHash);
@@ -83,9 +94,10 @@ inline bcos::h2048 payloadBloomToH2048(const std::array<bcos::byte, 256>& bloom)
 
 /// Compare the executed block's commitments against the payload's announced commitments; returns
 /// the first mismatching field name (txRoot slot reports "transactionsRoot"), or nullopt.
-/// blobGasUsed / requestsHash compare presence AND value bidirectionally (optional != optional):
-/// an announced-only field (peer ahead of the local fork config) is rejected just as a
-/// computed-only one is — op-geth's engine API rejects fork-field asymmetry in both directions.
+/// The three fork-gated fields (withdrawalsRoot / blobGasUsed / requestsHash) compare presence
+/// AND value bidirectionally (optional != optional): an announced-only field (peer ahead of the
+/// local fork config) is rejected just as a computed-only one is — op-geth's engine API rejects
+/// fork-field asymmetry in both directions.
 inline std::optional<std::string> mismatchedFieldOf(
     const OpBlockCommitments& computed, const OpBlockCommitments& announced)
 {

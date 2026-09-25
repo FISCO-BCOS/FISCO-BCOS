@@ -111,6 +111,13 @@ public:
         feature_evm_timestamp = 51,
         feature_evm_address = 52,
         feature_rpbft_term_weight = 53,
+        // DEPRECATED: the account-table encoding (hex vs binary /apps/ names) is a
+        // node-local physical layout, published by the startup detection as
+        // ledger::account::nodeAddressTableMode() (ledger/AccountTableName.h) — this flag no
+        // longer drives any behavior. The value 54 stays reserved (feature values are
+        // permanent) and string2Flag still recognizes the name; setting it, through
+        // governance or config.genesis, is accepted with a warning and records an inert
+        // no-op row.
         feature_raw_address = 54,
         feature_rpbft_vrf_type_secp256k1 = 55,
         feature_balance_policy2 = 56,     // 转账白名单 Transfer whitelist
@@ -181,6 +188,17 @@ public:
     /// dependencies are unmet, and one that is genesis-only. Not called by genesis loading,
     /// which uses set() directly.
     void validate(Flag flag) const;
+
+    /// A deprecated flag is still parsed (its enum value is permanent and string2Flag
+    /// recognizes the name) but drives nothing. Entry points accept it with a warning
+    /// rather than reject it — rejecting would fail governance transactions and
+    /// config.genesis files written before the deprecation, while the flag is an inert
+    /// no-op either way. validate() warns on the governance path;
+    /// NodeConfig::loadGenesisFeatures warns on the genesis path.
+    static constexpr bool isDeprecated(Flag flag) noexcept
+    {
+        return flag == Flag::feature_raw_address;
+    }
 
     bool get(Flag flag) const;
     bool get(std::string_view flag) const { return get(string2Flag(flag)); }

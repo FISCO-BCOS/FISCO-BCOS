@@ -201,4 +201,76 @@ BOOST_AUTO_TEST_CASE(FromFlzVariantsMatchEnvelopeVariants)
     BOOST_CHECK_EQUAL(computeL1CostFromFlz(fee, 0, fjordConfig()), intx::uint256{0});
 }
 
+// ── Legacy (Bedrock–Delta) L1 cost ──────────────────────────────────────────
+// 黄金值移植自 op-geth core/types/rollup_cost_test.go TestBedrockL1CostFunc：同一 emptyTx
+// 字节（kEmptyTx）、同一参数（baseFee=1e9, overhead=50, scalar=7e6）。
+//   Bedrock(pre-Regolith): gasUsed=1618 = 480(calldata) + 68*16(+68 修正) + 50(overhead)
+//                          fee = 1618 * 1e9 * 7e6 / 1e6 = 11326000000000
+//   Regolith:              gasUsed=530  = 480 + 50；fee = 530 * 7e9 = 3710000000000
+BOOST_AUTO_TEST_CASE(LegacyL1CostMatchesOpGethBedrockVectors)
+{
+    OpFeeParams fee{};
+    fee.l1_base_fee = intx::uint256{1000000000};  // 1e9
+    fee.l1_fee_overhead = intx::uint256{50};
+    fee.l1_fee_scalar = intx::uint256{7000000};  // 7e6
+
+    const evmc::bytes_view env = kEmptyTx;
+    // 前置锚定：emptyTx 的 calldata gas（zeroes*4 + ones*16）= 480（op-geth ecotoneGas）。
+    BOOST_REQUIRE_EQUAL(bedrockCalldataGasUsed(env), 480u);
+
+    const auto bedrock = computeLegacyL1Cost(fee, env, /*regolithActive=*/false);
+    BOOST_CHECK_EQUAL(bedrock.gas_used, 1618u);
+    BOOST_CHECK_EQUAL(bedrock.fee, 11326000000000_u256);
+
+    const auto regolith = computeLegacyL1Cost(fee, env, /*regolithActive=*/true);
+    BOOST_CHECK_EQUAL(regolith.gas_used, 530u);
+    BOOST_CHECK_EQUAL(regolith.fee, 3710000000000_u256);
+}
+
+// +68 只加一次（不是按字节）：Bedrock 与 Regolith 的 gas 差恒为 68*16 = 1088，与数据长度无关。
+BOOST_AUTO_TEST_CASE(LegacyTxDataGasPlus68IsOneTime)
+{
+    const evmc::bytes_view env = kEmptyTx;
+    BOOST_CHECK_EQUAL(
+        legacyTxDataGas(env, false) - legacyTxDataGas(env, true), 68u * 16u);
+    std::vector<uint8_t> zeros(100, 0x00);
+    BOOST_CHECK_EQUAL(legacyTxDataGas({zeros.data(), zeros.size()}, true), 400u);
+    BOOST_CHECK_EQUAL(legacyTxDataGas({zeros.data(), zeros.size()}, false), 400u + 1088u);
+}
+
+// legacy 公式的整槽输入可让乘积越过 2^256：op-geth 用 big.Int 不回绕；本实现与 Ecotone/Fjord
+// 路径同规则——真值 >= 2^256 时饱和到 uint256 max（超出任何余额，validate 上限必然拒绝）。
+BOOST_AUTO_TEST_CASE(LegacyL1CostSaturatesInsteadOfWrapping)
+{
+    const evmc::bytes_view env = kEmptyTx;  // regolith txDataGas=480（overhead=0 → gasUsed=480）
+    OpFeeParams fee{};
+    fee.l1_fee_overhead = intx::uint256{0};
+    fee.l1_fee_scalar = intx::uint256{1000000};
+    // 中间乘积 480 * 2^246 * 1e6 ≈ 2^275 越过 2^256 但真 fee = 480*2^246 < 2^256 可表示
+    // ——256 位求值会回绕，512 位求值精确。
+    fee.l1_base_fee = intx::uint256{1} << 246;
+    const auto r = computeLegacyL1Cost(fee, env, /*regolithActive=*/true);
+    BOOST_CHECK_EQUAL(r.fee, intx::uint256{480} << 246);
+
+    // 乘积越过 2^512 → 真 fee 必然 >= 2^256 → 饱和而非回绕成小值。
+    fee.l1_fee_scalar = intx::uint256{1} << 252;
+    const auto sat = computeLegacyL1Cost(fee, env, true);
+    BOOST_CHECK_EQUAL(sat.fee, ~intx::uint256{0});
+}
+
+// 整槽 overhead 可独立把 l1GasUsed 抬过 2^64：receipt 的 gas_used 截断到 64 位
+// （op-geth big.Int.Uint64()），fee 仍按完整精度计。
+BOOST_AUTO_TEST_CASE(LegacyL1GasUsedTruncatesLikeOpGethUint64)
+{
+    const evmc::bytes_view env = kEmptyTx;
+    OpFeeParams fee{};
+    fee.l1_base_fee = intx::uint256{1};
+    fee.l1_fee_overhead = intx::uint256{1} << 72;  // 2^72 超出 uint64
+    fee.l1_fee_scalar = intx::uint256{1000000};
+    const auto r = computeLegacyL1Cost(fee, env, /*regolithActive=*/true);
+    const auto fullGas = intx::uint256{480} + (intx::uint256{1} << 72);
+    BOOST_CHECK_EQUAL(r.gas_used, static_cast<uint64_t>(fullGas));
+    BOOST_CHECK_EQUAL(r.fee, fullGas);  // baseFee=1, scalar=1e6 → fee = gasUsed
+}
+
 BOOST_AUTO_TEST_SUITE_END()

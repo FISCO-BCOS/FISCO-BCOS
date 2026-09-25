@@ -20,6 +20,8 @@
 
 #include "AccountPrecompiled.h"
 #include "../../vm/HostContext.h"
+#include "bcos-framework/ledger/AccountTableName.h"
+#include <boost/algorithm/hex.hpp>
 #include <boost/regex.hpp>
 
 using namespace bcos;
@@ -306,10 +308,26 @@ void AccountPrecompiled::addAccountBalance(const std::string& accountTableName,
         // table is not exist, this call form EVM_BALANCE_SENDER_ADDRESS, create it
 
 
-        // get account hex from /sys/xxxxx or /apps/xxxxx
-        boost::smatch match;
-        boost::regex_search(accountTableName, match, boost::regex("/([^/]+)$"));
-        auto accountHex = match[1].str();
+        // get account hex from /sys/xxxxx or /apps/xxxxx. A binary account table name
+        // ("/s/<20 raw bytes>") carries raw address bytes that may themselves contain
+        // 0x2f ('/'), so the last-path-segment regex cannot be used on it — the address
+        // sits at a fixed offset instead. Hex-encoded (lowercase) it is exactly the value
+        // the regex path yields for a hex name.
+        std::string accountHex;
+        if (ledger::account::isBinaryAccountTableName(accountTableName))
+        {
+            const auto* addressBegin =
+                accountTableName.data() + ledger::account::BINARY_TABLE_PREFIX.size();  // NOLINT
+            accountHex.reserve(ledger::account::HEX_ADDRESS_SIZE);
+            boost::algorithm::hex_lower(addressBegin, addressBegin + ledger::account::ADDRESS_SIZE,
+                std::back_inserter(accountHex));
+        }
+        else
+        {
+            boost::smatch match;
+            boost::regex_search(accountTableName, match, boost::regex("/([^/]+)$"));
+            accountHex = match[1].str();
+        }
 
         PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                               << LOG_BADGE("AccountPrecompiled, addAccountBalance")

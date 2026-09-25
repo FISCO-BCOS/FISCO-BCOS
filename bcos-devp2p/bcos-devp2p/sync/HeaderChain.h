@@ -25,6 +25,7 @@
 #include "../rlpx/Messages.h"
 #include "../rlpx/Session.h"
 #include "../eth/Protocol.h"
+#include <functional>
 #include <stdexcept>
 
 namespace bcos::devp2p::sync
@@ -85,6 +86,15 @@ public:
     std::optional<HeaderWithHash> requestHeaderByHash(
         rlpx::Session& _session, bcos::h256 const& _hash);
 
+    // Per-header validation policy: (header, parent) -> result. Defaults to the
+    // Ethereum PoS rules (validateHeaderPoS over m_config); OP Stack sync injects
+    // makeOpHeaderValidator (sync/OpHeaderValidator.h) instead. Only consulted when
+    // the anchor header is known; the typed exception semantics of requestHeaders
+    // (HeaderRuleViolation on a rule failure) are unchanged.
+    using HeaderValidatorFn = std::function<HeaderValidationResult(
+        bcos::protocol::EthBlockHeaderData const&, bcos::protocol::EthBlockHeaderData const&)>;
+    void setHeaderValidator(HeaderValidatorFn _validator) { m_validator = std::move(_validator); }
+
     // Advance the anchor past `_count` downloaded headers.
     void advance(uint64_t _count, HeaderWithHash const& _lastHeader);
 
@@ -93,6 +103,7 @@ private:
     bcos::h256 m_anchorHash;
     std::optional<bcos::protocol::EthBlockHeaderData> m_anchorHeader;
     ChainConfig m_config;
+    HeaderValidatorFn m_validator;
     uint64_t m_maxHeadersPerRequest;
     uint64_t m_requestId{0};
 };

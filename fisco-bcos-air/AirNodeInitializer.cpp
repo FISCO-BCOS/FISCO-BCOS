@@ -119,9 +119,9 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     // version below instead.
     nodeService->setEthereumELMode(nodeConfig->ethereumELModeEnabled());
 
-    // The chain's executor_version, resolved from the ledger at boot: the RPC blob gate and
-    // eth_getStorageAt's system-address prefix selection key on it. EL-mode sidecar handling
-    // stays keyed on the EL flag above.
+    // The chain's executor_version, resolved from the ledger at boot: the RPC blob admission
+    // gate keys on it (RpcChainPolicy admits blob transactions only on executor_version == 2).
+    // EL-mode sidecar handling stays keyed on the EL flag above.
     nodeService->setExecutorVersion(m_nodeInitializer->executorVersion());
 
     // Engine-driven modes ([consensus] enable_single_node_consensus or [op_engine_rpc]):
@@ -195,6 +195,10 @@ void AirNodeInitializer::init(bcos::initializer::Params const& _params)
     {
         bcos::initializer::EthereumSyncInitializer::validateNodeConfig(*nodeConfig);
     }
+    if (nodeConfig->opStackELModeEnabled())
+    {
+        bcos::initializer::OpStackSyncInitializer::validateNodeConfig(*nodeConfig);
+    }
 
     init(_params.configFilePath, _params.genesisFilePath);
 
@@ -236,6 +240,19 @@ void AirNodeInitializer::init(bcos::initializer::Params const& _params)
             }
         }
     }
+
+    // OP-Stack EL self-sync: same shape, one lane up. The verifier (OpBlockVerifier) builds
+    // its own serial scheduler + OpstackExecutor internally, so the driver needs only the
+    // shared ledger / block factory / global state storage / commit observer.
+    if (nodeConfig->opStackELModeEnabled())
+    {
+        auto initializer = m_nodeInitializer;
+        m_opStackSync = std::make_shared<bcos::initializer::OpStackSyncInitializer>(nodeConfig,
+            initializer->ledger(), initializer->protocolInitializer()->blockFactory(),
+            initializer->globalStateStorageInitializer(), initializer->ioServicePool(),
+            initializer->mptCommitObserver());
+        m_opStackSync->validateConfig();
+    }
 }
 
 void AirNodeInitializer::validateEthereumELParams(
@@ -244,15 +261,16 @@ void AirNodeInitializer::validateEthereumELParams(
     if (_params.ethereumEL.has_value())
     {
         bool const wantEL = *_params.ethereumEL;
-        bool const configuredEL = _nodeConfig.ethereumELModeEnabled();
+        bool const configuredEL =
+            _nodeConfig.ethereumELModeEnabled() || _nodeConfig.opStackELModeEnabled();
         if (wantEL && !configuredEL)
         {
             BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "command-line --el requests Ethereum L1 EL mode but "
-                                      "[ethereum].mode != el in " +
+                                      "command-line --el requests EL self-sync mode but "
+                                      "[ethereum].mode is neither el nor opstack-el in " +
                                       _params.configFilePath +
                                       "; the config file is the source of truth — either "
-                                      "set [ethereum] mode=el or drop --el"));
+                                      "set [ethereum] mode=el|opstack-el or drop --el"));
         }
     }
     if (_params.ethereumBootnodesFile.has_value())
@@ -283,10 +301,11 @@ void AirNodeInitializer::start()
         m_nodeInitializer->start();
     }
 
-    // Ethereum L1 EL mode: the node is a pure Ethereum execution-layer client — the FISCO
-    // gateway/P2P network is not part of the Ethereum stack, so it stays dormant. The
-    // self-sync driver (bootnode download -> verify -> commit) is what moves the chain.
-    const bool elMode = (m_ethereumSync != nullptr);
+    // EL self-sync modes (ethereum.mode=el / opstack-el): the node is a pure execution-layer
+    // client — the FISCO gateway/P2P network is not part of the Ethereum/OP stack, so it
+    // stays dormant. The self-sync driver (bootnode download -> verify -> commit) is what
+    // moves the chain.
+    const bool elMode = (m_ethereumSync != nullptr) || (m_opStackSync != nullptr);
     if (m_gateway && !elMode)
     {
         m_gateway->start();
@@ -300,6 +319,11 @@ void AirNodeInitializer::start()
     if (m_ethereumSync)
     {
         m_ethereumSync->start();
+    }
+
+    if (m_opStackSync)
+    {
+        m_opStackSync->start();
     }
 
     if (m_tarsApplication && m_tarsConfig)
@@ -320,6 +344,10 @@ void AirNodeInitializer::stop()
 {
     try
     {
+        if (m_opStackSync)
+        {
+            m_opStackSync->stop();
+        }
         if (m_ethereumSync)
         {
             m_ethereumSync->stop();

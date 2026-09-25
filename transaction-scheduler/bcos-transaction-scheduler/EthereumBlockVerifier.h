@@ -302,13 +302,14 @@ task::Task<void> accumulatePoWBlockRewards(ViewType& view,
     std::vector<bcos::bytes> const& rawUncles, ledger::LedgerConfig const& ledgerConfig)
 {
     using namespace bcos::ledger::account;
-    const bool binaryAddress =
-        ledgerConfig.features().get(ledger::Features::Flag::feature_raw_address);
 
     auto addBalance = [&](bcos::Address const& address, u256 const& amount) -> task::Task<void> {
         // EL mode: a FISCO system-address (e.g. 0x...1000) is an ordinary Ethereum account and
-        // must live under /apps/ so the MPT builder sees it. Pass treatSystemAsUser=true.
-        EVMAccount<ViewType> account(view, address, binaryAddress, /*treatSystemAsUser=*/true);
+        // must live under the lane's logical /apps/ name so the MPT builder sees it. The
+        // physical name comes from account::ethLaneAccountTableName — the lane rule ("/apps/
+        // <hex>", no /sys/ routing) re-encoded to this node's layout — pinned via
+        // FromTableName so Hex and Binary nodes write the same logical row.
+        EVMAccount<ViewType> account(view, FromTableName{}, ethLaneAccountTableName(address));
         // Register the account table (SYS_TABLES) so the executor's
         // readAccountImpl can see it: it decides existence via the flat fields,
         // but the write-back path (applyToStorage) still needs a registered

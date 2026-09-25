@@ -1,6 +1,7 @@
-find_package(Boost REQUIRED unit_test_framework)
+find_package(Boost REQUIRED unit_test_framework thread)
 find_package(jsoncpp CONFIG REQUIRED)
 find_package(evmone REQUIRED)
+find_package(CURL REQUIRED)
 
 # Lightweight suite: FakeTransaction / header-only surfaces.
 # This binary links ledger via opstack-executor's PUBLIC closure (OpBlockExecute.cpp needs
@@ -22,6 +23,7 @@ add_executable(opstack-executor-tests
     PreBlockOpStepsTest.cpp
     Storage2StateHelpersTest.cpp
     Storage2StatePoisonTest.cpp
+    Storage2StateBinaryModeTest.cpp
     OpEnvelopeMirrorTest.cpp
     support/SeedPreStateTest.cpp
     OpJovianShapeTest.cpp
@@ -81,6 +83,7 @@ endif()
 add_executable(opstack-executor-receipt-tests
     TestMain.cpp
     OpReceiptEncodeTest.cpp
+    OpSealForkMatrixTest.cpp
     OpCallWritebackTest.cpp
     ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
 )
@@ -117,6 +120,8 @@ add_test(NAME OpstackExecutorReceiptTests COMMAND opstack-executor-receipt-tests
 add_executable(opstack-executor-scheduler-tests
     TestMain.cpp
     OpSchedulerTest.cpp
+    OpBlockVerifierTest.cpp
+    OpSepoliaReplayTest.cpp
 )
 set_target_properties(opstack-executor-scheduler-tests PROPERTIES UNITY_BUILD OFF)
 target_include_directories(opstack-executor-scheduler-tests PRIVATE
@@ -130,8 +135,12 @@ target_link_libraries(opstack-executor-scheduler-tests PRIVATE
     bcos-crypto
     codec
     ledger
+    tool
     evmone::evmone
     Boost::unit_test_framework
+    Boost::thread
+    CURL::libcurl
+    jsoncpp_static
 )
 add_test(NAME OpstackExecutorSchedulerTests COMMAND opstack-executor-scheduler-tests)
 

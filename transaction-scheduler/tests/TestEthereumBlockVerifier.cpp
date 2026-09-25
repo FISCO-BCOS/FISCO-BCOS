@@ -95,7 +95,7 @@ public:
 task::Task<void> EEBVFundAccount(EEBVBackendStorage& storage, evmc_address const& addr, u256 balance)
 {
     using namespace bcos::ledger::account;
-    EVMAccount<EEBVBackendStorage> acc(storage, addr, false);
+    EVMAccount<EEBVBackendStorage> acc(storage, addr, AddressTableMode::Hex);
     if (!co_await acc.exists())
     {
         co_await acc.create();
@@ -108,7 +108,7 @@ template <class Storage>
 task::Task<u256> EEBVReadBalance(Storage& storage, evmc_address const& addr)
 {
     using namespace bcos::ledger::account;
-    EVMAccount<std::remove_reference_t<Storage>> acc(storage, addr, false);
+    EVMAccount<std::remove_reference_t<Storage>> acc(storage, addr, AddressTableMode::Hex);
     co_return co_await acc.balance();
 }
 
@@ -153,7 +153,7 @@ task::Task<void> EEBVDeployCode(
     EEBVBackendStorage& storage, evmc_address const& addr, bcos::bytes code)
 {
     using namespace bcos::ledger::account;
-    EVMAccount<EEBVBackendStorage> acc(storage, addr, false);
+    EVMAccount<EEBVBackendStorage> acc(storage, addr, AddressTableMode::Hex);
     if (!co_await acc.exists())
     {
         co_await acc.create();
@@ -167,7 +167,7 @@ task::Task<void> EEBVWriteSlot(
     Storage& storage, evmc_address const& addr, uint64_t slot, evmc::bytes32 const& value)
 {
     using namespace bcos::ledger::account;
-    EVMAccount<std::remove_reference_t<Storage>> acc(storage, addr, false);
+    EVMAccount<std::remove_reference_t<Storage>> acc(storage, addr, AddressTableMode::Hex);
     co_await acc.setStorage(EEBVBytes32FromU64(slot), value);
 }
 
@@ -175,7 +175,7 @@ template <class Storage>
 task::Task<evmc::bytes32> EEBVReadSlot(Storage& storage, evmc_address const& addr, uint64_t slot)
 {
     using namespace bcos::ledger::account;
-    EVMAccount<std::remove_reference_t<Storage>> acc(storage, addr, false);
+    EVMAccount<std::remove_reference_t<Storage>> acc(storage, addr, AddressTableMode::Hex);
     co_return co_await acc.storage(EEBVBytes32FromU64(slot));
 }
 

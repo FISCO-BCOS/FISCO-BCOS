@@ -20,6 +20,7 @@
 
 #include "EthEndpoint.h"
 #include "bcos-framework/engine/RawTransactionDispatch.h"
+#include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
@@ -521,26 +522,26 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     }
     auto const ledger = m_nodeService->ledger();
 
-    // System-contract addresses (0x1000 range, etc.) are stored under the "/sys/" prefix by
-    // EVMAccount on the legacy executor; user accounts under "/apps/". The v2/v3 executors write
-    // EVERY address under "/apps/" (EVMAccount with treatSystemAsUser=true, and genesis imports
-    // the same way there), so on those chains the prefix is USER_APPS for every address. Picking
-    // the right prefix here keeps eth_getStorageAt consistent with both the genesis alloc import
-    // and the executor — same logic as Ledger::getStorageAt.
-    auto const tablePrefix =
-        (m_nodeService->executorVersion() < ledger::ETHEREUM_EXECUTOR_VERSION &&
-                precompiled::contains(
-                    bcos::precompiled::c_systemTxsAddress, std::string_view{addressStr})) ?
-            ledger::SYS_DIRECTORY::SYS_APPS :
-            ledger::SYS_DIRECTORY::USER_APPS;
-    auto const contractTableName = getContractTableName(tablePrefix, addressStr);
-
     // The empty-slot value: a 32-byte zero, matching the flat read's padded rendering.
     constexpr const char* c_emptyStorageValue =
         "0x0000000000000000000000000000000000000000000000000000000000000000";
 
     if (isLatest)
     {
+        // One lane rule governs a lane end to end: the genesis alloc import, the executor,
+        // and this flat reader all derive the account table name through
+        // ledger::account::ethLaneAccountTableName when feature_l2_ethereum_compat is set —
+        // on an Ethereum-compatible chain the 8 system-tx addresses are ordinary accounts
+        // living under /apps/ — and through ledger::account::accountTableName otherwise
+        // (only the v1 lane keeps the /sys/ routing). Same single-flag read idiom as
+        // tryResolveMptContext above; derived only here because the historical path below
+        // reads the MPT, not the flat KV.
+        auto const contractTableName =
+            co_await ledger::getFeature(
+                *ledger, ledger::Features::Flag::feature_l2_ethereum_compat, blockNumber) ?
+                ledger::account::ethLaneAccountTableName(
+                    bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight}) :
+                ledger::account::accountTableName(addressStr);
         // Latest state: fork a fresh view of GlobalStateStorage's COMMITTED plane and read
         // the flat KV — a consistent point-in-time snapshot of the last committed block
         // (cache -> committed backend, no in-flight pending layers). NOTE this is the FLAT
@@ -1334,7 +1335,7 @@ task::Task<void> EthEndpoint::call(
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(InvalidParams, "invalid `from` address in call request"));
         }
-        // The account row key is the lowercase hex text on chains without feature_raw_address,
+        // The account row key is the lowercase hex text on hex-layout nodes (the default),
         // and clients (ethers/viem) send an EIP-55 mixed-case `from` — normalize the lookup key
         // the same way every other address lookup in this file does, or the read misses and the
         // call falls back to the state nonce (NONCE_TOO_LOW for an in-flight sender).

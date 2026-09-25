@@ -23,6 +23,7 @@
 #include "libinitializer/CommandHelper.h"
 #include "libinitializer/EthereumSyncInitializer.h"
 #include "libinitializer/Initializer.h"
+#include "libinitializer/OpStackSyncInitializer.h"
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/rpc/RPCInterface.h>
 #include <bcos-rpc/tarsRPC/RPCServer.h>
@@ -82,5 +83,7 @@ private:
     // init(params) — which runs AFTER that — can still hang the tx-gossip announce hook
     // on it. The RPC (m_rpc) owns the strong reference.
     std::weak_ptr<bcos::rpc::NodeService> m_nodeService;
+    // OP-Stack EL-mode self-sync driver (only set when [ethereum] mode=opstack-el).
+    std::shared_ptr<bcos::initializer::OpStackSyncInitializer> m_opStackSync;
 };
 }  // namespace bcos::node

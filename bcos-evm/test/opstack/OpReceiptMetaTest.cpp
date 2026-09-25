@@ -141,4 +141,32 @@ BOOST_AUTO_TEST_CASE(EcotoneCalldataGasUsedBecomesL1GasUsed)
     BOOST_CHECK_NE(*m.l1_gas_used, 1600u);
 }
 
+// Legacy（Bedrock–Delta）分支：legacy_l1_gas_used 快照直接成为 l1_gas_used；Ecotone 专有的
+// blob/scalar 字段不得出现（pre-Ecotone 的 L1Block 没有这些槽；legacy scalar 是整槽 uint256，
+// 放不进 uint32 meta 字段）。l1_gas_price / l1_fee 仍填。
+BOOST_AUTO_TEST_CASE(LegacyMetaOmitsEcotoneScalarAndBlobFields)
+{
+    OpFeeParams fee{};
+    fee.l1_base_fee = 1000_u256;
+    fee.base_fee_scalar = 7;         // Ecotone 槽值——legacy 分支必须忽略
+    fee.blob_base_fee = 2000_u256;   // 同上
+    fee.blob_base_fee_scalar = 9;    // 同上
+    fee.l1_fee_overhead = 50_u256;
+    fee.l1_fee_scalar = 7000000_u256;
+    auto p = props(fee, /*flzLen=*/0, 11326000000000_u256, bedrockConfig());
+    p.legacy_l1_gas_used = 1618;
+    const auto m = deriveOpReceiptMeta(p, 0_u256, /*fill_operator_scalars=*/false);
+    BOOST_REQUIRE(m.l1_gas_price.has_value());
+    BOOST_CHECK_EQUAL(*m.l1_gas_price, 1000_u256);
+    BOOST_REQUIRE(m.l1_fee.has_value());
+    BOOST_CHECK_EQUAL(*m.l1_fee, 11326000000000_u256);
+    BOOST_REQUIRE(m.l1_gas_used.has_value());
+    BOOST_CHECK_EQUAL(*m.l1_gas_used, 1618u);
+    BOOST_CHECK(!m.l1_blob_base_fee.has_value());
+    BOOST_CHECK(!m.l1_base_fee_scalar.has_value());
+    BOOST_CHECK(!m.l1_blob_base_fee_scalar.has_value());
+    BOOST_CHECK(!m.operator_fee.has_value());       // pre-Isthmus
+    BOOST_CHECK(!m.da_footprint.has_value());       // pre-Jovian
+}
+
 BOOST_AUTO_TEST_SUITE_END()
