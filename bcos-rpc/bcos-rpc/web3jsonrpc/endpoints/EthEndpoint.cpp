@@ -1011,6 +1011,22 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
                     "blob sidecar commitment does not match its versioned hash"));
             }
         }
+        // Cheap bound before the expensive KZG batch verify: the pool refuses a
+        // transaction outside [1, maxBlobsPerTransaction] blobs at admission
+        // (MemPoolImpl::insertLocked), so a wrapper that can never be admitted is
+        // rejected here without spending proof verifications on it. Same verdict the
+        // pool's gate maps to.
+        if (auto const* memPool = m_nodeService->memPool(); memPool != nullptr)
+        {
+            auto const blobCount = web3Tx.blobVersionedHashes.size();
+            auto const maxBlobs = memPool->maxBlobsPerTransaction();
+            if (blobCount == 0 || blobCount > maxBlobs) [[unlikely]]
+            {
+                BOOST_THROW_EXCEPTION(admissionError(protocol::TransactionStatus::Malformed,
+                    fmt::format("blob transaction carries {} blobs, outside [1, {}]", blobCount,
+                        maxBlobs)));
+            }
+        }
         if (!crypto::kzg::verifyBlobKzgProofBatch(
                 blobSidecar->blobs, blobSidecar->commitments, blobSidecar->proofs))
         {
@@ -1110,7 +1126,7 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         // EL-mode transaction gossip ([ethereum] tx_gossip): announce the freshly admitted
         // transaction to the devp2p peers. Best-effort by design — the announcement must
         // never turn an admitted transaction into an RPC error.
-        if (auto const& announcer = m_nodeService->txGossipAnnouncer()) [[unlikely]]
+        if (auto const& announcer = m_nodeService->txGossipAnnouncer())
         {
             try
             {

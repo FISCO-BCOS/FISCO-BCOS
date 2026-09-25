@@ -318,8 +318,11 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_ioServicePool, m_ledgerConfigState);
     // executor_version==2 (the pure-Ethereum executor): the mempool runs the L1 fee market —
     // blob transactions admitted, fee-ordered sealing, fee-bump replacement. EL mode
-    // (ethereum.mode=el) additionally sizes the pool (capacity, lifetime) and bounds blobs by
-    // the active blob schedule. Every other version keeps the L2 pool defaults (no fee market,
+    // (ethereum.mode=el) additionally sizes the pool (capacity, lifetime) and resolves the
+    // per-transaction blob limit dynamically: the EIP-7840 schedule evaluated at the chain
+    // head's timestamp — LedgerConfigState is republished with every committed block
+    // (MultiVersionScheduler's commitBlock wrapper) and carries the head header's
+    // millisecond timestamp. Every other version keeps the L2 pool defaults (no fee market,
     // blobs refused).
     bcos::txpool::MemPoolConfig memPoolConfig;
     if (m_executorVersion == bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
@@ -328,16 +331,17 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         if (m_nodeConfig->ethereumELModeEnabled())
         {
             auto const forkSchedule = EthereumSyncInitializer::evmcForkSchedule(*m_nodeConfig);
-            auto const blobSchedule = bcos::protocol::blobScheduleForTimestamp(
+            memPoolConfig.capacity = m_nodeConfig->ethereumMempoolCapacity();
+            memPoolConfig.txLifetimeMs = m_nodeConfig->ethereumMempoolTxLifetimeMinutes() * 60 * 1000;
+            memPoolConfig.blobForks =
                 bcos::protocol::BlobForkTimes{.cancunTime = forkSchedule.cancunTime,
                     .pragueTime = forkSchedule.pragueTime,
                     .bpo1Time = forkSchedule.bpo1Time,
-                    .bpo2Time = forkSchedule.bpo2Time},
-                static_cast<uint64_t>(bcos::utcTime() / 1000));
-            memPoolConfig.capacity = 5120;
-            memPoolConfig.txLifetimeMs = 30 * 60 * 1000;
-            memPoolConfig.maxBlobsPerTransaction =
-                static_cast<std::size_t>(blobSchedule.maxBlobs);
+                    .bpo2Time = forkSchedule.bpo2Time};
+            memPoolConfig.headTimestampSeconds = [state = m_ledgerConfigState] {
+                return static_cast<uint64_t>((std::max)(state->get()->timestamp(), int64_t{0})) /
+                       1000;
+            };
         }
     }
     m_memPoolInitializer = MemPoolInitializer::build(memPoolConfig);

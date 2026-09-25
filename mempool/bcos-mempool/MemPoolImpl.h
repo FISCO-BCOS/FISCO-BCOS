@@ -2,6 +2,7 @@
 
 #include "bcos-framework/bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/bcos-framework/engine/Types.h"
+#include "bcos-framework/bcos-framework/protocol/BlobSchedule.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
@@ -19,6 +20,7 @@
 #include <algorithm>
 #include <concepts>
 #include <cstdint>
+#include <functional>
 #include <queue>
 #include <string_view>
 #include <unordered_set>
@@ -67,6 +69,13 @@ struct MemPoolConfig
     int64_t txLifetimeMs = 0;
     /// EIP-4844: max blob versioned hashes one transaction may carry (L1 only).
     std::size_t maxBlobsPerTransaction = 6;
+    /// When set (EL mode), the per-transaction blob limit resolves dynamically instead of
+    /// reading the static field above: the EIP-7840 schedule (blobForks) is evaluated at
+    /// the chain-head timestamp this provider returns, in seconds. A BPO bump activating
+    /// while the node runs takes effect without a restart, and a chain still syncing
+    /// behind wall-clock time is gated by the fork its head is actually on.
+    std::function<uint64_t()> headTimestampSeconds{};
+    protocol::BlobForkTimes blobForks{};
 };
 
 /// Static fee keys of a transaction, without the block's base fee: the most the
@@ -309,9 +318,23 @@ private:
 
 public:
     /// The default config is the L2 pool exactly as before; L1 wiring passes a config.
-    explicit MemPoolImpl(MemPoolConfig config = {}) : m_config(config) {}
+    explicit MemPoolImpl(MemPoolConfig config = {}) : m_config(std::move(config)) {}
 
     MemPoolConfig const& config() const { return m_config; }
+
+    /// The per-transaction blob limit in force now: the EIP-7840 schedule resolved at the
+    /// chain head's timestamp when the config wires a provider (EL mode), else the static
+    /// field. Pre-Cancun heads resolve to the zero schedule (maxBlobs 0: no blobs).
+    std::size_t maxBlobsPerTransaction() const
+    {
+        if (m_config.headTimestampSeconds)
+        {
+            return static_cast<std::size_t>(protocol::blobScheduleForTimestamp(
+                m_config.blobForks, m_config.headTimestampSeconds())
+                                                .maxBlobs);
+        }
+        return m_config.maxBlobsPerTransaction;
+    }
 
     void add(InputTransactions auto transactions)
     {
@@ -365,6 +388,28 @@ public:
             return it->second;
         }
         return std::nullopt;
+    }
+
+    /// Whether a sidecar is registered for @p txHash — the existence probe for callers that
+    /// do not need the payload (blobSidecar() copies the whole sidecar, blobs included).
+    bool hasBlobSidecar(crypto::HashType const& txHash) const
+    {
+        std::unique_lock lock(m_mutex);
+        return m_blobSidecars.contains(txHash);
+    }
+
+    /// Invoke @p visitor with the registered sidecar under the pool lock, avoiding the
+    /// whole-sidecar copy blobSidecar() makes. @return false when none is registered.
+    bool visitBlobSidecar(crypto::HashType const& txHash, auto&& visitor) const
+    {
+        std::unique_lock lock(m_mutex);
+        auto const it = m_blobSidecars.find(txHash);
+        if (it == m_blobSidecars.end())
+        {
+            return false;
+        }
+        visitor(it->second);
+        return true;
     }
 
     /// engine_getBlobsV1's pool half: for every requested versioned hash, the pooled blob

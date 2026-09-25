@@ -45,6 +45,7 @@
 #include "bcos-ledger/mpt/StateRoots.h"
 #include "bcos-ledger/mpt/ViewNodeStorage.h"
 #include "bcos-rlp-protocol/EthBlockHeader.h"
+#include "bcos-rlp-protocol/EthPoSHeaderValidation.h"
 #include "bcos-rlp-protocol/EthWithdrawal.h"
 #include "bcos-task/Task.h"
 #include "bcos-transaction-scheduler/EthereumChainRollback.h"
@@ -472,6 +473,13 @@ public:
         m_reorgWindow(reorgWindow)
     {}
 
+    /// The shallow-reorg window this verifier commits with (0 = rollback journaling
+    /// disabled). Exposed so the Engine API self-built commit lane — which commits
+    /// through EthEngineService, not through this class — writes the SAME rollback
+    /// journal for its blocks (EthereumChainRollback.h), keeping every block in the
+    /// window rewindable no matter which lane committed it.
+    [[nodiscard]] int64_t reorgWindow() const { return m_reorgWindow; }
+
     /// MPT state root over the executed view's Ethereum world state, built incrementally
     /// from the parent block's state root. Forwards to the shared implementation
     /// (ledger::mpt::computeMptStateRoot, bcos-ledger/mpt/StateRoots.h). verifyAndCommit
@@ -851,6 +859,36 @@ public:
         // double-commit the same height. (The lock also keeps its original role —
         // serializing the commit section's [prepare -> merge -> onCommit] triple.)
         std::unique_lock commitLock(m_commitMutex);
+
+        // 1b. Parent-relative consensus validation (EIP-1559 base fee, EIP-4844/7918
+        //     excess blob gas, gas-limit bound and minimum, strictly increasing
+        //     timestamp, gasUsed <= gasLimit, blobGasUsed cap, fork-gated field
+        //     presence): the SAME implementation the devp2p sync lane applies at
+        //     HeaderChain (bcos-rlp-protocol/EthPoSHeaderValidation.h, re-exported by
+        //     bcos-devp2p/sync/HeaderValidator.h), mapped field-by-field from the
+        //     EvmcForkTimestamps schedule — 0 means "active from genesis" and
+        //     UINT64_MAX "never" in both representations. The devp2p lane validates
+        //     every header before import, so for it this recheck is an identity; the
+        //     Engine API newPayload lane had NO such check — a CL-pushed header could
+        //     carry a baseFee/blobGas/gasLimit the network lane would have rejected.
+        //     Runs BEFORE the height guard: the check is stateless (header vs parent
+        //     header only), cheap, and must fire before the guard's shallow-reorg
+        //     branch can rewind committed state for a block that is invalid anyway.
+        protocol::PoSChainConfig const posChainConfig{.chainId = chainId,
+            .londonTime = forkSchedule.londonTime,
+            .shanghaiTime = forkSchedule.shanghaiTime,
+            .cancunTime = forkSchedule.cancunTime,
+            .pragueTime = forkSchedule.pragueTime,
+            .osakaTime = forkSchedule.osakaTime,
+            .bpo1Time = forkSchedule.bpo1Time,
+            .bpo2Time = forkSchedule.bpo2Time,
+            .mergeBlock = mergeBlock};
+        if (auto headerCheck = protocol::validateHeaderPoS(ethHeader, parentHeader,
+                posChainConfig);
+            !headerCheck.valid)
+        {
+            co_return co_await fail("EthereumBlockVerifier: " + headerCheck.error);
+        }
 
         // 1. Fork the execution view, then the height guard.
         auto view = globalStateStorage.fork();

@@ -383,5 +383,28 @@ BOOST_AUTO_TEST_CASE(malformedIngressDroppedWithoutEscalation)
                     bcos::ref(notRlp)) == TxGossipService::PeerVerdict::Ok);
 }
 
+BOOST_AUTO_TEST_CASE(rawCacheReannounceKeepsSingleEntry)
+{
+    // Re-announcing the same hash must refresh the cached envelope in place: a second
+    // eviction-order entry would double-count the hash against the 1024-entry budget and
+    // evict it (plus every older entry) once the deque overflows.
+    auto const hash = h256("f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1");
+    bcos::bytes const envelope{0x02, 0xc4, 0x01, 0x02, 0x03, 0x04};
+    for (int i = 0; i < 1100; ++i)
+    {
+        service.announceLocalTransaction(hash, 0x02, envelope.size(), envelope);
+    }
+
+    GossipTestPeer asker;
+    eth::GetPooledTransactionsMessage request{.requestId = 7, .hashes = {hash}};
+    gossipDeliver(service, *asker.state, eth::frameId(eth::msg::GetPooledTransactions),
+        eth::encodeGetPooledTransactions(request));
+    BOOST_REQUIRE_EQUAL(asker.frames.size(), 1);
+    auto reply = eth::decodePooledTransactions(bcos::ref(asker.frames.front().second));
+    BOOST_REQUIRE(reply.has_value());
+    BOOST_REQUIRE_EQUAL(reply->transactions.size(), 1);
+    BOOST_CHECK(reply->transactions.front() == envelope);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

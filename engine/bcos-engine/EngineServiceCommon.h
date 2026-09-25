@@ -127,6 +127,12 @@ inline bcos::h256 withdrawalsRootFor(const ExecutionPayload& /*payload*/)
 
 namespace engine_common
 {
+/// Optional SYS_CONFIG row (decimal gas limit) an operator sets to steer the L1 block
+/// gas limit: the EL block builder then moves each built block's gasLimit toward the
+/// target by strictly less than parent/1024 (clamped to the 5000 consensus minimum).
+/// Absent, built blocks inherit the parent header's gasLimit unchanged.
+constexpr std::string_view c_l1GasLimitTargetKey{"el_gas_limit_target"};
+
 /// A CL-pushed (external) payload mapped into the RLP domain: the reconstructed Ethereum
 /// header, the committed parent header (filled by the caller from the ledger), and the raw
 /// sidecars (EIP-2718 envelopes, per-item EIP-4895 withdrawal RLP) the EL verifier consumes.
@@ -238,6 +244,12 @@ public:
     /// executeEthereumBlock implementation verifyAndCommit verifies with.
     virtual task::Task<ExternalBuildResult> buildL1Block(
         typename GlobalStateStorageType::ViewType& view, ExternalBuildBlock const& block) = 0;
+    /// The shallow-reorg window the shared verifier commits with (0 = rollback
+    /// journaling disabled). The self-built newPayload commit lane reads this to write
+    /// the SAME rollback journal for blocks it commits, so a reorg can rewind blocks
+    /// committed through either lane. Default 0 keeps stubs (and any wiring without a
+    /// reorg window) behavior-identical.
+    virtual int64_t reorgWindow() const { return 0; }
 };
 }  // namespace engine_common
 

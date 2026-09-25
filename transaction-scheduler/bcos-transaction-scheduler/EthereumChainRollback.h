@@ -193,8 +193,8 @@ task::Task<void> writeRollbackJournalRows(Storage& prewriteStorage,
 
 /// Thrown when a rollback cannot be served: the target is not behind the head, the depth
 /// exceeds the reorg window, or a needed journal row is missing (pruned by the window, or
-/// never captured — e.g. blocks committed by the engine built-lane, which keeps no
-/// journal). The caller classifies this as "reorg too deep — resync", never as a peer
+/// never captured — e.g. blocks committed before journaling was wired into every commit
+/// lane). The caller classifies this as "reorg too deep — resync", never as a peer
 /// fault.
 struct RollbackRefused : public std::runtime_error
 {
@@ -309,6 +309,11 @@ task::Task<RollbackResult> rollbackCommittedChain(GlobalStateStorage& globalStat
             batch, executor_v1::StateKey{ledger::SYS_BLOCK_NUMBER_2_NONCES, numberStr});
         co_await storage2::removeOne(
             batch, executor_v1::StateKey{ledger::SYS_NUMBER_2_WITHDRAWALS, numberStr});
+        // Locally built blob blocks carry a sidecar row (EthEngineService's commit);
+        // leaving it behind would let engine_getBlobsV* serve the orphaned block's
+        // blobs for this height after the reorg.
+        co_await storage2::removeOne(
+            batch, executor_v1::StateKey{ledger::SYS_NUMBER_2_BLOBS, numberStr});
         co_await storage2::removeOne(
             batch, executor_v1::StateKey{ledger::SYS_ROLLBACK_JOURNAL, numberStr});
     }

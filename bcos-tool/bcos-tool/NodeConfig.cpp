@@ -1362,11 +1362,37 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
                                   std::to_string(m_ethereumReorgWindow)));
     }
 
+    // Engine mempool sizing (EL mode only): capacity in transactions and per-transaction
+    // lifetime in minutes. Validated on the signed parse like the neighbours — a negative
+    // or zero value is a config error at load time, not a pool that silently never holds
+    // (or never expires) a transaction.
+    auto const mempoolCapacity = checkAndGetValue(_pt, "ethereum.mempool_capacity", "5120");
+    if (mempoolCapacity <= 0 || mempoolCapacity > 10'000'000)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "ethereum.mempool_capacity must be in [1, 10000000], got " +
+                                  std::to_string(mempoolCapacity)));
+    }
+    m_ethereumMempoolCapacity = static_cast<size_t>(mempoolCapacity);
+    auto const mempoolLifetime =
+        checkAndGetValue(_pt, "ethereum.mempool_tx_lifetime_minutes", "30");
+    if (mempoolLifetime <= 0 || mempoolLifetime > 24 * 60 * 7)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "ethereum.mempool_tx_lifetime_minutes must be in [1, 10080] (one week), got " +
+                std::to_string(mempoolLifetime)));
+    }
+    m_ethereumMempoolTxLifetimeMinutes = mempoolLifetime;
+
     NodeConfig_LOG(INFO) << LOG_DESC("loadEthereumConfig") << LOG_KV("mode", mode)
                          << LOG_KV("bootnodesFile", m_ethereumBootnodesFile)
                          << LOG_KV("nodeKeyFile", m_ethereumNodeKeyFile)
                          << LOG_KV("maxBatchSize", m_ethereumMaxBatchSize)
                          << LOG_KV("reorgWindow", m_ethereumReorgWindow)
+                         << LOG_KV("mempoolCapacity", m_ethereumMempoolCapacity)
+                         << LOG_KV("mempoolTxLifetimeMinutes",
+                                m_ethereumMempoolTxLifetimeMinutes)
                          << LOG_KV("depositContractAddress",
                                 "0x" + m_ethereumDepositContractAddress.hex())
                          << LOG_KV("finalizedCheckpoint",
@@ -3793,6 +3819,14 @@ bcos::Address const& bcos::tool::NodeConfig::ethereumDepositContractAddress() co
 std::int64_t bcos::tool::NodeConfig::ethereumReorgWindow() const
 {
     return m_ethereumReorgWindow;
+}
+size_t bcos::tool::NodeConfig::ethereumMempoolCapacity() const
+{
+    return m_ethereumMempoolCapacity;
+}
+std::int64_t bcos::tool::NodeConfig::ethereumMempoolTxLifetimeMinutes() const
+{
+    return m_ethereumMempoolTxLifetimeMinutes;
 }
 bool bcos::tool::NodeConfig::singlePointConsensus() const
 {

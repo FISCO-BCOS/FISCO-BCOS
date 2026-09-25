@@ -96,6 +96,15 @@ public:
             co_return ExternalPayloadResult{
                 .outcome = ExternalPayloadOutcome::StaleOrOutOfOrder, .error = {}};
         }
+        catch (scheduler_v1::RollbackRefused const& e)
+        {
+            // The shallow-reorg retry inside verifyAndCommit could not rewind (window
+            // disabled, depth beyond it, or the journal pruned). Same caller contract as
+            // the head+1 race: SYNCING, so the CL re-syncs instead of the exception
+            // escaping as a generic -32603 RPC error.
+            co_return ExternalPayloadResult{
+                .outcome = ExternalPayloadOutcome::StaleOrOutOfOrder, .error = e.what()};
+        }
     }
 
     task::Task<engine::engine_common::ExternalRollbackResult> rollbackToCommitted(
@@ -172,6 +181,11 @@ public:
         result.executionRequests = std::move(execution.executionRequests);
         co_return result;
     }
+
+    /// The engine's self-built newPayload commit lane writes the rollback journal for
+    /// its blocks when this is positive — same value the verifier's own commit path
+    /// journals with (single source: the shared verifier instance).
+    int64_t reorgWindow() const override { return m_verifier->reorgWindow(); }
 
 private:
     std::shared_ptr<Verifier> m_verifier;

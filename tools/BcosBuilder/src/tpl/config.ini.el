@@ -48,6 +48,15 @@
     node_key_file=
     ; max blocks requested per batch
     max_batch_size=192
+    ; shallow-reorg window: how many committed blocks a reorg may rewind. Every commit
+    ; journals its pre-block flat-state values, so the knob trades per-commit journal
+    ; cost for reorg depth. 0 disables journaling/rollback entirely. Must be <=
+    ; storage.mpt_prune_window unless the latter is -1 (unbounded).
+    ; reorg_window=256
+    ; engine mempool sizing (EL mode only): capacity in transactions, per-transaction
+    ; lifetime in minutes before expiry
+    ; mempool_capacity=5120
+    ; mempool_tx_lifetime_minutes=30
     ; eth/68 transaction gossip: dedicated outbound sessions exchange pooled
     ; transactions with bootnode peers and admit what arrives into the engine
     ; mempool (locally injected RPC transactions are announced the same way).
@@ -79,8 +88,12 @@
     ; Authenticated Engine API listener (JSON-RPC over HTTP + JWT) for a consensus
     ; client. Requires ethereum.mode=el; mutually exclusive with [op_engine_rpc] and
     ; consensus.enable_single_node_consensus.
-    ; NOTE: block import still comes from devp2p sync — the listener answers
-    ; forkchoiceUpdated/newPayload for unknown payloads with SYNCING.
+    ; With this enabled the node is CL-DRIVEN: newPayload payloads are verified AND
+    ; executed/committed locally through the shared EthereumBlockVerifier, and
+    ; forkchoiceUpdated advances the head; the devp2p sync loop is demoted to a
+    ; backfiller — it bootstraps up to the peer tip, then idles and only downloads
+    ; when the Engine API answers SYNCING for a payload whose ancestors are missing.
+    ; With enable=false the sync loop stays fully autonomous (devp2p import only).
     enable=false
     listen_ip=127.0.0.1
     listen_port=8551

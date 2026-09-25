@@ -31,7 +31,9 @@
  *          (d) a stale block whose parent is NOT canonical still throws
  *              StaleOrOutOfOrderBlock (no rollback happens);
  *          (e) window 0 keeps the pre-Phase-3 behavior: no journal rows are written and a
- *              stale replay throws StaleOrOutOfOrderBlock.
+ *              stale replay throws StaleOrOutOfOrderBlock;
+ *          (f) a rolled-back blob block's SYS_NUMBER_2_BLOBS row is deleted with the rest
+ *              of the number-keyed rows, and a fork block at the same height lands its own.
  */
 
 #include "TrivialCheckpointStorage.h"
@@ -230,6 +232,9 @@ bcos::protocol::EthBlockHeaderData RBBaseHeader(
     header.stateRoot = ledger::mpt::emptyRootHash();
     header.txsRoot = ledger::mpt::emptyRootHash();
     header.receiptsRoot = ledger::mpt::emptyRootHash();
+    // Shanghai is active from genesis in this suite: every block commits to the
+    // empty withdrawals trie and carries an empty withdrawals list.
+    header.withdrawalsHash = ledger::mpt::emptyRootHash();
     return header;
 }
 
@@ -389,7 +394,7 @@ task::Task<void> RBDriveChain(RBFixture& fixture, SchedulerSerialImpl& scheduler
 
         auto result = co_await verifier.verifyAndCommit(fixture.multiLayerStorage, fakeLedger,
             ethHeader, prevEthHeader, std::vector<bcos::bytes>{raw},
-            std::optional<std::vector<bcos::bytes>>{}, forks, 1, std::vector<bcos::bytes>{}, 0,
+            std::vector<bcos::bytes>{}, forks, 1, std::vector<bcos::bytes>{}, 0,
             decoder, stateRootCalc);
         BOOST_REQUIRE_MESSAGE(result.valid, "block " << number << " invalid: " << result.error);
         // FakeLedger::asyncPrewriteBlock is a no-op: write the ledger metadata rows the real
@@ -451,7 +456,7 @@ BOOST_FIXTURE_TEST_CASE(staleReorgRetryRollsBackAndCommits, RBFixture)
         };
         auto result = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger,
             forkHeader, chain.headers[1], std::vector<bcos::bytes>{},
-            std::optional<std::vector<bcos::bytes>>{}, forks, 1, std::vector<bcos::bytes>{}, 0,
+            std::vector<bcos::bytes>{}, forks, 1, std::vector<bcos::bytes>{}, 0,
             decoder, stateRootCalc);
         BOOST_REQUIRE_MESSAGE(result.valid, "fork block invalid: " << result.error);
         BOOST_CHECK_EQUAL(result.stateRoot, chain.roots[2]);
@@ -572,11 +577,14 @@ BOOST_FIXTURE_TEST_CASE(staleNonCanonicalParentStillThrows, RBFixture)
         Verifier verifier(scheduler, *executor, *blockFactory, nullptr, c_reorgWindow);
         co_await RBDriveChain(*this, scheduler, verifier, *fakeLedger, chain, 4);
 
-        // A "block 3" whose claimed parent is A3 (number 3's canonical block, NOT the
-        // canonical A2 at number-1 = 2): the retry's canonical-parent check fails, so the
-        // original stale throw must surface.
-        auto bogus = RBEmptyChildHeader(chain.headers[1], kGasLimit);
-        bogus.parentInfo.blockHash = chain.hashes[3];
+        // A "block 3" that follows a NON-canonical parent cleanly: B2 is a plausible
+        // block-2 header (A2 with different extraData, hence a different hash) that is
+        // NOT the canonical A2. The stateless parent-relative check (step 1b) passes;
+        // the retry's canonical-parent check (B2's hash != the canonical A2 at
+        // number-1 = 2) fails, so the original stale throw must surface.
+        auto nonCanonicalParent = chain.headers[1];
+        nonCanonicalParent.extraData = bcos::bytes{bcos::byte{0x42}};
+        auto bogus = RBEmptyChildHeader(nonCanonicalParent, kGasLimit);
         scheduler_v1::EvmcForkTimestamps forks;
         forks.londonTime = 0;
         forks.parisTime = 0;
@@ -592,8 +600,8 @@ BOOST_FIXTURE_TEST_CASE(staleNonCanonicalParentStillThrows, RBFixture)
         };
         BOOST_CHECK_THROW(
             co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, bogus,
-                chain.headers[2], std::vector<bcos::bytes>{},
-                std::optional<std::vector<bcos::bytes>>{}, forks, 1, std::vector<bcos::bytes>{},
+                nonCanonicalParent, std::vector<bcos::bytes>{},
+                std::vector<bcos::bytes>{}, forks, 1, std::vector<bcos::bytes>{},
                 0, decoder, stateRootCalc),
             StaleOrOutOfOrderBlock);
         BOOST_CHECK_EQUAL(co_await RBReadBalance(backendStorage, chain.recipient), u256(400));
@@ -640,12 +648,66 @@ BOOST_FIXTURE_TEST_CASE(disabledWindowJournalsNothing, RBFixture)
         BOOST_CHECK_THROW(
             co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, forkHeader,
                 chain.headers[0], std::vector<bcos::bytes>{},
-                std::optional<std::vector<bcos::bytes>>{}, forks, 1, std::vector<bcos::bytes>{},
+                std::vector<bcos::bytes>{}, forks, 1, std::vector<bcos::bytes>{},
                 0, decoder, stateRootCalc),
             StaleOrOutOfOrderBlock);
         // And the explicit entry point refuses immediately.
         BOOST_CHECK_THROW(
             co_await verifier.rollbackChain(multiLayerStorage, 0), RollbackRefused);
+    }());
+}
+
+// (f) A blob-carrying block's SYS_NUMBER_2_BLOBS row (written by the engine lane's commit
+// for locally built blocks, served by engine_getBlobsV*) must not survive a rollback:
+// the rolled-back heights lose the row, and a fork block committing at the same height
+// afterwards lands its own row cleanly.
+BOOST_FIXTURE_TEST_CASE(rollbackDeletesBlobRows, RBFixture)
+{
+    task::syncWait([&, this]() -> task::Task<void> {
+        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testRBBlobs");
+        SchedulerSerialImpl scheduler(ioServicePool);
+        RBChain chain;
+        co_await RBSetupGenesis(*this, chain);
+
+        constexpr int64_t c_reorgWindow = 4;
+        auto fakeLedger = std::make_shared<bcos::test::FakeLedger>();
+        using Verifier = EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>;
+        Verifier verifier(scheduler, *executor, *blockFactory, nullptr, c_reorgWindow);
+        co_await RBDriveChain(*this, scheduler, verifier, *fakeLedger, chain, 4);
+
+        // Simulate the engine-lane commit rows for blob-carrying blocks 3 and 4
+        // (FakeLedger::asyncPrewriteBlock is a no-op, so the test writes them the same
+        // way it writes the number/hash rows).
+        auto writeBlobRow = [this](protocol::BlockNumber number,
+                                bcos::bytes payload) -> task::Task<void> {
+            storage::Entry entry;
+            entry.set(std::move(payload));
+            co_await storage2::writeOne(backendStorage,
+                StateKey{ledger::SYS_NUMBER_2_BLOBS, std::to_string(number)}, std::move(entry));
+        };
+        auto readBlobRow = [this](protocol::BlockNumber number) -> task::Task<bcos::bytes> {
+            auto entry = co_await storage2::readOne(backendStorage,
+                StateKeyView{ledger::SYS_NUMBER_2_BLOBS, std::to_string(number)});
+            BOOST_REQUIRE(entry);
+            co_return bcos::bytes(entry->get().begin(), entry->get().end());
+        };
+        co_await writeBlobRow(3, {bcos::byte{0xA3}});
+        co_await writeBlobRow(4, {bcos::byte{0xA4}});
+        BOOST_CHECK(rowInBackend(backendStorage, ledger::SYS_NUMBER_2_BLOBS, "3"));
+        BOOST_CHECK(rowInBackend(backendStorage, ledger::SYS_NUMBER_2_BLOBS, "4"));
+
+        auto result = co_await verifier.rollbackChain(multiLayerStorage, 2);
+        BOOST_CHECK_EQUAL(result.oldHead, 4);
+        BOOST_CHECK_EQUAL(result.newHead, 2);
+        BOOST_CHECK_MESSAGE(!rowInBackend(backendStorage, ledger::SYS_NUMBER_2_BLOBS, "3"),
+            "blob row of rolled-back block 3 survived");
+        BOOST_CHECK_MESSAGE(!rowInBackend(backendStorage, ledger::SYS_NUMBER_2_BLOBS, "4"),
+            "blob row of rolled-back block 4 survived");
+
+        // The fork block committing at height 3 writes its own row; nothing stale
+        // lingers underneath it.
+        co_await writeBlobRow(3, {bcos::byte{0xB3}});
+        BOOST_CHECK((co_await readBlobRow(3)) == bcos::bytes{bcos::byte{0xB3}});
     }());
 }
 

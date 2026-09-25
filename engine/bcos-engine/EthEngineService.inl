@@ -29,8 +29,11 @@
 #include <bcos-framework/protocol/BlobSchedule.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/EthTrieRoots.h>
+#include <bcos-rlp-protocol/EthPoSHeaderValidation.h>
 #include <bcos-rlp-protocol/EthWithdrawal.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
+#include <bcos-transaction-scheduler/EthereumChainRollback.h>
+#include <algorithm>
 #include <limits>
 #include <optional>
 #include <unordered_set>
@@ -302,7 +305,7 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
             if (sealedTx->type() ==
                     static_cast<std::uint8_t>(protocol::TransactionType::Web3Transaction) &&
                 !sealedTx->blobVersionedHashes().empty() &&
-                !m_memPool.blobSidecar(sealedTx->hash()).has_value())
+                !m_memPool.hasBlobSidecar(sealedTx->hash()))
             {
                 blobStalledSenders.insert(std::move(sender));
                 BCOS_LOG(WARNING) << LOG_BADGE("EthEngineService")
@@ -386,8 +389,16 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
             {
                 continue;
             }
-            auto sidecar = m_memPool.blobSidecar(tx.decoded->hash());
-            if (!sidecar.has_value())
+            auto const found = m_memPool.visitBlobSidecar(tx.decoded->hash(),
+                [&bundle](engine::BlobTxSidecar const& sidecar) {
+                    bundle.commitments.insert(bundle.commitments.end(),
+                        sidecar.commitments.begin(), sidecar.commitments.end());
+                    bundle.proofs.insert(
+                        bundle.proofs.end(), sidecar.proofs.begin(), sidecar.proofs.end());
+                    bundle.blobs.insert(
+                        bundle.blobs.end(), sidecar.blobs.begin(), sidecar.blobs.end());
+                });
+            if (!found)
             {
                 BCOS_LOG(WARNING) << LOG_BADGE("EthEngineService")
                                   << LOG_DESC("getPayload: blob transaction without sidecar in "
@@ -395,11 +406,6 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
                                   << LOG_KV("hash", tx.decoded->hash().hexPrefixed());
                 continue;
             }
-            bundle.commitments.insert(bundle.commitments.end(), sidecar->commitments.begin(),
-                sidecar->commitments.end());
-            bundle.proofs.insert(
-                bundle.proofs.end(), sidecar->proofs.begin(), sidecar->proofs.end());
-            bundle.blobs.insert(bundle.blobs.end(), sidecar->blobs.begin(), sidecar->blobs.end());
         }
     }
 
@@ -559,6 +565,13 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     BuiltPayloadPtr cached;
     PayloadID payloadId;
     std::optional<EthPayloadArtifacts<ViewType>> localArtifact;
+    // The artifact's executed view, moved out of the artifact under the tracker lock but
+    // pushed only under m_commitMutex — the rollback journal captures pre-block values
+    // from the committed plane and must run BEFORE the view is queued.
+    std::optional<ViewType> localView;
+    // The block's rollback journal (EthereumChainRollback.h), captured when the wiring
+    // reports a reorg window; written into the same prewrite buffer as the block data.
+    std::optional<scheduler_v1::RollbackJournal> rollbackJournal;
     // Set when THIS block still owns a queued (or about-to-be-queued) state layer: either this
     // call pushes one, or a previous attempt pushed it and failed, leaving it queued for the
     // retry (commit_retry_without_ledger_drains_after_failed_merge). A payload whose artifact
@@ -672,9 +685,11 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         auto guard = m_tracker.lockExclusive();
         auto artifactIt = m_artifacts.find(payloadId);
         // Keep artifacts until the durable write succeeds so a retry can finish the block.
-        // pushView + view.reset() happen under the lock so a concurrent duplicate
-        // newPayload never pushes the same view twice; header/receipts are only
-        // read here and consumed after the I/O succeeds, so their presence is the
+        // The view is MOVED OUT here (not pushed) under the lock so a concurrent duplicate
+        // newPayload never takes the same view twice; it is pushed under m_commitMutex
+        // below, after the rollback journal capture — capture reads pre-block values from
+        // the committed plane and requires the view not yet queued. header/receipts are
+        // only read here and consumed after the I/O succeeds, so their presence is the
         // retry discriminator.
         if (artifactIt != m_artifacts.end() &&
             (artifactIt->second.view || artifactIt->second.header))
@@ -682,7 +697,7 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
             stateLayerQueued = true;
             if (artifactIt->second.view)
             {
-                m_globalStateStorage.pushView(std::move(*artifactIt->second.view));
+                localView = std::move(*artifactIt->second.view);
                 artifactIt->second.view.reset();
             }
             if (m_ledger && artifactIt->second.header)
@@ -721,6 +736,31 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
             localArtifact = std::nullopt;
             stateLayerQueued = false;
         }
+    }
+
+    // Rollback journal (the SAME shared implementation the external/devp2p lane uses,
+    // EthereumChainRollback.h — not a copy): capture the pre-block values of every
+    // flat-state row this block dirtied, so a later shallow reorg can rewind a block
+    // committed through the SELF-BUILT lane too. Captured under m_commitMutex, after
+    // the duplicate check (only the committing call journals) and BEFORE pushView —
+    // exactly the verifier's step 7a ordering. Disabled when the wiring reports a zero
+    // reorg window (the seam's single source is the shared verifier instance). The
+    // if-constexpr keeps storages without a committed-plane fork (unit-test stubs)
+    // compiling — they can never wire a reorg window, so there is nothing to capture.
+    auto const reorgWindow = m_externalPayloadVerifier ? m_externalPayloadVerifier->reorgWindow() : 0;
+    if constexpr (requires { m_globalStateStorage.forkCommitted(); })
+    {
+        if (localArtifact && localView && reorgWindow > 0)
+        {
+            auto committed = m_globalStateStorage.forkCommitted();
+            rollbackJournal =
+                co_await scheduler_v1::captureRollbackJournal(*localView, committed);
+        }
+    }
+    if (localView)
+    {
+        m_globalStateStorage.pushView(std::move(*localView));
+        localView.reset();
     }
 
     if (localArtifact)
@@ -808,6 +848,15 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
                 executor_v1::StateKey{bcos::ledger::SYS_NUMBER_2_BLOBS,
                     std::to_string(cached->executionPayload.blockNumber)},
                 std::move(blobsEntry));
+        }
+        // Rollback journal rows, written into the SAME prewrite buffer (=> the same
+        // WriteBatch) as the block data — the number-keyed journal plus the expiry of
+        // the row that fell out of the window, identical to the external lane's commit
+        // (EthereumBlockVerifier step 8, writeRollbackJournalRows).
+        if (rollbackJournal)
+        {
+            co_await scheduler_v1::writeRollbackJournalRows(prewriteStorage,
+                cached->executionPayload.blockNumber, *rollbackJournal, reorgWindow);
         }
         // MPT pruning: the observer turns the block's delta into the deletion keys of expired
         // node rows, applied to prewriteStorage so deletions land in the SAME WriteBatch as
@@ -1335,7 +1384,48 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
 
     ledger::LedgerConfig ledgerConfig;
     co_await ledger::getLedgerConfig(view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
-    auto const gasLimit = u256(std::get<0>(ledgerConfig.gasLimit()));
+
+    // Block gas limit: inherit the PARENT header's limit by default (delta 0). The
+    // chain's gas limit is a consensus property the parent-relative header validation
+    // bounds to |delta| < parent/1024 per block; tx_gas_limit (a single-transaction
+    // admission cap) must not mint header fields. An optional operator target — the
+    // SYS_CONFIG row engine_common::c_l1GasLimitTargetKey (decimal) — pulls the limit
+    // toward it by strictly less than parent/1024 per block, clamped to the 5000
+    // consensus minimum. PayloadAttributes.gasLimit (the OP extension) is ignored on L1.
+    u256 gasLimit = l1Input.parentHeader.gasLimit;
+    if (auto targetEntry =
+            co_await ledger::getSystemConfig(view, engine_common::c_l1GasLimitTargetKey);
+        targetEntry.has_value())
+    {
+        u256 target = 0;
+        try
+        {
+            target = u256(std::get<0>(*targetEntry));
+        }
+        catch (std::exception const& e)
+        {
+            BOOST_THROW_EXCEPTION(InvalidPayloadAttributes{}
+                                  << bcos::errinfo_comment{
+                                         std::string("EngineService: malformed ") +
+                                         std::string(engine_common::c_l1GasLimitTargetKey) +
+                                         " SYS_CONFIG value: " + e.what()});
+        }
+        u256 const parentLimit = l1Input.parentHeader.gasLimit;
+        u256 const bound = parentLimit / protocol::kGasLimitBoundDivisor;
+        if (bound > 1)
+        {
+            // Step strictly inside the consensus bound (geth's parent/1024 - 1), so the
+            // built header always passes the parent-relative gasLimit check.
+            u256 const step = bound - 1;
+            u256 const lower = parentLimit > step ? parentLimit - step : u256(0);
+            u256 const upper = parentLimit + step;
+            gasLimit = std::min(std::max(target, lower), upper);
+        }
+        if (gasLimit < protocol::kMinGasLimit)
+        {
+            gasLimit = u256(protocol::kMinGasLimit);
+        }
+    }
 
     if (forkVersion >= bcos::protocol::EthBlockVersion::CANCUN &&
         !payloadAttributes.parentBeaconBlockRoot.has_value())

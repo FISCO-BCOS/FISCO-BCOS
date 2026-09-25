@@ -174,7 +174,7 @@ struct EL1BNode
     std::shared_ptr<bcos::test::FakeLedger> fakeLedger =
         std::make_shared<bcos::test::FakeLedger>();
 
-    explicit EL1BNode(std::string name)
+    explicit EL1BNode(std::string name, int64_t reorgWindow = 0)
     {
         ioServicePool = std::make_shared<bcos::IOServicePool>(1, std::move(name));
         scheduler = std::make_unique<scheduler_v1::SchedulerSerialImpl>(ioServicePool);
@@ -185,7 +185,8 @@ struct EL1BNode
             };
         executor = std::make_shared<executor_v1::eth::EthereumExecutor>(
             receiptFactory, std::move(lookup));
-        verifier = std::make_shared<EL1BVerifier>(*scheduler, *executor, *blockFactory);
+        verifier = std::make_shared<EL1BVerifier>(*scheduler, *executor, *blockFactory,
+            /*commitObserver=*/nullptr, reorgWindow);
     }
 
     /// Identical genesis on both nodes: executor config, funded accounts, the canonical
@@ -230,6 +231,50 @@ struct EL1BFixture
             /*ledger=*/nullptr, engine::c_defaultBlockTxCountLimit,
             static_cast<std::uint32_t>(ApiVersion::V4), /*commitObserver=*/nullptr,
             /*ledgerConfigState=*/nullptr, externalVerifier,
+            /*clSync=*/std::make_shared<engine_common::ClSyncCoordination>())
+    {}
+};
+
+/// Reorg variant: BOTH nodes run the real seam over verifiers with a positive reorg
+/// window, so every commit (either lane) writes a rollback journal and a competing
+/// payload can rewind a self-built commit.
+struct EL1BReorgFixture
+{
+    static constexpr int64_t c_reorgWindow = 8;
+
+    EL1BNode nodeA{"reorgA", c_reorgWindow};
+    EL1BNode nodeB{"reorgB", c_reorgWindow};
+    bcos::txpool::MemPoolImpl memPoolA{bcos::txpool::MemPoolConfig{
+        .chainKind = bcos::txpool::ChainKind::L1}};
+    bcos::txpool::MemPoolImpl memPoolB{bcos::txpool::MemPoolConfig{
+        .chainKind = bcos::txpool::ChainKind::L1}};
+    StubExecutor stubExecutor;
+    StubScheduler stubScheduler;
+    std::shared_ptr<initializer::ExternalPayloadVerifierImpl<RealGlobalStateStorage>>
+        externalVerifierA;
+    std::shared_ptr<initializer::ExternalPayloadVerifierImpl<RealGlobalStateStorage>>
+        externalVerifierB;
+    EL1BService serviceA;
+    EL1BService serviceB;
+
+    EL1BReorgFixture()
+      : externalVerifierA(
+            std::make_shared<initializer::ExternalPayloadVerifierImpl<RealGlobalStateStorage>>(
+                nodeA.verifier, nodeA.fakeLedger, nodeA.blockFactory, el1bCancunForks(),
+                /*chainId=*/1, /*mergeBlock=*/0)),
+        externalVerifierB(
+            std::make_shared<initializer::ExternalPayloadVerifierImpl<RealGlobalStateStorage>>(
+                nodeB.verifier, nodeB.fakeLedger, nodeB.blockFactory, el1bCancunForks(),
+                /*chainId=*/1, /*mergeBlock=*/0)),
+        serviceA(memPoolA, nodeA.storage, stubExecutor, stubScheduler, nodeA.blockFactory,
+            /*ledger=*/nodeA.fakeLedger, engine::c_defaultBlockTxCountLimit,
+            static_cast<std::uint32_t>(ApiVersion::V4), /*commitObserver=*/nullptr,
+            /*ledgerConfigState=*/nullptr, externalVerifierA,
+            /*clSync=*/std::make_shared<engine_common::ClSyncCoordination>()),
+        serviceB(memPoolB, nodeB.storage, stubExecutor, stubScheduler, nodeB.blockFactory,
+            /*ledger=*/nodeB.fakeLedger, engine::c_defaultBlockTxCountLimit,
+            static_cast<std::uint32_t>(ApiVersion::V4), /*commitObserver=*/nullptr,
+            /*ledgerConfigState=*/nullptr, externalVerifierB,
             /*clSync=*/std::make_shared<engine_common::ClSyncCoordination>())
     {}
 };
@@ -627,6 +672,360 @@ BOOST_FIXTURE_TEST_CASE(newPayloadRejectsMismatchedExpectedBlobVersionedHashes, 
     request.expectedBlobVersionedHashes = {};
     auto rejectedEmpty = task::syncWait(service.newPayload(request, 3));
     BOOST_CHECK(rejectedEmpty.status == PayloadValidationStatus::Invalid);
+}
+
+// The built block's gasLimit comes from the PARENT header (delta 0 by default) — the
+// tx_gas_limit system config is a single-transaction admission cap and must not mint
+// header fields. An optional operator target (el_gas_limit_target) pulls the limit
+// toward it by strictly less than parent/1024 per block.
+BOOST_FIXTURE_TEST_CASE(gasLimitDerivesFromParentNotTxGasLimitConfig, EL1BFixture)
+{
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    nodeA.seedGenesis(parent, {});
+    nodeB.seedGenesis(parent, {});
+    // tx_gas_limit 100x the parent's 30M: must NOT become the block gas limit.
+    writeRawSysConfig(nodeA.backendStorage,
+        std::string(magic_enum::enum_name(ledger::SystemConfig::tx_gas_limit)), "3000000000");
+
+    ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+    auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
+    auto fcu = task::syncWait(service.updateForkchoice(state, &attributes, 3));
+    BOOST_REQUIRE(fcu.payloadId.has_value());
+    auto data = task::syncWait(service.getPayload(*fcu.payloadId, 3));
+    BOOST_REQUIRE(data);
+    // Δ=0: the parent's 30M, not the 3B admission cap.
+    BOOST_CHECK_EQUAL(data->executionPayload.gasLimit, u256(30000000));
+
+    // Operator target above the parent: pull up by parent/1024 - 1 (strictly inside the
+    // |Δ| < parent/1024 consensus bound). A different timestamp forces a fresh build.
+    u256 const step = u256(30000000) / 1024 - 1;  // 29295
+    writeRawSysConfig(nodeA.backendStorage,
+        std::string(engine_common::c_l1GasLimitTargetKey), "40000000");
+    auto attributesUp = makePayloadAttributesV3(c_blockTimestampMs + 12000);
+    auto fcuUp = task::syncWait(service.updateForkchoice(state, &attributesUp, 3));
+    BOOST_REQUIRE(fcuUp.payloadId.has_value());
+    auto dataUp = task::syncWait(service.getPayload(*fcuUp.payloadId, 3));
+    BOOST_REQUIRE(dataUp);
+    BOOST_CHECK_EQUAL(dataUp->executionPayload.gasLimit, u256(30000000) + step);
+
+    // Operator target far below: pull down by the same step.
+    writeRawSysConfig(nodeA.backendStorage,
+        std::string(engine_common::c_l1GasLimitTargetKey), "5000");
+    auto attributesDown = makePayloadAttributesV3(c_blockTimestampMs + 24000);
+    auto fcuDown = task::syncWait(service.updateForkchoice(state, &attributesDown, 3));
+    BOOST_REQUIRE(fcuDown.payloadId.has_value());
+    auto dataDown = task::syncWait(service.getPayload(*fcuDown.payloadId, 3));
+    BOOST_REQUIRE(dataDown);
+    BOOST_CHECK_EQUAL(dataDown->executionPayload.gasLimit, u256(30000000) - step);
+}
+
+// Parent-relative consensus checks on the engine EXTERNAL newPayload lane (the real
+// verifier seam end-to-end): a payload whose header lies about its parent-derived
+// fields is INVALID even though its blockHash is internally consistent — previously
+// these all answered VALID. The untouched payload still verifies VALID.
+BOOST_FIXTURE_TEST_CASE(externalPayloadParentRelativeConsensusChecks, EL1BFixture)
+{
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    auto const recipient = el1bEvmcAddress(0x44);
+    nodeA.seedGenesis(parent, {});
+    nodeB.seedGenesis(parent, {});
+
+    // Node A builds a valid Cancun payload (empty block, one withdrawal).
+    ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+    auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
+    attributes.withdrawals = std::vector<WithdrawalV1>{WithdrawalV1{.index = 0,
+        .validatorIndex = 1, .amount = 2,
+        .address = bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)))}};
+    auto fcu = task::syncWait(service.updateForkchoice(state, &attributes, 3));
+    BOOST_REQUIRE(fcu.payloadId.has_value());
+    auto data = task::syncWait(service.getPayload(*fcu.payloadId, 3));
+    BOOST_REQUIRE(data);
+
+    NewPayloadRequest validRequest;
+    validRequest.executionPayload = data->executionPayload;
+    validRequest.parentBeaconBlockRoot = data->parentBeaconBlockRoot;
+    auto converted = engine::detail::executionPayloadToEthBlock(validRequest);
+    auto* validBlock = std::get_if<engine_common::ExternalPayloadBlock>(&converted);
+    BOOST_REQUIRE(validBlock != nullptr);
+
+    // Node B runs the EXTERNAL lane with the REAL verifier seam: it never built this
+    // payload, so newPayload routes through verifyAndCommit.
+    bcos::txpool::MemPoolImpl memPoolB{
+        bcos::txpool::MemPoolConfig{.chainKind = bcos::txpool::ChainKind::L1}};
+    auto externalVerifierB =
+        std::make_shared<initializer::ExternalPayloadVerifierImpl<RealGlobalStateStorage>>(
+            nodeB.verifier, nodeB.fakeLedger, nodeB.blockFactory, el1bCancunForks(),
+            /*chainId=*/1, /*mergeBlock=*/0);
+    EL1BService serviceB(memPoolB, nodeB.storage, stubExecutor, stubScheduler,
+        nodeB.blockFactory, /*ledger=*/nullptr, engine::c_defaultBlockTxCountLimit,
+        static_cast<std::uint32_t>(ApiVersion::V4), /*commitObserver=*/nullptr,
+        /*ledgerConfigState=*/nullptr, externalVerifierB,
+        /*clSync=*/std::make_shared<engine_common::ClSyncCoordination>());
+
+    // Rebuild the request with one header field changed, recomputing blockHash so the
+    // payload passes the reconstruction gate and reaches the parent-relative checks.
+    auto tamper = [&](auto&& apply) {
+        NewPayloadRequest request = validRequest;
+        auto ethHeader = validBlock->ethHeader;
+        apply(request, ethHeader);
+        request.executionPayload.blockHash = protocol::ethHeaderHash(ethHeader);
+        return request;
+    };
+    auto expectInvalid = [&](NewPayloadRequest const& request, std::string_view reason) {
+        auto status = task::syncWait(serviceB.newPayload(request, 3));
+        BOOST_CHECK(status.status == PayloadValidationStatus::Invalid);
+        BOOST_REQUIRE(status.validationError.has_value());
+        BOOST_CHECK_MESSAGE(status.validationError->find(reason) != std::string::npos,
+            "expected <" << reason << "> in: " << *status.validationError);
+    };
+
+    // baseFee off the EIP-1559 recomputation by one wei.
+    expectInvalid(
+        tamper([](NewPayloadRequest& r, protocol::EthBlockHeaderData& h) {
+            r.executionPayload.baseFeePerGas += 1;
+            h.baseFee = *h.baseFee + 1;
+        }),
+        "baseFeePerGas does not match the EIP-1559 recomputation");
+    // excessBlobGas off the EIP-4844 recomputation (parent carries none => 0).
+    expectInvalid(
+        tamper([](NewPayloadRequest& r, protocol::EthBlockHeaderData& h) {
+            r.executionPayload.excessBlobGas = u256(131072);
+            h.excessBlobGas = u256(131072);
+        }),
+        "excessBlobGas does not match the EIP-4844/7918 recomputation");
+    // gasLimit beyond the parent/1024 bound (30M + 30M/1024).
+    expectInvalid(
+        tamper([](NewPayloadRequest& r, protocol::EthBlockHeaderData& h) {
+            r.executionPayload.gasLimit = u256(30000000) + u256(30000000) / 1024;
+            h.gasLimit = r.executionPayload.gasLimit;
+        }),
+        "gasLimit differs from the parent by more than 1/1024");
+    // timestamp not strictly greater than the parent's.
+    expectInvalid(
+        tamper([](NewPayloadRequest& r, protocol::EthBlockHeaderData& h) {
+            r.executionPayload.timestamp = static_cast<std::uint64_t>(c_parentTimestamp) * 1000;
+            h.timestamp = c_parentTimestamp;
+        }),
+        "timestamp must be strictly greater than the parent");
+    // gasUsed above the gas limit.
+    expectInvalid(
+        tamper([](NewPayloadRequest& r, protocol::EthBlockHeaderData& h) {
+            r.executionPayload.gasUsed = r.executionPayload.gasLimit + 1;
+            h.gasUsed = h.gasLimit + 1;
+        }),
+        "gasUsed exceeds gasLimit");
+    // blobGasUsed above the Cancun per-block cap (6 blobs), still a blob multiple.
+    expectInvalid(
+        tamper([](NewPayloadRequest& r, protocol::EthBlockHeaderData& h) {
+            r.executionPayload.blobGasUsed = u256(7 * 131072);
+            h.blobGasUsed = u256(7 * 131072);
+        }),
+        "invalid blobGasUsed");
+
+    // Control: the untouched payload verifies VALID through the same lane.
+    auto status = task::syncWait(serviceB.newPayload(validRequest, 3));
+    BOOST_CHECK(status.status == PayloadValidationStatus::Valid);
+    BOOST_REQUIRE(status.latestValidHash.has_value());
+    BOOST_CHECK_EQUAL(*status.latestValidHash, validRequest.executionPayload.blockHash);
+}
+
+// Shallow reorg over a SELF-BUILT commit: node A builds block B (FCU+attributes) and
+// commits it through the self-built newPayload lane, which must write the same rollback
+// journal the external lane writes. The CL then pushes the competing block B' (built by
+// node B on identical genesis): the external lane's height guard rewinds to the parent —
+// possible ONLY because B's journal exists — and commits B'. The ledger ends at B''s
+// world state, and a follow-up forkchoice to B' is VALID.
+BOOST_FIXTURE_TEST_CASE(selfBuiltCommitJournalsForShallowReorg, EL1BReorgFixture)
+{
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    auto const recipient = el1bEvmcAddress(0x55);
+    auto const recipientAddress =
+        bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+    nodeA.seedGenesis(parent, {});
+    nodeB.seedGenesis(parent, {});
+
+    // The verifier's reorg route compares the CANONICAL hash at the parent height against
+    // ethHeaderHash of the reconstructed parent header — so the reorg test cannot use the
+    // synthetic c_genesisHash. Derive the real one: read the seeded parent row back and
+    // hash the SAME EthBlockHeader(tars).data() reconstruction the verifier performs.
+    h256 genesisHash;
+    {
+        auto view = nodeA.storage.fork();
+        auto parentBlock = task::syncWait(
+            ledger::getBlockData(view, 0, ledger::HEADER, *nodeA.blockFactory));
+        genesisHash = protocol::ethHeaderHash(
+            protocol::EthBlockHeader(*parentBlock->blockHeader()).data());
+    }
+    for (auto* node : {&nodeA, &nodeB})
+    {
+        writeNumberToHash(node->backendStorage, 0, genesisHash);
+        writeHashToNumber(node->backendStorage, genesisHash, 0);
+    }
+
+    ForkchoiceState state{genesisHash, h256{}, h256{}};
+
+    // Node A: build block B (2-gwei withdrawal credit) and commit it self-built.
+    auto attributesA = makePayloadAttributesV3(c_blockTimestampMs);
+    attributesA.withdrawals = std::vector<WithdrawalV1>{WithdrawalV1{.index = 0,
+        .validatorIndex = 1, .amount = 2, .address = recipientAddress}};
+    auto fcuA = task::syncWait(serviceA.updateForkchoice(state, &attributesA, 3));
+    BOOST_REQUIRE(fcuA.payloadId.has_value());
+    auto dataA = task::syncWait(serviceA.getPayload(*fcuA.payloadId, 3));
+    BOOST_REQUIRE(dataA);
+    NewPayloadRequest requestA;
+    requestA.executionPayload = dataA->executionPayload;
+    requestA.parentBeaconBlockRoot = dataA->parentBeaconBlockRoot;
+    auto committedA = task::syncWait(serviceA.newPayload(requestA, 3));
+    BOOST_CHECK(committedA.status == PayloadValidationStatus::Valid);
+    BOOST_CHECK_EQUAL(
+        task::syncWait(el1bBalance(nodeA.storage.latestBackend(), recipient)),
+        u256(2000000000));
+    // FakeLedger::asyncPrewriteBlock is a no-op: write the ledger metadata rows the real
+    // Ledger::prewriteBlock would have written (the established pattern of
+    // TestEthereumChainRollback / TestMPTPrunerSyncWiring).
+    el1bWriteCurrentNumber(nodeA.backendStorage, 1);
+    writeNumberToHash(nodeA.backendStorage, 1, requestA.executionPayload.blockHash);
+    writeHashToNumber(nodeA.backendStorage, requestA.executionPayload.blockHash, 1);
+    // F1: the SELF-BUILT commit wrote the rollback journal for block 1 — the row the
+    // shallow reorg below cannot serve without.
+    auto journalEntry = task::syncWait(storage2::readOne(nodeA.backendStorage,
+        executor_v1::StateKey{ledger::SYS_ROLLBACK_JOURNAL, std::string("1")}));
+    BOOST_REQUIRE(journalEntry.has_value());
+    {
+        auto const value = journalEntry->get();
+        auto journal = scheduler_v1::decodeRollbackJournal(
+            bcos::bytesConstRef(reinterpret_cast<const bcos::byte*>(value.data()), value.size()));
+        // The block dirtied the recipient's account rows (plus the two ledger counters
+        // the capture appends unconditionally).
+        BOOST_CHECK_GE(journal.entries.size(), 3);
+    }
+
+    // Node B: build the COMPETING block B' at the same height (5-gwei credit).
+    auto attributesB = makePayloadAttributesV3(c_blockTimestampMs);
+    attributesB.withdrawals = std::vector<WithdrawalV1>{WithdrawalV1{.index = 0,
+        .validatorIndex = 1, .amount = 5, .address = recipientAddress}};
+    auto fcuB = task::syncWait(serviceB.updateForkchoice(state, &attributesB, 3));
+    BOOST_REQUIRE(fcuB.payloadId.has_value());
+    auto dataB = task::syncWait(serviceB.getPayload(*fcuB.payloadId, 3));
+    BOOST_REQUIRE(dataB);
+    NewPayloadRequest requestB;
+    requestB.executionPayload = dataB->executionPayload;
+    requestB.parentBeaconBlockRoot = dataB->parentBeaconBlockRoot;
+    BOOST_REQUIRE(requestB.executionPayload.blockHash != requestA.executionPayload.blockHash);
+
+    // The CL pushes B' to node A: not built there -> external lane -> sibling at the
+    // head -> shallow reorg (depth 1, within the window) -> B' commits.
+    auto committedB = task::syncWait(serviceA.newPayload(requestB, 3));
+    auto const committedBError =
+        committedB.validationError ? *committedB.validationError : std::string("<no error>");
+    BOOST_CHECK_MESSAGE(committedB.status == PayloadValidationStatus::Valid, committedBError);
+    // Same FakeLedger no-op compensation for the fork block's commit (the rollback set
+    // current_number to 0; the no-op prewrite leaves the fork block's rows to us).
+    el1bWriteCurrentNumber(nodeA.backendStorage, 1);
+    writeNumberToHash(nodeA.backendStorage, 1, requestB.executionPayload.blockHash);
+    writeHashToNumber(nodeA.backendStorage, requestB.executionPayload.blockHash, 1);
+
+    // B's 2-gwei credit is rolled back; only B''s 5 gwei remains, the head is 1 and
+    // the canonical row at 1 names B'.
+    BOOST_CHECK_EQUAL(
+        task::syncWait(el1bBalance(nodeA.storage.latestBackend(), recipient)),
+        u256(5000000000));
+    auto view = nodeA.storage.fork();
+    auto const head =
+        task::syncWait(ledger::getCurrentBlockNumber(view, ledger::fromStorage));
+    BOOST_CHECK_EQUAL(head, 1);
+    auto canonical = task::syncWait(ledger::getBlockHash(view, 1, ledger::fromStorage));
+    BOOST_REQUIRE(canonical.has_value());
+    BOOST_CHECK_EQUAL(*canonical, requestB.executionPayload.blockHash);
+
+    // The CL's follow-up forkchoice to B' is VALID.
+    ForkchoiceState toBPrime{requestB.executionPayload.blockHash, h256{}, h256{}};
+    auto fcuToBPrime = task::syncWait(serviceA.updateForkchoice(toBPrime, nullptr, 3));
+    BOOST_CHECK(fcuToBPrime.payloadStatus.status == PayloadValidationStatus::Valid);
+}
+
+// Rollback-refused mapping (F5): the reorg route hands a competing payload to the
+// verifier, whose stale retry calls rollbackChain — if the journal row for the
+// rolled-back block is gone (pruned window, or a commit that never journaled), the
+// retry throws RollbackRefused. The adapter must absorb that into a SYNCING answer
+// (the CL re-syncs), not let the exception escape newPayload as a -32603 RPC error.
+BOOST_FIXTURE_TEST_CASE(reorgRollbackRefusedAnswersSyncing, EL1BReorgFixture)
+{
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    auto const recipient = el1bEvmcAddress(0x56);
+    auto const recipientAddress =
+        bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+    nodeA.seedGenesis(parent, {});
+    nodeB.seedGenesis(parent, {});
+
+    // Real genesis hash, same derivation as selfBuiltCommitJournalsForShallowReorg.
+    h256 genesisHash;
+    {
+        auto view = nodeA.storage.fork();
+        auto parentBlock = task::syncWait(
+            ledger::getBlockData(view, 0, ledger::HEADER, *nodeA.blockFactory));
+        genesisHash = protocol::ethHeaderHash(
+            protocol::EthBlockHeader(*parentBlock->blockHeader()).data());
+    }
+    for (auto* node : {&nodeA, &nodeB})
+    {
+        writeNumberToHash(node->backendStorage, 0, genesisHash);
+        writeHashToNumber(node->backendStorage, genesisHash, 0);
+    }
+
+    ForkchoiceState state{genesisHash, h256{}, h256{}};
+
+    // Node A builds block B and commits it self-built.
+    auto attributesA = makePayloadAttributesV3(c_blockTimestampMs);
+    attributesA.withdrawals = std::vector<WithdrawalV1>{WithdrawalV1{.index = 0,
+        .validatorIndex = 1, .amount = 2, .address = recipientAddress}};
+    auto fcuA = task::syncWait(serviceA.updateForkchoice(state, &attributesA, 3));
+    BOOST_REQUIRE(fcuA.payloadId.has_value());
+    auto dataA = task::syncWait(serviceA.getPayload(*fcuA.payloadId, 3));
+    BOOST_REQUIRE(dataA);
+    NewPayloadRequest requestA;
+    requestA.executionPayload = dataA->executionPayload;
+    requestA.parentBeaconBlockRoot = dataA->parentBeaconBlockRoot;
+    auto committedA = task::syncWait(serviceA.newPayload(requestA, 3));
+    BOOST_REQUIRE(committedA.status == PayloadValidationStatus::Valid);
+    el1bWriteCurrentNumber(nodeA.backendStorage, 1);
+    writeNumberToHash(nodeA.backendStorage, 1, requestA.executionPayload.blockHash);
+    writeHashToNumber(nodeA.backendStorage, requestA.executionPayload.blockHash, 1);
+
+    // The rollback journal the retry depends on is gone (window pruning / an
+    // unjournaled commit): the retry's rollbackChain must throw RollbackRefused.
+    task::syncWait(storage2::removeOne(nodeA.backendStorage,
+        executor_v1::StateKey{ledger::SYS_ROLLBACK_JOURNAL, std::string("1")}));
+
+    // Node B builds the competing block B' at the same height; the CL pushes it to
+    // node A. The reorg route resolves the canonical parent (genesis), the retry
+    // cannot rewind, and the answer must be SYNCING — no exception escapes.
+    auto attributesB = makePayloadAttributesV3(c_blockTimestampMs);
+    attributesB.withdrawals = std::vector<WithdrawalV1>{WithdrawalV1{.index = 0,
+        .validatorIndex = 1, .amount = 5, .address = recipientAddress}};
+    auto fcuB = task::syncWait(serviceB.updateForkchoice(state, &attributesB, 3));
+    BOOST_REQUIRE(fcuB.payloadId.has_value());
+    auto dataB = task::syncWait(serviceB.getPayload(*fcuB.payloadId, 3));
+    BOOST_REQUIRE(dataB);
+    NewPayloadRequest requestB;
+    requestB.executionPayload = dataB->executionPayload;
+    requestB.parentBeaconBlockRoot = dataB->parentBeaconBlockRoot;
+    BOOST_REQUIRE(requestB.executionPayload.blockHash != requestA.executionPayload.blockHash);
+
+    auto refused = task::syncWait(serviceA.newPayload(requestB, 3));
+    BOOST_CHECK(refused.status == PayloadValidationStatus::Syncing);
+
+    // The committed chain is untouched: still B's world state at head 1.
+    BOOST_CHECK_EQUAL(
+        task::syncWait(el1bBalance(nodeA.storage.latestBackend(), recipient)),
+        u256(2000000000));
+    auto view = nodeA.storage.fork();
+    auto const head =
+        task::syncWait(ledger::getCurrentBlockNumber(view, ledger::fromStorage));
+    BOOST_CHECK_EQUAL(head, 1);
+    auto canonical = task::syncWait(ledger::getBlockHash(view, 1, ledger::fromStorage));
+    BOOST_REQUIRE(canonical.has_value());
+    BOOST_CHECK_EQUAL(*canonical, requestA.executionPayload.blockHash);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

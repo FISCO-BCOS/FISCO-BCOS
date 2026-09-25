@@ -298,6 +298,11 @@ public:
     // storage.mpt_prune_window to be -1 or >= this value (validated in
     // validateELModeInvariants). Default 256.
     std::int64_t ethereumReorgWindow() const;
+    // EL-mode engine mempool sizing ([ethereum] mempool_capacity /
+    // mempool_tx_lifetime_minutes in config.ini): how many transactions the in-process
+    // pool holds and how many minutes one lives before expiry. Defaults 5120 / 30.
+    size_t ethereumMempoolCapacity() const;
+    std::int64_t ethereumMempoolTxLifetimeMinutes() const;
 
     // the gateway configurations
     const std::string& p2pListenIP() const;
@@ -656,6 +661,10 @@ private:
     std::optional<EthereumFinalizedCheckpoint> m_ethereumFinalizedCheckpoint;
     // [ethereum] reorg_window: EL shallow-reorg depth bound (see ethereumReorgWindow()).
     std::int64_t m_ethereumReorgWindow = 256;
+    // [ethereum] mempool_capacity / mempool_tx_lifetime_minutes: engine mempool sizing
+    // (EL mode only; see ethereumMempoolCapacity()).
+    size_t m_ethereumMempoolCapacity = 5120;
+    std::int64_t m_ethereumMempoolTxLifetimeMinutes = 30;
     // EIP-6110 deposit contract ([ethereum] deposit_contract_address in config.ini) for the
     // Prague+ requestsHash cross-check. Defaults to the Ethereum mainnet deposit contract —
     // the same address scheduler_v1::c_mainnetDepositContractAddress pins (Sepolia:

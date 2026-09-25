@@ -488,10 +488,17 @@ BOOST_FIXTURE_TEST_CASE(verifyAndCommitValidExternalBlock, EEBVFixture)
 
         // Parent (block 0) header for the PoS field checks and the MPT parent root.
         auto parentHeader = EEBVPoSHeader(0, kTimestamp - 1, bcos::h256{}, kGasLimit, kBaseFee);
-        parentHeader.gasUsed = 0;
+        // gasUsed exactly at the EIP-1559 elasticity target, so the child's baseFee
+        // stays 1 gwei under the parent-relative recomputation
+        // (bcos-rlp-protocol/EthPoSHeaderValidation.h, step 1b of verifyAndCommit).
+        parentHeader.gasUsed = kGasLimit / 2;
         parentHeader.stateRoot = ledger::mpt::emptyRootHash();
         parentHeader.txsRoot = ledger::mpt::emptyRootHash();
         parentHeader.receiptsRoot = ledger::mpt::emptyRootHash();
+        // Zeroed Cancun blob-gas fields: ignored pre-Cancun, and when Cancun is
+        // active they make the child's zero excessBlobGas recompute exactly.
+        parentHeader.blobGasUsed = u256(0);
+        parentHeader.excessBlobGas = u256(0);
 
         // MPT state root from the (empty) genesis trie — world state only.
         auto stateRoot =
@@ -500,6 +507,9 @@ BOOST_FIXTURE_TEST_CASE(verifyAndCommitValidExternalBlock, EEBVFixture)
 
         // Assemble the external Ethereum header the peer would have sent us.
         auto ethHeader = EEBVPoSHeader(1, kTimestamp, genesisHash, kGasLimit, kBaseFee);
+        // Shanghai is active from genesis: the header must commit to the (empty)
+        // withdrawals trie, and the block carries an empty withdrawals list.
+        ethHeader.withdrawalsHash = ledger::mpt::emptyRootHash();
         ethHeader.stateRoot = stateRoot;
         ethHeader.txsRoot = computation.txsRoot;
         ethHeader.receiptsRoot = computation.receiptsRoot;
@@ -535,7 +545,7 @@ BOOST_FIXTURE_TEST_CASE(verifyAndCommitValidExternalBlock, EEBVFixture)
         };
 
         auto result = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, ethHeader,
-            parentHeader, std::vector<bcos::bytes>{raw}, std::nullopt, forks, 1, {}, 0, decoder,
+            parentHeader, std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{}, forks, 1, {}, 0, decoder,
             stateRootCalc);
 
         BOOST_CHECK(result.valid);
@@ -611,16 +621,26 @@ BOOST_FIXTURE_TEST_CASE(verifyRejectsTamperedTxsRoot, EEBVFixture)
                     receipts, txs | ::ranges::views::indirect, std::vector<bcos::bytes>{raw});
 
         auto parentHeader = EEBVPoSHeader(0, kTimestamp - 1, bcos::h256{}, kGasLimit, kBaseFee);
-        parentHeader.gasUsed = 0;
+        // gasUsed exactly at the EIP-1559 elasticity target, so the child's baseFee
+        // stays 1 gwei under the parent-relative recomputation
+        // (bcos-rlp-protocol/EthPoSHeaderValidation.h, step 1b of verifyAndCommit).
+        parentHeader.gasUsed = kGasLimit / 2;
         parentHeader.stateRoot = ledger::mpt::emptyRootHash();
         parentHeader.txsRoot = ledger::mpt::emptyRootHash();
         parentHeader.receiptsRoot = ledger::mpt::emptyRootHash();
+        // Zeroed Cancun blob-gas fields: ignored pre-Cancun, and when Cancun is
+        // active they make the child's zero excessBlobGas recompute exactly.
+        parentHeader.blobGasUsed = u256(0);
+        parentHeader.excessBlobGas = u256(0);
 
         auto stateRoot =
             co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
                 computeMptStateRoot(view, parentHeader.stateRoot, prodConfig);
 
         auto ethHeader = EEBVPoSHeader(1, kTimestamp, genesisHash, kGasLimit, kBaseFee);
+        // Shanghai is active from genesis: the header must commit to the (empty)
+        // withdrawals trie, and the block carries an empty withdrawals list.
+        ethHeader.withdrawalsHash = ledger::mpt::emptyRootHash();
         ethHeader.stateRoot = stateRoot;
         ethHeader.txsRoot = computation.txsRoot;
         ethHeader.receiptsRoot = computation.receiptsRoot;
@@ -654,7 +674,7 @@ BOOST_FIXTURE_TEST_CASE(verifyRejectsTamperedTxsRoot, EEBVFixture)
         };
 
         auto result = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, ethHeader,
-            parentHeader, std::vector<bcos::bytes>{raw}, std::nullopt, forks, 1, {}, 0, decoder,
+            parentHeader, std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{}, forks, 1, {}, 0, decoder,
             stateRootCalc);
 
         BOOST_CHECK(!result.valid);
@@ -734,16 +754,26 @@ BOOST_FIXTURE_TEST_CASE(verifyRejectsStaleOrGapBlock, EEBVFixture)
                     receipts, txs | ::ranges::views::indirect, std::vector<bcos::bytes>{raw});
 
         auto parentHeader = EEBVPoSHeader(0, kTimestamp - 1, bcos::h256{}, kGasLimit, kBaseFee);
-        parentHeader.gasUsed = 0;
+        // gasUsed exactly at the EIP-1559 elasticity target, so the child's baseFee
+        // stays 1 gwei under the parent-relative recomputation
+        // (bcos-rlp-protocol/EthPoSHeaderValidation.h, step 1b of verifyAndCommit).
+        parentHeader.gasUsed = kGasLimit / 2;
         parentHeader.stateRoot = ledger::mpt::emptyRootHash();
         parentHeader.txsRoot = ledger::mpt::emptyRootHash();
         parentHeader.receiptsRoot = ledger::mpt::emptyRootHash();
+        // Zeroed Cancun blob-gas fields: ignored pre-Cancun, and when Cancun is
+        // active they make the child's zero excessBlobGas recompute exactly.
+        parentHeader.blobGasUsed = u256(0);
+        parentHeader.excessBlobGas = u256(0);
 
         auto stateRoot =
             co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
                 computeMptStateRoot(view, parentHeader.stateRoot, prodConfig);
 
         auto ethHeader = EEBVPoSHeader(1, kTimestamp, genesisHash, kGasLimit, kBaseFee);
+        // Shanghai is active from genesis: the header must commit to the (empty)
+        // withdrawals trie, and the block carries an empty withdrawals list.
+        ethHeader.withdrawalsHash = ledger::mpt::emptyRootHash();
         ethHeader.stateRoot = stateRoot;
         ethHeader.txsRoot = computation.txsRoot;
         ethHeader.receiptsRoot = computation.receiptsRoot;
@@ -776,7 +806,7 @@ BOOST_FIXTURE_TEST_CASE(verifyRejectsStaleOrGapBlock, EEBVFixture)
         // ---- The legitimate first commit (head 0 -> block 1) must succeed: the guard
         //      must not break the normal in-order path. ----
         auto result = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, ethHeader,
-            parentHeader, std::vector<bcos::bytes>{raw}, std::nullopt, forks, 1, {}, 0, decoder,
+            parentHeader, std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{}, forks, 1, {}, 0, decoder,
             stateRootCalc);
         BOOST_REQUIRE(result.valid);
 
@@ -793,7 +823,7 @@ BOOST_FIXTURE_TEST_CASE(verifyRejectsStaleOrGapBlock, EEBVFixture)
             try
             {
                 co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, header, parent,
-                    std::vector<bcos::bytes>{raw}, std::nullopt, forks, 1, {}, 0, decoder,
+                    std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{}, forks, 1, {}, 0, decoder,
                     stateRootCalc);
             }
             // The guard throws the TYPED StaleOrOutOfOrderBlock (the sync loop
@@ -811,14 +841,21 @@ BOOST_FIXTURE_TEST_CASE(verifyRejectsStaleOrGapBlock, EEBVFixture)
 
         // Stale replay: block 1 again while the head is already 1.
         BOOST_CHECK(co_await attemptCommit(ethHeader, parentHeader));
-        // Gap: block 3 while the head is 1 (only block 2 could commit next). The guard
-        // fires before the parent header is ever consulted, so the exact parent is
-        // irrelevant here.
+        // Gap: block 3 while the head is 1 (only block 2 could commit next). The
+        // parent-relative check (step 1b) runs BEFORE the height guard, so the pair
+        // must be consensus-valid on its own: build a block-2 parent whose gasUsed
+        // sits at the elasticity target (keeping the 1-gwei baseFee) and a block-3
+        // header that follows it cleanly — the guard is then what fires.
+        auto gapParent = ethHeader;
+        gapParent.number = 2;
+        gapParent.timestamp = kTimestamp + 1;
+        gapParent.gasUsed = kGasLimit / 2;
         auto gapHeader = ethHeader;
         gapHeader.number = 3;
+        gapHeader.timestamp = kTimestamp + 2;
         gapHeader.parentInfo.blockNumber = 2;
         gapHeader.parentInfo.blockHash = cryptoSuite->hashImpl()->hash(std::string("block2"));
-        BOOST_CHECK(co_await attemptCommit(gapHeader, ethHeader));
+        BOOST_CHECK(co_await attemptCommit(gapHeader, gapParent));
 
         // Both rejections happened BEFORE any state fork/commit: the head is still 1
         // (no SYS_KEY_CURRENT_NUMBER rewind or advance) and the committed balances are
@@ -966,10 +1003,17 @@ BOOST_FIXTURE_TEST_CASE(cancunBeaconRootsSystemCallVerifies, EEBVFixture)
                     receipts, txs | ::ranges::views::indirect, std::vector<bcos::bytes>{raw});
 
         auto parentHeader = EEBVPoSHeader(0, kTimestamp - 1, bcos::h256{}, kGasLimit, kBaseFee);
-        parentHeader.gasUsed = 0;
+        // gasUsed exactly at the EIP-1559 elasticity target, so the child's baseFee
+        // stays 1 gwei under the parent-relative recomputation
+        // (bcos-rlp-protocol/EthPoSHeaderValidation.h, step 1b of verifyAndCommit).
+        parentHeader.gasUsed = kGasLimit / 2;
         parentHeader.stateRoot = ledger::mpt::emptyRootHash();
         parentHeader.txsRoot = ledger::mpt::emptyRootHash();
         parentHeader.receiptsRoot = ledger::mpt::emptyRootHash();
+        // Zeroed Cancun blob-gas fields: ignored pre-Cancun, and when Cancun is
+        // active they make the child's zero excessBlobGas recompute exactly.
+        parentHeader.blobGasUsed = u256(0);
+        parentHeader.excessBlobGas = u256(0);
 
         auto stateRoot =
             co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
@@ -977,6 +1021,9 @@ BOOST_FIXTURE_TEST_CASE(cancunBeaconRootsSystemCallVerifies, EEBVFixture)
 
         // The external Cancun header: blob-gas fields + parentBeaconRoot present.
         auto ethHeader = EEBVPoSHeader(1, kTimestamp, genesisHash, kGasLimit, kBaseFee);
+        // Shanghai is active from genesis: the header must commit to the (empty)
+        // withdrawals trie, and the block carries an empty withdrawals list.
+        ethHeader.withdrawalsHash = ledger::mpt::emptyRootHash();
         ethHeader.stateRoot = stateRoot;
         ethHeader.txsRoot = computation.txsRoot;
         ethHeader.receiptsRoot = computation.receiptsRoot;
@@ -1010,7 +1057,7 @@ BOOST_FIXTURE_TEST_CASE(cancunBeaconRootsSystemCallVerifies, EEBVFixture)
         };
 
         auto result = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, ethHeader,
-            parentHeader, std::vector<bcos::bytes>{raw}, std::nullopt, forks, 1, {}, 0, decoder,
+            parentHeader, std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{}, forks, 1, {}, 0, decoder,
             stateRootCalc);
 
         BOOST_CHECK(result.valid);
@@ -1089,16 +1136,26 @@ BOOST_FIXTURE_TEST_CASE(cancunBeaconRootsMissingCodeSkipsSilently, EEBVFixture)
                     receipts, txs | ::ranges::views::indirect, std::vector<bcos::bytes>{raw});
 
         auto parentHeader = EEBVPoSHeader(0, kTimestamp - 1, bcos::h256{}, kGasLimit, kBaseFee);
-        parentHeader.gasUsed = 0;
+        // gasUsed exactly at the EIP-1559 elasticity target, so the child's baseFee
+        // stays 1 gwei under the parent-relative recomputation
+        // (bcos-rlp-protocol/EthPoSHeaderValidation.h, step 1b of verifyAndCommit).
+        parentHeader.gasUsed = kGasLimit / 2;
         parentHeader.stateRoot = ledger::mpt::emptyRootHash();
         parentHeader.txsRoot = ledger::mpt::emptyRootHash();
         parentHeader.receiptsRoot = ledger::mpt::emptyRootHash();
+        // Zeroed Cancun blob-gas fields: ignored pre-Cancun, and when Cancun is
+        // active they make the child's zero excessBlobGas recompute exactly.
+        parentHeader.blobGasUsed = u256(0);
+        parentHeader.excessBlobGas = u256(0);
 
         auto stateRoot =
             co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
                 computeMptStateRoot(view, parentHeader.stateRoot, prodConfig);
 
         auto ethHeader = EEBVPoSHeader(1, kTimestamp, genesisHash, kGasLimit, kBaseFee);
+        // Shanghai is active from genesis: the header must commit to the (empty)
+        // withdrawals trie, and the block carries an empty withdrawals list.
+        ethHeader.withdrawalsHash = ledger::mpt::emptyRootHash();
         ethHeader.stateRoot = stateRoot;
         ethHeader.txsRoot = computation.txsRoot;
         ethHeader.receiptsRoot = computation.receiptsRoot;
@@ -1128,7 +1185,7 @@ BOOST_FIXTURE_TEST_CASE(cancunBeaconRootsMissingCodeSkipsSilently, EEBVFixture)
         };
 
         auto result = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, ethHeader,
-            parentHeader, std::vector<bcos::bytes>{raw}, std::nullopt, forks, 1, {}, 0, decoder,
+            parentHeader, std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{}, forks, 1, {}, 0, decoder,
             stateRootCalc);
 
         BOOST_CHECK(result.valid);
@@ -1317,16 +1374,26 @@ BOOST_FIXTURE_TEST_CASE(pragueSystemCallsVerify, EEBVFixture)
                     receipts, txs | ::ranges::views::indirect, std::vector<bcos::bytes>{raw});
 
         auto parentHeader = EEBVPoSHeader(0, kTimestamp - 1, bcos::h256{}, kGasLimit, kBaseFee);
-        parentHeader.gasUsed = 0;
+        // gasUsed exactly at the EIP-1559 elasticity target, so the child's baseFee
+        // stays 1 gwei under the parent-relative recomputation
+        // (bcos-rlp-protocol/EthPoSHeaderValidation.h, step 1b of verifyAndCommit).
+        parentHeader.gasUsed = kGasLimit / 2;
         parentHeader.stateRoot = ledger::mpt::emptyRootHash();
         parentHeader.txsRoot = ledger::mpt::emptyRootHash();
         parentHeader.receiptsRoot = ledger::mpt::emptyRootHash();
+        // Zeroed Cancun blob-gas fields: ignored pre-Cancun, and when Cancun is
+        // active they make the child's zero excessBlobGas recompute exactly.
+        parentHeader.blobGasUsed = u256(0);
+        parentHeader.excessBlobGas = u256(0);
 
         auto stateRoot =
             co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
                 computeMptStateRoot(view, parentHeader.stateRoot, prodConfig);
 
         auto ethHeader = EEBVPoSHeader(1, kTimestamp, genesisHash, kGasLimit, kBaseFee);
+        // Shanghai is active from genesis: the header must commit to the (empty)
+        // withdrawals trie, and the block carries an empty withdrawals list.
+        ethHeader.withdrawalsHash = ledger::mpt::emptyRootHash();
         ethHeader.stateRoot = stateRoot;
         ethHeader.txsRoot = computation.txsRoot;
         ethHeader.receiptsRoot = computation.receiptsRoot;
@@ -1407,7 +1474,7 @@ BOOST_FIXTURE_TEST_CASE(pragueSystemCallsVerify, EEBVFixture)
         };
 
         auto result = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, ethHeader,
-            parentHeader, std::vector<bcos::bytes>{raw}, std::nullopt, forks, 1, {}, 0, decoder,
+            parentHeader, std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{}, forks, 1, {}, 0, decoder,
             stateRootCalc);
 
         BOOST_CHECK(result.valid);

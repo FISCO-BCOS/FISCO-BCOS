@@ -244,6 +244,9 @@ bcos::protocol::EthBlockHeaderData MPSBaseHeader(
     header.stateRoot = ledger::mpt::emptyRootHash();
     header.txsRoot = ledger::mpt::emptyRootHash();
     header.receiptsRoot = ledger::mpt::emptyRootHash();
+    // Shanghai is active from genesis in this suite: every block commits to the
+    // empty withdrawals trie and carries an empty withdrawals list.
+    header.withdrawalsHash = ledger::mpt::emptyRootHash();
     return header;
 }
 
@@ -445,7 +448,7 @@ BOOST_FIXTURE_TEST_CASE(prunerWiredIntoSyncCommitPath, MPSFixture)
             // ---- Verification side: the devp2p-sync commit path, with the real pruner. ----
             auto result = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger,
                 ethHeader, prevEthHeader, std::vector<bcos::bytes>{raw},
-                std::optional<std::vector<bcos::bytes>>{}, forks, 1, std::vector<bcos::bytes>{},
+                std::vector<bcos::bytes>{}, forks, 1, std::vector<bcos::bytes>{},
                 0, decoder, stateRootCalc);
             BOOST_REQUIRE_MESSAGE(result.valid,
                 "block " << number << " invalid: " << result.error);
@@ -507,7 +510,7 @@ BOOST_FIXTURE_TEST_CASE(prunerWiredIntoSyncCommitPath, MPSFixture)
         {
             co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, ethHeaders[1],
                 ethHeaders[0], std::vector<bcos::bytes>{raws[1]},
-                std::optional<std::vector<bcos::bytes>>{}, forks, 1, std::vector<bcos::bytes>{},
+                std::vector<bcos::bytes>{}, forks, 1, std::vector<bcos::bytes>{},
                 0, decoder, stateRootCalc);
         }
         catch (StaleOrOutOfOrderBlock const& e)

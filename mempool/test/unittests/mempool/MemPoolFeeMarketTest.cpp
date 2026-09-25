@@ -243,6 +243,40 @@ BOOST_AUTO_TEST_CASE(l1_rejects_blob_over_max_blobs_per_transaction)
     BOOST_CHECK(pool.tryAdd(makeBlobTx(sender, 0, 2)) == TransactionStatus::None);
 }
 
+// EL mode wires a head-timestamp provider: the per-transaction blob limit is the EIP-7840
+// schedule evaluated at the chain head's timestamp, re-read on every admission — a fork
+// that activates while the process runs takes effect without a restart, and a chain still
+// syncing behind wall-clock time is gated by the fork its head is actually on.
+BOOST_AUTO_TEST_CASE(blob_limit_resolves_from_head_timestamp_dynamically)
+{
+    uint64_t headSeconds = 500;  // pre-Cancun
+    MemPoolImpl pool{MemPoolConfig{.chainKind = ChainKind::L1,
+        .headTimestampSeconds = [&headSeconds] { return headSeconds; },
+        .blobForks = protocol::BlobForkTimes{
+            .cancunTime = 1000, .pragueTime = 2000, .bpo1Time = 3000, .bpo2Time = 4000}}};
+    std::string sender("dddddddddddddddddddd", 20);
+
+    // Pre-Cancun the schedule is the zero entry: maxBlobs 0, no blob transaction admitted.
+    BOOST_CHECK_EQUAL(pool.maxBlobsPerTransaction(), 0);
+    BOOST_CHECK(pool.tryAdd(makeBlobTx(sender, 0, 1)) == TransactionStatus::Malformed);
+
+    // Cancun (max 6): seven blobs refused, six admitted.
+    headSeconds = 1500;
+    BOOST_CHECK_EQUAL(pool.maxBlobsPerTransaction(), 6);
+    BOOST_CHECK(pool.tryAdd(makeBlobTx(sender, 0, 7)) == TransactionStatus::Malformed);
+    BOOST_CHECK(pool.tryAdd(makeBlobTx(sender, 0, 6)) == TransactionStatus::None);
+
+    // The head crossing the Prague boundary raises the limit to 9 mid-process: the same
+    // seven-blob shape that was malformed under Cancun now goes in.
+    headSeconds = 2500;
+    BOOST_CHECK_EQUAL(pool.maxBlobsPerTransaction(), 9);
+    BOOST_CHECK(pool.tryAdd(makeBlobTx(sender, 1, 7)) == TransactionStatus::None);
+
+    // BPO2 (max 21), same mechanism.
+    headSeconds = 4500;
+    BOOST_CHECK_EQUAL(pool.maxBlobsPerTransaction(), 21);
+}
+
 BOOST_AUTO_TEST_CASE(seal_orders_by_effective_tip_across_senders)
 {
     MemPoolImpl pool{MemPoolConfig{.chainKind = ChainKind::L1}};

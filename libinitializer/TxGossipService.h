@@ -407,11 +407,27 @@ private:
     void cacheRaw(crypto::HashType const& hash, bcos::bytes raw)
     {
         std::unique_lock lock(m_rawCacheMutex);
-        m_rawCacheBytes += raw.size();
-        m_rawCacheOrder.push_back(hash);
-        m_rawCache[hash] = std::move(raw);
-        while (m_rawCacheOrder.size() > c_rawCacheMaxEntries ||
-               m_rawCacheBytes > c_rawCacheMaxBytes)
+        if (auto it = m_rawCache.find(hash); it != m_rawCache.end())
+        {
+            // Re-cache replaces the payload in place: the hash keeps its eviction-order
+            // slot and only the byte delta is accounted. Pushing a second order entry
+            // would double-count one hash against both budgets, and the stale slot would
+            // later pop as a map miss — with enough re-caches the order deque could drain
+            // empty while the byte counter still reads over budget (front() on an empty
+            // deque is UB).
+            m_rawCacheBytes -= it->second.size();
+            m_rawCacheBytes += raw.size();
+            it->second = std::move(raw);
+        }
+        else
+        {
+            m_rawCacheBytes += raw.size();
+            m_rawCacheOrder.push_back(hash);
+            m_rawCache.emplace(hash, std::move(raw));
+        }
+        while (!m_rawCacheOrder.empty() &&
+               (m_rawCacheOrder.size() > c_rawCacheMaxEntries ||
+                   m_rawCacheBytes > c_rawCacheMaxBytes))
         {
             auto it = m_rawCache.find(m_rawCacheOrder.front());
             if (it != m_rawCache.end())

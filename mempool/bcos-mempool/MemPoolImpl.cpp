@@ -76,12 +76,11 @@ bcos::protocol::TransactionStatus bcos::txpool::MemPoolImpl::insertLocked(
             bcos::throwTrace(InvalidBlobTransaction{});
         }
         auto const blobCount = transaction->blobVersionedHashes().size();
-        if (blobCount == 0 || blobCount > m_config.maxBlobsPerTransaction)
+        if (blobCount == 0 || blobCount > maxBlobsPerTransaction())
         {
             MEMPOOL_LOG(WARNING) << LOG_DESC("MemPoolImpl: invalid blob transaction, skip")
                                  << LOG_KV("blobCount", blobCount)
-                                 << LOG_KV("maxBlobsPerTransaction",
-                                        m_config.maxBlobsPerTransaction);
+                                 << LOG_KV("maxBlobsPerTransaction", maxBlobsPerTransaction());
             return TransactionStatus::Malformed;
         }
     }

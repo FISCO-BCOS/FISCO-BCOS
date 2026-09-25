@@ -24,7 +24,9 @@
 #include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-framework/engine/AnyEngineService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
+#include <bcos-crypto/kzg/Kzg4844.h>
 #include <bcos-mempool/MemPoolImpl.h>
+#include <bcos-rlp-protocol/Web3BlobTxWrapper.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rpc/filter/LogMatcher.h>
 #include <bcos-rpc/jwtAuth/JwtConfig.h>
@@ -734,6 +736,57 @@ BOOST_AUTO_TEST_CASE(handleEIP4844TxTest)
         "0x03f9013a0182a8f98477359400850432ec4812825208946f54ca6f6ede96662024ffd61bfd18f3f4e34dff8080c0843b9aca00f8c6a001fb60d5b0abeff9e3d47099386a31eed62cd55d54aa146b42d10eb81b0a9b2aa00156b2193030eb7c9496d8586492934a57a5ebd0fac816ef1ea01dc4d09498c5a001bd78704a4b015adec86a654a123045312b083641ababec0e60ef17be4453e7a001b59b9a8b8d35bd6afcff91c6afc56ebcaf4a62f6e83f5e57aac4484f022cc4a00110aac506aff4957e40d4640f0763015b84bbb8c23f50f1b13d501067bea878a001f100a97a70563cd623e588c976155ffe5999d1e9258302d969964d7524bd0280a08c1cff27365c5fe0a6ebfe5e010b3460747489302547f3ba5b181390fad485ada02af2f430e0dfad48ba78853b59486ea7425835c3a7034bb22702234f8994288f",
         "0xa8fd95a70b4f2b6cea8c52bcb782b5c3f806a0d5250cf75a1d97a6e899f09979");
     // clang-format on
+}
+
+// The blob-count gate runs before the KZG batch verify: a wrapper whose blob count exceeds
+// the pool's per-transaction limit is refused on the count alone — the proofs below are
+// deliberate garbage, so reaching verifyBlobKzgProofBatch would answer with the KZG message
+// instead and fail this test.
+BOOST_AUTO_TEST_CASE(handleBlobTxOverCountLimitRejectedBeforeKzg)
+{
+    nodeService->setExecutorVersion(bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
+    nodeService->setEthereumELMode(true);
+    bcos::txpool::MemPoolImpl memPool{
+        bcos::txpool::MemPoolConfig{.chainKind = bcos::txpool::ChainKind::L1}};
+    nodeService->setMemPool(memPool);
+
+    auto const blobCount = memPool.maxBlobsPerTransaction() + 1;
+    bcos::bytes blob(crypto::kzg::BlobSize, bcos::byte{0});
+    blob.back() = bcos::byte{0x2a};
+    bcos::bytes commitment;
+    BOOST_REQUIRE(crypto::kzg::blobToKzgCommitment(bcos::ref(blob), commitment));
+    auto const versionedHash =
+        crypto::kzg::versionedHashFromCommitment(bcos::ref(commitment));
+
+    rpc::Web3Transaction web3Tx;
+    web3Tx.type = rpc::TransactionType::EIP4844;
+    web3Tx.chainId = 1;
+    web3Tx.nonce = 0;
+    web3Tx.maxPriorityFeePerGas = u256(1);
+    web3Tx.maxFeePerGas = u256(2);
+    web3Tx.gasLimit = 21000;
+    web3Tx.to = Address("1111111111111111111111111111111111111111");
+    web3Tx.value = u256(0);
+    web3Tx.maxFeePerBlobGas = u256(1);
+    engine::BlobTxSidecar sidecar;
+    for (std::size_t i = 0; i < blobCount; ++i)
+    {
+        sidecar.blobs.push_back(blob);
+        sidecar.commitments.push_back(commitment);
+        sidecar.proofs.emplace_back(crypto::kzg::ProofSize, bcos::byte{0x11});
+        web3Tx.blobVersionedHashes.push_back(versionedHash);
+    }
+    auto const wrapper = rpc::encodeBlobTxNetworkWrapper(web3Tx, sidecar);
+
+    const std::string request =
+        R"({"jsonrpc":"2.0","id":1132123, "method":"eth_sendRawTransaction","params":[")" +
+        bcos::toHexStringWithPrefix(wrapper) + R"("]})";
+    auto response = onRPCRequestWrapper(request);
+    BOOST_REQUIRE(response.isMember("error"));
+    BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), InvalidParams);
+    BOOST_CHECK(response["error"]["message"].asString().find("outside [1,") !=
+                std::string::npos);
+    BOOST_CHECK(!response.isMember("result"));
 }
 
 BOOST_AUTO_TEST_CASE(handleEngineNotAvailableTest)

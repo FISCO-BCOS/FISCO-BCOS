@@ -220,6 +220,9 @@ bcos::protocol::EthBlockHeaderData EBSBaseHeader(int64_t number, int64_t timesta
     header.stateRoot = ledger::mpt::emptyRootHash();
     header.txsRoot = ledger::mpt::emptyRootHash();
     header.receiptsRoot = ledger::mpt::emptyRootHash();
+    // Shanghai is active from genesis on both lanes in this suite: every block
+    // commits to the empty withdrawals trie and carries an empty withdrawals list.
+    header.withdrawalsHash = ledger::mpt::emptyRootHash();
     return header;
 }
 
@@ -353,6 +356,7 @@ BOOST_FIXTURE_TEST_CASE(downloadVerifyCommitChain, EBSFixture)
             bcos::bytesConstRef(block1.headerRlp.data(), block1.headerRlp.size()));
         block1.transactions = {raw1};
         block1.uncles = {};
+        block1.withdrawals = std::vector<bcos::bytes>{};
 
         // Block 2 — base fee recomputed per EIP-1559 from block 1 (gasUsed 21000 < target).
         auto baseFee2 = bcos::devp2p::sync::computeNextBaseFee(ethHeader1);
@@ -398,6 +402,7 @@ BOOST_FIXTURE_TEST_CASE(downloadVerifyCommitChain, EBSFixture)
             bcos::bytesConstRef(block2.headerRlp.data(), block2.headerRlp.size()));
         block2.transactions = {raw2};
         block2.uncles = {};
+        block2.withdrawals = std::vector<bcos::bytes>{};
 
         // The fake peer serves a full chain indexed by block number: genesis at [0], then
         // the two real blocks.
@@ -466,11 +471,10 @@ BOOST_FIXTURE_TEST_CASE(downloadVerifyCommitChain, EBSFixture)
             bcos::devp2p::rlpx::RlpxClient client(std::move(clientKey), clientConfig);
             auto established = client.connect();
 
-            // The synthetic headers are London-style (no withdrawals/blob/requests
-            // fields); disable the post-London forks so the fail-closed field-presence
-            // checks match what this chain actually carries.
+            // The synthetic headers are Shanghai-style (empty withdrawals commitment,
+            // no blob/requests fields): keep the post-Shanghai forks disabled so the
+            // fail-closed field-presence checks match what this chain actually carries.
             bcos::devp2p::sync::ChainConfig devp2pConfig{.chainId = 1};
-            devp2pConfig.shanghaiTime = std::numeric_limits<uint64_t>::max();
             devp2pConfig.cancunTime = std::numeric_limits<uint64_t>::max();
             devp2pConfig.pragueTime = std::numeric_limits<uint64_t>::max();
             bcos::devp2p::sync::BlockExchange exchange(1, genesisHeader, devp2pConfig);
@@ -623,6 +627,7 @@ BOOST_FIXTURE_TEST_CASE(downloadRejectsTamperedCommitment, EBSFixture)
             bcos::bytesConstRef(block1.headerRlp.data(), block1.headerRlp.size()));
         block1.transactions = {raw1};
         block1.uncles = {};
+        block1.withdrawals = std::vector<bcos::bytes>{};
         bcos::devp2p::sync::Block genesisBlock;
         genesisBlock.header = genesisHeader;
         bcos::codec::rlp::encode(genesisBlock.headerRlp, genesisHeader);
@@ -681,10 +686,9 @@ BOOST_FIXTURE_TEST_CASE(downloadRejectsTamperedCommitment, EBSFixture)
         {
             bcos::devp2p::rlpx::RlpxClient client(std::move(clientKey), clientConfig);
             auto established = client.connect();
-            // Same London-style synthetic headers as above: keep the post-London forks
-            // disabled in the devp2p header validator.
+            // Same Shanghai-style synthetic headers as above: keep the post-Shanghai
+            // forks disabled in the devp2p header validator.
             bcos::devp2p::sync::ChainConfig devp2pConfig{.chainId = 1};
-            devp2pConfig.shanghaiTime = std::numeric_limits<uint64_t>::max();
             devp2pConfig.cancunTime = std::numeric_limits<uint64_t>::max();
             devp2pConfig.pragueTime = std::numeric_limits<uint64_t>::max();
             bcos::devp2p::sync::BlockExchange exchange(1, genesisHeader, devp2pConfig);
@@ -838,6 +842,7 @@ BOOST_FIXTURE_TEST_CASE(secondPeerReplayRejectedByHeadGuard, EBSFixture)
             bcos::bytesConstRef(block1.headerRlp.data(), block1.headerRlp.size()));
         block1.transactions = {raw1};
         block1.uncles = {};
+        block1.withdrawals = std::vector<bcos::bytes>{};
 
         // Block 2 — base fee recomputed per EIP-1559 from block 1.
         auto baseFee2 = bcos::devp2p::sync::computeNextBaseFee(ethHeader1);
@@ -883,6 +888,7 @@ BOOST_FIXTURE_TEST_CASE(secondPeerReplayRejectedByHeadGuard, EBSFixture)
             bcos::bytesConstRef(block2.headerRlp.data(), block2.headerRlp.size()));
         block2.transactions = {raw2};
         block2.uncles = {};
+        block2.withdrawals = std::vector<bcos::bytes>{};
 
         // Both fake peers serve the SAME full chain: genesis at [0], then the two
         // real blocks.
@@ -921,8 +927,8 @@ BOOST_FIXTURE_TEST_CASE(secondPeerReplayRejectedByHeadGuard, EBSFixture)
         };
 
         // One peer round: serve the chain from a fresh fake peer, download the two
-        // blocks with a fresh BlockExchange (the synthetic headers are London-style,
-        // so the post-London forks stay disabled in the devp2p header validator),
+        // blocks with a fresh BlockExchange (the synthetic headers are Shanghai-style,
+        // so the post-Shanghai forks stay disabled in the devp2p header validator),
         // and hand every downloaded block to onBlock.
         auto runPeerRound = [&](std::string const& clientId, auto&& onBlock) {
             bcos::devp2p::rlpx::EccKeyPair serverKey;
@@ -952,7 +958,6 @@ BOOST_FIXTURE_TEST_CASE(secondPeerReplayRejectedByHeadGuard, EBSFixture)
                 bcos::devp2p::rlpx::RlpxClient client(std::move(clientKey), clientConfig);
                 auto established = client.connect();
                 bcos::devp2p::sync::ChainConfig devp2pConfig{.chainId = 1};
-                devp2pConfig.shanghaiTime = std::numeric_limits<uint64_t>::max();
                 devp2pConfig.cancunTime = std::numeric_limits<uint64_t>::max();
                 devp2pConfig.pragueTime = std::numeric_limits<uint64_t>::max();
                 bcos::devp2p::sync::BlockExchange exchange(1, genesisHeader, devp2pConfig);
@@ -991,13 +996,17 @@ BOOST_FIXTURE_TEST_CASE(secondPeerReplayRejectedByHeadGuard, EBSFixture)
 
         // ---- Peer 2: the stale resume point — the second peer is asked for the SAME
         //      blocks the first peer already committed. Every replayed block must be
-        //      rejected by the head+1 guard (throw) before any state fork. ----
+        //      rejected by the head+1 guard (throw) before any state fork. The
+        //      parent-relative check (step 1b) runs before the guard, so the replayed
+        //      block is paired with its REAL parent (tracked from genesis), not the
+        //      committed head — only then does the guard get to fire.
         int rejected = 0;
+        auto replayParent = genesisHeader;
         runPeerRound("peer-2", [&](bcos::devp2p::sync::Block const& block) {
             try
             {
                 task::syncWait(verifier.verifyAndCommit(multiLayerStorage, *fakeLedger,
-                    block.header, prevHeader, block.transactions, block.withdrawals, forks, 1,
+                    block.header, replayParent, block.transactions, block.withdrawals, forks, 1,
                     block.uncles, 0, decoder, stateRootCalc));
             }
             catch (StaleOrOutOfOrderBlock const& e)
@@ -1009,6 +1018,7 @@ BOOST_FIXTURE_TEST_CASE(secondPeerReplayRejectedByHeadGuard, EBSFixture)
                 BOOST_CHECK(std::string(e.what()).find("not the ledger head + 1") !=
                             std::string::npos);
                 ++rejected;
+                replayParent = block.header;
                 return;
             }
             BOOST_FAIL("peer-2 replay of block " << block.number()

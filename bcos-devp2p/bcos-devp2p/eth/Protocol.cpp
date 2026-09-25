@@ -526,18 +526,22 @@ RlpResult<NewPooledTransactionHashesMessage> decodeNewPooledTransactionHashes(by
     RLP_TRY(auto sizes, takeListPayload(items, "eth: expected an RLP list"));
     while (!sizes.empty())
     {
+        if (msg.sizes.size() >= kMaxAnnouncedHashes)
+        {
+            return std::unexpected(genericError("eth: too many announced transaction sizes"));
+        }
         RLP_TRY(auto size, take<uint64_t>(sizes));
         msg.sizes.push_back(size);
     }
     RLP_TRY(auto hashes, takeListPayload(items, "eth: expected an RLP list"));
     while (!hashes.empty())
     {
+        if (msg.hashes.size() >= kMaxAnnouncedHashes)
+        {
+            return std::unexpected(genericError("eth: too many announced transaction hashes"));
+        }
         RLP_TRY(auto hash, take<h256>(hashes));
         msg.hashes.push_back(hash);
-    }
-    if (msg.hashes.size() > kMaxAnnouncedHashes)
-    {
-        return std::unexpected(genericError("eth: too many announced transaction hashes"));
     }
     // eth/68: the three fields name the same transactions, so their counts must
     // agree — a mismatch is a malformed announcement, not a partial one.
