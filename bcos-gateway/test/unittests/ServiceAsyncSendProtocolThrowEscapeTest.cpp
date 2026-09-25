@@ -42,6 +42,7 @@
 #include "bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
+#include "unittests/utils/TlsLoopback.h"
 #include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <chrono>
@@ -115,9 +116,6 @@ BOOST_AUTO_TEST_CASE(SendProtocolDoesNotEscapeSendRejection)
     boost::system::error_code connectError;
     client.connect(acceptor.local_endpoint(), connectError);
     BOOST_REQUIRE(!connectError);
-    // Kept open until the session is destroyed so drop()'s ssl async_shutdown completes.
-    ba::ip::tcp::socket serverSide(*io);
-    acceptor.accept(serverSide);
 
     auto testHost = std::make_shared<TestHost>(
         std::make_shared<ASIOInterface>(
@@ -125,11 +123,25 @@ BOOST_AUTO_TEST_CASE(SendProtocolDoesNotEscapeSendRejection)
     // Service::newSeq() delegates to the host-wide seq allocator
     service->setHost(testHost);
 
-    ba::ssl::context sslContext(ba::ssl::context::tlsv12);
+    // TLS-handshake the loopback pair (see unittests/utils/TlsLoopback.h): the session's
+    // reads/writes dispatch on its ssl::stream at compile time, so start()'s read loop only
+    // parks (stays pending, keeping the session active) on a HANDSHAKEN stream — on an
+    // un-handshaken stream the read would fail immediately and drop the session.
+    auto serverCtx = testutil::makeTlsServerContext();
+    auto clientCtx = testutil::makeTlsClientContext();
+    ba::ip::tcp::socket serverSide(*io);
+    acceptor.accept(serverSide);
+    // Kept alive until the session is destroyed so drop()'s ssl async_shutdown completes.
+    testutil::PeerSslStream tlsPeer(std::move(serverSide), serverCtx);
+    std::thread peerHandshake([&] {
+        boost::system::error_code ec;
+        tlsPeer.handshake(ba::ssl::stream_base::server, ec);
+        BOOST_CHECK(!ec);
+    });
+
     std::atomic<bool> teardownNotified{false};
     {
-        auto sessionSocket = std::make_shared<Socket>(io, sslContext, NodeIPEndpoint());
-        sessionSocket->ref() = std::move(client);
+        auto sessionSocket = testutil::makeTlsSessionSocket(io, clientCtx, std::move(client));
         auto session = std::make_shared<Session>(sessionSocket, *testHost);
         // Tolerant handler: disconnect()'s teardown notification lands here.
         session->setMessageHandler(
@@ -161,10 +173,10 @@ BOOST_AUTO_TEST_CASE(SendProtocolDoesNotEscapeSendRejection)
         }
     }
 
+    peerHandshake.join();
     workGuard.reset();
     {
         boost::system::error_code ec;
-        serverSide.close(ec);
         acceptor.close(ec);
     }
     io->stop();

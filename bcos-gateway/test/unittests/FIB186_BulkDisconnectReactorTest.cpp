@@ -96,6 +96,9 @@ public:
     bi::tcp::endpoint localEndpoint(boost::system::error_code = {}) { return {}; }
     bi::tcp::socket& ref() { return m_sslSocket->next_layer(); }
     ba::ssl::stream<bi::tcp::socket>& sslref() { return *m_sslSocket; }
+    // ASIOInterface dispatches reads/writes on stream(); the raw TCP socket keeps this fake's
+    // IO plaintext (this test never performs real IO — the socket stays disconnected).
+    bi::tcp::socket& stream() { return ref(); }
     const NodeIPEndpoint& nodeIPEndpoint() const { return m_nodeIPEndpoint; }
     void setNodeIPEndpoint(NodeIPEndpoint) {}
     ba::io_context& ioService() { return *m_ioContext; }

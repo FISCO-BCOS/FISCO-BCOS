@@ -31,6 +31,7 @@
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/IOServicePool.h>
 #include "bcos-utilities/testutils/TestPromptFixture.h"
+#include "unittests/utils/TlsLoopback.h"
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
@@ -338,6 +339,10 @@ public:
     }
     bi::tcp::socket& ref() { return m_sslSocket->next_layer(); }
     ba::ssl::stream<bi::tcp::socket>& sslref() { return *m_sslSocket; }
+    // ASIOInterface dispatches reads/writes on stream(). No FakeSocket-based session ever writes,
+    // and the only production read through stream() (startUsesDefaultReadPolicy) relies on the
+    // read failing fast — the un-handshaken SSL stream delivers exactly that.
+    ba::ssl::stream<bi::tcp::socket>& stream() { return *m_sslSocket; }
     const NodeIPEndpoint& nodeIPEndpoint() const { return m_nodeIPEndpoint; }
     void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) {}
     ba::io_context& ioService() { return m_ioService; }
@@ -365,7 +370,7 @@ inline std::shared_ptr<Socket> makeLoopbackSocket(
     std::shared_ptr<ba::io_context> _ioContext, ba::ssl::context& _sslContext,
     bi::tcp::socket _socket)
 {
-    auto socket = std::make_shared<Socket>(std::move(_ioContext), _sslContext, NodeIPEndpoint());
+    auto socket = std::make_shared<Socket>(std::move(_ioContext), &_sslContext, NodeIPEndpoint());
     socket->ref() = std::move(_socket);
     return socket;
 }
@@ -485,14 +490,11 @@ BOOST_AUTO_TEST_CASE(startUsesDefaultReadPolicy)
 {
     // Coverage for the production read entry point: Session::start() is the only instantiation
     // of readLoop<ASIOInterface::DefaultReadPolicy> (every other test enters via
-    // startWithPolicy<FakePolicy>). Drive DefaultReadPolicy down its deterministic
-    // unexpected-type branch — an m_type that is neither TCP_ONLY nor SSL completes the read
-    // with a posted operation_not_supported — and assert the read loop drops the session.
-    // (m_type defaults to TCP_ONLY, so "unset" would arm a real async_read_some on the fake's
-    // connected socket pair instead; the invalid type is what makes the branch deterministic.)
+    // startWithPolicy<FakePolicy>). DefaultReadPolicy dispatches async_read_some on the fake's
+    // stream() — an UN-HANDSHAKEN ssl::stream over a connected TCP pair — which completes
+    // promptly with an SSL error; the read loop must then drop the session.
     auto fakeSocket = std::make_shared<FakeSocket>();
     auto fakeAsio = std::make_shared<FakeASIO>();
-    fakeAsio->setType(2);
     {
         auto fakeHost = std::make_shared<FakeHost<FakeSocket>>(fakeAsio, nullptr);
 
@@ -623,6 +625,11 @@ BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
     ba::ip::tcp::acceptor acceptor(*io, ba::ip::tcp::endpoint(ba::ip::tcp::v4(), 0));
     auto listenEndpoint = acceptor.local_endpoint();
 
+    // TLS contexts for the loopback: the session's reads/writes dispatch on its ssl::stream at
+    // compile time, so the wire speaks real TLS (see unittests/utils/TlsLoopback.h).
+    auto serverCtx = testutil::makeTlsServerContext();
+    auto clientCtx = testutil::makeTlsClientContext();
+
     std::vector<uint8_t> received;
     std::mutex recvMutex;
     std::thread peerThread([&] {
@@ -633,11 +640,17 @@ BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
         {
             return;
         }
-        // Read one chunk: loopback delivers the whole (small, compressed) frame in a single
-        // read_some. A single read also avoids blocking this thread forever if the session never
-        // closes the socket.
+        testutil::PeerSslStream tlsPeer(std::move(peer), serverCtx);
+        tlsPeer.handshake(ba::ssl::stream_base::server, ec);
+        if (ec)
+        {
+            return;
+        }
+        // Read one chunk: loopback delivers the whole (small, compressed) frame in a single TLS
+        // record, hence in a single read_some. A single read also avoids blocking this thread
+        // forever if the session never closes the socket.
         std::array<uint8_t, 4096> buf;
-        std::size_t n = peer.read_some(ba::buffer(buf), ec);
+        std::size_t n = tlsPeer.read_some(ba::buffer(buf), ec);
         if (!ec && n > 0)
         {
             std::lock_guard<std::mutex> lock(recvMutex);
@@ -650,10 +663,9 @@ BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
     client.connect(listenEndpoint, connectError);
     BOOST_REQUIRE(!connectError);
 
-    ba::ssl::context sslContext(ba::ssl::context::tlsv12);
     {
         auto fakeHost = std::make_shared<FakeHost<Socket>>(fakeAsio, nullptr);
-        auto sessionSocket = makeLoopbackSocket(io, sslContext, std::move(client));
+        auto sessionSocket = testutil::makeTlsSessionSocket(io, clientCtx, std::move(client));
         auto session = std::make_shared<Session>(sessionSocket, *fakeHost, 2, true);
         session->startWithPolicy<FakeASIO::ReadPolicy>();
 
@@ -744,12 +756,19 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
     auto listenV2 = acceptorV2.local_endpoint();
     auto listenV0 = acceptorV0.local_endpoint();
 
+    // TLS contexts for the loopbacks: the sessions' reads/writes dispatch on their ssl::stream at
+    // compile time, so the wires speak real TLS (see unittests/utils/TlsLoopback.h). The contexts
+    // must outlive every Socket/peer stream (an ssl::stream references its context).
+    auto serverCtx = testutil::makeTlsServerContext();
+    auto clientCtx = testutil::makeTlsClientContext();
+
     std::vector<uint8_t> receivedV2;
     std::vector<uint8_t> receivedV0;
     std::mutex recvMutex;
     // Read exactly one wire frame: [length:4][payload...]. The length field counts the whole
-    // frame including itself, so after reading the 4 length bytes we read len-4 more.
-    auto readExactFrame = [](ba::ip::tcp::socket& _peer) -> std::vector<uint8_t> {
+    // frame including itself, so after reading the 4 length bytes we read len-4 more. Works on
+    // the TLS peer stream — boost::asio::read decrypts transparently.
+    auto readExactFrame = [](auto& _peer) -> std::vector<uint8_t> {
         std::array<uint8_t, 4> lenBuf;
         boost::system::error_code ec;
         std::size_t n = boost::asio::read(_peer, ba::buffer(lenBuf), ec);
@@ -780,9 +799,15 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
         {
             return;
         }
+        testutil::PeerSslStream tlsPeer(std::move(peer), serverCtx);
+        tlsPeer.handshake(ba::ssl::stream_base::server, ec);
+        if (ec)
+        {
+            return;
+        }
         // Service is not run in this test, so P2PSession::start()'s initial heartbeat is skipped
         // (heartBeat only sends when service->active()) — the broadcast frame is the first one.
-        auto frame = readExactFrame(peer);
+        auto frame = readExactFrame(tlsPeer);
         std::lock_guard<std::mutex> lock(recvMutex);
         receivedV2 = std::move(frame);
     });
@@ -794,7 +819,13 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
         {
             return;
         }
-        auto frame = readExactFrame(peer);
+        testutil::PeerSslStream tlsPeer(std::move(peer), serverCtx);
+        tlsPeer.handshake(ba::ssl::stream_base::server, ec);
+        if (ec)
+        {
+            return;
+        }
+        auto frame = readExactFrame(tlsPeer);
         std::lock_guard<std::mutex> lock(recvMutex);
         receivedV0 = std::move(frame);
     });
@@ -816,16 +847,14 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
     // P2PSession::start() -> heartBeat() arms a timer on service->host()->asioInterface().
     service->setHost(std::make_shared<FakeHost<Socket>>(fakeAsio, nullptr));
 
-    // The FakeHosts must outlive the sessions (Session holds a reference_wrapper<Host>); the
-    // ssl::context must outlive every Socket (the ssl::stream references it).
-    ba::ssl::context sslContext(ba::ssl::context::tlsv12);
+    // The FakeHosts must outlive the sessions (Session holds a reference_wrapper<Host>).
     std::vector<std::shared_ptr<FakeHost<Socket>>> hosts;
     std::vector<std::shared_ptr<Session>> sessions;
     auto makePeerSession = [&](ba::ip::tcp::socket _client, P2pID _nodeID, uint32_t _version) {
         auto host = std::make_shared<FakeHost<Socket>>(fakeAsio, nullptr);
         hosts.push_back(host);
         auto session = std::make_shared<Session>(
-            makeLoopbackSocket(io, sslContext, std::move(_client)), *host, 2, true);
+            testutil::makeTlsSessionSocket(io, clientCtx, std::move(_client)), *host, 2, true);
         session->startWithPolicy<FakeASIO::ReadPolicy>();
         sessions.push_back(session);
 
@@ -940,9 +969,10 @@ BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
     // concurrent producers. N threads call fastSendMessage concurrently and the single-writer
     // write loop (Session::writeLoop, guarded by the m_writingInFlight single-flight flag) must
     // put a complete, non-interleaved frame for every message on the wire — if the serialization
-    // were ever broken, frames would be torn or interleaved. Uses a real loopback socket
-    // (a real loopback Socket) so the full awaitableWrite -> async_write path runs, then parses the
-    // accumulated byte stream into frames by their length prefix.
+    // were ever broken, frames would be torn or interleaved. Uses a real loopback connection
+    // with the plaintext PlainSocket (this test needs no P2PSession wrapper) so the full
+    // awaitableWrite -> async_write path runs, then parses the accumulated byte stream into
+    // frames by their length prefix.
     constexpr size_t threadCount = 8;
     constexpr size_t msgPerThread = 50;
     constexpr size_t totalMsgs = threadCount * msgPerThread;
@@ -995,11 +1025,14 @@ BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
     const size_t frameSize = Message::MESSAGE_HEADER_LENGTH + extendedHeaderLen + 64;
     const size_t expectedBytes = frameSize * totalMsgs;
 
-    ba::ssl::context sslContext(ba::ssl::context::tlsv12);
+    // PlainSocket flavour: this test drives the session directly (no P2PSession wrapper), so it
+    // can exercise the compile-time plaintext stream end to end — the peer reads raw frames.
     {
-        auto fakeHost = std::make_shared<FakeHost<Socket>>(fakeAsio, nullptr);
-        auto sessionSocket = makeLoopbackSocket(io, sslContext, std::move(client));
-        auto session = std::make_shared<Session>(sessionSocket, *fakeHost, 2, true);
+        auto fakeHost = std::make_shared<FakeHost<PlainSocket>>(fakeAsio, nullptr);
+        auto sessionSocket = std::make_shared<PlainSocket>(io, nullptr, NodeIPEndpoint());
+        sessionSocket->ref() = std::move(client);
+        auto session = std::make_shared<BasicSession<P2PDecoder, PlainSocket>>(
+            sessionSocket, *fakeHost, 2, true);
         session->startWithPolicy<FakeASIO::ReadPolicy>();
 
         std::vector<std::thread> senders;

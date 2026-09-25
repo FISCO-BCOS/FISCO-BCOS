@@ -688,7 +688,6 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
         std::make_shared<ASIOInterface>(ioServicePool, _config->listenIP(), _config->listenPort());
     asioInterface->setSrvContext(std::move(srvCtx));
     asioInterface->setClientContext(std::move(clientCtx));
-    asioInterface->setType(ASIOInterface::ASIO_TYPE::SSL);
 
     auto nodeIDHash = _config->calculateShortNodeID(pubHex);
     P2PInfo selfInfo(nodeIDHash, pubHex);

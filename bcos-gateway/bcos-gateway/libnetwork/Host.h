@@ -514,7 +514,7 @@ task::Task<void> Host<DecoderT, SocketT>::acceptLoop()
         bool iterationFailed = false;
         try
         {
-            auto socket = m_asioInterface->newSocket(true, NodeIPEndpoint());
+            auto socket = m_asioInterface->newSocket<SocketT>(true, NodeIPEndpoint());
             auto [ec] = co_await m_asioInterface->awaitableAccept(socket);
             /// get the endpoint information of remote client after accept the connections
             auto endpoint = socket->remoteEndpoint();
@@ -1006,7 +1006,7 @@ Host<DecoderT, SocketT>::connect(NodeIPEndpoint _nodeIPEndpoint)
         }
     }
 
-    std::shared_ptr<Socket> socket = m_asioInterface->newSocket(false, _nodeIPEndpoint);
+    auto socket = m_asioInterface->newSocket<SocketT>(false, _nodeIPEndpoint);
     co_return co_await clientConnect(std::move(socket), std::move(_nodeIPEndpoint));
 }
 

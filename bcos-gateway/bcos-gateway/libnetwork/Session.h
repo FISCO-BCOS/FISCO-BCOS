@@ -9,6 +9,7 @@
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/FrameMeta.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
+#include "bcos-gateway/libnetwork/Socket.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Timer.h"
@@ -29,10 +30,9 @@
 
 namespace bcos::gateway
 {
-class Socket;
 // The default argument lives on this first declaration; Host.h's definition does not repeat it.
-// SocketT is the socket type of the sessions this host creates (production: Socket; tests
-// instantiate fakes).
+// SocketT is the socket type of the sessions this host creates (production: Socket — the TLS
+// alias from Socket.h; tests instantiate fakes).
 template <FrameDecoder DecoderT, typename SocketT = Socket>
 class Host;
 
@@ -96,9 +96,9 @@ struct Payload
 // generic over the frame DECODER only — the session never sees a concrete message type.
 // Inbound, DecoderT splits the byte stream into FrameMeta (see FrameMeta.h); outbound, the
 // caller hands over an already-encoded header plus payload views. SocketT is the socket type
-// (production: Socket; a forward declaration suffices for the default argument). The member
-// definitions follow at the bottom of this header; the gateway instantiates this with libp2p's
-// P2PDecoder.
+// (production: Socket, the TLS flavour of BasicSocket; PlainSocket is plaintext TCP; tests
+// instantiate fakes). The member definitions follow at the bottom of this header; the gateway
+// instantiates this with libp2p's P2PDecoder.
 template <FrameDecoder DecoderT, typename SocketT = Socket>
 class BasicSession : public std::enable_shared_from_this<BasicSession<DecoderT, SocketT>>
 {
@@ -1029,52 +1029,57 @@ void BasicSession<DecoderT, SocketT>::closeSocket(DisconnectReason _reason)
         {
             socket->close();
         }
-        auto shutdown_timer = std::make_shared<boost::asio::steady_timer>(
-            socket->ioService(), std::chrono::milliseconds(m_shutDownTimeThres));
-        /// async wait for shutdown
-        shutdown_timer->async_wait([socket](const boost::system::error_code& error) {
-            /// drop operation has been aborted
-            if (error == boost::asio::error::operation_aborted)
-            {
-                SESSION_LOG(DEBUG)
-                    << "[drop] operation_aborted  by async_shutdown"
-                    << LOG_KV("value", error.value()) << LOG_KV("message", error.message());
-                return;
-            }
-            /// shutdown timer error
-            if (error && error != boost::asio::error::operation_aborted)
-            {
-                SESSION_LOG(WARNING)
-                    << "[drop] shutdown timer failed" << LOG_KV("failedValue", error.value())
-                    << LOG_KV("message", error.message());
-            }
-            /// force to shutdown when timeout
-            if (socket->ref().is_open())
-            {
-                SESSION_LOG(WARNING) << "[drop] timeout, force close the socket"
-                                     << LOG_KV("remote endpoint", socket->remoteEndpoint());
-                socket->close();
-            }
-        });
-
-        /// async shutdown normally
-        socket->sslref().async_shutdown(
-            [socket, shutdown_timer](const boost::system::error_code& error) {
-                shutdown_timer->cancel();
-                if (error)
+        // TLS close_notify shutdown only exists on SSL sockets; plain sockets are already fully
+        // closed above and need no application-layer shutdown.
+        if constexpr (requires { socket->sslref(); })
+        {
+            auto shutdown_timer = std::make_shared<boost::asio::steady_timer>(
+                socket->ioService(), std::chrono::milliseconds(m_shutDownTimeThres));
+            /// async wait for shutdown
+            shutdown_timer->async_wait([socket](const boost::system::error_code& error) {
+                /// drop operation has been aborted
+                if (error == boost::asio::error::operation_aborted)
                 {
-                    SESSION_LOG(INFO)
-                        << "[drop] shutdown failed " << LOG_KV("failedValue", error.value())
+                    SESSION_LOG(DEBUG)
+                        << "[drop] operation_aborted  by async_shutdown"
+                        << LOG_KV("value", error.value()) << LOG_KV("message", error.message());
+                    return;
+                }
+                /// shutdown timer error
+                if (error && error != boost::asio::error::operation_aborted)
+                {
+                    SESSION_LOG(WARNING)
+                        << "[drop] shutdown timer failed" << LOG_KV("failedValue", error.value())
                         << LOG_KV("message", error.message());
                 }
-                /// force to close the socket
+                /// force to shutdown when timeout
                 if (socket->ref().is_open())
                 {
-                    SESSION_LOG(WARNING) << LOG_DESC("force to shutdown session")
-                                         << LOG_KV("endpoint", socket->nodeIPEndpoint());
+                    SESSION_LOG(WARNING) << "[drop] timeout, force close the socket"
+                                         << LOG_KV("remote endpoint", socket->remoteEndpoint());
                     socket->close();
                 }
             });
+
+            /// async shutdown normally
+            socket->sslref().async_shutdown(
+                [socket, shutdown_timer](const boost::system::error_code& error) {
+                    shutdown_timer->cancel();
+                    if (error)
+                    {
+                        SESSION_LOG(INFO)
+                            << "[drop] shutdown failed " << LOG_KV("failedValue", error.value())
+                            << LOG_KV("message", error.message());
+                    }
+                    /// force to close the socket
+                    if (socket->ref().is_open())
+                    {
+                        SESSION_LOG(WARNING) << LOG_DESC("force to shutdown session")
+                                             << LOG_KV("endpoint", socket->nodeIPEndpoint());
+                        socket->close();
+                    }
+                });
+        }
     }
     catch (...)
     {

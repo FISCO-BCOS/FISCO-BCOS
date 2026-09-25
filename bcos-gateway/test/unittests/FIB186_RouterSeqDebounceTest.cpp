@@ -48,6 +48,7 @@
 #include "bcos-gateway/libp2p/router/RouterTableImpl.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
+#include "unittests/utils/TlsLoopback.h"
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/test/unit_test.hpp>
@@ -154,17 +155,6 @@ public:
     }
 };
 
-// Wrap a connected TCP socket in the production Socket (see SessionTest's makeLoopbackSocket).
-// The ssl::context must outlive the returned Socket (the ssl::stream references it).
-std::shared_ptr<Socket> makeLoopbackSocketDebounce(
-    std::shared_ptr<ba::io_context> _ioContext, ba::ssl::context& _sslContext,
-    bi::tcp::socket _socket)
-{
-    auto socket = std::make_shared<Socket>(std::move(_ioContext), _sslContext, NodeIPEndpoint());
-    socket->ref() = std::move(_socket);
-    return socket;
-}
-
 // Service::m_sessions is protected; expose insertion for the neighbour/churn sessions below (same
 // seam as SessionTest's FanoutProbeService). Nothing router-internal is touched.
 class RouterProbeService : public Service
@@ -194,9 +184,10 @@ public:
     std::string m_id;
 };
 
-// Read one length-prefixed frame off the raw loopback peer (see SessionTest's readExactFrame);
-// empty on error/EOF.
-std::vector<uint8_t> readExactFrame(bi::tcp::socket& _peer)
+// Read one length-prefixed frame off the loopback peer (see SessionTest's readExactFrame);
+// empty on error/EOF. Generic over the stream type: the peer speaks TLS (the session's
+// reads/writes dispatch on its ssl::stream at compile time — see unittests/utils/TlsLoopback.h).
+std::vector<uint8_t> readExactFrame(auto& _peer)
 {
     std::array<uint8_t, 4> lenBuf{};
     boost::system::error_code ec;
@@ -233,6 +224,12 @@ BOOST_AUTO_TEST_CASE(MembershipChurnCoalescesRouterSeqToOneLeadingEdgeBroadcast)
     ba::ip::tcp::acceptor acceptor(*io, ba::ip::tcp::endpoint(ba::ip::tcp::v4(), 0));
     auto listenEndpoint = acceptor.local_endpoint();
 
+    // TLS contexts for the loopback: the session's reads/writes dispatch on its ssl::stream at
+    // compile time, so the wire speaks real TLS (see unittests/utils/TlsLoopback.h). The contexts
+    // must outlive every Socket/peer stream (an ssl::stream references its context).
+    auto serverCtx = testutil::makeTlsServerContext();
+    auto clientCtx = testutil::makeTlsClientContext();
+
     // The loopback peer: records the packetType of every frame the service writes to its
     // neighbour session. The service never start()s here, so P2PSession heartbeats are skipped
     // (they require service->active()) and the ONLY frames on the wire are router-seq broadcasts.
@@ -246,9 +243,15 @@ BOOST_AUTO_TEST_CASE(MembershipChurnCoalescesRouterSeqToOneLeadingEdgeBroadcast)
         {
             return;
         }
+        testutil::PeerSslStream tlsPeer(std::move(peer), serverCtx);
+        tlsPeer.handshake(ba::ssl::stream_base::server, ec);
+        if (ec)
+        {
+            return;
+        }
         while (true)
         {
-            auto frame = readExactFrame(peer);
+            auto frame = readExactFrame(tlsPeer);
             if (frame.empty())
             {
                 return;
@@ -283,15 +286,14 @@ BOOST_AUTO_TEST_CASE(MembershipChurnCoalescesRouterSeqToOneLeadingEdgeBroadcast)
 
     // One real neighbour session ("recorder") over the loopback: the leading-edge broadcast must
     // reach it exactly once. The FakeHosts must outlive the sessions (Session holds a
-    // reference_wrapper<Host>); the ssl::context must outlive every Socket.
-    ba::ssl::context sslContext(ba::ssl::context::tlsv12);
+    // reference_wrapper<Host>).
     std::vector<std::shared_ptr<FakeHost_Debounce<Socket>>> hosts;
     std::shared_ptr<Session> recorderSession;
     {
         auto host = std::make_shared<FakeHost_Debounce<Socket>>(fakeAsio, nullptr);
         hosts.push_back(host);
         recorderSession = std::make_shared<Session>(
-            makeLoopbackSocketDebounce(io, sslContext, std::move(client)), *host, 2, true);
+            testutil::makeTlsSessionSocket(io, clientCtx, std::move(client)), *host, 2, true);
         recorderSession->startWithPolicy<FakeASIO_Debounce::ReadPolicy>();
 
         auto p2pSession = std::make_shared<P2PSession>();
@@ -373,7 +375,7 @@ BOOST_AUTO_TEST_CASE(MembershipChurnCoalescesRouterSeqToOneLeadingEdgeBroadcast)
         // onDisconnect logs the session endpoint and the default log level builds even TRACE
         // streams eagerly, so the fake needs a session object -- a never-started Session over an
         // unconnected Socket is enough (nodeIPEndpoint() reads the stored endpoint member).
-        auto socket = std::make_shared<Socket>(io, sslContext, NodeIPEndpoint());
+        auto socket = std::make_shared<Socket>(io, &clientCtx, NodeIPEndpoint());
         peer->setSession(std::make_shared<Session>(socket, *hosts.front(), 2, true));
         service->addSession(peer->p2pID(), peer);
         service->onDisconnect(NetworkException{}, std::move(peer));

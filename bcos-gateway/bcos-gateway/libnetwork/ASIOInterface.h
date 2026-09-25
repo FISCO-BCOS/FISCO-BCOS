@@ -26,25 +26,18 @@ namespace bcos::gateway
 class ASIOInterface
 {
 public:
-    // Production always selects SSL (GatewayFactory::buildService). TCP_ONLY is kept because the
-    // test harness relies on it: m_type defaults to TCP_ONLY, so the wire-level tests write
-    // PLAINTEXT frames through socket->ref() to a raw tcp::socket peer — removing the runtime
-    // switch would force those writes through an un-handshaken ssl::stream. The medium-term
-    // replacement is a compile-time stream-type parameter on the socket, not deleting this enum.
-    enum ASIO_TYPE
-    {
-        TCP_ONLY = 0,
-        SSL = 1
-    };
-
+    // The TCP-vs-SSL choice is a COMPILE-TIME property of the socket type (BasicSocket<StreamT>,
+    // see Socket.h): production uses Socket (TLS), PlainSocket is plaintext TCP. Operations below
+    // dispatch on the socket's stream() IO object or, where TLS-specific (handshake / verify),
+    // on the presence of sslref() via `if constexpr` — there is no runtime type switch.
     /// verify callback
     using VerifyCallback = std::function<bool(bool, boost::asio::ssl::verify_context&)>;
 
     ASIOInterface(IOServicePool::Ptr _ioServicePool, std::string listenHost, uint16_t listenPort);
     ~ASIOInterface();
-    void setType(int type);
 
     ba::ssl::context* srvContext();
+    ba::ssl::context* clientContext();
 
     void setSrvContext(ba::ssl::context _srvContext);
     void setClientContext(ba::ssl::context _clientContext);
@@ -56,8 +49,17 @@ public:
     // async_accept re-arm against the cancelAcceptor() that Host::stop() posts there.
     boost::asio::steady_timer newAcceptorTimer(uint32_t timeout);
 
-    std::shared_ptr<Socket> newSocket(
-        bool _server, NodeIPEndpoint nodeIPEndpoint = NodeIPEndpoint());
+    // SocketT defaults to the production Socket; Host passes its own SocketT template parameter
+    // explicitly so the created socket matches the session/host instantiation. SocketT must be
+    // constructible from (io_context ptr, ssl::context*, NodeIPEndpoint) — BasicSocket is; test
+    // fakes never go through newSocket (their Hosts never run acceptLoop/connect), so this
+    // template is only instantiated for real socket types.
+    template <typename SocketT = Socket>
+    std::shared_ptr<SocketT> newSocket(bool _server, NodeIPEndpoint nodeIPEndpoint = NodeIPEndpoint())
+    {
+        return std::make_shared<SocketT>(m_ioServicePool->getIOService(),
+            _server ? srvContext() : clientContext(), std::move(nodeIPEndpoint));
+    }
 
     bi::tcp::acceptor* acceptor();
 
@@ -67,7 +69,11 @@ public:
     void setVerifyCallback(
         const std::shared_ptr<SocketT>& socket, VerifyCallback callback, bool /*unused*/ = true)
     {
-        socket->sslref().set_verify_callback(std::move(callback));
+        if constexpr (requires { socket->sslref(); })
+        {
+            socket->sslref().set_verify_callback(std::move(callback));
+        }
+        // Plain sockets have no TLS layer: certificate verification does not apply.
     }
 
     // ----- coroutine-facing interface -----------------------------------------
@@ -82,43 +88,26 @@ public:
     //
     // The read path is a COMPILE-TIME policy (the template parameter of awaitableReadSome):
     // production uses DefaultReadPolicy, whose invoke() directly dispatches async_read_some on
-    // the socket (TCP vs SSL, see DefaultReadPolicy below) — no std::function, no virtual call,
-    // fully inlined. Read-loop test fakes substitute their own policy type to park / control
-    // read completions deterministically. CONTRACT (for custom policies and for every initiate
-    // call in this header): the completion must be invoked or destroyed exactly once, so the
-    // awaiting coroutine is always settled. Deferring the initiation is the norm, but a
-    // synchronous invocation or drop is safe here — symmetric transfer means it can no longer
-    // resume a frame that has not finished suspending.
+    // the socket's stream() IO object (TLS or plaintext is the socket's compile-time stream
+    // type) — no std::function, no virtual call, fully inlined. Read-loop test fakes substitute
+    // their own policy type to park / control read completions deterministically. CONTRACT (for
+    // custom policies and for every initiate call in this header): the completion must be
+    // invoked or destroyed exactly once, so the awaiting coroutine is always settled. Deferring
+    // the initiation is the norm, but a synchronous invocation or drop is safe here — symmetric
+    // transfer means it can no longer resume a frame that has not finished suspending.
     using ReadSomeHandler = task::detail::FireCompletion<boost::system::error_code, std::size_t>;
 
-    // Production read-initiation policy: directly dispatches async_read_some on the socket
-    // (TCP vs SSL, with the unexpected-type default completing via operation_not_supported).
-    // Nested in ASIOInterface so it can read the private m_type; tests provide their own policy
-    // with the same invoke() signature.
+    // Production read-initiation policy: directly dispatches async_read_some on the socket's
+    // stream() (TLS for Socket, plaintext for PlainSocket). Nested in ASIOInterface for
+    // symmetry with the other socket operations; tests provide their own policy with the same
+    // invoke() signature.
     struct DefaultReadPolicy
     {
         template <typename SocketT>
-        static void invoke(ASIOInterface* self, const std::shared_ptr<SocketT>& socket,
+        static void invoke(ASIOInterface* /*self*/, const std::shared_ptr<SocketT>& socket,
             boost::asio::mutable_buffer buffers, ReadSomeHandler completion)
         {
-            switch (self->m_type)
-            {
-            case TCP_ONLY:
-                socket->ref().async_read_some(buffers, std::move(completion));
-                break;
-            case SSL:
-                socket->sslref().async_read_some(buffers, std::move(completion));
-                break;
-            default:
-                // total completion: an unexpected type must still answer the read, or the
-                // awaiting read-loop coroutine pins forever. Post the completion so it runs on
-                // the socket's io thread like every other asio completion.
-                boost::asio::post(socket->ioService(),
-                    [completion = std::move(completion)]() mutable {
-                        completion(boost::asio::error::operation_not_supported, std::size_t{0});
-                    });
-                break;
-            }
+            socket->stream().async_read_some(buffers, std::move(completion));
         }
     };
 
@@ -157,7 +146,19 @@ public:
     {
         return task::makeFireAwaitable<boost::system::error_code>(
             [socket, type](auto handler) {
-                socket->sslref().async_handshake(type, std::move(handler));
+                if constexpr (requires { socket->sslref(); })
+                {
+                    socket->sslref().async_handshake(type, std::move(handler));
+                }
+                else
+                {
+                    // Plain socket: no TLS layer, so the handshake is an immediate success.
+                    // Post the completion so it runs on the socket's io thread like every
+                    // other asio completion (total completion, see the class comment above).
+                    boost::asio::post(socket->ioService(), [handler = std::move(handler)]() mutable {
+                        handler(boost::system::error_code{});
+                    });
+                }
             },
             boost::asio::error::operation_aborted);
     }
@@ -167,34 +168,13 @@ public:
     {
         return task::makeFireAwaitable<boost::system::error_code, std::size_t>(
             [this, socket, buffers = std::move(buffers)](auto handler) mutable {
-                auto type = m_type;
                 auto& ioService = socket->ioService();
                 if (socket->isConnected())
                 {
-                    boost::asio::post(ioService, [type, socket, buffers = std::move(buffers),
-                                                     handler = std::move(handler)]() mutable {
-                        switch (type)
-                        {
-                        case TCP_ONLY:
-                        {
-                            ba::async_write(socket->ref(), buffers, std::move(handler));
-                            break;
-                        }
-                        case SSL:
-                        {
-                            ba::async_write(socket->sslref(), buffers, std::move(handler));
-                            break;
-                        }
-                        default:
-                            // total completion: an unexpected type must still answer the
-                            // awaiting coroutine — dropping the handler would pin its frame
-                            // forever. (FireAwaitable's completion-or-cancel rescue would
-                            // eventually release the frame, but failing loudly here keeps the
-                            // error explicit.)
-                            handler(boost::asio::error::operation_not_supported, 0);
-                            break;
-                        }
-                    });
+                    boost::asio::post(ioService,
+                        [socket, buffers = std::move(buffers), handler = std::move(handler)]() mutable {
+                            ba::async_write(socket->stream(), buffers, std::move(handler));
+                        });
                 }
                 else
                 {
@@ -261,6 +241,5 @@ private:
 
     std::optional<ba::ssl::context> m_srvContext;
     std::optional<ba::ssl::context> m_clientContext;
-    int m_type = 0;
 };
 }  // namespace bcos::gateway

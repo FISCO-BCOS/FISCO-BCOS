@@ -81,6 +81,9 @@ public:
     {
         return *m_sslSocket;
     }
+    // ASIOInterface dispatches reads/writes on stream(); the raw TCP socket keeps this fake's
+    // IO plaintext (the read-loop tests inject completions via the fake read policy anyway).
+    boost::asio::ip::tcp::socket& stream() { return ref(); }
     const NodeIPEndpoint& nodeIPEndpoint() const { return m_nodeIPEndpoint; }
     void setNodeIPEndpoint(NodeIPEndpoint /*unused*/) {}
     boost::asio::io_context& ioService() { return *m_ioContext; }
