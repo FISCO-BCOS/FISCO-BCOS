@@ -242,12 +242,66 @@ BOOST_AUTO_TEST_CASE(ImportValidatesAllocHexBeforeFirstWrite)
             co_await importEthereumGenesisState(*storage, badNonceAllocs, *hashImpl, features),
             bcos::tool::InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "nonce is not a valid uint64"); });
-        auto badNonceRow = co_await storage2::readOne(*storage, executor_v1::StateKeyView(
-                                                                     SYS_TABLES,
-                                                                     std::string(SYS_DIRECTORY::
-                                                                             USER_APPS) +
-                                                                         goodAddress));
+        auto badNonceRow = co_await storage2::readOne(
+            *storage, executor_v1::StateKeyView(
+                          SYS_TABLES, std::string(SYS_DIRECTORY::USER_APPS) + goodAddress));
         BOOST_CHECK(!badNonceRow);
+    }());
+}
+
+// Regression for the EEST test_many_delegations crash (4800-alloc Prague
+// fixture): the legacy-storage coroutine bridge used to resume the awaiting
+// coroutine INSIDE the inline completion callback, so every account write
+// nested one resume deeper — a genesis with tens of thousands of allocs
+// overflowed the thread stack before the import finished. The import below
+// drives ~60k inline-completing writes; it must simply complete.
+BOOST_AUTO_TEST_CASE(LargeAllocImportDoesNotStackOverflow)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto storage = makeStorage();
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+
+        LedgerConfig param;
+        param.setBlockNumber(0);
+        param.setHash(HashType(""));
+        param.setBlockTxCountLimit(0);
+
+        GenesisConfig genesisConfig;
+        genesisConfig.m_txGasLimit = 3000000000;
+        genesisConfig.m_compatibilityVersion =
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_6_VERSION);
+        genesisConfig.m_features.push_back(
+            FeatureSet{Features::Flag::feature_l2_ethereum_compat, 1});
+        genesisConfig.m_chainID = "901";
+        genesisConfig.m_groupID = "group0";
+        // Ethereum executor lane: writes every address under /apps/, so the
+        // legacy-lane system-address guard does not reject the 0x1000-range
+        // addresses the sequential generator below produces.
+        genesisConfig.m_executorVersion = ledger::ETHEREUM_EXECUTOR_VERSION;
+
+        constexpr size_t c_allocCount = 20000;
+        genesisConfig.m_allocs.reserve(c_allocCount);
+        for (size_t i = 0; i < c_allocCount; ++i)
+        {
+            genesisConfig.m_allocs.push_back(Alloc{.address = fmt::format("{:040x}", i + 1),
+                .balance = u256(i + 1),
+                .nonce = "1",
+                .code = "",
+                .storage = {}});
+        }
+        appendGenesisFeatureFlagsSlot(genesisConfig);
+
+        auto ok = co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
+        BOOST_CHECK(ok);
+
+        // The first and last account rows really landed.
+        for (size_t i : {size_t{1}, c_allocCount})
+        {
+            auto tableName = fmt::format("{}{:040x}", SYS_DIRECTORY::USER_APPS, i);
+            auto balanceEntry = co_await storage2::readOne(
+                *storage, executor_v1::StateKeyView(tableName, ACCOUNT_TABLE_FIELDS::BALANCE));
+            BOOST_REQUIRE(balanceEntry);
+        }
     }());
 }
 

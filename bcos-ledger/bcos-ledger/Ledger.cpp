@@ -22,6 +22,7 @@
  */
 
 #include "Ledger.h"
+#include "CoroutineStackReset.h"
 #include "GenesisStateRoot.h"
 #include "LedgerMethods.h"
 #include "bcos-framework/ledger/EVMAccount.h"
@@ -285,8 +286,9 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     for (auto& [key, entry] : prewriteMeta.rows)
     {
         auto [table, rowKey] = executor_v1::StateKeyView{key}.get();
-        storage->asyncSetRow(table, rowKey, std::move(entry),
-            [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
+        storage->asyncSetRow(table, rowKey, std::move(entry), [setRowCallback](auto&& error) {
+            setRowCallback(std::forward<decltype(error)>(error));
+        });
     }
 
     std::atomic_int64_t totalCount = 0;
@@ -855,20 +857,20 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
 void Ledger::asyncGetTotalTransactionCount(
     std::function<void(Error::Ptr, int64_t, int64_t, bcos::protocol::BlockNumber)> _callback)
 {
-    asyncCheckStateTableValid(SYS_CURRENT_STATE,
-        [this, callback = std::move(_callback)](Error::Ptr tableError) mutable {
-            if (tableError)
-            {
-                LEDGER_LOG(DEBUG) << "GetTotalTransactionCount"
-                                  << boost::diagnostic_information(*tableError);
-                callback(std::move(tableError), -1, -1, -1);
-                return;
-            }
+    asyncCheckStateTableValid(SYS_CURRENT_STATE, [this, callback = std::move(_callback)](
+                                                     Error::Ptr tableError) mutable {
+        if (tableError)
+        {
+            LEDGER_LOG(DEBUG) << "GetTotalTransactionCount"
+                              << boost::diagnostic_information(*tableError);
+            callback(std::move(tableError), -1, -1, -1);
+            return;
+        }
 
-            task::wait([](decltype(*this)& self,
-                           std::function<void(
-                               Error::Ptr, int64_t, int64_t, bcos::protocol::BlockNumber)>
-                               callback) -> task::Task<void> {
+        task::wait(
+            [](decltype(*this)& self,
+                std::function<void(Error::Ptr, int64_t, int64_t, bcos::protocol::BlockNumber)>
+                    callback) -> task::Task<void> {
                 ledger::TransactionCount count;
                 try
                 {
@@ -876,16 +878,16 @@ void Ledger::asyncGetTotalTransactionCount(
                 }
                 catch (bcos::Error& e)
                 {
-                    LEDGER_LOG(DEBUG) << "GetTotalTransactionCount"
-                                      << boost::diagnostic_information(e);
+                    LEDGER_LOG(DEBUG)
+                        << "GetTotalTransactionCount" << boost::diagnostic_information(e);
                     callback(
                         BCOS_ERROR_WITH_PREV_PTR(e.errorCode(), e.errorMessage(), e), -1, -1, -1);
                     co_return;
                 }
                 catch (std::exception& e)
                 {
-                    LEDGER_LOG(DEBUG) << "GetTotalTransactionCount"
-                                      << boost::diagnostic_information(e);
+                    LEDGER_LOG(DEBUG)
+                        << "GetTotalTransactionCount" << boost::diagnostic_information(e);
                     callback(BCOS_ERROR_WITH_PREV_PTR(LedgerError::CollectAsyncCallbackError,
                                  "Get total transaction count failed with errors!", e),
                         -1, -1, -1);
@@ -898,7 +900,7 @@ void Ledger::asyncGetTotalTransactionCount(
                                   << LOG_KV("blockNumber", count.blockNumber);
                 callback(nullptr, count.total, count.failed, count.blockNumber);
             }(*this, std::move(callback)));
-        });
+    });
 }
 
 void Ledger::asyncGetSystemConfigByKey(const std::string_view& _key,
@@ -977,23 +979,22 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
         return;
     }
 
-    asyncCheckStateTableValid(SYS_BLOCK_NUMBER_2_NONCES,
-        [this, callback = std::move(_onGetList), _startNumber, _offset](
-            Error::Ptr tableError) mutable {
-            if (tableError)
-            {
-                LEDGER_LOG(INFO) << "GetNonceList open table failed"
-                                 << boost::diagnostic_information(*tableError);
-                callback(std::move(tableError), nullptr);
-                return;
-            }
+    asyncCheckStateTableValid(SYS_BLOCK_NUMBER_2_NONCES, [this, callback = std::move(_onGetList),
+                                                             _startNumber, _offset](
+                                                             Error::Ptr tableError) mutable {
+        if (tableError)
+        {
+            LEDGER_LOG(INFO) << "GetNonceList open table failed"
+                             << boost::diagnostic_information(*tableError);
+            callback(std::move(tableError), nullptr);
+            return;
+        }
 
-            task::wait([](decltype(*this)& self, bcos::protocol::BlockNumber startNumber,
-                           int64_t offset,
-                           std::function<void(Error::Ptr,
-                               std::shared_ptr<std::map<protocol::BlockNumber,
-                                   protocol::NonceListPtr>>)>
-                               callback) -> task::Task<void> {
+        task::wait(
+            [](decltype(*this)& self, bcos::protocol::BlockNumber startNumber, int64_t offset,
+                std::function<void(Error::Ptr,
+                    std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>)>
+                    callback) -> task::Task<void> {
                 auto numberRange = ::ranges::views::iota(startNumber, startNumber + offset + 1);
                 std::vector<std::optional<Entry>> entries;
                 try
@@ -1036,8 +1037,8 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
                     }
                     catch (std::exception const& e)
                     {
-                        LEDGER_LOG(WARNING) << "Parse nonce list failed"
-                                            << boost::diagnostic_information(e);
+                        LEDGER_LOG(WARNING)
+                            << "Parse nonce list failed" << boost::diagnostic_information(e);
                         continue;
                     }
                 }
@@ -1046,7 +1047,7 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
                                   << LOG_KV("retMap size", retMap->size());
                 callback(nullptr, std::move(retMap));
             }(*this, _startNumber, _offset, std::move(callback)));
-        });
+    });
 }
 
 void Ledger::removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync)
@@ -1120,11 +1121,10 @@ void Ledger::asyncGetNodeListByType(std::string_view const& _type,
 void Ledger::asyncCheckStateTableValid(
     std::string_view tableName, std::function<void(Error::Ptr)> callback)
 {
-    m_stateStorage->asyncOpenTable(tableName,
-        [this, tableName = std::string(tableName), callback = std::move(callback)](
-            auto&& error, std::optional<Table>&& table) mutable {
-            callback(
-                checkTableValid(std::forward<decltype(error)>(error), table, tableName));
+    m_stateStorage->asyncOpenTable(
+        tableName, [this, tableName = std::string(tableName), callback = std::move(callback)](
+                       auto&& error, std::optional<Table>&& table) mutable {
+            callback(checkTableValid(std::forward<decltype(error)>(error), table, tableName));
         });
 }
 
@@ -1189,8 +1189,8 @@ static void asyncGetBlockTransactionHashStrings(bcos::storage::StorageInterface&
         std::vector<std::string> hashList;
         try
         {
-            hashList = co_await ledger::getBlockTransactionHashStrings(
-                storage, blockNumber, blockFactory);
+            hashList =
+                co_await ledger::getBlockTransactionHashStrings(storage, blockNumber, blockFactory);
         }
         catch (bcos::Error& e)
         {
@@ -1381,9 +1381,9 @@ void Ledger::getTxProof(
                 return;
             }
             auto blockNumber = _receipt->blockNumber();
-            asyncGetBlockTransactionHashStrings(*m_stateStorage, *m_blockFactory,
-                blockNumber, [this, _onGetProof, _txHash = std::move(_txHash), blockNumber](
-                                 Error::Ptr&& _error, std::vector<std::string>&& _hashList) {
+            asyncGetBlockTransactionHashStrings(*m_stateStorage, *m_blockFactory, blockNumber,
+                [this, _onGetProof, _txHash = std::move(_txHash), blockNumber](
+                    Error::Ptr&& _error, std::vector<std::string>&& _hashList) {
                     if (_error || _hashList.empty())
                     {
                         LEDGER_LOG(DEBUG)
@@ -1612,6 +1612,15 @@ static task::Task<void> importGenesisState(::ranges::forward_range auto const& a
     // accounts in the genesis batch.
     verifyL2FeatureFlagsSlot(allocs, features);
 
+    // Every per-alloc co_await below completes inline against the legacy
+    // storage, and where the symmetric-transfer tail call is not emitted each
+    // iteration nests ~25 fat ASAN/-O0 resume frames that only a genuine
+    // suspension unwinds — without one per alloc, importing tens of thousands
+    // of allocs overflows the thread stack (EEST test_many_delegations, 4800
+    // allocs). See CoroutineStackReset.h for why the worker is not a
+    // tbb::task_group; the per-alloc bounce costs microseconds against a
+    // genesis-time import.
+
     for (auto&& importAccount : allocs)
     {
         // Decode & validate EVERY hex field of the alloc BEFORE the first
@@ -1641,8 +1650,8 @@ static task::Task<void> importGenesisState(::ranges::forward_range auto const& a
             slots.emplace_back(evmKey, evmValue);
         }
 
-        account::EVMAccount account(storage, address,
-            features.get(Features::Flag::feature_raw_address), treatSystemAsUser);
+        account::EVMAccount account(
+            storage, address, features.get(Features::Flag::feature_raw_address), treatSystemAsUser);
         co_await account.create();
 
         if (codeHash.has_value())
@@ -1664,6 +1673,8 @@ static task::Task<void> importGenesisState(::ranges::forward_range auto const& a
         {
             co_await account.setStorage(evmKey, evmValue);
         }
+
+        co_await ledger::detail::stackReset;
     }
 }
 
@@ -2209,6 +2220,11 @@ bool Ledger::buildGenesisBlock(
                 nodeEntry.set(std::move(nodeRlp));
                 co_await storage2::writeOne(
                     *m_stateStorage, storage2::mptNodeStateKey(nodeHash), std::move(nodeEntry));
+                // One writeOne Task-await per node nests ~4 resume frames
+                // where the symmetric-transfer tail call is not emitted; the
+                // node count scales with the alloc count, so reset the stack
+                // per node exactly like importGenesisState does per alloc.
+                co_await ledger::detail::stackReset;
             }
         }
 
@@ -2506,21 +2522,21 @@ std::optional<storage::Table> Ledger::buildDir(
 void Ledger::asyncGetCurrentStateByKey(std::string_view const& _key,
     std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback)
 {
-    asyncCheckStateTableValid(SYS_CURRENT_STATE,
-        [this, key = std::string(_key), callback = std::move(_callback)](
-            Error::Ptr tableError) mutable {
-            if (tableError)
-            {
-                LEDGER_LOG(DEBUG) << LOG_DESC("asyncGetCurrentStateByKey failed")
-                                  << LOG_KV("key", key)
-                                  << boost::diagnostic_information(*tableError);
-                callback(std::move(tableError), {});
-                return;
-            }
+    asyncCheckStateTableValid(SYS_CURRENT_STATE, [this, key = std::string(_key),
+                                                     callback = std::move(_callback)](
+                                                     Error::Ptr tableError) mutable {
+        if (tableError)
+        {
+            LEDGER_LOG(DEBUG) << LOG_DESC("asyncGetCurrentStateByKey failed") << LOG_KV("key", key)
+                              << boost::diagnostic_information(*tableError);
+            callback(std::move(tableError), {});
+            return;
+        }
 
-            task::wait([](decltype(*this)& self, std::string key,
-                           std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)>
-                               callback) -> task::Task<void> {
+        task::wait(
+            [](decltype(*this)& self, std::string key,
+                std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> callback)
+                -> task::Task<void> {
                 std::optional<bcos::storage::Entry> entry;
                 try
                 {
@@ -2529,9 +2545,8 @@ void Ledger::asyncGetCurrentStateByKey(std::string_view const& _key,
                 }
                 catch (std::exception& e)
                 {
-                    LEDGER_LOG(DEBUG)
-                        << LOG_DESC("asyncGetCurrentStateByKey exception") << LOG_KV("key", key)
-                        << boost::diagnostic_information(e);
+                    LEDGER_LOG(DEBUG) << LOG_DESC("asyncGetCurrentStateByKey exception")
+                                      << LOG_KV("key", key) << boost::diagnostic_information(e);
                     callback(
                         BCOS_ERROR_WITH_PREV_PTR(LedgerError::GetStorageError, "Get row failed", e),
                         {});
@@ -2541,7 +2556,7 @@ void Ledger::asyncGetCurrentStateByKey(std::string_view const& _key,
                 // not checkEntryValid here.
                 callback(nullptr, std::move(entry));
             }(*this, std::move(key), std::move(callback)));
-        });
+    });
 }
 
 Error::Ptr Ledger::setCurrentStateByKey(std::string_view const& _key, bcos::storage::Entry entry)

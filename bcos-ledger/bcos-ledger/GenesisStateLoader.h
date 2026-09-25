@@ -22,6 +22,7 @@
  */
 #pragma once
 
+#include "CoroutineStackReset.h"
 #include "GenesisStateRoot.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
@@ -50,9 +51,8 @@ namespace bcos::ledger
 /// @param allocs  addresses are 40-hex (with or without 0x); nonce is a DECIMAL string;
 ///                code is hex; storage slots/values are 32-byte hex.
 template <class Storage>
-task::Task<bcos::h256> importEthereumGenesisState(
-    Storage& storage, std::vector<Alloc> const& allocs, crypto::Hash const& hashImpl,
-    Features const& features)
+task::Task<bcos::h256> importEthereumGenesisState(Storage& storage,
+    std::vector<Alloc> const& allocs, crypto::Hash const& hashImpl, Features const& features)
 {
     // Build the full genesis trie FIRST: genesis import is not transactional,
     // and computeGenesisStateTrie validates every alloc hex field (address /
@@ -70,6 +70,10 @@ task::Task<bcos::h256> importEthereumGenesisState(
     genesis.m_executorVersion = ledger::ETHEREUM_EXECUTOR_VERSION;
     auto trie = co_await computeGenesisStateTrie(genesis);
 
+    // Same stack-reset contract as Ledger's importGenesisState: the per-alloc
+    // co_awaits below complete inline, and where the symmetric-transfer tail
+    // call is not emitted the nested resume frames accumulate until a genuine
+    // suspension unwinds them.
     for (auto const& alloc : allocs)
     {
         // Decode & validate EVERY hex field of the alloc BEFORE the first
@@ -117,6 +121,8 @@ task::Task<bcos::h256> importEthereumGenesisState(
         {
             co_await account.setStorage(evmKey, evmValue);
         }
+
+        co_await detail::stackReset;
     }
 
     // Persist every produced genesis trie node as a "/mpt/" state row, exactly
@@ -129,6 +135,8 @@ task::Task<bcos::h256> importEthereumGenesisState(
         storage::Entry nodeEntry;
         nodeEntry.set(std::move(nodeRlp));
         co_await storage2::writeOne(storage, mptNodeStateKey(nodeHash), std::move(nodeEntry));
+        // Same per-iteration stack-reset contract as the alloc loop above.
+        co_await detail::stackReset;
     }
     co_return trie.root;
 }
