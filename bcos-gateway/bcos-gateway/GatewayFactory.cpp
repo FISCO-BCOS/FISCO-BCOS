@@ -15,12 +15,13 @@
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/Host.h"
-#include "bcos-gateway/libnetwork/PeerBlackWhitelist.h"
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libp2p/PeerBlackWhitelist.h"
+#include "bcos-gateway/libp2p/Message.h"
+#include "bcos-gateway/libp2p/P2PDecoder.h"
+#include "bcos-gateway/libp2p/P2PIdentity.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
 #include "bcos-gateway/libp2p/Service.h"
-#include "bcos-gateway/libp2p/ServiceV2.h"
 #include "bcos-gateway/libp2p/router/RouterTableImpl.h"
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
 #include "bcos-gateway/libratelimit/RateLimiterManager.h"
@@ -687,27 +688,29 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
         std::make_shared<ASIOInterface>(ioServicePool, _config->listenIP(), _config->listenPort());
     asioInterface->setSrvContext(std::move(srvCtx));
     asioInterface->setClientContext(std::move(clientCtx));
-    asioInterface->setType(ASIOInterface::ASIO_TYPE::SSL);
 
     auto nodeIDHash = _config->calculateShortNodeID(pubHex);
     P2PInfo selfInfo(nodeIDHash, pubHex);
-    // Session Factory
-    auto sessionFactory = std::make_shared<SessionFactory>(selfInfo,
-        _config->sessionRecvBufferSize(), _config->allowMaxMsgSize(), _config->maxReadDataSize(),
-        _config->maxSendDataSize(), _config->enableCompress());
+    // Session Factory: the gateway's wire format is the P2P one (see libp2p/P2PDecoder.h).
+    auto sessionFactory = std::make_shared<P2PSessionFactory>(_config->sessionRecvBufferSize(),
+        _config->allowMaxMsgSize(), _config->maxReadDataSize(), _config->maxSendDataSize());
     // KeyFactory
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
 
     // init Host
-    auto host = std::make_shared<Host>(_config->hashImpl(), asioInterface, sessionFactory);
+    auto host = std::make_shared<P2PHost>(asioInterface, sessionFactory);
     host->setHostPort(_config->listenIP(), _config->listenPort());
-    host->setSSLContextPubHandler(m_sslContextPubHandler);
-    host->setSSLContextPubHandlerWithoutExtInfo(m_sslContextPubHandlerWithoutExtInfo);
+    // Identity seam (libp2p/P2PIdentity.h): FISCO-BCOS cert → node-id extraction and cert
+    // black/white-list admission, injected into the generic Host. The identity object owns the
+    // admission lists; Service keeps a reference for config-reload updates.
+    auto peerIdentity = std::make_shared<P2PPeerIdentity>(
+        _config->hashImpl(), m_sslContextPubHandler, m_sslContextPubHandlerWithoutExtInfo);
     // init peer black/white list
-    host->setPeerBlacklist(PeerBlackWhitelist(PeerBlackWhitelist::Type::Blacklist,
+    peerIdentity->setPeerBlacklist(PeerBlackWhitelist(PeerBlackWhitelist::Type::Blacklist,
         _config->peerBlacklist(), _config->enableBlacklist()));
-    host->setPeerWhitelist(PeerBlackWhitelist(PeerBlackWhitelist::Type::Whitelist,
+    peerIdentity->setPeerWhitelist(PeerBlackWhitelist(PeerBlackWhitelist::Type::Whitelist,
         _config->peerWhitelist(), _config->enableWhitelist()));
+    host->setPeerIdentity(peerIdentity);
     host->setEnableSslVerify(_config->enableSSLVerify());
     // FIB-184: apply the configured inbound-session caps (no longer hardcoded in Host)
     host->setMaxConcurrentSessions(_config->maxConcurrentSessions());
@@ -716,22 +719,18 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     host->setMaxPendingHandshakes(_config->maxPendingHandshakes());
     host->setHandshakeTimeout(_config->handshakeTimeout());
     host->setMaxConnectionsPerSecond(_config->maxConnectionsPerSecond());
-    // init Service
+    // init Service (the optional router module is enabled by passing a RouterTableFactory)
     bool enableRIPProtocol = _config->enableRIPProtocol();
-    Service::Ptr service = nullptr;
-    if (enableRIPProtocol)
-    {
-        auto routerTableFactory = std::make_shared<RouterTableFactoryImpl>();
-        service = std::make_shared<ServiceV2>(
-            selfInfo, routerTableFactory, *ioServicePool->getIOService());
-    }
-    else
-    {
-        service = std::make_shared<Service>(selfInfo);
-    }
+    Service::Ptr service = std::make_shared<Service>(selfInfo,
+        enableRIPProtocol ? std::shared_ptr<RouterTableFactory>(
+                                std::make_shared<RouterTableFactoryImpl>()) :
+                            nullptr,
+        enableRIPProtocol ? ioServicePool->getIOService().get() : nullptr);
 
     service->setHost(host);
+    service->setPeerIdentity(peerIdentity);
     service->setStaticNodes(_config->connectedNodes());
+    service->setEnableCompress(_config->enableCompress());
 
     GatewayP2PReloadHandler::config = _config;
     GatewayP2PReloadHandler::service = service;
@@ -829,8 +828,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         service->registerDisconnectHandler(
             [gatewayNodeManagerWeakPtr, serviceWeakPtr = std::weak_ptr<Service>(service)](
                 NetworkException e, P2PSession::Ptr p2pSession) {
-                if (e.errorCode() == P2PExceptionType::DuplicateSession ||
-                    e.errorCode() == P2PExceptionType::Success)
+                if (errorCodeOf(e) == P2PExceptionType::DuplicateSession ||
+                    errorCodeOf(e) == P2PExceptionType::Success)
                 {
                     return;
                 }
@@ -873,7 +872,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             auto gatewayRateLimiterWeakPtr =
                 std::weak_ptr<ratelimiter::GatewayRateLimiter>(gatewayRateLimiter);
             service->setBeforeMessageHandler(
-                [gatewayRateLimiterWeakPtr](SessionFace& _session, const Message& _msg,
+                [gatewayRateLimiterWeakPtr](Session& _session, const Message& _msg,
                     uint32_t _wireLength) -> std::optional<bcos::Error> {
                     auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
                     if (!gatewayRateLimiter)
@@ -904,7 +903,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                 });
 
             service->setOnMessageHandler([gatewayRateLimiterWeakPtr](
-                                             SessionFace::Ptr _session, const Message& _message)
+                                             Session::Ptr _session, const Message& _message)
                                              -> std::optional<bcos::Error> {
                 auto gatewayRateLimiter = gatewayRateLimiterWeakPtr.lock();
                 if (!gatewayRateLimiter)
@@ -991,29 +990,27 @@ void GatewayFactory::initFailOver(
 }
 
 bcos::amop::AMOPImpl::Ptr GatewayFactory::buildAMOP(
-    P2PInterface::Ptr _network, P2pID const& _p2pNodeID)
+    Service::Ptr _network, P2pID const& _p2pNodeID)
 {
     auto topicManager = std::make_shared<TopicManager>(m_rpcServiceName, _network);
     auto amopMessageFactory = std::make_shared<AMOPMessageFactory>();
     auto requestFactory = std::make_shared<AMOPRequestFactory>();
 
-    auto service = std::dynamic_pointer_cast<Service>(_network);
-    registerAMOPHandlers(service, topicManager);
+    registerAMOPHandlers(_network, topicManager);
 
     return std::make_shared<AMOPImpl>(topicManager, amopMessageFactory, requestFactory, _network,
         _p2pNodeID, *m_ioServicePool->getIOService(), m_ioServicePool);
 }
 
 bcos::amop::AMOPImpl::Ptr GatewayFactory::buildLocalAMOP(
-    P2PInterface::Ptr _network, P2pID const& _p2pNodeID)
+    Service::Ptr _network, P2pID const& _p2pNodeID)
 {
     // Note: must set rpc to the topicManager before start the amop
     auto topicManager = std::make_shared<LocalTopicManager>(m_rpcServiceName, _network);
     auto amopMessageFactory = std::make_shared<AMOPMessageFactory>();
     auto requestFactory = std::make_shared<AMOPRequestFactory>();
 
-    auto service = std::dynamic_pointer_cast<Service>(_network);
-    registerAMOPHandlers(service, topicManager);
+    registerAMOPHandlers(_network, topicManager);
 
     return std::make_shared<AMOPImpl>(topicManager, amopMessageFactory, requestFactory, _network,
         _p2pNodeID, *m_ioServicePool->getIOService(), m_ioServicePool);
@@ -1027,8 +1024,8 @@ void GatewayFactory::registerAMOPHandlers(
     // register disconnect handler
     service->registerDisconnectHandler(
         [weakTopicManager](NetworkException e, P2PSession::Ptr p2pSession) {
-            if (e.errorCode() == P2PExceptionType::DuplicateSession ||
-                e.errorCode() == P2PExceptionType::Success)
+            if (errorCodeOf(e) == P2PExceptionType::DuplicateSession ||
+                errorCodeOf(e) == P2PExceptionType::Success)
             {
                 return;
             }

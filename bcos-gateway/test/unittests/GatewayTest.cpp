@@ -25,7 +25,7 @@
 #include "bcos-gateway/Gateway.h"
 #include "bcos-gateway/gateway/GatewayNodeManager.h"
 #include "bcos-gateway/libamop/AMOPImpl.h"
-#include "bcos-gateway/libp2p/P2PInterface.h"
+#include "bcos-gateway/libp2p/Service.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
@@ -43,7 +43,6 @@ using namespace bcos::group;
 // Forward declarations for interfaces we'll mock
 namespace bcos::gateway
 {
-class P2PInterface;
 class GatewayNodeManager;
 }  // namespace bcos::gateway
 namespace bcos::amop
@@ -185,8 +184,8 @@ BOOST_AUTO_TEST_CASE(testFakeItWithInterfaces)
     // Test fakeit usage similar to testBaselineScheduler.cpp
     // Create mocks for Gateway dependencies
 
-    // Mock P2PInterface for testing P2P operations
-    fakeit::Mock<P2PInterface> mockP2PInterface;
+    // Mock Service for testing P2P operations
+    fakeit::Mock<Service> mockP2PInterface;
 
     // Setup mock behaviors using When().AlwaysDo() pattern like in testBaselineScheduler
     fakeit::When(Method(mockP2PInterface, start)).AlwaysDo([]() {
@@ -198,7 +197,7 @@ BOOST_AUTO_TEST_CASE(testFakeItWithInterfaces)
     });
 
     // Test that we can call the mocked methods
-    P2PInterface& p2pRef = mockP2PInterface.get();
+    Service& p2pRef = mockP2PInterface.get();
 
     // These should not throw since we've mocked them
     BOOST_CHECK_NO_THROW(p2pRef.start());
@@ -270,9 +269,9 @@ BOOST_AUTO_TEST_CASE(testNodeIDOperations)
 
 BOOST_AUTO_TEST_CASE(testGatewayP2PInterfaceMock)
 {
-    // Test P2PInterface mocking similar to testBaselineScheduler pattern
-    // P2PInterface is polymorphic and can be mocked
-    fakeit::Mock<P2PInterface> mockP2PInterface;
+    // Test Service mocking similar to testBaselineScheduler pattern
+    // Service is polymorphic and can be mocked
+    fakeit::Mock<Service> mockP2PInterface;
 
     // Setup mock behaviors using When().AlwaysDo() pattern
     fakeit::When(Method(mockP2PInterface, start)).AlwaysDo([]() {
@@ -283,7 +282,7 @@ BOOST_AUTO_TEST_CASE(testGatewayP2PInterfaceMock)
     });
 
     // Test the mocked P2P interface
-    P2PInterface& p2pRef = mockP2PInterface.get();
+    Service& p2pRef = mockP2PInterface.get();
 
     // These should not throw since we've mocked them
     BOOST_CHECK_NO_THROW(p2pRef.start());
@@ -375,7 +374,7 @@ BOOST_AUTO_TEST_CASE(testComplexGatewayScenario)
     // This demonstrates how to build comprehensive tests similar to testBaselineScheduler.cpp
 
     // Create multiple mocks for a complete Gateway test
-    fakeit::Mock<P2PInterface> mockP2PInterface;
+    fakeit::Mock<Service> mockP2PInterface;
     fakeit::Mock<GatewayNodeManager> mockGatewayNodeManager;
     fakeit::Mock<bcos::amop::AMOPImpl> mockAMOP;
 
@@ -402,7 +401,7 @@ BOOST_AUTO_TEST_CASE(testComplexGatewayScenario)
         });
 
     // Test the complex scenario
-    P2PInterface& p2pRef = mockP2PInterface.get();
+    Service& p2pRef = mockP2PInterface.get();
     GatewayNodeManager& nodeManagerRef = mockGatewayNodeManager.get();
     bcos::amop::AMOPImpl& amopRef = mockAMOP.get();
 

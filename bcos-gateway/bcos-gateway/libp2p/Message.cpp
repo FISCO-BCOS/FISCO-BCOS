@@ -18,7 +18,7 @@
  * @date 2021-05-04
  */
 
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/Common.h"
 #include "bcos-gateway/libnetwork/Common.h"
@@ -199,7 +199,12 @@ int32_t P2PMessageOptions::decode(const bytesConstRef& _buffer)
 
 bool Message::encodeHeader(bytes& _buffer) const
 {
-    if (auto result = encodeHeaderImpl(_buffer); !result)
+    return encodeHeaderWithExt(_buffer, m_ext);
+}
+
+bool Message::encodeHeaderWithExt(bytes& _buffer, uint16_t _wireExt) const
+{
+    if (auto result = encodeHeaderImpl(_buffer, _wireExt); !result)
     {
         return result;
     }
@@ -212,14 +217,25 @@ bool Message::encodeHeader(bytes& _buffer) const
     return true;
 }
 
-bool bcos::gateway::Message::encodeHeaderImpl(bytes& _buffer) const
+void Message::stampLength(bytes& _header, uint32_t _totalLength)
+{
+    *(uint32_t*)_header.data() =
+        boost::asio::detail::socket_ops::host_to_network_long(_totalLength);
+}
+
+bool Message::compressionSupported() const
+{
+    return m_version >= (uint16_t)(bcos::protocol::ProtocolVersion::V2);
+}
+
+bool bcos::gateway::Message::encodeHeaderImpl(bytes& _buffer, uint16_t _wireExt) const
 {
     // set length to zero first
     uint32_t length = 0;
     uint16_t version = boost::asio::detail::socket_ops::host_to_network_short(m_version);
     uint16_t packetType = boost::asio::detail::socket_ops::host_to_network_short(m_packetType);
     uint32_t seq = boost::asio::detail::socket_ops::host_to_network_long(m_seq);
-    uint16_t ext = boost::asio::detail::socket_ops::host_to_network_short(m_ext);
+    uint16_t ext = boost::asio::detail::socket_ops::host_to_network_short(_wireExt);
 
     _buffer.insert(_buffer.end(), (byte*)&length, (byte*)&length + 4);
     _buffer.insert(_buffer.end(), (byte*)&version, (byte*)&version + 2);
@@ -309,7 +325,7 @@ bool Message::tryToCompressPayload(bytes& compressData) const
         return false;
     }
 
-    if (m_version < (uint16_t)(bcos::protocol::ProtocolVersion::V2))
+    if (!compressionSupported())
     {
         return false;
     }

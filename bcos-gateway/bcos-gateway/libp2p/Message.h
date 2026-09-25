@@ -131,6 +131,10 @@ public:
     /// length(4) + version(2) + packetType(2) + seq(4) + ext(2)
     constexpr static size_t MESSAGE_HEADER_LENGTH = 14;
 
+    /// The ext flag meaning "payload is compressed" on the wire.
+    constexpr static uint16_t COMPRESS_EXT_FLAG =
+        (uint16_t)bcos::protocol::MessageExtFieldFlag::COMPRESS;
+
     /// For RSA public key, the prefix length is 18 in hex, used for print log graciously
     constexpr static size_t RSA_PUBLIC_KEY_PREFIX = 18;
     constexpr static size_t RSA_PUBLIC_KEY_TRUNC = 8;
@@ -195,9 +199,21 @@ public:
     const std::any& extAttributes() const;
 
     bool encodeHeader(bytes& _buffer) const;
+    /// Encode the header using the given wire ext flags instead of the message's own m_ext.
+    /// The fast send path stamps flags like COMPRESS onto the wire header only, so a shared
+    /// message object (e.g. broadcast fan-out) is never mutated by an individual send.
+    bool encodeHeaderWithExt(bytes& _buffer, uint16_t _wireExt) const;
+
+    /// Patch the frame total length into an already-encoded header (offset 0, network order).
+    /// The send path zero-copies the payload views, so the final wire length is only known
+    /// after the header was encoded.
+    static void stampLength(bytes& _header, uint32_t _totalLength);
+    /// Whether the wire format of this message's version supports payload compression
+    /// (the ext flags are only honoured V2+).
+    bool compressionSupported() const;
 
 protected:
-    bool encodeHeaderImpl(bytes& _buffer) const;
+    bool encodeHeaderImpl(bytes& _buffer, uint16_t _wireExt) const;
     int32_t decodeHeader(const bytesConstRef& _buffer);
 
     mutable uint32_t m_length = 0;

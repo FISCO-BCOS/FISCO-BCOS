@@ -33,8 +33,8 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Host.h"
-#include "bcos-gateway/libnetwork/Message.h"
-#include "bcos-gateway/libnetwork/Session.h"
+#include "bcos-gateway/libp2p/Message.h"
+#include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-gateway/libnetwork/SessionReadLoop.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
@@ -66,17 +66,18 @@ public:
     FakeASIO_Lifetime()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_Lifetime"), "0.0.0.0", 0)
     {}
-    ~FakeASIO_Lifetime() noexcept override = default;
+    ~FakeASIO_Lifetime() noexcept = default;
 
     // Compile-time read-initiation policy (see ASIOInterface::awaitableReadSome): the read loop
     // is launched with this policy (startWithPolicy<FakeASIO_Lifetime::ReadPolicy>) so every
     // read parks its completion in a manually-fired slot.
     struct ReadPolicy
     {
-        static void invoke(ASIOInterface* asio, const std::shared_ptr<SocketFace>& /*socket*/,
+        template <typename SocketT>
+        static void invoke(ASIOInterface* asio, const std::shared_ptr<SocketT>& /*socket*/,
             ba::mutable_buffer /*buffers*/, ReadCompletion completion)
         {
-            dynamic_cast<FakeASIO_Lifetime*>(asio)->parkRead(std::move(completion));
+            static_cast<FakeASIO_Lifetime*>(asio)->parkRead(std::move(completion));
         }
     };
 
@@ -108,25 +109,9 @@ private:
         m_readHandler;
 };
 
-class FakeHost_Lifetime : public bcos::gateway::Host
-{
-public:
-    FakeHost_Lifetime(bcos::crypto::Hash::Ptr hash, std::shared_ptr<ASIOInterface> asioInterface,
-        std::shared_ptr<SessionFactory> sessionFactory)
-      : Host(std::move(hash), std::move(asioInterface), std::move(sessionFactory))
-    {
-        m_run = true;
-    }
-
-    // Simulate Host::stop() having already run (IOServicePool::stop() joins the io_context
-    // threads), so haveNetwork() returns false and no io_context is left to service posted
-    // handlers.
-    void stopNetwork() { m_run = false; }
-};
-
 // A socket backed by a real SSL stream so drop()/closeSocket() can call sslref() safely; close()
 // only flips the connected flag (the underlying TCP socket is never opened).
-class FakeSocket_Lifetime : public SocketFace
+class FakeSocket_Lifetime
 {
 public:
     FakeSocket_Lifetime()
@@ -134,17 +119,20 @@ public:
         m_sslContext(ba::ssl::context::tlsv12),
         m_sslSocket(std::make_shared<ba::ssl::stream<bi::tcp::socket>>(*m_ioContext, m_sslContext))
     {}
-    ~FakeSocket_Lifetime() override = default;
+    ~FakeSocket_Lifetime() = default;
 
-    bool isConnected() const override { return m_connected; }
-    void close() override { m_connected = false; }
-    bi::tcp::endpoint remoteEndpoint(boost::system::error_code) override { return {}; }
-    bi::tcp::endpoint localEndpoint(boost::system::error_code) override { return {}; }
-    bi::tcp::socket& ref() override { return m_sslSocket->next_layer(); }
-    ba::ssl::stream<bi::tcp::socket>& sslref() override { return *m_sslSocket; }
-    const NodeIPEndpoint& nodeIPEndpoint() const override { return m_nodeIPEndpoint; }
-    void setNodeIPEndpoint(NodeIPEndpoint) override {}
-    ba::io_context& ioService() override { return *m_ioContext; }
+    bool isConnected() const { return m_connected; }
+    void close() { m_connected = false; }
+    bi::tcp::endpoint remoteEndpoint(boost::system::error_code = {}) { return {}; }
+    bi::tcp::endpoint localEndpoint(boost::system::error_code = {}) { return {}; }
+    bi::tcp::socket& ref() { return m_sslSocket->next_layer(); }
+    ba::ssl::stream<bi::tcp::socket>& sslref() { return *m_sslSocket; }
+    // ASIOInterface dispatches reads/writes on stream(); the raw TCP socket keeps this fake's
+    // IO plaintext (the read-loop tests inject completions via the fake read policy anyway).
+    bi::tcp::socket& stream() { return ref(); }
+    const NodeIPEndpoint& nodeIPEndpoint() const { return m_nodeIPEndpoint; }
+    void setNodeIPEndpoint(NodeIPEndpoint) {}
+    ba::io_context& ioService() { return *m_ioContext; }
 
     bool m_connected{true};
 
@@ -155,20 +143,38 @@ private:
     NodeIPEndpoint m_nodeIPEndpoint;
 };
 
+class FakeHost_Lifetime : public bcos::gateway::Host<P2PDecoder, FakeSocket_Lifetime>
+{
+public:
+    FakeHost_Lifetime(std::shared_ptr<ASIOInterface> asioInterface,
+        std::shared_ptr<BasicSessionFactory<P2PDecoder, FakeSocket_Lifetime>> sessionFactory)
+      : Host<P2PDecoder, FakeSocket_Lifetime>(
+            std::move(asioInterface), std::move(sessionFactory))
+    {
+        this->m_run = true;
+    }
+
+    // Simulate Host::stop() having already run (IOServicePool::stop() joins the io_context
+    // threads), so haveNetwork() returns false and no io_context is left to service posted
+    // handlers.
+    void stopNetwork() { this->m_run = false; }
+};
+
+using Session_Lifetime = BasicSession<P2PDecoder, FakeSocket_Lifetime>;
+
 // The regression: an in-flight async read must keep the Session alive after every external strong
 // reference is dropped. Pre-fix (weak_ptr capture) the Session would be destroyed here, leaving
 // async_read_some writing into a freed recv buffer.
 BOOST_AUTO_TEST_CASE(InFlightReadKeepsSessionAlive)
 {
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_Lifetime>();
     auto fakeAsio = std::make_shared<FakeASIO_Lifetime>();
-    auto fakeHost = std::make_shared<FakeHost_Lifetime>(hashImpl, fakeAsio, nullptr);
+    auto fakeHost = std::make_shared<FakeHost_Lifetime>(fakeAsio, nullptr);
 
-    std::weak_ptr<Session> weakSession;
+    std::weak_ptr<Session_Lifetime> weakSession;
     {
-        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 1024, true);
-        session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message) {});
+        auto session = std::make_shared<Session_Lifetime>(fakeSocket, *fakeHost, 1024, true);
+        session->setMessageHandler([](NetworkException, Session_Lifetime::Ptr, FrameMeta) {});
         weakSession = session;
 
         // startWithPolicy() arms the first read synchronously (the old code used to defer the
@@ -230,13 +236,12 @@ BOOST_AUTO_TEST_CASE(InFlightReadKeepsSessionAlive)
 // test deliberately never runs the socket's io_context, mirroring the joined-thread state.
 BOOST_AUTO_TEST_CASE(DropClosesSocketInlineWhenNetworkDown)
 {
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_Lifetime>();
     auto fakeAsio = std::make_shared<FakeASIO_Lifetime>();
-    auto fakeHost = std::make_shared<FakeHost_Lifetime>(hashImpl, fakeAsio, nullptr);
+    auto fakeHost = std::make_shared<FakeHost_Lifetime>(fakeAsio, nullptr);
 
-    auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 1024, true);
-    session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message) {});
+    auto session = std::make_shared<Session_Lifetime>(fakeSocket, *fakeHost, 1024, true);
+    session->setMessageHandler([](NetworkException, Session_Lifetime::Ptr, FrameMeta) {});
     BOOST_REQUIRE(fakeSocket->isConnected());
 
     // Host::stop() has already joined the io_context threads: the socket's io_context will never

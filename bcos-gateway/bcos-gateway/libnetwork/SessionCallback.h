@@ -1,13 +1,13 @@
 /**
- * @brief: inteface for boost::asio(for unittest)
+ * @brief: response-callback correlation for pending with-response sends
  *
- * @file CallbackInterface.h
+ * @file SessionCallback.h
  * @author: octopuswang
  * @date 2018-09-13
  */
 #pragma once
 #include "bcos-gateway/libnetwork/Common.h"
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libnetwork/FrameMeta.h"
 #include <boost/asio/steady_timer.hpp>
 #include <array>
 #include <mutex>
@@ -17,13 +17,13 @@
 namespace bcos::gateway
 {
 
-class Session;
-
-// The response message, or nullopt when the request failed / timed out / the session dropped
+// The response frame, or nullopt when the request failed / timed out / the session dropped
 // before any response arrived.
-using SessionCallbackFunc = std::function<void(NetworkException, std::optional<Message>)>;
+using SessionCallbackFunc = std::function<void(NetworkException, std::optional<FrameMeta>)>;
 
-struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
+// SessionT: the session type the request was registered through (BasicSession<DecoderT, ...>).
+template <typename SessionT>
+struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback<SessionT>>
 {
     using Ptr = std::shared_ptr<ResponseCallback>;
 
@@ -33,15 +33,17 @@ struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
     // the session the request was registered through: the manager is shared host-wide, so a
     // routed response can be claimed on a different session than the owner — the owner's
     // pending-seq bookkeeping must be updated through this pointer, not the claiming session
-    std::weak_ptr<Session> owner;
+    std::weak_ptr<SessionT> owner;
 };
 
-using SessionResponseCallback = ResponseCallback;
+template <typename SessionT>
+using SessionResponseCallback = ResponseCallback<SessionT>;
 
 // Host-wide manager of pending response callbacks. One instance is owned by the Host and
 // shared by every session of that host (a routed response can be claimed on a different
 // session than the request went out on), so lookups are sharded into buckets to reduce lock
 // contention.
+template <typename SessionT>
 class SessionCallbackManager
 {
 public:
@@ -49,7 +51,7 @@ public:
     SessionCallbackManager(const SessionCallbackManager&) = delete;
     SessionCallbackManager& operator=(const SessionCallbackManager&) = delete;
 
-    SessionResponseCallback::Ptr getCallback(uint32_t seq, bool isRemove)
+    typename SessionResponseCallback<SessionT>::Ptr getCallback(uint32_t seq, bool isRemove)
     {
         auto& bucket = m_buckets.at(seq % BucketNum);
         std::lock_guard<std::mutex> lockGuard(bucket.mutex);
@@ -68,7 +70,7 @@ public:
         return callback;
     }
 
-    bool addCallback(uint32_t seq, SessionResponseCallback::Ptr callback)
+    bool addCallback(uint32_t seq, typename SessionResponseCallback<SessionT>::Ptr callback)
     {
         auto& bucket = m_buckets.at(seq % BucketNum);
         std::lock_guard<std::mutex> lockGuard(bucket.mutex);
@@ -86,7 +88,7 @@ private:
     struct Bucket
     {
         std::mutex mutex;
-        std::unordered_map<uint32_t, SessionResponseCallback::Ptr> callbacks;
+        std::unordered_map<uint32_t, typename SessionResponseCallback<SessionT>::Ptr> callbacks;
     };
 
     static constexpr uint32_t BucketNum = 64;

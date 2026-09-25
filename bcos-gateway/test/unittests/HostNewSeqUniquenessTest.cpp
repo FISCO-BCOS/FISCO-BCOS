@@ -40,7 +40,7 @@ BOOST_FIXTURE_TEST_SUITE(HostNewSeqUniquenessTest, TestPromptFixture)
 
 BOOST_AUTO_TEST_CASE(test_sequentialSeqsNeverRepeat)
 {
-    auto host = std::make_shared<Host>(nullptr, nullptr, nullptr);
+    auto host = std::make_shared<P2PHost>(nullptr, nullptr);
     std::unordered_set<uint32_t> seqs;
     for (int i = 0; i < 1000; ++i)
     {
@@ -51,7 +51,7 @@ BOOST_AUTO_TEST_CASE(test_sequentialSeqsNeverRepeat)
 
 BOOST_AUTO_TEST_CASE(test_concurrentSeqsNeverCollide)
 {
-    auto host = std::make_shared<Host>(nullptr, nullptr, nullptr);
+    auto host = std::make_shared<P2PHost>(nullptr, nullptr);
     constexpr size_t kThreads = 8;
     constexpr size_t kDrawsPerThread = 500;
     std::atomic<bool> start{false};
@@ -93,7 +93,7 @@ BOOST_AUTO_TEST_CASE(test_concurrentSeqsNeverCollide)
 // same host-wide sequence — this is the topology a routed response relies on.
 BOOST_AUTO_TEST_CASE(test_seqUniqueAcrossServicesSharingOneHost)
 {
-    auto host = std::make_shared<Host>(nullptr, nullptr, nullptr);
+    auto host = std::make_shared<P2PHost>(nullptr, nullptr);
     P2PInfo selfInfo;
     selfInfo.rawP2pID = "selfRawP2pID";
     selfInfo.p2pID = "selfP2pID";

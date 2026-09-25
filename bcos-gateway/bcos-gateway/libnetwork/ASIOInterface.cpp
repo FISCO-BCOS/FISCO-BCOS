@@ -1,5 +1,5 @@
 /**
- * @brief: inteface for boost::asio(for unittest)
+ * @brief: wrapper for boost::asio network operations
  *
  * @file AsioInterface.cpp
  * @author: bxq2011hust
@@ -15,73 +15,6 @@ using namespace bcos;
 using namespace bcos::gateway;
 using namespace std;
 
-Socket::Socket(std::shared_ptr<ba::io_context> _ioService, ba::ssl::context& _sslContext,
-    NodeIPEndpoint _nodeIPEndpoint)
-  : m_nodeIPEndpoint(std::move(_nodeIPEndpoint)),
-    m_ioService(std::move(_ioService)),
-    m_sslSocket(*m_ioService, _sslContext)
-{}
-
-Socket::~Socket()
-{
-    close();
-}
-
-bool Socket::isConnected() const
-{
-    return m_sslSocket.lowest_layer().is_open();
-}
-
-void Socket::close()
-{
-    try
-    {
-        boost::system::error_code ec;
-        m_sslSocket.lowest_layer().shutdown(bi::tcp::socket::shutdown_both, ec);
-        if (m_sslSocket.lowest_layer().is_open())
-        {
-            m_sslSocket.lowest_layer().close();
-        }
-    }
-    catch (...)
-    {}
-}
-
-bi::tcp::endpoint Socket::remoteEndpoint(boost::system::error_code ec)
-{
-    return m_sslSocket.lowest_layer().remote_endpoint(ec);
-}
-
-bi::tcp::endpoint Socket::localEndpoint(boost::system::error_code ec)
-{
-    return m_sslSocket.lowest_layer().local_endpoint(ec);
-}
-
-bi::tcp::socket& Socket::ref()
-{
-    return m_sslSocket.next_layer();
-}
-
-ba::ssl::stream<bi::tcp::socket>& Socket::sslref()
-{
-    return m_sslSocket;
-}
-
-const NodeIPEndpoint& Socket::nodeIPEndpoint() const
-{
-    return m_nodeIPEndpoint;
-}
-
-void Socket::setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint)
-{
-    m_nodeIPEndpoint = std::move(_nodeIPEndpoint);
-}
-
-ba::io_context& Socket::ioService()
-{
-    return *m_ioService;
-}
-
 ASIOInterface::ASIOInterface(
     IOServicePool::Ptr _ioServicePool, std::string listenHost, uint16_t listenPort)
   : m_ioServicePool(std::move(_ioServicePool)),
@@ -92,20 +25,20 @@ ASIOInterface::ASIOInterface(
     boost::asio::socket_base::reuse_address optionReuseAddress(true);
     m_acceptor.set_option(optionReuseAddress);
     // The read path needs no runtime seam: awaitableReadSome compiles against the default policy
-    // (DefaultReadPolicy), whose invoke() directly dispatches async_read_some on the socket
-    // (TCP vs SSL by m_type) — see ASIOInterface.h.
+    // (DefaultReadPolicy), whose invoke() dispatches async_read_some on the socket's stream() —
+    // the TCP-vs-SSL choice is the compile-time stream type of the socket (see Socket.h).
 }
 
 ASIOInterface::~ASIOInterface() = default;
 
-void ASIOInterface::setType(int type)
-{
-    m_type = type;
-}
-
 ba::ssl::context* ASIOInterface::srvContext()
 {
     return m_srvContext.has_value() ? &*m_srvContext : nullptr;
+}
+
+ba::ssl::context* ASIOInterface::clientContext()
+{
+    return m_clientContext.has_value() ? &*m_clientContext : nullptr;
 }
 
 void ASIOInterface::setSrvContext(ba::ssl::context _srvContext)
@@ -130,20 +63,7 @@ boost::asio::steady_timer ASIOInterface::newAcceptorTimer(uint32_t timeout)
         m_acceptor.get_executor(), std::chrono::milliseconds(timeout));
 }
 
-std::shared_ptr<SocketFace> ASIOInterface::newSocket(bool _server, NodeIPEndpoint nodeIPEndpoint)
-{
-    std::shared_ptr<SocketFace> socket = std::make_shared<Socket>(m_ioServicePool->getIOService(),
-        _server ? *m_srvContext : *m_clientContext, nodeIPEndpoint);
-    return socket;
-}
-
 bi::tcp::acceptor* ASIOInterface::acceptor()
 {
     return &m_acceptor;
-}
-
-void ASIOInterface::setVerifyCallback(
-    const std::shared_ptr<SocketFace>& socket, VerifyCallback callback, bool /*unused*/)
-{
-    socket->sslref().set_verify_callback(std::move(callback));
 }

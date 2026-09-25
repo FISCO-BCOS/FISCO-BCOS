@@ -5,11 +5,12 @@
 
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/Common.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-task/Wait.h>
+#include <range/v3/view/empty.hpp>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -34,12 +35,12 @@ bool P2PSession::active()
     return m_run;
 }
 
-SessionFace::Ptr P2PSession::session()
+Session::Ptr P2PSession::session()
 {
     return m_session;
 }
 
-void P2PSession::setSession(std::shared_ptr<SessionFace> session)
+void P2PSession::setSession(Session::Ptr session)
 {
     m_session = std::move(session);
 }
@@ -136,9 +137,8 @@ void P2PSession::heartBeat()
                 task::wait([](std::shared_ptr<P2PSession> _self) -> task::Task<void> {
                     Message message;
                     message.setPacketType(GatewayMessageType::Heartbeat);
-                    ::ranges::any_view<bytesConstRef> emptyPayloads;
                     co_await _self->fastSendP2PMessage(
-                        message, std::move(emptyPayloads), Options{});
+                        message, ::ranges::views::empty<bytesConstRef>, Options{});
                 }(self));
             }
             catch (std::exception const& e)
@@ -165,30 +165,4 @@ void P2PSession::heartBeat()
             }
         });
     }
-}
-
-bcos::task::Task<std::optional<Message>> P2PSession::fastSendP2PMessage(
-    Message& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
-{
-    if (!m_session || !m_session->active()) [[unlikely]]
-    {
-        P2PSESSION_LOG(WARNING) << LOG_DESC("fastSendP2PMessage failed for invalid session")
-                                << LOG_KV("from", message.printSrcP2PNodeID())
-                                << LOG_KV("dst", message.printDstP2PNodeID());
-        co_return {};
-    }
-    auto service = m_service.lock();
-    if (!service)
-    {
-        co_return {};
-    }
-    // reset message using original long nodeID or short nodeID according to the protocol version
-    // Note: m_protocolInfo be setted when create P2PSession
-    service->resetP2pID(message, (ProtocolVersion)m_protocolInfo->version());
-    // the p2p message version must match the negotiated protocol version of this session: the
-    // encodeHeaderImpl of Message only encodes the ttl/src/dst routing fields for version > V0,
-    // so sending with the default (V0) version would silently drop the V2 routing fields and break
-    // multi-hop forwarding through ServiceV2 router tables
-    message.setVersion((uint16_t)m_protocolInfo->version());
-    co_return co_await m_session->fastSendMessage(message, std::move(payloads), options);
 }
