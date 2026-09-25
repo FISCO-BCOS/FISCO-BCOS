@@ -27,6 +27,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <boost/core/ignore_unused.hpp>
+#include <csignal>
 #include <cstddef>
 #include <cstdlib>
 #include <fstream>
@@ -38,6 +39,13 @@ using namespace bcos::boostssl;
 using namespace bcos;
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
+
+volatile std::sig_atomic_t g_running = 1;
+
+void signalHandler(int)
+{
+    g_running = 0;
+}
 
 void usage()
 {
@@ -81,6 +89,9 @@ int main(int argc, char** argv)
 
     std::cout << LOG_DESC(" [EventSub] start sdk ... ") << std::endl;
 
+    signal(SIGINT, signalHandler);
+    signal(SIGTERM, signalHandler);
+
     // construct eventsub params
     auto params = std::make_shared<bcos::cppsdk::event::EventSubParams>();
     params->setFromBlock(from);
@@ -118,11 +129,14 @@ int main(int argc, char** argv)
             }
         });
 
-    while (true)
+    while (g_running)
     {
         std::cout << LOG_DESC(" Main thread running ") << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(10000));
     }
+
+    sdk->stop();
+    std::cout << LOG_DESC(" [EventSub] exited gracefully.") << std::endl;
 
     return EXIT_SUCCESS;
 }

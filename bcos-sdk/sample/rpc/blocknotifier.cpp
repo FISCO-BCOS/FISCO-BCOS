@@ -26,6 +26,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <boost/core/ignore_unused.hpp>
+#include <csignal>
 #include <cstddef>
 #include <cstdlib>
 #include <fstream>
@@ -39,6 +40,13 @@ using namespace bcos::boostssl;
 using namespace bcos;
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
+
+volatile std::sig_atomic_t g_running = 1;
+
+void signalHandler(int)
+{
+    g_running = 0;
+}
 
 void usage()
 {
@@ -72,17 +80,23 @@ int main(int argc, char** argv)
 
     std::cout << LOG_DESC(" [BlockNotifier] start sdk ... ") << std::endl;
 
+    signal(SIGINT, signalHandler);
+    signal(SIGTERM, signalHandler);
+
     sdk->service()->registerBlockNumberNotifier(
         group, [](const std::string& _group, int64_t _blockNumber) {
             std::cout << " \t block notifier ===>>>> " << LOG_KV("group", _group)
                       << LOG_KV("blockNumber", _blockNumber) << std::endl;
         });
 
-    while (true)
+    while (g_running)
     {
         std::cout << LOG_DESC(" Main thread running ") << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(10000));
     }
+
+    sdk->stop();
+    std::cout << LOG_DESC(" [BlockNotifier] exited gracefully.") << std::endl;
 
     return EXIT_SUCCESS;
 }
