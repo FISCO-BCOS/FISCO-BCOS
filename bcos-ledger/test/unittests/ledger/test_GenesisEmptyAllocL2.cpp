@@ -14,8 +14,8 @@
  *  limitations under the License.
  *
  * @file test_GenesisEmptyAllocL2.cpp
- * @brief Empty-alloc L2 genesis must publish mpt::emptyRootHash() as the genesis
- *        stateRoot, not a zero h256. The combination (feature_l2_ethereum_compat
+ * @brief Empty-alloc Ethereum-lane genesis must publish mpt::emptyRootHash() as the genesis
+ *        stateRoot, not a zero h256. The combination (executor_version >= 2
  *        + no allocs) is rejected by NodeConfig::validateL2Invariants, but
  *        buildGenesisBlock is callable directly, and commitTrie() recognizes
  *        only emptyRootHash() as the from-empty marker — a zero parent root
@@ -49,16 +49,16 @@ struct GenesisEmptyAllocL2Fixture
 {
     GenesisEmptyAllocL2Fixture() { m_blockFactory = createBlockFactory(createNormalCryptoSuite()); }
 
-    // l2 flag on, allocs empty — constructed directly, bypassing
-    // NodeConfig::validateL2Invariants (which forbids this combination).
+    // Ethereum lane on (executor_version >= 2), allocs empty — constructed
+    // directly, bypassing NodeConfig::validateL2Invariants (which forbids this
+    // combination).
     static GenesisConfig makeEmptyAllocL2Genesis()
     {
         GenesisConfig genesisConfig;
         genesisConfig.m_txGasLimit = 3000000000;
         genesisConfig.m_compatibilityVersion =
             static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_6_VERSION);
-        genesisConfig.m_features.push_back(
-            FeatureSet{Features::Flag::feature_l2_ethereum_compat, 1});
+        genesisConfig.m_executorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
         genesisConfig.m_chainID = "901";
         genesisConfig.m_groupID = "group0";
         return genesisConfig;

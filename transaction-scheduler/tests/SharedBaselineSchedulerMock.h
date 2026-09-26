@@ -26,9 +26,11 @@
 // only existed because each test anchored its own stub on its own storage type for ADL.
 // The stub is found by ADL through the shared storage's template arguments (this
 // namespace is an associated namespace of the ViewType), and it hands out
-// g_stubFeatures — EVERY fixture using the shared types must assign g_stubFeatures in
-// its constructor (ledger::Features{} reproduces the old trivial stubs), because tests
-// in this binary share the one global.
+// g_stubFeatures / g_stubExecutorVersion — EVERY fixture using the shared types must
+// assign g_stubFeatures in its constructor (ledger::Features{} reproduces the old
+// trivial stubs) and g_stubExecutorVersion when it drives an Ethereum-lane scenario
+// (the default 0 is the legacy lane), because tests in this binary share the one
+// global.
 //
 // The single BaselineScheduler specialization is explicitly instantiated in
 // SharedBaselineSchedulerInst.cpp; the extern template declaration at the bottom keeps
@@ -44,10 +46,13 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/MultiLayerStorage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
+#include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-task/AwaitableValue.h"
 #include "bcos-task/Task.h"
 #include "bcos-transaction-scheduler/BaselineScheduler.h"
+#include <bcos-codec/rlp/Common.h>
+#include <bcos-codec/rlp/RLPEncode.h>
 #include <boost/test/unit_test.hpp>
 #include <cstdint>
 #include <map>
@@ -227,19 +232,28 @@ struct SharedMockScheduler
 /// that drives the shared scheduler (see the file-level comment).
 inline ledger::Features g_stubFeatures{};
 
-/// RAII guard for g_stubFeatures: resets it to the default Features at fixture teardown.
-/// The global is shared by every suite in the binary; without the reset, a fixture that
-/// forgets to assign it would silently inherit whichever features the previously-run
-/// suite left behind (mpt_state_root / l2_ethereum_compat leak across suites). Declare
-/// the guard BEFORE the BaselineScheduler member so it is destructed after it; every
-/// fixture using the shared scheduler should hold one and still assign g_stubFeatures
-/// in its constructor.
+/// The executor_version the shared getLedgerConfig stub hands out: 0 is the legacy lane,
+/// bcos::ledger::ETHEREUM_EXECUTOR_VERSION (2) the Ethereum lane ("scenario B" MPT from
+/// genesis on). Reset together with g_stubFeatures by ScopedStubFeatures.
+inline int g_stubExecutorVersion{0};
+
+/// RAII guard for g_stubFeatures / g_stubExecutorVersion: resets both to the defaults at
+/// fixture teardown. The globals are shared by every suite in the binary; without the
+/// reset, a fixture that forgets to assign them would silently inherit whichever values
+/// the previously-run suite left behind (mpt_state_root / executor_version leak across
+/// suites). Declare the guard BEFORE the BaselineScheduler member so it is destructed
+/// after it; every fixture using the shared scheduler should hold one and still assign
+/// g_stubFeatures in its constructor.
 struct ScopedStubFeatures
 {
     ScopedStubFeatures() = default;
     ScopedStubFeatures(ScopedStubFeatures const&) = delete;
     ScopedStubFeatures& operator=(ScopedStubFeatures const&) = delete;
-    ~ScopedStubFeatures() { g_stubFeatures = ledger::Features{}; }
+    ~ScopedStubFeatures()
+    {
+        g_stubFeatures = ledger::Features{};
+        g_stubExecutorVersion = 0;
+    }
 };
 
 /// Storage-level getLedgerConfig stub, found by ADL through the shared ViewType's
@@ -252,11 +266,71 @@ inline task::AwaitableValue<void> tag_invoke(ledger::tag_t<ledger::getLedgerConf
     protocol::BlockNumber /*blockNumber*/, protocol::BlockFactory& /*blockFactory*/)
 {
     ledgerConfig.setFeatures(g_stubFeatures);
+    ledgerConfig.setExecutorVersion(g_stubExecutorVersion);
     return {};
 }
 
 using SharedBaselineScheduler = scheduler_v1::BaselineScheduler<SharedMultiLayerStorage,
     SharedMockExecutor, SharedMockScheduler, ledger::LedgerInterface>;
+
+/// A minimal Web3-shaped (EIP-1559, type 0x02) filler transaction for Ethereum-lane
+/// (executor_version >= 2) blocks: finishExecute commits the txsRoot over each transaction's
+/// EIP-2718 wire bytes (calculateEthereumTransactionRoot -> reassembleWeb3RawTransaction),
+/// which throws on a FISCO-shaped payload — so scenario-B fixtures append this shape instead
+/// of createTransaction(0, "to", ...). The 65-byte signature is a dummy with a valid yParity
+/// last byte: reassembly only splices r||s||yParity onto the signing payload (the same idiom
+/// as TestMPTPrunerSyncWiring's MPSMakeWeb3TransferTx).
+inline std::shared_ptr<bcostars::protocol::TransactionImpl> makeWeb3FillerTx(
+    uint64_t nonce, crypto::Hash const& hashImpl)
+{
+    auto tx = std::make_shared<bcostars::protocol::TransactionImpl>();
+    auto& inner = tx->mutableInner();
+    inner.data.version = 1;
+    inner.data.blockLimit = 1000;
+    inner.data.chainID = "0x1";
+    inner.data.nonce = std::to_string(nonce);
+    inner.data.value = "0x0";
+    inner.data.gasPrice = "0x0";
+    inner.data.gasLimit = 100000;
+    inner.data.maxFeePerGas = "0x3b9aca00";
+    inner.data.maxPriorityFeePerGas = "0x0";
+    inner.type = static_cast<int>(bcos::protocol::TransactionType::Web3Transaction);
+    inner.web3TypedTxKind = 2;  // EIP-1559
+
+    evmc_address recipient{};
+    recipient.bytes[19] = 0x11;
+    inner.data.to = "0x1100000000000000000000000000000000000011";
+
+    // Signing payload: 0x02 || rlp([chainId, nonce, maxPriorityFeePerGas, maxFeePerGas,
+    // gasLimit, to, value, data, accessList]) — the canonical EIP-1559 shape.
+    bcos::bytes body;
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));            // chainId
+    bcos::codec::rlp::encode(body, nonce);                               // nonce
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));            // maxPriorityFeePerGas
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1000000000));   // maxFeePerGas
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(100000));       // gasLimit
+    bcos::codec::rlp::encode(
+        body, bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes))));
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));  // value
+    bcos::codec::rlp::encode(body, bcos::bytes{});             // data
+    body.push_back(bcos::codec::rlp::LIST_HEAD_BASE);          // empty accessList
+    bcos::bytes payloadBytes;
+    payloadBytes.push_back(0x02);
+    bcos::codec::rlp::encodeHeader(payloadBytes,
+        bcos::codec::rlp::Header{.isList = true, .payloadLength = body.size()});
+    payloadBytes.insert(payloadBytes.end(), body.begin(), body.end());
+
+    bcos::bytes signature(65, 0);
+    signature[31] = 0x12;
+    signature[63] = 0x34;
+    signature[64] = 0x01;
+    inner.extraTransactionBytes.assign(payloadBytes.begin(), payloadBytes.end());
+    inner.signature.assign(signature.begin(), signature.end());
+
+    tx->forceSender(bcos::bytes(std::begin(recipient.bytes), std::end(recipient.bytes)));
+    tx->calculateHash(hashImpl);
+    return tx;
+}
 }  // namespace bcos::test::sharedmock
 
 // Explicitly instantiated once in SharedBaselineSchedulerInst.cpp — consumer TUs must

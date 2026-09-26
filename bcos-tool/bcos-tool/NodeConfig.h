@@ -437,7 +437,7 @@ protected:
 private:
     void loadAlloc(boost::property_tree::ptree const& ptree);
 
-    // A6.5: L2 genesis alloc parsing (L2 mode gated by feature_l2_ethereum_compat)
+    // A6.5: Ethereum-lane genesis alloc parsing (the lane is gated by executor.version >= 2)
     void loadAllocs(boost::property_tree::ptree const& _genesisConfig);
     void loadEthGenesisHeader(boost::property_tree::ptree const& _genesisConfig);
     void validateL2Invariants();

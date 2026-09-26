@@ -88,7 +88,7 @@ GenesisConfig makeEthGenesisConfig()
     genesisConfig.m_txGasLimit = 3000000000;
     genesisConfig.m_compatibilityVersion =
         static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_6_VERSION);
-    genesisConfig.m_features.push_back(FeatureSet{Features::Flag::feature_l2_ethereum_compat, 1});
+    genesisConfig.m_executorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
     genesisConfig.m_chainID = "901";
     genesisConfig.m_groupID = "group0";
     // Empty allocs on purpose: the empty-alloc L2 branch publishes

@@ -46,11 +46,11 @@ BOOST_AUTO_TEST_CASE(laneBoundaries)
     BOOST_CHECK_EQUAL(suggestedPriorityFeeWei(ledger::OPSTACK_EXECUTOR_VERSION), 1'000'000u);
     BOOST_CHECK_EQUAL(suggestedPriorityFeeWei(ledger::OPSTACK_EXECUTOR_VERSION + 5), 1'000'000u);
 
-    // The lane distinction that matters here is executor_version vs the ledger's
-    // feature_l2_ethereum_compat state shape: the Eth lane may carry that flag (the
-    // pure-Ethereum executor on an MPT root) and must keep EIP-1559 semantics, matching
-    // eth_gasPrice. There is no separate OP-only predicate in this policy: blockBaseFee keys
-    // on the header shape (isOpEthereumBlock) and the tip on the >= ETHEREUM floor above.
+    // The lane distinction that matters here is executor_version alone: the Ethereum lane
+    // (executor_version >= ETHEREUM_EXECUTOR_VERSION — the pure-Ethereum executor on a full
+    // MPT state root) must keep EIP-1559 semantics, matching eth_gasPrice. There is no
+    // separate OP-only predicate in this policy: blockBaseFee keys on the header shape
+    // (isOpEthereumBlock) and the tip on the >= ETHEREUM floor above.
 }
 
 BOOST_AUTO_TEST_SUITE_END()

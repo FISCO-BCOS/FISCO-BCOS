@@ -449,11 +449,14 @@ public:
         }
 
         //    Feature set + the execution LedgerConfig (revision from the fork config;
-        //    features feed computeMptStateDelta's l2Mode and the parent-root rule).
+        //    executor_version pinned to the OP lane — this verifier only runs on
+        //    executor_version >= OPSTACK_EXECUTOR_VERSION chains, and computeMptStateDelta's
+        //    l2Mode plus the parent-root rule branch on it).
         bcos::ledger::Features features;
         co_await bcos::ledger::readFromStorage(features, view, number);
         bcos::ledger::LedgerConfig execLedgerConfig;
         execLedgerConfig.setBlockNumber(number);
+        execLedgerConfig.setExecutorVersion(bcos::ledger::OPSTACK_EXECUTOR_VERSION);
         execLedgerConfig.setEVMCRevision(cfg.rev);
         execLedgerConfig.setFeatures(features);
 
@@ -565,13 +568,13 @@ public:
 
         // 6. State root: the incremental world-state MPT over the executed view, from the
         //    parent block's committed state root (computeMptStateDelta — the L1 mechanism;
-        //    l2Mode follows feature_l2_ethereum_compat from the features read above). The new
+        //    l2Mode follows the executor_version pinned on execLedgerConfig above). The new
         //    trie nodes land in the view's top mutable layer and commit WITH the block, so
         //    the next block's incremental build resolves its parent nodes. Missing parent
         //    nodes are a storage fault (MPTInvariantViolation), never a silent empty-trie
         //    rebuild.
         auto const parentStateRoot = co_await ledger::mpt::parentStateRootFor(
-            view, features, number, *m_blockFactory);
+            view, bcos::ledger::OPSTACK_EXECUTOR_VERSION, features, number, *m_blockFactory);
         ledger::mpt::MPTDeltaLayer mptDelta;
         try
         {
@@ -582,8 +585,8 @@ public:
         {
             throw engine::OpStorageError(fmt::format(
                 "OpBlockVerifier: incremental MPT build at block {} failed — parent block {}'s "
-                "state root {} has no persisted trie nodes (feature_l2_ethereum_compat must be "
-                "active since genesis): {}",
+                "state root {} has no persisted trie nodes (the OP lane builds the complete MPT "
+                "from genesis): {}",
                 number, number - 1, parentStateRoot.hex(), e.what()));
         }
         catch (const ledger::mpt::MPTDecodeError& e)

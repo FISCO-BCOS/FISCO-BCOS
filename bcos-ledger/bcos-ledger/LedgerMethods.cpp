@@ -516,7 +516,7 @@ bcos::task::Task<bool> bcos::ledger::tag_invoke(ledger::tag_t<getFeature> /*unus
 {
     // Single-flag read: Ledger overrides fetchFeature with one SYS_CONFIG row instead of
     // fetchAllFeatures' scan of every feature key (~60 rows). Used by the historical
-    // state-read path (feature_l2_ethereum_compat) which needs exactly one flag; degrades
+    // state-read path (feature_mpt_state_root) which needs exactly one flag; degrades
     // to false (scenario A) on any failure, the same honest default as getFeatures'
     // empty-set fallback.
     try

@@ -87,8 +87,9 @@ enum class TransactionStatus : int32_t
     /// gasLimit exceeds the per-transaction cap (tx_gas_limit, or the Osaka constant cap).
     MaxGasLimitExceeded = 10023,
     /// A FISCO-native (tars BCOSTransaction) transaction on a chain that carries EIP-2718
-    /// envelopes only (feature_l2_ethereum_compat). It has no envelope an OP verifier can
-    /// re-derive, so one inside a block makes that verifier reject the whole block.
+    /// envelopes only (executor_version >= ETHEREUM_EXECUTOR_VERSION). It has no envelope an
+    /// OP verifier can re-derive, so one inside a block makes that verifier reject the whole
+    /// block.
     BcosTxNotAllowed = 10024,
 };
 

@@ -10,8 +10,9 @@
 
 // [ethereum] mode=opstack-el: the OP-Stack EL self-sync declaration. The genesis side is
 // bound to the OP lane (executor.version >= 3), the OP fork schedule
-// ([op_fork_timestamps]), the L2 genesis shape (feature_l2_ethereum_compat + [alloc.*] +
-// [eth_genesis_header]) and a non-zero [web3] chain_id; the config.ini side is bound to
+// ([op_fork_timestamps]), the Ethereum-lane genesis shape ([alloc.*] +
+// [eth_genesis_header], both implied by executor.version >= 3) and a non-zero [web3]
+// chain_id; the config.ini side is bound to
 // the genesis declaration both ways and is mutually exclusive with the engine-driven
 // block producers ([op_engine_rpc], enable_single_node_consensus).
 
@@ -34,13 +35,13 @@ const std::string kNode =
     "1234567890123456789012345678901234567890123456789012345678901234"
     "1234567890123456789012345678901234567890123456789012345678901234";
 
-/// The L2 genesis shape ([features] + [alloc.0] + [eth_genesis_header]); the header
+/// The Ethereum-lane genesis shape ([alloc.0] + [eth_genesis_header]); the OP lane's
+/// executor.version >= 3 implies both, so no [features] section is needed. The header
 /// values are the fixture from test_NodeConfigEthGenesisHeader.cpp (the hash matches
 /// the 21 fields, though only Ledger::buildGenesisBlock checks that).
 std::string l2Sections()
 {
-    return "[features]\nfeature_l2_ethereum_compat=1\n"
-           "[alloc.0]\naddress=0x43000000000000000000000000000000000000C0\n"
+    return "[alloc.0]\naddress=0x43000000000000000000000000000000000000C0\n"
            "balance=0\nnonce=0\ncode=0x6080604052\n"
            "[eth_genesis_header]\n"
            "parent_hash=0x0000000000000000000000000000000000000000000000000000000000000000\n"
@@ -66,7 +67,8 @@ std::string l2Sections()
 }
 
 /// OP-lane genesis (executor.version=3 + [op_fork_timestamps]) with a configurable
-/// [web3] chain_id, optional L2 sections and an optional [ethereum] mode declaration.
+/// [web3] chain_id, optional Ethereum-lane sections and an optional [ethereum] mode
+/// declaration.
 std::string opGenesis(std::string const& web3ChainId, bool l2, std::string const& ethSection)
 {
     return "[version]\ncompatibility_version=3.18.0\n"
@@ -173,17 +175,19 @@ BOOST_AUTO_TEST_CASE(opStackELRequiresOpForkSchedule)
         });
 }
 
-// The sync client replays an Ethereum-shaped OP chain: no L2 feature (and therefore no
-// [alloc.*] / [eth_genesis_header]) means no genesis anchor to sync from.
-BOOST_AUTO_TEST_CASE(opStackELRequiresL2GenesisShape)
+// The sync client replays an Ethereum-shaped OP chain: without the Ethereum-lane
+// genesis shape there is no genesis anchor to sync from. There is no feature-flag
+// check anymore — executor.version >= 3 already implies the lane, so the generic
+// lane binding fires instead: validateL2Invariants rejects the missing [alloc.*]
+// section before the opstack-el block is even reached.
+BOOST_AUTO_TEST_CASE(opStackELRequiresEthLaneGenesisShape)
 {
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     BOOST_CHECK_EXCEPTION(
         cfg.loadGenesisConfigFromString(
             opGenesis("11155420", false, "[ethereum]\nmode=opstack-el\n")),
         InvalidConfig, [](auto const& e) {
-            return errinfoContains(
-                e, "mode=opstack-el requires feature_l2_ethereum_compat enabled");
+            return errinfoContains(e, "requires a non-empty [alloc.*] section");
         });
 }
 

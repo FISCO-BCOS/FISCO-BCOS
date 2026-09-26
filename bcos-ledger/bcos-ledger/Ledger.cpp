@@ -152,15 +152,16 @@ task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
 {
     // One lane rule governs a lane end to end: the genesis alloc import
     // (importGenesisState), the executor, and this flat reader all derive the account table
-    // name through account::ethLaneAccountTableName when feature_l2_ethereum_compat is set —
-    // on an Ethereum-compatible chain the 8 system-tx addresses are ordinary accounts living
-    // under /apps/ — and through account::accountTableName otherwise (only the v1 lane keeps
-    // the /sys/ routing for the system-tx addresses). Both rules re-encode to the node-local
-    // layout, so a Binary node reads "/s/<20 raw bytes>" either way. _blockNumber gates the
-    // feature read: the flag is genesis-set (enableNumber 0) on L2 chains, so any historical
-    // block number resolves it correctly; one SYS_CONFIG row read (fetchFeature).
+    // name through account::ethLaneAccountTableName on the Ethereum lane
+    // (executor_version >= ETHEREUM_EXECUTOR_VERSION) — there the 8 system-tx addresses are
+    // ordinary accounts living under /apps/ — and through account::accountTableName otherwise
+    // (only the v1 lane keeps the /sys/ routing for the system-tx addresses). Both rules
+    // re-encode to the node-local layout, so a Binary node reads "/s/<20 raw bytes>" either
+    // way. The lane is genesis-fixed (SystemConfigPrecompiled refuses governance writes
+    // crossing ETHEREUM_EXECUTOR_VERSION), so any historical block number resolves it
+    // correctly; one SYS_CONFIG row read (fetchExecutorVersionAt).
     auto const contractTableName =
-        co_await fetchFeature(ledger::Features::Flag::feature_l2_ethereum_compat, _blockNumber) ?
+        co_await fetchExecutorVersionAt(_blockNumber) >= ledger::ETHEREUM_EXECUTOR_VERSION ?
             account::ethLaneAccountTableName(
                 bcos::Address{_address, bcos::Address::FromHex, bcos::Address::AlignRight}) :
             account::accountTableName(_address);
@@ -1570,8 +1571,8 @@ static void verifyL2FeatureFlagsSlot(
 // (op-sepolia: 2066 accounts) overflow the default 8 MiB stack. syncWait starts
 // each operation with a fresh stack; the surrounding function stays a coroutine
 // for its callers.
-static void importGenesisAccount(auto& storage, crypto::Hash const& hashImpl,
-    Features const& features, auto const& importAccount)
+static void importGenesisAccount(
+    auto& storage, crypto::Hash const& hashImpl, bool ethLane, auto const& importAccount)
 {
     // allocs from NodeConfig carry 0x-prefixed hex; LedgerTest builds them without
     // a prefix. Strip a leading 0x so both shapes unhex cleanly. The exact-width /
@@ -1607,13 +1608,13 @@ static void importGenesisAccount(auto& storage, crypto::Hash const& hashImpl,
         slots.emplace_back(evmKey, evmValue);
     }
 
-    // Naming rule: on an Ethereum-compatible (L2) chain the c_systemTxsAddress members are
-    // ordinary accounts living under their /apps/ logical name — the OP bridge writes them
-    // there — so the alloc tables derive through the lane rule; the v1 lane keeps
-    // EVMAccount's own /sys/ routing. Both re-encode to the node-local layout.
-    auto tableName = features.get(Features::Flag::feature_l2_ethereum_compat) ?
-                         account::ethLaneAccountTableName(address) :
-                         account::accountTableName(address, account::nodeAddressTableMode());
+    // Naming rule: on the Ethereum lane (executor_version >= ETHEREUM_EXECUTOR_VERSION) the
+    // c_systemTxsAddress members are ordinary accounts living under their /apps/ logical name
+    // — the OP bridge writes them there — so the alloc tables derive through the lane rule;
+    // the v1 lane keeps EVMAccount's own /sys/ routing. Both re-encode to the node-local
+    // layout.
+    auto tableName = ethLane ? account::ethLaneAccountTableName(address) :
+                               account::accountTableName(address, account::nodeAddressTableMode());
     account::EVMAccount account(storage, account::FromTableName{}, std::move(tableName));
     task::syncWait(account.create());
 
@@ -1638,8 +1639,8 @@ static void importGenesisAccount(auto& storage, crypto::Hash const& hashImpl,
     }
 }
 
-static task::Task<void> importGenesisState(
-    ::ranges::forward_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
+static task::Task<void> importGenesisState(::ranges::forward_range auto const& allocs,
+    auto& storage, const crypto::Hash& hashImpl, bool ethLane)
 {
     Features features;
     co_await ledger::readFromStorage(features, storage, 0);
@@ -1650,10 +1651,10 @@ static task::Task<void> importGenesisState(
     verifyL2FeatureFlagsSlot(allocs, features);
 
     // The account-table naming rule (lane rule vs the v1 /sys/ routing) lives in
-    // importGenesisAccount, keyed on feature_l2_ethereum_compat.
+    // importGenesisAccount, keyed on the executor_version lane.
     for (auto&& importAccount : allocs)
     {
-        importGenesisAccount(storage, hashImpl, features, importAccount);
+        importGenesisAccount(storage, hashImpl, ethLane, importAccount);
     }
 }
 
@@ -1994,18 +1995,14 @@ bool Ledger::buildGenesisBlock(
         // — the FISCO-BCOS native stateRoot for blocks >= 1 is an XOR of
         // per-block state-change hashes, a different domain from this MPT root,
         // so only the (previously empty) genesis block carries it.
-        bool const l2EthereumCompat = std::any_of(genesis.m_features.begin(),
-            genesis.m_features.end(), [](ledger::FeatureSet const& featureSet) {
-                return featureSet.flag == Features::Flag::feature_l2_ethereum_compat &&
-                       featureSet.enable > 0;
-            });
+        bool const ethLane = genesis.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION;
         if (!genesis.m_allocs.empty())
         {
             header->setStateRoot(ethStateTrie.root);
         }
-        else if (l2EthereumCompat)
+        else if (ethLane)
         {
-            // Empty-alloc L2 genesis: NodeConfig::validateL2Invariants rejects this
+            // Empty-alloc Ethereum-lane genesis: NodeConfig::validateL2Invariants rejects this
             // combination, but buildGenesisBlock is callable directly. Publish the
             // canonical empty-trie root instead of a zero h256 — commitTrie()
             // recognizes only emptyRootHash() as the from-empty marker
@@ -2114,10 +2111,9 @@ bool Ledger::buildGenesisBlock(
         // Write default features
         Features features;
         features.setGenesisFeatures(protocol::BlockVersion(versionNumber));
-        // feature_l2_ethereum_compat (if set in genesis.m_features) is handled
-        // by setGenesisFeatures(genesis.m_features, ...) below, which iterates
-        // every featureSet with enable > 0 and calls features.set(flag). No
-        // separate L2-mode set needed here.
+        // genesis.m_features entries are handled by setGenesisFeatures(genesis.m_features,
+        // ...) below, which iterates every featureSet with enable > 0 and calls
+        // features.set(flag).
 
         // tx count limit
         Entry txLimitEntry;
@@ -2173,10 +2169,11 @@ bool Ledger::buildGenesisBlock(
         }
 
         co_await setGenesisFeatures(genesis.m_features, features, *m_stateStorage);
-        co_await importGenesisState(
-            genesis.m_allocs, *m_stateStorage, *m_blockFactory->cryptoSuite()->hashImpl());
+        co_await importGenesisState(genesis.m_allocs, *m_stateStorage,
+            *m_blockFactory->cryptoSuite()->hashImpl(), ethLane);
 
-        // Scenario B (L2): block 1 builds the MPT incrementally on top of the genesis state
+        // Ethereum lane (executor_version >= 2): block 1 builds the MPT incrementally on top
+        // of the genesis state
         // root (buildAndCollect with the genesis root as parent) and reads the parent trie
         // through "/mpt/" state rows, so every genesis trie node — account trie plus each
         // account's storage sub-trie — must be persisted here, on the same storage the alloc
@@ -2185,7 +2182,7 @@ bool Ledger::buildGenesisBlock(
         // A (feature_mpt_state_root activated mid-chain) starts its first MPT block from
         // emptyRootHash() and needs no genesis nodes either. MPT pruning needs no genesis
         // seeding: its counts are rebuilt from the state roots at every startup (MPTPruner.h).
-        if (l2EthereumCompat)
+        if (ethLane)
         {
             // task::syncWait per node, not co_await: same stack-depth constraint as
             // importGenesisState — a real genesis emits thousands of trie nodes
@@ -2586,10 +2583,10 @@ task::Task<bcos::ledger::Features> Ledger::fetchAllFeatures(protocol::BlockNumbe
 task::Task<bool> Ledger::fetchFeature(
     bcos::ledger::Features::Flag _flag, protocol::BlockNumber _blockNumber)
 {
-    // One SYS_CONFIG row instead of fetchAllFeatures' read of every feature key (~61 rows).
+    // One SYS_CONFIG row instead of fetchAllFeatures' read of every feature key (~60 rows).
     // A flag is active when its enableNumber <= _blockNumber; absent row / decode failure
     // means "not enabled" (the honest scenario-A default). Used by the historical
-    // state-read path which needs exactly feature_l2_ethereum_compat.
+    // state-read path which needs exactly feature_mpt_state_root.
     auto const key = std::string(magic_enum::enum_name(_flag));
     auto const [error, entry] = m_stateStorage->getRow(SYS_CONFIG, key);
     if (error || !entry)
@@ -2599,6 +2596,36 @@ task::Task<bool> Ledger::fetchFeature(
     auto const [value, enableNumber] =
         bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
     co_return _blockNumber >= enableNumber;
+}
+
+task::Task<int64_t> Ledger::fetchExecutorVersionAt(protocol::BlockNumber _blockNumber)
+{
+    // Same single-row idiom as fetchFeature: an absent row is a pre-Ethereum-lane chain (0);
+    // a row whose enableNumber is after _blockNumber reads as 0 for that block.
+    auto const key =
+        std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version));
+    auto const [error, entry] = m_stateStorage->getRow(SYS_CONFIG, key);
+    if (error || !entry)
+    {
+        co_return 0;
+    }
+    auto const [value, enableNumber] =
+        bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
+    if (_blockNumber < enableNumber)
+    {
+        co_return 0;
+    }
+    try
+    {
+        co_return boost::lexical_cast<int64_t>(value);
+    }
+    catch (boost::bad_lexical_cast const&)
+    {
+        // Boot (readOnChainExecutorVersion) refuses an unparseable row, so reaching this
+        // means the row was corrupted afterwards -- corruption, not a legacy chain.
+        BOOST_THROW_EXCEPTION(std::runtime_error(
+            "on-chain executor_version is not an integer: '" + value + "'"));
+    }
 }
 bcos::storage::StorageInterface::Ptr bcos::ledger::Ledger::getStateStorage()
 {

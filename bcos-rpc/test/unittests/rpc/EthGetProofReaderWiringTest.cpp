@@ -21,7 +21,8 @@
  */
 
 #include "../common/RPCFixture.h"
-#include <bcos-framework/ledger/Features.h>
+#include <bcos-framework/ledger/LedgerConfig.h>
+#include <bcos-framework/ledger/SystemConfigs.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
@@ -190,11 +191,11 @@ BOOST_AUTO_TEST_CASE(UnwiredReaderStillReturns32603)
 // the adapter's nullopt-on-miss is what generateProof turns into BlockNotCommitted.
 BOOST_AUTO_TEST_CASE(MissingRootThroughAdapterReturns32004)
 {
-    // MPT active at the block (feature_l2_ethereum_compat), so the missing root is a genuine
-    // storage miss, not a predates-activation legacy XOR root.
-    bcos::ledger::Features features;
-    features.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
-    m_ledger->setFeatures(std::move(features));
+    // MPT active at the block (the Ethereum lane, executor_version >= 2), so the missing root
+    // is a genuine storage miss, not a predates-activation legacy XOR root.
+    m_ledger->setSystemConfig(
+        std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version)),
+        std::to_string(bcos::ledger::ETHEREUM_EXECUTOR_VERSION));
 
     buildTrie();
     wireReader();
