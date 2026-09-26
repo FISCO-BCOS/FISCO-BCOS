@@ -988,7 +988,8 @@ void seedCommittedGenesis(StorageType& mls, bcos::crypto::Hash::Ptr const& hashI
 {
     auto view = mls.fork();
     view.newMutable();
-    bcos::ledger::account::EVMAccount account(view, kImportEip1559Sender, /*rawAddress=*/false);
+    bcos::ledger::account::EVMAccount account(
+        view, kImportEip1559Sender, bcos::ledger::account::AddressTableMode::Hex);
     bcos::task::syncWait(account.create());
     bcos::task::syncWait(account.setCode({}, {}, hashImpl->emptyHash()));
     bcos::task::syncWait(account.setNonce("0"));

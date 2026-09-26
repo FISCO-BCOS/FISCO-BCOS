@@ -29,6 +29,7 @@
 #include <bcos-rpc/groupmgr/NodeService.h>
 #include <bcos-rpc/tarsRPC/RPCServer.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
+#include <bcos-tool/Exceptions.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <boost/atomic.hpp>
@@ -159,6 +160,108 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     }
 }
 
+void AirNodeInitializer::init(bcos::initializer::Params const& _params)
+{
+    // The config file is the source of truth for Ethereum L1 EL mode; the command-line
+    // flags only mirror it and any conflict is a hard error (fail fast, never silently
+    // prefer one side).
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    auto nodeConfig = std::make_shared<NodeConfig>(keyFactory);
+    nodeConfig->loadGenesisConfig(_params.genesisFilePath);
+    nodeConfig->loadConfig(_params.configFilePath);
+    validateEthereumELParams(_params, *nodeConfig);
+
+    // EL mode's NodeConfig-only checks run BEFORE the core node init below: init performs
+    // the MPT pruner's boot-time window walk and, with storage.mpt_prune_sweep_garbage, a
+    // whole-keyspace garbage sweep, so a config error (mis-edited bootnode file, drifting
+    // genesis anchor hash) must fail fast instead of after that side effect — the same
+    // placement rule as the OP-mode mpt_prune_window refusal. The full object-level
+    // validateConfig() still runs after construction below.
+    if (nodeConfig->ethereumELModeEnabled())
+    {
+        bcos::initializer::EthereumSyncInitializer::validateNodeConfig(*nodeConfig);
+    }
+    if (nodeConfig->opStackELModeEnabled())
+    {
+        bcos::initializer::OpStackSyncInitializer::validateNodeConfig(*nodeConfig);
+    }
+
+    init(_params.configFilePath, _params.genesisFilePath);
+
+    // Ethereum L1 EL mode: after the core node is initialized, build the self-sync driver
+    // over the SAME v2 scheduler + EthereumExecutor + global state storage the rest of the
+    // v2 pipeline uses. It downloads blocks from bootnodes, verifies and commits them.
+    if (nodeConfig->ethereumELModeEnabled())
+    {
+        auto initializer = m_nodeInitializer;
+        if (!initializer->ethereumExecutor() || !initializer->ethereumSerialScheduler())
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                      "Ethereum L1 EL mode requires executor_version >= 2 "
+                                      "(the v2 EthereumExecutor); set [executor] version=2 "
+                                      "in config.genesis"));
+        }
+        m_ethereumSync = std::make_shared<bcos::initializer::EthereumSyncInitializer>(nodeConfig,
+            initializer->ledger(), initializer->protocolInitializer()->blockFactory(),
+            initializer->ethereumSerialScheduler(), initializer->ethereumExecutor(),
+            initializer->globalStateStorageInitializer(), initializer->ioServicePool(),
+            initializer->mptCommitObserver());
+        m_ethereumSync->validateConfig();
+    }
+
+    // OP-Stack EL self-sync: same shape, one lane up. The verifier (OpBlockVerifier) builds
+    // its own serial scheduler + OpstackExecutor internally, so the driver needs only the
+    // shared ledger / block factory / global state storage / commit observer.
+    if (nodeConfig->opStackELModeEnabled())
+    {
+        auto initializer = m_nodeInitializer;
+        m_opStackSync = std::make_shared<bcos::initializer::OpStackSyncInitializer>(nodeConfig,
+            initializer->ledger(), initializer->protocolInitializer()->blockFactory(),
+            initializer->globalStateStorageInitializer(), initializer->ioServicePool(),
+            initializer->mptCommitObserver());
+        m_opStackSync->validateConfig();
+    }
+}
+
+void AirNodeInitializer::validateEthereumELParams(
+    bcos::initializer::Params const& _params, bcos::tool::NodeConfig const& _nodeConfig)
+{
+    if (_params.ethereumEL.has_value())
+    {
+        bool const wantEL = *_params.ethereumEL;
+        bool const configuredEL =
+            _nodeConfig.ethereumELModeEnabled() || _nodeConfig.opStackELModeEnabled();
+        if (wantEL && !configuredEL)
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                      "command-line --el requests EL self-sync mode but "
+                                      "[ethereum].mode is neither el nor opstack-el in " +
+                                      _params.configFilePath +
+                                      "; the config file is the source of truth — either "
+                                      "set [ethereum] mode=el|opstack-el or drop --el"));
+        }
+    }
+    if (_params.ethereumBootnodesFile.has_value())
+    {
+        auto const& configured = _nodeConfig.ethereumBootnodesFile();
+        // Normalise a leading "./" so `-b bootnodes.json` matches
+        // bootnodes_file=./bootnodes.json (same file, two spellings).
+        auto normalise = [](std::string const& p) {
+            return p.rfind("./", 0) == 0 ? p.substr(2) : p;
+        };
+        if (normalise(*_params.ethereumBootnodesFile) != normalise(configured))
+        {
+            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                      "command-line --bootnodes '" +
+                                      *_params.ethereumBootnodesFile +
+                                      "' differs from [ethereum].bootnodes_file='" + configured +
+                                      "' in " + _params.configFilePath +
+                                      "; the config file is the source of truth — align them "
+                                      "or drop --bootnodes"));
+        }
+    }
+}
+
 void AirNodeInitializer::start()
 {
     if (m_nodeInitializer)
@@ -166,7 +269,12 @@ void AirNodeInitializer::start()
         m_nodeInitializer->start();
     }
 
-    if (m_gateway)
+    // EL self-sync modes (ethereum.mode=el / opstack-el): the node is a pure execution-layer
+    // client — the FISCO gateway/P2P network is not part of the Ethereum/OP stack, so it
+    // stays dormant. The self-sync driver (bootnode download -> verify -> commit) is what
+    // moves the chain.
+    const bool elMode = (m_ethereumSync != nullptr) || (m_opStackSync != nullptr);
+    if (m_gateway && !elMode)
     {
         m_gateway->start();
     }
@@ -174,6 +282,16 @@ void AirNodeInitializer::start()
     if (m_rpc)
     {
         m_rpc->start();
+    }
+
+    if (m_ethereumSync)
+    {
+        m_ethereumSync->start();
+    }
+
+    if (m_opStackSync)
+    {
+        m_opStackSync->start();
     }
 
     if (m_tarsApplication && m_tarsConfig)
@@ -194,6 +312,14 @@ void AirNodeInitializer::stop()
 {
     try
     {
+        if (m_opStackSync)
+        {
+            m_opStackSync->stop();
+        }
+        if (m_ethereumSync)
+        {
+            m_ethereumSync->stop();
+        }
         if (m_rpc)
         {
             m_rpc->stop();

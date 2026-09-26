@@ -14,7 +14,11 @@ namespace bcos::evm::opstack
 {
 /// Read from the L1Block storage slots after this block's L1 attributes deposit
 /// has executed (consensus-critical).
-/// Layout mirrors op-geth L1Block.sol (slot 3/8 are packed, non-standard ABI).
+/// Layout mirrors op-geth L1Block.sol (slot 3/8 are packed, non-standard ABI). Slot numbers
+/// cross-checked against op-geth core/types/rollup_cost.go (L1BaseFeeSlot=1,
+/// L1FeeScalarsSlot=3, OverheadSlot=5, ScalarSlot=6, L1BlobBaseFeeSlot=7,
+/// OperatorFeeParamsSlot=8): number/timestamp pack into slot 0, so basefee is slot 1 — NOT
+/// slot 2 — in both the Bedrock and the Ecotone+ layouts.
 struct OpFeeParams
 {
     intx::uint256 l1_base_fee;             // slot 1 (whole slot)
@@ -26,13 +30,21 @@ struct OpFeeParams
     uint32_t operator_fee_scalar;          // slot 8 bytes[20,24)
     uint64_t operator_fee_constant;        // slot 8 bytes[24,32)
     uint16_t da_footprint_gas_scalar = 0;  // slot 8 bytes[18,20)
+    // Bedrock–Delta legacy L1-fee inputs (has_legacy_l1_formula), both whole slots; the scalar's
+    // precision is 1e6 (op-geth l1CostHelper divides by oneMillion). Ecotone+ keeps stale
+    // Bedrock-era values in these two slots (L1Block.sol @custom:legacy fields) — only the legacy
+    // formula may read them.
+    intx::uint256 l1_fee_overhead = 0;     // slot 5 (whole slot)
+    intx::uint256 l1_fee_scalar = 0;       // slot 6 (whole slot)
 };
 
 /// True when the Ecotone-formula input slots are live (op-geth switches formulas on the
-/// same probe): a non-zero slot3 scalar segment or a non-zero slot7 blob base fee.
-/// When false on an Ecotone-timestamped block, the Pre-Ecotone (Bedrock) formula on
-/// slots 1/5/6 still governs (specs.optimism.io/protocol/ecotone/l1-attributes.html:
-/// the activation block keeps setL1BlockValues; steady state arrives with the next block).
+/// same probe, rollup_cost.go's "firstEcotoneBlock" check): a non-zero slot3 scalar
+/// segment or a non-zero slot7 blob base fee. When false on an Ecotone-timestamped block,
+/// the Pre-Ecotone (Bedrock) formula on slots 1/5/6 still governs
+/// (specs.optimism.io/protocol/ecotone/l1-attributes.html: the activation block keeps
+/// setL1BlockValues; steady state arrives with the next block). Never false on a settled
+/// chain: a written L1 attributes set carries non-zero scalars.
 [[nodiscard]] inline bool ecotoneL1SlotsLive(const OpFeeParams& p) noexcept
 {
     return p.base_fee_scalar != 0 || p.blob_base_fee_scalar != 0 || p.blob_base_fee != 0;
@@ -57,6 +69,12 @@ struct OpFeeParams
 OpFeeParams unpackOpFeeParams(const evmc::bytes32& slot1, const evmc::bytes32& slot3,
     const evmc::bytes32& slot7, const evmc::bytes32& slot8) noexcept;
 
-/// Read slots 1/3/7/8 from OP_L1_BLOCK and unpack (a missing slot is treated as a zero word).
+/// Unpack from the six storage slots (Isthmus callers may ignore da_footprint_gas_scalar;
+/// pre-Ecotone callers ignore the slot 3/7/8 fields).
+OpFeeParams unpackOpFeeParams(const evmc::bytes32& slot1, const evmc::bytes32& slot3,
+    const evmc::bytes32& slot5, const evmc::bytes32& slot6, const evmc::bytes32& slot7,
+    const evmc::bytes32& slot8) noexcept;
+
+/// Read slots 1/3/5/6/7/8 from OP_L1_BLOCK and unpack (a missing slot is treated as a zero word).
 OpFeeParams loadOpFeeParams(const evmone::state::StateView& view) noexcept;
 }  // namespace bcos::evm::opstack

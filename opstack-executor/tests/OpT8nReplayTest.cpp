@@ -35,7 +35,7 @@
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpDepositEncode.h>
 #include <opstack-executor/OpstackExecutor.h>
-#include <opstack-executor/Storage2State.h>
+#include <bcos-evm/adapter/Storage2State.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <array>
@@ -1263,13 +1263,14 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
     // withdrawalsRoot is a header field from Shanghai (EIP-4895) on: Canyon..Holocene
     // carry the empty-trie root, Isthmus+ the MessagePasser storage root. Regolith
     // (London) headers carry NO withdrawalsRoot — the vector omits the key and the
-    // FISCO seal must keep the zero hash (field absent), not the empty-trie root.
-    if (h.isMember("withdrawalsRoot"))
-        ctx.checkField("withdrawalsRoot",
-            hexHash(test::from_json<hash256>(jAt(h, "withdrawalsRoot"))),
-            hexHash(seal.withdrawalsRoot));
-    else
-        ctx.checkField("withdrawalsRoot", hexHash(hash256{}), hexHash(seal.withdrawalsRoot));
+    // FISCO seal keeps the field absent (nullopt), not the empty-trie root.
+    ctx.checkOptional("withdrawalsRoot",
+        h.isMember("withdrawalsRoot") ?
+            std::optional{hexHash(test::from_json<hash256>(jAt(h, "withdrawalsRoot")))} :
+            std::nullopt,
+        seal.withdrawalsRoot.has_value() ?
+            std::optional{hexHash(*seal.withdrawalsRoot)} :
+            std::nullopt);
     // ── header.stateRoot (single leg: execution+engine vs op-geth consensus root) ─
     // Timing: the seal-stage ts is already the full post-finalize world state (same
     // anchor as the messagePasserStorage snapshot); later postState comparisons only

@@ -88,12 +88,6 @@
         "paillier"
       ]
     },
-    "tikv": {
-      "description": "TiKV storage backend dependencies",
-      "dependencies": [
-        "tikv-client-cpp"
-      ]
-    },
     "lightnode": {
       "description": "Light node dependencies",
       "dependencies": [
@@ -117,12 +111,6 @@
         "tarscpp",
         "hsm-crypto",
         "ethereum-tests"
-      ]
-    },
-    "etcd": {
-      "description": "ETCD dependencies",
-      "dependencies": [
-        "etcd-cpp-apiv3"
       ]
     },
     "tcmalloc": {

@@ -58,14 +58,14 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <cxxabi.h>
 #include <engine/bcos-engine/OpEngineService.h>
-#include <opstack-executor/Storage2State.h>
+#include <bcos-evm/adapter/Storage2State.h>
 #include <json/json.h>
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpScheduler.h>  // route A surgery (Task 6 P1-8): executeBlock drives
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <opstack-executor/OpstackExecutor.h>
-#include <opstack-executor/Storage2State.h>
-#include <opstack-executor/Storage2StateHelpers.h>
+#include <bcos-evm/adapter/Storage2State.h>
+#include <bcos-evm/adapter/Storage2StateHelpers.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>

@@ -45,15 +45,16 @@ EthBlockInfo buildBlockInfo(
         info.base_fee = static_cast<uint64_t>(bcos::u256(baseFeeHex));
     }
     // EIP-4844 blob gas parameters (Cancun+). The blob base fee is computed from
-    // the block's excess blob gas using the per-revision blob schedule (EIP-7840),
-    // matching evmone's statetest/blockchaintest loaders:
+    // the block's excess blob gas using the block's blob schedule (EIP-7840):
+    // the verifier stamps the timestamp-resolved schedule into the ledger config
+    // (BPO1/BPO2-aware); chains without one fall back to the revision defaults:
     //   blob_base_fee = compute_blob_gas_price(blob_params, excess_blob_gas)
     info.excess_blob_gas = config.excessBlobGas();
     info.blob_gas_used = config.blobGasUsed();
     if (rev >= EVMC_CANCUN)
     {
         const auto excess = config.excessBlobGas().value_or(0);
-        info.blob_base_fee = evm::compute_blob_gas_price(blobParamsForRevision(rev), excess);
+        info.blob_base_fee = evm::compute_blob_gas_price(blobParamsForBlock(config, rev), excess);
     }
     else
     {

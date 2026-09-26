@@ -33,7 +33,7 @@
 
 #include "support/OpEngineKarstTestHarness.h"
 #include "support/SequenceInvariants.h"
-#include <opstack-executor/RecentBlockHashes.h>
+#include <bcos-evm/adapter/RecentBlockHashes.h>
 
 #include <boost/test/unit_test.hpp>
 

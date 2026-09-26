@@ -24,7 +24,6 @@
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
-#include <bcos-framework/election/LeaderElectionInterface.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/multigroup/GroupInfo.h>
 #include <bcos-framework/multigroup/GroupInfoCodec.h>
@@ -107,7 +106,6 @@ protected:
     std::string generateIniConfig(bcos::tool::NodeConfig::Ptr _nodeConfig);
 
     void syncGroupNodeInfo();
-    virtual void initConsensusFailOver(bcos::crypto::KeyInterface::Ptr _nodeID);
 
     bcos::protocol::NodeArchitectureType m_nodeArchType;
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
@@ -128,8 +126,6 @@ protected:
     bcos::group::ChainNodeInfo::Ptr m_nodeInfo;
 
     bcos::group::GroupInfoCodec::Ptr m_groupInfoCodec;
-    bcos::protocol::MemberFactoryInterface::Ptr m_memberFactory;
-    bcos::election::LeaderElectionInterface::Ptr m_leaderElection;
     bcos::tool::NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
     bcos::IOServicePool::Ptr m_ioServicePool;
 };

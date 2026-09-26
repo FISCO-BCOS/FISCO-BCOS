@@ -717,7 +717,7 @@ void Service::onReceiveProtocol(
 void Service::updatePeerBlacklist(const std::set<std::string>& _strList, const bool _enable)
 {
     // update the config
-    m_host->peerBlacklist()->update(_strList, _enable);
+    m_host->peerBlacklist().update(_strList, _enable);
     // disconnect nodes in the blacklist
     if (_enable)
     {
@@ -742,7 +742,7 @@ void Service::updatePeerBlacklist(const std::set<std::string>& _strList, const b
 void Service::updatePeerWhitelist(const std::set<std::string>& _strList, const bool _enable)
 {
     // update the config
-    m_host->peerWhitelist()->update(_strList, _enable);
+    m_host->peerWhitelist().update(_strList, _enable);
     // disconnect nodes not in the whitelist
     if (_enable)
     {

@@ -22,6 +22,28 @@ target_link_libraries(bcos-crypto PUBLIC ${LIB_LIST} fmt::fmt)
 target_link_libraries(bcos-crypto PUBLIC bcos-concepts)
 set_target_properties(bcos-crypto PROPERTIES UNITY_BUILD "ON")
 
+# Build-time regression guard against the bundled-secp256k1 link hijack: runs on every
+# default build, including the -DTESTS=OFF release configuration that ships the affected
+# binaries (the ctest of the same name only exists when TESTS is on). Registered here
+# rather than at the top level because wedprcrypto's imported targets are
+# directory-scoped and invisible from the root scope. The inspection is Unix/GNU-only
+# (libffi_c_*.a naming + nm): the windows-2025 CI job builds with -DTESTS=OFF on the
+# x64-windows-static-release triplet, where the glob matches nothing and nm is absent,
+# so an unconditional ALL target would abort that build — register only where the
+# toolchain can actually be inspected.
+find_program(NM_EXECUTABLE nm)
+if(UNIX AND NM_EXECUTABLE)
+    # The archive directory is resolved per configuration at build time through the
+    # generator expression — a plain IMPORTED_LOCATION lookup at configure time misses
+    # imported targets that only carry per-config IMPORTED_LOCATION_<CONFIG>.
+    add_custom_target(check-wedpr-secp256k1 ALL
+        COMMAND ${CMAKE_COMMAND} -DBINARY_DIR=${CMAKE_BINARY_DIR}
+            "-DGENERATOR=${CMAKE_GENERATOR}"
+            "-DWEDPR_LIB_DIR=$<TARGET_FILE_DIR:wedprcrypto::crypto>"
+            -P ${CMAKE_SOURCE_DIR}/cmake/CheckWedprSecp256k1.cmake
+        COMMENT "Checking the wedprcrypto link surface for bundled secp256k1")
+endif()
+
 if(NOT WIN32)
     target_compile_options(bcos-crypto PUBLIC "-Wno-ignored-attributes")
 endif()

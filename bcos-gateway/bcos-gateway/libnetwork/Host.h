@@ -8,7 +8,7 @@
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/Message.h"
-#include "bcos-gateway/libnetwork/PeerBlackWhitelistInterface.h"
+#include "bcos-gateway/libnetwork/PeerBlackWhitelist.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Common.h"
@@ -110,8 +110,8 @@ public:
     virtual void setSSLContextPubHandlerWithoutExtInfo(
         std::function<bool(X509* x509, std::string& pubHex)> _sslContextPubHandlerWithoutExtInfo);
 
-    virtual void setSessionCallbackManager(
-        SessionCallbackManagerInterface::Ptr sessionCallbackManager);
+    // host-wide response-callback manager shared by every session this host creates
+    virtual SessionCallbackManager& sessionCallbackManager();
 
     virtual const std::shared_ptr<ASIOInterface>& asioInterface() const;
     virtual std::shared_ptr<SessionFactory> sessionFactory() const;
@@ -121,10 +121,10 @@ public:
     virtual uint32_t newSeq();
     virtual P2PInfo p2pInfo();
 
-    virtual void setPeerBlacklist(PeerBlackWhitelistInterface::Ptr _peerBlacklist);
-    virtual PeerBlackWhitelistInterface::Ptr peerBlacklist();
-    virtual void setPeerWhitelist(PeerBlackWhitelistInterface::Ptr _peerWhitelist);
-    virtual PeerBlackWhitelistInterface::Ptr peerWhitelist();
+    virtual void setPeerBlacklist(PeerBlackWhitelist _peerBlacklist);
+    virtual PeerBlackWhitelist& peerBlacklist();
+    virtual void setPeerWhitelist(PeerBlackWhitelist _peerWhitelist);
+    virtual PeerBlackWhitelist& peerWhitelist();
 
     // FIB-186 (vector D): run a session-teardown notification on the dedicated teardown executor
     // instead of the shared I/O pool. Teardown of established sessions (Service::onMessage's error
@@ -309,7 +309,9 @@ protected:
     // Session::drop() stops posting here once haveNetwork() goes false, so nothing is enqueued
     // after Host::stop().
     std::shared_ptr<bcos::IOServicePool> m_teardownPool;
-    std::shared_ptr<SessionCallbackManagerInterface> m_sessionCallbackManager;
+    // Host-wide response-callback manager, owned here and shared by every session this host
+    // creates (sessions hold a non-owning pointer to it).
+    SessionCallbackManager m_sessionCallbackManager;
 
     bcos::crypto::Hash::Ptr m_hashImpl;
     /// representing to the network state
@@ -357,9 +359,11 @@ protected:
 
     P2PInfo m_p2pInfo;
 
-    // Peer black list
-    PeerBlackWhitelistInterface::Ptr m_peerBlacklist{nullptr};
-    PeerBlackWhitelistInterface::Ptr m_peerWhitelist{nullptr};
+    // Peer black/white list, disabled by default (blocks/rejects no one)
+    PeerBlackWhitelist m_peerBlacklist{
+        PeerBlackWhitelist::Type::Blacklist, std::set<std::string>{}};
+    PeerBlackWhitelist m_peerWhitelist{
+        PeerBlackWhitelist::Type::Whitelist, std::set<std::string>{}};
 
     // FIB-184: session-cap accounting.
     std::size_t m_maxConcurrentSessions{DEFAULT_MAX_CONCURRENT_SESSIONS};

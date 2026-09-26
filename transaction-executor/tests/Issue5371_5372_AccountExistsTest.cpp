@@ -93,7 +93,7 @@ struct AccountExistsFixture
 
     ledger::account::EVMAccount<decltype(rollbackableStorage)> account(const evmc_address& a)
     {
-        return {rollbackableStorage, a, false};
+        return {rollbackableStorage, a, bcos::ledger::account::AddressTableMode::Hex};
     }
 
     h256 emptyCodeHash() const { return hashImpl->hash(bytesConstRef{}); }

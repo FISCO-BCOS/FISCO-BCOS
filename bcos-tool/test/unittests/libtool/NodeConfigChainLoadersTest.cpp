@@ -242,7 +242,6 @@ BOOST_AUTO_TEST_CASE(gettersAfterFullGenesisLoad)
     BOOST_CHECK_GT(cfg.compatibilityVersion(), 0U);
     BOOST_CHECK(!cfg.compatibilityVersionStr().empty());
     BOOST_CHECK_NO_THROW(cfg.genesisData());
-    BOOST_CHECK_NO_THROW(cfg.pdAddrs());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

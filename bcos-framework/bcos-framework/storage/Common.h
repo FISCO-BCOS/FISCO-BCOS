@@ -39,7 +39,6 @@ namespace bcos::storage
 {
 
 const std::string ROCKSDB = "rocksDB";
-const std::string TiKV = "TiKV";
 
 enum StorageError
 {

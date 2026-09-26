@@ -497,7 +497,7 @@ BOOST_AUTO_TEST_CASE(mptCommitSingleMergeIncludesTrieNodeRows)
 
     auto address = Address{};
     address.data()[0] = 0xAB;
-    auto const table = mpt::accountTableName(address);
+    auto const table = bcos::ledger::account::hexAccountTableName(address);
     plan[500] = {{table, "balance", "1000000"}};  // activation block: still XOR
     plan[501] = {{table, "balance", "42"}};       // first MPT block
 

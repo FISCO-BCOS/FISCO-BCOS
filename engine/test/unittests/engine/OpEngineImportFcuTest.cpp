@@ -24,7 +24,7 @@
 
 #include <opstack-executor/OpDepositEncode.h>  // encodeDepositEnvelope
 #include <opstack-executor/OpScheduler.h>
-#include <opstack-executor/RecentBlockHashes.h>
+#include <bcos-evm/adapter/RecentBlockHashes.h>
 #include <support/SeedPreState.h>
 
 #include <bcos-framework/ledger/EVMAccount.h>

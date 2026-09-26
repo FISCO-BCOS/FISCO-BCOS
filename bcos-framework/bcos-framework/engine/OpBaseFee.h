@@ -137,7 +137,7 @@ inline std::optional<std::string> validateOpExtraDataForLayout(
     return "unknown extraData layout";
 }
 
-/// One EIP-1559 fee step, shared by both clocks below (op-geth calcBaseFeeInner):
+/// One EIP-1559 fee step, shared by the clocks below (op-geth calcBaseFeeInner):
 /// parentBaseFee +/- max(1, parentBaseFee * |gasMetered - gasTarget| / gasTarget / denominator).
 /// Inputs to one EIP-1559 fee step. Named fields rather than three positional u256
 /// amounts: they are the same type, and transposing metered and target would silently
@@ -200,76 +200,63 @@ struct OpFeeStepParams
     return deltaFee < parentBaseFee ? parentBaseFee - deltaFee : bcos::u256(0);
 }
 
-/// Next-block baseFee from a Holocene-active parent's own extraData. Reachable only
-/// through calcOpNextBlockBaseFee below, which owns the pre-Holocene constants path.
-/// extraData layout (version byte first):
-///   9 bytes  = Holocene: 0x00 || denominator(u32 BE) || elasticity(u32 BE)
-///   17 bytes = Jovian:   0x01 || denominator || elasticity || minBaseFee(u64 BE)
-/// Fail-closed everywhere (no 8/2 default): empty, short, wrong-version, or zero
-/// denom/elasticity extraData throws; a Holocene+/Jovian parent missing baseFee
-/// (or a Jovian parent missing blobGasUsed) throws — op-geth dereferences those
-/// fields and would panic on nil, so silence is never an option; and the u256
-/// delta multiply is overflow-guarded where op-geth relies on unbounded big.Int.
-/// The caller decides parentIsJovian from the fork schedule; the minBaseFee floor
-/// is only read from exactly-17-byte extraData carrying 0x01.
-[[nodiscard]] inline bcos::u256 calcOpBaseFee(
-    bcos::protocol::BlockHeader const& parent, bool parentIsJovian)
+namespace detail
 {
-    auto extraView = parent.extraData();
-    std::span<const bcos::byte> extra{extraView.data(), extraView.size()};
-    if (auto shapeError = validateOpExtraDataShape(extra, /*allowEmpty=*/false))
-    {
-        throwOpBaseFeeError("OP parent extraData " + *shapeError);
-    }
-    auto [denominator32, elasticity32] =
-        decodeEip1559Params(extra.subspan(1, c_eip1559ParamsBytes));
-    uint64_t const denominator = denominator32;
-    uint64_t const elasticity = elasticity32;
-
-    // Jovian minBaseFee — requires exactly the engine's stamped/validated Jovian layout
-    // (17 bytes, version byte 0x01). A bare >=17 gate would read a floor out of a buffer
-    // the extraData validation would have rejected.
-    std::optional<bcos::u256> minBaseFee;
-    if (parentIsJovian && extra.size() == 17 && extra[0] == 0x01)
-    {
-        minBaseFee = bcos::u256(bcos::fromBigEndian<std::uint64_t>(extra.subspan(9, 8)));
-    }
-
-    bcos::u256 const gasTarget = parent.gasLimit() / elasticity;
+/// EIP-1559 arithmetic core shared by the engine (BlockHeader) and devp2p (raw header
+/// fields) entry points — op-geth consensus/misc/eip1559/eip1559.go calcBaseFeeInner plus
+/// the Jovian minBaseFee floor. op-geth computes with unbounded big.Int; the fixed-width
+/// u256 multiply is overflow-guarded here so an extreme (corrupt or adversarial) parent
+/// header fails closed instead of wrapping mod 2^256.
+inline bcos::u256 calcOpBaseFeeCore(bcos::u256 const& parentGasLimit, bcos::u256 gasMetered,
+    bcos::u256 const& parentBaseFee, std::uint64_t denominator, std::uint64_t elasticity,
+    std::optional<bcos::u256> const& minBaseFee)
+{
+    bcos::u256 const gasTarget = parentGasLimit / elasticity;
     if (gasTarget == 0) [[unlikely]]
     {
         throwOpBaseFeeError("invalid OP base-fee parameters: zero gas target");
     }
 
-    // Jovian meters max(gasUsed, blobGasUsed DA footprint). op-geth dereferences
-    // header.BlobGasUsed on the Jovian path; a Jovian parent without it is corrupt,
-    // so fail closed instead of silently under-counting the DA footprint.
-    bcos::u256 gasMetered = parent.gasUsed();
-    if (parentIsJovian)
+    bcos::u256 const u256Max = ~bcos::u256(0);
+    bcos::u256 result;
+    if (gasMetered == gasTarget)
     {
-        if (!parent.blobGasUsed().has_value())
+        // Exact target: the fee holds steady (delta 0) — still subject to the Jovian
+        // minBaseFee floor below, like every other arm.
+        result = parentBaseFee;
+    }
+    else if (gasMetered > gasTarget)
+    {
+        // baseFee increases: max(1, parentBaseFee * delta / gasTarget / denominator)
+        bcos::u256 const delta = gasMetered - gasTarget;
+        if (parentBaseFee > u256Max / delta) [[unlikely]]
         {
-            throwOpBaseFeeError("Jovian OP parent header is missing blobGasUsed");
+            throwOpBaseFeeError("OP base-fee delta computation overflows u256");
         }
-        if (*parent.blobGasUsed() > gasMetered)
+        bcos::u256 deltaFee = parentBaseFee * delta;
+        deltaFee /= gasTarget;
+        deltaFee /= denominator;
+        result = parentBaseFee + (deltaFee > 0 ? deltaFee : bcos::u256(1));
+        // The multiply guard cannot see the final add; deltaFee near the maximum
+        // would wrap exactly here, where big.Int would keep going.
+        if (result < parentBaseFee) [[unlikely]]
         {
-            gasMetered = *parent.blobGasUsed();
+            throwOpBaseFeeError("OP base-fee increase overflows u256");
         }
     }
-
-    // op-geth dereferences parent.BaseFee and panics on nil; a Holocene+ parent
-    // without a base fee is a corrupt header — fail closed rather than pricing the
-    // next block at 0.
-    if (!parent.baseFee().has_value())
+    else
     {
-        BOOST_THROW_EXCEPTION(InvalidEngineEncoding{}
-                              << bcos::errinfo_comment{"OP parent header is missing baseFee"});
+        // baseFee decreases: parentBaseFee - parentBaseFee * delta / gasTarget / denominator
+        bcos::u256 const delta = gasTarget - gasMetered;
+        if (parentBaseFee > u256Max / delta) [[unlikely]]
+        {
+            throwOpBaseFeeError("OP base-fee delta computation overflows u256");
+        }
+        bcos::u256 deltaFee = parentBaseFee * delta;
+        deltaFee /= gasTarget;
+        deltaFee /= denominator;
+        result = deltaFee < parentBaseFee ? parentBaseFee - deltaFee : bcos::u256(0);
     }
-    bcos::u256 const parentBaseFee = *parent.baseFee();
-    bcos::u256 result = opNextBaseFeeStep(OpFeeStepParams{.parentBaseFee = parentBaseFee,
-        .gasMetered = gasMetered,
-        .gasTarget = gasTarget,
-        .denominator = denominator});
 
     // Jovian minBaseFee floor — applies to all three arms.
     if (minBaseFee.has_value() && result < *minBaseFee)
@@ -277,6 +264,104 @@ struct OpFeeStepParams
         result = *minBaseFee;
     }
     return result;
+}
+}  // namespace detail
+
+/// Jovian metering: the base fee moves on max(gasUsed, blobGasUsed DA footprint).
+/// op-geth (calcBaseFeeInner) dereferences header.BlobGasUsed on the Jovian path; a
+/// Jovian parent without it is corrupt, so fail closed instead of silently
+/// under-counting the DA footprint.
+inline bcos::u256 opGasMetered(
+    bcos::u256 parentGasUsed, std::optional<bcos::u256> const& parentBlobGasUsed, bool parentIsJovian)
+{
+    if (parentIsJovian)
+    {
+        if (!parentBlobGasUsed.has_value())
+        {
+            throwOpBaseFeeError("Jovian OP parent header is missing blobGasUsed");
+        }
+        if (*parentBlobGasUsed > parentGasUsed)
+        {
+            return *parentBlobGasUsed;
+        }
+    }
+    return parentGasUsed;
+}
+
+/// Raw-header-fields next-block baseFee — op-geth eip1559.CalcBaseFee
+/// (consensus/misc/eip1559/eip1559.go) lifted off protocol::BlockHeader so the devp2p
+/// header-sync validator (which works on rlp-protocol's EthBlockHeaderData) shares the
+/// exact arithmetic with the engine. Semantics, keyed exactly like op-geth:
+///  - `parentIsHolocene` (Holocene active at the PARENT's timestamp): decode the EIP-1559
+///    denominator/elasticity — and, for a Jovian parent, the minBaseFee floor — from the
+///    parent's extraData (fail-closed on any shape violation, like op-geth which assumes
+///    ValidateOptimismExtraData already passed on the parent).
+///  - Pre-Holocene parent: `fallbackDenominator`/`fallbackElasticity` apply; op-geth
+///    sources them from the chain config with the denominator keyed on the CHILD's
+///    Canyon activation (BaseFeeChangeDenominator(header.Time)) — the caller resolves
+///    that pair.
+/// Throws InvalidEngineEncoding (fail-closed) on malformed parent data or u256 overflow.
+inline bcos::u256 calcOpBaseFeeFromFields(bcos::u256 const& parentGasLimit,
+    bcos::u256 const& parentGasUsed, bcos::u256 const& parentBaseFee,
+    std::optional<bcos::u256> const& parentBlobGasUsed,
+    std::span<const bcos::byte> parentExtraData, bool parentIsHolocene, bool parentIsJovian,
+    std::uint64_t fallbackDenominator, std::uint64_t fallbackElasticity)
+{
+    std::uint64_t denominator = fallbackDenominator;
+    std::uint64_t elasticity = fallbackElasticity;
+    std::optional<bcos::u256> minBaseFee;
+    if (parentIsHolocene)
+    {
+        if (auto shapeError = validateOpExtraDataShape(parentExtraData, /*allowEmpty=*/false))
+        {
+            throwOpBaseFeeError("OP parent extraData " + *shapeError);
+        }
+        auto [denominator32, elasticity32] =
+            decodeEip1559Params(parentExtraData.subspan(1, c_eip1559ParamsBytes));
+        denominator = denominator32;
+        elasticity = elasticity32;
+        // Jovian minBaseFee — only from exactly the Jovian layout (17 bytes, version
+        // byte 0x01); a 9-byte extraData under a Jovian parent decodes params but
+        // carries no floor (op-geth DecodeJovianExtraData best-effort behaviour).
+        if (parentIsJovian && parentExtraData.size() == c_jovianExtraDataBytes &&
+            parentExtraData[0] == c_jovianExtraDataVersion)
+        {
+            minBaseFee =
+                bcos::u256(bcos::fromBigEndian<std::uint64_t>(parentExtraData.subspan(9, 8)));
+        }
+    }
+    auto const gasMetered = opGasMetered(parentGasUsed, parentBlobGasUsed, parentIsJovian);
+    return detail::calcOpBaseFeeCore(
+        parentGasLimit, gasMetered, parentBaseFee, denominator, elasticity, minBaseFee);
+}
+
+/// Next-block baseFee (op-geth CalcBaseFee). Holocene-active and later only:
+/// a pre-Holocene parent has empty extraData and must use the prior 1559 constants
+/// in the caller, not this helper. extraData layout (version byte first):
+/// 9 bytes = Holocene: 0x00 || denominator(u32 BE) || elasticity(u32 BE)
+/// 17 bytes = Jovian: 0x01 || denominator || elasticity || minBaseFee(u64 BE)
+/// Fail-closed everywhere (no 8/2 default): empty, short, wrong-version, or zero
+/// denom/elasticity extraData throws; a Holocene+/Jovian parent missing baseFee
+/// (or a Jovian parent missing blobGasUsed) throws — op-geth dereferences those
+/// fields and would panic on nil, so silence is never an option; and the u256
+/// delta multiply is overflow-guarded where op-geth relies on unbounded big.Int.
+/// The caller decides parentIsJovian from the fork schedule; the minBaseFee floor
+/// is only read from exactly-17-byte extraData carrying 0x01.
+inline bcos::u256 calcOpBaseFee(bcos::protocol::BlockHeader const& parent, bool parentIsJovian)
+{
+    auto extraView = parent.extraData();
+    std::span<const bcos::byte> extra{extraView.data(), extraView.size()};
+    // op-geth dereferences parent.BaseFee and panics on nil; a Holocene+ parent
+    // without a base fee is a corrupt header — fail closed rather than pricing the
+    // next block at 0.
+    if (!parent.baseFee().has_value())
+    {
+        throwOpBaseFeeError("OP parent header is missing baseFee");
+    }
+    return calcOpBaseFeeFromFields(parent.gasLimit(), parent.gasUsed(), *parent.baseFee(),
+        parent.blobGasUsed(), extra, /*parentIsHolocene=*/true, parentIsJovian,
+        /*fallbackDenominator=*/0, /*fallbackElasticity=*/0 /* unused: Holocene always
+        decodes the parameters from the parent extraData */);
 }
 
 /// Which clock the next block's baseFee uses. Both flags describe the PARENT: the

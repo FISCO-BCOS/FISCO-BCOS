@@ -21,7 +21,6 @@
 #pragma once
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework/election/LeaderEntryPointInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/multigroup/ChainNodeInfoFactory.h>
 #include <bcos-framework/multigroup/GroupInfoFactory.h>
@@ -60,7 +59,5 @@ private:
     bcos::gateway::GatewayInterface::Ptr m_gateway;
     std::atomic_bool m_running = {false};
     bcos::IOServicePool::Ptr m_ioServicePool;
-
-    bcos::election::LeaderEntryPointInterface::Ptr m_leaderEntryPoint;
 };
 }  // namespace bcostars

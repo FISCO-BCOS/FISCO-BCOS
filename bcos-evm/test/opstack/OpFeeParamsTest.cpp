@@ -116,6 +116,9 @@ BOOST_AUTO_TEST_CASE(UnpacksDaFootprintGasScalarFromSlot8, * boost::unit_test::l
     BOOST_CHECK_EQUAL(p.operator_fee_constant, 13u);
 }
 
+// Bedrock–Delta legacy 布局（op-geth core/types/rollup_cost.go: L1BaseFeeSlot=1,
+// OverheadSlot=5, ScalarSlot=6；Bedrock L1Block.sol 的 number/timestamp 打包进 slot 0，
+// 所以 basefee 是 slot 1 而非 slot 2）。overhead/scalar 都是整槽 uint256。
 // clang-format off
 BOOST_AUTO_TEST_CASE(LoadReadsBedrockOverheadAndScalarSlots, * boost::unit_test::label("fork-ecotone") * boost::unit_test::label("fork-fjord") * boost::unit_test::label("fork-granite") * boost::unit_test::label("fork-holocene") * boost::unit_test::label("fork-isthmus") * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
 // clang-format on

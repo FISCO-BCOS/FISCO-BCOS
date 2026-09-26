@@ -5,6 +5,7 @@
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/MultiLayerStorage.h"
+#include "bcos-framework/testutils/ScopedNodeAddressTableMode.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
@@ -16,8 +17,8 @@
 #include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include "bcos-transaction-scheduler/SchedulerParallelImpl.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
-#include <bcos-utilities/IOServicePool.h>
 #include "transaction-executor/tests/TestBytecode.h"
+#include <bcos-utilities/IOServicePool.h>
 #include <benchmark/benchmark.h>
 #include <boost/throw_exception.hpp>
 #include <random>
@@ -70,6 +71,12 @@ struct Fixture
     };
     std::vector<Transfer> m_transfers;
     ledger::LedgerConfig m_ledgerConfig;
+    // Exercise the binary account-table layout: the encoding is node-local now, so arm
+    // the node-mode singleton directly. Member guard (not a constructor-body call) so the
+    // Hex default is restored when the fixture is destroyed — the benchmark binary shares
+    // the process with every fixture instantiation.
+    bcos::test::ScopedNodeAddressTableMode m_addressTableModeGuard{
+        ledger::account::AddressTableMode::Binary};
 
     Fixture()
       : m_cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
@@ -102,10 +109,6 @@ struct Fixture
         {
             m_scheduler.emplace<SchedulerSerialImpl>(m_ioServicePool);
         }
-
-        ledger::Features features;
-        features.set(ledger::Features::Flag::feature_raw_address);
-        m_ledgerConfig.setFeatures(features);
     }
 
     void deployContract()

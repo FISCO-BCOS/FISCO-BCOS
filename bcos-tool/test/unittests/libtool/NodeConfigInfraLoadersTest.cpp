@@ -61,15 +61,12 @@ BOOST_AUTO_TEST_CASE(syncConfigValidAndInvalid)
 }
 
 
-BOOST_AUTO_TEST_CASE(storageConfigDefaultsAndTikv)
+BOOST_AUTO_TEST_CASE(storageConfigDefaults)
 {
     LoaderProbe a;
     a.loadStorageConfig({});  // pure defaults — covers the bulk of the loader
     BOOST_CHECK_EQUAL(a.storageType(), "RocksDB");
-
-    LoaderProbe b;  // TiKV branch disables separate block/state
-    b.loadStorageConfig(fromIni("[storage]\ntype=TiKV\nenable_separate_block_state=true\n"));
-    BOOST_CHECK(!b.enableSeparateBlockAndState());
+    BOOST_CHECK(!a.enableSeparateBlockAndState());
 }
 
 
@@ -96,16 +93,6 @@ BOOST_AUTO_TEST_CASE(storageConfigMptPruneValidation)
     BOOST_CHECK_NO_THROW(
         sweepOn.loadStorageConfig(fromIni("[storage]\nmpt_prune_sweep_garbage=true\n")));
     BOOST_CHECK(sweepOn.mptPruneSweepGarbage());
-}
-
-
-BOOST_AUTO_TEST_CASE(failOverConfigDisabledAndError)
-{
-    LoaderProbe a;  // disabled → early return
-    BOOST_CHECK_NO_THROW(a.loadFailOverConfig(fromIni("[failover]\nenable=false\n"), true));
-    LoaderProbe b;  // enabled, enforce member id, empty → throws
-    BOOST_CHECK_THROW(b.loadFailOverConfig(fromIni("[failover]\nenable=true\n"), true),
-        bcos::tool::InvalidConfig);
 }
 
 

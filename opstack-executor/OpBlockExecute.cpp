@@ -328,9 +328,9 @@ bcos::bytes encodeReceiptForRoot(
     // Regolith -> rlp([status, cum, bloom, logs]) — the pre-Canyon
     // receipt hash inadvertently omitted the deposit nonce too, so the meta's API-level
     // deposit_nonce is NOT part of the consensus leaf pre-Canyon. runDeposit fills the
-    // version iff fork >= Canyon; meta presence and fork must agree in both directions
-    // or the leaf would silently change shape — this path's consensus check (and the
-    // engine helper's internal-error check), before the shared encoder runs.
+    // version iff fork >= Canyon; the version's presence and the fork must agree in both
+    // directions or the leaf would silently change shape — this path's consensus check (and
+    // the engine helper's internal-error check), before the shared encoder runs.
     // The shared encoder throws the ledger's EthReceiptEncodeError; translate it into this
     // path's consensus-rejection type so callers keep mapping one error family (-32603).
     try
@@ -339,7 +339,14 @@ bcos::bytes encodeReceiptForRoot(
         {
             const auto& meta = r.opStackMeta();
             const bool wantsVersion = cfg.fork >= OpFork::Canyon;
-            if (!meta || meta->deposit_receipt_version.has_value() != wantsVersion)
+            // A pre-Regolith (Bedrock) deposit's meta carries NEITHER field, which the tars
+            // carrier round-trips as nullopt (the all-empty legacy-receipt heuristic), so meta
+            // presence itself is only checkable Canyon+; what must agree in both directions on
+            // every fork is the version's PRESENCE (a Regolith receipt carrying a version would
+            // silently lengthen the pre-Canyon leaf, a Canyon+ receipt missing it shorten it).
+            const bool hasVersion =
+                meta.has_value() && meta->deposit_receipt_version.has_value();
+            if (hasVersion != wantsVersion)
                 throw OpConsensusError(
                     "op block: deposit receipt nonce/version missing or fork-inconsistent");
             if (wantsVersion && !meta->deposit_nonce)
@@ -375,6 +382,38 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
     receiptLeaves.reserve(result.receipts.size());
     for (size_t i = 0; i < result.receipts.size(); ++i)
     {
+        // Deposit receipt fork matrix (op-geth state_processor.go MakeReceipt / receipt.go
+        // EncodeIndex + spec deposits.md "Deposit Receipt"): the meta fields the receipt
+        // carries must match the fork. Pre-Regolith: neither field (and an all-empty meta
+        // round-trips as nullopt). Regolith–Delta: deposit_nonce only (the receipts-root
+        // leaf still omits it — op-geth's EncodeIndex quirk, see encodeReceiptLeaf).
+        // Canyon+: deposit_nonce + deposit_receipt_version=1. The receipts on this path
+        // always come from this node's own runDeposit, so a matrix violation is an internal
+        // fault surfaced as a consensus rejection (fail-closed — the alternative is silently
+        // committing a leaf the peers did not).
+        if (result.txTypes[i] == static_cast<uint8_t>(kDepositTxType))
+        {
+            const auto& meta = result.receipts[i]->opStackMeta();
+            const bool hasNonce = meta.has_value() && meta->deposit_nonce.has_value();
+            const bool hasVersion =
+                meta.has_value() && meta->deposit_receipt_version.has_value();
+            if (cfg.has_deposit_receipt_version)  // Canyon+
+            {
+                if (!hasNonce || !hasVersion)
+                    throw OpConsensusError(
+                        "op block: Canyon+ deposit receipt missing deposit nonce/receipt "
+                        "version");
+            }
+            else
+            {
+                if (hasVersion)
+                    throw OpConsensusError(
+                        "op block: pre-Canyon deposit receipt carries deposit receipt version");
+                if (hasNonce && !cfg.regolith_deposit_fixes)
+                    throw OpConsensusError(
+                        "op block: pre-Regolith deposit receipt carries deposit nonce");
+            }
+        }
         receiptLeaves.emplace_back(
             encodeReceiptForRoot(*result.receipts[i], result.txTypes[i], cfg));
     }
@@ -400,10 +439,14 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
             seal.logsBloom.bytes[i] |= bloom[i];
     }
 
-    // Isthmus+: withdrawalsRoot = MessagePasser storage root, requestsHash = sha256("").
-    // Canyon..Holocene: withdrawals list is always empty → empty-trie root (EIP-4895).
-    // Regolith (London): EIP-4895 is not active — the header carries NO withdrawalsRoot,
-    // so the seal keeps the zero hash (= field absent; the replay gates on it).
+    // Isthmus+: withdrawalsRoot = MessagePasser storage root, requestsHash = sha256("")
+    // (EIP-7685 empty list; pre-Isthmus headers lack the field, nullopt).
+    // Canyon..Holocene: the L2 never processes withdrawal credits — OP headers carry an
+    // always-empty withdrawals list, so withdrawalsRoot = empty-trie root (EIP-4895,
+    // EmptyWithdrawalsHash 0x56e81f…b421).
+    // Regolith (London): EIP-4895 is not active — the header carries NO withdrawalsRoot
+    // (field absent, nullopt), so the seal keeps the zero hash (= field absent; the replay
+    // gates on it).
     if (cfg.fork >= OpFork::Isthmus)
     {
         seal.withdrawalsRoot = opStorageRoot(messagePasserStorage);
@@ -412,14 +455,20 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
     else if (cfg.fork >= OpFork::Canyon)
     {
         auto const emptyRoot = bcos::ledger::mpt::emptyRootHash();
-        std::memcpy(
-            seal.withdrawalsRoot.bytes, emptyRoot.data(), sizeof(seal.withdrawalsRoot.bytes));
+        evmone::hash256 empty{};
+        std::memcpy(empty.bytes, emptyRoot.data(), sizeof(empty.bytes));
+        seal.withdrawalsRoot = empty;
     }
 
-    // Jovian: header blobGasUsed slot = DA footprint (Σ da_footprint over non-deposit receipts).
-    // Deposits legitimately carry nullopt and are skipped. A missing optional on a non-deposit
+    // Header blobGasUsed is a Jovian+ field in this tree's seal semantics: Jovian reclaims
+    // the slot as the DA footprint (Σ da_footprint over non-deposit receipts). Deposits
+    // legitimately carry nullopt and are skipped. A missing optional on a non-deposit
     // receipt must not silently contribute 0 — that under-counts the header commitment the
     // same way a missing deposit nonce used to under-encode the receipts-root leaf.
+    // Below Jovian the slot stays ABSENT: op-geth's Ecotone+ t8n headers carry "0x0" but
+    // this tree's envelope deliberately does not mirror it pre-Jovian (the pinned-vector
+    // replay asserts absence; upstream's release-3.18.0 variant set 0 there and DIVERGEs
+    // against the regenerated op-geth envelope re-encode).
     if (cfg.has_da_footprint)
     {
         uint64_t footprint = 0;

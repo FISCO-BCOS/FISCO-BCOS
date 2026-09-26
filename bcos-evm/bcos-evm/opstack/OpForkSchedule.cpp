@@ -117,6 +117,34 @@ void ensureKarstIsOsaka(std::span<const OpForkActivation> activations)
 }
 }  // namespace
 
+// Bedrock: the ledger ladder's genesis rung (bcos::ledger::OpFork::Bedrock), reached only
+// by from-genesis replay through the free configAt() below. The executor enum has no
+// Bedrock enumerator (its values are index-bound to the codec table and engine::OpForkId),
+// so .fork aliases Regolith — exact for every threshold comparison the executor makes; the
+// rung difference rides regolith_deposit_fixes/has_legacy_l1_formula (see the enum note in
+// OpForkSchedule.h). nullptr precompiles selects evmone's built-in table for the revision
+// (same pattern as ecotoneConfig); the OP-specific override tables only exist Fjord+.
+const OpForkConfig& bedrockConfig() noexcept
+{
+    static const OpForkConfig cfg{
+        .fork = OpFork::Regolith,
+        .rev = EVMC_LONDON,
+        .precompiles = nullptr,
+        .disable_prague_requests = true,
+        .has_operator_fee = false,
+        .has_jovian_operator_formula = false,
+        .has_da_footprint = false,
+        .deposit_exempt_from_max_tx_gas = false,
+        .l1_fee_model = L1FeeModel::Bedrock,
+        .has_ecotone_l1_formula = false,
+        .has_legacy_l1_formula = true,
+        .regolith_deposit_fixes = false,
+        .has_deposit_receipt_version = false,
+        .has_withdrawals = false,
+    };
+    return cfg;
+}
+
 const OpForkConfig& regolithConfig() noexcept
 {
     static const OpForkConfig cfg{
@@ -129,10 +157,17 @@ const OpForkConfig& regolithConfig() noexcept
         .has_da_footprint = false,
         .deposit_exempt_from_max_tx_gas = false,
         .l1_fee_model = L1FeeModel::Bedrock,
+        .has_ecotone_l1_formula = false,
+        .has_legacy_l1_formula = true,
+        .regolith_deposit_fixes = true,
+        .has_deposit_receipt_version = false,
+        .has_withdrawals = false,
     };
     return cfg;
 }
 
+// Canyon moves the EVM base to Shanghai (EIP-1153/5656/6780; 4895 is consensus-only on an
+// L2 — headers carry an always-empty withdrawals list) and introduces depositReceiptVersion.
 const OpForkConfig& canyonConfig() noexcept
 {
     static const OpForkConfig cfg{
@@ -145,6 +180,36 @@ const OpForkConfig& canyonConfig() noexcept
         .has_da_footprint = false,
         .deposit_exempt_from_max_tx_gas = false,
         .l1_fee_model = L1FeeModel::Bedrock,
+        .has_ecotone_l1_formula = false,
+        .has_legacy_l1_formula = true,
+        .regolith_deposit_fixes = true,
+        .has_deposit_receipt_version = true,
+        .has_withdrawals = true,
+    };
+    return cfg;
+}
+
+// Delta changes nothing on the EL (span batches are a derivation-layer feature); it is
+// kept in the ladder to mirror op-node's naming and rollup.json keying. Like Bedrock it
+// has no enumerator here, so .fork aliases Canyon — exact for every EL threshold
+// (>= Canyon true, >= Ecotone false).
+const OpForkConfig& deltaConfig() noexcept
+{
+    static const OpForkConfig cfg{
+        .fork = OpFork::Canyon,
+        .rev = EVMC_SHANGHAI,
+        .precompiles = nullptr,
+        .disable_prague_requests = true,
+        .has_operator_fee = false,
+        .has_jovian_operator_formula = false,
+        .has_da_footprint = false,
+        .deposit_exempt_from_max_tx_gas = false,
+        .l1_fee_model = L1FeeModel::Bedrock,
+        .has_ecotone_l1_formula = false,
+        .has_legacy_l1_formula = true,
+        .regolith_deposit_fixes = true,
+        .has_deposit_receipt_version = true,
+        .has_withdrawals = true,
     };
     return cfg;
 }
@@ -161,6 +226,11 @@ const OpForkConfig& ecotoneConfig() noexcept
         .has_da_footprint = false,
         .deposit_exempt_from_max_tx_gas = false,
         .l1_fee_model = L1FeeModel::Ecotone,
+        .has_ecotone_l1_formula = true,
+        .has_legacy_l1_formula = false,
+        .regolith_deposit_fixes = true,
+        .has_deposit_receipt_version = true,
+        .has_withdrawals = true,
     };
     return cfg;
 }
@@ -177,6 +247,11 @@ const OpForkConfig& fjordConfig() noexcept
         .has_da_footprint = false,
         .deposit_exempt_from_max_tx_gas = false,
         .l1_fee_model = L1FeeModel::Fjord,
+        .has_ecotone_l1_formula = false,
+        .has_legacy_l1_formula = false,
+        .regolith_deposit_fixes = true,
+        .has_deposit_receipt_version = true,
+        .has_withdrawals = true,
     };
     return cfg;
 }
@@ -217,6 +292,11 @@ const OpForkConfig& isthmusConfig() noexcept
         .has_da_footprint = false,
         .deposit_exempt_from_max_tx_gas = false,
         .l1_fee_model = L1FeeModel::Fjord,
+        .has_ecotone_l1_formula = false,
+        .has_legacy_l1_formula = false,
+        .regolith_deposit_fixes = true,
+        .has_deposit_receipt_version = true,
+        .has_withdrawals = true,
     };
     return cfg;
 }
@@ -233,6 +313,11 @@ const OpForkConfig& jovianConfig() noexcept
         .has_da_footprint = true,
         .deposit_exempt_from_max_tx_gas = false,
         .l1_fee_model = L1FeeModel::Fjord,
+        .has_ecotone_l1_formula = false,
+        .has_legacy_l1_formula = false,
+        .regolith_deposit_fixes = true,
+        .has_deposit_receipt_version = true,
+        .has_withdrawals = true,
     };
     return cfg;
 }
@@ -381,5 +466,40 @@ uint64_t OpForkSchedule::baselineTimestamp() const
 std::span<const OpForkActivation> OpForkSchedule::jovianAndLaterActivations() const
 {
     return m_jovianAndLater;
+}
+
+const OpForkConfig& configAt(
+    const bcos::ledger::OpForkSchedule& schedule, uint64_t timestampSec) noexcept
+{
+    // The ladder itself is resolved by the single shared parser (ledger/OpForkSchedule.h);
+    // this only maps the resolved fork onto its executor config. The switch is over the
+    // FULL ledger ladder (Bedrock..Karst), hence the bcos::ledger:: qualifications —
+    // opstack::OpFork deliberately has no Bedrock/Delta enumerators.
+    switch (bcos::ledger::resolveOpFork(schedule, timestampSec))
+    {
+    case bcos::ledger::OpFork::Bedrock:
+        return bedrockConfig();
+    case bcos::ledger::OpFork::Regolith:
+        return regolithConfig();
+    case bcos::ledger::OpFork::Canyon:
+        return canyonConfig();
+    case bcos::ledger::OpFork::Delta:
+        return deltaConfig();
+    case bcos::ledger::OpFork::Ecotone:
+        return ecotoneConfig();
+    case bcos::ledger::OpFork::Fjord:
+        return fjordConfig();
+    case bcos::ledger::OpFork::Granite:
+        return graniteConfig();
+    case bcos::ledger::OpFork::Holocene:
+        return holoceneConfig();
+    case bcos::ledger::OpFork::Isthmus:
+        return isthmusConfig();
+    case bcos::ledger::OpFork::Jovian:
+        return jovianConfig();
+    case bcos::ledger::OpFork::Karst:
+        return karstConfig();
+    }
+    return bedrockConfig();  // unreachable: resolveOpFork is total
 }
 }  // namespace bcos::evm::opstack

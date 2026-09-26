@@ -22,6 +22,7 @@
 #include "Classify.h"
 #include "Constants.h"
 #include "Errors.h"
+#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
@@ -103,30 +104,44 @@ struct FlatAccountMeta
 /// parent flat state (spec §5.3 path 2: delta 层无该字段行的取 flat 值). Three O(1) named-row
 /// reads; NEVER a slot scan (spec §4.2).
 ///
+/// @p mode is the node's account-table mode (nodeAddressTableMode(), threaded down from the
+/// build call sites). Table routing is delegated to EVMAccount itself — the single owner of the
+/// AddressTableMode name-derivation rule — so this function never re-derives a table name:
+/// Hex reads the 40-hex table, Binary the 20-byte raw-address table, with no cross-layout
+/// fallback (a node is exactly one of the two; encoding changes go through the boot-time
+/// migration). Reads only; this function never writes.
+///
+/// @p ethLaneNaming selects the lane's naming rule (the OP lane passes its l2Mode here):
+/// the Storage2State bridge deliberately writes the c_systemTxsAddress members under their
+/// /apps/ logical name like any other account (in Ethereum they ARE ordinary accounts;
+/// Storage2State.h applyModifiedEntry explains), so on that lane the flat name comes from
+/// account::ethLaneAccountTableName — /apps/ logical, no /sys/ routing, re-encoded to the
+/// node layout — keeping this back-fill on the same logical row as the bridge in both
+/// encodings. The v1 lane passes false and keeps EVMAccount's /sys/ routing.
+///
 /// Missing rows take the Yellow Paper defaults: nonce/balance 0, codeHash = emptyCodeHash() —
 /// the account leaf encodes codeHash verbatim, so a zero h256 here would produce a wrong leaf
 /// hash. A codeHash row that is present but decodes to zero violates the executor contract
 /// (codeHash = keccak(code), never zero) and throws rather than committing a forking leaf.
-bcos::task::Task<FlatAccountMeta> readFlatAccountMeta(auto& flatView, bcos::Address const& addr)
+bcos::task::Task<FlatAccountMeta> readFlatAccountMeta(auto& flatView, bcos::Address const& addr,
+    account::AddressTableMode mode, bool ethLaneNaming = false)
 {
-    auto const table = accountTableName(addr);
+    account::EVMAccount<std::remove_reference_t<decltype(flatView)>> account =
+        ethLaneNaming ?
+            account::EVMAccount<std::remove_reference_t<decltype(flatView)>>(
+                flatView, account::FromTableName{}, account::ethLaneAccountTableName(addr)) :
+            account::EVMAccount<std::remove_reference_t<decltype(flatView)>>(flatView, addr, mode);
     FlatAccountMeta meta;
 
-    auto nonceEntry =
-        co_await bcos::storage2::readOne(flatView, executor_v1::StateKeyView{table, ROW_NONCE});
-    if (nonceEntry)
+    if (auto nonceEntry = co_await account.storageEntry(ROW_NONCE))
     {
         meta.nonce = detail::entryToU256(*nonceEntry);
     }
-    auto balanceEntry =
-        co_await bcos::storage2::readOne(flatView, executor_v1::StateKeyView{table, ROW_BALANCE});
-    if (balanceEntry)
+    if (auto balanceEntry = co_await account.storageEntry(ROW_BALANCE))
     {
         meta.balance = detail::entryToU256(*balanceEntry);
     }
-    auto codeHashEntry =
-        co_await bcos::storage2::readOne(flatView, executor_v1::StateKeyView{table, ROW_CODE_HASH});
-    if (codeHashEntry)
+    if (auto codeHashEntry = co_await account.storageEntry(ROW_CODE_HASH))
     {
         meta.codeHash = detail::entryToH256(*codeHashEntry);
         if (meta.codeHash == bcos::h256{})

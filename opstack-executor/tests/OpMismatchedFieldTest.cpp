@@ -75,7 +75,7 @@ BOOST_AUTO_TEST_CASE(ReportsWithdrawalsRoot)
 {
     C c = match();
     C a = match();
-    a.withdrawalsRoot.data()[0] = 0x01;
+    a.withdrawalsRoot = makeH256(0x01);
     BOOST_CHECK_EQUAL(*mismatchedFieldOf(c, a), "withdrawalsRoot");
 }
 
@@ -181,7 +181,8 @@ BOOST_AUTO_TEST_CASE(AnnouncedProjectsAllEightFields)
     BOOST_CHECK_EQUAL(announced.receiptsRoot, payload.receiptsRoot);
     BOOST_CHECK_EQUAL(announced.logsBloom.data()[0], 0xaa);  // byte-faithful bloom
     BOOST_CHECK_EQUAL(announced.logsBloom.data()[255], 0xbb);
-    BOOST_CHECK_EQUAL(announced.withdrawalsRoot, *payload.withdrawalsRoot);
+    BOOST_REQUIRE(announced.withdrawalsRoot.has_value());
+    BOOST_CHECK_EQUAL(*announced.withdrawalsRoot, *payload.withdrawalsRoot);
     BOOST_CHECK_EQUAL(announced.stateRoot, payload.stateRoot);
     BOOST_CHECK_EQUAL(announced.gasUsed, payload.gasUsed);
     BOOST_CHECK_EQUAL(announced.txRoot, txRoot);

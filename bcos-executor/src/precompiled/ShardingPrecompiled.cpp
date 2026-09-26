@@ -22,6 +22,7 @@
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
+#include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-table/src/ContractShardUtils.h"
 #include <boost/throw_exception.hpp>
@@ -259,7 +260,9 @@ void ShardingPrecompiled::linkShard(
         return;
     }
 
-    auto tableName = getContractTableName(BFSPrecompiled::getLinkRootDir(), contractAddress);
+    // Binary layout is a physical re-encoding of the Hex string
+    // (legacyAppsAccountTableName); no /sys/ routing in either mode.
+    auto tableName = ledger::account::legacyAppsAccountTableName(contractAddress);
 
     auto historyShard = ContractShardUtils::getContractShard(_executive->storage(), tableName);
     if (!historyShard.empty())
@@ -354,7 +357,8 @@ void ShardingPrecompiled::handleGetContractShard(
                            << "handleGetContractShard"
                            << LOG_KV("contractAddress", contractAddress);
 
-    auto tableName = getContractTableName(BFSPrecompiled::getLinkRootDir(), contractAddress);
+    // Mode-aware derivation, see linkShard: the shard row lives in the account table.
+    auto tableName = ledger::account::legacyAppsAccountTableName(contractAddress);
 
     auto shardName = ContractShardUtils::getContractShard(_executive->storage(), tableName);
     _callParameters->setExecResult(codec.encode(s256(CODE_SUCCESS), shardName));
@@ -397,7 +401,8 @@ void ShardingPrecompiled::handleSetContractShard(
 
     contractAddress = trimHexPrefix(contractAddress);
 
-    auto tableName = getContractTableName(BFSPrecompiled::getLinkRootDir(), contractAddress);
+    // Mode-aware derivation, see linkShard: the shard row lives in the account table.
+    auto tableName = ledger::account::legacyAppsAccountTableName(contractAddress);
     ContractShardUtils::setContractShard(_executive->storage(), tableName, shardName);
 }
 

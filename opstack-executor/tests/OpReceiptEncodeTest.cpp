@@ -477,6 +477,8 @@ BOOST_AUTO_TEST_CASE(DepositExplicitZeroNonceEncodesEmptyRlpItem)
 // Measure the "wedprcrypto breaks libc++ typed catch binary-wide" claim on THIS target.
 // If BOOST_CHECK_THROW binds OpConsensusError, the processOpBlock catch (const OpConsensusError&)
 // ladder is executable in a binary that already links ledger + protocol-tars + bcos-crypto.
+// Throw trigger: a deposit receipt carrying a receipt version without its nonce (the one
+// malformed deposit shape encodeReceiptLeaf still fails closed on).
 BOOST_AUTO_TEST_CASE(TypedCatchBindsOpConsensusErrorOnReceiptSuite)
 {
     auto receipt = kOpTestReceiptFactory->createReceipt(bcos::u256(21000), std::string{},

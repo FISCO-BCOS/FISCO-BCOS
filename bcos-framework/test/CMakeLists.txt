@@ -27,6 +27,7 @@ set(SOURCES unittests/storage2/TestMemoryStorage.cpp
     unittests/interfaces/FeaturesGenesisOnlyTest.cpp
     unittests/interfaces/FeaturesTest.cpp
     unittests/interfaces/TestTransactionExecutor.cpp
+    unittests/interfaces/OpForkScheduleTest.cpp
     unittests/mempool/TestAnyMemPool.cpp
     unittests/engine/TestAnyEngineService.cpp
     unittests/engine/TestDACaps.cpp)

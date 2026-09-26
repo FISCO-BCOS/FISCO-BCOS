@@ -23,7 +23,7 @@ using namespace bcos::executor;
 // still-blocked worker thread.
 //
 // Threads are created only when PromiseTransactionExecutive is actually
-// invoked (TiKV storage + sharding path only) and exit after the task
+// invoked (sharding path only) and exit after the task
 // completes, avoiding persistent resource consumption.
 // ---------------------------------------------------------------------------
 

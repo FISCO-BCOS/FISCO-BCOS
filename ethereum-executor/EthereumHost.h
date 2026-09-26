@@ -49,6 +49,10 @@ struct EthBlockInfo
     std::optional<uint64_t> excess_blob_gas;
     /// Blob gas price computed from excess_blob_gas (EIP-4844).
     std::optional<uint256> blob_base_fee;
+    /// The parent beacon block root (EIP-4788). Not part of evmc_tx_context —
+    /// only consumed as the block-start system-call input (EthSystemCalls.h),
+    /// so only the external-block verifier's system-call wiring fills it.
+    bytes32 parent_beacon_block_root;
 };
 
 /// Overrides applied only for the eth_call / eth_estimateGas dry-run path
@@ -157,7 +161,11 @@ class EthereumHost : public evmc::Host
     EthereumState<Storage>& m_state;
     EthBlockInfo const& m_block;
     BlockHashLookup m_blockHashLookup;
-    protocol::Transaction const& m_tx;
+    // nullptr in system-call mode (EthSystemCalls.h): there is no transaction,
+    // matching evmone's `const Transaction empty_tx{}` host — get_tx_context()
+    // then reports a zero origin and zero gas prices, exactly what upstream's
+    // default-constructed transaction yields.
+    protocol::Transaction const* m_tx;
     // By value, not by const-ref: the natural construction site for real
     // (call == false) execution passes EthCallParams{} as a temporary, and a
     // reference member would dangle past the full-expression. It is only two
@@ -174,7 +182,7 @@ class EthereumHost : public evmc::Host
 
 public:
     EthereumHost(evmc_revision rev, evmc::VM& vm, EthereumState<Storage>& state,
-        EthBlockInfo const& block, BlockHashLookup blockHashLookup, protocol::Transaction const& tx,
+        EthBlockInfo const& block, BlockHashLookup blockHashLookup, protocol::Transaction const* tx,
         EthCallParams const& callParams, uint64_t chainId)
       : m_rev{rev},
         m_vm{vm},
@@ -185,11 +193,14 @@ public:
         m_callParams{callParams},
         m_chainId{chainId}
     {
-        for (auto const& h : tx.blobVersionedHashes())
+        if (m_tx != nullptr)
         {
-            bytes32 hash{};
-            std::copy_n(h.begin(), sizeof(evmc_bytes32), hash.bytes);
-            m_blobHashes.push_back(hash);
+            for (auto const& h : m_tx->blobVersionedHashes())
+            {
+                bytes32 hash{};
+                std::copy_n(h.begin(), sizeof(evmc_bytes32), hash.bytes);
+                m_blobHashes.push_back(hash);
+            }
         }
     }
 
@@ -621,13 +632,18 @@ evmc_tx_context EthereumHost<Storage>::get_tx_context() const noexcept
     const auto base_fee = (m_rev >= EVMC_LONDON) ? m_block.base_fee : 0;
 
     // TODO: The effective gas price is already computed in transaction validation.
-    const auto max_gas_price = ethMaxGasPrice(m_tx, m_callParams);
-    const auto max_priority_gas_price = ethMaxPriorityGasPrice(m_tx, m_callParams);
+    // System-call mode (m_tx == nullptr) reports zero prices and a zero origin —
+    // evmone's system-call host passes a default-constructed Transaction, whose
+    // sender/gas fields are all zero; the four system contracts never read
+    // ORIGIN/GASPRICE, so this is parity, not an approximation.
+    const auto max_gas_price = m_tx != nullptr ? ethMaxGasPrice(*m_tx, m_callParams) : uint256{0};
+    const auto max_priority_gas_price =
+        m_tx != nullptr ? ethMaxPriorityGasPrice(*m_tx, m_callParams) : uint256{0};
     assert(max_gas_price >= base_fee || max_gas_price == 0);
     const auto priority_gas_price = std::min(max_priority_gas_price, max_gas_price - base_fee);
     const auto effective_gas_price = base_fee + priority_gas_price;
 
-    const auto sender = ethSender(m_tx);
+    const auto sender = m_tx != nullptr ? ethSender(*m_tx) : address{};
 
     return evmc_tx_context{
         evm::toEvmcBE<evmc::uint256be>(effective_gas_price),  // By EIP-1559.

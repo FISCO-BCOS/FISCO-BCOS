@@ -14,7 +14,6 @@
 
 [storage]
     enable_cache=true
-    pd_addrs=
     key_page_size=10240
 
 [executor]

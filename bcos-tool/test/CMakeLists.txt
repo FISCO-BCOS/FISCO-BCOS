@@ -35,6 +35,7 @@ set_source_files_properties("unittests/libtool/NodeConfigOpForkScheduleTest.cpp"
 set_source_files_properties("unittests/libtool/NodeConfigOpForkTimestampsTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("unittests/libtool/NodeConfigOpEip1559Test.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("unittests/libtool/NodeConfigLaneMatrixTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_source_files_properties("unittests/libtool/NodeConfigOpStackELTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 
 target_link_libraries(${TEST_BINARY_NAME} PUBLIC tool bcos-crypto Boost::unit_test_framework)

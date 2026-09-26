@@ -1,6 +1,7 @@
 #pragma once
 
 #include <bcos-framework/ledger/GenesisConfig.h>
+#include <bcos-framework/ledger/OpForkSchedule.h>
 #include <evmc/evmc.hpp>
 
 #include <cstdint>
@@ -22,9 +23,12 @@ namespace bcos::evm::opstack
 // clang-format off
 //   OP fork  | Ethereum base | EVM rev (FB)  | FB status
 //   ---------+---------------+---------------+--------------------------------------------
-//   Bedrock  | London        | —             | not modeled (unreachable; first fork is Regolith)
+//   Bedrock  | London        | EVMC_LONDON   | modeled via bedrockConfig() (ledger-ladder rung;
+//           |               |               | .fork aliases Regolith — see the note below)
 //   Regolith | London        | EVMC_LONDON   | modeled; deposit-tx fixes, Bedrock L1 fee
 //   Canyon   | Shanghai      | EVMC_SHANGHAI | modeled; EIP-4895/1153/5656/6780, Bedrock L1 fee
+//   Delta    | Shanghai      | EVMC_SHANGHAI | modeled via deltaConfig() (ledger-ladder rung,
+//           |               |               | no EL change; .fork aliases Canyon)
 //   Ecotone  | Cancun        | EVMC_CANCUN   | modeled; blob L1 fee (EIP-4844/4788/7516)
 //   Fjord    | Cancun        | EVMC_CANCUN   | modeled; FastLZ L1 fee, p256 active
 //   Granite  | Cancun        | EVMC_CANCUN   | modeled; 8 precompile size limits
@@ -44,6 +48,19 @@ namespace bcos::evm::opstack
 //     karstPrecompileOverrides). EIP-7825 per-tx gas cap gates on Osaka with deposits
 //     exempt (see runDeposit). Production parse accepts any contiguous EL fork range,
 //     so Karst is nameable as a baseline or after any earlier activation.
+//
+// The FULL ladder — Bedrock..Karst including Delta — lives in
+// bcos::ledger::OpFork (bcos-framework/ledger/OpForkSchedule.h), the single
+// fork-activation parser shared with the devp2p header validator
+// (ledger::resolveOpFork). This executor-side enum deliberately stays 9-rung
+// (Regolith..Karst): its values index the ledger codec's c_opForkNames table and
+// engine::OpForkId (static_asserts in OpForkSchedule.cpp), and every exhaustive
+// switch over it (configForFork, tryEngineForkId) must keep compiling unchanged.
+// The two extra ledger rungs are covered by bedrockConfig()/deltaConfig() below,
+// whose .fork aliases the nearest modeled rung (Regolith for Bedrock, Canyon for
+// Delta) — exact for every threshold comparison the executor makes — while the
+// rung-precise behavior rides the flags below (has_legacy_l1_formula,
+// regolith_deposit_fixes, has_deposit_receipt_version, has_withdrawals).
 // ────────────────────────────────────────────────────────────────────────────
 enum class OpFork
 {
@@ -85,10 +102,31 @@ struct OpForkConfig
     // When true, runDeposit passes enforce_max_tx_gas=false (EIP-7825 deposit exemption).
     bool deposit_exempt_from_max_tx_gas{};
     L1FeeModel l1_fee_model{};
+    // Release-line (#5632) three-state across these two flags, kept in sync with
+    // l1_fee_model above (Bedrock model <-> has_legacy_l1_formula, Ecotone <->
+    // has_ecotone_l1_formula, Fjord <-> both false) so the two encodings cannot
+    // disagree:
+    //   has_legacy_l1_formula=true            -> Bedrock..Delta overhead/scalar formula
+    //   has_ecotone_l1_formula=true           -> Ecotone calldataGas formula
+    //   both false                            -> Fjord+ FastLZ formula
+    // (has_legacy_l1_formula implies has_ecotone_l1_formula=false.)
+    bool has_ecotone_l1_formula{};
+    bool has_legacy_l1_formula{};
+    // Regolith deposit fixes: deposits count a nonce, is_system_tx is deprecated, etc.
+    bool regolith_deposit_fixes{};
+    // Canyon+: deposit receipts carry depositReceiptVersion=1.
+    bool has_deposit_receipt_version{};
+    // Canyon+: headers carry the (always empty) withdrawals list field.
+    bool has_withdrawals{};
 };
 
+// Bedrock and Delta rungs of the ledger ladder (bcos::ledger::OpFork), reached only by
+// from-genesis replay through the free configAt() below. See the enum note for why their
+// .fork aliases the nearest modeled rung.
+const OpForkConfig& bedrockConfig() noexcept;
 const OpForkConfig& regolithConfig() noexcept;
 const OpForkConfig& canyonConfig() noexcept;
+const OpForkConfig& deltaConfig() noexcept;
 const OpForkConfig& ecotoneConfig() noexcept;
 const OpForkConfig& fjordConfig() noexcept;
 const OpForkConfig& graniteConfig() noexcept;
@@ -151,4 +189,15 @@ private:
     std::vector<OpForkActivation> m_activations;
     std::vector<OpForkActivation> m_jovianAndLater;
 };
+
+/// Maps the fork that bcos::ledger::resolveOpFork (the single OP fork-activation
+/// parser — see ledger/OpForkSchedule.h for the ladder semantics: isthmus-unset =
+/// Isthmus zero-start baseline, unscheduled intermediate rungs skipped,
+/// UINT64_MAX = not scheduled, `ts >= forkTime` activates) resolves for
+/// `timestampSec` onto that fork's executor config. Unlike the class above this
+/// resolves the raw ledger schedule (full Bedrock..Karst ladder, including the
+/// Bedrock/Delta rungs the class's codec channel cannot name), which is what
+/// from-genesis replay consumers (OpBlockVerifier) hold.
+const OpForkConfig& configAt(
+    const bcos::ledger::OpForkSchedule& schedule, uint64_t timestampSec) noexcept;
 }  // namespace bcos::evm::opstack

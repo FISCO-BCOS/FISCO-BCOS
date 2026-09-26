@@ -115,11 +115,10 @@ private:
 
     Transactions m_transactions;
     std::mutex m_mutex;
-    bool m_rawAddress{};
 
     /// The mempool stores the sender as raw address bytes (TransactionImpl::sender());
-    /// convert them to an evmc_address so EVMAccount resolves the same lower-case hex
-    /// account path (/apps/<hex>) the executor writes and reads.
+    /// convert them to an evmc_address so EVMAccount resolves the same account table path
+    /// the executor writes and reads.
     static evmc_address senderToAddress(std::string_view sender)
     {
         evmc_address addr{};
@@ -216,12 +215,13 @@ public:
                 continue;
             }
             // The mempool stores the sender as raw address bytes (forceSender), while the
-            // executor persists accounts under the lower-case hex path (/apps/<hex>) via the
-            // evmc_address EVMAccount overload. Passing the raw bytes through the string_view
-            // overload would treat them as a hex string and compute a wrong table path, so the
-            // nonce read below would miss the account entirely. Build an evmc_address instead
-            // so the same hex path is used as the executor.
-            ledger::account::EVMAccount account(state, senderToAddress(sender), m_rawAddress);
+            // executor persists accounts via the evmc_address EVMAccount overload. Passing
+            // the raw bytes through the string_view overload would treat them as a hex string
+            // and compute a wrong table path, so the nonce read below would miss the account
+            // entirely. Build an evmc_address instead so the same table path is used as the
+            // executor.
+            ledger::account::EVMAccount account(
+                state, senderToAddress(sender), ledger::account::nodeAddressTableMode());
 
             int64_t currentNonce = 0;
             if (auto nonceStr = task::syncWait(account.nonce()))
@@ -271,9 +271,10 @@ public:
         {
             auto sender = it->sender();
             auto nextIt = senderIndex.equal_range(sender).second;
-            // Same hex-path note as in seal(): the raw sender bytes must go through the
+            // Same table-path note as in seal(): the raw sender bytes must go through the
             // evmc_address overload so the account nonce read finds the executor's account.
-            ledger::account::EVMAccount account(state, senderToAddress(sender), m_rawAddress);
+            ledger::account::EVMAccount account(
+                state, senderToAddress(sender), ledger::account::nodeAddressTableMode());
             if (auto nonceStr = task::syncWait(account.nonce()))
             {
                 int64_t nonce = 0;

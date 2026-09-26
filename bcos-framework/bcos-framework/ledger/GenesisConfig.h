@@ -22,6 +22,7 @@
 
 #include "Features.h"
 #include "LedgerConfig.h"
+#include "OpForkSchedule.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/engine/OpEip1559Params.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
@@ -127,6 +128,11 @@ struct EthereumForkSchedule
     uint64_t m_bpo2Time = 0;
 };
 
+// The OP-lane fork schedule ([op_fork_timestamps]) lives in
+// ledger/OpForkSchedule.h next to the OpFork ladder enum and resolveOpFork, the
+// fork-activation parser shared by the executor and the devp2p header
+// validator; this header re-exports it for the config/genesis side.
+
 class GenesisConfig
 {
 public:
@@ -212,6 +218,15 @@ public:
     // [fork_timestamps] section pasted into an ordinary v2 genesis cannot waive
     // them. validateL2Invariants binds it to m_ethereumForkSchedule both ways.
     bool m_ethereumELMode = false;
+
+    // True iff config.genesis declares "[ethereum] mode=opstack-el" — the chain is
+    // an OP-Stack chain synced over devp2p (OpStackSyncInitializer), executor
+    // version >= OPSTACK_EXECUTOR_VERSION. Same chain-level pin semantics as
+    // m_ethereumELMode; validateL2Invariants binds it to m_opForkSchedule, the L2
+    // genesis shape ([eth_genesis_header] + [alloc.*]) and a non-zero [web3]
+    // chain_id. Mutually exclusive with m_ethereumELMode by construction (one
+    // mode string).
+    bool m_opStackELMode = false;
 
     // Canonical OP fork schedule. Parsed from genesis [op_fork_schedule]
     // canonical and persisted into s_chain_metadata at genesis when set; not

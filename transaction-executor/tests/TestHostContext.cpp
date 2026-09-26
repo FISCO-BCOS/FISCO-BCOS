@@ -6,6 +6,7 @@
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-framework/ledger/AccountTableName.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
@@ -22,7 +23,9 @@
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
+#include <bcos-framework/testutils/ScopedNodeAddressTableMode.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
+#include <bcos-utilities/BoostLog.h>
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
@@ -32,7 +35,6 @@
 #include <memory>
 #include <range/v3/algorithm/sort.hpp>
 #include <range/v3/algorithm/unique.hpp>
-#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos::task;
 using namespace bcos::storage2;
@@ -442,7 +444,8 @@ static bcos::task::Task<void> testNestConstructor(auto* self, bool web3)
 
     if (web3)
     {
-        bcos::ledger::account::EVMAccount account(self->storage, address1, false);
+        bcos::ledger::account::EVMAccount account(
+            self->storage, address1, bcos::ledger::account::AddressTableMode::Hex);
         auto nonce = co_await account.nonce();
         BOOST_REQUIRE(nonce.has_value());
         BOOST_TEST(nonce.value() == "11");
@@ -465,7 +468,8 @@ static bcos::task::Task<void> testNestConstructor(auto* self, bool web3)
         BOOST_CHECK_NE(address2, bcos::Address{});
         if (web3)
         {
-            bcos::ledger::account::EVMAccount account(self->storage, address2, false);
+            bcos::ledger::account::EVMAccount account(
+                self->storage, address2, bcos::ledger::account::AddressTableMode::Hex);
             auto nonce = co_await account.nonce();
             BOOST_REQUIRE(nonce.has_value());
             BOOST_TEST(nonce.value() == "1");
@@ -533,10 +537,10 @@ BOOST_AUTO_TEST_CASE(transferBalance)
         message.gas = 21000;
 
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> senderAccount(
-            rollbackableStorage, message.sender, false);
+            rollbackableStorage, message.sender, bcos::ledger::account::AddressTableMode::Hex);
         co_await senderAccount.setBalance(bcos::u256(1001));
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> recipientAccount(
-            rollbackableStorage, message.recipient, false);
+            rollbackableStorage, message.recipient, bcos::ledger::account::AddressTableMode::Hex);
         co_await recipientAccount.setBalance(bcos::u256(0));
 
         evmc_address origin{};
@@ -695,6 +699,442 @@ BOOST_AUTO_TEST_CASE(setStorageStatusLegacy)
         auto status4 = iface->set_storage(hostCtx, &helloworldAddress, &storageKey, &zeroValue);
         BOOST_CHECK_EQUAL(status4, EVMC_STORAGE_DELETED);  // buggy: should be ASSIGNED
 
+        co_return;
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(nodeAddressTableModeSingleton)
+{
+    namespace account = bcos::ledger::account;
+    // Default without the startup flow: Hex — the pre-detection behavior every library and
+    // test inherits.
+    BOOST_CHECK(account::nodeAddressTableMode() == account::AddressTableMode::Hex);
+
+    // Set/get round trip through both modes. The singleton is process-global, so the guard
+    // restores the Hex default on the way out (the startup flow sets it exactly once,
+    // single-threaded).
+    bcos::test::ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Hex);
+    for (auto mode : {account::AddressTableMode::Hex, account::AddressTableMode::Binary})
+    {
+        account::setNodeAddressTableMode(mode);
+        BOOST_CHECK(account::nodeAddressTableMode() == mode);
+    }
+}
+
+// The two layouts are disjoint namespaces: there is no runtime mixed mode, so a Binary-mode
+// account sees nothing of the hex table's rows and vice versa. A chain changes encoding only
+// through the one-shot boot-time migration ([storage] migrate_account_tables_to_binary),
+// which rewrites the physical keys — never through a per-read fallback.
+BOOST_AUTO_TEST_CASE(binaryAndHexLayoutsAreDisjoint)
+{
+    syncWait([this]() -> Task<void> {
+        namespace account = bcos::ledger::account;
+        auto address = bcos::unhexAddress("0x4200000000000000000000000000000000001234");
+        std::string const hexTable = "/apps/4200000000000000000000000000000000001234";
+
+        evmc_bytes32 slotKey{};
+        slotKey.bytes[31] = 0x11;
+        evmc_bytes32 slotValue{};
+        slotValue.bytes[31] = 0x42;
+
+        bcos::bytes code{0x60, 0x00, 0x60, 0x00, 0xf3};
+        auto const codeHash = hashImpl->hash(code);
+
+        // Old-layout rows: written through the Hex-mode account, exactly as an unmigrated
+        // node's blocks would have written them.
+        account::EVMAccount hexAccount(storage, address, account::AddressTableMode::Hex);
+        BOOST_CHECK_EQUAL(hexAccount.address(), hexTable);
+        co_await hexAccount.create();
+        co_await hexAccount.setNonce("7");
+        co_await hexAccount.setBalance(bcos::u256(12345));
+        co_await hexAccount.setCode(code, "the-abi", codeHash);
+        co_await hexAccount.setStorage(slotKey, slotValue);
+
+        // (a) Plain Binary mode sees nothing of the hex-table data.
+        account::EVMAccount binaryAccount(storage, address, account::AddressTableMode::Binary);
+        BOOST_CHECK(binaryAccount.address() != hexTable);
+        BOOST_CHECK(!(co_await binaryAccount.exists()));
+        BOOST_CHECK(!(co_await binaryAccount.nonce()).has_value());
+        BOOST_CHECK_EQUAL(co_await binaryAccount.balance(), bcos::u256(0));
+        BOOST_CHECK_EQUAL(co_await binaryAccount.codeHash(), bcos::h256{});
+        BOOST_CHECK(!(co_await binaryAccount.code()).has_value());
+        evmc_bytes32 const zeroValue{};
+        auto zeroSlot = co_await binaryAccount.storage(slotKey);
+        BOOST_CHECK(std::equal(std::begin(zeroSlot.bytes), std::end(zeroSlot.bytes),
+            std::begin(zeroValue.bytes), std::end(zeroValue.bytes)));
+
+        // (b) And the other way around: a fresh binary table is invisible in Hex mode.
+        co_await binaryAccount.create();
+        co_await binaryAccount.setNonce("8");
+        evmc_bytes32 newSlotKey{};
+        newSlotKey.bytes[31] = 0x22;
+        evmc_bytes32 newSlotValue{};
+        newSlotValue.bytes[31] = 0x77;
+        co_await binaryAccount.setStorage(newSlotKey, newSlotValue);
+
+        BOOST_CHECK(co_await binaryAccount.nonce() == std::optional<std::string>{"8"});
+        auto writtenSlot = co_await binaryAccount.storage(newSlotKey);
+        BOOST_CHECK(std::equal(std::begin(writtenSlot.bytes), std::end(writtenSlot.bytes),
+            std::begin(newSlotValue.bytes), std::end(newSlotValue.bytes)));
+        // The hex table keeps its old rows, untouched by the binary writes (no write-time
+        // twin removal exists anymore).
+        BOOST_CHECK(co_await hexAccount.nonce() == std::optional<std::string>{"7"});
+        auto untouchedSlot = co_await hexAccount.storage(newSlotKey);
+        BOOST_CHECK(std::equal(std::begin(untouchedSlot.bytes), std::end(untouchedSlot.bytes),
+            std::begin(zeroValue.bytes), std::end(zeroValue.bytes)));
+
+        co_return;
+    }());
+}
+
+// Account table-name coding helpers (ledger/AccountTableName.h): the two physical
+// encodings of one logical account table and the canonical form used for hashing.
+BOOST_AUTO_TEST_CASE(accountTableNameCoding)
+{
+    namespace account = bcos::ledger::account;
+    std::string const hexTable = "/apps/4200000000000000000000000000000000001234";
+    std::string const binTable = [&] {
+        auto address = bcos::unhexAddress("0x4200000000000000000000000000000000001234");
+        std::string name(account::BINARY_TABLE_PREFIX);
+        name.append(reinterpret_cast<const char*>(address.bytes), sizeof(address.bytes));  // NOLINT
+        return name;
+    }();
+    BOOST_REQUIRE_EQUAL(binTable.size(), 23u);
+
+    // Probes: prefix+shape disambiguate the two encodings.
+    BOOST_CHECK(account::isHexAccountTableName(hexTable));
+    BOOST_CHECK(!account::isBinaryAccountTableName(hexTable));
+    BOOST_CHECK(account::isBinaryAccountTableName(binTable));
+    BOOST_CHECK(!account::isHexAccountTableName(binTable));
+
+    // F1 regression pin: a "/apps/" table with a 20-char name (mkdir/link/CNS can produce
+    // these) is a plain BFS table, NOT a binary account table — the binary layout lives
+    // under the reserved "/s/" namespace, so classification is never by length alone.
+    std::string const twentyCharAppsName = "/apps/" + std::string(20, 'x');
+    BOOST_CHECK(!account::isBinaryAccountTableName(twentyCharAppsName));
+    BOOST_CHECK(!account::isHexAccountTableName(twentyCharAppsName));
+    BOOST_CHECK(account::binaryToHexAccountTableName(twentyCharAppsName).empty());
+    BOOST_CHECK_EQUAL(account::canonicalTableNameForHash(twentyCharAppsName), twentyCharAppsName);
+
+    // Negative probes: wrong prefix, wrong length, uppercase hex, non-hex char.
+    BOOST_CHECK(!account::isHexAccountTableName("/sys/4200000000000000000000000000000000001234"));
+    BOOST_CHECK(
+        !account::isHexAccountTableName("/apps/42000000000000000000000000000000000012"));  // 38
+    BOOST_CHECK(
+        !account::isHexAccountTableName("/apps/4200000000000000000000000000000000001234ff"));  // 42
+    BOOST_CHECK(!account::isHexAccountTableName("/apps/420000000000000000000000000000000000ABCD"));
+    BOOST_CHECK(!account::isHexAccountTableName("/apps/zz00000000000000000000000000000000001234"));
+    BOOST_CHECK(!account::isBinaryAccountTableName(binTable.substr(0, 22)));  // 19 address bytes
+    BOOST_CHECK(!account::isBinaryAccountTableName(binTable + "x"));          // 21 address bytes
+    BOOST_CHECK(!account::isBinaryAccountTableName("/s/"));
+    BOOST_CHECK(!account::isBinaryAccountTableName("/apps/"));
+    // An "_accessAuth" auth table is neither encoding — it is out of scope (not migrated,
+    // not normalized).
+    BOOST_CHECK(!account::isHexAccountTableName(hexTable + "_accessAuth"));
+    BOOST_CHECK(!account::isBinaryAccountTableName(binTable + "_accessAuth"));
+
+    // Round trip, lowercase canonical hex.
+    BOOST_CHECK_EQUAL(account::binaryToHexAccountTableName(binTable), hexTable);
+    BOOST_CHECK(account::hexToBinaryAccountTableName(hexTable) == binTable);
+
+    // Invalid input → empty string (documented caller error).
+    BOOST_CHECK(account::binaryToHexAccountTableName(hexTable).empty());
+    BOOST_CHECK(account::binaryToHexAccountTableName("/s/short").empty());
+    BOOST_CHECK(account::hexToBinaryAccountTableName(binTable).empty());
+
+    // Canonicalization: binary → hex, hex identical, everything else untouched.
+    BOOST_CHECK_EQUAL(account::canonicalTableNameForHash(binTable), hexTable);
+    BOOST_CHECK_EQUAL(account::canonicalTableNameForHash(hexTable), hexTable);
+    BOOST_CHECK_EQUAL(account::canonicalTableNameForHash("s_tables"), "s_tables");
+    BOOST_CHECK_EQUAL(account::canonicalTableNameForHash("/sys/status"), "/sys/status");
+    BOOST_CHECK_EQUAL(
+        account::canonicalTableNameForHash("/apps/someContract"), "/apps/someContract");
+    BOOST_CHECK_EQUAL(
+        account::canonicalTableNameForHash(hexTable + "_accessAuth"), hexTable + "_accessAuth");
+}
+
+// accountTableName(string_view, Binary) is TOTAL: only a canonical 40-char lowercase-hex
+// address takes the Binary branch; every other input — the strings user-controlled
+// precompiled params (ShardingPrecompiled) and RPC/P2P ingress can actually deliver
+// (uppercase, non-hex, odd length, 38 chars) — falls through to the verbatim
+// /apps/<input> form, identical to the Hex branch. Both encodings therefore hash every
+// input to the same digest: no throw on the Binary side of a mixed-encoding network.
+BOOST_AUTO_TEST_CASE(accountTableNameIsTotalAcrossModes)
+{
+    namespace account = bcos::ledger::account;
+    using account::AddressTableMode;
+
+    std::string_view const canonical = "4200000000000000000000000000000000001234";
+    // Canonical input: Binary encodes raw, and the two forms normalize to the same name.
+    auto const hexName = account::accountTableName(canonical, AddressTableMode::Hex);
+    auto const binName = account::accountTableName(canonical, AddressTableMode::Binary);
+    BOOST_CHECK_EQUAL(hexName, "/apps/4200000000000000000000000000000000001234");
+    BOOST_CHECK(account::isBinaryAccountTableName(binName));
+    BOOST_CHECK_EQUAL(account::canonicalTableNameForHash(binName), hexName);
+
+    // Non-canonical inputs: no throw, and both modes return the SAME verbatim hex-layout
+    // name (a typically empty table), so Hex and Binary nodes agree on the digest.
+    for (std::string_view input : {
+             "420000000000000000000000000000000000ABCD",    // uppercase
+             "zz00000000000000000000000000000000001234",    // non-hex chars
+             "420000000000000000000000000000000000123",     // odd length (39)
+             "42000000000000000000000000000000000012",      // even but short (38)
+             "0x4200000000000000000000000000000000001234",  // 0x-prefixed (42)
+             "",                                            // empty
+         })
+    {
+        std::string const expect = "/apps/" + std::string(input);
+        BOOST_CHECK_EQUAL(account::accountTableName(input, AddressTableMode::Hex), expect);
+        BOOST_CHECK_EQUAL(account::accountTableName(input, AddressTableMode::Binary), expect);
+        BOOST_CHECK_EQUAL(account::canonicalTableNameForHash(expect), expect);
+    }
+}
+
+// Write-side isolation: with the runtime fallback mode gone, a Binary-mode write touches
+// only the binary table and leaves any hex twin row alone (and symmetrically for Hex mode).
+// Physical consolidation is the migration tool's job, not the write path's.
+BOOST_AUTO_TEST_CASE(binaryWritesLeaveHexRowsUntouched)
+{
+    syncWait([this]() -> Task<void> {
+        namespace account = bcos::ledger::account;
+        auto address = bcos::unhexAddress("0x4200000000000000000000000000000000005678");
+        std::string const hexTable = "/apps/4200000000000000000000000000000000005678";
+        std::string const binTable = account::hexToBinaryAccountTableName(hexTable);
+        BOOST_REQUIRE(!binTable.empty());
+
+        evmc_bytes32 slotKey{};
+        slotKey.bytes[31] = 0x33;
+        evmc_bytes32 slotValue{};
+        slotValue.bytes[31] = 0x55;
+        evmc_bytes32 newSlotValue{};
+        newSlotValue.bytes[31] = 0x66;
+        bcos::bytes code{0x60, 0x00, 0x60, 0x00, 0xf3};
+        auto const codeHash = hashImpl->hash(code);
+
+        // Rows in the legacy hex layout.
+        account::EVMAccount hexAccount(storage, address, account::AddressTableMode::Hex);
+        co_await hexAccount.create();
+        co_await hexAccount.setNonce("3");
+        co_await hexAccount.setBalance(bcos::u256(999));
+        co_await hexAccount.setStorage(slotKey, slotValue);
+
+        // (a) Binary-mode writes land in the binary table only; the hex twins stay put.
+        account::EVMAccount binaryAccount(storage, address, account::AddressTableMode::Binary);
+        co_await binaryAccount.create();
+        co_await binaryAccount.setNonce("4");
+        co_await binaryAccount.setBalance(bcos::u256(1000));
+        co_await binaryAccount.setStorage(slotKey, newSlotValue);
+        co_await binaryAccount.setCode(code, "the-abi", codeHash);
+
+        // Both registrations and both row sets now exist side by side...
+        BOOST_CHECK(co_await storage2::existsOne(
+            storage, StateKeyView{bcos::ledger::SYS_TABLES, hexTable}));
+        BOOST_CHECK(co_await storage2::existsOne(
+            storage, StateKeyView{bcos::ledger::SYS_TABLES, binTable}));
+        BOOST_CHECK(co_await hexAccount.nonce() == std::optional<std::string>{"3"});
+        BOOST_CHECK_EQUAL(co_await hexAccount.balance(), bcos::u256(999));
+        BOOST_CHECK(co_await binaryAccount.nonce() == std::optional<std::string>{"4"});
+        BOOST_CHECK_EQUAL(co_await binaryAccount.balance(), bcos::u256(1000));
+        BOOST_CHECK_EQUAL(co_await binaryAccount.codeHash(), codeHash);
+        auto binSlot = co_await binaryAccount.storage(slotKey);
+        BOOST_CHECK(std::equal(std::begin(binSlot.bytes), std::end(binSlot.bytes),
+            std::begin(newSlotValue.bytes), std::end(newSlotValue.bytes)));
+        auto hexSlot = co_await hexAccount.storage(slotKey);
+        BOOST_CHECK(std::equal(std::begin(hexSlot.bytes), std::end(hexSlot.bytes),
+            std::begin(slotValue.bytes), std::end(slotValue.bytes)));
+
+        // (b) And Hex mode is symmetric: its writes touch only the hex table.
+        co_await hexAccount.setNonce("5");
+        BOOST_CHECK(co_await hexAccount.nonce() == std::optional<std::string>{"5"});
+        BOOST_CHECK(co_await binaryAccount.nonce() == std::optional<std::string>{"4"});
+
+        co_return;
+    }());
+}
+
+// FIB-82 follow-up: on a Binary-mode node the create flow must create the auth table at the
+// HEX path ("/apps/<40 hex>_accessAuth") even with bugfix_auth_check OFF (the default
+// fixture ledgerConfig sets no bugfix flags) — ContractAuthMgrPrecompiled looks up auth
+// tables by hex path unconditionally, and auth table names are not normalized in
+// Entry::hash, so a binary auth path would both break the precompiled's lookup and fork
+// the XOR root against Hex nodes. The process-global mode is restored to Hex on the way
+// out by the scoped guard (the startup flow sets it exactly once, single-threaded).
+BOOST_AUTO_TEST_CASE(createOnBinaryNodeWritesHexAuthTable)
+{
+    namespace account = bcos::ledger::account;
+    bcos::test::ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Binary);
+    syncWait([this]() -> Task<void> {
+        auto codeAddress = bcos::unhexAddress("0x4200000000000000000000000000000000004321");
+        std::string const hexAuthTable =
+            "/apps/4200000000000000000000000000000000004321_accessAuth";
+
+        // blockHeader.number() != 0 so executeCreate runs createAuthTable (the fixture's own
+        // deploy runs at number 0 and skips it).
+        bcostars::protocol::BlockHeaderImpl createBlockHeader;
+        createBlockHeader.setVersion(
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION));
+        createBlockHeader.setNumber(1);
+        createBlockHeader.calculateHash(*hashImpl);
+
+        std::string helloworldBytecodeBinary;
+        boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
+        evmc_message message = {.kind = EVMC_CREATE,
+            .flags = 0,
+            .depth = 0,
+            .gas = 300 * 10000,
+            .recipient = {},
+            .sender = {},
+            .input_data = (const uint8_t*)helloworldBytecodeBinary.data(),
+            .input_size = helloworldBytecodeBinary.size(),
+            .value = {},
+            .create2_salt = {},
+            .code_address = codeAddress,
+            .code = nullptr,
+            .code_size = 0};
+        evmc_address origin = {};
+
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
+            hostContext(rollbackableStorage, rollbackableTransientStorage, createBlockHeader,
+                message, origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
+                bcos::task::syncWait);
+        co_await hostContext.prepare();
+        auto result = co_await hostContext.execute();
+        BOOST_REQUIRE_EQUAL(result.status_code, 0);
+
+        // The auth table must exist at the hex path...
+        BOOST_CHECK(co_await storage2::existsOne(
+            storage, StateKeyView{bcos::ledger::SYS_TABLES, hexAuthTable}));
+        // ...and NOT at the binary path that the recipient account's path() would have
+        // produced before the fix.
+        auto const binAuthTable =
+            account::hexToBinaryAccountTableName("/apps/4200000000000000000000000000000000004321") +
+            "_accessAuth";
+        BOOST_REQUIRE(binAuthTable.size() > std::string_view{"_accessAuth"}.size());
+        BOOST_CHECK(!co_await storage2::existsOne(
+            storage, StateKeyView{bcos::ledger::SYS_TABLES, binAuthTable}));
+        co_return;
+    }());
+}
+
+// Round-7 review F4: the internalCreate stub fix must hold on the v1 lane (the
+// transaction-executor HostContext every production transaction runs through), not only on
+// the v0 TransactionExecutor fixture. End to end on a Binary-layout node: (a) create a CRUD
+// table through the TableManager precompiled, (b) insert + select through the link address
+// the create flow returned — the call resolves the stub's code via EVMAccount at
+// "/s/<20 raw bytes>", so before the fix it failed with NotFoundCodeError — and (c) the
+// stub's account table exists ONLY in the binary layout (no "/apps/<hex>" registration).
+BOOST_AUTO_TEST_CASE(createTableOnBinaryNodeV1Lane)
+{
+    namespace account = bcos::ledger::account;
+    bcos::test::ScopedNodeAddressTableMode const modeGuard(account::AddressTableMode::Binary);
+    syncWait([this]() -> Task<void> {
+        // Genesis + BFS init, the same arrangement as the `precompiled` test above.
+        auto storageWrapper =
+            std::make_shared<bcos::storage::LegacyStorageWrapper<std::decay_t<decltype(storage)>>>(
+                storage);
+        auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
+            std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr);
+        bcos::ledger::Ledger ledger(
+            std::make_shared<bcostars::protocol::BlockFactoryImpl>(cryptoSuite,
+                std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(cryptoSuite),
+                std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite),
+                std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite)),
+            storageWrapper, 1000);
+        bcos::ledger::GenesisConfig genesis;
+        genesis.m_txGasLimit = 100000;
+        genesis.m_compatibilityVersion = bcos::tool::toVersionNumber("3.6.0");
+        ledger.buildGenesisBlock(genesis, ledgerConfig);
+
+        bcostars::protocol::BlockHeaderImpl blockHeader;
+        blockHeader.inner().data.version = (int)bcos::protocol::BlockVersion::V3_5_VERSION;
+        // The block number feeds newEVMAddress(blockNumber, contextID, seq) — the stub's
+        // link address. The process-global executable cache (getCacheExecutables) is keyed
+        // by address alone and SHARED across test cases, so the link address must not
+        // collide with any address another case in this binary creates: their creates use
+        // small block numbers (the call() helper's static counter starts at 0), hence a
+        // large, odd one here.
+        blockHeader.setNumber(1000003);
+        blockHeader.calculateHash(*bcos::executor::GlobalHashImpl::g_hashImpl);
+        co_await initBFS(blockHeader, *hashImpl);
+
+        bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
+        auto callAddress = [&](evmc_address callAddress,
+                               bcos::bytes const& input) -> Task<EVMCResult> {
+            evmc_message message = {.kind = EVMC_CALL,
+                .flags = 0,
+                .depth = 0,
+                .gas = 10000000,
+                .recipient = callAddress,
+                .sender = {},
+                .input_data = input.data(),
+                .input_size = input.size(),
+                .value = {},
+                .create2_salt = {},
+                .code_address = callAddress,
+                .code = nullptr,
+                .code_size = 0};
+            evmc_address origin = {};
+
+            HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
+                hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
+                    origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
+                    bcos::task::syncWait);
+            co_await hostContext.prepare();
+            co_return co_await hostContext.execute();
+        };
+
+        // (a) Create the table through the TableManager precompiled (0x1002); the link
+        // address is chosen by the create flow (ExecutiveWrapper assigns it via
+        // newEVMAddress), so read it back from the BFS link row below.
+        evmc_address tableManagerAddress{};
+        {
+            auto address = bcos::Address(0x1002);
+            ::ranges::copy(address, tableManagerAddress.bytes);
+        }
+        using TableInfoTuple = std::tuple<std::string, std::vector<std::string>>;
+        auto createResult = co_await callAddress(tableManagerAddress,
+            abiCodec.abiIn(std::string("createTable(string,(string,string[]))"),
+                std::string("t_v1_binary"), TableInfoTuple{"id", {"item_name", "item_id"}}));
+        BOOST_REQUIRE_EQUAL(createResult.status_code, EVMC_SUCCESS);
+        int32_t createCode = -1;
+        abiCodec.abiOut(
+            bcos::bytesConstRef(createResult.output_data, createResult.output_size), createCode);
+        BOOST_REQUIRE_EQUAL(createCode, 0);  // CODE_SUCCESS
+
+        // The link row carries the address internalCreate registered the stub under.
+        auto linkEntry = co_await storage2::readOne(
+            storage, StateKeyView{"/tables/t_v1_binary", bcos::executor::FS_LINK_ADDRESS});
+        BOOST_REQUIRE(linkEntry.has_value());
+        std::string const linkAddress(linkEntry->get());
+        BOOST_REQUIRE_EQUAL(linkAddress.size(), 40);
+
+        // (b) insert + select through the link address: the call resolves code via
+        // EVMAccount in Binary mode, so it only succeeds if the stub landed at
+        // "/s/<20 raw bytes>".
+        auto linkEvmcAddress = bcos::unhexAddress("0x" + linkAddress);
+        using EntryTuple = std::tuple<std::string, std::vector<std::string>>;
+        auto insertResult = co_await callAddress(
+            linkEvmcAddress, abiCodec.abiIn(std::string("insert((string,string[]))"),
+                                 EntryTuple{"1", {"apple", "100"}}));
+        BOOST_REQUIRE_EQUAL(insertResult.status_code, EVMC_SUCCESS);
+
+        auto selectResult = co_await callAddress(
+            linkEvmcAddress, abiCodec.abiIn(std::string("select(string)"), std::string("1")));
+        BOOST_REQUIRE_EQUAL(selectResult.status_code, EVMC_SUCCESS);
+        EntryTuple selected;
+        abiCodec.abiOut(
+            bcos::bytesConstRef(selectResult.output_data, selectResult.output_size), selected);
+        BOOST_CHECK_EQUAL(std::get<0>(selected), "1");
+        BOOST_CHECK(std::get<1>(selected) == std::vector<std::string>({"apple", "100"}));
+
+        // (c) The stub's account table is registered ONLY at the binary name.
+        auto const binTable =
+            account::accountTableName(linkAddress, account::AddressTableMode::Binary);
+        BOOST_REQUIRE(account::isBinaryAccountTableName(binTable));
+        BOOST_CHECK(co_await storage2::existsOne(
+            storage, StateKeyView{bcos::ledger::SYS_TABLES, binTable}));
+        BOOST_CHECK(!co_await storage2::existsOne(
+            storage, StateKeyView{bcos::ledger::SYS_TABLES, "/apps/" + linkAddress}));
         co_return;
     }());
 }

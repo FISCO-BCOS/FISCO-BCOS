@@ -30,7 +30,6 @@
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
-#include "tikv_client.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/security/StorageEncryptInterface.h>
 #include <bcos-security/bcos-security/BcosKmsDataEncryption.h>
@@ -82,9 +81,7 @@ po::variables_map initCommandLine(int argc, const char* argv[])
         po::value<bool>()->default_value(false),
         "if read display value use hex, if write decode hex value")("compare,C",
         po::value<std::vector<std::string>>()->multitoken(),
-        "[RocksDB] [path] [Table] or [TiKV] [pd addresses] [Table]/[ca path if use ssl] [cert path "
-        "if use ssl] [Table], eg RocksDB ../node0/data s_hash_2_tx"
-        "[key path if use ssl]")("config,c",
+        "[RocksDB] [path] [Table], eg RocksDB ../node0/data s_hash_2_tx")("config,c",
         boost::program_options::value<std::string>()->default_value("./config.ini"),
         "config file path")("genesis,g",
         boost::program_options::value<std::string>()->default_value("./config.genesis"),
@@ -240,7 +237,7 @@ void getTableSize(DB* db, const string_view& table)
 }
 
 TransactionalStorageInterface::Ptr createBackendStorage(
-    std::shared_ptr<bcos::tool::NodeConfig> nodeConfig, const std::string& logPath,
+    std::shared_ptr<bcos::tool::NodeConfig> nodeConfig, [[maybe_unused]] const std::string& logPath,
     bool write = false, const std::string& secondaryPath = "./rocksdb_secondary/")
 {
     bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr;
@@ -270,13 +267,6 @@ TransactionalStorageInterface::Ptr createBackendStorage(
             storage = std::make_shared<RocksDBStorage>(
                 std::unique_ptr<rocksdb::DB>(rocksdb), dataEncryption);
         }
-    }
-    else if (boost::iequals(nodeConfig->storageType(), "TiKV"))
-    {
-#ifdef WITH_TIKV
-        storage = StorageInitializer::build(nodeConfig->pdAddrs(), logPath, nodeConfig->pdCaPath(),
-            nodeConfig->pdCertPath(), nodeConfig->pdKeyPath());
-#endif
     }
     else
     {
@@ -690,43 +680,6 @@ int main(int argc, const char* argv[])
                 }
                 delete it;
             }
-            else if (boost::iequals(nodeConfig->storageType(), "TiKV"))
-            {
-#ifdef WITH_TIKV
-                std::shared_ptr<tikv_client::TransactionClient> cluster = nullptr;
-                cluster = storage::newTiKVClient(nodeConfig->pdAddrs(), logInitializer->logPath(),
-                    nodeConfig->pdCaPath(), nodeConfig->pdCertPath(), nodeConfig->pdKeyPath());
-                auto snapshot = cluster->snapshot();
-                bool finished = false;
-                uint32_t batch = 256;
-                uint32_t count = 0;
-                auto lastKey = tableName;
-                while (!finished)
-                {
-                    auto kvPairs =
-                        snapshot->scan(lastKey, Bound::Excluded, "", Bound::Unbounded, batch);
-                    for (auto& kv : kvPairs)
-                    {
-                        if (kv.key.rfind(tableName, 0) == 0)
-                        {
-                            writeKV(outfile, kv.key, kv.value, hexEncoded);
-                        }
-                        else
-                        {
-                            finished = true;
-                            break;
-                        }
-                    }
-                    lastKey = kvPairs.back().key;
-                    count += kvPairs.size();
-                    std::cout << "scan count: " << count << "\r";
-                    if (kvPairs.size() < batch)
-                    {
-                        finished = true;
-                    }
-                }
-#endif
-            }
             else
             {
                 throw std::runtime_error("storage type not support");
@@ -769,12 +722,6 @@ int main(int argc, const char* argv[])
                 getTableSize(db, storage::FS_USER_TABLE);
             }
         }
-        else if (boost::iequals(nodeConfig->storageType(), "TiKV"))
-        {
-#ifdef WITH_TIKV
-            // TODO: add TiKV support
-#endif
-        }
     }
     else if (params.count("compare") != 0U)
     {
@@ -782,7 +729,6 @@ int main(int argc, const char* argv[])
         protocolInitializer->init(nodeConfig);
         auto blockFactory = protocolInitializer->blockFactory();
         auto compareParameters = params["compare"].as<vector<string>>();
-        // compare data with tikv is not supported for now
         StorageInterface::Ptr localStorage =
             createBackendStorage(nodeConfig, logInitializer->logPath());
         StorageInterface::Ptr remoteStorage = nullptr;
@@ -795,27 +741,6 @@ int main(int argc, const char* argv[])
             auto* rocksdb = createSecondaryRocksDB(remoteDBPath, remoteSecondaryPath);
             remoteStorage =
                 std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(rocksdb), nullptr);
-        }
-        else if (boost::iequals(DBtype, "TiKV"))
-        {
-#ifdef WITH_TIKV
-            vector<string> pdAddrs;
-            std::cout << "pdAddrs:" << compareParameters[1] << std::endl;
-            boost::algorithm::split(pdAddrs, compareParameters[1], boost::is_any_of(","));
-            std::string caPath;
-            std::string cert;
-            std::string key;
-
-            if (compareParameters.size() >= 5)
-            {
-                caPath = compareParameters[2];
-                cert = compareParameters[3];
-                key = compareParameters[4];
-                specificTable = (compareParameters.size() == 6 ? compareParameters[5] : "");
-            }
-            remoteStorage =
-                StorageInitializer::build(pdAddrs, logInitializer->logPath(), caPath, cert, key);
-#endif
         }
         else
         {

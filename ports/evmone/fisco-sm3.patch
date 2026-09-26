@@ -58,14 +58,19 @@ diff -ruN a/cmake/LibraryTools.cmake b/cmake/LibraryTools.cmake
 diff -ruN a/lib/evmone/CMakeLists.txt b/lib/evmone/CMakeLists.txt
 --- a/lib/evmone/CMakeLists.txt	2026-04-10 05:51:37
 +++ b/lib/evmone/CMakeLists.txt	2026-07-24 00:08:08
-@@ -46,7 +46,6 @@
+@@ -46,12 +46,7 @@
  if(CABLE_COMPILER_GNULIKE)
      target_compile_options(
          evmone PRIVATE
 -        -fno-exceptions
          $<$<CXX_COMPILER_ID:GNU>:-Wstack-usage=2900>
      )
-     if(NOT SANITIZE MATCHES undefined)
+-    if(NOT SANITIZE MATCHES undefined)
+-        # RTTI can be disabled except for UBSan which checks vptr integrity.
+-        target_compile_options(evmone PRIVATE -fno-rtti)
+-    endif()
+ endif()
+ set_target_properties(
 diff -ruN a/lib/evmone/advanced_execution.cpp b/lib/evmone/advanced_execution.cpp
 --- a/lib/evmone/advanced_execution.cpp	2026-04-10 05:51:37
 +++ b/lib/evmone/advanced_execution.cpp	2026-07-24 00:08:22

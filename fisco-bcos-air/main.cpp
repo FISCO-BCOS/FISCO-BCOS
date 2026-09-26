@@ -120,7 +120,7 @@ int main(int argc, const char* argv[])
             }
             return 0;
         }
-        initializer->init(param.configFilePath, param.genesisFilePath);
+        initializer->init(param);
         bcos::initializer::showNodeVersionMetric();
 
         bcos::initializer::printVersion();

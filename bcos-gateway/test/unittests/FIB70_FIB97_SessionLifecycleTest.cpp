@@ -379,8 +379,8 @@ BOOST_AUTO_TEST_CASE(SocketSharedPtrCaptureInAsyncHandler)
     fakeSocket->close();
 }
 
-// The response-callback manager is shared host-wide (GatewayFactory creates one
-// SessionCallbackManagerBucket for the Host and injects it into every session), so drop() must
+// The response-callback manager is shared host-wide (the Host owns one SessionCallbackManager
+// and hands it to every session it creates), so drop() must
 // fail only the seqs registered through the dropped session — popping the whole manager would
 // spuriously fail every in-flight request/response on every other session.
 BOOST_AUTO_TEST_CASE(DropFlushesOnlyOwnPendingResponseCallbacks)
@@ -392,13 +392,11 @@ BOOST_AUTO_TEST_CASE(DropFlushesOnlyOwnPendingResponseCallbacks)
     {
         auto fakeAsio = std::make_shared<FakeASIO_FIB>();
         auto fakeHost = std::make_shared<FakeHost_FIB>(hashImpl, fakeAsio, nullptr);
-        // one manager shared by both sessions, as in production
-        auto callbackManager = std::make_shared<SessionCallbackManagerBucket>();
+        // both sessions share their host's callback manager, as in production
+        auto& callbackManager = fakeHost->sessionCallbackManager();
 
         auto sessionA = std::make_shared<Session>(fakeSocketA, *fakeHost, 2, true);
-        sessionA->setSessionCallbackManager(callbackManager);
         auto sessionB = std::make_shared<Session>(fakeSocketB, *fakeHost, 2, true);
-        sessionB->setSessionCallbackManager(callbackManager);
 
         const uint32_t seqA = 1001;
         const uint32_t seqB = 1002;
@@ -418,9 +416,9 @@ BOOST_AUTO_TEST_CASE(DropFlushesOnlyOwnPendingResponseCallbacks)
                 ++firedB;
             }
         };
-        callbackManager->addCallback(seqA, handlerA);
+        callbackManager.addCallback(seqA, handlerA);
         sessionA->addPendingResponseSeq(seqA);
-        callbackManager->addCallback(seqB, handlerB);
+        callbackManager.addCallback(seqB, handlerB);
         sessionB->addPendingResponseSeq(seqB);
 
         // skip the socket teardown tail; the flush runs before the null-socket check
@@ -438,8 +436,8 @@ BOOST_AUTO_TEST_CASE(DropFlushesOnlyOwnPendingResponseCallbacks)
         // session A's waiter is failed with an error; session B's is left untouched
         BOOST_CHECK_EQUAL(firedA, 1);
         BOOST_CHECK_EQUAL(firedB, 0);
-        BOOST_CHECK(callbackManager->getCallback(seqA, false) == nullptr);
-        BOOST_CHECK(callbackManager->getCallback(seqB, false) != nullptr);
+        BOOST_CHECK(callbackManager.getCallback(seqA, false) == nullptr);
+        BOOST_CHECK(callbackManager.getCallback(seqB, false) != nullptr);
 
         sessionB->setSocket(nullptr);
     }
@@ -467,10 +465,9 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
     {
         auto fakeAsio = std::make_shared<FakeASIO_FIB>();
         auto fakeHost = std::make_shared<FakeHost_FIB>(hashImpl, fakeAsio, nullptr);
-        auto callbackManager = std::make_shared<SessionCallbackManagerBucket>();
+        auto& callbackManager = fakeHost->sessionCallbackManager();
 
         auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);
-        session->setSessionCallbackManager(callbackManager);
         session->setMessageHandler(
             [](NetworkException e, SessionFace::Ptr sessionFace, Message message) {});
         session->startWithPolicy<FakeASIO_FIB::ReadPolicy>();
@@ -514,7 +511,7 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
         // exactly one completion, always a failure, and the response callback is gone
         BOOST_CHECK_EQUAL(completions.load(), 1);
         BOOST_CHECK(errorCode.load() != 0);
-        BOOST_CHECK(callbackManager->getCallback(seq, false) == nullptr);
+        BOOST_CHECK(callbackManager.getCallback(seq, false) == nullptr);
 
         // drain the parked read so the read loop unwinds before the socket is nulled
         fakeAsio->stopReads();

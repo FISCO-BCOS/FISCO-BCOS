@@ -22,9 +22,12 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-crypto/hash/SM3.h>
+#include <bcos-framework/ledger/AccountTableName.h>
+#include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/storage/Serialize.h>
 #include <boost/test/unit_test.hpp>
 #include <array>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -221,6 +224,71 @@ BOOST_AUTO_TEST_CASE(entryHash)
     auto normalHash =
         entry.hash(table, key, *sm3, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
     BOOST_CHECK_EQUAL(normalHash, bcos::crypto::HashType{});
+}
+
+// Encoding-agnostic state root (ledger/AccountTableName.h): the binary and hex encodings
+// of one logical account table fold the same entry hash, in both digest formats (the
+// v3.1 format and the bugfix_statestorage_hash_v3_17 length-prefixed format).
+BOOST_AUTO_TEST_CASE(entryHashAccountTableNormalization)
+{
+    namespace account = bcos::ledger::account;
+    auto sm3 = std::make_shared<bcos::crypto::SM3>();
+    const auto v3_1 = (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION;
+
+    bcos::ledger::Features featuresV317;
+    featuresV317.set(bcos::ledger::Features::Flag::bugfix_statestorage_hash_v3_17);
+    const std::optional<bcos::ledger::Features> v317{featuresV317};
+
+    std::string const hexTable = "/apps/4200000000000000000000000000000000001234";
+    std::string const binTable = account::hexToBinaryAccountTableName(hexTable);
+    BOOST_REQUIRE_EQUAL(binTable.size(), 23u);
+
+    auto data = "some-value"s;
+    auto key = "nonce"s;
+
+    for (auto status : {Entry::MODIFIED, Entry::DELETED})
+    {
+        Entry entry;
+        entry.setStatus(status);
+        if (status == Entry::MODIFIED)
+        {
+            entry.set(data);
+        }
+
+        // (1) Same logical row, two encodings of the account table: equal digests.
+        for (auto&& features : {std::optional<bcos::ledger::Features>{std::nullopt}, v317})
+        {
+            auto hexHash = entry.hash(hexTable, key, *sm3, v3_1, features);
+            auto binHash = entry.hash(binTable, key, *sm3, v3_1, features);
+            BOOST_CHECK_EQUAL(hexHash, binHash);
+            BOOST_CHECK_NE(hexHash, bcos::crypto::HashType{});
+
+            // (2) s_tables registration rows embed the table name in the KEY: the binary
+            // key normalizes to the hex key.
+            auto hexRegHash = entry.hash("s_tables", hexTable, *sm3, v3_1, features);
+            auto binRegHash = entry.hash("s_tables", binTable, *sm3, v3_1, features);
+            BOOST_CHECK_EQUAL(hexRegHash, binRegHash);
+        }
+
+        // (3) Negative control: "_accessAuth" auth tables are NOT normalized (out of
+        // scope — they stay hex, unmigrated), so the two spellings hash differently.
+        auto hexAuthHash = entry.hash(hexTable + "_accessAuth", key, *sm3, v3_1, std::nullopt);
+        auto binAuthHash = entry.hash(binTable + "_accessAuth", key, *sm3, v3_1, std::nullopt);
+        BOOST_CHECK_NE(hexAuthHash, binAuthHash);
+
+        // (4) Non-account tables hash by their literal name (no accidental rewrite).
+        auto sysHash = entry.hash("/sys/status", key, *sm3, v3_1, std::nullopt);
+        auto hasher = sm3->hasher();
+        hasher.update(std::string_view{"/sys/status"});
+        hasher.update(key);
+        if (status == Entry::MODIFIED)
+        {
+            hasher.update(data);
+        }
+        bcos::crypto::HashType sysExpect;
+        hasher.final(sysExpect);
+        BOOST_CHECK_EQUAL(sysHash, sysExpect);
+    }
 }
 
 // ── Buffer model coverage tests ───────────────────────────────────

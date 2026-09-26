@@ -88,7 +88,8 @@ struct OpForkScheduleMetadataFixture
             static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_18_0_VERSION);
         genesisConfig.m_chainID = "1";
         genesisConfig.m_groupID = "group0";
-        genesisConfig.m_opForkSchedule = OpForkSchedule{jovianTime, karstTime};
+        genesisConfig.m_opForkSchedule =
+            OpForkSchedule{.m_jovianTime = jovianTime, .m_karstTime = karstTime};
         return genesisConfig;
     }
 };

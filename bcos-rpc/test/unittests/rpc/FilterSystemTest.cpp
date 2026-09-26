@@ -197,7 +197,7 @@ BOOST_AUTO_TEST_CASE(filterBlockTagResolvesAgainstHeadAndDepths)
         auto request = std::make_shared<Web3FilterRequest>();
         request->fromJson(parse(R"({"fromBlock":"latest","toBlock":"latest",
             "address":"0x1234","topics":[]})"),
-            latest, /*safeDepth*/ 1, /*finalizedDepth*/ 2);
+            latest, /*safeDepth*/ 1, /*finalizedDepth*/ 2, std::nullopt, std::nullopt, false);
         BOOST_CHECK_EQUAL(request->fromBlock(), latest);
         BOOST_CHECK(request->fromIsLatest());
         BOOST_CHECK_EQUAL(request->toBlock(), latest);
@@ -209,7 +209,7 @@ BOOST_AUTO_TEST_CASE(filterBlockTagResolvesAgainstHeadAndDepths)
         auto request = std::make_shared<Web3FilterRequest>();
         request->fromJson(parse(R"({"fromBlock":"safe","toBlock":"finalized",
             "address":"0x1234","topics":[]})"),
-            latest, /*safeDepth*/ 1, /*finalizedDepth*/ 2);
+            latest, /*safeDepth*/ 1, /*finalizedDepth*/ 2, std::nullopt, std::nullopt, false);
         BOOST_CHECK_EQUAL(request->fromBlock(), latest - 1);
         BOOST_CHECK(!request->fromIsLatest());
         BOOST_CHECK_EQUAL(request->toBlock(), (std::max)(latest - 2, protocol::BlockNumber{0}));
@@ -221,7 +221,7 @@ BOOST_AUTO_TEST_CASE(filterBlockTagResolvesAgainstHeadAndDepths)
         auto request = std::make_shared<Web3FilterRequest>();
         request->fromJson(parse(R"({"fromBlock":"0x0","toBlock":"0x5",
             "address":"0x1234","topics":[]})"),
-            latest, /*safeDepth*/ 1, /*finalizedDepth*/ 2);
+            latest, /*safeDepth*/ 1, /*finalizedDepth*/ 2, std::nullopt, std::nullopt, false);
         BOOST_CHECK_EQUAL(request->fromBlock(), 0);
         BOOST_CHECK_EQUAL(request->toBlock(), 5);
     }

@@ -20,9 +20,11 @@
  */
 #pragma once
 #include "../consensus/ConsensusNode.h"
+#include "../protocol/BlobSchedule.h"
 #include "../protocol/ProtocolTypeDef.h"
 #include "Features.h"
 #include "LedgerTypeDef.h"
+#include "OpForkSchedule.h"
 #include "OpForkScheduleCodec.h"
 #include "SystemConfigs.h"
 #include <bcos-framework/engine/OpEip1559Params.h>
@@ -60,19 +62,14 @@ constexpr static std::uint64_t DEFAULT_EPOCH_BLOCK_NUM = 1000;
 constexpr static std::uint64_t DEFAULT_INTERNAL_NOTIFY_FLAG = 0;
 
 // OP-lane fork schedule, parsed from the [op_fork_timestamps] section of
-// config.genesis (executor_version >= OPSTACK_EXECUTOR_VERSION). OP forks
-// activate by L2 block TIMESTAMP IN SECONDS, exactly like op-node's
-// rollup.json jovian_time / karst_time (op-node/rollup/types.go:
-// IsJovian(ts) == Time != nil && ts >= *Time). 0 means "active from genesis";
-// std::numeric_limits<uint64_t>::max() encodes op-node's nil, i.e. "not
-// scheduled". Isthmus is the OP lane's baseline and therefore has no entry:
-// the engine's -38005 gate admits only Isthmus+ payloads. Lives here (not
-// GenesisConfig.h) so LedgerConfig can snapshot the resolved schedule.
-struct OpForkSchedule
-{
-    uint64_t m_jovianTime = std::numeric_limits<uint64_t>::max();
-    uint64_t m_karstTime = std::numeric_limits<uint64_t>::max();
-};
+// config.genesis (executor_version >= OPSTACK_EXECUTOR_VERSION). The
+// ledger::OpForkSchedule value type lives in OpForkSchedule.h (upstream #5632)
+// together with resolveOpFork, the fork-activation parser shared by the
+// executor and the devp2p header validator; LedgerConfig snapshots the
+// resolved schedule from there. On the engine path the pre-Isthmus rungs stay
+// unset (UINT64_MAX): the engine's -38005 gate admits only Isthmus+ payloads,
+// and an unset isthmus_time makes Isthmus the zero-start baseline — the shape
+// every engine-driven chain has.
 
 class LedgerConfig
 {
@@ -194,6 +191,17 @@ public:
     std::optional<uint64_t> blobGasUsed() const { return m_blobGasUsed; }
     void setBlobGasUsed(std::optional<uint64_t> v) { m_blobGasUsed = v; }
 
+    // EIP-7840 blob schedule resolved for the block being executed, stamped per
+    // block by the external-block verifier from the chain's fork-timestamp
+    // schedule (revisions cannot express the post-Osaka BPO1/BPO2 schedule
+    // bumps). nullopt = not stamped: the executor falls back to the
+    // revision-keyed defaults (Cancun/Prague), the pre-BPO behaviour.
+    std::optional<protocol::BlobScheduleConfig> const& blobSchedule() const
+    {
+        return m_blobSchedule;
+    }
+    void setBlobSchedule(protocol::BlobScheduleConfig v) { m_blobSchedule = v; }
+
     // Not enforce to set this field, in memory data
     void setSealerId(int64_t _sealerId) { m_sealerId = _sealerId; }
     int64_t sealerId() const { return m_sealerId; }
@@ -294,6 +302,7 @@ private:
     /// on OP chains initialized before the row existed.
     std::optional<OpForkSchedule> m_opForkSchedule;
     std::optional<uint64_t> m_blobGasUsed;
+    std::optional<protocol::BlobScheduleConfig> m_blobSchedule;
     std::tuple<uint64_t, protocol::BlockNumber> m_epochSealerNum = {DEFAULT_EPOCH_SEALER_NUM, 0};
     std::tuple<uint64_t, protocol::BlockNumber> m_epochBlockNum = {DEFAULT_EPOCH_BLOCK_NUM, 0};
     uint64_t m_notifyRotateFlagInfo{0};
@@ -346,6 +355,16 @@ static_assert(static_cast<int>(ExecutorLane::Opstack) == 3);
 /// OPSTACK selects the OP lane. A value above the newest DECLARED slot saturates down to
 /// the newest slot the node actually wired, which is this one only when the OP slot is
 /// unwired.
+///
+/// PRE-RELEASE SEMANTICS: executor_version = 2 was introduced mid-branch (2026-08) and is
+/// NOT part of any upstream release — upstream releases have no v2. The version gates
+/// consensus-critical behaviour (Ethereum trie roots for txsRoot/receiptsRoot/stateRoot,
+/// the system-address migration to /apps/), and its exact rules may still change between
+/// commits; no cross-commit compatibility is guaranteed for a chain that ran v2 on a
+/// pre-release binary. Before any formal release ships with v2 selectable, this gate must
+/// be re-hung on a proper feature flag / activation block height (Features::Flag) instead
+/// of a bare version compare — tracked in
+/// https://github.com/FISCO-BCOS/FISCO-BCOS/issues/5563.
 inline constexpr int ETHEREUM_EXECUTOR_VERSION = static_cast<int>(ExecutorLane::Ethereum);
 
 /// The executor version that selects the OP-Stack OpSchedulerSeam (op composition root).

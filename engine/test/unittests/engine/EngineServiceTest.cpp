@@ -1410,6 +1410,10 @@ BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
         c_initialBlockNumber, c_initialBlockNumber);
     std::string sender("cccccccccccccccccccc", 20);
     // Web3-shaped: only transactions with an EIP-2718 wire form enter OP payloads.
+    // BloomScheduler always returns TWO receipts, so the payload must execute two
+    // transactions — the receipts-root assembly types each receipt by the executed
+    // transaction at the same index, and a shorter transaction list is out-of-bounds.
+    // Same sender, nonces 0 and 1: seal picks the gapless prefix.
     auto tx = makeWeb3Tx(sender, 0);
     auto tx2 = makeWeb3Tx(sender, 1);
     memPool.add(std::vector{tx, tx2});

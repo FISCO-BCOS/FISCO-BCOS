@@ -64,9 +64,6 @@ BOOST_AUTO_TEST_CASE(defaultsAreReadableWithoutLoad)
     BOOST_CHECK_NO_THROW(cfg.minWriteBufferNumberToMerge());
     BOOST_CHECK_NO_THROW(cfg.blockCacheSize());
     BOOST_CHECK_NO_THROW(cfg.enableRocksDBBlob());
-    BOOST_CHECK_NO_THROW(cfg.pdCaPath());
-    BOOST_CHECK_NO_THROW(cfg.pdCertPath());
-    BOOST_CHECK_NO_THROW(cfg.pdKeyPath());
     BOOST_CHECK_NO_THROW(cfg.storageDBName());
     BOOST_CHECK_NO_THROW(cfg.stateDBName());
     BOOST_CHECK_NO_THROW(cfg.enableArchive());

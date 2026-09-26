@@ -401,6 +401,14 @@ public:
         }
     }
 
+    // GCC 14+ -Wmismatched-new-delete false positive: std::generator's promise
+    // allocator is diagnosed inside the coroutine body below. The diagnostic targets
+    // libstdc++ internals, not this code — scope the suppression to this construct
+    // rather than downgrading the warning for the whole project.
+#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 14
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmismatched-new-delete"
+#endif
     template <class AccessorType>
     task::Generator<AccessorType&> range(size_t startIndex) const
     {
@@ -419,6 +427,9 @@ public:
             }
         }
     }
+#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 14
+#pragma GCC diagnostic pop
+#endif
 
     template <class AccessorType>
     task::Generator<AccessorType&> range()

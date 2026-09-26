@@ -282,18 +282,18 @@ public:
 
     static FCRowOp balanceRow(Address const& addr, std::string value)
     {
-        return {bcos::ledger::mpt::accountTableName(addr),
+        return {bcos::ledger::account::hexAccountTableName(addr),
             std::string(bcos::ledger::mpt::ROW_BALANCE), std::move(value)};
     }
     static FCRowOp nonceRow(Address const& addr, std::string value)
     {
-        return {bcos::ledger::mpt::accountTableName(addr),
+        return {bcos::ledger::account::hexAccountTableName(addr),
             std::string(bcos::ledger::mpt::ROW_NONCE), std::move(value)};
     }
     /// A storage slot row: 32-raw-byte slot key, 32-raw-byte value.
     static FCRowOp slotRow(Address const& addr, h256 const& slot, h256 const& value)
     {
-        return {bcos::ledger::mpt::accountTableName(addr),
+        return {bcos::ledger::account::hexAccountTableName(addr),
             std::string(reinterpret_cast<char const*>(slot.data()), h256::SIZE),
             std::string(reinterpret_cast<char const*>(value.data()), h256::SIZE)};
     }

@@ -38,7 +38,7 @@
 #include <opstack-executor/OpstackExecutor.h>  // OpstackExecutor + depositFromTransaction
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>  // per-tx loop (refactored path)
 #include <bcos-utilities/IOServicePool.h>
-#include <opstack-executor/Storage2State.h>
+#include <bcos-evm/adapter/Storage2State.h>
 #include <boost/test/unit_test.hpp>
 #include <evmc/evmc.hpp>
 #include <evmc/hex.hpp>
@@ -179,7 +179,8 @@ void seedCanonicalL1FeeSlots(ViewT& view)
         return val;
     };
     bcos::task::syncWait([&]() -> bcos::task::Task<void> {
-        bcos::ledger::account::EVMAccount<ViewT> acc(view, bcos::evm::opstack::OP_L1_BLOCK, false);
+        bcos::ledger::account::EVMAccount<ViewT> acc(
+            view, bcos::evm::opstack::OP_L1_BLOCK, bcos::ledger::account::AddressTableMode::Hex);
         co_await acc.setStorage(slotKey(1), slotVal(kSlot1));
         co_await acc.setStorage(slotKey(3), slotVal(kSlot3));
         co_await acc.setStorage(slotKey(7), slotVal(kSlot7));
@@ -398,7 +399,8 @@ BOOST_AUTO_TEST_CASE(L1BlockDepositWritesSlots)
                                                  << " codeHash=" << codeHash.hex());
 
     bcos::task::syncWait([&]() -> bcos::task::Task<void> {
-        bcos::ledger::account::EVMAccount<ViewType> acc(view, bcos::evm::opstack::OP_L1_BLOCK, false);
+        bcos::ledger::account::EVMAccount<ViewType> acc(
+            view, bcos::evm::opstack::OP_L1_BLOCK, bcos::ledger::account::AddressTableMode::Hex);
         co_await acc.create();
         co_await acc.setCode(code, /*abi=*/"", codeHash);
         co_await acc.setNonce("1");
@@ -416,7 +418,8 @@ BOOST_AUTO_TEST_CASE(L1BlockDepositWritesSlots)
     // bridge the deposit actually reads via (get_account -> code_hash gate, get_account_code ->
     // CODE_HASH -> SYS_CODE_BINARY).
     {
-        bcos::ledger::account::EVMAccount<ViewType> acc(view, bcos::evm::opstack::OP_L1_BLOCK, false);
+        bcos::ledger::account::EVMAccount<ViewType> acc(
+            view, bcos::evm::opstack::OP_L1_BLOCK, bcos::ledger::account::AddressTableMode::Hex);
         BOOST_CHECK(bcos::task::syncWait(acc.exists()));
         auto c = bcos::task::syncWait(acc.code());
         BOOST_REQUIRE(c.has_value());
@@ -467,7 +470,8 @@ BOOST_AUTO_TEST_CASE(L1BlockDepositWritesSlots)
     // `PUSH1 4 CALLDATASIZE LT` = cd < 4, not `CALLDATASIZE PUSH1 4 LT` = cd > 4).
     evmc::bytes32 slot1Key{};
     slot1Key.bytes[31] = 0x01;
-    bcos::ledger::account::EVMAccount<ViewType> acc(view, bcos::evm::opstack::OP_L1_BLOCK, false);
+    bcos::ledger::account::EVMAccount<ViewType> acc(
+        view, bcos::evm::opstack::OP_L1_BLOCK, bcos::ledger::account::AddressTableMode::Hex);
     const auto slot1 = bcos::task::syncWait(acc.storage(slot1Key));
     BOOST_TEST_MESSAGE("L1Block slot1 after deposit: 0x"
                        << evmc::hex(evmc::bytes_view(slot1.bytes, sizeof(slot1.bytes))));
@@ -496,7 +500,8 @@ BOOST_AUTO_TEST_CASE(NonZeroL1ParamsAlignWithUnpackOpFeeParams)
     bcos::bytes code = bcos::fromHex(kL1BlockCodeHex);
     const auto codeHash = keccak256(code);
     bcos::task::syncWait([&]() -> bcos::task::Task<void> {
-        bcos::ledger::account::EVMAccount<ViewType> acc(view, bcos::evm::opstack::OP_L1_BLOCK, false);
+        bcos::ledger::account::EVMAccount<ViewType> acc(
+            view, bcos::evm::opstack::OP_L1_BLOCK, bcos::ledger::account::AddressTableMode::Hex);
         co_await acc.create();
         co_await acc.setCode(code, /*abi=*/"", codeHash);
         co_await acc.setNonce("1");
@@ -533,7 +538,8 @@ BOOST_AUTO_TEST_CASE(NonZeroL1ParamsAlignWithUnpackOpFeeParams)
     expectedSlot8.bytes[23] = 0x0b;
     expectedSlot8.bytes[31] = 0x0d;
 
-    bcos::ledger::account::EVMAccount<ViewType> acc(view, bcos::evm::opstack::OP_L1_BLOCK, false);
+    bcos::ledger::account::EVMAccount<ViewType> acc(
+        view, bcos::evm::opstack::OP_L1_BLOCK, bcos::ledger::account::AddressTableMode::Hex);
     // Stub L1Block bytecode packs scalars into slot3/8 per unpackOpFeeParams offsets but does not
     // store full uint256 words in slot1/7 — verify the consumer path instead of raw slot equality.
     bcos::evm::evmstate::Storage2State<ViewType> bridge(view);
@@ -573,7 +579,7 @@ BOOST_AUTO_TEST_CASE(DepositWritesFeeParamsReadableByLoadOpFeeParams)
     const auto codeHash = keccak256(code);
     bcos::task::syncWait([&]() -> bcos::task::Task<void> {
         bcos::ledger::account::EVMAccount<ViewType> acc(
-            view, bcos::evm::opstack::OP_L1_BLOCK, false);
+            view, bcos::evm::opstack::OP_L1_BLOCK, bcos::ledger::account::AddressTableMode::Hex);
         co_await acc.create();
         co_await acc.setCode(code, /*abi=*/"", codeHash);
         co_await acc.setNonce("1");
@@ -627,7 +633,7 @@ BOOST_AUTO_TEST_CASE(FailedDepositSealsBlockWithFullGasAndBumpedNonce)
     const auto codeHash = keccak256(code);
     bcos::task::syncWait([&]() -> bcos::task::Task<void> {
         bcos::ledger::account::EVMAccount<ViewType> acc(
-            view, bcos::evm::opstack::OP_L1_BLOCK, false);
+            view, bcos::evm::opstack::OP_L1_BLOCK, bcos::ledger::account::AddressTableMode::Hex);
         co_await acc.create();
         co_await acc.setCode(code, /*abi=*/"", codeHash);
         co_await acc.setNonce("1");
@@ -660,7 +666,8 @@ BOOST_AUTO_TEST_CASE(FailedDepositSealsBlockWithFullGasAndBumpedNonce)
     BOOST_CHECK_EQUAL(receipt->gasUsed(), bcos::u256{kTooLowGas});  // full gasLimit charged
 
     // Regolith: the depositor's nonce is force-incremented despite the failure.
-    bcos::ledger::account::EVMAccount<ViewType> acc(view, bcos::evm::opstack::OP_DEPOSITOR, false);
+    bcos::ledger::account::EVMAccount<ViewType> acc(
+        view, bcos::evm::opstack::OP_DEPOSITOR, bcos::ledger::account::AddressTableMode::Hex);
     const auto nonce = bcos::task::syncWait(acc.nonce());
     BOOST_REQUIRE(nonce.has_value());
     BOOST_CHECK_EQUAL(*nonce, std::string{"1"});
@@ -691,7 +698,9 @@ struct JovianShapeFixture
         bcos::bytes code = bcos::fromHex(kL1BlockCodeHex);
         const auto codeHash = keccak256(code);
         bcos::task::syncWait([&]() -> bcos::task::Task<void> {
-            bcos::ledger::account::EVMAccount<ViewType> acc(view, bcos::evm::opstack::OP_L1_BLOCK, false);
+            bcos::ledger::account::EVMAccount<ViewType> acc(
+                view, bcos::evm::opstack::OP_L1_BLOCK,
+                bcos::ledger::account::AddressTableMode::Hex);
             co_await acc.create();
             co_await acc.setCode(code, /*abi=*/"", codeHash);
             co_await acc.setNonce("1");
@@ -700,7 +709,8 @@ struct JovianShapeFixture
             // normal-block test where the tx actually executes.
             const auto kUserSender =
                 evmc::from_hex<evmc::address>("7e5f4552091a69125d5dfcb7b8c2659029395bdf").value();
-            bcos::ledger::account::EVMAccount<ViewType> usr(view, kUserSender, false);
+            bcos::ledger::account::EVMAccount<ViewType> usr(
+                view, kUserSender, bcos::ledger::account::AddressTableMode::Hex);
             co_await usr.create();
             co_await usr.setBalance(bcos::u256("1000000000000000000000"));  // 1000 ETH
             co_await usr.setNonce("0");
@@ -709,13 +719,15 @@ struct JovianShapeFixture
                     "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"));
             const auto authority =
                 evmc::from_hex<evmc::address>("1eff47bc3a10a45d4b230b5d10e37751fe6aa718").value();
-            bcos::ledger::account::EVMAccount<ViewType> auth(view, authority, false);
+            bcos::ledger::account::EVMAccount<ViewType> auth(
+                view, authority, bcos::ledger::account::AddressTableMode::Hex);
             co_await auth.create();
             co_await auth.setBalance(bcos::u256("1000000000000000000"));
             co_await auth.setNonce("0");
             const auto impl =
                 evmc::from_hex<evmc::address>("c0de000000000000000000000000000000000004").value();
-            bcos::ledger::account::EVMAccount<ViewType> implAcc(view, impl, false);
+            bcos::ledger::account::EVMAccount<ViewType> implAcc(
+                view, impl, bcos::ledger::account::AddressTableMode::Hex);
             co_await implAcc.create();
             co_await implAcc.setCode(bcos::fromHex("602a60015500"), /*abi=*/"",
                 keccak256(bcos::fromHex("602a60015500")));
@@ -871,7 +883,8 @@ BOOST_AUTO_TEST_CASE(MessagePasserStorageDrivesWithdrawalRoot)
     // Seed the MessagePasser (0x4200...11) with two non-zero slots.
     const auto kPasser = bcos::evm::opstack::OP_L2_TO_L1_MESSAGE_PASSER;
     bcos::task::syncWait([&]() -> bcos::task::Task<void> {
-        bcos::ledger::account::EVMAccount<ViewType> acc(fx.view, kPasser, false);
+        bcos::ledger::account::EVMAccount<ViewType> acc(
+            fx.view, kPasser, bcos::ledger::account::AddressTableMode::Hex);
         co_await acc.create();
         co_await acc.setNonce("1");
         evmc::bytes32 k1{};
@@ -905,12 +918,13 @@ BOOST_AUTO_TEST_CASE(MessagePasserStorageDrivesWithdrawalRoot)
     seeded[k1] = v1;
     seeded[k2] = v2;
     const auto expected = bcos::evm::opstack::opStorageRoot(seeded);
+    BOOST_REQUIRE(result.seal.withdrawalsRoot.has_value());
     BOOST_TEST_MESSAGE("seal withdrawalsRoot: 0x"
-                       << evmc::hex(evmc::bytes_view(result.seal.withdrawalsRoot.bytes,
-                                              sizeof(result.seal.withdrawalsRoot.bytes))));
+                       << evmc::hex(evmc::bytes_view(result.seal.withdrawalsRoot->bytes,
+                                              sizeof(result.seal.withdrawalsRoot->bytes))));
     BOOST_TEST_MESSAGE("expected opStorageRoot: 0x"
                        << evmc::hex(evmc::bytes_view(expected.bytes, sizeof(expected.bytes))));
-    BOOST_CHECK_EQUAL(std::memcmp(result.seal.withdrawalsRoot.bytes, expected.bytes,
+    BOOST_CHECK_EQUAL(std::memcmp(result.seal.withdrawalsRoot->bytes, expected.bytes,
                           sizeof(expected.bytes)),
         0);
 }
@@ -943,7 +957,8 @@ BOOST_AUTO_TEST_CASE(EmptyPasserStorageSealsEmptyRootConstant)
     auto result = fx.run({makeDepositEnvelope(makeJovianCalldataNonZero())},
         static_cast<int64_t>(2000) * 1000 + 1000);
     BOOST_REQUIRE_EQUAL(result.receipts.size(), 1u);
-    BOOST_CHECK_EQUAL(std::memcmp(result.seal.withdrawalsRoot.bytes, ledgerEmpty.data(),
+    BOOST_REQUIRE(result.seal.withdrawalsRoot.has_value());
+    BOOST_CHECK_EQUAL(std::memcmp(result.seal.withdrawalsRoot->bytes, ledgerEmpty.data(),
                           sizeof(emptyRoot.bytes)),
         0);
 }
@@ -967,7 +982,8 @@ BOOST_AUTO_TEST_CASE(SetCode7702InBlockWritesDelegation)
     const auto authority =
         evmc::from_hex<evmc::address>("1eff47bc3a10a45d4b230b5d10e37751fe6aa718").value();
     const auto impl = evmc::from_hex<evmc::address>("c0de000000000000000000000000000000000004").value();
-    bcos::ledger::account::EVMAccount<ViewType> acc(fx.view, authority, false);
+    bcos::ledger::account::EVMAccount<ViewType> acc(
+        fx.view, authority, bcos::ledger::account::AddressTableMode::Hex);
     auto codeEntry = bcos::task::syncWait(acc.code());
     BOOST_REQUIRE(codeEntry.has_value());
     const auto& code = codeEntry->get();
@@ -1011,16 +1027,19 @@ BOOST_AUTO_TEST_CASE(WithdrawTxWritesMessagePasserAndChangesRoot)
     const auto l1CodeHash = keccak256(l1Code);
 
     bcos::task::syncWait([&]() -> bcos::task::Task<void> {
-        bcos::ledger::account::EVMAccount<ViewType> l1(view, bcos::evm::opstack::OP_L1_BLOCK, false);
+        bcos::ledger::account::EVMAccount<ViewType> l1(
+            view, bcos::evm::opstack::OP_L1_BLOCK, bcos::ledger::account::AddressTableMode::Hex);
         co_await l1.create();
         co_await l1.setCode(l1Code, /*abi=*/"", l1CodeHash);
         co_await l1.setNonce("1");
         seedCanonicalL1FeeSlots(view);
-        bcos::ledger::account::EVMAccount<ViewType> mp(view, kPasser, false);
+        bcos::ledger::account::EVMAccount<ViewType> mp(
+            view, kPasser, bcos::ledger::account::AddressTableMode::Hex);
         co_await mp.create();
         co_await mp.setCode(passerCode, /*abi=*/"", passerCodeHash);
         co_await mp.setNonce("1");
-        bcos::ledger::account::EVMAccount<ViewType> snd(view, kSender, false);
+        bcos::ledger::account::EVMAccount<ViewType> snd(
+            view, kSender, bcos::ledger::account::AddressTableMode::Hex);
         co_await snd.create();
         co_await snd.setBalance(bcos::u256("1000000000000000000000"));  // 1000 ETH
         co_await snd.setNonce("0");
@@ -1044,7 +1063,8 @@ BOOST_AUTO_TEST_CASE(WithdrawTxWritesMessagePasserAndChangesRoot)
     auto slotHash = keccak256(slotInput);
     evmc::bytes32 slotKey{};
     std::copy_n(slotHash.data(), 32, slotKey.bytes);
-    bcos::ledger::account::EVMAccount<ViewType> mp(view, kPasser, false);
+    bcos::ledger::account::EVMAccount<ViewType> mp(
+        view, kPasser, bcos::ledger::account::AddressTableMode::Hex);
     const auto slotVal = bcos::task::syncWait(mp.storage(slotKey));
     BOOST_CHECK_EQUAL(slotVal.bytes[31], 0x01);
 
@@ -1055,12 +1075,13 @@ BOOST_AUTO_TEST_CASE(WithdrawTxWritesMessagePasserAndChangesRoot)
     one.bytes[31] = 0x01;
     expectedStorage[slotKey] = one;
     const auto expectedRoot = bcos::evm::opstack::opStorageRoot(expectedStorage);
-    BOOST_CHECK_EQUAL(std::memcmp(result.seal.withdrawalsRoot.bytes, expectedRoot.bytes,
+    BOOST_REQUIRE(result.seal.withdrawalsRoot.has_value());
+    BOOST_CHECK_EQUAL(std::memcmp(result.seal.withdrawalsRoot->bytes, expectedRoot.bytes,
                           sizeof(expectedRoot.bytes)),
         0);
     // And it is NOT the empty-trie root (the sendMessage changed the state).
     const auto emptyRoot = bcos::ledger::mpt::emptyRootHash();
-    BOOST_CHECK_NE(std::memcmp(result.seal.withdrawalsRoot.bytes, emptyRoot.data(),
+    BOOST_CHECK_NE(std::memcmp(result.seal.withdrawalsRoot->bytes, emptyRoot.data(),
                        bcos::h256::SIZE),
         0);
 }

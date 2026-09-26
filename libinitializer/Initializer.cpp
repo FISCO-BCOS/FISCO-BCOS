@@ -187,7 +187,8 @@ std::shared_ptr<bcos::engine::AnyEngineService> Initializer::engineService()
 
 void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
-    bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion, const std::string& _logPath)
+    bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion,
+    [[maybe_unused]] const std::string& _logPath)
 {
     // Engine-driven block production (single-node consensus or [op_engine_rpc]) is AIR-only.
     // Both modes skip txpool/pbft init and wire the in-process mempool into NodeService via
@@ -203,6 +204,18 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 "enable_single_node_consensus / op_engine_rpc.enable are only supported on "
                 "AIR nodes (in-process mempool/scheduler); not supported on MAX/tars "
                 "deployments"));
+    }
+
+    // The account-table migration rewrites the state RocksDB directly; on TiKV the chain
+    // state does not live there, so the flag would migrate the wrong store.
+    if (m_nodeConfig->migrateAccountTablesToBinary() &&
+        !boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "[storage] migrate_account_tables_to_binary requires RocksDB storage (the "
+                "state DB it rewrites); storage.type=" +
+                m_nodeConfig->storageType() + " keeps its chain state elsewhere"));
     }
 
     // TBB global thread control
@@ -241,6 +254,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     m_globalStateStorageInitializer =
         GlobalStateStorageInitializer::build(m_nodeConfig->storagePath(), rocksDBOption);
 
+    // Node-local account-table encoding, handled inside LedgerInitializer::build (lane check
+    // → layout-flag read → optional one-shot migration → mode publication, all before the
+    // genesis write). The open DB handle is passed down: RocksDB's single-instance lock
+    // forbids opening the state DB twice, and the ledger's decryption-aware config reads are
+    // what determine the executor lane.
+    AccountTableBoot accountTableBoot{.stateDB = m_globalStateStorageInitializer->rocksDB(),
+        .migrateToBinary = m_nodeConfig->migrateAccountTablesToBinary()};
+
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
         // Share CheckpointRocksDBStorage's RocksDB with the legacy storage layer.
@@ -262,31 +283,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_protocolInitializer->dataEncryption());
         }
     }
-#ifdef WITH_TIKV
-    else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
-    {
-        m_storage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-            m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-        if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
-        {  // TODO: in max node, scheduler will use storage to commit but the ledger only use
-           // storage to read, the storage which ledger use should not trigger the switch when the
-           // scheduler is committing block
-            schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-            consensusStorage = m_storage;
-            airExecutorStorage = m_storage;
-        }
-        else
-        {  // in AIR/PRO node, scheduler and executor in one process so need different storage
-            schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-            consensusStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-            airExecutorStorage = StorageInitializer::build(m_nodeConfig->pdAddrs(), _logPath,
-                m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath());
-        }
-    }
-#endif
     else
     {
         throw std::runtime_error("storage type not support");
@@ -294,13 +290,11 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     // build ledger
     auto ledger = LedgerInitializer::build(m_protocolInitializer->blockFactory(), m_storage,
-        m_nodeConfig, m_blockStorage, m_ioServicePool);
+        m_nodeConfig, m_blockStorage, m_ioServicePool, std::move(accountTableBoot));
     ledger->setKeyPageSize(m_nodeConfig->keyPageSize());
     m_ledger = ledger;
 
     bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory = nullptr;
-    // Note: since tikv-storage store txs with transaction, batch writing is more efficient than
-    // writing one by one
     if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
     {
         executionMessageFactory =
@@ -420,12 +414,18 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // boot-time init below: that init walks the window's state roots and, with
     // storage.mpt_prune_sweep_garbage on, deletes unreachable "/mpt/" rows, so a refusal
     // placed after it would turn a fail-fast into a slow, side-effectful one.
-    if (opStackMode && m_nodeConfig->mptPruneWindow() > 0)
+    // Only the engine-driven OP mode is refused: the devp2p self-sync lanes are SUPPORTED —
+    // their commit paths feed the same CommitObserver hooks as the PBFT and Engine API paths
+    // (EthereumBlockVerifier::verifyAndCommit via EthereumSyncInitializer;
+    // OpBlockVerifier::verifyAndCommit via OpStackSyncInitializer), so the window prunes at
+    // runtime there, not just at boot.
+    if (opStackMode && m_nodeConfig->mptPruneWindow() > 0 && !m_nodeConfig->opStackELModeEnabled())
     {
         BOOST_THROW_EXCEPTION(
             bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                "storage.mpt_prune_window is not supported in OP mode (executor_version>=3) yet: "
-                "the OP commit path has no MPT pruning observer"));
+                "storage.mpt_prune_window is not supported in engine-driven OP mode "
+                "(executor_version>=3) yet: the engine-API OP commit path has no MPT pruning "
+                "observer (the opstack-el self-sync path does — prune is supported there)"));
     }
 
     // [op_engine_rpc] requires the v2 pure-Ethereum executor or the OP lane: on
@@ -533,11 +533,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // ordered against a chunk reading that account's has_storage (an EIP-7610
         // CREATE-collision input) — a consensus divergence. Revisit (record the range read)
         // before v2 is allowed to run on a parallel scheduler.
-        auto ethereumSerialScheduler =
+        m_ethereumSerialScheduler =
             std::make_shared<scheduler_v1::SchedulerSerialImpl>(m_ioServicePool);
+        m_ethereumExecutor = ethereumExecutor;
         std::tie(m_ethereumSchedulerHolder, m_setEthereumSchedulerBlockNumberNotifier) =
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
-                m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
+                m_protocolInitializer->blockFactory(), m_ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 ethereumExecutor, m_mptCommitObserver,
                 !m_nodeConfig->engineDrivenBlockProduction());
@@ -554,7 +555,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger,
+                m_ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger,
                 bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState, m_mptCommitObserver);
         }
     }
@@ -576,11 +577,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         }
 
         // executor_version=2 baseline scheduler, driven by a dedicated serial pipeline.
-        auto ethereumSerialScheduler =
+        m_ethereumSerialScheduler =
             std::make_shared<scheduler_v1::SchedulerSerialImpl>(m_ioServicePool);
+        m_ethereumExecutor = ethereumExecutor;
         std::tie(m_ethereumSchedulerHolder, m_setEthereumSchedulerBlockNumberNotifier) =
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
-                m_protocolInitializer->blockFactory(), ethereumSerialScheduler,
+                m_protocolInitializer->blockFactory(), m_ethereumSerialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 ethereumExecutor, m_mptCommitObserver,
                 !m_nodeConfig->engineDrivenBlockProduction());
@@ -593,22 +595,26 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger,
+                m_ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger,
                 bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState, m_mptCommitObserver);
         }
     }
 
     if (opStackMode)
     {
-        // The OP chain is driven by an external op-node over the authenticated
-        // [op_engine_rpc] endpoint; there is no other block producer in OP mode.
-        if (!m_nodeConfig->engineDrivenBlockProduction())
+        // Two OP drivers: an external op-node over the authenticated [op_engine_rpc]
+        // endpoint (engine-driven block production), or the devp2p self-sync client
+        // (ethereum.mode=opstack-el, wired by AirNodeInitializer through
+        // OpStackSyncInitializer). Anything else (a plain PBFT chain on
+        // executor_version>=3) has no block producer at all — refuse.
+        if (!m_nodeConfig->engineDrivenBlockProduction() && !m_nodeConfig->opStackELModeEnabled())
         {
             BOOST_THROW_EXCEPTION(
                 bcos::tool::InvalidConfig() << bcos::errinfo_comment(
                     "OP mode (executor_version>=3) requires engine-driven block production "
-                    "([op_engine_rpc] enable): either enable [op_engine_rpc] on an OP chain, "
-                    "or set executor_version back to 2 by governance before upgrading a PBFT "
+                    "([op_engine_rpc] enable) or OP-Stack EL self-sync ([ethereum] "
+                    "mode=opstack-el): either enable [op_engine_rpc] on an OP chain, or set "
+                    "executor_version back to 2 by governance before upgrading a PBFT "
                     "chain"));
         }
         if (m_nodeConfig->enableSingleNodeConsensus())
@@ -728,46 +734,54 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_protocolInitializer->blockFactory(), m_globalStateStorageInitializer->storage(),
                 // Ledger on OpScheduler; engine keeps ledger=nullptr.
                 m_ledger, m_ioServicePool);
-        m_daCaps = std::make_shared<bcos::engine::DACaps>();
-        // Leftover inventory (Karst-on-#5550): this is the live OP Engine path
-        // (OpForkSchedule → OpSchedulerSeam → OpScheduler → AnyEngineService(OpEngineService)).
-        // EngineServiceImpl is test-only (EthLegacyEngine / parity). buildOp still takes
-        // maxEngineVersion=V4 and the Karst profile discards it in favor of timestamp-keyed
-        // getPayload V4/V5.
-        // The chain's EIP-1559 triple (config.genesis [op_eip1559], legacy preset when
-        // undeclared) prices every pre-Holocene block; resolved through the SAME
-        // effectiveOpEip1559 the genesis pin uses, so admission and the pin cannot disagree.
-        // The declared-ness travels with it: an undeclared OP lane is announced at WARNING,
-        // because the engine will substitute this preset whenever op-node reports zero params
-        // and the preset need not be this chain's pair.
-        auto const& declaredOpEip1559 = m_nodeConfig->genesisConfig().m_opEip1559;
-        auto const opEip1559 = bcos::engine::effectiveOpEip1559(declaredOpEip1559);
-        if (declaredOpEip1559.has_value())
+        // The Engine API service is the block producer only in engine-driven OP mode. In
+        // opstack-el self-sync mode blocks arrive over devp2p and commit through
+        // OpBlockVerifier (OpStackSyncInitializer), so no EngineService — and none of the
+        // DA-caps / mempool / EIP-1559-substitution wiring below that exists only to serve
+        // it — is built.
+        if (!m_nodeConfig->opStackELModeEnabled())
         {
-            INITIALIZER_LOG(INFO) << LOG_DESC("OP chain EIP-1559 parameters")
-                                  << LOG_KV("declared", true)
-                                  << LOG_KV("elasticity", opEip1559.elasticity)
-                                  << LOG_KV("denominator", opEip1559.denominator)
-                                  << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
+            m_daCaps = std::make_shared<bcos::engine::DACaps>();
+            // Leftover inventory (Karst-on-#5550): this is the live OP Engine path
+            // (OpForkSchedule → OpSchedulerSeam → OpScheduler → AnyEngineService(OpEngineService)).
+            // EngineServiceImpl is test-only (EthLegacyEngine / parity). buildOp still takes
+            // maxEngineVersion=V4 and the Karst profile discards it in favor of timestamp-keyed
+            // getPayload V4/V5.
+            // The chain's EIP-1559 triple (config.genesis [op_eip1559], legacy preset when
+            // undeclared) prices every pre-Holocene block; resolved through the SAME
+            // effectiveOpEip1559 the genesis pin uses, so admission and the pin cannot disagree.
+            // The declared-ness travels with it: an undeclared OP lane is announced at WARNING,
+            // because the engine will substitute this preset whenever op-node reports zero params
+            // and the preset need not be this chain's pair.
+            auto const& declaredOpEip1559 = m_nodeConfig->genesisConfig().m_opEip1559;
+            auto const opEip1559 = bcos::engine::effectiveOpEip1559(declaredOpEip1559);
+            if (declaredOpEip1559.has_value())
+            {
+                INITIALIZER_LOG(INFO) << LOG_DESC("OP chain EIP-1559 parameters")
+                                      << LOG_KV("declared", true)
+                                      << LOG_KV("elasticity", opEip1559.elasticity)
+                                      << LOG_KV("denominator", opEip1559.denominator)
+                                      << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
+            }
+            else
+            {
+                // Never silent: the engine substitutes exactly this preset into a block's extraData
+                // whenever op-node reports zero params (op-deployer leaves L1 SystemConfig's params
+                // zero unless setEIP1559Params is called), and the preset need not be this chain's
+                // pair.
+                INITIALIZER_LOG(WARNING)
+                    << LOG_DESC(
+                           "OP chain EIP-1559 parameters UNDECLARED: assuming the OP-mainnet "
+                           "preset (declare [op_eip1559] if this chain's values differ)")
+                    << LOG_KV("declared", false) << LOG_KV("elasticity", opEip1559.elasticity)
+                    << LOG_KV("denominator", opEip1559.denominator)
+                    << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
+            }
+            m_engineServiceInitializer = EngineServiceInitializer::buildOp(
+                m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
+                m_memPoolInitializer->memPool(), bcos::engine::c_defaultBlockTxCountLimit, opDelegate,
+                m_daCaps, /*allowSynthesizedL1Attributes=*/false, declaredOpEip1559);
         }
-        else
-        {
-            // Never silent: the engine substitutes exactly this preset into a block's extraData
-            // whenever op-node reports zero params (op-deployer leaves L1 SystemConfig's params
-            // zero unless setEIP1559Params is called), and the preset need not be this chain's
-            // pair.
-            INITIALIZER_LOG(WARNING)
-                << LOG_DESC(
-                       "OP chain EIP-1559 parameters UNDECLARED: assuming the OP-mainnet "
-                       "preset (declare [op_eip1559] if this chain's values differ)")
-                << LOG_KV("declared", false) << LOG_KV("elasticity", opEip1559.elasticity)
-                << LOG_KV("denominator", opEip1559.denominator)
-                << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
-        }
-        m_engineServiceInitializer = EngineServiceInitializer::buildOp(
-            m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
-            m_memPoolInitializer->memPool(), bcos::engine::c_defaultBlockTxCountLimit, opDelegate,
-            m_daCaps, /*allowSynthesizedL1Attributes=*/false, declaredOpEip1559);
 
         m_opScheduler = opDelegate;
         // Republish the full ledger configuration after every OP commit. OP commits go
@@ -865,13 +879,17 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // (NodeConfig requires an explicit evm_revision for executor_version>=2), so a one-time
     // INFO line is accurate and stays off the per-block / per-RPC getLedgerConfig hot path.
     // The CI integration test greps this line to pin the effective revision.
+    // Ethereum L1 EL mode (ethereum.mode=el) is exempt: its EVMC revision is derived from the
+    // per-block timestamp via the [fork_timestamps] schedule (EthereumBlockVerifier's
+    // fillExecutionLedgerConfig), never from an on-chain evmc_revision row.
     //
     // The OP lane is outside this probe: NodeConfig rejects an explicit revision there and
     // Ledger::buildGenesisBlock therefore writes no evmc_revision row, because OpScheduler
     // derives it per block from [op_fork_timestamps] (configAt(schedule, blockTime).rev). Its
     // absence is the expected shape, not the runtime-switch hazard this guard targets.
     if (m_executorVersion >= scheduler_v1::ETHEREUM_EXECUTOR_VERSION &&
-        !bcos::ledger::isOpLaneVersion(m_executorVersion))
+        !bcos::ledger::isOpLaneVersion(m_executorVersion) &&
+        !m_nodeConfig->ethereumELModeEnabled())
     {
         if (auto evmcRev = task::syncWait(ledger::getSystemConfig(
                 *m_ledger, magic_enum::enum_name(ledger::SystemConfig::evmc_revision))))
@@ -902,27 +920,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     // Set scheduler to TxPoolInitializer after scheduler is created
     m_txpoolInitializer->setScheduler(m_scheduler);
-
-    if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
-    {
-#ifdef WITH_TIKV
-        std::weak_ptr<bcos::scheduler::SchedulerManager> schedulerWeakPtr =
-            std::dynamic_pointer_cast<bcos::scheduler::SchedulerManager>(m_scheduler);
-        auto switchHandler = [scheduler = schedulerWeakPtr]() {
-            if (scheduler.lock())
-            {
-                scheduler.lock()->triggerSwitch();
-            }
-        };
-        if (_nodeArchType != bcos::protocol::NodeArchitectureType::MAX)
-        {
-            dynamic_pointer_cast<bcos::storage::TiKVStorage>(airExecutorStorage)
-                ->setSwitchHandler(switchHandler);
-        }
-        dynamic_pointer_cast<bcos::storage::TiKVStorage>(schedulerStorage)
-            ->setSwitchHandler(switchHandler);
-#endif
-    }
 
     bcos::storage::CacheStorageFactory::Ptr cacheFactory = nullptr;
     if (m_nodeConfig->enableLRUCacheStorage())
@@ -1031,7 +1028,15 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // keeps the EngineService the sole block producer; otherwise PBFT and the engine driver
     // would write blocks to the same global storage concurrently. The front service is
     // still wired for gateway bookkeeping, but its dispatchers are inert with no peers.
-    if (!m_nodeConfig->engineDrivenBlockProduction())
+    //
+    // Ethereum L1 EL mode (ethereum.mode=el) and OP-Stack EL self-sync
+    // (ethereum.mode=opstack-el) skip them for the same reason, one level further out:
+    // blocks arrive over devp2p download (EthereumSyncInitializer / OpStackSyncInitializer)
+    // and there is no local block production at all, so the txpool's ledger reads at init
+    // and the consensus/sync handlers pbft->init() registers would serve nothing. start()
+    // below already skips all three modes.
+    if (!m_nodeConfig->engineDrivenBlockProduction() && !m_nodeConfig->ethereumELModeEnabled() &&
+        !m_nodeConfig->opStackELModeEnabled())
     {
         // init the txpool
         m_txpoolInitializer->init();
@@ -1039,6 +1044,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // Note: must init PBFT after txpool, in case of pbft calls txpool to verifyBlock before
         // txpool init finished
         m_pbftInitializer->init();
+    }
+    else if (m_nodeConfig->ethereumELModeEnabled() || m_nodeConfig->opStackELModeEnabled())
+    {
+        INITIALIZER_LOG(INFO) << LOG_DESC(
+            "EL self-sync mode (ethereum.mode=el|opstack-el): skip txpool/pbft/sealer init "
+            "(blocks arrive via devp2p download; no local block production)");
     }
     else
     {
@@ -1314,7 +1325,12 @@ void Initializer::start()
 {
     // Engine-driven modes (single-node consensus / op_engine_rpc): txpool/pbft (and the
     // sealer inside pbft) stay dormant — block production goes through the EngineService.
-    if (!m_nodeConfig->engineDrivenBlockProduction())
+    // EL self-sync modes (ethereum.mode=el / opstack-el): the node is a pure execution-layer
+    // client; blocks come from bootnode download (EthereumSyncInitializer /
+    // OpStackSyncInitializer), never from FISCO consensus/txpool, so those pipelines also
+    // stay dormant.
+    if (!m_nodeConfig->engineDrivenBlockProduction() && !m_nodeConfig->ethereumELModeEnabled() &&
+        !m_nodeConfig->opStackELModeEnabled())
     {
         if (m_txpoolInitializer)
         {
@@ -1530,7 +1546,7 @@ bcos::Error::Ptr Initializer::generateSnapshot(const std::string& snapshotPath,
     bool withTxAndReceipts, const tool::NodeConfig::Ptr& nodeConfig)
 {
     if (!boost::iequals(nodeConfig->storageType(), "RocksDB"))
-    {  // TODO: support TiKV
+    {
         std::cerr << "only support RocksDB storage" << std::endl;
         return BCOS_ERROR_PTR(-1, "only support RocksDB storage");
     }
@@ -1803,7 +1819,7 @@ bcos::Error::Ptr Initializer::importSnapshot(
     const std::string& snapshotPath, const tool::NodeConfig::Ptr& nodeConfig)
 {
     if (!boost::iequals(nodeConfig->storageType(), "RocksDB"))
-    {  // TODO: support TiKV
+    {
         std::cerr << "only support RocksDB storage" << std::endl;
         return BCOS_ERROR_PTR(-1, "only support RocksDB storage");
     }

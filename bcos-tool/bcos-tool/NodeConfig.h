@@ -42,10 +42,8 @@ class NodeConfig
 public:
     constexpr static ssize_t DEFAULT_CACHE_SIZE = 32 * 1024 * 1024;
     constexpr static ssize_t DEFAULT_MIN_CONSENSUS_TIME_MS = 3000;
-    constexpr static ssize_t DEFAULT_MIN_LEASE_TTL_SECONDS = 3;
     constexpr static ssize_t DEFAULT_MAX_SEAL_TIME_MS = 600000;
     constexpr static ssize_t DEFAULT_PIPELINE_SIZE = 50;
-
     using Ptr = std::shared_ptr<NodeConfig>;
     NodeConfig();
 
@@ -56,8 +54,8 @@ public:
     explicit NodeConfig(bcos::crypto::KeyFactory::Ptr _keyFactory);
     virtual ~NodeConfig() = default;
 
-    virtual void loadConfig(std::string const& _configPath, bool _enforceMemberID = true,
-        bool enforceChainConfig = false, bool enforceGroupId = true);
+    virtual void loadConfig(std::string const& _configPath, bool enforceChainConfig = false,
+        bool enforceGroupId = true);
     virtual void loadServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadGatewayServiceConfig(boost::property_tree::ptree const& _pt);
@@ -79,7 +77,7 @@ public:
 
     virtual void loadGenesisConfigFromString(std::string const& _content);
 
-    virtual void loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID = true,
+    virtual void loadConfig(boost::property_tree::ptree const& _pt,
         bool _enforceChainConfig = false, bool _enforceGroupId = true);
     virtual void loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig);
 
@@ -95,9 +93,10 @@ public:
 
     /// OP-lane fork schedule from the genesis [op_fork_timestamps] section: activation times
     /// in SECONDS, keyed per block by the L2 block timestamp exactly as op-node keys
-    /// rollup.json's jovian_time / karst_time. Present iff the section is present, which
+    /// rollup.json's *_time fields. Present iff the section is present, which
     /// validateL2Invariants binds both ways to executor.version >= OPSTACK_EXECUTOR_VERSION.
-    /// Isthmus is the lane baseline and has no entry.
+    /// An unset isthmus_time keeps Isthmus as the zero-start baseline (existing chains); a
+    /// set one activates the full Bedrock..Karst ladder (Bedrock is genesis, no entry).
     std::optional<ledger::OpForkSchedule> const& opForkSchedule() const;
 
     /// The chain's EIP-1559 triple from the genesis [op_eip1559] section, or nullopt when the
@@ -142,10 +141,10 @@ public:
     // finds (init Phase 3). Default false: the scan is skipped entirely (only a hint is
     // logged — counting the garbage would itself cost the full-table scan).
     bool mptPruneSweepGarbage() const;
-    std::vector<std::string> const& pdAddrs() const;
-    std::string const& pdCaPath() const;
-    std::string const& pdCertPath() const;
-    std::string const& pdKeyPath() const;
+    // One-shot offline hex→binary account-table migration at boot
+    // ([storage] migrate_account_tables_to_binary, default false). Safe to leave on: once the
+    // layout flag in the state DB says "bin" the boot skips the scan entirely.
+    bool migrateAccountTablesToBinary() const;
     std::string const& storageDBName() const;
     std::string const& stateDBName() const;
     bool enableArchive() const;
@@ -252,14 +251,30 @@ public:
     // from RLPx bootnodes, verifies them with EthereumBlockVerifier and commits them
     // locally — no FISCO gateway / PBFT / txpool pipeline.
     bool ethereumELModeEnabled() const;
-    const std::string& ethereumListenIP() const;
-    uint16_t ethereumListenPort() const;
+    // mode=opstack-el: same self-sync shape for an OP-Stack chain (executor_version >= 3):
+    // blocks download from op-geth EL peers over devp2p and commit through OpBlockVerifier.
+    // Mutually exclusive with mode=el and with [op_engine_rpc] (the sync client replaces
+    // the engine-API driver, it does not complement it).
+    bool opStackELModeEnabled() const;
+    // [ethereum] op_block_time_seconds: the OP chain's block cadence in seconds (rollup.json
+    // block_time; 2 on every superchain chain). Feeds the header validator's soft
+    // block-interval check. Default 2, accepted range [1, 60].
+    uint64_t opBlockTimeSeconds() const;
+    // [ethereum] op_sync_lag_blocks: how far behind the peer's UNSAFE head the OP-EL sync
+    // caps its download (a tip-reorg-avoidance heuristic only — it does NOT track the OP
+    // safe/finalized head, which L1 batch derivation defines and which can lag the unsafe
+    // head by a whole sequencing window). Default 64, accepted range [0, 10000];
+    // 0 = download right up to the peer's tip.
+    uint64_t opSyncLagBlocks() const;
     // path to the bootnodes file (enode:// list, geth-style); default ./bootnodes.json
     const std::string& ethereumBootnodesFile() const;
-    // path to the secp256k1 node private key (PEM/hex), default empty => derive/load
-    // from the node's own key material
+    // path to a file holding the 32-byte secp256k1 node private key (hex, optional
+    // 0x prefix); empty => auto-generate a persistent key next to the FISCO node key
+    // on first start (conf/node.rlpx.key) so the RLPx identity survives restarts
     const std::string& ethereumNodeKeyFile() const;
     uint32_t ethereumMaxBatchSize() const;
+    // the EL-sync chain id ([web3] chain_id in config.genesis), pinned when the genesis
+    // declares an EL-sync mode (el or opstack-el); 0 = unset (never a mainnet fallback)
     uint64_t ethereumChainId() const;
     // EL-mode fork schedule ([fork_timestamps] in config.genesis): L1 PoS chains fork on
     // timestamps (not block heights); 0 means active from genesis, and an absent
@@ -272,6 +287,20 @@ public:
     uint64_t ethereumForkOsakaTime() const;
     uint64_t ethereumForkBpo1Time() const;
     uint64_t ethereumForkBpo2Time() const;
+    // The merge (TTD) block number ([fork_timestamps].merge_block in config.genesis):
+    // blocks below it follow PoW header rules (non-zero difficulty, ommers allowed),
+    // from it onward PoS rules. 0 = PoS from genesis. REQUIRED whenever a
+    // [fork_timestamps] section is present — there is no chain-agnostic default.
+    uint64_t ethereumMergeBlock() const;
+    // Optional operator-pinned finalized checkpoint ([ethereum].finalized_checkpoint in
+    // config.ini, "<number>:<0xHASH>"): the committed block at `number` must carry
+    // `hash` — a mismatch means the bootnodes serve a wrong fork and is fatal.
+    struct EthereumFinalizedCheckpoint
+    {
+        uint64_t number = 0;
+        bcos::crypto::HashType hash;
+    };
+    std::optional<EthereumFinalizedCheckpoint> const& ethereumFinalizedCheckpoint() const;
 
     // the gateway configurations
     const std::string& p2pListenIP() const;
@@ -313,11 +342,6 @@ public:
 
     uint32_t compatibilityVersion() const;
     std::string compatibilityVersionStr() const;
-
-    std::string const& memberID() const;
-    unsigned leaseTTL() const;
-    bool enableFailOver() const;
-    std::string const& failOverClusterUrl() const;
 
     bool storageSecurityEnable() const;
     std::string storageSecuirtyKeyCenterUrl() const;
@@ -393,8 +417,6 @@ protected:
     virtual void loadStorageConfig(boost::property_tree::ptree const& _pt);
     virtual void loadConsensusConfig(boost::property_tree::ptree const& _pt);
 
-    virtual void loadFailOverConfig(
-        boost::property_tree::ptree const& _pt, bool _enforceMemberID = true);
     virtual void loadOthersConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadLedgerConfig(boost::property_tree::ptree const& _genesisConfig);
@@ -508,14 +530,10 @@ private:
     std::string m_storagePath;
     std::string m_storageType = "RocksDB";
     size_t m_keyPageSize = 10240;
-    std::vector<std::string> m_pd_addrs;
-    std::string m_pdCaPath;
-    std::string m_pdCertPath;
-    std::string m_pdKeyPath;
     bool m_enableDBStatistics = false;
     int m_maxWriteBufferNumber = 3;
     int m_maxBackgroundJobs = 3;
-    int m_maxOpenFiles = -1;
+    int m_maxOpenFiles = 256;
     size_t m_writeBufferSize = 64 << 21;
     int m_minWriteBufferNumberToMerge = 2;
     size_t m_blockCacheSize = 128 << 20;
@@ -527,6 +545,9 @@ private:
     // booting. Default off — the boot skips the scan entirely and only logs a hint (counting
     // the garbage would itself cost the full-table scan).
     bool m_mptPruneSweepGarbage = false;
+    // One-shot boot-time migration of the account tables to the binary encoding
+    // (libinitializer/AccountTableMigration). Hex-only executor lanes refuse it at boot.
+    bool m_migrateAccountTablesToBinary = false;
 
     bool m_enableArchive = false;
     bool m_syncArchivedBlocks = false;
@@ -628,14 +649,20 @@ private:
 
     // config for Ethereum L1 EL-mode self-sync ([ethereum] in config.ini)
     bool m_enableEthereumEL = false;
-    std::string m_ethereumListenIP = "0.0.0.0";
-    uint16_t m_ethereumListenPort = 30303;
+    // mode=opstack-el: OP-Stack devp2p self-sync (executor_version >= 3). Shares the
+    // bootnodes/node_key/max_batch/finalized_checkpoint knobs with mode=el.
+    bool m_enableOpStackEL = false;
+    uint64_t m_opBlockTimeSeconds = 2;
+    uint64_t m_opSyncLagBlocks = 64;
     std::string m_ethereumBootnodesFile = "./bootnodes.json";
     std::string m_ethereumNodeKeyFile;
     uint32_t m_ethereumMaxBatchSize = 192;
-    // The EL-mode chain id, validated and pinned from config.genesis's [web3] chain_id
-    // (validateL2Invariants) when the genesis declares EL mode. 0 = unset: a read
-    // outside EL mode is obviously invalid rather than silently Ethereum mainnet.
+    uint64_t m_ethereumMergeBlock = 0;
+    std::optional<EthereumFinalizedCheckpoint> m_ethereumFinalizedCheckpoint;
+    // The EL-sync chain id, validated and pinned from config.genesis's [web3] chain_id
+    // (validateL2Invariants) when the genesis declares an EL-sync mode (el or
+    // opstack-el). 0 = unset: a read outside EL-sync mode is obviously invalid rather
+    // than silently Ethereum mainnet.
     uint64_t m_ethereumChainId = 0;
     // The EL-mode fork schedule ([fork_timestamps] in config.genesis) lives on
     // m_genesisConfig.m_ethereumForkSchedule; the REQUIRED pre-Prague ladder
@@ -661,13 +688,6 @@ private:
 
     bool m_enableLRUCacheStorage = true;
     ssize_t m_cacheSize = DEFAULT_CACHE_SIZE;  // 32MB for default
-
-    // failover config
-    std::string m_memberID;
-    unsigned m_leaseTTL = 0;
-    bool m_enableFailOver = false;
-    // etcd/zookeeper/consual url
-    std::string m_failOverClusterUrl;
 
     // others config
     int m_sendTxTimeout = -1;

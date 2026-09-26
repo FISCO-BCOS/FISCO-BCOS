@@ -66,12 +66,7 @@ ProPBFTInitializer::ProPBFTInitializer(bcos::protocol::NodeArchitectureType _nod
 
 void ProPBFTInitializer::scheduledTask()
 {
-    if (m_leaderElection && m_leaderElection->electionClusterOk())
-    {
-        m_timer->stop();
-        return;
-    }
-    // not enable failover, report nodeInfo to rpc/gw periodly
+    // report nodeInfo to rpc/gw periodly
     reportNodeInfo();
     m_timer->restart();
 }
@@ -105,7 +100,7 @@ void ProPBFTInitializer::reportNodeInfo()
 void ProPBFTInitializer::start()
 {
     PBFTInitializer::start();
-    if (m_timer && !m_nodeConfig->enableFailOver())
+    if (m_timer)
     {
         m_timer->start();
     }
@@ -124,12 +119,7 @@ void ProPBFTInitializer::stop()
 
 void ProPBFTInitializer::onGroupInfoChanged()
 {
-    if (!m_leaderElection || !m_leaderElection->electionClusterOk())
-    {
-        reportNodeInfo();
-        return;
-    }
-    PBFTInitializer::onGroupInfoChanged();
+    reportNodeInfo();
 }
 
 
@@ -150,20 +140,5 @@ void ProPBFTInitializer::init()
         onGroupInfoChanged();
     });
     PBFTInitializer::init();
-    // Note: m_leaderElection is created after PBFTInitializer::init
-    if (m_leaderElection)
-    {
-        m_leaderElection->registerOnElectionClusterException([this]() {
-            INITIALIZER_LOG(INFO) << LOG_DESC("OnElectionClusterException")
-                                  << LOG_KV("nodeName", m_nodeConfig->nodeName());
-        });
-        m_leaderElection->registerOnElectionClusterRecover([]() {
-            INITIALIZER_LOG(INFO) << LOG_DESC(
-                "OnElectionClusterRecover: stop reportNodeInfo to rpc/gateway");
-        });
-    }
-    else
-    {
-        reportNodeInfo();
-    }
+    reportNodeInfo();
 }

@@ -12,9 +12,9 @@
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerPolicy.h>
 #include <opstack-executor/OpstackExecutor.h>
-#include <opstack-executor/RecentBlockHashes.h>
-#include <opstack-executor/Storage2State.h>
-#include <opstack-executor/Storage2StateHelpers.h>
+#include <bcos-evm/adapter/RecentBlockHashes.h>
+#include <bcos-evm/adapter/Storage2State.h>
+#include <bcos-evm/adapter/Storage2StateHelpers.h>
 
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>

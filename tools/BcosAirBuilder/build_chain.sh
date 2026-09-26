@@ -1493,6 +1493,11 @@ generate_common_ini() {
     ; if modify enable_separate_block_state, should clear the data directory
     ;enable_separate_block_state=false
     ;sync_archived_blocks=false
+    ; One-shot offline migration of the account tables to the binary layout at boot;
+    ; the mode-aware lanes (baseline v1, Eth engine, OP) accept it, only the legacy
+    ; v0 executor lane (executor_version=0) refuses to boot with it; safe to remove
+    ; once migration has completed
+    ;migrate_account_tables_to_binary=false
 
 [txpool]
     ; size of the txpool, default is 15000

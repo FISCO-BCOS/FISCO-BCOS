@@ -144,7 +144,8 @@ bcos::protocol::Transaction::Ptr buildEip1559FiscoTx()
 /// existing account with empty code; a bare setBalance would leave it nonexistent).
 void fundSender(MutableStorage& storage, bcos::crypto::Hash::Ptr const& hashImpl)
 {
-    bcos::ledger::account::EVMAccount<MutableStorage> account(storage, kSender, false);
+    bcos::ledger::account::EVMAccount<MutableStorage> account(
+        storage, kSender, bcos::ledger::account::AddressTableMode::Hex);
     bcos::task::syncWait(account.create());
     bcos::task::syncWait(account.setCode({}, {}, hashImpl->emptyHash()));
     bcos::task::syncWait(account.setNonce("0"));

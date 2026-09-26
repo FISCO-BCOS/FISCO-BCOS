@@ -28,8 +28,8 @@
 #include <opstack-executor/OpCommon.h>
 // toBlockInfo / narrowU256ToU64 / toEvmcBytes32 / OpBlockSeal
 #include <opstack-executor/OpstackExecutor.h>
-#include <opstack-executor/RecentBlockHashes.h>
-#include <opstack-executor/Storage2State.h>
+#include <bcos-evm/adapter/RecentBlockHashes.h>
+#include <bcos-evm/adapter/Storage2State.h>
 #include <algorithm>
 #include <array>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
@@ -352,7 +352,8 @@ inline const evmc::bytes32 OP_EMPTY_REQUESTS_HASH = [] {
 /// word gates the leaf shape — Canyon+ appends nonce+version, while the pre-Canyon
 /// (Regolith) receipt hash inadvertently omitted the nonce too. Meta presence must
 /// agree with the fork in both directions: cfg decides, a mismatch is a consensus
-/// error, never a silently different leaf.
+/// error, never a silently different leaf. Normal txs keep their typed prefix +
+/// rlp([status, cumGas, bloom, logs]).
 [[nodiscard]] bcos::bytes encodeReceiptForRoot(
     const bcos::protocol::TransactionReceipt& r, uint8_t txType, const OpForkConfig& cfg);
 }  // namespace bcos::evm::opstack
@@ -680,7 +681,13 @@ void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
     }
 
     // The Cancun/Ecotone beacon root and blob pair exist only from Ecotone on; a pre-Ecotone
-    // header must not be required to carry them.
+    // header must not be required to carry them. This leniency is what lets the devp2p sync
+    // path (OpBlockVerifier) replay Bedrock..Delta blocks: pre-Ecotone OP headers carry no
+    // parentBeaconBlockRoot / blobGasUsed at all (the fork-gated header shape, devp2p's
+    // OpHeaderValidator), which the strict toBlockInfo would reject as a missing required
+    // header field. The zero-filled optionals are dead EVM inputs pre-Cancun (no EIP-4788
+    // beacon-roots system call, no blob fee), so the leniency is semantics-neutral; Ecotone+
+    // headers carry the fields and stay strict.
     auto blk = detail::toBlockInfo(header, std::nullopt, /*lenientOptionals=*/false,
         /*requireEcotoneHeaderFields=*/cfg.fork >= op::OpFork::Ecotone);
     hashes.emplace(

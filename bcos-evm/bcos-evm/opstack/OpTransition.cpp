@@ -237,12 +237,17 @@ OpReceiptMeta deriveOpReceiptMeta(const OpTxProperties& props, intx::uint256 ope
     OpReceiptMeta m;
     m.l1_gas_price = fee.l1_base_fee;
     m.l1_fee = props.l1_cost;
-    if (props.bedrock_l1_gas_used.has_value())
+    if (props.bedrock_l1_gas_used.has_value() || props.legacy_l1_gas_used.has_value())
     {
         // Pre-Ecotone receipt shape (op-geth deriveOPStackFields pre-Ecotone): L1GasUsed =
         // rollupDataGas + overhead, L1FeeScalar = the raw Bedrock scalar. The Ecotone
         // scalar/blob passthrough fields stay absent — op-geth leaves them nil pre-Ecotone.
-        m.l1_gas_used = *props.bedrock_l1_gas_used;
+        // Either snapshot member marks the receipt as legacy-priced: opValidate sets both
+        // (the bedrock one saturates >= 2^64, the legacy one truncates like op-geth's
+        // Uint64()); hand-built test props may carry only one.
+        m.l1_gas_used = props.bedrock_l1_gas_used.has_value() ?
+                            *props.bedrock_l1_gas_used :
+                            *props.legacy_l1_gas_used;
         m.l1_fee_scalar = props.bedrock_l1_fee_scalar;
     }
     else
@@ -415,10 +420,36 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
 
     uint32_t flzLen = 0;
     intx::uint256 l1Cost;
-    // FastLZ only prices the Fjord formula. Bedrock and Ecotone
-    // (including its zero-slot fallback) both route through computeL1Cost — routing them through
-    // the flz branch here would price every pre-Fjord block as Fjord.
-    if (cfg.l1_fee_model == L1FeeModel::Fjord)
+    std::optional<uint64_t> legacyL1GasUsed;
+    if (cfg.has_legacy_l1_formula)
+    {
+        // Bedrock–Delta: (txDataGas + overhead) * l1BaseFee * l1FeeScalar / 1e6, with the +68
+        // phantom non-zero bytes pre-Regolith (op-geth newL1CostFuncBedrockHelper's isRegolith
+        // switch, core/types/rollup_cost.go). regolith_deposit_fixes is exactly
+        // IsRegolith(blockTime) for every config in the ladder (false only on bedrockConfig,
+        // whose .fork aliases Regolith — a cfg.fork >= Regolith probe would lie there).
+        const auto legacy =
+            computeLegacyL1Cost(fee, signedTxEnvelope, /*regolithActive=*/cfg.regolith_deposit_fixes);
+        l1Cost = legacy.fee;
+        legacyL1GasUsed = legacy.gas_used;
+    }
+    else if (!ecotoneL1SlotsLive(fee))
+    {
+        // First-Ecotone-block fallback (op-geth rollup_cost.go NewL1CostFunc selectFunc):
+        // Ecotone is active but the L1Block Ecotone parameters read all-zero (the activation
+        // block's L1 attributes deposit is still Bedrock-formatted), so the Bedrock legacy
+        // formula applies — with isRegolith=true (Ecotone ≥ Regolith, no +68 phantom bytes).
+        // Checked before the Ecotone/Fjord split: "the first block of Fjord and Ecotone could
+        // be the same block" — an Isthmus-era migrated chain whose L1Block still carries only
+        // the legacy slots takes this same branch.
+        const auto legacy = computeLegacyL1Cost(fee, signedTxEnvelope, /*regolithActive=*/true);
+        l1Cost = legacy.fee;
+        legacyL1GasUsed = legacy.gas_used;
+    }
+    // FastLZ only prices the Fjord formula (and Ecotone with live slots routes through
+    // computeL1Cost, which selects the Ecotone arm itself) — routing a pre-Fjord block
+    // through the flz branch here would price it as Fjord.
+    else if (cfg.l1_fee_model == L1FeeModel::Fjord)
     {
         flzLen = flzCompressLen(signedTxEnvelope);
         l1Cost = computeL1CostFromFlz(fee, flzLen, cfg);
@@ -451,13 +482,13 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
         flzLen, cfg.has_operator_fee, cfg.has_jovian_operator_formula, cfg.has_da_footprint};
     // Receipt-shape snapshot, frozen at validate time (deriveOpReceiptMeta takes no cfg):
     // - Ecotone formula actually ran (slots live): calldataGas becomes l1_gas_used.
-    // - Bedrock formula ran (Bedrock model, or the Ecotone zero-slot fallback): the receipt gets
-    //   the pre-Ecotone shape — l1_gas_used = gas + overhead, L1FeeScalar = raw Bedrock scalar.
-    // - Fjord+: both stay unset; flz_len drives l1_gas_used.
-    // Same selection helper computeL1Cost consumes — the fee and the receipt snapshot
+    // - A legacy/Bedrock formula ran (has_legacy_l1_formula, or the zero-slot fallback on
+    //   any model — legacyL1GasUsed is set exactly then): the receipt gets the pre-Ecotone
+    //   shape — l1_gas_used = gas + overhead, L1FeeScalar = raw Bedrock scalar.
+    // - Fjord+ with live slots: both stay unset; flz_len drives l1_gas_used.
+    // Same selection the fee computation above made — the fee and the receipt snapshot
     // cannot disagree about which formula ran.
-    const bool bedrockFormula = bedrockFormulaActive(cfg, fee);
-    if (bedrockFormula)
+    if (legacyL1GasUsed.has_value())
     {
         // Pre-Ecotone receipt L1GasUsed = rollupDataGas + overhead. op-geth keeps it a
         // *big.Int: `gasWithOverhead := new(big.Int).SetUint64(gas); Add(gasWithOverhead,
@@ -468,17 +499,28 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
         // whole-slot uint256 read from slot 5 / calldata arg 6, but the canonical
         // L1Block.setL1BlockValues writes a uint64, so the sum fits on a valid chain.
         // Saturate (never wrap mod 2^64) if adversarial state exceeds it; upstream never
-        // wraps either. NB: there is no params.L1FeeOverhead symbol at the pin.
+        // wraps either. NB: there is no params.L1FeeOverhead symbol at the pin. The data-gas
+        // term mirrors the isRegolith switch the fee formula above ran with — pre-Regolith
+        // (bedrockConfig on the merged full ladder) legacyTxDataGas carries op-geth's one-time
+        // +68 phantom non-zero bytes, which bedrockCalldataGasUsed alone would drop.
         const auto gasWithOverhead =
-            intx::uint256{bcos::evm::opstack::bedrockCalldataGasUsed(signedTxEnvelope)} +
+            intx::uint256{bcos::evm::opstack::legacyTxDataGas(signedTxEnvelope,
+                cfg.has_legacy_l1_formula ? cfg.regolith_deposit_fixes : true)} +
             fee.overhead;
         props.bedrock_l1_gas_used = gasWithOverhead > std::numeric_limits<uint64_t>::max() ?
                                         std::numeric_limits<uint64_t>::max() :
                                         static_cast<uint64_t>(gasWithOverhead);
         props.bedrock_l1_fee_scalar = fee.bedrock_scalar;
+        // Release-line (#5632) twin of the snapshot above: the overhead-inclusive gas the
+        // legacy fee formula actually ran on (op-geth's Uint64() truncation; includes the
+        // pre-Regolith +68 phantom bytes when the legacy arm ran pre-Regolith).
+        props.legacy_l1_gas_used = legacyL1GasUsed;
     }
     else if (cfg.l1_fee_model == L1FeeModel::Ecotone)
     {
+        // Under the Ecotone formula, snapshot the envelope's bedrockCalldataGasUsed
+        // (zeroes*4 + ones*16) for deriveOpReceiptMeta to read as l1_gas_used —
+        // preserving the no-cfg invariant.
         props.ecotone_calldata_gas_used =
             std::optional<uint64_t>{bcos::evm::opstack::bedrockCalldataGasUsed(signedTxEnvelope)};
     }
@@ -545,8 +587,18 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
     int64_t blockGasLeft, const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
     evmone::state::StateDiff& outStateDiff)
 {
-    if (dep.is_system_tx)
-        throw std::runtime_error("op deposit: is_system_tx not supported (block error)");
+    // op-geth state_transition.go preCheck: "Don't touch the gas pool for system transactions"
+    // pre-Regolith; Regolith rejects them outright (ErrSystemTxNotSupported, block-level error).
+    if (dep.is_system_tx && cfg.regolith_deposit_fixes)
+        throw std::runtime_error("op deposit: is_system_tx not supported since Regolith (block error)");
+    const bool preRegolith = !cfg.regolith_deposit_fixes;
+    const bool unmeteredSystemTx = dep.is_system_tx && preRegolith;
+    // Pre-Regolith receipt gas accounting (op-geth innerExecute / execute failure branch):
+    // "Record deposits as using all their gas (matches the gas pool). System Transactions are
+    // special & are not recorded as using any gas (anywhere). Regolith changes this behaviour so
+    // the actual gas used is reported." — success, EVM revert and entry failure all report the
+    // same value pre-Regolith, so this constant covers every path below.
+    const int64_t preRegolithGasUsed = unmeteredSystemTx ? 0 : dep.gas_limit;
 
     evmone::state::State state{view};
     auto& fromAcc = state.get_or_insert(dep.from);
@@ -575,14 +627,23 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
     // other Osaka-gated rule in that function is the blob count (state.cpp:338), and a deposit
     // carries no blobs; compute_tx_intrinsic_cost has no Osaka-gated term (highest is Prague,
     // state.cpp:79). Execution below still runs at the real cfg.rev.
+    //
+    // A pre-Regolith system deposit never touches the block gas pool (op-geth preCheck), so the
+    // `gas_limit > block_gas_left` check must not apply to it: the Bedrock L1-attributes deposit
+    // carries gasLimit 150M, above the block gas limit. Pass an uncapped pool in that case only.
     evmone::state::BlockInfo validateBlock = block;
     validateBlock.base_fee = 0;
     const DepositValidationView maskedView{view, dep.from};
     const auto props = evmone::state::validate_transaction(maskedView, validateBlock, tx, cfg.rev,
-        blockGasLeft, 0, {.enforce_max_tx_gas = !cfg.deposit_exempt_from_max_tx_gas});
-    // Deposit EIP-7825 exemption (release-line #5576 used a rev clamp to Prague here): the
-    // policy flag achieves the same exemption at the real OSAKA rev, driven by
-    // karstConfig().deposit_exempt_from_max_tx_gas.
+        unmeteredSystemTx ? std::numeric_limits<int64_t>::max() : blockGasLeft, 0,
+        {.enforce_max_tx_gas = !cfg.deposit_exempt_from_max_tx_gas});
+    // Two exemptions folded into one call:
+    // * Deposit EIP-7825 exemption (release-line #5576 used a rev clamp to Prague here):
+    //   the policy flag achieves the same exemption at the real OSAKA rev, driven by
+    //   karstConfig().deposit_exempt_from_max_tx_gas.
+    // * The pre-Regolith system deposit never touches the block gas pool (op-geth preCheck
+    //   returns nil for system transactions), so the gas_limit > block_gas_left check is
+    //   bypassed for it only — via an uncapped pool, not by skipping validation.
 
     evmone::state::TransactionReceipt receipt;
     receipt.type = kDepositTxType;
@@ -596,7 +657,7 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
         // mint is retained, nonce is force-incremented, gasUsed = gasLimit in full (:498).
         state.get(dep.from).nonce = preNonce + 1;
         receipt.status = EVMC_FAILURE;
-        receipt.gas_used = dep.gas_limit;
+        receipt.gas_used = preRegolith ? preRegolithGasUsed : dep.gas_limit;
     }
     else
     {
@@ -607,20 +668,23 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
             // branch (:486-513), gasUsed = gasLimit in full (:498). Same as a validate failure.
             state.get(dep.from).nonce = preNonce + 1;
             receipt.status = EVMC_FAILURE;
-            receipt.gas_used = dep.gas_limit;
+            receipt.gas_used = preRegolith ? preRegolithGasUsed : dep.gas_limit;
         }
         else
         {
             // Host::prepare_message does not bump the nonce itself for depth==0 messages (the
             // upstream evmone assumes the caller already bumped it, and CREATE address derivation
             // uses nonce-1 to obtain the "pre-execution" nonce) — retains the fix from 2327532.
+            // The bump is unconditional across forks: deposits increment the sender nonce in
+            // every era (spec deposits.md "Nonce Handling"; op-geth innerExecute Call branch and
+            // evm.create's SetNonce are not Regolith-gated).
             assert(fromAcc.nonce < evmone::state::Account::NonceMax);
             ++fromAcc.nonce;
             OpHost host{cfg.rev, vm, state, block, hashes, tx, chainId, cfg.precompiles};
             auto outcome = runTxMessage(state, host, tx, cfg.rev, block.coinbase,
                 p.execution_gas_limit, p.min_gas_cost, /*delegation_refund=*/0);
             receipt.status = outcome.result.status_code;
-            receipt.gas_used = outcome.gas_used;
+            receipt.gas_used = preRegolith ? preRegolithGasUsed : outcome.gas_used;
             receipt.logs = host.take_logs();
             // The attributes deposit's own return data (normally empty: it CALLs L1Block with a
             // void return). Copied into a buffer because outcome.result is scoped to this branch.
@@ -642,12 +706,15 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
 
     // Deposit nonce/version on opStackMeta (op-geth deposit receipt has no L1/operator/DA
     // fields); effectiveGasPrice is 0 for deposits (op-geth emits "0x0").
-    // Deposit receipt fields (deposits spec): the FISCO opStackMeta carries the nonce on
-    // every fork, while deposit_receipt_version appears only from Canyon on (op-geth leaves
-    // it nil pre-Canyon). OpFork is protocol-ordered, so >= Canyon covers every modeled fork.
+    // Fork gating (op-geth state_processor.go MakeReceipt / spec deposits.md "Deposit
+    // Receipt"): deposit_nonce is recorded from Regolith on (pre-Regolith receipts omit it);
+    // deposit_receipt_version=1 joins at Canyon. Within the FISCO opStackMeta extension this
+    // matches the consensus RLP gating exactly, so the API fields and the receipts-root leaf
+    // cannot disagree about which fields a fork carries.
     bcos::protocol::OpStackReceiptMeta meta;
-    meta.deposit_nonce = preNonce;
-    if (cfg.fork >= OpFork::Canyon)
+    if (cfg.regolith_deposit_fixes)
+        meta.deposit_nonce = preNonce;
+    if (cfg.has_deposit_receipt_version)
         meta.deposit_receipt_version = 1;
     out->setOpStackMeta(std::move(meta));
     out->setEffectiveGasPrice("0x0");

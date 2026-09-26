@@ -26,9 +26,6 @@
 #include "bcos-storage/CheckpointRocksDBStorage.h"
 #include "bcos-storage/RocksDBStorage.h"
 #include <rocksdb/statistics.h>
-#ifdef WITH_TIKV
-#include "bcos-storage/TiKVStorage.h"
-#endif
 #include "rocksdb/convenience.h"
 #include "rocksdb/filter_policy.h"
 #include <bcos-framework/security/StorageEncryptInterface.h>
@@ -71,11 +68,12 @@ public:
         // options.compaction_pri = rocksdb::kMinOverlappingRatio;
         options.compression = rocksdb::kZSTD;
         options.bottommost_compression = rocksdb::kZSTD;  // last level compression
-        // -1 (unlimited, the default): an archive-scale DB holds tens of thousands of SSTs,
-        // and a small table cache thrashes — every random read evicts a reader and re-reads
-        // its index/filter/properties blocks (observed ~900MB/s of throwaway reads during an
-        // MPT prune rebuild with the previous 256). See
-        // RocksDBCheckpointOption::maxOpenFiles for the fd/memory cost.
+        // Bounded by default (256): caps fd usage for ordinary consortium-chain DBs.
+        // -1 (unlimited) is the archive-scale choice — a small table cache thrashes there,
+        // every random read evicting a reader and re-reading its index/filter/properties
+        // blocks (observed ~900MB/s of throwaway reads during an MPT prune rebuild with
+        // 256 on a ~942GB / 10k-SST database). See RocksDBCheckpointOption::maxOpenFiles
+        // for the fd/memory cost of -1.
         options.max_open_files = rocksDBOption.maxOpenFiles;
         options.write_buffer_size =
             rocksDBOption.writeBufferSize;  // default is 64MB, set 256MB here
@@ -141,18 +139,5 @@ public:
         return std::make_shared<bcos::storage::RocksDBStorage>(
             std::forward<decltype(rocksDB)>(rocksDB), _dataEncrypt);
     }
-
-#ifdef WITH_TIKV
-    static bcos::storage::TransactionalStorageInterface::Ptr build(
-        const std::vector<std::string>& _pdAddrs, const std::string& _logPath,
-        const std::string& caPath = std::string(""), const std::string& certPath = std::string(""),
-        const std::string& keyPath = std::string(""))
-    {
-        boost::filesystem::create_directories(_logPath);
-        static std::shared_ptr<tikv_client::TransactionClient> cluster =
-            storage::newTiKVClient(_pdAddrs, _logPath, caPath, certPath, keyPath);
-        return std::make_shared<bcos::storage::TiKVStorage>(cluster);
-    }
-#endif
 };
 }  // namespace bcos::initializer

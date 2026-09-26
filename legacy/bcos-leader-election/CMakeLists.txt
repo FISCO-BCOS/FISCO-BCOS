@@ -1,0 +1,34 @@
+#------------------------------------------------------------------------------
+# Top-level CMake file for bcos-leader-election
+# ------------------------------------------------------------------------------
+# Copyright (C) 2022 bcos-leader-election
+# SPDX-License-Identifier: Apache-2.0
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#------------------------------------------------------------------------------
+
+
+if(WITH_LEDGER_ELECTION)
+    project(bcos-leader-election VERSION ${VERSION})
+
+    file(GLOB_RECURSE SRCS src/*.cpp)
+    find_package(etcd-cpp-api CONFIG REQUIRED)
+    find_package(gRPC REQUIRED)
+    add_library(leader_election ${SRCS})
+    # bcos-legacy adds legacy/ to the include path so that consumers keep
+    # resolving <bcos-leader-election/...> includes after the move to legacy/.
+    target_link_libraries(leader_election PUBLIC bcos-utilities bcos-framework etcd-cpp-api bcos-legacy)
+
+    if(TESTS)
+        add_subdirectory(test)
+    endif()
+endif()
