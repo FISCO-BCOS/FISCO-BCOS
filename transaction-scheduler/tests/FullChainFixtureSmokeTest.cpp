@@ -52,16 +52,15 @@ BOOST_AUTO_TEST_CASE(XorChainOneBlockRoundTrip)
     BOOST_CHECK_EQUAL(onChain->stateRoot(), header->stateRoot());
 }
 
-// The fixture's L2 genesis path really reaches RocksDB: an alloc-carrying genesis with
-// feature_l2_ethereum_compat persists a non-zero op-geth-compatible stateRoot in the genesis
-// header AND its trie nodes as committed "/mpt/" rows (cc51df624), readable back through the
-// storage2 backend — the wiring PR-20's scenario-B suite depends on.
+// The fixture's Ethereum-lane genesis path really reaches RocksDB: an alloc-carrying
+// genesis with executor_version >= 2 persists a non-zero op-geth-compatible stateRoot in
+// the genesis header AND its trie nodes as committed "/mpt/" rows (cc51df624), readable
+// back through the storage2 backend — the wiring PR-20's scenario-B suite depends on.
 BOOST_AUTO_TEST_CASE(L2GenesisNodesReachBackend)
 {
     FullChainFixture fixture{"smoke_l2_genesis"};
     auto genesis = FullChainFixture::baseGenesis();
-    genesis.m_features.push_back(
-        ledger::FeatureSet{ledger::Features::Flag::feature_l2_ethereum_compat, 1});
+    genesis.m_executorVersion = ledger::ETHEREUM_EXECUTOR_VERSION;
     genesis.m_allocs.push_back(ledger::Alloc{.address = "1100000000000000000000000000000000000011",
         .balance = u256(1000),
         .nonce = "0",

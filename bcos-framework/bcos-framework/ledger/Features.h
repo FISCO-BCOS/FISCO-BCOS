@@ -121,9 +121,16 @@ public:
         feature_raw_address = 54,
         feature_rpbft_vrf_type_secp256k1 = 55,
         feature_balance_policy2 = 56,     // 转账白名单 Transfer whitelist
-        feature_l2_ethereum_compat = 57,  // OP-Stack L2 mode: Ethereum-compatible
-                                          // genesis/predeploys. Genesis-only: validate()
-                                          // rejects it on the governance setSystemConfig path.
+        // RESERVED, never reuse. Bit 57 was feature_l2_ethereum_compat on the
+        // release-3.18.0 development line (introduced by #5273 before any release shipped),
+        // the "Ethereum-compatible lane" switch. The lane is now decided by executor_version
+        // alone (ledger::ETHEREUM_EXECUTOR_VERSION / OPSTACK_EXECUTOR_VERSION), so nothing
+        // reads this bit any more. It stays declared because the value is persisted on-chain
+        // and the rule above is "never delete a flag's number". It is deliberately NOT named
+        // feature_l2_ethereum_compat — Features::string2Flag must keep REJECTING that name so
+        // a genesis still carrying `feature_l2_ethereum_compat=1` fails loudly at load instead
+        // of silently enabling nothing.
+        reserved_removed_l2_ethereum_compat = 57,
         feature_mpt_state_root = 58,      // MPT lazy-build: block stateRoot switches to the
                                           // Ethereum MPT root from this flag's activation
                                           // block on (spec 2026-04-24 design3 4.3)

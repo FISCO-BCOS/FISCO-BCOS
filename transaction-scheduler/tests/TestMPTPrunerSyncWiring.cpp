@@ -340,11 +340,13 @@ BOOST_FIXTURE_TEST_CASE(prunerWiredIntoSyncCommitPath, MPSFixture)
             std::string(magic_enum::enum_name(ledger::SystemConfig::tx_gas_limit)), "30000000");
 
         // ---- The REAL pruner over the committed-state backend, wired as the verifier's
-        //      CommitObserver. Boot at genesis: no feature_mpt_state_root row is set, so
-        //      init starts empty (trackedCount 0) — the first block's full build seeds the
-        //      counts through the ordinary delta path, exactly as in the PBFT-lane wiring
-        //      test. The sync lane's headers are served by peers, not read from the local
-        //      ledger, so the boot lookup is backed by the roots this test commits.
+        //      CommitObserver. Boot at genesis on the Ethereum lane (the executor_version
+        //      SYS_CONFIG row above): firstMptBlock is 0, so init walks the head root — the
+        //      EMPTY genesis trie (emptyRootHash) — and ends with trackedCount 0; the first
+        //      block's full build seeds the counts through the ordinary delta path, exactly
+        //      as in the PBFT-lane wiring test. The sync lane's headers are served by peers,
+        //      not read from the local ledger, so the boot lookup is backed by the roots this
+        //      test commits.
         auto& backend = multiLayerStorage.latestBackend();
         auto pruner = std::make_shared<MPSPruner>(backend, c_pruneWindow);
         std::map<protocol::BlockNumber, h256> committedRoots;
@@ -354,7 +356,8 @@ BOOST_FIXTURE_TEST_CASE(prunerWiredIntoSyncCommitPath, MPSFixture)
             auto const it = committedRoots.find(number);
             co_return it != committedRoots.end() ? std::optional<h256>{it->second} : std::nullopt;
         };
-        co_await pruner->init(0, stateRootAt, /*sweepGarbage=*/false);
+        co_await pruner->init(
+            0, ledger::ETHEREUM_EXECUTOR_VERSION, stateRootAt, /*sweepGarbage=*/false);
         BOOST_CHECK_EQUAL(pruner->trackedCount(), 0U);
 
         auto fakeLedger = std::make_shared<bcos::test::FakeLedger>();

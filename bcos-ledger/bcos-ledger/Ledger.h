@@ -141,9 +141,15 @@ public:
     task::Task<bcos::ledger::Features> fetchAllFeatures(protocol::BlockNumber) override;
 
     // Single-flag read (round-2 Finding E): one SYS_CONFIG row instead of fetchAllFeatures'
-    // ~61-key scan; used by the historical state-read path for feature_l2_ethereum_compat.
+    // ~60-key scan; used by the historical state-read path for feature_mpt_state_root.
     task::Task<bool> fetchFeature(
         bcos::ledger::Features::Flag flag, protocol::BlockNumber blockNumber) override;
+
+    // Single-row read of the executor_version SYS_CONFIG entry at @p blockNumber (absent row =
+    // 0, a pre-Ethereum-lane chain). The lane it decides (legacy vs Ethereum account-table
+    // naming) is genesis-fixed: governance writes crossing ETHEREUM_EXECUTOR_VERSION are
+    // refused by SystemConfigPrecompiled, so any block number resolves it correctly.
+    task::Task<int64_t> fetchExecutorVersionAt(protocol::BlockNumber blockNumber) override;
 
     storage::StorageInterface::Ptr getStateStorage() override;
 

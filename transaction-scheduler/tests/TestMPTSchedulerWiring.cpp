@@ -112,8 +112,10 @@ using MWRowOp = bcos::test::sharedmock::SharedMockScheduler::RowOp;
 
 /// Scheduler impl that replays a per-block write plan through the storage argument
 /// BaselineScheduler hands it — the production write path (view mutable layer).
-/// The Features the shared getLedgerConfig stub hands to every execute — set per test.
+/// The Features / executor_version the shared getLedgerConfig stub hands to every execute —
+/// set per test.
 auto& g_mwFeatures = bcos::test::sharedmock::g_stubFeatures;
+auto& g_mwExecutorVersion = bcos::test::sharedmock::g_stubExecutorVersion;
 
 task::Task<std::vector<protocol::Transaction::ConstPtr>> emptyTxsTaskMW()
 {
@@ -187,6 +189,7 @@ public:
             mockLedger.get(), mockTxPool.get(), *transactionSubmitResultFactory, *hashImpl)
     {
         g_mwFeatures = ledger::Features{};
+        g_mwExecutorVersion = 0;
         mockScheduler.m_plan = &plan;
 
         observer = std::make_shared<MWProbeObserver>();
@@ -243,12 +246,14 @@ public:
         features.setActivationBlock(
             ledger::Features::Flag::feature_mpt_state_root, activationBlock);
         g_mwFeatures = features;
+        g_mwExecutorVersion = 0;  // scenario A lives on the legacy lane
     }
     static void useScenarioB()
     {
-        ledger::Features features;
-        features.set(ledger::Features::Flag::feature_l2_ethereum_compat);
-        g_mwFeatures = features;
+        // Scenario B is the Ethereum lane (executor_version >= 2): MPT from genesis on,
+        // no feature flag involved.
+        g_mwFeatures = ledger::Features{};
+        g_mwExecutorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
     }
 
     std::tuple<Error::Ptr, protocol::BlockHeader::Ptr> executeBlockRaw(protocol::BlockNumber number)
@@ -258,9 +263,20 @@ public:
         blockHeader->setNumber(number);
         blockHeader->setVersion(blockVersion);
         blockHeader->calculateHash(*hashImpl);
-        bytes input;
-        block->appendTransaction(transactionFactory->createTransaction(
-            0, "to", input, std::to_string(number), 100, "chain", "group", 0));
+        // Ethereum-lane blocks must carry an EIP-2718 transaction: finishExecute commits the
+        // txsRoot over the wire bytes (calculateEthereumTransactionRoot), which throws on a
+        // FISCO-shaped payload. The legacy lane keeps the plain filler transaction.
+        if (g_mwExecutorVersion >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
+        {
+            block->appendTransaction(bcos::test::sharedmock::makeWeb3FillerTx(
+                static_cast<uint64_t>(number), *hashImpl));
+        }
+        else
+        {
+            bytes input;
+            block->appendTransaction(transactionFactory->createTransaction(
+                0, "to", input, std::to_string(number), 100, "chain", "group", 0));
+        }
 
         Error::Ptr execError;
         protocol::BlockHeader::Ptr executedHeader;
@@ -403,7 +419,8 @@ public:
     MWMultiLayerStorage multiLayerStorage;
     bcos::test::sharedmock::SharedMockExecutor mockExecutor;
     std::shared_ptr<MWProbeObserver> observer;
-    // Resets the shared g_stubFeatures at fixture teardown (SharedBaselineSchedulerMock.h).
+    // Resets the shared g_stubFeatures / g_stubExecutorVersion at fixture teardown
+    // (SharedBaselineSchedulerMock.h).
     bcos::test::sharedmock::ScopedStubFeatures m_featuresGuard;
     bcos::test::sharedmock::SharedBaselineScheduler baselineScheduler;
 };
@@ -617,11 +634,12 @@ BOOST_AUTO_TEST_CASE(commitAtomicityAndObserverTiming)
     }
 }
 
-// Scenario B (L2, restart case): every block is MPT-rooted; the first executed block after a
-// restart resolves its parent root from the parent's SIGNED HEADER in the backend — what
-// commit left behind. Part 1: a parent header carrying emptyRootHash() chains cleanly. Part 2
-// (separate case below): a parent header carrying a root whose nodes do not exist must fail
-// the execute loudly — proving the header value is actually consumed, not silently defaulted.
+// Scenario B (Ethereum lane, restart case): every block is MPT-rooted; the first executed
+// block after a restart resolves its parent root from the parent's SIGNED HEADER in the
+// backend — what commit left behind. Part 1: a parent header carrying emptyRootHash() chains
+// cleanly. Part 2 (separate case below): a parent header carrying a root whose nodes do not
+// exist must fail the execute loudly — proving the header value is actually consumed, not
+// silently defaulted.
 BOOST_AUTO_TEST_CASE(scenarioBParentFromLedgerHeader)
 {
     namespace mpt = bcos::ledger::mpt;

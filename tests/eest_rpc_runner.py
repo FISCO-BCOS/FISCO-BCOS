@@ -133,7 +133,7 @@ SYNC_CHECK_BINARY = "build/tools/eth-sync-check/eth-sync-check"  # overridden in
 
 # ----------------------------------------------------------------------------- eth B0
 # NodeConfig::validateL2Invariants (upstream #5420) requires an [eth_genesis_header]
-# section whenever feature_l2_ethereum_compat=1: the Ledger cross-checks state_root
+# section on the Ethereum lane (executor_version >= 2): the Ledger cross-checks state_root
 # against the MPT root derived from the [alloc.*] sections and hash against
 # keccak256(rlp(header)). state_root comes from the node's own trie builder via
 # `eth-sync-check --genesis-ini`; the header hash is computed here (geth field order).
@@ -325,15 +325,12 @@ def gen_config(workdir, fixture, fork_rev, idx, env_overrides=None, port_offset=
     version=2
     evm_revision={fork_rev}
 
-[features]
-    feature_l2_ethereum_compat=1
-
 """ + "\n".join(allocs)
     (workdir / "config.genesis").write_text(genesis)
 
-    # [eth_genesis_header] is mandatory under feature_l2_ethereum_compat (upstream
-    # #5420): derive the alloc state root with the node's own trie builder and append
-    # a self-consistent B0 header section.
+    # [eth_genesis_header] is mandatory on the Ethereum lane (executor_version >= 2,
+    # upstream #5420): derive the alloc state root with the node's own trie builder and
+    # append a self-consistent B0 header section.
     state_root = genesis_state_root(workdir, fixture, SYNC_CHECK_BINARY)
     with open(workdir / "config.genesis", "a") as fh:
         fh.write(eth_genesis_header_section(fixture, fork_rev, state_root))

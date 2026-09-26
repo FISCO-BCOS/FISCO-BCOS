@@ -273,40 +273,45 @@ void TransactionExecutor::initEvmEnvironment()
     auto tablePrecompiled = std::make_shared<precompiled::TablePrecompiled>(m_hashImpl);
 
     // in EVM
-    m_precompiled->insert(SYS_CONFIG_ADDRESS, std::move(sysConfig), disabledInL2());
-    m_precompiled->insert(CONSENSUS_ADDRESS, std::move(consensusPrecompiled), disabledInL2());
+    // The Ethereum lane (executor_version >= ETHEREUM_EXECUTOR_VERSION) hides the
+    // FISCO-private precompiles (kL2DisabledSet). The lane is genesis-fixed, so the
+    // boot-time ledgerConfig snapshot is authoritative for the predicate lifetime.
+    const bool ethLane = m_ledgerCache->ledgerConfig().executorVersion() >=
+                         ledger::ETHEREUM_EXECUTOR_VERSION;
+    m_precompiled->insert(SYS_CONFIG_ADDRESS, std::move(sysConfig), disabledInL2(ethLane));
+    m_precompiled->insert(CONSENSUS_ADDRESS, std::move(consensusPrecompiled), disabledInL2(ethLane));
     m_precompiled->insert(
-        TABLE_MANAGER_ADDRESS, std::move(tableManagerPrecompiled), disabledInL2());
-    m_precompiled->insert(KV_TABLE_ADDRESS, std::move(kvTablePrecompiled), disabledInL2());
-    m_precompiled->insert(TABLE_ADDRESS, std::move(tablePrecompiled), disabledInL2());
+        TABLE_MANAGER_ADDRESS, std::move(tableManagerPrecompiled), disabledInL2(ethLane));
+    m_precompiled->insert(KV_TABLE_ADDRESS, std::move(kvTablePrecompiled), disabledInL2(ethLane));
+    m_precompiled->insert(TABLE_ADDRESS, std::move(tablePrecompiled), disabledInL2(ethLane));
     m_precompiled->insert(DAG_TRANSFER_ADDRESS,
-        std::make_shared<precompiled::DagTransferPrecompiled>(m_hashImpl), disabledInL2());
+        std::make_shared<precompiled::DagTransferPrecompiled>(m_hashImpl), disabledInL2(ethLane));
     m_precompiled->insert(CRYPTO_ADDRESS, std::make_shared<CryptoPrecompiled>(m_hashImpl));
     m_precompiled->insert(
-        BFS_ADDRESS, std::make_shared<BFSPrecompiled>(m_hashImpl), disabledInL2());
+        BFS_ADDRESS, std::make_shared<BFSPrecompiled>(m_hashImpl), disabledInL2(ethLane));
     m_precompiled->insert(PAILLIER_ADDRESS, std::make_shared<PaillierPrecompiled>(m_hashImpl),
         predicateAnd(
             [](uint32_t, bool, ledger::Features const& features) {
                 return features.get(ledger::Features::Flag::feature_paillier);
             },
-            disabledInL2()));
+            disabledInL2(ethLane)));
     m_precompiled->insert(
-        GROUP_SIG_ADDRESS, std::make_shared<GroupSigPrecompiled>(m_hashImpl), disabledInL2());
+        GROUP_SIG_ADDRESS, std::make_shared<GroupSigPrecompiled>(m_hashImpl), disabledInL2(ethLane));
     m_precompiled->insert(
-        RING_SIG_ADDRESS, std::make_shared<RingSigPrecompiled>(m_hashImpl), disabledInL2());
+        RING_SIG_ADDRESS, std::make_shared<RingSigPrecompiled>(m_hashImpl), disabledInL2(ethLane));
     m_precompiled->insert(
-        DISCRETE_ZKP_ADDRESS, std::make_shared<ZkpPrecompiled>(m_hashImpl), disabledInL2());
+        DISCRETE_ZKP_ADDRESS, std::make_shared<ZkpPrecompiled>(m_hashImpl), disabledInL2(ethLane));
 
     m_precompiled->insert(AUTH_MANAGER_ADDRESS,
         std::make_shared<AuthManagerPrecompiled>(m_hashImpl),
         predicateAnd([](uint32_t version, bool isAuthCheck, ledger::Features const& features)
                          -> bool { return isAuthCheck || version >= BlockVersion::V3_3_VERSION; },
-            disabledInL2()));
+            disabledInL2(ethLane)));
     m_precompiled->insert(AUTH_CONTRACT_MGR_ADDRESS,
         std::make_shared<ContractAuthMgrPrecompiled>(m_hashImpl),
         predicateAnd([](uint32_t version, bool isAuthCheck, ledger::Features const& features)
                          -> bool { return isAuthCheck || version >= BlockVersion::V3_3_VERSION; },
-            disabledInL2()));
+            disabledInL2(ethLane)));
 
     m_precompiled->insert(SHARDING_PRECOMPILED_ADDRESS,
         std::make_shared<ShardingPrecompiled>(GlobalHashImpl::g_hashImpl),
@@ -314,34 +319,34 @@ void TransactionExecutor::initEvmEnvironment()
             [](uint32_t version, bool isAuthCheck, ledger::Features const& features) {
                 return features.get(ledger::Features::Flag::feature_sharding);
             },
-            disabledInL2()));
+            disabledInL2(ethLane)));
     m_precompiled->insert(CAST_ADDRESS,
         std::make_shared<CastPrecompiled>(GlobalHashImpl::g_hashImpl),
         predicateAnd(
             [](uint32_t version, bool, ledger::Features const&) {
                 return version >= static_cast<uint32_t>(BlockVersion::V3_2_VERSION);
             },
-            disabledInL2()));
+            disabledInL2(ethLane)));
     m_precompiled->insert(ACCOUNT_MGR_ADDRESS,
         std::make_shared<AccountManagerPrecompiled>(m_hashImpl),
         predicateAnd(
             [](uint32_t version, bool, ledger::Features const&) {
                 return version >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION);
             },
-            disabledInL2()));
+            disabledInL2(ethLane)));
     m_precompiled->insert(ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>(m_hashImpl),
         predicateAnd(
             [](uint32_t version, bool, ledger::Features const&) {
                 return version >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION);
             },
-            disabledInL2()));
+            disabledInL2(ethLane)));
 
     // CRYPTO stays in the static-precompile set; GROUP_SIG / RING_SIG / CAST
     // were moved out in PR #5286 so they flow through the m_precompiled
-    // predicate path (which carries `disabledInL2()`). HostContext::call
+    // predicate path (which carries the disabledInL2 gate). HostContext::call
     // checks isStaticPrecompiled BEFORE the predicate path, so keeping the
     // three FISCO-private precompiles in the static set would silently bypass
-    // the L2 gate and execute them under feature_l2_ethereum_compat, leaking
+    // the Ethereum-lane gate and execute them on the lane, leaking
     // FISCO-only output into otherwise-Ethereum-compatible bytecode.
     set<string> builtIn = {std::string(CRYPTO_ADDRESS)};
     m_staticPrecompiled = std::make_shared<set<string>>(builtIn);
@@ -362,7 +367,7 @@ void TransactionExecutor::initEvmEnvironment()
             [](uint32_t version, bool isAuthCheck, ledger::Features const& features) {
                 return features.get(ledger::Features::Flag::feature_balance_precompiled);
             },
-            disabledInL2()));
+            disabledInL2(ethLane)));
 }
 
 void TransactionExecutor::initTestPrecompiledTable(storage::StorageInterface::Ptr storage)

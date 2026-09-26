@@ -76,11 +76,12 @@ BOOST_AUTO_TEST_CASE(L2BranchWritesAllocsToFlatKV)
         GenesisConfig genesisConfig;
         genesisConfig.m_txGasLimit = 3000000000;
         genesisConfig.m_compatibilityVersion =
-            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_6_VERSION);
-        genesisConfig.m_features.push_back(
-            FeatureSet{Features::Flag::feature_l2_ethereum_compat, 1});
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_15_0_VERSION);
+        genesisConfig.m_executorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
         genesisConfig.m_chainID = "901";
         genesisConfig.m_groupID = "group0";
+        // compat >= 3.9 seeds SYS_CONFIG/web3_chain_id from m_web3ChainID; it must parse
+        genesisConfig.m_web3ChainID = genesisConfig.m_chainID;
 
         // single predeploy: address 0x43..00c0, 5-byte code, one storage slot
         std::string address = "43000000000000000000000000000000000000c0";
@@ -142,10 +143,11 @@ BOOST_AUTO_TEST_CASE(L2BranchWritesAllocsToFlatKV)
         auto expectedRoot = co_await ledger::computeGenesisStateRoot(genesisConfig);
         BOOST_CHECK_EQUAL(block->blockHeader()->stateRoot(), expectedRoot);
 
-        // 4) L2 feature flag persisted
-        ledger::Features features;
-        co_await features.readFromStorage(*storage, 0);
-        BOOST_CHECK(features.get(ledger::Features::Flag::feature_l2_ethereum_compat));
+        // 4) the executor_version row persisted: the Ethereum lane is genesis-fixed
+        // through it (SystemConfigPrecompiled refuses governance writes crossing
+        // ETHEREUM_EXECUTOR_VERSION).
+        BOOST_CHECK_EQUAL(co_await ledger->fetchExecutorVersionAt(0),
+            bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
     }());
 }
 
@@ -164,22 +166,21 @@ BOOST_AUTO_TEST_CASE(PbftBranchUnchanged)
         genesisConfig.m_txGasLimit = 3000000000;
         genesisConfig.m_compatibilityVersion =
             static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_6_VERSION);
-        // pbft mode: no feature_l2_ethereum_compat, no allocs
-        // (validateL2Invariants requires they agree)
+        // pbft mode: executor_version stays 0 (the legacy lane), no allocs
+        // (validateL2Invariants requires the [alloc.*] section and
+        // executor.version >= 2 to agree)
 
         auto ok = co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
         BOOST_CHECK(ok);
 
         // pbft mode leaves the genesis block stateRoot empty (no allocs; the
-        // eth-block view is L2-only), as it was before this feature.
+        // eth-block view is Ethereum-lane-only), as it was before this feature.
         auto block = co_await ledger::getBlockData(*ledger, 0, HEADER);
         BOOST_REQUIRE(block);
         BOOST_CHECK_EQUAL(block->blockHeader()->stateRoot(), bcos::crypto::HashType());
 
-        // pbft mode must NOT enable the L2 feature flag
-        ledger::Features features;
-        co_await features.readFromStorage(*storage, 0);
-        BOOST_CHECK(!features.get(ledger::Features::Flag::feature_l2_ethereum_compat));
+        // pbft mode must NOT record an executor_version row — the legacy lane reads 0
+        BOOST_CHECK_EQUAL(co_await ledger->fetchExecutorVersionAt(0), 0);
     }());
 }
 
@@ -272,8 +273,6 @@ BOOST_AUTO_TEST_CASE(LargeAllocImportDoesNotStackOverflow)
         genesisConfig.m_txGasLimit = 3000000000;
         genesisConfig.m_compatibilityVersion =
             static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_6_VERSION);
-        genesisConfig.m_features.push_back(
-            FeatureSet{Features::Flag::feature_l2_ethereum_compat, 1});
         genesisConfig.m_chainID = "901";
         genesisConfig.m_groupID = "group0";
         // Ethereum executor lane: writes every address under /apps/, so the

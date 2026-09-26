@@ -67,15 +67,11 @@ perl -p -i -e 's/version=1/version=2/' config.genesis
 # evmc revision (cancun from genesis; the v2 executor needs an EVMC revision)
 perl -p -i -e 's/^(\s*is_serial_execute=true)/$1\n    evm_revision=cancun/' config.genesis
 
-# L2 mode is required so genesis [alloc] can pre-fund an EOA sender
-# (the same mode the ethereum-executor targets). The Eth lane is mode-aware: a fresh
+# executor_version=2 (patched above) already puts the chain on the Ethereum lane, so
+# genesis [alloc] can pre-fund an EOA sender (the same lane the ethereum-executor
+# targets). The Eth lane is mode-aware: a fresh
 # chain is born with the binary account-table layout ("/s/<20 raw bytes>") and the lane
 # reads and writes it through account::ethLaneAccountTableName.
-cat >> config.genesis <<'GENESIS_EOF'
-
-[features]
-    feature_l2_ethereum_compat=1
-GENESIS_EOF
 
 # Pre-fund the fixture sender (secretKey below) via genesis alloc. The alloc
 # parser requires a `code` key; an empty value means "no code" (a plain EOA).
@@ -88,8 +84,8 @@ cat >> config.genesis <<'GENESIS_EOF'
     code=
 GENESIS_EOF
 
-# L2 mode (feature_l2_ethereum_compat) now REQUIRES an [eth_genesis_header]
-# section (NodeConfig::validateL2Invariants, upstream #5420): an L2 chain
+# The Ethereum lane (executor_version >= 2) now REQUIRES an [eth_genesis_header]
+# section (NodeConfig::validateL2Invariants, upstream #5420): an Ethereum-lane chain
 # without it would mint a Tars-hashed B0 that no op-node/op-reth can match.
 # The section is a full Prague-era B0 header artifact; the node cross-checks
 # state_root against the MPT root it derives from the [alloc.*] sections and

@@ -289,7 +289,7 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
     loadOpForkTimestamps(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
 
-    // === A6.5: L2 genesis allocs; L2 mode is gated by feature_l2_ethereum_compat ===
+    // === A6.5: Ethereum-lane genesis allocs; the lane is gated by executor.version >= 2 ===
     loadAllocs(_genesisConfig);
     // === A3: B0 full Ethereum genesis header from the merged genesis artifact ===
     loadEthGenesisHeader(_genesisConfig);
@@ -523,42 +523,40 @@ void NodeConfig::loadEthGenesisHeader(boost::property_tree::ptree const& _genesi
 void NodeConfig::validateL2Invariants()
 {
     auto const& genesis = m_genesisConfig;
-    // L2 mode is signalled by the feature_l2_ethereum_compat flag in [features];
-    // there is no separate chain_mode. allocs and the flag must agree.
-    bool l2Enabled = std::any_of(genesis.m_features.begin(), genesis.m_features.end(),
-        [](ledger::FeatureSet const& featureSet) {
-            return featureSet.flag == ledger::Features::Flag::feature_l2_ethereum_compat &&
-                   featureSet.enable > 0;
-        });
-    if (l2Enabled && genesis.m_allocs.empty())
+    // The Ethereum lane (L1 EL / L2 OP-Stack) is signalled by executor.version >=
+    // ETHEREUM_EXECUTOR_VERSION; there is no separate chain_mode or feature flag.
+    // allocs and the lane must agree.
+    bool const ethLane = genesis.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION;
+    if (ethLane && genesis.m_allocs.empty())
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "feature_l2_ethereum_compat requires a non-empty [alloc.*] "
-                                  "section in config.genesis"));
+                                  "executor.version >= 2 (the Ethereum lane) requires a "
+                                  "non-empty [alloc.*] section in config.genesis"));
     }
-    if (!l2Enabled && !genesis.m_allocs.empty())
+    if (!ethLane && !genesis.m_allocs.empty())
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "[alloc.*] section requires feature_l2_ethereum_compat enabled "
-                                  "in [features]"));
+                                  "[alloc.*] section requires executor.version >= 2 (the "
+                                  "Ethereum lane) in config.genesis"));
     }
-    // The Ethereum B0 header and L2 mode are bound both ways: a pbft chain
-    // with an [eth_genesis_header] section is a mis-assembled config, and an
-    // L2 chain WITHOUT the section would mint a Tars-hashed B0 that no
-    // op-node/op-reth can ever match — fail fast in both directions.
-    if (!l2Enabled && genesis.m_ethGenesisHeader.has_value())
+    // The Ethereum B0 header and the Ethereum lane are bound both ways: a consortium chain
+    // with an [eth_genesis_header] section is a mis-assembled config, and an Ethereum-lane
+    // chain WITHOUT the section would mint a Tars-hashed B0 that no EL/op-node/op-reth can
+    // ever match — fail fast in both directions.
+    if (!ethLane && genesis.m_ethGenesisHeader.has_value())
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("[eth_genesis_header] section requires "
-                                               "feature_l2_ethereum_compat enabled in [features]"));
+                                               "executor.version >= 2 (the Ethereum lane) in "
+                                               "config.genesis"));
     }
-    if (l2Enabled && !genesis.m_ethGenesisHeader.has_value())
+    if (ethLane && !genesis.m_ethGenesisHeader.has_value())
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
-                "feature_l2_ethereum_compat requires an [eth_genesis_header] section in "
-                "config.genesis (all 22 fields from the merged genesis artifact); an L2 chain "
-                "without it would build a non-Ethereum genesis block"));
+                "executor.version >= 2 (the Ethereum lane) requires an [eth_genesis_header] "
+                "section in config.genesis (all 22 fields from the merged genesis artifact); "
+                "an Ethereum-lane chain without it would build a non-Ethereum genesis block"));
     }
     // EL mode ([ethereum] mode=el) and its [fork_timestamps] schedule are bound both ways:
     // the schedule only makes sense on a chain that declares EL mode — otherwise an ordinary
@@ -649,11 +647,11 @@ void NodeConfig::validateL2Invariants()
                 "executor.evm_revision / evm_revision_forks"));
     }
     // The opstack-el declaration ([ethereum] mode=opstack-el) is bound to the OP lane and
-    // the L2 genesis shape: the sync client downloads OP blocks over devp2p and commits
-    // them through OpBlockVerifier, which requires the OP executor (fork resolution from
-    // [op_fork_timestamps]), the Ethereum genesis anchor ([eth_genesis_header], pinned
-    // through the L2 feature), and the genesis state ([alloc.*]). The chain-id requirement
-    // is the shared EL-sync block above.
+    // the Ethereum-lane genesis shape: the sync client downloads OP blocks over devp2p and
+    // commits them through OpBlockVerifier, which requires the OP executor (fork resolution
+    // from [op_fork_timestamps]) and the Ethereum genesis anchor ([eth_genesis_header] plus
+    // [alloc.*], both bound to executor.version >= 2 above — the >= 3 requirement below
+    // implies them). The chain-id requirement is the shared EL-sync block above.
     if (genesis.m_opStackELMode)
     {
         if (genesis.m_executorVersion < ledger::OPSTACK_EXECUTOR_VERSION)
@@ -669,15 +667,6 @@ void NodeConfig::validateL2Invariants()
                                       "[op_fork_timestamps] section in config.genesis (the OP "
                                       "fork schedule drives both header validation and the "
                                       "EIP-2124 fork-id ladder)"));
-        }
-        if (!l2Enabled)
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "[ethereum] mode=opstack-el requires "
-                                      "feature_l2_ethereum_compat enabled in [features] (with "
-                                      "the [alloc.*] and [eth_genesis_header] sections it "
-                                      "binds): the sync client replays an Ethereum-shaped OP "
-                                      "chain"));
         }
     }
 }

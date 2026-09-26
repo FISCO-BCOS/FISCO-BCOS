@@ -205,7 +205,8 @@ task::Task<void> EthEndpoint::blockNumber(const Json::Value&, Json::Value& respo
 constexpr int32_t EthHistoricalStateUnavailable = -32004;
 
 /// Historical MPT read context: the block's committed state root plus whether the chain's
-/// storage tries are complete. getProof reads the same flag (feature_l2_ethereum_compat) to
+/// storage tries are complete. getProof reads the same executor_version lane
+/// (>= ETHEREUM_EXECUTOR_VERSION) to
 /// distinguish "exclusion provably means zero" (scenario B, complete tries) from "cold slot
 /// absent from an incomplete trie" (scenario A, mid-chain MPT activation).
 struct HistoricalMptContext
@@ -237,19 +238,38 @@ std::string stateRootMissingMessage(bcos::protocol::BlockNumber blockNumber,
     return "Block stateRoot not in MPT node storage";
 }
 
-/// Was this block's header stateRoot ever expected to be an MPT root? Scenario B
-/// (feature_l2_ethereum_compat) builds the MPT from genesis; scenario A
+/// executor_version effective at @p blockNumber, degrading to 0 (consortium lane) on a read
+/// failure — the same honest default as getFeature's empty-set fallback. The lane is
+/// genesis-fixed (SystemConfigPrecompiled refuses governance writes crossing
+/// ETHEREUM_EXECUTOR_VERSION), so any block number resolves it correctly; the per-block read
+/// only defends a row a pre-3.18 binary could have written mid-chain.
+bcos::task::Task<int64_t> executorVersionAt(
+    bcos::ledger::LedgerInterface& ledger, bcos::protocol::BlockNumber blockNumber)
+{
+    try
+    {
+        co_return co_await ledger.fetchExecutorVersionAt(blockNumber);
+    }
+    catch (...)
+    {
+        co_return 0;
+    }
+}
+
+/// Was this block's header stateRoot ever expected to be an MPT root? Scenario B (the
+/// Ethereum lane, executor_version >= ETHEREUM_EXECUTOR_VERSION) builds the MPT from genesis;
+/// scenario A
 /// (feature_mpt_state_root) starts at the flag's activation block + 1 — the activation block
 /// itself still commits a legacy XOR root (shouldBuildMPT's strictly-greater, mirrored by
 /// MPTPruner's activation+1), reproduced here by querying the flag at blockNumber - 1 through
-/// the same single-row SYS_CONFIG read as the fullTrie flag below. Called ONLY on the
+/// the same single-row SYS_CONFIG read as the fullTrie lane check below. Called ONLY on the
 /// historical-read error paths to pick the -32004 wording; a fetch failure degrades to false
 /// (predates-MPT wording), the honest non-pruned default.
 bcos::task::Task<bool> mptStateRootExpectedAt(
     bcos::ledger::LedgerInterface& ledger, bcos::protocol::BlockNumber blockNumber)
 {
     using Flag = bcos::ledger::Features::Flag;
-    if (co_await ledger::getFeature(ledger, Flag::feature_l2_ethereum_compat, blockNumber))
+    if (co_await executorVersionAt(ledger, blockNumber) >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
     {
         co_return true;
     }
@@ -316,12 +336,12 @@ task::Task<std::optional<HistoricalMptContext>> tryResolveMptContext(
                 stateRootMissingMessage(blockNumber, head, mptPruneWindow, mptActive)));
         }
     }
-    // The scenario flag decides how absence at this root is read (getProof's fullTrie).
-    // Single-flag read (feature_l2_ethereum_compat): one SYS_CONFIG row instead of
+    // The chain's lane decides how absence at this root is read (getProof's fullTrie).
+    // Single-row read (executor_version SYS_CONFIG entry): one row instead of
     // fetchAllFeatures' ~60-key scan; degrades to false (scenario A) on read failure, the
     // same honest default as getFeatures' empty-set fallback.
-    auto const fullTrie = co_await ledger::getFeature(
-        ledger, ledger::Features::Flag::feature_l2_ethereum_compat, blockNumber);
+    auto const fullTrie = co_await executorVersionAt(ledger, blockNumber) >=
+                          bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
     co_return HistoricalMptContext{stateRoot, fullTrie};
 }
 
@@ -530,15 +550,15 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     {
         // One lane rule governs a lane end to end: the genesis alloc import, the executor,
         // and this flat reader all derive the account table name through
-        // ledger::account::ethLaneAccountTableName when feature_l2_ethereum_compat is set —
+        // ledger::account::ethLaneAccountTableName on the Ethereum lane
+        // (executor_version >= ETHEREUM_EXECUTOR_VERSION) —
         // on an Ethereum-compatible chain the 8 system-tx addresses are ordinary accounts
         // living under /apps/ — and through ledger::account::accountTableName otherwise
-        // (only the v1 lane keeps the /sys/ routing). Same single-flag read idiom as
-        // tryResolveMptContext above; derived only here because the historical path below
-        // reads the MPT, not the flat KV.
+        // (only the v1 lane keeps the /sys/ routing). The lane is genesis-fixed, so the
+        // boot-time executorVersion is authoritative; the historical path below reads the
+        // MPT, not the flat KV, and resolves the lane per block instead.
         auto const contractTableName =
-            co_await ledger::getFeature(
-                *ledger, ledger::Features::Flag::feature_l2_ethereum_compat, blockNumber) ?
+            m_nodeService->executorVersion() >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION ?
                 ledger::account::ethLaneAccountTableName(
                     bcos::Address{addressStr, bcos::Address::FromHex, bcos::Address::AlignRight}) :
                 ledger::account::accountTableName(addressStr);
@@ -1903,15 +1923,16 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
         BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "MPT not enabled on this node"));
     }
 
-    // The exclusion-vs-cold-slot distinction is mode-driven (spec §5.9): only under
-    // feature_l2_ethereum_compat (scenario B) are the storage tries complete, making an
+    // The exclusion-vs-cold-slot distinction is lane-driven (spec §5.9): only on the
+    // Ethereum lane (executor_version >= ETHEREUM_EXECUTOR_VERSION, scenario B) are the
+    // storage tries complete, making an
     // exclusion walk a provable zero. Otherwise (scenario A) the trie omits slots never
     // written after MPT activation, and generateProof marks such slots inMPT=false instead
-    // of emitting a lying value-0 exclusion proof. Single-flag read (one SYS_CONFIG row,
+    // of emitting a lying value-0 exclusion proof. Single-row read (one SYS_CONFIG row,
     // same helper as resolveHistoricalMptContext); degrades to false (honest scenario-A
     // behavior) on fetch failure.
-    auto const fullTrie = co_await ledger::getFeature(
-        *ledger, ledger::Features::Flag::feature_l2_ethereum_compat, blockNumber);
+    auto const fullTrie =
+        co_await executorVersionAt(*ledger, blockNumber) >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
 
     auto result = co_await mapPrunedMptWalk(ledger::mpt::generateProof(*mptReader, stateRoot,
                                                 address, std::span<h256 const>(slots), fullTrie),
@@ -1927,7 +1948,7 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
         {
             // BlockNotCommitted: same wording rules as the other five endpoints' root probe —
             // a pre-activation block never had an MPT root, so don't claim pruning. The extra
-            // feature read is paid only on this error path.
+            // lane read is paid only on this error path.
             auto const mptActive = co_await mptStateRootExpectedAt(*ledger, blockNumber);
             message = stateRootMissingMessage(
                 blockNumber, head, m_nodeService->mptPruneWindow(), mptActive);
