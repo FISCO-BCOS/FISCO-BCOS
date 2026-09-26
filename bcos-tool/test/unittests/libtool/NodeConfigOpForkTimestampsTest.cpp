@@ -16,6 +16,7 @@
 // reach the genesis pin.
 
 #include "ExceptionCheck.h"
+#include "EthLaneGenesisFixture.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-tool/NodeConfig.h>
 #include <boost/test/unit_test.hpp>
@@ -34,7 +35,11 @@ namespace
 constexpr uint64_t kNever = std::numeric_limits<uint64_t>::max();
 
 /// Genesis with a configurable [executor] tail and an optional [op_fork_timestamps] section;
-/// everything else is fixed so the OP checks are the only guards that can fire.
+/// everything else is fixed so the OP checks are the only guards that can fire. Every
+/// executor tail used here is version >= 2 (the Ethereum lane), so the genesis also carries
+/// the lane-mandatory [alloc.0] + [eth_genesis_header] sections — validateL2Invariants binds
+/// them to executor.version >= 2 both ways, and without them the lane binding would throw
+/// before the OP guard under test.
 std::string opGenesis(std::string const& executorTail, std::string const& opSection)
 {
     const std::string node =
@@ -50,7 +55,7 @@ std::string opGenesis(std::string const& executorTail, std::string const& opSect
            "[tx]\ngas_limit=3000000000\n"
            "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
            "auth_admin_account=0x0000000000000000000000000000000000000001\n" +
-           executorTail + opSection;
+           executorTail + opSection + ethLaneGenesisSections();
 }
 
 /// The OP lane's accepted [executor] tail: version 3, no evm_revision.
@@ -322,8 +327,11 @@ BOOST_AUTO_TEST_CASE(reloadWithoutSectionDropsTheSchedule)
     BOOST_CHECK(!cfg.genesisConfig().m_evmcRevision.has_value());
 }
 
-// Node admission compares genesis strings byte for byte, so a v2 chain's string must be
-// exactly what it was before this section existed.
+// Node admission compares genesis strings byte for byte, so a v2 chain's pin shape must not
+// drift. A v2 chain now necessarily carries the Ethereum-lane sections ([alloc.*] +
+// [eth_genesis_header], bound to executor.version >= 2 by validateL2Invariants); allocs stay
+// out of the pin, but the header is pinned, so the expected string below includes the
+// [ethGenesisHeader] block and still contains no [opForkTimestamps] emission.
 BOOST_AUTO_TEST_CASE(legacyV2GenesisStringUnchanged)
 {
     auto cfg = loadOk(opGenesis("version=2\nevm_revision=prague\n", ""));
@@ -341,9 +349,8 @@ BOOST_AUTO_TEST_CASE(legacyV2GenesisStringUnchanged)
         "[tx]\ngaslimit:3000000000\n"
         "[executor]\niswasm: 0\nisAuthCheck:0\n"
         "authAdminAccount:0x0000000000000000000000000000000000000001\nisSerialExecute:0\n"
-        "evmRevision:0:prague\nepochSealerNum:4\nepochBlockNum:1000\n"
-        "node.0:" +
-        node + ",1\n";
+        "evmRevision:0:prague\nepochSealerNum:4\nepochBlockNum:1000\n" +
+        ethLaneGenesisPinSection() + "node.0:" + node + ",1\n";
     BOOST_CHECK_EQUAL(data, expected);
 }
 

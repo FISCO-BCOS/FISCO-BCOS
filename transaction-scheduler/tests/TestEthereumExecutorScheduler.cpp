@@ -40,6 +40,7 @@
 #include "bcos-framework/testutils/faker/FakeBlock.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-ledger/mpt/Constants.h"
 #include "bcos-mempool/MemPoolImpl.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
@@ -176,6 +177,27 @@ task::Task<void> EEWriteCurrentNumber(EEBackendStorage& storage, int64_t number)
     storage::Entry entry(std::to_string(number));
     co_await storage2::writeOne(storage,
         StateKey{ledger::SYS_CURRENT_STATE, ledger::SYS_KEY_CURRENT_NUMBER}, std::move(entry));
+}
+
+/// Persist the genesis (block-0) header row under SYS_NUMBER_2_BLOCK_HEADER — the row
+/// parentStateRootFor reads when block 1 builds its MPT. On the Ethereum lane
+/// (executor_version >= 2) every block from genesis on is an MPT block, so block 1's
+/// build resolves its parent root from this row and throws NotFoundBlockHeader without
+/// it (the production owner is Ledger::buildGenesisBlock; publishPendingBlockHeaderForMPT
+/// deliberately skips block 0). The stateRoot is the canonical empty-trie root: these
+/// fixtures fund accounts as flat rows only, and the block-1 build scans just the block's
+/// own delta layer (MPTBuilder.h).
+task::Task<void> EEWriteGenesisHeader(EEBackendStorage& storage)
+{
+    bcostars::protocol::BlockHeaderImpl header;
+    header.setNumber(0);
+    header.setStateRoot(bcos::ledger::mpt::emptyRootHash());
+    bcos::bytes buffer;
+    header.encode(buffer);
+    storage::Entry entry;
+    entry.set(std::move(buffer));
+    co_await storage2::writeOne(storage,
+        StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, std::string{"0"}}, std::move(entry));
 }
 
 class TestEthereumExecutorSchedulerFixture
@@ -1096,6 +1118,9 @@ BOOST_AUTO_TEST_CASE(engineServiceSealsAndExecutesRealTx)
                 std::move(entry));
         }
         co_await EEWriteCurrentNumber(backendStorage, 0);
+        // executor_version=2 (written below) makes block 1 an MPT block whose parent root
+        // comes from the block-0 header row.
+        co_await EEWriteGenesisHeader(backendStorage);
 
         // executor_version=2 → getLedgerConfig wires the EVMC revision for the v2 executor.
         // A block gas limit so the transfer (gas 21000) fits in the block.
@@ -1261,6 +1286,9 @@ BOOST_AUTO_TEST_CASE(engineServiceKarstServesZeroWithdrawalsRoot)
                 std::move(entry));
         }
         co_await EEWriteCurrentNumber(backendStorage, 0);
+        // executor_version = 2 (written below) makes block 1 an MPT block whose parent root
+        // comes from the block-0 header row.
+        co_await EEWriteGenesisHeader(backendStorage);
         // executor_version = 2 is the whole point of this case; tx_gas_limit is left unset
         // (getLedgerConfig defaults it to 0) because the payload here carries no
         // transactions, so no gas bound is exercised.

@@ -234,16 +234,6 @@ void seedHeadAndGenesisHeader(MLS& mls, bcos::protocol::BlockHeader::Ptr const& 
     bcos::task::syncWait(mls.mergeView(std::move(view)));
 }
 
-void seedL2CompatFeature(MLS& mls, bcos::protocol::BlockNumber enableNumber = 0)
-{
-    auto view = mls.fork();
-    view.newMutable();
-    bcos::ledger::Features features;
-    features.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
-    bcos::task::syncWait(bcos::ledger::writeToStorage(features, view, enableNumber));
-    bcos::task::syncWait(mls.mergeView(std::move(view)));
-}
-
 // ── genesis MPT trie (the scenario-B import, verbatim from OpSchedulerTest) ──
 
 bcos::ledger::mpt::TrieBuildResult collectAccountStorageTrie(
@@ -339,13 +329,13 @@ struct VerifierFixture
         seedSysTables(multiLayerStorage);
     }
 
-    /// Ledger head 0 with the real genesis trie root + the l2-ethereum-compat feature — the
-    /// incremental MPT build resolves the genesis nodes persisted here.
+    /// Ledger head 0 with the real genesis trie root — the incremental MPT build resolves the
+    /// genesis nodes persisted here. The OP lane is scenario B by construction
+    /// (executor_version >= OPSTACK_EXECUTOR_VERSION), so no feature row is seeded.
     void prepareGenesis()
     {
         auto const genesisRoot = computeAndPersistGenesisTrie(multiLayerStorage);
         seedHeadAndGenesisHeader(multiLayerStorage, makeGenesisHeader(genesisRoot));
-        seedL2CompatFeature(multiLayerStorage);
     }
 };
 
@@ -422,6 +412,9 @@ engine::OpBlockCommitments probeCommitments(VerifierFixture& f,
     bcos::task::syncWait(bcos::ledger::readFromStorage(features, view, number));
     bcos::ledger::LedgerConfig execLedgerConfig;
     execLedgerConfig.setBlockNumber(number);
+    // Mirror OpBlockVerifier::verifyAndCommit: the executor_version is pinned to the OP lane
+    // (computeMptStateDelta's l2Mode and the parent-root rule branch on it).
+    execLedgerConfig.setExecutorVersion(bcos::ledger::OPSTACK_EXECUTOR_VERSION);
     execLedgerConfig.setEVMCRevision(cfg.rev);
     execLedgerConfig.setFeatures(features);
 
@@ -464,8 +457,8 @@ engine::OpBlockCommitments probeCommitments(VerifierFixture& f,
     auto opResult = engine::finalizeOpBlockResult(executor, view, *header, execLedgerConfig, cfg,
         receipts, rawRefs, ctx.cumulativeGasUsed, hashErr, /*skipStateRootBuild=*/true);
 
-    auto const parentRoot = bcos::task::syncWait(
-        bcos::ledger::mpt::parentStateRootFor(view, features, number, *f.blockFactory));
+    auto const parentRoot = bcos::task::syncWait(bcos::ledger::mpt::parentStateRootFor(
+        view, bcos::ledger::OPSTACK_EXECUTOR_VERSION, features, number, *f.blockFactory));
     auto delta = bcos::task::syncWait(
         bcos::ledger::mpt::computeMptStateDelta(view, parentRoot, execLedgerConfig, false));
     return engine::commitmentsOf(opResult.seal, delta.stateRoot, opResult.gasUsed, opResult.txRoot);

@@ -336,7 +336,8 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coExecute
         // the next block's parent root.
         std::optional<ledger::mpt::MPTDeltaLayer> mptDelta;
         std::optional<h256> mptStateRoot;
-        if (shouldBuildMPT(ledgerConfig->features(), blockHeader->number()))
+        if (shouldBuildMPT(
+                ledgerConfig->executorVersion(), ledgerConfig->features(), blockHeader->number()))
         {
             try
             {
@@ -353,9 +354,10 @@ BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::coExecute
                     << blockHeader->number() << " | " << boost::diagnostic_information(e);
                 if (blockHeader->number() == 1)
                 {
-                    // Block 1 is where a missing parent trie first bites on an L2 chain: the
-                    // genesis trie nodes ARE persisted with the genesis state (Ledger.cpp's
-                    // l2EthereumCompat prewrite, #5374), so a failure here means that prewrite
+                    // Block 1 is where a missing parent trie first bites on an Ethereum-lane
+                    // chain: the genesis trie nodes ARE persisted with the genesis state
+                    // (Ledger.cpp's ethLane prewrite, #5374), so a failure here means that
+                    // prewrite
                     // did not run (e.g. a genesis written by a binary predating #5374). Name
                     // it instead of leaving operators to guess at a bare missing-node error
                     // from the trie core.
@@ -816,13 +818,13 @@ void BaselineScheduler<MultiLayerStorage, Executor, SchedulerImpl, Ledger>::call
             }
             auto ledgerConfig = co_await ledger::getLedgerConfig(
                 latestView, blockNumber, self->m_blockFactory.get());
-            if (!ledgerConfig->features().get(ledger::Features::Flag::feature_l2_ethereum_compat))
+            if (ledgerConfig->executorVersion() < ledger::ETHEREUM_EXECUTOR_VERSION)
             {
                 callback(
                     BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
                         fmt::format("eth_call: historical call at block {} requires the "
-                                    "full-fidelity MPT of an L2 Ethereum-compat chain "
-                                    "(feature_l2_ethereum_compat, scenario B); this chain's state "
+                                    "full-fidelity MPT of an Ethereum-lane chain "
+                                    "(executor_version >= 2, scenario B); this chain's state "
                                     "at that block is not completely committed to an MPT",
                             blockNumber)),
                     nullptr);

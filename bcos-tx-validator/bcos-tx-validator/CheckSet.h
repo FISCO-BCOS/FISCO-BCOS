@@ -112,10 +112,11 @@ enum class Check : uint32_t
     /// pool (Web3NonceChecker::existsMemoryNonce). The Web3 counterpart of BcosPoolNonce, and
     /// node-local in the same way -- but keyed on the SENDER, which BcosPoolNonce is not.
     Web3PoolNonce = 1U << 19,
-    /// Whether this chain carries FISCO-native (tars) transactions at all. An OP-Stack L2
-    /// (feature_l2_ethereum_compat) carries EIP-2718 envelopes only: a BCOSTransaction has no
-    /// envelope for an op-reth verifier to re-derive, so one inside a block makes that verifier
-    /// reject the WHOLE block. Reads the configuration snapshot alone -- no account, no
+    /// Whether this chain carries FISCO-native (tars) transactions at all. An Ethereum-lane
+    /// chain (executor_version >= ETHEREUM_EXECUTOR_VERSION) carries EIP-2718 envelopes only:
+    /// a BCOSTransaction has no
+    /// envelope for an EL / op-reth verifier to re-derive, so one inside a block makes that
+    /// verifier reject the WHOLE block. Reads the configuration snapshot alone -- no account, no
     /// envelope -- which is why it sits in the state stage.
     BcosTxAllowedOnChain = 1U << 20,
 };

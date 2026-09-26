@@ -86,7 +86,7 @@ using SystemTxPredicate = std::function<bool(protocol::Transaction const&)>;
 ///     and continuing. That is NOT this rule seen from the other end, and the two are not
 ///     copies to merge: the builder enforces a payload-encoding invariant that holds on any
 ///     chain -- a transaction with no EIP-2718 wire form cannot be written into an engine
-///     payload at all, whatever feature_l2_ethereum_compat says -- while the check below is a
+///     payload at all, whatever the chain's executor_version says -- while the check below is a
 ///     ruling about what THIS chain's configuration admits, and reports a status a caller can
 ///     read. Different predicate, different domain, different consequence.
 ///

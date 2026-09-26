@@ -258,18 +258,20 @@ public:
     /// reachable node row is missing (the trie is the source of truth — fail loud, same
     /// convention as Trie.h) or the head header carries no root.
     bcos::task::Task<void> init(bcos::protocol::BlockNumber currentBlock,
-        StateRootLookup stateRootAt, bool sweepGarbage, GarbageProgress progress = {})
+        int64_t executorVersion, StateRootLookup stateRootAt, bool sweepGarbage,
+        GarbageProgress progress = {})
     {
         m_watermark.store(currentBlock, std::memory_order_relaxed);
+        m_executorVersion = executorVersion;
 
         bcos::ledger::Features features;
         co_await features.readFromStorage(*m_backend, currentBlock);
         using Flag = bcos::ledger::Features::Flag;
 
         std::optional<bcos::protocol::BlockNumber> firstMptBlock;
-        if (features.get(Flag::feature_l2_ethereum_compat))
+        if (executorVersion >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION)
         {
-            firstMptBlock = 0;  // scenario B/L2: the genesis stateRoot is already an MPT root
+            firstMptBlock = 0;  // Ethereum lane: the genesis stateRoot is already an MPT root
         }
         else if (features.get(Flag::feature_mpt_state_root))
         {
@@ -1140,6 +1142,9 @@ private:
 
     Backend* m_backend;
     int64_t m_pruneWindow;
+    // The chain's executor_version, captured by init (the lane — legacy vs Ethereum — decides
+    // firstMptBlock; it is genesis-fixed, so the init-time value stays correct across a reorg).
+    int64_t m_executorVersion = 0;
     std::atomic<int64_t> m_watermark{-1};
     uint64_t m_lastSweepDeleted = 0;
     std::unordered_map<bcos::h256, Entry> m_counts;

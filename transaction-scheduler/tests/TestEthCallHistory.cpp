@@ -72,8 +72,9 @@ using HCViewType = HCMultiLayerStorage::ViewType;
 using HCHistoricalBackend = HistoricalStateBackend<HCViewType>;
 using HCHistoricalView = View<HCMutableStorage, void, HCHistoricalBackend>;
 
-/// The Features the shared getLedgerConfig stub hands out — set per test.
+/// The Features / executor_version the shared getLedgerConfig stub hands out — set per test.
 auto& g_hcFeatures = bcos::test::sharedmock::g_stubFeatures;
+auto& g_hcExecutorVersion = bcos::test::sharedmock::g_stubExecutorVersion;
 
 task::Task<std::vector<protocol::Transaction::ConstPtr>> hcEmptyTxsTask()
 {
@@ -167,9 +168,10 @@ public:
         baselineScheduler(multiLayerStorage, mockScheduler, probeExecutor, *blockFactory,
             mockLedger.get(), mockTxPool.get(), *transactionSubmitResultFactory, *hashImpl)
     {
-        ledger::Features features;
-        features.set(ledger::Features::Flag::feature_l2_ethereum_compat);
-        g_hcFeatures = features;
+        // The Ethereum lane (executor_version >= 2, scenario B): the full-fidelity MPT is
+        // built from genesis on, so historical calls are servable at every height.
+        g_hcFeatures = ledger::Features{};
+        g_hcExecutorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
         mockScheduler.m_plan = &plan;
         probeExecutor.m_mode = bcos::test::sharedmock::SharedMockExecutor::Mode::ReadSlot;
         probeExecutor.m_probeAddress = hcEvmcAddress();
@@ -225,9 +227,11 @@ public:
         blockHeader->setNumber(number);
         blockHeader->setVersion(blockVersion);
         blockHeader->calculateHash(*hashImpl);
-        bytes input;
-        block->appendTransaction(transactionFactory->createTransaction(
-            0, "to", input, std::to_string(number), 100, "chain", "group", 0));
+        // This fixture drives the Ethereum lane (executor_version = 2), where finishExecute
+        // commits the txsRoot over EIP-2718 wire bytes (calculateEthereumTransactionRoot) —
+        // it throws on a FISCO-shaped payload, so the filler transaction is Web3-shaped.
+        block->appendTransaction(bcos::test::sharedmock::makeWeb3FillerTx(
+            static_cast<uint64_t>(number), *hashImpl));
 
         Error::Ptr execError;
         protocol::BlockHeader::Ptr executedHeader;
@@ -288,8 +292,8 @@ public:
     std::vector<protocol::BlockHeader::Ptr> runCanonicalChain()
     {
         // Seed the genesis header (Ledger::buildGenesisBlock's job in production): scenario-B
-        // block 1 resolves its parent root from it, and an empty-alloc L2 genesis commits the
-        // empty trie.
+        // block 1 resolves its parent root from it, and an empty-alloc Ethereum-lane genesis
+        // commits the empty trie.
         writeHeaderToBackend(makeHeader(0, ledger::mpt::emptyRootHash()));
 
         auto const table = ledger::account::hexAccountTableName(hcAddress());
@@ -342,7 +346,8 @@ public:
     fakeit::Mock<txpool::TxPoolInterface> mockTxPool;
     HCMultiLayerStorage multiLayerStorage;
     bcos::test::sharedmock::SharedMockExecutor probeExecutor;
-    // Resets the shared g_stubFeatures at fixture teardown (SharedBaselineSchedulerMock.h).
+    // Resets the shared g_stubFeatures / g_stubExecutorVersion at fixture teardown
+    // (SharedBaselineSchedulerMock.h).
     bcos::test::sharedmock::ScopedStubFeatures m_featuresGuard;
     bcos::test::sharedmock::SharedBaselineScheduler baselineScheduler;
 };
@@ -534,23 +539,24 @@ BOOST_AUTO_TEST_CASE(callAtBlockRefusalPaths)
     BOOST_CHECK(beyondError->errorMessage().find("does not exist") != std::string::npos);
     BOOST_CHECK(!beyondReceipt);
 
-    // Scenario A (mid-chain MPT activation) is refused: the trie there is not the complete
-    // state, so a historical call could silently mis-read dormant accounts.
+    // Scenario A (mid-chain MPT activation on the legacy lane) is refused: the trie there
+    // is not the complete state, so a historical call could silently mis-read dormant
+    // accounts.
     ledger::Features scenarioA;
     scenarioA.set(ledger::Features::Flag::feature_mpt_state_root);
     scenarioA.setActivationBlock(ledger::Features::Flag::feature_mpt_state_root, 0);
     g_hcFeatures = scenarioA;
+    g_hcExecutorVersion = 0;
     auto [scenarioAError, scenarioAReceipt] = callAt(1);
     BOOST_REQUIRE(scenarioAError);
-    BOOST_CHECK(
-        scenarioAError->errorMessage().find("feature_l2_ethereum_compat") != std::string::npos);
+    BOOST_CHECK(scenarioAError->errorMessage().find("executor_version >= 2") != std::string::npos);
     BOOST_CHECK(!scenarioAReceipt);
 
-    // Back to scenario B: the empty-root genesis header serves an EMPTY state — the slot
-    // reads as zero, which is Ethereum's answer for "before anything was written".
-    ledger::Features scenarioB;
-    scenarioB.set(ledger::Features::Flag::feature_l2_ethereum_compat);
-    g_hcFeatures = scenarioB;
+    // Back on the Ethereum lane (executor_version = 2, scenario B): the empty-root genesis
+    // header serves an EMPTY state — the slot reads as zero, which is Ethereum's answer for
+    // "before anything was written".
+    g_hcFeatures = ledger::Features{};
+    g_hcExecutorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
     auto [genesisError, genesisReceipt] = callAt(0);
     BOOST_REQUIRE_MESSAGE(
         !genesisError, (genesisError ? genesisError->errorMessage() : std::string{}));

@@ -446,7 +446,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         // MPTInvariantViolation on a missing reachable node row; fails loudly at boot.
         auto const currentBlock = task::syncWait(ledger::getCurrentBlockNumber(*ledger));
         task::syncWait(pruner->init(
-            currentBlock,
+            currentBlock, m_executorVersion,
             [ledger](BlockNumber number) -> task::Task<std::optional<h256>> {
                 auto block = co_await ledger::getBlockData(*ledger, number, ledger::HEADER);
                 co_return block ? std::optional<h256>{block->blockHeader()->stateRoot()} :

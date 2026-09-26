@@ -215,9 +215,6 @@ def gen_config(workdir, fixture, fork_rev, idx, env_overrides=None, port_offset=
     version=2
     evm_revision={fork_rev}
 
-[features]
-    feature_l2_ethereum_compat=1
-
 """ + "\n".join(allocs)
     (workdir / "config.genesis").write_text(genesis)
 

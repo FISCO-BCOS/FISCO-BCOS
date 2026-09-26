@@ -107,9 +107,6 @@ grep -qE '^\s*evm_revision=' config.genesis || fail "build_chain -O did not pin 
 perl -p -i -e "s/chain_id=20200/chain_id=${L2_CHAIN_ID}/" config.genesis
 cat >> config.genesis <<'GENESIS_EOF'
 
-[features]
-    feature_l2_ethereum_compat=1
-
 [alloc.0]
     address=0x9015bca99e8d49107c33b2cac14013a8dfd2c1b0
     balance=1000000000000000000000
@@ -117,7 +114,8 @@ cat >> config.genesis <<'GENESIS_EOF'
     code=
 GENESIS_EOF
 
-# L2 mode (feature_l2_ethereum_compat) now REQUIRES an [eth_genesis_header]
+# The Ethereum lane (executor_version >= 2, pinned above by build_chain.sh -O) now
+# REQUIRES an [eth_genesis_header]
 # section (NodeConfig::validateL2Invariants, upstream #5420): an L2 chain
 # without it would mint a Tars-hashed B0 that no op-node/op-reth can match.
 # Identical alloc to ci_check_eth_executor.sh, so the same precomputed

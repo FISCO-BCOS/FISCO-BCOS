@@ -265,8 +265,8 @@ public:
     /// writes landing in a fresh mutable layer stacked on a HistoricalStateBackend
     /// (read-your-writes inside the call, nothing persisted; HistoricalCallStorage.h).
     ///
-    /// Gated to scenario B (feature_l2_ethereum_compat): only there is the trie the
-    /// COMPLETE state at the root. A scenario-A trie excludes every account dormant since
+    /// Gated to scenario B (the Ethereum lane, executor_version >= 2): only there is the trie
+    /// the COMPLETE state at the root. A scenario-A trie excludes every account dormant since
     /// activation, so a historical call could silently execute against a state where such
     /// accounts read as absent — refused loudly instead (OQ6 resolution, MPTAccount.h:83-85).
     /// Blocks above the latest height and blocks whose header records no state root

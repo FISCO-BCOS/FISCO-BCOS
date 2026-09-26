@@ -32,6 +32,8 @@
 // Shared test-asset helper (see bcos-ledger genesis tests): the SystemConfig
 // predeploy alloc must carry the feature_flags Entry slot Ledger verifies.
 #include "../../../../bcos-ledger/test/unittests/ledger/GenesisFeatureFlagsHelper.h"
+#include <bcos-framework/ledger/LedgerConfig.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-ledger/mpt/Proof.h>
 #include <bcos-rpc/groupmgr/NodeService.h>
 #include <bcos-rpc/jsonrpc/Common.h>
@@ -264,8 +266,15 @@ BOOST_AUTO_TEST_CASE(ScenarioB_AllAllocAccountsProve)
 {
     FullChainFixture fixture{"epi_scenario_b"};
     auto genesis = FullChainFixture::baseGenesis();
-    genesis.m_features.push_back(
-        ledger::FeatureSet{ledger::Features::Flag::feature_l2_ethereum_compat, 1});
+    // Scenario B IS the Ethereum lane now: executor_version >= 2 (not a feature flag).
+    // Ledger::buildGenesisBlock only persists the executor_version SYS_CONFIG row for
+    // compatibilityVersion >= 3.15 (Ledger.cpp) — and the endpoint resolves the lane from
+    // exactly that row (fetchExecutorVersionAt) — so the fixture's 3.6 default must move up.
+    // >= 3.9 also seeds SYS_CONFIG/web3_chain_id from m_web3ChainID, which must parse.
+    genesis.m_compatibilityVersion =
+        static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_15_0_VERSION);
+    genesis.m_web3ChainID = genesis.m_chainID;
+    genesis.m_executorVersion = ledger::ETHEREUM_EXECUTOR_VERSION;
     genesis.m_allocs.push_back(ledger::Alloc{.address = std::string(c_epiContractAddress),
         .balance = u256(500),
         .nonce = "1",

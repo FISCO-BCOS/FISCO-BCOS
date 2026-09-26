@@ -55,11 +55,8 @@ cd "${WORK_DIR}"
 perl -p -i -e 's/version=1/version=2/' config.genesis
 perl -p -i -e 's/^(\s*is_serial_execute=true)/$1\n    evm_revision=cancun/' config.genesis
 
-cat >> config.genesis <<'GENESIS_EOF'
-
-[features]
-    feature_l2_ethereum_compat=1
-GENESIS_EOF
+# executor_version=2 (patched above) already puts the chain on the Ethereum lane, so
+# genesis [alloc] can pre-fund a sender.
 
 # Pre-fund a sender (secretKey below) via genesis alloc.
 cat >> config.genesis <<'GENESIS_EOF'
@@ -70,7 +67,7 @@ cat >> config.genesis <<'GENESIS_EOF'
     code=
 GENESIS_EOF
 
-# L2 mode (feature_l2_ethereum_compat) now REQUIRES an [eth_genesis_header]
+# The Ethereum lane (executor_version >= 2) now REQUIRES an [eth_genesis_header]
 # section (NodeConfig::validateL2Invariants, upstream #5420): an L2 chain
 # without it would mint a Tars-hashed B0 that no op-node/op-reth can match.
 # Identical alloc to ci_check_eth_executor.sh, so the same precomputed

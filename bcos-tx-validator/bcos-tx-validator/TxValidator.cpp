@@ -351,22 +351,24 @@ TransactionStatus checkBcosGroupChainId(Envelope const& in)
 
 TransactionStatus checkBcosTxAllowedOnChain(StateInputs const& in)
 {
-    // An OP-Stack L2 carries EIP-2718 envelopes only. A BCOSTransaction has none, so op-reth
-    // cannot re-derive it and rejects the whole block that carries it -- one native transaction
-    // in one block stalls the whole L2. Refuse it here instead of sealing a block the verifier
-    // throws away.
+    // An Ethereum-lane chain (executor_version >= ETHEREUM_EXECUTOR_VERSION: L1 EL or
+    // OP-Stack L2) carries EIP-2718 envelopes only. A BCOSTransaction has none, so the EL /
+    // op-reth cannot re-derive it and rejects the whole block that carries it -- one native
+    // transaction in one block stalls the whole chain. Refuse it here instead of sealing a
+    // block the verifier throws away.
     //
-    // The flag comes from the same snapshot every other state check reads, so this follows
-    // whatever the chain last published. It cannot change under a running pool: the flag is
-    // genesis-only, and Features::validate rejects it on the governance setSystemConfig path
-    // (bcos-framework/ledger/Features.cpp). That closes what would otherwise be a hole here --
-    // transactions already admitted are not re-judged at seal time (MemoryStorage re-checks the
-    // ledger nonce alone), so a mid-chain flip would leave native transactions in the pool
-    // eligible for a proposal. The rest of the tree makes the same genesis-time assumption
-    // (OpScheduler.h; NodeConfig::validateL2Invariants, which validates the flag against the
-    // genesis alloc; scheduler_v1::validateMPTFlagMatrix, which refuses to boot when its
-    // activation block is not 0).
-    if (in.chain.config->features().get(ledger::Features::Flag::feature_l2_ethereum_compat))
+    // The executor_version comes from the same snapshot every other state check reads, so
+    // this follows whatever the chain last published. It cannot change under a running pool:
+    // the lane is genesis-only, and SystemConfigPrecompiled refuses governance writes that
+    // cross the ETHEREUM_EXECUTOR_VERSION boundary. That closes what would otherwise be a
+    // hole here -- transactions already admitted are not re-judged at seal time
+    // (MemoryStorage re-checks the ledger nonce alone), so a mid-chain flip would leave
+    // native transactions in the pool eligible for a proposal. The rest of the tree makes
+    // the same genesis-time assumption (OpScheduler.h; NodeConfig::validateL2Invariants,
+    // which validates the genesis alloc against the lane;
+    // scheduler_v1::validateOpModeGenesisOnly, which refuses to boot when an OP-mode
+    // executor_version's activation block is not 0).
+    if (in.chain.config->executorVersion() >= ledger::ETHEREUM_EXECUTOR_VERSION)
     {
         return TransactionStatus::BcosTxNotAllowed;
     }
