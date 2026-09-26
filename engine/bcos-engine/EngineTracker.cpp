@@ -125,8 +125,13 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
                                           "Forkchoice head block is not canonical"});
             }
         }
-        else
+        else if (!(resolved.allowCanonicalHeadJump && resolved.headCanonical))
         {
+            // Strict +1 by default. The EL-mode lane relaxes this to any CANONICAL
+            // head: there the devp2p sync loop commits blocks without a per-block FCU,
+            // so the first forkchoiceUpdated after a backfill legitimately jumps the
+            // tracked head across every synced block. A non-canonical jump stays
+            // rejected on every lane.
             BOOST_THROW_EXCEPTION(InvalidForkchoiceState{} << bcos::errinfo_comment{
                                       "Forkchoice head block number must increase by exactly 1"});
         }

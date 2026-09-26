@@ -18,7 +18,8 @@
  */
 
 #include "../common/RPCFixture.h"
-#include <bcos-framework/ledger/Features.h>
+#include <bcos-framework/ledger/LedgerConfig.h>
+#include <bcos-framework/ledger/SystemConfigs.h>
 #include <bcos-framework/storage2/AnyStorage.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-ledger/mpt/Account.h>
@@ -40,8 +41,9 @@ namespace bcos::test
 {
 namespace mpt = bcos::ledger::mpt;
 
-// FakeLedger's default (empty) feature set leaves feature_l2_ethereum_compat OFF, so every case
-// here runs under scenario A unless it opts in to scenario B explicitly.
+// FakeLedger has no executor_version SYS_CONFIG row by default (fetchExecutorVersionAt reads
+// 0 — the consortium lane), so every case here runs under scenario A unless it opts in to
+// scenario B explicitly.
 class EthGetProofSlotNotInMPTFixture : public RPCFixture
 {
 public:
@@ -87,11 +89,14 @@ public:
         m_ledger->ledgerData().back()->blockHeader()->setStateRoot(stateRoot);
     }
 
-    void enableL2Mode()
+    /// Put the fake chain on the Ethereum lane (executor_version >= 2, scenario B): the
+    /// endpoint resolves the lane per block from the executor_version SYS_CONFIG entry
+    /// (LedgerInterface::fetchExecutorVersionAt).
+    void useEthereumLane()
     {
-        ledger::Features features;
-        features.set(ledger::Features::Flag::feature_l2_ethereum_compat);
-        m_ledger->setFeatures(features);
+        m_ledger->setSystemConfig(
+            std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version)),
+            std::to_string(bcos::ledger::ETHEREUM_EXECUTOR_VERSION));
     }
 
     /// A JSON quantity ("0x2a") back to trimmed big-endian bytes; "0x0" -> empty.
@@ -205,12 +210,13 @@ BOOST_AUTO_TEST_CASE(ColdSlotWithoutFlatValueReadsZero)
     BOOST_TEST(!cold["inMPT"].asBool());
 }
 
-// Scenario B (feature_l2_ethereum_compat): the same absent slot yields the unchanged EIP-1186
-// exclusion proof — value 0x0, non-empty proof, inMPT true — because the complete trie makes
-// the exclusion a provable zero. The flat value must NOT leak into the response.
+// Scenario B (the Ethereum lane, executor_version >= 2): the same absent slot yields the
+// unchanged EIP-1186 exclusion proof — value 0x0, non-empty proof, inMPT true — because the
+// complete trie makes the exclusion a provable zero. The flat value must NOT leak into the
+// response.
 BOOST_AUTO_TEST_CASE(ScenarioBKeepsExclusionProof)
 {
-    enableL2Mode();
+    useEthereumLane();
     setFlatValue(slotCold, h256{0x1337U});  // present in flat KV, must be ignored
 
     auto resp = getProof({slotCold.hexPrefixed()});

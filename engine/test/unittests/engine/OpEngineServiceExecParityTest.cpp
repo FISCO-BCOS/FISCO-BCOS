@@ -28,7 +28,10 @@
 #include "support/SeedPreState.h"
 
 #include <bcos-concepts/ByteBuffer.h>
+#include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-evm/adapter/StateRootCompute.h>  // trimmedBigEndian
+#include <bcos-evm/eth/state/hash_utils.hpp>    // evmone::keccak256
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/TransactionFactory.h>
@@ -37,6 +40,9 @@
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/Ledger.h>
+#include <bcos-ledger/mpt/HashBuilder.h>   // computeTrieRoot / flushTrieNodes
+#include <bcos-ledger/mpt/MPTBuilder.h>    // TrieBuildResult
+#include <bcos-ledger/mpt/ViewNodeStorage.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-table/src/LegacyStorageWrapper.h>
@@ -206,15 +212,91 @@ void registerVerifiedBlock(MLS& multiLayerStorage, bcos::h256 const& blockHash, 
     bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
 }
 
+/// Test-local mirrors of the opstack-executor helpers (OpSchedulerTest.cpp): build the full
+/// Ethereum MPT over the seeded pre-state flat rows and persist every node as "/mpt/" rows —
+/// the mirror of Ledger::buildGenesisBlock's Ethereum-lane genesis import. The incremental
+/// MPT build at the golden block dereferences the parent root's persisted nodes
+/// (OpScheduler::execute), so the golden parent header must carry THIS root and the rows
+/// must exist, or execution fails with "no persisted trie nodes".
+bcos::ledger::mpt::TrieBuildResult collectAccountStorageTrie(
+    const std::map<evmc::bytes32, evmc::bytes32>& storage)
+{
+    std::map<bcos::h256, bcos::bytes> entries;
+    for (auto const& [key, value] : storage)
+    {
+        if (evmc::is_zero(value))
+            continue;
+        bcos::bytes leaf;
+        bcos::codec::rlp::encode(leaf,
+            bcos::evm::trimmedBigEndian(bcos::bytesConstRef{value.bytes, sizeof(value.bytes)}));
+        entries[bcos::h256{evmone::keccak256(key).bytes, 32}] = std::move(leaf);
+    }
+    return bcos::ledger::mpt::computeTrieRoot(entries);
+}
+
+struct CollectedStateRoot
+{
+    evmone::hash256 root{};
+    std::unordered_map<bcos::h256, bcos::bytes> newNodes;
+};
+
+template <class Ledger>
+CollectedStateRoot collectStateRoot(const Ledger& ledger)
+{
+    std::map<bcos::h256, bcos::bytes> entries;
+    CollectedStateRoot out;
+    if (!ledger.visitAccounts([&](const auto& account) {
+            auto storageTrie = collectAccountStorageTrie(account.storage);
+            out.newNodes.merge(std::move(storageTrie.newNodes));
+            evmone::hash256 storageRoot{};
+            std::memcpy(storageRoot.bytes, storageTrie.root.data(), sizeof(storageRoot.bytes));
+            auto const balanceBe = intx::be::store<evmc::uint256be>(account.balance);
+            bcos::bytes leaf;
+            bcos::codec::rlp::encode(leaf, account.nonce,
+                bcos::evm::trimmedBigEndian(
+                    bcos::bytesConstRef{balanceBe.bytes, sizeof(balanceBe.bytes)}),
+                bcos::bytesConstRef{storageRoot.bytes, sizeof(storageRoot)},
+                bcos::bytesConstRef{account.codeHash.bytes, sizeof(evmc::bytes32)});
+            entries[bcos::h256{evmone::keccak256(account.addr).bytes, 32}] = std::move(leaf);
+            return true;
+        }))
+    {
+        throw std::runtime_error("collectStateRoot: account traversal incomplete");
+    }
+    auto result = bcos::ledger::mpt::computeTrieRoot(entries);
+    out.newNodes.merge(std::move(result.newNodes));
+    std::memcpy(out.root.bytes, result.root.data(), sizeof(out.root.bytes));
+    return out;
+}
+
+bcos::h256 computeAndPersistPreStateTrie(MLS& multiLayerStorage)
+{
+    auto view = multiLayerStorage.fork();
+    view.newMutable();
+    bcos::evm::evmstate::Storage2State<ViewType> bridge(view);
+    auto result = collectStateRoot(bridge);
+    BOOST_REQUIRE_MESSAGE(
+        !bridge.poisoned(), "pre-state trie build poisoned: " << std::string(bridge.firstError()));
+    bcos::ledger::mpt::ViewNodeStorage<ViewType> nodeStorage(view);
+    bcos::task::syncWait(bcos::ledger::mpt::flushTrieNodes(nodeStorage, result.newNodes));
+    bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
+    bcos::h256 root;
+    std::memcpy(root.data(), result.root.bytes, sizeof(result.root.bytes));
+    return root;
+}
+
 /// Seed the parent (genesis) header row the payload validation reads. Values derive from the
 /// vector's env so the golden payload's parent constraints hold exactly: parent number =
 /// currentNumber - 1, a whole-second timestamp strictly below the payload's, the env gas
 /// limit and base fee at the steady state (gasUsed == gasLimit / elasticity, so calcOpBaseFee
 /// reproduces the golden baseFeePerGas verbatim), and the fork's Holocene/Jovian extraData
 /// carrying the corpus 50/6 pair. Without this row newPayload fails closed with
-/// "parent block header is missing from storage".
+/// "parent block header is missing from storage". @p stateRoot is the persisted pre-state
+/// trie root (computeAndPersistPreStateTrie): the incremental MPT build dereferences the
+/// parent's nodes through it.
 void registerGoldenParentHeader(MLS& multiLayerStorage,
-    bcos::protocol::BlockFactory::Ptr const& blockFactory, Json::Value const& env, bool jovian)
+    bcos::protocol::BlockFactory::Ptr const& blockFactory, Json::Value const& env, bool jovian,
+    bcos::h256 const& stateRoot)
 {
     auto quantity = [](std::string const& hex) {
         auto const digits = hex.rfind("0x", 0) == 0 ? hex.substr(2) : hex;
@@ -230,6 +312,7 @@ void registerGoldenParentHeader(MLS& multiLayerStorage,
     auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
     header->setNumber(parentNumber);
     header->setTimestamp(parentTimestampMs);
+    header->setStateRoot(stateRoot);
     header->setGasLimit(gasLimit);
     header->setGasUsed(gasLimit / 6);  // steady state: next base fee == parent's
     header->setBaseFee(baseFee);
@@ -328,10 +411,11 @@ void runGoldenVector(std::string const& id)
     auto sample = w6test::loadVectorSample(id);
     auto fixture = std::make_unique<OpE2eFixture>(forkScheduleFor(sample.jovian));
     opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
+    auto const preStateRoot = computeAndPersistPreStateTrie(fixture->multiLayerStorage);
     const auto goldenHeader = w6test::decodeGoldenHeader(sample);
     registerVerifiedBlock(fixture->multiLayerStorage, goldenHeader->parentInfo().blockHash, 0);
-    registerGoldenParentHeader(
-        fixture->multiLayerStorage, fixture->blockFactory, sample.vector["env"], sample.jovian);
+    registerGoldenParentHeader(fixture->multiLayerStorage, fixture->blockFactory,
+        sample.vector["env"], sample.jovian, preStateRoot);
 
     auto params = w6test::makeParamsJson(sample);
     auto request = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
@@ -355,10 +439,11 @@ void runInvalidFieldParity(std::string const& vectorId, std::string const& corru
     auto sample = w6test::loadVectorSample(vectorId);
     auto fixture = std::make_unique<OpE2eFixture>(forkScheduleFor(sample.jovian));
     opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
+    auto const preStateRoot = computeAndPersistPreStateTrie(fixture->multiLayerStorage);
     const auto goldenHeader = w6test::decodeGoldenHeader(sample);
     registerVerifiedBlock(fixture->multiLayerStorage, goldenHeader->parentInfo().blockHash, 0);
-    registerGoldenParentHeader(
-        fixture->multiLayerStorage, fixture->blockFactory, sample.vector["env"], sample.jovian);
+    registerGoldenParentHeader(fixture->multiLayerStorage, fixture->blockFactory,
+        sample.vector["env"], sample.jovian, preStateRoot);
 
     auto params = w6test::makeParamsJson(sample);
     if (corruptField == "stateRoot")

@@ -60,6 +60,7 @@ public:
     virtual void loadRpcServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadGatewayServiceConfig(boost::property_tree::ptree const& _pt);
     virtual void loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt);
+    virtual void loadEngineRpcConfig(boost::property_tree::ptree const& _pt);
 
     virtual void loadWithoutTarsFrameworkConfig(boost::property_tree::ptree const& _pt);
 
@@ -228,6 +229,16 @@ public:
     // endpoint); production configs must never set it
     bool opEngineAllowV1Executor() const;
 
+    // engine rpc configurations ([engine_rpc]): the authenticated Engine API listener for
+    // Ethereum L1 EL mode (ethereum.mode=el); NodeConfig refuses it in any other mode.
+    bool enableEngineRpc() const;
+    const std::string& engineRpcListenIP() const;
+    uint16_t engineRpcListenPort() const;
+    uint32_t engineHttpBodySizeLimit() const;
+    uint32_t engineBatchRequestSizeLimit() const;
+    const std::string& engineJwtSecretFile() const;
+    int32_t engineClockSkewSecs() const;
+
     // single-node consensus configurations
     bool enableSingleNodeConsensus() const;
     // true when block production is driven through the EngineService — by the built-in
@@ -262,6 +273,10 @@ public:
     uint64_t opSyncLagBlocks() const;
     // path to the bootnodes file (enode:// list, geth-style); default ./bootnodes.json
     const std::string& ethereumBootnodesFile() const;
+    // eth/68 transaction gossip ([ethereum] tx_gossip, default true): dedicated outbound
+    // sessions that exchange pooled transactions with bootnode peers and admit what
+    // arrives into the engine mempool. Only meaningful in EL mode.
+    bool ethereumTxGossipEnabled() const;
     // path to a file holding the 32-byte secp256k1 node private key (hex, optional
     // 0x prefix); empty => auto-generate a persistent key next to the FISCO node key
     // on first start (conf/node.rlpx.key) so the RLPx identity survives restarts
@@ -295,6 +310,21 @@ public:
         bcos::crypto::HashType hash;
     };
     std::optional<EthereumFinalizedCheckpoint> const& ethereumFinalizedCheckpoint() const;
+    // EIP-6110 deposit contract address ([ethereum] deposit_contract_address in
+    // config.ini), consumed by the Prague+ requestsHash cross-check in
+    // EthereumBlockVerifier. Defaults to the Ethereum mainnet deposit contract.
+    bcos::Address const& ethereumDepositContractAddress() const;
+    // EL shallow-reorg window ([ethereum] reorg_window in config.ini): how many committed
+    // blocks a reorg may rewind. Every commit journals its pre-block flat-state values
+    // (EthereumChainRollback.h) so the chain can roll back up to this depth. Requires
+    // storage.mpt_prune_window to be -1 or >= this value (validated in
+    // validateELModeInvariants). Default 256.
+    std::int64_t ethereumReorgWindow() const;
+    // EL-mode engine mempool sizing ([ethereum] mempool_capacity /
+    // mempool_tx_lifetime_minutes in config.ini): how many transactions the in-process
+    // pool holds and how many minutes one lives before expiry. Defaults 5120 / 30.
+    size_t ethereumMempoolCapacity() const;
+    std::int64_t ethereumMempoolTxLifetimeMinutes() const;
 
     // the gateway configurations
     const std::string& p2pListenIP() const;
@@ -437,7 +467,7 @@ protected:
 private:
     void loadAlloc(boost::property_tree::ptree const& ptree);
 
-    // A6.5: L2 genesis alloc parsing (L2 mode gated by feature_l2_ethereum_compat)
+    // A6.5: Ethereum-lane genesis alloc parsing (the lane is gated by executor.version >= 2)
     void loadAllocs(boost::property_tree::ptree const& _genesisConfig);
     void loadEthGenesisHeader(boost::property_tree::ptree const& _genesisConfig);
     void validateL2Invariants();
@@ -614,6 +644,15 @@ private:
     int32_t m_opEngineClockSkewSecs{60};
     bool m_opEngineAllowV1Executor = false;
 
+    // config for engine rpc ([engine_rpc], EL mode)
+    bool m_enableEngineRpc = false;
+    std::string m_engineRpcListenIP = "127.0.0.1";
+    uint16_t m_engineRpcListenPort{};
+    uint32_t m_engineHttpBodySizeLimit{};
+    uint32_t m_engineBatchRequestSizeLimit{};
+    std::string m_engineJwtSecretFile;
+    int32_t m_engineClockSkewSecs{60};
+
     // config for single-node consensus
     bool m_enableSingleNodeConsensus = false;
     uint64_t m_singleNodeConsensusBlockInterval = 1000;
@@ -644,10 +683,24 @@ private:
     uint64_t m_opBlockTimeSeconds = 2;
     uint64_t m_opSyncLagBlocks = 64;
     std::string m_ethereumBootnodesFile = "./bootnodes.json";
+    // [ethereum] tx_gossip: eth/68 pooled-transaction gossip with bootnode peers.
+    bool m_ethereumTxGossip = true;
     std::string m_ethereumNodeKeyFile;
     uint32_t m_ethereumMaxBatchSize = 192;
     uint64_t m_ethereumMergeBlock = 0;
     std::optional<EthereumFinalizedCheckpoint> m_ethereumFinalizedCheckpoint;
+    // [ethereum] reorg_window: EL shallow-reorg depth bound (see ethereumReorgWindow()).
+    std::int64_t m_ethereumReorgWindow = 256;
+    // [ethereum] mempool_capacity / mempool_tx_lifetime_minutes: engine mempool sizing
+    // (EL mode only; see ethereumMempoolCapacity()).
+    size_t m_ethereumMempoolCapacity = 5120;
+    std::int64_t m_ethereumMempoolTxLifetimeMinutes = 30;
+    // EIP-6110 deposit contract ([ethereum] deposit_contract_address in config.ini) for the
+    // Prague+ requestsHash cross-check. Defaults to the Ethereum mainnet deposit contract —
+    // the same address scheduler_v1::c_mainnetDepositContractAddress pins (Sepolia:
+    // 0x7f02c3e3c98b133055b8b348b2ac625669182295).
+    bcos::Address m_ethereumDepositContractAddress{
+        std::string("0x00000000219ab540356cBB839Cbe05303d7705Fa")};
     // The EL-sync chain id, validated and pinned from config.genesis's [web3] chain_id
     // (validateL2Invariants) when the genesis declares an EL-sync mode (el or
     // opstack-el). 0 = unset: a read outside EL-sync mode is obviously invalid rather

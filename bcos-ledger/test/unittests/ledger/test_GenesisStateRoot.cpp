@@ -36,11 +36,11 @@ h256 gsrStateRoot(GenesisConfig const& genesis)
     return task::syncWait(computeGenesisStateRoot(genesis));
 }
 
-// L2 chain with one funded contract alloc.
+// Ethereum-lane chain with one funded contract alloc.
 GenesisConfig gsrBaseConfig()
 {
     GenesisConfig genesis;
-    genesis.m_features.push_back(FeatureSet{Features::Flag::feature_l2_ethereum_compat, 1});
+    genesis.m_executorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
     genesis.m_chainID = "901";
     genesis.m_groupID = "group0";
     genesis.m_allocs.push_back(Alloc{.address = "0x43000000000000000000000000000000000000c0",
@@ -228,14 +228,32 @@ BOOST_AUTO_TEST_CASE(MalformedAllocHexAborts)
         BOOST_CHECK_EXCEPTION(gsrStateRoot(config), bcos::tool::InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "address is duplicated"); });
     }
-    // alloc at a FISCO system address (SYS_CONFIG ...1000): EVMAccount would
-    // write it to /sys/ but the root hashes it as an ordinary account.
+    // alloc at a FISCO system address (SYS_CONFIG ...1000) on the LEGACY lane:
+    // EVMAccount would write it to /sys/ but the root hashes it as an ordinary
+    // account.
     {
         auto config = gsrBaseConfig();
+        config.m_executorVersion = 0;  // legacy lane keeps the /sys/ routing guard
         config.m_allocs[0].address = "0x0000000000000000000000000000000000001000";
         BOOST_CHECK_EXCEPTION(gsrStateRoot(config), bcos::tool::InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "FISCO system address"); });
     }
+}
+
+// The guard above is the LEGACY lane's: the v2/v3 executors write every address under /apps/
+// (ethLaneAccountTableName, no /sys/ routing) and the genesis import matches them there, so a
+// system-address alloc is an ordinary account on those chains and must be admitted — EEST
+// Cancun fixtures allocate the 0x1000-range precompile addresses.
+BOOST_AUTO_TEST_CASE(SystemAddressAllocIsAdmittedOnTheEthereumExecutor)
+{
+    auto v2 = gsrBaseConfig();
+    v2.m_executorVersion = ledger::ETHEREUM_EXECUTOR_VERSION;
+    v2.m_allocs[0].address = "0x0000000000000000000000000000000000001000";
+
+    h256 root;
+    BOOST_CHECK_NO_THROW(root = gsrStateRoot(v2));
+    BOOST_CHECK_NE(root, mpt::emptyRootHash());
+    BOOST_CHECK_EQUAL(gsrStateRoot(v2), root);  // deterministic
 }
 
 BOOST_AUTO_TEST_SUITE_END()

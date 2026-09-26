@@ -444,8 +444,9 @@ jobs:
   # Dedicated, lightweight leg for the OP-Stack L2 mode. Kept OUT of the 5-OS
   # `build` matrix on purpose: multiplying that matrix by an l2 dimension would
   # double an already heavy C++ build for no extra coverage. L2 mode is a
-  # runtime genesis feature flag (feature_l2_ethereum_compat), not a
-  # compile-time variant, so a matrix axis would just rebuild identical
+  # runtime genesis setting (executor.version >= 3 with [ethereum]
+  # mode=opstack-el), not a compile-time variant, so a matrix axis would just
+  # rebuild identical
   # binaries. This job builds once on ubuntu with WITH_L2_CONTRACTS=ON and runs
   # only the L2-relevant unit suites, then the integration runner (which SKIPs
   # itself when the A8 devnet is absent).
@@ -508,7 +509,7 @@ jobs:
         run: |
           cd build
           CTEST_OUTPUT_ON_FAILURE=TRUE ctest -j3 -R \
-            'NodeConfigAllocsTest|GenesisStateRootTest|LedgerGenesisL2Test|LedgerGenesisAllocsHashTest|FeatureL2FlagTest|L2ConfigLoaderTest|PrecompiledMapDisabledInL2Test|PrecompiledMapProductionInvariantTest|KzgPrecompileRegisteredTest|EthEndpointSystemConfigTest|MultiVersionSchedulerTest'
+            'NodeConfigAllocsTest|GenesisStateRootTest|LedgerGenesisL2Test|LedgerGenesisAllocsHashTest|L2ConfigLoaderTest|PrecompiledMapDisabledInL2Test|PrecompiledMapProductionInvariantTest|KzgPrecompileRegisteredTest|EthEndpointSystemConfigTest|MultiVersionSchedulerTest'
       - name: Assert the module suites are registered with ctest
         run: |
           cd build

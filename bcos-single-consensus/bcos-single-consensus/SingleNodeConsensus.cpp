@@ -236,7 +236,6 @@ bool SingleNodeConsensus::produceBlock()
         return nowMs / 1000 * 1000;
     }();
     std::uint64_t const timestamp = std::max(wholeSecondMs, m_lastTimestamp + 1000);
-    m_lastTimestamp = timestamp;
     bcos::engine::PayloadAttributes payloadAttributes;
     payloadAttributes.prevRandao = m_prevRandao;
     payloadAttributes.suggestedFeeRecipient = m_feeRecipient;
@@ -319,6 +318,14 @@ bool SingleNodeConsensus::produceBlock()
             << LOG_KV("error", newPayloadStatus.validationError.value_or(""));
         return false;
     }
+
+    // Only a COMMITTED block consumes the timestamp: on an empty-skip or a failed
+    // attempt the next iteration must reuse it, or a pinned fixed_timestamp (the EEST
+    // harness sets block.timestamp = env.currentTimestamp) would silently step +1s
+    // whenever the first interval tick fired before the transaction reached the
+    // mempool. EIP-2 monotonicity is unaffected — committed blocks still step from
+    // the last committed timestamp.
+    m_lastTimestamp = timestamp;
 
     // Advance the CL-side head to the newly committed block. The EngineService does not expose
     // or advance the canonical head, so the CL tracks it — exactly like a real consensus layer

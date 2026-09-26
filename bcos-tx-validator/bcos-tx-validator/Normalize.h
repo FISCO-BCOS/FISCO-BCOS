@@ -26,6 +26,14 @@
 namespace bcos::txvalidator
 {
 
+/// Whether this chain admits blob (EIP-4844) transactions: L2 (the OP Stack default)
+/// refuses them at admission; L1 admits them subject to the per-transaction blob bound.
+struct BlobPolicy
+{
+    bool allow = false;
+    std::size_t maxBlobsPerTransaction = 6;
+};
+
 /// Rebuild a Web3 transaction's unauthenticated tars mirror from its signed envelope, and
 /// reject it if the wire-supplied transaction hash disagrees with the recomputed one.
 ///
@@ -103,6 +111,6 @@ namespace bcos::txvalidator
 /// and an envelope that disagree, which the RPC path does not let anyone do.
 ///
 /// @return None on success. Otherwise the transaction is unchanged.
-protocol::TransactionStatus normalize(protocol::Transaction& tx);
+protocol::TransactionStatus normalize(protocol::Transaction& tx, BlobPolicy blobPolicy = {});
 
 }  // namespace bcos::txvalidator

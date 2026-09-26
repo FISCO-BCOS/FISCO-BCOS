@@ -152,15 +152,16 @@ task::Task<std::optional<storage::Entry>> Ledger::getStorageAt(
 {
     // One lane rule governs a lane end to end: the genesis alloc import
     // (importGenesisState), the executor, and this flat reader all derive the account table
-    // name through account::ethLaneAccountTableName when feature_l2_ethereum_compat is set —
-    // on an Ethereum-compatible chain the 8 system-tx addresses are ordinary accounts living
-    // under /apps/ — and through account::accountTableName otherwise (only the v1 lane keeps
-    // the /sys/ routing for the system-tx addresses). Both rules re-encode to the node-local
-    // layout, so a Binary node reads "/s/<20 raw bytes>" either way. _blockNumber gates the
-    // feature read: the flag is genesis-set (enableNumber 0) on L2 chains, so any historical
-    // block number resolves it correctly; one SYS_CONFIG row read (fetchFeature).
+    // name through account::ethLaneAccountTableName on the Ethereum lane
+    // (executor_version >= ETHEREUM_EXECUTOR_VERSION) — there the 8 system-tx addresses are
+    // ordinary accounts living under /apps/ — and through account::accountTableName otherwise
+    // (only the v1 lane keeps the /sys/ routing for the system-tx addresses). Both rules
+    // re-encode to the node-local layout, so a Binary node reads "/s/<20 raw bytes>" either
+    // way. The lane is genesis-fixed (SystemConfigPrecompiled refuses governance writes
+    // crossing ETHEREUM_EXECUTOR_VERSION), so any historical block number resolves it
+    // correctly; one SYS_CONFIG row read (fetchExecutorVersionAt).
     auto const contractTableName =
-        co_await fetchFeature(ledger::Features::Flag::feature_l2_ethereum_compat, _blockNumber) ?
+        co_await fetchExecutorVersionAt(_blockNumber) >= ledger::ETHEREUM_EXECUTOR_VERSION ?
             account::ethLaneAccountTableName(
                 bcos::Address{_address, bcos::Address::FromHex, bcos::Address::AlignRight}) :
             account::accountTableName(_address);
@@ -253,8 +254,9 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     for (auto& [key, entry] : prewriteMeta.rows)
     {
         auto [table, rowKey] = executor_v1::StateKeyView{key}.get();
-        storage->asyncSetRow(table, rowKey, std::move(entry),
-            [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
+        storage->asyncSetRow(table, rowKey, std::move(entry), [setRowCallback](auto&& error) {
+            setRowCallback(std::forward<decltype(error)>(error));
+        });
     }
 
     std::atomic_int64_t totalCount = 0;
@@ -823,20 +825,20 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
 void Ledger::asyncGetTotalTransactionCount(
     std::function<void(Error::Ptr, int64_t, int64_t, bcos::protocol::BlockNumber)> _callback)
 {
-    asyncCheckStateTableValid(SYS_CURRENT_STATE,
-        [this, callback = std::move(_callback)](Error::Ptr tableError) mutable {
-            if (tableError)
-            {
-                LEDGER_LOG(DEBUG) << "GetTotalTransactionCount"
-                                  << boost::diagnostic_information(*tableError);
-                callback(std::move(tableError), -1, -1, -1);
-                return;
-            }
+    asyncCheckStateTableValid(SYS_CURRENT_STATE, [this, callback = std::move(_callback)](
+                                                     Error::Ptr tableError) mutable {
+        if (tableError)
+        {
+            LEDGER_LOG(DEBUG) << "GetTotalTransactionCount"
+                              << boost::diagnostic_information(*tableError);
+            callback(std::move(tableError), -1, -1, -1);
+            return;
+        }
 
-            task::wait([](decltype(*this)& self,
-                           std::function<void(
-                               Error::Ptr, int64_t, int64_t, bcos::protocol::BlockNumber)>
-                               callback) -> task::Task<void> {
+        task::wait(
+            [](decltype(*this)& self,
+                std::function<void(Error::Ptr, int64_t, int64_t, bcos::protocol::BlockNumber)>
+                    callback) -> task::Task<void> {
                 ledger::TransactionCount count;
                 try
                 {
@@ -844,16 +846,16 @@ void Ledger::asyncGetTotalTransactionCount(
                 }
                 catch (bcos::Error& e)
                 {
-                    LEDGER_LOG(DEBUG) << "GetTotalTransactionCount"
-                                      << boost::diagnostic_information(e);
+                    LEDGER_LOG(DEBUG)
+                        << "GetTotalTransactionCount" << boost::diagnostic_information(e);
                     callback(
                         BCOS_ERROR_WITH_PREV_PTR(e.errorCode(), e.errorMessage(), e), -1, -1, -1);
                     co_return;
                 }
                 catch (std::exception& e)
                 {
-                    LEDGER_LOG(DEBUG) << "GetTotalTransactionCount"
-                                      << boost::diagnostic_information(e);
+                    LEDGER_LOG(DEBUG)
+                        << "GetTotalTransactionCount" << boost::diagnostic_information(e);
                     callback(BCOS_ERROR_WITH_PREV_PTR(LedgerError::CollectAsyncCallbackError,
                                  "Get total transaction count failed with errors!", e),
                         -1, -1, -1);
@@ -866,7 +868,7 @@ void Ledger::asyncGetTotalTransactionCount(
                                   << LOG_KV("blockNumber", count.blockNumber);
                 callback(nullptr, count.total, count.failed, count.blockNumber);
             }(*this, std::move(callback)));
-        });
+    });
 }
 
 void Ledger::asyncGetSystemConfigByKey(const std::string_view& _key,
@@ -945,23 +947,22 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
         return;
     }
 
-    asyncCheckStateTableValid(SYS_BLOCK_NUMBER_2_NONCES,
-        [this, callback = std::move(_onGetList), _startNumber, _offset](
-            Error::Ptr tableError) mutable {
-            if (tableError)
-            {
-                LEDGER_LOG(INFO) << "GetNonceList open table failed"
-                                 << boost::diagnostic_information(*tableError);
-                callback(std::move(tableError), nullptr);
-                return;
-            }
+    asyncCheckStateTableValid(SYS_BLOCK_NUMBER_2_NONCES, [this, callback = std::move(_onGetList),
+                                                             _startNumber, _offset](
+                                                             Error::Ptr tableError) mutable {
+        if (tableError)
+        {
+            LEDGER_LOG(INFO) << "GetNonceList open table failed"
+                             << boost::diagnostic_information(*tableError);
+            callback(std::move(tableError), nullptr);
+            return;
+        }
 
-            task::wait([](decltype(*this)& self, bcos::protocol::BlockNumber startNumber,
-                           int64_t offset,
-                           std::function<void(Error::Ptr,
-                               std::shared_ptr<std::map<protocol::BlockNumber,
-                                   protocol::NonceListPtr>>)>
-                               callback) -> task::Task<void> {
+        task::wait(
+            [](decltype(*this)& self, bcos::protocol::BlockNumber startNumber, int64_t offset,
+                std::function<void(Error::Ptr,
+                    std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>)>
+                    callback) -> task::Task<void> {
                 auto numberRange = ::ranges::views::iota(startNumber, startNumber + offset + 1);
                 std::vector<std::optional<Entry>> entries;
                 try
@@ -1004,8 +1005,8 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
                     }
                     catch (std::exception const& e)
                     {
-                        LEDGER_LOG(WARNING) << "Parse nonce list failed"
-                                            << boost::diagnostic_information(e);
+                        LEDGER_LOG(WARNING)
+                            << "Parse nonce list failed" << boost::diagnostic_information(e);
                         continue;
                     }
                 }
@@ -1014,7 +1015,7 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
                                   << LOG_KV("retMap size", retMap->size());
                 callback(nullptr, std::move(retMap));
             }(*this, _startNumber, _offset, std::move(callback)));
-        });
+    });
 }
 
 void Ledger::removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync)
@@ -1088,11 +1089,10 @@ void Ledger::asyncGetNodeListByType(std::string_view const& _type,
 void Ledger::asyncCheckStateTableValid(
     std::string_view tableName, std::function<void(Error::Ptr)> callback)
 {
-    m_stateStorage->asyncOpenTable(tableName,
-        [this, tableName = std::string(tableName), callback = std::move(callback)](
-            auto&& error, std::optional<Table>&& table) mutable {
-            callback(
-                checkTableValid(std::forward<decltype(error)>(error), table, tableName));
+    m_stateStorage->asyncOpenTable(
+        tableName, [this, tableName = std::string(tableName), callback = std::move(callback)](
+                       auto&& error, std::optional<Table>&& table) mutable {
+            callback(checkTableValid(std::forward<decltype(error)>(error), table, tableName));
         });
 }
 
@@ -1157,8 +1157,8 @@ static void asyncGetBlockTransactionHashStrings(bcos::storage::StorageInterface&
         std::vector<std::string> hashList;
         try
         {
-            hashList = co_await ledger::getBlockTransactionHashStrings(
-                storage, blockNumber, blockFactory);
+            hashList =
+                co_await ledger::getBlockTransactionHashStrings(storage, blockNumber, blockFactory);
         }
         catch (bcos::Error& e)
         {
@@ -1349,9 +1349,9 @@ void Ledger::getTxProof(
                 return;
             }
             auto blockNumber = _receipt->blockNumber();
-            asyncGetBlockTransactionHashStrings(*m_stateStorage, *m_blockFactory,
-                blockNumber, [this, _onGetProof, _txHash = std::move(_txHash), blockNumber](
-                                 Error::Ptr&& _error, std::vector<std::string>&& _hashList) {
+            asyncGetBlockTransactionHashStrings(*m_stateStorage, *m_blockFactory, blockNumber,
+                [this, _onGetProof, _txHash = std::move(_txHash), blockNumber](
+                    Error::Ptr&& _error, std::vector<std::string>&& _hashList) {
                     if (_error || _hashList.empty())
                     {
                         LEDGER_LOG(DEBUG)
@@ -1570,8 +1570,8 @@ static void verifyL2FeatureFlagsSlot(
 // (op-sepolia: 2066 accounts) overflow the default 8 MiB stack. syncWait starts
 // each operation with a fresh stack; the surrounding function stays a coroutine
 // for its callers.
-static void importGenesisAccount(auto& storage, crypto::Hash const& hashImpl,
-    Features const& features, auto const& importAccount)
+static void importGenesisAccount(
+    auto& storage, crypto::Hash const& hashImpl, bool ethLane, auto const& importAccount)
 {
     // allocs from NodeConfig carry 0x-prefixed hex; LedgerTest builds them without
     // a prefix. Strip a leading 0x so both shapes unhex cleanly. The exact-width /
@@ -1607,13 +1607,13 @@ static void importGenesisAccount(auto& storage, crypto::Hash const& hashImpl,
         slots.emplace_back(evmKey, evmValue);
     }
 
-    // Naming rule: on an Ethereum-compatible (L2) chain the c_systemTxsAddress members are
-    // ordinary accounts living under their /apps/ logical name — the OP bridge writes them
-    // there — so the alloc tables derive through the lane rule; the v1 lane keeps
-    // EVMAccount's own /sys/ routing. Both re-encode to the node-local layout.
-    auto tableName = features.get(Features::Flag::feature_l2_ethereum_compat) ?
-                         account::ethLaneAccountTableName(address) :
-                         account::accountTableName(address, account::nodeAddressTableMode());
+    // Naming rule: on the Ethereum lane (executor_version >= ETHEREUM_EXECUTOR_VERSION) the
+    // c_systemTxsAddress members are ordinary accounts living under their /apps/ logical name
+    // — the OP bridge writes them there — so the alloc tables derive through the lane rule;
+    // the v1 lane keeps EVMAccount's own /sys/ routing. Both re-encode to the node-local
+    // layout.
+    auto tableName = ethLane ? account::ethLaneAccountTableName(address) :
+                               account::accountTableName(address, account::nodeAddressTableMode());
     account::EVMAccount account(storage, account::FromTableName{}, std::move(tableName));
     task::syncWait(account.create());
 
@@ -1638,8 +1638,8 @@ static void importGenesisAccount(auto& storage, crypto::Hash const& hashImpl,
     }
 }
 
-static task::Task<void> importGenesisState(
-    ::ranges::forward_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
+static task::Task<void> importGenesisState(::ranges::forward_range auto const& allocs,
+    auto& storage, const crypto::Hash& hashImpl, bool ethLane)
 {
     Features features;
     co_await ledger::readFromStorage(features, storage, 0);
@@ -1650,10 +1650,10 @@ static task::Task<void> importGenesisState(
     verifyL2FeatureFlagsSlot(allocs, features);
 
     // The account-table naming rule (lane rule vs the v1 /sys/ routing) lives in
-    // importGenesisAccount, keyed on feature_l2_ethereum_compat.
+    // importGenesisAccount, keyed on the executor_version lane.
     for (auto&& importAccount : allocs)
     {
-        importGenesisAccount(storage, hashImpl, features, importAccount);
+        importGenesisAccount(storage, hashImpl, ethLane, importAccount);
     }
 }
 
@@ -1994,18 +1994,14 @@ bool Ledger::buildGenesisBlock(
         // — the FISCO-BCOS native stateRoot for blocks >= 1 is an XOR of
         // per-block state-change hashes, a different domain from this MPT root,
         // so only the (previously empty) genesis block carries it.
-        bool const l2EthereumCompat = std::any_of(genesis.m_features.begin(),
-            genesis.m_features.end(), [](ledger::FeatureSet const& featureSet) {
-                return featureSet.flag == Features::Flag::feature_l2_ethereum_compat &&
-                       featureSet.enable > 0;
-            });
+        bool const ethLane = genesis.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION;
         if (!genesis.m_allocs.empty())
         {
             header->setStateRoot(ethStateTrie.root);
         }
-        else if (l2EthereumCompat)
+        else if (ethLane)
         {
-            // Empty-alloc L2 genesis: NodeConfig::validateL2Invariants rejects this
+            // Empty-alloc Ethereum-lane genesis: NodeConfig::validateL2Invariants rejects this
             // combination, but buildGenesisBlock is callable directly. Publish the
             // canonical empty-trie root instead of a zero h256 — commitTrie()
             // recognizes only emptyRootHash() as the from-empty marker
@@ -2114,10 +2110,9 @@ bool Ledger::buildGenesisBlock(
         // Write default features
         Features features;
         features.setGenesisFeatures(protocol::BlockVersion(versionNumber));
-        // feature_l2_ethereum_compat (if set in genesis.m_features) is handled
-        // by setGenesisFeatures(genesis.m_features, ...) below, which iterates
-        // every featureSet with enable > 0 and calls features.set(flag). No
-        // separate L2-mode set needed here.
+        // genesis.m_features entries are handled by setGenesisFeatures(genesis.m_features,
+        // ...) below, which iterates every featureSet with enable > 0 and calls
+        // features.set(flag).
 
         // tx count limit
         Entry txLimitEntry;
@@ -2173,10 +2168,11 @@ bool Ledger::buildGenesisBlock(
         }
 
         co_await setGenesisFeatures(genesis.m_features, features, *m_stateStorage);
-        co_await importGenesisState(
-            genesis.m_allocs, *m_stateStorage, *m_blockFactory->cryptoSuite()->hashImpl());
+        co_await importGenesisState(genesis.m_allocs, *m_stateStorage,
+            *m_blockFactory->cryptoSuite()->hashImpl(), ethLane);
 
-        // Scenario B (L2): block 1 builds the MPT incrementally on top of the genesis state
+        // Ethereum lane (executor_version >= 2): block 1 builds the MPT incrementally on top
+        // of the genesis state
         // root (buildAndCollect with the genesis root as parent) and reads the parent trie
         // through "/mpt/" state rows, so every genesis trie node — account trie plus each
         // account's storage sub-trie — must be persisted here, on the same storage the alloc
@@ -2185,7 +2181,7 @@ bool Ledger::buildGenesisBlock(
         // A (feature_mpt_state_root activated mid-chain) starts its first MPT block from
         // emptyRootHash() and needs no genesis nodes either. MPT pruning needs no genesis
         // seeding: its counts are rebuilt from the state roots at every startup (MPTPruner.h).
-        if (l2EthereumCompat)
+        if (ethLane)
         {
             // task::syncWait per node, not co_await: same stack-depth constraint as
             // importGenesisState — a real genesis emits thousands of trie nodes
@@ -2495,21 +2491,21 @@ std::optional<storage::Table> Ledger::buildDir(
 void Ledger::asyncGetCurrentStateByKey(std::string_view const& _key,
     std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback)
 {
-    asyncCheckStateTableValid(SYS_CURRENT_STATE,
-        [this, key = std::string(_key), callback = std::move(_callback)](
-            Error::Ptr tableError) mutable {
-            if (tableError)
-            {
-                LEDGER_LOG(DEBUG) << LOG_DESC("asyncGetCurrentStateByKey failed")
-                                  << LOG_KV("key", key)
-                                  << boost::diagnostic_information(*tableError);
-                callback(std::move(tableError), {});
-                return;
-            }
+    asyncCheckStateTableValid(SYS_CURRENT_STATE, [this, key = std::string(_key),
+                                                     callback = std::move(_callback)](
+                                                     Error::Ptr tableError) mutable {
+        if (tableError)
+        {
+            LEDGER_LOG(DEBUG) << LOG_DESC("asyncGetCurrentStateByKey failed") << LOG_KV("key", key)
+                              << boost::diagnostic_information(*tableError);
+            callback(std::move(tableError), {});
+            return;
+        }
 
-            task::wait([](decltype(*this)& self, std::string key,
-                           std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)>
-                               callback) -> task::Task<void> {
+        task::wait(
+            [](decltype(*this)& self, std::string key,
+                std::function<void(Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> callback)
+                -> task::Task<void> {
                 std::optional<bcos::storage::Entry> entry;
                 try
                 {
@@ -2518,9 +2514,8 @@ void Ledger::asyncGetCurrentStateByKey(std::string_view const& _key,
                 }
                 catch (std::exception& e)
                 {
-                    LEDGER_LOG(DEBUG)
-                        << LOG_DESC("asyncGetCurrentStateByKey exception") << LOG_KV("key", key)
-                        << boost::diagnostic_information(e);
+                    LEDGER_LOG(DEBUG) << LOG_DESC("asyncGetCurrentStateByKey exception")
+                                      << LOG_KV("key", key) << boost::diagnostic_information(e);
                     callback(
                         BCOS_ERROR_WITH_PREV_PTR(LedgerError::GetStorageError, "Get row failed", e),
                         {});
@@ -2530,7 +2525,7 @@ void Ledger::asyncGetCurrentStateByKey(std::string_view const& _key,
                 // not checkEntryValid here.
                 callback(nullptr, std::move(entry));
             }(*this, std::move(key), std::move(callback)));
-        });
+    });
 }
 
 Error::Ptr Ledger::setCurrentStateByKey(std::string_view const& _key, bcos::storage::Entry entry)
@@ -2586,10 +2581,10 @@ task::Task<bcos::ledger::Features> Ledger::fetchAllFeatures(protocol::BlockNumbe
 task::Task<bool> Ledger::fetchFeature(
     bcos::ledger::Features::Flag _flag, protocol::BlockNumber _blockNumber)
 {
-    // One SYS_CONFIG row instead of fetchAllFeatures' read of every feature key (~61 rows).
+    // One SYS_CONFIG row instead of fetchAllFeatures' read of every feature key (~60 rows).
     // A flag is active when its enableNumber <= _blockNumber; absent row / decode failure
     // means "not enabled" (the honest scenario-A default). Used by the historical
-    // state-read path which needs exactly feature_l2_ethereum_compat.
+    // state-read path which needs exactly feature_mpt_state_root.
     auto const key = std::string(magic_enum::enum_name(_flag));
     auto const [error, entry] = m_stateStorage->getRow(SYS_CONFIG, key);
     if (error || !entry)
@@ -2599,6 +2594,36 @@ task::Task<bool> Ledger::fetchFeature(
     auto const [value, enableNumber] =
         bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
     co_return _blockNumber >= enableNumber;
+}
+
+task::Task<int64_t> Ledger::fetchExecutorVersionAt(protocol::BlockNumber _blockNumber)
+{
+    // Same single-row idiom as fetchFeature: an absent row is a pre-Ethereum-lane chain (0);
+    // a row whose enableNumber is after _blockNumber reads as 0 for that block.
+    auto const key =
+        std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version));
+    auto const [error, entry] = m_stateStorage->getRow(SYS_CONFIG, key);
+    if (error || !entry)
+    {
+        co_return 0;
+    }
+    auto const [value, enableNumber] =
+        bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
+    if (_blockNumber < enableNumber)
+    {
+        co_return 0;
+    }
+    try
+    {
+        co_return boost::lexical_cast<int64_t>(value);
+    }
+    catch (boost::bad_lexical_cast const&)
+    {
+        // Boot (readOnChainExecutorVersion) refuses an unparseable row, so reaching this
+        // means the row was corrupted afterwards -- corruption, not a legacy chain.
+        BOOST_THROW_EXCEPTION(std::runtime_error(
+            "on-chain executor_version is not an integer: '" + value + "'"));
+    }
 }
 bcos::storage::StorageInterface::Ptr bcos::ledger::Ledger::getStateStorage()
 {

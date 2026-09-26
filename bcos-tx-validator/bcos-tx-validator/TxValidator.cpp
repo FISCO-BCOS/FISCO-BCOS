@@ -60,7 +60,11 @@ bool isDelegatedCode(bytes const& code) noexcept
 /// Route on the SIGNED envelope, never on web3TypedTxKind: the mirror is unauthenticated, and a
 /// peer that mis-declares a 1559 envelope as legacy would otherwise dodge TipNotAboveCap and
 /// TypeByRevision.
-TxKind kindOf(Transaction const& tx)
+///
+/// A blob envelope routes to Web3Blob only when the chain admits blob transactions; otherwise it
+/// lands in Rejected, the same verdict it always had. normalize() applies the same policy, so the
+/// two cannot disagree.
+TxKind kindOf(Transaction const& tx, BlobPolicy blobPolicy)
 {
     if (tx.type() == static_cast<uint8_t>(TransactionType::BCOSTransaction))
     {
@@ -74,6 +78,8 @@ TxKind kindOf(Transaction const& tx)
         return TxKind::Web3AccessList;
     case engine::RawTransactionKind::DynamicFee:
         return TxKind::Web3DynamicFee;
+    case engine::RawTransactionKind::Blob:
+        return blobPolicy.allow ? TxKind::Web3Blob : TxKind::Rejected;
     case engine::RawTransactionKind::SetCode:
         return TxKind::Web3SetCode;
     default:
@@ -90,6 +96,8 @@ evmc_revision requiredRevision(TxKind kind) noexcept
         return EVMC_BERLIN;  // EIP-2930
     case TxKind::Web3DynamicFee:
         return EVMC_LONDON;  // EIP-1559
+    case TxKind::Web3Blob:
+        return EVMC_CANCUN;  // EIP-4844
     case TxKind::Web3SetCode:
         return EVMC_PRAGUE;  // EIP-7702
     default:
@@ -118,7 +126,7 @@ TxValidator::TxValidator(crypto::CryptoSuite::Ptr cryptoSuite,
     std::shared_ptr<ledger::LedgerInterface> ledger,
     ledger::LedgerConfigState::Ptr ledgerConfigState, NonceCheckerInterface::Ptr txPoolNonceChecker,
     Web3NonceChecker::Ptr web3NonceChecker, SystemTxPredicate isSystemTx, std::string groupId,
-    std::string chainId)
+    std::string chainId, BlobPolicy blobPolicy)
   : m_cryptoSuite(std::move(cryptoSuite)),
     m_ledger(std::move(ledger)),
     m_ledgerConfigState(std::move(ledgerConfigState)),
@@ -126,7 +134,8 @@ TxValidator::TxValidator(crypto::CryptoSuite::Ptr cryptoSuite,
     m_web3NonceChecker(std::move(web3NonceChecker)),
     m_isSystemTx(std::move(isSystemTx)),
     m_groupId(std::move(groupId)),
-    m_chainId(std::move(chainId))
+    m_chainId(std::move(chainId)),
+    m_blobPolicy(blobPolicy)
 {
     if (!m_ledgerConfigState)
     {
@@ -250,8 +259,9 @@ struct PoolInputs
 
 TransactionStatus checkTypeGate(Envelope const& in)
 {
-    // An allow-list, not a deny-list. normalize() already refused blob/deposit/reserved
-    // envelopes, so Rejected here means the routing key and the gate disagree; and a value that
+    // An allow-list, not a deny-list. normalize() already refused deposit/reserved envelopes and,
+    // on a chain whose policy disallows them, blob envelopes too, so Rejected here means the
+    // routing key and the gate disagree; and a value that
     // is no TxKind at all (which kindOf() cannot produce, but the table resolves to this gate
     // alone precisely so that such a value is judged by something) must fall through to the
     // rejection too. Fail closed either way.
@@ -261,6 +271,7 @@ TransactionStatus checkTypeGate(Envelope const& in)
     case TxKind::Web3Legacy:
     case TxKind::Web3AccessList:
     case TxKind::Web3DynamicFee:
+    case TxKind::Web3Blob:
     case TxKind::Web3SetCode:
         return TransactionStatus::None;
     case TxKind::Rejected:
@@ -351,22 +362,24 @@ TransactionStatus checkBcosGroupChainId(Envelope const& in)
 
 TransactionStatus checkBcosTxAllowedOnChain(StateInputs const& in)
 {
-    // An OP-Stack L2 carries EIP-2718 envelopes only. A BCOSTransaction has none, so op-reth
-    // cannot re-derive it and rejects the whole block that carries it -- one native transaction
-    // in one block stalls the whole L2. Refuse it here instead of sealing a block the verifier
-    // throws away.
+    // An Ethereum-lane chain (executor_version >= ETHEREUM_EXECUTOR_VERSION: L1 EL or
+    // OP-Stack L2) carries EIP-2718 envelopes only. A BCOSTransaction has none, so the EL /
+    // op-reth cannot re-derive it and rejects the whole block that carries it -- one native
+    // transaction in one block stalls the whole chain. Refuse it here instead of sealing a
+    // block the verifier throws away.
     //
-    // The flag comes from the same snapshot every other state check reads, so this follows
-    // whatever the chain last published. It cannot change under a running pool: the flag is
-    // genesis-only, and Features::validate rejects it on the governance setSystemConfig path
-    // (bcos-framework/ledger/Features.cpp). That closes what would otherwise be a hole here --
-    // transactions already admitted are not re-judged at seal time (MemoryStorage re-checks the
-    // ledger nonce alone), so a mid-chain flip would leave native transactions in the pool
-    // eligible for a proposal. The rest of the tree makes the same genesis-time assumption
-    // (OpScheduler.h; NodeConfig::validateL2Invariants, which validates the flag against the
-    // genesis alloc; scheduler_v1::validateMPTFlagMatrix, which refuses to boot when its
-    // activation block is not 0).
-    if (in.chain.config->features().get(ledger::Features::Flag::feature_l2_ethereum_compat))
+    // The executor_version comes from the same snapshot every other state check reads, so
+    // this follows whatever the chain last published. It cannot change under a running pool:
+    // the lane is genesis-only, and SystemConfigPrecompiled refuses governance writes that
+    // cross the ETHEREUM_EXECUTOR_VERSION boundary. That closes what would otherwise be a
+    // hole here -- transactions already admitted are not re-judged at seal time
+    // (MemoryStorage re-checks the ledger nonce alone), so a mid-chain flip would leave
+    // native transactions in the pool eligible for a proposal. The rest of the tree makes
+    // the same genesis-time assumption (OpScheduler.h; NodeConfig::validateL2Invariants,
+    // which validates the genesis alloc against the lane;
+    // scheduler_v1::validateOpModeGenesisOnly, which refuses to boot when an OP-mode
+    // executor_version's activation block is not 0).
+    if (in.chain.config->executorVersion() >= ledger::ETHEREUM_EXECUTOR_VERSION)
     {
         return TransactionStatus::BcosTxNotAllowed;
     }
@@ -392,6 +405,15 @@ TransactionStatus checkTipNotAboveCap(StateInputs const& in)
 TransactionStatus checkSetCodeHasTo(StateInputs const& in)
 {
     return in.tx.to().empty() ? TransactionStatus::CreateSetCodeTx : TransactionStatus::None;
+}
+
+TransactionStatus checkBlobHasTo(StateInputs const& in)
+{
+    // evmone's CREATE_BLOB_TX: a blob transaction is never a contract creation. The other half of
+    // evmone's blob block -- blob_hashes non-empty -- runs while normalizing, because an empty
+    // list cannot survive the mirror (Web3TarsBridge writes the hashes the envelope carried, and
+    // normalize refuses an envelope that carried none).
+    return in.tx.to().empty() ? TransactionStatus::BlobTxMissingHashes : TransactionStatus::None;
 }
 
 TransactionStatus checkAuthListNonEmpty(StateInputs const& in)
@@ -670,6 +692,7 @@ constexpr std::array<CheckEntry<StateInputs>, c_stateOrder.size()> c_stateRegist
     {Check::BcosTxAllowedOnChain, &checkBcosTxAllowedOnChain},
     {Check::TypeByRevision, &checkTypeByRevision},
     {Check::SetCodeHasTo, &checkSetCodeHasTo},
+    {Check::BlobHasTo, &checkBlobHasTo},
     {Check::AuthListNonEmpty, &checkAuthListNonEmpty},
     {Check::TipNotAboveCap, &checkTipNotAboveCap},
     {Check::MaxGasLimit, &checkMaxGasLimit},
@@ -872,12 +895,12 @@ task::Task<TransactionStatus> TxValidator::verify(
     // that reads a business field reads the mirror, and until this runs the mirror is whatever
     // the sender chose. It is not a Check bit precisely so that no context can switch it off and
     // nothing can order a mirror-reading check ahead of it.
-    if (auto status = normalize(tx); status != TransactionStatus::None)
+    if (auto status = normalize(tx, m_blobPolicy); status != TransactionStatus::None)
     {
         co_return status;
     }
 
-    const auto kind = kindOf(tx);
+    const auto kind = kindOf(tx, m_blobPolicy);
     // A system transaction is one whose `to` is a system contract: a property of the
     // transaction, not of any check, so it is marked here regardless of which checks run. The
     // pool-side validator marked it inside its signature path, which SignaturePolicy::Disabled

@@ -368,16 +368,13 @@ public:
         auto const addressOwned = std::string(address);
         auto const keyOwned = std::string(key);
         auto view = this->m_multiLayerStorage->fork();
-        // The scenario-B arm below is gated on the chain's current feature set, not the
-        // caller's block context (EthEndpoint passes 0), so read the flags at the committed
-        // tip: a feature enabled after genesis is invisible at number 0. (The account-table
-        // mode itself needs no read — it is node-local, nodeAddressTableMode().)
+        // The OP lane is scenario B by construction (executor_version >= OPSTACK_EXECUTOR_VERSION
+        // is genesis-fixed), so no feature read decides the routing below. The tip number is
+        // still needed for the committed-MPT fallback. (The account-table mode itself needs no
+        // read — it is node-local, nodeAddressTableMode().)
         auto const tipNumber =
             co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
-        bcos::ledger::Features features;
-        co_await bcos::ledger::readFromStorage(features, view, tipNumber);
-        if (features.get(bcos::ledger::Features::Flag::feature_l2_ethereum_compat) &&
-            keyOwned == bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE)
+        if (keyOwned == bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE)
         {
             // Pending first: the caller uses this value as the transaction nonce, and a sealed
             // but uncommitted block may already have advanced it (the sibling note above: fork()
@@ -634,9 +631,9 @@ private:
 
             auto ledgerConfig = co_await loadLedgerConfig(view, number);
 
-            // Persist trie nodes on L2-compat even for verify=false; adopt reuses this view.
-            bool const persistTrieNodes =
-                ledgerConfig->features().get(ledger::Features::Flag::feature_l2_ethereum_compat);
+            // Persist trie nodes even for verify=false; adopt reuses this view. The OP lane
+            // is scenario B by construction, so this is unconditional.
+            bool const persistTrieNodes = true;
             auto outcome =
                 co_await execute(view, *blockHeader, transactions, *ledgerConfig, persistTrieNodes);
 
@@ -1134,8 +1131,8 @@ private:
                     // Missing parent trie nodes: fail rather than rebuild from an empty trie.
                     throw bcos::evm::engine::OpStorageError(fmt::format(
                         "OpScheduler: incremental MPT build at block {} failed — parent block "
-                        "{}'s state root {} has no persisted trie nodes (scenario B / "
-                        "feature_l2_ethereum_compat must be active since genesis): {}",
+                        "{}'s state root {} has no persisted trie nodes (the OP lane builds the "
+                        "complete MPT from genesis): {}",
                         header.number(), header.number() - 1, parentRoot.hex(), e.what()));
                 }
             }
@@ -1325,12 +1322,16 @@ private:
             [](const Error::Ptr&) {});
     }
 
-    /// Build LedgerConfig without header.hash() (throws on an OP header).
+    /// Build LedgerConfig without header.hash() (throws on an OP header). The executor_version
+    /// is pinned to the OP lane: this scheduler only runs on executor_version >=
+    /// OPSTACK_EXECUTOR_VERSION chains, and the consumers that branch on the lane
+    /// (computeMptStateDelta's l2Mode, shouldBuildMPT) must see it.
     task::Task<ledger::LedgerConfig::Ptr> loadLedgerConfig(
         ViewType& view, protocol::BlockNumber number)
     {
         auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
         ledgerConfig->setBlockNumber(number);
+        ledgerConfig->setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
         bcos::ledger::Features features;
         co_await bcos::ledger::readFromStorage(features, view, number);
         ledgerConfig->setFeatures(features);
@@ -1556,38 +1557,16 @@ private:
         auto blockNumber =
             co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
 
-        bcos::ledger::Features features;
-        co_await bcos::ledger::readFromStorage(features, view, blockNumber);
-        // Scenario B (OP / feature_l2_ethereum_compat): balances live in committed MPT only.
-        // The flat committed plane has no ACCOUNT_BALANCE rows, so route latest eth_call /
-        // estimateGas through the same MPT view as historical calls.
-        if (features.get(bcos::ledger::Features::Flag::feature_l2_ethereum_compat))
+        // Scenario B by construction (the OP lane builds the complete MPT from genesis):
+        // balances live in committed MPT only. The flat committed plane has no
+        // ACCOUNT_BALANCE rows, so route latest eth_call / estimateGas through the same MPT
+        // view as historical calls.
+        auto [err, receipt] = co_await coCallAtBlock(std::move(transaction), blockNumber);
+        if (err)
         {
-            auto [err, receipt] = co_await coCallAtBlock(std::move(transaction), blockNumber);
-            if (err)
-            {
-                BOOST_THROW_EXCEPTION(*err);
-            }
-            co_return receipt;
+            BOOST_THROW_EXCEPTION(*err);
         }
-
-        auto block = co_await bcos::ledger::getBlockData(
-            view, blockNumber, bcos::ledger::HEADER, *m_blockFactory);
-        // blockHeader() returns a shared_ptr by value; keep it alive.
-        auto blockHeader = block->blockHeader();
-        auto const& header = *blockHeader;
-
-        // The block the call is evaluated AGAINST decides the fork.
-        const auto& cfg = op::configAt(
-            m_forkSchedule, bcos::evm::engine::detail::forkTimestampSec(header.timestamp()));
-
-        auto ledgerConfig = std::make_shared<bcos::ledger::LedgerConfig>();
-        ledgerConfig->setBlockNumber(blockNumber);
-        ledgerConfig->setTimestamp(header.timestamp());
-        ledgerConfig->setFeatures(features);
-        ledgerConfig->setEVMCRevision(cfg.rev);
-
-        co_return co_await coCallOnView(view, header, *transaction, *ledgerConfig, "call");
+        co_return receipt;
     }
 
     /// eth_call against the committed MPT at @p blockNumber. Refusals return Error, not throw.
@@ -1606,29 +1585,6 @@ private:
                 BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber,
                     fmt::format("eth_call: block {} does not exist (latest: {})", blockNumber,
                         latestNumber)),
-                protocol::TransactionReceipt::Ptr{nullptr}};
-        }
-
-        bcos::ledger::Features features;
-        co_await bcos::ledger::readFromStorage(features, latestView, blockNumber);
-
-        if (blockNumber == latestNumber &&
-            !features.get(bcos::ledger::Features::Flag::feature_l2_ethereum_compat))
-        {
-            // Scenario A / flat-storage chains: latest == coCallLatest.
-            co_return std::tuple{
-                Error::Ptr{nullptr}, co_await coCallLatest(std::move(transaction))};
-        }
-
-        // Historical (and scenario-B latest) calls need feature_l2_ethereum_compat.
-        if (!features.get(bcos::ledger::Features::Flag::feature_l2_ethereum_compat))
-        {
-            co_return std::tuple{
-                BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus,
-                    fmt::format("eth_call: historical call at block {} requires the "
-                                "full-fidelity MPT of an L2 Ethereum-compat chain "
-                                "(feature_l2_ethereum_compat, scenario B)",
-                        blockNumber)),
                 protocol::TransactionReceipt::Ptr{nullptr}};
         }
 
@@ -1665,6 +1621,8 @@ private:
         auto ledgerConfig = std::make_shared<bcos::ledger::LedgerConfig>();
         ledgerConfig->setBlockNumber(blockNumber);
         ledgerConfig->setTimestamp(header.timestamp());
+        bcos::ledger::Features features;
+        co_await bcos::ledger::readFromStorage(features, latestView, blockNumber);
         ledgerConfig->setFeatures(features);
         ledgerConfig->setEVMCRevision(cfg.rev);
 

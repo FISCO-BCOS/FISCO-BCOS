@@ -34,9 +34,8 @@ inline constexpr uint64_t c_minSuggestedPriorityFeeWei = 1'000'000;
 /// semantics follow geth (eth_gasPrice = head.baseFee + tip, never below the base fee).
 /// This is the lane predicate the endpoints consume; OP mode itself is a fixed genesis
 /// value (== OPSTACK_EXECUTOR_VERSION), decided at chain creation and never re-derived.
-/// Note the deliberate difference from the ledger's feature_l2_ethereum_compat state shape:
-/// the Eth lane may carry that flag too (an MPT-state chain still sealed by the consensus
-/// layer), so lane decisions key on executor_version and never on the flag.
+/// executor_version is the ONLY lane selector: the state shape (complete-trie MPT, /apps/
+/// account tables) keys on the same value, so lane decisions never consult a feature flag.
 inline bool usesEthereumFeeSemantics(int executorVersion)
 {
     return executorVersion >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
@@ -47,6 +46,15 @@ inline bool usesEthereumFeeSemantics(int executorVersion)
 inline uint64_t suggestedPriorityFeeWei(int executorVersion)
 {
     return usesEthereumFeeSemantics(executorVersion) ? c_minSuggestedPriorityFeeWei : 0;
+}
+
+/// True when the chain admits EIP-4844 blob transactions over RPC. Only the pure-Ethereum
+/// executor (== ETHEREUM_EXECUTOR_VERSION) does: OP (>= OPSTACK_EXECUTOR_VERSION) refuses them
+/// like any L2, and the legacy lane (0/1) has no blob support at all. EL-only concerns that are
+/// not about admission (sidecar gossip, Engine blob handling) still key on ethereumELMode.
+inline bool admitsBlobTransactions(int executorVersion)
+{
+    return executorVersion == bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
 }
 
 /// A committed block's base fee under the lane rules. OP-Stack headers are NON_ETH yet

@@ -28,11 +28,14 @@
 #include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include "engine/bcos-engine/PayloadId.h"
+#include <bcos-crypto/hash/Sha256.h>
 #include <bcos-ledger/mpt/EthTrieRoots.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
+#include <bcos-rlp-protocol/EthWithdrawal.h>
 #include <boost/assert.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
+#include <limits>
 #include <span>
 #include <stdexcept>
 #include <vector>
@@ -82,23 +85,33 @@ std::vector<std::string> supportedCapabilities()
     // Eth and Op advertise the same list. FCU V4 is unimplemented (Endpoint -38005)
     // and absent upstream (op-geth / op-node top out at V3), so it is not listed.
     // A V4-shaped build still stores PayloadV3 (payloadShapeVersion).
+    //
+    // getPayloadBodies*V1 and getClientVersionV1 are vanilla engine methods both lanes
+    // answer mechanically from the committed ledger / build info (geth advertises them
+    // from the same auto-derived caps list), so the OP table carries them too;
+    // engine_getBlobsV1 is likewise listed on both lanes and simply answers all-null on
+    // an L2 (no blob pool sidecars, no blob sidecar rows — a shape the spec explicitly
+    // allows). engine_exchangeClientVersionV1 is the pre-rename draft name of
+    // engine_getClientVersionV1, kept routable for older CLs.
     static const std::vector<std::string> caps{"engine_exchangeCapabilities",
         "engine_forkchoiceUpdatedV1", "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3",
         "engine_getPayloadV1", "engine_getPayloadV2", "engine_getPayloadV3", "engine_getPayloadV4",
         "engine_getPayloadV5", "engine_newPayloadV1", "engine_newPayloadV2", "engine_newPayloadV3",
-        "engine_newPayloadV4"};
+        "engine_newPayloadV4", "engine_getPayloadBodiesByHashV1", "engine_getPayloadBodiesByRangeV1",
+        "engine_getBlobsV1", "engine_getClientVersionV1", "engine_exchangeClientVersionV1"};
     return caps;
 }
 
 /// Shared over the two transaction carriers (attributes hex strings and payload raw
 /// bytes): a blob (type-3) or unsupported/unknown-type transaction invalidates the whole
 /// carrier — it is never dropped individually. Blob rejection is FISCO's OP policy, not an
-/// op-geth check (decodeTyped accepts 0x03; see the OpScheduler.h type-byte gate note).
+/// op-geth check (decodeTyped accepts 0x03; see the OpScheduler.h type-byte gate note);
+/// the executor_version==2 lane passes allowBlob=true to lift it.
 std::optional<std::string> validateRawTransactionKind(
-    bcos::engine::RawTransactionKind kind, std::size_t index)
+    bcos::engine::RawTransactionKind kind, std::size_t index, bool allowBlob)
 {
     using bcos::engine::RawTransactionKind;
-    if (kind == RawTransactionKind::Blob)
+    if (kind == RawTransactionKind::Blob && !allowBlob)
     {
         return "blob transactions are not allowed (transaction index " + std::to_string(index) +
                ")";
@@ -111,7 +124,7 @@ std::optional<std::string> validateRawTransactionKind(
 }
 
 std::optional<std::string> validatePayloadAttributes(const PayloadAttributes& payloadAttributes,
-    std::uint32_t version, std::vector<bcos::bytes>* decodedForcedTxs)
+    std::uint32_t version, std::vector<bcos::bytes>* decodedForcedTxs, bool l1Mode)
 {
     if (decodedForcedTxs != nullptr)
     {
@@ -173,8 +186,12 @@ std::optional<std::string> validatePayloadAttributes(const PayloadAttributes& pa
         return std::string("withdrawals are required for PayloadAttributesV2 and V3");
     }
     if (version >= static_cast<std::uint32_t>(ApiVersion::V2) &&
-        payloadAttributes.withdrawals.has_value() && !payloadAttributes.withdrawals->empty())
+        payloadAttributes.withdrawals.has_value() && !payloadAttributes.withdrawals->empty() &&
+        !l1Mode)
     {
+        // The OP lane cannot commit non-empty withdrawals (no real withdrawals trie root).
+        // The L1 lane computes the EIP-4895 MPT withdrawals root in buildL1Payload, so
+        // non-empty withdrawals are valid there.
         return std::string(
             "non-empty withdrawals are not supported until the withdrawals trie root is "
             "computed");
@@ -313,7 +330,7 @@ bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes)
 }
 
 std::optional<std::string> validateExecutionPayload(
-    const ExecutionPayload& executionPayload, std::uint32_t version)
+    const ExecutionPayload& executionPayload, std::uint32_t version, bool allowBlob)
 {
     for (std::size_t i = 0; i < executionPayload.transactions.size(); ++i)
     {
@@ -323,7 +340,7 @@ std::optional<std::string> validateExecutionPayload(
             return "executionPayload.transactions[" + std::to_string(i) + "] is empty";
         }
         if (auto error = engine_common::validateRawTransactionKind(
-                dispatchRawTransaction(bcos::ref(raw)), i))
+                dispatchRawTransaction(bcos::ref(raw)), i, allowBlob))
         {
             return error;
         }
@@ -545,7 +562,7 @@ bcos::h256 transactionsRootFromPayload(const ExecutionPayload& payload)
 std::optional<std::string> matchReconstructedEthBlockHash(
     const bcos::protocol::BlockHeaderFactory::Ptr& factory, const ExecutionPayload& payload,
     const std::optional<bcos::h256>& parentBeaconBlockRoot,
-    bcos::protocol::EthBlockVersion forkVersion)
+    bcos::protocol::EthBlockVersion forkVersion, std::optional<bcos::h256> requestsHash)
 {
     // A null factory is a node-local wiring fault, not a defect in the submitted payload: it must
     // reach the caller's internal-error mapping, never the InvalidBlockHash string (a hard
@@ -584,8 +601,8 @@ std::optional<std::string> matchReconstructedEthBlockHash(
 
     try
     {
-        finalizeEthBlockHeader(
-            *header, payload, parentBeaconBlockRoot, forkVersion, payload.withdrawalsRoot);
+        finalizeEthBlockHeader(*header, payload, parentBeaconBlockRoot, forkVersion,
+            payload.withdrawalsRoot, requestsHash);
     }
     catch (OpExecutionInternalError const&)
     {
@@ -658,7 +675,7 @@ std::optional<bcos::protocol::EthBlockVersion> ethBlockVersionForBlock(
 
 void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const ExecutionPayload& payload,
     std::optional<bcos::h256> parentBeaconBlockRoot, bcos::protocol::EthBlockVersion forkVersion,
-    std::optional<bcos::h256> withdrawalsRoot)
+    std::optional<bcos::h256> withdrawalsRoot, std::optional<bcos::h256> requestsHash)
 {
     header.setUncleHash(bcos::protocol::c_emptyOmmersHash);
     header.setDifficulty(bcos::u256(0));
@@ -681,7 +698,7 @@ void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const Execution
 
     if (forkVersion >= bcos::protocol::EthBlockVersion::PRAGUE)
     {
-        header.setRequestsHash(engine_common::c_emptyRequestsHash);
+        header.setRequestsHash(requestsHash.value_or(engine_common::c_emptyRequestsHash));
     }
 
     header.setEthBlockVersion(forkVersion);
@@ -693,6 +710,157 @@ void finalizeEthBlockHeader(bcos::protocol::BlockHeader& header, const Execution
             OpExecutionInternalError{} << bcos::errinfo_comment{
                 "EngineService: failed to compute Eth RLP hash: " + r.error().message});
     }
+}
+
+bcos::h256 calculateRequestsHash(std::vector<bcos::bytes> const& executionRequests)
+{
+    bcos::bytes digests;
+    digests.reserve(executionRequests.size() * bcos::h256::SIZE);
+    for (auto const& request : executionRequests)
+    {
+        auto const digest = bcos::crypto::sha256Hash(bcos::ref(request));
+        digests.insert(digests.end(), digest.begin(), digest.end());
+    }
+    return bcos::crypto::sha256Hash(bcos::ref(digests));
+}
+
+std::optional<std::string> validateExecutionPayloadL1(
+    const ExecutionPayload& executionPayload, std::uint32_t version)
+{
+    for (std::size_t i = 0; i < executionPayload.transactions.size(); ++i)
+    {
+        auto const& raw = executionPayload.transactions[i].raw;
+        if (raw.empty())
+        {
+            return "executionPayload.transactions[" + std::to_string(i) + "] is empty";
+        }
+        // L1 admits every EIP-2718 kind except the OP deposit extension (0x7e); blob
+        // transactions (0x03), which validateRawTransactionKind rejects for OP, are
+        // ordinary L1 citizens.
+        auto const kind = dispatchRawTransaction(bcos::ref(raw));
+        if (kind == RawTransactionKind::Unsupported)
+        {
+            return "unsupported transaction type (transaction index " + std::to_string(i) + ")";
+        }
+        if (kind == RawTransactionKind::Deposit)
+        {
+            return "deposit transactions are an OP-Stack extension (transaction index " +
+                   std::to_string(i) + ")";
+        }
+    }
+    if (version == 1 && executionPayload.withdrawals.has_value())
+    {
+        return std::string("withdrawals are not part of ExecutionPayloadV1");
+    }
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V2) &&
+        !executionPayload.withdrawals.has_value())
+    {
+        return std::string("withdrawals are required for ExecutionPayloadV2 and later");
+    }
+    if (version <= static_cast<std::uint32_t>(ApiVersion::V2) &&
+        (executionPayload.blobGasUsed.has_value() || executionPayload.excessBlobGas.has_value()))
+    {
+        return std::string("blob gas fields are only valid for ExecutionPayloadV3 and later");
+    }
+    if (version >= static_cast<std::uint32_t>(ApiVersion::V3) &&
+        (!executionPayload.blobGasUsed.has_value() || !executionPayload.excessBlobGas.has_value()))
+    {
+        return std::string("blob gas fields are required for ExecutionPayloadV3 and later");
+    }
+    if (executionPayload.withdrawalsRoot.has_value())
+    {
+        // withdrawalsRoot is the OP Isthmus wire extension (MessagePasser storage root);
+        // no L1 payload carries it, and trusting a submitted value would bypass the
+        // locally computed withdrawals trie root.
+        return std::string("withdrawalsRoot is an OP-Stack extension not valid on an L1 payload");
+    }
+    return std::nullopt;
+}
+
+std::variant<engine_common::ExternalPayloadBlock, std::string> executionPayloadToEthBlock(
+    const NewPayloadRequest& request)
+{
+    auto const& payload = request.executionPayload;
+    // Every hash-critical divergence folds into the same message: the caller answers
+    // InvalidBlockHash, matching matchReconstructedEthBlockHash's contract.
+    auto mismatch = [] {
+        return std::string("blockHash does not match the reconstructed block header");
+    };
+    // The payload timestamp is internal milliseconds over the Engine-API seconds wire
+    // value; a sub-second remainder cannot be an L1 header timestamp.
+    if (payload.timestamp % 1000 != 0)
+    {
+        return mismatch();
+    }
+
+    engine_common::ExternalPayloadBlock external;
+    external.rawTransactions.reserve(payload.transactions.size());
+    for (auto const& tx : payload.transactions)
+    {
+        external.rawTransactions.push_back(tx.raw);
+    }
+    auto& header = external.ethHeader;
+    header.logsBloom = payload.logsBloom;
+    header.parentInfo = bcos::protocol::ParentInfo{
+        .blockNumber = payload.blockNumber - 1, .blockHash = payload.parentHash};
+    header.uncleHash = bcos::protocol::c_emptyOmmersHash;
+    header.stateRoot = payload.stateRoot;
+    header.txsRoot = transactionsRootFromPayload(payload);
+    header.receiptsRoot = payload.receiptsRoot;
+    header.difficulty = bcos::u256(0);
+    header.gasLimit = payload.gasLimit;
+    header.gasUsed = payload.gasUsed;
+    header.prevRandao = payload.prevRandao;
+    header.extraData = payload.extraData;
+    header.coinbase = payload.feeRecipient;
+    header.nonce = engine_common::c_posNonce;
+    header.number = payload.blockNumber;
+    header.timestamp = static_cast<int64_t>(payload.timestamp / 1000);
+    header.baseFee = payload.baseFeePerGas;
+    header.blobGasUsed = payload.blobGasUsed;
+    header.excessBlobGas = payload.excessBlobGas;
+    header.parentBeaconRoot = request.parentBeaconBlockRoot;
+    if (request.executionRequests.has_value())
+    {
+        header.requestsHash = calculateRequestsHash(*request.executionRequests);
+    }
+    if (payload.withdrawals.has_value())
+    {
+        auto& encoded = external.rawWithdrawals.emplace();
+        encoded.reserve(payload.withdrawals->size());
+        for (std::size_t i = 0; i < payload.withdrawals->size(); ++i)
+        {
+            auto const& withdrawal = (*payload.withdrawals)[i];
+            if (withdrawal.index > std::numeric_limits<std::uint64_t>::max() ||
+                withdrawal.validatorIndex > std::numeric_limits<std::uint64_t>::max() ||
+                withdrawal.amount > std::numeric_limits<std::uint64_t>::max())
+            {
+                return mismatch();
+            }
+            bcos::protocol::EthWithdrawalData data;
+            data.index = static_cast<std::uint64_t>(withdrawal.index);
+            data.validatorIndex = static_cast<std::uint64_t>(withdrawal.validatorIndex);
+            data.address = withdrawal.address;
+            data.amount = static_cast<std::uint64_t>(withdrawal.amount);
+            bcos::bytes item;
+            bcos::codec::rlp::encode(item, data);
+            encoded.push_back(std::move(item));
+        }
+        std::vector<bcos::bytesConstRef> refs;
+        refs.reserve(encoded.size());
+        for (auto const& item : encoded)
+        {
+            refs.push_back(bcos::ref(item));
+        }
+        // Never the ExecutionPayloadV4 withdrawalsRoot field: that dialect is the OP
+        // MessagePasser storage root, so the L1 header root is recomputed from the list.
+        header.withdrawalsHash = bcos::ledger::mpt::calculateWithdrawalsRoot(refs);
+    }
+    if (bcos::protocol::ethHeaderHash(header) != payload.blockHash)
+    {
+        return mismatch();
+    }
+    return external;
 }
 
 }  // namespace bcos::engine::detail

@@ -283,8 +283,7 @@ BOOST_AUTO_TEST_CASE(L2GenesisPersistsAllTrieNodes)
         auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
 
         auto genesisConfig = baseConfig();
-        genesisConfig.m_features.push_back(
-            FeatureSet{Features::Flag::feature_l2_ethereum_compat, 1});
+        genesisConfig.m_executorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
         genesisConfig.m_allocs.push_back(contractAlloc());
         genesisConfig.m_allocs.push_back(eoaAlloc());
         appendGenesisFeatureFlagsSlot(genesisConfig);
@@ -311,7 +310,7 @@ BOOST_AUTO_TEST_CASE(L2GenesisPersistsAllTrieNodes)
     }());
 }
 
-// (b) L2 flag with an empty alloc set (root = empty-trie root): nothing to persist.
+// (b) Ethereum lane with an empty alloc set (root = empty-trie root): nothing to persist.
 BOOST_AUTO_TEST_CASE(EmptyAllocsWriteNoNodeRows)
 {
     task::syncWait([this]() -> task::Task<void> {
@@ -319,8 +318,7 @@ BOOST_AUTO_TEST_CASE(EmptyAllocsWriteNoNodeRows)
         auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
 
         auto genesisConfig = baseConfig();
-        genesisConfig.m_features.push_back(
-            FeatureSet{Features::Flag::feature_l2_ethereum_compat, 1});
+        genesisConfig.m_executorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
 
         auto ok = co_await ledger::buildGenesisBlock(*ledger, genesisConfig, makeParam());
         BOOST_REQUIRE(ok);
@@ -329,8 +327,8 @@ BOOST_AUTO_TEST_CASE(EmptyAllocsWriteNoNodeRows)
 }
 
 // (c) Non-MPT chains write no node rows: neither a plain pbft genesis nor an alloc-carrying
-// genesis without feature_l2_ethereum_compat (the header still pins the alloc root, but no
-// block will ever build an MPT on top of it).
+// genesis on the legacy lane (executor_version < 2 — the header still pins the alloc root, but
+// no block will ever build an MPT on top of it).
 BOOST_AUTO_TEST_CASE(NonL2ChainsWriteNoNodeRows)
 {
     task::syncWait([this]() -> task::Task<void> {
@@ -366,8 +364,7 @@ BOOST_AUTO_TEST_CASE(BlockOneIncrementalBuildOverGenesisRoot)
         auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
 
         auto genesisConfig = baseConfig();
-        genesisConfig.m_features.push_back(
-            FeatureSet{Features::Flag::feature_l2_ethereum_compat, 1});
+        genesisConfig.m_executorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
         genesisConfig.m_allocs.push_back(contractAlloc());
         genesisConfig.m_allocs.push_back(eoaAlloc());
         appendGenesisFeatureFlagsSlot(genesisConfig);

@@ -35,6 +35,7 @@
 #endif
 #include <bcos-executor/src/executor/SwitchExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
+#include <bcos-transaction-scheduler/EthereumBlockVerifier.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <bcos-tx-validator/TxValidator.h>
 #include <bcos-utilities/BoostLogInitializer.h>
@@ -64,6 +65,10 @@ class SchedulerInterface;
 namespace engine
 {
 class AnyEngineService;
+namespace engine_common
+{
+class ClSyncCoordination;
+}
 }
 namespace single_consensus
 {
@@ -131,6 +136,25 @@ public:
     {
         return m_ethereumSerialScheduler;
     }
+    /// The EL-mode ([engine_rpc]) block verifier, shared between the Engine API external
+    /// newPayload lane and the devp2p sync loop (AirNodeInitializer forwards it to
+    /// EthereumSyncInitializer); both lanes serialize on the verifier's m_commitMutex.
+    /// Null unless initNode() built it (ethereum.mode=el with [engine_rpc] enable).
+    std::shared_ptr<scheduler_v1::EthereumBlockVerifier<scheduler_v1::SchedulerSerialImpl,
+        executor_v1::eth::EthereumExecutor>>
+    elBlockVerifier()
+    {
+        return m_elBlockVerifier;
+    }
+    /// The CL-driven coordination state shared between the Engine API service (which
+    /// latches CL-driven mode on the first forkchoiceUpdated and records a backfill
+    /// target on every SYNCING answer) and the devp2p sync loop (AirNodeInitializer
+    /// forwards it to EthereumSyncInitializer). Null unless initNode() built the
+    /// [engine_rpc] EL wiring.
+    std::shared_ptr<bcos::engine::engine_common::ClSyncCoordination> clSyncCoordination()
+    {
+        return m_clSyncCoordination;
+    }
     std::shared_ptr<GlobalStateStorageInitializer> globalStateStorageInitializer()
     {
         return m_globalStateStorageInitializer;
@@ -189,6 +213,11 @@ public:
     std::function<std::shared_ptr<
         bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>>()>
     stateStorageProvider();
+    /// Resolved executor version (0 = legacy SchedulerManager, 1 = TransactionExecutorImpl,
+    /// 2 = EthereumExecutor, >= 3 = OP mode). Valid after initNode resolved it; the RPC blob
+    /// gate and eth_getStorageAt's prefix selection key on it through NodeService.
+    int executorVersion() const noexcept { return m_executorVersion; }
+
     bcos::Error::Ptr generateSnapshot(const std::string& snapshotPath, bool withTxAndReceipts,
         const tool::NodeConfig::Ptr& nodeConfig);
     bcos::Error::Ptr importSnapshot(
@@ -254,6 +283,16 @@ private:
     /// the rest of the v2 pipeline uses. Only meaningful when executor_version >= 2.
     std::shared_ptr<executor_v1::eth::EthereumExecutor> m_ethereumExecutor;
     std::shared_ptr<scheduler_v1::SchedulerSerialImpl> m_ethereumSerialScheduler;
+    /// The EL-mode block verifier shared between the Engine API external newPayload lane
+    /// (via ExternalPayloadVerifierImpl) and the devp2p sync loop. Built only when
+    /// ethereum.mode=el and [engine_rpc] enable are both set.
+    std::shared_ptr<scheduler_v1::EthereumBlockVerifier<scheduler_v1::SchedulerSerialImpl,
+        executor_v1::eth::EthereumExecutor>>
+        m_elBlockVerifier;
+    /// The CL-driven coordination state shared between the Engine API service and the
+    /// devp2p sync loop. Built with m_elBlockVerifier (the [engine_rpc] EL wiring);
+    /// AirNodeInitializer forwards it to EthereumSyncInitializer like elBlockVerifier().
+    std::shared_ptr<bcos::engine::engine_common::ClSyncCoordination> m_clSyncCoordination;
     /// OP scheduler (executor_version >= 3), wired to MultiVersionScheduler slot 3.
     std::shared_ptr<scheduler::SchedulerInterface> m_opScheduler;
     /// Installs the OP block-number notifier on the OpScheduler.

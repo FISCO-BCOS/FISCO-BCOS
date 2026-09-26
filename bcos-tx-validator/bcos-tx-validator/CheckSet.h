@@ -40,8 +40,9 @@ enum class TxKind : uint8_t
     Web3Legacy,      ///< RLP list header, no type byte
     Web3AccessList,  ///< 0x01, EIP-2930
     Web3DynamicFee,  ///< 0x02, EIP-1559
+    Web3Blob,        ///< 0x03, EIP-4844 -- only when the chain admits blob transactions
     Web3SetCode,     ///< 0x04, EIP-7702
-    Rejected,        ///< blob(0x03) / deposit(0x7e) / reserved -- TypeGate always fails
+    Rejected,        ///< blob-when-disallowed / deposit(0x7e) / reserved -- TypeGate always fails
 };
 
 enum class AdmissionContext : uint8_t
@@ -112,12 +113,16 @@ enum class Check : uint32_t
     /// pool (Web3NonceChecker::existsMemoryNonce). The Web3 counterpart of BcosPoolNonce, and
     /// node-local in the same way -- but keyed on the SENDER, which BcosPoolNonce is not.
     Web3PoolNonce = 1U << 19,
-    /// Whether this chain carries FISCO-native (tars) transactions at all. An OP-Stack L2
-    /// (feature_l2_ethereum_compat) carries EIP-2718 envelopes only: a BCOSTransaction has no
-    /// envelope for an op-reth verifier to re-derive, so one inside a block makes that verifier
-    /// reject the WHOLE block. Reads the configuration snapshot alone -- no account, no
+    /// Whether this chain carries FISCO-native (tars) transactions at all. An Ethereum-lane
+    /// chain (executor_version >= ETHEREUM_EXECUTOR_VERSION) carries EIP-2718 envelopes only:
+    /// a BCOSTransaction has no
+    /// envelope for an EL / op-reth verifier to re-derive, so one inside a block makes that
+    /// verifier reject the WHOLE block. Reads the configuration snapshot alone -- no account, no
     /// envelope -- which is why it sits in the state stage.
     BcosTxAllowedOnChain = 1U << 20,
+    /// EIP-4844: a blob transaction must carry a `to` address (blob txs cannot be contract
+    /// creations). The non-empty blobVersionedHashes half is enforced while normalizing.
+    BlobHasTo = 1U << 21,
 };
 
 constexpr Check operator|(Check lhs, Check rhs) noexcept
@@ -176,6 +181,7 @@ inline constexpr std::array c_stateOrder{
     Check::BcosTxAllowedOnChain,
     Check::TypeByRevision,
     Check::SetCodeHasTo,
+    Check::BlobHasTo,
     Check::AuthListNonEmpty,
     Check::TipNotAboveCap,
     Check::MaxGasLimit,
@@ -322,6 +328,13 @@ constexpr Check poolAdmissionCheckSet(TxKind kind) noexcept
         return c_web3Common | Check::TypeByRevision;
     case TxKind::Web3DynamicFee:
         return c_web3Common | Check::TypeByRevision | Check::TipNotAboveCap;
+    case TxKind::Web3Blob:
+        // evmone routes the blob type through the eip1559 hierarchy (state.cpp: blob sits in the
+        // same switch arm as eip1559 for TIP_GT_FEE_CAP), so TipNotAboveCap applies here exactly
+        // as for Web3DynamicFee; omitting it would admit a transaction execution then rejects.
+        // The blob-specific rules mirror evmone's special block: TypeByRevision, then "to"
+        // present (BlobHasTo); the empty-hashes rule runs even earlier, while normalizing.
+        return c_web3Common | Check::TypeByRevision | Check::TipNotAboveCap | Check::BlobHasTo;
     case TxKind::Web3SetCode:
         return c_web3Common | Check::TypeByRevision | Check::TipNotAboveCap | Check::SetCodeHasTo |
                Check::AuthListNonEmpty;

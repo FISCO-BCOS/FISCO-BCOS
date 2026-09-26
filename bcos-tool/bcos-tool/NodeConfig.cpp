@@ -168,6 +168,34 @@ uint64_t readOptionalForkTimestamp(boost::property_tree::ptree const& section,
     }
     return std::numeric_limits<uint64_t>::max();
 }
+
+// Shared field set of the authenticated Engine API listener sections
+// ([op_engine_rpc] and [engine_rpc]).
+struct EngineRpcSectionConfig
+{
+    bool enable = false;
+    std::string listenIP = "127.0.0.1";
+    int listenPort = 8551;
+    int requestBodySizeLimit = 10485760;
+    int batchRequestSizeLimit = 8;
+    std::string jwtSecretFile;
+    int32_t clockSkewSecs = 60;
+};
+
+EngineRpcSectionConfig parseEngineRpcSection(boost::property_tree::ptree const& _pt,
+    std::string const& _section, std::string _defaultJwtSecretFile)
+{
+    EngineRpcSectionConfig config;
+    config.enable = _pt.get<bool>(_section + ".enable", false);
+    config.listenIP = _pt.get<std::string>(_section + ".listen_ip", "127.0.0.1");
+    config.listenPort = _pt.get<int>(_section + ".listen_port", 8551);
+    config.requestBodySizeLimit = _pt.get<int>(_section + ".request_body_size_limit", 10485760);
+    config.batchRequestSizeLimit = _pt.get<int>(_section + ".batch_request_size_limit", 8);
+    config.jwtSecretFile =
+        _pt.get<std::string>(_section + ".jwt_secret_file", std::move(_defaultJwtSecretFile));
+    config.clockSkewSecs = _pt.get<int32_t>(_section + ".clock_skew_secs", 60);
+    return config;
+}
 }  // namespace
 
 NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
@@ -222,6 +250,7 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     loadRpcConfig(_pt);
     loadWeb3RpcConfig(_pt);
     loadOpEngineRpcConfig(_pt);
+    loadEngineRpcConfig(_pt);
     loadGatewayConfig(_pt);
     loadSealerConfig(_pt);
     loadSingleNodeConsensusConfig(_pt);
@@ -260,7 +289,7 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
     loadOpForkTimestamps(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
 
-    // === A6.5: L2 genesis allocs; L2 mode is gated by feature_l2_ethereum_compat ===
+    // === A6.5: Ethereum-lane genesis allocs; the lane is gated by executor.version >= 2 ===
     loadAllocs(_genesisConfig);
     // === A3: B0 full Ethereum genesis header from the merged genesis artifact ===
     loadEthGenesisHeader(_genesisConfig);
@@ -494,42 +523,40 @@ void NodeConfig::loadEthGenesisHeader(boost::property_tree::ptree const& _genesi
 void NodeConfig::validateL2Invariants()
 {
     auto const& genesis = m_genesisConfig;
-    // L2 mode is signalled by the feature_l2_ethereum_compat flag in [features];
-    // there is no separate chain_mode. allocs and the flag must agree.
-    bool l2Enabled = std::any_of(genesis.m_features.begin(), genesis.m_features.end(),
-        [](ledger::FeatureSet const& featureSet) {
-            return featureSet.flag == ledger::Features::Flag::feature_l2_ethereum_compat &&
-                   featureSet.enable > 0;
-        });
-    if (l2Enabled && genesis.m_allocs.empty())
+    // The Ethereum lane (L1 EL / L2 OP-Stack) is signalled by executor.version >=
+    // ETHEREUM_EXECUTOR_VERSION; there is no separate chain_mode or feature flag.
+    // allocs and the lane must agree.
+    bool const ethLane = genesis.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION;
+    if (ethLane && genesis.m_allocs.empty())
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "feature_l2_ethereum_compat requires a non-empty [alloc.*] "
-                                  "section in config.genesis"));
+                                  "executor.version >= 2 (the Ethereum lane) requires a "
+                                  "non-empty [alloc.*] section in config.genesis"));
     }
-    if (!l2Enabled && !genesis.m_allocs.empty())
+    if (!ethLane && !genesis.m_allocs.empty())
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "[alloc.*] section requires feature_l2_ethereum_compat enabled "
-                                  "in [features]"));
+                                  "[alloc.*] section requires executor.version >= 2 (the "
+                                  "Ethereum lane) in config.genesis"));
     }
-    // The Ethereum B0 header and L2 mode are bound both ways: a pbft chain
-    // with an [eth_genesis_header] section is a mis-assembled config, and an
-    // L2 chain WITHOUT the section would mint a Tars-hashed B0 that no
-    // op-node/op-reth can ever match — fail fast in both directions.
-    if (!l2Enabled && genesis.m_ethGenesisHeader.has_value())
+    // The Ethereum B0 header and the Ethereum lane are bound both ways: a consortium chain
+    // with an [eth_genesis_header] section is a mis-assembled config, and an Ethereum-lane
+    // chain WITHOUT the section would mint a Tars-hashed B0 that no EL/op-node/op-reth can
+    // ever match — fail fast in both directions.
+    if (!ethLane && genesis.m_ethGenesisHeader.has_value())
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("[eth_genesis_header] section requires "
-                                               "feature_l2_ethereum_compat enabled in [features]"));
+                                               "executor.version >= 2 (the Ethereum lane) in "
+                                               "config.genesis"));
     }
-    if (l2Enabled && !genesis.m_ethGenesisHeader.has_value())
+    if (ethLane && !genesis.m_ethGenesisHeader.has_value())
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
-                "feature_l2_ethereum_compat requires an [eth_genesis_header] section in "
-                "config.genesis (all 22 fields from the merged genesis artifact); an L2 chain "
-                "without it would build a non-Ethereum genesis block"));
+                "executor.version >= 2 (the Ethereum lane) requires an [eth_genesis_header] "
+                "section in config.genesis (all 22 fields from the merged genesis artifact); "
+                "an Ethereum-lane chain without it would build a non-Ethereum genesis block"));
     }
     // EL mode ([ethereum] mode=el) and its [fork_timestamps] schedule are bound both ways:
     // the schedule only makes sense on a chain that declares EL mode — otherwise an ordinary
@@ -620,11 +647,11 @@ void NodeConfig::validateL2Invariants()
                 "executor.evm_revision / evm_revision_forks"));
     }
     // The opstack-el declaration ([ethereum] mode=opstack-el) is bound to the OP lane and
-    // the L2 genesis shape: the sync client downloads OP blocks over devp2p and commits
-    // them through OpBlockVerifier, which requires the OP executor (fork resolution from
-    // [op_fork_timestamps]), the Ethereum genesis anchor ([eth_genesis_header], pinned
-    // through the L2 feature), and the genesis state ([alloc.*]). The chain-id requirement
-    // is the shared EL-sync block above.
+    // the Ethereum-lane genesis shape: the sync client downloads OP blocks over devp2p and
+    // commits them through OpBlockVerifier, which requires the OP executor (fork resolution
+    // from [op_fork_timestamps]) and the Ethereum genesis anchor ([eth_genesis_header] plus
+    // [alloc.*], both bound to executor.version >= 2 above — the >= 3 requirement below
+    // implies them). The chain-id requirement is the shared EL-sync block above.
     if (genesis.m_opStackELMode)
     {
         if (genesis.m_executorVersion < ledger::OPSTACK_EXECUTOR_VERSION)
@@ -640,15 +667,6 @@ void NodeConfig::validateL2Invariants()
                                       "[op_fork_timestamps] section in config.genesis (the OP "
                                       "fork schedule drives both header validation and the "
                                       "EIP-2124 fork-id ladder)"));
-        }
-        if (!l2Enabled)
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "[ethereum] mode=opstack-el requires "
-                                      "feature_l2_ethereum_compat enabled in [features] (with "
-                                      "the [alloc.*] and [eth_genesis_header] sections it "
-                                      "binds): the sync client replays an Ethereum-shaped OP "
-                                      "chain"));
         }
     }
 }
@@ -680,6 +698,21 @@ void NodeConfig::validateELModeInvariants() const
                                   "config.genesis declares [ethereum] mode=el but config.ini "
                                   "has ethereum.mode=none: an EL chain has no on-chain "
                                   "evmc_revision, so every node must run in EL mode"));
+    }
+    // Phase 3 shallow reorg (EthereumChainRollback.h) vs MPT pruning: a rollback target's
+    // state root must stay fully resolvable on disk. A node row deleted at block b was
+    // obsoleted at b - mpt_prune_window, so with prune_window >= reorg_window every node a
+    // rollback target (>= head - reorg_window) references is still present. Pruning
+    // disabled (-1) is always safe. Only EL mode rolls back, so only EL mode is gated.
+    if (m_enableEthereumEL && m_ethereumReorgWindow > 0 && m_mptPruneWindow != -1 &&
+        m_mptPruneWindow < m_ethereumReorgWindow)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "storage.mpt_prune_window (" + std::to_string(m_mptPruneWindow) +
+                ") must be -1 (disabled) or >= ethereum.reorg_window (" +
+                std::to_string(m_ethereumReorgWindow) +
+                "): an EL rollback target's trie nodes would already be pruned"));
     }
     // Same two-way binding for opstack-el: the per-node mode must be backed by the
     // chain-level declaration (which validateL2Invariants binds to the OP lane, the
@@ -1124,20 +1157,12 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
         ; only; neither key reaches the other port.
         ; enable_miner_api=false
     */
-    const bool enableOpEngineRpc = _pt.get<bool>("op_engine_rpc.enable", false);
-    const std::string listenIP = _pt.get<std::string>("op_engine_rpc.listen_ip", "127.0.0.1");
-    const int listenPort = _pt.get<int>("op_engine_rpc.listen_port", 8551);
-    const int requestBodySizeLimit =
-        _pt.get<int>("op_engine_rpc.request_body_size_limit", 10485760);
-    const int batchRequestSizeLimit = _pt.get<int>("op_engine_rpc.batch_request_size_limit", 8);
-    const std::string jwtSecretFile =
-        _pt.get<std::string>("op_engine_rpc.jwt_secret_file", "conf/op-engine/jwt.hex");
-    const int32_t clockSkewSecs = _pt.get<int32_t>("op_engine_rpc.clock_skew_secs", 60);
+    const auto config = parseEngineRpcSection(_pt, "op_engine_rpc", "conf/op-engine/jwt.hex");
     // test-only escape hatch, see Initializer's executor-version guard
     const bool allowV1Executor = _pt.get<bool>("op_engine_rpc.unsafe_allow_v1_executor", false);
     const bool enableMinerApi = _pt.get<bool>("op_engine_rpc.enable_miner_api", false);
 
-    m_enableOpEngineRpc = enableOpEngineRpc;
+    m_enableOpEngineRpc = config.enable;
     // Mutual-exclusion check, symmetric with loadSingleNodeConsensusConfig: whichever of the
     // two loaders runs second fires the guard, so it holds regardless of loadConfig's loader
     // order and also when a loader is invoked on its own.
@@ -1148,24 +1173,80 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
                 "consensus.enable_single_node_consensus and op_engine_rpc.enable are mutually "
                 "exclusive: both drive the same EngineService; enable at most one"));
     }
-    m_opEngineRpcListenIP = listenIP;
-    m_opEngineRpcListenPort = listenPort;
-    m_opEngineHttpBodySizeLimit = requestBodySizeLimit;
-    m_opEngineBatchRequestSizeLimit = batchRequestSizeLimit;
-    m_opEngineJwtSecretFile = jwtSecretFile;
-    m_opEngineClockSkewSecs = clockSkewSecs;
+    // Symmetric with loadEngineRpcConfig: the EL-mode [engine_rpc] listener and the OP-lane
+    // [op_engine_rpc] listener serve the same EngineService slot.
+    if (m_enableOpEngineRpc && m_enableEngineRpc)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "op_engine_rpc.enable and engine_rpc.enable are mutually exclusive: both "
+                "configure the same Engine API listener; enable at most one"));
+    }
+    m_opEngineRpcListenIP = config.listenIP;
+    m_opEngineRpcListenPort = config.listenPort;
+    m_opEngineHttpBodySizeLimit = config.requestBodySizeLimit;
+    m_opEngineBatchRequestSizeLimit = config.batchRequestSizeLimit;
+    m_opEngineJwtSecretFile = config.jwtSecretFile;
+    m_opEngineClockSkewSecs = config.clockSkewSecs;
     m_opEngineAllowV1Executor = allowV1Executor;
     m_enableOpEngineMinerApi = enableMinerApi;
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadOpEngineRpcConfig")
-                         << LOG_KV("enableOpEngineRpc", enableOpEngineRpc)
-                         << LOG_KV("listenIP", listenIP) << LOG_KV("listenPort", listenPort)
-                         << LOG_KV("requestBodySizeLimit", requestBodySizeLimit)
-                         << LOG_KV("batchRequestSizeLimit", batchRequestSizeLimit)
-                         << LOG_KV("jwtSecretFile", jwtSecretFile)
-                         << LOG_KV("clockSkewSecs", clockSkewSecs)
+                         << LOG_KV("enableOpEngineRpc", m_enableOpEngineRpc)
+                         << LOG_KV("listenIP", config.listenIP)
+                         << LOG_KV("listenPort", config.listenPort)
+                         << LOG_KV("requestBodySizeLimit", config.requestBodySizeLimit)
+                         << LOG_KV("batchRequestSizeLimit", config.batchRequestSizeLimit)
+                         << LOG_KV("jwtSecretFile", config.jwtSecretFile)
+                         << LOG_KV("clockSkewSecs", config.clockSkewSecs)
                          << LOG_KV("unsafeAllowV1Executor", allowV1Executor)
                          << LOG_KV("enableMinerApi", enableMinerApi);
+}
+
+void NodeConfig::loadEngineRpcConfig(boost::property_tree::ptree const& _pt)
+{
+    /*
+    [engine_rpc]
+        enable=false
+        listen_ip=127.0.0.1
+        listen_port=8551
+        request_body_size_limit=10485760
+        batch_request_size_limit=8
+        jwt_secret_file=conf/engine/jwt.hex
+        clock_skew_secs=60
+    */
+    const auto config = parseEngineRpcSection(_pt, "engine_rpc", "conf/engine/jwt.hex");
+
+    m_enableEngineRpc = config.enable;
+    if (m_enableEngineRpc && m_enableOpEngineRpc)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "engine_rpc.enable and op_engine_rpc.enable are mutually exclusive: both "
+                "configure the same Engine API listener; enable at most one"));
+    }
+    if (m_enableEngineRpc && m_enableSingleNodeConsensus)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "engine_rpc.enable and consensus.enable_single_node_consensus are mutually "
+                "exclusive: both expose the same EngineService; enable at most one"));
+    }
+    m_engineRpcListenIP = config.listenIP;
+    m_engineRpcListenPort = config.listenPort;
+    m_engineHttpBodySizeLimit = config.requestBodySizeLimit;
+    m_engineBatchRequestSizeLimit = config.batchRequestSizeLimit;
+    m_engineJwtSecretFile = config.jwtSecretFile;
+    m_engineClockSkewSecs = config.clockSkewSecs;
+
+    NodeConfig_LOG(INFO) << LOG_DESC("loadEngineRpcConfig")
+                         << LOG_KV("enableEngineRpc", m_enableEngineRpc)
+                         << LOG_KV("listenIP", config.listenIP)
+                         << LOG_KV("listenPort", config.listenPort)
+                         << LOG_KV("requestBodySizeLimit", config.requestBodySizeLimit)
+                         << LOG_KV("batchRequestSizeLimit", config.batchRequestSizeLimit)
+                         << LOG_KV("jwtSecretFile", config.jwtSecretFile)
+                         << LOG_KV("clockSkewSecs", config.clockSkewSecs);
 }
 
 void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
@@ -1196,6 +1277,10 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
         ; committed block at <number> must carry <0xHASH>; a mismatch is fatal
         ; (the bootnodes serve a wrong fork). Empty = no checkpoint.
         finalized_checkpoint=
+        ; EIP-6110 deposit contract address for the Prague+ requestsHash
+        ; cross-check. Optional; defaults to the Ethereum mainnet deposit
+        ; contract (Sepolia: 0x7f02c3e3c98b133055b8b348b2ac625669182295).
+        deposit_contract_address=
         ; mode=opstack-el only: the OP chain's block cadence in seconds
         ; (rollup.json block_time; 2 on every superchain chain). Feeds the
         ; header validator's block-interval check. Range [1, 60].
@@ -1238,6 +1323,15 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
                 "exclusive: EL mode self-syncs from bootnodes; single-node consensus "
                 "produces its own blocks"));
     }
+    // [engine_rpc] is the EL-mode Engine API listener; without EL mode nothing drives or
+    // serves the EngineService it exposes.
+    if (!enableEL && m_enableEngineRpc)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "engine_rpc.enable requires ethereum.mode=el: the engine RPC listener serves "
+                "the EL-mode EngineService"));
+    }
     m_enableEthereumEL = enableEL;
     m_enableOpStackEL = enableOpStackEL;
     // NOTE: this loader deliberately stays PURE parsing of the config.ini
@@ -1250,6 +1344,7 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     // direction in validateELModeInvariants, which the node initializers call
     // after BOTH files are loaded.
     m_ethereumBootnodesFile = _pt.get<std::string>("ethereum.bootnodes_file", "./bootnodes.json");
+    m_ethereumTxGossip = _pt.get<bool>("ethereum.tx_gossip", true);
     m_ethereumNodeKeyFile = _pt.get<std::string>("ethereum.node_key_file", "");
     uint32_t maxBatch = _pt.get<uint32_t>("ethereum.max_batch_size", 192);
     // This value will size RLPx GetBlockHeaders/GetBlockBodies requests once
@@ -1333,10 +1428,68 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
             EthereumFinalizedCheckpoint{number, crypto::HashType(hashStr)};
     }
 
+    // EIP-6110 deposit contract address (Prague+ requestsHash cross-check). Optional:
+    // defaults to the Ethereum mainnet deposit contract (re-assigned here so a config
+    // reload without the key falls back to the default); Sepolia operators set
+    // 0x7f02c3e3c98b133055b8b348b2ac625669182295.
+    m_ethereumDepositContractAddress =
+        bcos::Address(std::string("0x00000000219ab540356cBB839Cbe05303d7705Fa"));
+    auto depositContract = _pt.get<std::string>("ethereum.deposit_contract_address", "");
+    boost::algorithm::trim(depositContract);
+    if (!depositContract.empty())
+    {
+        requireHexField("ethereum", "deposit_contract_address", depositContract, 40, false);
+        m_ethereumDepositContractAddress = bcos::Address(depositContract);
+    }
+
+    // Shallow-reorg window (Phase 3, EthereumChainRollback.h): how many committed blocks a
+    // reorg may rewind. Every commit journals its pre-block flat-state values into
+    // SYS_ROLLBACK_JOURNAL, so the knob trades per-commit journal cost for reorg depth.
+    // 0 disables journaling/rollback entirely; negative is a config error. The pairing
+    // with storage.mpt_prune_window (a rollback target's trie nodes must still be on disk)
+    // is checked in validateELModeInvariants — loadStorageConfig runs after this loader.
+    m_ethereumReorgWindow = _pt.get<int64_t>("ethereum.reorg_window", 256);
+    if (m_ethereumReorgWindow < 0 || m_ethereumReorgWindow > 100'000)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "ethereum.reorg_window must be 0 (disabled) or in "
+                                  "[1, 100000], got " +
+                                  std::to_string(m_ethereumReorgWindow)));
+    }
+
+    // Engine mempool sizing (EL mode only): capacity in transactions and per-transaction
+    // lifetime in minutes. Validated on the signed parse like the neighbours — a negative
+    // or zero value is a config error at load time, not a pool that silently never holds
+    // (or never expires) a transaction.
+    auto const mempoolCapacity = checkAndGetValue(_pt, "ethereum.mempool_capacity", "5120");
+    if (mempoolCapacity <= 0 || mempoolCapacity > 10'000'000)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "ethereum.mempool_capacity must be in [1, 10000000], got " +
+                                  std::to_string(mempoolCapacity)));
+    }
+    m_ethereumMempoolCapacity = static_cast<size_t>(mempoolCapacity);
+    auto const mempoolLifetime =
+        checkAndGetValue(_pt, "ethereum.mempool_tx_lifetime_minutes", "30");
+    if (mempoolLifetime <= 0 || mempoolLifetime > 24 * 60 * 7)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "ethereum.mempool_tx_lifetime_minutes must be in [1, 10080] (one week), got " +
+                std::to_string(mempoolLifetime)));
+    }
+    m_ethereumMempoolTxLifetimeMinutes = mempoolLifetime;
+
     NodeConfig_LOG(INFO) << LOG_DESC("loadEthereumConfig") << LOG_KV("mode", mode)
                          << LOG_KV("bootnodesFile", m_ethereumBootnodesFile)
                          << LOG_KV("nodeKeyFile", m_ethereumNodeKeyFile)
                          << LOG_KV("maxBatchSize", m_ethereumMaxBatchSize)
+                         << LOG_KV("reorgWindow", m_ethereumReorgWindow)
+                         << LOG_KV("mempoolCapacity", m_ethereumMempoolCapacity)
+                         << LOG_KV("mempoolTxLifetimeMinutes",
+                                m_ethereumMempoolTxLifetimeMinutes)
+                         << LOG_KV("depositContractAddress",
+                                "0x" + m_ethereumDepositContractAddress.hex())
                          << LOG_KV("opBlockTimeSeconds", m_opBlockTimeSeconds)
                          << LOG_KV("opSyncLagBlocks", m_opSyncLagBlocks)
                          << LOG_KV("finalizedCheckpoint",
@@ -1986,6 +2139,14 @@ void NodeConfig::loadSingleNodeConsensusConfig(boost::property_tree::ptree const
             InvalidConfig() << errinfo_comment(
                 "consensus.enable_single_node_consensus and op_engine_rpc.enable are mutually "
                 "exclusive: both drive the same EngineService; enable at most one"));
+    }
+    // Symmetric with loadEngineRpcConfig (the EL-mode Engine API listener).
+    if (m_enableSingleNodeConsensus && m_enableEngineRpc)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "consensus.enable_single_node_consensus and engine_rpc.enable are mutually "
+                "exclusive: both expose the same EngineService; enable at most one"));
     }
     m_singleNodeConsensusBlockInterval = _pt.get<uint64_t>("consensus.block_interval", 1000);
     m_singleNodeConsensusProduceEmptyBlocks = _pt.get<bool>("consensus.produce_empty_blocks", true);
@@ -3227,6 +3388,41 @@ int32_t NodeConfig::opEngineClockSkewSecs() const
     return m_opEngineClockSkewSecs;
 }
 
+bool NodeConfig::enableEngineRpc() const
+{
+    return m_enableEngineRpc;
+}
+
+const std::string& NodeConfig::engineRpcListenIP() const
+{
+    return m_engineRpcListenIP;
+}
+
+uint16_t NodeConfig::engineRpcListenPort() const
+{
+    return m_engineRpcListenPort;
+}
+
+uint32_t NodeConfig::engineHttpBodySizeLimit() const
+{
+    return m_engineHttpBodySizeLimit;
+}
+
+uint32_t NodeConfig::engineBatchRequestSizeLimit() const
+{
+    return m_engineBatchRequestSizeLimit;
+}
+
+const std::string& NodeConfig::engineJwtSecretFile() const
+{
+    return m_engineJwtSecretFile;
+}
+
+int32_t NodeConfig::engineClockSkewSecs() const
+{
+    return m_engineClockSkewSecs;
+}
+
 const std::string& NodeConfig::p2pListenIP() const
 {
     return m_p2pListenIP;
@@ -3767,6 +3963,10 @@ const std::string& bcos::tool::NodeConfig::ethereumBootnodesFile() const
 {
     return m_ethereumBootnodesFile;
 }
+bool bcos::tool::NodeConfig::ethereumTxGossipEnabled() const
+{
+    return m_ethereumTxGossip;
+}
 const std::string& bcos::tool::NodeConfig::ethereumNodeKeyFile() const
 {
     return m_ethereumNodeKeyFile;
@@ -3843,6 +4043,22 @@ std::optional<NodeConfig::EthereumFinalizedCheckpoint> const&
 bcos::tool::NodeConfig::ethereumFinalizedCheckpoint() const
 {
     return m_ethereumFinalizedCheckpoint;
+}
+bcos::Address const& bcos::tool::NodeConfig::ethereumDepositContractAddress() const
+{
+    return m_ethereumDepositContractAddress;
+}
+std::int64_t bcos::tool::NodeConfig::ethereumReorgWindow() const
+{
+    return m_ethereumReorgWindow;
+}
+size_t bcos::tool::NodeConfig::ethereumMempoolCapacity() const
+{
+    return m_ethereumMempoolCapacity;
+}
+std::int64_t bcos::tool::NodeConfig::ethereumMempoolTxLifetimeMinutes() const
+{
+    return m_ethereumMempoolTxLifetimeMinutes;
 }
 bool bcos::tool::NodeConfig::singlePointConsensus() const
 {

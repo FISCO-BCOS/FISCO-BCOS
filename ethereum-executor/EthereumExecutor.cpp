@@ -28,7 +28,21 @@ EthBlockInfo buildBlockInfo(
     // field in evmc_tx_context), so for pre-Paris forks we must place the
     // DIFFICULTY value into prev_randao for 0x44 to work.
     if (rev >= EVMC_PARIS)
-        info.prev_randao = config.prevRandao();
+    {
+        // The block header carries the CL-supplied prevRandao (Engine API
+        // payloadAttributes.prevRandao); the ledger config's value is a static
+        // fallback for chains whose headers predate the field (all-zero there).
+        auto const headerRandao = header.prevRandao();
+        if (headerRandao != bcos::h256{})
+        {
+            std::copy_n(headerRandao.data(), sizeof(info.prev_randao.bytes),
+                info.prev_randao.bytes);
+        }
+        else
+        {
+            info.prev_randao = config.prevRandao();
+        }
+    }
     else
         info.prev_randao = evmc::bytes32{static_cast<uint64_t>(info.difficulty)};
     auto const& cb = header.coinbase();

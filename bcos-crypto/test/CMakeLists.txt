@@ -27,6 +27,11 @@ find_package(ZLIB REQUIRED)
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE ..)
 target_link_libraries(${TEST_BINARY_NAME} Boost::unit_test_framework bcos-utilities bcos-crypto ZLIB::ZLIB)
+if(FULLNODE)
+    # Kzg4844Test.cpp compiles to an empty TU without this; c-kzg-4844 is a fullnode
+    # manifest feature, so the KZG headers are unavailable in the other configurations.
+    target_compile_definitions(${TEST_BINARY_NAME} PRIVATE BCOS_CRYPTO_WITH_KZG)
+endif()
 set_source_files_properties("unittests/main.cpp" "unittests/testMerkle.cpp" "unittests/Secp256k1RecoverTest.cpp" "unittests/Ed25519RecoverTest.cpp" "unittests/SM2RecoverTest.cpp" "unittests/ChecksumAddressExtraTest.cpp" "unittests/HashImplHasherTest.cpp" "unittests/SignatureRoundtripTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 config_test_cases("" "${SOURCES}" "${TEST_BINARY_NAME}" "" "")

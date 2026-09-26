@@ -222,15 +222,16 @@ bcos::task::Task<ProofWalk> proofWalk(Storage& storage, bcos::h256 root, bcos::b
 ///   - a requested slot is absent, !fullTrie → StorageProof with inMPT=false, empty value, empty
 ///                                             proof (SlotNotInMPT, see @p fullTrie below)
 ///
-/// @param fullTrie asserts the storage tries are COMPLETE (scenario B, feature_l2_ethereum_compat:
-/// every live slot has a trie leaf), so an exclusion walk IS a provable zero. Under scenario A
+/// @param fullTrie asserts the storage tries are COMPLETE (scenario B, the Ethereum lane
+/// executor_version >= 2: every live slot has a trie leaf), so an exclusion walk IS a provable
+/// zero. Under scenario A
 /// (slot-level weakening, spec §4.4) the trie only commits slots written after MPT activation; an
 /// exclusion walk there looks IDENTICAL to scenario B's but proves nothing about the slot's
 /// flat-KV value, which may be non-zero — the entry is marked inMPT=false with value and proof
-/// left empty instead of lying with a value-0 exclusion proof. The distinction is mode-driven and
+/// left empty instead of lying with a value-0 exclusion proof. The distinction is lane-driven and
 /// cannot be inferred from the trie shape, hence this explicit parameter; the default keeps the
 /// complete-trie semantics of existing callers. This layer stays storage-pure: reading the
-/// Features flag and filling the flat-KV value are the RPC layer's job.
+/// executor_version lane and filling the flat-KV value are the RPC layer's job.
 ///
 /// Proof generation is a read-only cold path: instantiate over a Storage without an extra cache
 /// layer (e.g. the RocksDB-backed store directly) to avoid polluting the commit path's cache.

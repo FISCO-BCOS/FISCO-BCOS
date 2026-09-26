@@ -59,7 +59,7 @@ public:
     std::shared_ptr<boostssl::ws::WsConfig> initConfig(
         const bcos::tool::NodeConfig::Ptr& _nodeConfig);
     std::shared_ptr<boostssl::ws::WsConfig> initWeb3RpcServiceConfig(
-        const bcos::tool::NodeConfig::Ptr& _nodeConfig, bool _enableOPEngine = false);
+        const bcos::tool::NodeConfig::Ptr& _nodeConfig, bool _enableEngineRpc = false);
     std::shared_ptr<boostssl::ws::WsService> buildWsService(
         bcos::boostssl::ws::WsConfig::Ptr _config);
 
@@ -105,7 +105,7 @@ protected:
     /// port reads [web3_rpc] enable_miner_api (see RpcFactory.cpp).
     bcos::rpc::Web3JsonRpcImpl::Ptr buildWeb3JsonRpc(int sendTxTimeout,
         boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager,
-        bool _enableOPEngine = false, bool _enableMinerApi = false);
+        bool _enableEngineRpc = false, bool _enableMinerApi = false);
     bcos::event::EventSub::Ptr buildEventSub(
         const std::shared_ptr<boostssl::ws::WsService>& _wsService,
         GroupManager::Ptr _groupManager);

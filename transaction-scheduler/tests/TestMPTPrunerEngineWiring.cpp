@@ -37,7 +37,6 @@
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <boost/test/unit_test.hpp>
-#include <magic_enum/magic_enum.hpp>
 #include <map>
 #include <string>
 #include <utility>
@@ -48,7 +47,6 @@ using namespace bcos;
 using namespace bcos::test::fullchain;
 namespace mpt = bcos::ledger::mpt;
 
-constexpr std::string_view c_mptFlagName = "feature_mpt_state_root";
 constexpr int64_t c_pruneWindow = 2;
 
 /// The committed-state backend type: MultiLayerStorage::latestBackend() is the checkpoint
@@ -178,25 +176,32 @@ BOOST_AUTO_TEST_SUITE(MPTPrunerEngineWiringSuite)
 BOOST_AUTO_TEST_CASE(prunerWiredIntoEngineCommitPath)
 {
     FullChainFixture fixture{"mpt_pruner_engine_wiring"};
-    fixture.buildGenesis(FullChainFixture::baseGenesis());
-    // Activation at block 1: block 1 itself stays on the legacy XOR root (strictly-greater
-    // rule), blocks >= 2 are MPT blocks and fire the pruner — same matrix as the PBFT-path
-    // wiring test.
-    fixture.enableFeatureFromBlock(c_mptFlagName, 1);
+    // The chain is on the Ethereum lane FROM GENESIS (executor_version >= 2 is scenario B:
+    // every block including block 1 is an MPT block). Ledger::buildGenesisBlock persists the
+    // executor_version SYS_CONFIG row only for compatibilityVersion >= 3.15 — and the
+    // engine's getLedgerConfig reads the lane from exactly that row — so the fixture's 3.6
+    // default must move up; >= 3.9 also seeds SYS_CONFIG/web3_chain_id from m_web3ChainID,
+    // which must parse. Empty allocs: the genesis stateRoot is the canonical empty-trie root
+    // and block 1's MPT build starts from the empty trie.
+    auto genesis = FullChainFixture::baseGenesis();
+    genesis.m_compatibilityVersion =
+        static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_15_0_VERSION);
+    genesis.m_web3ChainID = genesis.m_chainID;
+    genesis.m_executorVersion = ledger::ETHEREUM_EXECUTOR_VERSION;
+    fixture.buildGenesis(genesis);
     // The engine derives the header fork era from the chain's on-chain EVM revision and
-    // fails closed (UnsupportedFork) without one. executor_version = 2 + CANCUN is the
-    // production [op_engine_rpc] configuration; CANCUN pins the V3 method triple
+    // fails closed (UnsupportedFork) without one. CANCUN pins the V3 method triple
     // (forkchoiceUpdatedV3 / getPayloadV3 / newPayloadV3).
-    writeSysConfig(fixture, magic_enum::enum_name(ledger::SystemConfig::executor_version),
-        std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
     writeSysConfig(
         fixture, ledger::SYSTEM_KEY_EVMC_REVISION, ledger::encodeEVMCRevisionConfig(EVMC_CANCUN, {}));
 
     auto& backend = fixture.m_multiLayerStorage.latestBackend();
     auto pruner = std::make_shared<FCPruner>(backend, c_pruneWindow);
-    // Fresh chain at the genesis block: MPT is not active yet, so init starts empty — the
-    // first MPT block's full build seeds the counts through the ordinary delta path.
-    task::syncWait(pruner->init(0, stateRootLookup(fixture.m_ledger), /*sweepGarbage=*/false));
+    // Fresh chain at the genesis block on the Ethereum lane: firstMptBlock is 0, so init
+    // walks the head root — the EMPTY genesis trie — and starts with trackedCount 0; the
+    // first block's full build seeds the counts through the ordinary delta path.
+    task::syncWait(pruner->init(0, /*executorVersion=*/ledger::ETHEREUM_EXECUTOR_VERSION,
+        stateRootLookup(fixture.m_ledger), /*sweepGarbage=*/false));
     BOOST_CHECK_EQUAL(pruner->trackedCount(), 0U);
 
     StubMemPool memPool;
@@ -264,14 +269,12 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoEngineCommitPath)
         // The committed header as persisted by newPayload's ledger prewrite.
         roots[number] = fixture.headerOnChain(number)->stateRoot();
         nodeCounts[number] = fixture.backendNodeCount();
-        if (number >= 2)  // MPT blocks only; block 1 is XOR and fires no observer
-        {
-            // The in-memory count of the just-committed root: exactly one reference, no
-            // deadline — and no metadata row may have landed with any block.
-            BOOST_CHECK(pruner->countOf(roots[number]) == std::optional<uint64_t>{1});
-            BOOST_CHECK(!pruner->deadlineOf(roots[number]).has_value());
-            BOOST_CHECK_EQUAL(pruneMetadataRowCount(backend), 0U);
-        }
+        // Every block is an MPT block on the Ethereum lane and fires the observer: the
+        // in-memory count of the just-committed root reads exactly one reference, no
+        // deadline — and no metadata row may have landed with any block.
+        BOOST_CHECK(pruner->countOf(roots[number]) == std::optional<uint64_t>{1});
+        BOOST_CHECK(!pruner->deadlineOf(roots[number]).has_value());
+        BOOST_CHECK_EQUAL(pruneMetadataRowCount(backend), 0U);
     }
 
     // (a) The engine commit path really fired the hooks: the pruner tracks the live window's
@@ -279,9 +282,9 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoEngineCommitPath)
     BOOST_CHECK_EQUAL(pruner->watermark(), c_head);
     BOOST_CHECK_GT(pruner->trackedCount(), 0U);
 
-    // (b) Bounded, converged node count: deletions land at the commit of block 2+N+1 = 5;
-    // from then on each block adds one trie version and deletes the one that fell out of the
-    // window, so the count plateaus.
+    // (b) Bounded, converged node count: with every block an MPT block, the first deletion
+    // lands at the commit of block 1+N+1 = 4; from then on each block adds one trie version
+    // and deletes the one that fell out of the window, so the count plateaus.
     BOOST_REQUIRE_EQUAL(nodeCounts[5], nodeCounts[6]);
     BOOST_REQUIRE_EQUAL(nodeCounts[6], nodeCounts[7]);
     BOOST_REQUIRE_EQUAL(nodeCounts[7], nodeCounts[8]);
@@ -289,21 +292,21 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoEngineCommitPath)
     BOOST_CHECK_GT(nodeCounts[8], 0);
 
     // (c) Window guarantee with N=2 at head 8: roots of blocks 6..8 (head-N .. head) keep
-    // their nodes; the root of block r is deleted when block r+1+N commits, so roots 2..5
+    // their nodes; the root of block r is deleted when block r+1+N commits, so roots 1..5
     // are all gone.
     for (protocol::BlockNumber number = 6; number <= 8; ++number)
     {
         BOOST_CHECK_MESSAGE(nodeRowInBackend(backend, roots[number]),
             "in-window root of block " + std::to_string(number) + " was pruned");
     }
-    for (protocol::BlockNumber number = 2; number <= 5; ++number)
+    for (protocol::BlockNumber number = 1; number <= 5; ++number)
     {
         BOOST_CHECK_MESSAGE(!nodeRowInBackend(backend, roots[number]),
             "out-of-window root of block " + std::to_string(number) + " still on disk");
     }
-    // The root of block 2 was obsoleted at block 3 and deleted at block 5 — its in-memory
+    // The root of block 1 was obsoleted at block 2 and deleted at block 4 — its in-memory
     // entry is erased with the deletion; a still-live root reads count 1, no deadline.
-    BOOST_CHECK(!pruner->countOf(roots[2]).has_value());
+    BOOST_CHECK(!pruner->countOf(roots[1]).has_value());
     BOOST_CHECK(pruner->countOf(roots[8]) == std::optional<uint64_t>{1});
 
     // (d) The in-memory pruner never wrote a "/sys/mpt_prune_*" metadata row.
