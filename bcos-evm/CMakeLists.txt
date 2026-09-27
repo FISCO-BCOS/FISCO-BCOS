@@ -5,9 +5,6 @@ if(NOT DEFINED PROJECT_NAME)
 else()
     set(BCOS_EVM_STANDALONE OFF)
 endif()
-if(NOT BCOS_EVM_STANDALONE)
-    set(BCOS_EVM_STATE_ROOT_SOURCES bcos-evm/adapter/StateRootCompute.cpp)
-endif()
 
 project(bcos-evm LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
@@ -61,7 +58,6 @@ add_library(bcos-evm-eth STATIC
     bcos-evm/eth/state/requests.cpp
     bcos-evm/eth/state/state.cpp
     bcos-evm/eth/state/system_contracts.cpp
-    ${BCOS_EVM_STATE_ROOT_SOURCES}
     # 只编入实际被引用的两个。blob_schedule/utils 曾在此，但全模块零引用
     # （符号可达性核验，且去掉后两个测试目标仍完整链接通过）；它们已不再随 port 安装。
     #
@@ -85,7 +81,7 @@ add_library(bcos-evm-eth STATIC
     ${EVMONE_TEST_UTILS_DIR}/test_state.cpp)
 add_library(bcosevm::eth ALIAS bcos-evm-eth)
 # Shim first: ${CMAKE_CURRENT_SOURCE_DIR} is <repo>/bcos-evm, which contains a real test/
-# directory (test/eth, test/opstack). With it searched first, <test/state/...> and
+# directory (test/eth). With it searched first, <test/state/...> and
 # <test/utils/...> resolve to the shim and the package only for as long as bcos-evm/test/state/
 # and bcos-evm/test/utils/ happen not to exist — adding either would silently shadow evmone's
 # headers for every TU in the module, with no diagnostic. The shim holds nothing but test/, so
@@ -94,11 +90,6 @@ target_include_directories(bcos-evm-eth PUBLIC
     ${EVMONE_PKG_SHIM_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(bcos-evm-eth PUBLIC evmone::evmone evmone::precompiles intx::intx)
-# 自研建根(替代退役 evmone mpt/mpt_hash):StateRootCompute.h 用 bcos-codec RLP + bcos-ledger
-# computeTrieRoot。codec/ledger 均用 genex 解析(standalone 为空)；bcos-ledger 的头路径由
-# ledger 目标的 PUBLIC include 传递（BUILD_INTERFACE 指向 <repo>/bcos-ledger），无需单独
-# 添加——且 standalone 下 CMAKE_SOURCE_DIR 指向 bcos-evm 自身，该路径并不存在。
-target_link_libraries(bcos-evm-eth PUBLIC $<$<TARGET_EXISTS:codec>:codec> $<$<TARGET_EXISTS:ledger>:ledger>)
 # 移植文件按上游原样编译；并入本仓后会继承全局 -Werror -Wall -Wextra -pedantic
 # （cmake/CompilerSettings.cmake），AppleClang 对上游代码报 missing-field-initializers。
 # vendored 代码不受本仓告警策略约束——抑制仅限移植源文件，FISCO 自有代码保持全 -Werror。
@@ -112,27 +103,6 @@ set_source_files_properties(
     bcos-evm/eth/state/system_contracts.cpp
     ${EVMONE_TEST_UTILS_DIR}/test_state.cpp
     PROPERTIES COMPILE_OPTIONS "-Wno-missing-field-initializers")
-
-# opstack 库依赖 bcos-framework（OpTransition 投影到框架 receipt），standalone 不可编译——
-# 仅 FULLNODE 集成构建包含。
-if(NOT BCOS_EVM_STANDALONE)
-    add_library(bcos-evm-opstack STATIC
-        bcos-evm/opstack/OpForkSchedule.cpp
-        bcos-evm/opstack/OpHost.cpp
-        bcos-evm/opstack/OpPrecompiles.cpp
-        bcos-evm/opstack/OpFeeParams.cpp
-        bcos-evm/opstack/RollupCost.cpp
-        bcos-evm/opstack/OpTransition.cpp)
-    add_library(bcosevm::opstack ALIAS bcos-evm-opstack)
-    target_include_directories(bcos-evm-opstack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-    target_link_libraries(bcos-evm-opstack PUBLIC bcosevm::eth bcos-framework)
-    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-        # OP modules use skipped-field designated initializers and GCC-13 reference-returning
-        # helpers; downgrade only here (global -Wmissing-field-initializers stays active).
-        target_compile_options(bcos-evm-opstack PRIVATE
-            -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
-    endif()
-endif()
 
 # 集成构建（主工程 add_subdirectory）下跟随主工程的 TESTS 开关，独立构建恒默认 ON；
 # 否则整树 TESTS=ON 构建/CI 也不会编译 bcos-evm-eth-tests，回归无从暴露。

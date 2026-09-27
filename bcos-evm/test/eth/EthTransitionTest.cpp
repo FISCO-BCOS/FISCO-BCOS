@@ -1,5 +1,5 @@
 #define BOOST_TEST_MODULE BcosEvmEthTests
-#include <bcos-evm/adapter/StateDiffSanitize.h>
+#include <bcos-evm/eth/SanitizeStateDiff.h>
 #include <evmone/evmone.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>

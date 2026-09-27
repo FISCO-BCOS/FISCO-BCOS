@@ -13,17 +13,17 @@
  * Differences from the L1 verifier, all sourced from op-geth (optimism branch):
  *  - NO block-start EIP-4788/EIP-2935 handling here and NO block-end EIP-7002/7251 system
  *    calls: OP chains gate those inside the fork-aware execution path itself
- *    (preBlockOpSteps' system_call_block_start is revision-gated; Prague requests are
- *    suppressed by finalizeOpBlock).
+ *    (preBlockOpEthSteps' systemCallBlockStart is revision-gated; Prague requests are
+ *    suppressed by the no-withdrawals finalizeState).
  *  - NO withdrawals application and NO PoW rewards: OP blocks carry no withdrawals list
  *    (the Canyon..Holocene withdrawalsRoot is the constant empty-list hash; Isthmus+ it is
  *    the L2ToL1MessagePasser storage root) and pay no coinbase reward.
  *  - The first transaction of every block MUST be the L1-attributes deposit (0x7e);
  *    blob (0x03) and 0x7d type bytes are consensus-rejected.
- *  - Commitment surface is the six-way OpBlockCommitments comparison
+ *  - Commitment surface is the six-way OpEthBlockCommitments comparison
  *    (receiptsRoot/logsBloom/withdrawalsRoot/stateRoot/gasUsed/transactionsRoot) plus the
  *    two seal-only outputs (blobGasUsed from Ecotone, requestsHash from Isthmus), with
- *    fork-gated field PRESENCE compared bidirectionally (mismatchedFieldOf).
+ *    fork-gated field PRESENCE compared bidirectionally (opEthMismatchedFieldOf).
  *
  * Why not drive OpScheduler::executeBlock/commitBlock: the scheduler's public entry is the
  * engine lane's two-phase execute→commit protocol (callback Error::Ptr surface, one pending
@@ -31,20 +31,21 @@
  * exceptions carrying the mismatching field AND both values, and a faithful pre-Ecotone
  * header projection (OpScheduler's announced-hash identity via canonicalBlockHash only
  * covers withdrawalsRoot-bearing headers). The verifier therefore assembles the SAME shared
- * stages OpScheduler::execute runs — preBlockOpSteps → SchedulerSerialImpl(serial=true) →
- * finalizeOpBlockResult — plus the ledger MPT increment (ledger::mpt::computeMptStateDelta,
+ * stages OpScheduler::execute runs — preBlockOpEthSteps → SchedulerSerialImpl(serial=true) →
+ * finalizeOpEthBlockResult — plus the ledger MPT increment (ledger::mpt::computeMptStateDelta,
  * the L1 mechanism) and the FIB-104 commit sequence (pushView → prewriteBlockToBuffer →
  * mergeBackStorage), reusing the helpers rather than copying their logic.
  */
 
-#include <opstack-executor/OpBlockExecute.h>  // preBlockOpSteps / finalizeOpBlockResult
-#include <opstack-executor/OpCommitments.h>   // OpBlockCommitments / commitmentsOf / mismatchedFieldOf
-#include <opstack-executor/OpCommon.h>        // OpConsensusError / forkTimestampSec / OpBlockSeal
-#include <opstack-executor/OpstackExecutor.h> // OpstackExecutor / OpBlockExecutionContext
+#include <opstack-executor/OpEthBlockSteps.h>  // preBlockOpEthSteps / finalizeOpEthBlockResult
+#include <opstack-executor/OpEthCommitments.h>  // OpEthBlockCommitments / opEthCommitmentsOf / opEthMismatchedFieldOf
+#include <opstack-executor/OpEthDeposit.h>      // decodeOpDepositEnvelope / DepositTx
+#include <opstack-executor/OpEthExecutor.h>     // OpEthExecutor / OpEthBlockContext
+#include <opstack-executor/OpForkSpec.h>        // opForkSpecAt
+#include <opstack-executor/OpCommon.h>          // OpConsensusError / OpStorageError
 
 #include <bcos-devp2p/sync/Block.h>  // devp2p::sync::Block
-#include <bcos-evm/adapter/RecentBlockHashes.h>
-#include <bcos-evm/opstack/OpForkSchedule.h>
+#include <opstack-executor/OpRecentBlockHashes.h>  // per-block BLOCKHASH source
 #include <bcos-framework/ledger/FeaturesStorage.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
@@ -126,7 +127,7 @@ struct OpBlockVerificationResult
     protocol::BlockHeader::Ptr header;  // the committed (projected, verified) header
     std::vector<protocol::Transaction::Ptr> transactions;
     std::vector<protocol::TransactionReceipt::Ptr> receipts;
-    bcos::evm::engine::OpBlockCommitments commitments;
+    OpEthBlockCommitments commitments;
     bcos::crypto::HashType blockHash;  // keccak256(rlp(header)) — the p2p identity
 };
 
@@ -134,7 +135,7 @@ namespace detail
 {
 /// seconds -> milliseconds with an overflow guard (the internal BlockHeader stores ms; the
 /// EthBlockHeader(BlockHeader) bridge back divides by 1000 and rejects sub-second values, so
-/// the ×1000 here is the exact inverse — OpCommon.h's forkTimestampSec comment).
+/// the ×1000 here is the exact inverse — OpForkSpec.h's opForkTimestampSec comment).
 inline int64_t p2pTimestampToInternalMs(int64_t timestampSec)
 {
     if (timestampSec < 0 || timestampSec > std::numeric_limits<int64_t>::max() / 1000)
@@ -294,9 +295,9 @@ inline protocol::Transaction::Ptr wrapOpP2pEnvelope(
 }
 
 /// The announced side of the six-way comparison, projected straight from the p2p header
-/// (presence AND value for the fork-gated fields — mismatchedFieldOf treats presence
+/// (presence AND value for the fork-gated fields — opEthMismatchedFieldOf treats presence
 /// asymmetry as a first-class mismatch).
-inline bcos::evm::engine::OpBlockCommitments announcedCommitmentsOf(
+inline OpEthBlockCommitments announcedCommitmentsOf(
     protocol::EthBlockHeaderData const& ethHeader)
 {
     std::optional<uint64_t> blobGasUsed;
@@ -309,7 +310,7 @@ inline bcos::evm::engine::OpBlockCommitments announcedCommitmentsOf(
         }
         blobGasUsed = static_cast<uint64_t>(*ethHeader.blobGasUsed);
     }
-    return bcos::evm::engine::OpBlockCommitments{
+    return OpEthBlockCommitments{
         .receiptsRoot = ethHeader.receiptsRoot,
         .logsBloom = bcos::h2048(ethHeader.logsBloom.data(), ethHeader.logsBloom.size()),
         .withdrawalsRoot = ethHeader.withdrawalsHash,
@@ -323,7 +324,7 @@ inline bcos::evm::engine::OpBlockCommitments announcedCommitmentsOf(
 
 /// Render one commitment field for the OpBlockVerificationFailed diagnostic.
 inline std::string renderCommitmentField(
-    std::string_view field, bcos::evm::engine::OpBlockCommitments const& c)
+    std::string_view field, OpEthBlockCommitments const& c)
 {
     auto optHash = [](std::optional<bcos::h256> const& v) {
         return v ? v->hexPrefixed() : std::string("<absent>");
@@ -395,8 +396,6 @@ public:
     /// is rolled back).
     task::Task<OpBlockVerificationResult> verifyAndCommit(bcos::devp2p::sync::Block const& block)
     {
-        namespace op = bcos::evm::opstack;
-        namespace engine = bcos::evm::engine;
         namespace edetail = bcos::evm::engine::detail;
 
         auto const& ethHeader = block.header;
@@ -434,7 +433,7 @@ public:
         //    the Ethereum RLP domain); op-node keys forks on the L2 block's own timestamp, so
         //    no unit conversion is needed here — the internal millisecond conversion happens
         //    once, in the header projection below.
-        const auto& cfg = op::configAt(m_forkSchedule, static_cast<uint64_t>(ethHeader.timestamp));
+        const auto spec = opForkSpecAt(m_forkSchedule, static_cast<uint64_t>(ethHeader.timestamp));
 
         // 3. Header projection (seconds -> ms inside), then a fidelity self-check: the
         //    projection must re-encode to the announced block hash on EVERY fork (the
@@ -457,18 +456,18 @@ public:
         bcos::ledger::LedgerConfig execLedgerConfig;
         execLedgerConfig.setBlockNumber(number);
         execLedgerConfig.setExecutorVersion(bcos::ledger::OPSTACK_EXECUTOR_VERSION);
-        execLedgerConfig.setEVMCRevision(cfg.rev);
+        execLedgerConfig.setEVMCRevision(spec.rev);
         execLedgerConfig.setFeatures(features);
 
         // 4. Wrap every raw envelope into the executable tars carrier (0x03/0x7d and
         //    malformed envelopes are deterministic OpConsensusError here), and split the
-        //    deposits for the block-pre steps (depositFromTransaction decodes the 0x7e
+        //    deposits for the block-pre steps (decodeOpDepositEnvelope decodes the 0x7e
         //    envelope; a malformed deposit is consensus-rejected, same as OpScheduler).
         OpBlockVerificationResult result;
         result.transactions.reserve(block.transactions.size());
         std::vector<bcos::bytesConstRef> rawTxBytes;
         rawTxBytes.reserve(block.transactions.size());
-        std::vector<op::DepositTx> deposits;
+        std::vector<DepositTx> deposits;
         for (auto const& raw : block.transactions)
         {
             auto tx = detail::wrapOpP2pEnvelope(raw, *m_hashImpl);
@@ -476,9 +475,10 @@ public:
             {
                 try
                 {
-                    deposits.push_back(OpstackExecutor::depositFromTransaction(*tx));
+                    deposits.push_back(decodeOpDepositEnvelope(
+                        bcos::bytesConstRef(raw.data(), raw.size())));
                 }
-                catch (const OpTxValidationFailed& e)
+                catch (const OpEthDepositValidationFailed& e)
                 {
                     BOOST_THROW_EXCEPTION(bcos::evm::OpConsensusError(
                         std::string("OpBlockVerifier: malformed deposit: ") + e.what(),
@@ -489,35 +489,33 @@ public:
             result.transactions.push_back(std::move(tx));
         }
 
-        // 5. Execute: the same shared stages OpScheduler::execute runs — preBlockOpSteps
+        // 5. Execute: the same shared stages OpScheduler::execute runs — preBlockOpEthSteps
         //    (recent-block-hashes → block-start system call → deposit-first/Jovian shape) →
-        //    SchedulerSerialImpl(serial=true) per-tx loop → finalizeOpBlockResult with the
+        //    SchedulerSerialImpl(serial=true) per-tx loop → finalizeOpEthBlockResult with the
         //    state-root build deferred to the incremental MPT below.
-        std::shared_ptr<SharedErrorSlot> sharedError;
+        std::shared_ptr<OpStorageErrorSlot> sharedError;
         auto rethrowStorageFaultIfPoisoned = [&sharedError]() {
-            if (!sharedError)
-                return;
-            std::lock_guard lock(sharedError->mutex);
-            if (!sharedError->message.empty())
-                throw engine::OpStorageError(
-                    "OpBlockVerifier: block state read fault (poisoned): " + sharedError->message);
+            if (sharedError && sharedError->poisoned())
+                throw bcos::evm::engine::OpStorageError(
+                    "OpBlockVerifier: block state read fault (poisoned): " +
+                    sharedError->firstErrorMessage());
         };
-        engine::OpExecuteBlockResult opResult;
+        OpEthExecuteBlockResult opResult;
         try
         {
-            sharedError = std::make_shared<SharedErrorSlot>();
-            OpstackExecutor executor(m_receiptFactory, m_hashImpl, cfg, sharedError);
+            sharedError = std::make_shared<OpStorageErrorSlot>();
+            OpEthExecutor executor(m_receiptFactory, spec, sharedError);
 
             std::optional<std::string> hashErr;
             std::optional<uint16_t> daFootprintGasScalar;
-            std::optional<edetail::RecentBlockHashes<ViewType>> hashes;
-            engine::preBlockOpSteps(view, *header, cfg, rawTxBytes, deposits, executor, hashes,
-                hashErr, daFootprintGasScalar);
+            std::optional<OpRecentBlockHashes<ViewType>> hashes;
+            co_await preBlockOpEthSteps(view, *header, spec, rawTxBytes, deposits, executor.vm(),
+                sharedError, hashes, hashErr, daFootprintGasScalar);
 
-            OpBlockExecutionContext ctx{.fee = {},
+            OpEthBlockContext ctx{.fee = {},
                 .blockGasLeft =
                     edetail::narrowU256ToI64(header->gasLimit(), "OpBlockVerifier blockGasLeft"),
-                .blockHashes = &*hashes,
+                .blockHashLookup = opEthBlockHashLookup(*hashes),
                 .chainId = m_chainId,
                 .daFootprintGasScalar = daFootprintGasScalar};
 
@@ -537,19 +535,19 @@ public:
             // skipStateRootBuild=true: the root comes from the incremental MPT delta below
             // (the same view whose top mutable layer is exactly this block's delta), not from
             // finalize's full two-layer rebuild.
-            opResult = engine::finalizeOpBlockResult(executor, view, *header, execLedgerConfig,
-                cfg, receipts, rawTxBytes, ctx.cumulativeGasUsed, hashErr,
+            opResult = co_await finalizeOpEthBlockResult(view, *header, execLedgerConfig, spec,
+                sharedError, receipts, rawTxBytes, ctx.cumulativeGasUsed, hashErr,
                 /*skipStateRootBuild=*/true);
         }
         catch (const bcos::evm::OpConsensusError&)
         {
             // A poisoned slot is a storage fault even when validation wrapped it as consensus
-            // (Storage2State reads are noexcept and swallow the fault into the shared slot) —
+            // (EthereumState reads are noexcept and swallow the fault into the shared slot) —
             // the same check OpScheduler::execute runs for every exception type.
             rethrowStorageFaultIfPoisoned();
             throw;
         }
-        catch (const engine::OpStorageError&)
+        catch (const bcos::evm::engine::OpStorageError&)
         {
             throw;
         }
@@ -583,7 +581,7 @@ public:
         }
         catch (const ledger::mpt::MPTInvariantViolation& e)
         {
-            throw engine::OpStorageError(fmt::format(
+            throw bcos::evm::engine::OpStorageError(fmt::format(
                 "OpBlockVerifier: incremental MPT build at block {} failed — parent block {}'s "
                 "state root {} has no persisted trie nodes (the OP lane builds the complete MPT "
                 "from genesis): {}",
@@ -591,7 +589,7 @@ public:
         }
         catch (const ledger::mpt::MPTDecodeError& e)
         {
-            throw engine::OpStorageError(fmt::format(
+            throw bcos::evm::engine::OpStorageError(fmt::format(
                 "OpBlockVerifier: MPT node decode failed at block {}: {}", number, e.what()));
         }
         opResult.stateRoot = mptDelta.stateRoot;
@@ -599,10 +597,10 @@ public:
         // 7. Commitment comparison: executed vs announced, all six fields plus the two
         //    seal-only outputs, presence compared bidirectionally. The mismatch error names
         //    the field and carries both values.
-        auto computed = engine::commitmentsOf(
+        auto computed = opEthCommitmentsOf(
             opResult.seal, opResult.stateRoot, opResult.gasUsed, opResult.txRoot);
         auto announced = detail::announcedCommitmentsOf(ethHeader);
-        if (auto mismatch = engine::mismatchedFieldOf(computed, announced))
+        if (auto mismatch = opEthMismatchedFieldOf(computed, announced))
         {
             BOOST_THROW_EXCEPTION((OpBlockVerificationFailed{*mismatch,
                 detail::renderCommitmentField(*mismatch, computed),

@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include "EthExecutionPolicy.h"
 #include "EthereumTransition.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/BlockHeader.h"

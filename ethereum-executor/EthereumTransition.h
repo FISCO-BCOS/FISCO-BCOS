@@ -8,10 +8,17 @@
 /// involved: the transaction is the bcos protocol::Transaction, validation and
 /// execution read it directly, and the resulting BCOS receipt is produced
 /// directly (no evmone TransactionReceipt intermediate).
+///
+/// Chain-specific behaviour (tx-type admission, fee withholding/settlement,
+/// intrinsic gas) is delegated to the Policy template parameter — see
+/// EthExecutionPolicy.h. The default EthL1Policy is the verbatim L1 logic;
+/// an L2 (e.g. OP Stack) supplies its own policy instead of re-porting this
+/// file.
 
 #pragma once
 
 #include "EVMSupport.h"
+#include "EthExecutionPolicy.h"
 #include "EthereumHost.h"
 #include "EthereumState.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
@@ -253,80 +260,24 @@ int64_t processAuthorizationList(
 /// Transaction directly; @p callParams carries the eth_call dry-run
 /// normalization overrides (all empty / false for real execution).
 /// @return Execution gas limit or transaction validation error.
-template <class Storage>
+template <class Storage, class Policy = EthL1Policy>
 std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState<Storage>& state,
     EthBlockInfo const& block, protocol::Transaction const& tx, evmc_revision rev,
-    int64_t blockGasLeft, int64_t blobGasLeft, EthCallParams const& callParams)
+    int64_t blockGasLeft, int64_t blobGasLeft, EthCallParams const& callParams,
+    Policy const& policy = Policy{})
 {
     const auto txKind = tx.web3TypedTxKind();
-    // Reject unknown / out-of-range typed-tx kinds (only 0-4 exist). geth
-    // rejects unknown type bytes at RLP decode; the port has no decode layer,
-    // so without this a crafted kind (>=5) would skip both type gates below,
-    // trip the maxPriorityGasPrice assert (debug) or silently run as legacy
-    // (release), diverging from geth.
-    if (txKind > 4)
-        return make_error_code(ErrorCode::TX_TYPE_NOT_SUPPORTED);
+    // The type-byte fork gating and the type-specific checks (blob / set-code)
+    // are the chain policy's: an L2 admits a different set of type bytes (e.g.
+    // OP's deposit 0x7e, blob txs rejected from Ecotone on).
+    if (auto const typeError =
+            policy.validateTxType(tx, txKind, rev, block, blobGasLeft, callParams))
+        return *typeError;
     const auto gasLimit = effectiveGasLimit(tx, callParams);
     const auto nonce = effectiveNonce(tx, callParams);
     const auto maxGasPrice = ethMaxGasPrice(tx, callParams);
     const auto maxPriorityGasPrice = ethMaxPriorityGasPrice(tx, callParams);
     const auto hasTo = ethToAddress(tx).has_value();
-    const auto& blobHashes = tx.blobVersionedHashes();
-
-    switch (txKind)  // Validate "special" transaction types.
-    {
-    case 3:  // blob
-        if (rev < EVMC_CANCUN)
-            return make_error_code(ErrorCode::TX_TYPE_NOT_SUPPORTED);
-        if (!hasTo)
-            return make_error_code(ErrorCode::CREATE_BLOB_TX);
-        if (blobHashes.empty())
-            return make_error_code(ErrorCode::EMPTY_BLOB_HASHES_LIST);
-        if (rev >= EVMC_OSAKA && blobHashes.size() > evm::MAX_TX_BLOB_COUNT)
-            return make_error_code(ErrorCode::BLOB_GAS_LIMIT_EXCEEDED);
-
-        assert(block.blob_base_fee.has_value());
-        if (ethMaxBlobGasPrice(tx) < *block.blob_base_fee)
-            return make_error_code(ErrorCode::BLOB_FEE_CAP_LESS_THAN_BLOCKS);
-
-        if (std::ranges::any_of(blobHashes, [](const auto& h) { return h[0] != 0x01; }))
-            return make_error_code(ErrorCode::INVALID_BLOB_HASH_VERSION);
-        if (static_cast<uint64_t>(evm::GAS_PER_BLOB) * blobHashes.size() >
-            static_cast<uint64_t>(blobGasLeft))
-            return make_error_code(ErrorCode::BLOB_GAS_LIMIT_EXCEEDED);
-        break;
-
-    case 4:  // set_code
-        if (rev < EVMC_PRAGUE)
-            return make_error_code(ErrorCode::TX_TYPE_NOT_SUPPORTED);
-        if (!hasTo)
-            return make_error_code(ErrorCode::CREATE_SET_CODE_TX);
-        if (tx.authorizationList().empty())
-            return make_error_code(ErrorCode::EMPTY_AUTHORIZATION_LIST);
-        break;
-
-    default:;
-    }
-
-    switch (txKind)  // Validate the "regular" transaction type hierarchy.
-    {
-    case 4:  // set_code
-    case 3:  // blob
-    case 2:  // eip1559
-        if (rev < EVMC_LONDON)
-            return make_error_code(ErrorCode::TX_TYPE_NOT_SUPPORTED);
-
-        if (maxPriorityGasPrice > maxGasPrice)
-            return make_error_code(ErrorCode::TIP_GT_FEE_CAP);  // Priority gas price is too high.
-        [[fallthrough]];
-
-    case 1:  // access_list
-        if (rev < EVMC_BERLIN)
-            return make_error_code(ErrorCode::TX_TYPE_NOT_SUPPORTED);
-        [[fallthrough]];
-
-    case 0:;  // legacy
-    }
 
     assert(maxPriorityGasPrice <= maxGasPrice);
 
@@ -365,75 +316,19 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
     // Widened to u512 so gasLimit * gasPrice + value cannot wrap, as the original intx::umul did.
     auto max_total_fee = bcos::u512(static_cast<uint64_t>(gasLimit)) * bcos::u512(maxGasPrice);
     max_total_fee += bcos::u512(tx.value());
-
-    if (txKind == 3)  // blob
-    {
-        const auto total_blob_gas = static_cast<uint64_t>(evm::GAS_PER_BLOB) * blobHashes.size();
-        // 256-bit product then widened — matches the original intx expression bit for bit.
-        max_total_fee += bcos::u512(uint256(total_blob_gas) * ethMaxBlobGasPrice(tx));
-    }
+    // Chain-level additions to the theoretical maximum cost (L1: the blob fee;
+    // an L2 may add its L1 data fee) are the policy's.
+    max_total_fee += policy.additionalMaxCost(tx, block, rev, callParams);
     const auto senderBalance = senderPtr != nullptr ? senderPtr->balance : uint256{};
     if (bcos::u512(senderBalance) < max_total_fee)
         return make_error_code(ErrorCode::INSUFFICIENT_FUNDS);
 
-    const auto [intrinsic_cost, min_cost] =
-        eth_transition_detail::compute_tx_intrinsic_cost(rev, tx);
+    const auto [intrinsic_cost, min_cost] = policy.intrinsicCost(rev, tx);
     if (gasLimit < std::max(intrinsic_cost, min_cost))
         return make_error_code(ErrorCode::INTRINSIC_GAS_TOO_LOW);
 
     const auto execution_gas_limit = gasLimit - intrinsic_cost;
     return EthTxProperties{execution_gas_limit, min_cost};
-}
-
-/// Map an evmc status code to the FISCO internal TransactionStatus convention
-/// (0 = success / None, non-zero = failure).
-inline int32_t mapEvmcStatusToBcosStatus(evmc_status_code status)
-{
-    switch (status)
-    {
-    case EVMC_SUCCESS:
-        return static_cast<int32_t>(protocol::TransactionStatus::None);
-    case EVMC_REVERT:
-        return static_cast<int32_t>(protocol::TransactionStatus::RevertInstruction);
-    case EVMC_OUT_OF_GAS:
-        return static_cast<int32_t>(protocol::TransactionStatus::OutOfGas);
-    case EVMC_UNDEFINED_INSTRUCTION:
-    case EVMC_INVALID_INSTRUCTION:
-        return static_cast<int32_t>(protocol::TransactionStatus::BadInstruction);
-    case EVMC_BAD_JUMP_DESTINATION:
-        return static_cast<int32_t>(protocol::TransactionStatus::BadJumpDestination);
-    case EVMC_STACK_OVERFLOW:
-        return static_cast<int32_t>(protocol::TransactionStatus::OutOfStack);
-    case EVMC_STACK_UNDERFLOW:
-        return static_cast<int32_t>(protocol::TransactionStatus::StackUnderflow);
-    case EVMC_INSUFFICIENT_BALANCE:
-        return static_cast<int32_t>(protocol::TransactionStatus::NotEnoughCash);
-    default:
-        return static_cast<int32_t>(protocol::TransactionStatus::Unknown);
-    }
-}
-
-/// Build a BCOS receipt from the executed EVM result (no evmone receipt
-/// intermediate). Return data is not retained by the host, matching the v2
-/// executor's documented limitation.
-template <class Storage>
-protocol::TransactionReceipt::Ptr buildBcosReceipt(EthereumHost<Storage>& host,
-    evmc::Result const& result, int64_t gasUsed, protocol::TransactionReceiptFactory const& rf,
-    int64_t blockNumber)
-{
-    std::vector<protocol::LogEntry> logs;
-    for (auto const& l : host.take_logs())
-    {
-        bcos::bytes addr(l.addr.bytes, l.addr.bytes + sizeof(evmc_address));
-        bcos::h256s topics;
-        for (auto const& t : l.topics)
-            topics.emplace_back(bcos::bytesConstRef(t.bytes, sizeof(evmc_bytes32)));
-        bcos::bytes data(l.data.begin(), l.data.end());
-        logs.emplace_back(std::move(addr), std::move(topics), std::move(data));
-    }
-    bcos::bytes output;
-    return rf.createReceipt(bcos::u256(static_cast<uint64_t>(gasUsed)), std::string{}, logs,
-        mapEvmcStatusToBcosStatus(result.status_code), bcos::ref(output), blockNumber);
 }
 
 /// Executes a valid transaction (ported evmone transition()).
@@ -445,15 +340,14 @@ protocol::TransactionReceipt::Ptr buildBcosReceipt(EthereumHost<Storage>& host,
 /// (matching the old executor, which applied the diff unconditionally). For a
 /// dry-run (eth_call) the caller hands this a throwaway/forked view so nothing
 /// real persists.
-template <class Storage>
+template <class Storage, class Policy = EthL1Policy>
 task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Storage>& state,
     EthBlockInfo const& block, BlockHashLookup blockHashLookup, protocol::Transaction const& tx,
     evmc_revision rev, evmc::VM& vm, EthTxProperties const& txProps, uint64_t chainId,
     EthCallParams const& callParams, protocol::TransactionReceiptFactory const& rf,
-    int64_t blockNumber)
+    int64_t blockNumber, Policy const& policy = Policy{})
 {
     const auto gasLimit = effectiveGasLimit(tx, callParams);
-    const auto txKind = tx.web3TypedTxKind();
     const auto sender = ethSender(tx);
     const auto to = ethToAddress(tx);
 
@@ -467,34 +361,16 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
     const auto delegation_refund =
         eth_transition_detail::processAuthorizationList(state, chainId, tx);
 
-    const auto base_fee = (rev >= EVMC_LONDON) ? block.base_fee : 0;
-    const auto max_gas_price = ethMaxGasPrice(tx, callParams);
-    const auto max_priority_gas_price = ethMaxPriorityGasPrice(tx, callParams);
-    assert(max_gas_price >= base_fee);                // Required for valid tx.
-    assert(max_gas_price >= max_priority_gas_price);  // Required for valid tx.
-    const auto priority_gas_price = std::min(max_priority_gas_price, max_gas_price - base_fee);
-    const auto effective_gas_price = base_fee + priority_gas_price;
+    // The fee model (effective price, up-front withholding, post-execution
+    // settlement) is the chain policy's — see EthExecutionPolicy.h.
+    uint256 priority_gas_price;
+    const auto effective_gas_price = policy.effectiveGasPrice(ethMaxGasPrice(tx, callParams),
+        ethMaxPriorityGasPrice(tx, callParams), block, rev, priority_gas_price);
+    const auto tx_max_cost =
+        policy.withholdUpfront(sender_acc, tx, block, rev, gasLimit, effective_gas_price);
 
-    assert(effective_gas_price <= max_gas_price);  // Required for valid tx.
-    const auto tx_max_cost = uint256(static_cast<uint64_t>(gasLimit)) * effective_gas_price;
-
-    sender_acc.balance -= tx_max_cost;  // Modify sender balance after all checks.
-
-    if (txKind == 3)  // blob
-    {
-        // This uint64 * uint256 cannot overflow, because tx.blob_gas_used has limits enforced
-        // before this stage.
-        assert(block.blob_base_fee.has_value());
-        const auto blob_gas_used =
-            static_cast<uint64_t>(evm::GAS_PER_BLOB) * tx.blobVersionedHashes().size();
-        const auto blob_fee = bcos::u512(blob_gas_used) * bcos::u512(*block.blob_base_fee);
-        assert(blob_fee <= bcos::u512(std::numeric_limits<uint256>::max()));
-        assert(bcos::u512(sender_acc.balance) >= blob_fee);  // Required for valid tx.
-        sender_acc.balance -= uint256(blob_fee);
-    }
-
-    EthereumHost<Storage> host{
-        rev, vm, state, block, std::move(blockHashLookup), &tx, callParams, chainId};
+    EthereumHost<Storage, Policy> host{rev, vm, state, block, std::move(blockHashLookup),
+        ethTxContextOf(tx, callParams), callParams, chainId, policy};
 
     sender_acc.access_status = EVMC_ACCESS_WARM;  // Tx sender is always warm.
     if (to.has_value())
@@ -504,6 +380,16 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
         evmc::address a{};
         std::copy_n(entry.account.begin(), sizeof(evmc_address), a.bytes);
         host.access_account(a);
+        // A policy whose access_account does not materialize the account (OP's
+        // always-warm precompile overrides) must still have one for
+        // get_storage. No-op for L1: access_account already inserted it
+        // (Berlin+; access lists cannot exist earlier).
+        if (!entry.storageKeys.empty())
+        {
+            EthAccount fresh;
+            fresh.erase_if_empty = true;
+            state.get_or_insert(a, std::move(fresh));
+        }
         for (const auto& sk : entry.storageKeys)
         {
             evmc_bytes32 key{};
@@ -528,23 +414,11 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
 
     const auto result = host.call(message);
 
-    auto gas_used = gasLimit - result.gas_left;
+    const auto gas_used = policy.template settleFees<Storage>(state, block, rev,
+        txProps.min_gas_cost, gasLimit, result.gas_left, delegation_refund, result.gas_refund,
+        tx_max_cost, effective_gas_price, priority_gas_price, sender_acc);
 
-    const auto max_refund_quotient = rev >= EVMC_LONDON ? 5 : 2;
-    const auto refund_limit = gas_used / max_refund_quotient;
-    const auto refund = std::min(delegation_refund + result.gas_refund, refund_limit);
-    gas_used -= refund;
-    assert(gas_used > 0);
-
-    // EIP-7623: The gas used by the transaction must be at least the min_gas_cost.
-    gas_used = std::max(gas_used, txProps.min_gas_cost);
-
-    sender_acc.balance +=
-        tx_max_cost - uint256(static_cast<uint64_t>(gas_used)) * effective_gas_price;
-    state.touch(block.coinbase).balance +=
-        uint256(static_cast<uint64_t>(gas_used)) * priority_gas_price;
-
-    auto receipt = buildBcosReceipt(host, result, gas_used, rf, blockNumber);
+    auto receipt = policy.buildReceipt(host, result, gas_used, rf, blockNumber);
 
     co_await state.applyToStorage(rev);
     co_return receipt;

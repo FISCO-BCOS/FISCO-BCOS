@@ -152,7 +152,7 @@ BOOST_AUTO_TEST_CASE(loadsFullLadder)
     BOOST_CHECK_EQUAL(s.m_karstTime, 1000U);
 }
 
-// Without isthmus_time, configAt treats Isthmus as the zero-start baseline and never
+// Without isthmus_time, the fork ladder treats Isthmus as the zero-start baseline and never
 // consults the pre-Isthmus rungs — so scheduling one there is a silently-dead entry and
 // must fail fast. With isthmus_time set, the full ladder is live and the same keys load.
 BOOST_AUTO_TEST_CASE(preIsthmusKeysRequireIsthmusTime)

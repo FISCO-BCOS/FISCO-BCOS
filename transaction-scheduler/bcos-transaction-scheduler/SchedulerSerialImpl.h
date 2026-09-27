@@ -70,7 +70,7 @@ public:
     /// parameters live in the frame past the full-expression, so ctx must be an lvalue that
     /// outlives the co_await; there is deliberately NO default argument (a `= {}` default
     /// would materialise a temporary bound to the frame's reference — the same footgun
-    /// OpstackExecutor::createExecuteContext recorded and removed). BlockContext-less callers
+    /// OpEthExecutor::createExecuteContext recorded and removed). BlockContext-less callers
     /// use the 5-parameter overload below.
     template <class Storage, executor_v1::TransactionExecutor<Storage> TransactionExecutor>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage& storage,

@@ -26,7 +26,7 @@
  *            (OP chains short-circuit excessBlobGas to 0)
  *        Fork activation resolves through bcos::ledger::resolveOpFork
  *        (bcos-framework/ledger/OpForkSchedule.h) — the single ladder parser the
- *        executor's configAt also delegates to, with op-node's rollup.json semantics
+ *        executor's OpForkSpec also delegates to, with op-node's rollup.json semantics
  *        (IsX(ts) == ts >= forkTime, unscheduled rungs implied by later forks,
  *        isthmus_time unset = Isthmus zero-start baseline).
  * @date 2026/9/21
@@ -72,7 +72,7 @@ constexpr bcos::u256 c_opMaxGasLimit{bcos::u256(std::numeric_limits<int64_t>::ma
 /// Minimal OP chain configuration for header validation. forkSchedule is the genesis
 /// [op_fork_timestamps] schedule (bcos::ledger::OpForkSchedule); every fork gate below
 /// resolves through bcos::ledger::resolveOpFork — the SAME ladder parser the executor
-/// uses (bcos::evm::opstack::configAt delegates to it), so a schedule the executor
+/// uses (opstack-executor/OpForkSpec.h delegates to it), so a schedule the executor
 /// accepts can never be read differently here (an unset isthmus_time means "Isthmus is
 /// the zero-start baseline", not "Isthmus inactive"; an unscheduled intermediate rung
 /// is implied by a later scheduled fork).

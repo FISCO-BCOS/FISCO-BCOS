@@ -15,6 +15,7 @@
 /// ctest actually runs it.
 
 #include "ethereum-executor/EVMSupport.h"
+#include "ethereum-executor/EthExecutionPolicy.h"
 #include "ethereum-executor/EthereumHost.h"
 #include "ethereum-executor/EthereumState.h"
 #include "ethereum-executor/tests/TestMemoryStorage.h"
@@ -33,7 +34,9 @@
 // error. An explicit instantiation pulls every evmc::Host override into the
 // vtable plus the private non-virtuals (create / prepare_message / call), and
 // is cheaper than constructing an object (which needs an evmc::VM and a
-// protocol::Transaction).
+// protocol::Transaction). The default Policy argument makes this
+// EthereumHost<MutableStorage, EthL1Policy>, so every EthL1Policy hook call
+// site in the host is instantiated too.
 template class bcos::executor_v1::eth::EthereumHost<bcos::executor_v1::MutableStorage>;
 
 namespace
@@ -207,6 +210,29 @@ void testRecoverAuthorityRejectsBadSignature()
     CHECK(!eth_evm::recoverAuthority(auth).has_value());
 }
 
+void testL1PolicyPrecompileDispatch()
+{
+    // The default policy must forward precompile dispatch to the shared
+    // EVMPrecompiles table unchanged: 0x01 is a precompile everywhere, 0x0a
+    // (point_evaluation) only from Cancun, 0x0b (BLS12_G1ADD) only from Prague.
+    using eth::EthL1Policy;
+    CHECK(EthL1Policy::isPrecompile(
+        EVMC_CANCUN, addressFromHex("0x0000000000000000000000000000000000000001")));
+    CHECK(!EthL1Policy::isPrecompile(
+        EVMC_SHANGHAI, addressFromHex("0x000000000000000000000000000000000000000a")));
+    CHECK(EthL1Policy::isPrecompile(
+        EVMC_CANCUN, addressFromHex("0x000000000000000000000000000000000000000a")));
+    CHECK(!EthL1Policy::isPrecompile(
+        EVMC_CANCUN, addressFromHex("0x000000000000000000000000000000000000000b")));
+    CHECK(EthL1Policy::isPrecompile(
+        EVMC_PRAGUE, addressFromHex("0x000000000000000000000000000000000000000b")));
+    // The warm-account check and the dispatch check are the same predicate.
+    CHECK(EthL1Policy::isPrecompile(EVMC_CANCUN,
+               addressFromHex("0x0000000000000000000000000000000000000001")) ==
+          eth_evm::is_precompile(EVMC_CANCUN,
+              addressFromHex("0x0000000000000000000000000000000000000001")));
+}
+
 void testEthereumStateInstantiation()
 {
     // Compile/instantiation smoke: EthereumState over the in-memory storage.
@@ -354,6 +380,7 @@ int main()
     testBlobGasPrice();
     testRecoverAuthority();
     testRecoverAuthorityRejectsBadSignature();
+    testL1PolicyPrecompileDispatch();
     testEthereumStateInstantiation();
     testHasStorageIgnoresTombstones();
     testEthereumStateBinaryMode();

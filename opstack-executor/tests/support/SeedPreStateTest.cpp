@@ -5,7 +5,6 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <json/json.h>
 #include <boost/test/unit_test.hpp>
-#include <bcos-evm/eth/state/state_diff.hpp>
 #include <fstream>
 #include <sstream>
 
@@ -88,31 +87,32 @@ BOOST_AUTO_TEST_CASE(SeedAccountsAndVerify)
 
     opstack_test::seedPreState(multiLayerStorage, pre);
 
-    // Verify: fork a new view and read back through the Storage2State bridge
+    // Verify: fork a new view and read back through EVMAccount (the same access path the
+    // executors use).
     auto view = multiLayerStorage.fork();
-    bcos::evm::evmstate::Storage2State<ViewType> bridge(view);
     const auto addr = opstack_test::jsonAddress("0x7e5f4552091a69125d5dfcb7b8c2659029395bdf");
-    const auto acct = bridge.get_account(addr);
-    BOOST_REQUIRE(acct.has_value());
-    BOOST_CHECK(acct->balance == intx::from_string<intx::uint256>("0x56bc75e2d63100000"));
-    BOOST_CHECK_EQUAL(acct->nonce, 0u);
+    auto acct = bcos::executor_v1::eth::ethViewAccount(view, addr);
+    BOOST_REQUIRE(bcos::task::syncWait(acct.exists()));
+    BOOST_CHECK(bcos::task::syncWait(acct.balance()) ==
+                opstack_test::jsonU256("0x56bc75e2d63100000"));
+    BOOST_CHECK_EQUAL(bcos::task::syncWait(acct.nonce()).value_or(""), "0");
     const auto l1 = opstack_test::jsonAddress("0x4200000000000000000000000000000000000015");
-    const auto l1Acct = bridge.get_account(l1);
-    BOOST_REQUIRE(l1Acct.has_value());
+    auto l1Acct = bcos::executor_v1::eth::ethViewAccount(view, l1);
+    BOOST_REQUIRE(bcos::task::syncWait(l1Acct.exists()));
     // Positive anchors: a seeding no-op would still pass the zero-valued checks above —
     // pin the seeded nonce / storage-presence / empty code explicitly.
-    BOOST_CHECK_EQUAL(l1Acct->nonce, 1u);
-    BOOST_CHECK(l1Acct->has_storage);
-    BOOST_CHECK(!acct->has_storage);
-    BOOST_CHECK(bridge.get_account_code(l1).empty());
-    BOOST_CHECK(bridge.get_account_code(addr).empty());
+    BOOST_CHECK_EQUAL(bcos::task::syncWait(l1Acct.nonce()).value_or(""), "1");
     const auto slot = opstack_test::jsonBytes32(
         "0x0000000000000000000000000000000000000000000000000000000000000001");
-    BOOST_CHECK(bridge.get_storage(l1, slot) ==
+    BOOST_CHECK(bcos::task::syncWait(l1Acct.storage(slot)) ==
                 opstack_test::jsonBytes32(
                     "0x0000000000000000000000000000000000000000000000000000000000001234"));
-    BOOST_CHECK_MESSAGE(
-        !bridge.poisoned(), "seeding poisoned: " << std::string(bridge.firstError()));
+    // The EOA has no storage rows: any slot reads back as zero.
+    BOOST_CHECK(bcos::task::syncWait(acct.storage(slot)) == evmc::bytes32{});
+    auto const l1Code = bcos::task::syncWait(l1Acct.code());
+    BOOST_CHECK(!l1Code.has_value() || l1Code->get().empty());
+    auto const code = bcos::task::syncWait(acct.code());
+    BOOST_CHECK(!code.has_value() || code->get().empty());
 }
 
 BOOST_AUTO_TEST_CASE(RejectsOddLengthHex)

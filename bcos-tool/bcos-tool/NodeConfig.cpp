@@ -634,7 +634,8 @@ void NodeConfig::validateL2Invariants()
                 "keys, so an empty one reads as absent"));
     }
     // On the OP lane the EVM revision is a FUNCTION of the fork schedule: OpScheduler feeds
-    // the executor configAt(schedule, blockTime).rev, so a configured executor.evm_revision is
+    // the executor the fork spec resolved from (schedule, blockTime), so a configured
+    // executor.evm_revision is
     // never read for execution and can only disagree with what the chain actually runs (a
     // prague pin on a Karst block, say). Reject the pair instead of carrying a value that
     // lies.
@@ -1726,8 +1727,8 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
         prevTime = time;
         hasPrev = true;
     }
-    // Scheduling a pre-Isthmus fork without isthmus_time is silently meaningless: configAt
-    // treats an unset isthmus_time as "Isthmus is the zero-start baseline" and never
+    // Scheduling a pre-Isthmus fork without isthmus_time is silently meaningless: the fork
+    // ladder treats an unset isthmus_time as "Isthmus is the zero-start baseline" and never
     // consults the lower rungs. Fail fast instead of accepting a schedule nothing reads.
     if (schedule.m_isthmusTime == kNever)
     {

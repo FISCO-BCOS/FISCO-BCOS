@@ -50,6 +50,7 @@
 #include "bcos-transaction-scheduler/SchedulerParallelImpl.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
 #include "engine/bcos-engine/EngineServiceImpl.h"
+#include "ethereum-executor/EthExecutionPolicy.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include "ethereum-executor/EthereumHost.h"
 #include <evmone/evmone.h>
@@ -882,8 +883,10 @@ BOOST_AUTO_TEST_CASE(blockHashHostNoexceptBoundary)
         eth::BlockHashLookup throwingLookup = [](int64_t, int64_t) -> evmc::bytes32 {
             throw std::runtime_error("simulated storage failure");
         };
+        const eth::EthL1Policy policy{};
         eth::EthereumHost<EEMutableStorage> host{EVMC_SHANGHAI, vm, state, block,
-            std::move(throwingLookup), tx.get(), callParams, 1};
+            std::move(throwingLookup), eth::ethTxContextOf(*tx, callParams), callParams, 1,
+            policy};
         auto result = vm.execute(host, EVMC_SHANGHAI, msg, code, sizeof(code));
         BOOST_CHECK_EQUAL(result.status_code, EVMC_SUCCESS);
     }
@@ -894,8 +897,9 @@ BOOST_AUTO_TEST_CASE(blockHashHostNoexceptBoundary)
         eth::BlockHashLookup zeroLookup = [](int64_t, int64_t) -> evmc::bytes32 {
             return evmc::bytes32{};
         };
+        const eth::EthL1Policy policy{};
         eth::EthereumHost<EEMutableStorage> host{EVMC_SHANGHAI, vm, state, block,
-            std::move(zeroLookup), tx.get(), callParams, 1};
+            std::move(zeroLookup), eth::ethTxContextOf(*tx, callParams), callParams, 1, policy};
         auto result = vm.execute(host, EVMC_SHANGHAI, msg, code, sizeof(code));
         BOOST_CHECK_EQUAL(result.status_code, EVMC_SUCCESS);
     }

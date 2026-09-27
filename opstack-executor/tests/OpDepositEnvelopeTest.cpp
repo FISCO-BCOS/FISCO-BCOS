@@ -1,12 +1,12 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
 
-// OpDepositEnvelopeTest — decodeDepositEnvelope is consensus-grade strict decoding with ~15
+// OpDepositEnvelopeTest — decodeOpDepositEnvelope is consensus-grade strict decoding with ~15
 // rejection branches: one negative case per fail branch (exact-type BOOST_CHECK_THROW on
-// OpTxValidationFailed) plus positive anchors decoding valid envelopes field-by-field.
+// OpEthDepositValidationFailed) plus positive anchors decoding valid envelopes field-by-field.
 
-#include <opstack-executor/OpDepositEncode.h>
-#include <opstack-executor/OpstackExecutor.h>
+#include <opstack-executor/OpEthDeposit.h>       // DepositTx / decodeOpDepositEnvelope
+#include <opstack-executor/OpEthL1Attributes.h>  // encodeOpEthDepositEnvelope
 
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPEncode.h>
@@ -17,8 +17,8 @@
 #include <cstdint>
 #include <optional>
 
-using bcos::executor_v1::opstack::decodeDepositEnvelope;
-using bcos::executor_v1::opstack::OpTxValidationFailed;
+using bcos::executor_v1::opstack::decodeOpDepositEnvelope;
+using bcos::executor_v1::opstack::OpEthDepositValidationFailed;
 namespace rlp = bcos::codec::rlp;
 
 namespace
@@ -104,8 +104,8 @@ bcos::bytes validEnvelope(Fields const& f = {})
 
 void expectReject(bcos::bytes const& env)
 {
-    BOOST_CHECK_THROW((void)decodeDepositEnvelope(bcos::bytesConstRef{env.data(), env.size()}),
-        OpTxValidationFailed);
+    BOOST_CHECK_THROW((void)decodeOpDepositEnvelope(bcos::bytesConstRef{env.data(), env.size()}),
+        OpEthDepositValidationFailed);
 }
 }  // namespace
 
@@ -115,10 +115,10 @@ BOOST_AUTO_TEST_CASE(ValidEnvelopeDecodesFieldByField)
 {
     Fields f;
     auto const env = validEnvelope(f);
-    auto dep = decodeDepositEnvelope(bcos::bytesConstRef{env.data(), env.size()});
+    auto dep = decodeOpDepositEnvelope(bcos::bytesConstRef{env.data(), env.size()});
 
     for (size_t i = 0; i < 32; ++i)
-        BOOST_CHECK_EQUAL(dep.source_hash.bytes[i], 0x11);
+        BOOST_CHECK_EQUAL(dep.sourceHash.bytes[i], 0x11);
     BOOST_REQUIRE(dep.to.has_value());
     for (size_t i = 0; i < 20; ++i)
     {
@@ -126,10 +126,10 @@ BOOST_AUTO_TEST_CASE(ValidEnvelopeDecodesFieldByField)
         BOOST_CHECK_EQUAL(dep.to->bytes[i], 0x33);
     }
     BOOST_REQUIRE(dep.mint.has_value());
-    BOOST_CHECK(*dep.mint == intx::uint256{0x1234});
-    BOOST_CHECK(dep.value == intx::uint256{1});
-    BOOST_CHECK_EQUAL(dep.gas_limit, 1000000);
-    BOOST_CHECK(dep.is_system_tx);
+    BOOST_CHECK(*dep.mint == bcos::u256{0x1234});
+    BOOST_CHECK(dep.value == bcos::u256{1});
+    BOOST_CHECK_EQUAL(dep.gasLimit, 1000000);
+    BOOST_CHECK(dep.isSystemTx);
     BOOST_REQUIRE_EQUAL(dep.data.size(), 2u);
     BOOST_CHECK_EQUAL(dep.data[0], 0xde);
     BOOST_CHECK_EQUAL(dep.data[1], 0xad);
@@ -147,13 +147,13 @@ BOOST_AUTO_TEST_CASE(BareByteIntegersDecode)
     f.gas = 21;
     f.isSystemTx = 1;
     auto const env = validEnvelope(f);
-    auto dep = decodeDepositEnvelope(bcos::bytesConstRef{env.data(), env.size()});
+    auto dep = decodeOpDepositEnvelope(bcos::bytesConstRef{env.data(), env.size()});
 
     BOOST_REQUIRE(dep.mint.has_value());
-    BOOST_CHECK(*dep.mint == intx::uint256{0x7f});
-    BOOST_CHECK(dep.value == intx::uint256{1});
-    BOOST_CHECK_EQUAL(dep.gas_limit, 21);
-    BOOST_CHECK(dep.is_system_tx);
+    BOOST_CHECK(*dep.mint == bcos::u256{0x7f});
+    BOOST_CHECK(dep.value == bcos::u256{1});
+    BOOST_CHECK_EQUAL(dep.gasLimit, 21);
+    BOOST_CHECK(dep.isSystemTx);
 }
 
 BOOST_AUTO_TEST_CASE(ValidCreationEnvelopeEmptyMintZeroValue)
@@ -166,13 +166,13 @@ BOOST_AUTO_TEST_CASE(ValidCreationEnvelopeEmptyMintZeroValue)
     f.isSystemTx = 0;
     f.data = {};
     auto const env = validEnvelope(f);
-    auto dep = decodeDepositEnvelope(bcos::bytesConstRef{env.data(), env.size()});
+    auto dep = decodeOpDepositEnvelope(bcos::bytesConstRef{env.data(), env.size()});
 
     BOOST_CHECK(!dep.to.has_value());
     BOOST_CHECK(!dep.mint.has_value());
-    BOOST_CHECK(dep.value == intx::uint256{0});
-    BOOST_CHECK_EQUAL(dep.gas_limit, 21000);
-    BOOST_CHECK(!dep.is_system_tx);
+    BOOST_CHECK(dep.value == bcos::u256{0});
+    BOOST_CHECK_EQUAL(dep.gasLimit, 21000);
+    BOOST_CHECK(!dep.isSystemTx);
     BOOST_CHECK(dep.data.empty());
 }
 
@@ -405,23 +405,23 @@ BOOST_AUTO_TEST_CASE(RejectsNonCanonicalOrOverWideIntegers)
     }
 }
 
-// encodeDepositEnvelope must produce the canonical op-geth 0x7e deposit envelope bytes —
+// encodeOpEthDepositEnvelope must produce the canonical op-geth 0x7e deposit envelope bytes —
 // the deposit tx root commits these bytes, so the encoder is consensus-critical. The golden
-// vector pins the exact output; the round-trip through decodeDepositEnvelope proves the
+// vector pins the exact output; the round-trip through decodeOpDepositEnvelope proves the
 // pair are inverses on every field.
 BOOST_AUTO_TEST_CASE(EncodeDepositEnvelopeGolden)
 {
-    bcos::evm::opstack::DepositTx dep{};
-    std::fill(std::begin(dep.source_hash.bytes), std::end(dep.source_hash.bytes), 0x11);
+    bcos::executor_v1::opstack::DepositTx dep{};
+    std::fill(std::begin(dep.sourceHash.bytes), std::end(dep.sourceHash.bytes), 0x11);
     std::fill(std::begin(dep.from.bytes), std::end(dep.from.bytes), 0x22);
     dep.to = std::nullopt;    // contract creation
     dep.mint = std::nullopt;  // no mint
     dep.value = 0;
-    dep.gas_limit = 100000;
-    dep.is_system_tx = false;
+    dep.gasLimit = 100000;
+    dep.isSystemTx = false;
     // data stays empty
 
-    auto const encoded = bcos::evm::opstack::encodeDepositEnvelope(dep);
+    auto const encoded = bcos::executor_v1::opstack::encodeOpEthDepositEnvelope(dep);
     // 7e || f8 3f (long-form list header, 63-byte payload) || a0(source_hash 0x11×32)
     // || 94(from 0x22×20) || 80(to) 80(mint) 80(value) || 83 01 86 a0(gas 100000) || 80 80.
     BOOST_CHECK_EQUAL(bcos::toHex(encoded),
@@ -429,15 +429,15 @@ BOOST_AUTO_TEST_CASE(EncodeDepositEnvelopeGolden)
         "2222222222222222222222222222222222222222808080830186a08080");
 
     // Round-trip: the decoder must reproduce every field.
-    auto const decoded = decodeDepositEnvelope(bcos::bytesConstRef{encoded.data(), encoded.size()});
+    auto const decoded = decodeOpDepositEnvelope(bcos::bytesConstRef{encoded.data(), encoded.size()});
     BOOST_REQUIRE(!decoded.to.has_value());
     BOOST_REQUIRE(!decoded.mint.has_value());
-    BOOST_CHECK(decoded.value == intx::uint256{0});
-    BOOST_CHECK_EQUAL(decoded.gas_limit, 100000);
-    BOOST_CHECK(!decoded.is_system_tx);
+    BOOST_CHECK(decoded.value == bcos::u256{0});
+    BOOST_CHECK_EQUAL(decoded.gasLimit, 100000);
+    BOOST_CHECK(!decoded.isSystemTx);
     BOOST_REQUIRE(decoded.data.empty());
     for (size_t i = 0; i < 32; ++i)
-        BOOST_CHECK_EQUAL(decoded.source_hash.bytes[i], 0x11);
+        BOOST_CHECK_EQUAL(decoded.sourceHash.bytes[i], 0x11);
     for (size_t i = 0; i < 20; ++i)
         BOOST_CHECK_EQUAL(decoded.from.bytes[i], 0x22);
 }

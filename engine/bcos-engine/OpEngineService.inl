@@ -21,11 +21,11 @@
 
 // This is the DEFINITION half of the split: OpEngineService.h is declarations-only.
 // Including this.inl is the opt-in instantiation point — members use
-// the canonical block hash (bcos-rlp-protocol) and bcos::evm::opstack::estimatedDaSize.
+// the canonical block hash (bcos-rlp-protocol) and the OP lane's estimatedDaSize.
 // engine links rlp-protocol PUBLIC so installed consumers inherit the include dirs;
-// instantiators still need to link bcos-evm-opstack.
+// instantiators still need to link opstack-executor.
 #include "OpEngineService.h"
-#include <bcos-evm/opstack/RollupCost.h>
+#include <opstack-executor/OpRollupCost.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
 
 #include <iterator>
@@ -42,7 +42,7 @@ namespace detail
 /// a bcos::bytes.
 inline auto estimatedDaBytes(bcos::bytes const& env)
 {
-    return bcos::evm::opstack::estimatedDaSize(evmc::bytes_view(env.data(), env.size()));
+    return bcos::executor_v1::opstack::estimatedDaSize(evmc::bytes_view(env.data(), env.size()));
 }
 
 /// release ExecutionPayload keeps a single carrier: `transactions[i].raw`.

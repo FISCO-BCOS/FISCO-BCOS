@@ -1,17 +1,21 @@
 #pragma once
-// In-house JSON(pre)->StateDiff seeding. This branch has no evmone
-// test/utils/test_state.hpp; here we
-// parse the vector pre with jsoncpp and build StateDiff directly, applying it via
-// applyDiff(seeding=true).
+// In-house JSON(pre)->ledger seeding on the bcos-evm-free lane: the vector pre
+// (jsoncpp object, key=address hex, value={balance,nonce,code,storage}) is written
+// account-by-account through the same EVMAccount path the Ethereum/OP executors use
+// (eth::ethViewAccount — the eth-lane table-name rule), so a seeded view is row-for-row
+// what execution reads. Nonce/balance zero values are written as explicit "0" rows; the
+// MPT build reads a missing row as the same Yellow Paper default, so the stateRoot is
+// unaffected. Empty code leaves NO code rows (a missing CODE_HASH reads as
+// emptyCodeHash()).
+#include <bcos-crypto/hash/Keccak256.h>  // keccak256Hash
+#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <ethereum-executor/EthereumState.h>  // eth::ethViewAccount
 #include <json/json.h>
-#include <bcos-evm/adapter/Storage2State.h>
 #include <algorithm>  // std::copy
-#include <bcos-evm/eth/state/state_diff.hpp>
-#include <cstdint>  // std::uint64_t
+#include <cstdint>    // std::uint64_t
 #include <evmc/evmc.hpp>
-#include <intx/intx.hpp>
 #include <iterator>  // std::begin/std::end
 #include <limits>
 #include <stdexcept>
@@ -59,74 +63,72 @@ inline evmc::bytes jsonBytes(std::string_view hex)
     return {bytes.begin(), bytes.end()};
 }
 
-inline intx::uint256 jsonU256(std::string_view hex)
+inline bcos::u256 jsonU256(std::string_view hex)
 {
-    // vendored intx::from_string takes const char*/std::string (no base param) and
-    // auto-detects the 0x prefix (base-0 semantics).
-    return intx::from_string<intx::uint256>(std::string(hex));
+    // bcos::u256's string ctor auto-detects the 0x prefix (base-0 semantics).
+    return bcos::u256(std::string(hex));
 }
 
 inline uint64_t jsonU64(std::string_view hex)
 {
     // Bounds-checked: a vector nonce above uint64_t would otherwise silently truncate through
     // the narrowing cast.
-    const auto v = intx::from_string<intx::uint256>(std::string(hex));
+    const auto v = jsonU256(hex);
     if (v > std::numeric_limits<uint64_t>::max())
         throw std::overflow_error("jsonU64: value exceeds uint64_t: " + std::string(hex));
     return static_cast<uint64_t>(v);
 }
 
-/// Seeds the vector pre (jsoncpp object, key=address hex, value={balance,nonce,code,storage})
-/// into MLS: fork -> Storage2State::applyDiff(seeding=true) -> mergeView. seeding=true exempts
-/// the EIP-161 empty-account guard (Storage2State::applyDiff contract).
-template <class MLS>
-void seedPreState(MLS& multiLayerStorage, Json::Value const& pre)
+/// Writes the vector pre (jsoncpp object, key=address hex, value={balance,nonce,code,storage})
+/// into an already-mutable execution view via EVMAccount. Shared by seedPreState (backend
+/// seeding) and the dual-run/golden harnesses, which need the pre-state INSIDE the scanned
+/// delta layer (the incremental MPT build scans the top mutable layer only).
+template <class View>
+void seedPreStateIntoView(View& view, Json::Value const& pre)
 {
-    evmone::state::StateDiff diff;
-    diff.modified_accounts.reserve(pre.size());
     for (auto const& addrKey : pre.getMemberNames())
     {
         auto const& acct = pre[addrKey];
-        evmone::state::StateDiff::Entry entry;
-        entry.addr = jsonAddress(addrKey);
-        entry.nonce = jsonU64(acct["nonce"].asString());
-        entry.balance = jsonU256(acct["balance"].asString());
-        // Empty code ("0x" -> empty bytes) stays nullopt: a has_value empty vector would write
-        // extra CODE_BINARY/ABI rows (stateRoot-unobservable but needless).
+        auto account = bcos::executor_v1::eth::ethViewAccount(view, jsonAddress(addrKey));
+        bcos::task::syncWait(account.create());
+        bcos::task::syncWait(account.setNonce(std::to_string(jsonU64(acct["nonce"].asString()))));
+        bcos::task::syncWait(account.setBalance(jsonU256(acct["balance"].asString())));
+        // Empty code ("0x" -> empty bytes) leaves no code rows at all: a missing CODE_HASH
+        // reads as emptyCodeHash() everywhere downstream.
         if (acct.isMember("code"))
         {
             auto const codeStr = acct["code"].asString();
             if (!codeStr.empty() && codeStr != "0x")
             {
-                entry.code = jsonBytes(codeStr);
+                auto const codeEvmc = jsonBytes(codeStr);
+                bcos::bytes code{codeEvmc.begin(), codeEvmc.end()};
+                bcos::task::syncWait(account.setCode(
+                    code, {}, bcos::crypto::keccak256Hash(bcos::bytesConstRef{
+                                  code.data(), code.size()})));
             }
         }
         if (acct.isMember("storage"))
         {
             for (auto const& key : acct["storage"].getMemberNames())
             {
-                entry.modified_storage.emplace_back(
-                    jsonBytes32(key), jsonBytes32(acct["storage"][key].asString()));
+                bcos::task::syncWait(account.setStorage(
+                    jsonBytes32(key), jsonBytes32(acct["storage"][key].asString())));
             }
         }
-        diff.modified_accounts.push_back(std::move(entry));
     }
+}
 
+/// Seeds the vector pre into MLS: fork -> seedPreStateIntoView -> mergeView.
+/// Precondition: the MLS deque must be empty here — mergeView merges the pushed layer only in
+/// that case (MultiLayerStorage's own WARNING). That holds for this helper's use (fresh MLS,
+/// single seed), so the seed lands in the backend immediately and the backend assertions can
+/// pass.
+template <class MLS>
+void seedPreState(MLS& multiLayerStorage, Json::Value const& pre)
+{
     auto view = multiLayerStorage.fork();
     view.newMutable();
-    {
-        bcos::evm::evmstate::Storage2State<typename MLS::ViewType> bridge(view);
-        bridge.applyDiff(diff, /*seeding=*/true);
-        if (bridge.poisoned())
-        {
-            throw std::runtime_error(
-                "seedPreState: ledger poisoned: " + std::string(bridge.firstError()));
-        }
-    }
-    // Precondition: the MLS deque must be empty here — mergeView merges the pushed layer only in
-    // that case (MultiLayerStorage's own WARNING). That holds for this helper's use (fresh MLS,
-    // single seed), so the seed lands in the backend immediately and the backend assertions can
-    // pass.
+    seedPreStateIntoView(view, pre);
     bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
 }
 

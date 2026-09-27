@@ -715,7 +715,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         uint64_t const opChainId = static_cast<uint64_t>(*parsedChainId);
         auto opScheduler =
             std::make_shared<bcos::evm::engine::OpSchedulerSeam<GlobalStateStorage::ViewType>>(
-                *opForkSchedule, bcos::evm::opstack::L1BlockInfo{});
+                *opForkSchedule, bcos::executor_v1::opstack::OpEthL1BlockInfo{});
         auto opDelegate =
             std::make_shared<bcos::executor_v1::opstack::OpScheduler<GlobalStateStorage>>(
                 m_protocolInitializer->blockFactory()->receiptFactory(),
@@ -800,7 +800,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     //
     // The OP lane is outside this probe: NodeConfig rejects an explicit revision there and
     // Ledger::buildGenesisBlock therefore writes no evmc_revision row, because OpScheduler
-    // derives it per block from [op_fork_timestamps] (configAt(schedule, blockTime).rev). Its
+    // derives it per block from [op_fork_timestamps] (via opstack-executor/OpForkSpec.h). Its
     // absence is the expected shape, not the runtime-switch hazard this guard targets.
     if (m_executorVersion >= scheduler_v1::ETHEREUM_EXECUTOR_VERSION &&
         m_executorVersion < scheduler_v1::OPSTACK_EXECUTOR_VERSION &&

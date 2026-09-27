@@ -37,7 +37,7 @@
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
-#include <opstack-executor/tests/OpSchedulerSeamTestHelpers.h>
+#include <opstack-executor/OpEthL1Attributes.h>  // synthesizeOpEthL1AttributesDeposit
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <limits>
@@ -323,7 +323,8 @@ BOOST_AUTO_TEST_CASE(payload_shape_version_v4_is_payload_v3)
 
 BOOST_AUTO_TEST_CASE(op_envelope_to_tars_rejects_rlp_leftover)
 {
-    auto env = bcos::evm::engine::testutil::synthesizeL1AttributesEnvelope(false);
+    auto env = bcos::executor_v1::opstack::synthesizeOpEthL1AttributesDeposit(
+        bcos::executor_v1::opstack::OpEthL1BlockInfo{}, false);
     auto hash = crypto::keccak256Hash(bcos::ref(env));
     BOOST_REQUIRE(
         engine_common::op::opEnvelopeToTars(env, hash, /*allowDeposit=*/true).has_value());

@@ -4,19 +4,20 @@
 
 // Engine-facing OP seam. executeBlock exists only for the scheduler concept check.
 
-#include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
+#include <bcos-framework/ledger/OpForkSchedule.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <opstack-executor/OpBlockExecute.h>
-#include <opstack-executor/OpCommitments.h>
-#include <opstack-executor/OpCommon.h>
-#include <opstack-executor/OpDepositEncode.h>
+#include <opstack-executor/OpCommon.h>  // OpConsensusError / OpStorageError
+#include <opstack-executor/OpEthCommitments.h>  // OpEthExecuteBlockResult / opEthCommitmentsOf / opEthMismatchedFieldOf
+#include <opstack-executor/OpEthL1Attributes.h>  // OpEthL1BlockInfo / synthesizeOpEthL1AttributesEnvelope
+#include <opstack-executor/OpForkSpec.h>  // OpFork / opForkTimestampSec
 #include <cstdint>
 #include <optional>
 #include <range/v3/range/concepts.hpp>
@@ -33,41 +34,46 @@ template <class Storage>
 class OpSchedulerSeam
 {
 public:
+    using OpEthL1BlockInfo = bcos::executor_v1::opstack::OpEthL1BlockInfo;
+
     explicit OpSchedulerSeam(
-        bcos::ledger::OpForkSchedule forkSchedule, bcos::evm::opstack::L1BlockInfo l1BlockInfo)
+        bcos::ledger::OpForkSchedule forkSchedule, OpEthL1BlockInfo l1BlockInfo)
       : m_forkSchedule(forkSchedule), m_l1BlockInfo(std::move(l1BlockInfo))
     {}
 
     using BlockEnv = bcos::protocol::BlockHeader;
-    using ExecuteResult = OpExecuteBlockResult;
+    using ExecuteResult = bcos::executor_v1::opstack::OpEthExecuteBlockResult;
     using ConsensusError = OpConsensusError;
     using StorageError = OpStorageError;
     static constexpr std::string_view c_ethRawTxTable = SYS_ETH_HASH_2_RAWTX;
-    static OpBlockCommitments commitmentsOf(const OpExecuteBlockResult& result)
+    static bcos::executor_v1::opstack::OpEthBlockCommitments commitmentsOf(
+        const ExecuteResult& result)
     {
-        return bcos::evm::engine::commitmentsOf(
+        return bcos::executor_v1::opstack::opEthCommitmentsOf(
             result.seal, result.stateRoot, result.gasUsed, result.txRoot);
     }
 
     /// Announced-side projection for the six-field comparison.
-    static bcos::evm::engine::OpBlockCommitments announcedCommitmentsOf(
+    static bcos::executor_v1::opstack::OpEthBlockCommitments announcedOpEthCommitmentsOf(
         const bcos::engine::ExecutionPayload& payload, const bcos::h256& transactionsRoot,
         const bcos::protocol::BlockHeader& ethHeader)
     {
-        return bcos::evm::engine::announcedCommitmentsOf(payload, transactionsRoot, ethHeader);
+        return bcos::executor_v1::opstack::announcedOpEthCommitmentsOf(
+            payload, transactionsRoot, ethHeader);
     }
 
     /// First mismatching field name, or nullopt.
-    static std::optional<std::string> mismatchedFieldOf(
-        const OpBlockCommitments& computed, const OpBlockCommitments& announced)
+    static std::optional<std::string> opEthMismatchedFieldOf(
+        const bcos::executor_v1::opstack::OpEthBlockCommitments& computed,
+        const bcos::executor_v1::opstack::OpEthBlockCommitments& announced)
     {
-        return bcos::evm::engine::mismatchedFieldOf(computed, announced);
+        return bcos::executor_v1::opstack::opEthMismatchedFieldOf(computed, announced);
     }
 
     /// transactionsRoot over raw EIP-2718 envelopes (needed before execution).
     static bcos::h256 computeTxRoot(::ranges::input_range auto const& rawTxBytes)
     {
-        return computeOpTxRoot(rawTxBytes);
+        return bcos::executor_v1::opstack::computeOpEthTransactionsRoot(rawTxBytes);
     }
 
     /// Jovian semantics or later for a block whose internal (millisecond) timestamp is
@@ -75,13 +81,13 @@ public:
     /// ×100 formula and extraData is the 17-byte Jovian shape; Isthmus keeps blobGasUsed 0.
     /// Derived from the fork the schedule resolves rather than a single flag: Karst is a
     /// superset of Jovian and leaves the L1-attributes / DA-footprint shape unchanged, and
-    /// OpFork is declared in fork order (OpForkSchedule.h), so `>= Jovian` is the predicate.
-    /// The CALLER picks which block's timestamp to pass: op-geth keys base fee on the parent
-    /// (eip1559.go CalcBaseFee), op-node keys the L1-attributes layout and the payload
-    /// attributes on the child (derive/l1_block_info.go, derive/attributes.go).
+    /// OpFork is declared in fork order (ledger/OpForkSchedule.h), so `>= Jovian` is the
+    /// predicate. The CALLER picks which block's timestamp to pass: op-geth keys base fee on
+    /// the parent (eip1559.go CalcBaseFee), op-node keys the L1-attributes layout and the
+    /// payload attributes on the child (derive/l1_block_info.go, derive/attributes.go).
     [[nodiscard]] bool isJovianActive(int64_t internalTimestampMs) const noexcept
     {
-        return forkAt(internalTimestampMs) >= bcos::evm::opstack::OpFork::Jovian;
+        return forkAt(internalTimestampMs) >= bcos::ledger::OpFork::Jovian;
     }
 
     /// Karst semantics for a block whose internal (millisecond) timestamp is
@@ -89,7 +95,7 @@ public:
     /// the engine's getPayload method-version gate (V5 is Karst-only, V4 is pre-Karst).
     [[nodiscard]] bool isKarstActive(int64_t internalTimestampMs) const noexcept
     {
-        return forkAt(internalTimestampMs) >= bcos::evm::opstack::OpFork::Karst;
+        return forkAt(internalTimestampMs) >= bcos::ledger::OpFork::Karst;
     }
 
     /// Synthesize the L1-attributes deposit envelope from the configured L1 info.
@@ -110,23 +116,8 @@ public:
     [[nodiscard]] bcos::bytes synthesizeL1AttributesEnvelope(
         int64_t l2InternalTimestampMs, int64_t parentInternalTimestampMs) const
     {
-        if (bcos::evm::opstack::isUnsetL1BlockInfo(m_l1BlockInfo))
-        {
-            throw std::invalid_argument(
-                "OpSchedulerSeam: refuse to synthesize L1-attributes from an unset "
-                "L1BlockInfo (number, time, and blockHash are all zero)");
-        }
-        if (bcos::evm::opstack::isUnsetSystemConfig(m_l1BlockInfo))
-        {
-            throw std::invalid_argument(
-                "OpSchedulerSeam: refuse to synthesize L1-attributes with an unset "
-                "SystemConfig (baseFeeScalar and batcherHash must be non-zero)");
-        }
-        // Jovian layout only once the PARENT is Jovian too — on the activation block itself
-        // the child is Jovian but the parent is not, and op-node still emits Isthmus there.
-        const bool jovianLayout =
-            isJovianActive(l2InternalTimestampMs) && isJovianActive(parentInternalTimestampMs);
-        return bcos::evm::opstack::synthesizeL1AttributesDeposit(m_l1BlockInfo, jovianLayout);
+        return bcos::executor_v1::opstack::synthesizeOpEthL1AttributesEnvelope(
+            m_forkSchedule, m_l1BlockInfo, l2InternalTimestampMs, parentInternalTimestampMs);
     }
 
     OpSchedulerSeam(const OpSchedulerSeam&) = delete;
@@ -148,15 +139,14 @@ public:
 
 private:
     /// Single conversion point from internal milliseconds to the schedule's seconds.
-    [[nodiscard]] bcos::evm::opstack::OpFork forkAt(int64_t internalTimestampMs) const noexcept
+    [[nodiscard]] bcos::ledger::OpFork forkAt(int64_t internalTimestampMs) const noexcept
     {
-        return bcos::evm::opstack::configAt(
-            m_forkSchedule, bcos::evm::engine::detail::forkTimestampSec(internalTimestampMs))
-            .fork;
+        return bcos::ledger::resolveOpFork(m_forkSchedule,
+            bcos::executor_v1::opstack::opForkTimestampSec(internalTimestampMs));
     }
 
     bcos::ledger::OpForkSchedule m_forkSchedule;
-    bcos::evm::opstack::L1BlockInfo m_l1BlockInfo;
+    OpEthL1BlockInfo m_l1BlockInfo;
 };
 
 }  // namespace bcos::evm::engine

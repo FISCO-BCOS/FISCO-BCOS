@@ -131,8 +131,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         # (`set_source_files_properties/set_target_properties ... COMPILE_OPTIONS
         # -Wno-missing-field-initializers`) is reserved for vendored upstream code that cannot
         # carry those initializers. bcos-evm/CMakeLists.txt applies it that way today; the OP
-        # executor modules (bcos-evm-opstack / opstack-executor) will add it where their
-        # upstream-derived code needs it when they land (part 3+).
+        # executor module (opstack-executor) adds it where its upstream-derived code needs it.
 
         # gcc bug, refer to https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105595
         add_compile_options(-Wno-subobject-linkage)

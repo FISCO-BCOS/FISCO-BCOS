@@ -242,7 +242,7 @@ void AirNodeInitializer::init(bcos::initializer::Params const& _params)
     }
 
     // OP-Stack EL self-sync: same shape, one lane up. The verifier (OpBlockVerifier) builds
-    // its own serial scheduler + OpstackExecutor internally, so the driver needs only the
+    // its own OpScheduler + OpEthExecutor internally, so the driver needs only the
     // shared ledger / block factory / global state storage / commit observer.
     if (nodeConfig->opStackELModeEnabled())
     {

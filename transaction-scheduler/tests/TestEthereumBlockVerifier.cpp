@@ -1202,7 +1202,7 @@ BOOST_FIXTURE_TEST_CASE(cancunBeaconRootsMissingCodeSkipsSilently, EEBVFixture)
 // REAL EIP-7002/7251 runtime code against seeded queue state, so the system call writes
 // zeros back over non-zero parent slots (count reset, queue head/tail cleared when the
 // queue drains, excess decaying to zero). That drives the zero-value write-back path
-// (Storage2State::applyModifiedEntry -> storage2::removeOne -> DELETED tombstone ->
+// (zero-value write -> storage2::removeOne -> DELETED tombstone ->
 // incremental MPT build) end to end through the real system contracts. The state root
 // is cross-checked against independent manual slot applications, the committed state is
 // checked for the deleted slots, and the returned EIP-7685 requests are asserted

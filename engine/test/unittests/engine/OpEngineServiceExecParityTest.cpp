@@ -30,8 +30,6 @@
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-evm/adapter/StateRootCompute.h>  // trimmedBigEndian
-#include <bcos-evm/eth/state/hash_utils.hpp>    // evmone::keccak256
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/TransactionFactory.h>
@@ -42,6 +40,7 @@
 #include <bcos-ledger/Ledger.h>
 #include <bcos-ledger/mpt/HashBuilder.h>   // computeTrieRoot / flushTrieNodes
 #include <bcos-ledger/mpt/MPTBuilder.h>    // TrieBuildResult
+#include <bcos-ledger/mpt/StateRoots.h>    // computeMptStateDelta / emptyRootHash
 #include <bcos-ledger/mpt/ViewNodeStorage.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
@@ -212,77 +211,44 @@ void registerVerifiedBlock(MLS& multiLayerStorage, bcos::h256 const& blockHash, 
     bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
 }
 
-/// Test-local mirrors of the opstack-executor helpers (OpSchedulerTest.cpp): build the full
-/// Ethereum MPT over the seeded pre-state flat rows and persist every node as "/mpt/" rows —
+/// Test-local mirror of the opstack-executor genesis helper (OpSchedulerTest.cpp): build the
+/// full Ethereum MPT over the seeded pre-state flat rows via the production MPT builder
+/// (computeMptStateDelta, parent = the empty root) and persist every node as "/mpt/" rows —
 /// the mirror of Ledger::buildGenesisBlock's Ethereum-lane genesis import. The incremental
 /// MPT build at the golden block dereferences the parent root's persisted nodes
 /// (OpScheduler::execute), so the golden parent header must carry THIS root and the rows
 /// must exist, or execution fails with "no persisted trie nodes".
-bcos::ledger::mpt::TrieBuildResult collectAccountStorageTrie(
-    const std::map<evmc::bytes32, evmc::bytes32>& storage)
-{
-    std::map<bcos::h256, bcos::bytes> entries;
-    for (auto const& [key, value] : storage)
-    {
-        if (evmc::is_zero(value))
-            continue;
-        bcos::bytes leaf;
-        bcos::codec::rlp::encode(leaf,
-            bcos::evm::trimmedBigEndian(bcos::bytesConstRef{value.bytes, sizeof(value.bytes)}));
-        entries[bcos::h256{evmone::keccak256(key).bytes, 32}] = std::move(leaf);
-    }
-    return bcos::ledger::mpt::computeTrieRoot(entries);
-}
 
-struct CollectedStateRoot
+/// Copy every flat row visible through @p from into @p to's top mutable layer. The
+/// incremental MPT build scans the top mutable layer ONLY (buildAndCollect), so a
+/// backend-merged seed is invisible to it — this re-materializes the seeded state as the
+/// genesis build's delta.
+template <class From, class To>
+bcos::task::Task<void> copyFlatRows(From& from, To& to)
 {
-    evmone::hash256 root{};
-    std::unordered_map<bcos::h256, bcos::bytes> newNodes;
-};
-
-template <class Ledger>
-CollectedStateRoot collectStateRoot(const Ledger& ledger)
-{
-    std::map<bcos::h256, bcos::bytes> entries;
-    CollectedStateRoot out;
-    if (!ledger.visitAccounts([&](const auto& account) {
-            auto storageTrie = collectAccountStorageTrie(account.storage);
-            out.newNodes.merge(std::move(storageTrie.newNodes));
-            evmone::hash256 storageRoot{};
-            std::memcpy(storageRoot.bytes, storageTrie.root.data(), sizeof(storageRoot.bytes));
-            auto const balanceBe = intx::be::store<evmc::uint256be>(account.balance);
-            bcos::bytes leaf;
-            bcos::codec::rlp::encode(leaf, account.nonce,
-                bcos::evm::trimmedBigEndian(
-                    bcos::bytesConstRef{balanceBe.bytes, sizeof(balanceBe.bytes)}),
-                bcos::bytesConstRef{storageRoot.bytes, sizeof(storageRoot)},
-                bcos::bytesConstRef{account.codeHash.bytes, sizeof(evmc::bytes32)});
-            entries[bcos::h256{evmone::keccak256(account.addr).bytes, 32}] = std::move(leaf);
-            return true;
-        }))
+    auto it = co_await bcos::storage2::range(from);
+    while (auto kv = co_await it.next())
     {
-        throw std::runtime_error("collectStateRoot: account traversal incomplete");
+        auto const& [k, v] = *kv;
+        if (auto const* entry = std::get_if<bcos::storage::Entry>(std::addressof(v)))
+            co_await bcos::storage2::writeOne(to, k, *entry);
     }
-    auto result = bcos::ledger::mpt::computeTrieRoot(entries);
-    out.newNodes.merge(std::move(result.newNodes));
-    std::memcpy(out.root.bytes, result.root.data(), sizeof(out.root.bytes));
-    return out;
 }
 
 bcos::h256 computeAndPersistPreStateTrie(MLS& multiLayerStorage)
 {
+    auto readView = multiLayerStorage.fork();  // read-through to the committed backend
     auto view = multiLayerStorage.fork();
     view.newMutable();
-    bcos::evm::evmstate::Storage2State<ViewType> bridge(view);
-    auto result = collectStateRoot(bridge);
-    BOOST_REQUIRE_MESSAGE(
-        !bridge.poisoned(), "pre-state trie build poisoned: " << std::string(bridge.firstError()));
+    bcos::task::syncWait(copyFlatRows(readView, view));
+    bcos::ledger::LedgerConfig ledgerConfig;
+    ledgerConfig.setExecutorVersion(bcos::ledger::OPSTACK_EXECUTOR_VERSION);
+    auto delta = bcos::task::syncWait(bcos::ledger::mpt::computeMptStateDelta(
+        view, bcos::ledger::mpt::emptyRootHash(), ledgerConfig));
     bcos::ledger::mpt::ViewNodeStorage<ViewType> nodeStorage(view);
-    bcos::task::syncWait(bcos::ledger::mpt::flushTrieNodes(nodeStorage, result.newNodes));
+    bcos::task::syncWait(bcos::ledger::mpt::flushTrieNodes(nodeStorage, delta.newNodes));
     bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
-    bcos::h256 root;
-    std::memcpy(root.data(), result.root.bytes, sizeof(result.root.bytes));
-    return root;
+    return delta.stateRoot;
 }
 
 /// Seed the parent (genesis) header row the payload validation reads. Values derive from the
