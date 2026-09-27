@@ -22,9 +22,9 @@
 
 #include "support/OpEngineKarstTestHarness.h"
 
+#include <bcos-evm/adapter/RecentBlockHashes.h>
 #include <opstack-executor/OpDepositEncode.h>  // encodeDepositEnvelope
 #include <opstack-executor/OpScheduler.h>
-#include <bcos-evm/adapter/RecentBlockHashes.h>
 #include <support/SeedPreState.h>
 
 #include <bcos-framework/ledger/EVMAccount.h>
@@ -225,6 +225,35 @@ BOOST_AUTO_TEST_CASE(FcuToImportedTipCanonicalizes)
     bcos::evm::evmstate::Storage2State<ViewType> state(canonicalView);
     auto const root = bcos::evm::stateRootOf(state);
     BOOST_CHECK_EQUAL(bcos::h256(root.bytes, 32).hex(), importedStateRoot.hex());
+}
+
+// KL3 恢复路径：同 head FCU 重发（缺口② tip merge 失败回滚后的 CL 重试、缺口③ 崩溃后
+// "canonical 行已存在而指针未动"的恢复）必须幂等——tip 已推进时重发不回退、不重复推进，
+// 再次 VALID，tracker safe/finalized 保持。
+BOOST_AUTO_TEST_CASE(SameHeadFcuReissueIsIdempotent)
+{
+    ImportServiceFixture f;
+
+    auto request = f.validRequest(fixtureHeadHash(), 1);
+    auto const blockHash = request.executionPayload.blockHash;
+    auto status = bcos::task::syncWait(f.service.newPayload(request, 4));
+    BOOST_REQUIRE_EQUAL(static_cast<int>(status.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+
+    bcos::engine::ForkchoiceState forkchoice{blockHash, blockHash, fixtureHeadHash()};
+    auto first = bcos::task::syncWait(f.service.updateForkchoice(forkchoice, nullptr, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(first.payloadStatus.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+
+    auto again = bcos::task::syncWait(f.service.updateForkchoice(forkchoice, nullptr, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(again.payloadStatus.status),
+        static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
+    auto canonicalView = f.storage.forkCommitted();
+    BOOST_CHECK_EQUAL(bcos::task::syncWait(bcos::ledger::getCurrentBlockNumber(
+                          canonicalView, bcos::ledger::fromStorage)),
+        1);
+    BOOST_REQUIRE(f.service.getSafeBlockNumber().has_value());
+    BOOST_CHECK_EQUAL(*f.service.getSafeBlockNumber(), 1);
 }
 
 // FCU 未知头（规范表与 ImportedStore 都没有）→ SYNCING，无 payloadId。

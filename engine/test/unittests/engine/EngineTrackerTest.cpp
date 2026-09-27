@@ -298,6 +298,50 @@ BOOST_AUTO_TEST_CASE(engine_tracker_swallows_parent_without_attributes)
     BOOST_CHECK_EQUAL(tracker.trackedHead()->hash, h256(10));
 }
 
+// KL3 gap-②: the pre-apply FCU snapshot restores all four mutable fields on rollback
+// (a failed deferred-tip-move must leave the tracker exactly as before the FCU), and
+// the CL's re-issued FCU re-applies cleanly from the rolled-back state.
+BOOST_AUTO_TEST_CASE(engine_tracker_rollback_restores_pre_apply_fcu_state)
+{
+    EngineTracker tracker;
+    auto const preApply = tracker.snapshotForkchoiceForRollback();
+    tracker.applyForkchoice(resolved(h256(10), 10, true, false));
+    auto const appliedHead = tracker.trackedHead();
+    BOOST_REQUIRE(appliedHead.has_value());
+
+    tracker.rollbackForkchoice(preApply, appliedHead);
+    BOOST_CHECK(!tracker.trackedHead().has_value());
+    BOOST_CHECK(!tracker.safeBlockNumber().has_value());
+    BOOST_CHECK(!tracker.finalizedBlockNumber().has_value());
+
+    BOOST_CHECK(tracker.applyForkchoice(resolved(h256(10), 10, true, false)) ==
+                ForkchoiceApplyResult::Applied);
+    BOOST_REQUIRE(tracker.trackedHead().has_value());
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
+}
+
+// The rollback anchor guard: a failed OLDER apply must not clobber a NEWER concurrent
+// apply — the newer FCU's own outcome governs.
+BOOST_AUTO_TEST_CASE(engine_tracker_rollback_anchor_spares_newer_apply)
+{
+    EngineTracker tracker;
+    tracker.applyForkchoice(resolved(h256(10), 10, true, false));
+    auto const stalePreApply = tracker.snapshotForkchoiceForRollback();
+    auto const staleAppliedHead = tracker.trackedHead();
+    BOOST_REQUIRE(staleAppliedHead.has_value());
+
+    // A newer concurrent FCU moves the tracker forward (head 11)...
+    tracker.applyForkchoice(resolved(h256(11), 11, true, false));
+    BOOST_REQUIRE(tracker.trackedHead().has_value());
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 11);
+
+    // ...so the old failure's rollback must not rewind it.
+    tracker.rollbackForkchoice(stalePreApply, staleAppliedHead);
+    BOOST_REQUIRE(tracker.trackedHead().has_value());
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 11);
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->hash, h256(11));
+}
+
 // A set-but-unresolved safe/finalized hash (non-zero hash, nullopt number) is rejected
 // fail-closed, and a previous FCU's stored height survives it — the store shares the
 // gate's requiresCanonical predicate, so an unresolved pair can never wipe m_safe.
@@ -864,8 +908,7 @@ BOOST_AUTO_TEST_CASE(engine_tracker_shared_guard_allows_concurrent_readers)
             int current = ++activeReaders;
             int observed = peakReaders.load();
             while (observed < current && !peakReaders.compare_exchange_weak(observed, current))
-            {
-            }
+            {}
         }
 
         sync.arrive_and_wait();

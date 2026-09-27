@@ -140,6 +140,18 @@ public:
     // parent plane). The import plane erases the committed rows and re-materializes
     // parentFlat, so the block executes exactly on its parent's post-state — required
     // for canonical-ancestor siblings whose parent plane differs from the tip.
+    //
+    // KL2 contract for all three type-erased payloads (@p parentFlat, @p blockDelta,
+    // @p blockFlat): each is a shared_ptr to the scheduler's MultiLayerStorage
+    // MutableStorage — the concrete type the OpScheduler/OpEngineService pair agrees
+    // on. This framework header cannot name that type (the dependency direction is
+    // exactly why the signature erases), so the consumer un-erases with
+    // static_pointer_cast and a producer that stores ANY other type is silent UB, not
+    // a catchable error. The concrete type is pinned HERE and at the engine's single
+    // un-erase helper (OpEngineService.inl uneraseImportPlaneState); the long-term fix
+    // is an OP-lane concept interface that names the type (follow-up issue). Baseline
+    // schedulers never produce these payloads: the default implementation is
+    // unsupported and answers UnknownError.
     virtual void importExecute(bcos::protocol::Block::Ptr block,
         std::vector<bcos::protocol::BlockHeader::Ptr> const& parentHeaders,
         std::shared_ptr<void> const& parentFlat,

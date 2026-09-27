@@ -327,6 +327,11 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
         .allowNonLinearHead = true,
         .canonicalTipNumber = canonicalTipNumber,
     };
+    // KL3 gap-②: the deferred tip move below runs AFTER the tracker has accepted this
+    // FCU, so a failed move must not leave tracker and ledger diverging — snapshot the
+    // pre-apply FCU state and restore it if the move throws. The CL re-issues the FCU
+    // (idempotent for the same head), which re-applies and retries the move.
+    auto const fcuRollback = m_tracker.snapshotForkchoiceForRollback();
     const auto applyResult = m_tracker.applyForkchoice(resolved);
     if (applyResult == ForkchoiceApplyResult::Swallowed)
     {
@@ -345,14 +350,33 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
         // pointer lagged. NOT mergeView/mergeBackStorage: those merge the OLDEST queued
         // layer whenever the pending deque is non-empty (MultiLayerStorage.h's FIFO
         // warning), which would commit another block's in-flight layer from inside an FCU.
+        // KL3 gap-①: until the merge below lands, concurrent by-height reads see the OLD
+        // canonical tip while the new head is already hash-addressable — intended
+        // semantics (the tip moves at FCU time, exactly as it did before the import lane).
+        // KL3 gap-③: a crash BEFORE the merge persists canonical rows without a moved
+        // tip; recovery is the CL re-issuing this same-head FCU (the detection premise
+        // — rows exist — re-fires and the pointer converges). Pinned by
+        // SameHeadFcuReissueIsIdempotent in OpEngineImportFcuTest.
+        auto appliedHead = m_tracker.trackedHead();
         auto row = std::make_shared<typename GlobalStateStorageType::MutableStorage>();
         bcos::storage::Entry numberEntry;
         numberEntry.set(std::to_string(*ledgerTipAdvance));
-        co_await storage2::writeOne(*row,
-            executor_v1::StateKey{
-                bcos::ledger::SYS_CURRENT_STATE, bcos::ledger::SYS_KEY_CURRENT_NUMBER},
-            std::move(numberEntry));
-        co_await m_globalStateStorage.mergeToBackends(*row);
+        try
+        {
+            co_await storage2::writeOne(*row,
+                executor_v1::StateKey{
+                    bcos::ledger::SYS_CURRENT_STATE, bcos::ledger::SYS_KEY_CURRENT_NUMBER},
+                std::move(numberEntry));
+            co_await m_globalStateStorage.mergeToBackends(*row);
+        }
+        catch (...)
+        {
+            m_tracker.rollbackForkchoice(fcuRollback, appliedHead);
+            throw;
+        }
+        // canonicalizedTo runs only AFTER a successful merge: the tip has moved, so a
+        // failure here must NOT restore the tracker (the ledger is already ahead; the
+        // republish is retried by the next FCU).
         if (m_delegate)
         {
             m_delegate->canonicalizedTo(*ledgerTipAdvance);
@@ -1414,6 +1438,19 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::rollbackCan
 /// between the import-time committed plane and the block's parent flat). This is the
 /// milestone's flat/delta stand-in for design §4.4.5's body replay. Returns nullptr when
 /// NO chain block carries a flat — the caller must fail (缺 body, 禁止盲 rewind).
+///
+/// KL2 un-erase point: the shared_ptr<void> payloads crossing
+/// SchedulerInterface::importExecute (parentFlat / blockDelta / blockFlat) are all the
+/// scheduler's MultiLayerStorage MutableStorage — see the concrete-type contract pinned
+/// in the interface comment. This is the SINGLE static_pointer_cast for all of them, so
+/// a producer-side type change surfaces here (and in that comment), never at a call site.
+template <class MutableStorageT>
+[[nodiscard]] inline std::shared_ptr<MutableStorageT> uneraseImportPlaneState(
+    std::shared_ptr<void> const& erased)
+{
+    return std::static_pointer_cast<MutableStorageT>(erased);
+}
+
 template <class MutableStorageT>
 task::Task<std::shared_ptr<MutableStorageT>> reconstructSwitchFlat(
     std::vector<ImportedBlock> const& chain)
@@ -1433,7 +1470,7 @@ task::Task<std::shared_ptr<MutableStorageT>> reconstructSwitchFlat(
     }
     auto world = std::make_shared<MutableStorageT>();
     {
-        auto baseFlat = std::static_pointer_cast<MutableStorageT>(chain[base].postStateFlat);
+        auto baseFlat = uneraseImportPlaneState<MutableStorageT>(chain[base].postStateFlat);
         auto flatIterator = co_await baseFlat->range();
         while (true)
         {
@@ -1452,7 +1489,7 @@ task::Task<std::shared_ptr<MutableStorageT>> reconstructSwitchFlat(
     }
     for (std::size_t i = base + 1; i < chain.size(); ++i)
     {
-        auto delta = std::static_pointer_cast<MutableStorageT>(chain[i].storageDelta);
+        auto delta = uneraseImportPlaneState<MutableStorageT>(chain[i].storageDelta);
         if (!delta)
         {
             BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
@@ -1940,7 +1977,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::canonicaliz
         {
             for (auto& block : chain)
             {
-                auto delta = std::static_pointer_cast<MutableStorageT>(block.storageDelta);
+                auto delta = uneraseImportPlaneState<MutableStorageT>(block.storageDelta);
                 if (!delta)
                 {
                     BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{

@@ -237,6 +237,39 @@ std::optional<bcos::protocol::BlockNumber> EngineTracker::finalizedBlockNumber()
     return m_finalized;
 }
 
+ForkchoiceRollback EngineTracker::snapshotForkchoiceForRollback() const
+{
+    std::shared_lock lock(m_mutex);
+    return ForkchoiceRollback{
+        .state = m_forkchoiceState,
+        .trackedHead = m_trackedHead,
+        .safe = m_safe,
+        .finalized = m_finalized,
+    };
+}
+
+void EngineTracker::rollbackForkchoice(
+    const ForkchoiceRollback& preApply, std::optional<TrackedHeadBlock> const& appliedHead)
+{
+    std::unique_lock lock(m_mutex);
+    // Anchor check: only rewind while the tracker still reflects THIS apply. A newer
+    // concurrent FCU that has moved the tracked head must not be clobbered by an older
+    // failure — that FCU's own outcome governs, and its result was computed against its
+    // own (moved) state.
+    auto const sameHead =
+        m_trackedHead.has_value() == appliedHead.has_value() &&
+        (!appliedHead.has_value() || (m_trackedHead->hash == appliedHead->hash &&
+                                         m_trackedHead->blockNumber == appliedHead->blockNumber));
+    if (!sameHead)
+    {
+        return;
+    }
+    m_forkchoiceState = preApply.state;
+    m_trackedHead = preApply.trackedHead;
+    m_safe = preApply.safe;
+    m_finalized = preApply.finalized;
+}
+
 EngineTracker::ExclusiveAccess EngineTracker::lockExclusive()
 {
     return ExclusiveAccess{*this};

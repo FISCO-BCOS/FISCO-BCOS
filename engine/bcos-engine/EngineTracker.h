@@ -93,6 +93,18 @@ enum class ForkchoiceApplyResult
     RebuildOnParent,
 };
 
+/// The four fields applyForkchoice may mutate, captured before the call so a failed
+/// deferred-tip-move (KL3) can restore them. Deliberately a plain value copy: the
+/// tracker is small and the rollback path is cold. The payload cache is NOT covered —
+/// payload publishes roll back via publishBuiltPayload's own snapshot pair.
+struct ForkchoiceRollback
+{
+    ForkchoiceState state;
+    std::optional<TrackedHeadBlock> trackedHead;
+    std::optional<bcos::protocol::BlockNumber> safe;
+    std::optional<bcos::protocol::BlockNumber> finalized;
+};
+
 class EngineTracker
 {
 public:
@@ -104,6 +116,14 @@ public:
     std::optional<TrackedHeadBlock> trackedHead() const;
     std::optional<bcos::protocol::BlockNumber> safeBlockNumber() const;
     std::optional<bcos::protocol::BlockNumber> finalizedBlockNumber() const;
+    /// KL3 gap-②: pre-apply FCU snapshot for the deferred-tip-move rollback.
+    [[nodiscard]] ForkchoiceRollback snapshotForkchoiceForRollback() const;
+    /// Restores the pre-apply snapshot ONLY while the tracker still reflects the apply
+    /// this rollback belongs to (tracked head unchanged since @p appliedHead): a newer
+    /// concurrent FCU's state must not be clobbered by an older failure — that FCU's
+    /// own outcome governs, and the failed FCU is simply re-issued by the CL.
+    void rollbackForkchoice(
+        const ForkchoiceRollback& preApply, std::optional<TrackedHeadBlock> const& appliedHead);
     /// RAII guards over m_mutex. Unlock must run on the locking thread
     /// (shared_mutex). A live guard moved or destroyed on another thread
     /// std::terminate()s rather than unlocking (POSIX UB). Do not hold a
