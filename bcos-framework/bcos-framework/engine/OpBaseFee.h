@@ -204,9 +204,11 @@ namespace detail
 {
 /// EIP-1559 arithmetic core shared by the engine (BlockHeader) and devp2p (raw header
 /// fields) entry points — op-geth consensus/misc/eip1559/eip1559.go calcBaseFeeInner plus
-/// the Jovian minBaseFee floor. op-geth computes with unbounded big.Int; the fixed-width
-/// u256 multiply is overflow-guarded here so an extreme (corrupt or adversarial) parent
-/// header fails closed instead of wrapping mod 2^256.
+/// the Jovian minBaseFee floor. Derives the gas target, delegates the guarded step math
+/// to opNextBaseFeeStep — the SINGLE step home (N8: this used to be a verbatim twin with
+/// the same guards and comments, and a drift between the two would have priced the
+/// pre-Holocene prediction and the Holocene validation differently) — then applies the
+/// Jovian floor.
 inline bcos::u256 calcOpBaseFeeCore(bcos::u256 const& parentGasLimit, bcos::u256 gasMetered,
     bcos::u256 const& parentBaseFee, std::uint64_t denominator, std::uint64_t elasticity,
     std::optional<bcos::u256> const& minBaseFee)
@@ -217,48 +219,13 @@ inline bcos::u256 calcOpBaseFeeCore(bcos::u256 const& parentGasLimit, bcos::u256
         throwOpBaseFeeError("invalid OP base-fee parameters: zero gas target");
     }
 
-    bcos::u256 const u256Max = ~bcos::u256(0);
-    bcos::u256 result;
-    if (gasMetered == gasTarget)
-    {
-        // Exact target: the fee holds steady (delta 0) — still subject to the Jovian
-        // minBaseFee floor below, like every other arm.
-        result = parentBaseFee;
-    }
-    else if (gasMetered > gasTarget)
-    {
-        // baseFee increases: max(1, parentBaseFee * delta / gasTarget / denominator)
-        bcos::u256 const delta = gasMetered - gasTarget;
-        if (parentBaseFee > u256Max / delta) [[unlikely]]
-        {
-            throwOpBaseFeeError("OP base-fee delta computation overflows u256");
-        }
-        bcos::u256 deltaFee = parentBaseFee * delta;
-        deltaFee /= gasTarget;
-        deltaFee /= denominator;
-        result = parentBaseFee + (deltaFee > 0 ? deltaFee : bcos::u256(1));
-        // The multiply guard cannot see the final add; deltaFee near the maximum
-        // would wrap exactly here, where big.Int would keep going.
-        if (result < parentBaseFee) [[unlikely]]
-        {
-            throwOpBaseFeeError("OP base-fee increase overflows u256");
-        }
-    }
-    else
-    {
-        // baseFee decreases: parentBaseFee - parentBaseFee * delta / gasTarget / denominator
-        bcos::u256 const delta = gasTarget - gasMetered;
-        if (parentBaseFee > u256Max / delta) [[unlikely]]
-        {
-            throwOpBaseFeeError("OP base-fee delta computation overflows u256");
-        }
-        bcos::u256 deltaFee = parentBaseFee * delta;
-        deltaFee /= gasTarget;
-        deltaFee /= denominator;
-        result = deltaFee < parentBaseFee ? parentBaseFee - deltaFee : bcos::u256(0);
-    }
+    bcos::u256 result = opNextBaseFeeStep(OpFeeStepParams{.parentBaseFee = parentBaseFee,
+        .gasMetered = gasMetered,
+        .gasTarget = gasTarget,
+        .denominator = denominator});
 
-    // Jovian minBaseFee floor — applies to all three arms.
+    // Jovian minBaseFee floor — applies to all three arms (the equal-target arm included:
+    // the floor raises an engaged-but-below-floor parent fee like every other arm).
     if (minBaseFee.has_value() && result < *minBaseFee)
     {
         result = *minBaseFee;

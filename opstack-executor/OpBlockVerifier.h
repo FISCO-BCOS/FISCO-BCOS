@@ -406,9 +406,9 @@ public:
         auto const blockHash = bcos::protocol::ethHeaderHash(ethHeader);
         if (blockHash != block.hash)
         {
-            throw std::logic_error(
+            BOOST_THROW_EXCEPTION(std::logic_error(
                 "OpBlockVerifier: block.hash does not match keccak256(rlp(header)) — "
-                "devp2p Block assembly must fill hash from the header RLP");
+                "devp2p Block assembly must fill hash from the header RLP"));
         }
 
         // 1. Fork the execution view over the COMMITTED state (an engine-lane pending layer
@@ -441,9 +441,9 @@ public:
         auto header = detail::projectOpP2pHeader(ethHeader, *m_blockFactory);
         if (bcos::protocol::EthBlockHeader::computeHash(*header) != blockHash)
         {
-            throw std::logic_error(
+            BOOST_THROW_EXCEPTION(std::logic_error(
                 "OpBlockVerifier: header projection is not RLP-faithful (re-encoded hash "
-                "differs from the announced block hash)");
+                "differs from the announced block hash)"));
         }
 
         //    Feature set + the execution LedgerConfig (revision from the fork config;

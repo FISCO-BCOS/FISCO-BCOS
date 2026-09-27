@@ -27,6 +27,7 @@
 #include <opstack-executor/OpCommitments.h>
 #include <opstack-executor/OpCommon.h>
 #include <opstack-executor/OpDepositEncode.h>
+#include <boost/throw_exception.hpp>
 #include <cstdint>
 #include <limits>
 #include <memory>
@@ -84,7 +85,7 @@ public:
     {
         if (!m_schedule)
         {
-            throw std::invalid_argument("OpSchedulerSeam: null fork schedule");
+            BOOST_THROW_EXCEPTION(std::invalid_argument("OpSchedulerSeam: null fork schedule"));
         }
     }
 
@@ -237,7 +238,8 @@ public:
         ::ranges::input_range auto const& /*transactions*/,
         bcos::ledger::LedgerConfig const& /*ledgerConfig*/)
     {
-        throw std::logic_error("OpSchedulerSeam::executeBlock: not supported in OP mode");
+        BOOST_THROW_EXCEPTION(
+            std::logic_error("OpSchedulerSeam::executeBlock: not supported in OP mode"));
         co_return {};  // unreachable; satisfies the coroutine's declared return type
     }
 
@@ -246,15 +248,15 @@ private:
     {
         if (bcos::evm::opstack::isUnsetL1BlockInfo(m_l1BlockInfo))
         {
-            throw std::invalid_argument(
+            BOOST_THROW_EXCEPTION(std::invalid_argument(
                 "OpSchedulerSeam: refuse to synthesize L1-attributes from an unset "
-                "L1BlockInfo (number, time, and blockHash are all zero)");
+                "L1BlockInfo (number, time, and blockHash are all zero)"));
         }
         if (bcos::evm::opstack::isUnsetSystemConfig(m_l1BlockInfo))
         {
-            throw std::invalid_argument(
+            BOOST_THROW_EXCEPTION(std::invalid_argument(
                 "OpSchedulerSeam: refuse to synthesize L1-attributes with an unset "
-                "SystemConfig (baseFeeScalar and batcherHash must be non-zero)");
+                "SystemConfig (baseFeeScalar and batcherHash must be non-zero)"));
         }
     }
 

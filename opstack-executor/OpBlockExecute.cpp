@@ -372,7 +372,8 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
     // a caller programming error (internal invariant), not a block-content rejection — mapped to
     // std::logic_error, never INVALID.
     if (result.txTypes.size() != result.receipts.size())
-        throw std::logic_error("op block: receipts/txTypes length mismatch (caller bug)");
+        BOOST_THROW_EXCEPTION(
+            std::logic_error("op block: receipts/txTypes length mismatch (caller bug)"));
     OpBlockSeal seal{};
 
     // receipts-root: indexed trie (key = rlp(index)) over the EncodeIndex-encoded leaves —

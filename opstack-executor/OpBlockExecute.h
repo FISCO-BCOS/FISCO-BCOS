@@ -334,7 +334,8 @@ inline const evmc::bytes32 OP_EMPTY_REQUESTS_HASH = [] {
         // yields 32 bytes. Kept as std::logic_error to match the seal's other
         // internal-invariant guards (see the length/empty-envelope checks below): a
         // builder bug, not a block-content rejection (which would be OpConsensusError).
-        throw std::logic_error("c_emptyRequestsHashHex must decode to exactly 32 bytes");
+        BOOST_THROW_EXCEPTION(
+            std::logic_error("c_emptyRequestsHashHex must decode to exactly 32 bytes"));
     }
     std::copy(raw.begin(), raw.end(), hash.bytes);
     return hash;
@@ -404,13 +405,14 @@ OpExecuteBlockResult finalizeOpBlockResult(bcos::executor_v1::opstack::OpstackEx
     // length mismatch is a caller programming error, not a block-content rejection, so it is
     // classified as std::logic_error rather than OpConsensusError (INVALID).
     if (rawTxBytes.size() != receipts.size())
-        throw std::logic_error("op block: receipts/rawTxBytes length mismatch (caller bug)");
+        BOOST_THROW_EXCEPTION(
+            std::logic_error("op block: receipts/rawTxBytes length mismatch (caller bug)"));
     std::vector<uint8_t> txTypes;
     txTypes.reserve(rawTxBytes.size());
     for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
     {
         if (rawTxBytes[i].empty())  // defensive: the per-tx loop already rejects empty envelopes
-            throw std::logic_error("op block: empty envelope (caller bug)");
+            BOOST_THROW_EXCEPTION(std::logic_error("op block: empty envelope (caller bug)"));
         txTypes.emplace_back(op::classifyTxType(rawTxBytes[i][0]));
     }
 
