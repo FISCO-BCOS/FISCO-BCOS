@@ -34,7 +34,7 @@ using bcos::ledger::InvalidOpForkSchedule;
 
 namespace
 {
-constexpr uint64_t kNever = std::numeric_limits<uint64_t>::max();
+constexpr uint64_t c_never = std::numeric_limits<uint64_t>::max();
 /// Genesis fork schedule in SECONDS, the shape [op_fork_timestamps] produces.
 bcos::ledger::OpForkSchedule sched(uint64_t jovianTime, uint64_t karstTime)
 {
@@ -129,7 +129,7 @@ BOOST_AUTO_TEST_CASE(SimultaneousJovianKarstFoldsIntoTheLaterFork)
     BOOST_CHECK_EQUAL(bothAtT.configAt(1000).fork, OpFork::Karst);
 
     // jovian unscheduled with karst scheduled: rejected, not silently Isthmus.
-    BOOST_CHECK_THROW(OpForkSchedule::fromLedgerSchedule(sched(kNever, 2000)),
+    BOOST_CHECK_THROW(OpForkSchedule::fromLedgerSchedule(sched(c_never, 2000)),
         bcos::ledger::InvalidOpForkSchedule);
     // karst earlier than jovian: rejected.
     BOOST_CHECK_THROW(
@@ -153,17 +153,17 @@ BOOST_AUTO_TEST_CASE(ConfigAtIsKeyedOnTheBlockTimestamp)
 // the largest representable timestamp.
 BOOST_AUTO_TEST_CASE(UnscheduledForksNeverActivate)
 {
-    const auto isthmusOnly = OpForkSchedule::fromLedgerSchedule(sched(kNever, kNever));
+    const auto isthmusOnly = OpForkSchedule::fromLedgerSchedule(sched(c_never, c_never));
     BOOST_CHECK_EQUAL(isthmusOnly.configAt(0).fork, OpFork::Isthmus);
-    BOOST_CHECK_EQUAL(isthmusOnly.configAt(kNever - 1).fork, OpFork::Isthmus);
-    const auto jovianOnly = OpForkSchedule::fromLedgerSchedule(sched(0, kNever));
-    BOOST_CHECK_EQUAL(jovianOnly.configAt(kNever - 1).fork, OpFork::Jovian);
+    BOOST_CHECK_EQUAL(isthmusOnly.configAt(c_never - 1).fork, OpFork::Isthmus);
+    const auto jovianOnly = OpForkSchedule::fromLedgerSchedule(sched(0, c_never));
+    BOOST_CHECK_EQUAL(jovianOnly.configAt(c_never - 1).fork, OpFork::Jovian);
 }
 
 // A genesis-activated fork is active for block 0 itself (timestamp 0 >= 0).
 BOOST_AUTO_TEST_CASE(ZeroMeansActiveFromGenesis)
 {
-    const auto jovianAtGenesis = OpForkSchedule::fromLedgerSchedule(sched(0, kNever));
+    const auto jovianAtGenesis = OpForkSchedule::fromLedgerSchedule(sched(0, c_never));
     BOOST_CHECK_EQUAL(jovianAtGenesis.configAt(0).fork, OpFork::Jovian);
     // jovian == karst == 0 folds into the later fork: the chain is Karst from block 0.
     const auto bothAtGenesis = OpForkSchedule::fromLedgerSchedule(sched(0, 0));
@@ -520,9 +520,9 @@ BOOST_AUTO_TEST_CASE(CanonicalTextFoldsLedgerShorthand, *boost::unit_test::label
         OpForkSchedule::fromLedgerSchedule(sched(0, 50)).canonicalText(), "0:jovian,50:karst");
     // Unscheduled jovian is the all-Isthmus legacy chain.
     BOOST_CHECK_EQUAL(
-        OpForkSchedule::fromLedgerSchedule(sched(kNever, kNever)).canonicalText(), "0:isthmus");
+        OpForkSchedule::fromLedgerSchedule(sched(c_never, c_never)).canonicalText(), "0:isthmus");
     // An unscheduled karst leaves no row; the jovian ladder stands alone.
-    BOOST_CHECK_EQUAL(OpForkSchedule::fromLedgerSchedule(sched(100, kNever)).canonicalText(),
+    BOOST_CHECK_EQUAL(OpForkSchedule::fromLedgerSchedule(sched(100, c_never)).canonicalText(),
         "0:isthmus,100:jovian");
     // Simultaneous jovian/karst times merge into the later fork (op-geth
     // CheckConfigForkOrder compares with `>`): (0,0) is a Karst-baseline chain, (T,T)

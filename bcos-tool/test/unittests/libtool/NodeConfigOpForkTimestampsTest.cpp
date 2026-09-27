@@ -31,7 +31,7 @@ BOOST_AUTO_TEST_SUITE(NodeConfigOpForkTimestampsTest)
 
 namespace
 {
-constexpr uint64_t kNever = std::numeric_limits<uint64_t>::max();
+constexpr uint64_t c_never = std::numeric_limits<uint64_t>::max();
 
 /// Genesis with a configurable [executor] tail and an optional [op_fork_timestamps] section;
 /// everything else is fixed so the OP checks are the only guards that can fire.
@@ -83,7 +83,7 @@ BOOST_AUTO_TEST_CASE(absentKeyMeansNeverActivates)
     auto cfg = loadOk(opGenesis(opExecutor(), "[op_fork_timestamps]\njovian_time=0\n"));
     BOOST_REQUIRE(cfg.opForkSchedule().has_value());
     BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_jovianTime, 0U);
-    BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_karstTime, kNever);
+    BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_karstTime, c_never);
 }
 
 // Karst is Jovian's rules on an Osaka EVM, so it cannot activate first. Equal times are
@@ -147,7 +147,7 @@ BOOST_AUTO_TEST_CASE(unscheduledIntermediateForksAllowed)
     auto jump = loadOk(opGenesis(
         opExecutor(), "[op_fork_timestamps]\nisthmus_time=500\ncanyon_time=100\n"));
     BOOST_REQUIRE(jump.opForkSchedule().has_value());
-    BOOST_CHECK_EQUAL(jump.opForkSchedule()->m_regolithTime, kNever);
+    BOOST_CHECK_EQUAL(jump.opForkSchedule()->m_regolithTime, c_never);
     BOOST_CHECK_EQUAL(jump.opForkSchedule()->m_canyonTime, 100U);
     BOOST_CHECK_EQUAL(jump.opForkSchedule()->m_isthmusTime, 500U);
 }

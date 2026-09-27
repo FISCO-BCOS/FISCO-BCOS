@@ -67,6 +67,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <semaphore>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
@@ -80,6 +81,40 @@
 namespace bcos::executor_v1::opstack
 {
 #define OP_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("OP_SCHEDULER")
+
+// KB5 (the original finding this class closes): the execute/commit/import sections
+// below span co_awaits, and task::syncWait may resume the coroutine on another
+// thread — a std::mutex released by a thread that did not acquire it is ISO/POSIX
+// UB. A counting_semaphore<1> keeps the same single-holder exclusion while release
+// from ANY thread stays defined (same discipline as the engine's
+// CrossThreadCommitGate in EngineServiceCommon.h).
+class CrossThreadGate
+{
+public:
+    explicit CrossThreadGate(std::counting_semaphore<1>& gate) : m_gate(gate), m_held(true)
+    {
+        m_gate.acquire();
+    }
+    CrossThreadGate(std::counting_semaphore<1>& gate, std::try_to_lock_t) :
+        m_gate(gate), m_held(gate.try_acquire())
+    {}
+    ~CrossThreadGate() { release(); }
+    CrossThreadGate(CrossThreadGate const&) = delete;
+    CrossThreadGate& operator=(CrossThreadGate const&) = delete;
+    bool owns_lock() const noexcept { return m_held; }
+    void release()
+    {
+        if (m_held)
+        {
+            m_gate.release();
+            m_held = false;
+        }
+    }
+
+private:
+    std::counting_semaphore<1>& m_gate;
+    bool m_held;
+};
 
 /// executeBlock → commitBlock payload. announcedBlockHash is the CL hash; do not
 /// recompute it from executedHeader (optional fields are incomplete).
@@ -221,7 +256,12 @@ public:
 
     void reset(std::function<void(Error::Ptr)> callback) override
     {
-        std::scoped_lock lock(m_executeMutex, m_commitMutex, m_pendingMutex);
+        // Same three sections reset() must quiesce, acquired in the canonical
+        // execute -> commit -> pending order every other path follows (a
+        // scoped_lock cannot compose the semaphores with the pending mutex).
+        CrossThreadGate executeGate(m_executeGate);
+        CrossThreadGate commitGate(m_commitGate);
+        std::lock_guard pendingLock(m_pendingMutex);
         if (m_pending)
         {
             OP_SCHEDULER_LOG(INFO) << "reset: dropping uncommitted pending block "
@@ -590,13 +630,13 @@ private:
                 co_return {nullptr, cached->first, cached->second};
             }
 
-            // One execute at a time. Also take m_commitMutex so pushView / popFrontStorage
-            // cannot race mergeBackStorage (reset() already takes all three). NOTE: these
-            // std::unique_lock objects span the co_awaits below. executeBlock/commitBlock
-            // now use task::syncWait, so the EngineServiceImpl caller does not proceed
-            // until this task finishes. If a future awaitable resumes on another thread,
-            // these locks must be narrowed or replaced with a coroutine-aware lock.
-            std::unique_lock executeLock(m_executeMutex, std::try_to_lock);
+            // One execute at a time. Also take the commit gate so pushView /
+            // popFrontStorage cannot race mergeBackStorage (reset() already takes all
+            // three). The gates are counting semaphores on purpose: these sections
+            // span the co_awaits below and task::syncWait may resume on another
+            // thread — a std::mutex released by a non-owning thread would be UB, a
+            // semaphore release from any thread never is (KB5).
+            CrossThreadGate executeLock(m_executeGate, std::try_to_lock);
             if (!executeLock.owns_lock())
             {
                 auto message = std::string{"Another block is executing!"};
@@ -604,7 +644,7 @@ private:
                 co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
                     nullptr, false};
             }
-            std::unique_lock commitLock(m_commitMutex, std::try_to_lock);
+            CrossThreadGate commitLock(m_commitGate, std::try_to_lock);
             if (!commitLock.owns_lock())
             {
                 auto message = std::string{"Another block is committing!"};
@@ -814,7 +854,7 @@ private:
             OP_SCHEDULER_LOG(INFO) << "Adopt probe: " << number;
 
             // Same double-lock as coExecuteBlock: pushView must not race mergeBackStorage.
-            std::unique_lock executeLock(m_executeMutex, std::try_to_lock);
+            CrossThreadGate executeLock(m_executeGate, std::try_to_lock);
             if (!executeLock.owns_lock())
             {
                 auto message = std::string{"Another block is executing!"};
@@ -822,7 +862,7 @@ private:
                 co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
                     nullptr, false};
             }
-            std::unique_lock commitLock(m_commitMutex, std::try_to_lock);
+            CrossThreadGate commitLock(m_commitGate, std::try_to_lock);
             if (!commitLock.owns_lock())
             {
                 auto message = std::string{"Another block is committing!"};
@@ -957,7 +997,7 @@ private:
             OP_SCHEDULER_LOG(INFO) << "Commit block: " << header->number();
             auto number = header->number();
 
-            std::unique_lock commitLock(m_commitMutex, std::try_to_lock);
+            CrossThreadGate commitLock(m_commitGate, std::try_to_lock);
             if (!commitLock.owns_lock())
             {
                 auto message = std::string{"Another block is committing!"};
@@ -1035,7 +1075,7 @@ private:
 
             auto ledgerConfig = co_await loadCommitLedgerConfig(header);
             m_lastCommittedBlockNumber.store(number);
-            commitLock.unlock();
+            commitLock.release();
 
             OP_SCHEDULER_LOG(INFO) << "Commit block finished: " << number;
             notifyBlockNumber(number);
@@ -1072,10 +1112,10 @@ private:
             OP_SCHEDULER_LOG(INFO) << "Import execute: " << number;
 
             // Same pair as coExecuteBlock: imports must not overlap an execute (shared
-            // m_executeMutex) or a commit's mergeBackStorage (m_commitMutex). Unlike
+            // execute gate) or a commit's mergeBackStorage (commit gate). Unlike
             // coExecuteBlock: NO pending-slot classification, NO continuity check, NO
             // fast path, NO lastExecuted/lastCommitted movement, NO pushView.
-            std::unique_lock executeLock(m_executeMutex, std::try_to_lock);
+            CrossThreadGate executeLock(m_executeGate, std::try_to_lock);
             if (!executeLock.owns_lock())
             {
                 auto message = std::string{"Another block is executing!"};
@@ -1083,7 +1123,7 @@ private:
                 co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
                     nullptr, nullptr, nullptr};
             }
-            std::unique_lock commitLock(m_commitMutex, std::try_to_lock);
+            CrossThreadGate commitLock(m_commitGate, std::try_to_lock);
             if (!commitLock.owns_lock())
             {
                 auto message = std::string{"Another block is committing!"};
@@ -2041,9 +2081,9 @@ private:
         std::function<void(bcos::Error::Ptr)>)>
         m_transactionNotifier;
     std::atomic<bool> m_crossCheckIncrementalRoot = false;
-    std::mutex m_executeMutex;
+    std::counting_semaphore<1> m_executeGate{1};
     std::atomic<int64_t> m_lastExecutedBlockNumber{-1};
-    std::mutex m_commitMutex;
+    std::counting_semaphore<1> m_commitGate{1};
     std::atomic<int64_t> m_lastCommittedBlockNumber{-1};
     std::mutex m_pendingMutex;
     std::optional<PendingBlock> m_pending;

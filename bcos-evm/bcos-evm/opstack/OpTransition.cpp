@@ -323,8 +323,12 @@ bcos::protocol::TransactionReceipt::Ptr opTransition(const evmone::state::StateV
     const auto base_fee = (rev >= EVMC_LONDON) ? block.base_fee : 0;
     assert(tx.max_gas_price >= base_fee);
     assert(tx.max_gas_price >= tx.max_priority_gas_price);
-    const auto priority_gas_price =
-        std::min(tx.max_priority_gas_price, tx.max_gas_price - base_fee);
+    // opValidate guarantees max_gas_price >= base_fee; clamp anyway so a violated
+    // precondition saturates instead of wrapping past 2^256 (the asserts vanish
+    // under NDEBUG).
+    const auto payable_gas_price =
+        tx.max_gas_price >= base_fee ? tx.max_gas_price - base_fee : intx::uint256{0};
+    const auto priority_gas_price = std::min(tx.max_priority_gas_price, payable_gas_price);
     const auto effective_gas_price = base_fee + priority_gas_price;
 
     assert(effective_gas_price <= tx.max_gas_price);
@@ -371,7 +375,11 @@ bcos::protocol::TransactionReceipt::Ptr opTransition(const evmone::state::StateV
     {
         state.touch(OP_OPERATOR_FEE_VAULT).balance += opAtUsed;
         assert(props.operator_cost_at_gas_limit >= opAtUsed);
-        sender_acc.balance += props.operator_cost_at_gas_limit - opAtUsed;
+        // Same NDEBUG-proofing as the gas-price clamp: opValidate guarantees the
+        // precondition; clamp so a violation cannot wrap the refund to ~2^256.
+        sender_acc.balance += props.operator_cost_at_gas_limit >= opAtUsed ?
+            props.operator_cost_at_gas_limit - opAtUsed :
+            intx::uint256{0};
     }
 
     evmone::state::TransactionReceipt receipt{tx.type, outcome.result.status_code, gas_used, {},
