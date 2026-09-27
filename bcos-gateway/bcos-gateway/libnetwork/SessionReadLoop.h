@@ -119,8 +119,22 @@ task::Task<void> BasicSession<DecoderT, SocketT>::readLoop()
                     if (meta.status == FrameMeta::Status::Frame)
                     {
                         NetworkException e;
-                        onMessage(e, std::move(meta));
-                        recvBuffer.onRead(meta.consumed);
+                        if (meta.takeBuffer) [[unlikely]]
+                        {
+                            // Large frame (the decoder left meta.frame empty): move the whole
+                            // receive buffer into the frame instead of copying it out. The tail
+                            // bytes after the frame reseed a fresh buffer; the frame's bytes
+                            // left with the moved storage, so there is no onRead for them.
+                            meta.frameOffset = static_cast<uint32_t>(
+                                recvBuffer.takeStorage(meta.frame, meta.consumed));
+                            meta.takeBuffer = false;
+                            onMessage(e, std::move(meta));
+                        }
+                        else
+                        {
+                            onMessage(e, std::move(meta));
+                            recvBuffer.onRead(meta.consumed);
+                        }
                     }
                     else if (meta.status == FrameMeta::Status::NeedMoreData)
                     {

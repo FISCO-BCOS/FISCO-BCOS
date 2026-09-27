@@ -83,6 +83,28 @@ void bcos::gateway::SessionRecvBuffer::moveToHeader()
         m_writePos = 0;
     }
 }
+std::size_t bcos::gateway::SessionRecvBuffer::takeStorage(bytes& out, std::size_t frameLen)
+{
+    auto frameStart = m_readPos;
+    auto frameEnd = frameStart + frameLen;
+    std::size_t tail = m_writePos - frameEnd;
+
+    out = std::move(m_recvBuffer);
+    // The reseeded buffer needs to hold only the tail; the next large frame grows it again
+    // through the usual NeedMoreData path. A small floor keeps the value-initialized memset
+    // of the fresh allocation cheaper than the frame copy this path avoids.
+    m_recvBufferSize = std::max(tail, TAKE_STORAGE_FLOOR);
+    m_recvBuffer.resize(m_recvBufferSize);
+    if (tail > 0)
+    {
+        std::memcpy(m_recvBuffer.data(), out.data() + frameEnd, tail);
+    }
+    // drop the stolen tail bytes from the frame vector (size-only, no relocation)
+    out.resize(frameEnd);
+    m_readPos = 0;
+    m_writePos = tail;
+    return frameStart;
+}
 bcos::bytesConstRef bcos::gateway::SessionRecvBuffer::asReadBuffer() const
 {
     return {m_recvBuffer.data() + m_readPos, m_writePos - m_readPos};

@@ -96,14 +96,15 @@ BOOST_AUTO_TEST_CASE(decodesCompleteV0Frame)
     BOOST_REQUIRE(meta.status == FrameMeta::Status::Frame);
     BOOST_CHECK_EQUAL(meta.consumed, frame.size());
     BOOST_CHECK_EQUAL(meta.seq, 0x11223344);
-    BOOST_CHECK(!meta.isResp);
-    BOOST_CHECK(meta.dstID.empty());
+    BOOST_CHECK(!meta.takeBuffer);
     BOOST_CHECK_EQUAL(meta.frame.size(), frame.size());
-    BOOST_CHECK(std::equal(meta.frame.begin(), meta.frame.end(), frame.begin()));
+    auto frameData = meta.frameData();
+    BOOST_CHECK_EQUAL(frameData.size(), frame.size());
+    BOOST_CHECK(std::equal(frameData.begin(), frameData.end(), frame.begin()));
 
     // the decoded frame round-trips through Message::decode
     Message message;
-    BOOST_REQUIRE(message.decode(ref(meta.frame)) > 0);
+    BOOST_REQUIRE(message.decode(meta.frameData()) > 0);
     BOOST_CHECK_EQUAL(message.seq(), 0x11223344);
     BOOST_CHECK_EQUAL(message.payload().size(), payload.size());
 }
@@ -165,19 +166,83 @@ BOOST_AUTO_TEST_CASE(decodesV2ExtendedHeader)
     BOOST_REQUIRE(meta.status == FrameMeta::Status::Frame);
     BOOST_CHECK_EQUAL(meta.consumed, frame.size());
     BOOST_CHECK_EQUAL(meta.seq, 7);
-    BOOST_CHECK(meta.isResp);
-    BOOST_CHECK_EQUAL(meta.dstID, "dstNode");
+
+    // the response-decision fields are peeked at the libp2p boundary, not lifted by the decoder
+    auto respInfo = Message::peekResponseFrameInfo(meta.frameData());
+    BOOST_REQUIRE(respInfo.has_value());
+    BOOST_CHECK(respInfo->isResp);
+    BOOST_CHECK_EQUAL(respInfo->dstP2PNodeID, "dstNode");
 }
 
-BOOST_AUTO_TEST_CASE(protocolErrorOnTruncatedExtendedHeader)
+BOOST_AUTO_TEST_CASE(truncatedExtendedHeaderRejectedAtLibp2pBoundary)
 {
     P2PDecoder decoder;
     // version V2 promises the extended header (ttl/src/dst), but the declared frame length
-    // only covers the 14-byte base header
+    // only covers the 14-byte base header. Stream splitting no longer inspects the extended
+    // header, so the decoder hands the frame over; the libp2p boundary rejects it instead.
     auto frame = buildFrame(0, 0, 0, {});
     stamp16(frame, 4, (uint16_t)bcos::protocol::ProtocolVersion::V2);
     auto meta = decoder.tryDecode(ref(frame));
-    BOOST_CHECK(meta.status == FrameMeta::Status::ProtocolError);
+    BOOST_REQUIRE(meta.status == FrameMeta::Status::Frame);
+
+    auto respInfo = Message::peekResponseFrameInfo(meta.frameData());
+    BOOST_REQUIRE(respInfo.has_value());
+    BOOST_CHECK(!respInfo->isResp);
+
+    // a RESPONSE-flagged variant drives the peek down the extended-header walk: bounds
+    // violation yields nullopt, and Message::decode rejects the frame as well
+    stamp16(frame, 12, (uint16_t)bcos::protocol::MessageExtFieldFlag::RESPONSE);
+    BOOST_CHECK(!Message::peekResponseFrameInfo(ref(frame)).has_value());
+
+    Message message;
+    BOOST_CHECK_THROW(message.decode(ref(frame)), std::out_of_range);
+}
+
+BOOST_AUTO_TEST_CASE(peekResponseFrameInfoBoundsAndVariants)
+{
+    // too short for the fixed header
+    bytes tiny(10, 0xff);
+    BOOST_CHECK(!Message::peekResponseFrameInfo(ref(tiny)).has_value());
+
+    // V0 response frame: isResp set, no extended header on the wire -> empty dstP2PNodeID
+    auto v0Resp = buildFrame(0, 1, (uint16_t)bcos::protocol::MessageExtFieldFlag::RESPONSE, {});
+    auto v0Info = Message::peekResponseFrameInfo(ref(v0Resp));
+    BOOST_REQUIRE(v0Info.has_value());
+    BOOST_CHECK(v0Info->isResp);
+    BOOST_CHECK(v0Info->dstP2PNodeID.empty());
+
+    // non-response V2 frame: peek stops at the ext flag and never walks the extended header
+    auto v2Plain = buildFrame((uint16_t)bcos::protocol::ProtocolVersion::V2, 2, 0, bytes(4, 'q'),
+        "srcNode", "dstNode");
+    auto v2Info = Message::peekResponseFrameInfo(ref(v2Plain));
+    BOOST_REQUIRE(v2Info.has_value());
+    BOOST_CHECK(!v2Info->isResp);
+    BOOST_CHECK(v2Info->dstP2PNodeID.empty());
+}
+
+BOOST_AUTO_TEST_CASE(largeFrameRequestsTakeBuffer)
+{
+    P2PDecoder decoder;
+    // at/above FRAME_TAKE_BUFFER_THRESHOLD the decoder leaves `frame` empty and asks the read
+    // loop to swap the whole receive buffer in instead of copying
+    auto frame = buildFrame(0, 9, 0, bytes(FRAME_TAKE_BUFFER_THRESHOLD, 'L'));
+    auto meta = decoder.tryDecode(ref(frame));
+    BOOST_REQUIRE(meta.status == FrameMeta::Status::Frame);
+    BOOST_CHECK(meta.takeBuffer);
+    BOOST_CHECK(meta.frame.empty());
+    BOOST_CHECK_EQUAL(meta.consumed, frame.size());
+
+    // just below the threshold: the copy path, frameData() exposes exactly the frame
+    auto smallFrame = buildFrame(
+        0, 10, 0, bytes(FRAME_TAKE_BUFFER_THRESHOLD - Message::MESSAGE_HEADER_LENGTH - 1, 's'));
+    auto smallMeta = decoder.tryDecode(ref(smallFrame));
+    BOOST_REQUIRE(smallMeta.status == FrameMeta::Status::Frame);
+    BOOST_CHECK(!smallMeta.takeBuffer);
+    BOOST_CHECK_EQUAL(smallMeta.frame.size(), smallFrame.size());
+    BOOST_CHECK_EQUAL(smallMeta.frameOffset, 0);
+    BOOST_REQUIRE_EQUAL(smallMeta.frameData().size(), smallFrame.size());
+    BOOST_CHECK(
+        std::equal(smallMeta.frameData().begin(), smallMeta.frameData().end(), smallFrame.begin()));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

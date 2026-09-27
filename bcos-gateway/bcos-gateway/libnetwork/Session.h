@@ -60,10 +60,20 @@ public:
     bool onWrite(std::size_t _dataSize);
     bool resizeBuffer(size_t _bufferSize);
     void moveToHeader();
+    /// Take-buffer handover for large frames (FrameMeta::takeBuffer): moves the whole storage
+    /// into `out` with the frame at [old readPos, old readPos + frameLen), reseeds this buffer
+    /// with just the tail bytes after the frame, and returns the frame's start offset (the old
+    /// readPos). The caller (the read loop) must NOT call onRead for this frame afterwards —
+    /// the consumed bytes left with `out`.
+    std::size_t takeStorage(bytes& out, std::size_t frameLen);
     bcos::bytesConstRef asReadBuffer() const;
     bcos::bytesConstRef asWriteBuffer() const;
 
 private:
+    /// Minimum size of the fresh buffer reseeded by takeStorage — must be nonzero so the next
+    /// read has somewhere to land; kept small since the NeedMoreData grow path re-expands it.
+    constexpr static std::size_t TAKE_STORAGE_FLOOR = 4 * 1024;
+
     // 0         readPos    writePos       m_recvBufferSize
     // |___________|__________|____________|
     //
@@ -271,7 +281,8 @@ public:
     // manager, cancel its timeout, update the owner session's pending-seq bookkeeping and invoke
     // the callback with the frame. Returns false when nothing is registered for the seq (it
     // already timed out or was settled elsewhere). DECIDING which frames are responses for this
-    // node is the protocol layer's policy — libnetwork never interprets FrameMeta::isResp/dstID.
+    // node is the protocol layer's policy — FrameMeta carries only the correlation key (seq);
+    // libnetwork never interprets the frame's header fields.
     bool claimResponse(NetworkException const& e, FrameMeta meta);
 
     /// Settle one queued callback that resumes a suspended waiter, delivering `args...` to it.
@@ -1137,10 +1148,11 @@ void BasicSession<DecoderT, SocketT>::onMessage(NetworkException const& e, Frame
                 {
                     return;
                 }
-                // Every decoded frame goes to the message handler: interpreting the metadata
-                // (is this a response? is it addressed to this node?) is the protocol layer's
-                // policy — libnetwork only transports frames. The handler drives the
-                // response-correlation mechanism through claimResponse when it wants it.
+                // Every decoded frame goes to the message handler: interpreting the frame's
+                // header fields (is this a response? is it addressed to this node?) is the
+                // protocol layer's policy — libnetwork only transports frames. The handler
+                // drives the response-correlation mechanism through claimResponse when it
+                // wants it.
                 session->m_messageHandler(e, session, std::move(meta));
             }
             catch (std::exception const& e)
@@ -1161,7 +1173,7 @@ bool BasicSession<DecoderT, SocketT>::claimResponse(NetworkException const& e, F
         SESSION_LOG(WARNING) << LOG_BADGE("claimResponse")
                              << LOG_DESC("callback not found, maybe the callback timeout")
                              << LOG_KV("endpoint", nodeIPEndpoint())
-                             << LOG_KV("seq", meta.seq) << LOG_KV("resp", meta.isResp);
+                             << LOG_KV("seq", meta.seq);
         return false;
     }
     // erase on the session that REGISTERED the seq: the callback manager is host-shared, so the

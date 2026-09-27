@@ -308,26 +308,41 @@ void Service::onConnect(NetworkException e, std::shared_ptr<P2PInfo> p2pInfo, Se
                 return;
             }
             // Response correlation is P2P policy, so it lives here rather than in libnetwork: a
-            // response frame addressed to THIS node (or carrying no dstID, the V0 form) settles
-            // the pending request's callback; a frame addressed to another node falls through to
-            // the router like any other — a routed response must never consume a LOCAL pending
-            // callback on a seq collision.
-            if (meta.isResp && (meta.dstID.empty() || meta.dstID == self->m_nodeID ||
-                                   meta.dstID == self->m_selfInfo.p2pID))
+            // response frame addressed to THIS node (or carrying no dstP2PNodeID, the V0 form)
+            // settles the pending request's callback; a frame addressed to another node falls
+            // through to the router like any other — a routed response must never consume a
+            // LOCAL pending callback on a seq collision. A malformed frame (nullopt) falls
+            // through too: Message::decode below rejects it as a ProtocolError.
+            auto respInfo = Message::peekResponseFrameInfo(meta.frameData());
+            if (respInfo && respInfo->isResp &&
+                (respInfo->dstP2PNodeID.empty() || respInfo->dstP2PNodeID == self->m_nodeID ||
+                    respInfo->dstP2PNodeID == self->m_selfInfo.p2pID))
             {
                 session->claimResponse(exception, std::move(meta));
                 return;
             }
             Message message;
-            if (message.decode(ref(meta.frame)) < 0) [[unlikely]]
+            // decode's bounds checks (checkOffset) throw out_of_range on a malformed frame;
+            // treat that exactly like a decode error: ProtocolError drops the session below.
+            // decodeOwned takes over the frame storage: the payload becomes a view instead of
+            // a second full-frame copy.
+            try
             {
-                self->onMessage(makeNetworkException(P2PExceptionType::ProtocolError,
-                                    "ProtocolError(decode message error)"),
-                    std::move(session), Message{}, p2pSessionWeakPtr);
-                return;
+                if (message.decodeOwned(std::move(meta.frame), meta.frameOffset) >= 0) [[likely]]
+                {
+                    self->onMessage(
+                        exception, std::move(session), std::move(message), p2pSessionWeakPtr);
+                    return;
+                }
             }
-            self->onMessage(
-                exception, std::move(session), std::move(message), p2pSessionWeakPtr);
+            catch (std::exception const& e)
+            {
+                SERVICE_LOG(WARNING) << LOG_DESC("decode message exception")
+                                     << LOG_KV("msg", boost::diagnostic_information(e));
+            }
+            self->onMessage(makeNetworkException(P2PExceptionType::ProtocolError,
+                                "ProtocolError(decode message error)"),
+                std::move(session), Message{}, p2pSessionWeakPtr);
         });
 
     // Note: the lock must be here, otherwise there will be more than one started sessions,

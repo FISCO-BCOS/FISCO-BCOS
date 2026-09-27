@@ -433,7 +433,7 @@ BOOST_AUTO_TEST_CASE(doReadTest)
                     bcos::WriteGuard guard(x_mutex);
                     BOOST_CHECK_EQUAL(errorCodeOf(e), P2PExceptionType::Success);
                     Message message;
-                    BOOST_REQUIRE(message.decode(ref(meta.frame)) > 0);
+                    BOOST_REQUIRE(message.decode(meta.frameData()) > 0);
                     BOOST_CHECK(message.lengthDirect() > 0);
                     // every payload byte of the reassembled frame must be 0xff
                     auto payload = message.payload();
@@ -1321,6 +1321,171 @@ BOOST_AUTO_TEST_CASE(SessionRecvBufferTest)
         BOOST_CHECK_EQUAL(recvBuffer.asWriteBuffer().size(),
             recvBufferSize - (writeDataSize1 + writeDataSize3 - readDataSize1));
     }
+}
+
+BOOST_AUTO_TEST_CASE(SessionRecvBufferTakeStorageTest)
+{
+    std::size_t recvBufferSize = 1024;
+    SessionRecvBuffer recvBuffer(recvBufferSize);
+
+    // layout: [0,100) consumed prefix, [100,700) the frame being taken, [700,800) tail
+    constexpr std::size_t prefixLen = 100;
+    constexpr std::size_t frameLen = 600;
+    constexpr std::size_t tailLen = 100;
+    auto writeBuffer = recvBuffer.asWriteBuffer();
+    for (std::size_t i = 0; i < prefixLen + frameLen + tailLen; ++i)
+    {
+        const_cast<byte*>(writeBuffer.data())[i] = static_cast<byte>(i);
+    }
+    BOOST_REQUIRE(recvBuffer.onWrite(prefixLen + frameLen + tailLen));
+    BOOST_REQUIRE(recvBuffer.onRead(prefixLen));  // consume the prefix
+
+    bytes frameStorage;
+    auto frameStart = recvBuffer.takeStorage(frameStorage, frameLen);
+
+    // the moved storage keeps the dead prefix; the frame starts at the old readPos, and the
+    // stolen tail is truncated off the end
+    BOOST_CHECK_EQUAL(frameStart, prefixLen);
+    BOOST_REQUIRE_EQUAL(frameStorage.size(), prefixLen + frameLen);
+    for (std::size_t i = 0; i < prefixLen + frameLen; ++i)
+    {
+        BOOST_CHECK_EQUAL(frameStorage[i], static_cast<byte>(i));
+    }
+
+    // the buffer is reseeded with exactly the tail
+    BOOST_CHECK_EQUAL(recvBuffer.readPos(), 0);
+    BOOST_CHECK_EQUAL(recvBuffer.writePos(), tailLen);
+    BOOST_CHECK_EQUAL(recvBuffer.dataSize(), tailLen);
+    auto readBuffer = recvBuffer.asReadBuffer();
+    BOOST_REQUIRE_EQUAL(readBuffer.size(), tailLen);
+    for (std::size_t i = 0; i < tailLen; ++i)
+    {
+        BOOST_CHECK_EQUAL(readBuffer[i], static_cast<byte>(prefixLen + frameLen + i));
+    }
+
+    // take again with an empty tail: the fresh buffer keeps write space for the next read
+    bytes all;
+    auto start2 = recvBuffer.takeStorage(all, tailLen);
+    BOOST_CHECK_EQUAL(start2, 0);
+    BOOST_REQUIRE_EQUAL(all.size(), tailLen);
+    for (std::size_t i = 0; i < tailLen; ++i)
+    {
+        BOOST_CHECK_EQUAL(all[i], static_cast<byte>(prefixLen + frameLen + i));
+    }
+    BOOST_CHECK_EQUAL(recvBuffer.readPos(), 0);
+    BOOST_CHECK_EQUAL(recvBuffer.writePos(), 0);
+    BOOST_CHECK_EQUAL(recvBuffer.dataSize(), 0);
+    BOOST_CHECK(recvBuffer.asWriteBuffer().size() > 0);
+}
+
+namespace
+{
+bytes buildWireFrame(uint32_t _seq, bytes const& _payload)
+{
+    Message message;
+    message.setSeq(_seq);
+    bytes header;
+    BOOST_REQUIRE(message.encodeHeader(header));
+    bytes frame = std::move(header);
+    frame.insert(frame.end(), _payload.begin(), _payload.end());
+    Message::stampLength(frame, static_cast<uint32_t>(frame.size()));
+    return frame;
+}
+}  // namespace
+
+// Frames at least FRAME_TAKE_BUFFER_THRESHOLD take the buffer-swap path instead of being
+// copied out of the receive buffer (FrameMeta::takeBuffer). [A small][B large][C small] in a
+// single read exercises the two hard parts of the swap: B is decoded with a dead prefix
+// (frameOffset > 0) and a non-empty tail (C) that must reseed the fresh buffer.
+BOOST_AUTO_TEST_CASE(largeFrameTakesReceiveBuffer)
+{
+    auto fakeSocket = std::make_shared<FakeSocket>();
+    auto fakeAsio = std::make_shared<FakeASIO>();
+    {
+        auto fakeHost = std::make_shared<FakeHost<FakeSocket>>(fakeAsio, nullptr);
+
+        auto frameA = buildWireFrame(1, bytes(10, 'a'));
+        auto frameB = buildWireFrame(2, bytes(FRAME_TAKE_BUFFER_THRESHOLD, 'b'));
+        auto frameC = buildWireFrame(3, bytes(20, 'c'));
+        auto stream = std::make_shared<std::vector<uint8_t>>();
+        stream->insert(stream->end(), frameA.begin(), frameA.end());
+        stream->insert(stream->end(), frameB.begin(), frameB.end());
+        stream->insert(stream->end(), frameC.begin(), frameC.end());
+
+        // forceSize: the whole stream lands in one read (maxReadDataSize lifted above the
+        // stream size), so A/B/C decode in one inner-loop pass and B's handover sees the
+        // dead prefix (readPos > 0) plus a non-empty tail
+        auto session = std::make_shared<FakeSession>(
+            fakeSocket, *fakeHost, stream->size() + 1024, true);
+        session->setMaxReadDataSize(4 * 1024 * 1024);
+
+        struct Received
+        {
+            bytes frame;
+            uint32_t frameOffset;
+            std::size_t storageSize;
+        };
+        std::mutex x_received;
+        std::vector<Received> received;
+        session->setMessageHandler(
+            [&](NetworkException e, FakeSession::Ptr, FrameMeta meta) {
+                if (errorCodeOf(e) != 0)
+                {
+                    return;
+                }
+                auto data = meta.frameData();
+                std::lock_guard lock(x_received);
+                received.push_back(Received{
+                    bytes(data.begin(), data.end()), meta.frameOffset, meta.frame.size()});
+            });
+        session->startWithPolicy<FakeASIO::ReadPolicy>();
+
+        fakeAsio->asyncAppendRecvPacket(stream);
+
+        size_t retryTimes = 0;
+        while (true)
+        {
+            {
+                std::lock_guard lock(x_received);
+                if (received.size() == 3)
+                {
+                    break;
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            BOOST_REQUIRE(++retryTimes < 500);
+        }
+
+        {
+            std::lock_guard lock(x_received);
+            BOOST_REQUIRE_EQUAL(received.size(), 3);
+            BOOST_CHECK(received[0].frame == frameA);
+            BOOST_CHECK(received[1].frame == frameB);
+            BOOST_CHECK(received[2].frame == frameC);
+            // A and C took the copy path: storage is exactly the frame
+            BOOST_CHECK_EQUAL(received[0].frameOffset, 0);
+            BOOST_CHECK_EQUAL(received[0].storageSize, frameA.size());
+            BOOST_CHECK_EQUAL(received[2].frameOffset, 0);
+            BOOST_CHECK_EQUAL(received[2].storageSize, frameC.size());
+            // B took the buffer: storage = A's consumed prefix + B, tail (C) truncated away
+            BOOST_CHECK_EQUAL(received[1].frameOffset, frameA.size());
+            BOOST_CHECK_EQUAL(received[1].storageSize, frameA.size() + frameB.size());
+        }
+
+        // Teardown (same as doReadTest): tolerant handler, then unwind the parked read.
+        session->setMessageHandler([](NetworkException, FakeSession::Ptr, FrameMeta) {});
+        fakeAsio->stopReads();
+        size_t drainRetry = 0;
+        while (fakeAsio->readsInFlight() != 0 && drainRetry < 200)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            drainRetry++;
+        }
+        BOOST_REQUIRE_EQUAL(fakeAsio->readsInFlight(), 0);
+        session->setSocket(nullptr);
+    }
+
+    fakeSocket->close();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

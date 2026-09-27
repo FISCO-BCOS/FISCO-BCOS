@@ -16,28 +16,34 @@
  * @file FrameMeta.h
  * @brief FrameMeta + the FrameDecoder concept: the seam that keeps libnetwork a generic
  *        framed-transport engine. The session layer never sees a concrete message type —
- *        inbound, a Decoder splits the byte stream into owned frames plus opaque metadata
- *        (sequence number, response flag, destination id) that the session delivers,
- *        uninterpreted, to the message handler; outbound, the caller hands over an
- *        already-encoded header and payload views.
+ *        inbound, a Decoder splits the byte stream into owned frames plus the sequence
+ *        number (libnetwork's response-correlation key); outbound, the caller hands over
+ *        an already-encoded header and payload views. Protocol-level header fields
+ *        (response flag, routing destination, ...) are the protocol layer's business:
+ *        it re-reads them from the frame bytes at its own boundary.
  */
 #pragma once
 
 #include "bcos-utilities/Common.h"
 #include <concepts>
 #include <cstdint>
-#include <string>
 
 namespace bcos::gateway
 {
-/// One decode step's output: both the stream-splitting result and every piece of metadata the
+/// Frames at least this large are handed over through the take-buffer path (see
+/// FrameMeta::takeBuffer): the read loop swaps the whole receive buffer into FrameMeta::frame
+/// instead of copying the frame out. Below this, a memcpy is cheaper than a buffer swap plus
+/// a fresh allocation.
+constexpr uint32_t FRAME_TAKE_BUFFER_THRESHOLD = 256 * 1024;
+
+/// One decode step's output: both the stream-splitting result and the correlation key the
 /// session needs to dispatch the frame. The wire format is entirely the Decoder's business.
 struct FrameMeta
 {
     enum class Status : uint8_t
     {
         NeedMoreData,   ///< declaredLength holds the frame's total length (buffer-grow hint)
-        Frame,          ///< consumed/frame/seq/isResp/dstID are valid
+        Frame,          ///< consumed/frame/seq are valid
         ProtocolError,  ///< the stream is desynchronized; the session drops the connection
     };
 
@@ -45,16 +51,31 @@ struct FrameMeta
     uint32_t declaredLength = 0;  ///< Status::NeedMoreData: the frame length the header declares
     uint32_t consumed = 0;        ///< Status::Frame: bytes consumed from the read buffer
     uint32_t seq = 0;             ///< response-correlation key
-    bool isResp = false;          ///< response flag, opaque to libnetwork: the message handler
-                                  ///< decides whether it settles a pending request
-                                  ///< (BasicSession::claimResponse)
-    /// Destination node id, opaque to libnetwork (empty for protocols without multi-hop
-    /// routing): the message handler uses it to tell local delivery from forwarding — a routed
-    /// response must never claim a LOCAL pending callback on a seq collision.
-    std::string dstID;
-    /// The complete wire frame (header + payload), owned. Owned because dispatch is asynchronous
-    /// (posted to another executor) while the read buffer is reused and resized.
+    /// Offset of the frame's first byte within `frame`. 0 on the copy path; the read buffer's
+    /// readPos on the take-buffer path, where the dead prefix of already-consumed bytes rides
+    /// along inside the moved vector and is freed with it.
+    uint32_t frameOffset = 0;
+    /// Decoder-to-read-loop hint, never meaningful to the message handler: the frame is at
+    /// least FRAME_TAKE_BUFFER_THRESHOLD bytes, so the decoder left `frame` empty and the read
+    /// loop moves the whole receive buffer in (filling frameOffset) instead of copying. The
+    /// read loop clears the flag before dispatch.
+    bool takeBuffer = false;
+    /// The wire frame storage, owned. Owned because dispatch is asynchronous (posted to another
+    /// executor) while the read buffer is reused and resized. Copy path: exactly the frame
+    /// (header + payload). Take-buffer path: the session's whole former receive buffer with
+    /// the frame at [frameOffset, frameOffset + consumed). Always read through frameData().
     bytes frame;
+
+    /// The decoded wire frame as a view into `frame` — valid for both the copy and the
+    /// take-buffer path; the single access contract for consumers.
+    bytesConstRef frameData() const
+    {
+        if (frame.empty())
+        {
+            return {};
+        }
+        return {frame.data() + frameOffset, consumed};
+    }
 };
 
 /// A stream decoder: splits a TCP byte stream into frames. Stateless formats use an empty

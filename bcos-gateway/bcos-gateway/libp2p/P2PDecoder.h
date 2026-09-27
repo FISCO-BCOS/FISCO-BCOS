@@ -33,9 +33,11 @@ namespace bcos::gateway
 {
 /// Stream decoder for the gateway P2P wire format (the frame layout is documented on Message).
 /// Stateless: every frame is self-delimiting via its 4-byte length prefix, so the decoder
-/// instance carries no state. tryDecode mirrors the header validation of Message::decodeHeader
-/// (FIB-66) plus the MAX_MESSAGE_LENGTH bound, is bounds-safe on arbitrary attacker-controlled
-/// input and never throws (FrameDecoder contract).
+/// instance carries no state. tryDecode validates only what stream splitting needs — the
+/// declared length (FIB-66) plus the MAX_MESSAGE_LENGTH bound and the version range; every
+/// other header field (ext flags, extended header) is parsed at the libp2p boundary
+/// (Message::peekResponseFrameInfo / Message::decode). It is bounds-safe on arbitrary
+/// attacker-controlled input and never throws (FrameDecoder contract).
 class P2PDecoder
 {
 public:
@@ -74,50 +76,24 @@ public:
             return meta;
         }
 
-        // seq (offset 8) + ext (offset 12)
+        // seq (offset 8): libnetwork's response-correlation key, lifted into the frame
+        // metadata. Everything else in the header is parsed at the libp2p boundary.
         meta.seq =
             boost::asio::detail::socket_ops::network_to_host_long(*((const uint32_t*)(data + 8)));
-        uint16_t ext =
-            boost::asio::detail::socket_ops::network_to_host_short(*((const uint16_t*)(data + 12)));
-        meta.isResp = (ext & bcos::protocol::MessageExtFieldFlag::RESPONSE) != 0;
-
-        // Extended header (version > V0): ttl(2) + srcP2PNodeID + dstP2PNodeID. Only the
-        // destination id is lifted into the frame metadata — the message handler uses it to tell
-        // local delivery from forwarding; the full parse happens later in Message::decode.
-        if (version > static_cast<uint16_t>(bcos::protocol::ProtocolVersion::V0))
-        {
-            uint32_t offset = Message::MESSAGE_HEADER_LENGTH + 2;  // skip ttl
-            auto readNodeID = [&](std::string* out) {
-                if (offset + 2 > length) [[unlikely]]
-                {
-                    return false;
-                }
-                uint16_t nodeIDLen = boost::asio::detail::socket_ops::network_to_host_short(
-                    *((const uint16_t*)(data + offset)));
-                offset += 2;
-                if (offset + nodeIDLen > length) [[unlikely]]
-                {
-                    return false;
-                }
-                if (out != nullptr)
-                {
-                    out->assign(data + offset, data + offset + nodeIDLen);
-                }
-                offset += nodeIDLen;
-                return true;
-            };
-            if (!readNodeID(nullptr) || !readNodeID(&meta.dstID)) [[unlikely]]
-            {
-                meta.status = FrameMeta::Status::ProtocolError;
-                return meta;
-            }
-        }
 
         meta.status = FrameMeta::Status::Frame;
         meta.consumed = length;
-        meta.declaredLength = length;
-        // Owned copy: dispatch is asynchronous while the read buffer is reused and resized.
-        meta.frame.assign(data, data + length);
+        if (length >= FRAME_TAKE_BUFFER_THRESHOLD)
+        {
+            // Large frame: leave `frame` empty and let the read loop swap the whole receive
+            // buffer in — cheaper than copying the frame out and allocating a fresh buffer.
+            meta.takeBuffer = true;
+        }
+        else
+        {
+            // Owned copy: dispatch is asynchronous while the read buffer is reused and resized.
+            meta.frame.assign(data, data + length);
+        }
         return meta;
     }
 };

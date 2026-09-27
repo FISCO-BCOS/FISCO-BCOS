@@ -193,8 +193,10 @@ inline std::shared_ptr<std::vector<uint8_t>> buildDecodeErrorFrame()
     return frame;
 }
 
-// A frame that throws during decode: version V2 means the extended header (ttl/src/dst) must
-// follow the 14-byte base header, but the frame ends there — checkOffset throws out_of_range.
+// A frame whose V2 header promises the extended header (ttl/src/dst) but ends after the
+// 14-byte base header. Stream splitting no longer inspects the extended header, so the
+// session delivers it; Message::decode rejects it at the libp2p boundary (checkOffset throws
+// out_of_range) — see P2PDecoderTest.truncatedExtendedHeaderRejectedAtLibp2pBoundary.
 inline std::shared_ptr<std::vector<uint8_t>> buildDecodeExceptionFrame()
 {
     auto frame = buildDecodeErrorFrame();
@@ -313,10 +315,11 @@ BOOST_AUTO_TEST_CASE(DecodeErrorTriggersSessionDrop)
     fakeSocket->close();
 }
 
-// FIB-70: Verify that decode exception triggers session drop.
-// Before the fix, an exception in decode() would leave the session as a zombie.
-// After the fix, drop(UserReason) is called in the catch block.
-BOOST_AUTO_TEST_CASE(DecodeExceptionTriggersSessionDrop)
+// The V2-truncated-extended-header frame used to be rejected inside the session's decode
+// step; with stream splitting limited to length/version validation it is now a complete,
+// consumable frame delivered to the message handler, and the session stays up. (Rejection
+// happens at the libp2p boundary, covered by P2PDecoderTest and Service's ProtocolError path.)
+BOOST_AUTO_TEST_CASE(TruncatedExtendedHeaderIsDeliveredNotDropped)
 {
     auto fakeSocket = std::make_shared<FakeSocket_FIB>();
 
@@ -325,25 +328,41 @@ BOOST_AUTO_TEST_CASE(DecodeExceptionTriggersSessionDrop)
         auto fakeHost = std::make_shared<FakeHost_FIB>(fakeAsio, nullptr);
 
         auto session = std::make_shared<Session_FIB>(fakeSocket, *fakeHost, 16, true);
+        std::atomic<size_t> handlerCalls{0};
         session->setMessageHandler(
-            [](NetworkException e, Session_FIB::Ptr sessionFace, FrameMeta meta) {});
+            [&handlerCalls](NetworkException e, Session_FIB::Ptr sessionFace, FrameMeta meta) {
+                if (errorCodeOf(e) == 0)
+                {
+                    ++handlerCalls;
+                }
+            });
 
         session->startWithPolicy<FakeASIO_FIB::ReadPolicy>();
 
-        // Send a frame that will trigger a decode exception
         fakeAsio->asyncAppendRecvPacket(buildDecodeExceptionFrame());
 
-        // Wait for the session to be dropped
+        // Wait for the frame to be delivered to the message handler
         size_t retryCount = 0;
-        while (session->active() && retryCount < 200)
+        while (handlerCalls.load() == 0 && retryCount < 200)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
             retryCount++;
         }
 
-        // FIB-70 fix: session must be inactive after decode exception
-        BOOST_CHECK(!session->active());
+        BOOST_CHECK_EQUAL(handlerCalls.load(), 1);
+        // the session is NOT dropped: stream splitting succeeded on this frame
+        BOOST_CHECK(session->active());
 
+        session->drop(UserReason);
+        // drain the parked read so the read loop unwinds before the socket is nulled
+        fakeAsio->stopReads();
+        size_t drainRetry = 0;
+        while (fakeAsio->readsInFlight() != 0 && drainRetry < 200)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            drainRetry++;
+        }
+        BOOST_REQUIRE_EQUAL(fakeAsio->readsInFlight(), 0);
         session->setSocket(nullptr);
     }
 

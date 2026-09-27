@@ -395,8 +395,9 @@ task::Task<std::optional<Message>> P2PSession::fastSendP2PMessage(
         co_return std::nullopt;
     }
     // Decode the response frame back into a Message (the session delivers raw frames now).
+    // decodeOwned takes over the frame storage: the payload becomes a view instead of a copy.
     Message respMessage;
-    if (respMessage.decode(ref(response->frame)) < 0) [[unlikely]]
+    if (respMessage.decodeOwned(std::move(response->frame), response->frameOffset) < 0) [[unlikely]]
     {
         BOOST_THROW_EXCEPTION(makeNetworkException(
             P2PExceptionType::ProtocolError, "ProtocolError(decode response message error)"));

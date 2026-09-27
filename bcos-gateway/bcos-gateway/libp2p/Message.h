@@ -27,6 +27,7 @@
 #include <boost/throw_exception.hpp>
 #include <any>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -177,6 +178,14 @@ public:
     // views (see Session::fastSendMessage); kept for tests and legacy callers.
     bool encode(bytes& _buffer);
     int32_t decode(const bytesConstRef& _buffer);
+    /// Receive-path decode that takes ownership of the frame storage instead of copying the
+    /// payload out of it. `storage` is the FrameMeta's frame vector: exactly the frame on the
+    /// copy path (frameOffset == 0), the session's former receive buffer on the take-buffer
+    /// path (frame at [frameOffset, ...)). payload() then views into the owned storage;
+    /// compressed frames fall back to an owned m_payload (decompression materializes new bytes
+    /// anyway). A message decoded this way must not be re-encode()d whole — the send paths
+    /// re-encode the header and pass payload() as views, which stays correct.
+    int32_t decodeOwned(bytes&& storage, uint32_t frameOffset);
     bool isRespPacket() const;
 
     // compress payload if payload need to be compressed
@@ -204,6 +213,20 @@ public:
     /// message object (e.g. broadcast fan-out) is never mutated by an individual send.
     bool encodeHeaderWithExt(bytes& _buffer, uint16_t _wireExt) const;
 
+    /// The response-decision fields of an encoded frame's wire header, lifted without a full
+    /// decode. dstP2PNodeID is empty for V0 frames (no extended header on the wire).
+    struct ResponseFrameInfo
+    {
+        bool isResp = false;
+        std::string dstP2PNodeID;
+    };
+    /// Bounds-safe peek at an encoded frame: the response flag and, for version > V0, the
+    /// dstP2PNodeID. The Service receive path uses this to tell a response addressed to this
+    /// node from a routed one before settling a pending request — a routed response must never
+    /// consume a LOCAL pending callback on a seq collision. Returns std::nullopt when the
+    /// frame is malformed; the caller then falls through to Message::decode's error path.
+    static std::optional<ResponseFrameInfo> peekResponseFrameInfo(const bytesConstRef& _frame);
+
     /// Patch the frame total length into an already-encoded header (offset 0, network order).
     /// The send path zero-copies the payload views, so the final wire length is only known
     /// after the header was encoded.
@@ -215,6 +238,10 @@ public:
 protected:
     bool encodeHeaderImpl(bytes& _buffer, uint16_t _wireExt) const;
     int32_t decodeHeader(const bytesConstRef& _buffer);
+    /// Shared decode body. When _frameOwned is true the payload is recorded as an (offset,
+    /// size) view into m_ownedFrame — _viewStart is the frame's offset within m_ownedFrame —
+    /// instead of being copied into m_payload.
+    int32_t decodeImpl(const bytesConstRef& _buffer, bool _frameOwned, uint32_t _viewStart);
 
     mutable uint32_t m_length = 0;
     uint16_t m_version = (uint16_t)(bcos::protocol::ProtocolVersion::V0);
@@ -231,6 +258,16 @@ protected:
 
     P2PMessageOptions m_options;  ///< options fields
     bytes m_payload;              ///< payload data
+
+    // decodeOwned mode: the frame storage is owned here and the payload is a position-based
+    // (offset, size) view into it — positions stay valid across the default copy/move
+    // constructors (a copy deep-copies the vector and the offsets index the new buffer), so
+    // no custom special members are needed. m_payloadInFrame is false on the send path, on
+    // copy-decode, and for compressed frames (decompression materializes m_payload).
+    bytes m_ownedFrame;
+    uint32_t m_payloadOffsetInFrame = 0;
+    uint32_t m_payloadSizeInFrame = 0;
+    bool m_payloadInFrame = false;
 
     std::any m_extAttr = nullptr;  ///< message additional attributes
 };

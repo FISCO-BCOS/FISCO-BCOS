@@ -423,8 +423,80 @@ int32_t Message::decodeHeader(const bytesConstRef& _buffer)
     return offset;
 }
 
+std::optional<Message::ResponseFrameInfo> Message::peekResponseFrameInfo(
+    const bytesConstRef& _frame)
+{
+    // No-throw, bounds-safe mirror of decodeHeader's layout: unlike checkOffset (which throws
+    // for Message::decode's error path), a bounds violation here just yields nullopt.
+    if (_frame.size() < MESSAGE_HEADER_LENGTH) [[unlikely]]
+    {
+        return std::nullopt;
+    }
+    const byte* data = _frame.data();
+    auto length = static_cast<uint32_t>(_frame.size());
+
+    // version (offset 4) + ext (offset 12)
+    uint16_t version =
+        boost::asio::detail::socket_ops::network_to_host_short(*((const uint16_t*)(data + 4)));
+    uint16_t ext =
+        boost::asio::detail::socket_ops::network_to_host_short(*((const uint16_t*)(data + 12)));
+
+    ResponseFrameInfo info;
+    info.isResp = (ext & bcos::protocol::MessageExtFieldFlag::RESPONSE) != 0;
+    if (!info.isResp || version <= static_cast<uint16_t>(bcos::protocol::ProtocolVersion::V0))
+    {
+        return info;
+    }
+
+    // extended header (version > V0): ttl(2) + srcP2PNodeID + dstP2PNodeID
+    uint32_t offset = MESSAGE_HEADER_LENGTH + 2;  // skip ttl
+    auto readNodeID = [&](std::string* out) {
+        if (offset + 2 > length) [[unlikely]]
+        {
+            return false;
+        }
+        uint16_t nodeIDLen = boost::asio::detail::socket_ops::network_to_host_short(
+            *((const uint16_t*)(data + offset)));
+        offset += 2;
+        if (offset + nodeIDLen > length) [[unlikely]]
+        {
+            return false;
+        }
+        if (out != nullptr)
+        {
+            out->assign(data + offset, data + offset + nodeIDLen);
+        }
+        offset += nodeIDLen;
+        return true;
+    };
+    if (!readNodeID(nullptr) || !readNodeID(&info.dstP2PNodeID)) [[unlikely]]
+    {
+        return std::nullopt;
+    }
+    return info;
+}
+
 int32_t Message::decode(const bytesConstRef& _buffer)
 {
+    return decodeImpl(_buffer, false, 0);
+}
+
+int32_t Message::decodeOwned(bytes&& storage, uint32_t frameOffset)
+{
+    m_ownedFrame = std::move(storage);
+    if (frameOffset >= m_ownedFrame.size()) [[unlikely]]
+    {
+        return MessageDecodeStatus::MESSAGE_INCOMPLETE;
+    }
+    return decodeImpl(
+        {m_ownedFrame.data() + frameOffset, m_ownedFrame.size() - frameOffset}, true, frameOffset);
+}
+
+int32_t Message::decodeImpl(const bytesConstRef& _buffer, bool _frameOwned, uint32_t _viewStart)
+{
+    // a fresh decode always resolves the payload mode below
+    m_payloadInFrame = false;
+
     // check if packet header fully received
     if (_buffer.size() < Message::MESSAGE_HEADER_LENGTH)
     {
@@ -495,6 +567,13 @@ int32_t Message::decode(const bytesConstRef& _buffer)
         }
         // reset ext
         m_ext &= (~bcos::protocol::MessageExtFieldFlag::COMPRESS);
+    }
+    else if (_frameOwned)
+    {
+        // zero-copy: the payload stays in the owned frame storage as an (offset, size) view
+        m_payloadInFrame = true;
+        m_payloadOffsetInFrame = _viewStart + static_cast<uint32_t>(offset);
+        m_payloadSizeInFrame = m_length - offset;
     }
     else
     {
@@ -613,11 +692,16 @@ void bcos::gateway::Message::setOptions(P2PMessageOptions _options)
 }
 bcos::bytesConstRef bcos::gateway::Message::payload() const
 {
+    if (m_payloadInFrame)
+    {
+        return {m_ownedFrame.data() + m_payloadOffsetInFrame, m_payloadSizeInFrame};
+    }
     return bcos::ref(m_payload);
 }
 void bcos::gateway::Message::setPayload(bytes _payload)
 {
     m_payload = std::move(_payload);
+    m_payloadInFrame = false;
 }
 void bcos::gateway::Message::setRespPacket()
 {
