@@ -1,3 +1,19 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
 #include <bcos-evm/adapter/StateDiffSanitize.h>
 #include <bcos-evm/eth/Eip7702Recover.h>
 #include <bcos-evm/opstack/OpFeeParams.h>
@@ -503,13 +519,17 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
         // term mirrors the isRegolith switch the fee formula above ran with — pre-Regolith
         // (bedrockConfig on the merged full ladder) legacyTxDataGas carries op-geth's one-time
         // +68 phantom non-zero bytes, which bedrockCalldataGasUsed alone would drop.
-        const auto gasWithOverhead =
-            intx::uint256{bcos::evm::opstack::legacyTxDataGas(
-                signedTxEnvelope, cfg.has_legacy_l1_formula ? cfg.regolith_deposit_fixes : true)} +
-            fee.l1_fee_overhead;
-        props.bedrock_l1_gas_used = gasWithOverhead > std::numeric_limits<uint64_t>::max() ?
-                                        std::numeric_limits<uint64_t>::max() :
-                                        static_cast<uint64_t>(gasWithOverhead);
+        // S1: l1_fee_overhead is the whole-slot uint256 of slot 5, so the addition
+        // itself can wrap in the 256-bit domain (an overhead near 2^256 turns the sum
+        // small) and silently defeat the saturation below. Compare in parts instead:
+        // the short-circuit keeps every arithmetic step wrap-free.
+        const auto txGas = intx::uint256{bcos::evm::opstack::legacyTxDataGas(
+            signedTxEnvelope, cfg.has_legacy_l1_formula ? cfg.regolith_deposit_fixes : true)};
+        const auto u64GasMax = intx::uint256{std::numeric_limits<uint64_t>::max()};
+        props.bedrock_l1_gas_used =
+            (fee.l1_fee_overhead > u64GasMax || txGas > u64GasMax - fee.l1_fee_overhead) ?
+                std::numeric_limits<uint64_t>::max() :
+                static_cast<uint64_t>(txGas + fee.l1_fee_overhead);
         props.bedrock_l1_fee_scalar = fee.l1_fee_scalar;
         // Release-line (#5632) twin of the snapshot above: the overhead-inclusive gas the
         // legacy fee formula actually ran on (op-geth's Uint64() truncation; includes the

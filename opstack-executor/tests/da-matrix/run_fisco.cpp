@@ -1,3 +1,19 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
 // run_fisco.cpp — Task 3: FISCO DA/operator-fee matrix runner.
 //
 // Reads the DA/operator-fee parameter grid (da-matrix/da_matrix.json), computes
@@ -124,7 +140,14 @@ bool computeCase(
     }
 
     // gas: jsoncpp asUInt64() — the overflow rows carry gas=2^64-1 and asDouble()
-    // would round it up to 2^64 (off-by-one).
+    // would round it up to 2^64 (off-by-one). asUInt64() itself THROWS on any
+    // non-integral Json type (S14), and this TU's contract is return-false —
+    // gate the type (and reject negatives) before the read.
+    if (!c["gas"].isIntegral() || (c["gas"].isInt64() && c["gas"].asInt64() < 0))
+    {
+        err = "case '" + id + "' gas must be a non-negative integer";
+        return false;
+    }
     const uint64_t gas = c["gas"].asUInt64();
 
     const auto envBytes = evmc::from_hex(envelopes[envRef].asString());
@@ -312,6 +335,15 @@ int main(int argc, char** argv)
         std::size_t compared = 0, skippedKnown = 0, skippedMissing = 0, mismatches = 0;
         for (const auto& c : cases)
         {
+            // S14: the isObject guard lives in computeCase, which runs only AFTER this
+            // loop indexes c["known_divergence"] — indexing a non-object const
+            // Json::Value is a jsoncpp assert/UB, violating this TU's never-throw
+            // contract. Gate the row shape first (same wording as the golden loop).
+            if (!c.isObject())
+            {
+                std::cerr << "run_fisco: case entries must be JSON objects\n";
+                return 1;
+            }
             // known_divergence rows are registered differences (DIVERGENCES.md) — skip + count.
             if (!c["known_divergence"].isNull())
             {

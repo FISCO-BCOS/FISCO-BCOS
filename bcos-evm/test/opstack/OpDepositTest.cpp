@@ -1,3 +1,19 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
 #include "OpTestReceiptFactory.h"
 #include "StateDiffWriteback.h"
 #include "TestPrinters.h"
@@ -5,8 +21,8 @@
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <evmone/evmone.h>
-#include <boost/test/unit_test.hpp>
 #include <boost/test/tree/decorator.hpp>
+#include <boost/test/unit_test.hpp>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
 #include <bcos-evm/eth/state/host.hpp>
 #include <bcos-evm/eth/state/state.hpp>
@@ -163,8 +179,8 @@ BOOST_AUTO_TEST_CASE(EvmRevertKeepsMintAndChargesActualGas, * boost::unit_test::
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
     ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
-    constexpr auto kRevert = 0x00000000000000000000000000000000000000dd_address;
-    ts[kRevert] = {.nonce = 0,
+    constexpr auto c_revert = 0x00000000000000000000000000000000000000dd_address;
+    ts[c_revert] = {.nonce = 0,
         .balance = intx::uint256{0},
         .storage = {},
         .code = evmc::from_hex("60006000fd").value()};
@@ -172,7 +188,7 @@ BOOST_AUTO_TEST_CASE(EvmRevertKeepsMintAndChargesActualGas, * boost::unit_test::
 
     DepositTx dep{.source_hash = 0x01_bytes32,
         .from = kFrom,
-        .to = kRevert,
+        .to = c_revert,
         .mint = intx::uint256{100},
         .value = intx::uint256{0},
         .gas_limit = 100000,
@@ -427,19 +443,19 @@ BOOST_AUTO_TEST_CASE(DepositResolvesEip7702Delegation, * boost::unit_test::label
     test::TestState ts;
     ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
     constexpr auto kImpl = 0x00000000000000000000000000000000000000aa_address;
-    constexpr auto kEoa = 0x00000000000000000000000000000000000000ab_address;
+    constexpr auto c_eoa = 0x00000000000000000000000000000000000000ab_address;
     ts[kImpl] = {.nonce = 1,
         .balance = intx::uint256{0},
         .storage = {},
         .code = evmc::from_hex("600160005500").value()};
-    ts[kEoa] = {.nonce = 1,
+    ts[c_eoa] = {.nonce = 1,
         .balance = intx::uint256{0},
         .storage = {},
         .code = evmc::from_hex("ef0100").value() + evmone::state::bytes{kImpl.bytes, 20}};
     test::TestBlockHashes hashes;
     DepositTx dep{.source_hash = 0x01_bytes32,
         .from = kFrom,
-        .to = kEoa,
+        .to = c_eoa,
         .mint = std::nullopt,
         .value = intx::uint256{0},
         .gas_limit = 100000,
@@ -450,7 +466,7 @@ BOOST_AUTO_TEST_CASE(DepositResolvesEip7702Delegation, * boost::unit_test::label
         kOpTestReceiptFactory, diff);
     bcos::evm::applyStateDiffStrict(ts, diff);
     BOOST_CHECK_EQUAL(r->status(), 0);
-    BOOST_CHECK_EQUAL(ts.at(kEoa).storage.at(0x00_bytes32), 0x01_bytes32);
+    BOOST_CHECK_EQUAL(ts.at(c_eoa).storage.at(0x00_bytes32), 0x01_bytes32);
 }
 
 // D-08 反作弊（红队 F-7）：委托指向 0x100——必须带 EVMC_DELEGATED 走空码回退，gas=21000；
@@ -463,15 +479,15 @@ BOOST_AUTO_TEST_CASE(DelegationToPrecompileFallsBackToEmptyCode, * boost::unit_t
     test::TestState ts;
     ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
     constexpr auto k100 = 0x0000000000000000000000000000000000000100_address;
-    constexpr auto kEoa = 0x00000000000000000000000000000000000000ac_address;
-    ts[kEoa] = {.nonce = 1,
+    constexpr auto c_eoa = 0x00000000000000000000000000000000000000ac_address;
+    ts[c_eoa] = {.nonce = 1,
         .balance = intx::uint256{0},
         .storage = {},
         .code = evmc::from_hex("ef0100").value() + evmone::state::bytes{k100.bytes, 20}};
     test::TestBlockHashes hashes;
     DepositTx dep{.source_hash = 0x01_bytes32,
         .from = kFrom,
-        .to = kEoa,
+        .to = c_eoa,
         .mint = std::nullopt,
         .value = intx::uint256{0},
         .gas_limit = 100000,
@@ -492,15 +508,15 @@ BOOST_AUTO_TEST_CASE(DepositWarmsSenderPerEip2929, * boost::unit_test::label("fo
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
     ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
-    constexpr auto kProbe = 0x00000000000000000000000000000000000000ba_address;
-    ts[kProbe] = {.nonce = 1,
+    constexpr auto c_probe = 0x00000000000000000000000000000000000000ba_address;
+    ts[c_probe] = {.nonce = 1,
         .balance = intx::uint256{0},
         .storage = {},
         .code = evmc::from_hex("32315000").value()};  // ORIGIN BALANCE POP STOP
     test::TestBlockHashes hashes;
     DepositTx dep{.source_hash = 0x01_bytes32,
         .from = kFrom,
-        .to = kProbe,
+        .to = c_probe,
         .mint = std::nullopt,
         .value = intx::uint256{0},
         .gas_limit = 100000,
@@ -521,8 +537,8 @@ BOOST_AUTO_TEST_CASE(DepositWarmsCoinbasePerEip3651, * boost::unit_test::label("
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
     ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
-    constexpr auto kProbe = 0x00000000000000000000000000000000000000bc_address;
-    ts[kProbe] = {.nonce = 1,
+    constexpr auto c_probe = 0x00000000000000000000000000000000000000bc_address;
+    ts[c_probe] = {.nonce = 1,
         .balance = intx::uint256{0},
         .storage = {},
         .code = evmc::from_hex("41315000").value()};  // COINBASE BALANCE POP STOP
@@ -531,7 +547,7 @@ BOOST_AUTO_TEST_CASE(DepositWarmsCoinbasePerEip3651, * boost::unit_test::label("
     b.coinbase = 0x00000000000000000000000000000000000000c1_address;
     DepositTx dep{.source_hash = 0x01_bytes32,
         .from = kFrom,
-        .to = kProbe,
+        .to = c_probe,
         .mint = std::nullopt,
         .value = intx::uint256{0},
         .gas_limit = 100000,
@@ -560,13 +576,13 @@ BOOST_AUTO_TEST_CASE(WarmColdDifferentialIs2500, * boost::unit_test::label("fork
     const auto run = [&](const evmc::address& target) {
         test::TestState ts;
         ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
-        constexpr auto kProbe = 0x00000000000000000000000000000000000000be_address;
-        ts[kProbe] = {
+        constexpr auto c_probe = 0x00000000000000000000000000000000000000be_address;
+        ts[c_probe] = {
             .nonce = 1, .balance = intx::uint256{0}, .storage = {}, .code = probeCode(target)};
         test::TestBlockHashes hashes;
         DepositTx dep{.source_hash = 0x01_bytes32,
             .from = kFrom,
-            .to = kProbe,
+            .to = c_probe,
             .mint = std::nullopt,
             .value = intx::uint256{0},
             .gas_limit = 100000,
@@ -589,11 +605,11 @@ BOOST_AUTO_TEST_CASE(BridgeDepositSpendsMintedValue, * boost::unit_test::label("
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
     ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
-    constexpr auto kTo = 0x00000000000000000000000000000000000000f1_address;
+    constexpr auto c_to = 0x00000000000000000000000000000000000000f1_address;
     test::TestBlockHashes hashes;
     DepositTx dep{.source_hash = 0x01_bytes32,
         .from = kFrom,
-        .to = kTo,
+        .to = c_to,
         .mint = intx::uint256{100},
         .value = intx::uint256{60},
         .gas_limit = 100000,
@@ -604,7 +620,7 @@ BOOST_AUTO_TEST_CASE(BridgeDepositSpendsMintedValue, * boost::unit_test::label("
         kOpTestReceiptFactory, diff);
     bcos::evm::applyStateDiffStrict(ts, diff);
     BOOST_CHECK_EQUAL(r->status(), 0);
-    BOOST_CHECK_EQUAL(ts.at(kTo).balance, intx::uint256{60});
+    BOOST_CHECK_EQUAL(ts.at(c_to).balance, intx::uint256{60});
     BOOST_CHECK_EQUAL(ts.at(kFrom).balance, intx::uint256{40});
     BOOST_CHECK_EQUAL(ts.at(kFrom).nonce, 1u);
 }
@@ -618,11 +634,11 @@ BOOST_AUTO_TEST_CASE(ValueFundedByPreexistingBalanceWithoutMint, * boost::unit_t
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
     ts[kFrom] = {.nonce = 0, .balance = intx::uint256{100}, .storage = {}, .code = {}};
-    constexpr auto kTo = 0x00000000000000000000000000000000000000f2_address;
+    constexpr auto c_to = 0x00000000000000000000000000000000000000f2_address;
     test::TestBlockHashes hashes;
     DepositTx dep{.source_hash = 0x01_bytes32,
         .from = kFrom,
-        .to = kTo,
+        .to = c_to,
         .mint = std::nullopt,
         .value = intx::uint256{60},
         .gas_limit = 100000,
@@ -633,7 +649,7 @@ BOOST_AUTO_TEST_CASE(ValueFundedByPreexistingBalanceWithoutMint, * boost::unit_t
         kOpTestReceiptFactory, diff);
     bcos::evm::applyStateDiffStrict(ts, diff);
     BOOST_CHECK_EQUAL(r->status(), 0);
-    BOOST_CHECK_EQUAL(ts.at(kTo).balance, intx::uint256{60});
+    BOOST_CHECK_EQUAL(ts.at(c_to).balance, intx::uint256{60});
     BOOST_CHECK_EQUAL(ts.at(kFrom).balance, intx::uint256{40});
 }
 
@@ -645,11 +661,11 @@ BOOST_AUTO_TEST_CASE(ValueFundedJointlyByBalanceAndMint, * boost::unit_test::lab
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
     ts[kFrom] = {.nonce = 0, .balance = intx::uint256{50}, .storage = {}, .code = {}};
-    constexpr auto kTo = 0x00000000000000000000000000000000000000f3_address;
+    constexpr auto c_to = 0x00000000000000000000000000000000000000f3_address;
     test::TestBlockHashes hashes;
     DepositTx dep{.source_hash = 0x01_bytes32,
         .from = kFrom,
-        .to = kTo,
+        .to = c_to,
         .mint = intx::uint256{20},
         .value = intx::uint256{60},
         .gas_limit = 100000,
@@ -660,7 +676,7 @@ BOOST_AUTO_TEST_CASE(ValueFundedJointlyByBalanceAndMint, * boost::unit_test::lab
         kOpTestReceiptFactory, diff);
     bcos::evm::applyStateDiffStrict(ts, diff);
     BOOST_CHECK_EQUAL(r->status(), 0);
-    BOOST_CHECK_EQUAL(ts.at(kTo).balance, intx::uint256{60});
+    BOOST_CHECK_EQUAL(ts.at(c_to).balance, intx::uint256{60});
     BOOST_CHECK_EQUAL(ts.at(kFrom).balance, intx::uint256{10});
 }
 
@@ -700,11 +716,11 @@ BOOST_AUTO_TEST_CASE(ValueOverPostMintBalanceFailsWithFullGasLimit, * boost::uni
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
     ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
-    constexpr auto kTo = 0x00000000000000000000000000000000000000f1_address;
+    constexpr auto c_to = 0x00000000000000000000000000000000000000f1_address;
     test::TestBlockHashes hashes;
     DepositTx dep{.source_hash = 0x01_bytes32,
         .from = kFrom,
-        .to = kTo,
+        .to = c_to,
         .mint = intx::uint256{5},
         .value = intx::uint256{60},
         .gas_limit = 100000,
@@ -946,15 +962,15 @@ BOOST_AUTO_TEST_CASE(BedrockMeteredDepositReportsFullGasLimitOnRevert)
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
     ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
-    constexpr auto kRevert = 0x00000000000000000000000000000000000000dd_address;
-    ts[kRevert] = {.nonce = 0,
+    constexpr auto c_revert = 0x00000000000000000000000000000000000000dd_address;
+    ts[c_revert] = {.nonce = 0,
         .balance = intx::uint256{0},
         .storage = {},
         .code = evmc::from_hex("60006000fd").value()};
     test::TestBlockHashes hashes;
     DepositTx dep{.source_hash = 0x01_bytes32,
         .from = kFrom,
-        .to = kRevert,
+        .to = c_revert,
         .mint = intx::uint256{100},
         .value = intx::uint256{0},
         .gas_limit = 100000,
@@ -965,7 +981,7 @@ BOOST_AUTO_TEST_CASE(BedrockMeteredDepositReportsFullGasLimitOnRevert)
         kOpTestReceiptFactory, diff);
     bcos::evm::applyStateDiffStrict(ts, diff);
     BOOST_CHECK_NE(r->status(), 0);
-    BOOST_CHECK_EQUAL(receiptGasUsed(*r), 100000);  // 全额，而非实际消耗
+    BOOST_CHECK_EQUAL(receiptGasUsed(*r), 100000);                // 全额，而非实际消耗
     BOOST_CHECK_EQUAL(ts.at(kFrom).balance, intx::uint256{100});  // mint 保留
     BOOST_CHECK_EQUAL(ts.at(kFrom).nonce, 1u);
 }
@@ -1065,8 +1081,8 @@ BOOST_AUTO_TEST_CASE(CanyonAndDeltaAddDepositReceiptVersion)
             .is_system_tx = false,
             .data = {}};
         evmone::state::StateDiff diff;
-        const auto r = runDeposit(ts, blkDeposit(), hashes, dep, *cfg, vm, 1234, 30000000,
-            kOpTestReceiptFactory, diff);
+        const auto r = runDeposit(
+            ts, blkDeposit(), hashes, dep, *cfg, vm, 1234, 30000000, kOpTestReceiptFactory, diff);
         BOOST_CHECK_EQUAL(r->status(), 0);
         const auto& meta = r->opStackMeta();
         BOOST_REQUIRE(meta.has_value());

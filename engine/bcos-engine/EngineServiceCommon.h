@@ -37,6 +37,7 @@
 #include <cstddef>
 #include <memory>
 #include <optional>
+#include <semaphore>
 #include <span>
 #include <string>
 #include <string_view>
@@ -44,6 +45,36 @@
 
 namespace bcos::engine
 {
+
+// S6: the Engine API commit sections span co_awaits by design (their comments say so),
+// and task::syncWait may resume the coroutine on another thread — a std::mutex
+// released by a thread that did not acquire it is ISO/POSIX UB. A counting semaphore
+// may be released from ANY thread, so it keeps the same single-holder exclusion
+// without the cross-thread-unlock hazard (EngineTracker::abortIfForeignThread
+// documents the same failure mode and chooses to terminate).
+class CrossThreadCommitGate
+{
+public:
+    explicit CrossThreadCommitGate(std::counting_semaphore<1>& gate) : m_gate(gate)
+    {
+        m_gate.acquire();
+    }
+    ~CrossThreadCommitGate() { release(); }
+    CrossThreadCommitGate(CrossThreadCommitGate const&) = delete;
+    CrossThreadCommitGate& operator=(CrossThreadCommitGate const&) = delete;
+    void release()
+    {
+        if (m_held)
+        {
+            m_gate.release();
+            m_held = false;
+        }
+    }
+
+private:
+    std::counting_semaphore<1>& m_gate;
+    bool m_held = true;
+};
 
 /// One shared definition (was duplicated in EngineTracker.h and EngineServiceImpl.h).
 struct TrackedHeadBlock

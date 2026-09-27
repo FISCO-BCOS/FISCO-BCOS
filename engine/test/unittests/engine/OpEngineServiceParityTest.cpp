@@ -245,14 +245,14 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
 
     bcos::h256 const targetHash(0x42);
     bcos::engine::PayloadID const targetPayloadId = "0xdeadbeef";
-    constexpr bcos::protocol::BlockNumber kTargetNumber = 7;
+    constexpr bcos::protocol::BlockNumber c_targetNumber = 7;
 
     {
         auto guard = tracker.lockExclusive();
         auto entry = std::make_shared<bcos::engine::BuiltPayload>();
         entry->executionPayload.blockHash = targetHash;
         auto header = blockFactory->blockHeaderFactory()->createBlockHeader();
-        header->setNumber(kTargetNumber);
+        header->setNumber(c_targetNumber);
         (void)bcos::engine::publishBuiltPayload(guard, artifacts, targetPayloadId, targetHash,
             entry, bcos::engine::OpPayloadArtifacts{.canonicalHeader = header});
     }
@@ -270,7 +270,7 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
         auto shared = tracker.lockShared();
         initialHeader = bcos::engine::detail::findBuiltHeader(shared, artifacts, targetHash);
         BOOST_REQUIRE(initialHeader);
-        BOOST_CHECK_EQUAL(initialHeader->number(), kTargetNumber);
+        BOOST_CHECK_EQUAL(initialHeader->number(), c_targetNumber);
 
         writer.emplace([&] {
             try
@@ -312,7 +312,7 @@ BOOST_AUTO_TEST_CASE(op_fast_path_concurrent_with_build_publish)
         auto shared = tracker.lockShared();
         auto stableHeader = bcos::engine::detail::findBuiltHeader(shared, artifacts, targetHash);
         BOOST_REQUIRE(stableHeader);
-        BOOST_CHECK_EQUAL(stableHeader->number(), kTargetNumber);
+        BOOST_CHECK_EQUAL(stableHeader->number(), c_targetNumber);
         BOOST_CHECK_EQUAL(stableHeader.get(), initialHeader.get());
     }
 }

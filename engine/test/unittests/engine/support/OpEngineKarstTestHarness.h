@@ -910,9 +910,9 @@ struct KarstProfilePair
 
 using namespace evmc::literals;
 
-inline constexpr auto kDepositFrom = 0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001_address;
-inline constexpr auto kL1Block = 0x4200000000000000000000000000000000000015_address;
-inline const bcos::Address kImportEip1559Sender{"0x1000000000000000000000000000000000000001"};
+inline constexpr auto c_depositFrom = 0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001_address;
+inline constexpr auto c_l1Block = 0x4200000000000000000000000000000000000015_address;
+inline const bcos::Address c_importEip1559Sender{"0x1000000000000000000000000000000000000001"};
 
 inline bcos::protocol::TransactionReceiptFactory::Ptr makeImportReceiptFactory()
 {
@@ -926,8 +926,8 @@ inline bcos::evm::opstack::DepositTx makeImportDeposit(std::string_view label)
     auto digest = hasher.hash(
         bcos::bytesConstRef{reinterpret_cast<const bcos::byte*>(label.data()), label.size()});
     std::memcpy(dep.source_hash.bytes, digest.data(), sizeof(dep.source_hash.bytes));
-    dep.from = kDepositFrom;
-    dep.to = kL1Block;
+    dep.from = c_depositFrom;
+    dep.to = c_l1Block;
     dep.mint = std::nullopt;
     dep.value = intx::uint256{0};
     dep.gas_limit = 0xf4240;
@@ -989,7 +989,7 @@ void seedCommittedGenesis(StorageType& mls, bcos::crypto::Hash::Ptr const& hashI
     auto view = mls.fork();
     view.newMutable();
     bcos::ledger::account::EVMAccount account(
-        view, kImportEip1559Sender, bcos::ledger::account::AddressTableMode::Hex);
+        view, c_importEip1559Sender, bcos::ledger::account::AddressTableMode::Hex);
     bcos::task::syncWait(account.create());
     bcos::task::syncWait(account.setCode({}, {}, hashImpl->emptyHash()));
     bcos::task::syncWait(account.setNonce("0"));
@@ -1035,7 +1035,7 @@ std::unique_ptr<StorageType> makeTestStorage(CheckpointBackend& checkpoint, Cach
 }
 
 /// Signed EIP-1559 envelope calling @p to with empty data (sender fixed to
-/// kImportEip1559Sender by forceSender + mirror fields, OpSchedulerTest precedent).
+/// c_importEip1559Sender by forceSender + mirror fields, OpSchedulerTest precedent).
 
 
 struct ImportSchedulerFixture

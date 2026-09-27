@@ -540,6 +540,10 @@ public:
     {
         if (notifier)  // symmetric with setTransactionNotifier: an empty std::function would
         {              // throw bad_function_call inside the commit task's try block.
+            // S7: the commit task invokes the notifiers on its own thread; swap under
+            // m_pendingMutex (the same mutex notifyBlockNumber copies them under) so an
+            // assignment can never race a live invocation.
+            std::lock_guard<std::mutex> lock(m_pendingMutex);
             m_blockNumberNotifier = std::move(notifier);
         }
     }
@@ -551,13 +555,20 @@ public:
     {
         if (notifier)
         {
+            // S7: same race-free swap discipline as setBlockNumberNotifier.
+            std::lock_guard<std::mutex> lock(m_pendingMutex);
             m_transactionNotifier = std::move(notifier);
         }
     }
 
     /// When true, execute() compares buildAndCollect against a full stateRootOf rebuild.
     /// Defaults off: the equality contract lives in IncrementalMPTRootMatchesFullRebuild.
-    void setCrossCheckIncrementalRoot(bool enable) { m_crossCheckIncrementalRoot = enable; }
+    void setCrossCheckIncrementalRoot(bool enable)
+    {
+        // S7: read concurrently by the execute path; a plain bool write here would be a
+        // data race.
+        m_crossCheckIncrementalRoot.store(enable, std::memory_order_relaxed);
+    }
 
 private:
     // ---- execute / commit ----
@@ -915,6 +926,12 @@ private:
         }
         catch (std::exception& e)
         {
+            // S8: a failed adopt must not leave a half-adopted probe behind — the
+            // explicit error arms above reset m_lastProbe, the catch arms must too.
+            // pushView may already have moved the view out (an empty view is a silent
+            // no-op there), and a retry on a stale slot would wedge m_pending at this
+            // height; resetting just costs one re-probe.
+            m_lastProbe.reset();
             auto message = fmt::format("Adopt probe failed! {}", boost::diagnostic_information(e));
             OP_SCHEDULER_LOG(ERROR) << message;
             co_return {BCOS_ERROR_UNIQUE_PTR(classifyException(std::current_exception()), message),
@@ -922,6 +939,8 @@ private:
         }
         catch (...)
         {
+            // S8: same half-adopted-probe discipline as the catch(std::exception&) arm.
+            m_lastProbe.reset();
             auto message = std::string{"Adopt probe failed! ("} +
                            describeException(std::current_exception()) + ")";
             OP_SCHEDULER_LOG(ERROR) << message;
@@ -1657,8 +1676,22 @@ private:
     /// Invoke the installed notifiers (ctor defaults are no-ops).
     void notifyBlockNumber(protocol::BlockNumber number)
     {
-        m_blockNumberNotifier(number);
-        m_transactionNotifier(number, std::make_shared<bcos::protocol::TransactionSubmitResults>(),
+        // S7: copy the installed functions under the same mutex the setters swap them
+        // under, then invoke the COPIES outside the lock. A setter racing this call
+        // only decides which copy the next commit sees; it can never destroy a
+        // function object that is mid-flight, and the callbacks never run under
+        // m_pendingMutex.
+        std::function<void(bcos::protocol::BlockNumber)> blockNumberNotifier;
+        std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
+            std::function<void(bcos::Error::Ptr)>)>
+            transactionNotifier;
+        {
+            std::lock_guard<std::mutex> lock(m_pendingMutex);
+            blockNumberNotifier = m_blockNumberNotifier;
+            transactionNotifier = m_transactionNotifier;
+        }
+        blockNumberNotifier(number);
+        transactionNotifier(number, std::make_shared<bcos::protocol::TransactionSubmitResults>(),
             [](const Error::Ptr&) {});
     }
 
@@ -2007,7 +2040,7 @@ private:
     std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
         std::function<void(bcos::Error::Ptr)>)>
         m_transactionNotifier;
-    bool m_crossCheckIncrementalRoot = false;
+    std::atomic<bool> m_crossCheckIncrementalRoot = false;
     std::mutex m_executeMutex;
     std::atomic<int64_t> m_lastExecutedBlockNumber{-1};
     std::mutex m_commitMutex;

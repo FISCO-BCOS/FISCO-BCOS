@@ -53,6 +53,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -249,8 +250,10 @@ private:
     /// artifact consume] against every other commit: MPTPruner stages the block's counting
     /// work on one shared overlay between the two hooks, so concurrent commits (the
     /// duplicate-newPayload race the commit path comments describe) would corrupt it. Held
-    /// across co_await, the same pattern as BaselineScheduler::m_commitMutex.
-    std::mutex m_commitMutex;
+    /// across co_await like BaselineScheduler::m_commitMutex, but as a counting semaphore
+    /// so the release stays legal when a co_await resumes the coroutine on another
+    /// thread (S6, CrossThreadCommitGate in EngineServiceCommon.h).
+    std::counting_semaphore<1> m_commitGate{1};
     std::unordered_map<PayloadID, EthPayloadArtifacts<ViewType>> m_artifacts;
     MemPoolType& m_memPool;
     GlobalStateStorageType& m_globalStateStorage;
@@ -261,7 +264,7 @@ private:
     int64_t m_blockTxCountLimit;
     std::uint32_t m_maxEngineVersion;
     /// The pruning observer the newPayload commit path fires (NoopCommitObserver unless the
-    /// wiring injected an MPTPruner). Dereferenced only under m_commitMutex; also consulted at
+    /// wiring injected an MPTPruner). Dereferenced only under the commit gate; also consulted at
     /// build time via needsRefCountDeltas() (passed to resolveEngineBlockStateRoot so the
     /// tally decision cannot drift from the commit hook).
     std::shared_ptr<ledger::mpt::CommitObserver> m_commitObserver;

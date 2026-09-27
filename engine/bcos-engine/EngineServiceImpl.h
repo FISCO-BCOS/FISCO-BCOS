@@ -63,6 +63,7 @@
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/indirect.hpp>
 #include <range/v3/view/transform.hpp>
+#include <semaphore>
 #include <shared_mutex>
 #include <string>
 #include <string_view>
@@ -715,16 +716,18 @@ private:
             }
         }  // x_state released — safe to co_await below.
 
-        // MPT pruning (CommitObserver) serialization: m_commitMutex guards the whole commit
-        // section — the pruning hooks stage the block's counting work on one shared overlay
-        // between coPreparePruneRows and onCommit (BaselineSchedulerMPTHelpers.h's
+        // MPT pruning (CommitObserver) serialization: the commit gate guards the whole
+        // commit section — the pruning hooks stage the block's counting work on one shared
+        // overlay between coPreparePruneRows and onCommit (BaselineSchedulerMPTHelpers.h's
         // prepareMPTPruneRows contract), so [prepare -> merge -> onCommit] must be serialized
-        // against every other commit, exactly like BaselineScheduler::m_commitMutex (which is
-        // likewise held across co_await). The mutex also settles the concurrent-duplicate
-        // race the comments below describe: the first call to enter commits; a duplicate that
-        // pops the still-unconsumed artifact blocks here and is detected by the re-validation
+        // against every other commit, exactly like BaselineScheduler::m_commitMutex. S6:
+        // unlike a mutex, the counting semaphore may be released by whichever thread the
+        // coroutine's last co_await resumed on, so spanning the section's co_awaits stays
+        // defined. The gate also settles the concurrent-duplicate race the comments below
+        // describe: the first call to enter commits; a duplicate that pops the
+        // still-unconsumed artifact blocks here and is detected by the re-validation
         // immediately after locking.
-        std::unique_lock commitLock(m_commitMutex);
+        CrossThreadCommitGate commitLock{m_commitGate};
         if (persistLedger)
         {
             bool committedByDuplicate = false;
@@ -1227,8 +1230,10 @@ private:
     /// against every other commit: MPTPruner stages the block's counting work on one shared
     /// overlay between the two hooks, so concurrent commits (the duplicate-newPayload race the
     /// commit path comments describe) would corrupt it. Held across co_await, the same pattern
-    /// as BaselineScheduler::m_commitMutex.
-    std::mutex m_commitMutex;
+    /// as BaselineScheduler::m_commitMutex — a counting semaphore so the release stays
+    /// legal when a co_await resumes on another thread (S6, CrossThreadCommitGate in
+    /// EngineServiceCommon.h).
+    std::counting_semaphore<1> m_commitGate{1};
     std::reference_wrapper<MemPoolType> m_memPool;
     std::reference_wrapper<GlobalStateStorageType> m_globalStateStorage;
     int64_t m_blockTxCountLimit;
@@ -1243,7 +1248,7 @@ private:
     bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState;
     /// The pruning observer the newPayload commit path fires (NoopCommitObserver unless the
     /// initializer injected an MPTPruner for storage.mpt_prune_window > 0). Dereferenced only
-    /// under m_commitMutex; also consulted at build time via needsRefCountDeltas() (passed to
+    /// under the commit gate; also consulted at build time via needsRefCountDeltas() (passed to
     /// resolveEngineBlockStateRoot so the tally decision cannot drift from the commit hook).
     std::shared_ptr<ledger::mpt::CommitObserver> m_commitObserver;
     ForkchoiceState m_forkchoiceState;

@@ -85,7 +85,7 @@ BOOST_AUTO_TEST_CASE(FlatCapturesTheBlocksOwnWrites)
     auto& delta = *std::static_pointer_cast<MutableStorage>(artifacts.delta);
     auto& flat = *std::static_pointer_cast<MutableStorage>(artifacts.flat);
 
-    // The deposit's from-address (kDepositFrom, 0xdead..0001) as the executor's state
+    // The deposit's from-address (c_depositFrom, 0xdead..0001) as the executor's state
     // keys render it: the account address without the 0x prefix under the /apps/ table.
     auto accountKey = [](std::string_view field) {
         return StateKey{

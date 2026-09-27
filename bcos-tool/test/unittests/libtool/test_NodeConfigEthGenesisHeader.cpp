@@ -47,7 +47,7 @@ std::shared_ptr<NodeConfig> makeEthNodeConfig()
     return std::make_shared<NodeConfig>(std::make_shared<bcos::crypto::KeyFactoryImpl>());
 }
 
-constexpr auto kEthBase =
+constexpr auto c_ethBase =
     "[chain]\nsm_crypto=0\nchain_id=1\ngroup_id=g\n"
     "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
     "node.0=0102030405060708090a0b0c0d0e0f1011121314:1\n"
@@ -55,9 +55,9 @@ constexpr auto kEthBase =
     "[tx]\ngas_limit=300000000\n"
     "[executor]\nis_auth_check=1\nauth_admin_account=0x0\n";
 
-constexpr auto kEthFeatureL2 = "[features]\nfeature_l2_ethereum_compat=1\n";
+constexpr auto c_ethFeatureL2 = "[features]\nfeature_l2_ethereum_compat=1\n";
 
-constexpr auto kEthAlloc0 =
+constexpr auto c_ethAlloc0 =
     "[alloc.0]\naddress=0x43000000000000000000000000000000000000C0\n"
     "balance=0\nnonce=0\ncode=0x6080604052\n";
 
@@ -111,7 +111,7 @@ std::string ethHeaderSection(std::string const& skipKey = {})
 
 std::string l2EthConfig(std::string const& ethSection)
 {
-    return std::string(kEthBase) + kEthFeatureL2 + kEthAlloc0 + ethSection;
+    return std::string(c_ethBase) + c_ethFeatureL2 + c_ethAlloc0 + ethSection;
 }
 }  // namespace
 
@@ -244,7 +244,7 @@ BOOST_AUTO_TEST_CASE(L2WithoutSectionRejected)
     // op-node/op-reth could match, so it fails fast.
     auto cfg = makeEthNodeConfig();
     BOOST_CHECK_EXCEPTION(
-        cfg->loadGenesisConfig(parseEthIni(std::string(kEthBase) + kEthFeatureL2 + kEthAlloc0)),
+        cfg->loadGenesisConfig(parseEthIni(std::string(c_ethBase) + c_ethFeatureL2 + c_ethAlloc0)),
         bcos::tool::InvalidConfig, [](auto const& e) {
             return bcos::test::errinfoContains(e, "requires an [eth_genesis_header] section");
         });
@@ -254,7 +254,7 @@ BOOST_AUTO_TEST_CASE(SectionWithoutL2FeatureRejected)
 {
     auto cfg = makeEthNodeConfig();
     BOOST_CHECK_EXCEPTION(
-        cfg->loadGenesisConfig(parseEthIni(std::string(kEthBase) + ethHeaderSection())),
+        cfg->loadGenesisConfig(parseEthIni(std::string(c_ethBase) + ethHeaderSection())),
         bcos::tool::InvalidConfig, [](auto const& e) {
             return bcos::test::errinfoContains(e, "section requires feature_l2_ethereum_compat");
         });
@@ -338,7 +338,7 @@ BOOST_AUTO_TEST_CASE(GenesisDataCoversEthHeader)
     // A non-L2 chain (no feature, no allocs, no section) must not mention
     // the section in its genesis pin at all.
     auto cfg3 = makeEthNodeConfig();
-    cfg3->loadGenesisConfig(parseEthIni(std::string(kEthBase)));
+    cfg3->loadGenesisConfig(parseEthIni(std::string(c_ethBase)));
     auto withoutHeader = generateGenesisData(cfg3->genesisConfig(), emptyLedgerConfig);
     BOOST_CHECK(withoutHeader.find("[ethGenesisHeader]") == std::string::npos);
 }

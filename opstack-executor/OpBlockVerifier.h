@@ -38,8 +38,9 @@
  */
 
 #include <opstack-executor/OpBlockExecute.h>  // preBlockOpSteps / finalizeOpBlockResult
-#include <opstack-executor/OpCommitments.h>  // OpBlockCommitments / commitmentsOf / mismatchedFieldOf
-#include <opstack-executor/OpCommon.h>       // OpConsensusError / OpBlockSeal
+// OpBlockCommitments / commitmentsOf / mismatchedFieldOf
+#include <opstack-executor/OpCommitments.h>
+#include <opstack-executor/OpCommon.h>         // OpConsensusError / OpBlockSeal
 #include <opstack-executor/OpstackExecutor.h>  // OpstackExecutor / OpBlockExecutionContext
 
 #include <bcos-devp2p/sync/Block.h>  // devp2p::sync::Block

@@ -361,22 +361,53 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
         auto row = std::make_shared<typename GlobalStateStorageType::MutableStorage>();
         bcos::storage::Entry numberEntry;
         numberEntry.set(std::to_string(*ledgerTipAdvance));
+        bool tipGateTaken = false;
         try
         {
+            {
+                // S10: the deferred tip move must be exclusive against a concurrent FCU
+                // doing the same move and against import/canonicalize batches — the same
+                // m_canonicalizeInFlight exclusion those use (set and cleared under
+                // m_importedTreeMutex in sync sections only, never held across an
+                // await). Fails closed: the rollback below restores the tracker and the
+                // CL re-issues this idempotent FCU, exactly like a canonicalize
+                // collision.
+                std::lock_guard treeLock(m_importedTreeMutex);
+                if (m_canonicalizeInFlight)
+                {
+                    BOOST_THROW_EXCEPTION(OpExecutionInternalError{}
+                                              << bcos::errinfo_comment{
+                                                  "tip move: another import/canonicalize "
+                                                  "is in flight"});
+                }
+                m_canonicalizeInFlight = true;
+                tipGateTaken = true;
+            }
             co_await storage2::writeOne(*row,
                 executor_v1::StateKey{
                     bcos::ledger::SYS_CURRENT_STATE, bcos::ledger::SYS_KEY_CURRENT_NUMBER},
                 std::move(numberEntry));
             co_await m_globalStateStorage.mergeToBackends(*row);
+            {
+                std::lock_guard treeLock(m_importedTreeMutex);
+                m_canonicalizeInFlight = false;
+                tipGateTaken = false;
+            }
         }
         catch (...)
         {
+            if (tipGateTaken)
+            {
+                std::lock_guard treeLock(m_importedTreeMutex);
+                m_canonicalizeInFlight = false;
+            }
             m_tracker.rollbackForkchoice(fcuRollback, appliedHead);
             throw;
         }
         // canonicalizedTo runs only AFTER a successful merge: the tip has moved, so a
         // failure here must NOT restore the tracker (the ledger is already ahead; the
-        // republish is retried by the next FCU).
+        // republish is retried by the next FCU). Deliberately OUTSIDE the in-flight
+        // gate: the move has landed, a notifier failure must not wedge the gate shut.
         if (m_delegate)
         {
             m_delegate->canonicalizedTo(*ledgerTipAdvance);
@@ -676,6 +707,11 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     // only reworked when per-envelope execution becomes reusable.
     while (true)
     {
+        // S9: executedHeader is declared OUTSIDE this loop and only a called-back
+        // delegate overwrites it; reset it each round so a later (no-error, no-header)
+        // callback shape can never break on a STALE header from an earlier failed
+        // candidate and stamp its commitments into the final payload.
+        executedHeader = nullptr;
         std::vector<bytes> candidateEnvelopes = forcedEnvelopes;
         std::optional<bcos::engine::DACaps::Budget> budget;
         if (m_daCaps && m_daCaps->maxBlockSize.load(std::memory_order_relaxed) != 0)
@@ -1212,14 +1248,30 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
     bcos::protocol::BlockHeader::Ptr executedHeader;
     std::shared_ptr<void> blockDelta;
     std::shared_ptr<void> blockFlat;
-    m_delegate->importExecute(block, parentHeaders, parentFlat,
-        [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr header,
-            std::shared_ptr<void> delta, std::shared_ptr<void> flat) {
-            executeError = std::move(error);
-            executedHeader = std::move(header);
-            blockDelta = std::move(delta);
-            blockFlat = std::move(flat);
-        });
+    {
+        // S4: when the parent is the canonical tip this executes against the COMMITTED
+        // plane, so the execution must not overlap a canonicalize batch's incremental
+        // merges — the tree gate further down only guards the decide+put, not the
+        // execution itself. Hold m_importedTreeMutex across importExecute and fail
+        // closed while a batch is in flight: canonicalize takes the same mutex at its
+        // entry/exit sync sections, so a concurrent batch either waits for this lock or
+        // is visible through the flag. Holding the mutex here obeys the file's standing
+        // rule (no co_await under a POSIX lock): importExecute is a synchronous
+        // syncWait delegate call, this coroutine never suspends while the lock is held.
+        std::lock_guard treeLock(m_importedTreeMutex);
+        if (m_canonicalizeInFlight)
+        {
+            co_return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+        }
+        m_delegate->importExecute(block, parentHeaders, parentFlat,
+            [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr header,
+                std::shared_ptr<void> delta, std::shared_ptr<void> flat) {
+                executeError = std::move(error);
+                executedHeader = std::move(header);
+                blockDelta = std::move(delta);
+                blockFlat = std::move(flat);
+            });
+    }
     if (executeError)
     {
         co_return mapDelegateError(*executeError, latestValidHash);

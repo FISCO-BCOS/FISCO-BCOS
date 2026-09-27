@@ -18,6 +18,7 @@
  */
 
 #include "EngineTracker.h"
+#include <cstdint>
 
 // Upstream pin: op-geth d401af16f2dd94b010a72eaef10e07ac10b31931
 // (eth/catalyst/api.go forkchoiceUpdated / SetSafe / SetFinalized).
@@ -147,7 +148,12 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
                         "Forkchoice head block hash conflicts with tracked block number"});
             }
         }
-        else if (headBlockNumber == trackedHeadBlock.blockNumber + 1)
+        // S11: trackedHeadBlock.blockNumber comes from a ledger row; at INT64_MAX the
+        // signed + 1 below would overflow (UB). An unsigned-difference comparison
+        // expresses the same "exactly one above" branch wrap-free.
+        else if (static_cast<std::uint64_t>(headBlockNumber) -
+                     static_cast<std::uint64_t>(trackedHeadBlock.blockNumber) ==
+                 1u)
         {
             // Reject a +1 head advance when the resolver cannot confirm it is canonical.
             if (!resolved.headCanonical)

@@ -567,6 +567,17 @@ std::optional<std::string> matchReconstructedEthBlockHash(
         BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
                                   "EngineService: block header factory is null"});
     }
+    // S2: reconstructing parentInfo below evaluates number - 1; a negative
+    // blockNumber would sign-underflow at INT64_MIN (UB). The OP lane rejects this
+    // shape in validateOpPayloadHeaderFields ("must not be negative"); the Eth lane's
+    // validateExecutionPayload does not, so guard it here to the same bound — zero is
+    // deliberately allowed (number - 1 == -1 is benign and keeps the
+    // reconstructed-hash-mismatch answer parity tests pin). Callers fold this string
+    // into InvalidBlockHash.
+    if (payload.blockNumber < 0)
+    {
+        return std::string("executionPayload.blockNumber must not be negative");
+    }
     // Only a genuine hash mismatch, or a header the submitted fields cannot reconstruct into a
     // valid Ethereum header, returns a message (both callers fold it into InvalidBlockHash).
     // Everything that reconstructs the header from the submitted fields is outside the try: a

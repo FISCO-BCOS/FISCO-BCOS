@@ -160,6 +160,16 @@ std::optional<std::string> validateOpPayloadHeaderFields(
     {
         return std::string("blockNumber must not be negative");
     }
+    // S5: payload.timestamp is internal milliseconds (uint64) but the header field it
+    // lands in is int64 (BlockHeader::setTimestamp); a value above INT64_MAX narrows
+    // to a negative committed header and breaks timestamp monotonicity downstream.
+    // The RPC boundary already bounds this (EngineHelper
+    // engineSecondsToInternalMillis) and the p2p lane rejects it (OpBlockVerifier
+    // p2pTimestampToInternalMs) — this restores the same bound on the engine lane.
+    if (payload.timestamp > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
+    {
+        return std::string("timestamp exceeds the representable millisecond range");
+    }
     if (!tryNarrowU256ToU64(payload.gasLimit).has_value())
     {
         return std::string("gasLimit exceeds the uint64 range of the ETH header field");

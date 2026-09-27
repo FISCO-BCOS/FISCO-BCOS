@@ -44,9 +44,9 @@ using namespace op_engine_parity_test;
 
 namespace
 {
-constexpr int kValid = static_cast<int>(bcos::engine::PayloadValidationStatus::Valid);
-constexpr int kInvalid = static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid);
-constexpr int kSyncing = static_cast<int>(bcos::engine::PayloadValidationStatus::Syncing);
+constexpr int c_valid = static_cast<int>(bcos::engine::PayloadValidationStatus::Valid);
+constexpr int c_invalid = static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid);
+constexpr int c_syncing = static_cast<int>(bcos::engine::PayloadValidationStatus::Syncing);
 
 template <class Fixture>
 int importPayload(Fixture& f, bcos::engine::NewPayloadRequest const& request)
@@ -85,24 +85,24 @@ BOOST_AUTO_TEST_CASE(S1_ForwardCanonicalizeBlockByBlock)
 {
     ImportServiceFixture f;
     auto request1 = f.validRequest(fixtureHeadHash(), 1);
-    BOOST_REQUIRE_EQUAL(importPayload(f, request1), kValid);
+    BOOST_REQUIRE_EQUAL(importPayload(f, request1), c_valid);
     BOOST_REQUIRE_EQUAL(fcuTo(f, request1.executionPayload.blockHash,
                             request1.executionPayload.blockHash, fixtureHeadHash()),
-        kValid);
+        c_valid);
     checkAll(f.storage, *f.blockFactory, {.previousTip = 0, .head = 1, .headTxCount = 1});
 
     auto request2 = f.validRequest(request1.executionPayload.blockHash, 2);
-    BOOST_REQUIRE_EQUAL(importPayload(f, request2), kValid);
+    BOOST_REQUIRE_EQUAL(importPayload(f, request2), c_valid);
     BOOST_REQUIRE_EQUAL(fcuTo(f, request2.executionPayload.blockHash,
                             request2.executionPayload.blockHash, fixtureHeadHash()),
-        kValid);
+        c_valid);
     checkAll(f.storage, *f.blockFactory, {.previousTip = 1, .head = 2, .headTxCount = 1});
 
     auto request3 = f.validRequest(request2.executionPayload.blockHash, 3);
-    BOOST_REQUIRE_EQUAL(importPayload(f, request3), kValid);
+    BOOST_REQUIRE_EQUAL(importPayload(f, request3), c_valid);
     BOOST_REQUIRE_EQUAL(fcuTo(f, request3.executionPayload.blockHash,
                             request3.executionPayload.blockHash, fixtureHeadHash()),
-        kValid);
+        c_valid);
     checkAll(f.storage, *f.blockFactory, {.previousTip = 2, .head = 3, .headTxCount = 1});
 }
 
@@ -127,8 +127,8 @@ BOOST_AUTO_TEST_CASE(S3_SameHeightSwitchDropsSibling)
     auto const bPrimeHash = requestBPrime.executionPayload.blockHash;
     BOOST_REQUIRE(bPrimeHash != bHash);
 
-    BOOST_REQUIRE_EQUAL(importPayload(f, requestBPrime), kValid);
-    BOOST_REQUIRE_EQUAL(fcuTo(f, bPrimeHash, bPrimeHash, fixtureHeadHash()), kValid);
+    BOOST_REQUIRE_EQUAL(importPayload(f, requestBPrime), c_valid);
+    BOOST_REQUIRE_EQUAL(fcuTo(f, bPrimeHash, bPrimeHash, fixtureHeadHash()), c_valid);
     checkAll(f.storage, *f.blockFactory,
         {.previousTip = 3,
             .head = 2,
@@ -149,23 +149,23 @@ BOOST_AUTO_TEST_CASE(S4_MultiOrphanAboveHead)
 
     // D@4: a stored child of C, so C is not a leaf when it gets orphaned.
     auto requestD = f.validRequest(cHash, 4);
-    BOOST_REQUIRE_EQUAL(importPayload(f, requestD), kValid);
+    BOOST_REQUIRE_EQUAL(importPayload(f, requestD), c_valid);
 
     auto requestBPrime = f.makeSiblingAtHeight2();
     (void)aHash;  // sibling's parent is encoded in the request itself
     auto const bPrimeHash = requestBPrime.executionPayload.blockHash;
-    BOOST_REQUIRE_EQUAL(importPayload(f, requestBPrime), kValid);
-    BOOST_REQUIRE_EQUAL(fcuTo(f, bPrimeHash, bPrimeHash, fixtureHeadHash()), kValid);
+    BOOST_REQUIRE_EQUAL(importPayload(f, requestBPrime), c_valid);
+    BOOST_REQUIRE_EQUAL(fcuTo(f, bPrimeHash, bPrimeHash, fixtureHeadHash()), c_valid);
     checkAll(f.storage, *f.blockFactory,
         {.previousTip = 3, .head = 2, .headTxCount = 1, .allowRewind = true});
 
     // The next legal payload extends the new tip B'@2 at height 3.
     auto request3 = f.validRequest(bPrimeHash, 3);
-    BOOST_REQUIRE_EQUAL(importPayload(f, request3), kValid);
+    BOOST_REQUIRE_EQUAL(importPayload(f, request3), c_valid);
     BOOST_REQUIRE(f.service.hasImportedBlock(request3.executionPayload.blockHash));
     BOOST_REQUIRE_EQUAL(fcuTo(f, request3.executionPayload.blockHash,
                             request3.executionPayload.blockHash, fixtureHeadHash()),
-        kValid);
+        c_valid);
     checkAll(f.storage, *f.blockFactory, {.previousTip = 2, .head = 3, .headTxCount = 1});
 }
 
@@ -177,7 +177,7 @@ BOOST_AUTO_TEST_CASE(S5_OldHeadFcuDoesNotRewindLatest)
     ImportServiceFixture f;
     f.seedCanonicalChainABC();
     auto const bHash = f.seededChainHash[2];
-    BOOST_REQUIRE_EQUAL(fcuTo(f, bHash, bHash, fixtureHeadHash()), kValid);
+    BOOST_REQUIRE_EQUAL(fcuTo(f, bHash, bHash, fixtureHeadHash()), c_valid);
     checkAll(f.storage, *f.blockFactory, {.previousTip = 3, .head = 3, .headTxCount = 1});
 }
 
@@ -187,11 +187,11 @@ BOOST_AUTO_TEST_CASE(S6_DuplicateImportIsIdempotent)
 {
     ImportServiceFixture f;
     auto request1 = f.validRequest(fixtureHeadHash(), 1);
-    BOOST_REQUIRE_EQUAL(importPayload(f, request1), kValid);
-    BOOST_REQUIRE_EQUAL(importPayload(f, request1), kValid);  // replay
+    BOOST_REQUIRE_EQUAL(importPayload(f, request1), c_valid);
+    BOOST_REQUIRE_EQUAL(importPayload(f, request1), c_valid);  // replay
     BOOST_REQUIRE_EQUAL(fcuTo(f, request1.executionPayload.blockHash,
                             request1.executionPayload.blockHash, fixtureHeadHash()),
-        kValid);
+        c_valid);
     checkAll(f.storage, *f.blockFactory, {.previousTip = 1, .head = 1, .headTxCount = 1});
 }
 
@@ -212,14 +212,14 @@ BOOST_AUTO_TEST_CASE(S7_InvalidThenValidPayload)
             *bad.parentBeaconBlockRoot, bcos::engine::OpForkId::Isthmus);
         bad.executionPayload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*header);
     }
-    BOOST_REQUIRE_EQUAL(importPayload(f, bad), kInvalid);
+    BOOST_REQUIRE_EQUAL(importPayload(f, bad), c_invalid);
     BOOST_REQUIRE(f.service.hasImportedBlock(bad.executionPayload.blockHash) == false);
 
     auto good = f.validRequest(cHash, 4);
-    BOOST_REQUIRE_EQUAL(importPayload(f, good), kValid);
+    BOOST_REQUIRE_EQUAL(importPayload(f, good), c_valid);
     BOOST_REQUIRE_EQUAL(fcuTo(f, good.executionPayload.blockHash, good.executionPayload.blockHash,
                             fixtureHeadHash()),
-        kValid);
+        c_valid);
     checkAll(f.storage, *f.blockFactory, {.previousTip = 3, .head = 4, .headTxCount = 1});
 }
 
@@ -231,10 +231,10 @@ BOOST_AUTO_TEST_CASE(S8_RejectedFcuThenFcu)
     f.seedCanonicalChainABC();
     auto const cHash = f.seededChainHash[3];
     auto const unknown = bcos::h256(0xdeadbeef);
-    BOOST_REQUIRE_EQUAL(fcuTo(f, unknown, unknown, fixtureHeadHash()), kSyncing);
+    BOOST_REQUIRE_EQUAL(fcuTo(f, unknown, unknown, fixtureHeadHash()), c_syncing);
     checkAll(f.storage, *f.blockFactory, {.previousTip = 3, .head = 3, .headTxCount = 1});
 
-    BOOST_REQUIRE_EQUAL(fcuTo(f, cHash, cHash, fixtureHeadHash()), kValid);
+    BOOST_REQUIRE_EQUAL(fcuTo(f, cHash, cHash, fixtureHeadHash()), c_valid);
     checkAll(f.storage, *f.blockFactory, {.previousTip = 3, .head = 3, .headTxCount = 1});
 }
 
@@ -245,9 +245,9 @@ BOOST_AUTO_TEST_CASE(S9_MidChainMergeFailureRollsBackBothLayers)
 {
     CacheImportServiceFixture f(/*stripImportDeltaAt=*/2);
     auto request1 = f.validRequest(fixtureHeadHash(), 1);
-    BOOST_REQUIRE_EQUAL(importPayload(f, request1), kValid);
+    BOOST_REQUIRE_EQUAL(importPayload(f, request1), c_valid);
     auto request2 = f.validRequest(request1.executionPayload.blockHash, 2);
-    BOOST_REQUIRE_EQUAL(importPayload(f, request2), kValid);
+    BOOST_REQUIRE_EQUAL(importPayload(f, request2), c_valid);
 
     bool canonicalizeThrew = false;
     try
@@ -271,7 +271,7 @@ BOOST_AUTO_TEST_CASE(S10_ConcurrentImportDuringCanonicalize)
     ImportServiceFixture f(gate);
 
     auto request1 = f.validRequest(fixtureHeadHash(), 1);
-    BOOST_REQUIRE_EQUAL(importPayload(f, request1), kValid);
+    BOOST_REQUIRE_EQUAL(importPayload(f, request1), c_valid);
     auto const b1Hash = request1.executionPayload.blockHash;
 
     bcos::engine::ForkchoiceUpdatedResult fcuResult;
@@ -300,8 +300,8 @@ BOOST_AUTO_TEST_CASE(S10_ConcurrentImportDuringCanonicalize)
 
     BOOST_REQUIRE_MESSAGE(
         finished, "concurrent newPayload blocked behind the canonicalize lock across an await");
-    BOOST_REQUIRE_EQUAL(static_cast<int>(fcuResult.payloadStatus.status), kValid);
-    BOOST_REQUIRE_EQUAL(static_cast<int>(importStatus.status), kSyncing);
+    BOOST_REQUIRE_EQUAL(static_cast<int>(fcuResult.payloadStatus.status), c_valid);
+    BOOST_REQUIRE_EQUAL(static_cast<int>(importStatus.status), c_syncing);
     checkAll(f.storage, *f.blockFactory, {.previousTip = 1, .head = 1, .headTxCount = 1});
 }
 
@@ -313,7 +313,7 @@ BOOST_AUTO_TEST_CASE(S11_FinalizedAdvanceKeepsInvariants)
     ImportServiceFixture f;
     f.seedCanonicalChainABC();
     auto const cHash = f.seededChainHash[3];
-    BOOST_REQUIRE_EQUAL(fcuTo(f, cHash, cHash, cHash), kValid);
+    BOOST_REQUIRE_EQUAL(fcuTo(f, cHash, cHash, cHash), c_valid);
     checkAll(f.storage, *f.blockFactory, {.previousTip = 3, .head = 3, .headTxCount = 1});
 }
 
@@ -323,11 +323,11 @@ BOOST_AUTO_TEST_CASE(S12_BlockhashAcrossPayloadChain)
 {
     ImportServiceFixture f;
     auto request1 = f.validRequest(fixtureHeadHash(), 1);
-    BOOST_REQUIRE_EQUAL(importPayload(f, request1), kValid);
+    BOOST_REQUIRE_EQUAL(importPayload(f, request1), c_valid);
     auto request2 = f.validRequest(request1.executionPayload.blockHash, 2);
-    BOOST_REQUIRE_EQUAL(importPayload(f, request2), kValid);
+    BOOST_REQUIRE_EQUAL(importPayload(f, request2), c_valid);
     auto request3 = f.validRequest(request2.executionPayload.blockHash, 3);
-    BOOST_REQUIRE_EQUAL(importPayload(f, request3), kValid);
+    BOOST_REQUIRE_EQUAL(importPayload(f, request3), c_valid);
 
     {
         auto& probeDeltaStorage = *std::static_pointer_cast<MutableStorage>(f.deltaByNumber[3]);
@@ -349,7 +349,7 @@ BOOST_AUTO_TEST_CASE(S12_BlockhashAcrossPayloadChain)
 
     BOOST_REQUIRE_EQUAL(fcuTo(f, request3.executionPayload.blockHash,
                             request3.executionPayload.blockHash, fixtureHeadHash()),
-        kValid);
+        c_valid);
     checkAll(f.storage, *f.blockFactory, {.previousTip = 3, .head = 3, .headTxCount = 1});
 }
 
@@ -364,8 +364,8 @@ BOOST_AUTO_TEST_CASE(S13_WarmCacheSameHeightSwitch)
     auto requestBPrime = f.makeSiblingAtHeight2();
     auto const bPrimeHash = requestBPrime.executionPayload.blockHash;
 
-    BOOST_REQUIRE_EQUAL(importPayload(f, requestBPrime), kValid);
-    BOOST_REQUIRE_EQUAL(fcuTo(f, bPrimeHash, bPrimeHash, fixtureHeadHash()), kValid);
+    BOOST_REQUIRE_EQUAL(importPayload(f, requestBPrime), c_valid);
+    BOOST_REQUIRE_EQUAL(fcuTo(f, bPrimeHash, bPrimeHash, fixtureHeadHash()), c_valid);
 
     // The cache must serve the NEW plane: the height-2 hash row is B' and the pointer is 2.
     auto const cachedHash2 = cacheValue(
@@ -397,13 +397,13 @@ BOOST_AUTO_TEST_CASE(S14_BackReorgOntoAbandonedBranch)
     auto const bHash = f.seededChainHash[2];
     auto requestBPrime = f.makeSiblingAtHeight2();
     auto const bPrimeHash = requestBPrime.executionPayload.blockHash;
-    BOOST_REQUIRE_EQUAL(importPayload(f, requestBPrime), kValid);
-    BOOST_REQUIRE_EQUAL(fcuTo(f, bPrimeHash, bPrimeHash, fixtureHeadHash()), kValid);
+    BOOST_REQUIRE_EQUAL(importPayload(f, requestBPrime), c_valid);
+    BOOST_REQUIRE_EQUAL(fcuTo(f, bPrimeHash, bPrimeHash, fixtureHeadHash()), c_valid);
     checkAll(f.storage, *f.blockFactory,
         {.previousTip = 3, .head = 2, .headTxCount = 1, .allowRewind = true});
 
     // Back-reorg onto the abandoned branch B@2.
-    BOOST_REQUIRE_EQUAL(fcuTo(f, bHash, bHash, fixtureHeadHash()), kValid);
+    BOOST_REQUIRE_EQUAL(fcuTo(f, bHash, bHash, fixtureHeadHash()), c_valid);
     checkAll(f.storage, *f.blockFactory,
         {.previousTip = 2,
             .head = 2,

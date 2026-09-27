@@ -1,3 +1,19 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
 #include "TestPrinters.h"
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
@@ -132,14 +148,14 @@ BOOST_AUTO_TEST_CASE(FailedDepositStatusIsEmptyString)
 // and 5 are both 1 byte).
 BOOST_AUTO_TEST_CASE(DepositWithLogEmbedsEncodedLogsAndNonceTail)
 {
-    constexpr auto kAddr = 0x00000000000000000000000000000000000000aa_address;
+    constexpr auto c_addr = 0x00000000000000000000000000000000000000aa_address;
     evmone::state::Log evmoneLog{
-        .addr = kAddr, .data = evmc::bytes{0x68, 0x69}, .topics = {0x01_bytes32}};
+        .addr = c_addr, .data = evmc::bytes{0x68, 0x69}, .topics = {0x01_bytes32}};
 
     // Project the log onto a FISCO LogEntry (raw bytes, same mapping mapOpLogs uses).
     evmc::bytes32 topicVal = 0x01_bytes32;
     std::vector<bcos::protocol::LogEntry> logs;
-    logs.emplace_back(bcos::bytes(kAddr.bytes, kAddr.bytes + sizeof(kAddr.bytes)),
+    logs.emplace_back(bcos::bytes(c_addr.bytes, c_addr.bytes + sizeof(c_addr.bytes)),
         bcos::h256s{bcos::h256(topicVal.bytes, sizeof(topicVal.bytes))}, bcos::bytes{0x68, 0x69});
     auto dep = kOpTestReceiptFactory->createReceipt(
         bcos::u256(21000), std::string{}, logs, /*status=*/0, bcos::bytesConstRef{}, 1);
@@ -174,12 +190,12 @@ BOOST_AUTO_TEST_CASE(DepositWithLogEmbedsEncodedLogsAndNonceTail)
 // the first log's long-form header did not clobber the nonce/version tail.
 BOOST_AUTO_TEST_CASE(DepositWithMultipleLogsEmbedsEncodedLogsAndNonceTail)
 {
-    constexpr auto kAddrA = 0x00000000000000000000000000000000000000aa_address;
-    constexpr auto kAddrB = 0x00000000000000000000000000000000000000bb_address;
-    evmone::state::Log logA{.addr = kAddrA,
+    constexpr auto c_addrA = 0x00000000000000000000000000000000000000aa_address;
+    constexpr auto c_addrB = 0x00000000000000000000000000000000000000bb_address;
+    evmone::state::Log logA{.addr = c_addrA,
         .data = evmc::bytes{0x68, 0x69},
         .topics = {0x01_bytes32, 0x02_bytes32, 0x03_bytes32}};
-    evmone::state::Log logB{.addr = kAddrB, .data = evmc::bytes{}, .topics = {}};
+    evmone::state::Log logB{.addr = c_addrB, .data = evmc::bytes{}, .topics = {}};
 
     // Project both logs onto FISCO LogEntry (raw bytes, same mapping mapOpLogs uses).
     std::vector<bcos::protocol::LogEntry> logs;

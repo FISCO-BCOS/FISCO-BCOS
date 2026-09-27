@@ -195,6 +195,17 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
         };
     }
     auto payloadId = *payloadIdOpt;
+    // S11 sibling (EngineTracker.cpp has the same + 1 shape): *headBlockNumber comes
+    // from the ledger; at INT64_MAX the + 1 below would sign-overflow (UB). No chain
+    // builds that high — fail closed instead of wrapping.
+    if (*headBlockNumber >= std::numeric_limits<protocol::BlockNumber>::max())
+    {
+        co_return ForkchoiceUpdatedResult{
+            .payloadStatus = engine_common::makeStatus(PayloadValidationStatus::Invalid,
+                std::nullopt, std::string("head block number is not representable")),
+            .payloadId = std::nullopt,
+        };
+    }
     auto nextBlockNumber = *headBlockNumber + 1;
     std::optional<BuildPayloadResult> built;
     try
@@ -425,22 +436,24 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         }
     }
 
-    // MPT pruning (CommitObserver) serialization: m_commitMutex guards the whole commit
+    // MPT pruning (CommitObserver) serialization: the commit gate guards the whole commit
     // section — the pruning hooks stage the block's counting work on one shared overlay
     // between coPreparePruneRows and onCommit (BaselineSchedulerMPTHelpers.h's
     // prepareMPTPruneRows contract), so [prepare -> merge -> onCommit] must be serialized
-    // against every other commit, exactly like BaselineScheduler::m_commitMutex (likewise
-    // held across co_await). The mutex also settles the concurrent-duplicate race the
-    // comments below describe: the first call to enter commits; a duplicate that popped the
-    // still-unconsumed artifact blocks here and is caught by the re-validation next.
-    std::unique_lock commitLock(m_commitMutex);
+    // against every other commit, exactly like BaselineScheduler::m_commitMutex. S6: unlike
+    // a mutex, the counting semaphore may be released by whichever thread the coroutine's
+    // last co_await resumed on, so spanning the section's co_awaits stays defined. The gate
+    // also settles the concurrent-duplicate race the comments below describe: the first call
+    // to enter commits; a duplicate that popped the still-unconsumed artifact blocks here
+    // and is caught by the re-validation next.
+    CrossThreadCommitGate commitLock{m_commitGate};
     if (localArtifact)
     {
         bool committedByDuplicate = false;
         {
             auto guard = m_tracker.lockExclusive();
             // commitRetainedPayload (below) clears m_artifacts after a successful commit, so
-            // an artifact that vanished while this call waited on m_commitMutex means a
+            // an artifact that vanished while this call waited on the commit gate means a
             // concurrent duplicate already landed this block's rows AND counted its delta —
             // re-firing either would merge idempotent rows but DOUBLE-COUNT the reference
             // movements.

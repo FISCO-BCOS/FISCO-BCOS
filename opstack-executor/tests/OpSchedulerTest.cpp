@@ -1337,7 +1337,7 @@ BOOST_AUTO_TEST_CASE(CallGasAboveBlockPoolClassifiesAsConsensusRejected)
 BOOST_AUTO_TEST_CASE(ExecuteBlockSelectsForkFromTheBlockTimestamp)
 {
     constexpr uint64_t kHeaderSecond = 0x3f2;
-    constexpr auto kP256Verify = 0x0000000000000000000000000000000000000100_address;
+    constexpr auto c_p256Verify = 0x0000000000000000000000000000000000000100_address;
 
     // Both arms are Jovian-or-later, so the block keeps ONE shape: a Jovian-sized L1-attributes
     // deposit first (has_da_footprint carries from Jovian into Karst unchanged), then the probe.
@@ -1367,7 +1367,7 @@ BOOST_AUTO_TEST_CASE(ExecuteBlockSelectsForkFromTheBlockTimestamp)
         // parent pre-karst and only the executed block's own timestamp selects the fork.
         seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader());
         auto dep = makeDeposit();
-        dep.to = kP256Verify;  // empty input: the precompile succeeds and only the price moves
+        dep.to = c_p256Verify;  // empty input: the precompile succeeds and only the price moves
         auto const depEnv = encodeDepositEnvelope(dep);
         auto out = invokeExecute(
             f, assembleBlock(f, makeHeader(), {l1AttributesEnv, depEnv}), /*verify=*/false);
@@ -1550,8 +1550,8 @@ BOOST_AUTO_TEST_CASE(ValidateErrorCodeRoundTripsOnError)
 BOOST_AUTO_TEST_CASE(StorageReadFaultRejectsBlockAsStorageFault)
 {
     Fixture f;
-    constexpr evmc::address kPoisonAddr = 0x00000000000000000000000000000000deadc0de_address;
-    seedCorruptAccount(f.multiLayerStorage, kPoisonAddr, f.hashImpl);
+    constexpr evmc::address c_poisonAddr = 0x00000000000000000000000000000000deadc0de_address;
+    seedCorruptAccount(f.multiLayerStorage, c_poisonAddr, f.hashImpl);
 
     // The minimal OP block from CommitPersistsSevenLedgerTables: L1 attributes deposit + one
     // eip1559 transfer. Neither tx touches the corrupt account — it is only reached by the

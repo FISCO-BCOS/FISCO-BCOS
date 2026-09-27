@@ -85,13 +85,14 @@ using ViewType = typename MLS::ViewType;
 // The 146-byte L1Block runtime bytecode (tools/op-e2e/gen_l1block.py): dispatches on
 // setL1BlockValues (Isthmus 0x098999be / Jovian 0x3db6be2b), writes slots 1/3/7/8 aligned to
 // FISCO's unpackOpFeeParams reads, returns.
+// Block 1's exact L1 attributes deposit envelope (type 0x7e, to=OP_L1_BLOCK,
+// gas=0xf4240, 178-byte Jovian calldata 0x3db6be2b...) captured from the B3a node.
 inline constexpr char c_l1BlockCodeHex[] =
     "6004361060255760003560e01c63098999be14602b5760003560e01c633d"
     "b6be2b14602b575b60006000fd5b6000358060c01c63ffffffff1660601b"
     "60003560a01c63ffffffff1660401b176003555060243560015560443560"
     "075560a03560c01c63ffffffff1660401b60a03560801c67ffffffffffff"
-    "ffff161760b03560f01c61ffff1660601b1760085560006000f3";// Block 1's exact L1 attributes deposit envelope (type 0x7e, to=OP_L1_BLOCK, gas=0xf4240,
-// 178-byte Jovian calldata 0x3db6be2b...) captured from the B3a node.
+    "ffff161760b03560f01c61ffff1660601b1760085560006000f3";
 inline constexpr char c_depositEnvelopeHex[] =
     "7ef90106a05eea6d70f9bde6d282e117c76b5da51b2b5b5aa4040c6481df4156"
     "5df07361fc94deaddeaddeaddeaddeaddeaddeaddeaddead0001944200000000"

@@ -188,10 +188,15 @@ inline Json::Value makeParamsJson(GoldenSample const& sample)
     ep["transactions"] = txs;
     if (header->withdrawalsRoot())
         ep["withdrawalsRoot"] = hexPrefixedH256(*header->withdrawalsRoot());
-    ep["blobGasUsed"] =
-        quantityOf(*header->blobGasUsed());  // optional<u256>, always filled by toTarsHeader
-    ep["excessBlobGas"] =
-        quantityOf(*header->excessBlobGas());  // optional<u256>, always filled by toTarsHeader
+    // S13: toTarsHeader sets these only when the source RLP carries them
+    // (EthBlockHeader.cpp) — the "always filled" claim the old comment made is
+    // false — so mirror the withdrawalsRoot shape above and emit the field only
+    // when present; a pre-Ecotone corpus vector must not dereference an empty
+    // optional.
+    if (header->blobGasUsed())
+        ep["blobGasUsed"] = quantityOf(*header->blobGasUsed());
+    if (header->excessBlobGas())
+        ep["excessBlobGas"] = quantityOf(*header->excessBlobGas());
 
     Json::Value params(Json::arrayValue);
     params.append(ep);
