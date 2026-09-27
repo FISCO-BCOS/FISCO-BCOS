@@ -9,6 +9,7 @@
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
 #include <bcos-evm/eth/state/errors.hpp>
@@ -170,7 +171,7 @@ inline bcos::protocol::TransactionReceipt::Ptr makeFiscoReceipt(
     // gas_used 是 int64_t，运行时检查非负防 cast 回绕（evmone 保证；负值仅理论可达，但
     // NDEBUG 下 assert 会消失，共识面不容忍回绕）。
     if (evmoneReceipt.gas_used < 0)
-        throw std::runtime_error("opTransition: negative gas_used");
+        BOOST_THROW_EXCEPTION(std::runtime_error("opTransition: negative gas_used"));
     auto out = receiptFactory->createReceipt(
         bcos::u256{static_cast<uint64_t>(evmoneReceipt.gas_used)}, std::move(contractAddress),
         mapOpLogs(evmoneReceipt.logs), toFiscoStatus(evmoneReceipt.status), output,
@@ -245,9 +246,8 @@ OpReceiptMeta deriveOpReceiptMeta(const OpTxProperties& props, intx::uint256 ope
         // Either snapshot member marks the receipt as legacy-priced: opValidate sets both
         // (the bedrock one saturates >= 2^64, the legacy one truncates like op-geth's
         // Uint64()); hand-built test props may carry only one.
-        m.l1_gas_used = props.bedrock_l1_gas_used.has_value() ?
-                            *props.bedrock_l1_gas_used :
-                            *props.legacy_l1_gas_used;
+        m.l1_gas_used = props.bedrock_l1_gas_used.has_value() ? *props.bedrock_l1_gas_used :
+                                                                *props.legacy_l1_gas_used;
         m.l1_fee_scalar = props.bedrock_l1_fee_scalar;
     }
     else
@@ -428,8 +428,8 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
         // switch, core/types/rollup_cost.go). regolith_deposit_fixes is exactly
         // IsRegolith(blockTime) for every config in the ladder (false only on bedrockConfig,
         // whose .fork aliases Regolith — a cfg.fork >= Regolith probe would lie there).
-        const auto legacy =
-            computeLegacyL1Cost(fee, signedTxEnvelope, /*regolithActive=*/cfg.regolith_deposit_fixes);
+        const auto legacy = computeLegacyL1Cost(
+            fee, signedTxEnvelope, /*regolithActive=*/cfg.regolith_deposit_fixes);
         l1Cost = legacy.fee;
         legacyL1GasUsed = legacy.gas_used;
     }
@@ -495,7 +495,7 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
         // overhead)` where overhead = GetState(OverheadSlot).Big() and L1GasUsed is
         // `*big.Int` (core/types/rollup_cost.go:301-315, receipt.go:91). op-reth keeps its
         // RPC field a u128 with saturating_add/saturating_to (crates/rpc/src/eth/receipt.rs:
-        // 184-190). FISCO's non-consensus snapshot is uint64. `fee.overhead` is the
+        // 184-190). FISCO's non-consensus snapshot is uint64. `fee.l1_fee_overhead` is the
         // whole-slot uint256 read from slot 5 / calldata arg 6, but the canonical
         // L1Block.setL1BlockValues writes a uint64, so the sum fits on a valid chain.
         // Saturate (never wrap mod 2^64) if adversarial state exceeds it; upstream never
@@ -504,13 +504,13 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
         // (bedrockConfig on the merged full ladder) legacyTxDataGas carries op-geth's one-time
         // +68 phantom non-zero bytes, which bedrockCalldataGasUsed alone would drop.
         const auto gasWithOverhead =
-            intx::uint256{bcos::evm::opstack::legacyTxDataGas(signedTxEnvelope,
-                cfg.has_legacy_l1_formula ? cfg.regolith_deposit_fixes : true)} +
-            fee.overhead;
+            intx::uint256{bcos::evm::opstack::legacyTxDataGas(
+                signedTxEnvelope, cfg.has_legacy_l1_formula ? cfg.regolith_deposit_fixes : true)} +
+            fee.l1_fee_overhead;
         props.bedrock_l1_gas_used = gasWithOverhead > std::numeric_limits<uint64_t>::max() ?
                                         std::numeric_limits<uint64_t>::max() :
                                         static_cast<uint64_t>(gasWithOverhead);
-        props.bedrock_l1_fee_scalar = fee.bedrock_scalar;
+        props.bedrock_l1_fee_scalar = fee.l1_fee_scalar;
         // Release-line (#5632) twin of the snapshot above: the overhead-inclusive gas the
         // legacy fee formula actually ran on (op-geth's Uint64() truncation; includes the
         // pre-Regolith +68 phantom bytes when the legacy arm ran pre-Regolith).
@@ -590,7 +590,8 @@ bcos::protocol::TransactionReceipt::Ptr runDeposit(const evmone::state::StateVie
     // op-geth state_transition.go preCheck: "Don't touch the gas pool for system transactions"
     // pre-Regolith; Regolith rejects them outright (ErrSystemTxNotSupported, block-level error).
     if (dep.is_system_tx && cfg.regolith_deposit_fixes)
-        throw std::runtime_error("op deposit: is_system_tx not supported since Regolith (block error)");
+        BOOST_THROW_EXCEPTION(std::runtime_error(
+            "op deposit: is_system_tx not supported since Regolith (block error)"));
     const bool preRegolith = !cfg.regolith_deposit_fixes;
     const bool unmeteredSystemTx = dep.is_system_tx && preRegolith;
     // Pre-Regolith receipt gas accounting (op-geth innerExecute / execute failure branch):

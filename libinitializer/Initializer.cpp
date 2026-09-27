@@ -555,8 +555,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                m_ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger,
-                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState, m_mptCommitObserver);
+                m_ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(),
+                ledger, bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState,
+                m_mptCommitObserver);
         }
     }
     else
@@ -595,8 +596,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                m_ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger,
-                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState, m_mptCommitObserver);
+                m_ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(),
+                ledger, bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState,
+                m_mptCommitObserver);
         }
     }
 
@@ -757,11 +759,11 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             auto const opEip1559 = bcos::engine::effectiveOpEip1559(declaredOpEip1559);
             if (declaredOpEip1559.has_value())
             {
-                INITIALIZER_LOG(INFO) << LOG_DESC("OP chain EIP-1559 parameters")
-                                      << LOG_KV("declared", true)
-                                      << LOG_KV("elasticity", opEip1559.elasticity)
-                                      << LOG_KV("denominator", opEip1559.denominator)
-                                      << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
+                INITIALIZER_LOG(INFO)
+                    << LOG_DESC("OP chain EIP-1559 parameters") << LOG_KV("declared", true)
+                    << LOG_KV("elasticity", opEip1559.elasticity)
+                    << LOG_KV("denominator", opEip1559.denominator)
+                    << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
             }
             else
             {
@@ -779,8 +781,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             }
             m_engineServiceInitializer = EngineServiceInitializer::buildOp(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
-                m_memPoolInitializer->memPool(), bcos::engine::c_defaultBlockTxCountLimit, opDelegate,
-                m_daCaps, /*allowSynthesizedL1Attributes=*/false, declaredOpEip1559);
+                m_memPoolInitializer->memPool(), bcos::engine::c_defaultBlockTxCountLimit,
+                opDelegate, m_daCaps, /*allowSynthesizedL1Attributes=*/false, declaredOpEip1559);
         }
 
         m_opScheduler = opDelegate;
@@ -888,8 +890,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // derives it per block from [op_fork_timestamps] (configAt(schedule, blockTime).rev). Its
     // absence is the expected shape, not the runtime-switch hazard this guard targets.
     if (m_executorVersion >= scheduler_v1::ETHEREUM_EXECUTOR_VERSION &&
-        !bcos::ledger::isOpLaneVersion(m_executorVersion) &&
-        !m_nodeConfig->ethereumELModeEnabled())
+        !bcos::ledger::isOpLaneVersion(m_executorVersion) && !m_nodeConfig->ethereumELModeEnabled())
     {
         if (auto evmcRev = task::syncWait(ledger::getSystemConfig(
                 *m_ledger, magic_enum::enum_name(ledger::SystemConfig::evmc_revision))))

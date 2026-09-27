@@ -98,6 +98,23 @@ BOOST_AUTO_TEST_CASE(regolithForkKeysDepositLeafWithoutNonceVersion)
     BOOST_CHECK_EQUAL(out.receiptsRoot, rootOverLeaf(*receipts[0], c_depositTxType, false));
 }
 
+BOOST_AUTO_TEST_CASE(regolithAcceptsFullyAbsentMeta)
+{
+    // A pre-Regolith (Bedrock) deposit's meta carries NEITHER field and round-trips as
+    // nullopt (the all-empty legacy-receipt heuristic), so — mirroring the executor seal —
+    // the helper must accept it pre-Canyon and encode the same pre-Canyon leaf it would
+    // for a present-but-fieldless meta. Regressing to a blanket !meta rejection here would
+    // fail every Bedrock deposit the day an OP-lane caller passes its fork.
+    std::vector<RawOnlyTx> payload{{.raw = {0x7e, 0x01}}};
+    std::vector<bcos::protocol::TransactionReceipt::Ptr> receipts{
+        depositReceipt(std::nullopt, std::nullopt)};
+    const std::vector<std::uint8_t> types{c_depositTxType};
+
+    const auto out = bcos::engine::engine_common::buildHeaderCommitments(
+        payload, receipts, types, bcos::engine::OpForkId::Regolith);
+    BOOST_CHECK_EQUAL(out.receiptsRoot, rootOverLeaf(*receipts[0], c_depositTxType, false));
+}
+
 BOOST_AUTO_TEST_CASE(laneWithoutForkContextRejectsDepositReceipt)
 {
     std::vector<RawOnlyTx> payload{{.raw = {0x7e, 0x01}}};

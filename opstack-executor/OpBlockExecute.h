@@ -24,12 +24,13 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <opstack-executor/OpCommitments.h>
+#include <boost/throw_exception.hpp>
 // OpBlockCommitments / payloadBloomToH2048 / toBcosH256
 #include <opstack-executor/OpCommon.h>
 // toBlockInfo / narrowU256ToU64 / toEvmcBytes32 / OpBlockSeal
-#include <opstack-executor/OpstackExecutor.h>
 #include <bcos-evm/adapter/RecentBlockHashes.h>
 #include <bcos-evm/adapter/Storage2State.h>
+#include <opstack-executor/OpstackExecutor.h>
 #include <algorithm>
 #include <array>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
@@ -677,7 +678,7 @@ void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
 
     if (schedule == nullptr)
     {
-        throw std::invalid_argument("preBlockOpSteps: OpForkSchedule is required");
+        BOOST_THROW_EXCEPTION(std::invalid_argument("preBlockOpSteps: OpForkSchedule is required"));
     }
 
     // The Cancun/Ecotone beacon root and blob pair exist only from Ecotone on; a pre-Ecotone
@@ -758,33 +759,6 @@ void preBlockOpSteps(Storage& view, bcos::protocol::BlockHeader const& header,
                 op::jovianDaFootprintGasScalar(std::span<uint8_t const>{data.data(), data.size()}))
             daFootprintGasScalar = *scalar;
     }
-}
-
-/// Project the payload/header announced commitments into OpBlockCommitments (the "announced" side
-/// of mismatchedFieldOf).
-inline OpBlockCommitments announcedCommitmentsOf(const bcos::engine::ExecutionPayload& payload,
-    const bcos::h256& transactionsRoot, const bcos::protocol::BlockHeader& ethHeader)
-{
-    // Isthmus+ payloads always carry withdrawalsRoot (upstream invariant), but if that ever lapses
-    // the unconditional deref below would throw bad_optional_access (-> UnknownError). Guard it
-    // into a clean consensus-level rejection naming the field (symmetric to mismatchedFieldOf's
-    // report).
-    if (!payload.withdrawalsRoot.has_value())
-        throw OpConsensusError("op block: payload missing withdrawalsRoot");
-    OpBlockCommitments out{
-        .receiptsRoot = payload.receiptsRoot,
-        .logsBloom = payloadBloomToH2048(payload.logsBloom),
-        .withdrawalsRoot = *payload.withdrawalsRoot,
-        .stateRoot = payload.stateRoot,
-        .gasUsed = payload.gasUsed,
-        .txRoot = transactionsRoot,
-        .blobGasUsed = payload.blobGasUsed.has_value() ?
-                           std::optional<uint64_t>(bcos::evm::engine::detail::narrowU256ToU64(
-                               *payload.blobGasUsed, "ExecutionPayload.blobGasUsed")) :
-                           std::nullopt,
-        .requestsHash = ethHeader.requestsHash(),
-    };
-    return out;
 }
 
 /// transactionsRoot over raw EIP-2718 envelopes (trie key = rlp(index), value = raw wire bytes).

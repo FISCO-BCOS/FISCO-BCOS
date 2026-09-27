@@ -302,8 +302,8 @@ BOOST_AUTO_TEST_CASE(TransitionUsesValidateSnapshot)
     // Inject fee F: l1_base_fee = 1 gwei (non-zero), base_fee_scalar 1100 -> props.l1_cost
     // non-zero.
     OpFeeParams F{.l1_base_fee = 1000000000_u256,
-        .overhead = 0_u256,
-        .bedrock_scalar = 0_u256,
+        .l1_fee_overhead = 0_u256,
+        .l1_fee_scalar = 0_u256,
         .base_fee_scalar = 1100,
         .blob_base_fee_scalar = 0,
         .blob_base_fee = 0_u256,

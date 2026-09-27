@@ -134,8 +134,8 @@ BOOST_AUTO_TEST_CASE(InsufficientForL1CostFails)
     test::TestState ts;
     ts[kSenderValidate] = {.nonce = 0, .balance = 100000000_u256, .storage = {}, .code = {}};
     OpFeeParams fee{.l1_base_fee = 1000000000_u256,
-        .overhead = 0_u256,
-        .bedrock_scalar = 0_u256,
+        .l1_fee_overhead = 0_u256,
+        .l1_fee_scalar = 0_u256,
         .base_fee_scalar = 2,
         .blob_base_fee_scalar = 3,
         .blob_base_fee = 10000000_u256,
@@ -186,8 +186,8 @@ BOOST_AUTO_TEST_CASE(BedrockL1GasUsedSaturatesOverflowingOverhead)
 
     {  // normal overhead stays exact
         OpFeeParams fee{};
-        fee.overhead = 2100_u256;
-        fee.bedrock_scalar = 1_u256;
+        fee.l1_fee_overhead = 2100_u256;
+        fee.l1_fee_scalar = 1_u256;
         const auto r = opValidate(
             ts, blkValidate(), baseTx(), {env.data(), env.size()}, regolithConfig(), fee, 30000000);
         BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(r));
@@ -198,8 +198,8 @@ BOOST_AUTO_TEST_CASE(BedrockL1GasUsedSaturatesOverflowingOverhead)
 
     {  // overhead = 2^64 saturates instead of wrapping to the gas-only value
         OpFeeParams fee{};
-        fee.overhead = intx::uint256{1} << 64;
-        fee.bedrock_scalar = 1_u256;
+        fee.l1_fee_overhead = intx::uint256{1} << 64;
+        fee.l1_fee_scalar = 1_u256;
         const auto r = opValidate(
             ts, blkValidate(), baseTx(), {env.data(), env.size()}, regolithConfig(), fee, 30000000);
         BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(r));
@@ -225,8 +225,8 @@ BOOST_AUTO_TEST_CASE(BalanceCapDoesNotWrapAt2Pow256)
 
     // 非零 L1 费用参数：l1Cost > 0 即足以触发回绕
     OpFeeParams fee{.l1_base_fee = 1000000000_u256,
-        .overhead = 0_u256,
-        .bedrock_scalar = 0_u256,
+        .l1_fee_overhead = 0_u256,
+        .l1_fee_scalar = 0_u256,
         .base_fee_scalar = 2,
         .blob_base_fee_scalar = 3,
         .blob_base_fee = 10000000_u256,
@@ -252,8 +252,8 @@ BOOST_AUTO_TEST_CASE(BalanceCapCountsEveryTermExactlyOnce)
     const std::vector<uint8_t> env(120, 0x11);
     // l1 与 operator 两项都非零，否则漏算任一项都察觉不到。
     const OpFeeParams fee{.l1_base_fee = 1000000000_u256,
-        .overhead = 0_u256,
-        .bedrock_scalar = 0_u256,
+        .l1_fee_overhead = 0_u256,
+        .l1_fee_scalar = 0_u256,
         .base_fee_scalar = 1100,
         .blob_base_fee_scalar = 0,
         .blob_base_fee = 0_u256,
@@ -420,8 +420,8 @@ BOOST_AUTO_TEST_CASE(LegacyL1CostJoinsThe512BitCap)
     const auto fee = legacyFee();
     const auto tx = baseTx();
     const auto l1Cost = 11326000000000_u256;  // Bedrock 黄金值
-    const auto needed = intx::uint256{static_cast<uint64_t>(tx.gas_limit)} * tx.max_gas_price +
-                        tx.value + l1Cost;
+    const auto needed =
+        intx::uint256{static_cast<uint64_t>(tx.gas_limit)} * tx.max_gas_price + tx.value + l1Cost;
     {
         test::TestState ts;
         ts[kSenderValidate] = {.nonce = 0, .balance = needed, .storage = {}, .code = {}};

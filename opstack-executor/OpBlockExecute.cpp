@@ -12,6 +12,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpstackExecutor.h>  // envelopeExecutionFieldsMismatch (shared gate)
+#include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <bcos-evm/eth/state/state.hpp>  // evmone::state::finalize
 #include <bcos-evm/eth/state/system_contracts.hpp>
@@ -60,7 +61,7 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
 {
     if (schedule == nullptr)
     {
-        throw std::invalid_argument("processOpBlock: OpForkSchedule is required");
+        BOOST_THROW_EXCEPTION(std::invalid_argument("processOpBlock: OpForkSchedule is required"));
     }
     // Storage write-back failures must leave as OpStorageError (-32603), never a bare
     // runtime_error — the same classification the per-tx path applies in m_finish /
@@ -344,8 +345,7 @@ bcos::bytes encodeReceiptForRoot(
             // presence itself is only checkable Canyon+; what must agree in both directions on
             // every fork is the version's PRESENCE (a Regolith receipt carrying a version would
             // silently lengthen the pre-Canyon leaf, a Canyon+ receipt missing it shorten it).
-            const bool hasVersion =
-                meta.has_value() && meta->deposit_receipt_version.has_value();
+            const bool hasVersion = meta.has_value() && meta->deposit_receipt_version.has_value();
             if (hasVersion != wantsVersion)
                 throw OpConsensusError(
                     "op block: deposit receipt nonce/version missing or fork-inconsistent");
@@ -395,8 +395,7 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
         {
             const auto& meta = result.receipts[i]->opStackMeta();
             const bool hasNonce = meta.has_value() && meta->deposit_nonce.has_value();
-            const bool hasVersion =
-                meta.has_value() && meta->deposit_receipt_version.has_value();
+            const bool hasVersion = meta.has_value() && meta->deposit_receipt_version.has_value();
             if (cfg.has_deposit_receipt_version)  // Canyon+
             {
                 if (!hasNonce || !hasVersion)

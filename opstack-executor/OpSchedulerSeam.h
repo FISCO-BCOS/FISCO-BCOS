@@ -106,14 +106,6 @@ public:
             result.seal, result.stateRoot, result.gasUsed, result.txRoot);
     }
 
-    /// Announced-side projection for the six-field comparison.
-    static bcos::evm::engine::OpBlockCommitments announcedCommitmentsOf(
-        const bcos::engine::ExecutionPayload& payload, const bcos::h256& transactionsRoot,
-        const bcos::protocol::BlockHeader& ethHeader)
-    {
-        return bcos::evm::engine::announcedCommitmentsOf(payload, transactionsRoot, ethHeader);
-    }
-
     /// First mismatching field name, or nullopt.
     static std::optional<std::string> mismatchedFieldOf(
         const OpBlockCommitments& computed, const OpBlockCommitments& announced)

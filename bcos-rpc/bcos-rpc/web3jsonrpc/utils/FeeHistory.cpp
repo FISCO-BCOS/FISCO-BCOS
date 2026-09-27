@@ -198,16 +198,21 @@ bcos::u256 bcos::rpc::calcOpNextBaseFee(
     // Pre-Holocene parent (empty extraData): the step was previously SKIPPED here (the
     // prediction returned the parent's fee — a flat line), because this path had no fork
     // schedule to identify the era and no chain parameters to size the step. Both arrive
-    // now: the era comes from the header itself (ethBlockVersion >= SHANGHAI means the
-    // chain is past Canyon, choosing denominatorCanyon; the single Canyon activation
-    // block is the only ambiguity, the same tolerance as the engine's shape-derived
-    // forks), and the triple rides the LedgerConfig snapshot from the op_eip1559_params
-    // row. calcOpNextBlockBaseFee is the SAME function the engine's newPayload/FCU paths
-    // use, so the prediction can no longer drift from validation.
+    // now: the era comes from the header's shape (the probe below), and the triple rides
+    // the LedgerConfig snapshot from the op_eip1559_params row. calcOpNextBlockBaseFee is
+    // the SAME function the engine's newPayload/FCU paths use, so the prediction can no
+    // longer drift from validation.
     if (extra.empty())
     {
-        auto const newBlockIsCanyon =
-            parent.ethBlockVersion() >= bcos::protocol::EthBlockVersion::SHANGHAI;
+        // Era probe via the header's shape, NOT ethBlockVersion: OP headers are always
+        // NON_ETH (rebuildOpEthHeader deliberately leaves it so), so a SHANGHAI version
+        // probe was vacuously false and every post-Canyon pre-Holocene parent predicted
+        // with the pre-Canyon denominator. An OP header carries withdrawalsRoot exactly
+        // from Canyon on (the seal writes it when has_withdrawals), so its presence on
+        // the parent means the next block — at a strictly later timestamp — is Canyon+
+        // too. The Canyon ACTIVATION block itself stays ambiguous (its pre-Canyon parent
+        // lacks the field), the same tolerance as the engine's shape-derived forks.
+        auto const newBlockIsCanyon = parent.withdrawalsRoot().has_value();
         return bcos::engine::calcOpNextBlockBaseFee(
             parent, {.parentIsHolocene = false,
                         .parentIsJovian = false,

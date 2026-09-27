@@ -390,7 +390,11 @@ private:
     /// another thread (libtask/bcos-task/Wait.h), so the unlock would cross threads;
     /// canonicalizeImportedHead takes this lock only for its sync entry and exit
     /// sections, and m_canonicalizeInFlight (guarded by it) carries the exclusion
-    /// across the awaited body.
+    /// across the awaited body. (Sanctioned exception, OpScheduler.h: coExecuteBlock /
+    /// coImportExecute hold std::unique_lock pairs across syncWait-bounded co_awaits —
+    /// safe ONLY while every awaited callback completes on the calling thread, the
+    /// standing precondition that lock pair's own comment pins; a callback that hops
+    /// threads must narrow those locks or replace them with a coroutine-aware mutex.)
     mutable std::mutex m_importedTreeMutex;
     /// True while canonicalizeImportedHead is between its entry and exit critical
     /// sections. Guarded by m_importedTreeMutex. A concurrent newPayload that observes

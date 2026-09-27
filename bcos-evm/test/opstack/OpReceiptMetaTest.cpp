@@ -159,12 +159,12 @@ BOOST_AUTO_TEST_CASE(LegacyMetaOmitsEcotoneScalarAndBlobFields)
 {
     OpFeeParams fee{};
     fee.l1_base_fee = 1000_u256;
-    fee.base_fee_scalar = 7;         // Ecotone 槽值——legacy 分支必须忽略
-    fee.blob_base_fee = 2000_u256;   // 同上
-    fee.blob_base_fee_scalar = 9;    // 同上
-    fee.overhead = 50_u256;
+    fee.base_fee_scalar = 7;        // Ecotone 槽值——legacy 分支必须忽略
+    fee.blob_base_fee = 2000_u256;  // 同上
+    fee.blob_base_fee_scalar = 9;   // 同上
     fee.l1_fee_overhead = 50_u256;
-    fee.bedrock_scalar = 7000000_u256;
+    fee.l1_fee_overhead = 50_u256;
+    fee.l1_fee_scalar = 7000000_u256;
     fee.l1_fee_scalar = 7000000_u256;
     auto p = props(fee, /*flzLen=*/0, 11326000000000_u256, bedrockConfig());
     p.legacy_l1_gas_used = 1618;
@@ -178,8 +178,8 @@ BOOST_AUTO_TEST_CASE(LegacyMetaOmitsEcotoneScalarAndBlobFields)
     BOOST_CHECK(!m.l1_blob_base_fee.has_value());
     BOOST_CHECK(!m.l1_base_fee_scalar.has_value());
     BOOST_CHECK(!m.l1_blob_base_fee_scalar.has_value());
-    BOOST_CHECK(!m.operator_fee.has_value());       // pre-Isthmus
-    BOOST_CHECK(!m.da_footprint.has_value());       // pre-Jovian
+    BOOST_CHECK(!m.operator_fee.has_value());  // pre-Isthmus
+    BOOST_CHECK(!m.da_footprint.has_value());  // pre-Jovian
 }
 
 BOOST_AUTO_TEST_SUITE_END()

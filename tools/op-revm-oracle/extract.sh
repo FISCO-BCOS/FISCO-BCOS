@@ -47,6 +47,11 @@ if [ -n "$P256_SRC" ]; then
   P256_GAS="$(grep -hoE 'P256VERIFY_BASE_GAS_FEE_OSAKA: u64 = [0-9_]+' \
     "$P256_SRC/secp256r1.rs" | head -1 | grep -oE '[0-9_]+$' | tr -d '_')"
 fi
+# The tracked oracle is the external judge for the Karst precompile table, so a missing
+# source must die, not silently pin p256verify_gas:0 (same rule as c2-e2e.sh's forge pin:
+# an unfetchable anchor is a hard error, never a default).
+[ -n "$P256_SRC" ] || { echo "error: revm-precompile-$REVM_PRECOMPILE_VER sources not found under \${CARGO_HOME:-$HOME/.cargo}/registry/src; cannot derive p256verify_gas" >&2; exit 1; }
+[ -n "$P256_GAS" ] || { echo "error: P256VERIFY_BASE_GAS_FEE_OSAKA not found in $P256_SRC/secp256r1.rs; cannot derive p256verify_gas" >&2; exit 1; }
 
 cat > "$OUT" <<EOF
 {

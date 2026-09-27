@@ -134,8 +134,8 @@ BOOST_AUTO_TEST_CASE(LoadReadsBedrockOverheadAndScalarSlots, * boost::unit_test:
     ts[OP_L1_BLOCK].storage[key(6)] = fullWord(1'000'000);
 
     const auto fee = loadOpFeeParams(ts);
-    BOOST_CHECK_EQUAL(fee.overhead, intx::uint256{2100});
-    BOOST_CHECK_EQUAL(fee.bedrock_scalar, intx::uint256{1'000'000});
+    BOOST_CHECK_EQUAL(fee.l1_fee_overhead, intx::uint256{2100});
+    BOOST_CHECK_EQUAL(fee.l1_fee_scalar, intx::uint256{1'000'000});
 }
 
 // clang-format off
@@ -145,8 +145,8 @@ BOOST_AUTO_TEST_CASE(MissingSlotsStayZero, * boost::unit_test::label("fork-ecoto
     using namespace evmone;
     test::TestState ts;
     const auto fee = loadOpFeeParams(ts);
-    BOOST_CHECK_EQUAL(fee.overhead, intx::uint256{0});
-    BOOST_CHECK_EQUAL(fee.bedrock_scalar, intx::uint256{0});
+    BOOST_CHECK_EQUAL(fee.l1_fee_overhead, intx::uint256{0});
+    BOOST_CHECK_EQUAL(fee.l1_fee_scalar, intx::uint256{0});
     BOOST_CHECK_EQUAL(fee.l1_base_fee, intx::uint256{0});
 }
 

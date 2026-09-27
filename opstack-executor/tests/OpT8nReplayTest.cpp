@@ -1,3 +1,6 @@
+// FISCO BCOS
+// SPDX-License-Identifier: Apache-2.0
+
 // OpT8nReplayTest.cpp — OP block-level differential replay gate.
 //
 // Replays test/opstack/t8n/vectors/*.json (schema v3-block, op-geth
@@ -23,6 +26,7 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-evm/adapter/StateRootCompute.h>
+#include <bcos-evm/adapter/Storage2State.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>
@@ -35,7 +39,6 @@
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpDepositEncode.h>
 #include <opstack-executor/OpstackExecutor.h>
-#include <bcos-evm/adapter/Storage2State.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <array>
@@ -1268,9 +1271,8 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
         h.isMember("withdrawalsRoot") ?
             std::optional{hexHash(test::from_json<hash256>(jAt(h, "withdrawalsRoot")))} :
             std::nullopt,
-        seal.withdrawalsRoot.has_value() ?
-            std::optional{hexHash(*seal.withdrawalsRoot)} :
-            std::nullopt);
+        seal.withdrawalsRoot.has_value() ? std::optional{hexHash(*seal.withdrawalsRoot)} :
+                                           std::nullopt);
     // ── header.stateRoot (single leg: execution+engine vs op-geth consensus root) ─
     // Timing: the seal-stage ts is already the full post-finalize world state (same
     // anchor as the messagePasserStorage snapshot); later postState comparisons only

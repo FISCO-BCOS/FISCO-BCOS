@@ -341,12 +341,14 @@ task::Task<void> EngineEndpoint::handleNewPayload(
     }
 
     // Parse before taking the latch so a malformed request still answers InvalidParams
-    // (-32602) while a V4 payload is in flight; the latch below only bounds execution.
+    // (-32602) while another payload is in flight; the latch below only bounds execution.
     auto newPayloadReq = parseNewPayloadRequest(request, version);
 
-    // One in-flight V4 newPayload; a second concurrent call answers SYNCING.
-    const bool opExecution = version == engine::ApiVersion::V4;
-    if (opExecution && m_opPayloadBusy.exchange(true, std::memory_order_acq_rel))
+    // One in-flight newPayload regardless of method version (review KB5): V2/V3 carry the
+    // Regolith..Holocene OP payloads — and post-merge Eth payloads — through the same
+    // execute/commit plane as V4, so they need the same one-in-flight bound; a second
+    // concurrent call answers SYNCING.
+    if (m_opPayloadBusy.exchange(true, std::memory_order_acq_rel))
     {
         auto syncingStatus = serializePayloadStatus(
             engine::PayloadStatus{
@@ -358,7 +360,7 @@ task::Task<void> EngineEndpoint::handleNewPayload(
         buildJsonContent(syncingStatus, response);
         co_return;
     }
-    OpPayloadBusyReset busyReset{m_opPayloadBusy, opExecution};
+    OpPayloadBusyReset busyReset{m_opPayloadBusy, /*owned=*/true};
 
     engine::PayloadStatus engineResult;
     try

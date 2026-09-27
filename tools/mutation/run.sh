@@ -122,8 +122,11 @@ for id in "${ids[@]}"; do
   # Each variant names the file it mutates; fall back to the legacy default.
   vmutated=$(field "$id" mutated); [ -n "$vmutated" ] || vmutated="$mutated"
   git -C "$root" apply --3way "$patch" || { echo "[$id] APPLY FAILED"; rc_all=1; continue; }
-  # Restore on ANY exit (interrupt included) so the tree never stays patched.
-  trap 'restore_patch "$patch"' EXIT INT TERM
+  # Restore on ANY exit (interrupt included) so the tree never stays patched, and keep
+  # the corpus cleanup armed across the variant window: the bare restore trap used to
+  # overwrite the :86 cleanup_corpus EXIT trap without re-arming it, so an interrupt
+  # mid-variant leaked the provisioned corpus symlink.
+  trap 'restore_patch "$patch"; cleanup_corpus' EXIT INT TERM
 
   if ! ninja -C "$build_dir" "$target" >/dev/null 2>&1; then
     echo "[$id] BUILD FAILED under the variant (variant is unusable)"; rc_all=1

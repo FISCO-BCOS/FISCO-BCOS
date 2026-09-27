@@ -11,12 +11,12 @@
 // commitBlock: prewriteBlockToBuffer(announcedHash) → mergeBackStorage.
 // Committed-tip sibling reorg (ReorgUndo / one-level rollback) is a follow-up.
 
+#include <bcos-evm/adapter/RecentBlockHashes.h>
 #include <opstack-executor/OpBlockExecute.h>
 #include <opstack-executor/OpCommitments.h>
 #include <opstack-executor/OpSchedulerPolicy.h>
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <opstack-executor/OpstackExecutor.h>
-#include <bcos-evm/adapter/RecentBlockHashes.h>
 
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
@@ -522,7 +522,7 @@ public:
     {
         if (!m_schedule)
         {
-            throw std::invalid_argument("OpScheduler: null fork schedule");
+            BOOST_THROW_EXCEPTION(std::invalid_argument("OpScheduler: null fork schedule"));
         }
         // execute() tolerates a null ledger; commit does not (see coCommitBlock).
         // Default no-op notifiers. An empty std::function would throw inside the async task.
@@ -733,9 +733,10 @@ private:
             if (verify)
             {
                 // Compare the projected values, matching engine::commitmentsOfHeader: below
-                // Canyon the announced header carries no withdrawalsRoot while finishExecute
-                // always writes the seal's zero sentinel, so absent and the zero hash are the
-                // same header there.
+                // Canyon the announced header carries no withdrawalsRoot and finishExecute
+                // keeps the executed header's unset as well (seal presence — never a zero
+                // sentinel there), so absent on both sides collapses to the same zero under
+                // value_or.
                 if (executedHeader->withdrawalsRoot().value_or(bcos::h256{}) !=
                     blockHeader->withdrawalsRoot().value_or(bcos::h256{}))
                 {
@@ -1793,7 +1794,8 @@ private:
         if (view.size() >= 2 && view[0] == '0' && (view[1] == 'x' || view[1] == 'X'))
             view.remove_prefix(2);
         if (view.size() != sizeof(out.bytes) * 2)
-            throw std::invalid_argument("OpScheduler: invalid address (need 40 hex chars)");
+            BOOST_THROW_EXCEPTION(
+                std::invalid_argument("OpScheduler: invalid address (need 40 hex chars)"));
         boost::algorithm::unhex(view.begin(), view.end(), out.bytes);
         return out;
     }

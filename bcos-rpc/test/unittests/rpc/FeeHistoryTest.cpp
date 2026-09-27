@@ -120,7 +120,8 @@ BOOST_AUTO_TEST_CASE(ethNextBaseFeeDecreaseClampsToOneWeiNotZero)
 // The chain's DECLARED triple must drive the pre-Holocene step (the whole point of the
 // op_eip1559_params row): a denom-8 chain (devnet + C2 both declare 8) whose parent ran
 // 1 gwei with zero usage predicts 875'000'000 — the legacy preset would have said
-// 980'000'000. The child is pre-Canyon (LONDON header), so the base denominator applies.
+// 980'000'000. The child is pre-Canyon (no withdrawalsRoot — the OP header shape below
+// Canyon), so the base denominator applies.
 BOOST_AUTO_TEST_CASE(opNextBaseFeePreHoloceneUsesTheDeclaredTriple)
 {
     auto parent = makeLondonParent(30'000'000, 0, 1'000'000'000);
@@ -129,13 +130,19 @@ BOOST_AUTO_TEST_CASE(opNextBaseFeePreHoloceneUsesTheDeclaredTriple)
     BOOST_CHECK_EQUAL(next, bcos::u256(875'000'000));
 }
 
-// A parent PAST Canyon (SHANGHAI header) prices the next block with denominatorCanyon —
-// the header's own fork version is what this path has, and it is exact for every block
-// except the single Canyon activation boundary.
+// A parent PAST Canyon prices the next block with denominatorCanyon. The era probe is the
+// parent's SHAPE (withdrawalsRoot present ⟺ Canyon+ on an OP header): ethBlockVersion is
+// NON_ETH on every real OP header, so the old SHANGHAI-version probe never fired in
+// production and post-Canyon parents predicted with the pre-Canyon denominator. Exact for
+// every block except the single Canyon activation boundary.
 BOOST_AUTO_TEST_CASE(opNextBaseFeePostCanyonUsesTheCanyonDenominator)
 {
-    auto parent = makeLondonParent(30'000'000, 0, 1'000'000'000);
-    parent.setEthBlockVersion(bcos::protocol::EthBlockVersion::SHANGHAI);
+    BlockHeaderImpl parent;
+    parent.setEthBlockVersion(bcos::protocol::EthBlockVersion::NON_ETH);
+    parent.setWithdrawalsRoot(bcos::crypto::HashType(1));  // Canyon+ OP header shape
+    parent.setGasLimit(30'000'000);
+    parent.setGasUsed(0);
+    parent.setBaseFee(1'000'000'000);
     auto const next = calcOpNextBaseFee(parent,
         bcos::engine::OpEip1559Params{.elasticity = 6, .denominator = 8, .denominatorCanyon = 250});
     // delta 5M/5M target... denominator 250: 1e9 - 1e9*(5M/5M)/250 = 996'000'000.

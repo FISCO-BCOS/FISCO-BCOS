@@ -67,8 +67,10 @@ BOOST_AUTO_TEST_CASE(JovianAndKarstConfigs, * boost::unit_test::label("fork-rego
 }
 
 // At and above karst_time the member configAt hands back the same static config karstConfig()
-// does. (The free configAt(schedule, ts) shorthand resolver was retired with review finding
-// F39 — every dispatch now goes through OpForkSchedule::configAt so the rule has one home.)
+// does. (The free configAt(schedule, ts) overload is NOT retired: it serves from-genesis
+// replay consumers like OpBlockVerifier, which hold a ledger::OpForkSchedule the class's
+// codec channel cannot name. Member dispatch still goes through OpForkSchedule::configAt,
+// so the dispatch rule keeps one home.)
 BOOST_AUTO_TEST_CASE(ConfigAtSelectsKarst)
 {
     // Fold the shorthand into this lane's schedule the same way the Initializer wiring does,

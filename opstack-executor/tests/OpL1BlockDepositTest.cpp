@@ -85,14 +85,14 @@ using ViewType = typename MLS::ViewType;
 // The 146-byte L1Block runtime bytecode (tools/op-e2e/gen_l1block.py): dispatches on
 // setL1BlockValues (Isthmus 0x098999be / Jovian 0x3db6be2b), writes slots 1/3/7/8 aligned to
 // FISCO's unpackOpFeeParams reads, returns.
-inline constexpr char kL1BlockCodeHex[] =
+inline constexpr char c_l1BlockCodeHex[] =
     "6004361060255760003560e01c63098999be14602b5760003560e01c633d"
     "b6be2b14602b575b60006000fd5b6000358060c01c63ffffffff1660601b"
     "60003560a01c63ffffffff1660401b176003555060243560015560443560"
     "075560a03560c01c63ffffffff1660401b60a03560801c67ffffffffffff"
     "ffff161760b03560f01c61ffff1660601b1760085560006000f3";// Block 1's exact L1 attributes deposit envelope (type 0x7e, to=OP_L1_BLOCK, gas=0xf4240,
 // 178-byte Jovian calldata 0x3db6be2b...) captured from the B3a node.
-inline constexpr char kDepositEnvelopeHex[] =
+inline constexpr char c_depositEnvelopeHex[] =
     "7ef90106a05eea6d70f9bde6d282e117c76b5da51b2b5b5aa4040c6481df4156"
     "5df07361fc94deaddeaddeaddeaddeaddeaddeaddeaddead0001944200000000"
     "0000000000000000000000000000158080830f424080b8b23db6be2b00000000"
@@ -106,7 +106,7 @@ inline constexpr char kDepositEnvelopeHex[] =
 // A signed EIP-1559 tx calling the L2ToL1MessagePasser (0x4200...0016, OP_L2_TO_L1_MESSAGE_PASSER)
 // sendMessage(bytes32) with an all-zero message hash (selector 0xe12c9ca8, chainId 0x2105). Signed
 // with the known test privkey (b3_contracts.py PRIVKEY), so the recovered sender is 0x6afa...C693.
-inline constexpr char kWithdrawTxEnvelopeHex[] =
+inline constexpr char c_withdrawTxEnvelopeHex[] =
     "02f89182210580843b9aca00847735940083030d409442000000000000000000"
     "0000000000000000001680a4e12c9ca800000000000000000000000000000000"
     "00000000000000000000000000000000c001a0d3379d9b67266aeb5c70214c78"
@@ -115,7 +115,7 @@ inline constexpr char kWithdrawTxEnvelopeHex[] =
 
 // A real signed EIP-7702 set-code tx from the t8n vector isthmus_setcode_7702.json
 // (block.transactions[1]._op_raw, chainId 0x2105, sender 0x7e5f...5bdf, authority to=0x1eff...718).
-inline constexpr char kSetcodeTxEnvelopeHex[] =
+inline constexpr char c_setcodeTxEnvelopeHex[] =
     "04f8cd822105808405f5e100847735940083030d40941eff47bc3a10a45d4b23"
     "0b5d10e37751fe6aa7188080c0f85ef85c82210594c0de000000000000000000"
     "0000000000000000048080a04f2932930bb9cb89e91dcfbbe82525b7d995da2d"
@@ -160,11 +160,11 @@ bcos::crypto::HashType keccak256(const bcos::bytes& data)
 template <class ViewT>
 void seedCanonicalL1FeeSlots(ViewT& view)
 {
-    static constexpr char kSlot1[] =
+    static constexpr char c_slot1[] =
         "00000000000000000000000000000000000000000000000000000006fc23ac00";
-    static constexpr char kSlot3[] =
+    static constexpr char c_slot3[] =
         "0000000000000000000000000000000000000558000c5fc50000000000000000";
-    static constexpr char kSlot7[] =
+    static constexpr char c_slot7[] =
         "00000000000000000000000000000000000000000000000000000000000f4240";
     auto slotKey = [](uint8_t slot) {
         evmc::bytes32 key{};
@@ -181,9 +181,9 @@ void seedCanonicalL1FeeSlots(ViewT& view)
     bcos::task::syncWait([&]() -> bcos::task::Task<void> {
         bcos::ledger::account::EVMAccount<ViewT> acc(
             view, bcos::evm::opstack::OP_L1_BLOCK, bcos::ledger::account::AddressTableMode::Hex);
-        co_await acc.setStorage(slotKey(1), slotVal(kSlot1));
-        co_await acc.setStorage(slotKey(3), slotVal(kSlot3));
-        co_await acc.setStorage(slotKey(7), slotVal(kSlot7));
+        co_await acc.setStorage(slotKey(1), slotVal(c_slot1));
+        co_await acc.setStorage(slotKey(3), slotVal(c_slot3));
+        co_await acc.setStorage(slotKey(7), slotVal(c_slot7));
         co_return;
     }());
 }
@@ -253,7 +253,7 @@ bcos::bytes makeIsthmusCalldata()
 /// (block.transactions[1]._op_raw, chainId 0x2105, sender 0x7e5f...5bdf). The OP path recovers the
 /// sender from the signature, so a dummy-sig envelope would recover a garbage sender with no
 /// balance; this real one recovers to the sender the fixture seeds.
-inline constexpr char kUserTxEnvelopeHex[] =
+inline constexpr char c_userTxEnvelopeHex[] =
     "02f9013e822105808405f5e1008477359400830186a094b0b000000000000000"
     "0000000000000000000001880de0b6b3a7640000b8c80479f5f560b988c4ea6f"
     "e8523be93037def43fa29d31cdee175dc41f337b92a83a9ea71774bcebb7ab0b"
@@ -389,11 +389,11 @@ BOOST_AUTO_TEST_CASE(L1BlockDepositWritesSlots)
     auto view = multiLayerStorage.fork();
     view.newMutable();
 
-    constexpr uint64_t kIsthmusTime = 1000;
-    constexpr uint64_t kJovianTime = 2000;
+    constexpr uint64_t c_isthmusTime = 1000;
+    constexpr uint64_t c_jovianTime = 2000;
 
     // ---- Seed L1Block exactly as importGenesisState does (EVMAccount create+setCode+setStorage) --
-    bcos::bytes code = bcos::fromHex(kL1BlockCodeHex);
+    bcos::bytes code = bcos::fromHex(c_l1BlockCodeHex);
     const auto codeHash = keccak256(code);
     BOOST_TEST_MESSAGE("seeded L1Block code len=" << code.size()
                                                  << " codeHash=" << codeHash.hex());
@@ -443,9 +443,9 @@ BOOST_AUTO_TEST_CASE(L1BlockDepositWritesSlots)
 
     // Jovian-active timestamp (>= jovianTime); the deposit calldata is 178B with the Jovian
     // selector, satisfying preBlockOpSteps' Jovian shape check.
-    auto header = makeOpHeader(1, static_cast<int64_t>(kJovianTime) * 1000 + 1000);
+    auto header = makeOpHeader(1, static_cast<int64_t>(c_jovianTime) * 1000 + 1000);
     std::vector<bcos::bytes> rawTxs;
-    rawTxs.emplace_back(bcos::fromHex(kDepositEnvelopeHex));
+    rawTxs.emplace_back(bcos::fromHex(c_depositEnvelopeHex));
 
     bcos::evm::engine::OpExecuteBlockResult result;
     try
@@ -494,10 +494,10 @@ BOOST_AUTO_TEST_CASE(NonZeroL1ParamsAlignWithUnpackOpFeeParams)
     auto view = multiLayerStorage.fork();
     view.newMutable();
 
-    constexpr uint64_t kIsthmusTime = 1000;
-    constexpr uint64_t kJovianTime = 2000;
+    constexpr uint64_t c_isthmusTime = 1000;
+    constexpr uint64_t c_jovianTime = 2000;
 
-    bcos::bytes code = bcos::fromHex(kL1BlockCodeHex);
+    bcos::bytes code = bcos::fromHex(c_l1BlockCodeHex);
     const auto codeHash = keccak256(code);
     bcos::task::syncWait([&]() -> bcos::task::Task<void> {
         bcos::ledger::account::EVMAccount<ViewType> acc(
@@ -510,7 +510,7 @@ BOOST_AUTO_TEST_CASE(NonZeroL1ParamsAlignWithUnpackOpFeeParams)
 
     auto runCtx = makeRunCtx();
 
-    auto header = makeOpHeader(1, static_cast<int64_t>(kJovianTime) * 1000 + 1000);
+    auto header = makeOpHeader(1, static_cast<int64_t>(c_jovianTime) * 1000 + 1000);
     std::vector<bcos::bytes> rawTxs{makeDepositEnvelope(makeJovianCalldataNonZero())};
 
     bcos::evm::engine::OpExecuteBlockResult result;
@@ -572,10 +572,10 @@ BOOST_AUTO_TEST_CASE(DepositWritesFeeParamsReadableByLoadOpFeeParams)
     auto view = multiLayerStorage.fork();
     view.newMutable();
 
-    constexpr uint64_t kIsthmusTime = 1000;
-    constexpr uint64_t kJovianTime = 2000;
+    constexpr uint64_t c_isthmusTime = 1000;
+    constexpr uint64_t c_jovianTime = 2000;
 
-    bcos::bytes code = bcos::fromHex(kL1BlockCodeHex);
+    bcos::bytes code = bcos::fromHex(c_l1BlockCodeHex);
     const auto codeHash = keccak256(code);
     bcos::task::syncWait([&]() -> bcos::task::Task<void> {
         bcos::ledger::account::EVMAccount<ViewType> acc(
@@ -588,7 +588,7 @@ BOOST_AUTO_TEST_CASE(DepositWritesFeeParamsReadableByLoadOpFeeParams)
 
     auto runCtx = makeRunCtx();
 
-    auto header = makeOpHeader(1, static_cast<int64_t>(kJovianTime) * 1000 + 1000);
+    auto header = makeOpHeader(1, static_cast<int64_t>(c_jovianTime) * 1000 + 1000);
     std::vector<bcos::bytes> rawTxs{makeDepositEnvelope(makeJovianCalldataNonZero())};
 
     bcos::evm::engine::OpExecuteBlockResult result;
@@ -626,10 +626,10 @@ BOOST_AUTO_TEST_CASE(FailedDepositSealsBlockWithFullGasAndBumpedNonce)
     auto view = multiLayerStorage.fork();
     view.newMutable();
 
-    constexpr uint64_t kIsthmusTime = 1000;
-    constexpr uint64_t kJovianTime = 2000;
+    constexpr uint64_t c_isthmusTime = 1000;
+    constexpr uint64_t c_jovianTime = 2000;
 
-    bcos::bytes code = bcos::fromHex(kL1BlockCodeHex);
+    bcos::bytes code = bcos::fromHex(c_l1BlockCodeHex);
     const auto codeHash = keccak256(code);
     bcos::task::syncWait([&]() -> bcos::task::Task<void> {
         bcos::ledger::account::EVMAccount<ViewType> acc(
@@ -642,7 +642,7 @@ BOOST_AUTO_TEST_CASE(FailedDepositSealsBlockWithFullGasAndBumpedNonce)
 
     auto runCtx = makeRunCtx();
 
-    auto header = makeOpHeader(1, static_cast<int64_t>(kJovianTime) * 1000 + 1000);
+    auto header = makeOpHeader(1, static_cast<int64_t>(c_jovianTime) * 1000 + 1000);
 
     // The Jovian L1-attributes calldata (178B) has intrinsic ~21832; gas_limit 20000 is too low
     // -> INTRINSIC_GAS_TOO_LOW -> failed-deposit branch: status=failure, gasUsed = gasLimit,
@@ -695,7 +695,7 @@ struct JovianShapeFixture
     JovianShapeFixture()
     {
         view.newMutable();
-        bcos::bytes code = bcos::fromHex(kL1BlockCodeHex);
+        bcos::bytes code = bcos::fromHex(c_l1BlockCodeHex);
         const auto codeHash = keccak256(code);
         bcos::task::syncWait([&]() -> bcos::task::Task<void> {
             bcos::ledger::account::EVMAccount<ViewType> acc(
@@ -780,7 +780,7 @@ BOOST_AUTO_TEST_CASE(JovianIsthmusLenAttrsRejectsUserTxOffActivationWindow)
 {
     JovianShapeFixture fx;
     std::vector<bcos::bytes> rawTxs{makeDepositEnvelope(makeIsthmusCalldata()),
-        bcos::fromHex(kUserTxEnvelopeHex)};
+        bcos::fromHex(c_userTxEnvelopeHex)};
     BOOST_CHECK_EXCEPTION(fx.run(rawTxs, static_cast<int64_t>(2000) * 1000 + 1000),
         std::runtime_error, [](std::runtime_error const& e) {
             return std::string(e.what()).find("unexpected non-deposit transactions") !=
@@ -793,7 +793,7 @@ BOOST_AUTO_TEST_CASE(JovianNormalBlockWithUserTxSeals)
 {
     JovianShapeFixture fx;
     std::vector<bcos::bytes> rawTxs{makeDepositEnvelope(makeJovianCalldataZeroBaseFees()),
-        bcos::fromHex(kUserTxEnvelopeHex)};
+        bcos::fromHex(c_userTxEnvelopeHex)};
     try
     {
         fx.run(rawTxs, static_cast<int64_t>(2000) * 1000 + 1000);
@@ -843,7 +843,7 @@ BOOST_AUTO_TEST_CASE(FirstTxNotAttributesRejected)
 {
     JovianShapeFixture fx;
     BOOST_CHECK_THROW(
-        fx.run({bcos::fromHex(kUserTxEnvelopeHex)}, static_cast<int64_t>(2000) * 1000 + 1000),
+        fx.run({bcos::fromHex(c_userTxEnvelopeHex)}, static_cast<int64_t>(2000) * 1000 + 1000),
         std::runtime_error);
 }
 
@@ -855,7 +855,7 @@ BOOST_AUTO_TEST_CASE(DepositAfterNonDepositAccepted)
 {
     JovianShapeFixture fx;
     std::vector<bcos::bytes> rawTxs{makeDepositEnvelope(makeJovianCalldataZeroBaseFees()),
-        bcos::fromHex(kUserTxEnvelopeHex), makeDepositEnvelope(makeJovianCalldataZeroBaseFees())};
+        bcos::fromHex(c_userTxEnvelopeHex), makeDepositEnvelope(makeJovianCalldataZeroBaseFees())};
     auto result = fx.run(rawTxs, static_cast<int64_t>(2000) * 1000 + 1000);
     BOOST_REQUIRE_EQUAL(result.receipts.size(), 3u);
 }
@@ -973,7 +973,7 @@ BOOST_AUTO_TEST_CASE(SetCode7702InBlockWritesDelegation)
     JovianShapeFixture fx;
 
     std::vector<bcos::bytes> rawTxs{makeDepositEnvelope(makeJovianCalldataZeroBaseFees()),
-        bcos::fromHex(kSetcodeTxEnvelopeHex)};
+        bcos::fromHex(c_setcodeTxEnvelopeHex)};
     auto result = fx.run(rawTxs, static_cast<int64_t>(2000) * 1000 + 1000);
     BOOST_REQUIRE_EQUAL(result.receipts.size(), 2u);
     BOOST_CHECK_EQUAL(result.receipts[1]->status(), 0);
@@ -1011,8 +1011,8 @@ BOOST_AUTO_TEST_CASE(WithdrawTxWritesMessagePasserAndChangesRoot)
     auto view = multiLayerStorage.fork();
     view.newMutable();
 
-    constexpr uint64_t kIsthmusTime = 1000;
-    constexpr uint64_t kJovianTime = 2000;
+    constexpr uint64_t c_isthmusTime = 1000;
+    constexpr uint64_t c_jovianTime = 2000;
 
     const auto kPasser = bcos::evm::opstack::OP_L2_TO_L1_MESSAGE_PASSER;
     const auto kSender =
@@ -1023,7 +1023,7 @@ BOOST_AUTO_TEST_CASE(WithdrawTxWritesMessagePasserAndChangesRoot)
     // SSTORE pops key=slot then value=1.
     bcos::bytes passerCode = bcos::fromHex("600160206004600037600060205260406000205560006000f3");
     const auto passerCodeHash = keccak256(passerCode);
-    bcos::bytes l1Code = bcos::fromHex(kL1BlockCodeHex);
+    bcos::bytes l1Code = bcos::fromHex(c_l1BlockCodeHex);
     const auto l1CodeHash = keccak256(l1Code);
 
     bcos::task::syncWait([&]() -> bcos::task::Task<void> {
@@ -1051,9 +1051,9 @@ BOOST_AUTO_TEST_CASE(WithdrawTxWritesMessagePasserAndChangesRoot)
 
     auto runCtx = makeRunCtx();
 
-    auto header = makeOpHeader(1, static_cast<int64_t>(kJovianTime) * 1000 + 1000);
+    auto header = makeOpHeader(1, static_cast<int64_t>(c_jovianTime) * 1000 + 1000);
     std::vector<bcos::bytes> rawTxs{makeDepositEnvelope(makeJovianCalldataZeroBaseFees()),
-        bcos::fromHex(kWithdrawTxEnvelopeHex)};
+        bcos::fromHex(c_withdrawTxEnvelopeHex)};
     auto result =
         runOpBlock(view, *header, rawTxs, /*jovianActive=*/true, 0x2105, runCtx);
     BOOST_REQUIRE_EQUAL(result.receipts.size(), 2u);

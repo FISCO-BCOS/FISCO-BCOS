@@ -35,8 +35,8 @@ OpFeeParams feeParams(uint64_t l1Base, uint64_t blobBase, uint32_t baseScalar, u
     uint32_t opScalar = 0, uint64_t opConst = 0)
 {
     return OpFeeParams{.l1_base_fee = intx::uint256{l1Base},
-        .overhead = 0_u256,
-        .bedrock_scalar = 0_u256,
+        .l1_fee_overhead = 0_u256,
+        .l1_fee_scalar = 0_u256,
         .base_fee_scalar = baseScalar,
         .blob_base_fee_scalar = blobScalar,
         .blob_base_fee = intx::uint256{blobBase},
@@ -106,8 +106,8 @@ BOOST_AUTO_TEST_CASE(EcotoneL1DiffersFromFjordSameEnvelope, * boost::unit_test::
 // clang-format on
 {
     OpFeeParams fee{.l1_base_fee = 1000000000_u256,
-        .overhead = 0_u256,
-        .bedrock_scalar = 0_u256,
+        .l1_fee_overhead = 0_u256,
+        .l1_fee_scalar = 0_u256,
         .base_fee_scalar = 2,
         .blob_base_fee_scalar = 3,
         .blob_base_fee = 10000000_u256,
@@ -142,8 +142,8 @@ BOOST_AUTO_TEST_CASE(L1CostDoesNotWrapOnWholeSlotFeeValues, * boost::unit_test::
     const evmc::bytes_view env = kEmptyTx;  // flz 31 -> daScaled floors to 1e8; calldataGas 480
 
     OpFeeParams fee{.l1_base_fee = intx::uint256{1} << 252,
-        .overhead = 0_u256,
-        .bedrock_scalar = 0_u256,
+        .l1_fee_overhead = 0_u256,
+        .l1_fee_scalar = 0_u256,
         .base_fee_scalar = 1368,
         .blob_base_fee_scalar = 0,
         .blob_base_fee = intx::uint256{0},
@@ -160,8 +160,8 @@ BOOST_AUTO_TEST_CASE(L1CostDoesNotWrapOnWholeSlotFeeValues, * boost::unit_test::
 
     // The blob term wraps independently of the calldata term.
     const OpFeeParams blobFee{.l1_base_fee = intx::uint256{0},
-        .overhead = 0_u256,
-        .bedrock_scalar = 0_u256,
+        .l1_fee_overhead = 0_u256,
+        .l1_fee_scalar = 0_u256,
         .base_fee_scalar = 0,
         .blob_base_fee_scalar = 0xffffffff,
         .blob_base_fee = intx::uint256{1} << 250,
@@ -175,8 +175,8 @@ BOOST_AUTO_TEST_CASE(L1CostDoesNotWrapOnWholeSlotFeeValues, * boost::unit_test::
     // after the third multiply, which wraps mod 2^512: 480 * 2^255 * 2^255 == 120 * 2^512 == 0,
     // so this arm charged zero instead of saturating.
     const OpFeeParams bedrockFee{.l1_base_fee = intx::uint256{1} << 200,
-        .overhead = intx::uint256{0},
-        .bedrock_scalar = intx::uint256{1'000'000},
+        .l1_fee_overhead = intx::uint256{0},
+        .l1_fee_scalar = intx::uint256{1'000'000},
         .base_fee_scalar = 0,
         .blob_base_fee_scalar = 0,
         .blob_base_fee = 0_u256,
@@ -187,14 +187,14 @@ BOOST_AUTO_TEST_CASE(L1CostDoesNotWrapOnWholeSlotFeeValues, * boost::unit_test::
 
     OpFeeParams bedrockSaturating = bedrockFee;
     bedrockSaturating.l1_base_fee = intx::uint256{1} << 255;
-    bedrockSaturating.bedrock_scalar = intx::uint256{1} << 255;
+    bedrockSaturating.l1_fee_scalar = intx::uint256{1} << 255;
     BOOST_CHECK_EQUAL(computeL1Cost(bedrockSaturating, env, regolithConfig()), ~intx::uint256{0});
     BOOST_CHECK_EQUAL(computeL1Cost(bedrockSaturating, env, canyonConfig()), ~intx::uint256{0});
 
     // A zero factor keeps the mathematical zero: op-geth's big.Int evaluates 0 here, so the
     // guard must not turn an astronomical read into a saturated fee.
     OpFeeParams bedrockZeroScalar = bedrockSaturating;
-    bedrockZeroScalar.bedrock_scalar = 0;
+    bedrockZeroScalar.l1_fee_scalar = 0;
     BOOST_CHECK_EQUAL(computeL1Cost(bedrockZeroScalar, env, regolithConfig()), intx::uint256{0});
     OpFeeParams bedrockZeroBase = bedrockSaturating;
     bedrockZeroBase.l1_base_fee = 0;
@@ -203,7 +203,7 @@ BOOST_AUTO_TEST_CASE(L1CostDoesNotWrapOnWholeSlotFeeValues, * boost::unit_test::
     // The sum `calldataGas + overhead` is a whole-slot read too and is widened before the
     // multiply, so an `overhead` near the top of the word saturates instead of wrapping.
     OpFeeParams bedrockOverhead = bedrockFee;
-    bedrockOverhead.overhead = ~intx::uint256{0};
+    bedrockOverhead.l1_fee_overhead = ~intx::uint256{0};
     bedrockOverhead.l1_base_fee = intx::uint256{2};
     BOOST_CHECK_EQUAL(computeL1Cost(bedrockOverhead, env, regolithConfig()), ~intx::uint256{0});
 }
@@ -275,10 +275,10 @@ BOOST_AUTO_TEST_CASE(BedrockL1CostAddsOverheadToGas, * boost::unit_test::label("
 {
     OpFeeParams p{};
     p.l1_base_fee = intx::uint256{1'000'000'000};
-    p.bedrock_scalar = intx::uint256{1'000'000};
-    p.overhead = intx::uint256{2100};
+    p.l1_fee_scalar = intx::uint256{1'000'000};
+    p.l1_fee_overhead = intx::uint256{2100};
     const auto gas = bedrockCalldataGasUsed(kEmptyTx);
-    const auto want = (intx::uint256{gas} + p.overhead) * p.l1_base_fee * p.bedrock_scalar /
+    const auto want = (intx::uint256{gas} + p.l1_fee_overhead) * p.l1_base_fee * p.l1_fee_scalar /
                       intx::uint256{1'000'000};
     BOOST_CHECK_EQUAL(computeL1Cost(p, kEmptyTx, regolithConfig()), want);
     BOOST_CHECK_EQUAL(computeL1Cost(p, kEmptyTx, canyonConfig()), want);
@@ -290,11 +290,11 @@ BOOST_AUTO_TEST_CASE(EcotoneConfigFallsBackToBedrockWhenNewSlotsZero, * boost::u
 {
     OpFeeParams p{};
     p.l1_base_fee = intx::uint256{1'000'000'000};
-    p.bedrock_scalar = intx::uint256{1'000'000};
-    p.overhead = intx::uint256{2100};
+    p.l1_fee_scalar = intx::uint256{1'000'000};
+    p.l1_fee_overhead = intx::uint256{2100};
     // slot3/7 remain 0
     const auto gas = bedrockCalldataGasUsed(kEmptyTx);
-    const auto want = (intx::uint256{gas} + p.overhead) * p.l1_base_fee * p.bedrock_scalar /
+    const auto want = (intx::uint256{gas} + p.l1_fee_overhead) * p.l1_base_fee * p.l1_fee_scalar /
                       intx::uint256{1'000'000};
     BOOST_CHECK_EQUAL(computeL1Cost(p, kEmptyTx, ecotoneConfig()), want);
 }
@@ -333,8 +333,8 @@ BOOST_AUTO_TEST_CASE(BedrockEmptyEnvelopeIsZero, * boost::unit_test::label("fork
 // clang-format on
 {
     OpFeeParams p{};
-    p.overhead = intx::uint256{2100};
-    p.bedrock_scalar = intx::uint256{1};
+    p.l1_fee_overhead = intx::uint256{2100};
+    p.l1_fee_scalar = intx::uint256{1};
     BOOST_CHECK_EQUAL(computeL1Cost(p, {}, regolithConfig()), intx::uint256{0});
 }
 
@@ -368,8 +368,7 @@ BOOST_AUTO_TEST_CASE(LegacyL1CostMatchesOpGethBedrockVectors)
 BOOST_AUTO_TEST_CASE(LegacyTxDataGasPlus68IsOneTime)
 {
     const evmc::bytes_view env = kEmptyTx;
-    BOOST_CHECK_EQUAL(
-        legacyTxDataGas(env, false) - legacyTxDataGas(env, true), 68u * 16u);
+    BOOST_CHECK_EQUAL(legacyTxDataGas(env, false) - legacyTxDataGas(env, true), 68u * 16u);
     std::vector<uint8_t> zeros(100, 0x00);
     BOOST_CHECK_EQUAL(legacyTxDataGas({zeros.data(), zeros.size()}, true), 400u);
     BOOST_CHECK_EQUAL(legacyTxDataGas({zeros.data(), zeros.size()}, false), 400u + 1088u);

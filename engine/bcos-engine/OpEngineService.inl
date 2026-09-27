@@ -943,6 +943,12 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
             std::string("blockHash does not match the reconstructed block header"));
     }
 
+    // No m_importedTreeMutex on this fast path — the design note's scope is deliberate:
+    // the lock guards the ImportedStore occupancy/put decision sequence and the
+    // canonicalize gate, NOT the delegate's commit (review KB5 leg). This branch consults
+    // m_artifacts/m_tracker and hands off to the scheduler's own commit serialization;
+    // taking the gate here would hold a POSIX mutex across the storage co_awaits below
+    // for no ImportedStore decision.
     {
         bcos::protocol::BlockHeader::Ptr builtHeader;
         {
@@ -1948,24 +1954,30 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::canonicaliz
                                               "canonicalize: stored header height mismatch"});
                 }
 
-                // This height's canonical keys ride the SAME merge as the block's delta
-                // (一块一配): HASH_2_NUMBER / NUMBER_2_HASH / NUMBER_2_BLOCK_HEADER, plus
-                // SYS_CURRENT_STATE on the head's own merge.
+                // This height's canonical keys (HASH_2_NUMBER / NUMBER_2_HASH /
+                // NUMBER_2_BLOCK_HEADER, tx/receipt rows, NUMBER_2_TXS, plus SYS_CURRENT_STATE
+                // on the head) ride the SAME journal+merge WINDOW as the block's delta
+                // (一块一配 atomicity via the shared undo journal), but into a TRANSIENT delta:
+                // writing them into block.storageDelta would pollute the ImportedStore-resident
+                // execution result — the canonical rows would ride every later replay
+                // (reconstructSwitchFlat seeds the switch world from these deltas) and never
+                // leave the stored delta.
+                auto canonicalDelta = std::make_shared<MutableStorageT>();
                 bcos::storage::Entry numberEntry;
                 numberEntry.set(std::to_string(block.number));
-                co_await storage2::writeOne(*delta,
+                co_await storage2::writeOne(*canonicalDelta,
                     executor_v1::StateKey{bcos::ledger::SYS_HASH_2_NUMBER,
                         bcos::concepts::bytebuffer::toView(block.hash)},
                     std::move(numberEntry));
                 bcos::storage::Entry hashEntry;
                 hashEntry.set(block.hash.asBytes());
-                co_await storage2::writeOne(*delta,
+                co_await storage2::writeOne(*canonicalDelta,
                     executor_v1::StateKey{
                         bcos::ledger::SYS_NUMBER_2_HASH, std::to_string(block.number)},
                     std::move(hashEntry));
                 bcos::storage::Entry headerEntry;
                 headerEntry.set(block.headerBytes);
-                co_await storage2::writeOne(*delta,
+                co_await storage2::writeOne(*canonicalDelta,
                     executor_v1::StateKey{
                         bcos::ledger::SYS_NUMBER_2_BLOCK_HEADER, std::to_string(block.number)},
                     std::move(headerEntry));
@@ -1975,7 +1987,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::canonicaliz
                 {
                     bcos::storage::Entry txEntry;
                     txEntry.set(block.encodedTxs[i]);
-                    co_await storage2::writeOne(*delta,
+                    co_await storage2::writeOne(*canonicalDelta,
                         executor_v1::StateKey{bcos::ledger::SYS_HASH_2_TX,
                             bcos::concepts::bytebuffer::toView(block.txHashes[i])},
                         std::move(txEntry));
@@ -1983,7 +1995,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::canonicaliz
                     {
                         bcos::storage::Entry receiptEntry;
                         receiptEntry.set(block.receipts[i]);
-                        co_await storage2::writeOne(*delta,
+                        co_await storage2::writeOne(*canonicalDelta,
                             executor_v1::StateKey{bcos::ledger::SYS_HASH_2_RECEIPT,
                                 bcos::concepts::bytebuffer::toView(block.txHashes[i])},
                             std::move(receiptEntry));
@@ -1995,7 +2007,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::canonicaliz
                     bcos::storage::Entry numberToTxsEntry;
                     numberToTxsEntry.set(
                         encodeNumberToTxsRow(*m_blockFactory, block.txHashes, block.txRecipients));
-                    co_await storage2::writeOne(*delta,
+                    co_await storage2::writeOne(*canonicalDelta,
                         executor_v1::StateKey{
                             bcos::ledger::SYS_NUMBER_2_TXS, std::to_string(block.number)},
                         std::move(numberToTxsEntry));
@@ -2004,30 +2016,36 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::canonicaliz
                 {
                     bcos::storage::Entry currentEntry;
                     currentEntry.set(std::to_string(block.number));
-                    co_await storage2::writeOne(*delta,
+                    co_await storage2::writeOne(*canonicalDelta,
                         executor_v1::StateKey{
                             bcos::ledger::SYS_CURRENT_STATE, bcos::ledger::SYS_KEY_CURRENT_NUMBER},
                         std::move(currentEntry));
                 }
-                // Journal every key this block's merge will write before touching the backend, so
-                // a failure in a later block (or the post-condition) undoes this block too
-                // (review F3).
+                // Journal every key this block's merges will write before touching the backend,
+                // so a failure in a later block (or the post-condition) undoes this block too
+                // (review F3) — both the block's execution rows and its canonical rows.
                 {
-                    auto deltaIterator = co_await delta->range();
-                    while (true)
+                    for (auto* journalDelta : {delta.get(), canonicalDelta.get()})
                     {
-                        auto item = co_await deltaIterator.next();
-                        if (!item.has_value())
+                        auto deltaIterator = co_await journalDelta->range();
+                        while (true)
                         {
-                            break;
+                            auto item = co_await deltaIterator.next();
+                            if (!item.has_value())
+                            {
+                                break;
+                            }
+                            co_await recordCanonicalizeUndo(backend, undo, undoSeen,
+                                executor_v1::StateKeyView(std::get<0>(*item)));
                         }
-                        co_await recordCanonicalizeUndo(
-                            backend, undo, undoSeen, executor_v1::StateKeyView(std::get<0>(*item)));
                     }
                 }
                 // The imported chain never occupies the MLS pending deque — mergeToBackends
-                // (design §4.2: 不要对空 deque 调 mergeBackStorage).
+                // (design §4.2: 不要对空 deque 调 mergeBackStorage). Execution rows first,
+                // then this height's canonical rows: a failure between the two merges still
+                // restores the pre-call backend through the undo journal above.
                 co_await m_globalStateStorage.mergeToBackends(*delta);
+                co_await m_globalStateStorage.mergeToBackends(*canonicalDelta);
             }
 
             if (m_delegate)

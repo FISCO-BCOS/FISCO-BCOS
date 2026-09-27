@@ -149,7 +149,16 @@ jobs:
         # inside it (tools/opstack-genesis is a tracked directory), and `ln -sfn` cannot
         # overwrite a real directory either. The trailing test fails the step if the
         # opstack-genesis link did not land.
+        #
+        # Before replacing: surface in-tree vs corpus drift as a notice. This step shadows
+        # the tracked tools/opstack-genesis with the pinned corpus checkout, so in-tree-only
+        # genesis-toolchain changes are never exercised by this pipeline — the drift must
+        # be visible, not silent.
         run: |
+          if ! diff -rq "$GITHUB_WORKSPACE/tools/opstack-genesis" \
+                        "$GITHUB_WORKSPACE/e2e-tests/tools/opstack-genesis" >/dev/null 2>&1; then
+            echo "::notice::in-tree tools/opstack-genesis differs from the pinned corpus copy; this pipeline runs the corpus copy, so in-tree-only genesis-toolchain changes are not exercised here"
+          fi
           rm -rf "$GITHUB_WORKSPACE/tools/op-e2e" \
             "$GITHUB_WORKSPACE/tools/opstack-genesis" \
             "$GITHUB_WORKSPACE/opstack-executor/tests/t8n"
@@ -450,10 +459,18 @@ jobs:
           ref: b82691ac133a94637da9e6969a63f86279c6b0a2
           path: e2e-tests
       - name: Symlink e2e assets into in-tree paths
+        # Same discipline as the build job's symlink step: clear destinations first —
+        # tools/opstack-genesis is a tracked directory, so a bare `ln -s` nests the link
+        # inside it and this job would silently keep running the in-tree copy instead of
+        # the pinned corpus checkout — and verify the link landed.
         run: |
+          rm -rf "$GITHUB_WORKSPACE/tools/op-e2e" \
+            "$GITHUB_WORKSPACE/tools/opstack-genesis" \
+            "$GITHUB_WORKSPACE/opstack-executor/tests/t8n"
           ln -s "$GITHUB_WORKSPACE/e2e-tests/tools/op-e2e" "$GITHUB_WORKSPACE/tools/op-e2e"
           ln -s "$GITHUB_WORKSPACE/e2e-tests/tools/opstack-genesis" "$GITHUB_WORKSPACE/tools/opstack-genesis"
           ln -s "$GITHUB_WORKSPACE/e2e-tests/opstack-executor/tests/t8n" "$GITHUB_WORKSPACE/opstack-executor/tests/t8n"
+          test -f tools/opstack-genesis/build-allocs.py
       - name: Regenerate opstack t8n vectors
         uses: FISCO-BCOS/op-stack-e2e-tests/.github/actions/opstack-t8n-regen@b82691ac133a94637da9e6969a63f86279c6b0a2
       - name: Run tests

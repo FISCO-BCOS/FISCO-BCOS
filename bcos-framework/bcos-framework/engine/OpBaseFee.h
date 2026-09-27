@@ -271,8 +271,8 @@ inline bcos::u256 calcOpBaseFeeCore(bcos::u256 const& parentGasLimit, bcos::u256
 /// op-geth (calcBaseFeeInner) dereferences header.BlobGasUsed on the Jovian path; a
 /// Jovian parent without it is corrupt, so fail closed instead of silently
 /// under-counting the DA footprint.
-inline bcos::u256 opGasMetered(
-    bcos::u256 parentGasUsed, std::optional<bcos::u256> const& parentBlobGasUsed, bool parentIsJovian)
+inline bcos::u256 opGasMetered(bcos::u256 parentGasUsed,
+    std::optional<bcos::u256> const& parentBlobGasUsed, bool parentIsJovian)
 {
     if (parentIsJovian)
     {
@@ -303,9 +303,9 @@ inline bcos::u256 opGasMetered(
 /// Throws InvalidEngineEncoding (fail-closed) on malformed parent data or u256 overflow.
 inline bcos::u256 calcOpBaseFeeFromFields(bcos::u256 const& parentGasLimit,
     bcos::u256 const& parentGasUsed, bcos::u256 const& parentBaseFee,
-    std::optional<bcos::u256> const& parentBlobGasUsed,
-    std::span<const bcos::byte> parentExtraData, bool parentIsHolocene, bool parentIsJovian,
-    std::uint64_t fallbackDenominator, std::uint64_t fallbackElasticity)
+    std::optional<bcos::u256> const& parentBlobGasUsed, std::span<const bcos::byte> parentExtraData,
+    bool parentIsHolocene, bool parentIsJovian, std::uint64_t fallbackDenominator,
+    std::uint64_t fallbackElasticity)
 {
     std::uint64_t denominator = fallbackDenominator;
     std::uint64_t elasticity = fallbackElasticity;

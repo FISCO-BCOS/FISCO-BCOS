@@ -104,9 +104,12 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
         if (headBlockNumber < trackedHeadBlock.blockNumber &&
             headBlockNumber != resolved.canonicalTipNumber)
         {
-            // OP old canonical head (design §4.2 fourth row): NEVER rewind the
-            // tracked tip; only SetSafe/SetFinalized overwrite (zero hash clears
-            // nothing), then attrs decide build-vs-heartbeat.
+            // OP old non-canonical head (design §4.2 fourth row): this branch NEVER
+            // rewinds the tracked tip — only SetSafe/SetFinalized overwrite (zero hash
+            // clears nothing), then attrs decide build-vs-heartbeat. A head that IS the
+            // canonical tip skips this branch via the != canonicalTipNumber guard and
+            // re-seeds the tracker below: a canonical-tip rewind is deliberate
+            // re-seeding, not the non-linear rewind forbidden here.
             if (requiresCanonical(resolved.state.safeBlockHash, safeBlockNumber))
             {
                 m_safe = safeBlockNumber;

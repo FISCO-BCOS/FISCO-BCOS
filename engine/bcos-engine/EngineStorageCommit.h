@@ -193,14 +193,21 @@ HeaderCommitments buildHeaderCommitments(PayloadTransactions const& payloadTrans
             }
             const bool wantsVersion = *opFork >= bcos::engine::OpForkId::Canyon;
             const auto& meta = receipts[i]->opStackMeta();
-            if (!meta || meta->deposit_receipt_version.has_value() != wantsVersion)
+            // Mirror the executor seal (encodeReceiptForRoot): a pre-Regolith (Bedrock)
+            // deposit's meta carries NEITHER field and round-trips as nullopt (the
+            // all-empty legacy-receipt heuristic), so meta PRESENCE itself is only
+            // checkable Canyon+; what must agree with the fork on every fork is the
+            // version's presence — a Regolith receipt carrying a version would silently
+            // lengthen the pre-Canyon leaf, a Canyon+ receipt missing it shorten it.
+            const bool hasVersion = meta.has_value() && meta->deposit_receipt_version.has_value();
+            if (hasVersion != wantsVersion)
             {
                 BOOST_THROW_EXCEPTION(
                     OpExecutionInternalError{} << bcos::errinfo_comment{
                         "scheduler returned a deposit receipt whose nonce/version metadata "
                         "does not match the block's fork"});
             }
-            if (wantsVersion && !meta->deposit_nonce)
+            if (wantsVersion && (!meta.has_value() || !meta->deposit_nonce))
             {
                 BOOST_THROW_EXCEPTION(
                     OpExecutionInternalError{} << bcos::errinfo_comment{

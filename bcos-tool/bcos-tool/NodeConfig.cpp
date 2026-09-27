@@ -178,8 +178,8 @@ NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
 
 NodeConfig::NodeConfig() : m_ledgerConfig(std::make_shared<LedgerConfig>()) {}
 
-void NodeConfig::loadConfig(std::string const& _configPath, bool enforceChainConfig,
-    bool enforceGroupId)
+void NodeConfig::loadConfig(
+    std::string const& _configPath, bool enforceChainConfig, bool enforceGroupId)
 {
     boost::property_tree::ptree iniConfig;
     boost::property_tree::read_ini(_configPath, iniConfig);
@@ -209,8 +209,8 @@ void NodeConfig::loadGenesisConfigFromString(std::string const& _content)
     loadGenesisConfig(genesisConfig);
 }
 
-void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforceChainConfig,
-    bool _enforceGroupId)
+void NodeConfig::loadConfig(
+    boost::property_tree::ptree const& _pt, bool _enforceChainConfig, bool _enforceGroupId)
 {
     // if version < 3.1.0, config.ini include chainConfig
     if (_enforceChainConfig || (m_genesisConfig.m_compatibilityVersion <
@@ -631,7 +631,9 @@ void NodeConfig::validateL2Invariants()
     // activate, and would silently run Isthmus forever. Two equivalent declarations are
     // accepted: the karst line's [op_fork_schedule] canonical (ledger-codec validated,
     // persisted to chain metadata, any contiguous EL fork range) and the release line's
-    // [op_fork_timestamps] shorthand (jovian_time/karst_time on the Isthmus baseline).
+    // [op_fork_timestamps] shorthand (jovian_time/karst_time on the Isthmus baseline). When
+    // both are declared they must spell the same schedule (cross-checked below) and the
+    // canonical channel takes precedence downstream.
     // The OP lane's EIP-1559 parameters and schedule share the lane binding above; what
     // remains here is the requirement direction: an OP chain without any schedule has no way
     // to say when Jovian or Karst activate.
@@ -643,6 +645,51 @@ void NodeConfig::validateL2Invariants()
                 "executor.version >= 3 (OP lane) requires an [op_fork_schedule] canonical or an "
                 "[op_fork_timestamps] section carrying at least one entry: boost's INI reader "
                 "drops a section with no keys, so an empty one reads as absent"));
+    }
+    // Dual-channel cross-check (review N2): downstream the canonical channel silently wins
+    // (Initializer schedule resolution, Ledger metadata writes), so that precedence must
+    // never be silent. The two channels have to spell the SAME schedule — compared as
+    // parsed activations, modulo the Isthmus baseline the shorthand fold always pins at 0
+    // and the canonical channel may spell implicitly (a first activation above Isthmus) —
+    // and agreement is announced at WARNING so the redundancy stays visible.
+    if (ledger::isOpLaneVersion(genesis.m_executorVersion) &&
+        genesis.m_opForkSchedule.has_value() && genesis.m_opstackForkSchedule.has_value())
+    {
+        auto folded = ledger::foldOpForkShorthand(
+            genesis.m_opForkSchedule->m_jovianTime, genesis.m_opForkSchedule->m_karstTime);
+        auto canonical = ledger::parseOpForkSchedule(*genesis.m_opstackForkSchedule);
+        auto const dropPinnedIsthmusBaseline =
+            [](std::vector<ledger::OpForkActivationRecord>& records) {
+                if (!records.empty() && records.front().forkName == "isthmus" &&
+                    records.front().timestamp == 0)
+                {
+                    records.erase(records.begin());
+                }
+            };
+        dropPinnedIsthmusBaseline(folded);
+        dropPinnedIsthmusBaseline(canonical);
+        bool const sameSchedule =
+            folded.size() == canonical.size() &&
+            std::equal(folded.begin(), folded.end(), canonical.begin(),
+                [](auto const& left, auto const& right) {
+                    return left.forkName == right.forkName && left.timestamp == right.timestamp;
+                });
+        if (!sameSchedule)
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment(
+                    "[op_fork_schedule] canonical and [op_fork_timestamps] shorthand disagree: "
+                    "canonical=" +
+                    *genesis.m_opstackForkSchedule +
+                    ", folded shorthand=" + ledger::canonicalOpForkSchedule(folded) +
+                    " — declare one channel, or make both spell the same schedule"));
+        }
+        NodeConfig_LOG(WARNING)
+            << LOG_DESC(
+                   "genesis declares both [op_fork_schedule] and [op_fork_timestamps] "
+                   "with the same schedule; the canonical channel takes precedence "
+                   "downstream")
+            << LOG_KV("canonical", *genesis.m_opstackForkSchedule);
     }
     // On the OP lane the EVM revision is a FUNCTION of the fork schedule: OpScheduler feeds
     // the executor configAt(schedule, blockTime).rev, so a configured executor.evm_revision is
@@ -1254,9 +1301,9 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     const std::string mode = _pt.get<std::string>("ethereum.mode", "none");
     if (mode != "none" && mode != "el" && mode != "opstack-el")
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "ethereum.mode invalid: \"" + mode +
-                                  "\" (supported: none, el, opstack-el)"));
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "ethereum.mode invalid: \"" + mode + "\" (supported: none, el, opstack-el)"));
     }
     const bool enableEL = (mode == "el");
     const bool enableOpStackEL = (mode == "opstack-el");
@@ -1315,10 +1362,9 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     uint64_t blockTime = _pt.get<uint64_t>("ethereum.op_block_time_seconds", 2);
     if (blockTime == 0 || blockTime > 60)
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "ethereum.op_block_time_seconds must be in [1, 60], got " +
-                std::to_string(blockTime)));
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "ethereum.op_block_time_seconds must be in [1, 60], got " +
+                                  std::to_string(blockTime)));
     }
     m_opBlockTimeSeconds = blockTime;
 
@@ -1332,10 +1378,9 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     uint64_t syncLag = _pt.get<uint64_t>("ethereum.op_sync_lag_blocks", 64);
     if (syncLag > 10000)
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "ethereum.op_sync_lag_blocks must be in [0, 10000], got " +
-                std::to_string(syncLag)));
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "ethereum.op_sync_lag_blocks must be in [0, 10000], got " +
+                                  std::to_string(syncLag)));
     }
     m_opSyncLagBlocks = syncLag;
 
@@ -1405,7 +1450,7 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     m_genesisConfig.m_ethereumELMode = false;
     m_genesisConfig.m_opStackELMode = false;
     m_genesisConfig.m_ethereumForkSchedule.reset();
-    m_ethereumChainId = 0;  // reassigned by validateL2Invariants when EL is declared
+    m_ethereumChainId = 0;     // reassigned by validateL2Invariants when EL is declared
     m_ethereumMergeBlock = 0;  // reassigned by the REQUIRED merge_block key below
 
     if (auto ethSection = _genesisConfig.get_child_optional("ethereum"))
@@ -1582,19 +1627,18 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
         return;
     }
     // The ladder's entries, in fork order (Bedrock has no entry — it is genesis).
-    std::array<std::pair<std::string_view, uint64_t ledger::OpForkSchedule::*>, 10> const
-        keys{{
-            {"regolith_time", &ledger::OpForkSchedule::m_regolithTime},
-            {"canyon_time", &ledger::OpForkSchedule::m_canyonTime},
-            {"delta_time", &ledger::OpForkSchedule::m_deltaTime},
-            {"ecotone_time", &ledger::OpForkSchedule::m_ecotoneTime},
-            {"fjord_time", &ledger::OpForkSchedule::m_fjordTime},
-            {"granite_time", &ledger::OpForkSchedule::m_graniteTime},
-            {"holocene_time", &ledger::OpForkSchedule::m_holoceneTime},
-            {"isthmus_time", &ledger::OpForkSchedule::m_isthmusTime},
-            {"jovian_time", &ledger::OpForkSchedule::m_jovianTime},
-            {"karst_time", &ledger::OpForkSchedule::m_karstTime},
-        }};
+    std::array<std::pair<std::string_view, uint64_t ledger::OpForkSchedule::*>, 10> const keys{{
+        {"regolith_time", &ledger::OpForkSchedule::m_regolithTime},
+        {"canyon_time", &ledger::OpForkSchedule::m_canyonTime},
+        {"delta_time", &ledger::OpForkSchedule::m_deltaTime},
+        {"ecotone_time", &ledger::OpForkSchedule::m_ecotoneTime},
+        {"fjord_time", &ledger::OpForkSchedule::m_fjordTime},
+        {"granite_time", &ledger::OpForkSchedule::m_graniteTime},
+        {"holocene_time", &ledger::OpForkSchedule::m_holoceneTime},
+        {"isthmus_time", &ledger::OpForkSchedule::m_isthmusTime},
+        {"jovian_time", &ledger::OpForkSchedule::m_jovianTime},
+        {"karst_time", &ledger::OpForkSchedule::m_karstTime},
+    }};
     // Every key is optional, so a misspelled one (jovain_time=0) would otherwise be read as
     // "not scheduled" and the chain would run the wrong fork rules without a word — the
     // failure validateL2Invariants' presence check exists to prevent. Reject anything but
@@ -1602,8 +1646,8 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
     // guarantees at least one recognised entry.
     for (auto const& [key, _] : *section)
     {
-        bool known = std::any_of(keys.begin(), keys.end(),
-            [&](auto const& entry) { return entry.first == key; });
+        bool known = std::any_of(
+            keys.begin(), keys.end(), [&](auto const& entry) { return entry.first == key; });
         if (!known)
         {
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -1616,7 +1660,8 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
     ledger::OpForkSchedule schedule;
     for (auto const& [key, member] : keys)
     {
-        schedule.*member = readOptionalForkTimestamp(*section, "op_fork_timestamps", std::string(key));
+        schedule.*member =
+            readOptionalForkTimestamp(*section, "op_fork_timestamps", std::string(key));
     }
     // Same rule as the L1 ladder: activation times must be non-decreasing down the fork
     // order, because a later fork is defined as a superset of the earlier one (Karst is
@@ -1624,14 +1669,14 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
     // SKIPPED, not terminal: on the full ladder an intermediate fork may legitimately be
     // unscheduled when a later fork's activation implies it (e.g. a chain that jumped
     // straight to Canyon). Only the SCHEDULED entries are checked pairwise, in fork order.
-    uint64_t const kNever = std::numeric_limits<uint64_t>::max();
+    uint64_t const c_never = std::numeric_limits<uint64_t>::max();
     std::string_view prevKey;
     uint64_t prevTime = 0;
     bool hasPrev = false;
     for (auto const& [key, member] : keys)
     {
         uint64_t const time = schedule.*member;
-        if (time == kNever)
+        if (time == c_never)
         {
             continue;
         }
@@ -1639,9 +1684,8 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment(
-                    "[op_fork_timestamps]." + std::string(key) + " (" +
-                    std::to_string(time) + ") is earlier than " + std::string(prevKey) + " (" +
-                    std::to_string(prevTime) +
+                    "[op_fork_timestamps]." + std::string(key) + " (" + std::to_string(time) +
+                    ") is earlier than " + std::string(prevKey) + " (" + std::to_string(prevTime) +
                     "): fork activation times must be non-decreasing"));
         }
         prevKey = key;
@@ -1651,7 +1695,7 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
     // Scheduling a pre-Isthmus fork without isthmus_time is silently meaningless: configAt
     // treats an unset isthmus_time as "Isthmus is the zero-start baseline" and never
     // consults the lower rungs. Fail fast instead of accepting a schedule nothing reads.
-    if (schedule.m_isthmusTime == kNever)
+    if (schedule.m_isthmusTime == c_never)
     {
         for (auto const& [key, member] : keys)
         {
@@ -1659,7 +1703,7 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
             {
                 break;
             }
-            if (schedule.*member != kNever)
+            if (schedule.*member != c_never)
             {
                 BOOST_THROW_EXCEPTION(
                     InvalidConfig() << errinfo_comment(
@@ -3823,8 +3867,8 @@ std::string bcos::tool::generateGenesisData(
                 {"jovian_time", opSchedule.m_jovianTime},
                 {"karst_time", opSchedule.m_karstTime},
             }};
-            bool const anyGenesisActive = std::any_of(pinned.begin(), pinned.end(),
-                [](auto const& entry) { return entry.second == 0; });
+            bool const anyGenesisActive = std::any_of(
+                pinned.begin(), pinned.end(), [](auto const& entry) { return entry.second == 0; });
             if (anyGenesisActive)
             {
                 ss << "[opForkTimestamps]" << '\n';
@@ -3833,6 +3877,29 @@ std::string bcos::tool::generateGenesisData(
                     if (time == 0)
                     {
                         ss << key << ":0" << '\n';
+                    }
+                }
+            }
+        }
+        else if (genesisConfig.m_opstackForkSchedule.has_value())
+        {
+            // N2/KH1: canonical-only chains get the same genesis pin, else a persisted
+            // schedule that outlives the genesis file has no anchor to compare against.
+            // Same section and shape as the shorthand pin above — only the zero-timestamp
+            // ("active from genesis") entries, in schedule order — so a canonical-only
+            // chain and its shorthand twin produce identical pins, and each emitted
+            // `<fork>_time:0` key re-loads to the same genesis-active fork it declares.
+            auto const records = ledger::parseOpForkSchedule(*genesisConfig.m_opstackForkSchedule);
+            bool const anyGenesisActive = std::any_of(records.begin(), records.end(),
+                [](auto const& record) { return record.timestamp == 0; });
+            if (anyGenesisActive)
+            {
+                ss << "[opForkTimestamps]" << '\n';
+                for (auto const& record : records)
+                {
+                    if (record.timestamp == 0)
+                    {
+                        ss << record.forkName << "_time:0" << '\n';
                     }
                 }
             }

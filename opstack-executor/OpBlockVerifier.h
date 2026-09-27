@@ -38,9 +38,9 @@
  */
 
 #include <opstack-executor/OpBlockExecute.h>  // preBlockOpSteps / finalizeOpBlockResult
-#include <opstack-executor/OpCommitments.h>   // OpBlockCommitments / commitmentsOf / mismatchedFieldOf
-#include <opstack-executor/OpCommon.h>        // OpConsensusError / forkTimestampSec / OpBlockSeal
-#include <opstack-executor/OpstackExecutor.h> // OpstackExecutor / OpBlockExecutionContext
+#include <opstack-executor/OpCommitments.h>  // OpBlockCommitments / commitmentsOf / mismatchedFieldOf
+#include <opstack-executor/OpCommon.h>       // OpConsensusError / OpBlockSeal
+#include <opstack-executor/OpstackExecutor.h>  // OpstackExecutor / OpBlockExecutionContext
 
 #include <bcos-devp2p/sync/Block.h>  // devp2p::sync::Block
 #include <bcos-evm/adapter/RecentBlockHashes.h>
@@ -107,11 +107,10 @@ struct OpBlockVerificationFailed : public bcos::evm::OpConsensusError
     std::string computedValue;
     std::string announcedValue;
 
-    OpBlockVerificationFailed(
-        std::string field_, std::string computed_, std::string announced_)
+    OpBlockVerificationFailed(std::string field_, std::string computed_, std::string announced_)
       : bcos::evm::OpConsensusError(fmt::format(
-            "OpBlockVerifier: commitment mismatch on field {} (computed={}, announced={})",
-            field_, computed_, announced_)),
+            "OpBlockVerifier: commitment mismatch on field {} (computed={}, announced={})", field_,
+            computed_, announced_)),
         field(std::move(field_)),
         computedValue(std::move(computed_)),
         announcedValue(std::move(announced_))
@@ -133,7 +132,7 @@ namespace detail
 {
 /// seconds -> milliseconds with an overflow guard (the internal BlockHeader stores ms; the
 /// EthBlockHeader(BlockHeader) bridge back divides by 1000 and rejects sub-second values, so
-/// the ×1000 here is the exact inverse — OpCommon.h's forkTimestampSec comment).
+/// the ×1000 here is the exact inverse).
 inline int64_t p2pTimestampToInternalMs(int64_t timestampSec)
 {
     if (timestampSec < 0 || timestampSec > std::numeric_limits<int64_t>::max() / 1000)
@@ -228,12 +227,12 @@ inline protocol::Transaction::Ptr wrapOpP2pEnvelope(
     auto const txHash = hashImpl.hash(bcos::bytesConstRef(raw.data(), raw.size()));
     if (raw.empty())
     {
-        BOOST_THROW_EXCEPTION(bcos::evm::OpConsensusError(
-            "OpBlockVerifier: empty transaction envelope", txHash));
+        BOOST_THROW_EXCEPTION(
+            bcos::evm::OpConsensusError("OpBlockVerifier: empty transaction envelope", txHash));
     }
     auto const typeByte = static_cast<uint8_t>(raw[0]);
-    constexpr uint8_t kRlpListBase = 0xc0;     // legacy RLP list prefix
-    constexpr uint8_t kDepositTypeByte = 0x7e; // kDepositTxType (OpTransition.h)
+    constexpr uint8_t kRlpListBase = 0xc0;      // legacy RLP list prefix
+    constexpr uint8_t kDepositTypeByte = 0x7e;  // kDepositTxType (OpTransition.h)
     if (typeByte < kRlpListBase && typeByte != 0x01 && typeByte != 0x02 && typeByte != 0x04 &&
         typeByte != kDepositTypeByte)
     {
@@ -278,8 +277,8 @@ inline protocol::Transaction::Ptr wrapOpP2pEnvelope(
         try
         {
             auto senderHex = web3Tx.sender();
-            auto sender = bcos::fromHex(
-                senderHex.rfind("0x", 0) == 0 ? senderHex.substr(2) : senderHex);
+            auto sender =
+                bcos::fromHex(senderHex.rfind("0x", 0) == 0 ? senderHex.substr(2) : senderHex);
             tarsTx.sender.assign(sender.begin(), sender.end());
         }
         catch (std::exception const& e)
@@ -364,9 +363,9 @@ public:
 
     OpBlockVerifier(bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory,
         bcos::crypto::Hash::Ptr hashImpl, uint64_t chainId,
-        bcos::ledger::OpForkSchedule forkSchedule,
-        bcos::protocol::BlockFactory::Ptr blockFactory, MultiLayerStorage& multiLayerStorage,
-        bcos::ledger::LedgerInterface::Ptr ledger, bcos::IOServicePool::Ptr ioServicePool,
+        bcos::ledger::OpForkSchedule forkSchedule, bcos::protocol::BlockFactory::Ptr blockFactory,
+        MultiLayerStorage& multiLayerStorage, bcos::ledger::LedgerInterface::Ptr ledger,
+        bcos::IOServicePool::Ptr ioServicePool,
         std::shared_ptr<bcos::ledger::mpt::CommitObserver> commitObserver = nullptr)
       : m_receiptFactory(std::move(receiptFactory)),
         m_hashImpl(std::move(hashImpl)),
@@ -530,8 +529,9 @@ public:
                 }
                 catch (const std::exception& e)
                 {
-                    throw engine::OpStorageError(std::string(
-                        "OpBlockVerifier: parent block header is missing from storage: ") +
+                    throw engine::OpStorageError(
+                        std::string(
+                            "OpBlockVerifier: parent block header is missing from storage: ") +
                         e.what());
                 }
             }
@@ -565,8 +565,8 @@ public:
             // skipStateRootBuild=true: the root comes from the incremental MPT delta below
             // (the same view whose top mutable layer is exactly this block's delta), not from
             // finalize's full two-layer rebuild.
-            opResult = engine::finalizeOpBlockResult(executor, view, *header, execLedgerConfig,
-                cfg, receipts, rawTxBytes, ctx.cumulativeGasUsed, hashErr,
+            opResult = engine::finalizeOpBlockResult(executor, view, *header, execLedgerConfig, cfg,
+                receipts, rawTxBytes, ctx.cumulativeGasUsed, hashErr,
                 /*skipStateRootBuild=*/true);
         }
         catch (const bcos::evm::OpConsensusError&)
@@ -601,8 +601,8 @@ public:
         //    the next block's incremental build resolves its parent nodes. Missing parent
         //    nodes are a storage fault (MPTInvariantViolation), never a silent empty-trie
         //    rebuild.
-        auto const parentStateRoot = co_await ledger::mpt::parentStateRootFor(
-            view, features, number, *m_blockFactory);
+        auto const parentStateRoot =
+            co_await ledger::mpt::parentStateRootFor(view, features, number, *m_blockFactory);
         ledger::mpt::MPTDeltaLayer mptDelta;
         try
         {
@@ -687,8 +687,8 @@ public:
             }
             // blockHashOverride keys the hash rows by the p2p identity; writeNonces=false
             // matches the OP commit path (OpScheduler::commitPersist).
-            co_await ledger::prewriteBlockToBuffer(*m_ledger, blockTxs, outBlock,
-                prewriteStorage, blockHash, /*writeNonces=*/false);
+            co_await ledger::prewriteBlockToBuffer(
+                *m_ledger, blockTxs, outBlock, prewriteStorage, blockHash, /*writeNonces=*/false);
             // The deletions of expired "/mpt/" node rows land in the SAME WriteBatch as the
             // block data (crash-atomicity contract, CommitObserver.h); a Noop observer
             // returns an empty batch.

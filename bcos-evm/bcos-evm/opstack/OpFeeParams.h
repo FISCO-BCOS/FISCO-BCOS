@@ -21,21 +21,20 @@ namespace bcos::evm::opstack
 /// slot 2 — in both the Bedrock and the Ecotone+ layouts.
 struct OpFeeParams
 {
-    intx::uint256 l1_base_fee;             // slot 1 (whole slot)
-    intx::uint256 overhead;                // slot 5 (Bedrock)
-    intx::uint256 bedrock_scalar;          // slot 6 (Bedrock)
+    intx::uint256 l1_base_fee;  // slot 1 (whole slot)
+    // Bedrock–Delta legacy L1-fee inputs (has_legacy_l1_formula), both whole slots; the scalar's
+    // precision is 1e6 (op-geth l1CostHelper divides by oneMillion). Ecotone+ keeps stale
+    // Bedrock-era values in these two slots (L1Block.sol @custom:legacy fields) — only the legacy
+    // formula may read them. Declared at the slots' position so designated initializers
+    // written for the pre-unification field order keep compiling.
+    intx::uint256 l1_fee_overhead = 0;     // slot 5 (whole slot)
+    intx::uint256 l1_fee_scalar = 0;       // slot 6 (whole slot)
     uint32_t base_fee_scalar;              // slot 3 bytes[16,20)
     uint32_t blob_base_fee_scalar;         // slot 3 bytes[20,24)
     intx::uint256 blob_base_fee;           // slot 7 (whole slot)
     uint32_t operator_fee_scalar;          // slot 8 bytes[20,24)
     uint64_t operator_fee_constant;        // slot 8 bytes[24,32)
     uint16_t da_footprint_gas_scalar = 0;  // slot 8 bytes[18,20)
-    // Bedrock–Delta legacy L1-fee inputs (has_legacy_l1_formula), both whole slots; the scalar's
-    // precision is 1e6 (op-geth l1CostHelper divides by oneMillion). Ecotone+ keeps stale
-    // Bedrock-era values in these two slots (L1Block.sol @custom:legacy fields) — only the legacy
-    // formula may read them.
-    intx::uint256 l1_fee_overhead = 0;     // slot 5 (whole slot)
-    intx::uint256 l1_fee_scalar = 0;       // slot 6 (whole slot)
 };
 
 /// True when the Ecotone-formula input slots are live (op-geth switches formulas on the
@@ -55,9 +54,11 @@ struct OpFeeParams
 /// setL1BlockValues, so the Ecotone formula's input slots are zero and the zero-probe
 /// falls back to the Pre-Ecotone rule (specs.optimism.io/protocol/ecotone/
 /// l1-attributes.html: steady state arrives with the next block). Single home for the
-/// selection: computeL1Cost (the fee) and deriveOpReceiptMeta (the receipt snapshot) must
-/// both consume this helper — a block priced with one formula while its receipt claims
-/// the other is a silent fee/receipt split.
+/// fee selection: computeL1Cost (the fee) consumes this helper; deriveOpReceiptMeta takes
+/// no cfg of its own and receives the formula's inputs precomputed by the transition,
+/// which must source them from the same selection (OpTransition's bedrock_l1_* props) —
+/// a block priced with one formula while its receipt claims the other is a silent
+/// fee/receipt split.
 [[nodiscard]] inline bool bedrockFormulaActive(
     const OpForkConfig& cfg, const OpFeeParams& fee) noexcept
 {

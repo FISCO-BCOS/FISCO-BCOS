@@ -73,8 +73,8 @@ BOOST_AUTO_TEST_CASE(RoutesFeesToFourVaults, * boost::unit_test::label("fork-reg
     tx.nonce = 0;
 
     OpFeeParams fee{.l1_base_fee = 1000000000_u256,
-        .overhead = 0_u256,
-        .bedrock_scalar = 0_u256,
+        .l1_fee_overhead = 0_u256,
+        .l1_fee_scalar = 0_u256,
         .base_fee_scalar = 2,
         .blob_base_fee_scalar = 3,
         .blob_base_fee = 10000000_u256,
@@ -137,8 +137,8 @@ BOOST_AUTO_TEST_CASE(ReceiptCarriesL1AndOperatorMeta, * boost::unit_test::label(
     tx.nonce = 0;
 
     OpFeeParams fee{.l1_base_fee = 1000000000_u256,
-        .overhead = 0_u256,
-        .bedrock_scalar = 0_u256,
+        .l1_fee_overhead = 0_u256,
+        .l1_fee_scalar = 0_u256,
         .base_fee_scalar = 2,
         .blob_base_fee_scalar = 3,
         .blob_base_fee = 10000000_u256,
@@ -223,8 +223,8 @@ BOOST_AUTO_TEST_CASE(ReceiptBloomMatchesRecomputedBloom, * boost::unit_test::lab
     tx.nonce = 0;
 
     OpFeeParams fee{.l1_base_fee = 1000000000_u256,
-        .overhead = 0_u256,
-        .bedrock_scalar = 0_u256,
+        .l1_fee_overhead = 0_u256,
+        .l1_fee_scalar = 0_u256,
         .base_fee_scalar = 2,
         .blob_base_fee_scalar = 3,
         .blob_base_fee = 10000000_u256,
@@ -282,8 +282,8 @@ BOOST_AUTO_TEST_CASE(JovianReceiptMetaAndOperatorFormula, * boost::unit_test::la
 
     // Jovian: gas * scalar * 100 + constant — use small scalar so buyGas stays affordable.
     OpFeeParams fee{.l1_base_fee = 1000000000_u256,
-        .overhead = 0_u256,
-        .bedrock_scalar = 0_u256,
+        .l1_fee_overhead = 0_u256,
+        .l1_fee_scalar = 0_u256,
         .base_fee_scalar = 2,
         .blob_base_fee_scalar = 3,
         .blob_base_fee = 10000000_u256,
@@ -472,8 +472,8 @@ BOOST_AUTO_TEST_CASE(OperatorFeeConservesWhenCfgDisagreesWithProps, * boost::uni
     tx.nonce = 0;
 
     OpFeeParams fee{.l1_base_fee = 0_u256,
-        .overhead = 0_u256,
-        .bedrock_scalar = 0_u256,
+        .l1_fee_overhead = 0_u256,
+        .l1_fee_scalar = 0_u256,
         .base_fee_scalar = 0,
         .blob_base_fee_scalar = 0,
         .blob_base_fee = 0_u256,
@@ -543,8 +543,8 @@ BOOST_AUTO_TEST_CASE(ReceiptMetaFollowsSnapshotNotTransitionCfg, * boost::unit_t
     tx.nonce = 0;
 
     OpFeeParams fee{.l1_base_fee = 0_u256,
-        .overhead = 0_u256,
-        .bedrock_scalar = 0_u256,
+        .l1_fee_overhead = 0_u256,
+        .l1_fee_scalar = 0_u256,
         .base_fee_scalar = 0,
         .blob_base_fee_scalar = 0,
         .blob_base_fee = 0_u256,
@@ -623,8 +623,8 @@ BOOST_AUTO_TEST_CASE(L1CostIsDebitedFromSenderAndConserves, * boost::unit_test::
 
     // l1_base_fee 非零，operator fee 关闭：把 l1 这一项单独隔离出来。
     OpFeeParams fee{.l1_base_fee = 1000000000_u256,
-        .overhead = 0_u256,
-        .bedrock_scalar = 0_u256,
+        .l1_fee_overhead = 0_u256,
+        .l1_fee_scalar = 0_u256,
         .base_fee_scalar = 1100,
         .blob_base_fee_scalar = 0,
         .blob_base_fee = 0_u256,
@@ -764,13 +764,10 @@ BOOST_AUTO_TEST_CASE(BedrockTransitionRoutesLegacyL1Fee)
 
     OpFeeParams fee{};
     fee.l1_base_fee = 1000000000_u256;
-    fee.overhead = 50_u256;
     fee.l1_fee_overhead = 50_u256;
-    fee.bedrock_scalar = 7000000_u256;
     fee.l1_fee_scalar = 7000000_u256;
-    const auto envBytes = evmc::from_hex(
-        "dd80808094095e7baea6a6c7c4c2dfeb977efac326af552d878080808080")
-                              .value();
+    const auto envBytes =
+        evmc::from_hex("dd80808094095e7baea6a6c7c4c2dfeb977efac326af552d878080808080").value();
     const evmc::bytes_view env = envBytes;
 
     const auto v = opValidate(ts, block, tx, env, bedrockConfig(), fee, 30000000);
@@ -780,8 +777,8 @@ BOOST_AUTO_TEST_CASE(BedrockTransitionRoutesLegacyL1Fee)
 
     const auto before = totalSupply(ts);
     evmone::state::StateDiff diff;
-    const auto txR =
-        opTransition(ts, block, hashes, tx, bedrockConfig(), vm, props, 1234, kOpTestReceiptFactory, diff);
+    const auto txR = opTransition(
+        ts, block, hashes, tx, bedrockConfig(), vm, props, 1234, kOpTestReceiptFactory, diff);
     BOOST_REQUIRE_EQUAL(txR->status(), 0);
     bcos::evm::applyStateDiffStrict(ts, diff);
 
@@ -790,9 +787,9 @@ BOOST_AUTO_TEST_CASE(BedrockTransitionRoutesLegacyL1Fee)
     BOOST_CHECK_EQUAL(ts.at(OP_L1_FEE_VAULT).balance, props.l1_cost);
     BOOST_CHECK_EQUAL(ts.at(OP_BASE_FEE_VAULT).balance, gasUsed * intx::uint256{7});
     BOOST_CHECK_EQUAL(ts.at(OP_SEQUENCER_FEE_VAULT).balance, gasUsed * intx::uint256{10});
-    BOOST_CHECK_EQUAL(
-        ts.at(OP_OPERATOR_FEE_VAULT).balance, intx::uint256{0});  // pre-Isthmus 无 operator fee
-    BOOST_CHECK_EQUAL(totalSupply(ts), before);              // 费用只在账户间搬运
+    BOOST_CHECK_EQUAL(ts.at(OP_OPERATOR_FEE_VAULT).balance, intx::uint256{0});  // pre-Isthmus 无
+                                                                                // operator fee
+    BOOST_CHECK_EQUAL(totalSupply(ts), before);  // 费用只在账户间搬运
 
     const auto& meta = txR->opStackMeta();
     BOOST_REQUIRE(meta.has_value());

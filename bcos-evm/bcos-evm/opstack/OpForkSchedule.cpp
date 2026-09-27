@@ -42,6 +42,33 @@ static_assert(
         static_cast<uint8_t>(engine::OpForkId::Karst) == static_cast<std::size_t>(OpFork::Karst),
     "OpForkId and OpFork disagree: fork order/count changed on one side only");
 
+// The ledger::OpFork spelling (bcos-framework/ledger/OpForkSchedule.h) is the fourth copy of
+// the ladder: it names the two rungs the executor's model collapses (Bedrock, Delta), so its
+// VALUES are deliberately not shared with OpFork above — bind the order of both ladders plus
+// the exact position of the two ledger-only rungs instead (ledger::Regolith sits one past
+// OpFork::Regolith, ledger::Ecotone two past OpFork::Ecotone, which pins Delta's slot), so a
+// one-sided insert or reorder fails to compile instead of mis-aligning the schedule codec's
+// fork names against the executor's fork table.
+static_assert(ledger::OpFork::Bedrock < ledger::OpFork::Regolith &&
+                  ledger::OpFork::Regolith < ledger::OpFork::Canyon &&
+                  ledger::OpFork::Canyon < ledger::OpFork::Delta &&
+                  ledger::OpFork::Delta < ledger::OpFork::Ecotone &&
+                  ledger::OpFork::Ecotone < ledger::OpFork::Fjord &&
+                  ledger::OpFork::Fjord < ledger::OpFork::Granite &&
+                  ledger::OpFork::Granite < ledger::OpFork::Holocene &&
+                  ledger::OpFork::Holocene < ledger::OpFork::Isthmus &&
+                  ledger::OpFork::Isthmus < ledger::OpFork::Jovian &&
+                  ledger::OpFork::Jovian < ledger::OpFork::Karst &&
+                  OpFork::Regolith < OpFork::Canyon && OpFork::Canyon < OpFork::Ecotone &&
+                  OpFork::Ecotone < OpFork::Fjord && OpFork::Fjord < OpFork::Granite &&
+                  OpFork::Granite < OpFork::Holocene && OpFork::Holocene < OpFork::Isthmus &&
+                  OpFork::Isthmus < OpFork::Jovian && OpFork::Jovian < OpFork::Karst &&
+                  static_cast<std::size_t>(ledger::OpFork::Regolith) ==
+                      static_cast<std::size_t>(OpFork::Regolith) + 1 &&
+                  static_cast<std::size_t>(ledger::OpFork::Ecotone) ==
+                      static_cast<std::size_t>(OpFork::Ecotone) + 2,
+    "ledger::OpFork and OpFork disagree on ladder order or the two ledger-only rungs");
+
 namespace
 {
 OpFork forkFromName(std::string_view forkName)
