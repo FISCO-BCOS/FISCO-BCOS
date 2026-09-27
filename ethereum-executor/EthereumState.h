@@ -19,9 +19,9 @@
 ///     evmone::state::StateDiff struct and no separate applyStateDiff function.
 ///
 /// Types are renamed (EthAccount / EthStorageValue / EthereumState) so this
-/// port never collides with the unchanged bcos-evm library's
-/// evmone::state::{Account, StorageValue, State} (both may be linked into the
-/// same binary — bcos-evm keeps serving the opstack layer and its tests).
+/// port never collided with the retired bcos-evm library's
+/// evmone::state::{Account, StorageValue, State} while both were linked into
+/// the same binary.
 ///
 /// Known limitation — code hash algorithm:
 /// applyToStorage() keys the SYS_CODE_BINARY table by the code hash, and the

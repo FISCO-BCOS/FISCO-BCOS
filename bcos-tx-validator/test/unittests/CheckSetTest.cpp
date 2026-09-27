@@ -247,7 +247,7 @@ BOOST_AUTO_TEST_CASE(typeGateIsEvaluatedFirstAndSignatureBeforeAccountState)
     BOOST_CHECK(indexOf(Check::ChainId) < indexOf(Check::Balance));
 
     // The items evmone's validate_transaction also has, in the order it reports them
-    // (bcos-evm/bcos-evm/eth/state/state.cpp): the type-specific block -- revision gate, 7702
+    // (ported as ethereum-executor/EthereumTransition.h): the type-specific block -- revision gate, 7702
     // "to" present, 4844 "to" present (its "hashes non-empty" runs earlier, in normalize), 7702
     // authorization list non-empty -- comes BEFORE the shared fee rules, so
     // a 7702 envelope with an empty authorization list and a tip above its fee cap reports the

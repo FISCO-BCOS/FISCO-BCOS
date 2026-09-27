@@ -40,7 +40,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     # including the node binary once part-5 links the library — which
     # cmake/CompilerSettings.cmake:118-129 forbids ("would silence a real defect detector
     # (-Wmissing-field-initializers) for all 25+ modules on behalf of one feature"; the
-    # per-target downgrade is the documented mechanism, cf. bcos-evm/CMakeLists.txt).
+    # per-target downgrade is the documented mechanism).
     target_compile_options(opstack-executor PRIVATE
         -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
 endif()

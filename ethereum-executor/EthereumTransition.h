@@ -162,9 +162,9 @@ inline evmc_message build_message(
     };
 }
 
-/// EIP-7702: The single implementation both the eth path and (historically) the
+/// EIP-7702: The single implementation both the eth path and the
 /// opstack path share, ported to operate on EthereumState with a bcos
-/// AuthorizationList. See bcos-evm Eip7702Recover.h for the reference.
+/// AuthorizationList. See EVMSupport.h's recoverAuthority for the recovery reference.
 template <class Storage>
 int64_t processAuthorizationList(
     EthereumState<Storage>& state, uint64_t chainId, protocol::Transaction const& tx)
@@ -357,7 +357,7 @@ task::Task<protocol::TransactionReceipt::Ptr> runTransaction(EthereumState<Stora
 
     // The NODE's chain id, never tx.chain_id: validate_transaction does not
     // check that field, so passing it would make EIP-7702 step 1 compare sender
-    // input against sender input. See the declaration comment in bcos-evm.
+    // input against sender input (pinned by TestEthereumAuthorizationList.cpp).
     const auto delegation_refund =
         eth_transition_detail::processAuthorizationList(state, chainId, tx);
 

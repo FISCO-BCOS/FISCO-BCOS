@@ -6,8 +6,7 @@
 ///
 /// Golden values are the canonical Ethereum vectors: keccak256(""), the
 /// Yellow-Paper CREATE example, the EIP-1014 CREATE2 examples, the EIP-4844
-/// blob-gas vector, and the EIP-7702 authority-recovery vector shared with
-/// bcos-evm/test/opstack/Op7702Test.cpp.
+/// blob-gas vector, and the EIP-7702 authority-recovery golden vector.
 ///
 /// Checks are NDEBUG-independent (CHECK exits non-zero on failure): CI builds
 /// with Release/-DNDEBUG, which would compile out assert() and leave the
@@ -179,7 +178,7 @@ void testBlobGasPrice()
 
 void testRecoverAuthority()
 {
-    // EIP-7702 golden vector (bcos-evm/test/opstack/Op7702Test.cpp):
+    // EIP-7702 golden vector:
     // private key 0x59c6995e..., chain_id = 1, delegation = 0x00..cc, nonce = 0
     //   -> authority 0x70997970C51812dc3A010C7d01b50e0d17dc79C8
     bcos::protocol::Authorization auth;

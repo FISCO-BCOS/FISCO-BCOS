@@ -152,7 +152,7 @@ constexpr bool contains(Check set, Check item) noexcept
 ///   gate  -- reads the transaction alone. FISCO's own pre-checks: a refused envelope type, a
 ///            malformed `to`, a bad signature or a foreign group/chain id is rejected without a
 ///            single read, which is what keeps unauthenticated P2P input cheap to refuse.
-///   state -- evmone's validate_transaction (bcos-evm/bcos-evm/eth/state/state.cpp, mirrored by
+///   state -- evmone's validate_transaction (ported as
 ///            ethereum-executor/EthereumTransition.h), in ITS order, judged against one chain
 ///            view -- a configuration snapshot plus the fee and chain-id keys -- and, only when
 ///            the set contains an account-state check, one account read. evmone validates the
