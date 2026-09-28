@@ -173,8 +173,6 @@ CHAIN_ID=$(cast chain-id --rpc-url "$L2")
 START=$(( $(cast block-number --rpc-url "$L2") + 1 ))
 PORTAL=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["opChainDeployments"][0]["OptimismPortalProxy"])' "$C2/state.json")
 log "driving the mix from L2 block $START"
-cast send "$PORTAL" --value 1ether --private-key "$DEV1_KEY" --rpc-url "$L1" > /dev/null \
-  || die "L1 deposit to OptimismPortal failed"
 OP_E2E_DIR="${OP_E2E_DIR:-${REPO_ROOT}/.ci-op-e2e-tests}"
 SCEN=$(C2_L2_WEB3="$L2" C2_DEV_KEY="$DEV1_KEY" C2_L2_CHAIN_ID="$CHAIN_ID" \
   bash "${OP_E2E_DIR}/tools/op-e2e/l2_tx_scenarios.sh") || { echo "$SCEN" >&2; die "l2_tx_scenarios.sh failed"; }
@@ -193,6 +191,12 @@ if [ "$OVERLAY" = on ]; then
     --gas-limit 300000 --rpc-url "$L2" --chain-id "$CHAIN_ID" > /dev/null \
     || die "overlay SystemConfig.setValueByKey was not included with status 1"
 fi
+# The L1 deposit goes last: a deposit from DEV1 increments DEV1's L2 nonce when it lands, so
+# sent earlier it can consume the nonce an L2 transaction above was already signed with, and
+# that transaction then never lands (first standalone run with a 2s L1: the deposit took nonce
+# 5 in block 35 and setValueByKey, signed with nonce 5, timed out).
+cast send "$PORTAL" --value 1ether --private-key "$DEV1_KEY" --rpc-url "$L1" > /dev/null \
+  || die "L1 deposit to OptimismPortal failed"
 LAST_MIX=$(python3 "$CMP" wait-mix --l2 "$L2" --first "$START" --overlay "$OVERLAY") || exit 2
 LAST=$(( START + BLOCKS - 1 ))
 [ "$LAST_MIX" -gt "$LAST" ] && LAST=$LAST_MIX
