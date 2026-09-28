@@ -153,8 +153,12 @@ for _ in $(seq 1 20); do curl -sf "http://127.0.0.1:$BEACON_PORT/eth/v1/config/s
 
 # ── drive the transaction mix ────────────────────────────────────────────────
 DEV1_KEY=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d  # owns the overlay SystemConfig
-K9=0xa0Ee7A142d267C1f36714E4a8F75612F20a79720                                # anvil account #9: 7702 authority
-K9_KEY=0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6
+# 7702 authority: a fresh key per run. A fixed account keeps the previous run's delegation
+# (code 0xef0100<counter>) on an --attach devnet, and the funding transfer then executes the
+# counter's code and reverts.
+read -r K9 K9_KEY < <(cast wallet new --json \
+  | python3 -c 'import json,sys; w=json.load(sys.stdin)[0]; print(w["address"], w["private_key"])') \
+  || die "cast wallet new failed"
 CHAIN_ID=$(cast chain-id --rpc-url "$L2")
 START=$(( $(cast block-number --rpc-url "$L2") + 1 ))
 PORTAL=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["opChainDeployments"][0]["OptimismPortalProxy"])' "$C2/state.json")
@@ -188,8 +192,15 @@ python3 "$CMP" coverage --workdir "$WORK" --overlay "$OVERLAY" || exit 2
 
 # ── replay every block with kona-host --native ──────────────────────────────
 L1_HEAD=$(cat "$WORK/l1_head.txt")
-TIMEOUT=()
-command -v timeout >/dev/null && TIMEOUT=(timeout "${KONA_TIMEOUT:-900}")
+# kona-host retries a hint the L2 node cannot answer forever, so every run needs a deadline.
+# macOS ships no coreutils timeout; perl's alarm (SIGALRM, exit 142) is the fallback.
+if command -v timeout >/dev/null; then
+  TIMEOUT=(timeout "${KONA_TIMEOUT:-900}")
+elif command -v gtimeout >/dev/null; then
+  TIMEOUT=(gtimeout "${KONA_TIMEOUT:-900}")
+else
+  TIMEOUT=(perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "${KONA_TIMEOUT:-900}")
+fi
 kona() {
   if [ -n "${KONA_HOST_BIN:-}" ]; then
     ${TIMEOUT[@]+"${TIMEOUT[@]}"} "$KONA_HOST_BIN" "$@"
