@@ -298,8 +298,9 @@ BOOST_AUTO_TEST_CASE(StorageSlotProofsIncludingExclusion)
     BOOST_CHECK(!check.value.has_value());
 }
 
-// An unknown address on a populated trie, and any address on the empty root, both yield
-// AccountNotInMPT. A root absent from storage yields BlockNotCommitted.
+// Under scenario A (fullTrie=false) an unknown address on a populated trie, and any address on
+// the empty root, both yield AccountNotInMPT; a complete trie proves them absent instead
+// (ProofAccountExclusionTest). A root absent from storage yields BlockNotCommitted.
 BOOST_AUTO_TEST_CASE(AccountNotInMPTErrors)
 {
     MemStorage storage;
@@ -310,12 +311,12 @@ BOOST_AUTO_TEST_CASE(AccountNotInMPTErrors)
 
     bcos::Address const unknown = makeAddress(0xcd);
     auto missing = bcos::task::syncWait(
-        generateProof(storage, stateRoot, unknown, std::span<bcos::h256 const>{}));
+        generateProof(storage, stateRoot, unknown, std::span<bcos::h256 const>{}, false));
     BOOST_REQUIRE(std::holds_alternative<ProofErrorCode>(missing));
     BOOST_CHECK(std::get<ProofErrorCode>(missing) == ProofErrorCode::AccountNotInMPT);
 
     auto emptyRoot = bcos::task::syncWait(
-        generateProof(storage, emptyRootHash(), known, std::span<bcos::h256 const>{}));
+        generateProof(storage, emptyRootHash(), known, std::span<bcos::h256 const>{}, false));
     BOOST_REQUIRE(std::holds_alternative<ProofErrorCode>(emptyRoot));
     BOOST_CHECK(std::get<ProofErrorCode>(emptyRoot) == ProofErrorCode::AccountNotInMPT);
 

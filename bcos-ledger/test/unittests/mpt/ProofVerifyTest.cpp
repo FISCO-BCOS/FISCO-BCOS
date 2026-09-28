@@ -203,8 +203,9 @@ BOOST_AUTO_TEST_CASE(EmptyStorageTrieSlotVerifies)
     BOOST_CHECK(!verifyProof(setup.stateRoot, tampered).storageValid.at(0));
 }
 
-// A dormant (never-written) account has no leaf to prove: the boundary is documented at the
-// generate level — generateProof refuses with AccountNotInMPT, so no proof reaches the verifier.
+// A dormant account under scenario A (fullTrie=false) has no leaf to prove: generateProof
+// refuses with AccountNotInMPT, so no proof reaches the verifier. (Under a complete trie an
+// absent account gets a verifiable exclusion proof: ProofAccountExclusionTest.)
 BOOST_AUTO_TEST_CASE(ExclusionAtGenerateLevel)
 {
     VerifyMemStorage storage;
@@ -213,7 +214,8 @@ BOOST_AUTO_TEST_CASE(ExclusionAtGenerateLevel)
     auto const stateRoot = seedStateTrieFlushed(storage, {{makeAddress(0xab), account}});
 
     auto missing = bcos::task::syncWait(
-        generateProof(storage, stateRoot, makeAddress(0xcd), std::span<bcos::h256 const>{}));
+        generateProof(storage, stateRoot, makeAddress(0xcd), std::span<bcos::h256 const>{},
+            /*fullTrie=*/false));
     BOOST_REQUIRE(std::holds_alternative<ProofErrorCode>(missing));
     BOOST_CHECK(std::get<ProofErrorCode>(missing) == ProofErrorCode::AccountNotInMPT);
 }

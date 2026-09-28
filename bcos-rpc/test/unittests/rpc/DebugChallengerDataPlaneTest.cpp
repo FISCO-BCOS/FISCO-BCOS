@@ -28,6 +28,7 @@
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-ledger/mpt/MPTReadView.h>
+#include <bcos-ledger/mpt/Proof.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EndpointsMapping.h>
@@ -226,7 +227,7 @@ BOOST_AUTO_TEST_CASE(RawHeaderRefusesNonOpHeader)
     auto const resp = call1("debug_getRawHeader", "0x1");
     BOOST_REQUIRE(resp.isMember("error"));
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), InternalError);
-    BOOST_CHECK_EQUAL(resp["error"]["message"].asString(), "Block 1 has no OP Ethereum header");
+    BOOST_CHECK_EQUAL(resp["error"]["message"].asString(), "Block 1 has no Ethereum header");
 }
 
 // A trie node answers under both key shapes kona-host sends: bare hash and 'c' || hash.
@@ -314,6 +315,81 @@ BOOST_AUTO_TEST_CASE(NonOpLaneIsMethodNotFound)
             BOOST_TEST(!resp.isMember("result"));
         }
     }
+}
+
+// The rollup genesis ([eth_genesis_header]) is an Ethereum-versioned header whose stored hash is
+// keccak256 of its RLP; eth_getBlockByNumber(0) publishes it and debug_getRawHeader(0) must hash
+// to it (kona-host starts every claim from the genesis anchor).
+BOOST_AUTO_TEST_CASE(RawHeaderServesEthGenesisHeader)
+{
+    setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+    protocol::EthBlockHeaderData data;
+    data.uncleHash = protocol::c_emptyOmmersHash;
+    data.stateRoot = h256(1U);
+    data.txsRoot = mpt::emptyRootHash();
+    data.receiptsRoot = mpt::emptyRootHash();
+    data.gasLimit = 30'000'000;
+    data.timestamp = 1'700'000'000;
+    data.extraData = bytes{0x00, 0x00, 0x00, 0x00, 0xfa, 0x00, 0x00, 0x00, 0x06};
+    data.baseFee = 1'000'000'000;
+    data.withdrawalsHash = mpt::emptyRootHash();
+    data.blobGasUsed = 0;
+    data.excessBlobGas = 0;
+    data.parentBeaconRoot = h256{};
+    bytes rlp;
+    codec::rlp::encode(rlp, data);
+    auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+    protocol::EthBlockHeader::toTarsHeader(header, bcos::ref(rlp));
+    header->calculateHash(*cryptoSuite->hashImpl());
+    BOOST_REQUIRE(!bcos::protocol::isOpEthereumBlock(*header));  // the case that was refused
+    m_ledger->ledgerData().front()->setBlockHeader(header);
+    auto const genesisHash = m_ledger->ledgerData().front()->blockHeader()->hash();
+    m_ledger->indexBlockHash(genesisHash, 0);
+
+    Json::Value blockParams(Json::arrayValue);
+    blockParams.append("0x0");
+    blockParams.append(false);
+    auto const published = call("eth_getBlockByNumber", blockParams)["result"]["hash"].asString();
+    BOOST_CHECK_EQUAL(published, genesisHash.hexPrefixed());
+
+    auto const raw = resultBytes(call1("debug_getRawHeader", "0x0"));
+    BOOST_CHECK(raw == rlp);
+    BOOST_CHECK_EQUAL(bcos::crypto::keccak256Hash(bcos::ref(raw)).hexPrefixed(), published);
+    BOOST_CHECK(resultBytes(call1("debug_getRawHeader", published)) == rlp);
+}
+
+// kona-host asks eth_getProof for accounts a block creates: under a complete trie the absent
+// account answers an EIP-1186 exclusion proof (empty account), never -32004.
+BOOST_AUTO_TEST_CASE(GetProofAbsentAccountIsExclusionProof)
+{
+    setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
+    auto const root = buildTrie();
+    wireReader();
+    m_ledger->ledgerData().back()->blockHeader()->setStateRoot(root);
+
+    bcos::Address const dead(std::string("0x000000000000000000000000000000000000dEaD"));
+    Json::Value params(Json::arrayValue);
+    params.append(dead.hexPrefixed());
+    params.append(Json::Value(Json::arrayValue));
+    params.append("latest");
+    auto const resp = call("eth_getProof", params);
+    BOOST_REQUIRE_MESSAGE(resp.isMember("result"), printJson(resp));
+    auto const& result = resp["result"];
+    BOOST_CHECK_EQUAL(result["balance"].asString(), "0x0");
+    BOOST_CHECK_EQUAL(result["nonce"].asString(), "0x0");
+    BOOST_CHECK_EQUAL(result["codeHash"].asString(), mpt::emptyCodeHash().hexPrefixed());
+    BOOST_CHECK_EQUAL(result["storageHash"].asString(), mpt::emptyRootHash().hexPrefixed());
+
+    mpt::EIP1186Proof proof;
+    proof.address = dead;
+    proof.codeHash = mpt::emptyCodeHash();
+    proof.storageHash = mpt::emptyRootHash();
+    for (auto const& node : result["accountProof"])
+    {
+        proof.accountProof.push_back(fromHexWithPrefix(node.asString()));
+    }
+    BOOST_CHECK(!proof.accountProof.empty());
+    BOOST_CHECK(mpt::verifyProof(root, proof).accountValid);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

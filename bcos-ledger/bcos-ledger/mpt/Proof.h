@@ -83,7 +83,7 @@ struct EIP1186Proof
 /// codes. Genuine storage inconsistencies still throw MPTInvariantViolation, like Trie does.
 enum class ProofErrorCode : uint8_t
 {
-    AccountNotInMPT,    ///< the walk from stateRoot dead-ends before an account leaf
+    AccountNotInMPT,    ///< scenario A (!fullTrie) only: the walk dead-ends before an account leaf
     BlockNotCommitted,  ///< stateRoot itself is absent from node storage (unknown/uncommitted)
 };
 
@@ -215,17 +215,22 @@ bcos::task::Task<ProofWalk> proofWalk(Storage& storage, bcos::h256 root, bcos::b
 ///
 /// Outcomes:
 ///   - stateRoot absent from storage        → ProofErrorCode::BlockNotCommitted
-///   - stateRoot == emptyRootHash(), or the account walk dead-ends
-///                                           → ProofErrorCode::AccountNotInMPT
+///   - the account is absent (the walk dead-ends, or stateRoot == emptyRootHash()), fullTrie
+///                                           → exclusion proof: the dead-end prefix as
+///                                             accountProof (empty for the empty root) and the
+///                                             empty account (nonce/balance 0, emptyCodeHash,
+///                                             emptyRootHash), as geth answers
+///   - the account is absent, !fullTrie      → ProofErrorCode::AccountNotInMPT (a dormant
+///                                             account: the walk proves nothing about it)
 ///   - a requested slot is absent, fullTrie  → StorageProof with empty value and the dead-end
 ///                                             prefix as exclusion proof (EIP-1186 value 0x0)
 ///   - a requested slot is absent, !fullTrie → StorageProof with inMPT=false, empty value, empty
 ///                                             proof (SlotNotInMPT, see @p fullTrie below)
 ///
-/// @param fullTrie asserts the storage tries are COMPLETE (scenario B, the Ethereum lane
-/// executor_version >= 2: every live slot has a trie leaf), so an exclusion walk IS a provable
-/// zero. Under scenario A
-/// (slot-level weakening, spec §4.4) the trie only commits slots written after MPT activation; an
+/// @param fullTrie asserts the state and storage tries are COMPLETE (scenario B, the Ethereum
+/// lane executor_version >= 2: every live account and slot has a trie leaf), so an exclusion walk
+/// IS a provable zero — an absent account is the empty account, an absent slot is 0. Under scenario
+/// A (slot-level weakening, spec §4.4) the trie only commits slots written after MPT activation; an
 /// exclusion walk there looks IDENTICAL to scenario B's but proves nothing about the slot's
 /// flat-KV value, which may be non-zero — the entry is marked inMPT=false with value and proof
 /// left empty instead of lying with a value-0 exclusion proof. The distinction is lane-driven and
@@ -250,23 +255,24 @@ bcos::task::Task<std::variant<EIP1186Proof, ProofErrorCode>> generateProof(Stora
     bcos::h256 stateRoot, bcos::Address address, std::span<bcos::h256 const> slots,
     bool fullTrie = true)
 {
-    if (stateRoot == emptyRootHash())
+    detail::ProofWalk accountWalk;  // the empty trie holds no accounts and has no nodes
+    if (stateRoot != emptyRootHash())
     {
-        co_return ProofErrorCode::AccountNotInMPT;  // empty trie holds no accounts
+        accountWalk = co_await detail::proofWalk(
+            storage, stateRoot, bytesToNibbles(accountKeyHash(address).ref()));
+        if (accountWalk.rootMissing)
+        {
+            co_return ProofErrorCode::BlockNotCommitted;
+        }
     }
-
-    auto const addressKeyHash = accountKeyHash(address);
-    auto accountWalk =
-        co_await detail::proofWalk(storage, stateRoot, bytesToNibbles(addressKeyHash.ref()));
-    if (accountWalk.rootMissing)
-    {
-        co_return ProofErrorCode::BlockNotCommitted;
-    }
-    if (!accountWalk.value)
+    if (!accountWalk.value && !fullTrie)
     {
         co_return ProofErrorCode::AccountNotInMPT;
     }
-    auto const account = Account::decode(bcos::ref(*accountWalk.value));
+    // An absent account under a complete trie is the empty account, proven by the dead-end
+    // walk; its storage trie is empty, so the slot loop below proves every slot zero.
+    auto const account =
+        accountWalk.value ? Account::decode(bcos::ref(*accountWalk.value)) : Account{};
 
     EIP1186Proof out;
     out.address = address;
@@ -365,7 +371,9 @@ namespace detail
 /// @param path the full nibble path of the key being proven (64 nibbles for 32-byte key hashes)
 /// @return nullopt   → the chain is INVALID (hash mismatch, malformed node, dangling hash ref,
 ///                     or trailing unused proof items — padded proofs are rejected)
-///         empty     → valid EXCLUSION proof: the walk dead-ends, the key is absent
+///         empty     → valid EXCLUSION proof: the walk dead-ends, the key is absent — and for
+///                     the empty root, an EMPTY proof (the empty trie has no nodes; geth's
+///                     trie.Prove emits none)
 ///         non-empty → the proven leaf/branch value
 template <bcos::crypto::hasher::Hasher HasherT>
 std::optional<bcos::bytes> verifyProofChain(bcos::h256 const& expectedRoot,
@@ -415,6 +423,10 @@ std::optional<bcos::bytes> verifyProofChain(bcos::h256 const& expectedRoot,
     // failure empties node and the loop exits. Lambda return values materialize before the
     // assignment overwrites node, so decoding an inline child that lives inside the current
     // variant is safe by construction (proofWalk needs a comment to enforce the same).
+    if (expectedRoot == emptyRootHash<HasherT>() && proofNodes.empty())
+    {
+        return bcos::bytes{};
+    }
     auto node = takeNode(expectedRoot);
     while (node)
     {
@@ -473,10 +485,11 @@ std::optional<bcos::bytes> verifyProofChain(bcos::h256 const& expectedRoot,
 /// link via detail::verifyProofChain, the deliberate second implementation cross-validating
 /// generateProof's proofWalk.
 ///
-/// accountValid requires all of: the account chain anchors at @p claimedRoot, ends at a present
-/// account leaf, the leaf decodes, and the decoded fields EQUAL the proof's claimed
-/// nonce/balance/codeHash/storageHash. Malformed leaf bytes yield accountValid=false, never an
-/// exception. On any account-side failure the function returns immediately with every
+/// accountValid requires all of: the account chain anchors at @p claimedRoot, ends at an account
+/// leaf that decodes or proves the account absent (an exclusion; an empty accountProof for the
+/// empty root), and the proven account — the empty account when absent — EQUALS the proof's
+/// claimed nonce/balance/codeHash/storageHash. Malformed leaf bytes yield accountValid=false, never
+/// an exception. On any account-side failure the function returns immediately with every
 /// storageValid false and every storageStatus Invalid (including inMPT=false entries: an
 /// unestablished account leaf makes even "unverifiable" too generous) — slot chains hang off
 /// proof.storageHash, which an invalid account side has not established.
@@ -501,17 +514,18 @@ VerifyResult verifyProof(bcos::h256 claimedRoot, EIP1186Proof const& proof)
     auto const accountPath = bytesToNibbles(accountKeyHash(proof.address).ref());
     auto const accountLeaf = detail::verifyProofChain(
         claimedRoot, std::span<bcos::bytes const>(proof.accountProof), accountPath, hasher);
-    if (!accountLeaf || accountLeaf->empty())
+    if (!accountLeaf)
     {
-        // Invalid chain, or an exclusion: an EIP-1186 proof for a present account must contain
-        // the account leaf.
-        return out;
+        return out;  // invalid chain
     }
 
-    Account decoded;
+    Account decoded;  // an exclusion proves the empty account
     try
     {
-        decoded = Account::decode(bcos::ref(*accountLeaf));
+        if (!accountLeaf->empty())
+        {
+            decoded = Account::decode(bcos::ref(*accountLeaf));
+        }
     }
     catch (...)
     {

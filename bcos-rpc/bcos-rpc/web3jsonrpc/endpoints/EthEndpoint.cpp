@@ -2107,14 +2107,15 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
         BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "MPT not enabled on this node"));
     }
 
-    // The exclusion-vs-cold-slot distinction is lane-driven (spec §5.9): only on the
-    // Ethereum lane (executor_version >= ETHEREUM_EXECUTOR_VERSION, scenario B) are the
-    // storage tries complete, making an
-    // exclusion walk a provable zero. Otherwise (scenario A) the trie omits slots never
-    // written after MPT activation, and generateProof marks such slots inMPT=false instead
-    // of emitting a lying value-0 exclusion proof. Single-row read (one SYS_CONFIG row,
-    // same helper as resolveHistoricalMptContext); degrades to false (honest scenario-A
-    // behavior) on fetch failure.
+    // The exclusion-vs-cold distinction is lane-driven (spec §5.9): only on the Ethereum lane
+    // (executor_version >= ETHEREUM_EXECUTOR_VERSION, scenario B) are the tries complete, making
+    // an exclusion walk a provable zero — an absent account answers an exclusion proof of the
+    // empty account (as getBalance reads it as zero), an absent slot a zero value. Otherwise
+    // (scenario A) the trie omits slots never written after MPT activation, and generateProof
+    // marks such slots inMPT=false (and absent accounts AccountNotInMPT) instead of emitting a
+    // lying exclusion. Single-row read (one SYS_CONFIG row, same helper as
+    // resolveHistoricalMptContext); degrades to false (honest scenario-A behavior) on fetch
+    // failure.
     auto const fullTrie =
         co_await executorVersionAt(*ledger, blockNumber) >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
 
@@ -2248,12 +2249,15 @@ task::Task<void> EthEndpoint::getRawHeader(const Json::Value& request, Json::Val
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
     }
     auto const& header = *headerPtr;
-    // Only an OP header's canonical hash is keccak256 of this RLP (canonicalBlockHash); any
-    // other header would hand the host bytes that do not hash to the published block hash.
-    if (!protocol::isOpEthereumBlock(header)) [[unlikely]]
+    // The published hash (canonicalBlockHash) is keccak256 of this RLP for an OP header and for
+    // an Ethereum-versioned one, whose stored hash is that RLP hash (calculateRLPHash) — the
+    // rollup genesis from [eth_genesis_header] is the latter. A native FISCO header's hash is
+    // not, so serving it would hand the host bytes that do not hash to the published hash.
+    if (!protocol::isOpEthereumBlock(header) &&
+        header.ethBlockVersion() == protocol::EthBlockVersion::NON_ETH) [[unlikely]]
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(
-            InternalError, "Block " + std::to_string(blockNumber) + " has no OP Ethereum header"));
+            InternalError, "Block " + std::to_string(blockNumber) + " has no Ethereum header"));
     }
     Json::Value result = toHexStringWithPrefix(protocol::EthBlockHeader::encodeHeader(header));
     buildJsonContent(result, response);
