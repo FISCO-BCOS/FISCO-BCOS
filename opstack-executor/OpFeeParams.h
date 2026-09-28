@@ -6,8 +6,8 @@
 
 #pragma once
 
-#include <ethereum-executor/EthereumState.h>
 #include <bcos-task/Task.h>
+#include <ethereum-executor/EthereumState.h>
 #include <cstdint>
 #include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
@@ -51,8 +51,8 @@ struct OpFeeParams
     // precision is 1e6 (op-geth l1CostHelper divides by oneMillion). Ecotone+ keeps stale
     // Bedrock-era values in these two slots (L1Block.sol @custom:legacy fields) — only the legacy
     // formula may read them.
-    intx::uint256 l1_fee_overhead = 0;     // slot 5 (whole slot)
-    intx::uint256 l1_fee_scalar = 0;       // slot 6 (whole slot)
+    intx::uint256 l1_fee_overhead = 0;  // slot 5 (whole slot)
+    intx::uint256 l1_fee_scalar = 0;    // slot 6 (whole slot)
 };
 
 /// op-geth rollup_cost.go NewL1CostFunc "firstEcotoneBlock" edge case: Ecotone is active (per
@@ -84,9 +84,9 @@ OpFeeParams loadOpFeeParams(eth::EthereumState<Storage>& state) noexcept
         k.bytes[31] = s;
         return k;
     };
-    auto read = [&](uint8_t s) { return state.get_storage(OP_L1_BLOCK, slot(s)).current; };
+    auto readSlot = [&](uint8_t s) { return state.get_storage(OP_L1_BLOCK, slot(s)).current; };
     return unpackOpFeeParams(
-        read(1), read(3), read(5), read(6), read(7), read(8));
+        readSlot(1), readSlot(3), readSlot(5), readSlot(6), readSlot(7), readSlot(8));
 }
 
 /// Coroutine variant of loadOpFeeParams for block-execution drivers: the EthereumState
@@ -103,7 +103,7 @@ task::Task<OpFeeParams> loadOpFeeParamsAsync(Storage& view)
         return k;
     };
     co_return unpackOpFeeParams(co_await acc.storage(slot(1)), co_await acc.storage(slot(3)),
-        co_await acc.storage(slot(5)), co_await acc.storage(slot(6)),
-        co_await acc.storage(slot(7)), co_await acc.storage(slot(8)));
+        co_await acc.storage(slot(5)), co_await acc.storage(slot(6)), co_await acc.storage(slot(7)),
+        co_await acc.storage(slot(8)));
 }
 }  // namespace bcos::executor_v1::opstack

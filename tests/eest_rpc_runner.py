@@ -173,7 +173,7 @@ def genesis_state_root(workdir, fixture, sync_check_binary):
     # Same ulimit -s bump as the node start: importing a very large alloc
     # (e.g. 4800 accounts) overflows the default 8MB stack in RocksDB's
     # WAL/crc32c path (ASAN DEADLYSIGNAL), 64MB is plenty.
-    proc = subprocess.run(["bash", "-c",
+    proc = subprocess.run([shutil.which("bash") or "/bin/bash", "-c",  # nosec B603 - argv is shlex-quoted above
                            "ulimit -s 65536 && exec "
                            + " ".join(shlex.quote(a) for a in
                                       [sync_check_binary, "--genesis", str(json_path),
@@ -444,7 +444,8 @@ class Node:
             inner = [self.binary, "-c", "config.ini", "-g", "config.genesis"]
             inner = " ".join(shlex.quote(a) for a in inner)
             self.proc = subprocess.Popen(
-                ["bash", "-c", f"ulimit -s 65536 && exec {inner}"],
+                [shutil.which("bash") or "/bin/bash", "-c",  # nosec B603 - argv is shlex-quoted above
+                 f"ulimit -s 65536 && exec {inner}"],
                 cwd=str(self.workdir), stdout=logf, stderr=subprocess.STDOUT,
                 env=env, start_new_session=True)
             ready = False
@@ -477,8 +478,9 @@ class Node:
                 bind_failed = "bind failed" in tail or "Address already in use" in tail
                 ports = [self.rpc_port, self.rpc_port + PORT_STRIDE,
                          self.rpc_port + 2 * PORT_STRIDE]
-                out = subprocess.run(
-                    ["ss", "-tanp"], capture_output=True, text=True, timeout=10).stdout
+                out = subprocess.run(  # nosec B603 - fixed argv, diagnostic only
+                    [shutil.which("ss") or "/usr/bin/ss", "-tanp"],
+                    capture_output=True, text=True, timeout=10).stdout
                 hits = [ln for ln in out.splitlines()
                         if any(f":{p} " in ln for p in ports)]
                 with open(self.workdir / "bind-debug.txt", "a") as dbg:

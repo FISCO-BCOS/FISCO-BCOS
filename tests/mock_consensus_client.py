@@ -65,6 +65,11 @@ EXPECTED_CAPABILITIES = {
     "engine_newPayloadV2",
     "engine_newPayloadV3",
     "engine_newPayloadV4",
+    "engine_getPayloadBodiesByHashV1",
+    "engine_getPayloadBodiesByRangeV1",
+    "engine_getBlobsV1",
+    "engine_getClientVersionV1",
+    "engine_exchangeClientVersionV1",
 }
 
 # The one genuinely unimplemented version: routable, answers -38005, never advertised.

@@ -276,7 +276,8 @@ std::variant<EthTxProperties, std::error_code> validateTransaction(EthereumState
     const auto gasLimit = effectiveGasLimit(tx, callParams);
     const auto nonce = effectiveNonce(tx, callParams);
     const auto maxGasPrice = ethMaxGasPrice(tx, callParams);
-    const auto maxPriorityGasPrice = ethMaxPriorityGasPrice(tx, callParams);
+    // Assert-only in release builds (the assert below is NDEBUG-compiled out).
+    [[maybe_unused]] const auto maxPriorityGasPrice = ethMaxPriorityGasPrice(tx, callParams);
     const auto hasTo = ethToAddress(tx).has_value();
 
     assert(maxPriorityGasPrice <= maxGasPrice);
