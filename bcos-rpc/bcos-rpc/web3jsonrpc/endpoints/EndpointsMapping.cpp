@@ -131,6 +131,11 @@ void EndpointsMapping::addEthHandlers()
     m_handlers[methodString(EthMethod::txpool_status)] = &Endpoints::txpoolStatus;
     m_handlers[methodString(EthMethod::txpool_content)] = &Endpoints::txpoolContent;
     m_handlers[methodString(EthMethod::eth_getProof)] = &Endpoints::getProof;
+    // Challenger data plane (ADR 0007). Registered on every listener; the handler itself
+    // answers MethodNotFound off the OP lane, which is decided by executor_version at
+    // request time, not at listener construction.
+    m_handlers[methodString(EthMethod::debug_getRawHeader)] = &Endpoints::getRawHeader;
+    m_handlers[methodString(EthMethod::debug_dbGet)] = &Endpoints::dbGet;
     // clang-format on
 }
 
