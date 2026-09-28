@@ -27,11 +27,18 @@ The gate stops at the first block that is not a match and prints FISCO's `hash`,
 - The range contains a user deposit, an EIP-7702 transaction with status 1, a reverting call,
   and (overlay=on) a successful `SystemConfig.setValueByKey` on `0x4200…1000`;
   `compare.py coverage_gaps` rejects a range without them.
-- kona read L2 state through `debug_dbGet` (at least one `L2StateNode hint was sent` warning,
-  `bin/host/src/single/handler.rs:286-301`), and FISCO answers `debug_executePayload` with an
-  error. kona-host always tries that witness first (`bin/host/src/single/cfg.rs:189`,
-  `bin/host/src/backend/online.rs:145-177`); the preflight fails if FISCO ever serves it,
-  because the route ADR 0007 chose would then go untested.
+- kona built each block from the geth route, not from a `debug_executePayload` witness.
+  kona-host tries the witness first on every preimage miss (`bin/host/src/single/cfg.rs:189`,
+  `bin/host/src/backend/online.rs:145-177`); a success logs nothing, a failure logs
+  `Failed to prefetch high-level hint: debug_executePayload failed` (`online.rs:160`). A block
+  counts as MATCH only when kona validated it and that line appears at least once in its log;
+  preflight also requires FISCO to answer `debug_executePayload` with `-32601`.
+- In the first live run (blocks 75, 76, 360) kona read accounts and storage through
+  `eth_getProof` (`L2AccountProof`/`L2AccountStorageProof` hints, `handler.rs:303-385`),
+  fetched bytecode through `debug_dbGet` (`handler.rs:255-285`), and sent zero `L2StateNode`
+  hints. The gate therefore requires no trie-node fetch. The summary prints the `debug_dbGet`
+  code-hint count for information; kona logs hints only at trace level (`online.rs:109`), so
+  the count is 0 unless `KONA_TRACE=1` runs kona-host with `-vvvvv`.
 - kona-host checks `keccak(agreed output) == agreed root` using FISCO's `debug_getRawHeader`
   and `eth_getProof(L2ToL1MessagePasser).storageHash` (`handler.rs:219-250`), so a FISCO
   `eth_getProof` storage hash that disagrees with the header `withdrawalsRoot` fails the run.
@@ -76,6 +83,15 @@ with `debug_getRawHeader`/`debug_getRawReceipts` (`handler.rs:82,109`); anvil re
 from v1.8.0 (`crates/anvil/core/src/eth/mod.rs:369,377`), v1.7.1 does not, and a live v1.5.1
 answers `-32601`. Against a devnet that is already up: `C2=/tmp/c2 bash run.sh --attach`.
 
+`--attach` only works on a young devnet. The sequencer advances its L1 origin by at most one
+L1 block per L2 block, so a deposit sent now lands after about
+`(head_l1 - unsafe_l2.l1origin) × block_time` seconds. With anvil at 1 s and `block_time` 2 s
+that lag grows by one L1 block per L2 block; the first live run measured a ~25 min deposit at
+L2 block 500. `compare.py origin-lag` exits 2 when the lag exceeds
+`DEPOSIT_BUDGET / block_time` blocks (300 s / 2 s = 150 on the harness devnet), which leaves
+half of `wait-mix`'s 600 s budget for the L2 transactions. The throwaway devnet runs anvil at
+2 s (`ANVIL_BLOCK_TIME`, equal to `block_time`), so its lag stays at its start-up value.
+
 Evidence stays in `$WORK`: `fisco_blocks.json`, `outputs.json`, `pairs.tsv`, `kona/<b>.log`,
 `kona/<b>.kv` (replayable offline with `--data-dir` and no RPC flags), `verdicts.jsonl`.
 
@@ -88,6 +104,19 @@ A genesis alloc edit cannot serve as the control: kona reads FISCO's own state, 
 see the edit. The `kona_parity_negative_control` job in `.github/workflows/c2-e2e.yml` runs it
 nightly and asserts exit code 1.
 
+## Preflight
+
+Checked in seconds before any transaction is sent; each failure prints a `missing:` line and
+exits 2. The last two cover the FISCO bugs the first live run hit after minutes of kona retries.
+
+- L1 `debug_getRawHeader(latest)` hashes to the block hash, and `debug_getRawReceipts` answers.
+- L2 `debug_getRawHeader` for block 0 and for `latest` hashes to the block hash; kona needs the
+  genesis header when the agreed block is near genesis.
+- L2 `debug_dbGet(stateRoot)` returns bytes whose keccak is the key.
+- L2 `eth_getProof(0x…dEaD, [], latest)` returns a proof object. kona hints an account proof
+  for every account it reads (`handler.rs:303-338`), absent accounts included.
+- L2 `debug_executePayload` answers `-32601`.
+
 ## Not verified on the machine this was written on
 
 That machine had no kona-host binary, op-node, op-batcher, op-deployer, or FISCO OP build, so:
@@ -95,8 +124,7 @@ That machine had no kona-host binary, op-node, op-batcher, op-deployer, or FISCO
 - No end-to-end run of `run.sh`, positive or negative, has happened.
 - FISCO's `debug_getRawHeader`/`debug_dbGet` (ticket 02) did not exist yet; preflight against a
   build without them prints `missing: L2 debug_getRawHeader (ticket 02)`.
-- That every block emits at least one `L2StateNode` hint is expected from kona's trie walk but
-  unobserved; the gate requires one across the run, not per block.
+- The origin-lag limit and the 2 s anvil default have not been exercised in a full run.
 - The EIP-7702 `cast send --auth` incantation ran against anvil v1.8.3 (type 0x4, status 1,
   delegation code `0xef0100…`), not against FISCO.
 - `compare.py preflight` ran against anvil v1.8.3 (L1 checks pass) and anvil v1.5.1 (reports

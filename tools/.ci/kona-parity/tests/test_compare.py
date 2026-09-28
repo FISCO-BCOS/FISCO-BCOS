@@ -27,11 +27,14 @@ def sealed(n, state=R["a"], receipts=R["b"]):
                 transactions_root=R["d"], receipts_root=receipts)
 
 
-def ok_log(n, root, hints=2):
-    return ([line("WARN", f"L2StateNode hint was sent for node hash: {R['e']}")] * hints
-            + [line("ERROR", "Failed to prefetch high-level hint: debug_executePayload failed: "
-                    "Method not found"),
-               sealed(n),
+WITNESS_REFUSED = line("ERROR", "Failed to prefetch high-level hint: debug_executePayload failed: "
+                       "server returned an error response: error code -32601: Method not found")
+
+
+def ok_log(n, root, witness=1, code=0):
+    return ([line("TRACE", f"Received hint: l2-code {R['e']}")] * code
+            + [WITNESS_REFUSED] * witness
+            + [sealed(n),
                line("INFO", "Successfully validated L2 block", number=n, output_root=root)])
 
 
@@ -56,10 +59,11 @@ FULL_MIX = [block(1, L1INFO), block(2, L1INFO, DEPOSIT), block(3, L1INFO, SETCOD
 
 
 def test_parse_extracts_roots_hints_and_keeps_crashes():
-    k = compare.parse_kona_log(ok_log(7, R["a"]) + ["thread 'main' panicked at x.rs:1"])
+    k = compare.parse_kona_log(ok_log(7, R["a"], witness=2, code=3)
+                               + ["thread 'main' panicked at x.rs:1"])
     assert k["sealed"][7]["stateRoot"] == R["a"]
     assert k["validated"] == {"number": 7, "output_root": R["a"]}
-    assert k["state_node_hints"] == 2 and k["witness_failures"] == 1
+    assert k["witness_failures"] == 2 and k["code_hints"] == 3 and k["state_node_hints"] == 0
     assert any("panicked" in e for e in k["errors"])
     assert not any("debug_executePayload" in e for e in k["errors"])
 
@@ -67,6 +71,11 @@ def test_parse_extracts_roots_hints_and_keeps_crashes():
 def test_verdict_match():
     v = compare.block_verdict(7, 0, compare.parse_kona_log(ok_log(7, R["a"])), R["a"].upper())
     assert v["verdict"] == "MATCH"
+
+
+def test_verdict_match_without_refused_witness_is_error():
+    v = compare.block_verdict(7, 0, compare.parse_kona_log(ok_log(7, R["a"], witness=0)), R["a"])
+    assert v["verdict"] == "ERROR" and "debug_executePayload" in v["reason"]
 
 
 def test_verdict_mismatch_carries_kona_root():
@@ -102,9 +111,12 @@ def run_summary(logs_by_block, verdict_rcs, expect=False, blocks=FULL_MIX):
 
 
 def test_summary_all_match_is_green():
-    code, lines = run_summary({b: ok_log(b, R["a"]) for b in (1, 2, 3, 4)},
+    # Zero state-node hints is the normal case (kona reads state via eth_getProof); the
+    # debug_dbGet code-hint count is reported, never required.
+    code, lines = run_summary({b: ok_log(b, R["a"], code=2) for b in (1, 2, 3, 4)},
                               [(1, 0), (2, 0), (3, 0), (4, 0)])
     assert code == compare.EXIT_MATCH and lines[-1].startswith("ALL 4 BLOCKS MATCH")
+    assert "8 code hints" in lines[-1] and "0 state-node hints" in lines[-1]
 
 
 def test_summary_first_divergence_reports_both_sides():
@@ -121,9 +133,8 @@ def test_summary_first_divergence_reports_both_sides():
 def test_summary_error_and_unproven_route_are_red():
     code, _ = run_summary({1: []}, [(1, 1)])
     assert code == compare.EXIT_ERROR
-    code, lines = run_summary({b: ok_log(b, R["a"], hints=0) for b in (1, 2, 3, 4)},
-                              [(1, 0), (2, 0), (3, 0), (4, 0)])
-    assert code == compare.EXIT_ERROR and "debug_dbGet" in lines[-1]
+    code, lines = run_summary({1: ok_log(1, R["a"], witness=0)}, [(1, 0)])
+    assert code == compare.EXIT_ERROR and "debug_executePayload" in lines[-1]
     code, lines = run_summary({1: ok_log(1, R["a"])}, [(1, 0)], blocks=FULL_MIX[:1])
     assert code == compare.EXIT_ERROR and "lacks" in lines[-1]
     assert compare.summarize([], FULL_MIX, {}, "on", False)[0] == compare.EXIT_ERROR
@@ -184,3 +195,77 @@ def test_beacon_stub_serves_startup_endpoints():
             urllib.request.urlopen(f"http://127.0.0.1:{port}/eth/v1/beacon/blobs/1", timeout=1)
     finally:
         proc.kill()
+
+
+# ---------------------------------------------------------------- preflight / origin-lag, over a
+# fake JSON-RPC node whose answers are switched per test.
+
+GENESIS_RLP = "0xc0"  # keccak(0xc0) is the hash the fake node reports for block 0
+LATEST_RLP = "0xc180"
+
+
+class FakeNode:
+    def __init__(self, overrides=None):
+        from eth_hash.auto import keccak
+        h = lambda raw: "0x" + keccak(bytes.fromhex(raw[2:])).hex()  # noqa: E731
+        self.node = "0x" + "01" * 8
+        self.answers = {
+            ("eth_getBlockByNumber", "0x0"): {"result": {"hash": h(GENESIS_RLP), "stateRoot": h(self.node)}},
+            ("eth_getBlockByNumber", "latest"): {"result": {"hash": h(LATEST_RLP), "stateRoot": h(self.node)}},
+            ("debug_getRawHeader", h(GENESIS_RLP)): {"result": GENESIS_RLP},
+            ("debug_getRawHeader", h(LATEST_RLP)): {"result": LATEST_RLP},
+            ("debug_getRawReceipts", "latest"): {"result": []},
+            ("debug_dbGet", h(self.node)): {"result": self.node},
+            ("eth_getProof", compare.ABSENT_ACCOUNT): {"result": {"accountProof": ["0x80"]}},
+            ("debug_executePayload", None): {"error": {"code": -32601, "message": "not found"}},
+            ("optimism_syncStatus", None): {"result": {"head_l1": {"number": 400},
+                                                       "unsafe_l2": {"l1origin": {"number": 380}}}},
+        }
+        self.answers.update(overrides or {})
+
+    def __call__(self, url, method, params):
+        key = params[0] if params and isinstance(params[0], str) else None
+        return self.answers.get((method, key)) or self.answers.get((method, None)) \
+            or {"error": {"code": -32601, "message": "Method not found"}}
+
+
+def preflight(monkeypatch, capsys, overrides=None):
+    monkeypatch.setattr(compare, "rpc", FakeNode(overrides))
+    rc = compare.main(["preflight", "--l1", "http://l1", "--l2", "http://l2"])
+    return rc, capsys.readouterr().out
+
+
+def test_preflight_passes_on_a_complete_node(monkeypatch, capsys):
+    assert preflight(monkeypatch, capsys) == (compare.EXIT_MATCH, "")
+
+
+def test_preflight_catches_refused_genesis_header(monkeypatch, capsys):
+    from eth_hash.auto import keccak
+    g = "0x" + keccak(bytes.fromhex(GENESIS_RLP[2:])).hex()
+    rc, out = preflight(monkeypatch, capsys, {("debug_getRawHeader", g): {
+        "error": {"code": -32603, "message": "Block 0 has no OP Ethereum header"}}})
+    assert rc == compare.EXIT_ERROR
+    assert "missing: L2 debug_getRawHeader (ticket 02: FISCO must serve the genesis header)" in out
+
+
+def test_preflight_catches_missing_exclusion_proof(monkeypatch, capsys):
+    rc, out = preflight(monkeypatch, capsys, {("eth_getProof", compare.ABSENT_ACCOUNT): {
+        "error": {"code": -32004, "message": "Account not in trie"}}})
+    assert rc == compare.EXIT_ERROR and "missing: L2 eth_getProof exclusion proof" in out
+
+
+def test_preflight_requires_minus_32601_for_execute_payload(monkeypatch, capsys):
+    rc, out = preflight(monkeypatch, capsys, {("debug_executePayload", None): {
+        "error": {"code": -32603, "message": "internal"}}})
+    assert rc == compare.EXIT_ERROR and "must answer -32601" in out
+    rc, _ = preflight(monkeypatch, capsys, {("debug_executePayload", None): {"result": {}}})
+    assert rc == compare.EXIT_ERROR
+
+
+@pytest.mark.parametrize("head,origin,rc", [(400, 380, 0), (400, 250, 0), (900, 500, 2)])
+def test_origin_lag_limit_is_budget_over_l2_block_time(monkeypatch, capsys, head, origin, rc):
+    node = FakeNode({("optimism_syncStatus", None): {"result": {
+        "head_l1": {"number": head}, "unsafe_l2": {"l1origin": {"number": origin}}}}})
+    monkeypatch.setattr(compare, "rpc", node)
+    assert compare.main(["origin-lag", "--op-node", "http://n", "--l2-block-time", "2",
+                         "--budget", "300"]) == rc

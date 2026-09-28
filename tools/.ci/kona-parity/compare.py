@@ -24,6 +24,8 @@ EXIT_MATCH, EXIT_MISMATCH, EXIT_ERROR = 0, 1, 2
 L1_INFO_DEPOSITOR = "0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001"
 # FISCO overlay SystemConfig proxy (op-stack-e2e-tests tools/opstack-genesis/chain-config-c2.yaml).
 OVERLAY_SYSTEM_CONFIG = "0x4200000000000000000000000000000000001000"
+# An account no devnet ever touches: its eth_getProof must be an exclusion proof.
+ABSENT_ACCOUNT = "0x000000000000000000000000000000000000dEaD"
 
 # kona v1.7.0 log messages this gate keys on (rust/kona at optimism 64b043ea5bbc):
 MSG_SEALED = "Sealed new block"  # crates/proof/executor/src/builder/core.rs:336-344
@@ -31,7 +33,14 @@ MSG_VALIDATED = "Successfully validated L2 block"  # bin/client/src/single.rs:15
 MSG_FAILED = "Failed to validate L2 block"  # bin/client/src/single.rs:140-148
 MSG_EXHAUSTED = "Exhausted data source"  # crates/proof/driver/src/core.rs:259
 MSG_STATE_NODE = "L2StateNode hint was sent"  # bin/host/src/single/handler.rs:291
-MSG_WITNESS_FAILED = "debug_executePayload failed"  # bin/host/src/backend/util.rs:29
+# Logged by the retry loop each time the retained L2PayloadWitness hint fails
+# (bin/host/src/backend/online.rs:160, message suffix from backend/util.rs:29). A successful
+# witness fetch logs nothing, so "kona validated the block AND this line appeared" is the only
+# log evidence that kona's preimages came from the geth route, not from debug_executePayload.
+MSG_WITNESS_FAILED = "Failed to prefetch high-level hint: debug_executePayload failed"
+# trace-level (kona-host -vvvvv) hint routing, online.rs:109; hint name from
+# crates/proof/proof/src/hint.rs:162. One line per code preimage kona asked FISCO's debug_dbGet for.
+MSG_CODE_HINT = "Received hint: l2-code"
 
 
 def _hex(value):
@@ -50,7 +59,7 @@ def parse_kona_log(lines):
 
     Non-JSON lines (docker noise, panics) are kept as errors so a crash is never silent."""
     out = {"sealed": {}, "validated": None, "failed": None, "exhausted": False,
-           "state_node_hints": 0, "witness_failures": 0, "errors": []}
+           "state_node_hints": 0, "witness_failures": 0, "code_hints": 0, "errors": []}
     for raw in lines:
         raw = raw.strip()
         if not raw:
@@ -81,7 +90,9 @@ def parse_kona_log(lines):
             out["exhausted"] = True
         if msg.startswith(MSG_STATE_NODE):
             out["state_node_hints"] += 1
-        if MSG_WITNESS_FAILED in msg:
+        if msg.startswith(MSG_CODE_HINT):
+            out["code_hints"] += 1
+        if msg.startswith(MSG_WITNESS_FAILED):
             out["witness_failures"] += 1
         elif rec.get("level") == "ERROR" and len(out["errors"]) < 5:
             out["errors"].append(msg[:300])
@@ -105,10 +116,13 @@ def block_verdict(block, rc, kona, claimed_output_root):
         return v
     if rc == 0 and validated is not None and validated["number"] == block:
         v["kona_output_root"] = validated["output_root"]
-        if validated["output_root"] == claimed:
-            v.update(verdict="MATCH", reason="")
-        else:
+        if validated["output_root"] != claimed:
             v.update(verdict="MISMATCH", reason="validated root differs from claim")
+        elif kona["witness_failures"] == 0:
+            v.update(verdict="ERROR", reason="kona validated the block but logged no refused "
+                     "debug_executePayload: cannot show the witness route was unused")
+        else:
+            v.update(verdict="MATCH", reason="")
         return v
     detail = "; ".join(kona["errors"][:3]) or "no validation line in kona log"
     v.update(verdict="ERROR", reason=f"kona-host exit {rc}: {detail}")
@@ -187,15 +201,15 @@ def summarize(verdicts, blocks, kona_logs, overlay, expect_fee_vault):
     if gaps:
         lines.append(f"GATE ERROR: gated range lacks {', '.join(gaps)}")
         return EXIT_ERROR, lines
-    hints = sum(k["state_node_hints"] for k in kona_logs.values())
-    if hints == 0:
-        lines.append("GATE ERROR: no L2StateNode hint in any kona log; the debug_dbGet "
-                     "route was not exercised")
-        return EXIT_ERROR, lines
+    # Informational only: kona v1.7.0 takes accounts and storage from eth_getProof and uses
+    # debug_dbGet for bytecode; state-node hints appear only when a proof misses a node.
+    code = sum(k["code_hints"] for k in kona_logs.values())
+    nodes = sum(k["state_node_hints"] for k in kona_logs.values())
     if expect_fee_vault:
         lines.append("NEGATIVE CONTROL FAILED: mutated fee vault but every block matched")
-    lines.append(f"ALL {len(verdicts)} BLOCKS MATCH kona-client (overlay={overlay}, "
-                 f"{hints} trie nodes served by debug_dbGet)")
+    lines.append(f"ALL {len(verdicts)} BLOCKS MATCH kona-client (overlay={overlay}; "
+                 f"debug_dbGet: {code} code hints [trace-level, 0 unless KONA_TRACE=1], "
+                 f"{nodes} state-node hints)")
     return EXIT_MATCH, lines
 
 
@@ -241,23 +255,27 @@ def fetch_blocks(l2, first, last):
 def cmd_preflight(a):
     missing = []
 
-    def probe_header(url, side, hint):
+    def probe_header(url, side, hint, tag):
         try:
-            b = rpc_result(url, "eth_getBlockByNumber", ["latest", False])
+            b = rpc_result(url, "eth_getBlockByNumber", [tag, False])
             raw = rpc_result(url, "debug_getRawHeader", [b["hash"]])
             if keccak_hex(raw) != b["hash"].lower():
-                missing.append(f"{side} debug_getRawHeader returns RLP whose keccak != block hash")
+                missing.append(f"{side} debug_getRawHeader({tag}) returns RLP whose keccak != "
+                               "block hash")
             return b
         except Exception as e:  # noqa: BLE001 — every failure becomes a "missing:" line
             missing.append(f"{side} debug_getRawHeader ({hint}): {e}")
             return None
 
-    probe_header(a.l1, "L1", "anvil from foundry >= v1.8.0")
+    probe_header(a.l1, "L1", "anvil from foundry >= v1.8.0", "latest")
     try:
         rpc_result(a.l1, "debug_getRawReceipts", ["latest"])
     except Exception as e:  # noqa: BLE001
         missing.append(f"L1 debug_getRawReceipts (anvil from foundry >= v1.8.0): {e}")
-    head = probe_header(a.l2, "L2", "ticket 02")
+    # Block 0 separately: kona fetches the genesis header whenever the agreed block is near
+    # genesis, and a FISCO build that served only post-genesis headers hung the first live run.
+    probe_header(a.l2, "L2", "ticket 02: FISCO must serve the genesis header", "0x0")
+    head = probe_header(a.l2, "L2", "ticket 02", "latest")
     if head is not None:
         try:
             node = rpc_result(a.l2, "debug_dbGet", [head["stateRoot"]])
@@ -265,13 +283,22 @@ def cmd_preflight(a):
                 missing.append("L2 debug_dbGet(stateRoot) returns bytes whose keccak != key")
         except Exception as e:  # noqa: BLE001
             missing.append(f"L2 debug_dbGet (ticket 02): {e}")
+    # kona hints L2AccountProof for every account it reads (handler.rs:303-338); an account
+    # absent from the trie must come back as an exclusion proof, not an error, or kona retries
+    # the hint until the per-block timeout.
     try:
-        served = "error" not in rpc(a.l2, "debug_executePayload", ["0x" + "00" * 32, {}])
-    except Exception:  # noqa: BLE001 — an HTTP-level rejection also means "not served"
-        served = False
-    if served:
-        missing.append("L2 debug_executePayload answered without error: kona would take the "
-                       "witness route and the debug_dbGet route (ADR 0007) goes untested")
+        proof = rpc_result(a.l2, "eth_getProof", [ABSENT_ACCOUNT, [], "latest"])
+        if not isinstance(proof, dict) or not isinstance(proof.get("accountProof"), list):
+            missing.append(f"L2 eth_getProof({ABSENT_ACCOUNT}) returned {str(proof)[:80]}, "
+                           "not a proof object")
+    except Exception as e:  # noqa: BLE001
+        missing.append(f"L2 eth_getProof exclusion proof for an absent account "
+                       f"({ABSENT_ACCOUNT}): {e}")
+    body = rpc(a.l2, "debug_executePayload", ["0x" + "00" * 32, {}])
+    code = body.get("error", {}).get("code") if isinstance(body.get("error"), dict) else None
+    if code != -32601:
+        missing.append(f"L2 debug_executePayload must answer -32601 (ADR 0007: the witness "
+                       f"route stays unimplemented so kona uses the geth route); got {body}"[:200])
     for m in missing:
         print(f"missing: {m}")
     return EXIT_ERROR if missing else EXIT_MATCH
@@ -366,6 +393,25 @@ def cmd_summary(a):
     return code
 
 
+def origin_lag(status):
+    """L1 blocks between the L1 head and the sequencer's L1 origin (unsafe_l2.l1origin). A
+    deposit made in the L1 head block is included once the origin reaches it, and the origin
+    moves at most one L1 block per L2 block, so the deposit waits about lag * L2 block_time."""
+    return status["head_l1"]["number"] - status["unsafe_l2"]["l1origin"]["number"]
+
+
+def cmd_origin_lag(a):
+    lag = origin_lag(rpc_result(a.op_node, "optimism_syncStatus", []))
+    limit = a.budget // a.l2_block_time
+    print(f"[kona-parity] sequencer L1-origin lag: {lag} L1 blocks "
+          f"(deposit wait ~{lag * a.l2_block_time}s, limit {limit} blocks = {a.budget}s)")
+    if lag > limit:
+        print(f"missing: a devnet whose sequencer L1 origin trails the L1 head by <= {limit} "
+              f"blocks (this one: {lag}); start a fresh devnet instead of --attach")
+        return EXIT_ERROR
+    return EXIT_MATCH
+
+
 def cmd_beacon_stub(a):
     """Beacon API subset kona-host needs at startup (OnlineBlobProvider::init reads
     genesis_time and SECONDS_PER_SLOT; providers-alloy/src/blobs.rs:55-69). Blob requests get
@@ -428,6 +474,11 @@ def main(argv=None):
         s.add_argument("--overlay", choices=["on", "off"], required=True)
         s.add_argument("--expect-fee-vault", action="store_true")
         s.set_defaults(fn=fn)
+    s = sub.add_parser("origin-lag")
+    s.add_argument("--op-node", required=True)
+    s.add_argument("--l2-block-time", type=int, required=True)
+    s.add_argument("--budget", type=int, required=True, help="seconds a deposit may take")
+    s.set_defaults(fn=cmd_origin_lag)
     s = sub.add_parser("beacon-stub")
     s.add_argument("--port", type=int, required=True)
     s.add_argument("--genesis-time", type=int, required=True)

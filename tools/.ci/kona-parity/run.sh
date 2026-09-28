@@ -11,14 +11,17 @@
 #
 #   --blocks N          minimum gated blocks (default 12); the range grows to cover the mix
 #   --attach            use a running harness devnet (C2 workspace + setup_c2.sh port vars)
-#                       instead of starting a throwaway one
+#                       instead of starting a throwaway one; refused (exit 2) when the
+#                       sequencer's L1 origin trails the L1 head too far for a deposit to land
 #   --mutate fee-vault  negative control: FISCO_BIN was built after mutate-fee-vault.sh; the
 #                       gate must go red (exit 1) at the first fee-paying block
 #
 # Env: OVERLAY=on|off (default on; honoured by the harness once ticket 12 lands, verified here
 #      against the chain either way), FISCO_BIN, BIN_DIR, OP_E2E_DIR, OP_MONOREPO, REPO_ROOT,
 #      ANVIL_BIN, KONA_HOST_BIN (native binary) or KONA_HOST_IMAGE (default: pins.json),
-#      KONA_L2_RPC (default: FISCO web3), KONA_TIMEOUT (seconds per block, default 900), WORK.
+#      KONA_L2_RPC (default: FISCO web3), KONA_TIMEOUT (seconds per block, default 900),
+#      KONA_TRACE=1 (kona-host -vvvvv: counts debug_dbGet code hints, much larger logs),
+#      DEPOSIT_BUDGET (seconds a deposit may take to reach L2, default 300), WORK.
 #
 # Exit: 0 every block matches, 1 first divergence (both sides' roots printed),
 #       2 the gate could not produce evidence ("missing: ..." says what). Never 0 by skipping.
@@ -28,6 +31,10 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${REPO_ROOT:-$(cd "${HERE}/../../.." && pwd)}"
 CMP="${HERE}/compare.py"
 BLOCKS=12 ATTACH=0 MUTATE=""
+# L1 block time. It equals rollup.json block_time (2 on the harness devnet): the sequencer
+# advances its L1 origin by at most one L1 block per L2 block, so a faster L1 makes the origin
+# lag, and with it the deposit latency, grow for the whole life of the devnet.
+ANVIL_BLOCK_TIME="${ANVIL_BLOCK_TIME:-2}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --blocks) BLOCKS="$2"; shift 2 ;;
@@ -110,7 +117,7 @@ else
   # skips its own anvil when the port already answers. Flags copy its anvil command line.
   "$ANVIL_BIN" --port "$ANVIL_PORT" --chain-id 900900 \
     --mnemonic "test test test test test test test test test test test junk" \
-    --block-time "${ANVIL_BLOCK_TIME:-1}" --slots-in-an-epoch 1 > "$C2/anvil.log" 2>&1 &
+    --block-time "$ANVIL_BLOCK_TIME" --slots-in-an-epoch 1 > "$C2/anvil.log" 2>&1 &
   echo $! > "$C2/anvil.pid"
   for _ in $(seq 1 30); do cast chain-id --rpc-url "http://127.0.0.1:$ANVIL_PORT" >/dev/null 2>&1 && break; sleep 1; done
   log "starting the harness devnet in $C2 (OVERLAY=$OVERLAY)"
@@ -141,13 +148,16 @@ if [ "$OVERLAY" = on ] && [ "$CODE" = 0x ]; then
 elif [ "$OVERLAY" = off ] && [ "$CODE" != 0x ]; then
   missing "harness overlay switch (ticket 12): OVERLAY=off requested but 0x4200…1000 has code"
 fi
+L2_BLOCK_TIME=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["block_time"])' "$WORK/rollup.json")
+python3 "$CMP" origin-lag --op-node "$OPN" --l2-block-time "$L2_BLOCK_TIME" \
+  --budget "${DEPOSIT_BUDGET:-300}" || exit 2
 [ -n "$MUTATE" ] && log "negative control: FISCO_BIN must carry mutate-fee-vault.sh; expecting red"
 
 python3 "$CMP" preflight --l1 "$L1" --l2 "$KONA_L2" || exit 2
 
 GENESIS_TS=$(cast block 0 --field timestamp --rpc-url "$L1")
 python3 "$CMP" beacon-stub --port "$BEACON_PORT" --genesis-time "$GENESIS_TS" \
-  --seconds-per-slot "${ANVIL_BLOCK_TIME:-1}" 2> "$WORK/beacon-stub.log" &
+  --seconds-per-slot "$ANVIL_BLOCK_TIME" 2> "$WORK/beacon-stub.log" &
 BG_PIDS+=($!)
 for _ in $(seq 1 20); do curl -sf "http://127.0.0.1:$BEACON_PORT/eth/v1/config/spec" >/dev/null && break; sleep 0.5; done
 
@@ -211,7 +221,7 @@ kona() {
 }
 set +e
 while IFS=$'\t' read -r B AGREED_HASH AGREED_ROOT CLAIMED; do
-  kona --logs.stdout.format json single --native \
+  kona --logs.stdout.format json ${KONA_TRACE:+-vvvvv} single --native \
     --l1-head "$L1_HEAD" \
     --agreed-l2-head-hash "$AGREED_HASH" --agreed-l2-output-root "$AGREED_ROOT" \
     --claimed-l2-output-root "$CLAIMED" --claimed-l2-block-number "$B" \
