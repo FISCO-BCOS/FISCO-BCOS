@@ -27,15 +27,6 @@
 
 #pragma once
 
-#include <opstack-executor/OpCommon.h>  // OpConsensusError / OpStorageError / detail conversions
-#include <opstack-executor/OpEthBlockExecute.h>  // buildOpEthBlockInfo / sealOpEthBlock / ...
-#include <opstack-executor/OpEthCommitments.h>   // OpEthExecuteBlockResult / computeOpEthTransactionsRoot
-#include <opstack-executor/OpEthDeposit.h>       // DepositTx / OP_DEPOSIT_TX_TYPE
-#include <opstack-executor/OpExecutionPolicy.h>  // OpPolicy
-#include <opstack-executor/OpStorageErrorGuard.h>  // OpStorageErrorSlot / OpFaultRecordingStorage
-#include <opstack-executor/OpRecentBlockHashes.h>  // per-block BLOCKHASH source
-#include <ethereum-executor/EthSystemCalls.h>    // eth::systemCallBlockStart
-#include <ethereum-executor/EthereumTransition.h>  // eth::finalizeState
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-framework/protocol/TransactionReceiptNormalize.h>
@@ -45,6 +36,15 @@
 #include <bcos-task/Task.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
+#include <ethereum-executor/EthSystemCalls.h>      // eth::systemCallBlockStart
+#include <ethereum-executor/EthereumTransition.h>  // eth::finalizeState
+#include <opstack-executor/OpCommon.h>  // OpConsensusError / OpStorageError / detail conversions
+#include <opstack-executor/OpEthBlockExecute.h>  // buildOpEthBlockInfo / sealOpEthBlock / ...
+#include <opstack-executor/OpEthCommitments.h>  // OpEthExecuteBlockResult / computeOpEthTransactionsRoot
+#include <opstack-executor/OpEthDeposit.h>         // DepositTx / OP_DEPOSIT_TX_TYPE
+#include <opstack-executor/OpExecutionPolicy.h>    // OpPolicy
+#include <opstack-executor/OpRecentBlockHashes.h>  // per-block BLOCKHASH source
+#include <opstack-executor/OpStorageErrorGuard.h>  // OpStorageErrorSlot / OpFaultRecordingStorage
 #include <cstdint>
 #include <cstring>
 #include <memory>
@@ -64,8 +64,7 @@ namespace eth = bcos::executor_v1::eth;
 /// layer enforces the 256-block window — identical to the legacy path, which
 /// passed the RecentBlockHashes object itself as the evmone BlockHashes.
 template <class Storage>
-[[nodiscard]] eth::BlockHashLookup opEthBlockHashLookup(
-    OpRecentBlockHashes<Storage> const& hashes)
+[[nodiscard]] eth::BlockHashLookup opEthBlockHashLookup(OpRecentBlockHashes<Storage> const& hashes)
 {
     return [&hashes](int64_t blockNumber, int64_t /*currentHeight*/) {
         return hashes.get_block_hash(blockNumber);
@@ -86,8 +85,8 @@ template <class Storage, class RawTxRange>
 task::Task<void> preBlockOpEthSteps(Storage& view, bcos::protocol::BlockHeader const& header,
     OpForkSpec const& spec, RawTxRange const& rawTxBytes, std::vector<DepositTx> const& deposits,
     evmc::VM& vm, std::shared_ptr<OpStorageErrorSlot> const& errorSlot,
-    std::optional<OpRecentBlockHashes<Storage>>& hashes,
-    std::optional<std::string>& hashErr, std::optional<uint16_t>& daFootprintGasScalar)
+    std::optional<OpRecentBlockHashes<Storage>>& hashes, std::optional<std::string>& hashErr,
+    std::optional<uint16_t>& daFootprintGasScalar)
 {
     // buildOpEthBlockInfo's leniency rule is the legacy toBlockInfo one
     // (pre-Ecotone optionals zero-filled — dead EVM inputs pre-Cancun);
@@ -169,8 +168,8 @@ task::Task<void> preBlockOpEthSteps(Storage& view, bcos::protocol::BlockHeader c
         {
             throw bcos::evm::OpConsensusError(e.what());
         }
-        if (auto scalar = opEthJovianDaFootprintGasScalar(
-                std::span<uint8_t const>{data.data(), data.size()}))
+        if (auto scalar =
+                opEthJovianDaFootprintGasScalar(std::span<uint8_t const>{data.data(), data.size()}))
             daFootprintGasScalar = *scalar;
     }
     co_return;
@@ -199,7 +198,7 @@ task::Task<OpEthExecuteBlockResult> finalizeOpEthBlockResult(Storage& view,
 {
     // End-of-block finalize — no block reward, no withdrawals (OP). Same
     // all-or-nothing journaling discipline as the per-tx loop: roll back on a
-    // part-way failure (ported finalizeOpBlock / executeOpEthBlock step 4).
+    // part-way failure (ported finalizeOpBlock step 4).
     {
         evmc::address coinbase{};
         auto const& cb = header.coinbase();
@@ -224,8 +223,7 @@ task::Task<OpEthExecuteBlockResult> finalizeOpEthBlockResult(Storage& view,
                 co_await rollable.rollback(savepoint);
             }
             catch (...)
-            {
-            }
+            {}
             std::rethrow_exception(failure);
         }
     }
@@ -245,10 +243,6 @@ task::Task<OpEthExecuteBlockResult> finalizeOpEthBlockResult(Storage& view,
         txTypes.emplace_back(opEthClassifyTxType(rawTxBytes[i][0]));
     }
 
-    OpEthBlockResult result;
-    result.receipts = std::move(receipts);
-    result.txTypes = std::move(txTypes);
-    result.gasUsed = cumulative;
     if (hashErr.has_value())
         throw bcos::evm::engine::OpStorageError("block-hash lookup failed: " + *hashErr);
 
@@ -256,7 +250,7 @@ task::Task<OpEthExecuteBlockResult> finalizeOpEthBlockResult(Storage& view,
     // transactionIndex / logIndex are written, logsBloom is recomputed
     // unconditionally from logEntries, and cumulativeGasUsed is filled when
     // empty (the OP running prefix is set upstream in ExecuteContext::finish).
-    bcos::protocol::normalizeReceipts(result.receipts);
+    bcos::protocol::normalizeReceipts(receipts);
 
     // Commitments: MessagePasser snapshot (the complete, tombstone-filtered live
     // slot map) → poison check → seal → stateRoot → txRoot. sealOpEthBlock's
@@ -268,7 +262,7 @@ task::Task<OpEthExecuteBlockResult> finalizeOpEthBlockResult(Storage& view,
     OpEthBlockSeal seal;
     try
     {
-        seal = sealOpEthBlock(result, spec, mpStorage);
+        seal = sealOpEthBlock(receipts, txTypes, spec, mpStorage);
     }
     catch (OpEthBlockError const& e)
     {
@@ -289,7 +283,7 @@ task::Task<OpEthExecuteBlockResult> finalizeOpEthBlockResult(Storage& view,
             view, bcos::ledger::mpt::emptyRootHash(), rootConfig);
     }
     auto txRoot = computeOpEthTransactionsRoot(rawTxBytes);
-    co_return OpEthExecuteBlockResult{std::move(result.receipts), seal, stateRoot,
-        static_cast<uint64_t>(cumulative), txRoot};
+    co_return OpEthExecuteBlockResult{
+        std::move(receipts), seal, stateRoot, static_cast<uint64_t>(cumulative), txRoot};
 }
 }  // namespace bcos::executor_v1::opstack

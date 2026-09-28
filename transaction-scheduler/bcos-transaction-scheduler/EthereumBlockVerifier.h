@@ -28,8 +28,8 @@
 
 #include "bcos-codec/rlp/RLPEncode.h"
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/EVMAccount.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/Block.h"
 #include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-framework/protocol/BlockHeader.h"
@@ -48,13 +48,15 @@
 #include "bcos-rlp-protocol/EthPoSHeaderValidation.h"
 #include "bcos-rlp-protocol/EthWithdrawal.h"
 #include "bcos-task/Task.h"
+#include "bcos-transaction-scheduler/BaselineSchedulerMPTHelpers.h"
 #include "bcos-transaction-scheduler/EthereumChainRollback.h"
 #include "bcos-transaction-scheduler/EthereumRequests.h"
-#include "bcos-transaction-scheduler/BaselineSchedulerMPTHelpers.h"
 #include "bcos-transaction-scheduler/EthereumSystemCalls.h"
+#include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include "ethereum-executor/EthStorageErrorGuard.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include <evmc/evmc.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -122,9 +124,8 @@ inline evmc_revision evmcRevisionForTimestamp(
     EvmcForkTimestamps const& schedule, int64_t timestamp, u256 const& difficulty)
 {
     const uint64_t timestampValue = static_cast<uint64_t>(timestamp);
-    auto active = [timestampValue](uint64_t forkTime) {
-        return forkTime == 0 || timestampValue >= forkTime;
-    };
+    auto active = [timestampValue](
+                      uint64_t forkTime) { return forkTime == 0 || timestampValue >= forkTime; };
     if (active(schedule.osakaTime))
     {
         return EVMC_OSAKA;
@@ -168,8 +169,8 @@ inline protocol::BlockHeader::Ptr makeExecutionBlockHeader(
 {
     auto header = blockFactory.blockHeaderFactory()->createBlockHeader();
     header->setNumber(ethHeader.number);
-    header->setTimestamp(static_cast<int64_t>(ethHeader.timestamp) *
-                         static_cast<int64_t>(kSecondsToMilliseconds));
+    header->setTimestamp(
+        static_cast<int64_t>(ethHeader.timestamp) * static_cast<int64_t>(kSecondsToMilliseconds));
     header->setVersion(blockVersion);
     protocol::ParentInfo parentInfo{
         .blockNumber = ethHeader.number - 1, .blockHash = ethHeader.parentInfo.blockHash};
@@ -183,7 +184,8 @@ inline protocol::BlockHeader::Ptr makeExecutionBlockHeader(
     header->setStateRoot(ethHeader.stateRoot);
     header->setTxsRoot(ethHeader.txsRoot);
     header->setReceiptsRoot(ethHeader.receiptsRoot);
-    header->setLogsBloom(bcos::bytesConstRef(ethHeader.logsBloom.data(), ethHeader.logsBloom.size()));
+    header->setLogsBloom(
+        bcos::bytesConstRef(ethHeader.logsBloom.data(), ethHeader.logsBloom.size()));
     header->setDifficulty(ethHeader.difficulty);
     header->setGasUsed(ethHeader.gasUsed);
     header->setNonce(ethHeader.nonce);
@@ -237,8 +239,8 @@ inline void fillExecutionLedgerConfig(protocol::EthBlockHeaderData const& ethHea
     // prev_randao (buildBlockInfo). PoS (merge+) blocks have difficulty 0.
     // Sepolia's merge block is 1735371; blocks below it are PoW.
     config.setDifficulty(ethHeader.difficulty > std::numeric_limits<int64_t>::max() ?
-                              std::numeric_limits<int64_t>::max() :
-                              static_cast<int64_t>(ethHeader.difficulty));
+                             std::numeric_limits<int64_t>::max() :
+                             static_cast<int64_t>(ethHeader.difficulty));
 
     evmc::bytes32 randao{};
     std::memcpy(randao.bytes, ethHeader.prevRandao.data(), kHashBytes);
@@ -298,8 +300,8 @@ inline constexpr u256 kBlobGasPerBlob{131072};
 /// blocks pay no rewards (the CL handles them via withdrawals).
 template <class ViewType>
 task::Task<void> accumulatePoWBlockRewards(ViewType& view,
-    protocol::EthBlockHeaderData const& ethHeader,
-    std::vector<bcos::bytes> const& rawUncles, ledger::LedgerConfig const& ledgerConfig)
+    protocol::EthBlockHeaderData const& ethHeader, std::vector<bcos::bytes> const& rawUncles,
+    ledger::LedgerConfig const& ledgerConfig)
 {
     using namespace bcos::ledger::account;
 
@@ -355,11 +357,10 @@ task::Task<void> accumulatePoWBlockRewards(ViewType& view,
         {
             BOOST_THROW_EXCEPTION(std::runtime_error{
                 "EthereumBlockVerifier: uncle number out of the valid depth range (uncle " +
-                std::to_string(uncleHeader.number) + ", block " +
-                std::to_string(ethHeader.number) + ")"});
+                std::to_string(uncleHeader.number) + ", block " + std::to_string(ethHeader.number) +
+                ")"});
         }
-        u256 uncleReward =
-            u256(static_cast<uint64_t>(8 - depth)) * kPoWBlockReward / 8;
+        u256 uncleReward = u256(static_cast<uint64_t>(8 - depth)) * kPoWBlockReward / 8;
         co_await addBalance(uncleHeader.coinbase, uncleReward);
         coinbaseReward += kPoWBlockReward / 32;
     }
@@ -396,7 +397,7 @@ struct EthereumBlockVerificationResult
 {
     bool valid{false};
     std::string error;
-    protocol::BlockHeader::Ptr header;                       ///< the FISCO execution header
+    protocol::BlockHeader::Ptr header;  ///< the FISCO execution header
     std::vector<protocol::TransactionReceipt::Ptr> receipts;
     std::vector<protocol::Transaction::Ptr> transactions;
     EthereumBlockComputation computation;
@@ -406,7 +407,10 @@ struct EthereumBlockVerificationResult
 /// Everything the shared execution phase (EthereumBlockVerifier::executeEthereumBlock)
 /// produces over the caller's view: the deterministic outputs plus the commit-time
 /// artifacts. `error` set means the block is INVALID (decode / execution / system-call
-/// failure) — it must never be committed.
+/// failure) — it must never be committed. A STORAGE fault instead throws
+/// executor_v1::eth::EthStorageError out of executeEthereumBlock (the fail-loud
+/// guard, EthStorageErrorGuard.h): a poisoned block is a build failure / SYNCING /
+/// -32603 on the caller side — never INVALID, never a commit.
 struct EthereumBlockExecution
 {
     std::optional<std::string> error;
@@ -507,6 +511,11 @@ public:
     /// EXACTLY ONCE over @p view, incrementally from parentHeader.stateRoot, and the
     /// caller owns the view's fate (verifyAndCommit pushes it; the builder stages it
     /// into the payload artifact pushed at newPayload commit time).
+    ///
+    /// @throws executor_v1::eth::EthStorageError at the block boundary when any
+    ///         storage read anywhere in the block failed (the EthStorageErrorGuard
+    ///         fail-loud channel) — the block is poisoned: the builder must not
+    ///         commit it, the verifier must not judge it INVALID.
     template <class ViewType>
     task::Task<EthereumBlockExecution> executeEthereumBlock(ViewType& view,
         protocol::EthBlockHeaderData const& ethHeader,
@@ -515,8 +524,7 @@ public:
         std::optional<std::vector<bcos::bytes>> const& rawWithdrawals,
         EvmcForkTimestamps const& forkSchedule, uint64_t chainId,
         std::vector<bcos::bytes> const& rawUncles, uint64_t mergeBlock,
-        TransactionDecoder const& decoder,
-        StateRootCalculator<ViewType> const& stateRootCalculator)
+        TransactionDecoder const& decoder, StateRootCalculator<ViewType> const& stateRootCalculator)
     {
         EthereumBlockExecution execution;
         auto fail = [&](std::string message) -> task::Task<EthereumBlockExecution> {
@@ -545,6 +553,16 @@ public:
         }
         const evmc_revision blockRevision = *revOpt;
 
+        // The block's shared swallowed-read recorder (EthStorageErrorGuard.h): every
+        // EthereumState instance of this block — block-start/end system calls, the
+        // transactions (through the executor's BlockContext), finalization — records
+        // its fail-safe storage read faults here, and the block-boundary check below
+        // throws EthStorageError on any. A poisoned block must never produce outputs:
+        // the builder would commit a wrong stateRoot, the verifier would judge a legal
+        // block INVALID. Throwing (instead of setting `error`) is what keeps the verify
+        // lane away from INVALID.
+        auto storageErrorSlot = std::make_shared<executor_v1::eth::EthStorageErrorSlot>();
+
         // Cancun+ block-start system calls (EIP-4788 beacon roots; EIP-2935 historical
         // block hashes from Prague). geth runs these BEFORE the block's transactions,
         // so the write must land in the view before executeBlock; from Cancun on the
@@ -558,7 +576,7 @@ public:
         if (blockRevision >= EVMC_CANCUN)
         {
             if (auto error = co_await applyBlockStartSystemCalls(
-                    view, m_executor.get().vm(), ethHeader, blockRevision);
+                    view, m_executor.get().vm(), ethHeader, blockRevision, storageErrorSlot);
                 error.has_value())
             {
                 co_return co_await fail("EthereumBlockVerifier: " + *error);
@@ -614,19 +632,41 @@ public:
             co_return co_await fail(
                 "EthereumBlockVerifier: transaction decode failed at index " +
                 std::to_string(failedIndex) + " of " + std::to_string(rawTransactions.size()) +
-                " (malformed EIP-2718 or unsupported type): " + decodeDiag +
-                " raw=" + bcos::toHexStringWithPrefix(bytesConstRef(badRaw.data(), badRaw.size()))
-                      .substr(0, 400));
+                " (malformed EIP-2718 or unsupported type): " + decodeDiag + " raw=" +
+                bcos::toHexStringWithPrefix(bytesConstRef(badRaw.data(), badRaw.size()))
+                    .substr(0, 400));
         }
 
-        // Execute the block.
+        // Execute the block. The per-block context carries the shared storage-error
+        // recorder (EthStorageErrorGuard.h) and the cross-transaction blob gas budget
+        // to every per-tx ExecuteContext; executors without their own BlockContext
+        // (test stubs) get the EmptyBlockContext and the recorder simply stays
+        // unwired — their reads do not fail.
         auto& receipts = execution.receipts;
         std::exception_ptr executeFailure;
         std::string executeDiag;
         try
         {
-            receipts = co_await m_scheduler.get().executeBlock(view, m_executor.get(), *blockHeader,
-                transactions | ::ranges::views::indirect, ledgerConfig);
+            typename BlockContextOf<Executor>::type blockContext{};
+            if constexpr (requires { blockContext.storageErrorSlot = storageErrorSlot; })
+            {
+                blockContext.storageErrorSlot = storageErrorSlot;
+            }
+            if constexpr (requires {
+                              m_scheduler.get().executeBlock(view, m_executor.get(), *blockHeader,
+                                  transactions | ::ranges::views::indirect, ledgerConfig,
+                                  blockContext);
+                          })
+            {
+                receipts =
+                    co_await m_scheduler.get().executeBlock(view, m_executor.get(), *blockHeader,
+                        transactions | ::ranges::views::indirect, ledgerConfig, blockContext);
+            }
+            else
+            {
+                receipts = co_await m_scheduler.get().executeBlock(view, m_executor.get(),
+                    *blockHeader, transactions | ::ranges::views::indirect, ledgerConfig);
+            }
         }
         catch (...)
         {
@@ -687,8 +727,19 @@ public:
                 ew.amount_in_gwei = d.amount;
                 withdrawals.push_back(std::move(ew));
             }
-            co_await m_executor.get().finalizeBlock(
-                view, *blockHeader, ledgerConfig, blockRevision, std::nullopt, withdrawals);
+            if constexpr (requires {
+                              m_executor.get().finalizeBlock(view, *blockHeader, ledgerConfig,
+                                  blockRevision, std::nullopt, withdrawals, storageErrorSlot);
+                          })
+            {
+                co_await m_executor.get().finalizeBlock(view, *blockHeader, ledgerConfig,
+                    blockRevision, std::nullopt, withdrawals, storageErrorSlot);
+            }
+            else
+            {
+                co_await m_executor.get().finalizeBlock(
+                    view, *blockHeader, ledgerConfig, blockRevision, std::nullopt, withdrawals);
+            }
         }
 
         // PoW (pre-merge) blocks pay the coinbase block reward (2 ETH) plus uncle
@@ -756,7 +807,7 @@ public:
         if (blockRevision >= EVMC_PRAGUE)
         {
             auto blockEnd = co_await applyBlockEndSystemCalls(
-                view, m_executor.get().vm(), ethHeader, blockRevision);
+                view, m_executor.get().vm(), ethHeader, blockRevision, storageErrorSlot);
             if (blockEnd.error.has_value())
             {
                 co_return co_await fail("EthereumBlockVerifier: " + *blockEnd.error);
@@ -777,10 +828,8 @@ public:
             {
                 bcos::bytes entry;
                 entry.reserve(1 + depositRequestsData->size());
-                entry.push_back(
-                    static_cast<uint8_t>(executor_v1::eth::EthRequests::Type::deposit));
-                entry.insert(
-                    entry.end(), depositRequestsData->begin(), depositRequestsData->end());
+                entry.push_back(static_cast<uint8_t>(executor_v1::eth::EthRequests::Type::deposit));
+                entry.insert(entry.end(), depositRequestsData->begin(), depositRequestsData->end());
                 execution.executionRequests.push_back(std::move(entry));
             }
             for (auto const& request : blockEnd.requests)
@@ -797,6 +846,14 @@ public:
                 execution.executionRequests.push_back(std::move(entry));
             }
         }
+
+        // Block-boundary storage-fault check (EthStorageErrorGuard.h): every execution
+        // step above ran with the shared recorder, so a single swallowed storage read
+        // anywhere in the block poisons it here. Throwing (not `error`) keeps both
+        // lanes honest: the builder's caller fails the build without committing, the
+        // verifier's caller maps the exception to SYNCING / -32603 — a poisoned block
+        // is never committed and never judged INVALID.
+        storageErrorSlot->throwIfPoisoned("EthereumBlockVerifier: ");
 
         // Fill cumulativeGasUsed + logsBloom (v2) and compute the deterministic roots.
         execution.computation = co_await computeEthereumRoots(
@@ -817,8 +874,7 @@ public:
         }
         else
         {
-            execution.stateRoot =
-                co_await stateRootCalculator(view, blockHeader->version());
+            execution.stateRoot = co_await stateRootCalculator(view, blockHeader->version());
         }
         co_return execution;
     }
@@ -837,8 +893,9 @@ public:
     ///        receive coinbase/uncle rewards, blocks at or above it pay none
     /// @param stateRootCalculator computes the block's state root over the executed view
     template <class GlobalStateStorage>
-    task::Task<EthereumBlockVerificationResult> verifyAndCommit(GlobalStateStorage& globalStateStorage,
-        ledger::LedgerInterface& ledger, protocol::EthBlockHeaderData const& ethHeader,
+    task::Task<EthereumBlockVerificationResult> verifyAndCommit(
+        GlobalStateStorage& globalStateStorage, ledger::LedgerInterface& ledger,
+        protocol::EthBlockHeaderData const& ethHeader,
         protocol::EthBlockHeaderData const& parentHeader,
         std::vector<bcos::bytes> const& rawTransactions,
         std::optional<std::vector<bcos::bytes>> const& rawWithdrawals,
@@ -884,8 +941,7 @@ public:
             .bpo1Time = forkSchedule.bpo1Time,
             .bpo2Time = forkSchedule.bpo2Time,
             .mergeBlock = mergeBlock};
-        if (auto headerCheck = protocol::validateHeaderPoS(ethHeader, parentHeader,
-                posChainConfig);
+        if (auto headerCheck = protocol::validateHeaderPoS(ethHeader, parentHeader, posChainConfig);
             !headerCheck.valid)
         {
             co_return co_await fail("EthereumBlockVerifier: " + headerCheck.error);
@@ -966,8 +1022,8 @@ public:
         //      seam) also runs, so a block this node builds is executed byte-identically
         //      to a block it verifies.
         auto execution = co_await executeEthereumBlock(view, ethHeader, parentHeader,
-            rawTransactions, rawWithdrawals, forkSchedule, chainId, rawUncles, mergeBlock,
-            decoder, stateRootCalculator);
+            rawTransactions, rawWithdrawals, forkSchedule, chainId, rawUncles, mergeBlock, decoder,
+            stateRootCalculator);
         if (execution.error.has_value())
         {
             co_return co_await fail(std::move(*execution.error));
@@ -985,9 +1041,8 @@ public:
         result.stateRoot = execution.stateRoot;
 
         // 7. Verify against the header.
-        if (auto error =
-                verifyAgainstHeader(ethHeader, computation, result.stateRoot, rawWithdrawals,
-                    rawUncles, transactions, computedRequestsHash);
+        if (auto error = verifyAgainstHeader(ethHeader, computation, result.stateRoot,
+                rawWithdrawals, rawUncles, transactions, computedRequestsHash);
             error.has_value())
         {
             co_return co_await fail(std::move(*error));
@@ -1049,7 +1104,8 @@ public:
             auto blockTxs = std::make_shared<protocol::ConstTransactions>(
                 transactions | ::ranges::views::transform([](auto const& transaction) {
                     return protocol::Transaction::ConstPtr(transaction);
-                }) | ::ranges::to<std::vector>());
+                }) |
+                ::ranges::to<std::vector>());
             co_await ledger::prewriteBlockToBuffer(ledger, blockTxs, block, prewriteStorage);
             // EIP-4895 withdrawals sidecar (Shanghai+): the Block structure carries no
             // withdrawals, so persist the raw per-item RLP as one number-keyed row (the
@@ -1067,16 +1123,16 @@ public:
                 }
                 bcos::bytes encodedWithdrawals;
                 encodedWithdrawals.reserve(withdrawalsPayload.size() + 8);
-                bcos::codec::rlp::encodeHeader(encodedWithdrawals,
-                    bcos::codec::rlp::Header{
-                        .isList = true, .payloadLength = withdrawalsPayload.size()});
-                encodedWithdrawals.insert(encodedWithdrawals.end(), withdrawalsPayload.begin(),
-                    withdrawalsPayload.end());
+                bcos::codec::rlp::encodeHeader(
+                    encodedWithdrawals, bcos::codec::rlp::Header{.isList = true,
+                                            .payloadLength = withdrawalsPayload.size()});
+                encodedWithdrawals.insert(
+                    encodedWithdrawals.end(), withdrawalsPayload.begin(), withdrawalsPayload.end());
                 storage::Entry withdrawalsEntry;
                 withdrawalsEntry.set(std::move(encodedWithdrawals));
                 co_await storage2::writeOne(prewriteStorage,
-                    executor_v1::StateKey{ledger::SYS_NUMBER_2_WITHDRAWALS,
-                                          std::to_string(ethHeader.number)},
+                    executor_v1::StateKey{
+                        ledger::SYS_NUMBER_2_WITHDRAWALS, std::to_string(ethHeader.number)},
                     std::move(withdrawalsEntry));
             }
             if (rollbackJournal)
@@ -1162,8 +1218,8 @@ public:
         if (computation.receiptsRoot != ethHeader.receiptsRoot)
         {
             return "receiptsRoot mismatch (computed=" + computation.receiptsRoot.hex() +
-                   " header=" + ethHeader.receiptsRoot.hex() + " gasUsed=" +
-                   computation.gasUsed.str() + "/" + ethHeader.gasUsed.str() +
+                   " header=" + ethHeader.receiptsRoot.hex() +
+                   " gasUsed=" + computation.gasUsed.str() + "/" + ethHeader.gasUsed.str() +
                    " logsBloom=" + toHex(computation.logsBloom).substr(0, 64) + "/" +
                    toHex(ethHeader.logsBloom).substr(0, 64) + ")";
         }
@@ -1271,8 +1327,8 @@ private:
         // landed (MPTPruner re-walks the post-rollback roots; Noop ignores the hook). The
         // lookup only ever resolves blocks <= newHead, whose header rows the rollback keeps.
         typename ledger::mpt::CommitObserver::StateRootLookup stateRootAt =
-            [&globalStateStorage,
-                this](protocol::BlockNumber number) -> task::Task<std::optional<bcos::h256>> {
+            [&globalStateStorage, this](
+                protocol::BlockNumber number) -> task::Task<std::optional<bcos::h256>> {
             auto committed = globalStateStorage.forkCommitted();
             auto block = co_await ledger::getBlockData(
                 committed, number, ledger::HEADER, m_blockFactory.get());

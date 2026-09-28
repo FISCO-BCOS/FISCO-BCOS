@@ -1,21 +1,20 @@
 #pragma once
 // Shared harness for the bcos-evm-free OP executor tests. Holds the pieces
-// OpEthDualRunTest.cpp (C1) and OpEthForkMatrixTest.cpp (C2) both drive:
+// OpEthExecutorDualRunTest.cpp (C1) and OpEthForkMatrixTest.cpp (C2) both drive:
 //   - the MLS/storage fixture (TrivialCheckpointStorage + MemoryStorage aliases + DualRunFixture),
 //   - envelope -> tars transaction carrier (buildFiscoTx),
-//   - the two execution drivers, both on the bcos-evm-free layer (migration step 3.3 retired
-//     the legacy preBlockOpSteps/finalizeOpBlockResult baseline leg — the golden `_op_expected`
-//     block in support/GoldenExpect.h is the arbiter now):
-//       runNewPath:      executeOpEthBlock -> opEthMessagePasserStorage -> sealOpEthBlock ->
-//                        computeOpEthTxRoot + computeMptStateRoot over an OpForkSpec;
-//       runExecutorPath: the production scheduler shape — preBlockOpEthSteps ->
-//                        SchedulerSerialImpl(serial=true) over OpEthExecutor ->
-//                        finalizeOpEthBlockResult (OpEthBlockSteps.h);
+//   - the production-scheduler driver (runExecutorPath): preBlockOpEthSteps ->
+//     SchedulerSerialImpl(serial=true) over OpEthExecutor -> finalizeOpEthBlockResult
+//     (OpEthBlockSteps.h) — the shape OpScheduler::execute and OpBlockVerifier::verifyAndCommit
+//     run. The golden `_op_expected` block in support/GoldenExpect.h is the arbiter for C1;
+//     C2 executes this same path twice from independent MLS forks as a determinism twin
+//     (migration step 3.3 retired the legacy preBlockOpSteps/finalizeOpBlockResult baseline
+//     leg, and the test-only monolithic executeOpEthBlock driver was later deleted with the
+//     production cutover it duplicated).
 //   - flat-row state diff diagnostics (collectRows / dumpDeltaRows / dumpRowDiff) for
 //     stateRoot-mismatch bring-up.
 // Suite-level plumbing (t8n corpus loading, golden headers) stays in support/GoldenSample.h.
 
-#include <opstack-executor/OpEthBlockExecute.h>  // executeOpEthBlock / sealOpEthBlock / ...
 #include <opstack-executor/OpEthBlockSteps.h>    // preBlockOpEthSteps / finalizeOpEthBlockResult
 #include <opstack-executor/OpEthCommitments.h>   // OpEthExecuteBlockResult
 #include <opstack-executor/OpEthDeposit.h>       // decodeOpDepositEnvelope
@@ -132,36 +131,6 @@ inline bcos::protocol::Transaction::Ptr buildFiscoTx(
     tx->mutableInner().extraTransactionBytes.assign(env.begin(), env.end());
     tx->mutableInner().extraTransactionHash.assign(txHash.begin(), txHash.end());
     return tx;
-}
-
-struct NewPathOutcome
-{
-    opeth::OpEthBlockResult result;
-    opeth::OpEthBlockSeal seal;
-    bcos::h256 stateRoot;
-    bcos::h256 txRoot;
-};
-
-/// Monolithic driver: executeOpEthBlock -> MessagePasser snapshot -> seal -> roots. All writes
-/// land in @p view; the stateRoot is a full MPT rebuild from the empty root over the executed
-/// view (the tests sit on a genesis-less seeded state), which also writes trie nodes into the
-/// view's top layer — the view is throwaway, so that is fine.
-template <class ViewType>
-NewPathOutcome runNewPath(DualRunFixture& f, ViewType& view,
-    bcos::protocol::BlockHeader const& header, opeth::OpForkSpec const& spec,
-    std::vector<opeth::OpEthBlockTx> const& txs)
-{
-    evmc::VM vm{evmc_create_evmone()};
-    auto result = bcos::task::syncWait(
-        opeth::executeOpEthBlock(view, header, spec, txs, vm, kOpChainId, *f.receiptFactory));
-    auto mpStorage = bcos::task::syncWait(opeth::opEthMessagePasserStorage(view));
-    auto seal = opeth::sealOpEthBlock(result, spec, mpStorage);
-    auto txRoot = opeth::computeOpEthTxRoot(txs);
-    bcos::ledger::LedgerConfig ledgerConfig;
-    ledgerConfig.setExecutorVersion(bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
-    auto stateRoot = bcos::task::syncWait(bcos::ledger::mpt::computeMptStateRoot(
-        view, bcos::ledger::mpt::emptyRootHash(), ledgerConfig));
-    return NewPathOutcome{std::move(result), seal, stateRoot, txRoot};
 }
 
 /// Production-scheduler driver (the shape OpScheduler::execute and

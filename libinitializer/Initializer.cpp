@@ -39,6 +39,7 @@
 #include "bcos-executor/src/executor/SwitchExecutorManager.h"
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/ledger/Ledger.h"
+#include "bcos-framework/protocol/BlobSchedule.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-ledger/mpt/MPTPruner.h"
@@ -48,7 +49,6 @@
 #include "bcos-storage/RocksDBStorage.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
-#include "bcos-framework/protocol/BlobSchedule.h"
 #include "engine/bcos-engine/ClSyncCoordination.h"
 #include "engine/bcos-engine/OpLedgerConfigRepublish.h"
 #include "ethereum-executor/EthereumExecutor.h"
@@ -60,7 +60,6 @@
 #include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-utilities/Common.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
 #include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
@@ -85,6 +84,7 @@
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <bcos-txpool/txpool/utilities/SystemTransaction.h>
+#include <bcos-utilities/Common.h>
 #include <legacy/bcos-storage/StorageWrapperImpl.h>
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerSeam.h>
@@ -341,7 +341,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // (ethereum.mode=el) additionally sizes the pool (capacity, lifetime) and resolves the
     // per-transaction blob limit dynamically: the EIP-7840 schedule evaluated at the chain
     // head's timestamp — LedgerConfigState is republished with every committed block
-    // (MultiVersionScheduler's commitBlock wrapper) and carries the head header's
+    // (MultiVersionScheduler's commitBlock wrapper, the engine services' commit lanes, and
+    // the devp2p sync loop in EthereumSyncInitializer) and carries the head header's
     // millisecond timestamp. Every other version keeps the L2 pool defaults (no fee market,
     // blobs refused).
     bcos::txpool::MemPoolConfig memPoolConfig;
@@ -352,7 +353,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             auto const forkSchedule = EthereumSyncInitializer::evmcForkSchedule(*m_nodeConfig);
             memPoolConfig.capacity = m_nodeConfig->ethereumMempoolCapacity();
-            memPoolConfig.txLifetimeMs = m_nodeConfig->ethereumMempoolTxLifetimeMinutes() * 60 * 1000;
+            memPoolConfig.txLifetimeMs =
+                m_nodeConfig->ethereumMempoolTxLifetimeMinutes() * 60 * 1000;
             memPoolConfig.blobForks =
                 bcos::protocol::BlobForkTimes{.cancunTime = forkSchedule.cancunTime,
                     .pragueTime = forkSchedule.pragueTime,
@@ -586,9 +588,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             }
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                m_ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger,
-                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState, m_mptCommitObserver,
-                std::move(externalPayloadVerifier), m_clSyncCoordination,
+                m_ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(),
+                ledger, bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState,
+                m_mptCommitObserver, std::move(externalPayloadVerifier), m_clSyncCoordination,
                 /*allowBlobTransactions=*/m_executorVersion ==
                     bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
         }
@@ -657,9 +659,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             }
             m_engineServiceInitializer = EngineServiceInitializer::build(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
-                m_ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(), ledger,
-                bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState, m_mptCommitObserver,
-                std::move(externalPayloadVerifier), m_clSyncCoordination,
+                m_ethereumSerialScheduler, ethereumExecutor, m_memPoolInitializer->memPool(),
+                ledger, bcos::engine::c_defaultBlockTxCountLimit, m_ledgerConfigState,
+                m_mptCommitObserver, std::move(externalPayloadVerifier), m_clSyncCoordination,
                 /*allowBlobTransactions=*/m_executorVersion ==
                     bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
         }

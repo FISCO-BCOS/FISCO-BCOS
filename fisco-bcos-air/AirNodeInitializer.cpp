@@ -219,8 +219,8 @@ void AirNodeInitializer::init(bcos::initializer::Params const& _params)
             initializer->ledger(), initializer->protocolInitializer()->blockFactory(),
             initializer->ethereumSerialScheduler(), initializer->ethereumExecutor(),
             initializer->globalStateStorageInitializer(), initializer->ioServicePool(),
-            initializer->mptCommitObserver(), initializer->elBlockVerifier(),
-            initializer->clSyncCoordination(),
+            initializer->mptCommitObserver(), initializer->ledgerConfigState(),
+            initializer->elBlockVerifier(), initializer->clSyncCoordination(),
             // eth/68 transaction gossip ([ethereum] tx_gossip): the engine mempool and the
             // same admission validator the RPC entry uses. Either unset keeps gossip off.
             &initializer->memPoolInitializer()->memPool(), initializer->memPoolValidator());
@@ -283,13 +283,13 @@ void AirNodeInitializer::validateEthereumELParams(
         };
         if (normalise(*_params.ethereumBootnodesFile) != normalise(configured))
         {
-            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "command-line --bootnodes '" +
-                                      *_params.ethereumBootnodesFile +
-                                      "' differs from [ethereum].bootnodes_file='" + configured +
-                                      "' in " + _params.configFilePath +
-                                      "; the config file is the source of truth — align them "
-                                      "or drop --bootnodes"));
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                    "command-line --bootnodes '" + *_params.ethereumBootnodesFile +
+                    "' differs from [ethereum].bootnodes_file='" + configured + "' in " +
+                    _params.configFilePath +
+                    "; the config file is the source of truth — align them "
+                    "or drop --bootnodes"));
         }
     }
 }

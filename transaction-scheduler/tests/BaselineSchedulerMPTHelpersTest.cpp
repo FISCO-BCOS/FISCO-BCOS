@@ -67,18 +67,29 @@ BOOST_AUTO_TEST_CASE(ScenarioA_FlagSetButActivationUnknown_DoesNotBuild)
     BOOST_CHECK(!shouldBuildMPT(0, features, 1000));
 }
 
-// OP mode (executor_version >= OPSTACK_EXECUTOR_VERSION) is genesis-only: its activation
-// block must be 0. Below the OP lane this guard polices nothing — the lane boundary
-// itself is genesis-fixed and the SystemConfigPrecompiled refuses governance writes
-// crossing it in both directions.
+// Every lane at or above the Ethereum boundary (executor_version >= ETHEREUM_EXECUTOR_VERSION)
+// is genesis-only: its activation block must be 0. The check starts at the Ethereum lane
+// because the MPT gates (MPTFeatureGates, StateRoots, MPTPruner) all read >= 2 as
+// MPT-from-genesis: a historical (2, activation != 0) row — writable before compat 3.18
+// bounded the key — must fail-stop at boot instead of folding the chain's XOR history into
+// an MPT. Below the boundary this guard polices nothing — the legacy lane has no
+// genesis-bound lane preconditions here.
 BOOST_AUTO_TEST_CASE(OpMode_GenesisBoundActivationPasses)
 {
     BOOST_CHECK_NO_THROW(validateOpModeGenesisOnly(ledger::OPSTACK_EXECUTOR_VERSION, 0));
 
-    // Legacy and Eth lanes: no genesis-only constraint in this guard.
-    BOOST_CHECK_NO_THROW(validateOpModeGenesisOnly(0, 0));
+    // The Eth lane passes only when genesis-bound.
     BOOST_CHECK_NO_THROW(validateOpModeGenesisOnly(ledger::ETHEREUM_EXECUTOR_VERSION, 0));
-    BOOST_CHECK_NO_THROW(validateOpModeGenesisOnly(ledger::ETHEREUM_EXECUTOR_VERSION, 7));
+    // Legacy lane: no genesis-only constraint in this guard, whatever the activation block.
+    BOOST_CHECK_NO_THROW(validateOpModeGenesisOnly(0, 0));
+    BOOST_CHECK_NO_THROW(validateOpModeGenesisOnly(0, 7));
+    BOOST_CHECK_NO_THROW(validateOpModeGenesisOnly(1, 7));
+}
+
+BOOST_AUTO_TEST_CASE(EthLane_LateActivationThrows)
+{
+    BOOST_CHECK_THROW(validateOpModeGenesisOnly(ledger::ETHEREUM_EXECUTOR_VERSION, 7),
+        InvalidExecutorVersionGenesis);
 }
 
 BOOST_AUTO_TEST_CASE(OpMode_LateActivationThrows)
@@ -92,8 +103,10 @@ BOOST_AUTO_TEST_CASE(OpMode_AboveTheLadderSaturatesAndLateActivationIsRefused)
     // Above the newest declared lane there is no lane of its own: the scheduler saturates such a
     // value onto the newest WIRED slot (MultiVersionScheduler::setVersion, pinned by the
     // libinitializer suite's setVersionSaturatesToNewestWiredSlot), so boot accepts it. Refusing
-    // it here would strand a chain that wrote the row before 3.18 — nothing bounded that key then
-    // — with no way to lower it (the precompile refuses writes at or above OPSTACK).
+    // the value itself at boot would strand a chain that wrote the row before 3.18 — nothing
+    // bounded that key then — because the node must boot to execute the governance write that
+    // lowers the row (a write below the Ethereum lane, the only direction the precompile still
+    // accepts).
     BOOST_CHECK_NO_THROW(validateOpModeGenesisOnly(ledger::OPSTACK_EXECUTOR_VERSION + 1, 0));
     // The OP lane's own genesis-only precondition still applies to every value at or above the
     // slot.

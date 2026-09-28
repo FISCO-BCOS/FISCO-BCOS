@@ -37,15 +37,19 @@
 #include <bcos-mempool/MemPoolImpl.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
-#include <bcos-utilities/IOServicePool.h>
 #include <bcos-transaction-scheduler/EthereumBlockVerifier.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
+#include <bcos-utilities/IOServicePool.h>
+#include <ethereum-executor/EthStorageErrorGuard.h>
 #include <ethereum-executor/EthereumExecutor.h>
 #include <boost/test/unit_test.hpp>
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <memory>
 #include <string>
+#include <thread>
 
 using namespace bcos;
 using namespace bcos::engine;
@@ -60,7 +64,7 @@ using EL1BService = EthEngineService<bcos::txpool::MemPoolImpl, RealGlobalStateS
 
 // Genesis block-0 context every case shares: a 30M-gas Cancun parent at the slot before
 // the payload timestamp (the Engine-API default, 1700000000 s).
-constexpr int64_t c_parentTimestamp = 1700000000 - 12;  // seconds
+constexpr int64_t c_parentTimestamp = 1700000000 - 12;                   // seconds
 constexpr std::uint64_t c_blockTimestampMs = c_defaultPayloadTimestamp;  // 1700000000 s
 constexpr u256 c_parentGasLimit = u256(30000000);
 const h256 c_genesisHash{"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"};
@@ -167,24 +171,21 @@ struct EL1BNode
     std::unique_ptr<scheduler_v1::SchedulerSerialImpl> scheduler;
     crypto::CryptoSuite::Ptr cryptoSuite = bcos::test::createNormalCryptoSuite();
     bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory{cryptoSuite};
-    bcos::protocol::BlockFactory::Ptr blockFactory =
-        bcos::test::createBlockFactory(cryptoSuite);
+    bcos::protocol::BlockFactory::Ptr blockFactory = bcos::test::createBlockFactory(cryptoSuite);
     std::shared_ptr<executor_v1::eth::EthereumExecutor> executor;
     std::shared_ptr<EL1BVerifier> verifier;
-    std::shared_ptr<bcos::test::FakeLedger> fakeLedger =
-        std::make_shared<bcos::test::FakeLedger>();
+    std::shared_ptr<bcos::test::FakeLedger> fakeLedger = std::make_shared<bcos::test::FakeLedger>();
 
     explicit EL1BNode(std::string name, int64_t reorgWindow = 0)
     {
         ioServicePool = std::make_shared<bcos::IOServicePool>(1, std::move(name));
         scheduler = std::make_unique<scheduler_v1::SchedulerSerialImpl>(ioServicePool);
-        executor_v1::eth::BlockHashLookup lookup =
-            [&backend = backendStorage](int64_t blockNumber, int64_t currentHeight) {
-                return initializer::ethBlockHashLookupFromStorage(
-                    backend, blockNumber, currentHeight);
-            };
-        executor = std::make_shared<executor_v1::eth::EthereumExecutor>(
-            receiptFactory, std::move(lookup));
+        executor_v1::eth::BlockHashLookup lookup = [&backend = backendStorage](
+                                                       int64_t blockNumber, int64_t currentHeight) {
+            return initializer::ethBlockHashLookupFromStorage(backend, blockNumber, currentHeight);
+        };
+        executor =
+            std::make_shared<executor_v1::eth::EthereumExecutor>(receiptFactory, std::move(lookup));
         verifier = std::make_shared<EL1BVerifier>(*scheduler, *executor, *blockFactory,
             /*commitObserver=*/nullptr, reorgWindow);
     }
@@ -214,8 +215,8 @@ struct EL1BFixture
 {
     EL1BNode nodeA{"el1bA"};
     EL1BNode nodeB{"el1bB"};
-    bcos::txpool::MemPoolImpl memPool{bcos::txpool::MemPoolConfig{
-        .chainKind = bcos::txpool::ChainKind::L1}};
+    bcos::txpool::MemPoolImpl memPool{
+        bcos::txpool::MemPoolConfig{.chainKind = bcos::txpool::ChainKind::L1}};
     StubExecutor stubExecutor;
     StubScheduler stubScheduler;
     std::shared_ptr<initializer::ExternalPayloadVerifierImpl<RealGlobalStateStorage>>
@@ -244,10 +245,10 @@ struct EL1BReorgFixture
 
     EL1BNode nodeA{"reorgA", c_reorgWindow};
     EL1BNode nodeB{"reorgB", c_reorgWindow};
-    bcos::txpool::MemPoolImpl memPoolA{bcos::txpool::MemPoolConfig{
-        .chainKind = bcos::txpool::ChainKind::L1}};
-    bcos::txpool::MemPoolImpl memPoolB{bcos::txpool::MemPoolConfig{
-        .chainKind = bcos::txpool::ChainKind::L1}};
+    bcos::txpool::MemPoolImpl memPoolA{
+        bcos::txpool::MemPoolConfig{.chainKind = bcos::txpool::ChainKind::L1}};
+    bcos::txpool::MemPoolImpl memPoolB{
+        bcos::txpool::MemPoolConfig{.chainKind = bcos::txpool::ChainKind::L1}};
     StubExecutor stubExecutor;
     StubScheduler stubScheduler;
     std::shared_ptr<initializer::ExternalPayloadVerifierImpl<RealGlobalStateStorage>>
@@ -279,8 +280,7 @@ struct EL1BReorgFixture
     {}
 };
 
-protocol::EthBlockHeaderData el1bParentHeader(u256 gasUsed, u256 excessBlobGas,
-    u256 blobGasUsed)
+protocol::EthBlockHeaderData el1bParentHeader(u256 gasUsed, u256 excessBlobGas, u256 blobGasUsed)
 {
     protocol::EthBlockHeaderData parent;
     parent.number = 0;
@@ -320,14 +320,15 @@ evmc_address el1bEvmcAddress(uint8_t seed)
 void el1bPoolAdd(bcos::txpool::MemPoolImpl& pool, bcos::crypto::Hash& hashImpl,
     bcos::bytes const& raw, std::optional<engine::BlobTxSidecar> sidecar = std::nullopt)
 {
-    auto tx = bcos::rpc::decodeWeb3RawTransaction(
-        bcos::bytesConstRef(raw.data(), raw.size()), hashImpl);
+    auto tx =
+        bcos::rpc::decodeWeb3RawTransaction(bcos::bytesConstRef(raw.data(), raw.size()), hashImpl);
     BOOST_REQUIRE(tx);
     // The ingress contract: recover the sender from the signature and clear the tainted
     // flag (the pool rejects tainted transactions).
     crypto::Secp256k1Crypto secp;
     tx->verify(hashImpl, secp);
-    BOOST_CHECK(pool.tryAdd(std::move(tx), std::move(sidecar)) == protocol::TransactionStatus::None);
+    BOOST_CHECK(
+        pool.tryAdd(std::move(tx), std::move(sidecar)) == protocol::TransactionStatus::None);
 }
 
 /// A one-blob EIP-4844 sidecar with genuine KZG commitment/proof for @p seed, plus the
@@ -346,6 +347,247 @@ engine::BlobTxSidecar el1bMakeSidecar(uint8_t seed)
     sidecar.commitments.push_back(std::move(commitment));
     sidecar.proofs.push_back(std::move(proof));
     return sidecar;
+}
+
+/// A RealGlobalStateBackendStorage whose ACCOUNT-table reads ("/apps/", "/s/", "/sys/")
+/// can be armed to throw (an injected storage fault, counted down so a test can arm
+/// exactly one failure) or to park until a gate opens (a deterministic concurrency
+/// interleave). Shadows FOUR read primitives: the raw pair (fillMissingValues and the
+/// multi-layer View call readOneRaw/readSomeRaw on the backend directly) AND the
+/// storage2::readOne/readSome CPO targets — the View's own readOne ends in
+/// storage2::readOne(backend), whose base MemoryStorage implementation would otherwise
+/// dispatch to the BASE readOneRaw and slip past the injector. Writes and range() pass
+/// straight to the base.
+struct FaultyBackendStorage : RealGlobalStateBackendStorage
+{
+    std::shared_ptr<std::atomic<int>> accountReadThrowRemaining =
+        std::make_shared<std::atomic<int>>(0);
+    std::shared_ptr<std::atomic<bool>> accountReadGate = std::make_shared<std::atomic<bool>>(false);
+    std::shared_ptr<std::atomic<bool>> accountReadGateOpen =
+        std::make_shared<std::atomic<bool>>(true);
+    std::shared_ptr<std::atomic<bool>> accountReadParked =
+        std::make_shared<std::atomic<bool>>(false);
+
+    static bool isAccountKey(auto const& key)
+    {
+        executor_v1::StateKeyView const keyView{key};
+        return keyView.m_table.starts_with("/apps/") || keyView.m_table.starts_with("/s/") ||
+               keyView.m_table.starts_with("/sys/");
+    }
+
+    void injectAccountRead(auto const& key) const
+    {
+        if (!isAccountKey(key))
+        {
+            return;
+        }
+        if (accountReadGate->load(std::memory_order_acquire))
+        {
+            accountReadParked->store(true, std::memory_order_release);
+            while (!accountReadGateOpen->load(std::memory_order_acquire))
+            {
+                std::this_thread::yield();
+            }
+        }
+        int remaining = accountReadThrowRemaining->load(std::memory_order_acquire);
+        while (remaining > 0 && !accountReadThrowRemaining->compare_exchange_weak(
+                                    remaining, remaining - 1, std::memory_order_acq_rel))
+        {
+        }
+        if (remaining > 0)
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error{"injected storage read fault"});
+        }
+    }
+
+    auto readOneRaw(const auto& key, auto&&... args) -> task::Task<DataValue>
+    {
+        injectAccountRead(key);
+        co_return co_await RealGlobalStateBackendStorage::readOneRaw(
+            key, std::forward<decltype(args)>(args)...);
+    }
+
+    auto readSomeRaw(
+        ::ranges::input_range auto keys, auto&&... args) -> task::Task<std::vector<DataValue>>
+    {
+        if (accountReadGate->load(std::memory_order_acquire) ||
+            accountReadThrowRemaining->load(std::memory_order_acquire) > 0)
+        {
+            for (auto&& key : keys)
+            {
+                injectAccountRead(key);
+            }
+        }
+        co_return co_await RealGlobalStateBackendStorage::readSomeRaw(
+            std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...);
+    }
+
+    auto readOne(auto key, auto&&... args) -> task::Task<std::optional<bcos::storage::Entry>>
+    {
+        injectAccountRead(key);
+        co_return co_await RealGlobalStateBackendStorage::readOne(
+            std::move(key), std::forward<decltype(args)>(args)...);
+    }
+
+    auto readSome(::ranges::input_range auto keys,
+        auto&&... args) -> task::Task<std::vector<std::optional<bcos::storage::Entry>>>
+    {
+        if (accountReadGate->load(std::memory_order_acquire) ||
+            accountReadThrowRemaining->load(std::memory_order_acquire) > 0)
+        {
+            for (auto&& key : keys)
+            {
+                injectAccountRead(key);
+            }
+        }
+        co_return co_await RealGlobalStateBackendStorage::readSome(
+            std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...);
+    }
+};
+
+using FaultyCheckpointBackend = TrivialCheckpointStorage<bcos::executor_v1::StateKey,
+    bcos::executor_v1::StateValue, FaultyBackendStorage>;
+using FaultyGlobalStateStorage =
+    bcos::storage2::MultiLayerStorage<RealGlobalStateMutableStorage, void, FaultyCheckpointBackend>;
+
+/// EL1BNode over the fault-injecting backend: same real execution/verification pipeline,
+/// plus the storage-fault and concurrency gates the commit-lane tests drive.
+struct EL1BFaultNode
+{
+    FaultyBackendStorage backendStorage;
+    FaultyCheckpointBackend checkpointBackend{backendStorage};
+    FaultyGlobalStateStorage storage{checkpointBackend};
+    std::shared_ptr<bcos::IOServicePool> ioServicePool;
+    std::unique_ptr<scheduler_v1::SchedulerSerialImpl> scheduler;
+    crypto::CryptoSuite::Ptr cryptoSuite = bcos::test::createNormalCryptoSuite();
+    bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory{cryptoSuite};
+    bcos::protocol::BlockFactory::Ptr blockFactory = bcos::test::createBlockFactory(cryptoSuite);
+    std::shared_ptr<executor_v1::eth::EthereumExecutor> executor;
+    std::shared_ptr<EL1BVerifier> verifier;
+    std::shared_ptr<bcos::test::FakeLedger> fakeLedger = std::make_shared<bcos::test::FakeLedger>();
+
+    explicit EL1BFaultNode(std::string name, int64_t reorgWindow = 0)
+    {
+        ioServicePool = std::make_shared<bcos::IOServicePool>(1, std::move(name));
+        scheduler = std::make_unique<scheduler_v1::SchedulerSerialImpl>(ioServicePool);
+        executor_v1::eth::BlockHashLookup lookup = [this](
+                                                       int64_t blockNumber, int64_t currentHeight) {
+            return initializer::ethBlockHashLookupFromStorage(
+                backendStorage, blockNumber, currentHeight);
+        };
+        executor =
+            std::make_shared<executor_v1::eth::EthereumExecutor>(receiptFactory, std::move(lookup));
+        verifier = std::make_shared<EL1BVerifier>(*scheduler, *executor, *blockFactory,
+            /*commitObserver=*/nullptr, reorgWindow);
+    }
+
+    /// Same seeding as EL1BNode::seedGenesis; the helpers take the base backend type,
+    /// which FaultyBackendStorage inherits.
+    void seedGenesis(protocol::EthBlockHeaderData const& parent,
+        std::vector<std::pair<evmc_address, u256>> const& funded)
+    {
+        writeEthExecutorConfig(backendStorage, EVMC_CANCUN);
+        writeRawSysConfig(backendStorage,
+            std::string(magic_enum::enum_name(ledger::SystemConfig::tx_gas_limit)), "30000000");
+        for (auto const& [addr, balance] : funded)
+        {
+            task::syncWait(el1bFund(backendStorage, addr, balance));
+        }
+        el1bWriteCurrentNumber(backendStorage, 0);
+        writeHashToNumber(backendStorage, c_genesisHash, 0);
+        writeNumberToHash(backendStorage, 0, c_genesisHash);
+        el1bSeedParentHeaderRow(backendStorage, *blockFactory, parent);
+    }
+};
+
+/// A ledger stub whose prewrite persists the SYS_HASH_2_NUMBER row the self-built
+/// commit lane's fail-closed guard reads (the way the real Ledger::asyncPrewriteBlock
+/// writes it); prewriteCount pins how often the commit section ran.
+class El1bPersistingLedger : public bcos::test::FakeLedger
+{
+public:
+    using FakeLedger::FakeLedger;
+
+    std::atomic<unsigned> prewriteCount{0};
+
+    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
+        bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr block,
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
+        std::optional<bcos::ledger::Features> features,
+        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
+    {
+        (void)writeTxsAndReceipts;
+        (void)features;
+        (void)blockHashOverride;
+        (void)writeNonces;
+        if (block)
+        {
+            auto const header = block->blockHeader();
+            bcos::storage::Entry hash2NumberEntry;
+            hash2NumberEntry.set(std::to_string(header->number()));
+            storage->asyncSetRow(ledger::SYS_HASH_2_NUMBER,
+                bcos::concepts::bytebuffer::toView(header->hash()), std::move(hash2NumberEntry),
+                [](auto&&) {});
+        }
+        ++prewriteCount;
+        callback("", nullptr);
+    }
+};
+
+/// Node A over the fault backend with a persisting ledger and a positive reorg window:
+/// the self-built commit lane journals rollback rows and the fail-closed duplicate
+/// guard has a ledger row to answer from. Node B is the independent verifier.
+struct EL1BFaultFixture
+{
+    static constexpr int64_t c_reorgWindow = 8;
+
+    EL1BFaultNode nodeA{"faultA", c_reorgWindow};
+    EL1BFaultNode nodeB{"faultB", c_reorgWindow};
+    bcos::txpool::MemPoolImpl memPool{
+        bcos::txpool::MemPoolConfig{.chainKind = bcos::txpool::ChainKind::L1}};
+    StubExecutor stubExecutor;
+    StubScheduler stubScheduler;
+    std::shared_ptr<El1bPersistingLedger> ledgerA = std::make_shared<El1bPersistingLedger>();
+    std::shared_ptr<initializer::ExternalPayloadVerifierImpl<FaultyGlobalStateStorage>>
+        externalVerifierA;
+    EthEngineService<bcos::txpool::MemPoolImpl, FaultyGlobalStateStorage, StubExecutor,
+        StubScheduler>
+        serviceA;
+
+    EL1BFaultFixture()
+      : externalVerifierA(
+            std::make_shared<initializer::ExternalPayloadVerifierImpl<FaultyGlobalStateStorage>>(
+                nodeA.verifier, nodeA.fakeLedger, nodeA.blockFactory, el1bCancunForks(),
+                /*chainId=*/1, /*mergeBlock=*/0)),
+        serviceA(memPool, nodeA.storage, stubExecutor, stubScheduler, nodeA.blockFactory,
+            /*ledger=*/ledgerA, engine::c_defaultBlockTxCountLimit,
+            static_cast<std::uint32_t>(ApiVersion::V4), /*commitObserver=*/nullptr,
+            /*ledgerConfigState=*/nullptr, externalVerifierA,
+            /*clSync=*/std::make_shared<engine_common::ClSyncCoordination>())
+    {}
+};
+
+/// Build block 1 on the fault fixture's node A (one 2-gwei withdrawal credit to
+/// @p recipientAddress) and return the newPayload request for it. Seeds node A's
+/// genesis first; the caller seeds node B when the verify lane needs it.
+NewPayloadRequest el1bBuildWithdrawalPayload(
+    EL1BFaultFixture& fixture, bcos::Address const& recipientAddress)
+{
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    fixture.nodeA.seedGenesis(parent, {});
+    ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+    auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
+    attributes.withdrawals = std::vector<WithdrawalV1>{
+        WithdrawalV1{.index = 0, .validatorIndex = 1, .amount = 2, .address = recipientAddress}};
+    auto fcu = task::syncWait(fixture.serviceA.updateForkchoice(state, &attributes, 3));
+    BOOST_REQUIRE(fcu.payloadStatus.status == PayloadValidationStatus::Valid);
+    BOOST_REQUIRE(fcu.payloadId.has_value());
+    auto data = task::syncWait(fixture.serviceA.getPayload(*fcu.payloadId, 3));
+    BOOST_REQUIRE(data);
+    NewPayloadRequest request;
+    request.executionPayload = data->executionPayload;
+    request.parentBeaconBlockRoot = data->parentBeaconBlockRoot;
+    return request;
 }
 }  // namespace
 
@@ -409,7 +651,8 @@ BOOST_FIXTURE_TEST_CASE(cancunBuildThenVerifyClosedLoop, EL1BFixture)
     ForkchoiceState state{c_genesisHash, h256{}, h256{}};
     auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
     attributes.withdrawals = std::vector<WithdrawalV1>{WithdrawalV1{.index = 0,
-        .validatorIndex = 1, .amount = 2,
+        .validatorIndex = 1,
+        .amount = 2,
         .address = bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)))}};
     auto fcu = task::syncWait(service.updateForkchoice(state, &attributes, 3));
     BOOST_CHECK(fcu.payloadStatus.status == PayloadValidationStatus::Valid);
@@ -482,10 +725,9 @@ BOOST_FIXTURE_TEST_CASE(cancunBuildThenVerifyClosedLoop, EL1BFixture)
             std::runtime_error{"legacy state-root fold must not run for executor v2"});
     };
     auto forks = el1bCancunForks();
-    auto result = task::syncWait(nodeB.verifier->verifyAndCommit(nodeB.storage,
-        *nodeB.fakeLedger, external->ethHeader, parent, external->rawTransactions,
-        external->rawWithdrawals, forks, /*chainId=*/1, /*rawUncles=*/{}, /*mergeBlock=*/0,
-        decoder, stateRootCalc));
+    auto result = task::syncWait(nodeB.verifier->verifyAndCommit(nodeB.storage, *nodeB.fakeLedger,
+        external->ethHeader, parent, external->rawTransactions, external->rawWithdrawals, forks,
+        /*chainId=*/1, /*rawUncles=*/{}, /*mergeBlock=*/0, decoder, stateRootCalc));
     BOOST_CHECK(result.valid);
     BOOST_CHECK_MESSAGE(result.error.empty(), result.error);
 
@@ -545,10 +787,9 @@ BOOST_FIXTURE_TEST_CASE(cancunDerivedContextStampsBuiltHeader, EL1BFixture)
             std::runtime_error{"legacy state-root fold must not run for executor v2"});
     };
     auto forks = el1bCancunForks();
-    auto result = task::syncWait(nodeB.verifier->verifyAndCommit(nodeB.storage,
-        *nodeB.fakeLedger, external->ethHeader, parent, external->rawTransactions,
-        external->rawWithdrawals, forks, /*chainId=*/1, /*rawUncles=*/{}, /*mergeBlock=*/0,
-        decoder, stateRootCalc));
+    auto result = task::syncWait(nodeB.verifier->verifyAndCommit(nodeB.storage, *nodeB.fakeLedger,
+        external->ethHeader, parent, external->rawTransactions, external->rawWithdrawals, forks,
+        /*chainId=*/1, /*rawUncles=*/{}, /*mergeBlock=*/0, decoder, stateRootCalc));
     BOOST_CHECK(result.valid);
     BOOST_CHECK_MESSAGE(result.error.empty(), result.error);
 }
@@ -574,7 +815,8 @@ BOOST_FIXTURE_TEST_CASE(sealSkipsBlobTransactionWithoutSidecar, EL1BFixture)
     blob.to = bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
     blob.value = u256(7);
     blob.maxFeePerBlobGas = u256(1000000000);
-    blob.blobVersionedHashes = {h256("0101010101010101010101010101010101010101010101010101010101010101")};
+    blob.blobVersionedHashes = {
+        h256("0101010101010101010101010101010101010101010101010101010101010101")};
     auto rawBlob = el1bSign(blob, *senderKey);
 
     // Same sender, next nonce: an ordinary transfer. The suffix rule drops it together
@@ -663,9 +905,9 @@ BOOST_FIXTURE_TEST_CASE(newPayloadRejectsMismatchedExpectedBlobVersionedHashes, 
     request.parentBeaconBlockRoot = data->parentBeaconBlockRoot;
 
     // Wrong hash entirely.
-    request.expectedBlobVersionedHashes = {h256("0202020202020202020202020202020202020202020202020202020202020202")};
-    auto rejected =
-        task::syncWait(service.newPayload(request, 3));
+    request.expectedBlobVersionedHashes = {
+        h256("0202020202020202020202020202020202020202020202020202020202020202")};
+    auto rejected = task::syncWait(service.newPayload(request, 3));
     BOOST_CHECK(rejected.status == PayloadValidationStatus::Invalid);
 
     // The payload carries one blob; an empty expectation mismatches too.
@@ -699,8 +941,8 @@ BOOST_FIXTURE_TEST_CASE(gasLimitDerivesFromParentNotTxGasLimitConfig, EL1BFixtur
     // Operator target above the parent: pull up by parent/1024 - 1 (strictly inside the
     // |Δ| < parent/1024 consensus bound). A different timestamp forces a fresh build.
     u256 const step = u256(30000000) / 1024 - 1;  // 29295
-    writeRawSysConfig(nodeA.backendStorage,
-        std::string(engine_common::c_l1GasLimitTargetKey), "40000000");
+    writeRawSysConfig(
+        nodeA.backendStorage, std::string(engine_common::c_l1GasLimitTargetKey), "40000000");
     auto attributesUp = makePayloadAttributesV3(c_blockTimestampMs + 12000);
     auto fcuUp = task::syncWait(service.updateForkchoice(state, &attributesUp, 3));
     BOOST_REQUIRE(fcuUp.payloadId.has_value());
@@ -709,8 +951,8 @@ BOOST_FIXTURE_TEST_CASE(gasLimitDerivesFromParentNotTxGasLimitConfig, EL1BFixtur
     BOOST_CHECK_EQUAL(dataUp->executionPayload.gasLimit, u256(30000000) + step);
 
     // Operator target far below: pull down by the same step.
-    writeRawSysConfig(nodeA.backendStorage,
-        std::string(engine_common::c_l1GasLimitTargetKey), "5000");
+    writeRawSysConfig(
+        nodeA.backendStorage, std::string(engine_common::c_l1GasLimitTargetKey), "5000");
     auto attributesDown = makePayloadAttributesV3(c_blockTimestampMs + 24000);
     auto fcuDown = task::syncWait(service.updateForkchoice(state, &attributesDown, 3));
     BOOST_REQUIRE(fcuDown.payloadId.has_value());
@@ -734,7 +976,8 @@ BOOST_FIXTURE_TEST_CASE(externalPayloadParentRelativeConsensusChecks, EL1BFixtur
     ForkchoiceState state{c_genesisHash, h256{}, h256{}};
     auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
     attributes.withdrawals = std::vector<WithdrawalV1>{WithdrawalV1{.index = 0,
-        .validatorIndex = 1, .amount = 2,
+        .validatorIndex = 1,
+        .amount = 2,
         .address = bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)))}};
     auto fcu = task::syncWait(service.updateForkchoice(state, &attributes, 3));
     BOOST_REQUIRE(fcu.payloadId.has_value());
@@ -756,8 +999,8 @@ BOOST_FIXTURE_TEST_CASE(externalPayloadParentRelativeConsensusChecks, EL1BFixtur
         std::make_shared<initializer::ExternalPayloadVerifierImpl<RealGlobalStateStorage>>(
             nodeB.verifier, nodeB.fakeLedger, nodeB.blockFactory, el1bCancunForks(),
             /*chainId=*/1, /*mergeBlock=*/0);
-    EL1BService serviceB(memPoolB, nodeB.storage, stubExecutor, stubScheduler,
-        nodeB.blockFactory, /*ledger=*/nullptr, engine::c_defaultBlockTxCountLimit,
+    EL1BService serviceB(memPoolB, nodeB.storage, stubExecutor, stubScheduler, nodeB.blockFactory,
+        /*ledger=*/nullptr, engine::c_defaultBlockTxCountLimit,
         static_cast<std::uint32_t>(ApiVersion::V4), /*commitObserver=*/nullptr,
         /*ledgerConfigState=*/nullptr, externalVerifierB,
         /*clSync=*/std::make_shared<engine_common::ClSyncCoordination>());
@@ -780,46 +1023,40 @@ BOOST_FIXTURE_TEST_CASE(externalPayloadParentRelativeConsensusChecks, EL1BFixtur
     };
 
     // baseFee off the EIP-1559 recomputation by one wei.
-    expectInvalid(
-        tamper([](NewPayloadRequest& r, protocol::EthBlockHeaderData& h) {
-            r.executionPayload.baseFeePerGas += 1;
-            h.baseFee = *h.baseFee + 1;
-        }),
+    expectInvalid(tamper([](NewPayloadRequest& r, protocol::EthBlockHeaderData& h) {
+        r.executionPayload.baseFeePerGas += 1;
+        h.baseFee = *h.baseFee + 1;
+    }),
         "baseFeePerGas does not match the EIP-1559 recomputation");
     // excessBlobGas off the EIP-4844 recomputation (parent carries none => 0).
-    expectInvalid(
-        tamper([](NewPayloadRequest& r, protocol::EthBlockHeaderData& h) {
-            r.executionPayload.excessBlobGas = u256(131072);
-            h.excessBlobGas = u256(131072);
-        }),
+    expectInvalid(tamper([](NewPayloadRequest& r, protocol::EthBlockHeaderData& h) {
+        r.executionPayload.excessBlobGas = u256(131072);
+        h.excessBlobGas = u256(131072);
+    }),
         "excessBlobGas does not match the EIP-4844/7918 recomputation");
     // gasLimit beyond the parent/1024 bound (30M + 30M/1024).
-    expectInvalid(
-        tamper([](NewPayloadRequest& r, protocol::EthBlockHeaderData& h) {
-            r.executionPayload.gasLimit = u256(30000000) + u256(30000000) / 1024;
-            h.gasLimit = r.executionPayload.gasLimit;
-        }),
+    expectInvalid(tamper([](NewPayloadRequest& r, protocol::EthBlockHeaderData& h) {
+        r.executionPayload.gasLimit = u256(30000000) + u256(30000000) / 1024;
+        h.gasLimit = r.executionPayload.gasLimit;
+    }),
         "gasLimit differs from the parent by more than 1/1024");
     // timestamp not strictly greater than the parent's.
-    expectInvalid(
-        tamper([](NewPayloadRequest& r, protocol::EthBlockHeaderData& h) {
-            r.executionPayload.timestamp = static_cast<std::uint64_t>(c_parentTimestamp) * 1000;
-            h.timestamp = c_parentTimestamp;
-        }),
+    expectInvalid(tamper([](NewPayloadRequest& r, protocol::EthBlockHeaderData& h) {
+        r.executionPayload.timestamp = static_cast<std::uint64_t>(c_parentTimestamp) * 1000;
+        h.timestamp = c_parentTimestamp;
+    }),
         "timestamp must be strictly greater than the parent");
     // gasUsed above the gas limit.
-    expectInvalid(
-        tamper([](NewPayloadRequest& r, protocol::EthBlockHeaderData& h) {
-            r.executionPayload.gasUsed = r.executionPayload.gasLimit + 1;
-            h.gasUsed = h.gasLimit + 1;
-        }),
+    expectInvalid(tamper([](NewPayloadRequest& r, protocol::EthBlockHeaderData& h) {
+        r.executionPayload.gasUsed = r.executionPayload.gasLimit + 1;
+        h.gasUsed = h.gasLimit + 1;
+    }),
         "gasUsed exceeds gasLimit");
     // blobGasUsed above the Cancun per-block cap (6 blobs), still a blob multiple.
-    expectInvalid(
-        tamper([](NewPayloadRequest& r, protocol::EthBlockHeaderData& h) {
-            r.executionPayload.blobGasUsed = u256(7 * 131072);
-            h.blobGasUsed = u256(7 * 131072);
-        }),
+    expectInvalid(tamper([](NewPayloadRequest& r, protocol::EthBlockHeaderData& h) {
+        r.executionPayload.blobGasUsed = u256(7 * 131072);
+        h.blobGasUsed = u256(7 * 131072);
+    }),
         "invalid blobGasUsed");
 
     // Control: the untouched payload verifies VALID through the same lane.
@@ -851,10 +1088,10 @@ BOOST_FIXTURE_TEST_CASE(selfBuiltCommitJournalsForShallowReorg, EL1BReorgFixture
     h256 genesisHash;
     {
         auto view = nodeA.storage.fork();
-        auto parentBlock = task::syncWait(
-            ledger::getBlockData(view, 0, ledger::HEADER, *nodeA.blockFactory));
-        genesisHash = protocol::ethHeaderHash(
-            protocol::EthBlockHeader(*parentBlock->blockHeader()).data());
+        auto parentBlock =
+            task::syncWait(ledger::getBlockData(view, 0, ledger::HEADER, *nodeA.blockFactory));
+        genesisHash =
+            protocol::ethHeaderHash(protocol::EthBlockHeader(*parentBlock->blockHeader()).data());
     }
     for (auto* node : {&nodeA, &nodeB})
     {
@@ -866,8 +1103,8 @@ BOOST_FIXTURE_TEST_CASE(selfBuiltCommitJournalsForShallowReorg, EL1BReorgFixture
 
     // Node A: build block B (2-gwei withdrawal credit) and commit it self-built.
     auto attributesA = makePayloadAttributesV3(c_blockTimestampMs);
-    attributesA.withdrawals = std::vector<WithdrawalV1>{WithdrawalV1{.index = 0,
-        .validatorIndex = 1, .amount = 2, .address = recipientAddress}};
+    attributesA.withdrawals = std::vector<WithdrawalV1>{
+        WithdrawalV1{.index = 0, .validatorIndex = 1, .amount = 2, .address = recipientAddress}};
     auto fcuA = task::syncWait(serviceA.updateForkchoice(state, &attributesA, 3));
     BOOST_REQUIRE(fcuA.payloadId.has_value());
     auto dataA = task::syncWait(serviceA.getPayload(*fcuA.payloadId, 3));
@@ -878,8 +1115,7 @@ BOOST_FIXTURE_TEST_CASE(selfBuiltCommitJournalsForShallowReorg, EL1BReorgFixture
     auto committedA = task::syncWait(serviceA.newPayload(requestA, 3));
     BOOST_CHECK(committedA.status == PayloadValidationStatus::Valid);
     BOOST_CHECK_EQUAL(
-        task::syncWait(el1bBalance(nodeA.storage.latestBackend(), recipient)),
-        u256(2000000000));
+        task::syncWait(el1bBalance(nodeA.storage.latestBackend(), recipient)), u256(2000000000));
     // FakeLedger::asyncPrewriteBlock is a no-op: write the ledger metadata rows the real
     // Ledger::prewriteBlock would have written (the established pattern of
     // TestEthereumChainRollback / TestMPTPrunerSyncWiring).
@@ -902,8 +1138,8 @@ BOOST_FIXTURE_TEST_CASE(selfBuiltCommitJournalsForShallowReorg, EL1BReorgFixture
 
     // Node B: build the COMPETING block B' at the same height (5-gwei credit).
     auto attributesB = makePayloadAttributesV3(c_blockTimestampMs);
-    attributesB.withdrawals = std::vector<WithdrawalV1>{WithdrawalV1{.index = 0,
-        .validatorIndex = 1, .amount = 5, .address = recipientAddress}};
+    attributesB.withdrawals = std::vector<WithdrawalV1>{
+        WithdrawalV1{.index = 0, .validatorIndex = 1, .amount = 5, .address = recipientAddress}};
     auto fcuB = task::syncWait(serviceB.updateForkchoice(state, &attributesB, 3));
     BOOST_REQUIRE(fcuB.payloadId.has_value());
     auto dataB = task::syncWait(serviceB.getPayload(*fcuB.payloadId, 3));
@@ -928,11 +1164,9 @@ BOOST_FIXTURE_TEST_CASE(selfBuiltCommitJournalsForShallowReorg, EL1BReorgFixture
     // B's 2-gwei credit is rolled back; only B''s 5 gwei remains, the head is 1 and
     // the canonical row at 1 names B'.
     BOOST_CHECK_EQUAL(
-        task::syncWait(el1bBalance(nodeA.storage.latestBackend(), recipient)),
-        u256(5000000000));
+        task::syncWait(el1bBalance(nodeA.storage.latestBackend(), recipient)), u256(5000000000));
     auto view = nodeA.storage.fork();
-    auto const head =
-        task::syncWait(ledger::getCurrentBlockNumber(view, ledger::fromStorage));
+    auto const head = task::syncWait(ledger::getCurrentBlockNumber(view, ledger::fromStorage));
     BOOST_CHECK_EQUAL(head, 1);
     auto canonical = task::syncWait(ledger::getBlockHash(view, 1, ledger::fromStorage));
     BOOST_REQUIRE(canonical.has_value());
@@ -962,10 +1196,10 @@ BOOST_FIXTURE_TEST_CASE(reorgRollbackRefusedAnswersSyncing, EL1BReorgFixture)
     h256 genesisHash;
     {
         auto view = nodeA.storage.fork();
-        auto parentBlock = task::syncWait(
-            ledger::getBlockData(view, 0, ledger::HEADER, *nodeA.blockFactory));
-        genesisHash = protocol::ethHeaderHash(
-            protocol::EthBlockHeader(*parentBlock->blockHeader()).data());
+        auto parentBlock =
+            task::syncWait(ledger::getBlockData(view, 0, ledger::HEADER, *nodeA.blockFactory));
+        genesisHash =
+            protocol::ethHeaderHash(protocol::EthBlockHeader(*parentBlock->blockHeader()).data());
     }
     for (auto* node : {&nodeA, &nodeB})
     {
@@ -977,8 +1211,8 @@ BOOST_FIXTURE_TEST_CASE(reorgRollbackRefusedAnswersSyncing, EL1BReorgFixture)
 
     // Node A builds block B and commits it self-built.
     auto attributesA = makePayloadAttributesV3(c_blockTimestampMs);
-    attributesA.withdrawals = std::vector<WithdrawalV1>{WithdrawalV1{.index = 0,
-        .validatorIndex = 1, .amount = 2, .address = recipientAddress}};
+    attributesA.withdrawals = std::vector<WithdrawalV1>{
+        WithdrawalV1{.index = 0, .validatorIndex = 1, .amount = 2, .address = recipientAddress}};
     auto fcuA = task::syncWait(serviceA.updateForkchoice(state, &attributesA, 3));
     BOOST_REQUIRE(fcuA.payloadId.has_value());
     auto dataA = task::syncWait(serviceA.getPayload(*fcuA.payloadId, 3));
@@ -1001,8 +1235,8 @@ BOOST_FIXTURE_TEST_CASE(reorgRollbackRefusedAnswersSyncing, EL1BReorgFixture)
     // node A. The reorg route resolves the canonical parent (genesis), the retry
     // cannot rewind, and the answer must be SYNCING — no exception escapes.
     auto attributesB = makePayloadAttributesV3(c_blockTimestampMs);
-    attributesB.withdrawals = std::vector<WithdrawalV1>{WithdrawalV1{.index = 0,
-        .validatorIndex = 1, .amount = 5, .address = recipientAddress}};
+    attributesB.withdrawals = std::vector<WithdrawalV1>{
+        WithdrawalV1{.index = 0, .validatorIndex = 1, .amount = 5, .address = recipientAddress}};
     auto fcuB = task::syncWait(serviceB.updateForkchoice(state, &attributesB, 3));
     BOOST_REQUIRE(fcuB.payloadId.has_value());
     auto dataB = task::syncWait(serviceB.getPayload(*fcuB.payloadId, 3));
@@ -1017,15 +1251,280 @@ BOOST_FIXTURE_TEST_CASE(reorgRollbackRefusedAnswersSyncing, EL1BReorgFixture)
 
     // The committed chain is untouched: still B's world state at head 1.
     BOOST_CHECK_EQUAL(
-        task::syncWait(el1bBalance(nodeA.storage.latestBackend(), recipient)),
-        u256(2000000000));
+        task::syncWait(el1bBalance(nodeA.storage.latestBackend(), recipient)), u256(2000000000));
     auto view = nodeA.storage.fork();
-    auto const head =
-        task::syncWait(ledger::getCurrentBlockNumber(view, ledger::fromStorage));
+    auto const head = task::syncWait(ledger::getCurrentBlockNumber(view, ledger::fromStorage));
     BOOST_CHECK_EQUAL(head, 1);
     auto canonical = task::syncWait(ledger::getBlockHash(view, 1, ledger::fromStorage));
     BOOST_REQUIRE(canonical.has_value());
     BOOST_CHECK_EQUAL(*canonical, requestA.executionPayload.blockHash);
+}
+
+// R1 regression (commit lane, reorgWindow > 0): a storage fault INSIDE the self-built
+// commit's rollback-journal capture must not leave a header-only artifact behind — the
+// catch hands the executed view back to the artifact before the exception escapes, so
+// the CL's retry re-runs take-out + capture from the intact artifact and commits the
+// FULL block: state layer, ledger rows, and the journal itself.
+BOOST_FIXTURE_TEST_CASE(captureFaultRetryCommitsWithStateAndJournal, EL1BFaultFixture)
+{
+    auto const recipient = el1bEvmcAddress(0x60);
+    auto const recipientAddress =
+        bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+    auto request = el1bBuildWithdrawalPayload(*this, recipientAddress);
+
+    // The capture reads the pre-block account rows from the committed plane; arm every
+    // account read to fail. The exception must escape newPayload (the RPC layer maps it
+    // to -32603), with the artifact restored for the retry.
+    nodeA.backendStorage.accountReadThrowRemaining->store(100);
+    BOOST_CHECK_THROW(task::syncWait(serviceA.newPayload(request, 3)), std::runtime_error);
+    nodeA.backendStorage.accountReadThrowRemaining->store(0);
+    // Nothing landed: no state, no ledger row (the prewrite never ran).
+    BOOST_CHECK_EQUAL(task::syncWait(el1bBalance(nodeA.backendStorage, recipient)), u256(0));
+    BOOST_CHECK_EQUAL(ledgerA->prewriteCount.load(), 0);
+
+    // The CL's retry commits the full block from the restored artifact.
+    auto committed = task::syncWait(serviceA.newPayload(request, 3));
+    BOOST_CHECK(committed.status == PayloadValidationStatus::Valid);
+    BOOST_CHECK_EQUAL(ledgerA->prewriteCount.load(), 1);
+    BOOST_CHECK_EQUAL(
+        task::syncWait(el1bBalance(nodeA.backendStorage, recipient)), u256(2000000000));
+    auto journalEntry = task::syncWait(storage2::readOne(nodeA.backendStorage,
+        executor_v1::StateKey{ledger::SYS_ROLLBACK_JOURNAL, std::string("1")}));
+    BOOST_CHECK(journalEntry.has_value());
+}
+
+// R1 regression (commit lane, reorgWindow > 0): a duplicate newPayload racing an
+// in-flight commit must NEVER see a header-only artifact. T1 commits but parks inside
+// the journal capture (holding m_commitMutex, the artifact's view already taken out);
+// T2's duplicate must BLOCK on m_commitMutex — not grab the header-only artifact and
+// commit the block without its state layer. T1's capture then fails once, the catch
+// restores the view, and T2 commits the full block exactly once.
+BOOST_FIXTURE_TEST_CASE(concurrentDuplicateNewPayloadCommitsStateOnce, EL1BFaultFixture)
+{
+    auto const recipient = el1bEvmcAddress(0x61);
+    auto const recipientAddress =
+        bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+    auto request = el1bBuildWithdrawalPayload(*this, recipientAddress);
+
+    // Park the first account read of T1's journal capture until the gate opens.
+    nodeA.backendStorage.accountReadGate->store(true);
+    nodeA.backendStorage.accountReadGateOpen->store(false);
+    nodeA.backendStorage.accountReadParked->store(false);
+
+    std::atomic<bool> t1Threw{false};
+    std::thread t1([&] {
+        try
+        {
+            auto status = task::syncWait(serviceA.newPayload(request, 3));
+            (void)status;
+        }
+        catch (...)
+        {
+            t1Threw.store(true, std::memory_order_release);
+        }
+    });
+    while (!nodeA.backendStorage.accountReadParked->load(std::memory_order_acquire))
+    {
+        std::this_thread::yield();
+    }
+
+    // T2: the CL's duplicate submission. It must block on m_commitMutex for as long as
+    // T1 is parked inside the capture — pre-fix it would have taken the header-only
+    // artifact and committed without the state layer.
+    std::atomic<bool> t2Done{false};
+    auto t2Status = PayloadValidationStatus::Invalid;
+    std::thread t2([&] {
+        auto status = task::syncWait(serviceA.newPayload(request, 3));
+        t2Status = status.status;
+        t2Done.store(true, std::memory_order_release);
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    BOOST_CHECK(!t2Done.load(std::memory_order_acquire));
+
+    // Fail T1's capture exactly once (the R1 catch restores the view into the
+    // artifact), then let everything through: T2 re-runs take-out + capture on the
+    // intact artifact and commits.
+    nodeA.backendStorage.accountReadThrowRemaining->store(1);
+    nodeA.backendStorage.accountReadGateOpen->store(true);
+    nodeA.backendStorage.accountReadGate->store(false);
+    t1.join();
+    BOOST_CHECK(t1Threw.load(std::memory_order_acquire));
+    t2.join();
+    BOOST_CHECK(t2Status == PayloadValidationStatus::Valid);
+
+    // Exactly one commit happened, with the state layer and the journal.
+    BOOST_CHECK_EQUAL(ledgerA->prewriteCount.load(), 1);
+    BOOST_CHECK_EQUAL(
+        task::syncWait(el1bBalance(nodeA.backendStorage, recipient)), u256(2000000000));
+    auto journalEntry = task::syncWait(storage2::readOne(nodeA.backendStorage,
+        executor_v1::StateKey{ledger::SYS_ROLLBACK_JOURNAL, std::string("1")}));
+    BOOST_CHECK(journalEntry.has_value());
+}
+
+// R6 (build lane): EthereumState's fail-safe reads swallow a storage fault into the
+// block's shared EthStorageErrorSlot, and executeEthereumBlock's block-boundary check
+// turns it into a loud EthStorageError. The build must FAIL — a poisoned block (a
+// zero-read balance masquerading as state) is never sealed, never committed.
+BOOST_FIXTURE_TEST_CASE(buildLaneStorageFaultFailsBuildWithoutCommit, EL1BFaultFixture)
+{
+    auto const recipient = el1bEvmcAddress(0x62);
+    auto const recipientAddress =
+        bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    nodeA.seedGenesis(parent, {});
+
+    ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+    auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
+    attributes.withdrawals = std::vector<WithdrawalV1>{
+        WithdrawalV1{.index = 0, .validatorIndex = 1, .amount = 2, .address = recipientAddress}};
+
+    // Every account read fails: the block-start system call / withdrawal credit records
+    // the swallowed fault, and the boundary check throws. updateForkchoice only absorbs
+    // OpExecutionInternalError, so the EthStorageError reaches the caller (-32603).
+    nodeA.backendStorage.accountReadThrowRemaining->store(100);
+    BOOST_CHECK_THROW(task::syncWait(serviceA.updateForkchoice(state, &attributes, 3)),
+        executor_v1::eth::EthStorageError);
+    nodeA.backendStorage.accountReadThrowRemaining->store(0);
+
+    // Nothing committed: the head stays at genesis and the withdrawal never landed.
+    auto view = nodeA.storage.fork();
+    auto const head = task::syncWait(ledger::getCurrentBlockNumber(view, ledger::fromStorage));
+    BOOST_CHECK_EQUAL(head, 0);
+    BOOST_CHECK_EQUAL(task::syncWait(el1bBalance(nodeA.backendStorage, recipient)), u256(0));
+}
+
+// R6 (verify lane): the same swallowed fault during verifyAndCommit must THROW
+// EthStorageError out of the verifier — mapped by the caller to SYNCING / a failed sync
+// round — and never surface as `result.valid == false`: a storage fault must not judge
+// a legal block INVALID.
+BOOST_FIXTURE_TEST_CASE(verifyLaneStorageFaultThrowsInsteadOfInvalid, EL1BFaultFixture)
+{
+    auto const recipient = el1bEvmcAddress(0x63);
+    auto const recipientAddress =
+        bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+    auto request = el1bBuildWithdrawalPayload(*this, recipientAddress);
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    nodeB.seedGenesis(parent, {});
+
+    auto converted = engine::detail::executionPayloadToEthBlock(request);
+    auto* external = std::get_if<engine_common::ExternalPayloadBlock>(&converted);
+    BOOST_REQUIRE(external != nullptr);
+
+    auto& hashImpl = *nodeA.cryptoSuite->hashImpl();
+    EL1BVerifier::TransactionDecoder decoder =
+        [&hashImpl](bcos::bytes const& raw) -> protocol::Transaction::Ptr {
+        return bcos::rpc::decodeWeb3RawTransaction(
+            bcos::bytesConstRef(raw.data(), raw.size()), hashImpl);
+    };
+    using ViewType = FaultyGlobalStateStorage::ViewType;
+    EL1BVerifier::StateRootCalculator<ViewType> stateRootCalc =
+        [](ViewType&, uint32_t) -> task::Task<crypto::HashType> {
+        BOOST_THROW_EXCEPTION(
+            std::runtime_error{"legacy state-root fold must not run for executor v2"});
+    };
+    auto forks = el1bCancunForks();
+
+    nodeB.backendStorage.accountReadThrowRemaining->store(100);
+    BOOST_CHECK_THROW(
+        task::syncWait(nodeB.verifier->verifyAndCommit(nodeB.storage, *nodeB.fakeLedger,
+            external->ethHeader, parent, external->rawTransactions, external->rawWithdrawals, forks,
+            /*chainId=*/1, /*rawUncles=*/{}, /*mergeBlock=*/0, decoder, stateRootCalc)),
+        executor_v1::eth::EthStorageError);
+    nodeB.backendStorage.accountReadThrowRemaining->store(0);
+
+    // The block was not committed on node B.
+    BOOST_CHECK_EQUAL(task::syncWait(el1bBalance(nodeB.backendStorage, recipient)), u256(0));
+}
+
+// R7 (seal side): the L1 seal filter enforces the fork schedule's per-block blob
+// maximum — the static pool falls back to the Cancun cap of 6. Seven pooled one-blob
+// transactions from one sender build a block with exactly six; the seventh stays
+// pooled (with its sidecar) for a later block instead of entering the block with a
+// validation-failure receipt, and the capped block still verifies.
+BOOST_FIXTURE_TEST_CASE(sealCapsBlockBlobsAtScheduleMaximum, EL1BFixture)
+{
+    auto& hashImpl = *nodeA.cryptoSuite->hashImpl();
+    crypto::Secp256k1Crypto secp;
+    auto senderKey = secp.generateKeyPair();
+    auto const sender = el1bEvmcAddress(senderKey->address(nodeA.cryptoSuite->hashImpl()));
+    auto const recipient = el1bEvmcAddress(0x64);
+
+    std::vector<bcos::bytes> rawBlobs;
+    for (uint64_t nonce = 0; nonce < 7; ++nonce)
+    {
+        auto sidecar = el1bMakeSidecar(static_cast<uint8_t>(0x30 + nonce));
+        auto const versionedHash =
+            crypto::kzg::versionedHashFromCommitment(bcos::ref(sidecar.commitments.front()));
+        bcos::rpc::Web3Transaction blob;
+        blob.type = bcos::rpc::TransactionType::EIP4844;
+        blob.chainId = 1;
+        blob.nonce = nonce;
+        blob.maxPriorityFeePerGas = u256(100000000);
+        blob.maxFeePerGas = u256(2000000000);
+        blob.gasLimit = 21000;
+        blob.to = bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+        blob.value = u256(7);
+        blob.maxFeePerBlobGas = u256(1000000000);
+        blob.blobVersionedHashes = {versionedHash};
+        rawBlobs.push_back(el1bSign(blob, *senderKey));
+        el1bPoolAdd(memPool, hashImpl, rawBlobs.back(), std::move(sidecar));
+    }
+
+    auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
+    std::vector<std::pair<evmc_address, u256>> funded{{sender, u256(1000000000000000000ULL)}};
+    nodeA.seedGenesis(parent, funded);
+    nodeB.seedGenesis(parent, funded);
+
+    ForkchoiceState state{c_genesisHash, h256{}, h256{}};
+    auto attributes = makePayloadAttributesV3(c_blockTimestampMs);
+    auto fcu = task::syncWait(service.updateForkchoice(state, &attributes, 3));
+    BOOST_CHECK(fcu.payloadStatus.status == PayloadValidationStatus::Valid);
+    BOOST_REQUIRE(fcu.payloadId.has_value());
+    auto data = task::syncWait(service.getPayload(*fcu.payloadId, 3));
+    BOOST_REQUIRE(data);
+    auto const& payload = data->executionPayload;
+
+    // Exactly the 6-blob budget made it into the block, in nonce order.
+    BOOST_REQUIRE_EQUAL(payload.transactions.size(), 6);
+    for (std::size_t i = 0; i < 6; ++i)
+    {
+        BOOST_CHECK(payload.transactions[i].raw == rawBlobs[i]);
+    }
+    BOOST_REQUIRE(payload.blobGasUsed.has_value());
+    BOOST_CHECK_EQUAL(*payload.blobGasUsed, u256(6 * 131072));
+    BOOST_REQUIRE(data->blobsBundle.has_value());
+    BOOST_CHECK_EQUAL(data->blobsBundle->commitments.size(), 6);
+
+    // Nonce 6 stayed pooled, sidecar registered for a later block.
+    auto seventh = bcos::rpc::decodeWeb3RawTransaction(
+        bcos::bytesConstRef(rawBlobs[6].data(), rawBlobs[6].size()), hashImpl);
+    BOOST_REQUIRE(seventh);
+    BOOST_CHECK(memPool.hasBlobSidecar(seventh->hash()));
+
+    // The capped block verifies on node B.
+    NewPayloadRequest request;
+    request.executionPayload = payload;
+    request.parentBeaconBlockRoot = data->parentBeaconBlockRoot;
+    auto converted = engine::detail::executionPayloadToEthBlock(request);
+    auto* external = std::get_if<engine_common::ExternalPayloadBlock>(&converted);
+    BOOST_REQUIRE(external != nullptr);
+    EL1BVerifier::TransactionDecoder decoder =
+        [&hashImpl](bcos::bytes const& raw) -> protocol::Transaction::Ptr {
+        return bcos::rpc::decodeWeb3RawTransaction(
+            bcos::bytesConstRef(raw.data(), raw.size()), hashImpl);
+    };
+    using ViewType = RealGlobalStateStorage::ViewType;
+    EL1BVerifier::StateRootCalculator<ViewType> stateRootCalc =
+        [](ViewType&, uint32_t) -> task::Task<crypto::HashType> {
+        BOOST_THROW_EXCEPTION(
+            std::runtime_error{"legacy state-root fold must not run for executor v2"});
+    };
+    auto forks = el1bCancunForks();
+    auto result = task::syncWait(nodeB.verifier->verifyAndCommit(nodeB.storage, *nodeB.fakeLedger,
+        external->ethHeader, parent, external->rawTransactions, external->rawWithdrawals, forks,
+        /*chainId=*/1, /*rawUncles=*/{}, /*mergeBlock=*/0, decoder, stateRootCalc));
+    BOOST_CHECK(result.valid);
+    BOOST_CHECK_MESSAGE(result.error.empty(), result.error);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

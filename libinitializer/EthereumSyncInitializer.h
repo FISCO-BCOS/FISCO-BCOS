@@ -23,30 +23,31 @@
  */
 #pragma once
 
-#include "libinitializer/Common.h"
-#include "libinitializer/GlobalStateStorageInitializer.h"
-#include "libinitializer/TxGossipService.h"
 #include "bcos-devp2p/eth/ForkId.h"
 #include "bcos-devp2p/rlpx/Client.h"
 #include "bcos-devp2p/sync/BlockExchange.h"
 #include "bcos-devp2p/sync/Bootnodes.h"
 #include "bcos-devp2p/sync/HeaderValidator.h"
+#include "bcos-framework/ledger/LedgerConfigState.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-ledger/mpt/CommitObserver.h"
-#include "bcos-tool/NodeConfig.h"
-#include "bcos-transaction-scheduler/EthereumBlockVerifier.h"
-#include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
-#include "bcos-tx-validator/TxValidator.h"
-#include "engine/bcos-engine/ClSyncCoordination.h"
 #include "bcos-rlp-protocol/EthBlockHeader.h"
 #include "bcos-rlp-protocol/EthGenesisHeader.h"
 #include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"  // complete type for shared_ptr upcast in decodeRaw()
 #include "bcos-task/Wait.h"
+#include "bcos-tool/NodeConfig.h"
+#include "bcos-transaction-scheduler/EthereumBlockVerifier.h"
+#include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
+#include "bcos-tx-validator/TxValidator.h"
+#include "engine/bcos-engine/ClSyncCoordination.h"
 #include "ethereum-executor/EthereumExecutor.h"
+#include "libinitializer/Common.h"
+#include "libinitializer/GlobalStateStorageInitializer.h"
+#include "libinitializer/TxGossipService.h"
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/throw_exception.hpp>
@@ -98,6 +99,10 @@ public:
     // _commitObserver: the shared MPT pruner (storage.mpt_prune_window > 0), forwarded to
     // the verifier so devp2p-synced commits feed pruning like every other commit path;
     // null keeps the verifier's built-in NoopCommitObserver.
+    // _ledgerConfigState: the node-wide admission configuration holder, republished after
+    // every committed block — this lane bypasses MultiVersionScheduler's publishing
+    // wrapper, so without it transaction admission (e.g. the mempool's per-fork blob
+    // bound) would keep judging against the boot snapshot. Null skips the republish.
     // _sharedVerifier: when set (the [engine_rpc] EL wiring), the sync loop verifies and
     // commits through this shared instance instead of constructing its own.
     // _clSync: the CL-driven coordination state shared with the Engine API service
@@ -107,13 +112,13 @@ public:
     // TxGossipService on dedicated sessions alongside the sync loop; either null
     // (non-EL / OP / engine_rpc-less wiring) keeps gossip off.
     EthereumSyncInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
-        bcos::ledger::LedgerInterface::Ptr _ledger,
-        bcos::protocol::BlockFactory::Ptr _blockFactory,
+        bcos::ledger::LedgerInterface::Ptr _ledger, bcos::protocol::BlockFactory::Ptr _blockFactory,
         std::shared_ptr<scheduler_v1::SchedulerSerialImpl> _scheduler,
         std::shared_ptr<executor_v1::eth::EthereumExecutor> _executor,
         GlobalStateStorageInitializer::Ptr _globalStateStorageInitializer,
         bcos::IOServicePool::Ptr _ioServicePool,
         std::shared_ptr<ledger::mpt::CommitObserver> _commitObserver = nullptr,
+        bcos::ledger::LedgerConfigState::Ptr _ledgerConfigState = nullptr,
         std::shared_ptr<Verifier> _sharedVerifier = nullptr,
         std::shared_ptr<engine::engine_common::ClSyncCoordination> _clSync = nullptr,
         bcos::txpool::MemPoolImpl* _gossipMemPool = nullptr,
@@ -126,6 +131,7 @@ public:
         m_globalStateStorageInitializer(std::move(_globalStateStorageInitializer)),
         m_ioServicePool(std::move(_ioServicePool)),
         m_commitObserver(std::move(_commitObserver)),
+        m_ledgerConfigState(std::move(_ledgerConfigState)),
         m_sharedVerifier(std::move(_sharedVerifier)),
         m_clSync(std::move(_clSync)),
         m_gossipMemPool(_gossipMemPool),
@@ -195,19 +201,19 @@ public:
             bcos::protocol::toEthBlockHeaderData(ethGenesisHeader.value()));
         if (projectedHash != ethGenesisHeader->m_hash)
         {
-            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "Ethereum L1 EL mode: [eth_genesis_header].hash " +
-                                      ethGenesisHeader->m_hash.hex() +
-                                      " does not match the re-computed genesis hash " +
-                                      projectedHash.hex()));
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                    "Ethereum L1 EL mode: [eth_genesis_header].hash " +
+                    ethGenesisHeader->m_hash.hex() +
+                    " does not match the re-computed genesis hash " + projectedHash.hex()));
         }
         // Bootnode file must exist and parse (validates the enode list eagerly).
         auto nodes = bcos::devp2p::sync::loadBootnodes(nodeConfig.ethereumBootnodesFile());
         if (nodes.empty())
         {
-            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "Ethereum L1 EL mode: no bootnodes in " +
-                                      nodeConfig.ethereumBootnodesFile()));
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                    "Ethereum L1 EL mode: no bootnodes in " + nodeConfig.ethereumBootnodesFile()));
         }
     }
 
@@ -309,9 +315,9 @@ private:
     struct ResumePoint
     {
         uint64_t startNumber;
-        bcos::protocol::EthBlockHeaderData anchor;        // local head (or genesis)
-        bcos::protocol::EthBlockHeaderData prevHeader;    // parent for the first download
-        bcos::protocol::EthBlockHeaderData genesisHeader; // chain genesis (handshake pin)
+        bcos::protocol::EthBlockHeaderData anchor;         // local head (or genesis)
+        bcos::protocol::EthBlockHeaderData prevHeader;     // parent for the first download
+        bcos::protocol::EthBlockHeaderData genesisHeader;  // chain genesis (handshake pin)
     };
 
     ResumePoint resumePoint() const
@@ -324,13 +330,12 @@ private:
             return {1, genesisHeader, genesisHeader, genesisHeader};
         }
         // Resume from the local head: anchor = local head header, start at head + 1.
-        auto headBlock = task::syncWait(
-            ledger::getBlockData(*m_ledger, current, bcos::ledger::HEADER));
+        auto headBlock =
+            task::syncWait(ledger::getBlockData(*m_ledger, current, bcos::ledger::HEADER));
         if (!headBlock || !headBlock->blockHeader())
         {
-            BOOST_THROW_EXCEPTION(std::runtime_error(
-                "EL sync: cannot read local head block " + std::to_string(current) +
-                " for resume"));
+            BOOST_THROW_EXCEPTION(std::runtime_error("EL sync: cannot read local head block " +
+                                                     std::to_string(current) + " for resume"));
         }
         // Convert the stored Tars header back to the Ethereum header domain. The
         // EthBlockHeader constructor copies the fork-gated optionals only when the
@@ -348,8 +353,7 @@ private:
         // No logging here: the sync loop calls this per bootnode, so the
         // "resuming from local head" INFO is emitted at the call site, once per
         // head advance.
-        return {
-            static_cast<uint64_t>(current + 1), head, head, genesisHeader};
+        return {static_cast<uint64_t>(current + 1), head, head, genesisHeader};
     }
 
     bcos::devp2p::sync::ChainConfig devp2pChainConfig() const
@@ -384,7 +388,8 @@ private:
     /// rule #2 (our checksum is the remote's genesis-sum and next matches its first
     /// fork) — unlike a wall-clock-derived all-forks checksum, which older remotes
     /// (e.g. geth 1.14.x, which only knows forks up to Cancun) reject outright.
-    bcos::devp2p::eth::ForkId computeForkId(uint64_t _localHeadNumber, uint64_t _localHeadTime) const
+    bcos::devp2p::eth::ForkId computeForkId(
+        uint64_t _localHeadNumber, uint64_t _localHeadTime) const
     {
         auto const& genesis = m_nodeConfig->genesisConfig().m_ethGenesisHeader.value();
         uint32_t hash = bcos::devp2p::eth::crc32(
@@ -473,9 +478,9 @@ private:
         if (hex.size() != 64 ||
             !std::all_of(hex.begin(), hex.end(), [](unsigned char c) { return std::isxdigit(c); }))
         {
-            throw std::runtime_error(
-                "EL sync: node key file " + _path + " must hold exactly 64 hex chars " +
-                "(a 32-byte secp256k1 private key, optional 0x prefix)");
+            throw std::runtime_error("EL sync: node key file " + _path +
+                                     " must hold exactly 64 hex chars " +
+                                     "(a 32-byte secp256k1 private key, optional 0x prefix)");
         }
         return bcos::fromHex(hex);
     }
@@ -491,8 +496,8 @@ private:
         if (!configured.empty())
         {
             auto key = readNodeKeyFile(configured);
-            INITIALIZER_LOG(INFO)
-                << LOG_DESC("EL sync: loaded node key") << LOG_KV("file", configured);
+            INITIALIZER_LOG(INFO) << LOG_DESC("EL sync: loaded node key")
+                                  << LOG_KV("file", configured);
             return makeNodeKeyPair(std::move(key), configured);
         }
         auto const dir = std::filesystem::path(m_nodeConfig->privateKeyPath()).parent_path();
@@ -500,8 +505,8 @@ private:
         if (std::filesystem::exists(path))
         {
             auto key = readNodeKeyFile(path.string());
-            INITIALIZER_LOG(INFO)
-                << LOG_DESC("EL sync: loaded persisted node key") << LOG_KV("file", path);
+            INITIALIZER_LOG(INFO) << LOG_DESC("EL sync: loaded persisted node key")
+                                  << LOG_KV("file", path);
             return makeNodeKeyPair(std::move(key), path.string());
         }
         bcos::devp2p::rlpx::EccKeyPair generated;  // random keypair
@@ -517,8 +522,8 @@ private:
                     "EL sync: cannot persist generated node key to " + path.string());
             }
         }
-        std::filesystem::permissions(path, std::filesystem::perms::owner_read |
-                                               std::filesystem::perms::owner_write);
+        std::filesystem::permissions(
+            path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
         {
             std::ofstream out(path, std::ios::trunc);
             if (!out)
@@ -577,15 +582,16 @@ private:
         if (localHash != _checkpoint.hash)
         {
             INITIALIZER_LOG(FATAL)
-                << LOG_DESC("EL sync: finalized checkpoint mismatch — the local chain is on "
-                            "a wrong fork; refusing to start the sync loop")
+                << LOG_DESC(
+                       "EL sync: finalized checkpoint mismatch — the local chain is on "
+                       "a wrong fork; refusing to start the sync loop")
                 << LOG_KV("checkpointNumber", _checkpoint.number)
                 << LOG_KV("expectedHash", _checkpoint.hash.hex())
                 << LOG_KV("localHash", localHash.hex())
                 << LOG_KV("action",
-                    "no chain-rollback tool ships yet, so the only supported recovery is "
-                    "a full resync from scratch; verify the bootnode list / "
-                    "finalized_checkpoint setting, then restart");
+                       "no chain-rollback tool ships yet, so the only supported recovery is "
+                       "a full resync from scratch; verify the bootnode list / "
+                       "finalized_checkpoint setting, then restart");
             return false;
         }
         INITIALIZER_LOG(INFO) << LOG_DESC("EL sync: finalized checkpoint verified")
@@ -623,11 +629,10 @@ private:
         // API commit paths. When Initializer wired the Engine API external lane
         // ([engine_rpc] EL mode), the lanes share ONE verifier instance — the reference
         // below keeps the call sites unchanged either way.
-        auto verifierHolder = m_sharedVerifier ?
-                                  m_sharedVerifier :
-                                  std::make_shared<Verifier>(
-                                      *m_scheduler, *m_executor, *m_blockFactory,
-                                      m_commitObserver, m_nodeConfig->ethereumReorgWindow());
+        auto verifierHolder = m_sharedVerifier ? m_sharedVerifier :
+                                                 std::make_shared<Verifier>(*m_scheduler,
+                                                     *m_executor, *m_blockFactory, m_commitObserver,
+                                                     m_nodeConfig->ethereumReorgWindow());
         Verifier& verifier = *verifierHolder;
         auto forks = evmcForkSchedule(*m_nodeConfig);
         auto chainId = m_nodeConfig->ethereumChainId();
@@ -704,10 +709,10 @@ private:
                 bool const clDriving = m_clSync && m_clSync->clDriving();
                 if (clDriving && !clDrivingLogged)
                 {
-                    INITIALIZER_LOG(INFO)
-                        << LOG_DESC("EL sync: first forkchoiceUpdated served — the CL now "
-                                    "drives the chain; autonomous advance stays off for the "
-                                    "rest of this process lifetime");
+                    INITIALIZER_LOG(INFO) << LOG_DESC(
+                        "EL sync: first forkchoiceUpdated served — the CL now "
+                        "drives the chain; autonomous advance stays off for the "
+                        "rest of this process lifetime");
                     clDrivingLogged = true;
                 }
                 bool const autonomousAllowed = !clDriving && !autonomousSuspended;
@@ -769,9 +774,7 @@ private:
                             << LOG_DESC("EL sync: resuming from local head")
                             << LOG_KV("headNumber", resume.anchor.number)
                             << LOG_KV("headHash",
-                                bcos::protocol::ethHeaderHash(resume.anchor)
-                                    .hex()
-                                    .substr(0, 18))
+                                   bcos::protocol::ethHeaderHash(resume.anchor).hex().substr(0, 18))
                             << LOG_KV("resumeFrom", resume.startNumber);
                         lastLoggedHead = static_cast<int64_t>(resume.anchor.number);
                     }
@@ -792,8 +795,7 @@ private:
                             << LOG_DESC("EL sync: bootnode failed, trying next")
                             << LOG_KV("host", peer.host) << LOG_KV("port", peer.port)
                             << LOG_KV("error", e.what())
-                            << LOG_KV("diag",
-                                boost::current_exception_diagnostic_information());
+                            << LOG_KV("diag", boost::current_exception_diagnostic_information());
                     };
                     // Shared handling for deterministic failures (the typed
                     // catches below): the same block fails identically for every
@@ -811,8 +813,9 @@ private:
                         if (!deterministicStall)
                         {
                             INITIALIZER_LOG(ERROR)
-                                << LOG_DESC("EL sync: cannot advance past the local head with "
-                                            "any bootnode; backing off and retrying")
+                                << LOG_DESC(
+                                       "EL sync: cannot advance past the local head with "
+                                       "any bootnode; backing off and retrying")
                                 << LOG_KV("headNumber", streakAnchor)
                                 << LOG_KV("streak", deterministicStreak)
                                 << LOG_KV("error", e.what());
@@ -841,9 +844,9 @@ private:
                         // EIP-2124 fork-id: mirrors geth's forkid.NewID over the
                         // LOCAL head (genesis on a fresh node), so any Sepolia node
                         // (old or new) accepts us (see computeForkId).
-                        clientConfig.forkId = computeForkId(
-                            static_cast<uint64_t>(resume.anchor.number),
-                            static_cast<uint64_t>(resume.anchor.timestamp));
+                        clientConfig.forkId =
+                            computeForkId(static_cast<uint64_t>(resume.anchor.number),
+                                static_cast<uint64_t>(resume.anchor.timestamp));
 
                         bcos::devp2p::rlpx::RlpxClient client(localKey, clientConfig);
                         // DEBUG: in steady state (caught up) the loop re-dials every
@@ -856,18 +859,17 @@ private:
                             << LOG_KV("startNumber", resume.startNumber);
                         auto established = client.connect();
                         INITIALIZER_LOG(DEBUG)
-                            << LOG_DESC("EL sync: handshake OK")
-                            << LOG_KV("host", peer.host) << LOG_KV("port", peer.port)
-                            << LOG_KV("peerHead",
-                                established.peerStatus.headHash.hex().substr(0, 18));
+                            << LOG_DESC("EL sync: handshake OK") << LOG_KV("host", peer.host)
+                            << LOG_KV("port", peer.port)
+                            << LOG_KV(
+                                   "peerHead", established.peerStatus.headHash.hex().substr(0, 18));
 
                         // Download from the local head onward: startNumber = anchor + 1,
                         // anchor = local head header (genesis on a fresh node). Blocks are
                         // verified in strictly ascending order, which the verifier's
                         // incremental MPT requires — hence the resume point, never a jump.
-                        bcos::devp2p::sync::BlockExchange exchange(
-                            resume.startNumber, anchor, devp2pConfig,
-                            m_nodeConfig->ethereumMaxBatchSize());
+                        bcos::devp2p::sync::BlockExchange exchange(resume.startNumber, anchor,
+                            devp2pConfig, m_nodeConfig->ethereumMaxBatchSize());
 
                         auto prevHeader = resume.prevHeader;
                         uint64_t downloadEnd = 0;
@@ -883,8 +885,8 @@ private:
                             // autonomous lane, so the finalized-checkpoint guard still
                             // applies and a concurrent Engine newPayload commit is absorbed
                             // by the verifier's height guard (StaleOrOutOfOrder below).
-                            auto targetHeader = exchange.requestHeaderByHash(
-                                established.session, *backfillTarget);
+                            auto targetHeader =
+                                exchange.requestHeaderByHash(established.session, *backfillTarget);
                             if (!targetHeader)
                             {
                                 // The peer does not know the target (a very fresh block, or
@@ -892,8 +894,9 @@ private:
                                 // for the round-end log like a declined head lookup.
                                 ++headLookupMisses;
                                 INITIALIZER_LOG(DEBUG)
-                                    << LOG_DESC("EL sync: bootnode does not know the "
-                                                "CL-announced backfill target")
+                                    << LOG_DESC(
+                                           "EL sync: bootnode does not know the "
+                                           "CL-announced backfill target")
                                     << LOG_KV("host", peer.host) << LOG_KV("port", peer.port)
                                     << LOG_KV("targetHash", backfillTarget->hex().substr(0, 18));
                                 continue;
@@ -917,8 +920,7 @@ private:
                                 if (localHash == *backfillTarget)
                                 {
                                     INITIALIZER_LOG(INFO)
-                                        << LOG_DESC(
-                                               "EL sync: backfill target already committed")
+                                        << LOG_DESC("EL sync: backfill target already committed")
                                         << LOG_KV("number", targetHeader->number())
                                         << LOG_KV("hash", backfillTarget->hex().substr(0, 18));
                                 }
@@ -941,15 +943,15 @@ private:
                                         {
                                             task::syncWait(verifier.rollbackChain(
                                                 m_globalStateStorageInitializer->storage(),
-                                                static_cast<int64_t>(targetHeader->number()) -
-                                                    1));
+                                                static_cast<int64_t>(targetHeader->number()) - 1));
                                             rolledBack = true;
                                         }
                                         catch (scheduler_v1::RollbackRefused const& refusal)
                                         {
                                             INITIALIZER_LOG(ERROR)
-                                                << LOG_DESC("EL sync: reorg rollback toward "
-                                                            "the CL-announced target refused")
+                                                << LOG_DESC(
+                                                       "EL sync: reorg rollback toward "
+                                                       "the CL-announced target refused")
                                                 << LOG_KV("number", targetHeader->number())
                                                 << LOG_KV("reason", refusal.what());
                                         }
@@ -958,13 +960,14 @@ private:
                                     {
                                         madeProgress = true;
                                         INITIALIZER_LOG(INFO)
-                                            << LOG_DESC("EL sync: CL-announced target names a "
-                                                        "non-canonical block below the tip — "
-                                                        "rewound the committed chain; "
-                                                        "downloading the CL's fork next round")
+                                            << LOG_DESC(
+                                                   "EL sync: CL-announced target names a "
+                                                   "non-canonical block below the tip — "
+                                                   "rewound the committed chain; "
+                                                   "downloading the CL's fork next round")
                                             << LOG_KV("number", targetHeader->number())
                                             << LOG_KV("targetHash",
-                                                backfillTarget->hex().substr(0, 18))
+                                                   backfillTarget->hex().substr(0, 18))
                                             << LOG_KV("localHash", localHash.hex());
                                         // Keep backfillTarget armed: the next round's
                                         // resume anchor sits at target-1 and the download
@@ -1041,7 +1044,7 @@ private:
                                     << LOG_KV("startNumber", resume.startNumber)
                                     << LOG_KV("peerHeadNumber", peerHead ? peerHead->number() : 0)
                                     << LOG_KV("peerHeadHash",
-                                        established.peerStatus.headHash.hex().substr(0, 18));
+                                           established.peerStatus.headHash.hex().substr(0, 18));
                                 continue;
                             }
                             madeProgress = true;
@@ -1089,16 +1092,14 @@ private:
                                 }
                                 auto result = task::syncWait(verifier.verifyAndCommit(
                                     m_globalStateStorageInitializer->storage(), *m_ledger,
-                                    block.header, prevHeader, block.transactions,
-                                    block.withdrawals, forks, chainId, block.uncles,
-                                    mergeBlock,
+                                    block.header, prevHeader, block.transactions, block.withdrawals,
+                                    forks, chainId, block.uncles, mergeBlock,
                                     [this](bcos::bytes const& raw) { return decodeRaw(raw); },
                                     stateRootCalc));
                                 if (!result.valid)
                                 {
                                     BOOST_THROW_EXCEPTION(BlockVerificationFailed(
-                                        "EL sync: block " +
-                                        std::to_string(block.header.number) +
+                                        "EL sync: block " + std::to_string(block.header.number) +
                                         " verification failed: " + result.error +
                                         " (computedStateRoot=" + result.stateRoot.hex() +
                                         " headerStateRoot=" + block.header.stateRoot.hex() +
@@ -1106,14 +1107,25 @@ private:
                                         " difficulty=" + block.header.difficulty.str() +
                                         " gasUsed=" + block.header.gasUsed.str() + ")"));
                                 }
+                                // TxValidator's "whoever commits a block publishes" contract:
+                                // this lane bypasses MultiVersionScheduler's publishing
+                                // wrapper, so republish the post-commit configuration here or
+                                // transaction admission (e.g. the mempool's per-fork blob
+                                // bound) keeps judging against the boot snapshot. A failing
+                                // refetch throws past downloadRange like a verification
+                                // failure: the block is durable and the next round republishes.
+                                if (m_ledgerConfigState)
+                                {
+                                    m_ledgerConfigState->set(
+                                        task::syncWait(ledger::getLedgerConfig(*m_ledger)));
+                                }
                                 prevHeader = block.header;
                                 lastDownloadedHash = block.hash;
                                 INITIALIZER_LOG(INFO)
                                     << LOG_DESC("EL sync: committed block")
                                     << LOG_KV("number", block.header.number)
                                     << LOG_KV("hash", block.hash.hex().substr(0, 18))
-                                    << LOG_KV("stateRoot",
-                                        result.stateRoot.hex().substr(0, 18));
+                                    << LOG_KV("stateRoot", result.stateRoot.hex().substr(0, 18));
                             });
                         if (expectedTipHash)
                         {
@@ -1185,8 +1197,7 @@ private:
                                 try
                                 {
                                     task::syncWait(verifier.rollbackChain(
-                                        m_globalStateStorageInitializer->storage(),
-                                        localTip - 1));
+                                        m_globalStateStorageInitializer->storage(), localTip - 1));
                                     rolledBack = true;
                                 }
                                 catch (scheduler_v1::RollbackRefused const& refusal)
@@ -1200,9 +1211,10 @@ private:
                             if (rolledBack)
                             {
                                 INITIALIZER_LOG(INFO)
-                                    << LOG_DESC("EL sync: repeated parent hash mismatch — "
-                                                "rewound the committed chain by one block; "
-                                                "retrying the download from the new anchor")
+                                    << LOG_DESC(
+                                           "EL sync: repeated parent hash mismatch — "
+                                           "rewound the committed chain by one block; "
+                                           "retrying the download from the new anchor")
                                     << LOG_KV("oldHead", localTip)
                                     << LOG_KV("newHead", localTip - 1)
                                     << LOG_KV("streak", mismatchStreak);
@@ -1224,17 +1236,18 @@ private:
                                     backfillTarget = std::nullopt;
                                 }
                                 INITIALIZER_LOG(ERROR)
-                                    << LOG_DESC("EL sync: repeated parent hash mismatch at the "
-                                                "same anchor and the reorg is too deep to roll "
-                                                "back; autonomous advance suspended, waiting "
-                                                "for CL direction or operator intervention")
+                                    << LOG_DESC(
+                                           "EL sync: repeated parent hash mismatch at the "
+                                           "same anchor and the reorg is too deep to roll "
+                                           "back; autonomous advance suspended, waiting "
+                                           "for CL direction or operator intervention")
                                     << LOG_KV("anchorNumber", streakAnchor)
                                     << LOG_KV("streak", mismatchStreak)
                                     << LOG_KV("action",
-                                        "the reorg exceeds [ethereum] reorg_window; the only "
-                                        "supported recovery is a full resync from scratch — "
-                                        "verify the bootnode list / finalized_checkpoint "
-                                        "setting, then restart");
+                                           "the reorg exceeds [ethereum] reorg_window; the only "
+                                           "supported recovery is a full resync from scratch — "
+                                           "verify the bootnode list / finalized_checkpoint "
+                                           "setting, then restart");
                             }
                         }
                         logPeerFailure(e);
@@ -1326,9 +1339,8 @@ private:
                 {
                     return;
                 }
-                INITIALIZER_LOG(WARNING)
-                    << LOG_DESC("EL sync: sync round failed, retrying")
-                    << LOG_KV("error", e.what());
+                INITIALIZER_LOG(WARNING) << LOG_DESC("EL sync: sync round failed, retrying")
+                                         << LOG_KV("error", e.what());
                 // Back off briefly before retrying the next bootnode / round.
                 std::this_thread::sleep_for(std::chrono::seconds(3));
             }
@@ -1343,6 +1355,7 @@ private:
     GlobalStateStorageInitializer::Ptr m_globalStateStorageInitializer;
     bcos::IOServicePool::Ptr m_ioServicePool;
     std::shared_ptr<ledger::mpt::CommitObserver> m_commitObserver;
+    bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState;
     std::shared_ptr<Verifier> m_sharedVerifier;
     std::shared_ptr<engine::engine_common::ClSyncCoordination> m_clSync;
     bcos::txpool::MemPoolImpl* m_gossipMemPool = nullptr;

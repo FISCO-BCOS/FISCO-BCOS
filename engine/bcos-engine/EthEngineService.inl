@@ -288,30 +288,53 @@ task::Task<ForkchoiceUpdatedResult> EthEngineService<MemPoolType, GlobalStateSto
 
     if (l1Input.has_value() && !sealedTxs.empty())
     {
-        // EL mode: a blob transaction whose EIP-4844 sidecar never arrived cannot be
-        // assembled into a blobsBundle, so it is unbuildable — skip it, and with it the
-        // rest of the sender's nonce suffix (the executor would reject the gap). The
-        // transaction stays pooled; a later block picks it up once the sidecar lands.
-        std::unordered_set<std::string> blobStalledSenders;
+        // EL mode: two blob-transaction exclusions, each leaving the transaction pooled
+        // for a later block and skipping the rest of the sender's nonce suffix with it
+        // (the executor would reject the nonce gap):
+        //  * the EIP-4844 sidecar never arrived — the transaction cannot be assembled
+        //    into a blobsBundle, so it is unbuildable;
+        //  * the block's blob budget is spent — the EIP-7844 schedule's per-block blob
+        //    maximum at the block's timestamp. The executor's block-level blob gas
+        //    budget (EthereumExecutor::BlockContext) is the backstop, not the filter:
+        //    without this skip an over-budget transaction would enter the block with a
+        //    validation-failure receipt instead of staying pooled.
+        std::unordered_set<std::string> blobSkippedSenders;
+        auto const maxBlobs = m_memPool.maxBlobsPerBlock(payloadAttributes->timestamp / 1000);
+        std::size_t sealedBlobs = 0;
         std::vector<protocol::Transaction::Ptr> buildableTxs;
         buildableTxs.reserve(sealedTxs.size());
         for (auto& sealedTx : sealedTxs)
         {
             std::string sender{sealedTx->sender()};
-            if (blobStalledSenders.contains(sender))
+            if (blobSkippedSenders.contains(sender))
             {
                 continue;
             }
             if (sealedTx->type() ==
                     static_cast<std::uint8_t>(protocol::TransactionType::Web3Transaction) &&
-                !sealedTx->blobVersionedHashes().empty() &&
-                !m_memPool.hasBlobSidecar(sealedTx->hash()))
+                !sealedTx->blobVersionedHashes().empty())
             {
-                blobStalledSenders.insert(std::move(sender));
-                BCOS_LOG(WARNING) << LOG_BADGE("EthEngineService")
-                                  << LOG_DESC("seal: skipping blob transaction without sidecar")
-                                  << LOG_KV("hash", sealedTx->hash().hexPrefixed());
-                continue;
+                if (!m_memPool.hasBlobSidecar(sealedTx->hash()))
+                {
+                    blobSkippedSenders.insert(std::move(sender));
+                    BCOS_LOG(WARNING)
+                        << LOG_BADGE("EthEngineService")
+                        << LOG_DESC("seal: skipping blob transaction without sidecar")
+                        << LOG_KV("hash", sealedTx->hash().hexPrefixed());
+                    continue;
+                }
+                if (sealedBlobs + sealedTx->blobVersionedHashes().size() > maxBlobs)
+                {
+                    blobSkippedSenders.insert(std::move(sender));
+                    BCOS_LOG(INFO) << LOG_BADGE("EthEngineService")
+                                   << LOG_DESC("seal: block blob budget spent; leaving blob "
+                                               "transaction pooled")
+                                   << LOG_KV("hash", sealedTx->hash().hexPrefixed())
+                                   << LOG_KV("sealedBlobs", sealedBlobs)
+                                   << LOG_KV("maxBlobs", maxBlobs);
+                    continue;
+                }
+                sealedBlobs += sealedTx->blobVersionedHashes().size();
             }
             buildableTxs.push_back(std::move(sealedTx));
         }
@@ -565,9 +588,10 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     BuiltPayloadPtr cached;
     PayloadID payloadId;
     std::optional<EthPayloadArtifacts<ViewType>> localArtifact;
-    // The artifact's executed view, moved out of the artifact under the tracker lock but
-    // pushed only under m_commitMutex — the rollback journal captures pre-block values
-    // from the committed plane and must run BEFORE the view is queued.
+    // The artifact's executed view, moved out of the artifact inside the m_commitMutex
+    // critical section (the take-out below) and pushed only after the rollback journal
+    // capture — capture reads pre-block values from the committed plane and must run
+    // BEFORE the view is queued. Restored into the artifact if capture throws.
     std::optional<ViewType> localView;
     // The block's rollback journal (EthereumChainRollback.h), captured when the wiring
     // reports a reorg window; written into the same prewrite buffer as the block data.
@@ -681,15 +705,28 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         co_return engine_common::makeStatus(
             PayloadValidationStatus::InvalidBlockHash, std::nullopt, mismatch);
     }
+    // MPT pruning (CommitObserver) serialization: m_commitMutex guards the whole commit
+    // section — the pruning hooks stage the block's counting work on one shared overlay
+    // between coPreparePruneRows and onCommit (BaselineSchedulerMPTHelpers.h's
+    // prepareMPTPruneRows contract), so [prepare -> merge -> onCommit] must be serialized
+    // against every other commit, exactly like BaselineScheduler::m_commitMutex (likewise
+    // held across co_await). The mutex is taken BEFORE the artifact take-out, so take-out
+    // -> rollback-journal capture -> pushView is one critical section (lock order
+    // m_commitMutex -> tracker, same as the commitRetainedPayload re-lock below): a
+    // concurrent duplicate newPayload sees either the full artifact (it commits) or none
+    // (commitRetainedPayload cleared it; the fail-closed ledger guard below answers the
+    // idempotent VALID) — never a header-only artifact it would commit without a state
+    // layer. The same mutual exclusion lets a capture failure hand the view back to the
+    // artifact for the CL's retry (see the catch below).
+    std::unique_lock commitLock(m_commitMutex);
     {
         auto guard = m_tracker.lockExclusive();
         auto artifactIt = m_artifacts.find(payloadId);
         // Keep artifacts until the durable write succeeds so a retry can finish the block.
-        // The view is MOVED OUT here (not pushed) under the lock so a concurrent duplicate
-        // newPayload never takes the same view twice; it is pushed under m_commitMutex
-        // below, after the rollback journal capture — capture reads pre-block values from
-        // the committed plane and requires the view not yet queued. header/receipts are
-        // only read here and consumed after the I/O succeeds, so their presence is the
+        // The view is MOVED OUT here (not pushed) so the same view is never taken twice; it
+        // is pushed after the rollback journal capture — capture reads pre-block values
+        // from the committed plane and requires the view not yet queued. header/receipts
+        // are only read here and consumed after the I/O succeeds, so their presence is the
         // retry discriminator.
         if (artifactIt != m_artifacts.end() &&
             (artifactIt->second.view || artifactIt->second.header))
@@ -707,54 +744,47 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         }
     }
 
-    // MPT pruning (CommitObserver) serialization: m_commitMutex guards the whole commit
-    // section — the pruning hooks stage the block's counting work on one shared overlay
-    // between coPreparePruneRows and onCommit (BaselineSchedulerMPTHelpers.h's
-    // prepareMPTPruneRows contract), so [prepare -> merge -> onCommit] must be serialized
-    // against every other commit, exactly like BaselineScheduler::m_commitMutex (likewise
-    // held across co_await). The mutex also settles the concurrent-duplicate race the
-    // comments below describe: the first call to enter commits; a duplicate that popped the
-    // still-unconsumed artifact blocks here and is caught by the re-validation next.
-    std::unique_lock commitLock(m_commitMutex);
-    if (localArtifact)
-    {
-        bool committedByDuplicate = false;
-        {
-            auto guard = m_tracker.lockExclusive();
-            // commitRetainedPayload (below) clears m_artifacts after a successful commit, so
-            // an artifact that vanished while this call waited on m_commitMutex means a
-            // concurrent duplicate already landed this block's rows AND counted its delta —
-            // re-firing either would merge idempotent rows but DOUBLE-COUNT the reference
-            // movements.
-            committedByDuplicate = !m_artifacts.contains(payloadId);
-        }
-        if (committedByDuplicate)
-        {
-            // The block IS committed: skip the commit work, own no queued layer (the no-op
-            // duplicate rule at stateLayerQueued), and let the fail-closed guard below answer
-            // from the ledger row (present -> the idempotent VALID).
-            localArtifact = std::nullopt;
-            stateLayerQueued = false;
-        }
-    }
-
     // Rollback journal (the SAME shared implementation the external/devp2p lane uses,
     // EthereumChainRollback.h — not a copy): capture the pre-block values of every
     // flat-state row this block dirtied, so a later shallow reorg can rewind a block
-    // committed through the SELF-BUILT lane too. Captured under m_commitMutex, after
-    // the duplicate check (only the committing call journals) and BEFORE pushView —
-    // exactly the verifier's step 7a ordering. Disabled when the wiring reports a zero
-    // reorg window (the seam's single source is the shared verifier instance). The
-    // if-constexpr keeps storages without a committed-plane fork (unit-test stubs)
-    // compiling — they can never wire a reorg window, so there is nothing to capture.
+    // committed through the SELF-BUILT lane too. Captured under m_commitMutex (only the
+    // committing call journals) and BEFORE pushView — exactly the verifier's step 7a
+    // ordering. Disabled when the wiring reports a zero reorg window (the seam's single
+    // source is the shared verifier instance). The if-constexpr keeps storages without a
+    // committed-plane fork (unit-test stubs) compiling — they can never wire a reorg
+    // window, so there is nothing to capture.
     auto const reorgWindow = m_externalPayloadVerifier ? m_externalPayloadVerifier->reorgWindow() : 0;
     if constexpr (requires { m_globalStateStorage.forkCommitted(); })
     {
         if (localArtifact && localView && reorgWindow > 0)
         {
-            auto committed = m_globalStateStorage.forkCommitted();
-            rollbackJournal =
-                co_await scheduler_v1::captureRollbackJournal(*localView, committed);
+            try
+            {
+                auto committed = m_globalStateStorage.forkCommitted();
+                rollbackJournal =
+                    co_await scheduler_v1::captureRollbackJournal(*localView, committed);
+            }
+            catch (...)
+            {
+                // A capture failure (a committed-plane storage fault) must not leave a
+                // header-only artifact behind: localView would die with this coroutine
+                // frame and the CL's retry would commit the block WITHOUT its state layer.
+                // Hand the view back to the artifact so the retry re-runs take-out +
+                // capture from the intact artifact. m_artifacts cannot change underneath —
+                // m_commitMutex is held.
+                if (localView)
+                {
+                    auto guard = m_tracker.lockExclusive();
+                    if (auto artifactIt = m_artifacts.find(payloadId);
+                        artifactIt != m_artifacts.end())
+                    {
+                        artifactIt->second.view =
+                            std::make_shared<ViewType>(std::move(*localView));
+                        localView.reset();
+                    }
+                }
+                throw;
+            }
         }
     }
     if (localView)

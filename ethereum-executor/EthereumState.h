@@ -12,8 +12,11 @@
 ///     "absent / empty" like the old StorageStateView adapter did). An
 ///     OPTIONAL observer hook (setStorageErrorHandler) reports each swallowed
 ///     read failure before the zero value is returned: default-empty keeps the
-///     L1 behaviour byte-identical, while the OP consensus path injects a
-///     recorder and fails loud (OpStorageError) at the block boundary;
+///     legacy behaviour byte-identical (eth_call, tests), while the consensus
+///     block lanes inject a recorder and fail loud at the block boundary —
+///     OP via OpStorageErrorGuard (OpStorageError), the L1 EL builder/verifier
+///     via EthStorageErrorGuard (EthStorageError), both mapped away from
+///     INVALID and from any commit;
 ///   * the final write-back is applyToStorage(), which writes the modified
 ///     accounts directly to BCOS storage via EVMAccount/storage2 — there is no
 ///     evmone::state::StateDiff struct and no separate applyStateDiff function.
@@ -276,8 +279,7 @@ class EthereumState
             m_onStorageError(error);
         }
         catch (...)
-        {
-        }
+        {}
     }
 
     // ---- Direct BCOS storage reads (synchronous, fail-safe) ----
@@ -466,9 +468,11 @@ public:
     explicit EthereumState(Storage& storage) noexcept : m_storage(storage) {}
 
     /// Install the optional storage-failure observer (see m_onStorageError).
-    /// Default-constructed EthereumState has none: L1 behaviour is unchanged.
-    /// The OP block-execution path injects a first-error recorder here and
-    /// checks it at the block boundary (opstack-executor/OpStorageErrorGuard.h).
+    /// Default-constructed EthereumState has none: legacy fail-safe behaviour
+    /// is unchanged. The consensus block-execution paths inject a first-error
+    /// recorder here and check it at the block boundary
+    /// (opstack-executor/OpStorageErrorGuard.h for OP,
+    /// ethereum-executor/EthStorageErrorGuard.h for the L1 lanes).
     void setStorageErrorHandler(std::function<void(std::exception_ptr)> handler) noexcept
     {
         m_onStorageError = std::move(handler);

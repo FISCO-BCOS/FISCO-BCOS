@@ -377,8 +377,8 @@ TransactionStatus checkBcosTxAllowedOnChain(StateInputs const& in)
     // native transactions in the pool eligible for a proposal. The rest of the tree makes
     // the same genesis-time assumption (OpScheduler.h; NodeConfig::validateL2Invariants,
     // which validates the genesis alloc against the lane;
-    // scheduler_v1::validateOpModeGenesisOnly, which refuses to boot when an OP-mode
-    // executor_version's activation block is not 0).
+    // scheduler_v1::validateOpModeGenesisOnly, which refuses to boot when an
+    // executor_version at or above the Ethereum lane has an activation block that is not 0).
     if (in.chain.config->executorVersion() >= ledger::ETHEREUM_EXECUTOR_VERSION)
     {
         return TransactionStatus::BcosTxNotAllowed;

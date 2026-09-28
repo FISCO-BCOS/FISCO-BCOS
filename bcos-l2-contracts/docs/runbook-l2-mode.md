@@ -178,9 +178,23 @@ Exact strings:
 | `[alloc.N].nonce must fit in uint64: <v>` | alloc `nonce` exceeds `uint64` (RLP-encoded as a uint64 in the state root) | `NodeConfig.cpp:260` |
 | `[alloc.N] malformed: <detail>` | malformed alloc hex (bad length / not 0x-prefixed / odd nibble count) | `NodeConfig.cpp:287` |
 | `genesis allocs changed since first init (op-geth state root mismatch); refuse to start. stored=<h> computed=<h>` | allocs edited after first init | `Ledger.cpp:1930` |
+| `L2 genesis allocs must carry the SystemConfig feature_flags Entry slot ...` | the alloc JSON has no `feature_flags` storage slot on the SystemConfig account | `Ledger.cpp` `verifyL2FeatureFlagsSlot` |
+| `SystemConfig feature_flags slot in the genesis allocs does not match this node's genesis feature set (Features::toFlagsNumber()): alloc=0x... expected=0x...` | the alloc's `feature_flags` value disagrees with the binary's feature set — see the bit-57 note below | `Ledger.cpp` `verifyL2FeatureFlagsSlot` |
 | `L2ConfigLoader: SystemConfig key '<k>' is not set (slot empty); ...` | a config key was never seeded into SystemConfig storage | `L2ConfigLoader.h:268` |
 | `L2ConfigLoader: chain_id == 0 breaks EIP-155 replay protection` | `chain_id` slot seeded as 0 | `L2ConfigLoader.h:301` |
 | `L2ConfigLoader: slot value must be <N> bytes, got <n>` | SystemConfig slot value has the wrong width (layout drift) | `L2ConfigLoader.h:145` |
+
+### Bit 57: `feature_l2_ethereum_compat` allocs from the 3.18 dev line
+
+The `feature_l2_ethereum_compat` flag (bit 57 of the packed `feature_flags`
+value) was introduced on the 3.18 development line and removed before any
+release shipped it; lanes are now expressed by `executor.version` alone. An
+alloc JSON generated while that flag existed carries bit 57 set and fails the
+slot check above on current binaries (`expected=0x...` never has bit 57).
+Regenerate the allocs with the current `build-allocs.py` — this moves the
+genesis `stateRoot` and therefore the genesis hash and `rollup.json`, so the
+old chain cannot be continued; treat it as a new genesis. Chains initialized
+before the flag existed are unaffected.
 
 ## Immutability
 
@@ -207,6 +221,7 @@ editing a frozen field means the node is now pointed at a different chain.
 | Change | Path |
 |--------|------|
 | Enable/disable L2 mode (`executor.version >= 3` + `[ethereum] mode=opstack-el`) | the executor version and allocs are pinned by genesis; immutable after first init — start a **new chain** |
+| Move an existing consortium chain (`executor_version` 0/1) onto the Ethereum/OP lane by governance | **not possible**: at compatibility >= 3.18 `SystemConfigPrecompiled` refuses `executor_version` writes of 2 or above in both directions — lane membership is a genesis property (a mid-chain flip would mix two state-transition rules on one chain). Below compatibility 3.18 only 0/1 are writable. Start a **new chain** |
 | Add / change a predeploy (different allocs) | allocs are pinned by the genesis `stateRoot`; start a **new chain** |
 | Bump the pinned OP fork to a new tag | edit `op-fork-pin.toml` — see `runbook-op-fork-upgrade.md` |
 | Phase B governance handover (DAO switch) | runtime `transferOwnership` txs, not a genesis change: `Ownable.owner` of SystemConfig / L2ValidatorSet (config + validator authority) and/or `ProxyAdmin` ownership (upgrade authority) — two independent roles, hand over each deliberately |

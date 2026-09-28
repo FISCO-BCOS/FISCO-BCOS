@@ -1,8 +1,8 @@
 #pragma once
 
-#include "bcos-framework/bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/bcos-framework/engine/Types.h"
 #include "bcos-framework/bcos-framework/protocol/BlobSchedule.h"
+#include "bcos-framework/bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
@@ -139,12 +139,8 @@ concept InputHashes =
 
 template <class SenderNonceTuple>
 concept SenderNonce = requires(SenderNonceTuple senderNonce) {
-    {
-        std::get<0>(senderNonce)
-    } -> std::convertible_to<std::string_view>;
-    {
-        std::get<1>(senderNonce)
-    } -> std::convertible_to<int64_t>;
+    { std::get<0>(senderNonce) } -> std::convertible_to<std::string_view>;
+    { std::get<1>(senderNonce) } -> std::convertible_to<int64_t>;
 };
 
 
@@ -332,6 +328,22 @@ public:
             return static_cast<std::size_t>(protocol::blobScheduleForTimestamp(
                 m_config.blobForks, m_config.headTimestampSeconds())
                                                 .maxBlobs);
+        }
+        return m_config.maxBlobsPerTransaction;
+    }
+
+    /// The per-BLOCK blob limit (EIP-7840 max blobs) for a block sealed at
+    /// @p timestampSeconds: the timestamp-keyed schedule when the config wires a
+    /// provider (EL mode), else the static per-transaction field — a statically
+    /// configured L1 chain runs one fixed fork, whose per-block and per-transaction
+    /// maxima coincide. The L2 pool never holds blob transactions (admission refuses
+    /// them), so the cap never binds there.
+    std::size_t maxBlobsPerBlock(uint64_t timestampSeconds) const
+    {
+        if (m_config.headTimestampSeconds)
+        {
+            return static_cast<std::size_t>(
+                protocol::blobScheduleForTimestamp(m_config.blobForks, timestampSeconds).maxBlobs);
         }
         return m_config.maxBlobsPerTransaction;
     }
@@ -524,8 +536,7 @@ public:
             }
             return a.hash > b.hash;
         };
-        std::priority_queue<Cursor, std::vector<Cursor>, decltype(cursorLess)> heap(
-            cursorLess);
+        std::priority_queue<Cursor, std::vector<Cursor>, decltype(cursorLess)> heap(cursorLess);
 
         // senderIndex is hashed_non_unique: a sender appears once per transaction, so
         // track the senders whose cursor is already on the heap (same dedup seal()

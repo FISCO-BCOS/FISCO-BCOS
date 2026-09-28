@@ -42,9 +42,8 @@ template bcos::task::Task<bcos::protocol::TransactionReceipt::Ptr>
 bcos::executor_v1::opstack::opRunDeposit<MutableStorage>(
     bcos::executor_v1::eth::EthereumState<MutableStorage>&,
     bcos::executor_v1::eth::EthBlockInfo const&, bcos::executor_v1::eth::BlockHashLookup,
-    bcos::executor_v1::opstack::DepositTx const&,
-    bcos::executor_v1::opstack::OpForkSpec const&, evmc::VM&, uint64_t, int64_t,
-    bcos::protocol::TransactionReceiptFactory const&, int64_t);
+    bcos::executor_v1::opstack::DepositTx const&, bcos::executor_v1::opstack::OpForkSpec const&,
+    evmc::VM&, uint64_t, int64_t, bcos::protocol::TransactionReceiptFactory const&, int64_t);
 
 template std::variant<bcos::executor_v1::eth::EthTxProperties, std::error_code>
 bcos::executor_v1::eth::validateTransaction<MutableStorage, bcos::executor_v1::opstack::OpPolicy>(
@@ -68,18 +67,10 @@ bcos::executor_v1::opstack::loadOpFeeParamsAsync<MutableStorage>(MutableStorage&
 template bcos::task::Task<std::map<evmc::bytes32, evmc::bytes32>>
 bcos::executor_v1::opstack::opEthMessagePasserStorage<MutableStorage>(MutableStorage&);
 
-template bcos::task::Task<bcos::executor_v1::opstack::OpEthBlockResult>
-bcos::executor_v1::opstack::executeOpEthBlock<MutableStorage>(MutableStorage&,
-    bcos::protocol::BlockHeader const&, bcos::executor_v1::opstack::OpForkSpec const&,
-    std::span<const bcos::executor_v1::opstack::OpEthBlockTx>, evmc::VM&, uint64_t,
-    bcos::protocol::TransactionReceiptFactory const&,
-    bcos::executor_v1::eth::BlockHashLookup);
-
 // ---- the shared block stages (OpEthBlockSteps.h) ----
 
-template bcos::task::Task<void>
-bcos::executor_v1::opstack::preBlockOpEthSteps<MutableStorage, std::vector<bcos::bytes>>(
-    MutableStorage&, bcos::protocol::BlockHeader const&,
+template bcos::task::Task<void> bcos::executor_v1::opstack::preBlockOpEthSteps<MutableStorage,
+    std::vector<bcos::bytes>>(MutableStorage&, bcos::protocol::BlockHeader const&,
     bcos::executor_v1::opstack::OpForkSpec const&, std::vector<bcos::bytes> const&,
     std::vector<bcos::executor_v1::opstack::DepositTx> const&, evmc::VM&,
     std::shared_ptr<bcos::executor_v1::opstack::OpStorageErrorSlot> const&,

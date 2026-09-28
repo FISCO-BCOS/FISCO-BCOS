@@ -70,59 +70,6 @@ struct OpEthDepositGasLimitReached : std::runtime_error
     using std::runtime_error::runtime_error;
 };
 
-namespace opeth_deposit_detail
-{
-/// Canonicality gate for RLP integers (ported OpstackExecutor.h's integerPayloadLength):
-/// rejects 0x00-as-byte (integer zero must be the empty item 0x80) and leading-zero
-/// multi-byte ints. Returns nullopt for anything that is not a canonical integer
-/// (list, truncated, non-canonical form); otherwise the payload length.
-[[nodiscard]] inline std::optional<size_t> integerPayloadLength(bcos::bytesConstRef const& ref)
-{
-    namespace rlp = bcos::codec::rlp;
-    if (ref.empty())
-        return std::nullopt;
-    uint8_t const b = ref[0];
-    if (b < 0x80)
-    {
-        // Byte item: 0x00 is non-canonical (integer zero must be the empty item 0x80);
-        // a bare byte 0x01..0x7f is a single payload byte.
-        return b == 0 ? std::nullopt : std::optional<size_t>{1};
-    }
-    if (b <= 0xb7)
-    {  // short string
-        size_t const pl = static_cast<size_t>(b - 0x80);
-        if (ref.size() < 1 + pl)
-            return std::nullopt;  // truncated length prefix
-        if (pl == 1 && ref[1] < 0x80)
-            return std::nullopt;  // single-byte payload < 0x80 must be a bare Byte
-        if (pl >= 2 && ref[1] == 0)
-            return std::nullopt;  // leading zero byte
-        return pl;                // pl == 0: the empty item 0x80, canonical zero
-    }
-    if (b <= 0xbf)
-    {  // long string
-        size_t const n = static_cast<size_t>(b - 0xb7);
-        if (ref.size() < 1 + n)
-            return std::nullopt;
-        if (ref[1] == 0)
-            return std::nullopt;  // length-of-length with a leading zero
-        size_t pl = 0;
-        for (size_t i = 0; i < n; ++i)
-        {
-            pl = (pl << 8) | ref[1 + i];
-            if (pl > (std::numeric_limits<size_t>::max() >> 8))
-                return std::nullopt;  // length-of-length overflow
-        }
-        if (pl < 56)
-            return std::nullopt;  // must use the short form
-        if (ref.size() < 1 + n + pl)
-            return std::nullopt;  // truncated payload
-        return pl;
-    }
-    return std::nullopt;  // list header: not an integer
-}
-}  // namespace opeth_deposit_detail
-
 /// Decode `0x7e || rlp([sourceHash, from, to, mint, value, gas, isSystemTx, data])`.
 /// Trust boundary: deposits are unsigned, so a peer can forge tars mint/value; only the
 /// 0x7e envelope bytes bind those fields. Never read mint/value from the tars mirror.
@@ -183,20 +130,20 @@ namespace opeth_deposit_detail
     }
     else
     {
-        if (auto pl = opeth_deposit_detail::integerPayloadLength(items); !pl || *pl > 32)
-            fail("deposit envelope: mint non-canonical or over-wide (>32 bytes)");
+        // Width (≤32 bytes) and canonicality are enforced by the rlp integer decoder
+        // (bcos-codec tryDecode(UnsignedIntegral&)) — the decode below rejects a
+        // non-canonical or over-wide item, and decodeField maps it to the same
+        // OpEthDepositValidationFailed as every other field fault.
         bcos::u256 m{0};
         decodeField(items, m, "deposit envelope: mint decode failed");
         dep.mint = m;
     }
-    // value (u256): width + canonicality check before decode — over-wide would truncate silently.
-    if (auto pl = opeth_deposit_detail::integerPayloadLength(items); !pl || *pl > 32)
-        fail("deposit envelope: value non-canonical or over-wide (>32 bytes)");
+    // value (u256): width + canonicality carried by the rlp decoder (over-wide would
+    // otherwise truncate silently).
     decodeField(items, dep.value, "deposit envelope: value decode failed");
-    // gas: width + canonicality, then int64 range. Over-range would wrap to -1.
+    // gas: width + canonicality from the rlp decoder, then int64 range. Over-range would
+    // wrap to -1.
     uint64_t gas = 0;
-    if (auto pl = opeth_deposit_detail::integerPayloadLength(items); !pl || *pl > 8)
-        fail("deposit envelope: gas non-canonical or over-wide (>8 bytes)");
     decodeField(items, gas, "deposit envelope: gas decode failed");
     if (gas > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
         fail("deposit envelope: gas exceeds int64 range");
@@ -204,8 +151,6 @@ namespace opeth_deposit_detail
     // isSystemTx: 0 or 1 only, matching op-geth decodeBool. Decoded as uint64 because
     // the bool overload rejects the empty-item false.
     uint64_t isSystemTxValue = 0;
-    if (auto pl = opeth_deposit_detail::integerPayloadLength(items); !pl || *pl > 8)
-        fail("deposit envelope: isSystemTx non-canonical or over-wide (>8 bytes)");
     decodeField(items, isSystemTxValue, "deposit envelope: isSystemTx decode failed");
     if (isSystemTxValue > 1)
         fail("deposit envelope: isSystemTx must be 0 or 1");

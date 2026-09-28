@@ -31,7 +31,9 @@
 /// Error model: storage READ errors follow EthereumState's fail-safe model
 /// (the noexcept evmc::Host boundary reports a failed read as absent/empty —
 /// the same model every transaction in the block already executes under, with
-/// the post-execution state-root check as the backstop). Write-back
+/// the post-execution state-root check as the backstop); the caller may pass a
+/// shared EthStorageErrorSlot to record each swallowed read for a fail-loud
+/// block-boundary check (EthStorageErrorGuard.h). Write-back
 /// (applyToStorage) failures and EVM-level call failures are surfaced as the
 /// returned error string, failing the block.
 
@@ -39,6 +41,7 @@
 
 #include "EVMSupport.h"
 #include "EthExecutionPolicy.h"
+#include "EthStorageErrorGuard.h"
 #include "EthereumHost.h"
 #include "EthereumState.h"
 #include "bcos-task/Task.h"
@@ -191,12 +194,16 @@ evmc::Result executeSystemCall(EthereumState<Storage>& state, EthBlockInfo const
 /// Call only when the block's revision >= EVMC_CANCUN.
 ///
 /// @param parentBlockHash the EIP-2935 input (hash of block number - 1).
+/// @param storageErrorSlot shared swallowed-read recorder (null = legacy
+///        fail-safe reads); the caller checks it at the block boundary.
 template <class Storage, class Policy = EthL1Policy>
 task::Task<std::optional<std::string>> systemCallBlockStart(Storage& view, evmc::VM& vm,
     EthBlockInfo const& block, evmc::bytes32 const& parentBlockHash, evmc_revision rev,
-    Policy const& policy = Policy{})
+    Policy const& policy = Policy{},
+    std::shared_ptr<EthStorageErrorSlot> storageErrorSlot = nullptr)
 {
     EthereumState<Storage> state(view);
+    installStorageErrorSlot(state, std::move(storageErrorSlot));
     try
     {
         for (const auto& contract : eth_system_calls_detail::STORAGE_SYSTEM_CONTRACTS)
@@ -249,12 +256,13 @@ struct EthBlockEndSystemCallsResult
 /// failure means divergent local state.
 /// Call only when the block's revision >= EVMC_PRAGUE.
 template <class Storage, class Policy = EthL1Policy>
-task::Task<EthBlockEndSystemCallsResult> systemCallBlockEnd(
-    Storage& view, evmc::VM& vm, EthBlockInfo const& block, evmc_revision rev,
-    Policy const& policy = Policy{})
+task::Task<EthBlockEndSystemCallsResult> systemCallBlockEnd(Storage& view, evmc::VM& vm,
+    EthBlockInfo const& block, evmc_revision rev, Policy const& policy = Policy{},
+    std::shared_ptr<EthStorageErrorSlot> storageErrorSlot = nullptr)
 {
     EthBlockEndSystemCallsResult result;
     EthereumState<Storage> state(view);
+    installStorageErrorSlot(state, std::move(storageErrorSlot));
     try
     {
         for (const auto& contract : eth_system_calls_detail::REQUESTS_SYSTEM_CONTRACTS)
@@ -271,9 +279,8 @@ task::Task<EthBlockEndSystemCallsResult> systemCallBlockEnd(
                 co_return result;
             }
 
-            const auto res =
-                eth_system_calls_detail::executeSystemCall<Storage, Policy>(state, block, rev, vm,
-                    contract.addr, code, {}, policy);
+            const auto res = eth_system_calls_detail::executeSystemCall<Storage, Policy>(
+                state, block, rev, vm, contract.addr, code, {}, policy);
             if (res.status_code != EVMC_SUCCESS)
             {
                 result.error = "block-end system call (EIP-7002/7251) failed: execution reverted";

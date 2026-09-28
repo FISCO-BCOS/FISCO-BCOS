@@ -105,9 +105,8 @@ inline int64_t narrowU256ToI64(const bcos::u256& v, const char* fieldName)
 }
 
 /// Bounds-checked u256→int64 narrowing of a receipt's gasUsed (a corrupt receipt must not wrap
-/// the gas pool). Kept here rather than OpEthBlockExecute.h's narrowOpEthGasUsed because that
-/// one throws the new layer's OpEthBlockError (a bare runtime_error), which would escape the
-/// INVALID/-32603 classification — this one throws OpConsensusError (INVALID), as legacy.
+/// the gas pool). Throws OpConsensusError (INVALID), as legacy — a bare runtime_error here
+/// would escape the INVALID/-32603 classification boundary.
 [[nodiscard]] inline int64_t narrowGasUsed(const bcos::u256& gasUsed)
 {
     static const bcos::u256 kMaxInt64(std::numeric_limits<int64_t>::max());

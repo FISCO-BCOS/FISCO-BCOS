@@ -7,6 +7,7 @@
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-utilities/ITTAPI.h"  // ittapi::Report / ITT_DOMAINS (self-contained)
+#include <bcos-utilities/BoostLog.h>
 #include <oneapi/tbb/cache_aligned_allocator.h>
 #include <oneapi/tbb/parallel_pipeline.h>
 #include <oneapi/tbb/partitioner.h>
@@ -16,7 +17,6 @@
 #include <range/v3/view/chunk.hpp>
 #include <range/v3/view/iota.hpp>
 #include <type_traits>
-#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::scheduler_v1
 {
@@ -41,6 +41,16 @@ struct BlockContextOf<E, std::void_t<typename E::BlockContext>>
 {
     using type = typename E::BlockContext;
 };
+
+/// The BlockContext-less executeBlock overload may VALUE-INITIALIZE the executor's
+/// context only when a default context stays meaningful: trivially for
+/// EmptyBlockContext; a real context opts in with kValueInitializedValid
+/// (EthereumExecutor::BlockContext — no recorder, a lazily initialized blob budget).
+/// OpEthBlockContext deliberately does not opt in: value-initializing it (null
+/// blockHashes, chainId 0, ...) would compile and be nonsense.
+template <class C>
+concept ValueInitValidBlockContext =
+    std::same_as<C, EmptyBlockContext> || requires { C::kValueInitializedValid; };
 
 #define SERIAL_SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SERIAL_SCHEDULER")
 
@@ -198,20 +208,30 @@ public:
         co_return receipts;
     }
 
-    /// BlockContext-less convenience overload: forwards a NAMED static EmptyBlockContext
-    /// instead of a default argument, so no temporary is ever bound to the coroutine's
-    /// reference parameter (see the 6-parameter overload for the lifetime rule). Constrained
-    /// to executors that define no BlockContext of their own — value-initializing a real
-    /// block context here (null blockHashes, chainId 0, ...) would compile and be nonsense.
+    /// BlockContext-less convenience overload: forwards a context that outlives the
+    /// co_await (a static for EmptyBlockContext, a coroutine-frame local otherwise —
+    /// both satisfy the 6-parameter overload's lifetime rule; only a CALL-SITE
+    /// temporary/default argument would die at the full-expression). Constrained to
+    /// contexts that stay meaningful when value-initialized (ValueInitValidBlockContext).
     template <class Storage, executor_v1::TransactionExecutor<Storage> TransactionExecutor>
-        requires std::same_as<typename BlockContextOf<TransactionExecutor>::type, EmptyBlockContext>
+        requires ValueInitValidBlockContext<typename BlockContextOf<TransactionExecutor>::type>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage& storage,
         TransactionExecutor& executor, protocol::BlockHeader const& blockHeader,
         ::ranges::input_range auto const& transactions, ledger::LedgerConfig const& ledgerConfig)
     {
-        static EmptyBlockContext const emptyContext = {};
-        co_return co_await executeBlock(
-            storage, executor, blockHeader, transactions, ledgerConfig, emptyContext);
+        if constexpr (std::same_as<typename BlockContextOf<TransactionExecutor>::type,
+                          EmptyBlockContext>)
+        {
+            static EmptyBlockContext const emptyContext = {};
+            co_return co_await executeBlock(
+                storage, executor, blockHeader, transactions, ledgerConfig, emptyContext);
+        }
+        else
+        {
+            typename BlockContextOf<TransactionExecutor>::type blockContext{};
+            co_return co_await executeBlock(
+                storage, executor, blockHeader, transactions, ledgerConfig, blockContext);
+        }
     }
 };
 

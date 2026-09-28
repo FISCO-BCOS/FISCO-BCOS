@@ -27,6 +27,7 @@
 #pragma once
 
 #include "EthExecutionPolicy.h"
+#include "EthStorageErrorGuard.h"
 #include "EthereumTransition.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/BlockHeader.h"
@@ -69,6 +70,31 @@ protocol::TransactionReceipt::Ptr validationErrorReceipt(std::error_code const& 
 class EthereumExecutor
 {
 public:
+    /// Per-block context (SchedulerSerialImpl's BlockContext channel): carried by the
+    /// block driver as an lvalue that outlives the executeBlock co_await; the per-tx
+    /// ExecuteContexts read/write it through a const pointer (the mutable fields are the
+    /// cross-transaction accumulators). Default-constructed it is valid: no storage-error
+    /// recorder and a lazily initialized blob budget.
+    struct BlockContext
+    {
+        /// Opt-in for SchedulerSerialImpl's BlockContext-less executeBlock overload
+        /// (ValueInitValidBlockContext): default-constructed IS a valid context here —
+        /// no storage-error recorder and a lazily initialized blob budget.
+        static constexpr bool kValueInitializedValid = true;
+        /// L1 fail-loud channel (EthStorageErrorGuard.h): when set, every per-tx
+        /// EthereumState of the block records its swallowed storage read faults here and
+        /// the block driver checks poisoned() at the block boundary. Null keeps the
+        /// legacy fail-safe behavior (eth_call, tests).
+        std::shared_ptr<EthStorageErrorSlot> storageErrorSlot;
+        /// The block's REMAINING blob gas budget (EIP-4844), decremented per validated
+        /// transaction so validateTransaction's per-tx blob check also enforces the
+        /// block-level limit. -1 = uninitialized: the first non-call transaction of the
+        /// block lazily sets it to the schedule's per-block maximum. A plain field —
+        /// the serial scheduler runs each chunk's execute() strictly in order, the same
+        /// discipline OpEthExecutor's blockGasLeft relies on.
+        mutable int64_t blobGasLeft = -1;
+    };
+
     /// @param blockHashLookup Optional BLOCKHASH provider used for BLOCKHASH
     ///                        lookups during execution. It is called with the
     ///                        queried height and the executing block's height
@@ -114,16 +140,20 @@ public:
 
     /// Block-level finalization: apply block rewards and withdrawals.
     /// Call this after all transactions in a block have been executed.
+    /// @p storageErrorSlot: the block's shared swallowed-read recorder
+    /// (EthStorageErrorGuard.h); null keeps the legacy fail-safe reads.
     template <class Storage>
     task::Task<void> finalizeBlock(Storage& storage, protocol::BlockHeader const& blockHeader,
         ledger::LedgerConfig const& ledgerConfig, evmc_revision rev,
-        std::optional<uint64_t> blockReward, std::vector<EthWithdrawal> const& withdrawals = {})
+        std::optional<uint64_t> blockReward, std::vector<EthWithdrawal> const& withdrawals = {},
+        std::shared_ptr<EthStorageErrorSlot> storageErrorSlot = nullptr)
     {
         // Same all-or-nothing guarantee as execute(): if finalizeState throws
         // part-way (a reward/withdrawal storage write fails), roll the journal
         // back so the block's rewards are not left half-applied, then rethrow.
         Rollbackable<Storage> rollable(storage);
         EthereumState<Rollbackable<Storage>> state(rollable);
+        installStorageErrorSlot(state, std::move(storageErrorSlot));
         const auto savepoint = rollable.current();
         // co_await is not permitted inside an exception handler ([expr.await]/2),
         // so the failure is captured here and the rollback runs after it.
@@ -192,6 +222,10 @@ public:
         // always drives real execution with call=false; the field is part of
         // the TransactionExecutor concept signature.
         bool call;
+        /// The caller-owned per-block context (null on the concept's 6-arg
+        /// createExecuteContext form): carries the block's shared storage-error
+        /// recorder and the cross-transaction blob gas budget.
+        BlockContext const* m_ctx = nullptr;
 
         // Per-phase state — owned by this context, safe for concurrent phases.
         evmc_revision m_rev = EVMC_FRONTIER;
@@ -208,14 +242,16 @@ public:
         protocol::TransactionReceipt::Ptr m_receipt;
 
         ExecuteContext(EthereumExecutor& exec, Storage& st, protocol::BlockHeader const& bh,
-            protocol::Transaction const& tx, int cid, ledger::LedgerConfig const& cfg, bool c)
+            protocol::Transaction const& tx, int cid, ledger::LedgerConfig const& cfg, bool c,
+            BlockContext const* blockCtx = nullptr)
           : executor(std::ref(exec)),
             storage(std::ref(st)),
             blockHeader(std::ref(bh)),
             transaction(std::ref(tx)),
             contextID(cid),
             ledgerConfig(std::ref(cfg)),
-            call(c)
+            call(c),
+            m_ctx(blockCtx)
         {}
 
         /// Node chain id for EIP-7702 auth validation; 0 if unconfigured.
@@ -240,7 +276,11 @@ public:
         ///
         /// blob_gas_left is the block's remaining blob gas (max_blob_gas_per_block
         /// minus already-included blobs). It must NOT be the tx's own blob gas,
-        /// otherwise a tx with too many blobs would pass validation.
+        /// otherwise a tx with too many blobs would pass validation. prepare()
+        /// computes the per-block MAXIMUM here; the cross-transaction decrement
+        /// lives in execute() through the block context (m_ctx->blobGasLeft) —
+        /// without a block context each transaction validates against the fresh
+        /// maximum (no block-level budget).
         /// The EIP-7840 blob schedule is resolved per block from the ledger
         /// config (stamped by the block verifier from the chain's fork
         /// timestamps; revision-keyed fallback otherwise) — see
@@ -343,6 +383,13 @@ public:
             // cross-block accumulation).
             Rollbackable<Storage> rollable(storage.get());
             EthereumState<Rollbackable<Storage>> state(rollable);
+            if (m_ctx != nullptr)
+            {
+                // L1 fail-loud channel (EthStorageErrorGuard.h): record every
+                // swallowed read fault into the block's shared slot; the block
+                // driver checks it at the block boundary.
+                installStorageErrorSlot(state, m_ctx->storageErrorSlot);
+            }
             const auto savepoint = rollable.current();
             // co_await is not permitted inside an exception handler ([expr.await]/2),
             // so the failure is captured here and the rollback runs after it.
@@ -358,9 +405,28 @@ public:
                     m_callParams.nonce = senderAcc ? senderAcc->nonce : 0;
                 }
 
+                // Block-level blob gas budget (EIP-4844): with a block context the
+                // remaining budget travels across the block's transactions
+                // (lazy-initialized to the schedule's per-block maximum on the
+                // first non-call transaction), so validateTransaction's per-tx
+                // blob check also rejects a transaction whose blobs would push
+                // the BLOCK over the fork's blob gas limit. Read-and-decrement
+                // needs no synchronization: the serial scheduler runs each
+                // chunk's execute() strictly in order (the same discipline
+                // OpEthExecutor's blockGasLeft relies on); the v2 pipeline is
+                // serial-only (EthereumState.h's hasStorageImpl note).
+                int64_t blobGasLeft = m_blobGasLeft;
+                if (m_ctx != nullptr && !call)
+                {
+                    if (m_ctx->blobGasLeft < 0)
+                    {
+                        m_ctx->blobGasLeft = m_blobGasLeft;
+                    }
+                    blobGasLeft = m_ctx->blobGasLeft;
+                }
                 auto validationResult = validateTransaction(state, m_blockInfo, transaction.get(),
-                    m_rev, m_blockInfo.gas_limit /*block_gas_left*/,
-                    m_blobGasLeft /*blob_gas_left*/, m_callParams);
+                    m_rev, m_blockInfo.gas_limit /*block_gas_left*/, blobGasLeft /*blob_gas_left*/,
+                    m_callParams);
                 if (auto* props = std::get_if<EthTxProperties>(&validationResult))
                 {
                     // Valid against the current state — use the computed properties.
@@ -369,6 +435,15 @@ public:
                     // code; only accounts with empty code or a 0xef0100 delegation
                     // designator may be senders, which validate_transaction already
                     // accepts.
+                    if (m_ctx != nullptr && !call)
+                    {
+                        // Only a transaction that passed validation consumes blob
+                        // budget: one rejected above writes no state and its
+                        // failure receipt does not charge the block.
+                        m_ctx->blobGasLeft -=
+                            static_cast<int64_t>(transaction.get().blobVersionedHashes().size()) *
+                            static_cast<int64_t>(evm::GAS_PER_BLOB);
+                    }
                     m_receipt = co_await runTransaction(state, m_blockInfo,
                         executor.get().m_blockHashLookup, transaction.get(), m_rev,
                         executor.get().m_vm, *props, nodeChainId(), m_callParams,
@@ -433,6 +508,10 @@ public:
         }
     };
 
+    /// 6-arg form (the TransactionExecutor concept probe + eth_call): no block
+    /// context is available, so the context's m_ctx is null — no storage-error
+    /// recorder, and every transaction validates against the fresh per-block
+    /// blob gas maximum (no cross-transaction budget).
     template <class Storage>
     task::Task<ExecuteContext<std::decay_t<Storage>>> createExecuteContext(Storage& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
@@ -441,6 +520,29 @@ public:
         co_return ExecuteContext<std::decay_t<Storage>>{
             *this, storage, blockHeader, transaction, contextID, ledgerConfig, call};
     }
+
+    /// 7-arg form (block execution): the caller owns the BlockContext and must
+    /// keep it alive across the prepare/execute/finish lifecycle
+    /// (SchedulerSerialImpl forwards the ctx that lives in the caller's
+    /// coroutine frame).
+    template <class Storage>
+    task::Task<ExecuteContext<std::decay_t<Storage>>> createExecuteContext(Storage& storage,
+        protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
+        int contextID, ledger::LedgerConfig const& ledgerConfig, bool call,
+        BlockContext const& blockCtx)
+    {
+        co_return ExecuteContext<std::decay_t<Storage>>{
+            *this, storage, blockHeader, transaction, contextID, ledgerConfig, call, &blockCtx};
+    }
+
+    // Deleted rvalue overload: this is a lazy coroutine, so a temporary bound to
+    // the const& above dies at the call-site full expression — before the body
+    // first runs — leaving m_ctx dangling. Compile error instead of UB.
+    template <class Storage>
+    task::Task<ExecuteContext<std::decay_t<Storage>>> createExecuteContext(Storage& storage,
+        protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
+        int contextID, ledger::LedgerConfig const& ledgerConfig, bool call,
+        BlockContext const&& blockCtx) = delete;
 
 private:
     protocol::TransactionReceiptFactory const& m_receiptFactory;

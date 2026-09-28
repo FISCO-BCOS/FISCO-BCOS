@@ -9,16 +9,16 @@
 
 #include <opstack-executor/OpEnvelopeCheck.h>
 
-#include <ethereum-executor/EthereumHost.h>  // eth::ethSender / ethMaxGasPrice
-#include <opstack-executor/OpEthDeposit.h>   // opeth_deposit_detail::integerPayloadLength
-#include <bcos-codec/rlp/RLPDecode.h>        // tryDecodeHeader / decode / captureRlp
+#include <bcos-codec/rlp/RLPDecode.h>            // tryDecodeHeader / decode / captureRlp
 #include <bcos-framework/protocol/TxGasModel.h>  // protocol::ethToAddress
-#include <bcos-rlp-protocol/Web3Transaction.h>   // rpc::AuthorizationListEntry decode (EIP-7702 bind)
-#include <bcos-rlp-protocol/Web3TxEnvelope.h>    // isTypedWeb3Envelope / classifyWeb3EnvelopeChainId
-#include <bcos-utilities/DataConvertUtility.h>   // safeFromQuantity
+#include <bcos-rlp-protocol/Web3Transaction.h>  // rpc::AuthorizationListEntry decode (EIP-7702 bind)
+#include <bcos-rlp-protocol/Web3TxEnvelope.h>   // isTypedWeb3Envelope / classifyWeb3EnvelopeChainId
+#include <bcos-utilities/DataConvertUtility.h>  // safeFromQuantity
+#include <ethereum-executor/EthereumHost.h>     // eth::ethSender / ethMaxGasPrice
 #include <algorithm>
 #include <cstring>
 #include <limits>
+#include <optional>
 #include <vector>
 
 namespace bcos::executor_v1::opstack
@@ -26,7 +26,62 @@ namespace bcos::executor_v1::opstack
 namespace
 {
 namespace rlp = bcos::codec::rlp;
-using opeth_deposit_detail::integerPayloadLength;
+
+/// Canonicality gate for RLP integers (ported OpstackExecutor.h's integerPayloadLength):
+/// rejects 0x00-as-byte (integer zero must be the empty item 0x80) and leading-zero
+/// multi-byte ints. Returns nullopt for anything that is not a canonical integer
+/// (list, truncated, non-canonical form); otherwise the payload length.
+///
+/// Accept/reject-equivalent to the shared codec's tryDecode(UnsignedIntegral&)
+/// (RLPDecode.h). It lives here as a NON-consuming gate (the rlp decode happens
+/// separately below) so the cross-check keeps its distinctive error strings
+/// ("nonce is not a canonical integer" vs "nonce over-wide" vs "nonce decode
+/// failed"); the deposit decoder (OpEthDeposit.h) instead lets the rlp decode
+/// itself carry the rejection.
+[[nodiscard]] std::optional<size_t> integerPayloadLength(bcos::bytesConstRef const& ref)
+{
+    if (ref.empty())
+        return std::nullopt;
+    uint8_t const b = ref[0];
+    if (b < 0x80)
+    {
+        // Byte item: 0x00 is non-canonical (integer zero must be the empty item 0x80);
+        // a bare byte 0x01..0x7f is a single payload byte.
+        return b == 0 ? std::nullopt : std::optional<size_t>{1};
+    }
+    if (b <= 0xb7)
+    {  // short string
+        size_t const pl = static_cast<size_t>(b - 0x80);
+        if (ref.size() < 1 + pl)
+            return std::nullopt;  // truncated length prefix
+        if (pl == 1 && ref[1] < 0x80)
+            return std::nullopt;  // single-byte payload < 0x80 must be a bare Byte
+        if (pl >= 2 && ref[1] == 0)
+            return std::nullopt;  // leading zero byte
+        return pl;                // pl == 0: the empty item 0x80, canonical zero
+    }
+    if (b <= 0xbf)
+    {  // long string
+        size_t const n = static_cast<size_t>(b - 0xb7);
+        if (ref.size() < 1 + n)
+            return std::nullopt;
+        if (ref[1] == 0)
+            return std::nullopt;  // length-of-length with a leading zero
+        size_t pl = 0;
+        for (size_t i = 0; i < n; ++i)
+        {
+            pl = (pl << 8) | ref[1 + i];
+            if (pl > (std::numeric_limits<size_t>::max() >> 8))
+                return std::nullopt;  // length-of-length overflow
+        }
+        if (pl < 56)
+            return std::nullopt;  // must use the short form
+        if (ref.size() < 1 + n + pl)
+            return std::nullopt;  // truncated payload
+        return pl;
+    }
+    return std::nullopt;  // list header: not an integer
+}
 
 /// Read one fixed-width RLP string item from `walker` into `out`:
 /// tryDecodeHeader plus an exact-width check, then crop. Returns false when
@@ -79,8 +134,8 @@ template <typename Out>
             storageKeys.push_back(key);
         }
         if (envEntries >= mirror.size() ||
-            !std::equal(mirror[envEntries].account.begin(), mirror[envEntries].account.end(),
-                addr.bytes) ||
+            !std::equal(
+                mirror[envEntries].account.begin(), mirror[envEntries].account.end(), addr.bytes) ||
             mirror[envEntries].storageKeys.size() != storageKeys.size())
             return "accessList is not bound to the signed envelope";
         for (size_t i = 0; i < storageKeys.size(); ++i)
@@ -345,8 +400,9 @@ std::optional<std::string> opEthEnvelopeExecutionFieldsMismatch(
     // pre-check keeps the gate's "nonce over-wide" string. List-shaped items are rejected
     // here rather than relying on rlp::decode's UnexpectedList: a 1-byte list (0xc1 0x05)
     // passes the width guard, so the kind check must be explicit like to/data. The
-    // canonicality gate (integerPayloadLength) is the same one the deposit decoder applies,
-    // so a non-canonical integer cannot slip the mirror↔envelope cross-check as a "match".
+    // canonicality gate (integerPayloadLength) is accept/reject-equivalent to the rlp
+    // integer decode, so a non-canonical integer cannot slip the mirror↔envelope
+    // cross-check as a "match".
     {
         if (nonceIsList)
             return "nonce field is an RLP list";
@@ -478,7 +534,8 @@ std::optional<std::string> opEthEnvelopeExecutionFieldsMismatch(
     auto const mirrorAccessList = tx.web3AccessList();
     if (accessListPayload)
     {
-        if (auto err = bindEnvelopeAccessList(*accessListPayload, accessListIsList, mirrorAccessList))
+        if (auto err =
+                bindEnvelopeAccessList(*accessListPayload, accessListIsList, mirrorAccessList))
             return err;
     }
     else if (!mirrorAccessList.empty())

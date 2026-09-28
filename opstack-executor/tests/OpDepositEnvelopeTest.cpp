@@ -137,10 +137,9 @@ BOOST_AUTO_TEST_CASE(ValidEnvelopeDecodesFieldByField)
 
 BOOST_AUTO_TEST_CASE(BareByteIntegersDecode)
 {
-    // Canonical RLP integers 0x01..0x7f are a single bare byte. integerPayloadLength
-    // must report 1 for those (0 is reserved for the empty item 0x80). Callers today
-    // only use the result as an upper bound, so this pins the name/value contract
-    // against a future exact-width check collapsing a bare byte with canonical zero.
+    // Canonical RLP integers 0x01..0x7f are a single bare byte (0 is reserved for the empty
+    // item 0x80). The rlp integer decoder admits those as one payload byte; this pins the
+    // bare-byte acceptance against a future change collapsing it with canonical zero.
     Fields f;
     f.mint = bcos::bytes{0x7f};
     f.value = bcos::bytes{0x01};

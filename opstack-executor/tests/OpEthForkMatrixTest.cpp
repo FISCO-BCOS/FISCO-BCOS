@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // OpEthForkMatrixTest — C2 synthetic fork-matrix coverage for the bcos-evm-free OP executor
-// migration. Where C1 (OpEthDualRunTest) replays the op-geth t8n corpus (Isthmus/Jovian only),
-// these cases synthesize blocks directly and pin the fork-dependent semantics the corpus does
-// not reach:
+// migration. Where C1 (OpEthExecutorDualRunTest) replays the op-geth t8n corpus (Isthmus/Jovian
+// only), these cases synthesize blocks directly and pin the fork-dependent semantics the corpus
+// does not reach:
 //   ① pre-Regolith deposit semantics (Bedrock/Regolith),
 //   ② the Ecotone first-block L1-fee fallback (ecotoneParamsUnset → legacy formula),
 //   ③ Isthmus operator-fee vault routing + gasLimit pre-charge refund,
@@ -20,9 +20,9 @@
 
 #include "support/DualRunHarness.h"
 
-#include <opstack-executor/OpEthCommitments.h>    // computeOpEthTransactionsRoot
-#include <opstack-executor/OpEthL1Attributes.h>   // encodeOpEthDepositEnvelope
-#include <opstack-executor/OpEthReceipt.h>        // intxToBcosU256
+#include <opstack-executor/OpEthCommitments.h>   // computeOpEthTransactionsRoot
+#include <opstack-executor/OpEthL1Attributes.h>  // encodeOpEthDepositEnvelope
+#include <opstack-executor/OpEthReceipt.h>       // intxToBcosU256
 #include <opstack-executor/OpExecutionPolicy.h>
 #include <opstack-executor/OpRollupCost.h>  // computeLegacyL1Cost / computeL1Cost / computeOperatorCost
 
@@ -36,9 +36,9 @@
 #include <bcos-ledger/mpt/EthTrieRoots.h>  // encodeReceiptLeaf
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
+#include <boost/test/unit_test.hpp>
 #include <evmone_precompiles/ecc.hpp>
 #include <evmone_precompiles/secp256r1.hpp>
-#include <boost/test/unit_test.hpp>
 
 #include <cstring>
 #include <optional>
@@ -184,8 +184,8 @@ void putU64BE(evmc::bytes32& w, size_t offset, uint64_t v)
 }
 
 template <class View>
-void seedAccounts(View& view, std::vector<AccountSeed> const& accounts,
-    bcos::crypto::Hash::Ptr const& hashImpl)
+void seedAccounts(
+    View& view, std::vector<AccountSeed> const& accounts, bcos::crypto::Hash::Ptr const& hashImpl)
 {
     for (auto const& seed : accounts)
     {
@@ -193,8 +193,8 @@ void seedAccounts(View& view, std::vector<AccountSeed> const& accounts,
         bcos::task::syncWait(account.create());
         // Same existence pattern as OpSchedulerTest's seedSender: a non-zero codeHash marks the
         // account as existing; empty code takes the empty-code hash.
-        bcos::task::syncWait(account.setCode(seed.code, {},
-            seed.code.empty() ? hashImpl->emptyHash() : hashImpl->hash(seed.code)));
+        bcos::task::syncWait(account.setCode(
+            seed.code, {}, seed.code.empty() ? hashImpl->emptyHash() : hashImpl->hash(seed.code)));
         bcos::task::syncWait(account.setNonce(std::to_string(seed.nonce)));
         bcos::task::syncWait(account.setBalance(seed.balance));
         for (auto const& [key, value] : seed.slots)
@@ -209,14 +209,14 @@ bcos::u256 viewBalance(View& view, evmc::address const& addr)
     return bcos::task::syncWait(account.balance());
 }
 
-// ── synthetic-block driver: the new layer executed twice from independent MLS forks ─────────
+// ── synthetic-block driver: the production path executed twice from independent MLS forks ───
 
 struct SyntheticOutcome
 {
     MLS::ViewType viewA;  // first execution's view
     MLS::ViewType viewB;  // determinism twin's view
-    NewPathOutcome outcomeA;
-    NewPathOutcome outcomeB;
+    opeth::OpEthExecuteBlockResult outcomeA;
+    opeth::OpEthExecuteBlockResult outcomeB;
 };
 
 SyntheticOutcome runSyntheticBlock(DualRunFixture& f, bcos::protocol::BlockHeader const& header,
@@ -228,22 +228,14 @@ SyntheticOutcome runSyntheticBlock(DualRunFixture& f, bcos::protocol::BlockHeade
     for (auto const& env : rawTxBytes)
         transactions.push_back(buildFiscoTx(env, f.hashImpl));
 
-    std::vector<opeth::OpEthBlockTx> txs;
-    txs.reserve(rawTxBytes.size());
-    for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
-    {
-        bool const isDeposit = rawTxBytes[i][0] == opeth::OP_DEPOSIT_TX_TYPE;
-        txs.push_back(opeth::OpEthBlockTx{
-            .tx = isDeposit ? nullptr : transactions[i], .envelope = rawTxBytes[i]});
-    }
     auto viewA = f.multiLayerStorage.fork();
     viewA.newMutable();
     seedAccounts(viewA, seeds, f.hashImpl);
-    auto outcomeA = runNewPath(f, viewA, header, spec, txs);
+    auto outcomeA = runExecutorPath(f, viewA, header, spec, transactions, rawTxBytes);
     auto viewB = f.multiLayerStorage.fork();
     viewB.newMutable();
     seedAccounts(viewB, seeds, f.hashImpl);
-    auto outcomeB = runNewPath(f, viewB, header, spec, txs);
+    auto outcomeB = runExecutorPath(f, viewB, header, spec, transactions, rawTxBytes);
     return SyntheticOutcome{
         std::move(viewA), std::move(viewB), std::move(outcomeA), std::move(outcomeB)};
 }
@@ -265,12 +257,11 @@ void checkMetaEqual(bcos::protocol::TransactionReceipt const& a,
         BOOST_CHECK_EQUAL(metaA.l1_fee.has_value(), metaB.l1_fee.has_value());
         if (metaA.l1_fee && metaB.l1_fee)
             BOOST_CHECK_EQUAL(*metaA.l1_fee, *metaB.l1_fee);
-        BOOST_CHECK_EQUAL(
-            metaA.l1_blob_base_fee.has_value(), metaB.l1_blob_base_fee.has_value());
+        BOOST_CHECK_EQUAL(metaA.l1_blob_base_fee.has_value(), metaB.l1_blob_base_fee.has_value());
         if (metaA.l1_blob_base_fee && metaB.l1_blob_base_fee)
             BOOST_CHECK_EQUAL(*metaA.l1_blob_base_fee, *metaB.l1_blob_base_fee);
-        BOOST_CHECK_EQUAL(metaA.l1_base_fee_scalar.has_value(),
-            metaB.l1_base_fee_scalar.has_value());
+        BOOST_CHECK_EQUAL(
+            metaA.l1_base_fee_scalar.has_value(), metaB.l1_base_fee_scalar.has_value());
         BOOST_CHECK(metaA.l1_base_fee_scalar == metaB.l1_base_fee_scalar);
         BOOST_CHECK(metaA.l1_blob_base_fee_scalar == metaB.l1_blob_base_fee_scalar);
         BOOST_CHECK(metaA.operator_fee_scalar == metaB.operator_fee_scalar);
@@ -297,12 +288,11 @@ void checkTwinsAgree(SyntheticOutcome& out, opeth::OpForkSpec const& spec,
     auto const& outcomeA = out.outcomeA;
     auto const& outcomeB = out.outcomeB;
 
-    BOOST_REQUIRE_EQUAL(outcomeA.result.receipts.size(), rawTxBytes.size());
-    BOOST_REQUIRE_EQUAL(outcomeB.result.receipts.size(), rawTxBytes.size());
-    BOOST_REQUIRE_EQUAL(outcomeB.result.txTypes.size(), rawTxBytes.size());
+    BOOST_REQUIRE_EQUAL(outcomeA.receipts.size(), rawTxBytes.size());
+    BOOST_REQUIRE_EQUAL(outcomeB.receipts.size(), rawTxBytes.size());
 
-    BOOST_CHECK_EQUAL(outcomeA.seal.receiptsRoot.hexPrefixed(),
-        outcomeB.seal.receiptsRoot.hexPrefixed());
+    BOOST_CHECK_EQUAL(
+        outcomeA.seal.receiptsRoot.hexPrefixed(), outcomeB.seal.receiptsRoot.hexPrefixed());
     BOOST_CHECK(outcomeA.seal.logsBloom == outcomeB.seal.logsBloom);
     BOOST_CHECK_EQUAL(
         outcomeA.seal.withdrawalsRoot.has_value(), outcomeB.seal.withdrawalsRoot.has_value());
@@ -312,13 +302,12 @@ void checkTwinsAgree(SyntheticOutcome& out, opeth::OpForkSpec const& spec,
     BOOST_CHECK_EQUAL(
         outcomeA.seal.requestsHash.has_value(), outcomeB.seal.requestsHash.has_value());
     if (outcomeA.seal.requestsHash && outcomeB.seal.requestsHash)
-        BOOST_CHECK_EQUAL(outcomeA.seal.requestsHash->hexPrefixed(),
-            outcomeB.seal.requestsHash->hexPrefixed());
-    BOOST_CHECK_EQUAL(
-        outcomeA.seal.blobGasUsed.has_value(), outcomeB.seal.blobGasUsed.has_value());
+        BOOST_CHECK_EQUAL(
+            outcomeA.seal.requestsHash->hexPrefixed(), outcomeB.seal.requestsHash->hexPrefixed());
+    BOOST_CHECK_EQUAL(outcomeA.seal.blobGasUsed.has_value(), outcomeB.seal.blobGasUsed.has_value());
     if (outcomeA.seal.blobGasUsed && outcomeB.seal.blobGasUsed)
         BOOST_CHECK_EQUAL(*outcomeA.seal.blobGasUsed, *outcomeB.seal.blobGasUsed);
-    BOOST_CHECK_EQUAL(outcomeA.result.gasUsed, outcomeB.result.gasUsed);
+    BOOST_CHECK_EQUAL(outcomeA.gasUsed, outcomeB.gasUsed);
     BOOST_CHECK_EQUAL(outcomeA.txRoot.hexPrefixed(), outcomeB.txRoot.hexPrefixed());
     if (outcomeA.stateRoot != outcomeB.stateRoot)
         dumpRowDiff(out.viewA, out.viewB);
@@ -335,23 +324,20 @@ void checkTwinsAgree(SyntheticOutcome& out, opeth::OpForkSpec const& spec,
     for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
     {
         auto const expectedType = opeth::opEthClassifyTxType(rawTxBytes[i][0]);
-        BOOST_REQUIRE_EQUAL(expectedType, outcomeB.result.txTypes[i]);
-        auto const leafA = bcos::ledger::mpt::encodeReceiptLeaf(
-            *outcomeA.result.receipts[i], expectedType);
-        auto const leafB = bcos::ledger::mpt::encodeReceiptLeaf(
-            *outcomeB.result.receipts[i], expectedType);
-        BOOST_CHECK_MESSAGE(leafA == leafB,
-            "receipt " << i << " leaf mismatch: a=" << bcos::toHex(leafA)
-                       << " b=" << bcos::toHex(leafB));
+        auto const leafA =
+            bcos::ledger::mpt::encodeReceiptLeaf(*outcomeA.receipts[i], expectedType);
+        auto const leafB =
+            bcos::ledger::mpt::encodeReceiptLeaf(*outcomeB.receipts[i], expectedType);
+        BOOST_CHECK_MESSAGE(leafA == leafB, "receipt " << i
+                                                       << " leaf mismatch: a=" << bcos::toHex(leafA)
+                                                       << " b=" << bcos::toHex(leafB));
+        BOOST_CHECK_EQUAL(outcomeA.receipts[i]->status(), outcomeB.receipts[i]->status());
+        BOOST_CHECK_MESSAGE(outcomeA.receipts[i]->gasUsed() == outcomeB.receipts[i]->gasUsed(),
+            "receipt " << i << " gasUsed mismatch: a=" << outcomeA.receipts[i]->gasUsed()
+                       << " b=" << outcomeB.receipts[i]->gasUsed());
         BOOST_CHECK_EQUAL(
-            outcomeA.result.receipts[i]->status(), outcomeB.result.receipts[i]->status());
-        BOOST_CHECK_MESSAGE(
-            outcomeA.result.receipts[i]->gasUsed() == outcomeB.result.receipts[i]->gasUsed(),
-            "receipt " << i << " gasUsed mismatch: a=" << outcomeA.result.receipts[i]->gasUsed()
-                       << " b=" << outcomeB.result.receipts[i]->gasUsed());
-        BOOST_CHECK_EQUAL(outcomeA.result.receipts[i]->logEntries().size(),
-            outcomeB.result.receipts[i]->logEntries().size());
-        checkMetaEqual(*outcomeA.result.receipts[i], *outcomeB.result.receipts[i], i);
+            outcomeA.receipts[i]->logEntries().size(), outcomeB.receipts[i]->logEntries().size());
+        checkMetaEqual(*outcomeA.receipts[i], *outcomeB.receipts[i], i);
     }
 }
 
@@ -372,7 +358,8 @@ BOOST_AUTO_TEST_CASE(BedrockDepositSemantics)
 
     std::vector<bcos::bytes> const rawTxBytes = {
         // 0: unmetered system deposit, gasLimit far above the block gas limit (10M).
-        depositEnvelope(opeth::OP_DEPOSITOR, opeth::OP_L1_BLOCK, 150'000'000, /*system=*/true, 0x01),
+        depositEnvelope(
+            opeth::OP_DEPOSITOR, opeth::OP_L1_BLOCK, 150'000'000, /*system=*/true, 0x01),
         // 1: metered success (call into an empty-code account).
         depositEnvelope(kDepositor2, kTransferTarget, 100'000, false, 0x02),
         // 2: metered EVM revert (contract code PUSH1 0, PUSH1 0, REVERT — Paris-valid).
@@ -387,7 +374,7 @@ BOOST_AUTO_TEST_CASE(BedrockDepositSemantics)
     auto out = runSyntheticBlock(f, *header, opeth::OP_BEDROCK_SPEC, rawTxBytes, seeds);
     checkTwinsAgree(out, opeth::OP_BEDROCK_SPEC, rawTxBytes);
 
-    auto const& receipts = out.outcomeB.result.receipts;
+    auto const& receipts = out.outcomeB.receipts;
     BOOST_CHECK_EQUAL(receipts[0]->status(), 0);
     BOOST_CHECK_EQUAL(receipts[0]->gasUsed(), bcos::u256(0));  // system tx: unmetered
     BOOST_CHECK_EQUAL(receipts[1]->status(), 0);
@@ -407,8 +394,7 @@ BOOST_AUTO_TEST_CASE(BedrockDepositSemantics)
         BOOST_CHECK(receipts[i]->effectiveGasPrice() == "0x0");
     }
     // Block gas: the system deposit contributes 0, the metered ones their full gasLimit.
-    BOOST_CHECK_EQUAL(
-        static_cast<uint64_t>(out.outcomeB.result.gasUsed), 100'000 + 100'000 + 1'000);
+    BOOST_CHECK_EQUAL(out.outcomeB.gasUsed, uint64_t{100'000 + 100'000 + 1'000});
 }
 
 // Regolith twin of ①: deposits count a nonce (deposit_nonce = the sender's pre-execution nonce,
@@ -431,7 +417,7 @@ BOOST_AUTO_TEST_CASE(RegolithDepositNonce)
     auto out = runSyntheticBlock(f, *header, opeth::OP_REGOLITH_SPEC, rawTxBytes, seeds);
     checkTwinsAgree(out, opeth::OP_REGOLITH_SPEC, rawTxBytes);
 
-    auto const& receipts = out.outcomeB.result.receipts;
+    auto const& receipts = out.outcomeB.receipts;
     for (std::size_t i = 0; i < receipts.size(); ++i)
     {
         auto const meta = receipts[i]->opStackMeta();
@@ -452,8 +438,8 @@ BOOST_AUTO_TEST_CASE(RegolithDepositNonce)
         twinMeta.deposit_nonce.reset();
         twin->setOpStackMeta(twinMeta);
         twin->setEffectiveGasPrice(std::string{receipts[i]->effectiveGasPrice()});
-        auto const leaf = bcos::ledger::mpt::encodeReceiptLeaf(
-            *receipts[i], opeth::OP_DEPOSIT_TX_TYPE);
+        auto const leaf =
+            bcos::ledger::mpt::encodeReceiptLeaf(*receipts[i], opeth::OP_DEPOSIT_TX_TYPE);
         auto const twinLeaf =
             bcos::ledger::mpt::encodeReceiptLeaf(*twin, opeth::OP_DEPOSIT_TX_TYPE);
         BOOST_CHECK_MESSAGE(leaf == twinLeaf,
@@ -514,8 +500,7 @@ BOOST_AUTO_TEST_CASE(EcotoneFirstBlockFallback)
     putU32BE(slot3, 16, 1'000);  // base_fee_scalar
     putU32BE(slot3, 20, 2'000);  // blob_base_fee_scalar
     auto outSet = runWith({
-        {slotKey(1), wordFromU256(l1BaseFee)},
-        {slotKey(3), slot3},
+        {slotKey(1), wordFromU256(l1BaseFee)}, {slotKey(3), slot3},
         {slotKey(5), wordFromU256(intx::uint256{2'100})},
         {slotKey(6), wordFromU256(intx::uint256{1'000'000})},
         {slotKey(7), wordFromU256(intx::uint256{2'000'000'000})},  // blob_base_fee
@@ -524,8 +509,8 @@ BOOST_AUTO_TEST_CASE(EcotoneFirstBlockFallback)
     checkTwinsAgree(outUnset, opeth::OP_ECOTONE_SPEC, rawTxBytes);
     checkTwinsAgree(outSet, opeth::OP_ECOTONE_SPEC, rawTxBytes);
 
-    auto const metaUnset = outUnset.outcomeB.result.receipts[1]->opStackMeta();
-    auto const metaSet = outSet.outcomeB.result.receipts[1]->opStackMeta();
+    auto const metaUnset = outUnset.outcomeB.receipts[1]->opStackMeta();
+    auto const metaSet = outSet.outcomeB.receipts[1]->opStackMeta();
     BOOST_REQUIRE(metaUnset.has_value() && metaUnset->l1_fee.has_value());
     BOOST_REQUIRE(metaSet.has_value() && metaSet->l1_fee.has_value());
 
@@ -585,7 +570,7 @@ BOOST_AUTO_TEST_CASE(IsthmusOperatorFeeVaults)
 
     constexpr uint32_t kBaseScalar = 6'849;
     constexpr uint32_t kBlobScalar = 987'654;
-    constexpr uint32_t kOperatorScalar = 500'000;      // 0.5
+    constexpr uint32_t kOperatorScalar = 500'000;  // 0.5
     constexpr uint64_t kOperatorConstant = 12'345;
     evmc::bytes32 slot3{};
     putU32BE(slot3, 16, kBaseScalar);
@@ -603,19 +588,20 @@ BOOST_AUTO_TEST_CASE(IsthmusOperatorFeeVaults)
         // nonce=1: see the EIP-161 note in EcotoneFirstBlockFallback.
         {.addr = opeth::OP_L1_BLOCK,
             .nonce = 1,
-            .slots = {
-                {slotKey(1), wordFromU256(l1BaseFee)},
-                {slotKey(3), slot3},
-                {slotKey(7), wordFromU256(blobBaseFee)},
-                {slotKey(8), slot8},
-            }},
+            .slots =
+                {
+                    {slotKey(1), wordFromU256(l1BaseFee)},
+                    {slotKey(3), slot3},
+                    {slotKey(7), wordFromU256(blobBaseFee)},
+                    {slotKey(8), slot8},
+                }},
     };
 
     auto out = runSyntheticBlock(f, *header, opeth::OP_ISTHMUS_SPEC, rawTxBytes, seeds);
     checkTwinsAgree(out, opeth::OP_ISTHMUS_SPEC, rawTxBytes);
 
     // Expected economics (Isthmus operator formula: gas*scalar/1e6 + constant):
-    constexpr uint64_t kGasUsed = 21'000;  // plain value transfer
+    constexpr uint64_t kGasUsed = 21'000;                    // plain value transfer
     auto const effectivePrice = kHeaderBaseFee + kPriority;  // 1001000000, under the 2 gwei cap
     opeth::OpFeeParams const params{.l1_base_fee = l1BaseFee,
         .base_fee_scalar = kBaseScalar,
@@ -640,13 +626,12 @@ BOOST_AUTO_TEST_CASE(IsthmusOperatorFeeVaults)
     // Sender: -(gasUsed*effective) - l1Cost - opCost(gasUsed) - value(1 wei); the
     // opCost(gasLimit) pre-charge's excess comes back (kTxGasLimit > kGasUsed makes the delta
     // non-zero).
-    auto const expectedSender = (bcos::u256(1) << 200) -
-                                bcos::u256(kGasUsed) * effectivePrice -
+    auto const expectedSender = (bcos::u256(1) << 200) - bcos::u256(kGasUsed) * effectivePrice -
                                 opeth::intxToBcosU256(l1Cost) - opeth::intxToBcosU256(opAtUsed) -
                                 bcos::u256(1);  // the transferred value
     BOOST_CHECK_EQUAL(viewBalance(view, senderEvmc), expectedSender);
 
-    auto const meta = out.outcomeB.result.receipts[1]->opStackMeta();
+    auto const meta = out.outcomeB.receipts[1]->opStackMeta();
     BOOST_REQUIRE(meta.has_value());
     BOOST_REQUIRE(meta->operator_fee.has_value());
     BOOST_CHECK_EQUAL(*meta->operator_fee, opeth::intxToBcosU256(opAtUsed));
@@ -664,8 +649,8 @@ BOOST_AUTO_TEST_CASE(JovianDaFootprintSeal)
 {
     DualRunFixture f;
     auto makeReceipt = [&](bcos::u256 gasUsed) {
-        auto receipt = f.receiptFactory->createReceipt(gasUsed, std::string{},
-            bcos::protocol::LogEntries{}, 0, bcos::bytesConstRef{}, 1);
+        auto receipt = f.receiptFactory->createReceipt(
+            gasUsed, std::string{}, bcos::protocol::LogEntries{}, 0, bcos::bytesConstRef{}, 1);
         bcos::bytes bloom(256, 0);
         receipt->setLogsBloom(bcos::bytesConstRef{bloom.data(), bloom.size()});
         // encodeReceiptLeaf parses this field (decimal on the OP path).
@@ -684,47 +669,44 @@ BOOST_AUTO_TEST_CASE(JovianDaFootprintSeal)
 
     // (a) deposits-only block: the footprint sum is 0.
     {
-        opeth::OpEthBlockResult result;
-        result.receipts.push_back(depositReceipt());
-        result.txTypes.push_back(opeth::OP_DEPOSIT_TX_TYPE);
-        auto const seal = opeth::sealOpEthBlock(result, opeth::OP_JOVIAN_SPEC, {});
+        std::vector<bcos::protocol::TransactionReceipt::Ptr> const receipts{depositReceipt()};
+        std::vector<uint8_t> const txTypes{opeth::OP_DEPOSIT_TX_TYPE};
+        auto const seal = opeth::sealOpEthBlock(receipts, txTypes, opeth::OP_JOVIAN_SPEC, {});
         BOOST_REQUIRE(seal.blobGasUsed.has_value());
         BOOST_CHECK_EQUAL(*seal.blobGasUsed, 0);
     }
     // (b) a non-deposit receipt with NO meta at all → reject.
     {
-        opeth::OpEthBlockResult result;
-        result.receipts.push_back(depositReceipt());
-        result.txTypes.push_back(opeth::OP_DEPOSIT_TX_TYPE);
-        result.receipts.push_back(makeReceipt(bcos::u256(21'000)));
-        result.txTypes.push_back(0x02);
-        auto sealFn = [&] { return opeth::sealOpEthBlock(result, opeth::OP_JOVIAN_SPEC, {}); };
+        std::vector<bcos::protocol::TransactionReceipt::Ptr> const receipts{
+            depositReceipt(), makeReceipt(bcos::u256(21'000))};
+        std::vector<uint8_t> const txTypes{opeth::OP_DEPOSIT_TX_TYPE, 0x02};
+        auto sealFn = [&] {
+            return opeth::sealOpEthBlock(receipts, txTypes, opeth::OP_JOVIAN_SPEC, {});
+        };
         BOOST_CHECK_THROW(sealFn(), opeth::OpEthBlockError);
     }
     // (c) a non-deposit receipt whose meta lacks da_footprint → reject.
     {
-        opeth::OpEthBlockResult result;
-        result.receipts.push_back(depositReceipt());
-        result.txTypes.push_back(opeth::OP_DEPOSIT_TX_TYPE);
         auto normal = makeReceipt(bcos::u256(21'000));
         normal->setOpStackMeta(bcos::protocol::OpStackReceiptMeta{});  // present, but no footprint
-        result.receipts.push_back(normal);
-        result.txTypes.push_back(0x02);
-        auto sealFn = [&] { return opeth::sealOpEthBlock(result, opeth::OP_JOVIAN_SPEC, {}); };
+        std::vector<bcos::protocol::TransactionReceipt::Ptr> const receipts{
+            depositReceipt(), normal};
+        std::vector<uint8_t> const txTypes{opeth::OP_DEPOSIT_TX_TYPE, 0x02};
+        auto sealFn = [&] {
+            return opeth::sealOpEthBlock(receipts, txTypes, opeth::OP_JOVIAN_SPEC, {});
+        };
         BOOST_CHECK_THROW(sealFn(), opeth::OpEthBlockError);
     }
     // (d) the happy path: footprint sums over non-deposit receipts.
     {
-        opeth::OpEthBlockResult result;
-        result.receipts.push_back(depositReceipt());
-        result.txTypes.push_back(opeth::OP_DEPOSIT_TX_TYPE);
         auto normal = makeReceipt(bcos::u256(21'000));
         bcos::protocol::OpStackReceiptMeta meta;
         meta.da_footprint = 777;
         normal->setOpStackMeta(meta);
-        result.receipts.push_back(normal);
-        result.txTypes.push_back(0x02);
-        auto const seal = opeth::sealOpEthBlock(result, opeth::OP_JOVIAN_SPEC, {});
+        std::vector<bcos::protocol::TransactionReceipt::Ptr> const receipts{
+            depositReceipt(), normal};
+        std::vector<uint8_t> const txTypes{opeth::OP_DEPOSIT_TX_TYPE, 0x02};
+        auto const seal = opeth::sealOpEthBlock(receipts, txTypes, opeth::OP_JOVIAN_SPEC, {});
         BOOST_REQUIRE(seal.blobGasUsed.has_value());
         BOOST_CHECK_EQUAL(*seal.blobGasUsed, 777);
     }
@@ -848,12 +830,14 @@ BOOST_AUTO_TEST_CASE(PrecompileMaxInputSize)
     constexpr int64_t kTinyGas = 1'000;  // far below the bn256 pairing price (~13.9M at the cap)
 
     // Over the Jovian cap: EVMC_FAILURE + gas_left 0 (not OUT_OF_GAS — no pricing happened).
-    auto res = jovianPolicy.callPrecompile(EVMC_PRAGUE, msg(overCap.data(), overCap.size(), kTinyGas));
+    auto res =
+        jovianPolicy.callPrecompile(EVMC_PRAGUE, msg(overCap.data(), overCap.size(), kTinyGas));
     BOOST_CHECK_EQUAL(static_cast<int>(res.status_code), static_cast<int>(EVMC_FAILURE));
     BOOST_CHECK_EQUAL(res.gas_left, 0);
 
     // Exactly at the cap: admitted to the generic table → priced → OUT_OF_GAS.
-    auto resAt = jovianPolicy.callPrecompile(EVMC_PRAGUE, msg(atCap.data(), atCap.size(), kTinyGas));
+    auto resAt =
+        jovianPolicy.callPrecompile(EVMC_PRAGUE, msg(atCap.data(), atCap.size(), kTinyGas));
     BOOST_CHECK_EQUAL(static_cast<int>(resAt.status_code), static_cast<int>(EVMC_OUT_OF_GAS));
 
     // The same over-Jovian-cap input is within the Isthmus cap (112687): generic path again.
@@ -877,8 +861,7 @@ BOOST_AUTO_TEST_CASE(AlwaysWarmPrecompilesNoGhost)
     eth::EthereumHost<opstack_test::MutableStorage, opeth::OpPolicy> opHost{EVMC_PRAGUE, vm,
         opState, block, {}, std::nullopt, eth::EthCallParams{}, kOpChainId, opPolicy};
 
-    BOOST_CHECK_EQUAL(
-        static_cast<int>(opHost.access_account(opeth::OP_P256_VERIFY_ADDRESS)),
+    BOOST_CHECK_EQUAL(static_cast<int>(opHost.access_account(opeth::OP_P256_VERIFY_ADDRESS)),
         static_cast<int>(EVMC_ACCESS_WARM));
     BOOST_CHECK_EQUAL(static_cast<int>(opHost.access_account(evmc::address{0x08})),
         static_cast<int>(EVMC_ACCESS_WARM));
@@ -897,12 +880,10 @@ BOOST_AUTO_TEST_CASE(AlwaysWarmPrecompilesNoGhost)
         static_cast<int>(EVMC_ACCESS_WARM));
     BOOST_CHECK(l1State.modified().contains(evmc::address{0x08}));
     // 0x100 is not a Prague L1 precompile at all: cold first access + ghost.
-    BOOST_CHECK_EQUAL(
-        static_cast<int>(l1Host.access_account(opeth::OP_P256_VERIFY_ADDRESS)),
+    BOOST_CHECK_EQUAL(static_cast<int>(l1Host.access_account(opeth::OP_P256_VERIFY_ADDRESS)),
         static_cast<int>(EVMC_ACCESS_COLD));
     BOOST_CHECK(l1State.modified().contains(opeth::OP_P256_VERIFY_ADDRESS));
-    BOOST_CHECK_EQUAL(
-        static_cast<int>(l1Host.access_account(opeth::OP_P256_VERIFY_ADDRESS)),
+    BOOST_CHECK_EQUAL(static_cast<int>(l1Host.access_account(opeth::OP_P256_VERIFY_ADDRESS)),
         static_cast<int>(EVMC_ACCESS_WARM));
 }
 

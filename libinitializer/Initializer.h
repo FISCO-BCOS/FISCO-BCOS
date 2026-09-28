@@ -69,7 +69,7 @@ namespace engine_common
 {
 class ClSyncCoordination;
 }
-}
+}  // namespace engine
 namespace single_consensus
 {
 class SingleNodeConsensus;
@@ -204,6 +204,12 @@ public:
     {
         return m_mptCommitObserver;
     }
+
+    /// The node-wide admission configuration holder, republished by every commit lane.
+    /// Forwarded to the EL-mode sync path (AirNodeInitializer hands it to
+    /// EthereumSyncInitializer) so devp2p-synced commits republish too — that lane bypasses
+    /// MultiVersionScheduler's publishing wrapper. Valid after initNode().
+    bcos::ledger::LedgerConfigState::Ptr ledgerConfigState() { return m_ledgerConfigState; }
 
     /// Provider for eth_getStorageAt's latest-state path: each call forks a fresh latest view
     /// of GlobalStateStorage and returns an AnyStorage handle owning it (see

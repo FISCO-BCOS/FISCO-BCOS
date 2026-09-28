@@ -1,39 +1,24 @@
 /// @file OpEthBlockExecute.h
-/// @brief Whole-block OP Stack execution on the ethereum-executor stack — the
-///        bcos-evm-free counterpart of OpBlockExecute.h's processOpBlock /
+/// @brief Block-level helpers of the bcos-evm-free OP execution layer, shared
+///        by the production drivers (OpEthBlockSteps.h's preBlockOpEthSteps /
+///        finalizeOpEthBlockResult, driven around OpEthExecutor +
+///        SchedulerSerialImpl): the block-info projection
+///        (buildOpEthBlockInfo), the Jovian L1-attributes shape rules, the
+///        MessagePasser snapshot, the receipt type-byte classification and the
+///        header-commitment seal (sealOpEthBlock) — the bcos-evm-free
+///        counterparts of the pieces of OpBlockExecute.h's processOpBlock /
 ///        sealOpBlock, composed from the Part-A policy hooks and the B1-B6
 ///        layer (OpForkSpec / OpFeeParams / OpRollupCost / OpPolicy /
 ///        OpEthReceipt / OpEthDeposit).
 ///
 /// Semantics are ported from OpBlockExecute.cpp (processOpBlock + sealOpBlock)
 /// with the same fork gating; op-geth references live in those originals.
-///
-/// Deferred to the production cutover (step 3), by design: the
-/// envelope↔mirror cross-checks (envelopeChainIdMismatch /
-/// envelopeExecutionFieldsMismatch / blockPathZeroSender /
-/// blockPathUnboundAuthorizationList) and the pool-eviction error tagging
-/// (OpConsensusError::txHash / capacity / validateErrorCode). The dual-run
-/// harness builds its tars transactions FROM the envelopes, so the mirrors
-/// agree by construction and the checks are inert there; a block-level
-/// validation failure here throws OpEthBlockError without the typed tag.
 
 #pragma once
 
-#include <ethereum-executor/EVMSupport.h>
-#include <ethereum-executor/EthSystemCalls.h>
-#include <ethereum-executor/EthereumState.h>
-#include <ethereum-executor/EthereumTransition.h>
-#include <opstack-executor/OpEthDeposit.h>
-#include <opstack-executor/OpEthReceipt.h>
-#include <opstack-executor/OpExecutionPolicy.h>
-#include <opstack-executor/OpFeeParams.h>
-#include <opstack-executor/OpForkSpec.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-framework/engine/Constants.h>
 #include <bcos-framework/protocol/BlockHeader.h>
-#include <bcos-framework/protocol/TransactionReceiptFactory.h>
-#include <bcos-framework/protocol/TransactionReceiptNormalize.h>
-#include <bcos-framework/storage2/RollbackableStorage.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/EthTrieRoots.h>
@@ -41,6 +26,14 @@
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Bloom.h>
 #include <bcos-utilities/Common.h>
+#include <ethereum-executor/EVMSupport.h>
+#include <ethereum-executor/EthereumHost.h>
+#include <ethereum-executor/EthereumState.h>
+#include <opstack-executor/OpEthDeposit.h>
+#include <opstack-executor/OpEthReceipt.h>
+#include <opstack-executor/OpExecutionPolicy.h>
+#include <opstack-executor/OpFeeParams.h>
+#include <opstack-executor/OpForkSpec.h>
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -59,9 +52,10 @@ namespace bcos::executor_v1::opstack
 {
 namespace eth = bcos::executor_v1::eth;
 
-/// Consensus-level whole-block rejection on the new path — the counterpart of
-/// the legacy path's OpConsensusError (without its pool-eviction tags; see the
-/// file header).
+/// Consensus-level fault raised by the helpers in this file. The block steps
+/// (OpEthBlockSteps.h) catch it at the layer boundary and reclassify it to
+/// bcos::evm::OpConsensusError (INVALID), keeping the message — the legacy
+/// path's classification surface.
 struct OpEthBlockError : std::runtime_error
 {
     using std::runtime_error::runtime_error;
@@ -139,46 +133,14 @@ inline void validateOpEthJovianShape(
     return typeByte;
 }
 
-/// Bounds-checked u256→int64 narrowing (the raw-envelope sizing path's guard —
-/// a corrupt receipt must not wrap the gas pool). NOTE: this throws the bare
-/// OpEthBlockError; the production executor finish step instead uses OpCommon.h's
-/// engine::detail::narrowGasUsed, whose OpConsensusError keeps the
-/// INVALID/-32603 classification boundary.
-[[nodiscard]] inline int64_t narrowOpEthGasUsed(const bcos::u256& gasUsed)
-{
-    static const bcos::u256 kMaxInt64(std::numeric_limits<int64_t>::max());
-    if (gasUsed > kMaxInt64)
-        throw OpEthBlockError("op-eth block: receipt gasUsed exceeds int64_t range");
-    return static_cast<int64_t>(gasUsed);
-}
-
-/// One transaction within a block: the raw EIP-2718 envelope plus, for a normal
-/// (non-deposit) tx, the decoded transaction. Deposit-ness is decided by the
-/// envelope's type byte (0x7e) — never by the tars mirror.
-struct OpEthBlockTx
-{
-    std::shared_ptr<protocol::Transaction const> tx;  // null for deposits
-    bcos::bytes envelope;                             // raw EIP-2718 wire bytes
-};
-
-/// Block execution result (mirror of OpBlockResult, minus the evmone StateDiff —
-/// this path applies writes straight to the view, there is no diff carrier).
-struct OpEthBlockResult
-{
-    std::vector<protocol::TransactionReceipt::Ptr> receipts;
-    std::vector<uint8_t> txTypes;
-    int64_t gasUsed = 0;
-};
-
 /// EthBlockInfo from the block header (the retired OpCommon.h toBlockInfo's
 /// successor): OP takes gas_limit / base_fee / coinbase / prev_randao /
 /// parentBeaconBlockRoot from the HEADER, not the ledger config (contrast
-/// eth::buildBlockInfo, the L1 builder). Pre-Ecotone headers carry no baseFee/parentBeaconBlockRoot fields —
-/// the zero-filled optionals are dead EVM inputs pre-Cancun (no EIP-4788 system
-/// call, and OpPolicy::blobBaseFee ignores the block's blob fields), so the
-/// leniency is semantics-neutral; Ecotone+ headers stay strict.
-/// blob_base_fee stays nullopt: OpPolicy::blobBaseFee asserts exactly that (the
-/// OP BLOBBASEFEE opcode is the constant 1, never the L1 EIP-4844 price).
+/// eth::buildBlockInfo, the L1 builder). Pre-Ecotone headers carry no baseFee/parentBeaconBlockRoot
+/// fields — the zero-filled optionals are dead EVM inputs pre-Cancun (no EIP-4788 system call, and
+/// OpPolicy::blobBaseFee ignores the block's blob fields), so the leniency is semantics-neutral;
+/// Ecotone+ headers stay strict. blob_base_fee stays nullopt: OpPolicy::blobBaseFee asserts exactly
+/// that (the OP BLOBBASEFEE opcode is the constant 1, never the L1 EIP-4844 price).
 /// @p lenientOptionals (eth_call path) tolerates unset optional fields on ANY
 /// fork — the legacy builder's `call || fork < Ecotone` rule.
 [[nodiscard]] inline eth::EthBlockInfo buildOpEthBlockInfo(
@@ -206,10 +168,9 @@ struct OpEthBlockResult
     if (gasLimit > bcos::u256(std::numeric_limits<int64_t>::max()))
         throw OpEthBlockError("op-eth block: header gasLimit overflows int64");
     blk.gas_limit = static_cast<int64_t>(gasLimit);
-    blk.base_fee =
-        narrowU64(lenient ? header.baseFee().value_or(bcos::u256{0}) :
-                            requireField(header.baseFee(), "baseFee"),
-            "baseFee");
+    blk.base_fee = narrowU64(lenient ? header.baseFee().value_or(bcos::u256{0}) :
+                                       requireField(header.baseFee(), "baseFee"),
+        "baseFee");
     auto const& cb = header.coinbase();
     if (cb.size() == sizeof(evmc_address))
         std::copy_n(cb.begin(), sizeof(evmc_address), blk.coinbase.bytes);
@@ -218,8 +179,7 @@ struct OpEthBlockResult
     auto const beaconRoot =
         lenient ? header.parentBeaconBlockRoot().value_or(bcos::h256{}) :
                   requireField(header.parentBeaconBlockRoot(), "parentBeaconBlockRoot");
-    std::copy_n(
-        beaconRoot.data(), sizeof(blk.parent_beacon_block_root.bytes),
+    std::copy_n(beaconRoot.data(), sizeof(blk.parent_beacon_block_root.bytes),
         blk.parent_beacon_block_root.bytes);
     return blk;
 }
@@ -237,8 +197,8 @@ task::Task<std::map<evmc::bytes32, evmc::bytes32>> opEthMessagePasserStorage(Sto
     std::map<evmc::bytes32, evmc::bytes32> out;
     auto acc = eth::ethViewAccount(view, OP_L2_TO_L1_MESSAGE_PASSER);
     auto const tableName = std::string(co_await acc.path());
-    auto it = co_await storage2::range(view, storage2::RANGE_SEEK,
-        executor_v1::StateKey{tableName, std::string_view{}});
+    auto it = co_await storage2::range(
+        view, storage2::RANGE_SEEK, executor_v1::StateKey{tableName, std::string_view{}});
     while (auto kv = co_await it.next())
     {
         auto const& [k, v] = *kv;
@@ -288,220 +248,6 @@ task::Task<std::map<evmc::bytes32, evmc::bytes32>> opEthMessagePasserStorage(Sto
     return bcos::ledger::mpt::computeTrieRoot(entries).root;
 }
 
-/// Execute a whole OP block on the ethereum-executor stack (mirror of
-/// processOpBlock): block-start system calls (Cancun+) → deposit-first content
-/// check + Jovian shape → per-tx (deposits via opRunDeposit, normal txs via
-/// validateTransaction/runTransaction under OpPolicy) → no-reward finalize →
-/// receipt normalization. All writes land in @p view directly (the caller owns
-/// the view's discard-on-throw contract, same as processOpBlock's caller).
-///
-/// Per-transaction atomicity mirrors EthereumExecutor::ExecuteContext::execute():
-/// each tx runs on a journaling Rollbackable over the view and is rolled back
-/// if anything throws part-way.
-///
-/// @param chainId the NODE's chain id (EIP-7702 step-1 comparison input).
-template <class Storage>
-task::Task<OpEthBlockResult> executeOpEthBlock(Storage& view,
-    protocol::BlockHeader const& header, OpForkSpec const& spec,
-    std::span<const OpEthBlockTx> txs, evmc::VM& vm, uint64_t chainId,
-    protocol::TransactionReceiptFactory const& receiptFactory,
-    eth::BlockHashLookup blockHashLookup = {})
-{
-    auto const rev = spec.rev;
-    auto const block = buildOpEthBlockInfo(header, spec);
-
-    // Step 1: block-start system calls (EIP-4788/2935), Cancun+ only. The OP
-    // chain policy applies here too (deposit-mode OpPolicy: override precompile
-    // warmth, BLOBBASEFEE=1 — inert for the system contracts, but the policy
-    // surface is uniform).
-    if (rev >= EVMC_CANCUN)
-    {
-        evmc::bytes32 parentHash{};
-        auto const& parent = header.parentInfo();
-        std::copy_n(parent.blockHash.data(), sizeof(parentHash.bytes), parentHash.bytes);
-        OpPolicy const sysPolicy{spec, block};
-        if (auto err = co_await eth::systemCallBlockStart<Storage, OpPolicy>(
-                view, vm, block, parentHash, rev, sysPolicy))
-            throw OpEthBlockError("op-eth block: " + *err);
-    }
-
-    // Step 2: first tx must be a deposit (hard reject) + Jovian shape. Mirrors
-    // processOpBlock's accept set (the not-L1-attributes first deposit is a
-    // warn-only accept upstream; the warning is dropped here, the accept kept).
-    if (txs.empty())
-        throw OpEthBlockError("op-eth block: missing L1 attributes deposit (empty block)");
-    if (txs[0].envelope.empty() || txs[0].envelope[0] != OP_DEPOSIT_TX_TYPE)
-        throw OpEthBlockError("op-eth block: first tx is not a deposit");
-    auto const firstDeposit = decodeOpDepositEnvelope(
-        bcos::bytesConstRef{txs[0].envelope.data(), txs[0].envelope.size()});
-    if (spec.has_da_footprint)
-    {
-        // Last-tx-only deposits-only check matches op-geth CalcDAFootprint
-        // (core/types/rollup_cost.go:563-577). An empty trailing envelope is
-        // treated as non-deposit.
-        bool const lastTxIsDeposit =
-            !txs.back().envelope.empty() && txs.back().envelope[0] == OP_DEPOSIT_TX_TYPE;
-        validateOpEthJovianShape(
-            std::span<uint8_t const>{firstDeposit.data.data(), firstDeposit.data.size()},
-            lastTxIsDeposit, spec);
-    }
-
-    OpEthBlockResult result;
-    result.receipts.reserve(txs.size());
-    result.txTypes.reserve(txs.size());
-    int64_t blockGasLeft = block.gas_limit;
-    int64_t cumulative = 0;
-    bool feeLoaded = false;
-    OpFeeParams fee{};
-
-    for (auto const& btx : txs)
-    {
-        protocol::TransactionReceipt::Ptr receipt;
-        if (!btx.envelope.empty() && btx.envelope[0] == OP_DEPOSIT_TX_TYPE)
-        {
-            // Deposit after a non-deposit: warn-only accept upstream; accepted
-            // here without the warning (ordering is not a consensus rule).
-            auto const dep = decodeOpDepositEnvelope(
-                bcos::bytesConstRef{btx.envelope.data(), btx.envelope.size()});
-            executor_v1::Rollbackable<Storage> rollable(view);
-            eth::EthereumState<executor_v1::Rollbackable<Storage>> state(rollable);
-            auto const savepoint = rollable.current();
-            std::exception_ptr failure;
-            try
-            {
-                receipt = co_await opRunDeposit(state, block, blockHashLookup, dep, spec, vm,
-                    chainId, blockGasLeft, receiptFactory, header.number());
-            }
-            catch (...)
-            {
-                failure = std::current_exception();
-            }
-            if (failure)
-            {
-                try
-                {
-                    co_await rollable.rollback(savepoint);
-                }
-                catch (...)
-                {
-                }
-                std::rethrow_exception(failure);
-            }
-        }
-        else
-        {
-            if (btx.tx == nullptr)
-                throw std::logic_error(
-                    "op-eth block: non-deposit tx without a decoded transaction (caller bug)");
-            if (btx.envelope.empty())
-                throw OpEthBlockError("op-eth block: empty envelope on a non-deposit tx");
-            if (!feeLoaded)
-            {
-                // Fee params lazily loaded at the first normal tx (op-geth's
-                // per-block cache) — read AFTER this block's deposits landed
-                // (consensus-critical ordering). The Jovian-only DA scalar is
-                // the one deliberate exception: read directly from
-                // calldata[176:178] so it stays authoritative even if the
-                // attributes deposit rolled back L1Block slot 8; the activation
-                // block (176B) forces 0.
-                fee = co_await loadOpFeeParamsAsync(view);
-                if (spec.has_da_footprint)
-                {
-                    if (auto scalar = opEthJovianDaFootprintGasScalar(
-                            std::span<uint8_t const>{
-                                firstDeposit.data.data(), firstDeposit.data.size()}))
-                        fee.da_footprint_gas_scalar = *scalar;
-                }
-                feeLoaded = true;
-            }
-
-            executor_v1::Rollbackable<Storage> rollable(view);
-            eth::EthereumState<executor_v1::Rollbackable<Storage>> state(rollable);
-            auto const savepoint = rollable.current();
-            std::exception_ptr failure;
-            try
-            {
-                OpTxSnapshot snapshot{};
-                eth::EthCallParams const callParams{};
-                evmc::bytes_view const envelopeView{btx.envelope.data(), btx.envelope.size()};
-                OpPolicy const policy{spec, fee, block, envelopeView, *btx.tx, callParams,
-                    snapshot};
-                auto validation = eth::validateTransaction(state, block, *btx.tx, rev,
-                    blockGasLeft, 0 /*blobGasLeft — blob txs are rejected by the policy*/,
-                    callParams, policy);
-                if (auto const* err = std::get_if<std::error_code>(&validation))
-                {
-                    // No failed-receipt mechanism for normal txs: void the
-                    // whole block (op-geth). The capacity-fault / txHash
-                    // tagging of the legacy path is deferred (file header).
-                    throw OpEthBlockError(
-                        "op-eth block: invalid non-deposit tx: " + err->message());
-                }
-                receipt = co_await eth::runTransaction(state, block, blockHashLookup, *btx.tx,
-                    rev, vm, std::get<eth::EthTxProperties>(validation), chainId, callParams,
-                    receiptFactory, header.number(), policy);
-            }
-            catch (...)
-            {
-                failure = std::current_exception();
-            }
-            if (failure)
-            {
-                try
-                {
-                    co_await rollable.rollback(savepoint);
-                }
-                catch (...)
-                {
-                }
-                std::rethrow_exception(failure);
-            }
-        }
-        auto const gasUsed = narrowOpEthGasUsed(receipt->gasUsed());
-        blockGasLeft -= gasUsed;
-        cumulative += gasUsed;
-        // Cumulative gas as a DECIMAL string (RPC parses it as decimal).
-        receipt->setCumulativeGasUsed(std::to_string(static_cast<uint64_t>(cumulative)));
-        result.receipts.emplace_back(std::move(receipt));
-        result.txTypes.emplace_back(opEthClassifyTxType(btx.envelope[0]));
-    }
-
-    // Step 4: end-of-block finalize — no block reward, no withdrawals (OP).
-    {
-        executor_v1::Rollbackable<Storage> rollable(view);
-        eth::EthereumState<executor_v1::Rollbackable<Storage>> state(rollable);
-        auto const savepoint = rollable.current();
-        std::exception_ptr failure;
-        try
-        {
-            co_await eth::finalizeState(state, rev, block.coinbase, std::nullopt, {});
-        }
-        catch (...)
-        {
-            failure = std::current_exception();
-        }
-        if (failure)
-        {
-            try
-            {
-                co_await rollable.rollback(savepoint);
-            }
-            catch (...)
-            {
-            }
-            std::rethrow_exception(failure);
-        }
-    }
-
-    // Same receipt-field policy as the legacy seal path (finalizeOpBlockResult):
-    // transactionIndex / logIndex written, logsBloom recomputed unconditionally
-    // from logEntries, cumulativeGasUsed fill-when-empty (the running prefix
-    // above is kept).
-    protocol::normalizeReceipts(result.receipts);
-    result.gasUsed = cumulative;
-    co_return result;
-}
-
 /// Header commitments (mirror of sealOpBlock's OpBlockSeal, in framework types).
 struct OpEthBlockSeal
 {
@@ -520,10 +266,12 @@ struct OpEthBlockSeal
 /// Compute the header commitments (mirror of sealOpBlock).
 /// @param messagePasserStorage the complete, post-finalize live MessagePasser
 ///        slot map (opEthMessagePasserStorage output).
-[[nodiscard]] inline OpEthBlockSeal sealOpEthBlock(const OpEthBlockResult& result,
-    OpForkSpec const& spec, const std::map<evmc::bytes32, evmc::bytes32>& messagePasserStorage)
+[[nodiscard]] inline OpEthBlockSeal sealOpEthBlock(
+    std::vector<protocol::TransactionReceipt::Ptr> const& receipts,
+    std::vector<uint8_t> const& txTypes, OpForkSpec const& spec,
+    const std::map<evmc::bytes32, evmc::bytes32>& messagePasserStorage)
 {
-    if (result.txTypes.size() != result.receipts.size())
+    if (txTypes.size() != receipts.size())
         throw std::logic_error("op-eth block: receipts/txTypes length mismatch (caller bug)");
     OpEthBlockSeal seal{};
 
@@ -532,15 +280,14 @@ struct OpEthBlockSeal
     // legacy seal. The deposit fork-matrix guard is ported from sealOpBlock:
     // the meta fields a deposit receipt carries must match the fork.
     std::vector<bcos::bytes> receiptLeaves;
-    receiptLeaves.reserve(result.receipts.size());
-    for (size_t i = 0; i < result.receipts.size(); ++i)
+    receiptLeaves.reserve(receipts.size());
+    for (size_t i = 0; i < receipts.size(); ++i)
     {
-        if (result.txTypes[i] == OP_DEPOSIT_TX_TYPE)
+        if (txTypes[i] == OP_DEPOSIT_TX_TYPE)
         {
-            const auto& meta = result.receipts[i]->opStackMeta();
+            const auto& meta = receipts[i]->opStackMeta();
             const bool hasNonce = meta.has_value() && meta->deposit_nonce.has_value();
-            const bool hasVersion =
-                meta.has_value() && meta->deposit_receipt_version.has_value();
+            const bool hasVersion = meta.has_value() && meta->deposit_receipt_version.has_value();
             if (spec.has_deposit_receipt_version)  // Canyon+
             {
                 if (!hasNonce || !hasVersion)
@@ -561,8 +308,7 @@ struct OpEthBlockSeal
         }
         try
         {
-            receiptLeaves.push_back(
-                ledger::mpt::encodeReceiptLeaf(*result.receipts[i], result.txTypes[i]));
+            receiptLeaves.push_back(ledger::mpt::encodeReceiptLeaf(*receipts[i], txTypes[i]));
         }
         catch (ledger::mpt::EthReceiptEncodeError const& e)
         {
@@ -576,7 +322,7 @@ struct OpEthBlockSeal
     seal.receiptsRoot = ledger::mpt::calculateReceiptsRoot(receiptLeafRefs);
 
     // Block-level logsBloom = bitwise-OR of each receipt's 256-byte bloom.
-    for (const auto& r : result.receipts)
+    for (const auto& r : receipts)
     {
         auto const bloom = r->logsBloom();
         if (bloom.size() != seal.logsBloom.size())
@@ -617,11 +363,11 @@ struct OpEthBlockSeal
     if (spec.has_da_footprint)
     {
         uint64_t footprint = 0;
-        for (size_t i = 0; i < result.receipts.size(); ++i)
+        for (size_t i = 0; i < receipts.size(); ++i)
         {
-            if (result.txTypes[i] == OP_DEPOSIT_TX_TYPE)
+            if (txTypes[i] == OP_DEPOSIT_TX_TYPE)
                 continue;
-            const auto& meta = result.receipts[i]->opStackMeta();
+            const auto& meta = receipts[i]->opStackMeta();
             if (!meta || !meta->da_footprint)
                 throw OpEthBlockError(
                     "op-eth block: non-deposit receipt missing da_footprint under Jovian");
@@ -637,17 +383,5 @@ struct OpEthBlockSeal
         seal.blobGasUsed = uint64_t{0};
     }
     return seal;
-}
-
-/// transactionsRoot over the raw EIP-2718 envelopes (trie key = rlp(index),
-/// value = raw wire bytes) — computeOpTxRoot's core, straight on the framework
-/// helper both share.
-[[nodiscard]] inline bcos::h256 computeOpEthTxRoot(std::span<const OpEthBlockTx> txs)
-{
-    std::vector<bcos::bytesConstRef> rawEnvelopes;
-    rawEnvelopes.reserve(txs.size());
-    for (auto const& btx : txs)
-        rawEnvelopes.emplace_back(btx.envelope.data(), btx.envelope.size());
-    return ledger::mpt::calculateTransactionsRoot(rawEnvelopes);
 }
 }  // namespace bcos::executor_v1::opstack

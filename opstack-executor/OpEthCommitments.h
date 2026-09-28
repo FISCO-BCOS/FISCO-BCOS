@@ -21,14 +21,14 @@
 
 #pragma once
 
-#include <opstack-executor/OpEthBlockExecute.h>  // OpEthBlockSeal
-#include <opstack-executor/OpForkSpec.h>         // opForkSpecAt / opForkTimestampSec
-#include <bcos-framework/engine/Types.h>         // bcos::engine::ExecutionPayload
+#include <bcos-framework/engine/Types.h>  // bcos::engine::ExecutionPayload
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-ledger/mpt/EthTrieRoots.h>  // calculateTransactionsRoot
 #include <bcos-utilities/Bloom.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <opstack-executor/OpEthBlockExecute.h>  // OpEthBlockSeal
+#include <opstack-executor/OpForkSpec.h>         // opForkSpecAt / opForkTimestampSec
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -119,8 +119,7 @@ struct OpEthExecuteBlockResult
 /// transactionsRoot over raw EIP-2718 envelopes (trie key = rlp(index), value
 /// = raw wire bytes) — the bcos-evm-free counterpart of OpBlockExecute.h's
 /// computeOpTxRoot, sharing the framework helper (calculateTransactionsRoot)
-/// with it and with computeOpEthTxRoot (OpEthBlockExecute.h, the
-/// span<OpEthBlockTx> overload for the post-execution path).
+/// with it.
 template <class RawTxRange>
 [[nodiscard]] bcos::h256 computeOpEthTransactionsRoot(RawTxRange const& rawTxBytes)
 {

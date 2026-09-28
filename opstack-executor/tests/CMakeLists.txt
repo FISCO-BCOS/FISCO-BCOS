@@ -19,6 +19,7 @@ add_executable(opstack-executor-tests
     OpSchedulerPolicyTest.cpp
     support/SeedPreStateTest.cpp
     OpSchedulerSeamSmokeTest.cpp
+    OpRollupCostGoldenTest.cpp
 )
 # Unity build: header-heavy Boost.Test TUs share a large common preamble. TestMain.cpp
 # defines BOOST_TEST_MODULE. SeamSmoke has an anonymous-namespace CheckpointStorage stub
@@ -58,7 +59,6 @@ add_executable(opstack-executor-scheduler-tests
     OpSchedulerTest.cpp
     OpBlockVerifierTest.cpp
     OpSepoliaReplayTest.cpp
-    OpEthDualRunTest.cpp
     OpEthForkMatrixTest.cpp
     OpStorageErrorGuardTest.cpp
     OpEthEnvelopeCheckTest.cpp
@@ -66,6 +66,8 @@ add_executable(opstack-executor-scheduler-tests
     OpEthL1AttributesTest.cpp
     OpEthExecutorTest.cpp
     OpEthExecutorDualRunTest.cpp
+    OpEthReceiptGoldenTest.cpp
+    OpEthDepositGasTest.cpp
 )
 set_target_properties(opstack-executor-scheduler-tests PROPERTIES UNITY_BUILD OFF)
 target_include_directories(opstack-executor-scheduler-tests PRIVATE
@@ -73,7 +75,7 @@ target_include_directories(opstack-executor-scheduler-tests PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/bcos-ledger
 )
-# C1 dual-run harness (OpEthDualRunTest) reads the t8n corpus — same locations and override
+# C1 golden harness (OpEthExecutorDualRunTest) reads the t8n corpus — same locations and override
 # semantics as the engine parity suite (engine/test/CMakeLists.txt).
 if(NOT DEFINED OP_T8N_VECTORS_DIR)
     set(OP_T8N_VECTORS_DIR "${CMAKE_SOURCE_DIR}/opstack-executor/tests/t8n/vectors")

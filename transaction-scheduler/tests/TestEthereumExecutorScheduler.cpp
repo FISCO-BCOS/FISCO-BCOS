@@ -197,8 +197,8 @@ task::Task<void> EEWriteGenesisHeader(EEBackendStorage& storage)
     header.encode(buffer);
     storage::Entry entry;
     entry.set(std::move(buffer));
-    co_await storage2::writeOne(storage,
-        StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, std::string{"0"}}, std::move(entry));
+    co_await storage2::writeOne(
+        storage, StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, std::string{"0"}}, std::move(entry));
 }
 
 class TestEthereumExecutorSchedulerFixture
@@ -292,7 +292,7 @@ struct TSMWithBlockContext
     };
 };
 static_assert(std::is_same_v<scheduler_v1::BlockContextOf<EthereumExecutor>::type,
-    scheduler_v1::EmptyBlockContext>);
+    EthereumExecutor::BlockContext>);
 static_assert(std::is_same_v<scheduler_v1::BlockContextOf<TSMWithBlockContext>::type,
     TSMWithBlockContext::BlockContext>);
 
@@ -885,8 +885,7 @@ BOOST_AUTO_TEST_CASE(blockHashHostNoexceptBoundary)
         };
         const eth::EthL1Policy policy{};
         eth::EthereumHost<EEMutableStorage> host{EVMC_SHANGHAI, vm, state, block,
-            std::move(throwingLookup), eth::ethTxContextOf(*tx, callParams), callParams, 1,
-            policy};
+            std::move(throwingLookup), eth::ethTxContextOf(*tx, callParams), callParams, 1, policy};
         auto result = vm.execute(host, EVMC_SHANGHAI, msg, code, sizeof(code));
         BOOST_CHECK_EQUAL(result.status_code, EVMC_SUCCESS);
     }
@@ -1142,8 +1141,8 @@ BOOST_AUTO_TEST_CASE(engineServiceSealsAndExecutesRealTx)
             // the chain's EVM revision, and without an explicit one the compile-time
             // default (OSAKA -> PRAGUE) would demand fields a V1 build cannot supply.
             storage::Entry evmcEntry;
-            evmcEntry.set(bcos::storage::serialize::encode(ledger::SystemConfigEntry{
-                ledger::encodeEVMCRevisionConfig(EVMC_LONDON, {}), 0}));
+            evmcEntry.set(bcos::storage::serialize::encode(
+                ledger::SystemConfigEntry{ledger::encodeEVMCRevisionConfig(EVMC_LONDON, {}), 0}));
             co_await storage2::writeOne(backendStorage,
                 executor_v1::StateKey{ledger::SYS_CONFIG, ledger::SYSTEM_KEY_EVMC_REVISION},
                 std::move(evmcEntry));
@@ -1310,8 +1309,8 @@ BOOST_AUTO_TEST_CASE(engineServiceKarstServesZeroWithdrawalsRoot)
             // which would demand fields the V3 attribute shape still supplies, but an
             // explicit value keeps the fixture honest.
             storage::Entry evmcEntry;
-            evmcEntry.set(bcos::storage::serialize::encode(ledger::SystemConfigEntry{
-                ledger::encodeEVMCRevisionConfig(EVMC_CANCUN, {}), 0}));
+            evmcEntry.set(bcos::storage::serialize::encode(
+                ledger::SystemConfigEntry{ledger::encodeEVMCRevisionConfig(EVMC_CANCUN, {}), 0}));
             co_await storage2::writeOne(backendStorage,
                 executor_v1::StateKey{ledger::SYS_CONFIG, ledger::SYSTEM_KEY_EVMC_REVISION},
                 std::move(evmcEntry));

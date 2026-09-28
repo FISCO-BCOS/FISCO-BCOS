@@ -41,16 +41,6 @@
 
 #pragma once
 
-#include <ethereum-executor/EthereumState.h>
-#include <ethereum-executor/EthereumTransition.h>  // validateTransaction / runTransaction
-#include <opstack-executor/OpCommon.h>  // OpConsensusError / OpStorageError / narrowGasUsed
-#include <opstack-executor/OpEnvelopeCheck.h>  // the four fail-closed envelope checks
-#include <opstack-executor/OpEthBlockExecute.h>  // buildOpEthBlockInfo / OpEthBlockError
-#include <opstack-executor/OpEthDeposit.h>  // opRunDeposit / decodeOpDepositEnvelope
-#include <opstack-executor/OpExecutionPolicy.h>  // OpPolicy
-#include <opstack-executor/OpFeeParams.h>  // OpFeeParams / loadOpFeeParamsAsync
-#include <opstack-executor/OpForkSpec.h>  // OpForkSpec
-#include <opstack-executor/OpStorageErrorGuard.h>  // OpStorageErrorSlot / OpFaultRecordingStorage
 #include <bcos-codec/rlp/RLPEncode.h>  // sizing-envelope encode
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/BlockHeader.h>
@@ -63,7 +53,17 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>  // safeFromQuantity / fromBigEndian
 #include <bcos-utilities/Exceptions.h>
+#include <ethereum-executor/EthereumState.h>
+#include <ethereum-executor/EthereumTransition.h>  // validateTransaction / runTransaction
 #include <evmone/evmone.h>
+#include <opstack-executor/OpCommon.h>         // OpConsensusError / OpStorageError / narrowGasUsed
+#include <opstack-executor/OpEnvelopeCheck.h>  // the four fail-closed envelope checks
+#include <opstack-executor/OpEthBlockExecute.h>    // buildOpEthBlockInfo / OpEthBlockError
+#include <opstack-executor/OpEthDeposit.h>         // opRunDeposit / decodeOpDepositEnvelope
+#include <opstack-executor/OpExecutionPolicy.h>    // OpPolicy
+#include <opstack-executor/OpFeeParams.h>          // OpFeeParams / loadOpFeeParamsAsync
+#include <opstack-executor/OpForkSpec.h>           // OpForkSpec
+#include <opstack-executor/OpStorageErrorGuard.h>  // OpStorageErrorSlot / OpFaultRecordingStorage
 #include <charconv>
 #include <cstdint>
 #include <functional>
@@ -297,8 +297,8 @@ public:
             m_probe(std::make_unique<FaultStorage>(st, exec.m_errorSlot)),
             m_rollable(std::make_unique<RollableStorage>(*m_probe)),
             m_state(std::make_unique<State>(*m_rollable)),
-            m_guard(std::make_unique<OpStorageErrorGuard<RollableStorage>>(
-                *m_state, exec.m_errorSlot)),
+            m_guard(
+                std::make_unique<OpStorageErrorGuard<RollableStorage>>(*m_state, exec.m_errorSlot)),
             m_ctx(blockCtx)
         {}
 
@@ -332,8 +332,7 @@ public:
                 co_await m_rollable->rollback(m_savepoint);
             }
             catch (...)
-            {
-            }
+            {}
         }
 
         /// Stage 1 — validate (ported ExecuteContext::prepare / m_prepare):
@@ -346,7 +345,7 @@ public:
             executor.checkForkRevision(ledgerConfig);
 
             // Deposit-ness is decided by the envelope's type byte (0x7E) —
-            // never the forgeable tars mirror (executeOpEthBlock's rule).
+            // never the forgeable tars mirror (op-geth's rule).
             auto const rawEnv = transaction.extraTransactionBytes();
             m_isDeposit = !rawEnv.empty() && rawEnv[0] == OP_DEPOSIT_TX_TYPE;
             if (m_isDeposit)
@@ -518,10 +517,9 @@ public:
                     executor.buildBlockInfoChecked(blockHeader, call, m_ctx->blockGasLeft);
                 try
                 {
-                    m_receipt = co_await opRunDeposit(*m_state, blockInfo,
-                        m_ctx->blockHashLookup, *m_deposit, executor.m_spec, executor.m_vm,
-                        m_ctx->chainId, m_ctx->blockGasLeft, *executor.m_receiptFactory,
-                        blockHeader.number());
+                    m_receipt = co_await opRunDeposit(*m_state, blockInfo, m_ctx->blockHashLookup,
+                        *m_deposit, executor.m_spec, executor.m_vm, m_ctx->chainId,
+                        m_ctx->blockGasLeft, *executor.m_receiptFactory, blockHeader.number());
                 }
                 catch (...)
                 {
@@ -553,10 +551,10 @@ public:
                 // discipline — see OpTxSnapshot).
                 OpPolicy const policy{executor.m_spec, m_ctx->fee, *m_blockInfo, envelopeView(),
                     transaction, m_callParams, m_snapshot};
-                m_receipt = co_await eth::runTransaction(*m_state, *m_blockInfo,
-                    m_ctx->blockHashLookup, transaction, executor.m_spec.rev, executor.m_vm,
-                    m_txProps, m_ctx->chainId, m_callParams, *executor.m_receiptFactory,
-                    blockHeader.number(), policy);
+                m_receipt =
+                    co_await eth::runTransaction(*m_state, *m_blockInfo, m_ctx->blockHashLookup,
+                        transaction, executor.m_spec.rev, executor.m_vm, m_txProps, m_ctx->chainId,
+                        m_callParams, *executor.m_receiptFactory, blockHeader.number(), policy);
             }
             catch (...)
             {
@@ -682,9 +680,8 @@ public:
         BlockContext ctx{};
         if (auto const& chainId = ledgerConfig.chainId(); chainId.has_value())
         {
-            ctx.chainId = static_cast<uint64_t>(bcos::fromBigEndian<bcos::u256>(
-                bcos::bytesConstRef{reinterpret_cast<bcos::byte const*>(chainId->bytes),
-                    sizeof(chainId->bytes)}));
+            ctx.chainId = static_cast<uint64_t>(bcos::fromBigEndian<bcos::u256>(bcos::bytesConstRef{
+                reinterpret_cast<bcos::byte const*>(chainId->bytes), sizeof(chainId->bytes)}));
         }
         ctx.blockGasLeft = static_cast<int64_t>(
             bcos::evm::engine::detail::narrowU256ToI64(blockHeader.gasLimit(), "gasLimit"));
@@ -705,9 +702,8 @@ public:
     template <class Storage>
     task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(Storage& storage,
         protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
-        int contextID, ledger::LedgerConfig const& ledgerConfig, bool call,
-        OpFeeParams const& fee, int64_t blockGasLeft, uint64_t chainId,
-        eth::BlockHashLookup blockHashLookup)
+        int contextID, ledger::LedgerConfig const& ledgerConfig, bool call, OpFeeParams const& fee,
+        int64_t blockGasLeft, uint64_t chainId, eth::BlockHashLookup blockHashLookup)
     {
         (void)contextID;
         BlockContext ctx{};
@@ -800,7 +796,8 @@ private:
         }
         catch (...)
         {
-            throw bcos::evm::OpConsensusError("OpScheduler: " + what + " failed: unknown exception");
+            throw bcos::evm::OpConsensusError(
+                "OpScheduler: " + what + " failed: unknown exception");
         }
     }
 

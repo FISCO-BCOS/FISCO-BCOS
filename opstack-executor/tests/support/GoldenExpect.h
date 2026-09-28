@@ -6,8 +6,8 @@
 // (gasUsed/receiptsRoot/logsBloom/withdrawalsRoot/requestsHash/blobGasUsed/stateRoot), the
 // per-receipt fields (type/status/gasUsed/cumulativeGasUsed/logsCount/output + every `_op_*`
 // receipt-meta key the expectation carries), and the postState account balances/nonces.
-// Shared by OpEthDualRunTest (executeOpEthBlock leg) and OpEthExecutorDualRunTest
-// (OpEthExecutor + SchedulerSerialImpl leg).
+// Shared by OpEthExecutorDualRunTest (the t8n golden battery on the production
+// OpEthExecutor + SchedulerSerialImpl path) and OpEthForkMatrixTest's synthetic vectors.
 
 #include "SeedPreState.h"  // jsonU256/jsonU64/jsonBytes32
 
@@ -18,8 +18,8 @@
 #include <bcos-framework/protocol/TransactionReceipt.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <ethereum-executor/EthereumState.h>  // eth::ethViewAccount
-#include <boost/test/unit_test.hpp>
 #include <json/json.h>
+#include <boost/test/unit_test.hpp>
 
 #include <algorithm>
 #include <cstdint>
@@ -41,8 +41,7 @@ inline void checkGoldenHeader(Json::Value const& expected, opeth::OpEthBlockSeal
     BOOST_CHECK_EQUAL(bcos::u256(gasUsed), jsonU256(expected["gasUsed"].asString()));
     auto const expectedBloom = bcos::fromHex(expected["logsBloom"].asString());
     BOOST_REQUIRE_EQUAL(expectedBloom.size(), seal.logsBloom.size());
-    BOOST_CHECK(
-        std::equal(expectedBloom.begin(), expectedBloom.end(), seal.logsBloom.begin()));
+    BOOST_CHECK(std::equal(expectedBloom.begin(), expectedBloom.end(), seal.logsBloom.begin()));
     if (expected.isMember("withdrawalsRoot"))
     {
         BOOST_REQUIRE(seal.withdrawalsRoot.has_value());
@@ -65,7 +64,8 @@ inline void checkGoldenHeader(Json::Value const& expected, opeth::OpEthBlockSeal
     if (expected.isMember("blobGasUsed"))
     {
         BOOST_REQUIRE(seal.blobGasUsed.has_value());
-        BOOST_CHECK_EQUAL(bcos::u256(*seal.blobGasUsed), jsonU256(expected["blobGasUsed"].asString()));
+        BOOST_CHECK_EQUAL(
+            bcos::u256(*seal.blobGasUsed), jsonU256(expected["blobGasUsed"].asString()));
     }
     else
     {
@@ -106,8 +106,7 @@ inline void checkGoldenReceiptMeta(
     checkU64("_op_da_footprint_gas_scalar", meta ? meta->da_footprint_gas_scalar : std::nullopt);
     checkU64("_op_da_footprint", meta ? meta->da_footprint : std::nullopt);
     checkU64("_op_deposit_nonce", meta ? meta->deposit_nonce : std::nullopt);
-    checkU64(
-        "_op_deposit_receipt_version", meta ? meta->deposit_receipt_version : std::nullopt);
+    checkU64("_op_deposit_receipt_version", meta ? meta->deposit_receipt_version : std::nullopt);
     checkU64("_op_l1_gas_used", meta ? meta->l1_gas_used : std::nullopt);
 }
 
@@ -126,20 +125,17 @@ inline void checkGoldenReceipts(Json::Value const& expectedReceipts,
         {
             auto const& expected = expectedReceipts[static_cast<Json::ArrayIndex>(i)];
             auto const& receipt = *receipts[i];
-            auto const expectedType =
-                static_cast<uint8_t>(jsonU64(expected["type"].asString()));
+            auto const expectedType = static_cast<uint8_t>(jsonU64(expected["type"].asString()));
             BOOST_REQUIRE(!rawTxBytes[i].empty());
             BOOST_CHECK_EQUAL(opeth::opEthClassifyTxType(rawTxBytes[i][0]), expectedType);
             // Ethereum 0x1 (success) <-> FISCO status 0.
-            BOOST_CHECK_EQUAL(
-                receipt.status() == 0, jsonU64(expected["status"].asString()) == 1);
+            BOOST_CHECK_EQUAL(receipt.status() == 0, jsonU64(expected["status"].asString()) == 1);
             BOOST_CHECK_EQUAL(receipt.gasUsed(), jsonU256(expected["gasUsed"].asString()));
             BOOST_CHECK_EQUAL(bcos::u256(std::string{receipt.cumulativeGasUsed()}),
                 jsonU256(expected["cumulativeGasUsed"].asString()));
             BOOST_CHECK_EQUAL(
                 receipt.logEntries().size(), jsonU64(expected["logsCount"].asString()));
-            BOOST_CHECK_EQUAL(
-                "0x" + bcos::toHex(receipt.output()), expected["output"].asString());
+            BOOST_CHECK_EQUAL("0x" + bcos::toHex(receipt.output()), expected["output"].asString());
             checkGoldenReceiptMeta(expected, receipt);
         }
     }
@@ -157,8 +153,8 @@ void checkGoldenPostState(View& view, Json::Value const& postState)
             auto const& expected = postState[addrKey];
             auto account = bcos::executor_v1::eth::ethViewAccount(view, jsonAddress(addrKey));
             if (expected.isMember("balance"))
-                BOOST_CHECK_EQUAL(
-                    bcos::task::syncWait(account.balance()), jsonU256(expected["balance"].asString()));
+                BOOST_CHECK_EQUAL(bcos::task::syncWait(account.balance()),
+                    jsonU256(expected["balance"].asString()));
             if (expected.isMember("nonce"))
                 BOOST_CHECK_EQUAL(bcos::task::syncWait(account.nonce()).value_or("0"),
                     std::to_string(jsonU64(expected["nonce"].asString())));

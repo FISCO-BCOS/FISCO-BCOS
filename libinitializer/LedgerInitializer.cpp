@@ -105,11 +105,13 @@ std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::buil
 
     ledger->buildGenesisBlock(nodeConfig->genesisConfig(), *nodeConfig->ledgerConfig());
 
-    // OP mode is a genesis-only property: executor_version >= OPSTACK must be genesis-bound
-    // (activation block 0). The value is read from the ledger (written at genesis), with the
-    // genesis config as the fallback when the on-chain entry is absent. The Ethereum lane
-    // (executor_version >= ETHEREUM) implies the Ethereum state shape — MPT from genesis,
-    // /apps/ naming for every address — with no separate feature flag.
+    // Every lane at or above the Ethereum boundary is a genesis-only property:
+    // executor_version >= ETHEREUM must be genesis-bound (activation block 0). The value is
+    // read from the ledger (written at genesis), with the genesis config as the fallback when
+    // the on-chain entry is absent. The Ethereum lane (executor_version >= ETHEREUM) implies
+    // the Ethereum state shape — MPT from genesis, /apps/ naming for every address — with no
+    // separate feature flag, so a historical (2, activation != 0) row must fail-stop here
+    // rather than boot into MPT-from-genesis over XOR history.
     // A value above the newest declared lane is not refused here: the scheduler saturates it
     // onto the newest wired slot (MultiVersionScheduler::setVersion), and refusing it at boot
     // would strand a chain that wrote such a row before 3.18 with no way to lower it.

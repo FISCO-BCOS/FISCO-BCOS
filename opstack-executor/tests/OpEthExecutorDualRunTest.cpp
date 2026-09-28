@@ -7,11 +7,12 @@
 //   RecentBlockHashes wiring) → SchedulerSerialImpl(serial=true) over OpEthExecutor
 //   with an OpEthBlockContext → finalizeOpEthBlockResult (no-reward finalizeState →
 //   MessagePasser snapshot → seal → full stateRoot rebuild → txRoot).
-// The outcome is asserted against the vector's `_op_expected` golden block — the same
-// assertion battery as OpEthDualRunTest (C1, monolithic executeOpEthBlock driver), via
+// The outcome is asserted against the vector's `_op_expected` golden block via
 // support/GoldenExpect.h. Step 3.3 retired both the legacy dual-run baseline leg and this
 // file's inline block pre-steps (now the shared OpEthBlockSteps.h stages, driven through
-// support/DualRunHarness.h's runExecutorPath).
+// support/DualRunHarness.h's runExecutorPath); the test-only monolithic executeOpEthBlock
+// driver (the old OpEthDualRunTest leg, same battery on the same vectors) was later deleted
+// with the production cutover it duplicated.
 
 #include "support/DualRunHarness.h"
 #include "support/GoldenExpect.h"
