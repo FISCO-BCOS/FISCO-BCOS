@@ -581,6 +581,12 @@ public:
     }
 
     void setFeatures(bcos::ledger::Features _features) { m_features = _features; }
+    /// Map @p _hash to @p _number for asyncGetBlockNumberByHash, e.g. after a test rewrites a
+    /// header so its hash() changes (an OP header's RLP hash).
+    void indexBlockHash(HashType const& _hash, BlockNumber _number)
+    {
+        m_hash2Block[_hash] = _number;
+    }
 
     task::Task<bcos::ledger::Features> fetchAllFeatures(protocol::BlockNumber) override
     {

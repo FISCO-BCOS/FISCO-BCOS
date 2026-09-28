@@ -87,6 +87,10 @@ public:
     task::Task<void> txpoolStatus(const Json::Value&, Json::Value&);
     task::Task<void> txpoolContent(const Json::Value&, Json::Value&);
     task::Task<void> getProof(const Json::Value&, Json::Value&);
+    // Challenger data plane (ADR 0007): the geth-route preimage reads kona-host issues. OP lane
+    // only — any other executor_version answers MethodNotFound, as if unregistered.
+    task::Task<void> getRawHeader(const Json::Value&, Json::Value&);
+    task::Task<void> dbGet(const Json::Value&, Json::Value&);
 
 private:
     NodeService::Ptr m_nodeService;
@@ -108,6 +112,13 @@ private:
         bool engineLane = false;
     };
     ForkchoiceContext forkchoiceContext() const;
+
+    /// getBlockNumberAndHeadByTag, plus the 32-byte block hash (DATA) form op-node and
+    /// kona-host send. An unknown hash is InvalidParams "Block not found".
+    task::Task<std::tuple<protocol::BlockNumber, protocol::BlockNumber>>
+    getBlockNumberAndHeadByTagOrHash(std::string_view blockTagOrHash);
+    /// MethodNotFound unless the chain is on the OP lane (executor_version).
+    task::Task<void> requireOpLane(std::string_view method);
 
     task::Task<void> call(const Json::Value&, Json::Value&, u256* gasUsed, bool isEstimate);
 };
