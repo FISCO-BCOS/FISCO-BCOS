@@ -21,6 +21,7 @@
  * @date 2026/8/18
  */
 
+#include "EthereumBlockHashLookup.h"
 #include "TrivialCheckpointStorage.h"
 #include "bcos-codec/rlp/Common.h"
 #include "bcos-codec/rlp/RLPEncode.h"
@@ -45,12 +46,14 @@
 #include "bcos-transaction-scheduler/EthereumSystemCalls.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
 #include "bcos-utilities/IOServicePool.h"
+#include "ethereum-executor/EthStorageErrorGuard.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include "ethereum-executor/EthereumHost.h"
-#include "EthereumBlockHashLookup.h"
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <cctype>
 #include <limits>
 #include <magic_enum/magic_enum.hpp>
 #include <memory>
@@ -71,10 +74,8 @@ using EEBVMutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
 using EEBVBackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
     memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
     std::hash<StateKey>>;
-using EEBVCheckpointBackend =
-    TrivialCheckpointStorage<StateKey, StateValue, EEBVBackendStorage>;
-using EEBVMultiLayerStorage =
-    MultiLayerStorage<EEBVMutableStorage, void, EEBVCheckpointBackend>;
+using EEBVCheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, EEBVBackendStorage>;
+using EEBVMultiLayerStorage = MultiLayerStorage<EEBVMutableStorage, void, EEBVCheckpointBackend>;
 
 static const u256 EEBVFunding = u256(1000000000000000000ULL);  // 1 ETH
 
@@ -92,7 +93,8 @@ public:
     void markClean() { setTainted(false); }
 };
 
-task::Task<void> EEBVFundAccount(EEBVBackendStorage& storage, evmc_address const& addr, u256 balance)
+task::Task<void> EEBVFundAccount(
+    EEBVBackendStorage& storage, evmc_address const& addr, u256 balance)
 {
     using namespace bcos::ledger::account;
     EVMAccount<EEBVBackendStorage> acc(storage, addr, AddressTableMode::Hex);
@@ -203,7 +205,8 @@ constexpr std::string_view kEEBVHistoryStorageCode =
 // consolidation request). The block-end system call resets count every block, zeroes
 // head/tail when the queue drains, and decays excess towards zero — all zero-value
 // write-backs over slots present in the parent state.
-constexpr std::string_view kEEBVWithdrawalRequestAddress = "00000961EF480EB55E80D19AD83579A64C007002";
+constexpr std::string_view kEEBVWithdrawalRequestAddress =
+    "00000961EF480EB55E80D19AD83579A64C007002";
 constexpr std::string_view kEEBVConsolidationRequestAddress =
     "0000BBDDC7CE488642FB579F8B00F3A590007251";
 constexpr std::string_view kEEBVWithdrawalRequestCode =
@@ -257,21 +260,20 @@ task::Task<void> EEBVWriteCurrentNumber(EEBVBackendStorage& storage, int64_t num
         StateKey{ledger::SYS_CURRENT_STATE, ledger::SYS_KEY_CURRENT_NUMBER}, std::move(entry));
 }
 
-task::Task<void> EEBVWriteSystemConfig(EEBVBackendStorage& storage, std::string_view key,
-    std::string const& value)
+task::Task<void> EEBVWriteSystemConfig(
+    EEBVBackendStorage& storage, std::string_view key, std::string const& value)
 {
     storage::Entry entry;
     entry.set(storage::serialize::encode(ledger::SystemConfigEntry{value, 0}));
-    co_await storage2::writeOne(storage,
-        StateKey{ledger::SYS_CONFIG, std::string(key)}, std::move(entry));
+    co_await storage2::writeOne(
+        storage, StateKey{ledger::SYS_CONFIG, std::string(key)}, std::move(entry));
 }
 
 /// A real Web3-shaped EIP-1559 value-transfer tx: EIP-2718 signing payload in
 /// extraTransactionBytes + a 65-byte signature, mirroring the eth_sendRawTransaction
 /// ingress shape (the same construction engineServiceSealsAndExecutesRealTx uses).
-std::shared_ptr<EEBVTestTransactionImpl> EEBVMakeWeb3TransferTx(
-    evmc_address const& sender, evmc_address const& recipient, uint64_t value,
-    std::string const& nonce)
+std::shared_ptr<EEBVTestTransactionImpl> EEBVMakeWeb3TransferTx(evmc_address const& sender,
+    evmc_address const& recipient, uint64_t value, std::string const& nonce)
 {
     auto tx = std::make_shared<EEBVTestTransactionImpl>();
     auto& inner = tx->mutableInner();
@@ -296,11 +298,11 @@ std::shared_ptr<EEBVTestTransactionImpl> EEBVMakeWeb3TransferTx(
     // Signing payload: 0x02 || rlp([chainId, nonce, maxPriorityFeePerGas, maxFeePerGas,
     // gasLimit, to, value, data, accessList]).
     bcos::bytes body;
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));       // chainId
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));       // nonce
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));       // maxPriorityFeePerGas
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(1));           // chainId
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));           // nonce
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(0));           // maxPriorityFeePerGas
     bcos::codec::rlp::encode(body, static_cast<uint64_t>(1000000000));  // maxFeePerGas
-    bcos::codec::rlp::encode(body, static_cast<uint64_t>(100000));  // gasLimit
+    bcos::codec::rlp::encode(body, static_cast<uint64_t>(100000));      // gasLimit
     bcos::codec::rlp::encode(
         body, bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes))));
     bcos::codec::rlp::encode(body, static_cast<uint64_t>(value));  // value
@@ -308,8 +310,8 @@ std::shared_ptr<EEBVTestTransactionImpl> EEBVMakeWeb3TransferTx(
     body.push_back(bcos::codec::rlp::LIST_HEAD_BASE);              // empty accessList
     bcos::bytes payloadBytes;
     payloadBytes.push_back(0x02);
-    bcos::codec::rlp::encodeHeader(payloadBytes,
-        bcos::codec::rlp::Header{.isList = true, .payloadLength = body.size()});
+    bcos::codec::rlp::encodeHeader(
+        payloadBytes, bcos::codec::rlp::Header{.isList = true, .payloadLength = body.size()});
     payloadBytes.insert(payloadBytes.end(), body.begin(), body.end());
     inner.extraTransactionBytes.assign(payloadBytes.begin(), payloadBytes.end());
 
@@ -347,8 +349,7 @@ task::Task<crypto::HashType> EEBVXorStateRoot(View& view, uint32_t blockVersion,
         {
             entry.setStatus(storage::Entry::DELETED);
         }
-        totalHash ^= entry.hash(
-            tableName, keyName, *cryptoSuite->hashImpl(), blockVersion);
+        totalHash ^= entry.hash(tableName, keyName, *cryptoSuite->hashImpl(), blockVersion);
     }
     co_return totalHash;
 }
@@ -356,8 +357,8 @@ task::Task<crypto::HashType> EEBVXorStateRoot(View& view, uint32_t blockVersion,
 /// A PoS header skeleton with placeholder roots (the caller fills in the real ones).
 /// The uncle hash is the shared canonical empty-ommers hash
 /// (bcos::protocol::c_emptyOmmersHash, bcos-rlp-protocol/EthBlockHeader.h).
-bcos::protocol::EthBlockHeaderData EEBVPoSHeader(int64_t number, int64_t timestamp,
-    bcos::h256 parentHash, uint64_t gasLimit, bcos::u256 baseFee)
+bcos::protocol::EthBlockHeaderData EEBVPoSHeader(
+    int64_t number, int64_t timestamp, bcos::h256 parentHash, uint64_t gasLimit, bcos::u256 baseFee)
 {
     bcos::protocol::EthBlockHeaderData header;
     header.number = number;
@@ -398,8 +399,137 @@ public:
     {
         blockHashLookup = [&backend = backendStorage](
                               int64_t blockNumber, int64_t currentHeight) -> evmc::bytes32 {
-            return initializer::ethBlockHashLookupFromStorage(
-                backend, blockNumber, currentHeight);
+            return initializer::ethBlockHashLookupFromStorage(backend, blockNumber, currentHeight);
+        };
+        executor = std::make_shared<EthereumExecutor>(receiptFactory, blockHashLookup);
+        blockFactory = bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+    }
+};
+
+/// An EEBVBackendStorage whose reads against the EIP-7002/7251 request-contract
+/// account tables can be armed to throw (an injected storage fault, counted down so a
+/// test can arm exactly one failure), mirroring the engine test's FaultyBackendStorage
+/// (EthEngineL1BuildTest.cpp). Shadows FOUR read primitives: the raw pair (the
+/// multi-layer View calls readOneRaw/readSomeRaw on the backend directly) AND the
+/// storage2::readOne/readSome CPO targets — the View's own readOne ends in
+/// storage2::readOne(backend), whose base MemoryStorage implementation would otherwise
+/// dispatch to the BASE readOneRaw and slip past the injector. Writes and range() pass
+/// straight to the base.
+struct EEBVFaultyBackendStorage : EEBVBackendStorage
+{
+    std::shared_ptr<std::atomic<int>> requestContractReadThrowRemaining =
+        std::make_shared<std::atomic<int>>(0);
+
+    /// "/apps/<hex>" account tables of the two Prague request contracts; the hex case
+    /// differs between the EIP text and the EVMAccount encoding, so the 40-nibble
+    /// address tail compares case-insensitively.
+    static bool isRequestContractKey(auto const& key)
+    {
+        executor_v1::StateKeyView const keyView{key};
+        auto const table = keyView.m_table;
+        for (std::string_view address : {"00000961ef480eb55e80d19ad83579a64c007002",
+                 "0000bbddc7ce488642fb579f8b00f3a590007251"})
+        {
+            if (table.size() >= address.size())
+            {
+                auto const tail = table.substr(table.size() - address.size());
+                if (std::equal(tail.begin(), tail.end(), address.begin(), [](char a, char b) {
+                        return std::tolower(static_cast<unsigned char>(a)) == b;
+                    }))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    void injectRequestContractRead(auto const& key) const
+    {
+        if (!isRequestContractKey(key))
+        {
+            return;
+        }
+        int remaining = requestContractReadThrowRemaining->load(std::memory_order_acquire);
+        while (remaining > 0 && !requestContractReadThrowRemaining->compare_exchange_weak(
+                                    remaining, remaining - 1, std::memory_order_acq_rel))
+        {
+        }
+        if (remaining > 0)
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error{"injected storage read fault"});
+        }
+    }
+
+    auto readOneRaw(const auto& key, auto&&... args) -> task::Task<DataValue>
+    {
+        injectRequestContractRead(key);
+        co_return co_await EEBVBackendStorage::readOneRaw(
+            key, std::forward<decltype(args)>(args)...);
+    }
+
+    auto readSomeRaw(
+        ::ranges::input_range auto keys, auto&&... args) -> task::Task<std::vector<DataValue>>
+    {
+        if (requestContractReadThrowRemaining->load(std::memory_order_acquire) > 0)
+        {
+            for (auto&& key : keys)
+            {
+                injectRequestContractRead(key);
+            }
+        }
+        co_return co_await EEBVBackendStorage::readSomeRaw(
+            std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...);
+    }
+
+    auto readOne(auto key, auto&&... args) -> task::Task<std::optional<bcos::storage::Entry>>
+    {
+        injectRequestContractRead(key);
+        co_return co_await EEBVBackendStorage::readOne(
+            std::move(key), std::forward<decltype(args)>(args)...);
+    }
+
+    auto readSome(::ranges::input_range auto keys,
+        auto&&... args) -> task::Task<std::vector<std::optional<bcos::storage::Entry>>>
+    {
+        if (requestContractReadThrowRemaining->load(std::memory_order_acquire) > 0)
+        {
+            for (auto&& key : keys)
+            {
+                injectRequestContractRead(key);
+            }
+        }
+        co_return co_await EEBVBackendStorage::readSome(
+            std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...);
+    }
+};
+
+using EEBVFaultyCheckpointBackend =
+    TrivialCheckpointStorage<StateKey, StateValue, EEBVFaultyBackendStorage>;
+using EEBVFaultyMultiLayerStorage =
+    MultiLayerStorage<EEBVMutableStorage, void, EEBVFaultyCheckpointBackend>;
+
+/// EEBVFixture over the fault-injecting backend: same real execution/verification
+/// pipeline, plus the armed request-contract read fault the block-end poison test
+/// drives.
+class EEBVFaultFixture
+{
+public:
+    bcos::crypto::CryptoSuite::Ptr cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
+        std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr);
+    bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory{cryptoSuite};
+    EEBVFaultyBackendStorage backendStorage;
+    EEBVFaultyCheckpointBackend checkpointBackend{backendStorage};
+    EEBVFaultyMultiLayerStorage multiLayerStorage{checkpointBackend};
+    eth::BlockHashLookup blockHashLookup;
+    std::shared_ptr<EthereumExecutor> executor;
+    bcos::protocol::BlockFactory::Ptr blockFactory;
+
+    EEBVFaultFixture()
+    {
+        blockHashLookup = [&backend = backendStorage](
+                              int64_t blockNumber, int64_t currentHeight) -> evmc::bytes32 {
+            return initializer::ethBlockHashLookupFromStorage(backend, blockNumber, currentHeight);
         };
         executor = std::make_shared<EthereumExecutor>(receiptFactory, blockHashLookup);
         blockFactory = bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
@@ -481,10 +611,9 @@ BOOST_FIXTURE_TEST_CASE(verifyAndCommitValidExternalBlock, EEBVFixture)
         // Plain EIP-1559 value transfer to an EOA: intrinsic 21000.
         BOOST_CHECK_EQUAL(receipts[0]->gasUsed(), u256(21000));
 
-        auto computation =
-            co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-                computeEthereumRoots(
-                    receipts, txs | ::ranges::views::indirect, std::vector<bcos::bytes>{raw});
+        auto computation = co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::computeEthereumRoots(receipts, txs | ::ranges::views::indirect,
+            std::vector<bcos::bytes>{raw});
 
         // Parent (block 0) header for the PoS field checks and the MPT parent root.
         auto parentHeader = EEBVPoSHeader(0, kTimestamp - 1, bcos::h256{}, kGasLimit, kBaseFee);
@@ -501,9 +630,8 @@ BOOST_FIXTURE_TEST_CASE(verifyAndCommitValidExternalBlock, EEBVFixture)
         parentHeader.excessBlobGas = u256(0);
 
         // MPT state root from the (empty) genesis trie — world state only.
-        auto stateRoot =
-            co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-                computeMptStateRoot(view, parentHeader.stateRoot, prodConfig);
+        auto stateRoot = co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::computeMptStateRoot(view, parentHeader.stateRoot, prodConfig);
 
         // Assemble the external Ethereum header the peer would have sent us.
         auto ethHeader = EEBVPoSHeader(1, kTimestamp, genesisHash, kGasLimit, kBaseFee);
@@ -530,23 +658,23 @@ BOOST_FIXTURE_TEST_CASE(verifyAndCommitValidExternalBlock, EEBVFixture)
         forks.londonTime = 0;
         forks.parisTime = 0;
         forks.shanghaiTime = 0;
-        forks.cancunTime = std::numeric_limits<uint64_t>::max();   // Cancun not yet
+        forks.cancunTime = std::numeric_limits<uint64_t>::max();  // Cancun not yet
         forks.pragueTime = std::numeric_limits<uint64_t>::max();
         forks.osakaTime = std::numeric_limits<uint64_t>::max();
         auto decoder = [tx](bcos::bytes const&) -> protocol::Transaction::Ptr { return tx; };
         using ViewType = EEBVMultiLayerStorage::ViewType;
         // v2 executor: the verifier computes the MPT state root itself; the injected legacy
         // fold must not run (throwing proves the v2 branch won).
-        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-            StateRootCalculator<ViewType>
-                stateRootCalc = [](ViewType&, uint32_t) -> task::Task<crypto::HashType> {
+        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::StateRootCalculator<ViewType>
+            stateRootCalc = [](ViewType&, uint32_t) -> task::Task<crypto::HashType> {
             BOOST_THROW_EXCEPTION(
                 std::runtime_error{"legacy state-root fold must not run for executor v2"});
         };
 
         auto result = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, ethHeader,
-            parentHeader, std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{}, forks, 1, {}, 0, decoder,
-            stateRootCalc);
+            parentHeader, std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{}, forks, 1, {},
+            0, decoder, stateRootCalc);
 
         BOOST_CHECK(result.valid);
         BOOST_CHECK(result.error.empty());
@@ -560,8 +688,7 @@ BOOST_FIXTURE_TEST_CASE(verifyAndCommitValidExternalBlock, EEBVFixture)
         BOOST_CHECK_EQUAL(recipientBalance, u256(100));
         auto senderBalance = co_await EEBVReadBalance(multiLayerStorage.latestBackend(), sender);
         // 1 ETH - 100 value - 21000 gas * 1e9 base fee (EIP-1559).
-        BOOST_CHECK_EQUAL(
-            senderBalance, EEBVFunding - 100 - u256(21000) * u256(1000000000));
+        BOOST_CHECK_EQUAL(senderBalance, EEBVFunding - 100 - u256(21000) * u256(1000000000));
     }());
 }
 
@@ -615,10 +742,9 @@ BOOST_FIXTURE_TEST_CASE(verifyRejectsTamperedTxsRoot, EEBVFixture)
         std::vector<protocol::Transaction::Ptr> txs{tx};
         auto receipts = co_await scheduler.executeBlock(
             view, *executor, prodHeader, txs | ::ranges::views::indirect, prodConfig);
-        auto computation =
-            co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-                computeEthereumRoots(
-                    receipts, txs | ::ranges::views::indirect, std::vector<bcos::bytes>{raw});
+        auto computation = co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::computeEthereumRoots(receipts, txs | ::ranges::views::indirect,
+            std::vector<bcos::bytes>{raw});
 
         auto parentHeader = EEBVPoSHeader(0, kTimestamp - 1, bcos::h256{}, kGasLimit, kBaseFee);
         // gasUsed exactly at the EIP-1559 elasticity target, so the child's baseFee
@@ -633,9 +759,8 @@ BOOST_FIXTURE_TEST_CASE(verifyRejectsTamperedTxsRoot, EEBVFixture)
         parentHeader.blobGasUsed = u256(0);
         parentHeader.excessBlobGas = u256(0);
 
-        auto stateRoot =
-            co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-                computeMptStateRoot(view, parentHeader.stateRoot, prodConfig);
+        auto stateRoot = co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::computeMptStateRoot(view, parentHeader.stateRoot, prodConfig);
 
         auto ethHeader = EEBVPoSHeader(1, kTimestamp, genesisHash, kGasLimit, kBaseFee);
         // Shanghai is active from genesis: the header must commit to the (empty)
@@ -658,24 +783,24 @@ BOOST_FIXTURE_TEST_CASE(verifyRejectsTamperedTxsRoot, EEBVFixture)
             scheduler, *executor, *blockFactory);
 
         scheduler_v1::EvmcForkTimestamps forks;
-        forks.londonTime = 0;    // London/Paris/Shanghai active from genesis (explicit 0;
-        forks.parisTime = 0;     // unset fields default to UINT64_MAX = never active)
+        forks.londonTime = 0;  // London/Paris/Shanghai active from genesis (explicit 0;
+        forks.parisTime = 0;   // unset fields default to UINT64_MAX = never active)
         forks.shanghaiTime = 0;
         forks.cancunTime = std::numeric_limits<uint64_t>::max();
         forks.pragueTime = std::numeric_limits<uint64_t>::max();
         forks.osakaTime = std::numeric_limits<uint64_t>::max();
         auto decoder = [tx](bcos::bytes const&) -> protocol::Transaction::Ptr { return tx; };
         using ViewType = EEBVMultiLayerStorage::ViewType;
-        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-            StateRootCalculator<ViewType>
-                stateRootCalc = [](ViewType&, uint32_t) -> task::Task<crypto::HashType> {
+        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::StateRootCalculator<ViewType>
+            stateRootCalc = [](ViewType&, uint32_t) -> task::Task<crypto::HashType> {
             BOOST_THROW_EXCEPTION(
                 std::runtime_error{"legacy state-root fold must not run for executor v2"});
         };
 
         auto result = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, ethHeader,
-            parentHeader, std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{}, forks, 1, {}, 0, decoder,
-            stateRootCalc);
+            parentHeader, std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{}, forks, 1, {},
+            0, decoder, stateRootCalc);
 
         BOOST_CHECK(!result.valid);
         BOOST_CHECK(result.error.find("transactionsRoot") != std::string::npos);
@@ -748,10 +873,9 @@ BOOST_FIXTURE_TEST_CASE(verifyRejectsStaleOrGapBlock, EEBVFixture)
         std::vector<protocol::Transaction::Ptr> txs{tx};
         auto receipts = co_await scheduler.executeBlock(
             view, *executor, prodHeader, txs | ::ranges::views::indirect, prodConfig);
-        auto computation =
-            co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-                computeEthereumRoots(
-                    receipts, txs | ::ranges::views::indirect, std::vector<bcos::bytes>{raw});
+        auto computation = co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::computeEthereumRoots(receipts, txs | ::ranges::views::indirect,
+            std::vector<bcos::bytes>{raw});
 
         auto parentHeader = EEBVPoSHeader(0, kTimestamp - 1, bcos::h256{}, kGasLimit, kBaseFee);
         // gasUsed exactly at the EIP-1559 elasticity target, so the child's baseFee
@@ -766,9 +890,8 @@ BOOST_FIXTURE_TEST_CASE(verifyRejectsStaleOrGapBlock, EEBVFixture)
         parentHeader.blobGasUsed = u256(0);
         parentHeader.excessBlobGas = u256(0);
 
-        auto stateRoot =
-            co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-                computeMptStateRoot(view, parentHeader.stateRoot, prodConfig);
+        auto stateRoot = co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::computeMptStateRoot(view, parentHeader.stateRoot, prodConfig);
 
         auto ethHeader = EEBVPoSHeader(1, kTimestamp, genesisHash, kGasLimit, kBaseFee);
         // Shanghai is active from genesis: the header must commit to the (empty)
@@ -788,17 +911,17 @@ BOOST_FIXTURE_TEST_CASE(verifyRejectsStaleOrGapBlock, EEBVFixture)
             scheduler, *executor, *blockFactory);
 
         scheduler_v1::EvmcForkTimestamps forks;
-        forks.londonTime = 0;    // London/Paris/Shanghai active from genesis (explicit 0;
-        forks.parisTime = 0;     // unset fields default to UINT64_MAX = never active)
+        forks.londonTime = 0;  // London/Paris/Shanghai active from genesis (explicit 0;
+        forks.parisTime = 0;   // unset fields default to UINT64_MAX = never active)
         forks.shanghaiTime = 0;
         forks.cancunTime = std::numeric_limits<uint64_t>::max();
         forks.pragueTime = std::numeric_limits<uint64_t>::max();
         forks.osakaTime = std::numeric_limits<uint64_t>::max();
         auto decoder = [tx](bcos::bytes const&) -> protocol::Transaction::Ptr { return tx; };
         using ViewType = EEBVMultiLayerStorage::ViewType;
-        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-            StateRootCalculator<ViewType>
-                stateRootCalc = [](ViewType&, uint32_t) -> task::Task<crypto::HashType> {
+        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::StateRootCalculator<ViewType>
+            stateRootCalc = [](ViewType&, uint32_t) -> task::Task<crypto::HashType> {
             BOOST_THROW_EXCEPTION(
                 std::runtime_error{"legacy state-root fold must not run for executor v2"});
         };
@@ -806,8 +929,8 @@ BOOST_FIXTURE_TEST_CASE(verifyRejectsStaleOrGapBlock, EEBVFixture)
         // ---- The legitimate first commit (head 0 -> block 1) must succeed: the guard
         //      must not break the normal in-order path. ----
         auto result = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, ethHeader,
-            parentHeader, std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{}, forks, 1, {}, 0, decoder,
-            stateRootCalc);
+            parentHeader, std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{}, forks, 1, {},
+            0, decoder, stateRootCalc);
         BOOST_REQUIRE(result.valid);
 
         // FakeLedger::asyncPrewriteBlock is a no-op, so the commit does not advance
@@ -823,8 +946,8 @@ BOOST_FIXTURE_TEST_CASE(verifyRejectsStaleOrGapBlock, EEBVFixture)
             try
             {
                 co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, header, parent,
-                    std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{}, forks, 1, {}, 0, decoder,
-                    stateRootCalc);
+                    std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{}, forks, 1, {}, 0,
+                    decoder, stateRootCalc);
             }
             // The guard throws the TYPED StaleOrOutOfOrderBlock (the sync loop
             // classifies it as a deterministic failure) — catching the concrete
@@ -832,8 +955,8 @@ BOOST_FIXTURE_TEST_CASE(verifyRejectsStaleOrGapBlock, EEBVFixture)
             // escapes this handler and fails the test.
             catch (StaleOrOutOfOrderBlock const& e)
             {
-                BOOST_CHECK(std::string(e.what()).find("not the ledger head + 1") !=
-                            std::string::npos);
+                BOOST_CHECK(
+                    std::string(e.what()).find("not the ledger head + 1") != std::string::npos);
                 co_return true;
             }
             co_return false;
@@ -990,17 +1113,15 @@ BOOST_FIXTURE_TEST_CASE(cancunBeaconRootsSystemCallVerifies, EEBVFixture)
 
         // The independent EIP-4788 application: slot ts%8191 <- timestamp,
         // slot ts%8191+8191 <- parent beacon root.
-        const uint64_t timestampIdx =
-            static_cast<uint64_t>(kTimestamp) % kEEBVHistoryBufferLength;
-        co_await EEBVWriteSlot(view, beaconRoots, timestampIdx,
-            EEBVBytes32FromU64(static_cast<uint64_t>(kTimestamp)));
+        const uint64_t timestampIdx = static_cast<uint64_t>(kTimestamp) % kEEBVHistoryBufferLength;
+        co_await EEBVWriteSlot(
+            view, beaconRoots, timestampIdx, EEBVBytes32FromU64(static_cast<uint64_t>(kTimestamp)));
         co_await EEBVWriteSlot(view, beaconRoots, timestampIdx + kEEBVHistoryBufferLength,
             EEBVBytes32FromH256(kParentBeaconRoot));
 
-        auto computation =
-            co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-                computeEthereumRoots(
-                    receipts, txs | ::ranges::views::indirect, std::vector<bcos::bytes>{raw});
+        auto computation = co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::computeEthereumRoots(receipts, txs | ::ranges::views::indirect,
+            std::vector<bcos::bytes>{raw});
 
         auto parentHeader = EEBVPoSHeader(0, kTimestamp - 1, bcos::h256{}, kGasLimit, kBaseFee);
         // gasUsed exactly at the EIP-1559 elasticity target, so the child's baseFee
@@ -1015,9 +1136,8 @@ BOOST_FIXTURE_TEST_CASE(cancunBeaconRootsSystemCallVerifies, EEBVFixture)
         parentHeader.blobGasUsed = u256(0);
         parentHeader.excessBlobGas = u256(0);
 
-        auto stateRoot =
-            co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-                computeMptStateRoot(view, parentHeader.stateRoot, prodConfig);
+        auto stateRoot = co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::computeMptStateRoot(view, parentHeader.stateRoot, prodConfig);
 
         // The external Cancun header: blob-gas fields + parentBeaconRoot present.
         auto ethHeader = EEBVPoSHeader(1, kTimestamp, genesisHash, kGasLimit, kBaseFee);
@@ -1049,16 +1169,16 @@ BOOST_FIXTURE_TEST_CASE(cancunBeaconRootsSystemCallVerifies, EEBVFixture)
         forks.osakaTime = std::numeric_limits<uint64_t>::max();
         auto decoder = [tx](bcos::bytes const&) -> protocol::Transaction::Ptr { return tx; };
         using ViewType = EEBVMultiLayerStorage::ViewType;
-        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-            StateRootCalculator<ViewType>
-                stateRootCalc = [](ViewType&, uint32_t) -> task::Task<crypto::HashType> {
+        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::StateRootCalculator<ViewType>
+            stateRootCalc = [](ViewType&, uint32_t) -> task::Task<crypto::HashType> {
             BOOST_THROW_EXCEPTION(
                 std::runtime_error{"legacy state-root fold must not run for executor v2"});
         };
 
         auto result = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, ethHeader,
-            parentHeader, std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{}, forks, 1, {}, 0, decoder,
-            stateRootCalc);
+            parentHeader, std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{}, forks, 1, {},
+            0, decoder, stateRootCalc);
 
         BOOST_CHECK(result.valid);
         BOOST_CHECK_MESSAGE(result.error.empty(), result.error);
@@ -1067,8 +1187,8 @@ BOOST_FIXTURE_TEST_CASE(cancunBeaconRootsSystemCallVerifies, EEBVFixture)
         auto committedTs =
             co_await EEBVReadSlot(multiLayerStorage.latestBackend(), beaconRoots, timestampIdx);
         BOOST_CHECK(committedTs == EEBVBytes32FromU64(static_cast<uint64_t>(kTimestamp)));
-        auto committedRoot = co_await EEBVReadSlot(
-            multiLayerStorage.latestBackend(), beaconRoots, timestampIdx + kEEBVHistoryBufferLength);
+        auto committedRoot = co_await EEBVReadSlot(multiLayerStorage.latestBackend(), beaconRoots,
+            timestampIdx + kEEBVHistoryBufferLength);
         BOOST_CHECK(committedRoot == EEBVBytes32FromH256(kParentBeaconRoot));
     }());
 }
@@ -1130,10 +1250,9 @@ BOOST_FIXTURE_TEST_CASE(cancunBeaconRootsMissingCodeSkipsSilently, EEBVFixture)
             view, *executor, prodHeader, txs | ::ranges::views::indirect, prodConfig);
         BOOST_REQUIRE_EQUAL(receipts.size(), 1u);
         // No manual 4788 write: the contract has no code, so the real block carries none.
-        auto computation =
-            co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-                computeEthereumRoots(
-                    receipts, txs | ::ranges::views::indirect, std::vector<bcos::bytes>{raw});
+        auto computation = co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::computeEthereumRoots(receipts, txs | ::ranges::views::indirect,
+            std::vector<bcos::bytes>{raw});
 
         auto parentHeader = EEBVPoSHeader(0, kTimestamp - 1, bcos::h256{}, kGasLimit, kBaseFee);
         // gasUsed exactly at the EIP-1559 elasticity target, so the child's baseFee
@@ -1148,9 +1267,8 @@ BOOST_FIXTURE_TEST_CASE(cancunBeaconRootsMissingCodeSkipsSilently, EEBVFixture)
         parentHeader.blobGasUsed = u256(0);
         parentHeader.excessBlobGas = u256(0);
 
-        auto stateRoot =
-            co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-                computeMptStateRoot(view, parentHeader.stateRoot, prodConfig);
+        auto stateRoot = co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::computeMptStateRoot(view, parentHeader.stateRoot, prodConfig);
 
         auto ethHeader = EEBVPoSHeader(1, kTimestamp, genesisHash, kGasLimit, kBaseFee);
         // Shanghai is active from genesis: the header must commit to the (empty)
@@ -1177,16 +1295,16 @@ BOOST_FIXTURE_TEST_CASE(cancunBeaconRootsMissingCodeSkipsSilently, EEBVFixture)
         forks.osakaTime = std::numeric_limits<uint64_t>::max();
         auto decoder = [tx](bcos::bytes const&) -> protocol::Transaction::Ptr { return tx; };
         using ViewType = EEBVMultiLayerStorage::ViewType;
-        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-            StateRootCalculator<ViewType>
-                stateRootCalc = [](ViewType&, uint32_t) -> task::Task<crypto::HashType> {
+        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::StateRootCalculator<ViewType>
+            stateRootCalc = [](ViewType&, uint32_t) -> task::Task<crypto::HashType> {
             BOOST_THROW_EXCEPTION(
                 std::runtime_error{"legacy state-root fold must not run for executor v2"});
         };
 
         auto result = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, ethHeader,
-            parentHeader, std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{}, forks, 1, {}, 0, decoder,
-            stateRootCalc);
+            parentHeader, std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{}, forks, 1, {},
+            0, decoder, stateRootCalc);
 
         BOOST_CHECK(result.valid);
         BOOST_CHECK_MESSAGE(result.error.empty(), result.error);
@@ -1268,10 +1386,10 @@ BOOST_FIXTURE_TEST_CASE(pragueSystemCallsVerify, EEBVFixture)
             kEEBVRequestQueueStorageOffset + kQueueIndex * kEEBVWithdrawalEntrySlots;
         const uint64_t kConsolidationEntrySlot =
             kEEBVRequestQueueStorageOffset + kQueueIndex * kEEBVConsolidationEntrySlots;
-        co_await EEBVWriteSlot(backendStorage, withdrawalRequest, kEEBVRequestExcessSlot,
-            EEBVBytes32FromU64(1));
-        co_await EEBVWriteSlot(backendStorage, withdrawalRequest, kEEBVRequestCountSlot,
-            EEBVBytes32FromU64(1));
+        co_await EEBVWriteSlot(
+            backendStorage, withdrawalRequest, kEEBVRequestExcessSlot, EEBVBytes32FromU64(1));
+        co_await EEBVWriteSlot(
+            backendStorage, withdrawalRequest, kEEBVRequestCountSlot, EEBVBytes32FromU64(1));
         co_await EEBVWriteSlot(backendStorage, withdrawalRequest, kEEBVRequestQueueHeadSlot,
             EEBVBytes32FromU64(kQueueIndex));
         co_await EEBVWriteSlot(backendStorage, withdrawalRequest, kEEBVRequestQueueTailSlot,
@@ -1284,20 +1402,20 @@ BOOST_FIXTURE_TEST_CASE(pragueSystemCallsVerify, EEBVFixture)
             backendStorage, withdrawalRequest, kWithdrawalEntrySlot + 2, withdrawalEntry2);
         // 7251's TARGET is 1, so excess=1 + count=0 also decays to zero (seeding
         // count=1 would leave excess at 1); the count reset is covered on the 7002 side.
-        co_await EEBVWriteSlot(backendStorage, consolidationRequest, kEEBVRequestExcessSlot,
-            EEBVBytes32FromU64(1));
+        co_await EEBVWriteSlot(
+            backendStorage, consolidationRequest, kEEBVRequestExcessSlot, EEBVBytes32FromU64(1));
         co_await EEBVWriteSlot(backendStorage, consolidationRequest, kEEBVRequestQueueHeadSlot,
             EEBVBytes32FromU64(kQueueIndex));
         co_await EEBVWriteSlot(backendStorage, consolidationRequest, kEEBVRequestQueueTailSlot,
             EEBVBytes32FromU64(kQueueIndex + 1));
         co_await EEBVWriteSlot(backendStorage, consolidationRequest, kConsolidationEntrySlot,
             EEBVBytes32FromAddress(consolidationSource));
-        co_await EEBVWriteSlot(backendStorage, consolidationRequest,
-            kConsolidationEntrySlot + 1, consolidationSrcPubkey0);
-        co_await EEBVWriteSlot(backendStorage, consolidationRequest,
-            kConsolidationEntrySlot + 2, consolidationEntry2);
-        co_await EEBVWriteSlot(backendStorage, consolidationRequest,
-            kConsolidationEntrySlot + 3, consolidationTgtPubkey1);
+        co_await EEBVWriteSlot(backendStorage, consolidationRequest, kConsolidationEntrySlot + 1,
+            consolidationSrcPubkey0);
+        co_await EEBVWriteSlot(
+            backendStorage, consolidationRequest, kConsolidationEntrySlot + 2, consolidationEntry2);
+        co_await EEBVWriteSlot(backendStorage, consolidationRequest, kConsolidationEntrySlot + 3,
+            consolidationTgtPubkey1);
 
         auto genesisHash = cryptoSuite->hashImpl()->hash(std::string("genesis"));
         co_await EEBVWriteBlockHash(backendStorage, 0, genesisHash);
@@ -1341,10 +1459,9 @@ BOOST_FIXTURE_TEST_CASE(pragueSystemCallsVerify, EEBVFixture)
         BOOST_CHECK_EQUAL(receipts[0]->status(), 0);
 
         // Independent EIP-4788 + EIP-2935 applications on the production side.
-        const uint64_t timestampIdx =
-            static_cast<uint64_t>(kTimestamp) % kEEBVHistoryBufferLength;
-        co_await EEBVWriteSlot(view, beaconRoots, timestampIdx,
-            EEBVBytes32FromU64(static_cast<uint64_t>(kTimestamp)));
+        const uint64_t timestampIdx = static_cast<uint64_t>(kTimestamp) % kEEBVHistoryBufferLength;
+        co_await EEBVWriteSlot(
+            view, beaconRoots, timestampIdx, EEBVBytes32FromU64(static_cast<uint64_t>(kTimestamp)));
         co_await EEBVWriteSlot(view, beaconRoots, timestampIdx + kEEBVHistoryBufferLength,
             EEBVBytes32FromH256(kParentBeaconRoot));
         // EIP-2935: slot (number-1) % 8191 <- parent block hash (block 1 -> slot 0).
@@ -1355,23 +1472,19 @@ BOOST_FIXTURE_TEST_CASE(pragueSystemCallsVerify, EEBVFixture)
         // slot — the queue body slots are untouched by the dequeue.
         co_await EEBVWriteSlot(view, withdrawalRequest, kEEBVRequestExcessSlot, evmc::bytes32{});
         co_await EEBVWriteSlot(view, withdrawalRequest, kEEBVRequestCountSlot, evmc::bytes32{});
-        co_await EEBVWriteSlot(
-            view, withdrawalRequest, kEEBVRequestQueueHeadSlot, evmc::bytes32{});
-        co_await EEBVWriteSlot(
-            view, withdrawalRequest, kEEBVRequestQueueTailSlot, evmc::bytes32{});
+        co_await EEBVWriteSlot(view, withdrawalRequest, kEEBVRequestQueueHeadSlot, evmc::bytes32{});
+        co_await EEBVWriteSlot(view, withdrawalRequest, kEEBVRequestQueueTailSlot, evmc::bytes32{});
         // EIP-7251 block-end oracle: excess 1 + count 0 is not above TARGET(1), so
         // excess resets to 0; the drained queue's head/tail reset to 0.
-        co_await EEBVWriteSlot(
-            view, consolidationRequest, kEEBVRequestExcessSlot, evmc::bytes32{});
+        co_await EEBVWriteSlot(view, consolidationRequest, kEEBVRequestExcessSlot, evmc::bytes32{});
         co_await EEBVWriteSlot(
             view, consolidationRequest, kEEBVRequestQueueHeadSlot, evmc::bytes32{});
         co_await EEBVWriteSlot(
             view, consolidationRequest, kEEBVRequestQueueTailSlot, evmc::bytes32{});
 
-        auto computation =
-            co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-                computeEthereumRoots(
-                    receipts, txs | ::ranges::views::indirect, std::vector<bcos::bytes>{raw});
+        auto computation = co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::computeEthereumRoots(receipts, txs | ::ranges::views::indirect,
+            std::vector<bcos::bytes>{raw});
 
         auto parentHeader = EEBVPoSHeader(0, kTimestamp - 1, bcos::h256{}, kGasLimit, kBaseFee);
         // gasUsed exactly at the EIP-1559 elasticity target, so the child's baseFee
@@ -1386,9 +1499,8 @@ BOOST_FIXTURE_TEST_CASE(pragueSystemCallsVerify, EEBVFixture)
         parentHeader.blobGasUsed = u256(0);
         parentHeader.excessBlobGas = u256(0);
 
-        auto stateRoot =
-            co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-                computeMptStateRoot(view, parentHeader.stateRoot, prodConfig);
+        auto stateRoot = co_await scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::computeMptStateRoot(view, parentHeader.stateRoot, prodConfig);
 
         auto ethHeader = EEBVPoSHeader(1, kTimestamp, genesisHash, kGasLimit, kBaseFee);
         // Shanghai is active from genesis: the header must commit to the (empty)
@@ -1466,22 +1578,22 @@ BOOST_FIXTURE_TEST_CASE(pragueSystemCallsVerify, EEBVFixture)
         forks.osakaTime = std::numeric_limits<uint64_t>::max();
         auto decoder = [tx](bcos::bytes const&) -> protocol::Transaction::Ptr { return tx; };
         using ViewType = EEBVMultiLayerStorage::ViewType;
-        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>::
-            StateRootCalculator<ViewType>
-                stateRootCalc = [](ViewType&, uint32_t) -> task::Task<crypto::HashType> {
+        scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl,
+            EthereumExecutor>::StateRootCalculator<ViewType>
+            stateRootCalc = [](ViewType&, uint32_t) -> task::Task<crypto::HashType> {
             BOOST_THROW_EXCEPTION(
                 std::runtime_error{"legacy state-root fold must not run for executor v2"});
         };
 
         auto result = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, ethHeader,
-            parentHeader, std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{}, forks, 1, {}, 0, decoder,
-            stateRootCalc);
+            parentHeader, std::vector<bcos::bytes>{raw}, std::vector<bcos::bytes>{}, forks, 1, {},
+            0, decoder, stateRootCalc);
 
         BOOST_CHECK(result.valid);
         BOOST_CHECK_MESSAGE(result.error.empty(), result.error);
 
-        auto committedRoot = co_await EEBVReadSlot(
-            multiLayerStorage.latestBackend(), beaconRoots, timestampIdx + kEEBVHistoryBufferLength);
+        auto committedRoot = co_await EEBVReadSlot(multiLayerStorage.latestBackend(), beaconRoots,
+            timestampIdx + kEEBVHistoryBufferLength);
         BOOST_CHECK(committedRoot == EEBVBytes32FromH256(kParentBeaconRoot));
         auto committedParentHash =
             co_await EEBVReadSlot(multiLayerStorage.latestBackend(), historyStorage, 0);
@@ -1490,15 +1602,15 @@ BOOST_FIXTURE_TEST_CASE(pragueSystemCallsVerify, EEBVFixture)
         // The zeroed slots must be GONE from the committed state (the zero write-backs
         // became DELETED tombstones and merged), not lingering zero rows — and the
         // untouched queue bodies must survive the commit.
-        for (auto slot : {kEEBVRequestExcessSlot, kEEBVRequestCountSlot,
-                 kEEBVRequestQueueHeadSlot, kEEBVRequestQueueTailSlot})
+        for (auto slot : {kEEBVRequestExcessSlot, kEEBVRequestCountSlot, kEEBVRequestQueueHeadSlot,
+                 kEEBVRequestQueueTailSlot})
         {
-            auto committed = co_await EEBVReadSlot(
-                multiLayerStorage.latestBackend(), withdrawalRequest, slot);
+            auto committed =
+                co_await EEBVReadSlot(multiLayerStorage.latestBackend(), withdrawalRequest, slot);
             BOOST_CHECK(committed == evmc::bytes32{});
         }
-        for (auto slot : {kEEBVRequestExcessSlot, kEEBVRequestQueueHeadSlot,
-                 kEEBVRequestQueueTailSlot})
+        for (auto slot :
+            {kEEBVRequestExcessSlot, kEEBVRequestQueueHeadSlot, kEEBVRequestQueueTailSlot})
         {
             auto committed = co_await EEBVReadSlot(
                 multiLayerStorage.latestBackend(), consolidationRequest, slot);
@@ -1517,6 +1629,110 @@ BOOST_FIXTURE_TEST_CASE(pragueSystemCallsVerify, EEBVFixture)
             multiLayerStorage.latestBackend(), consolidationRequest, kConsolidationEntrySlot + 3);
         BOOST_CHECK(committedConsolidationTgt == consolidationTgtPubkey1);
     }());
+}
+
+// N1 (block-end early-failure path): on a Prague block, a storage fault that poisons
+// ONLY the EIP-7002/7251 request-contract reads must THROW EthStorageError out of
+// verifyAndCommit — never surface as `result.valid == false`. systemCallBlockEnd's
+// fail-safe read swallows the fault into the block's shared EthStorageErrorSlot (the
+// contract code then looks missing, which per EIP-7002 is a hard block error), so the
+// fail() early-return path must check the slot exactly like the block-boundary check
+// does: judging a block INVALID off a failed read is what the guard exists to prevent.
+BOOST_FIXTURE_TEST_CASE(pragueBlockEndCodeReadFaultThrowsInsteadOfInvalid, EEBVFaultFixture)
+{
+    auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testEBVPragueFault");
+    SchedulerSerialImpl scheduler(ioServicePool);
+    auto fakeLedger = std::make_shared<bcos::test::FakeLedger>();
+    using Verifier = scheduler_v1::EthereumBlockVerifier<SchedulerSerialImpl, EthereumExecutor>;
+    Verifier verifier(scheduler, *executor, *blockFactory);
+
+    using ViewType = EEBVFaultyMultiLayerStorage::ViewType;
+    Verifier::TransactionDecoder decoder = [](bcos::bytes const&) -> protocol::Transaction::Ptr {
+        BOOST_THROW_EXCEPTION(std::runtime_error{"the block carries no transactions"});
+    };
+    Verifier::StateRootCalculator<ViewType> stateRootCalc =
+        [](ViewType&, uint32_t) -> task::Task<crypto::HashType> {
+        BOOST_THROW_EXCEPTION(
+            std::runtime_error{"legacy state-root fold must not run for executor v2"});
+    };
+
+    bcos::protocol::EthBlockHeaderData ethHeader;
+    bcos::protocol::EthBlockHeaderData parentHeader;
+    scheduler_v1::EvmcForkTimestamps forks;
+
+    task::syncWait([&, this]() -> task::Task<void> {
+        co_await EEBVDeployCode(backendStorage, EEBVAddressFromHex(kEEBVWithdrawalRequestAddress),
+            bcos::fromHex(std::string(kEEBVWithdrawalRequestCode)));
+        co_await EEBVDeployCode(backendStorage,
+            EEBVAddressFromHex(kEEBVConsolidationRequestAddress),
+            bcos::fromHex(std::string(kEEBVConsolidationRequestCode)));
+
+        auto genesisHash = cryptoSuite->hashImpl()->hash(std::string("genesis"));
+        co_await EEBVWriteBlockHash(backendStorage, 0, genesisHash);
+        co_await EEBVWriteCurrentNumber(backendStorage, 0);
+        co_await EEBVWriteSystemConfig(backendStorage,
+            std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version)),
+            std::to_string(ledger::ETHEREUM_EXECUTOR_VERSION));
+        co_await EEBVWriteSystemConfig(backendStorage,
+            std::string(magic_enum::enum_name(ledger::SystemConfig::tx_gas_limit)), "30000000");
+
+        const int64_t kTimestamp = 12345;
+        const uint64_t kGasLimit = 30000000;
+        const u256 kBaseFee(1000000000);
+
+        parentHeader = EEBVPoSHeader(0, kTimestamp - 1, bcos::h256{}, kGasLimit, kBaseFee);
+        // gasUsed exactly at the EIP-1559 elasticity target, so the child's baseFee
+        // stays 1 gwei under the parent-relative recomputation (step 1b of
+        // verifyAndCommit, bcos-rlp-protocol/EthPoSHeaderValidation.h).
+        parentHeader.gasUsed = kGasLimit / 2;
+        parentHeader.stateRoot = ledger::mpt::emptyRootHash();
+        parentHeader.txsRoot = ledger::mpt::emptyRootHash();
+        parentHeader.receiptsRoot = ledger::mpt::emptyRootHash();
+        parentHeader.blobGasUsed = u256(0);
+        parentHeader.excessBlobGas = u256(0);
+
+        ethHeader = EEBVPoSHeader(1, kTimestamp, genesisHash, kGasLimit, kBaseFee);
+        // The fork-gated commitments a Prague header must carry. The deterministic
+        // roots stay placeholders: the control run below fails on their mismatch AFTER
+        // the block-end system calls (proving it went through them), and the poisoned
+        // run throws before any cross-check runs.
+        ethHeader.withdrawalsHash = ledger::mpt::emptyRootHash();
+        ethHeader.prevRandao = bcos::h256{};
+        ethHeader.coinbase = bcos::Address{};
+        ethHeader.nonce = bcos::h64{};
+        ethHeader.blobGasUsed = u256(0);
+        ethHeader.excessBlobGas = u256(0);
+        ethHeader.parentBeaconRoot = cryptoSuite->hashImpl()->hash(std::string("beacon"));
+        ethHeader.requestsHash = ledger::mpt::emptyRootHash();
+
+        forks.londonTime = 0;
+        forks.parisTime = 0;
+        forks.shanghaiTime = 0;
+        forks.cancunTime = 0;
+        forks.pragueTime = 0;  // Prague active from genesis
+        forks.osakaTime = std::numeric_limits<uint64_t>::max();
+
+        // Control: unpoisoned reads — verification runs THROUGH the block-end system
+        // calls (no throw, no "system contract code missing" error) and only then
+        // fails on the placeholder roots.
+        auto control = co_await verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, ethHeader,
+            parentHeader, std::vector<bcos::bytes>{}, std::vector<bcos::bytes>{}, forks,
+            /*chainId=*/1, /*rawUncles=*/{}, /*mergeBlock=*/0, decoder, stateRootCalc);
+        BOOST_CHECK(!control.valid);
+        BOOST_CHECK_MESSAGE(control.error.find("system contract code missing") == std::string::npos,
+            "control run must pass the block-end system calls, got: " << control.error);
+    }());
+
+    // Poison ONLY the request contracts' account-table reads: the block-end get_code
+    // read swallows the fault into the slot, the code looks missing, and the fail()
+    // early-return must throw EthStorageError instead of judging the block INVALID.
+    backendStorage.requestContractReadThrowRemaining->store(10);
+    BOOST_CHECK_THROW(
+        task::syncWait(verifier.verifyAndCommit(multiLayerStorage, *fakeLedger, ethHeader,
+            parentHeader, std::vector<bcos::bytes>{}, std::vector<bcos::bytes>{}, forks,
+            /*chainId=*/1, /*rawUncles=*/{}, /*mergeBlock=*/0, decoder, stateRootCalc)),
+        executor_v1::eth::EthStorageError);
+    backendStorage.requestContractReadThrowRemaining->store(0);
 }
 
 // ---------------------------------------------------------------------------
@@ -1575,9 +1791,9 @@ BOOST_AUTO_TEST_CASE(depositRequestsCollection)
 
     // A canonical DepositEvent log collects to its 192-byte deposit request
     // (pubkey ‖ withdrawal_credentials ‖ amount ‖ signature ‖ index).
-    std::vector<protocol::TransactionReceipt::Ptr> receipts{EEBVReceiptWithLog(
-        contract, scheduler_v1::c_depositEventSignatureHash,
-        EEBVDepositLogData(pubkey, cred, amount, sig, index))};
+    std::vector<protocol::TransactionReceipt::Ptr> receipts{
+        EEBVReceiptWithLog(contract, scheduler_v1::c_depositEventSignatureHash,
+            EEBVDepositLogData(pubkey, cred, amount, sig, index))};
     auto collected = scheduler_v1::collectDepositRequestsData(receipts, contract);
     BOOST_REQUIRE(collected.has_value());
     bcos::bytes expected;
@@ -1591,12 +1807,13 @@ BOOST_AUTO_TEST_CASE(depositRequestsCollection)
 
     // Logs from another address or with another topic0 are ignored (an empty collection
     // is NOT a failure).
-    auto const otherAddress = bcos::Address(std::string("0x1111111111111111111111111111111111111111"));
+    auto const otherAddress =
+        bcos::Address(std::string("0x1111111111111111111111111111111111111111"));
     std::vector<protocol::TransactionReceipt::Ptr> otherReceipts{
         EEBVReceiptWithLog(otherAddress, scheduler_v1::c_depositEventSignatureHash,
             EEBVDepositLogData(pubkey, cred, amount, sig, index)),
-        EEBVReceiptWithLog(contract, bcos::h256{},
-            EEBVDepositLogData(pubkey, cred, amount, sig, index))};
+        EEBVReceiptWithLog(
+            contract, bcos::h256{}, EEBVDepositLogData(pubkey, cred, amount, sig, index))};
     auto ignored = scheduler_v1::collectDepositRequestsData(otherReceipts, contract);
     BOOST_REQUIRE(ignored.has_value());
     BOOST_CHECK(ignored->empty());
@@ -1615,8 +1832,7 @@ BOOST_AUTO_TEST_CASE(depositRequestsCollection)
     badOffsets[31] = 0xa1;  // first offset: 161 instead of 160
     std::vector<protocol::TransactionReceipt::Ptr> badOffsetReceipts{EEBVReceiptWithLog(
         contract, scheduler_v1::c_depositEventSignatureHash, std::move(badOffsets))};
-    BOOST_CHECK(
-        !scheduler_v1::collectDepositRequestsData(badOffsetReceipts, contract).has_value());
+    BOOST_CHECK(!scheduler_v1::collectDepositRequestsData(badOffsetReceipts, contract).has_value());
 }
 
 BOOST_AUTO_TEST_CASE(requestsHashAssembly)
@@ -1624,15 +1840,14 @@ BOOST_AUTO_TEST_CASE(requestsHashAssembly)
     // The empty requests list hashes to sha256("") — the canonical empty requestsHash
     // every Prague+ header without requests carries.
     auto const emptyHash = scheduler_v1::calculateRequestsHash(bcos::bytes{}, {});
-    BOOST_CHECK_EQUAL(emptyHash.hex(),
-        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    BOOST_CHECK_EQUAL(
+        emptyHash.hex(), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
 
     // Entries hash as sha256(type_byte ‖ data), concatenated in [deposit, withdrawal,
     // consolidation] order; empty entries are skipped.
     bcos::bytes const depositData(192, 0x11);
     bcos::bytes const withdrawalData(76, 0x22);
-    executor_v1::eth::EthRequests withdrawalRequest{
-        executor_v1::eth::EthRequests::Type::withdrawal,
+    executor_v1::eth::EthRequests withdrawalRequest{executor_v1::eth::EthRequests::Type::withdrawal,
         evmc::bytes_view{withdrawalData.data(), withdrawalData.size()}};
     auto const hash = scheduler_v1::calculateRequestsHash(depositData, {withdrawalRequest});
 
@@ -1671,32 +1886,31 @@ BOOST_AUTO_TEST_CASE(requestsHashVerifyAgainstHeader)
     auto const requestsHash = scheduler_v1::calculateRequestsHash(bcos::bytes(192, 0x11), {});
     header.requestsHash = requestsHash;
     // Prague block, header matches the executed requests.
-    BOOST_CHECK(!Verifier::verifyAgainstHeader(header, computation, header.stateRoot,
-        std::nullopt, noUncles, noTransactions, requestsHash)
+    BOOST_CHECK(!Verifier::verifyAgainstHeader(
+        header, computation, header.stateRoot, std::nullopt, noUncles, noTransactions, requestsHash)
                      .has_value());
     // Tampered header commitment.
     auto tampered = header;
     tampered.requestsHash = bcos::h256(
         std::string_view("0x9999999999999999999999999999999999999999999999999999999999999999"),
         bcos::h256::FromHex);
-    auto error = Verifier::verifyAgainstHeader(
-        tampered, computation, header.stateRoot, std::nullopt, noUncles, noTransactions,
-        requestsHash);
+    auto error = Verifier::verifyAgainstHeader(tampered, computation, header.stateRoot,
+        std::nullopt, noUncles, noTransactions, requestsHash);
     BOOST_REQUIRE(error.has_value());
     BOOST_CHECK(error->find("requestsHash mismatch") != std::string::npos);
     // Prague block whose header lacks requestsHash entirely.
     auto missing = header;
     missing.requestsHash.reset();
-    BOOST_CHECK(Verifier::verifyAgainstHeader(missing, computation, header.stateRoot,
-                    std::nullopt, noUncles, noTransactions, requestsHash)
+    BOOST_CHECK(Verifier::verifyAgainstHeader(missing, computation, header.stateRoot, std::nullopt,
+        noUncles, noTransactions, requestsHash)
                     .has_value());
     // Pre-Prague block (no computed hash) must not carry a requestsHash.
-    BOOST_CHECK(Verifier::verifyAgainstHeader(header, computation, header.stateRoot,
-                    std::nullopt, noUncles, noTransactions, std::nullopt)
+    BOOST_CHECK(Verifier::verifyAgainstHeader(
+        header, computation, header.stateRoot, std::nullopt, noUncles, noTransactions, std::nullopt)
                     .has_value());
     missing.requestsHash.reset();
-    BOOST_CHECK(!Verifier::verifyAgainstHeader(missing, computation, header.stateRoot,
-                    std::nullopt, noUncles, noTransactions, std::nullopt)
+    BOOST_CHECK(!Verifier::verifyAgainstHeader(missing, computation, header.stateRoot, std::nullopt,
+        noUncles, noTransactions, std::nullopt)
                      .has_value());
 }
 

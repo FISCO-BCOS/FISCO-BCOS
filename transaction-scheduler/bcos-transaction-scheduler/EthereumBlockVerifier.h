@@ -527,7 +527,25 @@ public:
         TransactionDecoder const& decoder, StateRootCalculator<ViewType> const& stateRootCalculator)
     {
         EthereumBlockExecution execution;
+
+        // The block's shared swallowed-read recorder (EthStorageErrorGuard.h): every
+        // EthereumState instance of this block — block-start/end system calls, the
+        // transactions (through the executor's BlockContext), finalization — records
+        // its fail-safe storage read faults here, and the checks below throw
+        // EthStorageError on any. A poisoned block must never produce outputs: the
+        // builder would commit a wrong stateRoot, the verifier would judge a legal
+        // block INVALID. Throwing (instead of setting `error`) is what keeps the verify
+        // lane away from INVALID. Declared BEFORE `fail` so the early-return error
+        // paths below (which never reach the block-boundary check) are checked too.
+        auto storageErrorSlot = std::make_shared<executor_v1::eth::EthStorageErrorSlot>();
+
         auto fail = [&](std::string message) -> task::Task<EthereumBlockExecution> {
+            // A poisoned storage read on an early-failure path (e.g. a block-end
+            // system call whose contract code read was swallowed) must still throw —
+            // judging the block INVALID off a failed read is exactly what the
+            // block-boundary check below prevents on the success path. No-op when the
+            // slot is clean, so ordinary error messages pass through unchanged.
+            storageErrorSlot->throwIfPoisoned("EthereumBlockVerifier: ");
             execution.error = std::move(message);
             co_return std::move(execution);
         };
@@ -552,16 +570,6 @@ public:
                 "EthereumBlockVerifier: no EVMC revision configured for the block");
         }
         const evmc_revision blockRevision = *revOpt;
-
-        // The block's shared swallowed-read recorder (EthStorageErrorGuard.h): every
-        // EthereumState instance of this block — block-start/end system calls, the
-        // transactions (through the executor's BlockContext), finalization — records
-        // its fail-safe storage read faults here, and the block-boundary check below
-        // throws EthStorageError on any. A poisoned block must never produce outputs:
-        // the builder would commit a wrong stateRoot, the verifier would judge a legal
-        // block INVALID. Throwing (instead of setting `error`) is what keeps the verify
-        // lane away from INVALID.
-        auto storageErrorSlot = std::make_shared<executor_v1::eth::EthStorageErrorSlot>();
 
         // Cancun+ block-start system calls (EIP-4788 beacon roots; EIP-2935 historical
         // block hashes from Prague). geth runs these BEFORE the block's transactions,
