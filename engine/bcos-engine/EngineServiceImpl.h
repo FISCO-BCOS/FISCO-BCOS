@@ -403,6 +403,12 @@ public:
         return m_finalizedBlockNumber;
     }
 
+    std::optional<bcos::protocol::BlockNumber> getHeadBlockNumber() const
+    {
+        std::shared_lock lock(x_state);
+        return m_trackedHeadBlock ? std::optional(m_trackedHeadBlock->blockNumber) : std::nullopt;
+    }
+
 private:
     // TrackedHeadBlock comes from EngineServiceCommon.h (one shared definition).
 

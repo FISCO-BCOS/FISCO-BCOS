@@ -99,6 +99,7 @@ public:
     {
         return std::nullopt;
     }
+    std::optional<bcos::protocol::BlockNumber> getHeadBlockNumber() const { return std::nullopt; }
 };
 
 class Web3TestFixture : public RPCFixture

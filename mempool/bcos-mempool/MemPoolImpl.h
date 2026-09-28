@@ -44,6 +44,14 @@ struct TransactionData
     TransactionData(protocol::Transaction::Ptr transaction);
 };
 
+/// One entry of MemPoolImpl::snapshotPendingQueued.
+struct PooledTransaction
+{
+    protocol::Transaction::Ptr transaction;
+    int64_t nonce = 0;
+    bool pending = false;  ///< sealable now (false = queued)
+};
+
 template <class TransactionsType>
 concept InputTransactions =
     ::ranges::input_range<TransactionsType> &&
@@ -127,6 +135,26 @@ private:
             std::copy_n(sender.begin(), sizeof(addr.bytes), addr.bytes);
         }
         return addr;
+    }
+
+    /// The sender's committed account nonce in @p state (0 for an absent account). The raw
+    /// sender bytes go through the evmc_address overload so the read finds the account table
+    /// path the executor writes (see senderToAddress).
+    static int64_t accountNonce(auto& state, std::string_view sender)
+    {
+        ledger::account::EVMAccount account(
+            state, senderToAddress(sender), ledger::account::nodeAddressTableMode());
+        int64_t nonce = 0;
+        if (auto nonceStr = task::syncWait(account.nonce()))
+        {
+            if (auto result =
+                    std::from_chars(nonceStr->data(), nonceStr->data() + nonceStr->size(), nonce);
+                result.ec != std::errc{})
+            {
+                bcos::throwTrace(InvalidNonce{} << bcos::errinfo_comment(*nonceStr));
+            }
+        }
+        return nonce;
     }
 
     /// What the pool does when (sender, nonce) is already taken: the one policy difference
@@ -214,25 +242,7 @@ public:
             {
                 continue;
             }
-            // The mempool stores the sender as raw address bytes (forceSender), while the
-            // executor persists accounts via the evmc_address EVMAccount overload. Passing
-            // the raw bytes through the string_view overload would treat them as a hex string
-            // and compute a wrong table path, so the nonce read below would miss the account
-            // entirely. Build an evmc_address instead so the same table path is used as the
-            // executor.
-            ledger::account::EVMAccount account(
-                state, senderToAddress(sender), ledger::account::nodeAddressTableMode());
-
-            int64_t currentNonce = 0;
-            if (auto nonceStr = task::syncWait(account.nonce()))
-            {
-                if (auto result = std::from_chars(
-                        nonceStr->data(), nonceStr->data() + nonceStr->size(), currentNonce);
-                    result.ec != std::errc{})
-                {
-                    bcos::throwTrace(InvalidNonce{} << bcos::errinfo_comment(*nonceStr));
-                }
-            }
+            int64_t currentNonce = accountNonce(state, sender);
             // seal() is read-only with respect to `state`: it only reads the sender's current
             // nonce to pick the executable (gapless) prefix in nonce order, and never writes the
             // advanced nonce back. The authoritative nonce advance happens during execution
@@ -271,30 +281,45 @@ public:
         {
             auto sender = it->sender();
             auto nextIt = senderIndex.equal_range(sender).second;
-            // Same table-path note as in seal(): the raw sender bytes must go through the
-            // evmc_address overload so the account nonce read finds the executor's account.
-            ledger::account::EVMAccount account(
-                state, senderToAddress(sender), ledger::account::nodeAddressTableMode());
-            if (auto nonceStr = task::syncWait(account.nonce()))
+            if (auto const nonce = accountNonce(state, sender); nonce > 0)
             {
-                int64_t nonce = 0;
-                if (auto result = std::from_chars(
-                        nonceStr->data(), nonceStr->data() + nonceStr->size(), nonce);
-                    result.ec != std::errc{})
-                {
-                    bcos::throwTrace(InvalidNonce{} << bcos::errinfo_comment(*nonceStr));
-                }
-
-                if (nonce > 0)
-                {
-                    auto start = senderNonceIndex.lower_bound(std::make_tuple(sender, 0));
-                    auto end = senderNonceIndex.upper_bound(std::make_tuple(sender, nonce - 1));
-                    senderNonceIndex.erase(start, end);
-                }
+                auto start = senderNonceIndex.lower_bound(std::make_tuple(sender, 0));
+                auto end = senderNonceIndex.upper_bound(std::make_tuple(sender, nonce - 1));
+                senderNonceIndex.erase(start, end);
             }
 
             it = nextIt;
         }
+    }
+
+    /// Every pooled transaction, each tagged with whether seal() would pick it against
+    /// @p state: pending = the sender's gapless nonce run starting at its account nonce
+    /// (seal()'s rule, without the count limit), queued = everything else (a nonce gap, or a
+    /// nonce the account has already passed). geth's txpool_content split. The pool lock covers
+    /// only the copy; the state reads run after it, so an RPC caller never stalls seal().
+    std::vector<PooledTransaction> snapshotPendingQueued(auto& state)
+    {
+        std::vector<PooledTransaction> out;
+        {
+            std::unique_lock lock(m_mutex);
+            for (auto const& data : m_transactions.get<0>())  // (sender, nonce) order
+            {
+                out.push_back({data.m_transaction, data.nonce(), false});
+            }
+        }
+        std::string_view sender;
+        int64_t expected = 0;
+        for (std::size_t i = 0; i < out.size(); ++i)
+        {
+            if (i == 0 || out[i].transaction->sender() != sender)
+            {
+                sender = out[i].transaction->sender();
+                expected = accountNonce(state, sender);
+            }
+            out[i].pending = out[i].nonce == expected;
+            expected += out[i].pending ? 1 : 0;
+        }
+        return out;
     }
 
     /// Drop txs by hash during OP payload building.

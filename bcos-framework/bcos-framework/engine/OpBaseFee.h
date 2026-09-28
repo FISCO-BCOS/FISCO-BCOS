@@ -37,6 +37,9 @@ namespace bcos::engine
     BOOST_THROW_EXCEPTION(InvalidEngineEncoding{} << bcos::errinfo_comment{std::move(message)});
 }
 
+/// Pre-Canyon (Bedrock) EIP-1559 denominator (superchain [optimism] config; the elasticity
+/// is the same 6 before and after Canyon).
+inline constexpr std::uint32_t c_eip1559DenominatorBedrock = 50;
 /// Canyon EIP-1559 parameters (op-geth params/config.go).
 inline constexpr std::uint32_t c_eip1559DenominatorCanyon = 250;
 inline constexpr std::uint32_t c_eip1559ElasticityCanyon = 6;

@@ -85,6 +85,8 @@ struct MockEngineService
     std::optional<BlockNumber> getSafeBlockNumber() const { return m_safeBlockNumber; }
 
     std::optional<BlockNumber> getFinalizedBlockNumber() const { return m_finalizedBlockNumber; }
+
+    std::optional<BlockNumber> getHeadBlockNumber() const { return std::nullopt; }
 };
 
 /// A non-copyable, non-movable mock that mimics the constraints of the real
@@ -142,6 +144,8 @@ struct NonCopyableEngineService
     std::optional<BlockNumber> getSafeBlockNumber() const { return m_safeBlockNumber; }
 
     std::optional<BlockNumber> getFinalizedBlockNumber() const { return m_finalizedBlockNumber; }
+
+    std::optional<BlockNumber> getHeadBlockNumber() const { return std::nullopt; }
 };
 
 /// Compile-time verification that mocks satisfy the EngineServiceConcept.
