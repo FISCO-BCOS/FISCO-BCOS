@@ -69,6 +69,9 @@ concept EngineServiceConcept = requires(EngineServiceType& engine,
     {
         engine.getFinalizedBlockNumber()
     } -> std::same_as<std::optional<bcos::protocol::BlockNumber>>;
+
+    // The head of the last applied forkchoice (unset before the first one).
+    { engine.getHeadBlockNumber() } -> std::same_as<std::optional<bcos::protocol::BlockNumber>>;
 };
 
 }  // namespace bcos::engine

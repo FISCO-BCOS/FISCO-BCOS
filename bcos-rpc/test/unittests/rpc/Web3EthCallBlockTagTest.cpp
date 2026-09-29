@@ -105,6 +105,7 @@ public:
     {
         return std::nullopt;
     }
+    std::optional<protocol::BlockNumber> getHeadBlockNumber() const { return std::nullopt; }
 };
 
 class Web3EthCallBlockTagFixture : public RPCFixture

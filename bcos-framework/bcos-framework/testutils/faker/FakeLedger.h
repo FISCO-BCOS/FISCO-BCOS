@@ -369,7 +369,11 @@ public:
         auto txs = std::make_shared<Transactions>();
         for (auto const& hash : *_txHashList)
         {
-            if (m_txsHashToData.count(hash))
+            if (auto it = m_storedTxs.find(hash); it != m_storedTxs.end())
+            {
+                txs->emplace_back(it->second);
+            }
+            else if (m_txsHashToData.count(hash))
             {
                 auto tx = m_blockFactory->transactionFactory()->createTransaction(
                     ref(*(m_txsHashToData[hash])), false);
@@ -379,10 +383,25 @@ public:
         _onGetTx(nullptr, txs, nullptr);
     }
 
-    void asyncGetTransactionReceiptByHash(crypto::HashType const&, bool,
+    void asyncGetTransactionReceiptByHash(crypto::HashType const& _hash, bool,
         std::function<void(Error::Ptr, TransactionReceipt::Ptr, MerkleProofPtr)> _onGetTx) override
     {
-        _onGetTx(nullptr, nullptr, nullptr);
+        auto it = m_storedReceipts.find(_hash);
+        _onGetTx(nullptr, it == m_storedReceipts.end() ? nullptr : it->second, nullptr);
+    }
+
+    /// Serve @p _tx and @p _receipt by the tx hash (getTransactions / getReceipt).
+    void storeTxAndReceipt(Transaction::Ptr _tx, TransactionReceipt::Ptr _receipt)
+    {
+        m_storedReceipts[_tx->hash()] = std::move(_receipt);
+        m_storedTxs[_tx->hash()] = std::move(_tx);
+    }
+    /// Make @p _block the ledger's block at its header's number, indexed by its hash.
+    void replaceBlock(Block::Ptr _block)
+    {
+        auto const number = _block->blockHeader()->number();
+        m_hash2Block[_block->blockHeader()->hash()] = number;
+        m_ledger[number] = std::move(_block);
     }
 
     void asyncGetTotalTransactionCount(std::function<void(Error::Ptr, int64_t _totalTxCount,
@@ -617,6 +636,8 @@ private:
     std::string eoaInLedger;
     std::string eoaInLedgerNonce;
     std::shared_ptr<FakeStorage> m_fakeStorage;
+    std::map<HashType, Transaction::Ptr> m_storedTxs;
+    std::map<HashType, TransactionReceipt::Ptr> m_storedReceipts;
     std::map<std::string, std::map<std::string, std::optional<storage::Entry>>>
         fakeStorageEntryMaps;
     // Empty by default, matching LedgerInterface's default fetchAllFeatures.

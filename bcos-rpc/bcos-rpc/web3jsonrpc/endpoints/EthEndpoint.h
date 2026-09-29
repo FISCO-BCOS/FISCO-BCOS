@@ -20,6 +20,7 @@
 
 #pragma once
 #include <bcos-framework/ledger/Ledger.h>
+#include <bcos-mempool/MemPoolImpl.h>
 #include <bcos-rpc/groupmgr/GroupManager.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
 #include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
@@ -80,12 +81,22 @@ public:
     task::Task<std::tuple<protocol::BlockNumber, protocol::BlockNumber>> getBlockNumberAndHeadByTag(
         std::string_view blockTag);
     task::Task<void> maxPriorityFeePerGas(const Json::Value&, Json::Value&);
+    // OP lane only (requireOpStackLane): the Web3 surface op-batcher / op-proposer call.
+    task::Task<void> feeHistory(const Json::Value&, Json::Value&);
+    task::Task<void> getBlockReceipts(const Json::Value&, Json::Value&);
+    task::Task<void> txpoolStatus(const Json::Value&, Json::Value&);
+    task::Task<void> txpoolContent(const Json::Value&, Json::Value&);
     task::Task<void> getProof(const Json::Value&, Json::Value&);
 
 private:
     NodeService::Ptr m_nodeService;
     FilterSystem::Ptr m_filterSystem;
     bool m_syncTransaction;
+
+    /// eth_getTransactionReceipt's result for @p hash; throws when the tx or receipt is absent.
+    task::Task<Json::Value> receiptJson(crypto::HashType const& hash);
+    /// The OP mempool split by sealability (empty when this node has no mempool).
+    task::Task<std::vector<txpool::PooledTransaction>> pooledTransactions();
 
     // The engine lane's forkchoice safe/finalized heads, plus whether the engine is wired
     // (which switches safe/finalized to fail-closed rather than the static-depth fallback).
