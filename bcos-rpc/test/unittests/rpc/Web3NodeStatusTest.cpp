@@ -122,7 +122,7 @@ BOOST_AUTO_TEST_CASE(netListeningIsConstantTrue)
     BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
 }
 
-BOOST_AUTO_TEST_CASE(maxPriorityFeePerGasIsConstant)
+BOOST_AUTO_TEST_CASE(maxPriorityFeePerGasResponds)
 {
     auto resp = call(req("eth_maxPriorityFeePerGas"));
     BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
