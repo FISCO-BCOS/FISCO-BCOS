@@ -95,8 +95,9 @@ protected:
     // Determine to periodically clean up expired transactions or not
     std::function<bool()> m_txsCleanUpSwitch;
 
-    // notify the consensus the latest txs count, to determine stop/start the consensus
-    // timer or not
+    // notify the consensus the number of unsealed txs (in the pool, not yet in any proposal),
+    // to determine stop/start the consensus timer or not. Delivered synchronously on every
+    // transition of that count and periodically as a backstop.
     std::function<void(size_t, std::function<void(Error::Ptr)>)> m_txsNotifier;
 };
 }  // namespace bcos::txpool

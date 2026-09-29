@@ -382,6 +382,9 @@ void PBFTInitializer::registerHandlers()
         return config->timeout();
     });
 
+    // txsSize is the unsealed-tx count (see TxPoolStorageInterface::m_txsNotifier); the txpool
+    // pushes it synchronously on every transition, so PBFTConfig::freshTimer() never decides
+    // on a stale periodic sample.
     m_txpool->registerTxsNotifier([this](size_t txsSize, std::function<void(Error::Ptr)> callback) {
         m_pbft->asyncNotifyTxsSize(txsSize, callback);
     });

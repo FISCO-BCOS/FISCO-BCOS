@@ -263,18 +263,24 @@ public:
         setTimeoutState(false);
     }
 
-    virtual void setTxsSize(size_t _txsSize)
+    // Fed by the txpool (MemoryStorage::notifyUnsealedTxsSize) with the number of transactions
+    // that are in the pool but not yet in any proposal. It is pushed synchronously on every
+    // transition (insert into an empty pool, seal, un-seal, removal), so at any consensus
+    // decision point it reflects the pool as of the last transition, not a periodic sample.
+    virtual void setUnsealedTxsSize(size_t _unsealedTxsSize)
     {
-        m_txsSize = _txsSize;
-        if (m_txsSize > 0 && !m_pbftTimer->running())
+        m_unsealedTxsSize = _unsealedTxsSize;
+        if (m_unsealedTxsSize > 0 && !m_pbftTimer->running())
         {
             m_pbftTimer->start();
         }
     }
 
+    // Called when no proposal is in flight (block committed, new view reached): keep the
+    // view-change timer armed only if there is unsealed work the next leader must propose.
     virtual void freshTimer()
     {
-        if (m_txsSize > 0)
+        if (m_unsealedTxsSize > 0)
         {
             m_pbftTimer->restart();
         }
@@ -519,6 +525,6 @@ protected:
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     RPBFTConfigTools::Ptr m_rpbftConfigTools = nullptr;
 
-    std::atomic<size_t> m_txsSize = {0};
+    std::atomic<size_t> m_unsealedTxsSize = {0};
 };
 }  // namespace bcos::consensus
