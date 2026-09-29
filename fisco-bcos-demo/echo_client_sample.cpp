@@ -32,8 +32,12 @@ using namespace bcos::tool;
 
 void usage()
 {
-    std::cerr << "Usage: ./echo-client-sample qps(MBit/s) ${server_address} ${port} "
-                 "payloadSize(KBytes, default is 1MBytes)\n"
+    std::cerr << "Usage: ./echo-client-sample <hostIp> <port> <qps(MBit/s)> "
+                 "[payloadSize(KBytes, default is 1MBytes)] [configPath]\n"
+              << "Example:\n"
+              << "    ./echo-client-sample 127.0.0.1 20200 1024\n"
+              << "    ./echo-client-sample 127.0.0.1 20200 1024 1024\n"
+              << "    ./echo-client-sample 127.0.0.1 20200 1024 1024 ./my_config.ini\n"
               << std::endl;
     exit(0);
 }
@@ -75,10 +79,13 @@ int main(int argc, char** argv)
     uint64_t qps = (atol(argv[3])) * 1024 * 1024;
     // default payLoadSize is 1MB
     uint64_t payLoadSize = 1024 * 1024;
-    if (argc > 3)
+    if (argc > 4)
     {
         payLoadSize = (atol(argv[4]) * 1024);
     }
+    // optional config file path, default is config.ini
+    std::string configFilePath = (argc > 5) ? argv[5] : "config.ini";
+    std::cout << "### configFilePath: " << configFilePath << std::endl;
     std::cout << "### payLoad:" << payLoadSize << std::endl;
     std::cout << "### qps: " << qps << std::endl;
     int64_t packetQPS = (qps) / (payLoadSize * 8);
@@ -87,7 +94,6 @@ int main(int argc, char** argv)
     g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     auto nodeConfig = std::make_shared<NodeConfig>();
-    std::string configFilePath = "config.ini";
     nodeConfig->loadConfig(configFilePath);
 
     auto logInitializer = std::make_shared<BoostLogInitializer>();

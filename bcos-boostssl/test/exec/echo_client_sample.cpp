@@ -39,9 +39,10 @@ using namespace bcos::boostssl::context;
 
 void usage()
 {
-    std::cerr << "Usage: echo-client-sample <peerIp> <peerPort> qps(MBit/s) payloadSize(KBytes, "
-                 "default is 1MBytes)\n"
+    std::cerr << "Usage: echo-client-sample <peerIp> <peerPort> <disableSsl> <qps(MBit/s)> "
+                 "[payloadSize(KBytes, default is 1MBytes)]\n"
               << "Example:\n"
+              << "    ./echo-client-sample 127.0.0.1 20200 true 1024\n"
               << "    ./echo-client-sample 127.0.0.1 20200 true 1024 1024\n";
     std::exit(0);
 }
