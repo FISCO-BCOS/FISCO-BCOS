@@ -534,6 +534,72 @@ public:
     }
 };
 
+/// El1bPersistingLedger whose asyncPrewriteBlock can be armed to fail (counted down, so
+/// a test can arm exactly one failure): a throw INSIDE the commit section, after
+/// pushView has consumed the executed view — the round-4 F1 path. Same injection shape
+/// as EngineServiceTest's FlakyLedger.
+class El1bFailingPrewriteLedger : public El1bPersistingLedger
+{
+public:
+    using El1bPersistingLedger::El1bPersistingLedger;
+
+    std::shared_ptr<std::atomic<int>> prewriteFailRemaining = std::make_shared<std::atomic<int>>(0);
+
+    void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
+        bcos::protocol::ConstTransactionsPtr txs, bcos::protocol::Block::ConstPtr block,
+        std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
+        std::optional<bcos::ledger::Features> features,
+        std::optional<bcos::crypto::HashType> blockHashOverride, bool writeNonces) override
+    {
+        int remaining = prewriteFailRemaining->load(std::memory_order_acquire);
+        while (remaining > 0 && !prewriteFailRemaining->compare_exchange_weak(
+                                    remaining, remaining - 1, std::memory_order_acq_rel))
+        {
+        }
+        if (remaining > 0)
+        {
+            callback("injected", BCOS_ERROR_PTR(bcos::ledger::LedgerError::ErrorArgument,
+                                     "injected prewrite failure"));
+            return;
+        }
+        El1bPersistingLedger::asyncPrewriteBlock(std::move(storage), std::move(txs),
+            std::move(block), std::move(callback), writeTxsAndReceipts, std::move(features),
+            std::move(blockHashOverride), writeNonces);
+    }
+};
+
+/// EL1BFaultFixture variant whose ledger fails the prewrite on demand. Node B is
+/// omitted: the F1 path is exercised entirely on node A's self-built commit lane.
+struct EL1BPrewriteFaultFixture
+{
+    static constexpr int64_t c_reorgWindow = 8;
+
+    EL1BFaultNode nodeA{"prewriteFaultA", c_reorgWindow};
+    bcos::txpool::MemPoolImpl memPool{
+        bcos::txpool::MemPoolConfig{.chainKind = bcos::txpool::ChainKind::L1}};
+    StubExecutor stubExecutor;
+    StubScheduler stubScheduler;
+    std::shared_ptr<El1bFailingPrewriteLedger> ledgerA =
+        std::make_shared<El1bFailingPrewriteLedger>();
+    std::shared_ptr<initializer::ExternalPayloadVerifierImpl<FaultyGlobalStateStorage>>
+        externalVerifierA;
+    EthEngineService<bcos::txpool::MemPoolImpl, FaultyGlobalStateStorage, StubExecutor,
+        StubScheduler>
+        serviceA;
+
+    EL1BPrewriteFaultFixture()
+      : externalVerifierA(
+            std::make_shared<initializer::ExternalPayloadVerifierImpl<FaultyGlobalStateStorage>>(
+                nodeA.verifier, nodeA.fakeLedger, nodeA.blockFactory, el1bCancunForks(),
+                /*chainId=*/1, /*mergeBlock=*/0)),
+        serviceA(memPool, nodeA.storage, stubExecutor, stubScheduler, nodeA.blockFactory,
+            /*ledger=*/ledgerA, engine::c_defaultBlockTxCountLimit,
+            static_cast<std::uint32_t>(ApiVersion::V4), /*commitObserver=*/nullptr,
+            /*ledgerConfigState=*/nullptr, externalVerifierA,
+            /*clSync=*/std::make_shared<engine_common::ClSyncCoordination>())
+    {}
+};
+
 /// Node A over the fault backend with a persisting ledger and a positive reorg window:
 /// the self-built commit lane journals rollback rows and the fail-closed duplicate
 /// guard has a ledger row to answer from. Node B is the independent verifier.
@@ -570,8 +636,7 @@ struct EL1BFaultFixture
 /// Build block 1 on the fault fixture's node A (one 2-gwei withdrawal credit to
 /// @p recipientAddress) and return the newPayload request for it. Seeds node A's
 /// genesis first; the caller seeds node B when the verify lane needs it.
-NewPayloadRequest el1bBuildWithdrawalPayload(
-    EL1BFaultFixture& fixture, bcos::Address const& recipientAddress)
+NewPayloadRequest el1bBuildWithdrawalPayload(auto& fixture, bcos::Address const& recipientAddress)
 {
     auto parent = el1bParentHeader(u256(0), u256(0), u256(0));
     fixture.nodeA.seedGenesis(parent, {});
@@ -1283,6 +1348,44 @@ BOOST_FIXTURE_TEST_CASE(captureFaultRetryCommitsWithStateAndJournal, EL1BFaultFi
     BOOST_CHECK_EQUAL(ledgerA->prewriteCount.load(), 0);
 
     // The CL's retry commits the full block from the restored artifact.
+    auto committed = task::syncWait(serviceA.newPayload(request, 3));
+    BOOST_CHECK(committed.status == PayloadValidationStatus::Valid);
+    BOOST_CHECK_EQUAL(ledgerA->prewriteCount.load(), 1);
+    BOOST_CHECK_EQUAL(
+        task::syncWait(el1bBalance(nodeA.backendStorage, recipient)), u256(2000000000));
+    auto journalEntry = task::syncWait(storage2::readOne(nodeA.backendStorage,
+        executor_v1::StateKey{ledger::SYS_ROLLBACK_JOURNAL, std::string("1")}));
+    BOOST_CHECK(journalEntry.has_value());
+}
+
+// Round-4 F1 regression (commit lane, reorgWindow > 0): a fault AFTER pushView — here
+// the ledger prewrite — consumes the executed view, so the CL's retry cannot recapture
+// the rollback journal (captureRollbackJournal iterates the view's dirty rows). The
+// journal is stashed in the artifact before pushView, and the retry must commit the
+// block WITH its SYS_ROLLBACK_JOURNAL row: a journal-less committed block would refuse
+// every later reorg reaching it (rollbackCommittedChain) and force a full resync.
+BOOST_FIXTURE_TEST_CASE(prewriteFaultRetryCommitsWithJournal, EL1BPrewriteFaultFixture)
+{
+    auto const recipient = el1bEvmcAddress(0x65);
+    auto const recipientAddress =
+        bcos::Address(bcos::bytesConstRef(recipient.bytes, sizeof(recipient.bytes)));
+    auto request = el1bBuildWithdrawalPayload(*this, recipientAddress);
+
+    // First attempt: the capture runs (reorgWindow > 0) and the journal is stashed in
+    // the artifact; the injected prewrite failure then throws out of the commit
+    // section, AFTER pushView consumed the view. Nothing is durable yet: no state, no
+    // prewrite, no journal row.
+    ledgerA->prewriteFailRemaining->store(1);
+    BOOST_CHECK_THROW(task::syncWait(serviceA.newPayload(request, 3)), bcos::Error);
+    BOOST_CHECK_EQUAL(task::syncWait(el1bBalance(nodeA.backendStorage, recipient)), u256(0));
+    BOOST_CHECK_EQUAL(ledgerA->prewriteCount.load(), 0);
+    auto journalBefore = task::syncWait(storage2::readOne(nodeA.backendStorage,
+        executor_v1::StateKey{ledger::SYS_ROLLBACK_JOURNAL, std::string("1")}));
+    BOOST_CHECK(!journalBefore.has_value());
+
+    // The CL's retry: the view is gone (its layer is queued from the first attempt's
+    // pushView), so the journal comes from the artifact — the block must land WITH its
+    // state and its journal row.
     auto committed = task::syncWait(serviceA.newPayload(request, 3));
     BOOST_CHECK(committed.status == PayloadValidationStatus::Valid);
     BOOST_CHECK_EQUAL(ledgerA->prewriteCount.load(), 1);

@@ -19,10 +19,10 @@
 
 #pragma once
 
+#include "ClSyncCoordination.h"
 #include "EngineMPTStateRoot.h"
 #include "EngineServiceCommon.h"
 #include "EngineTracker.h"
-#include "ClSyncCoordination.h"
 
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
@@ -44,6 +44,7 @@
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <bcos-task/Task.h>
+#include <bcos-transaction-scheduler/EthereumChainRollback.h>
 #include <bcos-utilities/Bloom.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -136,6 +137,13 @@ struct EthPayloadArtifacts
     /// pruning) when newPayload commits the block. Kept until the durable write succeeds,
     /// same rule as header/receipts, so a failed attempt's retry re-reads it.
     std::shared_ptr<const ledger::mpt::MPTDeltaLayer> mptDelta = nullptr;
+    /// The block's rollback journal, captured BEFORE pushView in newPayload's commit
+    /// section and stashed here immediately: a commit attempt that throws after pushView
+    /// has consumed the view cannot recapture on the CL's retry (captureRollbackJournal
+    /// iterates the view's dirty rows), so the retry reads the journal from the artifact
+    /// and still writes the journal rows with the block — a journal-less committed block
+    /// would refuse every later reorg reaching it.
+    std::optional<scheduler_v1::RollbackJournal> rollbackJournal = std::nullopt;
 };
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
@@ -269,8 +277,7 @@ private:
         const PayloadAttributes& payloadAttributes, const PayloadID& payloadId,
         std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
         std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view,
-        std::vector<bcos::bytes> decodedForcedTxs,
-        std::optional<L1BuildInput> l1Input) const;
+        std::vector<bcos::bytes> decodedForcedTxs, std::optional<L1BuildInput> l1Input) const;
 
     /// The L1 (EL-mode) half of buildPayload: runs the assembled transactions through the
     /// shared verifier execution phase (IExternalPayloadVerifier::buildL1Block) and stamps

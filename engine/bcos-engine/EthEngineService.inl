@@ -744,6 +744,15 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
         }
     }
 
+    // Retry hydration: a previous attempt that threw AFTER pushView consumed the view
+    // left the artifact header-only but with the journal stashed (the stash below).
+    // The view is gone, so the capture cannot re-run — restore the stashed journal so
+    // its rows still land in the block's prewrite buffer.
+    if (localArtifact && localArtifact->rollbackJournal)
+    {
+        rollbackJournal = localArtifact->rollbackJournal;
+    }
+
     // Rollback journal (the SAME shared implementation the external/devp2p lane uses,
     // EthereumChainRollback.h — not a copy): capture the pre-block values of every
     // flat-state row this block dirtied, so a later shallow reorg can rewind a block
@@ -784,6 +793,23 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
                     }
                 }
                 throw;
+            }
+
+            // Stash the journal in the artifact BEFORE pushView consumes the view: a
+            // throw in the commit section below (prewrite, sidecar writes, prune rows,
+            // merge) escapes with the artifact header-only, and the CL's retry cannot
+            // recapture — the view is gone. The retry restores the journal from the
+            // artifact (the hydration above), so the block always lands WITH its
+            // journal rows. m_artifacts cannot change underneath — m_commitMutex is
+            // held.
+            if (rollbackJournal)
+            {
+                auto guard = m_tracker.lockExclusive();
+                if (auto artifactIt = m_artifacts.find(payloadId);
+                    artifactIt != m_artifacts.end())
+                {
+                    artifactIt->second.rollbackJournal = *rollbackJournal;
+                }
             }
         }
     }
