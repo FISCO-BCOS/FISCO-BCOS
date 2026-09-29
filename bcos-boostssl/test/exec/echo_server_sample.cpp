@@ -42,7 +42,7 @@ std::string MODULE_NAME = "DEFAULT";
 
 void usage()
 {
-    std::cerr << "Usage: echo-server-sample <listenIP> <listenPort> <ssl>\n"
+    std::cerr << "Usage: echo-server-sample <listenIP> <listenPort> <ssl> [config_path]\n"
               << "Example:\n"
               << "    ./echo-server-sample 127.0.0.1 20200 true\n"
               << "    ./echo-server-sample 127.0.0.1 20200 false\n";
@@ -67,13 +67,16 @@ int main(int argc, char** argv)
         disableSsl = argv[3];
     }
     auto logInitializer = std::make_shared<BoostLogInitializer>();
-    std::string configFilePath = "config.ini";
+    std::string configFilePath = (argc > 4) ? argv[4] : "config.ini";
     boost::property_tree::ptree pt;
     boost::property_tree::read_ini(configFilePath, pt);
     logInitializer->initLog(pt);
     MODULE_NAME = "TEST_SERVER_MODULE";
-    TEST_SERVER_LOG(INFO, MODULE_NAME) << LOG_DESC("echo-server-sample") << LOG_KV("ip", host)
-                                       << LOG_KV("port", port) << LOG_KV("disableSsl", disableSsl);
+    TEST_SERVER_LOG(INFO, MODULE_NAME) << LOG_DESC("echo-server-sample starting") << LOG_KV("ip", host)
+                                       << LOG_KV("port", port) << LOG_KV("disableSsl", disableSsl)
+                                       << LOG_KV("configPath", configFilePath)
+                                       << LOG_KV("threadPoolSize", 8)
+                                       << LOG_KV("maxMsgSize", 100 * 1024 * 1024);
 
     auto config = std::make_shared<WsConfig>();
     config->setModel(WsModel::Server);
@@ -118,6 +121,8 @@ int main(int argc, char** argv)
     }
 
     wsService->start();
+    TEST_SERVER_LOG(INFO, MODULE_NAME) << LOG_DESC("echo-server-sample started successfully")
+                                       << LOG_KV("listenIP", host) << LOG_KV("listenPort", port);
 
     int i = 0;
     while (true)

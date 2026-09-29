@@ -40,9 +40,10 @@ using namespace bcos;
 void usage()
 {
     std::cerr << "Desc: publish amop message by command params\n";
-    std::cerr << "Usage: publish <config> <topic> <message>\n"
+    std::cerr << "Usage: publish <config> <topic> <message> [count]\n"
               << "Example:\n"
-              << "    ./publish ./config_sample.ini topic HelloWorld\n";
+              << "    ./publish ./config_sample.ini topic HelloWorld\n"
+              << "    ./publish ./config_sample.ini topic HelloWorld 10\n";
     std::exit(0);
 }
 
@@ -56,9 +57,11 @@ int main(int argc, char** argv)
     std::string config = argv[1];
     std::string topic = argv[2];
     std::string msg = argv[3];
+    uint32_t count = (argc > 4) ? (uint32_t)std::stoul(argv[4]) : 0;
 
-    std::cout << LOG_DESC(" [AMOP][Publish]] params ===>>>> ") << LOG_KV("\n\t # config", config)
-              << LOG_KV("\n\t # topic", topic) << LOG_KV("\n\t # message", msg) << std::endl;
+    std::cout << LOG_DESC(" [AMOP][Publish] params ===>>>> ") << LOG_KV("\n\t # config", config)
+              << LOG_KV("\n\t # topic", topic) << LOG_KV("\n\t # message", msg)
+              << LOG_KV("\n\t # count", count) << std::endl;
 
     auto factory = std::make_shared<SdkFactory>();
     // construct cpp-sdk object
@@ -68,10 +71,11 @@ int main(int argc, char** argv)
 
     std::cout << LOG_DESC(" [AMOP][Publish] start sdk ... ") << std::endl;
 
-    while (true)
+    uint32_t sentCount = 0;
+    while (count == 0 || sentCount < count)
     {
         std::cout << LOG_DESC(" publish message ===>>>> ") << LOG_KV("topic", topic)
-                  << LOG_KV("message", msg) << std::endl;
+                  << LOG_KV("message", msg) << LOG_KV("sentCount", sentCount + 1) << std::endl;
 
         sdk->amop()->publish(topic, bytesConstRef((byte*)msg.data(), msg.size()), -1,
             [](Error::Ptr _error, std::shared_ptr<bcos::boostssl::ws::WsMessage> _msg,
@@ -101,7 +105,11 @@ int main(int argc, char** argv)
                 }
             });
         std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+        sentCount++;
     }
+
+    std::cout << LOG_DESC(" [AMOP][Publish] all messages sent ===>>>> ")
+              << LOG_KV("totalCount", sentCount) << std::endl;
 
     return EXIT_SUCCESS;
 }

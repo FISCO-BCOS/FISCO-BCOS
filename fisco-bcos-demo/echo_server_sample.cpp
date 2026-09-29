@@ -24,6 +24,7 @@
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/ThreadPool.h>
+#include <boost/filesystem.hpp>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -31,9 +32,9 @@ using namespace bcos::tool;
 
 void usage()
 {
-    std::cerr << "Usage: echo-server-sample <listenIP> <listenPort> <ssl>\n"
+    std::cerr << "Usage: echo-server-sample [config_path]\n"
               << "Example:\n"
-              << "./echo-server-sample\n";
+              << "./echo-server-sample ./config.ini\n";
     std::exit(0);
 }
 
@@ -43,6 +44,15 @@ int main(int argc, char** argv)
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     auto nodeConfig = std::make_shared<NodeConfig>();
     std::string configFilePath = "config.ini";
+    if (argc > 1)
+    {
+        configFilePath = argv[1];
+    }
+    if (!boost::filesystem::exists(configFilePath))
+    {
+        std::cerr << "Config file not found: " << configFilePath << std::endl;
+        usage();
+    }
     nodeConfig->loadConfig(configFilePath);
 
     auto logInitializer = std::make_shared<BoostLogInitializer>();

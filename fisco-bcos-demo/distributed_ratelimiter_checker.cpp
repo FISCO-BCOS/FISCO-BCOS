@@ -23,6 +23,7 @@
 #include <bcos-utilities/ratelimiter/DistributedRateLimiter.h>
 #include <algorithm>
 #include <chrono>
+#include <climits>
 #include <cstdlib>
 #include <iostream>
 #include <thread>
@@ -43,7 +44,6 @@ void usage()
               << std::endl;
     exit(0);
 }
-
 struct StatData
 {
     std::atomic<int64_t> totalFailedC{0};
@@ -57,6 +57,11 @@ struct StatData
 
     std::atomic<int64_t> lastFailedData{0};
     std::atomic<int64_t> lastSucData{0};
+
+    std::atomic<int64_t> totalLatencyUS{0};
+    std::atomic<int64_t> maxLatencyUS{0};
+    std::atomic<int64_t> minLatencyUS{LLONG_MAX};
+    std::atomic<int64_t> latencyCount{0};
 
     void resetLast()
     {
@@ -83,9 +88,21 @@ struct StatData
             lastFailedData += _data;
         }
     }
-};
 
-// TODO: add latency check
+    void updateLatency(int64_t _latencyUS)
+    {
+        totalLatencyUS += _latencyUS;
+        latencyCount++;
+        int64_t currentMax = maxLatencyUS.load();
+        while (_latencyUS > currentMax &&
+               !maxLatencyUS.compare_exchange_weak(currentMax, _latencyUS))
+        {}
+        int64_t currentMin = minLatencyUS.load();
+        while (_latencyUS < currentMin &&
+               !minLatencyUS.compare_exchange_weak(currentMin, _latencyUS))
+        {}
+    }
+};
 
 int main(int argc, char** argv)
 {
@@ -121,7 +138,6 @@ int main(int argc, char** argv)
 
     // init all redis instance as client
     std::vector<std::thread> threads(clientCount);
-    //
     bool allThreadsInitSuc = false;
 
     // stat statistics
@@ -136,37 +152,30 @@ int main(int argc, char** argv)
         auto rateLimiter =
             std::make_shared<bcos::ratelimiter::DistributedRateLimiter>(redis, limitToken, rate, rateInterval);
         threads.emplace_back([rateLimiter, rate, rateInterval, &allThreadsInitSuc, &stateData]() {
+            auto sleepMS = random() % (2 * rateInterval * 10);
             while (true)
             {
                 if (!allThreadsInitSuc)
                 {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(sleepMS));
                     continue;
                 }
 
                 auto start = utcTimeUs();
 
-                // tryAcquire (0, 1/10 * rate)] once time
                 auto acquire = random() % (rate / 10);
                 acquire = (acquire > 0 ? acquire : 1);
 
                 bool result = rateLimiter->tryAcquire(acquire);
 
-                // auto end = utcTimeUs();
-                // if (end - start >= 500)
-                // {
-                //     std::cerr << " [distributed ratelimiter][timeout]"
-                //               << LOG_KV("tid", std::this_thread::get_id())
-                //               << LOG_KV("acquire", acquire) << LOG_KV("result", result)
-                //               << LOG_KV("elapsedUS", (end - start)) << std::endl;
-                // }
+                auto end = utcTimeUs();
+                int64_t elapsed = end - start;
+                stateData.updateLatency(elapsed);
 
-                // state suc
                 stateData.update(acquire, result);
 
-                // sleep ms
-                auto sleepMS = random() % (2 * rateInterval * 10);
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                sleepMS = random() % (2 * rateInterval * 10);
+                std::this_thread::sleep_for(std::chrono::milliseconds(sleepMS));
             }
         });
     };
@@ -200,6 +209,14 @@ int main(int argc, char** argv)
                       << LOG_KV(" STATUS ", stateData.lastSucData <= (rate + int64_t(0.05 * rate)) ?
                                                 "OK" :
                                                 "OverFlow")
+                      << LOG_KV("avgLatencyUS",
+                             stateData.latencyCount > 0 ?
+                                 stateData.totalLatencyUS / stateData.latencyCount :
+                                 0)
+                      << LOG_KV("maxLatencyUS", stateData.maxLatencyUS)
+                      << LOG_KV("minLatencyUS",
+                             stateData.minLatencyUS.load() == LLONG_MAX ? 0 :
+                                                                      stateData.minLatencyUS.load())
                       << std::endl;
         }
     });
