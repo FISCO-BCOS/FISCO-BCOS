@@ -16,10 +16,9 @@
  * @file FrameMeta.h
  * @brief FrameMeta + the FrameDecoder concept: the seam that keeps libnetwork a generic
  *        framed-transport engine. The session layer never sees a concrete message type —
- *        inbound, a Decoder splits the byte stream into owned frames plus the sequence
- *        number (libnetwork's response-correlation key); outbound, the caller hands over
- *        an already-encoded header and payload views. Protocol-level header fields
- *        (response flag, routing destination, ...) are the protocol layer's business:
+ *        inbound, a Decoder splits the byte stream into owned frames; outbound, the caller
+ *        hands over an already-encoded header and payload views. Protocol-level header fields
+ *        (seq, response flag, routing destination, ...) are the protocol layer's business:
  *        it re-reads them from the frame bytes at its own boundary.
  */
 #pragma once
@@ -36,21 +35,20 @@ namespace bcos::gateway
 /// a fresh allocation.
 constexpr uint32_t FRAME_TAKE_BUFFER_THRESHOLD = 256 * 1024;
 
-/// One decode step's output: both the stream-splitting result and the correlation key the
-/// session needs to dispatch the frame. The wire format is entirely the Decoder's business.
+/// One decode step's output: the stream-splitting result. The wire format is entirely the
+/// Decoder's business.
 struct FrameMeta
 {
     enum class Status : uint8_t
     {
         NeedMoreData,   ///< declaredLength holds the frame's total length (buffer-grow hint)
-        Frame,          ///< consumed/frame/seq are valid
+        Frame,          ///< consumed/frame are valid
         ProtocolError,  ///< the stream is desynchronized; the session drops the connection
     };
 
     Status status = Status::NeedMoreData;
     uint32_t declaredLength = 0;  ///< Status::NeedMoreData: the frame length the header declares
     uint32_t consumed = 0;        ///< Status::Frame: bytes consumed from the read buffer
-    uint32_t seq = 0;             ///< response-correlation key
     /// Offset of the frame's first byte within `frame`. 0 on the copy path; the read buffer's
     /// readPos on the take-buffer path, where the dead prefix of already-consumed bytes rides
     /// along inside the moved vector and is freed with it.

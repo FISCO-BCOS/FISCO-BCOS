@@ -24,7 +24,6 @@
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PDecoder.h"
-#include "bcos-gateway/libnetwork/SessionReadLoop.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include <bcos-framework/protocol/Protocol.h>
@@ -40,10 +39,12 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <future>
 #include <mutex>
 #include <optional>
 #include <queue>
 #include <list>
+#include <range/v3/view/concat.hpp>
 #include <range/v3/view/single.hpp>
 #include <thread>
 #include <tuple>
@@ -408,6 +409,15 @@ BOOST_AUTO_TEST_CASE(doReadTest)
     std::atomic<size_t> recvPacketCnt = 0;
     std::atomic<size_t> recvBufferSize = 0;
     std::atomic<uint64_t> lastReadTime = utcSteadyTime();
+    // Decode/payload failures observed by the consumer coroutine: it resumes on the fake's pool
+    // thread, where Boost.Test assertions are not thread-safe, so it records failures here and
+    // the test thread asserts after the coroutine exits.
+    std::atomic<size_t> decodeFailures = 0;
+    // Fulfilled when the consumer coroutine exits on ANY path (every frame received, channel
+    // closed early, unexpected exception): the test thread waits on the future so the
+    // coroutine's captured references cannot outlive this scope.
+    std::promise<void> consumerDone;
+    auto consumerFinished = consumerDone.get_future();
     auto fakeAsio = std::make_shared<FakeASIO>();
     {
         auto fakeHost = std::make_shared<FakeHost<FakeSocket>>(fakeAsio, nullptr);
@@ -417,33 +427,64 @@ BOOST_AUTO_TEST_CASE(doReadTest)
         // exercised from header-size upward (frames run up to 254 bytes)
         auto session = std::make_shared<FakeSession>(fakeSocket, *fakeHost, 16, true);
 
-        session->setMessageHandler(
-            [&recvPacketCnt, &recvBufferSize, &lastReadTime](
-                NetworkException e, FakeSession::Ptr sessionFace, FrameMeta meta) {
-                // the read loop calls this function after reading a frame; the session delivers
-                // raw wire frames now, so decode the Message at the libp2p boundary (as
-                // Service::onConnect's handler wiring does)
-                lastReadTime = utcSteadyTime();
-                if (errorCodeOf(e) != P2PExceptionType::Success)
+        // Pull-mode consumer: drains exactly totalPacketNum frames out of the session's
+        // recvMessage() channel, decoding each raw wire frame at the libp2p boundary (as
+        // Service::receiveLoop does). Exits on its own after the last frame; if the read loop
+        // drops the session first, the channel close rethrows the teardown NetworkException and
+        // the catch exits the coroutine with the shortfall visible in recvPacketCnt.
+        task::wait([](FakeSession::Ptr _session, std::size_t _expected,
+                       std::atomic<size_t>& _recvPacketCnt, std::atomic<size_t>& _recvBufferSize,
+                       std::atomic<uint64_t>& _lastReadTime, std::atomic<size_t>& _decodeFailures,
+                       std::promise<void>& _done) -> task::Task<void> {
+            // Fulfill the promise on every exit path: an escaping exception would throw onto the
+            // resuming pool thread's stack (detached task::wait), and an unset promise would
+            // hang the test thread.
+            struct DoneGuard
+            {
+                std::promise<void>& m_done;
+                ~DoneGuard()
                 {
-                    std::cout << "error: " << errorCodeOf(e) << " " << e.what() << std::endl;
+                    try
+                    {
+                        m_done.set_value();
+                    }
+                    catch (...)
+                    {}
                 }
+            } const guard{_done};
+            try
+            {
+                for (std::size_t i = 0; i < _expected; ++i)
                 {
-                    static bcos::SharedMutex x_mutex;
-                    bcos::WriteGuard guard(x_mutex);
-                    BOOST_CHECK_EQUAL(errorCodeOf(e), P2PExceptionType::Success);
+                    auto meta = co_await _session->recvMessage();
+                    _lastReadTime = utcSteadyTime();
                     Message message;
-                    BOOST_REQUIRE(message.decode(meta.frameData()) > 0);
-                    BOOST_CHECK(message.lengthDirect() > 0);
+                    if (message.decode(meta.frameData()) <= 0 || message.lengthDirect() <= 0)
+                    {
+                        ++_decodeFailures;
+                        continue;
+                    }
                     // every payload byte of the reassembled frame must be 0xff
                     auto payload = message.payload();
-                    BOOST_CHECK(std::all_of(payload.begin(), payload.end(),
-                        [](auto b) { return b == 0xff; }));
-                    recvBufferSize += message.lengthDirect();
+                    if (!std::all_of(
+                            payload.begin(), payload.end(), [](auto b) { return b == 0xff; }))
+                    {
+                        ++_decodeFailures;
+                    }
+                    _recvBufferSize += message.lengthDirect();
+                    ++_recvPacketCnt;
                 }
-
-                recvPacketCnt++;
-            });
+            }
+            catch (NetworkException& e)
+            {
+                // channel closed (session dropped) before every frame arrived — the count
+                // assertions on the test thread report the shortfall
+                std::cout << "consumer exit: " << errorCodeOf(e) << " " << e.what() << std::endl;
+            }
+            catch (...)
+            {}
+        }(session, totalPacketNum, recvPacketCnt, recvBufferSize, lastReadTime, decodeFailures,
+            consumerDone));
 
         session->startWithPolicy<FakeASIO::ReadPolicy>();
 
@@ -454,24 +495,160 @@ BOOST_AUTO_TEST_CASE(doReadTest)
                 ->asyncAppendRecvPacket(packet);
         }
 
+        // Wait for the consumer coroutine itself, not just the frame count: its wake-ups are
+        // posted onto the fake's pool thread (the channel poster), so completion is asynchronous
+        // and the count can lead the coroutine's exit by one resume.
         size_t retryTimes = 0;
-        while (auto restPacket = totalPacketNum - recvPacketCnt)
+        while (consumerFinished.wait_for(std::chrono::milliseconds(500)) !=
+                   std::future_status::ready &&
+               retryTimes < 100)
         {
-            std::cout << "waiting " << restPacket << " packets" << std::endl;
+            std::cout << "waiting " << (totalPacketNum - static_cast<int>(recvPacketCnt.load()))
+                      << " packets" << std::endl;
             retryTimes++;
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
-            BOOST_CHECK(retryTimes < 100);
         }
+        BOOST_CHECK(consumerFinished.wait_for(std::chrono::milliseconds(0)) ==
+                    std::future_status::ready);
 
         BOOST_CHECK_EQUAL(recvPacketCnt, totalPacketNum);
+        BOOST_CHECK_EQUAL(decodeFailures, 0);
         BOOST_CHECK_EQUAL(recvBufferSize, messageBuilder.sendBufferSize());
 
-        // Teardown: a read is still parked in the fake. Swap in a tolerant message handler
-        // first — failing the parked read drops the session, and the teardown notification
-        // would otherwise reach the strict handler above with a Disconnect error — then let the
-        // fake fail the read and wait for the read loop to unwind completely before nulling
+        // Teardown: a read is still parked in the fake. Failing it drops the session and closes
+        // the (already drained) recv channel; in pull mode there is no handler to swap out — the
+        // consumer has normally exited already, and on the shortfall path it exits now with the
+        // teardown NetworkException. Wait for the read loop to unwind completely before nulling
         // the socket.
-        session->setMessageHandler([](NetworkException, FakeSession::Ptr, FrameMeta) {});
+        fakeAsio->stopReads();
+        size_t drainRetry = 0;
+        while (fakeAsio->readsInFlight() != 0 && drainRetry < 200)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            drainRetry++;
+        }
+        BOOST_REQUIRE_EQUAL(fakeAsio->readsInFlight(), 0);
+
+        // Shortfall path: the consumer only exits once the drop above closes the channel — wait
+        // (bounded) so its captured references cannot outlive this scope.
+        if (consumerFinished.wait_for(std::chrono::seconds(10)) != std::future_status::ready)
+        {
+            BOOST_FAIL("consumer coroutine did not exit");
+        }
+        session->setSocket(nullptr);
+    }
+
+    fakeSocket->close();
+}
+
+BOOST_AUTO_TEST_CASE(recvQueueFullParksReadLoopInsteadOfDropping)
+{
+    // Backpressure: with no consumer draining, the read loop decodes frames until the recv
+    // queue hits MAX_RECV_QUEUE_FRAMES, then PARKS in waitWritable() — a slow consumer is not a
+    // dead peer, so the session must stay active (the v1 policy dropped it with
+    // drop(UserReason)). Once the consumer starts draining, delivery resumes and every queued
+    // plus still-undelivered frame arrives.
+    constexpr std::size_t totalPacketNum = FakeSession::MAX_RECV_QUEUE_FRAMES + 76;
+    FakeMessagesBuilder messageBuilder(totalPacketNum);
+    auto fakeSocket = std::make_shared<FakeSocket>();
+    auto fakeAsio = std::make_shared<FakeASIO>();
+    {
+        auto fakeHost = std::make_shared<FakeHost<FakeSocket>>(fakeAsio, nullptr);
+
+        // Same arrangement as doReadTest: a forced-tiny initial buffer so the growth path runs.
+        auto session = std::make_shared<FakeSession>(fakeSocket, *fakeHost, 16, true);
+
+        session->startWithPolicy<FakeASIO::ReadPolicy>();
+
+        // Feed every packet up front; no consumer is running yet.
+        while (auto packet = messageBuilder.nextPacket())
+        {
+            std::static_pointer_cast<FakeASIO>(fakeHost->asioInterface())
+                ->asyncAppendRecvPacket(packet);
+        }
+
+        // The park is observable as readsInFlight() == 0: a read parked in the fake holds the
+        // counter at 1, and the re-arm happens before the completing read unwinds, so only a
+        // waitWritable() park (or a dead loop) leaves it at 0 — with packets still undelivered
+        // in the fake, a dead loop would fail the active() check below.
+        size_t parkRetry = 0;
+        while (fakeAsio->readsInFlight() != 0 && parkRetry < 1000)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            parkRetry++;
+        }
+        BOOST_REQUIRE_EQUAL(fakeAsio->readsInFlight(), 0);
+
+        // The key regression assertion: the session survives a full recv queue.
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        BOOST_CHECK(session->active());
+
+        // Pull-mode consumer, same pattern as doReadTest: drains exactly totalPacketNum frames
+        // and exits; the frame-count assertions run on the test thread afterwards.
+        std::atomic<size_t> recvPacketCnt = 0;
+        std::atomic<size_t> recvBufferSize = 0;
+        std::atomic<size_t> decodeFailures = 0;
+        std::promise<void> consumerDone;
+        auto consumerFinished = consumerDone.get_future();
+        task::wait([](FakeSession::Ptr _session, std::size_t _expected,
+                       std::atomic<size_t>& _recvPacketCnt, std::atomic<size_t>& _recvBufferSize,
+                       std::atomic<size_t>& _decodeFailures,
+                       std::promise<void>& _done) -> task::Task<void> {
+            struct DoneGuard
+            {
+                std::promise<void>& m_done;
+                ~DoneGuard()
+                {
+                    try
+                    {
+                        m_done.set_value();
+                    }
+                    catch (...)
+                    {}
+                }
+            } const guard{_done};
+            try
+            {
+                for (std::size_t i = 0; i < _expected; ++i)
+                {
+                    auto meta = co_await _session->recvMessage();
+                    Message message;
+                    if (message.decode(meta.frameData()) <= 0 || message.lengthDirect() <= 0)
+                    {
+                        ++_decodeFailures;
+                        continue;
+                    }
+                    _recvBufferSize += message.lengthDirect();
+                    ++_recvPacketCnt;
+                }
+            }
+            catch (NetworkException& e)
+            {
+                // channel closed (session dropped) before every frame arrived
+                std::cout << "consumer exit: " << errorCodeOf(e) << " " << e.what() << std::endl;
+            }
+            catch (...)
+            {}
+        }(session, totalPacketNum, recvPacketCnt, recvBufferSize, decodeFailures, consumerDone));
+
+        size_t retryTimes = 0;
+        while (consumerFinished.wait_for(std::chrono::milliseconds(500)) !=
+                   std::future_status::ready &&
+               retryTimes < 100)
+        {
+            retryTimes++;
+        }
+        BOOST_REQUIRE(consumerFinished.wait_for(std::chrono::milliseconds(0)) ==
+                      std::future_status::ready);
+
+        // Delivery resumed out of the park and nothing was lost: every frame arrived and the
+        // session is still alive after the whole stall.
+        BOOST_CHECK_EQUAL(recvPacketCnt, totalPacketNum);
+        BOOST_CHECK_EQUAL(decodeFailures, 0);
+        BOOST_CHECK_EQUAL(recvBufferSize, messageBuilder.sendBufferSize());
+        BOOST_CHECK(session->active());
+
+        // Teardown, same as doReadTest: fail the parked read so the loop unwinds before the
+        // socket is nulled.
         fakeAsio->stopReads();
         size_t drainRetry = 0;
         while (fakeAsio->readsInFlight() != 0 && drainRetry < 200)
@@ -499,8 +676,30 @@ BOOST_AUTO_TEST_CASE(startUsesDefaultReadPolicy)
         auto fakeHost = std::make_shared<FakeHost<FakeSocket>>(fakeAsio, nullptr);
 
         auto session = std::make_shared<FakeSession>(fakeSocket, *fakeHost, 2, true);
-        // Tolerant handler: the read error drops the session, and the drop notifies.
-        session->setMessageHandler([](NetworkException, FakeSession::Ptr, FrameMeta) {});
+
+        // Pull-mode consumer: the read error drops the session, and the drop closes the recv
+        // channel, so the parked recvMessage() rethrows the teardown NetworkException. The
+        // observed error code goes back through the promise — the coroutine resumes on the
+        // fake's pool thread, where Boost.Test assertions are not thread-safe.
+        std::promise<int64_t> recvError;
+        auto recvErrorCode = recvError.get_future();
+        task::wait(
+            [](FakeSession::Ptr _session, std::promise<int64_t>& _recvError) -> task::Task<void> {
+                try
+                {
+                    (void)co_await _session->recvMessage();
+                    // a decoded frame instead of the teardown error: sentinel, fails the assert
+                    _recvError.set_value(P2PExceptionType::Success);
+                }
+                catch (NetworkException& e)
+                {
+                    _recvError.set_value(errorCodeOf(e));
+                }
+                catch (...)
+                {
+                    _recvError.set_value(-1);
+                }
+            }(session, recvError));
 
         session->start();  // production entry — NOT startWithPolicy<>
 
@@ -511,6 +710,12 @@ BOOST_AUTO_TEST_CASE(startUsesDefaultReadPolicy)
             retryTimes++;
         }
         BOOST_CHECK(!session->active());
+
+        // The consumer's resume is posted to the fake's pool, so the error code arrives
+        // asynchronously — wait (bounded) for it before asserting.
+        BOOST_REQUIRE(
+            recvErrorCode.wait_for(std::chrono::seconds(10)) == std::future_status::ready);
+        BOOST_CHECK_EQUAL(recvErrorCode.get(), P2PExceptionType::Disconnect);
         // drop() captured the socket into a local shared_ptr before clearing m_active, so the
         // socket can be nulled as soon as the session is inactive (same teardown as doReadTest).
         session->setSocket(nullptr);
@@ -519,7 +724,7 @@ BOOST_AUTO_TEST_CASE(startUsesDefaultReadPolicy)
     fakeSocket->close();
 }
 
-BOOST_AUTO_TEST_CASE(fastSendMessageOutboundRateLimit)
+BOOST_AUTO_TEST_CASE(sendMessageOutboundRateLimit)
 {
     // The fast path must honour the same pre-send (outgoing rate-limit) check the removed callback
     // path (asyncSendMessage) enforced: a beforeMessageHandler rejection surfaces as a thrown
@@ -608,7 +813,7 @@ public:
     }
 };
 
-BOOST_AUTO_TEST_CASE(fastSendMessageCompression)
+BOOST_AUTO_TEST_CASE(sendMessageCompression)
 {
     // The COMPRESS ext flag is stamped only onto the encoded wire header inside
     // P2PSession::fastSendP2PMessage: the caller's message is never mutated, so a reused message
@@ -966,7 +1171,7 @@ BOOST_AUTO_TEST_CASE(fastSendBroadcastFanoutMixedVersion)
 BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
 {
     // Regression for the per-session write ordering guarantee: the write path must serialize
-    // concurrent producers. N threads call fastSendMessage concurrently and the single-writer
+    // concurrent producers. N threads call sendMessage concurrently and the single-writer
     // write loop (Session::writeLoop, guarded by the m_writingInFlight single-flight flag) must
     // put a complete, non-interleaved frame for every message on the wire — if the serialization
     // were ever broken, frames would be torn or interleaved. Uses a real loopback connection
@@ -1057,9 +1262,10 @@ BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
                         static_cast<uint32_t>(headerBuffer.size() + payload.size()));
                     try
                     {
-                        task::syncWait(session->fastSendMessage(bcos::ref(headerBuffer),
-                            ::ranges::views::single(bcos::ref(std::as_const(payload))),
-                            message.seq(), Options{}));
+                        task::syncWait(session->sendMessage(
+                            ::ranges::views::concat(
+                                ::ranges::views::single(bcos::ref(headerBuffer)),
+                                ::ranges::views::single(bcos::ref(std::as_const(payload))))));
                     }
                     catch (std::exception const&)
                     {
@@ -1098,7 +1304,7 @@ BOOST_AUTO_TEST_CASE(fastSendConcurrentWriteOrder)
         }
 
         peerDone = true;
-        // Unblock the peer thread's read (same teardown shape as fastSendMessageCompression).
+        // Unblock the peer thread's read (same teardown shape as sendMessageCompression).
         session->disconnect(DisconnectReason::DisconnectRequested);
 
         // The session's read is parked in the fake ASIO (not on the real socket), so the
@@ -1335,7 +1541,7 @@ BOOST_AUTO_TEST_CASE(SessionRecvBufferTakeStorageTest)
     auto writeBuffer = recvBuffer.asWriteBuffer();
     for (std::size_t i = 0; i < prefixLen + frameLen + tailLen; ++i)
     {
-        const_cast<byte*>(writeBuffer.data())[i] = static_cast<byte>(i);
+        writeBuffer.data()[i] = static_cast<byte>(i);
     }
     BOOST_REQUIRE(recvBuffer.onWrite(prefixLen + frameLen + tailLen));
     BOOST_REQUIRE(recvBuffer.onRead(prefixLen));  // consume the prefix
@@ -1425,55 +1631,58 @@ BOOST_AUTO_TEST_CASE(largeFrameTakesReceiveBuffer)
             uint32_t frameOffset;
             std::size_t storageSize;
         };
-        std::mutex x_received;
-        std::vector<Received> received;
-        session->setMessageHandler(
-            [&](NetworkException e, FakeSession::Ptr, FrameMeta meta) {
-                if (errorCodeOf(e) != 0)
+        // The consumer coroutine hands the collected frames back through the promise: its
+        // resumptions are posted onto the fake's pool thread, so completion is asynchronous and
+        // the assertions below run on the test thread.
+        std::promise<std::vector<Received>> receivedPromise;
+        auto receivedFuture = receivedPromise.get_future();
+
+        // Pull-mode consumer: receive exactly the three frames. If the session is dropped first,
+        // the channel close rethrows the teardown NetworkException and the coroutine hands back
+        // the shortfall — the size assertion below reports it.
+        task::wait([](FakeSession::Ptr _session, std::size_t _expected,
+                       std::promise<std::vector<Received>>& _received) -> task::Task<void> {
+            std::vector<Received> received;
+            try
+            {
+                for (std::size_t i = 0; i < _expected; ++i)
                 {
-                    return;
+                    auto meta = co_await _session->recvMessage();
+                    auto data = meta.frameData();
+                    received.push_back(Received{
+                        bytes(data.begin(), data.end()), meta.frameOffset, meta.frame.size()});
                 }
-                auto data = meta.frameData();
-                std::lock_guard lock(x_received);
-                received.push_back(Received{
-                    bytes(data.begin(), data.end()), meta.frameOffset, meta.frame.size()});
-            });
+            }
+            catch (NetworkException& e)
+            {
+                std::cout << "consumer exit: " << errorCodeOf(e) << " " << e.what() << std::endl;
+            }
+            catch (...)
+            {}
+            try
+            {
+                _received.set_value(std::move(received));
+            }
+            catch (...)
+            {}
+        }(session, 3, receivedPromise));
         session->startWithPolicy<FakeASIO::ReadPolicy>();
 
         fakeAsio->asyncAppendRecvPacket(stream);
 
         size_t retryTimes = 0;
-        while (true)
+        while (receivedFuture.wait_for(std::chrono::milliseconds(10)) !=
+                   std::future_status::ready &&
+               retryTimes < 500)
         {
-            {
-                std::lock_guard lock(x_received);
-                if (received.size() == 3)
-                {
-                    break;
-                }
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            BOOST_REQUIRE(++retryTimes < 500);
+            ++retryTimes;
         }
+        BOOST_CHECK(receivedFuture.wait_for(std::chrono::milliseconds(0)) ==
+                    std::future_status::ready);
 
-        {
-            std::lock_guard lock(x_received);
-            BOOST_REQUIRE_EQUAL(received.size(), 3);
-            BOOST_CHECK(received[0].frame == frameA);
-            BOOST_CHECK(received[1].frame == frameB);
-            BOOST_CHECK(received[2].frame == frameC);
-            // A and C took the copy path: storage is exactly the frame
-            BOOST_CHECK_EQUAL(received[0].frameOffset, 0);
-            BOOST_CHECK_EQUAL(received[0].storageSize, frameA.size());
-            BOOST_CHECK_EQUAL(received[2].frameOffset, 0);
-            BOOST_CHECK_EQUAL(received[2].storageSize, frameC.size());
-            // B took the buffer: storage = A's consumed prefix + B, tail (C) truncated away
-            BOOST_CHECK_EQUAL(received[1].frameOffset, frameA.size());
-            BOOST_CHECK_EQUAL(received[1].storageSize, frameA.size() + frameB.size());
-        }
-
-        // Teardown (same as doReadTest): tolerant handler, then unwind the parked read.
-        session->setMessageHandler([](NetworkException, FakeSession::Ptr, FrameMeta) {});
+        // Teardown (same as doReadTest): unwind the parked read. Pull mode has no handler to
+        // swap out — the consumer has normally exited already; on the shortfall path the drop
+        // below closes the channel and the consumer exits with the teardown NetworkException.
         fakeAsio->stopReads();
         size_t drainRetry = 0;
         while (fakeAsio->readsInFlight() != 0 && drainRetry < 200)
@@ -1482,7 +1691,28 @@ BOOST_AUTO_TEST_CASE(largeFrameTakesReceiveBuffer)
             drainRetry++;
         }
         BOOST_REQUIRE_EQUAL(fakeAsio->readsInFlight(), 0);
+
+        // Shortfall path: the consumer only exits once the drop above closes the channel — wait
+        // (bounded) so its captured references cannot outlive this scope.
+        if (receivedFuture.wait_for(std::chrono::seconds(10)) != std::future_status::ready)
+        {
+            BOOST_FAIL("consumer coroutine did not exit");
+        }
+        auto received = receivedFuture.get();
         session->setSocket(nullptr);
+
+        BOOST_REQUIRE_EQUAL(received.size(), 3);
+        BOOST_CHECK(received[0].frame == frameA);
+        BOOST_CHECK(received[1].frame == frameB);
+        BOOST_CHECK(received[2].frame == frameC);
+        // A and C took the copy path: storage is exactly the frame
+        BOOST_CHECK_EQUAL(received[0].frameOffset, 0);
+        BOOST_CHECK_EQUAL(received[0].storageSize, frameA.size());
+        BOOST_CHECK_EQUAL(received[2].frameOffset, 0);
+        BOOST_CHECK_EQUAL(received[2].storageSize, frameC.size());
+        // B took the buffer: storage = A's consumed prefix + B, tail (C) truncated away
+        BOOST_CHECK_EQUAL(received[1].frameOffset, frameA.size());
+        BOOST_CHECK_EQUAL(received[1].storageSize, frameA.size() + frameB.size());
     }
 
     fakeSocket->close();

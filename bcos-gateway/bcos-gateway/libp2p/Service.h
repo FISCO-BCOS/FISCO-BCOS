@@ -13,14 +13,19 @@
 #include "bcos-framework/protocol/ProtocolInfoCodec.h"
 #include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
+#include "bcos-gateway/libp2p/PendingResponse.h"
+#include <bcos-task/Channel.h>
 #include <bcos-task/Task.h>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <range/v3/view/any_view.hpp>
 #include <array>
+#include <atomic>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <shared_mutex>
+#include <vector>
 
 
 namespace bcos::gateway
@@ -29,6 +34,15 @@ class Gateway;
 class RouterTableFactory;
 class RouterTableInterface;
 class P2PPeerIdentity;
+
+// One inbound message delivered to a subscribe() consumer: the decoded message plus the
+// session it arrived on (needed to reply / identify the peer).
+struct InboundMessage
+{
+    P2PSession::Ptr session;
+    Message message;
+};
+using InboundChannel = task::Channel<InboundMessage>;
 
 class Service : public std::enable_shared_from_this<Service>
 {
@@ -107,8 +121,42 @@ public:
     // the generic Host; updatePeerBlacklist/updatePeerWhitelist update them through this pointer.
     void setPeerIdentity(std::shared_ptr<P2PPeerIdentity> _peerIdentity);
 
+    // Node-wide message seq allocator (was Host::newSeq before correlation moved up from
+    // libnetwork). Seqs key m_pendingResponses, whose scope is this whole node — a routed
+    // response can arrive on any session — so the allocator is Service-wide and monotonic.
     virtual uint32_t newSeq();
 
+    // --- request/response correlation (the pending-request table m_pendingResponses) ---
+    // P2PSession::fastSendP2PMessage registers before sending; the receive path claims.
+    bool registerPendingResponse(uint32_t _seq, PendingResponse::Ptr _pending);
+    // Atomically erase and return the entry (nullptr when already settled) — the exactly-once
+    // primitive for ack / timeout / disconnect-flush / stop-flush / write-failure reclaim.
+    PendingResponse::Ptr claimPendingResponse(uint32_t _seq);
+    // Timeout timer handler: fail the waiter with NetworkTimeout when its seq is still pending.
+    void onResponseTimeout(uint32_t _seq);
+    // Settle a response frame addressed to this node (dispatched from the session message
+    // handler after Message::peekResponseFrameInfo). Completes the waiter inline — the handler
+    // already runs on a posted pool task, matching the old claimResponse threading.
+    void onResponseFrame(uint32_t _seq, Session::Ptr const& _session, FrameMeta _meta);
+    // Fail every pending request whose outbound session is the given one (session drop: the old
+    // Session::drop flush, moved up with the correlation table). A request is failed when its
+    // OUTBOUND session dies even though a routed response could in principle arrive on another
+    // session — preserving the old fail-fast-on-drop semantics.
+    void failPendingResponsesOf(Session::Ptr const& _session, NetworkException _error);
+    // Fail every pending request (Service::stop: no waiter may outlive the service).
+    void failAllPendingResponses(NetworkException _error);
+
+private:
+    // Shared settlement for the two flushes: cancel each entry's timeout and complete its
+    // waiter. Completions are POSTED to the shared pool while the network is up — drop() is
+    // reachable from a sender's own await_suspend, where resuming the waiter inline is UB, and
+    // onDisconnect runs on the dedicated single-thread teardown executor (FIB-186 vector D),
+    // which a burst of waiter continuations must not occupy — and run inline once the host is
+    // gone (a posted task would never run then; the old postCallback fallback).
+    void settleClaimedPending(
+        std::vector<PendingResponse::Ptr> _pendings, NetworkException const& _error);
+
+public:
     std::shared_ptr<bcos::crypto::KeyFactory> keyFactory();
 
     void setKeyFactory(std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory);
@@ -135,6 +183,21 @@ public:
     MessageHandler getMessageHandlerByMsgType(uint16_t _type);
 
     virtual void eraseHandlerByMsgType(uint16_t _type);
+
+    // Default per-type inbound queue depth for subscribe().
+    constexpr static std::size_t DEFAULT_INBOUND_QUEUE_SIZE = 1024;
+
+    // Pull-mode inbound subscription: one bounded channel per message type. The receive pump of
+    // every session pushes matching inbound messages here; the consumer drains the channel with
+    // `co_await channel->recv()` and chooses its own execution context through `poster` (where
+    // the parked consumer resumes). A full channel drops the message for THIS type only (logged)
+    // — a slow consumer must not take down the whole session. Channels are closed by stop(),
+    // which wakes the consumer's recv() with a NetworkException. Subscribing a type shadows the
+    // legacy registerHandlerByMsgType callback for that type (the pump prefers the channel).
+    std::shared_ptr<InboundChannel> subscribe(uint16_t _type, InboundChannel::Poster _poster,
+        std::size_t _capacity = DEFAULT_INBOUND_QUEUE_SIZE);
+    // The channel currently subscribed for _type, nullptr when none (lookup only, no creation).
+    std::shared_ptr<InboundChannel> inboundChannel(uint16_t _type) const;
 
     void setOnMessageHandler(
         std::function<std::optional<bcos::Error>(Session::Ptr, const Message&)> _handler);
@@ -166,6 +229,18 @@ protected:
     virtual void callDeleteSessionHandlers(const P2PSession::Ptr& _session);
 
 private:
+    // Pull-mode receive pumps. acceptPump drains Host::acceptSession() into onConnect;
+    // receiveLoop drains one session's recvMessage() into response correlation, the inbound
+    // filters, router forwarding and the per-type subscribe() channels (falling back to the
+    // legacy m_msgHandlers callback for types without a channel). A receiveLoop exits when the
+    // session's channel is closed (drop), and its exit path IS the disconnect handling.
+    task::Task<void> acceptPump();
+    task::Task<void> receiveLoop(P2PSession::Ptr _p2pSession);
+    // Shared teardown of a dead session: stop it (idempotent) and run onDisconnect. Called from
+    // receiveLoop's exit path and from onConnect's early-reject branches (self / duplicate peer)
+    // — the losing session never gets a pump, so its teardown is run inline here.
+    void teardownSession(NetworkException _e, P2PSession::Ptr _p2pSession);
+
     // Optional router (RIP) module, present only when constructed with a RouterTableFactory
     // (merged from the former ServiceV2 subclass). All router state lives behind the RouterState
     // pimpl so Service.h carries no router/timer headers; definitions in ServiceRouter.cpp.
@@ -223,6 +298,10 @@ protected:
     std::map<NodeIPEndpoint, P2pID> m_staticNodes;
     std::shared_mutex x_nodes;
     P2PHost::Ptr m_host;
+    // Node-level pending-request table (see PendingResponse.h) and its seq source. Both are
+    // Service-scoped: a routed response can arrive on any session of this node.
+    PendingResponseTable m_pendingResponses;
+    std::atomic<uint32_t> m_seq{1};
     // cert black/white-list admission lists (owned by the P2P identity object); null in tests
     // that never wire one — updatePeerBlacklist/Whitelist then skip the list update
     std::shared_ptr<P2PPeerIdentity> m_peerIdentity;
@@ -237,6 +316,13 @@ protected:
     bool m_run = false;
 
     std::array<MessageHandler, bcos::gateway::GatewayMessageType::All> m_msgHandlers{};
+
+    // Per-type pull channels (subscribe()). A type with a channel is dispatched there by the
+    // receive pumps; a type without one falls back to m_msgHandlers. Guarded by x_channels —
+    // subscribe() creates lazily and may race a receive pump's lookup.
+    std::array<std::shared_ptr<InboundChannel>, bcos::gateway::GatewayMessageType::All>
+        m_channels{};
+    mutable std::mutex x_channels;
 
     // the local protocol
     bcos::protocol::ProtocolInfo::ConstPtr m_localProtocol;
@@ -271,6 +357,7 @@ protected:
 #include <boost/container/small_vector.hpp>
 #include <boost/throw_exception.hpp>
 #include <range/v3/view/all.hpp>
+#include <range/v3/view/concat.hpp>
 #include <range/v3/view/single.hpp>
 #include <utility>
 
@@ -377,27 +464,133 @@ task::Task<std::optional<Message>> P2PSession::fastSendP2PMessage(
     }
 
     // headerBuffer / joinedPayload / compressedPayload live in this coroutine frame; the co_await
-    // keeps them alive until the session's write no longer references the views.
-    std::optional<FrameMeta> response;
-    if (hasWirePayloadOverride)
+    // keeps them alive until the session's write no longer references the views. The session send
+    // is pure frame transport: it returns false only when the session was already inactive (the
+    // old nullopt outcome) and throws NetworkException on a write failure — it knows nothing
+    // about responses, so the correlation below is orchestrated here against the Service-level
+    // pending-request table.
+    if (!options.response)
     {
-        response = co_await m_session->fastSendMessage(
-            ref(headerBuffer), ::ranges::views::single(wirePayloadOverride), message.seq(),
-            options);
+        if (hasWirePayloadOverride)
+        {
+            co_await m_session->sendMessage(
+                ::ranges::views::concat(::ranges::views::single(ref(headerBuffer)),
+                    ::ranges::views::single(wirePayloadOverride)));
+        }
+        else
+        {
+            co_await m_session->sendMessage(::ranges::views::concat(
+                ::ranges::views::single(ref(headerBuffer)), ::ranges::views::all(payloadRefs)));
+        }
+        co_return std::nullopt;
     }
-    else
+
+    // options.response: register the pending request BEFORE sending — the ack may arrive (on ANY
+    // session of this node, for a routed response) immediately after the write hits the wire. The
+    // result slot lives in this coroutine frame; the registered callback's reference into it stays
+    // valid because every settlement path (ack / timeout / disconnect-flush / stop-flush /
+    // write-failure reclaim) claims the table entry — destroying the callback — before or while
+    // completing it, and this frame outlives the wait below.
+    auto seq = message.seq();
+    typename task::GetResultAwaitable<NetworkException, std::optional<FrameMeta>>::Result result;
+    auto pending = std::make_shared<PendingResponse>();
+    pending->callback = [&result](NetworkException exception, std::optional<FrameMeta> responseFrame) {
+        task::GetResultAwaitable<NetworkException, std::optional<FrameMeta>>::complete(
+            result, std::move(exception), std::move(responseFrame));
+    };
+    pending->owner = m_session;
+    if (options.timeout > 0)
     {
-        response = co_await m_session->fastSendMessage(
-            ref(headerBuffer), ::ranges::views::all(payloadRefs), message.seq(), options);
+        // the timeout timer rides the shared pool — the same executor the old Session-level
+        // response timer used
+        pending->timeoutHandler.emplace(
+            m_session->host().asioInterface()->newTimer(options.timeout));
+        std::weak_ptr<Service> weakService = service;
+        pending->timeoutHandler->async_wait(
+            [weakService, seq](const boost::system::error_code& error) {
+                if (error)
+                {
+                    return;  // cancelled when the entry was settled
+                }
+                if (auto lockedService = weakService.lock())
+                {
+                    lockedService->onResponseTimeout(seq);
+                }
+            });
     }
-    if (!response)
+    if (!service->registerPendingResponse(seq, pending))
+    {
+        // duplicate seq: unreachable with the Service-wide monotonic allocator — fail loudly
+        // instead of waiting on a response that would claim somebody else's entry
+        BOOST_THROW_EXCEPTION(makeNetworkException(-1, "duplicate pending response seq"));
+    }
+    try
+    {
+        bool sent;
+        if (hasWirePayloadOverride)
+        {
+            sent = co_await m_session->sendMessage(
+                ::ranges::views::concat(::ranges::views::single(ref(headerBuffer)),
+                    ::ranges::views::single(wirePayloadOverride)));
+        }
+        else
+        {
+            sent = co_await m_session->sendMessage(
+                ::ranges::views::concat(::ranges::views::single(ref(headerBuffer)),
+                    ::ranges::views::all(payloadRefs)));
+        }
+        if (!sent)
+        {
+            // the session went inactive before the write: no ack can arrive — reclaim the
+            // registration and report "no response" exactly like the old early-nullopt path
+            if (auto claimed = service->claimPendingResponse(seq); claimed && claimed->timeoutHandler)
+            {
+                claimed->timeoutHandler->cancel();
+            }
+            co_return std::nullopt;
+        }
+    }
+    catch (NetworkException& e)
+    {
+        // Write failed: no ack can arrive. Claim the registration back — unless a concurrent
+        // ack/timeout/disconnect-flush already settled it, in which case the wait below returns
+        // that result inline. Either way the callback never outlives this frame.
+        if (auto claimed = service->claimPendingResponse(seq))
+        {
+            if (claimed->timeoutHandler)
+            {
+                claimed->timeoutHandler->cancel();
+            }
+            task::GetResultAwaitable<NetworkException, std::optional<FrameMeta>>::complete(
+                result, e, std::nullopt);
+        }
+    }
+    catch (...)
+    {
+        // non-network throw (e.g. allocation failure): reclaim so no dangling callback into this
+        // frame's result slot survives, then rethrow
+        if (auto claimed = service->claimPendingResponse(seq); claimed && claimed->timeoutHandler)
+        {
+            claimed->timeoutHandler->cancel();
+        }
+        throw;
+    }
+
+    // wait for ack / timeout / disconnect-flush (returns inline when already completed above)
+    auto [exception, responseFrame] =
+        co_await task::GetResultAwaitable<NetworkException, std::optional<FrameMeta>>(result);
+    if (errorCodeOf(exception) != 0)
+    {
+        BOOST_THROW_EXCEPTION(exception);
+    }
+    if (!responseFrame)
     {
         co_return std::nullopt;
     }
-    // Decode the response frame back into a Message (the session delivers raw frames now).
+    // Decode the response frame back into a Message (the session delivers raw frames).
     // decodeOwned takes over the frame storage: the payload becomes a view instead of a copy.
     Message respMessage;
-    if (respMessage.decodeOwned(std::move(response->frame), response->frameOffset) < 0) [[unlikely]]
+    if (respMessage.decodeOwned(std::move(responseFrame->frame), responseFrame->frameOffset) < 0) [[unlikely]]
     {
         BOOST_THROW_EXCEPTION(makeNetworkException(
             P2PExceptionType::ProtocolError, "ProtocolError(decode response message error)"));

@@ -13,17 +13,19 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief Pins the host-wide seq uniqueness invariant that Host::newSeq() relies on.
- * @file HostNewSeqUniquenessTest.cpp
- * @date 2026-09-14
+ * @brief Pins the Service-wide seq uniqueness invariant that Service::newSeq() relies on.
+ * @file ServiceNewSeqUniquenessTest.cpp
+ * @date 2026-09-28
  *
- * SessionCallbackManager is shared by every session of one Host, and a routed response can be
- * claimed on a different session than the request went out on, so response-matching seqs must be
- * unique host-wide — a per-session (or per-Service) counter would collide in the shared callback
- * map. These tests go RED if the allocator is ever moved back to a per-session/per-Service scope.
+ * Service's pending-request table (libp2p/PendingResponse.h) is keyed by seq and scoped to the
+ * whole node — a routed response can arrive on any session of this node — so seqs drawn from one
+ * Service must never repeat while a request could still be in flight. These tests go RED if the
+ * allocator ever loses its Service-wide monotonicity. (The predecessor of this test pinned the
+ * HOST-wide invariant of the old libnetwork callback manager; when correlation moved up to
+ * libp2p the allocator moved with it. Two Services sharing one Host no longer share a seq space:
+ * each owns its own pending-request table, so cross-service uniqueness is not required.)
  */
 
-#include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
@@ -36,22 +38,32 @@ using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::test;
 
-BOOST_FIXTURE_TEST_SUITE(HostNewSeqUniquenessTest, TestPromptFixture)
+BOOST_FIXTURE_TEST_SUITE(ServiceNewSeqUniquenessTest, TestPromptFixture)
+
+namespace
+{
+std::shared_ptr<Service> newService()
+{
+    P2PInfo selfInfo;
+    selfInfo.rawP2pID = "selfRawP2pID";
+    selfInfo.p2pID = "selfP2pID";
+    return std::make_shared<Service>(selfInfo);
+}
+}  // namespace
 
 BOOST_AUTO_TEST_CASE(test_sequentialSeqsNeverRepeat)
 {
-    auto host = std::make_shared<P2PHost>(nullptr, nullptr);
+    auto service = newService();
     std::unordered_set<uint32_t> seqs;
     for (int i = 0; i < 1000; ++i)
     {
-        BOOST_TEST(seqs.insert(host->newSeq()).second);
+        BOOST_TEST(seqs.insert(service->newSeq()).second);
     }
-    host->stop();
 }
 
 BOOST_AUTO_TEST_CASE(test_concurrentSeqsNeverCollide)
 {
-    auto host = std::make_shared<P2PHost>(nullptr, nullptr);
+    auto service = newService();
     constexpr size_t kThreads = 8;
     constexpr size_t kDrawsPerThread = 500;
     std::atomic<bool> start{false};
@@ -67,7 +79,7 @@ BOOST_AUTO_TEST_CASE(test_concurrentSeqsNeverCollide)
                 draws[t].reserve(kDrawsPerThread);
                 for (size_t i = 0; i < kDrawsPerThread; ++i)
                 {
-                    draws[t].push_back(host->newSeq());
+                    draws[t].push_back(service->newSeq());
                 }
             });
         }
@@ -86,29 +98,6 @@ BOOST_AUTO_TEST_CASE(test_concurrentSeqsNeverCollide)
         }
     }
     BOOST_TEST(seqs.size() == kThreads * kDrawsPerThread);
-    host->stop();
-}
-
-// Two Services sharing one Host (each Service serves its own sessions) must still draw from the
-// same host-wide sequence — this is the topology a routed response relies on.
-BOOST_AUTO_TEST_CASE(test_seqUniqueAcrossServicesSharingOneHost)
-{
-    auto host = std::make_shared<P2PHost>(nullptr, nullptr);
-    P2PInfo selfInfo;
-    selfInfo.rawP2pID = "selfRawP2pID";
-    selfInfo.p2pID = "selfP2pID";
-    auto service1 = std::make_shared<Service>(selfInfo);
-    auto service2 = std::make_shared<Service>(selfInfo);
-    service1->setHost(host);
-    service2->setHost(host);
-
-    std::unordered_set<uint32_t> seqs;
-    for (int i = 0; i < 100; ++i)
-    {
-        BOOST_TEST(seqs.insert(service1->newSeq()).second);
-        BOOST_TEST(seqs.insert(service2->newSeq()).second);
-    }
-    host->stop();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

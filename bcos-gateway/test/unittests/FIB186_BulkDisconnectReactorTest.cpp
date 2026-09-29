@@ -14,31 +14,37 @@
  *  limitations under the License.
  *
  * @brief Mechanism confirmation for FIB-186 vector D (persistent bulk-disconnect halts consensus,
- *        never recovers). CertiK re-test of the merged admission-control fix (18f48cc7) found A/B
- *        (connect-close churn) fixed but D still permanently halts consensus.
+ *        never recovers), re-expressed for the pull-mode receive path. CertiK re-test of the
+ *        merged admission-control fix (18f48cc7) found A/B (connect-close churn) fixed but D
+ *        still permanently halting consensus.
  * @file FIB186_BulkDisconnectReactorTest.cpp
  * @date 2026-07-14
  *
- * Root cause (from code): every inbound P2P message delivery is
- *   Session readLoop -> Session::onMessage -> asioInterface()->post(...)  (Session.cpp: onMessage)
- * and, before the fix, every session teardown notification went to that SAME reactor. So message
- * delivery and teardown shared ONE pool. A bulk-disconnect of a large established session pool
- * floods that reactor with teardown work (each drop drives onDisconnect -> onRemoveNodeIDs ->
- * syncLatestNodeIDList), so validator PBFT messages are read off the socket but their delivery task
- * is starved behind teardown -- "validators miss each other's messages", the halt CertiK observed.
- * The accept-side admission control cannot touch this: it gates NEW connections before the
- * handshake, whereas D tears down ALREADY-established sessions.
+ * Root cause (from code): in the push-mode receive path every inbound P2P message delivery was
+ *   Session readLoop -> registered message handler -> asioInterface()->post(...)
+ * and every session teardown notification went to that SAME reactor, so message delivery and
+ * teardown shared ONE pool. A bulk-disconnect of a large established session pool flooded that
+ * reactor with teardown work (each drop drove onDisconnect -> onRemoveNodeIDs ->
+ * syncLatestNodeIDList), so validator PBFT messages were read off the socket but their delivery
+ * task starved behind teardown -- "validators miss each other's messages", the halt CertiK
+ * observed. The push-mode fix gave teardown its own dedicated executor.
  *
- * The fix routes the teardown notification through Host::postTeardown, which owns a dedicated
- * single-thread IOServicePool, while delivery stays on the shared pool. This test drives a real
- * Session::drop() flood whose teardown work blocks its executor, then submits a validator-delivery
- * task through the delivery reactor and asserts it is NOT starved.
+ * The pull-mode receive path removes that coupling structurally; the dedicated teardown executor
+ * no longer exists because the work it isolated no longer lands on any reactor:
+ *   - consumers pull frames with BasicSession::recvMessage() (the Service receive pump), parked
+ *     in the session's recv channel;
+ *   - Session::drop() only CLOSES that channel (Session.cpp drop): the parked consumer's wake-up
+ *     is handed to the channel poster, which posts it to the shared IO pool while the host is
+ *     alive — one cheap post per dropped session, and no per-session teardown task chain is
+ *     enqueued anywhere. The disconnect handling itself runs inside the consumer's own
+ *     continuation (its catch path), not as reactor tasks queued ahead of message delivery.
  *
- * NOTE on the 3.18.0 threading model: the fix originally used a dedicated ThreadPool("p2pTeardown",
- * 1); that class no longer exists, so it is now a dedicated IOServicePool(1, "p2pTeardown"). Same
- * property, and the one that matters here: teardown must have its OWN thread, not merely its own
- * queue. Serializing teardown onto a bcos::Strand over the shared pool would still round-robin onto
- * the delivery threads and this test would go red again -- which is exactly what it is for.
+ * This test drives a real Session::drop() flood over 8 sessions, each with a consumer coroutine
+ * parked in recvMessage(), and asserts the pull-mode equivalent of the vector-D guarantee:
+ *   (1) every parked consumer is woken and exits with the Disconnect error the channel was
+ *       closed with;
+ *   (2) a validator-delivery task submitted to the shared pool while the disconnect wake-ups
+ *       are queued or running is NOT starved.
  */
 
 #include "bcos-crypto/hash/Keccak256.h"
@@ -46,6 +52,7 @@
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PDecoder.h"
+#include "bcos-task/Wait.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <chrono>
@@ -67,13 +74,14 @@ BOOST_FIXTURE_TEST_SUITE(FIB186_BulkDisconnectReactorTest, TestPromptFixture)
 
 namespace
 {
-// Minimal ASIO fake: the teardown flood never runs a socket read, so no handler is needed.
+// Minimal ASIO fake: the disconnect flood never runs a socket read, so no handler is needed.
 class FakeASIO_Reactor : public bcos::gateway::ASIOInterface
 {
 public:
-    // Two delivery threads: wide enough that a single stuck task cannot explain a starved
-    // delivery, narrow enough that the teardown flood would definitely swamp it if teardown
-    // were still posted here.
+    // Two delivery threads: the disconnect wake-ups and the delivery task share this pool. Wide
+    // enough that a single stuck wake-up cannot explain a starved delivery, narrow enough that
+    // per-session teardown WORK enqueued here (the push-mode regression) would visibly delay the
+    // delivery task.
     FakeASIO_Reactor()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(2, "FIB186Reactor"), "0.0.0.0", 0)
     {}
@@ -81,7 +89,7 @@ public:
 };
 
 // Socket fake backed by a real SSL stream so drop()/closeSocket() can call sslref(); starts
-// disconnected so closeSocket() early-returns (this test exercises only the m_asyncGroup path).
+// disconnected so closeSocket() early-returns (this test exercises only the recv-channel path).
 class FakeSocket_Reactor
 {
 public:
@@ -112,8 +120,10 @@ private:
     NodeIPEndpoint m_nodeIPEndpoint;
 };
 
-// Host subclass with the network marked up, so Session::drop() takes the "hand the teardown
-// notification to Host::postTeardown" path rather than the shutdown-inline path.
+// Host subclass with the network marked up (m_run = true), so Session::drop() takes the
+// live-network path: the recv-channel poster posts each parked consumer's wake-up to the shared
+// pool instead of running it inline (haveNetwork() == false would run the wake inline on the
+// dropping thread).
 class FakeHost_Reactor : public bcos::gateway::Host<P2PDecoder, FakeSocket_Reactor>
 {
 public:
@@ -126,32 +136,33 @@ public:
 
 using Session_Reactor = BasicSession<P2PDecoder, FakeSocket_Reactor>;
 
-// Shared state, held by shared_ptr so a task that outlives the test body never dangles.
+// Shared state, held by shared_ptr so a coroutine or task that outlives the test body never
+// dangles.
 struct ReactorProbe
 {
-    std::atomic<int> teardownRunning{0};  // teardown tasks currently occupying a reactor worker
-    std::atomic<bool> release{false};     // gate that frees the occupying teardown tasks
-    std::atomic<bool> delivered{false};   // set when the validator-delivery task runs
-    std::atomic<int> done{0};             // total tasks completed (drain barrier)
+    std::atomic<int> parked{0};          // consumers parked in recvMessage()
+    std::atomic<int> disconnects{0};     // consumers woken by drop() with a Disconnect error
+    std::atomic<bool> delivered{false};  // set when the validator-delivery task runs
+    std::atomic<int> done{0};            // total completions (drain barrier)
 };
 }  // namespace
 
-// Vector D as a shared-reactor starvation: teardown of established sessions and PBFT message
-// delivery both run on Host::m_asyncGroup, so a teardown flood starves delivery.
+// Vector D in pull mode: a bulk disconnect must wake every consumer parked in recvMessage() with
+// the Disconnect error, and the flood of consumer wake-ups posted to the shared pool must not
+// starve consensus message delivery on that same pool.
 BOOST_AUTO_TEST_CASE(TeardownFloodMustNotStarveMessageDelivery)
 {
-    // The reactor width is pinned by FakeASIO_Reactor's own IOServicePool(2) rather than by a
-    // process-global TBB control, so "the flood would swamp the delivery reactor if it landed
-    // there" is deterministic and independent of the host core count.
+    // The pool width is pinned by FakeASIO_Reactor's own IOServicePool(2) rather than by a
+    // process-global control, so "the disconnect wake-ups and the delivery task share this pool"
+    // is deterministic and independent of the host core count.
     auto fakeAsio = std::make_shared<FakeASIO_Reactor>();
     auto fakeHost = std::make_shared<FakeHost_Reactor>(fakeAsio);
 
     auto probe = std::make_shared<ReactorProbe>();
 
-    // Each dropped session's teardown notification models the per-disconnect work a real
-    // bulk-disconnect produces (onDisconnect -> onRemoveNodeIDs -> syncLatestNodeIDList): it
-    // occupies a reactor worker until released. More sessions than possible workers guarantees
-    // every worker ends up in teardown.
+    // One consumer coroutine per session, parked in recvMessage() exactly like the Service
+    // receive pump (Service::receiveLoop). task::wait starts the coroutine synchronously, so the
+    // consumer is parked in the session's recv channel before task::wait returns.
     constexpr int floodCount = 8;
     std::vector<Session_Reactor::Ptr> sessions;
     sessions.reserve(floodCount);
@@ -159,41 +170,55 @@ BOOST_AUTO_TEST_CASE(TeardownFloodMustNotStarveMessageDelivery)
     {
         auto socket = std::make_shared<FakeSocket_Reactor>();
         auto session = std::make_shared<Session_Reactor>(socket, *fakeHost, 1024, true);
-        session->setMessageHandler([probe](NetworkException, Session_Reactor::Ptr, FrameMeta) {
-            probe->teardownRunning.fetch_add(1);
-            while (!probe->release.load())
-            {  // hold the reactor worker, as a batch of real teardowns would
+        task::wait([](Session_Reactor::Ptr _session,
+                       std::shared_ptr<ReactorProbe> _probe) -> task::Task<void> {
+            _probe->parked.fetch_add(1);
+            try
+            {
+                while (true)
+                {
+                    // This test never delivers a frame; only the teardown wake matters.
+                    [[maybe_unused]] auto meta = co_await _session->recvMessage();
+                }
             }
-            probe->done.fetch_add(1);
-        });
+            catch (NetworkException& e)
+            {
+                // The pull-mode teardown notification: drop() closed the recv channel with the
+                // disconnect error. This catch is mandatory — an exception escaping a
+                // task::wait'd coroutine is rethrown on the resuming pool thread.
+                if (errorCodeOf(e) == P2PExceptionType::Disconnect)
+                {
+                    _probe->disconnects.fetch_add(1);
+                }
+                _probe->done.fetch_add(1);
+                co_return;
+            }
+        }(session, probe));
         sessions.push_back(std::move(session));
     }
 
-    // Bulk-disconnect: each drop() hands its teardown notification to Host::postTeardown
-    // (Session.cpp drop). Before the fix this went to the same reactor message delivery uses.
+    // Every consumer parked before any drop: each drop below then takes the channel's
+    // posted-wake path — the one a real bulk disconnect exercises.
+    BOOST_REQUIRE_EQUAL(probe->parked.load(), floodCount);
+
+    // Bulk-disconnect: each drop() closes the session's recv channel, and the channel poster
+    // hands the parked consumer's wake-up to the shared pool (one post per session). No
+    // per-session teardown task chain is enqueued anywhere.
     for (auto& session : sessions)
     {
         session->drop(DisconnectReason::TCPError);
     }
 
-    // Wait until teardown occupies the reactor, then let any second worker also pick up a teardown
-    // task (there are more teardown tasks than workers), so no worker is left idle.
-    while (probe->teardownRunning.load() < 1)
-    {
-        std::this_thread::yield();
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
-
-    // A validator PBFT message delivery goes through the delivery reactor -- exactly what
-    // Session::onMessage does (`m_server.get().asioInterface()->post(...)`). Submit it now, with
-    // the teardown flood still occupying its executor.
+    // A validator PBFT message delivery is posted to the same shared pool (the Session message
+    // delivery path posts there). Submit it while the disconnect wake-ups are queued or running.
     fakeHost->asioInterface()->post([probe]() {
         probe->delivered.store(true);
         probe->done.fetch_add(1);
     });
 
-    // Grace window: a healthy node must deliver consensus messages far inside a PBFT round. If the
-    // reactor is shared, teardown holds every worker and delivery cannot run within the window.
+    // Grace window: a healthy node must deliver consensus messages far inside a PBFT round. A
+    // disconnect flood that enqueued per-session teardown WORK on this pool ahead of delivery
+    // (the push-mode regression) would delay the delivery task beyond the window.
     for (int i = 0; i < 50 && !probe->delivered.load(); ++i)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -201,18 +226,21 @@ BOOST_AUTO_TEST_CASE(TeardownFloodMustNotStarveMessageDelivery)
 
     bool deliveredDuringFlood = probe->delivered.load();
 
-    // Release the flood and drain every task so no lambda outlives this scope.
-    probe->release.store(true);
+    // Drain barrier: every parked consumer must have been woken with Disconnect, plus the
+    // delivery task, so no coroutine or lambda outlives this scope.
     for (int i = 0; i < 5000 && probe->done.load() < floodCount + 1; ++i)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
     BOOST_CHECK_MESSAGE(deliveredDuringFlood,
-        "FIB-186 vector D: a PBFT message delivery submitted during a session-teardown flood must "
-        "not be starved. If this fails, Session::drop() and Session::onMessage() are back on the "
-        "same reactor -- teardown occupies every worker and delivery never runs, halting "
-        "consensus. Teardown must stay on Host::postTeardown's dedicated executor.");
+        "FIB-186 vector D (pull mode): a PBFT message delivery submitted during a "
+        "bulk-disconnect flood must not be starved. The wake-ups drop() posts for parked "
+        "recvMessage() consumers share the delivery pool; if this fails, per-session teardown "
+        "work is back on the delivery pool ahead of consensus messages.");
+    BOOST_CHECK_MESSAGE(probe->disconnects.load() == floodCount,
+        "every consumer parked in recvMessage() must be woken by drop() with the Disconnect "
+        "error the recv channel was closed with");
     BOOST_CHECK_EQUAL(probe->done.load(), floodCount + 1);
 }
 

@@ -443,6 +443,9 @@ std::optional<Message::ResponseFrameInfo> Message::peekResponseFrameInfo(
 
     ResponseFrameInfo info;
     info.isResp = (ext & bcos::protocol::MessageExtFieldFlag::RESPONSE) != 0;
+    // seq (offset 8): inside the fixed base header, so in bounds whenever _frame passed the
+    // MESSAGE_HEADER_LENGTH check above
+    info.seq = boost::asio::detail::socket_ops::network_to_host_long(*((const uint32_t*)(data + 8)));
     if (!info.isResp || version <= static_cast<uint16_t>(bcos::protocol::ProtocolVersion::V0))
     {
         return info;

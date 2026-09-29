@@ -75,19 +75,20 @@ void Service::start()
     {
         m_run = true;
 
-        auto self = std::weak_ptr<Service>(shared_from_this());
-        // the IdentityToken Host hands over is the P2PInfo that the injected P2PPeerIdentity
-        // filled during the TLS handshake (libnetwork/PeerIdentity.h); a null token means no
-        // identity was extracted — onConnect rejects it
-        m_host->setConnectionHandler([self](NetworkException e, IdentityToken const& identity,
-                                         Session::Ptr session) {
-            auto service = self.lock();
-            if (service)
+        // Pull-mode inbound connection intake: drain Host::acceptSession() into onConnect. The
+        // pump holds a strong Service reference; Host::stop() (called from Service::stop())
+        // closes the accept channel, which ends the pump and releases it.
+        task::wait([](std::shared_ptr<Service> service) -> task::Task<void> {
+            try
             {
-                service->onConnect(std::move(e), P2PPeerIdentity::p2pInfoOf(identity),
-                    std::move(session));
+                co_await service->acceptPump();
             }
-        });
+            catch (std::exception const& e)
+            {
+                SERVICE_LOG(WARNING) << LOG_DESC("accept pump exit")
+                                     << LOG_KV("what", boost::diagnostic_information(e));
+            }
+        }(shared_from_this()));
         m_host->start();
 
         heartBeat();
@@ -95,6 +96,21 @@ void Service::start()
         {
             m_router->routerTimer->start();
         }
+    }
+}
+
+// The accept pump: one loop iteration per inbound connection. acceptSession() throws once the
+// host stops — that is the pump's normal exit.
+task::Task<void> Service::acceptPump()
+{
+    while (m_run)
+    {
+        auto conn = co_await m_host->acceptSession();
+        // The IdentityToken is the P2PInfo that the injected P2PPeerIdentity filled during the
+        // TLS handshake (libnetwork/PeerIdentity.h); a null token means no identity was
+        // extracted — onConnect rejects it
+        onConnect(NetworkException{}, P2PPeerIdentity::p2pInfoOf(conn.identity),
+            std::move(conn.session));
     }
 }
 
@@ -110,6 +126,24 @@ void Service::stop()
         if (m_timer)
         {
             m_timer->cancel();
+        }
+        // Fail every pending request/response waiter before the network goes down: once the host
+        // stops, no ack/timeout path is guaranteed to run and a waiter would hang. Completions
+        // are posted to the shared pool while it is still up (see failPendingResponsesOf).
+        failAllPendingResponses(
+            makeNetworkException(P2PExceptionType::NetworkTimeout, "ServiceStopped"));
+        // Close every inbound channel: parked subscribe() consumers wake with a NetworkException
+        // instead of hanging past the network teardown.
+        {
+            std::lock_guard lock(x_channels);
+            for (auto& channel : m_channels)
+            {
+                if (channel)
+                {
+                    channel->close(std::make_exception_ptr(makeNetworkException(
+                        P2PExceptionType::NetworkTimeout, "ServiceStopped")));
+                }
+            }
         }
         m_host->stop();
 
@@ -295,32 +329,101 @@ void Service::onConnect(NetworkException e, std::shared_ptr<P2PInfo> p2pInfo, Se
     p2pSession->setService(weak_from_this());
     p2pSession->setProtocolInfo(m_localProtocol);
 
-    auto p2pSessionWeakPtr = std::weak_ptr<P2PSession>(p2pSession);
-    // The session delivers raw frames (FrameMeta) now; decode them back into Messages here, at
-    // the libp2p boundary. A decode failure is delivered as a ProtocolError so the error path
-    // below drops the session — the same treatment the old in-session decode gave it.
-    p2pSession->session()->setMessageHandler(
-        [self = shared_from_this(), p2pSessionWeakPtr](
-            NetworkException exception, Session::Ptr session, FrameMeta meta) {
-            if (errorCodeOf(exception) != 0)
+    // Note: the lock must be here, otherwise there will be more than one started sessions,
+    // and a session not maintained in m_sessions will be choosed when send messages in some cases
+    // which will cause coredump
+    bool duplicated = false;
+    bool newSession = false;
+    {
+        std::unique_lock lock(x_sessions);
+        auto existedSession = getP2PSessionByNodeIdWithoutLock(p2pID);
+        if (existedSession && existedSession->active())
+        {
+            SERVICE_LOG(INFO) << "Disconnect duplicate peer" << LOG_KV("p2pid", printShortP2pID(p2pID))
+                              << LOG_KV("endpoint", peer);
+            updateStaticNodes(session->socket(), p2pID);
+            session->disconnect(DuplicatePeer);
+            duplicated = true;
+        }
+        else
+        {
+            p2pSession->start();
+            sendProtocol(p2pSession);
+            updateStaticNodes(session->socket(), p2pID);
+
+            if (existedSession)
             {
-                self->onMessage(exception, std::move(session), Message{}, p2pSessionWeakPtr);
-                return;
+                m_sessions[p2pID] = p2pSession;
             }
+            else
+            {
+                m_sessions.insert(std::make_pair(p2pID, p2pSession));
+                newSession = true;
+            }
+        }
+    }
+    if (duplicated)
+    {
+        // The losing session never gets a receive pump, so its teardown runs inline here (the
+        // old push-mode teardown notification reached onDisconnect asynchronously — running it
+        // after releasing x_sessions keeps that off-lock property).
+        teardownSession(
+            makeNetworkException(P2PExceptionType::DuplicateSession, "DuplicateSession"),
+            p2pSession);
+        return;
+    }
+    if (newSession)
+    {
+        callNewSessionHandlers(p2pSession);
+    }
+    SERVICE_LOG(INFO) << LOG_DESC("Connection established")
+                      << LOG_KV("p2pid", printShortP2pID(p2pID))
+                      << LOG_KV("shortP2pid", printShortP2pID(p2pInfo->p2pID))
+                      << LOG_KV("endpoint", session->nodeIPEndpoint());
+
+    // Start the pull-mode receive pump for the surviving session. The pump frame holds strong
+    // Service/P2PSession references; it exits when the session's channel closes (drop),
+    // releasing them.
+    task::wait([](std::shared_ptr<Service> self, P2PSession::Ptr _p2pSession) -> task::Task<void> {
+        co_await self->receiveLoop(std::move(_p2pSession));
+    }(shared_from_this(), p2pSession));
+}
+
+void Service::teardownSession(NetworkException _e, P2PSession::Ptr _p2pSession)
+{
+    _p2pSession->stop(UserReason);
+    onDisconnect(std::move(_e), std::move(_p2pSession));
+}
+
+// The per-session receive pump (pull mode): pulls decoded frames out of the session's
+// recvMessage() channel, correlates responses, decodes to Message and dispatches through
+// onMessage. The loop's exit IS the disconnect path: recvMessage() rethrows the
+// NetworkException the session's channel was closed with (drop / protocol error), and the
+// catch below performs what the push-mode teardown notification used to reach asynchronously.
+task::Task<void> Service::receiveLoop(P2PSession::Ptr _p2pSession)
+{
+    auto session = _p2pSession->session();
+    try
+    {
+        while (m_run)
+        {
+            auto meta = co_await session->recvMessage();
+
             // Response correlation is P2P policy, so it lives here rather than in libnetwork: a
             // response frame addressed to THIS node (or carrying no dstP2PNodeID, the V0 form)
-            // settles the pending request's callback; a frame addressed to another node falls
-            // through to the router like any other — a routed response must never consume a
-            // LOCAL pending callback on a seq collision. A malformed frame (nullopt) falls
-            // through too: Message::decode below rejects it as a ProtocolError.
+            // settles the pending request in the node-level table; a frame addressed to another
+            // node falls through to the router like any other — a routed response must never
+            // consume a LOCAL pending callback on a seq collision. A malformed frame (nullopt)
+            // falls through too: Message::decode below rejects it as a ProtocolError.
             auto respInfo = Message::peekResponseFrameInfo(meta.frameData());
             if (respInfo && respInfo->isResp &&
-                (respInfo->dstP2PNodeID.empty() || respInfo->dstP2PNodeID == self->m_nodeID ||
-                    respInfo->dstP2PNodeID == self->m_selfInfo.p2pID))
+                (respInfo->dstP2PNodeID.empty() || respInfo->dstP2PNodeID == m_nodeID ||
+                    respInfo->dstP2PNodeID == m_selfInfo.p2pID))
             {
-                session->claimResponse(exception, std::move(meta));
-                return;
+                onResponseFrame(respInfo->seq, session, std::move(meta));
+                continue;
             }
+
             Message message;
             // decode's bounds checks (checkOffset) throw out_of_range on a malformed frame;
             // treat that exactly like a decode error: ProtocolError drops the session below.
@@ -330,9 +433,8 @@ void Service::onConnect(NetworkException e, std::shared_ptr<P2PInfo> p2pInfo, Se
             {
                 if (message.decodeOwned(std::move(meta.frame), meta.frameOffset) >= 0) [[likely]]
                 {
-                    self->onMessage(
-                        exception, std::move(session), std::move(message), p2pSessionWeakPtr);
-                    return;
+                    onMessage(NetworkException{}, session, std::move(message), _p2pSession);
+                    continue;
                 }
             }
             catch (std::exception const& e)
@@ -340,47 +442,37 @@ void Service::onConnect(NetworkException e, std::shared_ptr<P2PInfo> p2pInfo, Se
                 SERVICE_LOG(WARNING) << LOG_DESC("decode message exception")
                                      << LOG_KV("msg", boost::diagnostic_information(e));
             }
-            self->onMessage(makeNetworkException(P2PExceptionType::ProtocolError,
-                                "ProtocolError(decode message error)"),
-                std::move(session), Message{}, p2pSessionWeakPtr);
-        });
-
-    // Note: the lock must be here, otherwise there will be more than one started sessions,
-    // and a session not maintained in m_sessions will be choosed when send messages in some cases
-    // which will cause coredump
-    std::unique_lock lock(x_sessions);
-    auto existedSession = getP2PSessionByNodeIdWithoutLock(p2pID);
-    if (existedSession && existedSession->active())
-    {
-        SERVICE_LOG(INFO) << "Disconnect duplicate peer" << LOG_KV("p2pid", printShortP2pID(p2pID))
-                          << LOG_KV("endpoint", peer);
-        updateStaticNodes(session->socket(), p2pID);
-        session->disconnect(DuplicatePeer);
-        return;
+            // decode failure: a ProtocolError teardown, the same treatment the old in-session
+            // decode gave it
+            BOOST_THROW_EXCEPTION(makeNetworkException(
+                P2PExceptionType::ProtocolError, "ProtocolError(decode message error)"));
+        }
     }
-    p2pSession->start();
-    sendProtocol(p2pSession);
-    updateStaticNodes(session->socket(), p2pID);
-
-    if (existedSession)
+    catch (NetworkException& e)
     {
-        m_sessions[p2pID] = p2pSession;
-        lock.unlock();
+        SERVICE_LOG(INFO) << LOG_DESC("receiveLoop exit, teardown session")
+                          << LOG_KV("p2pid", _p2pSession->printP2pID())
+                          << LOG_KV("code", errorCodeOf(e)) << LOG_KV("msg", e.what());
+        teardownSession(e, std::move(_p2pSession));
     }
-    else
+    catch (std::exception const& e)
     {
-        m_sessions.insert(std::make_pair(p2pID, p2pSession));
-        lock.unlock();
-        callNewSessionHandlers(p2pSession);
+        // never let an exception escape a detached pump
+        SERVICE_LOG(WARNING) << LOG_DESC("receiveLoop exception")
+                             << LOG_KV("what", boost::diagnostic_information(e));
+        teardownSession(makeNetworkException(P2PExceptionType::Disconnect, "Disconnect"),
+            std::move(_p2pSession));
     }
-    SERVICE_LOG(INFO) << LOG_DESC("Connection established")
-                      << LOG_KV("p2pid", printShortP2pID(p2pID))
-                      << LOG_KV("shortP2pid", printShortP2pID(p2pInfo->p2pID))
-                      << LOG_KV("endpoint", session->nodeIPEndpoint());
 }
 
 void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
 {
+    // Fail the pending requests whose request went out on the dropped session (the old
+    // Session::drop flush, moved up with the correlation table): a request is failed when its
+    // OUTBOUND session dies even though a routed response could in principle arrive on another
+    // session — preserving the old fail-fast-on-drop semantics.
+    failPendingResponsesOf(p2pSession->session(),
+        makeNetworkException(P2PExceptionType::NetworkTimeout, "NetworkTimeout"));
     // handle all registered handlers
     for (const auto& handler : m_disconnectionHandlers)
     {
@@ -665,6 +757,19 @@ void Service::onMessage(NetworkException e, Session::Ptr session, Message messag
         auto packetType = message.packetType();
         auto ext = message.ext();
         auto version = message.version();
+        auto seq = message.seq();
+        // Pull-mode dispatch wins over the legacy callback: a subscribed type is pushed into its
+        // channel; a full channel drops THIS message only (logged) — a slow consumer must not
+        // take down the whole session.
+        if (auto channel = inboundChannel(packetType))
+        {
+            if (!channel->push(InboundMessage{std::move(p2pSession), std::move(message)}))
+            {
+                SERVICE_LOG(WARNING) << LOG_DESC("inbound channel full or closed, drop message")
+                                     << LOG_KV("packetType", packetType) << LOG_KV("seq", seq);
+            }
+            return;
+        }
         auto handler = getMessageHandlerByMsgType(packetType);
         if (handler)
         {
@@ -1106,7 +1211,99 @@ void bcos::gateway::Service::setPeerIdentity(std::shared_ptr<P2PPeerIdentity> _p
 }
 uint32_t bcos::gateway::Service::newSeq()
 {
-    return m_host->newSeq();
+    // Service-wide monotonic allocator (was Host::newSeq before correlation moved up from
+    // libnetwork). Uniqueness scope must match m_pendingResponses: the whole node.
+    return ++m_seq;
+}
+bool bcos::gateway::Service::registerPendingResponse(uint32_t _seq, PendingResponse::Ptr _pending)
+{
+    return m_pendingResponses.add(_seq, std::move(_pending));
+}
+bcos::gateway::PendingResponse::Ptr bcos::gateway::Service::claimPendingResponse(uint32_t _seq)
+{
+    return m_pendingResponses.claim(_seq);
+}
+void bcos::gateway::Service::onResponseTimeout(uint32_t _seq)
+{
+    auto pending = claimPendingResponse(_seq);
+    if (!pending)
+    {
+        return;  // already settled by ack / disconnect-flush / write-failure reclaim
+    }
+    pending->callback(
+        makeNetworkException(P2PExceptionType::NetworkTimeout, "NetworkTimeout"), std::nullopt);
+}
+void bcos::gateway::Service::onResponseFrame(
+    uint32_t _seq, Session::Ptr const& _session, FrameMeta _meta)
+{
+    auto pending = claimPendingResponse(_seq);
+    // without a pending entry: the request already timed out or was settled elsewhere
+    if (!pending)
+    {
+        SERVICE_LOG(WARNING) << LOG_BADGE("onResponseFrame")
+                             << LOG_DESC("pending request not found, maybe it timed out")
+                             << LOG_KV("endpoint", _session ? _session->nodeIPEndpoint()
+                                                            : NodeIPEndpoint())
+                             << LOG_KV("seq", _seq);
+        return;
+    }
+    if (pending->timeoutHandler)
+    {
+        pending->timeoutHandler->cancel();
+    }
+    // complete inline: this handler already runs on a pool thread (Session::onMessage posts the
+    // delivery), so resuming the waiter here cannot land on a sender's stack
+    pending->callback(NetworkException{}, std::move(_meta));
+}
+void bcos::gateway::Service::failPendingResponsesOf(
+    Session::Ptr const& _session, NetworkException _error)
+{
+    settleClaimedPending(m_pendingResponses.claimAllOf(_session.get()), _error);
+}
+void bcos::gateway::Service::failAllPendingResponses(NetworkException _error)
+{
+    settleClaimedPending(m_pendingResponses.claimAll(), _error);
+}
+void bcos::gateway::Service::settleClaimedPending(
+    std::vector<PendingResponse::Ptr> _pendings, NetworkException const& _error)
+{
+    for (auto& pending : _pendings)
+    {
+        if (pending->timeoutHandler)
+        {
+            pending->timeoutHandler->cancel();
+        }
+        // Complete OFF this stack while the network is up (see the declaration comment): the
+        // resumed waiter's continuation must not run on the caller's stack — drop() is reachable
+        // from a sender's own await_suspend — nor occupy the single-thread teardown executor.
+        if (m_host && m_host->haveNetwork())
+        {
+            m_host->asioInterface()->post(
+                [callback = std::move(pending->callback), _error]() mutable {
+                    try
+                    {
+                        callback(_error, std::nullopt);
+                    }
+                    catch (std::exception const& e)
+                    {
+                        SERVICE_LOG(WARNING) << LOG_DESC("pending response callback exception")
+                                             << LOG_KV("what", boost::diagnostic_information(e));
+                    }
+                });
+        }
+        else
+        {
+            try
+            {
+                pending->callback(_error, std::nullopt);
+            }
+            catch (std::exception const& e)
+            {
+                SERVICE_LOG(WARNING) << LOG_DESC("pending response callback exception")
+                                     << LOG_KV("what", boost::diagnostic_information(e));
+            }
+        }
+    }
 }
 std::shared_ptr<bcos::crypto::KeyFactory> bcos::gateway::Service::keyFactory()
 {
@@ -1142,6 +1339,24 @@ bool bcos::gateway::Service::registerHandlerByMsgType(
 
     m_msgHandlers.at(_type) = _msgHandler;
     return true;
+}
+
+std::shared_ptr<InboundChannel> bcos::gateway::Service::subscribe(
+    uint16_t _type, InboundChannel::Poster _poster, std::size_t _capacity)
+{
+    std::lock_guard lock(x_channels);
+    auto& slot = m_channels.at(_type);
+    if (!slot)
+    {
+        slot = std::make_shared<InboundChannel>(std::move(_poster), _capacity);
+    }
+    return slot;
+}
+
+std::shared_ptr<InboundChannel> bcos::gateway::Service::inboundChannel(uint16_t _type) const
+{
+    std::lock_guard lock(x_channels);
+    return m_channels.at(_type);
 }
 bcos::gateway::Service::MessageHandler bcos::gateway::Service::getMessageHandlerByMsgType(
     uint16_t _type)

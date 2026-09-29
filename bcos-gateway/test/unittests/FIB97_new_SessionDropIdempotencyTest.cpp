@@ -129,8 +129,6 @@ inline SessionBundle_FIB97new makeSessionFib97new()
     auto fakeHost = std::make_shared<FakeHost_FIB97new>(fakeAsio, nullptr);
 
     auto session = std::make_shared<Session_FIB97new>(fakeSocket, *fakeHost, 2, true);
-    session->setMessageHandler(
-        [](NetworkException /*e*/, Session_FIB97new::Ptr /*s*/, FrameMeta /*m*/) {});
 
     return {fakeHost, fakeSocket, session};
 }

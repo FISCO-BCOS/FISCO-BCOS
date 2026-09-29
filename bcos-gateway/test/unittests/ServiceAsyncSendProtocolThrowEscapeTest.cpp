@@ -43,9 +43,10 @@
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include "unittests/utils/TlsLoopback.h"
+#include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
-#include <atomic>
 #include <chrono>
+#include <future>
 #include <thread>
 
 using namespace bcos;
@@ -120,7 +121,7 @@ BOOST_AUTO_TEST_CASE(SendProtocolDoesNotEscapeSendRejection)
     auto testHost = std::make_shared<TestHost>(
         std::make_shared<ASIOInterface>(
             std::make_shared<bcos::IOServicePool>(1, "sendProtocolTest"), "0.0.0.0", 0));
-    // Service::newSeq() delegates to the host-wide seq allocator
+    // Service::newSeq() is the Service-local seq allocator (correlation lives in libp2p now)
     service->setHost(testHost);
 
     // TLS-handshake the loopback pair (see unittests/utils/TlsLoopback.h): the session's
@@ -139,15 +140,40 @@ BOOST_AUTO_TEST_CASE(SendProtocolDoesNotEscapeSendRejection)
         BOOST_CHECK(!ec);
     });
 
-    std::atomic<bool> teardownNotified{false};
+    // Pull-mode teardown observation: a consumer parked on recvMessage() is woken by drop()'s
+    // channel close, rethrowing the NetworkException the channel was closed with — the pull-mode
+    // replacement for the old setMessageHandler teardown notification. The promise is handed to
+    // the coroutine through a shared_ptr so the frame keeps it alive even if the test thread
+    // unwinds early (the wait below times out and BOOST_REQUIRE aborts the case), leaving a
+    // parked consumer behind.
+    auto teardownCode = std::make_shared<std::promise<int64_t>>();
+    auto teardownResult = teardownCode->get_future();
     {
         auto sessionSocket = testutil::makeTlsSessionSocket(io, clientCtx, std::move(client));
         auto session = std::make_shared<Session>(sessionSocket, *testHost);
-        // Tolerant handler: disconnect()'s teardown notification lands here.
-        session->setMessageHandler(
-            [&teardownNotified](NetworkException, Session::Ptr, FrameMeta) {
-                teardownNotified.store(true);
-            });
+        // The consumer must catch everything itself: an exception escaping a task::wait task is
+        // rethrown on whatever stack resumes the coroutine (here, a shared IO pool thread).
+        task::wait([](Session::Ptr _session,
+                       std::shared_ptr<std::promise<int64_t>> _teardownCode) -> task::Task<void> {
+            try
+            {
+                while (true)
+                {
+                    // No frame is ever expected: the handshake send is rejected pre-send by
+                    // beforeMessageHandler, so the first wakeup is the channel close on
+                    // disconnect() below.
+                    co_await _session->recvMessage();
+                }
+            }
+            catch (NetworkException& e)
+            {
+                _teardownCode->set_value(errorCodeOf(e));
+            }
+            catch (...)
+            {
+                _teardownCode->set_value(-1);
+            }
+        }(session, teardownCode));
         session->start();
         BOOST_REQUIRE(session->active());
 
@@ -164,13 +190,12 @@ BOOST_AUTO_TEST_CASE(SendProtocolDoesNotEscapeSendRejection)
         BOOST_CHECK_NO_THROW(service->sendProtocol(p2pSession));
 
         session->disconnect(DisconnectReason::DisconnectRequested);
-        // The read loop armed by start() unwinds on the io thread once the socket closes; the
-        // teardown notification runs on the host's teardown executor. Wait for it so no coroutine
-        // or handler outlives the io_context.
-        for (int i = 0; i < 200 && !teardownNotified.load(); ++i)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
+        // drop() closes the recv channel synchronously, but the parked consumer's resume is
+        // posted to the shared IO pool through the channel poster, so the catch above settles
+        // asynchronously. Wait for it so no coroutine outlives the io_context.
+        BOOST_REQUIRE(
+            teardownResult.wait_for(std::chrono::seconds(10)) == std::future_status::ready);
+        BOOST_CHECK_EQUAL(teardownResult.get(), P2PExceptionType::Disconnect);
     }
 
     peerHandshake.join();

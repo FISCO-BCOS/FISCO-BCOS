@@ -7,8 +7,8 @@
  * @date 2018
  *
  * Only the non-template SessionRecvBuffer / Payload definitions live here. BasicSession /
- * BasicSessionFactory are templates over the frame decoder (see FrameMeta.h); their member
- * definitions live at the bottom of Session.h and are instantiated by the concrete decoder's TU
+ * BasicSessionFactory are templates over the frame decoder (see FrameMeta.h); their members are
+ * defined inside the classes in Session.h and are instantiated by the concrete decoder's TU
  * (the gateway: libp2p's P2PDecoder).
  */
 
@@ -109,7 +109,7 @@ bcos::bytesConstRef bcos::gateway::SessionRecvBuffer::asReadBuffer() const
 {
     return {m_recvBuffer.data() + m_readPos, m_writePos - m_readPos};
 }
-bcos::bytesConstRef bcos::gateway::SessionRecvBuffer::asWriteBuffer() const
+bcos::bytesRef bcos::gateway::SessionRecvBuffer::asWriteBuffer()
 {
     return {m_recvBuffer.data() + m_writePos, m_recvBufferSize - m_writePos};
 }

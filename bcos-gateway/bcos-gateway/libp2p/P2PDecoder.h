@@ -76,11 +76,6 @@ public:
             return meta;
         }
 
-        // seq (offset 8): libnetwork's response-correlation key, lifted into the frame
-        // metadata. Everything else in the header is parsed at the libp2p boundary.
-        meta.seq =
-            boost::asio::detail::socket_ops::network_to_host_long(*((const uint32_t*)(data + 8)));
-
         meta.status = FrameMeta::Status::Frame;
         meta.consumed = length;
         if (length >= FRAME_TAKE_BUFFER_THRESHOLD)

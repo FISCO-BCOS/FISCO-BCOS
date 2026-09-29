@@ -95,7 +95,6 @@ BOOST_AUTO_TEST_CASE(decodesCompleteV0Frame)
     auto meta = decoder.tryDecode(ref(frame));
     BOOST_REQUIRE(meta.status == FrameMeta::Status::Frame);
     BOOST_CHECK_EQUAL(meta.consumed, frame.size());
-    BOOST_CHECK_EQUAL(meta.seq, 0x11223344);
     BOOST_CHECK(!meta.takeBuffer);
     BOOST_CHECK_EQUAL(meta.frame.size(), frame.size());
     auto frameData = meta.frameData();
@@ -121,13 +120,11 @@ BOOST_AUTO_TEST_CASE(decodesStickyFramesBackToBack)
     auto metaA = decoder.tryDecode(ref(stream));
     BOOST_REQUIRE(metaA.status == FrameMeta::Status::Frame);
     BOOST_CHECK_EQUAL(metaA.consumed, frameA.size());
-    BOOST_CHECK_EQUAL(metaA.seq, 1);
 
     bytesConstRef rest(stream.data() + metaA.consumed, stream.size() - metaA.consumed);
     auto metaB = decoder.tryDecode(rest);
     BOOST_REQUIRE(metaB.status == FrameMeta::Status::Frame);
     BOOST_CHECK_EQUAL(metaB.consumed, frameB.size());
-    BOOST_CHECK_EQUAL(metaB.seq, 2);
 }
 
 BOOST_AUTO_TEST_CASE(protocolErrorOnBadLength)
@@ -165,12 +162,13 @@ BOOST_AUTO_TEST_CASE(decodesV2ExtendedHeader)
     auto meta = decoder.tryDecode(ref(frame));
     BOOST_REQUIRE(meta.status == FrameMeta::Status::Frame);
     BOOST_CHECK_EQUAL(meta.consumed, frame.size());
-    BOOST_CHECK_EQUAL(meta.seq, 7);
 
-    // the response-decision fields are peeked at the libp2p boundary, not lifted by the decoder
+    // the response-decision fields (resp flag, seq, dst) are peeked at the libp2p boundary,
+    // not lifted by the decoder
     auto respInfo = Message::peekResponseFrameInfo(meta.frameData());
     BOOST_REQUIRE(respInfo.has_value());
     BOOST_CHECK(respInfo->isResp);
+    BOOST_CHECK_EQUAL(respInfo->seq, 7);
     BOOST_CHECK_EQUAL(respInfo->dstP2PNodeID, "dstNode");
 }
 

@@ -175,7 +175,7 @@ public:
 
     void setRespPacket();
     // Deprecated: the send path encodes the header with encodeHeader and passes the payload as
-    // views (see Session::fastSendMessage); kept for tests and legacy callers.
+    // views (see Session::sendMessage); kept for tests and legacy callers.
     bool encode(bytes& _buffer);
     int32_t decode(const bytesConstRef& _buffer);
     /// Receive-path decode that takes ownership of the frame storage instead of copying the
@@ -218,13 +218,15 @@ public:
     struct ResponseFrameInfo
     {
         bool isResp = false;
+        uint32_t seq = 0;  ///< the correlation key the pending-request table is keyed by
         std::string dstP2PNodeID;
     };
-    /// Bounds-safe peek at an encoded frame: the response flag and, for version > V0, the
-    /// dstP2PNodeID. The Service receive path uses this to tell a response addressed to this
-    /// node from a routed one before settling a pending request — a routed response must never
-    /// consume a LOCAL pending callback on a seq collision. Returns std::nullopt when the
-    /// frame is malformed; the caller then falls through to Message::decode's error path.
+    /// Bounds-safe peek at an encoded frame: the response flag, the correlation seq and, for
+    /// version > V0, the dstP2PNodeID. The Service receive path uses this to tell a response
+    /// addressed to this node from a routed one before settling a pending request — a routed
+    /// response must never consume a LOCAL pending callback on a seq collision. Returns
+    /// std::nullopt when the frame is malformed; the caller then falls through to
+    /// Message::decode's error path.
     static std::optional<ResponseFrameInfo> peekResponseFrameInfo(const bytesConstRef& _frame);
 
     /// Patch the frame total length into an already-encoded header (offset 0, network order).
