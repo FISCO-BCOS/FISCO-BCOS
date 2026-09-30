@@ -197,6 +197,11 @@ jobs:
           ref: 0451c8bf3601c502a36be4633c0e2f4cc38e9c9b
           path: .ci-op-e2e-tests
 
+      - name: Assert the harness ref matches kona-parity pins.json
+        run: |
+          test "$(jq -r .op_stack_e2e_tests.commit tools/.ci/kona-parity/pins.json)" \
+            = "$(git -C .ci-op-e2e-tests rev-parse HEAD)"
+
       - name: Initialize vcpkg submodule
         run: git submodule update --init --recursive -- vcpkg
 

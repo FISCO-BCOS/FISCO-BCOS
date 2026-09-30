@@ -32,7 +32,7 @@
   },
   "cast": {
     "min_version": "1.7.1",
-    "note": "run.sh refuses an older cast. The harness l2_tx_scenarios.sh (op-stack-e2e-tests tools/op-e2e/l2_tx_scenarios.sh:48-50) orders its flags for the `cast send --create` re-parse that cast >= 1.7.1 does. forge stays at the op-deployer pin (mise.toml, 1.2.3), so the CI jobs take cast from the anvil tarball below and put it first on PATH for run.sh only.",
+    "note": "run.sh refuses an older cast. The harness l2_tx_scenarios.sh (op-stack-e2e-tests tools/op-e2e/l2_tx_scenarios.sh:48-51) orders its flags for the `cast send --create` re-parse that cast >= 1.7.1 does. forge stays at the op-deployer pin (mise.toml, 1.2.3), so the CI jobs take cast from the anvil tarball below and put it first on PATH for run.sh only.",
     "verified_from": "local runs with the foundry v1.8.3 toolchain; cast 1.2.3 rejects the harness's --create flag order"
   },
   "anvil": {
