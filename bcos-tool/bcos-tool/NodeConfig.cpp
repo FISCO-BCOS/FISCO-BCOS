@@ -204,8 +204,8 @@ NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
 
 NodeConfig::NodeConfig() : m_ledgerConfig(std::make_shared<LedgerConfig>()) {}
 
-void NodeConfig::loadConfig(std::string const& _configPath, bool enforceChainConfig,
-    bool enforceGroupId)
+void NodeConfig::loadConfig(
+    std::string const& _configPath, bool enforceChainConfig, bool enforceGroupId)
 {
     boost::property_tree::ptree iniConfig;
     boost::property_tree::read_ini(_configPath, iniConfig);
@@ -235,8 +235,8 @@ void NodeConfig::loadGenesisConfigFromString(std::string const& _content)
     loadGenesisConfig(genesisConfig);
 }
 
-void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforceChainConfig,
-    bool _enforceGroupId)
+void NodeConfig::loadConfig(
+    boost::property_tree::ptree const& _pt, bool _enforceChainConfig, bool _enforceGroupId)
 {
     // if version < 3.1.0, config.ini include chainConfig
     if (_enforceChainConfig || (m_genesisConfig.m_compatibilityVersion <
@@ -708,12 +708,24 @@ void NodeConfig::validateELModeInvariants() const
     if (m_enableEthereumEL && m_ethereumReorgWindow > 0 && m_mptPruneWindow != -1 &&
         m_mptPruneWindow < m_ethereumReorgWindow)
     {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "storage.mpt_prune_window (" + std::to_string(m_mptPruneWindow) +
+                                  ") must be -1 (disabled) or >= ethereum.reorg_window (" +
+                                  std::to_string(m_ethereumReorgWindow) +
+                                  "): an EL rollback target's trie nodes would already be pruned"));
+    }
+    // Same pairing for the OP unfinalized window: every window block's incremental MPT build
+    // dereferences its parent's trie nodes down to the finalized tip's, and eth_call at an
+    // unfinalized height resolves through the same nodes; pruning must keep at least the
+    // window's depth of history behind the tip.
+    if (m_enableOpEngineRpc && m_mptPruneWindow != -1 && m_mptPruneWindow < m_opUnfinalizedWindow)
+    {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment(
                 "storage.mpt_prune_window (" + std::to_string(m_mptPruneWindow) +
-                ") must be -1 (disabled) or >= ethereum.reorg_window (" +
-                std::to_string(m_ethereumReorgWindow) +
-                "): an EL rollback target's trie nodes would already be pruned"));
+                ") must be -1 (disabled) or >= op_engine_rpc.unfinalized_window (" +
+                std::to_string(m_opUnfinalizedWindow) +
+                "): an unfinalized block's parent trie nodes would already be pruned"));
     }
     // Same two-way binding for opstack-el: the per-node mode must be backed by the
     // chain-level declaration (which validateL2Invariants binds to the OP lane, the
@@ -1162,6 +1174,19 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
     // test-only escape hatch, see Initializer's executor-version guard
     const bool allowV1Executor = _pt.get<bool>("op_engine_rpc.unsafe_allow_v1_executor", false);
     const bool enableMinerApi = _pt.get<bool>("op_engine_rpc.enable_miner_api", false);
+    // Unfinalized window (D1 方案 A): how many blocks newPayload may run ahead of the
+    // finalized (backend) tip before answering SYNCING. Default 1024 ≈ 34 min at 2 s/block,
+    // covering op-node's ~12.8 min L1 finality delay plus batcher lag. Below 16 a healthy
+    // op-node could never keep its unsafe head ahead of finalized; above 100000 the window
+    // is no bound at all.
+    m_opUnfinalizedWindow = _pt.get<int64_t>("op_engine_rpc.unfinalized_window", 1024);
+    if (m_opUnfinalizedWindow < 16 || m_opUnfinalizedWindow > 100'000)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "op_engine_rpc.unfinalized_window must be in [16, 100000], "
+                                  "got " +
+                                  std::to_string(m_opUnfinalizedWindow)));
+    }
 
     m_enableOpEngineRpc = config.enable;
     // Mutual-exclusion check, symmetric with loadSingleNodeConsensusConfig: whichever of the
@@ -1201,7 +1226,8 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("jwtSecretFile", config.jwtSecretFile)
                          << LOG_KV("clockSkewSecs", config.clockSkewSecs)
                          << LOG_KV("unsafeAllowV1Executor", allowV1Executor)
-                         << LOG_KV("enableMinerApi", enableMinerApi);
+                         << LOG_KV("enableMinerApi", enableMinerApi)
+                         << LOG_KV("unfinalizedWindow", m_opUnfinalizedWindow);
 }
 
 void NodeConfig::loadEngineRpcConfig(boost::property_tree::ptree const& _pt)
@@ -1297,9 +1323,9 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     const std::string mode = _pt.get<std::string>("ethereum.mode", "none");
     if (mode != "none" && mode != "el" && mode != "opstack-el")
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "ethereum.mode invalid: \"" + mode +
-                                  "\" (supported: none, el, opstack-el)"));
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "ethereum.mode invalid: \"" + mode + "\" (supported: none, el, opstack-el)"));
     }
     const bool enableEL = (mode == "el");
     const bool enableOpStackEL = (mode == "opstack-el");
@@ -1368,10 +1394,9 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     uint64_t blockTime = _pt.get<uint64_t>("ethereum.op_block_time_seconds", 2);
     if (blockTime == 0 || blockTime > 60)
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "ethereum.op_block_time_seconds must be in [1, 60], got " +
-                std::to_string(blockTime)));
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "ethereum.op_block_time_seconds must be in [1, 60], got " +
+                                  std::to_string(blockTime)));
     }
     m_opBlockTimeSeconds = blockTime;
 
@@ -1385,10 +1410,9 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     uint64_t syncLag = _pt.get<uint64_t>("ethereum.op_sync_lag_blocks", 64);
     if (syncLag > 10000)
     {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "ethereum.op_sync_lag_blocks must be in [0, 10000], got " +
-                std::to_string(syncLag)));
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "ethereum.op_sync_lag_blocks must be in [0, 10000], got " +
+                                  std::to_string(syncLag)));
     }
     m_opSyncLagBlocks = syncLag;
 
@@ -1452,10 +1476,10 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
     m_ethereumReorgWindow = _pt.get<int64_t>("ethereum.reorg_window", 256);
     if (m_ethereumReorgWindow < 0 || m_ethereumReorgWindow > 100'000)
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "ethereum.reorg_window must be 0 (disabled) or in "
-                                  "[1, 100000], got " +
-                                  std::to_string(m_ethereumReorgWindow)));
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment("ethereum.reorg_window must be 0 (disabled) or in "
+                                               "[1, 100000], got " +
+                                               std::to_string(m_ethereumReorgWindow)));
     }
 
     // Engine mempool sizing (EL mode only): capacity in transactions and per-transaction
@@ -1487,8 +1511,7 @@ void NodeConfig::loadEthereumConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("maxBatchSize", m_ethereumMaxBatchSize)
                          << LOG_KV("reorgWindow", m_ethereumReorgWindow)
                          << LOG_KV("mempoolCapacity", m_ethereumMempoolCapacity)
-                         << LOG_KV("mempoolTxLifetimeMinutes",
-                                m_ethereumMempoolTxLifetimeMinutes)
+                         << LOG_KV("mempoolTxLifetimeMinutes", m_ethereumMempoolTxLifetimeMinutes)
                          << LOG_KV("depositContractAddress",
                                 "0x" + m_ethereumDepositContractAddress.hex())
                          << LOG_KV("opBlockTimeSeconds", m_opBlockTimeSeconds)
@@ -1516,7 +1539,7 @@ void NodeConfig::loadForkTimestamps(boost::property_tree::ptree const& _genesisC
     m_genesisConfig.m_ethereumELMode = false;
     m_genesisConfig.m_opStackELMode = false;
     m_genesisConfig.m_ethereumForkSchedule.reset();
-    m_ethereumChainId = 0;  // reassigned by validateL2Invariants when EL is declared
+    m_ethereumChainId = 0;     // reassigned by validateL2Invariants when EL is declared
     m_ethereumMergeBlock = 0;  // reassigned by the REQUIRED merge_block key below
 
     if (auto ethSection = _genesisConfig.get_child_optional("ethereum"))
@@ -1661,19 +1684,18 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
         return;
     }
     // The ladder's entries, in fork order (Bedrock has no entry — it is genesis).
-    std::array<std::pair<std::string_view, uint64_t ledger::OpForkSchedule::*>, 10> const
-        keys{{
-            {"regolith_time", &ledger::OpForkSchedule::m_regolithTime},
-            {"canyon_time", &ledger::OpForkSchedule::m_canyonTime},
-            {"delta_time", &ledger::OpForkSchedule::m_deltaTime},
-            {"ecotone_time", &ledger::OpForkSchedule::m_ecotoneTime},
-            {"fjord_time", &ledger::OpForkSchedule::m_fjordTime},
-            {"granite_time", &ledger::OpForkSchedule::m_graniteTime},
-            {"holocene_time", &ledger::OpForkSchedule::m_holoceneTime},
-            {"isthmus_time", &ledger::OpForkSchedule::m_isthmusTime},
-            {"jovian_time", &ledger::OpForkSchedule::m_jovianTime},
-            {"karst_time", &ledger::OpForkSchedule::m_karstTime},
-        }};
+    std::array<std::pair<std::string_view, uint64_t ledger::OpForkSchedule::*>, 10> const keys{{
+        {"regolith_time", &ledger::OpForkSchedule::m_regolithTime},
+        {"canyon_time", &ledger::OpForkSchedule::m_canyonTime},
+        {"delta_time", &ledger::OpForkSchedule::m_deltaTime},
+        {"ecotone_time", &ledger::OpForkSchedule::m_ecotoneTime},
+        {"fjord_time", &ledger::OpForkSchedule::m_fjordTime},
+        {"granite_time", &ledger::OpForkSchedule::m_graniteTime},
+        {"holocene_time", &ledger::OpForkSchedule::m_holoceneTime},
+        {"isthmus_time", &ledger::OpForkSchedule::m_isthmusTime},
+        {"jovian_time", &ledger::OpForkSchedule::m_jovianTime},
+        {"karst_time", &ledger::OpForkSchedule::m_karstTime},
+    }};
     // Every key is optional, so a misspelled one (jovain_time=0) would otherwise be read as
     // "not scheduled" and the chain would run the wrong fork rules without a word — the
     // failure validateL2Invariants' presence check exists to prevent. Reject anything but
@@ -1681,8 +1703,8 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
     // guarantees at least one recognised entry.
     for (auto const& [key, _] : *section)
     {
-        bool known = std::any_of(keys.begin(), keys.end(),
-            [&](auto const& entry) { return entry.first == key; });
+        bool known = std::any_of(
+            keys.begin(), keys.end(), [&](auto const& entry) { return entry.first == key; });
         if (!known)
         {
             BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
@@ -1695,7 +1717,8 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
     ledger::OpForkSchedule schedule;
     for (auto const& [key, member] : keys)
     {
-        schedule.*member = readOptionalForkTimestamp(*section, "op_fork_timestamps", std::string(key));
+        schedule.*member =
+            readOptionalForkTimestamp(*section, "op_fork_timestamps", std::string(key));
     }
     // Same rule as the L1 ladder: activation times must be non-decreasing down the fork
     // order, because a later fork is defined as a superset of the earlier one (Karst is
@@ -1718,9 +1741,8 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment(
-                    "[op_fork_timestamps]." + std::string(key) + " (" +
-                    std::to_string(time) + ") is earlier than " + std::string(prevKey) + " (" +
-                    std::to_string(prevTime) +
+                    "[op_fork_timestamps]." + std::string(key) + " (" + std::to_string(time) +
+                    ") is earlier than " + std::string(prevKey) + " (" + std::to_string(prevTime) +
                     "): fork activation times must be non-decreasing"));
         }
         prevKey = key;
@@ -3323,6 +3345,10 @@ bool NodeConfig::opEngineAllowV1Executor() const
 {
     return m_opEngineAllowV1Executor;
 }
+std::int64_t NodeConfig::opUnfinalizedWindow() const
+{
+    return m_opUnfinalizedWindow;
+}
 
 bool NodeConfig::engineDrivenBlockProduction() const
 {
@@ -3823,8 +3849,8 @@ std::string bcos::tool::generateGenesisData(
                 {"jovian_time", opSchedule.m_jovianTime},
                 {"karst_time", opSchedule.m_karstTime},
             }};
-            bool const anyGenesisActive = std::any_of(pinned.begin(), pinned.end(),
-                [](auto const& entry) { return entry.second == 0; });
+            bool const anyGenesisActive = std::any_of(
+                pinned.begin(), pinned.end(), [](auto const& entry) { return entry.second == 0; });
             if (anyGenesisActive)
             {
                 ss << "[opForkTimestamps]" << '\n';

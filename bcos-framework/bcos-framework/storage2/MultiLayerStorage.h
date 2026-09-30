@@ -556,6 +556,25 @@ public:
         }
     }
 
+    /// A view over the committed backend (and cache) plus an EXPLICIT ordered layer list,
+    /// ignoring the anonymous m_storages deque. @p layers is oldest first: layers.front()
+    /// sits directly on the backend, layers.back() is the newest and is read first. Null
+    /// entries are skipped. This is the read/execute view of one chain inside an unfinalized
+    /// block tree (OpScheduler's window, D1 §8.3): sibling branches keep their own layers and
+    /// are invisible to each other because only the requested ancestor chain is stacked.
+    ViewType forkChain(std::vector<std::shared_ptr<MutableStorageType>> layers)
+    {
+        auto view = forkCommitted();
+        for (auto it = layers.rbegin(); it != layers.rend(); ++it)
+        {
+            if (*it)
+            {
+                view.m_immutableStorages.push_back(std::move(*it));
+            }
+        }
+        return view;
+    }
+
     void pushView(ViewType view)
     {
         if (!view.m_mutableStorage)

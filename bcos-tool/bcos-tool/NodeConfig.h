@@ -224,6 +224,10 @@ public:
     uint32_t opEngineBatchRequestSizeLimit() const;
     const std::string& opEngineJwtSecretFile() const;
     int32_t opEngineClockSkewSecs() const;
+    // OP unfinalized window ([op_engine_rpc] unfinalized_window in config.ini): how many
+    // blocks newPayload may sit above the finalized (backend) tip before it answers SYNCING.
+    // Default 1024, range [16, 100000]; storage.mpt_prune_window must be -1 or >= this.
+    std::int64_t opUnfinalizedWindow() const;
     // test-only escape hatch: allow [op_engine_rpc] to serve the v1 EngineService on
     // executor_version < 2 (the v1 Engine API integration harness drives it over this
     // endpoint); production configs must never set it
@@ -643,6 +647,9 @@ private:
     std::string m_opEngineJwtSecretFile;
     int32_t m_opEngineClockSkewSecs{60};
     bool m_opEngineAllowV1Executor = false;
+    // [op_engine_rpc] unfinalized_window: newPayload run-ahead bound over the finalized tip
+    // (see opUnfinalizedWindow()).
+    std::int64_t m_opUnfinalizedWindow = 1024;
 
     // config for engine rpc ([engine_rpc], EL mode)
     bool m_enableEngineRpc = false;
