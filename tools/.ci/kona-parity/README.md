@@ -61,7 +61,7 @@ The gate stops at the first block that is not a match and prints FISCO's `hash`,
 |---|---|
 | 0 | every gated block matches |
 | 1 | first divergence, both sides printed (`compare.py summarize`) |
-| 2 | no evidence: a `missing: ...` line names the tool, RPC, or transaction kind |
+| 2 | no evidence: a `missing: ...` line names the tool, RPC, or transaction kind, or a `GATE ERROR: ...` line names the replay gap |
 
 A skip is exit 2. `tools/.ci/l2-integration/run-all.sh:78-81` exits 0 when every scenario
 skips; this gate has no such path. `summarize` also refuses a green verdict unless
@@ -80,7 +80,7 @@ a replay interrupted partway through the range, or a verdict file carrying block
   a `kona parity gate (overlay=off) SKIPPED` notice and the matrix holds `on` alone. `run.sh`
   makes the same test and exits 2 for `OVERLAY=off` against such a harness, so nothing below
   the workflow can turn that skip into a pass. The `overlay=on` leg and the preflight keep
-  `SKIP == exit 2 == failure`.
+  `SKIP == exit 2 == failure`; a failing `kona_parity_legs` job leaves the workflow red.
 - `kona_parity_negative_control` in `c2-e2e.yml` (nightly) builds the fee-vault mutant and
   requires exit 1.
 - Both jobs install Foundry 1.2.3 for `forge` (the op-deployer build asserts the monorepo's
@@ -122,7 +122,8 @@ Those files, plus `l1_head.txt`, `rollup.json`, `l1-config.json`, `setup_c2.log`
 `beacon-stub.log` and the throwaway devnet's `c2/`, are run-owned (`compare.py RUN_OWNED`):
 `run.sh` deletes them first (`compare.py clean`), so reusing `WORK`, as the CI jobs do with
 `runner.temp/kona-parity`, never appends to an older `verdicts.jsonl`. Other files in `WORK`
-are kept.
+are kept. With `--attach`, `C2` must not be `$WORK/c2`; `run.sh` refuses that instead of
+deleting the running devnet.
 
 ## Negative control
 
@@ -158,7 +159,7 @@ kona-host v1.7.0 as a native `KONA_HOST_BIN`, anvil and cast from foundry v1.8.3
   Block 22 `MATCH`, block 23 (the first block holding a non-deposit transaction) `MISMATCH`,
   exit 1. `stateRoot`, `hash` and `outputRoot` differed while `transactionsRoot` and
   `receiptsRoot` stayed equal, which is what a wrong fee recipient produces.
-- The three commits after the initial one are what those runs required: a per-block timeout
+- The commits that followed the initial gate are what those runs required: a per-block timeout
   that works without coreutils `timeout`, a fresh EIP-7702 authority per run, and sending the
   L1 deposit after the L2 mix so it cannot take a nonce the mix already signed with.
 - `compare.py preflight` also ran against anvil v1.5.1, which reports

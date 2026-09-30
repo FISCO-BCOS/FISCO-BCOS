@@ -65,16 +65,16 @@ python3 -c 'from eth_hash.auto import keccak; keccak(b"")' 2>/dev/null \
 pin() { python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d[sys.argv[2]][sys.argv[3]])' \
   "${HERE}/pins.json" "$1" "$2"; }
 # The harness's l2_tx_scenarios.sh deploys its counter with `cast send --create`, whose flag
-# order only parses on cast >= 1.7.1 (its comment at :48-50), so the forge that op-deployer
+# order only parses on cast >= 1.7.1 (its comment at :48-51), so the forge that op-deployer
 # pins (1.2.3) cannot supply the cast this gate runs: the CI jobs put a newer cast first on PATH.
 command -v cast >/dev/null || missing "cast (Foundry) on PATH"
-CAST_MIN="$(pin cast min_version)"
-CAST_VER="$(cast --version 2>/dev/null | sed -nE 's/.*[^0-9.]([0-9]+\.[0-9]+\.[0-9]+).*/\1/p;' | sed -n 1p)"
+CAST_MIN="$(pin cast min_version)" || die "pins.json has no cast.min_version"
+CAST_VER="$( (cast --version 2>/dev/null || true) | sed -nE 's/.*[^0-9.]([0-9]+\.[0-9]+\.[0-9]+).*/\1/p;' | sed -n 1p)"
 python3 -c 'import sys; v, m = (tuple(int(x) for x in a.split(".")) for a in sys.argv[1:]); sys.exit(v < m)' \
   "${CAST_VER:-0.0.0}" "$CAST_MIN" \
   || missing "cast >= $CAST_MIN on PATH (found $(command -v cast): ${CAST_VER:-unparseable version});" \
              "the harness l2_tx_scenarios.sh needs it for cast send --create (pins.json cast)"
-KONA_HOST_IMAGE="${KONA_HOST_IMAGE:-$(pin kona_host image)}"
+KONA_HOST_IMAGE="${KONA_HOST_IMAGE:-$(pin kona_host image || die "pins.json has no kona_host.image")}"
 if [ -n "${KONA_HOST_BIN:-}" ]; then
   [ -x "$KONA_HOST_BIN" ] || missing "kona-host binary at KONA_HOST_BIN=$KONA_HOST_BIN"
 elif [ "$(uname)" != "Linux" ]; then
@@ -88,7 +88,11 @@ fi
 WORK="${WORK:-$(mktemp -d /tmp/kona-parity.XXXXXX)}"
 mkdir -p "$WORK"
 WORK="$(cd "$WORK" && pwd -P)"
-python3 "$CMP" clean --workdir "$WORK"
+# clean deletes $WORK/c2; an attached devnet must live elsewhere or it would be deleted here.
+if [ "$ATTACH" = 1 ] && [ -d "${C2:-}" ] && [ "$(cd "$C2" && pwd -P)" = "$WORK/c2" ]; then
+  die "--attach with C2=$C2 inside WORK=$WORK: clean would delete the running devnet"
+fi
+python3 "$CMP" clean --workdir "$WORK" || die "compare.py clean failed in $WORK"
 mkdir -p "$WORK/kona"
 BEACON_PORT="${BEACON_PORT:-8848}"
 BG_PIDS=()

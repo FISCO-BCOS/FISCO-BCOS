@@ -681,7 +681,8 @@ jobs:
   # fails the job, there is no skip inside run.sh. The overlay=off leg is the one exception,
   # decided here rather than in run.sh: it exists only when the pinned harness's setup_c2.sh
   # reads OVERLAY (ticket 12, FISCO-BCOS/op-stack-e2e-tests); until then this job prints a
-  # SKIP notice for it and the matrix holds overlay=on alone. overlay=on is never skipped.
+  # SKIP notice for it and the matrix holds overlay=on alone. overlay=on is never skipped by
+  # that decision (a failing kona_parity_legs leaves the whole workflow red, not green).
   kona_parity_legs:
     name: kona parity gate legs (harness overlay switch)
     runs-on: ubuntu-24.04
@@ -747,6 +748,11 @@ jobs:
           repository: FISCO-BCOS/op-stack-e2e-tests
           ref: 0451c8bf3601c502a36be4633c0e2f4cc38e9c9b
           path: .ci-op-e2e-tests
+
+      - name: Assert the harness ref matches kona-parity pins.json
+        run: |
+          test "$(jq -r .op_stack_e2e_tests.commit tools/.ci/kona-parity/pins.json)" \
+            = "$(git -C .ci-op-e2e-tests rev-parse HEAD)"
 
       - name: Download fisco-bcos from L2 unit job
         uses: actions/download-artifact@v4
