@@ -273,7 +273,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
     {
         sealView.newMutable();
         m_memPool.remove(sealView);
-        m_memPool.seal(m_blockTxCountLimit, sealView, std::back_inserter(sealedTxs));
+        m_memPool.seal(sealTxCountLimit(), sealView, std::back_inserter(sealedTxs));
     }
 
     std::vector<bytes> forcedEnvelopes;

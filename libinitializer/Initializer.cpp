@@ -34,6 +34,7 @@
 #include "GlobalStateStorageInitializer.h"
 #include "LedgerInitializer.h"
 #include "MemPoolInitializer.h"
+#include "OpSystemConfigLoader.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
 #include "bcos-executor/src/executor/SwitchExecutorManager.h"
@@ -690,6 +691,63 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                                       "OP mode (executor_version==3, the OPSTACK slot) requires "
                                       "an [op_fork_timestamps] section in config.genesis"));
         }
+        // The sealing parameters on the OP lane come from the SystemConfig predeploy
+        // (0x43...00c0), not from the SYS_CONFIG rows the boot snapshot above was read from.
+        // In engine-driven OP mode (this node is the sequencer's EL and the predeploy is part
+        // of the chain's genesis) load them now from the committed state into the snapshot,
+        // then refuse to start if the SystemConfig account or any of its four keys is missing
+        // (the loader throws), or if a genesis-frozen key disagrees with this node's
+        // config.genesis. The same loader is handed to the post-commit republisher below so
+        // every later snapshot carries the chain's current block_tx_count_limit. opstack-el
+        // self-sync replays a foreign OP chain that has no FISCO predeploy (the genesis
+        // feature_flags check tolerates its absence for the same reason) and never seals, so
+        // nothing there consumes the limit: no loader.
+        // One predicate for every chain id the OP lane accepts: the node's own [web3] chain_id
+        // (compared against the SystemConfig slot below) and the snapshot's (what execution
+        // and admission run with).
+        auto const requireOpChainId = [](std::optional<u256> const& chainId) -> uint64_t {
+            if (!chainId || *chainId == 0 || *chainId > std::numeric_limits<uint64_t>::max())
+            {
+                BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                          "OP mode (executor_version>=3) requires a non-zero "
+                                          "[web3] chain_id that fits uint64"));
+            }
+            return static_cast<uint64_t>(*chainId);
+        };
+        bcos::ledger::IL2ConfigLoader::Ptr l2SystemConfigLoader;
+        if (!m_nodeConfig->opStackELModeEnabled())
+        {
+            l2SystemConfigLoader =
+                std::make_shared<OpSystemConfigLoader>(m_globalStateStorageInitializer->storage());
+            if (auto error = bcos::engine::republishLedgerConfig(
+                    *m_ledgerConfigState, *m_ledger, l2SystemConfigLoader.get()))
+            {
+                BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                          "OP mode: loading the L2 system config from the "
+                                          "SystemConfig predeploy failed at startup: " +
+                                          error->errorMessage()));
+            }
+            auto const l2Config = m_ledgerConfigState->get();
+            auto const configuredChainId = requireOpChainId(
+                ledger::parseWeb3ChainId(m_nodeConfig->genesisConfig().m_web3ChainID));
+            if (auto mismatch = ledger::checkL2GenesisFrozenKeys(
+                    *l2Config, {.web3ChainId = u256(configuredChainId),
+                                   .txGasLimit = m_nodeConfig->txGasLimit(),
+                                   .compatibilityVersion = m_nodeConfig->compatibilityVersion()}))
+            {
+                BOOST_THROW_EXCEPTION(
+                    bcos::tool::InvalidConfig() << bcos::errinfo_comment(*mismatch));
+            }
+            INITIALIZER_LOG(INFO) << "L2 system config loaded: chain_id="
+                                  << fromBigEndian<u256>(l2Config->chainId()->bytes)
+                                  << " gas_limit=" << std::get<0>(l2Config->gasLimit())
+                                  << " block_tx_count_limit=" << l2Config->blockTxCountLimit()
+                                  << " compatibility_version="
+                                  << fmt::format("{:#x}", l2Config->compatibilityVersion())
+                                  << " source=SystemConfig@0x"
+                                  << ledger::L2_SYSTEM_CONFIG_ADDRESS_HEX
+                                  << " block=" << l2Config->blockNumber();
+        }
         // OP mode executes with the chain id admission judges against: the snapshot published
         // at boot, which already parsed the on-chain web3_chain_id row (TxValidator's
         // readChainView). The genesis file only seeds that row, so it is the fallback, not the
@@ -707,14 +765,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             parsedChainId = ledger::parseWeb3ChainId(m_nodeConfig->genesisConfig().m_web3ChainID);
         }
-        if (!parsedChainId || *parsedChainId == 0 ||
-            *parsedChainId > std::numeric_limits<uint64_t>::max())
-        {
-            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "OP mode (executor_version>=3) requires a non-zero [web3] "
-                                      "chain_id that fits uint64"));
-        }
-        uint64_t const opChainId = static_cast<uint64_t>(*parsedChainId);
+        uint64_t const opChainId = requireOpChainId(parsedChainId);
         auto opScheduler =
             std::make_shared<bcos::evm::engine::OpSchedulerSeam<GlobalStateStorage::ViewType>>(
                 *opForkSchedule, bcos::executor_v1::opstack::OpEthL1BlockInfo{});
@@ -732,26 +783,34 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         if (!m_nodeConfig->opStackELModeEnabled())
         {
             m_daCaps = std::make_shared<bcos::engine::DACaps>();
+            // The seal cap reads the admission holder's snapshot, which the republisher below
+            // keeps at the SystemConfig block_tx_count_limit; c_defaultBlockTxCountLimit is
+            // only the fallback for a snapshot that carries 0.
             m_engineServiceInitializer = EngineServiceInitializer::buildOp(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
                 m_memPoolInitializer->memPool(), bcos::engine::c_defaultBlockTxCountLimit,
-                opDelegate, m_daCaps, /*allowSynthesizedL1Attributes=*/false);
+                opDelegate, m_daCaps, /*allowSynthesizedL1Attributes=*/false,
+                [holder = m_ledgerConfigState]() -> int64_t {
+                    return static_cast<int64_t>(holder->get()->blockTxCountLimit());
+                });
         }
 
         m_opScheduler = opDelegate;
         // Republish the full ledger configuration after every OP commit (see
         // engine/OpLedgerConfigRepublish.h for why the engine must not publish the
-        // scheduler's own LedgerConfig instead). On failure the previous snapshot stays, which
-        // is strictly better than an empty one.
-        auto republishLedgerConfig =
-            bcos::engine::makeOpLedgerConfigRepublisher(m_ledgerConfigState, m_ledger,
-                [](bcos::protocol::BlockNumber number, bcos::Error::Ptr error) {
-                    INITIALIZER_LOG(ERROR)
-                        << LOG_DESC(
-                               "republish ledger config after OP commit failed; admission keeps "
-                               "the previous snapshot")
-                        << LOG_KV("number", number) << LOG_KV("error", error->errorMessage());
-                });
+        // scheduler's own LedgerConfig instead), overlaid with the SystemConfig keys at
+        // committed + 1 so the next seal honours a governance write. On failure the previous
+        // snapshot stays, which is strictly better than an empty one.
+        auto republishLedgerConfig = bcos::engine::makeOpLedgerConfigRepublisher(
+            m_ledgerConfigState, m_ledger,
+            [](bcos::protocol::BlockNumber number, bcos::Error::Ptr error) {
+                INITIALIZER_LOG(ERROR)
+                    << LOG_DESC(
+                           "republish ledger config after OP commit failed; admission keeps "
+                           "the previous snapshot")
+                    << LOG_KV("number", number) << LOG_KV("error", error->errorMessage());
+            },
+            l2SystemConfigLoader);
         // The scheduler holds one notifier slot; compose so installing the RPC notifier later
         // does not drop the republish.
         opDelegate->setBlockNumberNotifier(republishLedgerConfig);

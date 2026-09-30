@@ -44,7 +44,8 @@ namespace bcos::initializer
 /// MultiVersionScheduler's publishing wrapper, so each keeps the LedgerConfigState holder
 /// current itself — transaction admission reads it and nowhere else: build() hands the holder
 /// to EthEngineService, which republishes after every durable commit; buildOp() does not take
-/// one at all, and the initializer instead installs the republish notifier OpScheduler fires
+/// one at all (only a read-only seal-limit callable the initializer binds to the holder), and
+/// the initializer instead installs the republish notifier OpScheduler fires
 /// after every OP commit (OpLedgerConfigRepublish.h explains why the engine must not publish
 /// there).
 class EngineServiceInitializer
@@ -90,15 +91,16 @@ public:
         int64_t blockTxCountLimit = bcos::engine::c_defaultBlockTxCountLimit,
         bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
         std::shared_ptr<bcos::engine::DACaps> daCaps = nullptr,
-        bool allowSynthesizedL1Attributes = false)
+        bool allowSynthesizedL1Attributes = false,
+        std::function<int64_t()> sealTxCountLimitSource = nullptr)
     {
         auto initializer = Ptr(new EngineServiceInitializer());
         using ConcreteEngineService = bcos::engine::OpEngineService<bcos::txpool::MemPoolImpl,
             GlobalStateStorage, SchedulerType>;
         auto holder = std::make_shared<ConcreteOpModel<SchedulerType, ConcreteEngineService>>(
             std::move(storageInitializer), std::move(blockFactory), std::move(scheduler), memPool,
-            blockTxCountLimit, std::move(delegate), std::move(daCaps),
-            allowSynthesizedL1Attributes);
+            blockTxCountLimit, std::move(delegate), std::move(daCaps), allowSynthesizedL1Attributes,
+            std::move(sealTxCountLimitSource));
         initializer->m_holder = holder;
         initializer->m_engineService =
             std::shared_ptr<bcos::engine::AnyEngineService>(holder, &holder->m_any);
@@ -156,14 +158,15 @@ private:
             bcos::protocol::BlockFactory::Ptr blockFactory,
             std::shared_ptr<SchedulerType> scheduler, bcos::txpool::MemPoolImpl& memPool,
             int64_t blockTxCountLimit, bcos::scheduler::SchedulerInterface::Ptr delegate,
-            std::shared_ptr<bcos::engine::DACaps> daCaps, bool allowSynthesizedL1Attributes)
+            std::shared_ptr<bcos::engine::DACaps> daCaps, bool allowSynthesizedL1Attributes,
+            std::function<int64_t()> sealTxCountLimitSource)
           : m_storageInitializer(std::move(storageInitializer)),
             m_memPool(memPool),
             m_scheduler(std::move(scheduler)),
             m_any(std::in_place_type<ConcreteEngineService>, m_memPool,
                 m_storageInitializer->storage(), *m_scheduler, std::move(blockFactory),
                 blockTxCountLimit, std::move(delegate), std::move(daCaps),
-                allowSynthesizedL1Attributes)
+                allowSynthesizedL1Attributes, std::move(sealTxCountLimitSource))
         {}
 
         std::shared_ptr<GlobalStateStorageInitializer> m_storageInitializer;
