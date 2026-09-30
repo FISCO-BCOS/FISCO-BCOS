@@ -412,12 +412,16 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
             std::make_move_iterator(decodedForcedTxs.end()));
     }
 
-    // The build reads finalized state here. A pool transaction already included in the
-    // window can have a stale nonce until the read plane uses the selected parent view.
-    auto sealView = m_globalStateStorage.fork();
     std::vector<protocol::Transaction::Ptr> sealedTxs;
     if (!payloadAttributes.noTxPool.value_or(false))
     {
+        // Seal against the selected parent's state, including its unfinalized layers.
+        std::optional<ViewType> chainView;
+        if (m_chainViewProvider)
+        {
+            chainView = co_await m_chainViewProvider(forkchoiceState.headBlockHash);
+        }
+        auto sealView = chainView ? std::move(*chainView) : m_globalStateStorage.fork();
         // The pool fills what the forced transactions leave of the attributes' gasLimit
         // (the header field); see engine_common::poolGasBudget for the op-geth gasPool
         // rule and the system-deposit exemption. Undecodable forced envelopes take
