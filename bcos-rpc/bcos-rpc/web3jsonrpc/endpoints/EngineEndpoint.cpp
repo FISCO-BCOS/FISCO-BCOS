@@ -525,8 +525,8 @@ task::Task<Json::Value> EngineEndpoint::payloadBodyAtNumber(protocol::BlockNumbe
             co_return Json::nullValue;
         }
         auto const rawWithdrawals = entry->get();
-        body["withdrawals"] = decodeWithdrawalsJson(
-            bcos::bytes(rawWithdrawals.begin(), rawWithdrawals.end()));
+        body["withdrawals"] =
+            decodeWithdrawalsJson(bcos::bytes(rawWithdrawals.begin(), rawWithdrawals.end()));
     }
     else
     {
@@ -645,9 +645,8 @@ task::Task<void> EngineEndpoint::getBlobsV1(const Json::Value& request, Json::Va
     for (auto const& hashValue : hashes)
     {
         // parseH256 maps malformed hex / wrong length to -32602.
-        versionedHashes.emplace_back(crypto::HashType(
-            parseH256(hashValue.isString() ? std::string_view(hashValue.asString()) :
-                                             std::string_view())));
+        versionedHashes.emplace_back(crypto::HashType(parseH256(
+            hashValue.isString() ? std::string_view(hashValue.asString()) : std::string_view())));
     }
 
     // Pool first (the spec's data source: "fetch blobs from the execution layer blob
@@ -657,8 +656,7 @@ task::Task<void> EngineEndpoint::getBlobsV1(const Json::Value& request, Json::Va
     {
         items = memPool->blobsByVersionedHashes(versionedHashes);
     }
-    auto missing = static_cast<std::size_t>(
-        std::count(items.begin(), items.end(), std::nullopt));
+    auto missing = static_cast<std::size_t>(std::count(items.begin(), items.end(), std::nullopt));
     if (missing > 0)
     {
         auto const& ledger = m_nodeService->ledger();
@@ -666,13 +664,11 @@ task::Task<void> EngineEndpoint::getBlobsV1(const Json::Value& request, Json::Va
         if (stateStorage)
         {
             auto const head = co_await ledger::getCurrentBlockNumber(*ledger);
-            for (auto number = head; number >= 0 && missing > 0 &&
-                 head - number < c_getBlobsLedgerScanDepth;
-                 --number)
+            for (auto number = head;
+                number >= 0 && missing > 0 && head - number < c_getBlobsLedgerScanDepth; --number)
             {
                 auto const entry = co_await storage2::readOne(*stateStorage,
-                    executor_v1::StateKeyView{
-                        ledger::SYS_NUMBER_2_BLOBS, std::to_string(number)});
+                    executor_v1::StateKeyView{ledger::SYS_NUMBER_2_BLOBS, std::to_string(number)});
                 if (!entry.has_value())
                 {
                     continue;
@@ -684,8 +680,8 @@ task::Task<void> EngineEndpoint::getBlobsV1(const Json::Value& request, Json::Va
                 {
                     auto const outerHead = codec::rlp::decodeHeader(in);
                     bcos::byte* const outerStart = in.data();
-                    while (static_cast<std::size_t>(in.data() - outerStart) <
-                           outerHead.payloadLength)
+                    while (
+                        static_cast<std::size_t>(in.data() - outerStart) < outerHead.payloadLength)
                     {
                         auto const itemHead = codec::rlp::decodeHeader(in);
                         bcos::byte* const itemStart = in.data();
@@ -745,8 +741,8 @@ task::Task<void> EngineEndpoint::getClientVersionV1(
     // (params[0]) is informational only — accepted when object-shaped, never consulted.
     if (request.size() >= 1 && !request[0u].isObject())
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            InvalidParams, "engine_getClientVersionV1 expects [clientVersion]"));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "engine_getClientVersionV1 expects [clientVersion]"));
     }
     // "FB" is unreserved in the spec's ClientCode list (execution-apis identification.md
     // invites unlisted clients to pick a non-colliding two-letter code).
@@ -755,8 +751,7 @@ task::Task<void> EngineEndpoint::getClientVersionV1(
     self["name"] = "FISCO-BCOS";
     self["version"] = std::string("v") + FISCO_BCOS_PROJECT_VERSION;
     // commit is DATA, 4 bytes — the first four bytes of the build's commit hash.
-    self["commit"] =
-        "0x" + std::string(FISCO_BCOS_COMMIT_HASH).substr(0, 8);
+    self["commit"] = "0x" + std::string(FISCO_BCOS_COMMIT_HASH).substr(0, 8);
     Json::Value result(Json::arrayValue);
     result.append(std::move(self));
     buildJsonContent(result, response);
