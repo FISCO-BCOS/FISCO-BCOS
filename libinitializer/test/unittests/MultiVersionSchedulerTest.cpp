@@ -62,7 +62,7 @@ public:
     std::optional<UnfinalizedBlock> unfinalizedBlock(bcos::crypto::HashType const&) const override
     {
         ++m_windowLookupCount;
-        return UnfinalizedBlock{.number = 42};
+        return UnfinalizedBlock{.number = 42, .hash = {}, .parentHash = {}, .header = nullptr};
     }
     void finalizeUpTo(
         bcos::crypto::HashType const&, std::function<void(Error::Ptr)> callback) override
