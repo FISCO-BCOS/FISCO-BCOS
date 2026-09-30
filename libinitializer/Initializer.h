@@ -30,6 +30,7 @@
 #include "ethereum-executor/EthereumExecutor.h"
 #include "libinitializer/MultiVersionScheduler.h"
 #include <bcos-framework/engine/DACaps.h>
+#include <bcos-framework/engine/OpCanonicalReader.h>
 #ifdef TOOLS
 #include "tools/archive-tool/ArchiveService.h"
 #endif
@@ -116,6 +117,9 @@ public:
         return m_engineServiceInitializer;
     }
     std::shared_ptr<bcos::engine::AnyEngineService> engineService();
+    /// The OP lane's RPC read facade (EngineServiceInitializer::opCanonicalReader); null on
+    /// every other lane and in opstack-el self-sync mode (no Engine service).
+    bcos::engine::OpCanonicalReader::Ptr opCanonicalReader();
 
     std::shared_ptr<bcos::single_consensus::SingleNodeConsensus> singleNodeConsensus()
     {

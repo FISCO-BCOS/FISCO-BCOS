@@ -391,17 +391,22 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
 
     requireDelegate();
 
-    // NOT REMAPPED IN THIS CHANGE (sequencer lane, noTxPool=false): this is the FINALIZED
-    // plane — the OP lane no longer pushes executed layers onto the anonymous deque, so
-    // fork() sees no unfinalized block. MemPoolImpl::remove() therefore judges "already on
-    // chain" against a nonce up to `unfinalized_window` blocks stale: a tx included in an
-    // unfinalized block is re-sealed, fails nonce-too-low in the probe and is dropped via
-    // skipSenderTail (one extra build pass per such tx; convergent, not corrupt). The
-    // read-plane follow-up moves this to viewAt(trackedHead()) with the RPC reads.
-    auto sealView = m_globalStateStorage.fork();
+    // Sequencer lane (noTxPool=false): seal against the PARENT's chain view (D1 §10.2), so
+    // MemPoolImpl::remove() judges "already on chain" by the nonce the unfinalized head chain
+    // carries — the finalized plane would be up to `unfinalized_window` blocks stale and
+    // re-seal every tx already included upstream of the head. The provider is the
+    // OpScheduler's viewAt; without one (stubs) fork() is what it always was. Building the
+    // view only when sealing happens keeps the noTxPool (verifier) path free of the window
+    // walk.
     std::vector<protocol::Transaction::Ptr> sealedTxs;
     if (!payloadAttributes.noTxPool.value_or(false))
     {
+        std::optional<ViewType> chainView;
+        if (m_chainViewProvider)
+        {
+            chainView = co_await m_chainViewProvider(forkchoiceState.headBlockHash);
+        }
+        auto sealView = chainView ? std::move(*chainView) : m_globalStateStorage.fork();
         sealView.newMutable();
         m_memPool.remove(sealView);
         m_memPool.seal(m_blockTxCountLimit, sealView, std::back_inserter(sealedTxs));

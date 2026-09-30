@@ -1896,22 +1896,26 @@ BOOST_AUTO_TEST_CASE(CallAtBlockLatestEqualsLatestCall)
 }
 
 /// The OP lane (executor_version >= OPSTACK_EXECUTOR_VERSION, scenario B by construction) keeps
-/// account fields in the committed MPT, but an executed-but-unfinalized block may already have
-/// advanced the nonce in its window layer. getPendingStorageAt feeds EthEndpoint::call's tx
-/// nonce, so the unfinalized row must win over the committed trie value — otherwise a caller
-/// whose tx is already in a block gets NONCE_TOO_LOW. The pending plane is the most recently
-/// executed (staged) or admitted block's chain.
-BOOST_AUTO_TEST_CASE(PendingStorageAtPrefersThePendingLayerOverTheCommittedTrie)
+/// account fields in the committed MPT, but an unfinalized block may already have advanced the
+/// nonce in its window layer. getPendingStorageAt feeds EthEndpoint::call's tx nonce, so the
+/// unfinalized row must win over the committed trie value — otherwise a caller whose tx is
+/// already in a block gets NONCE_TOO_LOW. The pending plane is the CANONICAL HEAD's chain (D1
+/// §10.2, setCanonicalHeadProvider): a staged or admitted block that the Engine tracker has not
+/// made head is not visible, exactly like op-geth's pending state at the last forkchoice head.
+BOOST_AUTO_TEST_CASE(PendingStorageAtReadsTheCanonicalHeadChain)
 {
     Fixture f;
     // Committed state: kSender's trie-backed nonce is 0 (seedSender), and the genesis header
     // carries the root so the historical arm can resolve it.
     auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
-    auto before = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
-        kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*number=*/0));
-    BOOST_REQUIRE(before.has_value());
-    BOOST_CHECK_EQUAL(std::string(before->get()), "0");
+    auto const pendingNonce = [&] {
+        auto entry = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
+            kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*number=*/0));
+        BOOST_REQUIRE(entry.has_value());
+        return std::string(entry->get());
+    };
+    BOOST_CHECK_EQUAL(pendingNonce(), "0");
 
     // Staged (executed verify=true, neither admitted nor finalized): the corpus eip1559
     // transfer from kSender advanced its nonce to 1 inside the block's own layer.
@@ -1921,11 +1925,18 @@ BOOST_AUTO_TEST_CASE(PendingStorageAtPrefersThePendingLayerOverTheCommittedTrie)
     auto staged = executeOpBlock(f, makeHeader(), {depEnv, eipEnvBytes}, /*verify=*/true);
     BOOST_REQUIRE_MESSAGE(
         staged.err == nullptr, "stage block 1: " << (staged.err ? staged.err->errorMessage() : ""));
+    auto const stagedHash = bcos::protocol::canonicalBlockHash(*staged.header);
 
-    auto entry = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
-        kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*number=*/0));
-    BOOST_REQUIRE_MESSAGE(entry.has_value(), "the pending nonce row must be visible");
-    BOOST_CHECK_EQUAL(std::string(entry->get()), "1");
+    // No head provider / no head yet: the finalized plane.
+    BOOST_CHECK_EQUAL(pendingNonce(), "0");
+    std::optional<bcos::h256> head;
+    f.scheduler->setCanonicalHeadProvider([&head] { return head; });
+    BOOST_CHECK_EQUAL(pendingNonce(), "0");
+
+    // Admitted but not the head (between newPayload VALID and its forkchoiceUpdated): still
+    // the finalized plane.
+    commitOpBlock(f, staged.header);
+    BOOST_CHECK_EQUAL(pendingNonce(), "0");
     // Still nothing on disk.
     {
         auto committed = f.multiLayerStorage.forkCommitted();
@@ -1935,12 +1946,12 @@ BOOST_AUTO_TEST_CASE(PendingStorageAtPrefersThePendingLayerOverTheCommittedTrie)
         BOOST_REQUIRE(nonce.has_value());
         BOOST_CHECK_EQUAL(*nonce, "0");
     }
-    // Admitting keeps it visible; reset() of a staged-only block would have dropped it.
-    commitOpBlock(f, staged.header);
-    entry = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
-        kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*number=*/0));
-    BOOST_REQUIRE(entry.has_value());
-    BOOST_CHECK_EQUAL(std::string(entry->get()), "1");
+    // FCU(head = the admitted block): its window layer is the pending plane.
+    head = stagedHash;
+    BOOST_CHECK_EQUAL(pendingNonce(), "1");
+    // A head this scheduler does not know (SYNCING territory) reads the finalized plane.
+    head = bcos::h256(std::string(64, 'f'));
+    BOOST_CHECK_EQUAL(pendingNonce(), "0");
 }
 
 /// Binary-layout variant of the pending-plane test above: the unfinalized nonce row lives at
@@ -1973,6 +1984,9 @@ BOOST_AUTO_TEST_CASE(PendingStorageAtBinaryModeReadsThePendingLayer)
     auto staged = executeOpBlock(f, makeHeader(), {depEnv, eipEnvBytes}, /*verify=*/true);
     BOOST_REQUIRE_MESSAGE(
         staged.err == nullptr, "stage block 1: " << (staged.err ? staged.err->errorMessage() : ""));
+    commitOpBlock(f, staged.header);
+    auto const headHash = bcos::protocol::canonicalBlockHash(*staged.header);
+    f.scheduler->setCanonicalHeadProvider([headHash] { return std::optional(headHash); });
 
     auto entry = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
         kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*number=*/0));

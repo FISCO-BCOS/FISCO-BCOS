@@ -167,9 +167,9 @@ task::Task<Json::Value> FilterSystem::getFilterChangeImpl(std::string_view group
 task::Task<Json::Value> FilterSystem::getBlockChangeImpl(
     std::string_view groupId, Filter::Ptr filter)
 {
-    // getLatestBlockNumber and getBlockHash use the same ledger
-    auto ledger = getNodeService(groupId, "getBlockChangeImpl")->ledger();
-    auto latestBlockNumber = getLatestBlockNumber(*ledger);
+    // getLatestBlockNumber and canonicalBlockHashAt use the same node service
+    auto nodeService = getNodeService(groupId, "getBlockChangeImpl");
+    auto latestBlockNumber = getLatestBlockNumber(*nodeService);
     auto startBlockNumber = filter->startBlockNumber();
 
     if (latestBlockNumber < startBlockNumber)
@@ -189,7 +189,7 @@ task::Task<Json::Value> FilterSystem::getBlockChangeImpl(
     Json::Value jResult(Json::arrayValue);
     for (auto i = 0; i < processBlockNum; ++i)
     {
-        auto hash = co_await ledger::getBlockHash(*ledger, startBlockNumber + i);
+        auto hash = co_await canonicalBlockHashAt(*nodeService, startBlockNumber + i);
         jResult.append(hash.hexPrefixed());
     }
     co_return jResult;
@@ -198,9 +198,9 @@ task::Task<Json::Value> FilterSystem::getBlockChangeImpl(
 task::Task<Json::Value> FilterSystem::getPendingTxChangeImpl(
     std::string_view groupId, Filter::Ptr filter)
 {
-    // getLatestBlockNumber and getBlockData use the same ledger
-    auto ledger = getNodeService(groupId, "getPendingTxChangeImpl")->ledger();
-    auto latestBlockNumber = getLatestBlockNumber(*ledger);
+    // getLatestBlockNumber and canonicalBlockByNumber use the same node service
+    auto nodeService = getNodeService(groupId, "getPendingTxChangeImpl");
+    auto latestBlockNumber = getLatestBlockNumber(*nodeService);
     auto startBlockNumber = filter->startBlockNumber();
     if (latestBlockNumber < startBlockNumber)
     {  // Since the last query, no new blocks have been generated
@@ -220,8 +220,8 @@ task::Task<Json::Value> FilterSystem::getPendingTxChangeImpl(
     Json::Value jRes(Json::arrayValue);
     for (auto i = 0; i < processBlockNum; ++i)
     {
-        auto block = co_await ledger::getBlockData(
-            *ledger, i + startBlockNumber, bcos::ledger::TRANSACTIONS_HASH);
+        auto block = co_await canonicalBlockByNumber(
+            *nodeService, i + startBlockNumber, bcos::ledger::TRANSACTIONS_HASH);
         for (std::size_t index = 0; index < block->transactionsMetaDataSize(); ++index)
         {
             jRes.append(block->transactionHash(index).hexPrefixed());
@@ -232,9 +232,9 @@ task::Task<Json::Value> FilterSystem::getPendingTxChangeImpl(
 
 task::Task<Json::Value> FilterSystem::getLogChangeImpl(std::string_view groupId, Filter::Ptr filter)
 {
-    // getLatestBlockNumber and getLogsInternal use the same ledger
-    auto ledger = getNodeService(groupId, "getLogsImpl")->ledger();
-    auto latestBlockNumber = getLatestBlockNumber(*ledger);
+    // getLatestBlockNumber and getLogsInternal use the same node service
+    auto nodeService = getNodeService(groupId, "getLogsImpl");
+    auto latestBlockNumber = getLatestBlockNumber(*nodeService);
     auto startBlockNumber = filter->startBlockNumber();
     auto fromBlock = filter->params()->fromBlock();
     auto toBlock = filter->params()->toBlock();
@@ -281,7 +281,7 @@ task::Task<Json::Value> FilterSystem::getLogChangeImpl(std::string_view groupId,
                       << LOG_KV("nextStartBlockNumber", begin + processBlockNum)
                       << LOG_KV("begin", begin) << LOG_KV("end", end) << LOG_KV("from", begin)
                       << LOG_KV("to", begin + processBlockNum - 1);
-    co_return co_await getLogsInternal(*ledger, std::move(params));
+    co_return co_await getLogsInternal(*nodeService, std::move(params));
 }
 
 task::Task<Json::Value> FilterSystem::getFilterLogsImpl(std::string_view groupId, u256 filterID)
@@ -300,30 +300,31 @@ task::Task<Json::Value> FilterSystem::getFilterLogsImpl(std::string_view groupId
 task::Task<Json::Value> FilterSystem::getLogsImpl(
     std::string_view groupId, FilterRequest::Ptr params, bool needCheckRange)
 {
-    // getLatestBlockNumber and getLogsInPool use the same ledger
-    auto ledger = getNodeService(groupId, "getLogsImpl")->ledger();
+    // getLatestBlockNumber and getLogsInternal use the same node service
+    auto nodeService = getNodeService(groupId, "getLogsImpl");
     if (!params->blockHash().empty())
     {  // when blockHash is not empty, match logs within the specified block
         auto matcher = m_matcher;
-        int64_t blockNumber = 0;
+        protocol::Block::Ptr block;
         try
         {
-            blockNumber = co_await ledger::getBlockNumber(*ledger,
-                bcos::crypto::HashType(params->blockHash(), bcos::crypto::HashType::FromHex));
+            // By hash, any branch: a replaced sibling still answers for its own logs, as
+            // eth_getBlockByHash does (D1 §10.2).
+            block = co_await canonicalBlockByHash(*nodeService,
+                bcos::crypto::HashType(params->blockHash(), bcos::crypto::HashType::FromHex),
+                bcos::ledger::HEADER | bcos::ledger::RECEIPTS | bcos::ledger::TRANSACTIONS_HASH);
         }
         catch (std::exception& e)
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParamsCode(), "unknown block"));
         }
-        auto block = co_await ledger::getBlockData(*ledger, blockNumber,
-            bcos::ledger::HEADER | bcos::ledger::RECEIPTS | bcos::ledger::TRANSACTIONS_HASH);
         Json::Value jArray(Json::arrayValue);
         matcher->matches(params, block, jArray);
         co_return jArray;
     }
     else
     {
-        auto latestBlockNumber = getLatestBlockNumber(*ledger);
+        auto latestBlockNumber = getLatestBlockNumber(*nodeService);
         auto fromBlock = params->fromBlock();
         auto toBlock = params->toBlock();
         if (needCheckRange && !params->checkBlockRange())
@@ -347,12 +348,12 @@ task::Task<Json::Value> FilterSystem::getLogsImpl(
         auto processBlockNum = std::min(toBlock - fromBlock + 1, m_maxBlockProcessPerReq);
         params->setFromBlock(fromBlock);
         params->setToBlock(fromBlock + processBlockNum - 1);
-        co_return co_await getLogsInternal(*ledger, std::move(params));
+        co_return co_await getLogsInternal(*nodeService, std::move(params));
     }
 }
 
 task::Task<Json::Value> FilterSystem::getLogsInternal(
-    bcos::ledger::LedgerInterface& ledger, FilterRequest::Ptr params)
+    NodeService& nodeService, FilterRequest::Ptr params)
 {
     auto fromBlock = params->fromBlock();
     auto toBlock = params->toBlock();
@@ -360,7 +361,7 @@ task::Task<Json::Value> FilterSystem::getLogsInternal(
     auto matcher = m_matcher;
     for (auto number = fromBlock; number <= toBlock; ++number)
     {
-        auto block = co_await ledger::getBlockData(ledger, number,
+        auto block = co_await canonicalBlockByNumber(nodeService, number,
             bcos::ledger::HEADER | bcos::ledger::RECEIPTS | bcos::ledger::TRANSACTIONS_HASH);
         matcher->matches(params, block, jArray);
     }

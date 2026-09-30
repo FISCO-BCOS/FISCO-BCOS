@@ -187,6 +187,11 @@ std::shared_ptr<bcos::engine::AnyEngineService> Initializer::engineService()
     return m_engineServiceInitializer ? m_engineServiceInitializer->engineService() : nullptr;
 }
 
+bcos::engine::OpCanonicalReader::Ptr Initializer::opCanonicalReader()
+{
+    return m_engineServiceInitializer ? m_engineServiceInitializer->opCanonicalReader() : nullptr;
+}
+
 void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
     bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion,
