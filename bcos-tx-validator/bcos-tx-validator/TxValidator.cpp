@@ -28,6 +28,7 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-rlp-protocol/Web3TxEnvelope.h"
+#include "bcos-tars-protocol/protocol/Web3RawTransaction.h"
 #include "bcos-tx-validator/Normalize.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/DataConvertUtility.h"
@@ -177,6 +178,12 @@ void TxValidator::setScheduler(std::weak_ptr<scheduler::SchedulerInterface> sche
     m_scheduler = std::move(scheduler);
 }
 
+void TxValidator::setRollupCostFn(RollupCostFn rollupCost)
+{
+    WriteGuard guard(x_lateBound);
+    m_rollupCost = std::make_shared<const RollupCostFn>(std::move(rollupCost));
+}
+
 namespace
 {
 /// What every stage sees: the normalized transaction, its routing key and the validator's own
@@ -229,6 +236,9 @@ struct StateInputs
     TxKind kind;
     ChainView const& chain;
     std::optional<AccountState> const& sender;
+    /// Asked of the bound RollupCostFn exactly when the set contains Check::L1Cost. nullopt =
+    /// no rollup cost on this chain (nothing bound, or the callable declined): it stands down.
+    std::optional<u256> const& rollupCost;
 };
 
 /// Inputs of the pool stage. Either checker may be null: see checkBcosPoolNonce and
@@ -571,30 +581,47 @@ TransactionStatus checkInitCodeSize(StateInputs const& in)
     return TransactionStatus::None;
 }
 
-TransactionStatus checkBalance(StateInputs const& in)
+/// What the sender must cover before any rollup cost -- geth's tx.Cost(). Which fee it charges
+/// depends on whether this chain charges gas at all:
+///   baseFee == 0 (tx_gas_price unset or "0")  -> gas is free; only `value` has to be covered
+///   baseFee > 0                                -> value + gasLimit * effectiveGasPrice
+/// This mirrors the existing rule. It differs from evmone, which always charges
+/// max_gas_price * gas_limit + value, because on a free-gas FISCO chain the sender is never
+/// actually debited the fee cap they declared -- charging it at admission would reject
+/// transactions that execute perfectly well.
+///
+/// 512-bit, deliberately. bcos::u256 carries boost::multiprecision::unchecked, so
+/// gasLimit * gasPrice + value is reduced mod 2^256 with no signal -- with a maxFeePerGas
+/// near 2^256-1 the product comes back small and an unfundable transaction is admitted.
+/// Widening FIRST is what makes this correct: two 256-bit operands multiply into at most 512
+/// bits, so the u512 product cannot wrap even though u512 is itself `unchecked`.
+u512 gasAndValueCost(StateInputs const& in)
 {
-    // What the sender must be able to cover depends on whether this chain charges gas at all:
-    //   tx_gas_price unset or "0"  -> gas is free; only `value` has to be covered
-    //   tx_gas_price > 0           -> value + gasLimit * effectiveGasPrice
-    // This mirrors the existing rule. It differs from evmone, which always charges
-    // max_gas_price * gas_limit + value, because on a free-gas FISCO chain the sender is never
-    // actually debited the fee cap they declared -- charging it at admission would reject
-    // transactions that execute perfectly well.
-    const bool chargesGas = in.chain.baseFee != 0;
-
-    u256 const balance = in.sender.value().balance;
-
-    // 512-bit, deliberately. bcos::u256 carries boost::multiprecision::unchecked, so
-    // gasLimit * gasPrice + value is reduced mod 2^256 with no signal -- with a maxFeePerGas
-    // near 2^256-1 the product comes back small and an unfundable transaction is admitted.
-    // Widening FIRST is what makes this correct: two 256-bit operands multiply into at most 512
-    // bits, so the u512 product cannot wrap even though u512 is itself `unchecked`.
     u512 required{in.tx.value()};
-    if (chargesGas)
+    if (in.chain.baseFee != 0)
     {
         required += u512{in.tx.gasLimit()} * u512{protocol::effectiveGasPrice(in.tx)};
     }
-    if (u512{balance} < required)
+    return required;
+}
+
+TransactionStatus checkBalance(StateInputs const& in)
+{
+    if (u512{in.sender.value().balance} < gasAndValueCost(in))
+    {
+        return TransactionStatus::InsufficientFunds;
+    }
+    return TransactionStatus::None;
+}
+
+TransactionStatus checkL1Cost(StateInputs const& in)
+{
+    if (!in.rollupCost.has_value())
+    {
+        return TransactionStatus::None;  // no rollup cost on this chain
+    }
+    // op-geth ValidateTransactionWithState: balance < tx.Cost() + rollupCost.
+    if (u512{in.sender.value().balance} < gasAndValueCost(in) + u512{*in.rollupCost})
     {
         return TransactionStatus::InsufficientFunds;
     }
@@ -703,6 +730,7 @@ constexpr std::array<CheckEntry<StateInputs>, c_stateOrder.size()> c_stateRegist
     {Check::Web3NonceWindow, &checkWeb3NonceWindow},
     {Check::InitCodeSize, &checkInitCodeSize},
     {Check::Balance, &checkBalance},
+    {Check::L1Cost, &checkL1Cost},
     {Check::IntrinsicGas, &checkIntrinsicGas},
 }};
 
@@ -797,9 +825,22 @@ ChainView readChainView(ledger::LedgerConfigState const& configState, Check chec
     }
     if ((checks & c_baseFeeDependent) != Check::None)
     {
-        // The raw SYS_CONFIG string: "0x0" by default, hex as SystemConfigPrecompiled enforces. A
-        // value u256 cannot parse throws here, as it did when the checks parsed it themselves.
-        view.baseFee = u256(std::get<0>(view.config->gasPrice()));
+        // The OP lane prices against the head block's EIP-1559 base fee, as op-geth's pool
+        // does against head.BaseFee; tx_gas_price is a FISCO governance row the OP fee market
+        // never reads. The FISCO and L1 lanes keep tx_gas_price, as does an OP snapshot whose
+        // getLedgerConfig read no head header.
+        auto const& headBaseFee = view.config->baseFeePerGas();
+        if (view.config->executorVersion() >= ledger::OPSTACK_EXECUTOR_VERSION && headBaseFee)
+        {
+            view.baseFee = *headBaseFee;
+        }
+        else
+        {
+            // The raw SYS_CONFIG string: "0x0" by default, hex as SystemConfigPrecompiled
+            // enforces. A value u256 cannot parse throws here, as it did when the checks parsed
+            // it themselves.
+            view.baseFee = u256(std::get<0>(view.config->gasPrice()));
+        }
     }
     if (contains(checks, Check::ChainId))
     {
@@ -880,6 +921,25 @@ task::Task<std::optional<AccountState>> TxValidator::readAccountState(std::strin
     co_return state;
 }
 
+task::Task<std::optional<u256>> TxValidator::readRollupCost(
+    protocol::Transaction const& tx, ledger::LedgerConfig const& head)
+{
+    std::shared_ptr<const RollupCostFn> rollupCost;
+    {
+        ReadGuard guard(x_lateBound);
+        rollupCost = m_rollupCost;
+    }
+    if (!rollupCost)
+    {
+        co_return std::nullopt;
+    }
+    // The wire form: extraTransactionBytes is the signing payload, and the L1 fee covers the
+    // signature too.
+    auto const envelope = bcostars::protocol::reassembleWeb3RawTransaction(
+        tx.extraTransactionBytes(), tx.signatureData());
+    co_return co_await (*rollupCost)(ref(envelope), static_cast<uint64_t>(tx.gasLimit()), head);
+}
+
 task::Task<TransactionStatus> TxValidator::verify(
     Transaction& tx, AdmissionContext context, SignaturePolicy policy)
 {
@@ -936,7 +996,13 @@ task::Task<TransactionStatus> TxValidator::verify(
         {
             sender = co_await readAccountState(tx.sender());
         }
-        const StateInputs inputs{.tx = tx, .kind = kind, .chain = chain, .sender = sender};
+        std::optional<u256> rollupCost;
+        if ((checks & c_rollupCostDependent) != Check::None)
+        {
+            rollupCost = co_await readRollupCost(tx, *chain.config);
+        }
+        const StateInputs inputs{
+            .tx = tx, .kind = kind, .chain = chain, .sender = sender, .rollupCost = rollupCost};
         if (auto status = runStage(c_stateRegistry, checks, inputs);
             status != TransactionStatus::None)
         {
