@@ -544,6 +544,14 @@ task::Task<void> EngineEndpoint::getPayloadBodiesByHashV1(
         BOOST_THROW_EXCEPTION(JsonRpcException(
             InvalidParams, "engine_getPayloadBodiesByHashV1 expects an array of block hashes"));
     }
+    // Same ceiling as getPayloadBodiesByRangeV1 / getBlobsV1: the spec permits answering
+    // -38004 above the client's own limit, and each entry costs two storage reads.
+    if (hashes.size() > c_maxPayloadBodiesRange)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::TooLargeRequest,
+            "engine_getPayloadBodiesByHashV1: requested count too large: " +
+                std::to_string(hashes.size())));
+    }
     auto const& ledger = m_nodeService->ledger();
     Json::Value result(Json::arrayValue);
     for (auto const& hashValue : hashes)
