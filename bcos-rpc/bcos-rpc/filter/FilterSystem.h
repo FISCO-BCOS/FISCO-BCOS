@@ -5,6 +5,7 @@
 #include "bcos-rpc/filter/LogMatcher.h"
 #include "bcos-rpc/groupmgr/GroupManager.h"
 #include "bcos-rpc/groupmgr/NodeService.h"
+#include "bcos-rpc/web3jsonrpc/utils/CanonicalReads.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/BucketMap.h"
@@ -115,8 +116,7 @@ public:
 public:
     int64_t getLatestBlockNumber(std::string_view groupId)
     {
-        auto ledger = getNodeService(groupId, "getCurrentBlockNumber")->ledger();
-        return getLatestBlockNumber(*ledger);
+        return getLatestBlockNumber(*getNodeService(groupId, "getCurrentBlockNumber"));
     }
     int64_t getLatestBlockNumber() { return getLatestBlockNumber(m_group); }
 
@@ -143,8 +143,7 @@ protected:
     task::Task<Json::Value> getFilterLogsImpl(std::string_view groupId, u256 filterID);
     task::Task<Json::Value> getLogsImpl(
         std::string_view groupId, FilterRequest::Ptr params, bool needCheckRange);
-    task::Task<Json::Value> getLogsInternal(
-        bcos::ledger::LedgerInterface& ledger, FilterRequest::Ptr params);
+    task::Task<Json::Value> getLogsInternal(NodeService& nodeService, FilterRequest::Ptr params);
 
     virtual int32_t InvalidParamsCode() = 0;
     uint64_t insertFilter(Filter::Ptr filter);
@@ -158,12 +157,15 @@ protected:
         }
         return accessor.value();
     }
-    static int64_t getLatestBlockNumber(bcos::ledger::LedgerInterface& _ledger)
+    /// `latest` as the endpoints see it: the ledger's current number, or on the OP Engine lane
+    /// the tracker head (rpc::canonicalLatestNumber) — every block read below routes the same
+    /// way, so a filter never names a height it cannot then read.
+    static int64_t getLatestBlockNumber(NodeService& _nodeService)
     {
         int64_t latest = 0;
-        task::wait([](bcos::ledger::LedgerInterface& ledger, int64_t& ret) -> task::Task<void> {
-            ret = co_await ledger::getCurrentBlockNumber(ledger);
-        }(_ledger, latest));
+        task::wait([](NodeService& nodeService, int64_t& ret) -> task::Task<void> {
+            ret = co_await canonicalLatestNumber(nodeService);
+        }(_nodeService, latest));
         return latest;
     }
 

@@ -19,6 +19,7 @@
  */
 
 #include "EngineEndpoint.h"
+#include "bcos-rpc/web3jsonrpc/utils/CanonicalReads.h"
 #include "include/BuildInfo.h"
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/kzg/Kzg4844.h>
@@ -465,12 +466,13 @@ task::Task<void> EngineEndpoint::handleNewPayload(
 
 task::Task<Json::Value> EngineEndpoint::payloadBodyAtNumber(protocol::BlockNumber number)
 {
-    auto const& ledger = m_nodeService->ledger();
     protocol::Block::Ptr block;
     try
     {
-        block = co_await ledger::getBlockData(
-            *ledger, number, bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS);
+        // The canonical chain: the ledger, or on the OP lane the head chain's window above
+        // the finalized tip (rpc::canonicalBlockByNumber).
+        block = co_await canonicalBlockByNumber(
+            *m_nodeService, number, bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS);
     }
     catch (std::exception const&)
     {
@@ -478,6 +480,13 @@ task::Task<Json::Value> EngineEndpoint::payloadBodyAtNumber(protocol::BlockNumbe
         // GetBlockByNumber-miss path — not an RPC error.
         co_return Json::nullValue;
     }
+    co_return co_await payloadBodyOf(block);
+}
+
+task::Task<Json::Value> EngineEndpoint::payloadBodyOf(protocol::Block::Ptr const& block)
+{
+    auto const number = block->blockHeader()->number();
+    auto const& ledger = m_nodeService->ledger();
 
     Json::Value body(Json::objectValue);
     Json::Value transactions(Json::arrayValue);
@@ -525,8 +534,8 @@ task::Task<Json::Value> EngineEndpoint::payloadBodyAtNumber(protocol::BlockNumbe
             co_return Json::nullValue;
         }
         auto const rawWithdrawals = entry->get();
-        body["withdrawals"] = decodeWithdrawalsJson(
-            bcos::bytes(rawWithdrawals.begin(), rawWithdrawals.end()));
+        body["withdrawals"] =
+            decodeWithdrawalsJson(bcos::bytes(rawWithdrawals.begin(), rawWithdrawals.end()));
     }
     else
     {
@@ -544,28 +553,32 @@ task::Task<void> EngineEndpoint::getPayloadBodiesByHashV1(
         BOOST_THROW_EXCEPTION(JsonRpcException(
             InvalidParams, "engine_getPayloadBodiesByHashV1 expects an array of block hashes"));
     }
-    auto const& ledger = m_nodeService->ledger();
     Json::Value result(Json::arrayValue);
     for (auto const& hashValue : hashes)
     {
         // parseH256 maps malformed hex / wrong length to -32602.
         auto const blockHash = parseH256(
             hashValue.isString() ? std::string_view(hashValue.asString()) : std::string_view());
-        protocol::BlockNumber number = -1;
+        protocol::Block::Ptr block;
         try
         {
-            number = co_await ledger::getBlockNumber(*ledger, crypto::HashType(blockHash));
+            // By hash, any branch: an OP window block (a replaced sibling too) resolves like
+            // eth_getBlockByHash; the ledger for finalized ones. The body's withdrawals half
+            // still reads the ledger's SYS_NUMBER_2_WITHDRAWALS row, which the OP lane never
+            // writes, so a Canyon+ OP block's body is null here as before this change.
+            block = co_await canonicalBlockByHash(*m_nodeService, crypto::HashType(blockHash),
+                bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS);
         }
         catch (std::exception const&)
         {
             // A lookup fault on an unknown hash reads as "not found" below.
         }
-        if (number < 0)
+        if (!block)
         {
             result.append(Json::nullValue);
             continue;
         }
-        result.append(co_await payloadBodyAtNumber(number));
+        result.append(co_await payloadBodyOf(block));
     }
     buildJsonContent(result, response);
 }
@@ -592,8 +605,7 @@ task::Task<void> EngineEndpoint::getPayloadBodiesByRangeV1(
             "engine_getPayloadBodiesByRangeV1: requested count too large: " +
                 std::to_string(count)));
     }
-    auto const& ledger = m_nodeService->ledger();
-    auto const head = co_await ledger::getCurrentBlockNumber(*ledger);
+    auto const head = co_await canonicalLatestNumber(*m_nodeService);
     Json::Value result(Json::arrayValue);
     // A range beyond the latest block answers an empty array (no trailing nulls); the
     // start <= head guard also keeps start + count - 1 from overflowing.
@@ -637,9 +649,8 @@ task::Task<void> EngineEndpoint::getBlobsV1(const Json::Value& request, Json::Va
     for (auto const& hashValue : hashes)
     {
         // parseH256 maps malformed hex / wrong length to -32602.
-        versionedHashes.emplace_back(crypto::HashType(
-            parseH256(hashValue.isString() ? std::string_view(hashValue.asString()) :
-                                             std::string_view())));
+        versionedHashes.emplace_back(crypto::HashType(parseH256(
+            hashValue.isString() ? std::string_view(hashValue.asString()) : std::string_view())));
     }
 
     // Pool first (the spec's data source: "fetch blobs from the execution layer blob
@@ -649,8 +660,7 @@ task::Task<void> EngineEndpoint::getBlobsV1(const Json::Value& request, Json::Va
     {
         items = memPool->blobsByVersionedHashes(versionedHashes);
     }
-    auto missing = static_cast<std::size_t>(
-        std::count(items.begin(), items.end(), std::nullopt));
+    auto missing = static_cast<std::size_t>(std::count(items.begin(), items.end(), std::nullopt));
     if (missing > 0)
     {
         auto const& ledger = m_nodeService->ledger();
@@ -658,13 +668,11 @@ task::Task<void> EngineEndpoint::getBlobsV1(const Json::Value& request, Json::Va
         if (stateStorage)
         {
             auto const head = co_await ledger::getCurrentBlockNumber(*ledger);
-            for (auto number = head; number >= 0 && missing > 0 &&
-                 head - number < c_getBlobsLedgerScanDepth;
-                 --number)
+            for (auto number = head;
+                number >= 0 && missing > 0 && head - number < c_getBlobsLedgerScanDepth; --number)
             {
                 auto const entry = co_await storage2::readOne(*stateStorage,
-                    executor_v1::StateKeyView{
-                        ledger::SYS_NUMBER_2_BLOBS, std::to_string(number)});
+                    executor_v1::StateKeyView{ledger::SYS_NUMBER_2_BLOBS, std::to_string(number)});
                 if (!entry.has_value())
                 {
                     continue;
@@ -676,8 +684,8 @@ task::Task<void> EngineEndpoint::getBlobsV1(const Json::Value& request, Json::Va
                 {
                     auto const outerHead = codec::rlp::decodeHeader(in);
                     bcos::byte* const outerStart = in.data();
-                    while (static_cast<std::size_t>(in.data() - outerStart) <
-                           outerHead.payloadLength)
+                    while (
+                        static_cast<std::size_t>(in.data() - outerStart) < outerHead.payloadLength)
                     {
                         auto const itemHead = codec::rlp::decodeHeader(in);
                         bcos::byte* const itemStart = in.data();
@@ -737,8 +745,8 @@ task::Task<void> EngineEndpoint::getClientVersionV1(
     // (params[0]) is informational only — accepted when object-shaped, never consulted.
     if (request.size() >= 1 && !request[0u].isObject())
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            InvalidParams, "engine_getClientVersionV1 expects [clientVersion]"));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "engine_getClientVersionV1 expects [clientVersion]"));
     }
     // "FB" is unreserved in the spec's ClientCode list (execution-apis identification.md
     // invites unlisted clients to pick a non-colliding two-letter code).
@@ -747,8 +755,7 @@ task::Task<void> EngineEndpoint::getClientVersionV1(
     self["name"] = "FISCO-BCOS";
     self["version"] = std::string("v") + FISCO_BCOS_PROJECT_VERSION;
     // commit is DATA, 4 bytes — the first four bytes of the build's commit hash.
-    self["commit"] =
-        "0x" + std::string(FISCO_BCOS_COMMIT_HASH).substr(0, 8);
+    self["commit"] = "0x" + std::string(FISCO_BCOS_COMMIT_HASH).substr(0, 8);
     Json::Value result(Json::arrayValue);
     result.append(std::move(self));
     buildJsonContent(result, response);

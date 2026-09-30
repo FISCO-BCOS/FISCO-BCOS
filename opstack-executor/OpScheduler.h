@@ -217,15 +217,13 @@ public:
     }
 
     // ---- Read plane for the RPC side (D1 §10.2) ----
-    // NOT REMAPPED IN THIS CHANGE — the follow-up read-plane change must map `latest`/
-    // `pending`, eth_getBlockByNumber/ByHash, receipts, logs, eth_getProof, eth_call/
-    // getBalance/getTransactionCount @latest and the payload-build seal view to the Engine
-    // tracker's head (OpEngineService::trackedHead()) through the three entry points below.
-    // Until then every eth_* read (EthEndpoint → ledger), call()/callAtBlock()/getCode()
-    // here and the mempool seal view in buildOpPayload serve the FINALIZED plane, so a
-    // CL-sync verifier is not operable on this commit alone: op-node's derivation
-    // consolidation reads eth_getBlockByNumber(n+1) for every unsafe block, gets NotFound
-    // and resets (op-node/rollup/attributes/attributes.go consolidateNextSafeAttributes).
+    // Rule 1: views come from here. viewAt(hash) is the chain view of one window block (or the
+    // finalized tip); hashAtHeightOnChain maps a height on one chain to its block. Rule 2:
+    // heights come from the Engine tracker — this scheduler never decides which branch is
+    // canonical, it is TOLD the head through setCanonicalHeadProvider, and call()/
+    // callAtBlock()/getCode()/getABI()/getPendingStorageAt() read that head's chain
+    // (headView). The type-erased facade EthEndpoint consumes is
+    // bcos::engine::OpCanonicalReader (engine/bcos-engine/OpCanonicalReaderImpl.h).
 
     /// The read view of @p blockHash's chain: forkChain(ancestors incl. the block itself) for
     /// a window block, forkCommitted() for the finalized tip, nullopt for anything else
@@ -297,6 +295,53 @@ public:
         return m_window.size();
     }
 
+    /// The finalized tip as (number, hash), hydrated from the backend on first use (restart,
+    /// D1 §13.2). number == -1 and a zero hash when the ledger is empty.
+    task::Task<std::pair<protocol::BlockNumber, bcos::crypto::HashType>> finalizedTip()
+    {
+        co_await hydrateFinalized();
+        std::lock_guard<std::mutex> lock(m_windowMutex);
+        co_return std::pair{
+            static_cast<protocol::BlockNumber>(m_finalizedNumber.load()), m_finalizedHash};
+    }
+
+    /// The Engine tracker's head as seen by this scheduler's own reads (D1 §10.2 rule 2):
+    /// call()/callAtBlock()/getCode()/getABI()/getPendingStorageAt() evaluate against the
+    /// chain of the hash this returns. nullopt (or unset) = the finalized plane. The
+    /// composition root wires OpEngineService::trackedHead(); the provider must be cheap and
+    /// non-blocking (it is called on every RPC read).
+    using CanonicalHeadProvider = std::function<std::optional<bcos::crypto::HashType>()>;
+    void setCanonicalHeadProvider(CanonicalHeadProvider provider)
+    {
+        std::lock_guard<std::mutex> lock(m_windowMutex);
+        m_headProvider = std::move(provider);
+    }
+
+    /// The read view of the canonical head's chain: viewAt(head) when the provider names a
+    /// window block or the finalized tip, else the finalized plane — no provider, or no
+    /// tracker head yet after a restart. The unknown-head fallback is defensive: the tracker
+    /// only records heads resolveBlock found, and finalize prunes nothing on the head chain.
+    task::Task<ViewType> headView()
+    {
+        CanonicalHeadProvider provider;
+        {
+            std::lock_guard<std::mutex> lock(m_windowMutex);
+            provider = m_headProvider;
+        }
+        if (provider)
+        {
+            if (auto head = provider())
+            {
+                if (auto view = co_await viewAt(*head))
+                {
+                    co_return std::move(*view);
+                }
+            }
+        }
+        co_await hydrateFinalized();
+        co_return m_multiLayerStorage->forkCommitted();
+    }
+
     void status(
         std::function<void(Error::Ptr, bcos::protocol::Session::ConstPtr)> callback) override
     {
@@ -316,10 +361,6 @@ public:
             m_staged.clear();
         }
         m_lastProbe.reset();
-        if (m_recentHash != bcos::crypto::HashType{} && !m_window.contains(m_recentHash))
-        {
-            m_recentHash = {};
-        }
         callback(nullptr);
     }
 
@@ -329,8 +370,8 @@ public:
         callback(nullptr);
     }
 
-    /// eth_call on the latest committed state. Failures return an RPC Error, not a status-0
-    /// receipt.
+    /// eth_call on the canonical head's state (headView). Failures return an RPC Error, not a
+    /// status-0 receipt.
     void call(protocol::Transaction::Ptr transaction,
         std::function<void(bcos::Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override
     {
@@ -368,7 +409,7 @@ public:
             }(this, std::move(transaction), std::move(callback)));
     }
 
-    /// eth_call against the committed MPT at @p blockNumber.
+    /// eth_call against the MPT at @p blockNumber on the canonical head's chain.
     void callAtBlock(protocol::Transaction::Ptr transaction, protocol::BlockNumber blockNumber,
         std::function<void(bcos::Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override
     {
@@ -409,8 +450,8 @@ public:
             }(this, std::move(transaction), blockNumber, std::move(callback)));
     }
 
-    /// Contract code at the latest committed height. Do not use getLedgerConfig (header.hash()
-    /// throws).
+    /// Contract code at the canonical head (headView). Do not use getLedgerConfig
+    /// (header.hash() throws).
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override
     {
@@ -419,7 +460,7 @@ public:
                 std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) -> task::Task<void> {
                 try
                 {
-                    auto view = self->m_multiLayerStorage->forkCommitted();
+                    auto view = co_await self->headView();
                     // The OP lane's naming rule (no /sys/ routing, re-encoded to the node
                     // layout), NOT the v1-rule constructor — the bridge writes every
                     // address, system-tx ones included, under its /apps/ logical name.
@@ -465,7 +506,7 @@ public:
                 std::function<void(bcos::Error::Ptr, std::string)> callback) -> task::Task<void> {
                 try
                 {
-                    auto view = self->m_multiLayerStorage->forkCommitted();
+                    auto view = co_await self->headView();
                     // Lane rule, as in getCode above.
                     bcos::ledger::account::EVMAccount account(view,
                         bcos::ledger::account::FromTableName{},
@@ -501,15 +542,18 @@ public:
     }
 
     // `number` discarded: pending has no historical block context. See
-    // SchedulerInterface::getPendingStorageAt. The "pending plane" is the chain of the most
-    // recently executed/admitted block (m_recentHash) until the RPC read plane switches to
-    // viewAt(trackedHead); with nothing recent it is the finalized plane.
+    // SchedulerInterface::getPendingStorageAt. The "pending plane" on the OP lane is the
+    // canonical head's chain (D1 §10.2: same as `latest`, headView) — a block that is
+    // executed or admitted but not yet the tracker's head is not visible, exactly as op-geth
+    // keeps the pending state at the last forkchoice head. Nonce checks for tx admission read
+    // this, so a sender whose tx sits in an unfinalized head-chain block sees the advanced
+    // nonce, while a side branch's inclusion does not count.
     task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(std::string_view address,
         std::string_view key, bcos::protocol::BlockNumber /*number*/) override
     {
         auto const addressOwned = std::string(address);
         auto const keyOwned = std::string(key);
-        auto view = co_await recentView();
+        auto view = co_await headView();
         // The OP lane is scenario B by construction (executor_version >= OPSTACK_EXECUTOR_VERSION
         // is genesis-fixed), so no feature read decides the routing below. The tip number is
         // still needed for the committed-MPT fallback. (The account-table mode itself needs no
@@ -518,9 +562,9 @@ public:
             co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
         if (keyOwned == bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE)
         {
-            // Pending first: the caller uses this value as the transaction nonce, and a sealed
-            // but uncommitted block may already have advanced it (the sibling note above: fork()
-            // "can read the pending slot"). Scenario B keeps account fields in the committed
+            // Pending first: the caller uses this value as the transaction nonce, and an
+            // unfinalized head-chain block may already have advanced it in its own window
+            // layer. Scenario B keeps account fields in the committed
             // MPT, so when the pending/flat plane has no row, fall back to the committed tip's
             // MPT state. The OP lane's naming rule (verbatim /apps/ logical name, no /sys/
             // routing, re-encoded to the node layout) is legacyAppsAccountTableName — the
@@ -776,7 +820,6 @@ private:
                     .ledger = std::move(ledgerLayer),
                     .executedHeader = executedHeader,
                     .block = std::move(block)};
-                m_recentHash = announcedBlockHash;
                 m_lastProbe.reset();
             }
             else
@@ -909,7 +952,6 @@ private:
                     .ledger = std::move(ledgerLayer),
                     .executedHeader = executedHeader,
                     .block = std::move(block)};
-                m_recentHash = announcedBlockHash;
             }
             OP_SCHEDULER_LOG(INFO) << "Adopted probe as staged block: " << number;
             co_return {nullptr, std::move(executedHeader), false};
@@ -1029,7 +1071,6 @@ private:
             {
                 std::lock_guard<std::mutex> lock(m_windowMutex);
                 m_staged.erase(staged->hash);
-                m_recentHash = staged->hash;
                 m_window.insert_or_assign(staged->hash, std::move(*staged));
                 depth = m_window.size();
             }
@@ -1192,11 +1233,6 @@ private:
                 m_window.contains(it->second.parentHash) || it->second.parentHash == root;
             it = parentOk ? std::next(it) : m_staged.erase(it);
         }
-        if (m_recentHash != bcos::crypto::HashType{} && !m_window.contains(m_recentHash) &&
-            !m_staged.contains(m_recentHash))
-        {
-            m_recentHash = {};
-        }
         return pruned;
     }
 
@@ -1273,26 +1309,6 @@ private:
             layers.push_back((*it)->ledger);
         }
         return layers;
-    }
-
-    /// The pending-plane view for getPendingStorageAt: the chain of the most recently
-    /// executed (staged) or admitted block, else the finalized plane.
-    task::Task<ViewType> recentView()
-    {
-        co_await hydrateFinalized();
-        std::lock_guard<std::mutex> lock(m_windowMutex);
-        if (m_recentHash != bcos::crypto::HashType{})
-        {
-            if (auto it = m_staged.find(m_recentHash); it != m_staged.end())
-            {
-                co_return m_multiLayerStorage->forkChain(chainLayersLocked(it->second));
-            }
-            if (auto it = m_window.find(m_recentHash); it != m_window.end())
-            {
-                co_return m_multiLayerStorage->forkChain(chainLayersLocked(it->second));
-            }
-        }
-        co_return m_multiLayerStorage->forkCommitted();
     }
 
     /// The executed header of a staged or admitted block with this height and announced hash.
@@ -1945,15 +1961,16 @@ private:
     task::Task<protocol::TransactionReceipt::Ptr> coCallLatest(
         protocol::Transaction::Ptr transaction)
     {
-        auto view = m_multiLayerStorage->forkCommitted();
-        view.newMutable();
+        // The head chain's current number: its window layers carry SYS_CURRENT_STATE
+        // (prewriteBlockToBuffer), so this is the head height, the backend tip when no head
+        // is tracked.
+        auto view = co_await headView();
         auto blockNumber =
             co_await bcos::ledger::getCurrentBlockNumber(view, bcos::ledger::fromStorage);
 
         // Scenario B by construction (the OP lane builds the complete MPT from genesis):
-        // balances live in committed MPT only. The flat committed plane has no
-        // ACCOUNT_BALANCE rows, so route latest eth_call / estimateGas through the same MPT
-        // view as historical calls.
+        // balances live in MPT only. The flat plane has no ACCOUNT_BALANCE rows, so route
+        // latest eth_call / estimateGas through the same MPT view as historical calls.
         auto [err, receipt] = co_await coCallAtBlock(std::move(transaction), blockNumber);
         if (err)
         {
@@ -1962,11 +1979,14 @@ private:
         co_return receipt;
     }
 
-    /// eth_call against the committed MPT at @p blockNumber. Refusals return Error, not throw.
+    /// eth_call against the MPT at @p blockNumber on the canonical head's chain (headView: the
+    /// window layers stack the head chain's trie nodes and ledger rows over the backend, so a
+    /// finalized height reads exactly the committed plane and an unfinalized one its own
+    /// branch's). Refusals return Error, not throw.
     task::Task<std::tuple<Error::Ptr, protocol::TransactionReceipt::Ptr>> coCallAtBlock(
         protocol::Transaction::Ptr transaction, protocol::BlockNumber blockNumber)
     {
-        auto latestView = m_multiLayerStorage->forkCommitted();
+        auto latestView = co_await headView();
         auto latestNumber =
             co_await bcos::ledger::getCurrentBlockNumber(latestView, bcos::ledger::fromStorage);
         // Negative or beyond-latest: InvalidBlockNumber.
@@ -2056,8 +2076,9 @@ private:
     std::unordered_map<bcos::crypto::HashType, BlockLayer> m_window;
     /// Executed (verify=true) but not yet admitted; dropped by reset().
     std::unordered_map<bcos::crypto::HashType, BlockLayer> m_staged;
-    /// Most recently executed/admitted block: the pending plane of getPendingStorageAt.
-    bcos::crypto::HashType m_recentHash;
+    /// The tracker's head for this scheduler's own reads (setCanonicalHeadProvider); guarded
+    /// by m_windowMutex, copied out before it is invoked.
+    CanonicalHeadProvider m_headProvider;
     std::optional<ProbeSlot> m_lastProbe;
 };
 

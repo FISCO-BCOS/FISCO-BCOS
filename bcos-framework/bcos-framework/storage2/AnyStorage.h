@@ -57,7 +57,8 @@ namespace bcos::storage2
 // Notes
 // - Bulk APIs accept generic ranges; AnyStorage adapts them internally using any_view aliases
 // - merge(to, from) iterates source's range and applies writes/removes to destination generically
-// - Removing with BYPASS_LOGICAL_DELETE will bypass logical-deletion if the underlying storage supports it
+// - Removing with BYPASS_LOGICAL_DELETE will bypass logical-deletion if the underlying storage
+// supports it
 //
 // Keep Key/Value as template parameters to preserve strong types while
 // erasing the concrete storage implementation.
@@ -181,8 +182,7 @@ private:
         {
             if (physical)
             {
-                co_await m_storage->removeSome(
-                    ::ranges::views::all(keys), BYPASS_LOGICAL_DELETE);
+                co_await m_storage->removeSome(::ranges::views::all(keys), BYPASS_LOGICAL_DELETE);
             }
             else
             {
@@ -301,8 +301,7 @@ public:
 
     auto removeSome(::ranges::input_range auto keys, auto... tags) -> task::Task<void>
     {
-        constexpr bool physical =
-            contains_tag_v<BYPASS_LOGICAL_DELETE_TYPE, decltype(tags)...>;
+        constexpr bool physical = contains_tag_v<BYPASS_LOGICAL_DELETE_TYPE, decltype(tags)...>;
         co_await m_self->removeSome(::ranges::views::all(keys), physical);
     }
 
@@ -323,8 +322,7 @@ public:
 
     auto removeOne(auto key, auto... tags) -> task::Task<void>
     {
-        constexpr bool physical =
-            contains_tag_v<BYPASS_LOGICAL_DELETE_TYPE, decltype(tags)...>;
+        constexpr bool physical = contains_tag_v<BYPASS_LOGICAL_DELETE_TYPE, decltype(tags)...>;
         co_await m_self->removeOne(std::move(key), physical);
     }
 
@@ -347,5 +345,22 @@ public:
         co_await m_self->mergeFrom(*fromStorage.m_self);
     }
 };
+
+/// An AnyStorage<Key, Value> handle that OWNS the storage (typically a forked view) it
+/// erases: one aliasing shared_ptr keeps the storage and the handle alive together, so a
+/// caller manages exactly one lifetime. The borrowing constructor above is for storages
+/// owned elsewhere.
+template <class Key, class Value, class Storage>
+std::shared_ptr<AnyStorage<Key, Value>> makeOwningAnyStorage(Storage storage)
+{
+    struct OwningStorage
+    {
+        Storage storage;
+        std::optional<AnyStorage<Key, Value>> erased;
+        explicit OwningStorage(Storage s) : storage(std::move(s)) { erased.emplace(storage); }
+    };
+    auto owner = std::make_shared<OwningStorage>(std::move(storage));
+    return {owner, std::addressof(*owner->erased)};
+}
 
 }  // namespace bcos::storage2
