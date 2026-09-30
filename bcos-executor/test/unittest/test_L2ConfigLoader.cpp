@@ -34,6 +34,7 @@
 #include <boost/test/unit_test.hpp>
 #include <array>
 #include <cstdint>
+#include <limits>
 #include <map>
 #include <optional>
 #include <stdexcept>
@@ -162,7 +163,7 @@ BOOST_AUTO_TEST_CASE(HappyPathPopulatesLedgerConfig)
     putSlot(storage, "block_tx_count_limit", packUint64IntoLow192(1000), 0);
     putSlot(storage, "compatibility_version", packUint64IntoLow192(0x03'10'00'00), 0);
 
-    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage);
+    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage, systemConfigTable());
     LedgerConfig out;
 
     task::syncWait([&]() -> task::Task<void> {
@@ -200,7 +201,7 @@ BOOST_AUTO_TEST_CASE(ScheduledKeySkippedWhenFutureEnable)
     putSlot(storage, "block_tx_count_limit", packUint64IntoLow192(1000), 0);
     putSlot(storage, "compatibility_version", packUint64IntoLow192(0x03'10'00'00), 0);
 
-    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage);
+    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage, systemConfigTable());
     LedgerConfig out;
     // Pre-seed a cached gas limit the loader must NOT overwrite this block.
     out.setGasLimit({99'999'999, 0});
@@ -233,7 +234,7 @@ BOOST_AUTO_TEST_CASE(ScheduledKeyAppliesAtExactEnableBlock)
     putSlot(storage, "block_tx_count_limit", packUint64IntoLow192(1000), 100);
     putSlot(storage, "compatibility_version", packUint64IntoLow192(0x03'10'00'00), 100);
 
-    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage);
+    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage, systemConfigTable());
     LedgerConfig out;
 
     task::syncWait([&]() -> task::Task<void> {
@@ -257,7 +258,7 @@ BOOST_AUTO_TEST_CASE(MissingKeyThrows)
     putSlot(storage, "gas_limit", packUint64IntoLow192(30'000'000), 0);
     putSlot(storage, "compatibility_version", packUint64IntoLow192(0x03'10'00'00), 0);
 
-    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage);
+    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage, systemConfigTable());
     LedgerConfig out;
     BOOST_CHECK_THROW(task::syncWait([&]() -> task::Task<void> {
         co_await loader.loadIntoLedgerConfig(0, out);
@@ -278,7 +279,7 @@ BOOST_AUTO_TEST_CASE(ChainIdScheduledChangeThrows)
     putSlot(storage, "block_tx_count_limit", packUint64IntoLow192(1000), 0);
     putSlot(storage, "compatibility_version", packUint64IntoLow192(0x03'10'00'00), 0);
 
-    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage);
+    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage, systemConfigTable());
     LedgerConfig out;
     // Throws even when the caller's block (100) is past the enableNumber —
     // a scheduled chain_id change is invalid regardless of schedule state.
@@ -302,7 +303,7 @@ BOOST_AUTO_TEST_CASE(ChainIdFutureScheduledChangeAlsoThrows)
     putSlot(storage, "block_tx_count_limit", packUint64IntoLow192(1000), 0);
     putSlot(storage, "compatibility_version", packUint64IntoLow192(0x03'10'00'00), 0);
 
-    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage);
+    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage, systemConfigTable());
     LedgerConfig out;
     BOOST_CHECK_THROW(task::syncWait([&]() -> task::Task<void> {
         co_await loader.loadIntoLedgerConfig(/*blockNumber=*/50, out);  // 50 < 200
@@ -319,7 +320,7 @@ BOOST_AUTO_TEST_CASE(ChainIdZeroThrowsEip155)
     putSlot(storage, "block_tx_count_limit", packUint64IntoLow192(1000), 0);
     putSlot(storage, "compatibility_version", packUint64IntoLow192(0x03'10'00'00), 0);
 
-    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage);
+    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage, systemConfigTable());
     LedgerConfig out;
     BOOST_CHECK_THROW(task::syncWait([&]() -> task::Task<void> {
         co_await loader.loadIntoLedgerConfig(0, out);
@@ -341,7 +342,7 @@ BOOST_AUTO_TEST_CASE(GasLimitExceedsUint64Throws)
     putSlot(storage, "block_tx_count_limit", packUint64IntoLow192(1000), 0);
     putSlot(storage, "compatibility_version", packUint64IntoLow192(0x03'10'00'00), 0);
 
-    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage);
+    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage, systemConfigTable());
     LedgerConfig out;
     BOOST_CHECK_THROW(task::syncWait([&]() -> task::Task<void> {
         co_await loader.loadIntoLedgerConfig(0, out);
@@ -361,13 +362,49 @@ BOOST_AUTO_TEST_CASE(CompatibilityVersionExceedsUint32Throws)
     auto oversizedVersion = packUint64IntoLow192(uint64_t{1} << 33);
     putSlot(storage, "compatibility_version", oversizedVersion, 0);
 
-    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage);
+    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage, systemConfigTable());
     LedgerConfig out;
     BOOST_CHECK_THROW(task::syncWait([&]() -> task::Task<void> {
         co_await loader.loadIntoLedgerConfig(0, out);
         co_return;
     }()),
         std::runtime_error);
+}
+
+/// block_tx_count_limit feeds the sealer as an int64 count: 0 would seal empty blocks and a
+/// value above INT64_MAX would wrap. Both are refused by the loader, so the seal-side fallback
+/// to the constructor default never has to paper over an invalid on-chain value.
+BOOST_AUTO_TEST_CASE(BlockTxCountLimitZeroThrows)
+{
+    FakeSlotStorage storage;
+    putSlot(storage, "chain_id", chainIdLow192(20200), 0);
+    putSlot(storage, "gas_limit", packUint64IntoLow192(30'000'000), 0);
+    putSlot(storage, "block_tx_count_limit", packUint64IntoLow192(0), 0);
+    putSlot(storage, "compatibility_version", packUint64IntoLow192(0x03120000), 0);
+    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage, systemConfigTable());
+    LedgerConfig config;
+    BOOST_CHECK_EXCEPTION(task::syncWait(loader.loadIntoLedgerConfig(1, config)),
+        std::runtime_error, [](std::runtime_error const& error) {
+            return std::string(error.what()).find("block_tx_count_limit must be in") !=
+                   std::string::npos;
+        });
+}
+
+BOOST_AUTO_TEST_CASE(BlockTxCountLimitAboveInt64MaxThrows)
+{
+    FakeSlotStorage storage;
+    putSlot(storage, "chain_id", chainIdLow192(20200), 0);
+    putSlot(storage, "gas_limit", packUint64IntoLow192(30'000'000), 0);
+    putSlot(storage, "block_tx_count_limit",
+        packUint64IntoLow192(static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + 1), 0);
+    putSlot(storage, "compatibility_version", packUint64IntoLow192(0x03120000), 0);
+    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage, systemConfigTable());
+    LedgerConfig config;
+    BOOST_CHECK_EXCEPTION(task::syncWait(loader.loadIntoLedgerConfig(1, config)),
+        std::runtime_error, [](std::runtime_error const& error) {
+            return std::string(error.what()).find("block_tx_count_limit must be in") !=
+                   std::string::npos;
+        });
 }
 
 BOOST_AUTO_TEST_SUITE_END()
