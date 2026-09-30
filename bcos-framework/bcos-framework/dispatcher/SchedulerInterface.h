@@ -28,6 +28,7 @@
 #include <bcos-utilities/Error.h>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string_view>
 
 namespace bcos::scheduler
@@ -96,11 +97,45 @@ public:
     virtual task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
         std::string_view address, std::string_view key, bcos::protocol::BlockNumber number) = 0;
 
+    // ---- Unfinalized window (OP Engine lane, D1 方案 A) ----
+    // On the OP lane commitBlock ADMITS an executed block into an in-memory window rooted at
+    // the finalized (backend) tip; nothing reaches the backend until finalizeUpTo. Same-height
+    // siblings coexist; the Engine tracker decides which one is canonical. Every other
+    // scheduler has no window: the defaults answer "unknown block" and "nothing to finalize",
+    // and MultiVersionScheduler forwards both (every new method here must be forwarded there).
+
+    /// One block of the unfinalized window, as the engine needs it for parent resolution.
+    struct UnfinalizedBlock
+    {
+        bcos::protocol::BlockNumber number = 0;
+        bcos::crypto::HashType hash;              // CL-announced hash
+        bcos::crypto::HashType parentHash;        // window block or the finalized tip
+        bcos::protocol::BlockHeader::Ptr header;  // execution-stamped header
+    };
+
+    /// The window entry for @p blockHash, or nullopt when the block is not in the window
+    /// (finalized blocks live in the ledger; unknown blocks nowhere).
+    virtual std::optional<UnfinalizedBlock> unfinalizedBlock(
+        bcos::crypto::HashType const& /*blockHash*/) const
+    {
+        return std::nullopt;
+    }
+
+    /// Merge the window chain from the finalized tip up to @p blockHash (oldest first) into
+    /// the backend, then drop every window block that does not descend from it. Callback
+    /// error: the target is not in the window / does not descend from the tip, or a merge
+    /// failed (blocks merged before the failure stay merged; the window stays consistent).
+    virtual void finalizeUpTo(
+        bcos::crypto::HashType const& /*blockHash*/, std::function<void(Error::Ptr)> callback)
+    {
+        callback(nullptr);
+    }
+
     // for performance, do the things before executing block in executor.
     virtual void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::function<void(Error::Ptr)> callback) = 0;
 
-    virtual void stop(){};
-    virtual void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig){};
+    virtual void stop() {};
+    virtual void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig) {};
 };
 }  // namespace bcos::scheduler
