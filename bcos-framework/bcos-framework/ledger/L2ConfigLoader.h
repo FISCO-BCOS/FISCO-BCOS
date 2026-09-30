@@ -43,7 +43,6 @@
  */
 #pragma once
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/IL2ConfigLoader.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
@@ -63,6 +62,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace bcos::ledger
@@ -72,18 +72,6 @@ namespace bcos::ledger
 // reserved predeploy namespace (0x4200...0000-0x4200...07FF).
 inline constexpr std::string_view L2_SYSTEM_CONFIG_ADDRESS_HEX =
     "43000000000000000000000000000000000000c0";
-
-/// The state table the SystemConfig predeploy's slots live in, in THIS node's physical
-/// layout. Genesis imports the alloc through account::ethLaneAccountTableName
-/// (Ledger::importGenesisAccount) and the OP executor reads/writes the account through the
-/// same rule, so the loader must derive its key the same way: "/apps/<hex>" on a Hex-layout
-/// node, "/s/<20 raw bytes>" on a Binary-layout one. Building "/apps/" + hex by hand reads
-/// an empty table on Binary nodes and the loader reports every key as missing.
-inline std::string l2SystemConfigTableName()
-{
-    return account::ethLaneAccountTableName(bcos::Address{
-        L2_SYSTEM_CONFIG_ADDRESS_HEX, bcos::Address::FromHex, bcos::Address::AlignRight});
-}
 
 // Storage slot where SystemConfig._config is declared. With OZ v4.7.3
 // Initializable + ContextUpgradeable + Ownable bases the mapping lands at
@@ -235,11 +223,25 @@ inline evmc_uint256be valueToUint256BE(std::array<uint8_t, 24> const& value)
 /// `executor_v1::StateKey`, returning `std::optional<bcos::storage::Entry>`
 /// (the default FISCO-BCOS state-storage shape). The caller owns the storage;
 /// L2ConfigLoaderImpl holds a non-owning pointer.
+///
+/// @p tableName is the state table the SystemConfig predeploy's slots live in, in THIS
+/// node's physical layout: "/apps/<hex>" on a Hex-layout node, "/s/<20 raw bytes>" on a
+/// Binary-layout one. Callers take it from l2SystemConfigTableName()
+/// (bcos-framework/ledger/L2SystemConfigTable.h) -- account::ethLaneAccountTableName over
+/// L2_SYSTEM_CONFIG_ADDRESS_HEX, the rule genesis imports the alloc through. That helper is
+/// a separate header because it needs the account-table header, which MSVC 14.51 rejects
+/// inside the bcos-framework unity TU this header is compiled into (see L2ConfigLoader.cpp);
+/// the name therefore arrives from the caller instead of being computed here.
 template <typename Storage>
 class L2ConfigLoaderImpl : public ledger::IL2ConfigLoader
 {
 public:
-    explicit L2ConfigLoaderImpl(Storage& storage) : m_storage(&storage) { assert(m_storage); }
+    L2ConfigLoaderImpl(Storage& storage, std::string tableName)
+      : m_storage(&storage), m_tableName(std::move(tableName))
+    {
+        assert(m_storage);
+        assert(!m_tableName.empty());
+    }
 
     /// Refresh @p out by reading 4 slots from the SystemConfig predeploy.
     /// Precondition: @p out must already carry any non-L2 fields (consensus
@@ -250,7 +252,7 @@ public:
         using executor_v1::StateKey;
         namespace detail = l2_loader_detail;
 
-        auto const tableName = l2SystemConfigTableName();
+        auto const& tableName = m_tableName;
 
         // Compute the 4 slot addresses once. Slot hashes are content-addressed
         // and reusable across blocks, but precomputing them per call keeps the
@@ -373,6 +375,7 @@ public:
 
 private:
     Storage* m_storage;
+    std::string m_tableName;
 };
 
 /// The node-side values the three genesis-frozen SystemConfig keys must agree with. All three

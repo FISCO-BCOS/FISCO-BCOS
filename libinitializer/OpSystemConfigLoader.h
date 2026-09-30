@@ -22,6 +22,7 @@
 #include "GlobalStateStorageInitializer.h"
 #include <bcos-framework/ledger/IL2ConfigLoader.h>
 #include <bcos-framework/ledger/L2ConfigLoader.h>
+#include <bcos-framework/ledger/L2SystemConfigTable.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-task/Task.h>
 #include <optional>
@@ -54,7 +55,7 @@ class OpSystemConfigLoader final : public bcos::ledger::IL2ConfigLoader
 {
 public:
     explicit OpSystemConfigLoader(GlobalStateStorage& storage)
-      : m_reader{&storage}, m_impl(m_reader)
+      : m_reader{&storage}, m_impl(m_reader, bcos::ledger::l2SystemConfigTableName())
     {}
 
     task::Task<void> loadIntoLedgerConfig(
