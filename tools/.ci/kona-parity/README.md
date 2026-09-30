@@ -64,7 +64,30 @@ The gate stops at the first block that is not a match and prints FISCO's `hash`,
 | 2 | no evidence: a `missing: ...` line names the tool, RPC, or transaction kind |
 
 A skip is exit 2. `tools/.ci/l2-integration/run-all.sh:78-81` exits 0 when every scenario
-skips; this gate has no such path.
+skips; this gate has no such path. `summarize` also refuses a green verdict unless
+`verdicts.jsonl` holds exactly one verdict per block of `pairs.tsv` (`incomplete_evidence`):
+a replay interrupted partway through the range, or a verdict file carrying blocks the current
+`pairs.tsv` never scheduled, reports `GATE ERROR: incomplete evidence: ...` and exits 2.
+
+## CI jobs
+
+- `kona_parity` in `.github/workflows/workflow.yml` runs on every PR. Its preflight needs
+  FISCO's `debug_getRawHeader` and `debug_dbGet` (#5649), so that PR merges first.
+- The `overlay=off` matrix leg is the one place where "skip" is not a failure, and the decision
+  is made outside `run.sh`: the `kona_parity_legs` job greps the pinned harness's
+  `tools/op-e2e/setup_c2.sh` for `OVERLAY` and lists the `off` leg only when the harness reads
+  it (ticket 12, genesis overlay switch in FISCO-BCOS/op-stack-e2e-tests); otherwise it prints
+  a `kona parity gate (overlay=off) SKIPPED` notice and the matrix holds `on` alone. `run.sh`
+  makes the same test and exits 2 for `OVERLAY=off` against such a harness, so nothing below
+  the workflow can turn that skip into a pass. The `overlay=on` leg and the preflight keep
+  `SKIP == exit 2 == failure`.
+- `kona_parity_negative_control` in `c2-e2e.yml` (nightly) builds the fee-vault mutant and
+  requires exit 1.
+- Both jobs install Foundry 1.2.3 for `forge` (the op-deployer build asserts the monorepo's
+  `mise.toml` pin) and take `anvil` and `cast` from the sha256-pinned v1.8.3 tarball into a
+  directory that only the gate step puts first on `PATH`: the harness's `l2_tx_scenarios.sh`
+  orders its `cast send --create` flags for cast >= 1.7.1 (`pins.json cast`), and `run.sh`
+  exits 2 with the found version when `cast` is older.
 
 ## Run locally
 
@@ -75,10 +98,11 @@ git clone https://github.com/FISCO-BCOS/op-stack-e2e-tests .ci-op-e2e-tests
 git -C .ci-op-e2e-tests checkout 0451c8bf3601c502a36be4633c0e2f4cc38e9c9b
 bash tools/.ci/c2-e2e.sh            # builds .ci-c2-bins/{op-deployer,op-node,op-batcher}, then runs C2
 pip install -r tools/.ci/c2-e2e-requirements.txt
-ANVIL_BIN=/path/to/foundry-v1.8.3/anvil OVERLAY=on bash tools/.ci/kona-parity/run.sh --blocks 12
+PATH=/path/to/foundry-v1.8.3:$PATH OVERLAY=on bash tools/.ci/kona-parity/run.sh --blocks 12
 ```
 
-`anvil` must come from foundry v1.8.0 or later: kona-host fetches L1 headers and receipts
+`cast` on `PATH` must be 1.7.1 or later (`pins.json cast`; `run.sh` checks `cast --version`),
+and `anvil` (`ANVIL_BIN`, default: the one on `PATH`) must come from foundry v1.8.0 or later: kona-host fetches L1 headers and receipts
 with `debug_getRawHeader`/`debug_getRawReceipts` (`handler.rs:82,109`); anvil registers them
 from v1.8.0 (`crates/anvil/core/src/eth/mod.rs:369,377`), v1.7.1 does not, and a live v1.5.1
 answers `-32601`. Against a devnet that is already up: `C2=/tmp/c2 bash run.sh --attach`.
@@ -94,6 +118,11 @@ half of `wait-mix`'s 600 s budget for the L2 transactions. The throwaway devnet 
 
 Evidence stays in `$WORK`: `fisco_blocks.json`, `outputs.json`, `pairs.tsv`, `kona/<b>.log`,
 `kona/<b>.kv` (replayable offline with `--data-dir` and no RPC flags), `verdicts.jsonl`.
+Those files, plus `l1_head.txt`, `rollup.json`, `l1-config.json`, `setup_c2.log`,
+`beacon-stub.log` and the throwaway devnet's `c2/`, are run-owned (`compare.py RUN_OWNED`):
+`run.sh` deletes them first (`compare.py clean`), so reusing `WORK`, as the CI jobs do with
+`runner.temp/kona-parity`, never appends to an older `verdicts.jsonl`. Other files in `WORK`
+are kept.
 
 ## Negative control
 
@@ -117,16 +146,36 @@ exits 2. The last two cover the FISCO bugs the first live run hit after minutes 
   for every account it reads (`handler.rs:303-338`), absent accounts included.
 - L2 `debug_executePayload` answers `-32601`.
 
-## Not verified on the machine this was written on
+## Verification status
 
-That machine had no kona-host binary, op-node, op-batcher, op-deployer, or FISCO OP build, so:
+Two end-to-end runs on macOS (arm64), harness `0451c8bf`, OP monorepo `da197e45` binaries,
+kona-host v1.7.0 as a native `KONA_HOST_BIN`, anvil and cast from foundry v1.8.3:
 
-- No end-to-end run of `run.sh`, positive or negative, has happened.
-- FISCO's `debug_getRawHeader`/`debug_dbGet` (ticket 02) did not exist yet; preflight against a
-  build without them prints `missing: L2 debug_getRawHeader (ticket 02)`.
-- The origin-lag limit and the 2 s anvil default have not been exercised in a full run.
-- The EIP-7702 `cast send --auth` incantation ran against anvil v1.8.3 (type 0x4, status 1,
-  delegation code `0xef0100…`), not against FISCO.
-- `compare.py preflight` ran against anvil v1.8.3 (L1 checks pass) and anvil v1.5.1 (reports
-  `missing: L1 debug_getRawHeader`); `kona-host single --help` and one offline kona-host run
-  (for the JSON log shape) ran from the pinned image.
+- Green run: `run.sh --blocks 12`, `OVERLAY=on`. The range grew to cover the mix, blocks
+  23–48 (26 blocks); every block `MATCH`, exit 0. Each block's kona log carried 20–31
+  `debug_executePayload failed` prefetch lines and zero `L2StateNode` hints.
+- Negative control: `mutate-fee-vault.sh`, rebuild, `run.sh --blocks 12 --mutate fee-vault`.
+  Block 22 `MATCH`, block 23 (the first block holding a non-deposit transaction) `MISMATCH`,
+  exit 1. `stateRoot`, `hash` and `outputRoot` differed while `transactionsRoot` and
+  `receiptsRoot` stayed equal, which is what a wrong fee recipient produces.
+- The three commits after the initial one are what those runs required: a per-block timeout
+  that works without coreutils `timeout`, a fresh EIP-7702 authority per run, and sending the
+  L1 deposit after the L2 mix so it cannot take a nonce the mix already signed with.
+- `compare.py preflight` also ran against anvil v1.5.1, which reports
+  `missing: L1 debug_getRawHeader`.
+
+Not exercised, and what it means for the gate:
+
+- Karst: the harness activates `jovian_time=0` only, so the runs above cover Isthmus+Jovian
+  execution; Karst parity waits on the harness scheduling `karst_time=0`.
+- `OVERLAY=off`: the pinned harness has no overlay switch (ticket 12); `run.sh` exits 2 for it
+  and the CI leg is skipped until the harness pin is bumped (see "CI jobs").
+- The harness places its overlay `SystemConfig` at `0x4200…1000`, which is what
+  `compare.py OVERLAY_SYSTEM_CONFIG` and the coverage check key on; the in-repo contracts
+  README says `0x43…`. When the harness moves it, this constant moves with it.
+- `pins.json genesis_hash` stays empty: the harness writes the L1 head timestamp into the L2
+  genesis header, so the hash changes per run and cannot be asserted.
+- `--attach` was used against devnets whose L1-origin lag stayed under the 150-block limit;
+  a devnet past that limit is refused (exit 2), not tested through.
+- The GitHub Actions jobs themselves have not run yet; the local runs used the same scripts
+  with `KONA_HOST_BIN` instead of the docker fallback.
