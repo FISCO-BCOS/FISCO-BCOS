@@ -1018,7 +1018,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         {
             m_memPoolValidator->setRollupCostFn(
                 bcos::executor_v1::opstack::makeOpAdmissionRollupCost(
-                    m_globalStateStorageInitializer, *m_nodeConfig->opForkSchedule()));
+                    m_globalStateStorageInitializer, *m_nodeConfig->opForkSchedule(),
+                    m_protocolInitializer->blockFactory()));
         }
     }
 

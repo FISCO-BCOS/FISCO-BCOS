@@ -21,6 +21,7 @@
 #include "AdmissionHarness.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-tars-protocol/protocol/Web3RawTransaction.h"
+#include <limits>
 
 namespace bcos::test
 {
@@ -65,7 +66,7 @@ BOOST_AUTO_TEST_CASE(balanceCoveringTheRollupCostTooIsAdmitted)
 {
     OpHarness harness;
     harness.rollupCost = 123456789;
-    harness.account.balance = OpHarness::txCost() + *harness.rollupCost;
+    harness.account.balance = OpHarness::txCost() + u256(*harness.rollupCost);
     auto tx = admitTx();
     BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
     // Priced on the wire form and the transaction's gas limit, against the snapshot's head.
@@ -123,6 +124,45 @@ BOOST_AUTO_TEST_CASE(headBaseFeeRiseRejectsAndFallReadmits)
 
     harness.ledgerConfig->setBaseFeePerGas(u256(30) * kGwei);  // equal is enough
     BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
+}
+
+// A zero head base fee does not make gas free on the OP lane: execution always verifies
+// balance >= gasLimit * maxFeePerGas + value (+ rollup cost), so admission charges the gas term
+// too -- a sender covering only `value` is refused. The FISCO and L1 lanes keep the free-gas
+// rule: with tx_gas_price "0x0" the same sender is admitted there.
+BOOST_AUTO_TEST_CASE(zeroHeadBaseFeeStillChargesGasOnTheOpLane)
+{
+    OpHarness harness;
+    harness.ledgerConfig->setBaseFeePerGas(u256(0));
+    harness.account.balance = TxSpec{}.value;  // value covered, gas * feeCap not
+    auto tx = admitTx();                       // maxFee 30 gwei > 0
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::InsufficientFunds);
+    harness.account.balance = OpHarness::txCost();
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
+
+    // Same balance and gas price row on the L1 lane: free gas, admitted.
+    harness.ledgerConfig->setExecutorVersion(ledger::ETHEREUM_EXECUTOR_VERSION);
+    harness.account.balance = TxSpec{}.value;
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
+}
+
+// The rollup cost reaches the row at 512 bits. Execution adds the L1 fee and the operator fee at
+// 512 bits (OpPolicy::additionalMaxCost), so a sender holding exactly 2^256-1 with no gas or
+// value cost is refused once the rollup total reaches 2^256 -- a callable saturating that total
+// to 2^256-1 would have admitted it.
+BOOST_AUTO_TEST_CASE(rollupCostAtOrAbove2To256RejectsAMaxBalanceSender)
+{
+    OpHarness harness;
+    harness.ledgerConfig->setBaseFeePerGas(u256(0));  // FeeCapVsBaseFee stands down
+    harness.account.balance = std::numeric_limits<u256>::max();
+    auto tx = admitTx({.maxFeePerGas = 0, .maxPriorityFeePerGas = 0, .value = 0});
+
+    harness.rollupCost = std::numeric_limits<u256>::max();  // the saturated figure: admitted
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::None);
+
+    harness.rollupCost = u512{1} << 256;  // the true figure: refused
+    BOOST_CHECK(harness.run(*tx) == TransactionStatus::InsufficientFunds);
+    BOOST_CHECK_EQUAL(harness.rollupCostAsks, 2);
 }
 
 // tx_gas_price is a FISCO governance row; on the OP lane it neither rejects nor admits.

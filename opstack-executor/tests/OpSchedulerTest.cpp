@@ -1824,90 +1824,185 @@ BOOST_AUTO_TEST_CASE(PendingStorageAtServesTheOpLaneBalanceFromTheFlatPlane)
     BOOST_CHECK_EQUAL(std::string(pending->get()), "42");
 }
 
-/// The admission callable (TxValidator's RollupCostFn on the OP lane): prices with the L1Block
-/// slots of the COMMITTED plane and the fork of the head's timestamp, exactly as
-/// opTotalRollupCost over loadOpFeeParamsAsync would; caches per (head number, hash), so a slot
-/// rewrite is invisible under the same head and picked up under the next.
-BOOST_AUTO_TEST_CASE(AdmissionRollupCostPricesCommittedSlotsAndCachesPerHead)
+namespace
 {
-    Fixture f;
+using L1BlockSlots = std::map<uint8_t, evmc_bytes32>;
+
+evmc_bytes32 slotWord(uint64_t v)
+{
+    evmc_bytes32 w{};
+    for (int i = 0; i < 8; ++i)
+    {
+        w.bytes[31 - i] = static_cast<uint8_t>(v >> (8 * i));
+    }
+    return w;
+}
+
+/// Ecotone-shaped L1Block attributes: l1BaseFee (slot 1), scalars 2 / 3 packed in slot 3, blob
+/// base fee 1e7 (slot 7), operator fee constant 5 (slot 8) -- the operator term the fixture's
+/// Isthmus baseline adds at the gas limit.
+L1BlockSlots ecotoneSlots(uint64_t l1BaseFee)
+{
+    evmc_bytes32 scalars{};
+    scalars.bytes[19] = 2;
+    scalars.bytes[23] = 3;
+    return {{1, slotWord(l1BaseFee)}, {3, scalars}, {7, slotWord(10'000'000)}, {8, slotWord(5)}};
+}
+
+/// Writes @p slots through the lane's table name (as the attributes deposit does), rebuilds the
+/// full MPT over the committed flat state and persists its nodes, and commits a header at
+/// @p number carrying that root. Returns the snapshot admission judges by: (number, canonical
+/// hash, timestamp) exactly as the ledger config republish publishes it.
+bcos::ledger::LedgerConfig commitL1BlockSlotsAsHead(
+    Fixture& f, bcos::protocol::BlockNumber number, L1BlockSlots const& slots)
+{
     bcos::Address l1Block;
     std::memcpy(l1Block.data(), opeth::OP_L1_BLOCK.bytes, sizeof(opeth::OP_L1_BLOCK.bytes));
-    auto const slotKey = [](uint8_t s) {
-        evmc_bytes32 k{};
-        k.bytes[31] = s;
-        return k;
-    };
-    auto const word = [](uint64_t v) {
-        evmc_bytes32 w{};
-        for (int i = 0; i < 8; ++i)
-        {
-            w.bytes[31 - i] = static_cast<uint8_t>(v >> (8 * i));
-        }
-        return w;
-    };
-    // Ecotone-shaped attributes: l1BaseFee (slot 1), scalars 2 / 3 packed in slot 3, blob base
-    // fee (slot 7). Written through the lane's own table name, as the attributes deposit does.
-    auto const writeSlots = [&](uint64_t l1BaseFee) {
+    {
         auto view = f.multiLayerStorage.fork();
         view.newMutable();
         bcos::ledger::account::EVMAccount account(view, bcos::ledger::account::FromTableName{},
             bcos::ledger::account::ethLaneAccountTableName(l1Block));
-        bcos::task::syncWait(account.setStorage(slotKey(1), word(l1BaseFee)));
-        evmc_bytes32 scalars{};
-        scalars.bytes[19] = 2;
-        scalars.bytes[23] = 3;
-        bcos::task::syncWait(account.setStorage(slotKey(3), scalars));
-        bcos::task::syncWait(account.setStorage(slotKey(7), word(10'000'000)));
+        if (!bcos::task::syncWait(account.exists()))
+        {
+            // The predeploy is a contract; an EIP-161-empty account (no nonce, balance or
+            // code) would be dropped from the trie together with its storage.
+            bcos::task::syncWait(account.create());
+            bcos::task::syncWait(account.setNonce("1"));
+            bcos::task::syncWait(account.setBalance(bcos::u256(0)));
+        }
+        for (auto const& [slot, word] : slots)
+        {
+            evmc_bytes32 key{};
+            key.bytes[31] = slot;
+            bcos::task::syncWait(account.setStorage(key, word));
+        }
         bcos::task::syncWait(f.multiLayerStorage.mergeView(std::move(view)));
-    };
-    writeSlots(1'000'000'000);
+    }
+    auto header = makeCallGenesisHeader(computeAndPersistGenesisTrie(f.multiLayerStorage));
+    header->setNumber(number);
+    header->setTimestamp((1000 + number) * 1000);  // whole seconds in ms, fork at ~1000 s
+    seedCallGenesis(f.multiLayerStorage, header);
 
-    struct Owner
-    {
-        MLS& mls;
-        MLS& storage() { return mls; }
+    bcos::ledger::LedgerConfig head;
+    head.setBlockNumber(number);
+    head.setTimestamp(header->timestamp());
+    head.setHash(bcos::protocol::canonicalBlockHash(*header));
+    return head;
+}
+
+/// opTotalRollupCost over @p slots directly -- what the callable must answer, computed without
+/// the storage path under test.
+bcos::u512 expectedRollupCost(L1BlockSlots const& slots, evmc::bytes_view envelope,
+    uint64_t gasLimit, bcos::ledger::OpForkSchedule const& schedule)
+{
+    auto at = [&](uint8_t s) {
+        auto it = slots.find(s);
+        return it == slots.end() ? evmc_bytes32{} : it->second;
     };
+    auto const fee = opeth::unpackOpFeeParams(at(1), at(3), at(5), at(6), at(7), at(8));
+    return opeth::intxToBcosU512(
+        opeth::opTotalRollupCost(fee, envelope, gasLimit, opeth::opForkSpecAt(schedule, 1000)));
+}
+
+struct RollupCostOwner
+{
+    MLS& mls;
+    MLS& storage() { return mls; }
+};
+}  // namespace
+
+/// The admission callable (TxValidator's RollupCostFn on the OP lane) prices with the L1Block
+/// slots OF THE HEAD IT IS KEYED BY, read through that header's state root, and caches them per
+/// (number, hash). A new head committed between two asks under the old key changes nothing:
+/// the cached set is the old head's, and a cold read under the old key -- against a committed
+/// plane that now holds the new head's slots -- yields the same old set. A head whose hash the
+/// committed header at that number does not carry is refused, never priced from another head's
+/// state.
+BOOST_AUTO_TEST_CASE(AdmissionRollupCostReadsTheSlotsOfTheHeadItIsKeyedBy)
+{
+    Fixture f;
+    auto const envelopeBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    bcos::bytes const envelope(envelopeBytes.begin(), envelopeBytes.end());
+    evmc::bytes_view const envelopeView{envelopeBytes.data(), envelopeBytes.size()};
+    constexpr uint64_t gasLimit = 100000;
+
+    auto const slots1 = ecotoneSlots(1'000'000'000);
+    auto const head1 = commitL1BlockSlotsAsHead(f, 1, slots1);
+    auto const expected1 = expectedRollupCost(slots1, envelopeView, gasLimit, f.forkSchedule);
+    BOOST_REQUIRE(expected1 > 0);
+
     auto const rollupCost = opeth::makeOpAdmissionRollupCost(
-        std::make_shared<Owner>(Owner{f.multiLayerStorage}), f.forkSchedule);
+        std::make_shared<RollupCostOwner>(RollupCostOwner{f.multiLayerStorage}), f.forkSchedule,
+        f.blockFactory);
+    auto const priced1 = bcos::task::syncWait(rollupCost(bcos::ref(envelope), gasLimit, head1));
+    BOOST_REQUIRE(priced1.has_value());
+    BOOST_CHECK_EQUAL(*priced1, expected1);
 
+    // A new head lands: doubled l1BaseFee, header 2. The committed plane now holds head 2's slots.
+    auto const slots2 = ecotoneSlots(2'000'000'000);
+    auto const head2 = commitL1BlockSlotsAsHead(f, 2, slots2);
+    auto const expected2 = expectedRollupCost(slots2, envelopeView, gasLimit, f.forkSchedule);
+    BOOST_REQUIRE(expected2 != expected1);
+
+    // Still under head 1: the cached set is head 1's.
+    auto const cached = bcos::task::syncWait(rollupCost(bcos::ref(envelope), gasLimit, head1));
+    BOOST_REQUIRE(cached.has_value());
+    BOOST_CHECK_EQUAL(*cached, expected1);
+
+    // A cold callable under head 1 reads head 1's slots through header 1's root, not the plane.
+    auto const cold = opeth::makeOpAdmissionRollupCost(
+        std::make_shared<RollupCostOwner>(RollupCostOwner{f.multiLayerStorage}), f.forkSchedule,
+        f.blockFactory);
+    auto const coldUnderHead1 = bcos::task::syncWait(cold(bcos::ref(envelope), gasLimit, head1));
+    BOOST_REQUIRE(coldUnderHead1.has_value());
+    BOOST_CHECK_EQUAL(*coldUnderHead1, expected1);
+
+    // Under head 2, both callables price head 2's slots.
+    for (auto const* fn : {&rollupCost, &cold})
+    {
+        auto const priced2 = bcos::task::syncWait((*fn)(bcos::ref(envelope), gasLimit, head2));
+        BOOST_REQUIRE(priced2.has_value());
+        BOOST_CHECK_EQUAL(*priced2, expected2);
+    }
+
+    // A snapshot the ledger does not carry: refused, not priced from someone else's state.
+    auto foreign = head1;
+    foreign.setHash(bcos::crypto::HashType{0x99});
+    BOOST_CHECK_THROW(
+        bcos::task::syncWait(cold(bcos::ref(envelope), gasLimit, foreign)), std::runtime_error);
+    auto beyond = head2;
+    beyond.setBlockNumber(3);
+    BOOST_CHECK_THROW(
+        bcos::task::syncWait(cold(bcos::ref(envelope), gasLimit, beyond)), std::runtime_error);
+}
+
+/// The callable answers the true 512-bit total. Slots that push the L1 fee past 2^256 saturate
+/// it to 2^256-1 (opL1DataCost's rule, shared with execution), and the operator fee then carries
+/// the sum past 2^256 -- which is what execution's additionalMaxCost compares against; a callable
+/// saturating the SUM to 2^256-1 would admit a sender holding exactly that.
+BOOST_AUTO_TEST_CASE(AdmissionRollupCostCarriesTheTotalPast2To256)
+{
+    Fixture f;
     auto const envelopeBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
     bcos::bytes const envelope(envelopeBytes.begin(), envelopeBytes.end());
     constexpr uint64_t gasLimit = 100000;
-    bcos::ledger::LedgerConfig head;
-    head.setBlockNumber(1);
-    head.setTimestamp(1'000'000);  // ms; the fork is selected at 1000 s
-    bcos::crypto::HashType headHash;
-    headHash[0] = 1;
-    head.setHash(headHash);
 
-    auto const expected = [&] {
-        auto view = f.multiLayerStorage.forkCommitted();
-        auto const fee = bcos::task::syncWait(opeth::loadOpFeeParamsAsync(view));
-        auto const spec = opeth::opForkSpecAt(f.forkSchedule, 1000);
-        auto const total = opeth::opTotalRollupCost(
-            fee, evmc::bytes_view{envelopeBytes.data(), envelopeBytes.size()}, gasLimit, spec);
-        return opeth::intxToBcosU256(static_cast<intx::uint256>(total));
-    };
-    auto const first = expected();
-    BOOST_REQUIRE(first > 0);
+    evmc_bytes32 maxWord{};
+    std::fill(std::begin(maxWord.bytes), std::end(maxWord.bytes), 0xff);
+    evmc_bytes32 scalars{};  // base_fee_scalar and blob_base_fee_scalar both 2^32-1
+    std::fill(scalars.bytes + 16, scalars.bytes + 24, 0xff);
+    L1BlockSlots const slots{{1, maxWord}, {3, scalars}, {7, slotWord(1)}, {8, slotWord(5)}};
+    auto const head = commitL1BlockSlotsAsHead(f, 1, slots);
+
+    auto const rollupCost = opeth::makeOpAdmissionRollupCost(
+        std::make_shared<RollupCostOwner>(RollupCostOwner{f.multiLayerStorage}), f.forkSchedule,
+        f.blockFactory);
     auto const priced = bcos::task::syncWait(rollupCost(bcos::ref(envelope), gasLimit, head));
     BOOST_REQUIRE(priced.has_value());
-    BOOST_CHECK_EQUAL(*priced, first);
-
-    // Same head after a slot rewrite: the cached attributes still price it.
-    writeSlots(2'000'000'000);
-    auto const cached = bcos::task::syncWait(rollupCost(bcos::ref(envelope), gasLimit, head));
-    BOOST_REQUIRE(cached.has_value());
-    BOOST_CHECK_EQUAL(*cached, first);
-
-    // Next head: re-read, and the doubled l1BaseFee shows.
-    head.setBlockNumber(2);
-    auto const second = expected();
-    BOOST_CHECK(second != first);
-    auto const repriced = bcos::task::syncWait(rollupCost(bcos::ref(envelope), gasLimit, head));
-    BOOST_REQUIRE(repriced.has_value());
-    BOOST_CHECK_EQUAL(*repriced, second);
+    // L1 fee saturated to 2^256-1, operator fee = gasLimit * 0 / 1e6 + 5.
+    BOOST_CHECK_EQUAL(*priced, (bcos::u512{1} << 256) + 4);
+    BOOST_CHECK(*priced > bcos::u512{std::numeric_limits<bcos::u256>::max()});
 }
 
 /// Binary-layout variant of the pending-layer test above: the pending nonce row lives at

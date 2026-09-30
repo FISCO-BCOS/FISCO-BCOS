@@ -244,7 +244,7 @@ struct AdmitHarness
     /// The OP rollup cost the bound RollupCostFn answers; nullopt = bind nothing, as on the
     /// FISCO and L1 lanes. `rollupCostAsks` counts the calls, so a case can state that a
     /// context or lane never priced the envelope rather than infer it from a status.
-    std::optional<u256> rollupCost;
+    std::optional<u512> rollupCost;
     int rollupCostAsks = 0;
     /// The envelope and head the callable was last asked about, for pinning what it is handed.
     bytes lastRollupEnvelope;
@@ -315,7 +315,7 @@ struct AdmitHarness
         {
             validator->setRollupCostFn(
                 [this](bytesConstRef envelope, uint64_t gasLimit,
-                    ledger::LedgerConfig const& head) -> task::Task<std::optional<u256>> {
+                    ledger::LedgerConfig const& head) -> task::Task<std::optional<u512>> {
                     ++rollupCostAsks;
                     lastRollupEnvelope.assign(envelope.begin(), envelope.end());
                     lastRollupGasLimit = gasLimit;
