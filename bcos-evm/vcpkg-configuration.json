@@ -1,7 +1,0 @@
-{
-    "overlay-ports": [
-        "../ports/evmone",
-        "../ports/intx",
-        "../ports/blst"
-    ]
-}

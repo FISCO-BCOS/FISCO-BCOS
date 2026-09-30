@@ -16,7 +16,7 @@
  * @file test_LedgerGenesisAllocsHash.cpp
  * @brief Second-startup guard over the genesis allocs: the op-geth state root is
  *        persisted on first init and re-derived on every subsequent startup, so
- *        any alloc drift (or removing the feature) refuses to start.
+ *        any alloc drift refuses to start.
  *        "Restart" is simulated by calling buildGenesisBlock a second time on
  *        the same StateStorage: the second call sees the existing genesis
  *        block and enters the verify path.
@@ -67,11 +67,12 @@ struct AllocsHashFixture
         GenesisConfig genesisConfig;
         genesisConfig.m_txGasLimit = 3000000000;
         genesisConfig.m_compatibilityVersion =
-            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_6_VERSION);
-        genesisConfig.m_features.push_back(
-            FeatureSet{Features::Flag::feature_l2_ethereum_compat, 1});
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_15_0_VERSION);
+        genesisConfig.m_executorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
         genesisConfig.m_chainID = "901";
         genesisConfig.m_groupID = "group0";
+        // compat >= 3.9 seeds SYS_CONFIG/web3_chain_id from m_web3ChainID; it must parse
+        genesisConfig.m_web3ChainID = genesisConfig.m_chainID;
         genesisConfig.m_allocs.push_back(
             Alloc{.address = "43000000000000000000000000000000000000c0",
                 .balance = u256(0),
@@ -104,7 +105,14 @@ BOOST_AUTO_TEST_CASE(SecondStartupSameConfigOk)
     }());
 }
 
-BOOST_AUTO_TEST_CASE(SecondStartupChangedChainModeAborts)
+// The lane is genesis-fixed: once first init has written the executor_version SYS_CONFIG
+// row, the config-side executor.version is only a boot fallback (readOnChainExecutorVersion).
+// buildGenesisBlock's restart guards — the genesis-pin comparison and the alloc stateRoot
+// comparison — do not cover executor.version (generateGenesisData does not pin it), so a
+// restart that drops executor.version to 0 while keeping the allocs passes at the Ledger
+// level and the chain stays on the Ethereum lane. NodeConfig would reject the edited config
+// upstream (validateL2Invariants: "[alloc.*] section requires executor.version >= 2").
+BOOST_AUTO_TEST_CASE(SecondStartupExecutorVersionFlipKeepsOnChainLane)
 {
     task::syncWait([this]() -> task::Task<void> {
         auto storage = makeStorage();
@@ -114,22 +122,13 @@ BOOST_AUTO_TEST_CASE(SecondStartupChangedChainModeAborts)
 
         BOOST_REQUIRE(co_await ledger::buildGenesisBlock(*ledger, config, param));
 
-        // flip off feature_l2_ethereum_compat but keep allocs so the alloc
-        // guard (stateRoot) still has something to compare. NodeConfig would
-        // reject this upstream (validateL2Invariants requires the two to
-        // agree); Ledger defends anyway — on the RESTART path via the
-        // genesis-pin comparison: the feature-flags gate is first-init only
-        // (it compares against a binary-derived expected set, which must not
-        // be able to strand an initialized chain after an upgrade), while the
-        // pin/stateRoot comparisons cover every config drift on restart.
         auto changed = config;
-        changed.m_features.clear();
+        changed.m_executorVersion = 0;  // legacy lane in the config, allocs kept
 
-        BOOST_CHECK_EXCEPTION(
-            co_await ledger::buildGenesisBlock(*ledger, changed, param), bcos::tool::InvalidConfig,
-            [](auto const& e) {
-                return errinfoContains(e, "Genesis Data is inconsistent");
-            });
+        BOOST_CHECK(co_await ledger::buildGenesisBlock(*ledger, changed, param));
+        // The on-chain row from first init decides the lane, not the edited config.
+        BOOST_CHECK_EQUAL(co_await ledger->fetchExecutorVersionAt(0),
+            bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
     }());
 }
 

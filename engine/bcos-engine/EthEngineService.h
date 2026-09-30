@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include "ClSyncCoordination.h"
 #include "EngineMPTStateRoot.h"
 #include "EngineServiceCommon.h"
 #include "EngineTracker.h"
@@ -43,6 +44,7 @@
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <bcos-task/Task.h>
+#include <bcos-transaction-scheduler/EthereumChainRollback.h>
 #include <bcos-utilities/Bloom.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -94,6 +96,7 @@ void commitRetainedPayload(Guard& guard, ArtifactsMap& artifacts, PayloadID cons
 enum SyncingWarnSite : std::size_t
 {
     c_forkchoiceHeadUnknown,
+    c_forkchoiceHeadBehindTip,
     c_newPayloadParentUnknown,
     c_newPayloadNotBuiltHere,
     c_newPayloadCacheMiss,
@@ -134,6 +137,13 @@ struct EthPayloadArtifacts
     /// pruning) when newPayload commits the block. Kept until the durable write succeeds,
     /// same rule as header/receipts, so a failed attempt's retry re-reads it.
     std::shared_ptr<const ledger::mpt::MPTDeltaLayer> mptDelta = nullptr;
+    /// The block's rollback journal, captured BEFORE pushView in newPayload's commit
+    /// section and stashed here immediately: a commit attempt that throws after pushView
+    /// has consumed the view cannot recapture on the CL's retry (captureRollbackJournal
+    /// iterates the view's dirty rows), so the retry reads the journal from the artifact
+    /// and still writes the journal rows with the block — a journal-less committed block
+    /// would refuse every later reorg reaching it.
+    std::optional<scheduler_v1::RollbackJournal> rollbackJournal = std::nullopt;
 };
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
@@ -154,7 +164,11 @@ public:
         int64_t blockTxCountLimit = c_defaultBlockTxCountLimit,
         std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(ApiVersion::V3),
         std::shared_ptr<ledger::mpt::CommitObserver> commitObserver = nullptr,
-        bcos::ledger::LedgerConfigState::Ptr ledgerConfigState = nullptr)
+        bcos::ledger::LedgerConfigState::Ptr ledgerConfigState = nullptr,
+        std::shared_ptr<engine_common::IExternalPayloadVerifier<GlobalStateStorageType>>
+            externalPayloadVerifier = nullptr,
+        std::shared_ptr<engine_common::ClSyncCoordination> clSync = nullptr,
+        bool allowBlobTransactions = false)
       : m_memPool(memPool),
         m_globalStateStorage(globalStateStorage),
         m_executor(executor),
@@ -165,7 +179,10 @@ public:
         m_maxEngineVersion(maxEngineVersion),
         m_commitObserver(commitObserver ? std::move(commitObserver) :
                                           std::make_shared<ledger::mpt::NoopCommitObserver>()),
-        m_ledgerConfigState(std::move(ledgerConfigState))
+        m_ledgerConfigState(std::move(ledgerConfigState)),
+        m_externalPayloadVerifier(std::move(externalPayloadVerifier)),
+        m_clSync(std::move(clSync)),
+        m_allowBlobTransactions(allowBlobTransactions)
     {
         if (!m_blockFactory)
         {
@@ -205,6 +222,12 @@ public:
 
     task::Task<PayloadStatus> newPayload(const NewPayloadRequest& request, std::uint32_t version);
 
+    /// EL-mode external lane: a CL-pushed payload that was not built by this node's
+    /// forkchoiceUpdated. Reached only when m_externalPayloadVerifier is set (the
+    /// ethereum.mode=el wiring); the OP/single-node wiring leaves it null and the
+    /// null branch below keeps its historical behavior.
+    task::Task<PayloadStatus> newPayloadExternal(const NewPayloadRequest& request);
+
     std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber() const
     {
         return m_tracker.safeBlockNumber();
@@ -213,6 +236,12 @@ public:
     std::optional<bcos::protocol::BlockNumber> getFinalizedBlockNumber() const
     {
         return m_tracker.finalizedBlockNumber();
+    }
+
+    std::optional<bcos::protocol::BlockNumber> getHeadBlockNumber() const
+    {
+        auto const head = m_tracker.trackedHead();
+        return head ? std::optional(head->blockNumber) : std::nullopt;
     }
 
 private:
@@ -224,6 +253,18 @@ private:
         /// The block's MPT delta (null on the XOR-root path); updateForkchoice stashes it in
         /// the payload artifacts for the newPayload commit's pruning hooks.
         std::shared_ptr<const ledger::mpt::MPTDeltaLayer> mptDelta = nullptr;
+        /// Prague+ execution requests computed during an L1 build (engine-API wire form);
+        /// nullopt pre-Prague or on the OP path.
+        std::optional<std::vector<bytes>> executionRequests = std::nullopt;
+    };
+
+    /// EL-mode (L1) build inputs updateForkchoice resolves before sealing: the parent's
+    /// Ethereum header (the builder's state anchor) plus the base fee / excess blob gas /
+    /// header fork derived from it and the CL's timestamp.
+    struct L1BuildInput
+    {
+        bcos::protocol::EthBlockHeaderData parentHeader;
+        engine_common::ExternalL1Context l1Context;
     };
 
     bool isForkchoiceVersionSupported(std::uint32_t version) const
@@ -242,7 +283,15 @@ private:
         const PayloadAttributes& payloadAttributes, const PayloadID& payloadId,
         std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
         std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view,
-        std::vector<bcos::bytes> decodedForcedTxs) const;
+        std::vector<bcos::bytes> decodedForcedTxs, std::optional<L1BuildInput> l1Input) const;
+
+    /// The L1 (EL-mode) half of buildPayload: runs the assembled transactions through the
+    /// shared verifier execution phase (IExternalPayloadVerifier::buildL1Block) and stamps
+    /// the computed roots into the payload/header it is building.
+    task::Task<BuildPayloadResult> buildL1Payload(const ForkchoiceState& forkchoiceState,
+        const PayloadAttributes& payloadAttributes, bcos::protocol::BlockNumber nextBlockNumber,
+        std::vector<EngineTransaction> engineTransactions, ViewType& view,
+        L1BuildInput const& l1Input) const;
 
     EngineTracker m_tracker;
     /// Serializes the newPayload commit section [prepareMPTPruneRows -> merge -> onCommit ->
@@ -271,6 +320,26 @@ private:
     /// not through MultiVersionScheduler's publishing wrapper, so without this holder the
     /// engine-driven modes would admit every later transaction against the boot snapshot.
     bcos::ledger::LedgerConfigState::Ptr m_ledgerConfigState;
+
+    /// Type-erased seam over scheduler_v1::EthereumBlockVerifier, injected only on the
+    /// EL-mode wiring (the instance is shared with the devp2p sync loop so both commit
+    /// lanes serialize on the verifier's m_commitMutex). Non-null switches newPayload's
+    /// shape gate to the L1 dialect and enables the external newPayload lane.
+    std::shared_ptr<engine_common::IExternalPayloadVerifier<GlobalStateStorageType>>
+        m_externalPayloadVerifier;
+
+    /// CL-driven sync coordination ([engine_rpc] EL wiring only, created and shared by
+    /// the composition root): the first served forkchoiceUpdated latches the devp2p
+    /// sync loop's CL-driven mode, and every SYNCING answer records its missing hash
+    /// as the loop's backfill target. Null on the single-node / op_engine_rpc wirings,
+    /// where no devp2p sync loop exists.
+    std::shared_ptr<engine_common::ClSyncCoordination> m_clSync;
+
+    /// executor_version==2 wiring (set by the composition root): the single-node /
+    /// op_engine_rpc lanes keep the OP-flavored newPayload shape gate, except blob
+    /// (type-3) envelopes are admitted — the admission path (TxValidator Web3Blob)
+    /// already let them into the pool. The EL mode's L1 dialect admits them regardless.
+    bool m_allowBlobTransactions;
 };
 
 }  // namespace bcos::engine

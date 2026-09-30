@@ -132,6 +132,49 @@ struct TransactionCost
     int64_t min = 0;
 };
 
+/// Compute the transaction intrinsic gas g0 (Yellow Paper, 6.2) and minimal gas (EIP-7623)
+/// from raw fields. Ported from evmone state.cpp.
+///
+/// This is the Transaction-independent core: transaction kinds that are not a
+/// bcos Transaction (OP's deposit, decoded straight from its envelope) call
+/// this overload directly with their own fields. The Transaction overload
+/// below is a thin forwarder.
+///
+/// @param authorization_count the EIP-7702 list size, already gated to 0 by
+///        the caller for non-set-code transactions (see the forwarder's
+///        comment for why the mirror cannot be trusted ungated).
+inline TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, bool is_create,
+    std::span<const uint8_t> data, int64_t access_list_cost, size_t authorization_count)
+{
+    static constexpr auto TX_BASE_COST = 21000;
+    static constexpr auto TX_CREATE_COST = 32000;
+    static constexpr auto DATA_TOKEN_COST = 4;
+    static constexpr auto INITCODE_WORD_COST = 2;
+    static constexpr auto TOTAL_COST_FLOOR_PER_TOKEN = 10;
+
+    const auto create_cost = (is_create && rev >= EVMC_HOMESTEAD) ? TX_CREATE_COST : 0;
+
+    const auto num_tokens = static_cast<int64_t>(compute_tx_data_tokens(rev, data));
+    const auto data_cost = num_tokens * DATA_TOKEN_COST;
+
+    const auto auth_list_cost =
+        (rev >= EVMC_PRAGUE) ?
+            static_cast<int64_t>(authorization_count) * AUTHORIZATION_EMPTY_ACCOUNT_COST :
+            0;
+
+    const auto initcode_cost =
+        (is_create && rev >= EVMC_SHANGHAI) ? INITCODE_WORD_COST * num_words(data.size()) : 0;
+
+    const auto intrinsic_cost =
+        TX_BASE_COST + create_cost + data_cost + access_list_cost + auth_list_cost + initcode_cost;
+
+    // EIP-7623: Compute the minimum cost for the transaction. If disabled, just use 0.
+    const auto min_cost =
+        rev >= EVMC_PRAGUE ? TX_BASE_COST + num_tokens * TOTAL_COST_FLOOR_PER_TOKEN : 0;
+
+    return {intrinsic_cost, min_cost};
+}
+
 /// Compute the transaction intrinsic gas g0 (Yellow Paper, 6.2) and minimal gas (EIP-7623).
 /// Ported from evmone state.cpp.
 ///
@@ -143,22 +186,7 @@ struct TransactionCost
 /// into std::terminate.
 inline TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, Transaction const& tx)
 {
-    static constexpr auto TX_BASE_COST = 21000;
-    static constexpr auto TX_CREATE_COST = 32000;
-    static constexpr auto DATA_TOKEN_COST = 4;
-    static constexpr auto INITCODE_WORD_COST = 2;
-    static constexpr auto TOTAL_COST_FLOOR_PER_TOKEN = 10;
-
-    const auto is_create = !ethToAddress(tx).has_value();
-
-    const auto create_cost = (is_create && rev >= EVMC_HOMESTEAD) ? TX_CREATE_COST : 0;
-
     const auto data = tx.input();
-    const auto num_tokens = static_cast<int64_t>(
-        compute_tx_data_tokens(rev, std::span<const uint8_t>{data.data(), data.size()}));
-    const auto data_cost = num_tokens * DATA_TOKEN_COST;
-
-    const auto access_list_cost = compute_access_list_cost(tx.web3AccessList());
 
     // evmone charges this with no gate, and can: its authorization_list is a decoded field that
     // only the type-4 RLP form populates, so non-empty implies set-code. That guarantee does not
@@ -177,22 +205,14 @@ inline TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, Transaction 
     // list from being materialised (and every r/s hex-parsed) for the transactions that cannot
     // carry one.
     static constexpr uint8_t SET_CODE_TX_KIND = 4;
-    const auto auth_list_cost =
+    const auto authorization_count =
         (rev >= EVMC_PRAGUE && tx.web3TypedTxKind() == SET_CODE_TX_KIND) ?
-            static_cast<int64_t>(tx.authorizationList().size()) * AUTHORIZATION_EMPTY_ACCOUNT_COST :
-            0;
+            tx.authorizationList().size() :
+            size_t{0};
 
-    const auto initcode_cost =
-        (is_create && rev >= EVMC_SHANGHAI) ? INITCODE_WORD_COST * num_words(data.size()) : 0;
-
-    const auto intrinsic_cost =
-        TX_BASE_COST + create_cost + data_cost + access_list_cost + auth_list_cost + initcode_cost;
-
-    // EIP-7623: Compute the minimum cost for the transaction. If disabled, just use 0.
-    const auto min_cost =
-        rev >= EVMC_PRAGUE ? TX_BASE_COST + num_tokens * TOTAL_COST_FLOOR_PER_TOKEN : 0;
-
-    return {intrinsic_cost, min_cost};
+    return compute_tx_intrinsic_cost(rev, !ethToAddress(tx).has_value(),
+        std::span<const uint8_t>{data.data(), data.size()},
+        compute_access_list_cost(tx.web3AccessList()), authorization_count);
 }
 
 }  // namespace gas

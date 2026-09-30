@@ -27,7 +27,7 @@ namespace bcos::engine
 /// sha256("") — the EL "empty requests hash" (EIP-7685: a block with no execution
 /// requests). Single-sourced here because two layers stamp it: the engine header builders
 /// (EngineServiceCommon.h c_emptyRequestsHash, as bcos::h256) and the OP block seal
-/// (OpBlockExecute.h OP_EMPTY_REQUESTS_HASH, as evmc::bytes32). The two layers cannot see
+/// (opstack-executor/OpEthBlockExecute.h, as evmc::bytes32). The two layers cannot see
 /// each other's headers (engine sits above opstack-executor), so the hex lives in the
 /// framework and each layer casts it into its native type.
 inline constexpr std::string_view c_emptyRequestsHashHex =

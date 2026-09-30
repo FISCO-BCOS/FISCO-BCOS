@@ -60,10 +60,12 @@ task::Task<void> drainQueuedLayers(Storage& storage)
 }
 
 /// The executable transactions of an execution payload, index-parallel with their EIP-2718 type
-/// bytes. Raw-only (forced) entries have no executable form and are skipped. Blob (0x03) and
-/// unsupported envelopes fail closed here — through the same isRawTransactionPayloadAdmissible
-/// rule the admission paths use — so the receipts-root leaf can never commit a type prefix for
-/// an envelope the repo's policy invalidates the whole payload for.
+/// bytes. Raw-only (forced) entries have no executable form and are skipped. Unsupported
+/// envelopes fail closed here; blob (0x03) envelopes fail closed too unless @p allowBlob — the
+/// OP lane's rule (isRawTransactionPayloadAdmissible, used by the EngineServiceImpl caller) —
+/// while the pure-Ethereum lane (EthEngineService, executor_version==2) admits and executes
+/// blob transactions, so it passes allowBlob=true. The receipts-root leaf can never commit a
+/// type prefix for an envelope the lane's policy invalidates the whole payload for.
 struct ExecutableTransactions
 {
     std::vector<protocol::Transaction::Ptr> transactions;
@@ -71,7 +73,8 @@ struct ExecutableTransactions
 };
 
 template <class PayloadTransactions>
-ExecutableTransactions collectExecutableTransactions(PayloadTransactions const& payloadTransactions)
+ExecutableTransactions collectExecutableTransactions(
+    PayloadTransactions const& payloadTransactions, bool allowBlob = false)
 {
     ExecutableTransactions out;
     out.transactions.reserve(payloadTransactions.size());
@@ -85,7 +88,9 @@ ExecutableTransactions collectExecutableTransactions(PayloadTransactions const& 
         // Gate on the single authoritative dispatch table, not rawTransactionTypeByte alone:
         // that returns 0x03 for a blob, so a blob would be committed as a 0x03-prefixed
         // receipts-trie leaf instead of invalidating the payload.
-        if (!isRawTransactionPayloadAdmissible(dispatchRawTransaction(bcos::ref(tx.raw))))
+        auto const kind = dispatchRawTransaction(bcos::ref(tx.raw));
+        if (!isRawTransactionPayloadAdmissible(kind) &&
+            !(allowBlob && kind == RawTransactionKind::Blob))
         {
             BOOST_THROW_EXCEPTION(OpExecutionInternalError{} << bcos::errinfo_comment{
                                       "execution payload carries an inadmissible transaction "

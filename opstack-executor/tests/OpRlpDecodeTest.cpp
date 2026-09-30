@@ -3,8 +3,8 @@
 
 // Unit tests for the OP block-context + conversion helpers (OpCommon.h). The RPC display-grade
 // raw-envelope RLP decode primitives were retired (block execution consumes the block's tars
-// Transaction objects); the CONSENSUS-grade deposit-envelope decoder is
-// OpstackExecutor.h's decodeDepositEnvelope, covered by OpDepositEnvelopeTest.
+// Transaction objects); the CONSENSUS-grade deposit-envelope decoder is OpEthDeposit.h's
+// decodeOpDepositEnvelope, covered by OpDepositEnvelopeTest.
 
 #include <opstack-executor/OpCommon.h>
 
@@ -40,6 +40,23 @@ BOOST_AUTO_TEST_CASE(narrowU256ToU64Bounds)
         std::numeric_limits<uint64_t>::max());
     BOOST_CHECK_THROW(narrowU256ToU64(bcos::u256(std::numeric_limits<uint64_t>::max()) + 1, "test"),
         OpConsensusError);
+}
+
+BOOST_AUTO_TEST_CASE(NarrowGasUsedRejectsAboveInt64)
+{
+    // Receipt gasUsed narrowing: int64-range passes, above throws OpConsensusError (the
+    // INVALID side of the INVALID/-32603 boundary — OpEthExecutor's finish step relies on it).
+    BOOST_CHECK_EQUAL(narrowGasUsed(bcos::u256(0)), 0);
+    BOOST_CHECK_EQUAL(
+        narrowGasUsed(bcos::u256(std::numeric_limits<int64_t>::max())),
+        std::numeric_limits<int64_t>::max());
+    BOOST_CHECK_THROW(
+        (void)narrowGasUsed(bcos::u256(std::numeric_limits<int64_t>::max()) + 1),
+        OpConsensusError);
+    // The decimal receipt-field form passes the value through verbatim.
+    BOOST_CHECK_EQUAL(decimalCumulative(0), "0");
+    BOOST_CHECK_EQUAL(
+        decimalCumulative(std::numeric_limits<uint64_t>::max()), "18446744073709551615");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -20,7 +20,8 @@
  *        MPT INCREMENTALLY on top of that root through the real BaselineScheduler — the
  *        first full-stack verification that the persisted genesis nodes actually feed the
  *        block-1 build. Scenario-B semantics take priority over scenario A's activation
- *        rule (l2 flag checked first in shouldBuildMPT).
+ *        rule (the Ethereum lane — executor_version >= 2 — is checked first in
+ *        shouldBuildMPT).
  */
 #include "FullChainFixture.h"
 // Test-asset helper shared with the bcos-ledger genesis tests: computes the
@@ -70,8 +71,15 @@ ledger::Alloc genEoaAlloc()
 ledger::GenesisConfig genL2Genesis()
 {
     auto genesis = FullChainFixture::baseGenesis();
-    genesis.m_features.push_back(
-        ledger::FeatureSet{ledger::Features::Flag::feature_l2_ethereum_compat, 1});
+    // The Ethereum lane: executor_version >= 2 (scenario B, full MPT from genesis on).
+    genesis.m_executorVersion = ledger::ETHEREUM_EXECUTOR_VERSION;
+    // Ledger::buildGenesisBlock persists the executor_version SYS_CONFIG row only at
+    // compatibility >= 3.15, and block 1 reads the lane back through the production
+    // getLedgerConfig path — so the fixture chain must declare 3.15. >= 3.9 also seeds
+    // SYS_CONFIG/web3_chain_id from m_web3ChainID, which must parse.
+    genesis.m_compatibilityVersion =
+        static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_15_0_VERSION);
+    genesis.m_web3ChainID = genesis.m_chainID;
     genesis.m_allocs.push_back(genContractAlloc());
     genesis.m_allocs.push_back(genEoaAlloc());
     // The contract sits at the SystemConfig predeploy address: Ledger verifies
@@ -218,8 +226,9 @@ BOOST_AUTO_TEST_CASE(BlockOneIncrementalBuildOverGenesisRoot)
 }
 
 // Scenario-B priority over scenario A: even with a feature_mpt_state_root activation row
-// pointing far in the future (block 100), the l2 flag — checked FIRST in shouldBuildMPT —
-// keeps every block on the MPT path. Block 1 commits an MPT root, not an XOR root.
+// pointing far in the future (block 100), the Ethereum lane (executor_version >= 2) —
+// checked FIRST in shouldBuildMPT — keeps every block on the MPT path. Block 1 commits an
+// MPT root, not an XOR root.
 BOOST_AUTO_TEST_CASE(L2PriorityOverScenarioAActivation)
 {
     FullChainFixture fixture{"gen_l2_priority"};

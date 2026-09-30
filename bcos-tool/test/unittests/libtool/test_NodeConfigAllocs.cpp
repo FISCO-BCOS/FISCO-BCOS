@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @file test_NodeConfigAllocs.cpp
- * @brief [alloc.N] / [alloc.N.storage] parsing gated by feature_l2_ethereum_compat (A6.5)
+ * @brief [alloc.N] / [alloc.N.storage] parsing gated by executor.version >= 2 (A6.5)
  */
 #include "ExceptionCheck.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
@@ -46,9 +46,9 @@ std::shared_ptr<NodeConfig> makeNodeConfig()
 
 // loadGenesisConfig -> loadLedgerConfig needs a non-empty sealer list and a
 // KeyFactory to build node ids; allocs/invariant checks run after that, so the
-// base config must carry one node line. There is no [chain].chain_mode anymore —
-// L2 mode is signalled by feature_l2_ethereum_compat in [features], so L2 cases
-// append kFeatureL2.
+// base config must carry one node line. There is no [chain].chain_mode and no
+// feature flag anymore — the Ethereum lane is signalled by executor.version >= 2,
+// so Ethereum-lane cases use kAllocsEthBase instead of kBase.
 constexpr auto kBase =
     "[chain]\nsm_crypto=0\nchain_id=1\ngroup_id=g\n"
     "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
@@ -57,14 +57,24 @@ constexpr auto kBase =
     "[tx]\ngas_limit=300000000\n"
     "[executor]\nis_auth_check=1\nauth_admin_account=0x0\n";
 
-constexpr auto kFeatureL2 = "[features]\nfeature_l2_ethereum_compat=1\n";
+// Ethereum-lane base: executor.version=2 signals the lane. compatibility_version
+// must be >= 3.18.0 (below it Ledger::buildGenesisBlock cannot persist the EVM
+// revision) and a v2 chain must pin an explicit executor.evm_revision.
+constexpr auto kAllocsEthBase =
+    "[chain]\nsm_crypto=0\nchain_id=1\ngroup_id=g\n"
+    "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+    "node.0=0102030405060708090a0b0c0d0e0f1011121314:1\n"
+    "[version]\ncompatibility_version=3.18.0\n"
+    "[tx]\ngas_limit=300000000\n"
+    "[executor]\nis_auth_check=1\nauth_admin_account=0x0\n"
+    "version=2\nevm_revision=cancun\n";
 
 constexpr auto kAlloc0 =
     "[alloc.0]\naddress=0x43000000000000000000000000000000000000C0\n"
     "balance=0\nnonce=0\ncode=0x6080604052\n";
 
-// A valid [eth_genesis_header] section: L2 mode now REQUIRES it
-// (validateL2Invariants binds the section and the feature both ways).
+// A valid [eth_genesis_header] section: the Ethereum lane now REQUIRES it
+// (validateL2Invariants binds the section and executor.version >= 2 both ways).
 constexpr auto kAllocsEthHeader =
     "[eth_genesis_header]\n"
     "parent_hash=0x0000000000000000000000000000000000000000000000000000000000000000\n"
@@ -97,35 +107,35 @@ constexpr auto kAllocsEthHeader =
 
 BOOST_AUTO_TEST_SUITE(NodeConfigAllocsTest)
 
-BOOST_AUTO_TEST_CASE(DefaultNoFeatureNoAllocs)
+BOOST_AUTO_TEST_CASE(DefaultLegacyLaneNoAllocs)
 {
     auto cfg = makeNodeConfig();
     cfg->loadGenesisConfig(parseIni(kBase));
     BOOST_CHECK(cfg->genesisConfig().m_allocs.empty());
 }
 
-BOOST_AUTO_TEST_CASE(FeatureL2WithAllocsParsed)
+BOOST_AUTO_TEST_CASE(EthLaneWithAllocsParsed)
 {
     auto cfg = makeNodeConfig();
-    cfg->loadGenesisConfig(parseIni(std::string(kBase) + kFeatureL2 + kAlloc0 + kAllocsEthHeader));
+    cfg->loadGenesisConfig(parseIni(std::string(kAllocsEthBase) + kAlloc0 + kAllocsEthHeader));
     BOOST_CHECK_EQUAL(cfg->genesisConfig().m_allocs.size(), 1U);
     BOOST_CHECK_EQUAL(cfg->genesisConfig().m_allocs[0].address,
         "0x43000000000000000000000000000000000000c0");  // forced lowercase
     BOOST_CHECK_EQUAL(cfg->genesisConfig().m_allocs[0].code, "0x6080604052");
 }
 
-BOOST_AUTO_TEST_CASE(FeatureL2RejectsEmptyAllocs)
+BOOST_AUTO_TEST_CASE(EthLaneRejectsEmptyAllocs)
 {
     auto cfg = makeNodeConfig();
-    BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseIni(std::string(kBase) + kFeatureL2)),
+    BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseIni(std::string(kAllocsEthBase))),
         bcos::tool::InvalidConfig, [](auto const& e) {
             return bcos::test::errinfoContains(e, "requires a non-empty [alloc.*] section");
         });
 }
 
-BOOST_AUTO_TEST_CASE(AllocsWithoutFeatureRejected)
+BOOST_AUTO_TEST_CASE(AllocsWithoutEthLaneRejected)
 {
-    // allocs present but feature_l2_ethereum_compat not enabled -> reject
+    // allocs present but executor.version < 2 (the legacy lane) -> reject
     auto cfg = makeNodeConfig();
     BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseIni(std::string(kBase) + kAlloc0)),
         bcos::tool::InvalidConfig,
@@ -134,7 +144,7 @@ BOOST_AUTO_TEST_CASE(AllocsWithoutFeatureRejected)
 
 BOOST_AUTO_TEST_CASE(AllocStorageSlotsParsed)
 {
-    std::string ini = std::string(kBase) + kFeatureL2 + kAllocsEthHeader +
+    std::string ini = std::string(kAllocsEthBase) + kAllocsEthHeader +
                       "[alloc.0]\naddress=0x43000000000000000000000000000000000000C0\n"
                       "balance=0\nnonce=0\ncode=0x6080604052\n"
                       "[alloc.0.storage]\n"
@@ -155,7 +165,7 @@ BOOST_AUTO_TEST_CASE(MissingAddressNamesSection)
 {
     // no address key -> boost ptree throws; the wrap must name [alloc.0].
     std::string ini =
-        std::string(kBase) + kFeatureL2 + "[alloc.0]\nbalance=0\nnonce=0\ncode=0x6080604052\n";
+        std::string(kAllocsEthBase) + "[alloc.0]\nbalance=0\nnonce=0\ncode=0x6080604052\n";
     auto cfg = makeNodeConfig();
     BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig,
         [](bcos::tool::InvalidConfig const& e) {
@@ -166,7 +176,7 @@ BOOST_AUTO_TEST_CASE(MissingAddressNamesSection)
 
 BOOST_AUTO_TEST_CASE(NonHexAddressRejected)
 {
-    std::string ini = std::string(kBase) + kFeatureL2 +
+    std::string ini = std::string(kAllocsEthBase) +
                       "[alloc.0]\naddress=0xZZ000000000000000000000000000000000000C0\n"
                       "balance=0\nnonce=0\ncode=0x6080604052\n";
     auto cfg = makeNodeConfig();
@@ -176,7 +186,7 @@ BOOST_AUTO_TEST_CASE(NonHexAddressRejected)
 
 BOOST_AUTO_TEST_CASE(BadBalanceNamesSection)
 {
-    std::string ini = std::string(kBase) + kFeatureL2 +
+    std::string ini = std::string(kAllocsEthBase) +
                       "[alloc.0]\naddress=0x43000000000000000000000000000000000000C0\n"
                       "balance=garbage\nnonce=0\ncode=0x6080604052\n";
     auto cfg = makeNodeConfig();
@@ -189,7 +199,7 @@ BOOST_AUTO_TEST_CASE(BadBalanceNamesSection)
 BOOST_AUTO_TEST_CASE(DuplicateAddressRejected)
 {
     // same address, different case -> lowercased dedup must reject.
-    std::string ini = std::string(kBase) + kFeatureL2 +
+    std::string ini = std::string(kAllocsEthBase) +
                       "[alloc.0]\naddress=0x43000000000000000000000000000000000000C0\n"
                       "balance=0\nnonce=0\ncode=0x6080604052\n"
                       "[alloc.1]\naddress=0x43000000000000000000000000000000000000c0\n"
@@ -202,7 +212,7 @@ BOOST_AUTO_TEST_CASE(DuplicateAddressRejected)
 BOOST_AUTO_TEST_CASE(BadStorageKeyRejected)
 {
     // storage key is not 64 hex chars -> reject.
-    std::string ini = std::string(kBase) + kFeatureL2 +
+    std::string ini = std::string(kAllocsEthBase) +
                       "[alloc.0]\naddress=0x43000000000000000000000000000000000000C0\n"
                       "balance=0\nnonce=0\ncode=0x6080604052\n"
                       "[alloc.0.storage]\n0x01=0x01\n";
@@ -217,7 +227,7 @@ BOOST_AUTO_TEST_CASE(BadStorageValueRejected)
 {
     // storage value is not 64 hex chars -> reject (importGenesisState unhexes it
     // into a 32-byte word; short/odd values would corrupt genesis storage).
-    std::string ini = std::string(kBase) + kFeatureL2 +
+    std::string ini = std::string(kAllocsEthBase) +
                       "[alloc.0]\naddress=0x43000000000000000000000000000000000000C0\n"
                       "balance=0\nnonce=0\ncode=0x6080604052\n"
                       "[alloc.0.storage]\n"
@@ -234,7 +244,7 @@ BOOST_AUTO_TEST_CASE(NonceOverflowRejected)
 {
     // nonce = 2^64 (one past uint64 max) -> reject; it is decimal-valid but the
     // genesis hash serializes nonce as uint64, so it must not overflow.
-    std::string ini = std::string(kBase) + kFeatureL2 +
+    std::string ini = std::string(kAllocsEthBase) +
                       "[alloc.0]\naddress=0x43000000000000000000000000000000000000C0\n"
                       "balance=0\nnonce=18446744073709551616\ncode=0x6080604052\n";
     auto cfg = makeNodeConfig();

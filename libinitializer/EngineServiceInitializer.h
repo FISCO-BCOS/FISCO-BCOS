@@ -59,7 +59,11 @@ public:
         bcos::ledger::LedgerInterface::Ptr ledger = nullptr,
         int64_t blockTxCountLimit = bcos::engine::c_defaultBlockTxCountLimit,
         bcos::ledger::LedgerConfigState::Ptr ledgerConfigState = nullptr,
-        std::shared_ptr<ledger::mpt::CommitObserver> commitObserver = nullptr)
+        std::shared_ptr<ledger::mpt::CommitObserver> commitObserver = nullptr,
+        std::shared_ptr<engine::engine_common::IExternalPayloadVerifier<GlobalStateStorage>>
+            externalPayloadVerifier = nullptr,
+        std::shared_ptr<engine::engine_common::ClSyncCoordination> clSync = nullptr,
+        bool allowBlobTransactions = false)
     {
         auto initializer = Ptr(new EngineServiceInitializer());
         using ConcreteEngineService = bcos::engine::EthEngineService<bcos::txpool::MemPoolImpl,
@@ -68,7 +72,8 @@ public:
             std::make_shared<ConcreteModel<SchedulerType, ExecutorType, ConcreteEngineService>>(
                 std::move(storageInitializer), std::move(blockFactory), std::move(scheduler),
                 std::move(transactionExecutor), memPool, std::move(ledger), blockTxCountLimit,
-                std::move(ledgerConfigState), std::move(commitObserver));
+                std::move(ledgerConfigState), std::move(commitObserver),
+                std::move(externalPayloadVerifier), std::move(clSync), allowBlobTransactions);
         initializer->m_holder = holder;
         initializer->m_engineService =
             std::shared_ptr<bcos::engine::AnyEngineService>(holder, &holder->m_any);
@@ -120,7 +125,11 @@ private:
             std::shared_ptr<ExecutorType> transactionExecutor, bcos::txpool::MemPoolImpl& memPool,
             bcos::ledger::LedgerInterface::Ptr ledger, int64_t blockTxCountLimit,
             bcos::ledger::LedgerConfigState::Ptr ledgerConfigState,
-            std::shared_ptr<ledger::mpt::CommitObserver> commitObserver)
+            std::shared_ptr<ledger::mpt::CommitObserver> commitObserver,
+            std::shared_ptr<engine::engine_common::IExternalPayloadVerifier<GlobalStateStorage>>
+                externalPayloadVerifier,
+            std::shared_ptr<engine::engine_common::ClSyncCoordination> clSync,
+            bool allowBlobTransactions)
           : m_storageInitializer(std::move(storageInitializer)),
             m_memPool(memPool),
             m_transactionExecutor(std::move(transactionExecutor)),
@@ -129,7 +138,8 @@ private:
                 m_storageInitializer->storage(), *m_transactionExecutor, *m_scheduler,
                 std::move(blockFactory), std::move(ledger), blockTxCountLimit,
                 /*maxEngineVersion=*/static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3),
-                std::move(commitObserver), std::move(ledgerConfigState))
+                std::move(commitObserver), std::move(ledgerConfigState),
+                std::move(externalPayloadVerifier), std::move(clSync), allowBlobTransactions)
         {}
 
         std::shared_ptr<GlobalStateStorageInitializer> m_storageInitializer;

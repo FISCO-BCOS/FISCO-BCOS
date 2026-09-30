@@ -4,30 +4,22 @@ find_package(evmone REQUIRED)
 find_package(CURL REQUIRED)
 
 # Lightweight suite: FakeTransaction / header-only surfaces.
-# This binary links ledger via opstack-executor's PUBLIC closure (OpBlockExecute.cpp needs
-# the trie builders). The older "do not link ledger — wedprcrypto breaks libc++ typed catch
-# binary-wide" instruction is false on this preset: BOOST_CHECK_THROW(..., OpConsensusError)
-# is what CI runs. Receipt tests use the same typed catch (BOOST_CHECK_EXCEPTION).
+# This binary links ledger via opstack-executor's PUBLIC closure (OpScheduler.h's cross-check
+# and OpEthBlockSteps.h call the trie builders). The older "do not link ledger — wedprcrypto
+# breaks libc++ typed catch binary-wide" instruction is false on this preset:
+# BOOST_CHECK_THROW(..., OpConsensusError) is what CI runs.
 #
 # BOOST_TEST_MODULE lives in TestMain.cpp (the single main for this suite).
 add_executable(opstack-executor-tests
     TestMain.cpp
     OpRlpDecodeTest.cpp
+    OpRecentBlockHashesTest.cpp
     OpDepositEnvelopeTest.cpp
-    OpTxConvertTest.cpp
     SmokeCompileTest.cpp
     OpSchedulerPolicyTest.cpp
-    OpCommonTest.cpp
-    OpCommitmentsTest.cpp
-    RecentBlockHashesTest.cpp
-    PreBlockOpStepsTest.cpp
-    Storage2StateHelpersTest.cpp
-    Storage2StatePoisonTest.cpp
-    Storage2StateBinaryModeTest.cpp
-    OpEnvelopeMirrorTest.cpp
     support/SeedPreStateTest.cpp
-    OpJovianShapeTest.cpp
     OpSchedulerSeamSmokeTest.cpp
+    OpRollupCostGoldenTest.cpp
 )
 # Unity build: header-heavy Boost.Test TUs share a large common preamble. TestMain.cpp
 # defines BOOST_TEST_MODULE. SeamSmoke has an anonymous-namespace CheckpointStorage stub
@@ -52,66 +44,11 @@ add_test(NAME OpstackExecutorTests COMMAND opstack-executor-tests)
 # Runtime suite (OpstackExecutorTest.cpp) stays with the web3-model decoupling follow-up.
 # Scheduler execute/commit/call coverage is opstack-executor-scheduler-tests below.
 
-
-# Receipts-root leaf encoding (encodeReceiptForRoot / sealOpBlock). Needs evmone's packaged RLP
-# helpers and ledger's computeTrieRootVarKey; kept off the lightweight binary to isolate the
-# larger protocol/crypto dependency closure. The repository-owned evmone port deliberately
-# installs test/utils/rlp_encode.{hpp,cpp} (ports/evmone/portfile.cmake §4d), and its generated
-# package config calls find_dependency(blst). Build the consensus golden-vector suite
-# unconditionally so a broken package contract fails configure instead of silently losing tests.
-get_target_property(_evmone_inc_dirs evmone::evmone INTERFACE_INCLUDE_DIRECTORIES)
-if(NOT _evmone_inc_dirs OR _evmone_inc_dirs MATCHES "-NOTFOUND$")
-    message(FATAL_ERROR "the repository evmone package must export INTERFACE_INCLUDE_DIRECTORIES")
-endif()
-# Find the first include dir that actually contains the vendored test utils, instead of
-# assuming list order (list(GET ... 0) would misdiagnose a reordered include list).
-set(EVMONE_TEST_UTILS_DIR)
-foreach(_dir IN LISTS _evmone_inc_dirs)
-    cmake_path(NORMAL_PATH _dir)
-    if(EXISTS "${_dir}/test/utils/rlp_encode.cpp")
-        set(EVMONE_TEST_UTILS_DIR "${_dir}/test/utils")
-        break()
-    endif()
-endforeach()
-if(NOT EVMONE_TEST_UTILS_DIR)
-    message(FATAL_ERROR "opstack-executor receipt tests require evmone test-utils "
-        "(rlp_encode.cpp not found under any of: ${_evmone_inc_dirs})")
-endif()
-if(NOT TARGET blst)
-    message(FATAL_ERROR "opstack-executor receipt tests require the blst CMake target")
-endif()
-add_executable(opstack-executor-receipt-tests
-    TestMain.cpp
-    OpReceiptEncodeTest.cpp
-    OpSealForkMatrixTest.cpp
-    OpCallWritebackTest.cpp
-    ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
-)
-set_target_properties(opstack-executor-receipt-tests PROPERTIES UNITY_BUILD OFF)
-set_source_files_properties(${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
-    PROPERTIES COMPILE_OPTIONS "-Wno-missing-field-initializers")
-target_link_libraries(opstack-executor-receipt-tests PRIVATE
-    opstack-executor
-    protocol-tars
-    bcos-crypto
-    codec
-    ledger
-    evmone::evmone
-    Boost::unit_test_framework
-    blst
-)
-# Same GNU downgrades as opstack-executor-tests: the OP templates instantiate in this TU too
-# (OpCallWritebackTest / OpReceiptEncodeTest), and the library's flags are PRIVATE.
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-    target_compile_options(opstack-executor-receipt-tests PRIVATE
-        -Wno-error=missing-field-initializers -Wno-error=dangling-reference)
-endif()
-target_include_directories(opstack-executor-receipt-tests PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/bcos-ledger
-)
-add_test(NAME OpstackExecutorReceiptTests COMMAND opstack-executor-receipt-tests)
+# The old opstack-executor-receipt-tests target (OpReceiptEncodeTest / OpSealForkMatrixTest /
+# OpCallWritebackTest over the legacy bcos-evm opstack layer) was retired in step 3.3 with the
+# old layer's test surface; the receipts-root leaf encoding is covered by OpEthCommitmentsTest /
+# OpEthForkMatrixTest in the scheduler binary below. The evmone test-utils / blst discovery it
+# needed went with it.
 
 # Scheduler suite: real executeBlock / commitBlock / call / callAtBlock against OpScheduler<MLS>.
 # Isolated from the lightweight binary (ledger / protocol-tars / wedprcrypto typed-catch).
@@ -122,6 +59,15 @@ add_executable(opstack-executor-scheduler-tests
     OpSchedulerTest.cpp
     OpBlockVerifierTest.cpp
     OpSepoliaReplayTest.cpp
+    OpEthForkMatrixTest.cpp
+    OpStorageErrorGuardTest.cpp
+    OpEthEnvelopeCheckTest.cpp
+    OpEthCommitmentsTest.cpp
+    OpEthL1AttributesTest.cpp
+    OpEthExecutorTest.cpp
+    OpEthExecutorDualRunTest.cpp
+    OpEthReceiptGoldenTest.cpp
+    OpEthDepositGasTest.cpp
 )
 set_target_properties(opstack-executor-scheduler-tests PROPERTIES UNITY_BUILD OFF)
 target_include_directories(opstack-executor-scheduler-tests PRIVATE
@@ -129,6 +75,22 @@ target_include_directories(opstack-executor-scheduler-tests PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/bcos-ledger
 )
+# C1 golden harness (OpEthExecutorDualRunTest) reads the t8n corpus — same locations and override
+# semantics as the engine parity suite (engine/test/CMakeLists.txt).
+if(NOT DEFINED OP_T8N_VECTORS_DIR)
+    set(OP_T8N_VECTORS_DIR "${CMAKE_SOURCE_DIR}/opstack-executor/tests/t8n/vectors")
+endif()
+if(NOT DEFINED OP_T8N_GOLDEN_ENGINE_DIR)
+    set(OP_T8N_GOLDEN_ENGINE_DIR
+        "${CMAKE_SOURCE_DIR}/opstack-executor/tests/t8n/golden/engine")
+endif()
+set(_t8n_defs
+    OP_T8N_VECTORS_DIR="${OP_T8N_VECTORS_DIR}"
+    OP_T8N_GOLDEN_ENGINE_DIR="${OP_T8N_GOLDEN_ENGINE_DIR}")
+if(REQUIRE_T8N_CORPUS OR DEFINED ENV{GITHUB_ACTIONS} OR DEFINED ENV{CI})
+    list(APPEND _t8n_defs FISCO_REQUIRE_T8N_CORPUS=1)
+endif()
+target_compile_definitions(opstack-executor-scheduler-tests PRIVATE ${_t8n_defs})
 target_link_libraries(opstack-executor-scheduler-tests PRIVATE
     opstack-executor
     protocol-tars

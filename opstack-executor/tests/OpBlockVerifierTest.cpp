@@ -4,15 +4,15 @@
 // OpBlockVerifierTest — the devp2p sync lane's verify+commit path (opstack-executor/
 // OpBlockVerifier.h). Every case assembles a devp2p::sync::Block whose announced header
 // commitments come from a probe that runs the verifier's OWN shared stages
-// (preBlockOpSteps → SchedulerSerialImpl(serial=true) → finalizeOpBlockResult +
+// (preBlockOpEthSteps → SchedulerSerialImpl(serial=true) → finalizeOpEthBlockResult +
 // ledger::mpt::computeMptStateDelta) on a forkCommitted view, so a valid block is equal by
 // construction and the mismatch cases flip exactly one announced field.
 //
 //  1. IsthmusBlockVerifiesAndCommits — deposit + eip1559; six-way + seal-output commitments
 //     match; ledger head/SYS rows advance; the p2p block hash keys SYS_NUMBER_2_HASH.
 //  2. BedrockBlockVerifiesAndCommits — m_isthmusTime=2000 with the block at second 1010
-//     resolves bedrockConfig(); the pre-Ecotone header carries NO fork-gated optionals and
-//     the lenient toBlockInfo path (OpBlockExecute.h) executes it.
+//     resolves the Bedrock spec; the pre-Ecotone header carries NO fork-gated optionals and
+//     the lenient header-projection path executes it.
 //  3. StateRootMismatchRejected / GasUsedMismatchRejected — one flipped announced field →
 //     OpBlockVerificationFailed (an OpConsensusError) naming the field and both values.
 //  4. OutOfOrderAndStaleHeightsRejected — a gap (number = head+2) and a replay of the
@@ -21,15 +21,18 @@
 //     OpConsensusError rejections naming the byte (op-geth admits neither on OP chains).
 
 #include <opstack-executor/OpBlockVerifier.h>
-#include <opstack-executor/OpCommitments.h>    // detail::toBcosH256
-#include <opstack-executor/OpDepositEncode.h>  // encodeDepositEnvelope
+#include <opstack-executor/OpEthBlockSteps.h>    // preBlockOpEthSteps / finalizeOpEthBlockResult
+#include <opstack-executor/OpEthCommitments.h>   // OpEthBlockCommitments / opEthCommitmentsOf
+#include <opstack-executor/OpEthDeposit.h>       // DepositTx / decodeOpDepositEnvelope
+#include <opstack-executor/OpEthExecutor.h>      // OpEthExecutor / OpEthBlockContext
+#include <opstack-executor/OpEthL1Attributes.h>  // encodeOpEthDepositEnvelope
+#include <opstack-executor/OpForkSpec.h>         // opForkSpecAt
 
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-devp2p/sync/Block.h>
-#include <bcos-evm/adapter/Storage2State.h>
-#include <bcos-evm/eth/state/hash_utils.hpp>
+#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/FeaturesStorage.h>
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
@@ -37,6 +40,7 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/Ledger.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
+#include <bcos-ledger/mpt/StateRoots.h>  // computeMptStateDelta / emptyRootHash / parentStateRootFor
 #include <bcos-ledger/mpt/ViewNodeStorage.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
@@ -63,8 +67,7 @@ using bcos::executor_v1::StateValue;
 using evmc::literals::operator""_address;
 using evmc::literals::operator""_bytes32;
 namespace memory_storage = bcos::storage2::memory_storage;
-namespace op = bcos::evm::opstack;
-namespace engine = bcos::evm::engine;
+namespace opeth = bcos::executor_v1::opstack;
 namespace vdetail = bcos::executor_v1::opstack::detail;  // the verifier's inline helpers
 
 namespace
@@ -134,16 +137,16 @@ bcos::protocol::BlockFactory::Ptr makeBlockFactory()
 
 /// L1 attributes deposit (isthmus_transfer_basic corpus shape): to==OP_L1_BLOCK &&
 /// from==OP_DEPOSITOR, empty data (pre-Jovian forks run no DA-footprint shape checks).
-op::DepositTx makeDeposit()
+opeth::DepositTx makeDeposit()
 {
-    op::DepositTx dep;
-    dep.source_hash = 0x6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7_bytes32;
+    opeth::DepositTx dep;
+    dep.sourceHash = 0x6ab967dfdd3aa359031bef6965cca32ed9a21ea969f7aeee2e58817142a645d7_bytes32;
     dep.from = 0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001_address;
     dep.to = 0x4200000000000000000000000000000000000015_address;
     dep.mint = std::nullopt;
-    dep.value = intx::uint256{0};
-    dep.gas_limit = 0xf4240;
-    dep.is_system_tx = false;
+    dep.value = bcos::u256{0};
+    dep.gasLimit = 0xf4240;
+    dep.isSystemTx = false;
     dep.data = {};
     return dep;
 }
@@ -151,7 +154,7 @@ op::DepositTx makeDeposit()
 std::vector<bcos::bytes> corpusTxs()
 {
     auto const eipEvmc = evmc::from_hex(kEip1559EnvelopeHex).value();
-    return {op::encodeDepositEnvelope(makeDeposit()),
+    return {opeth::encodeOpEthDepositEnvelope(makeDeposit()),
         bcos::bytes(eipEvmc.begin(), eipEvmc.end())};
 }
 
@@ -234,81 +237,42 @@ void seedHeadAndGenesisHeader(MLS& mls, bcos::protocol::BlockHeader::Ptr const& 
     bcos::task::syncWait(mls.mergeView(std::move(view)));
 }
 
-void seedL2CompatFeature(MLS& mls, bcos::protocol::BlockNumber enableNumber = 0)
-{
-    auto view = mls.fork();
-    view.newMutable();
-    bcos::ledger::Features features;
-    features.set(bcos::ledger::Features::Flag::feature_l2_ethereum_compat);
-    bcos::task::syncWait(bcos::ledger::writeToStorage(features, view, enableNumber));
-    bcos::task::syncWait(mls.mergeView(std::move(view)));
-}
-
 // ── genesis MPT trie (the scenario-B import, verbatim from OpSchedulerTest) ──
 
-bcos::ledger::mpt::TrieBuildResult collectAccountStorageTrie(
-    const std::map<evmc::bytes32, evmc::bytes32>& storage)
+/// Copy every flat row visible through @p from into @p to's top mutable layer. The
+/// incremental MPT build scans the top mutable layer ONLY (buildAndCollect), so a
+/// backend-merged seed is invisible to it — this re-materializes the committed state as the
+/// genesis build's delta.
+template <class From, class To>
+bcos::task::Task<void> copyFlatRows(From& from, To& to)
 {
-    std::map<bcos::h256, bcos::bytes> entries;
-    for (auto const& [key, value] : storage)
+    auto it = co_await bcos::storage2::range(from);
+    while (auto kv = co_await it.next())
     {
-        if (evmc::is_zero(value))
-            continue;
-        bcos::bytes leaf;
-        bcos::codec::rlp::encode(leaf,
-            bcos::evm::trimmedBigEndian(bcos::bytesConstRef{value.bytes, sizeof(value.bytes)}));
-        entries[bcos::h256{evmone::keccak256(key).bytes, 32}] = std::move(leaf);
+        auto const& [k, v] = *kv;
+        if (auto const* entry = std::get_if<bcos::storage::Entry>(std::addressof(v)))
+            co_await bcos::storage2::writeOne(to, k, *entry);
     }
-    return bcos::ledger::mpt::computeTrieRoot(entries);
 }
 
-struct CollectedStateRoot
-{
-    evmone::hash256 root{};
-    std::unordered_map<bcos::h256, bcos::bytes> newNodes;
-};
-
-template <class Ledger>
-CollectedStateRoot collectStateRoot(const Ledger& ledger)
-{
-    std::map<bcos::h256, bcos::bytes> entries;
-    CollectedStateRoot out;
-    if (!ledger.visitAccounts([&](const auto& account) {
-            auto storageTrie = collectAccountStorageTrie(account.storage);
-            out.newNodes.merge(std::move(storageTrie.newNodes));
-            evmone::hash256 storageRoot{};
-            std::memcpy(storageRoot.bytes, storageTrie.root.data(), sizeof(storageRoot.bytes));
-            auto const balanceBe = intx::be::store<evmc::uint256be>(account.balance);
-            bcos::bytes leaf;
-            bcos::codec::rlp::encode(leaf, account.nonce,
-                bcos::evm::trimmedBigEndian(
-                    bcos::bytesConstRef{balanceBe.bytes, sizeof(balanceBe.bytes)}),
-                bcos::bytesConstRef{storageRoot.bytes, sizeof(storageRoot)},
-                bcos::bytesConstRef{account.codeHash.bytes, sizeof(evmc::bytes32)});
-            entries[bcos::h256{evmone::keccak256(account.addr).bytes, 32}] = std::move(leaf);
-            return true;
-        }))
-    {
-        throw std::runtime_error("collectStateRoot: account traversal incomplete");
-    }
-    auto result = bcos::ledger::mpt::computeTrieRoot(entries);
-    out.newNodes.merge(std::move(result.newNodes));
-    std::memcpy(out.root.bytes, result.root.data(), sizeof(out.root.bytes));
-    return out;
-}
-
+/// Compute the scenario-B genesis state trie over the seeded accounts via the production MPT
+/// builder (computeMptStateDelta, parent = the empty root) and persist every node as "/mpt/"
+/// rows — the test-local mirror of Ledger::buildGenesisBlock's Ethereum-lane genesis import.
+/// Returns the root to stamp on the genesis header.
 bcos::h256 computeAndPersistGenesisTrie(MLS& mls)
 {
+    auto readView = mls.fork();  // read-through to the committed backend (never merged)
     auto view = mls.fork();
     view.newMutable();
-    bcos::evm::evmstate::Storage2State<ViewType> bridge(view);
-    auto result = collectStateRoot(bridge);
-    BOOST_REQUIRE_MESSAGE(
-        !bridge.poisoned(), "genesis trie build poisoned: " << std::string(bridge.firstError()));
+    bcos::task::syncWait(copyFlatRows(readView, view));
+    bcos::ledger::LedgerConfig ledgerConfig;
+    ledgerConfig.setExecutorVersion(bcos::ledger::OPSTACK_EXECUTOR_VERSION);
+    auto delta = bcos::task::syncWait(bcos::ledger::mpt::computeMptStateDelta(
+        view, bcos::ledger::mpt::emptyRootHash(), ledgerConfig));
     bcos::ledger::mpt::ViewNodeStorage<ViewType> nodeStorage(view);
-    bcos::task::syncWait(bcos::ledger::mpt::flushTrieNodes(nodeStorage, result.newNodes));
+    bcos::task::syncWait(bcos::ledger::mpt::flushTrieNodes(nodeStorage, delta.newNodes));
     bcos::task::syncWait(mls.mergeView(std::move(view)));
-    return engine::detail::toBcosH256(result.root);
+    return delta.stateRoot;
 }
 
 struct VerifierFixture
@@ -339,13 +303,13 @@ struct VerifierFixture
         seedSysTables(multiLayerStorage);
     }
 
-    /// Ledger head 0 with the real genesis trie root + the l2-ethereum-compat feature — the
-    /// incremental MPT build resolves the genesis nodes persisted here.
+    /// Ledger head 0 with the real genesis trie root — the incremental MPT build resolves the
+    /// genesis nodes persisted here. The OP lane is scenario B by construction
+    /// (executor_version >= OPSTACK_EXECUTOR_VERSION), so no feature row is seeded.
     void prepareGenesis()
     {
         auto const genesisRoot = computeAndPersistGenesisTrie(multiLayerStorage);
         seedHeadAndGenesisHeader(multiLayerStorage, makeGenesisHeader(genesisRoot));
-        seedL2CompatFeature(multiLayerStorage);
     }
 };
 
@@ -383,9 +347,10 @@ bcos::protocol::EthBlockHeaderData makeEthHeaderBase(
 }
 
 /// Fill the announced commitment fields from a probe result, preserving the fork's field
-/// PRESENCE (an optional stays unset when the probe reports it absent).
+/// PRESENCE (an optional stays unset when the probe reports it absent). Both the probe and
+/// verifyAndCommit report the new-layer OpEthBlockCommitments.
 void fillCommitments(
-    bcos::protocol::EthBlockHeaderData& d, engine::OpBlockCommitments const& c)
+    bcos::protocol::EthBlockHeaderData& d, opeth::OpEthBlockCommitments const& c)
 {
     d.stateRoot = c.stateRoot;
     d.txsRoot = c.txRoot;
@@ -409,49 +374,53 @@ void fillCommitments(
 /// Drive the verifier's OWN shared stages on a discarded forkCommitted view and return the
 /// executed commitments. A valid block's announced header is back-filled from this probe, so the
 /// verifier's comparison is equal by construction; the mismatch cases flip one field afterwards.
-engine::OpBlockCommitments probeCommitments(VerifierFixture& f,
+opeth::OpEthBlockCommitments probeCommitments(VerifierFixture& f,
     bcos::protocol::EthBlockHeaderData const& ethHeader, std::vector<bcos::bytes> const& rawTxBytes)
 {
     auto view = f.multiLayerStorage.forkCommitted();
     view.newMutable();
     auto const number = ethHeader.number;
-    const auto& cfg = op::configAt(f.forkSchedule, static_cast<uint64_t>(ethHeader.timestamp));
+    // The p2p header timestamp is SECONDS (EthBlockHeaderData keeps the Ethereum RLP domain) —
+    // the same conversion-free fork resolution OpBlockVerifier::verifyAndCommit step 2 runs.
+    const auto spec = opeth::opForkSpecAt(f.forkSchedule, static_cast<uint64_t>(ethHeader.timestamp));
     auto header = vdetail::projectOpP2pHeader(ethHeader, *f.blockFactory);
 
     bcos::ledger::Features features;
     bcos::task::syncWait(bcos::ledger::readFromStorage(features, view, number));
     bcos::ledger::LedgerConfig execLedgerConfig;
     execLedgerConfig.setBlockNumber(number);
-    execLedgerConfig.setEVMCRevision(cfg.rev);
+    // Mirror OpBlockVerifier::verifyAndCommit: the executor_version is pinned to the OP lane
+    // (computeMptStateDelta's l2Mode and the parent-root rule branch on it).
+    execLedgerConfig.setExecutorVersion(bcos::ledger::OPSTACK_EXECUTOR_VERSION);
+    execLedgerConfig.setEVMCRevision(spec.rev);
     execLedgerConfig.setFeatures(features);
 
     std::vector<bcos::protocol::Transaction::Ptr> transactions;
     std::vector<bcos::bytesConstRef> rawRefs;
-    std::vector<op::DepositTx> deposits;
+    std::vector<opeth::DepositTx> deposits;
     for (auto const& raw : rawTxBytes)
     {
         auto tx = vdetail::wrapOpP2pEnvelope(raw, *f.hashImpl);
         if (tx->isDepositTx())
         {
             deposits.push_back(
-                bcos::executor_v1::opstack::OpstackExecutor::depositFromTransaction(*tx));
+                opeth::decodeOpDepositEnvelope(bcos::bytesConstRef(raw.data(), raw.size())));
         }
         rawRefs.emplace_back(raw.data(), raw.size());
         transactions.push_back(std::move(tx));
     }
 
-    auto sharedError = std::make_shared<bcos::evm::evmstate::SharedErrorSlot>();
-    bcos::executor_v1::opstack::OpstackExecutor executor(f.receiptFactory, f.hashImpl, cfg,
-        sharedError);
+    auto sharedError = std::make_shared<opeth::OpStorageErrorSlot>();
+    opeth::OpEthExecutor executor(f.receiptFactory, spec, sharedError);
     std::optional<std::string> hashErr;
     std::optional<uint16_t> daFootprintGasScalar;
-    std::optional<engine::detail::RecentBlockHashes<ViewType>> hashes;
-    engine::preBlockOpSteps(
-        view, *header, cfg, rawRefs, deposits, executor, hashes, hashErr, daFootprintGasScalar);
+    std::optional<opeth::OpRecentBlockHashes<ViewType>> hashes;
+    bcos::task::syncWait(opeth::preBlockOpEthSteps(view, *header, spec, rawRefs, deposits,
+        executor.vm(), sharedError, hashes, hashErr, daFootprintGasScalar));
 
-    bcos::executor_v1::opstack::OpBlockExecutionContext ctx{.fee = {},
-        .blockGasLeft = engine::detail::narrowU256ToI64(header->gasLimit(), "probe blockGasLeft"),
-        .blockHashes = &*hashes,
+    opeth::OpEthBlockContext ctx{.fee = {},
+        .blockGasLeft = static_cast<int64_t>(header->gasLimit()),
+        .blockHashLookup = opeth::opEthBlockHashLookup(*hashes),
         .chainId = kChainId,
         .daFootprintGasScalar = daFootprintGasScalar};
     bcos::scheduler_v1::SchedulerSerialImpl serialScheduler(
@@ -461,14 +430,16 @@ engine::OpBlockCommitments probeCommitments(VerifierFixture& f,
                            -> bcos::protocol::Transaction const& { return *ptr; });
     auto receipts = bcos::task::syncWait(serialScheduler.executeBlock(
         view, executor, *header, transactionsRefs, execLedgerConfig, ctx));
-    auto opResult = engine::finalizeOpBlockResult(executor, view, *header, execLedgerConfig, cfg,
-        receipts, rawRefs, ctx.cumulativeGasUsed, hashErr, /*skipStateRootBuild=*/true);
+    auto opResult = bcos::task::syncWait(
+        opeth::finalizeOpEthBlockResult(view, *header, execLedgerConfig, spec, sharedError,
+            receipts, rawRefs, ctx.cumulativeGasUsed, hashErr, /*skipStateRootBuild=*/true));
 
-    auto const parentRoot = bcos::task::syncWait(
-        bcos::ledger::mpt::parentStateRootFor(view, features, number, *f.blockFactory));
+    auto const parentRoot = bcos::task::syncWait(bcos::ledger::mpt::parentStateRootFor(
+        view, bcos::ledger::OPSTACK_EXECUTOR_VERSION, features, number, *f.blockFactory));
     auto delta = bcos::task::syncWait(
         bcos::ledger::mpt::computeMptStateDelta(view, parentRoot, execLedgerConfig, false));
-    return engine::commitmentsOf(opResult.seal, delta.stateRoot, opResult.gasUsed, opResult.txRoot);
+    return opeth::opEthCommitmentsOf(
+        opResult.seal, delta.stateRoot, opResult.gasUsed, opResult.txRoot);
 }
 
 /// Assemble the devp2p block: header commitments filled, hash = keccak256(rlp(header)).
@@ -659,7 +630,7 @@ BOOST_AUTO_TEST_CASE(BlobAnd0x7dTypeBytesRejected)
     VerifierFixture f;
     f.prepareGenesis();
 
-    auto const depEnv = op::encodeDepositEnvelope(makeDeposit());
+    auto const depEnv = opeth::encodeOpEthDepositEnvelope(makeDeposit());
     // Commitment fields are never reached — the envelope type gate throws first — so a base
     // header with a self-consistent hash suffices.
     auto const data = makeEthHeaderBase(1, 1010, /*isthmusShape=*/true);

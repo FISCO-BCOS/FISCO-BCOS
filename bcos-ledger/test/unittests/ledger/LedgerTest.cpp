@@ -1794,9 +1794,12 @@ BOOST_AUTO_TEST_CASE(genesisSystemConfigFeatureFlags)
         genesisConfig.m_txGasLimit = 3000000000;
         genesisConfig.m_compatibilityVersion =
             static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_6_VERSION);
-        // enable the L2 feature in genesis
+        // Ethereum-lane genesis: the lane is the genesis-fixed executor_version,
+        // not a feature flag any more.
+        genesisConfig.m_executorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
+        // enable an ordinary feature in genesis: its bit must land in the packed word
         genesisConfig.m_features.push_back(
-            ledger::FeatureSet{.flag = Features::Flag::feature_l2_ethereum_compat, .enable = 1});
+            ledger::FeatureSet{.flag = Features::Flag::feature_rpbft_term_weight, .enable = 1});
         // SystemConfig predeploy at the canonical L2 address (no 0x prefix, 40 hex)
         genesisConfig.m_allocs.push_back(
             Alloc{.address = "43000000000000000000000000000000000000c0",
@@ -1826,10 +1829,17 @@ BOOST_AUTO_TEST_CASE(genesisSystemConfigFeatureFlags)
         auto value = entry->get();
         BOOST_CHECK_EQUAL(value.size(), 32U);
 
-        // the feature_l2_ethereum_compat bit (= its enum value) must be set in the big-endian value
-        auto idx = static_cast<size_t>(Features::Flag::feature_l2_ethereum_compat);
+        // the enabled feature's bit (= its enum value) must be set in the big-endian value
+        auto idx = static_cast<size_t>(Features::Flag::feature_rpbft_term_weight);
         auto theByte = static_cast<uint8_t>(value[value.size() - 1 - (idx / 8)]);
         BOOST_CHECK(((theByte >> (idx % 8)) & 1U) == 1U);
+
+        // bit 57 — the removed feature_l2_ethereum_compat, now a reserved tombstone
+        // (Features::Flag::reserved_removed_l2_ethereum_compat) — must NOT be set: the
+        // Ethereum lane comes from executor_version, and nothing packs that bit any more.
+        auto tombIdx = static_cast<size_t>(Features::Flag::reserved_removed_l2_ethereum_compat);
+        auto tombByte = static_cast<uint8_t>(value[value.size() - 1 - (tombIdx / 8)]);
+        BOOST_CHECK(((tombByte >> (tombIdx % 8)) & 1U) == 0U);
     }());
 }
 
@@ -2074,12 +2084,13 @@ BOOST_AUTO_TEST_CASE(getStorageAtFollowsNodeAddressTableMode)
     }());
 }
 
-// F2: Ledger::getStorageAt must branch on feature_l2_ethereum_compat exactly like the
+// F2: Ledger::getStorageAt must branch on the executor_version lane exactly like the
 // genesis alloc import and the executor do: on an Eth-lane chain the system-tx addresses
 // (e.g. SYS_CONFIG_ADDRESS 0x...1000) are ordinary accounts under /apps/, and only the v1
-// lane routes them to /sys/. The feature row is written straight into SYS_CONFIG
-// (enableNumber 0, as genesis sets it on L2 chains) instead of running a full genesis
-// import — fetchFeature reads exactly that one row.
+// lane routes them to /sys/. The lane is genesis-fixed (governance cannot cross
+// ETHEREUM_EXECUTOR_VERSION either way); the executor_version row is written straight into
+// SYS_CONFIG (enableNumber 0, as genesis writes it on Ethereum-lane chains) instead of
+// running a full genesis import — fetchExecutorVersionAt reads exactly that one row.
 BOOST_AUTO_TEST_CASE(getStorageAtFollowsEthLaneOnL2Chains)
 {
     namespace account = bcos::ledger::account;
@@ -2099,18 +2110,19 @@ BOOST_AUTO_TEST_CASE(getStorageAtFollowsEthLaneOnL2Chains)
         co_await storage2::writeOne(*storage, executor_v1::StateKey(sysTable, slotKey),
             storage::Entry{std::string_view{"sys-value"}});
 
-        // v1 lane (no feature row): the /sys/ routing holds.
+        // v1 lane (no executor_version row): the /sys/ routing holds.
         auto v1Entry = co_await ledger->getStorageAt(sysTxAddress, slotKey, 0);
         BOOST_REQUIRE(v1Entry.has_value());
         BOOST_CHECK_EQUAL(std::string(v1Entry->get()), "sys-value");
 
-        // Enable feature_l2_ethereum_compat at block 0: the same address now resolves
-        // through the lane rule to /apps/.
+        // Write the executor_version row genesis persists on an Ethereum-lane chain
+        // (value 2, enableNumber 0): the same address now resolves through the lane rule
+        // to /apps/.
         co_await storage2::writeOne(*storage,
             executor_v1::StateKey(ledger::SYS_CONFIG,
-                std::string(
-                    magic_enum::enum_name(ledger::Features::Flag::feature_l2_ethereum_compat))),
-            storage::Entry{bcos::storage::serialize::encode(ledger::SystemConfigEntry{"1", 0})});
+                std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version))),
+            storage::Entry{bcos::storage::serialize::encode(ledger::SystemConfigEntry{
+                std::to_string(bcos::ledger::ETHEREUM_EXECUTOR_VERSION), 0})});
         auto laneEntry = co_await ledger->getStorageAt(sysTxAddress, slotKey, 0);
         BOOST_REQUIRE(laneEntry.has_value());
         BOOST_CHECK_EQUAL(std::string(laneEntry->get()), "lane-value");

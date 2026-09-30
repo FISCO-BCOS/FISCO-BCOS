@@ -34,7 +34,7 @@ inline constexpr uint8_t c_depositTxType = 0x7e;
 
 /// Decoded form of an OP Stack deposit transaction (0x7E). Field set and semantics follow
 /// op-geth core/types.DepositTx and the executor-side DepositTx in
-/// bcos-evm/bcos-evm/opstack/OpTransition.h. This is the wire-decoding twin used by the
+/// opstack-executor/OpEthDeposit.h. This is the wire-decoding twin used by the
 /// RPC layer; execution wiring converts it to the evmone-facing representation.
 struct DepositTransaction
 {

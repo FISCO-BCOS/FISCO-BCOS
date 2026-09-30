@@ -100,7 +100,8 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoCommitPath)
     auto pruner = std::make_shared<FCPruner>(backend, c_pruneWindow);
     // Fresh chain at the genesis block: MPT is not active yet, so init starts empty — the
     // first MPT block's full build seeds the counts through the ordinary delta path.
-    task::syncWait(pruner->init(0, stateRootLookup(fixture.m_ledger), /*sweepGarbage=*/false));
+    task::syncWait(pruner->init(
+        0, /*executorVersion=*/0, stateRootLookup(fixture.m_ledger), /*sweepGarbage=*/false));
     BOOST_CHECK_EQUAL(pruner->trackedCount(), 0U);
     fixture.m_baselineScheduler.setMPTCommitObserver(pruner);
 
@@ -160,7 +161,8 @@ BOOST_AUTO_TEST_CASE(prunerWiredIntoCommitPath)
     // window's state roots — no guard, no replay: every deletion already landed with its
     // block's commit, and the rebuilt state matches the running pruner's exactly.
     auto pruner2 = std::make_shared<FCPruner>(backend, c_pruneWindow);
-    task::syncWait(pruner2->init(c_head, stateRootLookup(fixture.m_ledger), /*sweepGarbage=*/false));
+    task::syncWait(pruner2->init(
+        c_head, /*executorVersion=*/0, stateRootLookup(fixture.m_ledger), /*sweepGarbage=*/false));
     BOOST_CHECK_EQUAL(pruner2->watermark(), c_head);
     BOOST_CHECK_EQUAL(pruner2->trackedCount(), pruner->trackedCount());
     BOOST_CHECK_EQUAL(pruner2->pendingCount(), pruner->pendingCount());
@@ -207,7 +209,8 @@ BOOST_AUTO_TEST_CASE(midChainEnableRebuildsFromStateRoots)
     // feature_mpt_state_root activated at block 1 and the head is 3: init walks the roots of
     // blocks 2..3 (the whole post-activation history) and adopts every node on disk.
     auto pruner = std::make_shared<FCPruner>(backend, c_pruneWindow);
-    BOOST_CHECK_NO_THROW(task::syncWait(pruner->init(3, stateRootLookup(fixture.m_ledger), /*sweepGarbage=*/false)));
+    BOOST_CHECK_NO_THROW(task::syncWait(pruner->init(
+        3, /*executorVersion=*/0, stateRootLookup(fixture.m_ledger), /*sweepGarbage=*/false)));
     BOOST_CHECK_EQUAL(pruner->trackedCount(), fixture.backendNodeCount());
     fixture.m_baselineScheduler.setMPTCommitObserver(pruner);
 
@@ -272,7 +275,8 @@ BOOST_AUTO_TEST_CASE(batchedRebuildWithSharedStorageTrie)
     // Phase 1's countWalk resolves the popped hashes through ONE readSome per 64-entry batch
     // — rocksdb::MultiGet underneath here — with duplicate hashes inside a batch.
     BOOST_REQUIRE_NO_THROW(
-        task::syncWait(pruner->init(2, stateRootLookup(fixture.m_ledger), /*sweepGarbage=*/false)));
+        task::syncWait(pruner->init(
+            2, /*executorVersion=*/0, stateRootLookup(fixture.m_ledger), /*sweepGarbage=*/false)));
     // Every node on disk is reachable from block 2's root and counted once per referencing
     // path: the distinct-key count equals the on-disk row count...
     BOOST_CHECK_EQUAL(pruner->trackedCount(), fixture.backendNodeCount());

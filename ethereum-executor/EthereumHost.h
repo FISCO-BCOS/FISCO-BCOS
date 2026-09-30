@@ -29,6 +29,11 @@ namespace bcos::executor_v1::eth
 {
 using namespace evmc::literals;
 
+// Forward declaration only: the complete policy lives in EthExecutionPolicy.h
+// (which includes this header). It is complete at every instantiation point —
+// see the include contract in EthExecutionPolicy.h.
+struct EthL1Policy;
+
 /// Block-level parameters the EVM needs, derived directly from the BCOS
 /// protocol::BlockHeader + ledger::LedgerConfig by the executor. This is the
 /// ported evmone::state::BlockInfo, trimmed to what the host/transition touch.
@@ -69,6 +74,13 @@ struct EthCallParams
     /// Dry-runs are never charged: clear gas price / tip (and the block base fee
     /// is zeroed by the executor), closing the fee-cap and balance checks.
     bool free = false;
+    /// Optional floor for the effective max gas price (additive; unset = L1
+    /// behaviour byte-identical). The OP eth_call path sets this to the block
+    /// base fee for a pricing-less call (no gasPrice / maxFeePerGas), matching
+    /// the legacy clamp of evmTx.max_gas_price to base_fee — the EIP-1559
+    /// priority term is capped at max-baseFee, so the floor raises the
+    /// effective price to exactly baseFee, never above.
+    std::optional<uint256> maxGasPriceFloor;
 };
 
 /// The sender of a bcos Transaction (raw 20 bytes).
@@ -86,11 +98,14 @@ inline uint256 ethMaxGasPrice(protocol::Transaction const& tx, EthCallParams con
 {
     if (callParams.free)
         return 0;
+    uint256 out = 0;
     if (auto mf = tx.maxFeePerGas(); mf.has_value())
-        return *mf;
-    if (auto gp = tx.gasPrice(); gp.has_value())
-        return *gp;
-    return 0;
+        out = *mf;
+    else if (auto gp = tx.gasPrice(); gp.has_value())
+        out = *gp;
+    if (callParams.maxGasPriceFloor.has_value() && out < *callParams.maxGasPriceFloor)
+        out = *callParams.maxGasPriceFloor;
+    return out;
 }
 
 /// Effective max priority gas price (EIP-1559).
@@ -135,6 +150,36 @@ inline uint64_t effectiveNonce(protocol::Transaction const& tx, EthCallParams co
     return bcos::safeFromQuantity(tx.nonce()).value_or(0);
 }
 
+/// The transaction fields the host's get_tx_context needs, resolved once at
+/// construction (after the EthCallParams dry-run overrides). A value type, not
+/// a Transaction pointer: a transaction kind that is not a
+/// protocol::Transaction (OP's deposit) fills this struct directly, and a
+/// system call passes std::nullopt (matching evmone's `const Transaction
+/// empty_tx{}` host — zero origin, zero gas prices).
+struct EthTxContext
+{
+    address sender;
+    uint256 maxGasPrice = 0;
+    uint256 maxPriorityGasPrice = 0;
+    std::vector<bytes32> blobHashes;
+};
+
+/// Resolve an EthTxContext from a bcos Transaction.
+inline EthTxContext ethTxContextOf(protocol::Transaction const& tx, EthCallParams const& callParams)
+{
+    EthTxContext ctx;
+    ctx.sender = ethSender(tx);
+    ctx.maxGasPrice = ethMaxGasPrice(tx, callParams);
+    ctx.maxPriorityGasPrice = ethMaxPriorityGasPrice(tx, callParams);
+    for (auto const& h : tx.blobVersionedHashes())
+    {
+        bytes32 hash{};
+        std::copy_n(h.begin(), sizeof(evmc_bytes32), hash.bytes);
+        ctx.blobHashes.push_back(hash);
+    }
+    return ctx;
+}
+
 /// A block-hash lookup function (BLOCKHASH opcode). Replaces the virtual
 /// evmone::state::BlockHashes interface: the executor injects a storage-backed
 /// lambda (production) or an in-memory map (EEST), and the host guarantees it is
@@ -153,7 +198,10 @@ using BlockHashLookup = std::function<evmc::bytes32(int64_t blockNumber, int64_t
 /// Ported evmone::state::Host over EthereumState.
 ///
 /// @tparam Storage the BCOS storage backend (raw or Rollbackable wrapper).
-template <class Storage>
+/// @tparam Policy  the chain execution policy (EthExecutionPolicy.h): fee
+///                 formula in get_tx_context and precompile dispatch are
+///                 delegated to it. Defaults to the L1 policy.
+template <class Storage, class Policy = EthL1Policy>
 class EthereumHost : public evmc::Host
 {
     evmc_revision m_rev;
@@ -161,48 +209,44 @@ class EthereumHost : public evmc::Host
     EthereumState<Storage>& m_state;
     EthBlockInfo const& m_block;
     BlockHashLookup m_blockHashLookup;
-    // nullptr in system-call mode (EthSystemCalls.h): there is no transaction,
-    // matching evmone's `const Transaction empty_tx{}` host — get_tx_context()
-    // then reports a zero origin and zero gas prices, exactly what upstream's
-    // default-constructed transaction yields.
-    protocol::Transaction const* m_tx;
+    // std::nullopt in system-call mode (EthSystemCalls.h): there is no
+    // transaction, matching evmone's `const Transaction empty_tx{}` host —
+    // get_tx_context() then reports a zero origin and zero gas prices,
+    // exactly what upstream's default-constructed transaction yields.
+    std::optional<EthTxContext> m_txContext;
     // By value, not by const-ref: the natural construction site for real
     // (call == false) execution passes EthCallParams{} as a temporary, and a
     // reference member would dangle past the full-expression. It is only two
     // optionals + a bool.
     EthCallParams m_callParams;
     std::vector<evm::Log> m_logs;
-    // Stable copy of the tx blob hashes for get_tx_context (points into this).
-    std::vector<bytes32> m_blobHashes;
     // The node's chain id (EIP-155), surfaced to the EVM via get_tx_context's
     // chain_id field. Used by the CHAINID opcode (e.g. EIP-712 domain
     // separators baked into contract runtime code), so it must be the real
     // chain's id, NOT a hard-coded 1.
     uint64_t m_chainId;
+    // The chain execution policy. A reference (not a value) so policies with
+    // runtime state (an L2's resolved fork config) stay zero-copy; the caller
+    // guarantees the policy object outlives this host (it does: hosts are
+    // constructed per transaction inside runTransaction / executeSystemCall,
+    // and the policy comes from the caller's scope).
+    Policy const& m_policy;
 
 public:
     EthereumHost(evmc_revision rev, evmc::VM& vm, EthereumState<Storage>& state,
-        EthBlockInfo const& block, BlockHashLookup blockHashLookup, protocol::Transaction const* tx,
-        EthCallParams const& callParams, uint64_t chainId)
+        EthBlockInfo const& block, BlockHashLookup blockHashLookup,
+        std::optional<EthTxContext> txContext, EthCallParams const& callParams, uint64_t chainId,
+        Policy const& policy)
       : m_rev{rev},
         m_vm{vm},
         m_state{state},
         m_block{block},
         m_blockHashLookup{std::move(blockHashLookup)},
-        m_tx{tx},
+        m_txContext{std::move(txContext)},
         m_callParams{callParams},
-        m_chainId{chainId}
-    {
-        if (m_tx != nullptr)
-        {
-            for (auto const& h : m_tx->blobVersionedHashes())
-            {
-                bytes32 hash{};
-                std::copy_n(h.begin(), sizeof(evmc_bytes32), hash.bytes);
-                m_blobHashes.push_back(hash);
-            }
-        }
-    }
+        m_chainId{chainId},
+        m_policy{policy}
+    {}
 
     [[nodiscard]] std::vector<evm::Log>&& take_logs() noexcept { return std::move(m_logs); }
 
@@ -256,21 +300,21 @@ private:
     evmc::Result execute_message(const evmc_message& msg) noexcept;
 };
 
-template <class Storage>
-bool EthereumHost<Storage>::account_exists(const address& addr) const noexcept
+template <class Storage, class Policy>
+bool EthereumHost<Storage, Policy>::account_exists(const address& addr) const noexcept
 {
     const auto* const acc = m_state.find(addr);
     return acc != nullptr && (m_rev < EVMC_SPURIOUS_DRAGON || !acc->is_empty());
 }
 
-template <class Storage>
-bytes32 EthereumHost<Storage>::get_storage(const address& addr, const bytes32& key) const noexcept
+template <class Storage, class Policy>
+bytes32 EthereumHost<Storage, Policy>::get_storage(const address& addr, const bytes32& key) const noexcept
 {
     return m_state.get_storage(addr, key).current;
 }
 
-template <class Storage>
-evmc_storage_status EthereumHost<Storage>::set_storage(
+template <class Storage, class Policy>
+evmc_storage_status EthereumHost<Storage, Policy>::set_storage(
     const address& addr, const bytes32& key, const bytes32& value) noexcept
 {
     // Follow EVMC documentation https://evmc.ethereum.org/storagestatus.html#autotoc_md3
@@ -318,8 +362,8 @@ evmc_storage_status EthereumHost<Storage>::set_storage(
     return status;
 }
 
-template <class Storage>
-bytes32 EthereumHost<Storage>::get_transient_storage(
+template <class Storage, class Policy>
+bytes32 EthereumHost<Storage, Policy>::get_transient_storage(
     const address& addr, const bytes32& key) const noexcept
 {
     const auto& acc = m_state.get(addr);
@@ -327,8 +371,8 @@ bytes32 EthereumHost<Storage>::get_transient_storage(
     return it != acc.transient_storage.end() ? it->second : bytes32{};
 }
 
-template <class Storage>
-void EthereumHost<Storage>::set_transient_storage(
+template <class Storage, class Policy>
+void EthereumHost<Storage, Policy>::set_transient_storage(
     const address& addr, const bytes32& key, const bytes32& value) noexcept
 {
     auto& slot = m_state.get(addr).transient_storage[key];
@@ -336,8 +380,8 @@ void EthereumHost<Storage>::set_transient_storage(
     slot = value;
 }
 
-template <class Storage>
-evmc::uint256be EthereumHost<Storage>::get_balance(const address& addr) const noexcept
+template <class Storage, class Policy>
+evmc::uint256be EthereumHost<Storage, Policy>::get_balance(const address& addr) const noexcept
 {
     const auto* const acc = m_state.find(addr);
     return (acc != nullptr) ? evm::toEvmcBE<evmc::uint256be>(acc->balance) : evmc::uint256be{};
@@ -362,15 +406,15 @@ namespace eth_host_detail
 }
 }  // namespace eth_host_detail
 
-template <class Storage>
-size_t EthereumHost<Storage>::get_code_size(const address& addr) const noexcept
+template <class Storage, class Policy>
+size_t EthereumHost<Storage, Policy>::get_code_size(const address& addr) const noexcept
 {
     const auto raw_code = m_state.get_code(addr);
     return raw_code.size();
 }
 
-template <class Storage>
-bytes32 EthereumHost<Storage>::get_code_hash(const address& addr) const noexcept
+template <class Storage, class Policy>
+bytes32 EthereumHost<Storage, Policy>::get_code_hash(const address& addr) const noexcept
 {
     const auto* const acc = m_state.find(addr);
     if (acc == nullptr || acc->is_empty())
@@ -379,8 +423,8 @@ bytes32 EthereumHost<Storage>::get_code_hash(const address& addr) const noexcept
     return acc->code_hash;
 }
 
-template <class Storage>
-size_t EthereumHost<Storage>::copy_code(const address& addr, size_t code_offset,
+template <class Storage, class Policy>
+size_t EthereumHost<Storage, Policy>::copy_code(const address& addr, size_t code_offset,
     uint8_t* buffer_data, size_t buffer_size) const noexcept
 {
     const auto code = m_state.get_code(addr);
@@ -390,8 +434,8 @@ size_t EthereumHost<Storage>::copy_code(const address& addr, size_t code_offset,
     return num_bytes;
 }
 
-template <class Storage>
-bool EthereumHost<Storage>::selfdestruct(const address& addr, const address& beneficiary) noexcept
+template <class Storage, class Policy>
+bool EthereumHost<Storage, Policy>::selfdestruct(const address& addr, const address& beneficiary) noexcept
 {
     if (m_state.find(beneficiary) == nullptr)
         m_state.journal_create(beneficiary, false);
@@ -430,8 +474,8 @@ bool EthereumHost<Storage>::selfdestruct(const address& addr, const address& ben
     return false;
 }
 
-template <class Storage>
-std::optional<evmc_message> EthereumHost<Storage>::prepare_message(evmc_message msg) noexcept
+template <class Storage, class Policy>
+std::optional<evmc_message> EthereumHost<Storage, Policy>::prepare_message(evmc_message msg) noexcept
 {
     assert(msg.kind != EVMC_EOFCREATE);
     if (msg.depth == 0 || msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2)
@@ -473,8 +517,8 @@ std::optional<evmc_message> EthereumHost<Storage>::prepare_message(evmc_message 
     return msg;
 }
 
-template <class Storage>
-evmc::Result EthereumHost<Storage>::create(const evmc_message& msg) noexcept
+template <class Storage, class Policy>
+evmc::Result EthereumHost<Storage, Policy>::create(const evmc_message& msg) noexcept
 {
     assert(msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2);
 
@@ -545,8 +589,8 @@ evmc::Result EthereumHost<Storage>::create(const evmc_message& msg) noexcept
     return evmc::Result{result.status_code, gas_left, result.gas_refund, msg.recipient};
 }
 
-template <class Storage>
-evmc::Result EthereumHost<Storage>::execute_message(const evmc_message& msg) noexcept
+template <class Storage, class Policy>
+evmc::Result EthereumHost<Storage, Policy>::execute_message(const evmc_message& msg) noexcept
 {
     assert(msg.kind != EVMC_EOFCREATE);
     if (msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2)
@@ -582,8 +626,8 @@ evmc::Result EthereumHost<Storage>::execute_message(const evmc_message& msg) noe
     }
 
     // Calls to precompile address via EIP-7702 delegation execute empty code instead of precompile.
-    if ((msg.flags & EVMC_DELEGATED) == 0 && evm::is_precompile(m_rev, msg.code_address))
-        return evm::call_precompile(m_rev, msg);
+    if ((msg.flags & EVMC_DELEGATED) == 0 && m_policy.isPrecompile(m_rev, msg.code_address))
+        return m_policy.callPrecompile(m_rev, msg);
 
     // TODO: get_code() performs the account lookup. Add a way to get an account with code?
     const auto code = m_state.get_code(msg.code_address);
@@ -593,8 +637,8 @@ evmc::Result EthereumHost<Storage>::execute_message(const evmc_message& msg) noe
     return m_vm.execute(*this, m_rev, msg, code.data(), code.size());
 }
 
-template <class Storage>
-evmc::Result EthereumHost<Storage>::call(const evmc_message& orig_msg) noexcept
+template <class Storage, class Policy>
+evmc::Result EthereumHost<Storage, Policy>::call(const evmc_message& orig_msg) noexcept
 {
     const auto msg = prepare_message(orig_msg);
     if (!msg.has_value())
@@ -622,28 +666,33 @@ evmc::Result EthereumHost<Storage>::call(const evmc_message& orig_msg) noexcept
     return result;
 }
 
-template <class Storage>
-evmc_tx_context EthereumHost<Storage>::get_tx_context() const noexcept
+template <class Storage, class Policy>
+evmc_tx_context EthereumHost<Storage, Policy>::get_tx_context() const noexcept
 {
     // EIP-1559 base fee, revision-adjusted here: pre-London blocks have no base
-    // fee, and the host must not report a nonzero one (GASPRICE). This is the
-    // same gate as split-4/4's fee accounting (EthereumTransition.h), so both
-    // consumers agree on the field's precondition.
+    // fee, and the host must not report a nonzero one (GASPRICE). The fee
+    // formula itself is the chain policy's, shared with runTransaction's fee
+    // accounting (EthExecutionPolicy.h), so both consumers agree by
+    // construction.
     const auto base_fee = (m_rev >= EVMC_LONDON) ? m_block.base_fee : 0;
 
-    // TODO: The effective gas price is already computed in transaction validation.
-    // System-call mode (m_tx == nullptr) reports zero prices and a zero origin —
-    // evmone's system-call host passes a default-constructed Transaction, whose
-    // sender/gas fields are all zero; the four system contracts never read
-    // ORIGIN/GASPRICE, so this is parity, not an approximation.
-    const auto max_gas_price = m_tx != nullptr ? ethMaxGasPrice(*m_tx, m_callParams) : uint256{0};
-    const auto max_priority_gas_price =
-        m_tx != nullptr ? ethMaxPriorityGasPrice(*m_tx, m_callParams) : uint256{0};
-    assert(max_gas_price >= base_fee || max_gas_price == 0);
-    const auto priority_gas_price = std::min(max_priority_gas_price, max_gas_price - base_fee);
-    const auto effective_gas_price = base_fee + priority_gas_price;
+    // System-call mode (m_txContext == nullopt) has no transaction prices: the
+    // zero max prices collapse the EIP-1559 formula to the bare base fee
+    // (priority = min(0, 0 - base_fee) = 0), matching evmone's system-call
+    // host with its default-constructed Transaction. The four system contracts
+    // never read ORIGIN/GASPRICE anyway.
+    uint256 effective_gas_price = base_fee;
+    if (m_txContext.has_value())
+    {
+        uint256 priority_gas_price;
+        effective_gas_price = m_policy.effectiveGasPrice(m_txContext->maxGasPrice,
+            m_txContext->maxPriorityGasPrice, m_block, m_rev, priority_gas_price);
+    }
 
-    const auto sender = m_tx != nullptr ? ethSender(*m_tx) : address{};
+    const auto sender = m_txContext.has_value() ? m_txContext->sender : address{};
+    const auto* blob_hashes =
+        m_txContext.has_value() ? m_txContext->blobHashes.data() : nullptr;
+    const auto blob_hashes_count = m_txContext.has_value() ? m_txContext->blobHashes.size() : 0;
 
     return evmc_tx_context{
         evm::toEvmcBE<evmc::uint256be>(effective_gas_price),  // By EIP-1559.
@@ -655,16 +704,16 @@ evmc_tx_context EthereumHost<Storage>::get_tx_context() const noexcept
         m_block.prev_randao,
         evmc::uint256be{static_cast<uint64_t>(m_chainId)},  // Chain ID (EIP-155).
         evmc::uint256be{base_fee},
-        evm::toEvmcBE<evmc::uint256be>(m_block.blob_base_fee.value_or(0)),
-        m_blobHashes.data(),
-        m_blobHashes.size(),
+        evm::toEvmcBE<evmc::uint256be>(m_policy.blobBaseFee(m_block)),
+        blob_hashes,
+        blob_hashes_count,
         nullptr,  // initcodes (TXCREATE) — not used by this executor.
         0,        // initcodes_count
     };
 }
 
-template <class Storage>
-bytes32 EthereumHost<Storage>::get_block_hash(int64_t block_number) const noexcept
+template <class Storage, class Policy>
+bytes32 EthereumHost<Storage, Policy>::get_block_hash(int64_t block_number) const noexcept
 {
     if (m_blockHashLookup)
     {
@@ -690,24 +739,31 @@ bytes32 EthereumHost<Storage>::get_block_hash(int64_t block_number) const noexce
     return {};
 }
 
-template <class Storage>
-void EthereumHost<Storage>::emit_log(const address& addr, const uint8_t* data, size_t data_size,
+template <class Storage, class Policy>
+void EthereumHost<Storage, Policy>::emit_log(const address& addr, const uint8_t* data, size_t data_size,
     const bytes32 topics[], size_t topics_count) noexcept
 {
     m_logs.push_back({addr, {data, data_size}, {topics, topics + topics_count}});
 }
 
-template <class Storage>
-evmc_access_status EthereumHost<Storage>::access_account(const address& addr) noexcept
+template <class Storage, class Policy>
+evmc_access_status EthereumHost<Storage, Policy>::access_account(const address& addr) noexcept
 {
     if (m_rev < EVMC_BERLIN)
         return EVMC_ACCESS_COLD;  // Ignore before Berlin.
+
+    // The policy's always-warm set (e.g. OP's gas-override precompiles) is
+    // warm WITHOUT an account entry: report WARM before the get_or_insert
+    // below would journal a ghost account. L1's hook is constant-false, so
+    // the L1 behaviour (insert first, then warm-mark) is unchanged.
+    if (m_policy.isAlwaysWarmPrecompile(m_rev, addr))
+        return EVMC_ACCESS_WARM;
 
     EthAccount fresh;
     fresh.erase_if_empty = true;
     auto& acc = m_state.get_or_insert(addr, std::move(fresh));
 
-    if (acc.access_status == EVMC_ACCESS_WARM || evm::is_precompile(m_rev, addr))
+    if (acc.access_status == EVMC_ACCESS_WARM || m_policy.isPrecompile(m_rev, addr))
         return EVMC_ACCESS_WARM;
 
     m_state.journal_access_account(addr);
@@ -715,8 +771,8 @@ evmc_access_status EthereumHost<Storage>::access_account(const address& addr) no
     return EVMC_ACCESS_COLD;
 }
 
-template <class Storage>
-evmc_access_status EthereumHost<Storage>::access_storage(
+template <class Storage, class Policy>
+evmc_access_status EthereumHost<Storage, Policy>::access_storage(
     const address& addr, const bytes32& key) noexcept
 {
     auto& storage_slot = m_state.get_storage(addr, key);

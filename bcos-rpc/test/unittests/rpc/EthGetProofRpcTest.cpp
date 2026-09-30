@@ -18,7 +18,8 @@
  */
 
 #include "../common/RPCFixture.h"
-#include <bcos-framework/ledger/Features.h>
+#include <bcos-framework/ledger/LedgerConfig.h>
+#include <bcos-framework/ledger/SystemConfigs.h>
 #include <bcos-framework/storage2/AnyStorage.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-ledger/mpt/Account.h>
@@ -50,12 +51,14 @@ public:
         rpc = factory->buildLocalRpc(groupInfo, nodeService);
         web3JsonRpc = rpc->web3JsonRpc();
         BOOST_TEST(web3JsonRpc != nullptr);
-        // These cases assert scenario-B semantics (feature_l2_ethereum_compat: complete storage
-        // tries, exclusion = provable zero). The scenario-A SlotNotInMPT behavior is covered by
-        // EthGetProofSlotNotInMPTTest.cpp.
-        ledger::Features features;
-        features.set(ledger::Features::Flag::feature_l2_ethereum_compat);
-        m_ledger->setFeatures(features);
+        // These cases assert scenario-B semantics (the Ethereum lane, executor_version >= 2:
+        // complete storage tries, exclusion = provable zero). The scenario-A SlotNotInMPT
+        // behavior is covered by EthGetProofSlotNotInMPTTest.cpp. The endpoint resolves the
+        // lane per block from the executor_version SYS_CONFIG entry
+        // (LedgerInterface::fetchExecutorVersionAt).
+        m_ledger->setSystemConfig(
+            std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version)),
+            std::to_string(bcos::ledger::ETHEREUM_EXECUTOR_VERSION));
     }
 
     /// Commit @p entries into a fresh trie in @p storage and flush the produced nodes, returning

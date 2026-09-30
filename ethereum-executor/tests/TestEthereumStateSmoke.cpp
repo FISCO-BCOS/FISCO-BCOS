@@ -6,8 +6,7 @@
 ///
 /// Golden values are the canonical Ethereum vectors: keccak256(""), the
 /// Yellow-Paper CREATE example, the EIP-1014 CREATE2 examples, the EIP-4844
-/// blob-gas vector, and the EIP-7702 authority-recovery vector shared with
-/// bcos-evm/test/opstack/Op7702Test.cpp.
+/// blob-gas vector, and the EIP-7702 authority-recovery golden vector.
 ///
 /// Checks are NDEBUG-independent (CHECK exits non-zero on failure): CI builds
 /// with Release/-DNDEBUG, which would compile out assert() and leave the
@@ -15,6 +14,7 @@
 /// ctest actually runs it.
 
 #include "ethereum-executor/EVMSupport.h"
+#include "ethereum-executor/EthExecutionPolicy.h"
 #include "ethereum-executor/EthereumHost.h"
 #include "ethereum-executor/EthereumState.h"
 #include "ethereum-executor/tests/TestMemoryStorage.h"
@@ -33,7 +33,9 @@
 // error. An explicit instantiation pulls every evmc::Host override into the
 // vtable plus the private non-virtuals (create / prepare_message / call), and
 // is cheaper than constructing an object (which needs an evmc::VM and a
-// protocol::Transaction).
+// protocol::Transaction). The default Policy argument makes this
+// EthereumHost<MutableStorage, EthL1Policy>, so every EthL1Policy hook call
+// site in the host is instantiated too.
 template class bcos::executor_v1::eth::EthereumHost<bcos::executor_v1::MutableStorage>;
 
 namespace
@@ -176,7 +178,7 @@ void testBlobGasPrice()
 
 void testRecoverAuthority()
 {
-    // EIP-7702 golden vector (bcos-evm/test/opstack/Op7702Test.cpp):
+    // EIP-7702 golden vector:
     // private key 0x59c6995e..., chain_id = 1, delegation = 0x00..cc, nonce = 0
     //   -> authority 0x70997970C51812dc3A010C7d01b50e0d17dc79C8
     bcos::protocol::Authorization auth;
@@ -205,6 +207,29 @@ void testRecoverAuthorityRejectsBadSignature()
     auth.s = bcos::u256(0);
 
     CHECK(!eth_evm::recoverAuthority(auth).has_value());
+}
+
+void testL1PolicyPrecompileDispatch()
+{
+    // The default policy must forward precompile dispatch to the shared
+    // EVMPrecompiles table unchanged: 0x01 is a precompile everywhere, 0x0a
+    // (point_evaluation) only from Cancun, 0x0b (BLS12_G1ADD) only from Prague.
+    using eth::EthL1Policy;
+    CHECK(EthL1Policy::isPrecompile(
+        EVMC_CANCUN, addressFromHex("0x0000000000000000000000000000000000000001")));
+    CHECK(!EthL1Policy::isPrecompile(
+        EVMC_SHANGHAI, addressFromHex("0x000000000000000000000000000000000000000a")));
+    CHECK(EthL1Policy::isPrecompile(
+        EVMC_CANCUN, addressFromHex("0x000000000000000000000000000000000000000a")));
+    CHECK(!EthL1Policy::isPrecompile(
+        EVMC_CANCUN, addressFromHex("0x000000000000000000000000000000000000000b")));
+    CHECK(EthL1Policy::isPrecompile(
+        EVMC_PRAGUE, addressFromHex("0x000000000000000000000000000000000000000b")));
+    // The warm-account check and the dispatch check are the same predicate.
+    CHECK(EthL1Policy::isPrecompile(EVMC_CANCUN,
+               addressFromHex("0x0000000000000000000000000000000000000001")) ==
+          eth_evm::is_precompile(EVMC_CANCUN,
+              addressFromHex("0x0000000000000000000000000000000000000001")));
 }
 
 void testEthereumStateInstantiation()
@@ -354,6 +379,7 @@ int main()
     testBlobGasPrice();
     testRecoverAuthority();
     testRecoverAuthorityRejectsBadSignature();
+    testL1PolicyPrecompileDispatch();
     testEthereumStateInstantiation();
     testHasStorageIgnoresTombstones();
     testEthereumStateBinaryMode();

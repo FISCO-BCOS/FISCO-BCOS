@@ -49,25 +49,23 @@ constexpr uint32_t kVersion = static_cast<uint32_t>(protocol::BlockVersion::V3_3
 
 BOOST_AUTO_TEST_SUITE(PrecompiledMapDisabledInL2Test)
 
-BOOST_AUTO_TEST_CASE(PbftModePredicateLetsThrough)
+BOOST_AUTO_TEST_CASE(ConsortiumLanePredicateLetsThrough)
 {
     PrecompiledMap map;
-    map.insert(SYS_CONFIG_ADDRESS, std::make_shared<StubPrecompiled>(), disabledInL2());
+    map.insert(SYS_CONFIG_ADDRESS, std::make_shared<StubPrecompiled>(), disabledInL2(false));
 
-    Features pbft;  // flag unset == pbft mode
-    BOOST_CHECK(!pbft.get(Features::Flag::feature_l2_ethereum_compat));
-    auto impl = map.at(SYS_CONFIG_ADDRESS, kVersion, false, pbft);
+    Features features;  // the predicate ignores features entirely
+    auto impl = map.at(SYS_CONFIG_ADDRESS, kVersion, false, features);
     BOOST_CHECK(impl != nullptr);
 }
 
-BOOST_AUTO_TEST_CASE(L2ModePredicateBlocks)
+BOOST_AUTO_TEST_CASE(EthereumLanePredicateBlocks)
 {
     PrecompiledMap map;
-    map.insert(SYS_CONFIG_ADDRESS, std::make_shared<StubPrecompiled>(), disabledInL2());
+    map.insert(SYS_CONFIG_ADDRESS, std::make_shared<StubPrecompiled>(), disabledInL2(true));
 
-    Features l2;
-    l2.set(Features::Flag::feature_l2_ethereum_compat);
-    auto impl = map.at(SYS_CONFIG_ADDRESS, kVersion, false, l2);
+    Features features;
+    auto impl = map.at(SYS_CONFIG_ADDRESS, kVersion, false, features);
     BOOST_CHECK(impl == nullptr);
 }
 
@@ -76,7 +74,7 @@ BOOST_AUTO_TEST_CASE(KL2DisabledSetCoversAllEighteen)
     // 18 = 13 stateful business precompiles (original PR-5 set) + 5 FISCO-private
     // crypto/util precompiles added in response to PR review on #5286 (CAST,
     // PAILLIER, GROUP_SIG, RING_SIG, DISCRETE_ZKP — all absent from OP-Stack,
-    // so leaving them enabled in L2 mode leaks FISCO-only outputs and breaks
+    // so leaving them enabled on the Ethereum lane leaks FISCO-only outputs and breaks
     // chain interop). The three previously-static ones (CAST/GROUP_SIG/RING_SIG)
     // also had their isStaticPrecompiled bypass removed in the same fix.
     BOOST_CHECK_EQUAL(kL2DisabledSet.size(), 18U);
@@ -95,7 +93,7 @@ BOOST_AUTO_TEST_CASE(KL2DisabledSetCoversAllEighteen)
     BOOST_CHECK(has(GROUP_SIG_ADDRESS));
     BOOST_CHECK(has(RING_SIG_ADDRESS));
     BOOST_CHECK(has(DISCRETE_ZKP_ADDRESS));
-    // Negative: CRYPTO is FISCO-private too but stays out of the L2 set (it is
+    // Negative: CRYPTO is FISCO-private too but stays out of the disabled set (it is
     // the only remaining entry in the static-precompile bypass, used by SDK
     // helpers that have no OP-Stack equivalent address collision).
     BOOST_CHECK(!has(CRYPTO_ADDRESS));
@@ -103,28 +101,33 @@ BOOST_AUTO_TEST_CASE(KL2DisabledSetCoversAllEighteen)
 
 BOOST_AUTO_TEST_CASE(PredicateAndComposesWithExistingFlag)
 {
-    // Mirror the BALANCE site: feature gate ANDed with disabledInL2().
+    // Mirror the BALANCE site: feature gate ANDed with disabledInL2(ethLane). The lane
+    // is captured when the predicate is built, so the two lanes are two maps here, just
+    // as they are two boot-time executors in production.
     auto balanceGate = [](uint32_t, bool, Features const& features) {
         return features.get(Features::Flag::feature_balance_precompiled);
     };
-    PrecompiledMap map;
-    map.insert(BALANCE_PRECOMPILED_ADDRESS, std::make_shared<StubPrecompiled>(),
-        predicateAnd(balanceGate, disabledInL2()));
+    auto makeMap = [&](bool ethLane) {
+        PrecompiledMap map;
+        map.insert(BALANCE_PRECOMPILED_ADDRESS, std::make_shared<StubPrecompiled>(),
+            predicateAnd(balanceGate, disabledInL2(ethLane)));
+        return map;
+    };
 
-    // BOTH balance feature + L2 flag set -> L2 wins, hidden.
-    Features both;
-    both.set(Features::Flag::feature_balance_precompiled);
-    both.set(Features::Flag::feature_l2_ethereum_compat);
-    BOOST_CHECK(map.at(BALANCE_PRECOMPILED_ADDRESS, kVersion, false, both) == nullptr);
+    Features balanceOn;
+    balanceOn.set(Features::Flag::feature_balance_precompiled);
 
-    // Only balance feature (pbft mode) -> visible.
-    Features balanceOnly;
-    balanceOnly.set(Features::Flag::feature_balance_precompiled);
-    BOOST_CHECK(map.at(BALANCE_PRECOMPILED_ADDRESS, kVersion, false, balanceOnly) != nullptr);
+    // Ethereum lane, balance feature set -> the lane wins, hidden.
+    auto ethLaneMap = makeMap(true);
+    BOOST_CHECK(ethLaneMap.at(BALANCE_PRECOMPILED_ADDRESS, kVersion, false, balanceOn) == nullptr);
 
-    // Neither feature -> hidden (balance gate fails).
+    // Consortium lane, balance feature set -> visible.
+    auto consortiumMap = makeMap(false);
+    BOOST_CHECK(consortiumMap.at(BALANCE_PRECOMPILED_ADDRESS, kVersion, false, balanceOn) != nullptr);
+
+    // Consortium lane, balance feature unset -> hidden (balance gate fails).
     Features none;
-    BOOST_CHECK(map.at(BALANCE_PRECOMPILED_ADDRESS, kVersion, false, none) == nullptr);
+    BOOST_CHECK(consortiumMap.at(BALANCE_PRECOMPILED_ADDRESS, kVersion, false, none) == nullptr);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

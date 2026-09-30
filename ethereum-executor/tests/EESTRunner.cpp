@@ -3,7 +3,7 @@
  * @brief Standalone Ethereum Execution Spec Tests (EEST) runner.
  *
  * A dedicated command-line tool for running EEST v5.4.0 JSON state test fixtures
- * against ethereum-executor (based on bcos-evm).  Provides detailed per-file and per-test
+ * against ethereum-executor.  Provides detailed per-file and per-test
  * diagnostic output, configurable verbosity, single-fixture regression mode,
  * and TBB-based parallel execution.
  *
@@ -16,10 +16,7 @@
 
 #include "EESTRunner.h"
 #include "TestMemoryStorage.h"
-#include "TestStorageBridge.h"
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-evm/eth/state/block.hpp"
-#include "bcos-evm/eth/state/system_contracts.hpp"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Protocol.h"
@@ -29,6 +26,7 @@
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-task/TBBWait.h"
+#include "ethereum-executor/EthSystemCalls.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include <evmc/evmc.h>
 #include <tbb/concurrent_vector.h>
@@ -682,13 +680,13 @@ void printLine(std::string const& msg)
 // =============================================================================
 //  BlockHashes that accumulates hashes from fixture blocks
 // =============================================================================
-/// A BlockHashes implementation that stores block_number → hash mappings.
+/// A block-hash store that keeps block_number → hash mappings.
 /// Populated from fixture block headers as blocks are processed.
-struct FixtureBlockHashes : evmone::state::BlockHashes
+struct FixtureBlockHashes
 {
     std::map<int64_t, evmc::bytes32> hashes;
 
-    evmc::bytes32 get_block_hash(int64_t blockNumber) const noexcept override
+    evmc::bytes32 get_block_hash(int64_t blockNumber) const noexcept
     {
         auto it = hashes.find(blockNumber);
         if (it != hashes.end())
@@ -1740,7 +1738,7 @@ public:
             // EIP-4788 & EIP-2935: Execute system contracts at block start
             if (blockRev >= EVMC_CANCUN)
             {
-                evmone::state::BlockInfo bi{};
+                eth::EthBlockInfo bi{};
                 bi.number = test::hexToInt64(block.blockHeader.number);
                 bi.timestamp = tsSec;
                 bi.gas_limit = test::hexToInt64(block.blockHeader.gasLimit);
@@ -1767,12 +1765,16 @@ public:
                 }
                 // blob_base_fee is left as nullopt — system contracts don't need it
 
-                ::bcos::test::TestStorageStateView<MutableStorage> stateView(storage);
-                auto sysDiff = evmone::state::system_call_block_start(
-                    stateView, bi, blockHashes, blockRev, executor.vm());
-
-                task::tbb::syncWait(
-                    ::bcos::test::testApplyStateDiff(storage, sysDiff, *cryptoSuite->hashImpl()));
+                // EIP-2935's input is the parent block hash, which upstream's
+                // system_call_block_start read as block_hashes.get_block_hash(number - 1).
+                // A failure is tolerated (upstream asserts success — a release-mode no-op —
+                // and silently continues): the post-state check remains the arbiter.
+                auto sysErr = task::tbb::syncWait(eth::systemCallBlockStart(storage,
+                    executor.vm(), bi, blockHashes.get_block_hash(bi.number - 1), blockRev));
+                if (sysErr.has_value() && !g_opts.quiet)
+                {
+                    printLine("block-start system call skipped: " + *sysErr);
+                }
             }
 
             for (auto const& tx : block.transactions)
@@ -1838,7 +1840,7 @@ public:
                 evmWithdrawals.push_back(ew);
             }
 
-            // Apply block reward via finalize() (uses bcos-evm's built-in logic)
+            // Apply block reward via finalize()
             task::tbb::syncWait(executor.finalizeBlock(
                 storage, blockHdr, m_ledgerConfig, blockRev, blockReward, evmWithdrawals));
 
@@ -1860,7 +1862,7 @@ public:
             // and process consolidation requests respectively.
             if (blockRev >= EVMC_CANCUN)
             {
-                evmone::state::BlockInfo biEnd{};
+                eth::EthBlockInfo biEnd{};
                 biEnd.number = test::hexToInt64(block.blockHeader.number);
                 biEnd.timestamp = tsSec;
                 biEnd.gas_limit = test::hexToInt64(block.blockHeader.gasLimit);
@@ -1886,23 +1888,18 @@ public:
                             biEnd.parent_beacon_block_root.bytes);
                     }
                 }
-                // Set the current block's hash for EIP-2935 history storage
-                if (!block.blockHeader.hash.empty())
-                {
-                    auto hashBytes = test::hexToBytes(block.blockHeader.hash);
-                    if (hashBytes.size() == sizeof(evmc_bytes32))
-                    {
-                        std::copy_n(hashBytes.begin(), sizeof(evmc_bytes32), biEnd.hash.bytes);
-                    }
-                }
 
-                ::bcos::test::TestStorageStateView<MutableStorage> stateViewEnd(storage);
-                auto endResult = evmone::state::system_call_block_end(
-                    stateViewEnd, biEnd, blockHashes, blockRev, executor.vm());
-                if (endResult.has_value())
+                // Upstream system_call_block_end returns nullopt (skip, apply nothing) when a
+                // requests contract has no code or the call reverts; systemCallBlockEnd reports
+                // those as an error string instead (its deliberate deviation). The runner keeps
+                // the upstream fixture behaviour: an error here means "no block-end diff".
+                // The state write-back happens inside the call; the returned EIP-7685 requests
+                // are not consumed by the fixture check.
+                auto endResult = task::tbb::syncWait(
+                    eth::systemCallBlockEnd(storage, executor.vm(), biEnd, blockRev));
+                if (endResult.error.has_value() && !g_opts.quiet)
                 {
-                    task::tbb::syncWait(::bcos::test::testApplyStateDiff(
-                        storage, endResult->state_diff, *cryptoSuite->hashImpl()));
+                    printLine("block-end system call skipped: " + *endResult.error);
                 }
             }
         }

@@ -40,14 +40,6 @@ namespace
 constexpr auto kBlockVersion = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_16_0_VERSION);
 constexpr std::string_view c_senderHex = "9015bca99e8d49107c33b2cac14013a8dfd2c1b0";
 
-ledger::Features makeL2Features()
-{
-    ledger::Features features;
-    features.set(ledger::Features::Flag::feature_l2_ethereum_compat);
-    features.setActivationBlock(ledger::Features::Flag::feature_l2_ethereum_compat, 0);
-    return features;
-}
-
 evmc_address decodeAddress(std::string_view hex)
 {
     evmc_address address{};
@@ -68,7 +60,8 @@ struct L2MptStorageFixture
 
     L2MptStorageFixture()
     {
-        ledgerConfig.setFeatures(makeL2Features());
+        // The Ethereum lane (executor_version >= 2) builds the MPT from genesis on.
+        ledgerConfig.setExecutorVersion(bcos::ledger::ETHEREUM_EXECUTOR_VERSION);
         auto address = decodeAddress(c_senderHex);
         ledger::account::EVMAccount account{
             backendStorage, address, bcos::ledger::account::AddressTableMode::Hex};

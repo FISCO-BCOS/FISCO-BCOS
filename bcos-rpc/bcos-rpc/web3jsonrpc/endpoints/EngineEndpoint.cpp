@@ -19,12 +19,26 @@
  */
 
 #include "EngineEndpoint.h"
+#include "include/BuildInfo.h"
+#include <bcos-codec/rlp/RLPDecode.h>
+#include <bcos-crypto/kzg/Kzg4844.h>
 #include <bcos-framework/engine/Errors.h>
+#include <bcos-framework/engine/Types.h>
+#include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-framework/storage/LegacyStorageMethods.h>
+#include <bcos-framework/storage2/Storage.h>
+#include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-ledger/LedgerMethods.h>
+#include <bcos-mempool/MemPoolImpl.h>
+#include <bcos-rlp-protocol/EthWithdrawal.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
+#include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Error.h>
+#include <algorithm>
 #include <exception>
 #include <string_view>
 
@@ -78,6 +92,61 @@ struct OpPayloadBusyReset
 [[noreturn]] void rethrowAsEngineInternalError(bcos::Error const& e)
 {
     rethrowAsEngineInternalError(std::string_view(e.errorMessage()));
+}
+
+/// engine_getPayloadBodiesByRangeV1 request ceiling: the spec only fixes a floor
+/// (a client MUST serve count >= 32); geth's getBodiesByRange rejects count > 1024 with
+/// -38004 Too large request, and so does this endpoint. ByHash carries no cap, matching
+/// geth (the listener's HTTP body-size limit bounds the request instead).
+constexpr uint64_t c_maxPayloadBodiesRange = 1024;
+
+/// Strict uint64 hex-quantity reader for engine params, mirroring EngineHelper.cpp's
+/// translation-unit-local parseQuantity: jsoncpp's asString() stringifies numbers/bools
+/// (so an isString() gate is what makes the check complete) and a bare fromQuantity reads
+/// non-prefixed input as hex anyway — a malformed quantity from the CL must be -32602,
+/// never the -32603 the RPC entry point would funnel a std::invalid_argument into.
+uint64_t parseEngineQuantity(Json::Value const& value, std::string_view field)
+{
+    if (value.isString())
+    {
+        if (auto parsed = bcos::safeFromQuantity(value.asString()))
+        {
+            return *parsed;
+        }
+    }
+    BOOST_THROW_EXCEPTION(JsonRpcException(
+        InvalidParams, std::string(field) + " must be a uint64 hex quantity string"));
+}
+
+/// Decode a SYS_NUMBER_2_WITHDRAWALS row (the RLP LIST of the block's per-item
+/// withdrawal RLP, written by EthereumBlockVerifier's commit) into the WithdrawalV1
+/// JSON array. A malformed row is node-local data corruption: -32603, not a null body.
+Json::Value decodeWithdrawalsJson(bcos::bytes raw)
+{
+    Json::Value withdrawals(Json::arrayValue);
+    auto items = bcos::ref(raw);
+    auto const listHeader = bcos::codec::rlp::decodeHeader(items);
+    if (!listHeader.isList || listHeader.payloadLength != items.size())
+    {
+        rethrowAsEngineInternalError("malformed withdrawals sidecar row (not a closed RLP list)");
+    }
+    while (!items.empty())
+    {
+        auto const itemStart = items;
+        auto const itemHeader = bcos::codec::rlp::decodeHeader(items);
+        auto const itemSize = (itemStart.size() - items.size()) + itemHeader.payloadLength;
+        bcos::protocol::EthWithdrawal withdrawal;
+        withdrawal.rlpDecode(bcos::bytesConstRef(itemStart.data(), itemSize));
+        auto const& data = withdrawal.data();
+        Json::Value item(Json::objectValue);
+        item["index"] = toQuantity(data.index);
+        item["validatorIndex"] = toQuantity(data.validatorIndex);
+        item["address"] = data.address.hexPrefixed();
+        item["amount"] = toQuantity(data.amount);
+        withdrawals.append(std::move(item));
+        items = items.getCroppedData(itemHeader.payloadLength);
+    }
+    return withdrawals;
 }
 }  // namespace
 
@@ -392,4 +461,303 @@ task::Task<void> EngineEndpoint::handleNewPayload(
     }
     auto result = serializePayloadStatus(engineResult, version);
     buildJsonContent(result, response);
+}
+
+task::Task<Json::Value> EngineEndpoint::payloadBodyAtNumber(protocol::BlockNumber number)
+{
+    auto const& ledger = m_nodeService->ledger();
+    protocol::Block::Ptr block;
+    try
+    {
+        block = co_await ledger::getBlockData(
+            *ledger, number, bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS);
+    }
+    catch (std::exception const&)
+    {
+        // An unavailable (pruned / never-seen) block is a null body, matching geth's
+        // GetBlockByNumber-miss path — not an RPC error.
+        co_return Json::nullValue;
+    }
+
+    Json::Value body(Json::objectValue);
+    Json::Value transactions(Json::arrayValue);
+    for (auto const& tx : block->transactions())
+    {
+        // A committed EL block's transactions are all Web3 (EIP-2718): the signing payload
+        // (extraTransactionBytes) plus the r||s||yParity signature reassembles into the exact
+        // wire bytes the block was submitted with. Anything else here is node-local data
+        // corruption — fail loudly (-32603) rather than emitting a body the CL would
+        // hash-check into a confusing INVALID downstream.
+        if (tx->type() != static_cast<uint8_t>(protocol::TransactionType::Web3Transaction))
+        {
+            rethrowAsEngineInternalError(
+                "block carries a transaction without an EIP-2718 wire form");
+        }
+        try
+        {
+            transactions.append(
+                toHexStringWithPrefix(bcostars::protocol::reassembleWeb3RawTransaction(
+                    tx->extraTransactionBytes(), tx->signatureData())));
+        }
+        catch (std::exception const& e)
+        {
+            rethrowAsEngineInternalError(e);
+        }
+    }
+    body["transactions"] = std::move(transactions);
+
+    // withdrawals: the spec mandates JSON null for pre-Shanghai bodies; for Shanghai+
+    // (header carries withdrawalsRoot) the list comes from the SYS_NUMBER_2_WITHDRAWALS
+    // sidecar row the EL verifier's commit writes. A Shanghai+ block without the row
+    // (committed before the row existed, or a ledger whose raw state storage is not
+    // readable through this interface) is an unavailable body -> null.
+    if (block->blockHeader()->withdrawalsRoot().has_value())
+    {
+        auto const stateStorage = ledger->getStateStorage();
+        if (!stateStorage)
+        {
+            co_return Json::nullValue;
+        }
+        auto const entry = co_await storage2::readOne(*stateStorage,
+            executor_v1::StateKeyView{ledger::SYS_NUMBER_2_WITHDRAWALS, std::to_string(number)});
+        if (!entry.has_value())
+        {
+            co_return Json::nullValue;
+        }
+        auto const rawWithdrawals = entry->get();
+        body["withdrawals"] = decodeWithdrawalsJson(
+            bcos::bytes(rawWithdrawals.begin(), rawWithdrawals.end()));
+    }
+    else
+    {
+        body["withdrawals"] = Json::nullValue;
+    }
+    co_return body;
+}
+
+task::Task<void> EngineEndpoint::getPayloadBodiesByHashV1(
+    const Json::Value& request, Json::Value& response)
+{
+    auto const& hashes = request[0u];
+    if (!hashes.isArray())
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "engine_getPayloadBodiesByHashV1 expects an array of block hashes"));
+    }
+    auto const& ledger = m_nodeService->ledger();
+    Json::Value result(Json::arrayValue);
+    for (auto const& hashValue : hashes)
+    {
+        // parseH256 maps malformed hex / wrong length to -32602.
+        auto const blockHash = parseH256(
+            hashValue.isString() ? std::string_view(hashValue.asString()) : std::string_view());
+        protocol::BlockNumber number = -1;
+        try
+        {
+            number = co_await ledger::getBlockNumber(*ledger, crypto::HashType(blockHash));
+        }
+        catch (std::exception const&)
+        {
+            // A lookup fault on an unknown hash reads as "not found" below.
+        }
+        if (number < 0)
+        {
+            result.append(Json::nullValue);
+            continue;
+        }
+        result.append(co_await payloadBodyAtNumber(number));
+    }
+    buildJsonContent(result, response);
+}
+
+task::Task<void> EngineEndpoint::getPayloadBodiesByRangeV1(
+    const Json::Value& request, Json::Value& response)
+{
+    if (request.size() < 2)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "engine_getPayloadBodiesByRangeV1 expects [start, count]"));
+    }
+    auto const start = parseEngineQuantity(request[0u], "start");
+    auto const count = parseEngineQuantity(request[1u], "count");
+    // Spec: start or count below 1 is -32602; count above the ceiling is -38004.
+    if (start < 1 || count < 1)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "engine_getPayloadBodiesByRangeV1: start and count must be >= 1"));
+    }
+    if (count > c_maxPayloadBodiesRange)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::TooLargeRequest,
+            "engine_getPayloadBodiesByRangeV1: requested count too large: " +
+                std::to_string(count)));
+    }
+    auto const& ledger = m_nodeService->ledger();
+    auto const head = co_await ledger::getCurrentBlockNumber(*ledger);
+    Json::Value result(Json::arrayValue);
+    // A range beyond the latest block answers an empty array (no trailing nulls); the
+    // start <= head guard also keeps start + count - 1 from overflowing.
+    if (head >= 0 && start <= static_cast<uint64_t>(head))
+    {
+        auto const last = std::min(start + count - 1, static_cast<uint64_t>(head));
+        for (auto number = start; number <= last; ++number)
+        {
+            result.append(co_await payloadBodyAtNumber(static_cast<protocol::BlockNumber>(number)));
+        }
+    }
+    buildJsonContent(result, response);
+}
+
+namespace
+{
+/// engine_getBlobsV1 request ceiling: the spec mandates support for at least 128 versioned
+/// hashes and a -38004 above the client's cap.
+constexpr std::size_t c_maxGetBlobsRequest = 128;
+/// Ledger fallback scan depth: the pool is the spec's data source; the committed-block
+/// blob sidecar rows are only consulted for the recent window a CL realistically asks
+/// about (its own head's payloads). Each step is one storage read.
+constexpr protocol::BlockNumber c_getBlobsLedgerScanDepth = 128;
+}  // namespace
+
+task::Task<void> EngineEndpoint::getBlobsV1(const Json::Value& request, Json::Value& response)
+{
+    auto const& hashes = request[0u];
+    if (!hashes.isArray())
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "engine_getBlobsV1 expects an array of blob versioned hashes"));
+    }
+    if (hashes.size() > c_maxGetBlobsRequest)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(EngineError::TooLargeRequest,
+            "engine_getBlobsV1: requested count too large: " + std::to_string(hashes.size())));
+    }
+    std::vector<crypto::HashType> versionedHashes;
+    versionedHashes.reserve(hashes.size());
+    for (auto const& hashValue : hashes)
+    {
+        // parseH256 maps malformed hex / wrong length to -32602.
+        versionedHashes.emplace_back(crypto::HashType(
+            parseH256(hashValue.isString() ? std::string_view(hashValue.asString()) :
+                                             std::string_view())));
+    }
+
+    // Pool first (the spec's data source: "fetch blobs from the execution layer blob
+    // pool"), then the committed blocks' blob sidecar rows for the recent window.
+    std::vector<std::optional<engine::BlobItem>> items(versionedHashes.size());
+    if (auto* memPool = m_nodeService->memPool(); memPool != nullptr)
+    {
+        items = memPool->blobsByVersionedHashes(versionedHashes);
+    }
+    auto missing = static_cast<std::size_t>(
+        std::count(items.begin(), items.end(), std::nullopt));
+    if (missing > 0)
+    {
+        auto const& ledger = m_nodeService->ledger();
+        auto const stateStorage = ledger ? ledger->getStateStorage() : nullptr;
+        if (stateStorage)
+        {
+            auto const head = co_await ledger::getCurrentBlockNumber(*ledger);
+            for (auto number = head; number >= 0 && missing > 0 &&
+                 head - number < c_getBlobsLedgerScanDepth;
+                 --number)
+            {
+                auto const entry = co_await storage2::readOne(*stateStorage,
+                    executor_v1::StateKeyView{
+                        ledger::SYS_NUMBER_2_BLOBS, std::to_string(number)});
+                if (!entry.has_value())
+                {
+                    continue;
+                }
+                auto const rawRow = entry->get();
+                auto rowBytes = bcos::bytes(rawRow.begin(), rawRow.end());
+                auto in = bcos::ref(rowBytes);
+                try
+                {
+                    auto const outerHead = codec::rlp::decodeHeader(in);
+                    bcos::byte* const outerStart = in.data();
+                    while (static_cast<std::size_t>(in.data() - outerStart) <
+                           outerHead.payloadLength)
+                    {
+                        auto const itemHead = codec::rlp::decodeHeader(in);
+                        bcos::byte* const itemStart = in.data();
+                        bcos::bytes commitment, proof, blob;
+                        codec::rlp::decodeItems(in, commitment, proof, blob);
+                        if (static_cast<std::size_t>(in.data() - itemStart) !=
+                                itemHead.payloadLength ||
+                            commitment.size() != crypto::kzg::CommitmentSize)
+                        {
+                            break;  // corrupt row: stop mining it, other rows may still match
+                        }
+                        auto const versionedHash =
+                            crypto::kzg::versionedHashFromCommitment(bcos::ref(commitment));
+                        for (std::size_t j = 0; j < versionedHashes.size(); ++j)
+                        {
+                            if (!items[j].has_value() && versionedHashes[j] == versionedHash)
+                            {
+                                items[j] = engine::BlobItem{.commitment = std::move(commitment),
+                                    .proof = std::move(proof),
+                                    .blob = std::move(blob)};
+                                --missing;
+                                break;
+                            }
+                        }
+                    }
+                }
+                catch (std::exception const&)
+                {
+                    // A corrupt sidecar row is not an RPC error: the hashes it would have
+                    // served read as missing (null), the same as never-committed blobs.
+                    continue;
+                }
+            }
+        }
+    }
+
+    Json::Value result(Json::arrayValue);
+    for (auto const& item : items)
+    {
+        if (!item.has_value())
+        {
+            result.append(Json::nullValue);
+            continue;
+        }
+        Json::Value blobAndProof(Json::objectValue);
+        blobAndProof["blob"] = toHexStringWithPrefix(bcos::ref(item->blob));
+        blobAndProof["proof"] = toHexStringWithPrefix(bcos::ref(item->proof));
+        result.append(std::move(blobAndProof));
+    }
+    buildJsonContent(result, response);
+}
+
+task::Task<void> EngineEndpoint::getClientVersionV1(
+    const Json::Value& request, Json::Value& response)
+{
+    // Static self-report (execution-apis identification.md): the CL's own ClientVersionV1
+    // (params[0]) is informational only — accepted when object-shaped, never consulted.
+    if (request.size() >= 1 && !request[0u].isObject())
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            InvalidParams, "engine_getClientVersionV1 expects [clientVersion]"));
+    }
+    // "FB" is unreserved in the spec's ClientCode list (execution-apis identification.md
+    // invites unlisted clients to pick a non-colliding two-letter code).
+    Json::Value self(Json::objectValue);
+    self["code"] = "FB";
+    self["name"] = "FISCO-BCOS";
+    self["version"] = std::string("v") + FISCO_BCOS_PROJECT_VERSION;
+    // commit is DATA, 4 bytes — the first four bytes of the build's commit hash.
+    self["commit"] =
+        "0x" + std::string(FISCO_BCOS_COMMIT_HASH).substr(0, 8);
+    Json::Value result(Json::arrayValue);
+    result.append(std::move(self));
+    buildJsonContent(result, response);
+    co_return;
+}
+
+task::Task<void> EngineEndpoint::exchangeClientVersionV1(
+    const Json::Value& request, Json::Value& response)
+{
+    // Pre-rename draft name of engine_getClientVersionV1; older CLs still call it.
+    co_await getClientVersionV1(request, response);
 }

@@ -52,6 +52,10 @@ set_source_files_properties(
 # shares the same standalone build model.
 set_source_files_properties(
     "TestMPTPrunerSyncWiring.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+# TestEthereumChainRollback (Phase 3 shallow-reorg journal + rollback lane) shares the
+# same harness aliases; compile standalone.
+set_source_files_properties(
+    "TestEthereumChainRollback.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # TestSepoliaGenesisSync (real Sepolia genesis state load + empty-block verify).
 set_source_files_properties(
     "TestSepoliaGenesisSync.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
