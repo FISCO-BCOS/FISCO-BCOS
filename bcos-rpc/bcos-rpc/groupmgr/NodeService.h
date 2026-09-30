@@ -25,6 +25,7 @@
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/engine/AnyEngineService.h>
 #include <bcos-framework/engine/DACaps.h>
+#include <bcos-framework/engine/OpCanonicalReader.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/multigroup/ChainNodeInfo.h>
 #include <bcos-framework/multigroup/GroupInfo.h>
@@ -175,9 +176,26 @@ public:
         return m_stateStorageProvider;
     }
 
+    /// The OP Engine lane's read facade (D1 §10.2): `latest` is the Engine tracker's head,
+    /// blocks above the finalized tip are served from the scheduler's unfinalized window and
+    /// state reads at those heights from the head chain's view. Set only on an OP node with
+    /// [op_engine_rpc] (AirNodeInitializer, from EngineServiceInitializer::buildOp); null
+    /// everywhere else, and every endpoint then reads the ledger exactly as before. Owns what
+    /// it reads (the engine service through an aliasing shared_ptr into its holder, the
+    /// scheduler through a shared_ptr), so it carries no borrow contract.
+    void setOpCanonicalReader(bcos::engine::OpCanonicalReader::Ptr _reader) noexcept
+    {
+        m_opCanonicalReader = std::move(_reader);
+    }
+    bcos::engine::OpCanonicalReader::Ptr const& opCanonicalReader() const noexcept
+    {
+        return m_opCanonicalReader;
+    }
+
     /// blockTag semantics: how many blocks behind "latest" the "safe" / "finalized" tags
     /// point to (wired from [web3_rpc] safe_block_depth / finalized_block_depth). Default 0
-    /// — PBFT commits are final, so safe/finalized equal "latest" unless configured.
+    /// — PBFT commits are final, so safe/finalized equal "latest" unless configured. Ignored
+    /// on the OP lane (opCanonicalReader set): there the tags are the Engine tracker's.
     void setSafeBlockDepth(protocol::BlockNumber _depth) noexcept { m_safeBlockDepth = _depth; }
     protocol::BlockNumber safeBlockDepth() const noexcept { return m_safeBlockDepth; }
     void setFinalizedBlockDepth(protocol::BlockNumber _depth) noexcept
@@ -266,6 +284,9 @@ private:
 
     /// Shared OP DA caps (see setDaCaps); nullptr on Ethereum-only nodes.
     std::shared_ptr<bcos::engine::DACaps> m_daCaps;
+
+    /// OP-lane read facade (see setOpCanonicalReader); nullptr on every other lane.
+    bcos::engine::OpCanonicalReader::Ptr m_opCanonicalReader;
 
     bcostars::LedgerServicePrx m_ledgerPrx;
 };

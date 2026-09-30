@@ -116,6 +116,23 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     nodeService->setSafeBlockDepth(nodeConfig->web3SafeBlockDepth());
     nodeService->setFinalizedBlockDepth(nodeConfig->web3FinalizedBlockDepth());
 
+    // OP Engine lane (D1 §10.2): `latest` is the Engine tracker's head, blocks above the
+    // finalized tip are served from the scheduler's unfinalized window, and safe/finalized
+    // are the tracker's — the static depths above have no meaning there and are ignored.
+    if (auto opReader = m_nodeInitializer->opCanonicalReader())
+    {
+        nodeService->setOpCanonicalReader(std::move(opReader));
+        if (nodeConfig->web3SafeBlockDepth() != 0 || nodeConfig->web3FinalizedBlockDepth() != 0)
+        {
+            INITIALIZER_LOG(WARNING)
+                << LOG_DESC(
+                       "[web3_rpc] safe_block_depth / finalized_block_depth are ignored on the "
+                       "OP Engine lane: the safe/finalized tags follow engine_forkchoiceUpdated")
+                << LOG_KV("safe_block_depth", nodeConfig->web3SafeBlockDepth())
+                << LOG_KV("finalized_block_depth", nodeConfig->web3FinalizedBlockDepth());
+        }
+    }
+
     // A v2 genesis (the Engine driver, or [debug] enable): eth_sendRawTransaction takes a blob
     // transaction in its network wrapper and KZG-checks the sidecar, which the L1 payload
     // builder needs to assemble the blobsBundle under either driver. The blob ADMISSION gate

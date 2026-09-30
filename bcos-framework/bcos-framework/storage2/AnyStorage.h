@@ -346,4 +346,21 @@ public:
     }
 };
 
+/// An AnyStorage<Key, Value> handle that OWNS the storage (typically a forked view) it
+/// erases: one aliasing shared_ptr keeps the storage and the handle alive together, so a
+/// caller manages exactly one lifetime. The borrowing constructor above is for storages
+/// owned elsewhere.
+template <class Key, class Value, class Storage>
+std::shared_ptr<AnyStorage<Key, Value>> makeOwningAnyStorage(Storage storage)
+{
+    struct OwningStorage
+    {
+        Storage storage;
+        std::optional<AnyStorage<Key, Value>> erased;
+        explicit OwningStorage(Storage s) : storage(std::move(s)) { erased.emplace(storage); }
+    };
+    auto owner = std::make_shared<OwningStorage>(std::move(storage));
+    return {owner, std::addressof(*owner->erased)};
+}
+
 }  // namespace bcos::storage2
