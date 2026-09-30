@@ -2212,28 +2212,12 @@ task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& 
     buildJsonContent(output, response);
 }
 
-task::Task<void> EthEndpoint::requireOpLane(std::string_view method)
-{
-    // One SYS_CONFIG row rather than getLedgerConfig: kona-host issues thousands of
-    // debug_dbGet calls per block, and executor_version is the only input the gate needs.
-    auto const config = co_await ledger::getSystemConfig(
-        *m_nodeService->ledger(), magic_enum::enum_name(ledger::SystemConfig::executor_version));
-    auto const executorVersion = config ? boost::lexical_cast<int>(std::get<0>(config.value())) : 0;
-    if (!isOpStackLane(executorVersion))
-    {
-        // Same answer the dispatcher gives an unregistered method.
-        WEB3_LOG(DEBUG) << LOG_DESC("OP-lane-only method on another lane")
-                        << LOG_KV("method", method) << LOG_KV("executorVersion", executorVersion);
-        BOOST_THROW_EXCEPTION(JsonRpcException(MethodNotFound, "Method not found"));
-    }
-}
-
 task::Task<void> EthEndpoint::getRawHeader(const Json::Value& request, Json::Value& response)
 {
     // params: blockNumberOrHash (QTY|TAG|DATA 32B)
     // result: the RLP-encoded Ethereum header (DATA); keccak256(result) is the block hash
     // eth_getBlockBy* reports (canonicalBlockHash), which is what kona-host checks.
-    co_await requireOpLane("debug_getRawHeader");
+    co_await requireOpStackLane(*m_nodeService->ledger(), "debug_getRawHeader");
     protocol::BlockNumber blockNumber = 0;
     protocol::BlockNumber head = 0;
     std::tie(blockNumber, head) = co_await getBlockNumberAndHeadByTagOrHash(toView(request[0U]));
@@ -2273,7 +2257,7 @@ task::Task<void> EthEndpoint::dbGet(const Json::Value& request, Json::Value& res
     // (s_code_binary). Content addressing makes either store a valid answer for either shape;
     // the shape only picks which store to try first. A miss answers -32000 "not found" (geth's
     // server-error code); kona-host then retries its code hint with the bare-hash form.
-    co_await requireOpLane("debug_dbGet");
+    co_await requireOpStackLane(*m_nodeService->ledger(), "debug_dbGet");
     auto const key = safeFromHex(toView(request[0U]));
     if (!key) [[unlikely]]
     {

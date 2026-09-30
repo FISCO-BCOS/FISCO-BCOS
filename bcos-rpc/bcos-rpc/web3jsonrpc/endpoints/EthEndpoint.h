@@ -117,8 +117,6 @@ private:
     /// kona-host send. An unknown hash is InvalidParams "Block not found".
     task::Task<std::tuple<protocol::BlockNumber, protocol::BlockNumber>>
     getBlockNumberAndHeadByTagOrHash(std::string_view blockTagOrHash);
-    /// MethodNotFound unless the chain is on the OP lane (executor_version).
-    task::Task<void> requireOpLane(std::string_view method);
 
     task::Task<void> call(const Json::Value&, Json::Value&, u256* gasUsed, bool isEstimate);
 };
