@@ -1793,6 +1793,20 @@ BOOST_AUTO_TEST_CASE(getPayloadBodiesByHashV1RejectsBadParams)
         BOOST_CHECK_EXCEPTION(CALL_ENGINE_SYNC(getPayloadBodiesByHashV1, params, response),
             JsonRpcException, isEngineInvalidParams);
     }
+    // Above the 1024 ceiling is -38004 Too large request, same as ByRangeV1/getBlobsV1.
+    {
+        Json::Value params(Json::arrayValue);
+        Json::Value hashes(Json::arrayValue);
+        for (int i = 0; i < 1025; ++i)
+        {
+            hashes.append("0x" + bcos::h256(i).hex());
+        }
+        params.append(hashes);
+        Json::Value response;
+        BOOST_CHECK_EXCEPTION(CALL_ENGINE_SYNC(getPayloadBodiesByHashV1, params, response),
+            JsonRpcException,
+            [](JsonRpcException const& e) { return e.code() == EngineError::TooLargeRequest; });
+    }
 }
 
 BOOST_AUTO_TEST_CASE(getPayloadBodiesByHashV1NonWeb3TxIsInternalError)

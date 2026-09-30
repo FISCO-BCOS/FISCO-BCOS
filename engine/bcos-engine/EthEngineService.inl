@@ -595,7 +595,8 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
     std::optional<ViewType> localView;
     // The block's rollback journal (EthereumChainRollback.h), captured when the wiring
     // reports a reorg window; written into the same prewrite buffer as the block data.
-    std::optional<scheduler_v1::RollbackJournal> rollbackJournal;
+    // Shared ownership: the artifact stash and the hydration below are refcount copies.
+    std::shared_ptr<const scheduler_v1::RollbackJournal> rollbackJournal;
     // Set when THIS block still owns a queued (or about-to-be-queued) state layer: either this
     // call pushes one, or a previous attempt pushed it and failed, leaving it queued for the
     // retry (commit_retry_without_ledger_drains_after_failed_merge). A payload whose artifact
@@ -770,8 +771,8 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
             try
             {
                 auto committed = m_globalStateStorage.forkCommitted();
-                rollbackJournal =
-                    co_await scheduler_v1::captureRollbackJournal(*localView, committed);
+                rollbackJournal = std::make_shared<const scheduler_v1::RollbackJournal>(
+                    co_await scheduler_v1::captureRollbackJournal(*localView, committed));
             }
             catch (...)
             {
@@ -808,7 +809,11 @@ EthEngineService<MemPoolType, GlobalStateStorageType, ExecutorType, SchedulerTyp
                 if (auto artifactIt = m_artifacts.find(payloadId);
                     artifactIt != m_artifacts.end())
                 {
-                    artifactIt->second.rollbackJournal = *rollbackJournal;
+                    // Refcount copy (nothrow): a deep copy here would be the one throwing
+                    // statement between the capture's catch and pushView, and a bad_alloc
+                    // would leave a header-only artifact without a journal — exactly the
+                    // state this stash exists to prevent.
+                    artifactIt->second.rollbackJournal = rollbackJournal;
                 }
             }
         }
