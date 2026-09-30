@@ -21,13 +21,16 @@
  * LedgerConfigState, because the only configuration its commit callback could publish is
  * OpScheduler::loadCommitLedgerConfig's number+timestamp stub. The holder is kept complete by
  * the notifier OpScheduler fires after every durable commit, which is what these cases drive.
- * The last case asserts the stub's own shape, so a change that publishes the callback's object
- * instead of reading the ledger fails here rather than only in the C2 e2e leg.
+ * The stub case asserts the stub's own shape, so a change that publishes the callback's object
+ * instead of reading the ledger fails here rather than only in the C2 e2e leg. The two loader
+ * cases pin the SystemConfig overlay: evaluated at committed + 1, and a loader failure keeps the
+ * previous snapshot like any other failed refetch.
  */
 
 #include "engine/bcos-engine/OpLedgerConfigRepublish.h"
 
 #include <bcos-framework/ledger/Features.h>
+#include <bcos-framework/ledger/IL2ConfigLoader.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/ledger/LedgerConfigState.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
@@ -35,10 +38,12 @@
 #include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-utilities/Error.h>
 #include <boost/test/unit_test.hpp>
+#include <boost/throw_exception.hpp>
 
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -61,6 +66,28 @@ struct FailingBlockNumberLedger : bcos::test::FakeLedger
     void asyncGetBlockNumber(std::function<void(Error::Ptr, BlockNumber)> callback) override
     {
         callback(BCOS_ERROR_PTR(-1, "storage read failed"), 0);
+    }
+};
+
+/// Stands in for L2ConfigLoaderImpl over the SystemConfig predeploy: records the block it was
+/// asked to evaluate and writes the one runtime-writable key.
+struct RecordingL2Loader : bcos::ledger::IL2ConfigLoader
+{
+    std::vector<protocol::BlockNumber> calls;
+    uint64_t blockTxCountLimit = 3;
+    bool fail = false;
+
+    task::Task<void> loadIntoLedgerConfig(
+        protocol::BlockNumber blockNumber, bcos::ledger::LedgerConfig& out) override
+    {
+        calls.push_back(blockNumber);
+        if (fail)
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error(
+                "L2ConfigLoader: SystemConfig key 'block_tx_count_limit' is not set"));
+        }
+        out.setBlockTxCountLimit(blockTxCountLimit);
+        co_return;
     }
 };
 
@@ -187,6 +214,67 @@ BOOST_AUTO_TEST_CASE(scheduler_stub_config_is_not_an_admissible_snapshot)
     BOOST_REQUIRE(holder->get()->chainId().has_value());
     BOOST_CHECK(holder->get()->features().get(c_seededFeature));
     BOOST_CHECK_EQUAL(holder->get()->blockNumber(), stub->blockNumber());
+}
+
+/// With a SystemConfig loader installed, the republished snapshot carries the loader's
+/// block_tx_count_limit instead of the SYS_CONFIG row, and the loader is evaluated at
+/// committed + 1 -- the block this snapshot will seal -- so a governance write with
+/// enableNumber == next block applies to the next block. The ledger-sourced fields survive
+/// the overlay.
+BOOST_AUTO_TEST_CASE(commit_republish_overlays_system_config_at_the_next_block)
+{
+    auto ledger = makeLedger();
+    auto const committedNumber = ledger->blockNumber();
+    auto holder = makeBootHolder(committedNumber);
+    auto loader = std::make_shared<RecordingL2Loader>();
+    loader->blockTxCountLimit = 3;
+
+    std::vector<std::string> failures;
+    auto republish = bcos::engine::makeOpLedgerConfigRepublisher(
+        holder, ledger,
+        [&failures](protocol::BlockNumber, bcos::Error::Ptr error) {
+            failures.push_back(error->errorMessage());
+        },
+        loader);
+    republish(committedNumber);
+
+    BOOST_CHECK(failures.empty());
+    BOOST_REQUIRE_EQUAL(loader->calls.size(), 1u);
+    BOOST_CHECK_EQUAL(loader->calls.at(0), committedNumber + 1);
+
+    auto published = holder->get();
+    BOOST_CHECK_EQUAL(published->blockTxCountLimit(), 3u);
+    BOOST_CHECK_EQUAL(published->blockNumber(), committedNumber);
+    BOOST_REQUIRE(published->chainId().has_value());
+    BOOST_CHECK(published->features().get(c_seededFeature));
+}
+
+/// A loader failure (missing key, malformed slot) is a failed republish like any other: reported,
+/// not thrown, and the holder keeps the previous snapshot -- which is what lets the initializer
+/// turn the same return value into a startup refusal at boot.
+BOOST_AUTO_TEST_CASE(failed_system_config_load_keeps_the_previous_snapshot)
+{
+    auto ledger = makeLedger();
+    auto const committedNumber = ledger->blockNumber();
+    auto holder = makeBootHolder(committedNumber);
+    auto const before = holder->get();
+    auto loader = std::make_shared<RecordingL2Loader>();
+    loader->fail = true;
+
+    std::vector<std::string> failures;
+    auto republish = bcos::engine::makeOpLedgerConfigRepublisher(
+        holder, ledger,
+        [&failures](protocol::BlockNumber, bcos::Error::Ptr error) {
+            failures.push_back(error->errorMessage());
+        },
+        loader);
+    republish(committedNumber);  // must not throw
+
+    BOOST_REQUIRE_EQUAL(failures.size(), 1u);
+    BOOST_CHECK_MESSAGE(failures.at(0).find("block_tx_count_limit") != std::string::npos,
+        "the diagnostic must carry the loader's message, got: " + failures.at(0));
+    BOOST_CHECK(holder->get() == before);
+    BOOST_CHECK_EQUAL(holder->get()->blockNumber(), committedNumber - 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

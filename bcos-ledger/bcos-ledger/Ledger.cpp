@@ -2168,8 +2168,8 @@ bool Ledger::buildGenesisBlock(
         }
 
         co_await setGenesisFeatures(genesis.m_features, features, *m_stateStorage);
-        co_await importGenesisState(genesis.m_allocs, *m_stateStorage,
-            *m_blockFactory->cryptoSuite()->hashImpl(), ethLane);
+        co_await importGenesisState(
+            genesis.m_allocs, *m_stateStorage, *m_blockFactory->cryptoSuite()->hashImpl(), ethLane);
 
         // Ethereum lane (executor_version >= 2): block 1 builds the MPT incrementally on top
         // of the genesis state
@@ -2600,8 +2600,7 @@ task::Task<int64_t> Ledger::fetchExecutorVersionAt(protocol::BlockNumber _blockN
 {
     // Same single-row idiom as fetchFeature: an absent row is a pre-Ethereum-lane chain (0);
     // a row whose enableNumber is after _blockNumber reads as 0 for that block.
-    auto const key =
-        std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version));
+    auto const key = std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version));
     auto const [error, entry] = m_stateStorage->getRow(SYS_CONFIG, key);
     if (error || !entry)
     {
@@ -2621,8 +2620,8 @@ task::Task<int64_t> Ledger::fetchExecutorVersionAt(protocol::BlockNumber _blockN
     {
         // Boot (readOnChainExecutorVersion) refuses an unparseable row, so reaching this
         // means the row was corrupted afterwards -- corruption, not a legacy chain.
-        BOOST_THROW_EXCEPTION(std::runtime_error(
-            "on-chain executor_version is not an integer: '" + value + "'"));
+        BOOST_THROW_EXCEPTION(
+            std::runtime_error("on-chain executor_version is not an integer: '" + value + "'"));
     }
 }
 bcos::storage::StorageInterface::Ptr bcos::ledger::Ledger::getStateStorage()
@@ -2648,18 +2647,4 @@ bcos::storage::StorageInterface::Ptr bcos::ledger::Ledger::getStateStorage()
         return stateStorage;
     }
     return std::make_shared<bcos::storage::StateStorage>(m_stateStorage, true);
-}
-
-task::Task<void> Ledger::loadL2Config(protocol::BlockNumber blockNumber, ledger::LedgerConfig& cfg)
-{
-    // No loader configured (non-L2 mode, or PBFT short-circuit before the L2
-    // workflow wires one): nothing to refresh.
-    if (!m_l2Loader)
-    {
-        co_return;
-    }
-    // Delegate to the injected loader. A revert / short return / OOG throws out of
-    // here so the caller aborts the current block — we never swallow it.
-    co_await m_l2Loader->loadIntoLedgerConfig(blockNumber, cfg);
-    co_return;
 }

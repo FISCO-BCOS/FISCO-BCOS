@@ -50,6 +50,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <mutex>
 #include <optional>
 #include <set>
@@ -126,17 +127,30 @@ class OpEngineService
 {
 public:
     using ViewType = typename GlobalStateStorageType::ViewType;
+    /// Read-only source of the live mempool tx-count cap for sealing. The initializer wires
+    /// it to the admission holder's snapshot (LedgerConfig::blockTxCountLimit, which on the
+    /// OP lane the SystemConfig predeploy fills through the post-commit republish), so a
+    /// governance write whose enableNumber <= committed + 1 is honoured on the next block. A
+    /// callable rather than the holder
+    /// itself: this lane must not own a LedgerConfigState (OpLedgerConfigRepublish.h), and a
+    /// read-only seam keeps that pinned. A null source (a lane without the SystemConfig
+    /// overlay) falls back to the constructor's blockTxCountLimit; so does a 0 result, which
+    /// the OP-lane loader never publishes (it refuses a 0 slot) and only an unfilled holder
+    /// can yield.
+    using SealTxCountLimitSource = std::function<int64_t()>;
 
     OpEngineService(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage,
         SchedulerType& scheduler, bcos::protocol::BlockFactory::Ptr blockFactory,
         int64_t blockTxCountLimit = c_defaultBlockTxCountLimit,
         bcos::scheduler::SchedulerInterface::Ptr delegate = nullptr,
-        std::shared_ptr<DACaps> daCaps = nullptr, bool allowSynthesizedL1Attributes = false)
+        std::shared_ptr<DACaps> daCaps = nullptr, bool allowSynthesizedL1Attributes = false,
+        SealTxCountLimitSource sealTxCountLimitSource = nullptr)
       : m_memPool(memPool),
         m_globalStateStorage(globalStateStorage),
         m_scheduler(scheduler),
         m_blockFactory(std::move(blockFactory)),
         m_blockTxCountLimit(blockTxCountLimit),
+        m_sealTxCountLimitSource(std::move(sealTxCountLimitSource)),
         m_delegate(std::move(delegate)),
         m_daCaps(std::move(daCaps)),
         m_allowSynthesizedL1Attributes(allowSynthesizedL1Attributes)
@@ -291,6 +305,23 @@ private:
     SchedulerType& m_scheduler;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     int64_t m_blockTxCountLimit;
+    SealTxCountLimitSource m_sealTxCountLimitSource;
+
+    /// The mempool tx-count cap for the block being built: the live snapshot value when the
+    /// source yields one, else the constructor default. Deposits / forced transactions from
+    /// the payload attributes are mandatory inclusions and are not counted against it; the
+    /// cap bounds what the sequencer pulls from its own mempool.
+    int64_t sealTxCountLimit() const
+    {
+        if (m_sealTxCountLimitSource)
+        {
+            if (auto const live = m_sealTxCountLimitSource(); live > 0)
+            {
+                return live;
+            }
+        }
+        return m_blockTxCountLimit;
+    }
     /// Block-commit delegate. CONTRACT: executeBlock/commitBlock must invoke the
     /// completion callback synchronously, before the call returns — this service
     /// reads the captured error immediately after the call and answers VALID on a
