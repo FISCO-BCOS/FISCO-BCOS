@@ -262,7 +262,11 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::resolveBloc
     {
         co_return std::nullopt;
     }
-    co_return ResolvedBlock{.number = *number, .hash = blockHash, .inWindow = false};
+    co_return ResolvedBlock{.number = *number,
+        .hash = blockHash,
+        .parentHash = {},
+        .header = nullptr,
+        .inWindow = false};
 }
 
 template <class MemPoolType, class GlobalStateStorageType, class SchedulerType>
