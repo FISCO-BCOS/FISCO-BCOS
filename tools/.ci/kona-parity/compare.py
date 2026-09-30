@@ -14,6 +14,7 @@ Exit codes (every subcommand):
 import argparse
 import http.server
 import json
+import os
 import sys
 import time
 import urllib.request
@@ -157,6 +158,23 @@ def first_fee_paying_block(blocks):
     return None
 
 
+def incomplete_evidence(verdicts, gated):
+    """Why `verdicts` do not cover `gated` (block numbers from pairs.tsv) exactly, or ""."""
+    seen = [v["block"] for v in verdicts]
+    gated = set(gated)
+    problems = []
+    missing = sorted(gated - set(seen))
+    if missing:
+        problems.append(f"no verdict for gated blocks {missing}")
+    extra = sorted(set(seen) - gated)
+    if extra:
+        problems.append(f"verdicts for blocks outside pairs.tsv {extra}")
+    dup = sorted({b for b in seen if seen.count(b) > 1})
+    if dup:
+        problems.append(f"more than one verdict for blocks {dup}")
+    return "; ".join(problems)
+
+
 def render_divergence(verdict, fisco_block, kona):
     """Side-by-side header roots of the first divergent block."""
     sealed = kona["sealed"].get(verdict["block"], {})
@@ -173,8 +191,12 @@ def render_divergence(verdict, fisco_block, kona):
     return "\n".join(lines)
 
 
-def summarize(verdicts, blocks, kona_logs, overlay, expect_fee_vault):
-    """Final gate verdict. Returns (exit_code, report_lines)."""
+def summarize(verdicts, blocks, kona_logs, overlay, expect_fee_vault, gated):
+    """Final gate verdict. Returns (exit_code, report_lines).
+
+    `gated` is the set of block numbers pairs.tsv scheduled for replay. Green needs one verdict
+    per gated block and none outside it: a verdicts.jsonl cut short by an interrupted replay, or
+    carrying blocks from another run, is "incomplete evidence" (exit 2), never a match."""
     lines = []
     for v in verdicts:
         lines.append(f"block {v['block']}: {v['verdict']} {v['reason']}".rstrip())
@@ -196,6 +218,10 @@ def summarize(verdicts, blocks, kona_logs, overlay, expect_fee_vault):
         return EXIT_ERROR, lines
     if not verdicts:
         lines.append("GATE ERROR: no block was replayed")
+        return EXIT_ERROR, lines
+    incomplete = incomplete_evidence(verdicts, gated)
+    if incomplete:
+        lines.append(f"GATE ERROR: incomplete evidence: {incomplete}")
         return EXIT_ERROR, lines
     gaps = coverage_gaps(blocks, overlay)
     if gaps:
@@ -353,9 +379,35 @@ def cmd_collect(a):
     return EXIT_MATCH
 
 
+# Everything run.sh writes under $WORK. `clean` removes exactly these before a run so a reused
+# WORK (the CI jobs pass runner.temp/kona-parity) cannot carry a previous run's verdicts or
+# block files into _load_run; anything else in WORK is left alone.
+RUN_OWNED = ("fisco_blocks.json", "outputs.json", "pairs.tsv", "l1_head.txt", "verdicts.jsonl",
+             "rollup.json", "l1-config.json", "setup_c2.log", "beacon-stub.log", "kona", "c2")
+
+
+def cmd_clean(a):
+    import shutil
+    removed = []
+    for name in RUN_OWNED:
+        path = os.path.join(a.workdir, name)
+        if os.path.isdir(path) and not os.path.islink(path):
+            shutil.rmtree(path)
+        elif os.path.lexists(path):
+            os.remove(path)
+        else:
+            continue
+        removed.append(name)
+    if removed:
+        print(f"[kona-parity] removed previous run files from {a.workdir}: {' '.join(removed)}")
+    return EXIT_MATCH
+
+
 def _load_run(workdir):
     with open(f"{workdir}/fisco_blocks.json") as f:
         blocks = json.load(f)
+    with open(f"{workdir}/pairs.tsv") as f:
+        gated = {int(line.split("\t")[0]) for line in f if line.strip()}
     verdicts, logs = [], {}
     try:
         with open(f"{workdir}/verdicts.jsonl") as f:
@@ -365,7 +417,7 @@ def _load_run(workdir):
     for v in verdicts:
         with open(f"{workdir}/kona/{v['block']}.log") as f:
             logs[v["block"]] = parse_kona_log(f)
-    return blocks, verdicts, logs
+    return blocks, gated, verdicts, logs
 
 
 def cmd_verdict(a):
@@ -379,7 +431,7 @@ def cmd_verdict(a):
 
 
 def cmd_coverage(a):
-    blocks, _, _ = _load_run(a.workdir)
+    blocks, _, _, _ = _load_run(a.workdir)
     gaps = coverage_gaps(blocks, a.overlay)
     for g in gaps:
         print(f"missing: gated range has no {g}")
@@ -387,8 +439,8 @@ def cmd_coverage(a):
 
 
 def cmd_summary(a):
-    blocks, verdicts, logs = _load_run(a.workdir)
-    code, lines = summarize(verdicts, blocks, logs, a.overlay, a.expect_fee_vault)
+    blocks, gated, verdicts, logs = _load_run(a.workdir)
+    code, lines = summarize(verdicts, blocks, logs, a.overlay, a.expect_fee_vault, gated)
     print("\n".join(lines))
     return code
 
@@ -474,6 +526,9 @@ def main(argv=None):
         s.add_argument("--overlay", choices=["on", "off"], required=True)
         s.add_argument("--expect-fee-vault", action="store_true")
         s.set_defaults(fn=fn)
+    s = sub.add_parser("clean", help="remove run-owned files from --workdir")
+    s.add_argument("--workdir", required=True)
+    s.set_defaults(fn=cmd_clean)
     s = sub.add_parser("origin-lag")
     s.add_argument("--op-node", required=True)
     s.add_argument("--l2-block-time", type=int, required=True)
