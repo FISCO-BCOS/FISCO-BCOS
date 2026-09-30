@@ -359,6 +359,16 @@ struct VerifyResult
 
 namespace detail
 {
+/// Where a verified hash chain ended. @p present distinguishes the leaf (or value-carrying
+/// branch) holding the key from the dead end of an exclusion walk: the value bytes alone cannot,
+/// since a malformed leaf may carry an empty value. The trie never stores one (Trie.h reads an
+/// empty value as absence), so a present-but-empty end is a malformed proof, not an exclusion.
+struct ChainEnd
+{
+    bcos::bytes value;
+    bool present = false;
+};
+
 /// Verify one root→leaf hash chain using ONLY @p proofNodes — no storage access. Re-derives every
 /// hash link: proofNodes[0] must hash to @p expectedRoot, and each hash reference encountered
 /// along @p path must match the hash of the next consumed proof item. Inline children are decoded
@@ -369,14 +379,16 @@ namespace detail
 /// hide in the other.
 ///
 /// @param path the full nibble path of the key being proven (64 nibbles for 32-byte key hashes)
-/// @return nullopt   → the chain is INVALID (hash mismatch, malformed node, dangling hash ref,
-///                     or trailing unused proof items — padded proofs are rejected)
-///         empty     → valid EXCLUSION proof: the walk dead-ends, the key is absent — and for
-///                     the empty root, an EMPTY proof (the empty trie has no nodes; geth's
-///                     trie.Prove emits none)
-///         non-empty → the proven leaf/branch value
+/// @return nullopt        → the chain is INVALID (hash mismatch, malformed node, dangling hash
+///                          ref, or trailing unused proof items — padded proofs are rejected)
+///         !present      → valid EXCLUSION proof: the walk dead-ends, the key is absent — and
+///                          for the empty root, an EMPTY proof (the empty trie has no nodes;
+///                          geth's trie.Prove emits none); value is empty
+///         present       → the walk ended at the key's leaf (or a branch carrying its value):
+///                          value holds the proven bytes, which a well-formed trie never leaves
+///                          empty — the caller rejects that shape
 template <bcos::crypto::hasher::Hasher HasherT>
-std::optional<bcos::bytes> verifyProofChain(bcos::h256 const& expectedRoot,
+std::optional<ChainEnd> verifyProofChain(bcos::h256 const& expectedRoot,
     std::span<bcos::bytes const> proofNodes, bcos::bytes const& path, HasherT& hasher)
 {
     size_t idx = 0;  // next proof item to consume
@@ -409,12 +421,12 @@ std::optional<bcos::bytes> verifyProofChain(bcos::h256 const& expectedRoot,
     };
     // Every terminal exit: the result only stands if the proof was consumed exactly
     // (trailing items = padded proof, rejected).
-    auto finish = [&](bcos::bytes value) -> std::optional<bcos::bytes> {
+    auto finish = [&](bcos::bytes value, bool present) -> std::optional<ChainEnd> {
         if (idx != proofNodes.size())
         {
             return std::nullopt;
         }
-        return value;
+        return ChainEnd{.value = std::move(value), .present = present};
     };
 
     // One loop over a single "current node" state; the loop body only answers "where does
@@ -425,21 +437,22 @@ std::optional<bcos::bytes> verifyProofChain(bcos::h256 const& expectedRoot,
     // variant is safe by construction (proofWalk needs a comment to enforce the same).
     if (expectedRoot == emptyRootHash<HasherT>() && proofNodes.empty())
     {
-        return bcos::bytes{};
+        return ChainEnd{};
     }
     auto node = takeNode(expectedRoot);
     while (node)
     {
         if (std::holds_alternative<EmptyNode>(*node))
         {
-            return finish({});  // dead end: exclusion
+            return finish({}, false);  // dead end: exclusion
         }
         if (auto const* leaf = std::get_if<LeafNode>(&*node))
         {
             bool const match =
                 path.size() - pos == leaf->keyNibbles.size() &&
                 std::equal(leaf->keyNibbles.begin(), leaf->keyNibbles.end(), path.begin() + pos);
-            return finish(match ? leaf->value : bcos::bytes{});  // value, or a diverging leaf
+            // The key's leaf, or a diverging leaf (exclusion)
+            return finish(match ? leaf->value : bcos::bytes{}, match);
         }
         if (auto const* ext = std::get_if<ExtensionNode>(&*node))
         {
@@ -447,7 +460,7 @@ std::optional<bcos::bytes> verifyProofChain(bcos::h256 const& expectedRoot,
                 !std::equal(
                     ext->sharedNibbles.begin(), ext->sharedNibbles.end(), path.begin() + pos))
             {
-                return finish({});  // path diverges inside the extension: exclusion
+                return finish({}, false);  // path diverges inside the extension: exclusion
             }
             pos += ext->sharedNibbles.size();
             node = (ext->child.size() == HASH_REF_ENCODED_SIZE &&
@@ -459,7 +472,8 @@ std::optional<bcos::bytes> verifyProofChain(bcos::h256 const& expectedRoot,
         auto const& branch = std::get<BranchNode>(*node);
         if (pos == path.size())
         {
-            return finish(branch.value);  // path exhausted at a branch (empty = exclusion)
+            // path exhausted at a branch: its value, if any, belongs to the key (empty = exclusion)
+            return finish(branch.value, !branch.value.empty());
         }
         NodeRef const& child = branch.children.at(path.at(pos));
         ++pos;
@@ -469,7 +483,7 @@ std::optional<bcos::bytes> verifyProofChain(bcos::h256 const& expectedRoot,
         }
         else if (child.inlineRef().empty())
         {
-            return finish({});  // absent child: exclusion
+            return finish({}, false);  // absent child: exclusion
         }
         else
         {
@@ -489,10 +503,12 @@ std::optional<bcos::bytes> verifyProofChain(bcos::h256 const& expectedRoot,
 /// leaf that decodes or proves the account absent (an exclusion; an empty accountProof for the
 /// empty root), and the proven account — the empty account when absent — EQUALS the proof's
 /// claimed nonce/balance/codeHash/storageHash. Malformed leaf bytes yield accountValid=false, never
-/// an exception. On any account-side failure the function returns immediately with every
-/// storageValid false and every storageStatus Invalid (including inMPT=false entries: an
-/// unestablished account leaf makes even "unverifiable" too generous) — slot chains hang off
-/// proof.storageHash, which an invalid account side has not established.
+/// an exception; so does a present leaf with an empty value, which is not an exclusion (the trie
+/// never stores one) and must not pass as the empty account. On any account-side failure the
+/// function returns immediately with every storageValid false and every storageStatus Invalid
+/// (including inMPT=false entries: an unestablished account leaf makes even "unverifiable" too
+/// generous) — slot chains hang off proof.storageHash, which an invalid account side has not
+/// established.
 ///
 /// Per slot i, an inMPT=false entry (SlotNotInMPT, spec §5.9) is judged first: it is Unverifiable
 /// when its proof is empty — the value is flat-KV-asserted, deliberately NOT counted as verified
@@ -519,12 +535,16 @@ VerifyResult verifyProof(bcos::h256 claimedRoot, EIP1186Proof const& proof)
         return out;  // invalid chain
     }
 
+    if (accountLeaf->present && accountLeaf->value.empty())
+    {
+        return out;  // a [key, empty-value] leaf: malformed, not an exclusion of the account
+    }
     Account decoded;  // an exclusion proves the empty account
     try
     {
-        if (!accountLeaf->empty())
+        if (accountLeaf->present)
         {
-            decoded = Account::decode(bcos::ref(*accountLeaf));
+            decoded = Account::decode(bcos::ref(accountLeaf->value));
         }
     }
     catch (...)
@@ -565,11 +585,11 @@ VerifyResult verifyProof(bcos::h256 claimedRoot, EIP1186Proof const& proof)
         auto const slotPath = bytesToNibbles(slotKeyHash(entry.key, hasher).ref());
         auto recovered = detail::verifyProofChain(
             proof.storageHash, std::span<bcos::bytes const>(entry.proof), slotPath, hasher);
-        if (!recovered)
+        if (!recovered || (recovered->present && recovered->value.empty()))
         {
-            continue;  // invalid slot chain: storageValid[i] false, storageStatus[i] Invalid
+            continue;  // invalid slot chain (or an empty present leaf): Invalid, never Verified
         }
-        out.recoveredStorageValues[i] = std::move(*recovered);
+        out.recoveredStorageValues[i] = std::move(recovered->value);
         out.storageValid[i] = (out.recoveredStorageValues[i] == entry.value);
         out.storageStatus[i] =
             out.storageValid[i] ? SlotProofStatus::Verified : SlotProofStatus::Invalid;

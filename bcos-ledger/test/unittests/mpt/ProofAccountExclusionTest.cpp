@@ -24,6 +24,8 @@
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-ledger/mpt/MPTReadView.h>
+#include <bcos-ledger/mpt/Nibble.h>
+#include <bcos-ledger/mpt/NodeEncoder.h>
 #include <bcos-ledger/mpt/Proof.h>
 #include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
@@ -112,6 +114,36 @@ BOOST_AUTO_TEST_CASE(EmptyStateRootProvesEmptyAccount)
     auto const proof = prove(makeAddress(0xab), emptyRootHash());
     BOOST_CHECK(proof.accountProof.empty());
     BOOST_CHECK(verifyProof(emptyRootHash(), proof).accountValid);
+}
+
+// A hand-built [key, empty-value] leaf for the address is NOT an exclusion: the walk ends AT the
+// key's leaf, and the trie never stores an empty value. The verifier must reject it rather than
+// read the empty bytes as the empty account. The same single-leaf trie with a real account value
+// verifies, pinning that only the empty value is what the verifier refuses.
+BOOST_AUTO_TEST_CASE(EmptyPresentAccountLeafRejected)
+{
+    auto const address = makeAddress(0xcd);
+    auto const leafProof = [&](bcos::bytes value) {
+        auto const raw =
+            encodeRaw(TrieNode{LeafNode{.keyNibbles = bytesToNibbles(accountKeyHash(address).ref()),
+                .value = std::move(value)}});
+        bcos::h256 root;
+        bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
+        bcos::crypto::hasher::hash(hasher, bcos::ref(raw), root);
+        EIP1186Proof proof;
+        proof.address = address;
+        proof.codeHash = emptyCodeHash();
+        proof.storageHash = emptyRootHash();
+        proof.accountProof = {raw};
+        return std::pair{root, proof};
+    };
+
+    // Control: the same leaf holding the empty account's encoding is a valid inclusion proof.
+    auto const [presentRoot, presentProof] = leafProof(Account{}.encode());
+    BOOST_CHECK(verifyProof(presentRoot, presentProof).accountValid);
+
+    auto const [emptyLeafRoot, emptyLeafProof] = leafProof({});
+    BOOST_CHECK(!verifyProof(emptyLeafRoot, emptyLeafProof).accountValid);
 }
 
 // A present account keeps its inclusion proof, and scenario A keeps refusing absent accounts.
