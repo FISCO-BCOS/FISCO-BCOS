@@ -129,5 +129,37 @@ BOOST_AUTO_TEST_CASE(opLanePredicateKeysOnPresenceNotValue)
     BOOST_CHECK(!isOpEthereumBlock(*baseFeeOnly));
 }
 
+/// blockBaseFee: a NON_ETH header's base fee is the fee whatever its fork shape. A pre-Canyon
+/// OP head (Bedrock-Delta: baseFee set, no withdrawalsRoot) is NOT isOpEthereumBlock, and an
+/// earlier rule that keyed on that predicate served 0 for it -- OP admission then floored on
+/// nothing until Canyon. A native FISCO header has no base-fee field and stays 0.
+BOOST_AUTO_TEST_CASE(blockBaseFeeTrustsANonEthHeadersBaseFeeBeforeCanyon)
+{
+    auto preCanyon = makeNativeHeader();
+    preCanyon->setBaseFee(u256(1000000000));
+    BOOST_REQUIRE(!isOpEthereumBlock(*preCanyon));
+    BOOST_CHECK_EQUAL(blockBaseFee(*preCanyon), u256(1000000000));
+
+    auto canyon = makeNativeHeader();
+    canyon->setBaseFee(u256(7));
+    canyon->setWithdrawalsRoot(h256{});
+    BOOST_REQUIRE(isOpEthereumBlock(*canyon));
+    BOOST_CHECK_EQUAL(blockBaseFee(*canyon), u256(7));
+
+    auto native = makeNativeHeader();
+    BOOST_CHECK(!native->baseFee().has_value());
+    BOOST_CHECK_EQUAL(blockBaseFee(*native), u256(0));
+
+    // Eth lane keeps the London gate: a stamped pre-London version reads 0 even with a value.
+    auto preLondon = makeNativeHeader();
+    preLondon->setEthBlockVersion(EthBlockVersion::PRE_LONDON);
+    preLondon->setBaseFee(u256(5));
+    BOOST_CHECK_EQUAL(blockBaseFee(*preLondon), u256(0));
+    auto london = makeNativeHeader();
+    london->setEthBlockVersion(EthBlockVersion::LONDON);
+    london->setBaseFee(u256(5));
+    BOOST_CHECK_EQUAL(blockBaseFee(*london), u256(5));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

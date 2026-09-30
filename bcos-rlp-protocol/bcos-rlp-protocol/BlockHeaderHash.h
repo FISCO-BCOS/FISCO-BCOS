@@ -36,13 +36,15 @@ namespace bcos::protocol
 /// choose between the two themselves: that choice belongs here, once.
 [[nodiscard]] crypto::HashType canonicalBlockHash(BlockHeader const& header);
 
-/// A committed block's base fee under the lane rules. OP-Stack headers are NON_ETH yet carry a
-/// real base fee (rebuildOpEthHeader deliberately leaves ethBlockVersion NON_ETH) -- check that
-/// case before the NON_ETH short-circuit, which is for native FISCO headers that have no base
-/// fee at all. Eth-lane headers take the London+ rule (0 pre-London).
+/// A committed block's base fee under the lane rules. A NON_ETH header's optional base fee is
+/// authoritative: OP-Stack headers are NON_ETH on every fork (rebuildOpEthHeader deliberately
+/// leaves ethBlockVersion NON_ETH) and a pre-Canyon one (Bedrock-Delta) carries a base fee but no
+/// withdrawalsRoot, so isOpEthereumBlock is not the gate here -- keying on it read 0 for those
+/// heads. A native FISCO header has no base-fee field and yields 0. Eth-lane headers take the
+/// London+ rule (0 pre-London).
 [[nodiscard]] inline u256 blockBaseFee(BlockHeader const& header)
 {
-    if (isOpEthereumBlock(header))
+    if (header.ethBlockVersion() == EthBlockVersion::NON_ETH)
     {
         return header.baseFee().value_or(0);
     }

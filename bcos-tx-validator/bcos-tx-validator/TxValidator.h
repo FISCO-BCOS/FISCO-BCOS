@@ -73,7 +73,10 @@ using SystemTxPredicate = std::function<bool(protocol::Transaction const&)>;
 /// hash) keys the callable's per-head cache; the L1Block attributes come from the committed
 /// plane. Injected for the same reason SystemTxPredicate is (the formulas live behind evmone).
 /// nullopt = no rollup cost on this chain, Check::L1Cost stands down. Bound on the OP lane only.
-using RollupCostFn = std::function<task::Task<std::optional<u256>>(
+/// 512-bit: the L1 fee and the operator fee are each up to 2^256-1 and execution adds them at
+/// 512 bits (OpPolicy::additionalMaxCost); a callable that saturated their sum to 2^256-1 would
+/// let a sender holding exactly 2^256-1 through a check execution then fails.
+using RollupCostFn = std::function<task::Task<std::optional<u512>>(
     bytesConstRef signedEnvelope, uint64_t gasLimit, ledger::LedgerConfig const& head)>;
 
 /// The one place a transaction is judged admissible, for every ingress of both transaction
@@ -170,7 +173,7 @@ protected:
 private:
     /// The bound RollupCostFn's answer for @p tx, or nullopt when none is bound. Reassembles the
     /// signed envelope from the mirror; @p head is the snapshot the pass judges by.
-    task::Task<std::optional<u256>> readRollupCost(
+    task::Task<std::optional<u512>> readRollupCost(
         protocol::Transaction const& tx, ledger::LedgerConfig const& head);
 
     crypto::CryptoSuite::Ptr m_cryptoSuite;

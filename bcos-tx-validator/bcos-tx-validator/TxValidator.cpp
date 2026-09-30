@@ -220,6 +220,11 @@ struct ChainView
     /// stand down. An unset row reaches the snapshot as getLedgerConfig's "0x0" default, which
     /// is the verdict the checks always gave an unset row anyway.
     u256 baseFee;
+    /// executor_version >= OPSTACK_EXECUTOR_VERSION, derived with baseFee. OP execution verifies
+    /// balance >= gasLimit * maxFeePerGas + value + rollup cost whatever the head base fee is
+    /// (OpExecutionPolicy.h validateTransaction, the cap withholdUpfront relies on), so the
+    /// free-gas exception in gasAndValueCost is the FISCO and L1 lanes' only.
+    bool opLane = false;
     /// web3_chain_id. nullopt only on a holder nothing has published to yet: getLedgerConfig
     /// always sets it, serving an unset row as 0 exactly as the executor's CHAINID does.
     std::optional<u256> web3ChainId;
@@ -238,7 +243,7 @@ struct StateInputs
     std::optional<AccountState> const& sender;
     /// Asked of the bound RollupCostFn exactly when the set contains Check::L1Cost. nullopt =
     /// no rollup cost on this chain (nothing bound, or the callable declined): it stands down.
-    std::optional<u256> const& rollupCost;
+    std::optional<u512> const& rollupCost;
 };
 
 /// Inputs of the pool stage. Either checker may be null: see checkBcosPoolNonce and
@@ -582,13 +587,16 @@ TransactionStatus checkInitCodeSize(StateInputs const& in)
 }
 
 /// What the sender must cover before any rollup cost -- geth's tx.Cost(). Which fee it charges
-/// depends on whether this chain charges gas at all:
+/// depends on the lane and on whether this chain charges gas at all:
+///   OP lane                                    -> value + gasLimit * effectiveGasPrice, always
 ///   baseFee == 0 (tx_gas_price unset or "0")  -> gas is free; only `value` has to be covered
 ///   baseFee > 0                                -> value + gasLimit * effectiveGasPrice
-/// This mirrors the existing rule. It differs from evmone, which always charges
+/// The free-gas rule mirrors the FISCO one. It differs from evmone, which always charges
 /// max_gas_price * gas_limit + value, because on a free-gas FISCO chain the sender is never
 /// actually debited the fee cap they declared -- charging it at admission would reject
-/// transactions that execute perfectly well.
+/// transactions that execute perfectly well. The OP lane has no such chain: its execution runs
+/// the evmone comparison unconditionally (OpExecutionPolicy.h validateTransaction), so a
+/// zero-base-fee OP head must not admit a positive-fee transaction that execution refuses.
 ///
 /// 512-bit, deliberately. bcos::u256 carries boost::multiprecision::unchecked, so
 /// gasLimit * gasPrice + value is reduced mod 2^256 with no signal -- with a maxFeePerGas
@@ -598,7 +606,7 @@ TransactionStatus checkInitCodeSize(StateInputs const& in)
 u512 gasAndValueCost(StateInputs const& in)
 {
     u512 required{in.tx.value()};
-    if (in.chain.baseFee != 0)
+    if (in.chain.baseFee != 0 || in.chain.opLane)
     {
         required += u512{in.tx.gasLimit()} * u512{protocol::effectiveGasPrice(in.tx)};
     }
@@ -620,8 +628,9 @@ TransactionStatus checkL1Cost(StateInputs const& in)
     {
         return TransactionStatus::None;  // no rollup cost on this chain
     }
-    // op-geth ValidateTransactionWithState: balance < tx.Cost() + rollupCost.
-    if (u512{in.sender.value().balance} < gasAndValueCost(in) + u512{*in.rollupCost})
+    // op-geth ValidateTransactionWithState: balance < tx.Cost() + rollupCost. Both addends are
+    // 512-bit already; their sum is below 2^322 (gasLimit is 64-bit), so nothing wraps.
+    if (u512{in.sender.value().balance} < gasAndValueCost(in) + *in.rollupCost)
     {
         return TransactionStatus::InsufficientFunds;
     }
@@ -830,7 +839,8 @@ ChainView readChainView(ledger::LedgerConfigState const& configState, Check chec
         // never reads. The FISCO and L1 lanes keep tx_gas_price, as does an OP snapshot whose
         // getLedgerConfig read no head header.
         auto const& headBaseFee = view.config->baseFeePerGas();
-        if (view.config->executorVersion() >= ledger::OPSTACK_EXECUTOR_VERSION && headBaseFee)
+        view.opLane = view.config->executorVersion() >= ledger::OPSTACK_EXECUTOR_VERSION;
+        if (view.opLane && headBaseFee)
         {
             view.baseFee = *headBaseFee;
         }
@@ -921,7 +931,7 @@ task::Task<std::optional<AccountState>> TxValidator::readAccountState(std::strin
     co_return state;
 }
 
-task::Task<std::optional<u256>> TxValidator::readRollupCost(
+task::Task<std::optional<u512>> TxValidator::readRollupCost(
     protocol::Transaction const& tx, ledger::LedgerConfig const& head)
 {
     std::shared_ptr<const RollupCostFn> rollupCost;
@@ -996,7 +1006,7 @@ task::Task<TransactionStatus> TxValidator::verify(
         {
             sender = co_await readAccountState(tx.sender());
         }
-        std::optional<u256> rollupCost;
+        std::optional<u512> rollupCost;
         if ((checks & c_rollupCostDependent) != Check::None)
         {
             rollupCost = co_await readRollupCost(tx, *chain.config);
