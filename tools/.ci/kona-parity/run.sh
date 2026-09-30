@@ -23,6 +23,11 @@
 #      KONA_TRACE=1 (kona-host -vvvvv: counts debug_dbGet code hints, much larger logs),
 #      DEPOSIT_BUDGET (seconds a deposit may take to reach L2, default 300), WORK.
 #
+# WORK: evidence directory (default: a fresh mktemp). The run-owned files in it
+#      (compare.py RUN_OWNED: fisco_blocks.json, outputs.json, pairs.tsv, l1_head.txt,
+#      verdicts.jsonl, rollup.json, l1-config.json, setup_c2.log, beacon-stub.log, kona/, c2/)
+#      are deleted at start, so a reused WORK never mixes two runs; other files are kept.
+#
 # Exit: 0 every block matches, 1 first divergence (both sides' roots printed),
 #       2 the gate could not produce evidence ("missing: ..." says what). Never 0 by skipping.
 set -euo pipefail
@@ -81,8 +86,10 @@ else
 fi
 
 WORK="${WORK:-$(mktemp -d /tmp/kona-parity.XXXXXX)}"
-mkdir -p "$WORK/kona"
+mkdir -p "$WORK"
 WORK="$(cd "$WORK" && pwd -P)"
+python3 "$CMP" clean --workdir "$WORK"
+mkdir -p "$WORK/kona"
 BEACON_PORT="${BEACON_PORT:-8848}"
 BG_PIDS=()
 

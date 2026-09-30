@@ -104,10 +104,12 @@ def test_coverage_full_mix_and_gaps():
     assert gaps == ["user deposit (0x7e)", "reverting call", "call into overlay SystemConfig"]
 
 
-def run_summary(logs_by_block, verdict_rcs, expect=False, blocks=FULL_MIX):
+def run_summary(logs_by_block, verdict_rcs, expect=False, blocks=FULL_MIX, gated=None):
     logs = {b: compare.parse_kona_log(l) for b, l in logs_by_block.items()}
     verdicts = [compare.block_verdict(b, rc, logs[b], R["a"]) for b, rc in verdict_rcs]
-    return compare.summarize(verdicts, blocks, logs, "on", expect)
+    if gated is None:
+        gated = {b for b, _ in verdict_rcs}  # the replay covered exactly what it scheduled
+    return compare.summarize(verdicts, blocks, logs, "on", expect, gated)
 
 
 def test_summary_all_match_is_green():
@@ -137,7 +139,75 @@ def test_summary_error_and_unproven_route_are_red():
     assert code == compare.EXIT_ERROR and "debug_executePayload" in lines[-1]
     code, lines = run_summary({1: ok_log(1, R["a"])}, [(1, 0)], blocks=FULL_MIX[:1])
     assert code == compare.EXIT_ERROR and "lacks" in lines[-1]
-    assert compare.summarize([], FULL_MIX, {}, "on", False)[0] == compare.EXIT_ERROR
+    assert compare.summarize([], FULL_MIX, {}, "on", False, {1})[0] == compare.EXIT_ERROR
+
+
+ALL_OK = {b: ok_log(b, R["a"]) for b in (1, 2, 3, 4)}
+
+
+def test_summary_truncated_verdicts_are_incomplete_evidence():
+    # verdicts.jsonl holds a prefix of pairs.tsv (interrupted replay): the mix is fully
+    # covered by the block file, yet blocks 3 and 4 were never replayed.
+    code, lines = run_summary(ALL_OK, [(1, 0), (2, 0)], gated={1, 2, 3, 4})
+    assert code == compare.EXIT_ERROR
+    assert lines[-1] == "GATE ERROR: incomplete evidence: no verdict for gated blocks [3, 4]"
+
+
+def test_summary_verdicts_outside_pairs_are_incomplete_evidence():
+    code, lines = run_summary(ALL_OK, [(1, 0), (2, 0), (3, 0), (4, 0)], gated={1, 2, 3})
+    assert code == compare.EXIT_ERROR
+    assert "verdicts for blocks outside pairs.tsv [4]" in lines[-1]
+
+
+def test_summary_duplicate_verdicts_are_incomplete_evidence():
+    code, lines = run_summary(ALL_OK, [(1, 0), (2, 0), (2, 0), (3, 0), (4, 0)],
+                              gated={1, 2, 3, 4})
+    assert code == compare.EXIT_ERROR
+    assert "more than one verdict for blocks [2]" in lines[-1]
+
+
+def test_summary_exact_coverage_is_green_and_mismatch_prefix_stays_red():
+    code, _ = run_summary(ALL_OK, [(1, 0), (2, 0), (3, 0), (4, 0)], gated={1, 2, 3, 4})
+    assert code == compare.EXIT_MATCH
+    # run.sh stops at the first non-MATCH, so a mismatch prefix is complete evidence of red.
+    code, lines = run_summary({1: ok_log(1, R["a"]), 2: bad_log(2, R["b"], R["a"])},
+                              [(1, 0), (2, 1)], gated={1, 2, 3, 4})
+    assert code == compare.EXIT_MISMATCH and "FIRST DIVERGENCE at L2 block 2" in lines[-1]
+
+
+def test_clean_removes_run_owned_files_only(tmp_path):
+    stale = ["verdicts.jsonl", "pairs.tsv", "fisco_blocks.json", "outputs.json",
+             "l1_head.txt", "rollup.json", "l1-config.json", "setup_c2.log", "beacon-stub.log"]
+    for name in stale:
+        (tmp_path / name).write_text("stale")
+    (tmp_path / "kona").mkdir()
+    (tmp_path / "kona" / "5.log").write_text("stale")
+    (tmp_path / "kona" / "5.kv").mkdir()
+    (tmp_path / "c2" / "fisco").mkdir(parents=True)
+    (tmp_path / "keep.txt").write_text("mine")
+    assert compare.main(["clean", "--workdir", str(tmp_path)]) == 0
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["keep.txt"]
+    assert compare.main(["clean", "--workdir", str(tmp_path)]) == 0  # idempotent
+    assert set(stale + ["kona", "c2"]) == set(compare.RUN_OWNED)
+
+
+def test_cli_summary_reads_gated_set_from_pairs_tsv(tmp_path):
+    (tmp_path / "kona").mkdir()
+    (tmp_path / "fisco_blocks.json").write_text(json.dumps(FULL_MIX))
+    (tmp_path / "pairs.tsv").write_text("".join(f"{b}\t{R['c']}\t{R['a']}\t{R['a']}\n"
+                                                for b in (1, 2, 3, 4)))
+    for b in (1, 2, 3):  # a stale verdicts.jsonl from a run that was interrupted before 4
+        (tmp_path / "kona" / f"{b}.log").write_text("\n".join(ok_log(b, R["a"])))
+        assert compare.main(["verdict", "--workdir", str(tmp_path), "--block", str(b),
+                             "--rc", "0", "--log", str(tmp_path / f"kona/{b}.log"),
+                             "--claimed", R["a"]]) == 0
+    assert compare.main(["summary", "--workdir", str(tmp_path), "--overlay", "on"]) == 2
+    (tmp_path / "kona" / "4.log").write_text("\n".join(ok_log(4, R["a"])))
+    assert compare.main(["verdict", "--workdir", str(tmp_path), "--block", "4", "--rc", "0",
+                         "--log", str(tmp_path / "kona/4.log"), "--claimed", R["a"]]) == 0
+    assert compare.main(["summary", "--workdir", str(tmp_path), "--overlay", "on"]) == 0
+    (tmp_path / "pairs.tsv").unlink()
+    assert compare.main(["summary", "--workdir", str(tmp_path), "--overlay", "on"]) == 2
 
 
 def test_negative_control_expects_first_fee_paying_block():
@@ -155,6 +225,8 @@ def test_negative_control_expects_first_fee_paying_block():
 def test_cli_verdict_and_summary_exit_codes(tmp_path):
     (tmp_path / "kona").mkdir()
     (tmp_path / "fisco_blocks.json").write_text(json.dumps(FULL_MIX))
+    (tmp_path / "pairs.tsv").write_text("".join(f"{b}\t{R['c']}\t{R['a']}\t{R['a']}\n"
+                                                for b in (1, 2, 3, 4)))
     for b, log in ((1, ok_log(1, R["a"])), (2, bad_log(2, R["b"], R["a"]))):
         (tmp_path / "kona" / f"{b}.log").write_text("\n".join(log))
     common = ["--workdir", str(tmp_path), "--claimed", R["a"]]
