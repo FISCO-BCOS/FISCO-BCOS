@@ -23,6 +23,7 @@
 #include <bcos-framework/ledger/AccountTableName.h>
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/L2ConfigLoader.h>
+#include <bcos-framework/ledger/L2SystemConfigTable.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage/Entry.h>
@@ -116,6 +117,7 @@ std::string hexRuleTableName()
     return std::string(bcos::ledger::SYS_DIRECTORY::USER_APPS) +
            std::string(L2_SYSTEM_CONFIG_ADDRESS_HEX);
 }
+
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(L2ConfigLoaderTableLayoutTest)
@@ -128,6 +130,14 @@ BOOST_AUTO_TEST_CASE(HexLayoutTableIsTheAppsHexName)
     BOOST_CHECK_EQUAL(l2SystemConfigTableName(),
         account::ethLaneAccountTableName(bcos::Address{
             L2_SYSTEM_CONFIG_ADDRESS_HEX, bcos::Address::FromHex, bcos::Address::AlignRight}));
+
+    // The production loader is handed that name and reads exactly that table.
+    FakeSlotStorage storage;
+    seedAllKeys(storage, hexRuleTableName());
+    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage, l2SystemConfigTableName());
+    LedgerConfig config;
+    task::syncWait(loader.loadIntoLedgerConfig(1, config));
+    BOOST_CHECK_EQUAL(config.blockTxCountLimit(), 3U);
 }
 
 BOOST_AUTO_TEST_CASE(BinaryLayoutReadsTheRawBytesTable)
@@ -146,7 +156,7 @@ BOOST_AUTO_TEST_CASE(BinaryLayoutReadsTheRawBytesTable)
 
     FakeSlotStorage storage;
     seedAllKeys(storage, table);
-    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage);
+    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage, table);
     LedgerConfig config;
     task::syncWait(loader.loadIntoLedgerConfig(1, config));
 
@@ -165,7 +175,7 @@ BOOST_AUTO_TEST_CASE(BinaryLayoutDoesNotReadTheHexName)
 
     FakeSlotStorage storage;
     seedAllKeys(storage, hexRuleTableName());
-    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage);
+    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage, l2SystemConfigTableName());
     LedgerConfig config;
     BOOST_CHECK_EXCEPTION(task::syncWait(loader.loadIntoLedgerConfig(1, config)),
         std::runtime_error, [](std::runtime_error const& error) {

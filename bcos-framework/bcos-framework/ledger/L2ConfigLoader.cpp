@@ -16,11 +16,15 @@
  * @file L2ConfigLoader.cpp
  * @brief Translation unit placeholder for L2ConfigLoaderImpl.
  *
- * L2ConfigLoaderImpl is a header-only template (L2ConfigLoader.h) parameterized
- * on the concrete state storage type. The production instantiation — wiring the
- * Scheduler's per-block state-storage handle into the L2 config reload hook —
- * lands with the A4 OpStackInitializer workflow, not this PR. PR-4 only
- * delivers the entry point (the template + interface) and its unit tests, so
- * there is no production instantiation to anchor in a .cpp yet.
+ * L2ConfigLoaderImpl is a header-only template (L2ConfigLoader.h) parameterized on the
+ * concrete state storage type; this file only gives bcos-framework a TU that anchors the
+ * header. The production instantiation is OpSystemConfigLoader in
+ * libinitializer/OpSystemConfigLoader.h.
+ *
+ * This TU is part of the bcos-framework unity build, which the Windows CI job compiles with
+ * MSVC. MSVC 14.51 rejects EVMAccount.h's constexpr system-address constant in that TU
+ * (C7595/C2131 at EVMAccount.h:71/89/101), so the include graph below L2ConfigLoader.h must
+ * stay free of EVMAccount.h: the SystemConfig table name is passed into the loader by its
+ * caller (L2SystemConfigTable.h) rather than derived here.
  */
 #include "L2ConfigLoader.h"
