@@ -1,24 +1,24 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
 
-// OpSchedulerSeamSmokeTest — minimal compile-and-run verification that the ported
-// `bcos::evm::engine::OpSchedulerSeam` header instantiates against the current branch's types and
+// OpSchedulerSeamSmokeTest — minimal compile-and-run verification that
+// `bcos::evm::engine::OpSchedulerSeam` instantiates against the current branch's types and
 // that its engine-facing seam surface works. Exercises only:
 //   1. construction over a real MultiLayerStorage ViewType;
 //   2. the static seam surface the engine reaches as dependent names
-//      (computeTxRoot / commitmentsOf / isJovianActive).
-//      (The block-pre shape checks live in PreBlockOpStepsTest; the seam itself no longer
-//      executes blocks — see the note at the end of this file.)
-#include "OpSchedulerSeamTestHelpers.h"
+//      (computeTxRoot / commitmentsOf / isJovianActive);
+//   3. synthesizeL1AttributesEnvelope, the seam's L1-attributes deposit path (the seam
+//      itself no longer executes blocks — see the note at the end of this file).
+#include <opstack-executor/OpEthCommitments.h>  // OpEthExecuteBlockResult / OpEthBlockSeal
+#include <opstack-executor/OpEthDeposit.h>      // decodeOpDepositEnvelope / OP_DEPOSITOR
+#include <opstack-executor/OpEthL1Attributes.h>  // OpEthL1BlockInfo / synthesizeOpEthL1AttributesDeposit
+#include <opstack-executor/OpSchedulerSeam.h>
+
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-evm/opstack/OpPredeploys.h>
-#include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
-#include <opstack-executor/OpSchedulerSeam.h>
-#include <opstack-executor/OpstackExecutor.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <array>
@@ -29,6 +29,7 @@
 using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;
 namespace memory_storage = bcos::storage2::memory_storage;
+namespace opeth = bcos::executor_v1::opstack;
 
 namespace
 {
@@ -72,14 +73,14 @@ constexpr std::array<uint8_t, 4> kIsthmusSelector{0x09, 0x89, 0x99, 0xbe};
 constexpr std::array<uint8_t, 4> kJovianSelector{0x3d, 0xb6, 0xbe, 0x2b};
 
 /// Fully populated L1 info (snapshot + SystemConfig) for the offset pins.
-bcos::evm::opstack::L1BlockInfo filledL1Info()
+opeth::OpEthL1BlockInfo filledL1Info()
 {
-    bcos::evm::opstack::L1BlockInfo l1Info;
+    opeth::OpEthL1BlockInfo l1Info;
     l1Info.sequenceNumber = 0x1122334455667788ull;
     l1Info.time = 0x2233445566778899ull;
     l1Info.number = 0x33445566778899aaull;
-    l1Info.baseFee = intx::uint256{0x445566778899aabbull};
-    l1Info.blobBaseFee = intx::uint256{0x5566778899aabbccull};
+    l1Info.baseFee = bcos::u256{0x445566778899aabbull};
+    l1Info.blobBaseFee = bcos::u256{0x5566778899aabbccull};
     l1Info.baseFeeScalar = 0xa1b2c3d4u;
     l1Info.blobBaseFeeScalar = 0x11223344u;
     l1Info.operatorFeeScalar = 0x55667788u;
@@ -120,7 +121,7 @@ BOOST_AUTO_TEST_CASE(ConstructAndSeamSurface)
     auto view = multiLayerStorage.fork();
     view.newMutable();
 
-    // L1BlockInfo is required (no silent default). Construction with the unset sentinel is
+    // OpEthL1BlockInfo is required (no silent default). Construction with the unset sentinel is
     // allowed; synthesizeL1AttributesEnvelope is what refuses it.
     bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(kSeamSchedule, {});
 
@@ -131,8 +132,8 @@ BOOST_AUTO_TEST_CASE(ConstructAndSeamSurface)
     BOOST_CHECK(!scheduler.isKarstActive(kKarstMs - 1));
     BOOST_CHECK(scheduler.isKarstActive(kKarstMs));
     // Karst is a superset of Jovian and leaves the L1-attributes / DA-footprint shape alone,
-    // so isJovianActive must follow the fork configAt resolves: a Karst block still mints the
-    // Jovian-shaped L1-attributes deposit.
+    // so isJovianActive must follow the fork opForkSpecAt resolves: a Karst block still mints
+    // the Jovian-shaped L1-attributes deposit.
     BOOST_CHECK(scheduler.isJovianActive(kKarstMs));
 
     // computeTxRoot over the empty range: the standard empty-trie root (0x56e81f...), which
@@ -144,11 +145,11 @@ BOOST_AUTO_TEST_CASE(ConstructAndSeamSurface)
     BOOST_CHECK_EQUAL(txRoot, kEmptyTrieRoot);
 
     // commitmentsOf projects the seal + result members into the engine-facing surface.
-    bcos::evm::opstack::OpBlockSeal seal;
-    seal.receiptsRoot = evmone::hash256{};
-    seal.logsBloom = evmone::state::BloomFilter{};
-    seal.withdrawalsRoot = evmone::hash256{};
-    bcos::evm::engine::OpExecuteBlockResult result{
+    opeth::OpEthBlockSeal seal;
+    seal.receiptsRoot = bcos::h256{};
+    seal.logsBloom = bcos::Bloom{};
+    seal.withdrawalsRoot = bcos::h256{};
+    opeth::OpEthExecuteBlockResult result{
         .receipts = {},
         .seal = seal,
         .stateRoot = bcos::h256{},
@@ -163,7 +164,7 @@ BOOST_AUTO_TEST_CASE(ConstructAndSeamSurface)
 
 BOOST_AUTO_TEST_CASE(SynthesizeL1AttributesIsDepositEnvelope)
 {
-    auto const env = bcos::evm::engine::testutil::synthesizeL1AttributesEnvelope(false);
+    auto const env = opeth::synthesizeOpEthL1AttributesDeposit(opeth::OpEthL1BlockInfo{}, false);
     BOOST_REQUIRE(!env.empty());
     BOOST_CHECK_EQUAL(env.front(), static_cast<bcos::byte>(0x7e));
 }
@@ -188,20 +189,19 @@ BOOST_AUTO_TEST_CASE(SynthesizeRefusesZeroSystemConfig)
 BOOST_AUTO_TEST_CASE(SynthesizedDepositMatchesIsthmusLayout)
 {
     // All-zero L1 is a test-only fixture: call the encoder, not the production seam.
-    const auto env =
-        bcos::evm::opstack::synthesizeL1AttributesDeposit(bcos::evm::opstack::L1BlockInfo{}, false);
+    const auto env = opeth::synthesizeOpEthL1AttributesDeposit(opeth::OpEthL1BlockInfo{}, false);
     BOOST_REQUIRE_EQUAL(env.front(), static_cast<bcos::byte>(0x7e));
-    auto const dep = bcos::executor_v1::opstack::decodeDepositEnvelope(
-        bcos::bytesConstRef(env.data(), env.size()));
+    auto const dep =
+        opeth::decodeOpDepositEnvelope(bcos::bytesConstRef(env.data(), env.size()));
 
-    BOOST_CHECK(dep.from == bcos::evm::opstack::OP_DEPOSITOR);
+    BOOST_CHECK(dep.from == opeth::OP_DEPOSITOR);
     BOOST_REQUIRE(dep.to.has_value());
-    BOOST_CHECK(*dep.to == bcos::evm::opstack::OP_L1_BLOCK);
+    BOOST_CHECK(*dep.to == opeth::OP_L1_BLOCK);
     BOOST_CHECK(!dep.mint.has_value());
-    BOOST_CHECK(dep.value == intx::uint256{0});
-    BOOST_CHECK_EQUAL(dep.gas_limit, bcos::evm::opstack::c_l1InfoDepositGas);
-    BOOST_CHECK(!dep.is_system_tx);
-    BOOST_REQUIRE_EQUAL(dep.data.size(), bcos::evm::opstack::IsthmusL1AttributesLen);
+    BOOST_CHECK(dep.value == bcos::u256{0});
+    BOOST_CHECK_EQUAL(dep.gasLimit, opeth::OP_ETH_L1_INFO_DEPOSIT_GAS);
+    BOOST_CHECK(!dep.isSystemTx);
+    BOOST_REQUIRE_EQUAL(dep.data.size(), opeth::OP_ETH_ISTHMUS_L1_ATTRIBUTES_LEN);
     BOOST_CHECK_EQUAL_COLLECTIONS(
         dep.data.begin(), dep.data.begin() + 4, kIsthmusSelector.begin(), kIsthmusSelector.end());
 
@@ -214,8 +214,8 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositMatchesIsthmusLayout)
     std::copy(inner.begin(), inner.end(), domainInput.begin() + 32);
     const auto expectedHash =
         bcos::crypto::keccak256Hash(bcos::bytesConstRef(domainInput.data(), domainInput.size()));
-    BOOST_CHECK_EQUAL_COLLECTIONS(dep.source_hash.bytes, dep.source_hash.bytes + 32,
-        expectedHash.begin(), expectedHash.end());
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        dep.sourceHash.bytes, dep.sourceHash.bytes + 32, expectedHash.begin(), expectedHash.end());
 }
 
 BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsCalldataFieldOffsets)
@@ -228,9 +228,9 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsCalldataFieldOffsets)
 
     bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(kSeamSchedule, l1Info);
     const auto env = scheduler.synthesizeL1AttributesEnvelope(kJovianMs, kJovianMs);
-    auto const dep = bcos::executor_v1::opstack::decodeDepositEnvelope(
-        bcos::bytesConstRef(env.data(), env.size()));
-    BOOST_REQUIRE_EQUAL(dep.data.size(), bcos::evm::opstack::JovianL1AttributesLen);
+    auto const dep =
+        opeth::decodeOpDepositEnvelope(bcos::bytesConstRef(env.data(), env.size()));
+    BOOST_REQUIRE_EQUAL(dep.data.size(), opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_LEN);
     auto const& calldata = dep.data;
 
     auto checkBE = [&](size_t offset, uint64_t value) {
@@ -239,9 +239,9 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsCalldataFieldOffsets)
         BOOST_CHECK_EQUAL_COLLECTIONS(calldata.begin() + static_cast<ptrdiff_t>(offset),
             calldata.begin() + static_cast<ptrdiff_t>(offset + be.size()), be.begin(), be.end());
     };
-    auto checkBE256 = [&](size_t offset, intx::uint256 const& value) {
+    auto checkBE256 = [&](size_t offset, bcos::u256 const& value) {
         std::array<uint8_t, 32> be{};
-        intx::be::store(std::span<uint8_t, 32>(be.data(), be.size()), value);
+        bcos::toBigEndian(value, be);
         BOOST_CHECK_EQUAL_COLLECTIONS(calldata.begin() + static_cast<ptrdiff_t>(offset),
             calldata.begin() + static_cast<ptrdiff_t>(offset + be.size()), be.begin(), be.end());
     };
@@ -280,9 +280,9 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsIsthmusCalldataFieldOffsets)
 
     bcos::evm::engine::OpSchedulerSeam<ViewType> scheduler(kSeamSchedule, l1Info);
     const auto env = scheduler.synthesizeL1AttributesEnvelope(kIsthmusMs, kIsthmusMs);
-    auto const dep = bcos::executor_v1::opstack::decodeDepositEnvelope(
-        bcos::bytesConstRef(env.data(), env.size()));
-    BOOST_REQUIRE_EQUAL(dep.data.size(), bcos::evm::opstack::IsthmusL1AttributesLen);
+    auto const dep =
+        opeth::decodeOpDepositEnvelope(bcos::bytesConstRef(env.data(), env.size()));
+    BOOST_REQUIRE_EQUAL(dep.data.size(), opeth::OP_ETH_ISTHMUS_L1_ATTRIBUTES_LEN);
     auto const& calldata = dep.data;
 
     auto checkBE = [&](size_t offset, uint64_t value) {
@@ -291,9 +291,9 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositPinsIsthmusCalldataFieldOffsets)
         BOOST_CHECK_EQUAL_COLLECTIONS(calldata.begin() + static_cast<ptrdiff_t>(offset),
             calldata.begin() + static_cast<ptrdiff_t>(offset + be.size()), be.begin(), be.end());
     };
-    auto checkBE256 = [&](size_t offset, intx::uint256 const& value) {
+    auto checkBE256 = [&](size_t offset, bcos::u256 const& value) {
         std::array<uint8_t, 32> be{};
-        intx::be::store(std::span<uint8_t, 32>(be.data(), be.size()), value);
+        bcos::toBigEndian(value, be);
         BOOST_CHECK_EQUAL_COLLECTIONS(calldata.begin() + static_cast<ptrdiff_t>(offset),
             calldata.begin() + static_cast<ptrdiff_t>(offset + be.size()), be.begin(), be.end());
     };
@@ -325,12 +325,12 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositJovianLayout)
 {
     // The sourceHash is domain-1(l1Hash, seq) — L2 time is deliberately not bound, so the
     // builder takes no L2-time argument a caller could vary.
-    bcos::evm::opstack::L1BlockInfo const unset{};
-    const auto env = bcos::evm::opstack::synthesizeL1AttributesDeposit(unset, true);
+    opeth::OpEthL1BlockInfo const unset{};
+    const auto env = opeth::synthesizeOpEthL1AttributesDeposit(unset, true);
     BOOST_REQUIRE_EQUAL(env.front(), static_cast<bcos::byte>(0x7e));
-    auto const dep = bcos::executor_v1::opstack::decodeDepositEnvelope(
-        bcos::bytesConstRef(env.data(), env.size()));
-    BOOST_REQUIRE_EQUAL(dep.data.size(), bcos::evm::opstack::JovianL1AttributesLen);
+    auto const dep =
+        opeth::decodeOpDepositEnvelope(bcos::bytesConstRef(env.data(), env.size()));
+    BOOST_REQUIRE_EQUAL(dep.data.size(), opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_LEN);
     BOOST_CHECK_EQUAL_COLLECTIONS(
         dep.data.begin(), dep.data.begin() + 4, kJovianSelector.begin(), kJovianSelector.end());
     // [176:178] DA-footprint scalar is zero.
@@ -338,10 +338,9 @@ BOOST_AUTO_TEST_CASE(SynthesizedDepositJovianLayout)
     BOOST_CHECK_EQUAL(dep.data[177], 0);
 }
 
-// Note: the empty-block rejection test lives in PreBlockOpStepsTest (RejectsEmptyBlock).
-// OpSchedulerSeam is a pure engine seam and no longer executes blocks, so there is no
-// matching execution case here. The EIP-7702 authorization yParity width test was removed
-// with the RLP decode primitives (decodeAuthYParityScalar retired in OpCommon.h).
+// Note: the empty-block rejection coverage lives with the block-pre shape checks
+// (OpEthBlockSteps). OpSchedulerSeam is a pure engine seam and no longer executes blocks, so
+// there is no matching execution case here.
 
 // op-node emits the PREVIOUS fork's L1-attributes layout on the Jovian ACTIVATION block —
 // isJovianButNotFirstBlock (derive/l1_block_info.go:462-470) — because the L1Block predeploy
@@ -357,23 +356,23 @@ BOOST_AUTO_TEST_CASE(JovianActivationBlockKeepsIsthmusL1AttributesLayout)
 
     auto layoutSize = [&](int64_t childMs, int64_t parentMs) {
         auto const env = scheduler.synthesizeL1AttributesEnvelope(childMs, parentMs);
-        return bcos::executor_v1::opstack::decodeDepositEnvelope(
-            bcos::bytesConstRef(env.data(), env.size()))
+        return opeth::decodeOpDepositEnvelope(bcos::bytesConstRef(env.data(), env.size()))
             .data.size();
     };
 
     // Activation block: child is Jovian, parent is not -> still Isthmus's 176 bytes.
-    BOOST_CHECK_EQUAL(layoutSize(kJovianActivationMs, kParentOfActivationMs),
-        bcos::evm::opstack::IsthmusL1AttributesLen);
+    BOOST_CHECK_EQUAL(
+        layoutSize(kJovianActivationMs, kParentOfActivationMs),
+        opeth::OP_ETH_ISTHMUS_L1_ATTRIBUTES_LEN);
     // The very next block: parent is Jovian too -> the 178-byte Jovian layout.
     BOOST_CHECK_EQUAL(layoutSize(kJovianActivationMs + 1000, kJovianActivationMs),
-        bcos::evm::opstack::JovianL1AttributesLen);
+        opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_LEN);
     // Well before the fork: Isthmus on both sides.
     BOOST_CHECK_EQUAL(
-        layoutSize(kIsthmusMs, kIsthmusMs - 1000), bcos::evm::opstack::IsthmusL1AttributesLen);
+        layoutSize(kIsthmusMs, kIsthmusMs - 1000), opeth::OP_ETH_ISTHMUS_L1_ATTRIBUTES_LEN);
     // Karst is a superset of Jovian and has no activation-block exception of its own.
     BOOST_CHECK_EQUAL(
-        layoutSize(kKarstMs, kKarstMs - 1000), bcos::evm::opstack::JovianL1AttributesLen);
+        layoutSize(kKarstMs, kKarstMs - 1000), opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_LEN);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

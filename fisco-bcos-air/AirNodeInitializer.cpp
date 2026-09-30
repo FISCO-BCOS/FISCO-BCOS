@@ -89,6 +89,8 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
             m_nodeInitializer->txPoolInitializer()->txpool(), pbftInitializer->pbft(),
             pbftInitializer->blockSync(), m_nodeInitializer->protocolInitializer()->blockFactory(),
             m_nodeInitializer->engineService());
+    // Kept (weakly) for the EL-mode tx-gossip wiring in init(params), which runs after this.
+    m_nodeService = nodeService;
     // eth_getProof node reader (M8.3): committed MPT node rows straight from the state
     // backend. Set unconditionally — feature_mpt_state_root can activate at runtime, and a
     // pre-MPT header's stateRoot simply misses in the node rows (-32004); -32603 stays
@@ -112,12 +114,24 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     nodeService->setSafeBlockDepth(nodeConfig->web3SafeBlockDepth());
     nodeService->setFinalizedBlockDepth(nodeConfig->web3FinalizedBlockDepth());
 
+    // Ethereum L1 EL mode (ethereum.mode=el): the blob sidecar (network wrapper, KZG checks)
+    // and tx-gossip handling key on this flag. The blob ADMISSION gate keys on the executor
+    // version below instead.
+    nodeService->setEthereumELMode(nodeConfig->ethereumELModeEnabled());
+
+    // The chain's executor_version, resolved from the ledger at boot: the RPC blob admission
+    // gate keys on it (RpcChainPolicy admits blob transactions only on executor_version == 2).
+    // EL-mode sidecar handling stays keyed on the EL flag above.
+    nodeService->setExecutorVersion(m_nodeInitializer->executorVersion());
+
     // Engine-driven modes ([consensus] enable_single_node_consensus or [op_engine_rpc]):
     // route sendRawTransaction to the in-process mempool instead of txpool — the
     // EngineService seals these txs into blocks (driven by the built-in single-node timer
     // or by an external op-node), bypassing txpool/sealer/pbft, which are never initialized
-    // in these modes.
-    if (nodeConfig->engineDrivenBlockProduction() || nodeConfig->enableSingleNodeConsensus())
+    // in these modes. EL mode with [engine_rpc] enable gets the same mempool admission path
+    // (block import stays with devp2p sync).
+    if (nodeConfig->engineDrivenBlockProduction() || nodeConfig->enableSingleNodeConsensus() ||
+        nodeConfig->enableEngineRpc())
     {
         nodeService->setMemPool(m_nodeInitializer->memPoolInitializer()->memPool());
         // Admission travels with the pool it admits into. The context is the only thing the
@@ -205,12 +219,30 @@ void AirNodeInitializer::init(bcos::initializer::Params const& _params)
             initializer->ledger(), initializer->protocolInitializer()->blockFactory(),
             initializer->ethereumSerialScheduler(), initializer->ethereumExecutor(),
             initializer->globalStateStorageInitializer(), initializer->ioServicePool(),
-            initializer->mptCommitObserver());
+            initializer->mptCommitObserver(), initializer->ledgerConfigState(),
+            initializer->elBlockVerifier(), initializer->clSyncCoordination(),
+            // eth/68 transaction gossip ([ethereum] tx_gossip): the engine mempool and the
+            // same admission validator the RPC entry uses. Either unset keeps gossip off.
+            &initializer->memPoolInitializer()->memPool(), initializer->memPoolValidator());
         m_ethereumSync->validateConfig();
+        // The RPC side of gossip: eth_sendRawTransaction announces each admitted
+        // transaction through this hook. The NodeService was built in init(config,
+        // genesis) above; the gossip service itself starts with m_ethereumSync->start().
+        if (auto const& gossip = m_ethereumSync->txGossip())
+        {
+            if (auto nodeService = m_nodeService.lock())
+            {
+                nodeService->setTxGossipAnnouncer(
+                    [gossip](bcos::crypto::HashType const& txHash, uint8_t type, uint64_t size,
+                        bcos::bytes const& envelope) {
+                        gossip->announceLocalTransaction(txHash, type, size, envelope);
+                    });
+            }
+        }
     }
 
     // OP-Stack EL self-sync: same shape, one lane up. The verifier (OpBlockVerifier) builds
-    // its own serial scheduler + OpstackExecutor internally, so the driver needs only the
+    // its own OpScheduler + OpEthExecutor internally, so the driver needs only the
     // shared ledger / block factory / global state storage / commit observer.
     if (nodeConfig->opStackELModeEnabled())
     {
@@ -251,13 +283,13 @@ void AirNodeInitializer::validateEthereumELParams(
         };
         if (normalise(*_params.ethereumBootnodesFile) != normalise(configured))
         {
-            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "command-line --bootnodes '" +
-                                      *_params.ethereumBootnodesFile +
-                                      "' differs from [ethereum].bootnodes_file='" + configured +
-                                      "' in " + _params.configFilePath +
-                                      "; the config file is the source of truth — align them "
-                                      "or drop --bootnodes"));
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                    "command-line --bootnodes '" + *_params.ethereumBootnodesFile +
+                    "' differs from [ethereum].bootnodes_file='" + configured + "' in " +
+                    _params.configFilePath +
+                    "; the config file is the source of truth — align them "
+                    "or drop --bootnodes"));
         }
     }
 }

@@ -32,14 +32,12 @@ struct MockEngineService
 {
     std::vector<std::string> m_capabilities;
     ForkchoiceUpdatedResult m_forkchoiceResult{
-        .payloadStatus = PayloadStatus{
-            .latestValidHash = std::nullopt,
+        .payloadStatus = PayloadStatus{.latestValidHash = std::nullopt,
             .validationError = std::nullopt,
             .status = PayloadValidationStatus::Valid},
         .payloadId = std::nullopt};
     GetPayloadResult m_getPayloadResult = std::make_unique<GetPayloadData>();
-    PayloadStatus m_payloadStatus{
-        .latestValidHash = std::nullopt,
+    PayloadStatus m_payloadStatus{.latestValidHash = std::nullopt,
         .validationError = std::nullopt,
         .status = PayloadValidationStatus::Valid};
     std::optional<BlockNumber> m_safeBlockNumber{42};
@@ -121,8 +119,7 @@ struct NonCopyableEngineService
         const ForkchoiceState&, const PayloadAttributes*, std::uint32_t)
     {
         co_return ForkchoiceUpdatedResult{
-            .payloadStatus = PayloadStatus{
-                .latestValidHash = std::nullopt,
+            .payloadStatus = PayloadStatus{.latestValidHash = std::nullopt,
                 .validationError = std::nullopt,
                 .status = PayloadValidationStatus::Valid},
             .payloadId = std::nullopt};
@@ -135,8 +132,7 @@ struct NonCopyableEngineService
 
     task::Task<PayloadStatus> newPayload(const NewPayloadRequest&, std::uint32_t)
     {
-        co_return PayloadStatus{
-            .latestValidHash = std::nullopt,
+        co_return PayloadStatus{.latestValidHash = std::nullopt,
             .validationError = std::nullopt,
             .status = PayloadValidationStatus::Valid};
     }

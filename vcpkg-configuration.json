@@ -21,6 +21,7 @@
     "./ports/evmone",
     "./ports/intx",
     "./ports/blst",
+    "./ports/c-kzg-4844",
     "./ports/ittapi",
     "./ports/group-sig",
     "./ports/paillier",

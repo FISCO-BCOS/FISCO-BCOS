@@ -4,23 +4,25 @@ How to stand up a single FISCO-BCOS node in OP-Stack L2 mode, what changes
 versus the default `pbft` mode, the error strings you hit if the genesis is
 wrong, and the upgrade paths.
 
-L2 mode is signalled by one genesis feature flag — `feature_l2_ethereum_compat`
-in the `[features]` section. There is no `chain_mode` key; the flag and the
-`[alloc.*]` sections must agree (`bcos-tool/bcos-tool/NodeConfig.cpp:299`).
+L2 mode is signalled by the genesis executor version — `version = 3` (or higher)
+in the `[executor]` section of `config.genesis`, together with
+`[ethereum] mode = opstack-el`. There is no `chain_mode` key and no feature
+flag; the executor version and the `[alloc.*]` sections must agree
+(`NodeConfig::validateL2Invariants` in `bcos-tool/bcos-tool/NodeConfig.cpp`).
 
 This is node-bring-up only. The op-node / sequencer wiring and the L1 bridge
 are A8-workstream concerns and are not covered here.
 
 ## Smallest failing scenario this prevents
 
-You enable `feature_l2_ethereum_compat` in `config.genesis` but leave the
+You set `executor.version = 3` in `config.genesis` but leave the
 `[alloc.*]` sections out. The node refuses to start:
 
 ```
-feature_l2_ethereum_compat requires a non-empty [alloc.*] section in config.genesis
+executor.version >= 2 (the Ethereum lane) requires a non-empty [alloc.*] section in config.genesis
 ```
 
-(`NodeConfig.cpp:309`.) L2 mode has no contracts unless genesis allocs
+(`NodeConfig::validateL2Invariants`.) L2 mode has no contracts unless genesis allocs
 materialize them — predeploy constructors never run on-chain, so all runtime
 bytecode and storage must be written directly into genesis state. The quick
 start below produces those allocs.
@@ -84,11 +86,15 @@ is immutable: there is no fixing it post-launch.
 
 ### 3. Assemble `config.genesis`
 
-Enable the feature under `[features]` and append the generated `allocs.ini`:
+Declare the OP lane via the executor version and EL mode, then append the
+generated `allocs.ini`:
 
 ```ini
-[features]
-    feature_l2_ethereum_compat=1
+[executor]
+    version = 3
+
+[ethereum]
+    mode = opstack-el
 
 [chain]
     sm_crypto = false
@@ -106,9 +112,10 @@ Enable the feature under `[features]` and append the generated `allocs.ini`:
 ; ... 12 more predeploys ...
 ```
 
-The `[features]` value is parsed as a bool (`NodeConfig.cpp:1572`), so `=1`
-enables the flag from block 0. Absent the flag, any `[alloc.*]` section is
-rejected (`NodeConfig.cpp:315`).
+`executor.version >= 3` is the OP lane (an OP-Stack L2); `= 2` is the plain
+Ethereum lane (L1 EL). The lane is fixed at genesis — there is no runtime
+switch. With `executor.version < 2`, any `[alloc.*]` section is rejected
+(`NodeConfig::validateL2Invariants`).
 
 ### 4. Start the node
 
@@ -142,7 +149,7 @@ running devnet.
 
 ## L2 mode vs pbft mode
 
-| Aspect | `pbft` (default) | L2 (`feature_l2_ethereum_compat`) |
+| Aspect | `pbft` (default) | L2 (`executor.version >= 3`, `mode=opstack-el`) |
 |--------|------------------|-----------------------------------|
 | `[alloc.*]` genesis allocs | rejected | required (non-empty) |
 | Predeploys at block 0 | none | 13 (2 self-written + 11 pinned OP fork) |
@@ -162,16 +169,32 @@ Exact strings:
 
 | Error string (verbatim) | Cause | Source |
 |-------------------------|-------|--------|
-| `feature_l2_ethereum_compat requires a non-empty [alloc.*] section in config.genesis` | flag on, no allocs | `NodeConfig.cpp:309` |
-| `[alloc.*] section requires feature_l2_ethereum_compat enabled in [features]` | allocs present, flag off | `NodeConfig.cpp:315` |
-| `feature_l2_ethereum_compat requires the EVM executor; is_wasm=true is not supported` | flag on with `is_wasm = true` | `NodeConfig.cpp:325` |
+| `executor.version >= 2 (the Ethereum lane) requires a non-empty [alloc.*] section in config.genesis` | Ethereum lane on (`executor.version >= 2`), no allocs | `NodeConfig::validateL2Invariants` |
+| `[alloc.*] section requires executor.version >= 2 (the Ethereum lane) in config.genesis` | allocs present, `executor.version < 2` | `NodeConfig::validateL2Invariants` |
+| `executor.version >= 2 (the Ethereum lane) requires an [eth_genesis_header] section in config.genesis (all 22 fields from the merged genesis artifact); ...` | Ethereum lane on, no `[eth_genesis_header]` section | `NodeConfig::validateL2Invariants` |
+| `[eth_genesis_header] section requires executor.version >= 2 (the Ethereum lane) in config.genesis` | `[eth_genesis_header]` present on a consortium (`executor.version < 2`) genesis | `NodeConfig::validateL2Invariants` |
+| `executor.is_wasm=true is not supported: WASM support was removed in FISCO-BCOS 3.18; use the EVM executor (set is_wasm=false)` | `is_wasm = true` (any lane; WASM removed in 3.18) | `NodeConfig::loadExecutorConfig` |
 | `[alloc.N].address duplicate: <addr>` | two alloc entries share an address | `NodeConfig.cpp:239` |
 | `[alloc.N].nonce must fit in uint64: <v>` | alloc `nonce` exceeds `uint64` (RLP-encoded as a uint64 in the state root) | `NodeConfig.cpp:260` |
 | `[alloc.N] malformed: <detail>` | malformed alloc hex (bad length / not 0x-prefixed / odd nibble count) | `NodeConfig.cpp:287` |
 | `genesis allocs changed since first init (op-geth state root mismatch); refuse to start. stored=<h> computed=<h>` | allocs edited after first init | `Ledger.cpp:1930` |
+| `L2 genesis allocs must carry the SystemConfig feature_flags Entry slot ...` | the alloc JSON has no `feature_flags` storage slot on the SystemConfig account | `Ledger.cpp` `verifyL2FeatureFlagsSlot` |
+| `SystemConfig feature_flags slot in the genesis allocs does not match this node's genesis feature set (Features::toFlagsNumber()): alloc=0x... expected=0x...` | the alloc's `feature_flags` value disagrees with the binary's feature set — see the bit-57 note below | `Ledger.cpp` `verifyL2FeatureFlagsSlot` |
 | `L2ConfigLoader: SystemConfig key '<k>' is not set (slot empty); ...` | a config key was never seeded into SystemConfig storage | `L2ConfigLoader.h:268` |
 | `L2ConfigLoader: chain_id == 0 breaks EIP-155 replay protection` | `chain_id` slot seeded as 0 | `L2ConfigLoader.h:301` |
 | `L2ConfigLoader: slot value must be <N> bytes, got <n>` | SystemConfig slot value has the wrong width (layout drift) | `L2ConfigLoader.h:145` |
+
+### Bit 57: `feature_l2_ethereum_compat` allocs from the 3.18 dev line
+
+The `feature_l2_ethereum_compat` flag (bit 57 of the packed `feature_flags`
+value) was introduced on the 3.18 development line and removed before any
+release shipped it; lanes are now expressed by `executor.version` alone. An
+alloc JSON generated while that flag existed carries bit 57 set and fails the
+slot check above on current binaries (`expected=0x...` never has bit 57).
+Regenerate the allocs with the current `build-allocs.py` — this moves the
+genesis `stateRoot` and therefore the genesis hash and `rollup.json`, so the
+old chain cannot be continued; treat it as a new genesis. Chains initialized
+before the flag existed are unaffected.
 
 ## Immutability
 
@@ -197,7 +220,8 @@ editing a frozen field means the node is now pointed at a different chain.
 
 | Change | Path |
 |--------|------|
-| Enable/disable `feature_l2_ethereum_compat` | changes the genesis feature set (extraData) and allocs; immutable after first init — start a **new chain** |
+| Enable/disable L2 mode (`executor.version >= 3` + `[ethereum] mode=opstack-el`) | the executor version and allocs are pinned by genesis; immutable after first init — start a **new chain** |
+| Move an existing consortium chain (`executor_version` 0/1) onto the Ethereum/OP lane by governance | **not possible**: at compatibility >= 3.18 `SystemConfigPrecompiled` refuses `executor_version` writes of 2 or above in both directions — lane membership is a genesis property (a mid-chain flip would mix two state-transition rules on one chain). Below compatibility 3.18 only 0/1 are writable. Start a **new chain** |
 | Add / change a predeploy (different allocs) | allocs are pinned by the genesis `stateRoot`; start a **new chain** |
 | Bump the pinned OP fork to a new tag | edit `op-fork-pin.toml` — see `runbook-op-fork-upgrade.md` |
 | Phase B governance handover (DAO switch) | runtime `transferOwnership` txs, not a genesis change: `Ownable.owner` of SystemConfig / L2ValidatorSet (config + validator authority) and/or `ProxyAdmin` ownership (upgrade authority) — two independent roles, hand over each deliberately |

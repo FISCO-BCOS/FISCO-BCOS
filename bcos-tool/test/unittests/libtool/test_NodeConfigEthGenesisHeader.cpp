@@ -55,7 +55,18 @@ constexpr auto kEthBase =
     "[tx]\ngas_limit=300000000\n"
     "[executor]\nis_auth_check=1\nauth_admin_account=0x0\n";
 
-constexpr auto kEthFeatureL2 = "[features]\nfeature_l2_ethereum_compat=1\n";
+// Ethereum-lane base: executor.version=2 signals the lane (there is no feature
+// flag anymore). compatibility_version must be >= 3.18.0 (below it the EVM
+// revision cannot be persisted on-chain) and a v2 chain must pin an explicit
+// executor.evm_revision.
+constexpr auto kEthLaneBase =
+    "[chain]\nsm_crypto=0\nchain_id=1\ngroup_id=g\n"
+    "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+    "node.0=0102030405060708090a0b0c0d0e0f1011121314:1\n"
+    "[version]\ncompatibility_version=3.18.0\n"
+    "[tx]\ngas_limit=300000000\n"
+    "[executor]\nis_auth_check=1\nauth_admin_account=0x0\n"
+    "version=2\nevm_revision=cancun\n";
 
 constexpr auto kEthAlloc0 =
     "[alloc.0]\naddress=0x43000000000000000000000000000000000000C0\n"
@@ -109,9 +120,9 @@ std::string ethHeaderSection(std::string const& skipKey = {})
     return section;
 }
 
-std::string l2EthConfig(std::string const& ethSection)
+std::string ethLaneConfig(std::string const& ethSection)
 {
-    return std::string(kEthBase) + kEthFeatureL2 + kEthAlloc0 + ethSection;
+    return std::string(kEthLaneBase) + kEthAlloc0 + ethSection;
 }
 }  // namespace
 
@@ -120,7 +131,7 @@ BOOST_AUTO_TEST_SUITE(NodeConfigEthGenesisHeaderTest)
 BOOST_AUTO_TEST_CASE(AllFieldsParsed)
 {
     auto cfg = makeEthNodeConfig();
-    cfg->loadGenesisConfig(parseEthIni(l2EthConfig(ethHeaderSection())));
+    cfg->loadGenesisConfig(parseEthIni(ethLaneConfig(ethHeaderSection())));
     auto const& header = cfg->genesisConfig().m_ethGenesisHeader;
     BOOST_REQUIRE(header.has_value());
 
@@ -180,7 +191,7 @@ BOOST_AUTO_TEST_CASE(EachMissingRequiredFieldFailsFast)
         }
         auto cfg = makeEthNodeConfig();
         BOOST_CHECK_EXCEPTION(
-            cfg->loadGenesisConfig(parseEthIni(l2EthConfig(ethHeaderSection(key)))),
+            cfg->loadGenesisConfig(parseEthIni(ethLaneConfig(ethHeaderSection(key)))),
             bcos::tool::InvalidConfig, [](auto const& e) {
                 return bcos::test::errinfoContains(e, "is required (all 22 eth genesis header");
             });
@@ -207,7 +218,7 @@ BOOST_AUTO_TEST_CASE(OptionalFieldsMayBeOmitted)
             continue;
         }
         auto cfg = makeEthNodeConfig();
-        cfg->loadGenesisConfig(parseEthIni(l2EthConfig(ethHeaderSection(key))));
+        cfg->loadGenesisConfig(parseEthIni(ethLaneConfig(ethHeaderSection(key))));
         auto const& header = cfg->genesisConfig().m_ethGenesisHeader;
         BOOST_REQUIRE(header.has_value());
         if (key == "base_fee_per_gas")
@@ -237,26 +248,26 @@ BOOST_AUTO_TEST_CASE(OptionalFieldsMayBeOmitted)
     }
 }
 
-BOOST_AUTO_TEST_CASE(L2WithoutSectionRejected)
+BOOST_AUTO_TEST_CASE(EthLaneWithoutSectionRejected)
 {
-    // The section and the L2 feature are bound both ways: an L2 chain
-    // without [eth_genesis_header] would mint a Tars-hashed B0 no
-    // op-node/op-reth could match, so it fails fast.
+    // The section and the Ethereum lane are bound both ways: an Ethereum-lane
+    // chain (executor.version >= 2) without [eth_genesis_header] would mint a
+    // Tars-hashed B0 no op-node/op-reth could match, so it fails fast.
     auto cfg = makeEthNodeConfig();
     BOOST_CHECK_EXCEPTION(
-        cfg->loadGenesisConfig(parseEthIni(std::string(kEthBase) + kEthFeatureL2 + kEthAlloc0)),
+        cfg->loadGenesisConfig(parseEthIni(std::string(kEthLaneBase) + kEthAlloc0)),
         bcos::tool::InvalidConfig, [](auto const& e) {
             return bcos::test::errinfoContains(e, "requires an [eth_genesis_header] section");
         });
 }
 
-BOOST_AUTO_TEST_CASE(SectionWithoutL2FeatureRejected)
+BOOST_AUTO_TEST_CASE(SectionWithoutEthLaneRejected)
 {
     auto cfg = makeEthNodeConfig();
     BOOST_CHECK_EXCEPTION(
         cfg->loadGenesisConfig(parseEthIni(std::string(kEthBase) + ethHeaderSection())),
         bcos::tool::InvalidConfig, [](auto const& e) {
-            return bcos::test::errinfoContains(e, "section requires feature_l2_ethereum_compat");
+            return bcos::test::errinfoContains(e, "section requires executor.version >= 2");
         });
 }
 
@@ -265,7 +276,7 @@ BOOST_AUTO_TEST_CASE(NonZeroNumberRejected)
     auto section = ethHeaderSection();
     boost::replace_first(section, "number=0x0\n", "number=0x1\n");
     auto cfg = makeEthNodeConfig();
-    BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseEthIni(l2EthConfig(section))),  //
+    BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseEthIni(ethLaneConfig(section))),  //
         bcos::tool::InvalidConfig, [](auto const& e) {
             return bcos::test::errinfoContains(e, "[eth_genesis_header].number must be 0x0");
         });
@@ -279,7 +290,7 @@ BOOST_AUTO_TEST_CASE(EmptyExtraDataAccepted)
     boost::replace_first(
         section, "extra_data=0x01000000fa000000060000000000000000\n", "extra_data=0x\n");
     auto cfg = makeEthNodeConfig();
-    cfg->loadGenesisConfig(parseEthIni(l2EthConfig(section)));
+    cfg->loadGenesisConfig(parseEthIni(ethLaneConfig(section)));
     auto const& header = cfg->genesisConfig().m_ethGenesisHeader;
     BOOST_REQUIRE(header.has_value());
     BOOST_CHECK(header->m_extraData.empty());
@@ -288,7 +299,7 @@ BOOST_AUTO_TEST_CASE(EmptyExtraDataAccepted)
     auto badQuantity = ethHeaderSection();
     boost::replace_first(badQuantity, "gas_limit=0x1c9c380\n", "gas_limit=0x\n");
     auto cfg2 = makeEthNodeConfig();
-    BOOST_CHECK_EXCEPTION(cfg2->loadGenesisConfig(parseEthIni(l2EthConfig(badQuantity))),  //
+    BOOST_CHECK_EXCEPTION(cfg2->loadGenesisConfig(parseEthIni(ethLaneConfig(badQuantity))),  //
         bcos::tool::InvalidConfig, [](auto const& e) {
             return bcos::test::errinfoContains(e, ".gas_limit is not valid hex");
         });
@@ -301,7 +312,7 @@ BOOST_AUTO_TEST_CASE(BadWidthRejected)
     boost::replace_first(section, std::string(kEthEmptyTrieRoot),
         "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b4");
     auto cfg = makeEthNodeConfig();
-    BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseEthIni(l2EthConfig(section))),  //
+    BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseEthIni(ethLaneConfig(section))),  //
         bcos::tool::InvalidConfig, [](auto const& e) {
             return bcos::test::errinfoContains(e, ".state_root must be 64 hex chars");
         });
@@ -310,7 +321,7 @@ BOOST_AUTO_TEST_CASE(BadWidthRejected)
     auto shortNonce = ethHeaderSection();
     boost::replace_first(shortNonce, "nonce=0x0000000000000000\n", "nonce=0x00000000000000\n");
     auto cfg2 = makeEthNodeConfig();
-    BOOST_CHECK_EXCEPTION(cfg2->loadGenesisConfig(parseEthIni(l2EthConfig(shortNonce))),  //
+    BOOST_CHECK_EXCEPTION(cfg2->loadGenesisConfig(parseEthIni(ethLaneConfig(shortNonce))),  //
         bcos::tool::InvalidConfig, [](auto const& e) {
             return bcos::test::errinfoContains(e, ".nonce must be 16 hex chars");
         });
@@ -322,7 +333,7 @@ BOOST_AUTO_TEST_CASE(GenesisDataCoversEthHeader)
     // in one header field must produce different genesisData strings, and a
     // config without the section must not mention it at all.
     auto cfg = makeEthNodeConfig();
-    cfg->loadGenesisConfig(parseEthIni(l2EthConfig(ethHeaderSection())));
+    cfg->loadGenesisConfig(parseEthIni(ethLaneConfig(ethHeaderSection())));
     bcos::ledger::LedgerConfig emptyLedgerConfig;
     auto withHeader = generateGenesisData(cfg->genesisConfig(), emptyLedgerConfig);
     BOOST_CHECK(withHeader.find("[ethGenesisHeader]") != std::string::npos);
@@ -332,11 +343,11 @@ BOOST_AUTO_TEST_CASE(GenesisDataCoversEthHeader)
     auto tampered = ethHeaderSection();
     boost::replace_first(tampered, "gas_limit=0x1c9c380\n", "gas_limit=0x1c9c381\n");
     auto cfg2 = makeEthNodeConfig();
-    cfg2->loadGenesisConfig(parseEthIni(l2EthConfig(tampered)));
+    cfg2->loadGenesisConfig(parseEthIni(ethLaneConfig(tampered)));
     BOOST_CHECK(withHeader != generateGenesisData(cfg2->genesisConfig(), emptyLedgerConfig));
 
-    // A non-L2 chain (no feature, no allocs, no section) must not mention
-    // the section in its genesis pin at all.
+    // A legacy-lane chain (executor.version unset, no allocs, no section) must not
+    // mention the section in its genesis pin at all.
     auto cfg3 = makeEthNodeConfig();
     cfg3->loadGenesisConfig(parseEthIni(std::string(kEthBase)));
     auto withoutHeader = generateGenesisData(cfg3->genesisConfig(), emptyLedgerConfig);

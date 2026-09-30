@@ -85,8 +85,7 @@ public:
         co_return remoteCapabilities;
     }
     task::Task<bcos::engine::ForkchoiceUpdatedResult> updateForkchoice(
-        const bcos::engine::ForkchoiceState&, const bcos::engine::PayloadAttributes*,
-        std::uint32_t)
+        const bcos::engine::ForkchoiceState&, const bcos::engine::PayloadAttributes*, std::uint32_t)
     {
         co_return bcos::engine::ForkchoiceUpdatedResult{};
     }
@@ -101,10 +100,7 @@ public:
         co_return bcos::engine::PayloadStatus{};
     }
     std::optional<protocol::BlockNumber> getSafeBlockNumber() const { return std::nullopt; }
-    std::optional<protocol::BlockNumber> getFinalizedBlockNumber() const
-    {
-        return std::nullopt;
-    }
+    std::optional<protocol::BlockNumber> getFinalizedBlockNumber() const { return std::nullopt; }
     std::optional<protocol::BlockNumber> getHeadBlockNumber() const { return std::nullopt; }
 };
 
@@ -129,9 +125,9 @@ public:
 
     Web3JsonRpcImpl::Ptr buildWeb3RpcWithEngine(
         std::shared_ptr<bcos::scheduler::SchedulerInterface> sched,
-        std::shared_ptr<bcos::engine::AnyEngineService> engine,
-        protocol::BlockNumber safeDepth = 0, protocol::BlockNumber finalizedDepth = 0,
-        std::int64_t mptPruneWindow = -1, bool withMptReader = true)
+        std::shared_ptr<bcos::engine::AnyEngineService> engine, protocol::BlockNumber safeDepth = 0,
+        protocol::BlockNumber finalizedDepth = 0, std::int64_t mptPruneWindow = -1,
+        bool withMptReader = true)
     {
         auto service = std::make_shared<rpc::NodeService>(m_ledger, std::move(sched), txPool,
             nullptr, nullptr, m_blockFactory, std::move(engine));
@@ -171,8 +167,9 @@ public:
                 R"({"jsonrpc":"2.0","id":1,"method":"eth_call","params":[{"to":"0x1234567890123456789012345678901234567890","data":"0x"},)") +
             std::string(blockTag) + "]}";
         std::promise<bcos::bytes> promise;
-        web3->onRPCRequest(
-            payload, [&promise](bcos::bytes resp, boost::beast::http::status) { promise.set_value(std::move(resp)); });
+        web3->onRPCRequest(payload, [&promise](bcos::bytes resp, boost::beast::http::status) {
+            promise.set_value(std::move(resp));
+        });
         auto jsonBytes = promise.get_future().get();
         Json::Value value;
         Json::Reader reader;
@@ -186,14 +183,12 @@ public:
         Web3JsonRpcImpl::Ptr const& web3, std::string_view blockTag)
     {
         auto payload =
-            std::string(
-                R"({"jsonrpc":"2.0","id":1,"method":"eth_getBlockByNumber","params":[)") +
+            std::string(R"({"jsonrpc":"2.0","id":1,"method":"eth_getBlockByNumber","params":[)") +
             std::string(blockTag) + ",false]}";
         std::promise<bcos::bytes> promise;
-        web3->onRPCRequest(payload,
-            [&promise](bcos::bytes resp, boost::beast::http::status) {
-                promise.set_value(std::move(resp));
-            });
+        web3->onRPCRequest(payload, [&promise](bcos::bytes resp, boost::beast::http::status) {
+            promise.set_value(std::move(resp));
+        });
         auto jsonBytes = promise.get_future().get();
         Json::Value value;
         Json::Reader reader;
@@ -316,8 +311,8 @@ BOOST_AUTO_TEST_CASE(historicalCallBeyondPruneWindowAnswers32004)
     BOOST_CHECK_EQUAL(respInWindow["error"]["code"].asInt(), -32004);
     BOOST_CHECK(respInWindow["error"]["message"].asString().find(
                     "Block stateRoot not in MPT node storage") != std::string::npos);
-    BOOST_CHECK(respInWindow["error"]["message"].asString().find("State pruned") ==
-                std::string::npos);
+    BOOST_CHECK(
+        respInWindow["error"]["message"].asString().find("State pruned") == std::string::npos);
 }
 
 // Only MPTStateUnavailable is remapped: any other scheduler error (here InvalidStatus, the
@@ -357,8 +352,8 @@ BOOST_AUTO_TEST_CASE(historicalCallWithoutMptReaderStillReachesScheduler)
 // callAtBlock forwarding keeps it working.
 BOOST_AUTO_TEST_CASE(historicalCallWithoutMptReaderKeepsLegacySchedulerWorking)
 {
-    auto web3 = buildWeb3Rpc(std::make_shared<FakeScheduler2>(m_ledger, m_blockFactory), 0, 0,
-        -1, /*withMptReader=*/false);
+    auto web3 = buildWeb3Rpc(std::make_shared<FakeScheduler2>(m_ledger, m_blockFactory), 0, 0, -1,
+        /*withMptReader=*/false);
 
     auto resp = request(web3, R"("0x1")");
     BOOST_CHECK(resp.isMember("result"));
@@ -404,8 +399,8 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByTagDirect)
         BOOST_CHECK(!isLatest);
         // 0x8000000000000000 = 2^63 > INT64_MAX: would wrap to a negative height if
         // unchecked.
-        BOOST_CHECK_THROW(getBlockNumberByTag(latest, "0x8000000000000000", 0, 0),
-            bcos::rpc::JsonRpcException);
+        BOOST_CHECK_THROW(
+            getBlockNumberByTag(latest, "0x8000000000000000", 0, 0), bcos::rpc::JsonRpcException);
         // > UINT64_MAX: fromQuantity rejects it too.
         BOOST_CHECK_THROW(getBlockNumberByTag(latest, "0xffffffffffffffffffff", 0, 0),
             bcos::rpc::JsonRpcException);
@@ -451,8 +446,8 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByTagForkchoiceOverride)
         BOOST_CHECK_THROW(getBlockNumberByTag(latest, "safe", 0, 0, std::nullopt, std::nullopt,
                               /*failClosedOnMissingForkchoice=*/true),
             bcos::rpc::JsonRpcException);
-        BOOST_CHECK_THROW(getBlockNumberByTag(latest, "finalized", 0, 0, std::nullopt,
-                              std::nullopt, /*failClosedOnMissingForkchoice=*/true),
+        BOOST_CHECK_THROW(getBlockNumberByTag(latest, "finalized", 0, 0, std::nullopt, std::nullopt,
+                              /*failClosedOnMissingForkchoice=*/true),
             bcos::rpc::JsonRpcException);
     }
     // PBFT lane (failClosed=false), no forkchoice value: depth fallback still applies.

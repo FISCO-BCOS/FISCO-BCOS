@@ -14,25 +14,22 @@
  *  limitations under the License.
  *
  * @file MPTFeatureGates.h
- * @brief The feature-flag gates deciding whether a block commits an Ethereum MPT state root
- *        (shouldBuildMPT) plus the L2 activation-block boot guard (validateMPTFlagMatrix).
- *        Moved here from transaction-scheduler/BaselineSchedulerMPTHelpers.h so every
- *        state-root producer (BaselineScheduler, EngineServiceImpl) applies the SAME
- *        transition rule; the old header remains as a namespace-alias shim. The
- *        account-table encoding is node-local (nodeAddressTableMode) and plays no role in
- *        these gates — the MPT delta scan classifies both account-table layouts.
+ * @brief The gate deciding whether a block commits an Ethereum MPT state root
+ *        (shouldBuildMPT). Moved here from
+ *        transaction-scheduler/BaselineSchedulerMPTHelpers.h so every state-root producer
+ *        (BaselineScheduler, EngineServiceImpl) applies the SAME transition rule; the old
+ *        header remains as a namespace-alias shim. The account-table encoding is node-local
+ *        (nodeAddressTableMode) and plays no role in these gates — the MPT delta scan
+ *        classifies both account-table layouts.
  */
 #pragma once
 
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
-#include <bcos-utilities/Exceptions.h>
-#include <boost/throw_exception.hpp>
 
 namespace bcos::ledger::mpt
 {
-
-DERIVE_BCOS_EXCEPTION(InvalidMPTFlagMatrix);
 
 // Decide whether block @p blockNumber commits with an Ethereum MPT state root instead of
 // the legacy XOR root (spec 5.6 / 5.10). The execute path (coExecuteBlock) consults it once
@@ -42,14 +39,18 @@ DERIVE_BCOS_EXCEPTION(InvalidMPTFlagMatrix);
 // it is a node-local physical layout (nodeAddressTableMode), and the MPT delta scan
 // classifies both the 40-hex and the 20-byte raw-address account table layouts
 // (Classify.h parseAccountTable), so the encoding and the MPT state root combine freely.
-inline bool shouldBuildMPT(
-    bcos::ledger::Features const& features, bcos::protocol::BlockNumber blockNumber)
+//
+// @param executorVersion  the chain's executor_version (genesis-fixed; governance writes
+//                         crossing ETHEREUM_EXECUTOR_VERSION are refused). The Ethereum lane
+//                         (>= 2) builds the MPT from genesis on ("scenario B").
+inline bool shouldBuildMPT(int64_t executorVersion, bcos::ledger::Features const& features,
+    bcos::protocol::BlockNumber blockNumber)
 {
     bool buildMPT = false;
-    // Scenario B: L2 Ethereum-compat chains build the MPT from genesis on. Checked FIRST:
-    // at block 0 feature_mpt_state_root is not yet active, so consulting scenario A first
-    // would send an L2 chain down the XOR path.
-    if (features.get(ledger::Features::Flag::feature_l2_ethereum_compat))
+    // Scenario B: Ethereum-lane chains (executor_version >= 2) build the MPT from genesis on.
+    // Checked FIRST: at block 0 feature_mpt_state_root is not yet active, so consulting
+    // scenario A first would send an Ethereum-lane chain down the XOR path.
+    if (executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION)
     {
         buildMPT = true;
     }
@@ -63,48 +64,8 @@ inline bool shouldBuildMPT(
             features.activationBlockOf(ledger::Features::Flag::feature_mpt_state_root);
         buildMPT = activationBlock >= 0 && blockNumber > activationBlock;
     }
-    // Neither flag: legacy XOR state root (buildMPT stays false).
+    // Neither: legacy XOR state root (buildMPT stays false).
     return buildMPT;
-}
-
-// Startup-time guard for the flag matrix shouldBuildMPT relies on (spec 5.10, M7.3).
-//
-// Scenario B has no transition rule: shouldBuildMPT returns true for EVERY block once
-// feature_l2_ethereum_compat is set, because the flag is assumed enabled at genesis
-// (activation block 0) — the chain never has XOR history to transition from. A mid-chain
-// enable would silently flip the state-root scheme with no boundary, forking any node
-// that replays the pre-flag blocks. Refuse to start instead.
-//
-// Call this with a Features loaded via readFromStorage so activation blocks are
-// populated; a bare set() leaves activationBlockOf at -1, which this guard rejects for
-// the same reason (an unverifiable activation must not pass a consistency check).
-//
-// The account-table encoding plays no role here: it is a node-local physical layout
-// (nodeAddressTableMode), and the deprecated feature_raw_address flag drives nothing
-// (Features::validate accepts it with a warning; the recorded row is an inert no-op).
-// Every lane except the legacy v0 lane is mode-aware (the Eth/OP lanes derive names
-// through account::ethLaneAccountTableName), so the encoding needs no flag matrix.
-//
-// @throws InvalidMPTFlagMatrix when feature_l2_ethereum_compat is set with a non-zero (or
-//         unknown) activation block. A features object without the L2 flag always passes.
-inline void validateMPTFlagMatrix(bcos::ledger::Features const& features)
-{
-    using Flag = bcos::ledger::Features::Flag;
-    if (!features.get(Flag::feature_l2_ethereum_compat))
-    {
-        return;
-    }
-    auto activationBlock = features.activationBlockOf(Flag::feature_l2_ethereum_compat);
-    if (activationBlock != 0)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidMPTFlagMatrix{} << bcos::errinfo_comment(
-                "feature_l2_ethereum_compat must be enabled at genesis (activation block 0), "
-                "but its activation block is " +
-                std::to_string(activationBlock) +
-                "; enabling it mid-chain would switch the state-root scheme with no "
-                "transition rule (spec 5.10 scenario B)"));
-    }
 }
 
 }  // namespace bcos::ledger::mpt

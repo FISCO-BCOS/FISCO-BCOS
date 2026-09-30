@@ -100,8 +100,7 @@ public:
 
     /// Construct in-place from constructor arguments (for non-movable types).
     template <class T, class... Args>
-        requires EngineServiceConcept<T> &&
-                 std::is_constructible_v<T, Args...>
+        requires EngineServiceConcept<T> && std::is_constructible_v<T, Args...>
     explicit AnyEngineService(std::in_place_type_t<T>, Args&&... args)
       : m_impl(pro::make_proxy<AnyEngineServiceFacade, T>(std::forward<Args>(args)...))
     {}

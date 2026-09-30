@@ -125,10 +125,10 @@ struct OpForkSchedule
 /// (consensus/misc/eip1559/eip1559.go CalcBaseFee), while the L1-attributes calldata layout
 /// and the Jovian payload attributes key on the CHILD's (op-node derive/l1_block_info.go,
 /// derive/attributes.go). Callers whose internal timestamps are milliseconds convert through
-/// opstack-executor/OpCommon.h's forkTimestampSec.
+/// opstack-executor/OpForkSpec.h's opForkTimestampSec.
 ///
-/// This is THE fork-activation parser: every component (bcos-evm configAt, the devp2p
-/// OpHeaderValidator, the engine service) must resolve forks through it — a second
+/// This is THE fork-activation parser: every component (opstack-executor's OpForkSpec, the
+/// devp2p OpHeaderValidator, the engine service) must resolve forks through it — a second
 /// per-field interpretation (UINT64_MAX = "inactive" instead of "implied") rejects
 /// headers the executor accepts, which is exactly the jovian-only-schedule boot-but-
 /// never-syncs failure this function exists to prevent. The EIP-2124 fork-id ladder

@@ -13,7 +13,8 @@ add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE
     . ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/opstack-executor/tests
-    ${CMAKE_SOURCE_DIR}/bcos-rpc)
+    ${CMAKE_SOURCE_DIR}/bcos-rpc
+    ${CMAKE_SOURCE_DIR}/bcos-devp2p)
 
 find_package(Boost REQUIRED unit_test_framework)
 find_package(jsoncpp CONFIG REQUIRED)
@@ -55,5 +56,7 @@ set_source_files_properties(
     "unittests/engine/EthEngineServiceMPTStateRootTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties(
     "unittests/engine/EthEngineServiceTransactionalTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_source_files_properties(
+    "unittests/engine/EthEngineL1BuildTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "" "")

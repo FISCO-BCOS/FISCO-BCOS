@@ -18,13 +18,14 @@
  *
  * An L2 block is verified by op-reth, which rebuilds every transaction from its EIP-2718
  * envelope. A tars BCOSTransaction has no envelope, so one inside a block makes the verifier
- * reject the whole block. feature_l2_ethereum_compat is what says a chain is such an L2.
+ * reject the whole block. executor_version (>= ETHEREUM_EXECUTOR_VERSION, the Ethereum lane) is
+ * what says a chain is such an L2.
  *
- * Runs on the shared AdmissionHarness, with one line turning the flag on.
+ * Runs on the shared AdmissionHarness, with one line setting the executor version.
  */
 
 #include "AdmissionHarness.h"
-#include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-tx-validator/CheckSet.h"
 #include "bcos-tx-validator/TxPoolNonceChecker.h"
 #include <boost/test/unit_test.hpp>
@@ -64,9 +65,7 @@ std::shared_ptr<bcostars::protocol::TransactionImpl> nativeTx(std::string nonce 
 /// through LedgerConfigState::set(), so a case may call this any time before run().
 void makeL2(AdmitHarness& harness)
 {
-    ledger::Features features;
-    features.set(ledger::Features::Flag::feature_l2_ethereum_compat);
-    harness.ledgerConfig->setFeatures(features);
+    harness.ledgerConfig->setExecutorVersion(ledger::OPSTACK_EXECUTOR_VERSION);
 }
 
 std::ptrdiff_t orderIndexOf(Check target)
@@ -77,8 +76,8 @@ std::ptrdiff_t orderIndexOf(Check target)
 
 BOOST_AUTO_TEST_SUITE(L2NativeTxGateTest)
 
-// The baseline. On an ordinary FISCO chain the flag is off and a native transaction is what the
-// chain is for.
+// The baseline. On an ordinary FISCO chain (executor_version 0, off the Ethereum lane) a native
+// transaction is what the chain is for.
 BOOST_AUTO_TEST_CASE(nativeTransactionIsAdmittedWhenTheChainIsNotAnL2)
 {
     AdmitHarness harness;
@@ -119,8 +118,8 @@ BOOST_AUTO_TEST_CASE(everyContextRefusesANativeTransactionOnAnL2Chain)
     }
 }
 
-// The bit belongs to TxKind::Bcos only: an L2 chain exists to carry Web3 transactions, so turning
-// the flag on must leave them exactly as they were.
+// The bit belongs to TxKind::Bcos only: an L2 chain exists to carry Web3 transactions, so putting
+// the chain on the Ethereum lane must leave them exactly as they were.
 BOOST_AUTO_TEST_CASE(web3TransactionIsUnaffectedByTheL2Gate)
 {
     AdmitHarness harness;

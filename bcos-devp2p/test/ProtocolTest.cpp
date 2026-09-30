@@ -423,4 +423,129 @@ BOOST_AUTO_TEST_CASE(disconnectRoundTrip)
     BOOST_CHECK(decoded->reason == rlpx::DisconnectReason::UselessPeer);
 }
 
+// ---------------------------------------------------------------------------
+// Transaction gossip codecs (eth/68)
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(transactionsRoundTrip)
+{
+    // A legacy tx (bare RLP list element) and two typed envelopes (0x02, and a
+    // 0x03 blob network wrapper — opaque to this codec, string-wrapped like any
+    // typed tx).
+    eth::TransactionsMessage msg;
+    bcos::bytes legacyLegacy{0xc6, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06};  // fake list, opaque
+    bcos::bytes dynamicFee{0x02, 0xc4, 0x01, 0x02, 0x03, 0x04};
+    bcos::bytes blobWrapper{0x03, 0xf8, 0x02, 0xc0, 0xc0};
+    msg.transactions = {legacyLegacy, dynamicFee, blobWrapper};
+
+    auto encoded = eth::encodeTransactions(msg);
+    // Legacy splices as-is (starts 0xc6); typed txs are string-wrapped: 0x02's
+    // 5-byte content carries the 0x85 string prefix.
+    BOOST_CHECK_EQUAL(encoded[1], 0xc6);
+    auto decoded = eth::decodeTransactions(ref(encoded));
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_REQUIRE_EQUAL(decoded->transactions.size(), 3u);
+    BOOST_CHECK(decoded->transactions[0] == legacyLegacy);
+    BOOST_CHECK(decoded->transactions[1] == dynamicFee);
+    BOOST_CHECK(decoded->transactions[2] == blobWrapper);
+}
+
+BOOST_AUTO_TEST_CASE(transactionsEmptyAndCap)
+{
+    eth::TransactionsMessage empty;
+    auto encoded = eth::encodeTransactions(empty);
+    BOOST_CHECK_EQUAL(toHex(encoded), "c0");
+    auto decoded = eth::decodeTransactions(ref(encoded));
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_CHECK(decoded->transactions.empty());
+
+    // Over the per-message cap the decoder refuses instead of unbounded growth:
+    // kMaxTxsPerMessage tiny one-byte legacy... use the smallest possible typed tx
+    // (0x01 || empty list payload) repeated.
+    eth::TransactionsMessage over;
+    over.transactions.assign(eth::kMaxTxsPerMessage + 1, bcos::bytes{0x01, 0xc0});
+    auto overEncoded = eth::encodeTransactions(over);
+    auto overDecoded = eth::decodeTransactions(ref(overEncoded));
+    BOOST_CHECK(!overDecoded.has_value());
+}
+
+BOOST_AUTO_TEST_CASE(newPooledTransactionHashesRoundTrip)
+{
+    // eth/68: [types, sizes, hashes] — three same-length fields.
+    eth::NewPooledTransactionHashesMessage msg;
+    msg.types = {0x00, 0x02, 0x03};
+    msg.sizes = {120, 21000, 131613};
+    msg.hashes = {h256("1111111111111111111111111111111111111111111111111111111111111111"),
+        h256("2222222222222222222222222222222222222222222222222222222222222222"),
+        h256("3333333333333333333333333333333333333333333333333333333333333333")};
+
+    auto encoded = eth::encodeNewPooledTransactionHashes(msg);
+    auto decoded = eth::decodeNewPooledTransactionHashes(ref(encoded));
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_CHECK(decoded->types == msg.types);
+    BOOST_CHECK(decoded->sizes == msg.sizes);
+    BOOST_CHECK(decoded->hashes == msg.hashes);
+
+    // Empty announcement is well-formed.
+    eth::NewPooledTransactionHashesMessage none;
+    auto noneEncoded = eth::encodeNewPooledTransactionHashes(none);
+    auto noneDecoded = eth::decodeNewPooledTransactionHashes(ref(noneEncoded));
+    BOOST_REQUIRE(noneDecoded.has_value());
+    BOOST_CHECK(noneDecoded->hashes.empty());
+}
+
+BOOST_AUTO_TEST_CASE(newPooledTransactionHashesCountMismatchRejected)
+{
+    // Hand-build [types(1), sizes(1), hashes(2)]: the eth/68 shape rule rejects it.
+    eth::NewPooledTransactionHashesMessage good;
+    good.types = {0x02};
+    good.sizes = {100};
+    good.hashes = {h256("0101010101010101010101010101010101010101010101010101010101010101"),
+        h256("0202020202020202020202020202020202020202020202020202020202020202")};
+    auto encoded = eth::encodeNewPooledTransactionHashes(good);
+    auto decoded = eth::decodeNewPooledTransactionHashes(ref(encoded));
+    BOOST_CHECK(!decoded.has_value());
+}
+
+BOOST_AUTO_TEST_CASE(getPooledTransactionsRoundTrip)
+{
+    // eth/66+ request-id form: [reqId, [hash, ...]] — same wire convention as
+    // GetBlockHeaders, never the pre-66 bare list.
+    eth::GetPooledTransactionsMessage msg;
+    msg.requestId = 0xdeadbeef;
+    msg.hashes = {h256("4444444444444444444444444444444444444444444444444444444444444444"),
+        h256("5555555555555555555555555555555555555555555555555555555555555555")};
+
+    auto encoded = eth::encodeGetPooledTransactions(msg);
+    // Golden: outer list (payload 73B) of [0x84deadbee f, inner list (payload 66B) of
+    // two 0xa0-prefixed hashes]. 0xdeadbeef is 4 significant bytes, no leading zero.
+    std::string expected = "f84984deadbeeff842a0";
+    expected += std::string(64, '4');
+    expected += "a0";
+    expected += std::string(64, '5');
+    BOOST_CHECK_EQUAL(toHex(encoded), expected);
+
+    auto decoded = eth::decodeGetPooledTransactions(ref(encoded));
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_CHECK_EQUAL(decoded->requestId, msg.requestId);
+    BOOST_CHECK(decoded->hashes == msg.hashes);
+}
+
+BOOST_AUTO_TEST_CASE(pooledTransactionsRoundTrip)
+{
+    eth::PooledTransactionsMessage msg;
+    msg.requestId = 7;
+    bcos::bytes typed{0x02, 0xc4, 0x01, 0x02, 0x03, 0x04};
+    bcos::bytes blobWrapper{0x03, 0xc1, 0xc0};
+    msg.transactions = {typed, blobWrapper};
+
+    auto encoded = eth::encodePooledTransactions(msg);
+    auto decoded = eth::decodePooledTransactions(ref(encoded));
+    BOOST_REQUIRE(decoded.has_value());
+    BOOST_CHECK_EQUAL(decoded->requestId, 7u);
+    BOOST_REQUIRE_EQUAL(decoded->transactions.size(), 2u);
+    BOOST_CHECK(decoded->transactions[0] == typed);
+    BOOST_CHECK(decoded->transactions[1] == blobWrapper);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

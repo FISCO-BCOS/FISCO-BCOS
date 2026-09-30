@@ -330,9 +330,8 @@ public:
         _callback(nullptr, block);
     }
 
-    void asyncGetBlockNumberByHash(
-        crypto::HashType const& _hash, std::function<void(Error::Ptr, BlockNumber)> _onGetBlock)
-        override
+    void asyncGetBlockNumberByHash(crypto::HashType const& _hash,
+        std::function<void(Error::Ptr, BlockNumber)> _onGetBlock) override
     {
         // Mirror Ledger::asyncGetBlockNumberByHash: a known hash answers its block number, an
         // unknown one answers GetStorageError WITHOUT a chained STDError (the "not found" shape

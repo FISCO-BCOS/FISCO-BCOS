@@ -338,8 +338,11 @@ EthBlockHeader::EthBlockHeader(const bcos::protocol::BlockHeader& _header)
     // going through validateHeader) is copied up to 256 bytes and the remainder stays zero —
     // this is a defensive default, not a silent guarantee of fidelity. validateHeader rejects
     // any bloom whose size != 256 on the hash path.
-    std::memcpy(
-        m_data.logsBloom.data(), bloom.data(), (std::min)(bloom.size(), m_data.logsBloom.size()));
+    if (!bloom.empty())
+    {
+        std::memcpy(m_data.logsBloom.data(), bloom.data(),
+            (std::min)(bloom.size(), m_data.logsBloom.size()));
+    }
 
     // Optional fork fields.
     if (_header.baseFee().has_value())

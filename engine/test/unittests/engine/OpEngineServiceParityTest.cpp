@@ -62,8 +62,8 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/Exceptions.h>
+#include <opstack-executor/OpEthL1Attributes.h>  // synthesize fixture: DepositTx / OP_ETH_* constants
 #include <opstack-executor/OpSchedulerSeam.h>
-#include <opstack-executor/tests/OpSchedulerSeamTestHelpers.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 
@@ -381,7 +381,7 @@ static DecodableWeb3Tx makeDecodableWeb3Tx(
     tx->markClean();
     tx->setImportTime(static_cast<int64_t>(nonce));
     // The build loop's culprit matching rests on this identity: the producer tags the
-    // culprit with keccak256(signed envelope) (OpBlockExecute) and the consumer matches it
+    // culprit with keccak256(signed envelope) (OpEthExecutor) and the consumer matches it
     // against the sealed carrier's hash() (OpEngineService.inl) — they must be the same
     // bytes, or every reject (capacity or not) falls through to -32603.
     BOOST_REQUIRE_EQUAL(
@@ -415,6 +415,30 @@ struct StubExecutor
 };
 
 using EngineOpSchedulerBase = bcos::evm::engine::OpSchedulerSeam<ViewType>;
+
+/// Fixture L1-attributes deposit (the retired OpSchedulerSeamTestHelpers.h's successor, on
+/// the new-layer encoder): Isthmus 176 zero bytes; Jovian selector + zeros to 178.
+bcos::bytes zeroL1AttributesEnvelope(bool jovianActive)
+{
+    namespace opeth = bcos::executor_v1::opstack;
+    bcos::bytes data(opeth::OP_ETH_ISTHMUS_L1_ATTRIBUTES_LEN, 0);
+    if (jovianActive)
+    {
+        data.resize(opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_LEN, 0);
+        std::copy(opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_SELECTOR.begin(),
+            opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_SELECTOR.end(), data.begin());
+    }
+    opeth::DepositTx deposit{.sourceHash = evmc::bytes32{},
+        .from = opeth::OP_DEPOSITOR,
+        .to = opeth::OP_L1_BLOCK,
+        .mint = std::nullopt,
+        .value = bcos::u256{0},
+        .gasLimit = 1'000'000,
+        .isSystemTx = false,
+        .data = std::move(data)};
+    return opeth::encodeOpEthDepositEnvelope(deposit);
+}
+
 /// Production seam synthesizes from L1BlockInfo. Fixtures keep the zero envelope.
 struct EngineOpScheduler : EngineOpSchedulerBase
 {
@@ -422,7 +446,7 @@ struct EngineOpScheduler : EngineOpSchedulerBase
     [[nodiscard]] bcos::bytes synthesizeL1AttributesEnvelope(
         int64_t l2InternalTimestampMs, int64_t parentInternalTimestampMs) const
     {
-        return bcos::evm::engine::testutil::synthesizeL1AttributesEnvelope(
+        return zeroL1AttributesEnvelope(
             isJovianActive(l2InternalTimestampMs) && isJovianActive(parentInternalTimestampMs));
     }
 };
@@ -1177,9 +1201,9 @@ BOOST_AUTO_TEST_CASE(op_da_skip_drops_higher_nonce_regardless_of_seal_order)
     auto n1Raw = bcostars::protocol::reassembleWeb3RawTransaction(
         nonceN1.tx->extraTransactionBytes(), nonceN1.tx->signatureData());
     auto const nEstimate =
-        bcos::evm::opstack::estimatedDaSize(evmc::bytes_view(nRaw.data(), nRaw.size()));
+        bcos::executor_v1::opstack::estimatedDaSize(evmc::bytes_view(nRaw.data(), nRaw.size()));
     auto const n1Estimate =
-        bcos::evm::opstack::estimatedDaSize(evmc::bytes_view(n1Raw.data(), n1Raw.size()));
+        bcos::executor_v1::opstack::estimatedDaSize(evmc::bytes_view(n1Raw.data(), n1Raw.size()));
     BOOST_REQUIRE_GT(nEstimate, n1Estimate);
     daCaps->maxTxSize.store(n1Estimate, std::memory_order_relaxed);  // inclusive cap
 
@@ -1230,14 +1254,14 @@ BOOST_AUTO_TEST_CASE(op_da_block_budget_admits_at_cap_then_drops_and_keeps_force
     auto const sealedRaw = bcostars::protocol::reassembleWeb3RawTransaction(
         sealed.tx->extraTransactionBytes(), sealed.tx->signatureData());
     auto const sealedEst =
-        bcos::evm::opstack::estimatedDaSize(evmc::bytes_view(sealedRaw.data(), sealedRaw.size()));
+        bcos::executor_v1::opstack::estimatedDaSize(evmc::bytes_view(sealedRaw.data(), sealedRaw.size()));
 
     // Forced envelope carried through payloadAttributes.transactions (the same shape the
     // txFits test uses); its estimate is what preloads the budget.
     auto forced = makeDecodableWeb3Tx(0);
     auto const forcedRaw = bcos::fromHex(forced.rawHex);
     auto const forcedEst =
-        bcos::evm::opstack::estimatedDaSize(evmc::bytes_view(forcedRaw.data(), forcedRaw.size()));
+        bcos::executor_v1::opstack::estimatedDaSize(evmc::bytes_view(forcedRaw.data(), forcedRaw.size()));
 
     auto buildWithBudget = [&](std::uint64_t maxBlockSize) {
         auto daCaps = std::make_shared<bcos::engine::DACaps>();

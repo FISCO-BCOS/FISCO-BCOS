@@ -118,6 +118,20 @@ public:
     }
     txvalidator::AdmissionContext admissionContext() const noexcept { return m_admissionContext; }
 
+    /// EL-mode transaction gossip ([ethereum] tx_gossip): the announcement hook
+    /// eth_sendRawTransaction invokes AFTER a successful mempool admission, with the
+    /// transaction hash, its EIP-2718 type byte, the wire size and the exact wire
+    /// envelope (the EIP-4844 network wrapper for a blob transaction). Type-erased so
+    /// this header names no devp2p type; unset = no gossip wiring (OP / single-node /
+    /// tars builds), in which case the RPC entry skips the call.
+    using TxGossipAnnouncer =
+        std::function<void(crypto::HashType const&, uint8_t, uint64_t, bcos::bytes const&)>;
+    void setTxGossipAnnouncer(TxGossipAnnouncer announcer) noexcept
+    {
+        m_txGossipAnnouncer = std::move(announcer);
+    }
+    TxGossipAnnouncer const& txGossipAnnouncer() const noexcept { return m_txGossipAnnouncer; }
+
     /// Type-erased read handle over the MPT node storage for eth_getProof (M8.3): key = node
     /// hash, value = the node's raw RLP encoding, physically stored as ordinary state rows —
     /// StateKey{"/mpt/", <32 raw digest bytes>}, i.e. "/mpt/:" + digest = 38 bytes in the
@@ -188,6 +202,19 @@ public:
     void setMPTPruneWindow(std::int64_t _window) noexcept { m_mptPruneWindow = _window; }
     std::int64_t mptPruneWindow() const noexcept { return m_mptPruneWindow; }
 
+    /// Ethereum L1 EL mode (ethereum.mode=el): blob transactions arrive in their network
+    /// wrapper and carry a sidecar (KZG-checked at the RPC entry), and EL-only gossip keys on
+    /// this flag. Wired by AirNodeInitializer::initNodeService from the node config. Blob
+    /// ADMISSION keys on the executor version (see setExecutorVersion), not on this flag.
+    void setEthereumELMode(bool _enabled) noexcept { m_ethereumELMode = _enabled; }
+    bool ethereumELMode() const noexcept { return m_ethereumELMode; }
+
+    /// The chain's executor_version (SYS_CONFIG), resolved by the Initializer at boot and wired
+    /// by AirNodeInitializer. The RPC blob gate keys on it: executor_version==2 is the pure
+    /// Ethereum executor, which admits EIP-4844; 0 defaults to refusal.
+    void setExecutorVersion(int _version) noexcept { m_executorVersion = _version; }
+    int executorVersion() const noexcept { return m_executorVersion; }
+
     void setLedgerPrx(bcostars::LedgerServicePrx const& _ledgerPrx) { m_ledgerPrx = _ledgerPrx; }
 
     bool unreachable()
@@ -224,11 +251,18 @@ private:
 
     /// MPT pruning retention window; see setMPTPruneWindow.
     std::int64_t m_mptPruneWindow = -1;
+    /// Ethereum L1 EL mode; see setEthereumELMode.
+    bool m_ethereumELMode = false;
+    /// The chain's executor_version; see setExecutorVersion. 0 = unknown / pre-Ethereum.
+    int m_executorVersion = 0;
 
     /// Shared, unlike the mempool above: the validator is built for this path alone and nothing
     /// else keeps it alive. Null until set, which is every mode that has no mempool.
     std::shared_ptr<txvalidator::TxValidator> m_admissionValidator;
     txvalidator::AdmissionContext m_admissionContext = txvalidator::AdmissionContext::PoolAdmission;
+
+    /// EL-mode tx-gossip announce hook; see setTxGossipAnnouncer. Empty when unwired.
+    TxGossipAnnouncer m_txGossipAnnouncer;
 
     /// Shared OP DA caps (see setDaCaps); nullptr on Ethereum-only nodes.
     std::shared_ptr<bcos::engine::DACaps> m_daCaps;

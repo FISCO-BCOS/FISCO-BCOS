@@ -10,9 +10,9 @@ class MemPoolInitializer
 public:
     using Ptr = std::shared_ptr<MemPoolInitializer>;
 
-    MemPoolInitializer() = default;
+    explicit MemPoolInitializer(bcos::txpool::MemPoolConfig config = {}) : m_memPool(config) {}
 
-    static Ptr build();
+    static Ptr build(bcos::txpool::MemPoolConfig config = {});
 
     bcos::txpool::MemPoolImpl& memPool() { return m_memPool; }
     bcos::txpool::MemPoolImpl const& memPool() const { return m_memPool; }

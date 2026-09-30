@@ -151,6 +151,24 @@ constexpr static std::string_view SYS_NUMBER_2_HASH{"s_number_2_hash"};
 constexpr static std::string_view SYS_BLOCK_NUMBER_2_NONCES{"s_block_number_2_nonces"};
 constexpr static std::string_view SYS_NUMBER_2_BLOCK_HEADER{"s_number_2_header"};
 constexpr static std::string_view SYS_NUMBER_2_TXS{"s_number_2_txs"};
+// EL-mode (Ethereum L1) per-block EIP-4895 withdrawals, keyed by block number: the RLP
+// list of the block's withdrawal items. The Block structure carries no withdrawals, so
+// the EthereumBlockVerifier commit writes this sidecar row for engine_getPayloadBodies*
+// to serve; only Shanghai+ blocks get a row (pre-Shanghai payloads have no withdrawals).
+constexpr static std::string_view SYS_NUMBER_2_WITHDRAWALS{"s_number_2_withdrawals"};
+// EL-mode (Ethereum L1) per-block EIP-4844 blob sidecars, keyed by block number: the RLP
+// list of the block's [commitment, proof, blob] items in block order. The ExecutionPayload
+// carries only stripped blob transactions, so the engine's built-here commit writes this
+// sidecar row for engine_getBlobsV1 to serve; only Cancun+ blocks that carried blobs get a
+// row. Externally received blocks (newPayload lane) have no blob bodies on the wire, so
+// they get no row — engine_getBlobsV1 answers null for their hashes, as the spec allows
+// for blobs the node does not hold.
+constexpr static std::string_view SYS_NUMBER_2_BLOBS{"s_number_2_blobs"};
+// EL-mode shallow-reorg journal (EthereumChainRollback.h): one row per committed block,
+// keyed by block number, holding the pre-block values of every flat-state row the block
+// touched. Written into the block's own prewrite buffer (same WriteBatch as the block
+// data), pruned once the block leaves the reorg window.
+constexpr static std::string_view SYS_ROLLBACK_JOURNAL{"s_rollback_journal"};
 constexpr static std::string_view SYS_HASH_2_TX{"s_hash_2_tx"};
 constexpr static std::string_view SYS_HASH_2_RECEIPT{"s_hash_2_receipt"};
 constexpr static std::string_view DAG_TRANSFER{"/tables/dag_transfer"};

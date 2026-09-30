@@ -30,6 +30,7 @@
 #include "bcos-tx-validator/CheckSet.h"
 #include "bcos-tx-validator/LedgerNonceChecker.h"
 #include "bcos-tx-validator/NonceCheckerInterface.h"
+#include "bcos-tx-validator/Normalize.h"
 #include "bcos-tx-validator/Web3NonceChecker.h"
 #include "bcos-utilities/Common.h"
 #include <functional>
@@ -86,7 +87,7 @@ using SystemTxPredicate = std::function<bool(protocol::Transaction const&)>;
 ///     and continuing. That is NOT this rule seen from the other end, and the two are not
 ///     copies to merge: the builder enforces a payload-encoding invariant that holds on any
 ///     chain -- a transaction with no EIP-2718 wire form cannot be written into an engine
-///     payload at all, whatever feature_l2_ethereum_compat says -- while the check below is a
+///     payload at all, whatever the chain's executor_version says -- while the check below is a
 ///     ruling about what THIS chain's configuration admits, and reports a status a caller can
 ///     read. Different predicate, different domain, different consequence.
 ///
@@ -110,7 +111,8 @@ public:
         std::shared_ptr<ledger::LedgerInterface> ledger,
         ledger::LedgerConfigState::Ptr ledgerConfigState,
         NonceCheckerInterface::Ptr txPoolNonceChecker, Web3NonceChecker::Ptr web3NonceChecker,
-        SystemTxPredicate isSystemTx, std::string groupId, std::string chainId);
+        SystemTxPredicate isSystemTx, std::string groupId, std::string chainId,
+        BlobPolicy blobPolicy = {});
 
     /// Bound after construction: the ledger nonce checker cannot be built until the pool has read
     /// the chain's block limit. Until it is bound there is nothing to check a BCOS nonce against,
@@ -163,6 +165,9 @@ private:
     SystemTxPredicate m_isSystemTx;
     std::string m_groupId;
     std::string m_chainId;
+    /// Blob (EIP-4844) admission for normalize(): refused on L2, admitted with the
+    /// per-transaction blob bound on L1.
+    BlobPolicy m_blobPolicy;
     /// The two late-bound dependencies, both written once from an init path that runs while
     /// transactions may already be arriving, hence the lock. Readers copy the handle out and
     /// release, so nothing is held across a co_await.

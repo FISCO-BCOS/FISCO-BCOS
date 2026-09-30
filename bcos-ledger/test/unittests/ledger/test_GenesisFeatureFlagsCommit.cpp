@@ -46,7 +46,7 @@ GenesisConfig makeConfigWithoutFlagsSlot()
     genesisConfig.m_txGasLimit = 3000000000;
     genesisConfig.m_compatibilityVersion =
         static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_6_VERSION);
-    genesisConfig.m_features.push_back(FeatureSet{Features::Flag::feature_l2_ethereum_compat, 1});
+    genesisConfig.m_executorVersion = bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
     genesisConfig.m_chainID = "901";
     genesisConfig.m_groupID = "group0";
     genesisConfig.m_allocs.push_back(Alloc{.address = "43000000000000000000000000000000000000c0",

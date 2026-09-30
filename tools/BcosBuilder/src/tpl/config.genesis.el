@@ -66,10 +66,6 @@
     bpo1_time=1761017184
     bpo2_time=1761607008
 
-[features]
-    ; Ethereum-compatible world-state MPT (needed for the v2 state root)
-    feature_l2_ethereum_compat=1
-
 ; ----------------------------------------------------------------------------
 ; Real Sepolia genesis allocs (15 pre-funded EOAs from eth-clients/sepolia
 ; metadata/besu.json). The MPT over exactly these allocs equals the canonical
