@@ -210,6 +210,7 @@ public:
     {
         return std::nullopt;
     }
+    std::optional<bcos::protocol::BlockNumber> getHeadBlockNumber() const { return std::nullopt; }
 };
 
 class EngineRpcTestFixture : public RPCFixture
@@ -1571,13 +1572,13 @@ std::shared_ptr<bcostars::protocol::TransactionImpl> makeWeb3Tx()
 {
     namespace rlp = bcos::codec::rlp;
     bcos::bytes items;
-    rlp::encode(items, uint64_t{0});       // nonce
-    rlp::encode(items, uint64_t{1});       // gasPrice
-    rlp::encode(items, uint64_t{21000});   // gasLimit
+    rlp::encode(items, uint64_t{0});      // nonce
+    rlp::encode(items, uint64_t{1});      // gasPrice
+    rlp::encode(items, uint64_t{21000});  // gasLimit
     rlp::encode(items, bcos::Address("0xdead000000000000000000000000000000000011"));
-    rlp::encode(items, uint64_t{0});       // value
-    rlp::encode(items, bcos::bytes{});     // data
-    rlp::encode(items, uint64_t{1});       // chainId (EIP-155 preimage trailer)
+    rlp::encode(items, uint64_t{0});    // value
+    rlp::encode(items, bcos::bytes{});  // data
+    rlp::encode(items, uint64_t{1});    // chainId (EIP-155 preimage trailer)
     rlp::encode(items, uint64_t{0});
     rlp::encode(items, uint64_t{0});
     bcos::bytes preimage;
@@ -1585,9 +1586,9 @@ std::shared_ptr<bcostars::protocol::TransactionImpl> makeWeb3Tx()
     preimage.insert(preimage.end(), items.begin(), items.end());
 
     bcos::bytes signature(65, 0x00);
-    std::fill(signature.begin(), signature.begin() + 32, 0x11);   // r
+    std::fill(signature.begin(), signature.begin() + 32, 0x11);       // r
     std::fill(signature.begin() + 32, signature.begin() + 64, 0x22);  // s
-    signature[64] = 1;  // yParity
+    signature[64] = 1;                                                // yParity
 
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>();
     auto& inner = tx->mutableInner();
@@ -1680,11 +1681,10 @@ bool isEngineInternalError(JsonRpcException const& e)
 // is unaffected: real ledger callbacks are asynchronous, and Web3JsonRpcImpl::handleRequest
 // catches endpoint exceptions inside the coroutine. syncWait mirrors that: the SyncTask
 // body catches the exception inside the coroutine and rethrows only after completion.
-#define CALL_ENGINE_SYNC(method, params, response)                                     \
-    task::syncWait(                                                                    \
-        [&](Endpoints* ep, Json::Value p, Json::Value& r) -> task::Task<void> {        \
-            co_await ep->method(p, r);                                                 \
-        }(endpoints.get(), params, response))
+#define CALL_ENGINE_SYNC(method, params, response)                                         \
+    task::syncWait([&](Endpoints* ep, Json::Value p, Json::Value& r) -> task::Task<void> { \
+        co_await ep->method(p, r);                                                         \
+    }(endpoints.get(), params, response))
 
 BOOST_AUTO_TEST_CASE(getClientVersionV1)
 {
@@ -1756,8 +1756,8 @@ BOOST_AUTO_TEST_CASE(getPayloadBodiesByHashV1)
     auto const& body = result[1u];
     BOOST_REQUIRE(body.isObject());
     BOOST_REQUIRE_EQUAL(body["transactions"].size(), 1);
-    BOOST_CHECK_EQUAL(body["transactions"][0u].asString(),
-        toHexStringWithPrefix(expectedWireForWeb3Tx()));
+    BOOST_CHECK_EQUAL(
+        body["transactions"][0u].asString(), toHexStringWithPrefix(expectedWireForWeb3Tx()));
     // Pre-Shanghai header: withdrawals must be JSON null, not omitted.
     BOOST_CHECK(body.isMember("withdrawals"));
     BOOST_CHECK(body["withdrawals"].isNull());
@@ -1878,8 +1878,8 @@ BOOST_AUTO_TEST_CASE(getPayloadBodiesByRangeV1ClampsToHead)
     BOOST_CHECK(result[0u]["withdrawals"].isNull());
     BOOST_REQUIRE(result[1u].isObject());
     BOOST_REQUIRE_EQUAL(result[1u]["transactions"].size(), 1);
-    BOOST_CHECK_EQUAL(result[1u]["transactions"][0u].asString(),
-        toHexStringWithPrefix(expectedWireForWeb3Tx()));
+    BOOST_CHECK_EQUAL(
+        result[1u]["transactions"][0u].asString(), toHexStringWithPrefix(expectedWireForWeb3Tx()));
 
     // A range entirely beyond the head answers an empty array, no trailing nulls.
     Json::Value beyond(Json::arrayValue);

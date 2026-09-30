@@ -89,6 +89,10 @@ enum class EthMethod
     eth_getFilterLogs,
     eth_getLogs,
     eth_maxPriorityFeePerGas,
+    eth_feeHistory,
+    eth_getBlockReceipts,
+    txpool_status,
+    txpool_content,
     eth_getProof,
     miner_setMaxDASize
 };

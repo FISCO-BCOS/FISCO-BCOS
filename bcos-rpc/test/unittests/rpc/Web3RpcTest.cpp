@@ -22,9 +22,9 @@
 #include "../common/RPCFixture.h"
 #include "../common/Web3TxSamples.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include <bcos-crypto/kzg/Kzg4844.h>
 #include <bcos-framework/engine/AnyEngineService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
-#include <bcos-crypto/kzg/Kzg4844.h>
 #include <bcos-mempool/MemPoolImpl.h>
 #include <bcos-rlp-protocol/Web3BlobTxWrapper.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
@@ -101,6 +101,7 @@ public:
     {
         return std::nullopt;
     }
+    std::optional<bcos::protocol::BlockNumber> getHeadBlockNumber() const { return std::nullopt; }
 };
 
 class Web3TestFixture : public RPCFixture
@@ -755,8 +756,7 @@ BOOST_AUTO_TEST_CASE(handleBlobTxOverCountLimitRejectedBeforeKzg)
     blob.back() = bcos::byte{0x2a};
     bcos::bytes commitment;
     BOOST_REQUIRE(crypto::kzg::blobToKzgCommitment(bcos::ref(blob), commitment));
-    auto const versionedHash =
-        crypto::kzg::versionedHashFromCommitment(bcos::ref(commitment));
+    auto const versionedHash = crypto::kzg::versionedHashFromCommitment(bcos::ref(commitment));
 
     rpc::Web3Transaction web3Tx;
     web3Tx.type = rpc::TransactionType::EIP4844;
@@ -784,8 +784,7 @@ BOOST_AUTO_TEST_CASE(handleBlobTxOverCountLimitRejectedBeforeKzg)
     auto response = onRPCRequestWrapper(request);
     BOOST_REQUIRE(response.isMember("error"));
     BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), InvalidParams);
-    BOOST_CHECK(response["error"]["message"].asString().find("outside [1,") !=
-                std::string::npos);
+    BOOST_CHECK(response["error"]["message"].asString().find("outside [1,") != std::string::npos);
     BOOST_CHECK(!response.isMember("result"));
 }
 

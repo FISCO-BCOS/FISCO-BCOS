@@ -27,6 +27,7 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-mempool/MemPoolImpl.h"
 #include "bcos-protocol/TransactionStatus.h"
+#include "bcos-rpc/web3jsonrpc/utils/FeeHistory.h"
 #include "bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h"
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/hash/Keccak256.h>
@@ -87,9 +88,32 @@ task::Task<void> EthEndpoint::protocolVersion(const Json::Value&, Json::Value&)
 }
 task::Task<void> EthEndpoint::syncing(const Json::Value&, Json::Value& response)
 {
+    Json::Value result;
+    auto const& engine = m_nodeService->engineService();
+    if (engine && *engine && isOpStackLane(co_await readExecutorVersion(*m_nodeService->ledger())))
+    {
+        // OP lane: op-node drives the chain through forkchoiceUpdated and the PBFT BlockSync
+        // is dormant. Syncing only until the first forkchoice lands; afterwards the tracked head
+        // never passes the tip (it is a local block) and the tip leads it by one between each
+        // newPayload and its forkchoiceUpdated, which must not flap the answer every block.
+        auto const tip = co_await ledger::getCurrentBlockNumber(*m_nodeService->ledger());
+        auto const head = engine->getHeadBlockNumber();
+        if (head.has_value())
+        {
+            result = false;
+        }
+        else
+        {
+            result = Json::objectValue;
+            result["startingBlock"] = "0x0";
+            result["currentBlock"] = toQuantity(tip);
+            result["highestBlock"] = toQuantity(tip);
+        }
+        buildJsonContent(result, response);
+        co_return;
+    }
     auto const sync = m_nodeService->sync();
     auto status = sync->getSyncStatus();
-    Json::Value result;
     if (!status.has_value())
     {
         result = false;
@@ -340,8 +364,8 @@ task::Task<std::optional<HistoricalMptContext>> tryResolveMptContext(
     // Single-row read (executor_version SYS_CONFIG entry): one row instead of
     // fetchAllFeatures' ~60-key scan; degrades to false (scenario A) on read failure, the
     // same honest default as getFeatures' empty-set fallback.
-    auto const fullTrie = co_await executorVersionAt(ledger, blockNumber) >=
-                          bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
+    auto const fullTrie =
+        co_await executorVersionAt(ledger, blockNumber) >= bcos::ledger::ETHEREUM_EXECUTOR_VERSION;
     co_return HistoricalMptContext{stateRoot, fullTrie};
 }
 
@@ -1014,9 +1038,8 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         }
         try
         {
-            decodeBlobTxNetworkWrapper(
-                bcos::bytesConstRef(rawTxBytes.data(), rawTxBytes.size()), web3Tx,
-                blobSidecar.emplace());
+            decodeBlobTxNetworkWrapper(bcos::bytesConstRef(rawTxBytes.data(), rawTxBytes.size()),
+                web3Tx, blobSidecar.emplace());
         }
         catch (codec::rlp::RlpDecodeException const& e)
         {
@@ -1025,8 +1048,8 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         }
         for (std::size_t i = 0; i < blobSidecar->commitments.size(); ++i)
         {
-            if (crypto::kzg::versionedHashFromCommitment(
-                    bcos::ref(blobSidecar->commitments[i])) != web3Tx.blobVersionedHashes[i])
+            if (crypto::kzg::versionedHashFromCommitment(bcos::ref(blobSidecar->commitments[i])) !=
+                web3Tx.blobVersionedHashes[i])
             {
                 BOOST_THROW_EXCEPTION(admissionError(protocol::TransactionStatus::Malformed,
                     "blob sidecar commitment does not match its versioned hash"));
@@ -1151,8 +1174,8 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         {
             try
             {
-                announcer(encodeTxHash, static_cast<uint8_t>(web3Tx.type), rawTxBytes.size(),
-                    rawTxBytes);
+                announcer(
+                    encodeTxHash, static_cast<uint8_t>(web3Tx.type), rawTxBytes.size(), rawTxBytes);
             }
             catch (...)
             {
@@ -1648,21 +1671,10 @@ task::Task<void> EthEndpoint::getTransactionReceipt(
     // result: transactionReceipt(RECEIPT)
     auto const hashStr = toView(request[0U]);
     auto const hash = crypto::HashType(hashStr, crypto::HashType::FromHex);
-    auto const ledger = m_nodeService->ledger();
     Json::Value result = Json::objectValue;
     try
     {
-        auto receipt = co_await ledger::getReceipt(*ledger, hash);
-        auto hashList = std::make_shared<crypto::HashList>();
-        hashList->push_back(hash);
-        auto txs = co_await ledger::getTransactions(*ledger, std::move(hashList));
-        if (!receipt || !txs || txs->empty())
-        {
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(InvalidParams, "Invalid transaction hash: " + hash.hexPrefixed()));
-        }
-        auto blockHash = co_await ledger::getBlockHash(*ledger, receipt->blockNumber());
-        combineReceiptResponse(result, *receipt, *txs->at(0), blockHash);
+        result = co_await receiptJson(hash);
     }
     catch (std::exception const& e)
     {
@@ -1672,6 +1684,24 @@ task::Task<void> EthEndpoint::getTransactionReceipt(
     }
     buildJsonContent(result, response);
 }
+task::Task<Json::Value> EthEndpoint::receiptJson(crypto::HashType const& hash)
+{
+    auto const ledger = m_nodeService->ledger();
+    auto receipt = co_await ledger::getReceipt(*ledger, hash);
+    auto hashList = std::make_shared<crypto::HashList>();
+    hashList->push_back(hash);
+    auto txs = co_await ledger::getTransactions(*ledger, std::move(hashList));
+    if (!receipt || !txs || txs->empty())
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "Invalid transaction hash: " + hash.hexPrefixed()));
+    }
+    auto blockHash = co_await ledger::getBlockHash(*ledger, receipt->blockNumber());
+    Json::Value result = Json::objectValue;
+    combineReceiptResponse(result, *receipt, *txs->at(0), blockHash);
+    co_return result;
+}
+
 task::Task<void> EthEndpoint::getUncleByBlockHashAndIndex(const Json::Value&, Json::Value& response)
 {
     Json::Value result = "null";
@@ -1820,6 +1850,138 @@ task::Task<void> EthEndpoint::maxPriorityFeePerGas(
     Json::Value result = toQuantity(u256(tip));
     buildJsonContent(result, response);
     co_return;
+}
+
+task::Task<void> EthEndpoint::feeHistory(const Json::Value& request, Json::Value& response)
+{
+    // params: blockCount(QTY), newestBlock(QTY|TAG), rewardPercentiles(FLOAT[], optional)
+    auto& ledger = *m_nodeService->ledger();
+    co_await requireOpStackLane(ledger, "eth_feeHistory");
+    auto const& countJson = request[0U];
+    auto const blockCount = countJson.isUInt64() ?
+                                std::optional(countJson.asUInt64()) :
+                                bcos::safeFromQuantity(std::string(toView(countJson)));
+    if (!blockCount)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid blockCount"));
+    }
+    auto const& percentileJson = request[2U];
+    // geth maxQueryLimit: at most 100 percentiles (each row is computed for up to 1024 blocks).
+    if ((!percentileJson.isNull() && !percentileJson.isArray()) || percentileJson.size() > 100)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid reward percentiles"));
+    }
+    std::vector<double> percentiles;
+    for (auto const& entry : percentileJson)
+    {
+        // geth errInvalidPercentile: each in [0, 100], strictly increasing.
+        if (!entry.isNumeric() || entry.asDouble() < 0 || entry.asDouble() > 100 ||
+            (!percentiles.empty() && entry.asDouble() <= percentiles.back()))
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "invalid reward percentile"));
+        }
+        percentiles.push_back(entry.asDouble());
+    }
+    auto const [newest, head] = co_await getBlockNumberAndHeadByTag(toView(request[1U]));
+    Json::Value result = co_await buildOpFeeHistory(ledger, newest, head, *blockCount, percentiles);
+    buildJsonContent(result, response);
+}
+
+task::Task<void> EthEndpoint::getBlockReceipts(const Json::Value& request, Json::Value& response)
+{
+    // params: block(QTY|TAG|DATA 32B hash); result: [RECEIPT] in block order, each exactly what
+    // eth_getTransactionReceipt answers for that tx; null for an unknown block.
+    auto const ledger = m_nodeService->ledger();
+    co_await requireOpStackLane(*ledger, "eth_getBlockReceipts");
+    auto const blockId = toView(request[0U]);
+    protocol::BlockNumber number = 0;
+    protocol::BlockNumber head = 0;
+    if (blockId.size() == 66)
+    {
+        try
+        {
+            number = co_await ledger::getBlockNumber(
+                *ledger, crypto::HashType(blockId, crypto::HashType::FromHex));
+            head = co_await ledger::getCurrentBlockNumber(*ledger);
+        }
+        catch (bcos::Error const& e)
+        {
+            // Unknown hash: GetStorageError without a chained cause (as in eth_getProof); a
+            // storage fault carries one and propagates.
+            if (e.errorCode() != bcos::ledger::LedgerError::GetStorageError ||
+                boost::get_error_info<bcos::Error::STDError>(e) != nullptr)
+            {
+                throw;
+            }
+            number = -1;
+        }
+    }
+    else
+    {
+        std::tie(number, head) = co_await getBlockNumberAndHeadByTag(blockId);
+    }
+    // geth: null for a block this node does not have; any other failure is an error.
+    Json::Value result = Json::nullValue;
+    if (number >= 0 && number <= head)
+    {
+        result = Json::arrayValue;
+        auto const block =
+            co_await ledger::getBlockData(*ledger, number, ledger::TRANSACTIONS_HASH);
+        for (auto const& meta : block->transactionMetaDatas())
+        {
+            result.append(co_await receiptJson(meta->hash()));
+        }
+    }
+    buildJsonContent(result, response);
+}
+
+task::Task<std::vector<txpool::PooledTransaction>> EthEndpoint::pooledTransactions()
+{
+    co_await requireOpStackLane(*m_nodeService->ledger(), "txpool_*");
+    auto* memPool = m_nodeService->memPool();
+    if (memPool == nullptr)
+    {
+        co_return {};
+    }
+    auto const& provider = m_nodeService->stateStorageProvider();
+    auto const state = provider ? provider() : nullptr;
+    if (!state) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "No state storage on this node"));
+    }
+    co_return memPool->snapshotPendingQueued(*state);
+}
+
+task::Task<void> EthEndpoint::txpoolStatus(const Json::Value&, Json::Value& response)
+{
+    // result: {pending: QTY, queued: QTY} (geth txpool_status)
+    auto const pooled = co_await pooledTransactions();
+    auto const pending = std::ranges::count_if(pooled, &txpool::PooledTransaction::pending);
+    Json::Value result = Json::objectValue;
+    result["pending"] = toQuantity(pending);
+    result["queued"] = toQuantity(pooled.size() - pending);
+    buildJsonContent(result, response);
+}
+
+task::Task<void> EthEndpoint::txpoolContent(const Json::Value&, Json::Value& response)
+{
+    // result: {pending: {sender: {nonce(decimal): TX}}, queued: {...}} (geth txpool_content).
+    // TX is eth_getTransactionByHash's shape with the block fields null, as for a pending tx.
+    Json::Value result = Json::objectValue;
+    result["pending"] = Json::objectValue;
+    result["queued"] = Json::objectValue;
+    for (auto const& pooled : co_await pooledTransactions())
+    {
+        Json::Value tx = Json::objectValue;
+        combineTxResponse(tx, *pooled.transaction, 0, 0, crypto::HashType{});
+        tx["blockHash"] = Json::nullValue;
+        tx["blockNumber"] = Json::nullValue;
+        tx["transactionIndex"] = Json::nullValue;
+        auto const sender = tx["from"].asString();
+        result[pooled.pending ? "pending" : "queued"][sender][std::to_string(pooled.nonce)] =
+            std::move(tx);
+    }
+    buildJsonContent(result, response);
 }
 
 

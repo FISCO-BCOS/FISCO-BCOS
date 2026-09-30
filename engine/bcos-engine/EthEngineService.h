@@ -238,6 +238,12 @@ public:
         return m_tracker.finalizedBlockNumber();
     }
 
+    std::optional<bcos::protocol::BlockNumber> getHeadBlockNumber() const
+    {
+        auto const head = m_tracker.trackedHead();
+        return head ? std::optional(head->blockNumber) : std::nullopt;
+    }
+
 private:
     struct BuildPayloadResult
     {

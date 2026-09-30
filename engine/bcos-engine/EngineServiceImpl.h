@@ -403,6 +403,12 @@ public:
         return m_finalizedBlockNumber;
     }
 
+    std::optional<bcos::protocol::BlockNumber> getHeadBlockNumber() const
+    {
+        std::shared_lock lock(x_state);
+        return m_trackedHeadBlock ? std::optional(m_trackedHeadBlock->blockNumber) : std::nullopt;
+    }
+
 private:
     // TrackedHeadBlock comes from EngineServiceCommon.h (one shared definition).
 
@@ -1179,9 +1185,9 @@ private:
         Bloom const& logsBloom = commitments.logsBloom;
 
         // Step 2g: Compute state root (MPT when enabled, otherwise legacy XOR fold).
-        auto resolution = co_await engine_common::resolveEngineBlockStateRoot(view, *blockHeader,
-            ledgerConfig, *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory,
-            *m_commitObserver);
+        auto resolution =
+            co_await engine_common::resolveEngineBlockStateRoot(view, *blockHeader, ledgerConfig,
+                *m_blockFactory->cryptoSuite()->hashImpl(), *m_blockFactory, *m_commitObserver);
         h256 const stateRoot = resolution.stateRoot;
 
         // Step 2h: Set computed values in the block header and calculate the block hash.
