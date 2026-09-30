@@ -87,6 +87,18 @@ void bcos::scheduler_v1::MultiVersionScheduler::adoptProbeAsPending(
     auto& scheduler = getScheduler();
     scheduler.adoptProbeAsPending(std::move(block), std::move(callback));
 }
+std::optional<bcos::scheduler::SchedulerInterface::UnfinalizedBlock>
+bcos::scheduler_v1::MultiVersionScheduler::unfinalizedBlock(
+    bcos::crypto::HashType const& blockHash) const
+{
+    return checkedSchedulerAt(m_currentIndex.load()).unfinalizedBlock(blockHash);
+}
+void bcos::scheduler_v1::MultiVersionScheduler::finalizeUpTo(
+    bcos::crypto::HashType const& blockHash, std::function<void(Error::Ptr)> callback)
+{
+    auto& scheduler = getScheduler();
+    scheduler.finalizeUpTo(blockHash, std::move(callback));
+}
 void bcos::scheduler_v1::MultiVersionScheduler::reset(
     [[maybe_unused]] std::function<void(Error::Ptr)> callback)
 {

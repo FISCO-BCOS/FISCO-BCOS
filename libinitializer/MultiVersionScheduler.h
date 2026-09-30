@@ -93,6 +93,13 @@ public:
         std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool sysBlock)>
             callback) override;
 
+    /// Unfinalized-window pair (SchedulerInterface): forwarded so the OP engine reaching
+    /// OpScheduler through this wrapper gets the real window, not the empty defaults.
+    std::optional<UnfinalizedBlock> unfinalizedBlock(
+        bcos::crypto::HashType const& blockHash) const override;
+    void finalizeUpTo(
+        bcos::crypto::HashType const& blockHash, std::function<void(Error::Ptr)> callback) override;
+
     void reset([[maybe_unused]] std::function<void(Error::Ptr)> callback) override;
 
     void getCode(
