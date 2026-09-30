@@ -19,6 +19,7 @@
  */
 
 #include "EngineEndpoint.h"
+#include "bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h"
 #include "include/BuildInfo.h"
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/kzg/Kzg4844.h>
@@ -36,6 +37,7 @@
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
+#include <bcos-utilities/ClientIdentity.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Error.h>
 #include <algorithm>
@@ -493,6 +495,18 @@ task::Task<Json::Value> EngineEndpoint::payloadBodyAtNumber(protocol::BlockNumbe
             rethrowAsEngineInternalError(
                 "block carries a transaction without an EIP-2718 wire form");
         }
+        // OP deposit (0x7e): unsigned, so extraTransactionBytes IS the wire envelope
+        // (takeToTarsTransaction stores encode() verbatim) — the same bytes the ledger
+        // indexes it by (TransactionImpl::calculateHash's deposit arm). A reassemble here
+        // would reject the empty signature. Signed transactions need no such branch:
+        // reassembleWeb3RawTransaction recognises an already-sealed envelope and re-emits
+        // the same wire bytes (typed: verbatim; legacy: canonical re-encode, byte-equal)
+        // after cross-checking its trailer against the stored signature.
+        if (tx->isDepositTx())
+        {
+            transactions.append(toHexStringWithPrefix(tx->extraTransactionBytes()));
+            continue;
+        }
         try
         {
             transactions.append(
@@ -511,7 +525,21 @@ task::Task<Json::Value> EngineEndpoint::payloadBodyAtNumber(protocol::BlockNumbe
     // sidecar row the EL verifier's commit writes. A Shanghai+ block without the row
     // (committed before the row existed, or a ledger whose raw state storage is not
     // readable through this interface) is an unavailable body -> null.
-    if (block->blockHeader()->withdrawalsRoot().has_value())
+    //
+    // OP lane: every Canyon+ payload carries an EMPTY withdrawals list (op-node never
+    // sends any; OpEngineService renders [] on getPayload) and the OP verifier writes no
+    // sidecar row, so the list is [] by construction — reading the row would turn every
+    // OP body into null. The lane is genesis-fixed, so the boot-time executorVersion is
+    // authoritative (same rule as EthEndpoint's account-table lookup).
+    if (!block->blockHeader()->withdrawalsRoot().has_value())
+    {
+        body["withdrawals"] = Json::nullValue;
+    }
+    else if (isOpStackLane(m_nodeService->executorVersion()))
+    {
+        body["withdrawals"] = Json::Value(Json::arrayValue);
+    }
+    else
     {
         auto const stateStorage = ledger->getStateStorage();
         if (!stateStorage)
@@ -527,10 +555,6 @@ task::Task<Json::Value> EngineEndpoint::payloadBodyAtNumber(protocol::BlockNumbe
         auto const rawWithdrawals = entry->get();
         body["withdrawals"] =
             decodeWithdrawalsJson(bcos::bytes(rawWithdrawals.begin(), rawWithdrawals.end()));
-    }
-    else
-    {
-        body["withdrawals"] = Json::nullValue;
     }
     co_return body;
 }
@@ -741,7 +765,8 @@ task::Task<void> EngineEndpoint::getClientVersionV1(
     Json::Value self(Json::objectValue);
     self["code"] = "FB";
     self["name"] = "FISCO-BCOS";
-    self["version"] = std::string("v") + FISCO_BCOS_PROJECT_VERSION;
+    // The same string the devp2p Hello clientId carries (ADR 0003): one identity source.
+    self["version"] = bcos::clientIdentity();
     // commit is DATA, 4 bytes — the first four bytes of the build's commit hash.
     self["commit"] = "0x" + std::string(FISCO_BCOS_COMMIT_HASH).substr(0, 8);
     Json::Value result(Json::arrayValue);

@@ -48,6 +48,7 @@
 #include "bcos-tool/NodeConfig.h"
 #include "libinitializer/Common.h"
 #include "libinitializer/GlobalStateStorageInitializer.h"
+#include <bcos-utilities/ClientIdentity.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <opstack-executor/OpBlockVerifier.h>
 #include <boost/algorithm/string/trim.hpp>
@@ -636,7 +637,7 @@ private:
                         // ALWAYS the chain genesis (the handshake rejects a peer on a
                         // different chain), headHash reflects the local resume anchor.
                         auto clientConfig = peer;
-                        clientConfig.clientId = "FISCO-BCOS-OP-EL/v0.1.0";
+                        clientConfig.clientId = bcos::clientIdentity();
                         clientConfig.networkId = opConfig.chainId;
                         clientConfig.genesisHash = bcos::protocol::ethHeaderHash(genesisHeader);
                         clientConfig.headHash = bcos::protocol::ethHeaderHash(anchor);
