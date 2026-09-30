@@ -259,4 +259,41 @@ intx::uint256 computeOperatorCost(
 {
     return computeOperatorCost(params, gas, spec.has_jovian_operator_formula);
 }
+
+OpL1DataCost opL1DataCost(
+    const OpFeeParams& params, evmc::bytes_view signedTxEnvelope, const OpForkSpec& spec) noexcept
+{
+    if (spec.has_legacy_l1_formula)
+    {
+        // spec.fork is the ladder-resolved fork, so this is exactly IsRegolith(blockTime).
+        const auto legacy =
+            computeLegacyL1Cost(params, signedTxEnvelope, spec.fork >= OpFork::Regolith);
+        return {.fee = legacy.fee, .legacy_l1_gas_used = legacy.gas_used};
+    }
+    if (ecotoneParamsUnset(params))
+    {
+        // Ecotone is active but the L1Block Ecotone parameters read all-zero (the activation
+        // block's attributes deposit is still Bedrock-formatted). Checked before the
+        // Ecotone/Fjord split: "the first block of Fjord and Ecotone could be the same block".
+        const auto legacy = computeLegacyL1Cost(params, signedTxEnvelope, /*regolithActive=*/true);
+        return {.fee = legacy.fee, .legacy_l1_gas_used = legacy.gas_used};
+    }
+    if (spec.has_ecotone_l1_formula)
+    {
+        return {.fee = computeL1Cost(params, signedTxEnvelope, spec)};
+    }
+    const auto flzLen = flzCompressLen(signedTxEnvelope);
+    return {.fee = computeL1CostFromFlz(params, flzLen, spec), .flz_len = flzLen};
+}
+
+intx::uint512 opTotalRollupCost(const OpFeeParams& params, evmc::bytes_view signedTxEnvelope,
+    uint64_t gasLimit, const OpForkSpec& spec) noexcept
+{
+    intx::uint512 total = opL1DataCost(params, signedTxEnvelope, spec).fee;
+    if (spec.has_operator_fee)
+    {
+        total += computeOperatorCost(params, gasLimit, spec);
+    }
+    return total;
+}
 }  // namespace bcos::executor_v1::opstack

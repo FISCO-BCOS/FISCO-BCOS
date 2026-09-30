@@ -54,6 +54,8 @@
 #include <evmc/evmc.hpp>
 #include <evmc/hex.hpp>
 
+#include <opstack-executor/OpAdmissionRollupCost.h>  // makeOpAdmissionRollupCost
+
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -1789,6 +1791,123 @@ BOOST_AUTO_TEST_CASE(PendingStorageAtPrefersThePendingLayerOverTheCommittedTrie)
         kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*number=*/0));
     BOOST_REQUIRE_MESSAGE(entry.has_value(), "the pending nonce row must be visible");
     BOOST_CHECK_EQUAL(std::string(entry->get()), "7");
+}
+
+/// Admission's balance read (TxValidator::readAccountState -> getPendingStorageAt(BALANCE)) on
+/// the OP lane. Balances DO live in the flat plane here -- the genesis alloc import writes flat
+/// /apps/ rows (GenesisStateLoader.h) and the executor reads and writes them on the block's own
+/// view (EthereumState.h) -- so the committed row answers, and a pending layer wins over it just
+/// as for the nonce. Pinned because the "MPT only" comments on coCallLatest read as if this
+/// plane were empty; the L1Cost admission row depends on this value being the executed one.
+BOOST_AUTO_TEST_CASE(PendingStorageAtServesTheOpLaneBalanceFromTheFlatPlane)
+{
+    Fixture f;
+    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
+
+    auto committed = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
+        kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, /*number=*/0));
+    BOOST_REQUIRE_MESSAGE(committed.has_value(), "the committed balance row must be visible");
+    BOOST_CHECK_EQUAL(std::string(committed->get()), (bcos::u256(1) << 200).str({}, {}));
+
+    {
+        auto view = f.multiLayerStorage.fork();
+        view.newMutable();
+        bcos::ledger::account::EVMAccount account(
+            view, kSender, bcos::ledger::account::AddressTableMode::Hex);
+        bcos::task::syncWait(account.setBalance(bcos::u256(42)));
+        f.multiLayerStorage.pushView(std::move(view));
+    }
+    auto pending = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
+        kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE, /*number=*/0));
+    BOOST_REQUIRE_MESSAGE(pending.has_value(), "the pending balance row must be visible");
+    BOOST_CHECK_EQUAL(std::string(pending->get()), "42");
+}
+
+/// The admission callable (TxValidator's RollupCostFn on the OP lane): prices with the L1Block
+/// slots of the COMMITTED plane and the fork of the head's timestamp, exactly as
+/// opTotalRollupCost over loadOpFeeParamsAsync would; caches per (head number, hash), so a slot
+/// rewrite is invisible under the same head and picked up under the next.
+BOOST_AUTO_TEST_CASE(AdmissionRollupCostPricesCommittedSlotsAndCachesPerHead)
+{
+    Fixture f;
+    bcos::Address l1Block;
+    std::memcpy(l1Block.data(), opeth::OP_L1_BLOCK.bytes, sizeof(opeth::OP_L1_BLOCK.bytes));
+    auto const slotKey = [](uint8_t s) {
+        evmc_bytes32 k{};
+        k.bytes[31] = s;
+        return k;
+    };
+    auto const word = [](uint64_t v) {
+        evmc_bytes32 w{};
+        for (int i = 0; i < 8; ++i)
+        {
+            w.bytes[31 - i] = static_cast<uint8_t>(v >> (8 * i));
+        }
+        return w;
+    };
+    // Ecotone-shaped attributes: l1BaseFee (slot 1), scalars 2 / 3 packed in slot 3, blob base
+    // fee (slot 7). Written through the lane's own table name, as the attributes deposit does.
+    auto const writeSlots = [&](uint64_t l1BaseFee) {
+        auto view = f.multiLayerStorage.fork();
+        view.newMutable();
+        bcos::ledger::account::EVMAccount account(view, bcos::ledger::account::FromTableName{},
+            bcos::ledger::account::ethLaneAccountTableName(l1Block));
+        bcos::task::syncWait(account.setStorage(slotKey(1), word(l1BaseFee)));
+        evmc_bytes32 scalars{};
+        scalars.bytes[19] = 2;
+        scalars.bytes[23] = 3;
+        bcos::task::syncWait(account.setStorage(slotKey(3), scalars));
+        bcos::task::syncWait(account.setStorage(slotKey(7), word(10'000'000)));
+        bcos::task::syncWait(f.multiLayerStorage.mergeView(std::move(view)));
+    };
+    writeSlots(1'000'000'000);
+
+    struct Owner
+    {
+        MLS& mls;
+        MLS& storage() { return mls; }
+    };
+    auto const rollupCost = opeth::makeOpAdmissionRollupCost(
+        std::make_shared<Owner>(Owner{f.multiLayerStorage}), f.forkSchedule);
+
+    auto const envelopeBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    bcos::bytes const envelope(envelopeBytes.begin(), envelopeBytes.end());
+    constexpr uint64_t gasLimit = 100000;
+    bcos::ledger::LedgerConfig head;
+    head.setBlockNumber(1);
+    head.setTimestamp(1'000'000);  // ms; the fork is selected at 1000 s
+    bcos::crypto::HashType headHash;
+    headHash[0] = 1;
+    head.setHash(headHash);
+
+    auto const expected = [&] {
+        auto view = f.multiLayerStorage.forkCommitted();
+        auto const fee = bcos::task::syncWait(opeth::loadOpFeeParamsAsync(view));
+        auto const spec = opeth::opForkSpecAt(f.forkSchedule, 1000);
+        auto const total = opeth::opTotalRollupCost(
+            fee, evmc::bytes_view{envelopeBytes.data(), envelopeBytes.size()}, gasLimit, spec);
+        return opeth::intxToBcosU256(static_cast<intx::uint256>(total));
+    };
+    auto const first = expected();
+    BOOST_REQUIRE(first > 0);
+    auto const priced = bcos::task::syncWait(rollupCost(bcos::ref(envelope), gasLimit, head));
+    BOOST_REQUIRE(priced.has_value());
+    BOOST_CHECK_EQUAL(*priced, first);
+
+    // Same head after a slot rewrite: the cached attributes still price it.
+    writeSlots(2'000'000'000);
+    auto const cached = bcos::task::syncWait(rollupCost(bcos::ref(envelope), gasLimit, head));
+    BOOST_REQUIRE(cached.has_value());
+    BOOST_CHECK_EQUAL(*cached, first);
+
+    // Next head: re-read, and the doubled l1BaseFee shows.
+    head.setBlockNumber(2);
+    auto const second = expected();
+    BOOST_CHECK(second != first);
+    auto const repriced = bcos::task::syncWait(rollupCost(bcos::ref(envelope), gasLimit, head));
+    BOOST_REQUIRE(repriced.has_value());
+    BOOST_CHECK_EQUAL(*repriced, second);
 }
 
 /// Binary-layout variant of the pending-layer test above: the pending nonce row lives at

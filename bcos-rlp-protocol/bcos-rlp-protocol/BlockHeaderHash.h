@@ -35,4 +35,22 @@ namespace bcos::protocol
 /// fork fields) for an OP block, the header's own stored hash otherwise. Callers must not
 /// choose between the two themselves: that choice belongs here, once.
 [[nodiscard]] crypto::HashType canonicalBlockHash(BlockHeader const& header);
+
+/// A committed block's base fee under the lane rules. OP-Stack headers are NON_ETH yet carry a
+/// real base fee (rebuildOpEthHeader deliberately leaves ethBlockVersion NON_ETH) -- check that
+/// case before the NON_ETH short-circuit, which is for native FISCO headers that have no base
+/// fee at all. Eth-lane headers take the London+ rule (0 pre-London).
+[[nodiscard]] inline u256 blockBaseFee(BlockHeader const& header)
+{
+    if (isOpEthereumBlock(header))
+    {
+        return header.baseFee().value_or(0);
+    }
+    if (static_cast<std::uint8_t>(header.ethBlockVersion()) <
+        static_cast<std::uint8_t>(EthBlockVersion::LONDON))
+    {
+        return 0;
+    }
+    return header.baseFee().value_or(0);
+}
 }  // namespace bcos::protocol
