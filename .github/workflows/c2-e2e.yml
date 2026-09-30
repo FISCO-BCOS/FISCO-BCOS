@@ -235,15 +235,19 @@ jobs:
         with:
           version: 1.2.3
 
-      - name: Install anvil (pins.json anvil)
+      # STEP-SET TWIN of workflow.yml kona_parity's Install anvil and cast step: anvil >= 1.8.0
+      # for debug_getRawHeader/debug_getRawReceipts, cast >= 1.7.1 (pins.json cast) for the
+      # harness's `cast send --create`; forge keeps the 1.2.3 op-deployer pin.
+      - name: Install anvil and cast (pins.json anvil, cast)
         run: |
           set -euo pipefail
           PINS=tools/.ci/kona-parity/pins.json
           curl -sSfL "$(jq -r .anvil.linux_amd64_tarball "$PINS")" -o "$RUNNER_TEMP/foundry.tgz"
           echo "$(jq -r .anvil.linux_amd64_sha256 "$PINS")  $RUNNER_TEMP/foundry.tgz" | sha256sum -c -
-          mkdir -p "$RUNNER_TEMP/anvil"
-          tar -xzf "$RUNNER_TEMP/foundry.tgz" -C "$RUNNER_TEMP/anvil" anvil
-          "$RUNNER_TEMP/anvil/anvil" --version
+          mkdir -p "$RUNNER_TEMP/foundry-kona"
+          tar -xzf "$RUNNER_TEMP/foundry.tgz" -C "$RUNNER_TEMP/foundry-kona" anvil cast
+          "$RUNNER_TEMP/foundry-kona/anvil" --version
+          "$RUNNER_TEMP/foundry-kona/cast" --version
 
       - name: Pull kona-host (pins.json kona_host.image)
         run: docker pull "$(jq -r .kona_host.image tools/.ci/kona-parity/pins.json)"
@@ -325,7 +329,7 @@ jobs:
       - name: Run the gate; require exit code 1
         run: |
           set +e
-          bash tools/.ci/kona-parity/run.sh --blocks 12 --mutate fee-vault
+          PATH="$RUNNER_TEMP/foundry-kona:$PATH" bash tools/.ci/kona-parity/run.sh --blocks 12 --mutate fee-vault
           rc=$?
           echo "kona parity gate exit code under the fee-vault mutation: ${rc}"
           test "${rc}" -eq 1
@@ -334,7 +338,7 @@ jobs:
           BIN_DIR: ${{ github.workspace }}/.ci-c2-bins
           OP_MONOREPO: ${{ github.workspace }}/.ci-op-monorepo
           FISCO_BIN: ${{ github.workspace }}/build/fisco-bcos-air/fisco-bcos
-          ANVIL_BIN: ${{ runner.temp }}/anvil/anvil
+          ANVIL_BIN: ${{ runner.temp }}/foundry-kona/anvil
           OVERLAY: "on"
           WORK: ${{ runner.temp }}/kona-parity
 

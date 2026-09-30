@@ -30,6 +30,11 @@
     "commit": "0451c8bf3601c502a36be4633c0e2f4cc38e9c9b",
     "verified_from": ".github/workflows/workflow.yml (c2_e2e job, harness checkout step)"
   },
+  "cast": {
+    "min_version": "1.7.1",
+    "note": "run.sh refuses an older cast. The harness l2_tx_scenarios.sh (op-stack-e2e-tests tools/op-e2e/l2_tx_scenarios.sh:48-50) orders its flags for the `cast send --create` re-parse that cast >= 1.7.1 does. forge stays at the op-deployer pin (mise.toml, 1.2.3), so the CI jobs take cast from the anvil tarball below and put it first on PATH for run.sh only.",
+    "verified_from": "local runs with the foundry v1.8.3 toolchain; cast 1.2.3 rejects the harness's --create flag order"
+  },
   "anvil": {
     "release": "foundry v1.8.3",
     "linux_amd64_tarball": "https://github.com/foundry-rs/foundry/releases/download/v1.8.3/foundry_v1.8.3_linux_amd64.tar.gz",

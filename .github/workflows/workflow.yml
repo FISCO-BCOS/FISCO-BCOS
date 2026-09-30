@@ -723,16 +723,20 @@ jobs:
           version: 1.2.3
 
       # kona-host reads L1 through debug_getRawHeader/debug_getRawReceipts; anvil serves them
-      # from foundry v1.8.0. Only the anvil binary is taken, so forge/cast keep the 1.2.3 pin.
-      - name: Install anvil (pins.json anvil)
+      # from foundry v1.8.0. The harness's l2_tx_scenarios.sh needs cast >= 1.7.1 (pins.json
+      # cast) for `cast send --create`. Both come from the pinned v1.8.3 tarball into a
+      # directory that only the gate step puts first on PATH; forge stays at the 1.2.3 pin
+      # the op-deployer build and the L2 contracts need.
+      - name: Install anvil and cast (pins.json anvil, cast)
         run: |
           set -euo pipefail
           PINS=tools/.ci/kona-parity/pins.json
           curl -sSfL "$(jq -r .anvil.linux_amd64_tarball "$PINS")" -o "$RUNNER_TEMP/foundry.tgz"
           echo "$(jq -r .anvil.linux_amd64_sha256 "$PINS")  $RUNNER_TEMP/foundry.tgz" | sha256sum -c -
-          mkdir -p "$RUNNER_TEMP/anvil"
-          tar -xzf "$RUNNER_TEMP/foundry.tgz" -C "$RUNNER_TEMP/anvil" anvil
-          "$RUNNER_TEMP/anvil/anvil" --version
+          mkdir -p "$RUNNER_TEMP/foundry-kona"
+          tar -xzf "$RUNNER_TEMP/foundry.tgz" -C "$RUNNER_TEMP/foundry-kona" anvil cast
+          "$RUNNER_TEMP/foundry-kona/anvil" --version
+          "$RUNNER_TEMP/foundry-kona/cast" --version
 
       - name: Pull kona-host (pins.json kona_host.image)
         run: docker pull "$(jq -r .kona_host.image tools/.ci/kona-parity/pins.json)"
@@ -802,13 +806,14 @@ jobs:
           python3 -m pytest -q tools/.ci/kona-parity/tests
 
       - name: Run the kona parity gate
-        run: bash tools/.ci/kona-parity/run.sh --blocks 12
+        # PATH prefix: cast from the v1.8.3 tarball for this step only (forge is not used here).
+        run: PATH="$RUNNER_TEMP/foundry-kona:$PATH" bash tools/.ci/kona-parity/run.sh --blocks 12
         env:
           REPO_ROOT: ${{ github.workspace }}
           BIN_DIR: ${{ github.workspace }}/.ci-c2-bins
           OP_MONOREPO: ${{ github.workspace }}/.ci-op-monorepo
           FISCO_BIN: ${{ github.workspace }}/build/fisco-bcos-air/fisco-bcos
-          ANVIL_BIN: ${{ runner.temp }}/anvil/anvil
+          ANVIL_BIN: ${{ runner.temp }}/foundry-kona/anvil
           OVERLAY: ${{ matrix.overlay }}
           WORK: ${{ runner.temp }}/kona-parity
 
