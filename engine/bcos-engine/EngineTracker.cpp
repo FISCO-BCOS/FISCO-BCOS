@@ -98,14 +98,22 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
     }
 
     std::unique_lock lock(m_mutex);
+    bool rewind = false;
     if (m_trackedHead.has_value())
     {
         auto const& trackedHeadBlock = *m_trackedHead;
-        if (headBlockNumber < trackedHeadBlock.blockNumber)
+        if (resolved.headKnown)
         {
-            // Match release EngineServiceImpl: any older head is swallowed (VALID without
-            // payloadId). Rebuild-on-parent is intentionally not supported on this branch.
-            return ForkchoiceApplyResult::Swallowed;
+            // Window lane: the caller resolved the head in its unfinalized window (or as the
+            // finalized tip) and checked safe/finalized against that chain. Any known block
+            // may become the head — sibling, ancestor or a further descendant; a rewind is
+            // applied and reported so the caller can build on the new head (D1 §11.3).
+            rewind = headBlockNumber < trackedHeadBlock.blockNumber;
+        }
+        else if (headBlockNumber < trackedHeadBlock.blockNumber)
+        {
+            // No window to rewind in: leave the tracker alone and let the caller decide.
+            return ForkchoiceApplyResult::Rewind;
         }
         else if (headBlockNumber == trackedHeadBlock.blockNumber)
         {
@@ -136,10 +144,11 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
                                       "Forkchoice head block number must increase by exactly 1"});
         }
     }
-    else if (!resolved.headCanonical)
+    else if (!resolved.headCanonical && !resolved.headKnown)
     {
         // First apply: same fail-closed rule — an unconfirmed head must not seed the
-        // tracker, or every later +1/conflict check runs against a bogus tip.
+        // tracker, or every later +1/conflict check runs against a bogus tip. A window
+        // block after a restart is confirmed by its window membership (headKnown).
         BOOST_THROW_EXCEPTION(InvalidForkchoiceState{}
                               << bcos::errinfo_comment{"Forkchoice head block is not canonical"});
     }
@@ -163,7 +172,7 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
     {
         m_finalized = finalizedBlockNumber;
     }
-    return ForkchoiceApplyResult::Applied;
+    return rewind ? ForkchoiceApplyResult::Rewind : ForkchoiceApplyResult::Applied;
 }
 
 GetPayloadResult EngineTracker::getPayload(const PayloadID& payloadId, std::uint32_t version) const
