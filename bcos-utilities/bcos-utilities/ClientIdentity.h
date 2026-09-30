@@ -18,7 +18,6 @@
  */
 #pragma once
 
-#include "include/BuildInfo.h"
 #include <string>
 
 namespace bcos
@@ -26,12 +25,8 @@ namespace bcos
 /// `fisco-bcos/v<version>/<os>/<compiler>` (ADR 0003): the devp2p Hello clientId on the
 /// Ethereum and OP sync lanes and the `version` field of engine_getClientVersionV1 read
 /// this one function, so the identity a CL sees over the Engine API and the identity a
-/// peer sees in the RLPx handshake never drift apart. Built from the BuildInfo.h macros
-/// (generated per build under ${PROJECT_BINARY_DIR}/include, on every target's include
-/// path via BuildInfo.cmake).
-inline std::string clientIdentity()
-{
-    return std::string("fisco-bcos/v") + FISCO_BCOS_PROJECT_VERSION + "/" + FISCO_BCOS_BUILD_OS +
-           "/" + FISCO_BCOS_BUILD_COMPILER;
-}
+/// peer sees in the RLPx handshake never drift apart. Defined in ClientIdentity.cpp from
+/// the per-build generated version/os/compiler macros, which are never installed; this
+/// header stays free of them so installed-package consumers can include it.
+std::string clientIdentity();
 }  // namespace bcos
