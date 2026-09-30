@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <evmc/bytes.hpp>
 #include <intx/intx.hpp>
+#include <optional>
 
 namespace bcos::executor_v1::opstack
 {
@@ -87,4 +88,25 @@ intx::uint256 computeOperatorCost(
     const OpFeeParams& params, uint64_t gas, bool jovianFormula) noexcept;
 intx::uint256 computeOperatorCost(
     const OpFeeParams& params, uint64_t gas, const OpForkSpec& spec) noexcept;
+
+/// The L1 data fee of one signed envelope under @p spec, with the by-products the receipt
+/// needs: op-geth rollup_cost.go NewL1CostFunc's selection -- legacy (Bedrock-Delta, Regolith
+/// decides the +68 phantom bytes), first-Ecotone-block fallback (params unset: legacy with
+/// Regolith on), Ecotone calldata gas, else Fjord+ FastLZ. One implementation for execution
+/// (OpPolicy::additionalMaxCost) and admission (TxValidator's L1Cost row).
+struct OpL1DataCost
+{
+    intx::uint256 fee;
+    uint32_t flz_len = 0;  ///< Fjord+ only; 0 on every other branch
+    /// Engaged on the two legacy-priced branches: the receipt's L1GasUsed.
+    std::optional<uint64_t> legacy_l1_gas_used;
+};
+OpL1DataCost opL1DataCost(
+    const OpFeeParams& params, evmc::bytes_view signedTxEnvelope, const OpForkSpec& spec) noexcept;
+
+/// What op-geth's pool charges on top of tx.Cost() (core/txpool/rollup.go TotalTxCost with
+/// legacypool's RollupCostFn = types.NewTotalRollupCostFunc): the L1 data fee plus, from
+/// Isthmus on, the operator fee at the gas LIMIT. 512-bit: two 256-bit addends can carry.
+intx::uint512 opTotalRollupCost(const OpFeeParams& params, evmc::bytes_view signedTxEnvelope,
+    uint64_t gasLimit, const OpForkSpec& spec) noexcept;
 }  // namespace bcos::executor_v1::opstack

@@ -55,6 +55,7 @@
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include "libinitializer/BaselineSchedulerInitializer.h"
 #include "libinitializer/ProPBFTInitializer.h"
+#include "opstack-executor/OpAdmissionRollupCost.h"
 #include <TxPool.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hasher/AnyHasher.h>
@@ -1009,6 +1010,17 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             &bcos::txpool::isSystemTransaction, m_nodeConfig->groupId(), m_nodeConfig->chainId(),
             blobPolicy);
         m_memPoolValidator->setScheduler(m_scheduler);
+        // OP lane: the balance also covers the rollup cost (Check::L1Cost). Only this validator
+        // gets the callable: the txpool's cannot serve an OP chain (the OP gate above refuses a
+        // non-engine-driven, non-EL configuration) and opstack-el self-sync builds no mempool
+        // validator. The fork schedule was required when the OP scheduler was built.
+        if (m_executorVersion >= bcos::ledger::OPSTACK_EXECUTOR_VERSION)
+        {
+            m_memPoolValidator->setRollupCostFn(
+                bcos::executor_v1::opstack::makeOpAdmissionRollupCost(
+                    m_globalStateStorageInitializer, *m_nodeConfig->opForkSchedule(),
+                    m_protocolInitializer->blockFactory()));
+        }
     }
 
     // init the frontService
