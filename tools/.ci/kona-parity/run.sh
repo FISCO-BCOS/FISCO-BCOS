@@ -112,6 +112,12 @@ else
   ANVIL_BIN="${ANVIL_BIN:-anvil}"
   [ -f "${OP_E2E_DIR}/tools/op-e2e/setup_c2.sh" ] \
     || missing "op-stack-e2e-tests checkout at $OP_E2E_DIR (commit: pins.json op_stack_e2e_tests)"
+  # Until ticket 12 lands in the harness, setup_c2.sh does not read OVERLAY and every devnet
+  # carries the overlay: refuse OVERLAY=off before spending minutes on a devnet that the code
+  # check below would reject anyway. workflow.yml runs the same test to skip the leg outright.
+  if [ "$OVERLAY" = off ] && ! grep -qw OVERLAY "${OP_E2E_DIR}/tools/op-e2e/setup_c2.sh"; then
+    missing "harness overlay switch (ticket 12): setup_c2.sh at $OP_E2E_DIR does not read OVERLAY"
+  fi
   for b in op-deployer op-node op-batcher; do
     [ -x "$BIN_DIR/$b" ] || missing "$BIN_DIR/$b (build it as tools/.ci/c2-e2e.sh does)"
   done

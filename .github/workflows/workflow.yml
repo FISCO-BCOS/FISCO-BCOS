@@ -660,23 +660,20 @@ jobs:
           SKIP_FISCO_BUILD: "1"
 
   # kona-client block parity gate (tools/.ci/kona-parity/README.md): kona-host v1.7.0 replays
-  # every block of a C2 devnet and must reach FISCO's output root. Per PR, both genesis shapes.
-  # Exit 2 ("missing: ...") fails the job: there is no skip. Known red until its dependencies
-  # land: FISCO debug_getRawHeader/debug_dbGet (ticket 02) for both legs, and the harness
-  # OVERLAY switch (ticket 12) for overlay=off. Shares the OP-binary steps with c2_e2e above:
-  # keep them in lockstep.
-  kona_parity:
-    name: kona parity gate (overlay=${{ matrix.overlay }})
-    needs: [l2_unit_suites]
-    if: needs.l2_unit_suites.result == 'success'
+  # every block of a C2 devnet and must reach FISCO's output root. The gate needs FISCO's
+  # debug_getRawHeader/debug_dbGet (#5649, checked by its preflight); exit 2 ("missing: ...")
+  # fails the job, there is no skip inside run.sh. The overlay=off leg is the one exception,
+  # decided here rather than in run.sh: it exists only when the pinned harness's setup_c2.sh
+  # reads OVERLAY (ticket 12, FISCO-BCOS/op-stack-e2e-tests); until then this job prints a
+  # SKIP notice for it and the matrix holds overlay=on alone. overlay=on is never skipped.
+  kona_parity_legs:
+    name: kona parity gate legs (harness overlay switch)
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 5
     permissions:
       contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        overlay: ["on", "off"]
+    outputs:
+      overlay: ${{ steps.legs.outputs.overlay }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -693,6 +690,47 @@ jobs:
         run: |
           test "$(jq -r .op_stack_e2e_tests.commit tools/.ci/kona-parity/pins.json)" \
             = "$(git -C .ci-op-e2e-tests rev-parse HEAD)"
+
+      - name: Decide the matrix legs
+        id: legs
+        run: |
+          set -euo pipefail
+          # Same test as run.sh's OVERLAY=off refusal (tools/.ci/kona-parity/run.sh): the
+          # harness honours OVERLAY once its setup_c2.sh reads the variable.
+          if grep -qw OVERLAY .ci-op-e2e-tests/tools/op-e2e/setup_c2.sh; then
+            echo 'overlay=["on", "off"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'overlay=["on"]' >> "$GITHUB_OUTPUT"
+            echo "::notice title=kona parity gate (overlay=off) SKIPPED::the pinned harness" \
+              "(op-stack-e2e-tests @ $(git -C .ci-op-e2e-tests rev-parse --short HEAD)) has no" \
+              "OVERLAY switch in tools/op-e2e/setup_c2.sh (ticket 12, genesis overlay switch);" \
+              "only overlay=on runs. Bump the harness pin once the switch lands."
+          fi
+
+  # Shares the OP-binary steps with c2_e2e above: keep them in lockstep.
+  kona_parity:
+    name: kona parity gate (overlay=${{ matrix.overlay }})
+    needs: [l2_unit_suites, kona_parity_legs]
+    if: needs.l2_unit_suites.result == 'success' && needs.kona_parity_legs.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        overlay: ${{ fromJSON(needs.kona_parity_legs.outputs.overlay) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - name: Check out the op-e2e harness (op-stack-e2e-tests)
+        uses: actions/checkout@v4
+        with:
+          repository: FISCO-BCOS/op-stack-e2e-tests
+          ref: 0451c8bf3601c502a36be4633c0e2f4cc38e9c9b
+          path: .ci-op-e2e-tests
 
       - name: Download fisco-bcos from L2 unit job
         uses: actions/download-artifact@v4
