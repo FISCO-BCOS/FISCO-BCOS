@@ -280,7 +280,6 @@ public:
     using Holder = pro::proxy<AnyEntryFacade>;
 
     Entry() = default;
-    explicit Entry(auto input) { set(std::move(input)); }
 
     // m_buffer is the sole member: defaulted special members preserve the
     // held model (typed entries stay typed).  Move is noexcept thanks to
@@ -358,6 +357,18 @@ public:
         m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(
             SharedBufferModel<T, ENTRY_MODIFIED>{std::move(value)});
     }
+
+    // Declared after the set() overloads so the constraint can name them
+    // (name lookup in a requires-clause does not see members declared later
+    // in the class).  The constraint keeps this constructor out of overload
+    // resolution for types set() rejects — without it, unconstrained
+    // `auto` makes is_constructible_v<Entry, T> true for every T, which
+    // sends libstdc++ 16's std::optional<Entry> into a self-dependent
+    // constraint ("satisfaction of atomic constraint ... depends on
+    // itself").
+    template <typename T>
+        requires requires(Entry& self, T&& value) { self.set(std::forward<T>(value)); }
+    explicit Entry(T&& input) { set(std::move(input)); }
 
     // ── Typed storage API ──────────────────────────────────────────
     // Typed access never decodes: getTyped<T>() returns a pointer only if
