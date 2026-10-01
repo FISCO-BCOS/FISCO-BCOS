@@ -27,8 +27,8 @@ jobs:
       matrix:
         os:
           [
-            ubuntu-24.04,
-            ubuntu-24.04-arm,
+            ubuntu-26.04,
+            ubuntu-26.04-arm,
             macos-15,
             windows-2025,
           ]
@@ -65,7 +65,7 @@ jobs:
         with:
           node-version: 20
       - name: Install linux dependencies
-        if: matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm'
+        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-arm'
         run: |
           sudo apt update
           sudo apt install -y --no-install-recommends \
@@ -100,13 +100,13 @@ jobs:
             echo "EXTRA_FLAGS=" >> "$GITHUB_ENV"
           fi
       - name: Configure for linux
-        if: matrix.os == 'ubuntu-24.04'
+        if: matrix.os == 'ubuntu-26.04'
         run: |
           mkdir -p build
           cd build
           CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ${EXTRA_FLAGS} ..
       - name: Configure for linux arm
-        if: matrix.os == 'ubuntu-24.04-arm'
+        if: matrix.os == 'ubuntu-26.04-arm'
         run: |
           mkdir -p build
           cd build
@@ -163,14 +163,14 @@ jobs:
           fi
           echo "::notice::EEST pass rate ${PASS_RATE}% meets the 100% threshold"
       - name: Upload fisco-bcos binary artifact
-        if: matrix.os == 'ubuntu-24.04'
+        if: matrix.os == 'ubuntu-26.04'
         uses: actions/upload-artifact@v4
         with:
-          name: fisco-bcos-ubuntu-24-x86_64
+          name: fisco-bcos-ubuntu-26-x86_64
           path: build/fisco-bcos-air/fisco-bcos
           retention-days: 30
       # - name: Upload coverage report
-      #   if: matrix.os == 'ubuntu-24.04'
+      #   if: matrix.os == 'ubuntu-26.04'
       #   uses: actions/upload-artifact@v4
       #   with:
       #     name: coverage-report
@@ -200,7 +200,7 @@ jobs:
         # harness discards the node's stderr, so the root cause is not yet
         # diagnosed; see the air test which likewise excludes macos-15). macOS
         # is excluded until the node startup issue is fixed.
-        if: matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm'
+        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-arm'
         run: |
           # eth-account (tx signing) + requests (RPC). Handle PEP 668.
           python3 -m pip install --quiet eth-account requests 2>/dev/null || \
@@ -211,7 +211,7 @@ jobs:
         # Built-in single-node consensus mode ([consensus] enable_single_node_consensus):
         # builds a single-node AIR chain, patches config.ini to enable the mode (no
         # pbft/sealer/txpool), and drives eth_sendRawTransaction -> receipt / block reads.
-        if: matrix.os == 'ubuntu-24.04'
+        if: matrix.os == 'ubuntu-26.04'
         run: |
           # eth-account (tx signing) + requests (RPC). Handle PEP 668.
           python3 -m pip install --quiet eth-account requests 2>/dev/null || \
@@ -254,11 +254,11 @@ jobs:
         run: |
           set -euo pipefail
           case "${{ matrix.os }}" in
-            ubuntu-24.04)
+            ubuntu-26.04)
               PKG_OS=linux
               PKG_ARCH=x86_64
               ;;
-            ubuntu-24.04-arm)
+            ubuntu-26.04-arm)
               PKG_OS=linux
               PKG_ARCH=aarch64
               ;;
@@ -299,7 +299,7 @@ jobs:
 
   coverage:
     name: Coverage
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     env:
       # Surfaced as an env var so the upload step can be skipped when no token is
       # present. Fork PRs (pull_request event) receive NO secrets, so a tokenless
@@ -452,7 +452,7 @@ jobs:
   # itself when the A8 devnet is absent).
   l2_unit_suites:
     name: L2 unit suites
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     steps:
@@ -540,7 +540,7 @@ jobs:
     name: C2 deposit/withdraw e2e
     needs: [l2_unit_suites]
     if: needs.l2_unit_suites.result == 'success'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 45
     permissions:
       contents: read

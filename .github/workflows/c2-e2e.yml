@@ -27,7 +27,7 @@ jobs:
   # both files.
   c2_e2e:
     name: C2 deposit/withdraw e2e
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 45
     permissions:
       contents: read
