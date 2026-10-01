@@ -263,6 +263,16 @@ public:
     std::type_index typeIndex() const noexcept { return typeid(T); }
 };
 
+class Entry;
+
+// Constraint for Entry's greedy constructor.  Spelled as a concept with the
+// class as a template parameter so member lookup of `set` is dependent and
+// deferred to instantiation (when Entry is complete): an in-class
+// requires-clause naming `Entry::set` directly makes clang reject the member
+// access into the still-incomplete class.
+template <typename T, typename E>
+concept EntrySettable = requires(E& self, T&& value) { self.set(std::forward<T>(value)); };
+
 class Entry
 {
 public:
@@ -358,16 +368,12 @@ public:
             SharedBufferModel<T, ENTRY_MODIFIED>{std::move(value)});
     }
 
-    // Declared after the set() overloads so the constraint can name them
-    // (name lookup in a requires-clause does not see members declared later
-    // in the class).  The constraint keeps this constructor out of overload
-    // resolution for types set() rejects — without it, unconstrained
-    // `auto` makes is_constructible_v<Entry, T> true for every T, which
-    // sends libstdc++ 16's std::optional<Entry> into a self-dependent
-    // constraint ("satisfaction of atomic constraint ... depends on
-    // itself").
+    // Constrained to the types set() accepts: unconstrained, this constructor
+    // makes is_constructible_v<Entry, T> true for every T, which sends
+    // libstdc++ 16's std::optional<Entry> into a self-dependent constraint
+    // ("satisfaction of atomic constraint ... depends on itself").
     template <typename T>
-        requires requires(Entry& self, T&& value) { self.set(std::forward<T>(value)); }
+        requires EntrySettable<T, Entry>
     explicit Entry(T&& input) { set(std::move(input)); }
 
     // ── Typed storage API ──────────────────────────────────────────
