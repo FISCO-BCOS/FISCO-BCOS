@@ -371,10 +371,13 @@ public:
     // Constrained to the types set() accepts: unconstrained, this constructor
     // makes is_constructible_v<Entry, T> true for every T, which sends
     // libstdc++ 16's std::optional<Entry> into a self-dependent constraint
-    // ("satisfaction of atomic constraint ... depends on itself").
+    // ("satisfaction of atomic constraint ... depends on itself").  Takes the
+    // argument BY VALUE (like the original Entry(auto)) so an lvalue argument
+    // is copied, not moved-from; the Entry exclusion keeps the copy/move
+    // constructors winning for Entry arguments.
     template <typename T>
-        requires EntrySettable<T, Entry>
-    explicit Entry(T&& input) { set(std::move(input)); }
+        requires(!std::same_as<std::remove_cvref_t<T>, Entry> && EntrySettable<T, Entry>)
+    explicit Entry(T input) { set(std::move(input)); }
 
     // ── Typed storage API ──────────────────────────────────────────
     // Typed access never decodes: getTyped<T>() returns a pointer only if
