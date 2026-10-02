@@ -2463,6 +2463,16 @@ generate_auth_account()
         chmod u+x ${account_script}
         mv ${account_script} "${HOME}/.fisco/"
   fi
+  # The console get_*_account.sh scripts detect the arch with the non-portable
+  # `uname -p`, which prints "unknown" on newer coreutils (e.g. ubuntu-26.04) and
+  # then hits a fallback branch calling an undefined LOG_ERROR; rewrite to
+  # `uname -m` and export a LOG_ERROR fallback before running the script
+  sed -i.bak 's/uname -p/uname -m/g' "${HOME}/.fisco/${account_script}" && rm -f "${HOME}/.fisco/${account_script}.bak"
+  LOG_ERROR() {
+    local content=${1}
+    echo -e "\033[31m[ERROR] ${content}\033[0m"
+  }
+  export -f LOG_ERROR
   auth_admin_account=$(bash ${HOME}/.fisco/${account_script} | grep Address | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | awk '{print $5}')
   LOG_INFO "Admin account: ${auth_admin_account}"
   if [[ ${chain_version} == "air" ]];then

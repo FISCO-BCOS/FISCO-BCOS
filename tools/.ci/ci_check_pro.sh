@@ -79,6 +79,12 @@ generate_auth_account()
         LOG_INFO "Downloading ${account_script} from ${get_account_link}..."
         curl -#LO "${get_account_link}"
   fi
+  # The console get_*_account.sh scripts detect the arch with the non-portable
+  # `uname -p`, which prints "unknown" on newer coreutils (e.g. ubuntu-26.04) and
+  # then hits a fallback branch calling an undefined LOG_ERROR; rewrite to
+  # `uname -m` and export a LOG_ERROR fallback before running the script
+  sed -i.bak 's/uname -p/uname -m/g' "${account_script}" && rm -f "${account_script}.bak"
+  export -f LOG_ERROR
   auth_admin_account=$(bash ${account_script} | grep Address | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | awk '{print $5}')
   LOG_INFO "Admin account: ${auth_admin_account}"
 }
