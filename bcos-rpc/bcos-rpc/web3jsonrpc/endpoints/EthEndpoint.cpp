@@ -1970,15 +1970,16 @@ task::Task<void> EthEndpoint::txpoolContent(const Json::Value&, Json::Value& res
     Json::Value result = Json::objectValue;
     result["pending"] = Json::objectValue;
     result["queued"] = Json::objectValue;
-    for (auto const& pooled : co_await pooledTransactions())
+    auto const pooled = co_await pooledTransactions();
+    for (auto const& pooledTx : pooled)
     {
         Json::Value tx = Json::objectValue;
-        combineTxResponse(tx, *pooled.transaction, 0, 0, crypto::HashType{});
+        combineTxResponse(tx, *pooledTx.transaction, 0, 0, crypto::HashType{});
         tx["blockHash"] = Json::nullValue;
         tx["blockNumber"] = Json::nullValue;
         tx["transactionIndex"] = Json::nullValue;
         auto const sender = tx["from"].asString();
-        result[pooled.pending ? "pending" : "queued"][sender][std::to_string(pooled.nonce)] =
+        result[pooledTx.pending ? "pending" : "queued"][sender][std::to_string(pooledTx.nonce)] =
             std::move(tx);
     }
     buildJsonContent(result, response);

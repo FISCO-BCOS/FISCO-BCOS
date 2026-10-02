@@ -41,11 +41,11 @@ inline constexpr evmc::address OP_L2_TO_L1_MESSAGE_PASSER =
 struct OpFeeParams
 {
     intx::uint256 l1_base_fee;             // slot 1 (whole slot)
-    uint32_t base_fee_scalar;              // slot 3 bytes[16,20)
-    uint32_t blob_base_fee_scalar;         // slot 3 bytes[20,24)
+    uint32_t base_fee_scalar = 0;          // slot 3 bytes[16,20)
+    uint32_t blob_base_fee_scalar = 0;     // slot 3 bytes[20,24)
     intx::uint256 blob_base_fee;           // slot 7 (whole slot)
-    uint32_t operator_fee_scalar;          // slot 8 bytes[20,24)
-    uint64_t operator_fee_constant;        // slot 8 bytes[24,32)
+    uint32_t operator_fee_scalar = 0;      // slot 8 bytes[20,24)
+    uint64_t operator_fee_constant = 0;    // slot 8 bytes[24,32)
     uint16_t da_footprint_gas_scalar = 0;  // slot 8 bytes[18,20)
     // Bedrock–Delta legacy L1-fee inputs (has_legacy_l1_formula), both whole slots; the scalar's
     // precision is 1e6 (op-geth l1CostHelper divides by oneMillion). Ecotone+ keeps stale

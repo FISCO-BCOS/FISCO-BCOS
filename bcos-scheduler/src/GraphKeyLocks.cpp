@@ -200,7 +200,7 @@ void GraphKeyLocks::releaseKeyLocks(int64_t contextID, int64_t seq)
     {
         // All edge had removed, delete the vertex
         boost::remove_vertex(vertex, m_graph);
-        m_vertexes.erase(contextID);
+        m_vertexes.erase(Vertex(contextID));
     }
 }
 
