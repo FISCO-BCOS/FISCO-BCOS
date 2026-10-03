@@ -1,19 +1,3 @@
-/**
- *  Copyright (C) 2026 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- */
-
 #pragma once
 
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
@@ -25,8 +9,8 @@
 namespace bcos::scheduler_v1
 {
 
-/// Thrown for a negative version, and by scheduler(version)/getScheduler() when the
-/// selected slot is out of range or unwired. setVersion() deliberately does NOT throw on
+/// Thrown for a negative executor version, and by scheduler(version) / getScheduler() when
+/// the selected slot is out of range or unwired. setVersion() deliberately does NOT throw on
 /// an unwired slot at runtime — see its definition.
 DERIVE_BCOS_EXCEPTION(ExecutorVersionNotSupported);
 
@@ -42,20 +26,15 @@ DERIVE_BCOS_EXCEPTION(ExecutorVersionNotSupported);
 /// so a switch to the Ethereum or OP executor is honoured on Hex and Binary nodes alike.
 ///
 /// The executor version that selects the pure-Ethereum EthereumExecutor
-/// (ethereum-executor). It is index 2 of MultiVersionScheduler's scheduler array.
+/// (ethereum-executor); index 2 of MultiVersionScheduler's scheduler array.
 /// The canonical value lives in bcos-framework/ledger (so lower layers can gate on
 /// it without depending on libinitializer); this keeps the scheduler_v1 spelling.
 constexpr static int ETHEREUM_EXECUTOR_VERSION = ledger::ETHEREUM_EXECUTOR_VERSION;
 
-/// executor_version == this selects OP mode (OpScheduler, slot 3). A higher value is not a
-/// defined lane: boot does not refuse it — setVersion saturates it onto the newest WIRED
-/// slot and the chain keeps producing; from 3.18.0 on SystemConfigPrecompiled refuses it as
-/// a governance write instead (whose non-zero activation block would fail the next start in
-/// validateOpModeGenesisOnly). It is a genesis property:
+/// executor_version >= this selects OP mode (OpScheduler, slot 3). It is a genesis property:
 /// SystemConfigPrecompiled refuses a governance write of this value from 3.18.0 on, so on a
 /// running chain the value can only reach here from config.genesis via Initializer::init.
 constexpr static int OPSTACK_EXECUTOR_VERSION = ledger::OPSTACK_EXECUTOR_VERSION;
-/// Version ordering invariant: OP sits strictly above the Ethereum executor.
 static_assert(OPSTACK_EXECUTOR_VERSION > ETHEREUM_EXECUTOR_VERSION,
     "OPSTACK_EXECUTOR_VERSION must be strictly greater than ETHEREUM_EXECUTOR_VERSION");
 

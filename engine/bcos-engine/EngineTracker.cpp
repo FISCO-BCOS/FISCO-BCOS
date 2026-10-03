@@ -18,7 +18,6 @@
  */
 
 #include "EngineTracker.h"
-#include <cstdint>
 
 // Upstream pin: op-geth d401af16f2dd94b010a72eaef10e07ac10b31931
 // (eth/catalyst/api.go forkchoiceUpdated / SetSafe / SetFinalized).
@@ -99,44 +98,13 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
     }
 
     std::unique_lock lock(m_mutex);
-    if (m_trackedHead.has_value() && resolved.allowNonLinearHead)
-    {
-        auto const& trackedHeadBlock = *m_trackedHead;
-        if (headBlockNumber < trackedHeadBlock.blockNumber &&
-            headBlockNumber != resolved.canonicalTipNumber)
-        {
-            // OP old non-canonical head (design §4.2 fourth row): this branch NEVER
-            // rewinds the tracked tip — only SetSafe/SetFinalized overwrite (zero hash
-            // clears nothing), then attrs decide build-vs-heartbeat. A head that IS the
-            // canonical tip skips this branch via the != canonicalTipNumber guard and
-            // re-seeds the tracker below: a canonical-tip rewind is deliberate
-            // re-seeding, not the non-linear rewind forbidden here.
-            if (requiresCanonical(resolved.state.safeBlockHash, safeBlockNumber))
-            {
-                m_safe = safeBlockNumber;
-            }
-            if (requiresCanonical(resolved.state.finalizedBlockHash, finalizedBlockNumber))
-            {
-                m_finalized = finalizedBlockNumber;
-            }
-            return resolved.payloadAttributesPresent ? ForkchoiceApplyResult::RebuildOnParent :
-                                                       ForkchoiceApplyResult::Swallowed;
-        }
-        // head >= tracked: OP accepts any forward jump and a same-height side-chain
-        // switch without the +1/headCanonical gates — the caller has already run
-        // SetCanonical where the head needed canonicalizing, and an imported
-        // (not-yet-canonical) head is a legal OP FCU target.
-    }
-    else if (m_trackedHead.has_value())
+    if (m_trackedHead.has_value())
     {
         auto const& trackedHeadBlock = *m_trackedHead;
         if (headBlockNumber < trackedHeadBlock.blockNumber)
         {
-            if (resolved.payloadAttributesPresent)
-            {
-                return ForkchoiceApplyResult::RebuildOnParent;
-            }
-            // Heartbeat / stale-head FCU without attributes: VALID, no build.
+            // Match release EngineServiceImpl: any older head is swallowed (VALID without
+            // payloadId). Rebuild-on-parent is intentionally not supported on this branch.
             return ForkchoiceApplyResult::Swallowed;
         }
         else if (headBlockNumber == trackedHeadBlock.blockNumber)
@@ -148,12 +116,7 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
                         "Forkchoice head block hash conflicts with tracked block number"});
             }
         }
-        // S11: trackedHeadBlock.blockNumber comes from a ledger row; at INT64_MAX the
-        // signed + 1 below would overflow (UB). An unsigned-difference comparison
-        // expresses the same "exactly one above" branch wrap-free.
-        else if (static_cast<std::uint64_t>(headBlockNumber) -
-                     static_cast<std::uint64_t>(trackedHeadBlock.blockNumber) ==
-                 1u)
+        else if (headBlockNumber == trackedHeadBlock.blockNumber + 1)
         {
             // Reject a +1 head advance when the resolver cannot confirm it is canonical.
             if (!resolved.headCanonical)
@@ -173,11 +136,10 @@ ForkchoiceApplyResult EngineTracker::applyForkchoice(const ResolvedForkchoice& r
                                       "Forkchoice head block number must increase by exactly 1"});
         }
     }
-    else if (!resolved.headCanonical && !resolved.allowNonLinearHead)
+    else if (!resolved.headCanonical)
     {
         // First apply: same fail-closed rule — an unconfirmed head must not seed the
-        // tracker, or every later +1/conflict check runs against a bogus tip. The OP
-        // strategy bit accepts an unconfirmed (imported) seed by design.
+        // tracker, or every later +1/conflict check runs against a bogus tip.
         BOOST_THROW_EXCEPTION(InvalidForkchoiceState{}
                               << bcos::errinfo_comment{"Forkchoice head block is not canonical"});
     }
@@ -246,39 +208,6 @@ std::optional<bcos::protocol::BlockNumber> EngineTracker::finalizedBlockNumber()
 {
     std::shared_lock lock(m_mutex);
     return m_finalized;
-}
-
-ForkchoiceRollback EngineTracker::snapshotForkchoiceForRollback() const
-{
-    std::shared_lock lock(m_mutex);
-    return ForkchoiceRollback{
-        .state = m_forkchoiceState,
-        .trackedHead = m_trackedHead,
-        .safe = m_safe,
-        .finalized = m_finalized,
-    };
-}
-
-void EngineTracker::rollbackForkchoice(
-    const ForkchoiceRollback& preApply, std::optional<TrackedHeadBlock> const& appliedHead)
-{
-    std::unique_lock lock(m_mutex);
-    // Anchor check: only rewind while the tracker still reflects THIS apply. A newer
-    // concurrent FCU that has moved the tracked head must not be clobbered by an older
-    // failure — that FCU's own outcome governs, and its result was computed against its
-    // own (moved) state.
-    auto const sameHead =
-        m_trackedHead.has_value() == appliedHead.has_value() &&
-        (!appliedHead.has_value() || (m_trackedHead->hash == appliedHead->hash &&
-                                         m_trackedHead->blockNumber == appliedHead->blockNumber));
-    if (!sameHead)
-    {
-        return;
-    }
-    m_forkchoiceState = preApply.state;
-    m_trackedHead = preApply.trackedHead;
-    m_safe = preApply.safe;
-    m_finalized = preApply.finalized;
 }
 
 EngineTracker::ExclusiveAccess EngineTracker::lockExclusive()

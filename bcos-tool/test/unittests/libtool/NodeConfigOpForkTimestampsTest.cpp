@@ -32,7 +32,7 @@ BOOST_AUTO_TEST_SUITE(NodeConfigOpForkTimestampsTest)
 
 namespace
 {
-constexpr uint64_t c_never = std::numeric_limits<uint64_t>::max();
+constexpr uint64_t kNever = std::numeric_limits<uint64_t>::max();
 
 /// Genesis with a configurable [executor] tail and an optional [op_fork_timestamps] section;
 /// everything else is fixed so the OP checks are the only guards that can fire. Every
@@ -88,33 +88,18 @@ BOOST_AUTO_TEST_CASE(absentKeyMeansNeverActivates)
     auto cfg = loadOk(opGenesis(opExecutor(), "[op_fork_timestamps]\njovian_time=0\n"));
     BOOST_REQUIRE(cfg.opForkSchedule().has_value());
     BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_jovianTime, 0U);
-    BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_karstTime, c_never);
+    BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_karstTime, kNever);
 }
 
-// Karst is Jovian's rules on an Osaka EVM, so it cannot activate first. Equal times are
-// LEGAL though (op-geth CheckConfigForkOrder compares with `>`) — they fold into the
-// later fork downstream. The same ordering rule holds for any non-adjacent scheduled
-// pair down the full ladder.
+// Karst is Jovian's rules on an Osaka EVM, so it cannot activate first. The same holds for
+// any non-adjacent scheduled pair down the full ladder.
 BOOST_AUTO_TEST_CASE(decreasingScheduleRejected)
 {
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(opExecutor(),
                               "[op_fork_timestamps]\njovian_time=2000\nkarst_time=1000\n")),
         InvalidConfig, [](auto const& e) {
-            return errinfoContains(e, "fork activation times must be non-decreasing") &&
-                   errinfoContains(e, "jovian_time") && errinfoContains(e, "karst_time");
-        });
-
-    // UINT64_MAX ("not scheduled") is terminal for the jovian/karst pair: karst cannot be
-    // scheduled after it. The message names the keys and never prints the sentinel as if it
-    // were a time.
-    NodeConfig unscheduledJovian(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_CHECK_EXCEPTION(unscheduledJovian.loadGenesisConfigFromString(
-                              opGenesis(opExecutor(), "[op_fork_timestamps]\nkarst_time=1000\n")),
-        InvalidConfig, [](auto const& e) {
-            return errinfoContains(e, "fork activation times must be non-decreasing") &&
-                   errinfoContains(e, "jovian_time is not") &&
-                   !errinfoContains(e, "18446744073709551615");
+            return errinfoContains(e, "fork activation times must be non-decreasing");
         });
 
     // Non-adjacent pair, full ladder: ecotone cannot precede canyon.
@@ -124,35 +109,24 @@ BOOST_AUTO_TEST_CASE(decreasingScheduleRejected)
                                   "[op_fork_timestamps]\nisthmus_time=5000\ncanyon_time=2000\n"
                                   "ecotone_time=1000\n")),
         InvalidConfig, [](auto const& e) {
-            return errinfoContains(e, "fork activation times must be non-decreasing") &&
-                   errinfoContains(e, "canyon_time") && errinfoContains(e, "ecotone_time");
+            return errinfoContains(e, "fork activation times must be non-decreasing");
         });
 }
 
-// Simultaneous jovian/karst activation is the release line's genesis shape: it loads,
-// and the fold downstream merges it into the later fork.
-BOOST_AUTO_TEST_CASE(simultaneousTimesLoad)
-{
-    auto cfg = loadOk(
-        opGenesis(opExecutor(), "[op_fork_timestamps]\njovian_time=1000\nkarst_time=1000\n"));
-    BOOST_REQUIRE(cfg.opForkSchedule().has_value());
-    BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_jovianTime, 1000U);
-    BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_karstTime, 1000U);
-}
-
-// An unscheduled PRE-Isthmus intermediate fork is skipped, not terminal: a later fork's
-// activation implies it (a chain may jump straight to Canyon once the ladder is live).
-// The jovian/karst pair is the deliberate exception: this branch's engine lane resolves
-// that pair through ledger::foldOpForkShorthand, which rejects karst without jovian
-// (see decreasingScheduleRejected above) — upstream's devp2p replay path allows the
-// skip, but an engine-driven chain configured that way would only fail later, at
-// engine build, so config load refuses it up front.
+// An unscheduled intermediate fork is skipped, not terminal: a later fork's activation
+// implies it (a chain may jump straight to a later fork), so karst without jovian and
+// canyon without regolith are both valid schedules.
 BOOST_AUTO_TEST_CASE(unscheduledIntermediateForksAllowed)
 {
+    auto cfg = loadOk(opGenesis(opExecutor(), "[op_fork_timestamps]\nkarst_time=1000\n"));
+    BOOST_REQUIRE(cfg.opForkSchedule().has_value());
+    BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_jovianTime, kNever);
+    BOOST_CHECK_EQUAL(cfg.opForkSchedule()->m_karstTime, 1000U);
+
     auto jump = loadOk(opGenesis(
         opExecutor(), "[op_fork_timestamps]\nisthmus_time=500\ncanyon_time=100\n"));
     BOOST_REQUIRE(jump.opForkSchedule().has_value());
-    BOOST_CHECK_EQUAL(jump.opForkSchedule()->m_regolithTime, c_never);
+    BOOST_CHECK_EQUAL(jump.opForkSchedule()->m_regolithTime, kNever);
     BOOST_CHECK_EQUAL(jump.opForkSchedule()->m_canyonTime, 100U);
     BOOST_CHECK_EQUAL(jump.opForkSchedule()->m_isthmusTime, 500U);
 }
@@ -217,8 +191,8 @@ BOOST_AUTO_TEST_CASE(sectionWithoutOpLaneRejected)
         cfg.loadGenesisConfigFromString(
             opGenesis("version=2\nevm_revision=prague\n", "[op_fork_timestamps]\njovian_time=0\n")),
         InvalidConfig, [](auto const& e) {
-            return errinfoContains(e,
-                "[op_fork_timestamps]/[op_fork_schedule] requires executor.version >= 3 (OP lane)");
+            return errinfoContains(
+                e, "[op_fork_timestamps] requires executor.version >= 3 (OP lane)");
         });
 }
 
@@ -228,9 +202,8 @@ BOOST_AUTO_TEST_CASE(opLaneWithoutSectionRejected)
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(opExecutor(), "")),
         InvalidConfig, [](auto const& e) {
-            return errinfoContains(e,
-                "executor.version >= 3 (OP lane) requires an [op_fork_schedule] canonical or an "
-                "[op_fork_timestamps] section");
+            return errinfoContains(
+                e, "executor.version >= 3 (OP lane) requires an [op_fork_timestamps] section");
         });
 }
 

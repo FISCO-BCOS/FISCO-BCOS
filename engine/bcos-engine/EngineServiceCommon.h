@@ -22,8 +22,6 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/engine/Constants.h>
 #include <bcos-framework/engine/Errors.h>
-#include <bcos-framework/engine/OpEip1559Params.h>
-#include <bcos-framework/engine/OpForkId.h>
 #include <bcos-framework/engine/RawTransactionDispatch.h>
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
@@ -41,7 +39,6 @@
 #include <cstddef>
 #include <memory>
 #include <optional>
-#include <semaphore>
 #include <span>
 #include <string>
 #include <string_view>
@@ -50,36 +47,6 @@
 
 namespace bcos::engine
 {
-
-// S6: the Engine API commit sections span co_awaits by design (their comments say so),
-// and task::syncWait may resume the coroutine on another thread — a std::mutex
-// released by a thread that did not acquire it is ISO/POSIX UB. A counting semaphore
-// may be released from ANY thread, so it keeps the same single-holder exclusion
-// without the cross-thread-unlock hazard (EngineTracker::abortIfForeignThread
-// documents the same failure mode and chooses to terminate).
-class CrossThreadCommitGate
-{
-public:
-    explicit CrossThreadCommitGate(std::counting_semaphore<1>& gate) : m_gate(gate)
-    {
-        m_gate.acquire();
-    }
-    ~CrossThreadCommitGate() { release(); }
-    CrossThreadCommitGate(CrossThreadCommitGate const&) = delete;
-    CrossThreadCommitGate& operator=(CrossThreadCommitGate const&) = delete;
-    void release()
-    {
-        if (m_held)
-        {
-            m_gate.release();
-            m_held = false;
-        }
-    }
-
-private:
-    std::counting_semaphore<1>& m_gate;
-    bool m_held = true;
-};
 
 /// One shared definition (was duplicated in EngineTracker.h and EngineServiceImpl.h).
 struct TrackedHeadBlock
@@ -106,16 +73,8 @@ using BuiltPayloadPtr = std::shared_ptr<const BuiltPayload>;
 
 namespace detail
 {
-/// Holocene/Jovian extraData from CL attributes. Attribute 0,0 becomes the chain's Canyon pair
-/// (op-core EncodeHoloceneExtraData / EncodeJovianExtraData): op-node sends all-zero params
-/// when its L1 SystemConfig carries none, and the only value this node can justify is the one
-/// the chain declared in [op_eip1559]. The default keeps every non-OP caller (the Eth lane)
-/// behaviourally unchanged.
-bcos::bytes encodeOptimismExtraData(
-    const PayloadAttributes& payloadAttributes, OpEip1559Params eip1559);
-/// The legacy-preset form: every undeclared chain (and the Eth lane) prices with
-/// kLegacyOpEip1559Params. A separate overload rather than a defaulted parameter — a default
-/// declared in this header clashed with the redeclaration in EngineServiceImpl.h.
+/// Holocene/Jovian extraData from CL attributes. Attribute 0,0 becomes Canyon 250/6
+/// (op-core EncodeHoloceneExtraData / EncodeJovianExtraData).
 bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes);
 
 std::optional<std::string> validateExecutionPayload(
@@ -347,10 +306,8 @@ std::uint32_t payloadShapeVersion(std::uint32_t methodVersion);
 std::optional<std::string> validateRawTransactionKind(
     bcos::engine::RawTransactionKind kind, std::size_t index, bool allowBlob = false);
 /// EIP-1559 attribute pairing rule: the pair must be both-zero or both
-/// non-zero. (0,0) is legal attribute input — op-geth's ValidateHolocene1559Params accepts
-/// it and miner/worker.go:377-381 substitutes the chain config's pair, and
-/// encodeOptimismExtraData does the same from this node's declaration (the OP-mainnet preset
-/// when nothing is declared) — but a mixed pair such as (d>0,e==0) would be encoded
+/// non-zero. (0,0) is legal attribute input — encodeOptimismExtraData translates it to
+/// the Canyon constants 250/6 — but a mixed pair such as (d>0,e==0) would be encoded
 /// verbatim as a zero-elasticity header that calcOpBaseFee can never extend, bricking
 /// the chain on top of it. Committed headers are validated separately with a strict
 /// non-zero rule (validateOpExtraDataShape) since encode never produces a zero header.
@@ -426,34 +383,10 @@ inline bool isGetPayloadVersionSupported(std::uint32_t version)
 }
 /// Shared getPayload response assembly so V4+ executionRequests semantics stay aligned.
 template <class EntryT>
-GetPayloadResult assembleGetPayloadData(
-    const EntryT& entry, std::uint32_t version, std::optional<OpForkId> opForkId = std::nullopt)
+GetPayloadResult assembleGetPayloadData(const EntryT& entry, std::uint32_t version)
 {
-    // The OP builder stamps every fork's optional fields on its carrier (present-empty
-    // withdrawals, present-zero blob pair/withdrawalsRoot), but the response must be shaped
-    // like the block the fork actually defines — op-geth's engine_getPayloadV2 returns the
-    // block's own pre-Cancun ExecutionPayload. Shaping here (rather than at the builder)
-    // keeps the wire shape a property of the (method version, fork) pair and leaves the
-    // executed/build carrier untouched. `opForkId` is unset on the Eth lane, whose entries
-    // already carry exactly the fields its versions define.
-    ExecutionPayload executionPayload = entry.executionPayload;
-    if (opForkId.has_value())
-    {
-        if (*opForkId < OpForkId::Canyon)
-        {
-            // Pre-Shanghai (Regolith/PayloadV1): EIP-4895 withdrawals do not exist yet.
-            executionPayload.withdrawals.reset();
-            executionPayload.withdrawalsRoot.reset();
-        }
-        if (*opForkId < OpForkId::Ecotone)
-        {
-            // Pre-Cancun: neither side of the EIP-4844 blob pair exists yet.
-            executionPayload.blobGasUsed.reset();
-            executionPayload.excessBlobGas.reset();
-        }
-    }
     return std::make_unique<GetPayloadData>(GetPayloadData{
-        .executionPayload = std::move(executionPayload),
+        .executionPayload = entry.executionPayload,
         .blockValue = entry.blockValue,
         .blobsBundle = entry.blobsBundle,
         .shouldOverrideBuilder = entry.shouldOverrideBuilder,
@@ -465,12 +398,7 @@ GetPayloadResult assembleGetPayloadData(
                                          entry.executionRequests :
                                          std::optional<std::vector<bytes>>{std::in_place}) :
                                  std::nullopt,
-        // Beacon roots arrived with Cancun, so a V2 response must not carry one. A
-        // pre-Cancun build's artifact has none anyway, but gating here keeps the
-        // response shape a property of the version rather than of the builder.
-        .parentBeaconBlockRoot = version >= static_cast<std::uint32_t>(ApiVersion::V3) ?
-                                     entry.parentBeaconBlockRoot :
-                                     std::nullopt,
+        .parentBeaconBlockRoot = entry.parentBeaconBlockRoot,
     });
 }
 

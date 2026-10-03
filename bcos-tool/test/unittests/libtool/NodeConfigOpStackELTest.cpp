@@ -170,8 +170,8 @@ BOOST_AUTO_TEST_CASE(opStackELRequiresOpForkSchedule)
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(genesis), InvalidConfig,
         [](auto const& e) {
-            return errinfoContains(e,
-                "requires an [op_fork_schedule] canonical or an [op_fork_timestamps] section");
+            return errinfoContains(
+                e, "executor.version >= 3 (OP lane) requires an [op_fork_timestamps] section");
         });
 }
 

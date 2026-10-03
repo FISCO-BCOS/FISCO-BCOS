@@ -87,7 +87,6 @@ public:
     task::Task<void> txpoolStatus(const Json::Value&, Json::Value&);
     task::Task<void> txpoolContent(const Json::Value&, Json::Value&);
     task::Task<void> getProof(const Json::Value&, Json::Value&);
-    task::Task<void> feeHistory(const Json::Value&, Json::Value&);
 
 private:
     NodeService::Ptr m_nodeService;

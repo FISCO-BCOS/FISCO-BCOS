@@ -94,7 +94,6 @@ enum class EthMethod
     txpool_status,
     txpool_content,
     eth_getProof,
-    eth_feeHistory,
     miner_setMaxDASize
 };
 
