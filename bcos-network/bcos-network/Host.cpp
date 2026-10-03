@@ -5,4 +5,4 @@
  * the TUs that use a concrete Host specialization (the gateway: libp2p's P2PDecoder).
  */
 
-#include "bcos-gateway/libnetwork/Host.h"
+#include "bcos-network/Host.h"

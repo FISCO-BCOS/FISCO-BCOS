@@ -12,34 +12,34 @@
  * (the gateway: libp2p's P2PDecoder).
  */
 
-#include "bcos-gateway/libnetwork/Session.h"
+#include "bcos-network/Session.h"
 #include <range/v3/numeric/accumulate.hpp>
 
 using namespace bcos;
-using namespace bcos::gateway;
+using namespace bcos::network;
 
-size_t bcos::gateway::Payload::size() const
+size_t bcos::network::Payload::size() const
 {
     return ::ranges::accumulate(
         m_data, size_t(0), [](size_t sum, const bytesConstRef& ref) { return sum + ref.size(); });
 }
-std::size_t bcos::gateway::SessionRecvBuffer::readPos() const
+std::size_t bcos::network::SessionRecvBuffer::readPos() const
 {
     return m_readPos;
 }
-std::size_t bcos::gateway::SessionRecvBuffer::writePos() const
+std::size_t bcos::network::SessionRecvBuffer::writePos() const
 {
     return m_writePos;
 }
-std::size_t bcos::gateway::SessionRecvBuffer::dataSize() const
+std::size_t bcos::network::SessionRecvBuffer::dataSize() const
 {
     return m_writePos - m_readPos;
 }
-size_t bcos::gateway::SessionRecvBuffer::recvBufferSize() const
+size_t bcos::network::SessionRecvBuffer::recvBufferSize() const
 {
     return m_recvBufferSize;
 }
-bool bcos::gateway::SessionRecvBuffer::onRead(std::size_t _dataSize)
+bool bcos::network::SessionRecvBuffer::onRead(std::size_t _dataSize)
 {
     if (m_readPos + _dataSize <= m_writePos)
     {
@@ -48,7 +48,7 @@ bool bcos::gateway::SessionRecvBuffer::onRead(std::size_t _dataSize)
     }
     return false;
 }
-bool bcos::gateway::SessionRecvBuffer::onWrite(std::size_t _dataSize)
+bool bcos::network::SessionRecvBuffer::onWrite(std::size_t _dataSize)
 {
     if (m_writePos + _dataSize <= m_recvBufferSize)
     {
@@ -57,7 +57,7 @@ bool bcos::gateway::SessionRecvBuffer::onWrite(std::size_t _dataSize)
     }
     return false;
 }
-bool bcos::gateway::SessionRecvBuffer::resizeBuffer(size_t _bufferSize)
+bool bcos::network::SessionRecvBuffer::resizeBuffer(size_t _bufferSize)
 {
     if (_bufferSize > m_recvBufferSize)
     {
@@ -69,7 +69,7 @@ bool bcos::gateway::SessionRecvBuffer::resizeBuffer(size_t _bufferSize)
 
     return false;
 }
-void bcos::gateway::SessionRecvBuffer::moveToHeader()
+void bcos::network::SessionRecvBuffer::moveToHeader()
 {
     if (m_writePos > m_readPos)
     {
@@ -83,7 +83,7 @@ void bcos::gateway::SessionRecvBuffer::moveToHeader()
         m_writePos = 0;
     }
 }
-std::size_t bcos::gateway::SessionRecvBuffer::takeStorage(bytes& out, std::size_t frameLen)
+std::size_t bcos::network::SessionRecvBuffer::takeStorage(bytes& out, std::size_t frameLen)
 {
     auto frameStart = m_readPos;
     auto frameEnd = frameStart + frameLen;
@@ -105,11 +105,11 @@ std::size_t bcos::gateway::SessionRecvBuffer::takeStorage(bytes& out, std::size_
     m_writePos = tail;
     return frameStart;
 }
-bcos::bytesConstRef bcos::gateway::SessionRecvBuffer::asReadBuffer() const
+bcos::bytesConstRef bcos::network::SessionRecvBuffer::asReadBuffer() const
 {
     return {m_recvBuffer.data() + m_readPos, m_writePos - m_readPos};
 }
-bcos::bytesRef bcos::gateway::SessionRecvBuffer::asWriteBuffer()
+bcos::bytesRef bcos::network::SessionRecvBuffer::asWriteBuffer()
 {
     return {m_recvBuffer.data() + m_writePos, m_recvBufferSize - m_writePos};
 }

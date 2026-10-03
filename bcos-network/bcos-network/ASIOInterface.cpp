@@ -5,14 +5,14 @@
  * @author: bxq2011hust
  * @date 2019-07-244
  */
-#include "bcos-gateway/libnetwork/ASIOInterface.h"
+#include "bcos-network/ASIOInterface.h"
 #include "Socket.h"
 #include <chrono>
 
 namespace ba = boost::asio;
 namespace bi = ba::ip;
 using namespace bcos;
-using namespace bcos::gateway;
+using namespace bcos::network;
 using namespace std;
 
 ASIOInterface::ASIOInterface(

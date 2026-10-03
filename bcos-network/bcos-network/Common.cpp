@@ -3,7 +3,7 @@
  */
 #include "Common.h"
 
-namespace bcos::gateway
+namespace bcos::network
 {
 
 std::string reasonOf(DisconnectReason _reason)
@@ -43,4 +43,4 @@ std::string reasonOf(DisconnectReason _reason)
     }
 }
 
-}  // namespace bcos::gateway
+}  // namespace bcos::network
