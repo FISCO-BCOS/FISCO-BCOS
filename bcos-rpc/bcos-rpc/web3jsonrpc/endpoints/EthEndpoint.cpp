@@ -19,11 +19,13 @@
  */
 
 #include "EthEndpoint.h"
+#include "bcos-framework/engine/OpTime.h"
 #include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/protocol/TxGasModel.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-mempool/MemPoolImpl.h"
 #include "bcos-protocol/TransactionStatus.h"
@@ -52,6 +54,7 @@
 #include <bcos-rpc/web3jsonrpc/model/ReceiptResponse.h>
 #include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
 #include <bcos-rpc/web3jsonrpc/utils/AdmissionError.h>
+#include <bcos-rpc/web3jsonrpc/utils/FeeHistory.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tx-validator/TxValidator.h>
@@ -370,7 +373,7 @@ task::Task<std::optional<HistoricalMptContext>> tryResolveMptContext(
 }
 
 /// Historical-tag entry: strict — a missing reader or a root absent from MPT node storage
-/// throws (see tryResolveMptContext).
+/// throws, with pruning-aware wording (see tryResolveMptContext).
 bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
     bcos::ledger::LedgerInterface& ledger, bcos::protocol::BlockNumber blockNumber,
     bcos::protocol::BlockNumber head,
@@ -383,7 +386,8 @@ bcos::task::Task<HistoricalMptContext> resolveHistoricalMptContext(
 
 /// latest/pending entry: lenient — a missing reader or a tip root absent from MPT node
 /// storage yields std::nullopt so the caller serves the request from the flat state instead
-/// of failing the tag every client sends by default.
+/// of failing the tag every client sends by default. head/mptPruneWindow are only read on
+/// the strict error path, which this entry never takes.
 task::Task<std::optional<HistoricalMptContext>> tryResolveLatestMptContext(
     bcos::ledger::LedgerInterface& ledger, bcos::protocol::BlockNumber blockNumber,
     bcos::protocol::BlockNumber head,
@@ -1326,6 +1330,28 @@ task::Task<void> EthEndpoint::call(
                 chainBlockGasLimit = static_cast<uint64_t>(limit);
             }
         }
+        // EIP-7825's 2^24 ceiling applies only where it is actually in force at the target
+        // block (M1): the call=true executor path skips the per-tx admission check
+        // (geth #32641), so on Osaka+ the header-derived budget AND an explicit gas must
+        // stay under MAX_TX_GAS_LIMIT. On pre-Osaka revisions, pre-Karst OP chains, and
+        // the legacy FISCO lane (block gas up to 3e9) there is no such ceiling, and
+        // clamping there would fail estimates for transactions the chain admits fine.
+        if (auto const ledgerConfig = co_await ledger::getLedgerConfig(*ledger);
+            eip7825InForceAt(*ledgerConfig, blockNumber,
+                block ? bcos::engine::unixSecondsFromInternalMillis(
+                            static_cast<uint64_t>(block->blockHeader()->timestamp())) :
+                        0))
+        {
+            if (chainBlockGasLimit.has_value())
+            {
+                chainBlockGasLimit =
+                    std::min<uint64_t>(*chainBlockGasLimit, protocol::MAX_TX_GAS_LIMIT);
+            }
+            if (call.gas.has_value() && *call.gas > protocol::MAX_TX_GAS_LIMIT)
+            {
+                call.gas = protocol::MAX_TX_GAS_LIMIT;
+            }
+        }
         // No default cap: an unreadable header or an over-wide gasLimit must fail the request
         // with a diagnosable message, not silently size the estimate against a constant.
         if (needsGasDefault && !chainBlockGasLimit.has_value())
@@ -1389,6 +1415,13 @@ task::Task<void> EthEndpoint::call(
     }
     auto tx = call.takeToTransaction(m_nodeService->blockFactory()->transactionFactory(),
         std::move(pendingNonce), chainBlockGasLimit);
+    // No root-presence probe here (unlike the five direct historical endpoints): callAtBlock
+    // owns the historical walk, so it also owns the pruned-walk mapping — a root or internal
+    // node lost to the pruning window surfaces as SchedulerError::MPTStateUnavailable and is
+    // answered -32004 below. Probing here would re-resolve the context callAtBlock resolves
+    // anyway (one header read + one node-row read per request) and still miss the
+    // pruned-mid-request race the scheduler-side mapping covers exactly.
+
     struct Awaitable
     {
         bcos::scheduler::SchedulerInterface& m_scheduler;
@@ -1499,6 +1532,10 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
 
     u256 gasUsed;
     Json::Value callResponse;
+    // No pre-pass on the request: the estimate arm inside call() sizes an omitted/zero gas
+    // from the target block's header (fail-closed when the header is unreadable) and
+    // applies the EIP-7825 ceiling — to the derived budget and to an explicit gas alike —
+    // only where the chain actually runs Osaka+ rules at the target block (M1).
     co_await call(request, callResponse, std::addressof(gasUsed), true);
 
     if (!callResponse.isMember("error"))
@@ -2195,3 +2232,4 @@ bcos::rpc::EthEndpoint::EthEndpoint(
     m_filterSystem(std::move(filterSystem)),
     m_syncTransaction(syncTransaction)
 {}
+

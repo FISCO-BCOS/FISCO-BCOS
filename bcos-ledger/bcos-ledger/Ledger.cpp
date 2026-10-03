@@ -24,6 +24,7 @@
 #include "Ledger.h"
 #include "GenesisStateRoot.h"
 #include "LedgerMethods.h"
+#include "bcos-framework/ledger/ChainMetadata.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/FeaturesStorage.h"
@@ -2047,6 +2048,7 @@ bool Ledger::buildGenesisBlock(
         SYS_NUMBER_2_TXS, SYS_VALUE,
         SYS_HASH_2_RECEIPT, SYS_VALUE,
         SYS_BLOCK_NUMBER_2_NONCES, SYS_VALUE,
+        SYS_CHAIN_METADATA, SYS_VALUE,
     });
     constexpr static auto moreTables = std::to_array<std::string_view>(
             {SYS_CODE_BINARY, SYS_VALUE, SYS_CONTRACT_ABI, SYS_VALUE});
@@ -2275,6 +2277,52 @@ bool Ledger::buildGenesisBlock(
                 SystemConfigEntry{std::to_string(*genesis.m_excessBlobGas), 0}));
             co_await storage2::writeOne(*m_stateStorage,
                 executor_v1::StateKey(SYS_CONFIG, SYSTEM_KEY_EXCESS_BLOB_GAS), excessBlobGasEntry);
+        }
+
+        if (genesis.m_opEip1559.has_value())
+        {
+            // The declared EIP-1559 triple rides the on-chain SYS_CONFIG so every
+            // snapshot read (getLedgerConfig -> RPC fee prediction) prices with the
+            // chain's own parameters, not a binary-side preset. Write-only at genesis:
+            // the triple is genesis-frozen, same policy as the fork-schedule metadata.
+            auto const params = bcos::engine::effectiveOpEip1559(genesis.m_opEip1559);
+            Entry eip1559Entry;
+            eip1559Entry.set(bcos::storage::serialize::encode(SystemConfigEntry{
+                std::to_string(params.elasticity) + "," + std::to_string(params.denominator) + "," +
+                    std::to_string(params.denominatorCanyon),
+                0}));
+            co_await storage2::writeOne(*m_stateStorage,
+                executor_v1::StateKey(SYS_CONFIG, INTERNAL_SYSTEM_KEY_OP_EIP1559_PARAMS),
+                std::move(eip1559Entry));
+        }
+        // The resolved schedule also rides SYS_CONFIG so every getLedgerConfig snapshot —
+        // the RPC estimate gas-cap gate (M1) among them — keys fork activation on the
+        // chain's own schedule in every deployment. The SYS_CHAIN_METADATA triple is the
+        // integrity-bound copy the Initializer resolves at boot and is not reachable
+        // through LedgerInterface. Both declaration channels land here: the canonical
+        // section verbatim, the [op_fork_timestamps] shorthand folded by the same rule
+        // (foldOpForkShorthand) the executor applies.
+        std::optional<std::string> resolvedOpSchedule;
+        if (genesis.m_opstackForkSchedule.has_value())
+        {
+            const auto metadata =
+                buildOpForkScheduleMetadata(*genesis.m_opstackForkSchedule, header->hash());
+            co_await writeOpForkScheduleMetadata(*m_stateStorage, metadata);
+            resolvedOpSchedule = metadata.schedule;
+        }
+        else if (genesis.m_opForkSchedule.has_value())
+        {
+            resolvedOpSchedule = canonicalOpForkSchedule(foldOpForkShorthand(
+                genesis.m_opForkSchedule->m_jovianTime, genesis.m_opForkSchedule->m_karstTime));
+        }
+        if (resolvedOpSchedule.has_value())
+        {
+            Entry opForkScheduleEntry;
+            opForkScheduleEntry.set(
+                bcos::storage::serialize::encode(SystemConfigEntry{*resolvedOpSchedule, 0}));
+            co_await storage2::writeOne(*m_stateStorage,
+                executor_v1::StateKey(SYS_CONFIG, INTERNAL_SYSTEM_KEY_OP_FORK_SCHEDULE),
+                std::move(opForkScheduleEntry));
         }
 
         // write consensus node list

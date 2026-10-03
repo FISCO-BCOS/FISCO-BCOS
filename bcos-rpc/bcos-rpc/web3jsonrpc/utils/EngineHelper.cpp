@@ -318,6 +318,18 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
         requireNewPayloadV4ParamShape(params);
         requireExecutionPayloadV4Fields(ep);
     }
+    // X1: blockNumber lands in an int64_t BlockHeader field; the timestamp arm below
+    // bounds its sibling at INT64_MAX/1000 ms, so bound this uint64 -> int64
+    // narrowing the same way (S2/S5 guard the engine side; this closes the RPC
+    // entry itself — 0x8000000000000000 would otherwise arrive as INT64_MIN).
+    const auto blockNumberQuantity =
+        parseQuantity(ep["blockNumber"], "executionPayload.blockNumber");
+    if (blockNumberQuantity >
+        static_cast<std::uint64_t>(std::numeric_limits<bcos::protocol::BlockNumber>::max()))
+    {
+        BOOST_THROW_EXCEPTION(bcos::rpc::JsonRpcException(bcos::rpc::InvalidParams,
+            "blockNumber exceeds representable range: " + std::to_string(blockNumberQuantity)));
+    }
     bcos::engine::ExecutionPayload payload{
         .logsBloom = {},
         .parentHash = parseH256Field(ep["parentHash"], "executionPayload.parentHash"),
@@ -333,8 +345,7 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
         .feeRecipient = parseAddressField(ep["feeRecipient"], "executionPayload.feeRecipient"),
         .timestamp = engineSecondsToInternalMillis(
             parseQuantity(ep["timestamp"], "executionPayload.timestamp")),
-        .blockNumber = static_cast<bcos::protocol::BlockNumber>(
-            parseQuantity(ep["blockNumber"], "executionPayload.blockNumber")),
+        .blockNumber = static_cast<bcos::protocol::BlockNumber>(blockNumberQuantity),
         .withdrawals = std::nullopt,
         .blobGasUsed = std::nullopt,
         .excessBlobGas = std::nullopt,

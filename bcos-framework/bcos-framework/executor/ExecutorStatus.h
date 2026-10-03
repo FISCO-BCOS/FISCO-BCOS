@@ -23,10 +23,13 @@
 #include "../protocol/LogEntry.h"
 #include "../protocol/ProtocolTypeDef.h"
 #include <boost/iterator/iterator_categories.hpp>
+// clang-format off
 // boost.range 1.89/1.90 regression: any_iterator_interface.hpp uses add_const
 // without including it; fixed upstream in 1.91. Drop this after boost >= 1.91.
+// add_const MUST precede any_range; do not let include sorting separate them.
 #include <boost/type_traits/add_const.hpp>
 #include <boost/range/any_range.hpp>
+// clang-format on
 #include <memory>
 #include <sstream>
 #include <string_view>

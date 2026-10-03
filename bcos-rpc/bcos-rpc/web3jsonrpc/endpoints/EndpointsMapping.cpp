@@ -131,6 +131,7 @@ void EndpointsMapping::addEthHandlers()
     m_handlers[methodString(EthMethod::txpool_status)] = &Endpoints::txpoolStatus;
     m_handlers[methodString(EthMethod::txpool_content)] = &Endpoints::txpoolContent;
     m_handlers[methodString(EthMethod::eth_getProof)] = &Endpoints::getProof;
+    m_handlers[methodString(EthMethod::eth_feeHistory)] = &Endpoints::feeHistory;
     // clang-format on
 }
 

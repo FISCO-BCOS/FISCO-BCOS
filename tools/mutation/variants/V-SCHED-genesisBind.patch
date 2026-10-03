@@ -1,0 +1,22 @@
+diff --git a/bcos-framework/bcos-framework/ledger/ChainMetadata.h b/bcos-framework/bcos-framework/ledger/ChainMetadata.h
+index 10fbc51c9..c5e476425 100644
+--- a/bcos-framework/bcos-framework/ledger/ChainMetadata.h
++++ b/bcos-framework/bcos-framework/ledger/ChainMetadata.h
+@@ -112,7 +112,7 @@ struct OpForkScheduleMetadataRows
+ 
+     auto metadata =
+         buildOpForkScheduleMetadata(*rows.schedule, parseOpForkScheduleHexHash(*rows.genesisHash));
+-    if (metadata.genesisHash != expectedGenesisHash)
++    if (metadata.genesisHash != metadata.genesisHash)
+     {
+         throwInvalidOpForkSchedule("op fork schedule genesis binding mismatch");
+     }
+@@ -133,7 +133,7 @@ struct OpForkScheduleMetadataRows
+ {
+     if (stored.has_value())
+     {
+-        if (stored->genesisHash != expectedGenesisHash)
++        if (stored->genesisHash != stored->genesisHash)
+         {
+             throwInvalidOpForkSchedule("op fork schedule genesis binding mismatch");
+         }

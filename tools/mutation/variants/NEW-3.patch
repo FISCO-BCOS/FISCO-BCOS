@@ -1,0 +1,15 @@
+diff --git a/engine/bcos-engine/OpEngineService.inl b/engine/bcos-engine/OpEngineService.inl
+index ff860d772..b657bb7e6 100644
+--- a/engine/bcos-engine/OpEngineService.inl
++++ b/engine/bcos-engine/OpEngineService.inl
+@@ -1793,7 +1793,9 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::canonicaliz
+                         backend, undo, undoSeen, executor_v1::StateKeyView(std::get<0>(*item)));
+                 }
+             }
+-            co_await m_globalStateStorage.mergeToBackends(stagedDelta);
++            // MUTATION NEW-3: the switch's staged rows reach only the latest backend, so
++            // the (production) cache layer keeps the old plane and its reads win.
++            co_await storage2::merge(m_globalStateStorage.m_latestBackend, stagedDelta);
+ 
+             // Design §4.2 post-condition: the relabelled tip must really be backed by the
+             // head's world state — this is the check that catches a stale/partial plane.

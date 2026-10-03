@@ -785,6 +785,20 @@ size_t bcostars::protocol::TransactionImpl::size() const
             size += key.size();
         }
     }
+    // EIP-7702 authorization entries: count the variable-length hex strings (address/signer/r/s).
+    // The fixed chainID/nonce/v scalars are excluded, like the other fixed scalars above.
+    for (auto const& entry : m_inner()->data.authorizationList)
+    {
+        size += entry.address.size();
+        size += entry.signer.size();
+        size += entry.r.size();
+        size += entry.s.size();
+    }
+    // EIP-4844 blob commitments: each versioned hash is a 32-byte payload.
+    for (auto const& hash : m_inner()->data.blobVersionedHashes)
+    {
+        size += hash.size();
+    }
     size += m_inner()->signature.size();
     size += m_inner()->sender.size();
     size += m_inner()->extraData.size();

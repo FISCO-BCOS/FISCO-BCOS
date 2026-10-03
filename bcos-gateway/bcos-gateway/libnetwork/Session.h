@@ -1,3 +1,19 @@
+/**
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ */
+
 
 /** @file Session.h
  * @author monan <651932351@qq.com>
@@ -6,6 +22,7 @@
 
 #pragma once
 
+#include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
@@ -148,14 +165,14 @@ public:
     virtual const std::function<void(NetworkException, SessionFace::Ptr, Message)>&
     messageHandler();
     void setMessageHandler(
-        std::function<void(NetworkException, SessionFace::Ptr, Message)> messageHandler)
-        override;
+        std::function<void(NetworkException, SessionFace::Ptr, Message)> messageHandler) override;
 
     // handle before sending message: if the check fails (returns an error), the message is not
     // sent and a NetworkException surfaces so coroutine retry loops can stop. The handler receives
     // the actual wire length (payload views included) as _wireLength.
     void setBeforeMessageHandler(std::function<std::optional<bcos::Error>(
-        SessionFace&, const Message&, uint32_t _wireLength)> handler) override;
+            SessionFace&, const Message&, uint32_t _wireLength)>
+            handler) override;
 
     void setHostInfo(P2PInfo _hostInfo);
 
@@ -290,8 +307,8 @@ public:
             }
             catch (std::exception const& e)
             {
-                SESSION_LOG(WARNING) << LOG_DESC(description)
-                                     << LOG_KV("what", boost::diagnostic_information(e));
+                SESSION_LOG(WARNING)
+                    << LOG_DESC(description) << LOG_KV("what", boost::diagnostic_information(e));
             }
         };
         if (m_server.get().haveNetwork())
@@ -322,8 +339,8 @@ public:
     // Owned by the Host (m_server) that created us. Never null, like m_server.
     std::reference_wrapper<SessionCallbackManager> m_sessionCallbackManager;
     std::function<void(NetworkException, SessionFace::Ptr, Message)> m_messageHandler;
-    std::function<std::optional<bcos::Error>(
-        SessionFace&, const Message&, uint32_t)> m_beforeMessageHandler;
+    std::function<std::optional<bcos::Error>(SessionFace&, const Message&, uint32_t)>
+        m_beforeMessageHandler;
 
     // Seqs of with-response sends registered through this session. The callback manager above is
     // shared host-wide, so drop() uses this set to fail only THIS session's pending response

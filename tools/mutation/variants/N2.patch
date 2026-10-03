@@ -1,0 +1,18 @@
+diff --git a/engine/bcos-engine/OpEngineService.inl b/engine/bcos-engine/OpEngineService.inl
+index ff860d772..a2a1f3dbd 100644
+--- a/engine/bcos-engine/OpEngineService.inl
++++ b/engine/bcos-engine/OpEngineService.inl
+@@ -1534,11 +1534,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::canonicaliz
+                         }
+                         auto const& backendKey = std::get<0>(*item);
+                         auto const tableAndKey = std::string_view(backendKey.m_tableAndKey);
+-                        if (isLedgerCanonicalMetadataTable(
+-                                tableAndKey.substr(0, backendKey.m_split)))
+-                        {
+-                            continue;
+-                        }
++                        // MUTATION N2: the whole-plane scrub no longer skips ledger
++                        // metadata, so still-canonical ancestors' rows are deleted.
+                         auto present = co_await storage2::readOne(*flat,
+                             executor_v1::StateKeyView(tableAndKey.substr(0, backendKey.m_split),
+                                 tableAndKey.substr(backendKey.m_split + 1)));

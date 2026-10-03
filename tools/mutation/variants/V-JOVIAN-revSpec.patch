@@ -1,0 +1,13 @@
+diff --git a/bcos-evm/bcos-evm/opstack/OpForkSchedule.cpp b/bcos-evm/bcos-evm/opstack/OpForkSchedule.cpp
+index 8baa9a1fc..72a01c38d 100644
+--- a/bcos-evm/bcos-evm/opstack/OpForkSchedule.cpp
++++ b/bcos-evm/bcos-evm/opstack/OpForkSchedule.cpp
+@@ -204,7 +204,7 @@ const OpForkConfig& jovianConfig() noexcept
+ {
+     static const OpForkConfig cfg{
+         .fork = OpFork::Jovian,
+-        .rev = EVMC_PRAGUE,
++        .rev = EVMC_CANCUN,
+         .precompiles = &jovianPrecompileOverrides(),
+         .disable_prague_requests = true,
+         .has_operator_fee = true,

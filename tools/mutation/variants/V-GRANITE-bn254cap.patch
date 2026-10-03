@@ -1,0 +1,13 @@
+diff --git a/bcos-evm/bcos-evm/opstack/OpPrecompiles.cpp b/bcos-evm/bcos-evm/opstack/OpPrecompiles.cpp
+index f1d592b58..7b88e3d87 100644
+--- a/bcos-evm/bcos-evm/opstack/OpPrecompiles.cpp
++++ b/bcos-evm/bcos-evm/opstack/OpPrecompiles.cpp
+@@ -57,7 +57,7 @@ constexpr PrecompileOverrides::Entry kFjordEntries[] = {
+ };
+ 
+ constexpr PrecompileOverrides::Entry kGraniteEntries[] = {
+-    {.addr = evmc::address{0x08}, .gas_cost_override = -1, .max_input_size = 112687},
++    {.addr = evmc::address{0x08}, .gas_cost_override = -1, .max_input_size = 112704},
+     {.addr = kP256VerifyAddress, .gas_cost_override = 3450, .max_input_size = 0},
+ };
+ }  // namespace

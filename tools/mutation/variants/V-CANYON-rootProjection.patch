@@ -1,0 +1,13 @@
+diff --git a/engine/bcos-engine/OpEngineService.inl b/engine/bcos-engine/OpEngineService.inl
+index da1e85ee2..3503eb762 100644
+--- a/engine/bcos-engine/OpEngineService.inl
++++ b/engine/bcos-engine/OpEngineService.inl
+@@ -1191,7 +1191,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
+     // which can never equal the Canyon empty-trie seal and rejected every real CL payload
+     // in the Canyon..Holocene window (F-B2-1).
+     if (executedHeader->withdrawalsRoot().value_or(bcos::h256{}) !=
+-        ethHeader->withdrawalsRoot().value_or(bcos::h256{}))
++        payload.withdrawalsRoot.value_or(bcos::h256{}))
+     {
+         co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
+             std::string("withdrawalsRoot does not match the executed header"));

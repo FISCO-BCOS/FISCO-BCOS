@@ -1,0 +1,28 @@
+diff --git a/engine/bcos-engine/OpEngineService.cpp b/engine/bcos-engine/OpEngineService.cpp
+index d0f402acc..c477bcb93 100644
+--- a/engine/bcos-engine/OpEngineService.cpp
++++ b/engine/bcos-engine/OpEngineService.cpp
+@@ -380,19 +380,19 @@ std::optional<std::string> validateOpNewPayloadRequest(
+     // withdrawalsRoot and executionRequests moved into validateOpPayloadWindowFields, which
+     // now runs before validateOpPayloadHeaderFields, so a payload violating both a window
+     // field and a header field returns the window field's message.
+-    if (auto error = validateOpPayloadTransactions(payload))
++    if (auto error = validateOpPayloadWindowFields(request, payload, version))
+     {
+         return error;
+     }
+-    if (auto error = validateOpPayloadWithdrawals(payload, forkId))
++    if (auto error = validateOpPayloadTransactions(payload))
+     {
+         return error;
+     }
+-    if (auto error = validateOpBlobVersionedHashes(request))
++    if (auto error = validateOpPayloadWithdrawals(payload, forkId))
+     {
+         return error;
+     }
+-    if (auto error = validateOpPayloadWindowFields(request, payload, version))
++    if (auto error = validateOpBlobVersionedHashes(request))
+     {
+         return error;
+     }

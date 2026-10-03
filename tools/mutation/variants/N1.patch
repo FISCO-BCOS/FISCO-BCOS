@@ -1,0 +1,24 @@
+diff --git a/engine/bcos-engine/OpEngineService.inl b/engine/bcos-engine/OpEngineService.inl
+index ff860d772..1c8665480 100644
+--- a/engine/bcos-engine/OpEngineService.inl
++++ b/engine/bcos-engine/OpEngineService.inl
+@@ -1866,17 +1866,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::canonicaliz
+                             std::move(receiptEntry));
+                     }
+                 }
+-                // SYS_NUMBER_2_TXS[number]: mirrors the ledger's prewrite row so the block is
+-                // retrievable by number after the FCU canonicalizes it (review N1).
+-                {
+-                    bcos::storage::Entry numberToTxsEntry;
+-                    numberToTxsEntry.set(
+-                        encodeNumberToTxsRow(*m_blockFactory, block.txHashes, block.txRecipients));
+-                    co_await storage2::writeOne(*delta,
+-                        executor_v1::StateKey{
+-                            bcos::ledger::SYS_NUMBER_2_TXS, std::to_string(block.number)},
+-                        std::move(numberToTxsEntry));
+-                }
++                // MUTATION N1: the forward branch no longer writes SYS_NUMBER_2_TXS, so the
++                // block is canonical but its by-number transaction list is empty again.
+                 if (block.hash == headHash)
+                 {
+                     bcos::storage::Entry currentEntry;

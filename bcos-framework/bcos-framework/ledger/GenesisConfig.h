@@ -24,6 +24,7 @@
 #include "LedgerConfig.h"
 #include "OpForkSchedule.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
+#include "bcos-framework/engine/OpEip1559Params.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tool/VersionConverter.h"
 #include <bcos-utilities/Common.h>
@@ -40,6 +41,11 @@
 
 namespace bcos::ledger
 {
+
+/// The chain's EIP-1559 triple lives in bcos::engine (its consumer is OpBaseFee.h); this alias
+/// keeps the ledger-side spellings (`OpEip1559Params`, `ledger::OpEip1559Params`) valid without
+/// pulling an engine header into every definition.
+using OpEip1559Params = bcos::engine::OpEip1559Params;
 
 struct FeatureSet
 {
@@ -122,9 +128,9 @@ struct EthereumForkSchedule
     uint64_t m_bpo2Time = 0;
 };
 
-// The OP-lane fork schedule ([op_fork_timestamps]) now lives in
+// The OP-lane fork schedule ([op_fork_timestamps]) lives in
 // ledger/OpForkSchedule.h next to the OpFork ladder enum and resolveOpFork, the
-// single fork-activation parser shared by the executor and the devp2p header
+// fork-activation parser shared by the executor and the devp2p header
 // validator; this header re-exports it for the config/genesis side.
 
 class GenesisConfig
@@ -197,6 +203,14 @@ public:
     // op-node's rollup.json is the source of truth for those.
     std::optional<OpForkSchedule> m_opForkSchedule;
 
+    /// Present iff config.genesis carries an [op_eip1559] section: the chain's own EIP-1559
+    /// triple, priced into every pre-Holocene block. Absent means "use
+    /// kLegacyOpEip1559Params" (see effectiveOpEip1559), which is what keeps every pre-existing
+    /// chain's genesis pin byte-identical. Raw rather than defaulted so the pin can tell
+    /// "declared" from "not declared" — but the PIN carries the EFFECTIVE value, so a chain
+    /// writing the legacy triple explicitly pins the same string as one omitting the section.
+    std::optional<OpEip1559Params> m_opEip1559;
+
     // True iff config.genesis declares "[ethereum] mode=el" — the chain is an
     // Ethereum L1 EL-sync chain. Chain-level (part of the genesis pin), NOT the
     // per-node [ethereum] section of config.ini: the executor-v2 evmc_revision /
@@ -213,6 +227,11 @@ public:
     // chain_id. Mutually exclusive with m_ethereumELMode by construction (one
     // mode string).
     bool m_opStackELMode = false;
+
+    // Canonical OP fork schedule. Parsed from genesis [op_fork_schedule]
+    // canonical and persisted into s_chain_metadata at genesis when set; not
+    // part of LedgerConfig / generateGenesisData.
+    std::optional<std::string> m_opstackForkSchedule;
 
 };  // namespace genesisConfig
 }  // namespace bcos::ledger
