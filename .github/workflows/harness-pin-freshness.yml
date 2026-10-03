@@ -66,8 +66,14 @@ jobs:
           # permanent false positives. (weekly.yml is scanned too: it pins the same
           # corpus and used to escape this check.)
           WF_T8N=".github/workflows/workflow.yml .github/workflows/opstack-fork-nightly.yml .github/workflows/opstack-fork-weekly.yml"
+          # The checkout-scoped grep must not capture the c2_e2e job's harness ref
+          # (path .ci-op-e2e-tests): that pin tracks C2_BLESSED, a DIFFERENT axis
+          # (check-ci-pins.sh Axis 3 vs 4). Without the path filter the weekly job
+          # files a false t8n STALE issue whose remediation text would repoint the
+          # C2 checkout at the t8n branch and break the C2 pipeline.
           t8n_pins=$( { grep -hoE 'opstack-t8n-regen@[0-9a-f]{40}' $WF_T8N | sed 's/.*@//'; \
-                        grep -hA1 'repository: FISCO-BCOS/op-stack-e2e-tests' $WF_T8N \
+                        grep -hA2 'repository: FISCO-BCOS/op-stack-e2e-tests' $WF_T8N \
+                          | grep -v 'ci-op-e2e-tests' \
                           | grep -oE 'ref: [0-9a-f]{40}' | awk '{print $2}'; } | sort -u)
           c2_pin=$(grep -hoE 'ref: [0-9a-f]{40}' .github/workflows/c2-e2e.yml \
             | awk '{print $2}' | sort -u)

@@ -56,7 +56,7 @@ jobs:
           CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold \
             -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON \
             -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
-          cmake --build . --target test-bcos-engine opstack-executor-block-tests \
+          cmake --build . --target test-bcos-engine \
             opstack-executor-tests test-bcos-ledger -j 4
       - name: C++ fork suites (one invocation per suite; Boost rejects comma lists)
         run: |
@@ -72,10 +72,12 @@ jobs:
               || { echo "SUITE FAILED: $2 on $1"; rm -f "$out_file"; exit 1; }
             rm -f "$out_file"
           }
-          check_suite ./build/engine/test/test-bcos-engine OpEnginePayloadShapeBaselineSuite
-          check_suite ./build/engine/test/test-bcos-engine OpForkBoundarySweepSuite
-          check_suite ./build/engine/test/test-bcos-engine OpHeaderFieldSetBaselineSuite
-          check_suite ./build/opstack-executor/tests/opstack-executor-block-tests OpGoldenCorpusProvenance
+          # PORT BACKLOG: these four suites (OpEnginePayloadShapeBaselineSuite,
+          # OpForkBoundarySweepSuite, OpHeaderFieldSetBaselineSuite,
+          # OpGoldenCorpusProvenance) exist in no compiled binary at this head —
+          # their sources are the unwired opstack-executor/tests assets. Re-add
+          # the check_suite calls when those suites are ported onto live targets.
+          echo "fork-suites: 4 suites deferred to port backlog (see mapping.retired.json era)"
       - name: Set up Python 3.11 (mapping.json reader for the mutation harness)
         uses: actions/setup-python@v5
         with:
