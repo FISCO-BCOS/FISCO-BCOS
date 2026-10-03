@@ -1,74 +1,69 @@
 /**
- * Copyright (C) 2026 FISCO BCOS.
- * SPDX-License-Identifier: Apache-2.0
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  Copyright (C) 2026 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  *
  * @file FeeHistory.h
- * @brief eth_feeHistory: EIP-1559 history on Ethereum-mode chains, OP base-fee rules on OP Stack.
+ * @brief eth_feeHistory on the OP lane (geth eth/gasprice/feehistory.go shape).
  */
 
 #pragma once
 
-#include <bcos-framework/engine/OpEip1559Params.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-task/Task.h>
-#include <bcos-utilities/Common.h>
 #include <json/json.h>
-#include <cstddef>
+#include <cstdint>
 #include <span>
 #include <vector>
 
 namespace bcos::rpc
 {
+/// geth's maxHeaderHistory / maxBlockHistory default: a larger blockCount is clamped, not
+/// rejected.
+inline constexpr std::uint64_t c_maxFeeHistoryBlocks = 1024;
 
-/// Base fee a block header carries, as the eth_feeHistory history array reports it.
-/// 0 for native FISCO NON_ETH headers and for pre-London Eth headers. OP-Stack headers
-/// are NON_ETH yet carry a real base fee (see bcos::protocol::isOpEthereumBlock), so they must NOT
-/// take the NON_ETH short-circuit — that reported 0x0 for every OP block.
-bcos::u256 blockBaseFee(bcos::protocol::BlockHeader const& header);
+/// geth EffectiveGasTip: min(maxPriorityFeePerGas, maxFeePerGas - baseFee), floored at 0. A
+/// legacy web3 tx carries its gas price in both fields (Web3TxHandler), which yields
+/// gasPrice - baseFee.
+u256 effectivePriorityFee(protocol::Transaction const& tx, u256 const& baseFee);
 
-/// Ethereum L1 next-block base fee (EIP-1559, elasticity 2, denominator 8).
-bcos::u256 calcEthNextBaseFee(bcos::protocol::BlockHeader const& parent);
-
-/// OP Stack next-block base fee (op-geth CalcBaseFee). Returns parent base fee when the parent
-/// header is not yet Holocene-shaped (genesis-adjacent OP chains).
-bcos::u256 calcOpNextBaseFee(
-    bcos::protocol::BlockHeader const& parent, bcos::engine::OpEip1559Params const& eip1559);
-
-/// Effective priority fee per gas for one transaction at a given block base fee.
-bcos::u256 effectivePriorityFeePerGas(
-    bcos::protocol::Transaction const& tx, bcos::u256 const& baseFee);
-
-/// One transaction's effective priority fee and gas limit for eth_feeHistory rewards.
-struct GasWeightedPriorityFee
+struct RewardSample
 {
-    bcos::u256 tip;
-    std::uint64_t gas;
+    u256 tip;
+    std::uint64_t gasUsed = 0;
 };
 
-/// Pick reward percentiles using geth's gas-weighted indexing over ascending tips.
-/// @param blockGasUsed the block header's gasUsed (the threshold basis geth cites:
-/// eth/gasprice/feehistory.go thresholds on block.GasUsed, not the receipt sum).
-std::vector<bcos::u256> pickRewardPercentiles(std::vector<GasWeightedPriorityFee> const& samples,
+/// One block's reward row (geth processBlock): samples stable-sorted by tip, each percentile
+/// picks the first sample whose cumulative gasUsed reaches blockGasUsed * p / 100 (truncated to
+/// uint64). No samples, or a block with zero gasUsed, gives a zero row.
+std::vector<u256> rewardPercentiles(std::vector<RewardSample> samples,
     std::span<double const> percentiles, std::uint64_t blockGasUsed);
 
-/// Build the eth_feeHistory result object. `opStackMode` selects OP vs Ethereum base-fee
-/// prediction for the trailing entry (and OP parent metering on Jovian parents).
-bcos::task::Task<Json::Value> buildFeeHistory(bcos::ledger::LedgerInterface& ledger,
-    bcos::protocol::BlockNumber newestBlock, std::size_t blockCount,
-    std::vector<double> const& rewardPercentiles, bool opStackMode,
-    bcos::engine::OpEip1559Params const& eip1559);
+/// The next block's base fee after @p parent under the OP EIP-1559 rule (op-geth CalcBaseFee).
+/// The era comes from the parent header's shape, which a validated OP chain fixes: non-empty
+/// extraData = Holocene+ parent (parameters decoded from it; 17 bytes / 0x01 = Jovian, which
+/// adds the DA-footprint metering and minBaseFee floor); empty extraData = pre-Holocene, with
+/// elasticity 6 and denominator 250 when the child is Canyon, else 50. The child counts as
+/// Canyon when the parent carries withdrawalsRoot (every Canyon+ OP header does), so only the
+/// Canyon activation block itself is predicted with the Bedrock denominator.
+u256 nextOpBaseFee(protocol::BlockHeader const& parent);
 
+/// eth_feeHistory for blocks [newest - blockCount + 1, newest] of an OP-lane ledger whose head
+/// is @p head. blockCount 0 answers {"oldestBlock": "0x0"}; above c_maxFeeHistoryBlocks it is
+/// clamped; newest > head is InvalidParams. Deposits enter the rewards with tip 0.
+task::Task<Json::Value> buildOpFeeHistory(ledger::LedgerInterface& ledger,
+    protocol::BlockNumber newest, protocol::BlockNumber head, std::uint64_t blockCount,
+    std::vector<double> const& percentiles);
 }  // namespace bcos::rpc

@@ -64,6 +64,10 @@ task::Task<bcos::h256> importEthereumGenesisState(
     // it stays as the defensive invariant.
     GenesisConfig genesis;
     genesis.m_allocs = allocs;
+    // This loader exists for the Ethereum-executor lanes (EL sync, L2): those executors write
+    // every address under /apps/, so the trie builder's legacy-lane system-address guard does
+    // not apply, and the import below matches through ethLaneAccountTableName (no /sys/ routing).
+    genesis.m_executorVersion = ledger::ETHEREUM_EXECUTOR_VERSION;
     auto trie = co_await computeGenesisStateTrie(genesis);
 
     // The per-alloc/per-node writes are driven by task::syncWait, not co_await: genesis

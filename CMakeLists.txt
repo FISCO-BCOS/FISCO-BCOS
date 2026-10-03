@@ -74,7 +74,6 @@ if(FULLNODE)
     find_package(group-sig CONFIG REQUIRED)
     find_package(paillier CONFIG REQUIRED)
 
-    add_subdirectory(bcos-evm)
     add_subdirectory(ethereum-executor)
     add_subdirectory(opstack-executor)
     add_subdirectory(bcos-sealer)

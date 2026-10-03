@@ -488,8 +488,8 @@ private:
 
     void syncLoopImpl()
     {
-        // The verifier executes each block itself (it builds its own serial scheduler
-        // and OpstackExecutor per block internally); the dependencies it shares with
+        // The verifier executes each block itself (it builds its own OpScheduler
+        // + OpEthExecutor per block internally); the dependencies it shares with
         // the rest of the node are the block factory, the global state storage, the
         // ledger, the IO pool and the commit observer (the shared MPT pruner when
         // storage.mpt_prune_window > 0, else null -> the verifier's built-in Noop).

@@ -9,6 +9,7 @@
  */
 
 #include "ExceptionCheck.h"
+#include "EthLaneGenesisFixture.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -122,7 +123,8 @@ BOOST_AUTO_TEST_CASE(executorV2RequiresEvmcRevision)
         "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
         "auth_admin_account=0x0000000000000000000000000000000000000001\n";
 
-    // version=2 with no EVMC revision -> rejected.
+    // version=2 with no EVMC revision -> rejected (loadExecutorConfig's v2 guard fires
+    // before validateL2Invariants' lane binding, so no lane sections are needed here).
     {
         NodeConfig cfg(keyFactory);
         std::string genesis = base + "version=2\n";
@@ -130,17 +132,21 @@ BOOST_AUTO_TEST_CASE(executorV2RequiresEvmcRevision)
             [](auto const& e) { return errinfoContains(e, "requires an explicit"); });
     }
 
-    // version=2 with an explicit single revision -> accepted.
+    // version=2 with an explicit single revision -> accepted. The v2 lane also requires
+    // the [alloc.*] + [eth_genesis_header] sections (validateL2Invariants binds them to
+    // executor.version >= 2 both ways).
     {
         NodeConfig cfg(keyFactory);
-        std::string genesis = base + "version=2\nevm_revision=cancun\n";
+        std::string genesis =
+            base + "version=2\nevm_revision=cancun\n" + ethLaneGenesisSections();
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
     }
 
     // version=2 with fork transitions (no single revision) -> accepted.
     {
         NodeConfig cfg(keyFactory);
-        std::string genesis = base + "version=2\nevm_revision_forks=0:cancun,100000:osaka\n";
+        std::string genesis = base + "version=2\nevm_revision_forks=0:cancun,100000:osaka\n" +
+                              ethLaneGenesisSections();
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
     }
 
@@ -176,10 +182,13 @@ BOOST_AUTO_TEST_CASE(executorV2RequiresCompat318)
         "auth_admin_account=0x0000000000000000000000000000000000000001\n"
         "version=2\nevm_revision=cancun\n";
 
-    // 3.15.0 <= compat < 3.18.0 -> rejected (revision cannot be persisted on-chain).
+    // 3.15.0 <= compat < 3.18.0 -> rejected (revision cannot be persisted on-chain). The
+    // compat guard fires in loadExecutorConfig, before validateL2Invariants' lane binding;
+    // the lane sections appended below keep the accepted 3.18.0 case loadable.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(base + "3.17.0" + mid),
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadGenesisConfigFromString(base + "3.17.0" + mid + ethLaneGenesisSections()),
             InvalidConfig,
             [](auto const& e) {
                 return errinfoContains(e, "compatibility_version >= 3.18.0");
@@ -187,7 +196,8 @@ BOOST_AUTO_TEST_CASE(executorV2RequiresCompat318)
     }
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(base + "3.15.0" + mid),
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadGenesisConfigFromString(base + "3.15.0" + mid + ethLaneGenesisSections()),
             InvalidConfig,
             [](auto const& e) {
                 return errinfoContains(e, "compatibility_version >= 3.18.0");
@@ -196,7 +206,8 @@ BOOST_AUTO_TEST_CASE(executorV2RequiresCompat318)
     // compat >= 3.18.0 -> accepted.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(base + "3.18.0" + mid));
+        BOOST_REQUIRE_NO_THROW(
+            cfg.loadGenesisConfigFromString(base + "3.18.0" + mid + ethLaneGenesisSections()));
     }
 }
 
@@ -222,10 +233,13 @@ BOOST_AUTO_TEST_CASE(evmcRevisionForksEdgeCases)
         "auth_admin_account=0x0000000000000000000000000000000000000001\n"
         "version=2\n";
 
-    // Out-of-order entries: accepted, normalized (map is key-ordered).
+    // Out-of-order entries: accepted, normalized (map is key-ordered). The v2 lane binding
+    // needs the [alloc.*] + [eth_genesis_header] sections; the rejected cases below throw in
+    // loadExecutorConfig, before that binding runs.
     {
         NodeConfig cfg(keyFactory);
-        std::string genesis = base + "evm_revision_forks=100000:osaka, 0:cancun\n";
+        std::string genesis =
+            base + "evm_revision_forks=100000:osaka, 0:cancun\n" + ethLaneGenesisSections();
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
         auto const& gc = cfg.genesisConfig();
         BOOST_REQUIRE_EQUAL(gc.m_evmcRevisionForks.size(), 2u);
@@ -295,11 +309,11 @@ BOOST_AUTO_TEST_CASE(evmcExperimentalRejected)
                 return errinfoContains(e, "evm_revision_forks revision \"experimental\"");
             });
     }
-    // Control: a released revision is still accepted.
+    // Control: a released revision is still accepted (with the lane-mandatory sections).
     {
         NodeConfig cfg(keyFactory);
         BOOST_REQUIRE_NO_THROW(
-            cfg.loadGenesisConfigFromString(base + "evm_revision=cancun\n"));
+            cfg.loadGenesisConfigFromString(base + "evm_revision=cancun\n" + ethLaneGenesisSections()));
     }
 }
 
@@ -358,9 +372,12 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
         "cancun_time=1710338135\nprague_time=1746612311\n"
         "merge_block=0\n";
 
-    // Parses into the GenesisConfig and lands in the genesis pin.
+    // Parses into the GenesisConfig and lands in the genesis pin. (Every config here is
+    // executor.version=2, so each carries the lane-mandatory [alloc.0] +
+    // [eth_genesis_header] sections; allocs stay out of the pin, the header is pinned.)
     NodeConfig cfg(keyFactory);
-    BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(base + schedule));
+    BOOST_REQUIRE_NO_THROW(
+        cfg.loadGenesisConfigFromString(base + schedule + ethLaneGenesisSections()));
     auto const& gc = cfg.genesisConfig();
     BOOST_CHECK(gc.m_ethereumELMode);  // [ethereum] mode=el declaration
     BOOST_REQUIRE(gc.m_ethereumForkSchedule.has_value());
@@ -401,7 +418,8 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
         base + "[ethereum]\nmode=el\n"
                "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
                "cancun_time=1710338135\nprague_time=1746612312\n"
-               "merge_block=0\n"));
+               "merge_block=0\n" +
+        ethLaneGenesisSections()));
     BOOST_CHECK(
         data != bcos::tool::generateGenesisData(cfg2.genesisConfig(), *cfg2.ledgerConfig()));
 
@@ -414,7 +432,8 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
                "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
                "cancun_time=1710338135\nprague_time=1746612311\n"
                "merge_block=0\n"
-               "osaka_time=1767225548\n"));
+               "osaka_time=1767225548\n" +
+        ethLaneGenesisSections()));
     BOOST_CHECK(
         data == bcos::tool::generateGenesisData(cfgTail.genesisConfig(), *cfgTail.ledgerConfig()));
 
@@ -424,14 +443,16 @@ BOOST_AUTO_TEST_CASE(forkTimestampsGenesisPin)
     baseOtherChain.replace(baseOtherChain.find("[web3]\nchain_id=1\n"),
         std::string("[web3]\nchain_id=1\n").size(), "[web3]\nchain_id=11155111\n");
     NodeConfig cfg4(keyFactory);
-    BOOST_REQUIRE_NO_THROW(cfg4.loadGenesisConfigFromString(baseOtherChain + schedule));
+    BOOST_REQUIRE_NO_THROW(
+        cfg4.loadGenesisConfigFromString(baseOtherChain + schedule + ethLaneGenesisSections()));
     BOOST_CHECK(
         data != bcos::tool::generateGenesisData(cfg4.genesisConfig(), *cfg4.ledgerConfig()));
 
     // No [fork_timestamps] section -> no [forkTimestamps] emission (legacy chains stay
     // byte-identical); an explicit evm_revision satisfies the v2 guard instead.
     NodeConfig cfg3(keyFactory);
-    BOOST_REQUIRE_NO_THROW(cfg3.loadGenesisConfigFromString(base + "evm_revision=cancun\n"));
+    BOOST_REQUIRE_NO_THROW(cfg3.loadGenesisConfigFromString(
+        base + "evm_revision=cancun\n" + ethLaneGenesisSections()));
     BOOST_CHECK(!cfg3.genesisConfig().m_ethereumForkSchedule.has_value());
     BOOST_CHECK(!cfg3.genesisConfig().m_ethereumELMode);
     auto data3 = bcos::tool::generateGenesisData(cfg3.genesisConfig(), *cfg3.ledgerConfig());
@@ -466,7 +487,9 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRequireELDeclaration)
         // evm_revision lets loadExecutorConfig's v2 guard pass cleanly, so the "no EL
         // declaration" cases below reach validateL2Invariants — the branch under test — as
         // the ONLY guard that can fire. Without it the executor-v2 guard would throw first
-        // and the suite could not distinguish the two.
+        // and the suite could not distinguish the two. The same applies to the lane binding
+        // in validateL2Invariants: the [alloc.*] + [eth_genesis_header] sections appended to
+        // each case below satisfy it, so the EL declaration/schedule pairing is what throws.
         "evm_revision=cancun\n";
     const std::string schedule =
         "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
@@ -476,7 +499,9 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRequireELDeclaration)
     // [fork_timestamps] without [ethereum] mode=el: rejected by validateL2Invariants.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(base + schedule), InvalidConfig,
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadGenesisConfigFromString(base + schedule + ethLaneGenesisSections()),
+            InvalidConfig,
             [](auto const& e) {
                 return errinfoContains(e, "[fork_timestamps] section requires [ethereum] mode=el");
             });
@@ -485,7 +510,9 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRequireELDeclaration)
     {
         NodeConfig cfg(keyFactory);
         BOOST_CHECK_EXCEPTION(
-            cfg.loadGenesisConfigFromString(base + "[ethereum]\nmode=el\n"), InvalidConfig,
+            cfg.loadGenesisConfigFromString(
+                base + "[ethereum]\nmode=el\n" + ethLaneGenesisSections()),
+            InvalidConfig,
             [](auto const& e) {
                 return errinfoContains(e, "mode=el requires a [fork_timestamps] section");
             });
@@ -494,7 +521,8 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRequireELDeclaration)
     {
         NodeConfig cfg(keyFactory);
         BOOST_CHECK_EXCEPTION(
-            cfg.loadGenesisConfigFromString(base + "[ethereum]\nmode=none\n" + schedule),
+            cfg.loadGenesisConfigFromString(
+                base + "[ethereum]\nmode=none\n" + schedule + ethLaneGenesisSections()),
             InvalidConfig,
             [](auto const& e) {
                 return errinfoContains(e, "[fork_timestamps] section requires [ethereum] mode=el");
@@ -539,7 +567,9 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
         "[ethereum]\nmode=el\n"
         "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
         "cancun_time=1710338135\nprague_time=1746612311\n"
-        "merge_block=0\n";
+        "merge_block=0\n" +
+        // executor.version=2 binds the [alloc.*] + [eth_genesis_header] sections both ways.
+        ethLaneGenesisSections();
     const std::string ini = "[ethereum]\nmode=el\n";
 
     // Explicit valid chain id -> parsed and pinned.
@@ -581,7 +611,8 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
             "[tx]\ngas_limit=3000000000\n"
             "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
             "auth_admin_account=0x0000000000000000000000000000000000000001\n"
-            "version=2\nevm_revision=cancun\n";
+            "version=2\nevm_revision=cancun\n" +
+            ethLaneGenesisSections();
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(plainGenesis));
         BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString("[ethereum]\nmode=none\n"));
         BOOST_CHECK(!cfg.ethereumELModeEnabled());
@@ -612,7 +643,8 @@ BOOST_AUTO_TEST_CASE(elModeRequiresChainId)
             "[tx]\ngas_limit=3000000000\n"
             "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
             "auth_admin_account=0x0000000000000000000000000000000000000001\n"
-            "version=2\nevm_revision=cancun\n";
+            "version=2\nevm_revision=cancun\n" +
+            ethLaneGenesisSections();
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(plainGenesis));
         BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString(ini));
         BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig,
@@ -671,6 +703,89 @@ BOOST_AUTO_TEST_CASE(ethereumMaxBatchSizeBounds)
     }
 }
 
+// [ethereum] reorg_window bounds the EL shallow-reorg depth (EthereumChainRollback.h);
+// pairing with storage.mpt_prune_window is enforced by validateELModeInvariants: a
+// rollback target's trie nodes must still be on disk, so pruning (when enabled) must
+// retain at least as many blocks as a reorg may rewind.
+BOOST_AUTO_TEST_CASE(elReorgWindowVsMptPruneWindow)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    const std::string node =
+        "1234567890123456789012345678901234567890123456789012345678901234"
+        "1234567890123456789012345678901234567890123456789012345678901234";
+    const std::string genesis =
+        "[version]\ncompatibility_version=3.18.0\n"
+        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+        "[web3]\nchain_id=11155111\n"
+        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+        "node.0=" +
+        node +
+        ":1:1\n"
+        "[tx]\ngas_limit=3000000000\n"
+        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+        "version=2\n"
+        "[ethereum]\nmode=el\n"
+        "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
+        "cancun_time=1710338135\nprague_time=1746612311\n"
+        "merge_block=0\n" +
+        // executor.version=2 binds the [alloc.*] + [eth_genesis_header] sections both ways.
+        ethLaneGenesisSections();
+
+    auto loadBoth = [&](NodeConfig& cfg, std::string const& ini) {
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
+        BOOST_REQUIRE_NO_THROW(cfg.loadConfigFromString(ini));
+    };
+
+    // Default: reorg_window=256, pruning disabled (-1) — always safe.
+    {
+        NodeConfig cfg(keyFactory);
+        loadBoth(cfg, "[ethereum]\nmode=el\n");
+        BOOST_REQUIRE_NO_THROW(cfg.validateELModeInvariants());
+        BOOST_CHECK_EQUAL(cfg.ethereumReorgWindow(), 256);
+    }
+    // Pruning window larger than / equal to the reorg window: accepted.
+    for (auto const* ini : {"[ethereum]\nmode=el\n[storage]\nmpt_prune_window=300\n",
+             "[ethereum]\nmode=el\nreorg_window=100\n[storage]\nmpt_prune_window=100\n"})
+    {
+        NodeConfig cfg(keyFactory);
+        loadBoth(cfg, ini);
+        BOOST_REQUIRE_NO_THROW(cfg.validateELModeInvariants());
+    }
+    // Pruning enabled below the reorg window: rejected — an in-window rollback target
+    // would have its trie nodes pruned already.
+    {
+        NodeConfig cfg(keyFactory);
+        loadBoth(cfg, "[ethereum]\nmode=el\n[storage]\nmpt_prune_window=100\n");
+        BOOST_CHECK_EXCEPTION(cfg.validateELModeInvariants(), InvalidConfig,
+            [](auto const& e) {
+                return errinfoContains(e, "must be -1 (disabled) or >= ethereum.reorg_window");
+            });
+    }
+    // Rollback disabled (reorg_window=0): no rewind can happen, so a small pruning
+    // window is fine.
+    {
+        NodeConfig cfg(keyFactory);
+        loadBoth(
+            cfg, "[ethereum]\nmode=el\nreorg_window=0\n[storage]\nmpt_prune_window=100\n");
+        BOOST_REQUIRE_NO_THROW(cfg.validateELModeInvariants());
+    }
+    // reorg_window itself: negative or absurdly large is a load-time error.
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadConfigFromString("[ethereum]\nmode=el\nreorg_window=-1\n"), InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "ethereum.reorg_window must be"); });
+    }
+    {
+        NodeConfig cfg(keyFactory);
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadConfigFromString("[ethereum]\nmode=el\nreorg_window=100001\n"),
+            InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "ethereum.reorg_window must be"); });
+    }
+}
+
 // Reload is a supported shape: a second loadGenesisConfig without the EL declaration /
 // fork schedule must clear the previous values (a stale m_ethereumELMode would waive both
 // the executor.evm_revision and the auth_admin_account guards).
@@ -695,17 +810,19 @@ BOOST_AUTO_TEST_CASE(loadForkTimestampsReloadClears)
         "evm_revision=cancun\n";
 
     NodeConfig cfg(keyFactory);
-    // First load: EL declaration + fork schedule.
+    // First load: EL declaration + fork schedule (+ the lane-mandatory sections: every
+    // config in this test is executor.version=2).
     BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(
         base + "[ethereum]\nmode=el\n"
                "[fork_timestamps]\nlondon_time=0\nparis_time=0\nshanghai_time=1681338455\n"
                "cancun_time=1710338135\nprague_time=1746612311\n"
-               "merge_block=0\n"));
+               "merge_block=0\n" +
+        ethLaneGenesisSections()));
     BOOST_CHECK(cfg.genesisConfig().m_ethereumELMode);
     BOOST_CHECK(cfg.genesisConfig().m_ethereumForkSchedule.has_value());
 
     // Reload without those sections: both must be cleared, not retained.
-    BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(base));
+    BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(base + ethLaneGenesisSections()));
     BOOST_CHECK(!cfg.genesisConfig().m_ethereumELMode);
     BOOST_CHECK(!cfg.genesisConfig().m_ethereumForkSchedule.has_value());
 }
@@ -749,11 +866,13 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectMalformed)
             cfg.loadGenesisConfigFromString(base + "1746612311abc\n"), InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "prague_time invalid timestamp"); });
     }
-    // 0x-prefixed hex is still accepted.
+    // 0x-prefixed hex is still accepted. (executor.version=2 also binds the
+    // [alloc.*] + [eth_genesis_header] sections; the rejected cases above throw in
+    // loadForkTimestamps, before that binding runs.)
     {
         NodeConfig cfg(keyFactory);
-        BOOST_REQUIRE_NO_THROW(
-            cfg.loadGenesisConfigFromString(base + "0x67f9f25b\nmerge_block=0\n"));
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(
+            base + "0x67f9f25b\nmerge_block=0\n" + ethLaneGenesisSections()));
         BOOST_CHECK_EQUAL(
             cfg.genesisConfig().m_ethereumForkSchedule->m_pragueTime, 0x67f9f25bu);
     }
@@ -823,7 +942,9 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectOutOfOrder)
                 return errinfoContains(e, "bpo1_time (1750000000) is earlier than");
             });
     }
-    // A scheduled osaka with unscheduled bpos is fine (MAX is non-decreasing).
+    // A scheduled osaka with unscheduled bpos is fine (MAX is non-decreasing). The v2 lane
+    // binding needs the [alloc.*] + [eth_genesis_header] sections; the rejected cases above
+    // throw in loadForkTimestamps, before that binding runs.
     {
         NodeConfig cfg(keyFactory);
         BOOST_REQUIRE_NO_THROW(
@@ -831,7 +952,8 @@ BOOST_AUTO_TEST_CASE(forkTimestampsRejectOutOfOrder)
                 head + "shanghai_time=1681338455\n"
                        "cancun_time=1710338135\nprague_time=1746612311\n"
                        "merge_block=0\n"
-                       "osaka_time=1767225548\n"));
+                       "osaka_time=1767225548\n" +
+                ethLaneGenesisSections()));
         BOOST_CHECK_EQUAL(
             cfg.genesisConfig().m_ethereumForkSchedule->m_osakaTime, 1767225548u);
     }
@@ -873,16 +995,20 @@ BOOST_AUTO_TEST_CASE(ethereumMergeBlockParsing)
         BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(base), InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "merge_block is required"); });
     }
-    // Explicit 0 -> PoS from genesis (pure-PoS chains).
+    // Explicit 0 -> PoS from genesis (pure-PoS chains). (executor.version=2 also binds the
+    // [alloc.*] + [eth_genesis_header] sections; the rejected cases throw in
+    // loadForkTimestamps, before that binding runs.)
     {
         NodeConfig cfg(keyFactory);
-        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(base + "merge_block=0\n"));
+        BOOST_REQUIRE_NO_THROW(
+            cfg.loadGenesisConfigFromString(base + "merge_block=0\n" + ethLaneGenesisSections()));
         BOOST_CHECK_EQUAL(cfg.ethereumMergeBlock(), 0u);
     }
     // 0x-prefixed hex is accepted, like the timestamps.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(base + "merge_block=0x1a7acb\n"));
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(
+            base + "merge_block=0x1a7acb\n" + ethLaneGenesisSections()));
         BOOST_CHECK_EQUAL(cfg.ethereumMergeBlock(), 1735371u);
     }
     // Malformed values fail fast like every neighbouring parse.
@@ -895,7 +1021,8 @@ BOOST_AUTO_TEST_CASE(ethereumMergeBlockParsing)
     // Reload without the section resets to the unset value (0), not a stale one.
     {
         NodeConfig cfg(keyFactory);
-        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(base + "merge_block=42\n"));
+        BOOST_REQUIRE_NO_THROW(
+            cfg.loadGenesisConfigFromString(base + "merge_block=42\n" + ethLaneGenesisSections()));
         BOOST_CHECK_EQUAL(cfg.ethereumMergeBlock(), 42u);
         const std::string plain =
             "[version]\ncompatibility_version=3.18.0\n"
@@ -908,7 +1035,8 @@ BOOST_AUTO_TEST_CASE(ethereumMergeBlockParsing)
             "[tx]\ngas_limit=3000000000\n"
             "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
             "auth_admin_account=0x0000000000000000000000000000000000000001\n"
-            "version=2\nevm_revision=cancun\n";
+            "version=2\nevm_revision=cancun\n" +
+            ethLaneGenesisSections();
         BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(plain));
         BOOST_CHECK_EQUAL(cfg.ethereumMergeBlock(), 0u);
     }

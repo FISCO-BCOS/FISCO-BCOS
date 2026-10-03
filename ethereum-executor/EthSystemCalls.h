@@ -13,13 +13,14 @@
 ///     EVMC_CALL from SYSTEM_ADDRESS with 30M gas, executed with vm.execute()
 ///     directly (no host.call() — no nonce bump, no value transfer, no
 ///     recipient touch, no access-list warm-up);
-///   * the host runs in system-call mode (tx == nullptr): zero tx origin and
-///     zero gas prices, matching upstream's `const Transaction empty_tx{}`.
-///     The four system contracts never execute ORIGIN/GASPRICE/CHAINID, so
-///     chain id is also 0 here, as upstream's empty tx yields;
+///   * the host runs in system-call mode (no transaction context): zero tx
+///     origin and zero gas prices, matching upstream's
+///     `const Transaction empty_tx{}`. The four system contracts never execute
+///     ORIGIN/GASPRICE/CHAINID, so chain id is also 0 here, as upstream's
+///     empty tx yields;
 ///   * EIP-2935's input is the parent block hash, supplied by the caller —
 ///     upstream computes it as block_hashes.get_block_hash(number - 1),
-///     which the verifier's seeded RecentBlockHashes answered with exactly
+///     which the verifier's seeded OpRecentBlockHashes answered with exactly
 ///     this value;
 ///   * DELIBERATE deviation: a failed top-level system call (contract code
 ///     present but reverted) is an error here, at block start as well as at
@@ -30,13 +31,17 @@
 /// Error model: storage READ errors follow EthereumState's fail-safe model
 /// (the noexcept evmc::Host boundary reports a failed read as absent/empty —
 /// the same model every transaction in the block already executes under, with
-/// the post-execution state-root check as the backstop). Write-back
+/// the post-execution state-root check as the backstop); the caller may pass a
+/// shared EthStorageErrorSlot to record each swallowed read for a fail-loud
+/// block-boundary check (EthStorageErrorGuard.h). Write-back
 /// (applyToStorage) failures and EVM-level call failures are surfaced as the
 /// returned error string, failing the block.
 
 #pragma once
 
 #include "EVMSupport.h"
+#include "EthExecutionPolicy.h"
+#include "EthStorageErrorGuard.h"
 #include "EthereumHost.h"
 #include "EthereumState.h"
 #include "bcos-task/Task.h"
@@ -143,9 +148,14 @@ inline constexpr std::array REQUESTS_SYSTEM_CONTRACTS{
 /// exactly as upstream. The block-hash lookup is left empty: none of the
 /// four system contracts executes BLOCKHASH (EIP-2935 receives the parent
 /// hash as calldata instead).
-template <class Storage>
+///
+/// Defaults to the L1 policy: the four system contracts are regular EVM
+/// bytecode with no chain-specific fee or precompile semantics. A chain may
+/// pass its own policy when its system-call wiring requires it.
+template <class Storage, class Policy = EthL1Policy>
 evmc::Result executeSystemCall(EthereumState<Storage>& state, EthBlockInfo const& block,
-    evmc_revision rev, evmc::VM& vm, address const& addr, bytes_view code, bytes_view input)
+    evmc_revision rev, evmc::VM& vm, address const& addr, bytes_view code, bytes_view input,
+    Policy const& policy = Policy{})
 {
     // Every field is listed (the tree builds with -Werror
     // -Wmissing-field-initializers). value is zero — system calls transfer
@@ -168,8 +178,9 @@ evmc::Result executeSystemCall(EthereumState<Storage>& state, EthBlockInfo const
         .code_size = 0,
     };
 
-    EthereumHost<Storage> host{rev, vm, state, block, /*blockHashLookup=*/{},
-        /*tx=*/nullptr, EthCallParams{}, /*chainId=*/0};
+    // System-call mode: no transaction context (zero origin, zero prices).
+    EthereumHost<Storage, Policy> host{rev, vm, state, block, /*blockHashLookup=*/{},
+        /*txContext=*/std::nullopt, EthCallParams{}, /*chainId=*/0, policy};
     return vm.execute(host, rev, msg, code.data(), code.size());
 }
 }  // namespace eth_system_calls_detail
@@ -183,11 +194,16 @@ evmc::Result executeSystemCall(EthereumState<Storage>& state, EthBlockInfo const
 /// Call only when the block's revision >= EVMC_CANCUN.
 ///
 /// @param parentBlockHash the EIP-2935 input (hash of block number - 1).
-template <class Storage>
+/// @param storageErrorSlot shared swallowed-read recorder (null = legacy
+///        fail-safe reads); the caller checks it at the block boundary.
+template <class Storage, class Policy = EthL1Policy>
 task::Task<std::optional<std::string>> systemCallBlockStart(Storage& view, evmc::VM& vm,
-    EthBlockInfo const& block, evmc::bytes32 const& parentBlockHash, evmc_revision rev)
+    EthBlockInfo const& block, evmc::bytes32 const& parentBlockHash, evmc_revision rev,
+    Policy const& policy = Policy{},
+    std::shared_ptr<EthStorageErrorSlot> storageErrorSlot = nullptr)
 {
     EthereumState<Storage> state(view);
+    installStorageErrorSlot(state, std::move(storageErrorSlot));
     try
     {
         for (const auto& contract : eth_system_calls_detail::STORAGE_SYSTEM_CONTRACTS)
@@ -206,8 +222,8 @@ task::Task<std::optional<std::string>> systemCallBlockStart(Storage& view, evmc:
             const bytes32 input = contract.addr == HISTORY_STORAGE_ADDRESS ?
                                       parentBlockHash :
                                       block.parent_beacon_block_root;
-            const auto res = eth_system_calls_detail::executeSystemCall(
-                state, block, rev, vm, contract.addr, code, input);
+            const auto res = eth_system_calls_detail::executeSystemCall<Storage, Policy>(
+                state, block, rev, vm, contract.addr, code, input, policy);
             if (res.status_code != EVMC_SUCCESS)
             {
                 co_return "block-start system call (EIP-4788/2935) failed: system contract "
@@ -239,12 +255,14 @@ struct EthBlockEndSystemCallsResult
 /// both contracts are deployed by ordinary pre-fork transactions, so a
 /// failure means divergent local state.
 /// Call only when the block's revision >= EVMC_PRAGUE.
-template <class Storage>
-task::Task<EthBlockEndSystemCallsResult> systemCallBlockEnd(
-    Storage& view, evmc::VM& vm, EthBlockInfo const& block, evmc_revision rev)
+template <class Storage, class Policy = EthL1Policy>
+task::Task<EthBlockEndSystemCallsResult> systemCallBlockEnd(Storage& view, evmc::VM& vm,
+    EthBlockInfo const& block, evmc_revision rev, Policy const& policy = Policy{},
+    std::shared_ptr<EthStorageErrorSlot> storageErrorSlot = nullptr)
 {
     EthBlockEndSystemCallsResult result;
     EthereumState<Storage> state(view);
+    installStorageErrorSlot(state, std::move(storageErrorSlot));
     try
     {
         for (const auto& contract : eth_system_calls_detail::REQUESTS_SYSTEM_CONTRACTS)
@@ -261,9 +279,8 @@ task::Task<EthBlockEndSystemCallsResult> systemCallBlockEnd(
                 co_return result;
             }
 
-            const auto res =
-                eth_system_calls_detail::executeSystemCall(state, block, rev, vm, contract.addr,
-                    code, {});
+            const auto res = eth_system_calls_detail::executeSystemCall<Storage, Policy>(
+                state, block, rev, vm, contract.addr, code, {}, policy);
             if (res.status_code != EVMC_SUCCESS)
             {
                 result.error = "block-end system call (EIP-7002/7251) failed: execution reverted";

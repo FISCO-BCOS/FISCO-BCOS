@@ -213,6 +213,12 @@ public:
         return m_tracker.finalizedBlockNumber();
     }
 
+    std::optional<bcos::protocol::BlockNumber> getHeadBlockNumber() const
+    {
+        auto const head = m_tracker.trackedHead();
+        return head ? std::optional(head->blockNumber) : std::nullopt;
+    }
+
     /// Header returned by the last successful newPayload execute/commit (not the
     /// request-rebuilt announcement). Null if this call did not run or persist execution.
     bcos::protocol::BlockHeader::Ptr lastExecutedHeader() const

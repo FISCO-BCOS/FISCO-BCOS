@@ -15,7 +15,8 @@
  *
  * @file OpForkScheduleTest.cpp
  * @brief Pins bcos::ledger::resolveOpFork — the single OP fork-activation parser the
- *        executor (configAt) and the devp2p header validator both delegate to:
+ *        executor (opstack-executor/OpForkSpec.h) and the devp2p header validator both
+ *        delegate to:
  *        isthmus-unset zero-start baseline, unscheduled-rung implication, UINT64_MAX =
  *        not scheduled, ts >= forkTime activation.
  * @date 2026/9/22

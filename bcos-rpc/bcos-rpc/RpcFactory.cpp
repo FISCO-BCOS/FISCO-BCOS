@@ -387,20 +387,25 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
     return wsConfig;
 }
 
-// Init HTTP RPC service configuration. When _enableOPEngine=true, reads from
-// [op_engine_rpc] section (OP-Stack Engine API); otherwise reads from [web3_rpc].
+// Init HTTP RPC service configuration. When _enableEngineRpc=true, reads from the active
+// engine section ([op_engine_rpc] for the OP lane, [engine_rpc] for EL mode — NodeConfig
+// makes them mutually exclusive); otherwise reads from [web3_rpc].
 std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initWeb3RpcServiceConfig(
-    const bcos::tool::NodeConfig::Ptr& _nodeConfig, bool _enableOPEngine)
+    const bcos::tool::NodeConfig::Ptr& _nodeConfig, bool _enableEngineRpc)
 {
     auto wsConfig = std::make_shared<boostssl::ws::WsConfig>();
     wsConfig->setModel(bcos::boostssl::ws::WsModel::Server);
     wsConfig->setDisableSsl(true);
 
-    if (_enableOPEngine)
+    if (_enableEngineRpc)
     {
-        wsConfig->setListenIP(_nodeConfig->opEngineRpcListenIP());
-        wsConfig->setListenPort(_nodeConfig->opEngineRpcListenPort());
-        wsConfig->setMaxMsgSize(_nodeConfig->opEngineHttpBodySizeLimit());
+        const bool elEngineRpc = _nodeConfig->enableEngineRpc();
+        wsConfig->setListenIP(elEngineRpc ? _nodeConfig->engineRpcListenIP() :
+                                            _nodeConfig->opEngineRpcListenIP());
+        wsConfig->setListenPort(elEngineRpc ? _nodeConfig->engineRpcListenPort() :
+                                              _nodeConfig->opEngineRpcListenPort());
+        wsConfig->setMaxMsgSize(elEngineRpc ? _nodeConfig->engineHttpBodySizeLimit() :
+                                              _nodeConfig->opEngineHttpBodySizeLimit());
         // The engine API port is machine-to-machine (op-node / consensus clients),
         // not browser-facing, so CORS provides no functionality and would only
         // expose the port to cross-origin pages. Disable it explicitly.
@@ -429,7 +434,7 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initWeb3RpcServiceConf
                   << LOG_KV("asServer", wsConfig->asServer())
                   << LOG_KV("maxMsgSize", wsConfig->maxMsgSize())
                   << LOG_KV("corsConfig", wsConfig->corsConfig().toString())
-                  << LOG_KV("enableOPEngine", _enableOPEngine);
+                  << LOG_KV("enableEngineRpc", _enableEngineRpc);
 
     return wsConfig;
 }
@@ -481,10 +486,10 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
 }
 
 bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(int sendTxTimeout,
-    boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager, bool _enableOPEngine,
-    bool _enableMinerApi)
+    boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager,
+    bool _enableEngineRpc, bool _enableMinerApi)
 {
-    // Each RPC surface (web3 / op-engine) gets its own FilterSystem so that
+    // Each RPC surface (web3 / engine) gets its own FilterSystem so that
     // filter stores are isolated across ports (filters created on one port
     // cannot be removed from the other), and the internal static RNG used by
     // FilterSystem::insertFilter is not shared concurrently.
@@ -492,18 +497,22 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(int sendTxTimeout,
         _groupManager, m_nodeConfig->groupId(), m_nodeConfig->web3FilterTimeout(),
         m_nodeConfig->web3MaxProcessBlock());
 
+    const bool elEngineRpc = m_nodeConfig->enableEngineRpc();
     auto web3JsonRpc = std::make_shared<Web3JsonRpcImpl>(m_nodeConfig->groupId(),
-        _enableOPEngine ? m_nodeConfig->opEngineBatchRequestSizeLimit() :
-                          m_nodeConfig->web3BatchRequestSizeLimit(),
+        _enableEngineRpc ? (elEngineRpc ? m_nodeConfig->engineBatchRequestSizeLimit() :
+                                          m_nodeConfig->opEngineBatchRequestSizeLimit()) :
+                           m_nodeConfig->web3BatchRequestSizeLimit(),
         std::move(_groupManager), std::move(filterSystem), m_nodeConfig->web3SyncTransaction(),
-        _enableOPEngine, _enableMinerApi);
+        _enableEngineRpc, _enableMinerApi);
 
-    // if enable op engine, set jwt verifier and register op engine json http request handler
-    if (_enableOPEngine)
+    // if enable engine rpc, set jwt verifier and register engine json http request handler
+    if (_enableEngineRpc)
     {
         auto jwtConfig = std::make_shared<bcos::rpc::JwtConfig>();
-        jwtConfig->setSecretFile(m_nodeConfig->opEngineJwtSecretFile());
-        jwtConfig->setClockSkewSecs(m_nodeConfig->opEngineClockSkewSecs());
+        jwtConfig->setSecretFile(elEngineRpc ? m_nodeConfig->engineJwtSecretFile() :
+                                               m_nodeConfig->opEngineJwtSecretFile());
+        jwtConfig->setClockSkewSecs(elEngineRpc ? m_nodeConfig->engineClockSkewSecs() :
+                                                  m_nodeConfig->opEngineClockSkewSecs());
         jwtConfig->setAllowedAlgorithms("HS256");
         web3JsonRpc->setJwtVerifier(std::make_shared<bcos::rpc::JwtVerifier>(std::move(jwtConfig)));
         if (auto httpServer = _wsService->httpServer())
@@ -590,20 +599,22 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
     auto amopClient = buildAirAMOPClient(wsService);
     auto rpc = buildRpc(m_nodeConfig->sendTxTimeout(), wsService, groupManager, amopClient);
 
-    if (m_nodeConfig->enableOpEngineRpc())
+    if (m_nodeConfig->enableOpEngineRpc() || m_nodeConfig->enableEngineRpc())
     {
-        auto opEngineConfig = initWeb3RpcServiceConfig(m_nodeConfig, true);
-        auto opEngineWsService = buildWsService(std::move(opEngineConfig));
+        auto engineConfig = initWeb3RpcServiceConfig(m_nodeConfig, true);
+        auto engineWsService = buildWsService(std::move(engineConfig));
         // buildWeb3JsonRpc creates a dedicated FilterSystem for this port, so
-        // filter stores are isolated between the OP Engine (8551) and web3 (8545).
+        // filter stores are isolated between the engine (8551) and web3 (8545) ports.
         // The miner namespace is scoped per listener: the op-engine port carries it under
         // [op_engine_rpc] enable_miner_api, the web3 port under [web3_rpc] enable_miner_api —
-        // the batcher handshake can no longer leak onto the public listener.
-        auto opEngineJsonRpc = buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), opEngineWsService,
-            groupManager, true, m_nodeConfig->enableOpEngineMinerApi());
+        // the batcher handshake can no longer leak onto the public listener. The EL-mode
+        // [engine_rpc] listener has no miner namespace.
+        auto engineJsonRpc = buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), engineWsService,
+            groupManager, true,
+            m_nodeConfig->enableOpEngineRpc() && m_nodeConfig->enableOpEngineMinerApi());
 
-        rpc->setOpEngineJsonRpcImpl(std::move(opEngineJsonRpc));
-        rpc->setOpEngineService(std::move(opEngineWsService));
+        rpc->setOpEngineJsonRpcImpl(std::move(engineJsonRpc));
+        rpc->setOpEngineService(std::move(engineWsService));
     }
     if (m_nodeConfig->enableWeb3Rpc())
     {

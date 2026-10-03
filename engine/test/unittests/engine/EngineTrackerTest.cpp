@@ -276,70 +276,16 @@ BOOST_AUTO_TEST_CASE(engine_tracker_zero_head_hash_is_rejected)
     BOOST_CHECK(!tracker.trackedHead().has_value());
 }
 
-BOOST_AUTO_TEST_CASE(engine_tracker_rebuilds_on_parent_with_attributes)
+BOOST_AUTO_TEST_CASE(engine_tracker_swallows_parent_even_with_attributes)
 {
+    // Matrix: S2 — release EngineServiceImpl never rebuilds on parent; older head is swallowed.
     EngineTracker tracker;
     tracker.applyForkchoice(resolved(h256(10), 10, true, false));
     auto outcome = tracker.applyForkchoice(resolved(h256(9), 9, true, true));
-    BOOST_CHECK(outcome == ForkchoiceApplyResult::RebuildOnParent);
-    BOOST_REQUIRE(tracker.trackedHead().has_value());
-    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
-    BOOST_CHECK_EQUAL(tracker.trackedHead()->hash, h256(10));
-}
-
-BOOST_AUTO_TEST_CASE(engine_tracker_swallows_parent_without_attributes)
-{
-    EngineTracker tracker;
-    tracker.applyForkchoice(resolved(h256(10), 10, true, false));
-    auto outcome = tracker.applyForkchoice(resolved(h256(9), 9, true, false));
     BOOST_CHECK(outcome == ForkchoiceApplyResult::Swallowed);
     BOOST_REQUIRE(tracker.trackedHead().has_value());
     BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
     BOOST_CHECK_EQUAL(tracker.trackedHead()->hash, h256(10));
-}
-
-// KL3 gap-②: the pre-apply FCU snapshot restores all four mutable fields on rollback
-// (a failed deferred-tip-move must leave the tracker exactly as before the FCU), and
-// the CL's re-issued FCU re-applies cleanly from the rolled-back state.
-BOOST_AUTO_TEST_CASE(engine_tracker_rollback_restores_pre_apply_fcu_state)
-{
-    EngineTracker tracker;
-    auto const preApply = tracker.snapshotForkchoiceForRollback();
-    tracker.applyForkchoice(resolved(h256(10), 10, true, false));
-    auto const appliedHead = tracker.trackedHead();
-    BOOST_REQUIRE(appliedHead.has_value());
-
-    tracker.rollbackForkchoice(preApply, appliedHead);
-    BOOST_CHECK(!tracker.trackedHead().has_value());
-    BOOST_CHECK(!tracker.safeBlockNumber().has_value());
-    BOOST_CHECK(!tracker.finalizedBlockNumber().has_value());
-
-    BOOST_CHECK(tracker.applyForkchoice(resolved(h256(10), 10, true, false)) ==
-                ForkchoiceApplyResult::Applied);
-    BOOST_REQUIRE(tracker.trackedHead().has_value());
-    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
-}
-
-// The rollback anchor guard: a failed OLDER apply must not clobber a NEWER concurrent
-// apply — the newer FCU's own outcome governs.
-BOOST_AUTO_TEST_CASE(engine_tracker_rollback_anchor_spares_newer_apply)
-{
-    EngineTracker tracker;
-    tracker.applyForkchoice(resolved(h256(10), 10, true, false));
-    auto const stalePreApply = tracker.snapshotForkchoiceForRollback();
-    auto const staleAppliedHead = tracker.trackedHead();
-    BOOST_REQUIRE(staleAppliedHead.has_value());
-
-    // A newer concurrent FCU moves the tracker forward (head 11)...
-    tracker.applyForkchoice(resolved(h256(11), 11, true, false));
-    BOOST_REQUIRE(tracker.trackedHead().has_value());
-    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 11);
-
-    // ...so the old failure's rollback must not rewind it.
-    tracker.rollbackForkchoice(stalePreApply, staleAppliedHead);
-    BOOST_REQUIRE(tracker.trackedHead().has_value());
-    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 11);
-    BOOST_CHECK_EQUAL(tracker.trackedHead()->hash, h256(11));
 }
 
 // A set-but-unresolved safe/finalized hash (non-zero hash, nullopt number) is rejected
@@ -403,22 +349,22 @@ BOOST_AUTO_TEST_CASE(engine_tracker_swallows_old_head_without_attributes)
     BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
 }
 
-BOOST_AUTO_TEST_CASE(engine_tracker_rebuilds_on_noncanonical_parent_with_attributes)
+BOOST_AUTO_TEST_CASE(engine_tracker_swallows_noncanonical_parent_even_with_attributes)
 {
     EngineTracker tracker;
     tracker.applyForkchoice(resolved(h256(10), 10, true, false));
     auto outcome = tracker.applyForkchoice(resolved(h256(9), 9, false, true));
-    BOOST_CHECK(outcome == ForkchoiceApplyResult::RebuildOnParent);
+    BOOST_CHECK(outcome == ForkchoiceApplyResult::Swallowed);
     BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
     BOOST_CHECK_EQUAL(tracker.trackedHead()->hash, h256(10));
 }
 
-BOOST_AUTO_TEST_CASE(engine_tracker_rebuilds_on_older_than_parent_with_attributes)
+BOOST_AUTO_TEST_CASE(engine_tracker_swallows_older_than_parent_with_attributes)
 {
     EngineTracker tracker;
     tracker.applyForkchoice(resolved(h256(10), 10, true, false));
     auto outcome = tracker.applyForkchoice(resolved(h256(8), 8, true, true));
-    BOOST_CHECK(outcome == ForkchoiceApplyResult::RebuildOnParent);
+    BOOST_CHECK(outcome == ForkchoiceApplyResult::Swallowed);
     BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
     BOOST_CHECK_EQUAL(tracker.trackedHead()->hash, h256(10));
 }
@@ -503,74 +449,36 @@ BOOST_AUTO_TEST_CASE(engine_tracker_rejects_head_jump)
         "Forkchoice head block number must increase by exactly 1");
 }
 
-// ---- S5+S6 Task 2: OP 策略位 allowNonLinearHead（默认分支零行为变化）----
-
-BOOST_AUTO_TEST_CASE(engine_tracker_op_flag_allows_jump)
+// EL-mode relaxation (allowCanonicalHeadJump): the CL is the forkchoice authority and
+// the devp2p sync loop commits blocks without a per-block FCU, so a CANONICAL head may
+// jump arbitrarily far ahead of the tracked head. The canonical proof is still
+// required, and the block-producing lanes (flag unset) keep the strict +1 rule.
+BOOST_AUTO_TEST_CASE(engine_tracker_allows_canonical_head_jump_when_permitted)
 {
     EngineTracker tracker;
     tracker.applyForkchoice(resolved(h256(10), 10, true, false));
-    ResolvedForkchoice jump = resolved(h256(12), 12, true, false);
-    jump.allowNonLinearHead = true;
+
+    ResolvedForkchoice jump = resolved(h256(15), 15, true, false);
+    jump.allowCanonicalHeadJump = true;
     BOOST_CHECK(tracker.applyForkchoice(jump) == ForkchoiceApplyResult::Applied);
     BOOST_REQUIRE(tracker.trackedHead().has_value());
-    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 12);
-}
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 15);
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->hash, h256(15));
 
-BOOST_AUTO_TEST_CASE(engine_tracker_default_still_rejects_jump)
-{
-    // 原 engine_tracker_rejects_head_jump 语义必须仍绿：无 OP 位时默认仍是 +1 门。
-    EngineTracker tracker;
-    tracker.applyForkchoice(resolved(h256(10), 10, true, false));
-    ResolvedForkchoice jump = resolved(h256(12), 12, true, false);
-    BOOST_CHECK(!jump.allowNonLinearHead);
-    checkExceptionMessage<InvalidForkchoiceState>([&]() { tracker.applyForkchoice(jump); },
+    // A non-canonical jump stays rejected even with the relaxation armed.
+    ResolvedForkchoice nonCanonical = resolved(h256(18), 18, false, false);
+    nonCanonical.allowCanonicalHeadJump = true;
+    checkExceptionMessage<InvalidForkchoiceState>(
+        [&]() { tracker.applyForkchoice(nonCanonical); },
         "Forkchoice head block number must increase by exactly 1");
-}
-
-// 默认分支：更矮且无 attrs 仍 Swallowed（不拨矮 tracked、不更新）。
-BOOST_AUTO_TEST_CASE(engine_tracker_default_lower_head_still_swallowed)
-{
-    EngineTracker tracker;
-    tracker.applyForkchoice(resolved(h256(10), 10, true, false));
-    BOOST_CHECK(tracker.applyForkchoice(resolved(h256(9), 9, true, false)) ==
-                ForkchoiceApplyResult::Swallowed);
-    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
-}
-
-// OP 位 + old-head（head 已规范、号更矮）：不把 tracked 拨矮；safe/finalized 仍更新；
-// 有 attrs 才 RebuildOnParent。
-BOOST_AUTO_TEST_CASE(engine_tracker_op_old_head_does_not_rewind_tracked)
-{
-    EngineTracker tracker;
-    tracker.applyForkchoice(resolved(h256(10), 10, true, false));
-
-    ResolvedForkchoice oldHead = resolved(h256(8), 8, true, false);
-    oldHead.allowNonLinearHead = true;
-    oldHead.state.safeBlockHash = h256(8);
-    oldHead.state.finalizedBlockHash = h256(8);
-    BOOST_CHECK(tracker.applyForkchoice(oldHead) == ForkchoiceApplyResult::Swallowed);
     BOOST_REQUIRE(tracker.trackedHead().has_value());
-    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
-    BOOST_CHECK_EQUAL(tracker.trackedHead()->hash.hex(), h256(10).hex());
-    BOOST_CHECK_EQUAL(*tracker.safeBlockNumber(), 8);
-    BOOST_CHECK_EQUAL(*tracker.finalizedBlockNumber(), 8);
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 15);
 
-    oldHead.payloadAttributesPresent = true;
-    BOOST_CHECK(tracker.applyForkchoice(oldHead) == ForkchoiceApplyResult::RebuildOnParent);
-    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 10);
-}
-
-// OP 位 + 侧链换头（headCanonical=false）：Applied 并更新 tracked。
-BOOST_AUTO_TEST_CASE(engine_tracker_op_side_chain_switch_applies)
-{
-    EngineTracker tracker;
-    tracker.applyForkchoice(resolved(h256(10), 10, true, false));
-    ResolvedForkchoice imported = resolved(h256(77), 12, false, false);
-    imported.allowNonLinearHead = true;
-    BOOST_CHECK(tracker.applyForkchoice(imported) == ForkchoiceApplyResult::Applied);
-    BOOST_REQUIRE(tracker.trackedHead().has_value());
-    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 12);
-    BOOST_CHECK_EQUAL(tracker.trackedHead()->hash.hex(), h256(77).hex());
+    // And a canonical jump WITHOUT the flag keeps the strict +1 rule.
+    checkExceptionMessage<InvalidForkchoiceState>(
+        [&]() { tracker.applyForkchoice(resolved(h256(18), 18, true, false)); },
+        "Forkchoice head block number must increase by exactly 1");
+    BOOST_CHECK_EQUAL(tracker.trackedHead()->blockNumber, 15);
 }
 
 BOOST_AUTO_TEST_CASE(engine_tracker_updates_safe_and_finalized_on_apply)
@@ -908,7 +816,8 @@ BOOST_AUTO_TEST_CASE(engine_tracker_shared_guard_allows_concurrent_readers)
             int current = ++activeReaders;
             int observed = peakReaders.load();
             while (observed < current && !peakReaders.compare_exchange_weak(observed, current))
-            {}
+            {
+            }
         }
 
         sync.arrive_and_wait();
@@ -1118,7 +1027,9 @@ BOOST_AUTO_TEST_CASE(engine_common_capabilities_gold)
     std::vector<std::string> const gold{"engine_exchangeCapabilities", "engine_forkchoiceUpdatedV1",
         "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3", "engine_getPayloadV1",
         "engine_getPayloadV2", "engine_getPayloadV3", "engine_getPayloadV4", "engine_getPayloadV5",
-        "engine_newPayloadV1", "engine_newPayloadV2", "engine_newPayloadV3", "engine_newPayloadV4"};
+        "engine_newPayloadV1", "engine_newPayloadV2", "engine_newPayloadV3", "engine_newPayloadV4",
+        "engine_getPayloadBodiesByHashV1", "engine_getPayloadBodiesByRangeV1",
+        "engine_getBlobsV1", "engine_getClientVersionV1", "engine_exchangeClientVersionV1"};
     BOOST_CHECK(caps == gold);
 }
 

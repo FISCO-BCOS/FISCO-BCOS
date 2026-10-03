@@ -35,6 +35,8 @@
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-ledger/mpt/Constants.h>
+#include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
@@ -230,6 +232,34 @@ void writeNumberToHash(Backend& backend, protocol::BlockNumber blockNumber, h256
         std::move(entry)));
 }
 
+/// A committed header row at @p blockNumber. MPT-mode state-root resolution
+/// (executor_version >= 2, every fixture here) reads block N-1's header for its stateRoot
+/// (parentStateRootFor, StateRoots.h) whenever a payload is built on or committed above
+/// N-1, so any height the mock chain parents a block on needs this row. The stateRoot is
+/// the empty trie root: the stub scheduler writes no state, so every mocked block's MPT is
+/// empty and an empty delta folds back to the parent root without touching "/mpt/" rows.
+/// Timestamp sits one second below the default payload timestamp so any parent-child
+/// ordering check sees a strictly older parent.
+template <class Backend>
+void writeNumberToBlockHeader(Backend& backend, protocol::BlockNumber blockNumber)
+{
+    auto header = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
+    header->setNumber(blockNumber);
+    header->setTimestamp(c_defaultPayloadTimestamp - 1000);
+    header->setStateRoot(ledger::mpt::emptyRootHash());
+    header->setGasLimit(30'000'000);
+    header->setGasUsed(0);
+    header->setBaseFee(bcos::u256(1'000'000'000));
+    bcos::bytes encoded;
+    header->encode(encoded);
+    storage::Entry entry;
+    entry.set(std::move(encoded));
+    task::syncWait(storage2::writeOne(backend,
+        bcos::executor_v1::StateKey{
+            ledger::SYS_NUMBER_2_BLOCK_HEADER, boost::lexical_cast<std::string>(blockNumber)},
+        std::move(entry)));
+}
+
 /// Distinct hashes at one height overwrite NUMBER_2_HASH and fail the
 /// fail-closed canonical check. When the three forkchoice hashes differ,
 /// collapse to finalized < safe < head.
@@ -266,6 +296,11 @@ void setForkchoiceBlockNumbers(Storage& storage, ForkchoiceState const& forkchoi
     writeNumberToHash(backend, safeBlockNumber, forkchoiceState.safeBlockHash);
     writeHashToNumber(backend, forkchoiceState.finalizedBlockHash, finalizedBlockNumber);
     writeNumberToHash(backend, finalizedBlockNumber, forkchoiceState.finalizedBlockHash);
+    // Committed-header rows at every forkchoice height: building on the head (and
+    // committing the built payload) resolves the parent's stateRoot from these.
+    writeNumberToBlockHeader(backend, headBlockNumber);
+    writeNumberToBlockHeader(backend, safeBlockNumber);
+    writeNumberToBlockHeader(backend, finalizedBlockNumber);
 }
 
 /// GateMergeStorage (and similar) have no fixture ctor: write executor config

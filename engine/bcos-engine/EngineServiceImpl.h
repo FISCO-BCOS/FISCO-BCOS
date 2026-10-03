@@ -114,7 +114,7 @@ bcos::bytes encodeOptimismExtraData(
     const PayloadAttributes& payloadAttributes, OpEip1559Params eip1559);
 
 std::optional<std::string> validateExecutionPayload(
-    const ExecutionPayload& executionPayload, std::uint32_t version);
+    const ExecutionPayload& executionPayload, std::uint32_t version, bool allowBlob);
 
 std::optional<std::string> compareWithBuiltPayload(
     const ExecutionPayload& submitted, const ExecutionPayload& built);
@@ -406,6 +406,12 @@ public:
         return m_finalizedBlockNumber;
     }
 
+    std::optional<bcos::protocol::BlockNumber> getHeadBlockNumber() const
+    {
+        std::shared_lock lock(x_state);
+        return m_trackedHeadBlock ? std::optional(m_trackedHeadBlock->blockNumber) : std::nullopt;
+    }
+
 private:
     // TrackedHeadBlock comes from EngineServiceCommon.h (one shared definition).
 
@@ -421,6 +427,8 @@ private:
         /// Beacon root the payload was built with (from PayloadAttributes).
         /// newPayload does not overwrite this from the CL request.
         std::optional<h256> parentBeaconBlockRoot;
+        /// Never filled on this legacy lane: getPayloadV4+ reports the empty list.
+        std::optional<std::vector<bytes>> executionRequests = std::nullopt;
         std::shared_ptr<ViewType> view;
         /// Built-block artifacts kept so newPayload() can persist the ledger block tables
         /// (SYS_NUMBER_2_HASH / SYS_HASH_2_NUMBER / SYS_NUMBER_2_BLOCK_HEADER /

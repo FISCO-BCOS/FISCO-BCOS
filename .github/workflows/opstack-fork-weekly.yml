@@ -54,10 +54,10 @@ jobs:
         run: |
           mkdir -p build && cd build
           CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold \
-            -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF \
+            -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON \
             -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
           cmake --build . --target test-bcos-engine opstack-executor-block-tests \
-            opstack-executor-tests bcos-evm-opstack-tests test-bcos-ledger -j 4
+            opstack-executor-tests test-bcos-ledger -j 4
       - name: C++ fork suites (one invocation per suite; Boost rejects comma lists)
         run: |
           set -euo pipefail
@@ -76,8 +76,6 @@ jobs:
           check_suite ./build/engine/test/test-bcos-engine OpForkBoundarySweepSuite
           check_suite ./build/engine/test/test-bcos-engine OpHeaderFieldSetBaselineSuite
           check_suite ./build/opstack-executor/tests/opstack-executor-block-tests OpGoldenCorpusProvenance
-          check_suite ./build/bcos-evm/test/bcos-evm-opstack-tests OpPrecompilesSuite
-          check_suite ./build/bcos-evm/test/bcos-evm-opstack-tests OpOsakaSemanticsSuite
       - name: Set up Python 3.11 (mapping.json reader for the mutation harness)
         uses: actions/setup-python@v5
         with:
