@@ -1,7 +1,7 @@
 {
     "name": "tarscpp",
     "version-string": "3.0.3-3",
-    "port-version": 0,
+    "port-version": 1,
     "homepage": "https://github.com/FISCO-BCOS/TarsCpp",
     "description": "tarscpp",
     "dependencies": [

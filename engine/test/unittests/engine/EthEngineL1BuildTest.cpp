@@ -568,41 +568,12 @@ public:
     }
 };
 
-/// EL1BFaultFixture variant whose ledger fails the prewrite on demand. Node B is
-/// omitted: the F1 path is exercised entirely on node A's self-built commit lane.
-struct EL1BPrewriteFaultFixture
-{
-    static constexpr int64_t c_reorgWindow = 8;
-
-    EL1BFaultNode nodeA{"prewriteFaultA", c_reorgWindow};
-    bcos::txpool::MemPoolImpl memPool{
-        bcos::txpool::MemPoolConfig{.chainKind = bcos::txpool::ChainKind::L1}};
-    StubExecutor stubExecutor;
-    StubScheduler stubScheduler;
-    std::shared_ptr<El1bFailingPrewriteLedger> ledgerA =
-        std::make_shared<El1bFailingPrewriteLedger>();
-    std::shared_ptr<initializer::ExternalPayloadVerifierImpl<FaultyGlobalStateStorage>>
-        externalVerifierA;
-    EthEngineService<bcos::txpool::MemPoolImpl, FaultyGlobalStateStorage, StubExecutor,
-        StubScheduler>
-        serviceA;
-
-    EL1BPrewriteFaultFixture()
-      : externalVerifierA(
-            std::make_shared<initializer::ExternalPayloadVerifierImpl<FaultyGlobalStateStorage>>(
-                nodeA.verifier, nodeA.fakeLedger, nodeA.blockFactory, el1bCancunForks(),
-                /*chainId=*/1, /*mergeBlock=*/0)),
-        serviceA(memPool, nodeA.storage, stubExecutor, stubScheduler, nodeA.blockFactory,
-            /*ledger=*/ledgerA, engine::c_defaultBlockTxCountLimit,
-            static_cast<std::uint32_t>(ApiVersion::V4), /*commitObserver=*/nullptr,
-            /*ledgerConfigState=*/nullptr, externalVerifierA,
-            /*clSync=*/std::make_shared<engine_common::ClSyncCoordination>())
-    {}
-};
-
-/// Node A over the fault backend with a persisting ledger and a positive reorg window:
-/// the self-built commit lane journals rollback rows and the fail-closed duplicate
-/// guard has a ledger row to answer from. Node B is the independent verifier.
+/// Node A over the fault backend with a positive reorg window: the self-built commit
+/// lane journals rollback rows and the fail-closed duplicate guard has a ledger row to
+/// answer from. Node B is the independent verifier. ledgerA is the failing-prewrite
+/// variant with its counter at 0 — a pure pass-through to El1bPersistingLedger until a
+/// test arms it (prewriteFaultRetryCommitsWithJournal), so every other test on this
+/// fixture behaves identically to a plain persisting ledger.
 struct EL1BFaultFixture
 {
     static constexpr int64_t c_reorgWindow = 8;
@@ -613,7 +584,8 @@ struct EL1BFaultFixture
         bcos::txpool::MemPoolConfig{.chainKind = bcos::txpool::ChainKind::L1}};
     StubExecutor stubExecutor;
     StubScheduler stubScheduler;
-    std::shared_ptr<El1bPersistingLedger> ledgerA = std::make_shared<El1bPersistingLedger>();
+    std::shared_ptr<El1bFailingPrewriteLedger> ledgerA =
+        std::make_shared<El1bFailingPrewriteLedger>();
     std::shared_ptr<initializer::ExternalPayloadVerifierImpl<FaultyGlobalStateStorage>>
         externalVerifierA;
     EthEngineService<bcos::txpool::MemPoolImpl, FaultyGlobalStateStorage, StubExecutor,
@@ -1364,7 +1336,7 @@ BOOST_FIXTURE_TEST_CASE(captureFaultRetryCommitsWithStateAndJournal, EL1BFaultFi
 // journal is stashed in the artifact before pushView, and the retry must commit the
 // block WITH its SYS_ROLLBACK_JOURNAL row: a journal-less committed block would refuse
 // every later reorg reaching it (rollbackCommittedChain) and force a full resync.
-BOOST_FIXTURE_TEST_CASE(prewriteFaultRetryCommitsWithJournal, EL1BPrewriteFaultFixture)
+BOOST_FIXTURE_TEST_CASE(prewriteFaultRetryCommitsWithJournal, EL1BFaultFixture)
 {
     auto const recipient = el1bEvmcAddress(0x65);
     auto const recipientAddress =

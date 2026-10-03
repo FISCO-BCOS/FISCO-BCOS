@@ -98,8 +98,24 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
             set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=gold")
         endif()
     elseif("${LINKER}" MATCHES "mold")
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=mold")
-        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=mold")
+        # GCC 16's libgcc spec always references the libgcc_s_asneeded.so linker
+        # script (INPUT(AS_NEEDED(-lgcc_s))), which mold < 2.41.0 cannot parse,
+        # so probe with a real link instead of assuming -fuse-ld=mold works.
+        set(_mold_probe_src "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/mold-link-probe.cpp")
+        file(WRITE "${_mold_probe_src}" "int main() { return 0; }\n")
+        execute_process(
+            COMMAND ${CMAKE_CXX_COMPILER} -fuse-ld=mold "${_mold_probe_src}" -o "${_mold_probe_src}.out"
+            RESULT_VARIABLE _mold_probe_result
+            OUTPUT_QUIET ERROR_QUIET)
+        file(REMOVE "${_mold_probe_src}" "${_mold_probe_src}.out")
+        if(_mold_probe_result EQUAL 0)
+            set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=mold")
+            set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=mold")
+        else()
+            message(WARNING "LINKER=mold requested but a test link with -fuse-ld=mold failed "
+                "(mold < 2.41.0 cannot parse GCC 16's libgcc_s_asneeded.so linker script); "
+                "falling back to the default linker. Install mold >= 2.41.0 to use mold.")
+        endif()
     endif()
 
     if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")

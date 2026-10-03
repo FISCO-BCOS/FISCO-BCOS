@@ -74,7 +74,9 @@ task::Task<Json::Value> Web3JsonRpcImpl::handleRequest(
 
         Json::Value const& params = _request["params"];
         Json::Value result;
-        co_await (m_endpoints.*optHandler.value())(params, result);
+        auto handler = optHandler.value();
+        auto task = (m_endpoints.*handler)(params, result);
+        co_await std::move(task);
         result["id"] = _request["id"];
         response = std::move(result);
 

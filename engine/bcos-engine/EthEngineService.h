@@ -142,8 +142,12 @@ struct EthPayloadArtifacts
     /// has consumed the view cannot recapture on the CL's retry (captureRollbackJournal
     /// iterates the view's dirty rows), so the retry reads the journal from the artifact
     /// and still writes the journal rows with the block — a journal-less committed block
-    /// would refuse every later reorg reaching it.
-    std::optional<scheduler_v1::RollbackJournal> rollbackJournal = std::nullopt;
+    /// would refuse every later reorg reaching it. Held by shared_ptr (same convention as
+    /// mptDelta above): the stash and the exception-rollback artifacts-map snapshots then
+    /// copy a refcount instead of the block's whole dirty-row set, and the stash — running
+    /// between the capture's catch and pushView with the view still in hand — is nothrow,
+    /// so it cannot recreate the header-only-without-journal artifact it guards against.
+    std::shared_ptr<const scheduler_v1::RollbackJournal> rollbackJournal = nullptr;
 };
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
