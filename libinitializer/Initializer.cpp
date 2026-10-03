@@ -732,10 +732,37 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         if (!m_nodeConfig->opStackELModeEnabled())
         {
             m_daCaps = std::make_shared<bcos::engine::DACaps>();
+            // The declared-ness travels with it: an undeclared OP lane is announced at WARNING,
+            // because the engine will substitute this preset whenever op-node reports zero params
+            // and the preset need not be this chain's pair.
+            auto const& declaredOpEip1559 = m_nodeConfig->genesisConfig().m_opEip1559;
+            auto const opEip1559 = bcos::engine::effectiveOpEip1559(declaredOpEip1559);
+            if (declaredOpEip1559.has_value())
+            {
+                INITIALIZER_LOG(INFO)
+                    << LOG_DESC("OP chain EIP-1559 parameters") << LOG_KV("declared", true)
+                    << LOG_KV("elasticity", opEip1559.elasticity)
+                    << LOG_KV("denominator", opEip1559.denominator)
+                    << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
+            }
+            else
+            {
+                // Never silent: the engine substitutes exactly this preset into a block's
+                // extraData whenever op-node reports zero params (op-deployer leaves L1
+                // SystemConfig's params zero unless setEIP1559Params is called), and the
+                // preset need not be this chain's pair.
+                INITIALIZER_LOG(WARNING)
+                    << LOG_DESC("OP chain declares no [op_eip1559]: zero-attribute-params "
+                                "substitution will use the OP-mainnet PRESET")
+                    << LOG_KV("elasticity", opEip1559.elasticity)
+                    << LOG_KV("denominator", opEip1559.denominator)
+                    << LOG_KV("denominatorCanyon", opEip1559.denominatorCanyon);
+            }
             m_engineServiceInitializer = EngineServiceInitializer::buildOp(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
                 m_memPoolInitializer->memPool(), bcos::engine::c_defaultBlockTxCountLimit,
-                opDelegate, m_daCaps, /*allowSynthesizedL1Attributes=*/false);
+                opDelegate, m_daCaps, /*allowSynthesizedL1Attributes=*/false,
+                declaredOpEip1559);
         }
 
         m_opScheduler = opDelegate;
@@ -832,6 +859,31 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                     "on-chain; the effective EVM revision would be a binary-side default. "
                     "Refusing to start — configure executor.evm_revision at genesis, or run "
                     "executor_version 0/1"));
+        }
+    }
+
+    // Boot probe parity for the OP lane's fail-closed rows (review finding T):
+    // applyLedgerConfig throws on a malformed op_eip1559_params / op_fork_schedule row,
+    // and without a boot-side parse a corrupt row would only surface as the per-block
+    // "Execute block failed!" loop plus -32603 on every RPC reader. Parse both rows
+    // here on the OP lane so the failure is an explicit startup refusal, mirroring the
+    // evmc_revision probe above. Absent rows stay legal (pre-existing OP chains).
+    if (m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION)
+    {
+        if (auto row = task::syncWait(ledger::getSystemConfig(
+                *m_ledger, magic_enum::enum_name(ledger::SystemConfig::op_eip1559_params))))
+        {
+            // Returns the parsed triple or throws InvalidEVMCRevisionConfig — the exact
+            // parse applyLedgerConfig performs on every snapshot read.
+            (void)ledger::parseOpEip1559Params(std::get<0>(*row));
+        }
+        if (auto row = task::syncWait(ledger::getSystemConfig(
+                *m_ledger, magic_enum::enum_name(ledger::SystemConfig::op_fork_schedule))))
+        {
+            ledger::LedgerConfig probe;
+            // opForkScheduleFromCanonical throws ledger::InvalidOpForkSchedule on a
+            // malformed canonical row — the exact parse applyLedgerConfig performs.
+            (void)ledger::opForkScheduleFromCanonical(std::get<0>(*row));
         }
     }
 

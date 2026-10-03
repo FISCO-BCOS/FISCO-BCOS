@@ -76,6 +76,10 @@ namespace detail
 /// Holocene/Jovian extraData from CL attributes. Attribute 0,0 becomes Canyon 250/6
 /// (op-core EncodeHoloceneExtraData / EncodeJovianExtraData).
 bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes);
+/// Declared-triple form: the zero-attribute-params substitution uses the chain's own
+/// [op_eip1559] pair (see OpEngineService::m_eip1559) instead of the legacy preset.
+bcos::bytes encodeOptimismExtraData(
+    const PayloadAttributes& payloadAttributes, OpEip1559Params eip1559);
 
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version, bool allowBlob = false);

@@ -19,12 +19,14 @@
 
 #pragma once
 
+#include <bcos-framework/engine/OpEip1559Params.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-task/Task.h>
 #include <json/json.h>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -58,7 +60,10 @@ std::vector<u256> rewardPercentiles(std::vector<RewardSample> samples,
 /// elasticity 6 and denominator 250 when the child is Canyon, else 50. The child counts as
 /// Canyon when the parent carries withdrawalsRoot (every Canyon+ OP header does), so only the
 /// Canyon activation block itself is predicted with the Bedrock denominator.
-u256 nextOpBaseFee(protocol::BlockHeader const& parent);
+/// eip1559: the chain's DECLARED triple (from the op_eip1559_params SYS_CONFIG row);
+/// nullopt prices with kLegacyOpEip1559Params. Only the pre-Holocene arm reads it.
+u256 nextOpBaseFee(
+    protocol::BlockHeader const& parent, std::optional<engine::OpEip1559Params> eip1559 = std::nullopt);
 
 /// eth_feeHistory for blocks [newest - blockCount + 1, newest] of an OP-lane ledger whose head
 /// is @p head. blockCount 0 answers {"oldestBlock": "0x0"}; above c_maxFeeHistoryBlocks it is

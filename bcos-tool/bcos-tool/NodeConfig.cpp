@@ -287,6 +287,8 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
     // ([ethereum] mode=el, with its mandatory [fork_timestamps] section).
     loadForkTimestamps(_genesisConfig);
     loadOpForkTimestamps(_genesisConfig);
+    loadOpForkSchedule(_genesisConfig);
+    loadOpEip1559(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
 
     // === A6.5: Ethereum-lane genesis allocs; the lane is gated by executor.version >= 2 ===
@@ -646,6 +648,22 @@ void NodeConfig::validateL2Invariants()
             InvalidConfig() << errinfo_comment(
                 "the OP lane derives the EVM revision from [op_fork_timestamps]; remove "
                 "executor.evm_revision / evm_revision_forks"));
+    }
+    // The OP-only config sections are bound to the OP lane both ways (a section a non-OP
+    // chain cannot read is an operator trap; the OP lane's own semantics REQUIRE the ones
+    // marked mandatory). [op_eip1559] is optional on the OP lane itself: an absent triple
+    // means kLegacyOpEip1559Params, the bit-identical behaviour of every pre-existing chain.
+    if (genesis.m_opEip1559.has_value() &&
+        genesis.m_executorVersion < ledger::OPSTACK_EXECUTOR_VERSION)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[op_eip1559] requires executor.version >= 3 (OP lane)"));
+    }
+    if (genesis.m_opstackForkSchedule.has_value() &&
+        genesis.m_executorVersion < ledger::OPSTACK_EXECUTOR_VERSION)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[op_fork_schedule] requires executor.version >= 3 (OP lane)"));
     }
     // The opstack-el declaration ([ethereum] mode=opstack-el) is bound to the OP lane and
     // the Ethereum-lane genesis shape: the sync client downloads OP blocks over devp2p and
@@ -1748,6 +1766,24 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
             }
         }
     }
+    // (ledger::foldOpForkShorthand), so the shorthand and the canonical channel share ONE
+    // rule set. op-geth's CheckConfigForkOrder compares with `>`, so equal jovian/karst
+    // times are LEGAL and merge into the later fork downstream; a later fork at an EARLIER
+    // second — or karst scheduled with jovian unscheduled — is rejected with the keys named.
+    try
+    {
+        (void)ledger::foldOpForkShorthand(schedule.m_jovianTime, schedule.m_karstTime);
+    }
+    catch (ledger::InvalidOpForkSchedule const& e)
+    {
+        if (const auto* comment = boost::get_error_info<errinfo_comment>(e))
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment("[op_fork_timestamps] " + *comment));
+        }
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(std::string("[op_fork_timestamps] ") + e.what()));
+    }
     m_genesisConfig.m_opForkSchedule = schedule;
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadOpForkTimestamps")
@@ -1761,6 +1797,123 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
                          << LOG_KV("isthmus", schedule.m_isthmusTime)
                          << LOG_KV("jovian", schedule.m_jovianTime)
                          << LOG_KV("karst", schedule.m_karstTime);
+}
+
+void NodeConfig::loadOpForkSchedule(boost::property_tree::ptree const& _genesisConfig)
+{
+    // Reload must not keep a previous schedule: an absent section means "legacy via
+    // feature_op_jovian", and a stale optional would pin the wrong canonical.
+    m_genesisConfig.m_opstackForkSchedule.reset();
+    auto section = _genesisConfig.get_child_optional("op_fork_schedule");
+    if (!section)
+    {
+        return;
+    }
+    auto canonical = section->get_optional<std::string>("canonical");
+    if (!canonical)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment("[op_fork_schedule].canonical is required"));
+    }
+    try
+    {
+        m_genesisConfig.m_opstackForkSchedule =
+            ledger::canonicalOpForkSchedule(ledger::parseOpForkSchedule(*canonical));
+    }
+    catch (ledger::InvalidOpForkSchedule const& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                std::string("[op_fork_schedule].canonical invalid: ") + e.what()));
+    }
+    NodeConfig_LOG(INFO) << LOG_DESC("loadOpForkSchedule")
+                         << LOG_KV("canonical", *m_genesisConfig.m_opstackForkSchedule);
+}
+
+void NodeConfig::loadOpEip1559(boost::property_tree::ptree const& _genesisConfig)
+{
+    // Reload must not keep a previous triple (same shape as loadOpForkTimestamps): a stale
+    // optional would either pin or price with a value this config never declared.
+    m_genesisConfig.m_opEip1559.reset();
+    auto section = _genesisConfig.get_child_optional("op_eip1559");
+    if (!section)
+    {
+        return;
+    }
+    auto parseStrictUint64 = [&](std::string const& key, std::string const& text) -> uint64_t {
+        // Decimal and 0x-hex both, matching the sibling [op_fork_timestamps] section: a chain
+        // operator writing one section hex-formatted must not be surprised by the other.
+        // NOT parseForkTimestamp — that helper's message says "invalid timestamp", which would
+        // misname an EIP-1559 parameter.
+        std::string_view digits = text;
+        int base = 10;
+        if (digits.rfind("0x", 0) == 0 || digits.rfind("0X", 0) == 0)
+        {
+            base = 16;
+            digits.remove_prefix(2);
+        }
+        uint64_t out = 0;
+        auto [ptr, ec] = std::from_chars(digits.data(), digits.data() + digits.size(), out, base);
+        if (ec != std::errc{} || ptr != digits.data() + digits.size())
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "[op_eip1559]." + key + " is not a valid uint64: " + text));
+        }
+        if (out > std::numeric_limits<uint32_t>::max())
+        {
+            // The Holocene extraData encodes denominator and elasticity as uint32
+            // (encodeOptimismExtraData's 4-byte big-endian spans): a larger value would
+            // silently truncate there, so the loader refuses it instead.
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment(
+                    "[op_eip1559]." + key + " exceeds the uint32 range: " + text));
+        }
+        return out;
+    };
+    auto requireKey = [&](std::string const& key) -> uint64_t {
+        auto value = section->get_optional<std::string>(key);
+        if (!value || value->empty())
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment("[op_eip1559]." + key + " is required"));
+        }
+        return parseStrictUint64(key, *value);
+    };
+    ledger::OpEip1559Params params{.elasticity = requireKey("elasticity"),
+        .denominator = requireKey("denominator"),
+        // Optional: op-deployer's standard value is the default, and the pin records the
+        // EFFECTIVE triple, so an explicit 250 and an omitted key are the same declaration.
+        // A PRESENT key parses strictly like the other two — get_optional<uint64_t> would
+        // silently truncate "0xfa" to 0, silently default "abc" or an overflowing value to
+        // 250, and silently accept "250abc" as 250.
+        .denominatorCanyon = [&]() -> uint64_t {
+            auto value = section->get_optional<std::string>("denominator_canyon");
+            if (!value)
+            {
+                return 250;
+            }
+            return parseStrictUint64("denominator_canyon", *value);
+        }()};
+    if (params.elasticity == 0 || params.denominator == 0 || params.denominatorCanyon == 0)
+    {
+        // op-geth panics on a nil/zero denominator (params/config.go:1352-1355) and would
+        // divide by zero on a zero elasticity; a panic is not a model, so refuse at load.
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "[op_eip1559] values must be non-zero: elasticity=" +
+                std::to_string(params.elasticity) +
+                " denominator=" + std::to_string(params.denominator) +
+                " denominator_canyon=" + std::to_string(params.denominatorCanyon)));
+    }
+    m_genesisConfig.m_opEip1559 = params;
+    NodeConfig_LOG(INFO) << LOG_DESC("loadOpEip1559") << LOG_KV("elasticity", params.elasticity)
+                         << LOG_KV("denominator", params.denominator)
+                         << LOG_KV("denominatorCanyon", params.denominatorCanyon);
+}
+
+std::optional<ledger::OpEip1559Params> const& NodeConfig::opEip1559() const
+{
+    return m_genesisConfig.m_opEip1559;
 }
 
 void NodeConfig::loadGatewayConfig(boost::property_tree::ptree const& _pt)
@@ -3714,6 +3867,21 @@ std::string bcos::tool::generateGenesisData(
                       "")
            << (genesisConfig.m_excessBlobGas ?
                       "excessBlobGas:" + std::to_string(*genesisConfig.m_excessBlobGas) + "\n" :
+                      "")
+           << (genesisConfig.m_opEip1559.has_value() ?
+                      [&genesisConfig] {
+                          // The chain's EIP-1559 parameters price every pre-Holocene block, so
+                          // they are part of the genesis pin for the same reason evmRevision
+                          // is. Emitted only when DECLARED so a chain without [op_eip1559]
+                          // keeps the byte-identical pin it had before this key existed; the
+                          // value is the EFFECTIVE triple (effectiveOpEip1559), so "explicitly
+                          // 250" and "omitted canyon" pin the same string.
+                          auto const params =
+                              bcos::engine::effectiveOpEip1559(genesisConfig.m_opEip1559);
+                          return "eip1559:" + std::to_string(params.elasticity) + ',' +
+                                 std::to_string(params.denominator) + ',' +
+                                 std::to_string(params.denominatorCanyon) + "\n";
+                      }() :
                       "")
            << "[executor]" << '\n'
            << "iswasm: " << genesisConfig.m_isWasm << '\n'

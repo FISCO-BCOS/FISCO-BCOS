@@ -19,6 +19,7 @@
 
 #include "FeeHistory.h"
 #include <bcos-framework/engine/OpBaseFee.h>
+#include <bcos-framework/engine/OpEip1559Params.h>
 #include <bcos-ledger/LedgerMethods.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h>
@@ -83,7 +84,8 @@ std::vector<u256> bcos::rpc::rewardPercentiles(std::vector<RewardSample> samples
     return row;
 }
 
-u256 bcos::rpc::nextOpBaseFee(protocol::BlockHeader const& parent)
+u256 bcos::rpc::nextOpBaseFee(
+    protocol::BlockHeader const& parent, std::optional<engine::OpEip1559Params> eip1559)
 {
     auto const extra = parent.extraData();
     if (!extra.empty())
@@ -92,12 +94,18 @@ u256 bcos::rpc::nextOpBaseFee(protocol::BlockHeader const& parent)
                             extra[0] == engine::c_jovianExtraDataVersion;
         return engine::calcOpBaseFee(parent, jovian);
     }
+    // Pre-Holocene parent: the step sizes from the chain's DECLARED triple (the
+    // op_eip1559_params SYS_CONFIG row written at genesis from [op_eip1559]) — the
+    // same numbers the engine's zero-attribute-params substitution uses, so the
+    // prediction cannot drift from what the next block actually carries. Undeclared
+    // chains fall back to kLegacyOpEip1559Params (the constants below), which is
+    // exactly the pair those chains have always priced with.
+    auto const params = engine::effectiveOpEip1559(eip1559);
     auto const childIsCanyon = parent.withdrawalsRoot().has_value();
     return engine::calcOpBaseFeeFromFields(parent.gasLimit(), parent.gasUsed(),
         parent.baseFee().value_or(0), parent.blobGasUsed(), {}, /*parentIsHolocene=*/false,
         /*parentIsJovian=*/false,
-        childIsCanyon ? engine::c_eip1559DenominatorCanyon : engine::c_eip1559DenominatorBedrock,
-        engine::c_eip1559ElasticityCanyon);
+        childIsCanyon ? params.denominatorCanyon : params.denominator, params.elasticity);
 }
 
 task::Task<Json::Value> bcos::rpc::buildOpFeeHistory(ledger::LedgerInterface& ledger,
@@ -162,7 +170,12 @@ task::Task<Json::Value> bcos::rpc::buildOpFeeHistory(ledger::LedgerInterface& le
         }
         rewards.append(std::move(row));
     }
-    baseFees.append(toQuantity(nextOpBaseFee(*last)));
+    // The trailing prediction prices the block AFTER `newest`: feed it the chain's
+    // declared triple so a pre-Holocene tail cannot price with the legacy preset on a
+    // chain that declared its own pair (the same substitution the engine performs).
+    auto const declared = co_await ledger::getLedgerConfig(ledger);
+    baseFees.append(toQuantity(nextOpBaseFee(
+        *last, declared ? declared->opEip1559Params() : std::nullopt)));
     result["baseFeePerGas"] = std::move(baseFees);
     result["gasUsedRatio"] = std::move(ratios);
     if (wantRewards)

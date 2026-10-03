@@ -260,17 +260,22 @@ inline constexpr uint64_t c_opForkTimeUnset = std::numeric_limits<uint64_t>::max
 [[nodiscard]] inline std::vector<OpForkActivationRecord> foldOpForkShorthand(
     uint64_t jovianTime, uint64_t karstTime)
 {
-    if (karstTime != c_opForkTimeUnset && jovianTime == c_opForkTimeUnset)
+    // karst scheduled with jovian unset is a legal JUMP (op-node CheckConfigForkOrder
+    // allows skipping intermediates; the 10-rung ladder keeps jovian kNever): Karst is a
+    // superset of Jovian, so the fold implies Jovian AT karst's time — the same merge the
+    // equal-times pair takes below. One rule with NodeConfig's ladder validator (H):
+    // previously this threw while NodeConfig accepted the shape, crashing buildGenesisBlock.
+    uint64_t const effectiveJovianTime =
+        (jovianTime == c_opForkTimeUnset && karstTime != c_opForkTimeUnset) ? karstTime :
+                                                                              jovianTime;
+    if (karstTime < effectiveJovianTime)
         throwInvalidOpForkSchedule("karst_time (" + std::to_string(karstTime) +
-                                   ") is set but jovian_time is not: fork activation "
-                                   "times must be non-decreasing");
-    if (karstTime < jovianTime)
-        throwInvalidOpForkSchedule("karst_time (" + std::to_string(karstTime) +
-                                   ") is earlier than jovian_time (" + std::to_string(jovianTime) +
+                                   ") is earlier than jovian_time (" +
+                                   std::to_string(effectiveJovianTime) +
                                    "): fork activation times must be non-decreasing");
 
     std::vector<OpForkActivationRecord> records;
-    if (jovianTime == c_opForkTimeUnset)
+    if (effectiveJovianTime == c_opForkTimeUnset)
     {
         // Neither fork scheduled: the all-Isthmus legacy chain.
         records.push_back({std::string("isthmus"), 0});
@@ -278,9 +283,9 @@ inline constexpr uint64_t c_opForkTimeUnset = std::numeric_limits<uint64_t>::max
     else
     {
         // Isthmus is the implicit baseline unless Jovian itself activates at genesis.
-        if (jovianTime != 0)
+        if (effectiveJovianTime != 0)
             records.push_back({std::string("isthmus"), 0});
-        records.push_back({std::string("jovian"), jovianTime});
+        records.push_back({std::string("jovian"), effectiveJovianTime});
     }
     if (karstTime != c_opForkTimeUnset)
         records.push_back({std::string("karst"), karstTime});
