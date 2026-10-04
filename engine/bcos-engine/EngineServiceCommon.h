@@ -22,6 +22,7 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/engine/Constants.h>
 #include <bcos-framework/engine/Errors.h>
+#include <bcos-framework/engine/OpEip1559Params.h>
 #include <bcos-framework/engine/RawTransactionDispatch.h>
 #include <bcos-framework/engine/Types.h>
 #include <bcos-framework/ledger/LedgerConfig.h>

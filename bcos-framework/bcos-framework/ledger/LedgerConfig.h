@@ -545,9 +545,21 @@ inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value
         BOOST_THROW_EXCEPTION(InvalidEVMCRevisionConfig() << errinfo_comment(
                                   "cannot parse op_eip1559_params value: " + std::string(value)));
     }
-    return bcos::engine::OpEip1559Params{.elasticity = parseField(value.substr(0, comma1)),
+    auto params = bcos::engine::OpEip1559Params{.elasticity = parseField(value.substr(0, comma1)),
         .denominator = parseField(value.substr(comma1 + 1, comma2 - comma1 - 1)),
         .denominatorCanyon = parseField(value.substr(comma2 + 1))};
+    // A zero elasticity/denominator is arithmetic poison (gasTarget = gasLimit/elasticity,
+    // delta/denominator) and the config loader already refuses zeros at load; the row
+    // parser shares the invariant so a corrupt or foreign-written row fails as a named
+    // config error at boot instead of a divide-by-zero inside fee prediction.
+    if (params.elasticity == 0 || params.denominator == 0 || params.denominatorCanyon == 0)
+    {
+        BOOST_THROW_EXCEPTION(InvalidEVMCRevisionConfig() << errinfo_comment(
+                                  "op_eip1559_params value carries a zero "
+                                  "elasticity/denominator/denominatorCanyon: " +
+                                  std::string(value)));
+    }
+    return params;
 }
 
 /// Inverse of the genesis op_fork_schedule row write (Ledger::buildGenesisBlock): the row

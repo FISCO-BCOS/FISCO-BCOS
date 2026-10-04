@@ -22,7 +22,9 @@
 #include "VersionConverter.h"
 #include "bcos-framework/bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
+#include "bcos-framework/engine/OpEip1559Params.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/ledger/OpForkScheduleCodec.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
 #include "bcos-framework/security/KeyEncryptionType.h"
 #include "bcos-framework/security/StorageEncryptionType.h"
@@ -664,6 +666,52 @@ void NodeConfig::validateL2Invariants()
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "[op_fork_schedule] requires executor.version >= 3 (OP lane)"));
+    }
+    // A dual declaration must agree on WHEN Jovian and Karst activate (review AF): the
+    // canonical [op_fork_schedule] text is stored verbatim as the SYS_CONFIG row the
+    // snapshot readers and the RPC gates key on, while the executor and the genesis pin
+    // run the [op_fork_timestamps] shorthand — two channels that never cross-check would
+    // let one node price and admit against a different ladder than it executes. Compare
+    // the two channels under the SAME fold rule (an unset jovian with a scheduled karst
+    // implies jovian at karst's second), so a full-ladder canonical whose jovian/karst
+    // rungs match the shorthand still passes; only a real activation-time divergence is
+    // rejected.
+    if (genesis.m_opstackForkSchedule.has_value() && genesis.m_opForkSchedule.has_value())
+    {
+        auto const& shorthand = *genesis.m_opForkSchedule;
+        auto const canonicalRecords = ledger::parseOpForkSchedule(*genesis.m_opstackForkSchedule);
+        auto activationOf = [&canonicalRecords](std::string_view fork) {
+            for (auto const& record : canonicalRecords)
+            {
+                if (record.forkName == fork)
+                {
+                    return record.timestamp;
+                }
+            }
+            return ledger::c_opForkTimeUnset;
+        };
+        auto effectiveJovian = [](uint64_t jovianTime, uint64_t karstTime) {
+            return (jovianTime == ledger::c_opForkTimeUnset &&
+                    karstTime != ledger::c_opForkTimeUnset) ?
+                karstTime :
+                jovianTime;
+        };
+        auto const canonicalKarst = activationOf("karst");
+        auto const canonicalJovian =
+            effectiveJovian(activationOf("jovian"), canonicalKarst);
+        auto const shorthandJovian =
+            effectiveJovian(shorthand.m_jovianTime, shorthand.m_karstTime);
+        if (canonicalJovian != shorthandJovian || canonicalKarst != shorthand.m_karstTime)
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment(
+                    "[op_fork_schedule] activates jovian/karst at (" +
+                    std::to_string(canonicalJovian) + "/" + std::to_string(canonicalKarst) +
+                    ") but [op_fork_timestamps] declares (" + std::to_string(shorthandJovian) +
+                    "/" + std::to_string(shorthand.m_karstTime) +
+                    "): the canonical channel feeds the stored row while the executor runs "
+                    "the shorthand — declare one channel, or make them agree"));
+        }
     }
     // The opstack-el declaration ([ethereum] mode=opstack-el) is bound to the OP lane and
     // the Ethereum-lane genesis shape: the sync client downloads OP blocks over devp2p and
@@ -1767,9 +1815,10 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
         }
     }
     // (ledger::foldOpForkShorthand), so the shorthand and the canonical channel share ONE
-    // rule set. op-geth's CheckConfigForkOrder compares with `>`, so equal jovian/karst
-    // times are LEGAL and merge into the later fork downstream; a later fork at an EARLIER
-    // second — or karst scheduled with jovian unscheduled — is rejected with the keys named.
+    // rule set. Equal jovian/karst times are LEGAL and merge into the later fork
+    // downstream, and karst scheduled with jovian unscheduled is a legal implied jump
+    // (jovian folds into karst's second); only a later fork at an EARLIER second is
+    // rejected with the keys named.
     try
     {
         (void)ledger::foldOpForkShorthand(schedule.m_jovianTime, schedule.m_karstTime);

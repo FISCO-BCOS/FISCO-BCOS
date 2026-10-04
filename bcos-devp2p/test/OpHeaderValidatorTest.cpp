@@ -219,6 +219,26 @@ BOOST_AUTO_TEST_CASE(canyonDenominatorSwitch)
     BOOST_CHECK(validateOpHeader(p.child, p.parent, p.config).valid);
 }
 
+// A chain declaring its own [op_eip1559] pair must have its pre-Holocene headers
+// re-priced with the DECLARED constants, not the superchain preset: OpStackSyncInitializer
+// threads the declared triple into this config (review AI), and a preset-priced
+// header on such a chain is a genuine mismatch the validator must reject.
+BOOST_AUTO_TEST_CASE(declaredEip1559TripleDrivesPreHolocenePricing)
+{
+    auto p = makeBedrockPair();
+    p.config.eip1559DenominatorBedrock = 70;  // declared pair, not the 50/6 preset
+    // deltaFee = 1e9 * 5M/5M/70 = +14'285'714 (floor)
+    p.child.baseFee = expectedBaseFee(p);
+    BOOST_CHECK(validateOpHeader(p.child, p.parent, p.config).valid);
+
+    // The preset-priced baseFee (denominator 50 -> 1020000000) must now FAIL on the
+    // declared chain: the declared pair is the chain's pricing contract, and validating
+    // with the preset would accept wrongly-priced headers on every declared chain.
+    auto presetPriced = makeBedrockPair();
+    presetPriced.config.eip1559DenominatorBedrock = 70;
+    BOOST_CHECK(!validateOpHeader(presetPriced.child, presetPriced.parent, presetPriced.config).valid);
+}
+
 // Holocene: the EIP-1559 parameters come from the PARENT's 9-byte extraData
 // (op-geth IsOptimismHolocene(parent.Time)), not from the chain config.
 BOOST_AUTO_TEST_CASE(holoceneExtraDataParamsDriveBaseFee)

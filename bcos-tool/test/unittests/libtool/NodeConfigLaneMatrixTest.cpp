@@ -109,5 +109,54 @@ BOOST_AUTO_TEST_CASE(opSectionOnANonOpLaneIsRejectedByTheMatrix)
     }
 }
 
+// The two fork-schedule declaration channels may coexist only when they agree on WHEN
+// jovian/karst activate (review AF): the canonical text feeds the stored SYS_CONFIG row
+// (snapshot readers / RPC gates), the shorthand drives the executor — a divergent dual
+// declaration would boot and then price against a different ladder than it executes.
+BOOST_AUTO_TEST_CASE(dualForkScheduleDeclarationMustAgreeOnJovianKarst)
+{
+    auto genesisWith = [](std::string_view timestamps, std::string_view canonical) {
+        return std::string(
+                   "[version]\ncompatibility_version=3.18.0\n"
+                   "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+                   "[web3]\nchain_id=1\n"
+                   "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\n"
+                   "leader_period=1\nnode.0=") +
+            std::string(128, '1') +
+            ":1:1\n"
+            "[tx]\ngas_limit=3000000000\n"
+            "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+            "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+            "version=3\n"
+            "[op_fork_timestamps]\n" +
+            std::string(timestamps) + "[op_fork_schedule]\ncanonical=" + std::string(canonical) +
+            "\n" + ethLaneGenesisSections();
+    };
+
+    // Agreeing: jovian at genesis on both channels.
+    {
+        NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+        BOOST_CHECK_NO_THROW(cfg.loadGenesisConfigFromString(
+            genesisWith("jovian_time=0\n", "0:jovian")));
+    }
+    // Agreeing via the implied jump: shorthand karst-only folds jovian to karst's second,
+    // and a canonical that declares exactly that shape matches.
+    {
+        NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+        BOOST_CHECK_NO_THROW(cfg.loadGenesisConfigFromString(
+            genesisWith("karst_time=5\n", "0:isthmus,5:karst")));
+    }
+    // Diverging: the canonical activates jovian at 100 while the shorthand says 0 — the
+    // stored row and the executor would disagree; reject with both values named.
+    {
+        NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadGenesisConfigFromString(genesisWith("jovian_time=0\n", "0:isthmus,100:jovian")),
+            InvalidConfig, [](auto const& e) {
+                return errinfoContains(e, "activates jovian/karst at");
+            });
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

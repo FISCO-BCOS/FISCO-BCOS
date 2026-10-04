@@ -123,6 +123,15 @@ inline uint64_t parseTimestamp(std::string_view token)
             throwInvalidOpForkSchedule("timestamp overflow");
         value = value * 10 + digit;
     }
+    // The all-9s value IS the not-scheduled sentinel downstream (c_opForkTimeUnset): a
+    // literal 18446744073709551615 in canonical text would parse and round-trip, then
+    // read as "not scheduled" at the snapshot boundary — one representation silently
+    // carrying two meanings. Reject it so the canonical channel cannot smuggle the
+    // sentinel in as a declared activation time.
+    if (value == std::numeric_limits<uint64_t>::max())
+        throwInvalidOpForkSchedule(
+            "timestamp 18446744073709551615 is the not-scheduled sentinel and cannot be "
+            "declared as an activation time");
     return value;
 }
 
@@ -248,12 +257,15 @@ inline std::string canonicalOpForkSchedule(std::span<const OpForkActivationRecor
 inline constexpr uint64_t c_opForkTimeUnset = std::numeric_limits<uint64_t>::max();
 
 /// Fold the [op_fork_timestamps] shorthand (jovian_time / karst_time in seconds,
-/// c_opForkTimeUnset = not scheduled) into the canonical activation list. op-geth's
-/// CheckConfigForkOrder compares with `>`, so EQUAL times are legal and mean the later
-/// fork's rules apply from that second: a simultaneous pair collapses into the later
-/// fork — (0,0) becomes "0:karst", (T,T) becomes "0:isthmus,T:karst". A later fork at
-/// an EARLIER second is rejected with the keys named, because Karst is defined as
-/// Jovian's rules on an Osaka EVM and cannot activate first. NodeConfig validates the
+/// c_opForkTimeUnset = not scheduled) into the canonical activation list. Following the
+/// strict-`>` ordering convention of geth's config order checks, EQUAL times are legal
+/// and mean the later fork's rules apply from that second: a simultaneous pair collapses
+/// into the later fork — (0,0) becomes "0:karst", (T,T) becomes "0:isthmus,T:karst". A
+/// later fork at an EARLIER second is rejected with the keys named, because Karst is
+/// defined as Jovian's rules on an Osaka EVM and cannot activate first. (op-geth itself
+/// does not validate OP activation times — its CheckConfigForkOrder only orders the L1
+/// fork list; the cross-repo authority for the OP ladder is op-node's rollup config
+/// check.) NodeConfig validates the
 /// section through this same function, so the shorthand and the canonical channel can
 /// never drift into two rule sets. The result passes validateScheduleRecords, i.e. it
 /// is always parseable canonical text.

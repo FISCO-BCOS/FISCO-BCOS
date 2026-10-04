@@ -19,6 +19,7 @@
 #include "L2GenesisTestStorage.h"
 #include "bcos-framework/ledger/ChainMetadata.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/ledger/OpForkScheduleCodec.h"
 #include "bcos-framework/storage2/Storage.h"
@@ -588,6 +589,21 @@ BOOST_AUTO_TEST_CASE(genesisWritesScheduleToSysConfig)
             BOOST_CHECK_EQUAL(*row, "0:karst");
         }
 
+        // (UNSET, T) — the implied jump: karst scheduled with jovian unscheduled folds
+        // jovian INTO karst's second. The arm NodeConfig's old comment claimed was
+        // rejected; it is legal (op-node skips intermediates) and this row is exactly
+        // what a canonical dual declaration must carry to agree.
+        {
+            auto storage = makeL2GenesisTestStorage();
+            auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+            BOOST_REQUIRE(co_await ledger::buildGenesisBlock(
+                *ledger, shorthandGenesis(bcos::ledger::c_opForkTimeUnset, 2000),
+                emptyLedgerConfig()));
+            const auto row = co_await readOpForkScheduleSysConfigRow(*storage);
+            BOOST_REQUIRE(row.has_value());
+            BOOST_CHECK_EQUAL(*row, "0:isthmus,2000:karst");
+        }
+
         // No OP schedule declared anywhere: no row, so the gate treats the chain
         // as pre-Karst.
         {
@@ -605,6 +621,39 @@ BOOST_AUTO_TEST_CASE(genesisWritesScheduleToSysConfig)
         }
         co_return;
     }());
+}
+
+// The all-9s timestamp is the not-scheduled sentinel downstream (c_opForkTimeUnset): a
+// literal 18446744073709551615 in canonical text must not parse — it would round-trip and
+// then silently read as "not scheduled" at the snapshot boundary (one representation,
+// two meanings).
+BOOST_AUTO_TEST_CASE(canonicalTextCannotDeclareTheUnsetSentinel)
+{
+    BOOST_CHECK_EXCEPTION(
+        (void)bcos::ledger::parseOpForkSchedule("0:isthmus,18446744073709551615:karst"),
+        bcos::ledger::InvalidOpForkSchedule,
+        [](auto const& e) { return messageContains(e, "sentinel"); });
+    // max-1 still parses: only the exact sentinel value is reserved.
+    auto const records =
+        bcos::ledger::parseOpForkSchedule("0:isthmus,18446744073709551614:karst");
+    BOOST_CHECK_EQUAL(records.back().timestamp, 18446744073709551614ULL);
+}
+
+// A zero elasticity/denominator/denominatorCanyon in the op_eip1559_params row is
+// arithmetic poison (gasTarget = gasLimit/0 in fee prediction) and the config loader
+// already refuses zeros at load; the ROW parser must share the invariant so a corrupt or
+// foreign-written row fails as a named config error at boot instead.
+BOOST_AUTO_TEST_CASE(opEip1559RowRejectsZeroTriple)
+{
+    for (auto const* row : {"0,0,0", "6,0,250", "0,50,250"})
+    {
+        BOOST_CHECK_EXCEPTION((void)bcos::ledger::parseOpEip1559Params(row),
+            bcos::ledger::InvalidEVMCRevisionConfig,
+            [](auto const& e) { return messageContains(e, "zero"); });
+    }
+    // The legacy preset itself still parses, and so does any declared non-zero triple.
+    auto const legacy = bcos::ledger::parseOpEip1559Params("6,50,250");
+    BOOST_CHECK_EQUAL(legacy.denominatorCanyon, 250U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
