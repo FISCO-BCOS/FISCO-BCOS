@@ -215,6 +215,32 @@ inline protocol::BlockHeader::Ptr makeExecutionBlockHeader(
     {
         header->setRequestsHash(*ethHeader.requestsHash);
     }
+    // Stamp the Eth fork version so the committed header is served as an Ethereum header:
+    // combineBlockResponse only emits miner/mixHash (and the real fork-gated fields) when
+    // ethBlockVersion != NON_ETH. Without this a Paris/London header (no withdrawalsRoot)
+    // reads back as NON_ETH and the RPC response loses miner entirely, failing hive's
+    // FixtureHeader validation. Derivation mirrors EthBlockHeader::rlpDecode — presence of
+    // the fork-gated optionals defines the version; a Paris header is London-shaped, so it
+    // lands on LONDON. The require/forbidForkField pair in validateHeader is symmetric, so
+    // a field-derived version always passes validation.
+    auto ethVersion = bcos::protocol::EthBlockVersion::PRE_LONDON;
+    if (ethHeader.requestsHash)
+    {
+        ethVersion = bcos::protocol::EthBlockVersion::PRAGUE;
+    }
+    else if (ethHeader.parentBeaconRoot)
+    {
+        ethVersion = bcos::protocol::EthBlockVersion::CANCUN;
+    }
+    else if (ethHeader.withdrawalsHash)
+    {
+        ethVersion = bcos::protocol::EthBlockVersion::SHANGHAI;
+    }
+    else if (ethHeader.baseFee)
+    {
+        ethVersion = bcos::protocol::EthBlockVersion::LONDON;
+    }
+    header->setEthBlockVersion(ethVersion);
     return header;
 }
 
