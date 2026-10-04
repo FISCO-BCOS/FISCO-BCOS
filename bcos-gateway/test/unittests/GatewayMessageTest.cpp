@@ -21,8 +21,9 @@
 
 #include "bcos-gateway/gateway/GatewayMessageExtAttributes.h"
 #define BOOST_TEST_MAIN
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/Service.h"
+#include "bcos-utilities/ZstdCompress.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 
@@ -99,7 +100,7 @@ void testP2PMessage(uint32_t _version = 0)
 
 
     auto ret1 = decodeMsg1.decode(bytesConstRef(buffer->data(), buffer->size() - 1));
-    BOOST_CHECK_EQUAL(ret1, MessageDecodeStatus::MESSAGE_INCOMPLETE);
+    BOOST_CHECK_EQUAL(ret1, bcos::network::MessageDecodeStatus::MESSAGE_INCOMPLETE);
 
     {
         // default Message object
@@ -475,7 +476,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_decodeHeader_invalidLength)
 
     Message msg;
     auto ret = msg.decode(bytesConstRef(buffer.data(), buffer.size()));
-    BOOST_CHECK_EQUAL(ret, MessageDecodeStatus::MESSAGE_ERROR);
+    BOOST_CHECK_EQUAL(ret, bcos::network::MessageDecodeStatus::MESSAGE_ERROR);
 }
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage_decodeHeader_zeroLength)
@@ -484,7 +485,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_decodeHeader_zeroLength)
     // length = 0, less than header
     Message msg;
     auto ret = msg.decode(bytesConstRef(buffer.data(), buffer.size()));
-    BOOST_CHECK_EQUAL(ret, MessageDecodeStatus::MESSAGE_ERROR);
+    BOOST_CHECK_EQUAL(ret, bcos::network::MessageDecodeStatus::MESSAGE_ERROR);
 }
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage_decodeHeader_invalidVersion)
@@ -500,7 +501,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_decodeHeader_invalidVersion)
 
     Message msg;
     auto ret = msg.decode(bytesConstRef(buffer.data(), buffer.size()));
-    BOOST_CHECK_EQUAL(ret, MessageDecodeStatus::MESSAGE_ERROR);
+    BOOST_CHECK_EQUAL(ret, bcos::network::MessageDecodeStatus::MESSAGE_ERROR);
 }
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage_decode_offsetExceedsLength)
@@ -538,7 +539,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_extVersion_decodeHeader_errorPropagation)
 
     Message msg;
     auto ret = msg.decode(bytesConstRef(buffer.data(), buffer.size()));
-    BOOST_CHECK_EQUAL(ret, MessageDecodeStatus::MESSAGE_ERROR);
+    BOOST_CHECK_EQUAL(ret, bcos::network::MessageDecodeStatus::MESSAGE_ERROR);
 }
 
 // FIB-67: Test options decode bounds validation
@@ -579,7 +580,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessageOptions_decode_truncatedBuffer)
 
     auto decoded = std::make_shared<P2PMessageOptions>();
     auto ret = decoded->decode(bytesConstRef(buffer.data(), buffer.size()));
-    BOOST_CHECK_EQUAL(ret, MessageDecodeStatus::MESSAGE_ERROR);
+    BOOST_CHECK_EQUAL(ret, bcos::network::MessageDecodeStatus::MESSAGE_ERROR);
 }
 
 BOOST_AUTO_TEST_CASE(test_P2PMessageOptions_decode_truncatedNodeID)
@@ -595,7 +596,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessageOptions_decode_truncatedNodeID)
 
     auto decoded = std::make_shared<P2PMessageOptions>();
     auto ret = decoded->decode(bytesConstRef(buffer.data(), buffer.size()));
-    BOOST_CHECK_EQUAL(ret, MessageDecodeStatus::MESSAGE_ERROR);
+    BOOST_CHECK_EQUAL(ret, bcos::network::MessageDecodeStatus::MESSAGE_ERROR);
 }
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage_decode_validVersionBoundary)
@@ -625,7 +626,119 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_decode_validVersionBoundary)
 
     Message msg2;
     auto ret2 = msg2.decode(bytesConstRef(buffer2.data(), buffer2.size()));
-    BOOST_CHECK_EQUAL(ret2, MessageDecodeStatus::MESSAGE_ERROR);
+    BOOST_CHECK_EQUAL(ret2, bcos::network::MessageDecodeStatus::MESSAGE_ERROR);
+}
+
+namespace
+{
+// A complete V0 wire frame: header + payload, length stamped. Mirrors the receive side of
+// Session's read loop, where the frame lands in the session's receive buffer.
+bytes buildOwnedTestFrame(uint32_t _seq, uint16_t _ext, bytes const& _payload)
+{
+    Message message;
+    message.setSeq(_seq);
+    message.setExt(_ext);
+    bytes header;
+    BOOST_REQUIRE(message.encodeHeader(header));
+    bytes frame = std::move(header);
+    frame.insert(frame.end(), _payload.begin(), _payload.end());
+    Message::stampLength(frame, static_cast<uint32_t>(frame.size()));
+    return frame;
+}
+}  // namespace
+
+BOOST_AUTO_TEST_CASE(test_P2PMessage_decodeOwned)
+{
+    auto payload = bytes(4096, 'p');
+    auto frame = buildOwnedTestFrame(0x11223344, 0, payload);
+
+    // keep the storage range to verify the zero-copy payload view afterwards
+    auto storage = frame;  // decodeOwned consumes the moved-in vector
+    const byte* storageBase = nullptr;
+    std::size_t storageSize = 0;
+
+    Message message;
+    {
+        bytes owned = std::move(frame);
+        storageBase = owned.data();
+        storageSize = owned.size();
+        BOOST_REQUIRE_GT(message.decodeOwned(std::move(owned), 0), 0);
+    }
+
+    BOOST_CHECK_EQUAL(message.seq(), 0x11223344);
+    BOOST_REQUIRE_EQUAL(message.payload().size(), payload.size());
+    BOOST_CHECK(std::equal(message.payload().begin(), message.payload().end(), payload.begin()));
+
+    // zero-copy: the payload view points into the owned frame storage, not a fresh allocation
+    auto payloadData = message.payload().data();
+    BOOST_CHECK(payloadData >= storageBase);
+    BOOST_CHECK(payloadData + payload.size() <= storageBase + storageSize);
+    BOOST_CHECK(std::equal(storage.begin(), storage.end(),
+        storageBase));  // the owned storage is the frame, untouched
+}
+
+BOOST_AUTO_TEST_CASE(test_P2PMessage_decodeOwned_withPrefixOffset)
+{
+    // take-buffer path shape: the frame sits behind a dead prefix inside the moved storage
+    auto payload = bytes(300000, 'x');
+    auto frame = buildOwnedTestFrame(7, 0, payload);
+    constexpr std::size_t prefixLen = 24;
+
+    bytes storage(prefixLen, 0xAB);
+    storage.insert(storage.end(), frame.begin(), frame.end());
+
+    Message message;
+    BOOST_REQUIRE_GT(message.decodeOwned(std::move(storage), prefixLen), 0);
+    BOOST_CHECK_EQUAL(message.seq(), 7);
+    BOOST_REQUIRE_EQUAL(message.payload().size(), payload.size());
+    BOOST_CHECK(std::equal(message.payload().begin(), message.payload().end(), payload.begin()));
+}
+
+BOOST_AUTO_TEST_CASE(test_P2PMessage_decodeOwned_copySemantics)
+{
+    auto payload = bytes(2048, 'c');
+    auto frame = buildOwnedTestFrame(9, 0, payload);
+
+    Message message;
+    BOOST_REQUIRE_GT(message.decodeOwned(std::move(frame), 0), 0);
+
+    // a copy deep-copies the owned storage: both payloads stay valid and independent
+    auto copied = message;  // NOLINT(performance-unnecessary-copy-initialization)
+    const byte* originalPayloadData = message.payload().data();
+    BOOST_REQUIRE_EQUAL(copied.payload().size(), payload.size());
+    BOOST_CHECK(std::equal(copied.payload().begin(), copied.payload().end(), payload.begin()));
+    BOOST_CHECK(copied.payload().data() != originalPayloadData);
+
+    // a moved-from message leaves the payload valid in the destination
+    Message moved(std::move(message));
+    BOOST_REQUIRE_EQUAL(moved.payload().size(), payload.size());
+    BOOST_CHECK(std::equal(moved.payload().begin(), moved.payload().end(), payload.begin()));
+    BOOST_CHECK_EQUAL(moved.payload().data(), originalPayloadData);
+}
+
+BOOST_AUTO_TEST_CASE(test_P2PMessage_decodeOwned_compressedFallsBack)
+{
+    // a compressed payload must be materialized by decompression: no view is possible
+    auto payload = bytes(8192, 'z');
+    bcos::bytes compressed;
+    BOOST_REQUIRE(bcos::ZstdCompress::compress(
+        bcos::ref(payload), compressed, (int)bcos::network::c_zstdCompressLevel));
+
+    auto frame = buildOwnedTestFrame(
+        11, (uint16_t)bcos::protocol::MessageExtFieldFlag::COMPRESS, compressed);
+    const byte* storageBase = frame.data();
+    std::size_t storageSize = frame.size();
+
+    Message message;
+    BOOST_REQUIRE_GT(message.decodeOwned(std::move(frame), 0), 0);
+    // the COMPRESS flag is reset after decompression, the payload matches the original
+    BOOST_CHECK(
+        (message.ext() & bcos::protocol::MessageExtFieldFlag::COMPRESS) == 0);
+    BOOST_REQUIRE_EQUAL(message.payload().size(), payload.size());
+    BOOST_CHECK(std::equal(message.payload().begin(), message.payload().end(), payload.begin()));
+    // fallback: the payload is materialized outside the owned frame storage
+    auto payloadData = message.payload().data();
+    BOOST_CHECK(payloadData < storageBase || payloadData >= storageBase + storageSize);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

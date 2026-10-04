@@ -9,7 +9,7 @@
 #pragma once
 
 #include "bcos-utilities/Error.h"
-#include <bcos-framework/Common.h>
+#include <bcos-utilities/Exceptions.h>
 #include <boost/asio/ip/tcp.hpp>
 #include <set>
 #include <string>
@@ -21,10 +21,12 @@ namespace bi = boost::asio::ip;
 #define SESSION_LOG(LEVEL) BCOS_LOG(LEVEL) << "[SESSION][Session]"
 #define ASIO_LOG(LEVEL) BCOS_LOG(LEVEL) << "[ASIO][ASIO]"
 
-namespace bcos
+namespace bcos::network
 {
-namespace gateway
-{
+// NOTE: MessageDecodeStatus, c_compressThreshold, c_zstdCompressLevel, P2pID/P2pIDs and
+// Options are PROTOCOL-layer types, kept in this transport library only for backward
+// compatibility (the gateway's libp2p consumes them through the old libnetwork include path).
+// They are to sink to the protocol layer (libp2p) in a follow-up change.
 enum MessageDecodeStatus
 {
     MESSAGE_ERROR = -1,
@@ -57,7 +59,7 @@ enum DisconnectReason
     NoDisconnect = 0xffff
 };
 
-///< P2PExceptionType and g_P2PExceptionMsg used in P2PException
+///< P2PExceptionType used as the error code carried by NetworkException
 enum P2PExceptionType
 {
     Success = 0,
@@ -82,24 +84,37 @@ struct Options
     bool response = false;  ///< Whether to wait for a response.
 };
 
-class NetworkException : public std::exception
+// NetworkException follows the DERIVE_BCOS_EXCEPTION convention (see
+// bcos-framework/engine/Errors.h): the message is attached via errinfo_comment (read back by
+// bcos::Exception::what()) and the error code via errinfo_errorCode.
+using errinfo_errorCode = boost::error_info<struct tag_errorCode, int64_t>;
+
+DERIVE_BCOS_EXCEPTION(NetworkException);
+
+inline NetworkException makeNetworkException(int64_t errorCode, std::string msg)
 {
-public:
-    NetworkException() = default;
-    NetworkException(int _errorCode, std::string _msg);
+    NetworkException e;
+    e << errinfo_errorCode(errorCode);
+    e << errinfo_comment(std::move(msg));
+    return e;
+}
 
-    virtual int errorCode() const;
-    const char* what() const noexcept override;
-    bool operator!() const;
+[[nodiscard]] inline int64_t errorCodeOf(NetworkException const& e)
+{
+    if (auto const* errorCode = boost::get_error_info<errinfo_errorCode>(e))
+    {
+        return *errorCode;
+    }
+    return 0;
+}
 
-    virtual Error::Ptr toError();
+inline bool operator!(NetworkException const& e) { return errorCodeOf(e) == 0; }
 
-private:
-    int m_errorCode = 0;
-    std::string m_msg;
-};
+inline Error::Ptr toError(NetworkException const& e)
+{
+    return BCOS_ERROR_PTR(errorCodeOf(e), e.what());
+}
 
 /// @returns the string form of the given disconnection reason.
 std::string reasonOf(DisconnectReason _reason);
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::network

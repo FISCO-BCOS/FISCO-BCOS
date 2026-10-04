@@ -23,7 +23,7 @@
 #include "bcos-crypto/interfaces/crypto/KeyInterface.h"
 #include "bcos-framework/gateway/GatewayInterface.h"
 #include "bcos-framework/multigroup/GroupInfo.h"
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include <bcos-task/Task.h>
 #include <memory>
 namespace bcos

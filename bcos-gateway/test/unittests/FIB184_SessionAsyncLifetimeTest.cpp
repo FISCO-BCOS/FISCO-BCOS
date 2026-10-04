@@ -31,11 +31,11 @@
  */
 
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-gateway/libnetwork/ASIOInterface.h"
-#include "bcos-gateway/libnetwork/Host.h"
-#include "bcos-gateway/libnetwork/Message.h"
-#include "bcos-gateway/libnetwork/Session.h"
-#include "bcos-gateway/libnetwork/SessionReadLoop.h"
+#include "bcos-network/ASIOInterface.h"
+#include "bcos-network/Host.h"
+#include "bcos-gateway/libp2p/Message.h"
+#include "bcos-gateway/libp2p/P2PDecoder.h"
+#include <bcos-task/Wait.h>
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/asio/error.hpp>
@@ -57,26 +57,27 @@ BOOST_FIXTURE_TEST_SUITE(FIB184_SessionAsyncLifetimeTest, TestPromptFixture)
 
 // A fake ASIO that parks the read-loop's coroutine at a manually-fired completion, so a test can
 // hold a read "in flight" and complete it deterministically.
-class FakeASIO_Lifetime : public bcos::gateway::ASIOInterface
+class FakeASIO_Lifetime : public bcos::network::ASIOInterface
 {
 public:
     using ReadCompletion =
         task::detail::FireCompletion<boost::system::error_code, std::size_t>;
 
     FakeASIO_Lifetime()
-      : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_Lifetime"), "0.0.0.0", 0)
+      : bcos::network::ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_Lifetime"), "0.0.0.0", 0)
     {}
-    ~FakeASIO_Lifetime() noexcept override = default;
+    ~FakeASIO_Lifetime() noexcept = default;
 
     // Compile-time read-initiation policy (see ASIOInterface::awaitableReadSome): the read loop
     // is launched with this policy (startWithPolicy<FakeASIO_Lifetime::ReadPolicy>) so every
     // read parks its completion in a manually-fired slot.
     struct ReadPolicy
     {
-        static void invoke(ASIOInterface* asio, const std::shared_ptr<SocketFace>& /*socket*/,
+        template <typename SocketT>
+        static void invoke(bcos::network::ASIOInterface* asio, const std::shared_ptr<SocketT>& /*socket*/,
             ba::mutable_buffer /*buffers*/, ReadCompletion completion)
         {
-            dynamic_cast<FakeASIO_Lifetime*>(asio)->parkRead(std::move(completion));
+            static_cast<FakeASIO_Lifetime*>(asio)->parkRead(std::move(completion));
         }
     };
 
@@ -108,25 +109,9 @@ private:
         m_readHandler;
 };
 
-class FakeHost_Lifetime : public bcos::gateway::Host
-{
-public:
-    FakeHost_Lifetime(bcos::crypto::Hash::Ptr hash, std::shared_ptr<ASIOInterface> asioInterface,
-        std::shared_ptr<SessionFactory> sessionFactory)
-      : Host(std::move(hash), std::move(asioInterface), std::move(sessionFactory))
-    {
-        m_run = true;
-    }
-
-    // Simulate Host::stop() having already run (IOServicePool::stop() joins the io_context
-    // threads), so haveNetwork() returns false and no io_context is left to service posted
-    // handlers.
-    void stopNetwork() { m_run = false; }
-};
-
 // A socket backed by a real SSL stream so drop()/closeSocket() can call sslref() safely; close()
 // only flips the connected flag (the underlying TCP socket is never opened).
-class FakeSocket_Lifetime : public SocketFace
+class FakeSocket_Lifetime
 {
 public:
     FakeSocket_Lifetime()
@@ -134,17 +119,20 @@ public:
         m_sslContext(ba::ssl::context::tlsv12),
         m_sslSocket(std::make_shared<ba::ssl::stream<bi::tcp::socket>>(*m_ioContext, m_sslContext))
     {}
-    ~FakeSocket_Lifetime() override = default;
+    ~FakeSocket_Lifetime() = default;
 
-    bool isConnected() const override { return m_connected; }
-    void close() override { m_connected = false; }
-    bi::tcp::endpoint remoteEndpoint(boost::system::error_code) override { return {}; }
-    bi::tcp::endpoint localEndpoint(boost::system::error_code) override { return {}; }
-    bi::tcp::socket& ref() override { return m_sslSocket->next_layer(); }
-    ba::ssl::stream<bi::tcp::socket>& sslref() override { return *m_sslSocket; }
-    const NodeIPEndpoint& nodeIPEndpoint() const override { return m_nodeIPEndpoint; }
-    void setNodeIPEndpoint(NodeIPEndpoint) override {}
-    ba::io_context& ioService() override { return *m_ioContext; }
+    bool isConnected() const { return m_connected; }
+    void close() { m_connected = false; }
+    bi::tcp::endpoint remoteEndpoint(boost::system::error_code = {}) { return {}; }
+    bi::tcp::endpoint localEndpoint(boost::system::error_code = {}) { return {}; }
+    bi::tcp::socket& ref() { return m_sslSocket->next_layer(); }
+    ba::ssl::stream<bi::tcp::socket>& sslref() { return *m_sslSocket; }
+    // ASIOInterface dispatches reads/writes on stream(); the raw TCP socket keeps this fake's
+    // IO plaintext (the read-loop tests inject completions via the fake read policy anyway).
+    bi::tcp::socket& stream() { return ref(); }
+    const NodeIPEndpoint& nodeIPEndpoint() const { return m_nodeIPEndpoint; }
+    void setNodeIPEndpoint(NodeIPEndpoint) {}
+    ba::io_context& ioService() { return *m_ioContext; }
 
     bool m_connected{true};
 
@@ -155,21 +143,71 @@ private:
     NodeIPEndpoint m_nodeIPEndpoint;
 };
 
+class FakeHost_Lifetime : public bcos::network::Host<P2PDecoder, FakeSocket_Lifetime>
+{
+public:
+    FakeHost_Lifetime(std::shared_ptr<bcos::network::ASIOInterface> asioInterface,
+        std::shared_ptr<bcos::network::BasicSessionFactory<P2PDecoder, FakeSocket_Lifetime>> sessionFactory)
+      : bcos::network::Host<P2PDecoder, FakeSocket_Lifetime>(
+            std::move(asioInterface), std::move(sessionFactory))
+    {
+        this->m_run = true;
+    }
+
+    // Simulate Host::stop() having already run (IOServicePool::stop() joins the io_context
+    // threads), so haveNetwork() returns false and no io_context is left to service posted
+    // handlers.
+    void stopNetwork() { this->m_run = false; }
+};
+
+using Session_Lifetime = bcos::network::BasicSession<P2PDecoder, FakeSocket_Lifetime>;
+
 // The regression: an in-flight async read must keep the Session alive after every external strong
 // reference is dropped. Pre-fix (weak_ptr capture) the Session would be destroyed here, leaving
 // async_read_some writing into a freed recv buffer.
 BOOST_AUTO_TEST_CASE(InFlightReadKeepsSessionAlive)
 {
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_Lifetime>();
     auto fakeAsio = std::make_shared<FakeASIO_Lifetime>();
-    auto fakeHost = std::make_shared<FakeHost_Lifetime>(hashImpl, fakeAsio, nullptr);
+    auto fakeHost = std::make_shared<FakeHost_Lifetime>(fakeAsio, nullptr);
 
-    std::weak_ptr<Session> weakSession;
+    // Filled by the consumer coroutine below when drop() closes the recv channel: the push-era
+    // teardown handler is now the close error observed by a parked recvMessage().
+    auto disconnectError = std::make_shared<std::promise<int64_t>>();
+    auto disconnectResult = disconnectError->get_future();
+
+    std::weak_ptr<Session_Lifetime> weakSession;
     {
-        auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 1024, true);
-        session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message) {});
+        auto session = std::make_shared<Session_Lifetime>(fakeSocket, *fakeHost, 1024, true);
         weakSession = session;
+
+        // Pull-mode consumer, parked on recvMessage() until the read loop delivers a frame or
+        // drop() closes the channel with the teardown error. task::wait starts the coroutine
+        // synchronously, so it is parked in the channel's waiter slot before this statement
+        // returns. The session is captured as a RAW POINTER on purpose: a strong capture would
+        // defeat the weakSession assertions below, and the channel's lifetime contract (close()
+        // wakes every parked recv() before the channel may be destroyed, and the wake touches
+        // only the consumer's coroutine frame -- see Channel.h) makes the raw pointer safe. The
+        // promise travels by shared_ptr so a timed-out wait below cannot leave the resumed
+        // coroutine writing into a dead stack local.
+        task::wait([](Session_Lifetime* sessionPtr,
+                       std::shared_ptr<std::promise<int64_t>> result) -> task::Task<void> {
+            try
+            {
+                while (true)
+                {
+                    (void)co_await sessionPtr->recvMessage();
+                }
+            }
+            catch (bcos::network::NetworkException const& e)
+            {
+                result->set_value(bcos::network::errorCodeOf(e));
+            }
+            catch (...)
+            {
+                result->set_value(-1);
+            }
+        }(session.get(), disconnectError));
 
         // startWithPolicy() arms the first read synchronously (the old code used to defer the
         // first read through ASIOInterface::strandPost, which no longer exists).
@@ -177,46 +215,35 @@ BOOST_AUTO_TEST_CASE(InFlightReadKeepsSessionAlive)
 
         BOOST_REQUIRE_MESSAGE(fakeAsio->hasReadHandler(),
             "Session::startWithPolicy() must arm exactly one async read");
-        // `session` goes out of scope here: the in-flight read is now the only owner.
+        // `session` goes out of scope here: the in-flight read is now the only owner (the
+        // consumer coroutine above holds only a raw pointer).
     }
 
     BOOST_CHECK_MESSAGE(weakSession.lock() != nullptr,
         "FIB-184: an in-flight async read must keep the Session (and its recv buffer/socket) "
         "alive; pre-fix weak_ptr capture would have destroyed it here");
 
-    // Completing the read with EOF drives drop(): no re-arm, so the read handler releases its
-    // reference. drop() then hands out TWO deferred pieces of work, on two different executors:
+    // Completing the read with EOF drives drop(): no re-arm, so the read loop releases its
+    // frame's reference. drop() then hands out TWO pieces of deferred work, on two different
+    // executors:
     //   1. closeSocket(), posted to the socket's own io_context -- drained by poll() below.
     //      Mark the socket disconnected first so closeSocket() early-returns (no real SSL
     //      shutdown here).
-    //   2. the teardown notification, posted to Host::m_teardownPool -- a dedicated executor this
-    //      test drains with a sentinel below.
+    //   2. the teardown notification: closing the recv channel wakes the parked consumer through
+    //      the channel poster, which posts the resume to the shared IO pool (the host is still
+    //      up) -- awaited via the promise below.
     fakeSocket->m_connected = false;
     fakeAsio->fireReadHandler(boost::asio::error::eof, 0);
     fakeSocket->ioService().poll();
 
     // Piece 2 is why the release cannot be asserted the instant fireReadHandler returns: the
-    // notification lambda captures weak_from_this() but calls lock() on the teardown thread, so
-    // while it runs it holds a strong reference (plus the copy it passes to m_messageHandler).
-    // Asserting straight away raced that thread and made this case fail randomly in CI.
-    //
-    // Drain it instead of sleeping on it. m_teardownPool is a ONE-worker IOServicePool -- a single
-    // io_context serviced by a single thread (Host.cpp: IOServicePool(1, "p2pTeardown")) -- so
-    // posted handlers run strictly FIFO, and drop() ran synchronously inside fireReadHandler above,
-    // which means the notification is already queued. A sentinel posted now therefore runs after
-    // it, by which point notifyDisconnect has returned and both of its strong references are gone.
-    // If the pool ever gains a second worker this barrier stops holding and must be revisited.
-    //
-    // The promise is captured by value through a shared_ptr on purpose: should the wait below time
-    // out and BOOST_REQUIRE unwind the stack, the sentinel may still be sitting in the teardown
-    // queue, and a by-reference capture of a dead local would be exactly the use-after-free this
-    // file exists to prevent.
-    auto teardownDone = std::make_shared<std::promise<void>>();
-    auto teardownDrained = teardownDone->get_future();
-    fakeHost->postTeardown([teardownDone]() { teardownDone->set_value(); });
+    // consumer's resume is posted to the shared IO pool, so it runs asynchronously on a pool
+    // thread. Wait on the promise instead of sleeping on it: once it is fulfilled, the consumer
+    // coroutine has observed the channel close error and run to completion.
     BOOST_REQUIRE_MESSAGE(
-        teardownDrained.wait_for(std::chrono::seconds(5)) == std::future_status::ready,
-        "the teardown executor never drained -- the notification was never dispatched");
+        disconnectResult.wait_for(std::chrono::seconds(5)) == std::future_status::ready,
+        "the parked recvMessage() was never woken -- drop() did not close the recv channel");
+    BOOST_CHECK_EQUAL(disconnectResult.get(), static_cast<int64_t>(bcos::network::P2PExceptionType::Disconnect));
 
     BOOST_CHECK_MESSAGE(weakSession.expired(),
         "FIB-184: once the outstanding read and the deferred teardown complete, the Session must "
@@ -230,25 +257,54 @@ BOOST_AUTO_TEST_CASE(InFlightReadKeepsSessionAlive)
 // test deliberately never runs the socket's io_context, mirroring the joined-thread state.
 BOOST_AUTO_TEST_CASE(DropClosesSocketInlineWhenNetworkDown)
 {
-    auto hashImpl = std::make_shared<Keccak256>();
     auto fakeSocket = std::make_shared<FakeSocket_Lifetime>();
     auto fakeAsio = std::make_shared<FakeASIO_Lifetime>();
-    auto fakeHost = std::make_shared<FakeHost_Lifetime>(hashImpl, fakeAsio, nullptr);
+    auto fakeHost = std::make_shared<FakeHost_Lifetime>(fakeAsio, nullptr);
 
-    auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 1024, true);
-    session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message) {});
+    auto session = std::make_shared<Session_Lifetime>(fakeSocket, *fakeHost, 1024, true);
     BOOST_REQUIRE(fakeSocket->isConnected());
+
+    // Park a consumer on recvMessage(): no read loop ever runs in this test, so the channel
+    // stays empty and the coroutine suspends in the channel's waiter slot before task::wait
+    // returns. The session goes in as a raw pointer (the channel's wake touches only the
+    // consumer's coroutine frame -- see Channel.h), the promise by shared_ptr.
+    auto disconnectError = std::make_shared<std::promise<int64_t>>();
+    auto disconnectResult = disconnectError->get_future();
+    task::wait([](Session_Lifetime* sessionPtr,
+                   std::shared_ptr<std::promise<int64_t>> result) -> task::Task<void> {
+        try
+        {
+            (void)co_await sessionPtr->recvMessage();
+        }
+        catch (bcos::network::NetworkException const& e)
+        {
+            result->set_value(bcos::network::errorCodeOf(e));
+        }
+        catch (...)
+        {
+            result->set_value(-1);
+        }
+    }(session.get(), disconnectError));
 
     // Host::stop() has already joined the io_context threads: the socket's io_context will never
     // run again, so a posted teardown would be dead code.
     fakeHost->stopNetwork();
 
-    // The socket's io_context is deliberately never run in this test.
-    session->drop(DisconnectReason::ClientQuit);
+    // The socket's io_context is deliberately never run in this test. With the network down, the
+    // channel poster runs the consumer's wake INLINE (a posted task would never run), so the
+    // parked recvMessage() throws on drop()'s own stack and the promise is already fulfilled by
+    // the time drop() returns.
+    session->drop(bcos::network::DisconnectReason::ClientQuit);
 
     BOOST_CHECK_MESSAGE(!fakeSocket->isConnected(),
         "FIB-184: with the network down (io_context threads joined), drop() must close the socket "
         "inline; a teardown posted to the dead io_context would never run");
+
+    BOOST_REQUIRE_MESSAGE(
+        disconnectResult.wait_for(std::chrono::seconds(0)) == std::future_status::ready,
+        "the parked recvMessage() was not woken inline -- with the network down the channel "
+        "poster must run the wake synchronously inside drop()");
+    BOOST_CHECK_EQUAL(disconnectResult.get(), static_cast<int64_t>(bcos::network::P2PExceptionType::Disconnect));
 
     // Drain the shutdown handlers closeSocket() queued (they hold the socket, not the session) so
     // the fake io_context tears down cleanly.

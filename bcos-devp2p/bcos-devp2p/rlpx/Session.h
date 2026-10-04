@@ -14,35 +14,61 @@
  *  limitations under the License.
  *
  * @file Session.h
- * @brief An established RLPx session: framed, encrypted message exchange over a
- *        socket (port of silkworm MessageStream over geth-compatible framing).
+ * @brief An established RLPx session: framed, encrypted message exchange.
+ *        Synchronous facade over a bcos-network async session — the public
+ *        API (sendMessage/recvMessage/enableCompression) is unchanged from
+ *        the blocking-socket implementation it replaces.
  * @date 2026/8/18
  */
 #pragma once
 
+#include "FrameDecoder.h"
 #include "Framing.h"
 #include "MessageCodec.h"
-#include "Socket.h"
+#include <bcos-network/Host.h>
+#include <bcos-network/Session.h>
+#include <bcos-network/Socket.h>
 
 namespace bcos::devp2p::rlpx
 {
-// Sends/receives framed + encrypted messages over a connected socket.
-// Owns the socket so that the session can outlive the connection setup scope.
+using NetHost = bcos::network::Host<RlpxFrameDecoder, bcos::network::PlainSocket>;
+using NetSession = bcos::network::BasicSession<RlpxFrameDecoder, bcos::network::PlainSocket>;
+using NetHostPtr = std::shared_ptr<NetHost>;
+using NetSessionPtr = std::shared_ptr<NetSession>;
+
+// Sends/receives framed + encrypted messages over an established bcos-network
+// session. Owns the Host together with the session so the network outlives the
+// connection setup scope. The ingress cipher lives in the net session's
+// decoder; the egress cipher lives here (two FramingCipher instances built
+// from the same KeyMaterial, one direction each, so their stream states never
+// interfere).
 class Session
 {
 public:
-    Session(Socket&& _socket, FramingCipher _cipher);
+    Session(NetHostPtr _host, NetSessionPtr _netSession, FramingCipher _egressCipher);
+    Session(Session&&) noexcept;
+    Session& operator=(Session&&) noexcept;
+    Session(Session const&) = delete;
+    Session& operator=(Session const&) = delete;
+    ~Session();
 
     void sendMessage(Message const& _message);
     // I/O and framing (MAC) failures still throw; a malformed frame payload is
-    // reported as an RlpError value by the codec.
+    // reported as an RlpError value by the codec. A 15s read timeout throws a
+    // std::runtime_error containing "timed out" and the session stays alive
+    // (TxGossipService matches that substring to recognize a healthy idle peer).
     bcos::codec::rlp::RlpResult<Message> recvMessage();
 
     void enableCompression() { m_codec.enableCompression(); }
 
+    // Explicit teardown (drop the connection, stop the host). Idempotent; the
+    // destructor calls it too.
+    void close();
+
 private:
-    Socket m_socket;
-    FramingCipher m_cipher;
+    NetHostPtr m_host;
+    NetSessionPtr m_netSession;
+    FramingCipher m_egressCipher;  // only encryptFrame is used on this instance
     MessageCodec m_codec;
 };
 }  // namespace bcos::devp2p::rlpx

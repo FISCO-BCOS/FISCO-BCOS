@@ -21,7 +21,7 @@
 
 #include "bcos-framework/rpc/RPCInterface.h"
 #include "bcos-gateway/libamop/Common.h"
-#include "bcos-gateway/libp2p/P2PInterface.h"
+#include "bcos-gateway/libp2p/Service.h"
 #include "bcos-utilities/Common.h"
 #include <servant/Application.h>
 #include <shared_mutex>
@@ -34,7 +34,7 @@ class TopicManager : public std::enable_shared_from_this<TopicManager>
 {
 public:
     using Ptr = std::shared_ptr<TopicManager>;
-    TopicManager(std::string const& _rpcServiceName, bcos::gateway::P2PInterface::Ptr _network);
+    TopicManager(std::string const& _rpcServiceName, bcos::gateway::Service::Ptr _network);
     virtual ~TopicManager();
 
     virtual void start();
@@ -99,13 +99,13 @@ public:
      * @param _topicSeq: the topicSeq of the nodeID
      * @return bool: if the nodeID has been changed
      */
-    bool checkTopicSeq(bcos::gateway::P2pID const& _nodeID, uint32_t _topicSeq);
+    bool checkTopicSeq(bcos::network::P2pID const& _nodeID, uint32_t _topicSeq);
     /**
      * @brief: disconnect the offline p2p node
      * @param _nodeIDs: the offline p2p node id
      * @return void
      */
-    void onDisconnect(const bcos::gateway::P2pID& _nodeID);
+    void onDisconnect(const bcos::network::P2pID& _nodeID);
     /**
      * @brief: update the topicSeq and topicItems of the nodeID's
      * @param _nodeID: nodeID
@@ -114,7 +114,7 @@ public:
      * @return void
      */
     void updateSeqAndTopicsByNodeID(
-        bcos::gateway::P2pID const& _nodeID, uint32_t _topicSeq, const TopicItems& _topicItems);
+        bcos::network::P2pID const& _nodeID, uint32_t _topicSeq, const TopicItems& _topicItems);
     /**
      * @brief: find the nodeIDs by topic
      * @param _topic: topic
@@ -156,7 +156,7 @@ protected:
     mutable SharedMutex x_clientInfo;
 
     std::string m_rpcServiceName;
-    bcos::gateway::P2PInterface::Ptr m_network;
+    bcos::gateway::Service::Ptr m_network;
 };
 }  // namespace amop
 }  // namespace bcos

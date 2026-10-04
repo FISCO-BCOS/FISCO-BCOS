@@ -28,7 +28,7 @@ class LocalTopicManager : public TopicManager
 {
 public:
     using Ptr = std::shared_ptr<LocalTopicManager>;
-    LocalTopicManager(std::string const& _rpcServiceName, bcos::gateway::P2PInterface::Ptr _network);
+    LocalTopicManager(std::string const& _rpcServiceName, bcos::gateway::Service::Ptr _network);
     ~LocalTopicManager() override;
 
     void setLocalClient(bcos::rpc::RPCInterface::Ptr _rpc);

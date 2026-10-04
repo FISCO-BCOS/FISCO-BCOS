@@ -3,32 +3,8 @@
  */
 #include "Common.h"
 
-namespace bcos::gateway
+namespace bcos::network
 {
-
-NetworkException::NetworkException(int _errorCode, std::string _msg)
-  : m_errorCode(_errorCode), m_msg(std::move(_msg))
-{}
-
-int NetworkException::errorCode() const
-{
-    return m_errorCode;
-}
-
-const char* NetworkException::what() const noexcept
-{
-    return m_msg.c_str();
-}
-
-bool NetworkException::operator!() const
-{
-    return m_errorCode == 0;
-}
-
-Error::Ptr NetworkException::toError()
-{
-    return BCOS_ERROR_PTR(errorCode(), m_msg);
-}
 
 std::string reasonOf(DisconnectReason _reason)
 {
@@ -67,4 +43,4 @@ std::string reasonOf(DisconnectReason _reason)
     }
 }
 
-}  // namespace bcos::gateway
+}  // namespace bcos::network
