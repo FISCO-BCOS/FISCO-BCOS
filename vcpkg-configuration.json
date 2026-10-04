@@ -14,6 +14,7 @@
   ],
   "overlay-ports": [
     "./ports/boost-context",
+    "./ports/s2n",
     "./ports/tarscpp",
     "./ports/openssl",
     "./ports/secp256k1",

@@ -18,7 +18,7 @@
  * @date 2021-05-04
  */
 
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/Common.h"
 #include "bcos-gateway/libnetwork/Common.h"
@@ -199,7 +199,12 @@ int32_t P2PMessageOptions::decode(const bytesConstRef& _buffer)
 
 bool Message::encodeHeader(bytes& _buffer) const
 {
-    if (auto result = encodeHeaderImpl(_buffer); !result)
+    return encodeHeaderWithExt(_buffer, m_ext);
+}
+
+bool Message::encodeHeaderWithExt(bytes& _buffer, uint16_t _wireExt) const
+{
+    if (auto result = encodeHeaderImpl(_buffer, _wireExt); !result)
     {
         return result;
     }
@@ -212,14 +217,25 @@ bool Message::encodeHeader(bytes& _buffer) const
     return true;
 }
 
-bool bcos::gateway::Message::encodeHeaderImpl(bytes& _buffer) const
+void Message::stampLength(bytes& _header, uint32_t _totalLength)
+{
+    *(uint32_t*)_header.data() =
+        boost::asio::detail::socket_ops::host_to_network_long(_totalLength);
+}
+
+bool Message::compressionSupported() const
+{
+    return m_version >= (uint16_t)(bcos::protocol::ProtocolVersion::V2);
+}
+
+bool bcos::gateway::Message::encodeHeaderImpl(bytes& _buffer, uint16_t _wireExt) const
 {
     // set length to zero first
     uint32_t length = 0;
     uint16_t version = boost::asio::detail::socket_ops::host_to_network_short(m_version);
     uint16_t packetType = boost::asio::detail::socket_ops::host_to_network_short(m_packetType);
     uint32_t seq = boost::asio::detail::socket_ops::host_to_network_long(m_seq);
-    uint16_t ext = boost::asio::detail::socket_ops::host_to_network_short(m_ext);
+    uint16_t ext = boost::asio::detail::socket_ops::host_to_network_short(_wireExt);
 
     _buffer.insert(_buffer.end(), (byte*)&length, (byte*)&length + 4);
     _buffer.insert(_buffer.end(), (byte*)&version, (byte*)&version + 2);
@@ -309,7 +325,7 @@ bool Message::tryToCompressPayload(bytes& compressData) const
         return false;
     }
 
-    if (m_version < (uint16_t)(bcos::protocol::ProtocolVersion::V2))
+    if (!compressionSupported())
     {
         return false;
     }
@@ -407,8 +423,83 @@ int32_t Message::decodeHeader(const bytesConstRef& _buffer)
     return offset;
 }
 
+std::optional<Message::ResponseFrameInfo> Message::peekResponseFrameInfo(
+    const bytesConstRef& _frame)
+{
+    // No-throw, bounds-safe mirror of decodeHeader's layout: unlike checkOffset (which throws
+    // for Message::decode's error path), a bounds violation here just yields nullopt.
+    if (_frame.size() < MESSAGE_HEADER_LENGTH) [[unlikely]]
+    {
+        return std::nullopt;
+    }
+    const byte* data = _frame.data();
+    auto length = static_cast<uint32_t>(_frame.size());
+
+    // version (offset 4) + ext (offset 12)
+    uint16_t version =
+        boost::asio::detail::socket_ops::network_to_host_short(*((const uint16_t*)(data + 4)));
+    uint16_t ext =
+        boost::asio::detail::socket_ops::network_to_host_short(*((const uint16_t*)(data + 12)));
+
+    ResponseFrameInfo info;
+    info.isResp = (ext & bcos::protocol::MessageExtFieldFlag::RESPONSE) != 0;
+    // seq (offset 8): inside the fixed base header, so in bounds whenever _frame passed the
+    // MESSAGE_HEADER_LENGTH check above
+    info.seq = boost::asio::detail::socket_ops::network_to_host_long(*((const uint32_t*)(data + 8)));
+    if (!info.isResp || version <= static_cast<uint16_t>(bcos::protocol::ProtocolVersion::V0))
+    {
+        return info;
+    }
+
+    // extended header (version > V0): ttl(2) + srcP2PNodeID + dstP2PNodeID
+    uint32_t offset = MESSAGE_HEADER_LENGTH + 2;  // skip ttl
+    auto readNodeID = [&](std::string* out) {
+        if (offset + 2 > length) [[unlikely]]
+        {
+            return false;
+        }
+        uint16_t nodeIDLen = boost::asio::detail::socket_ops::network_to_host_short(
+            *((const uint16_t*)(data + offset)));
+        offset += 2;
+        if (offset + nodeIDLen > length) [[unlikely]]
+        {
+            return false;
+        }
+        if (out != nullptr)
+        {
+            out->assign(data + offset, data + offset + nodeIDLen);
+        }
+        offset += nodeIDLen;
+        return true;
+    };
+    if (!readNodeID(nullptr) || !readNodeID(&info.dstP2PNodeID)) [[unlikely]]
+    {
+        return std::nullopt;
+    }
+    return info;
+}
+
 int32_t Message::decode(const bytesConstRef& _buffer)
 {
+    return decodeImpl(_buffer, false, 0);
+}
+
+int32_t Message::decodeOwned(bytes&& storage, uint32_t frameOffset)
+{
+    m_ownedFrame = std::move(storage);
+    if (frameOffset >= m_ownedFrame.size()) [[unlikely]]
+    {
+        return MessageDecodeStatus::MESSAGE_INCOMPLETE;
+    }
+    return decodeImpl(
+        {m_ownedFrame.data() + frameOffset, m_ownedFrame.size() - frameOffset}, true, frameOffset);
+}
+
+int32_t Message::decodeImpl(const bytesConstRef& _buffer, bool _frameOwned, uint32_t _viewStart)
+{
+    // a fresh decode always resolves the payload mode below
+    m_payloadInFrame = false;
+
     // check if packet header fully received
     if (_buffer.size() < Message::MESSAGE_HEADER_LENGTH)
     {
@@ -479,6 +570,13 @@ int32_t Message::decode(const bytesConstRef& _buffer)
         }
         // reset ext
         m_ext &= (~bcos::protocol::MessageExtFieldFlag::COMPRESS);
+    }
+    else if (_frameOwned)
+    {
+        // zero-copy: the payload stays in the owned frame storage as an (offset, size) view
+        m_payloadInFrame = true;
+        m_payloadOffsetInFrame = _viewStart + static_cast<uint32_t>(offset);
+        m_payloadSizeInFrame = m_length - offset;
     }
     else
     {
@@ -597,11 +695,16 @@ void bcos::gateway::Message::setOptions(P2PMessageOptions _options)
 }
 bcos::bytesConstRef bcos::gateway::Message::payload() const
 {
+    if (m_payloadInFrame)
+    {
+        return {m_ownedFrame.data() + m_payloadOffsetInFrame, m_payloadSizeInFrame};
+    }
     return bcos::ref(m_payload);
 }
 void bcos::gateway::Message::setPayload(bytes _payload)
 {
     m_payload = std::move(_payload);
+    m_payloadInFrame = false;
 }
 void bcos::gateway::Message::setRespPacket()
 {

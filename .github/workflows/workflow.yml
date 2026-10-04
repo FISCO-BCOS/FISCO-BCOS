@@ -27,8 +27,8 @@ jobs:
       matrix:
         os:
           [
-            ubuntu-24.04,
-            ubuntu-24.04-arm,
+            ubuntu-26.04,
+            ubuntu-26.04-arm,
             macos-15,
             windows-2025,
           ]
@@ -65,13 +65,13 @@ jobs:
         with:
           node-version: 20
       - name: Install linux dependencies
-        if: matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm'
+        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-arm'
         run: |
           sudo apt update
           sudo apt install -y --no-install-recommends \
               lcov wget python3-dev python3-pip git curl zip unzip tar \
               clang make build-essential libssl-dev zlib1g-dev ca-certificates mold autoconf \
-              flex bison patch pkg-config uuid-runtime automake gcc-14 g++-14
+              flex bison patch pkg-config uuid-runtime automake gcc-16 g++-16
       - name: Install macOS dependencies
         if: matrix.os == 'macos-15'
         run: brew install libomp autoconf automake libtool
@@ -100,17 +100,17 @@ jobs:
             echo "EXTRA_FLAGS=" >> "$GITHUB_ENV"
           fi
       - name: Configure for linux
-        if: matrix.os == 'ubuntu-24.04'
+        if: matrix.os == 'ubuntu-26.04'
         run: |
           mkdir -p build
           cd build
-          CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ${EXTRA_FLAGS} ..
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ${EXTRA_FLAGS} ..
       - name: Configure for linux arm
-        if: matrix.os == 'ubuntu-24.04-arm'
+        if: matrix.os == 'ubuntu-26.04-arm'
         run: |
           mkdir -p build
           cd build
-          CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=arm64-linux-release ${EXTRA_FLAGS} ..
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=arm64-linux-release ${EXTRA_FLAGS} ..
       - name: Configure for macOS
         if: matrix.os == 'macos-15'
         run: |
@@ -163,14 +163,14 @@ jobs:
           fi
           echo "::notice::EEST pass rate ${PASS_RATE}% meets the 100% threshold"
       - name: Upload fisco-bcos binary artifact
-        if: matrix.os == 'ubuntu-24.04'
+        if: matrix.os == 'ubuntu-26.04'
         uses: actions/upload-artifact@v4
         with:
-          name: fisco-bcos-ubuntu-24-x86_64
+          name: fisco-bcos-ubuntu-26-x86_64
           path: build/fisco-bcos-air/fisco-bcos
           retention-days: 30
       # - name: Upload coverage report
-      #   if: matrix.os == 'ubuntu-24.04'
+      #   if: matrix.os == 'ubuntu-26.04'
       #   uses: actions/upload-artifact@v4
       #   with:
       #     name: coverage-report
@@ -200,7 +200,7 @@ jobs:
         # harness discards the node's stderr, so the root cause is not yet
         # diagnosed; see the air test which likewise excludes macos-15). macOS
         # is excluded until the node startup issue is fixed.
-        if: matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm'
+        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-arm'
         run: |
           # eth-account (tx signing) + requests (RPC). Handle PEP 668.
           python3 -m pip install --quiet eth-account requests 2>/dev/null || \
@@ -211,7 +211,7 @@ jobs:
         # Built-in single-node consensus mode ([consensus] enable_single_node_consensus):
         # builds a single-node AIR chain, patches config.ini to enable the mode (no
         # pbft/sealer/txpool), and drives eth_sendRawTransaction -> receipt / block reads.
-        if: matrix.os == 'ubuntu-24.04'
+        if: matrix.os == 'ubuntu-26.04'
         run: |
           # eth-account (tx signing) + requests (RPC). Handle PEP 668.
           python3 -m pip install --quiet eth-account requests 2>/dev/null || \
@@ -254,11 +254,11 @@ jobs:
         run: |
           set -euo pipefail
           case "${{ matrix.os }}" in
-            ubuntu-24.04)
+            ubuntu-26.04)
               PKG_OS=linux
               PKG_ARCH=x86_64
               ;;
-            ubuntu-24.04-arm)
+            ubuntu-26.04-arm)
               PKG_OS=linux
               PKG_ARCH=aarch64
               ;;
@@ -299,7 +299,7 @@ jobs:
 
   coverage:
     name: Coverage
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     env:
       # Surfaced as an env var so the upload step can be skipped when no token is
       # present. Fork PRs (pull_request event) receive NO secrets, so a tokenless
@@ -348,7 +348,7 @@ jobs:
           sudo apt install -y --no-install-recommends \
               lcov wget python3-dev python3-pip git curl zip unzip tar \
               clang make build-essential libssl-dev zlib1g-dev ca-certificates mold autoconf \
-              flex bison patch pkg-config uuid-runtime automake gcc-14 g++-14
+              flex bison patch pkg-config uuid-runtime automake gcc-16 g++-16
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-02-25
@@ -357,7 +357,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          CC=gcc-14 CXX=g++-14 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+          CC=gcc-16 CXX=g++-16 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
       - name: Build
         run: |
           cd build
@@ -373,11 +373,11 @@ jobs:
       - name: Generate coverage report
         run: |
           cd build
-          # gcda was produced by gcc-14, so geninfo must use the matching gcov-14
+          # gcda was produced by gcc-16, so geninfo must use the matching gcov-16
           # (otherwise: "Incompatible GCC/GCOV version"). version/unused are tolerated
           # as a fallback across lcov point releases.
           IGN=inconsistent,source,gcov,mismatch,version,negative,empty,unused
-          lcov --gcov-tool gcov-14 --capture --directory . \
+          lcov --gcov-tool gcov-16 --capture --directory . \
             --output-file coverage.info.in --ignore-errors "$IGN"
           lcov --remove coverage.info.in \
             '/usr*' '*vcpkg_installed*' '*boost/*' '*test*' '*build*' '*deps*' \
@@ -452,7 +452,7 @@ jobs:
   # itself when the A8 devnet is absent).
   l2_unit_suites:
     name: L2 unit suites
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     steps:
@@ -486,7 +486,7 @@ jobs:
           sudo apt install -y --no-install-recommends \
               wget python3-dev python3-pip git curl zip unzip tar \
               clang make build-essential libssl-dev zlib1g-dev ca-certificates mold autoconf \
-              flex bison patch pkg-config uuid-runtime automake gcc-14 g++-14
+              flex bison patch pkg-config uuid-runtime automake gcc-16 g++-16
       - name: Install Foundry
         # WITH_L2_CONTRACTS=ON does find_program(FORGE forge REQUIRED) at
         # configure time, so forge must be on PATH before cmake runs.
@@ -500,7 +500,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_L2_CONTRACTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_L2_CONTRACTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
       - name: Build
         run: |
           cd build
@@ -540,7 +540,7 @@ jobs:
     name: C2 deposit/withdraw e2e
     needs: [l2_unit_suites]
     if: needs.l2_unit_suites.result == 'success'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 45
     permissions:
       contents: read

@@ -34,7 +34,7 @@
  */
 
 #include "bcos-framework/gateway/GatewayTypeDef.h"
-#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-task/Wait.h"

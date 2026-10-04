@@ -23,7 +23,7 @@
 #include "PeersRouterTable.h"
 #include "bcos-crypto/interfaces/crypto/KeyFactory.h"
 #include "bcos-gateway/libnetwork/Common.h"
-#include "bcos-gateway/libp2p/P2PInterface.h"
+#include "bcos-gateway/libp2p/Service.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/protocol/GatewayNodeStatus.h"
 #include "bcos-utilities/Timer.h"
@@ -36,7 +36,7 @@ class GatewayNodeManager
 public:
     using Ptr = std::shared_ptr<GatewayNodeManager>;
     GatewayNodeManager(std::string const& _uuid, P2pID const& _nodeID,
-        std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface,
+        std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, Service::Ptr _p2pInterface,
         boost::asio::io_context& _ioContext);
     virtual ~GatewayNodeManager();
 
@@ -64,7 +64,7 @@ public:
 protected:
     // for ut
     GatewayNodeManager(std::string const& _uuid,
-        std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface);
+        std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, Service::Ptr _p2pInterface);
 
     uint32_t increaseSeq();
     bool statusChanged(std::string const& _p2pNodeID, uint32_t _seq);
@@ -88,7 +88,7 @@ protected:
     P2pID m_p2pNodeID;
     std::string m_uuid;
     std::shared_ptr<bcos::crypto::KeyFactory> m_keyFactory;
-    P2PInterface::Ptr m_p2pInterface;
+    Service::Ptr m_p2pInterface;
     // statusSeq
     std::atomic<uint32_t> m_statusSeq{1};
     tbb::concurrent_hash_map<std::string, uint32_t> m_p2pID2Seq;

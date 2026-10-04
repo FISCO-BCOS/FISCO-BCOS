@@ -1,105 +1,65 @@
-
 /** @file Common.h
- * Miscellanea required for the Host/Session/NodeTable classes.
- *
- * @author yujiechen
- * @date: 2018-09-19
+ * Backward-compatibility shim: the implementation moved to the standalone bcos-network
+ * library (bcos-network/Common.h, namespace bcos::network). This header keeps the old
+ * include path and the bcos::gateway names alive for libp2p and the gateway tests.
+ * The unscoped enums' enumerators are aliased individually — a using-declaration of the
+ * enum TYPE alone does not bring them into this namespace.
  */
-
 #pragma once
 
-#include "bcos-utilities/Error.h"
-#include <bcos-framework/Common.h>
-#include <boost/asio/ip/tcp.hpp>
-#include <set>
-#include <string>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-network/Common.h>
 
-namespace ba = boost::asio;
-namespace bi = boost::asio::ip;
-#define HOST_LOG(LEVEL) BCOS_LOG(LEVEL) << "[NETWORK][Host]"
-#define SESSION_LOG(LEVEL) BCOS_LOG(LEVEL) << "[SESSION][Session]"
-#define ASIO_LOG(LEVEL) BCOS_LOG(LEVEL) << "[ASIO][ASIO]"
-
-namespace bcos
+namespace bcos::gateway
 {
-namespace gateway
-{
-enum MessageDecodeStatus
-{
-    MESSAGE_ERROR = -1,
-    MESSAGE_INCOMPLETE = 0,
-};
+using bcos::network::MessageDecodeStatus;
+using bcos::network::MESSAGE_ERROR;
+using bcos::network::MESSAGE_INCOMPLETE;
 
-/// default compress threshold: 1KB
-const uint64_t c_compressThreshold = 1024;
-/// default zstd compress level:
-const uint64_t c_zstdCompressLevel = 1;
-enum DisconnectReason
-{
-    DisconnectRequested = 0,
-    TCPError,
-    BadProtocol,
-    UselessPeer,
-    TooManyPeers,
-    DuplicatePeer,
-    IncompatibleProtocol,
-    NullIdentity,
-    ClientQuit,
-    UnexpectedIdentity,
-    LocalIdentity,
-    PingTimeout,
-    UserReason = 0x10,
-    IdleWaitTimeout = 0x11,
-    NegotiateFailed = 0x12,
-    InBlacklistReason = 0x13,
-    NotInWhitelistReason = 0x14,
-    NoDisconnect = 0xffff
-};
+using bcos::network::c_compressThreshold;
+using bcos::network::c_zstdCompressLevel;
 
-///< P2PExceptionType and g_P2PExceptionMsg used in P2PException
-enum P2PExceptionType
-{
-    Success = 0,
-    ProtocolError,
-    NetworkTimeout,
-    Disconnect,
-    P2PExceptionTypeCnt,
-    ConnectError,
-    DuplicateSession,
-    NotInWhitelist,
-    OutBWOverflow,
-    InQPSOverflow,
-    ALL
-};
+using bcos::network::DisconnectReason;
+using bcos::network::BadProtocol;
+using bcos::network::ClientQuit;
+using bcos::network::DisconnectRequested;
+using bcos::network::DuplicatePeer;
+using bcos::network::IdleWaitTimeout;
+using bcos::network::InBlacklistReason;
+using bcos::network::IncompatibleProtocol;
+using bcos::network::LocalIdentity;
+using bcos::network::NegotiateFailed;
+using bcos::network::NoDisconnect;
+using bcos::network::NotInWhitelistReason;
+using bcos::network::NullIdentity;
+using bcos::network::PingTimeout;
+using bcos::network::TCPError;
+using bcos::network::TooManyPeers;
+using bcos::network::UnexpectedIdentity;
+using bcos::network::UselessPeer;
+using bcos::network::UserReason;
 
-//
-using P2pID = std::string;
-using P2pIDs = std::set<std::string>;
-struct Options
-{
-    uint32_t timeout = 0;   ///< The timeout value of async function, in milliseconds.
-    bool response = false;  ///< Whether to wait for a response.
-};
+using bcos::network::P2PExceptionType;
+using bcos::network::ALL;
+using bcos::network::ConnectError;
+using bcos::network::Disconnect;
+using bcos::network::DuplicateSession;
+using bcos::network::InQPSOverflow;
+using bcos::network::NetworkTimeout;
+using bcos::network::NotInWhitelist;
+using bcos::network::OutBWOverflow;
+using bcos::network::P2PExceptionTypeCnt;
+using bcos::network::ProtocolError;
+using bcos::network::Success;
 
-class NetworkException : public std::exception
-{
-public:
-    NetworkException() = default;
-    NetworkException(int _errorCode, std::string _msg);
+using bcos::network::Options;
+using bcos::network::P2pID;
+using bcos::network::P2pIDs;
 
-    virtual int errorCode() const;
-    const char* what() const noexcept override;
-    bool operator!() const;
-
-    virtual Error::Ptr toError();
-
-private:
-    int m_errorCode = 0;
-    std::string m_msg;
-};
-
-/// @returns the string form of the given disconnection reason.
-std::string reasonOf(DisconnectReason _reason);
-}  // namespace gateway
-}  // namespace bcos
+using bcos::network::errinfo_errorCode;
+using bcos::network::errorCodeOf;
+using bcos::network::makeNetworkException;
+using bcos::network::NetworkException;
+using bcos::network::operator!;
+using bcos::network::reasonOf;
+using bcos::network::toError;
+}  // namespace bcos::gateway

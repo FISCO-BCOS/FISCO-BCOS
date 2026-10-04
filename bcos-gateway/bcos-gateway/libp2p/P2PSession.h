@@ -7,9 +7,10 @@
 
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-gateway/libnetwork/Common.h"
-#include "bcos-gateway/libnetwork/Message.h"
-#include "bcos-gateway/libnetwork/SessionFace.h"
+#include "bcos-gateway/libp2p/Message.h"
+#include "bcos-gateway/libp2p/P2PDecoder.h"
 #include <boost/asio/steady_timer.hpp>
+#include <range/v3/range/concepts.hpp>
 #include <memory>
 #include <utility>
 
@@ -32,8 +33,8 @@ public:
     virtual bool active();
     virtual void heartBeat();
 
-    virtual SessionFace::Ptr session();
-    virtual void setSession(std::shared_ptr<SessionFace> session);
+    virtual Session::Ptr session();
+    virtual void setSession(Session::Ptr session);
 
     virtual P2pID p2pID();
     virtual std::string printP2pID();
@@ -49,11 +50,18 @@ public:
     // empty when negotiate failed or negotiate unfinished
     virtual bcos::protocol::ProtocolInfo::ConstPtr protocolInfo() const;
 
+    // Send a P2P message (header + zero-copy payload views); with Options::response, co_await the
+    // peer's response. payloads is a plain range (no any_view type erasure) taken by value — views
+    // are cheap to copy and a by-value parameter is moved into the coroutine frame. Defined at the
+    // bottom of Service.h: the body drives Service (compression policy, resetP2pID, the pre-send
+    // rate-limit hook), and that header completes both types.
+    template <::ranges::input_range Payloads>
+        requires std::convertible_to<::ranges::range_reference_t<Payloads>, bytesConstRef>
     task::Task<std::optional<Message>> fastSendP2PMessage(
-        Message& message, ::ranges::any_view<bytesConstRef> payloads, Options options);
+        Message& message, Payloads payloads, Options options);
 
 private:
-    SessionFace::Ptr m_session;
+    Session::Ptr m_session;
     /// gateway p2p info
     std::shared_ptr<P2PInfo> m_p2pInfo;
     std::weak_ptr<Service> m_service;

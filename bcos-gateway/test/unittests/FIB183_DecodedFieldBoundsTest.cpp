@@ -19,8 +19,8 @@
  */
 
 #include "bcos-gateway/Gateway.h"
-#include "bcos-gateway/libnetwork/Message.h"
-#include "bcos-gateway/libp2p/ServiceV2.h"
+#include "bcos-gateway/libp2p/Message.h"
+#include "bcos-gateway/libp2p/Service.h"
 #include "bcos-gateway/libp2p/router/RouterTableImpl.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 
@@ -49,22 +49,6 @@ public:
     }
 };
 
-// Exposes the protected router-seq handler.
-class FakeServiceV2FIB183 : public ServiceV2
-{
-public:
-    // ServiceV2 borrows an external io_context now; the test owns it and passes it in.
-    FakeServiceV2FIB183(
-        P2PInfo const& _info, RouterTableFactory::Ptr _factory, boost::asio::io_context& _ioContext)
-      : ServiceV2(_info, std::move(_factory), _ioContext)
-    {}
-    void callOnReceiveRouterSeq(
-        NetworkException _error, std::shared_ptr<P2PSession> _session, Message _message)
-    {
-        onReceiveRouterSeq(std::move(_error), std::move(_session), _message);
-    }
-};
-
 // Fix A: a Message whose decoded options carry zero dstNodeIDs must not be
 // indexed (dstNodeIDs[0] on an empty vector is OOB). The guard drops it before
 // touching m_gatewayNodeManager (which is null here), so no crash occurs.
@@ -87,7 +71,7 @@ BOOST_AUTO_TEST_CASE(EmptyDstNodeIDsIsDropped)
     auto gateway = std::make_shared<FakeGatewayFIB183>();
     // Must not crash / must not dereference the null GatewayNodeManager.
     BOOST_CHECK_NO_THROW(
-        gateway->callOnReceiveP2PMessage(NetworkException(0, ""), nullptr, std::move(msg)));
+        gateway->callOnReceiveP2PMessage(NetworkException{}, nullptr, std::move(msg)));
 }
 
 // Sanity check: confirm that a message decoded straight off the wire can legitimately
@@ -120,7 +104,12 @@ BOOST_AUTO_TEST_CASE(ShortRouterSeqPayloadIsDropped)
     selfInfo.p2pID = "selfP2pID";
     auto routerTableFactory = std::make_shared<RouterTableFactoryImpl>();
     boost::asio::io_context ioContext;
-    auto service = std::make_shared<FakeServiceV2FIB183>(selfInfo, routerTableFactory, ioContext);
+    auto service = std::make_shared<Service>(selfInfo, routerTableFactory, &ioContext);
+
+    // Black-box drive: the RouterTableSyncSeq message handler the router module registered,
+    // fetched through the public handler table (equivalent to calling onReceiveRouterSeq).
+    auto handler = service->getMessageHandlerByMsgType(GatewayMessageType::RouterTableSyncSeq);
+    BOOST_REQUIRE(handler);
 
     for (size_t len = 0; len < sizeof(uint32_t); ++len)
     {
@@ -132,8 +121,7 @@ BOOST_AUTO_TEST_CASE(ShortRouterSeqPayloadIsDropped)
         }
         BOOST_CHECK_EQUAL(msg.payload().size(), len);
         // Session is nullptr on purpose: the guard returns before it is used.
-        BOOST_CHECK_NO_THROW(
-            service->callOnReceiveRouterSeq(NetworkException(0, ""), nullptr, std::move(msg)));
+        BOOST_CHECK_NO_THROW(handler(NetworkException{}, nullptr, std::move(msg)));
     }
 
     service->stop();
