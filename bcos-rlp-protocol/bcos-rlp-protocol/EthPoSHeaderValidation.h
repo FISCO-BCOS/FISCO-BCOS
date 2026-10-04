@@ -295,6 +295,12 @@ inline std::optional<std::string> validateBlobGas(
 // Prague's requestsHash. The VALUE of requestsHash (EIP-7685) is verified by the
 // block verifier against the executed request list once that lands — presence here
 // is the fail-closed gate so a peer cannot serve a post-Prague header that omits it.
+// The direction is symmetric (geth's "x is not allowed before fork-y" checks): a
+// header carrying a field BEFORE its fork is equally invalid — the EEST
+// fork-transition suites (e.g. eip4844's invalid_pre_fork_block_with_blob_fields,
+// BlockException.INCORRECT_BLOCK_FORMAT) rely on it, since the positional RLP
+// decode alone cannot tell a Shanghai header with a stray blob field apart from a
+// Cancun header.
 inline std::optional<std::string> validateForkFieldPresence(
     bcos::protocol::EthBlockHeaderData const& _header, PoSChainConfig const& _config)
 {
@@ -321,6 +327,30 @@ inline std::optional<std::string> validateForkFieldPresence(
     if (isForkActive(_config.pragueTime, _header.timestamp) && !_header.requestsHash.has_value())
     {
         return "missing requestsHash (Prague active)";
+    }
+    if (!isForkActive(_config.shanghaiTime, _header.timestamp) &&
+        _header.withdrawalsHash.has_value())
+    {
+        return "withdrawalsHash present before Shanghai";
+    }
+    if (!isForkActive(_config.cancunTime, _header.timestamp))
+    {
+        if (_header.blobGasUsed.has_value())
+        {
+            return "blobGasUsed present before Cancun";
+        }
+        if (_header.excessBlobGas.has_value())
+        {
+            return "excessBlobGas present before Cancun";
+        }
+        if (_header.parentBeaconRoot.has_value())
+        {
+            return "parentBeaconBlockRoot present before Cancun";
+        }
+    }
+    if (!isForkActive(_config.pragueTime, _header.timestamp) && _header.requestsHash.has_value())
+    {
+        return "requestsHash present before Prague";
     }
     return std::nullopt;
 }
