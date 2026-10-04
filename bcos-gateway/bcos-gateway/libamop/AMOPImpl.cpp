@@ -21,7 +21,7 @@
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-framework/protocol/CommonError.h"
 #include "bcos-gateway/libamop/AMOPMessage.h"
-#include "bcos-gateway/libnetwork/Common.h"
+#include "bcos-network/Common.h"
 #include <bcos-task/Wait.h>
 #include <algorithm>
 #include <chrono>
@@ -62,7 +62,7 @@ TopicManager::Ptr AMOPImpl::topicManager()
 
 AMOPImpl::AMOPImpl(TopicManager::Ptr _topicManager,
     bcos::amop::AMOPMessageFactory::Ptr _messageFactory, AMOPRequestFactory::Ptr _requestFactory,
-    Service::Ptr _network, P2pID const& _p2pNodeID,
+    Service::Ptr _network, bcos::network::P2pID const& _p2pNodeID,
     boost::asio::io_context& _ioContext,
     bcos::IOServicePool::Ptr _ioServicePool)
   : m_topicManager(_topicManager),
@@ -76,7 +76,7 @@ AMOPImpl::AMOPImpl(TopicManager::Ptr _topicManager,
     m_timer->registerTimeoutHandler([this]() { broadcastTopicSeq(); });
 
     m_network->registerHandlerByMsgType(GatewayMessageType::AMOPMessageType,
-        [this](bcos::gateway::NetworkException const& _e, bcos::gateway::P2PSession::Ptr _session,
+        [this](bcos::network::NetworkException const& _e, bcos::gateway::P2PSession::Ptr _session,
             bcos::gateway::Message _message) {
             onAMOPMessage(_e, std::move(_session), std::move(_message));
         });
@@ -110,14 +110,14 @@ void AMOPImpl::broadcastTopicSeq()
         message->setSeq(_network->newSeq());
         message->setPayload(std::move(_payload));
         co_await _network->broadcastMessageToAll(
-            message, ::ranges::views::single(message->payload()), Options(0));
+            message, ::ranges::views::single(message->payload()), bcos::network::Options(0));
     }(network, std::move(buffer)));
     AMOP_LOG(TRACE) << LOG_BADGE("broadcastTopicSeq") << LOG_KV("topicSeq", topicSeq);
     m_timer->restart();
 }
 
 // receive the topic seq of other nodes, and try to request the latest topic when seq falling behind
-void AMOPImpl::onReceiveTopicSeqMessage(P2pID const& _nodeID, AMOPMessage::Ptr _msg)
+void AMOPImpl::onReceiveTopicSeqMessage(bcos::network::P2pID const& _nodeID, AMOPMessage::Ptr _msg)
 {
     try
     {
@@ -137,7 +137,7 @@ void AMOPImpl::onReceiveTopicSeqMessage(P2pID const& _nodeID, AMOPMessage::Ptr _
         // fire-and-forget through the coroutine fast path: the message is built in the frame and
         // the payload is moved into it (the caller's buffer does not outlive the deferred send);
         // an unreachable peer is an expected, recoverable state.
-        task::wait([](Service::Ptr _network, uint16_t _type, P2pID _nodeID,
+        task::wait([](Service::Ptr _network, uint16_t _type, bcos::network::P2pID _nodeID,
                        bcos::bytes _payload) -> task::Task<void> {
             Message message;
             message.setPacketType(_type);
@@ -146,14 +146,14 @@ void AMOPImpl::onReceiveTopicSeqMessage(P2pID const& _nodeID, AMOPMessage::Ptr _
             try
             {
                 co_await _network->sendMessageByNodeID(_nodeID, message,
-                    ::ranges::views::single(message.payload()), Options(0));
+                    ::ranges::views::single(message.payload()), bcos::network::Options(0));
             }
-            catch (NetworkException const& e)
+            catch (bcos::network::NetworkException const& e)
             {
                 AMOP_LOG(WARNING) << LOG_BADGE("onReceiveTopicSeqMessage")
                                   << LOG_DESC("send RequestTopic failed")
                                   << LOG_KV("nodeID", printShortP2pID(_nodeID))
-                                  << LOG_KV("code", errorCodeOf(e)) << LOG_KV("msg", e.what());
+                                  << LOG_KV("code", bcos::network::errorCodeOf(e)) << LOG_KV("msg", e.what());
             }
         }(network, GatewayMessageType::AMOPMessageType, _nodeID, std::move(buffer)));
     }
@@ -182,7 +182,7 @@ bcos::bytes AMOPImpl::buildAndEncodeMessage(uint32_t _type, bcos::bytesConstRef 
 }
 
 // receive topic response and update the local topicManager
-void AMOPImpl::onReceiveResponseTopicMessage(P2pID const& _nodeID, AMOPMessage::Ptr _msg)
+void AMOPImpl::onReceiveResponseTopicMessage(bcos::network::P2pID const& _nodeID, AMOPMessage::Ptr _msg)
 {
     try
     {
@@ -203,7 +203,7 @@ void AMOPImpl::onReceiveResponseTopicMessage(P2pID const& _nodeID, AMOPMessage::
 }
 
 // response topic message to the given node
-void AMOPImpl::onReceiveRequestTopicMessage(P2pID const& _nodeID, AMOPMessage::Ptr _msg)
+void AMOPImpl::onReceiveRequestTopicMessage(bcos::network::P2pID const& _nodeID, AMOPMessage::Ptr _msg)
 {
     (void)_msg;
     try
@@ -221,7 +221,7 @@ void AMOPImpl::onReceiveRequestTopicMessage(P2pID const& _nodeID, AMOPMessage::P
         // fire-and-forget through the coroutine fast path: the message is built in the frame and
         // the payload is moved into it (the caller's buffer does not outlive the deferred send);
         // a send failure is logged here (the old async callback only logged errors too).
-        task::wait([](Service::Ptr _network, uint16_t _type, P2pID _nodeID,
+        task::wait([](Service::Ptr _network, uint16_t _type, bcos::network::P2pID _nodeID,
                        bcos::bytes _payload) -> task::Task<void> {
             Message message;
             message.setPacketType(_type);
@@ -230,14 +230,14 @@ void AMOPImpl::onReceiveRequestTopicMessage(P2pID const& _nodeID, AMOPMessage::P
             try
             {
                 co_await _network->sendMessageByNodeID(_nodeID, message,
-                    ::ranges::views::single(message.payload()), Options(0));
+                    ::ranges::views::single(message.payload()), bcos::network::Options(0));
             }
-            catch (NetworkException const& e)
+            catch (bcos::network::NetworkException const& e)
             {
                 AMOP_LOG(WARNING) << LOG_BADGE("onReceiveRequestTopicMessage")
                                   << LOG_DESC("send ResponseTopic failed")
                                   << LOG_KV("dstNode", printShortP2pID(_nodeID))
-                                  << LOG_KV("code", errorCodeOf(e)) << LOG_KV("msg", e.what());
+                                  << LOG_KV("code", bcos::network::errorCodeOf(e)) << LOG_KV("msg", e.what());
             }
         }(network, GatewayMessageType::AMOPMessageType, _nodeID, std::move(buffer)));
     }
@@ -251,7 +251,7 @@ void AMOPImpl::onReceiveRequestTopicMessage(P2pID const& _nodeID, AMOPMessage::P
 
 // receive AMOP request message from the given node
 bcos::task::Task<std::tuple<bytesPointer, int16_t>> AMOPImpl::onReceiveAMOPMessage(
-    P2pID const& _nodeID, AMOPMessage::Ptr _msg)
+    bcos::network::P2pID const& _nodeID, AMOPMessage::Ptr _msg)
 {
     // AMOPRequest
     auto request = m_requestFactory->buildRequest(_msg->data());
@@ -261,7 +261,7 @@ bcos::task::Task<std::tuple<bytesPointer, int16_t>> AMOPImpl::onReceiveAMOPMessa
 }
 
 bcos::task::Task<std::tuple<bytesPointer, int16_t>> AMOPImpl::onReceiveAMOPMessage(
-    P2pID const& _nodeID, std::string const& _topic, bytesConstRef _data)
+    bcos::network::P2pID const& _nodeID, std::string const& _topic, bytesConstRef _data)
 {
     std::vector<std::string> clients;
     m_topicManager->queryClientsByTopic(_topic, clients);
@@ -309,7 +309,7 @@ bcos::task::Task<std::tuple<bytesPointer, int16_t>> AMOPImpl::onReceiveAMOPMessa
 }
 
 // receive the AMOP broadcast message from given node
-void AMOPImpl::onReceiveAMOPBroadcastMessage(P2pID const& _nodeID, AMOPMessage::Ptr _msg)
+void AMOPImpl::onReceiveAMOPBroadcastMessage(bcos::network::P2pID const& _nodeID, AMOPMessage::Ptr _msg)
 {
     // AMOPRequest
     auto request = m_requestFactory->buildRequest(_msg->data());
@@ -395,7 +395,7 @@ bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>> AMOPImpl::s
     // keep this alive for the whole (possibly deferred) send — callers may launch the coroutine
     // detached via task::wait
     auto self = shared_from_this();
-    std::vector<P2pID> nodeIDs;
+    std::vector<bcos::network::P2pID> nodeIDs;
     m_topicManager->queryNodeIDsByTopic(_topic, nodeIDs);
     if (nodeIDs.empty())
     {
@@ -452,7 +452,7 @@ bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>> AMOPImpl::s
         {
             auto respMessage = co_await network->sendMessageByNodeID(choosedNodeID, message,
                 ::ranges::views::single(message.payload()),
-                Options{c_amopResponseTimeoutMs, true});
+                bcos::network::Options{c_amopResponseTimeoutMs, true});
             if (!respMessage)
             {
                 // self-id sends and sessions expiring before the write co_return a null
@@ -497,12 +497,12 @@ bcos::task::Task<std::tuple<bcos::Error::Ptr, int16_t, bcos::bytes>> AMOPImpl::s
             co_return std::make_tuple(
                 std::move(error), packetType, responseData.toBytes());
         }
-        catch (NetworkException const& e)
+        catch (bcos::network::NetworkException const& e)
         {
             AMOP_LOG(DEBUG) << LOG_BADGE("sendMessageByTopic")
                             << LOG_DESC("send failed, retry next node")
                             << LOG_KV("nodeID", printShortP2pID(choosedNodeID))
-                            << LOG_KV("code", errorCodeOf(e)) << LOG_KV("msg", e.what());
+                            << LOG_KV("code", bcos::network::errorCodeOf(e)) << LOG_KV("msg", e.what());
         }
         catch (std::exception const& e)
         {
@@ -539,13 +539,13 @@ bcos::task::Task<void> AMOPImpl::sendBroadcastMessageByTopic(
     auto dataSize = _data.size();
     // a failed/unreachable node is logged and skipped by sendMessageByNodeIDs
     co_await m_network->sendMessageByNodeIDs(
-        GatewayMessageType::AMOPMessageType, nodeIDs, std::move(buffer), Options(0));
+        GatewayMessageType::AMOPMessageType, nodeIDs, std::move(buffer), bcos::network::Options(0));
     AMOP_LOG(DEBUG) << LOG_BADGE("asyncSendBroadbastMessage") << LOG_DESC("send broadcast message")
                     << LOG_KV("topic", _topic) << LOG_KV("data size", dataSize);
 }
 
 void AMOPImpl::onAMOPMessage(
-    NetworkException const& _e, P2PSession::Ptr _session, Message _message)
+    bcos::network::NetworkException const& _e, P2PSession::Ptr _session, Message _message)
 {
     auto self = std::weak_ptr<AMOPImpl>(shared_from_this());
     m_strand.post([self, _e, _session, _message = std::move(_message)]() mutable {
@@ -567,12 +567,12 @@ void AMOPImpl::onAMOPMessage(
 }
 
 void AMOPImpl::dispatcherAMOPMessage(
-    NetworkException const& _e, P2PSession::Ptr _session, Message _message)
+    bcos::network::NetworkException const& _e, P2PSession::Ptr _session, Message _message)
 {
-    if (errorCodeOf(_e) != 0)
+    if (bcos::network::errorCodeOf(_e) != 0)
     {
         AMOP_LOG(WARNING) << LOG_DESC("onAMOPMessage error for NetworkException")
-                          << LOG_KV("message", _e.what()) << LOG_KV("code", errorCodeOf(_e));
+                          << LOG_KV("message", _e.what()) << LOG_KV("code", bcos::network::errorCodeOf(_e));
         return;
     }
     if (_message.packetType() != GatewayMessageType::AMOPMessageType)
@@ -599,7 +599,7 @@ void AMOPImpl::dispatcherAMOPMessage(
         // dispatch the request to the local client, then send the response back to the peer;
         // all state is passed as coroutine parameters so it is copied into the frame and stays
         // alive for the whole (possibly deferred) round trip
-        task::wait([](std::shared_ptr<AMOPImpl> _self, P2pID _fromNodeID,
+        task::wait([](std::shared_ptr<AMOPImpl> _self, bcos::network::P2pID _fromNodeID,
                        AMOPMessage::Ptr _amopMessage, Message _message) -> task::Task<void> {
             auto [responseData, type] =
                 co_await _self->onReceiveAMOPMessage(_fromNodeID, _amopMessage);
@@ -618,7 +618,7 @@ void AMOPImpl::dispatcherAMOPMessage(
                 // frame for the duration of the co_await
                 co_await _self->m_network->sendMessageByNodeID(responseP2PMsg.dstP2PNodeID(),
                     responseP2PMsg, ::ranges::views::single(responseP2PMsg.payload()),
-                    Options{});
+                    bcos::network::Options{});
             }
             catch (std::exception const& e)
             {

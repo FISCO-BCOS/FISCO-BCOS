@@ -19,8 +19,8 @@
  */
 
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-gateway/libnetwork/ASIOInterface.h"
-#include "bcos-gateway/libnetwork/Host.h"
+#include "bcos-network/ASIOInterface.h"
+#include "bcos-network/Host.h"
 #include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
@@ -36,13 +36,13 @@ namespace bi = boost::asio::ip;
 
 BOOST_FIXTURE_TEST_SUITE(FIB184_SessionResourceCapTest, TestPromptFixture)
 
-class FakeASIO_FIB184 : public bcos::gateway::ASIOInterface
+class FakeASIO_FIB184 : public bcos::network::ASIOInterface
 {
 public:
     // ASIOInterface now owns its IOServicePool and is stopped by ~IOServicePool; the
     // strandPost / stop virtuals this fake used to override no longer exist.
     FakeASIO_FIB184()
-      : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB184"), "0.0.0.0", 0)
+      : bcos::network::ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB184"), "0.0.0.0", 0)
     {}
     ~FakeASIO_FIB184() noexcept {}
 };
@@ -83,11 +83,11 @@ private:
 };
 
 // Exposes the protected session-cap helpers for direct testing.
-class FakeHost_FIB184 : public bcos::gateway::Host<P2PDecoder, FakeSocket_FIB184>
+class FakeHost_FIB184 : public bcos::network::Host<P2PDecoder, FakeSocket_FIB184>
 {
 public:
-    explicit FakeHost_FIB184(std::shared_ptr<ASIOInterface> _asioInterface)
-      : Host<P2PDecoder, FakeSocket_FIB184>(std::move(_asioInterface), nullptr)
+    explicit FakeHost_FIB184(std::shared_ptr<bcos::network::ASIOInterface> _asioInterface)
+      : bcos::network::Host<P2PDecoder, FakeSocket_FIB184>(std::move(_asioInterface), nullptr)
     {
         this->m_run = true;
     }
@@ -95,7 +95,7 @@ public:
     void callReleaseSessionSlot(std::string const& addr) { releaseSessionSlot(addr); }
 };
 
-using Session_FIB184 = BasicSession<P2PDecoder, FakeSocket_FIB184>;
+using Session_FIB184 = bcos::network::BasicSession<P2PDecoder, FakeSocket_FIB184>;
 
 // FIB-184 Fix 2: a forced-size session uses exactly the requested recv buffer size, not the
 // 512KB floor that was unconditionally applied before.

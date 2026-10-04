@@ -20,8 +20,8 @@
  */
 
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-gateway/libnetwork/ASIOInterface.h"
-#include "bcos-gateway/libnetwork/Host.h"
+#include "bcos-network/ASIOInterface.h"
+#include "bcos-network/Host.h"
 #include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
@@ -42,11 +42,11 @@ namespace
 
 // FIB-97-new: All helper names are suffixed _FIB97new to avoid ODR collisions under UNITY_BUILD.
 
-class FakeASIO_FIB97new : public bcos::gateway::ASIOInterface
+class FakeASIO_FIB97new : public bcos::network::ASIOInterface
 {
 public:
     FakeASIO_FIB97new()
-      : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB97new"), "0.0.0.0", 0)
+      : bcos::network::ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB97new"), "0.0.0.0", 0)
     {}
     ~FakeASIO_FIB97new() noexcept = default;
 };
@@ -99,19 +99,19 @@ private:
     NodeIPEndpoint m_nodeIPEndpoint;
 };
 
-class FakeHost_FIB97new : public bcos::gateway::Host<P2PDecoder, FakeSocket_FIB97new>
+class FakeHost_FIB97new : public bcos::network::Host<P2PDecoder, FakeSocket_FIB97new>
 {
 public:
-    FakeHost_FIB97new(std::shared_ptr<ASIOInterface> _asioInterface,
-        std::shared_ptr<BasicSessionFactory<P2PDecoder, FakeSocket_FIB97new>> _sessionFactory)
-      : Host<P2PDecoder, FakeSocket_FIB97new>(
+    FakeHost_FIB97new(std::shared_ptr<bcos::network::ASIOInterface> _asioInterface,
+        std::shared_ptr<bcos::network::BasicSessionFactory<P2PDecoder, FakeSocket_FIB97new>> _sessionFactory)
+      : bcos::network::Host<P2PDecoder, FakeSocket_FIB97new>(
             std::move(_asioInterface), std::move(_sessionFactory))
     {
         this->m_run = true;
     }
 };
 
-using Session_FIB97new = BasicSession<P2PDecoder, FakeSocket_FIB97new>;
+using Session_FIB97new = bcos::network::BasicSession<P2PDecoder, FakeSocket_FIB97new>;
 
 // Session owns a reference_wrapper<Host> — the Host must outlive the session.
 // Return both from the helper so tests keep the host alive.
@@ -148,9 +148,9 @@ BOOST_AUTO_TEST_CASE(drop_twice_sequential_no_double_teardown)
     BOOST_REQUIRE(bundle.socket);
 
     // First drop: wins the m_dropped CAS and posts the (single) socket teardown.
-    bundle.session->drop(DisconnectReason::TCPError);
+    bundle.session->drop(bcos::network::DisconnectReason::TCPError);
     // Second drop: must be a no-op (CAS fails), so it posts no second teardown.
-    bundle.session->drop(DisconnectReason::TCPError);
+    bundle.session->drop(bcos::network::DisconnectReason::TCPError);
 
     // drop() marks the session inactive synchronously.
     BOOST_CHECK(!bundle.session->active());
@@ -173,8 +173,8 @@ BOOST_AUTO_TEST_CASE(drop_concurrent_two_threads_no_race)
     auto bundle = bcos::test::makeSessionFib97new();
     BOOST_REQUIRE(bundle.session);
 
-    std::thread t1([&] { bundle.session->drop(DisconnectReason::TCPError); });
-    std::thread t2([&] { bundle.session->drop(DisconnectReason::TCPError); });
+    std::thread t1([&] { bundle.session->drop(bcos::network::DisconnectReason::TCPError); });
+    std::thread t2([&] { bundle.session->drop(bcos::network::DisconnectReason::TCPError); });
     t1.join();
     t2.join();
 
@@ -196,7 +196,7 @@ BOOST_AUTO_TEST_CASE(drop_many_threads_stress)
     threads.reserve(kThreads);
     for (int i = 0; i < kThreads; ++i)
     {
-        threads.emplace_back([&] { bundle.session->drop(DisconnectReason::TCPError); });
+        threads.emplace_back([&] { bundle.session->drop(bcos::network::DisconnectReason::TCPError); });
     }
     for (auto& t : threads)
     {

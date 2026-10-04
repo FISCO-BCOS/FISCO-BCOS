@@ -20,8 +20,8 @@
  */
 
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-gateway/libnetwork/ASIOInterface.h"
-#include "bcos-gateway/libnetwork/Host.h"
+#include "bcos-network/ASIOInterface.h"
+#include "bcos-network/Host.h"
 #include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
@@ -36,13 +36,13 @@ namespace ba = boost::asio;
 
 BOOST_FIXTURE_TEST_SUITE(FIB186_HandshakeAdmissionTest, TestPromptFixture)
 
-class FakeASIO_FIB186 : public bcos::gateway::ASIOInterface
+class FakeASIO_FIB186 : public bcos::network::ASIOInterface
 {
 public:
     // ASIOInterface now owns its IOServicePool and is stopped by ~IOServicePool; the
     // strandPost / stop virtuals this fake used to override no longer exist.
     FakeASIO_FIB186()
-      : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB186"), "0.0.0.0", 0)
+      : bcos::network::ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB186"), "0.0.0.0", 0)
     {}
     ~FakeASIO_FIB186() noexcept {}
 };
@@ -50,11 +50,11 @@ public:
 // Exposes the protected handshake-admission helpers for direct testing, mirroring the FIB-184
 // session-cap test harness. No session is ever created in these tests, so the default SocketT
 // (the production Socket) is fine.
-class FakeHost_FIB186 : public bcos::gateway::Host<P2PDecoder>
+class FakeHost_FIB186 : public bcos::network::Host<P2PDecoder>
 {
 public:
-    explicit FakeHost_FIB186(std::shared_ptr<ASIOInterface> _asioInterface)
-      : Host<P2PDecoder>(std::move(_asioInterface), nullptr)
+    explicit FakeHost_FIB186(std::shared_ptr<bcos::network::ASIOInterface> _asioInterface)
+      : bcos::network::Host<P2PDecoder>(std::move(_asioInterface), nullptr)
     {
         this->m_run = true;
     }

@@ -99,13 +99,13 @@ public:
      * @param _topicSeq: the topicSeq of the nodeID
      * @return bool: if the nodeID has been changed
      */
-    bool checkTopicSeq(bcos::gateway::P2pID const& _nodeID, uint32_t _topicSeq);
+    bool checkTopicSeq(bcos::network::P2pID const& _nodeID, uint32_t _topicSeq);
     /**
      * @brief: disconnect the offline p2p node
      * @param _nodeIDs: the offline p2p node id
      * @return void
      */
-    void onDisconnect(const bcos::gateway::P2pID& _nodeID);
+    void onDisconnect(const bcos::network::P2pID& _nodeID);
     /**
      * @brief: update the topicSeq and topicItems of the nodeID's
      * @param _nodeID: nodeID
@@ -114,7 +114,7 @@ public:
      * @return void
      */
     void updateSeqAndTopicsByNodeID(
-        bcos::gateway::P2pID const& _nodeID, uint32_t _topicSeq, const TopicItems& _topicItems);
+        bcos::network::P2pID const& _nodeID, uint32_t _topicSeq, const TopicItems& _topicItems);
     /**
      * @brief: find the nodeIDs by topic
      * @param _topic: topic

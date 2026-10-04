@@ -100,7 +100,7 @@ void testP2PMessage(uint32_t _version = 0)
 
 
     auto ret1 = decodeMsg1.decode(bytesConstRef(buffer->data(), buffer->size() - 1));
-    BOOST_CHECK_EQUAL(ret1, MessageDecodeStatus::MESSAGE_INCOMPLETE);
+    BOOST_CHECK_EQUAL(ret1, bcos::network::MessageDecodeStatus::MESSAGE_INCOMPLETE);
 
     {
         // default Message object
@@ -476,7 +476,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_decodeHeader_invalidLength)
 
     Message msg;
     auto ret = msg.decode(bytesConstRef(buffer.data(), buffer.size()));
-    BOOST_CHECK_EQUAL(ret, MessageDecodeStatus::MESSAGE_ERROR);
+    BOOST_CHECK_EQUAL(ret, bcos::network::MessageDecodeStatus::MESSAGE_ERROR);
 }
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage_decodeHeader_zeroLength)
@@ -485,7 +485,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_decodeHeader_zeroLength)
     // length = 0, less than header
     Message msg;
     auto ret = msg.decode(bytesConstRef(buffer.data(), buffer.size()));
-    BOOST_CHECK_EQUAL(ret, MessageDecodeStatus::MESSAGE_ERROR);
+    BOOST_CHECK_EQUAL(ret, bcos::network::MessageDecodeStatus::MESSAGE_ERROR);
 }
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage_decodeHeader_invalidVersion)
@@ -501,7 +501,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_decodeHeader_invalidVersion)
 
     Message msg;
     auto ret = msg.decode(bytesConstRef(buffer.data(), buffer.size()));
-    BOOST_CHECK_EQUAL(ret, MessageDecodeStatus::MESSAGE_ERROR);
+    BOOST_CHECK_EQUAL(ret, bcos::network::MessageDecodeStatus::MESSAGE_ERROR);
 }
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage_decode_offsetExceedsLength)
@@ -539,7 +539,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_extVersion_decodeHeader_errorPropagation)
 
     Message msg;
     auto ret = msg.decode(bytesConstRef(buffer.data(), buffer.size()));
-    BOOST_CHECK_EQUAL(ret, MessageDecodeStatus::MESSAGE_ERROR);
+    BOOST_CHECK_EQUAL(ret, bcos::network::MessageDecodeStatus::MESSAGE_ERROR);
 }
 
 // FIB-67: Test options decode bounds validation
@@ -580,7 +580,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessageOptions_decode_truncatedBuffer)
 
     auto decoded = std::make_shared<P2PMessageOptions>();
     auto ret = decoded->decode(bytesConstRef(buffer.data(), buffer.size()));
-    BOOST_CHECK_EQUAL(ret, MessageDecodeStatus::MESSAGE_ERROR);
+    BOOST_CHECK_EQUAL(ret, bcos::network::MessageDecodeStatus::MESSAGE_ERROR);
 }
 
 BOOST_AUTO_TEST_CASE(test_P2PMessageOptions_decode_truncatedNodeID)
@@ -596,7 +596,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessageOptions_decode_truncatedNodeID)
 
     auto decoded = std::make_shared<P2PMessageOptions>();
     auto ret = decoded->decode(bytesConstRef(buffer.data(), buffer.size()));
-    BOOST_CHECK_EQUAL(ret, MessageDecodeStatus::MESSAGE_ERROR);
+    BOOST_CHECK_EQUAL(ret, bcos::network::MessageDecodeStatus::MESSAGE_ERROR);
 }
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage_decode_validVersionBoundary)
@@ -626,7 +626,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_decode_validVersionBoundary)
 
     Message msg2;
     auto ret2 = msg2.decode(bytesConstRef(buffer2.data(), buffer2.size()));
-    BOOST_CHECK_EQUAL(ret2, MessageDecodeStatus::MESSAGE_ERROR);
+    BOOST_CHECK_EQUAL(ret2, bcos::network::MessageDecodeStatus::MESSAGE_ERROR);
 }
 
 namespace
@@ -722,7 +722,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_decodeOwned_compressedFallsBack)
     auto payload = bytes(8192, 'z');
     bcos::bytes compressed;
     BOOST_REQUIRE(bcos::ZstdCompress::compress(
-        bcos::ref(payload), compressed, (int)bcos::gateway::c_zstdCompressLevel));
+        bcos::ref(payload), compressed, (int)bcos::network::c_zstdCompressLevel));
 
     auto frame = buildOwnedTestFrame(
         11, (uint16_t)bcos::protocol::MessageExtFieldFlag::COMPRESS, compressed);

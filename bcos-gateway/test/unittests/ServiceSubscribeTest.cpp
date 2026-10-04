@@ -48,7 +48,7 @@ public:
         info->rawP2pID = m_id;
         info->p2pID = m_id;
     }
-    P2pID p2pID() override { return m_id; }
+    bcos::network::P2pID p2pID() override { return m_id; }
     std::string printP2pID() override { return m_id; }
     std::string m_id;
 };
@@ -70,7 +70,7 @@ void deliver(Service& service, P2PSession::Ptr const& p2pSession, uint16_t packe
     message.setPacketType(packetType);
     message.setSeq(1);
     message.setPayload(bytes(payload.begin(), payload.end()));
-    service.onMessage(NetworkException{}, nullptr, std::move(message), p2pSession);
+    service.onMessage(bcos::network::NetworkException{}, nullptr, std::move(message), p2pSession);
 }
 
 // Inline poster: the tests are single-threaded, so resuming the consumer on the pusher's stack
@@ -105,7 +105,7 @@ BOOST_AUTO_TEST_CASE(legacyHandlerUsedWhenNoChannel)
 
     std::string received;
     BOOST_REQUIRE(service->registerHandlerByMsgType(TYPE_B,
-        [&received](NetworkException, std::shared_ptr<P2PSession>, Message message) {
+        [&received](bcos::network::NetworkException, std::shared_ptr<P2PSession>, Message message) {
             received.assign(message.payload().begin(), message.payload().end());
         }));
 
@@ -120,7 +120,7 @@ BOOST_AUTO_TEST_CASE(channelShadowsLegacyHandlerForSameType)
 
     bool legacyCalled = false;
     BOOST_REQUIRE(service->registerHandlerByMsgType(
-        TYPE_A, [&legacyCalled](NetworkException, std::shared_ptr<P2PSession>, Message) {
+        TYPE_A, [&legacyCalled](bcos::network::NetworkException, std::shared_ptr<P2PSession>, Message) {
             legacyCalled = true;
         }));
     auto channel = service->subscribe(TYPE_A, inlinePoster());

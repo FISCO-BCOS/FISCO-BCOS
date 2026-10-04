@@ -48,8 +48,8 @@
  */
 
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-gateway/libnetwork/ASIOInterface.h"
-#include "bcos-gateway/libnetwork/Host.h"
+#include "bcos-network/ASIOInterface.h"
+#include "bcos-network/Host.h"
 #include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-task/Wait.h"
@@ -75,7 +75,7 @@ BOOST_FIXTURE_TEST_SUITE(FIB186_BulkDisconnectReactorTest, TestPromptFixture)
 namespace
 {
 // Minimal ASIO fake: the disconnect flood never runs a socket read, so no handler is needed.
-class FakeASIO_Reactor : public bcos::gateway::ASIOInterface
+class FakeASIO_Reactor : public bcos::network::ASIOInterface
 {
 public:
     // Two delivery threads: the disconnect wake-ups and the delivery task share this pool. Wide
@@ -83,7 +83,7 @@ public:
     // per-session teardown WORK enqueued here (the push-mode regression) would visibly delay the
     // delivery task.
     FakeASIO_Reactor()
-      : ASIOInterface(std::make_shared<bcos::IOServicePool>(2, "FIB186Reactor"), "0.0.0.0", 0)
+      : bcos::network::ASIOInterface(std::make_shared<bcos::IOServicePool>(2, "FIB186Reactor"), "0.0.0.0", 0)
     {}
     ~FakeASIO_Reactor() noexcept = default;
 };
@@ -124,17 +124,17 @@ private:
 // live-network path: the recv-channel poster posts each parked consumer's wake-up to the shared
 // pool instead of running it inline (haveNetwork() == false would run the wake inline on the
 // dropping thread).
-class FakeHost_Reactor : public bcos::gateway::Host<P2PDecoder, FakeSocket_Reactor>
+class FakeHost_Reactor : public bcos::network::Host<P2PDecoder, FakeSocket_Reactor>
 {
 public:
-    FakeHost_Reactor(std::shared_ptr<ASIOInterface> asioInterface)
-      : Host<P2PDecoder, FakeSocket_Reactor>(std::move(asioInterface), nullptr)
+    FakeHost_Reactor(std::shared_ptr<bcos::network::ASIOInterface> asioInterface)
+      : bcos::network::Host<P2PDecoder, FakeSocket_Reactor>(std::move(asioInterface), nullptr)
     {
         this->m_run = true;
     }
 };
 
-using Session_Reactor = BasicSession<P2PDecoder, FakeSocket_Reactor>;
+using Session_Reactor = bcos::network::BasicSession<P2PDecoder, FakeSocket_Reactor>;
 
 // Shared state, held by shared_ptr so a coroutine or task that outlives the test body never
 // dangles.
@@ -181,12 +181,12 @@ BOOST_AUTO_TEST_CASE(TeardownFloodMustNotStarveMessageDelivery)
                     [[maybe_unused]] auto meta = co_await _session->recvMessage();
                 }
             }
-            catch (NetworkException& e)
+            catch (bcos::network::NetworkException& e)
             {
                 // The pull-mode teardown notification: drop() closed the recv channel with the
                 // disconnect error. This catch is mandatory — an exception escaping a
                 // task::wait'd coroutine is rethrown on the resuming pool thread.
-                if (errorCodeOf(e) == P2PExceptionType::Disconnect)
+                if (bcos::network::errorCodeOf(e) == bcos::network::P2PExceptionType::Disconnect)
                 {
                     _probe->disconnects.fetch_add(1);
                 }
@@ -206,7 +206,7 @@ BOOST_AUTO_TEST_CASE(TeardownFloodMustNotStarveMessageDelivery)
     // per-session teardown task chain is enqueued anywhere.
     for (auto& session : sessions)
     {
-        session->drop(DisconnectReason::TCPError);
+        session->drop(bcos::network::DisconnectReason::TCPError);
     }
 
     // A validator PBFT message delivery is posted to the same shared pool (the Session message

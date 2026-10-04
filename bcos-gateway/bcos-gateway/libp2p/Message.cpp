@@ -21,7 +21,7 @@
 #include "bcos-gateway/libp2p/Message.h"
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/Common.h"
-#include "bcos-gateway/libnetwork/Common.h"
+#include "bcos-network/Common.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/ZstdCompress.h"
 #include <boost/exception/diagnostic_information.hpp>
@@ -124,7 +124,7 @@ int32_t P2PMessageOptions::decode(const bytesConstRef& _buffer)
         {
             P2PMSG_LOG(ERROR) << LOG_DESC("decode: groupID length overflow")
                               << LOG_KV("groupIDLength", groupIDLength);
-            return MessageDecodeStatus::MESSAGE_ERROR;
+            return bcos::network::MessageDecodeStatus::MESSAGE_ERROR;
         }
 
         // groupID
@@ -146,7 +146,7 @@ int32_t P2PMessageOptions::decode(const bytesConstRef& _buffer)
         {
             P2PMSG_LOG(ERROR) << LOG_DESC("decode: nodeID length overflow")
                               << LOG_KV("nodeIDLength", nodeIDLength);
-            return MessageDecodeStatus::MESSAGE_ERROR;
+            return bcos::network::MessageDecodeStatus::MESSAGE_ERROR;
         }
 
         checkOffset(offset + nodeIDLength, length);
@@ -165,7 +165,7 @@ int32_t P2PMessageOptions::decode(const bytesConstRef& _buffer)
         {
             P2PMSG_LOG(ERROR) << LOG_DESC("decode: dstNodeID count overflow")
                               << LOG_KV("dstNodeCount", dstNodeCount);
-            return MessageDecodeStatus::MESSAGE_ERROR;
+            return bcos::network::MessageDecodeStatus::MESSAGE_ERROR;
         }
 
         checkOffset(offset + (static_cast<size_t>(dstNodeCount) * nodeIDLength), length);
@@ -191,7 +191,7 @@ int32_t P2PMessageOptions::decode(const bytesConstRef& _buffer)
         P2PMSG_LOG(ERROR) << LOG_DESC("decode message error")
                           << LOG_KV("e", boost::diagnostic_information(e));
         // invalid packet?
-        return MessageDecodeStatus::MESSAGE_ERROR;
+        return bcos::network::MessageDecodeStatus::MESSAGE_ERROR;
     }
 
     return offset;
@@ -320,7 +320,7 @@ bool Message::encode(bcos::bytes& _buffer)
 /// compress the payload data to be sended
 bool Message::tryToCompressPayload(bytes& compressData) const
 {
-    if (m_payload.size() <= bcos::gateway::c_compressThreshold)
+    if (m_payload.size() <= bcos::network::c_compressThreshold)
     {
         return false;
     }
@@ -331,7 +331,7 @@ bool Message::tryToCompressPayload(bytes& compressData) const
     }
 
     bool isCompressSuccess =
-        ZstdCompress::compress(ref(m_payload), compressData, bcos::gateway::c_zstdCompressLevel);
+        ZstdCompress::compress(ref(m_payload), compressData, bcos::network::c_zstdCompressLevel);
     return isCompressSuccess;
 }
 
@@ -350,7 +350,7 @@ int32_t Message::decodeHeader(const bytesConstRef& _buffer)
         P2PMSG_LOG(WARNING) << LOG_DESC("Invalid frame: length less than header")
                             << LOG_KV("length", m_length)
                             << LOG_KV("headerLen", MESSAGE_HEADER_LENGTH);
-        return MessageDecodeStatus::MESSAGE_ERROR;
+        return bcos::network::MessageDecodeStatus::MESSAGE_ERROR;
     }
 
     // version
@@ -363,7 +363,7 @@ int32_t Message::decodeHeader(const bytesConstRef& _buffer)
     {
         P2PMSG_LOG(WARNING) << LOG_DESC("Invalid frame: unsupported version")
                             << LOG_KV("version", m_version);
-        return MessageDecodeStatus::MESSAGE_ERROR;
+        return bcos::network::MessageDecodeStatus::MESSAGE_ERROR;
     }
 
     // packetType
@@ -389,7 +389,7 @@ int32_t Message::decodeHeader(const bytesConstRef& _buffer)
     // The packet was not fully received by the network.
     if (_buffer.size() < m_length)
     {
-        return MessageDecodeStatus::MESSAGE_INCOMPLETE;
+        return bcos::network::MessageDecodeStatus::MESSAGE_INCOMPLETE;
     }
 
     auto length = static_cast<int32_t>(_buffer.size());
@@ -489,7 +489,7 @@ int32_t Message::decodeOwned(bytes&& storage, uint32_t frameOffset)
     m_ownedFrame = std::move(storage);
     if (frameOffset >= m_ownedFrame.size()) [[unlikely]]
     {
-        return MessageDecodeStatus::MESSAGE_INCOMPLETE;
+        return bcos::network::MessageDecodeStatus::MESSAGE_INCOMPLETE;
     }
     return decodeImpl(
         {m_ownedFrame.data() + frameOffset, m_ownedFrame.size() - frameOffset}, true, frameOffset);
@@ -503,29 +503,29 @@ int32_t Message::decodeImpl(const bytesConstRef& _buffer, bool _frameOwned, uint
     // check if packet header fully received
     if (_buffer.size() < Message::MESSAGE_HEADER_LENGTH)
     {
-        return MessageDecodeStatus::MESSAGE_INCOMPLETE;
+        return bcos::network::MessageDecodeStatus::MESSAGE_INCOMPLETE;
     }
 
     int32_t offset = decodeHeader(_buffer);
     if (offset < 0)
     {
-        return MessageDecodeStatus::MESSAGE_ERROR;
+        return bcos::network::MessageDecodeStatus::MESSAGE_ERROR;
     }
     if (offset == 0)
     {
-        return MessageDecodeStatus::MESSAGE_INCOMPLETE;
+        return bcos::network::MessageDecodeStatus::MESSAGE_INCOMPLETE;
     }
 
     // check if packet header fully received
     if (_buffer.size() < m_length)
     {
-        return MessageDecodeStatus::MESSAGE_INCOMPLETE;
+        return bcos::network::MessageDecodeStatus::MESSAGE_INCOMPLETE;
     }
     if (m_length > MAX_MESSAGE_LENGTH)
     {
         P2PMSG_LOG(WARNING) << LOG_DESC("Illegal p2p message packet") << LOG_KV("length", m_length)
                             << LOG_KV("maxLen", MAX_MESSAGE_LENGTH);
-        return MessageDecodeStatus::MESSAGE_ERROR;
+        return bcos::network::MessageDecodeStatus::MESSAGE_ERROR;
     }
     if (hasOptions())
     {
@@ -533,7 +533,7 @@ int32_t Message::decodeImpl(const bytesConstRef& _buffer, bool _frameOwned, uint
         auto optionsOffset = m_options.decode(_buffer.getCroppedData(offset));
         if (optionsOffset < 0)
         {
-            return MessageDecodeStatus::MESSAGE_ERROR;
+            return bcos::network::MessageDecodeStatus::MESSAGE_ERROR;
         }
         offset += optionsOffset;
     }
@@ -543,7 +543,7 @@ int32_t Message::decodeImpl(const bytesConstRef& _buffer, bool _frameOwned, uint
     {
         P2PMSG_LOG(WARNING) << LOG_DESC("Invalid frame: offset exceeds length")
                             << LOG_KV("offset", offset) << LOG_KV("length", m_length);
-        return MessageDecodeStatus::MESSAGE_ERROR;
+        return bcos::network::MessageDecodeStatus::MESSAGE_ERROR;
     }
     auto data = _buffer.getCroppedData(offset, m_length - offset);
     // raw data cropped from buffer, maybe be compressed or not
@@ -560,7 +560,7 @@ int32_t Message::decodeImpl(const bytesConstRef& _buffer, bool _frameOwned, uint
                               << LOG_KV("packageType", m_packetType) << LOG_KV("ext", m_ext)
                               << LOG_KV("seq", m_seq);
             // invalid packet?
-            return MessageDecodeStatus::MESSAGE_ERROR;
+            return bcos::network::MessageDecodeStatus::MESSAGE_ERROR;
         }
         if (c_fileLogLevel <= TRACE) [[unlikely]]
         {

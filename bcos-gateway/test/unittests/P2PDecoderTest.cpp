@@ -36,7 +36,7 @@ BOOST_FIXTURE_TEST_SUITE(P2PDecoderTest, TestPromptFixture)
 namespace
 {
 // The decoder must satisfy the libnetwork concept it is plugged into.
-static_assert(FrameDecoder<P2PDecoder>);
+static_assert(bcos::network::FrameDecoder<P2PDecoder>);
 
 void stamp16(bytes& _buf, std::size_t _offset, uint16_t _value)
 {
@@ -69,20 +69,20 @@ BOOST_AUTO_TEST_CASE(needMoreDataOnShortBuffer)
     P2PDecoder decoder;
 
     auto empty = decoder.tryDecode(bytesConstRef{});
-    BOOST_CHECK(empty.status == FrameMeta::Status::NeedMoreData);
+    BOOST_CHECK(empty.status == bcos::network::FrameMeta::Status::NeedMoreData);
     BOOST_CHECK_EQUAL(empty.declaredLength, Message::MESSAGE_HEADER_LENGTH);
 
     // fewer bytes than the fixed header: the decoder asks for the header length
     bytes partial(10, 0xff);
     auto meta = decoder.tryDecode(ref(partial));
-    BOOST_CHECK(meta.status == FrameMeta::Status::NeedMoreData);
+    BOOST_CHECK(meta.status == bcos::network::FrameMeta::Status::NeedMoreData);
     BOOST_CHECK_EQUAL(meta.declaredLength, Message::MESSAGE_HEADER_LENGTH);
 
     // header complete but the frame body missing: asks for the declared frame length
     auto frame = buildFrame(0, 0x11223344, 0, bytes(100, 'x'));
     bytes headOnly(frame.begin(), frame.begin() + Message::MESSAGE_HEADER_LENGTH);
     meta = decoder.tryDecode(ref(headOnly));
-    BOOST_CHECK(meta.status == FrameMeta::Status::NeedMoreData);
+    BOOST_CHECK(meta.status == bcos::network::FrameMeta::Status::NeedMoreData);
     BOOST_CHECK_EQUAL(meta.declaredLength, frame.size());
 }
 
@@ -93,7 +93,7 @@ BOOST_AUTO_TEST_CASE(decodesCompleteV0Frame)
     auto frame = buildFrame(0, 0x11223344, 0, payload);
 
     auto meta = decoder.tryDecode(ref(frame));
-    BOOST_REQUIRE(meta.status == FrameMeta::Status::Frame);
+    BOOST_REQUIRE(meta.status == bcos::network::FrameMeta::Status::Frame);
     BOOST_CHECK_EQUAL(meta.consumed, frame.size());
     BOOST_CHECK(!meta.takeBuffer);
     BOOST_CHECK_EQUAL(meta.frame.size(), frame.size());
@@ -118,12 +118,12 @@ BOOST_AUTO_TEST_CASE(decodesStickyFramesBackToBack)
     stream.insert(stream.end(), frameB.begin(), frameB.end());
 
     auto metaA = decoder.tryDecode(ref(stream));
-    BOOST_REQUIRE(metaA.status == FrameMeta::Status::Frame);
+    BOOST_REQUIRE(metaA.status == bcos::network::FrameMeta::Status::Frame);
     BOOST_CHECK_EQUAL(metaA.consumed, frameA.size());
 
     bytesConstRef rest(stream.data() + metaA.consumed, stream.size() - metaA.consumed);
     auto metaB = decoder.tryDecode(rest);
-    BOOST_REQUIRE(metaB.status == FrameMeta::Status::Frame);
+    BOOST_REQUIRE(metaB.status == bcos::network::FrameMeta::Status::Frame);
     BOOST_CHECK_EQUAL(metaB.consumed, frameB.size());
 }
 
@@ -135,12 +135,12 @@ BOOST_AUTO_TEST_CASE(protocolErrorOnBadLength)
     auto frame = buildFrame(0, 0, 0, {});
     Message::stampLength(frame, Message::MESSAGE_HEADER_LENGTH - 1);
     auto meta = decoder.tryDecode(ref(frame));
-    BOOST_CHECK(meta.status == FrameMeta::Status::ProtocolError);
+    BOOST_CHECK(meta.status == bcos::network::FrameMeta::Status::ProtocolError);
 
     // length beyond the gateway maximum
     Message::stampLength(frame, static_cast<uint32_t>(MAX_MESSAGE_LENGTH) + 1);
     meta = decoder.tryDecode(ref(frame));
-    BOOST_CHECK(meta.status == FrameMeta::Status::ProtocolError);
+    BOOST_CHECK(meta.status == bcos::network::FrameMeta::Status::ProtocolError);
 }
 
 BOOST_AUTO_TEST_CASE(protocolErrorOnUnsupportedVersion)
@@ -149,7 +149,7 @@ BOOST_AUTO_TEST_CASE(protocolErrorOnUnsupportedVersion)
     auto frame = buildFrame(0, 0, 0, {});
     stamp16(frame, 4, 0xFFFF);
     auto meta = decoder.tryDecode(ref(frame));
-    BOOST_CHECK(meta.status == FrameMeta::Status::ProtocolError);
+    BOOST_CHECK(meta.status == bcos::network::FrameMeta::Status::ProtocolError);
 }
 
 BOOST_AUTO_TEST_CASE(decodesV2ExtendedHeader)
@@ -160,7 +160,7 @@ BOOST_AUTO_TEST_CASE(decodesV2ExtendedHeader)
         "dstNode");
 
     auto meta = decoder.tryDecode(ref(frame));
-    BOOST_REQUIRE(meta.status == FrameMeta::Status::Frame);
+    BOOST_REQUIRE(meta.status == bcos::network::FrameMeta::Status::Frame);
     BOOST_CHECK_EQUAL(meta.consumed, frame.size());
 
     // the response-decision fields (resp flag, seq, dst) are peeked at the libp2p boundary,
@@ -181,7 +181,7 @@ BOOST_AUTO_TEST_CASE(truncatedExtendedHeaderRejectedAtLibp2pBoundary)
     auto frame = buildFrame(0, 0, 0, {});
     stamp16(frame, 4, (uint16_t)bcos::protocol::ProtocolVersion::V2);
     auto meta = decoder.tryDecode(ref(frame));
-    BOOST_REQUIRE(meta.status == FrameMeta::Status::Frame);
+    BOOST_REQUIRE(meta.status == bcos::network::FrameMeta::Status::Frame);
 
     auto respInfo = Message::peekResponseFrameInfo(meta.frameData());
     BOOST_REQUIRE(respInfo.has_value());
@@ -223,18 +223,18 @@ BOOST_AUTO_TEST_CASE(largeFrameRequestsTakeBuffer)
     P2PDecoder decoder;
     // at/above FRAME_TAKE_BUFFER_THRESHOLD the decoder leaves `frame` empty and asks the read
     // loop to swap the whole receive buffer in instead of copying
-    auto frame = buildFrame(0, 9, 0, bytes(FRAME_TAKE_BUFFER_THRESHOLD, 'L'));
+    auto frame = buildFrame(0, 9, 0, bytes(bcos::network::FRAME_TAKE_BUFFER_THRESHOLD, 'L'));
     auto meta = decoder.tryDecode(ref(frame));
-    BOOST_REQUIRE(meta.status == FrameMeta::Status::Frame);
+    BOOST_REQUIRE(meta.status == bcos::network::FrameMeta::Status::Frame);
     BOOST_CHECK(meta.takeBuffer);
     BOOST_CHECK(meta.frame.empty());
     BOOST_CHECK_EQUAL(meta.consumed, frame.size());
 
     // just below the threshold: the copy path, frameData() exposes exactly the frame
     auto smallFrame = buildFrame(
-        0, 10, 0, bytes(FRAME_TAKE_BUFFER_THRESHOLD - Message::MESSAGE_HEADER_LENGTH - 1, 's'));
+        0, 10, 0, bytes(bcos::network::FRAME_TAKE_BUFFER_THRESHOLD - Message::MESSAGE_HEADER_LENGTH - 1, 's'));
     auto smallMeta = decoder.tryDecode(ref(smallFrame));
-    BOOST_REQUIRE(smallMeta.status == FrameMeta::Status::Frame);
+    BOOST_REQUIRE(smallMeta.status == bcos::network::FrameMeta::Status::Frame);
     BOOST_CHECK(!smallMeta.takeBuffer);
     BOOST_CHECK_EQUAL(smallMeta.frame.size(), smallFrame.size());
     BOOST_CHECK_EQUAL(smallMeta.frameOffset, 0);

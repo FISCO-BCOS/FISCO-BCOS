@@ -62,17 +62,17 @@ P2PPeerIdentity::P2PPeerIdentity(bcos::crypto::Hash::Ptr hashImpl, x509PubHandle
     m_pubHandlerWithoutExtInfo(std::move(pubHandlerWithoutExtInfo))
 {}
 
-IdentityToken P2PPeerIdentity::newIdentitySlot()
+bcos::network::IdentityToken P2PPeerIdentity::newIdentitySlot()
 {
     return std::make_shared<P2PInfo>();
 }
 
-std::shared_ptr<P2PInfo> P2PPeerIdentity::p2pInfoOf(IdentityToken const& token)
+std::shared_ptr<P2PInfo> P2PPeerIdentity::p2pInfoOf(bcos::network::IdentityToken const& token)
 {
     return std::static_pointer_cast<P2PInfo>(token);
 }
 
-PeerIdentity::Verdict P2PPeerIdentity::verifyPeer(X509* cert, IdentityToken const& identitySlot)
+bcos::network::PeerIdentity::Verdict P2PPeerIdentity::verifyPeer(X509* cert, bcos::network::IdentityToken const& identitySlot)
 {
     auto peerInfo = p2pInfoOf(identitySlot);
     if (!peerInfo)

@@ -6,14 +6,14 @@
  * @file TlsLoopback.h
  *
  * Wire-level tests drive the PRODUCTION Socket, whose reads/writes dispatch on its ssl::stream
- * at compile time (see libnetwork/Socket.h) — the old runtime TCP/SSL switch that let tests
+ * at compile time (see bcos-network/Socket.h) — the old runtime TCP/SSL switch that let tests
  * exchange PLAINTEXT frames through socket->ref() is gone. These helpers run a REAL TLS
  * handshake over a loopback TCP pair so the session and its peer speak TLS, which is also
  * closer to production than the plaintext harness was.
  */
 #pragma once
 
-#include "bcos-gateway/libnetwork/Socket.h"
+#include "bcos-network/Socket.h"
 #include <boost/asio/buffer.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl.hpp>
@@ -105,11 +105,11 @@ using PeerSslStream = boost::asio::ssl::stream<boost::asio::ip::tcp::socket>;
 // io_context must be running (it drives the async handshake). clientCtx must outlive the
 // returned socket (the ssl::stream references it). Throws std::runtime_error on handshake
 // failure.
-inline std::shared_ptr<Socket> makeTlsSessionSocket(
+inline std::shared_ptr<bcos::network::Socket> makeTlsSessionSocket(
     std::shared_ptr<boost::asio::io_context> io, boost::asio::ssl::context& clientCtx,
     boost::asio::ip::tcp::socket clientSocket)
 {
-    auto socket = std::make_shared<Socket>(std::move(io), &clientCtx, NodeIPEndpoint());
+    auto socket = std::make_shared<bcos::network::Socket>(std::move(io), &clientCtx, NodeIPEndpoint());
     socket->ref() = std::move(clientSocket);
     std::promise<boost::system::error_code> handshakeDone;
     auto future = handshakeDone.get_future();

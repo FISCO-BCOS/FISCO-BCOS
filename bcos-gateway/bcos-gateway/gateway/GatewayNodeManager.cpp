@@ -72,7 +72,7 @@ uint32_t GatewayNodeManager::statusSeq()
     return m_statusSeq;
 }
 
-GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _nodeID,
+GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, bcos::network::P2pID const& _nodeID,
     std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, Service::Ptr _p2pInterface,
     boost::asio::io_context& _ioContext)
   : GatewayNodeManager(_uuid, _keyFactory, _p2pInterface)
@@ -86,17 +86,17 @@ GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _n
     m_p2pInterface = _p2pInterface;
     // SyncNodeSeq
     m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::SyncNodeSeq,
-        [this](NetworkException const& _e, P2PSession::Ptr _session, Message _msg) {
+        [this](bcos::network::NetworkException const& _e, P2PSession::Ptr _session, Message _msg) {
             onReceiveStatusSeq(_e, _session, _msg);
         });
     // RequestNodeStatus
     m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::RequestNodeStatus,
-        [this](NetworkException const& _e, P2PSession::Ptr _session, Message _msg) {
+        [this](bcos::network::NetworkException const& _e, P2PSession::Ptr _session, Message _msg) {
             onRequestNodeStatus(_e, _session, _msg);
         });
     // ResponseNodeStatus
     m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::ResponseNodeStatus,
-        [this](NetworkException const& _e, P2PSession::Ptr _session, Message _msg) {
+        [this](bcos::network::NetworkException const& _e, P2PSession::Ptr _session, Message _msg) {
             onReceiveNodeStatus(_e, _session, _msg);
         });
     m_timer = std::make_shared<Timer>(_ioContext, SEQ_SYNC_PERIOD, "seqSync");
@@ -163,12 +163,12 @@ bool GatewayNodeManager::unregisterNode(const std::string& _groupID, std::string
 }
 
 void GatewayNodeManager::onReceiveStatusSeq(
-    NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg)
+    bcos::network::NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg)
 {
-    if (errorCodeOf(_e))
+    if (bcos::network::errorCodeOf(_e))
     {
         NODE_MANAGER_LOG(WARNING) << LOG_DESC("onReceiveStatusSeq error")
-                                  << LOG_KV("code", errorCodeOf(_e)) << LOG_KV("msg", _e.what());
+                                  << LOG_KV("code", bcos::network::errorCodeOf(_e)) << LOG_KV("msg", _e.what());
         return;
     }
     // FIB-183: onReceiveStatusSeq reads a 4-byte sequence via *(uint32_t*)payload().data()
@@ -195,7 +195,7 @@ void GatewayNodeManager::onReceiveStatusSeq(
     auto p2pInterface = m_p2pInterface;
     // fire-and-forget through the coroutine fast path: the message is built in the frame and the
     // (empty) payload rides as a view; an unreachable peer is an expected, recoverable state.
-    task::wait([](Service::Ptr _p2pInterface, uint16_t _type, P2pID _nodeID)
+    task::wait([](Service::Ptr _p2pInterface, uint16_t _type, bcos::network::P2pID _nodeID)
                    -> task::Task<void> {
         Message message;
         message.setPacketType(_type);
@@ -203,13 +203,13 @@ void GatewayNodeManager::onReceiveStatusSeq(
         try
         {
             co_await _p2pInterface->sendMessageByNodeID(_nodeID, message,
-                ::ranges::views::single(message.payload()), Options{0, false});
+                ::ranges::views::single(message.payload()), bcos::network::Options{0, false});
         }
-        catch (NetworkException const& e)
+        catch (bcos::network::NetworkException const& e)
         {
             NODE_MANAGER_LOG(INFO)
                 << LOG_DESC("onReceiveStatusSeq send RequestNodeStatus failed")
-                << LOG_KV("nodeid", printShortP2pID(_nodeID)) << LOG_KV("code", errorCodeOf(e))
+                << LOG_KV("nodeid", printShortP2pID(_nodeID)) << LOG_KV("code", bcos::network::errorCodeOf(e))
                 << LOG_KV("msg", e.what());
         }
     }(p2pInterface, GatewayMessageType::RequestNodeStatus, from));
@@ -225,12 +225,12 @@ bool GatewayNodeManager::statusChanged(std::string const& _p2pNodeID, uint32_t _
 }
 
 void GatewayNodeManager::onReceiveNodeStatus(
-    NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg)
+    bcos::network::NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg)
 {
-    if (errorCodeOf(_e))
+    if (bcos::network::errorCodeOf(_e))
     {
         NODE_MANAGER_LOG(WARNING) << LOG_DESC("onReceiveNodeStatus error")
-                                  << LOG_KV("code", errorCodeOf(_e)) << LOG_KV("msg", _e.what());
+                                  << LOG_KV("code", bcos::network::errorCodeOf(_e)) << LOG_KV("msg", _e.what());
         return;
     }
     auto gatewayNodeStatus = m_gatewayNodeStatusFactory->createGatewayNodeStatus();
@@ -273,12 +273,12 @@ bool GatewayNodeManager::updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _gro
 }
 
 void GatewayNodeManager::onRequestNodeStatus(
-    NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg)
+    bcos::network::NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg)
 {
-    if (errorCodeOf(_e))
+    if (bcos::network::errorCodeOf(_e))
     {
         NODE_MANAGER_LOG(WARNING) << LOG_DESC("onRequestNodeStatus network error")
-                                  << LOG_KV("code", errorCodeOf(_e)) << LOG_KV("msg", _e.what());
+                                  << LOG_KV("code", bcos::network::errorCodeOf(_e)) << LOG_KV("msg", _e.what());
         return;
     }
     auto const& from = (!_msg.srcP2PNodeID().empty()) ? _msg.srcP2PNodeID() : _session->p2pID();
@@ -295,7 +295,7 @@ void GatewayNodeManager::onRequestNodeStatus(
     // fire-and-forget through the coroutine fast path: the message is built in the frame and the
     // node status payload is moved into it (the caller's buffer does not outlive the deferred
     // send); an unreachable peer is an expected, recoverable state.
-    task::wait([](Service::Ptr _p2pInterface, uint16_t _type, P2pID _nodeID,
+    task::wait([](Service::Ptr _p2pInterface, uint16_t _type, bcos::network::P2pID _nodeID,
                    bcos::bytes _payload) -> task::Task<void> {
         Message message;
         message.setPacketType(_type);
@@ -304,13 +304,13 @@ void GatewayNodeManager::onRequestNodeStatus(
         try
         {
             co_await _p2pInterface->sendMessageByNodeID(_nodeID, message,
-                ::ranges::views::single(message.payload()), Options{0, false});
+                ::ranges::views::single(message.payload()), bcos::network::Options{0, false});
         }
-        catch (NetworkException const& e)
+        catch (bcos::network::NetworkException const& e)
         {
             NODE_MANAGER_LOG(INFO)
                 << LOG_DESC("onRequestNodeStatus send ResponseNodeStatus failed")
-                << LOG_KV("nodeid", printShortP2pID(_nodeID)) << LOG_KV("code", errorCodeOf(e))
+                << LOG_KV("nodeid", printShortP2pID(_nodeID)) << LOG_KV("code", bcos::network::errorCodeOf(e))
                 << LOG_KV("msg", e.what());
         }
     }(p2pInterface, GatewayMessageType::ResponseNodeStatus, from, std::move(*nodeStatusData)));
@@ -371,7 +371,7 @@ bytesPointer GatewayNodeManager::generateNodeStatus()
     return nodeStatus->encode();
 }
 
-void GatewayNodeManager::onRemoveNodeIDs(const P2pID& _p2pID)
+void GatewayNodeManager::onRemoveNodeIDs(const bcos::network::P2pID& _p2pID)
 {
     NODE_MANAGER_LOG(INFO) << LOG_DESC("onRemoveNodeIDs")
                            << LOG_KV("p2pid", printShortP2pID(_p2pID));
@@ -423,7 +423,7 @@ void GatewayNodeManager::broadcastStatusSeq()
         message->setPacketType(GatewayMessageType::SyncNodeSeq);
         message->setPayload(std::move(_payload));
         co_await _p2p->broadcastMessageToAll(
-            message, ::ranges::views::single(message->payload()), Options{});
+            message, ::ranges::views::single(message->payload()), bcos::network::Options{});
     }(p2p, std::move(payload)));
 }
 

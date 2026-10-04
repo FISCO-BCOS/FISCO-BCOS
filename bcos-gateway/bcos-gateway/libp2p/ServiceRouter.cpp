@@ -48,16 +48,16 @@ void Service::initRouter(
     m_router->routerTable->setUnreachableDistance(m_router->unreachableDistance);
     // process router packet related logic
     registerHandlerByMsgType(GatewayMessageType::RouterTableSyncSeq,
-        [this](NetworkException exception, std::shared_ptr<P2PSession> session, Message message) {
+        [this](bcos::network::NetworkException exception, std::shared_ptr<P2PSession> session, Message message) {
             onReceiveRouterSeq(std::move(exception), std::move(session), message);
         });
     registerHandlerByMsgType(GatewayMessageType::RouterTableResponse,
-        [this](NetworkException exception, std::shared_ptr<P2PSession> session, Message message) {
+        [this](bcos::network::NetworkException exception, std::shared_ptr<P2PSession> session, Message message) {
             onReceivePeersRouterTable(std::move(exception), std::move(session), message);
         });
 
     registerHandlerByMsgType(GatewayMessageType::RouterTableRequest,
-        [this](NetworkException exception, std::shared_ptr<P2PSession> session, Message message) {
+        [this](bcos::network::NetworkException exception, std::shared_ptr<P2PSession> session, Message message) {
             onReceiveRouterTableRequest(std::move(exception), std::move(session), message);
         });
     registerOnNewSession([this](P2PSession::Ptr _session) { onNewSession(std::move(_session)); });
@@ -87,12 +87,12 @@ void Service::initRouter(
 
 // receive routerTable from peers
 void Service::onReceivePeersRouterTable(
-    NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message)
+    bcos::network::NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message)
 {
-    if (errorCodeOf(_error) != 0)
+    if (bcos::network::errorCodeOf(_error) != 0)
     {
         SERVICE2_LOG(WARNING) << LOG_BADGE("onReceivePeersRouterTable")
-                              << LOG_KV("code", errorCodeOf(_error)) << LOG_KV("msg", _error.what());
+                              << LOG_KV("code", bcos::network::errorCodeOf(_error)) << LOG_KV("msg", _error.what());
         return;
     }
     auto routerTable = m_router->routerTableFactory->createRouterTable(_message.payload());
@@ -152,12 +152,12 @@ void Service::joinRouterTable(
 
 // receive routerTable request from peer
 void Service::onReceiveRouterTableRequest(
-    NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message)
+    bcos::network::NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message)
 {
-    if (errorCodeOf(_error) != 0)
+    if (bcos::network::errorCodeOf(_error) != 0)
     {
         SERVICE2_LOG(WARNING) << LOG_BADGE("onReceiveRouterTableRequest")
-                              << LOG_KV("code", errorCodeOf(_error)) << LOG_KV("msg", _error.what());
+                              << LOG_KV("code", bcos::network::errorCodeOf(_error)) << LOG_KV("msg", _error.what());
         return;
     }
     SERVICE2_LOG(INFO) << LOG_BADGE("onReceiveRouterTableRequest")
@@ -172,7 +172,7 @@ void Service::onReceiveRouterTableRequest(
     // fire-and-forget through the coroutine fast path: the message is built in the frame and the
     // router table payload is moved into it (the caller's buffer does not outlive the deferred
     // send); an unreachable peer is an expected, recoverable state.
-    task::wait([](std::shared_ptr<Service> _self, uint16_t _type, P2pID _nodeID,
+    task::wait([](std::shared_ptr<Service> _self, uint16_t _type, bcos::network::P2pID _nodeID,
                    bcos::bytes _payload) -> task::Task<void> {
         Message message;
         message.setPacketType(_type);
@@ -181,13 +181,13 @@ void Service::onReceiveRouterTableRequest(
         try
         {
             co_await _self->sendMessageByNodeID(_nodeID, message,
-                ::ranges::views::single(message.payload()), Options{0, false});
+                ::ranges::views::single(message.payload()), bcos::network::Options{0, false});
         }
-        catch (NetworkException const& e)
+        catch (bcos::network::NetworkException const& e)
         {
             SERVICE2_LOG(INFO)
                 << LOG_DESC("onReceiveRouterTableRequest send RouterTableResponse failed")
-                << LOG_KV("nodeid", printShortP2pID(_nodeID)) << LOG_KV("code", errorCodeOf(e))
+                << LOG_KV("nodeid", printShortP2pID(_nodeID)) << LOG_KV("code", bcos::network::errorCodeOf(e))
                 << LOG_KV("msg", e.what());
         }
     }(self, GatewayMessageType::RouterTableResponse, dstP2PNodeID, std::move(*routerTableData)));
@@ -211,7 +211,7 @@ void Service::broadcastRouterSeq()
         message->setPacketType(GatewayMessageType::RouterTableSyncSeq);
         message->setPayload(std::move(_payload));
         co_await _self->broadcastMessageToNeighbors(
-            message, ::ranges::views::single(message->payload()), Options{});
+            message, ::ranges::views::single(message->payload()), bcos::network::Options{});
     }(self, std::move(payload)));
 }
 
@@ -233,12 +233,12 @@ void Service::markRouterSeqChanged()
 }
 
 void Service::onReceiveRouterSeq(
-    NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message)
+    bcos::network::NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message)
 {
-    if (errorCodeOf(_error) != 0)
+    if (bcos::network::errorCodeOf(_error) != 0)
     {
         SERVICE2_LOG(WARNING) << LOG_BADGE("onReceiveRouterSeq")
-                              << LOG_KV("code", errorCodeOf(_error))
+                              << LOG_KV("code", bcos::network::errorCodeOf(_error))
                               << LOG_KV("message", _error.what());
         return;
     }
@@ -267,7 +267,7 @@ void Service::onReceiveRouterSeq(
     auto self = shared_from_this();
     // fire-and-forget through the coroutine fast path: the message is built in the frame and the
     // (empty) payload rides as a view; an unreachable peer is an expected, recoverable state.
-    task::wait([](std::shared_ptr<Service> _self, uint16_t _type, P2pID _nodeID)
+    task::wait([](std::shared_ptr<Service> _self, uint16_t _type, bcos::network::P2pID _nodeID)
                    -> task::Task<void> {
         Message message;
         message.setPacketType(_type);
@@ -275,13 +275,13 @@ void Service::onReceiveRouterSeq(
         try
         {
             co_await _self->sendMessageByNodeID(_nodeID, message,
-                ::ranges::views::single(message.payload()), Options{0, false});
+                ::ranges::views::single(message.payload()), bcos::network::Options{0, false});
         }
-        catch (NetworkException const& e)
+        catch (bcos::network::NetworkException const& e)
         {
             SERVICE2_LOG(INFO) << LOG_DESC("onReceiveRouterSeq send RouterTableRequest failed")
                                << LOG_KV("nodeid", printShortP2pID(_nodeID))
-                               << LOG_KV("code", errorCodeOf(e)) << LOG_KV("msg", e.what());
+                               << LOG_KV("code", bcos::network::errorCodeOf(e)) << LOG_KV("msg", e.what());
         }
     }(self, GatewayMessageType::RouterTableRequest, dstP2PNodeID));
 }

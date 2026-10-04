@@ -63,7 +63,7 @@ struct Service::RouterState
 template <::ranges::input_range Payloads>
     requires std::convertible_to<::ranges::range_reference_t<Payloads>, bytesConstRef>
 task::Task<std::optional<Message>> Service::forwardMessageByNodeID(
-    P2pID nodeID, Message& header, Payloads payloads, Options options)
+    bcos::network::P2pID nodeID, Message& header, Payloads payloads, bcos::network::Options options)
 {
     // Forwarding path (a message received from another node being relayed): unlike
     // sendMessageByNodeID it must NOT rewrite srcP2PNodeID — the original sender is preserved so

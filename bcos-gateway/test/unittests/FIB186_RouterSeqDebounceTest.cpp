@@ -38,8 +38,8 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-framework/protocol/ProtocolInfo.h"
-#include "bcos-gateway/libnetwork/ASIOInterface.h"
-#include "bcos-gateway/libnetwork/Host.h"
+#include "bcos-network/ASIOInterface.h"
+#include "bcos-network/Host.h"
 #include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
@@ -74,14 +74,14 @@ namespace
 // Read-parking fake ASIO (same shape as SessionTest's FakeASIO): the service-side session's read
 // loop parks its completion here instead of arming the real async_read_some -- the loopback peer
 // never sends anything service-side, so reads simply stay parked until stopReads() unwinds them.
-class FakeASIO_Debounce : public bcos::gateway::ASIOInterface
+class FakeASIO_Debounce : public bcos::network::ASIOInterface
 {
 public:
     using Packet = std::shared_ptr<std::vector<uint8_t>>;
     using ReadCompletion = task::detail::FireCompletion<boost::system::error_code, std::size_t>;
 
     FakeASIO_Debounce()
-      : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_Debounce"), "0.0.0.0", 0),
+      : bcos::network::ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_Debounce"), "0.0.0.0", 0),
         m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_Debounce"))
     {}
     ~FakeASIO_Debounce() noexcept {};
@@ -89,7 +89,7 @@ public:
     struct ReadPolicy
     {
         template <typename SocketT>
-        static void invoke(ASIOInterface* asio, const std::shared_ptr<SocketT>& /*socket*/,
+        static void invoke(bcos::network::ASIOInterface* asio, const std::shared_ptr<SocketT>& /*socket*/,
             ba::mutable_buffer buffers, ReadCompletion completion)
         {
             static_cast<FakeASIO_Debounce*>(asio)->parkRead(buffers, std::move(completion));
@@ -143,12 +143,12 @@ protected:
 };
 
 template <typename SocketT>
-class FakeHost_Debounce : public bcos::gateway::Host<P2PDecoder, SocketT>
+class FakeHost_Debounce : public bcos::network::Host<P2PDecoder, SocketT>
 {
 public:
-    FakeHost_Debounce(std::shared_ptr<ASIOInterface> _asioInterface,
-        std::shared_ptr<BasicSessionFactory<P2PDecoder, SocketT>> _sessionFactory)
-      : Host<P2PDecoder, SocketT>(std::move(_asioInterface), std::move(_sessionFactory))
+    FakeHost_Debounce(std::shared_ptr<bcos::network::ASIOInterface> _asioInterface,
+        std::shared_ptr<bcos::network::BasicSessionFactory<P2PDecoder, SocketT>> _sessionFactory)
+      : bcos::network::Host<P2PDecoder, SocketT>(std::move(_asioInterface), std::move(_sessionFactory))
     {
         this->m_run = true;
     }
@@ -160,7 +160,7 @@ class RouterProbeService : public Service
 {
 public:
     using Service::Service;
-    void addSession(P2pID const& _nodeID, P2PSession::Ptr _session)
+    void addSession(bcos::network::P2pID const& _nodeID, P2PSession::Ptr _session)
     {
         std::unique_lock lock(x_sessions);
         m_sessions[_nodeID] = std::move(_session);
@@ -178,7 +178,7 @@ public:
         info->rawP2pID = m_id;
         info->p2pID = m_id;
     }
-    P2pID p2pID() override { return m_id; }
+    bcos::network::P2pID p2pID() override { return m_id; }
     std::string printP2pID() override { return m_id; }
     std::string m_id;
 };
@@ -281,15 +281,15 @@ BOOST_AUTO_TEST_CASE(MembershipChurnCoalescesRouterSeqToOneLeadingEdgeBroadcast)
     // subclass-based test created by overriding the broadcast away.
     boost::asio::io_context routerIo;
     auto service = std::make_shared<RouterProbeService>(selfInfo, factory, &routerIo);
-    service->setHost(std::make_shared<FakeHost_Debounce<Socket>>(fakeAsio, nullptr));
+    service->setHost(std::make_shared<FakeHost_Debounce<bcos::network::Socket>>(fakeAsio, nullptr));
 
     // One real neighbour session ("recorder") over the loopback: the leading-edge broadcast must
     // reach it exactly once. The FakeHosts must outlive the sessions (Session holds a
     // reference_wrapper<Host>).
-    std::vector<std::shared_ptr<FakeHost_Debounce<Socket>>> hosts;
+    std::vector<std::shared_ptr<FakeHost_Debounce<bcos::network::Socket>>> hosts;
     std::shared_ptr<Session> recorderSession;
     {
-        auto host = std::make_shared<FakeHost_Debounce<Socket>>(fakeAsio, nullptr);
+        auto host = std::make_shared<FakeHost_Debounce<bcos::network::Socket>>(fakeAsio, nullptr);
         hosts.push_back(host);
         recorderSession = std::make_shared<Session>(
             testutil::makeTlsSessionSocket(io, clientCtx, std::move(client)), *host, 2, true);
@@ -346,7 +346,7 @@ BOOST_AUTO_TEST_CASE(MembershipChurnCoalescesRouterSeqToOneLeadingEdgeBroadcast)
         Message message;
         message.setPacketType(GatewayMessageType::RouterTableResponse);
         message.setPayload(std::move(tableData));
-        handler(NetworkException{}, std::make_shared<FakeSessionVB>(senderID),
+        handler(bcos::network::NetworkException{}, std::make_shared<FakeSessionVB>(senderID),
             std::move(message));
     }
 
@@ -374,10 +374,10 @@ BOOST_AUTO_TEST_CASE(MembershipChurnCoalescesRouterSeqToOneLeadingEdgeBroadcast)
         // onDisconnect logs the session endpoint and the default log level builds even TRACE
         // streams eagerly, so the fake needs a session object -- a never-started Session over an
         // unconnected Socket is enough (nodeIPEndpoint() reads the stored endpoint member).
-        auto socket = std::make_shared<Socket>(io, &clientCtx, NodeIPEndpoint());
+        auto socket = std::make_shared<bcos::network::Socket>(io, &clientCtx, NodeIPEndpoint());
         peer->setSession(std::make_shared<Session>(socket, *hosts.front(), 2, true));
         service->addSession(peer->p2pID(), peer);
-        service->onDisconnect(NetworkException{}, std::move(peer));
+        service->onDisconnect(bcos::network::NetworkException{}, std::move(peer));
     }
     // A per-erase broadcast regression would put more RouterTableSyncSeq frames on the wire
     // immediately; give any (bogus) fan-out a grace window to land before asserting.
@@ -389,7 +389,7 @@ BOOST_AUTO_TEST_CASE(MembershipChurnCoalescesRouterSeqToOneLeadingEdgeBroadcast)
     // Teardown (SessionTest order): disconnect the session BEFORE joining the peer thread so a
     // stuck peer read can never hang the test; then fail the parked reads and wait for the read
     // loops to unwind before the fake is destroyed.
-    recorderSession->disconnect(DisconnectReason::DisconnectRequested);
+    recorderSession->disconnect(bcos::network::DisconnectReason::DisconnectRequested);
     service->stop();
     fakeAsio->stopReads();
     size_t drainRetry = 0;

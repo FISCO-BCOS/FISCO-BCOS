@@ -43,7 +43,7 @@ public:
     void stop() override {}
 
     void callOnReceiveP2PMessage(
-        NetworkException const& _e, P2PSession::Ptr _session, Message _msg)
+        bcos::network::NetworkException const& _e, P2PSession::Ptr _session, Message _msg)
     {
         onReceiveP2PMessage(_e, _session, std::move(_msg));
     }
@@ -71,7 +71,7 @@ BOOST_AUTO_TEST_CASE(EmptyDstNodeIDsIsDropped)
     auto gateway = std::make_shared<FakeGatewayFIB183>();
     // Must not crash / must not dereference the null GatewayNodeManager.
     BOOST_CHECK_NO_THROW(
-        gateway->callOnReceiveP2PMessage(NetworkException{}, nullptr, std::move(msg)));
+        gateway->callOnReceiveP2PMessage(bcos::network::NetworkException{}, nullptr, std::move(msg)));
 }
 
 // Sanity check: confirm that a message decoded straight off the wire can legitimately
@@ -121,7 +121,7 @@ BOOST_AUTO_TEST_CASE(ShortRouterSeqPayloadIsDropped)
         }
         BOOST_CHECK_EQUAL(msg.payload().size(), len);
         // Session is nullptr on purpose: the guard returns before it is used.
-        BOOST_CHECK_NO_THROW(handler(NetworkException{}, nullptr, std::move(msg)));
+        BOOST_CHECK_NO_THROW(handler(bcos::network::NetworkException{}, nullptr, std::move(msg)));
     }
 
     service->stop();

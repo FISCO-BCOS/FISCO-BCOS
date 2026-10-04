@@ -68,9 +68,9 @@ GroupNodeInfo::Ptr makeGroupNodeInfo(std::string const& _group, std::vector<std:
     return info;
 }
 
-std::set<P2pID> S(std::initializer_list<std::string> _l)
+std::set<bcos::network::P2pID> S(std::initializer_list<std::string> _l)
 {
-    return std::set<P2pID>(_l.begin(), _l.end());
+    return std::set<bcos::network::P2pID>(_l.begin(), _l.end());
 }
 }  // namespace
 

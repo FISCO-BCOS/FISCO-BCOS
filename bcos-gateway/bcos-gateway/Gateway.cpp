@@ -179,7 +179,7 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
         try
         {
             auto respMessage = co_await m_p2pInterface->sendMessageByNodeID(
-                p2pID, message, _payloads, Options{c_gatewaySendTimeoutMs, true});
+                p2pID, message, _payloads, bcos::network::Options{c_gatewaySendTimeoutMs, true});
             if (!respMessage)
             {
                 // No response means nothing was sent (e.g. the target session is inactive or the
@@ -219,14 +219,14 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
                                << LOG_KV("moduleID", _moduleID) << LOG_KV("code", respCode)
                                << LOG_KV("message", "respCode != SUCCESS, try another gateway");
         }
-        catch (NetworkException const& e)
+        catch (bcos::network::NetworkException const& e)
         {
-            if (errorCodeOf(e) == P2PExceptionType::OutBWOverflow)
+            if (bcos::network::errorCodeOf(e) == bcos::network::P2PExceptionType::OutBWOverflow)
             {
                 co_return BCOS_ERROR_PTR(
                     bcos::protocol::CommonError::GatewayBandwidthOverFlow, e.what());
             }
-            if (errorCodeOf(e) == P2PExceptionType::InQPSOverflow)
+            if (bcos::network::errorCodeOf(e) == bcos::network::P2PExceptionType::InQPSOverflow)
             {
                 co_return BCOS_ERROR_PTR(
                     bcos::protocol::CommonError::GatewayQPSOverFlow, e.what());
@@ -234,7 +234,7 @@ bcos::task::Task<Error::Ptr> bcos::gateway::Gateway::sendMessageByNodeID(
             GATEWAY_LOG(DEBUG) << LOG_BADGE("Gateway::sendMessageByNodeID")
                                << LOG_DESC("network callback")
                                << LOG_KV("dstP2P", printShortP2pID(p2pID))
-                               << LOG_KV("code", errorCodeOf(e)) << LOG_KV("moduleID", _moduleID)
+                               << LOG_KV("code", bcos::network::errorCodeOf(e)) << LOG_KV("moduleID", _moduleID)
                                << LOG_KV("message", e.what());
             // try another gateway
         }
@@ -337,12 +337,12 @@ bcos::task::Task<Error::Ptr> Gateway::notifyGroupInfo(bcos::group::GroupInfo::Pt
 }
 
 void Gateway::onReceiveP2PMessage(
-    NetworkException const& _e, P2PSession::Ptr _session, Message _msg)
+    bcos::network::NetworkException const& _e, P2PSession::Ptr _session, Message _msg)
 {
-    if (errorCodeOf(_e))
+    if (bcos::network::errorCodeOf(_e))
     {
         GATEWAY_LOG(WARNING) << LOG_DESC("onReceiveP2PMessage error")
-                             << LOG_KV("code", errorCodeOf(_e)) << LOG_KV("msg", _e.what());
+                             << LOG_KV("code", bcos::network::errorCodeOf(_e)) << LOG_KV("msg", _e.what());
         return;
     }
 
@@ -440,12 +440,12 @@ void Gateway::onReceiveP2PMessage(
 }
 
 void Gateway::onReceiveBroadcastMessage(
-    NetworkException const& _e, P2PSession::Ptr _session, Message _msg)
+    bcos::network::NetworkException const& _e, P2PSession::Ptr _session, Message _msg)
 {
-    if (errorCodeOf(_e) != 0)
+    if (bcos::network::errorCodeOf(_e) != 0)
     {
         GATEWAY_LOG(WARNING) << LOG_DESC("onReceiveBroadcastMessage failed")
-                             << LOG_KV("code", errorCodeOf(_e)) << LOG_KV("msg", _e.what());
+                             << LOG_KV("code", bcos::network::errorCodeOf(_e)) << LOG_KV("msg", _e.what());
         return;
     }
 
@@ -551,13 +551,13 @@ bcos::gateway::Gateway::Gateway(GatewayConfig::Ptr _gatewayConfig, Service::Ptr 
     m_gatewayRateLimiter(std::move(_gatewayRateLimiter))
 {
     m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::PeerToPeerMessage,
-        [this](const NetworkException& networkException, std::shared_ptr<P2PSession> p2pSession,
+        [this](const bcos::network::NetworkException& networkException, std::shared_ptr<P2PSession> p2pSession,
             Message p2pMessage) {
             onReceiveP2PMessage(networkException, std::move(p2pSession), std::move(p2pMessage));
         });
 
     m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::BroadcastMessage,
-        [this](const NetworkException& networkException, std::shared_ptr<P2PSession> p2pSession,
+        [this](const bcos::network::NetworkException& networkException, std::shared_ptr<P2PSession> p2pSession,
             Message p2pMessage) {
             onReceiveBroadcastMessage(
                 networkException, std::move(p2pSession), std::move(p2pMessage));

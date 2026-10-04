@@ -32,9 +32,9 @@
 
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
-#include "bcos-gateway/libnetwork/ASIOInterface.h"
-#include "bcos-gateway/libnetwork/Host.h"
-#include "bcos-gateway/libnetwork/Socket.h"
+#include "bcos-network/ASIOInterface.h"
+#include "bcos-network/Host.h"
+#include "bcos-network/Socket.h"
 #include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
@@ -70,11 +70,11 @@ public:
 };
 
 // A Host<P2PDecoder> with the network marked up so Session::active() holds (haveNetwork()).
-class TestHost : public Host<P2PDecoder>
+class TestHost : public bcos::network::Host<P2PDecoder>
 {
 public:
-    explicit TestHost(std::shared_ptr<ASIOInterface> _asioInterface)
-      : Host<P2PDecoder>(std::move(_asioInterface), nullptr)
+    explicit TestHost(std::shared_ptr<bcos::network::ASIOInterface> _asioInterface)
+      : bcos::network::Host<P2PDecoder>(std::move(_asioInterface), nullptr)
     {
         m_run = true;
     }
@@ -102,7 +102,7 @@ BOOST_AUTO_TEST_CASE(SendProtocolDoesNotEscapeSendRejection)
     service->setBeforeMessageHandler(
         [](Session&, const Message&, uint32_t) -> std::optional<bcos::Error> {
             return bcos::Error::buildError(
-                "", P2PExceptionType::OutBWOverflow, "outgoing bandwidth overflow");
+                "", bcos::network::P2PExceptionType::OutBWOverflow, "outgoing bandwidth overflow");
         });
 
     // Real loopback pair: fastSendP2PMessage gates on session->active(), which needs a connected
@@ -119,7 +119,7 @@ BOOST_AUTO_TEST_CASE(SendProtocolDoesNotEscapeSendRejection)
     BOOST_REQUIRE(!connectError);
 
     auto testHost = std::make_shared<TestHost>(
-        std::make_shared<ASIOInterface>(
+        std::make_shared<bcos::network::ASIOInterface>(
             std::make_shared<bcos::IOServicePool>(1, "sendProtocolTest"), "0.0.0.0", 0));
     // Service::newSeq() is the Service-local seq allocator (correlation lives in libp2p now)
     service->setHost(testHost);
@@ -165,9 +165,9 @@ BOOST_AUTO_TEST_CASE(SendProtocolDoesNotEscapeSendRejection)
                     co_await _session->recvMessage();
                 }
             }
-            catch (NetworkException& e)
+            catch (bcos::network::NetworkException& e)
             {
-                _teardownCode->set_value(errorCodeOf(e));
+                _teardownCode->set_value(bcos::network::errorCodeOf(e));
             }
             catch (...)
             {
@@ -189,13 +189,13 @@ BOOST_AUTO_TEST_CASE(SendProtocolDoesNotEscapeSendRejection)
         // session registration in onConnect must proceed.
         BOOST_CHECK_NO_THROW(service->sendProtocol(p2pSession));
 
-        session->disconnect(DisconnectReason::DisconnectRequested);
+        session->disconnect(bcos::network::DisconnectReason::DisconnectRequested);
         // drop() closes the recv channel synchronously, but the parked consumer's resume is
         // posted to the shared IO pool through the channel poster, so the catch above settles
         // asynchronously. Wait for it so no coroutine outlives the io_context.
         BOOST_REQUIRE(
             teardownResult.wait_for(std::chrono::seconds(10)) == std::future_status::ready);
-        BOOST_CHECK_EQUAL(teardownResult.get(), P2PExceptionType::Disconnect);
+        BOOST_CHECK_EQUAL(teardownResult.get(), bcos::network::P2PExceptionType::Disconnect);
     }
 
     peerHandshake.join();

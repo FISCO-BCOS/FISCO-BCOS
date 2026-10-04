@@ -134,7 +134,7 @@ protected:
     // for UT
     Gateway() = default;
     virtual void onReceiveP2PMessage(
-        NetworkException const& _e, P2PSession::Ptr _session, Message _msg);
+        bcos::network::NetworkException const& _e, P2PSession::Ptr _session, Message _msg);
 
     /**
      * @brief: receive group broadcast message
@@ -144,7 +144,7 @@ protected:
      * @return void
      */
     virtual void onReceiveBroadcastMessage(
-        NetworkException const& _e, P2PSession::Ptr _session, Message _msg);
+        bcos::network::NetworkException const& _e, P2PSession::Ptr _session, Message _msg);
 
     bool checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
 

@@ -6,13 +6,13 @@
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-framework/Common.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
-#include "bcos-gateway/libnetwork/Common.h"
+#include "bcos-network/Common.h"
 #include "bcos-gateway/libp2p/Message.h"
-#include "bcos-gateway/libnetwork/Socket.h"
+#include "bcos-network/Socket.h"
 #include "bcos-gateway/libp2p/Common.h"
 #include "bcos-gateway/libp2p/P2PIdentity.h"  // for P2PPeerIdentity
 #include "bcos-gateway/libp2p/P2PSession.h"  // for P2PSession
-#include "bcos-gateway/libnetwork/ASIOInterface.h"
+#include "bcos-network/ASIOInterface.h"
 #include <openssl/x509.h>
 #include "bcos-gateway/libp2p/ServiceRouter.h"  // for Service::RouterState
 #include "bcos-utilities/BoostLog.h"
@@ -49,12 +49,12 @@ Service::Service(P2PInfo const& _p2pInfo,
     // the version, when handshake finished the version field of Message
     // should be set
     registerHandlerByMsgType(GatewayMessageType::Handshake,
-        [this](NetworkException exception, std::shared_ptr<P2PSession> session, Message message) {
+        [this](bcos::network::NetworkException exception, std::shared_ptr<P2PSession> session, Message message) {
             onReceiveProtocol(std::move(exception), std::move(session), message);
         });
 
     registerHandlerByMsgType(GatewayMessageType::Heartbeat,
-        [this](NetworkException exception, std::shared_ptr<P2PSession> session, Message message) {
+        [this](bcos::network::NetworkException exception, std::shared_ptr<P2PSession> session, Message message) {
             onReceiveHeartbeat(std::move(exception), std::move(session), message);
         });
 
@@ -107,9 +107,9 @@ task::Task<void> Service::acceptPump()
     {
         auto conn = co_await m_host->acceptSession();
         // The IdentityToken is the P2PInfo that the injected P2PPeerIdentity filled during the
-        // TLS handshake (libnetwork/PeerIdentity.h); a null token means no identity was
+        // TLS handshake (bcos-network/PeerIdentity.h); a null token means no identity was
         // extracted — onConnect rejects it
-        onConnect(NetworkException{}, P2PPeerIdentity::p2pInfoOf(conn.identity),
+        onConnect(bcos::network::NetworkException{}, P2PPeerIdentity::p2pInfoOf(conn.identity),
             std::move(conn.session));
     }
 }
@@ -131,7 +131,7 @@ void Service::stop()
         // stops, no ack/timeout path is guaranteed to run and a waiter would hang. Completions
         // are posted to the shared pool while it is still up (see failPendingResponsesOf).
         failAllPendingResponses(
-            makeNetworkException(P2PExceptionType::NetworkTimeout, "ServiceStopped"));
+            bcos::network::makeNetworkException(bcos::network::P2PExceptionType::NetworkTimeout, "ServiceStopped"));
         // Close every inbound channel: parked subscribe() consumers wake with a NetworkException
         // instead of hanging past the network teardown.
         {
@@ -140,8 +140,8 @@ void Service::stop()
             {
                 if (channel)
                 {
-                    channel->close(std::make_exception_ptr(makeNetworkException(
-                        P2PExceptionType::NetworkTimeout, "ServiceStopped")));
+                    channel->close(std::make_exception_ptr(bcos::network::makeNetworkException(
+                        bcos::network::P2PExceptionType::NetworkTimeout, "ServiceStopped")));
                 }
             }
         }
@@ -151,7 +151,7 @@ void Service::stop()
         std::unique_lock lock(x_sessions);
         for (auto& session : m_sessions)
         {
-            session.second->stop(ClientQuit);
+            session.second->stop(bcos::network::ClientQuit);
         }
 
         /// clear sessions
@@ -173,7 +173,7 @@ void Service::heartBeat()
     // x_sessions(W) waiting for x_nodes(W) while heartBeat holds x_nodes(R) waiting for
     // x_sessions(R). Copying the list then dropping x_nodes makes every path acquire x_sessions
     // before x_nodes.
-    std::vector<std::pair<NodeIPEndpoint, P2pID>> staticNodes;
+    std::vector<std::pair<NodeIPEndpoint, bcos::network::P2pID>> staticNodes;
     {
         std::shared_lock nodeLock(x_nodes);
         staticNodes.assign(m_staticNodes.begin(), m_staticNodes.end());
@@ -204,7 +204,7 @@ void Service::heartBeat()
             try
             {
                 auto [error, peerIdentity, session] = co_await _service->m_host->connect(_endpoint);
-                if (session || errorCodeOf(error) != 0)
+                if (session || bcos::network::errorCodeOf(error) != 0)
                 {
                     _service->onConnect(std::move(error),
                         P2PPeerIdentity::p2pInfoOf(peerIdentity), std::move(session));
@@ -258,7 +258,7 @@ void Service::heartBeat()
 }
 
 /// update the staticNodes
-void Service::updateStaticNodes(std::shared_ptr<Socket> const& _s, P2pID const& nodeID)
+void Service::updateStaticNodes(std::shared_ptr<bcos::network::Socket> const& _s, bcos::network::P2pID const& nodeID)
 {
     NodeIPEndpoint endpoint(_s->nodeIPEndpoint());
     std::unique_lock nodeLock(x_nodes);
@@ -279,18 +279,18 @@ void Service::updateStaticNodes(std::shared_ptr<Socket> const& _s, P2pID const& 
     }
 }
 
-void Service::onConnect(NetworkException e, std::shared_ptr<P2PInfo> p2pInfo, Session::Ptr session)
+void Service::onConnect(bcos::network::NetworkException e, std::shared_ptr<P2PInfo> p2pInfo, Session::Ptr session)
 {
-    P2pID p2pID = p2pInfo ? p2pInfo->rawP2pID : P2pID();
+    bcos::network::P2pID p2pID = p2pInfo ? p2pInfo->rawP2pID : bcos::network::P2pID();
     std::string peer = "unknown";
     if (session)
     {
         peer = session->nodeIPEndpoint().address() + ":" +
                std::to_string(session->nodeIPEndpoint().port());
     }
-    if (errorCodeOf(e))
+    if (bcos::network::errorCodeOf(e))
     {
-        SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("code", errorCodeOf(e))
+        SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("code", bcos::network::errorCodeOf(e))
                              << LOG_KV("p2pid", printShortP2pID(p2pID))
                              << LOG_KV("nodeName", p2pInfo ? p2pInfo->nodeName : "")
                              << LOG_KV("endpoint", peer) << LOG_KV("message", e.what());
@@ -307,7 +307,7 @@ void Service::onConnect(NetworkException e, std::shared_ptr<P2PInfo> p2pInfo, Se
                              << LOG_KV("endpoint", peer);
         if (session)
         {
-            session->disconnect(DisconnectReason::NullIdentity);
+            session->disconnect(bcos::network::DisconnectReason::NullIdentity);
         }
         return;
     }
@@ -319,7 +319,7 @@ void Service::onConnect(NetworkException e, std::shared_ptr<P2PInfo> p2pInfo, Se
     {
         SERVICE_LOG(TRACE) << "Disconnect self";
         updateStaticNodes(session->socket(), id());
-        session->disconnect(DuplicatePeer);
+        session->disconnect(bcos::network::DuplicatePeer);
         return;
     }
 
@@ -342,7 +342,7 @@ void Service::onConnect(NetworkException e, std::shared_ptr<P2PInfo> p2pInfo, Se
             SERVICE_LOG(INFO) << "Disconnect duplicate peer" << LOG_KV("p2pid", printShortP2pID(p2pID))
                               << LOG_KV("endpoint", peer);
             updateStaticNodes(session->socket(), p2pID);
-            session->disconnect(DuplicatePeer);
+            session->disconnect(bcos::network::DuplicatePeer);
             duplicated = true;
         }
         else
@@ -368,7 +368,7 @@ void Service::onConnect(NetworkException e, std::shared_ptr<P2PInfo> p2pInfo, Se
         // old push-mode teardown notification reached onDisconnect asynchronously — running it
         // after releasing x_sessions keeps that off-lock property).
         teardownSession(
-            makeNetworkException(P2PExceptionType::DuplicateSession, "DuplicateSession"),
+            bcos::network::makeNetworkException(bcos::network::P2PExceptionType::DuplicateSession, "DuplicateSession"),
             p2pSession);
         return;
     }
@@ -389,9 +389,9 @@ void Service::onConnect(NetworkException e, std::shared_ptr<P2PInfo> p2pInfo, Se
     }(shared_from_this(), p2pSession));
 }
 
-void Service::teardownSession(NetworkException _e, P2PSession::Ptr _p2pSession)
+void Service::teardownSession(bcos::network::NetworkException _e, P2PSession::Ptr _p2pSession)
 {
-    _p2pSession->stop(UserReason);
+    _p2pSession->stop(bcos::network::UserReason);
     onDisconnect(std::move(_e), std::move(_p2pSession));
 }
 
@@ -433,7 +433,7 @@ task::Task<void> Service::receiveLoop(P2PSession::Ptr _p2pSession)
             {
                 if (message.decodeOwned(std::move(meta.frame), meta.frameOffset) >= 0) [[likely]]
                 {
-                    onMessage(NetworkException{}, session, std::move(message), _p2pSession);
+                    onMessage(bcos::network::NetworkException{}, session, std::move(message), _p2pSession);
                     continue;
                 }
             }
@@ -444,15 +444,15 @@ task::Task<void> Service::receiveLoop(P2PSession::Ptr _p2pSession)
             }
             // decode failure: a ProtocolError teardown, the same treatment the old in-session
             // decode gave it
-            BOOST_THROW_EXCEPTION(makeNetworkException(
-                P2PExceptionType::ProtocolError, "ProtocolError(decode message error)"));
+            BOOST_THROW_EXCEPTION(bcos::network::makeNetworkException(
+                bcos::network::P2PExceptionType::ProtocolError, "ProtocolError(decode message error)"));
         }
     }
-    catch (NetworkException& e)
+    catch (bcos::network::NetworkException& e)
     {
         SERVICE_LOG(INFO) << LOG_DESC("receiveLoop exit, teardown session")
                           << LOG_KV("p2pid", _p2pSession->printP2pID())
-                          << LOG_KV("code", errorCodeOf(e)) << LOG_KV("msg", e.what());
+                          << LOG_KV("code", bcos::network::errorCodeOf(e)) << LOG_KV("msg", e.what());
         teardownSession(e, std::move(_p2pSession));
     }
     catch (std::exception const& e)
@@ -460,19 +460,19 @@ task::Task<void> Service::receiveLoop(P2PSession::Ptr _p2pSession)
         // never let an exception escape a detached pump
         SERVICE_LOG(WARNING) << LOG_DESC("receiveLoop exception")
                              << LOG_KV("what", boost::diagnostic_information(e));
-        teardownSession(makeNetworkException(P2PExceptionType::Disconnect, "Disconnect"),
+        teardownSession(bcos::network::makeNetworkException(bcos::network::P2PExceptionType::Disconnect, "Disconnect"),
             std::move(_p2pSession));
     }
 }
 
-void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
+void Service::onDisconnect(bcos::network::NetworkException e, P2PSession::Ptr p2pSession)
 {
     // Fail the pending requests whose request went out on the dropped session (the old
     // Session::drop flush, moved up with the correlation table): a request is failed when its
     // OUTBOUND session dies even though a routed response could in principle arrive on another
     // session — preserving the old fail-fast-on-drop semantics.
     failPendingResponsesOf(p2pSession->session(),
-        makeNetworkException(P2PExceptionType::NetworkTimeout, "NetworkTimeout"));
+        bcos::network::makeNetworkException(bcos::network::P2PExceptionType::NetworkTimeout, "NetworkTimeout"));
     // handle all registered handlers
     for (const auto& handler : m_disconnectionHandlers)
     {
@@ -490,11 +490,11 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
         }
         callDeleteSessionHandlers(p2pSession);
 
-        if (errorCodeOf(e) == P2PExceptionType::DuplicateSession)
+        if (bcos::network::errorCodeOf(e) == bcos::network::P2PExceptionType::DuplicateSession)
         {
             return;
         }
-        SERVICE_LOG(INFO) << LOG_DESC("onDisconnect") << LOG_KV("code", errorCodeOf(e))
+        SERVICE_LOG(INFO) << LOG_DESC("onDisconnect") << LOG_KV("code", bcos::network::errorCodeOf(e))
                           << LOG_KV("what", boost::diagnostic_information(e));
         std::unique_lock nodeLock(x_nodes);
         for (auto& it : m_staticNodes)
@@ -524,7 +524,7 @@ void Service::sendRespMessageBySession(bytesConstRef _payload, uint32_t _request
         // parameters so it is copied into the frame and stays alive.
         task::wait([](std::shared_ptr<Service> _self, P2PSession::Ptr _p2pSession,
                        bcos::bytes _payload, uint32_t _seq, std::string _dstP2PNodeID,
-                       P2pID _p2pid) -> task::Task<void> {
+                       bcos::network::P2pID _p2pid) -> task::Task<void> {
             try
             {
                 Message respMessage;
@@ -535,7 +535,7 @@ void Service::sendRespMessageBySession(bytesConstRef _payload, uint32_t _request
                 respMessage.setPayload(std::move(_payload));
                 // Note: respond directly via the original session (zero-copy view)
                 co_await _p2pSession->fastSendP2PMessage(
-                    respMessage, ::ranges::views::single(respMessage.payload()), Options{});
+                    respMessage, ::ranges::views::single(respMessage.payload()), bcos::network::Options{});
                 if (c_fileLogLevel <= TRACE) [[unlikely]]
                 {
                     SERVICE2_LOG(TRACE) << LOG_BADGE("sendRespMessageBySession")
@@ -565,7 +565,7 @@ void Service::sendRespMessageBySession(bytesConstRef _payload, uint32_t _request
     // receive callback that passed it does not outlive the deferred send. The session/service are
     // passed as coroutine parameters so they are copied into the frame.
     task::wait([](std::shared_ptr<Service> _self, P2PSession::Ptr _p2pSession,
-                   bcos::bytes _payload, uint32_t _seq, P2pID _p2pid) -> task::Task<void> {
+                   bcos::bytes _payload, uint32_t _seq, bcos::network::P2pID _p2pid) -> task::Task<void> {
         try
         {
             Message respMessage;
@@ -573,7 +573,7 @@ void Service::sendRespMessageBySession(bytesConstRef _payload, uint32_t _request
             respMessage.setRespPacket();
             respMessage.setPayload(std::move(_payload));
             co_await _p2pSession->fastSendP2PMessage(
-                respMessage, ::ranges::views::single(respMessage.payload()), Options{});
+                respMessage, ::ranges::views::single(respMessage.payload()), bcos::network::Options{});
             if (c_fileLogLevel <= TRACE) [[unlikely]]
             {
                 SERVICE_LOG(TRACE) << "sendRespMessageBySession" << LOG_KV("seq", _seq)
@@ -605,7 +605,7 @@ std::optional<bcos::Error> Service::onBeforeMessage(
     return std::nullopt;
 }
 
-void Service::onMessage(NetworkException e, Session::Ptr session, Message message,
+void Service::onMessage(bcos::network::NetworkException e, Session::Ptr session, Message message,
     std::weak_ptr<P2PSession> p2pSessionWeakPtr)
 {
     // router path (merged from the former ServiceV2::onMessage): a message whose dstP2PNodeID is
@@ -613,9 +613,9 @@ void Service::onMessage(NetworkException e, Session::Ptr session, Message messag
     // translated back to the raw ids before the common handling below
     if (m_router)
     {
-        if (errorCodeOf(e) != 0)
+        if (bcos::network::errorCodeOf(e) != 0)
         {
-            SERVICE2_LOG(WARNING) << LOG_BADGE("onMessage") << LOG_KV("code", errorCodeOf(e))
+            SERVICE2_LOG(WARNING) << LOG_BADGE("onMessage") << LOG_KV("code", bcos::network::errorCodeOf(e))
                                   << LOG_KV("msg", e.what());
             // fall through to the common handling below to trigger disconnectHandler
         }
@@ -662,7 +662,7 @@ void Service::onMessage(NetworkException e, Session::Ptr session, Message messag
                     try
                     {
                         co_await _self->forwardMessageByNodeID(_p2pMsg.dstP2PNodeID(), _p2pMsg,
-                            ::ranges::views::single(_p2pMsg.payload()), Options{});
+                            ::ranges::views::single(_p2pMsg.payload()), bcos::network::Options{});
                     }
                     catch (std::exception const& e)
                     {
@@ -707,7 +707,7 @@ void Service::onMessage(NetworkException e, Session::Ptr session, Message messag
 
     try
     {
-        P2pID p2pID = id();
+        bcos::network::P2pID p2pID = id();
         NodeIPEndpoint nodeIPEndpoint(boost::asio::ip::address(), 0);
         if (session && p2pSession)
         {
@@ -715,16 +715,16 @@ void Service::onMessage(NetworkException e, Session::Ptr session, Message messag
             nodeIPEndpoint = session->nodeIPEndpoint();
         }
 
-        if (errorCodeOf(e))
+        if (bcos::network::errorCodeOf(e))
         {
             SERVICE_LOG(INFO) << LOG_DESC("disconnect failed in P2PSession")
                               << LOG_KV("p2pid", printShortP2pID(p2pID))
-                              << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("code", errorCodeOf(e))
+                              << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("code", bcos::network::errorCodeOf(e))
                               << LOG_KV("message", e.what());
 
             if (p2pSession)
             {
-                p2pSession->stop(UserReason);
+                p2pSession->stop(bcos::network::UserReason);
                 onDisconnect(e, p2pSession);
             }
             return;
@@ -799,7 +799,7 @@ void Service::onMessage(NetworkException e, Session::Ptr session, Message messag
 }
 
 bcos::task::Task<void> Service::broadcastMessageToAll(Message::Ptr message,
-    ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads, Options options)
+    ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads, bcos::network::Options options)
 {
     if (m_router)
     {
@@ -810,9 +810,9 @@ bcos::task::Task<void> Service::broadcastMessageToAll(Message::Ptr message,
         // Fan out one independent coroutine per peer (see the router-less path below).
         for (auto const& node : reachableNodes)
         {
-            task::wait([](std::shared_ptr<Service> _self, P2pID _node, Message::Ptr _message,
+            task::wait([](std::shared_ptr<Service> _self, bcos::network::P2pID _node, Message::Ptr _message,
                            ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads,
-                           Options _options) mutable -> task::Task<void> {
+                           bcos::network::Options _options) mutable -> task::Task<void> {
                 try
                 {
                     co_await _self->sendMessageByNodeID(
@@ -828,7 +828,7 @@ bcos::task::Task<void> Service::broadcastMessageToAll(Message::Ptr message,
         }
         co_return;
     }
-    std::vector<P2pID> nodeIDs;
+    std::vector<bcos::network::P2pID> nodeIDs;
     {
         std::shared_lock lock(x_sessions);
         nodeIDs.reserve(m_sessions.size());
@@ -844,9 +844,9 @@ bcos::task::Task<void> Service::broadcastMessageToAll(Message::Ptr message,
     // race on the shared header and no head-of-line blocking on a stalled peer's socket.
     for (auto const& nodeID : nodeIDs)
     {
-        task::wait([](std::shared_ptr<Service> _self, P2pID _nodeID, Message::Ptr _message,
+        task::wait([](std::shared_ptr<Service> _self, bcos::network::P2pID _nodeID, Message::Ptr _message,
                        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads,
-                       Options _options) mutable -> task::Task<void> {
+                       bcos::network::Options _options) mutable -> task::Task<void> {
             try
             {
                 co_await _self->sendMessageByNodeID(
@@ -864,13 +864,13 @@ bcos::task::Task<void> Service::broadcastMessageToAll(Message::Ptr message,
 }
 
 bcos::task::Task<void> Service::broadcastMessageToNeighbors(Message::Ptr message,
-    ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads, Options options)
+    ::ranges::any_view<bytesConstRef, ::ranges::category::forward> payloads, bcos::network::Options options)
 {
     // Only directly connected sessions (m_sessions), unlike broadcastMessageToAll which may fan
     // out through the router table when the router module is enabled. This preserves the "router
     // table sync only between neighbors, propagated hop-by-hop" gossip model used by
     // broadcastRouterSeq.
-    std::vector<P2pID> nodeIDs;
+    std::vector<bcos::network::P2pID> nodeIDs;
     {
         std::shared_lock lock(x_sessions);
         nodeIDs.reserve(m_sessions.size());
@@ -886,9 +886,9 @@ bcos::task::Task<void> Service::broadcastMessageToNeighbors(Message::Ptr message
     // race on the shared header and no head-of-line blocking on a stalled peer's socket.
     for (auto const& nodeID : nodeIDs)
     {
-        task::wait([](std::shared_ptr<Service> _self, P2pID _nodeID, Message::Ptr _message,
+        task::wait([](std::shared_ptr<Service> _self, bcos::network::P2pID _nodeID, Message::Ptr _message,
                        ::ranges::any_view<bytesConstRef, ::ranges::category::forward> _payloads,
-                       Options _options) mutable -> task::Task<void> {
+                       bcos::network::Options _options) mutable -> task::Task<void> {
             try
             {
                 co_await _self->sendMessageByNodeID(
@@ -913,14 +913,14 @@ P2PInfos Service::sessionInfos()
            ::ranges::to<P2PInfos>();
 }
 
-bool Service::isConnected(P2pID const& nodeID) const
+bool Service::isConnected(bcos::network::P2pID const& nodeID) const
 {
     auto session = getP2PSessionByNodeId(nodeID);
     return session && session->active();
 }
 
 bcos::task::Task<void> Service::sendMessageByNodeIDs(uint16_t _type,
-    const std::vector<P2pID>& _nodeIDs, bcos::bytes _payload, Options _options)
+    const std::vector<bcos::network::P2pID>& _nodeIDs, bcos::bytes _payload, bcos::network::Options _options)
 {
     // value message held by shared_ptr: fan out one independent coroutine per node, so a stalled
     // peer's socket write cannot delay delivery to the peers behind it (same head-of-line-blocking
@@ -934,19 +934,19 @@ bcos::task::Task<void> Service::sendMessageByNodeIDs(uint16_t _type,
     auto self = shared_from_this();
     for (auto const& nodeID : _nodeIDs)
     {
-        task::wait([](std::shared_ptr<Service> _self, P2pID _nodeID, Message::Ptr _message,
-                       Options _options) -> task::Task<void> {
+        task::wait([](std::shared_ptr<Service> _self, bcos::network::P2pID _nodeID, Message::Ptr _message,
+                       bcos::network::Options _options) -> task::Task<void> {
             try
             {
                 co_await _self->sendMessageByNodeID(_nodeID, *_message,
                     ::ranges::views::single(_message->payload()),
-                    Options{_options.timeout, false});
+                    bcos::network::Options{_options.timeout, false});
             }
-            catch (NetworkException const& e)
+            catch (bcos::network::NetworkException const& e)
             {
                 SERVICE_LOG(INFO) << LOG_DESC("sendMessageByNodeIDs send failed")
                                   << LOG_KV("nodeid", printShortP2pID(_nodeID))
-                                  << LOG_KV("code", errorCodeOf(e)) << LOG_KV("message", e.what());
+                                  << LOG_KV("code", bcos::network::errorCodeOf(e)) << LOG_KV("message", e.what());
             }
             catch (std::exception const& e)
             {
@@ -985,7 +985,7 @@ void Service::sendProtocol(P2PSession::Ptr _session)
                               << LOG_KV("payload", message.payload().size())
                               << LOG_KV("seq", message.seq());
             co_await _session->fastSendP2PMessage(
-                message, ::ranges::views::single(message.payload()), Options{});
+                message, ::ranges::views::single(message.payload()), bcos::network::Options{});
         }
         catch (std::exception const& e)
         {
@@ -998,7 +998,7 @@ void Service::sendProtocol(P2PSession::Ptr _session)
 
 // receive the heartbeat msg
 void Service::Service::onReceiveHeartbeat(
-    NetworkException /*unused*/, std::shared_ptr<P2PSession> _session, const Message& /*unused*/)
+    bcos::network::NetworkException /*unused*/, std::shared_ptr<P2PSession> _session, const Message& /*unused*/)
 {
     std::string endpoint = "unknown";
     if (_session)
@@ -1012,12 +1012,12 @@ void Service::Service::onReceiveHeartbeat(
 
 // receive the protocolInfo
 void Service::onReceiveProtocol(
-    NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message)
+    bcos::network::NetworkException _error, std::shared_ptr<P2PSession> _session, const Message& _message)
 {
-    if (errorCodeOf(_error))
+    if (bcos::network::errorCodeOf(_error))
     {
         SERVICE_LOG(WARNING) << LOG_DESC("onReceiveProtocol failed")
-                             << LOG_KV("code", errorCodeOf(_error)) << LOG_KV("msg", _error.what())
+                             << LOG_KV("code", bcos::network::errorCodeOf(_error)) << LOG_KV("msg", _error.what())
                              << LOG_KV("peer", _session ? _session->printP2pID() : "unknown");
         return;
     }
@@ -1036,7 +1036,7 @@ void Service::onReceiveProtocol(
                 << LOG_KV("maxVersion", protocolInfo->maxVersion())
                 << LOG_KV("supportMinVersion", m_localProtocol->minVersion())
                 << LOG_KV("supportMaxVersion", m_localProtocol->maxVersion());
-            _session->session()->disconnect(DisconnectReason::NegotiateFailed);
+            _session->session()->disconnect(bcos::network::DisconnectReason::NegotiateFailed);
             return;
         }
         auto version = std::min(m_localProtocol->maxVersion(), protocolInfo->maxVersion());
@@ -1087,7 +1087,7 @@ void Service::updatePeerBlacklist(const std::set<std::string>& _strList, const b
                               << LOG_KV("peer", p2pIdWithoutExtInfo);
 
             updateStaticNodes(session.second->session()->socket(), session.second->p2pID());
-            session.second->session()->disconnect(DisconnectReason::InBlacklistReason);
+            session.second->session()->disconnect(bcos::network::DisconnectReason::InBlacklistReason);
         }
     }
 }
@@ -1120,13 +1120,13 @@ void Service::updatePeerWhitelist(const std::set<std::string>& _strList, const b
                               << LOG_KV("peer", p2pIdWithoutExtInfo);
 
             updateStaticNodes(session.second->session()->socket(), session.second->p2pID());
-            session.second->session()->disconnect(DisconnectReason::NotInWhitelistReason);
+            session.second->session()->disconnect(bcos::network::DisconnectReason::NotInWhitelistReason);
         }
     }
 }
 
 bcos::task::Task<std::optional<Message>> bcos::gateway::Service::sendMessageByNodeID(
-    P2pID nodeID, Message& header, ::ranges::any_view<bytesConstRef> payloads, Options options)
+    bcos::network::P2pID nodeID, Message& header, ::ranges::any_view<bytesConstRef> payloads, bcos::network::Options options)
 {
     if (m_router)
     {
@@ -1143,7 +1143,7 @@ bool bcos::gateway::Service::active()
 {
     return m_run;
 }
-bcos::gateway::P2pID bcos::gateway::Service::id() const
+bcos::network::P2pID bcos::gateway::Service::id() const
 {
     return m_nodeID;
 }
@@ -1156,7 +1156,7 @@ void bcos::gateway::Service::registerUnreachableHandler(std::function<void(std::
     WriteGuard writeGuard(m_router->x_unreachableHandlers);
     m_router->unreachableHandlers.emplace_back(std::move(_handler));
 }
-std::map<NodeIPEndpoint, P2pID> bcos::gateway::Service::staticNodes()
+std::map<NodeIPEndpoint, bcos::network::P2pID> bcos::gateway::Service::staticNodes()
 {
     // FIB-186 (vector D): read m_staticNodes under x_nodes -- the same member heartBeat now
     // snapshots under the lock. Returning it unlocked races with onConnect's updateStaticNodes
@@ -1188,7 +1188,7 @@ bcos::gateway::P2PInfo bcos::gateway::Service::localP2pInfo()
     p2pInfo.p2pID = m_nodeID;
     return p2pInfo;
 }
-bool bcos::gateway::Service::isReachable(P2pID const& _nodeID) const
+bool bcos::gateway::Service::isReachable(bcos::network::P2pID const& _nodeID) const
 {
     if (m_router)
     {
@@ -1231,10 +1231,10 @@ void bcos::gateway::Service::onResponseTimeout(uint32_t _seq)
         return;  // already settled by ack / disconnect-flush / write-failure reclaim
     }
     pending->callback(
-        makeNetworkException(P2PExceptionType::NetworkTimeout, "NetworkTimeout"), std::nullopt);
+        bcos::network::makeNetworkException(bcos::network::P2PExceptionType::NetworkTimeout, "NetworkTimeout"), std::nullopt);
 }
 void bcos::gateway::Service::onResponseFrame(
-    uint32_t _seq, Session::Ptr const& _session, FrameMeta _meta)
+    uint32_t _seq, Session::Ptr const& _session, bcos::network::FrameMeta _meta)
 {
     auto pending = claimPendingResponse(_seq);
     // without a pending entry: the request already timed out or was settled elsewhere
@@ -1253,19 +1253,19 @@ void bcos::gateway::Service::onResponseFrame(
     }
     // complete inline: this handler already runs on a pool thread (Session::onMessage posts the
     // delivery), so resuming the waiter here cannot land on a sender's stack
-    pending->callback(NetworkException{}, std::move(_meta));
+    pending->callback(bcos::network::NetworkException{}, std::move(_meta));
 }
 void bcos::gateway::Service::failPendingResponsesOf(
-    Session::Ptr const& _session, NetworkException _error)
+    Session::Ptr const& _session, bcos::network::NetworkException _error)
 {
     settleClaimedPending(m_pendingResponses.claimAllOf(_session.get()), _error);
 }
-void bcos::gateway::Service::failAllPendingResponses(NetworkException _error)
+void bcos::gateway::Service::failAllPendingResponses(bcos::network::NetworkException _error)
 {
     settleClaimedPending(m_pendingResponses.claimAll(), _error);
 }
 void bcos::gateway::Service::settleClaimedPending(
-    std::vector<PendingResponse::Ptr> _pendings, NetworkException const& _error)
+    std::vector<PendingResponse::Ptr> _pendings, bcos::network::NetworkException const& _error)
 {
     for (auto& pending : _pendings)
     {
@@ -1314,12 +1314,12 @@ void bcos::gateway::Service::setKeyFactory(std::shared_ptr<bcos::crypto::KeyFact
     m_keyFactory = std::move(_keyFactory);
 }
 void bcos::gateway::Service::registerDisconnectHandler(
-    std::function<void(NetworkException, P2PSession::Ptr)> _handler)
+    std::function<void(bcos::network::NetworkException, P2PSession::Ptr)> _handler)
 {
     m_disconnectionHandlers.push_back(std::move(_handler));
 }
 std::shared_ptr<P2PSession> bcos::gateway::Service::getP2PSessionByNodeIdWithoutLock(
-    P2pID const& _nodeID) const
+    bcos::network::P2pID const& _nodeID) const
 {
     if (auto it = m_sessions.find(_nodeID); it != m_sessions.end())
     {

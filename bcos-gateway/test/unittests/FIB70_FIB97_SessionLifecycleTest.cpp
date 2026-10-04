@@ -19,9 +19,9 @@
  */
 
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-gateway/libnetwork/ASIOInterface.h"
-#include "bcos-gateway/libnetwork/Host.h"
-#include "bcos-gateway/libnetwork/Socket.h"
+#include "bcos-network/ASIOInterface.h"
+#include "bcos-network/Host.h"
+#include "bcos-network/Socket.h"
 #include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
@@ -49,7 +49,7 @@ BOOST_FIXTURE_TEST_SUITE(FIB70_FIB97_SessionLifecycleTest, TestPromptFixture)
 
 // --- Fake components (mirrors SessionTest.cpp infrastructure) ---
 
-class FakeASIO_FIB : public bcos::gateway::ASIOInterface
+class FakeASIO_FIB : public bcos::network::ASIOInterface
 {
 public:
     using Packet = std::shared_ptr<std::vector<uint8_t>>;
@@ -57,7 +57,7 @@ public:
         task::detail::FireCompletion<boost::system::error_code, std::size_t>;
 
     FakeASIO_FIB()
-      : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"), "0.0.0.0", 0),
+      : bcos::network::ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"), "0.0.0.0", 0),
         m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"))
     {}
     ~FakeASIO_FIB() noexcept {}
@@ -68,7 +68,7 @@ public:
     struct ReadPolicy
     {
         template <typename SocketT>
-        static void invoke(ASIOInterface* asio, const std::shared_ptr<SocketT>& /*socket*/,
+        static void invoke(bcos::network::ASIOInterface* asio, const std::shared_ptr<SocketT>& /*socket*/,
             ba::mutable_buffer buffers, ReadCompletion completion)
         {
             static_cast<FakeASIO_FIB*>(asio)->parkRead(buffers, std::move(completion));
@@ -271,18 +271,18 @@ private:
 // default, the correlation tests (which wrap the session in a P2PSession / register it as a
 // pending-request owner) with the production Socket.
 template <typename SocketT = FakeSocket_FIB>
-class FakeHost_FIB : public bcos::gateway::Host<P2PDecoder, SocketT>
+class FakeHost_FIB : public bcos::network::Host<P2PDecoder, SocketT>
 {
 public:
-    FakeHost_FIB(std::shared_ptr<ASIOInterface> _asioInterface,
-        std::shared_ptr<BasicSessionFactory<P2PDecoder, SocketT>> _sessionFactory)
-      : Host<P2PDecoder, SocketT>(std::move(_asioInterface), std::move(_sessionFactory))
+    FakeHost_FIB(std::shared_ptr<bcos::network::ASIOInterface> _asioInterface,
+        std::shared_ptr<bcos::network::BasicSessionFactory<P2PDecoder, SocketT>> _sessionFactory)
+      : bcos::network::Host<P2PDecoder, SocketT>(std::move(_asioInterface), std::move(_sessionFactory))
     {
         this->m_run = true;
     }
 };
 
-using Session_FIB = BasicSession<P2PDecoder, FakeSocket_FIB>;
+using Session_FIB = bcos::network::BasicSession<P2PDecoder, FakeSocket_FIB>;
 
 // FIB-70: Verify that decode error (negative return from decode()) triggers session drop.
 // Before the fix, the session would remain active as a "zombie" until the idle timeout.
@@ -313,11 +313,11 @@ BOOST_AUTO_TEST_CASE(DecodeErrorTriggersSessionDrop)
             {
                 (void)co_await _session->recvMessage();
                 // a frame delivery instead of the teardown error means no drop happened
-                _exitCode->set_value(P2PExceptionType::Success);
+                _exitCode->set_value(bcos::network::P2PExceptionType::Success);
             }
-            catch (NetworkException const& e)
+            catch (bcos::network::NetworkException const& e)
             {
-                _exitCode->set_value(errorCodeOf(e));
+                _exitCode->set_value(bcos::network::errorCodeOf(e));
             }
             catch (...)
             {
@@ -333,7 +333,7 @@ BOOST_AUTO_TEST_CASE(DecodeErrorTriggersSessionDrop)
         // Wait for the consumer to observe the channel close (ProtocolError)
         BOOST_REQUIRE(
             exitCodeFuture.wait_for(std::chrono::seconds(10)) == std::future_status::ready);
-        BOOST_CHECK_EQUAL(exitCodeFuture.get(), P2PExceptionType::ProtocolError);
+        BOOST_CHECK_EQUAL(exitCodeFuture.get(), bcos::network::P2PExceptionType::ProtocolError);
 
         // FIB-70 fix: session must be inactive after decode error.
         // drop(UserReason) sets m_active = false as its first action; it runs on the read loop
@@ -404,7 +404,7 @@ BOOST_AUTO_TEST_CASE(TruncatedExtendedHeaderIsDeliveredNotDropped)
         // the session is NOT dropped: stream splitting succeeded on this frame
         BOOST_CHECK(session->active());
 
-        session->drop(UserReason);
+        session->drop(bcos::network::UserReason);
         // drain the parked read so the read loop unwinds before the socket is nulled
         fakeAsio->stopReads();
         size_t drainRetry = 0;
@@ -458,7 +458,7 @@ BOOST_AUTO_TEST_CASE(SocketSharedPtrCaptureInAsyncHandler)
 BOOST_AUTO_TEST_CASE(DisconnectFlushesOnlyOwnPendingResponses)
 {
     auto fakeAsio = std::make_shared<FakeASIO_FIB>();
-    auto host = std::make_shared<FakeHost_FIB<Socket>>(fakeAsio, nullptr);
+    auto host = std::make_shared<FakeHost_FIB<bcos::network::Socket>>(fakeAsio, nullptr);
 
     // The sessions never start and never touch the wire: they exist only as owner identities for
     // the pending table, so a bare Socket over an idle io_context is enough.
@@ -466,7 +466,7 @@ BOOST_AUTO_TEST_CASE(DisconnectFlushesOnlyOwnPendingResponses)
     ba::ssl::context sslContext(ba::ssl::context::tlsv12);
     auto makeSession = [&]() {
         return std::make_shared<Session>(
-            std::make_shared<Socket>(io, &sslContext, NodeIPEndpoint()), *host, 16, true);
+            std::make_shared<bcos::network::Socket>(io, &sslContext, NodeIPEndpoint()), *host, 16, true);
     };
     auto sessionA = makeSession();
     auto sessionB = makeSession();
@@ -482,16 +482,16 @@ BOOST_AUTO_TEST_CASE(DisconnectFlushesOnlyOwnPendingResponses)
     std::atomic<int> firedA{0};
     std::atomic<int> firedB{0};
     auto pendingA = std::make_shared<PendingResponse>();
-    pendingA->callback = [&firedA](NetworkException e, std::optional<FrameMeta>) {
-        if (errorCodeOf(e) != 0)
+    pendingA->callback = [&firedA](bcos::network::NetworkException e, std::optional<bcos::network::FrameMeta>) {
+        if (bcos::network::errorCodeOf(e) != 0)
         {
             ++firedA;
         }
     };
     pendingA->owner = sessionA;
     auto pendingB = std::make_shared<PendingResponse>();
-    pendingB->callback = [&firedB](NetworkException e, std::optional<FrameMeta>) {
-        if (errorCodeOf(e) != 0)
+    pendingB->callback = [&firedB](bcos::network::NetworkException e, std::optional<bcos::network::FrameMeta>) {
+        if (bcos::network::errorCodeOf(e) != 0)
         {
             ++firedB;
         }
@@ -501,7 +501,7 @@ BOOST_AUTO_TEST_CASE(DisconnectFlushesOnlyOwnPendingResponses)
     BOOST_REQUIRE(service->registerPendingResponse(seqB, pendingB));
 
     service->failPendingResponsesOf(sessionA,
-        makeNetworkException(P2PExceptionType::NetworkTimeout, "NetworkTimeout"));
+        bcos::network::makeNetworkException(bcos::network::P2PExceptionType::NetworkTimeout, "NetworkTimeout"));
 
     // session A's waiter is failed with an error; session B's is left untouched
     BOOST_CHECK_EQUAL(firedA, 1);
@@ -523,8 +523,8 @@ BOOST_AUTO_TEST_CASE(ResponseTimeoutSettlesWaiterExactlyOnce)
     std::atomic<int> fired{0};
     std::atomic<int64_t> errorCode{0};
     auto pending = std::make_shared<PendingResponse>();
-    pending->callback = [&fired, &errorCode](NetworkException e, std::optional<FrameMeta> meta) {
-        errorCode.store(errorCodeOf(e));
+    pending->callback = [&fired, &errorCode](bcos::network::NetworkException e, std::optional<bcos::network::FrameMeta> meta) {
+        errorCode.store(bcos::network::errorCodeOf(e));
         BOOST_CHECK(!meta);
         ++fired;
     };
@@ -535,7 +535,7 @@ BOOST_AUTO_TEST_CASE(ResponseTimeoutSettlesWaiterExactlyOnce)
     service->onResponseTimeout(seq);
 
     BOOST_CHECK_EQUAL(fired, 1);
-    BOOST_CHECK_EQUAL(errorCode.load(), P2PExceptionType::NetworkTimeout);
+    BOOST_CHECK_EQUAL(errorCode.load(), bcos::network::P2PExceptionType::NetworkTimeout);
     BOOST_CHECK(service->claimPendingResponse(seq) == nullptr);
 }
 
@@ -585,7 +585,7 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
     std::atomic<int64_t> errorCode{0};
     const uint32_t seq = 4321;
     {
-        auto fakeHost = std::make_shared<FakeHost_FIB<Socket>>(fakeAsio, nullptr);
+        auto fakeHost = std::make_shared<FakeHost_FIB<bcos::network::Socket>>(fakeAsio, nullptr);
         auto sessionSocket = testutil::makeTlsSessionSocket(io, clientCtx, std::move(client));
         auto session = std::make_shared<Session>(sessionSocket, *fakeHost, 2, true);
         session->startWithPolicy<FakeASIO_FIB::ReadPolicy>();
@@ -609,12 +609,12 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
             {
                 co_await _p2pSession->fastSendP2PMessage(message,
                     ::ranges::views::single(bcos::ref(std::as_const(_payload))),
-                    Options{2000, true});
+                    bcos::network::Options{2000, true});
                 ++_completions;
             }
-            catch (NetworkException const& e)
+            catch (bcos::network::NetworkException const& e)
             {
-                _errorCode.store(errorCodeOf(e));
+                _errorCode.store(bcos::network::errorCodeOf(e));
                 ++_completions;
             }
         }(p2pSession, std::move(payload), seq, completions, errorCode));
@@ -633,7 +633,7 @@ BOOST_AUTO_TEST_CASE(WriteFailureFailsWithResponseWaiterExactlyOnce)
         BOOST_CHECK(errorCode.load() != 0);
         BOOST_CHECK(service->claimPendingResponse(seq) == nullptr);
 
-        session->disconnect(DisconnectReason::DisconnectRequested);
+        session->disconnect(bcos::network::DisconnectReason::DisconnectRequested);
 
         // drain the parked read so the read loop unwinds before the fake is destroyed
         fakeAsio->stopReads();

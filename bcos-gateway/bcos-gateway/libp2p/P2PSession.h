@@ -6,7 +6,8 @@
 #pragma once
 
 #include "bcos-framework/protocol/ProtocolInfo.h"
-#include "bcos-gateway/libnetwork/Common.h"
+#include "bcos-framework/gateway/GatewayTypeDef.h"
+#include "bcos-network/Common.h"
 #include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PDecoder.h"
 #include <boost/asio/steady_timer.hpp>
@@ -29,14 +30,14 @@ public:
     virtual ~P2PSession();
 
     virtual void start();
-    virtual void stop(DisconnectReason reason);
+    virtual void stop(bcos::network::DisconnectReason reason);
     virtual bool active();
     virtual void heartBeat();
 
     virtual Session::Ptr session();
     virtual void setSession(Session::Ptr session);
 
-    virtual P2pID p2pID();
+    virtual bcos::network::P2pID p2pID();
     virtual std::string printP2pID();
     // Note: the p2pInfo must be setted after session setted
     virtual void setP2PInfo(P2PInfo const& p2pInfo);
@@ -58,7 +59,7 @@ public:
     template <::ranges::input_range Payloads>
         requires std::convertible_to<::ranges::range_reference_t<Payloads>, bytesConstRef>
     task::Task<std::optional<Message>> fastSendP2PMessage(
-        Message& message, Payloads payloads, Options options);
+        Message& message, Payloads payloads, bcos::network::Options options);
 
 private:
     Session::Ptr m_session;

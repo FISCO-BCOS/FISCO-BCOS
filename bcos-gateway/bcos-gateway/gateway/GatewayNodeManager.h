@@ -22,7 +22,7 @@
 #include "LocalRouterTable.h"
 #include "PeersRouterTable.h"
 #include "bcos-crypto/interfaces/crypto/KeyFactory.h"
-#include "bcos-gateway/libnetwork/Common.h"
+#include "bcos-network/Common.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/protocol/GatewayNodeStatus.h"
@@ -35,7 +35,7 @@ class GatewayNodeManager
 {
 public:
     using Ptr = std::shared_ptr<GatewayNodeManager>;
-    GatewayNodeManager(std::string const& _uuid, P2pID const& _nodeID,
+    GatewayNodeManager(std::string const& _uuid, bcos::network::P2pID const& _nodeID,
         std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, Service::Ptr _p2pInterface,
         boost::asio::io_context& _ioContext);
     virtual ~GatewayNodeManager();
@@ -43,7 +43,7 @@ public:
     virtual void start();
     virtual void stop();
 
-    void onRemoveNodeIDs(const P2pID& _p2pID);
+    void onRemoveNodeIDs(const bcos::network::P2pID& _p2pID);
 
     GroupNodeInfo::Ptr getGroupNodeInfoList(const std::string& _groupID);
 
@@ -74,18 +74,18 @@ protected:
     virtual void broadcastStatusSeq();
 
     virtual void onReceiveStatusSeq(
-        NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg);
+        bcos::network::NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg);
     virtual void onRequestNodeStatus(
-        NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg);
+        bcos::network::NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg);
     virtual void onReceiveNodeStatus(
-        NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg);
+        bcos::network::NetworkException const& _e, P2PSession::Ptr _session, const Message& _msg);
     virtual bytesPointer generateNodeStatus();
     virtual void syncLatestNodeIDList();
 
     virtual void updatePeerStatus(std::string const& _p2pID, GatewayNodeStatus::Ptr _status);
 
 protected:
-    P2pID m_p2pNodeID;
+    bcos::network::P2pID m_p2pNodeID;
     std::string m_uuid;
     std::shared_ptr<bcos::crypto::KeyFactory> m_keyFactory;
     Service::Ptr m_p2pInterface;

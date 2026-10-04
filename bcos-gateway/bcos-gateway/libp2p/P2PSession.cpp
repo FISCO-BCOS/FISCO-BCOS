@@ -4,7 +4,7 @@
  */
 
 #include "bcos-gateway/libp2p/P2PSession.h"
-#include "bcos-gateway/libnetwork/ASIOInterface.h"
+#include "bcos-network/ASIOInterface.h"
 #include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/Common.h"
 #include "bcos-gateway/libp2p/Service.h"
@@ -45,7 +45,7 @@ void P2PSession::setSession(Session::Ptr session)
     m_session = std::move(session);
 }
 
-P2pID P2PSession::p2pID()
+bcos::network::P2pID P2PSession::p2pID()
 {
     return m_p2pInfo->rawP2pID;
 }
@@ -100,7 +100,7 @@ void P2PSession::start()
     }
 }
 
-void P2PSession::stop(DisconnectReason reason)
+void P2PSession::stop(bcos::network::DisconnectReason reason)
 {
     if (m_run)
     {
@@ -138,7 +138,7 @@ void P2PSession::heartBeat()
                     Message message;
                     message.setPacketType(GatewayMessageType::Heartbeat);
                     co_await _self->fastSendP2PMessage(
-                        message, ::ranges::views::empty<bytesConstRef>, Options{});
+                        message, ::ranges::views::empty<bytesConstRef>, bcos::network::Options{});
                 }(self));
             }
             catch (std::exception const& e)

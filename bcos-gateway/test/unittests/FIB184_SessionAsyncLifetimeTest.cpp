@@ -31,8 +31,8 @@
  */
 
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-gateway/libnetwork/ASIOInterface.h"
-#include "bcos-gateway/libnetwork/Host.h"
+#include "bcos-network/ASIOInterface.h"
+#include "bcos-network/Host.h"
 #include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PDecoder.h"
 #include <bcos-task/Wait.h>
@@ -57,14 +57,14 @@ BOOST_FIXTURE_TEST_SUITE(FIB184_SessionAsyncLifetimeTest, TestPromptFixture)
 
 // A fake ASIO that parks the read-loop's coroutine at a manually-fired completion, so a test can
 // hold a read "in flight" and complete it deterministically.
-class FakeASIO_Lifetime : public bcos::gateway::ASIOInterface
+class FakeASIO_Lifetime : public bcos::network::ASIOInterface
 {
 public:
     using ReadCompletion =
         task::detail::FireCompletion<boost::system::error_code, std::size_t>;
 
     FakeASIO_Lifetime()
-      : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_Lifetime"), "0.0.0.0", 0)
+      : bcos::network::ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_Lifetime"), "0.0.0.0", 0)
     {}
     ~FakeASIO_Lifetime() noexcept = default;
 
@@ -74,7 +74,7 @@ public:
     struct ReadPolicy
     {
         template <typename SocketT>
-        static void invoke(ASIOInterface* asio, const std::shared_ptr<SocketT>& /*socket*/,
+        static void invoke(bcos::network::ASIOInterface* asio, const std::shared_ptr<SocketT>& /*socket*/,
             ba::mutable_buffer /*buffers*/, ReadCompletion completion)
         {
             static_cast<FakeASIO_Lifetime*>(asio)->parkRead(std::move(completion));
@@ -143,12 +143,12 @@ private:
     NodeIPEndpoint m_nodeIPEndpoint;
 };
 
-class FakeHost_Lifetime : public bcos::gateway::Host<P2PDecoder, FakeSocket_Lifetime>
+class FakeHost_Lifetime : public bcos::network::Host<P2PDecoder, FakeSocket_Lifetime>
 {
 public:
-    FakeHost_Lifetime(std::shared_ptr<ASIOInterface> asioInterface,
-        std::shared_ptr<BasicSessionFactory<P2PDecoder, FakeSocket_Lifetime>> sessionFactory)
-      : Host<P2PDecoder, FakeSocket_Lifetime>(
+    FakeHost_Lifetime(std::shared_ptr<bcos::network::ASIOInterface> asioInterface,
+        std::shared_ptr<bcos::network::BasicSessionFactory<P2PDecoder, FakeSocket_Lifetime>> sessionFactory)
+      : bcos::network::Host<P2PDecoder, FakeSocket_Lifetime>(
             std::move(asioInterface), std::move(sessionFactory))
     {
         this->m_run = true;
@@ -160,7 +160,7 @@ public:
     void stopNetwork() { this->m_run = false; }
 };
 
-using Session_Lifetime = BasicSession<P2PDecoder, FakeSocket_Lifetime>;
+using Session_Lifetime = bcos::network::BasicSession<P2PDecoder, FakeSocket_Lifetime>;
 
 // The regression: an in-flight async read must keep the Session alive after every external strong
 // reference is dropped. Pre-fix (weak_ptr capture) the Session would be destroyed here, leaving
@@ -199,9 +199,9 @@ BOOST_AUTO_TEST_CASE(InFlightReadKeepsSessionAlive)
                     (void)co_await sessionPtr->recvMessage();
                 }
             }
-            catch (NetworkException const& e)
+            catch (bcos::network::NetworkException const& e)
             {
-                result->set_value(errorCodeOf(e));
+                result->set_value(bcos::network::errorCodeOf(e));
             }
             catch (...)
             {
@@ -243,7 +243,7 @@ BOOST_AUTO_TEST_CASE(InFlightReadKeepsSessionAlive)
     BOOST_REQUIRE_MESSAGE(
         disconnectResult.wait_for(std::chrono::seconds(5)) == std::future_status::ready,
         "the parked recvMessage() was never woken -- drop() did not close the recv channel");
-    BOOST_CHECK_EQUAL(disconnectResult.get(), static_cast<int64_t>(P2PExceptionType::Disconnect));
+    BOOST_CHECK_EQUAL(disconnectResult.get(), static_cast<int64_t>(bcos::network::P2PExceptionType::Disconnect));
 
     BOOST_CHECK_MESSAGE(weakSession.expired(),
         "FIB-184: once the outstanding read and the deferred teardown complete, the Session must "
@@ -276,9 +276,9 @@ BOOST_AUTO_TEST_CASE(DropClosesSocketInlineWhenNetworkDown)
         {
             (void)co_await sessionPtr->recvMessage();
         }
-        catch (NetworkException const& e)
+        catch (bcos::network::NetworkException const& e)
         {
-            result->set_value(errorCodeOf(e));
+            result->set_value(bcos::network::errorCodeOf(e));
         }
         catch (...)
         {
@@ -294,7 +294,7 @@ BOOST_AUTO_TEST_CASE(DropClosesSocketInlineWhenNetworkDown)
     // channel poster runs the consumer's wake INLINE (a posted task would never run), so the
     // parked recvMessage() throws on drop()'s own stack and the promise is already fulfilled by
     // the time drop() returns.
-    session->drop(DisconnectReason::ClientQuit);
+    session->drop(bcos::network::DisconnectReason::ClientQuit);
 
     BOOST_CHECK_MESSAGE(!fakeSocket->isConnected(),
         "FIB-184: with the network down (io_context threads joined), drop() must close the socket "
@@ -304,7 +304,7 @@ BOOST_AUTO_TEST_CASE(DropClosesSocketInlineWhenNetworkDown)
         disconnectResult.wait_for(std::chrono::seconds(0)) == std::future_status::ready,
         "the parked recvMessage() was not woken inline -- with the network down the channel "
         "poster must run the wake synchronously inside drop()");
-    BOOST_CHECK_EQUAL(disconnectResult.get(), static_cast<int64_t>(P2PExceptionType::Disconnect));
+    BOOST_CHECK_EQUAL(disconnectResult.get(), static_cast<int64_t>(bcos::network::P2PExceptionType::Disconnect));
 
     // Drain the shutdown handlers closeSocket() queued (they hold the socket, not the session) so
     // the fake io_context tears down cleanly.

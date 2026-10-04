@@ -29,7 +29,7 @@ class ProGatewayNodeManager : public GatewayNodeManager
 {
 public:
     using Ptr = std::shared_ptr<ProGatewayNodeManager>;
-    ProGatewayNodeManager(std::string const& _uuid, P2pID const& _nodeID,
+    ProGatewayNodeManager(std::string const& _uuid, bcos::network::P2pID const& _nodeID,
         std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, Service::Ptr _p2pInterface,
         boost::asio::io_context& _ioContext);
 

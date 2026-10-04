@@ -12,14 +12,14 @@
 #include "bcos-gateway/gateway/GatewayNodeManager.h"
 #include "bcos-gateway/gateway/ProGatewayNodeManager.h"
 #include "bcos-gateway/libamop/AirTopicManager.h"
-#include "bcos-gateway/libnetwork/ASIOInterface.h"
-#include "bcos-gateway/libnetwork/Common.h"
-#include "bcos-gateway/libnetwork/Host.h"
+#include "bcos-network/ASIOInterface.h"
+#include "bcos-network/Common.h"
+#include "bcos-network/Host.h"
 #include "bcos-gateway/libp2p/PeerBlackWhitelist.h"
 #include "bcos-gateway/libp2p/Message.h"
 #include "bcos-gateway/libp2p/P2PDecoder.h"
 #include "bcos-gateway/libp2p/P2PIdentity.h"
-#include "bcos-gateway/libnetwork/Session.h"
+#include "bcos-network/Session.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-gateway/libp2p/router/RouterTableImpl.h"
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
@@ -684,7 +684,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     }
     auto ioServicePool = m_ioServicePool;
     auto asioInterface =
-        std::make_shared<ASIOInterface>(ioServicePool, _config->listenIP(), _config->listenPort());
+        std::make_shared<bcos::network::ASIOInterface>(ioServicePool, _config->listenIP(), _config->listenPort());
     asioInterface->setSrvContext(std::move(srvCtx));
     asioInterface->setClientContext(std::move(clientCtx));
 
@@ -798,7 +798,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             {
                 // register a null amop message handler
                 service->registerHandlerByMsgType(GatewayMessageType::AMOPMessageType,
-                    [](const bcos::gateway::NetworkException& _e,
+                    [](const bcos::network::NetworkException& _e,
                         const bcos::gateway::P2PSession::Ptr& session,
                         const bcos::gateway::Message& message) {
                         // 只读模式下, 不处理其它节点的amop消息
@@ -826,9 +826,9 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         // register disconnect handler
         service->registerDisconnectHandler(
             [gatewayNodeManagerWeakPtr, serviceWeakPtr = std::weak_ptr<Service>(service)](
-                NetworkException e, P2PSession::Ptr p2pSession) {
-                if (errorCodeOf(e) == P2PExceptionType::DuplicateSession ||
-                    errorCodeOf(e) == P2PExceptionType::Success)
+                bcos::network::NetworkException e, P2PSession::Ptr p2pSession) {
+                if (bcos::network::errorCodeOf(e) == bcos::network::P2PExceptionType::DuplicateSession ||
+                    bcos::network::errorCodeOf(e) == bcos::network::P2PExceptionType::Success)
                 {
                     return;
                 }
@@ -895,7 +895,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                         auto result = gatewayRateLimiter->checkOutGoing(
                             endpoint, pkgType, groupID, moduleID, msgLength);
                         return result ? std::make_optional(bcos::Error::buildError(
-                                            "", OutBWOverflow, result.value())) :
+                                            "", bcos::network::OutBWOverflow, result.value())) :
                                         std::nullopt;
                     }
                     return {};
@@ -917,7 +917,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                 auto result =
                     gatewayRateLimiter->checkInComing(endpoint, packetType, msgLength, true);
                 return result ? std::make_optional(
-                                    bcos::Error::buildError("", InQPSOverflow, result.value())) :
+                                    bcos::Error::buildError("", bcos::network::InQPSOverflow, result.value())) :
                                 std::nullopt;
                 return std::nullopt;
             });
@@ -989,7 +989,7 @@ void GatewayFactory::initFailOver(
 }
 
 bcos::amop::AMOPImpl::Ptr GatewayFactory::buildAMOP(
-    Service::Ptr _network, P2pID const& _p2pNodeID)
+    Service::Ptr _network, bcos::network::P2pID const& _p2pNodeID)
 {
     auto topicManager = std::make_shared<TopicManager>(m_rpcServiceName, _network);
     auto amopMessageFactory = std::make_shared<AMOPMessageFactory>();
@@ -1002,7 +1002,7 @@ bcos::amop::AMOPImpl::Ptr GatewayFactory::buildAMOP(
 }
 
 bcos::amop::AMOPImpl::Ptr GatewayFactory::buildLocalAMOP(
-    Service::Ptr _network, P2pID const& _p2pNodeID)
+    Service::Ptr _network, bcos::network::P2pID const& _p2pNodeID)
 {
     // Note: must set rpc to the topicManager before start the amop
     auto topicManager = std::make_shared<LocalTopicManager>(m_rpcServiceName, _network);
@@ -1022,9 +1022,9 @@ void GatewayFactory::registerAMOPHandlers(
     auto weakTopicManager = std::weak_ptr<TopicManager>(topicManager);
     // register disconnect handler
     service->registerDisconnectHandler(
-        [weakTopicManager](NetworkException e, P2PSession::Ptr p2pSession) {
-            if (errorCodeOf(e) == P2PExceptionType::DuplicateSession ||
-                errorCodeOf(e) == P2PExceptionType::Success)
+        [weakTopicManager](bcos::network::NetworkException e, P2PSession::Ptr p2pSession) {
+            if (bcos::network::errorCodeOf(e) == bcos::network::P2PExceptionType::DuplicateSession ||
+                bcos::network::errorCodeOf(e) == bcos::network::P2PExceptionType::Success)
             {
                 return;
             }
