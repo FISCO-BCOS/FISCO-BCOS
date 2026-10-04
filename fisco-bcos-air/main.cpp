@@ -64,6 +64,20 @@ int main(int argc, const char* argv[])
         auto param = bcos::initializer::initAirNodeCommandLine(argc, argv, false);
         if (param.op != bcos::initializer::Params::operation::None)
         {
+            if (param.hasOp(bcos::initializer::Params::operation::ImportBlocks))
+            {
+                // Offline RLP block import (the hive simulator contract): needs the
+                // FULL node init — EL config validation, state/ledger stores opened,
+                // the v2 pipeline built — but NO start(): nothing serves the network,
+                // the import commits through the EL verifier lane, then we exit 0 and
+                // the entrypoint starts the node normally.
+                initializer->init(param);
+                std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+                std::cout << "importing Ethereum blocks from " << param.importBlocksPath
+                          << " ..." << std::endl;
+                initializer->importEthereumBlocks(param.importBlocksPath);
+                return 0;
+            }
             if (param.hasOp(bcos::initializer::Params::operation::Prune))
             {
                 initializer->init(param.configFilePath, param.genesisFilePath);

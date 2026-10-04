@@ -20,6 +20,7 @@
  */
 #include "AirNodeInitializer.h"
 #include "libinitializer/Common.h"
+#include "libinitializer/EthereumBlockImport.h"
 #include "libinitializer/MemPoolInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
@@ -292,6 +293,37 @@ void AirNodeInitializer::validateEthereumELParams(
                     "or drop --bootnodes"));
         }
     }
+}
+
+void AirNodeInitializer::importEthereumBlocks(std::string const& _path)
+{
+    auto initializer = m_nodeInitializer;
+    auto nodeConfig = initializer->nodeConfig();
+    // The import drives the EL-mode pipeline (v2 scheduler + EthereumExecutor +
+    // EthereumBlockVerifier), so it is only meaningful on an EL-mode node.
+    if (!nodeConfig->ethereumELModeEnabled())
+    {
+        BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                                  "--import-blocks requires Ethereum L1 EL mode; set "
+                                  "[ethereum] mode=el in config.ini"));
+    }
+    bcos::initializer::EthereumBlockImporter importer(nodeConfig, initializer->ledger(),
+        initializer->protocolInitializer()->blockFactory(),
+        initializer->ethereumSerialScheduler(), initializer->ethereumExecutor(),
+        initializer->globalStateStorageInitializer(), initializer->mptCommitObserver(),
+        initializer->ledgerConfigState(), initializer->elBlockVerifier());
+    auto summary = importer.import(_path);
+    // Double-write the outcome: stdout for the hive/entrypoint harness, the node log
+    // for operators.
+    std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+    std::cout << "import-blocks done: imported=" << summary.imported
+              << " skipped=" << summary.skipped << " headNumber=" << summary.headNumber
+              << " headHash=" << summary.headHash.hex() << std::endl;
+    INITIALIZER_LOG(INFO) << LOG_DESC("import-blocks done")
+                          << LOG_KV("imported", summary.imported)
+                          << LOG_KV("skipped", summary.skipped)
+                          << LOG_KV("headNumber", summary.headNumber)
+                          << LOG_KV("headHash", summary.headHash.hex());
 }
 
 void AirNodeInitializer::start()

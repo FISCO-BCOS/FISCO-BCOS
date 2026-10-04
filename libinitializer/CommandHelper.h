@@ -48,7 +48,12 @@ struct Params
         Snapshot = 1 << 1,
         SnapshotWithoutTxAndReceipt = 1 << 2,
         ImportSnapshot = 1 << 3,
+        ImportBlocks = 1 << 4,
     } op;
+    // Path for --import-blocks: an RLP-encoded Ethereum block source — either a
+    // chain.rlp-style file (concatenated top-level RLP blocks) or a directory of
+    // one-block *.rlp files (the hive simulator contract).
+    std::string importBlocksPath;
     bool hasOp(operation op) const
     {
         return (static_cast<int>(this->op) & static_cast<int>(op)) != 0;
