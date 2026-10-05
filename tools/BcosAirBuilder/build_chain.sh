@@ -2473,7 +2473,7 @@ generate_auth_account()
   # The console get_*_account.sh scripts probe the arch with the non-portable
   # `uname -p`, which prints "unknown" on newer coreutils (e.g. ubuntu-26.04);
   # rewrite those probes to `uname -m` and fail loudly if any probe survives
-  sed -i.bak 's/$(uname -p)/$(uname -m)/g' "${HOME}/.fisco/${account_script}" && rm -f "${HOME}/.fisco/${account_script}.bak"
+  sed -i.bak 's/[$](uname -p)/[$](uname -m)/g' "${HOME}/.fisco/${account_script}" && rm -f "${HOME}/.fisco/${account_script}.bak"
   if grep -q 'uname -p' "${HOME}/.fisco/${account_script}"; then
       LOG_FATAL "${HOME}/.fisco/${account_script} still contains a non-portable \`uname -p\` arch probe; please update or patch the script manually"
   fi
