@@ -107,7 +107,7 @@ jobs:
         shell: bash
         run: |
           if [[ "${GITHUB_EVENT_NAME}" == "release" ]]; then
-            echo "EXTRA_FLAGS=-DSTATIC_BUILD=ON" >> "$GITHUB_ENV"
+            echo "EXTRA_FLAGS=-DBUILD_STATIC=ON" >> "$GITHUB_ENV"
           else
             echo "EXTRA_FLAGS=" >> "$GITHUB_ENV"
           fi

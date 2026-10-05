@@ -415,12 +415,12 @@ download_bin()
     fi
     mkdir -p bin && mv ${package_name} bin && cd bin && tar -zxf ${package_name} && cd ..
     chmod a+x ${binary_path}
-    # Release tarballs are dynamically linked against the build image's
-    # glibc/libstdc++ (ubuntu-26.04/gcc-16 for recent releases); verify the binary
-    # actually runs on this host and fail fast with an actionable message instead
-    # of dying in the dynamic loader at node start
+    # Sanity-check the downloaded binary actually runs on this host (release
+    # assets are statically linked since v3.18.0, but this still catches corrupt
+    # downloads, architecture mismatches and older dynamically-linked assets
+    # whose glibc/libstdc++ floor exceeds this host's)
     if ! "${binary_path}" -v > /dev/null 2>&1; then
-        exit_with_clean "The downloaded ${binary_name} binary cannot run on this host: it is dynamically linked against the glibc/libstdc++ of the CI build image (ubuntu-26.04 with gcc-16 for recent releases), which is newer than this host's. Please use a host running a comparable or newer OS (e.g. Ubuntu 26.04+), or build from source and pass the binary via the -e option."
+        exit_with_clean "The downloaded ${binary_name} binary cannot run on this host (corrupt download, wrong architecture, or a dynamically-linked asset from an older release whose glibc/libstdc++ requirement exceeds this host's). Please re-download, pick the asset matching this host's architecture, or build from source and pass the binary via the -e option."
     fi
 }
 
