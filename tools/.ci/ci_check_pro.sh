@@ -82,7 +82,7 @@ generate_auth_account()
   # The console get_*_account.sh scripts probe the arch with the non-portable
   # `uname -p`, which prints "unknown" on newer coreutils (e.g. ubuntu-26.04);
   # rewrite those probes to `uname -m` and fail loudly if any probe survives
-  sed -i.bak 's/[$](uname -p)/[$](uname -m)/g' "${account_script}" && rm -f "${account_script}.bak"
+  sed -i.bak "s/\$(uname -p)/\$(uname -m)/g" "${account_script}" && rm -f "${account_script}.bak"
   if grep -q 'uname -p' "${account_script}"; then
       LOG_ERROR "${account_script} still contains a non-portable \`uname -p\` arch probe; please update or patch the script manually"
       exit 1
