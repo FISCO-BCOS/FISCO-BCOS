@@ -415,6 +415,13 @@ download_bin()
     fi
     mkdir -p bin && mv ${package_name} bin && cd bin && tar -zxf ${package_name} && cd ..
     chmod a+x ${binary_path}
+    # Release tarballs are dynamically linked against the build image's
+    # glibc/libstdc++ (ubuntu-26.04/gcc-16 for recent releases); verify the binary
+    # actually runs on this host and fail fast with an actionable message instead
+    # of dying in the dynamic loader at node start
+    if ! "${binary_path}" -v > /dev/null 2>&1; then
+        exit_with_clean "The downloaded ${binary_name} binary cannot run on this host: it is dynamically linked against the glibc/libstdc++ of the CI build image (ubuntu-26.04 with gcc-16 for recent releases), which is newer than this host's. Please use a host running a comparable or newer OS (e.g. Ubuntu 26.04+), or build from source and pass the binary via the -e option."
+    fi
 }
 
 download_lightnode_bin()
@@ -2463,16 +2470,13 @@ generate_auth_account()
         chmod u+x ${account_script}
         mv ${account_script} "${HOME}/.fisco/"
   fi
-  # The console get_*_account.sh scripts detect the arch with the non-portable
-  # `uname -p`, which prints "unknown" on newer coreutils (e.g. ubuntu-26.04) and
-  # then hits a fallback branch calling an undefined LOG_ERROR; rewrite to
-  # `uname -m` and export a LOG_ERROR fallback before running the script
-  sed -i.bak 's/uname -p/uname -m/g' "${HOME}/.fisco/${account_script}" && rm -f "${HOME}/.fisco/${account_script}.bak"
-  LOG_ERROR() {
-    local content=${1}
-    echo -e "\033[31m[ERROR] ${content}\033[0m"
-  }
-  export -f LOG_ERROR
+  # The console get_*_account.sh scripts probe the arch with the non-portable
+  # `uname -p`, which prints "unknown" on newer coreutils (e.g. ubuntu-26.04);
+  # rewrite those probes to `uname -m` and fail loudly if any probe survives
+  sed -i.bak 's/$(uname -p)/$(uname -m)/g' "${HOME}/.fisco/${account_script}" && rm -f "${HOME}/.fisco/${account_script}.bak"
+  if grep -q 'uname -p' "${HOME}/.fisco/${account_script}"; then
+      LOG_FATAL "${HOME}/.fisco/${account_script} still contains a non-portable \`uname -p\` arch probe; please update or patch the script manually"
+  fi
   auth_admin_account=$(bash ${HOME}/.fisco/${account_script} | grep Address | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | awk '{print $5}')
   LOG_INFO "Admin account: ${auth_admin_account}"
   if [[ ${chain_version} == "air" ]];then

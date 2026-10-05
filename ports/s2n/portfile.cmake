@@ -1,3 +1,9 @@
+# Overlay port: s2n's CMakeLists hard-codes CMAKE_FIND_PACKAGE_PREFER_CONFIG=TRUE,
+# which routes find_package(OpenSSL) to the host's OpenSSL 3.x config and mixes it
+# with the vcpkg Tassl/OpenSSL 1.1.1 build. prefer-module-mode-findopenssl.patch
+# flips it back to module mode. Overlay ports bypass vcpkg version resolution, so
+# s2n does NOT track builtin-baseline bumps while this port exists; remove it once
+# the fix lands upstream. Tracking: https://github.com/FISCO-BCOS/FISCO-BCOS/issues/5663
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO aws/s2n-tls
