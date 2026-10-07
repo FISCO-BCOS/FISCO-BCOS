@@ -22,7 +22,10 @@ target_include_directories(opstack-executor PUBLIC
 # explicit because web3ChainIdFromEnvelope lives in that library TU (typed catch was measured
 # to bind even with bcos-crypto on the link line).
 target_link_libraries(opstack-executor PUBLIC
-    ethereum-executor bcos-framework bcos-protocol ledger rlp-protocol
+    # evm-precompiles is explicit because OpExecutionPolicy.h's public surface calls
+    # eth::evm::is_precompile / call_precompile / p256verify_execute directly; do not
+    # rely on the transitive PUBLIC closure through ethereum-executor.
+    ethereum-executor evm-precompiles bcos-framework bcos-protocol ledger rlp-protocol
     transaction-scheduler
     # bcos-devp2p: OpBlockVerifier.h's public surface takes devp2p::sync::Block (header-only
     # sync/Block.h; the link carries its include dir to consumers).

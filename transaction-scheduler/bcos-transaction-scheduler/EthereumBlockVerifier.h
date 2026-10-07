@@ -545,7 +545,8 @@ public:
             // judging the block INVALID off a failed read is exactly what the
             // block-boundary check below prevents on the success path. No-op when the
             // slot is clean, so ordinary error messages pass through unchanged.
-            storageErrorSlot->throwIfPoisoned("EthereumBlockVerifier: ");
+            executor_v1::eth::throwEthStorageErrorIfPoisoned(
+                *storageErrorSlot, "EthereumBlockVerifier: ");
             execution.error = std::move(message);
             co_return std::move(execution);
         };
@@ -861,7 +862,8 @@ public:
         // lanes honest: the builder's caller fails the build without committing, the
         // verifier's caller maps the exception to SYNCING / -32603 — a poisoned block
         // is never committed and never judged INVALID.
-        storageErrorSlot->throwIfPoisoned("EthereumBlockVerifier: ");
+        executor_v1::eth::throwEthStorageErrorIfPoisoned(
+            *storageErrorSlot, "EthereumBlockVerifier: ");
 
         // Fill cumulativeGasUsed + logsBloom (v2) and compute the deterministic roots.
         execution.computation = co_await computeEthereumRoots(

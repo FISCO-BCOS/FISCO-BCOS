@@ -30,6 +30,7 @@
 
 #include "EVMPrecompiles.h"
 #include "EVMSupport.h"
+#include "EthLogs.h"
 #include "EthereumHost.h"
 #include "EthereumState.h"
 #include "bcos-framework/protocol/LogEntry.h"
@@ -74,6 +75,83 @@ inline int32_t mapEvmcStatusToBcosStatus(evmc_status_code status)
     default:
         return static_cast<int32_t>(protocol::TransactionStatus::Unknown);
     }
+}
+
+/// Post-execution gas settlement, first half: apply the refund (capped at
+/// gas_used / quotient) and the EIP-7623 floor cost. Shared verbatim by
+/// EthL1Policy::settleFees, OpPolicy::settleFees and opRunDeposit.
+/// @return the final gas_used.
+inline int64_t applyRefundAndFloor(evmc_revision rev, int64_t minGasCost, int64_t gasLimit,
+    int64_t gasLeft, int64_t totalRefund)
+{
+    auto gas_used = gasLimit - gasLeft;
+
+    const auto max_refund_quotient = rev >= EVMC_LONDON ? 5 : 2;
+    const auto refund_limit = gas_used / max_refund_quotient;
+    const auto refund = std::min(totalRefund, refund_limit);
+    gas_used -= refund;
+    assert(gas_used > 0);
+
+    // EIP-7623: The gas used by the transaction must be at least the min_gas_cost.
+    return std::max(gas_used, minGasCost);
+}
+
+/// Post-execution gas settlement, second half: refund the gas prepayment to
+/// the sender and pay the coinbase tip. Shared verbatim by
+/// EthL1Policy::settleFees and OpPolicy::settleFees (which then routes the OP
+/// vault fees on top).
+template <class Storage>
+void refundPrepaymentAndTipCoinbase(EthereumState<Storage>& state, EthBlockInfo const& block,
+    int64_t gasUsed, uint256 txMaxCost, uint256 effectiveGasPrice, uint256 priorityGasPrice,
+    EthAccount& senderAcc)
+{
+    senderAcc.balance += txMaxCost - uint256(static_cast<uint64_t>(gasUsed)) * effectiveGasPrice;
+    state.touch(block.coinbase).balance +=
+        uint256(static_cast<uint64_t>(gasUsed)) * priorityGasPrice;
+}
+
+/// The set_code (type 4) admission checks. Shared verbatim by EthL1Policy and
+/// OpPolicy (the L1 hook additionally admits blob transactions).
+inline std::optional<std::error_code> validateSetCodeTxType(
+    protocol::Transaction const& tx, evmc_revision rev)
+{
+    if (rev < EVMC_PRAGUE)
+        return make_error_code(evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
+    if (!protocol::ethToAddress(tx).has_value())
+        return make_error_code(evm::ErrorCode::CREATE_SET_CODE_TX);
+    if (tx.authorizationList().empty())
+        return make_error_code(evm::ErrorCode::EMPTY_AUTHORIZATION_LIST);
+    return std::nullopt;
+}
+
+/// The "regular" transaction type hierarchy gate (set_code / eip1559 /
+/// access_list / legacy), including the tip-vs-fee-cap check. Shared verbatim
+/// by EthL1Policy and OpPolicy; special-type checks (blob, set_code fields)
+/// stay in the respective validateTxType hooks.
+inline std::optional<std::error_code> validateRegularTypeHierarchy(uint8_t txKind,
+    evmc_revision rev, uint256 maxGasPrice, uint256 maxPriorityGasPrice)
+{
+    switch (txKind)  // Validate the "regular" transaction type hierarchy.
+    {
+    case 4:  // set_code
+    case 3:  // blob
+    case 2:  // eip1559
+        if (rev < EVMC_LONDON)
+            return make_error_code(evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
+
+        if (maxPriorityGasPrice > maxGasPrice)
+            return make_error_code(
+                evm::ErrorCode::TIP_GT_FEE_CAP);  // Priority gas price is too high.
+        [[fallthrough]];
+
+    case 1:  // access_list
+        if (rev < EVMC_BERLIN)
+            return make_error_code(evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
+        [[fallthrough]];
+
+    case 0:;  // legacy
+    }
+    return std::nullopt;
 }
 
 /// The Ethereum L1 execution policy: every hook reproduces the behaviour that
@@ -124,38 +202,14 @@ struct EthL1Policy
             break;
 
         case 4:  // set_code
-            if (rev < EVMC_PRAGUE)
-                return make_error_code(evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
-            if (!hasTo)
-                return make_error_code(evm::ErrorCode::CREATE_SET_CODE_TX);
-            if (tx.authorizationList().empty())
-                return make_error_code(evm::ErrorCode::EMPTY_AUTHORIZATION_LIST);
+            if (const auto error = validateSetCodeTxType(tx, rev))
+                return error;
             break;
 
         default:;
         }
 
-        switch (txKind)  // Validate the "regular" transaction type hierarchy.
-        {
-        case 4:  // set_code
-        case 3:  // blob
-        case 2:  // eip1559
-            if (rev < EVMC_LONDON)
-                return make_error_code(evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
-
-            if (maxPriorityGasPrice > maxGasPrice)
-                return make_error_code(
-                    evm::ErrorCode::TIP_GT_FEE_CAP);  // Priority gas price is too high.
-            [[fallthrough]];
-
-        case 1:  // access_list
-            if (rev < EVMC_BERLIN)
-                return make_error_code(evm::ErrorCode::TX_TYPE_NOT_SUPPORTED);
-            [[fallthrough]];
-
-        case 0:;  // legacy
-        }
-        return std::nullopt;
+        return validateRegularTypeHierarchy(txKind, rev, maxGasPrice, maxPriorityGasPrice);
     }
 
     /// Chain-level addition to the sender's theoretical maximum transaction
@@ -250,20 +304,10 @@ struct EthL1Policy
         int64_t delegationRefund, int64_t evmRefund, uint256 txMaxCost,
         uint256 effectiveGasPrice, uint256 priorityGasPrice, EthAccount& senderAcc)
     {
-        auto gas_used = gasLimit - gasLeft;
-
-        const auto max_refund_quotient = rev >= EVMC_LONDON ? 5 : 2;
-        const auto refund_limit = gas_used / max_refund_quotient;
-        const auto refund = std::min(delegationRefund + evmRefund, refund_limit);
-        gas_used -= refund;
-        assert(gas_used > 0);
-
-        // EIP-7623: The gas used by the transaction must be at least the min_gas_cost.
-        gas_used = std::max(gas_used, minGasCost);
-
-        senderAcc.balance += txMaxCost - uint256(static_cast<uint64_t>(gas_used)) * effectiveGasPrice;
-        state.touch(block.coinbase).balance +=
-            uint256(static_cast<uint64_t>(gas_used)) * priorityGasPrice;
+        const auto gas_used =
+            applyRefundAndFloor(rev, minGasCost, gasLimit, gasLeft, delegationRefund + evmRefund);
+        refundPrepaymentAndTipCoinbase(
+            state, block, gas_used, txMaxCost, effectiveGasPrice, priorityGasPrice, senderAcc);
         return gas_used;
     }
 
@@ -304,16 +348,7 @@ struct EthL1Policy
     static protocol::TransactionReceipt::Ptr buildReceipt(Host& host, evmc::Result const& result,
         int64_t gasUsed, protocol::TransactionReceiptFactory const& rf, int64_t blockNumber)
     {
-        std::vector<protocol::LogEntry> logs;
-        for (auto const& l : host.take_logs())
-        {
-            bcos::bytes addr(l.addr.bytes, l.addr.bytes + sizeof(evmc_address));
-            bcos::h256s topics;
-            for (auto const& t : l.topics)
-                topics.emplace_back(bcos::bytesConstRef(t.bytes, sizeof(evmc_bytes32)));
-            bcos::bytes data(l.data.begin(), l.data.end());
-            logs.emplace_back(std::move(addr), std::move(topics), std::move(data));
-        }
+        auto logs = takeBcosLogs(host);
         bcos::bytes output;
         return rf.createReceipt(bcos::u256(static_cast<uint64_t>(gasUsed)), std::string{}, logs,
             mapEvmcStatusToBcosStatus(result.status_code), bcos::ref(output), blockNumber);
