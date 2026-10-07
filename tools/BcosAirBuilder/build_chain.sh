@@ -2492,6 +2492,12 @@ generate_auth_account()
       LOG_FATAL "${HOME}/.fisco/${account_script} still contains a non-portable \`uname -p\` arch probe; please update or patch the script manually"
   fi
   auth_admin_account=$(bash ${HOME}/.fisco/${account_script} | grep Address | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | awk '{print $5}')
+  # fail fast: a broken account script run (e.g. its tassl download failed)
+  # yields an empty/garbage address; deploying with it surfaces only minutes
+  # later as an obscure expand-node timeout
+  if ! [[ ${auth_admin_account} =~ ^0x[0-9a-fA-F]{40}$ ]]; then
+      LOG_FATAL "Failed to generate a valid auth admin account (got '${auth_admin_account}'); check the ${account_script} output above (e.g. tassl download failure)"
+  fi
   LOG_INFO "Admin account: ${auth_admin_account}"
   if [[ ${chain_version} == "air" ]];then
       mv accounts* "${ca_dir}"

@@ -102,6 +102,13 @@ generate_auth_account()
       exit 1
   fi
   auth_admin_account=$(bash ${account_script} | grep Address | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | awk '{print $5}')
+  # fail fast: a broken account script run (e.g. its tassl download failed)
+  # yields an empty/garbage address; deploying with it surfaces only minutes
+  # later as an obscure expand-node timeout
+  if ! [[ ${auth_admin_account} =~ ^0x[0-9a-fA-F]{40}$ ]]; then
+      LOG_ERROR "Failed to generate a valid auth admin account (got '${auth_admin_account}'); check the ${account_script} output above (e.g. tassl download failure)"
+      exit 1
+  fi
   LOG_INFO "Admin account: ${auth_admin_account}"
 }
 
