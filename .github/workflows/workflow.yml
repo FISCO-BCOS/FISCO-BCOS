@@ -19,7 +19,9 @@ concurrency:
 jobs:
   build:
     name: Build
-    runs-on: ${{ matrix.os }}
+    # ubuntu-26.04-static is a build CONFIGURATION, not a runner label: it runs
+    # on the ubuntu-26.04 runner with -DBUILD_STATIC=ON (see the matrix comment)
+    runs-on: ${{ matrix.os == 'ubuntu-26.04-static' && 'ubuntu-26.04' || matrix.os }}
     permissions:
       contents: write
     strategy:
