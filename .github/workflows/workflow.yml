@@ -29,9 +29,18 @@ jobs:
           [
             ubuntu-26.04,
             ubuntu-26.04-arm,
+            # static leg: same gcc-16 toolchain as ubuntu-26.04 but configured with
+            # -DBUILD_STATIC=ON (see "Compute build flags"), so the fully-static
+            # link path used for the release assets is gated by PR CI with the
+            # full unit-test + integration suites instead of being exercised only
+            # on release events
+            ubuntu-26.04-static,
             # gcc-14 leg: CompilerSettings.cmake declares GCC 12+ as the supported
             # floor, so keep one older-GCC compile+unit-test gate alongside the
-            # gcc-16 legs; release assets are packaged from the ubuntu-26.04 legs only
+            # gcc-16 legs. The declared floor (12) is intentionally lower than the
+            # oldest gated compiler (14): the declaration is the documented minimum
+            # for downstream builders, the gate is what CI actually verifies.
+            # release assets are packaged from the ubuntu-26.04 legs only
             ubuntu-24.04,
             macos-15,
             windows-2025,
@@ -69,7 +78,7 @@ jobs:
         with:
           node-version: 20
       - name: Install linux dependencies
-        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-arm'
+        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-arm' || matrix.os == 'ubuntu-26.04-static'
         run: |
           sudo apt update
           sudo apt install -y --no-install-recommends \
@@ -106,13 +115,16 @@ jobs:
         if: matrix.os != 'windows-2025'
         shell: bash
         run: |
-          if [[ "${GITHUB_EVENT_NAME}" == "release" ]]; then
+          # The ubuntu-26.04-static leg always builds statically so the -static
+          # link path of the release binaries is gated on every PR, not only
+          # exercised on release events
+          if [[ "${GITHUB_EVENT_NAME}" == "release" || "${{ matrix.os }}" == "ubuntu-26.04-static" ]]; then
             echo "EXTRA_FLAGS=-DBUILD_STATIC=ON" >> "$GITHUB_ENV"
           else
             echo "EXTRA_FLAGS=" >> "$GITHUB_ENV"
           fi
       - name: Configure for linux
-        if: matrix.os == 'ubuntu-26.04'
+        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-static'
         run: |
           mkdir -p build
           cd build
@@ -205,8 +217,10 @@ jobs:
           collection: https://raw.githubusercontent.com/FISCO-BCOS/FISCOBCOS-RPC-API/main/fiscobcos.rpcapi.collection.json
       - name: Integration test - Air
         # the ubuntu-24.04 leg is a gcc-14 compile/unit-test gate only; the full
-        # integration suite runs on the gcc-16 legs
-        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-arm'
+        # integration suite runs on the gcc-16 legs. The ubuntu-26.04-static leg
+        # included here runs the suite against the fully-static binary, so CI
+        # tests exactly the link configuration shipped as release assets
+        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-arm' || matrix.os == 'ubuntu-26.04-static'
         run: |
           cd tools
           bash .ci/ci_check_air.sh ${{ github.base_ref }} "true"
@@ -220,7 +234,7 @@ jobs:
         # harness discards the node's stderr, so the root cause is not yet
         # diagnosed; see the air test which likewise excludes macos-15). macOS
         # is excluded until the node startup issue is fixed.
-        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-arm'
+        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-arm' || matrix.os == 'ubuntu-26.04-static'
         run: |
           # eth-account (tx signing) + requests (RPC). Handle PEP 668.
           python3 -m pip install --quiet eth-account requests 2>/dev/null || \
@@ -231,7 +245,7 @@ jobs:
         # Built-in single-node consensus mode ([consensus] enable_single_node_consensus):
         # builds a single-node AIR chain, patches config.ini to enable the mode (no
         # pbft/sealer/txpool), and drives eth_sendRawTransaction -> receipt / block reads.
-        if: matrix.os == 'ubuntu-26.04'
+        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-static'
         run: |
           # eth-account (tx signing) + requests (RPC). Handle PEP 668.
           python3 -m pip install --quiet eth-account requests 2>/dev/null || \
@@ -268,7 +282,7 @@ jobs:
           echo "=== After cleanup ==="
           du -sh build/vcpkg_installed 2>/dev/null || true
       - name: Set packaging variables
-        if: github.event_name == 'release' && matrix.os != 'windows-2025' && matrix.os != 'ubuntu-24.04'
+        if: github.event_name == 'release' && matrix.os != 'windows-2025' && matrix.os != 'ubuntu-24.04' && matrix.os != 'ubuntu-26.04-static'
         id: pkgvars
         shell: bash
         run: |
@@ -298,7 +312,7 @@ jobs:
           # also expose as step outputs for later reference
           echo "pkg_name=$PKG_NAME" >> $GITHUB_OUTPUT
       - name: Create release tarball
-        if: github.event_name == 'release' && matrix.os != 'windows-2025' && matrix.os != 'ubuntu-24.04'
+        if: github.event_name == 'release' && matrix.os != 'windows-2025' && matrix.os != 'ubuntu-24.04' && matrix.os != 'ubuntu-26.04-static'
         shell: bash
         run: |
           set -euo pipefail
@@ -311,7 +325,7 @@ jobs:
           # Create tar.gz in repo root with only the binary inside (no extra folders)
           tar -C "$(dirname "$BIN_PATH")" -czf "${PKG_NAME}" "$(basename "$BIN_PATH")"
       - name: Upload assets to GitHub Release
-        if: github.event_name == 'release' && matrix.os != 'windows-2025' && matrix.os != 'ubuntu-24.04'
+        if: github.event_name == 'release' && matrix.os != 'windows-2025' && matrix.os != 'ubuntu-24.04' && matrix.os != 'ubuntu-26.04-static'
         uses: softprops/action-gh-release@v2
         with:
           files: |

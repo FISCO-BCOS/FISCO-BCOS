@@ -2470,14 +2470,25 @@ generate_auth_account()
         chmod u+x ${account_script}
         mv ${account_script} "${HOME}/.fisco/"
   fi
+  # NOTE: this account-script patch block is duplicated in
+  # tools/.ci/ci_check_pro.sh's generate_auth_account (build_chain.sh is a
+  # standalone release asset, so the logic cannot be factored into a shared
+  # helper); any change here must be mirrored there.
   # The console get_*_account.sh scripts probe the arch with the non-portable
   # `uname -p`, which prints "unknown" on newer coreutils (e.g. ubuntu-26.04);
   # rewrite those probes to `uname -m` and fail loudly if any probe survives
   sed -i.bak "s/\$(uname -p)/\$(uname -m)/g" "${HOME}/.fisco/${account_script}" && rm -f "${HOME}/.fisco/${account_script}.bak"
   # The script downloads tassl from gitee, which is flaky from CI runners
-  # (transient "Connection reset by peer"); add retries to its curl calls
-  sed -i.bak "s/curl -#LO/curl -#L --retry 5 --retry-all-errors -O/g" "${HOME}/.fisco/${account_script}" && rm -f "${HOME}/.fisco/${account_script}.bak"
-  if grep -q 'uname -p' "${HOME}/.fisco/${account_script}"; then
+  # (transient "Connection reset by peer"); add retries to its curl calls.
+  # --retry-all-errors requires curl >= 7.71 (2020-06); this script also runs on
+  # older operator hosts whose curl would abort on the unknown option, so probe
+  # for support first and fall back to plain --retry
+  local curl_retry_opts="--retry 5 --retry-delay 3"
+  if curl --help all 2>/dev/null | grep -q -- "--retry-all-errors"; then
+    curl_retry_opts="--retry 5 --retry-all-errors"
+  fi
+  sed -i.bak "s/curl -#LO/curl -#L ${curl_retry_opts} -O/g" "${HOME}/.fisco/${account_script}" && rm -f "${HOME}/.fisco/${account_script}.bak"
+  if grep -qF "\$(uname -p)" "${HOME}/.fisco/${account_script}"; then
       LOG_FATAL "${HOME}/.fisco/${account_script} still contains a non-portable \`uname -p\` arch probe; please update or patch the script manually"
   fi
   auth_admin_account=$(bash ${HOME}/.fisco/${account_script} | grep Address | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | awk '{print $5}')

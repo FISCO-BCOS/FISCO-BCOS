@@ -387,13 +387,15 @@ if [[ ${check_web3_test} == "true" ]]; then
     # otherwise the web3 suite surfaces the skipped tx_gas_price=1 setting as a
     # cryptic gasPrice assertion failure minutes later.
     console_with_retry() {
-        local output attempt
+        local output attempt rc
         for attempt in 1 2 3; do
-            output=$(bash console.sh "$@" 2>&1)
-            if [[ "${output}" != *'"code":-'* && "${output}" != *"timed out"* ]]; then
+            # check the exit code too: console.sh can fail without printing a
+            # recognizable error marker (e.g. java launcher errors)
+            output=$(bash console.sh "$@" 2>&1) && rc=0 || rc=$?
+            if [[ ${rc} -eq 0 && "${output}" != *'"code":-'* && "${output}" != *"timed out"* ]]; then
                 return 0
             fi
-            LOG_WARN "console.sh $* attempt ${attempt} failed, retrying in 10s..."
+            LOG_WARN "console.sh $* attempt ${attempt} failed (rc=${rc}), retrying in 10s..."
             sleep 10
         done
         LOG_ERROR "console.sh $* failed after 3 attempts: ${output}"
