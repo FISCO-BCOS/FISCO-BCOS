@@ -25,7 +25,11 @@
 #include "txpool/storage/MemoryStorage.h"
 #include <bcos-tx-validator/TxPoolNonceChecker.h>
 #include <bcos-tx-validator/Web3NonceChecker.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
 #include <bcos-utilities/Exceptions.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::txpool;

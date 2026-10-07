@@ -29,6 +29,10 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/core/null_deleter.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/log/attributes/clock.hpp>
+#include <boost/log/attributes/counter.hpp>
+#include <boost/log/attributes/current_process_id.hpp>
+#include <boost/log/attributes/current_thread_id.hpp>
 #include <boost/log/core/core.hpp>
 #include <boost/log/support/date_time.hpp>
 #include <boost/log/utility/exception_handler.hpp>
@@ -44,13 +48,34 @@ constexpr int MB_IN_BYTES = 1048576;
 
 namespace
 {
-void initializeLogAttributes()
+// Attach only the attributes the default formatters actually use; the full
+// add_common_attributes() set also materializes LineID/ProcessID per record,
+// each costing a heap allocation. LineID/ProcessID are added on demand when a
+// custom log.format string (which may reference them) is configured.
+void initializeLogAttributes(bool _withFormatAttrs)
 {
-    static std::once_flag once;
-    std::call_once(once, []() {
-        boost::log::add_common_attributes();
-        boost::log::core::get()->add_global_attribute("ThreadName", bcos::log::thread_name());
-    });
+    static std::mutex mutex;
+    std::lock_guard<std::mutex> lock(mutex);
+    auto core = boost::log::core::get();
+    static bool minimalDone = false;
+    if (!minimalDone)
+    {
+        core->add_global_attribute("TimeStamp", boost::log::attributes::local_clock());
+        core->add_global_attribute("ThreadID", boost::log::attributes::current_thread_id());
+        core->add_global_attribute("ThreadName", bcos::log::thread_name());
+        minimalDone = true;
+    }
+    if (_withFormatAttrs)
+    {
+        static bool formatAttrsDone = false;
+        if (!formatAttrsDone)
+        {
+            core->add_global_attribute("LineID", boost::log::attributes::counter<unsigned int>(1));
+            core->add_global_attribute(
+                "ProcessID", boost::log::attributes::current_process_id());
+            formatAttrsDone = true;
+        }
+    }
 }
 }  // namespace
 
@@ -104,6 +129,7 @@ void BoostLogInitializer::initStatLog(boost::property_tree::ptree const& _pt,
     std::string const& _logger, std::string const& _logPrefix)
 {
     m_running.store(true);
+    initializeLogAttributes(false);
     // not set the log path before init
     if (m_logPath.size() == 0)
     {
@@ -130,7 +156,7 @@ boost::shared_ptr<bcos::BoostLogInitializer::console_sink_t>
 BoostLogInitializer::initConsoleLogSink(
     boost::property_tree::ptree const& _pt, unsigned _logLevel, std::string const& channel)
 {
-    initializeLogAttributes();
+    initializeLogAttributes(!m_logFormat.empty());
     boost::shared_ptr<console_sink_t> consoleSink(new console_sink_t());
     // FIB-184: the sink is asynchronous, so its backend runs on a dedicated feeding thread. An
     // exception thrown there (formatting/IO during feed_records) with no handler propagates to
@@ -140,7 +166,7 @@ BoostLogInitializer::initConsoleLogSink(
     consoleSink->locked_backend()->add_stream(
         boost::shared_ptr<std::ostream>(&std::cout, boost::null_deleter()));
 
-    bool need_flush = _pt.get<bool>("log.flush", true);
+    bool need_flush = _pt.get<bool>("log.flush", false);
     consoleSink->locked_backend()->auto_flush(need_flush);
     consoleSink->set_filter(boost::log::expressions::attr<std::string>("Channel") == channel &&
                             boost::log::trivial::severity >= _logLevel);
@@ -212,7 +238,7 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
     {
         throw std::runtime_error("log.max_log_file_size must be greater than 100M");
     }
-    m_autoFlush = _pt.get<bool>("log.flush", true);
+    m_autoFlush = _pt.get<bool>("log.flush", false);
     m_enableLog = _pt.get<bool>("log.enable", true);
     m_maxArchiveSize = _pt.get<uint64_t>("log.max_archive_size", 0) * MB_IN_BYTES;
     if (m_maxArchiveSize == 0)
@@ -228,8 +254,15 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
 
     if (m_consoleLog)
     {
-        boost::shared_ptr<console_sink_t> sink = initConsoleLogSink(_pt, m_logLevel, _logger);
-        setLogFormatter(sink, m_logFormat);
+        if (useLineFastPath(_logger))
+        {
+            initLineConsoleLogSink(_pt);
+        }
+        else
+        {
+            boost::shared_ptr<console_sink_t> sink = initConsoleLogSink(_pt, m_logLevel, _logger);
+            setLogFormatter(sink, m_logFormat);
+        }
     }
     else
     {
@@ -246,19 +279,33 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
         //     throw std::runtime_error("log.archive_path must be different from log.log_path");
         // }
         auto enableRotateByHour = _pt.get<bool>("log.enable_rotate_by_hour", true);
-        boost::shared_ptr<sink_t> sink = nullptr;
-        if (enableRotateByHour)
+        if (useLineFastPath(_logger))
         {
-            sink = initHourLogSink(m_logPath, _logPrefix, _logger);
+            if (enableRotateByHour)
+            {
+                initHourLineLogSink(m_logPath, _logPrefix);
+            }
+            else
+            {
+                initLineLogSink(m_logPath);
+            }
         }
         else
         {
-            sink = initLogSink(m_logPath, _logger);
+            boost::shared_ptr<sink_t> sink = nullptr;
+            if (enableRotateByHour)
+            {
+                sink = initHourLogSink(m_logPath, _logPrefix, _logger);
+            }
+            else
+            {
+                sink = initLogSink(m_logPath, _logger);
+            }
+            setLogFormatter(sink, m_logFormat);
         }
-        setLogFormatter(sink, m_logFormat);
     }
     setFileLogLevel((LogLevel)m_logLevel);
-    initializeLogAttributes();
+    initializeLogAttributes(!m_logFormat.empty());
 
     auto enableRateCollector = _pt.get<bool>("log.enable_rate_collector", false);
     if (enableRateCollector)
@@ -344,6 +391,98 @@ boost::shared_ptr<bcos::BoostLogInitializer::sink_t> BoostLogInitializer::initLo
     return sink;
 }
 
+// Whole-line fast path: identical backend configuration as initLogSink, but
+// the sink never attaches to boost::log core; LogStream commits formatted
+// lines to it directly through the line-sink registry.
+std::shared_ptr<bcos::BoostLogInitializer::line_sink_t> BoostLogInitializer::initLineLogSink(
+    std::string const& _logPath)
+{
+    auto sink = std::make_shared<line_sink_t>();
+    sink->locked_backend()->enable_final_rotation(false);
+    sink->locked_backend()->set_open_mode(std::ios::app);
+    // The backend evaluates the rotation predicate on every record; the boost
+    // time-point functor builds a posix_time local_time each call (~250ns of
+    // consumer CPU, which the producer pays as cache-line contention). Wrap it
+    // in a 1s throttle: a daily rotation loses nothing at second granularity.
+    sink->locked_backend()->set_time_based_rotation(
+        [check = boost::log::sinks::file::rotation_at_time_point(
+             m_rotateTimePoint[0], m_rotateTimePoint[1], m_rotateTimePoint[2]),
+            last = std::time_t(0)]() mutable {
+            std::time_t now = std::time(nullptr);
+            if (now == last)
+            {
+                return false;
+            }
+            last = now;
+            return check();
+        });
+    sink->locked_backend()->set_file_name_pattern(_logPath + "/" + m_logNamePattern);
+    sink->locked_backend()->set_target_file_name_pattern(_logPath + "/" + m_rotateFileNamePattern);
+    sink->locked_backend()->set_rotation_size(m_rotateSize);
+    sink->locked_backend()->auto_flush(m_autoFlush);
+    if (!m_archivePath.empty())
+    {
+        boost::filesystem::path targetDir(m_archivePath);
+        sink->locked_backend()->set_file_collector(bcos::log::make_collector(targetDir,
+            m_maxArchiveSize, m_minFreeSpace, m_maxArchiveFiles, m_compressArchive));
+    }
+    sink->locked_backend()->scan_for_files();
+    if (m_enableLog)
+    {
+        bcos::log::registerLineSink(sink);
+    }
+    m_lineSinks.push_back(sink);
+    return sink;
+}
+
+std::shared_ptr<bcos::BoostLogInitializer::line_sink_t> BoostLogInitializer::initHourLineLogSink(
+    std::string const& _logPath, std::string const& _logPrefix)
+{
+    m_currentHourVec.push_back(
+        (int)boost::posix_time::second_clock::local_time().time_of_day().hours());
+    std::string fileName = _logPath + "/" + _logPrefix + "_%Y%m%d%H.%M.log";
+
+    auto sink = std::make_shared<line_sink_t>();
+    sink->locked_backend()->set_open_mode(std::ios::ate);
+    // 1s throttle: canRotate() builds a posix_time local_time per call, see
+    // initLineLogSink for the measurement.
+    sink->locked_backend()->set_time_based_rotation(
+        [this, index = (m_currentHourVec.size() - 1), last = std::time_t(0)]() mutable {
+            std::time_t now = std::time(nullptr);
+            if (now == last)
+            {
+                return false;
+            }
+            last = now;
+            return canRotate(index);
+        });
+    sink->locked_backend()->set_file_name_pattern(fileName);
+    sink->locked_backend()->set_rotation_size(m_rotateSize);
+    sink->locked_backend()->auto_flush(m_autoFlush);
+    if (m_enableLog)
+    {
+        bcos::log::registerLineSink(sink);
+    }
+    m_lineSinks.push_back(sink);
+    return sink;
+}
+
+std::shared_ptr<bcos::BoostLogInitializer::console_line_sink_t>
+BoostLogInitializer::initLineConsoleLogSink(boost::property_tree::ptree const& _pt)
+{
+    auto sink = std::make_shared<console_line_sink_t>();
+    sink->locked_backend()->add_stream(
+        boost::shared_ptr<std::ostream>(&std::cout, boost::null_deleter()));
+    bool need_flush = _pt.get<bool>("log.flush", false);
+    sink->locked_backend()->auto_flush(need_flush);
+    if (m_enableLog)
+    {
+        bcos::log::registerLineSink(sink);
+    }
+    m_consoleLineSinks.push_back(sink);
+    return sink;
+}
+
 /**
  * @brief: get log level according to given string
  *
@@ -384,6 +523,24 @@ void BoostLogInitializer::stopLogging()
         return;
     }
     m_running.store(false);
+    // Unregister whole-line sinks first so new records stop arriving through
+    // the fast path; producers that already hold a shared_ptr copy keep the
+    // sink alive until their write finishes.
+    for (auto const& sink : m_lineSinks)
+    {
+        bcos::log::unregisterLineSink(sink.get());
+        sink->stop();
+        sink->flush();
+    }
+    m_lineSinks.clear();
+    for (auto const& sink : m_consoleLineSinks)
+    {
+        bcos::log::unregisterLineSink(sink.get());
+        sink->stop();
+        sink->flush();
+    }
+    m_consoleLineSinks.clear();
+
     for (auto const& sink : m_sinks)
     {
         stopLogging(sink);
@@ -443,6 +600,25 @@ void bcos::BoostLogInitializer::ConsoleSink::consume(
         // abort if encounter fatal, will generate coredump
         // must make sure only use LOG(FATAL) when encounter the most serious problem
         // forbid use LOG(FATAL) in the function that should exit normally
+        std::abort();
+    }
+}
+void bcos::BoostLogInitializer::Sink::consumeLine(LogLevel _level, const std::string& _line)
+{
+    // The text file backend never reads the record, only the formatted line.
+    boost::log::sinks::text_file_backend::consume(boost::log::record_view(), _line);
+    if (_level == LogLevel::FATAL)
+    {
+        // abort if encounter fatal, will generate coredump (same semantics as
+        // the record-based consume above)
+        std::abort();
+    }
+}
+void bcos::BoostLogInitializer::ConsoleSink::consumeLine(LogLevel _level, const std::string& _line)
+{
+    boost::log::sinks::text_ostream_backend::consume(boost::log::record_view(), _line);
+    if (_level == LogLevel::FATAL)
+    {
         std::abort();
     }
 }

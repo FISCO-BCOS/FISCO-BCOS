@@ -23,7 +23,6 @@
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <evmc/evmc.h>
 #include <boost/lexical_cast.hpp>
 #include <algorithm>
@@ -31,6 +30,11 @@
 #include <cstdint>
 #include <map>
 #include <set>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::ledger;

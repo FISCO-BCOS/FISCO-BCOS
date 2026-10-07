@@ -24,7 +24,11 @@
 // hasher type. A unity build can mask a missing include of the former (a sibling TU's include
 // leaks in), so keep both explicit.
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
 #include <bcos-utilities/DataConvertUtility.h>  // fromBigEndian
+#endif
 
 namespace bcos::ledger::mpt
 {

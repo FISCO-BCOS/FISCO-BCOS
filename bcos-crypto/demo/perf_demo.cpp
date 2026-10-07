@@ -30,11 +30,15 @@
 #include <bcos-crypto/signature/fastsm2/FastSM2Crypto.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
-#include <bcos-utilities/Common.h>
 #include <boost/core/ignore_unused.hpp>
 #include <cassert>
 #include <ethash/keccak.hpp>
 #include <span>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::crypto;

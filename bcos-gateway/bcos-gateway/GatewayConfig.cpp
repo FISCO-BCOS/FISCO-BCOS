@@ -8,10 +8,7 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-gateway/Common.h"
 #include "bcos-security/bcos-security/BcosKms.h"
-#include "bcos-utilities/BoostLog.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/FileUtility.h"
-#include "bcos-utilities/FixedBytes.h"
+#include "bcos-utilities/LogStream.h"
 #include <json/json.h>
 #include <boost/regex.hpp>
 #include <boost/throw_exception.hpp>
@@ -20,6 +17,14 @@
 #include <vector>
 #include <boost/algorithm/string.hpp>
 #include <boost/exception_ptr.hpp>
+#include <boost/filesystem.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/FileUtility.h"
+#include "bcos-utilities/FixedBytes.h"
+#endif
 
 using namespace bcos;
 using namespace security;

@@ -23,9 +23,13 @@
 #include "../impl/TarsSerializable.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Serialize.h>
-#include <bcos-utilities/DataConvertUtility.h>  // bcos::toQuantity (hex-quantity serialization)
 #include <algorithm>
 #include <cassert>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>  // bcos::toQuantity (hex-quantity serialization)
+#endif
 
 DERIVE_BCOS_EXCEPTION(EmptyReceiptHash);
 

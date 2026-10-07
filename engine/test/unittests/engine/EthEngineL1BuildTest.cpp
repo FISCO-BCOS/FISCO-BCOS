@@ -39,7 +39,6 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-transaction-scheduler/EthereumBlockVerifier.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
-#include <bcos-utilities/IOServicePool.h>
 #include <ethereum-executor/EthStorageErrorGuard.h>
 #include <ethereum-executor/EthereumExecutor.h>
 #include <boost/test/unit_test.hpp>
@@ -50,6 +49,11 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <bcos-utilities/IOServicePool.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#endif
 
 using namespace bcos;
 using namespace bcos::engine;

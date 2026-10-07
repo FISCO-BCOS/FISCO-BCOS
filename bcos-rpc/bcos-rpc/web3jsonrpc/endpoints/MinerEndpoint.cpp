@@ -21,7 +21,11 @@
 
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
 #include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::rpc;

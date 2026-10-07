@@ -20,16 +20,21 @@
 
 #include "JwtVerifier.h"
 #include <bcos-rpc/Common.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/FileUtility.h>
 #include <jwt-cpp/traits/kazuho-picojson/defaults.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/trim.hpp>
 #include <algorithm>
 #include <cctype>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/FileUtility.h>
+#endif
 
 namespace bcos::rpc
 {

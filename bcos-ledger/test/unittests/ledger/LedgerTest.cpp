@@ -52,13 +52,17 @@
 #include <bcos-framework/testutils/ScopedNodeAddressTableMode.h>
 #include <bcos-framework/testutils/faker/FakeBlock.h>
 #include <bcos-table/src/StateStorage.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <magic_enum/magic_enum.hpp>
 #include <memory>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::ledger;

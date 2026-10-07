@@ -23,7 +23,10 @@
  * @brief: add file collector
  */
 #include "GzTools.h"
+#include "BoostLog.h"
 #include "BoostLogCollector.h"
+#include "Common.h"
+#include "LineAsyncSink.h"
 #include "Log.h"
 #include <boost/date_time/time_facet.hpp>
 #include <boost/enable_shared_from_this.hpp>
@@ -40,10 +43,27 @@
 #include <boost/spirit/home/qi/numeric/numeric_utils.hpp>
 #include <boost/system/detail/error_category.hpp>
 #include <boost/system/detail/error_code.hpp>
+#include <pthread.h>
+#include <array>
+#include <atomic>
+#include <cstdint>
+#include <cstdio>
+#include <ctime>
+#include <memory>
 #include <utility>
 #include <list>
 namespace bcos
 {
+// LogLevel is defined in LogStream.h without referencing boost; make sure the
+// values stay in sync with boost::log::trivial::severity_level.
+static_assert(static_cast<int>(LogLevel::TRACE) == boost::log::trivial::severity_level::trace);
+static_assert(static_cast<int>(LogLevel::DEBUG) == boost::log::trivial::severity_level::debug);
+static_assert(static_cast<int>(LogLevel::INFO) == boost::log::trivial::severity_level::info);
+static_assert(
+    static_cast<int>(LogLevel::WARNING) == boost::log::trivial::severity_level::warning);
+static_assert(static_cast<int>(LogLevel::ERROR) == boost::log::trivial::severity_level::error);
+static_assert(static_cast<int>(LogLevel::FATAL) == boost::log::trivial::severity_level::fatal);
+
 std::string const FileLogger = "FileLogger";
 boost::log::sources::severity_channel_logger_mt<boost::log::trivial::severity_level, std::string>
     FileLoggerHandler(boost::log::keywords::channel = FileLogger);
@@ -55,6 +75,113 @@ boost::log::sources::severity_channel_logger_mt<boost::log::trivial::severity_le
 LogLevel c_fileLogLevel = LogLevel::TRACE;
 LogLevel c_statLogLevel = LogLevel::INFO;
 
+namespace log
+{
+namespace
+{
+// Process-wide registry of whole-line sinks (fast path, used when no custom
+// log.format is configured). Producers hold a shared_ptr copy while writing,
+// so a sink stays alive even if it is unregistered mid-write.
+constexpr std::size_t MaxLineSinks = 4;
+std::array<std::atomic<std::shared_ptr<LineSinkWriter>>, MaxLineSinks> g_lineSinks;
+std::atomic<int> g_lineSinkCount{0};
+
+constexpr std::string_view c_severityNames[] = {
+    "trace", "debug", "info", "warning", "error", "fatal"};
+
+// "<threadName>-0x<tid>" exactly as the ThreadName/ThreadID attributes format
+// it; the value only changes when the thread is renamed, so cache it.
+std::string_view threadPart()
+{
+    thread_local std::string cachedName;
+    thread_local std::string part;
+    auto const& name = bcos::pthread_getThreadNameRef();
+    if (cachedName != name)
+    {
+        char tid[24];
+        std::snprintf(tid, sizeof(tid), "0x%016llx",
+            static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(pthread_self())));
+        cachedName = name;
+        part = name.empty() ? "Unnamed" : name;
+        part += '-';
+        part += tid;
+    }
+    return part;
+}
+
+// "severity|YYYY-MM-DD HH:MM:SS.ffffff|thread|", byte-identical to the
+// default formatter in BoostLogInitializer::setLogFormatter.
+void appendLinePrefix(std::string& _out, LogLevel _level)
+{
+    _out.append(c_severityNames[static_cast<int>(_level)]);
+    _out += '|';
+    timespec ts{};
+    clock_gettime(CLOCK_REALTIME, &ts);
+    std::time_t secs = ts.tv_sec;
+    std::tm tm{};
+    localtime_r(&secs, &tm);
+    char buf[40];
+    int n = std::snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d.%06ld",
+        tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
+        ts.tv_nsec / 1000);
+    _out.append(buf, static_cast<std::size_t>(n));
+    _out += '|';
+    _out.append(threadPart());
+    _out += '|';
+}
+}  // namespace
+
+void registerLineSink(std::shared_ptr<LineSinkWriter> _sink)
+{
+    for (auto& slot : g_lineSinks)
+    {
+        std::shared_ptr<LineSinkWriter> empty;
+        if (slot.compare_exchange_strong(empty, _sink))
+        {
+            g_lineSinkCount.fetch_add(1, std::memory_order_release);
+            return;
+        }
+    }
+}
+
+void unregisterLineSink(LineSinkWriter const* _sink)
+{
+    for (auto& slot : g_lineSinks)
+    {
+        if (slot.load(std::memory_order_acquire).get() == _sink)
+        {
+            slot.store(nullptr, std::memory_order_release);
+            g_lineSinkCount.fetch_sub(1, std::memory_order_release);
+            return;
+        }
+    }
+}
+
+bool hasLineSinks() noexcept
+{
+    return g_lineSinkCount.load(std::memory_order_acquire) > 0;
+}
+
+// Fans the line out to every registered whole-line sink; returns false when
+// no sink is registered (caller falls back to the legacy boost record path).
+bool commitLine(LogLevel _level, std::string_view _message)
+{
+    thread_local std::string prefix;
+    prefix.clear();
+    appendLinePrefix(prefix, _level);
+    bool any = false;
+    for (auto const& slot : g_lineSinks)
+    {
+        if (auto sink = slot.load(std::memory_order_acquire))
+        {
+            sink->writeLine(_level, prefix, _message);
+            any = true;
+        }
+    }
+    return any;
+}
+}  // namespace log
+
 void setFileLogLevel(LogLevel const& _level)
 {
     c_fileLogLevel = _level;
@@ -63,6 +190,26 @@ void setFileLogLevel(LogLevel const& _level)
 void setStatLogLevel(LogLevel const& _level)
 {
     c_statLogLevel = _level;
+}
+
+LogStream::~LogStream() noexcept
+{
+    try
+    {
+        // Fast path: a whole-line sink is registered (default log format), so
+        // the record bypasses boost::log core entirely. Fall back to the
+        // legacy boost record when no line sink is registered or a custom
+        // log.format (which may reference arbitrary attributes) is in use.
+        if (log::hasLineSinks() && log::commitLine(m_level, view()))
+        {
+            return;
+        }
+        BOOST_LOG_SEV(FileLoggerHandler,
+            static_cast<boost::log::trivial::severity_level>(static_cast<int>(m_level)))
+            << view();
+    }
+    catch (...)
+    {}
 }
 
 namespace

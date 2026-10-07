@@ -21,13 +21,17 @@
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-cpp-sdk/Sdk.h>
 #include <bcos-cpp-sdk/SdkFactory.h>
-#include <bcos-utilities/BoostLog.h>
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/LogStream.h>
+#endif
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 void usage(void)

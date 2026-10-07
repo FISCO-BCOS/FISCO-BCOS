@@ -11,8 +11,12 @@
 #include "bcos-tars-protocol/ErrorConverter.h"
 #include "bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h"
 #include <bcos-framework/protocol/ProtocolInfo.h>
-#include <bcos-utilities/Error.h>
 #include <boost/test/unit_test.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Error.h>
+#endif
 
 using namespace bcostars;
 

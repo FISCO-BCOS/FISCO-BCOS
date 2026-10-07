@@ -20,12 +20,16 @@
 #include "bcos-cpp-sdk/utilities/abi/ContractABIDefinitionFactory.h"
 #include "bcos-cpp-sdk/utilities/abi/ContractABIMethodDefinition.h"
 #include <bcos-cpp-sdk/utilities/Common.h>
-#include <bcos-utilities/BoostLog.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/LogStream.h>
 #include <cstring>
 #include <stdexcept>
 #include <type_traits>
 #include <boost/algorithm/string.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::cppsdk;

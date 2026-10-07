@@ -20,12 +20,17 @@
  */
 #pragma once
 
+#include <cstddef>
+#include <memory>
+#include <vector>
+
 #include "BoostLog.h"
+#include "BoundedAsyncSink.h"
+#include "LineAsyncSink.h"
 #include <sys/types.h>
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
 #include <boost/log/expressions/formatters/named_scope.hpp>
-#include <boost/log/sinks/async_frontend.hpp>
 #include <boost/log/sinks/text_file_backend.hpp>
 #include <boost/log/sinks/text_ostream_backend.hpp>
 #include <boost/log/sources/severity_logger.hpp>
@@ -45,15 +50,21 @@ public:
     {
     public:
         void consume(const boost::log::record_view& rec, const std::string& str);
+        // Whole-line fast path: str is the complete formatted line. The
+        // record is unused by the text backend; FATAL still aborts.
+        void consumeLine(LogLevel _level, const std::string& _line);
     };
     class ConsoleSink : public boost::log::sinks::text_ostream_backend
     {
     public:
         void consume(const boost::log::record_view& rec, const std::string& str);
+        void consumeLine(LogLevel _level, const std::string& _line);
     };
     using Ptr = std::shared_ptr<BoostLogInitializer>;
-    using sink_t = boost::log::sinks::asynchronous_sink<Sink>;
-    using console_sink_t = boost::log::sinks::asynchronous_sink<ConsoleSink>;
+    using sink_t = bcos::BoundedAsyncSink<Sink>;
+    using console_sink_t = bcos::BoundedAsyncSink<ConsoleSink>;
+    using line_sink_t = bcos::log::LineAsyncSink<Sink>;
+    using console_line_sink_t = bcos::log::LineAsyncSink<ConsoleSink>;
     virtual ~BoostLogInitializer() { stopLogging(); }
     BoostLogInitializer() = default;
 
@@ -83,8 +94,25 @@ private:
     boost::shared_ptr<sink_t> initHourLogSink(
         std::string const& _logPath, std::string const& _logPrefix, std::string const& channel);
 
+    // Whole-line fast-path variants, used when no custom log.format is
+    // configured; the sinks bypass boost::log core and register into the
+    // process-wide line-sink registry instead.
+    std::shared_ptr<line_sink_t> initLineLogSink(std::string const& _logPath);
+    std::shared_ptr<line_sink_t> initHourLineLogSink(
+        std::string const& _logPath, std::string const& _logPrefix);
+    std::shared_ptr<console_line_sink_t> initLineConsoleLogSink(boost::property_tree::ptree const& _pt);
+
     boost::shared_ptr<console_sink_t> initConsoleLogSink(
         boost::property_tree::ptree const& _pt, unsigned _logLevel, std::string const& channel);
+
+    // The fast path can only emit the built-in default line format; a custom
+    // log.format string may reference arbitrary boost attributes, so the
+    // FileLogger channel then keeps the legacy boost record pipeline. Other
+    // channels (e.g. the stat logger) always use the legacy pipeline.
+    bool useLineFastPath(std::string const& channel) const
+    {
+        return m_logFormat.empty() && channel == bcos::FileLogger;
+    }
 
     template <typename T>
     void setLogFormatter(T _sink, const std::string& format = "")
@@ -136,6 +164,8 @@ private:
     void stopLogging(boost::shared_ptr<sink_t> const& sink);
     std::vector<boost::shared_ptr<sink_t>> m_sinks;
     std::vector<boost::shared_ptr<console_sink_t>> m_consoleSinks;
+    std::vector<std::shared_ptr<line_sink_t>> m_lineSinks;
+    std::vector<std::shared_ptr<console_line_sink_t>> m_consoleLineSinks;
 
     std::vector<int> m_currentHourVec;
     std::string m_logPath;
@@ -150,7 +180,7 @@ private:
     uint64_t m_maxArchiveSize = 0;
     uint64_t m_minFreeSpace = 0;
     uint32_t m_maxArchiveFiles = 0;
-    bool m_autoFlush = true;
+    bool m_autoFlush = false;
     bool m_enableLog = true;
     std::atomic_bool m_running = {false};
     std::vector<int> m_rotateTimePoint = {0, 0, 0};

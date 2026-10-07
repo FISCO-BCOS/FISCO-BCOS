@@ -20,8 +20,6 @@
 #include "Hash.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-table/src/StateStorage.h"
-#include <bcos-utilities/Error.h>
-#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/concurrent_vector.h>
@@ -33,6 +31,12 @@
 #include <optional>
 #include <random>
 #include <string>
+#include <bcos-utilities/IOServicePool.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Error.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::storage;

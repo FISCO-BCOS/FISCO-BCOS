@@ -20,11 +20,15 @@
 #include "EthTrieRoots.h"
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-framework/protocol/TransactionReceipt.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <charconv>
 #include <cstdint>
 #include <utility>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 namespace bcos::ledger::mpt
 {

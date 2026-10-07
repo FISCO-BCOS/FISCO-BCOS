@@ -20,12 +20,16 @@
 
 #include "bcos-transaction-scheduler/GC.h"
 #include <chrono>
-#include <bcos-utilities/IOServicePool.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <future>
 #include <memory>
 #include <thread>
+#include <bcos-utilities/IOServicePool.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#endif
 
 using namespace bcos::scheduler_v1;
 

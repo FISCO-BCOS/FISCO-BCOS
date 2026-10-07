@@ -32,9 +32,13 @@
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
 #include <bcos-txpool/TxPool.h>
 #include <bcos-txpool/TxPoolFactory.h>
-#include <bcos-utilities/FileUtility.h>
 #include <include/BuildInfo.h>
 #include <json/json.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/FileUtility.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::tool;

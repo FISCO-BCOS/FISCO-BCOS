@@ -29,13 +29,17 @@
 #include <bcos-ledger/mpt/StorageValueCodec.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 #include <future>
 #include <map>
 #include <optional>
 #include <string>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 namespace bcos::test
 {

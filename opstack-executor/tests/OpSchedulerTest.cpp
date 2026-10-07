@@ -47,8 +47,6 @@
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/Error.h>
 #include <boost/exception/get_error_info.hpp>
 #include <boost/test/unit_test.hpp>
 #include <evmc/evmc.hpp>
@@ -64,6 +62,12 @@
 #include <system_error>
 #include <unordered_map>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Error.h>
+#endif
 
 using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;

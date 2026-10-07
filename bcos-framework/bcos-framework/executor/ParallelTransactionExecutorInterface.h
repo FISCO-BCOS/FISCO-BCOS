@@ -32,7 +32,7 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/iterator/iterator_categories.hpp>
 #include <memory>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 namespace bcos::executor
 {

@@ -22,9 +22,13 @@
 // Upstream pin: op-geth d401af16f2dd94b010a72eaef10e07ac10b31931
 // (eth/catalyst/api.go forkchoiceUpdated / SetSafe / SetFinalized).
 
-#include <bcos-utilities/Exceptions.h>
 #include <stdexcept>
 #include <thread>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Exceptions.h>
+#endif
 
 namespace bcos::engine
 {

@@ -12,8 +12,12 @@
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
 #include <bcos-crypto/signature/ed25519/Ed25519Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
-#include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::crypto;

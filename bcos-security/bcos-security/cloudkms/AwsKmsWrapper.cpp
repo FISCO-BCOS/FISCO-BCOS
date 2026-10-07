@@ -21,11 +21,15 @@
  * @date 2024-11-07
  */
 #include "AwsKmsWrapper.h"
-#include "bcos-utilities/FileUtility.h"
 #include <aws/core/auth/AWSCredentials.h>
 #include <aws/core/utils/Array.h>
 #include <aws/kms/model/DecryptRequest.h>
 #include <aws/kms/model/EncryptRequest.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/FileUtility.h"
+#endif
 namespace bcos::security
 {
 

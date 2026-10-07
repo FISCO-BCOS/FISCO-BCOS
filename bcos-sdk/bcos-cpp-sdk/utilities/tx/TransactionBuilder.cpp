@@ -23,9 +23,6 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/hsmSM2/HsmSM2Crypto.h>
 #include <bcos-tars-protocol/impl/TarsHashable.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/FixedBytes.h>
 #include <time.h>
 
 #include <chrono>
@@ -33,6 +30,13 @@
 #include <string>
 #include <thread>
 #include <utility>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/FixedBytes.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::cppsdk;

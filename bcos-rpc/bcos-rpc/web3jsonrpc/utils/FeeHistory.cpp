@@ -22,9 +22,13 @@
 #include <bcos-ledger/LedgerMethods.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/RpcChainPolicy.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <algorithm>
 #include <limits>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::rpc;

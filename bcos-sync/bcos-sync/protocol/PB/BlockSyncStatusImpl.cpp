@@ -20,8 +20,14 @@
  */
 #include "BlockSyncStatusImpl.h"
 #include "bcos-sync/utilities/Common.h"
-#include <bcos-protocol/Common.h>
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+import bcos.utilities;
+#else
 #include <bcos-utilities/Common.h>
+#include <bcos-protocol/Common.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::sync;

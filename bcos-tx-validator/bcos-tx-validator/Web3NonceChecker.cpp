@@ -23,8 +23,13 @@
 #include "bcos-task/Wait.h"
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/txpool/Constant.h>
-#include <bcos-protocol/TransactionStatus.h>
 
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+#else
+#include <bcos-protocol/TransactionStatus.h>
+#endif
 using namespace bcos;
 using namespace bcos::txvalidator;
 using namespace bcos::protocol;

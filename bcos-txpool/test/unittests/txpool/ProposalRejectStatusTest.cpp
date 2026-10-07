@@ -18,12 +18,16 @@
 #include "bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include "bcos-txpool/txpool/utilities/SystemTransaction.h"
-#include "bcos-utilities/IOServicePool.h"
 #include <bcos-tx-validator/TxPoolNonceChecker.h>
 #include <bcos-tx-validator/TxValidator.h>
 #include <bcos-tx-validator/Web3NonceChecker.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
+#include "bcos-utilities/IOServicePool.h"
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#endif
 
 using namespace bcos;
 using namespace bcos::txpool;

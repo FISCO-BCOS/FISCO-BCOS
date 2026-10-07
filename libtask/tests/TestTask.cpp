@@ -2,7 +2,6 @@
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
 #include "bcos-task/pmr/Task.h"
-#include "bcos-utilities/Common.h"
 #include <chrono>
 #include <oneapi/tbb/concurrent_vector.h>
 #include <oneapi/tbb/task_group.h>
@@ -16,6 +15,11 @@
 #include <stdexcept>
 #include <thread>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Common.h"
+#endif
 
 using namespace bcos::task;
 

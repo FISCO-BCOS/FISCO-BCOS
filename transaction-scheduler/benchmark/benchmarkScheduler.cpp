@@ -18,12 +18,16 @@
 #include "bcos-transaction-scheduler/SchedulerParallelImpl.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
 #include "transaction-executor/tests/TestBytecode.h"
-#include <bcos-utilities/IOServicePool.h>
 #include <benchmark/benchmark.h>
 #include <boost/throw_exception.hpp>
 #include <random>
 #include <range/v3/view/indirect.hpp>
 #include <variant>
+#include <bcos-utilities/IOServicePool.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#endif
 
 using namespace bcos;
 using namespace bcos::storage2::memory_storage;

@@ -18,7 +18,6 @@
  * @date 2025/3/12
  */
 
-#include "bcos-utilities/Common.h"
 #include "test/unittests/txpool/TxPoolFixture.h"
 #include <bcos-framework/txpool/Constant.h>
 #include <bcos-tx-validator/Web3NonceChecker.h>
@@ -30,6 +29,11 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Common.h"
+#endif
 
 using namespace bcos;
 using namespace bcos::txpool;

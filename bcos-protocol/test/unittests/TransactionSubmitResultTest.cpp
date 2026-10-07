@@ -8,9 +8,17 @@
  *   http://www.apache.org/licenses/LICENSE-2.0
  */
 
+#include <boost/test/unit_test.hpp>
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-framework/protocol/Protocol.h>
+#include <bcos-framework/protocol/TransactionReceipt.h>
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+#else
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
-#include <boost/test/unit_test.hpp>
+#endif
 
 using namespace bcos::protocol;
 

@@ -8,9 +8,13 @@
 
 #include "CompatHostContextHarness.h"
 #include "CompatTestFixture.h"
-#include "bcos-utilities/DataConvertUtility.h"
 
 #include <boost/test/unit_test.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/DataConvertUtility.h"
+#endif
 namespace bcos::test
 {
 

@@ -30,10 +30,14 @@
 #include "EVMHostInterface.h"
 #include "../Common.h"
 #include "HostContext.h"
-#include "bcos-utilities/Common.h"
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/core/ignore_unused.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Common.h"
+#endif
 
 using namespace std;
 

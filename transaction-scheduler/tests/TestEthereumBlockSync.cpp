@@ -45,7 +45,6 @@
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-scheduler/EthereumBlockVerifier.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
-#include "bcos-utilities/IOServicePool.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include "ethereum-executor/EthereumHost.h"
 #include "EthereumBlockHashLookup.h"
@@ -61,6 +60,11 @@
 #include <memory>
 #include <sstream>
 #include <thread>
+#include "bcos-utilities/IOServicePool.h"
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#endif
 
 // Anonymous namespace + EBS prefix: this TU is compiled standalone (it defines the
 // same MultiLayerStorage aliases as TestEthereumExecutorScheduler.cpp).

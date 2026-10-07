@@ -22,10 +22,14 @@
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-crypto/signature/hsmSM2/HsmSM2Crypto.h>
 #include <bcos-crypto/signature/key/KeyPair.h>
-#include <bcos-utilities/BoostLog.h>
 #include <boost/throw_exception.hpp>
 #include <exception>
 #include <memory>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/LogStream.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::cppsdk;

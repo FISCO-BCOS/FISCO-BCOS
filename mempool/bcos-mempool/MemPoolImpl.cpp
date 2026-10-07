@@ -1,10 +1,14 @@
 #include "MemPoolImpl.h"
 #include "bcos-framework/engine/RawTransactionDispatch.h"
 #include "bcos-crypto/kzg/Kzg4844.h"
-#include "bcos-utilities/BoostLog.h"
-#include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/LogStream.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <charconv>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Exceptions.h"
+#endif
 
 #define MEMPOOL_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("MEMPOOL")
 

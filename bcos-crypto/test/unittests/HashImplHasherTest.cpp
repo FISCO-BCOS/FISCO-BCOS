@@ -12,8 +12,12 @@
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/hash/Sha256.h>
 #include <bcos-crypto/hash/Sha3.h>
-#include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::crypto;

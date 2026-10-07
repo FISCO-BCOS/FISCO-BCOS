@@ -21,7 +21,6 @@
 #include "../common/RPCFixture.h"
 #include "../common/ThrowingTxPool.h"
 #include "../common/Web3TxSamples.h"
-#include <bcos-protocol/TransactionStatus.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EthEndpoint.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
@@ -32,6 +31,12 @@
 #include <memory>
 #include <string>
 #include <variant>
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+#else
+#include <bcos-protocol/TransactionStatus.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::rpc;

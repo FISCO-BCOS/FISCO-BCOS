@@ -20,15 +20,19 @@
 
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsSession.h>
-#include <bcos-utilities/BoostLog.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/asio/post.hpp>
 #include <chrono>
 #include <exception>
 #include <memory>
 #include <string>
 #include <utility>
+#include <bcos-utilities/IOServicePool.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#endif
 
 #define MESSAGE_SEND_DELAY_REPORT_MS (5000)
 #define MAX_MESSAGE_SEND_DELAY_MS (5000)

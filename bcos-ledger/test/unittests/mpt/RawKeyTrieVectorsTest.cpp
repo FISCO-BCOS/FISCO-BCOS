@@ -25,9 +25,6 @@
  *        client outputs, independent of this codebase.
  */
 #include <bcos-ledger/mpt/HashBuilder.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/FixedBytes.h>
 #include <json/json.h>
 #include <boost/test/unit_test.hpp>
 #include <filesystem>
@@ -38,6 +35,13 @@
 #include <string>
 #include <utility>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/FixedBytes.h>
+#endif
 
 namespace bcos::ledger::mpt::test
 {

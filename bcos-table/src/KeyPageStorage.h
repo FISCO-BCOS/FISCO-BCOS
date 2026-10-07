@@ -48,7 +48,7 @@
 #include <string_view>
 #include <thread>
 #include <utility>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 #define KeyPage_LOG(LEVEL) BCOS_LOG(LEVEL) << "[STORAGE-KeyPage]"
 namespace std

@@ -34,14 +34,18 @@
 #include <bcos-rpc/jwtAuth/JwtVerifier.h>
 #include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
-#include <bcos-utilities/BoostLog.h>
-#include <bcos-utilities/Exceptions.h>
-#include <bcos-utilities/FileUtility.h>
-#include <bcos-utilities/NewTimer.h>
+#include <bcos-utilities/LogStream.h>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <bcos-utilities/NewTimer.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/FileUtility.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::rpc;

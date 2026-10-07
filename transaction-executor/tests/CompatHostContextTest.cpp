@@ -20,7 +20,6 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-executor/RollbackableStorage.h"
-#include "bcos-utilities/FixedBytes.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
@@ -32,6 +31,11 @@
 #include <memory>
 #include <optional>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/FixedBytes.h"
+#endif
 
 using namespace bcos::task;
 using namespace bcos::storage2;

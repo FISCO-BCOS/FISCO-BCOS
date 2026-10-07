@@ -20,12 +20,16 @@
 
 #include "bcos-gateway/libratelimit/RateLimiterStat.h"
 #include "bcos-gateway/Common.h"
-#include "bcos-utilities/BoostLog.h"
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/LogStream.h"
 #include <iomanip>
 #include <optional>
 #include <sstream>
 #include <utility>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Common.h"
+#endif
 
 using namespace bcos;
 using namespace bcos::gateway;

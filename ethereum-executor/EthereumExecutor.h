@@ -37,7 +37,7 @@
 #include "bcos-framework/storage2/RollbackableStorage.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/TBBWait.h"
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <bcos-utilities/Exceptions.h>
 #include <evmc/evmc.h>
 #include <evmone/evmone.h>

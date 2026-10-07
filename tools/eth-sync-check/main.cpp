@@ -46,8 +46,6 @@
 #include <bcos-rlp-protocol/EthWithdrawal.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/FixedBytes.h>
 #include <curl/curl.h>
 #include <json/json.h>
 #include <boost/lexical_cast.hpp>
@@ -58,6 +56,12 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/FixedBytes.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::devp2p::sync;

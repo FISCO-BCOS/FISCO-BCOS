@@ -10,10 +10,14 @@
 
 #include <bcos-cpp-sdk/utilities/abi/ContractABIType.h>
 #include <bcos-cpp-sdk/utilities/abi/ContractABITypeCodec.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/FixedBytes.h>
 #include <boost/test/unit_test.hpp>
 #include <stdexcept>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::cppsdk;

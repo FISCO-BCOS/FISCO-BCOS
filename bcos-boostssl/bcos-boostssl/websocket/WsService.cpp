@@ -23,8 +23,7 @@
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-boostssl/websocket/WsSession.h>
-#include <bcos-utilities/BoostLog.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <chrono>
 #include <cstdint>
@@ -35,6 +34,11 @@
 #include <tuple>
 #include <utility>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#endif
 
 using namespace bcos;
 using namespace std::chrono_literals;

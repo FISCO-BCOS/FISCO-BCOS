@@ -16,8 +16,6 @@
 
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-rlp-protocol/Web3TxEnvelope.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 
 #include <cstdint>
@@ -25,6 +23,12 @@
 #include <optional>
 #include <string>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using bcos::executor_v1::opstack::opEthBlockPathUnboundAuthorizationList;
 using bcos::executor_v1::opstack::opEthBlockPathZeroSender;

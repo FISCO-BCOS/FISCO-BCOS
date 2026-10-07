@@ -20,7 +20,18 @@
 #add_definitions(-Wno-unused-value -Wunused-parameter)
 
 set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+if(WITH_CXX_MODULES)
+    if(NOT CMAKE_GENERATOR MATCHES "Ninja")
+        message(FATAL_ERROR "WITH_CXX_MODULES requires a Ninja generator (dyndep dependency scanning)")
+    endif()
+    set(CMAKE_CXX_SCAN_FOR_MODULES ON)
+    # Modules mode is a global property of the build: every module target
+    # (bcos-protocol, bcos-utilities, ...) is always present in this monorepo's
+    # full build, so one global define drives all `import`-vs-`#include` guards.
+    add_compile_definitions(FISCO_WITH_CXX_MODULES)
+else()
+    set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+endif()
 set(Boost_NO_WARN_NEW_VERSIONS ON)
 
 # C++23 std::expected floor: GCC 12+ / Clang 16+ (Xcode 16+) / VS2022 17.3+ (MSVC 19.33+).

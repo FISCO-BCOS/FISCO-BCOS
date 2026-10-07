@@ -1,9 +1,13 @@
 #include "bcos-rpc/jsonrpc/JsonRpcInterface.h"
 #include "unittests/common/RPCFixture.h"
 #include <bcos-rpc/filter/FilterSystem.h>
-#include <bcos-utilities/Common.h>
 
 #include <boost/test/unit_test.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#endif
 using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::rpc::filter;

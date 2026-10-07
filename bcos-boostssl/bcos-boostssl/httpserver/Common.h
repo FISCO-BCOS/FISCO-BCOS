@@ -19,7 +19,7 @@
  */
 #pragma once
 
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <bcos-utilities/Common.h>
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>

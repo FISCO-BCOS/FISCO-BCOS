@@ -20,7 +20,7 @@
 #include "AddressTableModeDetection.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-tool/Exceptions.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <rocksdb/db.h>
 #include <rocksdb/iterator.h>
 #include <rocksdb/snapshot.h>

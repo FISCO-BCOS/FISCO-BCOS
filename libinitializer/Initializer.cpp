@@ -67,8 +67,6 @@
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/rpc/RPCInterface.h>
-#include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
-#include <bcos-protocol/TransactionSubmitResultImpl.h>
 #include <bcos-scheduler/src/ExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-sync/BlockSync.h>
@@ -84,7 +82,6 @@
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <bcos-txpool/txpool/utilities/SystemTransaction.h>
-#include <bcos-utilities/Common.h>
 #include <legacy/bcos-storage/StorageWrapperImpl.h>
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerSeam.h>
@@ -100,6 +97,15 @@
 #include <string>
 #include <toml++/toml.hpp>
 #include <vector>
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
+#include <bcos-protocol/TransactionSubmitResultImpl.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::tool;

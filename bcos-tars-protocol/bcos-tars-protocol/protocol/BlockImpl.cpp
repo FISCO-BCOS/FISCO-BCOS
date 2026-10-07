@@ -34,10 +34,14 @@
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
-#include "bcos-utilities/AnyHolder.h"
 #include <algorithm>
 #include <range/v3/view/transform.hpp>
 #include <stdexcept>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/AnyHolder.h"
+#endif
 
 bcostars::protocol::BlockImpl::BlockImpl(bcostars::Block _block) : BlockImpl()
 {

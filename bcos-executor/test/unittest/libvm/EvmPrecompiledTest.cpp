@@ -19,14 +19,18 @@
  * @file EvmPrecompiledTest.cpp
  */
 
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/DataConvertUtility.h"
 #include "vm/EvmPrecompiledAddress.h"
 #include "vm/Precompiled.h"
 #include "vm/VMInstance.h"
-#include <Common.h>
 #include <boost/test/unit_test.hpp>
 #include <string_view>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/DataConvertUtility.h"
+#include <Common.h>
+#endif
 
 namespace bcos::test
 {

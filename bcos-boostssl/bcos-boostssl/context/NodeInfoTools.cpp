@@ -20,10 +20,15 @@
 
 #include <bcos-boostssl/context/Common.h>
 #include <bcos-boostssl/context/NodeInfoTools.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
+#include <boost/exception/diagnostic_information.hpp>
+#include <boost/filesystem.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
-#include <boost/exception/diagnostic_information.hpp>
+#endif
 
 using namespace bcos::boostssl::context;
 

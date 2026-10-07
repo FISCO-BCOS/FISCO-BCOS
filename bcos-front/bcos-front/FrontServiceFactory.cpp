@@ -21,7 +21,11 @@
 #include <bcos-front/Common.h>
 #include <bcos-front/FrontService.h>
 #include <bcos-front/FrontServiceFactory.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
 #include <bcos-utilities/Exceptions.h>
+#endif
 
 using namespace bcos;
 using namespace front;

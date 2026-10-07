@@ -28,10 +28,15 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/protocol/CommonError.h>
-#include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <thread>
 #include <boost/test/unit_test.hpp>
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+#else
+#include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::consensus;

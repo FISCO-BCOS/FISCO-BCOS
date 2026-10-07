@@ -22,8 +22,6 @@
 #include <bcos-rpc/jwtAuth/JwtErrors.h>
 #include <bcos-rpc/jwtAuth/JwtToken.h>
 #include <bcos-rpc/jwtAuth/JwtVerifier.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <jwt-cpp/traits/kazuho-picojson/defaults.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
@@ -33,6 +31,12 @@
 #include <string>
 #include <thread>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::rpc;

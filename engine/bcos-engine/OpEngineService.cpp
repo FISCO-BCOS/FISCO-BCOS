@@ -23,8 +23,12 @@
 #include <bcos-framework/engine/RawTransactionDispatch.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <limits>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 namespace bcos::engine::engine_common::op
 {

@@ -19,13 +19,17 @@
  */
 
 #include <bcos-cpp-sdk/utilities/tx/TransactionBuilder.h>
-#include <bcos-utilities/FixedBytes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <chrono>
 #include <memory>
 #include <string>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/FixedBytes.h>
+#endif
 
 void usage()
 {

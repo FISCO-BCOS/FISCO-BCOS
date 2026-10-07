@@ -31,15 +31,19 @@
 #include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
-#include "bcos-utilities/Common.h"
 #include <bcos-codec/rlp/Exceptions.h>
-#include "bcos-utilities/DataConvertUtility.h"
 #include <boost/throw_exception.hpp>
 #include <memory>
 #include <stdexcept>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <iterator>
 #include <range/v3/algorithm/move.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/DataConvertUtility.h"
+#endif
 
 namespace bcos::rpc
 {

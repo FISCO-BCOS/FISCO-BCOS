@@ -24,12 +24,11 @@
 #include "../impl/TarsHashable.h"
 #include "bcos-concepts/Hash.h"
 #include "bcos-rlp-protocol/EthBlockHeader.h"
-#include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/endian/conversion.hpp>
 #include <boost/lexical_cast.hpp>
 #include <cstring>
@@ -37,6 +36,11 @@
 #include <range/v3/view/any_view.hpp>
 #include <range/v3/view/transform.hpp>
 #include <stdexcept>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Common.h"
+#endif
 
 DERIVE_BCOS_EXCEPTION(EmptyBlockHeaderHash);
 

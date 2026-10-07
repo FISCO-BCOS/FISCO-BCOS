@@ -5,7 +5,7 @@
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <servant/Application.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 using namespace bcostars;
 class RpcServiceApp : public tars::Application

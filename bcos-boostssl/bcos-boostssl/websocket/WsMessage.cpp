@@ -19,10 +19,14 @@
  */
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
-#include <bcos-utilities/BoostLog.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::boostssl;

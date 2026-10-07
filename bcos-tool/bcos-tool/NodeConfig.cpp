@@ -26,13 +26,10 @@
 #include "bcos-framework/protocol/ServiceDesc.h"
 #include "bcos-framework/security/KeyEncryptionType.h"
 #include "bcos-framework/security/StorageEncryptionType.h"
-#include "bcos-utilities/BoostLog.h"
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/LogStream.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/FixedBytes.h>
 #include <util/tc_clientsocket.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/classification.hpp>
@@ -50,6 +47,13 @@
 #include <string_view>
 #include <thread>
 #include <utility>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Common.h"
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/FixedBytes.h>
+#endif
 
 constexpr static auto MAX_BLOCK_LIMIT = 5000;
 

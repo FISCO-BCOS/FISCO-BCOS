@@ -29,7 +29,6 @@
 #include "bcos-gateway/libp2p/Service.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/IOServicePool.h>
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/test/tools/old/interface.hpp>
@@ -48,6 +47,11 @@
 #include <tuple>
 #include <unordered_set>
 #include <vector>
+#include <bcos-utilities/IOServicePool.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#endif
 
 using namespace bcos;
 using namespace gateway;

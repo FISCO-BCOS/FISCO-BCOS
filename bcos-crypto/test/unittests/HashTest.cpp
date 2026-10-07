@@ -22,11 +22,15 @@
 #include <bcos-crypto/hash/Sha256.h>
 #include <bcos-crypto/hash/Sha3.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
+#include <bcos-utilities/IOServicePool.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#endif
 
 using namespace bcos;
 using namespace crypto;

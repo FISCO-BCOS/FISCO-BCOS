@@ -19,11 +19,15 @@
  */
 #include "EthBlockHeader.h"
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/throw_exception.hpp>
 #include <cstring>
 #include <limits>
 #include <stdexcept>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::codec::rlp;

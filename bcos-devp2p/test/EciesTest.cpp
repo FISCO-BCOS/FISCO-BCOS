@@ -18,8 +18,12 @@
  * @date 2026/8/18
  */
 #include <bcos-devp2p/rlpx/Crypto.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::devp2p::rlpx;

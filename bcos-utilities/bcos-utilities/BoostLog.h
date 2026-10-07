@@ -13,57 +13,19 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief: define Log
+ * @brief: heavy boost::log backend declarations (logger objects). Code that
+ *  only writes log lines should include the lightweight LogStream.h instead;
+ *  BCOS_LOG and the LOG_* macros live there.
  *
- * @file: Log.h
+ * @file: BoostLog.h
  * @author: yujiechen
  * @date 2021-02-24
  */
 #pragma once
 
-#ifdef WIN32
-#define WIN32_LEAN_AND_MEAN
-#endif
-
-#ifdef ERROR
-#undef ERROR
-#endif
-
-#ifdef TRACE
-#undef TRACE
-#endif
-
-#ifdef INFO
-#undef INFO
-#endif
-
-#ifdef WARNING
-#undef WARNING
-#endif
-
-#ifdef FATAL
-#undef FATAL
-#endif
-
+#include "LogStream.h"
 #include <boost/log/sources/severity_channel_logger.hpp>
 #include <boost/log/trivial.hpp>
-
-// BCOS log format
-#ifndef LOG_BADGE
-#define LOG_BADGE(_NAME) "[" << (_NAME) << "]"
-#endif
-
-#ifndef LOG_TYPE
-#define LOG_TYPE(_TYPE) (_TYPE) << "|"
-#endif
-
-#ifndef LOG_DESC
-#define LOG_DESC(_DESCRIPTION) (_DESCRIPTION)
-#endif
-
-#ifndef LOG_KV
-#define LOG_KV(_K, _V) "," << (_K) << "=" << (_V)
-#endif
 
 namespace bcos
 {
@@ -78,34 +40,4 @@ extern std::string const StatFileLogger;
 extern boost::log::sources::severity_channel_logger_mt<boost::log::trivial::severity_level,
     std::string>
     StatFileLoggerHandler;
-
-enum LogLevel
-{
-    TRACE = boost::log::trivial::severity_level::trace,
-    DEBUG = boost::log::trivial::severity_level::debug,
-    INFO = boost::log::trivial::severity_level::info,
-    WARNING = boost::log::trivial::severity_level::warning,
-    ERROR = boost::log::trivial::severity_level::error,
-    FATAL = boost::log::trivial::severity_level::fatal,
-};
-
-extern LogLevel c_fileLogLevel;
-extern LogLevel c_statLogLevel;
-
-constexpr auto operator<=>(LogLevel const& _lhs, auto const& _rhs)
-    requires(std::same_as<decltype(_rhs), LogLevel> || std::integral<decltype(_rhs)>)
-{
-    return static_cast<int>(_lhs) <=> static_cast<int>(_rhs);
-}
-
-void setFileLogLevel(LogLevel const& _level);
-void setStatLogLevel(LogLevel const& _level);
-
-#define BCOS_LOG(level)                                \
-    if (bcos::LogLevel::level >= bcos::c_fileLogLevel) \
-    BOOST_LOG_SEV(                                     \
-        bcos::FileLoggerHandler, (boost::log::trivial::severity_level)(bcos::LogLevel::level))
-// for block number log
-#define BLOCK_NUMBER(NUMBER) "[blk-" << (NUMBER) << "]"
-
 }  // namespace bcos

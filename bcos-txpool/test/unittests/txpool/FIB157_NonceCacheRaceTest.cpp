@@ -21,7 +21,6 @@
  *        evaluation and the remove happen under the same bucket lock.
  */
 
-#include "bcos-utilities/Common.h"
 #include "test/unittests/txpool/TxPoolFixture.h"
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-task/Wait.h>
@@ -32,6 +31,11 @@
 #include <set>
 #include <thread>
 #include <unordered_map>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Common.h"
+#endif
 
 using namespace bcos;
 using namespace bcos::txpool;

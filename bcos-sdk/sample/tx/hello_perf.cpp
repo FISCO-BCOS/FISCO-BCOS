@@ -23,8 +23,12 @@
 #include <bcos-cpp-sdk/utilities/crypto/KeyPairBuilder.h>
 #include <bcos-cpp-sdk/utilities/tx/TransactionBuilder.h>
 #include <bcos-cpp-sdk/utilities/tx/TransactionBuilderService.h>
-#include <bcos-utilities/Common.h>
 #include <boost/algorithm/string/compare.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::cppsdk;

@@ -1,3 +1,3 @@
 #pragma once
 
-#include "BoostLog.h"
+#include "LogStream.h"

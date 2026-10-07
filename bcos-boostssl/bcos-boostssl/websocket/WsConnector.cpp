@@ -21,7 +21,7 @@
 #include <bcos-boostssl/context/NodeInfoTools.h>
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsConnector.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/asio/error.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <memory>

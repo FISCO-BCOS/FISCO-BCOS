@@ -1,4 +1,3 @@
-#include <bcos-utilities/IOServicePool.h>
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
@@ -21,10 +20,15 @@
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionMetaDataImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
-#include <bcos-utilities/Error.h>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
 #include <boost/test/unit_test.hpp>
+#include <bcos-utilities/IOServicePool.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Error.h>
+#endif
 
 
 using namespace std;

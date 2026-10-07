@@ -9,7 +9,6 @@
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-task/Wait.h"
-#include "bcos-utilities/FixedBytes.h"
 #include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/global_control.h>
@@ -25,6 +24,11 @@
 #include <string>
 #include <thread>
 #include <boost/atomic.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/FixedBytes.h"
+#endif
 
 std::atomic_long g_blockNumber = 0;
 constexpr static long blockLimit = 900;

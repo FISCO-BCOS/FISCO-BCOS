@@ -23,8 +23,12 @@
 #include <bcos-rpc/groupmgr/GroupManager.h>
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
 #include <bcos-rpc/web3jsonrpc/Web3Subscribe.h>
-#include <bcos-utilities/IOServicePool.h>
 #include <boost/test/unit_test.hpp>
+#include <bcos-utilities/IOServicePool.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#endif
 using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::crypto;

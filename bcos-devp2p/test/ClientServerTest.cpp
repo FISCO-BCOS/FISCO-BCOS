@@ -23,11 +23,15 @@
 #include <bcos-devp2p/rlpx/Client.h>
 #include <bcos-devp2p/rlpx/MessageCodec.h>
 #include <bcos-devp2p/rlpx/Messages.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <stdexcept>
 #include <thread>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::devp2p;

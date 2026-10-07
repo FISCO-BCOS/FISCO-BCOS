@@ -303,7 +303,11 @@ public:
     byte* data() { return m_data.data(); }
     /// @returns a constant byte pointer to the object's data.
     byte const* data() const { return m_data.data(); }
-    auto& mutableData() { return m_data; }
+    // Note: explicit return type (not `auto&`) — GCC's modules implementation
+    // (PR114600-class issues) errors with "conflicting deduced return type"
+    // when merging a BMI-loaded instantiation of this member with a textual
+    // one in a TU that both imports bcos.protocol and includes this header.
+    std::array<byte, N>& mutableData() { return m_data; }
     /// @returns begin iterator.
     auto begin() const -> typename std::array<byte, N>::const_iterator { return m_data.begin(); }
     /// @returns end iterator.
@@ -404,8 +408,8 @@ public:
         return ret;
     }
 
-    auto begin() { return m_data.begin(); }
-    auto end() { return m_data.end(); }
+    auto begin() -> typename std::array<byte, N>::iterator { return m_data.begin(); }
+    auto end() -> typename std::array<byte, N>::iterator { return m_data.end(); }
     // Returns size_t, not the unnamed enum SIZE is declared in. MSVC rejects
     // bytesConstRef{data(), size()} otherwise: brace-init forbids narrowing, and the enum's
     // underlying type is signed int, so int -> size_t is a narrowing conversion there.

@@ -22,16 +22,22 @@
 #include "../common/ThrowingTxPool.h"
 #include "../common/Web3TxSamples.h"
 #include <bcos-framework/testutils/faker/FakeTransaction.h>
-#include <bcos-protocol/TransactionStatus.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EthEndpoint.h>
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/Error.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 #include <string>
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Error.h>
+#include <bcos-protocol/TransactionStatus.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::rpc;

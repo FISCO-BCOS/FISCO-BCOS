@@ -25,7 +25,7 @@
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <range/v3/view/any_view.hpp>
 #include <string>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 #define GATEWAYCLIENT_LOG(LEVEL) BCOS_LOG(LEVEL) << "[GATEWAYCLIENT][INITIALIZER]"
 #define GATEWAYCLIENT_BADGE "[GATEWAYCLIENT]"

@@ -35,7 +35,6 @@
 #include <bcos-framework/engine/RawTransactionDispatch.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
 #include <opstack-executor/OpEthL1Attributes.h>  // synthesizeOpEthL1AttributesDeposit
 #include <boost/test/unit_test.hpp>
@@ -44,6 +43,11 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::engine;

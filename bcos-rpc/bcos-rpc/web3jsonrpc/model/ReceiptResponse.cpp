@@ -2,11 +2,15 @@
 #include "Log.h"
 #include "bcos-crypto/ChecksumAddress.h"
 #include "bcos-rlp-protocol/Web3Transaction.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <cstdint>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/DataConvertUtility.h"
+#endif
 
 // The EIP-55 helpers live in utils/util.h (checksummedHexAddress /
 // checksummedHexAddressFromHex) — one home for the idiom across the response producers.

@@ -27,11 +27,10 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-ledger/LedgerMethods.h"
-#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-rpc/jsonrpc/Common.h"
 #include "bcos-rpc/validator/CallValidator.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include <json/value.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
@@ -45,6 +44,12 @@
 #include <string>
 #include <string_view>
 #include <utility>
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+#else
+#include "bcos-protocol/TransactionStatus.h"
+#endif
 
 using namespace std;
 using namespace bcos;

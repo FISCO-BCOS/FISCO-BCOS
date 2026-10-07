@@ -42,7 +42,6 @@
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-ledger/mpt/Constants.h"
 #include "bcos-mempool/MemPoolImpl.h"
-#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
@@ -63,6 +62,12 @@
 #include <string>
 #include <type_traits>
 #include <vector>
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+#else
+#include "bcos-protocol/TransactionStatus.h"
+#endif
 
 // Anonymous namespace + EE prefix: this TU is unity-merged with the other
 // scheduler test TUs, so every namespace-scope entity gets a unique name.

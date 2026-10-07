@@ -23,13 +23,17 @@
 #include <bcos-storage/KeyPrefixes.h>
 #include <bcos-storage/RocksDBStorage2.h>
 #include <bcos-storage/StateKVResolver.h>
-#include <bcos-utilities/FixedBytes.h>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
 #include <random>
 #include <string_view>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/FixedBytes.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::storage2;

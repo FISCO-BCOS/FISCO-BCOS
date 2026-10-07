@@ -4,11 +4,15 @@
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include <chrono>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-utilities/IOServicePool.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 #include <thread>
 #include <utility>
+#include <bcos-utilities/IOServicePool.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#endif
 
 namespace bcos::test
 {

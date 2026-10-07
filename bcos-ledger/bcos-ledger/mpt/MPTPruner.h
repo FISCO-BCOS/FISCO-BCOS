@@ -36,7 +36,7 @@
 #include <bcos-task/AwaitableValue.h>
 #include <bcos-task/TBBWait.h>
 #include <bcos-task/Task.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <oneapi/tbb/parallel_for.h>

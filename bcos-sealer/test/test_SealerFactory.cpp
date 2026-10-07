@@ -8,9 +8,13 @@
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-utilities/IOServicePool.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
+#include <bcos-utilities/IOServicePool.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#endif
 
 using namespace bcos::storage;
 using namespace std;

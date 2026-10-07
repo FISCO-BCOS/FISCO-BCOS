@@ -19,7 +19,7 @@
  */
 
 #pragma once
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <bcos-utilities/Common.h>
 
 #define RPC_WS_LOG(LEVEL) BCOS_LOG(LEVEL) << "[RPCWS][SERVICE]"

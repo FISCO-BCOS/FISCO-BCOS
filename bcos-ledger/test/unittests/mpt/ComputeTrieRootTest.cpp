@@ -25,8 +25,6 @@
 #include <bcos-ledger/mpt/Errors.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/FixedBytes.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <cstdint>
@@ -36,6 +34,12 @@
 #include <vector>
 
 #include "bcos-ledger/test/unittests/ExceptionCheck.h"
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
+#endif
 
 namespace bcos::ledger::mpt::test
 {

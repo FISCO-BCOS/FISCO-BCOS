@@ -20,7 +20,6 @@
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"
-#include "bcos-utilities/IOServicePool.h"
 #include <bcos-task/Wait.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/classification.hpp>
@@ -31,7 +30,12 @@
 #include <memory>
 #include <set>
 #include <utility>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
+#include "bcos-utilities/IOServicePool.h"
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#endif
 
 
 using namespace bcos;

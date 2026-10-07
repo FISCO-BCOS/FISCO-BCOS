@@ -24,9 +24,13 @@
  */
 #include "../NodeServiceApp.h"
 #include "libinitializer/CommandHelper.h"
-#include <bcos-utilities/Common.h>
 #include <chrono>
 #include <ctime>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#endif
 
 using namespace bcostars;
 using namespace bcos;

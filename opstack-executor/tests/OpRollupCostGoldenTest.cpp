@@ -15,12 +15,16 @@
 #include <opstack-executor/OpForkSpec.h>
 #include <opstack-executor/OpRollupCost.h>
 
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 #include <evmc/bytes.hpp>
 
 #include <cstdint>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos::executor_v1::opstack;
 using intx::operator""_u256;

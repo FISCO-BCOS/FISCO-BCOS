@@ -27,10 +27,14 @@
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-boostssl/websocket/WsSession.h>
 #include <bcos-boostssl/websocket/WsTools.h>
-#include <bcos-utilities/BoostLog.h>
-#include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/system/detail/error_code.hpp>
+#include <bcos-utilities/IOServicePool.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#endif
 
 using namespace bcos;
 using namespace bcos::boostssl;

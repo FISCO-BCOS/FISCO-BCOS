@@ -21,11 +21,15 @@
 #include "bcos-rpc/Common.h"
 #include "bcos-rpc/jsonrpc/Common.h"
 #include "bcos-rpc/util.h"
-#include "bcos-utilities/DataConvertUtility.h"
 #include <boost/regex.hpp>
 #include <limits>
 #include <optional>
 #include <string_view>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/DataConvertUtility.h"
+#endif
 
 using namespace bcos;
 using namespace bcos::rpc;

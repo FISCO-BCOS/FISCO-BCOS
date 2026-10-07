@@ -34,7 +34,18 @@ public:
     boost::log::attribute_value get_value() override
     {
         auto const& name = bcos::pthread_getThreadNameRef();
-        return boost::log::attributes::make_attribute_value(name.empty() ? "Unnamed" : name);
+        // The thread name rarely changes; cache the attribute value per thread so
+        // each record only pays a short string compare instead of allocating a new
+        // attribute_value_impl with a fresh copy of the name.
+        thread_local std::string cachedName;
+        thread_local boost::log::attribute_value cachedValue;
+        if (!cachedValue || cachedName != name)
+        {
+            cachedValue =
+                boost::log::attributes::make_attribute_value(name.empty() ? "Unnamed" : name);
+            cachedName = name;
+        }
+        return cachedValue;
     }
 };
 

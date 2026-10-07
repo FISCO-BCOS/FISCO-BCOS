@@ -36,11 +36,15 @@
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Error.h>
 #include <algorithm>
 #include <exception>
 #include <string_view>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::rpc;

@@ -27,10 +27,14 @@
 #include "bcos-ledger/mpt/EthTrieRoots.h"
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-utilities/Bloom.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::ledger::mpt;

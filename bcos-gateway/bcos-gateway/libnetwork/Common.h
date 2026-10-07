@@ -13,7 +13,7 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <set>
 #include <string>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 namespace ba = boost::asio;
 namespace bi = boost::asio::ip;

@@ -8,8 +8,13 @@
  *   http://www.apache.org/licenses/LICENSE-2.0
  */
 
-#include "bcos-protocol/amop/TopicItem.h"
 #include <boost/test/unit_test.hpp>
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+#else
+#include "bcos-protocol/amop/TopicItem.h"
+#endif
 
 using namespace bcos::protocol;
 

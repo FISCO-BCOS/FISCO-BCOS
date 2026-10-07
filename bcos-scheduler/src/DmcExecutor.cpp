@@ -1,8 +1,13 @@
 #include "DmcExecutor.h"
 #include "bcos-crypto/bcos-crypto/ChecksumAddress.h"
 #include "bcos-framework/executor/ExecuteError.h"
-#include <bcos-protocol/TransactionStatus.h>
 #include <list>
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+#else
+#include <bcos-protocol/TransactionStatus.h>
+#endif
 
 
 using namespace bcos::scheduler;

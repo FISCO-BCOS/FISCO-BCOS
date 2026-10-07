@@ -1,13 +1,17 @@
 #include <ostream>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-crypto/merkle/Merkle.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
 #include <iterator>
 #include <random>
 #include <stdexcept>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using HashType = std::array<uint8_t, 32>;
 

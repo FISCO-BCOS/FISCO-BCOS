@@ -7,9 +7,13 @@
 
 #include "CompatTestFixture.h"
 #include "vm/Precompiled.h"
-#include <Common.h>
 #include <boost/test/unit_test.hpp>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <Common.h>
+#endif
 
 namespace bcos::test
 {

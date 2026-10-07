@@ -36,7 +36,6 @@
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SessionReadLoop.h"
-#include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/asio/error.hpp>
 
@@ -45,6 +44,11 @@
 #include <future>
 #include <optional>
 #include <tuple>
+#include "bcos-utilities/IOServicePool.h"
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#endif
 using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::test;

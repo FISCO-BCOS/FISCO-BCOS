@@ -1,9 +1,13 @@
 #include "RPCClient.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
-#include "bcos-utilities/Exceptions.h"
 #include <boost/throw_exception.hpp>
 #include <iterator>
 #include <boost/algorithm/string.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Exceptions.h"
+#endif
 
 struct InvalidHostPortStringError : public bcos::Exception
 {

@@ -21,8 +21,12 @@
 #include "../common/RPCFixture.h"
 #include "bcos-rpc/bcos-rpc/RpcFactory.h"
 #include <bcos-rpc/tarsRPC/RPCServer.h>
-#include <bcos-utilities/Exceptions.h>
 #include <boost/test/unit_test.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Exceptions.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::rpc;

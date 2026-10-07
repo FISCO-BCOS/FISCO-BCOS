@@ -2,14 +2,20 @@
 
 #include "EVMCResult.h"
 #include "bcos-codec/abi/ContractABICodec.h"
-#include "bcos-protocol/TransactionStatus.h"
-#include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
 #include <evmc/evmc.h>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <cstdint>
 #include <gsl/pointers>
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+import bcos.utilities;
+#else
+#include "bcos-utilities/Common.h"
+#include "bcos-protocol/TransactionStatus.h"
+#endif
 
 DERIVE_BCOS_EXCEPTION(UnknownEVMCStatus);
 

@@ -26,9 +26,7 @@
 #include <bcos-crypto/signature/hsmSM2/HsmSM2KeyPairFactory.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-utilities/BoostLog.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/FileUtility.h>
+#include <bcos-utilities/LogStream.h>
 #include <openssl/bio.h>
 #include <openssl/ec.h>
 #include <openssl/ossl_typ.h>
@@ -37,6 +35,12 @@
 #include <fstream>
 #include <memory>
 #include <utility>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/FileUtility.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::cppsdk;

@@ -21,10 +21,14 @@
 #include "Constants.h"
 #include "Errors.h"
 #include "HexPrefix.h"
-#include "bcos-utilities/Overloaded.h"
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPEncode.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Overloaded.h"
 #include <bcos-utilities/Common.h>
+#endif
 
 namespace bcos::ledger::mpt
 {

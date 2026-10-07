@@ -24,7 +24,6 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 #include <evmone/evmone.h>
 
@@ -32,6 +31,11 @@
 #include <string>
 #include <utility>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#endif
 
 namespace
 {

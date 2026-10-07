@@ -4,8 +4,12 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/Web3AccessList.h"
 #include "bcos-rlp-protocol/Web3Transaction.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
 #include "bcos-utilities/Common.h"
+#endif
 
 namespace bcos::executor
 {

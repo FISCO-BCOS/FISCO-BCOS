@@ -24,7 +24,6 @@
 #include "../../bcos-storage/StorageWrapperImpl.h"
 #include "RPCInitializer.h"
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
-#include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
 #include "client/LedgerClientImpl.h"
 #include "client/P2PClientImpl.h"
@@ -37,7 +36,6 @@
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/BoostLogInitializer.h>
-#include <bcos-utilities/IOServicePool.h>
 #include <libinitializer/LedgerInitializer.h>
 #include <libinitializer/ProtocolInitializer.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -45,7 +43,13 @@
 #include <exception>
 #include <memory>
 #include <thread>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
+#include <bcos-utilities/IOServicePool.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Common.h"
+#endif
 
 DERIVE_BCOS_EXCEPTION(StartLightNodeException);
 

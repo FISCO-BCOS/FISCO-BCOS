@@ -22,7 +22,7 @@
 
 #include "bcos-crypto/KeyCompareTools.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 #define TREE_LOG(LEVEL)                                                      \
     BCOS_LOG(LEVEL) << LOG_BADGE("TREE") << LOG_KV("consIndex", m_consIndex) \

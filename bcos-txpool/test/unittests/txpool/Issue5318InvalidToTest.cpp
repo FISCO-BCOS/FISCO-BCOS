@@ -21,7 +21,6 @@
  */
 #include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
-#include "bcos-protocol/TransactionStatus.h"
 #include "test/unittests/txpool/TxPoolFixture.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
@@ -31,6 +30,12 @@
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 
 #include <boost/test/unit_test.hpp>
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+#else
+#include "bcos-protocol/TransactionStatus.h"
+#endif
 using namespace bcos;
 using namespace bcos::txpool;
 using namespace bcos::protocol;

@@ -31,7 +31,6 @@
 #include "bcos-framework/storage2/MultiLayerStorage.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
-#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
@@ -42,6 +41,12 @@
 #include <boost/test/unit_test.hpp>
 #include <array>
 #include <fakeit.hpp>
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+#else
+#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
+#endif
 
 // Regression test for the zero-stateRoot bug introduced by #5215 (ba902b6bb):
 // BaselineScheduler::coExecuteBlock passed view.backendStorageRef() instead of

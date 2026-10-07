@@ -20,8 +20,12 @@
  */
 #include <bcos-crypto/encrypt/Exceptions.h>
 #include <bcos-crypto/encrypt/SM4Crypto.h>
-#include <bcos-utilities/FixedBytes.h>
 #include <wedpr-crypto/WedprCrypto.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/FixedBytes.h>
+#endif
 using namespace bcos;
 using namespace bcos::crypto;
 

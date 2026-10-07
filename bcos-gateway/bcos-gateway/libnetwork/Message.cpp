@@ -22,10 +22,14 @@
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/Common.h"
 #include "bcos-gateway/libnetwork/Common.h"
-#include "bcos-utilities/BoostLog.h"
-#include "bcos-utilities/ZstdCompress.h"
+#include "bcos-utilities/LogStream.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <utility>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/ZstdCompress.h"
+#endif
 
 // same log tag as the former libp2p message implementation
 #define P2PMSG_LOG(LEVEL) BCOS_LOG(LEVEL) << "[P2PService][P2PMessage]"
