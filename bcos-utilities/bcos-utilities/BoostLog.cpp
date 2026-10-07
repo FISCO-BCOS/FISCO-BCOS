@@ -54,26 +54,9 @@
 #include <list>
 namespace bcos
 {
-// LogLevel is defined in LogStream.h without referencing boost; make sure the
-// values stay in sync with boost::log::trivial::severity_level.
-static_assert(static_cast<int>(LogLevel::TRACE) == boost::log::trivial::severity_level::trace);
-static_assert(static_cast<int>(LogLevel::DEBUG) == boost::log::trivial::severity_level::debug);
-static_assert(static_cast<int>(LogLevel::INFO) == boost::log::trivial::severity_level::info);
-static_assert(
-    static_cast<int>(LogLevel::WARNING) == boost::log::trivial::severity_level::warning);
-static_assert(static_cast<int>(LogLevel::ERROR) == boost::log::trivial::severity_level::error);
-static_assert(static_cast<int>(LogLevel::FATAL) == boost::log::trivial::severity_level::fatal);
-
 std::string const FileLogger = "FileLogger";
-boost::log::sources::severity_channel_logger_mt<boost::log::trivial::severity_level, std::string>
-    FileLoggerHandler(boost::log::keywords::channel = FileLogger);
-
-std::string const StatFileLogger = "StatFileLogger";
-boost::log::sources::severity_channel_logger_mt<boost::log::trivial::severity_level, std::string>
-    StatFileLoggerHandler(boost::log::keywords::channel = StatFileLogger);
 
 LogLevel c_fileLogLevel = LogLevel::TRACE;
-LogLevel c_statLogLevel = LogLevel::INFO;
 
 namespace log
 {
@@ -163,7 +146,7 @@ bool hasLineSinks() noexcept
 }
 
 // Fans the line out to every registered whole-line sink; returns false when
-// no sink is registered (caller falls back to the legacy boost record path).
+// no sink accepted it (e.g. all sinks were unregistered concurrently).
 bool commitLine(LogLevel _level, std::string_view _message)
 {
     thread_local std::string prefix;
@@ -187,26 +170,18 @@ void setFileLogLevel(LogLevel const& _level)
     c_fileLogLevel = _level;
 }
 
-void setStatLogLevel(LogLevel const& _level)
-{
-    c_statLogLevel = _level;
-}
-
 LogStream::~LogStream() noexcept
 {
     try
     {
-        // Fast path: a whole-line sink is registered (default log format), so
-        // the record bypasses boost::log core entirely. Fall back to the
-        // legacy boost record when no line sink is registered or a custom
-        // log.format (which may reference arbitrary attributes) is in use.
-        if (log::hasLineSinks() && log::commitLine(m_level, view()))
+        // The line is committed to every registered whole-line sink; when
+        // none is registered (before initLog / after stopLogging) it is
+        // dropped, same as logging with no sinks attached used to behave.
+        // The count check avoids formatting the prefix when logging is down.
+        if (log::hasLineSinks())
         {
-            return;
+            log::commitLine(m_level, view());
         }
-        BOOST_LOG_SEV(FileLoggerHandler,
-            static_cast<boost::log::trivial::severity_level>(static_cast<int>(m_level)))
-            << view();
     }
     catch (...)
     {}

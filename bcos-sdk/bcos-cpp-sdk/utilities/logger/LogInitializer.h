@@ -19,6 +19,7 @@
  */
 #pragma once
 #include <bcos-utilities/BoostLogInitializer.h>
+#include <boost/property_tree/ini_parser.hpp>
 #include <exception>
 #include <mutex>
 #include <string>

@@ -1,4 +1,5 @@
 #include "../tests/TrivialCheckpointStorage.h"
+#include <boost/log/core/core.hpp>
 #include "bcos-codec/bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-executor/src/Common.h"

@@ -37,9 +37,9 @@
  *
  *  Deliberately NOT in the module: Bloom.h (pulls bcos-crypto/bcos-framework
  *  into the GMF closure, breaking the layering), BoostLog.h /
- *  BoostLogInitializer.h / BoostLogCollector.h / BoostLogThreadNameAttribute.h
- *  (every importer deserializes the whole GMF, so the boost/log closure must
- *  stay out — the log facade lives in the lightweight LogStream.h),
+ *  BoostLogInitializer.h / BoostLogCollector.h (every importer deserializes
+ *  the whole GMF, so the boost/log closure must stay out — the log facade
+ *  lives in the lightweight LogStream.h),
  *  ITTAPI.h (vendor), Log.h (alias of LogStream.h), TestPromptFixture.h
  *  (test-only), and the boost::asio-based headers Timer.h / NewTimer.h /
  *  Worker.h / IOServicePool.h / RateCollector.h — GCC (-fmodules-ts) emits
@@ -194,12 +194,10 @@ using ::bcos::toString;
 // LogStream.h (macros BCOS_LOG/LOG_KV/... are not exportable; they expand to
 // bcos::LogStream and no longer need any boost/log header)
 using ::bcos::c_fileLogLevel;
-using ::bcos::c_statLogLevel;
 using ::bcos::LogLevel;
 using ::bcos::LogStream;
 using ::bcos::operator<=>;
 using ::bcos::setFileLogLevel;
-using ::bcos::setStatLogLevel;
 
 // AnyHolder.h
 using ::bcos::AnyHolder;

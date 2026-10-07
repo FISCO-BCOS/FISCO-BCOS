@@ -21,6 +21,7 @@
  */
 
 #include "../../bcos-ledger/LedgerImplLightnode.h"
+#include <boost/property_tree/ini_parser.hpp>
 #include "../../bcos-storage/StorageWrapperImpl.h"
 #include "RPCInitializer.h"
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"

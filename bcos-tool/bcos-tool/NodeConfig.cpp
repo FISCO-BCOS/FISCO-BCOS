@@ -19,6 +19,7 @@
  * @date 2021-06-10
  */
 #include "NodeConfig.h"
+#include <boost/property_tree/ini_parser.hpp>
 #include "VersionConverter.h"
 #include "bcos-framework/bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/consensus/ConsensusNode.h"

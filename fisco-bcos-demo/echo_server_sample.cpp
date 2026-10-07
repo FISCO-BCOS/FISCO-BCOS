@@ -18,6 +18,7 @@
  * @date 2022-06-10
  */
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <boost/property_tree/ini_parser.hpp>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>

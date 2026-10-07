@@ -1,4 +1,5 @@
 #include "bcos-crypto/bcos-crypto/hash/Keccak256.h"
+#include <boost/log/core/core.hpp>
 #include "bcos-crypto/bcos-crypto/signature/key/KeyImpl.h"
 #include "bcos-framework/testutils/faker/FakeConsensus.h"
 #include "bcos-sealer/SealerConfig.h"

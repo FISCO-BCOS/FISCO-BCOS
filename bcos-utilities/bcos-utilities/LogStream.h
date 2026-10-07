@@ -88,7 +88,6 @@ enum LogLevel
 };
 
 extern LogLevel c_fileLogLevel;
-extern LogLevel c_statLogLevel;
 
 constexpr auto operator<=>(LogLevel const& _lhs, auto const& _rhs)
     requires(std::same_as<decltype(_rhs), LogLevel> || std::integral<decltype(_rhs)>)
@@ -97,7 +96,6 @@ constexpr auto operator<=>(LogLevel const& _lhs, auto const& _rhs)
 }
 
 void setFileLogLevel(LogLevel const& _level);
-void setStatLogLevel(LogLevel const& _level);
 
 // Buffers one log record and commits it to the file logger on destruction.
 // Constructed only when the level check in BCOS_LOG passes, so disabled log

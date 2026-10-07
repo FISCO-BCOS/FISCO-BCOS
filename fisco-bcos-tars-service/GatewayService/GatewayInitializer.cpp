@@ -19,6 +19,7 @@
  * @date 2021-10-15
  */
 #include "GatewayInitializer.h"
+#include <boost/property_tree/ini_parser.hpp>
 #include "../Common/TarsUtils.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-framework/protocol/GlobalConfig.h>

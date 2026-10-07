@@ -18,6 +18,7 @@
  */
 
 #include "Hash.h"
+#include <boost/log/core/core.hpp>
 #include <bcos-framework/storage/Serialize.h>
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/Features.h"

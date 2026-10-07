@@ -19,6 +19,7 @@
  * @date 2021-10-18
  */
 #include "NodeServiceApp.h"
+#include <boost/property_tree/ini_parser.hpp>
 #include "../Common/TarsUtils.h"
 #include "../FrontService/FrontServiceServer.h"
 #include "../LedgerService/LedgerServiceServer.h"

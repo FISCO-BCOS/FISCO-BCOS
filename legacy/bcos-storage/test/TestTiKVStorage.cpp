@@ -1,4 +1,5 @@
 #include "bcos-framework/storage/StorageInterface.h"
+#include <boost/log/core/core.hpp>
 #include "bcos-storage/TiKVStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-crypto/hasher/OpenSSLHasher.h>

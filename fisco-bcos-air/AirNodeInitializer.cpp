@@ -19,6 +19,7 @@
  * @date 2021-10-28
  */
 #include "AirNodeInitializer.h"
+#include <boost/property_tree/ini_parser.hpp>
 #include "libinitializer/Common.h"
 #include "libinitializer/MemPoolInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>

@@ -19,6 +19,7 @@
  * @date 2022-5-10
  */
 #include "SchedulerServiceApp.h"
+#include <boost/property_tree/ini_parser.hpp>
 #include "Common/TarsUtils.h"
 #include "SchedulerService/SchedulerServiceServer.h"
 #include "bcos-utilities/LogStream.h"

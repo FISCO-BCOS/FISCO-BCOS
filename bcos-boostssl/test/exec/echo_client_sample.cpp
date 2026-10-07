@@ -19,6 +19,7 @@
  */
 
 #include "bcos-boostssl/websocket/WsInitializer.h"
+#include <boost/property_tree/ini_parser.hpp>
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-utilities/LogStream.h>

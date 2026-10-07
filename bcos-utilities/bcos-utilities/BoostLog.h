@@ -13,9 +13,10 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief: heavy boost::log backend declarations (logger objects). Code that
- *  only writes log lines should include the lightweight LogStream.h instead;
- *  BCOS_LOG and the LOG_* macros live there.
+ * @brief: logging channel names. The logging pipeline no longer goes through
+ *  boost::log core: producers hand fully formatted lines to whole-line sinks
+ *  (see LineAsyncSink.h). Code that only writes log lines should include the
+ *  lightweight LogStream.h instead; BCOS_LOG and the LOG_* macros live there.
  *
  * @file: BoostLog.h
  * @author: yujiechen
@@ -24,20 +25,9 @@
 #pragma once
 
 #include "LogStream.h"
-#include <boost/log/sources/severity_channel_logger.hpp>
-#include <boost/log/trivial.hpp>
+#include <string>
 
 namespace bcos
 {
 extern std::string const FileLogger;
-/// the file logger
-extern boost::log::sources::severity_channel_logger_mt<boost::log::trivial::severity_level,
-    std::string>
-    FileLoggerHandler;
-
-// the statFileLogger
-extern std::string const StatFileLogger;
-extern boost::log::sources::severity_channel_logger_mt<boost::log::trivial::severity_level,
-    std::string>
-    StatFileLoggerHandler;
 }  // namespace bcos

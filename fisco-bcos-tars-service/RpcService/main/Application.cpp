@@ -1,4 +1,5 @@
 #include "../../Common/TarsUtils.h"
+#include <boost/property_tree/ini_parser.hpp>
 #include "../RpcInitializer.h"
 #include "../RpcServiceServer.h"
 #include "libinitializer/CommandHelper.h"

@@ -25,6 +25,7 @@
  */
 
 #include "Initializer.h"
+#include <boost/property_tree/ini_parser.hpp>
 #include "AuthInitializer.h"
 #include "BfsInitializer.h"
 #include "EngineServiceInitializer.h"
