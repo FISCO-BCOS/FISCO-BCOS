@@ -262,7 +262,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
         // the Holocene extraData decode and the Jovian DA-footprint branch on parent.Time
         // (consensus/misc/eip1559/eip1559.go:64-110).
         parentTimestampMs = parentHeader->timestamp();
-        baseFee = calcOpBaseFee(*parentHeader, m_scheduler.isJovianActive(parentTimestampMs));
+        baseFee = calcOpBaseFeeForParent(*parentHeader, parentTimestampMs);
     }
 
     requireDelegate();
@@ -821,8 +821,7 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
     }
     {
         // PARENT time (op-geth eip1559.go:64-110 keys CalcBaseFee on parent.Time).
-        auto expectedBaseFee =
-            calcOpBaseFee(*parentHeader, m_scheduler.isJovianActive(parentHeader->timestamp()));
+        auto expectedBaseFee = calcOpBaseFeeForParent(*parentHeader, parentHeader->timestamp());
         if (payload.baseFeePerGas != expectedBaseFee)
         {
             co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,

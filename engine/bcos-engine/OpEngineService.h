@@ -28,6 +28,7 @@
 #include <bcos-framework/engine/EngineService.h>
 #include <bcos-framework/engine/Errors.h>
 #include <bcos-framework/engine/OpBaseFee.h>
+#include <cstdio>
 #include <bcos-framework/engine/OpEip1559Params.h>
 #include <bcos-framework/engine/Types.h>
 
@@ -221,6 +222,36 @@ public:
     }
 
 private:
+    /// Fork-aware OP base-fee pricing (op-geth CalcBaseFee, eip1559.go:64-110): a Holocene+
+    /// parent prices from its own extraData; a pre-Holocene parent prices from the chain's
+    /// declared 1559 constants (the Canyon denominator from Canyon on) — op-geth
+    /// DecodeOptimismExtraData's config-constants branch. Calling the Holocene+-only
+    /// calcOpBaseFee on a pre-Holocene parent throws on its empty extraData, turning a valid
+    /// pre-Holocene import/build into an internal error (hit by the Regolith-window e2e
+    /// suites replaying from genesis).
+    bcos::u256 calcOpBaseFeeForParent(
+        const bcos::protocol::BlockHeader& parentHeader, int64_t parentTimestampMs) const
+    {
+        if (m_scheduler.isHoloceneActive(parentTimestampMs))
+        {
+            return calcOpBaseFee(
+                parentHeader, m_scheduler.isJovianActive(parentTimestampMs));
+        }
+        // The 2-arg calcOpBaseFee's corrupt-header guard, kept on the pre-Holocene arm too.
+        if (!parentHeader.baseFee().has_value())
+        {
+            throwOpBaseFeeError("OP parent header is missing baseFee");
+        }
+        auto const params = effectiveOpEip1559(m_eip1559);
+        auto const denominator = m_scheduler.isCanyonActive(parentTimestampMs) ?
+                                     params.denominatorCanyon :
+                                     params.denominator;
+        return calcOpBaseFeeFromFields(parentHeader.gasLimit(), parentHeader.gasUsed(),
+            *parentHeader.baseFee(), parentHeader.blobGasUsed(), /*parentExtraData=*/{},
+            /*parentIsHolocene=*/false, /*parentIsJovian=*/false, denominator,
+            params.elasticity);
+    }
+
     static PayloadStatus makeStatus(PayloadValidationStatus status,
         std::optional<h256> latestValidHash = std::nullopt,
         std::optional<std::string> validationError = std::nullopt)
