@@ -91,6 +91,11 @@ cd /Users/octopus/octo/code/blockchain-impl/optimism/packages/contracts-bedrock 
 
 Both must print `da197e45ed44b9fca258b3b0d0709e8dfca1c7cd`.
 
+> **Known pin divergence (tracked):** these goldens were generated from the optimism
+> monorepo at `da197e45…`, while the enforced op-revm oracle pin (check-ci-pins.sh) is
+> `5f90f749…`. Regenerating the goldens at the enforced pin is the closure; until then
+> treat this table's provenance as da197e45.
+
 ## known_divergence
 
 See `DIVERGENCES.md`. Only `switch_karst` (karst_alias) is marked in the grid;

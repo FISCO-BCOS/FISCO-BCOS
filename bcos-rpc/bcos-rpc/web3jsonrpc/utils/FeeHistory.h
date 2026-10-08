@@ -61,9 +61,9 @@ std::vector<u256> rewardPercentiles(std::vector<RewardSample> samples,
 /// Canyon when the parent carries withdrawalsRoot (every Canyon+ OP header does), so only the
 /// Canyon activation block itself is predicted with the Bedrock denominator.
 /// eip1559: the chain's DECLARED triple (from the op_eip1559_params SYS_CONFIG row);
-/// nullopt prices with kLegacyOpEip1559Params. Only the pre-Holocene arm reads it.
-u256 nextOpBaseFee(
-    protocol::BlockHeader const& parent, std::optional<engine::OpEip1559Params> eip1559 = std::nullopt);
+/// nullopt prices with c_legacyOpEip1559Params. Only the pre-Holocene arm reads it.
+u256 nextOpBaseFee(protocol::BlockHeader const& parent,
+    std::optional<engine::OpEip1559Params> eip1559
 
 /// eth_feeHistory for blocks [newest - blockCount + 1, newest] of an OP-lane ledger whose head
 /// is @p head. blockCount 0 answers {"oldestBlock": "0x0"}; above c_maxFeeHistoryBlocks it is

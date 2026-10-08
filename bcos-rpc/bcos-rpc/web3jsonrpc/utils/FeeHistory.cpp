@@ -98,7 +98,7 @@ u256 bcos::rpc::nextOpBaseFee(
     // op_eip1559_params SYS_CONFIG row written at genesis from [op_eip1559]) — the
     // same numbers the engine's zero-attribute-params substitution uses, so the
     // prediction cannot drift from what the next block actually carries. Undeclared
-    // chains fall back to kLegacyOpEip1559Params (bcos-framework's
+    // chains fall back to c_legacyOpEip1559Params (bcos-framework's
     // engine/OpEip1559Params.h — effectiveOpEip1559), which is
     // exactly the pair those chains have always priced with.
     auto const params = engine::effectiveOpEip1559(eip1559);

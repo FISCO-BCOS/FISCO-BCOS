@@ -44,9 +44,9 @@ namespace
 {
 std::string formatL1FeeScalar(const bcos::u256& rawScalar)
 {
-    const bcos::u256 kScale{1'000'000};
-    auto const whole = (rawScalar / kScale).str();
-    auto const fraction = static_cast<uint64_t>(rawScalar % kScale);
+    const bcos::u256 c_feeScalarScale{1'000'000};
+    auto const whole = (rawScalar / c_feeScalarScale).str();
+    auto const fraction = static_cast<uint64_t>(rawScalar % c_feeScalarScale);
     if (fraction == 0)
     {
         return whole;

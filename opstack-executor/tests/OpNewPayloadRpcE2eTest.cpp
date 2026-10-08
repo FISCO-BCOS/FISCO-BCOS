@@ -1909,7 +1909,7 @@ BOOST_AUTO_TEST_CASE(ZeroAttributeParamsSubstituteTheDeclaredPair)
 
 // The other half of the same rule, and the one the operator can actually hit: the SAME zero
 // attribute pair on a node that declares nothing. Substitution still happens (the reference
-// never refuses), but the pair now comes from kLegacyOpEip1559Params — the OP-mainnet preset —
+// never refuses), but the pair now comes from c_legacyOpEip1559Params — the OP-mainnet preset —
 // which is only correct for a standard op-deployer chain. The engine logs a WARNING the first
 // time it fires (OpEngineService.inl, "block extraData will carry the OP-mainnet PRESET pair");
 // this case pins the VALUE so the warning's claim is checkable, and pairs with the declared case

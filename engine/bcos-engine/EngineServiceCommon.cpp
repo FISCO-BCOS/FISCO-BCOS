@@ -296,7 +296,7 @@ namespace bcos::engine::detail
 bcos::bytes encodeOptimismExtraData(const PayloadAttributes& payloadAttributes)
 {
     // The legacy preset: the behaviour every undeclared chain and the Eth lane has always had.
-    return encodeOptimismExtraData(payloadAttributes, bcos::engine::kLegacyOpEip1559Params);
+    return encodeOptimismExtraData(payloadAttributes, bcos::engine::c_legacyOpEip1559Params);
 }
 
 bcos::bytes encodeOptimismExtraData(

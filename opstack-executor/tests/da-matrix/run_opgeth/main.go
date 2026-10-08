@@ -19,15 +19,26 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// defaultGrid is the shared grid location (written by Task 1 in the
-// op-alignment worktree). Override with --grid.
-const defaultGrid = "/Users/octopus/octo/code/FISCO-BCOS/.claude/worktrees/op-alignment/opstack-executor/tests/da-matrix/da_matrix.json"
+// defaultGrid is the shared grid location, resolved relative to this runner's
+// directory so the harness works on any checkout. Override with --grid.
+const defaultGrid = "../da_matrix.json"
+
+// resolveDefaultGrid anchors the relative default to the runner binary's directory
+// (../da_matrix.json from run_opgeth/), independent of the caller's CWD.
+func resolveDefaultGrid() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return defaultGrid
+	}
+	return filepath.Join(filepath.Dir(exe), defaultGrid)
+}
 
 // l1BlockAddr is the L1Block contract whose storage holds the L1 gas
 // attributes (op-geth core/types/rollup_cost.go).
@@ -131,7 +142,7 @@ type outItem struct {
 }
 
 func main() {
-	gridPath := flag.String("grid", defaultGrid, "path to da_matrix.json grid")
+	gridPath := flag.String("grid", resolveDefaultGrid(), "path to da_matrix.json grid")
 	outPath := flag.String("out", "out_opgeth.json", "output snapshot path")
 	flag.Parse()
 

@@ -205,7 +205,7 @@ public:
 
     /// Present iff config.genesis carries an [op_eip1559] section: the chain's own EIP-1559
     /// triple, priced into every pre-Holocene block. Absent means "use
-    /// kLegacyOpEip1559Params" (see effectiveOpEip1559), which is what keeps every pre-existing
+    /// c_legacyOpEip1559Params" (see effectiveOpEip1559), which is what keeps every pre-existing
     /// chain's genesis pin byte-identical. Raw rather than defaulted so the pin can tell
     /// "declared" from "not declared" — but the PIN carries the EFFECTIVE value, so a chain
     /// writing the legacy triple explicitly pins the same string as one omitting the section.

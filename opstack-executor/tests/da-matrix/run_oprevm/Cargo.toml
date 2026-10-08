@@ -17,5 +17,9 @@ description = "op-revm DA/operator-fee grid runner for the FISCO opstack da-matr
 publish = false
 
 [dependencies]
+# Local-path dependency on the author's optimism monorepo checkout: regenerate with
+# `OP_REVM_REPO` pointing at YOUR checkout, or swap this for a git pin:
+#   op-revm = { git = "https://github.com/ethereum-optimism/optimism", rev = "<sha>" }
+# (the goldens' generation pin is recorded in ../README.md)
 op-revm = { path = "/Users/octopus/octo/code/blockchain-impl/optimism/rust/op-revm", version = "=20.0.0" }
 serde_json = "1"

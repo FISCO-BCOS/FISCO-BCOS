@@ -1,7 +1,8 @@
 # Copyright (c) FISCO-BCOS, Apache-2.0
 # chain-config template for build-allocs.py (L2 / OP-Stack genesis).
 # Copy this file, fill in the values, then:
-#   make allocs CONFIG=chain-config.yaml BASE=final-allocs.json
+#   python3 tools/opstack-genesis/build-allocs.py --config chain-config.yaml \
+#       --base-allocs final-allocs.json ...   (no Makefile target exists in-tree)
 # or:
 #   python3 build-allocs.py --config chain-config.yaml \
 #       --contracts ../../bcos-l2-contracts \

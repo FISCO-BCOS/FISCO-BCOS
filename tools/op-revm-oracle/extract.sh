@@ -1,4 +1,17 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 FISCO BCOS.
+# SPDX-License-Identifier: Apache-2.0
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 # Regenerate bcos-evm/test/opstack/op_revm_oracle.json from the pinned op-revm checkout.
 # The oracle exists so the Karst precompile table is judged by an EXTERNAL implementation,
 # not by its own literals (OpPrecompilesTest used to compare constants to themselves).
@@ -43,9 +56,16 @@ LOCK="$OP_REVM_REPO/rust/Cargo.lock"
 REVM_PRECOMPILE_VER="$(grep -A1 '^name = "revm-precompile"' "$LOCK" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
 P256_SRC="$(ls -d "${CARGO_HOME:-$HOME/.cargo}"/registry/src/*/revm-precompile-"$REVM_PRECOMPILE_VER"/src 2>/dev/null | head -1)"
 P256_GAS=""
+P256_SHA256=""
 if [ -n "$P256_SRC" ]; then
   P256_GAS="$(grep -hoE 'P256VERIFY_BASE_GAS_FEE_OSAKA: u64 = [0-9_]+' \
     "$P256_SRC/secp256r1.rs" | head -1 | grep -oE '[0-9_]+$' | tr -d '_')"
+  # Content hash of the exact file the constant was read from. The registry copy is
+  # keyed by SEMVER only (crates.io versions are immutable in the normal case, but
+  # admin-deleted republishes, mirror substitutions and local tampering are not
+  # detectable without one) — with the hash recorded, a drift is at least visible.
+  P256_SHA256="$(shasum -a 256 "$P256_SRC/secp256r1.rs" 2>/dev/null | awk '{print $1}')"
+  [ -n "$P256_SHA256" ] || P256_SHA256="(shasum unavailable)"
 fi
 # The tracked oracle is the external judge for the Karst precompile table, so a missing
 # source must die, not silently pin p256verify_gas:0 (same rule as c2-e2e.sh's forge pin:
@@ -75,6 +95,7 @@ cat > "$OUT" <<EOF
   "bls_g2_msm_max_input_size": $JOV_G2,
   "bls_pairing_max_input_size": $JOV_PAIR,
   "p256verify_gas": ${P256_GAS:-0},
+  "p256verify_source_sha256": "$P256_SHA256",
   "revm_precompile_version": "$REVM_PRECOMPILE_VER"
 }
 EOF

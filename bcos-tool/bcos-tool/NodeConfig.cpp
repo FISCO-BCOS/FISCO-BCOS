@@ -654,7 +654,7 @@ void NodeConfig::validateL2Invariants()
     // The OP-only config sections are bound to the OP lane both ways (a section a non-OP
     // chain cannot read is an operator trap; the OP lane's own semantics REQUIRE the ones
     // marked mandatory). [op_eip1559] is optional on the OP lane itself: an absent triple
-    // means kLegacyOpEip1559Params, the bit-identical behaviour of every pre-existing chain.
+    // means c_legacyOpEip1559Params, the bit-identical behaviour of every pre-existing chain.
     if (genesis.m_opEip1559.has_value() &&
         genesis.m_executorVersion < ledger::OPSTACK_EXECUTOR_VERSION)
     {

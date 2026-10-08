@@ -29,7 +29,9 @@ use std::env;
 use std::fs;
 use std::process;
 
-const DEFAULT_GRID: &str = "/Users/octopus/octo/code/FISCO-BCOS/.claude/worktrees/op-alignment/opstack-executor/tests/da-matrix/da_matrix.json";
+// Relative to the runner binary's directory (../da_matrix.json from run_oprevm/);
+// resolve at runtime so the harness works on any checkout. Override with --grid.
+const DEFAULT_GRID: &str = "../da_matrix.json";
 const DEFAULT_OUT: &str = "out_oprevm.json";
 
 /// "0x"-prefixed or bare lowercase/uppercase hex -> bytes; None on malformed input.
@@ -85,9 +87,20 @@ fn get_slot<'a>(slots: &'a serde_json::Map<String, Value>, key: &str, id: &str) 
     }
 }
 
+/// Resolve the relative default against the executable's directory, not the CWD.
+fn default_grid() -> String {
+    match std::env::current_exe() {
+        Ok(exe) => exe
+            .parent()
+            .map(|dir| dir.join(DEFAULT_GRID).to_string_lossy().into_owned())
+            .unwrap_or_else(|| DEFAULT_GRID.to_string()),
+        Err(_) => DEFAULT_GRID.to_string(),
+    }
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let mut grid_path = DEFAULT_GRID.to_string();
+    let mut grid_path = default_grid();
     let mut out_path = DEFAULT_OUT.to_string();
     let mut i = 1;
     while i < args.len() {
