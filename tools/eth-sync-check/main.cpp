@@ -671,6 +671,7 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         // (e.g. Prague on a Cancun chain makes the verifier demand requestsHash
         // that Cancun-era blocks do not carry).
         uint64_t const kNever = std::numeric_limits<uint64_t>::max();
+        uint64_t const londonTime = 0;  // the emitted ladder starts London at genesis
         uint64_t const parisTime = 0;  // TTD == 0: PoS from genesis
         bool forkNeverSeen = false;
         auto forkTime = [&](char const* jsonKey) -> uint64_t {
@@ -714,7 +715,7 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
             auto const& av = root["alloc"][addr];
             ledger::Alloc a;
             a.address = padHex(addr, 40, "alloc address");
-            a.balance = av.isMember("balance") ? u256(av["balance"].asString()) : u256(0);
+            a.balance = jsonQuantity(av, "balance").value_or(u256(0));
             auto nonce = jsonQuantity(av, "nonce").value_or(u256(0));
             if (nonce > u256(std::numeric_limits<uint64_t>::max()))
             {
@@ -804,6 +805,15 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         if (auto v = jsonQuantity(root, "baseFeePerGas"))
         {
             baseFee = h.baseFee = *v;
+        }
+        else if (forkActiveAtGenesis(londonTime))
+        {
+            // geth's Genesis.ToBlock: London active at genesis and no explicit
+            // baseFeePerGas -> params.InitialBaseFee (1 gwei). Omitting it would
+            // mint a pre-London-shaped header whose hash disagrees with geth's,
+            // and block 1 would fail "baseFeePerGas present but the parent is
+            // pre-London" (the same constant the validator uses).
+            baseFee = h.baseFee = protocol::kInitialBaseFee;
         }
         // consume-generated genesis files name it "withdrawalsRoot" (the fixture
         // header field); accept the geth-config-style "withdrawalsHash" too.

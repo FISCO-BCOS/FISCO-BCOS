@@ -75,7 +75,16 @@ int main(int argc, const char* argv[])
                 std::cout << "[" << bcos::getCurrentDateTime() << "] ";
                 std::cout << "importing Ethereum blocks from " << param.importBlocksPath
                           << " ..." << std::endl;
-                initializer->importEthereumBlocks(param.importBlocksPath);
+                auto summary = initializer->importEthereumBlocks(param.importBlocksPath);
+                // Skips are the consume-rlp contract (invalid blocks are rejected and
+                // the run continues), but a run that imported NOTHING is a hard
+                // failure — report it on the exit status so scripts can branch on it.
+                if (summary.imported == 0 && summary.skipped > 0)
+                {
+                    std::cerr << "import-blocks: nothing imported (imported=0 skipped="
+                              << summary.skipped << ")" << std::endl;
+                    return 1;
+                }
                 return 0;
             }
             if (param.hasOp(bcos::initializer::Params::operation::Prune))

@@ -21,6 +21,7 @@
 
 #pragma once
 #include "libinitializer/CommandHelper.h"
+#include "libinitializer/EthereumBlockImport.h"
 #include "libinitializer/EthereumSyncInitializer.h"
 #include "libinitializer/Initializer.h"
 #include "libinitializer/OpStackSyncInitializer.h"
@@ -61,7 +62,7 @@ public:
     /// caller exits 0 and the entrypoint starts the node normally. Throws on hard
     /// errors (bad path, malformed RLP framing, non-EL config); per-block failures
     /// are logged and skipped. Ethereum L1 EL mode (executor v2) only.
-    virtual void importEthereumBlocks(std::string const& _path);
+    virtual bcos::initializer::BlockImportSummary importEthereumBlocks(std::string const& _path);
     virtual bcos::initializer::Initializer::Ptr nodeInitializer() { return m_nodeInitializer; }
 
 protected:

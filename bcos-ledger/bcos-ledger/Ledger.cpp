@@ -1775,19 +1775,16 @@ bool Ledger::buildGenesisBlock(
         }
         auto genesisBlockHash = co_await ledger::getBlockHash(*m_stateStorage, 0, fromStorage);
         auto genesisData = generateGenesisData(genesis, ledgerConfig);
-        // op-geth-compatible Ethereum state trie over the allocs: the root is
-        // empty (zero) for pbft chains with no allocs (an empty-alloc L2 chain
-        // instead publishes mpt::emptyRootHash(), see the header-building branch
-        // below), set as the L2 genesis block's stateRoot below, and re-derived
-        // on restart to guard alloc immutability; the produced nodes are
-        // persisted further below on first init of an L2 chain. computeGenesisStateTrie only reads
-        // genesis.m_allocs, so it does not depend on the genesis state being
-        // written first.
-        GenesisStateTrie ethStateTrie;
-        if (!genesis.m_allocs.empty())
-        {
-            ethStateTrie = co_await computeGenesisStateTrie(genesis);
-        }
+        // op-geth-compatible Ethereum state trie over the allocs: an empty alloc
+        // set yields mpt::emptyRootHash() (computeGenesisStateTrie's documented
+        // empty-set contract), which is exactly what an empty-alloc Ethereum-lane
+        // genesis publishes (see the header-building branch below) — one source
+        // for the value the publish path and the restart guard both read. For
+        // non-Ethereum (pbft) chains the result is unused. The produced nodes are
+        // persisted further below on first init of an Ethereum-lane chain.
+        // computeGenesisStateTrie only reads genesis.m_allocs, so it does not
+        // depend on the genesis state being written first.
+        GenesisStateTrie ethStateTrie = co_await computeGenesisStateTrie(genesis);
         if (genesisBlockHash)
         {
             // genesis block exists, quit
@@ -1840,29 +1837,28 @@ bool Ledger::buildGenesisBlock(
             // genesis block's stateRoot (set to ethStateRoot on first init); a
             // config change to any alloc changes that root, so compare the
             // stored header's stateRoot against the freshly derived one. An
-            // empty-alloc Ethereum-lane genesis pins the canonical empty-trie
-            // root instead (buildGenesisBlock publishes mpt::emptyRootHash()
-            // for it), so a non-empty -> empty alloc drift is caught too.
-            // Legacy (non-Ethereum-lane) chains carry no allocs and leave the
-            // genesis stateRoot zero — the comparison does not apply to them.
+            // empty alloc set derives the canonical empty-trie root
+            // (computeGenesisStateTrie's empty-set contract), exactly what an
+            // empty-alloc Ethereum-lane genesis publishes below — so a
+            // non-empty -> empty alloc drift is caught too. Legacy
+            // (non-Ethereum-lane) chains carry no allocs and leave the genesis
+            // stateRoot zero — the comparison does not apply to them.
             bool const ethLaneRestart =
                 genesis.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION;
-            auto const expectedGenesisRoot =
-                genesis.m_allocs.empty() ? mpt::emptyRootHash() : ethStateTrie.root;
             if (existsGenesisData == genesisData && ethLaneRestart &&
-                genesisBlockHeader->stateRoot() != expectedGenesisRoot)
+                genesisBlockHeader->stateRoot() != ethStateTrie.root)
             {
                 LEDGER_LOG(FATAL) << LOG_BADGE("buildGenesisBlock")
                                   << LOG_DESC("genesis allocs changed since first init")
                                   << LOG_KV(
                                          "storedStateRoot", genesisBlockHeader->stateRoot().hex())
-                                  << LOG_KV("computedStateRoot", expectedGenesisRoot.hex());
+                                  << LOG_KV("computedStateRoot", ethStateTrie.root.hex());
                 BOOST_THROW_EXCEPTION(
                     bcos::tool::InvalidConfig() << errinfo_comment(
                         "genesis allocs changed since first init (op-geth state root mismatch); "
                         "refuse to start. stored=" +
                         genesisBlockHeader->stateRoot().hex() +
-                        " computed=" + expectedGenesisRoot.hex()));
+                        " computed=" + ethStateTrie.root.hex()));
             }
 
             if (existsGenesisData == genesisData)

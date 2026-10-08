@@ -161,8 +161,9 @@ public:
         BlockImportSummary summary;
         // The running parent header: seeded from the ledger resume anchor (genesis on
         // a fresh node, the local head on a resume) and advanced to each committed
-        // block. A skipped block does NOT advance it — the next block's parent is
-        // the skipped one, so it fails the verifier's checks the same way.
+        // block. A skipped block does NOT advance it — the parent stays at the last
+        // committed block, while the next block's own parentHash/number still refer
+        // to the skipped one, so it fails the continuity checks the same way.
         auto parentHeader = resumeParentHeader();
         for (auto const& file : files)
         {
@@ -345,6 +346,26 @@ inline void EthereumBlockImporter::importOneBlock(Verifier& _verifier, bcos::byt
     auto const& blockData = block.data();
     auto const blockHash = bcos::protocol::ethHeaderHash(blockData.header);
 
+    // Chain continuity: the verifier's validateHeaderPoS contract expects the
+    // CALLER to have checked the hash link (it checks only number == parent + 1;
+    // the devp2p lane links at HeaderChain, the engine lane looks the parent up
+    // by hash). Without this, a block with a forged parentHash would execute
+    // against the real previous state and commit an unlinked chain.
+    auto const expectedParentHash = bcos::protocol::ethHeaderHash(_parentHeader);
+    if (blockData.header.parentInfo.blockHash != expectedParentHash)
+    {
+        ++_summary.skipped;
+        INITIALIZER_LOG(WARNING)
+            << LOG_DESC("import-blocks: parent hash does not link to the current import "
+                        "head, skipping")
+            << LOG_KV("number", blockData.header.number)
+            << LOG_KV("hash", blockHash.hex().substr(0, 18))
+            << LOG_KV("parentHash", blockData.header.parentInfo.blockHash.hex().substr(0, 18))
+            << LOG_KV("expected", expectedParentHash.hex().substr(0, 18))
+            << LOG_KV("source", _source);
+        return;
+    }
+
     // The verifier wants the raw per-item RLP for uncles/withdrawals; the codec is
     // byte-exact, so re-encoding each decoded element reproduces the original bytes
     // (same pattern as EthEngineService's withdrawals sidecar).
@@ -387,13 +408,9 @@ inline void EthereumBlockImporter::importOneBlock(Verifier& _verifier, bcos::byt
                 << LOG_KV("source", _source) << LOG_KV("error", result.error);
             return;
         }
-        // TxValidator's "whoever commits a block publishes" contract: this lane
-        // bypasses MultiVersionScheduler's publishing wrapper, so republish the
-        // post-commit configuration here (same as the devp2p sync lane).
-        if (m_ledgerConfigState)
-        {
-            m_ledgerConfigState->set(task::syncWait(ledger::getLedgerConfig(*m_ledger)));
-        }
+        // The block is committed — advance the running parent and the summary
+        // FIRST, so a failure in the post-commit bookkeeping below cannot
+        // mis-report this block as skipped and desync the rest of the run.
         _parentHeader = blockData.header;
         ++_summary.imported;
         INITIALIZER_LOG(DEBUG)
@@ -417,6 +434,24 @@ inline void EthereumBlockImporter::importOneBlock(Verifier& _verifier, bcos::byt
                                  << LOG_KV("number", blockData.header.number)
                                  << LOG_KV("hash", blockHash.hex().substr(0, 18))
                                  << LOG_KV("source", _source) << LOG_KV("error", e.what());
+        return;
+    }
+    // TxValidator's "whoever commits a block publishes" contract: this lane
+    // bypasses MultiVersionScheduler's publishing wrapper, so republish the
+    // post-commit configuration here (same as the devp2p sync lane). Bookkeeping
+    // only — a failure here must not count the just-committed block as skipped.
+    try
+    {
+        if (m_ledgerConfigState)
+        {
+            m_ledgerConfigState->set(task::syncWait(ledger::getLedgerConfig(*m_ledger)));
+        }
+    }
+    catch (std::exception const& e)
+    {
+        INITIALIZER_LOG(WARNING) << LOG_DESC("import-blocks: ledger-config republish failed")
+                                 << LOG_KV("number", blockData.header.number)
+                                 << LOG_KV("error", e.what());
     }
 }
 

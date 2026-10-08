@@ -2,6 +2,11 @@
 ; FISCO-BCOS hive client node configuration (config.ini) — Ethereum L1 EL mode.
 ; Instantiated by bcos.sh: __CHAIN_ID__, __LOG_LEVEL__, __ENGINE_ENABLED__
 ; are substituted from the hive environment before the node starts.
+;
+; DISPOSABLE TEST PROFILE: RPC and the Engine API bind to 0.0.0.0 with
+; wide-open CORS and no authentication — correct inside a throwaway hive
+; container, NOT a starting point for real deployments. For production
+; configs start from tools/BcosBuilder/src/tpl/config.genesis.el instead.
 ; ============================================================================
 
 [service]

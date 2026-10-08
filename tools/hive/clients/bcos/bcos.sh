@@ -161,11 +161,15 @@ fi
 # skips invalid blocks and keeps going).
 if [ -f /chain.rlp ]; then
     echo "importing /chain.rlp ..." >&2
-    fisco-bcos -c config.ini -g config.genesis --import-blocks /chain.rlp
+    # The consume-rlp contract: invalid blocks are rejected and the run continues
+    # (best block = last VALID imported block). A total failure (imported=0) exits
+    # non-zero; tolerate it here so the node still starts and serves the head it has.
+    fisco-bcos -c config.ini -g config.genesis --import-blocks /chain.rlp || true
 fi
 if [ -d /blocks ] && [ -n "$(ls -A /blocks 2>/dev/null)" ]; then
     echo "importing /blocks ..." >&2
-    fisco-bcos -c config.ini -g config.genesis --import-blocks /blocks
+    # Same contract as above.
+    fisco-bcos -c config.ini -g config.genesis --import-blocks /blocks || true
 fi
 
 # ------------------------------------------------------------------- exec ----

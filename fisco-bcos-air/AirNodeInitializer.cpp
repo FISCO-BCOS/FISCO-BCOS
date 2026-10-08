@@ -295,7 +295,8 @@ void AirNodeInitializer::validateEthereumELParams(
     }
 }
 
-void AirNodeInitializer::importEthereumBlocks(std::string const& _path)
+bcos::initializer::BlockImportSummary AirNodeInitializer::importEthereumBlocks(
+    std::string const& _path)
 {
     auto initializer = m_nodeInitializer;
     auto nodeConfig = initializer->nodeConfig();
@@ -324,6 +325,7 @@ void AirNodeInitializer::importEthereumBlocks(std::string const& _path)
                           << LOG_KV("skipped", summary.skipped)
                           << LOG_KV("headNumber", summary.headNumber)
                           << LOG_KV("headHash", summary.headHash.hex());
+    return summary;
 }
 
 void AirNodeInitializer::start()
