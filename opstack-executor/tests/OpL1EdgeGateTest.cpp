@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-// bcos-evm/test/opstack/OpL1EdgeGateTest.cpp
+// opstack-executor/tests/OpL1EdgeGateTest.cpp
 // L1 edge gate: B-5b Jovian DA-footprint rejection + D-4 validate-snapshot contract.
 //
 // B-5b: engine_newPayloadV4 whose blobGasUsed (= the Jovian DA footprint header slot) exceeds
@@ -100,9 +100,13 @@ using namespace opstack_e2e;
 //
 // GasLimit is a separate override because the F-A2 equality gate ties the header field to the
 // LOCAL Σ: the boundary cell must keep remote == local and move gasLimit, not remote.
-// Overriding gasLimit changes the header preimage, so the blockHash recomputation below
-// (rebuildOpEthHeader over the mutated request.executionPayload) is mandatory — otherwise the
-// engine's hash gate would reject before the DA checks run.
+// Overriding gasLimit changes the header preimage; the blockHash recomputation below
+// (rebuildOpEthHeader over the mutated request.executionPayload) keeps the payload
+// self-consistent and matches the sibling cells' convention. NOTE the gate ORDER: the
+// Step-2 shape validator (which answers the DA-footprint error) runs BEFORE the
+// blockHash comparison (OpEngineService.inl: validateOpNewPayloadRequest precedes
+// canonicalBlockHash), so a stale hash cannot mask the DA gate — the recompute is
+// defensive consistency, not an ordering requirement.
 std::string statusForDaFootprintRemoteAndGasLimit(uint64_t remote, std::optional<uint64_t> gasLimit)
 {
     auto sample = w6test::loadVectorSample("jovian_da_mix");

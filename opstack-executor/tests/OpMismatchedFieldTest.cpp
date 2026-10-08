@@ -1,7 +1,7 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
 
-// Unit tests for the OP commitments comparison pure function (OpCommitments.h): 8 fields,
+// Unit tests for the OP commitments comparison pure function (OpEthCommitments.h): 8 fields,
 // comparison order (first mismatch wins), the "transactionsRoot" literal, and the optional
 // computed-side-only gating (blobGasUsed/requestsHash).
 

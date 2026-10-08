@@ -85,7 +85,7 @@ BOOST_AUTO_TEST_CASE(laneMatrixCoversTheOpSectionFamily)
 // declaring an OP-only section gets that rule's own rejection message.
 BOOST_AUTO_TEST_CASE(opSectionOnANonOpLaneIsRejectedByTheMatrix)
 {
-    for (auto const* section : {"op_fork_timestamps", "op_eip1559"})
+    for (auto const* section : {"op_fork_timestamps", "op_fork_schedule", "op_eip1559"})
     {
         NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
         auto const genesis =
@@ -152,6 +152,16 @@ BOOST_AUTO_TEST_CASE(dualForkScheduleDeclarationMustAgreeOnJovianKarst)
         NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
         BOOST_CHECK_EXCEPTION(
             cfg.loadGenesisConfigFromString(genesisWith("jovian_time=0\n", "0:isthmus,100:jovian")),
+            InvalidConfig, [](auto const& e) {
+                return errinfoContains(e, "activates jovian/karst at");
+            });
+    }
+    // The karst rung diverges on its own too (the jovian pair above agrees): shorthand
+    // karst_time=5 vs canonical karst at 100.
+    {
+        NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+        BOOST_CHECK_EXCEPTION(
+            cfg.loadGenesisConfigFromString(genesisWith("karst_time=5\n", "0:isthmus,100:karst")),
             InvalidConfig, [](auto const& e) {
                 return errinfoContains(e, "activates jovian/karst at");
             });

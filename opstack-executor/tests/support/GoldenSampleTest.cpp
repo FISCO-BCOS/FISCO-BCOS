@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-// bcos-evm/test/opstack/support/GoldenSampleTest.cpp
+// opstack-executor/tests/support/GoldenSampleTest.cpp
 #include "GoldenSample.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
@@ -49,7 +49,8 @@ BOOST_AUTO_TEST_CASE(DecodeGoldenHeaderRoundTrip)
     BOOST_REQUIRE(header != nullptr);
     // Byte-equivalence gate: EthBlockHeader::rlpEncode must reproduce the golden encodedHeaderHex
     // (the golden was pinned against the former BlockHeader::encodeOpHeader — same 21-field order
-    // + NON_ETH ms→s /1000). decodeTarsHeader is the strict inverse; the roundtrip must match.
+    // + NON_ETH ms→s /1000). (decodeTarsHeader no longer exists on this branch — see
+    // GoldenSample.h — so this pins the encode side only.)
     bcos::bytes encoded;
     bcos::protocol::EthBlockHeader(*header).rlpEncode(encoded);
     BOOST_CHECK(encoded == bcos::fromHex(sample.golden["encodedHeaderHex"].asString()));

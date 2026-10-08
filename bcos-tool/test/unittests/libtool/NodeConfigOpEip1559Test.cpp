@@ -17,6 +17,7 @@
 #include "ExceptionCheck.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include "EthLaneGenesisFixture.h"
+#include "NodeConfigLoaderProbe.h"
 #include <bcos-framework/engine/OpEip1559Params.h>
 #include <bcos-tool/NodeConfig.h>
 #include <boost/test/unit_test.hpp>
@@ -106,6 +107,17 @@ BOOST_AUTO_TEST_CASE(missingRequiredKeyRejected)
                               std::string(kSchedule) + "[op_eip1559]\ndenominator=8\n")),
         InvalidConfig,
         [](auto const& e) { return errinfoContains(e, "[op_eip1559].elasticity is required"); });
+}
+
+// The sibling missingRequiredKeyRejected only omits elasticity; the denominator key
+// must be rejected on its own too (the loader requires all three declared-or-none).
+BOOST_AUTO_TEST_CASE(missingDenominatorKeyRejected)
+{
+    NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+    BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(
+                              opExecutor(), std::string(kSchedule) + "[op_eip1559]\nelasticity=2\n")),
+        InvalidConfig,
+        [](auto const& e) { return errinfoContains(e, "[op_eip1559].denominator is required"); });
 }
 
 BOOST_AUTO_TEST_CASE(zeroValuesRejected)
@@ -235,6 +247,32 @@ BOOST_AUTO_TEST_CASE(genesisDataCarriesTheDeclaredEip1559Triple)
     // denominator_canyon was omitted, so the pin must carry the normalized 250.
     BOOST_CHECK(with.find("eip1559:2,8,250") != std::string::npos);
     BOOST_CHECK_NE(without, with);
+
+    // The pin carries the EFFECTIVE value: declaring denominator_canyon=250 explicitly
+    // must pin the SAME string as omitting it (asserted, not just documented).
+    NodeConfig explicitCfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+    BOOST_REQUIRE_NO_THROW(explicitCfg.loadGenesisConfigFromString(opGenesis(opExecutor(),
+        std::string(kSchedule) +
+            "[op_eip1559]\nelasticity=2\ndenominator=8\ndenominator_canyon=250\n")));
+    BOOST_REQUIRE(explicitCfg.ledgerConfig());
+    auto const explicitPin =
+        bcos::tool::generateGenesisData(explicitCfg.genesisConfig(), *explicitCfg.ledgerConfig());
+    BOOST_CHECK_EQUAL(explicitPin, with);
+}
+
+// Mirrors reloadWithoutSectionClearsPreviousSchedule: a stale triple must not leak
+// into the next genesis build when the section disappears from a re-read config.
+BOOST_AUTO_TEST_CASE(reloadWithoutSectionClearsPreviousEip1559)
+{
+    LoaderProbe probe;
+    probe.loadOpEip1559(
+        fromIni("[op_eip1559]\n"
+                "elasticity = 2\n"
+                "denominator = 8\n"));
+    BOOST_REQUIRE(probe.genesisConfig().m_opEip1559.has_value());
+
+    BOOST_CHECK_NO_THROW(probe.loadOpEip1559(fromIni("[chain]\nchain_id=1\n")));
+    BOOST_CHECK(!probe.genesisConfig().m_opEip1559.has_value());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -3,7 +3,7 @@
 
 // OpT8nReplayTest.cpp — OP block-level differential replay gate.
 //
-// Replays test/opstack/t8n/vectors/*.json (schema v3-block, op-geth
+// Replays opstack-executor/tests/t8n/vectors/*.json (schema v3-block, op-geth
 // GenerateChain+InsertChain golden, generator in t8n/generator/) block-by-block
 // through the production path (preBlockOpSteps → SchedulerSerialImpl →
 // finalizeOpBlockResult), comparing header fields, per-receipt fields, and
@@ -21,7 +21,6 @@
 // DIVERGENCES.md ALLOWLIST tuples (a:PENDING-FIX / c:SIGNED-OFF); dangling
 // entry= or never-hit exemptions = FAILURE.
 
-#include "StateDiffWriteback.h"
 #include "support/RunSharedPath.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
