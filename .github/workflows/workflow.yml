@@ -533,9 +533,11 @@ jobs:
   # l2_unit_suites (artifact) so this job skips vcpkg configure + C++ build.
   # STEP-SET TWIN of c2-e2e.yml's c2_e2e job (that one builds fisco-bcos from
   # source): every shared step must be edited in lockstep in both files.
-  # Runs on every PR (the workflow itself is skipped only for docs-only changes). The
-  # smoke variant keeps it inside a few minutes; the full adversarial run
-  # (CONTEST=1) is scheduled nightly in c2-e2e.yml.
+  # Runs on every PR (the workflow itself is skipped only for docs-only changes). It
+  # runs the FULL adversarial + kona leg (CONTEST=1, KONA_VERIFY=1) — the same depth
+  # as the nightly c2-e2e.yml job, just reusing the l2_unit_suites binary instead of
+  # rebuilding fisco-bcos. The added dispute-game + kona time is a few minutes, judged
+  # acceptable for per-PR coverage.
   c2_e2e:
     name: C2 deposit/withdraw e2e
     needs: [l2_unit_suites]
@@ -545,7 +547,7 @@ jobs:
     permissions:
       contents: read
     env:
-      CONTEST: "0"
+      CONTEST: "1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -592,6 +594,11 @@ jobs:
           curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh \
             | sudo bash -s -- --to /usr/local/bin
           just --version
+
+      # kona-host / kona-client (rust/kona) are built with cargo for the native replay
+      # verification leg. KONA_VERIFY=1 is the default; the per-PR smoke leg may disable it.
+      - name: Set up Rust (kona build)
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -645,6 +652,9 @@ jobs:
           cp .ci-op-monorepo/op-deployer/bin/op-deployer "$GITHUB_WORKSPACE/.ci-c2-bins/op-deployer"
           (cd .ci-op-monorepo && go build -o "$GITHUB_WORKSPACE/.ci-c2-bins/op-batcher" ./op-batcher/cmd)
           (cd .ci-op-monorepo && go build -o "$GITHUB_WORKSPACE/.ci-c2-bins/op-node" ./op-node/cmd)
+          (cd .ci-op-monorepo/rust && cargo build --release -p kona-host -p kona-client)
+          cp .ci-op-monorepo/rust/target/release/kona-host "$GITHUB_WORKSPACE/.ci-c2-bins/kona-host"
+          cp .ci-op-monorepo/rust/target/release/kona-client "$GITHUB_WORKSPACE/.ci-c2-bins/kona-client"
 
       - name: Fetch pinned Solidity deps
         run: bash tools/.ci/fetch-l2-contract-deps.sh
@@ -654,7 +664,10 @@ jobs:
         working-directory: bcos-l2-contracts
 
       - name: Run C2 ephemeral e2e
-        run: SKIP_OP_BUILD=1 bash tools/.ci/c2-e2e.sh
+        # SKIP_KONA_BUILD=1: kona-host/kona-client were already built by the Build OP stack
+        # binaries step (this mirrors c2-e2e.yml's full-run twin). KONA_VERIFY defaults to 1,
+        # so the native replay verification runs against the contest leg's dispute game.
+        run: SKIP_OP_BUILD=1 SKIP_KONA_BUILD=1 bash tools/.ci/c2-e2e.sh
         env:
           REPO_ROOT: ${{ github.workspace }}
           BIN_DIR: ${{ github.workspace }}/.ci-c2-bins
