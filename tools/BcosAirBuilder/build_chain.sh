@@ -415,6 +415,13 @@ download_bin()
     fi
     mkdir -p bin && mv ${package_name} bin && cd bin && tar -zxf ${package_name} && cd ..
     chmod a+x ${binary_path}
+    # Sanity-check the downloaded binary actually runs on this host (release
+    # assets are statically linked since v3.18.0, but this still catches corrupt
+    # downloads, architecture mismatches and older dynamically-linked assets
+    # whose glibc/libstdc++ floor exceeds this host's)
+    if ! "${binary_path}" -v > /dev/null 2>&1; then
+        exit_with_clean "The downloaded ${binary_name} binary cannot run on this host (corrupt download, wrong architecture, or a dynamically-linked asset from an older release whose glibc/libstdc++ requirement exceeds this host's). Please re-download, pick the asset matching this host's architecture, or build from source and pass the binary via the -e option."
+    fi
 }
 
 download_lightnode_bin()
@@ -2463,7 +2470,34 @@ generate_auth_account()
         chmod u+x ${account_script}
         mv ${account_script} "${HOME}/.fisco/"
   fi
+  # NOTE: this account-script patch block is duplicated in
+  # tools/.ci/ci_check_pro.sh's generate_auth_account (build_chain.sh is a
+  # standalone release asset, so the logic cannot be factored into a shared
+  # helper); any change here must be mirrored there.
+  # The console get_*_account.sh scripts probe the arch with the non-portable
+  # `uname -p`, which prints "unknown" on newer coreutils (e.g. ubuntu-26.04);
+  # rewrite those probes to `uname -m` and fail loudly if any probe survives
+  sed -i.bak "s/\$(uname -p)/\$(uname -m)/g" "${HOME}/.fisco/${account_script}" && rm -f "${HOME}/.fisco/${account_script}.bak"
+  # The script downloads tassl from gitee, which is flaky from CI runners
+  # (transient "Connection reset by peer"); add retries to its curl calls.
+  # --retry-all-errors requires curl >= 7.71 (2020-06); this script also runs on
+  # older operator hosts whose curl would abort on the unknown option, so probe
+  # for support first and fall back to plain --retry
+  local curl_retry_opts="--retry 5 --retry-delay 3"
+  if curl --help all 2>/dev/null | grep -q -- "--retry-all-errors"; then
+    curl_retry_opts="--retry 5 --retry-all-errors"
+  fi
+  sed -i.bak "s/curl -#LO/curl -#L ${curl_retry_opts} -O/g" "${HOME}/.fisco/${account_script}" && rm -f "${HOME}/.fisco/${account_script}.bak"
+  if grep -qF "\$(uname -p)" "${HOME}/.fisco/${account_script}"; then
+      LOG_FATAL "${HOME}/.fisco/${account_script} still contains a non-portable \`uname -p\` arch probe; please update or patch the script manually"
+  fi
   auth_admin_account=$(bash ${HOME}/.fisco/${account_script} | grep Address | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | awk '{print $5}')
+  # fail fast: a broken account script run (e.g. its tassl download failed)
+  # yields an empty/garbage address; deploying with it surfaces only minutes
+  # later as an obscure expand-node timeout
+  if ! [[ ${auth_admin_account} =~ ^0x[0-9a-fA-F]{40}$ ]]; then
+      LOG_FATAL "Failed to generate a valid auth admin account (got '${auth_admin_account}'); check the ${account_script} output above (e.g. tassl download failure)"
+  fi
   LOG_INFO "Admin account: ${auth_admin_account}"
   if [[ ${chain_version} == "air" ]];then
       mv accounts* "${ca_dir}"

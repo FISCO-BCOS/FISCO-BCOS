@@ -21,6 +21,7 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <memory>
 
 namespace bcos
