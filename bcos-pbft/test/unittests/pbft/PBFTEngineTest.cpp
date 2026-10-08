@@ -260,6 +260,20 @@ BOOST_AUTO_TEST_CASE(testHandlePrePrepareMsg)
     nonLeaderFaker->pbftEngine()->executeWorker();
     BOOST_CHECK(!nonLeaderFaker->pbftEngine()->cacheProcessor()->existPrePrepare(pbftMsg));
 
+    // case5's verify runs async on the txpool strand, and FIB-132 dedups
+    // in-flight verifies by (index, hash, view) — the same key case6 reuses.
+    // Wait for case5's callback to drain first: otherwise case6's verify is
+    // skipped as "already in-flight" and case5's deliberately-failing result
+    // decides case6's fate, starving the pre-prepare cache until the wait loop
+    // below times out (observed as a 60s flake on loaded CI runners).
+    auto drainT = utcTime();
+    while (nonLeaderFaker->pbftEngine()->inFlightProposalSizeForTest() > 0 &&
+           (utcTime() - drainT <= 60 * 1000))
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    BOOST_CHECK_EQUAL(nonLeaderFaker->pbftEngine()->inFlightProposalSizeForTest(), 0);
+
     // case6: valid pre-prepare
     // FIB-142: receiver now recomputes the decoded block hash and rejects any
     // (proposal hash, body) mismatch. To keep this test exercising the success

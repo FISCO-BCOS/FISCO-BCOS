@@ -382,8 +382,27 @@ if [[ ${check_web3_test} == "true" ]]; then
     cp ${current_path}/nodes/ca/accounts/* ${current_path}/console/dist/account/ecdsa/
     cd "${current_path}/console/dist/"
     account=$(bash console.sh listAccount | grep "current account" | awk -F '(' '{print $1}')
-    bash console.sh addBalance "${account}" 200 ether
-    bash console.sh setSystemConfigByKey tx_gas_price 1
+    # Console RPC calls can time out on overloaded runners ("waiting for message
+    # response timed out", code -4008). Retry each setup call and fail fast,
+    # otherwise the web3 suite surfaces the skipped tx_gas_price=1 setting as a
+    # cryptic gasPrice assertion failure minutes later.
+    console_with_retry() {
+        local output attempt rc
+        for attempt in 1 2 3; do
+            # check the exit code too: console.sh can fail without printing a
+            # recognizable error marker (e.g. java launcher errors)
+            output=$(bash console.sh "$@" 2>&1) && rc=0 || rc=$?
+            if [[ ${rc} -eq 0 && "${output}" != *'"code":-'* && "${output}" != *"timed out"* ]]; then
+                return 0
+            fi
+            LOG_WARN "console.sh $* attempt ${attempt} failed (rc=${rc}), retrying in 10s..."
+            sleep 10
+        done
+        LOG_ERROR "console.sh $* failed after 3 attempts: ${output}"
+        exit 1
+    }
+    console_with_retry addBalance "${account}" 200 ether
+    console_with_retry setSystemConfigByKey tx_gas_price 1
     cd ${current_path}
     bash ${current_path}/.ci/web3_test.sh "${current_path}/console/dist/account/ecdsa/${account}.pem"
     if [[ ${?} == "0" ]]; then

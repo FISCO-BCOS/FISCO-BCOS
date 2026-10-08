@@ -68,7 +68,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build/vcpkg_installed
-          key: vcpkg-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'ports/**') }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-cache-key-v4
+          key: vcpkg-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'ports/**') }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-cache-key-v4
 
       - name: Install system packages
         run: |
