@@ -50,8 +50,10 @@ struct ImportedBlock
     // without re-decoding the envelopes.
     std::vector<std::string> txRecipients;
 
-    // Per-block storage delta relative to parent. Task 3 replaces this placeholder
-    // with the real executor delta type; `put` success == the delta exists.
+    // Per-block storage delta relative to parent (type-erased placeholder until Task 3
+    // lands the real executor delta type). NOTE: put() does NOT verify this member —
+    // the "put succeeded" arrow must be drawn by the ENGINE (it attaches the delta it
+    // just executed), not assumed from store membership.
     std::shared_ptr<void> storageDelta;
     // S6 switch support: the MATERIALIZED full post-state of this block (every live
     // key/value on the import view). Restored wholesale when a switch-SetCanonical
@@ -67,7 +69,7 @@ struct ImportedBlock
 /// Imported payloads only: canonical-chain lookups must go through the ledger
 /// tables first, this store is the OP-side fallback (design §4.1 read path).
 /// Internally synchronized (concurrent newPayload RPC threads race
-/// put/get/occupantAt); decision atomicity ACROSS put/canonicalize is the
+/// put/get/occupantAt); decision atomicity ACROSS put/adoptCanonicalHead is the
 /// caller's engine lock (design §4.2).
 class ImportedStore
 {
@@ -126,8 +128,10 @@ public:
         std::lock_guard lock(m_mutex);
         return m_blocks.contains(hash);
     }
-    /// Every stored block was executed on its parent's post-state, so a stored
-    /// block always has state (design: put 成功才 hasState).
+    /// Membership in this store == a payload was imported and accepted. It is NOT a
+    /// state-plane guarantee by itself: hasState mirrors hasBlock, and the delta plane
+    /// is whatever the engine attached at put() (see storageDelta above — unverified
+    /// here). Callers must not read this as "the post-state is materialized".
     [[nodiscard]] bool hasState(const bcos::h256& hash) const { return hasBlock(hash); }
     [[nodiscard]] std::optional<ImportedBlock> get(const bcos::h256& hash) const
     {

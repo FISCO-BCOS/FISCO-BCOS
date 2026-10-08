@@ -148,8 +148,8 @@ void encodeLogsList(bcos::bytes& to, gsl::span<const bcos::protocol::LogEntry> l
 }
 }  // namespace
 
-bcos::bytes encodeReceiptLeaf(bcos::protocol::TransactionReceipt const& receipt,
-    std::uint8_t txType, bool includeDepositNonceVersion)
+bcos::bytes encodeReceiptLeaf(
+    bcos::protocol::TransactionReceipt const& receipt, std::uint8_t txType)
 {
     constexpr std::uint8_t c_legacyTxType = 0x00;
     constexpr std::uint8_t c_depositTxType = 0x7e;
@@ -172,7 +172,11 @@ bcos::bytes encodeReceiptLeaf(bcos::protocol::TransactionReceipt const& receipt,
     codec::rlp::encode(payload, bloom);
     encodeLogsList(payload, receipt.logEntries());
 
-    if (txType == c_depositTxType && includeDepositNonceVersion)
+    // The deposit leaf's [nonce, version] tail is presence-of-version driven only: a
+    // caller-chosen second gate here would be a fork knob with no caller (removed — it
+    // duplicated this inner rule and, set false, would strip the tail from Canyon+
+    // receipts).
+    if (txType == c_depositTxType)
     {
         // op-geth Receipts.EncodeIndex (core/types/receipt.go) DepositTxType branch: the
         // receipts-ROOT leaf gains [depositNonce, depositReceiptVersion] only when

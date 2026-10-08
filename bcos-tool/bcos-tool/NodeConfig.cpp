@@ -667,15 +667,17 @@ void NodeConfig::validateL2Invariants()
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "[op_fork_schedule] requires executor.version >= 3 (OP lane)"));
     }
-    // A dual declaration must agree on WHEN Jovian and Karst activate (review AF): the
-    // canonical [op_fork_schedule] text is stored verbatim as the SYS_CONFIG row the
-    // snapshot readers and the RPC gates key on, while the executor and the genesis pin
-    // run the [op_fork_timestamps] shorthand — two channels that never cross-check would
-    // let one node price and admit against a different ladder than it executes. Compare
-    // the two channels under the SAME fold rule (an unset jovian with a scheduled karst
-    // implies jovian at karst's second), so a full-ladder canonical whose jovian/karst
-    // rungs match the shorthand still passes; only a real activation-time divergence is
-    // rejected.
+    // A dual declaration must agree on WHEN Jovian and Karst activate: those are the
+    // only rungs any consumer keys on across BOTH channels — the canonical
+    // [op_fork_schedule] text is stored as the SYS_CONFIG row whose snapshot readers
+    // (opForkScheduleFromCanonical) extract exactly the jovian/karst seconds, while the
+    // executor, the devp2p validator and the genesis pin run the [op_fork_timestamps]
+    // shorthand. A divergence on those two rungs would make one node price and admit
+    // against a different activation than it executes; lower rungs of the canonical row
+    // are carried verbatim but read by nobody today. Compare the two channels under the
+    // SAME fold rule (an unset jovian with a scheduled karst implies jovian at karst's
+    // second), so a full-ladder canonical whose jovian/karst rungs match the shorthand
+    // still passes; only a real activation-time divergence is rejected.
     if (genesis.m_opstackForkSchedule.has_value() && genesis.m_opForkSchedule.has_value())
     {
         auto const& shorthand = *genesis.m_opForkSchedule;
@@ -1814,7 +1816,8 @@ void NodeConfig::loadOpForkTimestamps(boost::property_tree::ptree const& _genesi
             }
         }
     }
-    // (ledger::foldOpForkShorthand), so the shorthand and the canonical channel share ONE
+    // The jovian/karst pair is validated through (ledger::foldOpForkShorthand), so the
+    // shorthand and the canonical channel share ONE
     // rule set. Equal jovian/karst times are LEGAL and merge into the later fork
     // downstream, and karst scheduled with jovian unscheduled is a legal implied jump
     // (jovian folds into karst's second); only a later fork at an EARLIER second is

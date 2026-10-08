@@ -392,8 +392,8 @@ BOOST_AUTO_TEST_CASE(opStackMetaRejectsCorruptAndOverwideHex)
 // l1_fee_scalar, symmetric with opStackMetaEmpty() which already counts it. A receipt whose
 // ONLY OP metadata is the Bedrock scalar must still report a present meta instead of
 // collapsing to nullopt.
-// NOTE: no live producer emits this shape -- OpTransition.cpp's deriveOpReceiptMeta always
-// sets l1_gas_price and l1_fee together (and runDeposit always sets deposit_nonce) -- so the
+// NOTE: no live producer emits this shape -- OpEthReceipt.h's deriveOpReceiptMeta always
+// sets l1_gas_price and l1_fee together (and the deposit path always sets deposit_nonce) -- so the
 // failing shape is reachable only through the public setOpStackMeta() API or a hand-built /
 // externally-decoded tars struct. This pins the invariant for those paths.
 BOOST_AUTO_TEST_CASE(opStackMetaLoneFeeScalarKeepsMetaPresent)

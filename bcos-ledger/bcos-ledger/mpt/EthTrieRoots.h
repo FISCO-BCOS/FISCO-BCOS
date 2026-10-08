@@ -85,13 +85,8 @@ inline bcos::h256 calculateWithdrawalsRoot(std::span<bcos::bytesConstRef const> 
 /// @throws EthReceiptEncodeError when the receipt is malformed: bloom not 256 bytes, an
 ///         unparseable cumulativeGasUsed, or a deposit receipt with a receipt version but
 ///         no deposit nonce when includeDepositNonceVersion is true.
-[[nodiscard]] bcos::bytes encodeReceiptLeaf(bcos::protocol::TransactionReceipt const& receipt,
-    std::uint8_t txType, bool includeDepositNonceVersion);
-[[nodiscard]] inline bcos::bytes encodeReceiptLeaf(
-    bcos::protocol::TransactionReceipt const& receipt, std::uint8_t txType)
-{
-    return encodeReceiptLeaf(receipt, txType, /*includeDepositNonceVersion=*/true);
-}
+[[nodiscard]] bcos::bytes encodeReceiptLeaf(
+    bcos::protocol::TransactionReceipt const& receipt, std::uint8_t txType);
 
 /// Block-level logs bloom: bitwise OR of the per-receipt 256-byte blooms (each computed from its
 /// logs via bcos::getLogsBloom). Returns a zero bloom for an empty input. Forwarding reference:

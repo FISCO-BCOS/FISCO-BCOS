@@ -148,7 +148,8 @@ public:
     // exactly why the signature erases), so the consumer un-erases with
     // static_pointer_cast and a producer that stores ANY other type is silent UB, not
     // a catchable error. The concrete type is pinned HERE and at the engine's single
-    // un-erase helper (OpEngineService.inl uneraseImportPlaneState); the long-term fix
+    // un-erase site (OpEngineService.inl's static_pointer_cast of these payloads);
+    // the long-term fix
     // is an OP-lane concept interface that names the type (follow-up issue). Baseline
     // schedulers never produce these payloads: the default implementation is
     // unsupported and answers UnknownError.

@@ -868,7 +868,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // "Execute block failed!" loop plus -32603 on every RPC reader. Parse both rows
     // here on the OP lane so the failure is an explicit startup refusal, mirroring the
     // evmc_revision probe above. Absent rows stay legal (pre-existing OP chains).
-    if (m_executorVersion >= scheduler_v1::OPSTACK_EXECUTOR_VERSION)
+    if (ledger::isOpLaneVersion(m_executorVersion))
     {
         if (auto row = task::syncWait(ledger::getSystemConfig(
                 *m_ledger, magic_enum::enum_name(ledger::SystemConfig::op_eip1559_params))))
@@ -880,7 +880,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         if (auto row = task::syncWait(ledger::getSystemConfig(
                 *m_ledger, magic_enum::enum_name(ledger::SystemConfig::op_fork_schedule))))
         {
-            ledger::LedgerConfig probe;
             // opForkScheduleFromCanonical throws ledger::InvalidOpForkSchedule on a
             // malformed canonical row — the exact parse applyLedgerConfig performs.
             (void)ledger::opForkScheduleFromCanonical(std::get<0>(*row));
