@@ -102,4 +102,39 @@ BOOST_AUTO_TEST_CASE(ForwardSwitchKeepsChainLiveness)
     BOOST_CHECK_EQUAL(*store.occupantAt(2), hashOf('C'));
 }
 
+// M7: a sparse store (intermediate body never staged) must not detach a live
+// canonical ancestor: block 100 is a live ancestor of 102 while 101 was never
+// imported, so the walk cannot decide ancestry — and must NOT detach.
+BOOST_AUTO_TEST_CASE(SparseStoreKeepsLiveAncestor)
+{
+    bcos::engine::ImportedStore store;
+    BOOST_CHECK(store.put(block('A', 0, 100)));
+    // Sparse: 101 is skipped — only 100 and 102 are staged, with 102's parent = 101.
+    BOOST_CHECK(store.put(block('C', 'B', 102)));
+    store.adoptCanonicalHead(102, hashOf('C'));
+    // A is a live canonical ancestor (the walk from C cannot reach it, so the store
+    // must NOT detach it).
+    BOOST_CHECK(!store.hasBlock(hashOf('A')) ? false : true);  // body stays
+    // The canonical height index keeps A at 100 (not detached => not erased).
+    BOOST_CHECK_EQUAL(*store.occupantAt(100), hashOf('A'));
+}
+
+// M8: a switch-away-and-back must re-index the re-livened block — the old
+// erase-only fix-up left occupantAt answering nullopt for a live block.
+BOOST_AUTO_TEST_CASE(SwitchAwayAndBackReindexesLiveOccupant)
+{
+    bcos::engine::ImportedStore store;
+    BOOST_CHECK(store.put(block('A', 0, 1)));
+    BOOST_CHECK(store.put(block('B', 'A', 2)));
+    // Switch to a sibling chain: A' at 1 (canonical occupant shape).
+    BOOST_CHECK(store.put(block('D', 0, 1), /*occupantCanonical=*/true));
+    store.adoptCanonicalHead(1, hashOf('D'));
+    BOOST_CHECK_EQUAL(*store.occupantAt(1), hashOf('D'));
+    BOOST_CHECK(!store.occupantAt(2).has_value());  // B detached, height 2 vacated
+    // Switch back to the original chain: B re-livened, A stays live at 1.
+    store.adoptCanonicalHead(2, hashOf('B'));
+    BOOST_CHECK_EQUAL(*store.occupantAt(1), hashOf('A'));
+    BOOST_CHECK_EQUAL(*store.occupantAt(2), hashOf('B'));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

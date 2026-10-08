@@ -178,14 +178,20 @@ public:
             if (blockHash == hash)
             {
                 block.detached = false;
+                continue;
             }
-            else if (block.number >= number)
+            if (block.number >= number)
             {
                 block.detached = !descendsFrom(blockHash, hash);
             }
             else
             {
-                block.detached = !descendsFrom(hash, blockHash);
+                // descendsFrom(head, block) walks in-store parent links; a sparse store
+                // (intermediate body never staged) can leave the walk unanswerable —
+                // answerable=false means "do NOT detach": falsely detaching a live
+                // canonical ancestor re-opens the SYNCING-forever shape this fix closes.
+                const auto walkable = descendsFromWalkable(blockHash);
+                block.detached = walkable && !descendsFrom(hash, blockHash);
             }
         }
         // Heights above the new head have no canonical occupant; below/at it, a
@@ -198,6 +204,17 @@ public:
             auto const it = m_blocks.find(item.second);
             return it == m_blocks.end() || it->second.detached;
         });
+        // Rebuild the index from liveness, not just the head: a block re-livened by
+        // this pass (switch-back onto a still-stored chain) must regain its entry, or
+        // occupantAt answers "never imported" for a live block (the mirror invariant
+        // split in the opposite direction).
+        for (auto const& [hash, block] : m_blocks)
+        {
+            if (!block.detached)
+            {
+                m_byNumber.insert_or_assign(block.number, hash);
+            }
+        }
         m_byNumber[number] = hash;
     }
 
@@ -235,6 +252,28 @@ public:
     }
 
 private:
+    /// True iff a walk FROM @p blockHash can terminate: every parent link resolvable
+    /// in m_blocks. Unwalkable (sparse) links mean ancestry cannot be decided from this
+    /// store at all — callers must not detach on that basis.
+    [[nodiscard]] bool descendsFromWalkable(bcos::h256 const& blockHash) const
+    {
+        auto cursor = blockHash;
+        for (std::size_t guard = 0; guard <= m_blocks.size(); ++guard)
+        {
+            auto const it = m_blocks.find(cursor);
+            if (it == m_blocks.end())
+            {
+                return false;  // sparse: parent body never imported
+            }
+            if (it->second.parent == cursor)
+            {
+                return false;  // self-loop guard: cannot terminate
+            }
+            cursor = it->second.parent;
+        }
+        return true;
+    }
+
     /// True iff @p candidate is @p ancestorOrSelfHash itself or a stored descendant of
     /// it. Walks parent links through m_blocks (all stored bodies keep their links), so
     /// a live child of the new head is recognised while old-branch orphans are not.

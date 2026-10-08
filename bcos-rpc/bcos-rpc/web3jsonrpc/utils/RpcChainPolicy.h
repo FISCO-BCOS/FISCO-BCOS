@@ -50,9 +50,11 @@ inline bool usesEthereumFeeSemantics(int executorVersion)
 
 /// True on the OP lane (executor_version >= OPSTACK_EXECUTOR_VERSION): the only lane that
 /// serves the challenger data plane (debug_getRawHeader / debug_dbGet, ADR 0007).
+// Alias of the ONE lane predicate (ledger::isOpLaneVersion, LedgerConfig.h:385-388) —
+// a second hand-written copy can silently diverge from it.
 inline bool isOpStackLane(int executorVersion)
 {
-    return executorVersion >= bcos::ledger::OPSTACK_EXECUTOR_VERSION;
+    return bcos::ledger::isOpLaneVersion(executorVersion);
 }
 
 
