@@ -157,7 +157,12 @@ jobs:
         run: |
           if ! diff -rq "$GITHUB_WORKSPACE/tools/opstack-genesis" \
                         "$GITHUB_WORKSPACE/e2e-tests/tools/opstack-genesis" >/dev/null 2>&1; then
-            echo "::notice::in-tree tools/opstack-genesis differs from the pinned corpus copy; this pipeline runs the corpus copy, so in-tree-only genesis-toolchain changes are not exercised here"
+            # ESCALATION PATH (two-sided change, harness-pin-freshness policy): merge
+            # op-stack-e2e-tests#8 (sync-from-fisco-5615 — carries this tree's
+            # tools/opstack-genesis), bump the checkout+action pins to the merge commit,
+            # then flip this ::notice:: to ::error::+exit 1. Until the pins move, an error
+            # would block every PR on the drift it takes a merge to clear.
+            echo "::notice::in-tree tools/opstack-genesis differs from the pinned corpus copy; this pipeline runs the corpus copy, so in-tree-only genesis-toolchain changes are not exercised here. Sync is prepared: op-stack-e2e-tests#8 (merge, bump pin, then escalate this check to error)."
           fi
           rm -rf "$GITHUB_WORKSPACE/tools/op-e2e" \
             "$GITHUB_WORKSPACE/tools/opstack-genesis" \
