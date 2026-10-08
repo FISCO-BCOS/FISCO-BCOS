@@ -107,12 +107,20 @@ public:
                 }
             }
         }
-        m_byNumber.emplace(block.number, block.hash);
+        // insert_or_assign, NOT emplace: an allowed same-height coexistence (detached
+        // or canonical occupant above) must re-key the index to the block just
+        // imported — emplace kept the FIRST importer, so put's occupancy notion
+        // (every same-height non-detached block) and occupantAt's (first importer)
+        // were two predicates over one state, and a child of the second sibling saw
+        // occupantAt(parentHeight) name a block the engine no longer considers the
+        // occupant (the N3 "SYNCING forever" shape, between the import and the FCU).
+        m_byNumber.insert_or_assign(block.number, block.hash);
         m_blocks.emplace(block.hash, std::move(block));
         return true;
     }
 
-    /// First importer at @p number (nullopt when the height was never imported).
+    /// The most recent import at @p number (nullopt when the height was never
+    /// imported). Mirrors put's occupancy exactly: same-height coexistences re-key.
     [[nodiscard]] std::optional<h256> occupantAt(bcos::protocol::BlockNumber number) const
     {
         std::lock_guard lock(m_mutex);
@@ -158,21 +166,38 @@ public:
     void adoptCanonicalHead(bcos::protocol::BlockNumber number, const bcos::h256& hash)
     {
         std::lock_guard lock(m_mutex);
-        // Recompute liveness for every stored block at/above the new head: a block is
-        // live iff it IS the new head or descends from it. Old-branch occupants and
-        // their descendants are marked detached (bodies stay hash-addressable), which
-        // makes put()'s descendant guard skip them; without this, A-B-C-D → B' leaves
-        // C (child D) occupying height 3 and the next legal import at 3 answers
-        // SYNCING forever (review N3). Blocks below the head are canonical ancestors
-        // and keep their prior state.
+        // Recompute liveness for EVERY stored block — at/above AND below the new
+        // head. At/above: live iff the block descends from the head. Below: live iff
+        // the HEAD descends from it (a canonical ancestor of the switched-to chain) —
+        // a switch at/below the old tip (§4.3) makes some below-head blocks NOT
+        // ancestors, and leaving them live kept old-branch occupants indexed at
+        // heights the new chain occupies, the same SYNCING-forever shape (review N3)
+        // one FCU later. Detached bodies stay hash-addressable for re-import.
         for (auto& [blockHash, block] : m_blocks)
         {
-            if (block.number >= number)
+            if (blockHash == hash)
+            {
+                block.detached = false;
+            }
+            else if (block.number >= number)
             {
                 block.detached = !descendsFrom(blockHash, hash);
             }
+            else
+            {
+                block.detached = !descendsFrom(hash, blockHash);
+            }
         }
-        std::erase_if(m_byNumber, [number](auto const& item) { return item.first > number; });
+        // Heights above the new head have no canonical occupant; below/at it, a
+        // detached block must not occupy its height either.
+        std::erase_if(m_byNumber, [this, number](auto const& item) {
+            if (item.first > number)
+            {
+                return true;
+            }
+            auto const it = m_blocks.find(item.second);
+            return it == m_blocks.end() || it->second.detached;
+        });
         m_byNumber[number] = hash;
     }
 
