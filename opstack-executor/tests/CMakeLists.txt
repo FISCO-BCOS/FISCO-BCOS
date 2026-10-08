@@ -85,6 +85,21 @@ target_link_libraries(opstack-executor-block-tests PRIVATE
 set_source_files_properties(TestMain.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 add_test(NAME OpstackExecutorBlockTests COMMAND opstack-executor-block-tests)
 
+# da-matrix differential runner (run_fisco.cpp): a standalone main that computes the
+# fee grid and — in --check mode — compares against the COMMITTED golden snapshots.
+# The known_divergence rows are skipped+counted inside the runner (DIVERGENCES.md).
+add_executable(opstack-da-matrix-runner EXCLUDE_FROM_ALL da-matrix/run_fisco.cpp)
+target_include_directories(opstack-da-matrix-runner PRIVATE ${CMAKE_SOURCE_DIR})
+target_link_libraries(opstack-da-matrix-runner PRIVATE bcos-evm jsoncpp_static)
+
+# The differential gate: run the runner in --check mode against the COMMITTED goldens
+# (all four ends must agree except registered known_divergence rows). Wired so the
+# gate actually executes in ctest instead of being a manual-only comparison.
+add_test(NAME OpDaMatrixCheck
+    COMMAND opstack-da-matrix-runner
+        --grid ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/da_matrix.json
+        --check fisco --golden ${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/golden)
+
 # Runtime suite (OpstackExecutorTest.cpp) stays with the web3-model decoupling follow-up.
 # Scheduler execute/commit/call coverage is opstack-executor-scheduler-tests below.
 

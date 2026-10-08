@@ -6,8 +6,11 @@ Parameterized DA-gas / operator-fee matrix for the FISCO opstack
 per-case `{id, l1_cost, operator_cost}` snapshot; the snapshots are compared
 bit-for-bit and committed under `golden/`.
 
-This directory lives in the TESTS domain (CI `TESTS=ON`); the runners are wired
-into `opstack-executor/tests/CMakeLists.txt`.
+This directory lives in the TESTS domain (CI `TESTS=ON`); the FISCO runner is
+built as the `opstack-da-matrix-runner` executable and the differential gate
+executes in ctest (`OpDaMatrixCheck`: `run_fisco --check fisco --golden golden/`,
+known_divergence rows skipped+counted). `compare_snapshots.py` additionally
+cross-compares the committed snapshots and FAILS on a missing end.
 
 ## Layout
 

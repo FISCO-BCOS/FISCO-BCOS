@@ -42,9 +42,9 @@
 // golden are skipped and counted; zero compared cases is a FAILURE (empty-run
 // guard), and any mismatch exits non-zero.
 
-#include <bcos-evm/opstack/OpFeeParams.h>
-#include <bcos-evm/opstack/OpForkSchedule.h>
-#include <bcos-evm/opstack/RollupCost.h>
+#include <opstack-executor/OpFeeParams.h>
+#include <opstack-executor/OpForkSpec.h>
+#include <opstack-executor/OpRollupCost.h>
 
 #include <json/json.h>
 
@@ -64,30 +64,30 @@
 #include <string>
 #include <utility>
 
-using namespace bcos::evm::opstack;
+namespace opeth = bcos::executor_v1::opstack;
 
 namespace
 {
-// Fork -> config resolution, shared by the --check mode (Task 6). Every fork in
-// the da-matrix schema maps to exactly one of the seven OpForkSchedule configs.
-// Throws on an unknown fork; callers MUST pre-check with isKnownFork() so this
-// throw is unreachable from the (exception-free) runner path.
-const OpForkConfig& forkConfigFor(const std::string& fork)
+// Fork -> spec resolution, shared by the --check mode (Task 6). Every fork in the
+// da-matrix schema maps to exactly one constexpr OpForkSpec (OpForkSpec.h). Throws on
+// an unknown fork; callers MUST pre-check with isKnownFork() so this throw is
+// unreachable from the (exception-free) runner path.
+const opeth::OpForkSpec& forkSpecFor(const std::string& fork)
 {
     if (fork == "ecotone")
-        return ecotoneConfig();
+        return opeth::OP_ECOTONE_SPEC;
     if (fork == "fjord")
-        return fjordConfig();
+        return opeth::OP_FJORD_SPEC;
     if (fork == "granite")
-        return graniteConfig();
+        return opeth::OP_GRANITE_SPEC;
     if (fork == "holocene")
-        return holoceneConfig();
+        return opeth::OP_HOLOCENE_SPEC;
     if (fork == "isthmus")
-        return isthmusConfig();
+        return opeth::OP_ISTHMUS_SPEC;
     if (fork == "jovian")
-        return jovianConfig();
+        return opeth::OP_JOVIAN_SPEC;
     if (fork == "karst")
-        return karstConfig();
+        return opeth::OP_KARST_SPEC;
     throw std::invalid_argument("unknown fork: " + fork);
 }
 
@@ -175,7 +175,7 @@ bool computeCase(
         return false;
     }
 
-    const auto params = unpackOpFeeParams(slot1, slot3, slot7, slot8);
+    const auto params = opeth::unpackOpFeeParams(slot1, slot3, slot7, slot8);
 
     const std::string fork = c["fork"].asString();
     if (!isKnownFork(fork))
@@ -183,7 +183,7 @@ bool computeCase(
         err = "case '" + id + "' unknown fork: " + fork;
         return false;
     }
-    const OpForkConfig& cfg = forkConfigFor(fork);
+    const opeth::OpForkSpec& cfg = forkSpecFor(fork);
 
     const auto l1 = computeL1Cost(params, env, cfg);
     // The scheduler line moved the has_operator_fee gate out of the cost function (callers

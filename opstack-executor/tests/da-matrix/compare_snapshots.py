@@ -38,9 +38,12 @@ def main() -> int:
     for name, path in ends.items():
         try:
             data[name] = load(path)
-        except FileNotFoundError:
-            print(f"[warn] {name}: snapshot missing ({path}) — skipped")
-            data[name] = None
+        except FileNotFoundError as exc:
+            # A missing snapshot must fail the comparison, not shrink the checked
+            # set: deleting out_opgeth.json used to exit 0 while "comparing" two
+            # ends only (fail-open, see F14).
+            raise SystemExit(f"[fatal] {name}: snapshot missing ({path}) — the "
+                             "differential gate requires every committed end") from exc
 
     have = {k for k, v in data.items() if v is not None}
     if len(have) < 2:
