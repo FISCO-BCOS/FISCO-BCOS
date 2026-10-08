@@ -56,9 +56,11 @@ struct LaneKeyRule
     ChainLane lane;
     KeyPresence presence;
     bool pinned;
-    /// Thrown when the section is present on a lane that forbids it. The schedule family keeps
-    /// the combined two-key message the existing tests pin (NodeConfigOpForkTimestampsTest).
+    /// Thrown when the section is present on a lane that forbids it. The texts are the
+    /// exact strings validateL2Invariants throws (the existing tests pin them).
     std::string_view rejectMessage;
+    /// Thrown when presence == Required and the lane is active but the section is absent.
+    std::string_view requiredMessage;
     /// Where the current behaviour was reverse-engineered from.
     std::string_view reason;
 };
@@ -89,21 +91,25 @@ struct LaneKeyRule
             .lane = ChainLane::Op,
             .presence = KeyPresence::Optional,
             .pinned = false,
-            .rejectMessage =
-                "[op_fork_timestamps]/[op_fork_schedule] requires executor.version >= 3 (OP lane)",
+            .rejectMessage = "[op_fork_schedule] requires executor.version >= 3 (OP lane)",
+            .requiredMessage = {},
             .reason = "NodeConfig.cpp loadOpForkSchedule + validateL2Invariants"},
         {.section = "op_fork_timestamps",
             .lane = ChainLane::Op,
             .presence = KeyPresence::Required,
             .pinned = true,
-            .rejectMessage =
-                "[op_fork_timestamps]/[op_fork_schedule] requires executor.version >= 3 (OP lane)",
+            .rejectMessage = "[op_fork_timestamps] requires executor.version >= 3 (OP lane)",
+            .requiredMessage =
+                "executor.version >= 3 (OP lane) requires an [op_fork_timestamps] section "
+                "carrying at least one entry: boost's INI reader drops a section with no "
+                "keys, so an empty one reads as absent",
             .reason = "NodeConfig.cpp loadOpForkTimestamps + validateL2Invariants"},
         {.section = "op_eip1559",
             .lane = ChainLane::Op,
             .presence = KeyPresence::Optional,
             .pinned = true,
             .rejectMessage = "[op_eip1559] requires executor.version >= 3 (OP lane)",
+            .requiredMessage = {},
             .reason = "NodeConfig.cpp loadOpEip1559 + validateL2Invariants"},
     };
     return rules;

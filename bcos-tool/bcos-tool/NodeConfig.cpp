@@ -18,6 +18,7 @@
  * @author: yujiechen
  * @date 2021-06-10
  */
+#include "ChainLaneConfig.h"
 #include "NodeConfig.h"
 #include "VersionConverter.h"
 #include "bcos-framework/bcos-framework/protocol/Protocol.h"
@@ -618,25 +619,11 @@ void NodeConfig::validateL2Invariants()
                                       "11155420 for op-sepolia)"));
         }
     }
-    // The OP lane and its fork schedule are bound both ways. A [op_fork_timestamps] section on
-    // a non-OP chain would be a section nothing reads (and, worse, one an operator would
-    // reasonably expect to change execution); an OP chain without one has no way to say when
-    // Jovian or Karst activate, and would silently run Isthmus forever.
-    if (genesis.m_opForkSchedule.has_value() &&
-        genesis.m_executorVersion < ledger::OPSTACK_EXECUTOR_VERSION)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "[op_fork_timestamps] requires executor.version >= 3 (OP lane)"));
-    }
-    if (genesis.m_executorVersion >= ledger::OPSTACK_EXECUTOR_VERSION &&
-        !genesis.m_opForkSchedule.has_value())
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "executor.version >= 3 (OP lane) requires an [op_fork_timestamps] section "
-                "carrying at least one entry: boost's INI reader drops a section with no "
-                "keys, so an empty one reads as absent"));
-    }
+    // The OP lane and its fork schedule are bound both ways (enforced in the
+    // laneKeyRules walk below): a [op_fork_timestamps] section on a non-OP chain would
+    // be a section nothing reads (and, worse, one an operator would reasonably expect
+    // to change execution); an OP chain without one has no way to say when Jovian or
+    // Karst activate, and would silently run Isthmus forever.
     // On the OP lane the EVM revision is a FUNCTION of the fork schedule: OpScheduler feeds
     // the executor the fork spec resolved from (schedule, blockTime), so a configured
     // executor.evm_revision is
@@ -651,21 +638,43 @@ void NodeConfig::validateL2Invariants()
                 "the OP lane derives the EVM revision from [op_fork_timestamps]; remove "
                 "executor.evm_revision / evm_revision_forks"));
     }
-    // The OP-only config sections are bound to the OP lane both ways (a section a non-OP
-    // chain cannot read is an operator trap; the OP lane's own semantics REQUIRE the ones
-    // marked mandatory). [op_eip1559] is optional on the OP lane itself: an absent triple
+    // The OP-only config sections are bound to the OP lane from the declarative rule
+    // table (ChainLaneConfig.h laneKeyRules — the SAME table the lane matrix test
+    // asserts against, so table and behaviour cannot drift): a section a non-OP chain
+    // cannot read is an operator trap; the OP lane's own semantics REQUIRE the rule
+    // marked Required. [op_eip1559] is optional on the OP lane itself: an absent triple
     // means c_legacyOpEip1559Params, the bit-identical behaviour of every pre-existing chain.
-    if (genesis.m_opEip1559.has_value() &&
-        genesis.m_executorVersion < ledger::OPSTACK_EXECUTOR_VERSION)
+    // A section's presence reads the parsed GenesisConfig member the loader filled.
+    auto const lane = laneForExecutorVersion(genesis.m_executorVersion);
+    auto const sectionPresent = [&](std::string_view section) {
+        if (section == "op_fork_schedule")
+        {
+            return genesis.m_opstackForkSchedule.has_value();
+        }
+        if (section == "op_fork_timestamps")
+        {
+            return genesis.m_opForkSchedule.has_value();
+        }
+        if (section == "op_eip1559")
+        {
+            return genesis.m_opEip1559.has_value();
+        }
+        return false;
+    };
+    for (auto const& rule : laneKeyRules())
     {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "[op_eip1559] requires executor.version >= 3 (OP lane)"));
-    }
-    if (genesis.m_opstackForkSchedule.has_value() &&
-        genesis.m_executorVersion < ledger::OPSTACK_EXECUTOR_VERSION)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "[op_fork_schedule] requires executor.version >= 3 (OP lane)"));
+        const bool present = sectionPresent(rule.section);
+        if (rule.lane == ChainLane::Op && lane != ChainLane::Op && present)
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment(std::string(rule.rejectMessage)));
+        }
+        if (rule.lane == ChainLane::Op && lane == ChainLane::Op &&
+            rule.presence == KeyPresence::Required && !present)
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment(std::string(rule.requiredMessage)));
+        }
     }
     // A dual declaration must agree on WHEN Jovian and Karst activate: those are the
     // only rungs any consumer keys on across BOTH channels — the canonical

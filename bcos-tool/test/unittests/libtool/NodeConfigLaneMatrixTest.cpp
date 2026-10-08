@@ -61,23 +61,40 @@ BOOST_AUTO_TEST_CASE(laneMatrixCoversTheOpSectionFamily)
         }
         return nullptr;
     };
-    // (section, pinned): op_fork_schedule's canonical lives in chain metadata bound to the
-    // genesis hash instead of the pin string; the timestamps' zero-valued entries and the
-    // eip1559 triple are pinned outright.
-    std::pair<std::string_view, bool> const expected[] = {
-        {"op_fork_schedule", false}, {"op_fork_timestamps", true}, {"op_eip1559", true}};
-    for (auto const& [section, pinned] : expected)
+    // (section, pinned, presence, rejectMessage): the table IS the enforcement source now
+    // (validateL2Invariants walks laneKeyRules), so every column is pinned exactly — the
+    // old permissive `Required || Optional` check let the strictest column rot.
+    struct Expected
     {
-        auto const* rule = find(section);
-        BOOST_REQUIRE_MESSAGE(rule != nullptr, "matrix is missing " << section);
+        std::string_view section;
+        bool pinned;
+        KeyPresence presence;
+        std::string_view rejectMessage;
+    };
+    const Expected expected[] = {
+        {"op_fork_schedule", false, KeyPresence::Optional,
+            "[op_fork_schedule] requires executor.version >= 3 (OP lane)"},
+        {"op_fork_timestamps", true, KeyPresence::Required,
+            "[op_fork_timestamps] requires executor.version >= 3 (OP lane)"},
+        {"op_eip1559", true, KeyPresence::Optional,
+            "[op_eip1559] requires executor.version >= 3 (OP lane)"},
+    };
+    for (auto const& expected_rule : expected)
+    {
+        auto const* rule = find(expected_rule.section);
+        BOOST_REQUIRE_MESSAGE(rule != nullptr, "matrix is missing " << expected_rule.section);
         BOOST_CHECK(rule->lane == ChainLane::Op);
-        BOOST_CHECK(
-            rule->presence == KeyPresence::Required || rule->presence == KeyPresence::Optional);
-        BOOST_CHECK_EQUAL(rule->pinned, pinned);
-        BOOST_CHECK_MESSAGE(!rule->reason.empty(), section << " must cite its provenance");
-        BOOST_CHECK_MESSAGE(
-            rule->rejectMessage.find("requires executor.version >= 3") != std::string::npos,
-            section << " rejection must name the lane requirement");
+        BOOST_CHECK(rule->presence == expected_rule.presence);
+        BOOST_CHECK_EQUAL(rule->pinned, expected_rule.pinned);
+        BOOST_CHECK_MESSAGE(!rule->reason.empty(),
+            expected_rule.section << " must cite its provenance");
+        BOOST_CHECK_EQUAL(rule->rejectMessage, expected_rule.rejectMessage);
+        // A Required rule must carry the absence message too (validateL2Invariants throws it).
+        if (rule->presence == KeyPresence::Required)
+        {
+            BOOST_CHECK_MESSAGE(!rule->requiredMessage.empty(),
+                expected_rule.section << " is Required but cites no absence message");
+        }
     }
 }
 
@@ -107,6 +124,33 @@ BOOST_AUTO_TEST_CASE(opSectionOnANonOpLaneIsRejectedByTheMatrix)
                 return errinfoContains(e, "requires executor.version >= 3 (OP lane)");
             });
     }
+}
+
+// Required enforcement from the table: an OP chain whose [op_fork_timestamps] section
+// is absent must fail with the rule's own requiredMessage (the old hand-written check's
+// message, now sourced from the table).
+BOOST_AUTO_TEST_CASE(opLaneWithoutTheRequiredSectionThrowsTheTableMessage)
+{
+    NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+    auto const genesis =
+        std::string(
+            "[version]\ncompatibility_version=3.18.0\n"
+            "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+            "[web3]\nchain_id=1\n"
+            "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\n"
+            "leader_period=1\nnode.0=") +
+        std::string(128, '1') +
+        ":1:1\n"
+        "[tx]\ngas_limit=3000000000\n"
+        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+        "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+        "version=3\n" +
+        ethLaneGenesisSections();
+    BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(genesis), InvalidConfig,
+        [](auto const& e) {
+            return errinfoContains(e,
+                "executor.version >= 3 (OP lane) requires an [op_fork_timestamps] section");
+        });
 }
 
 // The two fork-schedule declaration channels may coexist only when they agree on WHEN
