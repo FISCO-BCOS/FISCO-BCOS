@@ -32,6 +32,9 @@ target_link_libraries(opstack-executor-tests PRIVATE
     jsoncpp_static
     Boost::unit_test_framework
 )
+# Locate the bcos-evm osaka fixture manifest (sha256 provenance check) at runtime.
+target_compile_definitions(opstack-executor-tests PRIVATE
+    OPSTACK_TEST_SOURCE_ROOT="${CMAKE_SOURCE_DIR}")
 # The OP templates instantiate in these consumer TUs, so the GNU downgrades that the library
 # marks PRIVATE (opstack-executor/CMakeLists.txt) must be re-added here explicitly — keeping
 # them out of every other downstream target.
