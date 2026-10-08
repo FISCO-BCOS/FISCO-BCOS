@@ -20,22 +20,30 @@
 
 namespace opstack_test
 {
-using bcos::evm::opstack::OpForkSchedule;
-
-std::shared_ptr<OpForkSchedule> karstOnlySchedule(uint64_t karstTs)
+bcos::ledger::OpForkSchedule karstOnlySchedule(uint64_t karstTs)
 {
-    return std::make_shared<OpForkSchedule>(
-        OpForkSchedule::parse("0:jovian," + std::to_string(karstTs) + ":karst"));
+    // jovian implied at karst's second (the fold rule): jovian_time = karst_time.
+    bcos::ledger::OpForkSchedule schedule;
+    schedule.m_jovianTime = karstTs;
+    schedule.m_karstTime = karstTs;
+    return schedule;
 }
 
-std::shared_ptr<OpForkSchedule> isthmusThenJovian(uint64_t jovianTs)
+bcos::ledger::OpForkSchedule isthmusThenJovian(uint64_t jovianTs)
 {
-    return std::make_shared<OpForkSchedule>(
-        OpForkSchedule::parse("0:isthmus," + std::to_string(jovianTs) + ":jovian"));
+    bcos::ledger::OpForkSchedule schedule;
+    schedule.m_jovianTime = jovianTs;
+    return schedule;
 }
 
-std::shared_ptr<OpForkSchedule> legacySchedule(bool jovianActive)
+bcos::ledger::OpForkSchedule legacySchedule(bool jovianActive)
 {
-    return std::make_shared<OpForkSchedule>(OpForkSchedule::legacy(jovianActive));
+    bcos::ledger::OpForkSchedule schedule;
+    if (jovianActive)
+    {
+        schedule.m_jovianTime = 1;
+    }
+    return schedule;
 }
 }  // namespace opstack_test
+  // namespace opstack_test

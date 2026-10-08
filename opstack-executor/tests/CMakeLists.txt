@@ -53,9 +53,16 @@ add_test(NAME OpstackExecutorTests COMMAND opstack-executor-tests)
 add_executable(opstack-executor-block-tests
     TestMain.cpp
     OpDaMatrixSchemaTest.cpp
+    OpDualPathEquivalenceTest.cpp
     OpGoldenCorpusProvenanceTest.cpp
+    OpKarstActivationTest.cpp
     OpKarstReleaseGateTest.cpp
+    OpL1BlockDepositTest.cpp
+    OpL1EdgeGateTest.cpp
     OpMismatchedFieldTest.cpp
+    OpNewPayloadRpcE2eTest.cpp
+    OpBlockInjectorTest.cpp
+    OpT8nReplayTest.cpp
     support/GoldenSampleTest.cpp
     support/KarstNutHelpers.cpp
 )

@@ -6,7 +6,6 @@
 // baseline (so `0:karst` is valid on its own); later activations must stay in
 // contiguous protocol order, which the gap case below exercises.
 
-#include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-framework/ledger/OpForkScheduleCodec.h>
 #include <boost/test/unit_test.hpp>
 
@@ -24,7 +23,9 @@ BOOST_AUTO_TEST_CASE(KarstConfigIsOsakaWithDepositExemption)
 
 BOOST_AUTO_TEST_CASE(ParseAllowsKarstAfterJovian)
 {
-    auto schedule = OpForkSchedule::parse("0:jovian,1:karst");
+    bcos::ledger::OpForkSchedule schedule;
+    schedule.m_jovianTime = 1;
+    schedule.m_karstTime = 1;
     BOOST_CHECK(schedule.forkAt(0) == OpFork::Jovian);
     BOOST_CHECK(schedule.forkAt(1) == OpFork::Karst);
     BOOST_CHECK_EQUAL(schedule.configAt(1).rev, EVMC_OSAKA);
@@ -35,7 +36,7 @@ BOOST_AUTO_TEST_CASE(ParseAllowsKarstAfterJovian)
 // isthmus as well and is rejected by the general rule, not a Karst/Jovian special case.
 BOOST_AUTO_TEST_CASE(ParseRejectsSkippedForkBeforeKarst)
 {
-    BOOST_CHECK_THROW(OpForkSchedule::parse("0:holocene,1:karst"), InvalidOpForkSchedule);
+    BOOST_CHECK_THROW(bcos::ledger::foldOpForkShorthand(300, 1), InvalidOpForkSchedule);  // karst before jovian
 }
 
 BOOST_AUTO_TEST_SUITE_END()

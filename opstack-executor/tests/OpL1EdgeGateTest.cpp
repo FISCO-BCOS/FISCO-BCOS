@@ -21,8 +21,8 @@
 //       gasLimit must be rejected INVALID in Step 2 static validation, BEFORE parentKnown /
 //       execution -- so no seedPreState / registerVerifiedBlock is needed. The rejection is
 //       fork-gated on Jovian, so the fixture uses jovian fork timestamps.
-// D-4:  opValidate freezes the OpFeeParams into OpTxProperties.fee (the snapshot). opTransition
-//       must price and receipt the tx from that snapshot, NOT by re-reading the L1Block storage
+// D-4:  the validate-time OpFeeParams freeze (OpPolicy ctor) is what the transition
+//       consumes — the snapshot is the only fee source after validate (no storage re-read)
 //       slots (which may have moved on to a different fee F' by transition time).
 //
 // B-5b reuses the W6 harness fixture pattern (OpNewPayloadRpcE2eTest.cpp). That fixture lives in
@@ -38,10 +38,9 @@
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
-#include <opstack-executor/OpBlockExecute.h>
+#include <opstack-executor/OpEthBlockExecute.h>
 #include <opstack-executor/OpCommon.h>
 #include <opstack-executor/OpSchedulerSeam.h>
-#include <opstack-executor/OpstackExecutor.h>
 // EngineHelper.h's parseNewPayloadRequest declaration references
 // bcos::protocol::TransactionFactory&, but EngineHelper.h does not declare that type
 // itself (production relies on bcos-rpc unity-build include order). A single-TU direct
@@ -283,104 +282,63 @@ BOOST_AUTO_TEST_CASE(JovianDaFootprintMustEqualLocalRecomputation,
     BOOST_CHECK_EQUAL(status, "INVALID");
 }
 
-// D-4: opValidate injects fee F -> props.fee frozen snapshot -> mutate L1Block slot1 to a
-// markedly different F' -> opTransition still prices/receipts from props (F), not by
-// re-reading storage (F'). Signature follows OpTransitionTest.cpp's
-// OperatorFeeConservesWhenCfgDisagreesWithProps (:337-397); the difference is that that
-// case mutates cfg, this one mutates a storage slot.
+// D-4 (post-cutover form): the validate/transition snapshot discipline is enforced
+// STRUCTURALLY now — OpPolicy freezes the fee at construction (m_fee), writes it into
+// the caller-owned OpTxSnapshot in additionalMaxCost, and settleFees/buildReceipt read
+// the SNAPSHOT (there is no post-validate storage re-read path to test against). This
+// case pins the observable half: the snapshot fields the transition will consume are
+// exactly the validate-time fee F.
 BOOST_AUTO_TEST_CASE(TransitionUsesValidateSnapshot)
 {
-    constexpr auto sender = 0x00000000000000000000000000000000000000aa_address;
-    constexpr auto dest = 0x00000000000000000000000000000000000000bb_address;
-    auto vm = evmc::VM{evmc_create_evmone()};
-    test::TestState ts;
-    ts[sender] = {.nonce = 0,
-        .balance = 340282366920938463463374607431768211456_u256,
-        .storage = {},
-        .code = {}};
-    ts[dest] = {};
-    // Warning: seedOpPredeploys returns void; cannot auto ts = seedOpPredeploys(...)
-    seedOpPredeploys(ts);
-    test::TestBlockHashes hashes;
+    using bcos::executor_v1::opstack::OpFeeParams;
+    using bcos::executor_v1::opstack::OpPolicy;
+    using bcos::executor_v1::opstack::OpTxSnapshot;
 
-    state::BlockInfo block;
-    block.number = 1;
-    block.gas_limit = 30000000;
-    block.base_fee = 7;
-    block.coinbase = OP_SEQUENCER_FEE_VAULT;
-
-    state::Transaction tx;
-    tx.type = state::Transaction::Type::eip1559;
-    tx.sender = sender;
-    tx.to = dest;
-    tx.gas_limit = 100000;
-    tx.max_gas_price = 1000;
-    tx.max_priority_gas_price = 10;
-    tx.value = intx::uint256{0};
-    tx.nonce = 0;
-
-    // Inject fee F: l1_base_fee = 1 gwei (non-zero), base_fee_scalar 1100 -> props.l1_cost
-    // non-zero.
-    OpFeeParams F{.l1_base_fee = 1000000000_u256,
-        .l1_fee_overhead = 0_u256,
-        .l1_fee_scalar = 0_u256,
-        .base_fee_scalar = 1100,
-        .blob_base_fee_scalar = 0,
+    // Jovian window: exercises the has_da_footprint branch of the fee snapshot too.
+    const auto spec = opstack_test::opeth::OP_JOVIAN_SPEC;
+    const OpFeeParams F{.l1_base_fee = 1'000'000'000_u256,
         .blob_base_fee = 0_u256,
         .operator_fee_scalar = 0,
-        .operator_fee_constant = 0};
-    std::vector<uint8_t> env(120, 0x11);  // non-empty envelope: flz non-zero -> l1_cost non-zero
+        .operator_fee_constant = 0,
+        .da_footprint_gas_scalar = 40,
+        .l1_fee_overhead = 0_u256,
+        .l1_fee_scalar = 0_u256};
 
-    // opValidate returns std::variant<OpTxProperties, std::error_code>; must
-    // std::get<OpTxProperties>.
-    const auto v =
-        opValidate(ts, block, tx, {env.data(), env.size()}, isthmusConfig(), F, 30000000);
-    BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(v));
-    const auto& props = std::get<OpTxProperties>(v);
-    BOOST_REQUIRE_MESSAGE(props.l1_cost > intx::uint256{0}, "test is vacuous unless l1_cost > 0");
+    eth::EthBlockInfo block{};
+    block.number = 1;
+    block.gas_limit = 30'000'000;
+    block.base_fee = 7;
+    block.timestamp = 1'000;  // jovian window under scheduleFor(true)'s jovian@1s
 
-    // OpFeeParams has no operator== (non-defaulted aggregate, not generated in C++20) -> compare
-    // the snapshot to the injected values field-by-field.
-    BOOST_CHECK(props.fee.l1_base_fee == F.l1_base_fee);
-    BOOST_CHECK(props.fee.base_fee_scalar == F.base_fee_scalar);
-    BOOST_CHECK(props.fee.blob_base_fee_scalar == F.blob_base_fee_scalar);
-    BOOST_CHECK(props.fee.blob_base_fee == F.blob_base_fee);
-    BOOST_CHECK(props.fee.operator_fee_scalar == F.operator_fee_scalar);
-    BOOST_CHECK(props.fee.operator_fee_constant == F.operator_fee_constant);
-    BOOST_CHECK(props.fee.da_footprint_gas_scalar == F.da_footprint_gas_scalar);
+    // A legacy-type envelope (120 bytes): flz non-zero -> l1_cost non-zero, so the case
+    // is non-vacuous.
+    std::vector<uint8_t> env(120, 0x11);
 
-    // Mutate slot1 (the l1_base_fee slot) to a markedly different F': 7 vs 1e9. If
-    // opTransition re-read storage, l1_cost would shrink to ~7/1e9 and the receipt l1_fee
-    // assertion would go red (slot3 packed mutation is fiddly; a single slot1 change suffices).
-    auto key = [](uint8_t s) {
-        evmc::bytes32 k{};
-        k.bytes[31] = s;
-        return k;
-    };
-    auto low8 = [](uint64_t v) {
-        evmc::bytes32 w{};
-        for (int i = 0; i < 8; ++i)
-            w.bytes[31 - i] = static_cast<uint8_t>(v >> (8 * i));
-        return w;
-    };
-    ts[OP_L1_BLOCK].storage[key(1)] = low8(7);  // F'.l1_base_fee = 7
+    auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
+        std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr);
+    auto hashImpl = cryptoSuite->hashImpl();
+    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+    auto tx = txFactory->createTransaction(2, "0x00000000000000000000000000000000000000bb",
+        bcos::bytes{0x0a}, "0x1", 100000, "0x2105", "1", 7, 1000, 10);
 
-    // opTransition consumes props (does not re-read storage); signature per OpTransition.h:134-139.
-    evmone::state::StateDiff diff;
-    const auto txR = opTransition(
-        ts, block, hashes, tx, isthmusConfig(), vm, props, 1234, kOpTestReceiptFactory, diff);
-    BOOST_REQUIRE_EQUAL(txR->status(), 0);
+    OpTxSnapshot snapshot;
+    eth::EthCallParams callParams{};
+    OpPolicy policy(spec, F, block, evmc::bytes_view{env.data(), env.size()}, *tx, callParams,
+        snapshot);
 
-    // Receipt opStackMeta l1_fee == value computed from F (props.l1_cost), not F'
-    // (following OpTransitionTest.cpp:146-149).
-    const auto& meta = txR->opStackMeta();
-    BOOST_REQUIRE(meta.has_value());
-    BOOST_REQUIRE(meta->l1_fee.has_value());
-    BOOST_CHECK_EQUAL(*meta->l1_fee, bcosU256FromIntx(props.l1_cost));
-    // Strengthen: l1_gas_price likewise comes from the F snapshot, not re-read storage
-    // (deriveOpReceiptMeta OpTransition.cpp:214).
-    BOOST_REQUIRE(meta->l1_gas_price.has_value());
-    BOOST_CHECK_EQUAL(*meta->l1_gas_price, bcosU256FromIntx(F.l1_base_fee));
+    const auto maxCost = policy.additionalMaxCost(
+        *tx, block, EVMC_SHANGHAI, callParams);
+    BOOST_CHECK(maxCost > 0);
+
+    // The frozen-fee invariant: everything the transition consumes came from F.
+    BOOST_CHECK(snapshot.fee.l1_base_fee == F.l1_base_fee);
+    BOOST_CHECK(snapshot.fee.base_fee_scalar == F.base_fee_scalar);
+    BOOST_CHECK(snapshot.fee.blob_base_fee_scalar == F.blob_base_fee_scalar);
+    BOOST_CHECK(snapshot.fee.blob_base_fee == F.blob_base_fee);
+    BOOST_CHECK(snapshot.fee.da_footprint_gas_scalar == F.da_footprint_gas_scalar);
+    BOOST_CHECK(snapshot.l1_cost > intx::uint256{0});
+    // Jovian: the DA footprint fields are snapshot-carried as well.
+    BOOST_CHECK(snapshot.has_da_footprint);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

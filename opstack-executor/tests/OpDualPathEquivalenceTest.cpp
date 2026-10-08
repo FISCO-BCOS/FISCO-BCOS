@@ -3,8 +3,8 @@
 
 // OpDualPathEquivalenceTest.cpp — OP single-path golden execution harness (route B retired with
 // runOpBlockInjection, Task 5). Each t8n vector / chain block is driven through
-// OpScheduler.executeBlock — the production OP execution path (preBlockOpSteps →
-// SchedulerSerialImpl(serial=true) → finalizeOpBlockResult) — with the ANNOUNCED header carrying
+// OpScheduler.executeBlock — the production OP execution path (preBlockOpEthSteps →
+// SchedulerSerialImpl(serial=true) → finalizeOpEthBlockResult) — with the ANNOUNCED header carrying
 // the op-geth golden commitments (`_op_expected.header` + the deterministic computeOpTxRoot), so
 // the skeleton's unconditional six-way verify asserts FISCO reproduces op-geth's block commitments.
 //
@@ -60,10 +60,9 @@
 #include <engine/bcos-engine/OpEngineService.h>
 #include <bcos-evm/adapter/Storage2State.h>
 #include <json/json.h>
-#include <opstack-executor/OpBlockExecute.h>
+#include <opstack-executor/OpEthBlockExecute.h>
 #include <opstack-executor/OpScheduler.h>  // route A surgery (Task 6 P1-8): executeBlock drives
 #include <opstack-executor/OpSchedulerSeam.h>
-#include <opstack-executor/OpstackExecutor.h>
 #include <bcos-evm/adapter/Storage2State.h>
 #include <bcos-evm/adapter/Storage2StateHelpers.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -88,7 +87,8 @@ using JsonValue = Json::Value;
 
 namespace
 {
-namespace op = bcos::evm::opstack;
+namespace op = bcos::executor_v1::opstack;
+namespace lop = bcos::ledger;
 namespace engine = bcos::evm::engine;
 namespace eth = bcos::executor_v1::eth;
 namespace detail = bcos::evm::engine::detail;
@@ -175,9 +175,54 @@ bcos::protocol::BlockFactory::Ptr makeBlockFactory()
 
 constexpr uint64_t kChainId = 0x2105;
 
-bcos::evm::opstack::OpFork forkEnumForName(const std::string& id, const std::string& name)
+/// Timestamp-0 single activation of @p fork — the ledger-schedule form of the old
+/// OpForkSchedule::parse("0:<fork>"): the named rung fires at second 0, other rungs
+/// unset (resolveOpFork then resolves exactly the named fork for Isthmus+; earlier
+/// forks resolve through the explicit rung at 0 likewise).
+bcos::ledger::OpForkSchedule scheduleForFork(bcos::ledger::OpFork fork)
 {
-    using bcos::evm::opstack::OpFork;
+    bcos::ledger::OpForkSchedule schedule;
+    switch (fork)
+    {
+    case bcos::ledger::OpFork::Regolith:
+        schedule.m_regolithTime = 0;
+        break;
+    case bcos::ledger::OpFork::Canyon:
+        schedule.m_canyonTime = 0;
+        break;
+    case bcos::ledger::OpFork::Delta:
+        schedule.m_deltaTime = 0;
+        break;
+    case bcos::ledger::OpFork::Ecotone:
+        schedule.m_ecotoneTime = 0;
+        break;
+    case bcos::ledger::OpFork::Fjord:
+        schedule.m_fjordTime = 0;
+        break;
+    case bcos::ledger::OpFork::Granite:
+        schedule.m_graniteTime = 0;
+        break;
+    case bcos::ledger::OpFork::Holocene:
+        schedule.m_holoceneTime = 0;
+        break;
+    case bcos::ledger::OpFork::Isthmus:
+        schedule.m_isthmusTime = 0;
+        break;
+    case bcos::ledger::OpFork::Jovian:
+        schedule.m_jovianTime = 0;
+        break;
+    case bcos::ledger::OpFork::Karst:
+        schedule.m_karstTime = 0;
+        break;
+    case bcos::ledger::OpFork::Bedrock:
+        break;  // Bedrock is the genesis fork with no schedule entry
+    }
+    return schedule;
+}
+
+bcos::ledger::OpFork forkEnumForName(const std::string& id, const std::string& name)
+{
+    using bcos::ledger::OpFork;
     if (name == "regolith")
         return OpFork::Regolith;
     if (name == "canyon")
@@ -201,9 +246,9 @@ bcos::evm::opstack::OpFork forkEnumForName(const std::string& id, const std::str
         name + "'");
 }
 
-std::string_view forkNameForEnum(bcos::evm::opstack::OpFork fork)
+std::string_view forkNameForEnum(bcos::ledger::OpFork fork)
 {
-    using bcos::evm::opstack::OpFork;
+    using bcos::ledger::OpFork;
     switch (fork)
     {
     case OpFork::Regolith:
@@ -550,7 +595,7 @@ void reportGolden(const std::string& id, const JsonValue& vec, const bcos::h256&
 /// state behind for the next chain block unless we re-derive and adopt it.
 void runBlockEquivalence(const std::string& id, Fixture& fixture,
     bcos::protocol::BlockHeader::Ptr const& header, const std::vector<bcos::bytes>& rawTxBytes,
-    const JsonValue& vec, bcos::evm::opstack::OpFork execFork, bool greenGuard,
+    const JsonValue& vec, bcos::ledger::OpFork execFork, bool greenGuard,
     bool persistStateOnSoftReject, GoldenStats& stats)
 {
     // Declared fork (`_info.hardfork`) drives the hard/soft golden gate. The EXECUTED fork is
@@ -564,8 +609,7 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
     // Execution schedule: a timestamp-0 single activation of execFork built through the production
     // parser ("0:<fork>"), so the scheduler's internal configAt(blockTs) resolves to exactly that
     // fork's config. Fork parity: the resolved config must self-identify as execFork.
-    const auto schedule = std::make_shared<op::OpForkSchedule>(
-        op::OpForkSchedule::parse("0:" + std::string(forkNameForEnum(execFork))));
+    const bcos::ledger::OpForkSchedule schedule = scheduleForFork(execFork);
     const auto tsSec = bcos::engine::unixSecondsFromInternalMillis(
         static_cast<uint64_t>(header->timestamp()));
     const auto& cfg = schedule->configAt(tsSec);
@@ -590,14 +634,16 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
     std::vector<op::DepositTx> deposits;
     deposits.reserve(rawTxBytes.size());
     for (std::size_t i = 0; i < rawTxBytes.size(); ++i)
-        if (rawTxBytes[i][0] == static_cast<uint8_t>(op::kDepositTxType))
-            deposits.push_back(
-                bcos::executor_v1::opstack::OpstackExecutor::depositFromTransaction(*transactions[i]));
+        if (rawTxBytes[i][0] == static_cast<uint8_t>(op::OP_DEPOSIT_TX_TYPE))
+            deposits.push_back(op::decodeOpDepositEnvelope(
+                bcos::bytesConstRef{rawTxBytes[i].data(), rawTxBytes[i].size()}));
 
     // Route A: OpScheduler.executeBlock — view lifecycle owned by the skeleton (fork/pushView
     // inside it). The announced header carries the golden commitments (filled by the caller), so
     // the unconditional six-way verify is the FISCO-vs-op-geth gate.
-    engine::OpExecuteBlockResult resultA;
+    // route A drives OpScheduler.executeBlock; the outcome surfaces via routeAErr + the
+    // finalized block (receipts/seal are read off the MLS view through the caller's checks).
+    bcos::Error::Ptr routeAErr;
     bcos::Error::Ptr routeAErr;
     try
     {
@@ -808,7 +854,7 @@ void runSingleVector(const std::string& id, const JsonValue& vec, Fixture& fixtu
     fillAnnouncedHeaderFromGolden(header, vec, rawTxBytes);
     // Single-block execution fork (P4, 2026-09-14): the vector's OWN declared fork
     // (`_info.hardfork`), routed through the same name→enum→"0:<fork>" schedule machinery as the
-    // chain path (forkEnumForName + OpForkSchedule::parse). The op-geth golden was generated under
+    // chain path (forkEnumForName + scheduleForFork). The op-geth golden was generated under
     // this very fork, so the announced golden commitments and FISCO's same-semantics execution are
     // comparable → route A's six-way verify is a hard FISCO-vs-op-geth gate here too (the legacy
     // vector-level isthmus/jovian pin — which mis-executed every pre-isthmus single and forced its

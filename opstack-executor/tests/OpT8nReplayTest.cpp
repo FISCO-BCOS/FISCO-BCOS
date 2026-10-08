@@ -5,8 +5,8 @@
 //
 // Replays opstack-executor/tests/t8n/vectors/*.json (schema v3-block, op-geth
 // GenerateChain+InsertChain golden, generator in t8n/generator/) block-by-block
-// through the production path (preBlockOpSteps → SchedulerSerialImpl →
-// finalizeOpBlockResult), comparing header fields, per-receipt fields, and
+// through the production path (preBlockOpEthSteps → SchedulerSerialImpl →
+// finalizeOpEthBlockResult), comparing header fields, per-receipt fields, and
 // postState (bidirectional + write-set coverage) against _op_expected.
 //
 // Hard assertion discipline: A) dir *.json set == manifest.txt set; parse
@@ -35,9 +35,9 @@
 #include <evmone/evmone.h>
 #include <fmt/format.h>
 #include <json/json.h>
-#include <opstack-executor/OpBlockExecute.h>
-#include <opstack-executor/OpDepositEncode.h>
-#include <opstack-executor/OpstackExecutor.h>
+#include <opstack-executor/OpEthBlockExecute.h>
+#include <opstack-executor/OpForkSpec.h>
+#include <opstack-executor/OpEthExecutor.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <array>
@@ -96,7 +96,8 @@ inline Json::Value jParse(std::istream& input)
         throw std::runtime_error("JSON parse failed: " + reader.getFormattedErrorMessages());
     return root;
 }
-using namespace bcos::evm::opstack;
+namespace opeth = bcos::executor_v1::opstack;
+using namespace bcos::ledger;
 using namespace evmone;
 
 // ── Local subset re-implementation of evmone test::from_json ─────────────────
@@ -532,7 +533,7 @@ struct TestStateLedger
 
 struct BlockContext
 {
-    const OpForkConfig* cfg = nullptr;
+    const opeth::OpForkSpec* cfg = nullptr;
     bool isJovian = false;
     state::BlockInfo blk;
     ParentOnlyBlockHashes hashes;
@@ -555,24 +556,24 @@ bool loadBlockContext(
     // all false, matching isthmus semantics (has_da_footprint true only on Jovian).
     const auto hardfork = jAt(jAt(blk, "_info"), "hardfork").asString();
     if (hardfork == "regolith")
-        out.cfg = &regolithConfig();
+        out.cfg = &opeth::OP_REGOLITH_SPEC;
     else if (hardfork == "canyon")
-        out.cfg = &canyonConfig();
+        out.cfg = &opeth::OP_CANYON_SPEC;
     else if (hardfork == "isthmus")
-        out.cfg = &isthmusConfig();
+        out.cfg = &opeth::OP_ISTHMUS_SPEC;
     else if (hardfork == "jovian")
     {
-        out.cfg = &jovianConfig();
+        out.cfg = &opeth::OP_JOVIAN_SPEC;
         out.isJovian = true;
     }
     else if (hardfork == "ecotone")
-        out.cfg = &ecotoneConfig();
+        out.cfg = &opeth::OP_ECOTONE_SPEC;
     else if (hardfork == "fjord")
-        out.cfg = &fjordConfig();
+        out.cfg = &opeth::OP_FJORD_SPEC;
     else if (hardfork == "granite")
-        out.cfg = &graniteConfig();
+        out.cfg = &opeth::OP_GRANITE_SPEC;
     else if (hardfork == "holocene")
-        out.cfg = &holoceneConfig();
+        out.cfg = &opeth::OP_HOLOCENE_SPEC;
     else
     {
         BOOST_ERROR(id << ": _info.hardfork must be exactly "
@@ -823,7 +824,7 @@ bool loadBlockContext(
             const bcos::bytes rawVec(raw.begin(), raw.end());
             try
             {
-                // Same type-byte classification as OpScheduler::execute / runOpBlockInjection:
+                // Same type-byte classification as OpScheduler::execute:
                 // blob (0x03) is not in {0x01, 0x02, 0x04} and not a legacy RLP list (>= 0xc0).
                 if (rawVec.empty())
                     throw bcos::evm::OpConsensusError("op block: empty envelope");
@@ -1002,7 +1003,7 @@ void markTouched(const test::TestState& before, const test::TestState& after,
 // family.
 struct MetaExpectation
 {
-    const OpForkConfig& cfg;
+    const opeth::OpForkSpec& cfg;
     bool isDeposit;
     // op-geth receipt_opstack.go:44 — operator_fee_scalar/constant are written
     // only when scalar != 0 || constant != 0 (FIELDMAP §5.4). Derived from the
@@ -1024,7 +1025,7 @@ std::set<std::string> expectedMetaFields(const MetaExpectation& in)
         fields.insert("deposit_nonce");
         // Producer mirror (runDeposit, OpTransition.cpp): fork >= Canyon covers the
         // protocol-ordered later forks, surviving a fork inserted below Regolith.
-        if (in.cfg.fork >= bcos::evm::opstack::OpFork::Canyon)
+        if (in.cfg.fork >= bcos::ledger::OpFork::Canyon)
             fields.insert("deposit_receipt_version");
         return fields;
     }
@@ -1202,13 +1203,9 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
         evmcToH256(bc.blk.prev_randao), evmcToH256(bc.blk.parent_beacon_block_root),
         evmcToH256(bc.hashes.parentHash));
 
-    bcos::executor_v1::opstack::OpstackExecutor executor{receiptFactory, hashImpl, cfg};
-    bcos::evm::engine::OpExecuteBlockResult executed;
-    try
-    {
-        executed = opstack_test::runSharedPath(storage, *header, bc.rawTxBytes, transactions,
-            bc.deposits, cfg, executor, bc.chainId, ioServicePool);
-    }
+    const auto spec = opeth::opForkSpec(cfg->fork);
+    auto executed = opstack_test::runSharedPath(
+        storage, *header, bc.rawTxBytes, transactions, spec);
     catch (const std::exception& e)
     {
         BOOST_ERROR(id << ": production path threw block-level error: " << e.what());
@@ -1228,8 +1225,12 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
     std::map<evmc::address, std::set<evmc::bytes32>> touchedSlots;
     markTouched(before, ts, touchedAddrs, touchedSlots);
 
-    OpBlockResult result;
-    result.receipts = executed.receipts;
+    struct
+    {
+        const std::vector<bcos::protocol::TransactionReceipt::Ptr>& receipts;
+        std::vector<uint8_t> txTypes;
+        int64_t gasUsed;
+    } result{executed.receipts, {}, static_cast<int64_t>(executed.gasUsed)};
     result.txTypes.reserve(bc.rawTxBytes.size());
     for (auto const& raw : bc.rawTxBytes)
     {
@@ -1335,14 +1336,14 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
 
         // Got-side unified view (plan A phase 2 API): FISCO TransactionReceipt::Ptr +
         // parallel txTypes byte (EIP-2718 type). OP fields via opStackMeta(); deposit vs
-        // normal tx discriminated by kDepositTxType (equivalent to the old
+        // normal tx discriminated by OP_DEPOSIT_TX_TYPE (equivalent to the old
         // OpDepositReceipt/OpTxReceipt variant discrimination).
         const auto& receipt = result.receipts[i];
-        const bool isDeposit = (result.txTypes[i] == static_cast<uint8_t>(kDepositTxType));
+        const bool isDeposit = (result.txTypes[i] == opeth::OP_DEPOSIT_TX_TYPE);
         if (metaGate)
         {
             // B3: bidirectional field-set compare — want is derived from
-            // OpForkConfig × the vector's calldata flags (NOT from the meta,
+            // OpForkSpec × the vector's calldata flags (NOT from the meta,
             // which would be a tautology); got is read off the receipt.
             const auto got = actualMetaFields(*receipt);
             const auto want = expectedMetaFields(
@@ -1692,11 +1693,11 @@ void assertRejectThrow(const std::string& id, const JsonValue& v,
         bc.blk.gas_limit, bcos::u256(bc.blk.base_fee), evmcToAddress(bc.blk.coinbase),
         evmcToH256(bc.blk.prev_randao), evmcToH256(bc.blk.parent_beacon_block_root),
         evmcToH256(bc.hashes.parentHash));
-    bcos::executor_v1::opstack::OpstackExecutor executor{receiptFactory, hashImpl, *bc.cfg};
+    const auto spec = opeth::opForkSpec(bc.cfg->fork);
     try
     {
-        (void)opstack_test::runSharedPath(storage, *header, bc.rawTxBytes, transactions,
-            bc.deposits, *bc.cfg, executor, bc.chainId, ioServicePool);
+        (void)opstack_test::runSharedPath(
+            storage, *header, bc.rawTxBytes, transactions, spec);
     }
     catch (const std::runtime_error& e)
     {

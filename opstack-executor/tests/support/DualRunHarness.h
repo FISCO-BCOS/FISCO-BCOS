@@ -183,6 +183,30 @@ opeth::OpEthExecuteBlockResult runExecutorPath(DualRunFixture& f, ViewType& view
             /*skipStateRootBuild=*/false));
 }
 
+/// Row-preserving copy from any readable storage into a mutable view: the suites that
+/// seed a bare MutableStorage (L1-deposit repro) can hand that state to the harness's
+/// MLS-based execution path. Skips the trie plane (materialized by the finalize step).
+template <class SourceStorage, class ViewType>
+bcos::task::Task<void> copyStorageRows(SourceStorage& source, ViewType& view)
+{
+    auto it = co_await bcos::storage2::range(source);
+    while (auto kv = co_await it.next())
+    {
+        auto const& [k, v] = *kv;
+        bcos::executor_v1::StateKeyView keyView(k);
+        auto const& [table, key] = keyView.get();
+        if (table == bcos::storage2::kMPTTable)
+            continue;
+        if (auto const* entry = std::get_if<bcos::storage::Entry>(std::addressof(v)))
+        {
+            bcos::storage::Entry copy;
+            copy.set(entry->get());
+            co_await bcos::storage2::writeOne(
+                view, StateKey{std::string(table), std::string(key)}, std::move(copy));
+        }
+    }
+}
+
 // ---- stateRoot-mismatch diagnostics: flat-row diff of two executed views ──────────────────
 
 using RowMap = std::map<std::pair<std::string, std::string>, std::string>;

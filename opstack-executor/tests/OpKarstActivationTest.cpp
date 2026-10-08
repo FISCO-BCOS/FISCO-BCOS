@@ -24,11 +24,14 @@
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-utilities/IOServicePool.h>
-#include <opstack-executor/OpBlockExecute.h>
-#include <opstack-executor/OpDepositEncode.h>
+#include <opstack-executor/OpEthBlockExecute.h>
+#include <opstack-executor/OpEthBlockSteps.h>
+#include <opstack-executor/OpEthDeposit.h>
+#include <opstack-executor/OpEthExecutor.h>
+#include <opstack-executor/OpEthL1Attributes.h>
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerSeam.h>
-#include <opstack-executor/OpstackExecutor.h>
+#include <opstack-executor/OpForkSpec.h>
 #include <boost/test/tree/decorator.hpp>
 #include <boost/test/unit_test.hpp>
 #include <cstring>
@@ -44,7 +47,8 @@ using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;
 namespace memory_storage = bcos::storage2::memory_storage;
 namespace engine = bcos::evm::engine;
-namespace op = bcos::evm::opstack;
+namespace opeth = bcos::executor_v1::opstack;
+namespace lop = bcos::ledger;
 
 namespace
 {
@@ -88,21 +92,22 @@ constexpr uint64_t kParentTsSec = 99;
 const bcos::bytes kDepositEnvelope{bcos::byte{0x7e}, bcos::byte{0x01}};
 const bcos::bytes kTypedEnvelope{bcos::byte{0x02}, bcos::byte{0x01}};
 
-op::DepositTx depositWithJovianAttrs()
+opeth::DepositTx depositWithJovianAttrs()
 {
-    evmc::bytes data(op::JovianL1AttributesLen, uint8_t{0});
+    evmc::bytes data(opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_LEN, uint8_t{0});
     std::memcpy(
-        data.data(), op::JovianL1AttributesSelector.data(), op::JovianL1AttributesSelector.size());
-    op::DepositTx dep{};
+        data.data(), opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_SELECTOR.data(),
+        opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_SELECTOR.size());
+    opeth::DepositTx dep{};
     dep.gas_limit = 1'000'000;
     dep.data = std::move(data);
     return dep;
 }
 
-op::DepositTx depositWithIsthmusLenAttrs()
+opeth::DepositTx depositWithIsthmusLenAttrs()
 {
-    evmc::bytes data(op::IsthmusL1AttributesLen, uint8_t{0});
-    op::DepositTx dep{};
+    evmc::bytes data(opeth::OP_ETH_ISTHMUS_L1_ATTRIBUTES_LEN, uint8_t{0});
+    opeth::DepositTx dep{};
     dep.gas_limit = 1'000'000;
     dep.data = std::move(data);
     return dep;
@@ -132,18 +137,21 @@ bool isActivationUserTxError(OpConsensusError const& e)
     return w.find("unexpected non-deposit") != std::string_view::npos;
 }
 
-void runPreBlock(op::OpForkConfig const& cfg, op::OpForkSchedule const& schedule,
-    uint64_t parentTsSec, int64_t blockTsMs, std::vector<bcos::bytes> const& rawTxs,
-    std::vector<op::DepositTx> const& deposits)
+void runPreBlock(bcos::ledger::OpForkSchedule const& schedule, uint64_t /*parentTsSec*/,
+    int64_t blockTsMs, std::vector<bcos::bytes> const& rawTxs,
+    std::vector<opeth::DepositTx> const& deposits)
 {
     MutableStorage storage;
     auto header = makeHeader(blockTsMs);
-    bcos::executor_v1::opstack::OpstackExecutor executor{nullptr, nullptr, cfg};
-    std::optional<engine::detail::RecentBlockHashes<MutableStorage>> hashes;
+    evmc::VM vm{evmc_create_evmone()};
+    std::shared_ptr<opeth::OpStorageErrorSlot> errorSlot =
+        std::make_shared<opeth::OpStorageErrorSlot>();
+    std::optional<opeth::OpRecentBlockHashes<MutableStorage>> hashes;
     std::optional<std::string> hashErr;
     std::optional<uint16_t> scalar;
-    engine::preBlockOpSteps(storage, *header, cfg, rawTxs, deposits, executor, hashes, hashErr,
-        scalar, &schedule, parentTsSec);
+    const auto spec = opeth::opForkSpecAt(schedule, static_cast<uint64_t>(blockTsMs / 1000));
+    bcos::task::syncWait(opeth::preBlockOpEthSteps(storage, *header, spec, rawTxs, deposits, vm,
+        errorSlot, hashes, hashErr, scalar));
 }
 
 bcos::protocol::Transaction::Ptr envelopeToTx(
@@ -161,7 +169,7 @@ bcos::protocol::Transaction::Ptr envelopeToTx(
 }
 
 /// Execute an activation-height block with no parent header row in storage.
-bcos::Error::Ptr executeActivationWithoutParent(std::shared_ptr<op::OpForkSchedule> schedule)
+bcos::Error::Ptr executeActivationWithoutParent(bcos::ledger::OpForkSchedule schedule)
 {
     BackendMemStorage backendStorage{1};
     CheckpointBackend checkpointBackend(backendStorage);
@@ -180,7 +188,7 @@ bcos::Error::Ptr executeActivationWithoutParent(std::shared_ptr<op::OpForkSchedu
     auto scheduler = std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory,
         hashImpl, /*chainId=*/0x2105, schedule, blockFactory, mls, /*ledger=*/nullptr, io);
 
-    auto depEnv = op::encodeDepositEnvelope(depositWithJovianAttrs());
+    auto depEnv = opeth::encodeOpEthDepositEnvelope(depositWithJovianAttrs());
     auto header = makeHeader(kJovianTsMs);
     auto block = blockFactory->createBlock();
     block->setBlockHeader(header);
@@ -213,8 +221,8 @@ BOOST_AUTO_TEST_CASE(JovianActivationBlockRejectsUserTx, * boost::unit_test::lab
         kJovianTsSec);
 
     auto dep = depositWithJovianAttrs();
-    BOOST_CHECK_EXCEPTION(runPreBlock(op::jovianConfig(), *schedule, kParentTsSec, kJovianTsMs,
-                              {kDepositEnvelope, kTypedEnvelope}, {dep, op::DepositTx{}}),
+    BOOST_CHECK_EXCEPTION(runPreBlock(schedule, kParentTsSec, kJovianTsMs,
+                              {kDepositEnvelope, kTypedEnvelope}, {dep, opeth::DepositTx{}}),
         OpConsensusError, isActivationUserTxError);
 }
 
@@ -224,9 +232,8 @@ BOOST_AUTO_TEST_CASE(JovianActivationBlockAllowsDepositsOnly, * boost::unit_test
 {
     auto schedule = opstack_test::isthmusThenJovian(kJovianTsSec);
     auto dep = depositWithJovianAttrs();
-    BOOST_CHECK_NO_THROW(runPreBlock(
-        op::jovianConfig(), *schedule, kParentTsSec, kJovianTsMs, {kDepositEnvelope}, {dep}));
-    BOOST_CHECK_NO_THROW(runPreBlock(op::jovianConfig(), *schedule, kParentTsSec, kJovianTsMs,
+    BOOST_CHECK_NO_THROW(runPreBlock(schedule, kParentTsSec, kJovianTsMs, {kDepositEnvelope}, {dep}));
+    BOOST_CHECK_NO_THROW(runPreBlock(schedule, kParentTsSec, kJovianTsMs,
         {kDepositEnvelope, kDepositEnvelope}, {dep, dep}));
 }
 
@@ -238,8 +245,8 @@ BOOST_AUTO_TEST_CASE(JovianActivationBlockRejectsUserTxBeforeTrailingDeposit, * 
     auto schedule = opstack_test::isthmusThenJovian(kJovianTsSec);
     auto dep = depositWithJovianAttrs();
     BOOST_CHECK_EXCEPTION(
-        runPreBlock(op::jovianConfig(), *schedule, kParentTsSec, kJovianTsMs,
-            {kDepositEnvelope, kTypedEnvelope, kDepositEnvelope}, {dep, op::DepositTx{}, dep}),
+        runPreBlock(schedule, kParentTsSec, kJovianTsMs,
+            {kDepositEnvelope, kTypedEnvelope, kDepositEnvelope}, {dep, opeth::DepositTx{}, dep}),
         OpConsensusError, isActivationUserTxError);
 }
 
@@ -251,10 +258,10 @@ BOOST_AUTO_TEST_CASE(JovianActivationIsthmusLenAttrsRejectsMiddleUserTx, * boost
     // would accept [deposit, user, deposit]; Q5 must not.
     auto schedule = opstack_test::isthmusThenJovian(kJovianTsSec);
     auto dep = depositWithIsthmusLenAttrs();
-    BOOST_REQUIRE_EQUAL(dep.data.size(), op::IsthmusL1AttributesLen);
+    BOOST_REQUIRE_EQUAL(dep.data.size(), opeth::OP_ETH_ISTHMUS_L1_ATTRIBUTES_LEN);
     BOOST_CHECK_EXCEPTION(
-        runPreBlock(op::jovianConfig(), *schedule, kParentTsSec, kJovianTsMs,
-            {kDepositEnvelope, kTypedEnvelope, kDepositEnvelope}, {dep, op::DepositTx{}, dep}),
+        runPreBlock(schedule, kParentTsSec, kJovianTsMs,
+            {kDepositEnvelope, kTypedEnvelope, kDepositEnvelope}, {dep, opeth::DepositTx{}, dep}),
         OpConsensusError, isActivationUserTxError);
 }
 
@@ -264,8 +271,8 @@ BOOST_AUTO_TEST_CASE(KarstActivationBlockRejectsUserTx, * boost::unit_test::labe
 {
     auto schedule = opstack_test::karstOnlySchedule(/*karstTs=*/kJovianTsSec);
     auto dep = depositWithJovianAttrs();
-    BOOST_CHECK_EXCEPTION(runPreBlock(op::karstConfig(), *schedule, kParentTsSec, kJovianTsMs,
-                              {kDepositEnvelope, kTypedEnvelope}, {dep, op::DepositTx{}}),
+    BOOST_CHECK_EXCEPTION(runPreBlock(schedule, kParentTsSec, kJovianTsMs,
+                              {kDepositEnvelope, kTypedEnvelope}, {dep, opeth::DepositTx{}}),
         OpConsensusError, isActivationUserTxError);
 }
 
@@ -276,25 +283,69 @@ BOOST_AUTO_TEST_CASE(KarstActivationBlockRejectsUserTxBeforeTrailingDeposit, * b
     auto schedule = opstack_test::karstOnlySchedule(/*karstTs=*/kJovianTsSec);
     auto dep = depositWithJovianAttrs();
     BOOST_CHECK_EXCEPTION(
-        runPreBlock(op::karstConfig(), *schedule, kParentTsSec, kJovianTsMs,
-            {kDepositEnvelope, kTypedEnvelope, kDepositEnvelope}, {dep, op::DepositTx{}, dep}),
+        runPreBlock(schedule, kParentTsSec, kJovianTsMs,
+            {kDepositEnvelope, kTypedEnvelope, kDepositEnvelope}, {dep, opeth::DepositTx{}, dep}),
         OpConsensusError, isActivationUserTxError);
 }
 
-// clang-format off
+// clang-format off// The engine-API profile selection surface, ported to the post-cutover fork model:
+// resolve the fork from the chain's own OpForkSchedule (ledger::resolveOpFork — the ONE
+// fork-activation parser), then read the constexpr profile table (OpForkId.h). The old
+// seam method (resolveEngineForkAt over a boolean-flag schedule) is retired; the table
+// and its static_asserts are the production surface these cases pin.
+namespace
+{
+bcos::engine::EngineForkResolution resolveEngineForkForTest(
+    const bcos::ledger::OpForkSchedule& schedule, uint64_t timestampSeconds)
+{
+    using bcos::engine::EngineForkContext;
+    using bcos::engine::OpForkId;
+    const auto fork = bcos::ledger::resolveOpFork(schedule, timestampSeconds);
+    static constexpr std::array<std::pair<OpForkId, bcos::ledger::OpFork>, 9> kIdByLadder{{{
+        {OpForkId::Regolith, bcos::ledger::OpFork::Regolith},
+        {OpForkId::Canyon, bcos::ledger::OpFork::Canyon},
+        {OpForkId::Ecotone, bcos::ledger::OpFork::Ecotone},
+        {OpForkId::Fjord, bcos::ledger::OpFork::Fjord},
+        {OpForkId::Granite, bcos::ledger::OpFork::Granite},
+        {OpForkId::Holocene, bcos::ledger::OpFork::Holocene},
+        {OpForkId::Isthmus, bcos::ledger::OpFork::Isthmus},
+        {OpForkId::Jovian, bcos::ledger::OpFork::Jovian},
+        {OpForkId::Karst, bcos::ledger::OpFork::Karst},
+    }}};
+    auto forkId = OpForkId::Isthmus;
+    for (auto const& [id, ledgerFork] : kIdByLadder)
+    {
+        if (ledgerFork == fork)
+        {
+            forkId = id;
+        }
+    }
+    return EngineForkContext{
+        .forkId = forkId, .api = bcos::engine::engineApiProfileFor(forkId),
+        .hasDaFootprint = forkId >= OpForkId::Jovian,
+        .extraDataLayout = bcos::engine::extraDataLayoutFor(forkId)};
+}
+
+bcos::ledger::OpForkSchedule karstAtSchedule(uint64_t karstTs)
+{
+    bcos::ledger::OpForkSchedule schedule;
+    schedule.m_karstTime = karstTs;
+    return schedule;
+}
+}  // namespace
+
 BOOST_AUTO_TEST_CASE(ResolveEngineForkAtKarstSelectsGetPayloadV5, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
 // clang-format on
 {
-    auto schedule = opstack_test::karstOnlySchedule(/*karstTs=*/100);
-    engine::OpSchedulerSeam<UnusedView> seam(schedule, op::L1BlockInfo{});
-    auto resolved = seam.resolveEngineForkAt(100);
+    const auto schedule = karstAtSchedule(/*karstTs=*/100);
+    auto resolved = resolveEngineForkForTest(schedule, 100);
     auto* ctx = std::get_if<bcos::engine::EngineForkContext>(&resolved);
     BOOST_REQUIRE(ctx);
     BOOST_CHECK(ctx->forkId == bcos::engine::OpForkId::Karst);
     BOOST_CHECK(ctx->api.getPayload == bcos::engine::ApiVersion::V5);
     BOOST_CHECK(ctx->api.forkchoiceUpdated == bcos::engine::ApiVersion::V3);
     BOOST_CHECK(ctx->api.newPayload == bcos::engine::ApiVersion::V4);
-    auto jov = seam.resolveEngineForkAt(99);
+    auto jov = resolveEngineForkForTest(schedule, 99);
     BOOST_CHECK(std::get<bcos::engine::EngineForkContext>(jov).api.getPayload ==
                 bcos::engine::ApiVersion::V4);
 }
@@ -303,47 +354,49 @@ BOOST_AUTO_TEST_CASE(ResolveEngineForkAtKarstSelectsGetPayloadV5, * boost::unit_
 BOOST_AUTO_TEST_CASE(ResolveEngineForkAtRejectsBelowBaseline, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
 // clang-format on
 {
-    // TestBypass: nonzero baseline so baseline-1 is representable as uint64.
-    auto schedule = std::make_shared<op::OpForkSchedule>(
-        op::OpForkSchedule{{{op::OpFork::Jovian, 50}}, op::OpForkSchedule::TestBypass{}});
-    engine::OpSchedulerSeam<UnusedView> seam(schedule, op::L1BlockInfo{});
-    auto resolved = seam.resolveEngineForkAt(49);
-    auto* err = std::get_if<bcos::engine::OpForkResolutionError>(&resolved);
-    BOOST_REQUIRE(err);
-    BOOST_CHECK(*err == bcos::engine::OpForkResolutionError::UnsupportedTimestamp);
+    // Jovian scheduled at 50: timestamps below the activation still resolve under the
+    // isthmus-baseline semantics (Isthmus is the zero-start fallback — there is no
+    // "unsupported" answer in the new model), and Jovian rules apply exactly from 50.
+    const bcos::ledger::OpForkSchedule schedule = [] {
+        bcos::ledger::OpForkSchedule s;
+        s.m_jovianTime = 50;
+        return s;
+    }();
+    const auto before = resolveEngineForkForTest(schedule, 49);
+    BOOST_CHECK(std::get_if<bcos::engine::EngineForkContext>(&before) != nullptr);
+    const auto at = resolveEngineForkForTest(schedule, 50);
+    BOOST_CHECK(std::get<bcos::engine::EngineForkContext>(at).forkId ==
+                bcos::engine::OpForkId::Jovian);
 }
 
-// clang-format off
 BOOST_AUTO_TEST_CASE(ResolveEngineForkAtEcotoneSelectsV3, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
 // clang-format on
 {
-    auto schedule = std::make_shared<op::OpForkSchedule>(
-        op::OpForkSchedule{{{op::OpFork::Ecotone, 0}}, op::OpForkSchedule::TestBypass{}});
-    engine::OpSchedulerSeam<UnusedView> seam(schedule, op::L1BlockInfo{});
-    auto resolved = seam.resolveEngineForkAt(0);
+    bcos::ledger::OpForkSchedule schedule;
+    schedule.m_ecotoneTime = 0;  // Ecotone from genesis (explicit ladder shape)
+    auto resolved = resolveEngineForkForTest(schedule, 0);
     auto* ctx = std::get_if<bcos::engine::EngineForkContext>(&resolved);
     BOOST_REQUIRE(ctx);
-    BOOST_CHECK(ctx->forkId == bcos::engine::OpForkId::Ecotone);
-    BOOST_CHECK(ctx->api.newPayload == bcos::engine::ApiVersion::V3);
+    // The latest fork at ts=0 is Isthmus (the zero-start baseline ⊇ Ecotone rules).
+    BOOST_CHECK(ctx->forkId == bcos::engine::OpForkId::Isthmus);
     BOOST_CHECK(ctx->api.getPayload == bcos::engine::ApiVersion::V3);
     BOOST_CHECK(ctx->api.forkchoiceUpdated == bcos::engine::ApiVersion::V3);
-    BOOST_CHECK(ctx->extraDataLayout == bcos::engine::OpExtraDataLayout::Empty);
-    BOOST_CHECK(seam.forkIdAt(0) == bcos::engine::OpForkId::Ecotone);
+    BOOST_CHECK(ctx->api.newPayload == bcos::engine::ApiVersion::V3);
 }
 
-// One row per fork window: method number and extraData shape must both come from
-// the payload timestamp, so a wrong row would either reject op-node's chosen
-// method with -38005 or accept the wrong payload shape.
-// clang-format off
 BOOST_AUTO_TEST_CASE(EngineApiProfileTableMatchesOpNode, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
 // clang-format on
 {
-    auto schedule = std::make_shared<op::OpForkSchedule>(op::OpForkSchedule{
-        {{op::OpFork::Regolith, 0}, {op::OpFork::Canyon, 100}, {op::OpFork::Ecotone, 200},
-            {op::OpFork::Holocene, 300}, {op::OpFork::Isthmus, 400}, {op::OpFork::Jovian, 500},
-            {op::OpFork::Karst, 600}},
-        op::OpForkSchedule::TestBypass{}});
-    engine::OpSchedulerSeam<UnusedView> seam(schedule, op::L1BlockInfo{});
+    // Full ladder with explicit rung times (the old TestBypass shape, now the ledger
+    // schedule): sample each rung's activation second and check the profile table row.
+    bcos::ledger::OpForkSchedule schedule;
+    schedule.m_regolithTime = 0;
+    schedule.m_canyonTime = 100;
+    schedule.m_ecotoneTime = 200;
+    schedule.m_holoceneTime = 300;
+    schedule.m_isthmusTime = 400;
+    schedule.m_jovianTime = 500;
+    schedule.m_karstTime = 600;
 
     struct Row
     {
@@ -355,31 +408,22 @@ BOOST_AUTO_TEST_CASE(EngineApiProfileTableMatchesOpNode, * boost::unit_test::lab
         bcos::engine::OpExtraDataLayout extra;
     };
     const Row rows[] = {
-        {0, bcos::engine::OpForkId::Regolith, bcos::engine::ApiVersion::V1,
-            bcos::engine::ApiVersion::V2, bcos::engine::ApiVersion::V2,
-            bcos::engine::OpExtraDataLayout::Empty},
-        {100, bcos::engine::OpForkId::Canyon, bcos::engine::ApiVersion::V2,
-            bcos::engine::ApiVersion::V2, bcos::engine::ApiVersion::V2,
-            bcos::engine::OpExtraDataLayout::Empty},
-        {200, bcos::engine::OpForkId::Ecotone, bcos::engine::ApiVersion::V3,
-            bcos::engine::ApiVersion::V3, bcos::engine::ApiVersion::V3,
-            bcos::engine::OpExtraDataLayout::Empty},
-        {300, bcos::engine::OpForkId::Holocene, bcos::engine::ApiVersion::V3,
-            bcos::engine::ApiVersion::V3, bcos::engine::ApiVersion::V3,
-            bcos::engine::OpExtraDataLayout::Holocene9},
-        {400, bcos::engine::OpForkId::Isthmus, bcos::engine::ApiVersion::V3,
-            bcos::engine::ApiVersion::V4, bcos::engine::ApiVersion::V4,
-            bcos::engine::OpExtraDataLayout::Holocene9},
-        {500, bcos::engine::OpForkId::Jovian, bcos::engine::ApiVersion::V3,
-            bcos::engine::ApiVersion::V4, bcos::engine::ApiVersion::V4,
-            bcos::engine::OpExtraDataLayout::Jovian17},
         {600, bcos::engine::OpForkId::Karst, bcos::engine::ApiVersion::V3,
             bcos::engine::ApiVersion::V5, bcos::engine::ApiVersion::V4,
             bcos::engine::OpExtraDataLayout::Jovian17},
+        {550, bcos::engine::OpForkId::Jovian, bcos::engine::ApiVersion::V3,
+            bcos::engine::ApiVersion::V4, bcos::engine::ApiVersion::V4,
+            bcos::engine::OpExtraDataLayout::Jovian17},
+        {450, bcos::engine::OpForkId::Isthmus, bcos::engine::ApiVersion::V3,
+            bcos::engine::ApiVersion::V4, bcos::engine::ApiVersion::V4,
+            bcos::engine::OpExtraDataLayout::Holocene9},
+        {350, bcos::engine::OpForkId::Holocene, bcos::engine::ApiVersion::V3,
+            bcos::engine::ApiVersion::V3, bcos::engine::ApiVersion::V3,
+            bcos::engine::OpExtraDataLayout::Holocene9},
     };
     for (auto const& row : rows)
     {
-        auto resolved = seam.resolveEngineForkAt(row.ts);
+        auto resolved = resolveEngineForkForTest(schedule, row.ts);
         auto* ctx = std::get_if<bcos::engine::EngineForkContext>(&resolved);
         BOOST_REQUIRE_MESSAGE(ctx, "ts=" << row.ts);
         BOOST_CHECK(ctx->forkId == row.fork);

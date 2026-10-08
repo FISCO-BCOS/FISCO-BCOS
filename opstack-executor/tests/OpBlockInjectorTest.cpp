@@ -1,27 +1,25 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
 
-// OpBlockInjectorTest — drives the shared block-execution path (preBlockOpSteps →
-// SchedulerSerialImpl(serial=true) → finalizeOpBlockResult — runOpBlockInjection's successor, Task
-// 5) over a plain MutableStorage fixture (spec §7(a); the path is Storage templates, so no MLS is
-// needed). A minimal "L1 attributes deposit + eip1559" block verifies:
+// OpBlockInjectorTest — drives the shared block-execution path (preBlockOpEthSteps →
+// SchedulerSerialImpl(serial=true) → finalizeOpEthBlockResult) over a plain MutableStorage
+// fixture (the path is Storage templates, so no MLS is needed). A minimal "L1 attributes deposit + eip1559" block verifies:
 //   (1) the system-call BlockInfo's gas_limit == header.gasLimit (toBlockInfo, trivially true);
 //   (2) receipt count == tx count;
 //   (3) the block-level gasUsed == manual Σ per-receipt gasUsed.
-// Plus: preBlockOpSteps rejects an empty block with OpConsensusError (the retired injector's
+// Plus: preBlockOpEthSteps rejects an empty block with OpConsensusError (the retired injector's
 // empty-block guard now lives there).
 // Per-tx BlockInfo gasLimit==header is deliberately NOT asserted here — that belongs to
-// OpstackExecutorTest::BlockInfoGasLimitUsesHeaderGasLimit.
+// OpSchedulerTest's BlockInfo gas-limit case.
 
+#include "support/DualRunHarness.h"
 #include "support/RunSharedPath.h"
-#include <opstack-executor/OpBlockExecute.h>
-#include <opstack-executor/OpDepositEncode.h>
+#include <opstack-executor/OpEthBlockExecute.h>
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
-#include <bcos-evm/test/opstack/support/OpForkFlagsCompat.h>
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
@@ -162,20 +160,10 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
     namespace engine = bcos::evm::engine;
     namespace detail = bcos::evm::engine::detail;
 
-    // Isthmus-active fork config.
-    // Isthmus-active fork config (feature_op_jovian OFF).
-    // Named-lvalue first: configAt takes const OpForkFlags&, and GCC-14's -Wdangling-reference
-    // flags passing a prvalue `op::OpForkFlags{}` here even though the returned reference
-    // aliases the static config, never the flags (false positive).
-    const auto forkFlags = op::OpForkFlags{};
-    const auto& cfg = op::configAt(forkFlags);
-
     MutableStorage storage;
     auto cryptoSuite = makeCryptoSuite();
     auto hashImpl = cryptoSuite->hashImpl();
     auto receiptFactory = makeReceiptFactory();
-    bcos::executor_v1::opstack::OpstackExecutor executor{receiptFactory, hashImpl, cfg};
-    auto ioServicePool = std::make_shared<bcos::IOServicePool>(1);
 
     auto header = makeHeader(1'000'000);  // 1000 s
 
@@ -183,8 +171,7 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
 
     auto depTx = makeAttributesDeposit();
     auto normFisco = buildEip1559FiscoTx();
-    std::vector<op::DepositTx> deposits{depTx};
-    bcos::bytes depEnv = encodeDepositEnvelope(depTx);
+    bcos::bytes depEnv = opstack_test::opeth::encodeOpEthDepositEnvelope(depTx);
     auto const normRef = normFisco->extraTransactionBytes();
     bcos::bytes normEnv(normRef.begin(), normRef.end());
     std::vector<bcos::bytes> rawTxBytes{depEnv, normEnv};
@@ -193,8 +180,8 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
     BOOST_REQUIRE(depFiscoTx != nullptr);
     std::vector<bcos::protocol::Transaction::ConstPtr> transactions{depFiscoTx, normFisco};
 
-    auto result = opstack_test::runSharedPath(storage, *header, rawTxBytes, transactions, deposits,
-        cfg, executor, kChainId, ioServicePool);
+    auto result = opstack_test::runSharedPath(storage, *header, rawTxBytes, transactions,
+        opstack_test::opeth::OP_ISTHMUS_SPEC);
 
     // System-call BlockInfo gas_limit == header.gasLimit (toBlockInfo, trivially true here).
     const auto sysBlk = detail::toBlockInfo(*header);
@@ -208,45 +195,38 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
     // gasUsed == manual Σ per-receipt gasUsed (the block-level cumulative accumulator).
     int64_t manual = 0;
     for (auto const& r : result.receipts)
-        manual += op::narrowGasUsed(r->gasUsed());
+        manual += static_cast<int64_t>(r->gasUsed());
     BOOST_CHECK_EQUAL(result.gasUsed, static_cast<uint64_t>(manual));
     BOOST_CHECK_GT(manual, 0);  // both txs actually consumed gas
 }
 
-/// Empty-block rejection: preBlockOpSteps with empty rawTxBytes → OpConsensusError (a
+/// Empty-block rejection: preBlockOpEthSteps with empty rawTxBytes → OpConsensusError (a
 /// std::runtime_error subclass). The retired runOpBlockInjection's empty-block guard lives here
 /// now.
 BOOST_AUTO_TEST_CASE(EmptyBlockRejectedByBlockPreSteps)
 {
-    namespace op = bcos::evm::opstack;
-    namespace engine = bcos::evm::engine;
-    namespace detail = bcos::evm::engine::detail;
-
-    // Isthmus-active fork config (feature_op_jovian OFF).
-    // Named-lvalue first: configAt takes const OpForkFlags&, and GCC-14's -Wdangling-reference
-    // flags passing a prvalue `op::OpForkFlags{}` here even though the returned reference
-    // aliases the static config, never the flags (false positive).
-    const auto forkFlags = op::OpForkFlags{};
-    const auto& cfg = op::configAt(forkFlags);
+    namespace opeth = opstack_test::opeth;
 
     MutableStorage storage;
     auto cryptoSuite = makeCryptoSuite();
     auto hashImpl = cryptoSuite->hashImpl();
     auto receiptFactory = makeReceiptFactory();
-    bcos::executor_v1::opstack::OpstackExecutor executor{receiptFactory, hashImpl, cfg};
 
     auto header = makeHeader(1'000'000);
 
     // Empty deposits/rawTxBytes → "op block: missing L1 attributes deposit (empty block)" →
     // OpConsensusError.
-    std::vector<op::DepositTx> deposits;
+    std::vector<opeth::DepositTx> deposits;
     std::vector<bcos::bytes> rawTxBytes;
     std::optional<std::string> hashErr;
     std::optional<uint16_t> daFootprintGasScalar;
-    std::optional<detail::RecentBlockHashes<MutableStorage>> hashes;
-    auto const schedule = op::OpForkSchedule::legacy(false);
-    BOOST_CHECK_THROW(engine::preBlockOpSteps(storage, *header, cfg, rawTxBytes, deposits, executor,
-                          hashes, hashErr, daFootprintGasScalar, &schedule, /*parentTsSec=*/0),
+    std::optional<opeth::OpRecentBlockHashes<MutableStorage>> hashes;
+    opeth::OpStorageErrorSlot sharedError;
+    opeth::OpEthExecutor executor{receiptFactory, opeth::OP_ISTHMUS_SPEC, sharedError};
+    BOOST_CHECK_THROW(
+        bcos::task::syncWait(opeth::preBlockOpEthSteps(storage, *header, opeth::OP_ISTHMUS_SPEC,
+                                 rawTxBytes, deposits, executor.vm(), sharedError, hashes, hashErr,
+                                 daFootprintGasScalar)),
         std::runtime_error);
 }
 
@@ -260,19 +240,10 @@ BOOST_AUTO_TEST_CASE(DepositAfterNonDepositAccepted)
 {
     namespace op = bcos::evm::opstack;
 
-    // Isthmus-active fork config (feature_op_jovian OFF).
-    // Named-lvalue first: configAt takes const OpForkFlags&, and GCC-14's -Wdangling-reference
-    // flags passing a prvalue `op::OpForkFlags{}` here (false positive, see
-    // InjectsDepositAndEip1559Block).
-    const auto forkFlags = op::OpForkFlags{};
-    const auto& cfg = op::configAt(forkFlags);
-
     MutableStorage storage;
     auto cryptoSuite = makeCryptoSuite();
     auto hashImpl = cryptoSuite->hashImpl();
     auto receiptFactory = makeReceiptFactory();
-    bcos::executor_v1::opstack::OpstackExecutor executor{receiptFactory, hashImpl, cfg};
-    auto ioServicePool = std::make_shared<bcos::IOServicePool>(1);
 
     auto header = makeHeader(1'000'000);
     fundSender(storage, hashImpl);
@@ -282,11 +253,10 @@ BOOST_AUTO_TEST_CASE(DepositAfterNonDepositAccepted)
     auto attrDep = makeAttributesDeposit();
     auto normFisco = buildEip1559FiscoTx();
     auto lateDep = makeAttributesDeposit();
-    std::vector<op::DepositTx> deposits{attrDep};
-    bcos::bytes attrEnv = encodeDepositEnvelope(attrDep);
+    bcos::bytes attrEnv = opstack_test::opeth::encodeOpEthDepositEnvelope(attrDep);
     auto const normRef = normFisco->extraTransactionBytes();
     bcos::bytes normEnv(normRef.begin(), normRef.end());
-    bcos::bytes lateEnv = encodeDepositEnvelope(lateDep);
+    bcos::bytes lateEnv = opstack_test::opeth::encodeOpEthDepositEnvelope(lateDep);
     std::vector<bcos::bytes> rawTxBytes{attrEnv, normEnv, lateEnv};
 
     auto attrFiscoTx = opstack_test::buildFiscoTxFromEnvelope(attrEnv, hashImpl);
@@ -296,15 +266,15 @@ BOOST_AUTO_TEST_CASE(DepositAfterNonDepositAccepted)
     std::vector<bcos::protocol::Transaction::ConstPtr> transactions{
         attrFiscoTx, normFisco, lateFiscoTx};
 
-    auto result = opstack_test::runSharedPath(storage, *header, rawTxBytes, transactions, deposits,
-        cfg, executor, kChainId, ioServicePool);
+    auto result = opstack_test::runSharedPath(storage, *header, rawTxBytes, transactions,
+        opstack_test::opeth::OP_ISTHMUS_SPEC);
 
     // All three txs execute — the late deposit is accepted, not rejected.
     BOOST_CHECK_EQUAL(result.receipts.size(), rawTxBytes.size());
     BOOST_CHECK_EQUAL(result.receipts.size(), 3u);
     int64_t manual = 0;
     for (auto const& r : result.receipts)
-        manual += op::narrowGasUsed(r->gasUsed());
+        manual += static_cast<int64_t>(r->gasUsed());
     BOOST_CHECK_GT(manual, 0);  // all three txs actually consumed gas
 }
 
@@ -318,16 +288,10 @@ BOOST_AUTO_TEST_CASE(FirstDepositNotL1AttributesAccepted)
 {
     namespace op = bcos::evm::opstack;
 
-    // Isthmus-active fork config (feature_op_jovian OFF).
-    const auto forkFlags = op::OpForkFlags{};
-    const auto& cfg = op::configAt(forkFlags);
-
     MutableStorage storage;
     auto cryptoSuite = makeCryptoSuite();
     auto hashImpl = cryptoSuite->hashImpl();
     auto receiptFactory = makeReceiptFactory();
-    bcos::executor_v1::opstack::OpstackExecutor executor{receiptFactory, hashImpl, cfg};
-    auto ioServicePool = std::make_shared<bcos::IOServicePool>(1);
 
     auto header = makeHeader(1'000'000);
     fundSender(storage, hashImpl);
@@ -346,7 +310,7 @@ BOOST_AUTO_TEST_CASE(FirstDepositNotL1AttributesAccepted)
     };
     auto normFisco = buildEip1559FiscoTx();
     std::vector<op::DepositTx> deposits{nonAttrDep};
-    bcos::bytes depEnv = encodeDepositEnvelope(nonAttrDep);
+    bcos::bytes depEnv = opstack_test::opeth::encodeOpEthDepositEnvelope(nonAttrDep);
     auto const normRef = normFisco->extraTransactionBytes();
     bcos::bytes normEnv(normRef.begin(), normRef.end());
     std::vector<bcos::bytes> rawTxBytes{depEnv, normEnv};
@@ -355,15 +319,15 @@ BOOST_AUTO_TEST_CASE(FirstDepositNotL1AttributesAccepted)
     BOOST_REQUIRE(depFiscoTx != nullptr);
     std::vector<bcos::protocol::Transaction::ConstPtr> transactions{depFiscoTx, normFisco};
 
-    auto result = opstack_test::runSharedPath(storage, *header, rawTxBytes, transactions, deposits,
-        cfg, executor, kChainId, ioServicePool);
+    auto result = opstack_test::runSharedPath(storage, *header, rawTxBytes, transactions,
+        opstack_test::opeth::OP_ISTHMUS_SPEC);
 
     // Both txs execute — the non-L1-attributes first deposit is accepted, not rejected.
     BOOST_CHECK_EQUAL(result.receipts.size(), rawTxBytes.size());
     BOOST_CHECK_EQUAL(result.receipts.size(), 2u);
     int64_t manual = 0;
     for (auto const& r : result.receipts)
-        manual += op::narrowGasUsed(r->gasUsed());
+        manual += static_cast<int64_t>(r->gasUsed());
     BOOST_CHECK_GT(manual, 0);  // both txs actually consumed gas
 }
 

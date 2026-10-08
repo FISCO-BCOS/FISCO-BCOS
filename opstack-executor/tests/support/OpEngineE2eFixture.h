@@ -16,12 +16,14 @@
 
 #pragma once
 
-// Shared OpEngineService e2e fixture for opstack-executor block-tests (mirrors
-// engine/test OpEngineServiceExecParityTest patterns on the Eth/Op split branch).
+// Shared OpEngineService e2e fixture for opstack-executor block-tests, rebuilt on the
+// post-cutover API: the seam is constructed from (OpForkSchedule, OpEthL1BlockInfo)
+// — timestamps select forks via ledger::resolveOpFork, NOT a boolean flag — and its
+// own synthesizeL1AttributesEnvelope(l2Ts, parentTs) already reproduces the
+// Isthmus/Jovian layout rule, so the old test-only override is gone.
 
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-evm/test/opstack/support/OpForkFlagsCompat.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/TransactionFactory.h>
 #include <bcos-framework/storage/Entry.h>
@@ -39,12 +41,11 @@
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <json/json.h>
+#include <opstack-executor/OpEthL1Attributes.h>
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <boost/lexical_cast.hpp>
 #include <engine/bcos-engine/OpEngineService.inl>
-
-#include "OpSchedulerSeamTestHelpers.h"
 
 #include <memory>
 #include <string>
@@ -66,7 +67,7 @@ struct TrivialCheckpointStorage
     Storage& open() & { return m_storage; }
     [[noreturn]] Storage& open(CheckpointName const&) & { std::abort(); }
     void createCheckpoint(Storage&, CheckpointName const&) {}
-    void deleteCheckpoint(CheckpointName const&) {}
+    void deleteCheckpoint(Storage&, CheckpointName const&) {}
     [[nodiscard]] std::optional<CheckpointName> latestCheckpointName() const
     {
         return std::nullopt;
@@ -80,7 +81,7 @@ struct TrivialCheckpointStorage
 using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
     memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
 using BackendMemStorage = memory_storage::MemoryStorage<StateKey, StateValue,
-    memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
+    memory_storage::Attribute(memory_storage::CONCURRENT | memory_storage::ORDERED),
     std::hash<StateKey>>;
 using CheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, BackendMemStorage>;
 using MLS = bcos::storage2::MultiLayerStorage<MutableStorage, void, CheckpointBackend>;
@@ -97,42 +98,7 @@ struct StubMemPool
     {}
 };
 
-struct StubExecutor
-{
-    template <class Storage>
-    struct ExecuteContext
-    {
-        bcos::task::Task<void> prepare() { co_return; }
-        bcos::task::Task<void> execute() { co_return; }
-        bcos::task::Task<bcos::protocol::TransactionReceipt::Ptr> finish() { co_return nullptr; }
-    };
-    template <class Storage>
-    bcos::task::Task<bcos::protocol::TransactionReceipt::Ptr> executeTransaction(Storage&,
-        const bcos::protocol::BlockHeader&, const bcos::protocol::Transaction&, int,
-        const bcos::ledger::LedgerConfig&, bool)
-    {
-        co_return nullptr;
-    }
-    template <class Storage>
-    bcos::task::Task<ExecuteContext<Storage>> createExecuteContext(Storage&,
-        const bcos::protocol::BlockHeader&, const bcos::protocol::Transaction&, int,
-        const bcos::ledger::LedgerConfig&, bool)
-    {
-        co_return ExecuteContext<Storage>{};
-    }
-};
-
-using EngineOpSchedulerBase = bcos::evm::engine::OpSchedulerSeam<ViewType>;
-/// E2e FCU builds synthesize the L1-attributes deposit when attrs carry no forced txs.
-struct EngineOpScheduler : EngineOpSchedulerBase
-{
-    using EngineOpSchedulerBase::EngineOpSchedulerBase;
-    [[nodiscard]] bcos::bytes synthesizeL1AttributesEnvelope(uint64_t timestampSeconds) const
-    {
-        return bcos::evm::engine::testutil::synthesizeL1AttributesEnvelope(
-            configAt(timestampSeconds).has_da_footprint);
-    }
-};
+using EngineOpScheduler = bcos::evm::engine::OpSchedulerSeam<ViewType>;
 using OpEngine = bcos::engine::OpEngineService<StubMemPool, MLS, EngineOpScheduler>;
 
 constexpr uint64_t kChainId = 0x2105;
@@ -161,15 +127,25 @@ inline bcos::protocol::TransactionReceiptFactory::Ptr makeReceiptFactory()
     return std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(makeCryptoSuite());
 }
 
-inline bcos::evm::opstack::OpForkFlags forkFlagsFor(bool jovian)
+/// Fork schedule for the e2e fixtures: Isthmus as the zero-start baseline, with
+/// optional Jovian at 1s (the pre-cutover `legacy(bool)` shape, now via timestamps —
+/// `jovian=true` ⇔ jovian activates at second 1, `false` ⇔ all-Isthmus).
+inline bcos::ledger::OpForkSchedule scheduleFor(bool jovian)
 {
-    return bcos::evm::opstack::OpForkFlags{.jovianActive = jovian};
+    bcos::ledger::OpForkSchedule schedule;
+    if (jovian)
+    {
+        schedule.m_jovianTime = 1;
+    }
+    return schedule;
 }
 
-inline std::shared_ptr<const bcos::evm::opstack::OpForkSchedule> scheduleFor(bool jovian)
+/// The seam's L1Block snapshot: all-zero is the documented "unset" sentinel, matching
+/// the old fixture's empty-l1BlockInfo boot (the engine prices with the legacy preset
+/// and warns — the honest undeclared shape).
+inline bcos::executor_v1::opstack::OpEthL1BlockInfo emptyL1BlockInfo()
 {
-    return std::make_shared<bcos::evm::opstack::OpForkSchedule>(
-        bcos::evm::opstack::OpForkSchedule::legacy(jovian));
+    return {};
 }
 
 inline void seedSysTables(MLS& multiLayerStorage)
@@ -351,25 +327,25 @@ struct OpE2eFixture
     std::shared_ptr<bcos::executor_v1::opstack::OpScheduler<MLS>> opDelegate;
     OpEngine service;
 
-    explicit OpE2eFixture(bcos::evm::opstack::OpForkFlags forkFlags)
-      : OpE2eFixture(scheduleFor(forkFlags.jovianActive))
+    explicit OpE2eFixture(bool jovian)
+      : OpE2eFixture(scheduleFor(jovian))
     {}
 
     /// Explicit schedule: lets a case pin a historical fork window (e.g. Regolith) while the
     /// engine, the seam and the real OpScheduler delegate all share it.
     /// `eip1559` stays an optional so a fixture can be honestly undeclared (the engine prices and
     /// warns exactly as a node without [op_eip1559] does) instead of passing the preset in.
-    explicit OpE2eFixture(std::shared_ptr<const bcos::evm::opstack::OpForkSchedule> schedule,
+    explicit OpE2eFixture(bcos::ledger::OpForkSchedule schedule,
         std::optional<bcos::engine::OpEip1559Params> eip1559 = std::nullopt)
       : hashImpl(makeCryptoSuite()->hashImpl()),
         receiptFactory(makeReceiptFactory()),
-        scheduler(schedule, {}),
+        scheduler(std::move(schedule), emptyL1BlockInfo()),
         legacyLedgerStorage(
             std::make_shared<bcos::storage::LegacyStorageWrapper<BackendMemStorage>>(
                 backendStorage)),
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
         opDelegate(std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory,
-            hashImpl, kChainId, std::move(schedule), blockFactory, multiLayerStorage, ledger,
+            hashImpl, kChainId, schedule, blockFactory, multiLayerStorage, ledger,
             ioServicePool)),
         service(memPool, multiLayerStorage, scheduler, blockFactory,
             bcos::engine::c_defaultBlockTxCountLimit, opDelegate, nullptr,
