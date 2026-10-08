@@ -1,0 +1,16 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -12,7 +12,12 @@
+ set(INSTALL_INCLUDE_DIR include CACHE PATH "Installation directory for header files")
+ set(INSTALL_CMAKE_DIR lib/cmake CACHE PATH "Installation directory for cmake files")
+ 
+-set(CMAKE_FIND_PACKAGE_PREFER_CONFIG TRUE)
++# Do not prefer config-mode packages: on systems with a distro OpenSSL
++# development package, config mode resolves find_package(OpenSSL) to the
++# system OpenSSLConfig.cmake (OpenSSL 3.x), while the rest of the build links
++# the vcpkg-provided OpenSSL/Tassl 1.1.1 — mixing the two ABIs. Module mode
++# (FindOpenSSL.cmake) honours the vcpkg openssl port's vcpkg-cmake-wrapper.
++set(CMAKE_FIND_PACKAGE_PREFER_CONFIG FALSE)
+ 
+ # These Version numbers are for major updates only- we won't track minor/patch updates here.
+ set(VERSION_MAJOR 1)

@@ -76,6 +76,16 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         # Note: If bring the -static option, apple will fail to link
         if(NOT APPLE)
             SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+            # GCC 16's C driver routes libgcc/libatomic through the
+            # libgcc_s_asneeded.so/libatomic_asneeded.so linker scripts, which CMake
+            # records in CMAKE_*_IMPLICIT_LINK_LIBRARIES and appends when C static
+            # libs are linked into C++ targets; under -static there is no .a for
+            # them and the link fails with "cannot find -lgcc_s_asneeded". The
+            # scripts only add AS_NEEDED entries that are meaningless for a static
+            # link (the g++ driver already supplies libgcc/libgcc_eh itself), so
+            # drop them from the implicit lists.
+            list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES gcc_s_asneeded atomic_asneeded)
+            list(REMOVE_ITEM CMAKE_CXX_IMPLICIT_LINK_LIBRARIES gcc_s_asneeded atomic_asneeded)
         endif()
 
         # SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-Bdynamic -ldl -lpthread -Wl,-Bstatic")
@@ -98,8 +108,26 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
             set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=gold")
         endif()
     elseif("${LINKER}" MATCHES "mold")
-        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=mold")
-        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=mold")
+        # GCC 16's libgcc spec always references the libgcc_s_asneeded.so linker
+        # script (INPUT(AS_NEEDED(-lgcc_s))), which mold < 2.41.0 cannot parse,
+        # so probe with a real link instead of assuming -fuse-ld=mold works.
+        set(_mold_probe_src "${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/mold-link-probe.cpp")
+        file(WRITE "${_mold_probe_src}" "int main() { return 0; }\n")
+        execute_process(
+            COMMAND ${CMAKE_CXX_COMPILER} -fuse-ld=mold "${_mold_probe_src}" -o "${_mold_probe_src}.out"
+            RESULT_VARIABLE _mold_probe_result
+            OUTPUT_QUIET ERROR_VARIABLE _mold_probe_error)
+        file(REMOVE "${_mold_probe_src}" "${_mold_probe_src}.out")
+        if(_mold_probe_result EQUAL 0)
+            set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=mold")
+            set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=mold")
+        else()
+            message(WARNING "LINKER=mold requested but a test link with -fuse-ld=mold failed; "
+                "falling back to the default linker. A likely cause is mold < 2.41.0, which "
+                "cannot parse GCC 16's libgcc_s_asneeded.so linker script (install mold >= 2.41.0 "
+                "to use mold); it can also be that mold is not installed at all. "
+                "Linker output: ${_mold_probe_error}")
+        endif()
     endif()
 
     if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
