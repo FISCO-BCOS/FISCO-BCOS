@@ -251,16 +251,29 @@ BOOST_AUTO_TEST_CASE(HappyPathShapeAndRoundTrip)
     BOOST_TEST(verify.storageValid[2]);
 }
 
-// Dormant account (present state root, address not in the trie) -> -32004 "not in trie".
-BOOST_AUTO_TEST_CASE(DormantAccountReturns32004)
+// Dormant account under scenario B (feature_l2_ethereum_compat, complete trie) -> an
+// empty-account proof with a non-empty non-existence proof, matching geth/reth EIP-1186
+// semantics (kona-host reads dormant accounts this way during fault-proof replay). The
+// scenario-A -32004 behavior is covered by EthGetProofSlotNotInMPTTest.cpp.
+BOOST_AUTO_TEST_CASE(DormantAccountReturnsEmptyProof)
 {
     buildTrie();
     wireReader();
 
     auto resp = getProof(dormant.hexPrefixed(), {}, "latest");
-    BOOST_REQUIRE(resp.isMember("error"));
-    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32004);
-    BOOST_CHECK(resp["error"]["message"].asString().find("not in trie") != std::string::npos);
+    BOOST_TEST(!resp.isMember("error"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    auto const& result = resp["result"];
+
+    BOOST_TEST(result["address"].asString() == dormant.hexPrefixed());
+    BOOST_TEST(result["balance"].asString() == "0x0");
+    BOOST_TEST(result["nonce"].asString() == "0x0");
+    BOOST_TEST(result["codeHash"].asString() == mpt::emptyCodeHash().hexPrefixed());
+    BOOST_TEST(result["storageHash"].asString() == mpt::emptyRootHash().hexPrefixed());
+    // The non-existence proof is non-empty: it carries the nodes from the state root down to the
+    // dead-end branch, which is exactly what lets a verifier prove the account is absent.
+    BOOST_REQUIRE(result["accountProof"].isArray());
+    BOOST_TEST(result["accountProof"].size() >= 1U);
 }
 
 // Header stateRoot absent from the MPT node storage -> -32004 "not in MPT node storage".
@@ -351,6 +364,78 @@ BOOST_AUTO_TEST_CASE(UnknownHashReturnsBlockNotFound)
     BOOST_REQUIRE(resp.isMember("error"));
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32602);  // InvalidParams
     BOOST_CHECK(resp["error"]["message"].asString().find("Block not found") != std::string::npos);
+}
+
+// EIP-1898 object form: kona-host's alloy provider sends {"blockHash": "0x…"} (BlockId::Hash
+// serialization) for eth_getProof's third parameter. It must resolve to the same block as the
+// plain 66-char hash string — not silently fall through to "latest", which would read the tip
+// block's MessagePasser storage root and break the fault-proof output-root recomputation.
+BOOST_AUTO_TEST_CASE(ObjectBlockHashFormReturnsSameProofAsHash)
+{
+    // Capture the latest block hash BEFORE buildTrie (setStateRoot clears dataHash).
+    auto const latestHash = m_ledger->ledgerData().back()->blockHeader()->hash();
+
+    buildTrie();
+    wireReader();
+
+    Json::Value req;
+    req["jsonrpc"] = "2.0";
+    req["id"] = 1;
+    req["method"] = "eth_getProof";
+    Json::Value params(Json::arrayValue);
+    params.append(address.hexPrefixed());
+    params.append(Json::arrayValue);  // no storage keys
+    Json::Value blockId(Json::objectValue);
+    blockId["blockHash"] = latestHash.hexPrefixed();
+    params.append(blockId);
+    req["params"] = params;
+
+    auto respByObject = request(printJson(req));
+    BOOST_REQUIRE(!respByObject.isMember("error"));
+    BOOST_REQUIRE(respByObject.isMember("result"));
+
+    auto respByHash = getProof(address.hexPrefixed(), {}, latestHash.hexPrefixed());
+    BOOST_REQUIRE(!respByHash.isMember("error"));
+    BOOST_REQUIRE(respByHash.isMember("result"));
+
+    // Same block -> same account state (same stateRoot, same storageHash).
+    BOOST_CHECK_EQUAL(respByObject["result"]["balance"].asString(),
+        respByHash["result"]["balance"].asString());
+    BOOST_CHECK_EQUAL(respByObject["result"]["storageHash"].asString(),
+        respByHash["result"]["storageHash"].asString());
+}
+
+// The {"blockNumber": "0x…"} EIP-1898 object form must resolve identically to the plain
+// quantity/tag string, exercising the helper's blockNumber branch.
+BOOST_AUTO_TEST_CASE(ObjectBlockNumberFormResolvesTag)
+{
+    buildTrie();
+    wireReader();
+
+    Json::Value req;
+    req["jsonrpc"] = "2.0";
+    req["id"] = 1;
+    req["method"] = "eth_getProof";
+    Json::Value params(Json::arrayValue);
+    params.append(address.hexPrefixed());
+    params.append(Json::arrayValue);
+    Json::Value blockId(Json::objectValue);
+    blockId["blockNumber"] = "latest";
+    params.append(blockId);
+    req["params"] = params;
+
+    auto respByObject = request(printJson(req));
+    BOOST_REQUIRE(!respByObject.isMember("error"));
+    BOOST_REQUIRE(respByObject.isMember("result"));
+
+    auto respByTag = getProof(address.hexPrefixed(), {}, "latest");
+    BOOST_REQUIRE(!respByTag.isMember("error"));
+    BOOST_REQUIRE(respByTag.isMember("result"));
+
+    BOOST_CHECK_EQUAL(respByObject["result"]["balance"].asString(),
+        respByTag["result"]["balance"].asString());
+    BOOST_CHECK_EQUAL(respByObject["result"]["storageHash"].asString(),
+        respByTag["result"]["storageHash"].asString());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -208,6 +208,31 @@ bcos::task::Task<ProofWalk> proofWalk(Storage& storage, bcos::h256 root, bcos::b
 }
 }  // namespace detail
 
+/// Build an empty-account proof: the EIP-1186 response for an address that is ABSENT from a
+/// COMPLETE state trie (geth/reth semantics — balance 0, nonce 0, empty code/storage hashes,
+/// plus a non-empty non-existence proof). @p accountProofNodes is the dead-end walk's collected
+/// nodes (empty only for an empty state trie). Every requested slot yields a provable-zero
+/// storage proof (empty value + empty proof).
+inline EIP1186Proof makeEmptyAccountProof(bcos::Address const& address,
+    std::span<bcos::h256 const> slots, std::vector<bcos::bytes> accountProofNodes)
+{
+    EIP1186Proof out;
+    out.address = address;
+    out.balance = 0;
+    out.nonce = 0;
+    out.codeHash = emptyCodeHash();
+    out.storageHash = emptyRootHash();
+    out.accountProof = std::move(accountProofNodes);
+    out.storageProof.reserve(slots.size());
+    for (auto const& slot : slots)
+    {
+        StorageProof entry;
+        entry.key = slot;
+        out.storageProof.push_back(std::move(entry));
+    }
+    return out;
+}
+
 /// Generate an EIP-1186 proof for @p address (and @p slots) against @p stateRoot (spec §5.9).
 /// Walks the state trie from stateRoot along accountKeyHash(address) collecting every
 /// hash-referenced node's raw RLP; decodes the account leaf; then walks the account's storage
@@ -252,6 +277,14 @@ bcos::task::Task<std::variant<EIP1186Proof, ProofErrorCode>> generateProof(Stora
 {
     if (stateRoot == emptyRootHash())
     {
+        // Scenario B (fullTrie, feature_l2_ethereum_compat): an empty state trie means no
+        // account exists anywhere — the caller gets an empty-account proof with no account
+        // nodes (geth/reth EIP-1186 semantics, which kona-host relies on). Scenario A keeps
+        // the -32004 outcome: its trie is incomplete, so "absent" cannot be proven empty.
+        if (fullTrie)
+        {
+            co_return makeEmptyAccountProof(address, slots, {});
+        }
         co_return ProofErrorCode::AccountNotInMPT;  // empty trie holds no accounts
     }
 
@@ -264,6 +297,14 @@ bcos::task::Task<std::variant<EIP1186Proof, ProofErrorCode>> generateProof(Stora
     }
     if (!accountWalk.value)
     {
+        // The walk dead-ends before an account leaf: the address is absent (an Ethereum empty
+        // account, EIP-161). Scenario B (fullTrie) proves this as an empty-account proof — the
+        // collected nodes ARE the non-existence proof (geth/reth EIP-1186 semantics). Scenario A
+        // cannot: its trie may omit flat-KV accounts, so absence proves nothing (keep -32004).
+        if (fullTrie)
+        {
+            co_return makeEmptyAccountProof(address, slots, std::move(accountWalk.nodes));
+        }
         co_return ProofErrorCode::AccountNotInMPT;
     }
     auto const account = Account::decode(bcos::ref(*accountWalk.value));
