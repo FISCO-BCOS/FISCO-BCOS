@@ -640,30 +640,35 @@ void NodeConfig::validateL2Invariants()
     }
     // The OP-only config sections are bound to the OP lane from the declarative rule
     // table (ChainLaneConfig.h laneKeyRules — the SAME table the lane matrix test
-    // asserts against, so table and behaviour cannot drift): a section a non-OP chain
+    // asserts against; presence is resolved through each rule's presenceMember hook, so
+    // a rule without a hook fails closed instead of reading "absent"): a section a non-OP chain
     // cannot read is an operator trap; the OP lane's own semantics REQUIRE the rule
     // marked Required. [op_eip1559] is optional on the OP lane itself: an absent triple
     // means c_legacyOpEip1559Params, the bit-identical behaviour of every pre-existing chain.
-    // A section's presence reads the parsed GenesisConfig member the loader filled.
+    // A section's presence reads the parsed GenesisConfig member NAMED by the rule
+    // (LaneKeyRule.presenceMember) — one hook per rule, so a new row is enforced by
+    // construction and a rule without a hook fails closed rather than reading "absent".
     auto const lane = laneForExecutorVersion(genesis.m_executorVersion);
-    auto const sectionPresent = [&](std::string_view section) {
-        if (section == "op_fork_schedule")
+    auto const sectionPresent = [&](LaneKeyRule const& rule) {
+        if (rule.presenceMember == "m_opstackForkSchedule")
         {
             return genesis.m_opstackForkSchedule.has_value();
         }
-        if (section == "op_fork_timestamps")
+        if (rule.presenceMember == "m_opForkSchedule")
         {
             return genesis.m_opForkSchedule.has_value();
         }
-        if (section == "op_eip1559")
+        if (rule.presenceMember == "m_opEip1559")
         {
             return genesis.m_opEip1559.has_value();
         }
-        return false;
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "lane rule '" + std::string(rule.section) +
+                                  "' has no presenceMember hook — wiring is required"));
     };
     for (auto const& rule : laneKeyRules())
     {
-        const bool present = sectionPresent(rule.section);
+        const bool present = sectionPresent(rule);
         if (rule.lane == ChainLane::Op && lane != ChainLane::Op && present)
         {
             BOOST_THROW_EXCEPTION(

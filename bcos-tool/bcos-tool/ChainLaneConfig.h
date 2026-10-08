@@ -61,6 +61,10 @@ struct LaneKeyRule
     std::string_view rejectMessage;
     /// Thrown when presence == Required and the lane is active but the section is absent.
     std::string_view requiredMessage;
+    /// The GenesisConfig member this section's presence reads. Presence is resolved
+    /// through ONE hook per rule — a rule with no presence hook must not silently read
+    /// "absent" (that is the fail-open default the lambda-dispatch shape had).
+    std::string_view presenceMember;
     /// Where the current behaviour was reverse-engineered from.
     std::string_view reason;
 };
@@ -93,6 +97,7 @@ struct LaneKeyRule
             .pinned = false,
             .rejectMessage = "[op_fork_schedule] requires executor.version >= 3 (OP lane)",
             .requiredMessage = {},
+            .presenceMember = "m_opstackForkSchedule",
             .reason = "NodeConfig.cpp loadOpForkSchedule + validateL2Invariants"},
         {.section = "op_fork_timestamps",
             .lane = ChainLane::Op,
@@ -103,6 +108,7 @@ struct LaneKeyRule
                 "executor.version >= 3 (OP lane) requires an [op_fork_timestamps] section "
                 "carrying at least one entry: boost's INI reader drops a section with no "
                 "keys, so an empty one reads as absent",
+            .presenceMember = "m_opForkSchedule",
             .reason = "NodeConfig.cpp loadOpForkTimestamps + validateL2Invariants"},
         {.section = "op_eip1559",
             .lane = ChainLane::Op,
@@ -110,6 +116,7 @@ struct LaneKeyRule
             .pinned = true,
             .rejectMessage = "[op_eip1559] requires executor.version >= 3 (OP lane)",
             .requiredMessage = {},
+            .presenceMember = "m_opEip1559",
             .reason = "NodeConfig.cpp loadOpEip1559 + validateL2Invariants"},
     };
     return rules;
