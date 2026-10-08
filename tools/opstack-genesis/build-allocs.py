@@ -64,8 +64,9 @@ except ImportError:  # pragma: no cover - dependency hint only
 #
 # hashlib.sha3_256 is NIST SHA-3 (0x06 domain padding) and produces DIFFERENT
 # digests from Ethereum's keccak256 (0x01 padding), so it cannot be used here.
-# Verified against the standard vectors in test_build_allocs.py
-# (keccak256("") = c5d24601..., keccak256("abc") = 4e03657a...).
+# Verified against the keccak cross-check in test_mpt_state_root.py (the pure-Python
+# implementation here is asserted equal to pycryptodome's golden state root there), and
+# the standard vectors keccak256("") = c5d24601..., keccak256("abc") = 4e03657a...
 # ---------------------------------------------------------------------------
 
 _KECCAK_RC = [
@@ -203,11 +204,18 @@ def strip0x(value):
 def parse_amount(value, label):
     """Parse a balance/nonce that may arrive as int, 0x-hex or decimal string."""
     if isinstance(value, int):
-        return value
-    text = str(value).strip().lower()
-    if text.startswith("0x"):
-        return int(text, 16) if len(text) > 2 else 0
-    return int(text, 10) if text else 0
+        amount = value
+    else:
+        text = str(value).strip().lower()
+        if text.startswith("0x"):
+            amount = int(text, 16) if len(text) > 2 else 0
+        else:
+            amount = int(text, 10) if text else 0
+    if amount < 0:
+        # YAML happily parses -1 into this lane; a negative balance/nonce has no
+        # genesis meaning and used to flow into the MPT word unchecked.
+        raise ValueError(f"{label}: negative amount {value!r} is not a valid balance/nonce")
+    return amount
 
 
 def verify_base_provenance(path, expected_sha256):
@@ -571,7 +579,19 @@ def build_proxied_allocs(predeploy, config, contracts_dir, base_accounts):
     storage.update(system_config_entry_storage(system_config))
     storage.update(validator_storage(predeploy.get("validators", []), name))
     for slot, value in (predeploy.get("storage") or {}).items():
-        storage[word_int(slot)] = word_int(value)
+        key = word_int(slot)
+        if key in storage:
+            # The raw overlay runs LAST; before this check it silently overwrote the
+            # OZ owner/initialized, EIP-1967 admin/implementation, system_config and
+            # validator slots the two-authority guards above had just validated (the
+            # account-collision path raises; the slot path must too).
+            raise ValueError(
+                f"{name}: raw storage slot {slot} collides with a computed slot "
+                "(OZ owner/initialized, EIP-1967, system_config or validators) — "
+                "override the guarded value in the config instead")
+        # Same strict-prefix rule as the other consensus config words: a quoted
+        # decimal like "100" must not be silently re-read as hex.
+        storage[key] = config_word(value, f"{name}.storage[{slot}]")
 
     proxy_alloc = {
         "address": normalize_hex(predeploy["address"]),

@@ -77,3 +77,22 @@ def test_duplicate_slot_key_inside_one_section_is_rejected(tmp_path):
     )
     with pytest.raises(ValueError, match="duplicate storage slot"):
         mpt.parse_allocs_ini(str(ini))
+
+
+def test_duplicate_address_key_across_alloc_n_sections_is_rejected(tmp_path):
+    # The [alloc.N] + address= layout build-allocs emits bypasses the section-suffix
+    # guard: two indices carrying the same address= used to survive parsing and only
+    # fail deep inside build_branch.
+    import pytest
+
+    ini = tmp_path / "allocs.ini"
+    ini.write_text(
+        "[alloc.1]\n"
+        "address = 0x" + "11" * 20 + "\n"
+        "balance = 5\n"
+        "[alloc.2]\n"
+        "address = 0x" + "11" * 20 + "\n"
+        "balance = 6\n"
+    )
+    with pytest.raises(ValueError, match="duplicate alloc address"):
+        mpt.parse_allocs_ini(str(ini))

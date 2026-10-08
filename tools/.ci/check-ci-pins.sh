@@ -99,8 +99,16 @@ checkout_pins() {
         }
         # Block boundary: a new step or another repository: line ends the scan, so
         # a checkout that names no ref cannot be paired with a later step ref.
-        look && /^[[:space:]]*-/ { look = 0 }
-        look && /^[[:space:]]*(uses|repository):/ { look = 0 }
+        # Emit NO-REF instead of dropping the block: a ref-less corpus checkout
+        # silently tracks the default branch and must fail loudly, not vanish.
+        look && /^[[:space:]]*-/ {
+            if (path != "" && ref == "") { print path, "NO-REF" }
+            look = 0
+        }
+        look && /^[[:space:]]*(uses|repository):/ {
+            if (path != "" && ref == "") { print path, "NO-REF" }
+            look = 0
+        }
         look && match($0, /ref:[[:space:]]*[0-9a-zA-Z._\/-]+/) {
             ref = substr($0, RSTART, RLENGTH); sub(/^ref:[[:space:]]*/, "", ref)
         }
@@ -108,6 +116,7 @@ checkout_pins() {
             path = substr($0, RSTART, RLENGTH); sub(/^path:[[:space:]]*/, "", path)
         }
         look && path != "" && ref != "" { print path, ref; look = 0 }
+        END { if (look && path != "" && ref == "") { print path, "NO-REF" } }
     '
 }
 
@@ -206,8 +215,18 @@ fi
 # Axis 3 (F-A4): corpus-repo ref agreement across workflow.yml and the
 # opstack-fork-nightly/weekly fork-matrix pins.
 # -----------------------------------------------------------------------------
+no_ref_checkouts="$(for f in "$WF" "$WF_NIGHTLY" "$WF_WEEKLY"; do checkout_pins "$f"; done \
+    | awk '$2 == "NO-REF" { print $1 }')"
+if [ -n "$no_ref_checkouts" ]; then
+    # Visible, not silent — but not a hard fail: the ci_pins job's own corpus clone is
+    # DELIBERATELY ref-less ("clone; ref applied next step") because the very next step
+    # fetches and asserts the ref parsed from workflow.yml, adding no fourth place to
+    # bump. Any OTHER ref-less corpus checkout would be pinned by nobody: eyeball the
+    # list against that one known-good pattern.
+    echo "::warning::corpus checkout(s) without an inline ref: $(echo $no_ref_checkouts | tr '\n' ' ') — legitimate only for the ci_pins clone whose next step pins the parsed ref; anything else silently tracks the default branch"
+fi
 wf_refs="$(for f in "$WF" "$WF_NIGHTLY" "$WF_WEEKLY"; do checkout_pins "$f"; done \
-    | awk '$1 != ".ci-op-e2e-tests" { print $2 }' | sort -u)"
+    | awk '$1 != ".ci-op-e2e-tests" && $2 != "NO-REF" { print $2 }' | sort -u)"
 action_refs="$(grep -hoE 'opstack-t8n-regen@[0-9a-f]{40}' \
     "$WF" "$WF_NIGHTLY" "$WF_WEEKLY" | sed 's/.*@//' | sort -u)"
 provision="$REPO_ROOT/tools/.ci/provision_t8n_corpus.sh"

@@ -304,6 +304,19 @@ def parse_allocs_ini(path):
                 current_storage.append((key, value))
             else:
                 current[key] = value
+    # The section-suffix guard above only sees the [alloc.<address>] layout; the
+    # [alloc.N] + address= layout build-allocs emits carries the real address in a
+    # key, so two indices with one address passed it and only failed deep inside
+    # build_branch (IndexError at depth 64). Reject on the RESOLVED address — the
+    # value every consumer actually keys on — for both layouts alike.
+    seen = set()
+    for alloc in allocs:
+        resolved = str(alloc.get("address", "")).lower()
+        if resolved in seen:
+            raise ValueError(
+                f"{path}: duplicate alloc address {alloc.get('address', '')} — merge the "
+                "entries into one [alloc.*] section")
+        seen.add(resolved)
     return allocs
 
 

@@ -114,7 +114,20 @@ if [[ ! -f "$KARST_CFG" ]]; then
   fail=1
 else
   set +e
-  karst_body="$(awk '/const OpForkConfig& karstConfig\(\) noexcept/,/^}/' "$KARST_CFG")"
+  # Brace-counted extraction, not a /start/,/^}/ range: the range runs past the
+  # function whenever its closing brace is not at column 0 (e.g. a one-line body
+  # inside a namespace), and the greps below would then match text that is NOT
+  # karstConfig's — the gate would pass while checking nothing.
+  karst_body="$(awk '
+    /const OpForkConfig& karstConfig\(\) noexcept/ { in_fn = 1 }
+    in_fn {
+      print
+      opens = gsub(/{/, "{"); closes = gsub(/}/, "}")
+      depth += opens - closes
+      if (opens + closes > 0 && depth <= 0) { in_fn = 0 }
+    }
+    END { if (in_fn) { print "karstConfig() braces never balanced" > "/dev/stderr"; exit 3 } }
+  ' "$KARST_CFG")"
   karst_status=$?
   set -e
   if [[ "$karst_status" -ne 0 ]]; then
@@ -125,6 +138,12 @@ else
     echo "check-op-karst-release-gate: karstConfig() not found in $KARST_CFG" >&2
     fail=1
   else
+    # The extraction must yield exactly ONE function definition.
+    body_defs="$(printf '%s\n' "$karst_body" | grep -cE 'noexcept')"
+    if [[ "$body_defs" -ne 1 ]]; then
+      echo "check-op-karst-release-gate: extracted karstConfig() body carries $body_defs noexcept sites (extraction overran?)" >&2
+      fail=1
+    fi
     set +e
     printf '%s\n' "$karst_body" | grep -qE 'EVMC_OSAKA'
     osaka_status=$?

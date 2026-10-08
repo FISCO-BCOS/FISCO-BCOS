@@ -114,6 +114,21 @@ restore_patch() {
   done < <(patch_files "$1")
 }
 
+# The per-variant restore() resets mutated files to HEAD; pre-existing local edits in
+# any file the selected variants touch would be silently destroyed by that reset (and
+# the end-of-run cleanliness gate is then satisfied BY the destruction). Refuse to start.
+for id in "${ids[@]}"; do
+  pf="$root/tools/mutation/variants/$id.patch"
+  [ -f "$pf" ] || continue
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    if [ -n "$(git -C "$root" status --porcelain -- "$f")" ]; then
+      echo "refusing to run: $f carries pre-existing local edits that restore() would destroy (commit or stash first)" >&2
+      exit 1
+    fi
+  done < <(patch_files "$pf")
+done
+
 rc_all=0
 for id in "${ids[@]}"; do
   patch="$root/tools/mutation/variants/$id.patch"
@@ -122,11 +137,21 @@ for id in "${ids[@]}"; do
   # Each variant names the file it mutates; fall back to the legacy default.
   vmutated=$(field "$id" mutated); [ -n "$vmutated" ] || vmutated="$mutated"
   git -C "$root" apply --3way "$patch" || { echo "[$id] APPLY FAILED"; rc_all=1; continue; }
-  # Restore on ANY exit (interrupt included) so the tree never stays patched, and keep
-  # the corpus cleanup armed across the variant window: the bare restore trap used to
-  # overwrite the :86 cleanup_corpus EXIT trap without re-arming it, so an interrupt
-  # mid-variant leaked the provisioned corpus symlink.
-  trap 'restore_patch "$patch"; cleanup_corpus' EXIT INT TERM
+  # Restore on ANY exit so the tree never stays patched, and keep the corpus cleanup
+  # armed across the variant window. INT/TERM additionally ABORT: a handler without
+  # exit would resume the run on the already-restored clean tree and report a false
+  # STILL GREEN verdict for the variant (the corpus cleanup would also leave later
+  # corpus-gated mapped tests silently skipping).
+  trap 'restore_patch "$patch"; cleanup_corpus' EXIT
+  trap 'restore_patch "$patch"; cleanup_corpus; trap - EXIT; exit 130' INT TERM
+  # Corpus re-assert per variant (defense in depth): an interrupting event must not
+  # turn a corpus-gated mapped test into a counted-as-pass skip.
+  if [ ! -e "$corpus_link" ]; then
+    echo "[$id] corpus disappeared mid-run at $corpus_link" >&2
+    rc_all=1
+    trap - EXIT INT TERM
+    continue
+  fi
 
   if ! ninja -C "$build_dir" "$target" >/dev/null 2>&1; then
     echo "[$id] BUILD FAILED under the variant (variant is unusable)"; rc_all=1

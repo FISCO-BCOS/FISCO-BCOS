@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-# Load by file path (same as test_build_allocs.py): tools/opstack-genesis/ is not a
+# Load by file path (same as test_mpt_state_root.py): tools/opstack-genesis/ is not a
 # package, so a plain `import gen_rollup_config` only works under pytest's default
 # rootdir sys.path insertion — path loading keeps the test import-mode independent.
 _SPEC = importlib.util.spec_from_file_location(
