@@ -996,6 +996,19 @@ BOOST_AUTO_TEST_CASE(Vectors)
     std::cout << "single-path summary: flat=" << stats.flat << " chainBlocks=" << stats.chainBlocks
               << " goldenMatch=" << stats.match << " goldenMismatch=" << stats.mismatch
               << " greenGuard=" << stats.greenGuardOk << "\n";
+
+    // F12 closure: the soft-class mismatch total (pre-isthmus six-way rejections and
+    // contract-create golden deltas, reported as GOLDEN-REPORT above) is BOUNDED, not
+    // merely printed. Baseline = 0: DIVERGENCES.md's tracked divergences all live in the
+    // hard/soft classes the per-vector assertions above already gate, so any soft-class
+    // mismatch that shows up here is a REAL divergence finding and must fail the suite
+    // (with the tally printed for bring-up). Raise this allowance ONLY with a
+    // DIVERGENCES.md entry naming the new divergence.
+    BOOST_CHECK_MESSAGE(stats.mismatch == 0,
+        "soft-class golden mismatches found: " << stats.mismatch
+                                               << " (see GOLDEN-REPORT lines above; every one "
+                                                  "is a real divergence finding — file it in "
+                                                  "DIVERGENCES.md or fix the executor)");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
