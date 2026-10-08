@@ -35,8 +35,5 @@ bcos::ledger::OpForkSchedule isthmusThenJovian(uint64_t jovianTs)
     schedule.m_jovianTime = jovianTs;
     return schedule;
 }
-
-    return schedule;
-}
 }  // namespace opstack_test
   // namespace opstack_test

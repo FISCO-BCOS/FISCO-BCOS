@@ -31,6 +31,7 @@
 #include <bcos-ledger/mpt/StateRoots.h>  // computeMptStateRoot
 #include <bcos-rlp-protocol/Web3Transaction.h>  // decodeWeb3RawTransaction
 #include <bcos-storage/KeyPrefixes.h>          // kMPTTable (row-diff filter)
+#include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>  // makeMinimalHeader
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>  // mutableInner (buildFiscoTx)
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
@@ -110,6 +111,36 @@ struct DualRunFixture
     bcos::crypto::Hash::Ptr hashImpl{makeCryptoSuite()->hashImpl()};
     bcos::IOServicePool::Ptr ioServicePool{std::make_shared<bcos::IOServicePool>(1)};
 };
+
+/// Minimal tars header carrying the fields the OP block path reads (number/ms timestamp/
+/// gasLimit/baseFee/coinbase/prevRandao/parentBeaconBlockRoot + parentHash via ParentInfo).
+/// Commitment fields (state/txs/receipts roots) stay zero — fillAnnouncedHeaderFromGolden
+/// backfills them from the vector where a golden compare runs.
+inline std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeMinimalHeader(
+    bcos::protocol::BlockNumber number, int64_t timestampMillis, int64_t gasLimit,
+    bcos::u256 baseFee, bcos::Address coinbase, bcos::h256 prevRandao,
+    bcos::h256 parentBeaconBlockRoot, bcos::h256 parentHash)
+{
+    auto h = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
+    h->setNumber(number);
+    h->setTimestamp(timestampMillis);
+    h->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = number - 1, .blockHash = parentHash});
+    h->setCoinbase(std::move(coinbase));
+    h->setStateRoot(bcos::h256{});
+    h->setTxsRoot(bcos::h256{});
+    h->setReceiptsRoot(bcos::h256{});
+    h->setGasLimit(bcos::u256(gasLimit));
+    h->setGasUsed(bcos::u256(0));
+    h->setExtraData(bcos::bytes{});
+    h->setPrevRandao(prevRandao);
+    h->setBaseFee(std::move(baseFee));
+    h->setWithdrawalsRoot(bcos::h256{});
+    h->setBlobGasUsed(bcos::u256(0));
+    h->setExcessBlobGas(bcos::u256(0));
+    h->setParentBeaconBlockRoot(parentBeaconBlockRoot);
+    h->setRequestsHash(bcos::h256{});
+    return h;
+}
 
 /// Envelope → executable tars transaction, mirroring the engine's opEnvelopeToTars +
 /// decodedTransactionFromEnvelope carrier step: decodeWeb3RawTransaction fills the tars mirror

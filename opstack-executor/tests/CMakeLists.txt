@@ -44,6 +44,22 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 endif()
 add_test(NAME OpstackExecutorTests COMMAND opstack-executor-tests)
 
+# C1 golden harness (OpEthExecutorDualRunTest) reads the t8n corpus — same locations and override
+# semantics as the engine parity suite (engine/test/CMakeLists.txt).
+if(NOT DEFINED OP_T8N_VECTORS_DIR)
+    set(OP_T8N_VECTORS_DIR "${CMAKE_SOURCE_DIR}/opstack-executor/tests/t8n/vectors")
+endif()
+if(NOT DEFINED OP_T8N_GOLDEN_ENGINE_DIR)
+    set(OP_T8N_GOLDEN_ENGINE_DIR
+        "${CMAKE_SOURCE_DIR}/opstack-executor/tests/t8n/golden/engine")
+endif()
+set(_t8n_defs
+    OP_T8N_VECTORS_DIR="${OP_T8N_VECTORS_DIR}"
+    OP_T8N_GOLDEN_ENGINE_DIR="${OP_T8N_GOLDEN_ENGINE_DIR}")
+if(REQUIRE_T8N_CORPUS OR DEFINED ENV{GITHUB_ACTIONS} OR DEFINED ENV{CI})
+    list(APPEND _t8n_defs FISCO_REQUIRE_T8N_CORPUS=1)
+endif()
+
 # Post-cutover port-backlog suites that compile against CURRENT headers.
 # The remaining suites (OpT8nReplayTest, OpNewPayloadRpcE2eTest, OpKarstActivationTest,
 # OpL1BlockDepositTest, OpL1EdgeGateTest, OpBlockInjectorTest, OpDualPathEquivalenceTest,
@@ -78,8 +94,17 @@ target_compile_definitions(opstack-executor-block-tests PRIVATE
     OPSTACK_TEST_SOURCE_ROOT="${CMAKE_SOURCE_DIR}")
 target_link_libraries(opstack-executor-block-tests PRIVATE
     opstack-executor
+    # engine: OpEngineService's non-template symbols (EngineTracker, engine_common::*)
+    # — the e2e suites instantiate OpEngineService.inl over the fixture types.
+    engine
+    # rpc: parseNewPayloadRequest (EngineHelper.cpp) — the e2e suites enter through
+    # the real JSON request parser.
+    rpc
     jsoncpp_static
     Boost::unit_test_framework
+    # evmmax::secp256k1::ecrecover (OpT8nReplayTest's 7702 authority recovery) lives in
+    # the precompiles archive, which evmone::evmone does not carry transitively.
+    evmone::precompiles
 )
 # GoldenSampleTest reads the t8n corpus — same availability semantics as the
 # scheduler-tests target (skip when absent, required in CI).
@@ -137,21 +162,6 @@ target_include_directories(opstack-executor-scheduler-tests PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/bcos-ledger
 )
-# C1 golden harness (OpEthExecutorDualRunTest) reads the t8n corpus — same locations and override
-# semantics as the engine parity suite (engine/test/CMakeLists.txt).
-if(NOT DEFINED OP_T8N_VECTORS_DIR)
-    set(OP_T8N_VECTORS_DIR "${CMAKE_SOURCE_DIR}/opstack-executor/tests/t8n/vectors")
-endif()
-if(NOT DEFINED OP_T8N_GOLDEN_ENGINE_DIR)
-    set(OP_T8N_GOLDEN_ENGINE_DIR
-        "${CMAKE_SOURCE_DIR}/opstack-executor/tests/t8n/golden/engine")
-endif()
-set(_t8n_defs
-    OP_T8N_VECTORS_DIR="${OP_T8N_VECTORS_DIR}"
-    OP_T8N_GOLDEN_ENGINE_DIR="${OP_T8N_GOLDEN_ENGINE_DIR}")
-if(REQUIRE_T8N_CORPUS OR DEFINED ENV{GITHUB_ACTIONS} OR DEFINED ENV{CI})
-    list(APPEND _t8n_defs FISCO_REQUIRE_T8N_CORPUS=1)
-endif()
 target_compile_definitions(opstack-executor-scheduler-tests PRIVATE ${_t8n_defs})
 target_link_libraries(opstack-executor-scheduler-tests PRIVATE
     opstack-executor

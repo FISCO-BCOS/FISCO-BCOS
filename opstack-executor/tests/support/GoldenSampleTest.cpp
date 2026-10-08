@@ -17,7 +17,7 @@
 // opstack-executor/tests/support/GoldenSampleTest.cpp
 #include "GoldenSample.h"
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-evm/opstack/OpForkSchedule.h>
+#include <bcos-framework/ledger/OpForkSchedule.h>
 #include <json/json.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>

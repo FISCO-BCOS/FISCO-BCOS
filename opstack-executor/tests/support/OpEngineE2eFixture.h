@@ -31,6 +31,10 @@
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/Ledger.h>
+#include <bcos-ledger/mpt/Constants.h>     // emptyRootHash
+#include <bcos-ledger/mpt/HashBuilder.h>   // flushTrieNodes
+#include <bcos-ledger/mpt/StateRoots.h>    // computeMptStateDelta
+#include <bcos-ledger/mpt/ViewNodeStorage.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-table/src/LegacyStorageWrapper.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
@@ -140,12 +144,21 @@ inline bcos::ledger::OpForkSchedule scheduleFor(bool jovian)
     return schedule;
 }
 
-/// The seam's L1Block snapshot: all-zero is the documented "unset" sentinel, matching
-/// the old fixture's empty-l1BlockInfo boot (the engine prices with the legacy preset
-/// and warns — the honest undeclared shape).
+/// The seam's L1Block snapshot. Number/time/blockHash/baseFeeScalar/batcherHash are
+/// non-zero on purpose: synthesizeOpEthL1AttributesEnvelope fail-closes on both
+/// sentinels (isUnsetOpEthL1BlockInfo / isUnsetOpEthSystemConfig), and the FCU-build
+/// suites (S7/S8/S9) drive exactly that path. The fee amounts stay zero — the pricing
+/// assertions read the 1559 sources (parent extraData / chain config), never the
+/// L1Block content.
 inline bcos::executor_v1::opstack::OpEthL1BlockInfo emptyL1BlockInfo()
 {
-    return {};
+    bcos::executor_v1::opstack::OpEthL1BlockInfo info{};
+    info.number = 1;
+    info.time = 1;
+    info.blockHash.bytes[31] = 0x01;
+    info.baseFeeScalar = 1;
+    info.batcherHash.bytes[31] = 0x01;
+    return info;
 }
 
 inline void seedSysTables(MLS& multiLayerStorage)
@@ -167,6 +180,46 @@ inline void seedSysTables(MLS& multiLayerStorage)
     bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
 }
 
+/// Copy every flat row visible through @p from into @p to's top mutable layer. The
+/// incremental MPT build scans the top mutable layer ONLY (buildAndCollect), so a
+/// backend-merged seed is invisible to it — this re-materializes the committed state as
+/// the genesis build's delta. (Mirror of OpSchedulerTest's copyFlatRows.)
+inline void copyFlatRows(MLS::ViewType& from, MLS::ViewType& to)
+{
+    auto it = bcos::task::syncWait(bcos::storage2::range(from));
+    while (auto kv = bcos::task::syncWait(it.next()))
+    {
+        auto const& [k, v] = *kv;
+        if (auto const* entry = std::get_if<bcos::storage::Entry>(std::addressof(v)))
+            bcos::task::syncWait(bcos::storage2::writeOne(to, k, *entry));
+    }
+}
+
+/// Build the MPT over the committed pre-state (parent = empty root) and persist every node
+/// as "/mpt/" rows — the test-local mirror of Ledger::buildGenesisBlock's Ethereum-lane
+/// genesis import (OpSchedulerTest's computeAndPersistGenesisTrie). The delegate
+/// OpScheduler's incremental build at the payload's block reads the PARENT header's
+/// stateRoot and resolves that root's nodes through storage: without this step the root is
+/// 0x00..00 (no persisted nodes) and execution fails "missing node hash".
+/// Returns the root to stamp on the parent header.
+inline bcos::h256 computeAndPersistParentTrie(MLS& mls)
+{
+    auto readView = mls.fork();  // read-through to the committed backend (never merged)
+    auto buildView = mls.fork();
+    buildView.newMutable();
+    copyFlatRows(readView, buildView);
+    bcos::ledger::LedgerConfig ledgerConfig;
+    ledgerConfig.setExecutorVersion(bcos::ledger::OPSTACK_EXECUTOR_VERSION);
+    auto delta = bcos::task::syncWait(bcos::ledger::mpt::computeMptStateDelta(
+        buildView, bcos::ledger::mpt::emptyRootHash(), ledgerConfig));
+    auto persistView = mls.fork();
+    persistView.newMutable();
+    bcos::ledger::mpt::ViewNodeStorage<ViewType> nodeStorage(persistView);
+    bcos::task::syncWait(bcos::ledger::mpt::flushTrieNodes(nodeStorage, delta.newNodes));
+    bcos::task::syncWait(mls.mergeView(std::move(persistView)));
+    return delta.stateRoot;
+}
+
 inline void registerVerifiedBlock(
     MLS& multiLayerStorage, bcos::h256 const& blockHash, int64_t number)
 {
@@ -185,7 +238,8 @@ inline void registerVerifiedBlock(
 }
 
 inline void registerGoldenParentHeader(MLS& multiLayerStorage,
-    bcos::protocol::BlockFactory::Ptr const& blockFactory, Json::Value const& env, bool jovian)
+    bcos::protocol::BlockFactory::Ptr const& blockFactory, Json::Value const& env, bool jovian,
+    bcos::h256 const& stateRoot)
 {
     auto quantity = [](std::string const& hex) {
         auto const digits = hex.rfind("0x", 0) == 0 ? hex.substr(2) : hex;
@@ -204,6 +258,7 @@ inline void registerGoldenParentHeader(MLS& multiLayerStorage,
     header->setGasUsed(gasLimit / 6);
     header->setBaseFee(baseFee);
     header->setBlobGasUsed(0);
+    header->setStateRoot(stateRoot);
     header->setExtraData(jovian ? bcos::fromHex("0100000032000000060000000000000000") :
                                   bcos::fromHex("000000003200000006"));
     bcos::bytes encoded;
@@ -221,7 +276,8 @@ inline void registerGoldenParentHeader(MLS& multiLayerStorage,
 /// Seed parent header from execution payload fields when the vector has no `env` block
 /// (invalid_* fork carriers, inline invalid samples that only carry `_op_payload`).
 inline void registerParentHeaderFromPayload(MLS& multiLayerStorage,
-    bcos::protocol::BlockFactory::Ptr const& blockFactory, Json::Value const& payload, bool jovian)
+    bcos::protocol::BlockFactory::Ptr const& blockFactory, Json::Value const& payload, bool jovian,
+    bcos::h256 const& stateRoot)
 {
     auto quantity = [](std::string const& hex) {
         auto const digits = hex.rfind("0x", 0) == 0 ? hex.substr(2) : hex;
@@ -244,6 +300,7 @@ inline void registerParentHeaderFromPayload(MLS& multiLayerStorage,
     header->setGasUsed(gasLimit / 6);
     header->setBaseFee(baseFee);
     header->setBlobGasUsed(0);
+    header->setStateRoot(stateRoot);
     header->setExtraData(jovian ? bcos::fromHex("0100000032000000060000000000000000") :
                                   bcos::fromHex("000000003200000006"));
     bcos::bytes encoded;
@@ -264,14 +321,19 @@ inline void registerParentForNewPayload(MLS& multiLayerStorage,
     bcos::h256 const& parentHash, int64_t parentNumber = 0)
 {
     registerVerifiedBlock(multiLayerStorage, parentHash, parentNumber);
+    // The delegate's incremental MPT build at the payload's block resolves the parent
+    // header's stateRoot against persisted "/mpt/" nodes — build + persist the seeded
+    // pre-state's trie first (callers always seedPreState before this helper).
+    auto const stateRoot = computeAndPersistParentTrie(multiLayerStorage);
     if (vector.isMember("env"))
     {
-        registerGoldenParentHeader(multiLayerStorage, blockFactory, vector["env"], jovian);
+        registerGoldenParentHeader(
+            multiLayerStorage, blockFactory, vector["env"], jovian, stateRoot);
     }
     else if (vector.isMember("_op_payload"))
     {
         registerParentHeaderFromPayload(
-            multiLayerStorage, blockFactory, vector["_op_payload"], jovian);
+            multiLayerStorage, blockFactory, vector["_op_payload"], jovian, stateRoot);
     }
 }
 
@@ -294,8 +356,9 @@ inline bcos::protocol::BlockHeader::Ptr productionHeaderOf(
     auto const& payload = request.executionPayload;
     auto envelopes = rawEnvelopesFromPayload(payload);
     const auto transactionsRoot = EngineOpScheduler::computeTxRoot(envelopes);
-    return bcos::engine::engine_common::op::rebuildOpEthHeader(blockFactory->blockHeaderFactory(),
-        payload, transactionsRoot, request.parentBeaconBlockRoot, bcos::engine::OpForkId::Isthmus);
+    return bcos::engine::engine_common::op::rebuildOpEthHeader(
+        blockFactory->blockHeaderFactory(), payload, transactionsRoot,
+        request.parentBeaconBlockRoot.value_or(bcos::h256{}));
 }
 
 inline bcos::protocol::Transaction::Ptr buildFiscoTxFromEnvelope(
