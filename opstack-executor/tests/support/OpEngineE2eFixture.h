@@ -67,7 +67,7 @@ struct TrivialCheckpointStorage
     Storage& open() & { return m_storage; }
     [[noreturn]] Storage& open(CheckpointName const&) & { std::abort(); }
     void createCheckpoint(Storage&, CheckpointName const&) {}
-    void deleteCheckpoint(Storage&, CheckpointName const&) {}
+    void deleteCheckpoint(CheckpointName const&) {}
     [[nodiscard]] std::optional<CheckpointName> latestCheckpointName() const
     {
         return std::nullopt;
@@ -339,7 +339,7 @@ struct OpE2eFixture
         std::optional<bcos::engine::OpEip1559Params> eip1559 = std::nullopt)
       : hashImpl(makeCryptoSuite()->hashImpl()),
         receiptFactory(makeReceiptFactory()),
-        scheduler(std::move(schedule), emptyL1BlockInfo()),
+        scheduler(schedule, emptyL1BlockInfo()),  // copy: opDelegate below moves it
         legacyLedgerStorage(
             std::make_shared<bcos::storage::LegacyStorageWrapper<BackendMemStorage>>(
                 backendStorage)),

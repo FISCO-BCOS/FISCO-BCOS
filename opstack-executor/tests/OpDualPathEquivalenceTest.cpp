@@ -25,14 +25,13 @@
 // vectors, PER VECTOR for single-block vectors (P4, 2026-09-14) — by building a timestamp-0
 // single-activation schedule `"0:<hardfork>"` (mirroring OpT8nReplayTest.loadBlockContext's
 // name→config switch). Fork parity is asserted by checking the schedule's resolved config
-// self-identifies as the intended exec fork (cfg.fork).
+// self-identifies as the intended exec fork (the spec's fork).
 // Exception handling: per-vector catches use catch(std::exception)/catch(...) (libevmone -fno-rtti
 // makes typed catch unreliable) — catch → BOOST_ERROR + continue.
 // has_storage scan (same-block create pre-triage) + /sys tripwire derived-table prefix assertion
 // (accountTableName(addr) prefix == apps/).
 
 #include "support/GoldenSample.h"
-#include <opstack-executor/OpDepositEncode.h>  // encodeDepositEnvelope (deposit envelope reconstruction)
 #include "support/SeedPreState.h"
 
 #include <bcos-concepts/ByteBuffer.h>
@@ -606,15 +605,15 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
     const bool isIsthmusJovian = (hardfork == "isthmus" || hardfork == "jovian");
     const bool hardGolden = isIsthmusJovian && (id.find("contract_create") == std::string::npos);
 
-    // Execution schedule: a timestamp-0 single activation of execFork built through the production
-    // parser ("0:<fork>"), so the scheduler's internal configAt(blockTs) resolves to exactly that
-    // fork's config. Fork parity: the resolved config must self-identify as execFork.
+    // Execution schedule: a timestamp-0 single activation of execFork (scheduleForFork),
+    // so resolveOpFork(schedule, blockTs) resolves to exactly that fork. Fork parity: the
+    // resolved fork must self-identify as execFork.
     const bcos::ledger::OpForkSchedule schedule = scheduleForFork(execFork);
     const auto tsSec = bcos::engine::unixSecondsFromInternalMillis(
         static_cast<uint64_t>(header->timestamp()));
-    const auto& cfg = schedule->configAt(tsSec);
-    BOOST_CHECK_MESSAGE(cfg.fork == execFork,
-        id << ": fork parity broken: schedule resolved fork " << static_cast<int>(cfg.fork)
+    const auto resolvedFork = bcos::ledger::resolveOpFork(schedule, tsSec);
+    BOOST_CHECK_MESSAGE(resolvedFork == execFork,
+        id << ": fork parity broken: schedule resolved fork " << static_cast<int>(resolvedFork)
            << " != execFork " << static_cast<int>(execFork));
 
     // Deposits (has_storage triage scan), built from the block-order Transaction objects
@@ -644,7 +643,7 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
     // route A drives OpScheduler.executeBlock; the outcome surfaces via routeAErr + the
     // finalized block (receipts/seal are read off the MLS view through the caller's checks).
     bcos::Error::Ptr routeAErr;
-    bcos::Error::Ptr routeAErr;
+    bcos::executor_v1::opstack::OpEthExecuteBlockResult resultA;
     try
     {
         // Block assembly: extraTransactionBytes = full envelope (SEV-8, overridden by

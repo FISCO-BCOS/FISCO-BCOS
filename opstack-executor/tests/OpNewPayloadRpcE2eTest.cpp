@@ -95,7 +95,7 @@ void assertSevenFields(std::string const& id, bcos::protocol::BlockHeader::Ptr c
 void runGoldenVector(std::string const& id)
 {
     auto sample = w6test::loadVectorSample(id);
-    auto fixture = std::make_unique<OpE2eFixture>(sample.jovian));
+    auto fixture = std::make_unique<OpE2eFixture>(sample.jovian);
     opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
     // Warning: parent pre-registration (gap A): without it -> SYNCING instead of VALID. parentHash
     // is decoded from the golden header
@@ -191,7 +191,7 @@ void runChainedPair(std::string const& aId, std::string const& bId)
     auto sampleB = w6test::loadChainedSample(bId);
     BOOST_REQUIRE(sampleA.jovian == sampleB.jovian);  // chained pair shares one fork (isthmus or
                                                       // jovian)
-    auto fixture = std::make_unique<OpE2eFixture>(sampleA.jovian));
+    auto fixture = std::make_unique<OpE2eFixture>(sampleA.jovian);
 
     // Seed only A's pre (B's pre is A's postState; never re-seed)
     opstack_test::seedPreState(fixture->multiLayerStorage, sampleA.vector["pre"]);
@@ -275,7 +275,7 @@ std::tuple<std::unique_ptr<OpE2eFixture>, bcos::h256, bcos::protocol::BlockNumbe
 runVectorAndGetBlockHash(std::string const& id)
 {
     auto sample = w6test::loadVectorSample(id);
-    auto fixture = std::make_unique<OpE2eFixture>(sample.jovian));
+    auto fixture = std::make_unique<OpE2eFixture>(sample.jovian);
     opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
     const auto goldenHeader = w6test::decodeGoldenHeader(sample);
     registerParentForNewPayload(fixture->multiLayerStorage, fixture->blockFactory, sample.vector,
@@ -488,7 +488,7 @@ void runInvalidVector(std::string const& id)
 {
     auto sample =
         (id.rfind("inline_", 0) == 0) ? makeInlineInvalidSample(id) : w6test::loadInvalidSample(id);
-    auto fixture = std::make_unique<OpE2eFixture>(sample.jovian));
+    auto fixture = std::make_unique<OpE2eFixture>(sample.jovian);
     const auto& fisco = sample.vector["_op_expected"]["reject"]["fisco"];
     const auto classification = fisco["classification"].asString();
     // Consumer gate: for executor-consumer vectors (non-decode class), the
@@ -1794,7 +1794,7 @@ BOOST_AUTO_TEST_CASE(HoloceneParentPricesFromItsOwnExtraData)
     schedule.m_graniteTime = 0;
     schedule.m_holoceneTime = 0;
     return schedule;
-}()
+}();
     auto fixture = std::make_unique<OpE2eFixture>(schedule, chainTriple);
     registerRegolithGenesis(*fixture, genesis, holoceneShaped);
 
@@ -1871,7 +1871,7 @@ BOOST_AUTO_TEST_CASE(ZeroAttributeParamsSubstituteTheDeclaredPair)
     schedule.m_graniteTime = 0;
     schedule.m_holoceneTime = 0;
     return schedule;
-}()
+}();
     auto fixture = std::make_unique<OpE2eFixture>(schedule, declared);
     registerRegolithGenesis(*fixture, genesis, holoceneShaped);
 
@@ -1937,7 +1937,7 @@ BOOST_AUTO_TEST_CASE(ZeroAttributeParamsOnAnUndeclaredNodeUseThePreset)
     schedule.m_graniteTime = 0;
     schedule.m_holoceneTime = 0;
     return schedule;
-}()
+}();
     auto fixture = std::make_unique<OpE2eFixture>(schedule);  // no [op_eip1559] declaration
     registerRegolithGenesis(*fixture, genesis, holoceneShaped);
 
@@ -2006,7 +2006,7 @@ BOOST_AUTO_TEST_CASE(NonZeroAttributeParamsAreEchoedOverTheDeclaration)
     schedule.m_graniteTime = 0;
     schedule.m_holoceneTime = 0;
     return schedule;
-}()
+}();
     auto fixture = std::make_unique<OpE2eFixture>(schedule, declared);
     registerRegolithGenesis(*fixture, genesis, holoceneShaped);
 
@@ -2073,7 +2073,7 @@ BOOST_AUTO_TEST_CASE(ForkchoiceHeadKnownValid)
 // :253-262)
 BOOST_AUTO_TEST_CASE(ForkchoiceHeadUnknownSyncing)
 {
-    auto fixture = std::make_unique<OpE2eFixture>(/*jovian=*/false));
+    auto fixture = std::make_unique<OpE2eFixture>(/*jovian=*/false);
     bcos::h256 unknownHash(0xdeadbeef);  // no block registered
     auto [state, payloadId] = bcos::task::syncWait(fixture->service.updateForkchoice(
         bcos::engine::ForkchoiceState{unknownHash, unknownHash, unknownHash}, nullptr,
@@ -2138,7 +2138,7 @@ BOOST_AUTO_TEST_CASE(ForkchoiceAttrsMinBaseFeeBeforeJovianInvalid)
     // Isthmus fixture: minBaseFee must be null pre-Jovian (jovian/exec-engine.md:59-79).
     // OpE2eFixture has no genesis-hash helper — register a known block instead
     // (pattern: ForkchoiceMonotonicityRejected).
-    auto fixture = std::make_unique<OpE2eFixture>(/*jovian=*/false));
+    auto fixture = std::make_unique<OpE2eFixture>(/*jovian=*/false);
     bcos::h256 knownBlock("0x5555555555555555555555555555555555555555555555555555555555555555");
     registerVerifiedBlock(fixture->multiLayerStorage, knownBlock, /*number=*/0);
     auto attrs = makeJovianAttrs();
@@ -2400,7 +2400,7 @@ bcos::h256 canonicalHashAtHeight(MLS& multiLayerStorage, int64_t height)
 BOOST_AUTO_TEST_CASE(ReorgSiblingRetractsForkchoiceHead)
 {
     auto sample = forkVectorSample("invalid_isthmus_chain_3_fork");
-    auto fixture = std::make_unique<OpE2eFixture>(sample.jovian));
+    auto fixture = std::make_unique<OpE2eFixture>(sample.jovian);
     opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
     registerParentForNewPayload(fixture->multiLayerStorage, fixture->blockFactory, sample.vector,
         sample.jovian, parseParentHashFromPayload(sample), 0);
@@ -2445,7 +2445,7 @@ BOOST_AUTO_TEST_CASE(ReorgSiblingRetractsForkchoiceHead)
 BOOST_AUTO_TEST_CASE(ReorgRetractNonCanonicalHeadStillRejected)
 {
     auto sample = forkVectorSample("invalid_isthmus_chain_3_fork");
-    auto fixture = std::make_unique<OpE2eFixture>(sample.jovian));
+    auto fixture = std::make_unique<OpE2eFixture>(sample.jovian);
     opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
     registerParentForNewPayload(fixture->multiLayerStorage, fixture->blockFactory, sample.vector,
         sample.jovian, parseParentHashFromPayload(sample), 0);
@@ -2564,7 +2564,7 @@ BOOST_AUTO_TEST_CASE(ReorgRebuildOnParentBuildsSibling)
 BOOST_AUTO_TEST_CASE(ReorgCaseUReplacesUncommittedPending)
 {
     auto sample = forkVectorSample("invalid_jovian_chain_3_fork");
-    auto fixture = std::make_unique<OpE2eFixture>(sample.jovian));
+    auto fixture = std::make_unique<OpE2eFixture>(sample.jovian);
     opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
     registerParentForNewPayload(fixture->multiLayerStorage, fixture->blockFactory, sample.vector,
         sample.jovian, parseParentHashFromPayload(sample), 0);
@@ -2607,7 +2607,7 @@ BOOST_AUTO_TEST_CASE(ReorgCaseUReplacesUncommittedPending)
 BOOST_AUTO_TEST_CASE(ReorgSiblingWithoutUndoJournalRefused)
 {
     auto sample = forkVectorSample("invalid_jovian_chain_3_fork");
-    auto fixture = std::make_unique<OpE2eFixture>(sample.jovian));
+    auto fixture = std::make_unique<OpE2eFixture>(sample.jovian);
     opstack_test::seedPreState(fixture->multiLayerStorage, sample.vector["pre"]);
     registerParentForNewPayload(fixture->multiLayerStorage, fixture->blockFactory, sample.vector,
         sample.jovian, parseParentHashFromPayload(sample), 0);

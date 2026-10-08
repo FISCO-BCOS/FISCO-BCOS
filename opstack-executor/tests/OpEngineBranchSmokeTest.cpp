@@ -23,8 +23,7 @@ BOOST_AUTO_TEST_CASE(OpModeInstantiatesAndGatesV4)
     MLS storage{checkpointBackend};
 
     EngineOpScheduler scheduler(bcos::ledger::OpForkSchedule{},  // all-Isthmus baseline
-        {},
-        {});
+        bcos::executor_v1::opstack::OpEthL1BlockInfo{});
     StubMemPool memPool;
     static auto blockFactory =
         bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());

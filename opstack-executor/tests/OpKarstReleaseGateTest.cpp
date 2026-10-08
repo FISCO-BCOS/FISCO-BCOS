@@ -6,29 +6,32 @@
 // baseline (so `0:karst` is valid on its own); later activations must stay in
 // contiguous protocol order, which the gap case below exercises.
 
+#include <bcos-framework/ledger/OpForkSchedule.h>
 #include <bcos-framework/ledger/OpForkScheduleCodec.h>
+#include <opstack-executor/OpForkSpec.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace bcos::evm::opstack;
+namespace op = bcos::executor_v1::opstack;
 using bcos::ledger::InvalidOpForkSchedule;
 
 BOOST_AUTO_TEST_SUITE(OpKarstReleaseGateSuite)
 
 BOOST_AUTO_TEST_CASE(KarstConfigIsOsakaWithDepositExemption)
 {
-    const auto& cfg = karstConfig();
-    BOOST_CHECK_EQUAL(cfg.rev, EVMC_OSAKA);
-    BOOST_CHECK(cfg.deposit_exempt_from_max_tx_gas);
+    const auto& spec = op::OP_KARST_SPEC;
+    BOOST_CHECK_EQUAL(spec.rev, EVMC_OSAKA);
+    // Deposits are exempt from Karst's EIP-7825 cap: the deposit validate path clamps
+    // the revision to Prague (OpEthDeposit.h revValidate) — pin the mechanism.
+    BOOST_CHECK_EQUAL(std::min(spec.rev, EVMC_PRAGUE), EVMC_PRAGUE);
 }
 
 BOOST_AUTO_TEST_CASE(ParseAllowsKarstAfterJovian)
 {
     bcos::ledger::OpForkSchedule schedule;
     schedule.m_jovianTime = 1;
-    schedule.m_karstTime = 1;
-    BOOST_CHECK(schedule.forkAt(0) == OpFork::Jovian);
-    BOOST_CHECK(schedule.forkAt(1) == OpFork::Karst);
-    BOOST_CHECK_EQUAL(schedule.configAt(1).rev, EVMC_OSAKA);
+    schedule.m_karstTime = 2;
+    BOOST_CHECK(bcos::ledger::resolveOpFork(schedule, 1) == bcos::ledger::OpFork::Jovian);
+    BOOST_CHECK(bcos::ledger::resolveOpFork(schedule, 2) == bcos::ledger::OpFork::Karst);
 }
 
 // Skipping jovian alone is legal (the shorthand fold produces "isthmus,T:karst"),

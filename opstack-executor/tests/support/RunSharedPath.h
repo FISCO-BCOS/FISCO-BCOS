@@ -10,7 +10,6 @@
 
 #include "DualRunHarness.h"
 
-#include <bcos-protocol/BlockHeader.h>
 #include <bcos-task/Wait.h>
 
 #include <memory>

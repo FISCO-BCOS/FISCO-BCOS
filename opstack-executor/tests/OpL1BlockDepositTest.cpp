@@ -178,7 +178,8 @@ void seedCanonicalL1FeeSlots(ViewT& view)
     };
     bcos::task::syncWait([&]() -> bcos::task::Task<void> {
         bcos::ledger::account::EVMAccount<ViewT> acc(
-            view, bcos::executor_v1::opstack::OP_L1_BLOCK, bcos::ledger::account::AddressTableMode::Hex);
+            view, bcos::executor_v1::opstack::OP_L1_BLOCK,
+            bcos::ledger::account::AddressTableMode::Hex);
         co_await acc.setStorage(slotKey(1), slotVal(c_slot1));
         co_await acc.setStorage(slotKey(3), slotVal(c_slot3));
         co_await acc.setStorage(slotKey(7), slotVal(c_slot7));
@@ -324,7 +325,7 @@ inline OpBlockRunCtx makeRunCtx()
 template <class StorageT>
 opstack_test::opeth::OpEthExecuteBlockResult runOpBlock(StorageT& storage,
     bcos::protocol::BlockHeader const& header, std::vector<bcos::bytes> const& rawTxs,
-    bool jovianActive, uint64_t /*chainId*/, OpBlockRunCtx& /*ctx*/)
+    bool jovianActive, uint64_t /*chainId*/, OpBlockRunCtx& ctx)
 {
     // The production path is Storage-templated over the view; the executor reads
     // whatever the test seeded (L1Block code/slots). Transactions build with the
@@ -372,7 +373,8 @@ BOOST_AUTO_TEST_CASE(L1BlockDepositWritesSlots)
 
     bcos::task::syncWait([&]() -> bcos::task::Task<void> {
         bcos::ledger::account::EVMAccount<ViewType> acc(
-            view, bcos::executor_v1::opstack::OP_L1_BLOCK, bcos::ledger::account::AddressTableMode::Hex);
+            view, bcos::executor_v1::opstack::OP_L1_BLOCK,
+            bcos::ledger::account::AddressTableMode::Hex);
         co_await acc.create();
         co_await acc.setCode(code, /*abi=*/"", codeHash);
         co_await acc.setNonce("1");
@@ -391,7 +393,8 @@ BOOST_AUTO_TEST_CASE(L1BlockDepositWritesSlots)
     // CODE_HASH -> SYS_CODE_BINARY).
     {
         bcos::ledger::account::EVMAccount<ViewType> acc(
-            view, bcos::executor_v1::opstack::OP_L1_BLOCK, bcos::ledger::account::AddressTableMode::Hex);
+            view, bcos::executor_v1::opstack::OP_L1_BLOCK,
+            bcos::ledger::account::AddressTableMode::Hex);
         BOOST_CHECK(bcos::task::syncWait(acc.exists()));
         auto c = bcos::task::syncWait(acc.code());
         BOOST_REQUIRE(c.has_value());
@@ -443,7 +446,8 @@ BOOST_AUTO_TEST_CASE(L1BlockDepositWritesSlots)
     evmc::bytes32 slot1Key{};
     slot1Key.bytes[31] = 0x01;
     bcos::ledger::account::EVMAccount<ViewType> acc(
-        view, bcos::executor_v1::opstack::OP_L1_BLOCK, bcos::ledger::account::AddressTableMode::Hex);
+        view, bcos::executor_v1::opstack::OP_L1_BLOCK,
+            bcos::ledger::account::AddressTableMode::Hex);
     const auto slot1 = bcos::task::syncWait(acc.storage(slot1Key));
     BOOST_TEST_MESSAGE("L1Block slot1 after deposit: 0x"
                        << evmc::hex(evmc::bytes_view(slot1.bytes, sizeof(slot1.bytes))));
@@ -473,7 +477,8 @@ BOOST_AUTO_TEST_CASE(NonZeroL1ParamsAlignWithUnpackOpFeeParams)
     const auto codeHash = keccak256(code);
     bcos::task::syncWait([&]() -> bcos::task::Task<void> {
         bcos::ledger::account::EVMAccount<ViewType> acc(
-            view, bcos::executor_v1::opstack::OP_L1_BLOCK, bcos::ledger::account::AddressTableMode::Hex);
+            view, bcos::executor_v1::opstack::OP_L1_BLOCK,
+            bcos::ledger::account::AddressTableMode::Hex);
         co_await acc.create();
         co_await acc.setCode(code, /*abi=*/"", codeHash);
         co_await acc.setNonce("1");
@@ -511,7 +516,8 @@ BOOST_AUTO_TEST_CASE(NonZeroL1ParamsAlignWithUnpackOpFeeParams)
     expectedSlot8.bytes[31] = 0x0d;
 
     bcos::ledger::account::EVMAccount<ViewType> acc(
-        view, bcos::executor_v1::opstack::OP_L1_BLOCK, bcos::ledger::account::AddressTableMode::Hex);
+        view, bcos::executor_v1::opstack::OP_L1_BLOCK,
+            bcos::ledger::account::AddressTableMode::Hex);
     // Stub L1Block bytecode packs scalars into slot3/8 per unpackOpFeeParams offsets but does not
     // store full uint256 words in slot1/7 — verify the consumer path instead of raw slot equality.
     bcos::evm::evmstate::Storage2State<ViewType> bridge(view);
@@ -551,7 +557,8 @@ BOOST_AUTO_TEST_CASE(DepositWritesFeeParamsReadableByLoadOpFeeParams)
     const auto codeHash = keccak256(code);
     bcos::task::syncWait([&]() -> bcos::task::Task<void> {
         bcos::ledger::account::EVMAccount<ViewType> acc(
-            view, bcos::executor_v1::opstack::OP_L1_BLOCK, bcos::ledger::account::AddressTableMode::Hex);
+            view, bcos::executor_v1::opstack::OP_L1_BLOCK,
+            bcos::ledger::account::AddressTableMode::Hex);
         co_await acc.create();
         co_await acc.setCode(code, /*abi=*/"", codeHash);
         co_await acc.setNonce("1");
@@ -605,7 +612,8 @@ BOOST_AUTO_TEST_CASE(FailedDepositSealsBlockWithFullGasAndBumpedNonce)
     const auto codeHash = keccak256(code);
     bcos::task::syncWait([&]() -> bcos::task::Task<void> {
         bcos::ledger::account::EVMAccount<ViewType> acc(
-            view, bcos::executor_v1::opstack::OP_L1_BLOCK, bcos::ledger::account::AddressTableMode::Hex);
+            view, bcos::executor_v1::opstack::OP_L1_BLOCK,
+            bcos::ledger::account::AddressTableMode::Hex);
         co_await acc.create();
         co_await acc.setCode(code, /*abi=*/"", codeHash);
         co_await acc.setNonce("1");
@@ -639,7 +647,8 @@ BOOST_AUTO_TEST_CASE(FailedDepositSealsBlockWithFullGasAndBumpedNonce)
 
     // Regolith: the depositor's nonce is force-incremented despite the failure.
     bcos::ledger::account::EVMAccount<ViewType> acc(
-        view, bcos::executor_v1::opstack::OP_DEPOSITOR, bcos::ledger::account::AddressTableMode::Hex);
+        view, bcos::executor_v1::opstack::OP_DEPOSITOR,
+            bcos::ledger::account::AddressTableMode::Hex);
     const auto nonce = bcos::task::syncWait(acc.nonce());
     BOOST_REQUIRE(nonce.has_value());
     BOOST_CHECK_EQUAL(*nonce, std::string{"1"});
@@ -710,7 +719,8 @@ struct JovianShapeFixture
     // timestampMillis keeps the historical contract of the retired OpForkTimestamps
     // {isthmusTime=1000, jovianTime=2000} wiring: >= 2'000'000 ms → Jovian config,
     // below → Isthmus (the feature-flag variant on this line, see runOpBlock).
-    opstack_test::opeth::OpEthExecuteBlockResult run(std::vector<bcos::bytes> rawTxs, int64_t timestampMillis)
+    opstack_test::opeth::OpEthExecuteBlockResult run(std::vector<bcos::bytes> rawTxs,
+        int64_t timestampMillis)
     {
         auto header = makeOpHeader(1, timestampMillis);
         return runOpBlock(view, *header, rawTxs,
@@ -1000,7 +1010,8 @@ BOOST_AUTO_TEST_CASE(WithdrawTxWritesMessagePasserAndChangesRoot)
 
     bcos::task::syncWait([&]() -> bcos::task::Task<void> {
         bcos::ledger::account::EVMAccount<ViewType> l1(
-            view, bcos::executor_v1::opstack::OP_L1_BLOCK, bcos::ledger::account::AddressTableMode::Hex);
+            view, bcos::executor_v1::opstack::OP_L1_BLOCK,
+            bcos::ledger::account::AddressTableMode::Hex);
         co_await l1.create();
         co_await l1.setCode(l1Code, /*abi=*/"", l1CodeHash);
         co_await l1.setNonce("1");

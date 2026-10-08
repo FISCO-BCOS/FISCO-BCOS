@@ -62,6 +62,7 @@ add_executable(opstack-executor-block-tests
     OpMismatchedFieldTest.cpp
     OpNewPayloadRpcE2eTest.cpp
     OpBlockInjectorTest.cpp
+    OpEngineBranchSmokeTest.cpp
     OpT8nReplayTest.cpp
     support/GoldenSampleTest.cpp
     support/KarstNutHelpers.cpp

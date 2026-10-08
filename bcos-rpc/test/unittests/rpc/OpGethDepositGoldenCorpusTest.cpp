@@ -81,12 +81,21 @@ BOOST_AUTO_TEST_CASE(EveryGoldenParsesAndPinsTheParityContracts)
         BOOST_CHECK_MESSAGE(tx["type"].asString() == "0x7e", stem << ": not a deposit tx");
 
         // Receipt side: status present, transactionHash matches the tx hash, and the
-        // Ecotone-era goldens carry depositReceiptVersion/depositNonce (which is why
-        // no l1FeeScalar appears — that field is Bedrock-era only upstream).
+        // deposit nonce is always present. depositReceiptVersion is era-gated (Canyon+):
+        // pre-Canyon goldens legitimately carry nonce ONLY (the presence-of-version rule
+        // encodeReceiptLeaf implements) — assert both shapes positively.
         BOOST_CHECK(receipt.isMember("status"));
         BOOST_CHECK_EQUAL(receipt["transactionHash"].asString(), tx["hash"].asString());
         BOOST_CHECK(receipt.isMember("depositNonce"));
-        BOOST_CHECK(receipt.isMember("depositReceiptVersion"));
+        if (stem.find("pre-canyon") != std::string::npos)
+        {
+            BOOST_CHECK_MESSAGE(!receipt.isMember("depositReceiptVersion"),
+                stem << ": pre-Canyon golden unexpectedly carries depositReceiptVersion");
+        }
+        else
+        {
+            BOOST_CHECK(receipt.isMember("depositReceiptVersion"));
+        }
         BOOST_CHECK_MESSAGE(!receipt.isMember("l1FeeScalar"),
             stem << ": Ecotone-era golden unexpectedly carries l1FeeScalar");
     }

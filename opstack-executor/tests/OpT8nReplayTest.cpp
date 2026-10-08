@@ -1204,8 +1204,12 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
         evmcToH256(bc.hashes.parentHash));
 
     const auto spec = opeth::opForkSpec(cfg->fork);
-    auto executed = opstack_test::runSharedPath(
-        storage, *header, bc.rawTxBytes, transactions, spec);
+    opeth::OpEthExecuteBlockResult executed;
+    try
+    {
+        executed = opstack_test::runSharedPath(
+            storage, *header, bc.rawTxBytes, transactions, spec);
+    }
     catch (const std::exception& e)
     {
         BOOST_ERROR(id << ": production path threw block-level error: " << e.what());

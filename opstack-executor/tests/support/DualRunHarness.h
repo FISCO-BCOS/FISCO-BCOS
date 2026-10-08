@@ -133,6 +133,17 @@ inline bcos::protocol::Transaction::Ptr buildFiscoTx(
     return tx;
 }
 
+/// Envelope → tars transaction for the suites that hold the pre-cutover helper name.
+/// buildFiscoTxFromEnvelope is the same envelope bridge buildFiscoTx provides; the alias
+/// exists so the ported suites (OpT8nReplayTest, OpBlockInjectorTest) call one shared
+/// definition instead of each keeping a private copy.
+inline bcos::protocol::Transaction::Ptr buildFiscoTxFromEnvelope(
+    bcos::bytes const& env, bcos::crypto::Hash::Ptr const& hashImpl)
+{
+    return buildFiscoTx(env, hashImpl);
+}
+
+
 /// Production-scheduler driver (the shape OpScheduler::execute and
 /// OpBlockVerifier::verifyAndCommit run): preBlockOpEthSteps ->
 /// SchedulerSerialImpl(serial=true) over OpEthExecutor -> finalizeOpEthBlockResult with the
