@@ -1336,11 +1336,16 @@ task::Task<void> EthEndpoint::call(
         // stay under MAX_TX_GAS_LIMIT. On pre-Osaka revisions, pre-Karst OP chains, and
         // the legacy FISCO lane (block gas up to 3e9) there is no such ceiling, and
         // clamping there would fail estimates for transactions the chain admits fine.
+        // An UNREADABLE header passes nullopt (not 0 — that is a valid instant) so the
+        // OP arm fails closed and clamps instead of guessing "pre-Karst".
+        std::optional<uint64_t> targetTimestampSeconds;
+        if (block)
+        {
+            targetTimestampSeconds = bcos::engine::unixSecondsFromInternalMillis(
+                static_cast<uint64_t>(block->blockHeader()->timestamp()));
+        }
         if (auto const ledgerConfig = co_await ledger::getLedgerConfig(*ledger);
-            eip7825InForceAt(*ledgerConfig, blockNumber,
-                block ? bcos::engine::unixSecondsFromInternalMillis(
-                            static_cast<uint64_t>(block->blockHeader()->timestamp())) :
-                        0))
+            eip7825InForceAt(*ledgerConfig, blockNumber, targetTimestampSeconds))
         {
             if (chainBlockGasLimit.has_value())
             {

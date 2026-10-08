@@ -23,6 +23,8 @@
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/ledger/SystemConfigs.h>
 #include <bcos-framework/protocol/BlockHeader.h>
+
+#include <optional>
 #include <bcos-ledger/LedgerMethods.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rpc/jsonrpc/Common.h>
@@ -63,14 +65,25 @@ inline bool isOpStackLane(int executorVersion)
 /// 3e9) — there is no per-tx ceiling, so an estimate budget must NOT be clamped to 2^24:
 /// a transaction consuming between 2^24 and the block limit is admissible there and its
 /// estimate must not fail (M1).
+///
+/// Fail-closed on an UNKNOWN target timestamp (nullopt: unreadable/pruned header): 0 is
+/// a valid instant, so feeding `block ? ts : 0` here read "unknown" as "pre-Karst" and
+/// let an explicit gas up to the block cap slip the clamp on a Karst chain — the exact
+/// lie this gate exists to prevent. Over-clamping a pre-Karst estimate when its header
+/// cannot be read is recoverable (retry with a smaller gas); an unclamped over-cap
+/// estimate is not, so unknown timestamps clamp.
 [[nodiscard]] inline bool eip7825InForceAt(bcos::ledger::LedgerConfig const& ledgerConfig,
-    bcos::protocol::BlockNumber targetBlock, uint64_t targetTimestampSeconds)
+    bcos::protocol::BlockNumber targetBlock, std::optional<uint64_t> targetTimestampSeconds)
 {
     if (isOpStackLane(ledgerConfig.executorVersion()))
     {
+        if (!targetTimestampSeconds.has_value())
+        {
+            return true;
+        }
         const auto& schedule = ledgerConfig.opForkSchedule();
         return schedule.has_value() && schedule->m_karstTime != bcos::ledger::c_opForkTimeUnset &&
-               targetTimestampSeconds >= schedule->m_karstTime;
+               *targetTimestampSeconds >= schedule->m_karstTime;
     }
     if (usesEthereumFeeSemantics(ledgerConfig.executorVersion()))
     {

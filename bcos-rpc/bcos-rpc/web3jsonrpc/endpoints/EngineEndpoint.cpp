@@ -413,7 +413,7 @@ task::Task<void> EngineEndpoint::handleNewPayload(
     // (-32602) while another payload is in flight; the latch below only bounds execution.
     auto newPayloadReq = parseNewPayloadRequest(request, version);
 
-    // One in-flight newPayload regardless of method version (review KB5): V2/V3 carry the
+    // One in-flight newPayload regardless of method version: V2/V3 carry the
     // Regolith..Holocene OP payloads — and post-merge Eth payloads — through the same
     // execute/commit plane as V4, so they need the same one-in-flight bound; a second
     // concurrent call answers SYNCING.
