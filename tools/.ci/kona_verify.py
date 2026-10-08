@@ -272,9 +272,20 @@ def main():
         env.setdefault(
             "RUST_LOG",
             "kona_derive=info,single_hint_handler=info,host_backend=info,l1_traversal=info")
-        result = subprocess.run(cmd, env=env)
-        beacon_server.shutdown()
-        proxy_proc.terminate()
+        # Native replay finishes in seconds; a hint-prefetch stall or derive retry loop can
+        # hang forever, so bound it well above the normal case (900s) and treat a timeout as
+        # a verification failure rather than letting the CI job-level timeout (45min) kill it.
+        # The finally block guarantees the beacon mock and the L1 debug proxy are torn down on
+        # every path (success, non-zero, or timeout) instead of leaking until CI VM recycle.
+        try:
+            result = subprocess.run(cmd, env=env, timeout=900)
+        except subprocess.TimeoutExpired:
+            print("[kona-verify] FAIL: kona-host did not finish within 900s "
+                  "(hint-prefetch stall or derive retry loop)")
+            return 1
+        finally:
+            beacon_server.shutdown()
+            proxy_proc.terminate()
         if result.returncode != 0:
             print("[kona-verify] FAIL: kona's independent derivation did not "
                   "reproduce FISCO's claimed output root")

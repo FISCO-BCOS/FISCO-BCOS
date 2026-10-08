@@ -103,6 +103,14 @@ task::Task<void> DebugEndpoint::dbGet(const Json::Value& request, Json::Value& r
         }
         preimage = *node;
     }
+    else if (rawKey.size() == c_codeKeySize)
+    {
+        // 33 bytes but the leading byte is not 'c': the length is right but the form is not
+        // the "c"+codeHash this endpoint understands. Call it out distinctly from a plain
+        // length mismatch so the caller can tell the prefix apart from the size.
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,
+            "debug_dbGet key must be a 32-byte node hash or the 33-byte \"c\"+codeHash form"));
+    }
     else
     {
         BOOST_THROW_EXCEPTION(
