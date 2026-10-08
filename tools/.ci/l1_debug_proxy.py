@@ -128,7 +128,10 @@ class L1Proxy:
     def rpc(self, method, params):
         return self.forward({"jsonrpc": "2.0", "method": method, "params": params, "id": 1})
 
-    def handle(self, payload):
+    def _handle_one(self, payload):
+        if not isinstance(payload, dict):
+            return {"jsonrpc": "2.0", "id": None,
+                    "error": {"code": -32600, "message": "Invalid Request"}}
         method = payload.get("method")
         params = payload.get("params", [])
 
@@ -150,6 +153,14 @@ class L1Proxy:
 
         # Everything else: transparent passthrough.
         return self.forward(payload)
+
+    def handle(self, payload):
+        # JSON-RPC batch: dispatch per item — debug_* methods are answered here, the rest
+        # transparently forwarded — so an array body does not crash the handler thread
+        # (payload.get on a list would raise AttributeError and drop the connection).
+        if isinstance(payload, list):
+            return [self._handle_one(item) for item in payload]
+        return self._handle_one(payload)
 
 
 def make_handler(proxy):

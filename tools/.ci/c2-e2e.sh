@@ -185,4 +185,14 @@ XDM="$XDM" \
 KONA_VERIFY="$KONA_VERIFY" \
 KONA_HOST="$BIN_DIR/kona-host" \
 KONA_VERIFY_SCRIPT="${REPO_ROOT}/tools/.ci/kona_verify.py" \
-bash "${OP_E2E_DIR}/tools/op-e2e/withdraw_e2e_ephemeral.sh"
+bash "${OP_E2E_DIR}/tools/op-e2e/withdraw_e2e_ephemeral.sh" 2>&1 | tee /tmp/c2-e2e.log
+
+# Regression guard against the "silently green" failure mode: if the harness pin is
+# stale (its withdraw_e2e_ephemeral.sh does not consume KONA_VERIFY), the kona leg is
+# skipped without any error and the suite still exits 0. Assert the kona verification
+# actually ran by requiring its PASS marker in the harness output. Only enforced when
+# KONA_VERIFY=1 (the per-PR and nightly/manual legs), where the marker is mandatory.
+if [[ "$KONA_VERIFY" == "1" ]]; then
+  grep -q "\[kona-verify\] PASS" /tmp/c2-e2e.log \
+    || die "kona verification did not produce a PASS marker (stale harness pin?)"
+fi

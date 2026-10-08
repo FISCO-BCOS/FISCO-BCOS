@@ -1,18 +1,19 @@
 name: C2 OP e2e (manual + nightly full run)
-# Per-PR coverage comes from workflow.yml → c2_e2e (smoke: CONTEST=0, reuses the
-# l2_unit_suites artifact). This workflow is the full run — it builds fisco-bcos from
-# scratch — and is triggered manually or nightly.
+# Per-PR coverage comes from workflow.yml → c2_e2e, which now runs the FULL
+# adversarial + kona depth (CONTEST=1, KONA_VERIFY=1) reusing the l2_unit_suites
+# artifact. This workflow is the full run — it builds fisco-bcos from scratch — and
+# is triggered manually or nightly.
 on:
   workflow_dispatch:
     inputs:
       contest:
-        description: "Run adversarial dispute scenarios (1=yes, 0=smoke only)"
+        description: "Run adversarial dispute scenarios (1=yes, 0=skip dispute scenarios)"
         required: false
         default: "1"
         type: choice
         options: ["1", "0"]
-  # Nightly full run: CONTEST=1 (adversarial dispute scenarios). The per-PR leg in
-  # workflow.yml runs the smoke variant instead.
+  # Nightly full run: CONTEST=1 (adversarial dispute scenarios + kona native replay).
+  # The per-PR leg in workflow.yml runs the same CONTEST=1 + kona depth.
   schedule:
     - cron: "0 18 * * *"
 
@@ -46,10 +47,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: FISCO-BCOS/op-stack-e2e-tests
-          # The --legacy L2 pricing this node needs (its method set has no eth_feeHistory) landed in
-          # FISCO-BCOS/op-stack-e2e-tests#2; this is that PR's merge commit, on the harness's
-          # default branch, so the pin is a stable revision rather than a PR branch tip.
-          ref: 0451c8bf3601c502a36be4633c0e2f4cc38e9c9b
+          # Pinned at the merge commit of FISCO-BCOS/op-stack-e2e-tests#7 (kona native
+          # fault-proof replay phase 3.6). This is the version whose
+          # withdraw_e2e_ephemeral.sh consumes KONA_VERIFY/KONA_HOST/KONA_VERIFY_SCRIPT —
+          # an earlier pin would silently skip the kona leg.
+          ref: ae542cda988a444a0d27da34e67b649963c35d27
           path: .ci-op-e2e-tests
 
       - name: Initialize vcpkg submodule
