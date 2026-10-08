@@ -29,5 +29,4 @@ namespace opstack_test
 
 [[nodiscard]] bcos::ledger::OpForkSchedule isthmusThenJovian(uint64_t jovianTs);
 
-[[nodiscard]] bcos::ledger::OpForkSchedule legacySchedule(bool jovianActive);
 }  // namespace opstack_test

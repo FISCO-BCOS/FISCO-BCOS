@@ -309,7 +309,6 @@ BOOST_AUTO_TEST_CASE(FirstDepositNotL1AttributesAccepted)
         .data = {},
     };
     auto normFisco = buildEip1559FiscoTx();
-    std::vector<op::DepositTx> deposits{nonAttrDep};
     bcos::bytes depEnv = opstack_test::opeth::encodeOpEthDepositEnvelope(nonAttrDep);
     auto const normRef = normFisco->extraTransactionBytes();
     bcos::bytes normEnv(normRef.begin(), normRef.end());

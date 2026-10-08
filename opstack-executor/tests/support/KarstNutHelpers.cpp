@@ -36,13 +36,6 @@ bcos::ledger::OpForkSchedule isthmusThenJovian(uint64_t jovianTs)
     return schedule;
 }
 
-bcos::ledger::OpForkSchedule legacySchedule(bool jovianActive)
-{
-    bcos::ledger::OpForkSchedule schedule;
-    if (jovianActive)
-    {
-        schedule.m_jovianTime = 1;
-    }
     return schedule;
 }
 }  // namespace opstack_test
