@@ -2298,9 +2298,11 @@ bool Ledger::buildGenesisBlock(
         // The resolved schedule also rides SYS_CONFIG so every getLedgerConfig snapshot —
         // the RPC estimate gas-cap gate (M1) among them — keys fork activation on the
         // chain's own schedule in every deployment. The SYS_CHAIN_METADATA triple is the
-        // integrity-bound copy the Initializer resolves at boot and is not reachable
-        // through LedgerInterface. Both declaration channels land here: the canonical
-        // section verbatim, the [op_fork_timestamps] shorthand folded by the same rule
+        // integrity-bound copy the Initializer's boot probe validates (absent = legal;
+        // partial/corrupt/mis-bound = startup refusal). Both declaration channels land
+        // here with the NORMALIZED canonical (buildOpForkScheduleMetadata re-parses and
+        // normalizes, so "0:Isthmus" persists as "0:isthmus"): the canonical section
+        // and the [op_fork_timestamps] shorthand folded by the same rule
         // (foldOpForkShorthand) the executor applies.
         std::optional<std::string> resolvedOpSchedule;
         if (genesis.m_opstackForkSchedule.has_value())
@@ -2312,8 +2314,16 @@ bool Ledger::buildGenesisBlock(
         }
         else if (genesis.m_opForkSchedule.has_value())
         {
-            resolvedOpSchedule = canonicalOpForkSchedule(foldOpForkShorthand(
-                genesis.m_opForkSchedule->m_jovianTime, genesis.m_opForkSchedule->m_karstTime));
+            // Same integrity triple for the shorthand channel: fold first, then bind the
+            // NORMALIZED canonical (both channels persist identical triples; a chain
+            // declared via [op_fork_timestamps] must not lack the integrity-bound copy).
+            const auto metadata =
+                buildOpForkScheduleMetadata(canonicalOpForkSchedule(foldOpForkShorthand(
+                                               genesis.m_opForkSchedule->m_jovianTime,
+                                               genesis.m_opForkSchedule->m_karstTime)),
+                    header->hash());
+            co_await writeOpForkScheduleMetadata(*m_stateStorage, metadata);
+            resolvedOpSchedule = metadata.schedule;
         }
         if (resolvedOpSchedule.has_value())
         {

@@ -25,6 +25,7 @@
  */
 
 #include "Initializer.h"
+#include <bcos-framework/ledger/ChainMetadata.h>
 #include "AuthInitializer.h"
 #include "BfsInitializer.h"
 #include "EngineServiceInitializer.h"
@@ -883,6 +884,28 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             // opForkScheduleFromCanonical throws ledger::InvalidOpForkSchedule on a
             // malformed canonical row — the exact parse applyLedgerConfig performs.
             (void)ledger::opForkScheduleFromCanonical(std::get<0>(*row));
+        }
+        // SYS_CHAIN_METADATA integrity triple: absent is legal (pre-triple chain);
+        // PRESENT-but-partial/corrupt/mis-bound is an explicit startup refusal — the
+        // triple exists precisely so a tampered schedule cannot survive unnoticed.
+        if (auto stateStorage = m_ledger->getStateStorage())
+        {
+            auto rows = task::syncWait(ledger::readOpForkScheduleMetadataRows(*stateStorage));
+            if (!ledger::opForkScheduleMetadataRowsAbsent(rows))
+            {
+                auto const& genesisHeader = m_nodeConfig->genesisConfig().m_ethGenesisHeader;
+                if (!genesisHeader.has_value())
+                {
+                    BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig()
+                                          << bcos::errinfo_comment(
+                                              "SYS_CHAIN_METADATA triple is present but the "
+                                              "node config carries no [eth_genesis_header] to "
+                                              "validate its genesis binding against"));
+                }
+                // Throws ledger::InvalidOpForkSchedule on partial triple, hash mismatch
+                // or genesis-binding mismatch.
+                (void)ledger::validateOpForkScheduleMetadataRows(rows, genesisHeader->m_hash);
+            }
         }
     }
 
