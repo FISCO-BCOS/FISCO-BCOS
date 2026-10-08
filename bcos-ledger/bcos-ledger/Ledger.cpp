@@ -1839,21 +1839,30 @@ bool Ledger::buildGenesisBlock(
             // tx / nodes, but NOT the allocs. The allocs are pinned by the
             // genesis block's stateRoot (set to ethStateRoot on first init); a
             // config change to any alloc changes that root, so compare the
-            // stored header's stateRoot against the freshly derived one.
-            if (existsGenesisData == genesisData && !genesis.m_allocs.empty() &&
-                genesisBlockHeader->stateRoot() != ethStateTrie.root)
+            // stored header's stateRoot against the freshly derived one. An
+            // empty-alloc Ethereum-lane genesis pins the canonical empty-trie
+            // root instead (buildGenesisBlock publishes mpt::emptyRootHash()
+            // for it), so a non-empty -> empty alloc drift is caught too.
+            // Legacy (non-Ethereum-lane) chains carry no allocs and leave the
+            // genesis stateRoot zero — the comparison does not apply to them.
+            bool const ethLaneRestart =
+                genesis.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION;
+            auto const expectedGenesisRoot =
+                genesis.m_allocs.empty() ? mpt::emptyRootHash() : ethStateTrie.root;
+            if (existsGenesisData == genesisData && ethLaneRestart &&
+                genesisBlockHeader->stateRoot() != expectedGenesisRoot)
             {
                 LEDGER_LOG(FATAL) << LOG_BADGE("buildGenesisBlock")
                                   << LOG_DESC("genesis allocs changed since first init")
                                   << LOG_KV(
                                          "storedStateRoot", genesisBlockHeader->stateRoot().hex())
-                                  << LOG_KV("computedStateRoot", ethStateTrie.root.hex());
+                                  << LOG_KV("computedStateRoot", expectedGenesisRoot.hex());
                 BOOST_THROW_EXCEPTION(
                     bcos::tool::InvalidConfig() << errinfo_comment(
                         "genesis allocs changed since first init (op-geth state root mismatch); "
                         "refuse to start. stored=" +
                         genesisBlockHeader->stateRoot().hex() +
-                        " computed=" + ethStateTrie.root.hex()));
+                        " computed=" + expectedGenesisRoot.hex()));
             }
 
             if (existsGenesisData == genesisData)
@@ -2001,8 +2010,10 @@ bool Ledger::buildGenesisBlock(
         }
         else if (ethLane)
         {
-            // Empty-alloc Ethereum-lane genesis: NodeConfig::validateL2Invariants rejects this
-            // combination, but buildGenesisBlock is callable directly. Publish the
+            // Empty-alloc Ethereum-lane genesis: legal on the L1 EL lane
+            // ([ethereum] mode=el — validateL2Invariants exempts it); the L2/OP
+            // lanes still reject this combination, but buildGenesisBlock is
+            // callable directly. Publish the
             // canonical empty-trie root instead of a zero h256 — commitTrie()
             // recognizes only emptyRootHash() as the from-empty marker
             // (mpt/HashBuilder.h), so a zero parent root would send block 1's

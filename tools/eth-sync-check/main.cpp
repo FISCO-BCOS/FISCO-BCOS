@@ -616,13 +616,11 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
             throw std::runtime_error("cannot parse genesis.json: " +
                                      reader.getFormattedErrorMessages());
         }
-        if (!root.isMember("alloc") || !root["alloc"].isObject() || root["alloc"].empty())
-        {
-            // validateL2Invariants rejects an executor-v2 genesis without allocs.
-            throw std::runtime_error(
-                "genesis.json has no (or an empty) alloc — executor version 2 requires a "
-                "non-empty [alloc.*] section");
-        }
+        // An empty (or absent) alloc is a valid EL-mode genesis: the alloc loop
+        // below emits no [alloc.*] sections and computeGenesisStateTrie returns
+        // the canonical empty-trie root, matching geth's empty-alloc stateRoot.
+        // (NodeConfig::validateL2Invariants exempts [ethereum] mode=el from the
+        // non-empty-alloc invariant; the L2/OP lanes still require allocs.)
         if (!root.isMember("config") || !root["config"].isObject())
         {
             throw std::runtime_error("genesis.json is missing the config object");

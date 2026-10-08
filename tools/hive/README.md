@@ -53,19 +53,23 @@ eels rows were rerun after the ethBlockVersion and fork-field-presence fixes:
 - `smoke/network`: **2/2 pass** (container starts, TCP 8545 reachable).
 - `smoke/genesis`: **4/6 pass** — genesis hash matches the geth-computed
   expectation byte-exactly for the non-empty-alloc cases. The two failures
-  ("empty genesis", "all forks") both use an empty-alloc genesis and are
-  rejected by the EL non-empty-alloc invariant (see limitations).
+  ("empty genesis", "all forks") inject `genesis-empty.json` (no `config`
+  section, `gasLimit: 1`, no London) — a pre-London genesis — and "all forks"
+  additionally sets `HIVE_TERMINAL_TOTAL_DIFFICULTY=24` (a PoW phase). Both
+  are the pre-London limitation below, previously masked by the empty-alloc
+  rejection firing first.
 - `ethereum/eels/consume-rlp` (EEST fixtures v5.4.0, staged locally):
   - `.*mcopy.*` **186/186 pass** (Cancun + Prague, incl.
     `blockchain_test_from_state_test`).
   - Prague `.*(eip7702|eip2935).*` **628/628 pass**
     (`--client.checktimelimit 15m`; the `many_delegations` fixtures import a
     single block in ~9 min under the Debug+ASan build).
-  - `.*(eip4895_withdrawals|eip6780_selfdestruct|eip1153_tstore).*` **791/794
+  - `.*(eip4895_withdrawals|eip6780_selfdestruct|eip1153_tstore).*` **794/794
     pass** — all 22 `fork_Paris` selfdestruct cases pass after the
-    ethBlockVersion stamping fix; the 3 remaining failures
-    (`test_large_amount`, `test_multiple_withdrawals_same_address` ×2) ship an
-    empty-alloc genesis (known limitation).
+    ethBlockVersion stamping fix; the 3 former failures (`test_large_amount`,
+    `test_multiple_withdrawals_same_address` ×2, empty-alloc Shanghai
+    fixtures) pass after the empty-alloc fix below — verified by a targeted
+    rerun of both fixture files (9/9 pass, incl. Cancun/Prague variants).
   - `.*eip4844_blobs.*` **4408/4408 pass** — incl. the
     `invalid_pre_fork_block_with_blob_fields` fork-transition variants, fixed
     by the symmetric fork-field-presence check in `EthPoSHeaderValidation.h`.
@@ -112,10 +116,13 @@ The entrypoint:
   starts before London — including the current `ethereum/rpc-compat` fixture
   chain (londonBlock=27, TTD>0, merge at block 36) — cannot be imported yet.
   `--genesis2ini` rejects `terminalTotalDifficulty > 0` loudly for now.
-- **Empty alloc**: the EL lane requires a non-empty `[alloc.*]` section, so the
-  `smoke/genesis` cases with `alloc: {}` ("empty genesis", "all forks") are
-  rejected by `--genesis2ini`. Relaxing `NodeConfig::validateL2Invariants` for
-  this is a pending decision.
+- ~~**Empty alloc**~~ (fixed): `NodeConfig::validateL2Invariants` now exempts the
+  L1 EL lane (`[ethereum] mode=el`) from the non-empty-alloc invariant — an
+  empty-alloc genesis publishes the canonical empty-trie root as its stateRoot
+  (`Ledger::buildGenesisBlock`, matching geth byte-exactly) — and
+  `--genesis2ini` converts an `alloc: {}` genesis instead of rejecting it. The
+  L2/OP lanes still require allocs (the SystemConfig predeploy's feature_flags
+  slot travels in them).
 - `engine_forkchoiceUpdatedV4` (Osaka) is not implemented yet.
 - ~~**EthBlockVersion stamping**~~ (fixed): `makeExecutionBlockHeader`
   (EthereumBlockVerifier.h) previously never called `setEthBlockVersion`, so

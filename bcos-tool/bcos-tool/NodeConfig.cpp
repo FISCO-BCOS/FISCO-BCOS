@@ -527,11 +527,17 @@ void NodeConfig::validateL2Invariants()
     // ETHEREUM_EXECUTOR_VERSION; there is no separate chain_mode or feature flag.
     // allocs and the lane must agree.
     bool const ethLane = genesis.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION;
-    if (ethLane && genesis.m_allocs.empty())
+    // An empty alloc set is legal only on the L1 EL lane ([ethereum] mode=el): its genesis
+    // stateRoot is the canonical empty-trie root (Ledger::buildGenesisBlock publishes
+    // mpt::emptyRootHash() and block 1's MPT build starts from it), which is a valid
+    // Ethereum genesis (hive smoke/genesis, several EEST fixtures). The L2/OP lanes still
+    // require allocs — the SystemConfig predeploy's feature_flags slot travels in them.
+    if (ethLane && genesis.m_allocs.empty() && !genesis.m_ethereumELMode)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "executor.version >= 2 (the Ethereum lane) requires a "
-                                  "non-empty [alloc.*] section in config.genesis"));
+                                  "non-empty [alloc.*] section in config.genesis (only "
+                                  "[ethereum] mode=el may run an empty-alloc genesis)"));
     }
     if (!ethLane && !genesis.m_allocs.empty())
     {
