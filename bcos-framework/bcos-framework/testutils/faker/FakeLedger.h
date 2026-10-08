@@ -245,6 +245,19 @@ public:
         updateLedgerConfig(latestBlock->blockHeader());
     }
 
+    /// Test-only: inject an already-built block header (e.g. an Eth-shaped header whose hash is
+    /// the RLP hash, as debug_getRawHeader expects) and register its hash->number mapping so
+    /// hash-based lookups resolve to it. The header must already carry its final hash.
+    void injectBlock(BlockHeader::Ptr _header)
+    {
+        auto block = m_blockFactory->createBlock();
+        block->setBlockHeader(_header);
+        WriteGuard l(x_ledger);
+        m_ledger.push_back(block);
+        m_hash2Block[_header->hash()] = _header->number();
+        updateLedgerConfig(_header);
+    }
+
     Block::Ptr populateFromHeader(BlockHeader::Ptr _blockHeader)
     {
         auto block = m_blockFactory->createBlock();
@@ -578,6 +591,13 @@ public:
         const std::string tableName =
             std::string(bcos::ledger::SYS_DIRECTORY::USER_APPS) + _address;
         fakeStorageEntryMaps[tableName][_key] = std::move(_data);
+    }
+
+    /// Test-only: write a state-storage entry directly by table name, so debug_dbGet's
+    /// content-addressed code read (table SYS_CODE_BINARY) can be seeded without an account.
+    void setStateStorageEntry(std::string _table, std::string _key, storage::Entry _entry)
+    {
+        fakeStorageEntryMaps[std::move(_table)][std::move(_key)] = std::move(_entry);
     }
 
     void setFeatures(bcos::ledger::Features _features) { m_features = _features; }

@@ -102,6 +102,11 @@ jobs:
             | sudo bash -s -- --to /usr/local/bin
           just --version
 
+      # kona-host / kona-client (rust/kona) are built with cargo for the native replay
+      # verification leg. KONA_VERIFY=1 is the default; the per-PR smoke leg may disable it.
+      - name: Set up Rust (kona build)
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Read OP monorepo pin
         id: op-pin
         run: |
@@ -145,6 +150,9 @@ jobs:
           cp .ci-op-monorepo/op-deployer/bin/op-deployer "$GITHUB_WORKSPACE/.ci-c2-bins/op-deployer"
           (cd .ci-op-monorepo && go build -o "$GITHUB_WORKSPACE/.ci-c2-bins/op-batcher" ./op-batcher/cmd)
           (cd .ci-op-monorepo && go build -o "$GITHUB_WORKSPACE/.ci-c2-bins/op-node" ./op-node/cmd)
+          (cd .ci-op-monorepo/rust && cargo build --release -p kona-host -p kona-client)
+          cp .ci-op-monorepo/rust/target/release/kona-host "$GITHUB_WORKSPACE/.ci-c2-bins/kona-host"
+          cp .ci-op-monorepo/rust/target/release/kona-client "$GITHUB_WORKSPACE/.ci-c2-bins/kona-client"
 
       - name: Configure FISCO (WITH_L2_CONTRACTS=ON)
         run: |
@@ -167,7 +175,7 @@ jobs:
         working-directory: bcos-l2-contracts
 
       - name: Run C2 ephemeral e2e
-        run: SKIP_OP_BUILD=1 bash tools/.ci/c2-e2e.sh
+        run: SKIP_OP_BUILD=1 SKIP_KONA_BUILD=1 bash tools/.ci/c2-e2e.sh
         env:
           REPO_ROOT: ${{ github.workspace }}
           BIN_DIR: ${{ github.workspace }}/.ci-c2-bins
