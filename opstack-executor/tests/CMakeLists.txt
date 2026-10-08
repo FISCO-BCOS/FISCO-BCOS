@@ -90,7 +90,9 @@ add_test(NAME OpstackExecutorBlockTests COMMAND opstack-executor-block-tests)
 # The known_divergence rows are skipped+counted inside the runner (DIVERGENCES.md).
 add_executable(opstack-da-matrix-runner EXCLUDE_FROM_ALL da-matrix/run_fisco.cpp)
 target_include_directories(opstack-da-matrix-runner PRIVATE ${CMAKE_SOURCE_DIR})
-target_link_libraries(opstack-da-matrix-runner PRIVATE bcos-evm jsoncpp_static)
+target_link_libraries(opstack-da-matrix-runner PRIVATE
+    opstack-executor  # OpFeeParams/OpRollupCost/OpForkSpec (the post-cutover home)
+    jsoncpp_static)
 
 # The differential gate: run the runner in --check mode against the COMMITTED goldens
 # (all four ends must agree except registered known_divergence rows). Wired so the
