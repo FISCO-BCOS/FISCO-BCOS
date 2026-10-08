@@ -36,7 +36,15 @@ std::string opSectionBody(std::string_view section)
 {
     if (section == "op_fork_timestamps")
     {
-        return "jovian_time=0\n";
+        // jovian_time requires isthmus_time (NodeConfig's parse-level guard: a scheduled
+        // rung without the isthmus baseline throws before the lane matrix sees it).
+        return "isthmus_time=0\njovian_time=0\n";
+    }
+    if (section == "op_fork_schedule")
+    {
+        // [op_fork_schedule].canonical is required (loadOpForkSchedule) — an empty section
+        // leaves the presence hook unset and the rule never fires.
+        return "canonical=0:isthmus\n";
     }
     if (section == "op_eip1559")
     {
