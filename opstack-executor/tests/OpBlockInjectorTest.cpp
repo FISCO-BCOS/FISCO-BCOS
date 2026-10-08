@@ -4,7 +4,7 @@
 // OpBlockInjectorTest — drives the shared block-execution path (preBlockOpEthSteps →
 // SchedulerSerialImpl(serial=true) → finalizeOpEthBlockResult) over a plain MutableStorage
 // fixture (the path is Storage templates, so no MLS is needed). A minimal "L1 attributes deposit + eip1559" block verifies:
-//   (1) the system-call BlockInfo's gas_limit == header.gasLimit (toBlockInfo, trivially true);
+//   (1) the system-call BlockInfo's gas_limit == header.gasLimit (buildOpEthBlockInfo, trivially true);
 //   (2) receipt count == tx count;
 //   (3) the block-level gasUsed == manual Σ per-receipt gasUsed.
 // Plus: preBlockOpEthSteps rejects an empty block with OpConsensusError (the retired injector's
@@ -14,11 +14,11 @@
 
 #include "support/DualRunHarness.h"
 #include <opstack-executor/OpEthBlockExecute.h>
+#include <opstack-executor/OpEthL1Attributes.h>  // encodeOpEthDepositEnvelope
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-evm/opstack/OpForkSchedule.h>
-#include <bcos-evm/opstack/OpPredeploys.h>
+#include <bcos-framework/ledger/OpForkSchedule.h>
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
@@ -51,19 +51,8 @@ constexpr uint64_t kChainId = 0x2105;
 constexpr int64_t kHeaderGasLimit = 30'000'000;
 const bcos::Address kSender{"0x1000000000000000000000000000000000000000"};
 
-bcos::crypto::CryptoSuite::Ptr makeCryptoSuite()
-{
-    return std::make_shared<bcos::crypto::CryptoSuite>(
-        std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr);
-}
-
-bcos::protocol::TransactionReceiptFactory::Ptr makeReceiptFactory()
-{
-    return std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(makeCryptoSuite());
-}
-
-/// A header carrying every optional field toBlockInfo reads via `.value()` (OpCommon.h:106-121):
-/// baseFee / parentBeaconBlockRoot / blobGasUsed must be set or toBlockInfo throws.
+/// A header carrying every optional field buildOpEthBlockInfo requires (OpEthBlockExecute.h):
+/// baseFee / parentBeaconBlockRoot / blobGasUsed must be set or it throws OpEthBlockError.
 std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeHeader(int64_t timestampMillis)
 {
     auto h = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
@@ -88,16 +77,16 @@ std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeHeader(int64_t timestam
 }
 
 /// The block's L1 attributes deposit: to==OP_L1_BLOCK && from==OP_DEPOSITOR.
-bcos::evm::opstack::DepositTx makeAttributesDeposit()
+bcos::executor_v1::opstack::DepositTx makeAttributesDeposit()
 {
-    return bcos::evm::opstack::DepositTx{
-        .source_hash = evmc::bytes32{},
-        .from = bcos::evm::opstack::OP_DEPOSITOR,
-        .to = bcos::evm::opstack::OP_L1_BLOCK,
+    return bcos::executor_v1::opstack::DepositTx{
+        .sourceHash = evmc::bytes32{},
+        .from = bcos::executor_v1::opstack::OP_DEPOSITOR,
+        .to = bcos::executor_v1::opstack::OP_L1_BLOCK,
         .mint = std::nullopt,
-        .value = intx::uint256{0},
-        .gas_limit = 100000,
-        .is_system_tx = false,
+        .value = bcos::u256{0},
+        .gasLimit = 100000,
+        .isSystemTx = false,
         .data = {},
     };
 }
@@ -156,8 +145,6 @@ BOOST_AUTO_TEST_SUITE(OpBlockInjector)
 
 BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
 {
-    namespace op = bcos::evm::opstack;
-    namespace engine = bcos::evm::engine;
     namespace detail = bcos::evm::engine::detail;
 
     opstack_test::DualRunFixture fixture;
@@ -184,8 +171,9 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
     auto result = opstack_test::runExecutorPath(
         fixture, view, *header, opstack_test::opeth::OP_ISTHMUS_SPEC, transactions, rawTxBytes);
 
-    // System-call BlockInfo gas_limit == header.gasLimit (toBlockInfo, trivially true here).
-    const auto sysBlk = detail::toBlockInfo(*header);
+    // System-call BlockInfo gas_limit == header.gasLimit (buildOpEthBlockInfo, trivially true here).
+    const auto sysBlk = opstack_test::opeth::buildOpEthBlockInfo(
+        *header, opstack_test::opeth::OP_ISTHMUS_SPEC);
     BOOST_CHECK_EQUAL(sysBlk.gas_limit, kHeaderGasLimit);
     BOOST_CHECK_EQUAL(sysBlk.gas_limit,
         static_cast<int64_t>(detail::narrowU256ToU64(header->gasLimit(), "test")));
@@ -222,11 +210,11 @@ BOOST_AUTO_TEST_CASE(EmptyBlockRejectedByBlockPreSteps)
     std::vector<bcos::bytes> rawTxBytes;
     std::optional<std::string> hashErr;
     std::optional<uint16_t> daFootprintGasScalar;
-    std::optional<opeth::OpRecentBlockHashes<MutableStorage>> hashes;
-    opeth::OpStorageErrorSlot sharedError;
+    std::optional<opeth::OpRecentBlockHashes<std::decay_t<decltype(view)>>> hashes;
+    auto sharedError = std::make_shared<opeth::OpStorageErrorSlot>();
     opeth::OpEthExecutor executor{receiptFactory, opeth::OP_ISTHMUS_SPEC, sharedError};
     BOOST_CHECK_THROW(
-        bcos::task::syncWait(opeth::preBlockOpEthSteps(storage, *header, opeth::OP_ISTHMUS_SPEC,
+        bcos::task::syncWait(opeth::preBlockOpEthSteps(view, *header, opeth::OP_ISTHMUS_SPEC,
                                  rawTxBytes, deposits, executor.vm(), sharedError, hashes, hashErr,
                                  daFootprintGasScalar)),
         std::runtime_error);
@@ -240,7 +228,6 @@ BOOST_AUTO_TEST_CASE(EmptyBlockRejectedByBlockPreSteps)
 /// block they accept) has no CI signal.
 BOOST_AUTO_TEST_CASE(DepositAfterNonDepositAccepted)
 {
-    namespace op = bcos::evm::opstack;
 
     opstack_test::DualRunFixture fixture;
     auto view = fixture.multiLayerStorage.fork();
@@ -289,7 +276,6 @@ BOOST_AUTO_TEST_CASE(DepositAfterNonDepositAccepted)
 /// deposits[0].data) out of the way.
 BOOST_AUTO_TEST_CASE(FirstDepositNotL1AttributesAccepted)
 {
-    namespace op = bcos::evm::opstack;
 
     opstack_test::DualRunFixture fixture;
     auto view = fixture.multiLayerStorage.fork();
@@ -302,14 +288,14 @@ BOOST_AUTO_TEST_CASE(FirstDepositNotL1AttributesAccepted)
 
     // First deposit deliberately NOT the L1-attributes tx: arbitrary from/to (the L1-attributes
     // content check is demoted to a WARNING, so this does not reject the block).
-    bcos::evm::opstack::DepositTx nonAttrDep{
-        .source_hash = evmc::bytes32{},
+    bcos::executor_v1::opstack::DepositTx nonAttrDep{
+        .sourceHash = evmc::bytes32{},
         .from = 0x811a752c8cd697e3cb27279c330ed1ada745a8d7_address,
         .to = 0x811a752c8cd697e3cb27279c330ed1ada745a8d7_address,
         .mint = std::nullopt,
-        .value = intx::uint256{0},
-        .gas_limit = 100000,
-        .is_system_tx = false,
+        .value = bcos::u256{0},
+        .gasLimit = 100000,
+        .isSystemTx = false,
         .data = {},
     };
     auto normFisco = buildEip1559FiscoTx();

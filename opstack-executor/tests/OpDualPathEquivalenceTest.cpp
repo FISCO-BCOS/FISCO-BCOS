@@ -37,9 +37,8 @@
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-evm/adapter/StateRootCompute.h>
-#include <bcos-evm/opstack/OpForkSchedule.h>
-#include <bcos-evm/opstack/OpPredeploys.h>
+#include <bcos-framework/ledger/EVMAccount.h>  // bcos::ledger::account::accountTableName
+#include <bcos-framework/ledger/OpForkSchedule.h>
 #include <bcos-framework/engine/OpTime.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
@@ -57,13 +56,15 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <cxxabi.h>
 #include <engine/bcos-engine/OpEngineService.h>
-#include <bcos-evm/adapter/Storage2State.h>
 #include <json/json.h>
 #include <opstack-executor/OpEthBlockExecute.h>
+#include <opstack-executor/OpEthL1Attributes.h>  // encodeOpEthDepositEnvelope
 #include <opstack-executor/OpScheduler.h>  // route A surgery (Task 6 P1-8): executeBlock drives
 #include <opstack-executor/OpSchedulerSeam.h>
-#include <bcos-evm/adapter/Storage2State.h>
-#include <bcos-evm/adapter/Storage2StateHelpers.h>
+#include <bcos-ledger/mpt/Constants.h>      // emptyRootHash
+#include <bcos-ledger/mpt/HashBuilder.h>    // flushTrieNodes
+#include <bcos-ledger/mpt/StateRoots.h>     // computeMptStateDelta
+#include <bcos-ledger/mpt/ViewNodeStorage.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
@@ -245,33 +246,6 @@ bcos::ledger::OpFork forkEnumForName(const std::string& id, const std::string& n
         name + "'");
 }
 
-std::string_view forkNameForEnum(bcos::ledger::OpFork fork)
-{
-    using bcos::ledger::OpFork;
-    switch (fork)
-    {
-    case OpFork::Regolith:
-        return "regolith";
-    case OpFork::Canyon:
-        return "canyon";
-    case OpFork::Ecotone:
-        return "ecotone";
-    case OpFork::Fjord:
-        return "fjord";
-    case OpFork::Granite:
-        return "granite";
-    case OpFork::Holocene:
-        return "holocene";
-    case OpFork::Isthmus:
-        return "isthmus";
-    case OpFork::Jovian:
-        return "jovian";
-    case OpFork::Karst:
-        return "karst";
-    }
-    throw std::invalid_argument("unknown OpFork enum");
-}
-
 struct Fixture
 {
     // Single-bucket CONCURRENT backend: the range(SYS_TABLES) scan for stateRoot relies on
@@ -298,6 +272,45 @@ struct GoldenStats
 
 /// Q5 fail-closed reads SYS_NUMBER_2_BLOCK_HEADER for parentTs. Dual-path executeBlock uses
 /// ledger=nullptr, so seed a parent row (timestamp strictly before the current block).
+/// Copy every flat row visible through @p from into @p to's top mutable layer. The
+/// incremental MPT build scans the top mutable layer ONLY (buildAndCollect), so a
+/// backend-merged seed is invisible to it — this re-materializes the committed state as
+/// the genesis build's delta (mirror of OpSchedulerTest's copyFlatRows).
+void copyFlatRows(MLS::ViewType& from, MLS::ViewType& to)
+{
+    auto it = bcos::task::syncWait(bcos::storage2::range(from));
+    while (auto kv = bcos::task::syncWait(it.next()))
+    {
+        auto const& [k, v] = *kv;
+        if (auto const* entry = std::get_if<bcos::storage::Entry>(std::addressof(v)))
+            bcos::task::syncWait(bcos::storage2::writeOne(to, k, *entry));
+    }
+}
+
+/// Build the MPT over the committed state (parent = empty root) and persist every node
+/// as "/mpt/" rows. Route A's incremental build at block N resolves the PARENT header's
+/// stateRoot against persisted nodes: without this, the parent root is 0x00..00 (no
+/// nodes) and execution fails "missing node hash". Returns the root to stamp on the
+/// parent header — for chain vectors this is per-block correct: the committed state
+/// after route A's block N-1 merge IS block N-1's post-state.
+bcos::h256 computeAndPersistParentTrie(MLS& mls)
+{
+    auto readView = mls.fork();  // read-through to the committed backend (never merged)
+    auto buildView = mls.fork();
+    buildView.newMutable();
+    copyFlatRows(readView, buildView);
+    bcos::ledger::LedgerConfig ledgerConfig;
+    ledgerConfig.setExecutorVersion(bcos::ledger::OPSTACK_EXECUTOR_VERSION);
+    auto delta = bcos::task::syncWait(bcos::ledger::mpt::computeMptStateDelta(
+        buildView, bcos::ledger::mpt::emptyRootHash(), ledgerConfig));
+    auto persistView = mls.fork();
+    persistView.newMutable();
+    bcos::ledger::mpt::ViewNodeStorage<MLS::ViewType> nodeStorage(persistView);
+    bcos::task::syncWait(bcos::ledger::mpt::flushTrieNodes(nodeStorage, delta.newNodes));
+    bcos::task::syncWait(mls.mergeView(std::move(persistView)));
+    return delta.stateRoot;
+}
+
 void seedParentHeaderForActivationCheck(MLS& mls, bcos::protocol::BlockHeader::Ptr const& header)
 {
     if (!header || header->number() <= 0)
@@ -309,7 +322,10 @@ void seedParentHeaderForActivationCheck(MLS& mls, bcos::protocol::BlockHeader::P
     parent->setTimestamp(ts > 0 ? ts - 1 : 0);
     parent->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = 0, .blockHash = bcos::h256{}});
     parent->setCoinbase(header->coinbase());
-    parent->setStateRoot(bcos::h256{});
+    // Route A's incremental MPT resolves THIS root against persisted trie nodes — build
+    // + persist the committed state's trie (pre-state for block 1; block N-1's post-state
+    // for chain block N) and stamp it.
+    parent->setStateRoot(computeAndPersistParentTrie(mls));
     parent->setTxsRoot(bcos::h256{});
     parent->setReceiptsRoot(bcos::h256{});
     parent->setGasLimit(header->gasLimit());
@@ -392,7 +408,7 @@ bcostars::protocol::BlockHeaderImpl::Ptr buildHeaderFromEnv(const Json::Value& e
 }
 
 /// Build raw envelope bytes from vector block.transactions (for txRoot / executeOpBlock decode):
-/// deposit → rebuild DepositTx from _op_deposit → encodeDepositEnvelope (tests/support);
+/// deposit → rebuild DepositTx from _op_deposit → encodeOpEthDepositEnvelope (OpEthL1Attributes.h);
 /// normal → _op_raw as-is. Asserts _op_raw is present (every chain-vector normal tx carries it).
 std::vector<bcos::bytes> buildRawTxBytes(const Json::Value& blk, const std::string& id)
 {
@@ -404,7 +420,7 @@ std::vector<bcos::bytes> buildRawTxBytes(const Json::Value& blk, const std::stri
         {
             const auto& d = jAt(t, "_op_deposit");
             op::DepositTx dep;
-            dep.source_hash = detail::toEvmcBytes32(jsonH256(jAt(d, "source_hash").asString()));
+            dep.sourceHash = detail::toEvmcBytes32(jsonH256(jAt(d, "sourceHash").asString()));
             dep.from = opstack_test::jsonAddress(jAt(d, "from").asString());
             dep.to = jAt(d, "to").isNull() ?
                          std::nullopt :
@@ -413,11 +429,14 @@ std::vector<bcos::bytes> buildRawTxBytes(const Json::Value& blk, const std::stri
                            std::optional{opstack_test::jsonU256(jAt(d, "mint").asString())} :
                            std::nullopt;
             dep.value = d.isMember("value") ? opstack_test::jsonU256(jAt(d, "value").asString()) :
-                                              intx::uint256{0};
-            dep.gas_limit = static_cast<int64_t>(opstack_test::jsonU64(jAt(d, "gas").asString()));
-            dep.is_system_tx = jAt(d, "is_system_tx").asBool();
-            dep.data = opstack_test::jsonBytes(jAt(t, "data").asString());
-            rawTxBytes.push_back(encodeDepositEnvelope(dep));
+                                              bcos::u256{0};
+            dep.gasLimit = static_cast<int64_t>(opstack_test::jsonU64(jAt(d, "gas").asString()));
+            dep.isSystemTx = jAt(d, "isSystemTx").asBool();
+            {
+                auto const dataEvmc = opstack_test::jsonBytes(jAt(t, "data").asString());
+                dep.data.assign(dataEvmc.begin(), dataEvmc.end());
+            }
+            rawTxBytes.push_back(encodeOpEthDepositEnvelope(dep));
         }
         else
         {
@@ -449,7 +468,7 @@ bcos::protocol::Transaction::Ptr buildBlockTx(
 /// Backfill the announced header's commitment fields from the vector's golden
 /// `_op_expected.header` (op-geth's real block, from the t8n generator), so OpScheduler's
 /// unconditional six-way verify compares FISCO's execution against the op-geth golden. txRoot is
-/// absent from _op_expected — it is the deterministic trie root over rawTxBytes (computeOpTxRoot,
+/// absent from _op_expected — it is the deterministic trie root over rawTxBytes (computeOpEthTransactionsRoot,
 /// the same function finalizeOpBlockResult uses → equal by construction).
 /// withdrawalsRoot/requestsHash/blobGasUsed are set only when present; blobGasUsed MUST be filled
 /// when the golden carries it (a buildHeaderFromEnv default of 0 would otherwise false-mismatch a
@@ -461,7 +480,7 @@ void fillAnnouncedHeaderFromGolden(bcos::protocol::BlockHeader::Ptr const& heade
     header->setStateRoot(jsonH256(jAt(ex, "stateRoot").asString()));
     header->setReceiptsRoot(jsonH256(jAt(ex, "receiptsRoot").asString()));
     header->setGasUsed(jsonBcosU256(jAt(ex, "gasUsed").asString()));
-    header->setTxsRoot(bcos::evm::engine::computeOpTxRoot(rawTxBytes));
+    header->setTxsRoot(bcos::executor_v1::opstack::computeOpEthTransactionsRoot(rawTxBytes));
     auto bloom = bcos::fromHex(jAt(ex, "logsBloom").asString());
     header->setLogsBloom(bcos::bytesConstRef(bloom.data(), bloom.size()));
     if (ex.isMember("withdrawalsRoot"))
@@ -485,25 +504,25 @@ void checkSysTripwire(const std::string& id, const JsonValue& vec)
         {
             if (j.isMember(k) && !j[k].isNull())
                 tables.insert(
-                    bcos::evm::evmstate::accountTableName(opstack_test::jsonAddress(j[k].asString())));
+                    bcos::ledger::account::accountTableName(opstack_test::jsonAddress(j[k].asString())));
         }
     };
     if (vec.isMember("pre"))
     {
         for (const auto& a : vec["pre"].getMemberNames())
-            tables.insert(bcos::evm::evmstate::accountTableName(opstack_test::jsonAddress(a)));
+            tables.insert(bcos::ledger::account::accountTableName(opstack_test::jsonAddress(a)));
     }
     if (vec.isMember("postState"))
     {
         for (const auto& a : vec["postState"].getMemberNames())
-            tables.insert(bcos::evm::evmstate::accountTableName(opstack_test::jsonAddress(a)));
+            tables.insert(bcos::ledger::account::accountTableName(opstack_test::jsonAddress(a)));
     }
     if (vec.isMember("env"))
     {
         const auto& cb = vec["env"]["currentCoinbase"];
         if (cb.isString())
             tables.insert(
-                bcos::evm::evmstate::accountTableName(opstack_test::jsonAddress(cb.asString())));
+                bcos::ledger::account::accountTableName(opstack_test::jsonAddress(cb.asString())));
     }
     if (vec.isMember("block") && vec["block"].isMember("transactions"))
     {
@@ -528,7 +547,7 @@ void checkSysTripwire(const std::string& id, const JsonValue& vec)
 /// FISCO Transactions; contract creations are visible as deposits with a nullopt `to` (the L1
 /// attributes deposit always carries a `to`, so a hit would be a genuine create deposit).
 void hasStorageScan(
-    const std::string& id, const std::vector<bcos::evm::opstack::DepositTx>& deposits)
+    const std::string& id, const std::vector<bcos::executor_v1::opstack::DepositTx>& deposits)
 {
     int creates = 0;
     for (const auto& dep : deposits)

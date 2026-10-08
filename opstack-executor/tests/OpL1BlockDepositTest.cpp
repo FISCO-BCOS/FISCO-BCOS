@@ -18,8 +18,8 @@
 //     runtime storage fork, not the executor.
 //   - if slot1 stays 0x1234 -> the bug is REPRODUCED offline; the executor/bridge is at fault.
 
-#include <bcos-evm/opstack/OpFeeParams.h>
-#include <bcos-evm/opstack/OpPredeploys.h>
+#include <opstack-executor/OpEthL1Attributes.h>  // encodeOpEthDepositEnvelope
+#include <opstack-executor/OpFeeParams.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/ledger/EVMAccount.h>
@@ -29,20 +29,21 @@
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <engine/bcos-engine/OpEngineService.h>
+#include <ethereum-executor/EthereumState.h>  // loadOpFeeParams' state view
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <opstack-executor/OpEthBlockExecute.h>  // opEthStorageRoot + shared block-execution path
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>  // per-tx loop (refactored path)
 #include <bcos-utilities/IOServicePool.h>
-#include <bcos-evm/adapter/Storage2State.h>
 #include <boost/test/unit_test.hpp>
 #include <evmc/evmc.hpp>
 #include <evmc/hex.hpp>
 #include <intx/intx.hpp>
 #include <stdexcept>
 
-#include "TestPrinters.h"
+#include "support/DualRunHarness.h"  // opstack_test::DualRunFixture + runExecutorPath
+
 
 using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;
@@ -270,15 +271,15 @@ bcos::bytes makeDepositEnvelope(bcos::bytes data, uint64_t gas = 1000000)
 {
     using namespace bcos::executor_v1::opstack;
     DepositTx dep{};
-    std::memset(dep.source_hash.bytes, 0x01, sizeof(dep.source_hash.bytes));
+    std::memset(dep.sourceHash.bytes, 0x01, sizeof(dep.sourceHash.bytes));
     dep.from = OP_DEPOSITOR;
     dep.to = OP_L1_BLOCK;
     dep.mint = std::nullopt;
-    dep.value = intx::uint256{0};
-    dep.gas_limit = static_cast<int64_t>(gas);
-    dep.is_system_tx = false;
-    dep.data = evmc::bytes(data.begin(), data.end());
-    return encodeDepositEnvelope(dep);
+    dep.value = bcos::u256{0};
+    dep.gasLimit = static_cast<int64_t>(gas);
+    dep.isSystemTx = false;
+    dep.data = bcos::bytes(data.begin(), data.end());
+    return encodeOpEthDepositEnvelope(dep);
 }
 
 /// FISCO Transaction from a raw envelope (opEnvelopeToTars + full-envelope override; pattern
@@ -319,20 +320,11 @@ inline OpBlockRunCtx makeRunCtx()
 
 /// Drive the post-cutover shared block-execution path: preBlockOpEthSteps →
 /// SchedulerSerialImpl(serial) over OpEthExecutor → finalizeOpEthBlockResult — the same
-/// production shape DualRunHarness's runExecutorPath drives. Fork selection is the
-/// timestamp schedule now (jovianActive → Jovian at second 1, else all-Isthmus), and the
-/// result type is the new OpEthExecuteBlockResult (receipts + seal + stateRoot/txRoot).
-/// Drive the post-cutover shared block-execution path (preBlockOpEthSteps →
-/// SchedulerSerialImpl(serial) over OpEthExecutor → finalizeOpEthBlockResult) over the
-/// CALLER's view — the executor reads and writes exactly the view the caller seeded
-/// and will read back. (The old adapter copied rows into a fresh fixture's view and
-/// returned results whose writes never reached the caller's store.)
-/// Drive the post-cutover shared block-execution path (preBlockOpEthSteps →
-/// SchedulerSerialImpl(serial) over OpEthExecutor → finalizeOpEthBlockResult) over the
-/// CALLER's view — the executor reads and writes exactly the view the caller seeded and
-/// will read back. (The old adapter copied rows into a fresh fixture's view and returned
-/// results whose writes never reached the caller's store.) The fixture supplies the
-/// receipt factory / hash impl / io pool; the caller's MLS view carries the state.
+/// production shape DualRunHarness's runExecutorPath drives, over the CALLER's view: the
+/// executor reads and writes exactly the view the caller seeded and will read back. Fork
+/// selection is the timestamp schedule now (jovianActive → Jovian at second 1, else
+/// all-Isthmus), and the result type is the new OpEthExecuteBlockResult (receipts + seal +
+/// stateRoot/txRoot). The fixture supplies the receipt factory / hash impl / io pool.
 template <class ViewT>
 opstack_test::opeth::OpEthExecuteBlockResult runOpBlock(ViewT& view,
     bcos::protocol::BlockHeader const& header, std::vector<bcos::bytes> const& rawTxs,
@@ -401,16 +393,12 @@ BOOST_AUTO_TEST_CASE(L1BlockDepositWritesSlots)
         BOOST_REQUIRE(c.has_value());
         BOOST_CHECK_EQUAL(c->get().size(), code.size());
 
-        bcos::evm::evmstate::Storage2State<ViewType> bridge(view);
-        const auto acc0 = bridge.get_account(bcos::executor_v1::opstack::OP_L1_BLOCK);
-        BOOST_REQUIRE(acc0.has_value());
-        const auto loadedCode = bridge.get_account_code(bcos::executor_v1::opstack::OP_L1_BLOCK);
-        BOOST_TEST_MESSAGE("bridge get_account_code size=" << loadedCode.size());
-        BOOST_CHECK_EQUAL(loadedCode.size(), code.size());
+        // The EVMAccount read above is the seeded-state proof; the storage slot is
+        // read back the same way (the bridge's Storage2State adapter is retired).
         evmc::bytes32 slot1Key{};
         slot1Key.bytes[31] = 0x01;
-        const auto s1 = bridge.get_storage(bcos::executor_v1::opstack::OP_L1_BLOCK, slot1Key);
-        BOOST_TEST_MESSAGE("bridge get_storage slot1=0x"
+        const auto s1 = bcos::task::syncWait(acc.storage(slot1Key));
+        BOOST_TEST_MESSAGE("account get_storage slot1=0x"
                            << evmc::hex(evmc::bytes_view(s1.bytes, sizeof(s1.bytes))));
     }
 
@@ -521,8 +509,8 @@ BOOST_AUTO_TEST_CASE(NonZeroL1ParamsAlignWithUnpackOpFeeParams)
             bcos::ledger::account::AddressTableMode::Hex);
     // Stub L1Block bytecode packs scalars into slot3/8 per unpackOpFeeParams offsets but does not
     // store full uint256 words in slot1/7 — verify the consumer path instead of raw slot equality.
-    bcos::evm::evmstate::Storage2State<ViewType> bridge(view);
-    const auto fee = bcos::executor_v1::opstack::loadOpFeeParams(bridge);
+    bcos::executor_v1::eth::EthereumState<ViewType> state(view);
+    const auto fee = bcos::executor_v1::opstack::loadOpFeeParams(state);
     BOOST_CHECK_EQUAL(fee.base_fee_scalar, 7u);
     BOOST_CHECK_EQUAL(fee.blob_base_fee_scalar, 9u);
     BOOST_CHECK_EQUAL(fee.operator_fee_scalar, 11u);
@@ -584,8 +572,8 @@ BOOST_AUTO_TEST_CASE(DepositWritesFeeParamsReadableByLoadOpFeeParams)
     BOOST_CHECK_EQUAL(result.receipts.front()->status(), 0);
 
     // The consumer side reads the deposit-written slots exactly as unpackOpFeeParams specified.
-    bcos::evm::evmstate::Storage2State<ViewType> bridge(view);
-    const auto fee = bcos::executor_v1::opstack::loadOpFeeParams(bridge);
+    bcos::executor_v1::eth::EthereumState<ViewType> state(view);
+    const auto fee = bcos::executor_v1::opstack::loadOpFeeParams(state);
     BOOST_CHECK_EQUAL(fee.base_fee_scalar, 7u);
     BOOST_CHECK_EQUAL(fee.blob_base_fee_scalar, 9u);
     BOOST_CHECK_EQUAL(fee.operator_fee_scalar, 11u);
@@ -625,7 +613,7 @@ BOOST_AUTO_TEST_CASE(FailedDepositSealsBlockWithFullGasAndBumpedNonce)
 
     auto header = makeOpHeader(1, static_cast<int64_t>(c_jovianTime) * 1000 + 1000);
 
-    // The Jovian L1-attributes calldata (178B) has intrinsic ~21832; gas_limit 20000 is too low
+    // The Jovian L1-attributes calldata (178B) has intrinsic ~21832; gasLimit 20000 is too low
     // -> INTRINSIC_GAS_TOO_LOW -> failed-deposit branch: status=failure, gasUsed = gasLimit,
     // nonce force-incremented (op-geth state_transition.go:486-513).
     constexpr uint64_t kTooLowGas = 20000;
@@ -900,16 +888,13 @@ BOOST_AUTO_TEST_CASE(MessagePasserStorageDrivesWithdrawalRoot)
     v2.bytes[31] = 0x03;
     seeded[k1] = v1;
     seeded[k2] = v2;
-    const auto expected = opEthStorageRoot(seeded);
+    const auto expected = bcos::executor_v1::opstack::opEthStorageRoot(seeded);
     BOOST_REQUIRE(result.seal.withdrawalsRoot.has_value());
     BOOST_TEST_MESSAGE("seal withdrawalsRoot: 0x"
-                       << evmc::hex(evmc::bytes_view(result.seal.withdrawalsRoot->bytes,
-                                              sizeof(result.seal.withdrawalsRoot->bytes))));
+                       << evmc::hex(evmc::bytes_view(result.seal.withdrawalsRoot->data(), 32)));
     BOOST_TEST_MESSAGE("expected opStorageRoot: 0x"
-                       << evmc::hex(evmc::bytes_view(expected.bytes, sizeof(expected.bytes))));
-    BOOST_CHECK_EQUAL(std::memcmp(result.seal.withdrawalsRoot->bytes, expected.bytes,
-                          sizeof(expected.bytes)),
-        0);
+                       << evmc::hex(evmc::bytes_view(expected.data(), 32)));
+    BOOST_CHECK_EQUAL(std::memcmp(result.seal.withdrawalsRoot->data(), expected.data(), 32), 0);
 }
 
 // ---- Item 4b: empty MessagePasser storage → the empty-trie root constant ----
@@ -924,15 +909,14 @@ BOOST_AUTO_TEST_CASE(EmptyPasserStorageSealsEmptyRootConstant)
     JovianShapeFixture fx;
 
     // opStorageRoot over an empty slot map == the pinned empty-trie literal.
-    const auto emptyRoot = opEthStorageRoot({});
+    const auto emptyRoot = bcos::executor_v1::opstack::opEthStorageRoot({});
     const auto* expectedHex = "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421";
-    BOOST_CHECK_EQUAL(evmc::hex(evmc::bytes_view(emptyRoot.bytes, sizeof(emptyRoot.bytes))),
-        expectedHex);
+    BOOST_CHECK_EQUAL(evmc::hex(evmc::bytes_view(emptyRoot.data(), 32)), expectedHex);
     // ... and equals bcos-ledger's emptyRootHash() (Constants.h, itself pinned by
     // bcos-ledger ConstantsTest): the pre-Isthmus seal branch and the empty Isthmus+ passer
     // converge on the same bytes.
     const auto& ledgerEmpty = bcos::ledger::mpt::emptyRootHash();
-    BOOST_CHECK_EQUAL(std::memcmp(emptyRoot.bytes, ledgerEmpty.data(), sizeof(emptyRoot.bytes)),
+    BOOST_CHECK_EQUAL(std::memcmp(emptyRoot.data(), ledgerEmpty.data(), 32),
         0);
 
     // The seal agrees: a block on a virgin passer produces header withdrawalsRoot == the same
@@ -941,8 +925,7 @@ BOOST_AUTO_TEST_CASE(EmptyPasserStorageSealsEmptyRootConstant)
         static_cast<int64_t>(2000) * 1000 + 1000);
     BOOST_REQUIRE_EQUAL(result.receipts.size(), 1u);
     BOOST_REQUIRE(result.seal.withdrawalsRoot.has_value());
-    BOOST_CHECK_EQUAL(std::memcmp(result.seal.withdrawalsRoot->bytes, ledgerEmpty.data(),
-                          sizeof(emptyRoot.bytes)),
+    BOOST_CHECK_EQUAL(std::memcmp(result.seal.withdrawalsRoot->data(), ledgerEmpty.data(), 32),
         0);
 }
 
@@ -1058,14 +1041,13 @@ BOOST_AUTO_TEST_CASE(WithdrawTxWritesMessagePasserAndChangesRoot)
     evmc::bytes32 one{};
     one.bytes[31] = 0x01;
     expectedStorage[slotKey] = one;
-    const auto expectedRoot = opEthStorageRoot(expectedStorage);
+    const auto expectedRoot = bcos::executor_v1::opstack::opEthStorageRoot(expectedStorage);
     BOOST_REQUIRE(result.seal.withdrawalsRoot.has_value());
-    BOOST_CHECK_EQUAL(std::memcmp(result.seal.withdrawalsRoot->bytes, expectedRoot.bytes,
-                          sizeof(expectedRoot.bytes)),
+    BOOST_CHECK_EQUAL(std::memcmp(result.seal.withdrawalsRoot->data(), expectedRoot.data(), 32),
         0);
     // And it is NOT the empty-trie root (the sendMessage changed the state).
     const auto emptyRoot = bcos::ledger::mpt::emptyRootHash();
-    BOOST_CHECK_NE(std::memcmp(result.seal.withdrawalsRoot->bytes, emptyRoot.data(),
+    BOOST_CHECK_NE(std::memcmp(result.seal.withdrawalsRoot->data(), emptyRoot.data(),
                        bcos::h256::SIZE),
         0);
 }

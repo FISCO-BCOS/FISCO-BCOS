@@ -8,7 +8,7 @@
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-evm/opstack/OpForkSchedule.h>
+#include <bcos-framework/ledger/OpForkSchedule.h>
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
 #include <bcos-framework/engine/OpForkId.h>
 #include <bcos-framework/engine/OpTime.h>
@@ -94,21 +94,21 @@ const bcos::bytes kTypedEnvelope{bcos::byte{0x02}, bcos::byte{0x01}};
 
 opeth::DepositTx depositWithJovianAttrs()
 {
-    evmc::bytes data(opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_LEN, uint8_t{0});
+    bcos::bytes data(opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_LEN, bcos::byte{0});
     std::memcpy(
         data.data(), opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_SELECTOR.data(),
         opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_SELECTOR.size());
     opeth::DepositTx dep{};
-    dep.gas_limit = 1'000'000;
+    dep.gasLimit = 1'000'000;
     dep.data = std::move(data);
     return dep;
 }
 
 opeth::DepositTx depositWithIsthmusLenAttrs()
 {
-    evmc::bytes data(opeth::OP_ETH_ISTHMUS_L1_ATTRIBUTES_LEN, uint8_t{0});
+    bcos::bytes data(opeth::OP_ETH_ISTHMUS_L1_ATTRIBUTES_LEN, bcos::byte{0});
     opeth::DepositTx dep{};
-    dep.gas_limit = 1'000'000;
+    dep.gasLimit = 1'000'000;
     dep.data = std::move(data);
     return dep;
 }
@@ -304,7 +304,7 @@ bcos::engine::EngineForkResolution resolveEngineForkForTest(
     using bcos::engine::EngineForkContext;
     using bcos::engine::OpForkId;
     const auto fork = bcos::ledger::resolveOpFork(schedule, timestampSeconds);
-    static constexpr std::array<std::pair<OpForkId, bcos::ledger::OpFork>, 9> kIdByLadder{{{
+    static constexpr std::array<std::pair<OpForkId, bcos::ledger::OpFork>, 9> kIdByLadder{{
         {OpForkId::Regolith, bcos::ledger::OpFork::Regolith},
         {OpForkId::Canyon, bcos::ledger::OpFork::Canyon},
         {OpForkId::Ecotone, bcos::ledger::OpFork::Ecotone},
@@ -314,7 +314,7 @@ bcos::engine::EngineForkResolution resolveEngineForkForTest(
         {OpForkId::Isthmus, bcos::ledger::OpFork::Isthmus},
         {OpForkId::Jovian, bcos::ledger::OpFork::Jovian},
         {OpForkId::Karst, bcos::ledger::OpFork::Karst},
-    }}};
+    }};
     auto forkId = OpForkId::Isthmus;
     bool matched = false;
     for (auto const& [id, ledgerFork] : kIdByLadder)

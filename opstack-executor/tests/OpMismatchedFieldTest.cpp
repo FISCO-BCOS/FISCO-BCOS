@@ -9,7 +9,7 @@
 #include <opstack-executor/OpEthCommitments.h>  // OpEthBlockCommitments / opEthMismatchedFieldOf
 #include <boost/test/unit_test.hpp>
 
-namespace bcos::evm::engine
+namespace bcos::executor_v1::opstack
 {
 namespace
 {
@@ -154,4 +154,4 @@ BOOST_AUTO_TEST_CASE(RequestsHashPresenceAsymmetryIsMismatch)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
-}  // namespace bcos::evm::engine
+}  // namespace bcos::executor_v1::opstack

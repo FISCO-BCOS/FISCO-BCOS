@@ -12,6 +12,7 @@
 #include "support/SeedPreState.h"
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-framework/ledger/Ledger.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
@@ -617,7 +618,14 @@ void runInvalidVector(std::string const& id)
                    << (importStatus.validationError ? " : " + *importStatus.validationError : ""));
             if (imported)
             {
-                BOOST_CHECK(fixture->service.hasImportedBlock(request.executionPayload.blockHash));
+                // Post-cutover equivalent of the old service.hasImportedBlock probe: a
+                // VALID import commits through the delegate, so the block hash must be
+                // readable back from the ledger plane (SYS_HASH_2_NUMBER).
+                auto probeView = fixture->multiLayerStorage.fork();
+                BOOST_CHECK(bcos::task::syncWait(
+                    bcos::ledger::getBlockNumber(probeView, request.executionPayload.blockHash,
+                        bcos::ledger::fromStorage))
+                                .has_value());
             }
         }
         return;
@@ -1225,6 +1233,11 @@ bcos::ledger::OpForkSchedule regolithOnlySchedule()
     return [] {
         bcos::ledger::OpForkSchedule s;
         s.m_regolithTime = 0;
+        // Explicitly setting isthmus_time ACTIVATES the full Bedrock..Karst ladder
+        // (OpForkSchedule.h: an unset isthmus_time resolves every pre-jovian timestamp
+        // to Isthmus, which would make this fixture's Regolith window unrepresentable
+        // and the engine see a Holocene parent). Any value above the test window works.
+        s.m_isthmusTime = 10'000;
         return s;
     }();
 }
@@ -1243,8 +1256,12 @@ void registerRegolithGenesis(
     OpE2eFixture& fixture, bcos::h256 const& hash, bcos::bytes extraData = {})
 {
     registerVerifiedBlock(fixture.multiLayerStorage, hash, 0);
+    // The builder's incremental MPT at block 1 resolves the genesis header's stateRoot
+    // against persisted trie nodes — build+persist the (possibly empty) pre-state trie.
+    auto const genesisRoot = computeAndPersistParentTrie(fixture.multiLayerStorage);
     auto header = fixture.blockFactory->blockHeaderFactory()->createBlockHeader();
     header->setNumber(0);
+    header->setStateRoot(genesisRoot);
     header->setTimestamp(0);
     header->setGasLimit(30'000'000);
     header->setGasUsed(20'000'000);
@@ -1273,12 +1290,18 @@ BOOST_AUTO_TEST_CASE(RegolithPayloadBuildsAndImportsAgainstRealScheduler)
     attrs.prevRandao = bcos::crypto::HashType{};
     attrs.suggestedFeeRecipient = bcos::Address{};
     attrs.gasLimit = 30'000'000;
+    // FCU V3 wire shape (the engine builds only at V3+); the block's fork still comes
+    // from the schedule at attrs.timestamp. eip1559Params: the OP path's unconditional
+    // Holocene+ wire requirement — inert for a pre-Holocene build (chain config prices).
+    attrs.withdrawals = std::vector<bcos::engine::WithdrawalV1>{};
+    attrs.parentBeaconBlockRoot = bcos::h256{};
+    attrs.eip1559Params = bcos::fromHex("0x0000000800000006");
 
     auto builder = std::make_unique<OpE2eFixture>(regolithOnlySchedule());
     registerRegolithGenesis(*builder, genesis);
     bcos::engine::ForkchoiceState fc{genesis, genesis, genesis};
     auto built = bcos::task::syncWait(builder->service.updateForkchoice(
-        fc, &attrs, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V1)));
+        fc, &attrs, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
     BOOST_REQUIRE_MESSAGE(
         built.payloadStatus.status == bcos::engine::PayloadValidationStatus::Valid,
         "Regolith FCU V1 build must be VALID, got "
@@ -1287,15 +1310,16 @@ BOOST_AUTO_TEST_CASE(RegolithPayloadBuildsAndImportsAgainstRealScheduler)
     BOOST_REQUIRE(built.payloadId.has_value());
 
     auto got = bcos::task::syncWait(builder->service.getPayload(
-        *built.payloadId, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V2)));
+        *built.payloadId, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
     BOOST_REQUIRE(got);
-    BOOST_CHECK(!got->parentBeaconBlockRoot.has_value());
-    // The V2 response is the Regolith block's own shape, not the builder's carrier: no
-    // pre-Canyon withdrawals list/root and no Cancun blob pair may leak through.
-    BOOST_CHECK(!got->executionPayload.withdrawals.has_value());
+    BOOST_CHECK(got->parentBeaconBlockRoot.has_value());  // V3 carrier field
+    // The block's FORK shape (Regolith) rides a V3 carrier: the carrier's withdrawals
+    // list (present-but-empty) and blob pair (0) are wire fields, while the FORK-only
+    // fields must stay absent — a pre-Canyon block has no withdrawalsRoot.
+    BOOST_REQUIRE(got->executionPayload.withdrawals.has_value());
+    BOOST_CHECK(got->executionPayload.withdrawals->empty());
     BOOST_CHECK(!got->executionPayload.withdrawalsRoot.has_value());
-    BOOST_CHECK(!got->executionPayload.blobGasUsed.has_value());
-    BOOST_CHECK(!got->executionPayload.excessBlobGas.has_value());
+    BOOST_CHECK(!got->executionPayload.extraData.empty() == false);
 
     // A second, freshly-seeded node imports the same payload: its artifact cache is empty, so
     // newPayload takes the import path (no built-header commit shortcut) and runs importExecute
@@ -1309,9 +1333,9 @@ BOOST_AUTO_TEST_CASE(RegolithPayloadBuildsAndImportsAgainstRealScheduler)
         .parentBeaconBlockRoot = {},
         .executionRequests = {}};
     auto status = bcos::task::syncWait(importer->service.newPayload(
-        roundTrip, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V2)));
+        roundTrip, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4)));
     BOOST_REQUIRE_MESSAGE(status.status == bcos::engine::PayloadValidationStatus::Valid,
-        "Regolith newPayload V2 import must be VALID, got "
+        "Regolith newPayload V4 import must be VALID, got "
             << static_cast<int>(status.status) << " " << status.validationError.value_or(""));
 }
 
@@ -1378,13 +1402,19 @@ BOOST_AUTO_TEST_CASE(PreCanyonBaseFeeUsesTheChainsEip1559Denominator)
     attrs.prevRandao = bcos::crypto::HashType{};
     attrs.suggestedFeeRecipient = bcos::Address{};
     attrs.gasLimit = 30'000'000;
+    // FCU V3 wire shape (the engine builds only at V3+); the block's fork still comes
+    // from the schedule at attrs.timestamp. eip1559Params: the OP path's unconditional
+    // Holocene+ wire requirement — inert for a pre-Holocene build (chain config prices).
+    attrs.withdrawals = std::vector<bcos::engine::WithdrawalV1>{};
+    attrs.parentBeaconBlockRoot = bcos::h256{};
+    attrs.eip1559Params = bcos::fromHex("0x0000000800000006");
 
     // ── builder side: the price sequenced for a denom-8 chain ─────────────────────
     auto builder = std::make_unique<OpE2eFixture>(regolithOnlySchedule(), chainTriple);
     registerRegolithGenesis(*builder, genesis);
     bcos::engine::ForkchoiceState fc{genesis, genesis, genesis};
     auto built = bcos::task::syncWait(builder->service.updateForkchoice(
-        fc, &attrs, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V1)));
+        fc, &attrs, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
     BOOST_REQUIRE_MESSAGE(
         built.payloadStatus.status == bcos::engine::PayloadValidationStatus::Valid,
         "Regolith FCU V1 build must be VALID, got "
@@ -1445,29 +1475,42 @@ bcos::engine::PayloadAttributes regolithAttrs(std::uint64_t tsMillis, bool noTxP
     attrs.suggestedFeeRecipient = bcos::Address{};
     attrs.gasLimit = 30'000'000;
     attrs.noTxPool = noTxPool;
+    // The post-cutover engine builds only on the FCU V3/V4 wire shape (attrs-carrying
+    // V1/V2 throw UnsupportedFork); the V3-required fields are present-but-neutral —
+    // the built block's FORK still comes from the schedule at attrs.timestamp, so a
+    // Regolith-window build prices and seals exactly as before.
+    attrs.withdrawals = std::vector<bcos::engine::WithdrawalV1>{};
+    attrs.parentBeaconBlockRoot = bcos::h256{};
+    // Required by validateOpPayloadAttributes on the OP path (Holocene+ wire rule,
+    // unconditional): 8-byte denominator||elasticity. Pre-Holocene blocks price from
+    // the chain config and write an EMPTY extraData, so the pair is inert here.
+    attrs.eip1559Params = bcos::fromHex("0x0000000800000006");
     return attrs;
 }
 
-/// FCU V1 + getPayload V2 against `parentHash`, asserting VALID; returns the payload.
+/// FCU V3 + getPayload V2 against `parentHash`, asserting VALID; returns the payload.
+/// (The engine accepts attrs only at V3+; the Regolith-window block keeps its V2
+/// getPayload profile shape.)
 std::optional<bcos::engine::ExecutionPayload> buildBlockOn(OpE2eFixture& fixture,
     bcos::h256 const& parentHash, std::uint64_t tsMillis, bool noTxPool, std::string_view what)
 {
     auto attrs = regolithAttrs(tsMillis, noTxPool);
     bcos::engine::ForkchoiceState const fc{parentHash, parentHash, parentHash};
     auto built = bcos::task::syncWait(fixture.service.updateForkchoice(
-        fc, &attrs, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V1)));
+        fc, &attrs, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
     BOOST_REQUIRE_MESSAGE(
         built.payloadStatus.status == bcos::engine::PayloadValidationStatus::Valid,
         what << ": FCU must be VALID, got " << static_cast<int>(built.payloadStatus.status) << " "
              << built.payloadStatus.validationError.value_or(""));
     BOOST_REQUIRE_MESSAGE(built.payloadId.has_value(), what << ": FCU returned no payloadId");
     auto got = bcos::task::syncWait(fixture.service.getPayload(
-        *built.payloadId, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V2)));
+        *built.payloadId, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
     BOOST_REQUIRE_MESSAGE(got != nullptr, what << ": getPayload returned nothing");
     return got->executionPayload;
 }
 
-/// newPayload V2 of `payload` against a node whose canonical parent is its parent.
+/// newPayload V4 of `payload` against a node whose canonical parent is its parent
+/// (the OP lane's newPayload is V4-only on the post-cutover engine).
 bcos::engine::PayloadStatus importPayload(
     OpE2eFixture& fixture, bcos::engine::ExecutionPayload const& payload)
 {
@@ -1476,7 +1519,7 @@ bcos::engine::PayloadStatus importPayload(
         .parentBeaconBlockRoot = {},
         .executionRequests = {}};
     return bcos::task::syncWait(fixture.service.newPayload(
-        request, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V2)));
+        request, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4)));
 }
 
 /// True for an envelope the OP lane classifies as a deposit (EIP-2718 type 0x7e).
@@ -1487,16 +1530,14 @@ bool isDepositEnvelope(bcos::bytes const& raw)
 
 /// Rebuild the canonical OP header for `payload` and stamp its hash back, exactly as
 /// OpL1EdgeGateTest does: without this the engine's hash gate would mask the field
-/// under test. `forkId` comes from the same schedule the engine resolves, so the
-/// rebuilt preimage matches byte for byte.
+/// under test. The rebuilt preimage is fully payload-driven (rebuildOpEthHeader stamps
+/// every fork field from the payload itself), so it matches the engine's own gate byte
+/// for byte.
 void resealPayloadBlockHash(OpE2eFixture& fixture, bcos::engine::ExecutionPayload& payload)
 {
-    auto const tsSec =
-        bcos::engine::unixSecondsFromInternalMillis(static_cast<uint64_t>(payload.timestamp));
     auto const txRoot = EngineOpScheduler::computeTxRoot(rawEnvelopesFromPayload(payload));
     auto header = bcos::engine::engine_common::op::rebuildOpEthHeader(
-        fixture.blockFactory->blockHeaderFactory(), payload, txRoot, std::nullopt,
-        fixture.scheduler.forkIdAt(tsSec));
+        fixture.blockFactory->blockHeaderFactory(), payload, txRoot, bcos::h256{});
     payload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*header);
 }
 
@@ -2286,8 +2327,8 @@ BOOST_AUTO_TEST_CASE(ForkchoiceHeadIncrement)
     (void)pBack;
     BOOST_CHECK_EQUAL(static_cast<int>(sBack.status),
         static_cast<int>(bcos::engine::PayloadValidationStatus::Valid));
-    BOOST_REQUIRE(fixture->service.trackedHeadNumber().has_value());
-    BOOST_CHECK_EQUAL(*fixture->service.trackedHeadNumber(), n1 + 2);
+    BOOST_REQUIRE(fixture->service.getHeadBlockNumber().has_value());
+    BOOST_CHECK_EQUAL(*fixture->service.getHeadBlockNumber(), n1 + 2);
 }
 
 // ⑥ no attributes -> head advance (getSafe/Finalized reflect it; mirrors updateForkchoice

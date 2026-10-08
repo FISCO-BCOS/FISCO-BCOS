@@ -32,7 +32,7 @@
 #include "support/OpEngineE2eFixture.h"
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-evm/opstack/RollupCost.h>
+#include <opstack-executor/OpRollupCost.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
@@ -59,15 +59,9 @@
 #include <boost/test/unit_test.hpp>
 
 // D-4: TestState pattern (following OpTransitionTest.cpp)
-#include "TestPrinters.h"
-#include <bcos-evm/opstack/OpFeeParams.h>
-#include <bcos-evm/opstack/OpForkSchedule.h>
-#include <bcos-evm/opstack/OpPredeploys.h>
-#include <bcos-evm/opstack/OpTransition.h>
-#include <bcos-evm/test/opstack/OpPredeploysSeed.h>
-#include <bcos-evm/test/opstack/OpTestReceiptFactory.h>
+#include <opstack-executor/OpFeeParams.h>
+#include <bcos-framework/ledger/OpForkSchedule.h>
 #include <evmone/evmone.h>
-#include <test/utils/test_state.hpp>
 
 #include <algorithm>
 #include <memory>
@@ -79,9 +73,8 @@ using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;
 namespace memory_storage = bcos::storage2::memory_storage;
 
-// D-4's TestState/opstack names (following OpTransitionTest.cpp:16-20)
-using namespace bcos::evm::opstack;
-using namespace bcos::evm::opstack::testutil;
+// D-4's opstack names on the post-cutover layer (the bcos-evm testutil namespace is gone).
+using namespace bcos::executor_v1::opstack;
 using namespace evmone;
 using namespace evmc::literals;
 using intx::operator""_u256;
@@ -117,19 +110,16 @@ std::string statusForDaFootprintRemoteAndGasLimit(uint64_t remote, std::optional
     {
         params[0u]["gasLimit"] = w6test::quantityOf(bcos::u256(*gasLimit));
     }
-    auto fixture = std::make_unique<OpE2eFixture>(forkFlagsFor(true));
+    auto fixture = std::make_unique<OpE2eFixture>(/*jovian=*/true);
     auto request = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
-    // parseNewPayloadRequest converts seconds to internal millis (EngineHelper.cpp:334);
-    // the fork table is keyed on Unix seconds (OpSchedulerSeam.h forkIdAt) — the same
-    // resolution runOpNewPayloadSteps does (OpEngineService.inl:845), so the recomputed
-    // hash matches the engine's own reconstruction byte for byte.
-    auto const tsSec = bcos::engine::unixSecondsFromInternalMillis(
-        static_cast<uint64_t>(request.executionPayload.timestamp));
+    // rebuildOpEthHeader is fully payload-driven (it stamps every fork field from the
+    // payload itself), so the recomputed hash matches the engine's own reconstruction
+    // byte for byte — the same call runOpNewPayloadSteps makes (OpEngineService.inl).
     auto const txRoot =
         EngineOpScheduler::computeTxRoot(rawEnvelopesFromPayload(request.executionPayload));
     auto header = bcos::engine::engine_common::op::rebuildOpEthHeader(
         fixture->blockFactory->blockHeaderFactory(), request.executionPayload, txRoot,
-        request.parentBeaconBlockRoot, fixture->scheduler.forkIdAt(tsSec));
+        request.parentBeaconBlockRoot.value_or(bcos::h256{}));
     request.executionPayload.blockHash = bcos::protocol::EthBlockHeader::computeHash(*header);
 
     auto status = bcos::task::syncWait(fixture->service.newPayload(request, 4));
@@ -149,9 +139,56 @@ std::string statusForDaFootprintRemote(uint64_t remote)
 /// header; the caller's `Σ == golden header blobGasUsed` assertion keeps this non-tautological
 /// (opstack-executor/tests/t8n/golden/engine/jovian_da_mix.golden.json is sealed by op-geth's
 /// t8n), so it checks the accumulator against an external oracle rather than against itself.
+/// Block-level DA footprint Σ over the raw envelopes (op-geth CalcDAFootprint): the
+/// scalar comes from the L1-attributes deposit's Jovian tail
+/// (opEthJovianDaFootprintGasScalar), every non-deposit envelope contributes
+/// estimatedDaSizeFromFlz(flzCompressLen(env)) × scalar — the same OpRollupCost.h
+/// primitives the per-tx accumulation (OpEthReceipt.h) uses. The bcos-evm-era free
+/// helper (daFootprintOfEnvelopes) retired with the cutover; the recomputation stays
+/// deliberately independent here — the guard under test recomputes on its own, so a
+/// shared helper would make the equality check tautological.
+std::optional<uint64_t> daFootprintOfEnvelopesLocal(
+    const std::vector<bcos::bytesConstRef>& envelopes)
+{
+    if (envelopes.empty() || envelopes.front().empty() ||
+        envelopes.front()[0] != OP_DEPOSIT_TX_TYPE)
+    {
+        return std::nullopt;
+    }
+    auto const dep = decodeOpDepositEnvelope(envelopes.front());
+    auto const attr = std::span<const uint8_t>{dep.data.data(), dep.data.size()};
+    auto const scalar = opEthJovianDaFootprintGasScalar(attr);
+    if (!scalar.has_value())
+    {
+        return std::nullopt;
+    }
+    if (*scalar == 0)
+    {
+        return uint64_t{0};  // Isthmus-length attributes: no DA footprint yet
+    }
+    uint64_t sum = 0;
+    for (auto const& env : envelopes)
+    {
+        if (!env.empty() && env[0] == OP_DEPOSIT_TX_TYPE)
+        {
+            continue;
+        }
+        auto const term =
+            estimatedDaSizeFromFlz(flzCompressLen(evmc::bytes_view{env.data(), env.size()})) *
+            static_cast<uint64_t>(*scalar);
+        // op-geth accumulates into a Go uint64 (wraps); wrapping would let a crafted
+        // block clear the equality gate, so fail closed instead.
+        if (sum > std::numeric_limits<uint64_t>::max() - term)
+        {
+            return std::nullopt;
+        }
+        sum += term;
+    }
+    return sum;
+}
+
 uint64_t localDaFootprintOfGoldenVector()
 {
-    namespace op = bcos::evm::opstack;
     auto sample = w6test::loadVectorSample("jovian_da_mix");
     std::vector<bcos::bytes> owned;
     for (auto const& raw : sample.golden["rawTransactions"])
@@ -164,7 +201,7 @@ uint64_t localDaFootprintOfGoldenVector()
     {
         envelopes.emplace_back(env.data(), env.size());
     }
-    auto const sum = op::daFootprintOfEnvelopes(envelopes);
+    auto const sum = daFootprintOfEnvelopesLocal(envelopes);
     BOOST_REQUIRE(sum.has_value());
     return *sum;
 }
@@ -214,7 +251,7 @@ BOOST_AUTO_TEST_CASE(DAFootprintExceedsGasLimitRejected)
     // (GoldenSample.h:85-90 warns); quantityOf is correct.
     params[0u]["blobGasUsed"] = w6test::quantityOf(gasLimit + 1);
 
-    auto fixture = std::make_unique<OpE2eFixture>(forkFlagsFor(true));
+    auto fixture = std::make_unique<OpE2eFixture>(/*jovian=*/true);
     auto request = bcos::rpc::parseNewPayloadRequest(params, bcos::engine::ApiVersion::V4);
     auto status = bcos::task::syncWait(fixture->service.newPayload(request, 4));
     // PayloadValidationStatus is an enum class without operator<<; must compare via
@@ -296,14 +333,16 @@ BOOST_AUTO_TEST_CASE(SnapshotFreezeFillsOpTxSnapshot)
     using bcos::executor_v1::opstack::OpTxSnapshot;
 
     // Jovian window: exercises the has_da_footprint branch of the fee snapshot too.
-    const auto spec = opstack_test::opeth::OP_JOVIAN_SPEC;
-    const OpFeeParams F{.l1_base_fee = 1'000'000'000_u256,
-        .blob_base_fee = 0_u256,
+    const auto spec = OP_JOVIAN_SPEC;
+    // l1_base_fee = 1 gwei with base_fee_scalar = 1100 keeps the Fjord calldata term
+    // non-zero (l1_cost > 0 is asserted below; the D-4 original pinned both).
+    const OpFeeParams F{.l1_base_fee = intx::uint256{1000000000},
+        .base_fee_scalar = 1100,
+        .blob_base_fee_scalar = 0,
+        .blob_base_fee = intx::uint256{0},
         .operator_fee_scalar = 0,
         .operator_fee_constant = 0,
-        .da_footprint_gas_scalar = 40,
-        .l1_fee_overhead = 0_u256,
-        .l1_fee_scalar = 0_u256};
+        .da_footprint_gas_scalar = 40};
 
     eth::EthBlockInfo block{};
     block.number = 1;
@@ -320,7 +359,8 @@ BOOST_AUTO_TEST_CASE(SnapshotFreezeFillsOpTxSnapshot)
     auto hashImpl = cryptoSuite->hashImpl();
     auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
     auto tx = txFactory->createTransaction(2, "0x00000000000000000000000000000000000000bb",
-        bcos::bytes{0x0a}, "0x1", 100000, "0x2105", "1", 7, 1000, 10);
+        bcos::bytes{0x0a}, "0x1", 100000, "0x2105", "1", 7, /*_abi=*/{}, /*_value=*/{},
+        /*_gasPrice=*/"1000", /*_gasLimit=*/10);
 
     OpTxSnapshot snapshot;
     eth::EthCallParams callParams{};

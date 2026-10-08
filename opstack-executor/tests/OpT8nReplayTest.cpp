@@ -23,11 +23,8 @@
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-evm/adapter/StateRootCompute.h>
-#include <bcos-evm/adapter/Storage2State.h>
-#include <bcos-evm/opstack/OpForkSchedule.h>
-#include <bcos-evm/opstack/OpPredeploys.h>
-#include <bcos-evm/opstack/OpTransition.h>
+#include "support/SeedPreState.h"
+#include "support/DualRunHarness.h"  // opstack_test::DualRunFixture / MLS / runExecutorPath
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <cxxabi.h>
@@ -40,7 +37,6 @@
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <array>
-#include <bcos-evm/eth/state/hash_utils.hpp>
 #include <evmone_precompiles/secp256k1.hpp>
 #include <filesystem>
 #include <fstream>
@@ -51,7 +47,7 @@
 #include <sstream>
 #include <string>
 #include <test/utils/rlp.hpp>
-#include <test/utils/test_state.hpp>
+#include <opstack-executor/OpEthL1Attributes.h>  // encodeOpEthDepositEnvelope
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -98,6 +94,128 @@ inline Json::Value jParse(std::istream& input)
 namespace opeth = bcos::executor_v1::opstack;
 using namespace bcos::ledger;
 using namespace evmone;
+
+// ── Local data-bag stand-ins for the evmone test-state types ─────────────────
+// The vcpkg evmone port ships test/utils/test_state.hpp but NOT the
+// <test/state/...> headers it cross-references (the portfile documents those
+// cross-references as consumer-supplied; the consumer was bcos-evm's vendored
+// eth/state copy, retired with the cutover). This TU only ever used those types
+// as JSON parse targets — no evmone state-machine call — so local equivalents
+// with the same field names keep the loader byte-identical without resurrecting
+// the vendored tree.
+namespace evmone
+{
+using bytes = evmc::bytes;
+using hash256 = evmc::bytes32;
+namespace state
+{
+struct BlockInfo
+{
+    int64_t number = 0;
+    int64_t timestamp = 0;
+    int64_t gas_limit = 0;
+    evmc::address coinbase{};
+    int64_t difficulty = 0;
+    evmc::bytes32 prev_randao{};
+    uint64_t base_fee = 0;
+    evmc::bytes32 parent_beacon_block_root{};
+};
+
+class BlockHashes
+{
+public:
+    virtual ~BlockHashes() = default;
+    [[nodiscard]] virtual evmc::bytes32 get_block_hash(int64_t block_number) const noexcept = 0;
+};
+
+struct Authorization
+{
+    intx::uint256 chain_id;
+    evmc::address addr{};
+    uint64_t nonce = 0;
+    intx::uint256 v;
+    intx::uint256 r;
+    intx::uint256 s;
+    std::optional<evmc::address> signer;
+};
+
+struct Transaction
+{
+    enum class Type
+    {
+        legacy,
+        access_list,
+        eip1559,
+        blob,
+        set_code,
+    };
+    Type type = Type::legacy;
+    evmc::address sender{};
+    std::optional<evmc::address> to;
+    uint64_t nonce = 0;
+    int64_t gas_limit = 0;
+    intx::uint256 max_gas_price;
+    intx::uint256 max_priority_gas_price;
+    intx::uint256 value;
+    evmc::bytes data;
+    std::vector<std::pair<evmc::address, std::vector<evmc::bytes32>>> access_list;
+    uint64_t chain_id = 0;
+    std::vector<Authorization> authorization_list;
+};
+}  // namespace state
+
+namespace test
+{
+/// Minimal TestAccount/TestState: the t8n gate uses TestState purely as an
+/// address→account map for seed/diff; none of evmone's state::transition surface
+/// is reachable here. `balance` is bcos::u256 (not intx) so the EVMAccount
+/// seed/read-back boundary converts nothing.
+struct TestAccount
+{
+    uint64_t nonce = 0;
+    bcos::u256 balance;
+    std::map<evmc::bytes32, evmc::bytes32> storage;
+    evmc::bytes code;
+    bool operator==(const TestAccount&) const noexcept = default;
+};
+using TestState = std::map<evmc::address, TestAccount>;
+}  // namespace test
+}  // namespace evmone
+
+namespace
+{
+/// The old bcos-evm DepositTx shape the vectors parse into (snake_case wire
+/// names); encoded through the production opeth::DepositTx + encoder, so the
+/// envelope bytes are the production bytes by construction.
+struct DepositTx
+{
+    evmc::bytes32 source_hash{};
+    evmc::address from{};
+    std::optional<evmc::address> to;  // nullopt = contract creation
+    std::optional<intx::uint256> mint;
+    intx::uint256 value = 0;
+    int64_t gas_limit = 0;
+    bool is_system_tx = false;
+    evmc::bytes data;
+};
+
+bcos::bytes encodeDepositEnvelope(const DepositTx& dep)
+{
+    opeth::DepositTx d;
+    d.sourceHash = dep.source_hash;
+    d.from = dep.from;
+    d.to = dep.to;
+    if (dep.mint.has_value())
+    {
+        d.mint = bcos::u256(intx::to_string(*dep.mint));
+    }
+    d.value = bcos::u256(intx::to_string(dep.value));
+    d.gasLimit = dep.gas_limit;
+    d.isSystemTx = dep.is_system_tx;
+    d.data.assign(dep.data.begin(), dep.data.end());
+    return opeth::encodeOpEthDepositEnvelope(d);
+}
+}  // namespace
 
 // ── Local subset re-implementation of evmone test::from_json ─────────────────
 // The vcpkg evmone package does not ship test/utils/statetest.hpp (which declares
@@ -194,7 +312,9 @@ evmone::test::TestState from_json<evmone::test::TestState>(const Json::Value& j)
         const auto& j_acc = j[j_addr];
         auto& acc = o[from_json<evmc::address>(Json::Value(j_addr))] = {
             .nonce = from_json<uint64_t>(jAt(j_acc, "nonce")),
-            .balance = from_json<intx::uint256>(jAt(j_acc, "balance")),
+            // base-0 string ctor: accepts the "0x"-prefixed and bare-decimal forms
+            // intx::from_string handled.
+            .balance = bcos::u256(jAt(j_acc, "balance").asString()),
             .storage = {},
             .code = from_json<evmone::bytes>(jAt(j_acc, "code"))};
         if (j_acc.isMember("storage"))
@@ -236,6 +356,12 @@ std::string hexU256(const intx::uint256& v)
 std::string hexHash(const hash256& h)
 {
     return "0x" + evmc::hex(evmc::bytes_view{h.bytes, sizeof(h.bytes)});
+}
+
+std::string hexHashBcos(const bcos::h256& h)
+{
+    const auto r = h.ref();
+    return "0x" + evmc::hex(evmc::bytes_view{r.data(), r.size()});
 }
 
 std::string hexAddr(const evmc::address& a)
@@ -426,11 +552,14 @@ inline bool structurallyUnrecoverable(const evmone::state::Authorization& a)
 
 std::optional<evmc::address> replayRecoverAuthority(const state::Authorization& auth)
 {
-    const auto msg = bytes{0x05} + rlp::encode_tuple(auth.chain_id, auth.addr, auth.nonce);
-    const auto h = keccak256(msg);
+    const auto msg = bytes{0x05} +
+                     rlp::encode_tuple(auth.chain_id,
+                         evmc::bytes_view{auth.addr.bytes, sizeof(auth.addr.bytes)}, auth.nonce);
+    const auto h =
+        bcos::crypto::keccak256Hash(bcos::bytesConstRef{msg.data(), msg.size()});
     const auto r = intx::be::store<evmc::bytes32>(auth.r);
     const auto s = intx::be::store<evmc::bytes32>(auth.s);
-    return evmmax::secp256k1::ecrecover(std::span<const uint8_t, 32>{h.bytes, 32},
+    return evmmax::secp256k1::ecrecover(std::span<const uint8_t, 32>{h.data(), 32},
         std::span<const uint8_t, 32>{r.bytes, 32}, std::span<const uint8_t, 32>{s.bytes, 32},
         auth.v != 0);
 }
@@ -485,44 +614,6 @@ bcos::protocol::TransactionReceiptFactory::Ptr makeTestReceiptFactory()
         std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr));
 }
-
-// ── TestState -> stateRootOf Ledger bridge ───────────────────────────────────
-// bcos::evm::stateRootOf<Ledger> (adapter/StateRootCompute.h) is a template
-// building a secure trie over any Ledger exposing `bool visitAccounts(Visitor) const`.
-// evmone::test::TestState is a std::map, not a Ledger, so expose the account
-// visit surface here. AccountView mirrors MemoryState::AccountView's root-building
-// fields (addr/nonce/balance/codeHash/storage); stateRootOf uses only these five.
-struct TestStateLedger
-{
-    const evmone::test::TestState& state;
-
-    template <class Visitor>
-    bool visitAccounts(Visitor&& visitor) const noexcept
-    {
-        for (const auto& [addr, account] : state)
-        {
-            struct View
-            {
-                const evmc::address& addr;
-                uint64_t nonce;
-                const intx::uint256& balance;
-                evmc::bytes32 codeHash;
-                const std::map<evmc::bytes32, evmc::bytes32>& storage;
-                [[nodiscard]] const evmc::bytes& code() const noexcept { return m_code; }
-                const evmc::bytes& m_code;
-            };
-            const View view{.addr = addr,
-                .nonce = account.nonce,
-                .balance = account.balance,
-                .codeHash = evmone::keccak256(account.code),
-                .storage = account.storage,
-                .m_code = account.code};
-            if (!visitor(view))
-                return false;
-        }
-        return true;
-    }
-};
 
 // ── Single-block load context (shared by replaySingleBlockInto / assertRejectThrow) ──
 // Pure move of the load section from the original replayVector path (previously
@@ -872,45 +963,138 @@ bcos::h256 evmcToH256(const evmc::bytes32& h)
 template <class StorageT>
 void seedStorageFromTestState(StorageT& storage, const test::TestState& ts)
 {
-    evmone::state::StateDiff diff;
-    diff.modified_accounts.reserve(ts.size());
-    for (const auto& [addr, account] : ts)
+    namespace eth = bcos::executor_v1::eth;
+    for (auto const& [addr, account] : ts)
     {
-        evmone::state::StateDiff::Entry entry;
-        entry.addr = addr;
-        entry.nonce = account.nonce;
-        entry.balance = account.balance;
+        auto acc = eth::ethViewAccount(storage, addr);
+        bcos::task::syncWait(acc.create());
+        bcos::task::syncWait(acc.setNonce(std::to_string(account.nonce)));
+        bcos::task::syncWait(acc.setBalance(account.balance));
         if (!account.code.empty())
-            entry.code = account.code;
-        for (const auto& [k, val] : account.storage)
         {
-            if (!evmc::is_zero(val))
-                entry.modified_storage.emplace_back(k, val);
+            bcos::bytes code{account.code.begin(), account.code.end()};
+            bcos::task::syncWait(acc.setCode(code, {},
+                bcos::crypto::keccak256Hash(bcos::bytesConstRef{code.data(), code.size()})));
         }
-        diff.modified_accounts.push_back(std::move(entry));
+        for (auto const& [key, value] : account.storage)
+        {
+            if (!evmc::is_zero(value))
+                bcos::task::syncWait(acc.setStorage(key, value));
+        }
     }
-    bcos::evm::evmstate::Storage2State<StorageT> bridge(storage);
-    bridge.applyDiff(diff, /*seeding=*/true);
-    if (bridge.poisoned())
-        throw std::runtime_error("seedStorageFromTestState poisoned: " + bridge.firstError());
 }
 
+/// Read the whole account plane back out of the view (the retired
+/// Storage2State::visitAccounts' post-cutover form): one range scan over the
+/// /apps/ tables, grouping rows into TestAccount entries — nonce/balance/codeHash
+/// are the named fields, a 32-byte binary key is a storage slot. Tombstones (the
+/// MLS range iterator still yields logically-deleted rows) and zero-valued slots
+/// are skipped, matching trie semantics (0 == absent).
+///
+/// Deliberately NO EVMAccount::exists() gate: the executor's settle/fee writes
+/// create account rows WITHOUT registering a SYS_TABLES row (create() is a
+/// seed-side call), so an exists()-gated fill misses exactly the accounts the
+/// block touched — the reverse-existence check below depends on seeing them.
 template <class StorageT>
-void fillTestStateFromStorage(StorageT& storage, test::TestState& ts)
+bcos::task::Task<void> fillTestStateFromStorageInto(StorageT& storage, test::TestState& ts)
 {
+    using bcos::ledger::ACCOUNT_TABLE_FIELDS;
+    namespace s2 = bcos::storage2;
     ts.clear();
-    bcos::evm::evmstate::Storage2State<StorageT> bridge(storage);
-    bridge.visitAccounts([&](auto const& acc) {
-        test::TestAccount account;
-        account.nonce = acc.nonce;
-        account.balance = acc.balance;
-        account.code = acc.code();
-        account.storage = acc.storage;
-        ts[acc.addr] = std::move(account);
-        return true;
-    });
-    if (bridge.poisoned())
-        throw std::runtime_error("fillTestStateFromStorage poisoned: " + bridge.firstError());
+    auto it = co_await s2::range(storage, s2::RANGE_SEEK,
+        bcos::executor_v1::StateKey{std::string("/apps/"), std::string_view{}});
+    test::TestAccount* current = nullptr;
+    std::string currentTable;
+    evmc::address currentAddr{};
+    bool currentIsAccount = false;
+    while (auto kv = co_await it.next())
+    {
+        auto const& [k, v] = *kv;
+        bcos::executor_v1::StateKeyView keyView(k);
+        if (keyView.m_table != currentTable)
+        {
+            currentTable = std::string(keyView.m_table);
+            current = nullptr;
+            // /apps/<40 lowercase hex> (Hex layout) or /apps/<20 raw bytes> (binary
+            // layout) — anything else is not an account; tables sort, so the first
+            // non-/apps/ table ends the scan.
+            currentIsAccount = currentTable.starts_with("/apps/") &&
+                               (currentTable.size() == 6 + 40 || currentTable.size() == 6 + 20);
+            if (!currentTable.starts_with("/apps/"))
+                co_return;  // past the account plane
+            if (!currentIsAccount)
+                continue;
+            if (currentTable.size() == 6 + 40)
+            {
+                auto const addrBytes = bcos::fromHex(currentTable.substr(6));
+                std::copy_n(addrBytes.begin(), 20, currentAddr.bytes);
+            }
+            else
+            {
+                std::copy_n(currentTable.data() + 6, 20, currentAddr.bytes);
+            }
+        }
+        if (!currentIsAccount)
+            continue;
+        // Tombstone rows carry no value: an account materializes only on its
+        // first LIVE row (an all-tombstone table is a deleted account == absent).
+        if (std::holds_alternative<s2::DELETED_TYPE>(v) ||
+            std::holds_alternative<s2::NOT_EXISTS_TYPE>(v))
+            continue;
+        auto const* entry = std::get_if<bcos::storage::Entry>(std::addressof(v));
+        if (entry == nullptr)
+            continue;
+        if (current == nullptr)
+            current = &ts[currentAddr];
+        const auto key = keyView.m_key;
+        const auto value = entry->get();
+        if (key == ACCOUNT_TABLE_FIELDS::NONCE)
+        {
+            current->nonce = std::stoull(std::string(value));
+        }
+        else if (key == ACCOUNT_TABLE_FIELDS::BALANCE)
+        {
+            current->balance = bcos::u256(std::string(value));
+        }
+        else if (key == ACCOUNT_TABLE_FIELDS::CODE_HASH)
+        {
+            // Code itself is read after the scan of this account's rows — see below.
+        }
+        else if (key == ACCOUNT_TABLE_FIELDS::CODE || key == ACCOUNT_TABLE_FIELDS::ABI ||
+                 key == ACCOUNT_TABLE_FIELDS::ALIVE || key == ACCOUNT_TABLE_FIELDS::FROZEN ||
+                 key == ACCOUNT_TABLE_FIELDS::SHARD)
+        {
+            // Named non-consensus rows: not part of the TestState surface.
+        }
+        else if (key.size() == 32 && value.size() == 32)
+        {
+            evmc::bytes32 slotKey{};
+            evmc::bytes32 slotValue{};
+            std::uninitialized_copy_n(key.data(), 32, slotKey.bytes);
+            std::uninitialized_copy_n(value.data(), 32, slotValue.bytes);
+            if (!evmc::is_zero(slotValue))
+                current->storage[slotKey] = slotValue;
+        }
+    }
+}
+
+/// Read back the current state. The addrs parameter is kept for the callers'
+/// shape but the scan is whole-plane (the retired visitAccounts semantics).
+template <class StorageT>
+void fillTestStateFromStorage(StorageT& storage, test::TestState& ts,
+    const std::set<evmc::address>& addrs)
+{
+    (void)addrs;  // whole-plane scan: the reverse-existence check needs accounts in NO set
+    bcos::task::syncWait(fillTestStateFromStorageInto(storage, ts));
+    // Code bodies sit behind the CODE_HASH row (SYS_CODE_BINARY); resolve per account.
+    for (auto& [addr, account] : ts)
+    {
+        auto acc = bcos::executor_v1::eth::ethViewAccount(storage, addr);
+        if (auto c = bcos::task::syncWait(acc.code()))
+        {
+            account.code.assign(c->get().begin(), c->get().end());
+        }
+    }
 }
 
 void markTouched(const test::TestState& before, const test::TestState& after,
@@ -1033,7 +1217,7 @@ std::set<std::string> expectedMetaFields(const MetaExpectation& in)
     // Non-deposit: the passthrough trio is unconditional (FIELDMAP §5.1:
     // L1GasUsed 恒发射 on every non-deposit receipt; FISCO Task 4 补算, FIXED 非豁免).
     fields.insert({"l1_gas_price", "l1_gas_used", "l1_fee"});
-    if (in.cfg.l1_fee_model == L1FeeModel::Bedrock)
+    if (in.cfg.has_legacy_l1_formula)  // Bedrock..Delta overhead/scalar formula (OpForkSpec)
         fields.insert("l1_fee_scalar");  // raw Bedrock slot-6 scalar (DIVERGENCES.md S4 row)
     else
         // Steady-state assumption: an Ecotone block with dead L1 slots also takes the
@@ -1116,9 +1300,21 @@ struct MetaFeeFlags
     bool daScalarNonZero = false;
 };
 
+/// op-node setL1BlockValues wire layout: the selectors/lengths are the production
+/// constants (OpEthBlockExecute.h / OpEthL1Attributes.h); the operator-fee offsets
+/// mirror the builder (OpEthL1Attributes.cpp c_operatorFeeScalarOffset /
+/// c_operatorFeeConstantOffset) — consensus wire constants, cross-checked by the
+/// fork-spec equivalence test.
+constexpr auto IsthmusL1AttributesSelector = opeth::OP_ETH_ISTHMUS_L1_ATTRIBUTES_SELECTOR;
+constexpr auto JovianL1AttributesSelector = opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_SELECTOR;
+constexpr std::size_t IsthmusL1AttributesLen = opeth::OP_ETH_ISTHMUS_L1_ATTRIBUTES_LEN;
+constexpr std::size_t JovianL1AttributesLen = opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_LEN;
+constexpr std::size_t c_l1AttributesOperatorFeeScalarOffset = 164;
+constexpr std::size_t c_l1AttributesOperatorFeeConstantOffset = 168;
+
 /// Derive the value-dependent emission flags from the vector's L1-attributes
 /// deposit calldata (the first deposit whose data carries the
-/// Isthmus/Jovian selector; op-node marshalBinary layout, OpDepositEncode.h).
+/// Isthmus/Jovian selector; op-node marshalBinary layout, OpEthL1Attributes.cpp).
 /// Pre-Isthmus calldata has no operator/DA fields → both false (harmless: the
 /// cfg gates close anyway — has_operator_fee is Isthmus+, has_da_footprint
 /// Jovian-only).
@@ -1205,7 +1401,7 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
         evmcToH256(bc.blk.prev_randao), evmcToH256(bc.blk.parent_beacon_block_root),
         evmcToH256(bc.hashes.parentHash));
 
-    const auto spec = opeth::opForkSpec(cfg->fork);
+    const auto& spec = cfg;  // BlockContext already carries the resolved fork's spec
     opeth::OpEthExecuteBlockResult executed;
     try
     {
@@ -1226,7 +1422,14 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
         return;
     }
 
-    fillTestStateFromStorage(view, ts);
+    // The touch-diff only needs the accounts that could have changed: before ∪ the
+    // vector's expected-postState set.
+    std::set<evmc::address> addrs;
+    for (const auto& [addr, _] : before)
+        addrs.insert(addr);
+    for (const auto& addrKey : jAt(blk, "_op_expected")["postState"].getMemberNames())
+        addrs.insert(opstack_test::jsonAddress(addrKey));
+    fillTestStateFromStorage(view, ts, addrs);
     std::set<evmc::address> touchedAddrs;
     std::map<evmc::address, std::set<evmc::bytes32>> touchedSlots;
     markTouched(before, ts, touchedAddrs, touchedSlots);
@@ -1245,7 +1448,7 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
             BOOST_ERROR(id << ": empty envelope after successful execute");
             return;
         }
-        result.txTypes.push_back(classifyTxType(raw[0]));
+        result.txTypes.push_back(opeth::opEthClassifyTxType(raw[0]));
     }
     result.gasUsed = static_cast<int64_t>(executed.gasUsed);
     const auto& seal = executed.seal;
@@ -1255,7 +1458,7 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
     ctx.checkField("gasUsed", hexU256(parseU256(jAt(h, "gasUsed"))),
         hexU64(static_cast<uint64_t>(result.gasUsed)));
     ctx.checkField("receiptsRoot", hexHash(test::from_json<hash256>(jAt(h, "receiptsRoot"))),
-        hexHash(seal.receiptsRoot));
+        hexHashBcos(seal.receiptsRoot));
     // bloom is always compared as 512 hex chars (a zero bloom is an all-zero string, not absent).
     {
         auto wantBloom = jAt(h, "logsBloom").asString();
@@ -1277,16 +1480,14 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
         h.isMember("withdrawalsRoot") ?
             std::optional{hexHash(test::from_json<hash256>(jAt(h, "withdrawalsRoot")))} :
             std::nullopt,
-        seal.withdrawalsRoot.has_value() ? std::optional{hexHash(*seal.withdrawalsRoot)} :
+        seal.withdrawalsRoot.has_value() ? std::optional{hexHashBcos(*seal.withdrawalsRoot)} :
                                            std::nullopt);
-    // ── header.stateRoot (single leg: execution+engine vs op-geth consensus root) ─
-    // Timing: the seal-stage ts is already the full post-finalize world state (same
-    // anchor as the messagePasserStorage snapshot); later postState comparisons only
-    // read ts, never write — safe to build the root here. Engine correctness
-    // (evmone mpt_hash) is anchored upstream; not re-proven here. Red failures
-    // should be attributed to execution/accounting or pre-alloc completeness first.
+    // ── header.stateRoot: the production incremental-MPT root (executed.stateRoot,
+    // computed over the real executed view) vs op-geth's consensus root. The
+    // storage-content leg is the postState per-field compare below; the retired
+    // bcos-evm stateRootOf<TestStateLedger> from-scratch recompute is not resurrected.
     ctx.checkField("stateRoot", hexHash(test::from_json<hash256>(jAt(h, "stateRoot"))),
-        hexHash(bcos::evm::stateRootOf(TestStateLedger{ts})));
+        hexHashBcos(executed.stateRoot));
     // requestsHash: pre-Prague (ecotone/fjord/..., incl. ecotone_upgrade_fjord_activation)
     // vectors do not emit this key (op-geth t8n omitempty; only Prague has EIP-7685
     // requests), so the want side goes through checkOptional by presence.
@@ -1294,23 +1495,20 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
         h.isMember("requestsHash") ?
             std::optional{hexHash(test::from_json<hash256>(jAt(h, "requestsHash")))} :
             std::nullopt,
-        seal.requestsHash.has_value() ? std::optional{hexHash(*seal.requestsHash)} : std::nullopt);
+        seal.requestsHash.has_value() ? std::optional{hexHashBcos(*seal.requestsHash)} : std::nullopt);
     // blobGasUsed: Ecotone+ vectors always emit it (op-geth headers carry 0x0 for
     // blob-less blocks); Regolith/Canyon (London/Shanghai) headers predate 4844 and
-    // the vectors omit the key — both sides must be absent. Jovian -> value compare
-    // ("0x0" is an in-place zero, e.g. jovian_first_block); the other Ecotone+ forks
-    // assert the C++ side is absent (seal.blobGasUsed semantics = Jovian
-    // DA-footprint header field; pre-Isthmus has no such reuse bit).
+    // the vectors omit the key — both sides must be absent. The post-cutover seal
+    // carries the op-geth header value on EVERY Ecotone+ block (fixed 0 on
+    // Ecotone–Isthmus, the DA footprint on Jovian+ — the header hash parity needs
+    // the field present), so the compare is a value compare for the whole window.
     if (bc.cfg->fork >= OpFork::Ecotone)
     {
         const auto wantBlobGas =
             parseU256(jAt(h, "blobGasUsed"));  // required (always emitted on Ecotone+)
         const auto gotBlobGas =
             seal.blobGasUsed.has_value() ? std::optional{hexU64(*seal.blobGasUsed)} : std::nullopt;
-        if (isJovian)
-            ctx.checkOptional("blobGasUsed", std::optional{hexU256(wantBlobGas)}, gotBlobGas);
-        else
-            ctx.checkOptional("blobGasUsed", std::nullopt, gotBlobGas);
+        ctx.checkOptional("blobGasUsed", std::optional{hexU256(wantBlobGas)}, gotBlobGas);
     }
     else
     {
@@ -1554,8 +1752,8 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
             const auto it = ts.find(addr);
             const test::TestAccount& got = it != ts.end() ? it->second : kZeroAccount;
 
-            ctx.checkField(
-                ap + ".balance", hexU256(parseU256(jAt(acc, "balance"))), hexU256(got.balance));
+            ctx.checkField(ap + ".balance", hexU256(parseU256(jAt(acc, "balance"))),
+                hexU256Bcos(got.balance));
             ctx.checkField(ap + ".nonce",
                 hexU64(acc.isMember("nonce") ? test::from_json<uint64_t>(jAt(acc, "nonce")) : 0),
                 hexU64(got.nonce));
@@ -2215,7 +2413,7 @@ BOOST_AUTO_TEST_CASE(GoldenTransactionsRootMatches)
         std::vector<bcos::bytes> raws;
         for (auto const& rt : j["rawTransactions"])
             raws.push_back(bcos::fromHexWithPrefix(rt.asString()));
-        auto root = bcos::evm::engine::computeOpTxRoot(raws);
+        auto root = opeth::computeOpEthTransactionsRoot(raws);
         auto golden = bcos::h256(j["transactionsRoot"].asString());
         BOOST_CHECK_MESSAGE(root == golden,
             entry.path().filename() << ": txsRoot mismatch computed=" << root.hexPrefixed()

@@ -39,7 +39,7 @@ BOOST_AUTO_TEST_CASE(ParseAllowsKarstAfterJovian)
 // isthmus as well and is rejected by the general rule, not a Karst/Jovian special case.
 BOOST_AUTO_TEST_CASE(ParseRejectsSkippedForkBeforeKarst)
 {
-    BOOST_CHECK_THROW(bcos::ledger::foldOpForkShorthand(300, 1), InvalidOpForkSchedule);  // karst before jovian
+    BOOST_CHECK_THROW(std::ignore = bcos::ledger::foldOpForkShorthand(300, 1), InvalidOpForkSchedule);  // karst before jovian
 }
 
 BOOST_AUTO_TEST_SUITE_END()
