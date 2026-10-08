@@ -6,15 +6,15 @@ find_package(TBB CONFIG REQUIRED)
 
 # The ported evmone precompile dispatch (EVMPrecompiles.h/.cpp) is a standalone
 # library: it is the shared canonical EVM-precompile implementation used by both
-# this executor and transaction-executor (via EvmPrecompiledAdapter.h). The
-# repository-root include dir lets consumers include it as
-# <ethereum-executor/EVMPrecompiles.h> (same convention as opstack-executor).
+# this executor and transaction-executor (via EvmPrecompiledAdapter.h). Only its
+# own directory is exported (consumers include <EVMPrecompiles.h>) — exporting
+# the repository root would put every top-level name into the header search
+# space of transaction-executor and everything downstream.
 add_library(evm-precompiles STATIC
     EVMPrecompiles.cpp
 )
 target_include_directories(evm-precompiles PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>)
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 target_link_libraries(evm-precompiles PUBLIC
     evmone::evmone evmone::precompiles intx::intx)
 set_target_properties(evm-precompiles PROPERTIES UNITY_BUILD OFF)

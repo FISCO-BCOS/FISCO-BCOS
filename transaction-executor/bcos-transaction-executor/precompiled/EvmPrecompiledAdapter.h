@@ -29,7 +29,7 @@
 #pragma once
 
 #include "bcos-executor/src/vm/Precompiled.h"
-#include <ethereum-executor/EVMPrecompiles.h>
+#include <EVMPrecompiles.h>
 #include <functional>
 #include <utility>
 
@@ -41,21 +41,39 @@ namespace eth_evm = bcos::executor_v1::eth::evm;
 using EvmPrecompileExecute = eth_evm::ExecutionResult (*)(
     const uint8_t* input, size_t input_size, uint8_t* output, size_t output_size) noexcept;
 
+/// Signature of the shared analyze functions (eth::evm::*_analyze).
+using EvmPrecompileAnalyze = eth_evm::PrecompileAnalysis (*)(
+    evmc::bytes_view input, evmc_revision rev) noexcept;
+
 /// Adapts an eth::evm execute function to the bcos-evm PrecompiledExecutor
-/// convention. On success the output is the first output_size bytes of a
-/// maxOutputSize buffer; on failure the result is {false, zeroes(failureOutputSize)}
-/// — byte-identical to the legacy bcos-evm executors.
+/// convention. The output buffer is sized from the matching analyze function's
+/// max_output_size — the single source of truth already maintained next to
+/// execute (rev-independent for every precompile routed here; only gas_cost
+/// varies with rev, and it is not read — BCOS pricing stays on the registrar
+/// side). On success the output is the first output_size bytes of that buffer;
+/// on failure the result is {false, zeroes(failureOutputSize)} — byte-identical
+/// to the legacy bcos-evm executors.
+///
+/// A zero max_output_size means analyze rejected the input outright (malformed
+/// MSM / BLS-pairing input length); it maps to failure instead of handing an
+/// empty buffer to an execute function whose own length checks are assert-only
+/// and compile out under NDEBUG.
 ///
 /// @p precheck (optional) replicates the legacy early input validation. It also
 /// keeps inputs the shared execute functions only assert on (MSM / pairing input
-/// divisibility, blake2 input length) from reaching them — those asserts compile
-/// out under NDEBUG.
+/// divisibility, blake2 input length) from reaching them.
 inline executor::PrecompiledExecutor adaptEvmPrecompiled(EvmPrecompileExecute execute,
-    size_t maxOutputSize, size_t failureOutputSize,
+    EvmPrecompileAnalyze analyze, size_t failureOutputSize,
     std::function<bool(bytesConstRef)> precheck = {})
 {
     return [=](bytesConstRef in) -> std::pair<bool, bytes> {
         if (precheck && !precheck(in))
+        {
+            return {false, bytes(failureOutputSize, 0)};
+        }
+        const auto maxOutputSize =
+            analyze({in.data(), in.size()}, EVMC_MAX_REVISION).max_output_size;
+        if (maxOutputSize == 0)
         {
             return {false, bytes(failureOutputSize, 0)};
         }
@@ -85,22 +103,14 @@ inline auto multipleOf(size_t pairSize)
     return [pairSize](bytesConstRef in) { return !in.empty() && in.size() % pairSize == 0; };
 }
 
-/// identity (0x04): output is the input itself, so the buffer is sized dynamically.
+/// identity (0x04): output is the input itself. Kept as a dedicated executor
+/// rather than routed through the adapter: identity_analyze's max_output_size
+/// is input.size(), which is 0 for empty input and would trip the adapter's
+/// zero-size failure guard, while legacy identity returns {true, {}} there.
 inline std::pair<bool, bytes> identityExecutor(bytesConstRef in)
 {
     bytes output(in.size(), 0);
     eth_evm::identity_execute(in.data(), in.size(), output.data(), output.size());
-    return {true, std::move(output)};
-}
-
-/// p256verify (0x0100): never fails — wrong-size input or an invalid signature
-/// yields {true, {}} per EIP-7212/RIP-7212 (matched by the shared execute).
-inline std::pair<bool, bytes> p256VerifyExecutor(bytesConstRef in)
-{
-    bytes output(32, 0);
-    const auto [status, outputSize] =
-        eth_evm::p256verify_execute(in.data(), in.size(), output.data(), output.size());
-    output.resize(status == EVMC_SUCCESS ? outputSize : 0);
     return {true, std::move(output)};
 }
 }  // namespace bcos::executor_v1

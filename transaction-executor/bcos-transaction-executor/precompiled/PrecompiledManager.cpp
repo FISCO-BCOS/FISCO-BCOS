@@ -40,11 +40,13 @@ bcos::executor_v1::PrecompiledManager::PrecompiledManager(crypto::Hash::Ptr hash
                0});
     m_address2Precompiled.emplace_back(
         2, Precompiled{executor::PrecompiledContract(
-                           60, 12, adaptEvmPrecompiled(eth_evm::sha256_execute, 32, 0)),
+                           60, 12, adaptEvmPrecompiled(
+                                       eth_evm::sha256_execute, eth_evm::sha256_analyze, 0)),
                0});
     m_address2Precompiled.emplace_back(
         3, Precompiled{executor::PrecompiledContract(
-                           600, 120, adaptEvmPrecompiled(eth_evm::ripemd160_execute, 32, 0)),
+                           600, 120, adaptEvmPrecompiled(
+                                         eth_evm::ripemd160_execute, eth_evm::ripemd160_analyze, 0)),
                0});
     m_address2Precompiled.emplace_back(
         4, Precompiled{executor::PrecompiledContract(15, 3, identityExecutor), 0});
@@ -54,22 +56,25 @@ bcos::executor_v1::PrecompiledManager::PrecompiledManager(crypto::Hash::Ptr hash
             0});
     m_address2Precompiled.emplace_back(
         6, Precompiled{executor::PrecompiledContract(
-                           150, 0, adaptEvmPrecompiled(eth_evm::ecadd_execute, 64, 64)),
+                           150, 0, adaptEvmPrecompiled(
+                                       eth_evm::ecadd_execute, eth_evm::ecadd_analyze, 64)),
                0});
     m_address2Precompiled.emplace_back(
         7, Precompiled{executor::PrecompiledContract(
-                           6000, 0, adaptEvmPrecompiled(eth_evm::ecmul_execute, 64, 64)),
+                           6000, 0, adaptEvmPrecompiled(
+                                        eth_evm::ecmul_execute, eth_evm::ecmul_analyze, 64)),
                0});
     m_address2Precompiled.emplace_back(
         8, Precompiled{executor::PrecompiledContract(
                            executor::PrecompiledRegistrar::pricer("alt_bn128_pairing_product"),
-                           adaptEvmPrecompiled(eth_evm::ecpairing_execute, 32, 32)),
+                           adaptEvmPrecompiled(
+                               eth_evm::ecpairing_execute, eth_evm::ecpairing_analyze, 32)),
                0});
     m_address2Precompiled.emplace_back(
         9, Precompiled{executor::PrecompiledContract(
                            executor::PrecompiledRegistrar::pricer("blake2_compression"),
-                           adaptEvmPrecompiled(
-                               eth_evm::blake2bf_execute, 64, 0, blake2InputOk)),
+                           adaptEvmPrecompiled(eth_evm::blake2bf_execute,
+                               eth_evm::blake2bf_analyze, 0, blake2InputOk)),
                0});
 
     // EIP-2537 BLS12-381 precompiles (Prague, 0x0b–0x11)
@@ -78,16 +83,21 @@ bcos::executor_v1::PrecompiledManager::PrecompiledManager(crypto::Hash::Ptr hash
         int address;
         const char* name;  // registrar pricer name (BCOS pricing, unchanged)
         EvmPrecompileExecute execute;
-        size_t maxOutputSize;
+        EvmPrecompileAnalyze analyze;
         std::function<bool(bytesConstRef)> precheck;
     } blsPrecompiles[] = {
-        {0x0b, "bls12_g1add", eth_evm::bls12_g1add_execute, 128, {}},
-        {0x0c, "bls12_g1msm", eth_evm::bls12_g1msm_execute, 128, multipleOf(160)},
-        {0x0d, "bls12_g2add", eth_evm::bls12_g2add_execute, 256, {}},
-        {0x0e, "bls12_g2msm", eth_evm::bls12_g2msm_execute, 256, multipleOf(288)},
-        {0x0f, "bls12_pairing_check", eth_evm::bls12_pairing_check_execute, 32, multipleOf(384)},
-        {0x10, "bls12_map_fp_to_g1", eth_evm::bls12_map_fp_to_g1_execute, 128, {}},
-        {0x11, "bls12_map_fp2_to_g2", eth_evm::bls12_map_fp2_to_g2_execute, 256, {}},
+        {0x0b, "bls12_g1add", eth_evm::bls12_g1add_execute, eth_evm::bls12_g1add_analyze, {}},
+        {0x0c, "bls12_g1msm", eth_evm::bls12_g1msm_execute, eth_evm::bls12_g1msm_analyze,
+            multipleOf(160)},
+        {0x0d, "bls12_g2add", eth_evm::bls12_g2add_execute, eth_evm::bls12_g2add_analyze, {}},
+        {0x0e, "bls12_g2msm", eth_evm::bls12_g2msm_execute, eth_evm::bls12_g2msm_analyze,
+            multipleOf(288)},
+        {0x0f, "bls12_pairing_check", eth_evm::bls12_pairing_check_execute,
+            eth_evm::bls12_pairing_check_analyze, multipleOf(384)},
+        {0x10, "bls12_map_fp_to_g1", eth_evm::bls12_map_fp_to_g1_execute,
+            eth_evm::bls12_map_fp_to_g1_analyze, {}},
+        {0x11, "bls12_map_fp2_to_g2", eth_evm::bls12_map_fp2_to_g2_execute,
+            eth_evm::bls12_map_fp2_to_g2_analyze, {}},
     };
     for (auto const& entry : blsPrecompiles)
     {
@@ -95,15 +105,15 @@ bcos::executor_v1::PrecompiledManager::PrecompiledManager(crypto::Hash::Ptr hash
             Precompiled{
                 executor::PrecompiledContract(
                     executor::PrecompiledRegistrar::pricer(entry.name),
-                    adaptEvmPrecompiled(entry.execute, entry.maxOutputSize, 0, entry.precheck)),
+                    adaptEvmPrecompiled(entry.execute, entry.analyze, 0, entry.precheck)),
                 ledger::Features::Flag::feature_evm_prague});
     }
 
     // EIP-7212 p256verify (Osaka, 0x0100)
     m_address2Precompiled.emplace_back(0x0100,
         Precompiled{
-            executor::PrecompiledContract(
-                executor::PrecompiledRegistrar::pricer("p256verify"), p256VerifyExecutor),
+            executor::PrecompiledContract(executor::PrecompiledRegistrar::pricer("p256verify"),
+                adaptEvmPrecompiled(eth_evm::p256verify_execute, eth_evm::p256verify_analyze, 0)),
             ledger::Features::Flag::feature_evm_osaka});
 
     m_address2Precompiled.emplace_back(

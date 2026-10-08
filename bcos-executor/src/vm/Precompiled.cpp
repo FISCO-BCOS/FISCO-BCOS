@@ -326,7 +326,8 @@ ETH_REGISTER_PRECOMPILED(alt_bn128_G1_add)(bytesConstRef _in)
     using namespace evmmax::bn254;
 
     uint8_t buf[128]{};
-    std::memcpy(buf, _in.data(), std::min(_in.size(), sizeof(buf)));
+    if (_in.size() != 0)
+        std::memcpy(buf, _in.data(), std::min(_in.size(), sizeof(buf)));
 
     const auto p = AffinePoint::from_bytes(std::span<const uint8_t, 64>{buf, 64});
     const auto q = AffinePoint::from_bytes(std::span<const uint8_t, 64>{buf + 64, 64});
@@ -343,7 +344,8 @@ ETH_REGISTER_PRECOMPILED(alt_bn128_G1_mul)(bytesConstRef _in)
     using namespace evmmax::bn254;
 
     uint8_t buf[96]{};
-    std::memcpy(buf, _in.data(), std::min(_in.size(), sizeof(buf)));
+    if (_in.size() != 0)
+        std::memcpy(buf, _in.data(), std::min(_in.size(), sizeof(buf)));
 
     const auto p = AffinePoint::from_bytes(std::span<const uint8_t, 64>{buf, 64});
     if (!p.has_value() || !validate(*p))
