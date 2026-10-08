@@ -283,12 +283,13 @@ BOOST_AUTO_TEST_CASE(JovianDaFootprintMustEqualLocalRecomputation,
 }
 
 // D-4 (post-cutover form): the validate/transition snapshot discipline is enforced
-// STRUCTURALLY now — OpPolicy freezes the fee at construction (m_fee), writes it into
-// the caller-owned OpTxSnapshot in additionalMaxCost, and settleFees/buildReceipt read
-// the SNAPSHOT (there is no post-validate storage re-read path to test against). This
-// case pins the observable half: the snapshot fields the transition will consume are
-// exactly the validate-time fee F.
-BOOST_AUTO_TEST_CASE(TransitionUsesValidateSnapshot)
+// structurally — OpPolicy's ctor takes the caller-owned OpTxSnapshot, additionalMaxCost
+// writes the fee into it, and settleFees/buildReceipt read it (see the read sites at
+// OpExecutionPolicy.h:295-296). This case pins the observable half: the snapshot fields
+// the transition will consume are exactly the validate-time fee F. The transition-side
+// (settleFees) behaviour is covered by the execution suites; this case's old
+// storage-mutation half was retired with the pre-cutover driver.
+BOOST_AUTO_TEST_CASE(SnapshotFreezeFillsOpTxSnapshot)
 {
     using bcos::executor_v1::opstack::OpFeeParams;
     using bcos::executor_v1::opstack::OpPolicy;

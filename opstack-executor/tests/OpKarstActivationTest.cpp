@@ -232,7 +232,8 @@ BOOST_AUTO_TEST_CASE(JovianActivationBlockAllowsDepositsOnly, * boost::unit_test
 {
     auto schedule = opstack_test::isthmusThenJovian(kJovianTsSec);
     auto dep = depositWithJovianAttrs();
-    BOOST_CHECK_NO_THROW(runPreBlock(schedule, kParentTsSec, kJovianTsMs, {kDepositEnvelope}, {dep}));
+    BOOST_CHECK_NO_THROW(runPreBlock(schedule, kParentTsSec, kJovianTsMs,
+        {kDepositEnvelope}, {dep}));
     BOOST_CHECK_NO_THROW(runPreBlock(schedule, kParentTsSec, kJovianTsMs,
         {kDepositEnvelope, kDepositEnvelope}, {dep, dep}));
 }
@@ -288,7 +289,9 @@ BOOST_AUTO_TEST_CASE(KarstActivationBlockRejectsUserTxBeforeTrailingDeposit, * b
         OpConsensusError, isActivationUserTxError);
 }
 
-// clang-format off// The engine-API profile selection surface, ported to the post-cutover fork model:
+// clang-format off
+
+// The engine-API profile selection surface, ported to the post-cutover fork model:
 // resolve the fork from the chain's own OpForkSchedule (ledger::resolveOpFork — the ONE
 // fork-activation parser), then read the constexpr profile table (OpForkId.h). The old
 // seam method (resolveEngineForkAt over a boolean-flag schedule) is retired; the table
@@ -313,12 +316,20 @@ bcos::engine::EngineForkResolution resolveEngineForkForTest(
         {OpForkId::Karst, bcos::ledger::OpFork::Karst},
     }}};
     auto forkId = OpForkId::Isthmus;
+    bool matched = false;
     for (auto const& [id, ledgerFork] : kIdByLadder)
     {
         if (ledgerFork == fork)
         {
             forkId = id;
+            matched = true;
         }
+    }
+    // Delta (and any future rung the table forgets) must not fall through to the
+    // Isthmus profile silently — an unmapped fork is a mapping bug, not Isthmus.
+    if (!matched)
+    {
+        return bcos::engine::OpForkResolutionError::InconsistentExecutionConfig;
     }
     return EngineForkContext{
         .forkId = forkId, .api = bcos::engine::engineApiProfileFor(forkId),
@@ -329,6 +340,10 @@ bcos::engine::EngineForkResolution resolveEngineForkForTest(
 bcos::ledger::OpForkSchedule karstAtSchedule(uint64_t karstTs)
 {
     bcos::ledger::OpForkSchedule schedule;
+    // jovian implied at karst's second (the fold rule, same as KarstNutHelpers):
+    // without this the ts<karstTs arm resolves Isthmus and the case cannot
+    // discriminate Jovian from Isthmus.
+    schedule.m_jovianTime = karstTs;
     schedule.m_karstTime = karstTs;
     return schedule;
 }
@@ -351,7 +366,10 @@ BOOST_AUTO_TEST_CASE(ResolveEngineForkAtKarstSelectsGetPayloadV5, * boost::unit_
 }
 
 // clang-format off
-BOOST_AUTO_TEST_CASE(ResolveEngineForkAtRejectsBelowBaseline, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format off
+BOOST_AUTO_TEST_CASE(ResolveEngineForkBelowActivationFallsBackToIsthmusBaseline,
+    * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
+// clang-format on
 // clang-format on
 {
     // Jovian scheduled at 50: timestamps below the activation still resolve under the
@@ -372,13 +390,15 @@ BOOST_AUTO_TEST_CASE(ResolveEngineForkAtRejectsBelowBaseline, * boost::unit_test
 BOOST_AUTO_TEST_CASE(ResolveEngineForkAtEcotoneSelectsV3, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
 // clang-format on
 {
+    // Ecotone resolved via an explicit ladder (isthmus above the sample ts keeps the
+    // zero-start Isthmus fallback out of the way, so the ecotone row is what resolves).
     bcos::ledger::OpForkSchedule schedule;
-    schedule.m_ecotoneTime = 0;  // Ecotone from genesis (explicit ladder shape)
+    schedule.m_ecotoneTime = 0;
+    schedule.m_isthmusTime = 100;
     auto resolved = resolveEngineForkForTest(schedule, 0);
     auto* ctx = std::get_if<bcos::engine::EngineForkContext>(&resolved);
     BOOST_REQUIRE(ctx);
-    // The latest fork at ts=0 is Isthmus (the zero-start baseline ⊇ Ecotone rules).
-    BOOST_CHECK(ctx->forkId == bcos::engine::OpForkId::Isthmus);
+    BOOST_CHECK(ctx->forkId == bcos::engine::OpForkId::Ecotone);
     BOOST_CHECK(ctx->api.getPayload == bcos::engine::ApiVersion::V3);
     BOOST_CHECK(ctx->api.forkchoiceUpdated == bcos::engine::ApiVersion::V3);
     BOOST_CHECK(ctx->api.newPayload == bcos::engine::ApiVersion::V3);
@@ -408,6 +428,15 @@ BOOST_AUTO_TEST_CASE(EngineApiProfileTableMatchesOpNode, * boost::unit_test::lab
         bcos::engine::OpExtraDataLayout extra;
     };
     const Row rows[] = {
+        {0, bcos::engine::OpForkId::Regolith, bcos::engine::ApiVersion::V1,
+            bcos::engine::ApiVersion::V2, bcos::engine::ApiVersion::V2,
+            bcos::engine::OpExtraDataLayout::Empty},
+        {100, bcos::engine::OpForkId::Canyon, bcos::engine::ApiVersion::V2,
+            bcos::engine::ApiVersion::V2, bcos::engine::ApiVersion::V2,
+            bcos::engine::OpExtraDataLayout::Empty},
+        {200, bcos::engine::OpForkId::Ecotone, bcos::engine::ApiVersion::V3,
+            bcos::engine::ApiVersion::V3, bcos::engine::ApiVersion::V3,
+            bcos::engine::OpExtraDataLayout::Empty},
         {600, bcos::engine::OpForkId::Karst, bcos::engine::ApiVersion::V3,
             bcos::engine::ApiVersion::V5, bcos::engine::ApiVersion::V4,
             bcos::engine::OpExtraDataLayout::Jovian17},
