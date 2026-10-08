@@ -322,30 +322,31 @@ inline OpBlockRunCtx makeRunCtx()
 /// production shape DualRunHarness's runExecutorPath drives. Fork selection is the
 /// timestamp schedule now (jovianActive → Jovian at second 1, else all-Isthmus), and the
 /// result type is the new OpEthExecuteBlockResult (receipts + seal + stateRoot/txRoot).
-template <class StorageT>
-opstack_test::opeth::OpEthExecuteBlockResult runOpBlock(StorageT& storage,
+/// Drive the post-cutover shared block-execution path (preBlockOpEthSteps →
+/// SchedulerSerialImpl(serial) over OpEthExecutor → finalizeOpEthBlockResult) over the
+/// CALLER's view — the executor reads and writes exactly the view the caller seeded
+/// and will read back. (The old adapter copied rows into a fresh fixture's view and
+/// returned results whose writes never reached the caller's store.)
+/// Drive the post-cutover shared block-execution path (preBlockOpEthSteps →
+/// SchedulerSerialImpl(serial) over OpEthExecutor → finalizeOpEthBlockResult) over the
+/// CALLER's view — the executor reads and writes exactly the view the caller seeded and
+/// will read back. (The old adapter copied rows into a fresh fixture's view and returned
+/// results whose writes never reached the caller's store.) The fixture supplies the
+/// receipt factory / hash impl / io pool; the caller's MLS view carries the state.
+template <class ViewT>
+opstack_test::opeth::OpEthExecuteBlockResult runOpBlock(ViewT& view,
     bcos::protocol::BlockHeader const& header, std::vector<bcos::bytes> const& rawTxs,
-    bool jovianActive, uint64_t /*chainId*/, OpBlockRunCtx& ctx)
+    bool jovianActive, OpBlockRunCtx& ctx)
 {
-    // The production path is Storage-templated over the view; the executor reads
-    // whatever the test seeded (L1Block code/slots). Transactions build with the
-    // caller's hash impl (the envelope->tars bridge this file already carries).
     std::vector<bcos::protocol::Transaction::ConstPtr> transactions;
     transactions.reserve(rawTxs.size());
     for (auto const& env : rawTxs)
     {
         transactions.push_back(buildFiscoTxFromEnvelope(env, ctx.hashImpl));
     }
-
-    opstack_test::DualRunFixture fixture;
-    auto view = fixture.multiLayerStorage.fork();
-    view.newMutable();
-    // The executor must read the CALLER's seeded state (L1Block code/slots). storage2
-    // views cannot alias two storages, so copy the caller's rows into the fixture's
-    // mutable layer (row-preserving: same StateKey -> same Entry value).
-    bcos::task::syncWait(opstack_test::copyStorageRows(storage, view));
     const auto spec = jovianActive ? opstack_test::opeth::OP_JOVIAN_SPEC :
                                      opstack_test::opeth::OP_ISTHMUS_SPEC;
+    opstack_test::DualRunFixture fixture;  // carries receiptFactory/hashImpl/ioServicePool
     return opstack_test::runExecutorPath(fixture, view, header, spec, transactions, rawTxs);
 }
 }  // namespace
@@ -425,7 +426,7 @@ BOOST_AUTO_TEST_CASE(L1BlockDepositWritesSlots)
     opstack_test::opeth::OpEthExecuteBlockResult result;
     try
     {
-        result = runOpBlock(view, *header, rawTxs, /*jovianActive=*/true, 0x2105, runCtx);
+        result = runOpBlock(view, *header, rawTxs, /*jovianActive=*/true, runCtx);
     }
     catch (const std::exception& e)
     {
@@ -493,7 +494,7 @@ BOOST_AUTO_TEST_CASE(NonZeroL1ParamsAlignWithUnpackOpFeeParams)
     opstack_test::opeth::OpEthExecuteBlockResult result;
     try
     {
-        result = runOpBlock(view, *header, rawTxs, /*jovianActive=*/true, 0x2105, runCtx);
+        result = runOpBlock(view, *header, rawTxs, /*jovianActive=*/true, runCtx);
     }
     catch (const std::exception& e)
     {
@@ -573,7 +574,7 @@ BOOST_AUTO_TEST_CASE(DepositWritesFeeParamsReadableByLoadOpFeeParams)
     opstack_test::opeth::OpEthExecuteBlockResult result;
     try
     {
-        result = runOpBlock(view, *header, rawTxs, /*jovianActive=*/true, 0x2105, runCtx);
+        result = runOpBlock(view, *header, rawTxs, /*jovianActive=*/true, runCtx);
     }
     catch (const std::exception& e)
     {
@@ -633,7 +634,7 @@ BOOST_AUTO_TEST_CASE(FailedDepositSealsBlockWithFullGasAndBumpedNonce)
     opstack_test::opeth::OpEthExecuteBlockResult result;
     try
     {
-        result = runOpBlock(view, *header, rawTxs, /*jovianActive=*/true, 0x2105, runCtx);
+        result = runOpBlock(view, *header, rawTxs, /*jovianActive=*/true, runCtx);
     }
     catch (const std::exception& e)
     {
@@ -724,7 +725,7 @@ struct JovianShapeFixture
     {
         auto header = makeOpHeader(1, timestampMillis);
         return runOpBlock(view, *header, rawTxs,
-            /*jovianActive=*/timestampMillis >= 2'000'000, kChainId, runCtx);
+            /*jovianActive=*/timestampMillis >= 2'000'000, runCtx);
     }
 };
 }  // namespace
@@ -1038,7 +1039,7 @@ BOOST_AUTO_TEST_CASE(WithdrawTxWritesMessagePasserAndChangesRoot)
     std::vector<bcos::bytes> rawTxs{makeDepositEnvelope(makeJovianCalldataZeroBaseFees()),
         bcos::fromHex(c_withdrawTxEnvelopeHex)};
     auto result =
-        runOpBlock(view, *header, rawTxs, /*jovianActive=*/true, 0x2105, runCtx);
+        runOpBlock(view, *header, rawTxs, /*jovianActive=*/true, runCtx);
     BOOST_REQUIRE_EQUAL(result.receipts.size(), 2u);
     BOOST_CHECK_EQUAL(result.receipts[1]->status(), 0);
     // The withdraw tx wrote sentMessages[0x00..00] = true: slot keccak256(0x00*64) = 1.

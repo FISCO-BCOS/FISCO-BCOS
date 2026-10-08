@@ -13,7 +13,6 @@
 // OpSchedulerTest's BlockInfo gas-limit case.
 
 #include "support/DualRunHarness.h"
-#include "support/RunSharedPath.h"
 #include <opstack-executor/OpEthBlockExecute.h>
 
 #include <bcos-crypto/hash/Keccak256.h>
@@ -140,9 +139,10 @@ bcos::protocol::Transaction::Ptr buildEip1559FiscoTx()
 /// Fund the sender EOA in the plain MutableStorage so opValidate's balance + EIP-3607 checks pass
 /// (StorageStateView::exists() needs a non-zero codeHash — create + setCode(empty) makes it an
 /// existing account with empty code; a bare setBalance would leave it nonexistent).
-void fundSender(MutableStorage& storage, bcos::crypto::Hash::Ptr const& hashImpl)
+template <class StorageT>
+void fundSender(StorageT& storage, bcos::crypto::Hash::Ptr const& hashImpl)
 {
-    bcos::ledger::account::EVMAccount<MutableStorage> account(
+    bcos::ledger::account::EVMAccount<StorageT> account(
         storage, kSender, bcos::ledger::account::AddressTableMode::Hex);
     bcos::task::syncWait(account.create());
     bcos::task::syncWait(account.setCode({}, {}, hashImpl->emptyHash()));
@@ -160,14 +160,15 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
     namespace engine = bcos::evm::engine;
     namespace detail = bcos::evm::engine::detail;
 
-    MutableStorage storage;
-    auto cryptoSuite = makeCryptoSuite();
-    auto hashImpl = cryptoSuite->hashImpl();
-    auto receiptFactory = makeReceiptFactory();
+    opstack_test::DualRunFixture fixture;
+    auto view = fixture.multiLayerStorage.fork();
+    view.newMutable();
+    auto hashImpl = fixture.hashImpl;
+    auto receiptFactory = fixture.receiptFactory;
 
     auto header = makeHeader(1'000'000);  // 1000 s
 
-    fundSender(storage, hashImpl);
+    fundSender(view, hashImpl);
 
     auto depTx = makeAttributesDeposit();
     auto normFisco = buildEip1559FiscoTx();
@@ -180,8 +181,8 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
     BOOST_REQUIRE(depFiscoTx != nullptr);
     std::vector<bcos::protocol::Transaction::ConstPtr> transactions{depFiscoTx, normFisco};
 
-    auto result = opstack_test::runSharedPath(storage, *header, rawTxBytes, transactions,
-        opstack_test::opeth::OP_ISTHMUS_SPEC);
+    auto result = opstack_test::runExecutorPath(
+        fixture, view, *header, opstack_test::opeth::OP_ISTHMUS_SPEC, transactions, rawTxBytes);
 
     // System-call BlockInfo gas_limit == header.gasLimit (toBlockInfo, trivially true here).
     const auto sysBlk = detail::toBlockInfo(*header);
@@ -207,10 +208,11 @@ BOOST_AUTO_TEST_CASE(EmptyBlockRejectedByBlockPreSteps)
 {
     namespace opeth = opstack_test::opeth;
 
-    MutableStorage storage;
-    auto cryptoSuite = makeCryptoSuite();
-    auto hashImpl = cryptoSuite->hashImpl();
-    auto receiptFactory = makeReceiptFactory();
+    opstack_test::DualRunFixture fixture;
+    auto view = fixture.multiLayerStorage.fork();
+    view.newMutable();
+    auto hashImpl = fixture.hashImpl;
+    auto receiptFactory = fixture.receiptFactory;
 
     auto header = makeHeader(1'000'000);
 
@@ -240,13 +242,14 @@ BOOST_AUTO_TEST_CASE(DepositAfterNonDepositAccepted)
 {
     namespace op = bcos::evm::opstack;
 
-    MutableStorage storage;
-    auto cryptoSuite = makeCryptoSuite();
-    auto hashImpl = cryptoSuite->hashImpl();
-    auto receiptFactory = makeReceiptFactory();
+    opstack_test::DualRunFixture fixture;
+    auto view = fixture.multiLayerStorage.fork();
+    view.newMutable();
+    auto hashImpl = fixture.hashImpl;
+    auto receiptFactory = fixture.receiptFactory;
 
     auto header = makeHeader(1'000'000);
-    fundSender(storage, hashImpl);
+    fundSender(view, hashImpl);
 
     // Block: [L1 attributes deposit, normal tx, deposit] — the third tx is a deposit after a
     // non-deposit, the M2 order-gate case that was demoted to an observable WARNING.
@@ -266,8 +269,8 @@ BOOST_AUTO_TEST_CASE(DepositAfterNonDepositAccepted)
     std::vector<bcos::protocol::Transaction::ConstPtr> transactions{
         attrFiscoTx, normFisco, lateFiscoTx};
 
-    auto result = opstack_test::runSharedPath(storage, *header, rawTxBytes, transactions,
-        opstack_test::opeth::OP_ISTHMUS_SPEC);
+    auto result = opstack_test::runExecutorPath(
+        fixture, view, *header, opstack_test::opeth::OP_ISTHMUS_SPEC, transactions, rawTxBytes);
 
     // All three txs execute — the late deposit is accepted, not rejected.
     BOOST_CHECK_EQUAL(result.receipts.size(), rawTxBytes.size());
@@ -288,13 +291,14 @@ BOOST_AUTO_TEST_CASE(FirstDepositNotL1AttributesAccepted)
 {
     namespace op = bcos::evm::opstack;
 
-    MutableStorage storage;
-    auto cryptoSuite = makeCryptoSuite();
-    auto hashImpl = cryptoSuite->hashImpl();
-    auto receiptFactory = makeReceiptFactory();
+    opstack_test::DualRunFixture fixture;
+    auto view = fixture.multiLayerStorage.fork();
+    view.newMutable();
+    auto hashImpl = fixture.hashImpl;
+    auto receiptFactory = fixture.receiptFactory;
 
     auto header = makeHeader(1'000'000);
-    fundSender(storage, hashImpl);
+    fundSender(view, hashImpl);
 
     // First deposit deliberately NOT the L1-attributes tx: arbitrary from/to (the L1-attributes
     // content check is demoted to a WARNING, so this does not reject the block).
@@ -318,8 +322,8 @@ BOOST_AUTO_TEST_CASE(FirstDepositNotL1AttributesAccepted)
     BOOST_REQUIRE(depFiscoTx != nullptr);
     std::vector<bcos::protocol::Transaction::ConstPtr> transactions{depFiscoTx, normFisco};
 
-    auto result = opstack_test::runSharedPath(storage, *header, rawTxBytes, transactions,
-        opstack_test::opeth::OP_ISTHMUS_SPEC);
+    auto result = opstack_test::runExecutorPath(
+        fixture, view, *header, opstack_test::opeth::OP_ISTHMUS_SPEC, transactions, rawTxBytes);
 
     // Both txs execute — the non-L1-attributes first deposit is accepted, not rejected.
     BOOST_CHECK_EQUAL(result.receipts.size(), rawTxBytes.size());

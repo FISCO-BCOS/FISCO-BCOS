@@ -21,7 +21,6 @@
 // DIVERGENCES.md ALLOWLIST tuples (a:PENDING-FIX / c:SIGNED-OFF); dangling
 // entry= or never-hit exemptions = FAILURE.
 
-#include "support/RunSharedPath.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-evm/adapter/StateRootCompute.h>
@@ -870,7 +869,8 @@ bcos::h256 evmcToH256(const evmc::bytes32& h)
     return bcos::h256(bcos::bytesConstRef(h.bytes, sizeof(h.bytes)));
 }
 
-void seedStorageFromTestState(opstack_test::MutableStorage& storage, const test::TestState& ts)
+template <class StorageT>
+void seedStorageFromTestState(StorageT& storage, const test::TestState& ts)
 {
     evmone::state::StateDiff diff;
     diff.modified_accounts.reserve(ts.size());
@@ -889,16 +889,17 @@ void seedStorageFromTestState(opstack_test::MutableStorage& storage, const test:
         }
         diff.modified_accounts.push_back(std::move(entry));
     }
-    bcos::evm::evmstate::Storage2State<opstack_test::MutableStorage> bridge(storage);
+    bcos::evm::evmstate::Storage2State<StorageT> bridge(storage);
     bridge.applyDiff(diff, /*seeding=*/true);
     if (bridge.poisoned())
         throw std::runtime_error("seedStorageFromTestState poisoned: " + bridge.firstError());
 }
 
-void fillTestStateFromStorage(opstack_test::MutableStorage& storage, test::TestState& ts)
+template <class StorageT>
+void fillTestStateFromStorage(StorageT& storage, test::TestState& ts)
 {
     ts.clear();
-    bcos::evm::evmstate::Storage2State<opstack_test::MutableStorage> bridge(storage);
+    bcos::evm::evmstate::Storage2State<StorageT> bridge(storage);
     bridge.visitAccounts([&](auto const& acc) {
         test::TestAccount account;
         account.nonce = acc.nonce;
@@ -1165,7 +1166,8 @@ std::size_t g_metaForkCellsChecked = 0;
 /// Executes one block on the production path. A nullptr pre inherits the caller's
 /// storage / ts (chain block i>0). touchedAddrs/touchedSlots are per-block.
 void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
-    opstack_test::MutableStorage& storage, evmone::test::TestState& ts, const JsonValue* pre,
+    opstack_test::DualRunFixture& fixture, opstack_test::MLS::ViewType& view,
+    evmone::test::TestState& ts, const JsonValue* pre,
     bool wantPostState, DivergenceLedger& ledger,
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
     bcos::crypto::Hash::Ptr const& hashImpl, bcos::IOServicePool::Ptr const& ioServicePool)
@@ -1181,7 +1183,7 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
     if (pre != nullptr)
     {
         ts = test::from_json<test::TestState>(*pre);
-        seedStorageFromTestState(storage, ts);
+        seedStorageFromTestState(view, ts);
     }
     const auto before = ts;
 
@@ -1207,8 +1209,8 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
     opeth::OpEthExecuteBlockResult executed;
     try
     {
-        executed = opstack_test::runSharedPath(
-            storage, *header, bc.rawTxBytes, transactions, spec);
+        executed = opstack_test::runExecutorPath(
+            fixture, view, *header, spec, transactions, bc.rawTxBytes);
     }
     catch (const std::exception& e)
     {
@@ -1224,7 +1226,7 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
         return;
     }
 
-    fillTestStateFromStorage(storage, ts);
+    fillTestStateFromStorage(view, ts);
     std::set<evmc::address> touchedAddrs;
     std::map<evmc::address, std::set<evmc::bytes32>> touchedSlots;
     markTouched(before, ts, touchedAddrs, touchedSlots);
@@ -1628,9 +1630,11 @@ void replayVector(const std::string& id, const JsonValue& v, DivergenceLedger& l
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
     bcos::crypto::Hash::Ptr const& hashImpl, bcos::IOServicePool::Ptr const& ioServicePool)
 {
-    opstack_test::MutableStorage storage;
+    opstack_test::DualRunFixture fixture;
+    auto view = fixture.multiLayerStorage.fork();
+    view.newMutable();
     evmone::test::TestState ts;
-    replaySingleBlockInto(id, v, storage, ts, &jAt(v, "pre"), /*wantPostState=*/true, ledger,
+    replaySingleBlockInto(id, v, fixture, view, ts, &jAt(v, "pre"), /*wantPostState=*/true, ledger,
         receiptFactory, hashImpl, ioServicePool);
 }
 
@@ -1679,8 +1683,10 @@ void assertRejectThrow(const std::string& id, const JsonValue& v,
         return;
     }
     evmone::test::TestState ts = test::from_json<test::TestState>(jAt(v, "pre"));
-    opstack_test::MutableStorage storage;
-    seedStorageFromTestState(storage, ts);
+    opstack_test::DualRunFixture fixture;
+    auto view = fixture.multiLayerStorage.fork();
+    view.newMutable();
+    seedStorageFromTestState(view, ts);
 
     std::vector<bcos::protocol::Transaction::ConstPtr> transactions;
     for (auto const& env : bc.rawTxBytes)
@@ -1700,8 +1706,8 @@ void assertRejectThrow(const std::string& id, const JsonValue& v,
     const auto spec = opeth::opForkSpec(bc.cfg->fork);
     try
     {
-        (void)opstack_test::runSharedPath(
-            storage, *header, bc.rawTxBytes, transactions, spec);
+        (void)opstack_test::runExecutorPath(
+            fixture, view, *header, spec, transactions, bc.rawTxBytes);
     }
     catch (const std::runtime_error& e)
     {
@@ -1763,7 +1769,9 @@ void replayChainVector(const std::string& id, const JsonValue& v, DivergenceLedg
             sampled.insert(static_cast<std::size_t>(idx));
         }
     }
-    opstack_test::MutableStorage storage;
+    opstack_test::DualRunFixture chainFixture;
+    auto chainView = chainFixture.multiLayerStorage.fork();
+    chainView.newMutable();
     evmone::test::TestState chainState;
     for (std::size_t i = 0; i < blocks.size(); ++i)
     {
@@ -1772,8 +1780,8 @@ void replayChainVector(const std::string& id, const JsonValue& v, DivergenceLedg
         if (blk.isMember("pre") && !blk["pre"].isNull())
             pre = &blk["pre"];
         const bool wantPostState = sampledAll || sampled.contains(i);
-        replaySingleBlockInto(id + "[" + std::to_string(i) + "]", blk, storage, chainState, pre,
-            wantPostState, ledger, receiptFactory, hashImpl, ioServicePool);
+        replaySingleBlockInto(id + "[" + std::to_string(i) + "]", blk, chainFixture, chainView,
+            chainState, pre, wantPostState, ledger, receiptFactory, hashImpl, ioServicePool);
     }
 }
 }  // namespace
