@@ -44,6 +44,40 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 endif()
 add_test(NAME OpstackExecutorTests COMMAND opstack-executor-tests)
 
+# Post-cutover port-backlog suites that compile against CURRENT headers.
+# The remaining suites (OpT8nReplayTest, OpNewPayloadRpcE2eTest, OpKarstActivationTest,
+# OpL1BlockDepositTest, OpL1EdgeGateTest, OpBlockInjectorTest, OpDualPathEquivalenceTest,
+# OpEngineBranchSmokeTest) reference pre-cutover headers (OpBlockExecute.h,
+# OpDepositEncode.h, OpstackExecutor.h, OpForkFlagsCompat.h, OpSchedulerSeamTestHelpers.h)
+# that must be ported first — tracked in the PR backlog.
+add_executable(opstack-executor-block-tests
+    TestMain.cpp
+    OpDaMatrixSchemaTest.cpp
+    OpGoldenCorpusProvenanceTest.cpp
+    OpKarstReleaseGateTest.cpp
+    OpMismatchedFieldTest.cpp
+    support/GoldenSampleTest.cpp
+    support/KarstNutHelpers.cpp
+)
+target_include_directories(opstack-executor-block-tests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/opstack-executor/tests
+    ${CMAKE_SOURCE_DIR}/bcos-rpc
+)
+target_compile_definitions(opstack-executor-block-tests PRIVATE
+    ${_t8n_defs}
+    OP_DA_MATRIX_PATH="${CMAKE_CURRENT_SOURCE_DIR}/da-matrix/da_matrix.json"
+    OPSTACK_TEST_SOURCE_ROOT="${CMAKE_SOURCE_DIR}")
+target_link_libraries(opstack-executor-block-tests PRIVATE
+    opstack-executor
+    jsoncpp_static
+    Boost::unit_test_framework
+)
+# GoldenSampleTest reads the t8n corpus — same availability semantics as the
+# scheduler-tests target (skip when absent, required in CI).
+set_source_files_properties(TestMain.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+add_test(NAME OpstackExecutorBlockTests COMMAND opstack-executor-block-tests)
+
 # Runtime suite (OpstackExecutorTest.cpp) stays with the web3-model decoupling follow-up.
 # Scheduler execute/commit/call coverage is opstack-executor-scheduler-tests below.
 

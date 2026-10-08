@@ -167,7 +167,8 @@ jobs:
           ln -s "$GITHUB_WORKSPACE/e2e-tests/opstack-executor/tests/t8n" "$GITHUB_WORKSPACE/opstack-executor/tests/t8n"
           test -f tools/opstack-genesis/build-allocs.py
       - name: Regenerate opstack t8n vectors
-        # The opstack t8n tests (opstack-executor-block-tests) read reference vectors
+        # The opstack block-tests target (t8n-provenance + schema + release gates)
+        # reads reference vectors
         # from the source tree at runtime; the JSON is git-ignored and regenerated here
         # from pinned op-geth before `ctest`. Windows builds with -DTESTS=OFF, so no tests.
         if: matrix.os != 'windows-2025'
