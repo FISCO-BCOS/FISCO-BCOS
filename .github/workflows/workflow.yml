@@ -105,11 +105,16 @@ jobs:
           # The ubuntu-26.04-static leg always builds statically so the -static
           # link path of the release binaries is gated on every PR, not only
           # exercised on release events
+          EXTRA_FLAGS=""
           if [[ "${GITHUB_EVENT_NAME}" == "release" || "${{ matrix.os }}" == "ubuntu-26.04-static" ]]; then
-            echo "EXTRA_FLAGS=-DBUILD_STATIC=ON" >> "$GITHUB_ENV"
-          else
-            echo "EXTRA_FLAGS=" >> "$GITHUB_ENV"
+            EXTRA_FLAGS="-DBUILD_STATIC=ON"
           fi
+          # The hive gate job (hive_smoke) reuses this leg's artifact and also
+          # needs eth-sync-check (genesis2ini); tools are off by default.
+          if [[ "${{ matrix.os }}" == "ubuntu-26.04" ]]; then
+            EXTRA_FLAGS="${EXTRA_FLAGS} -DTOOLS=ON"
+          fi
+          echo "EXTRA_FLAGS=${EXTRA_FLAGS}" >> "$GITHUB_ENV"
       - name: Configure for linux
         if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-static'
         run: |
@@ -178,7 +183,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: fisco-bcos-ubuntu-26-x86_64
-          path: build/fisco-bcos-air/fisco-bcos
+          # eth-sync-check rides along for the hive_smoke job (genesis2ini in
+          # the hive client entrypoint); upload-artifact keeps the paths
+          # relative to their least common ancestor (build/).
+          path: |
+            build/fisco-bcos-air/fisco-bcos
+            build/tools/eth-sync-check/eth-sync-check
           retention-days: 30
       # - name: Upload coverage report
       #   if: matrix.os == 'ubuntu-26.04'
@@ -674,3 +684,79 @@ jobs:
           BIN_DIR: ${{ github.workspace }}/.ci-c2-bins
           FISCO_BIN: ${{ github.workspace }}/build/fisco-bcos-air/fisco-bcos
           SKIP_FISCO_BUILD: "1"
+
+  # Hive conformance gate (PR variant): the dockerised smoke suites plus a
+  # host-level replay of one EEST fixture through the real import path
+  # (tools/hive/test-local.sh). Catches genesis-conversion and import-lane
+  # regressions in minutes; the full eels consume-rlp matrix runs nightly in
+  # hive-nightly.yml. Reuses the build job's artifact (ubuntu-26.04 leg, which
+  # enables TOOLS=ON for eth-sync-check), so this job skips the C++ build.
+  hive_smoke:
+    name: Hive smoke + import replay
+    needs: [build]
+    if: needs.build.result == 'success'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+
+      # Pinned hive revision; bump deliberately (client-interface changes in
+      # hive need matching changes under tools/hive/clients/bcos/).
+      - name: Check out hive
+        uses: actions/checkout@v4
+        with:
+          repository: ethereum/hive
+          ref: ae173f1ce15aed785e6c0945c2156a95819d21bf
+          path: .ci-hive
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.x"
+          cache: false
+
+      - name: Build the hive binary
+        run: cd .ci-hive && go build -o hive .
+
+      - name: Download fisco-bcos + eth-sync-check artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: fisco-bcos-ubuntu-26-x86_64
+          path: .
+
+      - name: Install the bcos client into the hive checkout
+        run: |
+          chmod +x fisco-bcos-air/fisco-bcos tools/eth-sync-check/eth-sync-check
+          BUILD_DIR=. bash tools/hive/build-local.sh .ci-hive
+
+      - name: Run hive smoke suites
+        run: cd .ci-hive && ./hive --sim "smoke/(genesis|network)" --client bcos
+
+      # hive exits 0 even when tests fail; gate on the run JSON. smoke/genesis
+      # carries exactly two known failures (pre-London geneses, see
+      # tools/hive/README.md "Known limitations"); anything else fails the job.
+      - name: Assert smoke results
+        run: |
+          python3 tools/hive/check-hive-results.py --logs .ci-hive/workspace/logs \
+            --sim smoke/genesis --expect-total 6 \
+            --allow-fail "empty genesis (bcos)" --allow-fail "all forks (bcos)"
+          python3 tools/hive/check-hive-results.py --logs .ci-hive/workspace/logs \
+            --sim smoke/network --expect-total 2
+
+      # EEST withdrawals test_large_amount fixture (Shanghai-at-genesis, empty
+      # alloc): replay the convert -> import -> serve path on the host and pin
+      # the served hashes byte-exactly.
+      - name: Host-level import replay (EEST fixture)
+        run: |
+          out=$(BINARY="${GITHUB_WORKSPACE}/fisco-bcos-air/fisco-bcos" \
+                TOOL="${GITHUB_WORKSPACE}/tools/eth-sync-check/eth-sync-check" \
+                bash tools/hive/test-local.sh \
+                  tools/hive/tests/withdrawals_large_amount.genesis.json \
+                  tools/hive/tests/withdrawals_large_amount.chain.rlp 2>&1)
+          echo "$out"
+          echo "$out" | grep -qF "genesis block hash: 0xa759d4d7ff38ec00e88b69069e86d1de9b7be0824b92a6c79b37fca1e6efabab" || exit 1
+          echo "$out" | grep -qF "0x1 0x6e8fb4aeae9c0247e35aedec84d933550541c1495e0cd65b83e794dab7f4a3d5" || exit 1

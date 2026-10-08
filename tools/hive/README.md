@@ -62,8 +62,9 @@ eels rows were rerun after the ethBlockVersion and fork-field-presence fixes:
   - `.*mcopy.*` **186/186 pass** (Cancun + Prague, incl.
     `blockchain_test_from_state_test`).
   - Prague `.*(eip7702|eip2935).*` **628/628 pass**
-    (`--client.checktimelimit 15m`; the `many_delegations` fixtures import a
-    single block in ~9 min under the Debug+ASan build).
+    (`--client.checktimelimit 25m`; the `many_delegations` fixtures import a
+    single block in ~10 min under the Debug+ASan build, and container start +
+    genesis conversion add enough overhead that 15m is too tight there).
   - `.*(eip4895_withdrawals|eip6780_selfdestruct|eip1153_tstore).*` **794/794
     pass** — all 22 `fork_Paris` selfdestruct cases pass after the
     ethBlockVersion stamping fix; the 3 former failures (`test_large_amount`,
@@ -171,3 +172,19 @@ bash tools/hive/test-local.sh /tmp/genesis.json /tmp/chain.rlp
 Verified: Cancun/Prague EEST blockchain fixtures import with `skipped=0` and
 the RPC-reported genesis/head hashes match the fixture's
 `genesisBlockHeader.hash` / `lastblockhash` byte-exactly.
+
+## Continuous integration
+
+- **PR gate** (`workflow.yml` → `hive_smoke`, <10 min): the dockerised
+  `smoke/(genesis|network)` suites plus a host-level replay of one EEST
+  fixture (`tests/withdrawals_large_amount.*` — Shanghai-at-genesis, empty
+  alloc) through `test-local.sh`, pinning the served genesis/head hashes
+  byte-exactly. Reuses the build job's artifact; no C++ build of its own.
+- **Nightly** (`.github/workflows/hive-nightly.yml`): the full eels
+  `consume-rlp` matrix (mcopy / eip7702+2935 / withdrawals+selfdestruct+tstore
+  / eip4844_blobs + a smoke shard) against a Release (MinSizeRel) build,
+  sharded across parallel jobs with the EEST fixtures tarball cached.
+- Both gate on `check-hive-results.py`, which parses hive's run JSON (the
+  hive process exits 0 even when tests fail) and fails the job unless the
+  failure set exactly matches the known-failure allow-list — today the two
+  pre-London smoke/genesis cases ("empty genesis", "all forks").
