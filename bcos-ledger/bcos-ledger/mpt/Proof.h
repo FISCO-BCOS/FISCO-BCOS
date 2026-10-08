@@ -241,7 +241,9 @@ inline EIP1186Proof makeEmptyAccountProof(bcos::Address const& address,
 /// Outcomes:
 ///   - stateRoot absent from storage        → ProofErrorCode::BlockNotCommitted
 ///   - stateRoot == emptyRootHash(), or the account walk dead-ends
-///                                           → ProofErrorCode::AccountNotInMPT
+///       fullTrie  → empty-account proof (geth/reth EIP-1186: balance/nonce 0, empty code/storage
+///                   hashes, the collected nodes as the non-existence proof)
+///       !fullTrie → ProofErrorCode::AccountNotInMPT
 ///   - a requested slot is absent, fullTrie  → StorageProof with empty value and the dead-end
 ///                                             prefix as exclusion proof (EIP-1186 value 0x0)
 ///   - a requested slot is absent, !fullTrie → StorageProof with inMPT=false, empty value, empty
@@ -255,7 +257,9 @@ inline EIP1186Proof makeEmptyAccountProof(bcos::Address const& address,
 /// flat-KV value, which may be non-zero — the entry is marked inMPT=false with value and proof
 /// left empty instead of lying with a value-0 exclusion proof. The distinction is lane-driven and
 /// cannot be inferred from the trie shape, hence this explicit parameter; the default keeps the
-/// complete-trie semantics of existing callers. This layer stays storage-pure: reading the
+/// complete-trie semantics of existing callers. The same flag also governs the absent-ACCOUNT
+/// outcome above: under scenario B absence is provably empty (empty-account proof), under
+/// scenario A it is not (AccountNotInMPT). This layer stays storage-pure: reading the
 /// executor_version lane and filling the flat-KV value are the RPC layer's job.
 ///
 /// Proof generation is a read-only cold path: instantiate over a Storage without an extra cache
