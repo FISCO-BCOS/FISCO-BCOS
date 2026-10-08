@@ -671,7 +671,15 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         // (e.g. Prague on a Cancun chain makes the verifier demand requestsHash
         // that Cancun-era blocks do not carry).
         uint64_t const kNever = std::numeric_limits<uint64_t>::max();
-        uint64_t const londonTime = 0;  // the emitted ladder starts London at genesis
+        // The emitted ladder hardcodes london_time=0 (EL mode runs London+ from
+        // genesis regardless of the JSON), but geth activates London BLOCK-based:
+        // Genesis.ToBlock consults g.Config.IsLondon(0), i.e. config.londonBlock
+        // must be present and 0. A genesis whose config lacks londonBlock (the
+        // smoke/genesis fixtures carry an empty config) mints a header WITHOUT
+        // baseFee in geth, so the baseFee default below must key off the JSON,
+        // not off the emitted ladder.
+        auto const londonBlock = jsonQuantity(config, "londonBlock");
+        bool const londonAtGenesis = londonBlock && *londonBlock == 0;
         uint64_t const parisTime = 0;  // TTD == 0: PoS from genesis
         bool forkNeverSeen = false;
         auto forkTime = [&](char const* jsonKey) -> uint64_t {
@@ -806,7 +814,7 @@ int runGenesis2Ini(std::string const& path, std::optional<std::string> const& ou
         {
             baseFee = h.baseFee = *v;
         }
-        else if (forkActiveAtGenesis(londonTime))
+        else if (londonAtGenesis)
         {
             // geth's Genesis.ToBlock: London active at genesis and no explicit
             // baseFeePerGas -> params.InitialBaseFee (1 gwei). Omitting it would
