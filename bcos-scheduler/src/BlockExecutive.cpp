@@ -1719,6 +1719,12 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
     }
     m_gasUsed.fetch_add(txGasUsed);
     auto version = m_executiveResults[output->contextID() - m_startContextID].version;
+    // one line per executed tx, whichever receipt version is built below
+    SCHEDULER_LOG(DEBUG) << LOG_DESC("TxExecuted")
+                         << LOG_KV("tx", m_executiveResults[output->contextID() - m_startContextID]
+                                             .transactionHash.abridged())
+                         << LOG_KV("number", number()) << LOG_KV("status", output->status())
+                         << LOG_KV("gasUsed", txGasUsed);
     switch (version)
     {
     case int32_t(bcos::protocol::TransactionVersion::V0_VERSION):
@@ -1730,12 +1736,6 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
         SCHEDULER_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
                              << " -> contextID:" << output->contextID() - m_startContextID
                              << *receipt;
-        SCHEDULER_LOG(DEBUG) << LOG_DESC("TxExecuted")
-                             << LOG_KV(
-                                    "tx", m_executiveResults[output->contextID() - m_startContextID]
-                                              .transactionHash.abridged())
-                             << LOG_KV("number", number()) << LOG_KV("status", output->status())
-                             << LOG_KV("gasUsed", txGasUsed);
         m_executiveResults[output->contextID() - m_startContextID].receipt = std::move(receipt);
         break;
     }
@@ -1750,12 +1750,6 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
         SCHEDULER_LOG(TRACE) << " 6.GenReceipt:\t [^^] " << output->toString()
                              << " -> contextID:" << output->contextID() - m_startContextID
                              << *receipt;
-        SCHEDULER_LOG(DEBUG) << LOG_DESC("TxExecuted")
-                             << LOG_KV(
-                                    "tx", m_executiveResults[output->contextID() - m_startContextID]
-                                              .transactionHash.abridged())
-                             << LOG_KV("number", number()) << LOG_KV("status", output->status())
-                             << LOG_KV("gasUsed", txGasUsed);
         m_executiveResults[output->contextID() - m_startContextID].receipt = std::move(receipt);
         break;
     }
