@@ -94,7 +94,12 @@ The entrypoint:
    `/jwtsecret`;
 4. imports `/chain.rlp` then `/blocks/` via
    `fisco-bcos --import-blocks <path>` — invalid blocks are skipped, so the
-   best block after startup is the last valid imported block;
+   best block after startup is the last valid imported block. The import
+   exits 0 normally, and exits 1 when nothing could be imported on a fresh
+   ledger (`imported == 0`, `skipped > 0`, head never advanced past genesis);
+   the entrypoint deliberately tolerates both (`|| true`) because the
+   simulator's pass/fail verdict comes from the RPC assertions, not the
+   import exit status;
 5. execs the node.
 
 ## Supported HIVE_* variables

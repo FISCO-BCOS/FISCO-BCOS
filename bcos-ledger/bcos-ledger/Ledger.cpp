@@ -2000,22 +2000,18 @@ bool Ledger::buildGenesisBlock(
         // per-block state-change hashes, a different domain from this MPT root,
         // so only the (previously empty) genesis block carries it.
         bool const ethLane = genesis.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION;
-        if (!genesis.m_allocs.empty())
+        if (!genesis.m_allocs.empty() || ethLane)
         {
+            // Publish the computed trie root — the same expression the restart
+            // guard above reads, so the two cannot drift apart. An empty-alloc
+            // Ethereum-lane genesis (legal on the L1 EL lane — validateL2Invariants
+            // exempts it; the L2/OP lanes reject the combination, but
+            // buildGenesisBlock is callable directly) yields the canonical
+            // empty-trie root: commitTrie() recognizes only emptyRootHash() as
+            // the from-empty marker (mpt/HashBuilder.h), so a zero parent root
+            // would send block 1's incremental MPT build down the node-reading
+            // merge path and abort on the nonexistent zero-hash node.
             header->setStateRoot(ethStateTrie.root);
-        }
-        else if (ethLane)
-        {
-            // Empty-alloc Ethereum-lane genesis: legal on the L1 EL lane
-            // ([ethereum] mode=el — validateL2Invariants exempts it); the L2/OP
-            // lanes still reject this combination, but buildGenesisBlock is
-            // callable directly. Publish the
-            // canonical empty-trie root instead of a zero h256 — commitTrie()
-            // recognizes only emptyRootHash() as the from-empty marker
-            // (mpt/HashBuilder.h), so a zero parent root would send block 1's
-            // incremental MPT build down the node-reading merge path and abort on
-            // the nonexistent zero-hash node.
-            header->setStateRoot(mpt::emptyRootHash());
         }
         if (genesis.m_ethGenesisHeader.has_value())
         {

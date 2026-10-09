@@ -21,7 +21,9 @@
  *        serving. The import runs after the full node init and before any start():
  *        each block goes through the SAME EthereumBlockVerifier lane as devp2p sync
  *        (PoS header rules -> execute -> roots -> MPT state root -> atomic commit),
- *        then the process exits 0 and the entrypoint starts the node normally.
+ *        then the process exits 0 and the entrypoint starts the node normally —
+ *        or exits 1 when nothing could be imported on a fresh ledger
+ *        (imported == 0, skipped > 0, head never advanced past genesis).
  * @date 2026/9/30
  */
 #pragma once
@@ -45,6 +47,7 @@
 #include "bcos-transaction-scheduler/EthereumBlockVerifier.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
 #include "ethereum-executor/EthereumExecutor.h"
+#include "libinitializer/BlockImportSummary.h"
 #include "libinitializer/Common.h"
 #include "libinitializer/EthereumSyncInitializer.h"
 #include "libinitializer/GlobalStateStorageInitializer.h"
@@ -61,17 +64,6 @@
 
 namespace bcos::initializer
 {
-
-/// Outcome of one offline import run. `skipped` counts blocks that failed decoding,
-/// verification, or commit — each was logged at WARNING and the import continued
-/// (hive blocks/*.rlp files are independent inputs; a bad one must not abort the run).
-struct BlockImportSummary
-{
-    size_t imported = 0;
-    size_t skipped = 0;
-    int64_t headNumber = -1;  // ledger head after the run (0 = still at genesis)
-    bcos::h256 headHash;      // hash of the head header (genesis anchor on a fresh ledger)
-};
 
 /// Offline RLP block importer for Ethereum L1 EL mode. Stateless apart from the
 /// wiring handed over from Initializer; import() drives the whole run
@@ -196,13 +188,18 @@ private:
         {
             files.emplace_back(_path);
         }
-        else if (fs::is_directory(_path, ec))
+        else if (!ec && fs::is_directory(_path, ec))
         {
-            for (auto const& entry : fs::directory_iterator(_path, ec))
+            // ec-scoped iteration: a mid-walk failure lands in ec (the tool's own
+            // message below) instead of escaping as std::filesystem_error.
+            for (fs::directory_iterator it(_path, ec), end; !ec && it != end;
+                 it.increment(ec))
             {
-                if (entry.is_regular_file(ec) && entry.path().extension() == ".rlp")
+                std::error_code entryEc;
+                if (it->is_regular_file(entryEc) && !entryEc &&
+                    it->path().extension() == ".rlp")
                 {
-                    files.push_back(entry.path());
+                    files.push_back(it->path());
                 }
             }
             // All files share the same directory, so ordering the full paths is
