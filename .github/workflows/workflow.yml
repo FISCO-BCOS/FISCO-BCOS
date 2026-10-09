@@ -560,10 +560,11 @@ jobs:
         with:
           repository: FISCO-BCOS/op-stack-e2e-tests
           # Pinned at a post-#7 merge commit: #7 added the kona native replay phase 3.6, and
-          # the later pin enables the debug namespace on the C2 web3 listener (setup_c2.sh
-          # enable_debug_api=true) — the preimage oracle (kona-host) reads debug_dbGet /
-          # debug_getRawHeader off it, so a pin without that line answers every hint -32601.
-          ref: 378774e100dd4658aa79e150c545f73812acdca5
+          # the later pins enable the debug namespace on the C2 web3 listener (setup_c2.sh
+          # enable_debug_api=true — the preimage oracle kona-host reads debug_dbGet /
+          # debug_getRawHeader off it) and drop the removed feature_l2_ethereum_compat bit
+          # from the genesis feature_flags so the node's verifyL2FeatureFlagsSlot passes.
+          ref: 5a2ad071ab2162972073ed9dfcf814e55a77fc8f
           path: .ci-op-e2e-tests
 
       - name: Download fisco-bcos from L2 unit job
