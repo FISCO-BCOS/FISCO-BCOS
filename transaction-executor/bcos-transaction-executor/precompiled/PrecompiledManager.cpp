@@ -45,8 +45,8 @@ bcos::executor_v1::PrecompiledManager::PrecompiledManager(crypto::Hash::Ptr hash
                0});
     m_address2Precompiled.emplace_back(
         3, Precompiled{executor::PrecompiledContract(
-                           600, 120, adaptEvmPrecompiled(
-                                         eth_evm::ripemd160_execute, eth_evm::ripemd160_analyze, 0)),
+                           600, 120, adaptEvmPrecompiled(eth_evm::ripemd160_execute,
+                                         eth_evm::ripemd160_analyze, 0)),
                0});
     m_address2Precompiled.emplace_back(
         4, Precompiled{executor::PrecompiledContract(15, 3, identityExecutor), 0});

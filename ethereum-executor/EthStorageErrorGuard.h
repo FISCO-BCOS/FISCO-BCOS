@@ -256,8 +256,8 @@ public:
     {
         try
         {
-            co_return co_await storage2::removeSome(
-                m_storage.get(), std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...);
+            co_return co_await storage2::removeSome(m_storage.get(),
+                std::forward<decltype(keys)>(keys), std::forward<decltype(args)>(args)...);
         }
         catch (...)
         {

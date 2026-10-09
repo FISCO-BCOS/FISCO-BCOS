@@ -71,15 +71,20 @@ inline executor::PrecompiledExecutor adaptEvmPrecompiled(EvmPrecompileExecute ex
         {
             return {false, bytes(failureOutputSize, 0)};
         }
+        // bytesConstRef{}.data() is nullptr for empty input; the shared
+        // analyze/execute functions take raw pointers, so substitute a valid
+        // address rather than pass nullptr with size 0 (formally UB).
+        static constexpr uint8_t kEmptyInput[1]{};
+        const auto* inputData = in.data() != nullptr ? in.data() : kEmptyInput;
         const auto maxOutputSize =
-            analyze({in.data(), in.size()}, EVMC_MAX_REVISION).max_output_size;
+            analyze({inputData, in.size()}, EVMC_MAX_REVISION).max_output_size;
         if (maxOutputSize == 0)
         {
             return {false, bytes(failureOutputSize, 0)};
         }
         bytes output(maxOutputSize, 0);
         const auto [status, outputSize] =
-            execute(in.data(), in.size(), output.data(), output.size());
+            execute(inputData, in.size(), output.data(), output.size());
         if (status != EVMC_SUCCESS)
         {
             return {false, bytes(failureOutputSize, 0)};
@@ -109,6 +114,11 @@ inline auto multipleOf(size_t pairSize)
 /// zero-size failure guard, while legacy identity returns {true, {}} there.
 inline std::pair<bool, bytes> identityExecutor(bytesConstRef in)
 {
+    if (in.empty())
+    {
+        // identity_execute would copy 0 bytes from/to possibly-null pointers.
+        return {true, {}};
+    }
     bytes output(in.size(), 0);
     eth_evm::identity_execute(in.data(), in.size(), output.data(), output.size());
     return {true, std::move(output)};

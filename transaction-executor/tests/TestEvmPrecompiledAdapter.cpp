@@ -98,7 +98,8 @@ void checkCorpus(executor::PrecompiledExecutor const& legacy,
 std::vector<bytes> genericCorpus()
 {
     std::vector<bytes> corpus = {{}, zeroBytes(32), ffBytes(32), fromHex("616263")};
-    for (size_t size : {1, 31, 32, 33, 64, 96, 127, 128, 129, 160, 191, 192, 193, 213, 255, 256, 384})
+    for (size_t size :
+        {1, 31, 32, 33, 64, 96, 127, 128, 129, 160, 191, 192, 193, 213, 255, 256, 384})
     {
         corpus.push_back(randomBytes(size, static_cast<uint32_t>(size * 2654435761u)));
     }
@@ -389,6 +390,42 @@ BOOST_AUTO_TEST_CASE(unsampledExecutorsUnchanged)
     }
 }
 
+BOOST_AUTO_TEST_CASE(analyzeMaxOutputSizeIsRevisionIndependent)
+{
+    // The adapter sizes its output buffer from analyze(input, EVMC_MAX_REVISION)
+    // .max_output_size. Pin the invariant that this relies on: max_output_size
+    // must not depend on rev — otherwise an evmc/evmone bump would silently
+    // resize a consensus-visible buffer with no reviewed code change.
+    const std::pair<EvmPrecompileAnalyze, size_t> cases[] = {
+        {eth_evm::sha256_analyze, 96},
+        {eth_evm::ripemd160_analyze, 96},
+        {eth_evm::ecadd_analyze, 128},
+        {eth_evm::ecmul_analyze, 96},
+        {eth_evm::ecpairing_analyze, 384},
+        {eth_evm::blake2bf_analyze, 213},
+        {eth_evm::bls12_g1add_analyze, 256},
+        {eth_evm::bls12_g1msm_analyze, 160},
+        {eth_evm::bls12_g2add_analyze, 512},
+        {eth_evm::bls12_g2msm_analyze, 288},
+        {eth_evm::bls12_pairing_check_analyze, 384},
+        {eth_evm::bls12_map_fp_to_g1_analyze, 64},
+        {eth_evm::bls12_map_fp2_to_g2_analyze, 128},
+        {eth_evm::p256verify_analyze, 160},
+        {eth_evm::identity_analyze, 96},  // not adapter-routed; pinned too
+    };
+    for (auto const& [analyze, inputSize] : cases)
+    {
+        const auto input = randomBytes(inputSize, 55);
+        const evmc::bytes_view view{input.data(), input.size()};
+        const auto expected = analyze(view, EVMC_FRONTIER).max_output_size;
+        for (int rev = EVMC_FRONTIER + 1; rev <= EVMC_MAX_REVISION; ++rev)
+        {
+            BOOST_CHECK_EQUAL(
+                analyze(view, static_cast<evmc_revision>(rev)).max_output_size, expected);
+        }
+    }
+}
+
 BOOST_AUTO_TEST_CASE(swappedExecutorsEquivalentThroughManager)
 {
     // The per-precompile cases above construct their own adapters; this case
@@ -435,6 +472,29 @@ BOOST_AUTO_TEST_CASE(swappedExecutorsEquivalentThroughManager)
             concat({BN254_P, be32(2), BN254_G2}), concat({zeroBytes(64), BN254_G2})})
     {
         checkManager(8, "alt_bn128_pairing_product", input);
+    }
+
+    // BLS (0x0b-0x11) and p256verify (0x0100) are feature-gated in production,
+    // but getPrecompiled(address) performs no feature filtering, so the test
+    // drives them through the manager exactly like 0x02 — pinning the
+    // production execute/analyze pairing for every adapter-routed entry.
+    std::vector<bytes> blsCorpus = genericCorpus();
+    blsCorpus.push_back(zeroBytes(256));  // g1add shaped (infinity + infinity)
+    blsCorpus.push_back(zeroBytes(512));  // g2add shaped
+    blsCorpus.push_back(zeroBytes(160));  // g1msm shaped (infinity, scalar 0)
+    blsCorpus.push_back(zeroBytes(288));  // g2msm shaped
+    blsCorpus.push_back(zeroBytes(384));  // bls pairing shaped
+    blsCorpus.push_back(concat({zeroBytes(16), BLS12_P, zeroBytes(192)}));  // g1add: x1 == p
+    for (auto const& input : blsCorpus)
+    {
+        checkManager(0x0b, "bls12_g1add", input);
+        checkManager(0x0c, "bls12_g1msm", input);
+        checkManager(0x0d, "bls12_g2add", input);
+        checkManager(0x0e, "bls12_g2msm", input);
+        checkManager(0x0f, "bls12_pairing_check", input);
+        checkManager(0x10, "bls12_map_fp_to_g1", input);
+        checkManager(0x11, "bls12_map_fp2_to_g2", input);
+        checkManager(0x0100, "p256verify", input);
     }
 }
 
