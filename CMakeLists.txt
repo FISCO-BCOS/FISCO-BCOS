@@ -66,6 +66,10 @@ endif ()
 
 add_subdirectory(legacy)
 
+if(WITH_CPPSDK)
+    add_subdirectory(bcos-sdk)
+endif()
+
 if(WITH_LIGHTNODE)
     add_subdirectory(legacy/lightnode)
 endif()
@@ -96,6 +100,7 @@ if(FULLNODE)
     add_subdirectory(bcos-sync)
     add_subdirectory(bcos-front)
     add_subdirectory(libinitializer)
+    add_subdirectory(bcos-ops)
     add_subdirectory(fisco-bcos-air)
 
     add_subdirectory(transaction-executor)
@@ -111,10 +116,6 @@ if(FULLNODE)
         add_subdirectory(tests)
         add_subdirectory(benchmark)
     endif()
-endif()
-
-if(WITH_CPPSDK)
-    add_subdirectory(bcos-sdk)
 endif()
 
 if(TOOLS)
