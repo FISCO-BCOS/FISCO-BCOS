@@ -103,9 +103,14 @@ protected:
     /// op-batcher / op-conductor should enable it. The switch is per listener and the key
     /// follows the listener: the op-engine port reads [op_engine_rpc] enable_miner_api, the web3
     /// port reads [web3_rpc] enable_miner_api (see RpcFactory.cpp).
+    /// _enableDebugApi registers the geth debug namespace (debug_dbGet / debug_getRawHeader /
+    /// debug_executePayload) on this listener. Off by default: it serves the fault-proof
+    /// preimage oracle (kona-host), not general clients. Per listener like miner: the op-engine
+    /// port reads [op_engine_rpc] enable_debug_api, the web3 port [web3_rpc] enable_debug_api.
     bcos::rpc::Web3JsonRpcImpl::Ptr buildWeb3JsonRpc(int sendTxTimeout,
         boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager,
-        bool _enableEngineRpc = false, bool _enableMinerApi = false);
+        bool _enableEngineRpc = false, bool _enableMinerApi = false,
+        bool _enableDebugApi = false);
     bcos::event::EventSub::Ptr buildEventSub(
         const std::shared_ptr<boostssl::ws::WsService>& _wsService,
         GroupManager::Ptr _groupManager);

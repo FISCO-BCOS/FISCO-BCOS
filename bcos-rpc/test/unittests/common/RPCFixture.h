@@ -209,6 +209,8 @@ public:
         "    listen_port=8555\n"
         "    ; the OP miner namespace is opt-in; these fixtures emulate the devnet config\n"
         "    enable_miner_api=true\n"
+        "    ; the debug namespace is opt-in; DebugEndpointTest's kona preimage-oracle calls need it\n"
+        "    enable_debug_api=true\n"
         "\n"
         "[rpc]\n"
         "    listen_ip=0.0.0.0\n"

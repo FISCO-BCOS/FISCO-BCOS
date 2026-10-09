@@ -105,7 +105,7 @@ jobs:
           just --version
 
       # kona-host / kona-client (rust/kona) are built with cargo for the native replay
-      # verification leg. KONA_VERIFY=1 is the default; the per-PR smoke leg may disable it.
+      # verification leg. KONA_VERIFY=1 is the default.
       - name: Set up Rust (kona build)
         uses: dtolnay/rust-toolchain@stable
 
@@ -123,7 +123,12 @@ jobs:
           path: |
             .ci-op-monorepo
             .ci-c2-bins
-          key: c2-op-${{ steps.op-pin.outputs.commit }}-${{ runner.os }}-${{ runner.arch }}
+          # The -kona1- token describes the cached binary SET: this entry now also carries
+          # kona-host/kona-client (cargo build). A cache keyed only on the OP monorepo commit
+          # would hit a pre-kona entry (op-deployer/op-node/op-batcher only) and skip the
+          # kona build, failing the e2e step with "missing .../kona-host". Bump the token
+          # whenever the cached binary set changes (e.g. the future cannon/MIPS leg).
+          key: c2-op-${{ steps.op-pin.outputs.commit }}-kona1-${{ runner.os }}-${{ runner.arch }}
 
       - name: Build OP stack binaries
         if: steps.op-cache.outputs.cache-hit != 'true'

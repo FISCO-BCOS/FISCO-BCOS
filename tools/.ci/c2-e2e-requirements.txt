@@ -4,3 +4,6 @@ pyyaml>=6.0
 eth-hash[pycryptodome]>=0.5
 trie>=2.0
 rlp>=3.0
+# l1_debug_proxy.py fronts anvil for kona-host's L1 hints and uses a requests.Session
+# (keep-alive + trust_env=False) rather than urllib.
+requests>=2.31
