@@ -61,6 +61,20 @@ map="$root/tools/mutation/variants/mapping.json"
 mutated="engine/bcos-engine/OpEngineService.inl"
 
 read_ids() { python3 -c "import json;print('\n'.join(v['variant'] for v in json.load(open('$map'))))"; }
+# The retired variants are parked pending rewrite (see mapping.retired.json): report
+# each as SKIPPED(retired) on every run instead of silently dropping it — a green
+# summary that does not enumerate them reads as full-variant coverage (it is 1 of 16
+# at this head).
+retired_map="$root/tools/mutation/variants/mapping.retired.json"
+report_retired() {
+  [ -f "$retired_map" ] || return 0
+  python3 - "$retired_map" <<'PY'
+import json, sys
+for v in json.load(open(sys.argv[1])):
+    reason = (v.get("why") or "").strip().splitlines()[0][:120]
+    print(f"[{v['variant']}] SKIPPED(retired) — {reason}")
+PY
+}
 field() {
   python3 -c "import json;m=json.load(open('$map'));print(next(str(v.get('$2','')) for v in m if v['variant']=='$1'))"
 }
@@ -214,5 +228,6 @@ while IFS= read -r f; do
   fi
 done < <({ python3 -c "import json;print('\n'.join(sorted({v.get('mutated','') or '$mutated' for v in json.load(open('$map'))})))"; for pf in "$root"/tools/mutation/variants/*.patch; do patch_files "$pf"; done; } | sort -u)
 cleanup_corpus
+report_retired
 trap - EXIT
 exit $rc_all

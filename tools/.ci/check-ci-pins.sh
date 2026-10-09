@@ -106,30 +106,24 @@ fail()
 # are stripped first: the surrounding prose names hashes (Axis 4 documents
 # b82691ac, 5f90f749c) and those must not be parsed as the pin.
 checkout_pins() {
+    # Collect repository/ref/path per step BLOCK (not from the repository line
+    # forward): a `path:` written before `repository:` must still pair, and a
+    # corpus checkout with no ref must print NO-REF — a ref-less checkout silently
+    # tracking the default branch must fail loudly, not vanish.
     sed 's/#.*//' "$1" | awk '
-        /repository:[[:space:]]*FISCO-BCOS\/op-stack-e2e-tests/ {
-            look = 1; ref = ""; path = ""; next
+        function flush() {
+            if (repo && path != "") { print path, (ref == "" ? "NO-REF" : ref) }
+            repo = 0; ref = ""; path = ""
         }
-        # Block boundary: a new step or another repository: line ends the scan, so
-        # a checkout that names no ref cannot be paired with a later step ref.
-        # Emit NO-REF instead of dropping the block: a ref-less corpus checkout
-        # silently tracks the default branch and must fail loudly, not vanish.
-        look && /^[[:space:]]*-/ {
-            if (path != "" && ref == "") { print path, "NO-REF" }
-            look = 0
-        }
-        look && /^[[:space:]]*(uses|repository):/ {
-            if (path != "" && ref == "") { print path, "NO-REF" }
-            look = 0
-        }
-        look && match($0, /ref:[[:space:]]*[0-9a-zA-Z._\/-]+/) {
+        /^[[:space:]]*-[[:space:]]*(name|uses|run):/ { flush() }
+        /repository:[[:space:]]*FISCO-BCOS\/op-stack-e2e-tests/ { repo = 1 }
+        match($0, /ref:[[:space:]]*[0-9a-zA-Z._\/-]+/) {
             ref = substr($0, RSTART, RLENGTH); sub(/^ref:[[:space:]]*/, "", ref)
         }
-        look && match($0, /path:[[:space:]]*[0-9a-zA-Z._\/-]+/) {
+        match($0, /path:[[:space:]]*[0-9a-zA-Z._\/-]+/) {
             path = substr($0, RSTART, RLENGTH); sub(/^path:[[:space:]]*/, "", path)
         }
-        look && path != "" && ref != "" { print path, ref; look = 0 }
-        END { if (look && path != "" && ref == "") { print path, "NO-REF" } }
+        END { flush() }
     '
 }
 
@@ -428,8 +422,12 @@ else
             echo "  SKIP $cite (registry documents this citation as non-existent)"
             continue
         fi
-        if [ -z "${SPECS_DIR:-}" ]; then
-            echo "  ::notice::unverified $cite (SPECS_DIR not set; supply a specs checkout to enforce)"
+        # Degrade to a notice when the specs checkout is absent OR unreachable: the
+        # workflow always exports SPECS_DIR, but its checkout step is
+        # continue-on-error, so a third-party outage must surface here as a notice,
+        # not as a citation-resolution failure (which misattributes the cause).
+        if [ -z "${SPECS_DIR:-}" ] || [ ! -d "$SPECS_DIR" ]; then
+            echo "  ::notice::unverified $cite (SPECS_DIR unset or checkout missing at '${SPECS_DIR:-}'; supply a specs checkout to enforce)"
             continue
         fi
         path="${cite%:*}"; line="${cite##*:}"
