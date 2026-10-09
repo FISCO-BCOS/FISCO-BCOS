@@ -31,9 +31,12 @@
 #include "bcos-ops/tx/Smoke.h"
 #include "bcos-ops/tx/TxSender.h"
 #include <atomic>
+#include <filesystem>
+#include <fstream>
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/event.hpp>
 #include <ftxui/component/screen_interactive.hpp>
+#include <ftxui/screen/screen.hpp>
 #include <ostream>
 #include <thread>
 
@@ -42,6 +45,70 @@ namespace bcos::ops
 namespace
 {
 using namespace ftxui;  // bcos::ops::Event clashes with ftxui::Event, which is always qualified
+
+/// --snapshot-dir: render the five views once from live data into <dir>/<n>-<view>.txt (80x24),
+/// for documentation and CI where no terminal is attached
+int snapshotViews(
+    Connection const& _connection, Args const& _args, std::string const& _dir, std::ostream& _out)
+{
+    LocalFallbacks fallbacks;
+    if (_connection.nodeDir)
+    {
+        fallbacks.txpoolLimit = static_cast<int64_t>(_connection.nodeDir->txpoolLimit);
+        fallbacks.consensusTimeoutMs = _connection.nodeDir->consensusTimeoutMs;
+    }
+    tui::Model model;
+    tui::Refresher refresher(_connection, fallbacks, thresholdsFrom(_args), model, nullptr, 100000);
+    refresher.runOnce();
+    if (_connection.nodeDir)
+    {
+        tui::LogTail tail(_connection.nodeDir->logDir());
+        auto events = tail.poll();
+        std::lock_guard<std::mutex> lock(model.mutex);
+        for (auto& event : events)
+        {
+            model.logTail.push_back(std::move(event));
+        }
+        while (model.logTail.size() > 500)
+        {
+            model.logTail.pop_front();
+        }
+    }
+    std::filesystem::create_directories(_dir);
+    std::string filter = _args.optionOr("filter", "");
+    std::vector<std::pair<std::string, std::function<Element()>>> views = {
+        {"overview", [&]() { return tui::renderOverview(model); }},
+        {"consensus", [&]() { return tui::renderConsensus(model); }},
+        {"sync", [&]() { return tui::renderSync(model); }},
+        {"tx",
+            [&]() {
+                return vbox({text(" tx "), text(" [ run smoke ] "), separator(),
+                           tui::renderTx(model)}) |
+                       border;
+            }},
+        {"log",
+            [&]() {
+                return vbox({text(" log  filter> " + filter), separator(),
+                           tui::renderLog(model, filter)}) |
+                       border;
+            }},
+    };
+    int index = 1;
+    for (auto const& [name, render] : views)
+    {
+        auto screen =
+            ftxui::Screen::Create(ftxui::Dimension::Fixed(80), ftxui::Dimension::Fixed(24));
+        std::lock_guard<std::mutex> lock(model.mutex);
+        auto footer =
+            text(" 1 overview  2 consensus  3 sync  4 tx  5 log  r refresh  q quit ") | dim;
+        ftxui::Render(screen, vbox({tui::renderTopBar(model), render() | flex, footer}));
+        auto path = _dir + "/" + std::to_string(index++) + "-" + name + ".txt";
+        std::ofstream out(path);
+        out << screen.ToString();
+        _out << path << '\n';
+    }
+    return c_exitOk;
+}
 
 int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
 {
@@ -54,6 +121,10 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
     }
     auto options = connectOptionsFrom(_args);
     auto connection = connect(options);
+    if (auto snapshotDir = _args.option("snapshot-dir"))
+    {
+        return snapshotViews(connection, _args, *snapshotDir, _out);
+    }
     LocalFallbacks fallbacks;
     if (connection.nodeDir)
     {
@@ -219,7 +290,8 @@ void registerTuiCommand()
 {
     registerCommand(
         "tui", Command{"interactive panel: overview, consensus, sync/p2p, tx smoke, log tail",
-                   "[--node-dir <dir> | --rpc <host:port>] [--account <pem>] [--version-check]",
+                   "[--node-dir <dir> | --rpc <host:port>] [--account <pem>] [--version-check] "
+                   "[--snapshot-dir <dir> [--filter <text>]]",
                    {"version-check"}, runTui});
 }
 }  // namespace bcos::ops
