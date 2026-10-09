@@ -31,6 +31,8 @@ contract ProxyAuthorityTest is Test {
         proxy = new TransparentUpgradeableProxy(
             address(impl), admin, abi.encodeCall(SystemConfig.initialize, (owner)));
         cfg = SystemConfig(address(proxy));
+        // The writes below use enableNumber 5; setValueByKey accepts at most block.number + 1.
+        vm.roll(100);
     }
 
     /// The governance owner writes config through the proxy.

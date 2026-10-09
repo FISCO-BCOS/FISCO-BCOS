@@ -24,7 +24,9 @@ interface ISystemConfig {
     ///         change path exists — all of them revert.
     /// @param key         config name (e.g. "block_tx_count_limit")
     /// @param value       config value, ≤ uint192 (all current configs fit)
-    /// @param enableNumber block height at which the value becomes active
+    /// @param enableNumber block height at which the value becomes active; at most
+    ///                    block.number + 1 (the next block), because each key holds a
+    ///                    single Entry and a write replaces the active value
     function setValueByKey(string calldata key, uint192 value, uint64 enableNumber) external;
 
     /// @notice Read a config value and its activation block height.

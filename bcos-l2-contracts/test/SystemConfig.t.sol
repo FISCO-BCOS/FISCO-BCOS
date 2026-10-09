@@ -15,6 +15,22 @@ contract SystemConfigTest is Test {
     function setUp() public {
         cfg = new SystemConfig();
         cfg.initialize(owner);
+        // The schedule tests below write enableNumber 5 / 10 / 20; setValueByKey accepts at
+        // most block.number + 1, so run them from a height past all of those.
+        vm.roll(100);
+    }
+
+    /// One Entry per key: a write replaces the active value, so activation can be at most
+    /// the next block -- anything later would leave the key without an active value.
+    function test_SetValueByKey_BeyondNextBlockReverts() public {
+        vm.startPrank(owner);
+        cfg.setValueByKey(WRITABLE_KEY, 1, uint64(block.number + 1));
+        vm.expectRevert("SystemConfig: enableNumber beyond next block");
+        cfg.setValueByKey(WRITABLE_KEY, 1, uint64(block.number + 2));
+        vm.stopPrank();
+        (uint192 v, uint64 e) = cfg.getValueByKey(WRITABLE_KEY);
+        assertEq(uint256(v), 1);
+        assertEq(uint256(e), block.number + 1);
     }
 
     function test_SetGetValueByKey_RoundTrip() public {
@@ -72,6 +88,8 @@ contract SystemConfigTest is Test {
     function test_Packing_ValueAndEnableIndependent() public {
         uint192 bigV = type(uint192).max;
         uint64 bigE = type(uint64).max;
+        // bigE must still be <= block.number + 1 to pass the setter.
+        vm.roll(uint256(type(uint64).max) - 1);
         vm.startPrank(owner);
         cfg.setValueByKey(WRITABLE_KEY, bigV, 0);
         (uint192 v1, uint64 e1) = cfg.getValueByKey(WRITABLE_KEY);

@@ -59,6 +59,11 @@ contract SystemConfig is ISystemConfig, OwnableUpgradeable {
         onlyOwner
     {
         require(_isWritableKey(key), "SystemConfig: key not runtime-writable");
+        // One Entry per key: a write replaces the active value, so a value that only
+        // activates later would leave the chain with NO active value until then (and
+        // the node's loader, which reads the slot at committed + 1, has nothing to fall
+        // back to after a restart). Activation is therefore at most the next block.
+        require(enableNumber <= block.number + 1, "SystemConfig: enableNumber beyond next block");
         _config[key] = Entry(value, enableNumber);
         emit ConfigUpdate(key, value, enableNumber);
     }

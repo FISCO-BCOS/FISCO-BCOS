@@ -21,7 +21,8 @@
  * each known key onto a LedgerConfig setter. These tests drive the loader
  * against a small in-memory storage that satisfies the readSome concept and
  * verify both the happy path (4 keys land in the right setters) and the
- * defensive paths (missing key, zero chainId, value overflow).
+ * defensive paths (missing key, zero chainId, value overflow, a scheduled change on a
+ * genesis-frozen key, an entry whose enableNumber is later than the evaluated block).
  */
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/ledger/L2ConfigLoader.h>
@@ -39,6 +40,8 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 using namespace bcos;
@@ -157,10 +160,10 @@ BOOST_AUTO_TEST_CASE(HappyPathPopulatesLedgerConfig)
 {
     FakeSlotStorage storage;
     putSlot(storage, "chain_id", chainIdLow192(901), /*enableNumber=*/0);
-    // gas_limit carries a non-zero enableNumber (10) while the caller block is
-    // 42: the loader must record 10 (the slot's enable block), not 42 (caller).
-    putSlot(storage, "gas_limit", packUint64IntoLow192(30'000'000), /*enableNumber=*/10);
-    putSlot(storage, "block_tx_count_limit", packUint64IntoLow192(1000), 0);
+    putSlot(storage, "gas_limit", packUint64IntoLow192(30'000'000), /*enableNumber=*/0);
+    // The one runtime-writable key carries a past enableNumber (10) while the caller
+    // block is 42: an entry the contract wrote earlier is simply active.
+    putSlot(storage, "block_tx_count_limit", packUint64IntoLow192(1000), /*enableNumber=*/10);
     putSlot(storage, "compatibility_version", packUint64IntoLow192(0x03'10'00'00), 0);
 
     L2ConfigLoaderImpl<FakeSlotStorage> loader(storage, systemConfigTable());
@@ -183,59 +186,56 @@ BOOST_AUTO_TEST_CASE(HappyPathPopulatesLedgerConfig)
 
     auto [gasLimit, gasLimitBlock] = out.gasLimit();
     BOOST_CHECK_EQUAL(gasLimit, 30'000'000U);
-    // enableNumber from the slot, NOT the caller's block (42).
-    BOOST_CHECK_EQUAL(gasLimitBlock, 10);
+    // gas_limit is genesis-frozen: the tuple's block is the slot's enableNumber (0), not the
+    // caller's block (42).
+    BOOST_CHECK_EQUAL(gasLimitBlock, 0);
     BOOST_CHECK_EQUAL(out.blockTxCountLimit(), 1000U);
     BOOST_CHECK_EQUAL(out.compatibilityVersion(), 0x03'10'00'00U);
 }
 
-// A key whose enableNumber is still in the future must be skipped: the loader
-// leaves LedgerConfig's prior value untouched rather than applying the
-// scheduled change early. Mirrors LedgerTypeDef::readFromStorage semantics.
-BOOST_AUTO_TEST_CASE(ScheduledKeySkippedWhenFutureEnable)
+// The slot holds one entry per key, so an entry whose enableNumber is still later than the
+// block being evaluated has displaced the active value with nothing to fall back to. The
+// contract cannot produce one (setValueByKey enforces enableNumber <= block.number + 1 and
+// the loader is evaluated at committed + 1), so it is a raw storage write or an alloc edit:
+// the loader must throw, not skip -- skipping would seal with the caller's SYS_CONFIG
+// fallback until the height arrives, and leave @p out silently unchanged.
+BOOST_AUTO_TEST_CASE(FutureScheduledWritableKeyThrows)
 {
     FakeSlotStorage storage;
     putSlot(storage, "chain_id", chainIdLow192(901), 0);
-    // gas_limit is scheduled to enable at block 200, but we load at block 50.
-    putSlot(storage, "gas_limit", packUint64IntoLow192(30'000'000), /*enableNumber=*/200);
-    putSlot(storage, "block_tx_count_limit", packUint64IntoLow192(1000), 0);
+    putSlot(storage, "gas_limit", packUint64IntoLow192(30'000'000), 0);
+    // block_tx_count_limit is scheduled for block 200, but we load at block 50.
+    putSlot(storage, "block_tx_count_limit", packUint64IntoLow192(1000), /*enableNumber=*/200);
     putSlot(storage, "compatibility_version", packUint64IntoLow192(0x03'10'00'00), 0);
 
     L2ConfigLoaderImpl<FakeSlotStorage> loader(storage, systemConfigTable());
     LedgerConfig out;
-    // Pre-seed a cached gas limit the loader must NOT overwrite this block.
-    out.setGasLimit({99'999'999, 0});
+    out.setBlockTxCountLimit(7);
 
-    task::syncWait([&]() -> task::Task<void> {
-        co_await loader.loadIntoLedgerConfig(/*blockNumber=*/50, out);  // 50 < 200
-        co_return;
-    }());
-
-    // gas_limit was future-enabled -> untouched, keeps the pre-seeded value.
-    auto [gasLimit, gasLimitBlock] = out.gasLimit();
-    BOOST_CHECK_EQUAL(gasLimit, 99'999'999U);
-    BOOST_CHECK_EQUAL(gasLimitBlock, 0);
-
-    // The other three keys (enableNumber 0) are active and applied normally.
-    BOOST_REQUIRE(out.chainId().has_value());
-    BOOST_CHECK_EQUAL(out.blockTxCountLimit(), 1000U);
-    BOOST_CHECK_EQUAL(out.compatibilityVersion(), 0x03'10'00'00U);
+    BOOST_CHECK_EXCEPTION(task::syncWait(loader.loadIntoLedgerConfig(/*blockNumber=*/50, out)),
+        std::runtime_error, [](std::runtime_error const& error) {  // 50 < 200
+            return std::string(error.what())
+                       .find("'block_tx_count_limit' is scheduled for block 200") !=
+                   std::string::npos;
+        });
+    // The scheduled value was not applied early either.
+    BOOST_CHECK_EQUAL(out.blockTxCountLimit(), 7U);
 }
 
-// Boundary: a key activates on the exact block equal to its enableNumber. The
-// gate is `blockNumber >= enableNumber`, so block == enableNumber applies.
+// Boundary: the writable key activates on the exact block equal to its enableNumber -- the
+// shape setValueByKey(…, block.number + 1) in block N produces when the loader evaluates
+// N + 1. The frozen keys carry 0.
 BOOST_AUTO_TEST_CASE(ScheduledKeyAppliesAtExactEnableBlock)
 {
     FakeSlotStorage storage;
-    // chain_id is genesis-frozen: its enableNumber must stay 0 (see
-    // ChainIdScheduledChangeThrows); the schedulable keys carry 100.
     putSlot(storage, "chain_id", chainIdLow192(901), 0);
-    putSlot(storage, "gas_limit", packUint64IntoLow192(30'000'000), 100);
+    putSlot(storage, "gas_limit", packUint64IntoLow192(30'000'000), 0);
     putSlot(storage, "block_tx_count_limit", packUint64IntoLow192(1000), 100);
-    putSlot(storage, "compatibility_version", packUint64IntoLow192(0x03'10'00'00), 100);
+    putSlot(storage, "compatibility_version", packUint64IntoLow192(0x03'10'00'00), 0);
 
     L2ConfigLoaderImpl<FakeSlotStorage> loader(storage, systemConfigTable());
     LedgerConfig out;
+    out.setBlockTxCountLimit(7);
 
     task::syncWait([&]() -> task::Task<void> {
         co_await loader.loadIntoLedgerConfig(/*blockNumber=*/100, out);  // 100 >= 100
@@ -244,10 +244,68 @@ BOOST_AUTO_TEST_CASE(ScheduledKeyAppliesAtExactEnableBlock)
 
     auto [gasLimit, gasLimitBlock] = out.gasLimit();
     BOOST_CHECK_EQUAL(gasLimit, 30'000'000U);
-    BOOST_CHECK_EQUAL(gasLimitBlock, 100);
+    BOOST_CHECK_EQUAL(gasLimitBlock, 0);
     BOOST_REQUIRE(out.chainId().has_value());
     BOOST_CHECK_EQUAL(out.blockTxCountLimit(), 1000U);
     BOOST_CHECK_EQUAL(out.compatibilityVersion(), 0x03'10'00'00U);
+}
+
+// gas_limit and compatibility_version are genesis-frozen like chain_id: the contract
+// rejects runtime writes, so a non-zero enableNumber is a slot written past the contract.
+// The loader throws whether the schedule is already past (block 100 >= 7) or still ahead
+// (block 50 < 200) -- the second case is what would otherwise let a crafted alloc pass the
+// boot comparison (checkL2GenesisFrozenKeys) on the caller's fallback value and overlay the
+// frozen key once the height arrived.
+BOOST_AUTO_TEST_CASE(FrozenKeyScheduledChangeThrows)
+{
+    for (std::string_view frozenKey : {"gas_limit", "compatibility_version"})
+    {
+        for (auto [enableNumber, blockNumber] :
+            {std::pair<uint64_t, protocol::BlockNumber>{7, 100}, {200, 50}})
+        {
+            FakeSlotStorage storage;
+            putSlot(storage, "chain_id", chainIdLow192(901), 0);
+            putSlot(storage, "gas_limit", packUint64IntoLow192(30'000'000),
+                frozenKey == "gas_limit" ? enableNumber : 0);
+            putSlot(storage, "block_tx_count_limit", packUint64IntoLow192(1000), 0);
+            putSlot(storage, "compatibility_version", packUint64IntoLow192(0x03'10'00'00),
+                frozenKey == "compatibility_version" ? enableNumber : 0);
+
+            L2ConfigLoaderImpl<FakeSlotStorage> loader(storage, systemConfigTable());
+            LedgerConfig out;
+            // Pin the frozen-key gate, not the schedule gate: the {200, 50} case would throw
+            // there too, so the message is what proves the frozen check fired first.
+            BOOST_CHECK_EXCEPTION(task::syncWait(loader.loadIntoLedgerConfig(blockNumber, out)),
+                std::runtime_error, [frozenKey](std::runtime_error const& error) {
+                    return std::string(error.what())
+                               .find(fmt::format("'{}' is genesis-frozen", frozenKey)) !=
+                           std::string::npos;
+                });
+        }
+    }
+}
+
+// An enableNumber at or above 2^63 must not slip past the schedule gate through a signed
+// conversion (BlockNumber is int64): the comparison is std::cmp_less, so it is rejected
+// like any other later height.
+BOOST_AUTO_TEST_CASE(HugeEnableNumberIsStillRejected)
+{
+    FakeSlotStorage storage;
+    putSlot(storage, "chain_id", chainIdLow192(901), 0);
+    putSlot(storage, "gas_limit", packUint64IntoLow192(30'000'000), 0);
+    putSlot(storage, "block_tx_count_limit", packUint64IntoLow192(1000),
+        /*enableNumber=*/(uint64_t{1} << 63) + 5);
+    putSlot(storage, "compatibility_version", packUint64IntoLow192(0x03'10'00'00), 0);
+
+    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage, systemConfigTable());
+    LedgerConfig out;
+    out.setBlockTxCountLimit(7);
+    BOOST_CHECK_EXCEPTION(task::syncWait(loader.loadIntoLedgerConfig(/*blockNumber=*/100, out)),
+        std::runtime_error, [](std::runtime_error const& error) {
+            return std::string(error.what()).find("'block_tx_count_limit' is scheduled for") !=
+                   std::string::npos;
+        });
+    BOOST_CHECK_EQUAL(out.blockTxCountLimit(), 7U);
 }
 
 BOOST_AUTO_TEST_CASE(MissingKeyThrows)

@@ -36,10 +36,14 @@
  *        Solidity is the single authoritative source for the L2 chain config.
  *        A missing key (entry never written) or a malformed slot value aborts
  *        the current block via throw; the loader never falls back to a cached
- *        config. A key whose packed enableNumber is still in the future is
- *        skipped (the block keeps its prior value), matching
- *        LedgerTypeDef::readFromStorage's `blockNumber >= enableNumber`
- *        schedule semantics so every node activates a change on the same block.
+ *        config. Each key holds ONE packed entry, so a scheduled value replaces
+ *        the active one with nothing to fall back to: SystemConfig.setValueByKey
+ *        only accepts enableNumber <= block.number + 1, the loader is evaluated
+ *        at committed + 1, and an entry whose enableNumber is still later than
+ *        that is rejected (throw) rather than skipped -- skipping would leave the
+ *        caller's SYS_CONFIG fallback in LedgerConfig until the height arrives,
+ *        and the previous SystemConfig value is unrecoverable after a restart.
+ *        The three genesis-frozen keys must carry enableNumber 0.
  */
 #pragma once
 #include <bcos-crypto/hash/Keccak256.h>
@@ -143,8 +147,9 @@ struct DecodedEntry
 // actual config width (uint64 / uint32 / uint256) by reading the trailing N
 // bytes and asserting the leading bytes are zero — matching the contract's
 // typed accessors (value is declared uint192 on-chain so the upper bytes of
-// any uint64 / uint32 config are required to be zero). enableNumber gates
-// whether the value is applied this block (see loadIntoLedgerConfig).
+// any uint64 / uint32 config are required to be zero). enableNumber must not be
+// later than the block being evaluated, and must be 0 on the genesis-frozen keys
+// (see loadIntoLedgerConfig).
 inline DecodedEntry decodeEntryValue(std::string_view slotBytes)
 {
     if (slotBytes.size() != L2_SLOT_BYTES)
@@ -293,26 +298,41 @@ public:
             auto const slotBytes = entries[i]->get();
             auto const decoded = detail::decodeEntryValue(slotBytes);
 
-            // chain_id is genesis-frozen (D4): genesis writes it with
-            // enableNumber 0 and the contract rejects runtime writes. A
-            // non-zero enableNumber can only mean someone smuggled a scheduled
-            // chain_id change past the contract whitelist (e.g. via a raw
-            // storage write) — refuse to run rather than re-key the chain.
-            if (key == "chain_id" && decoded.enableNumber != 0)
+            // Genesis-frozen keys (D4): genesis writes chain_id, gas_limit and
+            // compatibility_version with enableNumber 0 and SystemConfig._isWritableKey
+            // rejects runtime writes to them, so a non-zero enableNumber can only mean
+            // the slot was written past the contract (raw storage write, hand-edited
+            // alloc). Refuse to run rather than re-key or re-price the chain -- and
+            // rather than let checkL2GenesisFrozenKeys at boot compare the caller's
+            // fallback value, which a later height would then silently overlay.
+            if (key != "block_tx_count_limit" && decoded.enableNumber != 0)
             {
-                BOOST_THROW_EXCEPTION(
-                    std::runtime_error("L2ConfigLoader: chain_id is genesis-frozen; a scheduled "
-                                       "chain_id change (enableNumber != 0) is invalid"));
+                BOOST_THROW_EXCEPTION(std::runtime_error(
+                    fmt::format("L2ConfigLoader: '{}' is genesis-frozen; a scheduled change "
+                                "(enableNumber {} != 0) is invalid",
+                        key, decoded.enableNumber)));
             }
 
-            // Schedule gate: a config whose enableNumber is still in the future
-            // must not be applied yet — the block keeps its prior value. This
-            // mirrors LedgerTypeDef::readFromStorage's `blockNumber >=
-            // enableNumber` check so every node activates a scheduled change on
-            // the same block (a divergence here would fork the chain).
-            if (blockNumber < static_cast<protocol::BlockNumber>(decoded.enableNumber))
+            // Schedule gate. The slot holds ONE entry per key, so a scheduled value
+            // replaces the active one with nothing to fall back to. SystemConfig.setValueByKey
+            // only accepts enableNumber <= block.number + 1 and this loader is evaluated at
+            // committed + 1 (OpLedgerConfigRepublish.h), so every entry the contract can
+            // produce is active here; a later enableNumber is a raw storage write or an alloc
+            // edit. Refuse it instead of skipping it: "skip" would leave the SYS_CONFIG
+            // fallback in @p out until the height arrives, and after a restart the previous
+            // SystemConfig value is unrecoverable, so two nodes could seal with different
+            // limits. Every node evaluates the same slot at the same height, so the refusal
+            // itself is deterministic.
+            // std::cmp_less: a static_cast of an enableNumber >= 2^63 to the signed
+            // BlockNumber would go negative and slip past the comparison.
+            if (std::cmp_less(blockNumber, decoded.enableNumber))
             {
-                continue;
+                BOOST_THROW_EXCEPTION(std::runtime_error(
+                    fmt::format("L2ConfigLoader: '{}' is scheduled for block {} but the loader "
+                                "is evaluating block {}; a SystemConfig entry must be active at "
+                                "the next block (setValueByKey enforces enableNumber <= "
+                                "block.number + 1)",
+                        key, decoded.enableNumber, blockNumber)));
             }
             auto const& value = decoded.value;
 
@@ -337,9 +357,9 @@ public:
             }
             else if (key == "gas_limit")
             {
-                // The gas-limit tuple's second element is the block the value
-                // takes effect on; use the slot's enableNumber, not the caller's
-                // current block, so downstream sees the contract's schedule.
+                // The gas-limit tuple's second element is the block the value takes
+                // effect on; gas_limit is genesis-frozen, so the slot's enableNumber
+                // (checked to be 0 above) is what downstream sees, not the caller's block.
                 out.setGasLimit({detail::valueToUint64(value, key),
                     static_cast<protocol::BlockNumber>(decoded.enableNumber)});
             }
