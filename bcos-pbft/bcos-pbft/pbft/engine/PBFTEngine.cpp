@@ -24,6 +24,7 @@
 #include "bcos-framework/front/FrontServiceInterface.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include "bcos-pbft/pbft/utilities/SealStall.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
@@ -63,7 +64,8 @@ PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config, boost::asio::io_context& _ioCont
             onStableCheckPointCommitFailed(std::move(_error), std::move(_stableProposal));
         });
 
-    m_config->registerFastViewChangeHandler([this]() { triggerTimeout(false); });
+    m_config->registerFastViewChangeHandler(
+        [this](ViewChangeReason _reason) { triggerTimeout(false, _reason); });
     m_cacheProcessor->registerProposalAppliedHandler(
         [this](int64_t _errorCode, PBFTProposalInterface::Ptr _proposal,
             PBFTProposalInterface::Ptr _executedProposal) {
@@ -115,11 +117,11 @@ void PBFTEngine::initSendResponseHandler()
                     _id, _moduleID, _dstNode, bcos::ref(_payload));
                 if (error)
                 {
-                    PBFT_LOG(TRACE) << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
-                                    << LOG_KV("module", std::to_string(_moduleID))
-                                    << LOG_KV("dst", _dstNode->shortHex())
-                                    << LOG_KV("code", error->errorCode())
-                                    << LOG_KV("msg", error->errorMessage());
+                    PBFT_LOG(TRACE)
+                        << LOG_DESC("sendResponse failed") << LOG_KV("uuid", _id)
+                        << LOG_KV("module", std::to_string(_moduleID))
+                        << LOG_KV("dst", _dstNode->shortHex()) << LOG_KV("code", error->errorCode())
+                        << LOG_KV("msg", error->errorMessage());
                 }
             }(frontService, _id, _moduleID, _dstNode, _data.toBytes()));
         }
@@ -160,7 +162,7 @@ void PBFTEngine::start()
     // trigger fast viewchange to reachNewView
     if (!m_config->startRecovered())
     {
-        triggerTimeout(false);
+        triggerTimeout(false, ViewChangeReason::StartupRecovery);
     }
 }
 
@@ -225,7 +227,7 @@ void PBFTEngine::restart()
         PBFT_LOG(INFO) << LOG_DESC(
             "restart: skip master-flag flip during promotion transition (FIB-138)");
     }
-    triggerTimeout(false);
+    triggerTimeout(false, ViewChangeReason::Restart);
 }
 
 void PBFTEngine::stop()
@@ -286,8 +288,6 @@ void PBFTEngine::onProposalApplyFailed(int64_t _errorCode, PBFTProposalInterface
                           << printPBFTProposal(_proposal) << m_config->printCurrentState();
         return;
     }
-    PBFT_LOG(WARNING) << LOG_DESC("proposal execute failed") << printPBFTProposal(_proposal)
-                      << m_config->printCurrentState();
     // Note: must add lock here to ensure thread-safe
     RecursiveGuard l(m_mutex);
     if (_errorCode == bcos::scheduler::SchedulerError::InvalidBlocks)
@@ -336,11 +336,10 @@ void PBFTEngine::onProposalApplySuccess(
     // FIB-185: hand the owned payload to the front's serial send queue (off this thread); no copy.
     m_config->frontService()->broadcastMessageByOwnedPayload(
         bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, std::move(encodedData));
-    auto startT = utcTime();
-    auto recordT = utcTime();
+    PBFT_LOG(INFO) << LOG_DESC("CheckpointSent") << LOG_KV("index", checkPointMsg->index())
+                   << LOG_KV("hash", checkPointMsg->hash().abridged());
     // Note: must lock here to ensure thread safe
     RecursiveGuard l(m_mutex);
-    auto lockT = (utcTime() - startT);
     // restart the timer when proposal execute finished to in case of timeout
     if (m_config->timer()->running())
     {
@@ -370,9 +369,6 @@ void PBFTEngine::onProposalApplySuccess(
     m_cacheProcessor->checkAndCommitStableCheckPoint();
     m_cacheProcessor->tryToApplyCommitQueue();
     m_cacheProcessor->eraseExecutedProposal(_proposal->hash());
-    PBFT_LOG(INFO) << LOG_DESC("onProposalApplySuccess") << LOG_KV("index", checkPointMsg->index())
-                   << LOG_KV("hash", checkPointMsg->hash().abridged()) << LOG_KV("lockT", lockT)
-                   << LOG_KV("timecost", (utcTime() - recordT));
 }
 
 // called after proposal executed successfully
@@ -468,11 +464,6 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, const protocol::Block& prop
     auto pbftMessage =
         m_config->pbftMessageFactory()->populateFrom(PacketType::PrePreparePacket, pbftProposal,
             m_config->pbftMsgDefaultVersion(), m_config->view(), utcTime(), m_config->nodeIndex());
-    PBFT_LOG(INFO) << LOG_DESC("++++++++++++++++ Generating seal on")
-                   << LOG_KV("index", pbftMessage->index()) << LOG_KV("Idx", m_config->nodeIndex())
-                   << LOG_KV("hash", pbftMessage->hash().abridged())
-                   << LOG_KV("sysProposal", pbftProposal->systemProposal());
-
     // NOTE: must ensure thread safe, should not write any filed while
     // encoding broadcast the pre-prepare packet
     auto encodeStart = utcTime();
@@ -480,11 +471,14 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, const protocol::Block& prop
     auto encodeEnd = utcTime();
 
     // only broadcast pbft message to the consensus nodes
-    PBFT_LOG(INFO) << LOG_DESC("broadcast pre-prepare packet")
-                   << LOG_KV("packetSize", encodedData->size())
+    PBFT_LOG(INFO) << LOG_DESC("++++++++++++++++ PrePrepareSent")
                    << LOG_KV("index", pbftMessage->index())
-                   << LOG_KV("encode(ms)", encodeEnd - encodeStart)
-                   << LOG_KV("asyncSend(ms)", utcTime() - encodeEnd);
+                   << LOG_KV("hash", pbftMessage->hash().abridged())
+                   << LOG_KV("view", pbftMessage->view()) << LOG_KV("Idx", m_config->nodeIndex())
+                   << LOG_KV("txsSize", proposal.transactionsHashSize())
+                   << LOG_KV("sysProposal", pbftProposal->systemProposal())
+                   << LOG_KV("packetSize", encodedData->size())
+                   << LOG_KV("encodeMs", encodeEnd - encodeStart);
     // FIB-185: hand the owned payload to the front's serial send queue (off this thread); no copy.
     m_config->frontService()->broadcastMessageByOwnedPayload(
         bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, std::move(encodedData));
@@ -496,9 +490,9 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, const protocol::Block& prop
     // only broadcast the prePrepareMsg when local handlePrePrepareMsg success
     if (ret) [[likely]]
     {
-        PBFT_LOG(INFO) << LOG_DESC("handlePrePrepareMsg success")
-                       << LOG_KV("index", pbftMessage->index())
-                       << LOG_KV("costT(ms)", utcSteadyTime() - beginHandleT);
+        PBFT_LOG(DEBUG) << LOG_DESC("handlePrePrepareMsg success")
+                        << LOG_KV("index", pbftMessage->index())
+                        << LOG_KV("costT(ms)", utcSteadyTime() - beginHandleT);
     }
     else
     {
@@ -581,6 +575,7 @@ void PBFTEngine::onReceivePBFTMessage(Error::Ptr _error, NodeIDPtr _fromNode, by
         // decode the message and push the message into the queue
         auto pbftMsg = m_config->codec()->decode(_data);
         pbftMsg->setFrom(_fromNode);
+        countReceivedPacket(pbftMsg->packetType(), _data.size());
         // the committed proposal request message
         if (pbftMsg->packetType() == PacketType::CommittedProposalRequest)
         {
@@ -620,6 +615,7 @@ void PBFTEngine::onReceivePBFTMessage(Error::Ptr _error, NodeIDPtr _fromNode, by
         auto maxFutureIndex = lastApplied + 2 * m_config->waterMarkLimit();
         if (!m_pipeline.admit(pbftMsg, lastApplied, maxFutureIndex))
         {
+            m_config->blockStat().add(PBFTStatSlot::Rejected);
             return;
         }
         m_msgQueue.push(pbftMsg);
@@ -847,13 +843,7 @@ CheckResult PBFTEngine::checkPrePrepareMsg(std::shared_ptr<PBFTMessageInterface>
     // refuse pre-prepare massage from too large view node
     if (m_config->view() + m_config->waterMarkLimit() < _prePrepareMsg->view())
     {
-        PBFT_LOG(INFO) << LOG_DESC(
-                              "handlePrePrepareMsg: refuse pre-prepare massage from too large view")
-                       << LOG_KV("committedIndex", m_config->committedProposal()->index())
-                       << LOG_KV("recvIndex", _prePrepareMsg->index())
-                       << LOG_KV("recvView", _prePrepareMsg->view())
-                       << LOG_KV("hash", _prePrepareMsg->hash().abridged())
-                       << m_config->printCurrentState();
+        logPrePrepareRejected(bcos::LogLevel::INFO, "too_large_view", _prePrepareMsg);
         return CheckResult::INVALID;
     }
     return CheckResult::VALID;
@@ -1003,14 +993,8 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
         ittapi::ITT_DOMAINS::instance().PBFT, ittapi::ITT_DOMAINS::instance().PRE_PREPARE_MSG);
     if (isSyncingHigher())
     {
-        PBFT_LOG(INFO) << LOG_DESC(
-                              "handlePrePrepareMsg: reject the prePrepareMsg "
-                              "for the node is syncing")
-                       << LOG_KV("committedIndex", m_config->committedProposal()->index())
-                       << LOG_KV("recvIndex", _prePrepareMsg->index())
-                       << LOG_KV("hash", _prePrepareMsg->hash().abridged())
-                       << LOG_KV("syncingNum", m_config->syncingHighestNumber())
-                       << m_config->printCurrentState();
+        logPrePrepareRejected(bcos::LogLevel::INFO, "syncing", _prePrepareMsg,
+            std::string(",syncingNum=") + std::to_string(m_config->syncingHighestNumber()));
         return false;
     }
     if (m_cacheProcessor->executingProposals().contains(_prePrepareMsg->hash()))
@@ -1024,15 +1008,21 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                         << m_config->printCurrentState();
         return false;
     }
-    PBFT_LOG(INFO) << LOG_DESC("handlePrePrepareMsg") << printPBFTMsgInfo(_prePrepareMsg)
-                   << m_config->printCurrentState() << LOG_KV("utc", utcSteadyTime());
+    if (_needVerifyProposal)
+    {
+        // first entry for this message; the post-verify re-entry (_needVerifyProposal=false)
+        // and the leader's local handling do not print it again
+        PBFT_LOG(INFO) << LOG_DESC("PrePrepareReceived") << LOG_KV("index", _prePrepareMsg->index())
+                       << LOG_KV("hash", _prePrepareMsg->hash().abridged())
+                       << LOG_KV("view", _prePrepareMsg->view())
+                       << LOG_KV("fromIdx", _prePrepareMsg->generatedFrom())
+                       << LOG_KV("fromNewView", _generatedFromNewView);
+    }
 
     auto result = checkPrePrepareMsg(_prePrepareMsg);
     if (result == CheckResult::INVALID)
     {
-        PBFT_LOG(INFO) << LOG_DESC("handlePrePrepareMsg checkPrePrepareMsg failed")
-                       << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState()
-                       << LOG_KV("utc", utcSteadyTime());
+        logPrePrepareRejected(bcos::LogLevel::INFO, "check_failed", _prePrepareMsg);
         return false;
     }
     if (!_generatedFromNewView)
@@ -1045,10 +1035,7 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
         // view — breaking liveness and cross-view consistency.
         if (_prePrepareMsg->view() != m_config->view())
         {
-            PBFT_LOG(INFO) << LOG_DESC(
-                                  "handlePrePrepareMsg: reject non-local-view PrePrepare "
-                                  "in the normal path")
-                           << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+            logPrePrepareRejected(bcos::LogLevel::INFO, "non_local_view", _prePrepareMsg);
             return false;
         }
         // packet can be processed in this round of consensus
@@ -1056,10 +1043,8 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
         auto expectedLeader = m_config->leaderIndex(_prePrepareMsg->index());
         if (expectedLeader != _prePrepareMsg->generatedFrom())
         {
-            PBFT_LOG(TRACE) << LOG_DESC(
-                                   "handlePrePrepareMsg: invalid packet for not from the leader")
-                            << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState()
-                            << LOG_KV("expectedLeader", expectedLeader);
+            logPrePrepareRejected(bcos::LogLevel::TRACE, "not_leader", _prePrepareMsg,
+                std::string(",expectedLeader=") + std::to_string(expectedLeader));
             return false;
         }
         if (_needCheckSignature)
@@ -1078,15 +1063,10 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                 {
                     m_config->notifySealer(_prePrepareMsg->index(), true);
                 }
-                else
-                {
-                    PBFT_LOG(WARNING)
-                        << LOG_DESC(
-                               "handlePrePrepareMsg: suppressing notifySealer due to repeated "
-                               "sig failures from peer (FIB-131)")
-                        << LOG_KV("peer", peerIdx) << LOG_KV("failCount", failCount)
-                        << printPBFTMsgInfo(_prePrepareMsg);
-                }
+                // FIB-131: beyond the cap the reseal notification is suppressed
+                logPrePrepareRejected(bcos::LogLevel::WARNING, "signature", _prePrepareMsg,
+                    std::string(",failCount=") + std::to_string(failCount) + ",resealSuppressed=" +
+                        (failCount > c_maxInvalidPrePreparePerPeer ? "true" : "false"));
                 return false;
             }
         }
@@ -1100,10 +1080,10 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
     // track consensus state for one slot while sealing txs for another.
     if (_prePrepareMsg->index() != _prePrepareMsg->consensusProposal()->index())
     {
-        PBFT_LOG(WARNING) << LOG_DESC("handlePrePrepareMsg: outer/inner index mismatch (FIB-130)")
-                          << LOG_KV("outerIndex", _prePrepareMsg->index())
-                          << LOG_KV("innerIndex", _prePrepareMsg->consensusProposal()->index())
-                          << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+        // FIB-130
+        logPrePrepareRejected(bcos::LogLevel::WARNING, "index_mismatch", _prePrepareMsg,
+            std::string(",innerIndex=") +
+                std::to_string(_prePrepareMsg->consensusProposal()->index()));
         return false;
     }
     auto block = m_config->blockFactory().createBlock(
@@ -1125,30 +1105,23 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
     {
         if (!blockHeader)
         {
-            PBFT_LOG(WARNING) << LOG_DESC(
-                                     "handlePrePrepareMsg: decoded block has no header (FIB-130)")
-                              << printPBFTMsgInfo(_prePrepareMsg);
+            // FIB-130
+            logPrePrepareRejected(bcos::LogLevel::WARNING, "no_header", _prePrepareMsg);
             return false;
         }
         if (blockHeader->number() != _prePrepareMsg->consensusProposal()->index())
         {
-            PBFT_LOG(WARNING) << LOG_DESC(
-                                     "handlePrePrepareMsg: block header number mismatch (FIB-130)")
-                              << LOG_KV("headerNumber", blockHeader->number())
-                              << LOG_KV("msgIndex", _prePrepareMsg->consensusProposal()->index())
-                              << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+            // FIB-130
+            logPrePrepareRejected(bcos::LogLevel::WARNING, "index_mismatch", _prePrepareMsg,
+                std::string(",headerNumber=") + std::to_string(blockHeader->number()));
             return false;
         }
         blockHeader->calculateHash(*m_config->cryptoSuite()->hashImpl());
         if (blockHeader->hash() != _prePrepareMsg->consensusProposal()->hash())
         {
-            PBFT_LOG(WARNING) << LOG_DESC(
-                                     "handlePrePrepareMsg: decoded block hash != proposal "
-                                     "hash (FIB-130)")
-                              << LOG_KV("expected",
-                                     _prePrepareMsg->consensusProposal()->hash().abridged())
-                              << LOG_KV("decoded", blockHeader->hash().abridged())
-                              << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+            // FIB-130
+            logPrePrepareRejected(bcos::LogLevel::WARNING, "hash_mismatch", _prePrepareMsg,
+                std::string(",decoded=") + blockHeader->hash().abridged());
             return false;
         }
         // FIB-142 receiver-side (defence-in-depth): FIB-130 above only proves the
@@ -1162,12 +1135,10 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                 block->calculateTransactionRoot(*m_config->cryptoSuite()->hashImpl());
             computedTxsRoot != blockHeader->txsRoot())
         {
-            PBFT_LOG(WARNING) << LOG_DESC(
-                                     "handlePrePrepareMsg: reject for decoded body txsRoot "
-                                     "does not match header.txsRoot (FIB-142)")
-                              << LOG_KV("headerTxsRoot", blockHeader->txsRoot().abridged())
-                              << LOG_KV("computedTxsRoot", computedTxsRoot.abridged())
-                              << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+            // FIB-142
+            logPrePrepareRejected(bcos::LogLevel::WARNING, "txs_root_mismatch", _prePrepareMsg,
+                std::string(",headerTxsRoot=") + blockHeader->txsRoot().abridged() +
+                    ",computedTxsRoot=" + computedTxsRoot.abridged());
             return false;
         }
     }
@@ -1188,19 +1159,17 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
 
         if (parentTs > 0 && proposedTs <= parentTs)
         {
-            PBFT_LOG(WARNING)
-                << LOG_DESC("handlePrePrepareMsg: reject proposal with non-monotonic timestamp")
-                << LOG_KV("proposedTs", proposedTs) << LOG_KV("parentTs", parentTs)
-                << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+            logPrePrepareRejected(bcos::LogLevel::WARNING, "timestamp", _prePrepareMsg,
+                std::string(",proposedTs=") + std::to_string(proposedTs) +
+                    ",parentTs=" + std::to_string(parentTs));
             return false;
         }
         if (proposedTs > nowTs + c_maxAllowedFutureTimestampMs)
         {
-            PBFT_LOG(WARNING)
-                << LOG_DESC("handlePrePrepareMsg: reject proposal with far-future timestamp")
-                << LOG_KV("proposedTs", proposedTs) << LOG_KV("nowTs", nowTs)
-                << LOG_KV("maxDrift", c_maxAllowedFutureTimestampMs)
-                << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+            logPrePrepareRejected(bcos::LogLevel::WARNING, "timestamp", _prePrepareMsg,
+                std::string(",proposedTs=") + std::to_string(proposedTs) +
+                    ",nowTs=" + std::to_string(nowTs) +
+                    ",maxDrift=" + std::to_string(c_maxAllowedFutureTimestampMs));
             return false;
         }
     }
@@ -1217,8 +1186,6 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
         m_config->timer()->restart();
         // broadcast PrepareMsg the packet
         broadcastPrepareMsg(_prePrepareMsg);
-        PBFT_LOG(INFO) << LOG_DESC("handlePrePrepareMsg and broadcast prepare packet")
-                       << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
         m_cacheProcessor->checkAndPreCommit();
         return true;
     }
@@ -1245,9 +1212,8 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
         }
         if (m_inFlightProposals.size() >= c_maxInFlightProposals)
         {
-            PBFT_LOG(WARNING)
-                << LOG_DESC("handlePrePrepareMsg: in-flight set at cap, rejecting new verify")
-                << LOG_KV("cap", c_maxInFlightProposals) << printPBFTMsgInfo(_prePrepareMsg);
+            logPrePrepareRejected(bcos::LogLevel::WARNING, "in_flight_cap", _prePrepareMsg,
+                std::string(",cap=") + std::to_string(c_maxInFlightProposals));
             return false;
         }
         m_inFlightProposals.insert(key);
@@ -1336,9 +1302,9 @@ void PBFTEngine::broadcastPrepareMsg(PBFTMessageInterface::Ptr const& _prePrepar
 
     auto encodedData = m_config->codec()->encode(prepareMsg, m_config->pbftMsgDefaultVersion());
 
-    PBFT_LOG(INFO) << LOG_DESC("broadcast prepare packet")
-                   << LOG_KV("packetSize", encodedData->size())
-                   << LOG_KV("index", _prePrepareMsg->index());
+    PBFT_LOG(DEBUG) << LOG_DESC("PrepareSent") << LOG_KV("index", _prePrepareMsg->index())
+                    << LOG_KV("hash", _prePrepareMsg->hash().abridged())
+                    << LOG_KV("packetSize", encodedData->size());
     // only broadcast to the consensus nodes
     // FIB-185: hand the owned payload to the front's serial send queue (off this thread); no copy.
     m_config->frontService()->broadcastMessageByOwnedPayload(
@@ -1416,10 +1382,7 @@ void PBFTEngine::onTimeout()
         m_config->timer()->restart();
         return;
     }
-    auto startT = utcTime();
-    auto recordT = utcTime();
     RecursiveGuard lock(m_mutex);
-    auto lockT = utcTime() - startT;
     if (m_cacheProcessor->tryToApplyCommitQueue())
     {
         PBFT_LOG(INFO) << LOG_DESC("onTimeout: apply proposal to state-machine, restart the timer")
@@ -1438,14 +1401,21 @@ void PBFTEngine::onTimeout()
         m_config->timer()->restart();
         return;
     }
-    triggerTimeout(true);
-    PBFT_LOG(WARNING) << LOG_DESC("After onTimeout") << m_config->printCurrentState()
-                      << LOG_KV("lockT", lockT) << LOG_KV("timecost", (utcTime() - recordT));
+    triggerTimeout(true, ViewChangeReason::ConsensusTimeout, m_config->timer()->timeout());
 }
 
-void PBFTEngine::triggerTimeout(bool _incTimeout)
+void PBFTEngine::triggerTimeout(bool _incTimeout, ViewChangeReason _reason, int64_t _waitedMs)
 {
+    m_lastViewChangeReason = _reason;
+    auto waitingIndex = m_config->committedProposal()->index() + 1;
+    auto fromView = m_config->view();
     m_config->resetTimeoutState(_incTimeout);
+    PBFT_LOG(INFO) << LOG_DESC("ViewChangeTriggered")
+                   << LOG_KV("reason", viewChangeReasonName(_reason))
+                   << LOG_KV("waitingIndex", waitingIndex) << LOG_KV("waitedMs", _waitedMs)
+                   << LOG_KV("view", fromView) << LOG_KV("toView", m_config->toView())
+                   << LOG_KV("changeCycle", m_config->timer()->changeCycle())
+                   << LOG_KV("leaderIdx", m_config->getLeader());
     // clear the viewchange cache
     m_cacheProcessor->removeInvalidViewChange(
         m_config->view(), m_config->committedProposal()->index());
@@ -1523,7 +1493,9 @@ void PBFTEngine::broadcastViewChangeReq()
     // encode and broadcast the viewchangeReq
     auto encodedData = m_config->codec()->encode(viewChangeReq);
     // only broadcast to the consensus nodes
-    PBFT_LOG(INFO) << LOG_DESC("broadcastViewChangeReq") << printPBFTMsgInfo(viewChangeReq)
+    PBFT_LOG(INFO) << LOG_DESC("ViewChangeSent") << LOG_KV("view", m_config->view())
+                   << LOG_KV("toView", viewChangeReq->view())
+                   << LOG_KV("index", viewChangeReq->index())
                    << LOG_KV("packetSize", encodedData->size());
     // FIB-185: this runs under m_mutex (onTimeout -> triggerTimeout holds it). Hand the owned
     // payload to FrontService::broadcastMessageByOwnedPayload, which enqueues the gateway send
@@ -1550,8 +1522,7 @@ bool PBFTEngine::isValidViewChangeMsg(bcos::crypto::NodeIDPtr _fromNode,
     // check the committed-proposal index
     if (_viewChangeMsg->committedProposal()->index() < m_config->committedProposal()->index())
     {
-        PBFT_LOG(INFO) << LOG_DESC("InvalidViewChangeReq: invalid index")
-                       << printPBFTMsgInfo(_viewChangeMsg) << m_config->printCurrentState();
+        logViewChangeRejected(bcos::LogLevel::INFO, "stale_index", _viewChangeMsg);
         return false;
     }
     if (_fromNode && !isTimeout())
@@ -1575,17 +1546,16 @@ bool PBFTEngine::isValidViewChangeMsg(bcos::crypto::NodeIDPtr _fromNode,
     }
     if (_viewChangeMsg->view() < m_config->view())
     {
+        logViewChangeRejected(bcos::LogLevel::DEBUG, "stale_view", _viewChangeMsg);
         return false;
     }
     // check the committed proposal hash
     if (_viewChangeMsg->committedProposal()->index() == m_config->committedProposal()->index() &&
         _viewChangeMsg->committedProposal()->hash() != m_config->committedProposal()->hash())
     {
-        PBFT_LOG(WARNING) << LOG_DESC("InvalidViewChangeReq: conflict with local committedProposal")
-                          << LOG_DESC(", received proposal: ")
-                          << printPBFTProposal(_viewChangeMsg->committedProposal())
-                          << LOG_DESC(", local committedProposal:")
-                          << printPBFTProposal(m_config->committedProposal());
+        logViewChangeRejected(bcos::LogLevel::WARNING, "committed_conflict", _viewChangeMsg,
+            std::string(",receivedHash=") + _viewChangeMsg->committedProposal()->hash().abridged() +
+                ",localHash=" + m_config->committedProposal()->hash().abridged());
         return false;
     }
     // check the precommitted proposals
@@ -1593,16 +1563,16 @@ bool PBFTEngine::isValidViewChangeMsg(bcos::crypto::NodeIDPtr _fromNode,
     {
         if (precommitMsg->view() > _viewChangeMsg->view())
         {
-            PBFT_LOG(INFO) << LOG_DESC("InvalidViewChangeReq for invalid view")
-                           << printPBFTMsgInfo(precommitMsg) << printPBFTMsgInfo(_viewChangeMsg)
-                           << m_config->printCurrentState();
+            logViewChangeRejected(bcos::LogLevel::INFO, "prepared_view_invalid", _viewChangeMsg,
+                std::string(",propIndex=") + std::to_string(precommitMsg->index()) +
+                    ",propView=" + std::to_string(precommitMsg->view()));
             return false;
         }
         if (!m_cacheProcessor->checkPrecommitMsg(precommitMsg))
         {
-            PBFT_LOG(INFO) << LOG_DESC("InvalidViewChangeReq for invalid proposal")
-                           << LOG_KV("viewChangeFrom", _viewChangeMsg->generatedFrom())
-                           << printPBFTMsgInfo(precommitMsg) << m_config->printCurrentState();
+            logViewChangeRejected(bcos::LogLevel::INFO, "prepared_proposal_invalid", _viewChangeMsg,
+                std::string(",propIndex=") + std::to_string(precommitMsg->index()) +
+                    ",propHash=" + precommitMsg->hash().abridged());
             return false;
         }
     }
@@ -1613,8 +1583,7 @@ bool PBFTEngine::isValidViewChangeMsg(bcos::crypto::NodeIDPtr _fromNode,
     auto ret = checkSignature(_viewChangeMsg);
     if (ret == CheckResult::INVALID)
     {
-        PBFT_LOG(INFO) << LOG_DESC("InvalidViewChangeReq: invalid signature")
-                       << printPBFTMsgInfo(_viewChangeMsg) << m_config->printCurrentState();
+        logViewChangeRejected(bcos::LogLevel::INFO, "signature", _viewChangeMsg);
         return false;
     }
     return true;
@@ -1645,7 +1614,7 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeMsgInterface::Ptr _viewChangeMsg)
         if (view > 0)
         {
             // trigger timeout to reach fast view change
-            triggerTimeout(false);
+            triggerTimeout(false, ViewChangeReason::FPlusOneHigherView);
         }
     }
     auto newViewMsg = m_cacheProcessor->checkAndTryIntoNewView();
@@ -1661,8 +1630,7 @@ bool PBFTEngine::isValidNewViewMsg(std::shared_ptr<NewViewMsgInterface> _newView
 {
     if (_newViewMsg->view() <= m_config->view())
     {
-        PBFT_LOG(INFO) << LOG_DESC("InvalidNewViewMsg for invalid view")
-                       << printPBFTMsgInfo(_newViewMsg) << m_config->printCurrentState();
+        logNewViewRejected(bcos::LogLevel::INFO, "stale_view", _newViewMsg);
         return false;
     }
     // check the viewchange
@@ -1672,8 +1640,8 @@ bool PBFTEngine::isValidNewViewMsg(std::shared_ptr<NewViewMsgInterface> _newView
     {
         if (!isValidViewChangeMsg(_newViewMsg->from(), viewChangeReq))
         {
-            PBFT_LOG(WARNING) << LOG_DESC("InvalidNewViewMsg for viewChange check failed")
-                              << printPBFTMsgInfo(viewChangeReq);
+            logNewViewRejected(bcos::LogLevel::WARNING, "viewchange_invalid", _newViewMsg,
+                std::string(",viewChangeFrom=") + std::to_string(viewChangeReq->generatedFrom()));
             return false;
         }
         auto nodeInfo = m_config->getConsensusNodeByIndex(viewChangeReq->generatedFrom());
@@ -1686,9 +1654,9 @@ bool PBFTEngine::isValidNewViewMsg(std::shared_ptr<NewViewMsgInterface> _newView
     // TODO: need to ensure the accuracy of local weight parameters
     if (weight < m_config->minRequiredQuorum())
     {
-        PBFT_LOG(WARNING) << LOG_DESC("InvalidNewViewMsg for unenough weight")
-                          << LOG_KV("weight", weight)
-                          << LOG_KV("minRequiredQuorum", m_config->minRequiredQuorum());
+        logNewViewRejected(bcos::LogLevel::WARNING, "insufficient_weight", _newViewMsg,
+            std::string(",weight=") + std::to_string(weight) +
+                ",minRequiredQuorum=" + std::to_string(m_config->minRequiredQuorum()));
         return false;
     }
     // FIB-124: cross-check the prePrepareList against the bundled viewChange evidence.
@@ -1703,7 +1671,12 @@ bool PBFTEngine::isValidNewViewMsg(std::shared_ptr<NewViewMsgInterface> _newView
     // after FIB-124 cross-check above, the bypass of per-item sig checks in
     // reHandlePrePrepareProposals is safe).
     auto ret = checkSignature(_newViewMsg);
-    return ret != CheckResult::INVALID;
+    if (ret == CheckResult::INVALID)
+    {
+        logNewViewRejected(bcos::LogLevel::WARNING, "signature", _newViewMsg);
+        return false;
+    }
+    return true;
 }
 
 bool PBFTEngine::isValidNewViewPrePrepareList(std::shared_ptr<NewViewMsgInterface> _newViewMsg)
@@ -1746,11 +1719,10 @@ bool PBFTEngine::isValidNewViewPrePrepareList(std::shared_ptr<NewViewMsgInterfac
             if (existing->view() == proposal->view() && existing->hash() != proposal->hash())
                 [[unlikely]]
             {
-                PBFT_LOG(WARNING)
-                    << LOG_DESC("InvalidNewViewMsg: conflicting prepared proposals for index")
-                    << LOG_KV("index", proposal->index())
-                    << LOG_KV("existingHash", existing->hash().abridged())
-                    << LOG_KV("newHash", proposal->hash().abridged());
+                logNewViewRejected(bcos::LogLevel::WARNING, "conflicting_prepared", _newViewMsg,
+                    std::string(",propIndex=") + std::to_string(proposal->index()) +
+                        ",existingHash=" + existing->hash().abridged() +
+                        ",newHash=" + proposal->hash().abridged());
                 return false;
             }
             // Keep the higher-view one.
@@ -1788,22 +1760,18 @@ bool PBFTEngine::isValidNewViewPrePrepareList(std::shared_ptr<NewViewMsgInterfac
                                      justified->hash();
         if (ppHash != justifiedPropHash)
         {
-            PBFT_LOG(WARNING) << LOG_DESC(
-                                     "InvalidNewViewMsg: prePrepare hash does not match viewChange "
-                                     "evidence (FIB-124)")
-                              << LOG_KV("ppIndex", ppIndex) << LOG_KV("ppHash", ppHash.abridged())
-                              << LOG_KV("justifiedHash", justifiedPropHash.abridged())
-                              << printPBFTMsgInfo(_newViewMsg) << m_config->printCurrentState();
+            // FIB-124
+            logNewViewRejected(bcos::LogLevel::WARNING, "preprepare_hash_mismatch", _newViewMsg,
+                std::string(",ppIndex=") + std::to_string(ppIndex) + ",ppHash=" +
+                    ppHash.abridged() + ",justifiedHash=" + justifiedPropHash.abridged());
             return false;
         }
         if (prePrepare->view() != toView)
         {
-            PBFT_LOG(WARNING) << LOG_DESC(
-                                     "InvalidNewViewMsg: prePrepare view does not match newView "
-                                     "target (FIB-124)")
-                              << LOG_KV("ppIndex", ppIndex) << LOG_KV("ppView", prePrepare->view())
-                              << LOG_KV("toView", toView) << printPBFTMsgInfo(_newViewMsg)
-                              << m_config->printCurrentState();
+            // FIB-124
+            logNewViewRejected(bcos::LogLevel::WARNING, "preprepare_view_mismatch", _newViewMsg,
+                std::string(",ppIndex=") + std::to_string(ppIndex) +
+                    ",ppView=" + std::to_string(prePrepare->view()));
             return false;
         }
     }
@@ -1812,14 +1780,13 @@ bool PBFTEngine::isValidNewViewPrePrepareList(std::shared_ptr<NewViewMsgInterfac
 
 bool PBFTEngine::handleNewViewMsg(NewViewMsgInterface::Ptr _newViewMsg)
 {
-    PBFT_LOG(INFO) << LOG_DESC("handleNewViewMsg: receive newViewChangeMsg")
-                   << printPBFTMsgInfo(_newViewMsg) << m_config->printCurrentState();
     if (!isValidNewViewMsg(_newViewMsg))
     {
         return false;
     }
-    PBFT_LOG(INFO) << LOG_DESC("handleNewViewMsg success") << printPBFTMsgInfo(_newViewMsg)
-                   << m_config->printCurrentState();
+    PBFT_LOG(INFO) << LOG_DESC("NewViewReceived") << LOG_KV("view", _newViewMsg->view())
+                   << LOG_KV("fromIdx", _newViewMsg->generatedFrom())
+                   << LOG_KV("prePrepareCount", _newViewMsg->prePrepareList().size());
     reHandlePrePrepareProposals(_newViewMsg);
     return true;
 }
@@ -1834,7 +1801,10 @@ void PBFTEngine::reachNewView(ViewType _view)
     m_cacheProcessor->checkAndCommit();
     // reset the lowWarterMark after reachNewView
     m_config->setLowWaterMark(m_config->progressedIndex());
-    PBFT_LOG(INFO) << LOG_DESC("reachNewView") << m_config->printCurrentState()
+    PBFT_LOG(INFO) << LOG_DESC("NewViewReached") << LOG_KV("view", m_config->view())
+                   << LOG_KV("leaderIdx", m_config->getLeader())
+                   << LOG_KV("committedIndex", m_config->committedProposal()->index())
+                   << LOG_KV("changeCycle", m_config->timer()->changeCycle())
                    << LOG_KV("lowWaterMark", m_config->lowWaterMark())
                    << LOG_KV("highWaterMark", m_config->highWaterMark());
     // FIB-146 follow-up: dedup state from the previous view has no value after
@@ -1904,9 +1874,7 @@ void PBFTEngine::reHandlePrePrepareProposals(NewViewMsgInterface::Ptr _newViewRe
         // Note: in case of the reHandled proposals have system transactions, must
         // wait to reseal until all reHandled proposal committed
         m_config->setWaitResealUntil(maxProposalIndex);
-        PBFT_LOG(INFO) << LOG_DESC("reHandlePrePrepareProposals and wait to reseal new proposal")
-                       << LOG_KV("waitResealUntil", maxProposalIndex)
-                       << m_config->printCurrentState();
+        noteSealSkipped(SealSkipReason::WaitReseal, maxProposalIndex + 1, maxProposalIndex);
     }
     else
     {
@@ -1981,10 +1949,6 @@ bool PBFTEngine::handleCheckPointMsg(std::shared_ptr<PBFTMessageInterface> _chec
                           << printPBFTMsgInfo(_checkPointMsg);
         return false;
     }
-    PBFT_LOG(INFO) << LOG_DESC(
-                          "handleCheckPointMsg: try to add the checkpoint "
-                          "message into the cache")
-                   << printPBFTMsgInfo(_checkPointMsg) << m_config->printCurrentState();
     m_cacheProcessor->addCheckPointMsg(_checkPointMsg);
     m_cacheProcessor->tryToApplyCommitQueue();
     m_cacheProcessor->checkAndCommitStableCheckPoint();
@@ -2228,4 +2192,60 @@ bool bcos::consensus::PBFTEngine::shouldRotateSealers(protocol::BlockNumber _num
 void bcos::consensus::PBFTEngine::setLedger(ledger::LedgerInterface::Ptr ledger)
 {
     m_ledger = std::move(ledger);
+}
+
+void PBFTEngine::logPrePrepareRejected(bcos::LogLevel _level, std::string_view _reason,
+    PBFTMessageInterface::Ptr const& _prePrepareMsg, std::string const& _extra)
+{
+    PBFT_LOG_DYN(_level) << LOG_DESC("PrePrepareRejected") << LOG_KV("reason", _reason)
+                         << LOG_KV("index", _prePrepareMsg->index())
+                         << LOG_KV("hash", _prePrepareMsg->hash().abridged())
+                         << LOG_KV("view", _prePrepareMsg->view())
+                         << LOG_KV("fromIdx", _prePrepareMsg->generatedFrom()) << _extra
+                         << m_config->printCurrentState();
+}
+
+void PBFTEngine::logViewChangeRejected(bcos::LogLevel _level, std::string_view _reason,
+    ViewChangeMsgInterface::Ptr const& _viewChangeMsg, std::string const& _extra)
+{
+    PBFT_LOG_DYN(_level) << LOG_DESC("ViewChangeRejected") << LOG_KV("reason", _reason)
+                         << LOG_KV("toView", _viewChangeMsg->view())
+                         << LOG_KV("fromIdx", _viewChangeMsg->generatedFrom())
+                         << LOG_KV("index", _viewChangeMsg->index()) << _extra
+                         << m_config->printCurrentState();
+}
+
+void PBFTEngine::logNewViewRejected(bcos::LogLevel _level, std::string_view _reason,
+    NewViewMsgInterface::Ptr const& _newViewMsg, std::string const& _extra)
+{
+    PBFT_LOG_DYN(_level) << LOG_DESC("NewViewRejected") << LOG_KV("reason", _reason)
+                         << LOG_KV("view", _newViewMsg->view())
+                         << LOG_KV("fromIdx", _newViewMsg->generatedFrom()) << _extra
+                         << m_config->printCurrentState();
+}
+
+void PBFTEngine::countReceivedPacket(PacketType _type, size_t _bytes)
+{
+    auto& stat = m_config->blockStat();
+    stat.add(PBFTStatSlot::BytesRecv, _bytes);
+    switch (_type)
+    {
+    case PacketType::PrePreparePacket:
+        stat.add(PBFTStatSlot::PrePrepareRecv);
+        break;
+    case PacketType::PreparePacket:
+        stat.add(PBFTStatSlot::PrepareRecv);
+        break;
+    case PacketType::CommitPacket:
+        stat.add(PBFTStatSlot::CommitRecv);
+        break;
+    case PacketType::CheckPoint:
+        stat.add(PBFTStatSlot::CheckpointRecv);
+        break;
+    case PacketType::ViewChangePacket:
+        stat.add(PBFTStatSlot::ViewChangeRecv);
+        break;
+    default:
+        break;
+    }
 }

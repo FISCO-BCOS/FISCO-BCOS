@@ -387,24 +387,22 @@ void LedgerStorage::commitStableCheckPoint(PBFTProposalInterface::Ptr _stablePro
             auto commitPerTx =
                 (double)(utcTime() - startT) / (double)(_blockInfo->transactionsHashSize());
             PBFT_STORAGE_LOG(INFO)
-                << METRIC << LOG_DESC("commitStableCheckPoint success")
-                << LOG_KV("index", _blockHeader->number())
+                << METRIC << LOG_DESC("BlockCommitted") << LOG_KV("index", _blockHeader->number())
                 << LOG_KV("hash", _ledgerConfig->hash().abridged())
                 << LOG_KV("txs", _blockInfo->transactionsHashSize())
-                << LOG_KV("timeCost", utcTime() - startT) << LOG_KV("commitPerTx", commitPerTx);
+                << LOG_KV("commitMs", utcTime() - startT) << LOG_KV("commitPerTx", commitPerTx);
             auto txsSize = _blockInfo->transactionsHashSize();
             // Note:Here the thread pool is used to asynchronize the operation of PBFT finalize to
             // prevent the commitBlock from calling the callback synchronously and affecting the
             // performance.
-            ledgerStorage->m_strand.post(
-                [self, txsSize, _blockHeader, _ledgerConfig]() {
-                    auto storage = self.lock();
-                    if (!storage)
-                    {
-                        return;
-                    }
-                    storage->onStableCheckPointCommitted(txsSize, _blockHeader, _ledgerConfig);
-                });
+            ledgerStorage->m_strand.post([self, txsSize, _blockHeader, _ledgerConfig]() {
+                auto storage = self.lock();
+                if (!storage)
+                {
+                    return;
+                }
+                storage->onStableCheckPointCommitted(txsSize, _blockHeader, _ledgerConfig);
+            });
         }
         catch (std::exception const& e)
         {

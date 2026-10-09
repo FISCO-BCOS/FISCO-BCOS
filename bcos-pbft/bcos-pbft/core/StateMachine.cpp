@@ -79,8 +79,7 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
     // set the parentHash information
     if (_proposal->index() == _lastAppliedProposal->index() + 1)
     {
-        blockHeader->setParentInfo(ParentInfo{
-            .blockNumber = _lastAppliedProposal->index(),
+        blockHeader->setParentInfo(ParentInfo{.blockNumber = _lastAppliedProposal->index(),
             .blockHash = _lastAppliedProposal->hash()});
         CONSENSUS_LOG(DEBUG) << LOG_DESC("setParentInfo for the proposal")
                              << LOG_KV("proposalIndex", _proposal->index())
@@ -107,24 +106,24 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
             auto blockHeader = block->blockHeader();
             if (_error != nullptr)
             {
-                CONSENSUS_LOG(WARNING) << LOG_DESC("asyncExecuteBlock failed")
-                                       << LOG_KV("number", blockHeader->number())
-                                       << LOG_KV("code", _error->errorCode())
-                                       << LOG_KV("message", _error->errorMessage());
+                CONSENSUS_LOG(WARNING)
+                    << LOG_DESC("ProposalExecuteFailed") << LOG_KV("index", blockHeader->number())
+                    << LOG_KV("hash", _proposal->hash().abridged())
+                    << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
                 _onExecuteFinished(_error->errorCode());
                 return;
             }
             auto execT = (double)(utcTime() - startT) / (double)(block->transactionsHashSize());
-            CONSENSUS_LOG(INFO) << METRIC << LOG_DESC("asyncExecuteBlock success")
-                                << LOG_KV("sysBlock", _sysBlock)
-                                << LOG_KV("number", _blockHeader->number())
-                                << LOG_KV("result", _blockHeader->hash().abridged())
-                                << LOG_KV("txsSize", block->transactionsHashSize())
-                                << LOG_KV("txsRoot", _blockHeader->txsRoot().abridged())
-                                << LOG_KV("receiptsRoot", _blockHeader->receiptsRoot().abridged())
-                                << LOG_KV("stateRoot", _blockHeader->stateRoot().abridged())
-                                << LOG_KV("timeCost", (utcTime() - startT))
-                                << LOG_KV("execPerTx", execT);
+            CONSENSUS_LOG(DEBUG) << METRIC << LOG_DESC("asyncExecuteBlock success")
+                                 << LOG_KV("sysBlock", _sysBlock)
+                                 << LOG_KV("number", _blockHeader->number())
+                                 << LOG_KV("result", _blockHeader->hash().abridged())
+                                 << LOG_KV("txsSize", block->transactionsHashSize())
+                                 << LOG_KV("txsRoot", _blockHeader->txsRoot().abridged())
+                                 << LOG_KV("receiptsRoot", _blockHeader->receiptsRoot().abridged())
+                                 << LOG_KV("stateRoot", _blockHeader->stateRoot().abridged())
+                                 << LOG_KV("timeCost", (utcTime() - startT))
+                                 << LOG_KV("execPerTx", execT);
             if (_blockHeader->number() != blockHeader->number())
             {
                 CONSENSUS_LOG(WARNING) << LOG_DESC("asyncExecuteBlock exception")
