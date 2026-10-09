@@ -83,8 +83,10 @@ constexpr uint64_t c_ethCallGasCap = 50'000'000;
 /// serializes to {"blockHash": "0x…"} — which the string-only toView would turn into an empty
 /// tag and misread as "latest". Accept the object form alongside the plain string forms
 /// ("latest", "0x1", a 66-char "0x…" hash) so eth_getProof resolves the block the caller
-/// actually named. Returns an empty string for anything unrecognized, letting the caller's
-/// existing tag error paths handle it unchanged.
+/// actually named. An OBJECT form that is neither a blockHash-string nor a blockNumber
+/// string/integral is unsupported and throws InvalidParams — it must NOT return an empty
+/// string, which the shared getBlockNumberByTag resolver silently reads as "latest" (the exact
+/// wrong-block read this helper exists to prevent).
 std::string resolveBlockTagString(const Json::Value& tag)
 {
     if (tag.isString())
@@ -109,6 +111,8 @@ std::string resolveBlockTagString(const Json::Value& tag)
                 return fmt::format("0x{:x}", number.asUInt64());
             }
         }
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "Unsupported EIP-1898 block parameter"));
     }
     return {};
 }
