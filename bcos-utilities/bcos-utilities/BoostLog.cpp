@@ -22,8 +22,8 @@
  * @date 2024-01-18
  * @brief: add file collector
  */
-#include "GzTools.h"
 #include "BoostLogCollector.h"
+#include "GzTools.h"
 #include "Log.h"
 #include <boost/date_time/time_facet.hpp>
 #include <boost/enable_shared_from_this.hpp>
@@ -40,8 +40,9 @@
 #include <boost/spirit/home/qi/numeric/numeric_utils.hpp>
 #include <boost/system/detail/error_category.hpp>
 #include <boost/system/detail/error_code.hpp>
-#include <utility>
+#include <cctype>
 #include <list>
+#include <utility>
 namespace bcos
 {
 std::string const FileLogger = "FileLogger";
@@ -63,6 +64,99 @@ void setFileLogLevel(LogLevel const& _level)
 void setStatLogLevel(LogLevel const& _level)
 {
     c_statLogLevel = _level;
+}
+
+namespace
+{
+constexpr std::array<std::string_view, static_cast<size_t>(LogModule::COUNT)> c_logModuleNames = {
+    "PBFT", "TXPOOL", "SYNC", "SCHEDULER", "EXECUTOR", "LEDGER", "RPC", "GATEWAY", "FRONT"};
+
+}  // namespace
+
+static_assert(static_cast<size_t>(LogModule::COUNT) == 9, "update c_moduleLogLevel initializer");
+std::array<std::atomic<int>, static_cast<size_t>(LogModule::COUNT)> c_moduleLogLevel = {
+    {c_inheritGlobalLogLevel, c_inheritGlobalLogLevel, c_inheritGlobalLogLevel,
+        c_inheritGlobalLogLevel, c_inheritGlobalLogLevel, c_inheritGlobalLogLevel,
+        c_inheritGlobalLogLevel, c_inheritGlobalLogLevel, c_inheritGlobalLogLevel}};
+
+std::string_view logModuleName(LogModule _module)
+{
+    return c_logModuleNames[static_cast<size_t>(_module)];
+}
+
+std::optional<LogModule> parseLogModule(std::string_view _name)
+{
+    for (size_t i = 0; i < c_logModuleNames.size(); ++i)
+    {
+        auto candidate = c_logModuleNames[i];
+        if (candidate.size() != _name.size())
+        {
+            continue;
+        }
+        bool equal = true;
+        for (size_t j = 0; j < candidate.size(); ++j)
+        {
+            if (std::toupper(static_cast<unsigned char>(_name[j])) != candidate[j])
+            {
+                equal = false;
+                break;
+            }
+        }
+        if (equal)
+        {
+            return static_cast<LogModule>(i);
+        }
+    }
+    return std::nullopt;
+}
+
+void setModuleLogLevel(LogModule _module, LogLevel _level)
+{
+    c_moduleLogLevel[static_cast<size_t>(_module)].store(
+        static_cast<int>(_level), std::memory_order_relaxed);
+}
+
+void resetModuleLogLevel(LogModule _module)
+{
+    c_moduleLogLevel[static_cast<size_t>(_module)].store(
+        c_inheritGlobalLogLevel, std::memory_order_relaxed);
+}
+
+bool setModuleLogLevel(std::string_view _name, LogLevel _level)
+{
+    auto module = parseLogModule(_name);
+    if (!module)
+    {
+        return false;
+    }
+    setModuleLogLevel(*module, _level);
+    return true;
+}
+
+bool resetModuleLogLevel(std::string_view _name)
+{
+    auto module = parseLogModule(_name);
+    if (!module)
+    {
+        return false;
+    }
+    resetModuleLogLevel(*module);
+    return true;
+}
+
+std::vector<std::pair<std::string, LogLevel>> moduleLogLevels()
+{
+    std::vector<std::pair<std::string, LogLevel>> result;
+    for (size_t i = 0; i < c_moduleLogLevel.size(); ++i)
+    {
+        auto level = c_moduleLogLevel[i].load(std::memory_order_relaxed);
+        if (level == c_inheritGlobalLogLevel)
+        {
+            continue;
+        }
+        result.emplace_back(std::string(c_logModuleNames[i]), static_cast<LogLevel>(level));
+    }
+    return result;
 }
 
 namespace
