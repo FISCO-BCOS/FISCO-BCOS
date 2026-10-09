@@ -606,7 +606,9 @@ opeth::OpEthExecuteBlockResult runExecutionProbe(Fixture& f, ViewType& view,
     std::optional<uint16_t> daFootprintGasScalar;
     std::optional<opeth::OpRecentBlockHashes<ViewType>> hashes;
     bcos::task::syncWait(opeth::preBlockOpEthSteps(view, header, spec, rawTxBytes, deposits,
-        executor.vm(), sharedError, hashes, hashErr, daFootprintGasScalar));
+        executor.vm(), sharedError, hashes, hashErr, daFootprintGasScalar,
+        /*noUserTxActivationBlock=*/false));  // single-block probe, no activation crossing;
+    // the schedule gate runs for real inside OpScheduler::execute (Karst suite pins it)
     opeth::OpEthBlockContext ctx{.fee = {},
         .blockGasLeft = static_cast<int64_t>(header.gasLimit()),
         .blockHashLookup = opeth::opEthBlockHashLookup(*hashes),

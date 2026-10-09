@@ -509,8 +509,31 @@ public:
             std::optional<std::string> hashErr;
             std::optional<uint16_t> daFootprintGasScalar;
             std::optional<OpRecentBlockHashes<ViewType>> hashes;
+            // Fork-activation gate input: the parent header's timestamp, read only when
+            // the gate can fire (Jovian+). The parent is the committed head this view
+            // forked from (step 1's height guard), so the row exists; its absence is a
+            // storage fault like any other committed-row miss. The p2p child timestamp is
+            // already seconds; the stored parent header carries internal milliseconds.
+            bool noUserTxActivationBlock = false;
+            if (spec.has_da_footprint)
+            {
+                auto parentBlock = co_await ledger::getBlockData(view,
+                    static_cast<bcos::protocol::BlockNumber>(number) - 1, ledger::HEADER,
+                    *m_blockFactory);
+                auto parentHeader = parentBlock ? parentBlock->blockHeader() : nullptr;
+                if (!parentHeader)
+                {
+                    throw bcos::evm::engine::OpStorageError(fmt::format(
+                        "OpBlockVerifier: parent block header is missing from storage "
+                        "(block {})",
+                        number - 1));
+                }
+                noUserTxActivationBlock = ledger::isOpNoUserTxActivationBlock(m_forkSchedule,
+                    opForkTimestampSec(parentHeader->timestamp()),
+                    static_cast<uint64_t>(ethHeader.timestamp));
+            }
             co_await preBlockOpEthSteps(view, *header, spec, rawTxBytes, deposits, executor.vm(),
-                sharedError, hashes, hashErr, daFootprintGasScalar);
+                sharedError, hashes, hashErr, daFootprintGasScalar, noUserTxActivationBlock);
 
             OpEthBlockContext ctx{.fee = {},
                 .blockGasLeft =

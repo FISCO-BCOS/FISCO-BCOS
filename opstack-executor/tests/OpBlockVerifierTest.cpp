@@ -381,7 +381,9 @@ opeth::OpEthBlockCommitments probeCommitments(VerifierFixture& f,
     std::optional<uint16_t> daFootprintGasScalar;
     std::optional<opeth::OpRecentBlockHashes<ViewType>> hashes;
     bcos::task::syncWait(opeth::preBlockOpEthSteps(view, *header, spec, rawRefs, deposits,
-        executor.vm(), sharedError, hashes, hashErr, daFootprintGasScalar));
+        executor.vm(), sharedError, hashes, hashErr, daFootprintGasScalar,
+        /*noUserTxActivationBlock=*/false));  // probe skips the parent read; the schedule
+    // gate runs for real inside verifyAndCommit below (its fixtures stay below Jovian)
 
     opeth::OpEthBlockContext ctx{.fee = {},
         .blockGasLeft = static_cast<int64_t>(header->gasLimit()),

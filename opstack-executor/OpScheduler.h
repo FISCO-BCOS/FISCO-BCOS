@@ -1054,12 +1054,45 @@ private:
             sharedError = std::make_shared<OpStorageErrorSlot>();
             OpEthExecutor executor(m_receiptFactory, spec, sharedError);
 
-            // Block-start system call, deposit-first check, Jovian shape, DA scalar.
+            // Fork-activation gate input: the parent header's timestamp. Fetched here only
+            // when the gate can fire (Jovian+ block with a parent); pre-Jovian blocks keep
+            // their failure ordering (the MPT step below reads it for number > 0).
+            // getBlockData throws NotFoundBlockHeader for a number with no committed
+            // header — translate to the fail-closed storage fault.
+            bcos::protocol::BlockHeader::Ptr parentHeader;
+            if (spec.has_da_footprint && header.number() > 0)
+            {
+                try
+                {
+                    auto parentBlock = co_await ledger::getBlockData(
+                        view, header.number() - 1, ledger::HEADER, *m_blockFactory);
+                    parentHeader = parentBlock ? parentBlock->blockHeader() : nullptr;
+                }
+                catch (bcos::ledger::NotFoundBlockHeader const&)
+                {
+                    parentHeader = nullptr;
+                }
+                if (!parentHeader)
+                {
+                    throw bcos::evm::engine::OpStorageError(fmt::format(
+                        "OpScheduler: parent block header is missing from storage "
+                        "(block {}) — the fork-activation gate needs the parent timestamp",
+                        header.number() - 1));
+                }
+            }
+            bool const noUserTxActivationBlock =
+                parentHeader ? ledger::isOpNoUserTxActivationBlock(m_forkSchedule,
+                                     opForkTimestampSec(parentHeader->timestamp()),
+                                     opForkTimestampSec(header.timestamp())) :
+                               false;
+
+            // Block-start system call, deposit-first check, Jovian shape, DA scalar,
+            // activation deposits-only gate.
             std::optional<std::string> hashErr;
             std::optional<uint16_t> daFootprintGasScalar;
             std::optional<OpRecentBlockHashes<ViewType>> hashes;
             co_await preBlockOpEthSteps(view, header, spec, rawTxBytes, deposits, executor.vm(),
-                sharedError, hashes, hashErr, daFootprintGasScalar);
+                sharedError, hashes, hashErr, daFootprintGasScalar, noUserTxActivationBlock);
 
             // Fee params load on the first normal tx. blockGasLeft is narrowed from gasLimit.
             // BLOCKHASH answers come from the per-block OpRecentBlockHashes (op-geth GetHashFn
@@ -1098,24 +1131,28 @@ private:
                 bcos::scheduler_v1::ViewNodeStorage<ViewType> nodeStorage(view);
                 // getBlockData throws NotFoundBlockHeader for a number with no committed
                 // header — translate it to the fail-closed storage fault: the incremental
-                // build cannot run without the parent's state root.
-                bcos::protocol::BlockHeader::Ptr parentHeader;
-                try
-                {
-                    auto parentBlock = co_await ledger::getBlockData(
-                        view, header.number() - 1, ledger::HEADER, *m_blockFactory);
-                    parentHeader = parentBlock ? parentBlock->blockHeader() : nullptr;
-                }
-                catch (bcos::ledger::NotFoundBlockHeader const&)
-                {
-                    parentHeader = nullptr;
-                }
+                // build cannot run without the parent's state root. Jovian+ blocks already
+                // fetched the header for the activation gate above; pre-Jovian ones read
+                // it here (their only consumer).
                 if (!parentHeader)
                 {
-                    throw bcos::evm::engine::OpStorageError(fmt::format(
-                        "OpScheduler: parent block header is missing from storage "
-                        "(block {}) — the incremental MPT build needs its state root",
-                        header.number() - 1));
+                    try
+                    {
+                        auto parentBlock = co_await ledger::getBlockData(
+                            view, header.number() - 1, ledger::HEADER, *m_blockFactory);
+                        parentHeader = parentBlock ? parentBlock->blockHeader() : nullptr;
+                    }
+                    catch (bcos::ledger::NotFoundBlockHeader const&)
+                    {
+                        parentHeader = nullptr;
+                    }
+                    if (!parentHeader)
+                    {
+                        throw bcos::evm::engine::OpStorageError(fmt::format(
+                            "OpScheduler: parent block header is missing from storage "
+                            "(block {}) — the incremental MPT build needs its state root",
+                            header.number() - 1));
+                    }
                 }
                 auto const parentRoot = parentHeader->stateRoot();
                 try

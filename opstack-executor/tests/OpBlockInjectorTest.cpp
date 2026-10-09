@@ -218,7 +218,7 @@ BOOST_AUTO_TEST_CASE(EmptyBlockRejectedByBlockPreSteps)
     BOOST_CHECK_THROW(
         bcos::task::syncWait(opeth::preBlockOpEthSteps(view, *header, opeth::OP_ISTHMUS_SPEC,
                                  rawTxBytes, deposits, executor.vm(), sharedError, hashes, hashErr,
-                                 daFootprintGasScalar)),
+                                 daFootprintGasScalar, /*noUserTxActivationBlock=*/false)),
         std::runtime_error);
 }
 
