@@ -1,5 +1,7 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
+/// @file OpNewPayloadRpcE2eTest.cpp
+/// @brief Engine-API newPayload/forkchoiceUpdated end-to-end suites over the golden corpus (wire shapes, rejections, reorgs).
 
 // bcos-evm/test/opstack/OpNewPayloadRpcE2eTest.cpp
 // L2 end-to-end real-chain comparison: real JSON params ->
@@ -700,13 +702,16 @@ void runInvalidVector(std::string const& id)
                    << "', got: " << (status.validationError ? *status.validationError : "<none>"));
         }
     }
-    catch (const bcos::rpc::JsonRpcException&)
+    catch (const bcos::rpc::JsonRpcException& e)
     {
         // RPC-level shape rejection (requireNewPayloadV4ParamShape /
         // requireExecutionPayloadV4Fields) before the engine runs. The vector
         // was designed for engine-level validation, but the RPC layer catches
-        // the malformed payload first. Accept any InvalidParams rejection as
-        // the expected rejection for this vector.
+        // the malformed payload first. The rejection must be InvalidParams —
+        // any other code here is a different defect, not this vector's shape.
+        BOOST_CHECK_MESSAGE(e.code() == bcos::rpc::JsonRpcError::InvalidParams,
+            id << ": RPC-layer rejection must be InvalidParams (-32602), got code "
+               << e.code() << ": " << e.msg());
     }
 }
 
@@ -1397,7 +1402,7 @@ BOOST_AUTO_TEST_CASE(PreIsthmusBuildRejectedAtTheEngineBaseline)
 // eip1559.CalcBaseFee on that parent — the same "golden from the reference
 // implementation" rule the corpus generator follows.
 // ═══════════════════════════════════════════════════════════════════════════════
-BOOST_AUTO_TEST_CASE(PreCanyonBaseFeeUsesTheChainsEip1559Denominator)
+BOOST_AUTO_TEST_CASE(PreCanyonEngineBuildRejectedAtBaselineGate)
 {
     // The engine no longer builds pre-Isthmus blocks (the Isthmus-baseline gate pins
     // that below); the pricing rule this case names — a pre-Holocene block's 1559 step
@@ -1723,8 +1728,9 @@ BOOST_AUTO_TEST_CASE(PayloadTimestampNotIncreasingRejected)
 // before that fork the chain config's triple is the only source, and the extraData bytes are inert.
 // So the controlled outcome is NOT a rejection: the build must succeed and price with the chain
 // triple. The case plants a triple in the parent's extraData that differs from the chain's, so
-// the two sources are distinguishable by their op-geth goldens — both already pinned by
-// PreCanyonBaseFeeUsesTheChainsEip1559Denominator:
+// the two sources are distinguishable by their op-geth goldens — the pre-Canyon pricing
+// pins live in the devp2p suite (PreCanyonEngineBuildRejectedAtBaselineGate pins the
+// engine-layer baseline gate only):
 //   chain triple (elasticity 6, denominator 8)  -> 1_375_000_000  (correct here)
 //   extraData triple (denominator 250)          -> 1_012_000_000  (would mean the clock decoded
 //                                                                  a pre-Holocene parent's bytes)
@@ -1755,8 +1761,8 @@ BOOST_AUTO_TEST_CASE(PreHoloceneParentExtraDataIsInertForPricing)
 
 BOOST_AUTO_TEST_CASE(HoloceneParentPricesFromItsOwnExtraData)
 {
-    constexpr std::uint64_t kOpGethGoldenExtraDataTriple = 1'012'000'000ULL;
-    constexpr std::uint64_t kOpGethGoldenChainTriple = 1'375'000'000ULL;
+    constexpr std::uint64_t c_opGethGoldenExtraDataTriple = 1'012'000'000ULL;
+    constexpr std::uint64_t c_opGethGoldenChainTriple = 1'375'000'000ULL;
     bcos::engine::OpEip1559Params const chainTriple{
         .elasticity = 6, .denominator = 8, .denominatorCanyon = 250};
     auto const holoceneShaped = bcos::fromHex("0x00000000fa00000006");  // version 0, 250, 6
@@ -1798,12 +1804,12 @@ BOOST_AUTO_TEST_CASE(HoloceneParentPricesFromItsOwnExtraData)
     BOOST_CHECK(produced.withdrawals->empty());
 
     BOOST_TEST_INFO("S8 produced=" << produced.baseFeePerGas
-                                   << " extraDataGolden=" << kOpGethGoldenExtraDataTriple
-                                   << " chainGolden=" << kOpGethGoldenChainTriple);
-    BOOST_CHECK_MESSAGE(produced.baseFeePerGas == bcos::u256(kOpGethGoldenExtraDataTriple),
+                                   << " extraDataGolden=" << c_opGethGoldenExtraDataTriple
+                                   << " chainGolden=" << c_opGethGoldenChainTriple);
+    BOOST_CHECK_MESSAGE(produced.baseFeePerGas == bcos::u256(c_opGethGoldenExtraDataTriple),
         "S8: from Holocene on the parent's extraData is the 1559 source; got "
             << produced.baseFeePerGas);
-    BOOST_CHECK_MESSAGE(produced.baseFeePerGas != bcos::u256(kOpGethGoldenChainTriple),
+    BOOST_CHECK_MESSAGE(produced.baseFeePerGas != bcos::u256(c_opGethGoldenChainTriple),
         "S8: the price still came from the chain config across the boundary");
 
     // Close the loop: the chain's declared triple is what the next block will read back.

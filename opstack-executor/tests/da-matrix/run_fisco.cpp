@@ -12,7 +12,10 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
- */
+
+ *
+ * @file run_fisco.cpp
+ * @brief da-matrix runner: computes the OP fee grid and, in --check mode, compares it against the committed golden snapshots. */
 
 // run_fisco.cpp — Task 3: FISCO DA/operator-fee matrix runner.
 //
@@ -360,7 +363,12 @@ int main(int argc, char** argv)
             const auto it = golden.find(res.id);
             if (it == golden.end())
             {
-                ++skippedMissing;  // absent from golden (fork the other end cannot produce)
+                // A row missing from the golden is a hole, not a skip: the golden is
+                // generated from this same grid, so an absent row means the gate went
+                // stale. Fail loudly instead of silently passing under-covered.
+                ++mismatches;
+                ++skippedMissing;
+                std::cerr << "run_fisco: MISSING-FROM-GOLDEN " << res.id << "\n";
                 continue;
             }
             ++compared;

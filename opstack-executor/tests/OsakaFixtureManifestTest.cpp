@@ -54,13 +54,12 @@ BOOST_AUTO_TEST_CASE(ManifestRecordsEveryFixture)
 {
     const auto manifestPath = fixtureDir() / "manifest.json";
     std::ifstream in(manifestPath);
-    if (!in.good())
-    {
-        // The manifest is metadata for a not-yet-wired consumer; absence of the whole
-        // directory (e.g. stripped checkout) is out of scope here.
-        BOOST_TEST_MESSAGE("osaka fixture manifest not present; skipping");
-        return;
-    }
+    // The manifest is TRACKED, so its absence means a stripped or hand-edited fixture
+    // tree — fail loudly instead of silently disabling the only checksum verification
+    // of these pinned fixtures.
+    BOOST_REQUIRE_MESSAGE(in.good(),
+        "osaka fixture manifest missing at " << manifestPath
+                                             << " — the fixture checksums cannot verify");
     Json::Reader reader;
     Json::Value manifest;
     BOOST_REQUIRE_MESSAGE(reader.parse(in, manifest), "cannot parse manifest.json");

@@ -1,5 +1,7 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
+/// @file OpDualPathEquivalenceTest.cpp
+/// @brief Block-by-block equivalence between the scheduler route and the direct executor path over the t8n corpus.
 
 // OpDualPathEquivalenceTest.cpp — OP single-path golden execution harness (route B retired with
 // runOpBlockInjection, Task 5). Each t8n vector / chain block is driven through
@@ -174,7 +176,7 @@ bcos::protocol::BlockFactory::Ptr makeBlockFactory()
         cryptoSuite, blockHeaderFactory, transactionFactory, receiptFactory);
 }
 
-constexpr uint64_t kChainId = 0x2105;
+constexpr uint64_t c_chainId = 0x2105;
 
 /// Timestamp-0 single activation of @p fork — the ledger-schedule form of the old
 /// OpForkSchedule::parse("0:<fork>"): the named rung fires at second 0, other rungs
@@ -659,7 +661,11 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
             return;
         }
         bcos::task::syncWait(fixture.multiLayerStorage.mergeView(std::move(view)));
-        reportGolden(id, vec, resultA.stateRoot, greenGuard, persistStateOnSoftReject, stats);
+        // hardGolden=false on this arm by construction (it runs only when
+        // execFork < Canyon, outside the isthmus/jovian hard scope) — the golden gate
+        // must not inherit the chain-persistence flag: a mismatch here is a soft
+        // report, still counted and still failing the suite at the stats.mismatch gate.
+        reportGolden(id, vec, resultA.stateRoot, greenGuard, /*hardGolden=*/false, stats);
         return;
     }
     try
@@ -682,7 +688,7 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
         seedParentHeaderForActivationCheck(fixture.multiLayerStorage, header);
 
         auto opScheduler = std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(
-            fixture.receiptFactory, fixture.hashImpl, kChainId, schedule, fixture.blockFactory,
+            fixture.receiptFactory, fixture.hashImpl, c_chainId, schedule, fixture.blockFactory,
             fixture.multiLayerStorage, /*ledger=*/nullptr, fixture.ioServicePool);
 
         opScheduler->executeBlock(block, /*verify=*/true,

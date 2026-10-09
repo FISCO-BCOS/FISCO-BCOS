@@ -1,5 +1,7 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
+/// @file OpKarstActivationTest.cpp
+/// @brief Jovian/Karst fork-activation rules: the deposits-only activation gate and the engine API profile table.
 
 // M1 (decided 2026-10-08): post-Jovian fork-activation blocks are deposits-only under BOTH
 // upstream rules — op-geth's 176-byte L1-attributes shape check (CalcDAFootprint,
@@ -40,6 +42,7 @@
 #include <opstack-executor/OpForkSpec.h>
 #include <boost/test/tree/decorator.hpp>
 #include <boost/test/unit_test.hpp>
+#include <magic_enum/magic_enum.hpp>
 #include <cstring>
 #include <memory>
 #include <optional>
@@ -91,9 +94,9 @@ struct UnusedView
 {
 };
 
-constexpr uint64_t kJovianTsSec = 100;
-constexpr int64_t kJovianTsMs = static_cast<int64_t>(kJovianTsSec) * 1000;
-constexpr uint64_t kParentTsSec = 99;
+constexpr uint64_t c_jovianTsSec = 100;
+constexpr int64_t c_jovianTsMs = static_cast<int64_t>(c_jovianTsSec) * 1000;
+constexpr uint64_t c_parentTsSec = 99;
 
 const bcos::bytes kDepositEnvelope{bcos::byte{0x7e}, bcos::byte{0x01}};
 const bcos::bytes kTypedEnvelope{bcos::byte{0x02}, bcos::byte{0x01}};
@@ -204,7 +207,7 @@ bcos::Error::Ptr executeActivationWithoutParent(bcos::ledger::OpForkSchedule sch
         hashImpl, /*chainId=*/0x2105, schedule, blockFactory, mls, /*ledger=*/nullptr, io);
 
     auto depEnv = opeth::encodeOpEthDepositEnvelope(depositWithJovianAttrs());
-    auto header = makeHeader(kJovianTsMs);
+    auto header = makeHeader(c_jovianTsMs);
     auto block = blockFactory->createBlock();
     block->setBlockHeader(header);
     // The second envelope must be a VALID deposit: the old typed stub ({0x02, 0x01})
@@ -234,13 +237,13 @@ BOOST_AUTO_TEST_SUITE(OpKarstActivationSuite)
 BOOST_AUTO_TEST_CASE(JovianActivationBlockRejectsUserTx, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
 {
     // Header is internal milliseconds; schedule activations are Unix seconds (A13).
-    auto schedule = opstack_test::isthmusThenJovian(kJovianTsSec);
+    auto schedule = opstack_test::isthmusThenJovian(c_jovianTsSec);
     BOOST_CHECK_EQUAL(
-        bcos::engine::unixSecondsFromInternalMillis(static_cast<uint64_t>(kJovianTsMs)),
-        kJovianTsSec);
+        bcos::engine::unixSecondsFromInternalMillis(static_cast<uint64_t>(c_jovianTsMs)),
+        c_jovianTsSec);
 
     auto dep = depositWithJovianAttrs();
-    BOOST_CHECK_EXCEPTION(runPreBlock(schedule, kParentTsSec, kJovianTsMs,
+    BOOST_CHECK_EXCEPTION(runPreBlock(schedule, c_parentTsSec, c_jovianTsMs,
                               {kDepositEnvelope, kTypedEnvelope}, {dep, opeth::DepositTx{}}),
         OpConsensusError, isScheduleGateError);
 }
@@ -249,11 +252,11 @@ BOOST_AUTO_TEST_CASE(JovianActivationBlockRejectsUserTx, * boost::unit_test::lab
 BOOST_AUTO_TEST_CASE(JovianActivationBlockAllowsDepositsOnly, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
 // clang-format on
 {
-    auto schedule = opstack_test::isthmusThenJovian(kJovianTsSec);
+    auto schedule = opstack_test::isthmusThenJovian(c_jovianTsSec);
     auto dep = depositWithJovianAttrs();
-    BOOST_CHECK_NO_THROW(runPreBlock(schedule, kParentTsSec, kJovianTsMs,
+    BOOST_CHECK_NO_THROW(runPreBlock(schedule, c_parentTsSec, c_jovianTsMs,
         {kDepositEnvelope}, {dep}));
-    BOOST_CHECK_NO_THROW(runPreBlock(schedule, kParentTsSec, kJovianTsMs,
+    BOOST_CHECK_NO_THROW(runPreBlock(schedule, c_parentTsSec, c_jovianTsMs,
         {kDepositEnvelope, kDepositEnvelope}, {dep, dep}));
 }
 
@@ -261,10 +264,10 @@ BOOST_AUTO_TEST_CASE(JovianActivationBlockAllowsDepositsOnly, * boost::unit_test
 // checks per-tx during execution, not just the tail).
 BOOST_AUTO_TEST_CASE(JovianActivationBlockRejectsUserTxBeforeTrailingDeposit, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
 {
-    auto schedule = opstack_test::isthmusThenJovian(kJovianTsSec);
+    auto schedule = opstack_test::isthmusThenJovian(c_jovianTsSec);
     auto dep = depositWithJovianAttrs();
     BOOST_CHECK_EXCEPTION(
-        runPreBlock(schedule, kParentTsSec, kJovianTsMs,
+        runPreBlock(schedule, c_parentTsSec, c_jovianTsMs,
             {kDepositEnvelope, kTypedEnvelope, kDepositEnvelope}, {dep, opeth::DepositTx{}, dep}),
         OpConsensusError, isScheduleGateError);
 }
@@ -275,11 +278,11 @@ BOOST_AUTO_TEST_CASE(JovianActivationBlockRejectsUserTxBeforeTrailingDeposit, * 
 // is dropped or if the gate degenerates into the last-tx heuristic.
 BOOST_AUTO_TEST_CASE(JovianActivationIsthmusLenAttrsRejectsMiddleUserTx, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
 {
-    auto schedule = opstack_test::isthmusThenJovian(kJovianTsSec);
+    auto schedule = opstack_test::isthmusThenJovian(c_jovianTsSec);
     auto dep = depositWithIsthmusLenAttrs();
     BOOST_REQUIRE_EQUAL(dep.data.size(), opeth::OP_ETH_ISTHMUS_L1_ATTRIBUTES_LEN);
     BOOST_CHECK_EXCEPTION(
-        runPreBlock(schedule, kParentTsSec, kJovianTsMs,
+        runPreBlock(schedule, c_parentTsSec, c_jovianTsMs,
             {kDepositEnvelope, kTypedEnvelope, kDepositEnvelope}, {dep, opeth::DepositTx{}, dep}),
         OpConsensusError, isScheduleGateError);
 }
@@ -288,10 +291,10 @@ BOOST_AUTO_TEST_CASE(JovianActivationIsthmusLenAttrsRejectsMiddleUserTx, * boost
 // shape check runs before the gate and its verbatim message is the pin.
 BOOST_AUTO_TEST_CASE(JovianActivationIsthmusLenAttrsRejectsLastTxUserTx, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
 {
-    auto schedule = opstack_test::isthmusThenJovian(kJovianTsSec);
+    auto schedule = opstack_test::isthmusThenJovian(c_jovianTsSec);
     auto dep = depositWithIsthmusLenAttrs();
     BOOST_REQUIRE_EQUAL(dep.data.size(), opeth::OP_ETH_ISTHMUS_L1_ATTRIBUTES_LEN);
-    BOOST_CHECK_EXCEPTION(runPreBlock(schedule, kParentTsSec, kJovianTsMs,
+    BOOST_CHECK_EXCEPTION(runPreBlock(schedule, c_parentTsSec, c_jovianTsMs,
                               {kDepositEnvelope, kTypedEnvelope}, {dep, opeth::DepositTx{}}),
         OpConsensusError, isShapeRuleError);
 }
@@ -301,19 +304,19 @@ BOOST_AUTO_TEST_CASE(JovianActivationIsthmusLenAttrsRejectsLastTxUserTx, * boost
 // gate is the only thing that sees it.
 BOOST_AUTO_TEST_CASE(KarstActivationBlockRejectsUserTx, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
 {
-    auto schedule = opstack_test::karstOnlySchedule(/*karstTs=*/kJovianTsSec);
+    auto schedule = opstack_test::karstOnlySchedule(/*karstTs=*/c_jovianTsSec);
     auto dep = depositWithJovianAttrs();
-    BOOST_CHECK_EXCEPTION(runPreBlock(schedule, kParentTsSec, kJovianTsMs,
+    BOOST_CHECK_EXCEPTION(runPreBlock(schedule, c_parentTsSec, c_jovianTsMs,
                               {kDepositEnvelope, kTypedEnvelope}, {dep, opeth::DepositTx{}}),
         OpConsensusError, isScheduleGateError);
 }
 
 BOOST_AUTO_TEST_CASE(KarstActivationBlockRejectsUserTxBeforeTrailingDeposit, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
 {
-    auto schedule = opstack_test::karstOnlySchedule(/*karstTs=*/kJovianTsSec);
+    auto schedule = opstack_test::karstOnlySchedule(/*karstTs=*/c_jovianTsSec);
     auto dep = depositWithJovianAttrs();
     BOOST_CHECK_EXCEPTION(
-        runPreBlock(schedule, kParentTsSec, kJovianTsMs,
+        runPreBlock(schedule, c_parentTsSec, c_jovianTsMs,
             {kDepositEnvelope, kTypedEnvelope, kDepositEnvelope}, {dep, opeth::DepositTx{}, dep}),
         OpConsensusError, isScheduleGateError);
 }
@@ -322,17 +325,17 @@ BOOST_AUTO_TEST_CASE(KarstActivationBlockRejectsUserTxBeforeTrailingDeposit, * b
 // all — a plain mid-fork block (parent already past the rung) takes user transactions.
 BOOST_AUTO_TEST_CASE(JovianNonActivationBlockTakesUserTx, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
 {
-    auto schedule = opstack_test::isthmusThenJovian(kJovianTsSec);
+    auto schedule = opstack_test::isthmusThenJovian(c_jovianTsSec);
     auto dep = depositWithJovianAttrs();
-    BOOST_CHECK_NO_THROW(runPreBlock(schedule, /*parentTsSec=*/kJovianTsSec, kJovianTsMs,
+    BOOST_CHECK_NO_THROW(runPreBlock(schedule, /*parentTsSec=*/c_jovianTsSec, c_jovianTsMs,
         {kDepositEnvelope, kTypedEnvelope}, {dep, opeth::DepositTx{}}));
 }
 
 BOOST_AUTO_TEST_CASE(KarstNonActivationBlockTakesUserTx, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
 {
-    auto schedule = opstack_test::karstOnlySchedule(/*karstTs=*/kJovianTsSec);
+    auto schedule = opstack_test::karstOnlySchedule(/*karstTs=*/c_jovianTsSec);
     auto dep = depositWithJovianAttrs();
-    BOOST_CHECK_NO_THROW(runPreBlock(schedule, /*parentTsSec=*/kJovianTsSec, kJovianTsMs,
+    BOOST_CHECK_NO_THROW(runPreBlock(schedule, /*parentTsSec=*/c_jovianTsSec, c_jovianTsMs,
         {kDepositEnvelope, kTypedEnvelope}, {dep, opeth::DepositTx{}}));
 }
 
@@ -351,37 +354,22 @@ bcos::engine::EngineForkResolution resolveEngineForkForTest(
     using bcos::engine::EngineForkContext;
     using bcos::engine::OpForkId;
     const auto fork = bcos::ledger::resolveOpFork(schedule, timestampSeconds);
-    static constexpr std::array<std::pair<OpForkId, bcos::ledger::OpFork>, 9> kIdByLadder{{
-        {OpForkId::Regolith, bcos::ledger::OpFork::Regolith},
-        {OpForkId::Canyon, bcos::ledger::OpFork::Canyon},
-        {OpForkId::Ecotone, bcos::ledger::OpFork::Ecotone},
-        {OpForkId::Fjord, bcos::ledger::OpFork::Fjord},
-        {OpForkId::Granite, bcos::ledger::OpFork::Granite},
-        {OpForkId::Holocene, bcos::ledger::OpFork::Holocene},
-        {OpForkId::Isthmus, bcos::ledger::OpFork::Isthmus},
-        {OpForkId::Jovian, bcos::ledger::OpFork::Jovian},
-        {OpForkId::Karst, bcos::ledger::OpFork::Karst},
-    }};
-    auto forkId = OpForkId::Isthmus;
-    bool matched = false;
-    for (auto const& [id, ledgerFork] : kIdByLadder)
-    {
-        if (ledgerFork == fork)
-        {
-            forkId = id;
-            matched = true;
-        }
-    }
-    // Delta (and any future rung the table forgets) must not fall through to the
-    // Isthmus profile silently — an unmapped fork is a mapping bug, not Isthmus.
-    if (!matched)
+    // Derive the fork-id by NAME from the two production enums (OpForkId.h enumerates
+    // Regolith..Karst in ladder order; the ledger enum adds Bedrock and Delta). A
+    // rung added/renamed on either side breaks this lookup instead of drifting against
+    // a test-local table.
+    const auto forkName = magic_enum::enum_name(fork);
+    const auto forkId = magic_enum::enum_cast<OpForkId>(forkName);
+    // Delta (and any future rung the production enum lacks) must not fall through to
+    // the Isthmus profile silently — an unmapped fork is a mapping bug, not Isthmus.
+    if (!forkId.has_value())
     {
         return bcos::engine::OpForkResolutionError::InconsistentExecutionConfig;
     }
     return EngineForkContext{
-        .forkId = forkId, .api = bcos::engine::engineApiProfileFor(forkId),
-        .hasDaFootprint = forkId >= OpForkId::Jovian,
-        .extraDataLayout = bcos::engine::extraDataLayoutFor(forkId)};
+        .forkId = *forkId, .api = bcos::engine::engineApiProfileFor(*forkId),
+        .hasDaFootprint = *forkId >= OpForkId::Jovian,
+        .extraDataLayout = bcos::engine::extraDataLayoutFor(*forkId)};
 }
 
 bcos::ledger::OpForkSchedule karstAtSchedule(uint64_t karstTs)
@@ -514,7 +502,7 @@ BOOST_AUTO_TEST_CASE(EngineApiProfileTableMatchesOpNode, * boost::unit_test::lab
 BOOST_AUTO_TEST_CASE(JovianActivationWithoutParentHeaderFailsClosed, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
 // clang-format on
 {
-    auto err = executeActivationWithoutParent(opstack_test::isthmusThenJovian(kJovianTsSec));
+    auto err = executeActivationWithoutParent(opstack_test::isthmusThenJovian(c_jovianTsSec));
     BOOST_REQUIRE(err);
     BOOST_CHECK_EQUAL(
         err->errorCode(), static_cast<int>(bcos::scheduler::SchedulerError::OpStorageFault));
