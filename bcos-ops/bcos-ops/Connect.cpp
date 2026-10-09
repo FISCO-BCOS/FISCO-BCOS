@@ -16,10 +16,12 @@
  * @file Connect.cpp
  */
 #include "Connect.h"
+#include "IpcClient.h"
 #include "NodeDir.h"
 #include "OpsError.h"
 #include "RpcClient.h"
 #include "collect/RpcCollector.h"
+#include <filesystem>
 #include <vector>
 
 namespace bcos::ops
@@ -89,7 +91,24 @@ Connection connect(ConnectOptions const& _options)
         return connection;
     }
     auto node = NodeDir::load(_options.nodeDir);
-    // the local socket (PR-03) is tried first when present; fall back to the node's RPC
+    // the local socket first: zero configuration and it carries admin_*; fall back to the
+    // node's own RPC port when the socket is absent (node down, old node, ipc_enable=false)
+    // one connect attempt, reused for the command: a separate reachability probe would leave an
+    // aborted connection in the node's accept queue on every invocation
+    if (_options.allowIpc && std::filesystem::exists(node.ipcPath()))
+    {
+        try
+        {
+            auto connection = makeIpcRpcCall(node.ipcPath(), _options.requestTimeoutMs);
+            connection.group = node.groupId;
+            connection.nodeDir = node;
+            return connection;
+        }
+        catch (OpsError const&)
+        {
+            // stale file or a node that is shutting down: fall back to RPC below
+        }
+    }
     if (!_options.allowRpc)
     {
         throw OpsError(c_exitUsage, "local socket " + node.ipcPath() +

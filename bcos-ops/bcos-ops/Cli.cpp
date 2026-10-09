@@ -39,6 +39,7 @@ std::map<std::string, Command>& commandTable()
     static bool const registered = []() {
         registerStatusCommand();
         registerTxCommand();
+        registerAttachCommands();
         return true;
     }();
     (void)registered;
