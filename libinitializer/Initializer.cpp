@@ -735,12 +735,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             m_engineServiceInitializer = EngineServiceInitializer::buildOp(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
                 m_memPoolInitializer->memPool(), bcos::engine::c_defaultBlockTxCountLimit,
-                opDelegate, m_daCaps, /*allowSynthesizedL1Attributes=*/false);
+                opDelegate, m_daCaps, /*allowSynthesizedL1Attributes=*/false,
+                m_nodeConfig->opUnfinalizedWindow());
         }
 
         m_opScheduler = opDelegate;
-        // Republish the full ledger configuration after every OP commit (see
-        // engine/OpLedgerConfigRepublish.h for why the engine must not publish the
+        // Republish the full ledger configuration after every OP FINALIZE — the notifier fires
+        // once per block merged into the backend, never on admit into the unfinalized window
+        // (see engine/OpLedgerConfigRepublish.h for why the engine must not publish the
         // scheduler's own LedgerConfig instead). On failure the previous snapshot stays, which
         // is strictly better than an empty one.
         auto republishLedgerConfig =
@@ -1139,7 +1141,9 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
             });
     }
 
-    // Notify RPC after a committed OP block.
+    // Notify RPC after a FINALIZED OP block (the ledger advanced). Head switches inside the
+    // unfinalized window are the Engine tracker's; the RPC read plane follows
+    // engineService()->trackedHead() for `latest`, not this notification.
     if (m_setOpSchedulerBlockNumberNotifier)
     {
         m_setOpSchedulerBlockNumberNotifier(
