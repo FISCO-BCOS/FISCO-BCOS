@@ -186,12 +186,13 @@ public:
             }
             else
             {
-                // descendsFrom(head, block) walks in-store parent links; a sparse store
-                // (intermediate body never staged) can leave the walk unanswerable —
-                // answerable=false means "do NOT detach": falsely detaching a live
-                // canonical ancestor re-opens the SYNCING-forever shape this fix closes.
-                const auto walkable = descendsFromWalkable(blockHash);
-                block.detached = walkable && !descendsFrom(hash, blockHash);
+                // Below the new head: detach only when ancestry is DECIDED — the walk
+                // from the head passed the candidate's height without finding it. A
+                // sparse or cyclic staged range leaves the question open, and falsely
+                // detaching a live canonical ancestor re-opens the SYNCING-forever
+                // shape this fix closes (review N3/R1).
+                block.detached = ancestryDecidableFromHead(hash, block.number) &&
+                                 !descendsFrom(hash, blockHash);
             }
         }
         // Heights above the new head have no canonical occupant; below/at it, a
@@ -266,31 +267,34 @@ public:
     }
 
 private:
-    /// True iff a walk FROM @p blockHash can terminate: every parent link resolvable
-    /// in m_blocks. Unwalkable (sparse) links mean ancestry cannot be decided from this
-    /// store at all — callers must not detach on that basis.
-    [[nodiscard]] bool descendsFromWalkable(bcos::h256 const& blockHash) const
+    /// Can ancestry of a block at @p candidateNumber be DECIDED by walking the new
+    /// head's parent links? Parent numbers strictly decrease along a staged chain, so
+    /// the walk decides once it passes the candidate's height (a staged block at or
+    /// below it exists). Hitting an unstaged parent ABOVE the candidate's height, a
+    /// self-loop, or a guard-exhausted cycle leaves the question open (the staged range
+    /// is sparse) — and the caller must not detach on an undecidable answer.
+    [[nodiscard]] bool ancestryDecidableFromHead(
+        bcos::h256 const& headHash, bcos::protocol::BlockNumber candidateNumber) const
     {
-        auto cursor = blockHash;
+        auto cursor = headHash;
         for (std::size_t guard = 0; guard <= m_blocks.size(); ++guard)
         {
             auto const it = m_blocks.find(cursor);
             if (it == m_blocks.end())
             {
-                return false;  // sparse: parent body never imported
+                return false;  // left the staged chain ABOVE the candidate's height — a hole
+            }
+            if (it->second.number <= candidateNumber)
+            {
+                return true;  // passed the candidate's height inside the staged chain
             }
             if (it->second.parent == cursor)
             {
-                return false;  // self-loop guard: cannot terminate
+                return false;  // self-loop: undecidable
             }
             cursor = it->second.parent;
         }
-        // Guard exhaustion means the walk cannot terminate in a store this size — a
-        // parent cycle of length >= 2 (the in-loop check catches only self-loops).
-        // That is undecidable, the same answer as sparse/self-loop; answering true
-        // here would authorize adoptCanonicalHead's below-head detach on a walk its
-        // own contract calls undecidable (R1).
-        return false;
+        return false;  // >=2-cycle: undecidable
     }
 
     /// True iff @p candidate is @p ancestorOrSelfHash itself or a stored descendant of

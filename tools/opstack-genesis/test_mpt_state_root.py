@@ -47,6 +47,30 @@ def test_state_root_matches_independent_golden_oracle():
     assert "0x" + mpt.compute_state_root(allocs).hex() == golden.EXPECTED["golden_state"]
 
 
+# The one-account pin alone would not catch a divergence that only shows with several
+# accounts (ordering, per-account storage subtries). Three shapes: storage-bearing,
+# code-bearing, empty. Both implementations must agree AND the joint value is pinned.
+MULTI_ALLOC = [
+    (bytes.fromhex("43000000000000000000000000000000000000c0"), 1, 10**18,
+     bytes.fromhex("6080604052"), {bytes(32): bytes.fromhex("0385").rjust(32, b"\0")}),
+    (bytes.fromhex("4200000000000000000000000000000000001000"), 0, 0, b"", {}),
+    (bytes.fromhex("deaddeaddeaddeaddeaddeaddeaddeaddead0001"), 5, 7,
+     bytes.fromhex("6001"), {}),
+]
+MULTI_ALLOC_AS_DICTS = [
+    {"address": "0x" + a.hex(), "nonce": str(n), "balance": str(b), "code": "0x" + c.hex(),
+     "storage": [("0x" + s.hex(), "0x" + v.hex()) for s, v in st.items()]}
+    for a, n, b, c, st in MULTI_ALLOC
+]
+# Pinned once from the joint value (both implementations agree at pin time).
+EXPECTED_MULTI = "0x85011e86ef34676ba15a6637572a3df94b3c3045813cd6dfdbef03dfaee56fcc"
+
+
+def test_multi_account_cross_pin():
+    assert "0x" + mpt.compute_state_root(MULTI_ALLOC_AS_DICTS).hex() == EXPECTED_MULTI
+    assert "0x" + golden.state_root(MULTI_ALLOC).hex() == EXPECTED_MULTI
+
+
 def test_off_width_address_is_rejected_loudly():
     # The slot lane raised on len != 32 while the address lane
     # silently keccak'd a 19/21-byte address into a different trie. The guard must

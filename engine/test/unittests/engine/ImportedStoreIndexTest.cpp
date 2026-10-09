@@ -178,4 +178,21 @@ BOOST_AUTO_TEST_CASE(CanonicalAncestorWinsHeightOverLiveSibling)
     BOOST_CHECK(store.hasBlock(hashOf('S')));  // still hash-addressable for re-import
 }
 
+// The detach must actually FIRE when ancestry is decidable: an old-branch block at a
+// height the new chain occupies is detached and its height re-keyed to the new chain's
+// block. (The walk from the head passes the candidate's height via the sibling, so the
+// answer is decided; contrast SparseStoreKeepsLiveAncestor, where the walk can't reach
+// the candidate's height and nothing detaches.)
+BOOST_AUTO_TEST_CASE(BelowHeadOldBranchBlockDetachedWhenDecided)
+{
+    bcos::engine::ImportedStore store;
+    BOOST_CHECK(store.put(block('A', 0, 100)));
+    BOOST_CHECK(store.put(block('D', 0, 100), /*occupantCanonical=*/true));  // sibling at 100
+    BOOST_CHECK(store.put(block('B', 'D', 101)));
+    BOOST_CHECK(store.put(block('C', 'B', 102)));
+    store.adoptCanonicalHead(102, hashOf('C'));
+    BOOST_CHECK_EQUAL(*store.occupantAt(100), hashOf('D'));  // the sibling, not A
+    BOOST_CHECK(store.hasBlock(hashOf('A')));                // body stays for re-import
+}
+
 BOOST_AUTO_TEST_SUITE_END()

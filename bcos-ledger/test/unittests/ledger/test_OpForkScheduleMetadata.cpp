@@ -26,8 +26,11 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-ledger/Ledger.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include "bcos-ledger/test/unittests/ExceptionCheck.h"
 #include "bcos-task/Wait.h"
+#include "bcos-tool/Exceptions.h"
 #include <bcos-framework/testutils/faker/FakeBlock.h>
+#include <magic_enum/magic_enum.hpp>
 #include <boost/test/unit_test.hpp>
 #include <array>
 #include <memory>
@@ -687,7 +690,29 @@ BOOST_AUTO_TEST_CASE(genesisRejectsZeroEip1559Triple)
             .elasticity = 6, .denominator = 0, .denominatorCanyon = 250};
         BOOST_CHECK_EXCEPTION(
             co_await ledger::buildGenesisBlock(*ledger, genesis, emptyLedgerConfig()),
-            std::exception, [](auto const& e) { return messageContains(e, "carries a zero"); });
+            bcos::tool::InvalidConfig,
+            [](auto const& e) { return errinfoContains(e, "carries a zero"); });
+    }());
+}
+
+// genesis declaration → SYS_CONFIG row → snapshot parse: the declared triple
+// round-trips through the chain (the row FeeHistory and the engine both read).
+BOOST_AUTO_TEST_CASE(genesisEip1559RoundTripsThroughTheChain)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto storage = makeL2GenesisTestStorage();
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+        auto genesis = shorthandGenesis(1000, 2000);
+        genesis.m_opEip1559 = bcos::engine::OpEip1559Params{
+            .elasticity = 2, .denominator = 8, .denominatorCanyon = 64};
+        BOOST_REQUIRE(co_await ledger::buildGenesisBlock(*ledger, genesis, emptyLedgerConfig()));
+        auto const row = co_await ledger::getSystemConfig(
+            *ledger, std::string(magic_enum::enum_name(ledger::SystemConfig::op_eip1559_params)));
+        BOOST_REQUIRE_MESSAGE(row.has_value(), "the declared triple must persist as a row");
+        auto const parsed = ledger::parseOpEip1559Params(std::get<0>(*row));
+        BOOST_CHECK_EQUAL(parsed.elasticity, 2U);
+        BOOST_CHECK_EQUAL(parsed.denominator, 8U);
+        BOOST_CHECK_EQUAL(parsed.denominatorCanyon, 64U);
     }());
 }
 

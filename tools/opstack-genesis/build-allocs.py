@@ -166,11 +166,33 @@ _OP_CODE_NAMESPACE_BASE = 0xC0D3C0D3C0D3C0D3C0D3C0D3C0D3C0D3C0D30000
 # explicitly.
 PLACEHOLDER_ADDRESS = 0xDEAD
 
-# The FISCO SystemConfig predeploy (0x43...00C0). Its alloc MUST carry the
-# feature_flags Entry slot: the C++ genesis path verifies (and no longer
-# injects) that slot, so omitting it here would leave the genesis state root
-# not committing the feature set the node actually runs with.
-SYSTEM_CONFIG_PREDEPLOY = 0x43000000000000000000000000000000000000C0
+# The SystemConfig ROLE (the predeploy named "SystemConfig" in the chain
+# config) MUST carry the feature_flags Entry slot: the C++ genesis path
+# verifies (and no longer injects) that slot, so omitting it here would leave
+# the genesis state root not committing the feature set the node actually runs
+# with. The role is keyed by NAME, not by address — the template layout puts
+# SystemConfig at 0x43...00C0 while the committed C2 layout puts it at
+# 0x4200...1000; the node verifies the slot key, not an address literal.
+SYSTEM_CONFIG_ROLE = "SystemConfig"
+
+
+def require_system_config_flags(predeploy):
+    """Refuse a SystemConfig predeploy whose system_config lacks feature_flags.
+
+    Keyed on the role NAME (an address literal would silently skip the C2
+    layout, whose SystemConfig sits at 0x4200...1000, not the template's
+    0x43...C0). Extracted module-level so the guard is unit-testable without
+    the contracts directory.
+    """
+    name = predeploy.get("name", "<unnamed>")
+    system_config = predeploy.get("system_config", {}) or {}
+    if name == SYSTEM_CONFIG_ROLE and "feature_flags" not in system_config:
+        raise ValueError(
+            f"{name}: system_config must carry feature_flags (= the node's "
+            f"Features::toFlagsNumber() at genesis). The C++ genesis path "
+            f"verifies this slot instead of injecting it, so omitting it "
+            f"would leave the genesis state root not committing the feature "
+            f"set the chain runs with")
 
 # OP ProxyAdmin storage layout: the contract is plain OZ `Ownable`, so its
 # `_owner` lives at slot 0. The upgrade authority of every proxied predeploy
@@ -562,13 +584,8 @@ def build_proxied_allocs(predeploy, config, contracts_dir, base_accounts):
     proxy_code = source_account["code"]
 
     system_config = predeploy.get("system_config", {}) or {}
-    if proxy_address == SYSTEM_CONFIG_PREDEPLOY and "feature_flags" not in system_config:
-        raise ValueError(
-            f"{name}: system_config must carry feature_flags (= the node's "
-            f"Features::toFlagsNumber() at genesis). The C++ genesis path "
-            f"verifies this slot instead of injecting it, so omitting it "
-            f"would leave the genesis state root not committing the feature "
-            f"set the chain runs with")
+    # Role-name keyed (not an address literal) — see require_system_config_flags.
+    require_system_config_flags(predeploy)
 
     storage = {
         OZ_INITIALIZED_SLOT: INITIALIZED_RAN,

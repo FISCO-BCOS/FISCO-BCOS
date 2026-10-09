@@ -172,9 +172,10 @@ ends by design:
   that op-geth's behaviour is the intended one. Two things had to be corrected on the way:
   (a) the earlier "spec says it is not enabled for deposits" claim rested on a citation that
   does not exist (killed above); (b) that fabricated claim had propagated into
-  `tools/check-op-karst-release-gate.sh`, which asserts `deposit_exempt_from_max_tx_gas =
-  true` — the assertion is kept, now with a comment citing the real basis, so the gate no
-  longer rests on the non-existent line. WI-35 is therefore **closed as "matches op-revm;
+  a release-gate script asserting `deposit_exempt_from_max_tx_gas = true` — the script
+  was retired (it cited pre-cutover paths and was wired into nothing); the exemption pin
+  now lives in the C++ suites: OpEthDepositGasTest's KarstDepositAbove7825Cap... case
+  asserts the deposit is admitted past the cap while a normal tx is rejected. WI-35 is therefore **closed as "matches op-revm;
   op-geth differs; spec silent"** (no production change).
   Resolve with authoritative evidence — a spec statement, an op-geth/op-node PR, or op-node
   code exempting deposits — or align FISCO with op-geth.

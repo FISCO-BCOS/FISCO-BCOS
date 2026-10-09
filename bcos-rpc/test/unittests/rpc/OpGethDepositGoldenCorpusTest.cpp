@@ -20,6 +20,13 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-framework/protocol/TransactionReceipt.h>
+#include <bcos-rpc/web3jsonrpc/model/DepositTransaction.h>
+#include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
 
 #include <filesystem>
@@ -98,6 +105,112 @@ BOOST_AUTO_TEST_CASE(EveryGoldenParsesAndPinsTheParityContracts)
         }
         BOOST_CHECK_MESSAGE(!receipt.isMember("l1FeeScalar"),
             stem << ": Ecotone-era golden unexpectedly carries l1FeeScalar");
+    }
+}
+
+namespace
+{
+bcos::protocol::TransactionReceipt::Ptr receiptWithDepositMeta(
+    std::optional<uint64_t> nonce, std::optional<uint64_t> version)
+{
+    auto crypto = std::make_shared<bcos::crypto::CryptoSuite>(
+        std::make_shared<bcos::crypto::Keccak256>(),
+        std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
+    auto factory = std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(crypto);
+    auto receipt = factory->createReceipt(bcos::u256(21000),
+        "0x0000000000000000000000000000000000000000", {}, 1, bcos::bytesConstRef{}, 1);
+    bcos::protocol::OpStackReceiptMeta meta;
+    meta.deposit_nonce = nonce;
+    meta.deposit_receipt_version = version;
+    receipt->setOpStackMeta(meta);
+    return receipt;
+}
+
+std::string lowerHex(std::string s)
+{
+    std::transform(s.begin(), s.end(), s.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return s;
+}
+}  // namespace
+
+// The deposit-driven renderer over a fixture's own fields, compared VALUE-level against
+// the golden — the presence-only shape above cannot see a wrong value (the canyon-era
+// fixtures carry nonce 0xbb9 / depositReceiptVersion the renderer could not emit before
+// the receipt-driven fill).
+BOOST_AUTO_TEST_CASE(RenderersReproduceTheGoldenValues)
+{
+    for (auto const& stem : stems())
+    {
+        const auto goldenTx = loadJson(goldenDir() / (stem + ".tx.json"));
+        const auto goldenReceipt = loadJson(goldenDir() / (stem + ".receipt.json"));
+
+        bcos::rpc::DepositTransaction deposit;
+        deposit.sourceHash = bcos::h256(goldenTx["sourceHash"].asString());
+        deposit.from = bcos::Address(goldenTx["from"].asString());
+        deposit.to = goldenTx["to"].isNull() ?
+                         std::nullopt :
+                         std::optional<bcos::Address>(bcos::Address(goldenTx["to"].asString()));
+        deposit.mint = bcos::u256(goldenTx["mint"].asString());
+        deposit.value = bcos::u256(goldenTx["value"].asString());
+        deposit.gas = bcos::u256(goldenTx["gas"].asString()).convert_to<uint64_t>();
+        deposit.isSystemTx = goldenTx.get("isSystemTx", false).asBool();
+        deposit.input = bcos::fromHex(goldenTx["input"].asString());
+
+        Json::Value result(Json::objectValue);
+        bcos::rpc::combineDepositTxResponse(result, deposit);
+
+        std::optional<uint64_t> nonce, version;
+        if (goldenReceipt.isMember("depositNonce"))
+        {
+            nonce = bcos::u256(goldenReceipt["depositNonce"].asString()).convert_to<uint64_t>();
+        }
+        if (goldenReceipt.isMember("depositReceiptVersion"))
+        {
+            version =
+                bcos::u256(goldenReceipt["depositReceiptVersion"].asString()).convert_to<uint64_t>();
+        }
+        auto receipt = receiptWithDepositMeta(nonce, version);
+        bcos::rpc::fillDepositReceiptFields(result, *receipt);
+
+        for (auto const* key : {"type", "sourceHash", "gas", "value", "input", "mint",
+                 "gasPrice", "v", "r", "s", "nonce"})
+        {
+            BOOST_REQUIRE_MESSAGE(result.isMember(key), stem << ": renderer lacks " << key);
+            BOOST_CHECK_MESSAGE(result[key].asString() == goldenTx[key].asString(),
+                stem << ": " << key << " rendered " << result[key].asString() << " != golden "
+                     << goldenTx[key].asString());
+        }
+        BOOST_CHECK_MESSAGE(lowerHex(result["from"].asString()) == lowerHex(goldenTx["from"].asString()),
+            stem << ": from mismatch");
+        if (goldenTx["to"].isNull())
+        {
+            BOOST_CHECK_MESSAGE(result["to"].isNull(), stem << ": to must be null");
+        }
+        else
+        {
+            BOOST_CHECK_MESSAGE(
+                lowerHex(result["to"].asString()) == lowerHex(goldenTx["to"].asString()),
+                stem << ": to mismatch");
+        }
+        if (goldenTx.isMember("isSystemTx"))
+        {
+            BOOST_CHECK_EQUAL(result["isSystemTx"].asBool(), goldenTx["isSystemTx"].asBool());
+        }
+        // depositReceiptVersion rides the receipt: present iff the receipt golden carries it.
+        if (goldenTx.isMember("depositReceiptVersion"))
+        {
+            BOOST_CHECK_MESSAGE(
+                result.isMember("depositReceiptVersion") &&
+                    result["depositReceiptVersion"].asString() ==
+                        goldenTx["depositReceiptVersion"].asString(),
+                stem << ": depositReceiptVersion mismatch");
+        }
+        else
+        {
+            BOOST_CHECK_MESSAGE(!result.isMember("depositReceiptVersion"),
+                stem << ": depositReceiptVersion must not be emitted without the receipt meta");
+        }
     }
 }
 

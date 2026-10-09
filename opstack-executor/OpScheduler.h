@@ -613,9 +613,14 @@ private:
                     fmt::format("Discontinuous execute block number! expect: {} input: {}",
                         lastExecuted + 1, number);
                 OP_SCHEDULER_LOG(INFO) << message;
-                co_return {
-                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
-                    nullptr, false};
+                // Same SYNCING family as the sibling-reorg branch above: the payload's
+                // parent is not the executed head — the CL retries after re-parenting.
+                // (The adoptProbeAsPending InvalidBlockNumber sites answer probe-lifecycle
+                // faults — internal by contract, not chain conditions.)
+                auto gapError = BCOS_ERROR_UNIQUE_PTR(
+                    scheduler::SchedulerError::InvalidBlockNumber, message);
+                *gapError << bcos::engine::OpSiblingReorgUnsupported{true};
+                co_return {std::move(gapError), nullptr, false};
             }
 
             // Writes go to a committed-parent view. KeepProbe must not see the uncommitted

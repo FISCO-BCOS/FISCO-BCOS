@@ -109,7 +109,10 @@ add_test(NAME OpstackExecutorBlockTests COMMAND opstack-executor-block-tests)
 # da-matrix differential runner (run_fisco.cpp): a standalone main that computes the
 # fee grid and — in --check mode — compares against the COMMITTED golden snapshots.
 # The known_divergence rows are skipped+counted inside the runner (DIVERGENCES.md).
-add_executable(opstack-da-matrix-runner EXCLUDE_FROM_ALL da-matrix/run_fisco.cpp)
+# NOT EXCLUDE_FROM_ALL: the ctest gate below references the binary, and a target excluded
+# from ALL is never built by `cmake --build .` — ctest then fails it as "Unable to find
+# executable" on every leg (M02).
+add_executable(opstack-da-matrix-runner da-matrix/run_fisco.cpp)
 target_include_directories(opstack-da-matrix-runner PRIVATE ${CMAKE_SOURCE_DIR})
 target_link_libraries(opstack-da-matrix-runner PRIVATE
     opstack-executor  # OpFeeParams/OpRollupCost/OpForkSpec (the post-cutover home)

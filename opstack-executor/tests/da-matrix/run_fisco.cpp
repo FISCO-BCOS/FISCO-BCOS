@@ -177,8 +177,22 @@ bool computeCase(
         err = "case '" + id + "' has an invalid slot (must be exactly 32-byte hex)";
         return false;
     }
+    // Legacy slots 5/6 (Bedrock-era overhead/scalar) are read by no grid case — every
+    // row is Fjord-or-later. Zero-fill like a missing on-chain slot, with an override
+    // for a grid that starts carrying them.
+    evmc::bytes32 slot5{}, slot6{};
+    if (slots.isMember("5") && !hexToBytes32(slots["5"].asString(), slot5))
+    {
+        err = "case '" + id + "' has an invalid slot 5 (must be exactly 32-byte hex)";
+        return false;
+    }
+    if (slots.isMember("6") && !hexToBytes32(slots["6"].asString(), slot6))
+    {
+        err = "case '" + id + "' has an invalid slot 6 (must be exactly 32-byte hex)";
+        return false;
+    }
 
-    const auto params = opeth::unpackOpFeeParams(slot1, slot3, slot7, slot8);
+    const auto params = opeth::unpackOpFeeParams(slot1, slot3, slot5, slot6, slot7, slot8);
 
     const std::string fork = c["fork"].asString();
     if (!isKnownFork(fork))
@@ -291,14 +305,15 @@ int main(int argc, char** argv)
 
     // --check mode: value-level comparison against the committed golden snapshot.
     // Compares parsed JSON string values (not raw file text — the fisco golden is
-    // jsoncpp-serialized, the Go/Rust ends are not). known_divergence rows and
-    // rows absent from the golden are skipped + counted.
+    // jsoncpp-serialized, the Go/Rust ends are not). known_divergence rows are skipped+counted;
+    // rows absent from the golden are mismatches (M23).
     if (checkMode)
     {
+        // The committed layout is per-end: <goldenDir>/<end>/out_<end>.json.
         std::string goldenPath = goldenDir;
         if (goldenPath.back() != '/')
             goldenPath += '/';
-        goldenPath += "out_" + checkEnd + ".json";
+        goldenPath += checkEnd + "/out_" + checkEnd + ".json";
 
         std::ifstream gfin(goldenPath);
         if (!gfin.good())
@@ -347,12 +362,12 @@ int main(int argc, char** argv)
                 std::cerr << "run_fisco: case entries must be JSON objects\n";
                 return 1;
             }
-            // known_divergence rows are registered differences (DIVERGENCES.md) — skip + count.
-            if (!c["known_divergence"].isNull())
-            {
-                ++skippedKnown;
-                continue;
-            }
+            // known_divergence rows are registered CROSS-END differences (DIVERGENCES.md)
+            // — they exempt the four-source comparator (compare_snapshots.py), not this
+            // golden self-check: the golden carries the row, so the fisco end still
+            // computes and compares it. Skipping here would let a regression in the
+            // fork's own computation hide behind the alias registration (the karst_alias
+            // row IS the headline fork).
             CaseResult res;
             std::string err;
             if (!computeCase(c, envelopes, res, err))

@@ -44,6 +44,14 @@ BOOST_AUTO_TEST_CASE(ParseRejectsSkippedForkBeforeKarst)
     // karst before jovian
     BOOST_CHECK_THROW(
         std::ignore = bcos::ledger::foldOpForkShorthand(300, 1), InvalidOpForkSchedule);
+    // holocene -> karst skips isthmus: rejected by the general contiguity rule (the
+    // canonical text, validated by validateScheduleRecords on parse).
+    BOOST_CHECK_THROW(
+        std::ignore = bcos::ledger::parseOpForkSchedule("0:holocene,100:karst"),
+        InvalidOpForkSchedule);
+    // the adjacent chain stays legal
+    BOOST_CHECK_NO_THROW(
+        std::ignore = bcos::ledger::parseOpForkSchedule("0:isthmus,100:karst"));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

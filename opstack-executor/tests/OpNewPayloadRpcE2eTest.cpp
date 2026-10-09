@@ -1152,7 +1152,15 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
     {
         auto sample = w6test::loadInvalidSample(id);
         auto const& fisco = sample.vector["_op_expected"]["reject"]["fisco"];
-        classifications.insert(fisco["classification"].asString());
+        auto const cls = fisco["classification"].asString();
+        // VALID-classified vectors are the committed-tip sibling-reorg shape — parked
+        // until SYS_REORG_UNDO/ReorgUndo lands (runInvalidVector returns before the
+        // sibling assertions). Counting them from the DECLARED field would satisfy the
+        // gate without any executed assertion; parked coverage must not count.
+        if (cls != "VALID")
+        {
+            classifications.insert(cls);
+        }
         if (fisco.isMember("latest_valid_hash"))
             lvh.insert(fisco["latest_valid_hash"].isNull() ? "null" :
                                                              fisco["latest_valid_hash"].asString());
@@ -1170,15 +1178,25 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
     {
         auto sample = makeInlineInvalidSample(id);
         auto const& fisco = sample.vector["_op_expected"]["reject"]["fisco"];
-        classifications.insert(fisco["classification"].asString());
+        auto const cls = fisco["classification"].asString();
+        // VALID-classified vectors are the committed-tip sibling-reorg shape — parked
+        // until SYS_REORG_UNDO/ReorgUndo lands (runInvalidVector returns before the
+        // sibling assertions). Counting them from the DECLARED field would satisfy the
+        // gate without any executed assertion; parked coverage must not count.
+        if (cls != "VALID")
+        {
+            classifications.insert(cls);
+        }
         if (fisco.isMember("latest_valid_hash"))
             lvh.insert(fisco["latest_valid_hash"].isNull() ? "null" :
                                                              fisco["latest_valid_hash"].asString());
     }
-    // Required: classification (all four states covered). "VALID" replaced "-32603" as the
-    // same-height fork verdict under S-DRV-6/7 stage 1 (the sibling executes on the rebuilt
-    // parent base); -32603 remains the DEEPER-fork refusal but has no corpus vector yet.
-    for (auto const* c : {"INVALID", "SYNCING", "-38005", "VALID"})
+    // Required: classification (all states the runner actually asserts). VALID (the
+    // committed-tip sibling-reorg shape) is parked until SYS_REORG_UNDO/ReorgUndo lands —
+    // it is NOT counted above and NOT required here; restore both when the sibling
+    // assertions compile in. -32603 remains the DEEPER-fork refusal but has no corpus
+    // vector yet.
+    for (auto const* c : {"INVALID", "SYNCING", "-38005"})
         BOOST_CHECK_MESSAGE(
             classifications.count(c), "coverage: classification '" << c << "' has no vector");
     // Required: latest_valid_hash (both "parent" and null values)

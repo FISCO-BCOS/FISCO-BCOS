@@ -878,7 +878,10 @@ BOOST_AUTO_TEST_CASE(MessagePasserStorageDrivesWithdrawalRoot)
     BOOST_REQUIRE_EQUAL(result.receipts.size(), 1u);
 
     // The expected root is opStorageRoot over the seeded slots (the block does not touch the
-    // MessagePasser). Zero-value slots are skipped by opStorageRoot.
+    // MessagePasser). Zero-value slots are skipped by opStorageRoot. The computation below is
+    // a mechanism pin (the deposit-write → root plumbing over the same helper the seal uses);
+    // the non-empty MessagePasser root's EXTERNAL anchor is the corpus: the op-geth-generated
+    // Isthmus+ withdrawalsRoot values the t8n replay and the e2e suite compare per block.
     std::map<evmc::bytes32, evmc::bytes32> seeded;
     evmc::bytes32 k1{};
     k1.bytes[31] = 0x01;

@@ -905,6 +905,29 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 // Throws ledger::InvalidOpForkSchedule on partial triple, hash mismatch
                 // or genesis-binding mismatch.
                 (void)ledger::validateOpForkScheduleMetadataRows(rows, genesisHeader->m_hash);
+                // ... and against THIS node's declared schedule: the triple validates
+                // the row against itself and the genesis artifact, but not against the
+                // local config that will drive this node's pricing — a node booted with
+                // a different [op_fork_schedule] than the chain's recorded one must
+                // refuse, or the divergence surfaces only at the next fork activation.
+                auto const& declared = m_nodeConfig->genesisConfig().m_opstackForkSchedule;
+                if (declared.has_value() && rows.schedule.has_value())
+                {
+                    auto const declaredCanonical =
+                        ledger::canonicalOpForkSchedule(ledger::parseOpForkSchedule(*declared));
+                    if (*rows.schedule != declaredCanonical)
+                    {
+                        BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig()
+                                              << bcos::errinfo_comment(
+                                                  "the node's declared [op_fork_schedule] (" +
+                                                  declaredCanonical +
+                                                  ") does not match the chain's recorded "
+                                                  "schedule (" +
+                                                  *rows.schedule +
+                                                  ") — the chain runs the recorded schedule; "
+                                                  "fix the config or use a matching datadir"));
+                    }
+                }
             }
         }
     }

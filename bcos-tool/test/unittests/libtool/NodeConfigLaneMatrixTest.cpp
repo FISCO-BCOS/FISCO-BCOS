@@ -224,5 +224,52 @@ BOOST_AUTO_TEST_CASE(dualForkScheduleDeclarationMustAgreeOnJovianKarst)
     }
 }
 
+// The pinned field is the mechanical guard: a pinned rule's section must reach the
+// genesis pin, or two nodes can disagree on a consensus-changing key without admission
+// catching it. Walk the table and prove the emission, per rule — a new rule added with
+// pinned=true but no emission fails HERE, not silently in production.
+BOOST_AUTO_TEST_CASE(pinnedRulesActuallyReachTheGenesisPin)
+{
+    for (auto const& rule : laneKeyRules())
+    {
+        if (!rule.pinned)
+        {
+            continue;
+        }
+        // An OP-lane config carrying the section (jovian active at genesis so the
+        // schedule pin is emitted; the shorthand and the canonical agree by fold).
+        NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
+        auto const genesis =
+            std::string(
+                "[version]\ncompatibility_version=3.18.0\n"
+                "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+                "[web3]\nchain_id=1\n"
+                "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\n"
+                "leader_period=1\nnode.0=") +
+            std::string(128, '1') +
+            ":1:1\n"
+            "[tx]\ngas_limit=3000000000\n"
+            "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+            "auth_admin_account=0x0000000000000000000000000000000000000001\n"
+            "version=3\n"
+            "[op_fork_timestamps]\njovian_time=0\n"
+            "[op_fork_schedule]\ncanonical=0:jovian\n"
+            "[op_eip1559]\nelasticity=2\ndenominator=8\n" +
+            ethLaneGenesisSections();
+        BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
+        auto const pin = generateGenesisData(cfg.genesisConfig(), *cfg.ledgerConfig());
+        if (rule.section == "op_fork_timestamps")
+        {
+            BOOST_CHECK_MESSAGE(pin.find("[opForkTimestamps]") != std::string::npos,
+                "pinned rule op_fork_timestamps not emitted in the genesis pin");
+        }
+        if (rule.section == "op_eip1559")
+        {
+            BOOST_CHECK_MESSAGE(pin.find("eip1559:") != std::string::npos,
+                "pinned rule op_eip1559 not emitted in the genesis pin");
+        }
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

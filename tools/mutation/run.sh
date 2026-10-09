@@ -176,8 +176,9 @@ for id in "${ids[@]}"; do
   if [ ! -e "$corpus_link" ]; then
     echo "[$id] corpus disappeared mid-run at $corpus_link" >&2
     rc_all=1
-    trap - EXIT INT TERM
-    continue
+    # Restore BEFORE disarming the traps — the patch is already applied, and
+    # disarming first would leave the tree patched for the next variant.
+    restore_patch "$patch"; trap - EXIT INT TERM; continue
   fi
 
   if ! ninja -C "$build_dir" "$target" >/dev/null 2>&1; then
@@ -216,7 +217,14 @@ for id in "${ids[@]}"; do
     fi
   done < <(must_go_red "$id")
 
-  restore_patch "$patch"; trap - EXIT INT TERM
+  restore_patch "$patch"
+  # The source is restored but the binary still carries the mutation — rebuild it back
+  # so a later step (or a local follow-up run) does not execute the mutant.
+  if ! ninja -C "$build_dir" "$target" >/dev/null 2>&1; then
+    echo "[$id] restore-rebuild failed — the tree is clean but the binary is stale" >&2
+    rc_all=1
+  fi
+  trap - EXIT INT TERM
 done
 
 # Cleanliness gate covers EVERY mutated file in the mapping (legacy default included), so a

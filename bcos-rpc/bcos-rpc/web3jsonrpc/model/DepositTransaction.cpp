@@ -128,10 +128,27 @@ void bcos::rpc::combineDepositTxResponse(Json::Value& result, const DepositTrans
         result["isSystemTx"] = true;
     }
     // Deposits carry no nonce (the deposit nonce lives in the receipt), no gas price and
-    // no signature; op-geth emits zero quantities for these.
+    // no signature; op-geth emits zero quantities for these. fillDepositReceiptFields
+    // overwrites nonce with the receipt's deposit nonce once the receipt is in scope.
     result["nonce"] = "0x0";
     result["gasPrice"] = "0x0";
     result["v"] = "0x0";
     result["r"] = "0x0";
     result["s"] = "0x0";
+}
+
+void bcos::rpc::fillDepositReceiptFields(
+    Json::Value& result, const protocol::TransactionReceipt& receipt)
+{
+    if (auto const meta = receipt.opStackMeta())
+    {
+        if (meta->deposit_nonce.has_value())
+        {
+            result["nonce"] = toQuantity(*meta->deposit_nonce);
+        }
+        if (meta->deposit_receipt_version.has_value())
+        {
+            result["depositReceiptVersion"] = toQuantity(*meta->deposit_receipt_version);
+        }
+    }
 }

@@ -681,16 +681,26 @@ void NodeConfig::validateL2Invariants()
     for (auto const& rule : laneKeyRules())
     {
         const bool present = sectionPresent(rule);
-        if (rule.lane == ChainLane::Op && lane != ChainLane::Op && present)
+        // Lane-generic: the table currently carries only OP-lane rows, but a future
+        // non-Op row must be enforced by construction — written generically, not
+        // silently inert.
+        if (rule.lane != lane && present)
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment(std::string(rule.rejectMessage)));
         }
-        if (rule.lane == ChainLane::Op && lane == ChainLane::Op &&
-            rule.presence == KeyPresence::Required && !present)
+        if (rule.lane == lane && rule.presence == KeyPresence::Required && !present)
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment(std::string(rule.requiredMessage)));
+        }
+        // A Forbidden section present on its own lane is rejected too (Forbidden is
+        // "must not be declared when the lane is active"); the enum value now has a
+        // reader.
+        if (rule.lane == lane && rule.presence == KeyPresence::Forbidden && present)
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment(std::string(rule.rejectMessage)));
         }
     }
     // A dual declaration must agree on WHEN Jovian and Karst activate: those are the

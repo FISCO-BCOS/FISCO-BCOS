@@ -131,6 +131,13 @@ BOOST_AUTO_TEST_CASE(BlobGasUsedPresenceAsymmetryIsMismatch)
     c3.blobGasUsed = 7;
     a3.blobGasUsed = 7;
     BOOST_CHECK(!opEthMismatchedFieldOf(c3, a3).has_value());
+
+    // the fourth cell the matrix claims to cover: computed set, announced ABSENT —
+    // the same presence asymmetry in the other direction, equally loud.
+    C c4 = match();
+    C a4 = match();
+    c4.blobGasUsed = 1;
+    BOOST_CHECK_EQUAL(*opEthMismatchedFieldOf(c4, a4), "blobGasUsed");
 }
 
 BOOST_AUTO_TEST_CASE(RequestsHashPresenceAsymmetryIsMismatch)

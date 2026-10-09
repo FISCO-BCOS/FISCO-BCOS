@@ -34,6 +34,18 @@ BOOST_AUTO_TEST_SUITE(GoldenSampleSuite)
 
 BOOST_AUTO_TEST_CASE(LoadVectorAndGolden)
 {
+
+    // The t8n corpus is provisioned externally (symlink; .gitignore'd): skip when absent,
+    // fail when CI requires it — the same gate OpEthExecutorDualRunTest runs.
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     auto sample = w6test::loadVectorSample("jovian_deposit_only");
     BOOST_CHECK_EQUAL(sample.id, "jovian_deposit_only");
     // vector has env/pre/_op_expected; golden has rawTransactions/encodedHeaderHex/blockHash
@@ -47,6 +59,18 @@ BOOST_AUTO_TEST_CASE(LoadVectorAndGolden)
 
 BOOST_AUTO_TEST_CASE(DecodeGoldenHeaderRoundTrip)
 {
+
+    // The t8n corpus is provisioned externally (symlink; .gitignore'd): skip when absent,
+    // fail when CI requires it — the same gate OpEthExecutorDualRunTest runs.
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     auto sample = w6test::loadVectorSample("jovian_deposit_only");
     auto header = w6test::decodeGoldenHeader(sample);
     BOOST_REQUIRE(header != nullptr);
@@ -64,6 +88,18 @@ BOOST_AUTO_TEST_CASE(DecodeGoldenHeaderRoundTrip)
 
 BOOST_AUTO_TEST_CASE(MakeParamsJsonShape)
 {
+
+    // The t8n corpus is provisioned externally (symlink; .gitignore'd): skip when absent,
+    // fail when CI requires it — the same gate OpEthExecutorDualRunTest runs.
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     auto sample = w6test::loadVectorSample("jovian_deposit_only");
     auto params = w6test::makeParamsJson(sample);
     // engine_newPayloadV4 params = [ExecutionPayload, blobHashes, parentBeaconBlockRoot,
@@ -95,6 +131,18 @@ BOOST_AUTO_TEST_CASE(MakeParamsJsonShape)
 // must also stay OUT of the ExecutionPayload object (they are params, not payload fields).
 BOOST_AUTO_TEST_CASE(MakeInvalidParamsJsonPassesBlobParamsThrough)
 {
+
+    // The t8n corpus is provisioned externally (symlink; .gitignore'd): skip when absent,
+    // fail when CI requires it — the same gate OpEthExecutorDualRunTest runs.
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     w6test::InvalidSample sample;
     sample.vector["_info"]["hardfork"] = "jovian";
     auto& op = sample.vector["_op_payload"];
@@ -132,6 +180,18 @@ BOOST_AUTO_TEST_CASE(MakeInvalidParamsJsonPassesBlobParamsThrough)
 
 BOOST_AUTO_TEST_CASE(ManifestCorpusConsistency)
 {
+
+    // The t8n corpus is provisioned externally (symlink; .gitignore'd): skip when absent,
+    // fail when CI requires it — the same gate OpEthExecutorDualRunTest runs.
+    if (!w6test::t8nCorpusAvailable())
+    {
+        if (w6test::t8nCorpusRequired())
+        {
+            BOOST_FAIL("t8n corpus required in CI but missing");
+        }
+        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
+        return;
+    }
     // D4: automatic golden-manifest validation — manifest.txt (non-comment lines) ↔
     // vectors/*.json ↔ golden/engine/*.golden.json must be consistent. Guards against
     // missing vectors (should have been generated), orphan vectors, and manifest drift —

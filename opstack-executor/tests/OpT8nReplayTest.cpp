@@ -48,7 +48,7 @@
 #include <set>
 #include <sstream>
 #include <string>
-#include <test/utils/rlp.hpp>
+#include <bcos-codec/rlp/RLPEncode.h>  // variadic list-wrap encode (the 7702 signing message)
 #include <opstack-executor/OpEthL1Attributes.h>  // encodeOpEthDepositEnvelope
 #include <vector>
 
@@ -468,9 +468,11 @@ public:
     }
 
     // An exemption never hit this run = FAILURE (stale exemption turns red; must be cleared after
-    // fix/vector regen).
+    // fix/vector regen). The KNOWN-DIVERGE hit total is emitted so a drift that zeroes them
+    // out is visible in the log.
     void finish() const
     {
+        std::cout << "KNOWN-DIVERGE total: " << m_knownCount << "\n";
         for (const auto& e : m_entries)
         {
             if (e.exempt && e.hits == 0)
@@ -554,9 +556,19 @@ inline bool structurallyUnrecoverable(const evmone::state::Authorization& a)
 
 std::optional<evmc::address> replayRecoverAuthority(const state::Authorization& auth)
 {
-    const auto msg = bytes{0x05} +
-                     rlp::encode_tuple(auth.chain_id,
-                         evmc::bytes_view{auth.addr.bytes, sizeof(auth.addr.bytes)}, auth.nonce);
+    // 7702 signing message: MAGIC(0x05) || rlp([chain_id, addr, nonce]) — the repo codec's
+    // variadic encode writes the list in place (the evmone test-utils rlp.hpp this file
+    // once included is not installed by the vcpkg port: EVMONE_TESTING=OFF). chain_id is
+    // intx::uint256 (no codec overload): encode its trimmed big-endian bytes, the same
+    // shape evmone's rlp::encode(uint256) produced (all-zero encodes as the empty string).
+    bcos::bytes msg{bcos::byte{0x05}};
+    auto const chainIdBe = intx::be::store<evmc::bytes32>(auth.chain_id);
+    auto const* const chainIdFirst = std::find_if(std::begin(chainIdBe.bytes),
+        std::end(chainIdBe.bytes), [](uint8_t b) { return b != 0; });
+    bcos::codec::rlp::encode(msg,
+        bcos::bytesConstRef{reinterpret_cast<const uint8_t*>(chainIdFirst),
+            static_cast<size_t>(chainIdBe.bytes + 32 - chainIdFirst)},
+        bcos::bytesConstRef{auth.addr.bytes, sizeof(auth.addr.bytes)}, auth.nonce);
     const auto h =
         bcos::crypto::keccak256Hash(bcos::bytesConstRef{msg.data(), msg.size()});
     const auto r = intx::be::store<evmc::bytes32>(auth.r);
@@ -1519,6 +1531,12 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
         ctx.checkOptional("blobGasUsed", std::nullopt, std::nullopt);
     }
 
+    // The corpus's _op_expected.header carries ONLY the commitment fields the
+    // generator emits (gasUsed/logsBloom/receiptsRoot/stateRoot/withdrawalsRoot/
+    // requestsHash/blobGasUsed by era) — the full-header blockHash/txsRoot/timestamp/
+    // baseFee parity is pinned where the complete header is assembled and hashed: the
+    // Engine-API e2e suite (OpNewPayloadRpcE2eTest's golden blockHash compare), not here.
+
     // ── receipts ────────────────────────────────────────────────────────────
     const auto& expReceipts = jAt(jAt(blk, "_op_expected"), "receipts");
     if (expReceipts.size() != result.receipts.size())
@@ -1866,8 +1884,13 @@ void assertRejectThrow(const std::string& id, const JsonValue& v,
 {
     // setcode_create: CREATE_SET_CODE_TX is only reachable via structured to:null in the
     // evmone mirror; a real signed 0x04 envelope always carries a (possibly zero) to address.
+    // The family is a generator artifact (produced, then structurally un-replayable) —
+    // the skip is printed, not silent.
     if (id.find("setcode_create") != std::string::npos)
     {
+        std::cout << "SKIP setcode_create " << id
+                  << " (no signed 0x04 envelope can carry to:null; the vector family is a "
+                     "generator artifact)\n";
         return;
     }
     BlockContext bc;

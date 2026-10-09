@@ -70,11 +70,27 @@ jobs:
           # (path .ci-op-e2e-tests): that pin tracks C2_BLESSED, a DIFFERENT axis
           # (check-ci-pins.sh Axis 3 vs 4). Without the path filter the weekly job
           # files a false t8n STALE issue whose remediation text would repoint the
-          # C2 checkout at the t8n branch and break the C2 pipeline.
+          # C2 checkout at the t8n branch and break the C2 pipeline. The filter parses
+          # the whole checkout block: `grep -v ci-op-e2e-tests` alone only removed the
+          # path: line while the ref: line survived into t8n_pins (the leak the comment
+          # above claims to prevent).
           t8n_pins=$( { grep -hoE 'opstack-t8n-regen@[0-9a-f]{40}' $WF_T8N | sed 's/.*@//'; \
-                        grep -hA2 'repository: FISCO-BCOS/op-stack-e2e-tests' $WF_T8N \
-                          | grep -v 'ci-op-e2e-tests' \
-                          | grep -oE 'ref: [0-9a-f]{40}' | awk '{print $2}'; } | sort -u)
+                        sed 's/#.*//' $WF_T8N | awk '
+                            function flush() {
+                                if (repo && path != "" && path !~ /ci-op-e2e-tests/ && ref != "")
+                                    print ref
+                                repo = 0; ref = ""; path = ""
+                            }
+                            /^[[:space:]]*-[[:space:]]*(name|uses|run):/ { flush() }
+                            /repository:[[:space:]]*FISCO-BCOS\/op-stack-e2e-tests/ { repo = 1 }
+                            match($0, /ref:[[:space:]]*[0-9a-zA-Z._\/-]+/) {
+                                ref = substr($0, RSTART, RLENGTH); sub(/^ref:[[:space:]]*/, "", ref)
+                            }
+                            match($0, /path:[[:space:]]*[0-9a-zA-Z._\/-]+/) {
+                                path = substr($0, RSTART, RLENGTH); sub(/^path:[[:space:]]*/, "", path)
+                            }
+                            END { flush() }
+                        '; } | sort -u)
           c2_pin=$(grep -hoE 'ref: [0-9a-f]{40}' .github/workflows/c2-e2e.yml \
             | awk '{print $2}' | sort -u)
           # Each distinct t8n pin is checked against the blessed pipeline head.

@@ -8,6 +8,15 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     const protocol::TransactionReceipt& receipt, const crypto::HashType& blockHash)
 {
     combineTxResponse(result, tx, receipt.transactionIndex(), receipt.blockNumber(), blockHash);
+    // op-geth's newRPCTransaction fills a deposit tx's nonce from the receipt's
+    // depositNonce and emits depositReceiptVersion when the receipt carries one — the
+    // deposit branch below has no receipt in scope, so the fill happens here (the
+    // overload every eth_getTransaction* caller with a receipt goes through).
+    if (auto extraBytes = tx.extraTransactionBytes();
+        !extraBytes.empty() && extraBytes[0] == c_depositTxType)
+    {
+        fillDepositReceiptFields(result, receipt);
+    }
     // TODO: Check
     if (!receipt.effectiveGasPrice().empty())
     {
