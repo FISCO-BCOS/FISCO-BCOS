@@ -21,6 +21,7 @@
 #include <ctime>
 #include <filesystem>
 #include <fstream>
+#include <map>
 
 namespace bcos::ops
 {
@@ -146,6 +147,49 @@ std::vector<Event> readEvents(std::vector<std::string> const& _files)
     std::vector<Event> events;
     forEachEvent(_files, [&events](Event const& _event) { events.push_back(_event); });
     return events;
+}
+
+std::vector<Event> readEventsMatching(
+    std::vector<std::string> const& _files, std::function<bool(Event const&)> const& _keep)
+{
+    std::vector<Event> events;
+    forEachEvent(_files, [&](Event const& _event) {
+        if (_keep(_event))
+        {
+            events.push_back(_event);
+        }
+    });
+    return events;
+}
+
+std::vector<Event> readLastEventOfEach(
+    std::vector<std::string> const& _files, std::function<bool(Event const&)> const& _keep)
+{
+    std::map<std::string, Event> last;
+    forEachEvent(_files, [&](Event const& _event) {
+        if (!_keep(_event))
+        {
+            return;
+        }
+        auto key = _event.name + '|' + (_event.badges.empty() ? "" : _event.badges.front());
+        last.insert_or_assign(std::move(key), _event);
+    });
+    std::vector<Event> events;
+    events.reserve(last.size());
+    for (auto& [key, event] : last)
+    {
+        events.push_back(std::move(event));
+    }
+    std::stable_sort(events.begin(), events.end(),
+        [](Event const& _a, Event const& _b) { return _a.timeMs < _b.timeMs; });
+    return events;
+}
+
+std::function<bool(Event const&)> namedEvents(std::vector<std::string_view> _names)
+{
+    return [names = std::move(_names)](Event const& _event) {
+        return std::find(names.begin(), names.end(), _event.name) != names.end();
+    };
 }
 
 int64_t parseDurationMs(std::string const& _text)

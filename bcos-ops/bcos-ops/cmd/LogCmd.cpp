@@ -24,10 +24,13 @@
 #include "bcos-ops/Output.h"
 #include "bcos-ops/cmd/StatusCmd.h"
 #include "bcos-ops/collect/LogCollector.h"
+#include "bcos-ops/log/EventNames.h"
 #include "bcos-ops/log/LogFiles.h"
 #include "bcos-ops/log/Traces.h"
+#include "bcos-ops/log/TxLookup.h"
 #include <chrono>
 #include <iomanip>
+#include <map>
 #include <ostream>
 
 namespace bcos::ops
@@ -48,7 +51,8 @@ struct LogInput
     std::vector<Event> events;
 };
 
-LogInput loadEvents(Args const& _args)
+LogInput loadEvents(
+    Args const& _args, std::function<bool(Event const&)> const& _keep, bool _lastOfEachOnly)
 {
     LogInput input;
     input.node = NodeDir::load(_args.optionOr("node-dir", "."));
@@ -64,7 +68,8 @@ LogInput loadEvents(Args const& _args)
         throw OpsError(c_exitUsage, "no log files in " + input.node.logDir() + " (--since " +
                                         _args.optionOr("since", "1h") + ")");
     }
-    input.events = readEvents(input.files);
+    input.events = _lastOfEachOnly ? readLastEventOfEach(input.files, _keep) :
+                                     readEventsMatching(input.files, _keep);
     return input;
 }
 
@@ -139,52 +144,39 @@ int runLogTx(LogInput const& _input, Args const& _args, std::ostream& _out)
     auto const& hash = _args.positionals()[1];
     auto trace = traceTx(_input.events, hash);
     bool json = wantJson(_args.flag("json"));
-    Json::Value rpcPart;
+    std::optional<TxLookup> lookup;
     if (trace.rows.empty())
     {
-        // the RPC is an addition, not a prerequisite: try it, say so, never fail on it
+        // the RPC is an addition, not a prerequisite: say what it found, never fail on it.
+        // A connect failure and "the node has no receipt" are different answers.
         try
         {
             ConnectOptions options = connectOptionsFrom(_args);
             options.connectTimeoutMs = std::min(options.connectTimeoutMs, 2000);
             auto connection = connect(options);
-            Json::Value params(Json::arrayValue);
-            params.append(connection.group);
-            params.append("");
-            params.append(hash);
-            params.append(false);
-            auto receipt = connection.call("getTransactionReceipt", params);
-            rpcPart["source"] = connection.source;
-            rpcPart["blockNumber"] = receipt["blockNumber"];
-            rpcPart["status"] = receipt["status"];
+            lookup = lookupTxOnChain(connection.call, connection.source, connection.group, hash);
         }
         catch (std::exception const& e)
         {
-            rpcPart["error"] = e.what();
+            lookup = TxLookup::unavailable(e.what());
         }
     }
     if (json)
     {
         auto root = trace.toJson();
         root["source"] = "log";
-        if (!rpcPart.isNull())
+        if (lookup)
         {
-            root["rpc"] = rpcPart;
+            root["rpc"] = lookup->toJson();
         }
         printJson(_out, root);
     }
     else
     {
         renderTrace(_out, trace, false);
-        if (rpcPart.isMember("blockNumber"))
+        if (lookup)
         {
-            _out << rpcPart["source"].asString() << ": included in block "
-                 << rpcPart["blockNumber"].asInt64() << ", status " << rpcPart["status"].asInt()
-                 << '\n';
-        }
-        else if (rpcPart.isMember("error"))
-        {
-            _out << "rpc: unavailable (" << rpcPart["error"].asString() << ")\n";
+            _out << sanitizeForTerminal(lookup->line()) << '\n';
         }
     }
     return c_exitOk;
@@ -200,7 +192,37 @@ int runLog(Args const& _args, std::ostream& _out, std::ostream& _err)
             "[--since 1h] [--last N] [--node-dir <dir>] [--json]");
     }
     auto const& sub = _args.positionals()[0];
-    auto input = loadEvents(_args);
+    // each thread streams only its own event names out of the window (a DEBUG-level hour does
+    // not have to fit in memory); status keeps the handful of lines it reads
+    static std::map<std::string, std::vector<std::string_view>> const c_eventsOf = {
+        {"status", {events::Report, "compatibilityVersion updated", events::SyncStarted,
+                       events::SyncFinished, events::BlockApplied, events::BlockCommitted,
+                       events::BlockStat, events::ViewChangeTriggered}},
+        {"tx", {events::TxAdmitted, events::TxRejected, events::TxSealed, events::TxSealSkipped,
+                   events::TxExecuted, events::TxRemoved}},
+        {"pbft",
+            {events::PrePrepareSent, events::PrePrepareReceived, events::PrePrepareRejected,
+                events::PrepareQuorum, events::CommitQuorum, events::ProposalExecuted,
+                events::ProposalExecuteFailed, events::CheckpointSent, events::CheckpointQuorum,
+                events::CheckpointResend, events::BlockCommitted, events::Report}},
+        {"viewchange",
+            {events::ViewChangeTriggered, events::ViewChangeSent, events::ViewChangeReceived,
+                events::ViewChangeQuorum, events::NewViewReached}},
+        {"sync", {events::SyncStarted, events::SyncFinished}},
+        {"seal-stall", {events::SealSkipped, events::SealResumed}},
+        {"p2p", {events::PeerConnected, events::PeerDisconnected, events::HandshakeFailed,
+                    events::PeerConnectFailed}},
+        {"txsync", {events::ProposalTxsMissing, events::TxsRequested, events::TxsReceived,
+                       events::TxsRequestFailed}},
+    };
+    auto names = c_eventsOf.find(sub);
+    if (names == c_eventsOf.end())
+    {
+        throw OpsError(c_exitUsage, "unknown log subcommand: " + sub);
+    }
+    // status reads one line per kind (the last Report, the last SyncStarted, ...), so it keeps
+    // only those; the traces need every line of their thread
+    auto input = loadEvents(_args, namedEvents(names->second), sub == "status");
     bool json = wantJson(_args.flag("json"));
     if (sub == "status")
     {
