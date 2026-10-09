@@ -1279,64 +1279,76 @@ void registerRegolithGenesis(
     bcos::task::syncWait(fixture.multiLayerStorage.mergeView(std::move(view)));
 }
 
-}  // namespace
-
-BOOST_AUTO_TEST_CASE(RegolithPayloadBuildsAndImportsAgainstRealScheduler)
+/// All-Isthmus chain: every timestamp field unset, so resolveOpFork's OP-lane fallback
+/// (OpForkSchedule.h) resolves every block to Isthmus — the Engine-API baseline the
+/// post-cutover engine builds/imports.
+bcos::ledger::OpForkSchedule isthmusOnlySchedule()
 {
-    auto const genesis = regolithGenesisHash();
+    return bcos::ledger::OpForkSchedule{};
+}
 
+/// An Isthmus-shaped genesis header (Holocene 9-byte extraData carrying the legacy preset
+/// pair 50/6): the same role registerRegolithGenesis plays, for the Isthmus window.
+void registerIsthmusGenesis(OpE2eFixture& fixture, bcos::h256 const& hash)
+{
+    registerRegolithGenesis(
+        fixture, hash, bcos::fromHex("0x000000003200000006"));
+}
+
+bcos::engine::PayloadAttributes regolithAttrs(std::uint64_t tsMillis, bool noTxPool)
+{
     bcos::engine::PayloadAttributes attrs;
-    attrs.timestamp = 1'000;  // internal ms -> 1 s, the Regolith window of this schedule
+    attrs.timestamp = tsMillis;
     attrs.prevRandao = bcos::crypto::HashType{};
     attrs.suggestedFeeRecipient = bcos::Address{};
     attrs.gasLimit = 30'000'000;
-    // FCU V3 wire shape (the engine builds only at V3+); the block's fork still comes
-    // from the schedule at attrs.timestamp. eip1559Params: the OP path's unconditional
-    // Holocene+ wire requirement — inert for a pre-Holocene build (chain config prices).
+    attrs.noTxPool = noTxPool;
+    // The post-cutover engine builds only on the FCU V3/V4 wire shape (attrs-carrying
+    // V1/V2 throw UnsupportedFork); the V3-required fields are present-but-neutral —
+    // the built block's FORK still comes from the schedule at attrs.timestamp, so a
+    // Regolith-window build prices and seals exactly as before.
     attrs.withdrawals = std::vector<bcos::engine::WithdrawalV1>{};
     attrs.parentBeaconBlockRoot = bcos::h256{};
+    // Required by validateOpPayloadAttributes on the OP path (Holocene+ wire rule,
+    // unconditional): 8-byte denominator||elasticity. Pre-Holocene blocks price from
+    // the chain config and write an EMPTY extraData, so the pair is inert here.
     attrs.eip1559Params = bcos::fromHex("0x0000000800000006");
+    return attrs;
+}
 
-    auto builder = std::make_unique<OpE2eFixture>(regolithOnlySchedule());
-    registerRegolithGenesis(*builder, genesis);
-    bcos::engine::ForkchoiceState fc{genesis, genesis, genesis};
-    auto built = bcos::task::syncWait(builder->service.updateForkchoice(
+
+}  // namespace
+
+// The post-cutover OP engine's build/import surface is Isthmus-baseline: newPayload is
+// V4-only (Isthmus+ static shape), and the build side's hash routing
+// (canonicalBlockHash/isOpEthereumBlock) recognizes OP headers by the Isthmus+ field set.
+// This case pins the baseline gate itself: a pre-Isthmus build window must answer a clean
+// INVALID with the named reason, not a deep crash. (The capability history: the bcos-evm
+// engine built Regolith blocks; the cutover to the upstream-line engine narrowed the lane
+// to Isthmus+. Pre-Holocene execution coverage lives at the executor layer (t8n corpus
+// replay) and the sync-validator layer (OpHeaderValidatorTest's Bedrock/Canyon golden
+// vectors), not the Engine-API.)
+BOOST_AUTO_TEST_CASE(PreIsthmusBuildRejectedAtTheEngineBaseline)
+{
+    auto const genesis = regolithGenesisHash();
+    auto fixture = std::make_unique<OpE2eFixture>(regolithOnlySchedule());
+    registerRegolithGenesis(*fixture, genesis);
+
+    auto attrs = regolithAttrs(/*tsMillis=*/1'000, /*noTxPool=*/true);
+    bcos::engine::ForkchoiceState const fc{genesis, genesis, genesis};
+    auto built = bcos::task::syncWait(fixture->service.updateForkchoice(
         fc, &attrs, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
-    BOOST_REQUIRE_MESSAGE(
-        built.payloadStatus.status == bcos::engine::PayloadValidationStatus::Valid,
-        "Regolith FCU V1 build must be VALID, got "
-            << static_cast<int>(built.payloadStatus.status) << " "
-            << built.payloadStatus.validationError.value_or(""));
-    BOOST_REQUIRE(built.payloadId.has_value());
-
-    auto got = bcos::task::syncWait(builder->service.getPayload(
-        *built.payloadId, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
-    BOOST_REQUIRE(got);
-    BOOST_CHECK(got->parentBeaconBlockRoot.has_value());  // V3 carrier field
-    // The block's FORK shape (Regolith) rides a V3 carrier: the carrier's withdrawals
-    // list (present-but-empty) and blob pair (0) are wire fields, while the FORK-only
-    // fields must stay absent — a pre-Canyon block has no withdrawalsRoot.
-    BOOST_REQUIRE(got->executionPayload.withdrawals.has_value());
-    BOOST_CHECK(got->executionPayload.withdrawals->empty());
-    BOOST_CHECK(!got->executionPayload.withdrawalsRoot.has_value());
-    BOOST_CHECK(!got->executionPayload.extraData.empty() == false);
-
-    // A second, freshly-seeded node imports the same payload: its artifact cache is empty, so
-    // newPayload takes the import path (no built-header commit shortcut) and runs importExecute
-    // on the real OpScheduler over the genesis parent plane. The response is fed back verbatim —
-    // a leaky response would be rejected here with "withdrawals must be absent before the
-    // Canyon fork", which is exactly what this round trip pins.
-    auto importer = std::make_unique<OpE2eFixture>(regolithOnlySchedule());
-    registerRegolithGenesis(*importer, genesis);
-    bcos::engine::NewPayloadRequest roundTrip{.executionPayload = got->executionPayload,
-        .expectedBlobVersionedHashes = {},
-        .parentBeaconBlockRoot = {},
-        .executionRequests = {}};
-    auto status = bcos::task::syncWait(importer->service.newPayload(
-        roundTrip, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4)));
-    BOOST_REQUIRE_MESSAGE(status.status == bcos::engine::PayloadValidationStatus::Valid,
-        "Regolith newPayload V4 import must be VALID, got "
-            << static_cast<int>(status.status) << " " << status.validationError.value_or(""));
+    BOOST_CHECK(built.payloadStatus.status == bcos::engine::PayloadValidationStatus::Invalid);
+    BOOST_CHECK(built.payloadStatus.validationError.has_value());
+    if (built.payloadStatus.validationError)
+    {
+        BOOST_CHECK_MESSAGE(
+            built.payloadStatus.validationError->find("requires an Isthmus+ block time") !=
+                std::string::npos,
+            "the baseline rejection must name the Isthmus+ gate, got: "
+                << *built.payloadStatus.validationError);
+    }
+    BOOST_CHECK(!built.payloadId.has_value());
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1387,72 +1399,28 @@ BOOST_AUTO_TEST_CASE(RegolithPayloadBuildsAndImportsAgainstRealScheduler)
 // ═══════════════════════════════════════════════════════════════════════════════
 BOOST_AUTO_TEST_CASE(PreCanyonBaseFeeUsesTheChainsEip1559Denominator)
 {
-    // The chain this node serves declares denominator 8 (the corpus devnet and the C2 e2e
-    // both do), so the engine must price with 8 — not with the legacy preset it hardcoded
-    // before [op_eip1559] existed.
-    constexpr std::uint64_t kOpGethGoldenDenominator8 = 1'375'000'000ULL;
-    constexpr std::uint64_t kLegacyDenominator50 = 1'060'000'000ULL;
-    bcos::engine::OpEip1559Params const chainTriple{
-        .elasticity = 6, .denominator = 8, .denominatorCanyon = 250};
-
+    // The engine no longer builds pre-Isthmus blocks (the Isthmus-baseline gate pins
+    // that below); the pricing rule this case names — a pre-Holocene block's 1559 step
+    // reads the chain's DECLARED triple, Canyon denominator from Canyon on — is pinned
+    // where it actually executes: bcos-devp2p OpHeaderValidatorTest
+    // (bedrockBaseFeeGoldenVectors / canyonDenominatorSwitch /
+    // declaredEip1559TripleDrivesPreHolocenePricing), the from-genesis replay path.
+    // The engine-layer assertion reduces to the baseline gate.
     auto const genesis = regolithGenesisHash();
-
-    bcos::engine::PayloadAttributes attrs;
-    attrs.timestamp = 1'000;  // internal ms -> 1 s: the Regolith window of this schedule
-    attrs.prevRandao = bcos::crypto::HashType{};
-    attrs.suggestedFeeRecipient = bcos::Address{};
-    attrs.gasLimit = 30'000'000;
-    // FCU V3 wire shape (the engine builds only at V3+); the block's fork still comes
-    // from the schedule at attrs.timestamp. eip1559Params: the OP path's unconditional
-    // Holocene+ wire requirement — inert for a pre-Holocene build (chain config prices).
-    attrs.withdrawals = std::vector<bcos::engine::WithdrawalV1>{};
-    attrs.parentBeaconBlockRoot = bcos::h256{};
-    attrs.eip1559Params = bcos::fromHex("0x0000000800000006");
-
-    // ── builder side: the price sequenced for a denom-8 chain ─────────────────────
-    auto builder = std::make_unique<OpE2eFixture>(regolithOnlySchedule(), chainTriple);
-    registerRegolithGenesis(*builder, genesis);
-    bcos::engine::ForkchoiceState fc{genesis, genesis, genesis};
-    auto built = bcos::task::syncWait(builder->service.updateForkchoice(
-        fc, &attrs, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
-    BOOST_REQUIRE_MESSAGE(
-        built.payloadStatus.status == bcos::engine::PayloadValidationStatus::Valid,
-        "Regolith FCU V1 build must be VALID, got "
-            << static_cast<int>(built.payloadStatus.status) << " "
-            << built.payloadStatus.validationError.value_or(""));
-    BOOST_REQUIRE(built.payloadId.has_value());
-
-    auto got = bcos::task::syncWait(builder->service.getPayload(
-        *built.payloadId, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V2)));
-    BOOST_REQUIRE(got);
-
-    auto const produced = got->executionPayload.baseFeePerGas;
-    BOOST_TEST_INFO("produced=" << produced
-                                << " opGeth(denominator 8)=" << kOpGethGoldenDenominator8
-                                << " legacy(denominator 50)=" << kLegacyDenominator50);
-    // The payload announced for a denom-8 chain carries the denom-8 base fee. If this goes
-    // red with produced == kLegacyDenominator50, the chain's denominator stopped reaching
-    // the engine. The equality with the golden also proves the formula matches op-geth's
-    // (same denominator in, same base fee out).
-    BOOST_CHECK_EQUAL(produced, bcos::u256(kOpGethGoldenDenominator8));
-    BOOST_CHECK(produced != bcos::u256(kLegacyDenominator50));
-
-    // ── validator side: the very payload the builder announced must IMPORT ────────
-    // (The reproduction this case grew out of had to reprice the payload to the golden and
-    // watch newPayload reject it; with the parameter flowing, the builder's own payload is
-    // the golden and must be accepted verbatim by a fresh node.)
-    auto importer = std::make_unique<OpE2eFixture>(regolithOnlySchedule(), chainTriple);
-    registerRegolithGenesis(*importer, genesis);
-    bcos::engine::NewPayloadRequest request{.executionPayload = got->executionPayload,
-        .expectedBlobVersionedHashes = {},
-        .parentBeaconBlockRoot = {},
-        .executionRequests = {}};
-    auto status = bcos::task::syncWait(importer->service.newPayload(
-        request, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V2)));
-    BOOST_CHECK_MESSAGE(status.status == bcos::engine::PayloadValidationStatus::Valid,
-        "the denom-8 block must be ACCEPTED, got " << static_cast<int>(status.status) << " "
-                                                   << status.validationError.value_or(""));
+    auto fixture = std::make_unique<OpE2eFixture>(regolithOnlySchedule(),
+        bcos::engine::OpEip1559Params{.elasticity = 6, .denominator = 8,
+            .denominatorCanyon = 250});
+    registerRegolithGenesis(*fixture, genesis);
+    auto attrs = regolithAttrs(1'000, true);
+    auto built = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{genesis, genesis, genesis}, &attrs,
+        static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
+    BOOST_CHECK(built.payloadStatus.status == bcos::engine::PayloadValidationStatus::Invalid);
+    BOOST_REQUIRE(built.payloadStatus.validationError.has_value());
+    BOOST_CHECK(built.payloadStatus.validationError->find("requires an Isthmus+ block time") !=
+                std::string::npos);
 }
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Batch-2 RPC scenarios S2/S3/S4/S6 (triage Selection; expectations quoted below
@@ -1467,26 +1435,6 @@ namespace
 {
 /// Attributes for a plain Regolith block: timestamp is internal ms (the engine
 /// divides by 1000), the rest are the Regolith-era minimums.
-bcos::engine::PayloadAttributes regolithAttrs(std::uint64_t tsMillis, bool noTxPool)
-{
-    bcos::engine::PayloadAttributes attrs;
-    attrs.timestamp = tsMillis;
-    attrs.prevRandao = bcos::crypto::HashType{};
-    attrs.suggestedFeeRecipient = bcos::Address{};
-    attrs.gasLimit = 30'000'000;
-    attrs.noTxPool = noTxPool;
-    // The post-cutover engine builds only on the FCU V3/V4 wire shape (attrs-carrying
-    // V1/V2 throw UnsupportedFork); the V3-required fields are present-but-neutral —
-    // the built block's FORK still comes from the schedule at attrs.timestamp, so a
-    // Regolith-window build prices and seals exactly as before.
-    attrs.withdrawals = std::vector<bcos::engine::WithdrawalV1>{};
-    attrs.parentBeaconBlockRoot = bcos::h256{};
-    // Required by validateOpPayloadAttributes on the OP path (Holocene+ wire rule,
-    // unconditional): 8-byte denominator||elasticity. Pre-Holocene blocks price from
-    // the chain config and write an EMPTY extraData, so the pair is inert here.
-    attrs.eip1559Params = bcos::fromHex("0x0000000800000006");
-    return attrs;
-}
 
 /// FCU V3 + getPayload V2 against `parentHash`, asserting VALID; returns the payload.
 /// (The engine accepts attrs only at V3+; the Regolith-window block keeps its V2
@@ -1516,8 +1464,8 @@ bcos::engine::PayloadStatus importPayload(
 {
     bcos::engine::NewPayloadRequest request{.executionPayload = payload,
         .expectedBlobVersionedHashes = {},
-        .parentBeaconBlockRoot = {},
-        .executionRequests = {}};
+        .parentBeaconBlockRoot = bcos::h256{},
+        .executionRequests = std::vector<bcos::bytes>{}};
     return bcos::task::syncWait(fixture.service.newPayload(
         request, static_cast<std::uint32_t>(bcos::engine::ApiVersion::V4)));
 }
@@ -1589,8 +1537,8 @@ auto withCapturedLog(F&& trigger)
 BOOST_AUTO_TEST_CASE(AttributeNoTxPoolBuildsDepositsOnlyBlock)
 {
     auto const genesis = regolithGenesisHash();
-    auto builder = std::make_unique<OpE2eFixture>(regolithOnlySchedule());
-    registerRegolithGenesis(*builder, genesis);
+    auto builder = std::make_unique<OpE2eFixture>(isthmusOnlySchedule());
+    registerIsthmusGenesis(*builder, genesis);
 
     auto built = buildBlockOn(*builder, genesis, /*tsMillis=*/1'000, /*noTxPool=*/true, "S2");
     BOOST_REQUIRE(built.has_value());
@@ -1601,8 +1549,8 @@ BOOST_AUTO_TEST_CASE(AttributeNoTxPoolBuildsDepositsOnlyBlock)
     BOOST_CHECK_MESSAGE(isDepositEnvelope(built->transactions.front().raw),
         "S2: the noTxPool block's single transaction must be the L1-attributes deposit (0x7e)");
 
-    auto importer = std::make_unique<OpE2eFixture>(regolithOnlySchedule());
-    registerRegolithGenesis(*importer, genesis);
+    auto importer = std::make_unique<OpE2eFixture>(isthmusOnlySchedule());
+    registerIsthmusGenesis(*importer, genesis);
     auto status = importPayload(*importer, *built);
     BOOST_CHECK_MESSAGE(status.status == bcos::engine::PayloadValidationStatus::Valid,
         "S2: the deposits-only block must import, got " << static_cast<int>(status.status) << " "
@@ -1622,8 +1570,8 @@ BOOST_AUTO_TEST_CASE(AttributeNoTxPoolBuildsDepositsOnlyBlock)
 BOOST_AUTO_TEST_CASE(PayloadWithInvalidSignatureTxRejected)
 {
     auto const genesis = regolithGenesisHash();
-    auto builder = std::make_unique<OpE2eFixture>(regolithOnlySchedule());
-    registerRegolithGenesis(*builder, genesis);
+    auto builder = std::make_unique<OpE2eFixture>(isthmusOnlySchedule());
+    registerIsthmusGenesis(*builder, genesis);
 
     auto built = buildBlockOn(*builder, genesis, /*tsMillis=*/1'000, /*noTxPool=*/true, "S3");
     BOOST_REQUIRE(built.has_value());
@@ -1659,8 +1607,8 @@ BOOST_AUTO_TEST_CASE(PayloadWithInvalidSignatureTxRejected)
     mutated.transactions.push_back(std::move(appended));
     resealPayloadBlockHash(*builder, mutated);
 
-    auto importer = std::make_unique<OpE2eFixture>(regolithOnlySchedule());
-    registerRegolithGenesis(*importer, genesis);
+    auto importer = std::make_unique<OpE2eFixture>(isthmusOnlySchedule());
+    registerIsthmusGenesis(*importer, genesis);
     auto status = importPayload(*importer, mutated);
     auto const reason = status.validationError.value_or("<no reason>");
     BOOST_TEST_MESSAGE("S3 reject: status="
@@ -1695,8 +1643,8 @@ BOOST_AUTO_TEST_CASE(PayloadWithInvalidSignatureTxRejected)
 BOOST_AUTO_TEST_CASE(DepositsOnlyBlockAcceptedThenChainBuildsOnTop)
 {
     auto const genesis = regolithGenesisHash();
-    auto builder = std::make_unique<OpE2eFixture>(regolithOnlySchedule());
-    registerRegolithGenesis(*builder, genesis);
+    auto builder = std::make_unique<OpE2eFixture>(isthmusOnlySchedule());
+    registerIsthmusGenesis(*builder, genesis);
 
     auto built = buildBlockOn(*builder, genesis, /*tsMillis=*/1'000, /*noTxPool=*/true, "S4");
     BOOST_REQUIRE(built.has_value());
@@ -1704,8 +1652,8 @@ BOOST_AUTO_TEST_CASE(DepositsOnlyBlockAcceptedThenChainBuildsOnTop)
 
     // The substitution this scenario is named for: a fresh node learns the block by import
     // (no build artifact cache) and must adopt it as canonical, not fall back to Syncing.
-    auto importer = std::make_unique<OpE2eFixture>(regolithOnlySchedule());
-    registerRegolithGenesis(*importer, genesis);
+    auto importer = std::make_unique<OpE2eFixture>(isthmusOnlySchedule());
+    registerIsthmusGenesis(*importer, genesis);
     auto status = importPayload(*importer, *built);
     BOOST_REQUIRE_MESSAGE(status.status == bcos::engine::PayloadValidationStatus::Valid,
         "S4: the deposits-only block must be accepted, got "
@@ -1734,8 +1682,8 @@ BOOST_AUTO_TEST_CASE(DepositsOnlyBlockAcceptedThenChainBuildsOnTop)
 BOOST_AUTO_TEST_CASE(PayloadTimestampNotIncreasingRejected)
 {
     auto const genesis = regolithGenesisHash();
-    auto fixture = std::make_unique<OpE2eFixture>(regolithOnlySchedule());
-    registerRegolithGenesis(*fixture, genesis);
+    auto fixture = std::make_unique<OpE2eFixture>(isthmusOnlySchedule());
+    registerIsthmusGenesis(*fixture, genesis);
 
     auto built = buildBlockOn(*fixture, genesis, /*tsMillis=*/1'000, /*noTxPool=*/true, "S6");
     BOOST_REQUIRE(built.has_value());
@@ -1782,41 +1730,29 @@ BOOST_AUTO_TEST_CASE(PayloadTimestampNotIncreasingRejected)
 //                                                                  a pre-Holocene parent's bytes)
 BOOST_AUTO_TEST_CASE(PreHoloceneParentExtraDataIsInertForPricing)
 {
-    constexpr std::uint64_t kOpGethGoldenChainTriple = 1'375'000'000ULL;
-    constexpr std::uint64_t kOpGethGoldenExtraDataTriple = 1'012'000'000ULL;
-    bcos::engine::OpEip1559Params const chainTriple{
-        .elasticity = 6, .denominator = 8, .denominatorCanyon = 250};
-    // 9-byte Holocene form as the corpus writes it (registerParentHeaderFromPayload): version 0,
-    // denominator 0xfa = 250, elasticity 6.
-    auto const holoceneShaped = bcos::fromHex("0x00000000fa00000006");
-
+    // Post-cutover the engine cannot build on a pre-Holocene parent at all — the
+    // Isthmus-baseline gate rejects the build before pricing runs (pinned by
+    // PreIsthmusBuildRejectedAtTheEngineBaseline). The pricing inertness this case
+    // names — a Holocene-shaped extraData on a pre-Holocene parent must not be read —
+    // is covered where pre-Holocene blocks actually validate: bcos-devp2p
+    // OpHeaderValidatorTest::preHoloceneExtraDataMustBeEmpty +
+    // declaredEip1559TripleDrivesPreHolocenePricing.
     auto const genesis = regolithGenesisHash();
-    auto fixture = std::make_unique<OpE2eFixture>(regolithOnlySchedule(), chainTriple);
-    registerRegolithGenesis(*fixture, genesis, holoceneShaped);
-
-    auto built = buildBlockOn(*fixture, genesis, /*tsMillis=*/1'000, /*noTxPool=*/true, "S7");
-    BOOST_REQUIRE(built.has_value());
-    BOOST_TEST_INFO("S7 produced=" << built->baseFeePerGas
-                                   << " chainGolden=" << kOpGethGoldenChainTriple
-                                   << " extraDataGolden=" << kOpGethGoldenExtraDataTriple);
-    BOOST_CHECK_MESSAGE(built->baseFeePerGas == bcos::u256(kOpGethGoldenChainTriple),
-        "S7: a pre-Holocene parent's extraData must not feed the 1559 clock; got "
-            << built->baseFeePerGas);
-    BOOST_CHECK_MESSAGE(built->baseFeePerGas != bcos::u256(kOpGethGoldenExtraDataTriple),
-        "S7: the pricing decoded the parent's extraData on a pre-Holocene parent");
+    auto fixture = std::make_unique<OpE2eFixture>(regolithOnlySchedule(),
+        bcos::engine::OpEip1559Params{.elasticity = 6, .denominator = 8,
+            .denominatorCanyon = 250});
+    registerRegolithGenesis(*fixture, genesis, bcos::fromHex("0x00000000fa00000006"));
+    auto attrs = regolithAttrs(1'000, true);
+    auto built = bcos::task::syncWait(fixture->service.updateForkchoice(
+        bcos::engine::ForkchoiceState{genesis, genesis, genesis}, &attrs,
+        static_cast<std::uint32_t>(bcos::engine::ApiVersion::V3)));
+    BOOST_CHECK(built.payloadStatus.status == bcos::engine::PayloadValidationStatus::Invalid);
+    BOOST_REQUIRE(built.payloadStatus.validationError.has_value());
+    BOOST_CHECK(built.payloadStatus.validationError->find("requires an Isthmus+ block time") !=
+                std::string::npos);
 }
 
-// S8/S9 — the 1559 parameter SOURCE across the fork boundary. Below Holocene the price comes
-// from the chain config (config.optimism / rollup chain_op_config); from Holocene on, op-geth
-// reads the params out of the PARENT's extraData (consensus/misc/eip1559/eip1559.go:64-110).
-// This case pins the post-boundary half, the mirror of PreHoloceneParentExtraDataIsInertForPricing:
-// a Holocene parent whose extraData declares denominator 250 while the node's declared chain
-// triple is (6, 8, 250). The two candidate sources are told apart by their op-geth goldens
-// (already pinned by PreCanyonBaseFeeUsesTheChainsEip1559Denominator):
-//   1_012_000_000 = parent extraData, denominator 250  <- correct from Holocene on
-//   1_375_000_000 = chain config, denominator 8        <- would mean the source never switched
-// The second assertion closes the loop: the new block must write the CHAIN's declared params
-// into its own 9-byte Holocene extraData, which is what the block after it will price from.
+
 BOOST_AUTO_TEST_CASE(HoloceneParentPricesFromItsOwnExtraData)
 {
     constexpr std::uint64_t kOpGethGoldenExtraDataTriple = 1'012'000'000ULL;

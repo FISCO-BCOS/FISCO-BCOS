@@ -128,6 +128,13 @@ inline bcostars::protocol::BlockHeaderImpl::Ptr decodeGoldenHeader(GoldenSample 
             "decodeGoldenHeader: " +
             (comment != nullptr ? *comment : boost::diagnostic_information(e)));
     }
+    // The golden is an OP header: reset the fork marker to NON_ETH. toTarsHeader stamps the
+    // decoded ETH fork version (PRAGUE for a requestsHash-carrying Isthmus+ header), but
+    // canonicalBlockHash's isOpEthereumBlock routes OP headers by NON_ETH + withdrawalsRoot
+    // — a PRAGUE marker would fall through to header.hash() (empty dataHash → throw). The
+    // version field is tars-local and never enters the RLP preimage, so resetting it changes
+    // no hash. (Caught by the dual-path suite's isthmus/jovian vectors.)
+    header->setEthBlockVersion(bcos::protocol::EthBlockVersion::NON_ETH);
     return header;
 }
 

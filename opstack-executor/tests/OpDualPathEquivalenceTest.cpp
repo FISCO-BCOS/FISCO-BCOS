@@ -33,6 +33,7 @@
 
 #include "support/GoldenSample.h"
 #include "support/SeedPreState.h"
+#include "support/DualRunHarness.h"  // DualRunFixture + runExecutorPath (the pre-Canyon executor arm)
 
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
@@ -182,41 +183,33 @@ constexpr uint64_t kChainId = 0x2105;
 bcos::ledger::OpForkSchedule scheduleForFork(bcos::ledger::OpFork fork)
 {
     bcos::ledger::OpForkSchedule schedule;
-    switch (fork)
-    {
-    case bcos::ledger::OpFork::Regolith:
+    // resolveOpFork's OP-lane fallback resolves every pre-jovian timestamp to Isthmus when
+    // isthmus_time is UNSET — a schedule naming only a pre-Isthmus rung would resolve to
+    // Isthmus regardless (the parity check caught exactly this). Pin isthmus_time far above
+    // the vector's block time so the earlier rungs are reachable.
+    constexpr uint64_t c_farFuture = 10'000'000'000;  // ~year 2286 — above any vector ts
+    if (fork >= bcos::ledger::OpFork::Regolith)
         schedule.m_regolithTime = 0;
-        break;
-    case bcos::ledger::OpFork::Canyon:
+    if (fork >= bcos::ledger::OpFork::Canyon)
         schedule.m_canyonTime = 0;
-        break;
-    case bcos::ledger::OpFork::Delta:
+    if (fork >= bcos::ledger::OpFork::Delta)
         schedule.m_deltaTime = 0;
-        break;
-    case bcos::ledger::OpFork::Ecotone:
+    if (fork >= bcos::ledger::OpFork::Ecotone)
         schedule.m_ecotoneTime = 0;
-        break;
-    case bcos::ledger::OpFork::Fjord:
+    if (fork >= bcos::ledger::OpFork::Fjord)
         schedule.m_fjordTime = 0;
-        break;
-    case bcos::ledger::OpFork::Granite:
+    if (fork >= bcos::ledger::OpFork::Granite)
         schedule.m_graniteTime = 0;
-        break;
-    case bcos::ledger::OpFork::Holocene:
+    if (fork >= bcos::ledger::OpFork::Holocene)
         schedule.m_holoceneTime = 0;
-        break;
-    case bcos::ledger::OpFork::Isthmus:
+    if (fork >= bcos::ledger::OpFork::Isthmus)
         schedule.m_isthmusTime = 0;
-        break;
-    case bcos::ledger::OpFork::Jovian:
+    else
+        schedule.m_isthmusTime = c_farFuture;
+    if (fork >= bcos::ledger::OpFork::Jovian)
         schedule.m_jovianTime = 0;
-        break;
-    case bcos::ledger::OpFork::Karst:
+    if (fork >= bcos::ledger::OpFork::Karst)
         schedule.m_karstTime = 0;
-        break;
-    case bcos::ledger::OpFork::Bedrock:
-        break;  // Bedrock is the genesis fork with no schedule entry
-    }
     return schedule;
 }
 
@@ -371,7 +364,8 @@ bcos::u256 jsonBcosU256(const std::string& s)
 /// toBlockInfo reads number/timestamp/gasLimit/baseFee/coinbase/prevRandao/
 /// parentBeaconBlockRoot/extraData/blobGasUsed (OpCommon.h:106-121, optional fields .value());
 /// parentInfo serves RecentBlockHashes.
-bcostars::protocol::BlockHeaderImpl::Ptr buildHeaderFromEnv(const Json::Value& env)
+bcostars::protocol::BlockHeaderImpl::Ptr buildHeaderFromEnv(
+    const Json::Value& env, bcos::ledger::OpFork fork)
 {
     auto h = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     const int64_t number =
@@ -386,17 +380,30 @@ bcostars::protocol::BlockHeaderImpl::Ptr buildHeaderFromEnv(const Json::Value& e
     h->setBaseFee(jsonBcosU256(jAt(env, "currentBaseFee").asString()));
     h->setCoinbase(bcos::Address(jAt(env, "currentCoinbase").asString()));
     h->setPrevRandao(jsonH256(jAt(env, "currentRandom").asString()));
-    h->setParentBeaconBlockRoot(jsonH256(jAt(env, "parentBeaconBlockRoot").asString()));
+    if (fork >= bcos::ledger::OpFork::Ecotone)
+    {
+        h->setParentBeaconBlockRoot(jsonH256(jAt(env, "parentBeaconBlockRoot").asString()));
+    }
     const auto parentHash = jsonH256(jAt(env, "parentHash").asString());
     h->setParentInfo(bcos::protocol::ParentInfo{
         .blockNumber = (number > 0 ? number - 1 : 0), .blockHash = parentHash});
     h->setExtraData(bcos::bytes{});
-    h->setBlobGasUsed(bcos::u256(0));
-    h->setExcessBlobGas(bcos::u256(0));
     h->setStateRoot(bcos::h256{});
     h->setTxsRoot(bcos::h256{});
     h->setReceiptsRoot(bcos::h256{});
-    h->setWithdrawalsRoot(bcos::h256{});
+    // Fork-optional fields follow the fork's header shape (same rule as the harness'
+    // makeMinimalHeader): Canyon+ withdrawalsRoot, Ecotone+ blob pair + beacon root — an
+    // unconditional stamp leaks the field into a pre-fork header and fails the six-way
+    // presence compare (the regolith_* vectors caught exactly this).
+    if (fork >= bcos::ledger::OpFork::Canyon)
+    {
+        h->setWithdrawalsRoot(bcos::h256{});
+    }
+    if (fork >= bcos::ledger::OpFork::Ecotone)
+    {
+        h->setBlobGasUsed(bcos::u256(0));
+        h->setExcessBlobGas(bcos::u256(0));
+    }
     // requestsHash: deliberately NOT defaulted here. The announced zero was a harness-fixture
     // artifact: pre-Prague goldens omit requestsHash, so fillAnnouncedHeaderFromGolden left the
     // zero in place, while the executed pre-Prague header has the field absent — the six-way
@@ -420,7 +427,7 @@ std::vector<bcos::bytes> buildRawTxBytes(const Json::Value& blk, const std::stri
         {
             const auto& d = jAt(t, "_op_deposit");
             op::DepositTx dep;
-            dep.sourceHash = detail::toEvmcBytes32(jsonH256(jAt(d, "sourceHash").asString()));
+            dep.sourceHash = detail::toEvmcBytes32(jsonH256(jAt(d, "source_hash").asString()));
             dep.from = opstack_test::jsonAddress(jAt(d, "from").asString());
             dep.to = jAt(d, "to").isNull() ?
                          std::nullopt :
@@ -431,7 +438,7 @@ std::vector<bcos::bytes> buildRawTxBytes(const Json::Value& blk, const std::stri
             dep.value = d.isMember("value") ? opstack_test::jsonU256(jAt(d, "value").asString()) :
                                               bcos::u256{0};
             dep.gasLimit = static_cast<int64_t>(opstack_test::jsonU64(jAt(d, "gas").asString()));
-            dep.isSystemTx = jAt(d, "isSystemTx").asBool();
+            dep.isSystemTx = jAt(d, "is_system_tx").asBool();
             {
                 auto const dataEvmc = opstack_test::jsonBytes(jAt(t, "data").asString());
                 dep.data.assign(dataEvmc.begin(), dataEvmc.end());
@@ -659,10 +666,41 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
     // Route A: OpScheduler.executeBlock — view lifecycle owned by the skeleton (fork/pushView
     // inside it). The announced header carries the golden commitments (filled by the caller), so
     // the unconditional six-way verify is the FISCO-vs-op-geth gate.
-    // route A drives OpScheduler.executeBlock; the outcome surfaces via routeAErr + the
-    // finalized block (receipts/seal are read off the MLS view through the caller's checks).
     bcos::Error::Ptr routeAErr;
     bcos::executor_v1::opstack::OpEthExecuteBlockResult resultA;
+    // Pre-Canyon blocks can't route through OpScheduler.executeBlock: canonicalBlockHash's OP
+    // recognition (isOpEthereumBlock) requires the Canyon+ withdrawalsRoot, so the scheduler's
+    // commit-key computation throws EmptyBlockHeaderHash on a pre-Canyon header. Drive the
+    // executor path directly (the t8n replay's shape) over a forked view and merge it back —
+    // the chain's state inheritance holds and the golden compare below still runs.
+    if (execFork < bcos::ledger::OpFork::Canyon)
+    {
+        // The full-rebuild state root scans the view's TOP mutable layer only
+        // (MPTBuilder.h buildAndCollect) — the committed pre-state below it is invisible.
+        // Re-materialize the committed state into the top layer, or the root omits the
+        // pre-state and mismatches the op-geth golden.
+        auto readView = fixture.multiLayerStorage.fork();
+        auto view = fixture.multiLayerStorage.fork();
+        view.newMutable();
+        copyFlatRows(readView, view);
+        seedParentHeaderForActivationCheck(fixture.multiLayerStorage, header);
+        opstack_test::DualRunFixture driver;
+        const auto spec = op::opForkSpecAt(schedule,
+            bcos::engine::unixSecondsFromInternalMillis(static_cast<uint64_t>(header->timestamp())));
+        try
+        {
+            resultA = opstack_test::runExecutorPath(
+                driver, view, *header, spec, transactions, rawTxBytes);
+        }
+        catch (const std::exception& e)
+        {
+            BOOST_ERROR(id << ": pre-Canyon executor path threw: " << e.what());
+            return;
+        }
+        bcos::task::syncWait(fixture.multiLayerStorage.mergeView(std::move(view)));
+        reportGolden(id, vec, resultA.stateRoot, greenGuard, persistStateOnSoftReject, stats);
+        return;
+    }
     try
     {
         // Block assembly: extraTransactionBytes = full envelope (SEV-8, overridden by
@@ -848,7 +886,8 @@ void runSingleVector(const std::string& id, const JsonValue& vec, Fixture& fixtu
         if (hardfork == "isthmus" || hardfork == "jovian")
             header = w6test::decodeGoldenHeader(sample);
         else
-            header = buildHeaderFromEnv(jAt(vec, "env"));
+            header = buildHeaderFromEnv(jAt(vec, "env"), forkEnumForName(
+                id, jAt(jAt(vec, "_info"), "hardfork").asString()));
     }
     catch (const std::exception& e)
     {
@@ -910,7 +949,8 @@ void runChainVector(const std::string& id, const JsonValue& vec, Fixture& fixtur
         const std::string bid = id + "[" + std::to_string(i) + "]";
         if (blk.isMember("pre") && !blk["pre"].isNull())
             opstack_test::seedPreState(fixture.multiLayerStorage, blk["pre"]);
-        const auto header = buildHeaderFromEnv(jAt(blk, "env"));
+        const auto header = buildHeaderFromEnv(jAt(blk, "env"),
+            forkEnumForName(id, jAt(jAt(blk, "_info"), "hardfork").asString()));
         const auto rawTxBytes = buildRawTxBytes(blk, bid);
         fillAnnouncedHeaderFromGolden(header, blk, rawTxBytes);
         // Per-block fork config: execute under the block's own declared fork, not a vector-level

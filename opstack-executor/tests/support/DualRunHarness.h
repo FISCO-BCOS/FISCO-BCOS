@@ -116,10 +116,14 @@ struct DualRunFixture
 /// gasLimit/baseFee/coinbase/prevRandao/parentBeaconBlockRoot + parentHash via ParentInfo).
 /// Commitment fields (state/txs/receipts roots) stay zero — fillAnnouncedHeaderFromGolden
 /// backfills them from the vector where a golden compare runs.
+/// Fork-optional fields follow the fork's header shape, never stamped unconditionally:
+/// Canyon+ withdrawalsRoot, Ecotone+ blob pair + parentBeaconBlockRoot, Isthmus+
+/// requestsHash — an unconditional stamp would leak the field into a pre-fork header and
+/// fail the six-way presence compare (regolith_* vectors caught exactly this).
 inline std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeMinimalHeader(
     bcos::protocol::BlockNumber number, int64_t timestampMillis, int64_t gasLimit,
     bcos::u256 baseFee, bcos::Address coinbase, bcos::h256 prevRandao,
-    bcos::h256 parentBeaconBlockRoot, bcos::h256 parentHash)
+    bcos::h256 parentBeaconBlockRoot, bcos::h256 parentHash, opeth::OpForkSpec const& spec)
 {
     auto h = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     h->setNumber(number);
@@ -134,11 +138,20 @@ inline std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeMinimalHeader(
     h->setExtraData(bcos::bytes{});
     h->setPrevRandao(prevRandao);
     h->setBaseFee(std::move(baseFee));
-    h->setWithdrawalsRoot(bcos::h256{});
-    h->setBlobGasUsed(bcos::u256(0));
-    h->setExcessBlobGas(bcos::u256(0));
-    h->setParentBeaconBlockRoot(parentBeaconBlockRoot);
-    h->setRequestsHash(bcos::h256{});
+    if (spec.has_withdrawals)
+    {
+        h->setWithdrawalsRoot(bcos::h256{});
+    }
+    if (spec.fork >= bcos::ledger::OpFork::Ecotone)
+    {
+        h->setBlobGasUsed(bcos::u256(0));
+        h->setExcessBlobGas(bcos::u256(0));
+        h->setParentBeaconBlockRoot(parentBeaconBlockRoot);
+    }
+    if (spec.fork >= bcos::ledger::OpFork::Isthmus)
+    {
+        h->setRequestsHash(bcos::h256{});
+    }
     return h;
 }
 
