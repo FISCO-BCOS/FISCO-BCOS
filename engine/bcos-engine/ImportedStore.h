@@ -271,7 +271,12 @@ private:
             }
             cursor = it->second.parent;
         }
-        return true;
+        // Guard exhaustion means the walk cannot terminate in a store this size — a
+        // parent cycle of length >= 2 (the in-loop check catches only self-loops).
+        // That is undecidable, the same answer as sparse/self-loop; answering true
+        // here would authorize adoptCanonicalHead's below-head detach on a walk its
+        // own contract calls undecidable (R1).
+        return false;
     }
 
     /// True iff @p candidate is @p ancestorOrSelfHash itself or a stored descendant of

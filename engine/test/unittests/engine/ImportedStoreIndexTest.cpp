@@ -137,4 +137,25 @@ BOOST_AUTO_TEST_CASE(SwitchAwayAndBackReindexesLiveOccupant)
     BOOST_CHECK_EQUAL(*store.occupantAt(2), hashOf('B'));
 }
 
+// R1: a parent cycle (A.parent=Q, Q.parent=A) below a sparsely-linked head makes
+// the ancestry walk UNDECIDABLE, same as a sparse store — the store must not detach.
+// descendsFromWalkable's guard exhaustion once answered true (fail-open), letting the
+// below-head pass detach a block whose liveness it could not decide; the walk now
+// returns false on exhaustion, mirroring descendsFrom.
+BOOST_AUTO_TEST_CASE(CyclicParentWalkKeepsUndecidableAncestor)
+{
+    bcos::engine::ImportedStore store;
+    // A and Q form a 2-cycle; C's parent was never staged (sparse link to the cycle).
+    BOOST_CHECK(store.put(block('A', 'Q', 100)));
+    BOOST_CHECK(store.put(block('Q', 'A', 101)));
+    BOOST_CHECK(store.put(block('C', 'B', 102)));
+    store.adoptCanonicalHead(102, hashOf('C'));
+    // A's liveness cannot be decided (its own walk cycles; the head walk hits the
+    // unstaged B) — the store must keep it: body hash-addressable, height kept.
+    auto const gotA = store.get(hashOf('A'));
+    BOOST_REQUIRE(gotA.has_value());
+    BOOST_CHECK(!gotA->detached);
+    BOOST_CHECK_EQUAL(*store.occupantAt(100), hashOf('A'));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
