@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# needs bash >= 4 (declare -A): CI runs ubuntu; on macOS use homebrew bash
 # "Copyright [2026] <fisco-bcos>"
 # @ function: every event name listed in docs/ops/log-events.md must have exactly one
 #             LOG_DESC("<name>") in the module sources; a duplicate or a missing one fails.
@@ -17,6 +18,7 @@ declare -A MODULE_DIRS=(
     [TXPOOL]="bcos-txpool bcos-tx-validator bcos-framework/bcos-framework/txpool"
     [SYNC]="bcos-sync"
     [SCHEDULER]="bcos-scheduler/src"
+    [BASELINE]="transaction-scheduler"
     [EXECUTOR]="bcos-executor/src"
     [LEDGER]="bcos-ledger"
     [RPC]="bcos-rpc/bcos-rpc"

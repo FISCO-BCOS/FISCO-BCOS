@@ -30,15 +30,15 @@ info|2026-10-09 14:02:11.031|io-0x16e293000|[CONSENSUS][PBFT]ViewChangeTriggered
 | GATEWAY | `[Gateway][*]`、`[P2PService][*]`、`[NETWORK]`、`[SESSION]`、`[AMOP]` | `GATEWAY_LOG` 等全部网关宏 |
 | FRONT | `[FrontService]` | `FRONT_LOG` |
 
-每个 channel 有自己的级别表项，缺省继承 `[log] level`。运行时改一个 channel 而不动文件：
+每个 channel 有自己的级别表项，缺省继承 `[log] level`；本 PR 提供的是 `bcos-utilities/BoostLog.h` 的 `setModuleLogLevel` / `resetModuleLogLevel` / `moduleLogLevels` 这层 API。运行时改一个 channel 而不动文件的命令由后续 PR（运维工具 `fisco-bcos log-level`，经节点目录下的本机 socket 调 `admin_setLogLevel`）提供：
 
 ```
-./fisco-bcos log-level set --module TXPOOL debug     # 只把交易池打到 DEBUG
-./fisco-bcos log-level set --module TXPOOL inherit   # 回到跟随全局
-./fisco-bcos log-level get
+./fisco-bcos log-level set --module TXPOOL debug     # 后续 PR：只把交易池打到 DEBUG
+./fisco-bcos log-level set --module TXPOOL inherit   # 后续 PR：回到跟随全局
+./fisco-bcos log-level get                           # 后续 PR
 ```
 
-（`log-level` 走节点目录下的本机 socket，见 `docs/adr/0010-local-attach-over-unix-socket.md`。）`SIGUSR2` 重读 `[log] level` 的行为不变，只改全局项。
+`SIGUSR2` 重读 `[log] level` 的行为不变，只改全局项。
 
 <!-- events -->
 
@@ -63,7 +63,7 @@ info|2026-10-09 14:02:11.031|io-0x16e293000|[CONSENSUS][PBFT]ViewChangeTriggered
 | `CheckpointReceived` | `[CONSENSUS][PBFT]` | DEBUG | index,fromIdx,weight,minRequiredWeight | 每条 checkpoint 消息一行 |
 | `CheckpointQuorum` | `[CONSENSUS][PBFT]` | INFO | index,hash,weight | checkpoint 法定数达成，提交账本 |
 | `PBFT:BlockCommitted` | `[CONSENSUS][PBFT][STORAGE]` | INFO | index,hash,txs,commitMs,commitPerTx | 块落账本 |
-| `Report` | `[CONSENSUS][PBFT][METRIC]`，前缀 `^^^^^^^^` | INFO | committedIndex,consNum,committedHash,view,toView,changeCycle,expectedCheckPoint,Idx,sealUntil,…,roundMs | 一轮结束；roundMs = prePrepare 入缓存到 committed 的耗时，取不到为 -1 |
+| `Report` | `[CONSENSUS][PBFT][METRIC]`，前缀 `^^^^^^^^` | INFO | sealer,txs,committedIndex,consNum,committedHash,view,toView,changeCycle,expectedCheckPoint,Idx,sealUntil,…,roundMs | 一轮结束；roundMs = prePrepare 入缓存到 committed 的耗时，取不到为 -1。**行为变化**：整理前同步来的块不打 `sealer=`/`txs=`，现在所有块都打，同步来的块为 `sealer=-1,txs=-1`（脚本按 `sealer=[0-9]` 过滤即可保留旧口径） |
 
 ```
 n=129; grep -h "index=$n," log/log_*.log | grep '\[PBFT\]'
@@ -91,8 +91,8 @@ grep -h 'ViewChangeTriggered' log/log_*.log | tail -5
 
 | 事件 | badge | 级别 | 键 | 含义 |
 |---|---|---|---|---|
-| `SealSkipped` | `[CONSENSUS][SEALER]` / `[CONSENSUS][PBFT]` | INFO | reason,index,until | 只在 reason 变化时打一次。reason：no_txs、already_committed、not_leader、wait_reseal、sys_proposal_pending、prev_executing |
-| `SealResumed` | `[CONSENSUS][SEALER]` | INFO | index | 停滞原因清空，重新封块 |
+| `SealSkipped` | `[CONSENSUS][PBFT]` | INFO | reason,index,until | 只在 reason 变化时打一次（sealer 与 PBFT 两个模块共用一份状态，都经 `PBFT_LOG` 打）。reason：no_txs、already_committed、not_leader、wait_reseal、sys_proposal_pending、prev_executing |
+| `SealResumed` | `[CONSENSUS][PBFT]` | INFO | index | 停滞原因清空，重新封块 |
 
 `++++++++++++++++ Generate proposal`（`[CONSENSUS][SEALER]`，键 index,curNum,hash,sysTxs,txsSize,version）保留原文，每个提案一行。
 
@@ -108,7 +108,7 @@ grep -h 'SealSkipped\|SealResumed' log/log_*.log | tail -5
 
 ## 线索：交易生命周期
 
-每笔交易六个阶段，均 DEBUG：收到并准入（TXPOOL）、封装（TXPOOL）、执行（SCHEDULER）、移出（TXPOOL）；INFO 级别下只有块级汇总。查单笔交易前先 `log-level set --module TXPOOL debug`（执行阶段还需 `--module SCHEDULER debug`）。
+每笔交易六个阶段，均 DEBUG：收到并准入（TXPOOL）、封装（TXPOOL）、执行（SCHEDULER）、移出（TXPOOL）；INFO 级别下只有块级汇总。查单笔交易前先把 TXPOOL（执行阶段还有 SCHEDULER）切到 DEBUG。执行阶段按执行器通道各有一行：`executor_version=1` 的旧调度器（`SchedulerImpl`/`BlockExecutive`，badge `[SCHEDULER]`）与 AIR 默认的 baseline 调度器（`transaction-scheduler`，badge `[BASELINE_SCHEDULER]`），两者都在 SCHEDULER channel 下。
 
 | 事件 | badge | 级别 | 键 | 含义 |
 |---|---|---|---|---|
@@ -116,7 +116,8 @@ grep -h 'SealSkipped\|SealResumed' log/log_*.log | tail -5
 | `TxRejected` | `[TXPOOL]` | DEBUG | tx,reason | reason 为 `TransactionStatus` 名：NonceCheckFail、BlockLimitCheckFail、InvalidSignature、AlreadyInTxPool、TxPoolIsFull、… |
 | `TxSealed` | `[TXPOOL]` | DEBUG | tx,batchId,batchHash | 被封进提案 |
 | `TxSealSkipped` | `[TXPOOL]` | DEBUG | tx,reason,blockLimit,nonce | 封装时跳过，reason：nonce、blocklimit |
-| `TxExecuted` | `[SCHEDULER]` | DEBUG | tx,number,status,gasUsed | 回执生成 |
+| `TxExecuted` | `[SCHEDULER]` | DEBUG | tx,number,status,gasUsed | 回执生成（旧调度器 `BlockExecutive`，executor_version=1） |
+| `BASELINE:TxExecuted` | `[BASELINE_SCHEDULER]` | DEBUG | tx,number,status,gasUsed | 回执生成（baseline 调度器，AIR 默认） |
 | `TxRemoved` | `[TXPOOL]` | DEBUG | tx,number,reason | reason：committed、expired |
 | `TxsFetched` | `[TXPOOL]` | INFO | 现有键 | 一次封装取走的交易批 |
 | `TxsRemoved` | `[TXPOOL][METRIC]` | INFO | 现有键,number | 块提交后批量移出 |
@@ -165,8 +166,8 @@ grep -h 'SyncStarted\|SyncFinished' log/log_*.log | tail -4
 | 事件 | badge | 级别 | 键 | 含义 |
 |---|---|---|---|---|
 | `PeerConnected` | `[P2PService][Service]` | INFO | peer,endpoint,direction,shortP2pid | 握手成功，direction：in、out |
-| `PeerDisconnected` | `[P2PService][Service]` | INFO | peer,endpoint,reason,code,detail | 会话关闭，reason：remote_close、local_close、timeout、handshake_failed、duplicate、blacklist、error |
-| `HandshakeFailed` | `[NETWORK][Host]` | WARNING | endpoint,reason,detail | reason：ssl_handshake、no_node_id、protocol_mismatch |
+| `PeerDisconnected` | `[P2PService][Service]` | INFO | peer,endpoint,reason,code,detail | 会话关闭，reason：remote_close、local_close、timeout、handshake_failed、blacklist、error（重复会话在 `Service::onDisconnect` 里直接返回，不打这一行） |
+| `HandshakeFailed` | `[NETWORK][Host]` | 入站 INFO / 出站与协议不匹配 WARNING | endpoint,reason,detail | reason：ssl_handshake、no_node_id（入站：任何能连到 P2P 端口的人都能触发，所以只到 INFO）、protocol_mismatch |
 | `PeerConnectFailed` | `[NETWORK][Host]` | INFO | endpoint,reason,detail,consecutiveFailures | 主动连接失败；同一 endpoint 首次与每第 10 次 |
 
 ```
@@ -189,7 +190,8 @@ grep -h 'PeerConnected\|PeerDisconnected\|HandshakeFailed' log/log_*.log | tail 
 | `PBFT:BlockStat` | `[CONSENSUS][PBFT][METRIC]` | number,prePrepareRecv,prepareRecv,commitRecv,checkpointRecv,viewChangeRecv,rejected,bytesRecv |
 | `TXPOOL:BlockStat` | `[TXPOOL][METRIC]` | number,pending,sealed,added,removed,expired,rejected,rejectNonce,rejectBlockLimit,rejectSignature,rejectDuplicate,rejectFull,rejectOther |
 | `SYNC:BlockStat` | `[BLOCK SYNC][METRIC]` | number,downloaded,applied,requests,lag,peers |
-| `SCHEDULER:BlockStat` | `[SCHEDULER][METRIC]` | number,txs,failed,execMs,commitMs,execPerTxUs |
+| `SCHEDULER:BlockStat` | `[SCHEDULER][METRIC]` | number,txs,failed,execMs,commitMs,execPerTxUs（旧调度器，executor_version=1） |
+| `BASELINE:BlockStat` | `[BASELINE_SCHEDULER][METRIC]` | number,txs,execMs,commitMs（baseline 调度器，AIR 默认） |
 
 ```
 grep -h 'BlockStat,number=129,' log/log_*.log
@@ -197,9 +199,17 @@ grep -h 'BlockStat,number=129,' log/log_*.log
 
 <!-- /events -->
 
-## 保留原文的行
+## 仓内消费者清单
 
-`tools/log_extract.sh` 与现场脚本在 grep 这些文本，未改名：`ExecuteBlock request`、`ExecuteBlock success`、`CommitBlock success`、`Notify block result success`（`[SCHEDULER]`）、`++++++++++++++++ Generate proposal`（`[CONSENSUS][SEALER]`）、`^^^^^^^^Report`。
+改事件名或键之前先查这张表；这些脚本随本 PR 一起改过，改名要再牵动它们。
+
+| 消费者 | 依赖的行 / 键 |
+|---|---|
+| `tools/BcosAirBuilder/build_chain.sh` `generate_mtail_scripts`（随每条链发布的 Prometheus 采集规则） | `[CONSENSUS][PBFT]ProposalExecuted,…,execMs=`（块执行耗时）；`[CONSENSUS][PBFT][STORAGE]BlockCommitted,…,commitMs=`（块提交耗时）；`[LEDGER][METRIC]asyncPrewriteBlock,number=`（块高）；`[TXPOOL]TxsFetched,…,pendingTxs=`（交易池待处理数）；`p2p_session_actived` 等网关行未改 |
+| `tools/summary.sh` | `PrePrepareReceived,index=N,`（起始行）；`Report.*committedIndex=N,`（结束行）；`TxsRemoved,…,timecost=`；`ProposalExecuted,…,execMs=`；`Report,sealer=[0-9]`（只统计本节点共识出的块，`sealer=-1` 是同步来的）、其 `txs=`/`committedIndex=`/`consNum=`/`view=` 列序；`Generate proposal`；`ExecuteBlock request.*waitT`、`CommitBlock success`、`GetTableHashes success`（旧调度器行，baseline 通道下为空） |
+| `tools/log_extract.sh` | `[blk-N]ExecuteBlock request`、`ExecuteBlock success`（旧调度器行，未改名） |
+| `tools/.ci/ci_check_air.sh`、`ci_check_pro.sh`、`ci_check_baseline.sh` `check_consensus` | `NewViewReached`（进入新 view；启动恢复路径仍是 `checkAndTryToRecoverView: reachNewView`，脚本两者都认） |
+| 保留原文、未改名的行 | `ExecuteBlock request`、`ExecuteBlock success`、`CommitBlock success`、`Notify block result success`（`[SCHEDULER]`）、`++++++++++++++++ Generate proposal`（`[CONSENSUS][SEALER]`）、`^^^^^^^^Report`、`Execute block` / `Execute block finished` / `Commit block finished`（`[BASELINE_SCHEDULER]`） |
 
 ## 旧文本 → 新事件名
 
