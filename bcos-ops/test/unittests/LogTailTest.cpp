@@ -63,6 +63,27 @@ BOOST_AUTO_TEST_CASE(pollReturnsOnlyNewLines)
     BOOST_CHECK(tail.currentFile().ends_with("log_2026101006.00.log"));
 }
 
+BOOST_AUTO_TEST_CASE(unfinishedLineWaitsForItsNewline)
+{
+    TempLogDir temp;
+    temp.append("log_2026101005.00.log",
+        "info|2026-10-10 05:00:01.000000|x|[CONSENSUS][PBFT]CheckpointSent,index=1\n"
+        "info|2026-10-10 05:00:02.000000|x|[TXPOOL]Txs");
+    tui::LogTail tail(temp.dir.string());
+    auto first = tail.poll();
+    BOOST_REQUIRE_EQUAL(first.size(), 1U);
+    BOOST_CHECK_EQUAL(first[0].name, "CheckpointSent");
+    // the writer has not finished the second line: nothing is returned and nothing is kept
+    BOOST_CHECK(tail.poll().empty());
+    BOOST_CHECK(tail.poll().empty());
+    temp.append("log_2026101005.00.log", "Fetched,count=1\n");
+    auto second = tail.poll();
+    BOOST_REQUIRE_EQUAL(second.size(), 1U);
+    BOOST_CHECK_EQUAL(second[0].name, "TxsFetched");
+    BOOST_CHECK_EQUAL(second[0].get("count"), "1");
+    BOOST_CHECK(tail.poll().empty());
+}
+
 BOOST_AUTO_TEST_CASE(filterMatchesNameOrChannel)
 {
     auto event = *parseLine(
