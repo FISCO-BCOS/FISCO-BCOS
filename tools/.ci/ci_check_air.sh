@@ -313,6 +313,7 @@ ops_tool_test()
         exit 1
     fi
     ${fisco_bcos_path} log status --node-dir ${current_path}/nodes/127.0.0.1/node0 --json > ${current_path}/ops_log_status.json || { LOG_ERROR "ops log status failed"; cat ${current_path}/ops_log_status.json; exit 1; }
+    ${fisco_bcos_path} tui --version-check || { LOG_ERROR "tui --version-check failed"; exit 1; }
     LOG_INFO "=== ops tool: success ==="
 }
 ops_tool_test
