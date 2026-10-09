@@ -13,7 +13,7 @@ date: 2026-10-09
 
 ## 为什么跨机不做证书模式
 
-RPC 服务端强制校验客户端证书（`bcos-boostssl/bcos-boostssl/context/ContextBuilder.cpp` 的 `verify_peer | verify_fail_if_no_peer_cert`），要连 TLS 端口就得给工具配 `sdk.crt/sdk.key`，这正是 Java 控制台让人放弃的那一步。`build_chain.sh` 默认生成 `[rpc] enable_ssl=true`，但生产部署常把它关掉（无证书分发负担）；跨机检查只对关了 SSL 的端口成立。工具探测到 TLS 端口时直接报错退出码 1、提示不支持证书模式，而不是尝试无证书连接后给一个含糊的超时。
+RPC 服务端强制校验客户端证书（`bcos-boostssl/bcos-boostssl/context/ContextBuilder.cpp` 的 `verify_peer | verify_fail_if_no_peer_cert`），要连 TLS 端口就得给工具配 `sdk.crt/sdk.key`，这正是 Java 控制台让人放弃的那一步。`build_chain.sh` 默认生成 `[rpc] enable_ssl=true`，但生产部署常把它关掉（无证书分发负担）；跨机检查只对关了 SSL 的端口成立。工具先向端口发一条最小 TLS ClientHello，收到 ServerHello 或 alert 即判定为 TLS 端口，直接报错退出码 1、提示不支持证书模式，而不是尝试无证书连接后给一个含糊的超时（明文节点对这条记录静默关连接，随后的 WebSocket 连接给出真实错误）。
 
 ## 备选
 

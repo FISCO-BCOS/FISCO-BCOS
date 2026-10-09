@@ -62,7 +62,7 @@ Json::Value NodeStatus::toJson() const
     consensus["changeCycle"] = opt(changeCycle);
     consensus["inTimeout"] = opt(inTimeout);
     consensus["consensusNodesNum"] = opt(consensusNodesNum);
-    consensus["connectedConsensusNodes"] = opt(connectedConsensusNodes);
+    consensus["connectedGroupNodes"] = opt(connectedGroupNodes);
     consensus["minRequiredQuorum"] = opt(minRequiredQuorum);
     consensus["consensusTimeoutMs"] = opt(consensusTimeoutMs);
 

@@ -76,15 +76,22 @@ uint16_t unusedPort()
 
 BOOST_AUTO_TEST_SUITE(RpcClientTlsProbeTest)
 
-BOOST_AUTO_TEST_CASE(tlsAlertIsDetected)
+BOOST_AUTO_TEST_CASE(serverHelloIsTls)
 {
-    OneShotServer server(std::string("\x15\x03\x01\x00\x02\x02\x28", 7));
+    // what OpenSSL sends back to a ClientHello: a handshake record carrying ServerHello
+    OneShotServer server(std::string("\x16\x03\x03\x00\x31\x02\x00\x00\x2d\x03\x03", 11));
+    BOOST_CHECK(probeTls("127.0.0.1", server.port(), 2000));
+}
+
+BOOST_AUTO_TEST_CASE(alertIsTls)
+{
+    OneShotServer server(std::string("\x15\x03\x03\x00\x02\x02\x28", 7));
     BOOST_CHECK(probeTls("127.0.0.1", server.port(), 2000));
 }
 
 BOOST_AUTO_TEST_CASE(makeWsRpcCallRefusesTlsPort)
 {
-    OneShotServer server(std::string("\x15\x03\x01\x00\x02\x02\x28", 7));
+    OneShotServer server(std::string("\x16\x03\x03\x00\x31\x02\x00\x00\x2d\x03\x03", 11));
     BOOST_CHECK_EXCEPTION(
         makeWsRpcCall("127.0.0.1", server.port(), 2000), OpsError, [](OpsError const& e) {
             return e.exitCode == c_exitUsage &&
@@ -96,6 +103,21 @@ BOOST_AUTO_TEST_CASE(plaintextHttpIsNotTls)
 {
     OneShotServer server("HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n");
     BOOST_CHECK(!probeTls("127.0.0.1", server.port(), 2000));
+}
+
+BOOST_AUTO_TEST_CASE(silentCloseIsNotTls)
+{
+    OneShotServer server("");  // a plaintext server that drops a binary record
+    BOOST_CHECK(!probeTls("127.0.0.1", server.port(), 2000));
+}
+
+BOOST_AUTO_TEST_CASE(hostnameResolves)
+{
+    auto [host, port] = resolveHost("localhost", 20200, 2000);
+    BOOST_CHECK(host == "127.0.0.1" || host == "::1");
+    BOOST_CHECK_EQUAL(port, 20200);
+    BOOST_CHECK_EQUAL(resolveHost("10.1.2.3", 1, 2000).first, "10.1.2.3");
+    BOOST_CHECK_THROW(resolveHost("no-such-host.invalid", 1, 2000), OpsError);
 }
 
 BOOST_AUTO_TEST_CASE(closedPortIsConnectError)

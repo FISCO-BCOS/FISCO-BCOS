@@ -22,6 +22,7 @@
 #include <bcos-cpp-sdk/SdkFactory.h>
 #include <boost/asio/connect.hpp>
 #include <boost/asio/io_context.hpp>
+#include <boost/asio/ip/address.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/read.hpp>
 #include <boost/asio/steady_timer.hpp>
@@ -90,6 +91,61 @@ struct WsTransport
 };
 }  // namespace
 
+namespace
+{
+// A minimal TLS 1.2 ClientHello (one cipher suite, no extensions). OpenSSL answers it with a
+// ServerHello record (0x16) or an alert (0x15); it answers a plaintext HTTP request on a TLS port
+// with a silent close (SSL_R_HTTP_REQUEST), which is why an HTTP probe cannot detect TLS.
+constexpr unsigned char c_clientHello[] = {
+    0x16, 0x03, 0x01, 0x00, 0x2d,                    // record: handshake, TLS 1.0, 45 bytes
+    0x01, 0x00, 0x00, 0x29,                          // handshake: ClientHello, 41 bytes
+    0x03, 0x03,                                      // client version TLS 1.2
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // random (32 bytes)
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00,        // session id length
+    0x00, 0x02,  // cipher suites length
+    0xc0, 0x2f,  // TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    0x01, 0x00   // compression methods: null
+};
+}  // namespace
+
+std::pair<std::string, uint16_t> resolveHost(
+    std::string const& _host, uint16_t _port, int _timeoutMs)
+{
+    boost::system::error_code ec;
+    auto address = boost::asio::ip::make_address(_host, ec);
+    if (!ec)
+    {
+        return {address.to_string(), _port};
+    }
+    boost::asio::io_context io;
+    boost::asio::ip::tcp::resolver resolver(io);
+    boost::asio::ip::tcp::resolver::results_type results;
+    boost::system::error_code resolveEc;
+    bool done = runWithDeadline(io, _timeoutMs, [&]() {
+        resolver.async_resolve(
+            _host, std::to_string(_port), [&](boost::system::error_code const& _ec, auto _results) {
+                resolveEc = _ec;
+                results = std::move(_results);
+                io.stop();
+            });
+    });
+    if (!done || resolveEc || results.empty())
+    {
+        throw OpsError(c_exitUsage,
+            "cannot resolve host " + _host + (resolveEc ? ": " + resolveEc.message() : ""));
+    }
+    for (auto const& entry : results)  // IPv4 first
+    {
+        if (entry.endpoint().address().is_v4())
+        {
+            return {entry.endpoint().address().to_string(), _port};
+        }
+    }
+    return {results.begin()->endpoint().address().to_string(), _port};
+}
+
 bool probeTls(std::string const& _host, uint16_t _port, int _timeoutMs)
 {
     using boost::asio::ip::tcp;
@@ -113,14 +169,8 @@ bool probeTls(std::string const& _host, uint16_t _port, int _timeoutMs)
         throw OpsError(c_exitUsage, "connect to " + _host + ":" + std::to_string(_port) +
                                         " failed: " + connectEc.message());
     }
-    // a well-formed JSON-RPC POST so a plaintext node answers 200 instead of logging an error
-    std::string body = buildJsonRpcRequest("getGroupList", Json::Value(Json::arrayValue), 1);
-    std::string probe =
-        "POST / HTTP/1.1\r\nHost: " + _host +
-        "\r\nContent-Type: application/json\r\nContent-Length: " + std::to_string(body.size()) +
-        "\r\nConnection: close\r\n\r\n" + body;
     boost::system::error_code writeEc;
-    boost::asio::write(socket, boost::asio::buffer(probe), writeEc);
+    boost::asio::write(socket, boost::asio::buffer(c_clientHello, sizeof(c_clientHello)), writeEc);
     if (writeEc)
     {
         return false;
@@ -140,16 +190,18 @@ bool probeTls(std::string const& _host, uint16_t _port, int _timeoutMs)
     socket.close(ignored);
     if (got == 0)
     {
-        // closed without a byte: cannot tell; let the WebSocket connect produce the real error
+        // a plaintext HTTP server closes on a binary record without answering: not TLS as far as
+        // this probe can tell; the WebSocket connect produces the real error if it is not a node
         return false;
     }
     return first == c_tlsAlert || first == c_tlsHandshake;
 }
 
 Connection makeWsRpcCall(
-    std::string const& _host, uint16_t _port, int _connectTimeoutMs, int _requestTimeoutMs)
+    std::string const& _hostOrName, uint16_t _port, int _connectTimeoutMs, int _requestTimeoutMs)
 {
-    auto endpoint = _host + ":" + std::to_string(_port);
+    auto [_host, resolvedPort] = resolveHost(_hostOrName, _port, _connectTimeoutMs);
+    auto endpoint = _hostOrName + ":" + std::to_string(_port);
     if (probeTls(_host, _port, _connectTimeoutMs))
     {
         throw OpsError(c_exitUsage, "RPC port " + endpoint +

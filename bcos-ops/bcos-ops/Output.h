@@ -34,4 +34,7 @@ void printJson(std::ostream& _out, Json::Value const& _value);
 /// two-column table: label padded to the longest label
 void printRows(std::ostream& _out, std::vector<std::pair<std::string, std::string>> const& _rows);
 std::string abridged(std::string const& _hex, size_t _keep = 4);
+/// log lines and RPC strings are untrusted terminal input: drop C0 control bytes (except TAB)
+/// and DEL so an escape sequence embedded in a tx payload cannot drive the terminal
+std::string sanitizeForTerminal(std::string const& _text);
 }  // namespace bcos::ops

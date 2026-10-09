@@ -27,7 +27,7 @@ NodeStatus healthy()
     status.inTimeout = false;
     status.isSyncing = false;
     status.lag = 0;
-    status.connectedConsensusNodes = 3;
+    status.connectedGroupNodes = 4;  // self + 3 peers
     status.minRequiredQuorum = 3;
     status.txpoolLimit = 15000;
     return status;
@@ -111,9 +111,9 @@ BOOST_AUTO_TEST_CASE(syncCaughtUp)
 BOOST_AUTO_TEST_CASE(quorumConnected)
 {
     auto status = healthy();
-    status.connectedConsensusNodes = 1;  // self + 1 = 2 < 3
+    status.connectedGroupNodes = 2;  // self + 1 peer < quorum 3
     BOOST_CHECK(find(evaluate(status, Thresholds{}, c_now), "quorum_connected").failed());
-    status.connectedConsensusNodes = 2;  // self + 2 = 3
+    status.connectedGroupNodes = 3;  // self + 2 peers = quorum 3
     BOOST_CHECK(find(evaluate(status, Thresholds{}, c_now), "quorum_connected").ok());
     status.isConsensusNode = false;
     BOOST_CHECK_EQUAL(

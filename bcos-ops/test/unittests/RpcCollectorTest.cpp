@@ -29,7 +29,7 @@ BOOST_AUTO_TEST_CASE(mapsEveryField)
     BOOST_CHECK_EQUAL(*status.changeCycle, 0);
     BOOST_CHECK(status.inTimeout && !*status.inTimeout);
     BOOST_CHECK_EQUAL(*status.consensusNodesNum, 4);
-    BOOST_CHECK_EQUAL(*status.connectedConsensusNodes, 3);
+    BOOST_CHECK_EQUAL(*status.connectedGroupNodes, 4);
     BOOST_CHECK_EQUAL(*status.minRequiredQuorum, 3);
     BOOST_CHECK_EQUAL(*status.version, "3.18.0");
     BOOST_CHECK_EQUAL(*status.chainId, "chain0");

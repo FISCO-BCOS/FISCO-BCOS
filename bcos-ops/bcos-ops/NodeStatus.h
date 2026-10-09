@@ -47,7 +47,8 @@ struct NodeStatus
     std::optional<int64_t> changeCycle;
     std::optional<bool> inTimeout;
     std::optional<int64_t> consensusNodesNum;
-    std::optional<int64_t> connectedConsensusNodes;  // excludes the node itself
+    // the gateway's view of the group's connected nodes: includes this node and observers
+    std::optional<int64_t> connectedGroupNodes;
     std::optional<int64_t> minRequiredQuorum;
     std::optional<int64_t> consensusTimeoutMs;
     // sync

@@ -21,7 +21,7 @@
 #include "bcos-ops/Connect.h"
 #include "bcos-ops/OpsError.h"
 #include "bcos-ops/Output.h"
-#include "bcos-ops/collect/RpcCollector.h"
+#include "bcos-ops/collect/GroupFacts.h"
 #include "bcos-ops/tx/Abi.h"
 #include "bcos-ops/tx/Account.h"
 #include "bcos-ops/tx/Smoke.h"
@@ -51,10 +51,9 @@ struct ChainFacts
 {
     std::string chainId;
     bool sm = false;
-    std::optional<bool> authCheck;
 };
 
-/// chain id / crypto type / auth switch from getGroupInfo (node dir as fallback)
+/// chain id / crypto type from getGroupInfo, the node dir when the RPC is unavailable
 ChainFacts chainFacts(Connection const& _connection)
 {
     ChainFacts facts;
@@ -62,20 +61,12 @@ ChainFacts chainFacts(Connection const& _connection)
     {
         facts.chainId = _connection.nodeDir->chainId;
         facts.sm = _connection.nodeDir->smCrypto;
-        facts.authCheck = _connection.nodeDir->authCheck;
     }
     try
     {
-        Json::Value params(Json::arrayValue);
-        params.append(_connection.group);
-        auto info = _connection.call("getGroupInfo", params);
-        facts.chainId = info["chainID"].asString();
-        if (!info["nodeList"].empty())
-        {
-            auto ini = parseJson(info["nodeList"][0]["iniConfig"].asString(), "getGroupInfo");
-            facts.sm = ini["smCryptoType"].asBool();
-            facts.authCheck = ini["isAuthCheck"].asBool();
-        }
+        auto group = groupFacts(_connection.call, _connection.group, std::nullopt);
+        facts.chainId = group.chainId;
+        facts.sm = group.smCrypto.value_or(facts.sm);
     }
     catch (std::exception const&)
     {
@@ -123,7 +114,7 @@ int runSmokeCmd(Connection const& _connection, Args const& _args, std::ostream& 
 {
     auto facts = chainFacts(_connection);
     auto sender = makeSender(_connection, facts, _args);
-    auto result = runSmoke(*sender, facts.sm, facts.authCheck);
+    auto result = runSmoke(*sender, facts.sm);
     if (wantJson(_args.flag("json")))
     {
         auto json = result.toJson();
@@ -134,8 +125,8 @@ int runSmokeCmd(Connection const& _connection, Args const& _args, std::ostream& 
     {
         for (auto const& step : result.steps)
         {
-            _out << std::left << std::setw(8) << step.name << std::setw(14)
-                 << (step.txHash.empty() ? "-" : abridged(step.txHash, 6))
+            _out << std::left << std::setw(8) << step.name << std::setw(16)
+                 << (step.txHash.empty() ? "-" : abridged(step.txHash, 4))
                  << (step.ok ? "ok   " : "FAIL ") << step.detail << '\n';
         }
         if (!result.ok)
@@ -301,19 +292,17 @@ int runTx(Args const& _args, std::ostream& _out, std::ostream& _err)
     throw OpsError(c_exitUsage, "unknown tx subcommand: " + sub);
 }
 
-struct TxRegister
-{
-    TxRegister()
-    {
-        registerCommand(
-            "tx", Command{"smoke (deploy HelloWorld, set, get) or deploy/call/send/get with an ABI",
-                      "smoke | deploy <bin> --abi <abi> [args..] | call <addr> --abi <abi> <fn> "
-                      "[args..] | "
-                      "send <addr> --abi <abi> <fn> [args..] | get <hash>   [--account <pem>] "
-                      "[--node-dir "
-                      "<dir> | --rpc <host:port>] [--json]",
-                      {}, runTx});
-    }
-} s_txRegister;
 }  // namespace
+
+void registerTxCommand()
+{
+    registerCommand(
+        "tx", Command{"smoke (deploy HelloWorld, set, get) or deploy/call/send/get with an ABI",
+                  "smoke | deploy <bin> --abi <abi> [args..] | call <addr> --abi <abi> <fn> "
+                  "[args..] | "
+                  "send <addr> --abi <abi> <fn> [args..] | get <hash>   [--account <pem>] "
+                  "[--node-dir "
+                  "<dir> | --rpc <host:port>] [--json]",
+                  {}, runTx});
+}
 }  // namespace bcos::ops

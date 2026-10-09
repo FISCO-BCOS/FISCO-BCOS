@@ -24,14 +24,20 @@
 
 namespace bcos::ops
 {
-/// Raw TCP probe: sends a JSON-RPC POST and looks at the first reply byte. 0x15 (TLS alert) or 0x16
-/// (TLS handshake) means the port speaks TLS. Throws OpsError{1} when TCP connect fails.
+/// Raw TCP probe: sends a minimal TLS ClientHello and looks at the first reply byte. 0x16
+/// (ServerHello) or 0x15 (alert) means the port speaks TLS; no reply or an HTTP reply means it
+/// does not. _host must be an IP literal (see resolveHost). Throws OpsError{1} when TCP connect
+/// fails.
 bool probeTls(std::string const& _host, uint16_t _port, int _timeoutMs);
+/// IP literal passthrough, otherwise DNS with IPv4 preferred; throws OpsError{1} on failure
+std::pair<std::string, uint16_t> resolveHost(
+    std::string const& _host, uint16_t _port, int _timeoutMs);
 
-/// _connectTimeoutMs bounds the TCP probe and the websocket handshake; _requestTimeoutMs bounds
-/// each RpcCall (sendTransaction waits for the receipt, which can take a view change). Throws
-/// OpsError{1} on a TLS port or a connection failure. The returned Connection has source="rpc"
-/// and an empty group: the caller fills it.
+/// _connectTimeoutMs bounds name resolution, the TCP probe and the wait for the first websocket
+/// session (the handshake itself is capped by beast's 30 s handshake timeout); _requestTimeoutMs
+/// bounds each RpcCall (sendTransaction waits for the receipt, which can take a view change).
+/// Throws OpsError{1} on a TLS port or a connection failure. The returned Connection has
+/// source="rpc" and an empty group: the caller fills it.
 constexpr int c_defaultConnectTimeoutMs = 3000;
 constexpr int c_defaultRequestTimeoutMs = 15000;
 Connection makeWsRpcCall(std::string const& _host, uint16_t _port,

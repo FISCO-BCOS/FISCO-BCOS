@@ -40,8 +40,9 @@ int main(int argc, const char* argv[])
     /// set LC_ALL
     setDefaultOrCLocale();
     // `fisco-bcos <subcommand> ...`: the first non-flag argument selects an operator command
-    // (status / tx / log / attach / log-level / tui). The node start path only ever took flags,
-    // so this cannot change the behaviour of any existing invocation.
+    // (status / tx / attach / log-level, with log and tui to follow). The node start path only
+    // ever took flags, so no flag-only invocation changes; a stray positional argument used to
+    // print the usage and exit 0, it now reports an unknown subcommand and exits 1.
     if (argc >= 2 && argv[1][0] != '-')
     {
         return bcos::ops::runOps(argc, argv);

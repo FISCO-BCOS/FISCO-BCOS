@@ -16,6 +16,7 @@
  * @file RpcCollector.cpp
  */
 #include "RpcCollector.h"
+#include "GroupFacts.h"
 #include "bcos-ops/OpsError.h"
 #include <chrono>
 
@@ -89,7 +90,7 @@ NodeStatus collectFromRpc(RpcCall const& _call, std::string const& _group,
 
     tryCall(status, _call, "getConsensusStatus", params(_group, node),
         {"nodeID", "isConsensusNode", "view", "leaderIndex", "changeCycle", "inTimeout",
-            "consensusNodesNum", "connectedConsensusNodes", "minRequiredQuorum"},
+            "consensusNodesNum", "connectedGroupNodes", "minRequiredQuorum"},
         [&](Json::Value const& v) {
             status.nodeId = v["nodeID"].asString();
             status.isConsensusNode = v["isConsensusNode"].asBool();
@@ -98,7 +99,7 @@ NodeStatus collectFromRpc(RpcCall const& _call, std::string const& _group,
             status.changeCycle = asInt64(v["changeCycle"]);
             status.inTimeout = v["timeout"].asBool();
             status.consensusNodesNum = asInt64(v["consensusNodesNum"]);
-            status.connectedConsensusNodes = asInt64(v["connectedNodeList"]);
+            status.connectedGroupNodes = asInt64(v["connectedNodeList"]);
             status.minRequiredQuorum = asInt64(v["minRequiredQuorum"]);
             if (v.isMember("consensusTimeout"))  // 3.18+: the node reports its own period
             {
@@ -106,28 +107,21 @@ NodeStatus collectFromRpc(RpcCall const& _call, std::string const& _group,
             }
         });
 
-    tryCall(status, _call, "getGroupInfo", params(_group),
-        {"version", "chainId", "smCrypto", "authCheck"}, [&](Json::Value const& v) {
-            status.chainId = v["chainID"].asString();
-            auto const& nodeList = v["nodeList"];
-            Json::Value const* self = nullptr;
-            for (auto const& entry : nodeList)
-            {
-                if (!self || (status.nodeId && entry["nodeID"].asString() == *status.nodeId))
-                {
-                    self = &entry;
-                }
-            }
-            if (self == nullptr)
-            {
-                status.missing("version", "getGroupInfo: empty nodeList");
-                return;
-            }
-            auto ini = parseJson((*self)["iniConfig"].asString(), "getGroupInfo.iniConfig");
-            status.version = ini["binaryInfo"]["version"].asString();
-            status.smCrypto = ini["smCryptoType"].asBool();
-            status.authCheck = ini["isAuthCheck"].asBool();
-        });
+    try
+    {
+        auto facts = groupFacts(_call, _group, status.nodeId);
+        status.chainId = facts.chainId;
+        status.version = facts.version;
+        status.smCrypto = facts.smCrypto;
+        status.authCheck = facts.authCheck;
+    }
+    catch (std::exception const& e)
+    {
+        for (auto const* field : {"version", "chainId", "smCrypto", "authCheck"})
+        {
+            status.missing(field, std::string("getGroupInfo: ") + e.what());
+        }
+    }
 
     tryCall(status, _call, "getBlockNumber", params(_group, node), {"blockNumber"},
         [&](Json::Value const& v) { status.blockNumber = asInt64(v); });

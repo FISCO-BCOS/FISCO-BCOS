@@ -29,21 +29,17 @@ namespace
 // bcos::protocol::TransactionStatus::PermissionDenied (bcos-protocol/TransactionStatus.h)
 constexpr int32_t c_statusPermissionDenied = 18;
 
-bool looksAuthDenied(Receipt const& _receipt, std::optional<bool> _authCheck)
+bool looksAuthDenied(Receipt const& _receipt)
 {
     if (_receipt.status == c_statusPermissionDenied)
     {
         return true;
     }
+    // the executor's auth refusal message is "Create permission denied" / "... permission denied"
     auto lower = _receipt.message;
     std::transform(lower.begin(), lower.end(), lower.begin(),
         [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    if (lower.find("permission") != std::string::npos || lower.find("auth") != std::string::npos)
-    {
-        return true;
-    }
-    // auth-enabled chain and the deploy failed without a more specific reason
-    return _authCheck.value_or(false) && !_receipt.ok();
+    return lower.find("permission denied") != std::string::npos;
 }
 }  // namespace
 
@@ -80,7 +76,7 @@ Json::Value SmokeResult::toJson() const
     return value;
 }
 
-SmokeResult runSmoke(Sender& _sender, bool _sm, std::optional<bool> _authCheck)
+SmokeResult runSmoke(Sender& _sender, bool _sm)
 {
     SmokeResult result;
     Abi abi(_sm);
@@ -98,8 +94,7 @@ SmokeResult runSmoke(Sender& _sender, bool _sm, std::optional<bool> _authCheck)
     result.steps.push_back(deploy);
     if (!deploy.ok)
     {
-        result.reason =
-            looksAuthDenied(deployReceipt, _authCheck) ? "auth_denied" : "deploy_failed";
+        result.reason = looksAuthDenied(deployReceipt) ? "auth_denied" : "deploy_failed";
         return result;
     }
     auto const& address = deployReceipt.contractAddress;
@@ -116,7 +111,7 @@ SmokeResult runSmoke(Sender& _sender, bool _sm, std::optional<bool> _authCheck)
     result.steps.push_back(set);
     if (!set.ok)
     {
-        result.reason = looksAuthDenied(setReceipt, _authCheck) ? "auth_denied" : "set_failed";
+        result.reason = looksAuthDenied(setReceipt) ? "auth_denied" : "set_failed";
         return result;
     }
 

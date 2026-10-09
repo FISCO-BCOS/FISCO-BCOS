@@ -39,7 +39,8 @@ public:
         for (size_t i = 0; i < _argv.size(); ++i)
         {
             auto const& token = _argv[i];
-            if (token.size() < 2 || token[0] != '-')
+            if (token.size() < 2 || token[0] != '-' ||
+                std::isdigit(static_cast<unsigned char>(token[1])))  // -5 is a value
             {
                 m_positionals.push_back(token);
                 continue;

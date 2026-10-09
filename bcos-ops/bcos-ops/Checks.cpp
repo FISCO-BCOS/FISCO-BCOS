@@ -97,18 +97,20 @@ std::vector<Check> evaluate(
     {
         checks.push_back(skipped("quorum_connected", "not a consensus node"));
     }
-    else if (!_status.connectedConsensusNodes || !_status.minRequiredQuorum)
+    else if (!_status.connectedGroupNodes || !_status.minRequiredQuorum)
     {
         checks.push_back(skipped("quorum_connected", "connected nodes or quorum unknown"));
     }
     else
     {
-        auto reachable = *_status.connectedConsensusNodes + 1;  // connectedNodeList excludes self
+        // connectedNodeList counts this node and any observer, so this leans towards ok
+        auto reachable = *_status.connectedGroupNodes;
         bool fail = reachable < *_status.minRequiredQuorum;
         auto check = verdict("quorum_connected", fail,
-            fail ? "only " + std::to_string(reachable) + " of " +
-                       std::to_string(*_status.minRequiredQuorum) + " required nodes reachable" :
-                   "");
+            fail ?
+                "only " + std::to_string(reachable) + " group nodes connected (self included) of " +
+                    std::to_string(*_status.minRequiredQuorum) + " required" :
+                "");
         check.values["reachable"] = static_cast<Json::Int64>(reachable);
         check.values["minRequiredQuorum"] = static_cast<Json::Int64>(*_status.minRequiredQuorum);
         checks.push_back(std::move(check));

@@ -22,15 +22,31 @@
 
 namespace bcos::ops
 {
-std::map<std::string, Command>& commandTable()
+namespace
+{
+std::map<std::string, Command>& rawTable()
 {
     static std::map<std::string, Command> table;
     return table;
 }
+}  // namespace
+
+std::map<std::string, Command>& commandTable()
+{
+    // the register functions write through registerCommand → rawTable(), so this one-time
+    // initializer never re-enters commandTable()
+    static bool const registered = []() {
+        registerStatusCommand();
+        registerTxCommand();
+        return true;
+    }();
+    (void)registered;
+    return rawTable();
+}
 
 void registerCommand(std::string _name, Command _command)
 {
-    commandTable()[std::move(_name)] = std::move(_command);
+    rawTable()[std::move(_name)] = std::move(_command);
 }
 
 void printUsage(std::ostream& _out)

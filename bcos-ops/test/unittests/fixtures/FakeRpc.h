@@ -21,7 +21,7 @@ namespace bcos::ops::test
 // getConsensusStatus carry a JSON object encoded as a string, getGroupInfo's nodeList[].iniConfig
 // is a string too. A healthy 4-node chain at height 128.
 inline std::string const c_consensusStatusHealthy =
-    R"({"blockNumber":128,"changeCycle":0,"connectedNodeList":3,"consensusNodeList":[{"index":0,"nodeID":"3a1f00","weight":1,"termWeight":1},{"index":1,"nodeID":"3a1f01","weight":1,"termWeight":1},{"index":2,"nodeID":"3a1f02","weight":1,"termWeight":1},{"index":3,"nodeID":"3a1f03","weight":1,"termWeight":1}],"consensusNodesNum":4,"hash":"7b00","index":0,"isConsensusNode":true,"leaderIndex":2,"maxFaultyQuorum":1,"minRequiredQuorum":3,"nodeID":"3a1f00","timeout":false,"view":0})";
+    R"({"blockNumber":128,"changeCycle":0,"connectedNodeList":4,"consensusNodeList":[{"index":0,"nodeID":"3a1f00","weight":1,"termWeight":1},{"index":1,"nodeID":"3a1f01","weight":1,"termWeight":1},{"index":2,"nodeID":"3a1f02","weight":1,"termWeight":1},{"index":3,"nodeID":"3a1f03","weight":1,"termWeight":1}],"consensusNodesNum":4,"hash":"7b00","index":0,"isConsensusNode":true,"leaderIndex":2,"maxFaultyQuorum":1,"minRequiredQuorum":3,"nodeID":"3a1f00","timeout":false,"view":0})";
 
 inline std::string const c_syncStatusHealthy =
     R"({"archivedBlockNumber":0,"blockNumber":128,"genesisHash":"00","isSyncing":false,"knownHighestNumber":128,"knownLatestHash":"7b00","latestHash":"7b00","nodeID":"3a1f00","peers":[{"archivedBlockNumber":0,"blockNumber":128,"genesisHash":"00","latestHash":"7b00","nodeID":"3a1f01"},{"archivedBlockNumber":0,"blockNumber":128,"genesisHash":"00","latestHash":"7b00","nodeID":"3a1f02"},{"archivedBlockNumber":0,"blockNumber":128,"genesisHash":"00","latestHash":"7b00","nodeID":"3a1f03"}]})";

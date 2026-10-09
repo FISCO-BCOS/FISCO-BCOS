@@ -48,6 +48,6 @@ struct SmokeResult
     Json::Value toJson() const;
 };
 
-/// _authCheck: the chain's auth switch when known; it only sharpens the auth_denied verdict
-SmokeResult runSmoke(Sender& _sender, bool _sm, std::optional<bool> _authCheck);
+/// auth_denied = receipt status PermissionDenied or a "permission denied" message
+SmokeResult runSmoke(Sender& _sender, bool _sm);
 }  // namespace bcos::ops

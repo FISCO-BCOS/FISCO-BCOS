@@ -67,7 +67,7 @@ BOOST_AUTO_TEST_CASE(threeStepsSucceed)
     FakeSender sender;
     sender.sendReceipts = {receipt(0, "0x3f", "0xa1"), receipt(0, "0x9c")};
     sender.callReceipts = {receipt(0, "", "", c_helloOutput)};
-    auto result = runSmoke(sender, false, false);
+    auto result = runSmoke(sender, false);
     BOOST_CHECK(result.ok);
     BOOST_CHECK_EQUAL(result.exitCode(), c_exitOk);
     BOOST_REQUIRE_EQUAL(result.steps.size(), 3U);
@@ -89,7 +89,7 @@ BOOST_AUTO_TEST_CASE(secondStepFailureStopsBeforeThird)
     FakeSender sender;
     sender.sendReceipts = {receipt(0, "0x3f", "0xa1"), receipt(16, "0x9c", "", "", "revert")};
     sender.callReceipts = {receipt(0, "", "", c_helloOutput)};
-    auto result = runSmoke(sender, false, false);
+    auto result = runSmoke(sender, false);
     BOOST_CHECK(!result.ok);
     BOOST_CHECK_EQUAL(result.reason, "set_failed");
     BOOST_CHECK_EQUAL(result.exitCode(), c_exitChecksFailed);
@@ -101,21 +101,24 @@ BOOST_AUTO_TEST_CASE(permissionDeniedDeployIsAuthDenied)
 {
     FakeSender sender;
     sender.sendReceipts = {receipt(18, "0x3f")};  // TransactionStatus::PermissionDenied
-    auto result = runSmoke(sender, false, std::nullopt);
+    auto result = runSmoke(sender, false);
     BOOST_CHECK(!result.ok);
     BOOST_CHECK_EQUAL(result.reason, "auth_denied");
     BOOST_CHECK_EQUAL(result.exitCode(), c_exitChecksFailed);
     BOOST_CHECK_EQUAL(result.steps.size(), 1U);
 }
 
-BOOST_AUTO_TEST_CASE(authChainUnexplainedDeployFailureIsAuthDenied)
+BOOST_AUTO_TEST_CASE(unexplainedDeployFailureIsNotAuthDenied)
 {
     FakeSender sender;
-    sender.sendReceipts = {receipt(1, "0x3f")};
-    BOOST_CHECK_EQUAL(runSmoke(sender, false, true).reason, "auth_denied");
-    FakeSender plain;
-    plain.sendReceipts = {receipt(1, "0x3f")};
-    BOOST_CHECK_EQUAL(runSmoke(plain, false, false).reason, "deploy_failed");
+    sender.sendReceipts = {receipt(1, "0x3f", "", "", "out of gas")};
+    BOOST_CHECK_EQUAL(runSmoke(sender, false).reason, "deploy_failed");
+    FakeSender byMessage;
+    byMessage.sendReceipts = {receipt(16, "0x3f", "", "", "Create permission denied")};
+    BOOST_CHECK_EQUAL(runSmoke(byMessage, false).reason, "auth_denied");
+    FakeSender author;  // "auth" substring alone must not count
+    author.sendReceipts = {receipt(16, "0x3f", "", "", "revert: unauthorized author")};
+    BOOST_CHECK_EQUAL(runSmoke(author, false).reason, "deploy_failed");
 }
 
 BOOST_AUTO_TEST_CASE(getMismatchFails)
@@ -126,7 +129,7 @@ BOOST_AUTO_TEST_CASE(getMismatchFails)
         "0x0000000000000000000000000000000000000000000000000000000000000020"
         "0000000000000000000000000000000000000000000000000000000000000003"
         "6e6f700000000000000000000000000000000000000000000000000000000000")};
-    auto result = runSmoke(sender, false, false);
+    auto result = runSmoke(sender, false);
     BOOST_CHECK(!result.ok);
     BOOST_CHECK_EQUAL(result.reason, "get_failed");
 }

@@ -13,7 +13,7 @@ date: 2026-10-09
 
 ## 为什么不是继续用 Java 控制台
 
-Linux 生产机没有 JDK；装 JDK、拉控制台、配 `sdk.crt` 是三个额外步骤，每一步都可能因为网络或权限卡住。控制台也拿不到进程内部状态（timer 剩余、交易池按状态分布），`admin_*` 方法只在本机 socket 上注册（ADR 0010），控制台连不上。CI 里 `tools/.ci/ci_check_air.sh` 先让 `tx smoke` + `status` 与控制台测试并存一个版本周期，对比结论后再退役控制台测试。
+Linux 生产机没有 JDK；装 JDK、拉控制台、配 `sdk.crt` 是三个额外步骤，每一步都可能因为网络或权限卡住。控制台也拿不到进程内部状态（timer 剩余、交易池按状态分布），`admin_*` 方法只在本机 socket 上注册（ADR 0010），控制台连不上。CI 里 `tools/.ci/ci_check_air.sh` 将让 `tx smoke` + `status` 与控制台测试并存一个版本周期（挂接通道落地后接入，这样 CI 链的 TLS 端口不碍事），对比结论后再退役控制台测试。
 
 ## 代价
 
@@ -25,5 +25,5 @@ Linux 生产机没有 JDK；装 JDK、拉控制台、配 `sdk.crt` 是三个额�
 ## Consequences
 
 - 新模块 `bcos-ops/`：`NodeStatus`、收集器（RPC / 挂接 / 日志）、判定器、日志解析、子命令、TUI。单测在 `bcos-ops/test/unittests/`，唯一注入点是 `RpcCall`。
-- 只有 AIR 二进制带子命令；tars 服务与 lightnode 不做。
+- 只有 AIR 二进制带子命令；tars 服务与 lightnode 不做。`CommandHelper` 的退出码改动是共享的：lightnode 的坏旗标与缺文件也从 `exit(0)` 变为 `exit(1)`。
 - 输出契约：非 TTY 默认 JSON，退出码 0 / 1（用法或连接）/ 2（节点可达但判据失败或 auth 拒绝）。

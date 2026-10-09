@@ -39,6 +39,21 @@ void printJson(std::ostream& _out, Json::Value const& _value)
     _out << Json::writeString(builder, _value) << '\n';
 }
 
+std::string sanitizeForTerminal(std::string const& _text)
+{
+    std::string out;
+    out.reserve(_text.size());
+    for (unsigned char c : _text)
+    {
+        if ((c < 0x20 && c != '\t') || c == 0x7f)
+        {
+            continue;
+        }
+        out.push_back(static_cast<char>(c));
+    }
+    return out;
+}
+
 void printRows(std::ostream& _out, std::vector<std::pair<std::string, std::string>> const& _rows)
 {
     size_t width = 0;
@@ -48,7 +63,8 @@ void printRows(std::ostream& _out, std::vector<std::pair<std::string, std::strin
     }
     for (auto const& [label, value] : _rows)
     {
-        _out << std::left << std::setw(static_cast<int>(width) + 2) << label << value << '\n';
+        _out << std::left << std::setw(static_cast<int>(width) + 2) << label
+             << sanitizeForTerminal(value) << '\n';
     }
 }
 

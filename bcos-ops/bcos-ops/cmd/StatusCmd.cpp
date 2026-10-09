@@ -109,8 +109,8 @@ void renderStatus(
                                    "  " + ago(_status.latestTimestamp));
     rows.emplace_back("consensus",
         "view " + show(_status.view) + "  leader " + show(_status.leaderIndex) + "  nodes " +
-            show(_status.consensusNodesNum) + "  connected " +
-            show(_status.connectedConsensusNodes) + "  quorum " + show(_status.minRequiredQuorum) +
+            show(_status.consensusNodesNum) + "  connected " + show(_status.connectedGroupNodes) +
+            "  quorum " + show(_status.minRequiredQuorum) +
             (_status.inTimeout && *_status.inTimeout ? "  TIMEOUT" : ""));
     rows.emplace_back(
         "sync", std::string(_status.isSyncing && *_status.isSyncing ? "syncing" : "idle") +
@@ -184,16 +184,14 @@ int runStatus(Args const& _args, std::ostream& _out, std::ostream& _err)
     return runStatusOn(connection, thresholdsFrom(_args), wantJson(_args.flag("json")), _out);
 }
 
-struct StatusRegister
-{
-    StatusRegister()
-    {
-        registerCommand("status",
-            Command{"print the node status snapshot and run the health checks",
-                "[--node-dir <dir> | --rpc <host:port>] [--json] [--stall-factor 2] [--max-lag 10] "
-                "[--timeout 15000]",
-                {}, runStatus});
-    }
-} s_statusRegister;
 }  // namespace
+
+void registerStatusCommand()
+{
+    registerCommand("status",
+        Command{"print the node status snapshot and run the health checks",
+            "[--node-dir <dir> | --rpc <host:port>] [--json] [--stall-factor 2] [--max-lag 10] "
+            "[--timeout 15000]",
+            {}, runStatus});
+}
 }  // namespace bcos::ops
