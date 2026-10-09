@@ -226,9 +226,11 @@ Element renderLog(Model const& _model, std::string const& _filter)
         {
             badges += "[" + badge + "]";
         }
-        auto rest = event.raw.size() > event.name.size() + badges.size() ?
-                        event.raw.substr(badges.size() + event.name.size()) :
-                        std::string();
+        // the key/value tail: whatever follows the event name in the raw message (decorators
+        // and [blk-N] badges make the prefix length unknowable from the parsed parts)
+        auto namePos = event.name.empty() ? std::string::npos : event.raw.find(event.name);
+        auto rest = namePos == std::string::npos ? std::string() :
+                                                   event.raw.substr(namePos + event.name.size());
         auto line = hbox(
             {text(event.timestamp.size() > 11 ? event.timestamp.substr(11, 12) : event.timestamp) |
                     dim,

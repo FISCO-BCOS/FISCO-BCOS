@@ -25,8 +25,9 @@ namespace bcos::ops::tui
 {
 namespace
 {
-constexpr size_t c_maxLineBytes = 64 * 1024;
+constexpr std::streamoff c_maxLineBytes = 64 * 1024;
 constexpr size_t c_maxEventsPerPoll = 2000;
+constexpr std::streamoff c_firstLookBytes = 4 * 1024 * 1024;
 }  // namespace
 
 std::vector<Event> LogTail::poll()
@@ -53,7 +54,6 @@ std::vector<Event> LogTail::poll()
     {
         m_file = newest;
         m_offset = 0;
-        m_partial.clear();
     }
     std::ifstream in(m_file);
     if (!in)
@@ -65,13 +65,11 @@ std::vector<Event> LogTail::poll()
     if (size < m_offset)
     {
         m_offset = 0;  // truncated / rotated in place
-        m_partial.clear();
     }
-    if (m_offset == 0 && size > 0 && m_partial.empty() && events.empty() && m_file == newest &&
-        size > 4 * 1024 * 1024)
+    if (m_offset == 0 && size > c_firstLookBytes)
     {
         // first look at a big file: start from the last 4 MB rather than the whole history
-        m_offset = size - 4 * 1024 * 1024;
+        m_offset = size - c_firstLookBytes;
         in.seekg(m_offset);
         std::string skipped;
         std::getline(in, skipped);  // drop the partial line we landed in
@@ -81,30 +79,24 @@ std::vector<Event> LogTail::poll()
     std::string line;
     while (std::getline(in, line))
     {
-        if (in.eof() && !line.empty() && in.peek() == std::char_traits<char>::eof())
+        if (in.eof() && !line.empty())
         {
-            // no trailing newline yet: keep for the next poll, but never more than one log line's
-            // worth (a file that stops mid-line forever must not grow memory)
-            if (m_partial.size() + line.size() <= c_maxLineBytes)
+            // the writer has not finished this line: leave m_offset at its start so the next
+            // poll reads it whole. Nothing is buffered across polls, so a file that stops
+            // mid-line forever costs nothing; only a line longer than any log line is skipped
+            if (static_cast<std::streamoff>(line.size()) > c_maxLineBytes)
             {
-                m_partial += line;
-            }
-            else
-            {
-                m_partial.clear();
                 m_offset = size;
             }
             break;
         }
         if (events.size() >= c_maxEventsPerPoll)
         {
-            // a huge backlog is read across several polls; the offset is already past this line
-            m_offset = static_cast<std::streamoff>(in.tellg());
+            // a huge backlog is read across several polls; m_offset already points at the
+            // start of this line, it is re-read next time
             break;
         }
-        auto full = m_partial + line;
-        m_partial.clear();
-        if (auto event = parseLine(full))
+        if (auto event = parseLine(line))
         {
             events.push_back(*event);
         }
