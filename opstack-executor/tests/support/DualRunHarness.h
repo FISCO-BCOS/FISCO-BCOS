@@ -128,7 +128,8 @@ inline std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeMinimalHeader(
     auto h = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
     h->setNumber(number);
     h->setTimestamp(timestampMillis);
-    h->setParentInfo(bcos::protocol::ParentInfo{.blockNumber = number - 1, .blockHash = parentHash});
+    h->setParentInfo(
+        bcos::protocol::ParentInfo{.blockNumber = number - 1, .blockHash = parentHash});
     h->setCoinbase(std::move(coinbase));
     h->setStateRoot(bcos::h256{});
     h->setTxsRoot(bcos::h256{});

@@ -41,7 +41,7 @@
 #include <bcos-ledger/Ledger.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-ledger/mpt/StateRoots.h>  // computeMptStateDelta / emptyRootHash / parentStateRootFor
-#include <bcos-ledger/mpt/ViewNodeStorage.h>
+#include "support/GenesisTrie.h"  // copyFlatRows + computeAndPersistParentTrie
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
@@ -240,41 +240,6 @@ void seedHeadAndGenesisHeader(MLS& mls, bcos::protocol::BlockHeader::Ptr const& 
 // ── genesis MPT trie (the scenario-B import, verbatim from OpSchedulerTest) ──
 
 /// Copy every flat row visible through @p from into @p to's top mutable layer. The
-/// incremental MPT build scans the top mutable layer ONLY (buildAndCollect), so a
-/// backend-merged seed is invisible to it — this re-materializes the committed state as the
-/// genesis build's delta.
-template <class From, class To>
-bcos::task::Task<void> copyFlatRows(From& from, To& to)
-{
-    auto it = co_await bcos::storage2::range(from);
-    while (auto kv = co_await it.next())
-    {
-        auto const& [k, v] = *kv;
-        if (auto const* entry = std::get_if<bcos::storage::Entry>(std::addressof(v)))
-            co_await bcos::storage2::writeOne(to, k, *entry);
-    }
-}
-
-/// Compute the scenario-B genesis state trie over the seeded accounts via the production MPT
-/// builder (computeMptStateDelta, parent = the empty root) and persist every node as "/mpt/"
-/// rows — the test-local mirror of Ledger::buildGenesisBlock's Ethereum-lane genesis import.
-/// Returns the root to stamp on the genesis header.
-bcos::h256 computeAndPersistGenesisTrie(MLS& mls)
-{
-    auto readView = mls.fork();  // read-through to the committed backend (never merged)
-    auto view = mls.fork();
-    view.newMutable();
-    bcos::task::syncWait(copyFlatRows(readView, view));
-    bcos::ledger::LedgerConfig ledgerConfig;
-    ledgerConfig.setExecutorVersion(bcos::ledger::OPSTACK_EXECUTOR_VERSION);
-    auto delta = bcos::task::syncWait(bcos::ledger::mpt::computeMptStateDelta(
-        view, bcos::ledger::mpt::emptyRootHash(), ledgerConfig));
-    bcos::ledger::mpt::ViewNodeStorage<ViewType> nodeStorage(view);
-    bcos::task::syncWait(bcos::ledger::mpt::flushTrieNodes(nodeStorage, delta.newNodes));
-    bcos::task::syncWait(mls.mergeView(std::move(view)));
-    return delta.stateRoot;
-}
-
 struct VerifierFixture
 {
     BackendMemStorage backendStorage{1};
@@ -308,7 +273,7 @@ struct VerifierFixture
     /// (executor_version >= OPSTACK_EXECUTOR_VERSION), so no feature row is seeded.
     void prepareGenesis()
     {
-        auto const genesisRoot = computeAndPersistGenesisTrie(multiLayerStorage);
+        auto const genesisRoot = opstack_test::computeAndPersistParentTrie(multiLayerStorage);
         seedHeadAndGenesisHeader(multiLayerStorage, makeGenesisHeader(genesisRoot));
     }
 };

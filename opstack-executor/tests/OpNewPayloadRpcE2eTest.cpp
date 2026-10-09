@@ -1220,8 +1220,8 @@ BOOST_AUTO_TEST_CASE(CoverageMatrixFromManifest)
             errStrings.count(s), "coverage: validation_error_contains '" << s << "' has no vector");
 }
 
-// INT-F1 end to end: a Regolith-current schedule must BUILD (FCU V1 -> getPayload V2) and
-// IMPORT (newPayload V2) against the REAL OpScheduler delegate, not the
+// INT-F1 (post-cutover form): the engine's OP lane builds/imports Isthmus+ only —
+// PreIsthmusBuildRejectedAtTheEngineBaseline pins the baseline gate; the Regolith-window
 // FabricatedRootsStub stub. The announced pre-Canyon header carries no withdrawalsRoot,
 // no parentBeaconBlockRoot and no blob fields — the RLP shape rebuildOpEthHeader emits
 // for Regolith — so this reaches the scheduler's non-lenient header decode on the build
@@ -1258,7 +1258,7 @@ void registerRegolithGenesis(
     registerVerifiedBlock(fixture.multiLayerStorage, hash, 0);
     // The builder's incremental MPT at block 1 resolves the genesis header's stateRoot
     // against persisted trie nodes — build+persist the (possibly empty) pre-state trie.
-    auto const genesisRoot = computeAndPersistParentTrie(fixture.multiLayerStorage);
+    auto const genesisRoot = opstack_test::computeAndPersistParentTrie(fixture.multiLayerStorage);
     auto header = fixture.blockFactory->blockHeaderFactory()->createBlockHeader();
     header->setNumber(0);
     header->setStateRoot(genesisRoot);
@@ -1436,9 +1436,9 @@ namespace
 /// Attributes for a plain Regolith block: timestamp is internal ms (the engine
 /// divides by 1000), the rest are the Regolith-era minimums.
 
-/// FCU V3 + getPayload V2 against `parentHash`, asserting VALID; returns the payload.
-/// (The engine accepts attrs only at V3+; the Regolith-window block keeps its V2
-/// getPayload profile shape.)
+/// FCU V3 + getPayload V3 against `parentHash`, asserting VALID; returns the payload.
+/// (The engine accepts attrs only at V3+; the payload's shape tracks the built fork —
+/// a Regolith-window block still seals with the Regolith field set.)
 std::optional<bcos::engine::ExecutionPayload> buildBlockOn(OpE2eFixture& fixture,
     bcos::h256 const& parentHash, std::uint64_t tsMillis, bool noTxPool, std::string_view what)
 {
@@ -1775,17 +1775,9 @@ BOOST_AUTO_TEST_CASE(HoloceneParentPricesFromItsOwnExtraData)
     auto fixture = std::make_unique<OpE2eFixture>(schedule, chainTriple);
     registerRegolithGenesis(*fixture, genesis, holoceneShaped);
 
-    bcos::engine::PayloadAttributes attrs;
-    attrs.timestamp = 1'000;  // 1 s: inside the Holocene window
-    attrs.prevRandao = bcos::crypto::HashType{};
-    attrs.suggestedFeeRecipient = bcos::Address{};
-    attrs.gasLimit = 30'000'000;
-    attrs.noTxPool = true;
-    attrs.withdrawals = std::vector<bcos::engine::WithdrawalV1>{};
-    attrs.parentBeaconBlockRoot = bcos::h256{};
-    // op-node echoes the chain's declared params as 8 bytes (4-byte denominator + elasticity);
-    // the header form adds the leading version byte.
-    attrs.eip1559Params = bcos::fromHex("0x0000000800000006");
+    // 1 s: inside the Holocene window. op-node echoes the chain's declared params as 8
+    // bytes (4-byte denominator + elasticity); the header form adds the leading version byte.
+    auto attrs = regolithAttrs(/*tsMillis=*/1'000, /*noTxPool=*/true);
 
     bcos::engine::ForkchoiceState const fc{genesis, genesis, genesis};
     auto built = bcos::task::syncWait(fixture->service.updateForkchoice(

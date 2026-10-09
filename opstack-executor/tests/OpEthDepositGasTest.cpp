@@ -16,6 +16,10 @@
 
 #include <opstack-executor/OpEthDeposit.h>
 #include <opstack-executor/OpForkSpec.h>
+#include <ethereum-executor/EthereumHost.h>      // EthCallParams
+#include <ethereum-executor/EthereumTransition.h>  // validateTransaction
+#include <bcos-framework/protocol/TxGasModel.h>    // MAX_TX_GAS_LIMIT
+#include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
@@ -364,6 +368,60 @@ BOOST_AUTO_TEST_CASE(BlockBudgetBoundary){
         block.gas_limit = 60000;
         auto const r = runIsthmusDeposit(storage, plainDeposit(kFrom, 60000), block);
         BOOST_CHECK_EQUAL(r->status(), 0);
+    }
+}
+
+
+// R11: Karst's EIP-7825 per-tx cap (2^24) binds NORMAL transactions at Osaka; deposits are
+// exempt (opRunDeposit clamps the intrinsic check's revision to Prague — OpEthDeposit.h
+// revValidate). Pin both sides executably: a deposit over the cap is admitted under
+// OP_KARST_SPEC; a normal tx at the same gas rejects under validateTransaction at Osaka,
+// and the same tx passes at Prague (the cap is the only difference).
+BOOST_AUTO_TEST_CASE(KarstDepositAbove7825CapAdmittedButNormalTxRejected)
+{
+    using bcos::protocol::MAX_TX_GAS_LIMIT;
+    MutableStorage storage;
+    seedAccount(storage, kFrom, /*nonce=*/0, bcos::u256("1000000000000000000"), {});
+    auto block = depositBlock();
+
+    constexpr auto kTo = 0x00000000000000000000000000000000000000dd_address;
+    auto dep = plainDeposit(kTo, MAX_TX_GAS_LIMIT + 1);
+    eth::EthereumState<MutableStorage> state{storage};
+    evmc::VM vm{evmc_create_evmone()};
+    // The deposit is admitted under Karst — the exemption clamp keeps the intrinsic check
+    // at Prague (no cap on deposits).
+    BOOST_CHECK_NO_THROW((void)bcos::task::syncWait(opeth::opRunDeposit(state, block,
+        /*blockHashLookup=*/{}, dep, opeth::OP_KARST_SPEC, vm, kChainId, block.gas_limit,
+        *makeReceiptFactory(), block.number)));
+
+    // Control: a normal tx at the same gas under Osaka rejects via the cap.
+    auto cryptoSuite = std::make_shared<bcos::crypto::CryptoSuite>(
+        std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr);
+    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+    // Version 2 (EIP-1559): the legacy (V0) factory overload drops gasLimit entirely —
+    // only the typed path carries it (TransactionFactoryImpl.cpp's V0 short-circuit).
+    auto tx = txFactory->createTransaction(2, "0x00000000000000000000000000000000000000bb",
+        bcos::bytes{0x0a}, "0x0", 100000, "0x2105", "1", 7, /*_abi=*/{}, /*_value=*/{},
+        /*_gasPrice=*/{}, MAX_TX_GAS_LIMIT + 1, /*_maxFeePerGas=*/"0x3e8",
+        /*_maxPriorityFeePerGas=*/"0x1");
+    eth::EthBlockInfo blk{};
+    blk.number = 1;
+    blk.gas_limit = 30'000'000;
+    blk.base_fee = 1;
+    eth::EthCallParams callParams{};
+    auto verdict = eth::validateTransaction(state, blk, *tx, EVMC_OSAKA, blk.gas_limit,
+        blk.gas_limit, callParams);
+    BOOST_REQUIRE(std::holds_alternative<std::error_code>(verdict));
+    BOOST_CHECK_EQUAL(std::get<std::error_code>(verdict).value(),
+        static_cast<int>(eth::evm::ErrorCode::MAX_GAS_LIMIT_EXCEEDED));
+    // Prague has no cap — the same tx passes the cap check (it may fail a LATER rule; the
+    // point is the cap does not fire).
+    auto verdictPrague = eth::validateTransaction(state, blk, *tx, EVMC_PRAGUE, blk.gas_limit,
+        blk.gas_limit, callParams);
+    if (std::holds_alternative<std::error_code>(verdictPrague))
+    {
+        BOOST_CHECK_NE(std::get<std::error_code>(verdictPrague).value(),
+            static_cast<int>(eth::evm::ErrorCode::MAX_GAS_LIMIT_EXCEEDED));
     }
 }
 

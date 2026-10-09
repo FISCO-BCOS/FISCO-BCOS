@@ -140,7 +140,8 @@ inline std::optional<std::string> validateOpBaseFee(
             // Pre-Holocene arm: the shared helper (OpBaseFee.h) — the Canyon denominator
             // keys on the CHILD block's activation, same as op-geth's
             // BaseFeeChangeDenominator(header.Time) (params/config.go:1349-1359).
-            auto const params = bcos::engine::OpEip1559Params{.elasticity = _config.eip1559Elasticity,
+            auto const params =
+                bcos::engine::OpEip1559Params{.elasticity = _config.eip1559Elasticity,
                 .denominator = _config.eip1559DenominatorBedrock,
                 .denominatorCanyon = _config.eip1559DenominatorCanyon};
             expected = bcos::engine::calcOpBaseFeePreHolocene(_parent.gasLimit, _parent.gasUsed,

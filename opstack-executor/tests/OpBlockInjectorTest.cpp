@@ -4,7 +4,8 @@
 // OpBlockInjectorTest — drives the shared block-execution path (preBlockOpEthSteps →
 // SchedulerSerialImpl(serial=true) → finalizeOpEthBlockResult) over a plain MutableStorage
 // fixture (the path is Storage templates, so no MLS is needed). A minimal "L1 attributes deposit + eip1559" block verifies:
-//   (1) the system-call BlockInfo's gas_limit == header.gasLimit (buildOpEthBlockInfo, trivially true);
+//   (1) the system-call BlockInfo's gas_limit == header.gasLimit (buildOpEthBlockInfo,
+//       trivially true);
 //   (2) receipt count == tx count;
 //   (3) the block-level gasUsed == manual Σ per-receipt gasUsed.
 // Plus: preBlockOpEthSteps rejects an empty block with OpConsensusError (the retired injector's
@@ -171,7 +172,8 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
     auto result = opstack_test::runExecutorPath(
         fixture, view, *header, opstack_test::opeth::OP_ISTHMUS_SPEC, transactions, rawTxBytes);
 
-    // System-call BlockInfo gas_limit == header.gasLimit (buildOpEthBlockInfo, trivially true here).
+    // System-call BlockInfo gas_limit == header.gasLimit (buildOpEthBlockInfo,
+    // trivially true here).
     const auto sysBlk = opstack_test::opeth::buildOpEthBlockInfo(
         *header, opstack_test::opeth::OP_ISTHMUS_SPEC);
     BOOST_CHECK_EQUAL(sysBlk.gas_limit, kHeaderGasLimit);

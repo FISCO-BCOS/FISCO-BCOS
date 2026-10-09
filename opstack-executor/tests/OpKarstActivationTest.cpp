@@ -214,7 +214,9 @@ bcos::Error::Ptr executeActivationWithoutParent(bcos::ledger::OpForkSchedule sch
 BOOST_AUTO_TEST_SUITE(OpKarstActivationSuite)
 
 // clang-format off
-BOOST_AUTO_TEST_CASE(JovianActivationBlockRejectsUserTx, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst") * boost::unit_test::disabled())
+BOOST_AUTO_TEST_CASE(JovianActivationBlockRejectsUserTx,
+    *boost::unit_test::label("fork-jovian")
+        *boost::unit_test::label("fork-karst") * boost::unit_test::disabled())
 // clang-format on
 {
     // M1 (parked): the deposits-only-on-activation rule is a FISCO extension op-geth does
@@ -250,7 +252,9 @@ BOOST_AUTO_TEST_CASE(JovianActivationBlockAllowsDepositsOnly, * boost::unit_test
 }
 
 // clang-format off
-BOOST_AUTO_TEST_CASE(JovianActivationBlockRejectsUserTxBeforeTrailingDeposit, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst") * boost::unit_test::disabled())
+BOOST_AUTO_TEST_CASE(JovianActivationBlockRejectsUserTxBeforeTrailingDeposit,
+    *boost::unit_test::label("fork-jovian")
+        *boost::unit_test::label("fork-karst") * boost::unit_test::disabled())
 // clang-format on
 {
     // M1 (parked): the deposits-only-on-activation rule is a FISCO extension op-geth does
@@ -270,7 +274,9 @@ BOOST_AUTO_TEST_CASE(JovianActivationBlockRejectsUserTxBeforeTrailingDeposit, * 
 }
 
 // clang-format off
-BOOST_AUTO_TEST_CASE(JovianActivationIsthmusLenAttrsRejectsMiddleUserTx, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst") * boost::unit_test::disabled())
+BOOST_AUTO_TEST_CASE(JovianActivationIsthmusLenAttrsRejectsMiddleUserTx,
+    *boost::unit_test::label("fork-jovian")
+        *boost::unit_test::label("fork-karst") * boost::unit_test::disabled())
 // clang-format on
 {
     // M1 (parked): the deposits-only-on-activation rule is a FISCO extension op-geth does
@@ -292,7 +298,9 @@ BOOST_AUTO_TEST_CASE(JovianActivationIsthmusLenAttrsRejectsMiddleUserTx, * boost
 }
 
 // clang-format off
-BOOST_AUTO_TEST_CASE(KarstActivationBlockRejectsUserTx, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst") * boost::unit_test::disabled())
+BOOST_AUTO_TEST_CASE(KarstActivationBlockRejectsUserTx,
+    *boost::unit_test::label("fork-jovian")
+        *boost::unit_test::label("fork-karst") * boost::unit_test::disabled())
 // clang-format on
 {
     // M1 (parked): the deposits-only-on-activation rule is a FISCO extension op-geth does
@@ -310,7 +318,9 @@ BOOST_AUTO_TEST_CASE(KarstActivationBlockRejectsUserTx, * boost::unit_test::labe
 }
 
 // clang-format off
-BOOST_AUTO_TEST_CASE(KarstActivationBlockRejectsUserTxBeforeTrailingDeposit, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst") * boost::unit_test::disabled())
+BOOST_AUTO_TEST_CASE(KarstActivationBlockRejectsUserTxBeforeTrailingDeposit,
+    *boost::unit_test::label("fork-jovian")
+        *boost::unit_test::label("fork-karst") * boost::unit_test::disabled())
 // clang-format on
 {
     // M1 (parked): the deposits-only-on-activation rule is a FISCO extension op-geth does

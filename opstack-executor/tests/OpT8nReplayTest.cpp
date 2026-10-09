@@ -1300,17 +1300,17 @@ struct MetaFeeFlags
     bool daScalarNonZero = false;
 };
 
-/// op-node setL1BlockValues wire layout: the selectors/lengths are the production
-/// constants (OpEthBlockExecute.h / OpEthL1Attributes.h); the operator-fee offsets
-/// mirror the builder (OpEthL1Attributes.cpp c_operatorFeeScalarOffset /
-/// c_operatorFeeConstantOffset) — consensus wire constants, cross-checked by the
-/// fork-spec equivalence test.
+/// op-node setL1BlockValues wire layout: the selectors/lengths AND the operator-fee
+/// offsets are the production constants (OpEthBlockExecute.h / OpEthL1Attributes.h —
+/// the header is the single home for the offsets).
 constexpr auto IsthmusL1AttributesSelector = opeth::OP_ETH_ISTHMUS_L1_ATTRIBUTES_SELECTOR;
 constexpr auto JovianL1AttributesSelector = opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_SELECTOR;
 constexpr std::size_t IsthmusL1AttributesLen = opeth::OP_ETH_ISTHMUS_L1_ATTRIBUTES_LEN;
 constexpr std::size_t JovianL1AttributesLen = opeth::OP_ETH_JOVIAN_L1_ATTRIBUTES_LEN;
-constexpr std::size_t c_l1AttributesOperatorFeeScalarOffset = 164;
-constexpr std::size_t c_l1AttributesOperatorFeeConstantOffset = 168;
+constexpr std::size_t c_l1AttributesOperatorFeeScalarOffset =
+    opeth::OP_ETH_L1_OPERATOR_FEE_SCALAR_OFFSET;
+constexpr std::size_t c_l1AttributesOperatorFeeConstantOffset =
+    opeth::OP_ETH_L1_OPERATOR_FEE_CONSTANT_OFFSET;
 
 /// Derive the value-dependent emission flags from the vector's L1-attributes
 /// deposit calldata (the first deposit whose data carries the
@@ -1399,7 +1399,7 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
     auto header = opstack_test::makeMinimalHeader(bc.blk.number, bc.blk.timestamp * 1000,
         bc.blk.gas_limit, bcos::u256(bc.blk.base_fee), evmcToAddress(bc.blk.coinbase),
         evmcToH256(bc.blk.prev_randao), evmcToH256(bc.blk.parent_beacon_block_root),
-        evmcToH256(bc.hashes.parentHash));
+        evmcToH256(bc.hashes.parentHash), *bc.cfg);
 
     const auto& spec = cfg;  // BlockContext already carries the resolved fork's spec
     opeth::OpEthExecuteBlockResult executed;
@@ -1495,7 +1495,8 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
         h.isMember("requestsHash") ?
             std::optional{hexHash(test::from_json<hash256>(jAt(h, "requestsHash")))} :
             std::nullopt,
-        seal.requestsHash.has_value() ? std::optional{hexHashBcos(*seal.requestsHash)} : std::nullopt);
+        seal.requestsHash.has_value() ? std::optional{hexHashBcos(*seal.requestsHash)} :
+                                        std::nullopt);
     // blobGasUsed: Ecotone+ vectors always emit it (op-geth headers carry 0x0 for
     // blob-less blocks); Regolith/Canyon (London/Shanghai) headers predate 4844 and
     // the vectors omit the key — both sides must be absent. The post-cutover seal
@@ -1900,8 +1901,8 @@ void assertRejectThrow(const std::string& id, const JsonValue& v,
     auto header = opstack_test::makeMinimalHeader(bc.blk.number, bc.blk.timestamp * 1000,
         bc.blk.gas_limit, bcos::u256(bc.blk.base_fee), evmcToAddress(bc.blk.coinbase),
         evmcToH256(bc.blk.prev_randao), evmcToH256(bc.blk.parent_beacon_block_root),
-        evmcToH256(bc.hashes.parentHash));
-    const auto spec = opeth::opForkSpec(bc.cfg->fork);
+        evmcToH256(bc.hashes.parentHash), *bc.cfg);
+    const auto spec = *bc.cfg;
     try
     {
         (void)opstack_test::runExecutorPath(

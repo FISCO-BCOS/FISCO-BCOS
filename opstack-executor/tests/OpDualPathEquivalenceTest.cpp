@@ -33,7 +33,7 @@
 
 #include "support/GoldenSample.h"
 #include "support/SeedPreState.h"
-#include "support/DualRunHarness.h"  // DualRunFixture + runExecutorPath (the pre-Canyon executor arm)
+#include "support/DualRunHarness.h"  // DualRunFixture + runExecutorPath (pre-Canyon arm)
 
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
@@ -65,7 +65,7 @@
 #include <bcos-ledger/mpt/Constants.h>      // emptyRootHash
 #include <bcos-ledger/mpt/HashBuilder.h>    // flushTrieNodes
 #include <bcos-ledger/mpt/StateRoots.h>     // computeMptStateDelta
-#include <bcos-ledger/mpt/ViewNodeStorage.h>
+#include "support/GenesisTrie.h"  // copyFlatRows + computeAndPersistParentTrie
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
@@ -262,48 +262,6 @@ struct GoldenStats
     int mismatch = 0;
     int greenGuardOk = 0;
 };
-
-/// Q5 fail-closed reads SYS_NUMBER_2_BLOCK_HEADER for parentTs. Dual-path executeBlock uses
-/// ledger=nullptr, so seed a parent row (timestamp strictly before the current block).
-/// Copy every flat row visible through @p from into @p to's top mutable layer. The
-/// incremental MPT build scans the top mutable layer ONLY (buildAndCollect), so a
-/// backend-merged seed is invisible to it — this re-materializes the committed state as
-/// the genesis build's delta (mirror of OpSchedulerTest's copyFlatRows).
-void copyFlatRows(MLS::ViewType& from, MLS::ViewType& to)
-{
-    auto it = bcos::task::syncWait(bcos::storage2::range(from));
-    while (auto kv = bcos::task::syncWait(it.next()))
-    {
-        auto const& [k, v] = *kv;
-        if (auto const* entry = std::get_if<bcos::storage::Entry>(std::addressof(v)))
-            bcos::task::syncWait(bcos::storage2::writeOne(to, k, *entry));
-    }
-}
-
-/// Build the MPT over the committed state (parent = empty root) and persist every node
-/// as "/mpt/" rows. Route A's incremental build at block N resolves the PARENT header's
-/// stateRoot against persisted nodes: without this, the parent root is 0x00..00 (no
-/// nodes) and execution fails "missing node hash". Returns the root to stamp on the
-/// parent header — for chain vectors this is per-block correct: the committed state
-/// after route A's block N-1 merge IS block N-1's post-state.
-bcos::h256 computeAndPersistParentTrie(MLS& mls)
-{
-    auto readView = mls.fork();  // read-through to the committed backend (never merged)
-    auto buildView = mls.fork();
-    buildView.newMutable();
-    copyFlatRows(readView, buildView);
-    bcos::ledger::LedgerConfig ledgerConfig;
-    ledgerConfig.setExecutorVersion(bcos::ledger::OPSTACK_EXECUTOR_VERSION);
-    auto delta = bcos::task::syncWait(bcos::ledger::mpt::computeMptStateDelta(
-        buildView, bcos::ledger::mpt::emptyRootHash(), ledgerConfig));
-    auto persistView = mls.fork();
-    persistView.newMutable();
-    bcos::ledger::mpt::ViewNodeStorage<MLS::ViewType> nodeStorage(persistView);
-    bcos::task::syncWait(bcos::ledger::mpt::flushTrieNodes(nodeStorage, delta.newNodes));
-    bcos::task::syncWait(mls.mergeView(std::move(persistView)));
-    return delta.stateRoot;
-}
-
 void seedParentHeaderForActivationCheck(MLS& mls, bcos::protocol::BlockHeader::Ptr const& header)
 {
     if (!header || header->number() <= 0)
@@ -318,7 +276,7 @@ void seedParentHeaderForActivationCheck(MLS& mls, bcos::protocol::BlockHeader::P
     // Route A's incremental MPT resolves THIS root against persisted trie nodes — build
     // + persist the committed state's trie (pre-state for block 1; block N-1's post-state
     // for chain block N) and stamp it.
-    parent->setStateRoot(computeAndPersistParentTrie(mls));
+    parent->setStateRoot(opstack_test::computeAndPersistParentTrie(mls));
     parent->setTxsRoot(bcos::h256{});
     parent->setReceiptsRoot(bcos::h256{});
     parent->setGasLimit(header->gasLimit());
@@ -475,7 +433,8 @@ bcos::protocol::Transaction::Ptr buildBlockTx(
 /// Backfill the announced header's commitment fields from the vector's golden
 /// `_op_expected.header` (op-geth's real block, from the t8n generator), so OpScheduler's
 /// unconditional six-way verify compares FISCO's execution against the op-geth golden. txRoot is
-/// absent from _op_expected — it is the deterministic trie root over rawTxBytes (computeOpEthTransactionsRoot,
+/// absent from _op_expected — it is the deterministic trie root over rawTxBytes
+/// (computeOpEthTransactionsRoot,
 /// the same function finalizeOpBlockResult uses → equal by construction).
 /// withdrawalsRoot/requestsHash/blobGasUsed are set only when present; blobGasUsed MUST be filled
 /// when the golden carries it (a buildHeaderFromEnv default of 0 would otherwise false-mismatch a
@@ -511,7 +470,8 @@ void checkSysTripwire(const std::string& id, const JsonValue& vec)
         {
             if (j.isMember(k) && !j[k].isNull())
                 tables.insert(
-                    bcos::ledger::account::accountTableName(opstack_test::jsonAddress(j[k].asString())));
+                    bcos::ledger::account::accountTableName(
+                        opstack_test::jsonAddress(j[k].asString())));
         }
     };
     if (vec.isMember("pre"))
@@ -682,11 +642,12 @@ void runBlockEquivalence(const std::string& id, Fixture& fixture,
         auto readView = fixture.multiLayerStorage.fork();
         auto view = fixture.multiLayerStorage.fork();
         view.newMutable();
-        copyFlatRows(readView, view);
+        opstack_test::copyFlatRows(readView, view);
         seedParentHeaderForActivationCheck(fixture.multiLayerStorage, header);
         opstack_test::DualRunFixture driver;
         const auto spec = op::opForkSpecAt(schedule,
-            bcos::engine::unixSecondsFromInternalMillis(static_cast<uint64_t>(header->timestamp())));
+            bcos::engine::unixSecondsFromInternalMillis(
+                static_cast<uint64_t>(header->timestamp())));
         try
         {
             resultA = opstack_test::runExecutorPath(

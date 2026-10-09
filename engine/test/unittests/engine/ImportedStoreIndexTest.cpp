@@ -114,7 +114,7 @@ BOOST_AUTO_TEST_CASE(SparseStoreKeepsLiveAncestor)
     store.adoptCanonicalHead(102, hashOf('C'));
     // A is a live canonical ancestor (the walk from C cannot reach it, so the store
     // must NOT detach it).
-    BOOST_CHECK(!store.hasBlock(hashOf('A')) ? false : true);  // body stays
+    BOOST_CHECK(store.hasBlock(hashOf('A')));  // body stays
     // The canonical height index keeps A at 100 (not detached => not erased).
     BOOST_CHECK_EQUAL(*store.occupantAt(100), hashOf('A'));
 }

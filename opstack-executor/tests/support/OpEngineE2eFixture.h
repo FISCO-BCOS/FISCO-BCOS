@@ -34,7 +34,7 @@
 #include <bcos-ledger/mpt/Constants.h>     // emptyRootHash
 #include <bcos-ledger/mpt/HashBuilder.h>   // flushTrieNodes
 #include <bcos-ledger/mpt/StateRoots.h>    // computeMptStateDelta
-#include <bcos-ledger/mpt/ViewNodeStorage.h>
+#include "GenesisTrie.h"  // copyFlatRows + computeAndPersistParentTrie
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-table/src/LegacyStorageWrapper.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
@@ -149,8 +149,9 @@ inline bcos::ledger::OpForkSchedule scheduleFor(bool jovian)
 /// sentinels (isUnsetOpEthL1BlockInfo / isUnsetOpEthSystemConfig), and the FCU-build
 /// suites (S7/S8/S9) drive exactly that path. The fee amounts stay zero — the pricing
 /// assertions read the 1559 sources (parent extraData / chain config), never the
-/// L1Block content.
-inline bcos::executor_v1::opstack::OpEthL1BlockInfo emptyL1BlockInfo()
+/// L1Block content. Named for what it returns (a SEEDED snapshot, not the unset
+/// sentinel) — the old name outlived the sentinel fix.
+inline bcos::executor_v1::opstack::OpEthL1BlockInfo seededL1BlockInfo()
 {
     bcos::executor_v1::opstack::OpEthL1BlockInfo info{};
     info.number = 1;
@@ -179,47 +180,6 @@ inline void seedSysTables(MLS& multiLayerStorage)
     }
     bcos::task::syncWait(multiLayerStorage.mergeView(std::move(view)));
 }
-
-/// Copy every flat row visible through @p from into @p to's top mutable layer. The
-/// incremental MPT build scans the top mutable layer ONLY (buildAndCollect), so a
-/// backend-merged seed is invisible to it — this re-materializes the committed state as
-/// the genesis build's delta. (Mirror of OpSchedulerTest's copyFlatRows.)
-inline void copyFlatRows(MLS::ViewType& from, MLS::ViewType& to)
-{
-    auto it = bcos::task::syncWait(bcos::storage2::range(from));
-    while (auto kv = bcos::task::syncWait(it.next()))
-    {
-        auto const& [k, v] = *kv;
-        if (auto const* entry = std::get_if<bcos::storage::Entry>(std::addressof(v)))
-            bcos::task::syncWait(bcos::storage2::writeOne(to, k, *entry));
-    }
-}
-
-/// Build the MPT over the committed pre-state (parent = empty root) and persist every node
-/// as "/mpt/" rows — the test-local mirror of Ledger::buildGenesisBlock's Ethereum-lane
-/// genesis import (OpSchedulerTest's computeAndPersistGenesisTrie). The delegate
-/// OpScheduler's incremental build at the payload's block reads the PARENT header's
-/// stateRoot and resolves that root's nodes through storage: without this step the root is
-/// 0x00..00 (no persisted nodes) and execution fails "missing node hash".
-/// Returns the root to stamp on the parent header.
-inline bcos::h256 computeAndPersistParentTrie(MLS& mls)
-{
-    auto readView = mls.fork();  // read-through to the committed backend (never merged)
-    auto buildView = mls.fork();
-    buildView.newMutable();
-    copyFlatRows(readView, buildView);
-    bcos::ledger::LedgerConfig ledgerConfig;
-    ledgerConfig.setExecutorVersion(bcos::ledger::OPSTACK_EXECUTOR_VERSION);
-    auto delta = bcos::task::syncWait(bcos::ledger::mpt::computeMptStateDelta(
-        buildView, bcos::ledger::mpt::emptyRootHash(), ledgerConfig));
-    auto persistView = mls.fork();
-    persistView.newMutable();
-    bcos::ledger::mpt::ViewNodeStorage<ViewType> nodeStorage(persistView);
-    bcos::task::syncWait(bcos::ledger::mpt::flushTrieNodes(nodeStorage, delta.newNodes));
-    bcos::task::syncWait(mls.mergeView(std::move(persistView)));
-    return delta.stateRoot;
-}
-
 inline void registerVerifiedBlock(
     MLS& multiLayerStorage, bcos::h256 const& blockHash, int64_t number)
 {
@@ -324,7 +284,7 @@ inline void registerParentForNewPayload(MLS& multiLayerStorage,
     // The delegate's incremental MPT build at the payload's block resolves the parent
     // header's stateRoot against persisted "/mpt/" nodes — build + persist the seeded
     // pre-state's trie first (callers always seedPreState before this helper).
-    auto const stateRoot = computeAndPersistParentTrie(multiLayerStorage);
+    auto const stateRoot = opstack_test::computeAndPersistParentTrie(multiLayerStorage);
     if (vector.isMember("env"))
     {
         registerGoldenParentHeader(
@@ -402,7 +362,7 @@ struct OpE2eFixture
         std::optional<bcos::engine::OpEip1559Params> eip1559 = std::nullopt)
       : hashImpl(makeCryptoSuite()->hashImpl()),
         receiptFactory(makeReceiptFactory()),
-        scheduler(schedule, emptyL1BlockInfo()),  // copy: opDelegate below moves it
+        scheduler(schedule, seededL1BlockInfo()),  // copy: opDelegate below moves it
         legacyLedgerStorage(
             std::make_shared<bcos::storage::LegacyStorageWrapper<BackendMemStorage>>(
                 backendStorage)),
