@@ -226,13 +226,14 @@ Element renderLog(Model const& _model, std::string const& _filter)
         {
             badges += "[" + badge + "]";
         }
+        auto rest = event.raw.size() > event.name.size() + badges.size() ?
+                        event.raw.substr(badges.size() + event.name.size()) :
+                        std::string();
         auto line = hbox(
             {text(event.timestamp.size() > 11 ? event.timestamp.substr(11, 12) : event.timestamp) |
                     dim,
-                text(" " + badges) | dim, text(event.name) | bold,
-                text(event.raw.size() > event.name.size() + badges.size() ?
-                         event.raw.substr(badges.size() + event.name.size()) :
-                         "")});
+                text(" " + sanitizeForTerminal(badges)) | dim,
+                text(sanitizeForTerminal(event.name)) | bold, text(sanitizeForTerminal(rest))});
         if (!_filter.empty())
         {
             line = line | color(Color::Yellow);
