@@ -67,11 +67,16 @@ def main() -> int:
             if base[cid] != other[cid]:
                 print(f"MISMATCH {cid} {name}: fisco={base[cid]} {name}={other[cid]}")
                 mismatches += 1
-        if data.get("solidity") and cid in data["solidity"]:
-            sol = data["solidity"][cid]
-            # operator_cost is authoritative; l1_cost is cross-reference only.
-            if sol[1] != base[cid][1]:
-                print(f"MISMATCH {cid} solidity operator: fisco={base[cid][1]} sol={sol[1]}")
+        if data.get("solidity"):
+            if cid in data["solidity"]:
+                sol = data["solidity"][cid]
+                # operator_cost is authoritative; l1_cost is cross-reference only.
+                if sol[1] != base[cid][1]:
+                    print(f"MISMATCH {cid} solidity operator: fisco={base[cid][1]} sol={sol[1]}")
+                    mismatches += 1
+            else:
+                # A case missing from the solidity snapshot is a hole, not a pass.
+                print(f"MISSING {cid} in solidity")
                 mismatches += 1
 
     print(f"compared {compared} l1+op fields across fisco/opgeth/oprevm "

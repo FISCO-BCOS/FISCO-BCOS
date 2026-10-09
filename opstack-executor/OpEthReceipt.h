@@ -82,8 +82,11 @@ struct OpReceiptMeta
     std::optional<uint32_t> l1_base_fee_scalar;
     std::optional<uint32_t> l1_blob_base_fee_scalar;
     std::optional<intx::uint256> l1_fee;  // = l1_cost
-    std::optional<intx::uint256> l1_fee_scalar;  // Bedrock-era RAW slot-6 scalar (pre-Ecotone
-                                                 // only; op-geth reports it as L1FeeScalar)
+    std::optional<intx::uint256> l1_fee_scalar;  // Bedrock-era RAW slot-6 scalar — the
+                                                 // LEGACY pricing path (pre-Ecotone, plus
+                                                 // the first Ecotone block whose L1Block
+                                                 // Ecotone params read zero); op-geth
+                                                 // reports it as L1FeeScalar
     std::optional<uint64_t> l1_gas_used;  // Fjord+; wire index 11
     // operator (Isthmus+)
     std::optional<intx::uint256> operator_fee;    // FISCO extension: actually-charged value

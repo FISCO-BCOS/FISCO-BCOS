@@ -12,7 +12,10 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
- */
+
+ *
+ * @file MultiLayerStorage.h
+ * @brief Layered storage composition: mutable views over backend and cache layers with fork/merge semantics. */
 
 #pragma once
 #include "CheckpointStorage.h"
@@ -678,10 +681,12 @@ public:
         co_await mergeIntoBackends(fromStorage...);
     }
 
-    /// Cache-layer read (nullopt when this composition has no cache layer). The engine's
-    /// canonicalize undo journal pairs this with writeCacheLayer: mergeToBackends merges
-    /// into backend AND cache, so a failed batch must restore BOTH or the cache keeps
-    /// half-applied canonical state that fork()/forkCommitted() read first (review F3).
+    /// Cache-layer read (nullopt when this composition has no cache layer — a caller
+    /// cannot distinguish that from "key absent"; the intended consumer, the engine's
+    /// canonicalize undo journal, is a follow-up (OpScheduler.h marks it so) and will
+    /// pair this with writeCacheLayer: mergeToBackends merges into backend AND cache,
+    /// so a failed batch must restore BOTH or the cache keeps half-applied canonical
+    /// state that fork()/forkCommitted() read first).
     task::Task<std::optional<Value>> readCacheLayer(Key key)
     {
         if constexpr (withCacheStorage)

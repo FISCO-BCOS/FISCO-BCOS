@@ -60,12 +60,7 @@ if(REQUIRE_T8N_CORPUS OR DEFINED ENV{GITHUB_ACTIONS} OR DEFINED ENV{CI})
     list(APPEND _t8n_defs FISCO_REQUIRE_T8N_CORPUS=1)
 endif()
 
-# Post-cutover port-backlog suites that compile against CURRENT headers.
-# The remaining suites (OpT8nReplayTest, OpNewPayloadRpcE2eTest, OpKarstActivationTest,
-# OpL1BlockDepositTest, OpL1EdgeGateTest, OpBlockInjectorTest, OpDualPathEquivalenceTest,
-# OpEngineBranchSmokeTest) reference pre-cutover headers (OpBlockExecute.h,
-# OpDepositEncode.h, OpstackExecutor.h, OpForkFlagsCompat.h, OpSchedulerSeamTestHelpers.h)
-# that must be ported first — tracked in the PR backlog.
+# The OP block-path suites, all ported onto the post-cutover surface.
 add_executable(opstack-executor-block-tests
     TestMain.cpp
     OpDaMatrixSchemaTest.cpp

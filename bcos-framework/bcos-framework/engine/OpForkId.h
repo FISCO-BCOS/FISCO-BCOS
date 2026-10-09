@@ -130,7 +130,8 @@ struct EngineForkContext
     return OpExtraDataLayout::Empty;
 }
 
-// The base-fee clock reads this table instead of the fork order (see OpBaseFeeClock):
+// The base-fee clock reads this table instead of the fork order (OpBaseFee.h's
+// calcOpBaseFee* helpers):
 // "layout != Empty" means Holocene or later, "layout == Jovian17" means Jovian or
 // later. These pin each boundary so a layout change cannot silently re-price blocks.
 static_assert(extraDataLayoutFor(OpForkId::Regolith) == OpExtraDataLayout::Empty &&

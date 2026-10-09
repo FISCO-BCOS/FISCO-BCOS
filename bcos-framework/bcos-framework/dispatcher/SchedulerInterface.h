@@ -147,9 +147,9 @@ public:
     // on. This framework header cannot name that type (the dependency direction is
     // exactly why the signature erases), so the consumer un-erases with
     // static_pointer_cast and a producer that stores ANY other type is silent UB, not
-    // a catchable error. The concrete type is pinned HERE and at the engine's single
-    // un-erase site (OpEngineService.inl's static_pointer_cast of these payloads);
-    // the long-term fix
+    // a catchable error. The concrete type is pinned HERE (this comment) — no engine
+    // un-erase site exists yet; the import-plane consumer lands with the sibling-reorg
+    // work, and the long-term fix
     // is an OP-lane concept interface that names the type (follow-up issue). Baseline
     // schedulers never produce these payloads: the default implementation is
     // unsupported and answers UnknownError.

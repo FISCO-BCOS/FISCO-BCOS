@@ -12,7 +12,10 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
- */
+
+ *
+ * @file MemoryStorage.h
+ * @brief In-memory Storage2 backend: ordered/concurrent buckets, logical deletion and the merge primitives. */
 
 #pragma once
 
@@ -614,15 +617,11 @@ public:
                     // source concurrently: moving out of the shared source would let the
                     // second pass write a moved-from (gutted) Entry — a nondeterministic
                     // corruption of one layer (observed as intermittent state-root
-                    // mismatches on the switch-SetCanonical path).
-                    // Both destinations need their own copy of every merged value, so two
-                    // deep copies per row is the theoretical minimum here. And move is NOT
-                    // recoverable by dispatching on the single-pass (no-cache) shape:
-                    // mergeBackStorage hands the merged source layer back to its caller,
-                    // who may keep reading it — a moved-out row would be a silent read
-                    // miss on that layer. Recovering the copy needs an explicit
-                    // move-and-erase contract on the source, agreed with every caller of
-                    // mergeBackStorage/mergeToBackends — not a silent move here.
+                    // mismatches on the switch-SetCanonical path). The no-cache
+                    // single-pass shape pays the same copy to keep the primitive uniform
+                    // (its only in-tree uses are benchmarks); recovering it needs an
+                    // explicit move-and-erase contract on the source, agreed with every
+                    // caller of mergeBackStorage/mergeToBackends — not a silent move here.
                     std::visit(
                         [&](auto& innerValue) {
                             toStorage.writeOne(bucket, key, innerValue, false);

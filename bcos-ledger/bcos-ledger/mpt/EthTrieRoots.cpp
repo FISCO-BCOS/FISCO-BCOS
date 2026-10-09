@@ -173,9 +173,7 @@ bcos::bytes encodeReceiptLeaf(
     encodeLogsList(payload, receipt.logEntries());
 
     // The deposit leaf's [nonce, version] tail is presence-of-version driven only: a
-    // caller-chosen second gate here would be a fork knob with no caller (removed — it
-    // duplicated this inner rule and, set false, would strip the tail from Canyon+
-    // receipts).
+    // caller-chosen second gate here would be a fork knob with no caller.
     if (txType == c_depositTxType)
     {
         // op-geth Receipts.EncodeIndex (core/types/receipt.go) DepositTxType branch: the

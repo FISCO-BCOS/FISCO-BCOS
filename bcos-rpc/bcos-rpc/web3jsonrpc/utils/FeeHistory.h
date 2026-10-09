@@ -56,10 +56,11 @@ std::vector<u256> rewardPercentiles(std::vector<RewardSample> samples,
 /// The next block's base fee after @p parent under the OP EIP-1559 rule (op-geth CalcBaseFee).
 /// The era comes from the parent header's shape, which a validated OP chain fixes: non-empty
 /// extraData = Holocene+ parent (parameters decoded from it; 17 bytes / 0x01 = Jovian, which
-/// adds the DA-footprint metering and minBaseFee floor); empty extraData = pre-Holocene, with
-/// elasticity 6 and denominator 250 when the child is Canyon, else 50. The child counts as
-/// Canyon when the parent carries withdrawalsRoot (every Canyon+ OP header does), so only the
-/// Canyon activation block itself is predicted with the Bedrock denominator.
+/// adds the DA-footprint metering and minBaseFee floor); empty extraData = pre-Holocene, priced
+/// with the legacy FALLBACK preset {elasticity 6; denominator 250 when the child is Canyon,
+/// else 50} — the eip1559 argument below overrides it when the chain declares a triple. The
+/// child counts as Canyon when the parent carries withdrawalsRoot (every Canyon+ OP header
+/// does), so only the Canyon activation block itself is predicted with the Bedrock denominator.
 /// eip1559: the chain's DECLARED triple (from the op_eip1559_params SYS_CONFIG row);
 /// nullopt prices with c_legacyOpEip1559Params. Only the pre-Holocene arm reads it.
 u256 nextOpBaseFee(protocol::BlockHeader const& parent,

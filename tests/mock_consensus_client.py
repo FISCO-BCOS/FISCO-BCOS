@@ -460,7 +460,7 @@ def run_v2_block_flow() -> None:
     for a CL/chain fork mismatch. The pre-Karst V2 build loop itself is covered by the
     engine unit tests on a SHANGHAI fixture.
     """
-    _log_test("FCU V2 + getPayloadV2 + newPayloadV2 (pre-Karst surface)")
+    _log_test("FCU V2 attribute-shape refusal (-38005, pre-Karst surface)")
 
     head_hash = get_head_hash()
     fc_state = {

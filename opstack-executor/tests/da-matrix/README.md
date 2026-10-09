@@ -37,6 +37,8 @@ cd <build>/opstack-executor/tests && ./opstack-da-matrix-runner \
   --grid <this>/da_matrix.json --out out_fisco.json
 
 # 2. op-geth (Task 4; authoritative reference v1.101702.2)
+#    run_opgeth/ carries main.go + go.sum only (no go.mod): drop the directory into an
+#    op-geth checkout at the pinned tag (its go.mod supplies the dependencies), then:
 cd run_opgeth && go run . --grid <this>/da_matrix.json --out out_opgeth.json
 
 # 3. op-revm (Task 5; op-revm 20.0.0 checkout)
@@ -79,17 +81,16 @@ checkout silently changes the expected output.
 
 | Source | Local checkout | Pinned commit / version |
 |---|---|---|
-| op-revm | `/Users/octopus/octo/code/blockchain-impl/optimism/rust/op-revm` | `da197e45ed44b9fca258b3b0d0709e8dfca1c7cd` (version 20.0.0) |
-| contracts-bedrock | `/Users/octopus/octo/code/blockchain-impl/optimism/packages/contracts-bedrock` | `da197e45ed44b9fca258b3b0d0709e8dfca1c7cd` (same optimism monorepo) |
+| op-revm | `<optimism monorepo>/rust/op-revm` | `da197e45ed44b9fca258b3b0d0709e8dfca1c7cd` (version 20.0.0) |
+| contracts-bedrock | `<optimism monorepo>/packages/contracts-bedrock` | `da197e45ed44b9fca258b3b0d0709e8dfca1c7cd` (same optimism monorepo) |
 | op-geth | — (build-tagged) | v1.101702.2 (already recorded above) |
 
-op-revm and contracts-bedrock both live in the same optimism monorepo
-(`/Users/octopus/octo/code/blockchain-impl/optimism`), so they share one pinned
-commit. Verify with:
+op-revm and contracts-bedrock both live in the same optimism monorepo, so they share one
+pinned commit. Verify with:
 
 ```bash
-cd /Users/octopus/octo/code/blockchain-impl/optimism/rust/op-revm && git rev-parse HEAD
-cd /Users/octopus/octo/code/blockchain-impl/optimism/packages/contracts-bedrock && git rev-parse HEAD
+git -C <optimism monorepo>/rust/op-revm rev-parse HEAD
+git -C <optimism monorepo>/packages/contracts-bedrock rev-parse HEAD
 ```
 
 Both must print `da197e45ed44b9fca258b3b0d0709e8dfca1c7cd`.
