@@ -6,7 +6,7 @@
 // The largest number of topic in one event log
 #define EVENT_LOG_TOPICS_MAX_INDEX (4)
 
-#define FILTER_LOG(LEVEL) BCOS_LOG(LEVEL) << "[FILTER]"
+#define FILTER_LOG(LEVEL) BCOS_MODULE_LOG(RPC, LEVEL) << "[FILTER]"
 
 namespace bcos
 {

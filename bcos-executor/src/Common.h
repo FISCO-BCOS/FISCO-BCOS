@@ -35,6 +35,7 @@
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Exceptions.h"
+#include <bcos-utilities/BoostLog.h>
 #include <evmc/evmc.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <iterator>
@@ -43,7 +44,6 @@
 #include <range/v3/algorithm/copy.hpp>
 #include <range/v3/view/drop.hpp>
 #include <set>
-#include <bcos-utilities/BoostLog.h>
 
 namespace bcos
 {
@@ -60,13 +60,15 @@ constexpr static evmc_bytes32 EMPTY_EVM_BYTES32 = {};
 constexpr static evmc_uint256be EMPTY_EVM_UINT256 = {};
 using bytes_view = std::basic_string_view<uint8_t>;
 
-#define EXECUTOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR")
+#define EXECUTOR_LOG(LEVEL) BCOS_MODULE_LOG(EXECUTOR, LEVEL) << LOG_BADGE("EXECUTOR")
 #define EXECUTOR_BLK_LOG(LEVEL, number) EXECUTOR_LOG(LEVEL) << BLOCK_NUMBER(number)
 #define EXECUTOR_NAME_LOG(LEVEL) \
-    BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR:" + std::to_string(m_schedulerTermId))
+    BCOS_MODULE_LOG(EXECUTOR, LEVEL) << LOG_BADGE("EXECUTOR:" + std::to_string(m_schedulerTermId))
 #define COROUTINE_TRACE_LOG(LEVEL, contextID, seq) \
-    BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR") << "[" << (contextID) << "," << (seq) << "]"
-#define PARA_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("PARA") << LOG_BADGE(utcTime())
+    BCOS_MODULE_LOG(EXECUTOR, LEVEL)               \
+        << LOG_BADGE("EXECUTOR") << "[" << (contextID) << "," << (seq) << "]"
+#define PARA_LOG(LEVEL) \
+    BCOS_MODULE_LOG(EXECUTOR, LEVEL) << LOG_BADGE("PARA") << LOG_BADGE(utcTime())
 
 
 static constexpr std::string_view USER_TABLE_PREFIX = "/tables/";
@@ -140,7 +142,7 @@ static constexpr std::string_view FS_TYPE_DIR = "directory";
 static constexpr std::string_view FS_TYPE_CONTRACT = "contract";
 static constexpr std::string_view FS_TYPE_LINK = "link";
 
-#define EXECUTIVE_LOG(LEVEL) BCOS_LOG(LEVEL) << "[EXECUTOR]"
+#define EXECUTIVE_LOG(LEVEL) BCOS_MODULE_LOG(EXECUTOR, LEVEL) << "[EXECUTOR]"
 
 struct GlobalHashImpl
 {

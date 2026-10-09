@@ -58,7 +58,7 @@
 
 namespace bcos::ledger::mpt
 {
-#define MPT_PRUNER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("MPT_PRUNER")
+#define MPT_PRUNER_LOG(LEVEL) BCOS_MODULE_LOG(LEDGER, LEVEL) << LOG_BADGE("MPT_PRUNER")
 
 /// Whether the Phase-3 garbage sweep may scan the "/mpt/" table with CONCURRENT shard
 /// iterators: the backend must tolerate independent RANGE_SEEK iterators plus delete batches
@@ -107,11 +107,10 @@ struct SweepInlineCompletionCheck<Backend, true>
     using RangeAwaitable = decltype(std::declval<Backend&>().range(
         bcos::storage2::RANGE_SEEK, std::declval<bcos::executor_v1::StateKey&>()));
     using Iterator = bcos::task::AwaitableReturnType<RangeAwaitable>;
-    static constexpr bool value =
-        kIsAwaitableValue<RangeAwaitable> &&
-        kIsAwaitableValue<decltype(std::declval<Iterator&>().next())> &&
-        kIsAwaitableValue<decltype(std::declval<Backend&>().removeSome(
-            std::declval<std::vector<bcos::executor_v1::StateKey>>()))>;
+    static constexpr bool value = kIsAwaitableValue<RangeAwaitable> &&
+                                  kIsAwaitableValue<decltype(std::declval<Iterator&>().next())> &&
+                                  kIsAwaitableValue<decltype(std::declval<Backend&>().removeSome(
+                                      std::declval<std::vector<bcos::executor_v1::StateKey>>()))>;
 };
 
 /// Reference-counting MPT pruning (spec §4.8), one instance per chain over the committed-state
@@ -257,9 +256,8 @@ public:
     /// @throws MPTInvariantViolation when a
     /// reachable node row is missing (the trie is the source of truth — fail loud, same
     /// convention as Trie.h) or the head header carries no root.
-    bcos::task::Task<void> init(bcos::protocol::BlockNumber currentBlock,
-        int64_t executorVersion, StateRootLookup stateRootAt, bool sweepGarbage,
-        GarbageProgress progress = {})
+    bcos::task::Task<void> init(bcos::protocol::BlockNumber currentBlock, int64_t executorVersion,
+        StateRootLookup stateRootAt, bool sweepGarbage, GarbageProgress progress = {})
     {
         m_watermark.store(currentBlock, std::memory_order_relaxed);
         m_executorVersion = executorVersion;
@@ -408,8 +406,7 @@ public:
                              << shardCount << " shard(s) (progress logged every "
                              << SWEEP_SCAN_LOG_INTERVAL << " rows)";
         oneapi::tbb::parallel_for(size_t{0}, shardCount,
-            [this, &scanned, &garbage, &garbageDeleted, &progress, &progressMutex](
-                size_t shard) {
+            [this, &scanned, &garbage, &garbageDeleted, &progress, &progressMutex](size_t shard) {
                 auto const startKey = [shard] {
                     (void)shard;  // unused when shardCount == 1 (clang -Wunused-lambda-capture)
                     if constexpr (shardCount > 1)

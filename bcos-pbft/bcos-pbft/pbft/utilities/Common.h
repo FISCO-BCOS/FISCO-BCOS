@@ -19,15 +19,23 @@
  */
 #pragma once
 #include <bcos-framework/Common.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Exceptions.h>
 #include <stdint.h>
 #include <string>
 #include <string_view>
-#include <bcos-utilities/BoostLog.h>
 
-#define PBFT_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("PBFT")
-#define PBFT_STORAGE_LOG(LEVEL) \
-    BCOS_LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("PBFT") << LOG_BADGE("STORAGE")
+#define PBFT_LOG(LEVEL) BCOS_MODULE_LOG(PBFT, LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("PBFT")
+// runtime-level variant: _level is a bcos::LogLevel value, not a token. Used by the helpers that
+// emit one named event (e.g. PrePrepareRejected) from several sites at different severities, so
+// the event name has exactly one LOG_DESC in the tree.
+#define PBFT_LOG_DYN(_level)                                                              \
+    if (bcos::moduleLogEnabled(bcos::LogModule::PBFT, (_level)))                          \
+    BOOST_LOG_SEV(bcos::FileLoggerHandler, (boost::log::trivial::severity_level)(_level)) \
+        << LOG_BADGE("CONSENSUS") << LOG_BADGE("PBFT")
+#define PBFT_STORAGE_LOG(LEVEL)                                                 \
+    BCOS_MODULE_LOG(PBFT, LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("PBFT") \
+                                 << LOG_BADGE("STORAGE")
 
 namespace bcos::consensus
 {
@@ -46,6 +54,34 @@ enum PacketType : uint32_t
     RecoverRequest = 0xa,
     RecoverResponse = 0xb,
 };
+/// why a view-change was triggered; printed as ViewChangeTriggered,reason=<name>
+enum class ViewChangeReason : uint8_t
+{
+    ConsensusTimeout,
+    FPlusOneHigherView,
+    FaultyLeader,
+    StartupRecovery,
+    Restart,
+};
+
+inline std::string_view viewChangeReasonName(ViewChangeReason _reason)
+{
+    switch (_reason)
+    {
+    case ViewChangeReason::ConsensusTimeout:
+        return "consensus_timeout";
+    case ViewChangeReason::FPlusOneHigherView:
+        return "f_plus_one_higher_view";
+    case ViewChangeReason::FaultyLeader:
+        return "faulty_leader";
+    case ViewChangeReason::StartupRecovery:
+        return "startup_recovery";
+    case ViewChangeReason::Restart:
+        return "restart";
+    }
+    return "unknown";
+}
+
 DERIVE_BCOS_EXCEPTION(UnknownPBFTMsgType);
 DERIVE_BCOS_EXCEPTION(InitPBFTException);
 DERIVE_BCOS_EXCEPTION(InvalidPBFTMessage);

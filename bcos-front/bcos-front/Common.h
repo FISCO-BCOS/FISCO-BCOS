@@ -22,4 +22,4 @@
 #include <bcos-framework/Common.h>
 #include <bcos-utilities/BoostLog.h>
 
-#define FRONT_LOG(LEVEL) BCOS_LOG(LEVEL) << "[FrontService]"
+#define FRONT_LOG(LEVEL) BCOS_MODULE_LOG(FRONT, LEVEL) << "[FrontService]"
