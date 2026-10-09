@@ -10,13 +10,13 @@
 // 2. ConsensusRejectionClassifiedAsOpConsensusRejected: 0x03 type byte → OpConsensusRejected.
 // 3. classifyException: OpConsensusError→OpConsensusRejected / OpStorageError→OpStorageFault /
 // other→UnknownError.
-#include <opstack-executor/OpCommon.h>        // OpConsensusError / OpStorageError
-#include <opstack-executor/OpEthBlockSteps.h>  // preBlockOpEthSteps / finalizeOpEthBlockResult
+#include <opstack-executor/OpCommon.h>          // OpConsensusError / OpStorageError
+#include <opstack-executor/OpEthBlockSteps.h>   // preBlockOpEthSteps / finalizeOpEthBlockResult
 #include <opstack-executor/OpEthCommitments.h>  // OpEthExecuteBlockResult
-#include <opstack-executor/OpEthDeposit.h>      // DepositTx / decodeOpDepositEnvelope / OP_DEPOSIT_TX_TYPE
-#include <opstack-executor/OpEthExecutor.h>     // OpEthExecutor / OpEthBlockContext
+#include <opstack-executor/OpEthDeposit.h>  // DepositTx / decodeOpDepositEnvelope / OP_DEPOSIT_TX_TYPE
+#include <opstack-executor/OpEthExecutor.h>      // OpEthExecutor / OpEthBlockContext
 #include <opstack-executor/OpEthL1Attributes.h>  // encodeOpEthDepositEnvelope
-#include <opstack-executor/OpForkSpec.h>        // opForkSpecAt / opForkTimestampSec
+#include <opstack-executor/OpForkSpec.h>         // opForkSpecAt / opForkTimestampSec
 #include <opstack-executor/OpScheduler.h>
 #include <opstack-executor/OpSchedulerSeam.h>
 
@@ -24,7 +24,7 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/engine/Errors.h>
-#include <bcos-framework/ledger/EVMAccount.h>   // ethLaneAccountTableName (corrupt-row seeding)
+#include <bcos-framework/ledger/EVMAccount.h>       // ethLaneAccountTableName (corrupt-row seeding)
 #include <bcos-framework/ledger/FeaturesStorage.h>  // writeToStorage (feature_raw_address seeding)
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
@@ -33,7 +33,7 @@
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/testutils/ScopedNodeAddressTableMode.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
-#include <bcos-ledger/Ledger.h>  // real bcos::ledger::Ledger for the commit hook
+#include <bcos-ledger/Ledger.h>         // real bcos::ledger::Ledger for the commit hook
 #include <bcos-ledger/LedgerMethods.h>  // getBlockData (probe's parent-root lookup)
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-ledger/mpt/MPTBuilder.h>           // buildAndCollect (①a incremental cross-check)
@@ -205,8 +205,8 @@ std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeHeader()
 
 /// Back-fill the announced header's commitment fields from the execution probe result
 /// (finishExecute writes the same batch of fields, so verify compares equal).
-void fillAnnouncedHeader(bcos::protocol::BlockHeader::Ptr const& header,
-    opeth::OpEthExecuteBlockResult const& result)
+void fillAnnouncedHeader(
+    bcos::protocol::BlockHeader::Ptr const& header, opeth::OpEthExecuteBlockResult const& result)
 {
     header->setStateRoot(result.stateRoot);
     header->setTxsRoot(result.txRoot);
@@ -341,6 +341,8 @@ struct Fixture
     std::shared_ptr<bcos::ledger::Ledger> ledger;
     bcos::IOServicePool::Ptr ioServicePool{std::make_shared<bcos::IOServicePool>(1)};
     std::shared_ptr<bcos::executor_v1::opstack::OpScheduler<MLS>> scheduler;
+    /// Announced hash of the last block driven at each height (linkParent / finalizeBlock).
+    std::map<bcos::protocol::BlockNumber, bcos::h256> announcedHashAt;
 
     /// @p schedule lets a case cross an OP fork inside this fixture; the default leaves both
     /// forks unscheduled, which is what every pre-existing case relies on.
@@ -539,8 +541,8 @@ bcos::ledger::mpt::TrieBuildResult collectAccountStorageTrie(
         bcos::bytes leaf;
         bcos::codec::rlp::encode(
             leaf, trimmedBigEndian(bcos::bytesConstRef{value.bytes, sizeof(value.bytes)}));
-        entries[bcos::crypto::keccak256Hash(
-            bcos::bytesConstRef{key.bytes, sizeof(key.bytes)})] = std::move(leaf);
+        entries[bcos::crypto::keccak256Hash(bcos::bytesConstRef{key.bytes, sizeof(key.bytes)})] =
+            std::move(leaf);
     }
     return bcos::ledger::mpt::computeTrieRoot(entries);
 }
@@ -619,9 +621,9 @@ opeth::OpEthExecuteBlockResult runExecutionProbe(Fixture& f, ViewType& view,
                                        -> bcos::protocol::Transaction const& { return *ptr; });
     auto receipts = bcos::task::syncWait(serialScheduler.executeBlock(
         view, executor, header, transactionsRefs, execLedgerConfig, ctx));
-    auto result = bcos::task::syncWait(
-        opeth::finalizeOpEthBlockResult(view, header, execLedgerConfig, spec, sharedError,
-            std::move(receipts), rawTxBytes, ctx.cumulativeGasUsed, hashErr,
+    auto result =
+        bcos::task::syncWait(opeth::finalizeOpEthBlockResult(view, header, execLedgerConfig, spec,
+            sharedError, std::move(receipts), rawTxBytes, ctx.cumulativeGasUsed, hashErr,
             /*skipStateRootBuild=*/incrementalRoot && header.number() > 0));
     if (incrementalRoot && header.number() > 0)
     {
@@ -749,20 +751,75 @@ bcos::bytes makeSetterDepositEnvelope(bcos::Address const& contract, bcos::h256 
     return opeth::encodeOpEthDepositEnvelope(dep);
 }
 
+/// Unfinalized-window glue for the header builders. makeHeaderAt leaves parentHash zero, but
+/// the scheduler resolves a block's parent BY HASH (a window entry or the finalized tip), so
+/// a zero parent is linked to the last block driven at height-1 BEFORE the header is hashed.
+void linkParent(Fixture& f, bcos::protocol::BlockHeader& header)
+{
+    if (header.number() > 0 && header.parentInfo().blockHash == bcos::h256{})
+    {
+        if (auto it = f.announcedHashAt.find(header.number() - 1); it != f.announcedHashAt.end())
+        {
+            header.setParentInfo(bcos::protocol::ParentInfo{
+                .blockNumber = header.number() - 1, .blockHash = it->second});
+        }
+    }
+}
+
+/// Remember the announced hash the scheduler keys the block on (after fillAnnouncedHeader:
+/// the commitments are part of the hash).
+void rememberAnnounced(Fixture& f, bcos::protocol::BlockHeader const& header)
+{
+    f.announcedHashAt[header.number()] = bcos::protocol::canonicalBlockHash(header);
+}
+
+/// commitBlock (= ADMIT into the window) and require success.
+void commitOpBlock(Fixture& f, bcos::protocol::BlockHeader::Ptr const& executedHeader)
+{
+    bcos::Error::Ptr commitErr;
+    bool called = false;
+    f.scheduler->commitBlock(
+        executedHeader, [&](bcos::Error::Ptr e, bcos::ledger::LedgerConfig::Ptr) {
+            called = true;
+            commitErr = std::move(e);
+        });
+    BOOST_REQUIRE(called);
+    BOOST_REQUIRE_MESSAGE(commitErr == nullptr,
+        "commitBlock " << executedHeader->number()
+                       << " failed: " << (commitErr ? commitErr->errorMessage() : ""));
+}
+
+/// finalizeUpTo(announced hash of @p header): merges the block (and its unfinalized
+/// ancestors) into the backend — the window model's equivalent of the old per-block commit.
+void finalizeOpBlock(Fixture& f, bcos::protocol::BlockHeader const& header)
+{
+    bcos::Error::Ptr err;
+    bool called = false;
+    f.scheduler->finalizeUpTo(bcos::protocol::canonicalBlockHash(header), [&](bcos::Error::Ptr e) {
+        called = true;
+        err = std::move(e);
+    });
+    BOOST_REQUIRE(called);
+    BOOST_REQUIRE_MESSAGE(err == nullptr,
+        "finalizeUpTo " << header.number() << " failed: " << (err ? err->errorMessage() : ""));
+}
+
 /// Drive one OP block through the full scheduler path: direct execution probe → back-filled
-/// announced header → executeBlock(verify=true) → commitBlock. (The body mirrors the
-/// single-block driver inside CommitPersistsSevenLedgerTables — the two were NOT refactored
-/// into a shared helper; this copy exists so historical-call tests can build multi-block
-/// chains without touching that test.)
+/// announced header → executeBlock(verify=true) → commitBlock (admit) → finalizeUpTo, so the
+/// block is on disk afterwards exactly as the pre-window per-block commit left it. (The body
+/// mirrors the single-block driver inside CommitPersistsSevenLedgerTables — the two were NOT
+/// refactored into a shared helper; this copy exists so historical-call tests can build
+/// multi-block chains without touching that test.)
 void driveOpBlock(Fixture& f, std::shared_ptr<bcostars::protocol::BlockHeaderImpl> header,
     std::vector<bcos::bytes> const& rawTxBytes)
 {
+    linkParent(f, *header);
     auto viewA = f.multiLayerStorage.fork();
     viewA.newMutable();
-    opeth::OpEthExecuteBlockResult result =
-        runExecutionProbe(f, viewA, *header, rawTxBytes);
+    opeth::OpEthExecuteBlockResult result = runExecutionProbe(f, viewA, *header, rawTxBytes);
     BOOST_REQUIRE_EQUAL(result.receipts.size(), rawTxBytes.size());
     fillAnnouncedHeader(header, result);
+    rememberAnnounced(f, *header);
 
     auto block = f.blockFactory->createBlock();
     block->setBlockHeader(header);
@@ -799,6 +856,7 @@ void driveOpBlock(Fixture& f, std::shared_ptr<bcostars::protocol::BlockHeaderImp
     BOOST_REQUIRE_MESSAGE(commitErr == nullptr,
         "commitBlock " << header->number()
                        << " failed: " << (commitErr ? commitErr->errorMessage() : ""));
+    finalizeOpBlock(f, *header);
 }
 
 struct ExecuteCb
@@ -835,16 +893,32 @@ bcos::protocol::Block::Ptr assembleBlock(
     return block;
 }
 
-/// Probe against the committed parent (matches OpScheduler::coExecuteBlock's forkCommitted),
-/// fill the announced header, then executeBlock without commit.
+/// The probe view for a block whose parent is @p header's: the parent chain's view when the
+/// parent is a window block (OpScheduler::viewAt), else the finalized plane — the same view
+/// OpScheduler::coExecuteBlock stacks for it.
+ViewType probeViewFor(Fixture& f, bcos::protocol::BlockHeader const& header)
+{
+    if (auto chain = bcos::task::syncWait(f.scheduler->viewAt(header.parentInfo().blockHash)))
+    {
+        chain->newMutable();
+        return std::move(*chain);
+    }
+    auto view = f.multiLayerStorage.forkCommitted();
+    view.newMutable();
+    return view;
+}
+
+/// Probe against the parent's chain view, fill the announced header, then executeBlock without
+/// commit (staged when verify=true).
 ExecuteCb executeOpBlock(Fixture& f, std::shared_ptr<bcostars::protocol::BlockHeaderImpl> header,
     std::vector<bcos::bytes> const& rawTxBytes, bool verify)
 {
-    auto view = f.multiLayerStorage.forkCommitted();
-    view.newMutable();
+    linkParent(f, *header);
+    auto view = probeViewFor(f, *header);
     auto const result = runExecutionProbe(f, view, *header, rawTxBytes);
     BOOST_REQUIRE_EQUAL(result.receipts.size(), rawTxBytes.size());
     fillAnnouncedHeader(header, result);
+    rememberAnnounced(f, *header);
     return invokeExecute(f, assembleBlock(f, header, rawTxBytes), verify);
 }
 
@@ -895,8 +969,7 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
     // SchedulerSerialImpl → finalizeOpBlockResult), so the full executeBlock's verify passes.
     auto viewA = f.multiLayerStorage.fork();
     viewA.newMutable();
-    opeth::OpEthExecuteBlockResult resultA =
-        runExecutionProbe(f, viewA, *header, rawTxBytes);
+    opeth::OpEthExecuteBlockResult resultA = runExecutionProbe(f, viewA, *header, rawTxBytes);
     BOOST_REQUIRE_EQUAL(resultA.receipts.size(), rawTxBytes.size());
     fillAnnouncedHeader(header, resultA);
 
@@ -926,8 +999,8 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
     BOOST_REQUIRE(executedHeader != nullptr);
 
     // O1 regression: the RPC block-number push channel. Install a counting notifier via the
-    // composition-root setter; it must fire exactly once, with the committed number, after a
-    // VALID commit (and must NOT have fired before commitBlock).
+    // composition-root setter; it must fire exactly once, with the FINALIZED number, after
+    // finalizeUpTo merged the block (and must NOT fire on admit — the ledger has not moved).
     bcos::protocol::BlockNumber notifiedNumber = -1;
     int notifyCount = 0;
     f.scheduler->setBlockNumberNotifier([&](bcos::protocol::BlockNumber number) {
@@ -946,6 +1019,16 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
     BOOST_REQUIRE(called);
     BOOST_REQUIRE_MESSAGE(commitErr == nullptr,
         "commitBlock failed: " << (commitErr ? commitErr->errorMessage() : ""));
+    BOOST_CHECK_EQUAL(notifyCount, 0);
+    // Admitted, not yet on disk: the rows live in the block's window layers only.
+    {
+        auto pending = f.multiLayerStorage.forkCommitted();
+        auto row = bcos::task::syncWait(bcos::storage2::readOne(
+            pending, StateKey{bcos::ledger::SYS_NUMBER_2_HASH,
+                         boost::lexical_cast<std::string>(header->number())}));
+        BOOST_CHECK(!row.has_value());
+    }
+    finalizeOpBlock(f, *header);
     BOOST_CHECK_EQUAL(notifyCount, 1);
     BOOST_CHECK_EQUAL(notifiedNumber, header->number());
 
@@ -1028,9 +1111,11 @@ BOOST_AUTO_TEST_CASE(StatusAndResetNoOp)
     f.scheduler->reset([&](bcos::Error::Ptr err) { BOOST_REQUIRE(err == nullptr); });
 }
 
-/// Pending-slot state machine on the scheduler (not just classifyPendingConflict):
-/// RefuseOtherHeight, KeepProbe, ReplaceSameHeight + popFront, reset watermark restore.
-BOOST_AUTO_TEST_CASE(PendingSlotStateMachine)
+/// Unfinalized-window state machine on the scheduler (replaces the one-slot PendingSlot
+/// machine): same-height siblings coexist, a block's parent is resolved by hash, admit is
+/// idempotent, reset drops staged blocks only, and finalizeUpTo merges one chain and prunes
+/// the other.
+BOOST_AUTO_TEST_CASE(WindowStateMachine)
 {
     Fixture f;
     auto depEnv = opeth::encodeOpEthDepositEnvelope(makeDeposit());
@@ -1049,48 +1134,56 @@ BOOST_AUTO_TEST_CASE(PendingSlotStateMachine)
     auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
 
+    // Block 1: executed, admitted, finalized (driveOpBlock) — the backend tip.
     driveOpBlock(f, makeHeader(), {depEnv, eipEnvBytes});
+    BOOST_REQUIRE_EQUAL(f.scheduler->finalizedNumber(), 1);
+    auto const h1 = f.announcedHashAt.at(1);
+    BOOST_CHECK_EQUAL(f.scheduler->finalizedHash().hex(), h1.hex());
 
+    // A different block at the FINALIZED height: the finalized chain never rewinds.
     auto siblingTip = invokeExecute(
         f, assembleBlock(f, makeHeaderAt(1, bcos::u256(1'000'000'000)), {depEnv}), /*verify=*/true);
     BOOST_REQUIRE(siblingTip.err != nullptr);
     BOOST_CHECK_EQUAL(
         siblingTip.err->errorCode(), (int)bcos::scheduler::SchedulerError::InvalidBlockNumber);
     BOOST_CHECK_MESSAGE(
-        siblingTip.err->errorMessage().find("sibling of the committed tip") != std::string::npos,
-        "committed-tip sibling must fail closed, got: " << siblingTip.err->errorMessage());
+        siblingTip.err->errorMessage().find("finalized chain does not rewind") != std::string::npos,
+        "finalized-height sibling must fail closed, got: " << siblingTip.err->errorMessage());
 
-    auto block2a =
-        executeOpBlock(f, makeHeaderAt(2, bcos::u256(2'000'000'000)), {dep2a}, /*verify=*/true);
+    // Block 2a: executed (staged) then admitted.
+    auto header2a = makeHeaderAt(2, bcos::u256(2'000'000'000));
+    auto block2a = executeOpBlock(f, header2a, {dep2a}, /*verify=*/true);
     BOOST_REQUIRE_MESSAGE(block2a.err == nullptr,
         "execute block 2a: " << (block2a.err ? block2a.err->errorMessage() : ""));
     BOOST_REQUIRE(block2a.header != nullptr);
+    auto const h2a = f.announcedHashAt.at(2);
+    BOOST_CHECK(!f.scheduler->unfinalizedBlock(h2a).has_value());  // staged, not admitted
+    commitOpBlock(f, block2a.header);
+    BOOST_REQUIRE(f.scheduler->unfinalizedBlock(h2a).has_value());
+    BOOST_CHECK_EQUAL(f.scheduler->windowSize(), 1U);
 
-    // (a) another height while pending is occupied.
-    auto refused = invokeExecute(
-        f, assembleBlock(f, makeHeaderAt(3, bcos::u256(3'000'000'000)), {depEnv}), /*verify=*/true);
-    BOOST_REQUIRE(refused.err != nullptr);
+    // (a) A block whose parent hash resolves nowhere: refused by hash, not by a height
+    // watermark.
+    auto orphanHeader = makeHeaderAt(3, bcos::u256(3'000'000'000));
+    orphanHeader->setParentInfo(bcos::protocol::ParentInfo{
+        .blockNumber = 2, .blockHash = bcos::h256(std::string(64, '9'))});
+    auto orphan = invokeExecute(f, assembleBlock(f, orphanHeader, {depEnv}), /*verify=*/true);
+    BOOST_REQUIRE(orphan.err != nullptr);
     BOOST_CHECK_EQUAL(
-        refused.err->errorCode(), (int)bcos::scheduler::SchedulerError::InvalidStatus);
+        orphan.err->errorCode(), (int)bcos::scheduler::SchedulerError::InvalidBlockNumber);
     BOOST_CHECK_MESSAGE(
-        refused.err->errorMessage().find("Uncommitted pending block 2") != std::string::npos,
-        "RefuseOtherHeight must pin pending height 2, got: " << refused.err->errorMessage());
+        orphan.err->errorMessage().find("neither in the unfinalized window") != std::string::npos,
+        "unknown parent must be named, got: " << orphan.err->errorMessage());
 
-    // KeepProbe: verify=false sibling at the pending height must not drop the slot.
+    // A verify=false probe at the occupied height runs on its own view and disturbs nothing.
     auto probe =
         executeOpBlock(f, makeHeaderAt(2, bcos::u256(2'000'000'000)), {depProbe}, /*verify=*/false);
-    BOOST_REQUIRE_MESSAGE(probe.err == nullptr,
-        "KeepProbe execute: " << (probe.err ? probe.err->errorMessage() : ""));
-    auto stillRefused = invokeExecute(
-        f, assembleBlock(f, makeHeaderAt(3, bcos::u256(3'000'000'000)), {depEnv}), /*verify=*/true);
-    BOOST_REQUIRE(stillRefused.err != nullptr);
-    BOOST_CHECK_EQUAL(
-        stillRefused.err->errorCode(), (int)bcos::scheduler::SchedulerError::InvalidStatus);
-    BOOST_CHECK_MESSAGE(
-        stillRefused.err->errorMessage().find("Uncommitted pending block 2") != std::string::npos,
-        "KeepProbe must leave pending 2 occupied, got: " << stillRefused.err->errorMessage());
+    BOOST_REQUIRE_MESSAGE(
+        probe.err == nullptr, "probe execute: " << (probe.err ? probe.err->errorMessage() : ""));
+    BOOST_CHECK_EQUAL(f.scheduler->windowSize(), 1U);
+    BOOST_REQUIRE(f.scheduler->unfinalizedBlock(h2a).has_value());
 
-    // (b) verify=true replace at height 2; commit must find exactly one pushed layer.
+    // (b) Block 2b, a same-height sibling of 2a: coexists in the window.
     int txNotify = 0;
     f.scheduler->setTransactionNotifier(
         [&](bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
@@ -1098,62 +1191,102 @@ BOOST_AUTO_TEST_CASE(PendingSlotStateMachine)
             ++txNotify;
             cb(nullptr);
         });
-    auto block2b =
-        executeOpBlock(f, makeHeaderAt(2, bcos::u256(2'000'000'000)), {dep2b}, /*verify=*/true);
+    auto header2b = makeHeaderAt(2, bcos::u256(2'000'000'000));
+    auto block2b = executeOpBlock(f, header2b, {dep2b}, /*verify=*/true);
     BOOST_REQUIRE_MESSAGE(block2b.err == nullptr,
-        "ReplaceSameHeight execute: " << (block2b.err ? block2b.err->errorMessage() : ""));
-    BOOST_REQUIRE(block2b.header != nullptr);
+        "execute block 2b: " << (block2b.err ? block2b.err->errorMessage() : ""));
+    auto const h2b = f.announcedHashAt.at(2);
+    BOOST_REQUIRE_NE(h2a.hex(), h2b.hex());
+    commitOpBlock(f, block2b.header);
+    BOOST_CHECK_EQUAL(f.scheduler->windowSize(), 2U);
+    BOOST_CHECK(f.scheduler->unfinalizedBlock(h2a).has_value());
+    BOOST_CHECK(f.scheduler->unfinalizedBlock(h2b).has_value());
+    BOOST_CHECK_EQUAL(txNotify, 0);  // admit does not advance the ledger: no notification
 
-    // Committing the replaced block's header must be refused: the slot now holds block 2b,
-    // whose announced hash differs from block 2a's.
-    bcos::Error::Ptr staleCommitErr;
-    bool staleCalled = false;
-    f.scheduler->commitBlock(
-        block2a.header, [&](bcos::Error::Ptr e, bcos::ledger::LedgerConfig::Ptr) {
-            staleCalled = true;
-            staleCommitErr = std::move(e);
-        });
-    BOOST_REQUIRE(staleCalled);
-    BOOST_REQUIRE(staleCommitErr != nullptr);
-    BOOST_CHECK_EQUAL(
-        staleCommitErr->errorCode(), (int)bcos::scheduler::SchedulerError::InvalidBlockNumber);
-    BOOST_CHECK_MESSAGE(staleCommitErr->errorMessage().find("does not match the announced block") !=
-                            std::string::npos,
-        "stale-header commit must be refused by the announced-hash binding, got: "
-            << staleCommitErr->errorMessage());
+    // Admitting an already-admitted block again is idempotent (honest retry).
+    commitOpBlock(f, block2a.header);
+    BOOST_CHECK_EQUAL(f.scheduler->windowSize(), 2U);
 
-    bcos::Error::Ptr commitErr;
-    bool called = false;
-    f.scheduler->commitBlock(
-        block2b.header, [&](bcos::Error::Ptr e, bcos::ledger::LedgerConfig::Ptr) {
-            called = true;
-            commitErr = std::move(e);
-        });
-    BOOST_REQUIRE(called);
-    BOOST_REQUIRE_MESSAGE(
-        commitErr == nullptr, "replace commit must merge the single remaining layer: "
-                                  << (commitErr ? commitErr->errorMessage() : ""));
-    BOOST_CHECK_EQUAL(txNotify, 1);
-
-    // Occupied pending at 3, then reset restores lastExecuted to lastCommitted (2).
-    auto block3 =
-        executeOpBlock(f, makeHeaderAt(3, bcos::u256(3'000'000'000)), {dep3}, /*verify=*/true);
+    // Block 3 on top of 2b (linkParent picks the LAST block driven at height 2 = 2b).
+    auto header3 = makeHeaderAt(3, bcos::u256(3'000'000'000));
+    auto block3 = executeOpBlock(f, header3, {dep3}, /*verify=*/true);
     BOOST_REQUIRE_MESSAGE(block3.err == nullptr,
         "execute block 3: " << (block3.err ? block3.err->errorMessage() : ""));
+    auto const h3 = f.announcedHashAt.at(3);
+    BOOST_CHECK_EQUAL(header3->parentInfo().blockHash.hex(), h2b.hex());
+    // (c) reset drops the STAGED block 3 but keeps the window.
     f.scheduler->reset([&](bcos::Error::Ptr err) { BOOST_REQUIRE(err == nullptr); });
-
-    // (c) non-contiguous execute after reset.
-    auto discontinuous = invokeExecute(
-        f, assembleBlock(f, makeHeaderAt(5, bcos::u256(5'000'000'000)), {depEnv}), /*verify=*/true);
-    BOOST_REQUIRE(discontinuous.err != nullptr);
+    BOOST_CHECK_EQUAL(f.scheduler->windowSize(), 2U);
+    bcos::Error::Ptr droppedErr;
+    f.scheduler->commitBlock(block3.header,
+        [&](bcos::Error::Ptr e, bcos::ledger::LedgerConfig::Ptr) { droppedErr = e; });
+    BOOST_REQUIRE(droppedErr != nullptr);
+    BOOST_CHECK(boost::get_error_info<bcos::engine::OpPendingDropped>(*droppedErr) != nullptr);
+    // Re-executing it is a cache miss (dropped), then it stages and admits again.
+    block3 = executeOpBlock(f, header3, {dep3}, /*verify=*/true);
+    BOOST_REQUIRE(block3.err == nullptr);
+    commitOpBlock(f, block3.header);
+    BOOST_CHECK_EQUAL(f.scheduler->windowSize(), 3U);
+    // The chain view of block 3 sees 2b's rows at height 2 and never 2a's.
+    {
+        auto view = bcos::task::syncWait(f.scheduler->viewAt(h3));
+        BOOST_REQUIRE(view.has_value());
+        auto hashAt2 =
+            bcos::task::syncWait(bcos::ledger::getBlockHash(*view, 2, bcos::ledger::fromStorage));
+        BOOST_REQUIRE(hashAt2.has_value());
+        BOOST_CHECK_EQUAL(hashAt2->hex(), h2b.hex());
+        BOOST_CHECK_EQUAL(bcos::task::syncWait(bcos::ledger::getCurrentBlockNumber(
+                              *view, bcos::ledger::fromStorage)),
+            3);
+    }
     BOOST_CHECK_EQUAL(
-        discontinuous.err->errorCode(), (int)bcos::scheduler::SchedulerError::InvalidBlockNumber);
-    BOOST_CHECK_MESSAGE(discontinuous.err->errorMessage().find("expect: 3") != std::string::npos &&
-                            discontinuous.err->errorMessage().find("input: 5") != std::string::npos,
-        "reset must restore lastExecuted to committed tip 2, got: "
-            << discontinuous.err->errorMessage());
-}
+        bcos::task::syncWait(f.scheduler->hashAtHeightOnChain(h3, 2)).value_or(bcos::h256{}).hex(),
+        h2b.hex());
+    BOOST_CHECK_EQUAL(
+        bcos::task::syncWait(f.scheduler->hashAtHeightOnChain(h3, 1)).value_or(bcos::h256{}).hex(),
+        h1.hex());
 
+    // finalizeUpTo(2b): 2b merges, 2a is pruned, 3 stays (it descends from 2b).
+    auto const tx2a = f.hashImpl->hash(dep2a);
+    auto const tx2b = f.hashImpl->hash(dep2b);
+    bcos::Error::Ptr finErr;
+    f.scheduler->finalizeUpTo(h2b, [&](bcos::Error::Ptr e) { finErr = std::move(e); });
+    BOOST_REQUIRE_MESSAGE(
+        finErr == nullptr, "finalizeUpTo: " << (finErr ? finErr->errorMessage() : ""));
+    BOOST_CHECK_EQUAL(txNotify, 1);
+    BOOST_CHECK_EQUAL(f.scheduler->finalizedNumber(), 2);
+    BOOST_CHECK_EQUAL(f.scheduler->finalizedHash().hex(), h2b.hex());
+    BOOST_CHECK_EQUAL(f.scheduler->windowSize(), 1U);
+    BOOST_CHECK(!f.scheduler->unfinalizedBlock(h2a).has_value());
+    BOOST_CHECK(!f.scheduler->unfinalizedBlock(h2b).has_value());
+    BOOST_CHECK(f.scheduler->unfinalizedBlock(h3).has_value());
+    {
+        auto view = f.multiLayerStorage.forkCommitted();
+        auto hashAt2 =
+            bcos::task::syncWait(bcos::ledger::getBlockHash(view, 2, bcos::ledger::fromStorage));
+        BOOST_REQUIRE(hashAt2.has_value());
+        BOOST_CHECK_EQUAL(hashAt2->hex(), h2b.hex());
+        auto rowA = bcos::task::syncWait(bcos::storage2::readOne(
+            view, StateKey{bcos::ledger::SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(tx2a)}));
+        auto rowB = bcos::task::syncWait(bcos::storage2::readOne(
+            view, StateKey{bcos::ledger::SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(tx2b)}));
+        BOOST_CHECK(!rowA.has_value());  // the pruned sibling's tx never reached the backend
+        BOOST_CHECK(rowB.has_value());
+    }
+    // Finalizing the finalized tip again is a no-op; an unknown target is an error.
+    finErr = nullptr;
+    f.scheduler->finalizeUpTo(h2b, [&](bcos::Error::Ptr e) { finErr = std::move(e); });
+    BOOST_CHECK(finErr == nullptr);
+    f.scheduler->finalizeUpTo(h2a, [&](bcos::Error::Ptr e) { finErr = std::move(e); });
+    BOOST_REQUIRE(finErr != nullptr);
+    BOOST_CHECK_EQUAL(
+        finErr->errorCode(), (int)bcos::scheduler::SchedulerError::InvalidBlockNumber);
+    // 2a's parent (block 1) is now below the tip: re-executing it is refused as a rewind.
+    auto stale = invokeExecute(f, assembleBlock(f, header2a, {dep2a}), /*verify=*/true);
+    BOOST_REQUIRE(stale.err != nullptr);
+    BOOST_CHECK_EQUAL(
+        stale.err->errorCode(), (int)bcos::scheduler::SchedulerError::InvalidBlockNumber);
+}
 /// execute-only construction (null ledger) must not deref; commit returns InvalidStatus.
 BOOST_AUTO_TEST_CASE(CommitWithoutLedgerReturnsInvalidStatus)
 {
@@ -1470,8 +1603,8 @@ BOOST_AUTO_TEST_CASE(CallUnfundedSenderSucceedsViaFakeBalance)
     {
         bcos::protocol::TransactionReceipt::Ptr got;
         bcos::Error::Ptr err;
-        f.scheduler->call(makeCall(),
-            [&](bcos::Error::Ptr e, bcos::protocol::TransactionReceipt::Ptr r) {
+        f.scheduler->call(
+            makeCall(), [&](bcos::Error::Ptr e, bcos::protocol::TransactionReceipt::Ptr r) {
                 err = std::move(e);
                 got = std::move(r);
             });
@@ -1508,9 +1641,9 @@ BOOST_AUTO_TEST_CASE(CallWithoutPricingIsFlooredToBaseFee)
             err = std::move(e);
             got = std::move(r);
         });
-    BOOST_REQUIRE_MESSAGE(err == nullptr,
-        "pricing-less eth_call must be floored to baseFee, not rejected, got: "
-            << (err ? err->errorMessage() : ""));
+    BOOST_REQUIRE_MESSAGE(
+        err == nullptr, "pricing-less eth_call must be floored to baseFee, not rejected, got: "
+                            << (err ? err->errorMessage() : ""));
     BOOST_REQUIRE(got != nullptr);
     BOOST_CHECK_EQUAL(got->status(), 0);
     const auto egp = bcos::u256(std::string(got->effectiveGasPrice()));
@@ -1561,9 +1694,9 @@ BOOST_AUTO_TEST_CASE(ClassifyExceptionMapping)
         std::make_exception_ptr(bcos::evm::engine::OpStorageError{"ledger bridge poison"}));
     BOOST_CHECK_EQUAL(storage, bcos::scheduler::SchedulerError::OpStorageFault);
 
-    // mpt read-path faults (escaped the executor's storage-error poison ladder) are storage faults too:
-    // a missing referenced node / an undecodable persisted node both mean the trie rows
-    // under the pinned root are unreadable, never a generic UnknownError.
+    // mpt read-path faults (escaped the executor's storage-error poison ladder) are storage faults
+    // too: a missing referenced node / an undecodable persisted node both mean the trie rows under
+    // the pinned root are unreadable, never a generic UnknownError.
     auto missingNode = f.scheduler->classifyException(
         std::make_exception_ptr(bcos::ledger::mpt::MPTInvariantViolation{}));
     BOOST_CHECK_EQUAL(missingNode, bcos::scheduler::SchedulerError::OpStorageFault);
@@ -1654,8 +1787,8 @@ BOOST_AUTO_TEST_CASE(StorageReadFaultRejectsBlockAsStorageFault)
 }
 
 // a storage fault under the TX SENDER surfaces at the VALIDATION stage (m_prepare's
-// opValidate reads the sender account; the storage guard swallows the fault into the shared slot and
-// returns a default, so validation fails as an insufficient-funds-style OpConsensusError). The
+// opValidate reads the sender account; the storage guard swallows the fault into the shared slot
+// and returns a default, so validation fails as an insufficient-funds-style OpConsensusError). The
 // execute() catch ladder must reclassify that as OpStorageError — the same treatment coCallOnView
 // already gives every exception type on the eth_call path — not report the announced payload
 // INVALID on a local disk fault.
@@ -1763,35 +1896,65 @@ BOOST_AUTO_TEST_CASE(CallAtBlockLatestEqualsLatestCall)
 }
 
 /// The OP lane (executor_version >= OPSTACK_EXECUTOR_VERSION, scenario B by construction) keeps
-/// account fields in the committed MPT, but a sealed-but-uncommitted block may already have
-/// advanced the nonce in the pending layer. getPendingStorageAt feeds EthEndpoint::call's tx
-/// nonce, so the pending row must win over the committed trie value — otherwise a caller whose
-/// tx is already sealed gets NONCE_TOO_LOW.
-BOOST_AUTO_TEST_CASE(PendingStorageAtPrefersThePendingLayerOverTheCommittedTrie)
+/// account fields in the committed MPT, but an unfinalized block may already have advanced the
+/// nonce in its window layer. getPendingStorageAt feeds EthEndpoint::call's tx nonce, so the
+/// unfinalized row must win over the committed trie value — otherwise a caller whose tx is
+/// already in a block gets NONCE_TOO_LOW. The pending plane is the CANONICAL HEAD's chain (D1
+/// §10.2, setCanonicalHeadProvider): a staged or admitted block that the Engine tracker has not
+/// made head is not visible, exactly like op-geth's pending state at the last forkchoice head.
+BOOST_AUTO_TEST_CASE(PendingStorageAtReadsTheCanonicalHeadChain)
 {
     Fixture f;
     // Committed state: kSender's trie-backed nonce is 0 (seedSender), and the genesis header
     // carries the root so the historical arm can resolve it.
     auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
+    auto const pendingNonce = [&] {
+        auto entry = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
+            kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*number=*/0));
+        BOOST_REQUIRE(entry.has_value());
+        return std::string(entry->get());
+    };
+    BOOST_CHECK_EQUAL(pendingNonce(), "0");
 
-    // Pending layer (pushed, never merged): the in-flight block advanced kSender's nonce to 7.
+    // Staged (executed verify=true, neither admitted nor finalized): the corpus eip1559
+    // transfer from kSender advanced its nonce to 1 inside the block's own layer.
+    auto depEnv = opeth::encodeOpEthDepositEnvelope(makeDeposit());
+    auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
+    auto staged = executeOpBlock(f, makeHeader(), {depEnv, eipEnvBytes}, /*verify=*/true);
+    BOOST_REQUIRE_MESSAGE(
+        staged.err == nullptr, "stage block 1: " << (staged.err ? staged.err->errorMessage() : ""));
+    auto const stagedHash = bcos::protocol::canonicalBlockHash(*staged.header);
+
+    // No head provider / no head yet: the finalized plane.
+    BOOST_CHECK_EQUAL(pendingNonce(), "0");
+    std::optional<bcos::h256> head;
+    f.scheduler->setCanonicalHeadProvider([&head] { return head; });
+    BOOST_CHECK_EQUAL(pendingNonce(), "0");
+
+    // Admitted but not the head (between newPayload VALID and its forkchoiceUpdated): still
+    // the finalized plane.
+    commitOpBlock(f, staged.header);
+    BOOST_CHECK_EQUAL(pendingNonce(), "0");
+    // Still nothing on disk.
     {
-        auto view = f.multiLayerStorage.fork();
-        view.newMutable();
+        auto committed = f.multiLayerStorage.forkCommitted();
         bcos::ledger::account::EVMAccount account(
-            view, kSender, bcos::ledger::account::AddressTableMode::Hex);
-        bcos::task::syncWait(account.setNonce("7"));
-        f.multiLayerStorage.pushView(std::move(view));
+            committed, kSender, bcos::ledger::account::AddressTableMode::Hex);
+        auto nonce = bcos::task::syncWait(account.nonce());
+        BOOST_REQUIRE(nonce.has_value());
+        BOOST_CHECK_EQUAL(*nonce, "0");
     }
-
-    auto entry = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
-        kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*number=*/0));
-    BOOST_REQUIRE_MESSAGE(entry.has_value(), "the pending nonce row must be visible");
-    BOOST_CHECK_EQUAL(std::string(entry->get()), "7");
+    // FCU(head = the admitted block): its window layer is the pending plane.
+    head = stagedHash;
+    BOOST_CHECK_EQUAL(pendingNonce(), "1");
+    // A head this scheduler does not know (SYNCING territory) reads the finalized plane.
+    head = bcos::h256(std::string(64, 'f'));
+    BOOST_CHECK_EQUAL(pendingNonce(), "0");
 }
 
-/// Binary-layout variant of the pending-layer test above: the pending nonce row lives at
+/// Binary-layout variant of the pending-plane test above: the unfinalized nonce row lives at
 /// "/s/<20 raw bytes>", and the pending arm's lane-rule naming (legacyAppsAccountTableName
 /// re-encoded to the node layout) must find it.
 BOOST_AUTO_TEST_CASE(PendingStorageAtBinaryModeReadsThePendingLayer)
@@ -1799,23 +1962,36 @@ BOOST_AUTO_TEST_CASE(PendingStorageAtBinaryModeReadsThePendingLayer)
     const bcos::test::ScopedNodeAddressTableMode guard(
         bcos::ledger::account::AddressTableMode::Binary);
     Fixture f;
-    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
-    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
-
-    // Pending layer (pushed, never merged), seeded with the binary account-table naming.
+    // The fixture seeds kSender under the Hex naming; this node is binary, so seed it again
+    // under the binary naming the executor reads (existence + funds for the eip1559 sender).
     {
         auto view = f.multiLayerStorage.fork();
         view.newMutable();
         bcos::ledger::account::EVMAccount account(
             view, kSender, bcos::ledger::account::AddressTableMode::Binary);
-        bcos::task::syncWait(account.setNonce("7"));
-        f.multiLayerStorage.pushView(std::move(view));
+        bcos::task::syncWait(account.create());
+        bcos::task::syncWait(account.setCode({}, {}, f.hashImpl->emptyHash()));
+        bcos::task::syncWait(account.setNonce("0"));
+        bcos::task::syncWait(account.setBalance(bcos::u256(1) << 200));
+        bcos::task::syncWait(f.multiLayerStorage.mergeView(std::move(view)));
     }
+    auto const genesisRoot = computeAndPersistGenesisTrie(f.multiLayerStorage);
+    seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
+
+    auto depEnv = opeth::encodeOpEthDepositEnvelope(makeDeposit());
+    auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
+    auto staged = executeOpBlock(f, makeHeader(), {depEnv, eipEnvBytes}, /*verify=*/true);
+    BOOST_REQUIRE_MESSAGE(
+        staged.err == nullptr, "stage block 1: " << (staged.err ? staged.err->errorMessage() : ""));
+    commitOpBlock(f, staged.header);
+    auto const headHash = bcos::protocol::canonicalBlockHash(*staged.header);
+    f.scheduler->setCanonicalHeadProvider([headHash] { return std::optional(headHash); });
 
     auto entry = bcos::task::syncWait(f.scheduler->getPendingStorageAt(
         kSender.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::NONCE, /*number=*/0));
     BOOST_REQUIRE_MESSAGE(entry.has_value(), "the pending nonce row must be visible");
-    BOOST_CHECK_EQUAL(std::string(entry->get()), "7");
+    BOOST_CHECK_EQUAL(std::string(entry->get()), "1");
 }
 
 /// No feature flag gates the historical path anymore: the OP lane builds the complete MPT from
@@ -1933,8 +2109,8 @@ BOOST_AUTO_TEST_CASE(CallAtBlockMissingTrieNodesIsInvalidStatus)
 }
 
 /// The poison tripwire behind M5: root row persisted (M5 passes) but INNER nodes missing —
-/// the first trie walk past the root throws inside the executor's storage read path, the catch ladder swallows
-/// it into poison, and coCallAtBlock's poison checks must turn that into a loud
+/// the first trie walk past the root throws inside the executor's storage read path, the catch
+/// ladder swallows it into poison, and coCallAtBlock's poison checks must turn that into a loud
 /// OpStorageFault, never a status-ok receipt built on zero-value reads. Two genesis accounts
 /// guarantee the root is a branch/extension whose children are exactly the missing rows.
 BOOST_AUTO_TEST_CASE(CallAtBlockInnerNodeMissingIsStorageFault)
@@ -2319,7 +2495,8 @@ BOOST_AUTO_TEST_CASE(finalizeOpBlockResultNormalizesReceiptIndices)
         dep.data = {};
         return opeth::encodeOpEthDepositEnvelope(dep);
     };
-    auto const l1 = opeth::encodeOpEthDepositEnvelope(makeDeposit());  // L1 attributes, emits no log
+    auto const l1 =
+        opeth::encodeOpEthDepositEnvelope(makeDeposit());  // L1 attributes, emits no log
     auto const log1 =
         makeLogDeposit(0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1_bytes32);
     auto const log2 =
@@ -2391,8 +2568,7 @@ BOOST_AUTO_TEST_CASE(IncrementalMPTRootMatchesFullRebuild)
 
     // mint>0 deposit: exercises the mint-balance write shape.
     auto mintDep = makeDeposit();
-    mintDep.sourceHash =
-        0x1111111111111111111111111111111111111111111111111111111111111111_bytes32;
+    mintDep.sourceHash = 0x1111111111111111111111111111111111111111111111111111111111111111_bytes32;
     mintDep.mint = bcos::u256{0xdeaf};
     bcos::bytes mintEnv = opeth::encodeOpEthDepositEnvelope(mintDep);
 
@@ -2433,9 +2609,9 @@ BOOST_AUTO_TEST_CASE(IncrementalMPTRootMatchesFullRebuild)
         // success.)
         BOOST_REQUIRE_EQUAL(result.receipts.size(), rawTxBytes.size());
         for (auto const& r : result.receipts)
-            BOOST_REQUIRE_MESSAGE(r->status() == 0,
-                "block " << number << " probe tx reverted (status " << r->status()
-                         << ") — the root comparison would be vacuous");
+            BOOST_REQUIRE_MESSAGE(
+                r->status() == 0, "block " << number << " probe tx reverted (status " << r->status()
+                                           << ") — the root comparison would be vacuous");
 
         bcos::ledger::mpt::MPTDeltaLayer delta;
         try
@@ -2571,8 +2747,7 @@ BOOST_AUTO_TEST_CASE(VerifyRejectsMismatchedAnnouncedCommitments)
             },
             {}},
         {"blobGasUsed",
-            [](bcostars::protocol::BlockHeaderImpl& h) { h.setBlobGasUsed(bcos::u256{7}); },
-            {}},
+            [](bcostars::protocol::BlockHeaderImpl& h) { h.setBlobGasUsed(bcos::u256{7}); }, {}},
     };
 
     std::vector<bcos::bytes> const rawTxBytes{opeth::encodeOpEthDepositEnvelope(makeDeposit())};
@@ -2656,11 +2831,12 @@ std::pair<bcos::protocol::BlockHeader::Ptr, bcos::h256> probeAdoptCommit(Fixture
     std::shared_ptr<bcostars::protocol::BlockHeaderImpl> header,
     std::vector<bcos::bytes> const& rawTxBytes)
 {
-    auto view = f.multiLayerStorage.forkCommitted();
-    view.newMutable();
+    linkParent(f, *header);
+    auto view = probeViewFor(f, *header);
     auto const result = runExecutionProbe(f, view, *header, rawTxBytes);
     BOOST_REQUIRE_EQUAL(result.receipts.size(), rawTxBytes.size());
     fillAnnouncedHeader(header, result);
+    rememberAnnounced(f, *header);
     auto block = assembleBlock(f, header, rawTxBytes);
 
     auto probeCb = invokeExecute(f, block, /*verify=*/false);
@@ -2698,6 +2874,8 @@ std::pair<bcos::protocol::BlockHeader::Ptr, bcos::h256> probeAdoptCommit(Fixture
     BOOST_REQUIRE_MESSAGE(commitErr == nullptr,
         "commitBlock " << header->number()
                        << " failed: " << (commitErr ? commitErr->errorMessage() : ""));
+    // Admit keeps the block in the window; the cases below read the backend, so finalize.
+    finalizeOpBlock(f, *header);
     return {std::move(adoptCb.header), result.stateRoot};
 }
 
@@ -2928,8 +3106,7 @@ BOOST_AUTO_TEST_CASE(CommitAfterResetReportsOpPendingDroppedNotUnknownError)
 
     auto viewA = f.multiLayerStorage.fork();
     viewA.newMutable();
-    opeth::OpEthExecuteBlockResult resultA =
-        runExecutionProbe(f, viewA, *header, {depEnv});
+    opeth::OpEthExecuteBlockResult resultA = runExecutionProbe(f, viewA, *header, {depEnv});
     BOOST_REQUIRE_EQUAL(resultA.receipts.size(), 1U);
     fillAnnouncedHeader(header, resultA);
 

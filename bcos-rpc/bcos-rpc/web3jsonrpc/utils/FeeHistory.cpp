@@ -100,7 +100,7 @@ u256 bcos::rpc::nextOpBaseFee(protocol::BlockHeader const& parent)
         engine::c_eip1559ElasticityCanyon);
 }
 
-task::Task<Json::Value> bcos::rpc::buildOpFeeHistory(ledger::LedgerInterface& ledger,
+task::Task<Json::Value> bcos::rpc::buildOpFeeHistory(FeeHistoryBlockSource const& blockSource,
     protocol::BlockNumber newest, protocol::BlockNumber head, std::uint64_t blockCount,
     std::vector<double> const& percentiles)
 {
@@ -130,8 +130,8 @@ task::Task<Json::Value> bcos::rpc::buildOpFeeHistory(ledger::LedgerInterface& le
     protocol::BlockHeader::Ptr last;
     for (auto number = oldest; number <= newest; ++number)
     {
-        auto const block = co_await ledger::getBlockData(ledger, number,
-            ledger::HEADER | (wantRewards ? (ledger::TRANSACTIONS | ledger::RECEIPTS) : 0));
+        auto const block = co_await blockSource(
+            number, ledger::HEADER | (wantRewards ? (ledger::TRANSACTIONS | ledger::RECEIPTS) : 0));
         last = block->blockHeader();
         auto const baseFee = blockBaseFee(*last);
         baseFees.append(toQuantity(baseFee));

@@ -21,14 +21,14 @@
 // Dual parity vs EngineServiceImpl OP mode is unavailable on this branch (no Impl opMode).
 // Carrier: transactions[i].raw via parseNewPayloadRequest(V4).
 // Golden fields (stateRoot/receiptsRoot/gasUsed/txRoot/blockHash) are asserted against
-// OpEngineService::lastExecutedHeader() after newPayload — NOT rebuildOpEthHeader(request),
+// OpEngineService::executedHeader(blockHash) after newPayload — NOT rebuildOpEthHeader(request),
 // which copies those fields from the JSON and stays green if execution is skipped.
 
 #include "support/GoldenSample.h"
 #include "support/SeedPreState.h"
 
-#include <bcos-concepts/ByteBuffer.h>
 #include <bcos-codec/rlp/RLPEncode.h>
+#include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/ledger/GenesisConfig.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
@@ -38,9 +38,9 @@
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-ledger/Ledger.h>
-#include <bcos-ledger/mpt/HashBuilder.h>   // computeTrieRoot / flushTrieNodes
-#include <bcos-ledger/mpt/MPTBuilder.h>    // TrieBuildResult
-#include <bcos-ledger/mpt/StateRoots.h>    // computeMptStateDelta / emptyRootHash
+#include <bcos-ledger/mpt/HashBuilder.h>  // computeTrieRoot / flushTrieNodes
+#include <bcos-ledger/mpt/MPTBuilder.h>   // TrieBuildResult
+#include <bcos-ledger/mpt/StateRoots.h>   // computeMptStateDelta / emptyRootHash
 #include <bcos-ledger/mpt/ViewNodeStorage.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
@@ -354,7 +354,7 @@ void assertExecutionCommitments(std::string const& id,
     bcostars::protocol::BlockHeaderImpl::Ptr const& goldenHeader)
 {
     // These four fields are copied from OpScheduler execution (finishExecute), not
-    // from the request JSON. If newPayload skipped execute, lastExecutedHeader is
+    // from the request JSON. If newPayload skipped execute, executedHeader(hash) is
     // null and the caller fails before reaching here.
     BOOST_CHECK_MESSAGE(produced->stateRoot() == goldenHeader->stateRoot(), id << ": stateRoot");
     BOOST_CHECK_MESSAGE(
@@ -391,7 +391,7 @@ void runGoldenVector(std::string const& id)
         id << ": expected VALID, got " << static_cast<int>(status.status)
            << (status.validationError ? (" : " + *status.validationError) : std::string{}));
 
-    auto produced = fixture->service.lastExecutedHeader();
+    auto produced = fixture->service.executedHeader(request.executionPayload.blockHash);
     BOOST_REQUIRE_MESSAGE(produced, id << ": newPayload returned VALID without an executed header "
                                           "(execution/commit was skipped)");
     const auto goldenBlockHash = bcos::h256(std::string(sample.golden["blockHash"].asString()));
@@ -540,7 +540,7 @@ BOOST_AUTO_TEST_CASE(s6_request_rebuild_matches_golden_without_calling_newpayloa
 {
     // discriminator: rebuildOpEthHeader copies stateRoot/receiptsRoot/gasUsed
     // from the request JSON. That comparison is green even when newPayload never runs.
-    // runGoldenVector must therefore read lastExecutedHeader(), not this rebuild.
+    // runGoldenVector must therefore read executedHeader(hash), not this rebuild.
     SKIP_IF_NO_T8N_CORPUS();
     auto sample = w6test::loadVectorSample("isthmus_deposit_only");
     auto fixture = std::make_unique<OpE2eFixture>(forkScheduleFor(sample.jovian));
@@ -551,7 +551,7 @@ BOOST_AUTO_TEST_CASE(s6_request_rebuild_matches_golden_without_calling_newpayloa
     const auto goldenBlockHash = bcos::h256(std::string(sample.golden["blockHash"].asString()));
     assertRebuiltAnnouncement(
         "isthmus_deposit_only/request-rebuild", rebuilt, goldenHeader, goldenBlockHash);
-    BOOST_CHECK(!fixture->service.lastExecutedHeader());
+    BOOST_CHECK(!fixture->service.executedHeader(request.executionPayload.blockHash));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

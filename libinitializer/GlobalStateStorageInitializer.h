@@ -15,8 +15,7 @@ namespace bcos::initializer
 using GlobalStateMutableStorage =
     bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
         bcos::executor_v1::StateValue,
-        bcos::storage2::memory_storage::ORDERED |
-            bcos::storage2::memory_storage::LOGICAL_DELETION>;
+        bcos::storage2::memory_storage::ORDERED | bcos::storage2::memory_storage::LOGICAL_DELETION>;
 
 using GlobalStateCacheStorage =
     bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
@@ -28,17 +27,15 @@ using GlobalStateCheckpointStorage =
         bcos::executor_v1::StateValue, bcos::storage2::rocksdb::StateKeyResolver,
         bcos::storage2::rocksdb::StateValueResolver>;
 
-using GlobalStateStorage =
-    bcos::storage2::MultiLayerStorage<GlobalStateMutableStorage, GlobalStateCacheStorage,
-        GlobalStateCheckpointStorage>;
+using GlobalStateStorage = bcos::storage2::MultiLayerStorage<GlobalStateMutableStorage,
+    GlobalStateCacheStorage, GlobalStateCheckpointStorage>;
 
 class GlobalStateStorageInitializer
 {
 public:
     using Ptr = std::shared_ptr<GlobalStateStorageInitializer>;
 
-    explicit GlobalStateStorageInitializer(
-        std::string const& storageRootPath,
+    explicit GlobalStateStorageInitializer(std::string const& storageRootPath,
         bcos::storage2::rocksdb::RocksDBCheckpointOption const& rocksDBOption = {});
 
     static Ptr build(std::string const& storageRootPath,
@@ -64,17 +61,8 @@ template <class ViewType>
 std::shared_ptr<bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>>
 forkLatestStateView(ViewType view)
 {
-    using AnyStateStorage =
-        bcos::storage2::AnyStorage<executor_v1::StateKey, executor_v1::StateValue>;
-    struct OwningView
-    {
-        ViewType view;
-        std::optional<AnyStateStorage> erased;
-
-        explicit OwningView(ViewType v) : view(std::move(v)) { erased.emplace(view); }
-    };
-    auto owner = std::make_shared<OwningView>(std::move(view));
-    return {owner, std::addressof(*owner->erased)};
+    return bcos::storage2::makeOwningAnyStorage<executor_v1::StateKey, executor_v1::StateValue>(
+        std::move(view));
 }
 
 /// Fork a fresh COMMITTED view of a GlobalStateStorage (cache -> committed backend, NO
