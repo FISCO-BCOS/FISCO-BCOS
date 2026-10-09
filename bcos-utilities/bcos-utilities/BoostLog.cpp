@@ -39,22 +39,39 @@
 #include <boost/log/attributes/time_traits.hpp>
 #include <boost/log/core.hpp>
 #include <boost/log/detail/singleton.hpp>
+#include <boost/log/trivial.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/spirit/home/qi/numeric/numeric_utils.hpp>
 #include <boost/system/detail/error_category.hpp>
 #include <boost/system/detail/error_code.hpp>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <pthread.h>
+#endif
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <ctime>
 #include <memory>
+#include <shared_mutex>
 #include <utility>
 #include <list>
 namespace bcos
 {
 std::string const FileLogger = "FileLogger";
+
+// LogLevel is defined in LogStream.h without referencing boost; make sure the
+// values stay in sync with boost::log::trivial::severity_level.
+static_assert(static_cast<int>(LogLevel::TRACE) == boost::log::trivial::severity_level::trace);
+static_assert(static_cast<int>(LogLevel::DEBUG) == boost::log::trivial::severity_level::debug);
+static_assert(static_cast<int>(LogLevel::INFO) == boost::log::trivial::severity_level::info);
+static_assert(
+    static_cast<int>(LogLevel::WARNING) == boost::log::trivial::severity_level::warning);
+static_assert(static_cast<int>(LogLevel::ERROR) == boost::log::trivial::severity_level::error);
+static_assert(static_cast<int>(LogLevel::FATAL) == boost::log::trivial::severity_level::fatal);
 
 LogLevel c_fileLogLevel = LogLevel::TRACE;
 
@@ -65,8 +82,13 @@ namespace
 // Process-wide registry of whole-line sinks (fast path, used when no custom
 // log.format is configured). Producers hold a shared_ptr copy while writing,
 // so a sink stays alive even if it is unregistered mid-write.
+// std::atomic<std::shared_ptr> is not portable (libc++ rejects it), so the
+// slots are plain shared_ptrs guarded by a shared_mutex: register/unregister
+// are rare, and readers only hold the shared lock long enough to copy the
+// fixed-size slot array.
 constexpr std::size_t MaxLineSinks = 4;
-std::array<std::atomic<std::shared_ptr<LineSinkWriter>>, MaxLineSinks> g_lineSinks;
+std::array<std::shared_ptr<LineSinkWriter>, MaxLineSinks> g_lineSinks;
+std::shared_mutex g_lineSinksMutex;
 std::atomic<int> g_lineSinkCount{0};
 
 constexpr std::string_view c_severityNames[] = {
@@ -81,9 +103,15 @@ std::string_view threadPart()
     auto const& name = bcos::pthread_getThreadNameRef();
     if (cachedName != name)
     {
+#ifdef _WIN32
+        char tid[16];
+        std::snprintf(
+            tid, sizeof(tid), "0x%08lx", static_cast<unsigned long>(::GetCurrentThreadId()));
+#else
         char tid[24];
         std::snprintf(tid, sizeof(tid), "0x%016llx",
             static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(pthread_self())));
+#endif
         cachedName = name;
         part = name.empty() ? "Unnamed" : name;
         part += '-';
@@ -98,15 +126,19 @@ void appendLinePrefix(std::string& _out, LogLevel _level)
 {
     _out.append(c_severityNames[static_cast<int>(_level)]);
     _out += '|';
-    timespec ts{};
-    clock_gettime(CLOCK_REALTIME, &ts);
-    std::time_t secs = ts.tv_sec;
+    auto const micros = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::system_clock::now().time_since_epoch());
+    std::time_t secs = static_cast<std::time_t>(micros.count() / 1000000);
     std::tm tm{};
+#ifdef _WIN32
+    localtime_s(&tm, &secs);
+#else
     localtime_r(&secs, &tm);
+#endif
     char buf[40];
     int n = std::snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d.%06ld",
         tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
-        ts.tv_nsec / 1000);
+        static_cast<long>(micros.count() % 1000000));
     _out.append(buf, static_cast<std::size_t>(n));
     _out += '|';
     _out.append(threadPart());
@@ -116,11 +148,12 @@ void appendLinePrefix(std::string& _out, LogLevel _level)
 
 void registerLineSink(std::shared_ptr<LineSinkWriter> _sink)
 {
+    std::unique_lock lock(g_lineSinksMutex);
     for (auto& slot : g_lineSinks)
     {
-        std::shared_ptr<LineSinkWriter> empty;
-        if (slot.compare_exchange_strong(empty, _sink))
+        if (!slot)
         {
+            slot = std::move(_sink);
             g_lineSinkCount.fetch_add(1, std::memory_order_release);
             return;
         }
@@ -129,11 +162,12 @@ void registerLineSink(std::shared_ptr<LineSinkWriter> _sink)
 
 void unregisterLineSink(LineSinkWriter const* _sink)
 {
+    std::unique_lock lock(g_lineSinksMutex);
     for (auto& slot : g_lineSinks)
     {
-        if (slot.load(std::memory_order_acquire).get() == _sink)
+        if (slot.get() == _sink)
         {
-            slot.store(nullptr, std::memory_order_release);
+            slot.reset();
             g_lineSinkCount.fetch_sub(1, std::memory_order_release);
             return;
         }
@@ -152,10 +186,17 @@ bool commitLine(LogLevel _level, std::string_view _message)
     thread_local std::string prefix;
     prefix.clear();
     appendLinePrefix(prefix, _level);
-    bool any = false;
-    for (auto const& slot : g_lineSinks)
+    // Copy the slots under the shared lock, then write without holding it so
+    // a slow sink never blocks register/unregister or sibling producers.
+    std::array<std::shared_ptr<LineSinkWriter>, MaxLineSinks> sinks;
     {
-        if (auto sink = slot.load(std::memory_order_acquire))
+        std::shared_lock lock(g_lineSinksMutex);
+        sinks = g_lineSinks;
+    }
+    bool any = false;
+    for (auto const& sink : sinks)
+    {
+        if (sink)
         {
             sink->writeLine(_level, prefix, _message);
             any = true;
