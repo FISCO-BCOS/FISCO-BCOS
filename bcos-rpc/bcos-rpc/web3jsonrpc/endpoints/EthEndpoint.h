@@ -81,6 +81,10 @@ public:
     task::Task<void> maxPriorityFeePerGas(const Json::Value&, Json::Value&);
 
 private:
+    // tx_gas_price system config as a JSON quantity; "0x0" when the config is absent.
+    // Shared by eth_gasPrice and eth_maxPriorityFeePerGas.
+    task::Task<Json::Value> systemGasPriceQuantity();
+
     NodeService::Ptr m_nodeService;
     FilterSystem::Ptr m_filterSystem;
     bool m_syncTransaction;

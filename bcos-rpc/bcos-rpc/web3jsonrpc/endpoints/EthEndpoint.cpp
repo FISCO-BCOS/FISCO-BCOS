@@ -116,23 +116,23 @@ task::Task<void> EthEndpoint::hashrate(const Json::Value&, Json::Value& response
     buildJsonContent(result, response);
     co_return;
 }
-task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response)
+task::Task<Json::Value> EthEndpoint::systemGasPriceQuantity()
 {
-    // result: gasPrice(QTY)
     auto const ledger = m_nodeService->ledger();
     // TODO)): gas price can wrap in a class
     auto config = co_await ledger::getSystemConfig(*ledger, ledger::SYSTEM_KEY_TX_GAS_PRICE);
-    Json::Value result;
     if (config.has_value())
     {
         auto [gasPrice, _] = config.value();
         auto const value = std::stoull(gasPrice, nullptr, 16);
-        result = toQuantity(value);
+        co_return toQuantity(value);
     }
-    else
-    {
-        result = "0x0";
-    }
+    co_return "0x0";
+}
+task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response)
+{
+    // result: gasPrice(QTY)
+    Json::Value result = co_await systemGasPriceQuantity();
     buildJsonContent(result, response);
 }
 task::Task<void> EthEndpoint::accounts(const Json::Value&, Json::Value& response)
@@ -925,9 +925,13 @@ task::Task<std::tuple<protocol::BlockNumber, bool>> EthEndpoint::getBlockNumberB
 task::Task<void> EthEndpoint::maxPriorityFeePerGas(
     const Json::Value& request, Json::Value& response)
 {
-    Json::Value result = "0x0";
+    // result: maxPriorityFeePerGas(QTY)
+    // Blocks report baseFeePerGas = 0 (BlockResponse.cpp), so a client that prices an EIP-1559
+    // tx the standard way (maxFeePerGas = 2 * baseFee + maxPriorityFeePerGas) ends up with
+    // exactly this value. TxValidator admits the tx only when maxFeePerGas >= tx_gas_price,
+    // so the suggested tip must be the whole system gas price, not the historic constant 0.
+    Json::Value result = co_await systemGasPriceQuantity();
     buildJsonContent(result, response);
-    co_return;
 }
 bcos::rpc::EthEndpoint::EthEndpoint(
     NodeService::Ptr nodeService, FilterSystem::Ptr filterSystem, bool syncTransaction)
