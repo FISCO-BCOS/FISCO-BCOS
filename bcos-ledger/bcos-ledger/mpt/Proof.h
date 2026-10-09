@@ -518,13 +518,21 @@ std::optional<bcos::bytes> verifyProofChain(bcos::h256 const& expectedRoot,
 /// link via detail::verifyProofChain, the deliberate second implementation cross-validating
 /// generateProof's proofWalk.
 ///
-/// accountValid requires all of: the account chain anchors at @p claimedRoot, ends at a present
-/// account leaf, the leaf decodes, and the decoded fields EQUAL the proof's claimed
-/// nonce/balance/codeHash/storageHash. Malformed leaf bytes yield accountValid=false, never an
-/// exception. On any account-side failure the function returns immediately with every
-/// storageValid false and every storageStatus Invalid (including inMPT=false entries: an
-/// unestablished account leaf makes even "unverifiable" too generous) — slot chains hang off
-/// proof.storageHash, which an invalid account side has not established.
+/// accountValid requires one of two shapes, mirroring generateProof's two account outcomes:
+///   (a) a PRESENT account: the account chain anchors at @p claimedRoot, ends at a present
+///       account leaf, the leaf decodes, and the decoded fields EQUAL the proof's claimed
+///       nonce/balance/codeHash/storageHash;
+///   (b) an ABSENT account (empty-account proof, geth/reth EIP-1186): the account chain anchors
+///       at @p claimedRoot and is a valid EXCLUSION walk (no leaf), accepted only when the
+///       claimed fields are exactly the empty-account defaults (nonce == 0 && balance == 0 &&
+///       codeHash == emptyCodeHash && storageHash == emptyRootHash).
+/// Malformed leaf bytes or a chain that claims a present account behind an exclusion yield
+/// accountValid=false, never an exception. On any account-side failure the function returns
+/// immediately with every storageValid false and every storageStatus Invalid (including
+/// inMPT=false entries: an unestablished account leaf makes even "unverifiable" too generous) —
+/// slot chains hang off proof.storageHash, which an invalid account side has not established.
+/// Under shape (b), slot judging falls through to the empty-storage-root branch below (the
+/// provably-zero slots generateProof emitted are verified against the empty defaults).
 ///
 /// Per slot i, an inMPT=false entry (SlotNotInMPT, spec §5.9) is judged first: it is Unverifiable
 /// when its proof is empty — the value is flat-KV-asserted, deliberately NOT counted as verified
@@ -546,32 +554,55 @@ VerifyResult verifyProof(bcos::h256 claimedRoot, EIP1186Proof const& proof)
     auto const accountPath = bytesToNibbles(accountKeyHash(proof.address).ref());
     auto const accountLeaf = detail::verifyProofChain(
         claimedRoot, std::span<bcos::bytes const>(proof.accountProof), accountPath, hasher);
-    if (!accountLeaf || accountLeaf->empty())
+    if (!accountLeaf)
     {
-        // Invalid chain, or an exclusion: an EIP-1186 proof for a present account must contain
-        // the account leaf.
+        // Broken chain (hash mismatch, malformed node, dangling ref, padded proof).
         return out;
     }
-
-    Account decoded;
-    try
+    if (accountLeaf->empty())
     {
-        decoded = Account::decode(bcos::ref(*accountLeaf));
+        // Valid EXCLUSION walk: the account is absent. Accept it as the empty account only when
+        // the claimed fields are exactly the empty-account defaults; a non-empty account claim
+        // behind an exclusion chain is a forgery and is rejected.
+        if (proof.nonce == 0 && proof.balance == 0 &&
+            proof.codeHash == emptyCodeHash<HasherT>() &&
+            proof.storageHash == emptyRootHash<HasherT>())
+        {
+            out.accountValid = true;
+            out.recoveredNonce = 0;
+            out.recoveredBalance = 0;
+            out.recoveredCodeHash = emptyCodeHash<HasherT>();
+            out.recoveredStorageRoot = emptyRootHash<HasherT>();
+            // Fall through to the slot loop: storageHash == emptyRootHash<HasherT>() so the
+            // empty-storage-root branch judges the provably-zero slots generateProof emitted.
+        }
+        else
+        {
+            return out;
+        }
     }
-    catch (...)
+    else
     {
-        return out;  // malformed account leaf: invalid, never an escaping exception
+        Account decoded;
+        try
+        {
+            decoded = Account::decode(bcos::ref(*accountLeaf));
+        }
+        catch (...)
+        {
+            return out;  // malformed account leaf: invalid, never an escaping exception
+        }
+        if (decoded.nonce != proof.nonce || decoded.balance != proof.balance ||
+            decoded.codeHash != proof.codeHash || decoded.storageRoot != proof.storageHash)
+        {
+            return out;  // the chain proves a DIFFERENT account state than the proof claims
+        }
+        out.accountValid = true;
+        out.recoveredNonce = decoded.nonce;
+        out.recoveredBalance = decoded.balance;
+        out.recoveredCodeHash = decoded.codeHash;
+        out.recoveredStorageRoot = decoded.storageRoot;
     }
-    if (decoded.nonce != proof.nonce || decoded.balance != proof.balance ||
-        decoded.codeHash != proof.codeHash || decoded.storageRoot != proof.storageHash)
-    {
-        return out;  // the chain proves a DIFFERENT account state than the proof claims
-    }
-    out.accountValid = true;
-    out.recoveredNonce = decoded.nonce;
-    out.recoveredBalance = decoded.balance;
-    out.recoveredCodeHash = decoded.codeHash;
-    out.recoveredStorageRoot = decoded.storageRoot;
 
     for (size_t i = 0; i < proof.storageProof.size(); ++i)
     {

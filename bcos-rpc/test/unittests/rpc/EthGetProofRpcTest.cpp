@@ -274,6 +274,29 @@ BOOST_AUTO_TEST_CASE(DormantAccountReturnsEmptyProof)
     // dead-end branch, which is exactly what lets a verifier prove the account is absent.
     BOOST_REQUIRE(result["accountProof"].isArray());
     BOOST_TEST(result["accountProof"].size() >= 1U);
+
+    // Round trip, the same cross-validation the happy path performs: the serialized
+    // empty-account proof fed back through verifyProof must verify via its exclusion branch
+    // (shape b — valid exclusion + empty-account defaults), so generator and verifier cannot
+    // drift apart.
+    auto const reconstructed = proofFromJson(result);
+    auto const verify = mpt::verifyProof(stateRoot, reconstructed);
+    BOOST_TEST(verify.accountValid);
+    BOOST_TEST(verify.recoveredNonce == 0);
+    BOOST_TEST(verify.recoveredBalance == 0);
+    BOOST_TEST(verify.recoveredCodeHash == mpt::emptyCodeHash());
+    BOOST_TEST(verify.recoveredStorageRoot == mpt::emptyRootHash());
+
+    // A slot-bearing dormant proof round-trips too: each requested slot is provably zero
+    // (empty value + empty proof against the empty storage root).
+    auto respSlots = getProof(dormant.hexPrefixed(), {slotA.hexPrefixed()}, "latest");
+    BOOST_TEST(!respSlots.isMember("error"));
+    BOOST_REQUIRE(respSlots.isMember("result"));
+    auto const reconstructedSlots = proofFromJson(respSlots["result"]);
+    auto const verifySlots = mpt::verifyProof(stateRoot, reconstructedSlots);
+    BOOST_TEST(verifySlots.accountValid);
+    BOOST_REQUIRE_EQUAL(verifySlots.storageValid.size(), 1U);
+    BOOST_TEST(verifySlots.storageValid[0]);
 }
 
 // Header stateRoot absent from the MPT node storage -> -32004 "not in MPT node storage".

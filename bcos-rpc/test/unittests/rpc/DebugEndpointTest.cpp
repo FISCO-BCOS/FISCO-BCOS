@@ -126,18 +126,27 @@ public:
 
 BOOST_FIXTURE_TEST_SUITE(DebugEndpointTest, DebugEndpointFixture)
 
-// debug_dbGet must be registered in EndpointsMapping.
+// debug_dbGet must be registered in EndpointsMapping, but only behind the per-listener
+// enable_debug_api gate — a default mapping must NOT dispatch it (the gate is the protection).
 BOOST_AUTO_TEST_CASE(DbGetMethodRegistered)
 {
-    EndpointsMapping const mapping;
+    EndpointsMapping const defaultMapping;
+    BOOST_CHECK(!defaultMapping.findHandler("debug_dbGet").has_value());
+
+    EndpointsMapping const mapping(/*enableOPEngine=*/false, /*enableMinerApi=*/false,
+        /*enableDebugApi=*/true);
     BOOST_CHECK(mapping.findHandler("debug_dbGet").has_value());
     BOOST_CHECK(!mapping.findHandler("debug_dbGetX").has_value());
 }
 
-// debug_getRawHeader must be registered in EndpointsMapping.
+// debug_getRawHeader must be registered in EndpointsMapping, only behind enable_debug_api.
 BOOST_AUTO_TEST_CASE(GetRawHeaderMethodRegistered)
 {
-    EndpointsMapping const mapping;
+    EndpointsMapping const defaultMapping;
+    BOOST_CHECK(!defaultMapping.findHandler("debug_getRawHeader").has_value());
+
+    EndpointsMapping const mapping(/*enableOPEngine=*/false, /*enableMinerApi=*/false,
+        /*enableDebugApi=*/true);
     BOOST_CHECK(mapping.findHandler("debug_getRawHeader").has_value());
 }
 

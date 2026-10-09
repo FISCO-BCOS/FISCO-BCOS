@@ -21,12 +21,17 @@
 #pragma once
 #include <bcos-crypto/ChecksumAddress.h>
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/protocol/BlockHeader.h>
+#include <bcos-framework/storage2/Storage.h>
+#include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-rpc/Common.h>
+#include <bcos-task/Task.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
 #include <algorithm>
 #include <cctype>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -94,6 +99,28 @@ void buildJsonErrorWithData(
     Json::Value& data, int32_t code, std::string message, Json::Value& response);
 
 bcos::bytes toBytesResponse(Json::Value const& jResp);
+
+/// Read a contract's code bytes by its content address (codeHash) from the state storage. This
+/// is the ONE home for the content-addressed code read, shared by eth_getCode (historical path)
+/// and debug_dbGet (preimage path): both serve the same blob, and the lifecycle precondition —
+/// EVM code is immutable and never deleted, so the latest state plane IS the historical one (if
+/// code cleanup/compaction is ever introduced, this read must pin the blob at the block, not
+/// read the latest plane) — must live in exactly one place. Returns nullopt when the hash is
+/// absent; a null/absent state storage is the caller's concern.
+template <typename StateStorage>
+bcos::task::Task<std::optional<bcos::bytes>> readCodeByHash(
+    StateStorage& stateStorage, bcos::h256 const& codeHash)
+{
+    std::string const codeHashStr = codeHash.toRawString();
+    auto const codeEntry = co_await bcos::storage2::readOne(stateStorage,
+        executor_v1::StateKeyView{bcos::ledger::SYS_CODE_BINARY, codeHashStr});
+    if (!codeEntry.has_value())
+    {
+        co_return std::nullopt;
+    }
+    auto const& view = codeEntry.value().get();
+    co_return bcos::bytes(view.begin(), view.end());
+}
 
 inline auto printJson(const Json::Value& value)
 {
