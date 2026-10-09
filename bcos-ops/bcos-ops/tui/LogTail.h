@@ -39,6 +39,5 @@ private:
     std::string m_logDir;
     std::string m_file;
     std::streamoff m_offset = 0;
-    std::string m_partial;  // an unfinished last line carried to the next poll
 };
 }  // namespace bcos::ops::tui

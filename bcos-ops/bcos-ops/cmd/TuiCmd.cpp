@@ -137,6 +137,19 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
         });
     };
 
+    auto stopWorkers = [&]() {
+        refresher.stop();
+        stopTail = true;
+        if (tailThread.joinable())
+        {
+            tailThread.join();
+        }
+        if (smokeThread.joinable())
+        {
+            smokeThread.join();
+        }
+    };
+
     int selected = 0;
     std::string filter;
     auto overview = Renderer([&model]() {
@@ -174,6 +187,10 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
         }
         if (event == ftxui::Event::Character('q') || event == ftxui::Event::Escape)
         {
+            // stop every worker before Exit(): ScreenInteractive drops its event sender inside
+            // Exit, and a redraw posted after that from another thread is a use-after-free. The
+            // refresher stop may wait for one in-flight RPC (at most the request timeout).
+            stopWorkers();
             screen.Exit();
             return true;
         }
@@ -193,16 +210,7 @@ int runTui(Args const& _args, std::ostream& _out, std::ostream& _err)
 
     refresher.start();
     screen.Loop(root);
-    refresher.stop();
-    stopTail = true;
-    if (tailThread.joinable())
-    {
-        tailThread.join();
-    }
-    if (smokeThread.joinable())
-    {
-        smokeThread.join();
-    }
+    stopWorkers();  // no-op after a q/Escape exit; covers Loop ending for any other reason
     return c_exitOk;
 }
 }  // namespace
