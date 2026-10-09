@@ -65,8 +65,10 @@ sed -e "s/__CHAIN_ID__/${CHAIN_ID}/g" \
 # ---- import (mirrors bcos.sh) ----
 if [ -n "${CHAIN_RLP}" ]; then
     echo "[test-local] importing ${CHAIN_RLP}"
-    "${BINARY}" -c config.ini -g config.genesis --import-blocks "${CHAIN_RLP}" || {
-        echo "[test-local] FAIL: import"; exit 1; }
+    # Mirror bcos.sh's consume-rlp tolerance: a non-zero import exit must not
+    # abort the replica — the RPC checks below are the verdict (a failed import
+    # leaves the node serving genesis, and the hash assertions catch it).
+    "${BINARY}" -c config.ini -g config.genesis --import-blocks "${CHAIN_RLP}" || true
 fi
 
 # ---- start node, RPC sanity checks ----

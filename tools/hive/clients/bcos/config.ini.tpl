@@ -22,7 +22,10 @@
     node_key_file=./node.rlpx.key
     max_batch_size=192
     tx_gossip=true
-    ; allow shallow reorgs so hive fork tests (/blocks side chains) can rewind
+    ; rollback-journal depth for the devp2p/engine sync lane's shallow reorgs.
+    ; NOTE: --import-blocks is strictly linear (a block that does not extend
+    ; the import head is skipped); this window does not make side-chain
+    ; imports possible.
     reorg_window=256
 
 [chain]

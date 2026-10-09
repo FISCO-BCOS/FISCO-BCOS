@@ -155,6 +155,28 @@ The entrypoint:
   fixtures byte-exactly. A proper fix (symmetric transfer in the task
   completion cascade, or bounded apply batching) is pending.
 
+### Production lifecycle notes
+
+- **EthBlockVersion stamping is forward-only** (no backfill): blocks committed
+  by a pre-fix binary keep `NON_ETH` headers, so `eth_getBlockByNumber` on
+  historical Paris/London blocks of such a datadir still loses `miner` (the
+  NON_ETH mock branch). Consequence for `--import-blocks`: the resume anchor
+  re-encodes the stored header, and a pre-fix `NON_ETH` header never matches
+  the next block's `parentHash`, so resuming an import on a pre-fix datadir
+  skips every block and exits non-zero. EL-mode datadirs are hive-test
+  artifacts today; if a real EL chain ever accumulated pre-fix history, the
+  answer is a fresh import with the fixed binary.
+- **The importer is strictly linear**: a block that does not extend the
+  current import head is skipped (loudly) — side-chain placement is not
+  supported. The `reorg_window` comment in `clients/bcos/config.ini.tpl`
+  concerns the devp2p sync lane, not `--import-blocks`; hive fork tests that
+  rely on side-chain imports are out of scope. Verify-lane consolidation with
+  the sync lane is tracked in #5670.
+- **`--import-blocks` holds the whole input in memory**: the file is loaded
+  whole and every block is copied out into its own buffer, so peak memory is
+  roughly TWICE the input file size; plan RAM accordingly for multi-GB chain
+  exports. Slicing + streaming the input is tracked in #5669.
+
 ## Host-level testing without docker
 
 `test-local.sh` mirrors the container entrypoint on a bare host (genesis

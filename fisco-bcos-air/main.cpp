@@ -77,9 +77,14 @@ int main(int argc, const char* argv[])
                           << " ..." << std::endl;
                 auto summary = initializer->importEthereumBlocks(param.importBlocksPath);
                 // Skips are the consume-rlp contract (invalid blocks are rejected and
-                // the run continues), but a run that imported NOTHING is a hard
-                // failure — report it on the exit status so scripts can branch on it.
-                if (summary.imported == 0 && summary.skipped > 0)
+                // the run continues). A run that imported nothing is a hard failure
+                // ONLY when the chain never advanced past genesis — that is the
+                // "converter dropped a field, every block rejected, node serves
+                // genesis" mode the exit status exists for. An idempotent re-run of
+                // an already-imported file skips every block (each block's
+                // parentHash points at its own parent, not at the ledger head) but
+                // leaves headNumber > 0, and must report success.
+                if (summary.imported == 0 && summary.skipped > 0 && summary.headNumber <= 0)
                 {
                     std::cerr << "import-blocks: nothing imported (imported=0 skipped="
                               << summary.skipped << ")" << std::endl;
