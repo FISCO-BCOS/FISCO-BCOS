@@ -316,7 +316,10 @@ void PBFTCacheProcessor::updateCommitQueue(PBFTProposalInterface::Ptr _committed
     m_committedQueue.push(_committedProposal);
     m_committedProposalList.insert(proposalIndex);
     m_proposalsToStableConsensus.insert(proposalIndex);
-    PBFT_LOG(INFO) << LOG_DESC("######## CommitQuorum") << printPBFTProposal(_committedProposal)
+    // keys named like the rest of the round (index/hash) so `log pbft <n>` joins on them
+    PBFT_LOG(INFO) << LOG_DESC("######## CommitQuorum")
+                   << LOG_KV("index", _committedProposal->index())
+                   << LOG_KV("hash", _committedProposal->hash().abridged())
                    << LOG_KV("sys", _committedProposal->systemProposal())
                    << m_config->printCurrentState();
     if (_committedProposal->systemProposal())

@@ -56,7 +56,7 @@ info|2026-10-09 14:02:11.031|io-0x16e293000|[CONSENSUS][PBFT]ViewChangeTriggered
 | `PrepareQuorum` | `[CONSENSUS][PBFT]` | INFO | index,hash,view,weight,signatureSize | prepare 法定数达成，进入 precommit |
 | `CommitSent` | `[CONSENSUS][PBFT]` | DEBUG | index,hash | 广播 commit |
 | `CommitReceived` | `[CONSENSUS][PBFT]` | DEBUG | index,view,fromIdx,weight | 每条 commit 消息一行 |
-| `CommitQuorum` | `[CONSENSUS][PBFT]`，前缀 `######## ` | INFO | index,hash | commit 法定数达成，提案进入执行队列 |
+| `CommitQuorum` | `[CONSENSUS][PBFT]`，前缀 `######## ` | INFO | index,hash,sys | commit 法定数达成，提案进入执行队列 |
 | `ProposalExecuted` | `[CONSENSUS][PBFT]` | INFO | index,hash,proposalHash,execMs | 状态机执行完成 |
 | `ProposalExecuteFailed` | `[CONSENSUS][Core]` | WARNING | index,hash,code,msg | 执行失败 |
 | `CheckpointSent` | `[CONSENSUS][PBFT]` | INFO | index,hash | 执行完成后广播 checkpoint |
