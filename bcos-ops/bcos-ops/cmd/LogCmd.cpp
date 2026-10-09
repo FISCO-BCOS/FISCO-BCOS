@@ -77,7 +77,7 @@ void renderTrace(std::ostream& _out, TraceResult const& _trace, bool _json)
     }
     if (!_trace.missing.empty())
     {
-        _out << _trace.missing << '\n';
+        _out << sanitizeForTerminal(_trace.missing) << '\n';
     }
     if (_trace.rows.empty())
     {
@@ -98,7 +98,8 @@ void renderTrace(std::ostream& _out, TraceResult const& _trace, bool _json)
     auto line = [&](std::vector<std::string> const& _cells) {
         for (size_t i = 0; i < _cells.size() && i < widths.size(); ++i)
         {
-            _out << std::left << std::setw(static_cast<int>(widths[i]) + 2) << _cells[i];
+            _out << std::left << std::setw(static_cast<int>(widths[i]) + 2)
+                 << sanitizeForTerminal(_cells[i]);
         }
         _out << '\n';
     };
