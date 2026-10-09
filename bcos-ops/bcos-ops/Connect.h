@@ -31,12 +31,18 @@ struct ConnectOptions
 {
     std::string nodeDir = ".";
     std::optional<std::string> rpc;  // host:port
-    int timeoutMs = 3000;
+    int connectTimeoutMs = 3000;
+    int requestTimeoutMs = 15000;
     bool allowIpc = true;
     bool allowRpc = true;
 };
 
 ConnectOptions connectOptionsFrom(Args const& _args);
+/// Keeps a transport alive for the rest of the process. The SDK's WsService cannot be torn down
+/// from the main thread while its io thread is still draining callbacks (closing the socket there
+/// races the reader), and a one-shot CLI has nothing to gain from the teardown: runOps flushes
+/// stdout/stderr and leaves through _Exit, so the retained transports are never destroyed.
+void retainTransport(std::shared_ptr<void> _transport);
 /// parses "host:port"; throws OpsError{1} on a malformed value
 std::pair<std::string, uint16_t> parseHostPort(std::string const& _endpoint);
 Connection connect(ConnectOptions const& _options);

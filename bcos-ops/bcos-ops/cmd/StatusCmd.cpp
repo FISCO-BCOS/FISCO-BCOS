@@ -184,16 +184,16 @@ int runStatus(Args const& _args, std::ostream& _out, std::ostream& _err)
     return runStatusOn(connection, thresholdsFrom(_args), wantJson(_args.flag("json")), _out);
 }
 
-struct Register
+struct StatusRegister
 {
-    Register()
+    StatusRegister()
     {
         registerCommand("status",
             Command{"print the node status snapshot and run the health checks",
                 "[--node-dir <dir> | --rpc <host:port>] [--json] [--stall-factor 2] [--max-lag 10] "
-                "[--timeout 3000]",
+                "[--timeout 15000]",
                 {}, runStatus});
     }
-} s_register;
+} s_statusRegister;
 }  // namespace
 }  // namespace bcos::ops

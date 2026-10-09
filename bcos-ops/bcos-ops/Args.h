@@ -103,6 +103,13 @@ public:
     }
     std::vector<std::string> const& positionals() const { return m_positionals; }
     bool help() const { return flag("help") || flag("h"); }
+    /// same options and flags, different positionals (sub-subcommand dispatch)
+    Args withPositionals(std::vector<std::string> _positionals) const
+    {
+        Args copy = *this;
+        copy.m_positionals = std::move(_positionals);
+        return copy;
+    }
 
 private:
     std::map<std::string, std::string> m_options;

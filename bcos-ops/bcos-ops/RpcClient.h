@@ -28,7 +28,13 @@ namespace bcos::ops
 /// (TLS handshake) means the port speaks TLS. Throws OpsError{1} when TCP connect fails.
 bool probeTls(std::string const& _host, uint16_t _port, int _timeoutMs);
 
-/// Connects (3 s default), throws OpsError{1} on TLS port or connection failure.
-/// The returned Connection has source="rpc" and an empty group: the caller fills it.
-Connection makeWsRpcCall(std::string const& _host, uint16_t _port, int _timeoutMs = 3000);
+/// _connectTimeoutMs bounds the TCP probe and the websocket handshake; _requestTimeoutMs bounds
+/// each RpcCall (sendTransaction waits for the receipt, which can take a view change). Throws
+/// OpsError{1} on a TLS port or a connection failure. The returned Connection has source="rpc"
+/// and an empty group: the caller fills it.
+constexpr int c_defaultConnectTimeoutMs = 3000;
+constexpr int c_defaultRequestTimeoutMs = 15000;
+Connection makeWsRpcCall(std::string const& _host, uint16_t _port,
+    int _connectTimeoutMs = c_defaultConnectTimeoutMs,
+    int _requestTimeoutMs = c_defaultRequestTimeoutMs);
 }  // namespace bcos::ops

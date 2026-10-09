@@ -17,6 +17,7 @@
  */
 #include "Cli.h"
 #include "OpsError.h"
+#include <cstdlib>
 #include <iostream>
 
 namespace bcos::ops
@@ -108,6 +109,11 @@ int runOps(int argc, const char* argv[])
     {
         args.emplace_back(argv[i]);
     }
-    return runOps(args, std::cout, std::cerr);
+    auto code = runOps(args, std::cout, std::cerr);
+    std::cout.flush();
+    std::cerr.flush();
+    // see retainTransport(): the SDK transports stay alive and the process leaves without
+    // running their destructors
+    std::_Exit(code);
 }
 }  // namespace bcos::ops

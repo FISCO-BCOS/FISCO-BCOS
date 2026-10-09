@@ -20,15 +20,23 @@
 #include "OpsError.h"
 #include "RpcClient.h"
 #include "collect/RpcCollector.h"
+#include <vector>
 
 namespace bcos::ops
 {
+void retainTransport(std::shared_ptr<void> _transport)
+{
+    static auto* retained = new std::vector<std::shared_ptr<void>>();  // never freed on purpose
+    retained->push_back(std::move(_transport));
+}
+
 ConnectOptions connectOptionsFrom(Args const& _args)
 {
     ConnectOptions options;
     options.nodeDir = _args.optionOr("node-dir", ".");
     options.rpc = _args.option("rpc");
-    options.timeoutMs = _args.numberOr<int>("timeout", 3000);
+    options.connectTimeoutMs = _args.numberOr<int>("connect-timeout", 3000);
+    options.requestTimeoutMs = _args.numberOr<int>("timeout", 15000);
     return options;
 }
 
@@ -74,7 +82,9 @@ Connection connect(ConnectOptions const& _options)
     if (_options.rpc)
     {
         auto [host, port] = parseHostPort(*_options.rpc);
-        auto connection = makeWsRpcCall(host, port, _options.timeoutMs);
+        auto connection =
+            makeWsRpcCall(host, port, _options.connectTimeoutMs, _options.requestTimeoutMs);
+        retainTransport(connection.keepAlive);
         connection.group = discoverGroup(connection.call);
         return connection;
     }
@@ -92,7 +102,9 @@ Connection connect(ConnectOptions const& _options)
                                         " has SSL enabled ([rpc] disable_ssl=false); this tool "
                                         "only supports plaintext RPC or the local socket");
     }
-    auto connection = makeWsRpcCall(node.rpcHost(), node.rpcListenPort, _options.timeoutMs);
+    auto connection = makeWsRpcCall(
+        node.rpcHost(), node.rpcListenPort, _options.connectTimeoutMs, _options.requestTimeoutMs);
+    retainTransport(connection.keepAlive);
     connection.group = node.groupId;
     connection.nodeDir = node;
     return connection;

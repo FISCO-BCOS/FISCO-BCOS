@@ -146,10 +146,11 @@ bool probeTls(std::string const& _host, uint16_t _port, int _timeoutMs)
     return first == c_tlsAlert || first == c_tlsHandshake;
 }
 
-Connection makeWsRpcCall(std::string const& _host, uint16_t _port, int _timeoutMs)
+Connection makeWsRpcCall(
+    std::string const& _host, uint16_t _port, int _connectTimeoutMs, int _requestTimeoutMs)
 {
     auto endpoint = _host + ":" + std::to_string(_port);
-    if (probeTls(_host, _port, _timeoutMs))
+    if (probeTls(_host, _port, _connectTimeoutMs))
     {
         throw OpsError(c_exitUsage, "RPC port " + endpoint +
                                         " has SSL enabled; this tool only supports plaintext RPC "
@@ -159,7 +160,7 @@ Connection makeWsRpcCall(std::string const& _host, uint16_t _port, int _timeoutM
     config->setModel(bcos::boostssl::ws::WsModel::Client);
     config->setDisableSsl(true);
     config->setThreadPoolSize(1);
-    config->setSendMsgTimeout(_timeoutMs);
+    config->setSendMsgTimeout(_requestTimeoutMs);
     auto peers = std::make_shared<bcos::boostssl::ws::EndPoints>();
     peers->insert(bcos::boostssl::NodeIPEndpoint(_host, _port));
     config->setConnectPeers(peers);
@@ -167,7 +168,7 @@ Connection makeWsRpcCall(std::string const& _host, uint16_t _port, int _timeoutM
     auto transport = std::make_shared<WsTransport>();
     transport->factory = std::make_shared<bcos::cppsdk::SdkFactory>();
     transport->sdk = transport->factory->buildSdk(config, false);
-    transport->sdk->service()->wsService()->setWaitConnectFinishTimeout(_timeoutMs);
+    transport->sdk->service()->wsService()->setWaitConnectFinishTimeout(_connectTimeoutMs);
     try
     {
         transport->sdk->start();
@@ -181,7 +182,7 @@ Connection makeWsRpcCall(std::string const& _host, uint16_t _port, int _timeoutM
     connection.source = "rpc";
     connection.endpoint = endpoint;
     connection.keepAlive = transport;
-    connection.call = [transport, _timeoutMs](
+    connection.call = [transport, _requestTimeoutMs](
                           std::string_view _method, Json::Value const& _params) -> Json::Value {
         auto id = transport->nextId.fetch_add(1);
         auto body = buildJsonRpcRequest(_method, _params, id);
@@ -196,7 +197,7 @@ Connection makeWsRpcCall(std::string const& _host, uint16_t _port, int _timeoutM
                 catch (std::future_error const&)
                 {}
             });
-        if (future.wait_for(std::chrono::milliseconds(_timeoutMs + 500)) !=
+        if (future.wait_for(std::chrono::milliseconds(_requestTimeoutMs + 500)) !=
             std::future_status::ready)
         {
             throw OpsError(c_exitUsage, std::string(_method) + " timed out");
