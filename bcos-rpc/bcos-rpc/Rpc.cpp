@@ -83,6 +83,10 @@ void Rpc::start()
     {
         m_opEngineService->start();
     }
+    if (m_ipcServer)
+    {
+        m_ipcServer->start();
+    }
     RPC_LOG(INFO) << LOG_DESC("start rpc successfully");
 }
 
@@ -110,6 +114,10 @@ void Rpc::stop()
     if (m_opEngineService)
     {
         m_opEngineService->stop();
+    }
+    if (m_ipcServer)
+    {
+        m_ipcServer->stop();
     }
 
     RPC_LOG(INFO) << LOG_DESC("[RPC][RPC][stop]") << LOG_DESC("stop rpc successfully");
