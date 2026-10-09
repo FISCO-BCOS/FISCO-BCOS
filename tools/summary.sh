@@ -46,7 +46,7 @@ prepare_tmp_log()
 {
     local log_file=$1
     mkdir -p ${tmp_log_dir}
-    local start_line=$(cat -n $log_file | grep -aiE "addPrepareCache.*,reqIndex=${start_block}" | head -n 1)
+    local start_line=$(cat -n $log_file | grep -aiE "PrePrepareReceived,index=${start_block}," | head -n 1)
     # start_line=$(cat -n $log_file | grep -aiE "Generate proposal,index=${start_block}|Generating seal on,index=${start_block}" | head -n 1)
     start_line_number=$(echo "${start_line}"| awk '{print $1}')
     local start_block_timepoint=$(echo "${start_line}" | awk -F '|' '{print $2}'| awk -F '.' '{print $1}')
@@ -73,7 +73,7 @@ count_index()
     # process txpool log
     local log_file=$1
     local txpool_log="$(grep -aE "TXPOOL" $1)"
-    local nofity_receipt_and_remove_tx_time_list="$(echo "${txpool_log}" | grep -aE "batchRemove txs success" | awk -F '=' '{print $5}' | awk -F ',' '{print $1}')"
+    local nofity_receipt_and_remove_tx_time_list="$(echo "${txpool_log}" | grep -aE "TxsRemoved," | sed -n 's/.*timecost=\([0-9]*\).*/\1/p')"
     local average_nofity_receipt_and_remove_tx_time=$(echo "${nofity_receipt_and_remove_tx_time_list}" | awk '{sum+=$1} END {print sum/NR}')
     local max_nofity_receipt_and_remove_tx_time=$(echo "${nofity_receipt_and_remove_tx_time_list}" | awk 'max<$1 || NR==1{ max=$1 } END {print max}')
     local min_nofity_receipt_and_remove_tx_time=$(echo "${nofity_receipt_and_remove_tx_time_list}" | awk 'min>$1 || NR==1{ min=$1 } END {print min}')
@@ -82,12 +82,12 @@ count_index()
     grep -aE "CONSENSUS|BLOCK SYNC" ${log_file} > "${analysis_log_prefix}_executor_sync.log"
     local consensus_log_file="${analysis_log_prefix}_executor_sync.log"
 
-    local execute_block_time_list="$(cat ${consensus_log_file} | grep -iaE "asyncExecuteBlock success,sysBlock|BlockSync: applyBlock success" | awk -F '=' '{print $9}' | awk -F ',' '{print $1}')"
+    local execute_block_time_list="$(cat ${consensus_log_file} | grep -aE "ProposalExecuted," | sed -n 's/.*execMs=\([0-9]*\).*/\1/p')"
     local average_execute_block_time=$(echo "${execute_block_time_list}" | awk '{sum+=$1} END {print sum/NR}')
     local max_execute_block_time=$(echo "${execute_block_time_list}" | awk 'max<$1 || NR==1{ max=$1 } END {print max}')
     local min_execute_block_time=$(echo "${execute_block_time_list}" | awk 'min>$1 || NR==1{ min=$1 } END {print min}')
 
-    local execute_tx_time_list="$(cat ${consensus_log_file} | grep -iaE "asyncExecuteBlock success,sysBlock|BlockSync: applyBlock success" | awk -F '=' '{print $10}' | awk -F ',' '{print $1}')"
+    local execute_tx_time_list="$(cat ${consensus_log_file} | grep -aE "ProposalExecuted," | sed -n 's/.*execMs=\([0-9]*\).*/\1/p')"
     local average_execute_tx_time=$(echo "${execute_tx_time_list}" | awk '{sum+=$1} END {print sum/NR}')
     local max_execute_tx_time=$(echo "${execute_tx_time_list}" | awk 'max<$1 || NR==1{ max=$1 } END {print max}')
     local min_execute_tx_time=$(echo "${execute_tx_time_list}" | awk 'min>$1 || NR==1{ min=$1 } END {print min}')
@@ -97,12 +97,12 @@ count_index()
     local max_sealed_queue_length=$(echo "${sealed_queue_length_list}" | awk 'max<$1 || NR==1{ max=$1 } END {print max}')
     local min_sealed_queue_length=$(echo "${sealed_queue_length_list}" | awk 'min>$1 || NR==1{ min=$1 } END {print min}')
 
-    local txs_in_block_list=$(cat ${consensus_log_file} | grep -iaE "Report,sea" | awk -F '=' '{print $3}' |awk -F ',' '{print $1}')
+    local txs_in_block_list=$(cat ${consensus_log_file} | grep -aE "Report,sealer=[0-9]" | awk -F '=' '{print $3}' |awk -F ',' '{print $1}')
     local total_txs=$(echo "${txs_in_block_list}" | awk '{sum+=$1} END {print sum}')
     local average_txs_in_block=$(echo "${txs_in_block_list}" | awk '{sum+=$1} END {print sum/NR}')
     local max_txs_in_block=$(echo "${txs_in_block_list}" | awk 'max<$1 || NR==1{ max=$1 } END {print max}')
     local min_txs_in_block=$(echo "${txs_in_block_list}" | awk 'min>$1 || NR==1{ min=$1 } END {print min}')
-    local latest_report=$(cat ${consensus_log_file} | grep -iaE "Report,sea" | tail -n 1)
+    local latest_report=$(cat ${consensus_log_file} | grep -aE "Report,sealer=[0-9]" | tail -n 1)
     local latest_block=$(echo "${latest_report}"| awk -F '=' '{print $4}'|awk -F ',' '{print $1}')
     local latest_consensus=$(echo "${latest_report}"| awk -F '=' '{print $5}'|awk -F ',' '{print $1}')
     local view=$(echo "${latest_report}"| awk -F '=' '{print $7}'|awk -F ',' '{print $1}')

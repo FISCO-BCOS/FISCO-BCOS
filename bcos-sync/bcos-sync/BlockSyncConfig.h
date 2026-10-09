@@ -30,6 +30,7 @@
 #include <bcos-framework/sync/SyncConfig.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
+#include <bcos-utilities/BlockStat.h>
 
 namespace bcos::sync
 {
@@ -71,6 +72,16 @@ public:
 
     BlockSyncMsgFactory::Ptr msgFactory() { return m_msgFactory; }
     virtual void resetConfig(bcos::ledger::LedgerConfig::Ptr _ledgerConfig);
+
+    /// slots of the per-block [BLOCK SYNC][METRIC]BlockStat line (printed in BlockSync::onNewBlock)
+    enum SyncStatSlot : size_t
+    {
+        Downloaded = 0,
+        Applied,
+        Requests,
+        SyncStatSlotCount
+    };
+    BlockStatCounters<SyncStatSlotCount>& blockStat() { return m_blockStat; }
 
     bcos::crypto::HashType const& genesisHash() const { return m_genesisHash; }
     void setGenesisHash(bcos::crypto::HashType const& _hash);
@@ -179,6 +190,8 @@ protected:
     virtual bcos::protocol::NodeType determineNodeType();
     bool existNode(bcos::consensus::ConsensusNodeList const& _nodeList, SharedMutex& _lock,
         bcos::crypto::NodeIDPtr _nodeID);
+
+    BlockStatCounters<SyncStatSlotCount> m_blockStat;
 
 private:
     bcos::ledger::LedgerInterface::Ptr m_ledger;

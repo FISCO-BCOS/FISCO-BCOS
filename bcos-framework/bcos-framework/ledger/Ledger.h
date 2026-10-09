@@ -9,10 +9,10 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
-#include <range/v3/range/concepts.hpp>
 #include <bcos-utilities/BoostLog.h>
+#include <range/v3/range/concepts.hpp>
 
-#define LEDGER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("LEDGER")
+#define LEDGER_LOG(LEVEL) BCOS_MODULE_LOG(LEDGER, LEVEL) << LOG_BADGE("LEDGER")
 
 namespace bcos::ledger
 {
@@ -231,8 +231,8 @@ inline constexpr struct GetFeature
     /// Read ONE feature flag's enabled state at @p blockNumber (single SYS_CONFIG read,
     /// vs getFeatures' read of every flag). Degrades to false on any read failure, the
     /// same honest scenario-A default as getFeatures' empty-set fallback.
-    task::Task<bool> operator()(auto& ledger, Features::Flag flag,
-        protocol::BlockNumber blockNumber) const
+    task::Task<bool> operator()(
+        auto& ledger, Features::Flag flag, protocol::BlockNumber blockNumber) const
     {
         co_return co_await tag_invoke(*this, ledger, flag, blockNumber);
     }

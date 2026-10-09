@@ -41,7 +41,7 @@
 using namespace bcos;
 using namespace bcos::protocol;
 
-#define TX_VALIDATOR_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TXVALIDATOR")
+#define TX_VALIDATOR_LOG(LEVEL) BCOS_MODULE_LOG(TXPOOL, LEVEL) << LOG_BADGE("TXVALIDATOR")
 
 namespace bcos::txvalidator
 {

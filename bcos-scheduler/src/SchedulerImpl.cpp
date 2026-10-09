@@ -4,6 +4,7 @@
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
+#include "bcos-utilities/BlockStat.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
@@ -22,6 +23,20 @@
 #include <string_view>
 
 
+namespace
+{
+// per-block counters behind log.enable_block_stat; read and reset at CommitBlock success
+enum SchedulerStatSlot : size_t
+{
+    ExecMs = 0,
+    Count
+};
+bcos::BlockStatCounters<SchedulerStatSlot::Count>& schedulerBlockStat()
+{
+    static bcos::BlockStatCounters<SchedulerStatSlot::Count> counters;
+    return counters;
+}
+}  // namespace
 using namespace bcos::scheduler;
 
 const __itt_domain* const ITT_DOMAIN_SCHEDULER_EXECUTE = __itt_domain_create("scheduler.execute");
@@ -372,7 +387,7 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
             }
             else
             {
-                SCHEDULER_LOG(INFO)
+                SCHEDULER_LOG(DEBUG)
                     << BLOCK_NUMBER(requestBlockNumber) << LOG_BADGE("BlockTrace")
                     << "ExecuteBlock success, return executed block"
                     << LOG_KV("signatureSize", signature.size()) << LOG_KV("verify", verify);
@@ -467,8 +482,8 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
             return;
         }
 
-        SCHEDULER_LOG(INFO) << BLOCK_NUMBER(requestBlockNumber) << LOG_BADGE("BlockTrace")
-                            << "ExecuteBlock start" << LOG_KV("time(ms)", utcTime() - start);
+        SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(requestBlockNumber) << LOG_BADGE("BlockTrace")
+                             << "ExecuteBlock start" << LOG_KV("time(ms)", utcTime() - start);
         auto startTime = utcTime();
         try
         {
@@ -514,6 +529,7 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
                         << LOG_KV("signatureSize", signature.size())
                         << LOG_KV("timeCost", utcTime() - startTime)
                         << LOG_KV("blockVersion", header->version());
+                    schedulerBlockStat().add(SchedulerStatSlot::ExecMs, utcTime() - startTime);
 
                     m_lastExecuteFinishTime = utcTime();
                     executeLock->unlock();
@@ -728,6 +744,25 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                         << BLOCK_NUMBER(blockNumber) << LOG_BADGE("BlockTrace")
                         << "CommitBlock success" << LOG_KV("gas limit", self->m_gasLimit)
                         << LOG_KV("timeCost", utcTime() - startTime);
+                    if (bcos::BlockStat::enabled())
+                    {
+                        auto const& block = *blockExecutive->block();
+                        uint64_t txs = block.receiptsSize();
+                        uint64_t failed = 0;
+                        for (auto const& receipt : block.receipts())
+                        {
+                            if (receipt->status() != 0)
+                            {
+                                ++failed;
+                            }
+                        }
+                        auto execMs = schedulerBlockStat().takeAndReset(SchedulerStatSlot::ExecMs);
+                        SCHEDULER_LOG(INFO)
+                            << METRIC << LOG_DESC("BlockStat") << LOG_KV("number", blockNumber)
+                            << LOG_KV("txs", txs) << LOG_KV("failed", failed)
+                            << LOG_KV("execMs", execMs) << LOG_KV("commitMs", utcTime() - startTime)
+                            << LOG_KV("execPerTxUs", txs == 0 ? 0 : execMs * 1000 / txs);
+                    }
                     self->m_ledgerConfig = ledgerConfig;
                     commitLock->unlock();  // just unlock here
 

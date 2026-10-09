@@ -130,6 +130,8 @@ protected:
     virtual void onNewBlock(bcos::ledger::LedgerConfig::Ptr _ledgerConfig);
 
     virtual void downloadFinish();
+    // flip Downloading -> Idle; prints SyncFinished once per sync segment
+    void leaveSyncing(std::string_view _reason);
 
     // update SyncTreeTopology node info
     virtual void updateTreeTopologyNodeInfo();
@@ -158,6 +160,9 @@ protected:
     std::atomic_bool m_running = {false};
     std::atomic<SyncState> m_state = {SyncState::Idle};
     std::atomic<bcos::protocol::BlockNumber> m_maxRequestNumber = {0};
+    // set when the node flips Idle -> Downloading (for SyncFinished costMs/blocks)
+    std::atomic<uint64_t> m_syncStartMs = {0};
+    std::atomic<bcos::protocol::BlockNumber> m_syncStartNumber = {0};
 
     bcos::protocol::BlockNumber m_waterMark = 10;
     bcos::protocol::BlockNumber c_FaultyNodeBlockDelta = 50;
