@@ -30,6 +30,7 @@ NodeStatus collectFromLog(
     Event const* report = nullptr;
     Event const* versionLine = nullptr;
     Event const* syncFlip = nullptr;
+    Event const* syncProgress = nullptr;  // BlockApplied / BlockCommitted on the SYNC channel
     Event const* txpoolStat = nullptr;
     Event const* lastViewChange = nullptr;
     for (auto const& event : _events)
@@ -45,6 +46,11 @@ NodeStatus collectFromLog(
         else if (event.name == events::SyncStarted || event.name == events::SyncFinished)
         {
             syncFlip = &event;
+        }
+        else if ((event.name == events::BlockApplied || event.name == events::BlockCommitted) &&
+                 event.hasBadge(events::BadgeBlockSync))
+        {
+            syncProgress = &event;
         }
         else if (event.name == events::BlockStat && event.hasBadge(events::BadgeTxPool))
         {
@@ -80,9 +86,18 @@ NodeStatus collectFromLog(
             inTimeout = true;
         }
         status.inTimeout = inTimeout;
-        if (auto idx = report->getInt("Idx"))
+        // Idx is printed unsigned: an observer shows 18446744073709551615, which stoll rejects
+        auto idxText = report->get("Idx");
+        if (!idxText.empty())
         {
-            status.isConsensusNode = *idx >= 0;
+            try
+            {
+                status.isConsensusNode = std::stoull(idxText) < (1ULL << 62);
+            }
+            catch (std::exception const&)
+            {
+                status.isConsensusNode = false;
+            }
         }
         status.groupId = std::nullopt;
     }
@@ -92,32 +107,37 @@ NodeStatus collectFromLog(
     }
     else
     {
-        status.missing("version", "no startup line in window");
+        status.missing("version", "no compatibilityVersion line in the window");
     }
-    if (syncFlip)
+    // SyncStarted/SyncFinished print once per flip, so a node that has been downloading for
+    // longer than the window shows only BlockApplied/BlockCommitted lines; those mean "syncing"
+    // unless a later SyncFinished closed the segment
+    bool progressAfterFlip = syncProgress && (!syncFlip || syncProgress->timeMs > syncFlip->timeMs);
+    if (syncFlip && syncFlip->name == events::SyncStarted)
     {
-        status.isSyncing = syncFlip->name == events::SyncStarted;
-        if (*status.isSyncing)
-        {
-            status.knownHighestNumber = syncFlip->getInt("highest");
-            status.lag = syncFlip->getInt("lag");
-        }
-        else
-        {
-            status.knownHighestNumber = syncFlip->getInt("number");
-            status.lag = 0;
-        }
+        status.isSyncing = true;
+        status.knownHighestNumber = syncFlip->getInt("highest");
+        status.lag = syncFlip->getInt("lag");
+    }
+    else if (progressAfterFlip)
+    {
+        status.isSyncing = true;
+        status.missing(
+            "knownHighestNumber", "syncing (BlockApplied in window) without a SyncStarted line");
+        status.missing("lag", "syncing (BlockApplied in window) without a SyncStarted line");
+    }
+    else if (syncFlip)  // SyncFinished is the latest sync event
+    {
+        status.isSyncing = false;
+        status.knownHighestNumber = syncFlip->getInt("number");
+        status.lag = 0;
     }
     else
     {
-        // no sync activity in the window: the node is not syncing
-        status.isSyncing = false;
-        status.knownHighestNumber = status.blockNumber;
-        status.lag = status.blockNumber ? std::optional<int64_t>(0) : std::nullopt;
-        if (!status.blockNumber)
-        {
-            status.missing("lag", "no Report line in the window");
-        }
+        // no [BLOCK SYNC] event at all: the window cannot tell idle from a long download
+        status.missing("isSyncing", "no sync event in window");
+        status.missing("knownHighestNumber", "no sync event in window");
+        status.missing("lag", "no sync event in window");
     }
     if (txpoolStat)
     {
