@@ -19,6 +19,7 @@
 
 #include "DebugEndpoint.h"
 
+#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage/LegacyStorageMethods.h>
 #include <bcos-framework/storage2/Storage.h>
@@ -68,9 +69,9 @@ task::Task<void> DebugEndpoint::dbGet(const Json::Value& request, Json::Value& r
     if (rawKey.size() == c_codeKeySize && rawKey.front() == c_codeKeyPrefix)
     {
         // Contract code: strip the "c" prefix, the remaining 32 bytes are the code hash.
-        // Code rows are content-addressed and immutable, so the latest state plane is correct
-        // (the same read eth_getCode's historical path performs).
-        std::string const codeHashStr(rawKey.begin() + 1, rawKey.end());
+        // Content-addressed and immutable — resolved through the shared readCodeByHash helper
+        // (the same content-addressed read eth_getCode's historical path performs).
+        bcos::h256 const codeHash(bcos::bytes(rawKey.begin() + 1, rawKey.end()));
         auto const ledger = m_nodeService->ledger();
         auto const stateStorage = ledger->getStateStorage();
         if (!stateStorage)
@@ -78,13 +79,12 @@ task::Task<void> DebugEndpoint::dbGet(const Json::Value& request, Json::Value& r
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(InternalError, "State storage not available on this node"));
         }
-        auto const codeEntry = co_await bcos::storage2::readOne(*stateStorage,
-            executor_v1::StateKeyView{bcos::ledger::SYS_CODE_BINARY, codeHashStr});
-        if (!codeEntry.has_value())
+        auto const code = co_await readCodeByHash(*stateStorage, codeHash);
+        if (!code.has_value())
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "not found"));
         }
-        preimage.assign(codeEntry.value().get().begin(), codeEntry.value().get().end());
+        preimage = *code;
     }
     else if (rawKey.size() == c_stateNodeKeySize)
     {
@@ -99,7 +99,14 @@ task::Task<void> DebugEndpoint::dbGet(const Json::Value& request, Json::Value& r
         auto const node = co_await bcos::storage2::readOne(*mptReader, nodeHash);
         if (!node.has_value())
         {
-            BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "not found"));
+            // A missing node is either a hash never committed, or one pruned beyond the node's
+            // mptPruneWindow — indistinguishable from the hash alone (debug_dbGet carries no
+            // block number to run the pruned-vs-missing diagnosis eth_getProof does). Fault
+            // proofs must be servable for the whole dispute window, so the deployment
+            // precondition is mptPruneWindow >= the maximum dispute duration; naming both
+            // causes here keeps an operator's miss from looking like a bogus hash.
+            BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
+                "MPT node not found: unknown hash or pruned beyond the node's mptPruneWindow"));
         }
         preimage = *node;
     }
@@ -182,6 +189,19 @@ task::Task<void> DebugEndpoint::getRawHeader(const Json::Value& request, Json::V
     {
         BOOST_THROW_EXCEPTION(
             JsonRpcException(InternalError, std::string("Header RLP encode failed: ") + e.what()));
+    }
+
+    // The preimage-oracle contract is byte-exact: the served RLP must hash back to the key it
+    // was requested under. A stale/non-canonical hash->number entry, or a header that survives
+    // the EthBlockHeader bridge without being Eth-shaped, would otherwise serve the wrong
+    // header's RLP under the requested key — a failure kona-host surfaces only far from its
+    // cause. Recompute the keccak and fail loudly on mismatch.
+    auto const recomputed = bcos::crypto::keccak256Hash(bcos::ref(encoded));
+    if (recomputed != hash)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InternalError,
+            "Header RLP keccak mismatch: requested " + hash.hexPrefixed() +
+                ", recomputed " + recomputed.hexPrefixed()));
     }
 
     Json::Value result = toHexStringWithPrefix(encoded);

@@ -37,6 +37,13 @@ SKIP_KONA_BUILD="${SKIP_KONA_BUILD:-0}"
 log() { echo "[c2-e2e] $*"; }
 die() { echo "[c2-e2e] ERROR: $*" >&2; exit 1; }
 
+# KONA_VERIFY=1 replays a dispute game's root claim, so it needs a dispute game to exist —
+# CONTEST=1 creates one. Fail fast on the contradiction instead of paying the full devnet
+# setup and then dying inside the harness or at the PASS-marker guard (the script's own
+# kona_verify.py error spells this coupling out).
+[[ "$KONA_VERIFY" == "1" && "$CONTEST" != "1" ]] && \
+  die "KONA_VERIFY=1 requires CONTEST=1 (kona replays a dispute game's root claim); set KONA_VERIFY=0 for a contest-free run"
+
 [ -f "$VERSIONS" ] || die "missing $VERSIONS (check out FISCO-BCOS/op-stack-e2e-tests at the pinned ref into $OP_E2E_DIR first)"
 
 read_op_pin() {
@@ -160,8 +167,8 @@ REQS="${REPO_ROOT}/tools/.ci/c2-e2e-requirements.txt"
 python3 -m pip install --quiet -r "$REQS" 2>/dev/null \
   || pip3 install --quiet -r "$REQS" 2>/dev/null \
   || pip3 install --break-system-packages --quiet -r "$REQS"
-python3 -c "import yaml, eth_hash, trie, rlp" 2>/dev/null \
-  || die "C2 python deps unavailable after install (pyyaml/eth-hash/trie/rlp)"
+python3 -c "import yaml, eth_hash, trie, rlp, requests" 2>/dev/null \
+  || die "C2 python deps unavailable after install (pyyaml/eth-hash/trie/rlp/requests)"
 
 export NO_PROXY="${NO_PROXY:-127.0.0.1,localhost}"
 export no_proxy="${no_proxy:-127.0.0.1,localhost}"

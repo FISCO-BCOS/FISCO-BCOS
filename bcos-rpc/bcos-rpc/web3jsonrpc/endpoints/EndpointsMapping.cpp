@@ -37,7 +37,7 @@ std::optional<EndpointsMapping::Handler> EndpointsMapping::findHandler(
     return it->second;
 }
 
-void EndpointsMapping::addHandlers(bool enableOPEngine, bool enableMinerApi)
+void EndpointsMapping::addHandlers(bool enableOPEngine, bool enableMinerApi, bool enableDebugApi)
 {
     if (enableOPEngine)
     {
@@ -50,7 +50,12 @@ void EndpointsMapping::addHandlers(bool enableOPEngine, bool enableMinerApi)
     }
     addNetHandlers();
     addWeb3Handlers();
-    addDebugHandlers();
+    // The debug namespace serves the fault-proof preimage oracle and is opt-in per listener
+    // ([op_engine_rpc] / [web3_rpc] enable_debug_api), mirroring the miner-namespace gate.
+    if (enableDebugApi)
+    {
+        addDebugHandlers();
+    }
     for (auto& [method, _] : m_handlers)
     {
         WEB3_LOG(INFO) << LOG_BADGE("initHandler") << LOG_KV("method", method);

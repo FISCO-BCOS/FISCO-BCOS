@@ -1070,6 +1070,11 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
         ; listener only; the op-engine (8551) listener has its own [op_engine_rpc]
         ; enable_miner_api. Keep this port private if you set it — never expose it publicly.
         ; enable_miner_api=false
+        ; The geth debug namespace (debug_dbGet/debug_getRawHeader/debug_executePayload) is off
+        ; unless enabled here: it serves the fault-proof preimage oracle (kona-host), not general
+        ; clients. This key scopes the namespace to THIS web3 listener only; the op-engine (8551)
+        ; listener has its own [op_engine_rpc] enable_debug_api.
+        ; enable_debug_api=false
     */
     const std::string listenIP = _pt.get<std::string>("web3_rpc.listen_ip", "127.0.0.1");
     const int listenPort = _pt.get<int>("web3_rpc.listen_port", 8545);
@@ -1115,6 +1120,9 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
     // Default off: on an OP node the DA caps exist, so without this gate the method would be
     // reachable from every caller of this listener (see the [web3_rpc] doc block).
     m_enableMinerApi = _pt.get<bool>("web3_rpc.enable_miner_api", false);
+    // Default off: the debug namespace serves the fault-proof preimage oracle, not general
+    // clients — expose it only on a listener that opts in (see the [web3_rpc] doc block).
+    m_enableDebugApi = _pt.get<bool>("web3_rpc.enable_debug_api", false);
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadWeb3RpcConfig") << LOG_KV("enableWeb3Rpc", enableWeb3Rpc)
                          << LOG_KV("listenIP", listenIP) << LOG_KV("listenPort", listenPort)
@@ -1157,11 +1165,15 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
         ; batcher/conductor port. [web3_rpc] enable_miner_api scopes it to the web3 listener
         ; only; neither key reaches the other port.
         ; enable_miner_api=false
+        ; scopes the geth debug namespace to THIS listener only (default off); [web3_rpc]
+        ; enable_debug_api scopes it to the web3 listener. Neither key reaches the other port.
+        ; enable_debug_api=false
     */
     const auto config = parseEngineRpcSection(_pt, "op_engine_rpc", "conf/op-engine/jwt.hex");
     // test-only escape hatch, see Initializer's executor-version guard
     const bool allowV1Executor = _pt.get<bool>("op_engine_rpc.unsafe_allow_v1_executor", false);
     const bool enableMinerApi = _pt.get<bool>("op_engine_rpc.enable_miner_api", false);
+    const bool enableDebugApi = _pt.get<bool>("op_engine_rpc.enable_debug_api", false);
 
     m_enableOpEngineRpc = config.enable;
     // Mutual-exclusion check, symmetric with loadSingleNodeConsensusConfig: whichever of the
@@ -1191,6 +1203,7 @@ void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
     m_opEngineClockSkewSecs = config.clockSkewSecs;
     m_opEngineAllowV1Executor = allowV1Executor;
     m_enableOpEngineMinerApi = enableMinerApi;
+    m_enableOpEngineDebugApi = enableDebugApi;
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadOpEngineRpcConfig")
                          << LOG_KV("enableOpEngineRpc", m_enableOpEngineRpc)
@@ -3317,6 +3330,16 @@ bool NodeConfig::enableMinerApi() const
 bool NodeConfig::enableOpEngineMinerApi() const
 {
     return m_enableOpEngineMinerApi;
+}
+
+bool NodeConfig::enableDebugApi() const
+{
+    return m_enableDebugApi;
+}
+
+bool NodeConfig::enableOpEngineDebugApi() const
+{
+    return m_enableOpEngineDebugApi;
 }
 
 bool NodeConfig::opEngineAllowV1Executor() const

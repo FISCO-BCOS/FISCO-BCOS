@@ -984,12 +984,10 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
             if (account->codeHash != bcos::ledger::mpt::emptyCodeHash())
             {
                 auto const stateStorage = ledger->getStateStorage();
-                std::string const codeHashStr = account->codeHash.toRawString();
-                if (auto const codeEntry = co_await bcos::storage2::readOne(*stateStorage,
-                        executor_v1::StateKeyView{bcos::ledger::SYS_CODE_BINARY, codeHashStr});
-                    codeEntry.has_value())
+                if (auto const codeBytes = co_await readCodeByHash(*stateStorage, account->codeHash);
+                    codeBytes.has_value())
                 {
-                    code.assign(codeEntry.value().get().begin(), codeEntry.value().get().end());
+                    code = std::move(*codeBytes);
                 }
             }
         }
