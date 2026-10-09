@@ -61,7 +61,7 @@ jobs:
 
       - uses: lukka/get-cmake@latest
         with:
-          cmakeVersion: 3.28.3
+          cmakeVersion: 4.2.3
           ninjaVersion: 1.12.1
 
       - name: Restore vcpkg cache
@@ -153,7 +153,7 @@ jobs:
           CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold \
             -DTESTS=ON -DCOVERAGE=OFF -DWITH_L2_CONTRACTS=ON \
             -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON \
-            -DWITH_TARS_SERVICES=OFF -DTOOL=OFF \
+            -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DWITH_CXX_MODULES=ON \
             -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
 
       - name: Build fisco-bcos
