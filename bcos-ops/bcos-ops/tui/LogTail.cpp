@@ -23,6 +23,12 @@
 
 namespace bcos::ops::tui
 {
+namespace
+{
+constexpr size_t c_maxLineBytes = 64 * 1024;
+constexpr size_t c_maxEventsPerPoll = 2000;
+}  // namespace
+
 std::vector<Event> LogTail::poll()
 {
     std::vector<Event> events;
@@ -77,8 +83,23 @@ std::vector<Event> LogTail::poll()
     {
         if (in.eof() && !line.empty() && in.peek() == std::char_traits<char>::eof())
         {
-            // no trailing newline yet: keep for the next poll
-            m_partial += line;
+            // no trailing newline yet: keep for the next poll, but never more than one log line's
+            // worth (a file that stops mid-line forever must not grow memory)
+            if (m_partial.size() + line.size() <= c_maxLineBytes)
+            {
+                m_partial += line;
+            }
+            else
+            {
+                m_partial.clear();
+                m_offset = size;
+            }
+            break;
+        }
+        if (events.size() >= c_maxEventsPerPoll)
+        {
+            // a huge backlog is read across several polls; the offset is already past this line
+            m_offset = static_cast<std::streamoff>(in.tellg());
             break;
         }
         auto full = m_partial + line;
