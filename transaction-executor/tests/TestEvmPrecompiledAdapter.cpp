@@ -10,6 +10,14 @@
  *        {success, output} results on the same input corpus — including
  *        malformed, truncated and edge-case inputs whose failure-output shape
  *        is consensus-visible (revert data).
+ *
+ *        The swap ships WITHOUT a feature gate (PR #5665, F1 decision), so
+ *        this test is the substitute for that gate: the legacy
+ *        PrecompiledRegistrar executors in bcos-executor/src/vm/Precompiled.cpp
+ *        are the differential oracle the ungated swap depends on and MUST NOT
+ *        be deleted while the swap is ungated. They are also still live
+ *        production code — executor v0 dispatches to them
+ *        (bcos-executor/src/executor/TransactionExecutor.cpp).
  */
 
 #include "../bcos-transaction-executor/precompiled/EvmPrecompiledAdapter.h"
