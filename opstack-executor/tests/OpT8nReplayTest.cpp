@@ -1,5 +1,7 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
+/// @file OpT8nReplayTest.cpp
+/// @brief Block-by-block replay of the op-geth-generated t8n corpus into the FISCO execution path.
 
 // OpT8nReplayTest.cpp — OP block-level differential replay gate.
 //
@@ -339,7 +341,7 @@ namespace
 // hexutil.EncodeUint64/EncodeBig). Hash/address: "0x" fixed-length lowercase.
 // The absent side is always "<absent>".
 
-constexpr const char* kAbsent = "<absent>";
+constexpr const char* c_absent = "<absent>";
 
 std::string hexU64(uint64_t v)
 {
@@ -507,8 +509,8 @@ struct VectorContext
         ++comparisons;
         if (!want.has_value() && !got.has_value())
             return;
-        const auto w = want.value_or(kAbsent);
-        const auto g = got.value_or(kAbsent);
+        const auto w = want.value_or(c_absent);
+        const auto g = got.value_or(c_absent);
         if (w != g)
             ledger.diverge(id, field, w, g);
     }
@@ -596,7 +598,7 @@ std::set<std::string> loadManifest(const fs::path& path)
 // the block); deposit-only vectors carry no chainId, so this corpus constant is
 // used — a mirror of the generator's constant, not a fallback default.
 
-constexpr uint64_t kCorpusChainId = 0x2105;
+constexpr uint64_t c_corpusChainId = 0x2105;
 
 // ── Current API adaptation helpers ───────────────────────────────────────────
 // Receipts are bcos::protocol::TransactionReceipt::Ptr; OP fields come via
@@ -629,7 +631,7 @@ struct BlockContext
     ParentOnlyBlockHashes hashes;
     std::vector<DepositTx> deposits;
     std::vector<bcos::bytes> rawTxBytes;
-    uint64_t chainId = kCorpusChainId;
+    uint64_t chainId = c_corpusChainId;
     // decode-class reject (blob): the production execute hook classifies by
     // type byte before any per-tx decode; the load section reproduces that
     // rejection and records the message here for assertRejectThrow.
@@ -918,9 +920,9 @@ bool loadBlockContext(
                 // blob (0x03) is not in {0x01, 0x02, 0x04} and not a legacy RLP list (>= 0xc0).
                 if (rawVec.empty())
                     throw bcos::evm::OpConsensusError("op block: empty envelope");
-                constexpr uint8_t kRlpListBase = 0xc0;
+                constexpr uint8_t c_rlpListBase = 0xc0;
                 const auto typeByte = rawVec[0];
-                if (typeByte < kRlpListBase && typeByte != 0x01 && typeByte != 0x02 &&
+                if (typeByte < c_rlpListBase && typeByte != 0x01 && typeByte != 0x02 &&
                     typeByte != 0x04)
                     throw bcos::evm::OpConsensusError(
                         fmt::format("op block: unsupported tx type byte 0x{:02x}",
@@ -946,7 +948,7 @@ bool loadBlockContext(
             return false;
         }
     }
-    out.chainId = vectorChainId.value_or(kCorpusChainId);
+    out.chainId = vectorChainId.value_or(c_corpusChainId);
     return true;
 }
 
@@ -1803,7 +1805,7 @@ void replaySingleBlockInto(const std::string& id, const JsonValue& blk,
             const bool storageAllZero = std::ranges::all_of(
                 acc.storage, [](const auto& kv) { return evmc::is_zero(kv.second); });
             if (acc.nonce != 0 || acc.balance != 0 || !acc.code.empty() || !storageAllZero)
-                ledger.diverge(id, "postState." + hexAddr(addr) + ".exists", kAbsent, "<present>");
+                ledger.diverge(id, "postState." + hexAddr(addr) + ".exists", c_absent, "<present>");
         }
         // Coverage assertion (ii) address dimension: an address touched by replay applyDiff
         // but not listed in the vector postState = DIVERGE .uncovered (an account touched

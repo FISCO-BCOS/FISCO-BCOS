@@ -1,5 +1,7 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
+/// @file OpBlockInjectorTest.cpp
+/// @brief Block-injection paths of the OP scheduler: payload assembly, envelope checks and commit ordering.
 
 // OpBlockInjectorTest — drives the shared block-execution path (preBlockOpEthSteps →
 // SchedulerSerialImpl(serial=true) → finalizeOpEthBlockResult) over a plain MutableStorage
@@ -48,8 +50,8 @@ namespace
 using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
     memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
 
-constexpr uint64_t kChainId = 0x2105;
-constexpr int64_t kHeaderGasLimit = 30'000'000;
+constexpr uint64_t c_chainId = 0x2105;
+constexpr int64_t c_headerGasLimit = 30'000'000;
 const bcos::Address kSender{"0x1000000000000000000000000000000000000000"};
 
 /// A header carrying every optional field buildOpEthBlockInfo requires (OpEthBlockExecute.h):
@@ -64,7 +66,7 @@ std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeHeader(int64_t timestam
     h->setStateRoot(bcos::h256{});
     h->setTxsRoot(bcos::h256{});
     h->setReceiptsRoot(bcos::h256{});
-    h->setGasLimit(bcos::u256(kHeaderGasLimit));
+    h->setGasLimit(bcos::u256(c_headerGasLimit));
     h->setGasUsed(bcos::u256(0));
     h->setExtraData(bcos::bytes{});
     h->setPrevRandao(bcos::h256{});
@@ -98,11 +100,11 @@ bcos::executor_v1::opstack::DepositTx makeAttributesDeposit()
 /// never fires), and the dummy r/s is neutralized by forceSender.
 bcos::protocol::Transaction::Ptr buildEip1559FiscoTx()
 {
-    // chainId must match the block chainId (kChainId, 0x2105): a mismatch is rejected in m_prepare
+    // chainId must match the block chainId (c_chainId, 0x2105): a mismatch is rejected in m_prepare
     // before opValidate.
     bcos::rpc::Web3Transaction w3{};
     w3.type = bcos::rpc::TransactionType::EIP1559;
-    w3.chainId = kChainId;
+    w3.chainId = c_chainId;
     w3.nonce = 0;
     w3.maxFeePerGas = bcos::u256(30'000'000'000ULL);
     w3.maxPriorityFeePerGas = 0;
@@ -176,7 +178,7 @@ BOOST_AUTO_TEST_CASE(InjectsDepositAndEip1559Block)
     // trivially true here).
     const auto sysBlk = opstack_test::opeth::buildOpEthBlockInfo(
         *header, opstack_test::opeth::OP_ISTHMUS_SPEC);
-    BOOST_CHECK_EQUAL(sysBlk.gas_limit, kHeaderGasLimit);
+    BOOST_CHECK_EQUAL(sysBlk.gas_limit, c_headerGasLimit);
     BOOST_CHECK_EQUAL(sysBlk.gas_limit,
         static_cast<int64_t>(detail::narrowU256ToU64(header->gasLimit(), "test")));
 

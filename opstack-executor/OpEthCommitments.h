@@ -1,7 +1,8 @@
 /// @file OpEthCommitments.h
 /// @brief The six-way commitment comparison surface on the bcos-evm-free OP
 ///        layer — the counterpart of the pre-cutover OpCommitments.h (commitmentsOf /
-///        mismatchedFieldOf, since renamed into this file), OpBlockExecute.h (announcedCommitmentsOf /
+///        mismatchedFieldOf, since renamed into this file),
+///        OpBlockExecute.h (announcedCommitmentsOf /
 ///        computeOpTxRoot) and OpSchedulerSeam.h's isJovianActive /
 ///        isKarstActive, restated over OpEthBlockSeal (framework types; no
 ///        evmone BloomFilter/hash256).

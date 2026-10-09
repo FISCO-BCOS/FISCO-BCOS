@@ -6,7 +6,10 @@
  *  You may obtain a copy of the License at
  *
  *   http://www.apache.org/licenses/LICENSE-2.0
- */
+
+ *
+ * @file NodeConfigOpForkScheduleTest.cpp
+ * @brief NodeConfig [op_fork_schedule] canonical loader tests, joining the generator output to the node loader. */
 
 #include "ExceptionCheck.h"
 #include "EthLaneGenesisFixture.h"

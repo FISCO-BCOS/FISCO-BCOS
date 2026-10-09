@@ -47,8 +47,8 @@ namespace eth = bcos::executor_v1::eth;
 namespace opeth = bcos::executor_v1::opstack;
 using evmc::literals::operator""_address;
 
-constexpr evmc::address kFrom = 0x00000000000000000000000000000000000000cc_address;
-constexpr uint64_t kChainId = 1234;
+constexpr evmc::address c_from = 0x00000000000000000000000000000000000000cc_address;
+constexpr uint64_t c_chainId = 1234;
 
 bcos::protocol::TransactionReceiptFactory::Ptr makeReceiptFactory()
 {
@@ -87,7 +87,7 @@ opeth::DepositTx plainDeposit(evmc::address to, int64_t gasLimit = 100'000)
 {
     opeth::DepositTx dep{};
     dep.sourceHash.bytes[31] = 0x01;
-    dep.from = kFrom;
+    dep.from = c_from;
     dep.to = to;
     dep.gasLimit = gasLimit;
     return dep;
@@ -99,7 +99,7 @@ bcos::protocol::TransactionReceipt::Ptr runIsthmusDeposit(MutableStorage& storag
     eth::EthereumState<MutableStorage> state{storage};
     evmc::VM vm{evmc_create_evmone()};
     return bcos::task::syncWait(opeth::opRunDeposit(state, block, /*blockHashLookup=*/{}, dep,
-        opeth::OP_ISTHMUS_SPEC, vm, kChainId, block.gas_limit, *makeReceiptFactory(),
+        opeth::OP_ISTHMUS_SPEC, vm, c_chainId, block.gas_limit, *makeReceiptFactory(),
         block.number));
 }
 
@@ -136,13 +136,13 @@ BOOST_AUTO_TEST_SUITE(OpEthDepositGasSuite)
 // not raise it.
 BOOST_AUTO_TEST_CASE(RefundLowersDepositGasUsed)
 {
-    constexpr auto kClear = 0x00000000000000000000000000000000000000ee_address;
+    constexpr auto c_clear = 0x00000000000000000000000000000000000000ee_address;
     MutableStorage storage{1};
-    seedAccount(storage, kFrom, 0, bcos::u256{0}, {});
-    seedAccount(storage, kClear, 1, bcos::u256{0}, {0x60, 0x00, 0x60, 0x00, 0x55, 0x00},
+    seedAccount(storage, c_from, 0, bcos::u256{0}, {});
+    seedAccount(storage, c_clear, 1, bcos::u256{0}, {0x60, 0x00, 0x60, 0x00, 0x55, 0x00},
         {{word(0), word(1)}});
 
-    auto const r = runIsthmusDeposit(storage, plainDeposit(kClear), depositBlock());
+    auto const r = runIsthmusDeposit(storage, plainDeposit(c_clear), depositBlock());
     BOOST_CHECK_EQUAL(r->status(), 0);
     BOOST_CHECK_EQUAL(receiptGasUsed(*r), 21206);
 }
@@ -153,30 +153,30 @@ BOOST_AUTO_TEST_CASE(RefundLowersDepositGasUsed)
 // the assertion.
 BOOST_AUTO_TEST_CASE(RefundIsCappedAtOneFifthOfGasUsed)
 {
-    constexpr auto kClear4 = 0x00000000000000000000000000000000000000e4_address;
+    constexpr auto c_clear4 = 0x00000000000000000000000000000000000000e4_address;
     MutableStorage storage{1};
-    seedAccount(storage, kFrom, 0, bcos::u256{0}, {});
-    seedAccount(storage, kClear4, 1, bcos::u256{0},
+    seedAccount(storage, c_from, 0, bcos::u256{0}, {});
+    seedAccount(storage, c_clear4, 1, bcos::u256{0},
         {0x60, 0x00, 0x60, 0x00, 0x55, 0x60, 0x00, 0x60, 0x01, 0x55, 0x60, 0x00, 0x60, 0x02,
             0x55, 0x60, 0x00, 0x60, 0x03, 0x55, 0x00},
         {{word(0), word(1)}, {word(1), word(1)}, {word(2), word(1)}, {word(3), word(1)}});
 
-    auto const r = runIsthmusDeposit(storage, plainDeposit(kClear4), depositBlock());
+    auto const r = runIsthmusDeposit(storage, plainDeposit(c_clear4), depositBlock());
     BOOST_CHECK_EQUAL(r->status(), 0);
-    constexpr int64_t kPreRefund = 41024;
-    BOOST_CHECK_EQUAL(receiptGasUsed(*r), kPreRefund - kPreRefund / 5);
+    constexpr int64_t c_preRefund = 41024;
+    BOOST_CHECK_EQUAL(receiptGasUsed(*r), c_preRefund - c_preRefund / 5);
 }
 
 // Sender pre-warming (EIP-2929): BALANCE(ORIGIN) charges the warm 100, not the cold 2600
 // (a missing warm-up shows as 23604). Code: ORIGIN BALANCE POP STOP.
 BOOST_AUTO_TEST_CASE(DepositWarmsSenderPerEip2929)
 {
-    constexpr auto kProbe = 0x00000000000000000000000000000000000000ba_address;
+    constexpr auto c_probe = 0x00000000000000000000000000000000000000ba_address;
     MutableStorage storage{1};
-    seedAccount(storage, kFrom, 0, bcos::u256{0}, {});
-    seedAccount(storage, kProbe, 1, bcos::u256{0}, {0x32, 0x31, 0x50, 0x00});
+    seedAccount(storage, c_from, 0, bcos::u256{0}, {});
+    seedAccount(storage, c_probe, 1, bcos::u256{0}, {0x32, 0x31, 0x50, 0x00});
 
-    auto const r = runIsthmusDeposit(storage, plainDeposit(kProbe), depositBlock());
+    auto const r = runIsthmusDeposit(storage, plainDeposit(c_probe), depositBlock());
     BOOST_CHECK_EQUAL(r->status(), 0);
     BOOST_CHECK_EQUAL(receiptGasUsed(*r), 21104);
 }
@@ -184,14 +184,14 @@ BOOST_AUTO_TEST_CASE(DepositWarmsSenderPerEip2929)
 // Coinbase pre-warming (EIP-3651, Shanghai+): BALANCE(COINBASE) is likewise warm — 21104.
 BOOST_AUTO_TEST_CASE(DepositWarmsCoinbasePerEip3651)
 {
-    constexpr auto kProbe = 0x00000000000000000000000000000000000000bc_address;
+    constexpr auto c_probe = 0x00000000000000000000000000000000000000bc_address;
     MutableStorage storage{1};
-    seedAccount(storage, kFrom, 0, bcos::u256{0}, {});
-    seedAccount(storage, kProbe, 1, bcos::u256{0}, {0x41, 0x31, 0x50, 0x00});
+    seedAccount(storage, c_from, 0, bcos::u256{0}, {});
+    seedAccount(storage, c_probe, 1, bcos::u256{0}, {0x41, 0x31, 0x50, 0x00});
     auto block = depositBlock();
     block.coinbase = 0x00000000000000000000000000000000000000c1_address;
 
-    auto const r = runIsthmusDeposit(storage, plainDeposit(kProbe), block);
+    auto const r = runIsthmusDeposit(storage, plainDeposit(c_probe), block);
     BOOST_CHECK_EQUAL(r->status(), 0);
     BOOST_CHECK_EQUAL(receiptGasUsed(*r), 21104);
 }
@@ -202,8 +202,8 @@ BOOST_AUTO_TEST_CASE(DepositWarmsCoinbasePerEip3651)
 // everything-warm cheat both collapse the delta to 0 and are caught.
 BOOST_AUTO_TEST_CASE(WarmColdDifferentialIs2500)
 {
-    constexpr auto kCold = 0x00000000000000000000000000000000000000fe_address;
-    constexpr auto kProbe = 0x00000000000000000000000000000000000000be_address;
+    constexpr auto c_cold = 0x00000000000000000000000000000000000000fe_address;
+    constexpr auto c_probe = 0x00000000000000000000000000000000000000be_address;
     auto const probeCode = [](evmc::address const& target) {
         bcos::bytes code{0x73};  // PUSH20
         code.insert(code.end(), target.bytes, target.bytes + sizeof(target.bytes));
@@ -212,13 +212,13 @@ BOOST_AUTO_TEST_CASE(WarmColdDifferentialIs2500)
     };
     auto const run = [&](evmc::address const& target) {
         MutableStorage storage{1};
-        seedAccount(storage, kFrom, 0, bcos::u256{0}, {});
-        seedAccount(storage, kProbe, 1, bcos::u256{0}, probeCode(target));
-        auto const r = runIsthmusDeposit(storage, plainDeposit(kProbe), depositBlock());
+        seedAccount(storage, c_from, 0, bcos::u256{0}, {});
+        seedAccount(storage, c_probe, 1, bcos::u256{0}, probeCode(target));
+        auto const r = runIsthmusDeposit(storage, plainDeposit(c_probe), depositBlock());
         BOOST_CHECK_EQUAL(r->status(), 0);
         return receiptGasUsed(*r);
     };
-    BOOST_CHECK_EQUAL(run(kCold) - run(kFrom), 2500);
+    BOOST_CHECK_EQUAL(run(c_cold) - run(c_from), 2500);
 }
 
 // Anti-cheat (red-team F-7 in the original): a 7702 delegation pointing at 0x100 must take
@@ -227,14 +227,14 @@ BOOST_AUTO_TEST_CASE(WarmColdDifferentialIs2500)
 BOOST_AUTO_TEST_CASE(DelegationToPrecompileFallsBackToEmptyCode)
 {
     constexpr auto k100 = 0x0000000000000000000000000000000000000100_address;
-    constexpr auto kEoa = 0x00000000000000000000000000000000000000ac_address;
+    constexpr auto c_eoa = 0x00000000000000000000000000000000000000ac_address;
     bcos::bytes delegation{0xef, 0x01, 0x00};
     delegation.insert(delegation.end(), k100.bytes, k100.bytes + sizeof(k100.bytes));
     MutableStorage storage{1};
-    seedAccount(storage, kFrom, 0, bcos::u256{0}, {});
-    seedAccount(storage, kEoa, 1, bcos::u256{0}, std::move(delegation));
+    seedAccount(storage, c_from, 0, bcos::u256{0}, {});
+    seedAccount(storage, c_eoa, 1, bcos::u256{0}, std::move(delegation));
 
-    auto const r = runIsthmusDeposit(storage, plainDeposit(kEoa), depositBlock());
+    auto const r = runIsthmusDeposit(storage, plainDeposit(c_eoa), depositBlock());
     BOOST_CHECK_EQUAL(r->status(), 0);
     BOOST_CHECK_EQUAL(receiptGasUsed(*r), 21000);
 }
@@ -245,8 +245,8 @@ BOOST_AUTO_TEST_CASE(DelegationToPrecompileFallsBackToEmptyCode)
 BOOST_AUTO_TEST_CASE(ContractCreationDerivesAddressFromPreExecutionNonce)
 {
     MutableStorage storage{1};
-    seedAccount(storage, kFrom, 5, bcos::u256{0}, {});
-    auto dep = plainDeposit(kFrom);
+    seedAccount(storage, c_from, 5, bcos::u256{0}, {});
+    auto dep = plainDeposit(c_from);
     dep.to = std::nullopt;
     dep.data = {0x60, 0x00, 0x60, 0x00, 0xf3};  // PUSH1 0 PUSH1 0 RETURN: empty runtime
 
@@ -270,19 +270,19 @@ BOOST_AUTO_TEST_CASE(ContractCreationDerivesAddressFromPreExecutionNonce)
 // pinned: >= intrinsic 21000, < gasLimit.
 BOOST_AUTO_TEST_CASE(EvmRevertKeepsMintAndChargesActualGas)
 {
-    constexpr auto kRevert = 0x00000000000000000000000000000000000000dd_address;
+    constexpr auto c_revert = 0x00000000000000000000000000000000000000dd_address;
     MutableStorage storage{1};
-    seedAccount(storage, kFrom, 0, bcos::u256{0}, {});
-    seedAccount(storage, kRevert, 0, bcos::u256{0}, {0x60, 0x00, 0x60, 0x00, 0xfd});
+    seedAccount(storage, c_from, 0, bcos::u256{0}, {});
+    seedAccount(storage, c_revert, 0, bcos::u256{0}, {0x60, 0x00, 0x60, 0x00, 0xfd});
 
-    auto dep = plainDeposit(kRevert);
+    auto dep = plainDeposit(c_revert);
     dep.mint = bcos::u256{100};
     auto const r = runIsthmusDeposit(storage, dep, depositBlock());
     BOOST_CHECK_NE(r->status(), 0);
     BOOST_CHECK_GE(receiptGasUsed(*r), 21000);
     BOOST_CHECK_LT(receiptGasUsed(*r), 100000);
-    BOOST_CHECK_EQUAL(viewBalance(storage, kFrom), bcos::u256{100});
-    BOOST_CHECK_EQUAL(viewNonce(storage, kFrom), "1");
+    BOOST_CHECK_EQUAL(viewBalance(storage, c_from), bcos::u256{100});
+    BOOST_CHECK_EQUAL(viewNonce(storage, c_from), "1");
 }
 
 // Entry failure (gasLimit 20999 below the 21000 intrinsic) charges the FULL gasLimit and still
@@ -290,48 +290,48 @@ BOOST_AUTO_TEST_CASE(EvmRevertKeepsMintAndChargesActualGas)
 BOOST_AUTO_TEST_CASE(EntryFailureChargesFullGasLimitButKeepsMint)
 {
     MutableStorage storage{1};
-    seedAccount(storage, kFrom, 0, bcos::u256{0}, {});
+    seedAccount(storage, c_from, 0, bcos::u256{0}, {});
 
-    auto dep = plainDeposit(kFrom, /*gasLimit=*/20999);
+    auto dep = plainDeposit(c_from, /*gasLimit=*/20999);
     dep.mint = bcos::u256{50};
     auto const r = runIsthmusDeposit(storage, dep, depositBlock());
     BOOST_CHECK_EQUAL(r->status(), 1);
     BOOST_CHECK_EQUAL(receiptGasUsed(*r), 20999);
-    BOOST_CHECK_EQUAL(viewBalance(storage, kFrom), bcos::u256{50});
-    BOOST_CHECK_EQUAL(viewNonce(storage, kFrom), "1");
+    BOOST_CHECK_EQUAL(viewBalance(storage, c_from), bcos::u256{50});
+    BOOST_CHECK_EQUAL(viewNonce(storage, c_from), "1");
 }
 
 // value above the post-mint balance fails the transfer, charges the full gasLimit, and keeps
 // the mint while the value stays put (op-geth innerExecute's insufficient-funds branch).
 BOOST_AUTO_TEST_CASE(ValueOverPostMintBalanceFailsWithFullGasLimit)
 {
-    constexpr auto kTo = 0x00000000000000000000000000000000000000f1_address;
+    constexpr auto c_to = 0x00000000000000000000000000000000000000f1_address;
     MutableStorage storage{1};
-    seedAccount(storage, kFrom, 0, bcos::u256{0}, {});
+    seedAccount(storage, c_from, 0, bcos::u256{0}, {});
 
-    auto dep = plainDeposit(kTo);
+    auto dep = plainDeposit(c_to);
     dep.mint = bcos::u256{5};
     dep.value = bcos::u256{60};
     auto const r = runIsthmusDeposit(storage, dep, depositBlock());
     BOOST_CHECK_EQUAL(r->status(), 1);
     BOOST_CHECK_EQUAL(receiptGasUsed(*r), 100000);
-    BOOST_CHECK_EQUAL(viewBalance(storage, kFrom), bcos::u256{5});
-    BOOST_CHECK_EQUAL(viewBalance(storage, kTo), bcos::u256{0});
-    BOOST_CHECK_EQUAL(viewNonce(storage, kFrom), "1");
+    BOOST_CHECK_EQUAL(viewBalance(storage, c_from), bcos::u256{5});
+    BOOST_CHECK_EQUAL(viewBalance(storage, c_to), bcos::u256{0});
+    BOOST_CHECK_EQUAL(viewNonce(storage, c_from), "1");
 }
 
 // The mint addition wraps mod 2^256 like op-geth's uint256.Add: (2^256-1) + 2 = 1.
 BOOST_AUTO_TEST_CASE(MintAdditionWrapsLikeOpGethUint256Add)
 {
     MutableStorage storage{1};
-    seedAccount(storage, kFrom, 0, ~bcos::u256{0}, {});
+    seedAccount(storage, c_from, 0, ~bcos::u256{0}, {});
 
-    auto dep = plainDeposit(kFrom);
+    auto dep = plainDeposit(c_from);
     dep.mint = bcos::u256{2};
     auto const r = runIsthmusDeposit(storage, dep, depositBlock());
     BOOST_CHECK_EQUAL(r->status(), 0);
-    BOOST_CHECK_EQUAL(viewBalance(storage, kFrom), bcos::u256{1});
-    BOOST_CHECK_EQUAL(viewNonce(storage, kFrom), "1");
+    BOOST_CHECK_EQUAL(viewBalance(storage, c_from), bcos::u256{1});
+    BOOST_CHECK_EQUAL(viewNonce(storage, c_from), "1");
 }
 
 // Regolith+ rejects is_system_tx outright (op-geth ErrSystemTxNotSupported — the other of
@@ -340,8 +340,8 @@ BOOST_AUTO_TEST_CASE(MintAdditionWrapsLikeOpGethUint256Add)
 BOOST_AUTO_TEST_CASE(SystemTxIsBlockErrorSinceRegolith)
 {
     MutableStorage storage{1};
-    seedAccount(storage, kFrom, 0, bcos::u256{0}, {});
-    auto dep = plainDeposit(kFrom);
+    seedAccount(storage, c_from, 0, bcos::u256{0}, {});
+    auto dep = plainDeposit(c_from);
     dep.isSystemTx = true;
     BOOST_CHECK_EXCEPTION(runIsthmusDeposit(storage, dep, depositBlock()), std::runtime_error,
         [](std::runtime_error const& e) {
@@ -355,18 +355,18 @@ BOOST_AUTO_TEST_CASE(SystemTxIsBlockErrorSinceRegolith)
 BOOST_AUTO_TEST_CASE(BlockBudgetBoundary){
     {
         MutableStorage storage{1};
-        seedAccount(storage, kFrom, 0, bcos::u256{0}, {});
+        seedAccount(storage, c_from, 0, bcos::u256{0}, {});
         auto block = depositBlock();
         block.gas_limit = 50000;
-        BOOST_CHECK_THROW(runIsthmusDeposit(storage, plainDeposit(kFrom, 60000), block),
+        BOOST_CHECK_THROW(runIsthmusDeposit(storage, plainDeposit(c_from, 60000), block),
             opeth::OpEthDepositGasLimitReached);
     }
     {
         MutableStorage storage{1};
-        seedAccount(storage, kFrom, 0, bcos::u256{0}, {});
+        seedAccount(storage, c_from, 0, bcos::u256{0}, {});
         auto block = depositBlock();
         block.gas_limit = 60000;
-        auto const r = runIsthmusDeposit(storage, plainDeposit(kFrom, 60000), block);
+        auto const r = runIsthmusDeposit(storage, plainDeposit(c_from, 60000), block);
         BOOST_CHECK_EQUAL(r->status(), 0);
     }
 }
@@ -381,17 +381,17 @@ BOOST_AUTO_TEST_CASE(KarstDepositAbove7825CapAdmittedButNormalTxRejected)
 {
     using bcos::protocol::MAX_TX_GAS_LIMIT;
     MutableStorage storage;
-    seedAccount(storage, kFrom, /*nonce=*/0, bcos::u256("1000000000000000000"), {});
+    seedAccount(storage, c_from, /*nonce=*/0, bcos::u256("1000000000000000000"), {});
     auto block = depositBlock();
 
-    constexpr auto kTo = 0x00000000000000000000000000000000000000dd_address;
-    auto dep = plainDeposit(kTo, MAX_TX_GAS_LIMIT + 1);
+    constexpr auto c_to = 0x00000000000000000000000000000000000000dd_address;
+    auto dep = plainDeposit(c_to, MAX_TX_GAS_LIMIT + 1);
     eth::EthereumState<MutableStorage> state{storage};
     evmc::VM vm{evmc_create_evmone()};
     // The deposit is admitted under Karst — the exemption clamp keeps the intrinsic check
     // at Prague (no cap on deposits).
     BOOST_CHECK_NO_THROW((void)bcos::task::syncWait(opeth::opRunDeposit(state, block,
-        /*blockHashLookup=*/{}, dep, opeth::OP_KARST_SPEC, vm, kChainId, block.gas_limit,
+        /*blockHashLookup=*/{}, dep, opeth::OP_KARST_SPEC, vm, c_chainId, block.gas_limit,
         *makeReceiptFactory(), block.number)));
 
     // Control: a normal tx at the same gas under Osaka rejects via the cap.

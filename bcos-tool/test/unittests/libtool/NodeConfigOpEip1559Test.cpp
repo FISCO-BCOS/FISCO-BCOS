@@ -6,7 +6,10 @@
  *  You may obtain a copy of the License at
  *
  *   http://www.apache.org/licenses/LICENSE-2.0
- */
+
+ *
+ * @file NodeConfigOpEip1559Test.cpp
+ * @brief NodeConfig [op_eip1559] loader tests: declaration parsing, refusal rules and the genesis pin. */
 
 // [op_eip1559]: the chain's EIP-1559 triple (op-deployer's config.optimism, the same numbers
 // rollup.json carries as chain_op_config) as a chain-level, genesis-frozen key. The engine
@@ -34,7 +37,7 @@ BOOST_AUTO_TEST_SUITE(NodeConfigOpEip1559Test)
 namespace
 {
 /// The OP schedule section every version=3 case needs (the lane requires one to be present).
-constexpr const char* kSchedule = "[op_fork_timestamps]\njovian_time=0\n";
+constexpr const char* c_schedule = "[op_fork_timestamps]\njovian_time=0\n";
 
 /// Genesis with a configurable [executor] tail and the OP sections passed verbatim; everything
 /// else is fixed so the EIP-1559 checks are the only guards that can fire (same skeleton as
@@ -82,7 +85,7 @@ BOOST_AUTO_TEST_CASE(loadsTheTripleAndDefaultsTheCanyonDenominator)
 {
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(opGenesis(
-        opExecutor(), std::string(kSchedule) + "[op_eip1559]\nelasticity=2\ndenominator=8\n")));
+        opExecutor(), std::string(c_schedule) + "[op_eip1559]\nelasticity=2\ndenominator=8\n")));
     BOOST_REQUIRE(cfg.opEip1559().has_value());
     BOOST_CHECK_EQUAL(cfg.opEip1559()->elasticity, 2U);
     BOOST_CHECK_EQUAL(cfg.opEip1559()->denominator, 8U);
@@ -94,7 +97,7 @@ BOOST_AUTO_TEST_CASE(loadsTheTripleAndDefaultsTheCanyonDenominator)
 BOOST_AUTO_TEST_CASE(absentSectionLeavesTheTripleUnset)
 {
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(opGenesis(opExecutor(), kSchedule)));
+    BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(opGenesis(opExecutor(), c_schedule)));
     BOOST_CHECK(!cfg.opEip1559().has_value());
     // ... and the engine/pin both fall back to the legacy preset through ONE function.
     BOOST_CHECK_EQUAL(bcos::engine::effectiveOpEip1559(cfg.opEip1559()).denominator, 50U);
@@ -104,7 +107,7 @@ BOOST_AUTO_TEST_CASE(missingRequiredKeyRejected)
 {
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(opExecutor(),
-                              std::string(kSchedule) + "[op_eip1559]\ndenominator=8\n")),
+                              std::string(c_schedule) + "[op_eip1559]\ndenominator=8\n")),
         InvalidConfig,
         [](auto const& e) { return errinfoContains(e, "[op_eip1559].elasticity is required"); });
 }
@@ -115,7 +118,7 @@ BOOST_AUTO_TEST_CASE(missingDenominatorKeyRejected)
 {
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(
-                              opExecutor(), std::string(kSchedule) + "[op_eip1559]\nelasticity=2\n")),
+                              opExecutor(), std::string(c_schedule) + "[op_eip1559]\nelasticity=2\n")),
         InvalidConfig,
         [](auto const& e) { return errinfoContains(e, "[op_eip1559].denominator is required"); });
 }
@@ -127,7 +130,7 @@ BOOST_AUTO_TEST_CASE(zeroValuesRejected)
     {
         NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
         BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(
-                                  opExecutor(), std::string(kSchedule) + "[op_eip1559]\n" + body)),
+                                  opExecutor(), std::string(c_schedule) + "[op_eip1559]\n" + body)),
             InvalidConfig, [](auto const& e) {
                 return errinfoContains(e, "[op_eip1559] values must be non-zero");
             });
@@ -141,7 +144,7 @@ BOOST_AUTO_TEST_CASE(hexValuesAcceptedLikeTheSiblingScheduleSection)
     // decimal.
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(opGenesis(
-        opExecutor(), std::string(kSchedule) + "[op_eip1559]\nelasticity=0x2\ndenominator=0x8\n")));
+        opExecutor(), std::string(c_schedule) + "[op_eip1559]\nelasticity=0x2\ndenominator=0x8\n")));
     BOOST_REQUIRE(cfg.opEip1559().has_value());
     BOOST_CHECK_EQUAL(cfg.opEip1559()->elasticity, 2U);
     BOOST_CHECK_EQUAL(cfg.opEip1559()->denominator, 8U);
@@ -153,7 +156,7 @@ BOOST_AUTO_TEST_CASE(malformedValueRejected)
     {
         NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
         BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(opExecutor(),
-                                  std::string(kSchedule) + "[op_eip1559]\nelasticity=" + value +
+                                  std::string(c_schedule) + "[op_eip1559]\nelasticity=" + value +
                                       "\ndenominator=8\n")),
             InvalidConfig, [](auto const& e) {
                 return errinfoContains(e, "[op_eip1559].elasticity is not a valid uint64");
@@ -172,7 +175,7 @@ BOOST_AUTO_TEST_CASE(malformedCanyonDenominatorRejected)
         NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
         BOOST_CHECK_EXCEPTION(
             cfg.loadGenesisConfigFromString(opGenesis(opExecutor(),
-                std::string(kSchedule) +
+                std::string(c_schedule) +
                     "[op_eip1559]\nelasticity=2\ndenominator=8\ndenominator_canyon=" + value +
                     "\n")),
             InvalidConfig, [](auto const& e) {
@@ -188,7 +191,7 @@ BOOST_AUTO_TEST_CASE(canyonDenominatorHexParsesStrictly)
     // effective value as the omitted-key default.
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(opGenesis(
-        opExecutor(), std::string(kSchedule) +
+        opExecutor(), std::string(c_schedule) +
                           "[op_eip1559]\nelasticity=2\ndenominator=8\ndenominator_canyon=0xfa\n")));
     BOOST_REQUIRE(cfg.opEip1559().has_value());
     BOOST_CHECK_EQUAL(cfg.opEip1559()->denominatorCanyon, 250U);
@@ -206,7 +209,7 @@ BOOST_AUTO_TEST_CASE(valuesExceedingUint32Rejected)
     {
         NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
         BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(
-                                  opExecutor(), std::string(kSchedule) + "[op_eip1559]\n" + body)),
+                                  opExecutor(), std::string(c_schedule) + "[op_eip1559]\n" + body)),
             InvalidConfig,
             [](auto const& e) { return errinfoContains(e, "exceeds the uint32 range"); });
     }
@@ -232,7 +235,7 @@ BOOST_AUTO_TEST_CASE(genesisDataCarriesTheDeclaredEip1559Triple)
 {
     NodeConfig withoutCfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     BOOST_REQUIRE_NO_THROW(
-        withoutCfg.loadGenesisConfigFromString(opGenesis(opExecutor(), kSchedule)));
+        withoutCfg.loadGenesisConfigFromString(opGenesis(opExecutor(), c_schedule)));
     BOOST_REQUIRE(withoutCfg.ledgerConfig());
     auto const without =
         bcos::tool::generateGenesisData(withoutCfg.genesisConfig(), *withoutCfg.ledgerConfig());
@@ -240,7 +243,7 @@ BOOST_AUTO_TEST_CASE(genesisDataCarriesTheDeclaredEip1559Triple)
 
     NodeConfig withCfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     BOOST_REQUIRE_NO_THROW(withCfg.loadGenesisConfigFromString(opGenesis(
-        opExecutor(), std::string(kSchedule) + "[op_eip1559]\nelasticity=2\ndenominator=8\n")));
+        opExecutor(), std::string(c_schedule) + "[op_eip1559]\nelasticity=2\ndenominator=8\n")));
     BOOST_REQUIRE(withCfg.ledgerConfig());
     auto const with =
         bcos::tool::generateGenesisData(withCfg.genesisConfig(), *withCfg.ledgerConfig());
@@ -252,7 +255,7 @@ BOOST_AUTO_TEST_CASE(genesisDataCarriesTheDeclaredEip1559Triple)
     // must pin the SAME string as omitting it (asserted, not just documented).
     NodeConfig explicitCfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     BOOST_REQUIRE_NO_THROW(explicitCfg.loadGenesisConfigFromString(opGenesis(opExecutor(),
-        std::string(kSchedule) +
+        std::string(c_schedule) +
             "[op_eip1559]\nelasticity=2\ndenominator=8\ndenominator_canyon=250\n")));
     BOOST_REQUIRE(explicitCfg.ledgerConfig());
     auto const explicitPin =

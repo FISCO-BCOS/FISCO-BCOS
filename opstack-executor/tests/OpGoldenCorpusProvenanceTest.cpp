@@ -12,7 +12,10 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
- */
+
+ *
+ * @file OpGoldenCorpusProvenanceTest.cpp
+ * @brief Provenance pins for the t8n golden corpus: generator commit and SHA256SUMS. */
 
 // OpGoldenCorpusProvenanceTest.cpp — golden-corpus provenance tripwire (B3-5).
 //

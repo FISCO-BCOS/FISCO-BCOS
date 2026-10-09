@@ -12,7 +12,10 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
- */
+
+ *
+ * @file OpL1EdgeGateTest.cpp
+ * @brief L1-edge gating of OP payloads: DA footprint, gas limits and the deposit-first shape. */
 
 // opstack-executor/tests/OpL1EdgeGateTest.cpp
 // L1 edge gate: B-5b Jovian DA-footprint rejection + D-4 validate-snapshot contract.

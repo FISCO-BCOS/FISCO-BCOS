@@ -1,5 +1,7 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
+/// @file OpEngineBranchSmokeTest.cpp
+/// @brief Smoke coverage of the engine fork-resolution branches.
 
 // OpEngineBranchSmokeTest — compile-and-run verification that OpEngineService instantiates
 // against OpSchedulerSeam on the Eth/Op split branch. The -38005 pre-Isthmus gate is the runtime

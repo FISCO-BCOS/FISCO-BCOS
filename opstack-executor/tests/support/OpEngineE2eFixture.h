@@ -12,7 +12,10 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
- */
+
+ *
+ * @file OpEngineE2eFixture.h
+ * @brief In-process fixture wiring the OP engine service to a real ledger over memory storage. */
 
 #pragma once
 
@@ -105,7 +108,7 @@ struct StubMemPool
 using EngineOpScheduler = bcos::evm::engine::OpSchedulerSeam<ViewType>;
 using OpEngine = bcos::engine::OpEngineService<StubMemPool, MLS, EngineOpScheduler>;
 
-constexpr uint64_t kChainId = 0x2105;
+constexpr uint64_t c_chainId = 0x2105;
 
 inline bcos::crypto::CryptoSuite::Ptr makeCryptoSuite()
 {
@@ -368,7 +371,7 @@ struct OpE2eFixture
                 backendStorage)),
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
         opDelegate(std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory,
-            hashImpl, kChainId, schedule, blockFactory, multiLayerStorage, ledger,
+            hashImpl, c_chainId, schedule, blockFactory, multiLayerStorage, ledger,
             ioServicePool)),
         service(memPool, multiLayerStorage, scheduler, blockFactory,
             bcos::engine::c_defaultBlockTxCountLimit, opDelegate, nullptr,

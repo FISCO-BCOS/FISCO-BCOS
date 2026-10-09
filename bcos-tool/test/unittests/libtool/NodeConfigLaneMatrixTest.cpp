@@ -6,7 +6,10 @@
  *  You may obtain a copy of the License at
  *
  *   http://www.apache.org/licenses/LICENSE-2.0
- */
+
+ *
+ * @file NodeConfigLaneMatrixTest.cpp
+ * @brief Lane-key rule matrix for the NodeConfig OP/EL lanes: required/rejected section binding per lane and the dual-channel agreement check. */
 
 // The lane x key matrix: which config-genesis key belongs to which executor lane, whether it is
 // required/forbidden/optional there, and whether it must reach the genesis pin. Before this,
@@ -36,8 +39,9 @@ std::string opSectionBody(std::string_view section)
 {
     if (section == "op_fork_timestamps")
     {
-        // jovian_time requires isthmus_time (NodeConfig's parse-level guard: a scheduled
-        // rung without the isthmus baseline throws before the lane matrix sees it).
+        // isthmus_time=0 activates the full Bedrock..Karst ladder (an unset isthmus_time
+        // means the Isthmus zero-start baseline, which would hide the pre-Isthmus rungs
+        // under test); no loader guard couples jovian_time to isthmus_time.
         return "isthmus_time=0\njovian_time=0\n";
     }
     if (section == "op_fork_schedule")

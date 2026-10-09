@@ -12,7 +12,10 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
- */
+
+ *
+ * @file GoldenSampleTest.cpp
+ * @brief Golden-sample envelope/header fixtures for the OP wire shapes. */
 
 // opstack-executor/tests/support/GoldenSampleTest.cpp
 #include "GoldenSample.h"
@@ -158,10 +161,10 @@ BOOST_AUTO_TEST_CASE(ManifestCorpusConsistency)
         {
             if (line.empty() || line[0] == '#')
                 continue;
-            constexpr std::string_view kJsonSuffix = ".json";
-            if (line.size() > kJsonSuffix.size() && line.compare(line.size() - kJsonSuffix.size(),
-                                                        kJsonSuffix.size(), kJsonSuffix) == 0)
-                line.resize(line.size() - kJsonSuffix.size());
+            constexpr std::string_view c_jsonSuffix = ".json";
+            if (line.size() > c_jsonSuffix.size() && line.compare(line.size() - c_jsonSuffix.size(),
+                                                        c_jsonSuffix.size(), c_jsonSuffix) == 0)
+                line.resize(line.size() - c_jsonSuffix.size());
             manifest.insert(line);
         }
     }

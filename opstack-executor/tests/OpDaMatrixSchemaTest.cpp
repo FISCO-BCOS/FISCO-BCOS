@@ -12,7 +12,10 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
- */
+
+ *
+ * @file OpDaMatrixSchemaTest.cpp
+ * @brief Schema checks for the da-matrix fee grid and its known-divergence registry. */
 
 // OpDaMatrixSchemaTest.cpp — Task 2: da_matrix.json schema gate.
 //

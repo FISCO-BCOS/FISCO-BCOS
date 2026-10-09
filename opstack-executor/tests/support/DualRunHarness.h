@@ -59,7 +59,7 @@ namespace opeth = bcos::executor_v1::opstack;
 
 // The FISCO OP chain id — the same constant OpSchedulerTest's kChainId pins and the t8n corpus
 // envelopes embed (8453 = 0x2105).
-inline constexpr uint64_t kOpChainId = 0x2105;
+inline constexpr uint64_t c_opChainId = 0x2105;
 
 // Minimal CheckpointStorage stub (same shape as OpSchedulerTest's).
 template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
@@ -220,7 +220,7 @@ opeth::OpEthExecuteBlockResult runExecutorPath(DualRunFixture& f, ViewType& view
     opeth::OpEthBlockContext ctx{.fee = {},
         .blockGasLeft = static_cast<int64_t>(header.gasLimit()),
         .blockHashLookup = opeth::opEthBlockHashLookup(*hashes),
-        .chainId = kOpChainId,
+        .chainId = c_opChainId,
         .daFootprintGasScalar = daFootprintGasScalar};
 
     bcos::ledger::LedgerConfig execLedgerConfig;

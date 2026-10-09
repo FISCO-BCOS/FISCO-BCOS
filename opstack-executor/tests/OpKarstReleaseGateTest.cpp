@@ -1,5 +1,7 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
+/// @file OpKarstReleaseGateTest.cpp
+/// @brief Release-gate pins for the Karst fork surface (revision and the EIP-7825 deposit exemption).
 
 // OpKarstReleaseGateSuite — Karst cannot ship as a Jovian alias: Osaka + EIP-7825
 // exemption. The production parse accepts any known fork as the timestamp-0

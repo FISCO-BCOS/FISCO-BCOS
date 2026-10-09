@@ -12,7 +12,10 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
- */
+
+ *
+ * @file LedgerMethods.h
+ * @brief Storage-level ledger primitives: table/row access, system-config reads and the genesis/schedule metadata helpers. */
 
 #pragma once
 

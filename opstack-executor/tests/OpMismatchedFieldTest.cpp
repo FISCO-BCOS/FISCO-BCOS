@@ -1,5 +1,7 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
+/// @file OpMismatchedFieldTest.cpp
+/// @brief Field-level mismatch detection between announced and executed OP headers.
 
 // Unit tests for the OP commitments comparison pure function (OpEthCommitments.h): 8 fields,
 // comparison order (first mismatch wins), the "transactionsRoot" literal, and the optional

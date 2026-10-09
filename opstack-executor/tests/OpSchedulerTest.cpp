@@ -76,13 +76,13 @@ namespace opeth = bcos::executor_v1::opstack;
 namespace
 {
 
-constexpr uint64_t kChainId = 0x2105;  // 8453 — the FISCO OP chain id (vector eip1559 chainId)
+constexpr uint64_t c_chainId = 0x2105;  // 8453 — the FISCO OP chain id (vector eip1559 chainId)
 const bcos::Address kSender{"0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"};  // eip1559 recovered
                                                                             // sender
 
 // Corpus isthmus_transfer_basic.json: block.transactions[1]._op_raw (op-geth-signed eip1559
 // envelope).
-constexpr const char* kEip1559EnvelopeHex =
+constexpr const char* c_eip1559EnvelopeHex =
     "0x02f874822105808405f5e100847735940082520894b0b0000000000000000000000000000000000001880de"
     "0b6b3a764000080c001a0e37533ddb9f696c0b21788f1b00c78adc4a81b1d811d84e70fad672096fc924ea00ae"
     "693f4d68955a4c01ee8bab26f5be740ee416dd2556822f68b747d5aab7714";
@@ -240,7 +240,7 @@ bcos::protocol::Transaction::Ptr buildFiscoTx(
     }
     else if (!env.empty())
     {
-        // Corpus eip1559 (kEip1559EnvelopeHex): mirror fields must match the signed envelope
+        // Corpus eip1559 (c_eip1559EnvelopeHex): mirror fields must match the signed envelope
         // or envelopeExecutionFieldsMismatch rejects the block.
         tars.web3TypedTxKind = static_cast<tars::Char>(env[0]);
         tars.data.nonce = "0x0";
@@ -353,7 +353,7 @@ struct Fixture
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
         scheduler(
             std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(receiptFactory, hashImpl,
-                kChainId, forkSchedule, blockFactory, multiLayerStorage, ledger, ioServicePool))
+                c_chainId, forkSchedule, blockFactory, multiLayerStorage, ledger, ioServicePool))
     {
         seedSender(multiLayerStorage, kSender, hashImpl);
         seedSysTables(multiLayerStorage);
@@ -612,7 +612,7 @@ opeth::OpEthExecuteBlockResult runExecutionProbe(Fixture& f, ViewType& view,
     opeth::OpEthBlockContext ctx{.fee = {},
         .blockGasLeft = static_cast<int64_t>(header.gasLimit()),
         .blockHashLookup = opeth::opEthBlockHashLookup(*hashes),
-        .chainId = kChainId,
+        .chainId = c_chainId,
         .daFootprintGasScalar = daFootprintGasScalar};
     bcos::scheduler_v1::SchedulerSerialImpl serialScheduler(
         f.ioServicePool, /*chunkSize=*/1, /*serial=*/true);
@@ -658,7 +658,6 @@ std::shared_ptr<bcostars::protocol::BlockHeaderImpl> makeHeaderAt(
     return h;
 }
 
-/// Copy every flat row visible through @p from into @p to's top mutable layer. The
 /// Build the scenario-B genesis trie over the seeded accounts via the production MPT builder
 /// (computeMptStateDelta, parent = the empty root) and return the delta (root + newNodes).
 /// The build view is discarded — the caller decides which of the nodes to persist, so the
@@ -857,7 +856,7 @@ BOOST_AUTO_TEST_CASE(CommitPersistsSevenLedgerTables)
     // Corpus envelopes (same as ExecutesMinimalOpBlockEqualToDirectRouteB): deposit + eip1559.
     auto depTx = makeDeposit();
     bcos::bytes depEnv = opeth::encodeOpEthDepositEnvelope(depTx);
-    auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto eipEvmcBytes = evmc::from_hex(c_eip1559EnvelopeHex).value();
     bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
     std::vector<bcos::bytes> rawTxBytes{depEnv, eipEnvBytes};
 
@@ -1007,7 +1006,7 @@ BOOST_AUTO_TEST_CASE(PendingSlotStateMachine)
 {
     Fixture f;
     auto depEnv = opeth::encodeOpEthDepositEnvelope(makeDeposit());
-    auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto eipEvmcBytes = evmc::from_hex(c_eip1559EnvelopeHex).value();
     bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
     auto dep2a = depositEnvWithSource(
         0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_bytes32);
@@ -1132,7 +1131,7 @@ BOOST_AUTO_TEST_CASE(CommitWithoutLedgerReturnsInvalidStatus)
 {
     Fixture f;
     auto execOnly = std::make_shared<bcos::executor_v1::opstack::OpScheduler<MLS>>(f.receiptFactory,
-        f.hashImpl, kChainId, f.forkSchedule, f.blockFactory, f.multiLayerStorage, nullptr,
+        f.hashImpl, c_chainId, f.forkSchedule, f.blockFactory, f.multiLayerStorage, nullptr,
         f.ioServicePool);
     auto saved = f.scheduler;
     f.scheduler = execOnly;
@@ -1288,8 +1287,8 @@ BOOST_AUTO_TEST_CASE(CallGasAboveBlockPoolClassifiesAsConsensusRejected)
 /// one second short. Nothing else about the two runs differs.
 BOOST_AUTO_TEST_CASE(ExecuteBlockSelectsForkFromTheBlockTimestamp)
 {
-    constexpr uint64_t kHeaderSecond = 0x3f2;
-    constexpr auto kP256Verify = 0x0000000000000000000000000000000000000100_address;
+    constexpr uint64_t c_headerSecond = 0x3f2;
+    constexpr auto c_p256Verify = 0x0000000000000000000000000000000000000100_address;
 
     // Both arms are Jovian-or-later, so the block keeps ONE shape: a Jovian-sized L1-attributes
     // deposit first (has_da_footprint carries from Jovian into Karst unchanged), then the probe.
@@ -1314,7 +1313,7 @@ BOOST_AUTO_TEST_CASE(ExecuteBlockSelectsForkFromTheBlockTimestamp)
         auto const genesisRoot = opstack_test::computeAndPersistParentTrie(f.multiLayerStorage);
         seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
         auto dep = makeDeposit();
-        dep.to = kP256Verify;  // empty input: the precompile succeeds and only the price moves
+        dep.to = c_p256Verify;  // empty input: the precompile succeeds and only the price moves
         auto const depEnv = opeth::encodeOpEthDepositEnvelope(dep);
         auto out = invokeExecute(
             f, assembleBlock(f, makeHeader(), {l1AttributesEnv, depEnv}), /*verify=*/false);
@@ -1325,8 +1324,8 @@ BOOST_AUTO_TEST_CASE(ExecuteBlockSelectsForkFromTheBlockTimestamp)
         return out.header->gasUsed();
     };
 
-    auto const jovianGasUsed = gasUsedWithKarstAt(kHeaderSecond + 1);  // one second short
-    auto const karstGasUsed = gasUsedWithKarstAt(kHeaderSecond);       // exactly at activation
+    auto const jovianGasUsed = gasUsedWithKarstAt(c_headerSecond + 1);  // one second short
+    auto const karstGasUsed = gasUsedWithKarstAt(c_headerSecond);       // exactly at activation
     BOOST_CHECK_EQUAL(karstGasUsed - jovianGasUsed, 6900U - 3450U);
 }
 
@@ -1336,7 +1335,7 @@ BOOST_AUTO_TEST_CASE(ExecuteBlockGasPoolFullTagsCapacity)
     auto dep = makeDeposit();
     dep.gasLimit = 25'000;
     auto const depEnv = opeth::encodeOpEthDepositEnvelope(dep);
-    auto const eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto const eipEvmcBytes = evmc::from_hex(c_eip1559EnvelopeHex).value();
     bcos::bytes const eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
 
     auto header = makeHeader();
@@ -1594,7 +1593,7 @@ BOOST_AUTO_TEST_CASE(StorageReadFaultRejectsBlockAsStorageFault)
     // corrupt BALANCE row is read at the transfer's validation).
     auto depTx = makeDeposit();
     bcos::bytes depEnv = opeth::encodeOpEthDepositEnvelope(depTx);
-    auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto eipEvmcBytes = evmc::from_hex(c_eip1559EnvelopeHex).value();
     bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
 
     auto header = makeHeader();
@@ -1655,7 +1654,7 @@ BOOST_AUTO_TEST_CASE(SenderAccountFaultRejectsAsStorageFaultNotConsensus)
     // (buildFiscoTx forceSenders kSender for non-deposit envelopes).
     auto depTx = makeDeposit();
     bcos::bytes depEnv = opeth::encodeOpEthDepositEnvelope(depTx);
-    auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto eipEvmcBytes = evmc::from_hex(c_eip1559EnvelopeHex).value();
     bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
 
     auto header = makeHeader();
@@ -1805,7 +1804,7 @@ BOOST_AUTO_TEST_CASE(CallAtBlockServesHistoricalCallWithoutFeatureFlags)
     // Commit block 1 so block 0 is a historical (non-latest) height. No feature rows seeded.
     auto depTx = makeDeposit();
     bcos::bytes depEnv = opeth::encodeOpEthDepositEnvelope(depTx);
-    auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto eipEvmcBytes = evmc::from_hex(c_eip1559EnvelopeHex).value();
     bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
     driveOpBlock(f, makeHeader(), {depEnv, eipEnvBytes});
 
@@ -2130,7 +2129,7 @@ BOOST_AUTO_TEST_CASE(CallAtBlockServesEachHeightWithOpSemantics)
     // writes), block 3 (baseFee 3e9) makes block 2 a HISTORICAL height.
     auto depTx = makeDeposit();
     bcos::bytes depEnv = opeth::encodeOpEthDepositEnvelope(depTx);
-    auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto eipEvmcBytes = evmc::from_hex(c_eip1559EnvelopeHex).value();
     bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
     bcos::bytes setterEnv = makeSetterDepositEnvelope(kContract, kV2);
     driveOpBlock(f, makeHeaderAt(1, bcos::u256(1'000'000'000)), {depEnv, eipEnvBytes});
@@ -2359,7 +2358,7 @@ BOOST_AUTO_TEST_CASE(IncrementalMPTRootMatchesFullRebuild)
 
     auto depTx = makeDeposit();
     bcos::bytes depEnv = opeth::encodeOpEthDepositEnvelope(depTx);
-    auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto eipEvmcBytes = evmc::from_hex(c_eip1559EnvelopeHex).value();
     bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
 
     // mint>0 deposit: exercises the mint-balance write shape.
@@ -2702,7 +2701,7 @@ BOOST_AUTO_TEST_CASE(adoptPreservesTriePersistenceForNextBlock)
     seedCallGenesis(f.multiLayerStorage, makeCallGenesisHeader(genesisRoot));
 
     auto depEnv = opeth::encodeOpEthDepositEnvelope(makeDeposit());
-    auto eipEvmcBytes = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto eipEvmcBytes = evmc::from_hex(c_eip1559EnvelopeHex).value();
     bcos::bytes eipEnvBytes(eipEvmcBytes.begin(), eipEvmcBytes.end());
     bcos::bytes setterEnv = makeSetterDepositEnvelope(kContract, kV2);
 

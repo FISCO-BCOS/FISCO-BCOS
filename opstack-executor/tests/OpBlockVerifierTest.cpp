@@ -73,12 +73,12 @@ namespace vdetail = bcos::executor_v1::opstack::detail;  // the verifier's inlin
 namespace
 {
 
-constexpr uint64_t kChainId = 0x2105;  // 8453 — matches the eip1559 envelope's chainId
+constexpr uint64_t c_chainId = 0x2105;  // 8453 — matches the eip1559 envelope's chainId
 const bcos::Address kSender{"0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"};  // envelope sender
 
 // Corpus isthmus_transfer_basic.json: block.transactions[1]._op_raw (op-geth-signed eip1559
 // envelope).
-constexpr const char* kEip1559EnvelopeHex =
+constexpr const char* c_eip1559EnvelopeHex =
     "0x02f874822105808405f5e100847735940082520894b0b0000000000000000000000000000000000001880de"
     "0b6b3a764000080c001a0e37533ddb9f696c0b21788f1b00c78adc4a81b1d811d84e70fad672096fc924ea00ae"
     "693f4d68955a4c01ee8bab26f5be740ee416dd2556822f68b747d5aab7714";
@@ -153,7 +153,7 @@ opeth::DepositTx makeDeposit()
 
 std::vector<bcos::bytes> corpusTxs()
 {
-    auto const eipEvmc = evmc::from_hex(kEip1559EnvelopeHex).value();
+    auto const eipEvmc = evmc::from_hex(c_eip1559EnvelopeHex).value();
     return {opeth::encodeOpEthDepositEnvelope(makeDeposit()),
         bcos::bytes(eipEvmc.begin(), eipEvmc.end())};
 }
@@ -261,7 +261,7 @@ struct VerifierFixture
             std::make_shared<bcos::storage::LegacyStorageWrapper<BackendMemStorage>>(
                 backendStorage)),
         ledger(std::make_shared<bcos::ledger::Ledger>(blockFactory, legacyLedgerStorage, 1000)),
-        verifier(std::make_shared<Verifier>(receiptFactory, hashImpl, kChainId, forkSchedule,
+        verifier(std::make_shared<Verifier>(receiptFactory, hashImpl, c_chainId, forkSchedule,
             blockFactory, multiLayerStorage, ledger, ioServicePool))
     {
         seedSender(multiLayerStorage, kSender, hashImpl);
@@ -388,7 +388,7 @@ opeth::OpEthBlockCommitments probeCommitments(VerifierFixture& f,
     opeth::OpEthBlockContext ctx{.fee = {},
         .blockGasLeft = static_cast<int64_t>(header->gasLimit()),
         .blockHashLookup = opeth::opEthBlockHashLookup(*hashes),
-        .chainId = kChainId,
+        .chainId = c_chainId,
         .daFootprintGasScalar = daFootprintGasScalar};
     bcos::scheduler_v1::SchedulerSerialImpl serialScheduler(
         f.ioServicePool, /*chunkSize=*/1, /*serial=*/true);

@@ -1,5 +1,7 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
+/// @file OpL1BlockDepositTest.cpp
+/// @brief L1-attributes deposit handling across the OP fork ladder (block build/execute through the scheduler path).
 
 // OpL1BlockDepositTest — offline reproduction of the B3a node's L1Block deposit behaviour.
 //
@@ -616,8 +618,8 @@ BOOST_AUTO_TEST_CASE(FailedDepositSealsBlockWithFullGasAndBumpedNonce)
     // The Jovian L1-attributes calldata (178B) has intrinsic ~21832; gasLimit 20000 is too low
     // -> INTRINSIC_GAS_TOO_LOW -> failed-deposit branch: status=failure, gasUsed = gasLimit,
     // nonce force-incremented (op-geth state_transition.go:486-513).
-    constexpr uint64_t kTooLowGas = 20000;
-    std::vector<bcos::bytes> rawTxs{makeDepositEnvelope(makeJovianCalldataNonZero(), kTooLowGas)};
+    constexpr uint64_t c_tooLowGas = 20000;
+    std::vector<bcos::bytes> rawTxs{makeDepositEnvelope(makeJovianCalldataNonZero(), c_tooLowGas)};
 
     opstack_test::opeth::OpEthExecuteBlockResult result;
     try
@@ -632,7 +634,7 @@ BOOST_AUTO_TEST_CASE(FailedDepositSealsBlockWithFullGasAndBumpedNonce)
 
     const auto& receipt = result.receipts.front();
     BOOST_CHECK_EQUAL(receipt->status(), 1);  // toFiscoStatus: non-SUCCESS -> 1
-    BOOST_CHECK_EQUAL(receipt->gasUsed(), bcos::u256{kTooLowGas});  // full gasLimit charged
+    BOOST_CHECK_EQUAL(receipt->gasUsed(), bcos::u256{c_tooLowGas});  // full gasLimit charged
 
     // Regolith: the depositor's nonce is force-incremented despite the failure.
     bcos::ledger::account::EVMAccount<ViewType> acc(
@@ -660,7 +662,7 @@ struct JovianShapeFixture
     ViewType view = multiLayerStorage.fork();
     OpBlockRunCtx runCtx = makeRunCtx();
     // chainId of the real user-tx fixture (fjord_transfer_basic.json)
-    static constexpr uint64_t kChainId = 0x2105;
+    static constexpr uint64_t c_chainId = 0x2105;
 
     JovianShapeFixture()
     {

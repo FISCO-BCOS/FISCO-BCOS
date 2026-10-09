@@ -16,6 +16,7 @@
 
 
 /** @file Session.h
+ * @brief P2P session: framed message IO, endpoint bookkeeping and delivery callbacks.
  * @author monan <651932351@qq.com>
  * @date 2018
  */
