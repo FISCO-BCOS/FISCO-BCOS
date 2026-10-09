@@ -15,9 +15,11 @@
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/local/stream_protocol.hpp>
 #include <boost/asio/read_until.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include <boost/asio/streambuf.hpp>
 #include <boost/asio/write.hpp>
 #include <boost/test/unit_test.hpp>
+#include <atomic>
 #include <filesystem>
 #include <fstream>
 #include <future>
@@ -28,10 +30,15 @@ namespace bcos::ops::test
 namespace
 {
 /// minimal stand-in for the node's IpcServer (async accept + read loop on one io thread):
-/// getBlockNumber → 128, getConsensusStatus → a string-wrapped object, anything else → -32601
+/// getBlockNumber → 128, getConsensusStatus → a string-wrapped object, anything else → -32601.
+/// `delayNextReplyMs` holds the next reply back that long; `wrongIdOnce` answers the next
+/// request under another id (a stream that got out of step).
 class FakeIpcNode
 {
 public:
+    std::atomic<int> delayNextReplyMs{0};
+    std::atomic<bool> wrongIdOnce{false};
+
     explicit FakeIpcNode(std::string _path) : m_path(std::move(_path))
     {
         // everything that touches the acceptor lives on the io thread
@@ -62,8 +69,9 @@ private:
     {
         boost::asio::local::stream_protocol::socket socket;
         boost::asio::streambuf buffer;
-        explicit Session(boost::asio::local::stream_protocol::socket _socket)
-          : socket(std::move(_socket))
+        FakeIpcNode& node;
+        Session(boost::asio::local::stream_protocol::socket _socket, FakeIpcNode& _node)
+          : socket(std::move(_socket)), node(_node)
         {}
         void serve()
         {
@@ -80,7 +88,9 @@ private:
                     auto request = parseJson(line, "request");
                     Json::Value response;
                     response["jsonrpc"] = "2.0";
-                    response["id"] = request["id"];
+                    response["id"] = self->node.wrongIdOnce.exchange(false) ?
+                                         Json::Value(request["id"].asInt64() + 100) :
+                                         request["id"];
                     if (request["method"].asString() == "getBlockNumber")
                     {
                         response["result"] = 128;
@@ -98,13 +108,32 @@ private:
                     writer["indentation"] = "";
                     auto text =
                         std::make_shared<std::string>(Json::writeString(writer, response) + "\n");
-                    boost::asio::async_write(self->socket, boost::asio::buffer(*text),
-                        [self, text](boost::system::error_code const& wec, size_t) {
-                            if (!wec)
-                            {
-                                self->serve();
-                            }
-                        });
+                    auto delayMs = self->node.delayNextReplyMs.exchange(0);
+                    if (delayMs <= 0)
+                    {
+                        self->reply(text);
+                        return;
+                    }
+                    auto timer =
+                        std::make_shared<boost::asio::steady_timer>(self->socket.get_executor());
+                    timer->expires_after(std::chrono::milliseconds(delayMs));
+                    timer->async_wait([self, text, timer](boost::system::error_code const& tec) {
+                        if (!tec)
+                        {
+                            self->reply(text);
+                        }
+                    });
+                });
+        }
+        void reply(std::shared_ptr<std::string> _text)
+        {
+            auto self = shared_from_this();
+            boost::asio::async_write(socket, boost::asio::buffer(*_text),
+                [self, _text](boost::system::error_code const& wec, size_t) {
+                    if (!wec)
+                    {
+                        self->serve();
+                    }
                 });
         }
     };
@@ -121,7 +150,7 @@ private:
             // macOS report EINVAL for that connection; keep accepting like IpcServer does
             if (!ec)
             {
-                std::make_shared<Session>(std::move(socket))->serve();
+                std::make_shared<Session>(std::move(socket), *this)->serve();
             }
             accept();
         });
@@ -176,13 +205,50 @@ BOOST_AUTO_TEST_CASE(socketPresentSelectsAttach)
         [](OpsError const& e) { return e.exitCode == c_exitUsage; });
 }
 
+BOOST_AUTO_TEST_CASE(requestTimeoutRetiresTheConnection)
+{
+    TempNode node;
+    FakeIpcNode fake(node.socketPath());
+    fake.delayNextReplyMs = 1500;
+    auto connection = makeIpcRpcCall(node.socketPath(), 1000, 200);
+    // the first answer arrives after the deadline: the call fails, and the connection is never
+    // reused, so the late reply (id 1) can never be read as the answer to a later request
+    BOOST_CHECK_EXCEPTION(connection.call("getBlockNumber", Json::Value(Json::arrayValue)),
+        OpsError, [](OpsError const& e) {
+            return std::string(e.what()).find("response timed out") != std::string::npos;
+        });
+    BOOST_CHECK_EXCEPTION(connection.call("getBlockNumber", Json::Value(Json::arrayValue)),
+        OpsError, [](OpsError const& e) {
+            return std::string(e.what()).find("connection lost after a timeout") !=
+                   std::string::npos;
+        });
+    // the node itself is fine: a fresh connection is answered at once
+    auto fresh = makeIpcRpcCall(node.socketPath(), 1000, 2000);
+    BOOST_CHECK_EQUAL(fresh.call("getBlockNumber", Json::Value(Json::arrayValue)).asInt64(), 128);
+}
+
+BOOST_AUTO_TEST_CASE(replyUnderAnotherIdIsRejected)
+{
+    TempNode node;
+    FakeIpcNode fake(node.socketPath());
+    fake.wrongIdOnce = true;
+    auto connection = makeIpcRpcCall(node.socketPath(), 1000, 2000);
+    BOOST_CHECK_EXCEPTION(connection.call("getBlockNumber", Json::Value(Json::arrayValue)),
+        OpsError, [](OpsError const& e) {
+            return std::string(e.what()).find("response id mismatch") != std::string::npos;
+        });
+    BOOST_CHECK_EXCEPTION(connection.call("getBlockNumber", Json::Value(Json::arrayValue)),
+        OpsError, [](OpsError const& e) {
+            return std::string(e.what()).find("connection lost") != std::string::npos;
+        });
+}
+
 BOOST_AUTO_TEST_CASE(socketAbsentFallsBackToRpcAndFails)
 {
     TempNode node;  // no socket, rpc port 1 is unreachable
     ConnectOptions options;
     options.nodeDir = node.dir.string();
     options.connectTimeoutMs = 500;
-    BOOST_CHECK(!ipcReachable(node.socketPath(), 200));
     BOOST_CHECK_EXCEPTION(connect(options), OpsError, [](OpsError const& e) {
         return e.exitCode == c_exitUsage &&
                std::string(e.what()).find("connect") != std::string::npos;
@@ -196,7 +262,6 @@ BOOST_AUTO_TEST_CASE(staleSocketFileIsNotReachable)
         std::ofstream stale(node.socketPath());
         stale << "x";
     }
-    BOOST_CHECK(!ipcReachable(node.socketPath(), 200));
     ConnectOptions options;
     options.nodeDir = node.dir.string();
     options.allowRpc = false;

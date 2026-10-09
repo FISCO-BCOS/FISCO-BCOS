@@ -25,6 +25,7 @@
 #include <boost/asio/local/stream_protocol.hpp>
 #include <boost/asio/streambuf.hpp>
 #include <boost/beast/http/status.hpp>
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -81,9 +82,10 @@ private:
     boost::asio::io_context& m_io;
     std::string m_path;
     IpcHandler m_handler;
-    std::unique_ptr<boost::asio::local::stream_protocol::acceptor> m_acceptor;
+    std::shared_ptr<boost::asio::local::stream_protocol::acceptor> m_acceptor;  // touched on m_io
+                                                                                // only
     std::mutex m_sessionsMutex;
     std::set<IpcSession::Ptr> m_sessions;
-    bool m_running = false;
+    std::atomic<bool> m_running{false};
 };
 }  // namespace bcos::rpc
