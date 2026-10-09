@@ -523,9 +523,9 @@ void PBFTEngine::asyncNotifyNewBlock(
     }
     if (m_config->shouldResetConfig(_ledgerConfig->blockNumber()))
     {
-        PBFT_LOG(INFO) << LOG_DESC("The sync module notify the latestBlock")
-                       << LOG_KV("index", _ledgerConfig->blockNumber())
-                       << LOG_KV("hash", _ledgerConfig->hash().abridged());
+        PBFT_LOG(DEBUG) << LOG_DESC("The sync module notify the latestBlock")
+                        << LOG_KV("index", _ledgerConfig->blockNumber())
+                        << LOG_KV("hash", _ledgerConfig->hash().abridged());
         finalizeConsensus(_ledgerConfig, true);
     }
 }

@@ -696,7 +696,8 @@ void Service::onReceiveProtocol(
         if (protocolInfo->minVersion() > m_localProtocol->maxVersion() ||
             protocolInfo->maxVersion() < m_localProtocol->minVersion())
         {
-            logHandshakeFailed(_session->session()->nodeIPEndpoint(), "protocol_mismatch",
+            logHandshakeFailed(bcos::LogLevel::WARNING, _session->session()->nodeIPEndpoint(),
+                "protocol_mismatch",
                 "peer=" + _session->printP2pID() + " peerVersion=[" +
                     std::to_string(protocolInfo->minVersion()) + "," +
                     std::to_string(protocolInfo->maxVersion()) + "] local=[" +

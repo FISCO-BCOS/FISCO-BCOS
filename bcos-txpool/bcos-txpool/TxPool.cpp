@@ -45,7 +45,7 @@ void logBroadcastFallbackOnce(std::once_flag& _flag, std::string_view _reason)
 {
     std::call_once(_flag, [&]() {
         TXPOOL_LOG(INFO) << LOG_DESC("TxBroadcastFallback") << LOG_KV("reason", _reason)
-                         << LOG_KV("msg", "falling back to flood broadcast for all later txs");
+                         << LOG_KV("msg", "falling back to flood broadcast");
     });
 }
 }  // namespace

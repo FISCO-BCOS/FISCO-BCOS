@@ -569,14 +569,15 @@ void Host::handshakeServer(const boost::system::error_code& error,
     {
         // inbound ssl handshake failed: certificate verification (incl. blacklist/whitelist in
         // newVerifyCallback) or a protocol error; error.message() says which
-        logHandshakeFailed(socket->nodeIPEndpoint(), "ssl_handshake", error.message());
+        logHandshakeFailed(
+            bcos::LogLevel::INFO, socket->nodeIPEndpoint(), "ssl_handshake", error.message());
         socket->close();
         return;
     }
     const std::string& nodeInfo = *endpointPublicKey;
     if (nodeInfo.empty())
     {
-        logHandshakeFailed(socket->nodeIPEndpoint(), "no_node_id", "inbound");
+        logHandshakeFailed(bcos::LogLevel::INFO, socket->nodeIPEndpoint(), "no_node_id", "inbound");
         socket->close();
         return;
     }
@@ -922,7 +923,8 @@ std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionFace>> Host::handsh
     erasePendingConns(_nodeIPEndpoint);
     if (error)
     {
-        logHandshakeFailed(_nodeIPEndpoint, "ssl_handshake", error.message());
+        logHandshakeFailed(
+            bcos::LogLevel::WARNING, _nodeIPEndpoint, "ssl_handshake", error.message());
 
         if (socket->isConnected())
         {
@@ -934,7 +936,7 @@ std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionFace>> Host::handsh
     const std::string& nodeInfo = *endpointPublicKey;
     if (nodeInfo.empty())
     {
-        logHandshakeFailed(_nodeIPEndpoint, "no_node_id", "outbound");
+        logHandshakeFailed(bcos::LogLevel::WARNING, _nodeIPEndpoint, "no_node_id", "outbound");
         socket->close();
         return std::make_tuple(NetworkException(ConnectError, "Handshake failed"), P2PInfo{},
             std::shared_ptr<SessionFace>());

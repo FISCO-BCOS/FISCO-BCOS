@@ -106,8 +106,10 @@ std::string reasonOf(DisconnectReason _reason);
 /// @returns the PeerDisconnected reason tag (see docs/ops/log-events.md):
 /// remote_close|local_close|timeout|handshake_failed|duplicate|blacklist|error
 std::string_view disconnectReasonTag(DisconnectReason _reason);
-/// the single emission point of the HandshakeFailed event (WARNING)
-void logHandshakeFailed(
-    NodeIPEndpoint const& _endpoint, std::string_view _reason, std::string_view _detail);
+/// the single emission point of the HandshakeFailed event. Inbound failures are INFO: anyone who
+/// can reach the P2P port triggers them at their own rate; outbound (static peers) and protocol
+/// mismatches after a successful TLS handshake are WARNING.
+void logHandshakeFailed(bcos::LogLevel _level, NodeIPEndpoint const& _endpoint,
+    std::string_view _reason, std::string_view _detail);
 }  // namespace gateway
 }  // namespace bcos

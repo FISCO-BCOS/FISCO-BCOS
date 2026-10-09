@@ -341,9 +341,9 @@ void PBFTCacheProcessor::notifyCommittedProposalIndex(bcos::protocol::BlockNumbe
     m_committedProposalNotifier(_index, [_index](Error::Ptr _error) {
         if (!_error)
         {
-            PBFT_LOG(INFO) << LOG_DESC(
-                                  "notify the committed proposal index to the sync module success")
-                           << LOG_KV("index", _index);
+            PBFT_LOG(DEBUG) << LOG_DESC(
+                                   "notify the committed proposal index to the sync module success")
+                            << LOG_KV("index", _index);
             return;
         }
         PBFT_LOG(WARNING) << LOG_DESC(
@@ -1108,10 +1108,10 @@ void PBFTCacheProcessor::updateStableCheckPointQueue(PBFTProposalInterface::Ptr 
 {
     assert(_stableCheckPoint);
     m_stableCheckPointQueue.push(_stableCheckPoint);
-    PBFT_LOG(INFO) << LOG_DESC("updateStableCheckPointQueue: insert new checkpoint proposal")
-                   << LOG_KV("index", _stableCheckPoint->index())
-                   << LOG_KV("hash", _stableCheckPoint->hash().abridged())
-                   << m_config->printCurrentState();
+    PBFT_LOG(DEBUG) << LOG_DESC("updateStableCheckPointQueue: insert new checkpoint proposal")
+                    << LOG_KV("index", _stableCheckPoint->index())
+                    << LOG_KV("hash", _stableCheckPoint->hash().abridged())
+                    << m_config->printCurrentState();
     tryToCommitStableCheckPoint();
 }
 
@@ -1131,9 +1131,9 @@ void PBFTCacheProcessor::tryToCommitStableCheckPoint()
     if (!m_stableCheckPointQueue.empty() &&
         m_stableCheckPointQueue.top()->index() == m_config->committedProposal()->index() + 1)
     {
-        PBFT_LOG(INFO) << LOG_DESC("updateStableCheckPointQueue: commit stable checkpoint")
-                       << LOG_KV("index", m_stableCheckPointQueue.top()->index())
-                       << LOG_KV("committedIndex", m_config->committedProposal()->index());
+        PBFT_LOG(DEBUG) << LOG_DESC("updateStableCheckPointQueue: commit stable checkpoint")
+                        << LOG_KV("index", m_stableCheckPointQueue.top()->index())
+                        << LOG_KV("committedIndex", m_config->committedProposal()->index());
         auto stableCheckPoint = m_stableCheckPointQueue.top();
         m_committedProposalList.erase(stableCheckPoint->index());
         m_stableCheckPointQueue.pop();
