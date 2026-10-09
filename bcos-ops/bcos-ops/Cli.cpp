@@ -42,6 +42,7 @@ std::map<std::string, Command>& commandTable()
         registerStatusCommand();
         registerTxCommand();
         registerAttachCommands();
+        registerLogCommand();
         return true;
     }();
     (void)registered;

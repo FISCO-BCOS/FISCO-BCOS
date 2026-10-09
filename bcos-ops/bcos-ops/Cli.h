@@ -49,6 +49,7 @@ void registerCommand(std::string _name, Command _command);
 void registerStatusCommand();   // cmd/StatusCmd.cpp
 void registerTxCommand();       // cmd/TxCmd.cpp
 void registerAttachCommands();  // cmd/AttachCmd.cpp: attach, log-level
+void registerLogCommand();      // cmd/LogCmd.cpp
 
 /// argv[0] is the program, argv[1] the subcommand. Does not return: it leaves the process with
 /// std::_Exit(exit code), so the SDK transports kept by retainTransport() are never destroyed.
