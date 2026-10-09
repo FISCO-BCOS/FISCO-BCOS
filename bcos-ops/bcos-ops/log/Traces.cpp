@@ -189,9 +189,17 @@ TraceResult tracePbft(std::vector<Event> const& _events, int64_t _number)
     result.header = {"time", "event", "keys", "delta"};
     int64_t prev = 0;
     auto index = std::to_string(_number);
+    // the handbook's PBFT round, in its real order; other [CONSENSUS] lines with an index= key
+    // (notifications, cache bookkeeping) are not part of the thread
+    static std::vector<std::string_view> const c_round = {events::PrePrepareSent,
+        events::PrePrepareReceived, events::PrePrepareRejected, events::PrepareQuorum,
+        events::CommitQuorum, events::ProposalExecuted, events::ProposalExecuteFailed,
+        events::CheckpointSent, events::CheckpointQuorum, events::CheckpointResend,
+        events::BlockCommitted, events::Report};
     for (auto const& event : _events)
     {
-        if (!event.hasBadge(events::BadgeConsensus) || event.level != "info")
+        if (!event.hasBadge(events::BadgeConsensus) ||
+            std::find(c_round.begin(), c_round.end(), event.name) == c_round.end())
         {
             continue;
         }
