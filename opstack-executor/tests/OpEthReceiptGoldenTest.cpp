@@ -17,7 +17,6 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-ledger/mpt/EthTrieRoots.h>  // encodeReceiptLeaf
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
-#include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 
 #include <cstdint>
@@ -25,6 +24,11 @@
 #include <string>
 #include <utility>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#endif
 
 using namespace bcos::executor_v1::opstack;
 

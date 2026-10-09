@@ -21,8 +21,12 @@
 #include "Errors.h"
 #include "HexPrefix.h"
 #include <bcos-codec/rlp/RLPDecode.h>
-#include <bcos-utilities/FixedBytes.h>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/FixedBytes.h>
+#endif
 
 namespace bcos::ledger::mpt
 {

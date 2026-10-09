@@ -1,10 +1,16 @@
-#include <bcos-protocol/TransactionStatus.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rpc/filter/Common.h>
 #include <bcos-rpc/filter/LogMatcher.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+import bcos.utilities;
+#else
 #include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-protocol/TransactionStatus.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::rpc;

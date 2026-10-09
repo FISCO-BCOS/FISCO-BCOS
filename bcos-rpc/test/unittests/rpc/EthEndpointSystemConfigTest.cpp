@@ -24,10 +24,14 @@
  */
 
 #include "../common/RPCFixture.h"
-#include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 
 #include <boost/test/unit_test.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/DataConvertUtility.h"
+#endif
 using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::crypto;

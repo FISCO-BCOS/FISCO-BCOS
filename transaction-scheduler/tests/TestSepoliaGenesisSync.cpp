@@ -46,7 +46,6 @@
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-scheduler/EthereumBlockVerifier.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
-#include "bcos-utilities/IOServicePool.h"
 #include "ethereum-executor/EthereumExecutor.h"
 #include "ethereum-executor/EthereumHost.h"
 #include <bcos-devp2p/sync/Block.h>
@@ -57,6 +56,11 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include "bcos-utilities/IOServicePool.h"
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#endif
 
 // Anonymous namespace + ESS prefix: this TU is compiled standalone.
 namespace

@@ -11,8 +11,6 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-framework/txpool/Constant.h"
-#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
-#include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
@@ -20,9 +18,6 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-task/Wait.h"
 #include "bcos-txpool/txpool/utilities/SystemTransaction.h"
-#include "bcos-utilities/DataConvertUtility.h"
-#include "bcos-utilities/Error.h"
-#include "bcos-utilities/IOServicePool.h"
 #include <bcos-framework/ledger/LedgerConfigState.h>
 #include <bcos-tx-validator/LedgerNonceChecker.h>
 #include <bcos-tx-validator/NonceCheckerInterface.h>
@@ -40,6 +35,17 @@
 #include <future>
 #include <optional>
 #include <thread>
+
+#include "bcos-utilities/IOServicePool.h"
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+import bcos.utilities;
+#else
+#include "bcos-utilities/DataConvertUtility.h"
+#include "bcos-utilities/Error.h"
+#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
+#include "bcos-protocol/TransactionSubmitResultImpl.h"
+#endif
 
 using namespace bcos;
 using namespace bcos::txpool;

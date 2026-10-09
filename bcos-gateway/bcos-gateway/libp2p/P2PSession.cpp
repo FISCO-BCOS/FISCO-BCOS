@@ -8,8 +8,12 @@
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libp2p/Common.h"
 #include "bcos-gateway/libp2p/Service.h"
-#include "bcos-utilities/Common.h"
 #include <bcos-task/Wait.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Common.h"
+#endif
 
 using namespace bcos;
 using namespace bcos::gateway;

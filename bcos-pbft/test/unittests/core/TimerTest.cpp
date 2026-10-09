@@ -20,11 +20,15 @@
  */
 #include "bcos-pbft/pbft/engine/PBFTTimer.h"
 #include <chrono>
-#include <bcos-utilities/IOServicePool.h>
-#include <bcos-utilities/Timer.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <thread>
 #include <boost/test/unit_test.hpp>
+#include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/Timer.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#endif
 
 using namespace bcos;
 using namespace bcos::consensus;

@@ -18,10 +18,14 @@
  * @date 2021.03.06
  */
 #include "bcos-crypto/zkp/discretezkp/DiscreteLogarithmZkp.h"
-#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 
 #include <boost/test/unit_test.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 using namespace bcos;
 using namespace bcos::crypto;
 

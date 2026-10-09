@@ -22,8 +22,13 @@
 #include "PBFTNewViewMsg.h"
 #include "PBFTMessage.h"
 #include "PBFTViewChangeMsg.h"
-#include <bcos-protocol/Common.h>
 
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+#else
+#include <bcos-protocol/Common.h>
+#endif
 using namespace bcos;
 using namespace bcos::consensus;
 using namespace bcos::protocol;

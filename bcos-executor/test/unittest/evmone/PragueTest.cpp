@@ -18,11 +18,15 @@
  * @file PragueTest.cpp
  */
 
-#include "bcos-utilities/Common.h"
 #include "vm/Precompiled.h"
-#include <Common.h>
 #include <boost/test/unit_test.hpp>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Common.h"
+#include <Common.h>
+#endif
 
 namespace bcos::test
 {

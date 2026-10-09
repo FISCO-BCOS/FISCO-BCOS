@@ -30,9 +30,13 @@
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-rlp-protocol/Web3Transaction.h>
 #include <bcos-rlp-protocol/Web3TxEnvelope.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <string_view>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::rpc;

@@ -18,11 +18,17 @@
  * @date 2026/8/18
  */
 #include "EthReceipt.h"
-#include <bcos-protocol/TransactionStatus.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-protocol/TransactionStatus.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::codec::rlp;

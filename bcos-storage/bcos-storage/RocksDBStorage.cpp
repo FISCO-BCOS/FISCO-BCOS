@@ -22,9 +22,7 @@
 #include "Common.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/Table.h"
-#include "bcos-utilities/Common.h"
 #include "rocksdb/convenience.h"
-#include <bcos-utilities/Error.h>
 #include <rocksdb/cleanable.h>
 #include <rocksdb/options.h>
 #include <rocksdb/slice.h>
@@ -37,7 +35,13 @@
 #include <mutex>
 #include <optional>
 #include <variant>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/Error.h>
+#include <bcos-utilities/LogStream.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Common.h"
+#endif
 
 using namespace bcos::storage;
 using namespace bcos::protocol;

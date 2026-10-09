@@ -21,12 +21,16 @@
  */
 #include "bcos-pbft/core/ConsensusEngine.h"
 #include <chrono>
-#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <stdexcept>
 #include <thread>
+#include <bcos-utilities/IOServicePool.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#endif
 
 namespace bcos::test
 {

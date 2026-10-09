@@ -4,10 +4,14 @@
 #include "Web3TxHandler.h"
 #include "Web3TxEnvelope.h"  // isLegacyPreimageTail (shared discriminator)
 #include "bcos-rlp-protocol/Web3Transaction.h"
-#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Log.h>
 #include <cstddef>  // std::ptrdiff_t (ListEnd pointer arithmetic)
 #include <cstdint>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 namespace bcos::rpc
 {

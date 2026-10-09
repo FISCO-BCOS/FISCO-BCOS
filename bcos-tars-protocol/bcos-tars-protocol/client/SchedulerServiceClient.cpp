@@ -24,7 +24,7 @@
 #include "../protocol/TransactionImpl.h"
 #include "../protocol/TransactionReceiptImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 
 using namespace bcostars;
 

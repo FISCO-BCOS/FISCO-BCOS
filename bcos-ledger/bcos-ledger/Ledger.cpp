@@ -36,7 +36,6 @@
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-tool/VersionConverter.h"
 #include "bcos-utilities/Bloom.h"
-#include "bcos-utilities/Common.h"
 #include "mpt/Constants.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-concepts/Basic.h>
@@ -55,8 +54,7 @@
 #include <bcos-framework/storage/Table.h>
 #include <bcos-task/Wait.h>
 #include <bcos-tool/BfsFileFactory.h>
-#include <bcos-utilities/BoostLog.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/LogStream.h>
 #include <evmc/evmc.h>
 #include <tbb/parallel_for.h>
 #include <boost/algorithm/hex.hpp>
@@ -78,6 +76,12 @@
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/take.hpp>
 #include <utility>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Common.h"
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::ledger;

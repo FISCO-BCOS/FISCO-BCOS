@@ -26,9 +26,13 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-utilities/Common.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::consensus;

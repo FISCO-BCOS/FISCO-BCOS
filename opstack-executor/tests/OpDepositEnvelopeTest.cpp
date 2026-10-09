@@ -10,12 +10,16 @@
 
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPEncode.h>
-#include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 #include <evmc/evmc.hpp>
 
 #include <cstdint>
 #include <optional>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#endif
 
 using bcos::executor_v1::opstack::decodeOpDepositEnvelope;
 using bcos::executor_v1::opstack::OpEthDepositValidationFailed;

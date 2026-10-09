@@ -57,6 +57,10 @@ BOOST_AUTO_TEST_CASE(asyncSinkSuppressesBackendException)
 
     auto core = boost::log::core::get();
     core->add_sink(sink);
+    // Other suites (e.g. BoostLogInitializerTest with log.enable=false) may have disabled
+    // logging on the shared global core; make this case independent of run order.
+    bool const wasEnabled = core->get_logging_enabled();
+    core->set_logging_enabled(true);
 
     boost::log::sources::severity_logger<int> logger;
     BOOST_LOG_SEV(logger, 0) << "FIB-184 trigger record";
@@ -64,6 +68,7 @@ BOOST_AUTO_TEST_CASE(asyncSinkSuppressesBackendException)
     sink->stop();  // join the feeding thread: consume() runs here, throws, and is suppressed
     sink->flush();
     core->remove_sink(sink);
+    core->set_logging_enabled(wasEnabled);
 
     BOOST_CHECK_GE(consumed.load(), 1);  // the throwing backend actually ran
     BOOST_CHECK(true);                   // reached only because the throw did not abort the process

@@ -2,11 +2,15 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
-#include "bcos-utilities/IOServicePool.h"
 #include <bcos-framework/ledger/LedgerConfigState.h>
 #include <bcos-tx-validator/TxValidator.h>
 #include <bcos-tx-validator/Web3NonceChecker.h>
 #include <boost/test/unit_test.hpp>
+#include "bcos-utilities/IOServicePool.h"
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#endif
 
 struct TxPoolStorageFixture
 {

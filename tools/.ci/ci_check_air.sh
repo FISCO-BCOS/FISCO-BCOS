@@ -77,6 +77,8 @@ init()
     ${fisco_bcos_path} -v
     clear_node
     bash ${build_chain_path} -l "127.0.0.1:1" -e ${fisco_bcos_path} "${sm_option}"
+    # 日志默认不逐条flush以提升性能；测试依赖grep日志判断节点状态，强制每条日志及时落盘
+    perl -p -i -e 's/^\[log\]$/[log]\n    flush=true/' nodes/127.0.0.1/node*/config.ini
     # enable web3_rpc on node0 config.ini
     perl -p -i -e 'if (/\[web3_rpc\]/) { $flag=1 } elsif ($flag && s/enable\s*=\s*false/enable=true/i) { $flag=0; }' nodes/127.0.0.1/node0/config.ini
     cd nodes/127.0.0.1 && wait_and_start
@@ -90,6 +92,8 @@ init_baseline()
     ${fisco_bcos_path} -v
     clear_node
     bash ${build_chain_path} -l "127.0.0.1:1" -e ${fisco_bcos_path} "${sm_option}"
+    # 日志默认不逐条flush以提升性能；测试依赖grep日志判断节点状态，强制每条日志及时落盘
+    perl -p -i -e 's/^\[log\]$/[log]\n    flush=true/' nodes/127.0.0.1/node*/config.ini
 
     # 启用executor v1
     # Enable executor v1

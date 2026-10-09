@@ -23,9 +23,15 @@
 #include "AMOPClient.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/protocol/CommonError.h>
-#include <bcos-protocol/amop/TopicItem.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-task/Wait.h>
+#include <json/json.h>
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+#else
+#include <bcos-protocol/amop/TopicItem.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::rpc;

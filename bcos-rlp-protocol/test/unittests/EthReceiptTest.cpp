@@ -22,11 +22,17 @@
 #include "bcos-rlp-protocol/EthLog.h"
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/Exceptions.h>
-#include <bcos-protocol/TransactionStatus.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-protocol/TransactionStatus.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::protocol;

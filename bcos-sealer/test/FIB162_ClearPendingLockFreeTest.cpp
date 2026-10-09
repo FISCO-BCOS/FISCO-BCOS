@@ -36,13 +36,17 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tool/NodeTimeMaintenance.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <memory>
 #include <thread>
 #include <utility>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#endif
 
 namespace bcos::test
 {

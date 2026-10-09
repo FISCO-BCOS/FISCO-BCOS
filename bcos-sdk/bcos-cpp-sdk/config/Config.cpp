@@ -22,11 +22,15 @@
 #include <bcos-boostssl/websocket/WsConfig.h>
 #include <bcos-boostssl/websocket/WsTools.h>
 #include <bcos-cpp-sdk/config/Config.h>
-#include <bcos-utilities/BoostLog.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <memory>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/Exceptions.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::cppsdk;

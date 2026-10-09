@@ -40,7 +40,6 @@
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Error.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
@@ -49,6 +48,11 @@
 #include <future>
 #include <stdexcept>
 #include <thread>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::engine;

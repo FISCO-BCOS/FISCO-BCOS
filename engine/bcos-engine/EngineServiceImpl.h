@@ -41,7 +41,7 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Bloom.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/Exceptions.h"

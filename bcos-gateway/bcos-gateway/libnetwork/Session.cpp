@@ -15,9 +15,7 @@
 #include "bcos-gateway/libnetwork/SessionFace.h"
 #include "bcos-gateway/libnetwork/SessionReadLoop.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"
-#include "bcos-utilities/BoostLog.h"
-#include "bcos-utilities/Overloaded.h"
-#include "bcos-utilities/ZstdCompress.h"
+#include "bcos-utilities/LogStream.h"
 #include <bcos-framework/protocol/Protocol.h>  // for MessageExtFieldFlag
 #include <bcos-task/Wait.h>
 #include <boost/asio/buffer.hpp>
@@ -34,6 +32,12 @@
 #include <range/v3/view/single.hpp>
 #include <utility>
 #include <variant>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Overloaded.h"
+#include "bcos-utilities/ZstdCompress.h"
+#endif
 
 using namespace bcos;
 using namespace bcos::gateway;

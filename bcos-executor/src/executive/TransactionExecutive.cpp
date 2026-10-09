@@ -34,7 +34,6 @@
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-table/src/ContractShardUtils.h"
-#include "bcos-utilities/Exceptions.h"
 #include <optional>
 #include <range/v3/view/reverse.hpp>
 
@@ -46,9 +45,7 @@
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/protocol/Exceptions.h"
 #include "bcos-framework/protocol/Protocol.h"
-#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-tool/BfsFileFactory.h"
-#include "bcos-utilities/Common.h"
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
@@ -57,6 +54,15 @@
 #include <memory>
 #include <string>
 #include <boost/algorithm/string.hpp>
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+import bcos.utilities;
+#else
+#include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/Common.h"
+#include "bcos-protocol/TransactionStatus.h"
+#endif
 
 
 using namespace std;

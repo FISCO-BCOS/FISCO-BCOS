@@ -19,6 +19,7 @@
  * @date 2021-10-28
  */
 #include "AirNodeInitializer.h"
+#include <boost/property_tree/ini_parser.hpp>
 #include "libinitializer/Common.h"
 #include "libinitializer/MemPoolInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
@@ -31,8 +32,12 @@
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/Exceptions.h>
 #include <bcos-tool/NodeConfig.h>
-#include <bcos-utilities/IOServicePool.h>
 #include <boost/atomic.hpp>
+#include <bcos-utilities/IOServicePool.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#endif
 
 using namespace bcos::node;
 using namespace bcos::initializer;

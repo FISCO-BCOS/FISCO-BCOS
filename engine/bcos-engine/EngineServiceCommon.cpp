@@ -26,7 +26,6 @@
 #include "bcos-framework/engine/Errors.h"
 #include "bcos-framework/engine/OpBaseFee.h"
 #include "bcos-framework/engine/RawTransactionDispatch.h"
-#include "bcos-utilities/DataConvertUtility.h"
 #include "engine/bcos-engine/PayloadId.h"
 #include <bcos-crypto/hash/Sha256.h>
 #include <bcos-ledger/mpt/EthTrieRoots.h>
@@ -39,6 +38,11 @@
 #include <span>
 #include <stdexcept>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/DataConvertUtility.h"
+#endif
 
 namespace bcos::engine::engine_common
 {

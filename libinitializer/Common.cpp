@@ -22,12 +22,16 @@
 #include "Common.h"
 #include <bcos-framework/security/KeyEncryptInterface.h>
 #include <bcos-tool/Exceptions.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/Exceptions.h>
-#include <bcos-utilities/FileUtility.h>
 #include <openssl/engine.h>
 #include <openssl/rsa.h>
 #include <boost/filesystem.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/FileUtility.h>
+#endif
 
 namespace bcos::initializer
 {

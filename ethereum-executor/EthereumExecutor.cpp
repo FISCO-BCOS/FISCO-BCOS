@@ -6,10 +6,15 @@
 
 #include "EthereumExecutor.h"
 
-#include "bcos-protocol/TransactionStatus.h"
 #include <algorithm>
 #include <cstdint>
 #include <string>
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+#else
+#include "bcos-protocol/TransactionStatus.h"
+#endif
 
 namespace bcos::executor_v1::eth
 {

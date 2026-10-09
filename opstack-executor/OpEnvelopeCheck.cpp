@@ -13,13 +13,17 @@
 #include <bcos-framework/protocol/TxGasModel.h>  // protocol::ethToAddress
 #include <bcos-rlp-protocol/Web3Transaction.h>  // rpc::AuthorizationListEntry decode (EIP-7702 bind)
 #include <bcos-rlp-protocol/Web3TxEnvelope.h>   // isTypedWeb3Envelope / classifyWeb3EnvelopeChainId
-#include <bcos-utilities/DataConvertUtility.h>  // safeFromQuantity
 #include <ethereum-executor/EthereumHost.h>     // eth::ethSender / ethMaxGasPrice
 #include <algorithm>
 #include <cstring>
 #include <limits>
 #include <optional>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>  // safeFromQuantity
+#endif
 
 namespace bcos::executor_v1::opstack
 {

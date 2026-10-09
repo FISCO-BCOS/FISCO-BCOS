@@ -18,6 +18,7 @@
  */
 
 #include "Hash.h"
+#include <boost/log/core/core.hpp>
 #include <bcos-framework/storage/Serialize.h>
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/Features.h"
@@ -25,8 +26,6 @@
 #include "bcos-table/src/KeyPageStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-table/src/StateStorageInterface.h"
-#include <bcos-utilities/Error.h>
-#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/concurrent_vector.h>
@@ -43,6 +42,12 @@
 #include <unordered_map>
 #include <list>
 #include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/IOServicePool.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Error.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::storage;

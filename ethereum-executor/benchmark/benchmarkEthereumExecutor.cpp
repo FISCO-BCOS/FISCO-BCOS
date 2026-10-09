@@ -29,13 +29,18 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
-#include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
 #include <benchmark/benchmark.h>
 #include <boost/throw_exception.hpp>
 #include <stdexcept>
+#include <boost/log/core.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/DataConvertUtility.h"
+#endif
 
 using namespace bcos;
 using namespace bcos::storage2::memory_storage;

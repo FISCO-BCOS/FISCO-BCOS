@@ -2,7 +2,6 @@
 #include "bcos-cpp-sdk/tarsRPC/RPCClient.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-framework/protocol/Transaction.h"
-#include "bcos-utilities/FixedBytes.h"
 #include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
 #include <bcos-codec/abi/ContractABICodec.h>
 #include <bcos-crypto/hash/Keccak256.h>
@@ -19,6 +18,11 @@
 #include <string>
 #include <thread>
 #include <boost/atomic.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/FixedBytes.h"
+#endif
 
 std::atomic_long g_blockNumber = 0;
 constexpr static long blockLimit = 900;

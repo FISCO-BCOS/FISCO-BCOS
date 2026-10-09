@@ -18,7 +18,6 @@
 
 #include <bcos-codec/bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/lexical_cast.hpp>
@@ -26,6 +25,11 @@
 #include <cctype>
 #include <memory>
 #include <span>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 namespace
 {

@@ -18,10 +18,14 @@
  * @date 2026/9/2
  */
 #include <bcos-devp2p/rlpx/Messages.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::devp2p::rlpx;

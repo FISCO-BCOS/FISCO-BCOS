@@ -11,7 +11,6 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
-#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
@@ -22,6 +21,12 @@
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
 #include <future>
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+#else
+#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
+#endif
 
 using namespace bcos;
 using namespace bcos::storage2;

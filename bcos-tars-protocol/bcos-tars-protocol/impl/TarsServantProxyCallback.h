@@ -20,7 +20,7 @@
  */
 #pragma once
 
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include "bcos-utilities/Error.h"
 #include "servant/ServantProxy.h"
 #include <util/tc_autoptr.h>

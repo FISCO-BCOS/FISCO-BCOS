@@ -23,7 +23,7 @@
 #include "Framing.h"
 #include "Messages.h"
 #include <bcos-codec/rlp/Result.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
 #include <cctype>
 #include <stdexcept>
 #include <string>

@@ -23,9 +23,13 @@
 #include "bcos-pbft/core/Proposal.h"
 #include "bcos-pbft/pbft/protocol/PB/PBFTBaseMessage.h"
 #include "bcos-pbft/pbft/protocol/PB/PBFTProposal.h"
-#include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Exceptions.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::consensus;

@@ -59,9 +59,7 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/Web3RawTransaction.h>
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Error.h>
-#include <bcos-utilities/Exceptions.h>
 #include <opstack-executor/OpEthL1Attributes.h>  // synthesize fixture: DepositTx / OP_ETH_* constants
 #include <opstack-executor/OpSchedulerSeam.h>
 #include <boost/lexical_cast.hpp>
@@ -80,6 +78,12 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Exceptions.h>
+#endif
 
 using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;

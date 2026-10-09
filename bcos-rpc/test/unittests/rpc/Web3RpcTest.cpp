@@ -21,7 +21,6 @@
 
 #include "../common/RPCFixture.h"
 #include "../common/Web3TxSamples.h"
-#include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-crypto/kzg/Kzg4844.h>
 #include <bcos-framework/engine/AnyEngineService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
@@ -41,6 +40,11 @@
 #include <memory>
 #include <ostream>
 #include <string_view>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/DataConvertUtility.h"
+#endif
 
 using namespace bcos;
 using namespace bcos::rpc;

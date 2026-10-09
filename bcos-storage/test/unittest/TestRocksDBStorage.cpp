@@ -1,7 +1,6 @@
 #include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-storage/RocksDBStorage.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <rocksdb/write_batch.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -15,6 +14,12 @@
 #include <future>
 #include <optional>
 #include <random>
+#include <boost/log/core.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos::storage;
 

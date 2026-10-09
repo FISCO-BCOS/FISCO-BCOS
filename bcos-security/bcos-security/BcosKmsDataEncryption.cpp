@@ -25,9 +25,13 @@
 #include <bcos-crypto/encrypt/AESCrypto.h>
 #include <bcos-crypto/encrypt/SM4Crypto.h>
 #include <bcos-framework/protocol/Protocol.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/algorithm/string.hpp>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/LogStream.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos;
 using namespace crypto;

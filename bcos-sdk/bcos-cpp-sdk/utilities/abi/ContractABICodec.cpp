@@ -23,17 +23,21 @@
 #include <bcos-cpp-sdk/utilities/abi/ContractABIMethodDefinition.h>
 #include <bcos-cpp-sdk/utilities/abi/ContractABIType.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
-#include <bcos-utilities/Base64.h>
-#include <bcos-utilities/BoostLog.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/LogStream.h>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/throw_exception.hpp>
 #include <exception>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Base64.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/FixedBytes.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::cppsdk;

@@ -22,9 +22,13 @@
 #include <bcos-codec/rlp/Exceptions.h>
 #include <bcos-codec/rlp/Result.h>
 #include <bcos-rlp-protocol/EthBlockHeader.h>
-#include <bcos-utilities/BoostLog.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/LogStream.h>
 #include <stdexcept>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 namespace bcos::devp2p::sync
 {

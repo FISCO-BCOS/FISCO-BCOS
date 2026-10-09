@@ -29,10 +29,14 @@
 #include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 #include <string>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::protocol;

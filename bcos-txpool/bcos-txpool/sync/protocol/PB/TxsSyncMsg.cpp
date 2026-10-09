@@ -19,8 +19,13 @@
  * @date 2021-05-11
  */
 #include "TxsSyncMsg.h"
-#include "bcos-protocol/Common.h"
 #include "bcos-txpool/sync/utilities/Common.h"
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+#else
+#include "bcos-protocol/Common.h"
+#endif
 
 using namespace bcos;
 using namespace bcos::sync;

@@ -22,8 +22,12 @@
 #include "../../../src/executive/ExecutiveStackFlow.h"
 #include "../mock/MockExecutiveFactory.h"
 #include "../mock/MockLedger.h"
-#include <bcos-utilities/IOServicePool.h>
 #include <boost/test/unit_test.hpp>
+#include <bcos-utilities/IOServicePool.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#endif
 
 using namespace bcos;
 using namespace bcos::executor;

@@ -10,11 +10,15 @@
 
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <algorithm>
 #include <array>
 #include <span>
 #include <stdexcept>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 namespace bcos::executor_v1::opstack
 {

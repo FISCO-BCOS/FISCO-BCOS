@@ -1,13 +1,17 @@
 #include "GraphKeyLocks.h"
 #include "Common.h"
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/Error.h>
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/depth_first_search.hpp>
 #include <boost/graph/detail/adjacency_list.hpp>
 #include <boost/graph/properties.hpp>
 #include <boost/throw_exception.hpp>
 #include <fmt/format.h>
+#include <bcos-utilities/Error.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos::scheduler;
 

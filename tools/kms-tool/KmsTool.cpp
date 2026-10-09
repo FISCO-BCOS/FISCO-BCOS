@@ -1,10 +1,14 @@
 #include "bcos-framework/security/CloudKmsType.h"
 #include "bcos-security/bcos-security/cloudkms/AwsKmsWrapper.h"
-#include "bcos-utilities/FileUtility.h"
 #include <aws/core/Aws.h>
 #include <fstream>
 #include <iostream>
 #include <string>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/FileUtility.h"
+#endif
 
 using namespace bcos;
 using namespace bcos::security;

@@ -25,17 +25,22 @@
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
 #include "bcos-gateway/libratelimit/RateLimiterManager.h"
 #include "bcos-tars-protocol/protocol/GroupInfoCodecImpl.h"
-#include "bcos-utilities/BoostLog.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/DataConvertUtility.h"
-#include "bcos-utilities/FileUtility.h"
-#include "bcos-utilities/IOServicePool.h"
+#include "bcos-utilities/LogStream.h"
 #include <bcos-task/Wait.h>
 #include <openssl/evp.h>
 #include <openssl/x509.h>
 #include <exception>
 #include <optional>
 #include <boost/exception_ptr.hpp>
+#include "bcos-utilities/IOServicePool.h"
+#include <boost/filesystem.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/DataConvertUtility.h"
+#include "bcos-utilities/FileUtility.h"
+#endif
 
 using namespace bcos::rpc;
 using namespace bcos;

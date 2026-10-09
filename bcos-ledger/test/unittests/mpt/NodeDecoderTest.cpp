@@ -21,11 +21,15 @@
 #include <bcos-ledger/mpt/NodeDecoder.h>
 #include <bcos-ledger/mpt/NodeEncoder.h>
 #include <bcos-ledger/mpt/TrieNode.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/FixedBytes.h>
 #include <boost/test/unit_test.hpp>
 
 #include "bcos-ledger/test/unittests/ExceptionCheck.h"
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
+#endif
 
 namespace bcos::ledger::mpt::test
 {

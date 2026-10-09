@@ -28,12 +28,16 @@
 #include <bcos-ledger/mpt/MPTReadView.h>
 #include <bcos-ledger/mpt/StorageValueCodec.h>
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/FixedBytes.h>
 #include <boost/test/unit_test.hpp>
 #include <map>
 #include <string_view>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
+#endif
 
 namespace bcos::ledger::mpt::test
 {

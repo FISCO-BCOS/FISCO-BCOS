@@ -4,14 +4,12 @@
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
-#include "bcos-utilities/Common.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-task/Task.h>
 #include <bcos-tool/VersionConverter.h>
-#include <bcos-utilities/Error.h>
 #include <ittnotify.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
@@ -20,6 +18,12 @@
 #include <memory>
 #include <mutex>
 #include <string_view>
+#include <bcos-utilities/Error.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Common.h"
+#endif
 
 
 using namespace bcos::scheduler;

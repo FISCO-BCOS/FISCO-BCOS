@@ -41,8 +41,6 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
 #include <bcos-tool/NodeConfig.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/IOServicePool.h>
 #include <curl/curl.h>
 #include <json/json.h>
 #include <boost/test/unit_test.hpp>
@@ -64,6 +62,12 @@
 #include <thread>
 #include <utility>
 #include <vector>
+#include <bcos-utilities/IOServicePool.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using bcos::executor_v1::StateKey;
 using bcos::executor_v1::StateValue;

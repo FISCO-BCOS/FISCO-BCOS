@@ -21,9 +21,7 @@
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-framework/protocol/Transaction.h"
-#include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include "bcos-task/Wait.h"
-#include "bcos-utilities/Common.h"
 #include "bcos-utilities/ITTAPI.h"
 #include <bcos-tx-validator/CheckSet.h>
 #include <oneapi/tbb/blocked_range.h>
@@ -42,6 +40,14 @@
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
 #include <variant>
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+import bcos.utilities;
+#else
+#include "bcos-utilities/Common.h"
+#include "bcos-protocol/TransactionSubmitResultImpl.h"
+#endif
 
 const static auto CPU_CORES = std::thread::hardware_concurrency() + 1;
 const static auto BUCKET_SIZE = CPU_CORES;

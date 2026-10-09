@@ -19,6 +19,7 @@
  */
 
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include <boost/log/core/core.hpp>
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include <bcos-framework/storage/Serialize.h>

@@ -20,7 +20,6 @@
  */
 #include "BoostLogInitializer.h"
 #include "BoostLogCollector.h"
-#include "BoostLogThreadNameAttribute.h"
 #include "bcos-framework/Common.h"
 #include "bcos-framework/bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-utilities/BoostLog.h"
@@ -29,30 +28,14 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/core/null_deleter.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/log/core/core.hpp>
-#include <boost/log/support/date_time.hpp>
-#include <boost/log/utility/exception_handler.hpp>
-#include <boost/log/utility/setup/common_attributes.hpp>
+#include <boost/log/sinks/text_file_backend.hpp>
+#include <boost/property_tree/ini_parser.hpp>
+#include <iostream>
 #include <mutex>
 
 using namespace bcos;
 
-namespace logging = boost::log;
-namespace expr = boost::log::expressions;
-
 constexpr int MB_IN_BYTES = 1048576;
-
-namespace
-{
-void initializeLogAttributes()
-{
-    static std::once_flag once;
-    std::call_once(once, []() {
-        boost::log::add_common_attributes();
-        boost::log::core::get()->add_global_attribute("ThreadName", bcos::log::thread_name());
-    });
-}
-}  // namespace
 
 // register SIGUSE2 for dynamic reset log level
 struct BoostLogLevelResetHandler
@@ -99,58 +82,6 @@ bool BoostLogInitializer::canRotate(size_t const& _index)
     return false;
 }
 
-// init statLog
-void BoostLogInitializer::initStatLog(boost::property_tree::ptree const& _pt,
-    std::string const& _logger, std::string const& _logPrefix)
-{
-    m_running.store(true);
-    // not set the log path before init
-    if (m_logPath.size() == 0)
-    {
-        m_logPath = _pt.get<std::string>("log.log_path", "log");
-    }
-    /// set log level
-    unsigned logLevel = getLogLevel(_pt.get<std::string>("log.level", "info"));
-    auto sink = initLogSink(m_logPath, _logger);
-
-    setStatLogLevel((LogLevel)logLevel);
-
-    /// set file format
-    /// log-level|timestamp | message
-    sink->set_formatter(expr::stream
-                        << boost::log::expressions::attr<boost::log::trivial::severity_level>(
-                               "Severity")
-                        << "|"
-                        << boost::log::expressions::format_date_time<boost::posix_time::ptime>(
-                               "TimeStamp", "%Y-%m-%d %H:%M:%S.%f")
-                        << "|" << boost::log::expressions::smessage);
-}
-
-boost::shared_ptr<bcos::BoostLogInitializer::console_sink_t>
-BoostLogInitializer::initConsoleLogSink(
-    boost::property_tree::ptree const& _pt, unsigned _logLevel, std::string const& channel)
-{
-    initializeLogAttributes();
-    boost::shared_ptr<console_sink_t> consoleSink(new console_sink_t());
-    // FIB-184: the sink is asynchronous, so its backend runs on a dedicated feeding thread. An
-    // exception thrown there (formatting/IO during feed_records) with no handler propagates to
-    // std::terminate -> abort, turning the logging subsystem into a crash amplifier under load.
-    // Suppress it so a single log record is dropped instead of aborting the node.
-    consoleSink->set_exception_handler(boost::log::make_exception_suppressor());
-    consoleSink->locked_backend()->add_stream(
-        boost::shared_ptr<std::ostream>(&std::cout, boost::null_deleter()));
-
-    bool need_flush = _pt.get<bool>("log.flush", true);
-    consoleSink->locked_backend()->auto_flush(need_flush);
-    consoleSink->set_filter(boost::log::expressions::attr<std::string>("Channel") == channel &&
-                            boost::log::trivial::severity >= _logLevel);
-    boost::log::core::get()->add_sink(consoleSink);
-    m_consoleSinks.push_back(consoleSink);
-    bool enable_log = _pt.get<bool>("log.enable", true);
-    boost::log::core::get()->set_logging_enabled(enable_log);
-    return consoleSink;
-}
-
 void BoostLogInitializer::initLog(
     const std::string& _configFile, std::string const& _logger, std::string const& _logPrefix)
 {
@@ -164,15 +95,6 @@ void BoostLogInitializer::initLog(
 #ifndef _WIN32
     signal(BOOST_LOG_RELOAD_LOG_LEVEL, BoostLogLevelResetHandler::handle);
 #endif
-}
-
-void BoostLogInitializer::initStatLog(
-    const std::string& _configFile, std::string const& _logger, std::string const& _logPrefix)
-{
-    boost::property_tree::ptree pt;
-    boost::property_tree::read_ini(_configFile, pt);
-
-    return initStatLog(pt, _logger, _logPrefix);
 }
 
 /**
@@ -189,7 +111,6 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
     // get log level
     m_logLevel = getLogLevel(_pt.get<std::string>("log.level", "info"));
     m_consoleLog = _pt.get<bool>("log.enable_console_output", false);
-    m_logFormat = _pt.get<std::string>("log.format", "");
     m_logNamePattern = _pt.get<std::string>("log.log_name_pattern", "log_%Y%m%d_%H%M.log");
     m_compressArchive = _pt.get<bool>("log.compress_archive_file", false);
     m_archivePath = _pt.get<std::string>("log.archive_path", "");
@@ -212,7 +133,7 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
     {
         throw std::runtime_error("log.max_log_file_size must be greater than 100M");
     }
-    m_autoFlush = _pt.get<bool>("log.flush", true);
+    m_autoFlush = _pt.get<bool>("log.flush", false);
     m_enableLog = _pt.get<bool>("log.enable", true);
     m_maxArchiveSize = _pt.get<uint64_t>("log.max_archive_size", 0) * MB_IN_BYTES;
     if (m_maxArchiveSize == 0)
@@ -226,10 +147,20 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
     }
     m_minFreeSpace = _pt.get<uint64_t>("log.min_free_space", 0) * MB_IN_BYTES;
 
+    // Custom log.format strings are no longer supported: the pipeline formats
+    // the built-in line layout on the producer thread and never builds a
+    // boost record. Warn instead of silently ignoring the key.
+    auto logFormat = _pt.get<std::string>("log.format", "");
+    if (!logFormat.empty())
+    {
+        std::cout << "log.format is no longer supported, the built-in log line format is always "
+                     "used, configured format = "
+                  << logFormat << std::endl;
+    }
+
     if (m_consoleLog)
     {
-        boost::shared_ptr<console_sink_t> sink = initConsoleLogSink(_pt, m_logLevel, _logger);
-        setLogFormatter(sink, m_logFormat);
+        initLineConsoleLogSink(_pt);
     }
     else
     {
@@ -241,24 +172,17 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
         {
             m_archivePath = m_logPath;
         }
-        // if (!m_archivePath.empty() && m_archivePath == m_logPath)
-        // {
-        //     throw std::runtime_error("log.archive_path must be different from log.log_path");
-        // }
         auto enableRotateByHour = _pt.get<bool>("log.enable_rotate_by_hour", true);
-        boost::shared_ptr<sink_t> sink = nullptr;
         if (enableRotateByHour)
         {
-            sink = initHourLogSink(m_logPath, _logPrefix, _logger);
+            initHourLineLogSink(m_logPath, _logPrefix);
         }
         else
         {
-            sink = initLogSink(m_logPath, _logger);
+            initLineLogSink(m_logPath);
         }
-        setLogFormatter(sink, m_logFormat);
     }
     setFileLogLevel((LogLevel)m_logLevel);
-    initializeLogAttributes();
 
     auto enableRateCollector = _pt.get<bool>("log.enable_rate_collector", false);
     if (enableRateCollector)
@@ -271,109 +195,131 @@ void BoostLogInitializer::initLog(boost::property_tree::ptree const& _pt,
     }
 }
 
+// Whole-line fast path: the sink never attaches to boost::log core; LogStream
+// commits formatted lines to it directly through the line-sink registry.
+std::shared_ptr<bcos::BoostLogInitializer::line_sink_t> BoostLogInitializer::initLineLogSink(
+    std::string const& _logPath)
+{
+    auto sink = std::make_shared<line_sink_t>();
+    sink->locked_backend()->enable_final_rotation(false);
+    sink->locked_backend()->set_open_mode(std::ios::app);
+    // The backend evaluates the rotation predicate on every record; the boost
+    // time-point functor builds a posix_time local_time each call (~250ns of
+    // consumer CPU, which the producer pays as cache-line contention). Wrap it
+    // in a 1s throttle: a daily rotation loses nothing at second granularity.
+    sink->locked_backend()->set_time_based_rotation(
+        [check = boost::log::sinks::file::rotation_at_time_point(
+             m_rotateTimePoint[0], m_rotateTimePoint[1], m_rotateTimePoint[2]),
+            last = std::time_t(0)]() mutable {
+            std::time_t now = std::time(nullptr);
+            if (now == last)
+            {
+                return false;
+            }
+            last = now;
+            return check();
+        });
+    sink->locked_backend()->set_file_name_pattern(_logPath + "/" + m_logNamePattern);
+    sink->locked_backend()->set_target_file_name_pattern(_logPath + "/" + m_rotateFileNamePattern);
+    sink->locked_backend()->set_rotation_size(m_rotateSize);
+    sink->locked_backend()->auto_flush(m_autoFlush);
+    if (!m_archivePath.empty())
+    {
+        boost::filesystem::path targetDir(m_archivePath);
+        sink->locked_backend()->set_file_collector(bcos::log::make_collector(targetDir,
+            m_maxArchiveSize, m_minFreeSpace, m_maxArchiveFiles, m_compressArchive));
+    }
+    sink->locked_backend()->scan_for_files();
+    if (m_enableLog)
+    {
+        bcos::log::registerLineSink(sink);
+    }
+    m_lineSinks.push_back(sink);
+    return sink;
+}
+
 // rotate the log file the log every hour
-boost::shared_ptr<bcos::BoostLogInitializer::sink_t> BoostLogInitializer::initHourLogSink(
-    std::string const& _logPath, std::string const& _logPrefix, std::string const& channel)
+std::shared_ptr<bcos::BoostLogInitializer::line_sink_t> BoostLogInitializer::initHourLineLogSink(
+    std::string const& _logPath, std::string const& _logPrefix)
 {
     m_currentHourVec.push_back(
         (int)boost::posix_time::second_clock::local_time().time_of_day().hours());
     /// set file name
     std::string fileName = _logPath + "/" + _logPrefix + "_%Y%m%d%H.%M.log";
 
-    boost::shared_ptr<sink_t> sink(new sink_t());
-    // FIB-184: suppress async-sink feeding-thread exceptions so they cannot reach abort.
-    sink->set_exception_handler(boost::log::make_exception_suppressor());
+    auto sink = std::make_shared<line_sink_t>();
     sink->locked_backend()->set_open_mode(std::ios::ate);
+    // 1s throttle: canRotate() builds a posix_time local_time per call, see
+    // initLineLogSink for the measurement.
     sink->locked_backend()->set_time_based_rotation(
-        [this, index = (m_currentHourVec.size() - 1)]() { return canRotate(index); });
-
+        [this, index = (m_currentHourVec.size() - 1), last = std::time_t(0)]() mutable {
+            std::time_t now = std::time(nullptr);
+            if (now == last)
+            {
+                return false;
+            }
+            last = now;
+            return canRotate(index);
+        });
     sink->locked_backend()->set_file_name_pattern(fileName);
     /// set rotation size MB
     sink->locked_backend()->set_rotation_size(m_rotateSize);
     /// set auto-flush according to log configuration
     sink->locked_backend()->auto_flush(m_autoFlush);
-    sink->set_filter(boost::log::expressions::attr<std::string>("Channel") == channel);
-
-    boost::log::core::get()->add_sink(sink);
-    m_sinks.push_back(sink);
-    boost::log::core::get()->set_logging_enabled(m_enableLog);
+    if (m_enableLog)
+    {
+        bcos::log::registerLineSink(sink);
+    }
+    m_lineSinks.push_back(sink);
     return sink;
 }
 
-boost::shared_ptr<bcos::BoostLogInitializer::sink_t> BoostLogInitializer::initLogSink(
-    std::string const& _logPath, std::string const& channel)
+std::shared_ptr<bcos::BoostLogInitializer::console_line_sink_t>
+BoostLogInitializer::initLineConsoleLogSink(boost::property_tree::ptree const& _pt)
 {
-    /// set file name
-    // std::string fileName = _logPath + "/" + "log_%Y%m%d_%H%M.log";
-    boost::shared_ptr<sink_t> sink(new sink_t());
-    // FIB-184: suppress async-sink feeding-thread exceptions so they cannot reach abort.
-    sink->set_exception_handler(boost::log::make_exception_suppressor());
-    sink->locked_backend()->enable_final_rotation(false);
-    sink->locked_backend()->set_open_mode(std::ios::app);
-    sink->locked_backend()->set_time_based_rotation(boost::log::sinks::file::rotation_at_time_point(
-        m_rotateTimePoint[0], m_rotateTimePoint[1], m_rotateTimePoint[2]));
-    sink->locked_backend()->set_file_name_pattern(_logPath + "/" + m_logNamePattern);
-    sink->locked_backend()->set_target_file_name_pattern(_logPath + "/" + m_rotateFileNamePattern);
-    /// set rotation size MB
-    sink->locked_backend()->set_rotation_size(m_rotateSize);
-    /// set auto-flush according to log configuration
-    sink->locked_backend()->auto_flush(m_autoFlush);
-    sink->set_filter(boost::log::expressions::attr<std::string>("Channel") == channel);
-    if (!m_archivePath.empty())
+    auto sink = std::make_shared<console_line_sink_t>();
+    sink->locked_backend()->add_stream(
+        boost::shared_ptr<std::ostream>(&std::cout, boost::null_deleter()));
+    bool need_flush = _pt.get<bool>("log.flush", false);
+    sink->locked_backend()->auto_flush(need_flush);
+    if (m_enableLog)
     {
-#if 0
-        sink->locked_backend()->set_file_collector(boost::log::sinks::file::make_collector(
-            boost::log::keywords::target = m_archivePath,           // to store rotated files
-            boost::log::keywords::max_size = m_maxArchiveSize,      // maximum size(bytes)
-            boost::log::keywords::min_free_space = m_minFreeSpace,  // minimum free space(bytes)
-            boost::log::keywords::max_files = m_maxArchiveFiles  // maximum number of stored files
-            ));
-#endif
-        boost::filesystem::path targetDir(m_archivePath);
-        sink->locked_backend()->set_file_collector(
-            bcos::log::make_collector(targetDir,  // where to store rotated files
-                m_maxArchiveSize,                 // maximum size, in bytes
-                m_minFreeSpace,                   // minimum free space, in bytes
-                m_maxArchiveFiles,                // maximum number of stored files
-                m_compressArchive));
+        bcos::log::registerLineSink(sink);
     }
-    sink->locked_backend()->scan_for_files();
-    boost::log::core::get()->add_sink(sink);
-    m_sinks.push_back(sink);
-    boost::log::core::get()->set_logging_enabled(m_enableLog);
+    m_consoleLineSinks.push_back(sink);
     return sink;
 }
 
 /**
  * @brief: get log level according to given string
  *
- * @param levelStr: the given string that should be transformed to boost log level
+ * @param levelStr: the given string that should be transformed to log level
  * @return unsigned: the log level
  */
 unsigned BoostLogInitializer::getLogLevel(std::string const& levelStr)
 {
     if (boost::iequals(levelStr, "trace"))
     {
-        return boost::log::trivial::severity_level::trace;
+        return LogLevel::TRACE;
     }
     if (boost::iequals(levelStr, "debug"))
     {
-        return boost::log::trivial::severity_level::debug;
+        return LogLevel::DEBUG;
     }
     if (boost::iequals(levelStr, "warning"))
     {
-        return boost::log::trivial::severity_level::warning;
+        return LogLevel::WARNING;
     }
     if (boost::iequals(levelStr, "error"))
     {
-        return boost::log::trivial::severity_level::error;
+        return LogLevel::ERROR;
     }
     if (boost::iequals(levelStr, "fatal"))
     {
-        return boost::log::trivial::severity_level::fatal;
+        return LogLevel::FATAL;
     }
     /// default log level is info
-    return boost::log::trivial::severity_level::info;
+    return LogLevel::INFO;
 }
 
 /// stop and remove all sinks after the program exit
@@ -384,45 +330,30 @@ void BoostLogInitializer::stopLogging()
         return;
     }
     m_running.store(false);
-    for (auto const& sink : m_sinks)
+    // Unregister whole-line sinks first so new records stop arriving;
+    // producers that already hold a shared_ptr copy keep the sink alive until
+    // their write finishes.
+    for (auto const& sink : m_lineSinks)
     {
-        stopLogging(sink);
+        bcos::log::unregisterLineSink(sink.get());
+        sink->stop();
+        sink->flush();
     }
-    m_sinks.clear();
-
-    for (auto const& sink : m_consoleSinks)
+    m_lineSinks.clear();
+    for (auto const& sink : m_consoleLineSinks)
     {
-        stopLogging(sink);
+        bcos::log::unregisterLineSink(sink.get());
+        sink->stop();
+        sink->flush();
     }
-    m_consoleSinks.clear();
+    m_consoleLineSinks.clear();
 }
 
-/// stop a single sink
-void BoostLogInitializer::stopLogging(boost::shared_ptr<sink_t> const& sink)
+void bcos::BoostLogInitializer::Sink::consumeLine(LogLevel _level, const std::string& _line)
 {
-    if (!sink)
-    {
-        return;
-    }
-    // remove the sink from the core, so that no records are passed to it
-    if (boost::log::core::get())
-    {
-        boost::log::core::get()->remove_sink(sink);
-    }
-    // break the feeding loop
-    sink->stop();
-    // flush all log records that may have left buffered
-    sink->flush();
-}
-void bcos::BoostLogInitializer::Sink::consume(
-    const boost::log::record_view& rec, const std::string& str)
-{
-    boost::log::sinks::text_file_backend::consume(rec, str);
-    auto severity = rec.attribute_values()[boost::log::aux::default_attribute_names::severity()]
-                        .extract<boost::log::trivial::severity_level>();
-    // bug fix: determine m_ptr before get the log level
-    //          serverity.get() will call  BOOST_ASSERT(m_ptr)
-    if (severity.get_ptr() && severity.get() == boost::log::trivial::severity_level::fatal)
+    // The text file backend never reads the record, only the formatted line.
+    boost::log::sinks::text_file_backend::consume(boost::log::record_view(), _line);
+    if (_level == LogLevel::FATAL)
     {
         // abort if encounter fatal, will generate coredump
         // must make sure only use LOG(FATAL) when encounter the most serious problem
@@ -430,19 +361,12 @@ void bcos::BoostLogInitializer::Sink::consume(
         std::abort();
     }
 }
-void bcos::BoostLogInitializer::ConsoleSink::consume(
-    const boost::log::record_view& rec, const std::string& str)
+
+void bcos::BoostLogInitializer::ConsoleSink::consumeLine(LogLevel _level, const std::string& _line)
 {
-    boost::log::sinks::text_ostream_backend::consume(rec, str);
-    auto severity = rec.attribute_values()[boost::log::aux::default_attribute_names::severity()]
-                        .extract<boost::log::trivial::severity_level>();
-    // bug fix: determine m_ptr before get the log level
-    //          serverity.get() will call  BOOST_ASSERT(m_ptr)
-    if (severity.get_ptr() && severity.get() == boost::log::trivial::severity_level::fatal)
+    boost::log::sinks::text_ostream_backend::consume(boost::log::record_view(), _line);
+    if (_level == LogLevel::FATAL)
     {
-        // abort if encounter fatal, will generate coredump
-        // must make sure only use LOG(FATAL) when encounter the most serious problem
-        // forbid use LOG(FATAL) in the function that should exit normally
         std::abort();
     }
 }

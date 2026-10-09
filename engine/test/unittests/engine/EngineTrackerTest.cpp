@@ -25,9 +25,6 @@
 #include "engine/bcos-engine/PayloadId.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/engine/Errors.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/Exceptions.h>
 #include <boost/test/unit_test.hpp>
 
 #include <algorithm>
@@ -40,6 +37,13 @@
 #include <stdexcept>
 #include <thread>
 #include <unordered_map>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Exceptions.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::engine;

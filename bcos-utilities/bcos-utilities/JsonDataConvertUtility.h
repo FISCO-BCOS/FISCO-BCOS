@@ -51,7 +51,7 @@ std::string toJonString(T const& _i)
     return stream.str();
 }
 
-bytes jonStringToBytes(std::string const& _stringData)
+inline bytes jonStringToBytes(std::string const& _stringData)
 {
     return fromHex(_stringData);
 }

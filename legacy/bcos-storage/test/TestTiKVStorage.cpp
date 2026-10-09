@@ -1,8 +1,8 @@
 #include "bcos-framework/storage/StorageInterface.h"
+#include <boost/log/core/core.hpp>
 #include "bcos-storage/TiKVStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <rocksdb/write_batch.h>
 #include <tbb/concurrent_vector.h>
 #include <boost/archive/binary_iarchive.hpp>
@@ -16,6 +16,11 @@
 #include <boost/test/unit_test.hpp>
 #include <future>
 #include <optional>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos::storage;
 

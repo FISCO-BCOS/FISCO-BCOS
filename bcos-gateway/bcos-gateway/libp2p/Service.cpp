@@ -6,14 +6,14 @@
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-framework/Common.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
+#include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Common.h"      // for SocketFace
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"  // for SocketFace
 #include "bcos-gateway/libp2p/Common.h"
 #include "bcos-gateway/libp2p/P2PInterface.h"  // for SessionCallbackFunc...
 #include "bcos-gateway/libp2p/P2PSession.h"  // for P2PSession
-#include "bcos-utilities/BoostLog.h"
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/LogStream.h"
 #include <bcos-task/Wait.h>
 #include <boost/random.hpp>
 #include <boost/throw_exception.hpp>
@@ -21,6 +21,11 @@
 #include <range/v3/view/transform.hpp>
 #include <shared_mutex>
 #include <utility>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Common.h"
+#endif
 
 using namespace bcos;
 using namespace bcos::gateway;

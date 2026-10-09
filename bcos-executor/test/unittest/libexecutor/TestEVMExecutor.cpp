@@ -20,6 +20,7 @@
  */
 
 #include "../mock/MockLedger.h"
+#include <boost/log/core/core.hpp>
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"

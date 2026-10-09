@@ -21,15 +21,19 @@
 #include "bcos-rlp-protocol/Web3Transaction.h"
 #include "bcos-rlp-protocol/Web3TxEnvelope.h"
 #include "bcos-rlp-protocol/Web3TxHandler.h"
-#include "bcos-utilities/Common.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/protocol/Transaction.h>
-#include <bcos-utilities/DataConvertUtility.h>  // bcos::fromBigEndian
 #include <limits>
 #include <range/v3/algorithm/find_if.hpp>
 #include <range/v3/algorithm/move.hpp>
 #include <utility>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/Common.h"
+#include <bcos-utilities/DataConvertUtility.h>  // bcos::fromBigEndian
+#endif
 
 namespace bcos
 {

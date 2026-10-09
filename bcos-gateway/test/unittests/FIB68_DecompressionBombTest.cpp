@@ -18,11 +18,15 @@
  * @date 2026-04-07
  */
 
-#include "bcos-utilities/ZstdCompress.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 #include <cstdint>
 #include <string>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include "bcos-utilities/ZstdCompress.h"
+#endif
 
 using namespace bcos;
 using namespace bcos::test;

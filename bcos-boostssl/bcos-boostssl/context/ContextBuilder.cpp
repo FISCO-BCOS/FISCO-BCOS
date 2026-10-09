@@ -21,8 +21,13 @@
 #include <bcos-boostssl/context/Common.h>
 #include <bcos-boostssl/context/ContextBuilder.h>
 #include <bcos-boostssl/context/ContextConfig.h>
-#include <bcos-utilities/Exceptions.h>
+#include <boost/exception/all.hpp>
 #include <boost/filesystem/fstream.hpp>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Exceptions.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::boostssl;

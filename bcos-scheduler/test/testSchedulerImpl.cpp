@@ -5,7 +5,6 @@
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-protocol/bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-scheduler/src/SchedulerImpl.h"
-#include "bcos-utilities/IOServicePool.h"
 #include "mock/MockBlockExecutiveFactory.h"
 #include "mock/MockDmcExecutor.h"
 #include "mock/MockExecutor.h"
@@ -26,6 +25,11 @@
 #include <rocksdb/options.h>
 #include <future>
 #include <boost/test/unit_test.hpp>
+#include "bcos-utilities/IOServicePool.h"
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#endif
 
 
 using namespace std;

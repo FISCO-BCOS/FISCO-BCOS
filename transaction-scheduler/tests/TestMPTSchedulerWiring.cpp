@@ -39,7 +39,6 @@
 #include "bcos-ledger/mpt/Errors.h"
 #include "bcos-ledger/mpt/MPTBuilder.h"
 #include "bcos-ledger/mpt/StorageValueCodec.h"
-#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-storage/KeyPrefixes.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
@@ -55,6 +54,12 @@
 #include <optional>
 #include <string>
 #include <vector>
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+#else
+#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
+#endif
 
 // Everything in an anonymous namespace (unity-build friendly). The storage stack and the
 // mock executor / scheduler / getLedgerConfig stub are the SHARED test mocks

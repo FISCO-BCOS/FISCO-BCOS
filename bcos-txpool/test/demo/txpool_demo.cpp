@@ -21,11 +21,16 @@
 
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
-#include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include "bcos-txpool/test/unittests/txpool/TxPoolFixture.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <boost/test/unit_test.hpp>
+
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.protocol;
+#else
+#include "bcos-protocol/TransactionSubmitResultImpl.h"
+#endif
 using namespace bcos;
 using namespace bcos::front;
 using namespace bcos::protocol;

@@ -18,9 +18,10 @@
  * @date 2021-10-04
  */
 
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/LogStream.h"
 #include <bcos-cpp-sdk/ws/BlockNumberInfo.h>
 #include <bcos-cpp-sdk/ws/Common.h>
+#include <boost/exception/diagnostic_information.hpp>
 #include <json/json.h>
 
 using namespace bcos;

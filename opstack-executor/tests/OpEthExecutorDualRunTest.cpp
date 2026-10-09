@@ -18,11 +18,15 @@
 #include "support/GoldenExpect.h"
 #include "support/GoldenSample.h"  // w6test loaders (pulls support/SeedPreState.h)
 
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 
 #include <cstdint>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace opstack_test;
 

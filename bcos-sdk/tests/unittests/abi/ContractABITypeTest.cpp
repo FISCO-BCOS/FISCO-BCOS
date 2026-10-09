@@ -21,13 +21,17 @@
 #include <bcos-cpp-sdk/utilities/abi/ContractABICodec.h>
 #include <bcos-cpp-sdk/utilities/abi/ContractABIType.h>
 #include <bcos-cpp-sdk/utilities/abi/ContractABITypeCodec.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/FixedBytes.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <utility>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/FixedBytes.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::cppsdk;

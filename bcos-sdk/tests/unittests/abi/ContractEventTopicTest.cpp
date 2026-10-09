@@ -21,8 +21,6 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <sys/types.h>
 #include <boost/test/unit_test.hpp>
@@ -31,6 +29,12 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::codec::abi;

@@ -19,15 +19,20 @@
  */
 
 #include <bcos-boostssl/websocket/Common.h>
+#include <boost/property_tree/ini_parser.hpp>
 #include <bcos-boostssl/websocket/WsInitializer.h>
 #include <bcos-boostssl/websocket/WsService.h>
-#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/BoostLogInitializer.h>
-#include <bcos-utilities/Common.h>
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/Common.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::boostssl;

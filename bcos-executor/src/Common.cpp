@@ -22,7 +22,11 @@
 #include "Common.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-framework/protocol/Exceptions.h"
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
 #include "bcos-utilities/Common.h"
+#endif
 
 using namespace bcos::protocol;
 

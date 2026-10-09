@@ -20,13 +20,17 @@
  */
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/fastsm2/fast_sm2.h>
-#include <bcos-utilities/BoostLog.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/LogStream.h>
 #include <openssl/bn.h>
 #include <openssl/ec.h>
 #include <openssl/evp.h>
 #include <openssl/obj_mac.h>
 #include <openssl/sm2.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 #ifdef WITH_SM2_OPTIMIZE
 using namespace bcos;

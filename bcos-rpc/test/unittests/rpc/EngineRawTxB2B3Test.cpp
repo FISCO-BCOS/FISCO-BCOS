@@ -22,9 +22,13 @@
 #include <bcos-framework/engine/RawTransactionDispatch.h>
 #include <bcos-rpc/web3jsonrpc/model/DepositTransaction.h>
 #include <bcos-rpc/web3jsonrpc/utils/EngineHelper.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::rpc;

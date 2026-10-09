@@ -28,7 +28,6 @@
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-utilities/IOServicePool.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/executor_work_guard.hpp>
@@ -37,6 +36,11 @@
 #include <memory>
 #include <stdexcept>
 #include <thread>
+#include <bcos-utilities/IOServicePool.h>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#endif
 
 namespace bcos::test
 {

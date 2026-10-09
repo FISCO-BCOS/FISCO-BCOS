@@ -10,11 +10,15 @@
 
 #include <bcos-crypto/ChecksumAddress.h>
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <cctype>
 #include <string>
+#ifdef FISCO_WITH_CXX_MODULES
+import bcos.utilities;
+#else
+#include <bcos-utilities/DataConvertUtility.h>
+#endif
 
 using namespace bcos;
 using namespace bcos::crypto;
