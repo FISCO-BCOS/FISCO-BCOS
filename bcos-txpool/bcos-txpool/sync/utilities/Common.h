@@ -20,10 +20,10 @@
  */
 #pragma once
 #include <bcos-framework/Common.h>
-#include <tbb/parallel_for.h>
 #include <bcos-utilities/BoostLog.h>
+#include <tbb/parallel_for.h>
 
-#define SYNC_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SYNC")
+#define SYNC_LOG(LEVEL) BCOS_MODULE_LOG(TXPOOL, LEVEL) << LOG_BADGE("SYNC")
 namespace bcos::sync
 {
 enum class TxsSyncPacketType : int32_t

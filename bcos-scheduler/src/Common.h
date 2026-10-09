@@ -1,12 +1,12 @@
 #pragma once
 
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
+#include <bcos-utilities/BoostLog.h>
 #include <cstdint>
 #include <tuple>
-#include <bcos-utilities/BoostLog.h>
-#define SCHEDULER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("SCHEDULER")
+#define SCHEDULER_LOG(LEVEL) BCOS_MODULE_LOG(SCHEDULER, LEVEL) << LOG_BADGE("SCHEDULER")
 #define SCHEDULER_BLK_LOG(LEVEL, NUMBER) \
-    BCOS_LOG(LEVEL) << LOG_BADGE("SCHEDULER") << BLOCK_NUMBER(NUMBER)
+    BCOS_MODULE_LOG(SCHEDULER, LEVEL) << LOG_BADGE("SCHEDULER") << BLOCK_NUMBER(NUMBER)
 namespace bcos::scheduler
 {
 using ContextID = int64_t;
