@@ -12,6 +12,9 @@ FROM ubuntu:26.04
 
 ARG tag=local
 
+# Package versions are intentionally unpinned: the image tracks ubuntu:26.04 as
+# the glibc/libstdc++ baseline and must float with its security updates.
+# hadolint ignore=DL3008
 RUN sed -i 's|//archive.ubuntu.com|//mirrors.aliyun.com|; s|//security.ubuntu.com|//mirrors.aliyun.com|' /etc/apt/sources.list.d/ubuntu.sources \
     && apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl jq openssl xxd libssl3t64 \

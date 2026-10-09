@@ -77,7 +77,7 @@ NODE_PID=$!
 
 RPC="http://127.0.0.1:8545"
 ok=0
-for i in $(seq 1 60); do
+for _ in $(seq 1 60); do
     sleep 2
     if curl -s -X POST "${RPC}" -H 'Content-Type: application/json' \
         -d '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' | grep -q '"result"'; then

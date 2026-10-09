@@ -116,7 +116,7 @@ fi
 # syntactically valid but unreachable placeholder keeps the (autonomous) sync
 # loop idle — connection failures are transient and only log WARNINGs.
 if [ -n "${HIVE_BOOTNODE:-}" ]; then
-    BOOTNODES=$(printf '%s' "${HIVE_BOOTNODE}" | tr ' ,' '\n\n' | grep -v '^$' \
+    BOOTNODES=$(printf '%s' "${HIVE_BOOTNODE}" | tr -s ' ,' '\n' | grep -v '^$' \
         | jq -R . | jq -s .)
 else
     # secp256k1 generator point as pubkey, port 1 = unreachable
