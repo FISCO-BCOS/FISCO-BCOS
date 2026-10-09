@@ -18,10 +18,11 @@
 file(GLOB_RECURSE SRC_LIST "bcos-ops/*.cpp")
 
 find_package(jsoncpp CONFIG REQUIRED)
+find_package(ftxui CONFIG REQUIRED)
 
 add_library(bcos-ops ${SRC_LIST})
 target_include_directories(bcos-ops PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(bcos-ops PUBLIC bcos-cpp-sdk bcos-utilities jsoncpp_static)
+target_link_libraries(bcos-ops PUBLIC bcos-cpp-sdk bcos-utilities jsoncpp_static ftxui::screen ftxui::dom ftxui::component)
 set_target_properties(bcos-ops PROPERTIES UNITY_BUILD "ON")
 
 if(TESTS)
