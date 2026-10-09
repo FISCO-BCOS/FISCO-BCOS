@@ -84,7 +84,7 @@ jobs:
           python-version: '3.11'
       - name: Install pytest
         run: python -m pip install pytest
-      - name: Mutation harness (full variant set; restores source, leaves mutant BINARIES — runner is ephemeral)
+      - name: Mutation harness (live variants only — 15/16 parked in mapping.retired.json and reported SKIPPED; restores source, leaves mutant BINARIES — runner is ephemeral)
         run: bash tools/mutation/run.sh
       - name: conformance status placeholder (Plan D not started)
         # Block scalar: the value's inner "execution: ..." colon-space is not valid

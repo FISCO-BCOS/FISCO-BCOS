@@ -93,6 +93,8 @@ jobs:
           OP_GETH_ZIP: ${{ runner.temp }}/op-geth/superchain/superchain-configs.zip
           OP_REQUIRE_REGISTRY_ZIP: "1"
         run: python -m pytest tools/opstack-genesis/test_gen_official_genesis.py -q
+      - name: opstack-genesis python suites (the three the registry sweep does not cover)
+        run: python -m pytest tools/opstack-genesis/test_gen_rollup_config.py tools/opstack-genesis/test_gen_eth_header_fixture.py tools/opstack-genesis/test_mpt_state_root.py -q
       - name: route failure to an issue, do not block PRs
         if: failure()
         run: |
