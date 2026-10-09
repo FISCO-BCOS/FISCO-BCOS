@@ -1058,7 +1058,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             m_nodeConfig->singleNodeConsensusBlockInterval(),
             m_nodeConfig->singleNodeConsensusProduceEmptyBlocks(), prevRandao,
             m_nodeConfig->singleNodeConsensusFeeRecipient(),
-            m_nodeConfig->singleNodeConsensusFixedTimestamp());
+            m_nodeConfig->singleNodeConsensusFixedTimestamp(), m_nodeConfig->evmcRevision());
     }
 
 #ifdef TOOLS

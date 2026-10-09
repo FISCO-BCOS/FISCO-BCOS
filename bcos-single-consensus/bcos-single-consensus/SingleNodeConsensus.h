@@ -13,10 +13,12 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/FixedBytes.h"
+#include <evmc/evmc.h>
 #include <atomic>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 
@@ -52,7 +54,8 @@ public:
         bool _produceEmptyBlocks = true,
         bcos::crypto::HashType _prevRandao = bcos::crypto::HashType{},
         std::string _feeRecipient = "0x0000000000000000000000000000000000000000",
-        std::uint64_t _fixedTimestamp = 0);
+        std::uint64_t _fixedTimestamp = 0,
+        std::optional<evmc_revision> _evmRevision = std::nullopt);
 
     ~SingleNodeConsensus();
 
@@ -83,6 +86,15 @@ private:
     /// at startup instead of failing on the first block tick).
     bcos::Address m_feeRecipient;
     std::uint64_t m_fixedTimestamp;
+
+    /// Engine API method versions this CL speaks, selected from the chain's EVM revision
+    /// ([executor] evm_revision) the way geth selects them from the fork: forkchoiceUpdated
+    /// V3 requires CANCUN+, V2 requires SHANGHAI+; a pre-Shanghai chain only accepts V1
+    /// attributes (no withdrawals / parentBeaconBlockRoot). std::nullopt (revision unknown)
+    /// keeps the historical Karst dialect (V3/V5/V4).
+    std::uint32_t m_forkchoiceVersion;
+    std::uint32_t m_getPayloadVersion;
+    std::uint32_t m_newPayloadVersion;
 
     /// CL-side head tracking. newPayload() persists the ledger block tables — including
     /// SYS_CURRENT_STATE / SYS_KEY_CURRENT_NUMBER — via ledger::prewriteBlockToBuffer
