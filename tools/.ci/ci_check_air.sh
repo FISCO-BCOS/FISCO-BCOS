@@ -328,6 +328,7 @@ ops_tool_test()
         cat ${current_path}/ops_log_status.json
         exit 1
     fi
+    ${fisco_bcos_path} tui --version-check || { LOG_ERROR "tui --version-check failed"; exit 1; }
     LOG_INFO "=== ops tool: success ==="
 }
 ops_tool_test
