@@ -22,6 +22,7 @@
 #include "bcos-gateway/libnetwork/SocketFace.h"
 #include "bcos-utilities/IOServicePool.h"
 #include <bcos-task/Wait.h>
+#include <bcos-utilities/BoostLog.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -31,7 +32,6 @@
 #include <memory>
 #include <set>
 #include <utility>
-#include <bcos-utilities/BoostLog.h>
 
 
 using namespace bcos;
@@ -153,8 +153,7 @@ task::Task<void> Host::acceptLoop()
                 // is not delayed — and never logged at ERROR.
                 if (ec && ec != boost::asio::error::operation_aborted)
                 {
-                    HOST_LOG(ERROR) << LOG_DESC("accept failed")
-                                    << LOG_KV("message", ec.message());
+                    HOST_LOG(ERROR) << LOG_DESC("accept failed") << LOG_KV("message", ec.message());
                     iterationFailed = true;
                 }
                 socket->close();
@@ -250,9 +249,7 @@ task::Task<void> Host::acceptLoop()
             {
                 auto retryTimer = m_asioInterface->newAcceptorTimer(ACCEPT_RETRY_INTERVAL_MS);
                 co_await task::makeFireAwaitable<boost::system::error_code>(
-                    [&retryTimer](auto handler) {
-                        retryTimer.async_wait(std::move(handler));
-                    },
+                    [&retryTimer](auto handler) { retryTimer.async_wait(std::move(handler)); },
                     boost::asio::error::operation_aborted);
             }
             catch (...)
@@ -551,9 +548,9 @@ void Host::obtainNodeInfo(P2PInfo& info, std::string const& node_info)
         info.nodeName = obtainCommonNameFromSubject(node_info_vec[3]);
     }
 
-    HOST_LOG(INFO) << "obtainP2pInfo " << LOG_KV("node_info", node_info)
-                   << LOG_KV("p2pid", printShortP2pID(info.p2pID))
-                   << LOG_KV("rawP2pID", printShortP2pID(info.rawP2pID));
+    HOST_LOG(DEBUG) << "obtainP2pInfo " << LOG_KV("node_info", node_info)
+                    << LOG_KV("p2pid", printShortP2pID(info.p2pID))
+                    << LOG_KV("rawP2pID", printShortP2pID(info.rawP2pID));
 }
 
 /**
@@ -570,17 +567,16 @@ void Host::handshakeServer(const boost::system::error_code& error,
 {
     if (error)
     {
-        HOST_LOG(INFO) << LOG_DESC("handshakeServer Handshake failed")
-                       << LOG_KV("value", error.value()) << LOG_KV("message", error.message())
-                       << LOG_KV("endpoint", socket->nodeIPEndpoint());
+        // inbound ssl handshake failed: certificate verification (incl. blacklist/whitelist in
+        // newVerifyCallback) or a protocol error; error.message() says which
+        logHandshakeFailed(socket->nodeIPEndpoint(), "ssl_handshake", error.message());
         socket->close();
         return;
     }
     const std::string& nodeInfo = *endpointPublicKey;
     if (nodeInfo.empty())
     {
-        HOST_LOG(INFO) << LOG_DESC("handshakeServer get p2pID failed")
-                       << LOG_KV("remote endpoint", socket->remoteEndpoint());
+        logHandshakeFailed(socket->nodeIPEndpoint(), "no_node_id", "inbound");
         socket->close();
         return;
     }
@@ -590,10 +586,10 @@ void Host::handshakeServer(const boost::system::error_code& error,
         /// format: {nodeId}{#}{agencyName}{#}{nodeName}
         P2PInfo info;
         obtainNodeInfo(info, nodeInfo);
-        HOST_LOG(INFO) << LOG_DESC("handshakeServer succ")
-                       << LOG_KV("remote endpoint", socket->remoteEndpoint())
-                       << LOG_KV("shortP2pid", printShortP2pID(info.p2pID))
-                       << LOG_KV("rawP2pID", printShortP2pID(info.rawP2pID));
+        HOST_LOG(DEBUG) << LOG_DESC("handshakeServer succ")
+                        << LOG_KV("remote endpoint", socket->remoteEndpoint())
+                        << LOG_KV("shortP2pid", printShortP2pID(info.p2pID))
+                        << LOG_KV("rawP2pID", printShortP2pID(info.rawP2pID));
         auto session = startPeerSession(info, socket);
         if (!session)
         {
@@ -769,15 +765,14 @@ std::shared_ptr<SessionFace> Host::startPeerSession(
         return nullptr;
     }
 
-    std::shared_ptr<SessionFace> session =
-        m_sessionFactory->createSession(*this, socket);
+    std::shared_ptr<SessionFace> session = m_sessionFactory->createSession(*this, socket);
     // Bind a slot-release guard to the session; the slot is freed when the session is destroyed.
     session->setLifetimeGuard(std::make_shared<SessionSlotGuard>(weakHost, remoteAddress));
 
-    HOST_LOG(INFO) << LOG_DESC("startPeerSession, Remote=") << socket->remoteEndpoint()
-                   << LOG_KV("local endpoint", socket->localEndpoint())
-                   << LOG_KV("shortP2pid", printShortP2pID(p2pInfo.p2pID))
-                   << LOG_KV("rawP2pID", printShortP2pID(p2pInfo.rawP2pID));
+    HOST_LOG(DEBUG) << LOG_DESC("startPeerSession, Remote=") << socket->remoteEndpoint()
+                    << LOG_KV("local endpoint", socket->localEndpoint())
+                    << LOG_KV("shortP2pid", printShortP2pID(p2pInfo.p2pID))
+                    << LOG_KV("rawP2pID", printShortP2pID(p2pInfo.rawP2pID));
     return session;
 }
 
@@ -811,7 +806,7 @@ task::Task<std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionFace>>> 
         co_return std::make_tuple(
             NetworkException(0, ""), P2PInfo{}, std::shared_ptr<SessionFace>());
     }
-    HOST_LOG(INFO) << LOG_DESC("Connecting to node") << LOG_KV("endpoint", _nodeIPEndpoint);
+    HOST_LOG(DEBUG) << LOG_DESC("Connecting to node") << LOG_KV("endpoint", _nodeIPEndpoint);
     {
         Guard l(x_pendingConns);
         auto it = m_pendingConns.find(_nodeIPEndpoint);
@@ -837,37 +832,33 @@ task::Task<std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionFace>>> 
         /// if async connect timeout, close the socket directly
         auto connectTimer = std::make_shared<boost::asio::steady_timer>(
             socket->ioService(), std::chrono::milliseconds(m_connectTimeThre));
-        connectTimer->async_wait(
-            [this, socket, _nodeIPEndpoint](const boost::system::error_code& error) {
-                /// return when cancel has been called
-                if (error == boost::asio::error::operation_aborted)
-                {
-                    HOST_LOG(DEBUG)
-                        << LOG_DESC("AsyncConnect handshake handler revoke this operation");
-                    return;
-                }
-                /// connection timer error
-                if (error && error != boost::asio::error::operation_aborted)
-                {
-                    HOST_LOG(ERROR) << LOG_DESC("AsyncConnect timer failed")
-                                    << LOG_KV("errorValue", error.value())
-                                    << LOG_KV("message", error.message());
-                }
-                if (socket->isConnected())
-                {
-                    HOST_LOG(WARNING) << LOG_DESC("AsyncConnect timeout erase")
-                                      << LOG_KV("endpoint", _nodeIPEndpoint);
-                    erasePendingConns(_nodeIPEndpoint);
-                    socket->close();
-                }
-            });
+        connectTimer->async_wait([this, socket, _nodeIPEndpoint](
+                                     const boost::system::error_code& error) {
+            /// return when cancel has been called
+            if (error == boost::asio::error::operation_aborted)
+            {
+                HOST_LOG(DEBUG) << LOG_DESC("AsyncConnect handshake handler revoke this operation");
+                return;
+            }
+            /// connection timer error
+            if (error && error != boost::asio::error::operation_aborted)
+            {
+                HOST_LOG(ERROR) << LOG_DESC("AsyncConnect timer failed")
+                                << LOG_KV("errorValue", error.value())
+                                << LOG_KV("message", error.message());
+            }
+            if (socket->isConnected())
+            {
+                recordConnectFailure(_nodeIPEndpoint, "timeout", "connect/handshake timer");
+                erasePendingConns(_nodeIPEndpoint);
+                socket->close();
+            }
+        });
         /// callback async connect
         auto [ec] = co_await m_asioInterface->awaitableResolveConnect(socket);
         if (ec)
         {
-            HOST_LOG(ERROR) << LOG_DESC("TCP Connection refused by node")
-                            << LOG_KV("endpoint", _nodeIPEndpoint)
-                            << LOG_KV("message", ec.message());
+            recordConnectFailure(_nodeIPEndpoint, "tcp_connect", ec.message());
             // Settle on the SOCKET's io_context: on RESOLVE failure this coroutine resumed on
             // the resolver's context (resolveConnect invokes the handler inline from the
             // resolver completion), while connectTimer's async_wait handler runs on the
@@ -931,9 +922,7 @@ std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionFace>> Host::handsh
     erasePendingConns(_nodeIPEndpoint);
     if (error)
     {
-        HOST_LOG(WARNING) << LOG_DESC("handshakeClient failed")
-                          << LOG_KV("endpoint", _nodeIPEndpoint) << LOG_KV("value", error.value())
-                          << LOG_KV("message", error.message());
+        logHandshakeFailed(_nodeIPEndpoint, "ssl_handshake", error.message());
 
         if (socket->isConnected())
         {
@@ -945,8 +934,7 @@ std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionFace>> Host::handsh
     const std::string& nodeInfo = *endpointPublicKey;
     if (nodeInfo.empty())
     {
-        HOST_LOG(WARNING) << LOG_DESC("handshakeClient get p2pID failed")
-                          << LOG_KV("local endpoint", socket->localEndpoint());
+        logHandshakeFailed(_nodeIPEndpoint, "no_node_id", "outbound");
         socket->close();
         return std::make_tuple(NetworkException(ConnectError, "Handshake failed"), P2PInfo{},
             std::shared_ptr<SessionFace>());
@@ -956,8 +944,9 @@ std::tuple<NetworkException, P2PInfo, std::shared_ptr<SessionFace>> Host::handsh
     {
         P2PInfo info;
         obtainNodeInfo(info, nodeInfo);
-        HOST_LOG(INFO) << LOG_DESC("handshakeClient succ")
-                       << LOG_KV("local endpoint", socket->localEndpoint());
+        clearConnectFailures(_nodeIPEndpoint);
+        HOST_LOG(DEBUG) << LOG_DESC("handshakeClient succ")
+                        << LOG_KV("local endpoint", socket->localEndpoint());
         auto session = startPeerSession(info, socket);
         if (!session)
         {
@@ -1023,9 +1012,10 @@ void Host::stop()
             if (m_acceptLoopExit.get_future().wait_for(std::chrono::seconds(10)) !=
                 std::future_status::ready)
             {
-                HOST_LOG(ERROR) << LOG_DESC("accept loop did not exit within 10s of stop(); "
-                                            "the posted cancel was likely lost and this Host "
-                                            "(ASIOInterface, acceptor, teardown pool) may leak");
+                HOST_LOG(ERROR) << LOG_DESC(
+                    "accept loop did not exit within 10s of stop(); "
+                    "the posted cancel was likely lost and this Host "
+                    "(ASIOInterface, acceptor, teardown pool) may leak");
             }
         }
         catch (...)
@@ -1176,6 +1166,28 @@ void bcos::gateway::Host::erasePendingConns(NodeIPEndpoint const& nodeIPEndpoint
         m_pendingConns.erase(it);
     }
 }
+void bcos::gateway::Host::recordConnectFailure(
+    NodeIPEndpoint const& nodeIPEndpoint, std::string_view reason, std::string_view detail)
+{
+    uint32_t failures = 0;
+    {
+        bcos::Guard lock(x_connectFailures);
+        failures = ++m_connectFailures[nodeIPEndpoint];
+    }
+    if (failures == 1 || failures % c_connectFailLogEvery == 0)
+    {
+        HOST_LOG(INFO) << LOG_DESC("PeerConnectFailed") << LOG_KV("endpoint", nodeIPEndpoint)
+                       << LOG_KV("reason", reason) << LOG_KV("detail", detail)
+                       << LOG_KV("consecutiveFailures", failures);
+    }
+}
+
+void bcos::gateway::Host::clearConnectFailures(NodeIPEndpoint const& nodeIPEndpoint)
+{
+    bcos::Guard lock(x_connectFailures);
+    m_connectFailures.erase(nodeIPEndpoint);
+}
+
 void bcos::gateway::Host::insertPendingConns(NodeIPEndpoint const& nodeIPEndpoint)
 {
     bcos::Guard lock(x_pendingConns);

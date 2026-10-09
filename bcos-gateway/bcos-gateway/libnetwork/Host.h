@@ -281,6 +281,13 @@ protected:
 
     void insertPendingConns(NodeIPEndpoint const& nodeIPEndpoint);
 
+    /// PeerConnectFailed is rate-limited per endpoint: printed on the first consecutive failure
+    /// and then every c_connectFailLogEvery-th one; the counter resets on handshake success.
+    void recordConnectFailure(
+        NodeIPEndpoint const& nodeIPEndpoint, std::string_view reason, std::string_view detail);
+    void clearConnectFailures(NodeIPEndpoint const& nodeIPEndpoint);
+    constexpr static uint32_t c_connectFailLogEvery = 10;
+
 private:
     // Coroutine bodies for the accept/connect paths. The accept path is launched fire-and-forget
     // (task::wait) from startAccept(); the connect path is co_awaited by connect()'s caller. Each
@@ -321,6 +328,9 @@ protected:
 
     std::set<NodeIPEndpoint> m_pendingConns;
     bcos::Mutex x_pendingConns;
+    // consecutive outbound connect failures per endpoint, see recordConnectFailure
+    std::map<NodeIPEndpoint, uint32_t> m_connectFailures;
+    bcos::Mutex x_connectFailures;
     // host-wide seq source, see newSeq()
     std::atomic<uint32_t> m_seq{1};
 
