@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <cctype>
 #include <charconv>
+#include <limits>
 #include <evmc/evmc.hpp>
 #include <magic_enum/magic_enum.hpp>
 #include <map>
@@ -519,8 +520,6 @@ inline std::string encodeEVMCRevisionConfig(std::optional<evmc_revision> explici
     return oss.str();
 }
 
-/// Parse a SYS_CONFIG value string produced by encodeEVMCRevisionConfig and populate
-/// @p ledgerConfig's EVMC revision settings (explicit revision + fork transitions).
 /// Parse the op_eip1559_params SYS_CONFIG row ("elasticity,denominator,denominatorCanyon").
 /// Same fail-closed policy as applyEVMCRevisionConfig: a malformed persisted value must
 /// halt loudly rather than silently degrading the fee prediction to a preset.
@@ -534,6 +533,16 @@ inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value
             BOOST_THROW_EXCEPTION(
                 InvalidEVMCRevisionConfig()
                 << errinfo_comment("cannot parse op_eip1559_params value: " + std::string(value)));
+        }
+        // Holocene extraData encodes each field as u32; the [op_eip1559] loader refuses
+        // wider values at load and the row parser shares the invariant — a foreign row
+        // must fail the same way instead of silently carrying a value no header can emit.
+        if (out > std::numeric_limits<std::uint32_t>::max())
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidEVMCRevisionConfig()
+                << errinfo_comment(
+                       "op_eip1559_params field exceeds uint32 in value: " + std::string(value)));
         }
         return out;
     };
@@ -585,6 +594,8 @@ inline bcos::engine::OpEip1559Params parseOpEip1559Params(std::string_view value
     return schedule;
 }
 
+/// Parse a SYS_CONFIG value string produced by encodeEVMCRevisionConfig and populate
+/// @p ledgerConfig's EVMC revision settings (explicit revision + fork transitions).
 inline void applyEVMCRevisionConfig(LedgerConfig& ledgerConfig, std::string_view value)
 {
     ledgerConfig.clearForkTransitions();

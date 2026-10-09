@@ -246,9 +246,17 @@ inline bcos::u256 calcOpBaseFeeFromFields(bcos::u256 const& parentGasLimit,
     bcos::u256 const& parentGasUsed, bcos::u256 const& parentBaseFee, bool childIsCanyon,
     OpEip1559Params const& params)
 {
-    if (childIsCanyon && params.denominatorCanyon == 0)
+    // All three are arithmetic poisons (gasTarget = gasLimit/elasticity,
+    // delta/denominator): the config loader (NodeConfig [op_eip1559]) and the
+    // SYS_CONFIG row parser (LedgerConfig::parseOpEip1559Params) refuse zeros at their
+    // doors; guard here as well so a params producer bypassing both still fails closed
+    // instead of dividing by zero. denominatorCanyon only matters when the child is
+    // Canyon-active (op-geth panics there — config.go:1352-1354).
+    if (params.elasticity == 0 || params.denominator == 0 ||
+        (childIsCanyon && params.denominatorCanyon == 0))
     {
-        throwOpBaseFeeError("OP chain is Canyon-active with a zero denominatorCanyon");
+        throwOpBaseFeeError(
+            "OP base-fee parameters carry a zero elasticity/denominator/denominatorCanyon");
     }
     return calcOpBaseFeeFromFields(parentGasLimit, parentGasUsed, parentBaseFee,
         /*parentBlobGasUsed=*/std::nullopt, /*parentExtraData=*/{},

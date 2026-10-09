@@ -201,7 +201,12 @@ inline bool isOpNoUserTxActivationBlock(
     const OpForkSchedule& schedule, uint64_t parentTsSec, uint64_t childTsSec) noexcept
 {
     auto crossed = [&](uint64_t rungTime) {
-        return childTsSec >= rungTime && parentTsSec < rungTime;
+        // UINT64_MAX = unscheduled, never a crossing: without the exclusion a block
+        // stamped exactly at the sentinel would read as crossing an unset rung (the
+        // shorthand parser rejects the sentinel as a declared time, but grammar-admitted
+        // inputs should not be able to reach this gate).
+        return rungTime != std::numeric_limits<uint64_t>::max() && childTsSec >= rungTime &&
+               parentTsSec < rungTime;
     };
     return crossed(schedule.m_jovianTime) || crossed(schedule.m_karstTime);
 }

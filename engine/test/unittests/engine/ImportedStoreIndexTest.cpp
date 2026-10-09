@@ -158,4 +158,24 @@ BOOST_AUTO_TEST_CASE(CyclicParentWalkKeepsUndecidableAncestor)
     BOOST_CHECK_EQUAL(*store.occupantAt(100), hashOf('A'));
 }
 
+// Rebuild arbitration must be deterministic: a canonical ancestor always wins its
+// height over a live off-lineage sibling (whose sparse ancestry keeps it stored but
+// must not let it occupy the canonical chain's slot).
+BOOST_AUTO_TEST_CASE(CanonicalAncestorWinsHeightOverLiveSibling)
+{
+    bcos::engine::ImportedStore store;
+    BOOST_CHECK(store.put(block('A', 0, 100)));
+    BOOST_CHECK(store.put(block('B', 'A', 101)));
+    BOOST_CHECK(store.put(block('C', 'B', 102)));
+    // Sibling at the same height as A, with an unstored parent: stays live (sparse
+    // ancestry is undecidable, so the store must not detach it) — but must not take
+    // height 100 from the canonical ancestor. Same-height coexistence needs the caller
+    // vouching the existing occupant is canonical (§4.3), like every sibling import.
+    BOOST_CHECK(store.put(block('S', 0, 100), /*occupantCanonical=*/true));
+    store.adoptCanonicalHead(102, hashOf('C'));
+    BOOST_CHECK_EQUAL(*store.occupantAt(100), hashOf('A'));
+    BOOST_CHECK_EQUAL(*store.occupantAt(102), hashOf('C'));
+    BOOST_CHECK(store.hasBlock(hashOf('S')));  // still hash-addressable for re-import
+}
+
 BOOST_AUTO_TEST_SUITE_END()

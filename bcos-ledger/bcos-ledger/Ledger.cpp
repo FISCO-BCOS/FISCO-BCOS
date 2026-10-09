@@ -2285,7 +2285,19 @@ bool Ledger::buildGenesisBlock(
             // snapshot read (getLedgerConfig -> RPC fee prediction) prices with the
             // chain's own parameters, not a binary-side preset. Write-only at genesis:
             // the triple is genesis-frozen, same policy as the fork-schedule metadata.
+            // Refuse a zero-carrying triple at the SOURCE: the snapshot reader
+            // (parseOpEip1559Params) throws on zeros, so a zero here would otherwise
+            // write a row every later boot fails to read.
             auto const params = bcos::engine::effectiveOpEip1559(genesis.m_opEip1559);
+            if (params.elasticity == 0 || params.denominator == 0 ||
+                params.denominatorCanyon == 0)
+            {
+                BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << errinfo_comment(
+                                          "genesis [op_eip1559] triple carries a zero "
+                                          "elasticity/denominator/denominatorCanyon — the "
+                                          "SYS_CONFIG reader rejects zeros, so this chain "
+                                          "would never boot"));
+            }
             Entry eip1559Entry;
             eip1559Entry.set(bcos::storage::serialize::encode(SystemConfigEntry{
                 std::to_string(params.elasticity) + "," + std::to_string(params.denominator) + "," +

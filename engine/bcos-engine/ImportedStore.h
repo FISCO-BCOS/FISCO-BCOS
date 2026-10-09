@@ -207,12 +207,26 @@ public:
         // Rebuild the index from liveness, not just the head: a block re-livened by
         // this pass (switch-back onto a still-stored chain) must regain its entry, or
         // occupantAt answers "never imported" for a live block (the mirror invariant
-        // split in the opposite direction).
-        for (auto const& [hash, block] : m_blocks)
+        // split in the opposite direction). Arbitration must not depend on
+        // unordered_map iteration order: canonical-lineage blocks take their heights
+        // first, off-lineage live blocks only fill still-empty heights, and the head
+        // always wins its own.
+        auto const onCanonicalLineage = [&](bcos::h256 const& candidate) {
+            return candidate == hash || descendsFrom(hash, candidate);
+        };
+        for (auto const& [blockHash, block] : m_blocks)
         {
-            if (!block.detached)
+            if (!block.detached && onCanonicalLineage(blockHash))
             {
-                m_byNumber.insert_or_assign(block.number, hash);
+                m_byNumber.insert_or_assign(block.number, blockHash);
+            }
+        }
+        for (auto const& [blockHash, block] : m_blocks)
+        {
+            if (!block.detached && !onCanonicalLineage(blockHash) &&
+                m_byNumber.find(block.number) == m_byNumber.end())
+            {
+                m_byNumber.emplace(block.number, blockHash);
             }
         }
         m_byNumber[number] = hash;

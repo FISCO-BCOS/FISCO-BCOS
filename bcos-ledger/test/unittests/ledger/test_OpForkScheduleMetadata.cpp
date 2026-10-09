@@ -656,5 +656,40 @@ BOOST_AUTO_TEST_CASE(opEip1559RowRejectsZeroTriple)
     BOOST_CHECK_EQUAL(legacy.denominatorCanyon, 250U);
 }
 
+// The Holocene extraData encodes each field as u32; the config loader refuses wider
+// values at load (NodeConfig [op_eip1559]) and the ROW parser must share the invariant —
+// a foreign-written row with a wider field fails as a named config error at boot instead
+// of silently carrying a value no header can emit.
+BOOST_AUTO_TEST_CASE(opEip1559RowRejectsOverWideField)
+{
+    for (auto const* row : {"4294967296,50,250", "6,4294967296,250", "6,50,4294967296"})
+    {
+        BOOST_CHECK_EXCEPTION((void)bcos::ledger::parseOpEip1559Params(row),
+            bcos::ledger::InvalidEVMCRevisionConfig,
+            [](auto const& e) { return messageContains(e, "uint32"); });
+    }
+    // uint32 max still parses.
+    auto const maxOk =
+        bcos::ledger::parseOpEip1559Params("4294967295,4294967295,4294967295");
+    BOOST_CHECK_EQUAL(maxOk.elasticity, 4294967295U);
+}
+
+// The writer shares the reader's zero invariant: a genesis carrying a zero in the
+// declared triple must be refused at build, not persisted as a row every later boot
+// fails to parse.
+BOOST_AUTO_TEST_CASE(genesisRejectsZeroEip1559Triple)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto storage = makeL2GenesisTestStorage();
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+        auto genesis = shorthandGenesis(1000, 2000);
+        genesis.m_opEip1559 = bcos::engine::OpEip1559Params{
+            .elasticity = 6, .denominator = 0, .denominatorCanyon = 250};
+        BOOST_CHECK_EXCEPTION(
+            co_await ledger::buildGenesisBlock(*ledger, genesis, emptyLedgerConfig()),
+            std::exception, [](auto const& e) { return messageContains(e, "carries a zero"); });
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

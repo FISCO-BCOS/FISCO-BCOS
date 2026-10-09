@@ -145,6 +145,18 @@ uint64_t parseForkTimestamp(
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "[" + section + "]." + key + " invalid timestamp: " + value));
     }
+    // UINT64_MAX IS the not-scheduled sentinel (ledger::c_opForkTimeUnset): accepting it
+    // as a declared activation time would make resolveOpFork read the fork as never
+    // active — declare a real time or omit the key (the codec's parseTimestamp refuses
+    // the sentinel for the canonical channel; the shorthand parser must not be looser).
+    if (out == ledger::c_opForkTimeUnset)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[" + section + "]." + key +
+                                  " timestamp is the not-scheduled sentinel "
+                                  "(18446744073709551615): declare a real activation time or omit "
+                                  "the key"));
+    }
     return out;
 }
 
@@ -688,16 +700,18 @@ void NodeConfig::validateL2Invariants()
     // executor, the devp2p validator and the genesis pin run the [op_fork_timestamps]
     // shorthand. A divergence on those two rungs would make one node price and admit
     // against a different activation than it executes; lower rungs of the canonical row
-    // are carried verbatim but read by nobody today. Compare the two channels under the
-    // SAME fold rule (an unset jovian with a scheduled karst implies jovian at karst's
-    // second), so a full-ladder canonical whose jovian/karst rungs match the shorthand
-    // still passes; only a real activation-time divergence is rejected.
+    // are carried verbatim but read by nobody today. Compare the two channels through
+    // the SAME fold rule (ledger::foldOpForkShorthand): fold both sides' (jovian, karst)
+    // pairs into records and compare the resolved activations, so the implied-jovian
+    // jump and the equal-time merge come from the one rule set, not from a local
+    // re-implementation.
     if (genesis.m_opstackForkSchedule.has_value() && genesis.m_opForkSchedule.has_value())
     {
         auto const& shorthand = *genesis.m_opForkSchedule;
         auto const canonicalRecords = ledger::parseOpForkSchedule(*genesis.m_opstackForkSchedule);
-        auto activationOf = [&canonicalRecords](std::string_view fork) {
-            for (auto const& record : canonicalRecords)
+        auto activationOf = [](std::vector<ledger::OpForkActivationRecord> const& records,
+                                std::string_view fork) {
+            for (auto const& record : records)
             {
                 if (record.forkName == fork)
                 {
@@ -706,25 +720,22 @@ void NodeConfig::validateL2Invariants()
             }
             return ledger::c_opForkTimeUnset;
         };
-        auto effectiveJovian = [](uint64_t jovianTime, uint64_t karstTime) {
-            return (jovianTime == ledger::c_opForkTimeUnset &&
-                    karstTime != ledger::c_opForkTimeUnset) ?
-                karstTime :
-                jovianTime;
-        };
-        auto const canonicalKarst = activationOf("karst");
-        auto const canonicalJovian =
-            effectiveJovian(activationOf("jovian"), canonicalKarst);
-        auto const shorthandJovian =
-            effectiveJovian(shorthand.m_jovianTime, shorthand.m_karstTime);
-        if (canonicalJovian != shorthandJovian || canonicalKarst != shorthand.m_karstTime)
+        auto const canonicalFolded = ledger::foldOpForkShorthand(
+            activationOf(canonicalRecords, "jovian"), activationOf(canonicalRecords, "karst"));
+        auto const shorthandFolded =
+            ledger::foldOpForkShorthand(shorthand.m_jovianTime, shorthand.m_karstTime);
+        auto const canonicalJovian = activationOf(canonicalFolded, "jovian");
+        auto const canonicalKarst = activationOf(canonicalFolded, "karst");
+        auto const shorthandJovian = activationOf(shorthandFolded, "jovian");
+        auto const shorthandKarst = activationOf(shorthandFolded, "karst");
+        if (canonicalJovian != shorthandJovian || canonicalKarst != shorthandKarst)
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfig() << errinfo_comment(
                     "[op_fork_schedule] activates jovian/karst at (" +
                     std::to_string(canonicalJovian) + "/" + std::to_string(canonicalKarst) +
                     ") but [op_fork_timestamps] declares (" + std::to_string(shorthandJovian) +
-                    "/" + std::to_string(shorthand.m_karstTime) +
+                    "/" + std::to_string(shorthandKarst) +
                     "): the canonical channel feeds the stored row while the executor runs "
                     "the shorthand — declare one channel, or make them agree"));
         }
