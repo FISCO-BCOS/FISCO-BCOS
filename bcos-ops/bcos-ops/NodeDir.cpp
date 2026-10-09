@@ -73,10 +73,19 @@ NodeDir NodeDir::load(std::string const& _dir)
     node.chainId = chainSource.get<std::string>("chain.chain_id", "chain");
     node.smCrypto = chainSource.get<bool>("chain.sm_crypto", false);
     node.authCheck = genesis.get<bool>("executor.is_auth_check", false);
+    if (auto timeout = genesis.get_optional<int64_t>("consensus.consensus_timeout"))
+    {
+        node.consensusTimeoutMs = *timeout;
+    }
 
     node.rpcListenIp = ini.get<std::string>("rpc.listen_ip", "0.0.0.0");
     node.rpcListenPort = static_cast<uint16_t>(ini.get<int>("rpc.listen_port", 20200));
+    // NodeConfig::loadRpcConfig: disable_ssl is the legacy key, enable_ssl overrides it
     node.rpcDisableSsl = ini.get<bool>("rpc.disable_ssl", false);
+    if (auto enableSsl = ini.get_optional<bool>("rpc.enable_ssl"))
+    {
+        node.rpcDisableSsl = !*enableSsl;
+    }
     node.storagePath = ini.get<std::string>("storage.data_path", "data/" + node.groupId);
     node.logPath = ini.get<std::string>("log.log_path", "log");
     node.logFormat = ini.get<std::string>("log.format", "");

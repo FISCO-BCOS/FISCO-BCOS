@@ -86,8 +86,12 @@ BOOST_AUTO_TEST_CASE(nodeDirReadsIniAndGenesis)
         "    group_id=group0\n"
         "    chain_id=chain0\n"
         "[executor]\n"
-        "    is_auth_check=true\n");
+        "    is_auth_check=true\n"
+        "[consensus]\n"
+        "    consensus_timeout=3000\n");
     auto node = NodeDir::load(temp.dir.string());
+    BOOST_REQUIRE(node.consensusTimeoutMs);
+    BOOST_CHECK_EQUAL(*node.consensusTimeoutMs, 3000);
     BOOST_CHECK_EQUAL(node.rpcEndpoint(), "127.0.0.1:20200");
     BOOST_CHECK(!node.tls());
     BOOST_CHECK_EQUAL(node.groupId, "group0");
@@ -108,6 +112,16 @@ BOOST_AUTO_TEST_CASE(nodeDirDefaultsWhenKeysAbsent)
     BOOST_CHECK_EQUAL(node.rpcEndpoint(), "127.0.0.1:20200");
     BOOST_CHECK(node.tls());  // disable_ssl defaults to false, i.e. SSL on
     BOOST_CHECK_EQUAL(node.storagePath, "data/group0");
+}
+
+BOOST_AUTO_TEST_CASE(nodeDirEnableSslOverridesDisableSsl)
+{
+    TempNodeDir temp;
+    temp.write("config.ini", "[rpc]\n    disable_ssl=true\n    enable_ssl=true\n");
+    temp.write("config.genesis", "[chain]\n    group_id=group0\n");
+    BOOST_CHECK(NodeDir::load(temp.dir.string()).tls());
+    temp.write("config.ini", "[rpc]\n    enable_ssl=false\n");
+    BOOST_CHECK(!NodeDir::load(temp.dir.string()).tls());
 }
 
 BOOST_AUTO_TEST_CASE(nodeDirMissingIniThrowsUsage)
