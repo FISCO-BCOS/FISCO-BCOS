@@ -678,19 +678,26 @@ jobs:
   # kona-client block parity gate (tools/.ci/kona-parity/README.md): kona-host v1.7.0 replays
   # every block of a C2 devnet and must reach FISCO's output root. The gate needs FISCO's
   # debug_getRawHeader/debug_dbGet (#5649, checked by its preflight); exit 2 ("missing: ...")
-  # fails the job, there is no skip inside run.sh. The overlay=off leg is the one exception,
-  # decided here rather than in run.sh: it exists only when the pinned harness's setup_c2.sh
-  # reads OVERLAY (ticket 12, FISCO-BCOS/op-stack-e2e-tests); until then this job prints a
-  # SKIP notice for it and the matrix holds overlay=on alone. overlay=on is never skipped by
-  # that decision (a failing kona_parity_legs leaves the whole workflow red, not green).
+  # fails the job, there is no skip inside run.sh. Two decisions are made here, outside run.sh:
+  #   * whether the gate runs at all: only when this checkout serves the two debug methods
+  #     (bcos-rpc registers "debug_getRawHeader"); on a tree without them the gate would fail
+  #     its preflight on every PR until #5649 lands, so the matrix is empty and a SKIP notice
+  #     names the dependency instead. The grep is on the source that will be built, so a PR
+  #     cannot turn the gate off by pointing the pin elsewhere.
+  #   * the overlay=off leg: it exists only when the pinned harness's setup_c2.sh reads
+  #     OVERLAY (ticket 12, FISCO-BCOS/op-stack-e2e-tests); until then this job prints a SKIP
+  #     notice for it and the matrix holds overlay=on alone.
+  # overlay=on is never skipped by either decision once the debug methods are present (a
+  # failing kona_parity_legs leaves the whole workflow red, not green).
   kona_parity_legs:
     name: kona parity gate legs (harness overlay switch)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
       contents: read
     outputs:
       overlay: ${{ steps.legs.outputs.overlay }}
+      enabled: ${{ steps.legs.outputs.enabled }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -700,7 +707,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: FISCO-BCOS/op-stack-e2e-tests
-          ref: 0451c8bf3601c502a36be4633c0e2f4cc38e9c9b
+          ref: 378774e100dd4658aa79e150c545f73812acdca5
           path: .ci-op-e2e-tests
 
       - name: Assert the harness ref matches kona-parity pins.json
@@ -712,6 +719,18 @@ jobs:
         id: legs
         run: |
           set -euo pipefail
+          # The gate's preflight (compare.py preflight) needs debug_getRawHeader and
+          # debug_dbGet on the L2 web3 listener (#5649). Decide from the source this
+          # workflow builds, not from a running node: the method name is the registration
+          # key in bcos-rpc, so its absence means every preflight would exit 2.
+          if grep -rq '"debug_getRawHeader"' bcos-rpc/bcos-rpc; then
+            echo 'enabled=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'enabled=false' >> "$GITHUB_OUTPUT"
+            echo "::notice title=kona parity gate SKIPPED::this tree does not serve" \
+              "debug_getRawHeader/debug_dbGet (FISCO-BCOS#5649); the gate's preflight would" \
+              "exit 2 on every block, so no kona_parity leg runs until that PR is merged."
+          fi
           # Same test as run.sh's OVERLAY=off refusal (tools/.ci/kona-parity/run.sh): the
           # harness honours OVERLAY once its setup_c2.sh reads the variable.
           if grep -qw OVERLAY .ci-op-e2e-tests/tools/op-e2e/setup_c2.sh; then
@@ -728,8 +747,11 @@ jobs:
   kona_parity:
     name: kona parity gate (overlay=${{ matrix.overlay }})
     needs: [l2_unit_suites, kona_parity_legs]
-    if: needs.l2_unit_suites.result == 'success' && needs.kona_parity_legs.result == 'success'
-    runs-on: ubuntu-24.04
+    if: >-
+      needs.l2_unit_suites.result == 'success' &&
+      needs.kona_parity_legs.result == 'success' &&
+      needs.kona_parity_legs.outputs.enabled == 'true'
+    runs-on: ubuntu-26.04
     timeout-minutes: 90
     permissions:
       contents: read
@@ -746,7 +768,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: FISCO-BCOS/op-stack-e2e-tests
-          ref: 0451c8bf3601c502a36be4633c0e2f4cc38e9c9b
+          ref: 378774e100dd4658aa79e150c545f73812acdca5
           path: .ci-op-e2e-tests
 
       - name: Assert the harness ref matches kona-parity pins.json

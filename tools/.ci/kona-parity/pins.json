@@ -18,7 +18,7 @@
     "commit": "da197e45ed44b9fca258b3b0d0709e8dfca1c7cd",
     "describe": "v1.19.2",
     "note": "Built from the OP monorepo commit the harness pins; op-batcher and op-deployer come from the same commit.",
-    "verified_from": "https://github.com/FISCO-BCOS/op-stack-e2e-tests/blob/0451c8bf3601c502a36be4633c0e2f4cc38e9c9b/tools/op-e2e/versions.json"
+    "verified_from": "https://github.com/FISCO-BCOS/op-stack-e2e-tests/blob/378774e100dd4658aa79e150c545f73812acdca5/tools/op-e2e/versions.json"
   },
   "op_reth": {
     "release": "op-reth/v2.4.4",
@@ -27,8 +27,8 @@
     "verified_from": "https://github.com/ethereum-optimism/optimism/releases/tag/op-reth/v2.4.4"
   },
   "op_stack_e2e_tests": {
-    "commit": "0451c8bf3601c502a36be4633c0e2f4cc38e9c9b",
-    "verified_from": ".github/workflows/workflow.yml (c2_e2e job, harness checkout step)"
+    "commit": "378774e100dd4658aa79e150c545f73812acdca5",
+    "verified_from": ".github/workflows/workflow.yml (kona_parity_legs / kona_parity harness checkout steps) and c2-e2e.yml (kona_parity_negative_control)"
   },
   "cast": {
     "min_version": "1.7.1",

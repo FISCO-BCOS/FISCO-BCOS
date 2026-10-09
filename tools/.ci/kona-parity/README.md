@@ -71,16 +71,21 @@ a replay interrupted partway through the range, or a verdict file carrying block
 
 ## CI jobs
 
-- `kona_parity` in `.github/workflows/workflow.yml` runs on every PR. Its preflight needs
-  FISCO's `debug_getRawHeader` and `debug_dbGet` (#5649), so that PR merges first.
+- `kona_parity` in `.github/workflows/workflow.yml` runs on every PR whose tree serves
+  `debug_getRawHeader` and `debug_dbGet` (#5649): `kona_parity_legs` greps `bcos-rpc/bcos-rpc`
+  for the `"debug_getRawHeader"` registration key and, when it is absent, prints a
+  `kona parity gate SKIPPED` notice and leaves the matrix empty instead of letting the
+  preflight exit 2 on every block. The decision reads the source the workflow builds, so a
+  harness pin cannot switch the gate off; once #5649 is in the tree the gate is unconditional.
 - The `overlay=off` matrix leg is the one place where "skip" is not a failure, and the decision
   is made outside `run.sh`: the `kona_parity_legs` job greps the pinned harness's
   `tools/op-e2e/setup_c2.sh` for `OVERLAY` and lists the `off` leg only when the harness reads
   it (ticket 12, genesis overlay switch in FISCO-BCOS/op-stack-e2e-tests); otherwise it prints
   a `kona parity gate (overlay=off) SKIPPED` notice and the matrix holds `on` alone. `run.sh`
   makes the same test and exits 2 for `OVERLAY=off` against such a harness, so nothing below
-  the workflow can turn that skip into a pass. The `overlay=on` leg and the preflight keep
-  `SKIP == exit 2 == failure`; a failing `kona_parity_legs` job leaves the workflow red.
+  the workflow can turn that skip into a pass. With the debug methods present, the
+  `overlay=on` leg and the preflight keep `SKIP == exit 2 == failure`; a failing
+  `kona_parity_legs` job leaves the workflow red.
 - `kona_parity_negative_control` in `c2-e2e.yml` (nightly) builds the fee-vault mutant and
   requires exit 1.
 - Both jobs install Foundry 1.2.3 for `forge` (the op-deployer build asserts the monorepo's
