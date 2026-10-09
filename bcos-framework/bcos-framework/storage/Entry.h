@@ -263,6 +263,16 @@ public:
     std::type_index typeIndex() const noexcept { return typeid(T); }
 };
 
+class Entry;
+
+// Constraint for Entry's greedy constructor.  Spelled as a concept with the
+// class as a template parameter so member lookup of `set` is dependent and
+// deferred to instantiation (when Entry is complete): an in-class
+// requires-clause naming `Entry::set` directly makes clang reject the member
+// access into the still-incomplete class.
+template <typename T, typename E>
+concept EntrySettable = requires(E& self, T&& value) { self.set(std::forward<T>(value)); };
+
 class Entry
 {
 public:
@@ -280,7 +290,6 @@ public:
     using Holder = pro::proxy<AnyEntryFacade>;
 
     Entry() = default;
-    explicit Entry(auto input) { set(std::move(input)); }
 
     // m_buffer is the sole member: defaulted special members preserve the
     // held model (typed entries stay typed).  Move is noexcept thanks to
@@ -358,6 +367,17 @@ public:
         m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(
             SharedBufferModel<T, ENTRY_MODIFIED>{std::move(value)});
     }
+
+    // Constrained to the types set() accepts: unconstrained, this constructor
+    // makes is_constructible_v<Entry, T> true for every T, which sends
+    // libstdc++ 16's std::optional<Entry> into a self-dependent constraint
+    // ("satisfaction of atomic constraint ... depends on itself").  Takes the
+    // argument BY VALUE (like the original Entry(auto)) so an lvalue argument
+    // is copied, not moved-from; the Entry exclusion keeps the copy/move
+    // constructors winning for Entry arguments.
+    template <typename T>
+        requires(!std::same_as<std::remove_cvref_t<T>, Entry> && EntrySettable<T, Entry>)
+    explicit Entry(T input) { set(std::move(input)); }
 
     // ── Typed storage API ──────────────────────────────────────────
     // Typed access never decodes: getTyped<T>() returns a pointer only if

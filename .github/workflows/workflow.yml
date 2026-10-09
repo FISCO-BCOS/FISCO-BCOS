@@ -19,7 +19,9 @@ concurrency:
 jobs:
   build:
     name: Build
-    runs-on: ${{ matrix.os }}
+    # ubuntu-26.04-static is a build CONFIGURATION, not a runner label: it runs
+    # on the ubuntu-26.04 runner with -DBUILD_STATIC=ON (see the matrix comment)
+    runs-on: ${{ matrix.os == 'ubuntu-26.04-static' && 'ubuntu-26.04' || matrix.os }}
     permissions:
       contents: write
     strategy:
@@ -27,9 +29,15 @@ jobs:
       matrix:
         os:
           [
-            ubuntu-24.04,
-            ubuntu-24.04-arm,
-            macos-15,
+            ubuntu-26.04,
+            ubuntu-26.04-arm,
+            # static leg: same gcc-16 toolchain as ubuntu-26.04 but configured with
+            # -DBUILD_STATIC=ON (see "Compute build flags"), so the fully-static
+            # link path used for the release assets is gated by PR CI with the
+            # full unit-test + integration suites instead of being exercised only
+            # on release events
+            ubuntu-26.04-static,
+            macos-26,
             windows-2025,
           ]
     steps:
@@ -58,22 +66,22 @@ jobs:
         with:
           path: |
             ${{ github.workspace }}/build/vcpkg_installed
-          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-cache-key-v4
+          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-${{ matrix.os }}-cache-key-v4
       - name: Set up Node.js 20
         if: matrix.os != 'windows-2025'
         uses: actions/setup-node@v4
         with:
           node-version: 20
       - name: Install linux dependencies
-        if: matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm'
+        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-arm' || matrix.os == 'ubuntu-26.04-static'
         run: |
           sudo apt update
           sudo apt install -y --no-install-recommends \
               lcov wget python3-dev python3-pip git curl zip unzip tar \
               clang make build-essential libssl-dev zlib1g-dev ca-certificates mold autoconf \
-              flex bison patch pkg-config uuid-runtime automake gcc-14 g++-14
+              flex bison patch pkg-config uuid-runtime automake gcc-16 g++-16
       - name: Install macOS dependencies
-        if: matrix.os == 'macos-15'
+        if: matrix.os == 'macos-26'
         run: brew install libomp autoconf automake libtool
       - name: Set up MSVC environment
         # The windows-2025 image ships Visual Studio 18 (2026), which the pinned
@@ -94,25 +102,28 @@ jobs:
         if: matrix.os != 'windows-2025'
         shell: bash
         run: |
-          if [[ "${GITHUB_EVENT_NAME}" == "release" ]]; then
-            echo "EXTRA_FLAGS=-DSTATIC_BUILD=ON" >> "$GITHUB_ENV"
+          # The ubuntu-26.04-static leg always builds statically so the -static
+          # link path of the release binaries is gated on every PR, not only
+          # exercised on release events
+          if [[ "${GITHUB_EVENT_NAME}" == "release" || "${{ matrix.os }}" == "ubuntu-26.04-static" ]]; then
+            echo "EXTRA_FLAGS=-DBUILD_STATIC=ON" >> "$GITHUB_ENV"
           else
             echo "EXTRA_FLAGS=" >> "$GITHUB_ENV"
           fi
       - name: Configure for linux
-        if: matrix.os == 'ubuntu-24.04'
+        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-static'
         run: |
           mkdir -p build
           cd build
-          CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ${EXTRA_FLAGS} ..
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ${EXTRA_FLAGS} ..
       - name: Configure for linux arm
-        if: matrix.os == 'ubuntu-24.04-arm'
+        if: matrix.os == 'ubuntu-26.04-arm'
         run: |
           mkdir -p build
           cd build
-          CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=arm64-linux-release ${EXTRA_FLAGS} ..
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=arm64-linux-release ${EXTRA_FLAGS} ..
       - name: Configure for macOS
-        if: matrix.os == 'macos-15'
+        if: matrix.os == 'macos-26'
         run: |
           brew unlink cmake 2>/dev/null || true
           cmake --version
@@ -252,14 +263,14 @@ jobs:
           fi
           echo "::notice::EEST pass rate ${PASS_RATE}% meets the 100% threshold"
       - name: Upload fisco-bcos binary artifact
-        if: matrix.os == 'ubuntu-24.04'
+        if: matrix.os == 'ubuntu-26.04'
         uses: actions/upload-artifact@v4
         with:
-          name: fisco-bcos-ubuntu-24-x86_64
+          name: fisco-bcos-ubuntu-26-x86_64
           path: build/fisco-bcos-air/fisco-bcos
           retention-days: 30
       # - name: Upload coverage report
-      #   if: matrix.os == 'ubuntu-24.04'
+      #   if: matrix.os == 'ubuntu-26.04'
       #   uses: actions/upload-artifact@v4
       #   with:
       #     name: coverage-report
@@ -275,7 +286,10 @@ jobs:
         with:
           collection: https://raw.githubusercontent.com/FISCO-BCOS/FISCOBCOS-RPC-API/main/fiscobcos.rpcapi.collection.json
       - name: Integration test - Air
-        if: matrix.os != 'windows-2025' && matrix.os != 'macos-15'
+        # The ubuntu-26.04-static leg included here runs the suite against the
+        # fully-static binary, so CI tests exactly the link configuration
+        # shipped as release assets
+        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-arm' || matrix.os == 'ubuntu-26.04-static'
         run: |
           cd tools
           bash .ci/ci_check_air.sh ${{ github.base_ref }} "true"
@@ -287,9 +301,9 @@ jobs:
         # downloaded by the "Download EEST fixtures" step above. Linux only:
         # the node fails to bring up the RPC server on the macOS runners (the
         # harness discards the node's stderr, so the root cause is not yet
-        # diagnosed; see the air test which likewise excludes macos-15). macOS
+        # diagnosed; see the air test which likewise excludes macos-26). macOS
         # is excluded until the node startup issue is fixed.
-        if: matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm'
+        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-arm' || matrix.os == 'ubuntu-26.04-static'
         run: |
           # eth-account (tx signing) + requests (RPC). Handle PEP 668.
           python3 -m pip install --quiet eth-account requests 2>/dev/null || \
@@ -300,7 +314,7 @@ jobs:
         # Built-in single-node consensus mode ([consensus] enable_single_node_consensus):
         # builds a single-node AIR chain, patches config.ini to enable the mode (no
         # pbft/sealer/txpool), and drives eth_sendRawTransaction -> receipt / block reads.
-        if: matrix.os == 'ubuntu-24.04'
+        if: matrix.os == 'ubuntu-26.04' || matrix.os == 'ubuntu-26.04-static'
         run: |
           # eth-account (tx signing) + requests (RPC). Handle PEP 668.
           python3 -m pip install --quiet eth-account requests 2>/dev/null || \
@@ -337,21 +351,21 @@ jobs:
           echo "=== After cleanup ==="
           du -sh build/vcpkg_installed 2>/dev/null || true
       - name: Set packaging variables
-        if: github.event_name == 'release' && matrix.os != 'windows-2025'
+        if: github.event_name == 'release' && matrix.os != 'windows-2025' && matrix.os != 'ubuntu-26.04-static'
         id: pkgvars
         shell: bash
         run: |
           set -euo pipefail
           case "${{ matrix.os }}" in
-            ubuntu-24.04)
+            ubuntu-26.04)
               PKG_OS=linux
               PKG_ARCH=x86_64
               ;;
-            ubuntu-24.04-arm)
+            ubuntu-26.04-arm)
               PKG_OS=linux
               PKG_ARCH=aarch64
               ;;
-            macos-15)
+            macos-26)
               PKG_OS=macOS
               PKG_ARCH=arm
               ;;
@@ -367,7 +381,7 @@ jobs:
           # also expose as step outputs for later reference
           echo "pkg_name=$PKG_NAME" >> $GITHUB_OUTPUT
       - name: Create release tarball
-        if: github.event_name == 'release' && matrix.os != 'windows-2025'
+        if: github.event_name == 'release' && matrix.os != 'windows-2025' && matrix.os != 'ubuntu-26.04-static'
         shell: bash
         run: |
           set -euo pipefail
@@ -380,7 +394,7 @@ jobs:
           # Create tar.gz in repo root with only the binary inside (no extra folders)
           tar -C "$(dirname "$BIN_PATH")" -czf "${PKG_NAME}" "$(basename "$BIN_PATH")"
       - name: Upload assets to GitHub Release
-        if: github.event_name == 'release' && matrix.os != 'windows-2025'
+        if: github.event_name == 'release' && matrix.os != 'windows-2025' && matrix.os != 'ubuntu-26.04-static'
         uses: softprops/action-gh-release@v2
         with:
           files: |
@@ -388,7 +402,7 @@ jobs:
 
   coverage:
     name: Coverage
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     env:
       # Surfaced as an env var so the upload step can be skipped when no token is
       # present. Fork PRs (pull_request event) receive NO secrets, so a tokenless
@@ -437,7 +451,7 @@ jobs:
           sudo apt install -y --no-install-recommends \
               lcov wget python3-dev python3-pip git curl zip unzip tar \
               clang make build-essential libssl-dev zlib1g-dev ca-certificates mold autoconf \
-              flex bison patch pkg-config uuid-runtime automake gcc-14 g++-14
+              flex bison patch pkg-config uuid-runtime automake gcc-16 g++-16
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-02-25
@@ -446,7 +460,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          CC=gcc-14 CXX=g++-14 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+          CC=gcc-16 CXX=g++-16 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
       - name: Build
         run: |
           cd build
@@ -483,11 +497,11 @@ jobs:
       - name: Generate coverage report
         run: |
           cd build
-          # gcda was produced by gcc-14, so geninfo must use the matching gcov-14
+          # gcda was produced by gcc-16, so geninfo must use the matching gcov-16
           # (otherwise: "Incompatible GCC/GCOV version"). version/unused are tolerated
           # as a fallback across lcov point releases.
           IGN=inconsistent,source,gcov,mismatch,version,negative,empty,unused
-          lcov --gcov-tool gcov-14 --capture --directory . \
+          lcov --gcov-tool gcov-16 --capture --directory . \
             --output-file coverage.info.in --ignore-errors "$IGN"
           lcov --remove coverage.info.in \
             '/usr*' '*vcpkg_installed*' '*boost/*' '*test*' '*build*' '*deps*' \
@@ -562,7 +576,7 @@ jobs:
   # itself when the A8 devnet is absent).
   l2_unit_suites:
     name: L2 unit suites
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     steps:
@@ -589,14 +603,14 @@ jobs:
         with:
           path: |
             ${{ github.workspace }}/build/vcpkg_installed
-          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-cache-key-v4
+          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-cache-key-v4
       - name: Install linux dependencies
         run: |
           sudo apt update
           sudo apt install -y --no-install-recommends \
               wget python3-dev python3-pip git curl zip unzip tar \
               clang make build-essential libssl-dev zlib1g-dev ca-certificates mold autoconf \
-              flex bison patch pkg-config uuid-runtime automake gcc-14 g++-14
+              flex bison patch pkg-config uuid-runtime automake gcc-16 g++-16
       - name: Install Foundry
         # WITH_L2_CONTRACTS=ON does find_program(FORGE forge REQUIRED) at
         # configure time, so forge must be on PATH before cmake runs.
@@ -610,7 +624,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_L2_CONTRACTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_L2_CONTRACTS=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
       - name: Build
         run: |
           cd build
@@ -727,7 +741,7 @@ jobs:
     name: C2 deposit/withdraw e2e
     needs: [l2_unit_suites]
     if: needs.l2_unit_suites.result == 'success'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 45
     permissions:
       contents: read
