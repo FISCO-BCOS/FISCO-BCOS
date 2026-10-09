@@ -98,6 +98,15 @@ public:
         return forkAt(internalTimestampMs) >= bcos::ledger::OpFork::Karst;
     }
 
+    /// Isthmus baseline: the OP lane's Engine-API build/import surface only serves
+    /// Isthmus+ headers (the shape canonicalBlockHash recognizes OP blocks by). The
+    /// OP-lane Isthmus fallback in resolveOpFork makes unset-isthmus_time chains Isthmus
+    /// everywhere; this is false only on an explicit pre-Isthmus ladder.
+    [[nodiscard]] bool isIsthmusActive(int64_t internalTimestampMs) const noexcept
+    {
+        return forkAt(internalTimestampMs) >= bcos::ledger::OpFork::Isthmus;
+    }
+
     /// Canyon semantics for a block whose internal (millisecond) timestamp is
     /// @p internalTimestampMs: the pre-Holocene 1559 denominator switches to the Canyon
     /// value here (op-geth IsOptimismCanyon), which the engine's base-fee clock needs.

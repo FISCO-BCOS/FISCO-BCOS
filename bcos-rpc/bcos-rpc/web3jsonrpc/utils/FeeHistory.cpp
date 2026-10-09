@@ -102,11 +102,14 @@ u256 bcos::rpc::nextOpBaseFee(
     // engine/OpEip1559Params.h — effectiveOpEip1559), which is
     // exactly the pair those chains have always priced with.
     auto const params = engine::effectiveOpEip1559(eip1559);
+    // The prediction's child is the NEXT block — its exact timestamp is unknown here, so
+    // the Canyon arm keys on the parent's header shape (Canyon+ parents carry a
+    // withdrawalsRoot). A one-boundary-block approximation the engine and the sync
+    // validator do not share: they resolve the child through the fork schedule. The
+    // formula itself is the shared helper (OpBaseFee.h).
     auto const childIsCanyon = parent.withdrawalsRoot().has_value();
-    return engine::calcOpBaseFeeFromFields(parent.gasLimit(), parent.gasUsed(),
-        parent.baseFee().value_or(0), parent.blobGasUsed(), {}, /*parentIsHolocene=*/false,
-        /*parentIsJovian=*/false,
-        childIsCanyon ? params.denominatorCanyon : params.denominator, params.elasticity);
+    return engine::calcOpBaseFeePreHolocene(parent.gasLimit(), parent.gasUsed(),
+        parent.baseFee().value_or(0), childIsCanyon, params);
 }
 
 task::Task<Json::Value> bcos::rpc::buildOpFeeHistory(ledger::LedgerInterface& ledger,

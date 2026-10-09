@@ -28,7 +28,6 @@
 #include <bcos-framework/engine/EngineService.h>
 #include <bcos-framework/engine/Errors.h>
 #include <bcos-framework/engine/OpBaseFee.h>
-#include <cstdio>
 #include <bcos-framework/engine/OpEip1559Params.h>
 #include <bcos-framework/engine/Types.h>
 
@@ -224,13 +223,14 @@ public:
 private:
     /// Fork-aware OP base-fee pricing (op-geth CalcBaseFee, eip1559.go:64-110): a Holocene+
     /// parent prices from its own extraData; a pre-Holocene parent prices from the chain's
-    /// declared 1559 constants (the Canyon denominator from Canyon on) — op-geth
-    /// DecodeOptimismExtraData's config-constants branch. Calling the Holocene+-only
-    /// calcOpBaseFee on a pre-Holocene parent throws on its empty extraData, turning a valid
-    /// pre-Holocene import/build into an internal error (hit by the Regolith-window e2e
-    /// suites replaying from genesis).
-    bcos::u256 calcOpBaseFeeForParent(
-        const bcos::protocol::BlockHeader& parentHeader, int64_t parentTimestampMs) const
+    /// declared 1559 constants — op-geth DecodeOptimismExtraData's config-constants branch,
+    /// with the denominator keyed on the CHILD block's Canyon activation (op-geth
+    /// BaseFeeChangeDenominator(header.Time), params/config.go:1349-1359). Calling the
+    /// Holocene+-only calcOpBaseFee on a pre-Holocene parent throws on its empty extraData,
+    /// turning a valid pre-Holocene import/build into an internal error (hit by the
+    /// Regolith-window e2e suites replaying from genesis).
+    bcos::u256 calcOpBaseFeeForParent(const bcos::protocol::BlockHeader& parentHeader,
+        int64_t parentTimestampMs, int64_t childTimestampMs) const
     {
         if (m_scheduler.isHoloceneActive(parentTimestampMs))
         {
@@ -242,14 +242,9 @@ private:
         {
             throwOpBaseFeeError("OP parent header is missing baseFee");
         }
-        auto const params = effectiveOpEip1559(m_eip1559);
-        auto const denominator = m_scheduler.isCanyonActive(parentTimestampMs) ?
-                                     params.denominatorCanyon :
-                                     params.denominator;
-        return calcOpBaseFeeFromFields(parentHeader.gasLimit(), parentHeader.gasUsed(),
-            *parentHeader.baseFee(), parentHeader.blobGasUsed(), /*parentExtraData=*/{},
-            /*parentIsHolocene=*/false, /*parentIsJovian=*/false, denominator,
-            params.elasticity);
+        return calcOpBaseFeePreHolocene(parentHeader.gasLimit(), parentHeader.gasUsed(),
+            *parentHeader.baseFee(), m_scheduler.isCanyonActive(childTimestampMs),
+            effectiveOpEip1559(m_eip1559));
     }
 
     static PayloadStatus makeStatus(PayloadValidationStatus status,
@@ -267,6 +262,13 @@ private:
         {
             return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
                 std::string("OP block execution rejected the payload: ") + error.errorMessage());
+        }
+        if (boost::get_error_info<bcos::engine::OpSiblingReorgUnsupported>(error) != nullptr)
+        {
+            // One-level tip reorg is a deferred scheduler capability (ReorgUndo
+            // follow-up); the Engine-API answer is SYNCING so the CL retries after
+            // re-parenting — never a -32603 internal fault.
+            return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
         }
         BOOST_THROW_EXCEPTION(
             OpExecutionInternalError{} << bcos::errinfo_comment{

@@ -100,6 +100,18 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
                 .payloadId = std::nullopt,
             };
         }
+        // The OP lane's build path is Isthmus-baseline: canonicalBlockHash recognizes
+        // OP blocks by the Isthmus+ header field set, and rebuildOpEthHeader stamps the
+        // fork fields on that assumption. A pre-Isthmus child would die deep in the
+        // build with an opaque EmptyBlockHeaderHash — reject here as a clean INVALID.
+        if (!m_scheduler.isIsthmusActive(payloadAttributes->timestamp))
+        {
+            co_return ForkchoiceUpdatedResult{
+                .payloadStatus = makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+                    std::string("OP payload building requires an Isthmus+ block time "
+                                "(the lane's Engine-API baseline)")),
+                .payloadId = std::nullopt};
+        }
         if (auto validationError = engine_common::op::requireL1AttributesDeposit(
                 *payloadAttributes, m_allowSynthesizedL1Attributes);
             validationError.has_value())
@@ -184,6 +196,11 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::updateForkc
             forkchoiceState.safeBlockHash, canonicalSafeHash),
         .finalizedCanonical = engine_common::forkchoiceHashIsCanonical(
             forkchoiceState.finalizedBlockHash, canonicalFinalizedHash),
+        // A jump to a KNOWN canonical head is legal on the OP lane (§4.3: the CL may
+        // re-drive an FCU across already-committed blocks after a reorg or a resumed
+        // session) — the tracker still rejects non-canonical jumps (headCanonical gates
+        // the relaxation) and non-jump shape errors.
+        .allowCanonicalHeadJump = true,
     };
     if (m_tracker.applyForkchoice(resolved) == ForkchoiceApplyResult::Swallowed)
     {
@@ -262,7 +279,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::buildOpPayl
         // the Holocene extraData decode and the Jovian DA-footprint branch on parent.Time
         // (consensus/misc/eip1559/eip1559.go:64-110).
         parentTimestampMs = parentHeader->timestamp();
-        baseFee = calcOpBaseFeeForParent(*parentHeader, parentTimestampMs);
+        baseFee = calcOpBaseFeeForParent(
+            *parentHeader, parentTimestampMs, payloadAttributes.timestamp);
     }
 
     requireDelegate();
@@ -821,7 +839,8 @@ OpEngineService<MemPoolType, GlobalStateStorageType, SchedulerType>::runOpNewPay
     }
     {
         // PARENT time (op-geth eip1559.go:64-110 keys CalcBaseFee on parent.Time).
-        auto expectedBaseFee = calcOpBaseFeeForParent(*parentHeader, parentHeader->timestamp());
+        auto expectedBaseFee =
+            calcOpBaseFeeForParent(*parentHeader, parentHeader->timestamp(), payload.timestamp);
         if (payload.baseFeePerGas != expectedBaseFee)
         {
             co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,

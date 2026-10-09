@@ -599,9 +599,13 @@ private:
                     "is not in this scheduler slice",
                     number);
                 OP_SCHEDULER_LOG(WARNING) << message;
-                co_return {
-                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
-                    nullptr, false};
+                // Tagged: the Engine-API router answers SYNCING for this class (the CL
+                // retries after re-parenting), never -32603 — the code alone
+                // (InvalidBlockNumber) is shared with real corruption faults.
+                auto siblingError = BCOS_ERROR_UNIQUE_PTR(
+                    scheduler::SchedulerError::InvalidBlockNumber, message);
+                *siblingError << bcos::engine::OpSiblingReorgUnsupported{true};
+                co_return {std::move(siblingError), nullptr, false};
             }
             if (lastExecuted != -1 && number - lastExecuted != 1 && !probeAtPending)
             {
@@ -1092,9 +1096,28 @@ private:
             if (incrementalRoot)
             {
                 bcos::scheduler_v1::ViewNodeStorage<ViewType> nodeStorage(view);
-                auto parentBlock = co_await ledger::getBlockData(
-                    view, header.number() - 1, ledger::HEADER, *m_blockFactory);
-                auto const parentRoot = parentBlock->blockHeader()->stateRoot();
+                // getBlockData throws NotFoundBlockHeader for a number with no committed
+                // header — translate it to the fail-closed storage fault: the incremental
+                // build cannot run without the parent's state root.
+                bcos::protocol::BlockHeader::Ptr parentHeader;
+                try
+                {
+                    auto parentBlock = co_await ledger::getBlockData(
+                        view, header.number() - 1, ledger::HEADER, *m_blockFactory);
+                    parentHeader = parentBlock ? parentBlock->blockHeader() : nullptr;
+                }
+                catch (bcos::ledger::NotFoundBlockHeader const&)
+                {
+                    parentHeader = nullptr;
+                }
+                if (!parentHeader)
+                {
+                    throw bcos::evm::engine::OpStorageError(fmt::format(
+                        "OpScheduler: parent block header is missing from storage "
+                        "(block {}) — the incremental MPT build needs its state root",
+                        header.number() - 1));
+                }
+                auto const parentRoot = parentHeader->stateRoot();
                 try
                 {
                     auto delta = co_await ledger::mpt::buildAndCollect(nodeStorage, parentRoot,
