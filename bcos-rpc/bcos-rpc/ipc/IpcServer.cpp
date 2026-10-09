@@ -143,7 +143,7 @@ void IpcServer::start()
         std::filesystem::create_directories(parent, fsError);
     }
     ::unlink(m_path.c_str());  // a stale file from a crashed node would make bind fail
-    m_acceptor = std::make_unique<boost::asio::local::stream_protocol::acceptor>(
+    m_acceptor = std::make_shared<boost::asio::local::stream_protocol::acceptor>(
         m_io, boost::asio::local::stream_protocol::endpoint(m_path));
     m_running = true;
     accept();
@@ -152,25 +152,30 @@ void IpcServer::start()
 
 void IpcServer::stop()
 {
-    if (!m_running)
+    if (!m_running.exchange(false))
     {
         return;
     }
-    m_running = false;
-    boost::system::error_code ignored;
-    if (m_acceptor)
-    {
-        m_acceptor->close(ignored);
-    }
+    // the acceptor and the sessions live on m_io: close them there, never from this thread.
+    // The lambdas own what they close (acceptor moved out, sessions copied), so stop() is safe
+    // from the destructor too and the accept handler's re-arm cannot race the close.
+    auto acceptor = std::move(m_acceptor);
     std::set<IpcSession::Ptr> sessions;
     {
         std::lock_guard<std::mutex> lock(m_sessionsMutex);
         sessions.swap(m_sessions);
     }
-    for (auto const& session : sessions)
-    {
-        boost::asio::post(m_io, [session]() { session->close(); });
-    }
+    boost::asio::post(m_io, [acceptor, sessions]() {
+        boost::system::error_code ignored;
+        if (acceptor)
+        {
+            acceptor->close(ignored);
+        }
+        for (auto const& session : sessions)
+        {
+            session->close();
+        }
+    });
     ::unlink(m_path.c_str());
     RPC_LOG(INFO) << LOG_DESC("IpcServerStopped") << LOG_KV("path", m_path);
 }
@@ -178,17 +183,26 @@ void IpcServer::stop()
 void IpcServer::accept()
 {
     auto self = shared_from_this();
-    m_acceptor->async_accept([self](boost::system::error_code const& _ec,
-                                 boost::asio::local::stream_protocol::socket _socket) {
+    auto acceptor = m_acceptor;  // keeps the acceptor alive even if stop() moves it out meanwhile
+    if (!acceptor)
+    {
+        return;
+    }
+    acceptor->async_accept([self, acceptor](boost::system::error_code const& _ec,
+                               boost::asio::local::stream_protocol::socket _socket) {
         if (_ec)
         {
-            if (self->m_running)
+            if (self->m_running && _ec != boost::asio::error::operation_aborted)
             {
                 RPC_LOG(WARNING) << LOG_BADGE("IpcServer") << LOG_DESC("accept failed")
                                  << LOG_KV("message", _ec.message());
                 self->accept();
             }
             return;
+        }
+        if (!self->m_running)
+        {
+            return;  // stopped between accept and this handler: drop the socket
         }
         std::weak_ptr<IpcServer> weakServer = self;
         auto session = std::make_shared<IpcSession>(
@@ -200,6 +214,10 @@ void IpcServer::accept()
             });
         {
             std::lock_guard<std::mutex> lock(self->m_sessionsMutex);
+            if (!self->m_running)
+            {
+                return;  // stop() already swapped the session set out; this one closes with us
+            }
             self->m_sessions.insert(session);
         }
         session->start();

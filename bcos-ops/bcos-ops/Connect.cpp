@@ -99,7 +99,8 @@ Connection connect(ConnectOptions const& _options)
     {
         try
         {
-            auto connection = makeIpcRpcCall(node.ipcPath(), _options.requestTimeoutMs);
+            auto connection = makeIpcRpcCall(
+                node.ipcPath(), _options.connectTimeoutMs, _options.requestTimeoutMs);
             connection.group = node.groupId;
             connection.nodeDir = node;
             return connection;

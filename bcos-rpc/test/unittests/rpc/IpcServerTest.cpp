@@ -179,6 +179,23 @@ BOOST_AUTO_TEST_CASE(stopRemovesSocketFile)
     BOOST_CHECK(!std::filesystem::exists(path));
 }
 
+BOOST_AUTO_TEST_CASE(overlongPathFailsToStartAndStaysStopped)
+{
+    // sun_path holds 104 bytes on macOS (108 on Linux): a node dir deep enough makes bind
+    // impossible. start() must throw (Rpc::start logs IpcServerStartFailed and drops the server)
+    // and leave the server in the not-running state, so stop()/the destructor are no-ops.
+    auto path = "/tmp/" + std::string(120, 'p') + ".sock";
+    boost::asio::io_context io;
+    auto server = std::make_shared<IpcServer>(io, path, [](std::string_view, auto&& _sender) {
+        _sender(bcos::bytes{'{', '}'}, boost::beast::http::status::ok);
+    });
+    BOOST_CHECK_THROW(server->start(), std::exception);
+    BOOST_CHECK(!server->running());
+    BOOST_CHECK(!std::filesystem::exists(path));
+    server->stop();
+    BOOST_CHECK(!server->running());
+}
+
 BOOST_AUTO_TEST_CASE(staleFileIsReplacedOnStart)
 {
     auto path = shortSocketPath("stale");

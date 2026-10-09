@@ -23,8 +23,10 @@
 
 namespace bcos::ops
 {
-/// true when the file exists and a connection succeeds within _timeoutMs
-bool ipcReachable(std::string const& _path, int _timeoutMs);
 /// one blocking connection reused for every call; throws OpsError{1} when it cannot connect
-Connection makeIpcRpcCall(std::string const& _path, int _timeoutMs = 15000);
+/// within _connectTimeoutMs. Each call waits _requestTimeoutMs for its reply; after a timeout
+/// the connection is dead (a late reply must never be handed to the next request) and every
+/// later call throws "connection lost".
+Connection makeIpcRpcCall(
+    std::string const& _path, int _connectTimeoutMs = 3000, int _requestTimeoutMs = 15000);
 }  // namespace bcos::ops

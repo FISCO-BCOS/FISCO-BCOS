@@ -91,10 +91,19 @@ void registerAdminMethods(JsonRpcInterface& _rpc)
         }
         auto levelText = _params[0].asString();
         std::optional<std::string> module;
-        if (_params.size() > 1 && _params[1].isString() && !_params[1].asString().empty())
+        if (_params.size() > 1)
         {
+            // a present-but-wrong second argument must not silently become "the global level"
+            if (!_params[1].isString() || _params[1].asString().empty())
+            {
+                invalidParams(_respFunc, "admin_setLogLevel: module must be a non-empty string");
+                return;
+            }
             module = _params[1].asString();
         }
+        auto lowerLevel = levelText;
+        std::transform(lowerLevel.begin(), lowerLevel.end(), lowerLevel.begin(),
+            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         if (module)
         {
             if (!parseLogModule(*module))
@@ -104,7 +113,7 @@ void registerAdminMethods(JsonRpcInterface& _rpc)
                                              "GATEWAY FRONT)");
                 return;
             }
-            if (levelText == "inherit")
+            if (lowerLevel == "inherit")
             {
                 resetModuleLogLevel(*module);
             }

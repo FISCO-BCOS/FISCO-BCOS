@@ -123,6 +123,35 @@ BOOST_AUTO_TEST_CASE(invalidLevelOrModuleIsInvalidParams)
     auto noParams =
         viaIpc(*jsonRpc, R"({"jsonrpc":"2.0","id":9,"method":"admin_setLogLevel","params":[]})");
     BOOST_CHECK_EQUAL(noParams["error"]["code"].asInt(), -32602);
+    // a present-but-wrong module argument is refused; it must not fall through to "set the
+    // global level"
+    setFileLogLevel(LogLevel::INFO);
+    auto numberModule = viaIpc(*jsonRpc,
+        R"({"jsonrpc":"2.0","id":10,"method":"admin_setLogLevel","params":["debug",123]})");
+    BOOST_CHECK_EQUAL(numberModule["error"]["code"].asInt(), -32602);
+    BOOST_CHECK(c_fileLogLevel == LogLevel::INFO);
+    BOOST_CHECK(!moduleLogEnabled(LogModule::TXPOOL, LogLevel::DEBUG));
+    auto emptyModule = viaIpc(*jsonRpc,
+        R"({"jsonrpc":"2.0","id":11,"method":"admin_setLogLevel","params":["debug",""]})");
+    BOOST_CHECK_EQUAL(emptyModule["error"]["code"].asInt(), -32602);
+    BOOST_CHECK(c_fileLogLevel == LogLevel::INFO);
+}
+
+BOOST_AUTO_TEST_CASE(inheritIsCaseInsensitive)
+{
+    LevelGuard guard;
+    setFileLogLevel(LogLevel::INFO);
+    auto rpc = factory->buildLocalRpc(groupInfo, nodeService);
+    auto jsonRpc = rpc->jsonRpcImpl();
+    registerAdminMethods(*jsonRpc);
+    viaIpc(*jsonRpc,
+        R"({"jsonrpc":"2.0","id":12,"method":"admin_setLogLevel","params":["DEBUG","txpool"]})");
+    BOOST_CHECK(moduleLogEnabled(LogModule::TXPOOL, LogLevel::DEBUG));
+    auto inherit = viaIpc(*jsonRpc,
+        R"({"jsonrpc":"2.0","id":13,"method":"admin_setLogLevel","params":["INHERIT","TXPOOL"]})");
+    BOOST_CHECK(!inherit.isMember("error") || inherit["error"].isNull());
+    BOOST_CHECK_EQUAL(inherit["result"]["modules"].size(), 0U);
+    BOOST_CHECK(!moduleLogEnabled(LogModule::TXPOOL, LogLevel::DEBUG));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
