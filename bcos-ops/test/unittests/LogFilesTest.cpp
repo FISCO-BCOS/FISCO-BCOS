@@ -98,5 +98,31 @@ BOOST_AUTO_TEST_CASE(durations)
     BOOST_CHECK_THROW(parseDurationMs(""), OpsError);
 }
 
+BOOST_AUTO_TEST_CASE(lastEventOfEachKeepsOnePerNameAndChannel)
+{
+    TempLogDir temp;
+    temp.touch("log_2026101005.00.log",
+        "info|2026-10-10 05:00:01.000000|x|[CONSENSUS][PBFT][METRIC]Report,committedIndex=1\n"
+        "info|2026-10-10 05:00:02.000000|x|[BLOCK SYNC]SyncStarted,number=1,highest=9\n"
+        "info|2026-10-10 05:00:03.000000|x|[CONSENSUS][PBFT][STORAGE]BlockCommitted,index=2\n"
+        "info|2026-10-10 05:00:04.000000|x|[BLOCK SYNC][METRIC]BlockCommitted,number=2\n"
+        "info|2026-10-10 05:00:05.000000|x|[TXPOOL][METRIC]TxsFetched,count=3\n"
+        "info|2026-10-10 05:00:06.000000|x|[CONSENSUS][PBFT][METRIC]Report,committedIndex=2\n");
+    auto files = std::vector<std::string>{(temp.dir / "log_2026101005.00.log").string()};
+    auto keep = namedEvents({"Report", "SyncStarted", "BlockCommitted"});
+    auto events = readLastEventOfEach(files, keep);
+    // one Report (the later), one SyncStarted, BlockCommitted once per channel; TxsFetched dropped
+    BOOST_REQUIRE_EQUAL(events.size(), 4U);
+    BOOST_CHECK_EQUAL(events[0].name, "SyncStarted");
+    BOOST_CHECK_EQUAL(events[1].name, "BlockCommitted");
+    BOOST_CHECK(events[1].hasBadge("CONSENSUS"));
+    BOOST_CHECK_EQUAL(events[2].name, "BlockCommitted");
+    BOOST_CHECK(events[2].hasBadge("BLOCK SYNC"));
+    BOOST_CHECK_EQUAL(events[3].name, "Report");
+    BOOST_CHECK_EQUAL(events[3].get("committedIndex"), "2");
+    auto all = readEventsMatching(files, keep);
+    BOOST_CHECK_EQUAL(all.size(), 5U);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::ops::test

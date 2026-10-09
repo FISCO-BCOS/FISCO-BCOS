@@ -155,8 +155,6 @@ TraceResult traceViewChange(std::vector<Event> const& _events, size_t _last)
     std::vector<std::vector<std::string>> rows;
     for (auto const& [toView, round] : rounds)
     {
-        auto const* anchor =
-            round.triggered ? round.triggered : (round.reached ? round.reached : round.quorum);
         rows.push_back({formatTime(round.firstMs),
             round.triggered ?
                 round.triggered->get("view") :
@@ -169,7 +167,6 @@ TraceResult traceViewChange(std::vector<Event> const& _events, size_t _last)
                 "-",
             round.reached ? round.reached->get("leaderIdx", "-") : "-",
             round.reached ? formatTime(round.reached->timeMs) : "-"});
-        (void)anchor;
     }
     if (rows.size() > _last)
     {
@@ -246,8 +243,7 @@ TraceResult traceTx(std::vector<Event> const& _events, std::string const& _hash)
     {
         result.missing =
             "not found in log (per-tx events are DEBUG; run: fisco-bcos log-level set --module "
-            "TXPOOL debug, "
-            "then resend)";
+            "TXPOOL debug and --module SCHEDULER debug, then resend)";
     }
     return result;
 }
