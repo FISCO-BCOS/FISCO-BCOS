@@ -26,6 +26,14 @@ if (ONLY_CPP_SDK)
 endif ()
 
 add_library(bcos-utilities ${SRCS})
+if (WITH_CXX_MODULES)
+    # Named-module build: the module interface unit (module bcos.utilities)
+    # is compiled once into this library; consumers get the BMI on their
+    # compile line by linking bcos-utilities.
+    target_sources(bcos-utilities PUBLIC
+        FILE_SET CXX_MODULES BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}
+        FILES bcos-utilities/Utilities.cppm)
+endif ()
 target_include_directories(bcos-utilities PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-utilities>)
@@ -42,5 +50,11 @@ if(TESTS)
 endif()
 
 include(GNUInstallDirs)
-install(TARGETS bcos-utilities EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+if (WITH_CXX_MODULES)
+    install(TARGETS bcos-utilities EXPORT fiscobcosTargets
+        ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+        FILE_SET CXX_MODULES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+else ()
+    install(TARGETS bcos-utilities EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+endif ()
 install(DIRECTORY "bcos-utilities" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/" FILES_MATCHING PATTERN "*.h")

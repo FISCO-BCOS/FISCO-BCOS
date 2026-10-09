@@ -19,12 +19,31 @@
 
 add_subdirectory(bcos-protocol)
 
-add_library(bcos-protocol INTERFACE)
-target_include_directories(bcos-protocol INTERFACE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-    $<INSTALL_INTERFACE:include/bcos-protocol>
-)
-target_link_libraries(bcos-protocol INTERFACE codec)
+if(WITH_CXX_MODULES)
+    # Named-module build: the module interface unit is compiled once into this
+    # static library; consumers get the BMI on their compile line by linking
+    # bcos-protocol.
+    add_library(bcos-protocol STATIC)
+    target_sources(bcos-protocol PUBLIC
+        FILE_SET CXX_MODULES BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}
+        FILES bcos-protocol/Protocol.cppm)
+    target_include_directories(bcos-protocol PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+        $<INSTALL_INTERFACE:include/bcos-protocol>
+    )
+    target_link_libraries(bcos-protocol PUBLIC codec)
+    # Build-time-only dependencies of the module interface unit's global module
+    # fragment (TopicItem.h pulls in bcos-framework/Common.h and json/json.h).
+    find_package(jsoncpp CONFIG REQUIRED)
+    target_link_libraries(bcos-protocol PRIVATE bcos-framework JsonCpp::JsonCpp)
+else()
+    add_library(bcos-protocol INTERFACE)
+    target_include_directories(bcos-protocol INTERFACE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+        $<INSTALL_INTERFACE:include/bcos-protocol>
+    )
+    target_link_libraries(bcos-protocol INTERFACE codec)
+endif()
 
 if (TESTS)
     # fetch bcos-test
@@ -34,5 +53,11 @@ if (TESTS)
 endif()
 
 include(GNUInstallDirs)
-install(TARGETS bcos-protocol EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+if(WITH_CXX_MODULES)
+    install(TARGETS bcos-protocol EXPORT fiscobcosTargets
+        ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+        FILE_SET CXX_MODULES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+else()
+    install(TARGETS bcos-protocol EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+endif()
 install(DIRECTORY "bcos-protocol" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING PATTERN "*.h")

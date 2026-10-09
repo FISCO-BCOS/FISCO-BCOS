@@ -82,6 +82,16 @@ macro(configure_project)
     # Build the OP-Stack L2 Solidity contracts (bcos-l2-contracts/) via forge.
     # Default OFF so the C++ main build does not depend on the forge toolchain.
     default_option(WITH_L2_CONTRACTS OFF)
+    # Build selected libraries as C++20 named modules (currently
+    # bcos-utilities -> module bcos.utilities and bcos-protocol -> module
+    # bcos.protocol). Requires the Ninja generator and a CMake-supported
+    # modules toolchain (GCC 14+). Consumers may replace the textual
+    # #include <bcos-utilities/...> / <bcos-protocol/...> with
+    # `import bcos.utilities;` / `import bcos.protocol;` placed AFTER all
+    # remaining #includes (GCC cannot merge BMI-loaded declarations with
+    # textual re-includes that follow an import in the same TU, see GCC
+    # PR99000/PR114600). Default OFF: headers remain the only interface.
+    default_option(WITH_CXX_MODULES OFF)
 
     if((NOT FULLNODE) AND (NOT WITH_LIGHTNODE) AND WITH_CPPSDK)
         set(ONLY_CPP_SDK ON)
