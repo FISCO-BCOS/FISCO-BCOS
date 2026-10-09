@@ -217,6 +217,23 @@ BOOST_AUTO_TEST_CASE(DbGetInvalidKeyLengthReturnsInvalidParams)
     BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32602);
 }
 
+// debug_dbGet on a 33-byte key whose leading byte is not 'c' answers -32602 with the
+// distinct non-'c'-prefix message (not the length-mismatch message).
+BOOST_AUTO_TEST_CASE(DbGetNonCPrefixKeyReturnsInvalidParams)
+{
+    // 33 bytes = 66 hex chars, leading byte 0xdd (not 0x63 == 'c').
+    std::string key = "0xdd" + std::string(64, '0');
+    auto resp = call("debug_dbGet", [&] {
+        Json::Value p(Json::arrayValue);
+        p.append(key);
+        return p;
+    }());
+    BOOST_REQUIRE(resp.isMember("error"));
+    BOOST_CHECK_EQUAL(resp["error"]["code"].asInt(), -32602);
+    BOOST_CHECK(resp["error"]["message"].asString().find("33-byte \"c\"+codeHash form") !=
+                std::string::npos);
+}
+
 // debug_getRawHeader on a malformed hash answers -32602 InvalidParams.
 BOOST_AUTO_TEST_CASE(GetRawHeaderMalformedHashReturnsInvalidParams)
 {

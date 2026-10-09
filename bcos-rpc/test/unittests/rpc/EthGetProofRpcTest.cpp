@@ -251,10 +251,11 @@ BOOST_AUTO_TEST_CASE(HappyPathShapeAndRoundTrip)
     BOOST_TEST(verify.storageValid[2]);
 }
 
-// Dormant account under scenario B (feature_l2_ethereum_compat, complete trie) -> an
-// empty-account proof with a non-empty non-existence proof, matching geth/reth EIP-1186
-// semantics (kona-host reads dormant accounts this way during fault-proof replay). The
-// scenario-A -32004 behavior is covered by EthGetProofSlotNotInMPTTest.cpp.
+// Dormant account under scenario B (the Ethereum lane — executor_version >=
+// ETHEREUM_EXECUTOR_VERSION, complete trie) -> an empty-account proof with a non-empty
+// non-existence proof, matching geth/reth EIP-1186 semantics (kona-host reads dormant accounts
+// this way during fault-proof replay). The scenario-A -32004 behavior is covered by
+// EthGetProofSlotNotInMPTTest.cpp.
 BOOST_AUTO_TEST_CASE(DormantAccountReturnsEmptyProof)
 {
     buildTrie();
@@ -297,6 +298,36 @@ BOOST_AUTO_TEST_CASE(DormantAccountReturnsEmptyProof)
     BOOST_TEST(verifySlots.accountValid);
     BOOST_REQUIRE_EQUAL(verifySlots.storageValid.size(), 1U);
     BOOST_TEST(verifySlots.storageValid[0]);
+}
+
+// Scenario-B EMPTY state root (no account anywhere) -> an empty-account proof with an EMPTY
+// accountProof (there are no nodes to walk). This is the other makeEmptyAccountProof branch —
+// stateRoot == emptyRootHash(), fullTrie — distinct from the dormant dead-end walk above.
+BOOST_AUTO_TEST_CASE(EmptyStateRootReturnsEmptyProof)
+{
+    wireReader();
+    // An empty state trie: stateRoot == emptyRootHash(), no nodes committed.
+    m_ledger->ledgerData().back()->blockHeader()->setStateRoot(mpt::emptyRootHash());
+
+    auto resp = getProof(dormant.hexPrefixed(), {}, "latest");
+    BOOST_TEST(!resp.isMember("error"));
+    BOOST_REQUIRE(resp.isMember("result"));
+    auto const& result = resp["result"];
+
+    BOOST_TEST(result["address"].asString() == dormant.hexPrefixed());
+    BOOST_TEST(result["balance"].asString() == "0x0");
+    BOOST_TEST(result["nonce"].asString() == "0x0");
+    BOOST_TEST(result["codeHash"].asString() == mpt::emptyCodeHash().hexPrefixed());
+    BOOST_TEST(result["storageHash"].asString() == mpt::emptyRootHash().hexPrefixed());
+    // The empty state root has no nodes: the non-existence proof is itself empty.
+    BOOST_REQUIRE(result["accountProof"].isArray());
+    BOOST_TEST(result["accountProof"].empty());
+
+    // Round trip: the empty-account proof (empty chain + empty-account defaults) verifies via
+    // verifyProof's exclusion branch too.
+    auto const reconstructed = proofFromJson(result);
+    auto const verify = mpt::verifyProof(mpt::emptyRootHash(), reconstructed);
+    BOOST_TEST(verify.accountValid);
 }
 
 // Header stateRoot absent from the MPT node storage -> -32004 "not in MPT node storage".
@@ -459,6 +490,42 @@ BOOST_AUTO_TEST_CASE(ObjectBlockNumberFormResolvesTag)
         respByTag["result"]["balance"].asString());
     BOOST_CHECK_EQUAL(respByObject["result"]["storageHash"].asString(),
         respByTag["result"]["storageHash"].asString());
+}
+
+// An EIP-1898 object that is neither blockHash-string nor blockNumber string/integral is
+// rejected as InvalidParams — it must NOT silently resolve to "latest" (which the shared
+// tag resolver would do for an empty tag).
+BOOST_AUTO_TEST_CASE(UnsupportedObjectBlockTagReturnsInvalidParams)
+{
+    buildTrie();
+    wireReader();
+
+    auto send = [&](Json::Value blockId) {
+        Json::Value req;
+        req["jsonrpc"] = "2.0";
+        req["id"] = 1;
+        req["method"] = "eth_getProof";
+        Json::Value params(Json::arrayValue);
+        params.append(address.hexPrefixed());
+        params.append(Json::arrayValue);
+        params.append(std::move(blockId));
+        req["params"] = params;
+        return request(printJson(req));
+    };
+
+    // {"blockHash": null} — wrong type for blockHash.
+    Json::Value nullHash(Json::objectValue);
+    nullHash["blockHash"] = Json::Value::null;
+    auto respNullHash = send(nullHash);
+    BOOST_REQUIRE(respNullHash.isMember("error"));
+    BOOST_CHECK_EQUAL(respNullHash["error"]["code"].asInt(), -32602);
+
+    // {"blockNumber": true} — wrong type for blockNumber.
+    Json::Value boolNumber(Json::objectValue);
+    boolNumber["blockNumber"] = true;
+    auto respBoolNumber = send(boolNumber);
+    BOOST_REQUIRE(respBoolNumber.isMember("error"));
+    BOOST_CHECK_EQUAL(respBoolNumber["error"]["code"].asInt(), -32602);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

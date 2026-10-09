@@ -281,10 +281,11 @@ bcos::task::Task<std::variant<EIP1186Proof, ProofErrorCode>> generateProof(Stora
 {
     if (stateRoot == emptyRootHash())
     {
-        // Scenario B (fullTrie, feature_l2_ethereum_compat): an empty state trie means no
-        // account exists anywhere — the caller gets an empty-account proof with no account
-        // nodes (geth/reth EIP-1186 semantics, which kona-host relies on). Scenario A keeps
-        // the -32004 outcome: its trie is incomplete, so "absent" cannot be proven empty.
+        // Scenario B (fullTrie, the Ethereum lane — executor_version >=
+        // ETHEREUM_EXECUTOR_VERSION, complete trie): an empty state trie means no account
+        // exists anywhere — the caller gets an empty-account proof with no account nodes
+        // (geth/reth EIP-1186 semantics, which kona-host relies on). Scenario A keeps the
+        // -32004 outcome: its trie is incomplete, so "absent" cannot be proven empty.
         if (fullTrie)
         {
             co_return makeEmptyAccountProof(address, slots, {});
@@ -554,12 +555,36 @@ VerifyResult verifyProof(bcos::h256 claimedRoot, EIP1186Proof const& proof)
     auto const accountPath = bytesToNibbles(accountKeyHash(proof.address).ref());
     auto const accountLeaf = detail::verifyProofChain(
         claimedRoot, std::span<bcos::bytes const>(proof.accountProof), accountPath, hasher);
-    if (!accountLeaf)
+    if (!accountLeaf && proof.accountProof.empty() && claimedRoot == emptyRootHash<HasherT>())
+    {
+        // The EMPTY state root has no nodes to walk: generateProof's empty-root branch emits an
+        // empty accountProof (makeEmptyAccountProof(address, slots, {})), which verifyProofChain
+        // cannot express (its first takeNode runs out of items). Accept it as the empty-account
+        // shape iff the claimed fields are the empty-account defaults — the same geth/reth
+        // EIP-1186 semantics as the exclusion branch below. Fall through to the slot loop:
+        // storageHash == emptyRootHash<HasherT>() so the empty-storage-root branch judges the
+        // provably-zero slots generateProof emitted.
+        if (proof.nonce == 0 && proof.balance == 0 &&
+            proof.codeHash == emptyCodeHash<HasherT>() &&
+            proof.storageHash == emptyRootHash<HasherT>())
+        {
+            out.accountValid = true;
+            out.recoveredNonce = 0;
+            out.recoveredBalance = 0;
+            out.recoveredCodeHash = emptyCodeHash<HasherT>();
+            out.recoveredStorageRoot = emptyRootHash<HasherT>();
+        }
+        else
+        {
+            return out;
+        }
+    }
+    else if (!accountLeaf)
     {
         // Broken chain (hash mismatch, malformed node, dangling ref, padded proof).
         return out;
     }
-    if (accountLeaf->empty())
+    else if (accountLeaf->empty())
     {
         // Valid EXCLUSION walk: the account is absent. Accept it as the empty account only when
         // the claimed fields are exactly the empty-account defaults; a non-empty account claim

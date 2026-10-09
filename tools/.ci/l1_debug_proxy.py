@@ -94,7 +94,10 @@ def encode_receipt(rcpt):
     would turn the inner list into a byte-string item (b8.. prefix) instead of a
     list (f8.. prefix) and diverge the receipts trie root.
     """
-    status = hx(rcpt["status"])  # 0x1 -> b'\x01', 0x0 -> b'\x00'
+    # status is a PostStateOrStatus uint64: canonical RLP scalar 0 is the EMPTY string, not the
+    # byte 0x00 — use enc_scalar (same as cumulativeGasUsed below) so a failed (status 0x0)
+    # receipt encodes identically to geth and the receipts trie root still matches the header.
+    status = enc_scalar(rcpt["status"])
     cumulative_gas_used = enc_scalar(rcpt["cumulativeGasUsed"])
     bloom = hx(rcpt["logsBloom"])
     logs = [[hx(log["address"]), [hx(t) for t in log.get("topics", [])],
