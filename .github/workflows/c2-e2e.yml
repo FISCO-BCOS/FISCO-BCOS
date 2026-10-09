@@ -47,11 +47,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: FISCO-BCOS/op-stack-e2e-tests
-          # Pinned at the merge commit of FISCO-BCOS/op-stack-e2e-tests#7 (kona native
-          # fault-proof replay phase 3.6). This is the version whose
-          # withdraw_e2e_ephemeral.sh consumes KONA_VERIFY/KONA_HOST/KONA_VERIFY_SCRIPT —
-          # an earlier pin would silently skip the kona leg.
-          ref: ae542cda988a444a0d27da34e67b649963c35d27
+          # Pinned at a post-#7 merge commit: #7 added the kona native replay phase 3.6, and
+          # the later pin enables the debug namespace on the C2 web3 listener (setup_c2.sh
+          # enable_debug_api=true) — the preimage oracle (kona-host) reads debug_dbGet /
+          # debug_getRawHeader off it, so a pin without that line answers every hint -32601.
+          ref: 378774e100dd4658aa79e150c545f73812acdca5
           path: .ci-op-e2e-tests
 
       - name: Initialize vcpkg submodule
