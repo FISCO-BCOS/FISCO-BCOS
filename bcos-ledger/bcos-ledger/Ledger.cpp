@@ -2054,7 +2054,7 @@ bool Ledger::buildGenesisBlock(
         SYS_NUMBER_2_TXS, SYS_VALUE,
         SYS_HASH_2_RECEIPT, SYS_VALUE,
         SYS_BLOCK_NUMBER_2_NONCES, SYS_VALUE,
-        SYS_CHAIN_METADATA, SYS_VALUE,
+        SYS_OP_CHAIN_METADATA, SYS_VALUE,
     });
     constexpr static auto moreTables = std::to_array<std::string_view>(
             {SYS_CODE_BINARY, SYS_VALUE, SYS_CONTRACT_ABI, SYS_VALUE});
@@ -2317,7 +2317,7 @@ bool Ledger::buildGenesisBlock(
         }
         // The resolved schedule also rides SYS_CONFIG so every getLedgerConfig snapshot —
         // the RPC estimate gas-cap gate (M1) among them — keys fork activation on the
-        // chain's own schedule in every deployment. The SYS_CHAIN_METADATA triple is the
+        // chain's own schedule in every deployment. The SYS_OP_CHAIN_METADATA triple is the
         // integrity-bound copy the Initializer's boot probe validates (absent = legal;
         // partial/corrupt/mis-bound = startup refusal). Both declaration channels land
         // here with the NORMALIZED canonical (buildOpForkScheduleMetadata re-parses and

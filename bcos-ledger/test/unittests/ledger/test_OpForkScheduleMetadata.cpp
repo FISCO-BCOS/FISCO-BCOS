@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @file test_OpForkScheduleMetadata.cpp
- * @brief SYS_CHAIN_METADATA op-fork-schedule triple persist / resolve / fail-closed.
+ * @brief SYS_OP_CHAIN_METADATA op-fork-schedule triple persist / resolve / fail-closed.
  */
 #include "L2GenesisTestStorage.h"
 #include "bcos-framework/ledger/OpForkScheduleMetadata.h"
@@ -108,7 +108,7 @@ task::Task<void> writeMetadataRow(auto& storage, std::string_view key, std::stri
     storage::Entry entry;
     entry.set(value);
     co_await storage2::writeOne(storage,
-        executor_v1::StateKey(std::string_view(SYS_CHAIN_METADATA), key), std::move(entry));
+        executor_v1::StateKey(std::string_view(SYS_OP_CHAIN_METADATA), key), std::move(entry));
 }
 
 task::Task<std::optional<std::string>> readOpForkScheduleSysConfigRow(auto& storage)
