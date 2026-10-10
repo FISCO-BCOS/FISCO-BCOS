@@ -30,8 +30,6 @@
  */
 #pragma once
 
-#include "libinitializer/Common.h"
-#include "libinitializer/GlobalStateStorageInitializer.h"
 #include "bcos-devp2p/eth/OpForkId.h"
 #include "bcos-devp2p/rlpx/Client.h"
 #include "bcos-devp2p/sync/BlockExchange.h"
@@ -45,12 +43,15 @@
 #include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-ledger/mpt/CommitObserver.h"
-#include "bcos-tool/NodeConfig.h"
 #include "bcos-rlp-protocol/EthBlockHeader.h"
 #include "bcos-rlp-protocol/EthGenesisHeader.h"
 #include "bcos-task/Wait.h"
-#include <opstack-executor/OpBlockVerifier.h>
+#include "bcos-tool/NodeConfig.h"
+#include "libinitializer/Common.h"
+#include "libinitializer/GlobalStateStorageInitializer.h"
+#include <bcos-utilities/ClientIdentity.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <opstack-executor/OpBlockVerifier.h>
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
@@ -88,8 +89,7 @@ public:
     // devp2p-synced commits feed pruning like every other commit path; null keeps the
     // verifier's built-in NoopCommitObserver.
     OpStackSyncInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
-        bcos::ledger::LedgerInterface::Ptr _ledger,
-        bcos::protocol::BlockFactory::Ptr _blockFactory,
+        bcos::ledger::LedgerInterface::Ptr _ledger, bcos::protocol::BlockFactory::Ptr _blockFactory,
         GlobalStateStorageInitializer::Ptr _globalStateStorageInitializer,
         bcos::IOServicePool::Ptr _ioServicePool,
         std::shared_ptr<ledger::mpt::CommitObserver> _commitObserver = nullptr)
@@ -159,20 +159,19 @@ public:
             bcos::protocol::toEthBlockHeaderData(ethGenesisHeader.value()));
         if (projectedHash != ethGenesisHeader->m_hash)
         {
-            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "opstack-el mode: [eth_genesis_header].hash " +
-                                      ethGenesisHeader->m_hash.hex() +
-                                      " does not match the re-computed genesis hash " +
-                                      projectedHash.hex()));
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                    "opstack-el mode: [eth_genesis_header].hash " + ethGenesisHeader->m_hash.hex() +
+                    " does not match the re-computed genesis hash " + projectedHash.hex()));
         }
         // Bootnode file must exist and parse (validates the enode list eagerly).
         auto nodes = bcos::devp2p::sync::loadBootnodes(nodeConfig.ethereumBootnodesFile());
         if (nodes.empty())
         {
-            BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << bcos::errinfo_comment(
-                                      "opstack-el mode: no bootnodes in " +
-                                      nodeConfig.ethereumBootnodesFile() +
-                                      " (expected op-geth EL serving peers of the OP chain)"));
+            BOOST_THROW_EXCEPTION(
+                bcos::tool::InvalidConfig() << bcos::errinfo_comment(
+                    "opstack-el mode: no bootnodes in " + nodeConfig.ethereumBootnodesFile() +
+                    " (expected op-geth EL serving peers of the OP chain)"));
         }
     }
 
@@ -237,8 +236,8 @@ private:
     struct ResumePoint
     {
         uint64_t startNumber;
-        bcos::protocol::EthBlockHeaderData anchor;        // local head (or genesis)
-        bcos::protocol::EthBlockHeaderData genesisHeader; // chain genesis (handshake pin)
+        bcos::protocol::EthBlockHeaderData anchor;         // local head (or genesis)
+        bcos::protocol::EthBlockHeaderData genesisHeader;  // chain genesis (handshake pin)
     };
 
     ResumePoint resumePoint() const
@@ -251,13 +250,12 @@ private:
             return {1, genesisHeader, genesisHeader};
         }
         // Resume from the local head: anchor = local head header, start at head + 1.
-        auto headBlock = task::syncWait(
-            ledger::getBlockData(*m_ledger, current, bcos::ledger::HEADER));
+        auto headBlock =
+            task::syncWait(ledger::getBlockData(*m_ledger, current, bcos::ledger::HEADER));
         if (!headBlock || !headBlock->blockHeader())
         {
-            BOOST_THROW_EXCEPTION(std::runtime_error(
-                "OP-EL sync: cannot read local head block " + std::to_string(current) +
-                " for resume"));
+            BOOST_THROW_EXCEPTION(std::runtime_error("OP-EL sync: cannot read local head block " +
+                                                     std::to_string(current) + " for resume"));
         }
         // Convert the stored Tars header back to the Ethereum header domain. The
         // EthBlockHeader constructor copies the fork-gated optionals only when the
@@ -305,12 +303,17 @@ private:
         auto const& genesis = m_nodeConfig->genesisConfig().m_ethGenesisHeader.value();
         auto const& schedule = m_nodeConfig->opForkSchedule().value();
         bcos::devp2p::eth::OpForkIdLadder const ladder{{
-            schedule.m_canyonTime, schedule.m_ecotoneTime, schedule.m_fjordTime,
-            schedule.m_graniteTime, schedule.m_holoceneTime, schedule.m_isthmusTime,
-            schedule.m_jovianTime, schedule.m_karstTime,
+            schedule.m_canyonTime,
+            schedule.m_ecotoneTime,
+            schedule.m_fjordTime,
+            schedule.m_graniteTime,
+            schedule.m_holoceneTime,
+            schedule.m_isthmusTime,
+            schedule.m_jovianTime,
+            schedule.m_karstTime,
         }};
-        return bcos::devp2p::eth::computeOpForkId(genesis.m_hash,
-            static_cast<uint64_t>(genesis.m_timestamp), _localHeadTime, ladder);
+        return bcos::devp2p::eth::computeOpForkId(
+            genesis.m_hash, static_cast<uint64_t>(genesis.m_timestamp), _localHeadTime, ladder);
     }
 
     /// Fatal, non-retryable sync failure: thrown past the per-bootnode catch so the
@@ -352,9 +355,9 @@ private:
         if (hex.size() != 64 ||
             !std::all_of(hex.begin(), hex.end(), [](unsigned char c) { return std::isxdigit(c); }))
         {
-            throw std::runtime_error(
-                "OP-EL sync: node key file " + _path + " must hold exactly 64 hex chars " +
-                "(a 32-byte secp256k1 private key, optional 0x prefix)");
+            throw std::runtime_error("OP-EL sync: node key file " + _path +
+                                     " must hold exactly 64 hex chars " +
+                                     "(a 32-byte secp256k1 private key, optional 0x prefix)");
         }
         return bcos::fromHex(hex);
     }
@@ -370,8 +373,8 @@ private:
         if (!configured.empty())
         {
             auto key = readNodeKeyFile(configured);
-            INITIALIZER_LOG(INFO)
-                << LOG_DESC("OP-EL sync: loaded node key") << LOG_KV("file", configured);
+            INITIALIZER_LOG(INFO) << LOG_DESC("OP-EL sync: loaded node key")
+                                  << LOG_KV("file", configured);
             return makeNodeKeyPair(std::move(key), configured);
         }
         auto const dir = std::filesystem::path(m_nodeConfig->privateKeyPath()).parent_path();
@@ -379,8 +382,8 @@ private:
         if (std::filesystem::exists(path))
         {
             auto key = readNodeKeyFile(path.string());
-            INITIALIZER_LOG(INFO)
-                << LOG_DESC("OP-EL sync: loaded persisted node key") << LOG_KV("file", path);
+            INITIALIZER_LOG(INFO) << LOG_DESC("OP-EL sync: loaded persisted node key")
+                                  << LOG_KV("file", path);
             return makeNodeKeyPair(std::move(key), path.string());
         }
         bcos::devp2p::rlpx::EccKeyPair generated;  // random keypair
@@ -396,8 +399,8 @@ private:
                     "OP-EL sync: cannot persist generated node key to " + path.string());
             }
         }
-        std::filesystem::permissions(path, std::filesystem::perms::owner_read |
-                                               std::filesystem::perms::owner_write);
+        std::filesystem::permissions(
+            path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
         {
             std::ofstream out(path, std::ios::trunc);
             if (!out)
@@ -457,15 +460,16 @@ private:
         if (localHash != _checkpoint.hash)
         {
             INITIALIZER_LOG(FATAL)
-                << LOG_DESC("OP-EL sync: finalized checkpoint mismatch — the local chain is on "
-                            "a wrong fork; refusing to start the sync loop")
+                << LOG_DESC(
+                       "OP-EL sync: finalized checkpoint mismatch — the local chain is on "
+                       "a wrong fork; refusing to start the sync loop")
                 << LOG_KV("checkpointNumber", _checkpoint.number)
                 << LOG_KV("expectedHash", _checkpoint.hash.hex())
                 << LOG_KV("localHash", localHash.hex())
                 << LOG_KV("action",
-                    "no chain-rollback tool ships yet, so the only supported recovery is "
-                    "a full resync from scratch; verify the bootnode list / "
-                    "finalized_checkpoint setting, then restart");
+                       "no chain-rollback tool ships yet, so the only supported recovery is "
+                       "a full resync from scratch; verify the bootnode list / "
+                       "finalized_checkpoint setting, then restart");
             return false;
         }
         INITIALIZER_LOG(INFO) << LOG_DESC("OP-EL sync: finalized checkpoint verified")
@@ -502,8 +506,7 @@ private:
         // the rest of the node are the block factory, the global state storage, the
         // ledger, the IO pool and the commit observer (the shared MPT pruner when
         // storage.mpt_prune_window > 0, else null -> the verifier's built-in Noop).
-        using Verifier =
-            bcos::executor_v1::opstack::OpBlockVerifier<GlobalStateStorage>;
+        using Verifier = bcos::executor_v1::opstack::OpBlockVerifier<GlobalStateStorage>;
         Verifier verifier(m_blockFactory->receiptFactory(),
             m_blockFactory->cryptoSuite()->hashImpl(), m_nodeConfig->ethereumChainId(),
             m_nodeConfig->opForkSchedule().value(), m_blockFactory,
@@ -585,9 +588,7 @@ private:
                             << LOG_DESC("OP-EL sync: resuming from local head")
                             << LOG_KV("headNumber", resume.anchor.number)
                             << LOG_KV("headHash",
-                                bcos::protocol::ethHeaderHash(resume.anchor)
-                                    .hex()
-                                    .substr(0, 18))
+                                   bcos::protocol::ethHeaderHash(resume.anchor).hex().substr(0, 18))
                             << LOG_KV("resumeFrom", resume.startNumber);
                         lastLoggedHead = static_cast<int64_t>(resume.anchor.number);
                     }
@@ -608,8 +609,7 @@ private:
                             << LOG_DESC("OP-EL sync: bootnode failed, trying next")
                             << LOG_KV("host", peer.host) << LOG_KV("port", peer.port)
                             << LOG_KV("error", e.what())
-                            << LOG_KV("diag",
-                                boost::current_exception_diagnostic_information());
+                            << LOG_KV("diag", boost::current_exception_diagnostic_information());
                     };
                     // Shared handling for deterministic failures (the typed
                     // catches below): the same block fails identically for every
@@ -627,8 +627,9 @@ private:
                         if (!deterministicStall)
                         {
                             INITIALIZER_LOG(ERROR)
-                                << LOG_DESC("OP-EL sync: cannot advance past the local head "
-                                            "with any bootnode; backing off and retrying")
+                                << LOG_DESC(
+                                       "OP-EL sync: cannot advance past the local head "
+                                       "with any bootnode; backing off and retrying")
                                 << LOG_KV("headNumber", streakAnchor)
                                 << LOG_KV("streak", deterministicStreak)
                                 << LOG_KV("error", e.what());
@@ -645,7 +646,7 @@ private:
                         // ALWAYS the chain genesis (the handshake rejects a peer on a
                         // different chain), headHash reflects the local resume anchor.
                         auto clientConfig = peer;
-                        clientConfig.clientId = "FISCO-BCOS-OP-EL/v0.1.0";
+                        clientConfig.clientId = bcos::clientIdentity();
                         clientConfig.networkId = opConfig.chainId;
                         clientConfig.genesisHash = bcos::protocol::ethHeaderHash(genesisHeader);
                         clientConfig.headHash = bcos::protocol::ethHeaderHash(anchor);
@@ -671,10 +672,10 @@ private:
                             << LOG_KV("startNumber", resume.startNumber);
                         auto established = client.connect();
                         INITIALIZER_LOG(DEBUG)
-                            << LOG_DESC("OP-EL sync: handshake OK")
-                            << LOG_KV("host", peer.host) << LOG_KV("port", peer.port)
-                            << LOG_KV("peerHead",
-                                established.peerStatus.headHash.hex().substr(0, 18));
+                            << LOG_DESC("OP-EL sync: handshake OK") << LOG_KV("host", peer.host)
+                            << LOG_KV("port", peer.port)
+                            << LOG_KV(
+                                   "peerHead", established.peerStatus.headHash.hex().substr(0, 18));
 
                         // Download from the local head onward: startNumber = anchor + 1,
                         // anchor = local head header (genesis on a fresh node). Blocks are
@@ -713,9 +714,8 @@ private:
                         uint64_t downloadEnd = 0;
                         if (peerHead)
                         {
-                            downloadEnd = peerHead->number() > syncLag ?
-                                              peerHead->number() - syncLag :
-                                              0;
+                            downloadEnd =
+                                peerHead->number() > syncLag ? peerHead->number() - syncLag : 0;
                         }
                         else
                         {
@@ -735,7 +735,7 @@ private:
                                 << LOG_KV("startNumber", resume.startNumber)
                                 << LOG_KV("peerHeadNumber", peerHead ? peerHead->number() : 0)
                                 << LOG_KV("peerHeadHash",
-                                    established.peerStatus.headHash.hex().substr(0, 18));
+                                       established.peerStatus.headHash.hex().substr(0, 18));
                             continue;
                         }
                         madeProgress = true;
@@ -746,8 +746,7 @@ private:
                             << LOG_KV("startNumber", resume.startNumber)
                             << LOG_KV("downloadEnd", downloadEnd)
                             << LOG_KV("downloadCount", downloadCount)
-                            << LOG_KV("peerHead", peerHead->number())
-                            << LOG_KV("syncLag", syncLag)
+                            << LOG_KV("peerHead", peerHead->number()) << LOG_KV("syncLag", syncLag)
                             << LOG_KV("batch", m_nodeConfig->ethereumMaxBatchSize());
 
                         // Per-block commit logging is batched: one INFO every
@@ -780,9 +779,9 @@ private:
                                 {
                                     BOOST_THROW_EXCEPTION(FatalSyncError(
                                         "OP-EL sync: finalized checkpoint mismatch at block " +
-                                        std::to_string(checkpoint->number) +
-                                        " (downloaded hash " + block.hash.hex() +
-                                        " != configured " + checkpoint->hash.hex() +
+                                        std::to_string(checkpoint->number) + " (downloaded hash " +
+                                        block.hash.hex() + " != configured " +
+                                        checkpoint->hash.hex() +
                                         "): the bootnodes serve a wrong fork — refusing to "
                                         "commit; verify the bootnode list and the "
                                         "finalized_checkpoint setting"));
@@ -802,15 +801,14 @@ private:
                                         << LOG_KV("downloadCount", downloadCount)
                                         << LOG_KV("hash", block.hash.hex().substr(0, 18))
                                         << LOG_KV("stateRoot",
-                                            result.commitments.stateRoot.hex().substr(0, 18));
+                                               result.commitments.stateRoot.hex().substr(0, 18));
                                 }
                             });
                         INITIALIZER_LOG(INFO)
                             << LOG_DESC("OP-EL sync: batch download complete")
                             << LOG_KV("host", peer.host) << LOG_KV("port", peer.port)
                             << LOG_KV("startNumber", resume.startNumber)
-                            << LOG_KV("downloadEnd", downloadEnd)
-                            << LOG_KV("committed", committed);
+                            << LOG_KV("downloadEnd", downloadEnd) << LOG_KV("committed", committed);
                         // Successful download: end the round here rather than
                         // chaining another bounded download from the next
                         // bootnode. madeProgress is already true, so the round
@@ -845,18 +843,19 @@ private:
                         if (mismatchStreak >= c_maxAnchorFailureStreak)
                         {
                             INITIALIZER_LOG(FATAL)
-                                << LOG_DESC("OP-EL sync: repeated parent hash mismatch at the "
-                                            "same anchor — the committed local chain is on a "
-                                            "fork the bootnodes rejected (reorg); stopping the "
-                                            "sync loop")
+                                << LOG_DESC(
+                                       "OP-EL sync: repeated parent hash mismatch at the "
+                                       "same anchor — the committed local chain is on a "
+                                       "fork the bootnodes rejected (reorg); stopping the "
+                                       "sync loop")
                                 << LOG_KV("anchorNumber", streakAnchor)
                                 << LOG_KV("streak", mismatchStreak)
                                 << LOG_KV("action",
-                                    "automatic reorg rollback is not implemented yet and no "
-                                    "chain-rollback tool ships, so the only supported "
-                                    "recovery is a full resync from scratch; verify the "
-                                    "bootnode list / finalized_checkpoint setting, then "
-                                    "restart");
+                                       "automatic reorg rollback is not implemented yet and no "
+                                       "chain-rollback tool ships, so the only supported "
+                                       "recovery is a full resync from scratch; verify the "
+                                       "bootnode list / finalized_checkpoint setting, then "
+                                       "restart");
                             m_running.store(false);
                             return;
                         }
@@ -937,8 +936,7 @@ private:
                         // proves the local head is current — log a WARNING instead of
                         // a false healthy "caught up". Same backoff.
                         INITIALIZER_LOG(WARNING)
-                            << LOG_DESC(
-                                   "OP-EL sync: no bootnode served the head lookup this round")
+                            << LOG_DESC("OP-EL sync: no bootnode served the head lookup this round")
                             << LOG_KV("bootnodes", bootnodes.size())
                             << LOG_KV("headNumber", lastHeadNumber)
                             << LOG_KV("retrySeconds", c_caughtUpBackoff.count());
@@ -965,9 +963,8 @@ private:
                 {
                     return;
                 }
-                INITIALIZER_LOG(WARNING)
-                    << LOG_DESC("OP-EL sync: sync round failed, retrying")
-                    << LOG_KV("error", e.what());
+                INITIALIZER_LOG(WARNING) << LOG_DESC("OP-EL sync: sync round failed, retrying")
+                                         << LOG_KV("error", e.what());
                 // Back off briefly before retrying the next bootnode / round.
                 std::this_thread::sleep_for(std::chrono::seconds(3));
             }

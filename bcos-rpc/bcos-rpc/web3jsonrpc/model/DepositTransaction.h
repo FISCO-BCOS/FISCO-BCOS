@@ -26,6 +26,11 @@
 #include <json/json.h>
 #include <optional>
 
+namespace bcos::protocol
+{
+class TransactionReceipt;
+}
+
 namespace bcos::rpc
 {
 

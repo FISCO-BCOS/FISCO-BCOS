@@ -190,7 +190,7 @@ task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response
         if (auto block =
                 co_await ledger::getBlockData(*ledger, ledgerConfig->blockNumber(), ledger::HEADER))
         {
-            baseFee = blockBaseFee(*block->blockHeader());
+            baseFee = protocol::blockBaseFee(*block->blockHeader());
         }
         auto const tip = suggestedPriorityFeeWei(ledgerConfig->executorVersion());
         result = toQuantity(baseFee + u256(tip));
