@@ -110,7 +110,12 @@ constexpr static std::string_view SYSTEM_KEY_EXCESS_BLOB_GAS = magic_enum::enum_
 // A3: eth-genesis (L2) chains store the FISCO genesis pin here instead of in B0's
 // extraData — B0's extraData carries the genesis artifact bytes and enters the RLP hash.
 constexpr static std::string_view INTERNAL_SYSTEM_KEY_ETH_GENESIS_DATA = "eth_genesis_data";
-constexpr static std::string_view INTERNAL_SYSTEM_KEY_OP_EIP1559_PARAMS = "op_eip1559_params";
+// Derived from the enum like its fork-schedule sibling below: the genesis writer keys the
+// row off this constant while every SYS_CONFIG reader keys rows by
+// magic_enum::enum_name(SystemConfig::op_eip1559_params), so a literal here would keep the
+// writer's key in place through a rename and silently strand the row.
+constexpr static std::string_view INTERNAL_SYSTEM_KEY_OP_EIP1559_PARAMS =
+    magic_enum::enum_name(SystemConfig::op_eip1559_params);
 // OP lane: the RESOLVED canonical fork schedule ("0:isthmus,1000:karst" form), written at
 // genesis for both declaration channels ([op_fork_schedule] verbatim, [op_fork_timestamps]
 // folded) so every snapshot read (getLedgerConfig -> RPC estimate gas-cap gate) keys fork

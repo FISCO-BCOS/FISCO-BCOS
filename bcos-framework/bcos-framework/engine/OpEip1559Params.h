@@ -39,6 +39,10 @@ struct OpEip1559Params
     std::uint64_t elasticity = 0;
     std::uint64_t denominator = 0;
     std::uint64_t denominatorCanyon = 0;
+
+    /// Field-wise identity — the boot probe's recorded-vs-effective comparison and the tests
+    /// compare whole triples, not individual fields.
+    [[nodiscard]] friend bool operator==(OpEip1559Params const&, OpEip1559Params const&) = default;
 };
 
 /// The OP mainnet preset op-deployer emits (op-deployer/pkg/deployer/standard/standard.go:32-34),
