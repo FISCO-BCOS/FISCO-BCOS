@@ -229,7 +229,7 @@ public:
     bool m_opStackELMode = false;
 
     // Canonical OP fork schedule. Parsed from genesis [op_fork_schedule]
-    // canonical and persisted into s_chain_metadata at genesis when set; not
+    // canonical and persisted into s_op_chain_metadata at genesis when set; not
     // part of LedgerConfig / generateGenesisData.
     std::optional<std::string> m_opstackForkSchedule;
 

@@ -171,7 +171,7 @@ namespace detail
 {
 inline executor_v1::StateKeyView opForkScheduleMetadataKey(std::string_view key)
 {
-    return executor_v1::StateKeyView(SYS_CHAIN_METADATA, key);
+    return executor_v1::StateKeyView(SYS_OP_CHAIN_METADATA, key);
 }
 }  // namespace detail
 
