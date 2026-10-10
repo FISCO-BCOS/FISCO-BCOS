@@ -123,5 +123,28 @@ BOOST_AUTO_TEST_CASE(GenesisRootIsUsableAsCommitTrieParent)
     }());
 }
 
+// The restart guard recomputes the genesis state root from the (empty) alloc set
+// and compares it against the published header. A second buildGenesisBlock over
+// the SAME storage — the node-restart path — must therefore succeed; if the
+// publish path and the guard ever read different expressions, this fails with
+// "genesis allocs changed since first init".
+BOOST_AUTO_TEST_CASE(EmptyAllocGenesisSurvivesRebuild)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto storage = makeL2GenesisTestStorage();
+
+        LedgerConfig param;
+        param.setBlockNumber(0);
+        param.setHash(HashType(""));
+        param.setBlockTxCountLimit(0);
+
+        auto first = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+        BOOST_REQUIRE(co_await ledger::buildGenesisBlock(*first, makeEmptyAllocL2Genesis(), param));
+
+        auto second = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+        BOOST_CHECK(co_await ledger::buildGenesisBlock(*second, makeEmptyAllocL2Genesis(), param));
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

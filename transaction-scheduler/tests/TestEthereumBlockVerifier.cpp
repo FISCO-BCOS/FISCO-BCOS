@@ -1031,7 +1031,11 @@ BOOST_AUTO_TEST_CASE(tarsExecutionHeaderRoundTripPreservesRlp)
 
     auto cryptoSuite = bcos::test::createNormalCryptoSuite();
     auto blockFactory = bcos::test::createBlockFactory(cryptoSuite);
-    auto header = scheduler_v1::makeExecutionBlockHeader(h, *blockFactory, 0);
+    // London-at-genesis schedule; the header carries baseFee only, so both the
+    // schedule-derived version and the field presence land on LONDON.
+    scheduler_v1::EvmcForkTimestamps forkSchedule;
+    forkSchedule.londonTime = 0;
+    auto header = scheduler_v1::makeExecutionBlockHeader(h, *blockFactory, 0, forkSchedule);
 
     // Resume read-back: the EthBlockHeader(BlockHeader) ctor already converts the stored
     // millisecond timestamp back to seconds — no manual /= 1000 here (dividing again would
@@ -1047,6 +1051,54 @@ BOOST_AUTO_TEST_CASE(tarsExecutionHeaderRoundTripPreservesRlp)
         "Tars round-trip hash mismatch: orig=" << origHash.hex()
                                                << " rebuilt=" << rebuiltHash.hex());
     BOOST_CHECK(orig == rebuiltRlp);
+}
+
+// makeExecutionBlockHeader derives the Eth fork version from the chain's fork
+// SCHEDULE at the block timestamp — the same rule the EL build lane applies
+// (finalizeEthBlockHeader) — so the two producers cannot diverge. Pin the mapping
+// at every ladder rung, including the Osaka-caps-at-PRAGUE edge (EthBlockVersion
+// has no enumerator past PRAGUE, matching tryEthBlockVersionFor).
+BOOST_AUTO_TEST_CASE(executionHeaderVersionDerivesFromForkSchedule)
+{
+    auto cryptoSuite = bcos::test::createNormalCryptoSuite();
+    auto blockFactory = bcos::test::createBlockFactory(cryptoSuite);
+
+    bcos::protocol::EthBlockHeaderData h;
+    h.number = 1;
+    h.timestamp = 100;
+    h.parentInfo.blockNumber = 0;
+    h.gasLimit = 30000000;
+    // Prague-shaped field set; the schedule alone decides the stamp, so the
+    // derivation is pinned independently of field presence.
+    h.baseFee = bcos::u256(7);
+    h.withdrawalsHash = bcos::h256{};
+    h.blobGasUsed = bcos::u256(0);
+    h.excessBlobGas = bcos::u256(0);
+    h.parentBeaconRoot = bcos::h256{};
+    h.requestsHash = bcos::h256{};
+
+    auto versionFor = [&](scheduler_v1::EvmcForkTimestamps const& schedule) {
+        return scheduler_v1::makeExecutionBlockHeader(h, *blockFactory, 0, schedule)
+            ->ethBlockVersion();
+    };
+    auto ladder = [](uint64_t shanghai, uint64_t cancun, uint64_t prague) {
+        scheduler_v1::EvmcForkTimestamps s;
+        s.londonTime = 0;
+        s.parisTime = 0;
+        s.shanghaiTime = shanghai;
+        s.cancunTime = cancun;
+        s.pragueTime = prague;
+        return s;
+    };
+    using V = protocol::EthBlockVersion;
+    BOOST_CHECK(versionFor(ladder(200, 300, 400)) == V::LONDON);
+    BOOST_CHECK(versionFor(ladder(0, 300, 400)) == V::SHANGHAI);
+    BOOST_CHECK(versionFor(ladder(0, 0, 400)) == V::CANCUN);
+    BOOST_CHECK(versionFor(ladder(0, 0, 0)) == V::PRAGUE);
+    // Osaka adds no header fields: the stamp stays PRAGUE (the enum tops out there).
+    auto osaka = ladder(0, 0, 0);
+    osaka.osakaTime = 0;
+    BOOST_CHECK(versionFor(osaka) == V::PRAGUE);
 }
 
 // Cancun+ block through verifyAndCommit: the EIP-4788 block-start system call must

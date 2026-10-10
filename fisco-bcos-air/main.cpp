@@ -64,6 +64,34 @@ int main(int argc, const char* argv[])
         auto param = bcos::initializer::initAirNodeCommandLine(argc, argv, false);
         if (param.op != bcos::initializer::Params::operation::None)
         {
+            if (param.hasOp(bcos::initializer::Params::operation::ImportBlocks))
+            {
+                // Offline RLP block import (the hive simulator contract): needs the
+                // FULL node init — EL config validation, state/ledger stores opened,
+                // the v2 pipeline built — but NO start(): nothing serves the network,
+                // the import commits through the EL verifier lane, then we exit 0 and
+                // the entrypoint starts the node normally.
+                initializer->init(param);
+                std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+                std::cout << "importing Ethereum blocks from " << param.importBlocksPath
+                          << " ..." << std::endl;
+                auto summary = initializer->importEthereumBlocks(param.importBlocksPath);
+                // Skips are the consume-rlp contract (invalid blocks are rejected and
+                // the run continues). A run that imported nothing is a hard failure
+                // ONLY when the chain never advanced past genesis — that is the
+                // "converter dropped a field, every block rejected, node serves
+                // genesis" mode the exit status exists for. An idempotent re-run of
+                // an already-imported file skips every block (each block's
+                // parentHash points at its own parent, not at the ledger head) but
+                // leaves headNumber > 0, and must report success.
+                if (summary.imported == 0 && summary.skipped > 0 && summary.headNumber <= 0)
+                {
+                    std::cerr << "import-blocks: nothing imported (imported=0 skipped="
+                              << summary.skipped << ")" << std::endl;
+                    return 1;
+                }
+                return 0;
+            }
             if (param.hasOp(bcos::initializer::Params::operation::Prune))
             {
                 initializer->init(param.configFilePath, param.genesisFilePath);

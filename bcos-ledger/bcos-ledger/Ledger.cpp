@@ -1775,19 +1775,16 @@ bool Ledger::buildGenesisBlock(
         }
         auto genesisBlockHash = co_await ledger::getBlockHash(*m_stateStorage, 0, fromStorage);
         auto genesisData = generateGenesisData(genesis, ledgerConfig);
-        // op-geth-compatible Ethereum state trie over the allocs: the root is
-        // empty (zero) for pbft chains with no allocs (an empty-alloc L2 chain
-        // instead publishes mpt::emptyRootHash(), see the header-building branch
-        // below), set as the L2 genesis block's stateRoot below, and re-derived
-        // on restart to guard alloc immutability; the produced nodes are
-        // persisted further below on first init of an L2 chain. computeGenesisStateTrie only reads
-        // genesis.m_allocs, so it does not depend on the genesis state being
-        // written first.
-        GenesisStateTrie ethStateTrie;
-        if (!genesis.m_allocs.empty())
-        {
-            ethStateTrie = co_await computeGenesisStateTrie(genesis);
-        }
+        // op-geth-compatible Ethereum state trie over the allocs: an empty alloc
+        // set yields mpt::emptyRootHash() (computeGenesisStateTrie's documented
+        // empty-set contract), which is exactly what an empty-alloc Ethereum-lane
+        // genesis publishes (see the header-building branch below) — one source
+        // for the value the publish path and the restart guard both read. For
+        // non-Ethereum (pbft) chains the result is unused. The produced nodes are
+        // persisted further below on first init of an Ethereum-lane chain.
+        // computeGenesisStateTrie only reads genesis.m_allocs, so it does not
+        // depend on the genesis state being written first.
+        GenesisStateTrie ethStateTrie = co_await computeGenesisStateTrie(genesis);
         if (genesisBlockHash)
         {
             // genesis block exists, quit
@@ -1839,8 +1836,16 @@ bool Ledger::buildGenesisBlock(
             // tx / nodes, but NOT the allocs. The allocs are pinned by the
             // genesis block's stateRoot (set to ethStateRoot on first init); a
             // config change to any alloc changes that root, so compare the
-            // stored header's stateRoot against the freshly derived one.
-            if (existsGenesisData == genesisData && !genesis.m_allocs.empty() &&
+            // stored header's stateRoot against the freshly derived one. An
+            // empty alloc set derives the canonical empty-trie root
+            // (computeGenesisStateTrie's empty-set contract), exactly what an
+            // empty-alloc Ethereum-lane genesis publishes below — so a
+            // non-empty -> empty alloc drift is caught too. Legacy
+            // (non-Ethereum-lane) chains carry no allocs and leave the genesis
+            // stateRoot zero — the comparison does not apply to them.
+            bool const ethLaneRestart =
+                genesis.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION;
+            if (existsGenesisData == genesisData && ethLaneRestart &&
                 genesisBlockHeader->stateRoot() != ethStateTrie.root)
             {
                 LEDGER_LOG(FATAL) << LOG_BADGE("buildGenesisBlock")
@@ -1995,20 +2000,18 @@ bool Ledger::buildGenesisBlock(
         // per-block state-change hashes, a different domain from this MPT root,
         // so only the (previously empty) genesis block carries it.
         bool const ethLane = genesis.m_executorVersion >= ledger::ETHEREUM_EXECUTOR_VERSION;
-        if (!genesis.m_allocs.empty())
+        if (!genesis.m_allocs.empty() || ethLane)
         {
+            // Publish the computed trie root — the same expression the restart
+            // guard above reads, so the two cannot drift apart. An empty-alloc
+            // Ethereum-lane genesis (legal on the L1 EL lane — validateL2Invariants
+            // exempts it; the L2/OP lanes reject the combination, but
+            // buildGenesisBlock is callable directly) yields the canonical
+            // empty-trie root: commitTrie() recognizes only emptyRootHash() as
+            // the from-empty marker (mpt/HashBuilder.h), so a zero parent root
+            // would send block 1's incremental MPT build down the node-reading
+            // merge path and abort on the nonexistent zero-hash node.
             header->setStateRoot(ethStateTrie.root);
-        }
-        else if (ethLane)
-        {
-            // Empty-alloc Ethereum-lane genesis: NodeConfig::validateL2Invariants rejects this
-            // combination, but buildGenesisBlock is callable directly. Publish the
-            // canonical empty-trie root instead of a zero h256 — commitTrie()
-            // recognizes only emptyRootHash() as the from-empty marker
-            // (mpt/HashBuilder.h), so a zero parent root would send block 1's
-            // incremental MPT build down the node-reading merge path and abort on
-            // the nonexistent zero-hash node.
-            header->setStateRoot(mpt::emptyRootHash());
         }
         if (genesis.m_ethGenesisHeader.has_value())
         {

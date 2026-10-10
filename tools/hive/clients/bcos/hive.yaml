@@ -1,0 +1,4 @@
+# FISCO-BCOS Ethereum L1 EL-mode node, hive client definition.
+# Roles: eth1 = execution-layer client (JSON-RPC on 8545, Engine API on 8551).
+roles:
+  - "eth1"

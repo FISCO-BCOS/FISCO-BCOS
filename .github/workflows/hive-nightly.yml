@@ -1,0 +1,184 @@
+name: Hive eels nightly (full consume-rlp matrix)
+# Per-PR coverage comes from workflow.yml → hive_smoke (dockerised smoke suites +
+# host-level fixture replay, reusing the build artifact). This workflow is the full
+# run — it builds fisco-bcos from source — and is triggered manually or nightly.
+on:
+  workflow_dispatch:
+  # 17:42 UTC nightly, offset from c2-e2e.yml's 18:00 so the two full runs do
+  # not compete for docker on the same window.
+  schedule:
+    - cron: "42 17 * * *"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Builds the two binaries the hive client image wraps (fisco-bcos +
+  # eth-sync-check) and hands them to the matrix as an artifact, so each shard
+  # skips vcpkg configure + C++ build.
+  build:
+    name: Build hive client binaries
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+      - name: Initialize vcpkg submodule
+        run: git submodule update --init --recursive -- vcpkg
+      - name: Compute vcpkg revision
+        id: vcpkg-revision
+        shell: bash
+        run: echo "revision=$(git -C vcpkg rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: 3.28.3
+          ninjaVersion: 1.12.1
+      - name: Restore vcpkg cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/build/vcpkg_installed
+          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-ubuntu-26.04-cache-key-v4
+      - name: Install linux dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y --no-install-recommends \
+              wget python3-dev python3-pip git curl zip unzip tar \
+              clang make build-essential libssl-dev zlib1g-dev ca-certificates mold autoconf \
+              flex bison patch pkg-config uuid-runtime automake gcc-16 g++-16
+      - name: Configure (TOOLS=ON)
+        run: |
+          mkdir -p build
+          cd build
+          CC=gcc-16 CXX=g++-16 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=OFF -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DTOOLS=ON -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+      - name: Build
+        run: |
+          cd build
+          cmake --build . --target fisco-bcos eth-sync-check
+      - name: Upload hive client binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: hive-bins-ubuntu
+          path: |
+            build/fisco-bcos-air/fisco-bcos
+            build/tools/eth-sync-check/eth-sync-check
+          retention-days: 1
+
+  eels:
+    name: eels consume-rlp (${{ matrix.shard }})
+    needs: [build]
+    if: needs.build.result == 'success'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: smoke
+            sim: "smoke/(genesis|network)"
+            limit: ""
+          - shard: mcopy
+            sim: ethereum/eels/consume-rlp
+            limit: ".*mcopy.*"
+            total: 186
+          - shard: eip7702+2935
+            sim: ethereum/eels/consume-rlp
+            limit: ".*(eip7702|eip2935).*"
+            total: 628
+          - shard: withdrawals+selfdestruct+tstore
+            sim: ethereum/eels/consume-rlp
+            limit: ".*(eip4895_withdrawals|eip6780_selfdestruct|eip1153_tstore).*"
+            total: 794
+          - shard: eip4844_blobs
+            sim: ethereum/eels/consume-rlp
+            limit: ".*eip4844_blobs.*"
+            total: 4408
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+
+      # Pinned hive revision — keep in lockstep with workflow.yml's hive_smoke.
+      - name: Check out hive
+        uses: actions/checkout@v4
+        with:
+          repository: ethereum/hive
+          ref: ae173f1ce15aed785e6c0945c2156a95819d21bf
+          path: .ci-hive
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.x"
+          cache: false
+
+      - name: Build the hive binary
+        run: cd .ci-hive && go build -o hive .
+
+      - name: Download hive client binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: hive-bins-ubuntu
+          path: .
+
+      - name: Install the bcos client into the hive checkout
+        run: |
+          chmod +x fisco-bcos-air/fisco-bcos tools/eth-sync-check/eth-sync-check
+          BUILD_DIR=. bash tools/hive/build-local.sh .ci-hive
+
+      # EEST fixtures tarball (245MB), staged next to the consume-rlp
+      # Dockerfile; the image build copies it in when fixtures=/fixtures.
+      - name: Cache EEST fixtures
+        id: fixtures-cache
+        if: matrix.limit != ''
+        uses: actions/cache@v4
+        with:
+          path: .ci-fixtures/fixtures_stable.tar.gz
+          key: eest-fixtures-stable-v5.4.0
+      - name: Download EEST fixtures
+        if: matrix.limit != '' && steps.fixtures-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .ci-fixtures
+          curl --fail --retry 3 -L -o .ci-fixtures/fixtures_stable.tar.gz \
+            https://github.com/ethereum/execution-spec-tests/releases/download/v5.4.0/fixtures_stable.tar.gz
+      - name: Stage fixtures for the simulator image
+        if: matrix.limit != ''
+        run: cp .ci-fixtures/fixtures_stable.tar.gz .ci-hive/simulators/ethereum/eels/consume-rlp/fixtures.tar.gz
+
+      # This hive revision exits 1 when ANY test fails (hive.go's fatal() on a
+      # non-zero failCount); smoke/genesis carries two known failures and eels
+      # shards may regress upstream, so tolerate the exit code here — the
+      # assert step below parses the run JSON and is the real gate. A hard
+      # failure (image build, docker daemon) leaves no run JSON and still
+      # fails the assert.
+      - name: Run hive shard
+        run: |
+          cd .ci-hive
+          if [ -n "${{ matrix.limit }}" ]; then
+            ./hive --sim "${{ matrix.sim }}" --client bcos \
+              --sim.buildarg fixtures=/fixtures \
+              --sim.limit "${{ matrix.limit }}" \
+              --client.checktimelimit 25m || true
+          else
+            ./hive --sim "${{ matrix.sim }}" --client bcos || true
+          fi
+
+      # Gate on the run JSON: smoke/genesis carries exactly two known failures
+      # (pre-London geneses, see tools/hive/README.md "Known limitations");
+      # every eels shard must be fully green.
+      - name: Assert shard results
+        run: |
+          if [ "${{ matrix.shard }}" = "smoke" ]; then
+            python3 tools/hive/check-hive-results.py --logs .ci-hive/workspace/logs \
+              --sim smoke/genesis --expect-total 6 \
+              --allow-fail "empty genesis (bcos)" --allow-fail "all forks (bcos)"
+            python3 tools/hive/check-hive-results.py --logs .ci-hive/workspace/logs \
+              --sim smoke/network --expect-total 2
+          else
+            python3 tools/hive/check-hive-results.py --logs .ci-hive/workspace/logs \
+              --sim "${{ matrix.sim }}" --expect-total ${{ matrix.total }}
+          fi

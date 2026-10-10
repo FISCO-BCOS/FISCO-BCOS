@@ -20,6 +20,7 @@
  */
 
 #pragma once
+#include "libinitializer/BlockImportSummary.h"
 #include "libinitializer/CommandHelper.h"
 #include "libinitializer/EthereumSyncInitializer.h"
 #include "libinitializer/Initializer.h"
@@ -55,6 +56,15 @@ public:
         bcos::initializer::Params const& _params, bcos::tool::NodeConfig const& _nodeConfig);
     virtual void start();
     virtual void stop();
+    /// Offline RLP block import (`--import-blocks`, the hive simulator contract).
+    /// Must be called AFTER init(Params) (full node init) and INSTEAD of start():
+    /// imports the blocks through the EL-mode verifier lane, then returns — the
+    /// caller exits 0 and the entrypoint starts the node normally, or exits 1
+    /// when nothing could be imported on a fresh ledger (imported == 0,
+    /// skipped > 0, head never advanced past genesis). Throws on hard
+    /// errors (bad path, malformed RLP framing, non-EL config); per-block failures
+    /// are logged and skipped. Ethereum L1 EL mode (executor v2) only.
+    virtual bcos::initializer::BlockImportSummary importEthereumBlocks(std::string const& _path);
     virtual bcos::initializer::Initializer::Ptr nodeInitializer() { return m_nodeInitializer; }
 
 protected:
