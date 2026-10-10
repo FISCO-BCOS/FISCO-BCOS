@@ -93,14 +93,34 @@ static_assert(
     "c_opForkLadder must list every OpFork rung in declaration order");
 static_assert(
     [] {
-        std::size_t mapped = 0;
+        // A BIJECTION, not a count: every OpForkId value must be carried by exactly one row.
+        // The count form let a duplicated id plus an id no row carried through (both keep the
+        // number of id-carrying rows equal), and opForkIdFor then answered the duplicated
+        // row's id — the wrong Engine-API profile — for the rung whose id was dropped.
+        std::array<bool, magic_enum::enum_count<OpForkId>()> seen{};
         for (auto const& row : c_opForkLadder)
         {
-            mapped += row.engineForkId.has_value() ? 1 : 0;
+            if (!row.engineForkId.has_value())
+            {
+                continue;
+            }
+            auto const index = static_cast<std::size_t>(*row.engineForkId);
+            if (index >= seen.size() || seen[index])
+            {
+                return false;
+            }
+            seen[index] = true;
         }
-        return mapped == magic_enum::enum_count<OpForkId>();
+        for (bool const mapped : seen)
+        {
+            if (!mapped)
+            {
+                return false;
+            }
+        }
+        return true;
     }(),
-    "c_opForkLadder must carry an Engine-API fork id for every OpForkId rung");
+    "c_opForkLadder must map every OpForkId rung exactly once (bijection, not a count)");
 
 [[nodiscard]] inline std::optional<OpForkId> opForkIdFor(bcos::ledger::OpFork fork)
 {
