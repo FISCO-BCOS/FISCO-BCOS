@@ -762,10 +762,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             m_engineServiceInitializer = EngineServiceInitializer::buildOp(
                 m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), opScheduler,
                 m_memPoolInitializer->memPool(), bcos::engine::c_defaultBlockTxCountLimit,
-                opDelegate, m_daCaps, /*allowSynthesizedL1Attributes=*/false);
-            // NOTE (split): the declaredOpEip1559 wiring into the engine constructor rides
-            // the engine-side PR (the OpEngineService ctor param lands there); this branch
-            // keeps the config-channel reading + boot diagnostics only.
+                opDelegate, m_daCaps, /*allowSynthesizedL1Attributes=*/false,
+                declaredOpEip1559);
         }
 
         m_opScheduler = opDelegate;
