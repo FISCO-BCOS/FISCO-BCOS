@@ -1,4 +1,4 @@
-/*
+/**
  *  Copyright (C) 2026 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -6,10 +6,17 @@
  *  You may obtain a copy of the License at
  *
  *   http://www.apache.org/licenses/LICENSE-2.0
-
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  *
  * @file NodeConfigOpEip1559Test.cpp
- * @brief NodeConfig [op_eip1559] loader tests: declaration parsing, refusal rules and the genesis pin. */
+ * @brief NodeConfig [op_eip1559] loader tests: declaration parsing, refusal rules
+ *        and the genesis pin.
+ */
 
 // [op_eip1559]: the chain's EIP-1559 triple (op-deployer's config.optimism, the same numbers
 // rollup.json carries as chain_op_config) as a chain-level, genesis-frozen key. The engine
@@ -117,8 +124,8 @@ BOOST_AUTO_TEST_CASE(missingRequiredKeyRejected)
 BOOST_AUTO_TEST_CASE(missingDenominatorKeyRejected)
 {
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(
-                              opExecutor(), std::string(c_schedule) + "[op_eip1559]\nelasticity=2\n")),
+    BOOST_CHECK_EXCEPTION(cfg.loadGenesisConfigFromString(opGenesis(opExecutor(),
+                              std::string(c_schedule) + "[op_eip1559]\nelasticity=2\n")),
         InvalidConfig,
         [](auto const& e) { return errinfoContains(e, "[op_eip1559].denominator is required"); });
 }
@@ -143,8 +150,8 @@ BOOST_AUTO_TEST_CASE(hexValuesAcceptedLikeTheSiblingScheduleSection)
     // triple must not surprise an operator who writes one section hex-formatted, the other
     // decimal.
     NodeConfig cfg(std::make_shared<bcos::crypto::KeyFactoryImpl>());
-    BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(opGenesis(
-        opExecutor(), std::string(c_schedule) + "[op_eip1559]\nelasticity=0x2\ndenominator=0x8\n")));
+    BOOST_REQUIRE_NO_THROW(cfg.loadGenesisConfigFromString(opGenesis(opExecutor(),
+        std::string(c_schedule) + "[op_eip1559]\nelasticity=0x2\ndenominator=0x8\n")));
     BOOST_REQUIRE(cfg.opEip1559().has_value());
     BOOST_CHECK_EQUAL(cfg.opEip1559()->elasticity, 2U);
     BOOST_CHECK_EQUAL(cfg.opEip1559()->denominator, 8U);
