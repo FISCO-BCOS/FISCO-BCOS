@@ -17,7 +17,7 @@
  * @brief SYS_CHAIN_METADATA op-fork-schedule triple persist / resolve / fail-closed.
  */
 #include "L2GenesisTestStorage.h"
-#include "bcos-framework/ledger/ChainMetadata.h"
+#include "bcos-framework/ledger/OpForkScheduleMetadata.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
