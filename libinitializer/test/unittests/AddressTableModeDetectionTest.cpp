@@ -23,7 +23,10 @@
 #include <bcos-tool/Exceptions.h>
 #include <rocksdb/db.h>
 #include <boost/test/unit_test.hpp>
+#include <atomic>
 #include <filesystem>
+#include <random>
+#include <string>
 
 using namespace bcos;
 using namespace bcos::initializer;
@@ -40,9 +43,23 @@ std::string binaryTableName()
     return name;
 }
 
+namespace
+{
+// Each fixture instance gets its own directory: ctest runs the cases of this binary as
+// separate processes in parallel, and two processes opening one RocksDB path race on
+// the LOCK file (the shared fixed path made status.ok() fail intermittently in CI).
+std::filesystem::path uniqueTempDir(std::string const& prefix)
+{
+    static std::atomic<unsigned> counter{0};
+    std::random_device rd;
+    return std::filesystem::temp_directory_path() /
+           (prefix + "_" + std::to_string(rd()) + "_" + std::to_string(counter++));
+}
+}  // namespace
+
 struct TempRocksDB
 {
-    TempRocksDB() : dir(std::filesystem::temp_directory_path() / "addr_mode_detect_test")
+    TempRocksDB() : dir(uniqueTempDir("addr_mode_detect_test"))
     {
         std::filesystem::remove_all(dir);
         std::filesystem::create_directories(dir);
