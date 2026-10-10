@@ -30,10 +30,17 @@ bcos::h256 hashOf(char tag)
     return out;
 }
 
+// Field-by-field on a value-initialized block: an aggregate initializer naming only the
+// three ancestry fields leaves the eight payload members uninitialized, which gcc's
+// -Wmissing-field-initializers (CI is -Werror) rejects. The other members are irrelevant
+// to the height-index/liveness invariants under test.
 bcos::engine::ImportedBlock block(char tag, char parent, bcos::protocol::BlockNumber number)
 {
-    return bcos::engine::ImportedBlock{
-        .hash = hashOf(tag), .parent = hashOf(parent), .number = number};
+    bcos::engine::ImportedBlock out{};
+    out.hash = hashOf(tag);
+    out.parent = hashOf(parent);
+    out.number = number;
+    return out;
 }
 }  // namespace
 
