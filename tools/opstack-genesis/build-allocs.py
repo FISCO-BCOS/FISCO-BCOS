@@ -501,7 +501,12 @@ def build_proxied_allocs(predeploy, config, contracts_dir, base_accounts):
     disabled. See the module docstring for the full three-layer contract.
     """
     name = predeploy["name"]
-    proxy_spec = predeploy["proxy"]
+    proxy_spec = predeploy.get("proxy")
+    if proxy_spec is None:
+        raise ValueError(
+            f"{predeploy.get('name', '<unnamed>')}: proxied predeploys must carry a "
+            f"'proxy:' block (implementation source) — see chain-config.template.yaml "
+            f"for the required schema")
 
     proxy_admin = config.get("proxy_admin")
     governance_owner = config.get("governance_owner")

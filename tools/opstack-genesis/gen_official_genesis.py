@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # Copyright (c) FISCO-BCOS, Apache-2.0
 """Offline generator: superchain-configs.zip -> FISCO config.genesis fragment
-([eth_genesis_header] + [alloc.N] + [op_fork_schedule]) and op-node rollup.json.
+([eth_genesis_header] + [alloc.N] + [op_fork_schedule] + [op_fork_timestamps]) and op-node
+rollup.json.
 
 The zip is op-geth's embedded registry (superchain/superchain-configs.zip): a COMMIT
 pin, a shared zstd `dictionary`, `configs/<network>/<name>.toml` and a dictionary-
@@ -125,9 +126,20 @@ def header_field_set(ts0, fork_times):
     return fields
 
 
-def _hex_default(genesis, key, default):
+def _hex_default(genesis, key, default, zero_is_absent=False):
+    """Registry value for `key`, or `default` when absent.
+
+    `zero_is_absent` mirrors op-geth's Genesis.ToBlock for gasLimit: an explicit 0
+    is substituted with params.GenesisGasLimit exactly like a missing key (the
+    comment below names that rule; the plain-absent path alone did not implement
+    it, so an explicit "0x0" slipped through as 0x0).
+    """
     value = genesis.get(key)
-    return value if value is not None else default
+    if value is None:
+        return default
+    if zero_is_absent and value in ("0x0", "0x00", "0", 0):
+        return default
+    return value
 
 
 def build_header_fields(genesis, ts0, state_root, present):
@@ -175,7 +187,8 @@ def build_header_fields(genesis, ts0, state_root, present):
             text = fixed.hex() if isinstance(fixed, (bytes, bytearray)) else fixed
             out[key] = "0x" + text
         else:
-            out[key] = _hex_default(genesis, src, defaults[key])
+            out[key] = _hex_default(
+                genesis, src, defaults[key], zero_is_absent=(key == "gas_limit"))
     # The registry `nonce` is a quantity ("0x0"), while the header field is exactly 8
     # bytes and the INI wants 16 hex digits: normalize, never bytes.fromhex directly.
     if "nonce" in out:
@@ -312,6 +325,23 @@ def _fork_times(toml, extra_forks):
         if value is not None:
             times[fork] = int(value)
     return times
+
+
+def build_op_fork_timestamps_section(times):
+    """`[op_fork_timestamps]` — the OP-ladder shorthand the loader REQUIRES on the
+    OP lane (ChainLaneConfig.h: op_fork_timestamps = KeyPresence::Required) while
+    `[op_fork_schedule] canonical=` alone is rejected. Keys are exactly the ladder
+    triple the loader maps (isthmus_time doubles as the ladder-mode switch); an
+    absent rung is intentionally omitted — absent means not scheduled. The values
+    are the same activation seconds the canonical schedule carries, so the two
+    channels can never disagree (the loader's dual-declaration check compares them
+    under the shared fold rule).
+    """
+    lines = ["[op_fork_timestamps]"]
+    for fork in ("isthmus", "jovian", "karst"):
+        if fork in times:
+            lines.append(f"{fork}_time={times[fork]}")
+    return "\n".join(lines) + "\n"
 
 
 def build_schedule(toml, ts0, extra_forks=None):
@@ -523,6 +553,7 @@ def generate(zip_path, chain, *, extra_forks=None, l1_chain_id=None,
     ini = "\n".join(header_lines) + "\n"
     ini += _build_allocs.emit_ini(to_ini_allocs(alloc))
     ini += "[op_fork_schedule]\ncanonical=" + schedule + "\n"
+    ini += build_op_fork_timestamps_section(_fork_times(toml, extra_forks))
     ini += build_eip1559_section(toml)
     if l1_chain_id is None:
         # The L1 chain id is not in the chain toml (op-node reads it from the

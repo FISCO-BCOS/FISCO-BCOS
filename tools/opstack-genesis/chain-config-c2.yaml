@@ -15,6 +15,16 @@ predeploys:
   - name: SystemConfig
     address: "0x4200000000000000000000000000000000001000"
     sol_file: SystemConfig.sol
+    system_config:
+      block_tx_count_limit: 1000
+      compatibility_version: 0x03120000  # 3.18.0
+      # REQUIRED - must equal EXACTLY the node's Features::toFlagsNumber() for this
+      # chain's genesis feature set (see chain-config.template.yaml for the full
+      # contract: the node VERIFIES this slot at first init and refuses to build
+      # genesis on any mismatch; the genesis state root commits it). The role guard
+      # in build-allocs.py refuses a SystemConfig without this key regardless of its
+      # address - recompute the bitmap when the C2 node's feature set changes.
+      feature_flags: 0x1
     proxy:
       implementation: "0x4200000000000000000000000000000000001002"
   - name: L2ValidatorSet

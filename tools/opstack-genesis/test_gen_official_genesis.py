@@ -162,6 +162,34 @@ def test_missing_gas_limit_and_base_fee_defaults_match_op_geth():
     assert fields["base_fee_per_gas"] == "0x3b9aca00"  # 1000000000
 
 
+def test_explicit_zero_gas_limit_substitutes_like_absent():
+    """op-geth Genesis.ToBlock substitutes GenesisGasLimit when gasLimit is 0 -
+    an EXPLICIT "0x0" must substitute exactly like a missing key (the old path
+    only substituted on absence and let "0x0" slip through as 0x0)."""
+    for genesis in ({}, {"gasLimit": "0x0"}, {"gasLimit": 0}, {"gasLimit": "0x00"}):
+        fields = gen.build_header_fields(genesis, 0, gen.EMPTY_TRIE_ROOT, gen.LONDON_FIELDS)
+        assert fields["gas_limit"] == "0x47e7c4", genesis
+    # a real value passes through untouched
+    fields = gen.build_header_fields(
+        {"gasLimit": "0x1c9c380"}, 0, gen.EMPTY_TRIE_ROOT, gen.LONDON_FIELDS)
+    assert fields["gas_limit"] == "0x1c9c380"
+
+
+def test_op_fork_timestamps_section_carries_the_ladder_triple():
+    """[op_fork_timestamps] is Required on the OP lane; the generator must emit the
+    ladder keys with the SAME seconds the canonical schedule carries, omitting
+    unscheduled rungs (absent == not scheduled)."""
+    section = gen.build_op_fork_timestamps_section(
+        {"regolith": 0, "isthmus": 0, "jovian": 1764691201})
+    assert section == "[op_fork_timestamps]\nisthmus_time=0\njovian_time=1764691201\n"
+    # karst-without-jovian is a legal jump (shared fold rule): both keys emit raw.
+    section = gen.build_op_fork_timestamps_section({"isthmus": 0, "karst": 1781712001})
+    assert "karst_time=1781712001" in section and "jovian_time" not in section
+    # pre-Isthmus-only chains need no OP section rungs at all beyond the baseline
+    section = gen.build_op_fork_timestamps_section({"regolith": 0})
+    assert section == "[op_fork_timestamps]\n"
+
+
 def test_compute_state_root_matches_reference_on_adapted_input():
     alloc = {"0x" + "11" * 20: {"balance": "0x1", "nonce": "0x0"}}
     # The adapter must be a pure re-shape: its result equals feeding the reference
