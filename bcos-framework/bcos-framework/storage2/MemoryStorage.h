@@ -64,9 +64,7 @@ struct NullLock
 
 template <class Object>
 concept HasMemberSize = requires(Object object) {
-    {
-        object.size()
-    } -> std::integral;
+    { object.size() } -> std::integral;
 };
 
 struct Empty
