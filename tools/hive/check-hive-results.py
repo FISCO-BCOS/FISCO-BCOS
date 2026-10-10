@@ -3,12 +3,15 @@
 #
 # check-hive-results.py — assert on a hive run's per-test results.
 #
-# The hive binary exits 0 even when tests fail (the failure count only goes to
-# the log), so CI gates must parse the run JSON it writes under
-# workspace/logs/. This script picks the newest run for a simulator and checks
-# it: every test must pass, except an explicit allow-list of known-failure
-# names which must fail EXACTLY (no more, no fewer — a fixed known failure
-# turning green also fails the check, so the allow-list cannot rot).
+# The pinned hive revision exits 1 when ANY test fails (hive.go's fatal() on a
+# non-zero failCount), but that exit code cannot distinguish an allow-listed
+# known failure from a real regression — so the workflows tolerate it
+# (`|| true`) and THIS script is the actual gate. It picks the newest run for
+# a simulator under workspace/logs/ and checks it: every test must pass,
+# except an explicit allow-list of known-failure names which must fail
+# EXACTLY (no more, no fewer — a fixed known failure turning green also fails
+# the check, so the allow-list cannot rot). A hard hive failure (image build,
+# docker daemon) leaves no run JSON behind, which fails the gate here too.
 #
 # Usage:
 #   check-hive-results.py --logs hive/workspace/logs --sim smoke/genesis \

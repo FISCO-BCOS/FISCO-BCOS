@@ -211,7 +211,10 @@ the RPC-reported genesis/head hashes match the fixture's
   `consume-rlp` matrix (mcopy / eip7702+2935 / withdrawals+selfdestruct+tstore
   / eip4844_blobs + a smoke shard) against a Release (MinSizeRel) build,
   sharded across parallel jobs with the EEST fixtures tarball cached.
-- Both gate on `check-hive-results.py`, which parses hive's run JSON (the
-  hive process exits 0 even when tests fail) and fails the job unless the
-  failure set exactly matches the known-failure allow-list — today the two
-  pre-London smoke/genesis cases ("empty genesis", "all forks").
+- Both gate on `check-hive-results.py`, which parses hive's run JSON and
+  fails the job unless the failure set exactly matches the known-failure
+  allow-list — today the two pre-London smoke/genesis cases ("empty
+  genesis", "all forks"). (The pinned hive revision exits 1 when any test
+  fails, but that exit code cannot tell an allow-listed known failure from
+  a regression, so the workflows tolerate it and the JSON parse is the
+  gate.)
