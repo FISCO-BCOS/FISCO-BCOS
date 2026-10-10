@@ -348,7 +348,8 @@ inline constexpr uint64_t c_opForkTimeUnset = std::numeric_limits<uint64_t>::max
     uint64_t jovianTime, uint64_t karstTime)
 {
     // karst scheduled with jovian unset is a legal JUMP (op-node CheckConfigForkOrder
-    // allows skipping intermediates; the 10-rung ladder keeps jovian kNever): Karst is a
+    // allows skipping intermediates; the 10-rung ladder keeps jovian at the not-scheduled
+    // sentinel, ledger::c_opForkTimeUnset): Karst is a
     // superset of Jovian, so the fold implies Jovian AT karst's time — the same merge the
     // equal-times pair takes below. One rule with NodeConfig's ladder validator (H):
     // previously this threw while NodeConfig accepted the shape, crashing buildGenesisBlock.

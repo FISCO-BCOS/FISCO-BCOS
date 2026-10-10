@@ -207,8 +207,10 @@ public:
     /// triple, priced into every pre-Holocene block. Absent means "use
     /// c_legacyOpEip1559Params" (see effectiveOpEip1559), which is what keeps every pre-existing
     /// chain's genesis pin byte-identical. Raw rather than defaulted so the pin can tell
-    /// "declared" from "not declared" — but the PIN carries the EFFECTIVE value, so a chain
-    /// writing the legacy triple explicitly pins the same string as one omitting the section.
+    /// "declared" from "not declared": the pin line is emitted only when the section IS declared
+    /// (NodeConfig's generateGenesisData), and it carries the EFFECTIVE triple — so "explicitly
+    /// 250" and "omitted canyon" pin the same string, while omitting the WHOLE section pins
+    /// nothing at all, which is what keeps a pre-existing chain's pin text unchanged.
     std::optional<OpEip1559Params> m_opEip1559;
 
     // True iff config.genesis declares "[ethereum] mode=el" — the chain is an
