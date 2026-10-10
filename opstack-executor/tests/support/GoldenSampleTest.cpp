@@ -131,18 +131,9 @@ BOOST_AUTO_TEST_CASE(MakeParamsJsonShape)
 // must also stay OUT of the ExecutionPayload object (they are params, not payload fields).
 BOOST_AUTO_TEST_CASE(MakeInvalidParamsJsonPassesBlobParamsThrough)
 {
-
-    // The t8n corpus is provisioned externally (symlink; .gitignore'd): skip when absent,
-    // fail when CI requires it — the same gate OpEthExecutorDualRunTest runs.
-    if (!w6test::t8nCorpusAvailable())
-    {
-        if (w6test::t8nCorpusRequired())
-        {
-            BOOST_FAIL("t8n corpus required in CI but missing");
-        }
-        BOOST_WARN_MESSAGE(false, "t8n corpus missing (local run); skipping");
-        return;
-    }
+    // No corpus gate here: this case builds its fixture inline and reads no corpus
+    // file (the gate is for the loadVectorSample cases only — gating this one made a
+    // loader pin silently skip on local runs without the t8n symlink).
     w6test::InvalidSample sample;
     sample.vector["_info"]["hardfork"] = "jovian";
     auto& op = sample.vector["_op_payload"];

@@ -1,7 +1,8 @@
 // FISCO BCOS
 // SPDX-License-Identifier: Apache-2.0
 /// @file OpNewPayloadRpcE2eTest.cpp
-/// @brief Engine-API newPayload/forkchoiceUpdated end-to-end suites over the golden corpus (wire shapes, rejections, reorgs).
+/// @brief Engine-API newPayload/forkchoiceUpdated end-to-end suites over the golden
+/// corpus (wire shapes, rejections, reorgs).
 
 // bcos-evm/test/opstack/OpNewPayloadRpcE2eTest.cpp
 // L2 end-to-end real-chain comparison: real JSON params ->
@@ -516,10 +517,13 @@ void runInvalidVector(std::string const& id)
                     static_cast<int>(bcos::engine::PayloadValidationStatus::Syncing),
                 id << ": expected SYNCING, got " << static_cast<int>(status.status));
         }
-        catch (const bcos::rpc::JsonRpcException&)
+        catch (const bcos::rpc::JsonRpcException& e)
         {
             // RPC-level shape rejection before reaching the engine — acceptable for
-            // SYNCING vectors that test missing fields.
+            // SYNCING vectors that test missing fields, but ONLY as InvalidParams:
+            // any other RPC code here is a different defect riding this vector.
+            BOOST_CHECK_MESSAGE(e.code() == bcos::rpc::JsonRpcError::InvalidParams,
+                id << ": expected InvalidParams shape rejection, got " << e.code());
         }
         return;
     }
@@ -591,10 +595,13 @@ void runInvalidVector(std::string const& id)
             request = bcos::rpc::parseNewPayloadRequest(
                 params, static_cast<bcos::engine::ApiVersion>(version));
         }
-        catch (const bcos::rpc::JsonRpcException&)
+        catch (const bcos::rpc::JsonRpcException& e)
         {
             // RPC-level shape rejection before reaching the engine — acceptable for
-            // -38005/-32603 vectors that test missing fields.
+            // -38005/-32603 vectors that test missing fields, but ONLY as InvalidParams:
+            // swallowing an -32603 here would turn a vector into a zero-assertion pass.
+            BOOST_CHECK_MESSAGE(e.code() == bcos::rpc::JsonRpcError::InvalidParams,
+                id << ": expected InvalidParams shape rejection, got " << e.code());
             return;
         }
         if (classification == "-38005")

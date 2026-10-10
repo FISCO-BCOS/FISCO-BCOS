@@ -295,8 +295,11 @@ BOOST_AUTO_TEST_CASE(DAFootprintExceedsGasLimitRejected)
 // footprint (block_validator.go:131), so == gasLimit is VALID; spec's "below, like gasUsed"
 // (jovian/exec-engine.md:125) is <= semantics. Only the strictly-below cell is reachable on
 // this vector (at gasLimit == Σ the 1M deposit no longer fits, so the deposit-fit gate fires
-// first) — the equality wording is pinned by DAFootprintExceedsGasLimitRejected and the
-// equality mismatch by JovianDaFootprintMustEqualLocalRecomputation.
+// first). What IS pinned: the over-boundary INVALID by DAFootprintExceedsGasLimitRejected
+// (blobGasUsed = gasLimit+1 — identical under '>' and '>=') and the equality-mismatch INVALID
+// by JovianDaFootprintMustEqualLocalRecomputation. The "at == gasLimit is VALID" accept side is
+// NOT pinned anywhere — an accepted residual gap on jovian_da_mix (needs a small-deposit
+// vector whose deposit fits at Σ); a '>=' regression would hide behind this comment.
 // clang-format off
 BOOST_AUTO_TEST_CASE(JovianDaFootprintGasLimitBoundary, * boost::unit_test::label("fork-jovian") * boost::unit_test::label("fork-karst"))
 // clang-format on

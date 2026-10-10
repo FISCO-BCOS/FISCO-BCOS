@@ -14,7 +14,8 @@
 // Hard assertion discipline: A) dir *.json set == manifest.txt set; parse
 // failure / missing required field = named ADD_FAILURE; per-vector comparison
 // count recorded, 0 = FAILURE; the critical differential vectors
-// (kCriticalStems below) must stay manifested AND replayed = REQUIRE. B) required fields via jAt();
+// (c_criticalStems below) must stay manifested AND replayed = REQUIRE. B) required
+// fields via jAt();
 // hardfork must be exactly regolith|canyon|ecotone|fjord|granite|holocene|isthmus|jovian (no
 // default fork); unknown _op_type / receipt count mismatch = FAILURE (no zip-min). D) comparisons
 // routed through checkField/checkOptional into DivergenceLedger; checkOptional never gated on
@@ -1881,8 +1882,10 @@ std::string rejectConsumer(const JsonValue& v)
 }
 
 /// reject(executor/both) assertion: the production path must throw std::runtime_error
-/// whose what() contains the expected substring.
-void assertRejectThrow(const std::string& id, const JsonValue& v,
+/// whose what() contains the expected substring. Returns true when the vector was
+/// actually exercised (an assertion ran), false for the printed skip families — the
+/// caller registers a stem as replayed only on true (registration means executed).
+bool assertRejectThrow(const std::string& id, const JsonValue& v,
     const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory,
     bcos::crypto::Hash::Ptr const& hashImpl, bcos::IOServicePool::Ptr const& ioServicePool)
 {
@@ -1895,11 +1898,11 @@ void assertRejectThrow(const std::string& id, const JsonValue& v,
         std::cout << "SKIP setcode_create " << id
                   << " (no signed 0x04 envelope can carry to:null; the vector family is a "
                      "generator artifact)\n";
-        return;
+        return false;
     }
     BlockContext bc;
     if (!loadBlockContext(id, v, bc, /*wantPostState=*/true))
-        return;
+        return false;
     if (bc.decodeRejectMessage.has_value())
     {
         const auto expected =
@@ -1908,7 +1911,7 @@ void assertRejectThrow(const std::string& id, const JsonValue& v,
         BOOST_CHECK_MESSAGE(bc.decodeRejectMessage->find(expected) != std::string::npos,
             id << ": decode reject message missing '" << expected
                << "', got: " << *bc.decodeRejectMessage);
-        return;
+        return true;
     }
     evmone::test::TestState ts = test::from_json<test::TestState>(jAt(v, "pre"));
     opstack_test::DualRunFixture fixture;
@@ -1923,7 +1926,7 @@ void assertRejectThrow(const std::string& id, const JsonValue& v,
         if (!tx)
         {
             BOOST_ERROR(id << ": opEnvelopeToTars failed for envelope");
-            return;
+            return true;
         }
         transactions.push_back(std::move(tx));
     }
@@ -1944,16 +1947,17 @@ void assertRejectThrow(const std::string& id, const JsonValue& v,
                 .asString();
         BOOST_CHECK_MESSAGE(std::string(e.what()).find(expected) != std::string::npos,
             id << ": throw message missing '" << expected << "', got: " << e.what());
-        return;
+        return true;
     }
     catch (...)
     {
         const auto* excType = abi::__cxa_current_exception_type();
         BOOST_ERROR(id << ": threw non-runtime_error (typed catch bypassed, exception type: "
                        << (excType ? excType->name() : "<unknown>") << ")");
-        return;
+        return true;
     }
     BOOST_ERROR(id << ": expected production path to reject, but it executed");
+    return true;
 }
 
 // ── Chain replay ─────────────────────────────────────────────────────────────
@@ -2124,8 +2128,10 @@ BOOST_AUTO_TEST_CASE(Vectors)
                 const auto consumer = rejectConsumer(*vec);
                 if (consumer == "engine")
                     continue;  // field-corruption class: OpNewPayloadRpcE2eTest only
-                replayedStems.insert(stem);
-                assertRejectThrow(id, *vec, receiptFactory, hashImpl, ioServicePool);
+                if (assertRejectThrow(id, *vec, receiptFactory, hashImpl, ioServicePool))
+                {
+                    replayedStems.insert(stem);
+                }
                 continue;
             }
             replayedStems.insert(stem);
@@ -2165,9 +2171,9 @@ BOOST_AUTO_TEST_CASE(Vectors)
     // ran — a vector rewritten into an executor-reject shape would still satisfy
     // it. Byte drift is pinned by the corpus' vectors/SHA256SUMS; treat any edit
     // to a critical vector as gate-affecting.
-    static constexpr std::array<const char*, 2> kCriticalStems{
+    static constexpr std::array<const char*, 2> c_criticalStems{
         "ladder_1000_69292b10", "devnet_1875-2274_c38db356"};
-    for (const auto* stem : kCriticalStems)
+    for (const auto* stem : c_criticalStems)
     {
         BOOST_REQUIRE_MESSAGE(
             replayedStems.contains(stem), "critical vector missing from replay: " << stem);
