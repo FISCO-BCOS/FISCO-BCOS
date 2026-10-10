@@ -23,6 +23,8 @@
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/ledger/SystemConfigs.h>
 #include <bcos-framework/protocol/BlockHeader.h>
+
+#include <optional>
 #include <bcos-ledger/LedgerMethods.h>
 #include <bcos-rlp-protocol/BlockHeaderHash.h>
 #include <bcos-rpc/jsonrpc/Common.h>
@@ -48,9 +50,49 @@ inline bool usesEthereumFeeSemantics(int executorVersion)
 
 /// True on the OP lane (executor_version >= OPSTACK_EXECUTOR_VERSION): the only lane that
 /// serves the challenger data plane (debug_getRawHeader / debug_dbGet, ADR 0007).
+// Alias of the ONE lane predicate (ledger::isOpLaneVersion, LedgerConfig.h:385-388) —
+// a second hand-written copy can silently diverge from it.
 inline bool isOpStackLane(int executorVersion)
 {
-    return executorVersion >= bcos::ledger::OPSTACK_EXECUTOR_VERSION;
+    return bcos::ledger::isOpLaneVersion(executorVersion);
+}
+
+
+/// True when EIP-7825's per-tx gas ceiling (MAX_TX_GAS_LIMIT, 2^24) is actually in force
+/// at the target block: the chain runs Osaka+ rules there. OP lane: Karst activation is
+/// timestamp-keyed (op-node's IsKarst: ts >= karst_time) on the chain's own resolved
+/// schedule; an OP chain without the row (initialized before it existed) is treated as
+/// pre-Karst here. Eth lane: the persisted revision map at the block's height. Everywhere
+/// else — OP pre-Karst, Eth pre-Osaka, and the whole legacy FISCO lane (block gas up to
+/// 3e9) — there is no per-tx ceiling, so an estimate budget must NOT be clamped to 2^24:
+/// a transaction consuming between 2^24 and the block limit is admissible there and its
+/// estimate must not fail (M1).
+///
+/// Fail-closed on an UNKNOWN target timestamp (nullopt: unreadable/pruned header): 0 is
+/// a valid instant, so feeding `block ? ts : 0` here read "unknown" as "pre-Karst" and
+/// let an explicit gas up to the block cap slip the clamp on a Karst chain — the exact
+/// lie this gate exists to prevent. Over-clamping a pre-Karst estimate when its header
+/// cannot be read is recoverable (retry with a smaller gas); an unclamped over-cap
+/// estimate is not, so unknown timestamps clamp.
+[[nodiscard]] inline bool eip7825InForceAt(bcos::ledger::LedgerConfig const& ledgerConfig,
+    bcos::protocol::BlockNumber targetBlock, std::optional<uint64_t> targetTimestampSeconds)
+{
+    if (isOpStackLane(ledgerConfig.executorVersion()))
+    {
+        if (!targetTimestampSeconds.has_value())
+        {
+            return true;
+        }
+        const auto& schedule = ledgerConfig.opForkSchedule();
+        return schedule.has_value() && schedule->m_karstTime != bcos::ledger::c_opForkTimeUnset &&
+               *targetTimestampSeconds >= schedule->m_karstTime;
+    }
+    if (usesEthereumFeeSemantics(ledgerConfig.executorVersion()))
+    {
+        const auto revision = ledgerConfig.evmcRevisionForBlock(targetBlock);
+        return revision.has_value() && *revision >= EVMC_OSAKA;
+    }
+    return false;
 }
 
 /// Suggested priority fee (wei): the Ethereum/OP lanes suggest a non-zero tip (OP floors at

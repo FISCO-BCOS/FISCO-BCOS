@@ -24,6 +24,9 @@ find_package(Boost REQUIRED unit_test_framework)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE .)
+# Locate the in-tree golden fixtures (op-geth deposit-receipt parity corpus) at runtime.
+target_compile_definitions(${TEST_BINARY_NAME} PRIVATE
+    BCOS_RPC_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-unused-variable)
 
 # transaction-scheduler: EthGetProofIntegrationTest.cpp drives the FullChainFixture

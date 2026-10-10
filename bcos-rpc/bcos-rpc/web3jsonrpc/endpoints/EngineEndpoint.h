@@ -72,7 +72,8 @@ private:
     /// Build the -38005 answer for a method version this node does not implement.
     void buildUnimplementedVersionError(std::string_view method, Json::Value& response) const;
 
-    /// One in-flight V4 newPayload; a concurrent second call answers SYNCING.
+    /// One in-flight newPayload on the OP lane, all method versions (V1–V4); a
+    /// concurrent second call answers SYNCING.
     std::atomic<bool> m_opPayloadBusy{false};
 
     NodeService::Ptr m_nodeService;
